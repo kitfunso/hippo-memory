@@ -7,6 +7,8 @@ import * as path from 'path';
 import { type PhysicsConfig, DEFAULT_PHYSICS_CONFIG, mergePhysicsConfig } from './physics-config.js';
 import { DEFAULT_HALF_LIFE_DAYS } from './memory.js';
 import type { PromptRecallMetric } from './prompt-recall.js';
+import { DEFAULT_LOCAL_BUMP, DEFAULT_RECALL_BUDGET } from './search/types.js';
+import { log } from './log.js';
 
 export type DecayBasis = 'clock' | 'session' | 'adaptive';
 
@@ -70,34 +72,33 @@ export interface HippoConfig {
     enabled: boolean;
     budget: number;
     /** Skip a block identical to the one already injected this session
-     *  (ROADMAP TE2). Default true. Needs a session id from the hook payload. */
+     *  Default true. Needs a session id from the hook payload. */
     skipUnchanged: boolean;
     /** Resend an unchanged block after this many consecutive skips, so long
      *  sessions still see pinned rules near the latest turn. Default 10; 0
      *  never resends an unchanged block. */
     refreshTurns: number;
-    /** Z1: gate the hook's backfill on the prompt's own content instead of
-     *  the five newest memories. Default false: the eval failed its overlap gate
-     *  (docs/evals/2026-09-26-z1-prompt-recall-result.md). */
+    /** Gate the hook's backfill on the prompt's own content instead of the five
+     *  newest memories. Default true: the same overlap for fewer tokens. */
     promptRecall: boolean;
-    /** Z1: overlap metric for the prompt-recall gate. Default 'jaccard' (tuned, docs/evals/2026-09-26-z1-prompt-recall-result.md). */
+    /** Overlap metric for the prompt-recall gate. Default 'jaccard' (tuned). */
     promptRecallMetric: PromptRecallMetric;
-    /** Z1: minimum overlap score to admit a candidate. Default 0.04 (tuned). */
+    /** Minimum overlap score to admit a candidate. Default 0.04 (tuned). */
     promptRecallThreshold: number;
-    /** Z1: minimum shared tokens to admit a candidate. Default 2. */
+    /** Minimum shared tokens to admit a candidate. Default 2. */
     promptRecallMinShared: number;
-    /** Z1: max prompt-recall entries injected per prompt. Default 5 (tuned). */
+    /** Max prompt-recall entries injected per prompt. Default 5 (tuned). */
     promptRecallMaxItems: number;
-    /** Z1: FTS candidate pool size per store before gating. Default 100. */
+    /** FTS candidate pool size per store before gating. Default 100. */
     promptRecallCandidates: number;
   };
-  /** Memory scope isolation (v39): when true (default), ambient context
+  /** Memory scope isolation: when true (default), ambient context
    *  (`hippo context`, the UserPromptSubmit hook, /v1/context, MCP
    *  hippo_context) excludes memories owned by OTHER projects; explicit
    *  recall is unaffected. Set false to disable the ORIGIN PARTITION only -
    *  the secret veto is unconditional for ambient surfaces and no config or
    *  flag re-includes secret-flagged rows (explicit recall still returns
-   *  them). See docs/plans/2026-07-01-memory-scope-isolation.md. */
+   *  them). */
   contextProjectIsolation: boolean;
   extraction: {
     enabled: boolean | 'auto';
@@ -116,11 +117,8 @@ export interface HippoConfig {
   ambient: {
     enabled: boolean;
   };
-  /** LC2-E3: opt-in learned memory-value rescue veto on the sleep decay pass
-   *  (docs/plans/2026-08-10-lc2-e3-mv-wiring.md). Default OFF — the frozen
-   *  E2 weights (src/memory-value-weights.ts) only run when explicitly
-   *  enabled; no other knobs in v1 (the rescue budget is a code constant
-   *  tied to E2 evidence, not user-tunable). */
+  /** Opt-in learned memory-value rescue veto on the sleep decay pass. Default OFF: the frozen weights
+   *  (src/memory-value-weights.ts) only run when enabled; the rescue budget is a code constant, not user-tunable. */
   memoryValue: {
     enabled: boolean;
   };
@@ -137,16 +135,38 @@ export interface HippoConfig {
      *  Default 180. 0 keeps dormant memories forever. */
     retentionDays: number;
   };
-  /** FE2: tags a memory `churn-stale` when its named file/symbol/script
-   *  changed since storage. Default OFF - FE3 measures before it flips. */
+  /** Tags a memory `churn-stale` when its named file/symbol/script
+   *  changed since storage. Default OFF until a measurement justifies the flip. */
   churnStaleness: {
     enabled: boolean;
   };
+  /** Which agents' own memories init, sleep and session end import: tool ids, null for every tool, [] for none. */
+  agentMemories: {
+    tools: string[] | null;
+  };
+  /** Per-turn delivery ledger (src/recall-trace.ts): hashes, ids, counts and rejection reasons for each
+   *  pinned-only context call. Default off; read from the store the token ledger writes to. */
+  deliveryLedger: {
+    enabled: boolean;
+  };
+  /** Pilot holdout (src/pilot-arm.ts): share of sessions, in basis points 0-10000, that get no memories pushed.
+   *  Default 0 = off. Read from the store the token ledger writes to. */
+  pilot: {
+    holdoutRateBp: number;
+  };
+  /** How a folder's project is named. `remote: false` drops the origin-remote rule, leaving
+   *  `.hippo-project.json` then the folder name. Read from the global store's config only, so every store agrees. */
+  projectIdentity: {
+    remote: boolean;
+  };
+  /** The store serves many people, so a write that names no project is stamped NULL, never this folder's project,
+   *  and a context read must name the caller's project. Default false. Read it through isSharedStore. */
+  sharedStore: boolean;
 }
 
 const DEFAULT_CONFIG: HippoConfig = {
   defaultHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-  defaultBudget: 4000,
+  defaultBudget: DEFAULT_RECALL_BUDGET,
   defaultContextBudget: 3000,
   decayBasis: 'adaptive',
   autoLearnOnSleep: true,
@@ -174,7 +194,7 @@ const DEFAULT_CONFIG: HippoConfig = {
     lambda: 0.7,
   },
   search: {
-    localBump: 1.2,
+    localBump: DEFAULT_LOCAL_BUMP,
   },
   replay: {
     count: 5,
@@ -186,7 +206,7 @@ const DEFAULT_CONFIG: HippoConfig = {
     budget: 1500,
     skipUnchanged: true,
     refreshTurns: 10,
-    promptRecall: false,
+    promptRecall: true,
     promptRecallMetric: 'jaccard',
     promptRecallThreshold: 0.04,
     promptRecallMinShared: 2,
@@ -221,6 +241,19 @@ const DEFAULT_CONFIG: HippoConfig = {
   churnStaleness: {
     enabled: false,
   },
+  agentMemories: {
+    tools: null,
+  },
+  deliveryLedger: {
+    enabled: false,
+  },
+  pilot: {
+    holdoutRateBp: 0,
+  },
+  projectIdentity: {
+    remote: true,
+  },
+  sharedStore: false,
 };
 
 function isMemoryValueConfig(
@@ -241,6 +274,153 @@ function isChurnStalenessConfig(
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function isDeliveryLedgerConfig(
+  value: HippoConfig['deliveryLedger'] | undefined,
+): value is HippoConfig['deliveryLedger'] {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+// Only `{"enabled": true}` turns it on; anything malformed warns and stays off.
+function deliveryLedgerEnabled(value: HippoConfig['deliveryLedger'] | undefined): boolean {
+  if (value === undefined) return false;
+  const isObject = isDeliveryLedgerConfig(value);
+  const enabled = isObject ? value.enabled : undefined;
+  if (enabled === true || enabled === false) return enabled;
+  if (isObject && enabled === undefined) return false;
+  log.warn(
+    `config.json's "deliveryLedger" must be an object like {"enabled": true} ` +
+    `(got ${JSON.stringify(value)}) - using false.`,
+  );
+  return false;
+}
+
+// Only an integer 0..10000 counts; anything else warns and turns the pilot off.
+function pilotHoldoutRate(value: HippoConfig['pilot'] | undefined): number {
+  if (value === undefined) return 0;
+  const rate = value?.holdoutRateBp;
+  if (rate === undefined && value !== null && value.constructor === Object) return 0;
+  if (Number.isInteger(rate) && rate >= 0 && rate <= 10000) return rate;
+  log.warn(
+    `config.json's "pilot" must be an object like {"holdoutRateBp": 2000}, an integer from 0 to 10000 ` +
+    `(got ${JSON.stringify(value)}) - using 0 (pilot off).`,
+  );
+  return 0;
+}
+
+// Only a real false turns the remote rule off; anything else malformed warns and keeps it on.
+function projectIdentityRemote(value: HippoConfig['projectIdentity'] | undefined): boolean {
+  const remote = value?.remote;
+  if (remote === true || remote === false) return remote;
+  if (value === undefined || (remote === undefined && value !== null && value.constructor === Object)) return true;
+  log.warn(
+    `config.json's "projectIdentity" must be an object like {"remote": false} ` +
+    `(got ${JSON.stringify(value)}) - using true (projects named by their origin remote).`,
+  );
+  return true;
+}
+
+function agentMemoryTools(value: string[] | null | undefined): string[] | null {
+  if (value === undefined || value === null) return null;
+  if (Array.isArray(value) && value.every((t) => String(t) === t)) return value;
+  log.warn(
+    `config.json's "agentMemories.tools" must be a list of tool ids like ["claude-code", "codex"] ` +
+    `(got ${JSON.stringify(value)}) - importing none.`,
+  );
+  return [];
+}
+
+function memoryValueOverride(raw: Partial<HippoConfig>): Partial<HippoConfig['memoryValue']> {
+  // Spreading a non-object raw.memoryValue (e.g. {"memoryValue": true}) silently leaves `enabled` false;
+  // this feature must never be silently off, so warn loudly and fall back to defaults instead.
+  const memoryValueRaw = raw.memoryValue;
+  const validMemoryValueConfig = memoryValueRaw === undefined || isMemoryValueConfig(memoryValueRaw);
+  if (!validMemoryValueConfig) {
+    log.warn(
+      `config.json's "memoryValue" must be an object like {"enabled": true} ` +
+      `(got ${JSON.stringify(memoryValueRaw)}) - using defaults.`,
+    );
+  }
+  return memoryValueRaw !== undefined && isMemoryValueConfig(memoryValueRaw) ? memoryValueRaw : {};
+}
+
+function dormantSettings(raw: Partial<HippoConfig>): HippoConfig['dormant'] {
+  // Same rule as memoryValue above: a malformed value never silently
+  // changes what sleep does. Anything but a real object / boolean / number
+  // warns and falls back to the default, which keeps faded memories.
+  const dormantRaw = raw.dormant;
+  if (dormantRaw !== undefined && !isDormantConfig(dormantRaw)) {
+    log.warn(
+      `config.json's "dormant" must be an object like {"enabled": false} ` +
+      `(got ${JSON.stringify(dormantRaw)}) - using the default (faded memories kept dormant).`,
+    );
+  }
+  const dormantOverride: Partial<HippoConfig['dormant']> =
+    dormantRaw !== undefined && isDormantConfig(dormantRaw) ? dormantRaw : {};
+  // Only a real boolean counts: {"enabled": "false"} is a truthy string.
+  let dormantEnabled = dormantOverride.enabled ?? DEFAULT_CONFIG.dormant.enabled;
+  if (dormantEnabled !== true && dormantEnabled !== false) {
+    log.warn(
+      `config.json's "dormant.enabled" must be true or false ` +
+      `(got ${JSON.stringify(dormantEnabled)}) - using the default (faded memories kept dormant).`,
+    );
+    dormantEnabled = DEFAULT_CONFIG.dormant.enabled;
+  }
+  let dormantRetentionDays = dormantOverride.retentionDays ?? DEFAULT_CONFIG.dormant.retentionDays;
+  if (!Number.isFinite(dormantRetentionDays) || dormantRetentionDays < 0) {
+    log.warn(
+      `config.json's "dormant.retentionDays" must be a number of days, 0 or more ` +
+      `(got ${JSON.stringify(dormantRetentionDays)}) - using ${DEFAULT_CONFIG.dormant.retentionDays}.`,
+    );
+    dormantRetentionDays = DEFAULT_CONFIG.dormant.retentionDays;
+  }
+  return { enabled: dormantEnabled, retentionDays: dormantRetentionDays };
+}
+
+function churnStalenessEnabled(raw: Partial<HippoConfig>): boolean {
+  // Same "never silently wrong" rule as memoryValue/dormant above.
+  const churnStalenessRaw = raw.churnStaleness;
+  const validChurnStalenessConfig = churnStalenessRaw === undefined || isChurnStalenessConfig(churnStalenessRaw);
+  if (!validChurnStalenessConfig) {
+    log.warn(
+      `config.json's "churnStaleness" must be an object like {"enabled": true} ` +
+      `(got ${JSON.stringify(churnStalenessRaw)}) - using defaults.`,
+    );
+  }
+  const enabled =
+    churnStalenessRaw !== undefined && isChurnStalenessConfig(churnStalenessRaw)
+      ? churnStalenessRaw.enabled
+      : DEFAULT_CONFIG.churnStaleness.enabled;
+  if (enabled !== true && enabled !== false) {
+    log.warn(
+      `config.json's "churnStaleness.enabled" must be true or false ` +
+      `(got ${JSON.stringify(enabled)}) - using false.`,
+    );
+    return false;
+  }
+  return enabled;
+}
+
+function defaultHalfLifeDays(raw: Partial<HippoConfig>): number {
+  // Every writer starts a memory on this, and a zero or negative half-life scores zero strength, so sleep would retire it.
+  const days = raw.defaultHalfLifeDays ?? DEFAULT_CONFIG.defaultHalfLifeDays;
+  if (!Number.isFinite(days) || days <= 0) {
+    log.warn(
+      `config.json's "defaultHalfLifeDays" must be a number of days above 0 ` +
+      `(got ${JSON.stringify(days)}) - using ${DEFAULT_CONFIG.defaultHalfLifeDays}.`,
+    );
+    return DEFAULT_CONFIG.defaultHalfLifeDays;
+  }
+  return days;
+}
+
+// Only a real true turns it on; anything else present warns and stays off.
+function sharedStoreFlag(raw: Partial<HippoConfig>): boolean {
+  const value = raw.sharedStore;
+  if (value === undefined || value === true || value === false) return value === true;
+  log.warn(`config.json's "sharedStore" must be true or false (got ${JSON.stringify(value)}) - using false.`);
+  return false;
+}
+
 export function loadConfig(hippoRoot: string): HippoConfig {
   const configPath = path.join(hippoRoot, 'config.json');
   if (!fs.existsSync(configPath)) return { ...DEFAULT_CONFIG };
@@ -248,83 +428,12 @@ export function loadConfig(hippoRoot: string): HippoConfig {
     const raw: Partial<HippoConfig> = JSON.parse(fs.readFileSync(configPath, 'utf8'));
     const basis = raw.decayBasis;
     const validBasis = basis === 'clock' || basis === 'session' || basis === 'adaptive';
-    // Review-round F6: {...DEFAULT_CONFIG.memoryValue, ...raw.memoryValue}
-    // silently no-ops when raw.memoryValue is a non-object (e.g. the user
-    // wrote {"memoryValue": true}) — spreading a boolean/primitive/array
-    // contributes no enumerable own properties, so `enabled` stays at the
-    // default `false` with zero indication anything was wrong. This
-    // feature's whole point is "never silently off": warn loudly and fall
-    // back to defaults instead of merging garbage.
-    const memoryValueRaw = raw.memoryValue;
-    const validMemoryValueConfig = memoryValueRaw === undefined || isMemoryValueConfig(memoryValueRaw);
-    if (!validMemoryValueConfig) {
-      console.error(
-        `Warning: config.json's "memoryValue" must be an object like {"enabled": true} ` +
-        `(got ${JSON.stringify(memoryValueRaw)}) - using defaults.`,
-      );
-    }
-    const memoryValueOverride: Partial<HippoConfig['memoryValue']> =
-      memoryValueRaw !== undefined && isMemoryValueConfig(memoryValueRaw) ? memoryValueRaw : {};
-    // Same rule as memoryValue above: a malformed value never silently
-    // changes what sleep does. Anything but a real object / boolean / number
-    // warns and falls back to the default, which keeps faded memories.
-    const dormantRaw = raw.dormant;
-    if (dormantRaw !== undefined && !isDormantConfig(dormantRaw)) {
-      console.error(
-        `Warning: config.json's "dormant" must be an object like {"enabled": false} ` +
-        `(got ${JSON.stringify(dormantRaw)}) - using the default (faded memories kept dormant).`,
-      );
-    }
-    const dormantOverride: Partial<HippoConfig['dormant']> =
-      dormantRaw !== undefined && isDormantConfig(dormantRaw) ? dormantRaw : {};
-    // Only a real boolean counts: {"enabled": "false"} is a truthy string.
-    let dormantEnabled = dormantOverride.enabled ?? DEFAULT_CONFIG.dormant.enabled;
-    if (dormantEnabled !== true && dormantEnabled !== false) {
-      console.error(
-        `Warning: config.json's "dormant.enabled" must be true or false ` +
-        `(got ${JSON.stringify(dormantEnabled)}) - using the default (faded memories kept dormant).`,
-      );
-      dormantEnabled = DEFAULT_CONFIG.dormant.enabled;
-    }
-    let dormantRetentionDays = dormantOverride.retentionDays ?? DEFAULT_CONFIG.dormant.retentionDays;
-    if (!Number.isFinite(dormantRetentionDays) || dormantRetentionDays < 0) {
-      console.error(
-        `Warning: config.json's "dormant.retentionDays" must be a number of days, 0 or more ` +
-        `(got ${JSON.stringify(dormantRetentionDays)}) - using ${DEFAULT_CONFIG.dormant.retentionDays}.`,
-      );
-      dormantRetentionDays = DEFAULT_CONFIG.dormant.retentionDays;
-    }
-    // Same "never silently wrong" rule as memoryValue/dormant above.
-    const churnStalenessRaw = raw.churnStaleness;
-    const validChurnStalenessConfig = churnStalenessRaw === undefined || isChurnStalenessConfig(churnStalenessRaw);
-    if (!validChurnStalenessConfig) {
-      console.error(
-        `Warning: config.json's "churnStaleness" must be an object like {"enabled": true} ` +
-        `(got ${JSON.stringify(churnStalenessRaw)}) - using defaults.`,
-      );
-    }
-    let churnStalenessEnabled =
-      churnStalenessRaw !== undefined && isChurnStalenessConfig(churnStalenessRaw)
-        ? churnStalenessRaw.enabled
-        : DEFAULT_CONFIG.churnStaleness.enabled;
-    if (churnStalenessEnabled !== true && churnStalenessEnabled !== false) {
-      console.error(
-        `Warning: config.json's "churnStaleness.enabled" must be true or false ` +
-        `(got ${JSON.stringify(churnStalenessEnabled)}) - using false.`,
-      );
-      churnStalenessEnabled = false;
-    }
-    // Every writer starts a memory on this, and a zero or negative half-life scores zero strength, so sleep would retire it.
-    let defaultHalfLifeDays = raw.defaultHalfLifeDays ?? DEFAULT_CONFIG.defaultHalfLifeDays;
-    if (!Number.isFinite(defaultHalfLifeDays) || defaultHalfLifeDays <= 0) {
-      console.error(
-        `Warning: config.json's "defaultHalfLifeDays" must be a number of days above 0 ` +
-        `(got ${JSON.stringify(defaultHalfLifeDays)}) - using ${DEFAULT_CONFIG.defaultHalfLifeDays}.`,
-      );
-      defaultHalfLifeDays = DEFAULT_CONFIG.defaultHalfLifeDays;
-    }
+    const memoryValue = memoryValueOverride(raw);
+    const dormant = dormantSettings(raw);
+    const churnEnabled = churnStalenessEnabled(raw);
+    const halfLifeDays = defaultHalfLifeDays(raw);
     return {
-      defaultHalfLifeDays,
+      defaultHalfLifeDays: halfLifeDays,
       defaultBudget: raw.defaultBudget ?? DEFAULT_CONFIG.defaultBudget,
       defaultContextBudget: raw.defaultContextBudget ?? DEFAULT_CONFIG.defaultContextBudget,
       decayBasis: validBasis ? basis : DEFAULT_CONFIG.decayBasis,
@@ -348,25 +457,60 @@ export function loadConfig(hippoRoot: string): HippoConfig {
       ambient: { ...DEFAULT_CONFIG.ambient, ...(raw.ambient ?? {}) },
       memoryValue: {
         ...DEFAULT_CONFIG.memoryValue,
-        ...memoryValueOverride,
+        ...memoryValue,
       },
-      dormant: {
-        enabled: dormantEnabled,
-        retentionDays: dormantRetentionDays,
-      },
+      dormant,
       churnStaleness: {
-        enabled: churnStalenessEnabled,
+        enabled: churnEnabled,
       },
+      agentMemories: { tools: agentMemoryTools(raw.agentMemories?.tools) },
+      deliveryLedger: { enabled: deliveryLedgerEnabled(raw.deliveryLedger) },
+      pilot: { holdoutRateBp: pilotHoldoutRate(raw.pilot) },
+      projectIdentity: { remote: projectIdentityRemote(raw.projectIdentity) },
+      sharedStore: sharedStoreFlag(raw),
     };
   } catch (err) {
     if (fs.existsSync(configPath)) {
-      console.error(`Warning: failed to parse ${configPath}: ${err instanceof Error ? err.message : err}`);
+      log.warn(`failed to parse ${configPath}: ${err instanceof Error ? err.message : err}`);
     }
     return { ...DEFAULT_CONFIG };
   }
 }
 
-export function saveConfig(hippoRoot: string, config: HippoConfig): void {
-  const configPath = path.join(hippoRoot, 'config.json');
-  fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
+const sharedStoreRoots = new Set<string>();
+
+/** The folder as isGlobalStoreRoot compares it (realpath, case-folded on Windows); its helper sits behind an import cycle. */
+function sharedStoreKey(hippoRoot: string): string {
+  let real: string;
+  try {
+    real = fs.realpathSync.native(hippoRoot);
+  } catch (err) {
+    log.debug(`sharedStore: realpath fell back to resolve for ${hippoRoot}: ${err instanceof Error ? err.message : String(err)}`);
+    real = path.resolve(hippoRoot);
+  }
+  return process.platform === 'win32' ? real.toLowerCase() : real;
+}
+
+/** True when the store's config.json sets `"sharedStore": true`. Once true, a root stays true for this process,
+ *  so a broken edit while a server runs cannot turn it off. Reads only this key: loadConfig has no cache. */
+export function isSharedStore(hippoRoot: string): boolean {
+  const key = sharedStoreKey(hippoRoot);
+  if (sharedStoreRoots.has(key)) return true;
+  const configPath = path.join(path.resolve(hippoRoot), 'config.json');
+  if (!fs.existsSync(configPath)) return false;
+  let raw: Partial<HippoConfig> | null;
+  try {
+    raw = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  } catch (err) {
+    log.warn(`failed to read ${configPath}: ${err instanceof Error ? err.message : err} - sharedStore read as false.`);
+    return false;
+  }
+  if (raw?.sharedStore !== true) return false;
+  sharedStoreRoots.add(key);
+  return true;
+}
+
+/** Test seam: forget every root seen as shared. */
+export function _resetSharedStoreCacheForTests(): void {
+  sharedStoreRoots.clear();
 }

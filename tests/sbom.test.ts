@@ -99,7 +99,7 @@ describe('scripts/sbom.mjs CLI (real repo, spawns npm)', () => {
   const SBOM_JS = resolve(__dirname, '..', 'scripts', 'sbom.mjs');
   const REPO_ROOT = resolve(__dirname, '..');
 
-  it('lists react, react-dom and three; never @types/three or a dev component; every ref resolves', () => {
+  it('lists react and react-dom; never three or a dev component; every ref resolves', () => {
     const dir = mkdtempSync(join(tmpdir(), 'sbom-cli-'));
     try {
       const out = join(dir, 'out.cdx.json');
@@ -108,10 +108,10 @@ describe('scripts/sbom.mjs CLI (real repo, spawns npm)', () => {
       const bom = JSON.parse(readFileSync(out, 'utf8')) as CdxBom;
       const names = bom.components.map((c) => c.name);
 
-      for (const want of ['react', 'react-dom', 'three']) {
+      for (const want of ['react', 'react-dom']) {
         expect(names, `expected ${want} in the merged runtime SBOM (npm's sbom output may have changed)`).toContain(want);
       }
-      expect(names, '@types/three should stay a devDependency and be absent here').not.toContain('@types/three');
+      expect(names, 'the Living Map is gone, so three must not ship').not.toContain('three');
       const devComponent = bom.components.find((c) => c.properties.some((p) => p.name === 'cdx:npm:package:development' && p.value === 'true'));
       expect(devComponent, `found a dev component npm's development property did not filter: ${devComponent?.['bom-ref']}`).toBeUndefined();
 

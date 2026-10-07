@@ -80,11 +80,11 @@ describe('hippo mcp stdio (issue #13)', () => {
   afterEach(async () => {
     if (proc && proc.exitCode === null) {
       const exited = new Promise<void>((resolve) => proc!.once('exit', () => resolve()));
-      proc.kill('SIGKILL');
-      await Promise.race([
-        exited,
-        new Promise<void>((resolve) => setTimeout(resolve, 2000)),
-      ]);
+      // Closing stdin lets the server exit itself and write its coverage; SIGKILL would lose it.
+      proc.stdin.end();
+      const timedOut = await Promise.race([exited.then(() => false), new Promise<boolean>((resolve) => setTimeout(() => resolve(true), 2000))]);
+      if (timedOut) proc.kill('SIGKILL');
+      await Promise.race([exited, new Promise<void>((resolve) => setTimeout(resolve, 2000))]);
     }
     process.env.HOME = prevHome;
     process.env.USERPROFILE = prevUserProfile;

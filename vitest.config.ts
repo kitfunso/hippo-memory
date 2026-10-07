@@ -1,7 +1,14 @@
 import { mkdtempSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
+
+// Scratch dirs a test forgets to delete land in this run folder, which the guard's teardown removes.
+process.env.HIPPO_TEST_REAL_TMP ??= tmpdir();
+const TMP_KEYS = ['TMPDIR', 'TEMP', 'TMP'];
+const runTmp = mkdtempSync(join(tmpdir(), 'hippo-test-tmp-'));
+process.env.HIPPO_TEST_TMP_RUN = runTmp;
+for (const k of TMP_KEYS) process.env[k] = runTmp;
 
 // Isolate the global hippo store for the whole test run. getGlobalRoot()
 // (HIPPO_HOME, then XDG_DATA_HOME/hippo, then ~/.hippo) otherwise falls through
@@ -21,27 +28,52 @@ const isolatedUserHome = mkdtempSync(join(tmpdir(), 'hippo-test-userhome-'));
 process.env.HIPPO_TEST_TMP_USERHOME = isolatedUserHome;
 process.env.HOME = isolatedUserHome;
 process.env.USERPROFILE = isolatedUserHome;
-delete process.env.XDG_DATA_HOME;
-const PROVIDER_ENV_KEYS = ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'VOYAGE_API_KEY', 'COHERE_API_KEY', 'TYPESAFE_API_KEY', 'HIPPO_LLM_RERANKER_URL', 'HIPPO_LLM_RERANKER_KEY'];
+// Agent memory folders the import finds through the environment rather than the home folder (Copilot's VS Code data, and each tool's override).
+const isolatedAppData = join(isolatedUserHome, 'AppData', 'Roaming');
+process.env.APPDATA = isolatedAppData;
+const AGENT_HOME_KEYS = [
+  'XDG_DATA_HOME', 'XDG_CONFIG_HOME', 'CODEX_HOME', 'CLAUDE_CONFIG_DIR', 'CLAUDE_CODE_PROJECT_DIR_NAME', 'VSCODE_PORTABLE', 'VSCODE_APPDATA',
+  'GEMINI_CLI_HOME', 'QWEN_HOME', 'QWEN_RUNTIME_DIR', 'QWEN_CODE_MEMORY_BASE_DIR', 'QWEN_CODE_MEMORY_LOCAL', 'QWEN_CODE_MEMORY_PROJECT_SCOPE',
+  'OPENCLAW_WORKSPACE_DIR', 'OPENCLAW_STATE_DIR', 'OPENCLAW_HOME', 'OPENCLAW_PROFILE',
+];
+for (const k of AGENT_HOME_KEYS) delete process.env[k];
+delete process.env.HIPPO_AGENT_MEMORY_TOOLS;
+const PROVIDER_ENV_KEYS = ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'VOYAGE_API_KEY', 'COHERE_API_KEY', 'TYPESAFE_API_KEY', 'HIPPO_LLM_RERANKER_URL', 'HIPPO_LLM_RERANKER_KEY', 'CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_API_TOKEN', 'HIPPO_CLEF_ENDPOINT', 'HIPPO_CLEF_ENDPOINT_TOKEN'];
 for (const k of PROVIDER_ENV_KEYS) delete process.env[k];
+
+export const EVAL_TESTS = ['tests/token-eval*.test.ts'];
 
 export default defineConfig({
   test: {
     include: ['tests/**/*.test.ts', 'tests/**/*.test.mjs'],
+    exclude: [...configDefaults.exclude, ...EVAL_TESTS],
     environment: 'node',
     // Workers get the isolated homes and blank provider keys (a real key would bill and leak prompts);
     // the process.env writes at module scope above cover the main process. Both are required.
     env: {
-      HIPPO_HOME: isolatedHippoHome, HOME: isolatedUserHome, USERPROFILE: isolatedUserHome, XDG_DATA_HOME: '',
+      HIPPO_HOME: isolatedHippoHome, HOME: isolatedUserHome, USERPROFILE: isolatedUserHome, APPDATA: isolatedAppData,
+      ...Object.fromEntries(TMP_KEYS.map((k) => [k, runTmp])),
+      ...Object.fromEntries(AGENT_HOME_KEYS.map((k) => [k, ''])),
       ...Object.fromEntries(PROVIDER_ENV_KEYS.map((k) => [k, ''])),
     },
     globalSetup: ['tests/_real-store-guard.ts'],
+    server: { deps: { external: [/tests[\\/]_coverage-provider\.ts$/] } },
     // 55 of 384 files spawn git/hippo/nested-vitest children, so one fork per
     // core oversubscribes a big box. Detail: CHANGELOG 1.38.3.
-    poolOptions: { forks: { maxForks: 6 } },
+    maxWorkers: 6,
     // Real-SQLite tests that take ~2s alone blow the 5s default under that
     // contention, and setup hooks fork more children still, so both get 30s.
     testTimeout: 30_000,
     hookTimeout: 30_000,
+    coverage: {
+      provider: 'custom',
+      customProviderModule: './tests/_coverage-provider.ts',
+      // Without include, untested src files would not count; dist/ lets spawned-CLI results through to remap.
+      include: ['src/**/*.ts', 'dist/**/*.js'],
+      autoAttachSubprocess: true,
+      excludeAfterRemap: true,
+      reporter: ['text-summary', 'json-summary'],
+      thresholds: { lines: 90, branches: 82, functions: 95, statements: 89 },
+    },
   },
 });

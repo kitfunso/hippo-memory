@@ -24,11 +24,15 @@ import { fileURLToPath } from 'node:url';
 
 // hippo internals — use dist so we call production code paths
 import { createMemory } from '../dist/memory.js';
-import { writeEntry, loadAllEntries, initStore } from '../dist/store.js';
-import { embedMemory, loadEmbeddingIndex, isEmbeddingAvailable, resolveEmbeddingModel } from '../dist/embeddings.js';
-import { resetAllPhysicsState, loadPhysicsState } from '../dist/physics-state.js';
+import { initStore } from '../dist/store/open.js';
+import { writeEntry } from '../dist/store/entry-writes.js';
+import { loadAllEntries } from '../dist/store/entry-reads.js';
+import { embedMemory } from '../dist/embeddings.js';
+import { isEmbeddingAvailable, resolveEmbeddingModel } from '../dist/local-embedding.js';
 import { openHippoDb, closeHippoDb } from '../dist/db.js';
-import { hybridSearch, physicsSearch, buildCorpus } from '../dist/search.js';
+import { hybridSearch } from '../dist/search/hybrid.js';
+import { physicsSearch } from '../dist/search/physics-search.js';
+import { buildCorpus } from '../dist/search/bm25.js';
 import { DEFAULT_PHYSICS_CONFIG } from '../dist/physics-config.js';
 
 // ---------------------------------------------------------------------------

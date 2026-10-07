@@ -5,8 +5,7 @@
  * default base and a few write-time multipliers (`deriveHalfLife`). Changing
  * the default therefore reaches only new memories; without this migration a
  * store would mix old-base and new-base memories, a state the decay
- * evaluation never tested (docs/evals/2026-09-24-decay-default-prereg.md,
- * Migration). The rule, declared there before any run:
+ * evaluation never tested. The rule, declared before any run:
  *
  * - only a memory still on the old base is rescaled: its half-life is
  *   `deriveHalfLife(from, entry)` plus its recall bonus. A memory hippo shortened since
@@ -21,7 +20,8 @@
  * moves memories of live decisions, incidents and other objects off the flat 90 days they used to get.
  */
 import { deriveHalfLife, type MemoryEntry } from './memory.js';
-import { openStore, selectAllEntries, HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY } from './store.js';
+import { openStore, HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY } from './store/open.js';
+import { selectAllEntries } from './store/entry-reads.js';
 import { openHippoDb, closeHippoDb, getMeta, setMeta, type DatabaseSyncLike } from './db.js';
 import { appendAuditEvent } from './audit.js';
 import { loadConfig } from './config.js';
@@ -170,7 +170,7 @@ function objectMemoryIds(db: DatabaseSyncLike) {
   return { all, retired };
 }
 
-/** Memories that lost a conflict, which resolveConflict halved untagged. A resolved conflict with no audit row (before v1.31.0, or found stale) names no winner, so both sides count. */
+/** Memories that lost a conflict, which resolveConflict halved untagged. A resolved conflict with no audit row (resolved before resolves were audited, or found stale) names no winner, so both sides count. */
 function conflictLosers(db: DatabaseSyncLike): Set<string> {
   // SAFETY: SELECT of two fields every conflict_resolve audit row carries (ConflictResolveMeta in store.ts).
   const audited = db.prepare(`SELECT json_extract(metadata_json, '$.conflictId') AS conflictId, json_extract(metadata_json, '$.loserId') AS loserId FROM audit_log WHERE op = 'conflict_resolve'`).all() as { conflictId: number; loserId: string }[];
@@ -188,7 +188,10 @@ function writePlan(db: DatabaseSyncLike, plan: readonly MemoryEntry[], old: Read
   const byTenant = new Map<string, Record<string, number>>();
   for (const e of plan) {
     update.run(e.half_life_days, e.id);
-    byTenant.set(e.tenantId, { ...byTenant.get(e.tenantId), [e.id]: old.get(e.id)! });
+    // One record per tenant, filled in place: copying it per row made the write grow with the square of the store.
+    let record = byTenant.get(e.tenantId);
+    if (!record) byTenant.set(e.tenantId, (record = {}));
+    record[e.id] = old.get(e.id)!;
   }
   for (const [tenantId, oldHalfLives] of byTenant) {
     appendAuditEvent(db, { tenantId, actor: move.actor, op: 'half_life_migrate', metadata: { from: move.from, to: move.to, ids: Object.keys(oldHalfLives), oldHalfLives } });

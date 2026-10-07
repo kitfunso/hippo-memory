@@ -16,14 +16,12 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store.js';
+import { rmSync } from 'node:fs';
 import { serve, type ServerHandle } from '../src/server.js';
-import { createApiKey, type CreatedApiKey } from '../src/auth.js';
+import { createApiKey, type CreateApiKeyResult } from '../src/auth.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import type { ProjectBrief } from '../src/project-briefs.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 type BriefResponse = { brief: ProjectBrief };
 type BriefListResponse = { briefs: ProjectBrief[] };
@@ -36,20 +34,13 @@ async function jsonAs<T>(res: Response): Promise<T> {
   return (await res.json()) as T;
 }
 
-function makeRoot(): string {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-http-brief-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
-
 let home: string;
 let handle: ServerHandle;
-let apiKey: CreatedApiKey;
-let apiKeyB: CreatedApiKey;
+let apiKey: CreateApiKeyResult;
+let apiKeyB: CreateApiKeyResult;
 
 beforeEach(async () => {
-  home = makeRoot();
+  home = makeRoot('http-brief');
   const db = openHippoDb(home);
   try {
     apiKey = createApiKey(db, { tenantId: 'default', label: 'test-brief', role: 'admin' });
@@ -62,10 +53,10 @@ afterEach(async () => {
   rmSync(home, { recursive: true, force: true });
 });
 
-function authHeaders(key: CreatedApiKey = apiKey) {
+function authHeaders(key: CreateApiKeyResult = apiKey) {
   return { authorization: `Bearer ${key.plaintext}`, 'content-type': 'application/json' };
 }
-async function createBrief(body: { repo: string; summary: string }, key: CreatedApiKey = apiKey) {
+async function createBrief(body: { repo: string; summary: string }, key: CreateApiKeyResult = apiKey) {
   return fetch(`${handle.url}/v1/project-briefs`, { method: 'POST', headers: authHeaders(key), body: JSON.stringify(body) });
 }
 

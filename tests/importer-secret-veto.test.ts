@@ -1,5 +1,5 @@
 /**
- * Regression: the Claude Code memory importer (learnFromMemoryMd) must never
+ * Regression: the agent memory import must never
  * ingest a secret-bearing memory file. Some ~/.claude/projects/<p>/memory/*.md
  * files exist purely to hold a live credential (e.g. an API-key reference).
  *
@@ -12,9 +12,14 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { learnFromMemoryMd } from '../src/cli.js';
-import { initStore, loadAllEntries } from '../src/store.js';
+import { importProjectMemories } from '../src/agent-memories/sync.js';
+import { totalTally, type Tally } from '../src/agent-memories/report.js';
+import { initStore } from '../src/store/open.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
 import { detectSecret } from '../src/secret-detect.js';
+
+const sync = (root: string, home: string): Tally =>
+  totalTally(importProjectMemories(root, { machine: { home, env: {}, platform: process.platform } }));
 
 // AWS's own documented example access key — a well-known non-secret placeholder,
 // safe to embed. NEVER put a real credential in a fixture, even here.
@@ -24,7 +29,9 @@ let hippoRoot: string;
 let homeDir: string;
 
 function writeMemoryFile(name: string, frontmatter: string, body: string): void {
-  const memDir = path.join(homeDir, '.claude', 'projects', 'C--Users-test', 'memory');
+  // The importer reads only the folder Claude Code names after the store's project.
+  const project = fs.realpathSync.native(path.dirname(hippoRoot)).replace(/[^a-zA-Z0-9]/g, '-');
+  const memDir = path.join(homeDir, '.claude', 'projects', project, 'memory');
   fs.mkdirSync(memDir, { recursive: true });
   fs.writeFileSync(path.join(memDir, name), `---\n${frontmatter}\n---\n${body}\n`, 'utf8');
 }
@@ -40,7 +47,7 @@ afterEach(() => {
   fs.rmSync(homeDir, { recursive: true, force: true });
 });
 
-describe('learnFromMemoryMd secret veto', () => {
+describe('agent memory import secret veto', () => {
   it('sanity: the fixture key is flagged by detectSecret', () => {
     expect(detectSecret({ content: `key: ${FAKE_KEY}`, tags: [] }).flagged).toBe(true);
   });
@@ -57,10 +64,10 @@ describe('learnFromMemoryMd secret veto', () => {
       'Always run lighthouse after deploys and check the console before shipping.',
     );
 
-    const imported = learnFromMemoryMd(hippoRoot, homeDir);
+    const tally = sync(hippoRoot, homeDir);
 
     // Only the benign file is ingested.
-    expect(imported).toBe(1);
+    expect([tally.imported, tally.secret]).toEqual([1, 1]);
 
     const entries = loadAllEntries(hippoRoot);
     const joined = entries.map(e => e.content).join('\n');
@@ -84,7 +91,6 @@ describe('learnFromMemoryMd secret veto', () => {
       'Pin dependency versions and review before upgrading them.',
     );
 
-    const imported = learnFromMemoryMd(hippoRoot, homeDir);
-    expect(imported).toBe(2);
+    expect(sync(hippoRoot, homeDir).imported).toBe(2);
   });
 });

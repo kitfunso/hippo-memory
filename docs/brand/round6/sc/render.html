@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>hippo round 6 render</title>
+<style>html,body{margin:0;background:#0b0f0c}canvas{display:block}</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}</script>
+<body>
+<script type="module">
+import * as THREE from 'three';
+
+const q = {};
+for (const [k, v] of new URLSearchParams(location.search)) q[k] = v;
+const SIZE = +(q.size || 1024), alpha = q.alpha === '1';
+const renderer = new THREE.WebGLRenderer({ antialias: alpha, alpha, premultipliedAlpha: false, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1);
+renderer.setSize(SIZE, SIZE);
+document.body.appendChild(renderer.domElement);
+const dbg = renderer.getContext().getExtension('WEBGL_debug_renderer_info');
+if (dbg) console.log('gpu:', renderer.getContext().getParameter(dbg.UNMASKED_RENDERER_WEBGL));
+
+try {
+  const { createScene } = await import(`./${q.scene || 'sediment'}.js`);
+  const { render } = await createScene(renderer, SIZE, q);
+  let frames = 0;
+  const tick = () => { render(); if (++frames < 4) requestAnimationFrame(tick); else window.__done = true; };
+  tick();
+} catch (e) {
+  console.error('scene failed:', e.stack || e);
+  window.__done = true;
+}
+</script>
+</body></html>

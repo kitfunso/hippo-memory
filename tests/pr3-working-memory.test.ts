@@ -2,14 +2,13 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { initStore } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
 import {
   wmPush,
   wmRead,
   wmClear,
   wmFlush,
   WM_MAX_ENTRIES,
-  WorkingMemoryItem,
 } from '../src/working-memory.js';
 import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion } from '../src/db.js';
 

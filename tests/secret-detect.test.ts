@@ -9,11 +9,14 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { detectSecret, redactSecrets, redactSecretsStrict } from '../src/secret-detect.js';
-import { initStore, writeEntry, loadAllEntries } from '../src/store.js';
-import { createMemory } from '../src/memory.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { shareMemory, autoShare, syncGlobalToLocal, promoteToGlobal, getGlobalRoot } from '../src/shared.js';
 import { getContext, type Context } from '../src/api.js';
 import { clearProjectIdentityCache } from '../src/project-identity.js';
+import { ASSIGNED_SECRET_LINES, ORDINARY_CONFIG_LINES } from './_helpers/secret-shapes.js';
 
 // Built at runtime, so no secret-shaped literal sits in source.
 const HIPPO_KEY = 'hk_' + 'a'.repeat(24) + '.' + 'b'.repeat(32);
@@ -35,7 +38,7 @@ describe('detectSecret patterns', () => {
     expect(flagged('-----BEGIN RSA PRIVATE KEY-----')).toBe(true);
     expect(flagged('the prod API key is sk-abcdefghij0123456789xyz')).toBe(true);
     // The shape from the 2026-06-30 incident (synthetic value - never a real key).
-    expect(flagged('2chain prod API key for keith-personal: sk_vendor_1a2b3c4d')).toBe(true);
+    expect(flagged('project-i prod API key for the personal account: sk_vendor_1a2b3c4d')).toBe(true);
     expect(flagged('config sets api_key=9f8e7d6c5b4a3210ffff')).toBe(true);
   });
 
@@ -68,6 +71,46 @@ describe('detectSecret patterns', () => {
     // Credential-shaped values still flag.
     expect(flagged('password: MyDogsName2024x')).toBe(true);
     expect(flagged('config sets api_key=9f8e7d6c5b4a3210ffff')).toBe(true);
+  });
+
+  it.each([
+    ['a prefixed password', 'run DB_PASSWORD=' + 'Hunter2Hunter2' + ' before the migration'],
+    ['a prefixed token', 'set MY_API_TOKEN=' + 'abc123def456ghi789'],
+    ['a prefixed secret after a colon', 'CLIENT_SECRET: ' + '4f9a8b7c6d5e4f3a2b1c'],
+    ['a name that runs on past the keyword', 'AWS_SECRET_ACCESS_KEY=' + 'wJalrXUtnFEMI/K7MDENG/' + 'bPxRfiCYEXAMPLEKEY'],
+    ['a lower-case prefixed name', 'aws_secret_access_key=' + 'wJalrXUtnFEMI/K7MDENG/' + 'bPxRfiCYEXAMPLEKEY'],
+    ['a URL password', 'DATABASE_URL=postgres://admin:' + 'S3cretPw9' + '@localhost:5432/app'],
+    ['a passwd name', 'export SMTP_PASSWD=' + 'Tr0ub4dor3x99'],
+    ['a private key name', 'PRIVATE_KEY=' + '9f8e7d6c5b4a3210ffee'],
+    ['an access key name', 'S3_ACCESS_KEY=' + 'AKQ7Z2X9W4V1U8T3'],
+  ])('flags %s', (_name, content) => {
+    expect(flagged(content)).toBe(true);
+  });
+
+  it.each([
+    ['a name that only starts with a keyword', 'tokenizer: bert-base-uncased-v2 for the eval'],
+    ['a counter named after tokens', 'set max_tokens=4096 for the long runs'],
+    ['a URL template with no real password', 'connection strings look like postgres://user:password@host:5432/db'],
+    ['an ssh remote with a user and no password', 'clone ssh://git@github.com:22/acme/repo2.git'],
+  ])('does not flag %s', (_name, content) => {
+    expect(flagged(content)).toBe(false);
+  });
+
+  it.each(ASSIGNED_SECRET_LINES)('flags the assigned secret in %s', (content) => {
+    expect(detectSecret({ content, tags: [] })).toEqual({ flagged: true, reason: 'pattern:secret-assignment' });
+  });
+
+  it.each(ORDINARY_CONFIG_LINES)('does not flag the ordinary config %s', (content) => {
+    expect(detectSecret({ content, tags: [] })).toEqual({ flagged: false, reason: null });
+  });
+
+  it('reads no password from a URL whose query holds an @, and still reads one before the host', () => {
+    const query = 'http://localhost:8080?next=a@b.co';
+    expect(flagged(query)).toBe(false);
+    expect(redactSecretsStrict(query)).toBe(query);
+    const withPassword = `https://user:${'p4ss' + 'w0rd'}@host/x`;
+    expect(detectSecret({ content: withPassword, tags: [] }).reason).toBe('pattern:url-password');
+    expect(redactSecretsStrict(withPassword)).toBe('https://[REDACTED]@host/x');
   });
 });
 
@@ -113,6 +156,32 @@ describe('redactSecrets / redactSecretsStrict', () => {
     const prose = 'the quarterly review covers risk-free rate assumptions and nothing else';
     expect(redactSecrets(prose)).toBe(prose);
     expect(redactSecretsStrict(prose)).toBe(prose);
+  });
+
+  it('redactSecretsStrict removes a JWT at the start, after a space, after Bearer, after = and inside JSON quotes', () => {
+    for (const text of [`${JWT} was issued`, `the token is ${JWT}`, `Authorization: Bearer ${JWT}`, `jwt=${JWT}`, `{"id_token":"${JWT}"}`]) {
+      expect(redactSecretsStrict(text), text).not.toContain('eyJ');
+    }
+  });
+
+  it('redactSecretsStrict scrubs crafted 128 KiB runs of eyJ- and token= within 5x the time of prose', () => {
+    const fill = (unit: string): string => unit.repeat(Math.ceil(131072 / unit.length)).slice(0, 131072);
+    const prose = fill('the quarterly review covers risk-free rate assumptions and nothing else. ');
+    for (const crafted of [fill('eyJ-'), fill('token=')]) {
+      // The fastest of five interleaved runs of each text, so a GC pause or a busy runner weighs on both alike.
+      let hostile = Infinity;
+      let baseline = Infinity;
+      for (let run = 0; run < 5; run++) {
+        let started = performance.now();
+        redactSecretsStrict(crafted);
+        hostile = Math.min(hostile, performance.now() - started);
+        started = performance.now();
+        redactSecretsStrict(prose);
+        baseline = Math.min(baseline, performance.now() - started);
+      }
+      // A ratio to prose holds on any runner speed, and rescanning the run from each repeat costs thousands of times prose.
+      expect(hostile / baseline, crafted.slice(0, 6)).toBeLessThan(5);
+    }
   });
 });
 

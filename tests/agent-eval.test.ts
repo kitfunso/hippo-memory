@@ -21,15 +21,13 @@ import * as path from 'path';
 import * as os from 'os';
 import {
   createMemory,
-  applyOutcome,
-  type MemoryEntry,
+  DEFAULT_HALF_LIFE_DAYS,
 } from '../src/memory.js';
-import {
-  initStore,
-  writeEntry,
-  loadAllEntries,
-} from '../src/store.js';
-import { search, markRetrieved } from '../src/search.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
+import { search } from '../src/search/bm25-search.js';
+import { markRetrieved } from '../src/memory.js';
 
 // ---------------------------------------------------------------------------
 // Trap categories — each has a lesson and 2-3 task instances
@@ -222,7 +220,7 @@ function simulate(tasks: Task[], mode: 'none' | 'static' | 'hippo'): SimResult[]
   // For static mode: pre-load all lessons
   if (mode === 'static') {
     for (const cat of TRAP_CATEGORIES) {
-      const entry = createMemory(cat.lesson, { tags: cat.tags });
+      const entry = createMemory(cat.lesson, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: cat.tags });
       writeEntry(tmpDir, entry);
     }
   }
@@ -273,6 +271,7 @@ function simulate(tasks: Task[], mode: 'none' | 'static' | 'hippo'): SimResult[]
       // For hippo mode: learn from the mistake
       if (mode === 'hippo') {
         const lesson = createMemory(cat.lesson, {
+          baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
           tags: [...cat.tags, 'error'],
           emotional_valence: 'negative',
         });

@@ -1,5 +1,5 @@
 /**
- * E2 incident first-class object (docs/plans/2026-05-29-e2-incident-object.md).
+ * Incident first-class object.
  *
  * An incident is a postmortem capsule: a recorded operational event with a
  * lifecycle and optional linked receipts (the memories that are its evidence).
@@ -26,11 +26,14 @@
  * cross-tenant or nonexistent id is rejected (throw) before the insert.
  */
 
-import { openHippoDb, closeHippoDb } from './db.js';
-import { writeEntry, assertTenantId } from './store.js';
+import { BadRequestError, ConflictError, NotFoundError } from './api-errors.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
+import { writeEntry } from './store/entry-writes.js';
+import { assertTenantId } from './tenant.js';
 import { createMemory, Layer } from './memory.js';
 import { appendAuditEvent } from './audit.js';
 import { objectHalfLifeDays } from './half-life-migration.js';
+import { keysetAfter, type KeysetPosition } from './keyset.js';
 
 // ---------------------------------------------------------------------------
 // Domain types
@@ -76,6 +79,8 @@ export interface SaveIncidentOpts {
 export interface ListIncidentsOpts {
   status?: IncidentStatus;
   limit?: number;
+  /** Resume after this row: the position the previous page ended on. */
+  after?: KeysetPosition;
 }
 
 // ---------------------------------------------------------------------------
@@ -106,6 +111,7 @@ function parseLinkedMemoryIds(raw: string): string[] {
     }
     return [];
   } catch {
+    // A malformed list column reads as empty instead of failing the incident read.
     return [];
   }
 }
@@ -137,6 +143,72 @@ const INCIDENT_COLS = `
 // Public API
 // ---------------------------------------------------------------------------
 
+// Validate every linked receipt BEFORE inserting the row. Each must be a
+// memory in the SAME tenant; a cross-tenant or nonexistent id rejects the
+// whole write rather than recording an unverifiable receipt.
+function validateLinkedMemoryIds(db: DatabaseSyncLike, tenantId: string, linkInput: string[]): string[] {
+  const validated: string[] = [];
+  for (const linkId of linkInput) {
+    // SAFETY: row shape matches the single `id` column named in the SELECT above.
+    const exists = db.prepare(
+      `SELECT id FROM memories WHERE id = ? AND tenant_id = ?`,
+    ).get(linkId, tenantId) as { id: string } | undefined;
+    if (!exists) {
+      throw new NotFoundError(
+        `saveIncident: linked memory ${linkId} not found for tenant ${tenantId}`,
+      );
+    }
+    validated.push(linkId);
+  }
+  return validated;
+}
+
+/** The afterWrite body: link validation, INSERT, reload, open audit, all in one SAVEPOINT. */
+function writeIncidentRow(
+  db: DatabaseSyncLike,
+  memoryId: string,
+  tenantId: string,
+  opts: SaveIncidentOpts,
+  actor: string,
+  now: string,
+): IncidentRow {
+  const validated = validateLinkedMemoryIds(db, tenantId, opts.linkedMemoryIds ?? []);
+
+  const result = db.prepare(`
+    INSERT INTO incidents(
+      memory_id, tenant_id, incident_text, context,
+      status, resolution_text, resolved_at, closed_at, linked_memory_ids, created_at
+    ) VALUES (?, ?, ?, ?, 'open', NULL, NULL, NULL, ?, ?)
+  `).run(
+    memoryId,
+    tenantId,
+    opts.incidentText,
+    opts.context ?? null,
+    JSON.stringify(validated),
+    now,
+  );
+  const incidentId = Number(result.lastInsertRowid ?? 0);
+
+  // SAFETY: row's shape matches the columns named in INCIDENT_COLS above.
+  const row = db.prepare(`SELECT ${INCIDENT_COLS} FROM incidents WHERE id = ?`)
+    .get(incidentId) as IncidentRow | undefined;
+  if (!row) throw new Error('saveIncident: failed to reload saved incident row');
+
+  // GDPR-light metadata: id + flag only, no incident_text.
+  appendAuditEvent(db, {
+    tenantId,
+    actor,
+    op: 'incident_open',
+    targetId: String(incidentId),
+    metadata: {
+      incident_id: incidentId,
+      has_context: opts.context !== undefined && opts.context !== null && opts.context !== '',
+      linked_memory_count: validated.length,
+    },
+  });
+  return row;
+}
+
 /**
  * Create an incident. Writes the memory mirror + the incidents row atomically
  * inside writeEntry's SAVEPOINT 'write_entry'.
@@ -156,7 +228,7 @@ export function saveIncident(
   actor: string = 'cli',
 ): Incident {
   assertTenantId('saveIncident', tenantId);
-  if (!opts.incidentText) throw new Error('saveIncident: incidentText is required');
+  if (!opts.incidentText) throw new BadRequestError('saveIncident: incidentText is required');
 
   const now = new Date().toISOString();
   const content = opts.context
@@ -172,8 +244,6 @@ export function saveIncident(
     tenantId,
   });
 
-  const linkInput = opts.linkedMemoryIds ?? [];
-
   // Populated inside afterWrite so the linked-id validation, the INSERT, and the
   // memory write all share one SAVEPOINT.
   let savedRow: IncidentRow | undefined;
@@ -181,56 +251,7 @@ export function saveIncident(
   writeEntry(hippoRoot, mem, {
     actor,
     afterWrite: (db, memoryId) => {
-      // Validate every linked receipt BEFORE inserting the row. Each must be a
-      // memory in the SAME tenant; a cross-tenant or nonexistent id rejects the
-      // whole write rather than recording an unverifiable receipt.
-      const validated: string[] = [];
-      for (const linkId of linkInput) {
-        // SAFETY: row shape matches the single `id` column named in the SELECT above.
-        const exists = db.prepare(
-          `SELECT id FROM memories WHERE id = ? AND tenant_id = ?`,
-        ).get(linkId, tenantId) as { id: string } | undefined;
-        if (!exists) {
-          throw new Error(
-            `saveIncident: linked memory ${linkId} not found for tenant ${tenantId}`,
-          );
-        }
-        validated.push(linkId);
-      }
-
-      const result = db.prepare(`
-        INSERT INTO incidents(
-          memory_id, tenant_id, incident_text, context,
-          status, resolution_text, resolved_at, closed_at, linked_memory_ids, created_at
-        ) VALUES (?, ?, ?, ?, 'open', NULL, NULL, NULL, ?, ?)
-      `).run(
-        memoryId,
-        tenantId,
-        opts.incidentText,
-        opts.context ?? null,
-        JSON.stringify(validated),
-        now,
-      );
-      const incidentId = Number(result.lastInsertRowid ?? 0);
-
-      // SAFETY: row's shape matches the columns named in INCIDENT_COLS above.
-      const row = db.prepare(`SELECT ${INCIDENT_COLS} FROM incidents WHERE id = ?`)
-        .get(incidentId) as IncidentRow | undefined;
-      if (!row) throw new Error('saveIncident: failed to reload saved incident row');
-      savedRow = row;
-
-      // GDPR-light metadata: id + flag only, no incident_text.
-      appendAuditEvent(db, {
-        tenantId,
-        actor,
-        op: 'incident_open',
-        targetId: String(incidentId),
-        metadata: {
-          incident_id: incidentId,
-          has_context: opts.context !== undefined && opts.context !== null && opts.context !== '',
-          linked_memory_count: validated.length,
-        },
-      });
+      savedRow = writeIncidentRow(db, memoryId, tenantId, opts, actor, now);
     },
   });
 
@@ -256,7 +277,7 @@ export function resolveIncident(
 ): Incident {
   assertTenantId('resolveIncident', tenantId);
   if (!resolutionText || !resolutionText.trim()) {
-    throw new Error('resolveIncident: resolutionText is required (non-empty)');
+    throw new BadRequestError('resolveIncident: resolutionText is required (non-empty)');
   }
   const now = new Date().toISOString();
   const db = openHippoDb(hippoRoot);
@@ -275,9 +296,9 @@ export function resolveIncident(
           `SELECT status FROM incidents WHERE id = ? AND tenant_id = ?`,
         ).get(id, tenantId) as { status: string } | undefined;
         if (!existing) {
-          throw new Error(`resolveIncident: incident ${id} not found for tenant ${tenantId}`);
+          throw new NotFoundError(`resolveIncident: incident ${id} not found for tenant ${tenantId}`);
         }
-        throw new Error(
+        throw new ConflictError(
           `resolveIncident: incident ${id} is not open (status='${existing.status}'); only open incidents can be resolved.`,
         );
       }
@@ -285,7 +306,7 @@ export function resolveIncident(
       // SAFETY: row's shape matches the columns named in INCIDENT_COLS above.
       const row = db.prepare(`SELECT ${INCIDENT_COLS} FROM incidents WHERE id = ? AND tenant_id = ?`)
         .get(id, tenantId) as IncidentRow | undefined;
-      if (!row) throw new Error(`resolveIncident: incident ${id} not found after UPDATE`);
+      if (!row) throw new NotFoundError(`resolveIncident: incident ${id} not found after UPDATE`);
 
       appendAuditEvent(db, {
         tenantId,
@@ -340,9 +361,9 @@ export function closeIncident(
           `SELECT status FROM incidents WHERE id = ? AND tenant_id = ?`,
         ).get(id, tenantId) as { status: string } | undefined;
         if (!existing) {
-          throw new Error(`closeIncident: incident ${id} not found for tenant ${tenantId}`);
+          throw new NotFoundError(`closeIncident: incident ${id} not found for tenant ${tenantId}`);
         }
-        throw new Error(
+        throw new ConflictError(
           `closeIncident: incident ${id} is already closed (status='${existing.status}'); only open or resolved incidents can be closed.`,
         );
       }
@@ -350,7 +371,7 @@ export function closeIncident(
       // SAFETY: row's shape matches the columns named in INCIDENT_COLS above.
       const row = db.prepare(`SELECT ${INCIDENT_COLS} FROM incidents WHERE id = ? AND tenant_id = ?`)
         .get(id, tenantId) as IncidentRow | undefined;
-      if (!row) throw new Error(`closeIncident: incident ${id} not found after UPDATE`);
+      if (!row) throw new NotFoundError(`closeIncident: incident ${id} not found after UPDATE`);
 
       appendAuditEvent(db, {
         tenantId,
@@ -399,30 +420,31 @@ export function loadIncidents(
 ): Incident[] {
   assertTenantId('loadIncidents', tenantId);
   const limit = opts.limit ?? 100;
+  const after = keysetAfter('created_at', 'id', opts.after);
   const db = openHippoDb(hippoRoot);
   try {
     let rows: IncidentRow[];
     if (opts.status) {
       if (!VALID_INCIDENT_STATES.has(opts.status)) {
-        throw new Error(
+        throw new BadRequestError(
           `loadIncidents: status must be one of ${Array.from(VALID_INCIDENT_STATES).join('|')}; got ${opts.status}`,
         );
       }
       // SAFETY: rows' shape matches the columns named in INCIDENT_COLS above.
       rows = db.prepare(`
         SELECT ${INCIDENT_COLS} FROM incidents
-        WHERE tenant_id = ? AND status = ?
+        WHERE tenant_id = ? AND status = ?${after.sql}
         ORDER BY created_at DESC, id DESC
         LIMIT ?
-      `).all(tenantId, opts.status, limit) as IncidentRow[];
+      `).all(tenantId, opts.status, ...after.params, limit) as IncidentRow[];
     } else {
       // SAFETY: rows' shape matches the columns named in INCIDENT_COLS above.
       rows = db.prepare(`
         SELECT ${INCIDENT_COLS} FROM incidents
-        WHERE tenant_id = ?
+        WHERE tenant_id = ?${after.sql}
         ORDER BY created_at DESC, id DESC
         LIMIT ?
-      `).all(tenantId, limit) as IncidentRow[];
+      `).all(tenantId, ...after.params, limit) as IncidentRow[];
     }
     return rows.map(rowToIncident);
   } finally {

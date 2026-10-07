@@ -9,26 +9,20 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
+import { rmSync } from 'node:fs';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { drillDown, type Context } from '../src/api.js';
 import { serve, type ServerHandle } from '../src/server.js';
+import { makeRoot } from './_helpers/make-root.js';
 
-function makeRoot(prefix: string): string {
-  const root = mkdtempSync(join(tmpdir(), `hippo-${prefix}-`));
-  mkdirSync(join(root, '.hippo'), { recursive: true });
-  initStore(root);
-  return root;
-}
 function safeRmSync(p: string): void { try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ } }
 function ctxFor(root: string, tenantId: string = 'default'): Context {
   return { hippoRoot: root, tenantId, actor: { subject: 'test:v164', role: 'admin' } };
 }
 function makeSummary(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
   return createMemory(text, {
+    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     layer: Layer.Semantic,
     tags: ['dag-summary'],
     confidence: 'inferred',
@@ -60,6 +54,7 @@ describe('v1.6.4 Task 1 — drillDown discriminated outcome', () => {
 
   it('failure=not_drillable for a leaf row', () => {
     const leaf = createMemory('plain leaf body content', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Buffer,
       confidence: 'observed',
       dag_level: 0,
@@ -79,6 +74,18 @@ describe('v1.6.4 Task 1 — drillDown discriminated outcome', () => {
     const r = drillDown(ctxFor(root), s.id);
     expect('failure' in r).toBe(true);
     if ('failure' in r) expect(r.failure).toBe('not_found');
+  });
+
+  it('failure=not_found for a private-scoped leaf, so not_drillable never confirms a hidden row', () => {
+    const leaf = createMemory('secret leaf body content', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Buffer,
+      confidence: 'observed',
+      dag_level: 0,
+      scope: 'slack:private:CSEC',
+    });
+    writeEntry(root, leaf);
+    expect(drillDown(ctxFor(root), leaf.id)).toEqual({ failure: 'not_found' });
   });
 });
 
@@ -101,6 +108,7 @@ describe('v1.6.4 Task 1 — HTTP /v1/recall/drill status mapping', () => {
 
   it('422 for a leaf id (caller-actionable)', async () => {
     const leaf = createMemory('leaf body row content', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Buffer,
       confidence: 'observed',
       dag_level: 0,

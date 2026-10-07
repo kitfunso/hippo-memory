@@ -1,0 +1,490 @@
+{
+  "schemaVersion": 1,
+  "about": "Every agent surface hippo names, what hippo does there today, and per mode how far saving a checkpoint and lessons before context loss has got. Null means unknown, and unknown is never a pass. Rules: docs/integrations/agent-inventory.md. Check: node scripts/check-agent-inventory.mjs",
+  "nonAgentKeywords": ["memory", "agent-memory", "ai-memory", "llm-memory", "long-term-memory", "persistent-memory", "memory-layer", "mcp", "mcp-server", "model-context-protocol", "claude", "ai-agents", "coding-agent", "agents", "llm", "rag", "retrieval", "hybrid-search", "embeddings", "sqlite", "local-first", "cli", "context", "recall"],
+  "entries": [
+    {
+      "id": "claude-code",
+      "checked": "2026-10-03",
+      "names": ["Claude Code", "claude-code"],
+      "integration": ["native-hooks", "native-plugin"],
+      "sources": ["src/hooks/json-hooks.ts", "src/capture", "src/capture-contract.ts", "src/compaction-record.ts", "src/capture-error.ts", "extensions/claude-code-plugin", "integrations/claude-code.md"],
+      "claims": ["README.md", "package.json", "website/src/pages/claude-code.astro"],
+      "routes": {
+        "promptContext": "UserPromptSubmit runs hippo context --pinned-only",
+        "toolFailureCapture": "PostToolUseFailure runs hippo capture-error",
+        "preLossSave": "PreCompact runs hippo pre-compact: a compaction record and a task snapshot, and it asks the summariser to list memories",
+        "postCompactExtract": "PostCompact runs hippo post-compact: saves the memories the summary listed",
+        "sessionEndCapture": "SessionEnd runs hippo session-end",
+        "compactResume": "SessionStart(compact) runs hippo compact-resume"
+      },
+      "upstream": { "preLossEvent": "PreCompact", "beforeTrimOrReset": null },
+      "setup": "hippo setup writes the hooks into ~/.claude/settings.json; the Claude Code plugin ships the same hooks",
+      "store": null,
+      "maxSaveDelay": "none for the checkpoint: it is written inside PreCompact, before the host compacts",
+      "interface": "Claude Code hooks: settings.json entries and the plugin hooks.json",
+      "modes": [
+        {
+          "name": "terminal and IDE extensions, local, hooks from hippo setup",
+          "checkpointBeforeLoss": "shipped",
+          "lessonsBeforeLoss": "planned",
+          "fixtureEvidence": ["tests/hooks.test.ts", "tests/compaction-pre-compact.test.ts", "tests/pre-compact-e2e.test.ts", "tests/capture-contract-conformance.test.ts"],
+          "liveEvidence": []
+        },
+        {
+          "name": "Claude Code plugin install, local",
+          "checkpointBeforeLoss": "shipped",
+          "lessonsBeforeLoss": "planned",
+          "fixtureEvidence": ["tests/claude-code-plugin-hooks.test.ts", "tests/compaction-pre-compact.test.ts", "tests/pre-compact-e2e.test.ts"],
+          "liveEvidence": []
+        },
+        {
+          "name": "Claude Code on the web and other cloud sessions",
+          "checkpointBeforeLoss": "unknown",
+          "lessonsBeforeLoss": "unknown",
+          "fixtureEvidence": [],
+          "liveEvidence": []
+        }
+      ],
+      "owner": "maintainer",
+      "nextAction": "Save lessons before compaction, not only after it from the summary; record a live save-and-resume run for automatic and manual compaction; move the session-end, post-compact and tool-failure payload readers onto src/capture-contract.ts.",
+      "roadmap": "AZ4"
+    },
+    {
+      "id": "codex",
+      "checked": "2026-10-03",
+      "names": ["Codex", "codex"],
+      "integration": ["native-hooks", "wrapper"],
+      "sources": ["src/hooks", "src/codex-patch.ts", "integrations/codex.md"],
+      "claims": ["README.md", "package.json", "website/src/pages/codex.astro"],
+      "routes": {
+        "promptContext": "UserPromptSubmit runs hippo context --pinned-only",
+        "toolFailureCapture": null,
+        "preLossSave": null,
+        "postCompactExtract": null,
+        "sessionEndCapture": "opt-in launcher wrapper from hippo hook install codex",
+        "compactResume": "SessionStart(compact) runs hippo compact-resume"
+      },
+      "upstream": { "preLossEvent": "PreCompact", "beforeTrimOrReset": null },
+      "setup": "hippo setup writes ~/.codex/hooks.json; the launcher wrapper is opt-in",
+      "store": null,
+      "maxSaveDelay": null,
+      "interface": "Codex hooks.json plus a shell launcher wrapper",
+      "modes": [
+        { "name": "CLI runtime", "checkpointBeforeLoss": "planned", "lessonsBeforeLoss": "planned", "fixtureEvidence": [], "liveEvidence": [] }
+      ],
+      "owner": "maintainer",
+      "nextAction": "Add version-checked PreCompact and PostCompact mappings with supported transcript parsing; the transcript path can be null and plain hook stdout is ignored.",
+      "roadmap": "AZ4"
+    },
+    {
+      "id": "chatgpt-work",
+      "checked": "2026-10-03",
+      "names": ["ChatGPT Work"],
+      "integration": ["none"],
+      "sources": [],
+      "claims": ["ROADMAP.md"],
+      "routes": { "promptContext": null, "toolFailureCapture": null, "preLossSave": null, "postCompactExtract": null, "sessionEndCapture": null, "compactResume": null },
+      "upstream": { "preLossEvent": "PreCompact, through the Codex runtime", "beforeTrimOrReset": null },
+      "setup": null,
+      "store": null,
+      "maxSaveDelay": null,
+      "interface": null,
+      "modes": [
+        { "name": "ChatGPT Work with a Codex execution environment", "checkpointBeforeLoss": "planned", "lessonsBeforeLoss": "planned", "fixtureEvidence": [], "liveEvidence": [] }
+      ],
+      "owner": "maintainer",
+      "nextAction": "Package the validated Codex adapter; hook scripts must exist in the environment and be trusted, and public plugin ZIPs exclude lifecycle hooks.",
+      "roadmap": "AZ3"
+    },
+    {
+      "id": "chatgpt-chat",
+      "checked": "2026-10-03",
+      "names": ["ChatGPT"],
+      "integration": ["none"],
+      "sources": [],
+      "claims": ["ROADMAP.md"],
+      "routes": { "promptContext": null, "toolFailureCapture": null, "preLossSave": null, "postCompactExtract": null, "sessionEndCapture": null, "compactResume": null },
+      "upstream": { "preLossEvent": null, "beforeTrimOrReset": null },
+      "setup": null,
+      "store": null,
+      "maxSaveDelay": null,
+      "interface": null,
+      "modes": [
+        { "name": "web", "checkpointBeforeLoss": "blocked", "lessonsBeforeLoss": "blocked", "fixtureEvidence": [], "liveEvidence": [] },
+        { "name": "desktop", "checkpointBeforeLoss": "blocked", "lessonsBeforeLoss": "blocked", "fixtureEvidence": [], "liveEvidence": [] },
+        { "name": "mobile", "checkpointBeforeLoss": "blocked", "lessonsBeforeLoss": "blocked", "fixtureEvidence": [], "liveEvidence": [] }
+      ],
+      "owner": "maintainer",
+      "nextAction": "No authorised automatic capture source is known; establish one per mode. MCP access or export import does not expose compaction or full history.",
+      "roadmap": "AZ3"
+    },
+    {
+      "id": "claude-desktop",
+      "checked": "2026-10-03",
+      "names": ["Claude Desktop"],
+      "integration": ["mcp-recipe"],
+      "sources": ["extensions/mcp"],
+      "claims": ["extensions/mcp/README.md", "README.md", "website/src/pages/mcp.astro"],
+      "routes": { "promptContext": "MCP tools the model chooses to call", "toolFailureCapture": null, "preLossSave": null, "postCompactExtract": null, "sessionEndCapture": null, "compactResume": null },
+      "upstream": { "preLossEvent": null, "beforeTrimOrReset": null },
+      "setup": "manual MCP server entry in the Claude Desktop config",
+      "store": null,
+      "maxSaveDelay": null,
+      "interface": null,
+      "modes": [
+        { "name": "desktop chat", "checkpointBeforeLoss": "planned", "lessonsBeforeLoss": "planned", "fixtureEvidence": [], "liveEvidence": [] }
+      ],
+      "owner": "maintainer",
+      "nextAction": "Package as a Desktop extension and find an authorised conversation or checkpoint source; MCP tools alone are not pre-compaction capture.",
+      "roadmap": "AZ3"
+    },
+    {
+      "id": "claude-web-modes",
+      "checked": "2026-10-03",
+      "names": ["Claude web", "Cowork"],
+      "integration": ["none"],
+      "sources": [],
+      "claims": ["ROADMAP.md"],
+      "routes": { "promptContext": null, "toolFailureCapture": null, "preLossSave": null, "postCompactExtract": null, "sessionEndCapture": null, "compactResume": null },
+      "upstream": { "preLossEvent": null, "beforeTrimOrReset": null },
+      "setup": null,
+      "store": null,
+      "maxSaveDelay": null,
+      "interface": null,
+      "modes": [
+        { "name": "web", "checkpointBeforeLoss": "planned", "lessonsBeforeLoss": "planned", "fixtureEvidence": [], "liveEvidence": [] },
+        { "name": "mobile", "checkpointBeforeLoss": "planned", "lessonsBeforeLoss": "planned", "fixtureEvidence": [], "liveEvidence": [] },
+        { "name": "Cowork", "checkpointBeforeLoss": "planned", "lessonsBeforeLoss": "planned", "fixtureEvidence": [], "liveEvidence": [] }
+      ],
+      "owner": "maintainer",
+      "nextAction": "Reuse the per-mode packaging, then verify input, checkpoint timing, persistence and resume per mode.",
+      "roadmap": "AZ3"
+    },
+    {
+      "id": "cursor",
+      "checked": "2026-10-03",
+      "names": ["Cursor", "cursor"],
+      "integration": ["instruction-file", "mcp-recipe"],
+      "sources": ["integrations/cursor.md", "extensions/mcp"],
+      "claims": ["README.md", "package.json", "extensions/mcp/README.md", "website/src/pages/cursor.astro", "website/src/pages/mcp.astro"],
+      "routes": { "promptContext": "an AGENTS.md block asks the agent to run hippo recall; MCP tools", "toolFailureCapture": null, "preLossSave": null, "postCompactExtract": null, "sessionEndCapture": null, "compactResume": null },
+      "upstream": { "preLossEvent": "preCompact, observational, with no transcript", "beforeTrimOrReset": null },
+      "setup": "hippo setup patches AGENTS.md in the project",
+      "store": null,
+      "maxSaveDelay": null,
+      "interface": "AGENTS.md block, plus MCP",
+      "modes": [
+        { "name": "Agent desktop", "checkpointBeforeLoss": "planned", "lessonsBeforeLoss": "planned", "fixtureEvidence": [], "liveEvidence": [] },
+        { "name": "CLI", "checkpointBeforeLoss": "planned", "lessonsBeforeLoss": "planned", "fixtureEvidence": [], "liveEvidence": [] },
+        { "name": "cloud", "checkpointBeforeLoss": "unknown", "lessonsBeforeLoss": "unknown", "fixtureEvidence": [], "liveEvidence": [] }
+      ],
+      "owner": "maintainer",
+      "nextAction": "Build a native adapter on preCompact plus supported response and tool events for incremental capture; test CLI and cloud separately and prevent duplicate imported Claude hooks.",
+      "roadmap": "AZ4"
+    },
+    {
+      "id": "opencode",
+      "checked": "2026-10-03",
+      "names": ["OpenCode", "opencode"],
+      "integration": ["native-plugin"],
+      "sources": ["src/hooks/opencode.ts", "integrations/opencode.md"],
+      "claims": ["README.md", "package.json"],
+      "routes": { "promptContext": null, "toolFailureCapture": null, "preLossSave": null, "postCompactExtract": null, "sessionEndCapture": "session.idle runs hippo session-end", "compactResume": null },
+      "upstream": { "preLossEvent": "experimental.session.compacting", "beforeTrimOrReset": null },
+      "setup": "hippo setup installs a plugin at ~/.config/opencode/plugins/hippo.ts",
+      "store": null,
+      "maxSaveDelay": null,
+      "interface": "OpenCode plugin API",
+      "modes": [
+        { "name": "terminal", "checkpointBeforeLoss": "planned", "lessonsBeforeLoss": "planned", "fixtureEvidence": [], "liveEvidence": [] },
+        { "name": "desktop, web and IDE", "checkpointBeforeLoss": "planned", "lessonsBeforeLoss": "planned", "fixtureEvidence": [], "liveEvidence": [] },
+        { "name": "server-backed sessions", "checkpointBeforeLoss": "unknown", "lessonsBeforeLoss": "unknown", "fixtureEvidence": [], "liveEvidence": [] }
+      ],
+      "owner": "maintainer",
+      "nextAction": "Extend the plugin with experimental.session.compacting and session.compacted; it supplies no transcript, so verify SDK message inputs and session identity first.",
+      "roadmap": "AZ4"
+    },
+    {
+      "id": "openclaw",
+      "checked": "2026-10-03",
+      "names": ["OpenClaw", "openclaw"],
+      "integration": ["native-plugin"],
+      "sources": ["extensions/openclaw-plugin", "integrations/openclaw.md"],
+      "claims": ["README.md", "package.json"],
+      "routes": {
+        "promptContext": "before_prompt_build injects context",
+        "toolFailureCapture": "after_tool_call stores tool errors",
+        "preLossSave": null,
+        "postCompactExtract": null,
+        "sessionEndCapture": "session_end",
+        "compactResume": null
+      },
+      "upstream": { "preLossEvent": "before_compaction", "beforeTrimOrReset": "before_reset" },
+      "setup": "openclaw plugins install hippo-memory",
+      "store": null,
+      "maxSaveDelay": null,
+      "interface": "OpenClaw plugin hooks",
+      "modes": [
+        { "name": "native plugin on supported agent runtimes and channels", "checkpointBeforeLoss": "planned", "lessonsBeforeLoss": "planned", "fixtureEvidence": [], "liveEvidence": [] }
+      ],
+      "owner": "maintainer",
+      "nextAction": "Handle before_compaction, after_compaction and before_reset in the native plugin; check each runtime and private or group session routing separately.",
+      "roadmap": "AZ4"
+    },
+    {
+      "id": "pi",
+      "checked": "2026-10-03",
+      "names": ["Pi"],
+      "integration": ["native-plugin", "instruction-file"],
+      "sources": ["extensions/pi-extension", "src/hooks"],
+      "claims": ["README.md"],
+      "routes": {
+        "promptContext": "session_start injects context",
+        "toolFailureCapture": "tool_result stores tool errors",
+        "preLossSave": null,
+        "postCompactExtract": null,
+        "sessionEndCapture": "session_shutdown",
+        "compactResume": null
+      },
+      "upstream": { "preLossEvent": "session_before_compact", "beforeTrimOrReset": null },
+      "setup": "hippo setup patches AGENTS.md; the extension is a manual copy",
+      "store": null,
+      "maxSaveDelay": null,
+      "interface": "Pi extension API, plus an AGENTS.md block",
+      "modes": [
+        { "name": "interactive", "checkpointBeforeLoss": "planned", "lessonsBeforeLoss": "planned", "fixtureEvidence": [], "liveEvidence": [] },
+        { "name": "RPC, JSON and print", "checkpointBeforeLoss": "planned", "lessonsBeforeLoss": "planned", "fixtureEvidence": [], "liveEvidence": [] }
+      ],
+      "owner": "maintainer",
+      "nextAction": "Use session_before_compact, session_compact and session_compact_failed; install through setup instead of a manual copy; test forks so abandoned branches do not become facts.",
+      "roadmap": "AZ4"
+    },
+    {
+      "id": "windsurf-cascade",
+      "checked": "2026-10-03",
+      "names": ["Windsurf", "Devin Desktop", "Cascade"],
+      "integration": ["mcp-recipe"],
+      "sources": ["extensions/mcp"],
+      "claims": ["extensions/mcp/README.md", "README.md", "website/src/pages/mcp.astro"],
+      "routes": { "promptContext": "MCP tools the model chooses to call", "toolFailureCapture": null, "preLossSave": null, "postCompactExtract": null, "sessionEndCapture": null, "compactResume": null },
+      "upstream": { "preLossEvent": null, "beforeTrimOrReset": null },
+      "setup": "manual MCP server entry",
+      "store": null,
+      "maxSaveDelay": null,
+      "interface": null,
+      "modes": [
+        { "name": "Cascade in Windsurf or Devin Desktop", "checkpointBeforeLoss": "planned", "lessonsBeforeLoss": "planned", "fixtureEvidence": [], "liveEvidence": [] }
+      ],
+      "owner": "maintainer",
+      "nextAction": "No pre-compaction barrier is documented: build incremental capture from post_cascade_response_with_transcript and report the achievable checkpoint delay.",
+      "roadmap": "AZ4"
+    },
+    {
+      "id": "cline",
+      "checked": "2026-10-03",
+      "names": ["Cline"],
+      "integration": ["mcp-recipe"],
+      "sources": ["extensions/mcp"],
+      "claims": ["extensions/mcp/README.md", "README.md", "website/src/pages/mcp.astro"],
+      "routes": { "promptContext": "MCP tools the model chooses to call", "toolFailureCapture": null, "preLossSave": null, "postCompactExtract": null, "sessionEndCapture": null, "compactResume": null },
+      "upstream": { "preLossEvent": null, "beforeTrimOrReset": null },
+      "setup": "manual MCP server entry",
+      "store": null,
+      "maxSaveDelay": null,
+      "interface": null,
+      "modes": [
+        { "name": "VS Code extension", "checkpointBeforeLoss": "blocked", "lessonsBeforeLoss": "blocked", "fixtureEvidence": [], "liveEvidence": [] },
+        { "name": "CLI and SDK", "checkpointBeforeLoss": "blocked", "lessonsBeforeLoss": "blocked", "fixtureEvidence": [], "liveEvidence": [] }
+      ],
+      "owner": "maintainer",
+      "nextAction": "Upstream PreCompact is labelled coming soon and not wired for file hooks; build incremental capture from prompt, tool and run sources and recheck the native event when it ships.",
+      "roadmap": "AZ4"
+    },
+    {
+      "id": "vscode-agent",
+      "checked": "2026-10-03",
+      "names": ["VS Code"],
+      "integration": ["mcp-recipe"],
+      "sources": ["extensions/mcp"],
+      "claims": ["extensions/mcp/README.md"],
+      "routes": { "promptContext": "MCP tools the model chooses to call", "toolFailureCapture": null, "preLossSave": null, "postCompactExtract": null, "sessionEndCapture": null, "compactResume": null },
+      "upstream": { "preLossEvent": "PreCompact", "beforeTrimOrReset": null },
+      "setup": "manual MCP server entry",
+      "store": null,
+      "maxSaveDelay": null,
+      "interface": null,
+      "modes": [
+        { "name": "agent chat and Copilot Local", "checkpointBeforeLoss": "planned", "lessonsBeforeLoss": "planned", "fixtureEvidence": [], "liveEvidence": [] },
+        { "name": "remote extension hosts", "checkpointBeforeLoss": "unknown", "lessonsBeforeLoss": "unknown", "fixtureEvidence": [], "liveEvidence": [] }
+      ],
+      "owner": "maintainer",
+      "nextAction": "Wire a native package on PreCompact with verified payload mappings and workspace trust; remote hosts run on the extension host's OS and store.",
+      "roadmap": "AZ4"
+    },
+    {
+      "id": "copilot",
+      "checked": "2026-10-03",
+      "names": ["Copilot CLI", "GitHub Copilot coding agent"],
+      "integration": ["none"],
+      "sources": [],
+      "claims": ["ROADMAP.md"],
+      "routes": { "promptContext": null, "toolFailureCapture": null, "preLossSave": null, "postCompactExtract": null, "sessionEndCapture": null, "compactResume": null },
+      "upstream": { "preLossEvent": "preCompact", "beforeTrimOrReset": null },
+      "setup": null,
+      "store": null,
+      "maxSaveDelay": null,
+      "interface": null,
+      "modes": [
+        { "name": "CLI", "checkpointBeforeLoss": "planned", "lessonsBeforeLoss": "planned", "fixtureEvidence": [], "liveEvidence": [] },
+        { "name": "cloud coding agent", "checkpointBeforeLoss": "unknown", "lessonsBeforeLoss": "unknown", "fixtureEvidence": [], "liveEvidence": [] },
+        { "name": "SDK", "checkpointBeforeLoss": "planned", "lessonsBeforeLoss": "planned", "fixtureEvidence": [], "liveEvidence": [] }
+      ],
+      "owner": "maintainer",
+      "nextAction": "Extend CD1 with the preCompact contract, normalising camelCase and snake_case fields; verify CLI, cloud and SDK execution separately.",
+      "roadmap": "AZ4"
+    },
+    {
+      "id": "gemini-cli",
+      "checked": "2026-10-03",
+      "names": ["Gemini CLI"],
+      "integration": ["none"],
+      "sources": [],
+      "claims": ["ROADMAP.md"],
+      "routes": { "promptContext": null, "toolFailureCapture": null, "preLossSave": null, "postCompactExtract": null, "sessionEndCapture": null, "compactResume": null },
+      "upstream": { "preLossEvent": "PreCompress, advisory and asynchronous", "beforeTrimOrReset": null },
+      "setup": null,
+      "store": null,
+      "maxSaveDelay": null,
+      "interface": null,
+      "modes": [
+        { "name": "terminal and headless", "checkpointBeforeLoss": "planned", "lessonsBeforeLoss": "planned", "fixtureEvidence": [], "liveEvidence": [] },
+        { "name": "approved cloud execution", "checkpointBeforeLoss": "unknown", "lessonsBeforeLoss": "unknown", "fixtureEvidence": [], "liveEvidence": [] }
+      ],
+      "owner": "maintainer",
+      "nextAction": "Add a native adapter on PreCompress with durable incremental checkpoints, since the host does not wait for the save; test the race.",
+      "roadmap": "AZ4"
+    },
+    {
+      "id": "devin-cli",
+      "checked": "2026-10-03",
+      "names": ["Devin CLI"],
+      "integration": ["none"],
+      "sources": [],
+      "claims": ["ROADMAP.md"],
+      "routes": { "promptContext": null, "toolFailureCapture": null, "preLossSave": null, "postCompactExtract": null, "sessionEndCapture": null, "compactResume": null },
+      "upstream": { "preLossEvent": null, "beforeTrimOrReset": null },
+      "setup": null,
+      "store": null,
+      "maxSaveDelay": null,
+      "interface": null,
+      "modes": [
+        { "name": "CLI", "checkpointBeforeLoss": "planned", "lessonsBeforeLoss": "planned", "fixtureEvidence": [], "liveEvidence": [] }
+      ],
+      "owner": "maintainer",
+      "nextAction": "Only PostCompaction exists, after loss and with a nullable summary; reuse the AZ1 adapter and add incremental prompt and tool capture before loss.",
+      "roadmap": "AZ1"
+    },
+    {
+      "id": "devin-cloud",
+      "checked": "2026-10-03",
+      "names": ["Devin cloud"],
+      "integration": ["none"],
+      "sources": [],
+      "claims": ["ROADMAP.md"],
+      "routes": { "promptContext": null, "toolFailureCapture": null, "preLossSave": null, "postCompactExtract": null, "sessionEndCapture": null, "compactResume": null },
+      "upstream": { "preLossEvent": null, "beforeTrimOrReset": null },
+      "setup": null,
+      "store": null,
+      "maxSaveDelay": null,
+      "interface": null,
+      "modes": [
+        { "name": "cloud", "checkpointBeforeLoss": "unknown", "lessonsBeforeLoss": "unknown", "fixtureEvidence": [], "liveEvidence": [] }
+      ],
+      "owner": "maintainer",
+      "nextAction": "Establish authentication, an authorised checkpoint source and a store route before any preservation claim.",
+      "roadmap": "AZ2"
+    },
+    {
+      "id": "grok",
+      "checked": "2026-10-03",
+      "names": ["Grok"],
+      "integration": ["none"],
+      "sources": [],
+      "claims": ["ROADMAP.md"],
+      "routes": { "promptContext": null, "toolFailureCapture": null, "preLossSave": null, "postCompactExtract": null, "sessionEndCapture": null, "compactResume": null },
+      "upstream": { "preLossEvent": null, "beforeTrimOrReset": null },
+      "setup": null,
+      "store": null,
+      "maxSaveDelay": null,
+      "interface": null,
+      "modes": [
+        { "name": "web and mobile", "checkpointBeforeLoss": "planned", "lessonsBeforeLoss": "planned", "fixtureEvidence": [], "liveEvidence": [] }
+      ],
+      "owner": "maintainer",
+      "nextAction": "Extend the connector pilot with a verified automatic input and checkpoint source; tool discovery is not a compaction event stream.",
+      "roadmap": "AZ3"
+    },
+    {
+      "id": "grok-bot",
+      "checked": "2026-10-03",
+      "names": ["Grok Bot"],
+      "integration": ["none"],
+      "sources": [],
+      "claims": ["ROADMAP.md"],
+      "routes": { "promptContext": null, "toolFailureCapture": null, "preLossSave": null, "postCompactExtract": null, "sessionEndCapture": null, "compactResume": null },
+      "upstream": { "preLossEvent": null, "beforeTrimOrReset": null },
+      "setup": null,
+      "store": null,
+      "maxSaveDelay": null,
+      "interface": null,
+      "modes": [
+        { "name": "private, team, command and remote", "checkpointBeforeLoss": "planned", "lessonsBeforeLoss": "planned", "fixtureEvidence": [], "liveEvidence": [] }
+      ],
+      "owner": "maintainer",
+      "nextAction": "Verify runtime and checkpoint sources on the Bot computer, with group and private isolation and identity mapping.",
+      "roadmap": "AZ3"
+    },
+    {
+      "id": "muse",
+      "checked": "2026-10-03",
+      "names": ["Muse"],
+      "integration": ["none"],
+      "sources": [],
+      "claims": ["ROADMAP.md"],
+      "routes": { "promptContext": null, "toolFailureCapture": null, "preLossSave": null, "postCompactExtract": null, "sessionEndCapture": null, "compactResume": null },
+      "upstream": { "preLossEvent": null, "beforeTrimOrReset": null },
+      "setup": null,
+      "store": null,
+      "maxSaveDelay": null,
+      "interface": null,
+      "modes": [
+        { "name": "unidentified", "checkpointBeforeLoss": "blocked", "lessonsBeforeLoss": "blocked", "fixtureEvidence": [], "liveEvidence": [] }
+      ],
+      "owner": "Keith",
+      "nextAction": "Identify the exact product and runtime before allocating an adapter.",
+      "roadmap": "AZ3"
+    },
+    {
+      "id": "custom-agents",
+      "checked": "2026-10-03",
+      "names": ["Any MCP Client", "custom agents"],
+      "integration": ["mcp-recipe"],
+      "sources": ["extensions/mcp", "integrations/generic.md"],
+      "claims": ["extensions/mcp/README.md", "README.md"],
+      "routes": { "promptContext": "MCP tools or the hippo CLI, called by the agent", "toolFailureCapture": null, "preLossSave": null, "postCompactExtract": null, "sessionEndCapture": null, "compactResume": null },
+      "upstream": { "preLossEvent": null, "beforeTrimOrReset": null },
+      "setup": "manual MCP server entry or CLI calls from the agent's own code",
+      "store": null,
+      "maxSaveDelay": null,
+      "interface": null,
+      "modes": [
+        { "name": "other MCP clients", "checkpointBeforeLoss": "unknown", "lessonsBeforeLoss": "unknown", "fixtureEvidence": [], "liveEvidence": [] },
+        { "name": "custom CLI, HTTP, TypeScript and Python agents", "checkpointBeforeLoss": "planned", "lessonsBeforeLoss": "planned", "fixtureEvidence": [], "liveEvidence": [] }
+      ],
+      "owner": "maintainer",
+      "nextAction": "Publish a registration recipe over src/capture-contract.ts so a developer who owns the harness wires turn checkpoints and a before-trim flush once.",
+      "roadmap": "AZ4"
+    }
+  ]
+}

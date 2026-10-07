@@ -2,7 +2,7 @@
 import { randomUUID } from 'node:crypto';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
 import type { MemoryEntry } from './memory.js';
-import type { RerankStep } from './search.js';
+import type { RerankStep } from './search/types.js';
 
 export type GoalStatus = 'active' | 'suspended' | 'completed';
 export type PolicyType = 'schema-fit-biased' | 'error-prioritized' | 'recency-first' | 'hybrid';
@@ -93,7 +93,7 @@ export function pushGoal(hippoRoot: string, opts: PushGoalOpts): Goal {
 }
 
 /**
- * v1.7.4 — depth-cap enforcer extracted from pushGoalWithDb and resumeGoal.
+ * Depth-cap enforcer shared by pushGoalWithDb and resumeGoal.
  * If the (tenant, session) has >= MAX_ACTIVE_GOAL_DEPTH active goals,
  * suspend the oldest `overflow` ones.
  *
@@ -102,7 +102,7 @@ export function pushGoal(hippoRoot: string, opts: PushGoalOpts): Goal {
  * is impossible to misread the contract at a call site. Both existing call
  * sites (pushGoalWithDb, resumeGoal) wrap in `BEGIN IMMEDIATE` already.
  *
- * @internal v1.7.4 -- internal goal-stack invariant. Subject to change.
+ * @internal Internal goal-stack invariant. Subject to change.
  */
 export function enforceDepthCapWithinTx(
   db: DatabaseSyncLike,
@@ -221,6 +221,24 @@ export function getActiveGoals(hippoRoot: string, opts: GetActiveGoalsOpts): Goa
   }
 }
 
+/** Every goal of a (tenant, session), whatever its status, oldest first. */
+export function getSessionGoals(hippoRoot: string, opts: GetActiveGoalsOpts): Goal[] {
+  const db = openHippoDb(hippoRoot);
+  try {
+    // SAFETY: rows come from the SELECT below, which projects exactly GoalRow's columns.
+    const rows = db.prepare(`
+      SELECT id, session_id, tenant_id, goal_name, level, parent_goal_id, status,
+             success_condition, retrieval_policy_id, created_at, completed_at, outcome_score
+      FROM goal_stack
+      WHERE tenant_id = ? AND session_id = ?
+      ORDER BY created_at ASC
+    `).all(opts.tenantId, opts.sessionId) as GoalRow[];
+    return rows.map(rowToGoal);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
 export function getActiveGoalsWithDb(db: DatabaseSyncLike, opts: GetActiveGoalsOpts): Goal[] {
   // SAFETY: rows come from the SELECT above, which projects exactly
   // GoalRow's columns (in the same order goal_stack defines them).
@@ -234,57 +252,40 @@ export function getActiveGoalsWithDb(db: DatabaseSyncLike, opts: GetActiveGoalsO
   return rows.map(rowToGoal);
 }
 
-/**
- * v1.7.4 -- dlPFC goal-stack boost helper. Applies the multi-goal boost to a
- * list of entry-backed scored rows when (tenant, session) has active goals.
- * Pre-v1.7.4 this logic lived inline in cmdRecall (src/cli.ts:988-1140);
- * lifting here lets api.recall (primary band only) AND MCP physics/hybrid
- * call it.
- *
- * Caller responsibilities:
- *   - Do NOT call when an explicit `goalTag` is set (caller's gate)
- *   - Pass entry-backed rows (with `entry.tags`, `entry.id`, optional
- *     `entry.schema_fit`)
- *   - Manage the db handle lifecycle (helper neither opens nor closes)
- *   - Recompute `tokens` after if returned rows are projected to a budgeted
- *     shape
- *
- * Side effects:
- *   - INSERT OR IGNORE into `goal_recall_log` for each (boosted, goal) pair
- *   - Local memory id filter applied before INSERT (skips global-only ids
- *     to preserve FK invariant on goal_recall_log.memory_id)
- *
- * @internal v1.7.4 -- internal recall ranking helper. Subject to change.
- */
-export function applyGoalStackBoost<R extends { entry: MemoryEntry; score: number }>(
-  db: DatabaseSyncLike,
-  results: R[],
-  opts: {
-    sessionId: string;
-    tenantId: string;
-    limit: number;
-    /**
-     * A7 recall-trace (optional side-channel). When supplied, the helper
-     * records one goal-boost `RerankStep` per ACTUALLY-boosted row, keyed by
-     * `entry.id`. This is a SEPARATE accumulator, NOT a field on the result
-     * row — the helper re-spreads rows and strips internal markers
-     * (`_goalMatches` below), so a row field would be dropped. The score-mul
-     * + re-sort math is untouched; the trace is only populated when this map
-     * is passed (default path never allocates → byte-identical).
-     */
-    trace?: Map<string, RerankStep>;
-  },
-): R[] {
-  const { sessionId, tenantId, limit, trace } = opts;
-  const active = getActiveGoalsWithDb(db, { sessionId, tenantId });
-  if (active.length === 0) return results;
+/** One `goal_recall_log` row: a boosted local memory recalled while its goal was active. */
+export interface GoalRecallLogRow {
+  goalId: string;
+  memoryId: string;
+  tenantId: string;
+  sessionId: string;
+  recalledAt: string;
+  score: number;
+}
 
-  const goalsByTag = new Map(active.map((g) => [g.goalName, g]));
+/** Options shared by {@link computeGoalStackBoost} and {@link applyGoalStackBoost}. */
+export interface GoalStackBoostOpts {
+  sessionId: string;
+  tenantId: string;
+  limit: number;
+  /**
+   * Optional side-channel: one goal-boost `RerankStep` per boosted row, keyed by
+   * `entry.id`. A map rather than a row field because the helper re-spreads rows.
+   * Only populated when passed, so the default path allocates nothing.
+   */
+  trace?: Map<string, RerankStep>;
+}
 
-  // Load retrieval_policy rows for active goals so per-policy multipliers
-  // can compose onto the base goal-tag boost. Composed result is hard-capped
-  // at MAX_FINAL_MULTIPLIER (3.0x) BEFORE applying to score -- even an
-  // `errorPriority: 9.0` policy cannot exceed 3.0x.
+/** The boosted, re-sorted rows and the `goal_recall_log` rows they earn. */
+export interface GoalStackBoost<R> {
+  results: R[];
+  log: GoalRecallLogRow[];
+}
+
+// Load retrieval_policy rows for active goals so per-policy multipliers
+// can compose onto the base goal-tag boost. Composed result is hard-capped
+// at MAX_FINAL_MULTIPLIER (3.0x) BEFORE applying to score -- even an
+// `errorPriority: 9.0` policy cannot exceed 3.0x.
+function loadGoalPolicies(db: DatabaseSyncLike, active: Goal[]): Map<string, RetrievalPolicy> {
   const policiesByGoalId = new Map<string, RetrievalPolicy>();
   for (const g of active) {
     if (!g.retrievalPolicyId) continue;
@@ -314,68 +315,55 @@ export function applyGoalStackBoost<R extends { entry: MemoryEntry; score: numbe
       });
     }
   }
+  return policiesByGoalId;
+}
 
-  // Goal-tag matches per boosted row, keyed by entry id. Kept as a side table
-  // (rather than a spread-on `_goalMatches` marker property) so `boosted`
-  // stays exactly R[] end to end, with no cast-tag-then-strip round trip.
-  const matchesByEntryId = new Map<string, string[]>();
+/** The capped boost for one row whose tags match `matches` active goals. */
+function goalBoostMultiplier(
+  entry: MemoryEntry,
+  tags: string[],
+  matches: string[],
+  goalsByTag: Map<string, Goal>,
+  policiesByGoalId: Map<string, RetrievalPolicy>,
+): number {
+  // Base 2.0x for first match, +0.5x per additional, capped at 3.0x.
+  let multiplier = Math.min(
+    2.0 + 0.5 * (matches.length - 1),
+    MAX_FINAL_MULTIPLIER,
+  );
+  // Compose per-policy multipliers per matched tag.
+  for (const tag of matches) {
+    const goal = goalsByTag.get(tag)!;
+    const policy = policiesByGoalId.get(goal.id);
+    if (!policy) continue;
+    if (policy.policyType === 'error-prioritized' && tags.includes('error')) {
+      multiplier *= policy.errorPriority;
+    } else if (policy.policyType === 'schema-fit-biased') {
+      // Linearly weight schema_fit in [0,1] up to (weightSchemaFit)x.
+      // Default 1.0 is a no-op.
+      multiplier *=
+        1.0 +
+        Math.max(0, policy.weightSchemaFit - 1.0) *
+          (entry.schema_fit ?? 0.5);
+    } else if (policy.policyType === 'recency-first') {
+      multiplier *= policy.weightRecency;
+    } else if (policy.policyType === 'hybrid') {
+      multiplier *= policy.weightOutcome;
+    }
+  }
+  // Hard cap AFTER all composition.
+  return Math.min(multiplier, MAX_FINAL_MULTIPLIER);
+}
 
-  const boosted = results
-    .map((r) => {
-      const tags = r.entry.tags ?? [];
-      const matches = tags.filter((t) => goalsByTag.has(t));
-      if (matches.length === 0) return r;
-      // Base 2.0x for first match, +0.5x per additional, capped at 3.0x.
-      let multiplier = Math.min(
-        2.0 + 0.5 * (matches.length - 1),
-        MAX_FINAL_MULTIPLIER,
-      );
-      // Compose per-policy multipliers per matched tag.
-      for (const tag of matches) {
-        const goal = goalsByTag.get(tag)!;
-        const policy = policiesByGoalId.get(goal.id);
-        if (!policy) continue;
-        if (policy.policyType === 'error-prioritized' && tags.includes('error')) {
-          multiplier *= policy.errorPriority;
-        } else if (policy.policyType === 'schema-fit-biased') {
-          // Linearly weight schema_fit in [0,1] up to (weightSchemaFit)x.
-          // Default 1.0 is a no-op.
-          multiplier *=
-            1.0 +
-            Math.max(0, policy.weightSchemaFit - 1.0) *
-              (r.entry.schema_fit ?? 0.5);
-        } else if (policy.policyType === 'recency-first') {
-          multiplier *= policy.weightRecency;
-        } else if (policy.policyType === 'hybrid') {
-          multiplier *= policy.weightOutcome;
-        }
-      }
-      // Hard cap AFTER all composition.
-      multiplier = Math.min(multiplier, MAX_FINAL_MULTIPLIER);
-      // A7 recall-trace side-channel: record the goal-boost step BEFORE the
-      // score is mutated, keyed by entry id. Pure read of r.score here; the
-      // mutation below is byte-identical to pre-A7.
-      if (trace) {
-        trace.set(r.entry.id, {
-          stage: 'goal-boost',
-          multiplier,
-          scoreBefore: r.score,
-          scoreAfter: r.score * multiplier,
-          note: matches.join(', '),
-        });
-      }
-      matchesByEntryId.set(r.entry.id, matches);
-      // SAFETY: spreading a generic-constrained `r: R` widens the result to
-      // the spread's plain object type; only `score` changes, so the value
-      // still satisfies R's shape exactly.
-      return { ...r, score: r.score * multiplier } as R;
-    })
-    // T2 note: deliberately a PLAIN stable score sort, no compareEntryIdentity
-    // tail -- a re-sort of an already deterministically-ordered ranking
-    // inherits its determinism via sort stability, and ties preserve the
-    // prior (meaningful) rank instead of reordering by content.
-    .sort((a, b) => b.score - a.score);
-
+/** Log rows for the top `limit` boosted rows, one per matched goal. */
+function buildGoalRecallLog<R extends { entry: MemoryEntry; score: number }>(
+  db: DatabaseSyncLike,
+  boosted: R[],
+  matchesByEntryId: Map<string, string[]>,
+  goalsByTag: Map<string, Goal>,
+  opts: GoalStackBoostOpts,
+): GoalRecallLogRow[] {
+  const { sessionId, tenantId, limit } = opts;
   // Filter to local memories only -- global memory IDs aren't in this DB's
   // memories table, so the FK on goal_recall_log.memory_id would fail.
   // dlPFC depth's outcome propagation is session-scoped to local; boost on
@@ -393,15 +381,8 @@ export function applyGoalStackBoost<R extends { entry: MemoryEntry; score: numbe
     for (const row of localRows) localIds.add(row.id);
   }
 
-  // Log top-K boosted recalls. INSERT OR IGNORE because
-  // UNIQUE(memory_id, goal_id) means a re-recall during the same goal life
-  // is a no-op for outcome attribution.
   const recalledAt = new Date().toISOString();
-  const insertLog = db.prepare(`
-    INSERT OR IGNORE INTO goal_recall_log
-      (goal_id, memory_id, tenant_id, session_id, recalled_at, score)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `);
+  const log: GoalRecallLogRow[] = [];
   for (const r of boosted.slice(0, limit)) {
     if (!localIds.has(r.entry.id)) continue; // global -> skip log insert
     const matches = matchesByEntryId.get(r.entry.id);
@@ -409,18 +390,110 @@ export function applyGoalStackBoost<R extends { entry: MemoryEntry; score: numbe
     for (const tag of matches) {
       const goal = goalsByTag.get(tag);
       if (!goal) continue;
-      insertLog.run(
-        goal.id,
-        r.entry.id,
-        tenantId,
-        sessionId,
-        recalledAt,
-        r.score,
-      );
+      log.push({ goalId: goal.id, memoryId: r.entry.id, tenantId, sessionId, recalledAt, score: r.score });
     }
   }
+  return log;
+}
 
-  return boosted;
+/**
+ * dlPFC goal-stack boost. Applies the multi-goal boost to entry-backed scored
+ * rows when (tenant, session) has active goals and returns the log rows to
+ * write, without writing them; {@link writeGoalRecallLog} persists them.
+ *
+ * Caller responsibilities:
+ *   - Do NOT call when an explicit `goalTag` is set (caller's gate)
+ *   - Pass entry-backed rows (with `entry.tags`, `entry.id`, optional
+ *     `entry.schema_fit`)
+ *   - Manage the db handle lifecycle (helper neither opens nor closes)
+ *   - Recompute `tokens` after if returned rows are projected to a budgeted
+ *     shape
+ *
+ * Log rows cover the top `limit` boosted rows that live in this store's
+ * `memories` table (global-only ids are skipped to keep the FK on
+ * goal_recall_log.memory_id valid).
+ *
+ * @internal Recall ranking helper. Subject to change.
+ */
+export function computeGoalStackBoost<R extends { entry: MemoryEntry; score: number }>(
+  db: DatabaseSyncLike,
+  results: R[],
+  opts: GoalStackBoostOpts,
+): GoalStackBoost<R> {
+  const { sessionId, tenantId, trace } = opts;
+  const active = getActiveGoalsWithDb(db, { sessionId, tenantId });
+  if (active.length === 0) return { results, log: [] };
+
+  const goalsByTag = new Map(active.map((g) => [g.goalName, g]));
+  const policiesByGoalId = loadGoalPolicies(db, active);
+
+  // Goal-tag matches per boosted row, keyed by entry id. Kept as a side table
+  // (rather than a spread-on `_goalMatches` marker property) so `boosted`
+  // stays exactly R[] end to end, with no cast-tag-then-strip round trip.
+  const matchesByEntryId = new Map<string, string[]>();
+
+  const boosted = results
+    .map((r) => {
+      const tags = r.entry.tags ?? [];
+      const matches = tags.filter((t) => goalsByTag.has(t));
+      if (matches.length === 0) return r;
+      const multiplier = goalBoostMultiplier(r.entry, tags, matches, goalsByTag, policiesByGoalId);
+      // Recall-trace side-channel: record the goal-boost step BEFORE the
+      // score is mutated, keyed by entry id; a pure read of r.score.
+      if (trace) {
+        trace.set(r.entry.id, {
+          stage: 'goal-boost',
+          multiplier,
+          scoreBefore: r.score,
+          scoreAfter: r.score * multiplier,
+          note: matches.join(', '),
+        });
+      }
+      matchesByEntryId.set(r.entry.id, matches);
+      // SAFETY: spreading a generic-constrained `r: R` widens the result to
+      // the spread's plain object type; only `score` changes, so the value
+      // still satisfies R's shape exactly.
+      return { ...r, score: r.score * multiplier } as R;
+    })
+    // Deliberately a PLAIN stable score sort, no compareEntryIdentity
+    // tail -- a re-sort of an already deterministically-ordered ranking
+    // inherits its determinism via sort stability, and ties preserve the
+    // prior (meaningful) rank instead of reordering by content.
+    .sort((a, b) => b.score - a.score);
+
+  return { results: boosted, log: buildGoalRecallLog(db, boosted, matchesByEntryId, goalsByTag, opts) };
+}
+
+/**
+ * Writes goal-boost log rows. INSERT OR IGNORE because UNIQUE(memory_id, goal_id)
+ * makes a re-recall during the same goal life a no-op for outcome attribution.
+ */
+export function writeGoalRecallLog(db: DatabaseSyncLike, rows: readonly GoalRecallLogRow[]): void {
+  if (rows.length === 0) return;
+  const insertLog = db.prepare(`
+    INSERT OR IGNORE INTO goal_recall_log
+      (goal_id, memory_id, tenant_id, session_id, recalled_at, score)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `);
+  for (const row of rows) {
+    insertLog.run(row.goalId, row.memoryId, row.tenantId, row.sessionId, row.recalledAt, row.score);
+  }
+}
+
+/**
+ * {@link computeGoalStackBoost} plus {@link writeGoalRecallLog} in one call, for
+ * pipelines that boost and log on the same handle.
+ *
+ * @internal Recall ranking helper. Subject to change.
+ */
+export function applyGoalStackBoost<R extends { entry: MemoryEntry; score: number }>(
+  db: DatabaseSyncLike,
+  results: R[],
+  opts: GoalStackBoostOpts,
+): R[] {
+  const boost = computeGoalStackBoost(db, results, opts);
+  writeGoalRecallLog(db, boost.log);
+  return boost.results;
 }
 
 const POSITIVE_OUTCOME_THRESHOLD = 0.7;
@@ -431,7 +504,7 @@ const STRENGTH_DECAY = 0.85;
 export interface CompleteGoalOpts {
   outcomeScore?: number;
   /**
-   * v1.7.4 — when true, skip the strength-multiplier propagation block.
+   * When true, skip the strength-multiplier propagation block.
    * Default false (propagate). The goal's status still transitions to
    * 'completed' and `outcome_score` is still recorded; only the side-effect
    * on recalled memories' strength is suppressed.

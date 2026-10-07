@@ -40,10 +40,6 @@ console.log(`[F13r] loading turn index from ${INDEX}...`);
 
 // Auto-detect JSONL vs legacy single-blob JSON. JSONL is the v1.9.3+ format
 // (one turn per line; first line is metadata). Legacy is one big JSON object.
-function isJsonlPath(p) {
-  return p.endsWith('.jsonl') || p.endsWith('.jsonl.partial') || existsSync(p + '.jsonl') || existsSync(p);
-}
-
 // If user passed the .json (legacy) path but a .jsonl sibling exists, prefer it.
 let effectiveIndex = INDEX;
 if (!INDEX.endsWith('.jsonl') && existsSync(INDEX + '.jsonl')) {

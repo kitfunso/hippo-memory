@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { createMemory } from '../../src/memory.js';
-import type { SearchResult } from '../../src/search.js';
+import { createMemory } from '../_helpers/default-half-life-memory.js';
+import type { SearchResult } from '../../src/search/types.js';
 import { getReranker } from '../../src/rerankers/index.js';
 import { createJevReranker, jevReranker } from '../../src/rerankers/jev.js';
 import type { RerankerFn } from '../../src/rerankers/types.js';
@@ -45,7 +45,7 @@ describe('jevReranker', () => {
 
   beforeEach(() => {
     vi.restoreAllMocks();
-    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    warnSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     process.env.TYPESAFE_API_KEY = FAKE_KEY;
     delete process.env.HIPPO_JEV_TIMEOUT_MS;
     delete process.env.HIPPO_JEV_MODEL;
@@ -214,7 +214,7 @@ describe('jevReranker', () => {
       new Response(null, { status: 500, headers: { 'x-request-id': 'req-123' } }),
     );
     await freshReranker()('q', inputs());
-    const text = String(warnSpy.mock.calls[0][0]);
+    const text = String(warnSpy.mock.calls[0][0]).trimEnd();
     expect(text).toContain('request req-123');
     expect(text).toMatch(/^[\x20-\x7e]+$/);
   });

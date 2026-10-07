@@ -1,3 +1,4 @@
+import { envGithubAllowUnknownInstallationFallback, envTenant } from '../../env.js';
 import type { DatabaseSyncLike } from '../../db.js';
 
 export interface ResolveArgs {
@@ -22,7 +23,7 @@ export interface ResolveArgs {
  *         is non-empty (multi-tenant install with foreign installation)
  *       - `installationId` is missing AND either routing table is non-empty
  *         AND no `repository.full_name` match (PAT-mode webhook from a foreign
- *         account — codex P0 #4 regression target)
+ *         account)
  *
  * Escape hatch: `GITHUB_ALLOW_UNKNOWN_INSTALLATION_FALLBACK=1` restores the
  * env fallback for emergency rollback only. Mirrors the Slack equivalent
@@ -35,8 +36,8 @@ export function resolveTenantForGitHub(
   db: DatabaseSyncLike,
   args: ResolveArgs,
 ): string | null {
-  const envFallback = (): string => process.env.HIPPO_TENANT?.trim() || 'default';
-  const escapeHatch = process.env.GITHUB_ALLOW_UNKNOWN_INSTALLATION_FALLBACK === '1';
+  const envFallback = (): string => envTenant();
+  const escapeHatch = envGithubAllowUnknownInstallationFallback();
 
   // SAFETY: the row comes from the SELECT above, which projects exactly one
   // column, `c`, as a COUNT(*).

@@ -14,7 +14,7 @@
  *     The original plan stipulated <5ms. The first measured delta on a 5k
  *     store was ~12ms — driven by three additional openHippoDb / closeHippoDb
  *     cycles (one per continuity helper) plus the mirror-file write inside
- *     loadActiveTaskSnapshot (src/store.ts:1438). Both are real but the
+ *     loadActiveTaskSnapshot (src/store/sessions.ts). Both are real but the
  *     opt-in nature of --continuity means this is a boot-time cost, not a
  *     per-message hot-path cost. Optimization opportunities (shared connection,
  *     readOnly snapshot path) tracked for a v1.2.0+ follow-up.
@@ -36,7 +36,9 @@ import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { initStore, saveActiveTaskSnapshot, saveSessionHandoff, appendSessionEvent } from '../../dist/store.js';
+import { initStore } from '../../dist/store/open.js';
+import { saveActiveTaskSnapshot, appendSessionEvent } from '../../dist/store/sessions.js';
+import { saveSessionHandoff } from '../../dist/store/handoffs.js';
 import { remember as apiRemember, recall as apiRecall } from '../../dist/api.js';
 
 interface CliArgs {

@@ -37,6 +37,22 @@ else for (const [name, text] of [['README.md', readme], ['llms.txt', llms]]) {
   if (!text.includes(`${testsFloor} tests`)) missing.push(`tests: ${name} does not say "${testsFloor} tests"`);
 }
 
+// Keep setup limits and commercial availability on the owning rendered surfaces.
+for (const field of ['notice', 'availability']) {
+  const value = (site.match(new RegExp(`^\\s*${field}:\\s*'([^']+)'`, 'm')) || [])[1];
+  if (!value) missing.push(`${field}: no shared copy in site.ts`);
+  else for (const [name, text] of [['README.md', readme], ['llms.txt', llms]]) {
+    if (!normalize(text).includes(normalize(value))) missing.push(`${field}: ${name} lost the shared wording`);
+  }
+}
+const setup = await readFile(join(root, 'src', 'components', 'GetStarted.astro'), 'utf8');
+const quickstart = await readFile(join(root, 'src', 'pages', 'quickstart.astro'), 'utf8');
+const teams = await readFile(join(root, 'src', 'pages', 'teams.astro'), 'utf8');
+const withoutComments = (text) => text.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\/[^\n]*/g, '');
+if (!withoutComments(setup).includes('{getStarted.notice}')) missing.push('notice: GetStarted.astro no longer renders the setup limit');
+if (!withoutComments(quickstart).includes('{getStarted.notice}')) missing.push('notice: quickstart.astro no longer renders the setup limit');
+if (!withoutComments(teams).includes('{enterprise.availability}')) missing.push('availability: teams.astro no longer renders the edition status');
+
 const warns = ['R@5 = 74.0%', '0 outbound HTTP'].filter((c) => !readmeNorm.includes(normalize(c)));
 if (warns.length) {
   console.warn('[readme-sync] WARN: receipt claim(s) not found verbatim in README (verify wording):', warns.join(' | '));
@@ -80,4 +96,4 @@ if (missing.length) {
   process.exit(1);
 }
 
-console.log(`[readme-sync] OK: parsed ${parsed}; tests floor "${testsFloor}", ${locoRows.length} LoCoMo rows and the hero proofs match README.md.`);
+console.log(`[readme-sync] OK: parsed ${parsed}; tests floor "${testsFloor}", ${locoRows.length} LoCoMo rows, hero proofs, setup limits and edition availability match README.md.`);

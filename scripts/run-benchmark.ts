@@ -13,9 +13,11 @@ import * as path from 'path';
 import * as os from 'os';
 import { fileURLToPath } from 'url';
 
-import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
-import { initStore, writeEntry, loadAllEntries } from '../src/store.js';
-import { search, estimateTokens } from '../src/search.js';
+import { createMemory, type MemoryEntry } from '../src/memory.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
+import { search } from '../src/search/bm25-search.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -133,7 +135,7 @@ function buildSeedSet(hippoRoot: string): void {
 
   // Frontend/deploy
   seedMemory(hippoRoot, 'build_before_deploy',
-    `Always run npm run build before deploying frontend. Deploy command: npx wrangler pages deploy out --project-name=quantamental. Missing build step deploys stale code.`,
+    `Always run npm run build before deploying frontend. Deploy command: npx wrangler pages deploy out --project-name=project-e. Missing build step deploys stale code.`,
     { tags: ['frontend', 'deploy', 'build'] });
 
   seedMemory(hippoRoot, 'constants_must_sync',

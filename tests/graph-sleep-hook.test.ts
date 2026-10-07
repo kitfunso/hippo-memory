@@ -14,7 +14,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore, deleteEntry } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { deleteEntry } from '../src/store/delete-and-batch.js';
 import { saveDecision, closeDecision } from '../src/decisions.js';
 import { savePolicy } from '../src/policies.js';
 import { saveProjectBrief, refreshBrief } from '../src/project-briefs.js';
@@ -23,17 +24,14 @@ import {
   loadEntities,
   loadRelations,
   loadPendingExtractionTenants,
-  markGraphDirty,
-  runGraphRebuildTransaction,
-  insertEntity,
-} from '../src/graph.js';
-import { extractGraph as realExtractGraph } from '../src/graph-extract.js';
-import {
-  sleep,
-  adminActor,
-  type Context,
-  type SleepPhases,
-} from '../src/api.js';
+} from '../src/graph/read.js';
+import { markGraphDirty, runGraphRebuildTransaction, insertEntity } from '../src/graph/write.js';
+import { extractGraph as realExtractGraph, extractGraphChunked, deriveGraph, loadGraphSources } from '../src/graph-extract.js';
+import { graphDelta } from '../src/graph/delta.js';
+import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { WRITE_BUDGET } from '../src/write-budget.js';
+import { sleep, adminActor, type Context } from '../src/api.js';
+import { runSleep, type SleepPhases } from '../src/api/sleep-run.js';
 
 const T = 'default';
 
@@ -164,7 +162,7 @@ describe('E3 sleep enqueue-hook', () => {
         return realExtractGraph(root, tid);
       },
     };
-    await sleep(tc.ctx, { noShare: true, __phases: phases });
+    await runSleep(tc.ctx, { noShare: true }, phases);
     // The original (<= watermark) is processed; the mid-rebuild arrival is still pending.
     const stillPending = pending(tc.hippoRoot);
     expect(stillPending).toHaveLength(1);
@@ -180,7 +178,7 @@ describe('E3 sleep enqueue-hook', () => {
         return realExtractGraph(root, tid);
       },
     };
-    const r = await sleep(tc.ctx, { noShare: true, __phases: phases }); // must NOT reject
+    const r = await runSleep(tc.ctx, { noShare: true }, phases); // must NOT reject
     expect(loadEntities(tc.hippoRoot, 'tenantOk', { limit: 100 }).length).toBe(1);
     expect(pending(tc.hippoRoot, 'tenantOk')).toHaveLength(0);   // ok tenant drained
     expect(pending(tc.hippoRoot, 'tenantFail')).toHaveLength(1); // failed tenant left pending
@@ -211,11 +209,11 @@ describe('E3 sleep enqueue-hook', () => {
     // dirty-tenant snapshot taken before the deleting phases must still rebuild T.
     const phases: Partial<SleepPhases> = {
       deduplicateStore: (root) => {
-        deleteEntry(root, d.memoryId!, T);
+        deleteEntry(root, d.memoryId!);
         return { removed: 1, pairs: [] };
       },
     };
-    const r = await sleep(tc.ctx, { noShare: true, __phases: phases });
+    const r = await runSleep(tc.ctx, { noShare: true }, phases);
     expect(r.graph?.tenants).toBe(1);              // T rebuilt despite the mid-sleep deletion
     expect(pending(tc.hippoRoot)).toHaveLength(0); // its queue row cascade-deleted (mark = no-op)
   });
@@ -225,7 +223,7 @@ describe('E3 sleep enqueue-hook', () => {
     const phases: Partial<SleepPhases> = {
       loadPendingExtractionTenants: () => { throw new Error('boom: queue read failed'); },
     };
-    const r = await sleep(tc.ctx, { noShare: true, __phases: phases }); // must NOT reject
+    const r = await runSleep(tc.ctx, { noShare: true }, phases); // must NOT reject
     expect(r.active).toBeGreaterThanOrEqual(0);    // consolidation still ran (result built)
     expect(r.graph).toBeUndefined();               // graph refresh skipped, not crashed
     expect((r.details ?? []).some((d) => d.includes('dirty-tenant snapshot failed'))).toBe(true);
@@ -244,5 +242,50 @@ describe('E3 sleep enqueue-hook', () => {
       }),
     ).toThrow('mid-rebuild boom');
     expect(loadEntities(tc.hippoRoot, T, { limit: 100 })).toHaveLength(0); // insert rolled back
+  });
+
+  it('17. a sleep stopped between graph chunks leaves the tenant pending, and the next sleep converges', async () => {
+    savePolicy(tc.hippoRoot, T, { policyName: 'RetryPolicy', policyText: 'retry 3x' });
+    for (const team of ['billing', 'search', 'checkout']) {
+      saveDecision(tc.hippoRoot, T, { decisionText: `${team} adopts RetryPolicy for its outbound calls` });
+    }
+    const queued = pending(tc.hippoRoot).length;
+    const stopAtSecondChunk: Partial<SleepPhases> = {
+      extractGraph: (root, tid) => extractGraphChunked(root, tid, {
+        ...WRITE_BUDGET,
+        holdMs: 0,
+        pause: async () => { throw new Error('stopped between chunks'); },
+      }),
+    };
+
+    const stopped = await runSleep(tc.ctx, { noShare: true }, stopAtSecondChunk);
+
+    expect(stopped.graph).toBeUndefined();
+    expect(pending(tc.hippoRoot)).toHaveLength(queued);
+    expect(loadEntities(tc.hippoRoot, T, { limit: 100 })).toHaveLength(1); // the first chunk's one op stays
+
+    await sleep(tc.ctx, { noShare: true });
+
+    expect(pending(tc.hippoRoot)).toHaveLength(0);
+    const desired = deriveGraph(loadGraphSources(tc.hippoRoot, T));
+    const db = openHippoDb(tc.hippoRoot);
+    try {
+      expect(graphDelta(db, T, desired)).toEqual([]);
+    } finally {
+      closeHippoDb(db);
+    }
+    expect(loadRelations(tc.hippoRoot, T, { limit: 100 })).toHaveLength(3);
+  });
+
+  it('18. stale ops a rebuild skipped show in the details', async () => {
+    saveDecision(tc.hippoRoot, T, { decisionText: 'Adopt Postgres as the system of record' });
+    const phases: Partial<SleepPhases> = {
+      extractGraph: (root, tid) => ({ ...realExtractGraph(root, tid), skipped: 2 }),
+    };
+
+    const r = await runSleep(tc.ctx, { noShare: true }, phases);
+
+    expect(r.graph?.tenants).toBe(1);
+    expect(r.details).toContain('graph: 2 stale op(s) skipped for a tenant; the next sleep redoes them');
   });
 });

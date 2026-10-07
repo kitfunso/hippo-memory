@@ -2,9 +2,12 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { initStore, writeEntry, loadAllEntries } from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
-import { search } from '../src/search.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
+import { Layer } from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
+import { search } from '../src/search/bm25-search.js';
 
 let tmpDir: string;
 let hippoDir: string;

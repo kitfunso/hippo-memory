@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { assertNonEmpty } from '../src/store.js';
+import { assertNonEmpty } from '../src/recall-scope.js';
 
 describe('assertNonEmpty (v1.7.3 review-tail)', () => {
   it('throws when array is empty', () => {

@@ -1,19 +1,18 @@
 /**
- * E3.2 multi-hop graph recall (docs/plans/2026-06-02-e3.2-multihop-recall.md).
+ * Multi-hop graph recall.
  *
- * READ-ONLY consumer of the E3 graph substrate (entities/relations built by E3.1,
- * guarded by E3.3). Given the lexical recall seeds, walk the relations graph up to N
+ * READ-ONLY consumer of the graph substrate (entities/relations built by graph-extract,
+ * guarded by the graph-on-consolidated triggers). Given the lexical recall seeds, walk the relations graph up to N
  * hops and surface the memories of reached entities that the lexical search did not
  * already return.
  *
  * Relation-type-AGNOSTIC: it walks whatever edges exist. Today the graph holds only
  * `supersedes` edges (so a 1-hop walk surfaces a supersession-linked predecessor/
- * successor a lexical search may miss); the moment E3.1 emits cross-object edges
+ * successor a lexical search may miss); the moment extraction emits cross-object edges
  * (owns/depends-on/blocked-by/references) the SAME traversal lights up cross-entity
  * multi-hop with zero rework here.
  *
- * Design points (the first two were forced by the verify-stage benchmark, the rest by
- * codex review — all root-cause, not patches):
+ * Design points:
  *  1. Graph-reached memories are loaded DIRECTLY by id (tenant-scoped PK fetch), NOT
  *     intersected with the recall handler's candidate set — that set is lexically
  *     prefiltered (loadSearchRows filters by query tokens), so intersecting would exclude
@@ -29,23 +28,21 @@
  *     nothing at realistic budgets.
  *  3. BOTH the local and global stores are expanded — a global seed's entities/relations
  *     live under the global root, so graph recall must traverse each seed in the store its
- *     graph lives in (codex review).
+ *     graph lives in.
  *  4. By-id loads are chunked at 500 (loadEntriesByIds caps at 500/call), so a high-fanout
- *     traversal (--hops 3 --max-neighbors 200 -> up to 600 ids) loses none (codex review).
+ *     traversal (--hops 3 --max-neighbors 200 -> up to 600 ids) loses none.
  *
- * No graph writes (only SELECTs via graph.ts read helpers + store reads), so the E3.3
+ * No graph writes (only SELECTs via graph.ts read helpers + store reads), so the
  * check-graph-writes lint permits this module living outside graph.ts.
  */
-import { loadEntriesByIds } from './store.js';
+import { loadEntriesByIds } from './store/entry-reads.js';
 import type { MemoryEntry } from './memory.js';
-import { type SearchResult, estimateTokens } from './search.js';
+import { DEFAULT_RECALL_BUDGET, type ResultCost, type SearchResult } from './search/types.js';
+import { estimateTokens } from './token-ledger.js';
 import { compareEntryIdentity } from './compare.js';
-import {
-  loadEntitiesByMemoryId,
-  loadEntitiesByIds,
-  loadNeighborRelations,
-} from './graph.js';
+import { loadEntitiesByMemoryId, loadEntitiesByIds, loadNeighborRelations } from './graph/read.js';
 import { passesCliRecallScopeFilter, passesScopeFilterForRecall } from './recall-scope.js';
+import type { Entity } from './graph/types.js';
 
 /** Hard cap on `--hops` (a higher value just walks more of a finite graph; this bounds
  *  worst-case work and keeps the flag honest). */
@@ -78,8 +75,10 @@ export interface GraphExpandOpts {
    *  cmdRecall: a row is visible if valid_from <= asOf AND, when superseded, its successor
    *  was not yet valid at asOf). */
   asOf?: string;
-  /** Token budget for the augmented set (defaults to 4000, matching recall's default). */
+  /** Token budget for the augmented set (defaults to DEFAULT_RECALL_BUDGET, matching recall). */
   budget?: number;
+  /** Budget cost per result; defaults to the memory text. */
+  cost?: ResultCost;
   /** The recall --min-results floor: this many top base rows are kept regardless of
    *  budget, so graph expansion never violates the floor. Defaults to 1. */
   minResults?: number;
@@ -90,7 +89,7 @@ export interface GraphExpandOpts {
    *  (passesCliRecallScopeFilter); additive false/absent with requested set = api
    *  exact-narrowing semantics (passesScopeFilterForRecall). Base results are the
    *  caller's responsibility (they passed through the caller's own scope filter). */
-  recallScope?: { requested?: string; additive?: boolean };
+  recallScope?: { requested?: string; additive?: boolean; ownScope?: string };
 }
 
 /** Load memories by id in <=500-id chunks (loadEntriesByIds caps each call at 500). */
@@ -103,29 +102,25 @@ function loadByIdsChunked(root: string, tenantId: string, ids: string[]): Memory
   return out;
 }
 
-/**
- * Traverse one store's graph from the seeds present in it and accumulate new graph hits
- * into `hitsByOrigin`. Mutates `seenMemoryIds` so a memory is surfaced at most once across
- * stores. Pure reads.
- */
-function produceHitsForRoot(
+type HitOpts = Required<Pick<GraphExpandOpts, 'hops' | 'maxNeighbors' | 'tenantId' | 'includeSuperseded'>> & {
+  asOfDate: Date | null;
+  recallScope: { requested?: string; additive?: boolean; ownScope?: string };
+};
+
+interface RelationWalk {
+  reached: Map<number, GraphVia>;
+  originMemByEntityId: Map<number, string | null>;
+}
+
+/** BFS, both directions, up to `hops`: each reached entity's via, and the base memory it descends from. */
+function walkRelations(
   root: string,
-  baseResults: SearchResult[],
-  baseScoreByMemId: Map<string, number>,
-  seenMemoryIds: Set<string>,
-  hitsByOrigin: Map<string, GraphHit[]>,
-  opts: Required<Pick<GraphExpandOpts, 'hops' | 'maxNeighbors' | 'tenantId' | 'includeSuperseded'>> & {
-    asOfDate: Date | null;
-    recallScope: { requested?: string; additive?: boolean };
-  },
-): void {
-  const { hops, maxNeighbors, tenantId, includeSuperseded, asOfDate, recallScope } = opts;
-
-  // Seeds = graph entities (in THIS store) whose source memory is a base result.
-  const seedEntities = loadEntitiesByMemoryId(root, tenantId, baseResults.map((r) => r.entry.id));
-  if (seedEntities.length === 0) return;
-
-  // BFS, both directions, up to `hops`. `visited` prevents re-expansion (cycle-safe).
+  tenantId: string,
+  seedEntities: readonly Entity[],
+  hops: number,
+  maxNeighbors: number,
+): RelationWalk {
+  // `visited` prevents re-expansion (cycle-safe).
   // `originMemByEntityId` propagates the base-result memory id each reached node descends
   // from (for adjacency placement + score inheritance).
   const visitedEntityIds = new Set<number>(seedEntities.map((e) => e.id));
@@ -162,6 +157,51 @@ function produceHitsForRoot(
     }
     frontier = nextFrontier;
   }
+  return { reached, originMemByEntityId };
+}
+
+/** The recall hard filters (as-of, superseded, scope) re-applied to a directly loaded graph-reached row. */
+function passesRecallFilters(mem: MemoryEntry, via: GraphVia, successorValidFrom: Map<string, string>, opts: HitOpts): boolean {
+  const { includeSuperseded, asOfDate, recallScope } = opts;
+  // A node reached as the `to` endpoint of a `supersedes` edge IS the superseded
+  // (older) version — the graph is the authoritative signal (the memory mirror's
+  // `superseded_by` is NOT set by `hippo decide`, only the decisions table is). By
+  // default recall shows current truth, so drop it unless --include-superseded; the
+  // `from` endpoint (the newer successor) is always kept.
+  const isSupersededEndpoint = via.relType === 'supersedes' && via.direction === 'to';
+  if (asOfDate) {
+    if (new Date(mem.valid_from) > asOfDate) return false;        // not yet valid at asOf
+    if (mem.superseded_by) {
+      const succVf = successorValidFrom.get(mem.superseded_by);
+      // Visible only while its successor was NOT yet valid at asOf (matches cmdRecall).
+      if (succVf && new Date(succVf) <= asOfDate) return false;
+    }
+  } else if (!includeSuperseded && (mem.superseded_by || isSupersededEndpoint)) {
+    return false;                                                 // default recall drops superseded
+  }
+  return recallScope.additive
+    ? passesCliRecallScopeFilter(mem.scope ?? null, recallScope.requested) || passesScopeFilterForRecall(mem.scope ?? null, undefined, recallScope.ownScope)
+    : passesScopeFilterForRecall(mem.scope ?? null, recallScope.requested, recallScope.ownScope);
+}
+
+/** Traverse one store's graph from its seeds into `hitsByOrigin`. Pure reads; mutates `seenMemoryIds`
+ *  and `seenContent` so a memory, or a share/promote copy of it, surfaces at most once across stores. */
+function produceHitsForRoot(
+  root: string,
+  baseResults: SearchResult[],
+  baseScoreByMemId: Map<string, number>,
+  seenMemoryIds: Set<string>,
+  seenContent: Set<string>,
+  hitsByOrigin: Map<string, GraphHit[]>,
+  opts: HitOpts,
+): void {
+  const { hops, maxNeighbors, tenantId, asOfDate } = opts;
+
+  // Seeds = graph entities (in THIS store) whose source memory is a base result.
+  const seedEntities = loadEntitiesByMemoryId(root, tenantId, baseResults.map((r) => r.entry.id));
+  if (seedEntities.length === 0) return;
+
+  const { reached, originMemByEntityId } = walkRelations(root, tenantId, seedEntities, hops, maxNeighbors);
   if (reached.size === 0) return;
 
   // Reached entities -> source memory ids -> load DIRECTLY by id (chunked), not lexical.
@@ -189,30 +229,13 @@ function produceHitsForRoot(
     const mem = loadedById.get(ent.memoryId);
     if (!mem) continue;                       // not found / wrong tenant / already in base
     if (seenMemoryIds.has(mem.id)) continue;  // another reached entity already added it
+    if (seenContent.has(mem.content)) continue; // share/promote copy: same text, another id
     const via = reached.get(ent.id)!;
-    // A node reached as the `to` endpoint of a `supersedes` edge IS the superseded
-    // (older) version — the graph is the authoritative signal (the memory mirror's
-    // `superseded_by` is NOT set by `hippo decide`, only the decisions table is). By
-    // default recall shows current truth, so drop it unless --include-superseded; the
-    // `from` endpoint (the newer successor) is always kept.
-    const isSupersededEndpoint = via.relType === 'supersedes' && via.direction === 'to';
-    if (asOfDate) {
-      if (new Date(mem.valid_from) > asOfDate) continue;        // not yet valid at asOf
-      if (mem.superseded_by) {
-        const succVf = successorValidFrom.get(mem.superseded_by);
-        // Visible only while its successor was NOT yet valid at asOf (matches cmdRecall).
-        if (succVf && new Date(succVf) <= asOfDate) continue;
-      }
-    } else if (!includeSuperseded && (mem.superseded_by || isSupersededEndpoint)) {
-      continue;                                                 // default recall drops superseded
-    }
-    const scopeOk = recallScope.additive
-      ? passesCliRecallScopeFilter(mem.scope ?? null, recallScope.requested)
-      : passesScopeFilterForRecall(mem.scope ?? null, recallScope.requested);
-    if (!scopeOk) continue;
+    if (!passesRecallFilters(mem, via, successorValidFrom, opts)) continue;
     const origin = originMemByEntityId.get(ent.id) ?? baseResults[0].entry.id;
     const originScore = baseScoreByMemId.get(origin) ?? baseResults[baseResults.length - 1].score;
     seenMemoryIds.add(mem.id);
+    seenContent.add(mem.content);
     const hit: GraphHit = {
       entry: mem,
       score: originScore * (1 - HOP_DISCOUNT * via.hops),
@@ -242,7 +265,7 @@ export function graphExpandRecall(
   const { hops, hippoRoot, globalRoot, tenantId } = opts;
   if (hops <= 0 || baseResults.length === 0) return baseResults;
   const maxNeighbors = opts.maxNeighbors ?? DEFAULT_MAX_NEIGHBORS;
-  const budget = opts.budget ?? 4000;
+  const budget = opts.budget ?? DEFAULT_RECALL_BUDGET;
   const includeSuperseded = opts.includeSuperseded ?? false;
   const asOfDate = opts.asOf ? new Date(opts.asOf) : null;
   const minResults = opts.minResults ?? 1;
@@ -250,12 +273,13 @@ export function graphExpandRecall(
 
   const baseScoreByMemId = new Map(baseResults.map((r) => [r.entry.id, r.score]));
   const seenMemoryIds = new Set<string>(baseResults.map((r) => r.entry.id));
+  const seenContent = new Set<string>(baseResults.map((r) => r.entry.content));
   const hitsByOrigin = new Map<string, GraphHit[]>();
 
   // Expand against each distinct store the seeds may live in (local + global).
   const roots = globalRoot && globalRoot !== hippoRoot ? [hippoRoot, globalRoot] : [hippoRoot];
   for (const root of roots) {
-    produceHitsForRoot(root, baseResults, baseScoreByMemId, seenMemoryIds, hitsByOrigin, {
+    produceHitsForRoot(root, baseResults, baseScoreByMemId, seenMemoryIds, seenContent, hitsByOrigin, {
       hops, maxNeighbors, tenantId, includeSuperseded, asOfDate, recallScope,
     });
   }
@@ -263,8 +287,7 @@ export function graphExpandRecall(
   if (hitsByOrigin.size === 0) return baseResults;
   // Closer hops first within each origin group, then by inherited score.
   // Hops asc and score desc are both true primary keys (unchanged);
-  // compareEntryIdentity is only the TAIL for a same-hop, same-score tie
-  // (T2, deterministic tie keys).
+  // compareEntryIdentity is only the TAIL for a same-hop, same-score tie.
   for (const hits of hitsByOrigin.values()) {
     hits.sort((a, b) => {
       const byHops = a.graphVia.hops - b.graphVia.hops;
@@ -284,18 +307,18 @@ export function graphExpandRecall(
   // (NOTE: at a tight budget a new graph hit can displace a weakly-scored base result;
   // aggregate recall stays >= baseline, the displaced item is the lowest-value one.)
   // Protect the top --min-results base rows from eviction (graph expansion must not
-  // violate the recall min-results floor; codex P2). They are kept regardless of budget;
+  // violate the recall min-results floor). They are kept regardless of budget;
   // baseResults is score-ordered, so slice(0, N) is the top N.
   const protectedCount = Math.min(Math.max(minResults, 1), baseResults.length);
   const keep = new Set<SearchResult>(baseResults.slice(0, protectedCount));
-  let usedTokens = [...keep].reduce((s, r) => s + r.tokens, 0);
-  // T2 note: PLAIN stable score sort on purpose -- both input lists are
-  // deterministically ordered by this point, stability inherits that, and a
-  // base-vs-graph-hit tie keeps the BASE result first (the concat order),
-  // preserving pre-T2 semantics.
+  const price = opts.cost ?? ((r: SearchResult) => r.tokens);
+  let usedTokens = [...keep].reduce((s, r) => s + price(r), 0);
+  // PLAIN stable score sort on purpose: both input lists are already deterministically
+  // ordered, and a base-vs-graph-hit tie keeps the BASE result first (the concat order).
   for (const r of [...baseResults.slice(protectedCount), ...allHits].sort((a, b) => b.score - a.score)) {
-    if (usedTokens + r.tokens > budget) continue;
-    usedTokens += r.tokens;
+    const tokens = price(r);
+    if (usedTokens + tokens > budget) continue;
+    usedTokens += tokens;
     keep.add(r);
   }
 

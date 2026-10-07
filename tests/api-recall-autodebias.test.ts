@@ -1,7 +1,7 @@
 /**
  * J3.2 — api.recall integration with planningFallacyHint auto-injection.
  *
- * Asserts the orchestrator (computePlanningFallacyHint) wires correctly
+ * Asserts the orchestrator (computePlanningFallacyOutput) wires correctly
  * through api.recall: hint populated only when ALL conditions met (env
  * != off, forward-claim match, class resolves uniquely, nClosed > 0).
  * Audit attribution flows from ctx.actor.subject -> inner
@@ -13,20 +13,12 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store.js';
+import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { recall, type Context } from '../src/api.js';
-import { savePrediction, closePrediction } from '../src/predictions.js';
+import { savePrediction, closePrediction } from '../src/predictions/store.js';
+import { makeRoot } from './_helpers/make-root.js';
 
-function makeRoot(prefix: string): string {
-  const root = mkdtempSync(join(tmpdir(), `hippo-${prefix}-`));
-  mkdirSync(join(root, '.hippo'), { recursive: true });
-  initStore(root);
-  return root;
-}
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
 }

@@ -33,7 +33,7 @@ describe('github envelope', () => {
 });
 
 describe('isGitHubIssueEvent', () => {
-  const fixture: GitHubIssueEvent = {
+  const fixture = {
     action: 'opened',
     repository: repo,
     sender,
@@ -44,7 +44,7 @@ describe('isGitHubIssueEvent', () => {
       user: sender,
       updated_at: '2026-05-04T10:00:00Z',
     },
-  };
+  } satisfies GitHubIssueEvent;
 
   it('accepts a valid issues payload', () => {
     expect(isGitHubIssueEvent(fixture, 'issues')).toBe(true);
@@ -66,7 +66,7 @@ describe('isGitHubIssueEvent', () => {
 });
 
 describe('isGitHubIssueCommentEvent', () => {
-  const fixture: GitHubIssueCommentEvent = {
+  const fixture = {
     action: 'created',
     repository: repo,
     sender,
@@ -77,7 +77,7 @@ describe('isGitHubIssueCommentEvent', () => {
       user: sender,
       updated_at: '2026-05-04T10:01:00Z',
     },
-  };
+  } satisfies GitHubIssueCommentEvent;
 
   it('accepts a valid issue_comment payload', () => {
     expect(isGitHubIssueCommentEvent(fixture, 'issue_comment')).toBe(true);
@@ -99,7 +99,7 @@ describe('isGitHubIssueCommentEvent', () => {
 });
 
 describe('isGitHubPullRequestEvent', () => {
-  const fixture: GitHubPullRequestEvent = {
+  const fixture = {
     action: 'opened',
     repository: repo,
     sender,
@@ -110,7 +110,7 @@ describe('isGitHubPullRequestEvent', () => {
       user: sender,
       updated_at: '2026-05-04T10:02:00Z',
     },
-  };
+  } satisfies GitHubPullRequestEvent;
 
   it('accepts a valid pull_request payload', () => {
     expect(isGitHubPullRequestEvent(fixture, 'pull_request')).toBe(true);
@@ -132,7 +132,7 @@ describe('isGitHubPullRequestEvent', () => {
 });
 
 describe('isGitHubPullRequestReviewCommentEvent', () => {
-  const fixture: GitHubPullRequestReviewCommentEvent = {
+  const fixture = {
     action: 'created',
     repository: repo,
     sender,
@@ -143,7 +143,7 @@ describe('isGitHubPullRequestReviewCommentEvent', () => {
       user: sender,
       updated_at: '2026-05-04T10:03:00Z',
     },
-  };
+  } satisfies GitHubPullRequestReviewCommentEvent;
 
   it('accepts a valid pull_request_review_comment payload', () => {
     expect(isGitHubPullRequestReviewCommentEvent(fixture, 'pull_request_review_comment')).toBe(true);

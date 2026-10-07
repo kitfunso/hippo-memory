@@ -35,7 +35,7 @@ from harness.adapter import InteractionRecord  # noqa: E402
 from harness.runner import Runner  # noqa: E402
 from harness.submission import read_release  # noqa: E402
 
-CODEX_JS = r"C:\Users\skf_s\AppData\Roaming\npm\node_modules\@openai\codex\bin\codex.js"
+CODEX_JS = HERE.parents[3] / "AppData/Roaming/npm/node_modules/@openai/codex/bin/codex.js"
 PREAMBLE = ("You are a JSON-only grading function. Do NOT use any tool. Do NOT read, open, view or write any "
             "file. Everything you need is in this message. Reply with the JSON object only.\n\n")
 ORDER = {"restaurant": "Blue Bottle Coffee", "items": ["small latte"], "notes": "pickup"}
@@ -54,7 +54,7 @@ def codex_verdict(system: str, user: str, work: Path, tag: str) -> str:
     """One judge call through the Windows codex CLI (ChatGPT plan) via WSL interop."""
     out, log = work / f"codex-{tag}.txt", work / f"codex-{tag}.log"
     out.unlink(missing_ok=True)  # a codex exit 0 without output must fail, never reread an older verdict
-    cmd = ["node.exe", CODEX_JS, "exec", "--skip-git-repo-check", "--ephemeral", "--ignore-user-config",
+    cmd = ["node.exe", win(CODEX_JS), "exec", "--skip-git-repo-check", "--ephemeral", "--ignore-user-config",
            "-s", "read-only", "-c", "notify=[]", "-c", 'model_reasoning_effort="medium"', "-m", MODEL,
            "-o", win(out), "-"]
     env = {**os.environ, "CODEX_HOME": os.environ["DOLPHIN_CODEX_HOME"], "WSLENV": "CODEX_HOME/p"}

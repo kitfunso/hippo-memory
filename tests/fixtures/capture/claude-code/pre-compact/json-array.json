@@ -1,0 +1,8 @@
+{
+  "stdin": "[{\"session_id\":\"sess-1\",\"transcript_path\":\"/home/u/.claude/projects/p/sess-1.jsonl\",\"cwd\":\"/work/repo\",\"hook_event_name\":\"PreCompact\"}]",
+  "timedOut": false,
+  "expect": {
+    "status": "skipped",
+    "reason": "malformed or incomplete PreCompact payload (missing string transcript_path)"
+  }
+}

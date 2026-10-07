@@ -10,27 +10,18 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store.js';
+import { rmSync } from 'node:fs';
 import { remember } from '../src/api.js';
 import { pushGoal } from '../src/goals.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../src/mcp/server.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
+import { makeRoot } from './_helpers/make-root.js';
 
-function makeRoot(): string {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-mcp-goal-boost-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
-
-interface HippoRecallToolArgs {
+type HippoRecallToolArgs = {
   query: string;
   budget?: number;
   session_id?: string;
-}
+};
 
 function callTool(
   name: string,
@@ -70,7 +61,7 @@ describe('MCP hippo_recall session_id goal-stack boost (v1.7.4)', () => {
   const sessionId = 'sess-mcp-1.7.4';
 
   beforeEach(() => {
-    home = makeRoot();
+    home = makeRoot('mcp-goal-boost');
   });
 
   afterEach(() => rmSync(home, { recursive: true, force: true }));

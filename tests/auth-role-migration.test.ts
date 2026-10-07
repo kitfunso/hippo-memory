@@ -13,17 +13,18 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, getCurrentSchemaVersion, getSchemaVersion } from '../src/db.js';
 import { createApiKey, validateApiKey } from '../src/auth.js';
+import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 
 describe('v1.12.0 migration v26: api_keys.role', () => {
   it('CURRENT_SCHEMA_VERSION is 26', () => {
-    expect(getCurrentSchemaVersion()).toBe(48);
+    expect(getCurrentSchemaVersion()).toBe(LATEST_SCHEMA_VERSION);
   });
 
   it('fresh DB has api_keys.role column with DEFAULT admin', () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-v26-fresh-'));
     const db = openHippoDb(home);
     try {
-      expect(getSchemaVersion(db)).toBe(48);
+      expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
       // SAFETY: PRAGMA table_info always returns rows with these four columns.
       const cols = db.prepare(`PRAGMA table_info(api_keys)`).all() as Array<{ name: string; type: string; dflt_value: string | null; notnull: number }>;
       const role = cols.find((c) => c.name === 'role');

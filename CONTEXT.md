@@ -8,10 +8,20 @@ claim cards. These terms have one fixed meaning in the hippo code, the `hippo` C
 ### Memory lifecycle
 
 **Dormant memory**:
-A memory sleep moved out of active memory instead of deleting it, because it faded
-(`dormant.enabled`, on by default). It keeps its content and can be restored or forgotten for
-good until `dormant.retentionDays` expires it.
+A memory moved out of active memory instead of being deleted: sleep's decay pass when it
+faded (`dormant.enabled`, on by default), an imported agent memory whose note was deleted,
+`hippo projects repair`, or `hippo audit repair` setting aside an automatic memory with a certain
+defect, which sleep and the daily runner also do once per store after an upgrade. It keeps its content and can be restored or forgotten for good until
+`dormant.retentionDays` expires it. A memory audit repair set aside comes back `verified`.
 _Avoid_: archived memory (the raw archive keeps metadata only), deleted, cold
+
+**Automatic memory**:
+A memory hippo wrote without a person choosing the words: session capture, git learning,
+a sleep merge, a compaction memory, an extracted fact or a DAG summary, at confidence observed
+or inferred, and a promoted or shared copy of one. Only automatic memories are held to the quality check (`src/memory-quality.ts`);
+one with a certain defect is never reused by sleep or shared, and `hippo audit repair` can set
+it aside. A person's memory is never judged on its wording.
+_Avoid_: auto memory (Claude Code's own feature), generated memory, low-quality memory
 
 **Churn-stale memory**:
 A memory whose named file, code symbol or `npm run` script changed or disappeared in its own
@@ -33,10 +43,37 @@ A `kind='raw'` memory: a connector message or imported note, append-only. Sleep 
 deletes one; only the raw archive removes it.
 _Avoid_: raw memory, transcript
 
+**Compaction memory**:
+A memory `hippo post-compact` saves from one item of the summariser's "Memories for hippo" list:
+tagged `compaction-memory`, source `compaction:<session id>`, kind distilled, confidence observed.
+It fades like any other memory. An item that restates a memory the project already holds is not
+saved again; when another session restates it, that memory is strengthened as a recall would. The session that
+compacted is not shown it again in its own prompts.
+_Avoid_: summary memory (the summary lives in the compaction record), snapshot (the task snapshot is a different thing)
+
+**Keep rule**:
+A tag and a source prefix that together keep a memory out of automatic deletion; today one pair
+per imported agent memory tool. Both must match, because a merge copies a source's tags onto
+a row whose source is `consolidation`. `canAutoDelete` and `AUTO_DELETABLE_SQL` in `src/memory.ts`
+apply it and change together. `hippo forget` and `hippo supersede` still work on a kept memory.
+_Avoid_: pin (a person sets that), retention policy, allowlist
+
+**Imported agent memory**:
+A memory hippo copied from another coding agent's own memory: a Claude Code auto memory note, a Codex memory, and the
+like. It follows its source item: kept while the item exists, superseded when the item changes, set aside as dormant
+(restorable) when the item is deleted.
+_Avoid_: synced memory, external memory, auto memory (Claude Code's own feature)
+
 **Token ledger**:
 The record of every block of memory text hippo handed an agent: surface, session, estimated
 tokens, and whether it was sent or skipped as unchanged. Counts only, never the text.
 _Avoid_: usage log, telemetry, cost log
+
+**Delivery ledger**:
+The optional per-turn record of the per-prompt hook: one event per call and one row per
+candidate memory, saying whether it was emitted, reused or rejected and why.
+Ids, hashes, counts and reasons only, never the text. Off by default; kept 90 days.
+_Avoid_: delivery log, trace, telemetry
 
 **Failure log**:
 Every failed tool call the capture-error hook sees, stored as a memory or not: outcome, session,
@@ -55,7 +92,19 @@ another session hit first. Repeat-error rate compares repeats per session betwee
 a holdout arm; it is never reported as one absolute number.
 _Avoid_: duplicate (that is a lesson hippo already holds), recurrence
 
+**At-risk memory**:
+An unpinned memory whose strength, projected 30 days ahead, falls under 0.2. The dashboard's
+Health view counts and colours projects by their share of these. A pinned memory is never at risk.
+_Avoid_: fading (that is the 0.2 to 0.5 band), weak, stale (that is a confidence tier)
+
 ### Access
+
+**Origin project**:
+The lowercased project a memory was captured in (`origin_project`). An empty string means
+user-global, shown as Global; null means a row from before schema v39, shown as Unassigned.
+The Health view groups memories by it. Unlike scope, it grants no access.
+_Avoid_: project scope, workspace, repo (for the grouping)
+
 
 **Scope**:
 The access boundary of a memory's source, one channel or one repo (`slack:private:C123`,
@@ -71,6 +120,42 @@ _Avoid_: private scope (it covers quarantine too), secret scope
 Permission for one member API key to read one restricted scope. Admin keys, the local CLI and
 stdio MCP need none.
 _Avoid_: ACL entry, share, permission
+
+**Auth resolver**:
+A function the server asks to vouch for a bearer token that is not an API key. Tokens are routed
+by shape: an `hk_` token goes only to API-key validation, any other token only to the resolver.
+Returns a tenant, subject, role and scope grants, or nothing (a 401). It throws only when its
+upstream is down; a throw or a missed deadline is a 503, which a stream heartbeat skips rather than
+treating as revocation. It runs on every authenticated request and every stream heartbeat, so it
+must be cache-backed. Its admin role is tenant admin: no other tenant's audit log, no host-wide
+sleep. It can mint and revoke member API keys only. A key a member mints for itself expires; a
+member key an admin mints never does, so it keeps working after the user leaves the identity
+provider until someone revokes it.
+_Avoid_: auth plugin, identity provider
+
+**Public JSON path**:
+A fixed GET `/v1/` path that `serve()`'s caller pairs with a JSON value (`publicJson`). Anyone can read it, with no key and
+under any store, so it must hold nothing secret. The value is serialized once at boot and may be at most 64 KiB; a path a
+core GET route already serves is refused at boot.
+_Avoid_: public route (`PUBLIC_ROUTES` holds the signed connector webhooks), open endpoint, metadata route
+
+**Key owner**:
+The auth-resolver subject that minted a self-service API key for itself. A member signed in
+through the resolver lists and may revoke only the keys it owns; a key an admin or the CLI mints
+has no owner.
+_Avoid_: owner (alone; a claimant or assignee is something else), creator, minter
+
+**Key expiry**:
+The time after which an API key fails on every route. Self-service keys always have one; other
+keys have none. The first key with an expiry raises the store's binary floor, since an older
+binary would ignore it.
+_Avoid_: TTL (that is the setting, not the time), expiry (alone; a reclaim is something else)
+
+**Audit cursor**:
+The last audit event id an exporter has read; `listAuditEventsAfter` returns the events after it.
+Retention prune deletes events whether or not they were exported, so an exporter must keep up with
+the prune window; gaps in ids are normal.
+_Avoid_: offset, page token
 
 **Derived memory**:
 A memory built from other memories' content: a consolidation merge, a DAG summary or profile, an
@@ -135,10 +220,26 @@ _Avoid_: kanban, tracker
 The JSON a host writes to a hook command's stdin at spawn. Optional, and absent only counts as a manual run when the read finished on its own; a read that timed out proves nothing either way.
 _Avoid_: stdin text, hook input, hook data
 
+**Compaction record**:
+The row in the `compactions` table for one Claude Code compaction: `hippo pre-compact` writes it
+`started`, `hippo post-compact` moves it to `summarised` and then `done`. It holds the session,
+whether a task snapshot was saved, the summary with secrets scrubbed, every item of the "Memories
+for hippo" list and how many became memories. It is not a memory: recall, context and sleep's memory
+passes never read it. `hippo sleep`, or the daily runner for the global store, finishes one left
+`started` or `summarised` for over 10 minutes;
+a compaction that never wrote a summary is closed as `no-summary`.
+_Avoid_: compaction summary, compaction log, snapshot
+
 **User correction**:
 A human message that tells the agent something it just did, said, proposed or assumed is wrong
 or unwanted, or turns it against that. A detected one is a candidate lesson, not a stored memory.
 _Avoid_: feedback (outcomes are feedback too), complaint, redirect
+
+**Sub-agent transcript**:
+The JSONL file Claude Code writes for one delegated agent, in the parent session's `subagents/`
+folder and apart from the parent's own transcript. Each turn ends in a text-only message that goes
+back to the parent; the last one is its final report. Session-end capture reads only the parent's.
+_Avoid_: sidechain log, child transcript
 
 ### Support
 

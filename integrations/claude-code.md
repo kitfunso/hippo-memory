@@ -10,7 +10,7 @@ Add this block to your `CLAUDE.md` (project root or `~/.claude/CLAUDE.md` for gl
 ## Memory (Hippo)
 
 Hippo manages project memory across sessions. It decays old memories, strengthens
-retrieved ones, and compresses episodes into patterns during sleep cycles.
+retrieved ones, and merges related episodes into one memory during sleep.
 
 ### At session start
 
@@ -61,7 +61,7 @@ Consolidation runs automatically when Claude Code exits (via a `SessionEnd` hook
 
 The hook runs `hippo session-end --log-file <path>`, which spawns a detached child process that runs `hippo sleep` then `hippo capture --last-session` in sequence and writes their output to `~/.hippo/logs/claude-code-sleep.log`. Detaching is the only way to survive the TUI teardown — otherwise Claude Code SIGTERM's the hook before consolidation finishes.
 
-A companion `SessionStart` hook (installed automatically) prints that log on your next session start between `=== Previous session hippo consolidation ===` banners and clears it. So you actually see what was consolidated.
+A companion `SessionStart` hook (installed automatically) prints that log on your next session start between `=== Previous session hippo consolidation ===` banners and clears it. It prints on stderr: Claude Code adds SessionStart stdout to the model's context, and the log is for you, not the model. To read it, start `claude --debug` and open `~/.claude/debug/<session-id>.txt`. When the last sleep failed or a compaction summary was set aside, the hook also shows you one line on screen, such as `Hippo: 1 compaction summary set aside as .bad. Run hippo doctor for details.` Claude Code shows that line to you and does not add it to the model's context.
 
 > **Migration from 0.22.x:** earlier releases installed two parallel SessionEnd entries (one for `sleep`, one for `capture`). They ran simultaneously and were both killed by the TUI before completion, so the log rarely had the `[hippo] sleep complete` / `[hippo] capture complete` lines. Re-running `hippo hook install claude-code` (or `hippo setup`) collapses them into the single detached `hippo session-end` entry. Also covers the pre-0.20.2 `Stop` hook that ran `hippo sleep` after every turn.
 
@@ -71,8 +71,8 @@ If you prefer manual control:
 hippo sleep
 ```
 
-This decays unretrieved memories, merges related episodes into patterns, and
-removes entries below the strength threshold.
+This decays unretrieved memories, merges related episodes into one memory, and
+moves faded memories to a dormant store, deleted after 180 days unless restored.
 
 ### Check memory health
 
@@ -92,8 +92,8 @@ hippo init
 ```
 
 Hippo auto-detects Claude Code and:
-1. Patches `CLAUDE.md` with the hook block above
-2. Adds a `SessionEnd` hook to `~/.claude/settings.json` so `hippo sleep` runs on session exit
+1. Patches `CLAUDE.md` with hippo's own block, which is shorter than the snippet above
+2. Adds 7 hooks to `~/.claude/settings.json`; the `SessionEnd` one runs `hippo sleep` on session exit
 
 No copy-paste needed, no cron required.
 
@@ -102,6 +102,6 @@ To skip auto-detection: `hippo init --no-hooks`
 ## Notes
 
 - Hippo stores everything in `.hippo/` in your project root. It's markdown on disk. Commit it or gitignore it, your call.
-- `--budget 3000` is a good default for Claude Code sessions. Increase for larger context tasks.
+- `--budget 3000` is a good default for Claude Code sessions. Increase for larger context tasks. The budget counts the whole printed block, headings and tags included.
 - If the project has no `.hippo/` yet, run `hippo init` first.
 - For global memory across projects, run `hippo init --global`. The global store defaults to `~/.hippo/` but respects `$HIPPO_HOME` and `$XDG_DATA_HOME/hippo`.

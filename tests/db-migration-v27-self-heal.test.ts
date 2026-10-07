@@ -16,8 +16,9 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
+import { LATEST_SCHEMA_VERSION_STR } from './_helpers/schema-version.js';
 
 function tableNames(db: DatabaseSyncLike): string[] {
   // SAFETY: DatabaseSyncLike#all() returns `unknown[]`; the row shape is guaranteed
@@ -78,7 +79,7 @@ describe('migration v27 self-heal — partial-applied v16 state', () => {
       const tables = tableNames(db);
       expect(tables).toContain('api_keys');
       expect(tables).toContain('audit_log');
-      expect(getMeta(db, 'schema_version')).toBe('48');
+      expect(getMeta(db, 'schema_version')).toBe(LATEST_SCHEMA_VERSION_STR);
     } finally {
       closeHippoDb(db);
     }
@@ -142,7 +143,7 @@ describe('migration v27 self-heal — partial-applied v16 state', () => {
       const tables = tableNames(db2);
       expect(tables).toContain('api_keys');
       expect(tables).toContain('audit_log');
-      expect(getMeta(db2, 'schema_version')).toBe('48');
+      expect(getMeta(db2, 'schema_version')).toBe(LATEST_SCHEMA_VERSION_STR);
     } finally {
       closeHippoDb(db2);
     }

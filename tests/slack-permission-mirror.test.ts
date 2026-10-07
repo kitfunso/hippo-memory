@@ -2,11 +2,12 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { initStore } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import type { Context } from '../src/api.js';
 import { ingestMessage } from '../src/connectors/slack/ingest.js';
 import { recall } from '../src/api.js';
 
-const ctx = (root: string) => ({
+const ctx = (root: string): Context => ({
   hippoRoot: root,
   tenantId: 'default',
   actor: { subject: 'connector:slack', role: 'admin' },
@@ -76,8 +77,8 @@ describe('slack permission mirroring', () => {
   // with scope='slack:private:CSHARED'. Tenant A queries the same scope string
   // and must get nothing — recall is tenant-scoped before scope-scoped.
   it('tenant-mismatched scope does not leak across tenants', () => {
-    const ctxA = (r: string) => ({ hippoRoot: r, tenantId: 'tenantA', actor: { subject: 'cli', role: 'admin' } });
-    const ctxB = (r: string) => ({ hippoRoot: r, tenantId: 'tenantB', actor: { subject: 'cli', role: 'admin' } });
+    const ctxA = (r: string): Context => ({ hippoRoot: r, tenantId: 'tenantA', actor: { subject: 'cli', role: 'admin' } });
+    const ctxB = (r: string): Context => ({ hippoRoot: r, tenantId: 'tenantB', actor: { subject: 'cli', role: 'admin' } });
     ingestMessage(ctxB(root), {
       teamId: 'T1',
       channel: { id: 'CSHARED', is_private: true },

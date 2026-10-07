@@ -5,19 +5,18 @@ import { mkdtempSync, rmSync, readFileSync, existsSync, statSync, mkdirSync } fr
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync, execSync } from 'node:child_process';
+import { initStore } from '../src/store/open.js';
+import { saveActiveTaskSnapshot, appendSessionEvent, closeTaskSnapshotsForSession } from '../src/store/sessions.js';
 import {
-  initStore,
-  saveActiveTaskSnapshot,
   saveSessionHandoff,
   loadHandoffById,
   loadLatestHandoff,
   stampHandoffOutcome,
   writeSessionEndHandoff,
-  appendSessionEvent,
-  closeTaskSnapshotsForSession,
-} from '../src/store.js';
+} from '../src/store/handoffs.js';
 import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, type DatabaseSyncLike } from '../src/db.js';
 import { getContext, adminActor } from '../src/api.js';
+import { LATEST_SCHEMA_VERSION, LATEST_SCHEMA_VERSION_STR } from './_helpers/schema-version.js';
 
 interface ColumnInfo {
   name: string;
@@ -79,9 +78,9 @@ describe('test 1: fresh store, single open', () => {
       const cols = columns(db, 'session_handoffs').map((c) => c.name);
       expect(cols).toEqual(expect.arrayContaining(['constraints_json', 'evidence_json', 'outcome', 'target_runtime', 'card_id']));
       expect(indexNames(db, 'session_handoffs')).toContain('idx_session_handoffs_tenant_outcome');
-      expect(getMeta(db, 'schema_version')).toBe('48');
-      expect(getSchemaVersion(db)).toBe(48);
-      expect(getCurrentSchemaVersion()).toBe(48);
+      expect(getMeta(db, 'schema_version')).toBe(LATEST_SCHEMA_VERSION_STR);
+      expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
+      expect(getCurrentSchemaVersion()).toBe(LATEST_SCHEMA_VERSION);
     } finally {
       closeHippoDb(db);
     }
@@ -106,7 +105,7 @@ describe('test 2: v41 store upgrades to v42', () => {
 
     const db2 = openHippoDb(root);
     try {
-      expect(getMeta(db2, 'schema_version')).toBe('48');
+      expect(getMeta(db2, 'schema_version')).toBe(LATEST_SCHEMA_VERSION_STR);
       const cols = columns(db2, 'session_handoffs').map((c) => c.name);
       expect(cols).toEqual(expect.arrayContaining(['constraints_json', 'evidence_json', 'outcome', 'target_runtime', 'card_id']));
     } finally {
@@ -132,7 +131,7 @@ describe('test 2: v41 store upgrades to v42', () => {
 
     const db2 = openHippoDb(root);
     try {
-      expect(getMeta(db2, 'schema_version')).toBe('48');
+      expect(getMeta(db2, 'schema_version')).toBe(LATEST_SCHEMA_VERSION_STR);
       const cols = columns(db2, 'session_handoffs').map((c) => c.name);
       expect(cols).toEqual(expect.arrayContaining(['constraints_json', 'evidence_json', 'outcome', 'target_runtime', 'card_id']));
     } finally {
@@ -474,8 +473,8 @@ describe('test 8: scope filtering on the continuity read paths', () => {
 });
 
 describe('test 9: helper swap leaves no local passesScopeFilter clone', () => {
-  it('src/api.ts, src/cli.ts and src/mcp/server.ts declare no local passesScopeFilter const', () => {
-    for (const rel of ['api.ts', 'cli.ts', 'mcp/server.ts']) {
+  it('src/api.ts, the CLI recall path and src/mcp/server.ts declare no local passesScopeFilter const', () => {
+    for (const rel of ['api.ts', 'cli.ts', 'cli/recall.ts', 'mcp/server.ts']) {
       const content = readFileSync(join(__dirname, '..', 'src', rel), 'utf8');
       expect(content).not.toMatch(/const passesScopeFilter\b/);
     }
@@ -628,7 +627,7 @@ describe('fix 4: v42 migration backfills outcome from session_complete events', 
 
     const db2 = openHippoDb(root);
     try {
-      expect(getMeta(db2, 'schema_version')).toBe('48');
+      expect(getMeta(db2, 'schema_version')).toBe(LATEST_SCHEMA_VERSION_STR);
     } finally {
       closeHippoDb(db2);
     }

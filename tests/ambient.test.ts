@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createMemory, Layer, type MemoryEntry, type EmotionalValence } from '../src/memory.js';
+import { createMemory, Layer, type MemoryEntry, type EmotionalValence, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { computeAmbientState, renderAmbientSummary, formatAmbientVector } from '../src/ambient.js';
 
 function mem(content: string, opts: {
@@ -12,6 +12,7 @@ function mem(content: string, opts: {
   dag_level?: number;
 } = {}): MemoryEntry {
   const entry = createMemory(content, {
+    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     layer: opts.layer ?? Layer.Episodic,
     tags: opts.tags ?? [],
   });

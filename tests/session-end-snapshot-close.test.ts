@@ -4,7 +4,9 @@ import * as path from 'path';
 import { spawnSync, type SpawnSyncReturns } from 'child_process';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
-import { getHippoRoot, loadActiveTaskSnapshot, saveActiveTaskSnapshot } from '../src/store.js';
+import { getHippoRoot } from '../src/store/open.js';
+import { loadActiveTaskSnapshot, saveActiveTaskSnapshot } from '../src/store/sessions.js';
+import { loadLatestHandoff } from '../src/store/handoffs.js';
 
 // DF1 (docs/plans/2026-08-23-df1-snapshot-lifecycle.md) T3 test 6:
 // session-end wiring. `cmdSessionEnd` extracts `payload.session_id` from the
@@ -243,6 +245,41 @@ describe('6. session-end wiring: --session-id argv + worker close (DF1 T3)', () 
     const forgedLine = logText.split('\n').find((l) => l.startsWith('FORGED'));
     expect(forgedLine).toBeUndefined();
     expect(logText).toContain('sess-evilFORGED [hippo] fake linesess-tail');
+  });
+
+  it('a session that never compacted gets a handoff from its own transcript', async () => {
+    const hippoRoot = getHippoRoot(dir);
+    const transcriptPath = path.join(dir, 'session.jsonl');
+    fs.writeFileSync(transcriptPath, [
+      { type: 'user', message: { role: 'user', content: 'add rate limiting to the webhook endpoint' } },
+      { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'Limiter added; the test is next.' }] } },
+    ].map((e) => JSON.stringify(e)).join('\n') + '\n');
+
+    const logFile = path.join(dir, 'session-end-no-compact.log');
+    const payload = JSON.stringify({ session_id: 'sess-no-compact', transcript_path: transcriptPath, hook_event_name: 'SessionEnd' });
+    expect(runHippo(['session-end', '--log-file', logFile], dir, env, payload).status).toBe(0);
+
+    await waitUntil(() => closeStepLogged(logFile));
+    expect(fs.readFileSync(logFile, 'utf8')).toContain('wrote handoff for session sess-no-compact');
+    expect(loadLatestHandoff(hippoRoot, 'default', 'sess-no-compact')?.nextAction).toBe('Limiter added; the test is next.');
+  });
+
+  it('reads the transcript even while the session holds the snapshot, in case another session takes the slot before the write', async () => {
+    const hippoRoot = getHippoRoot(dir);
+    saveActiveTaskSnapshot(hippoRoot, 'default', { task: 'from the snapshot', summary: 's', next_step: 'n', session_id: 'sess-own', source: 'pre-compact' });
+    // A tail with nothing to read is the one read that leaves a log line; the slot flip itself cannot be timed from a test.
+    const transcriptPath = path.join(dir, 'own.jsonl');
+    fs.writeFileSync(transcriptPath, JSON.stringify({ type: 'summary' }) + '\n');
+
+    const logFile = path.join(dir, 'session-end-own-snapshot.log');
+    const payload = JSON.stringify({ session_id: 'sess-own', transcript_path: transcriptPath, hook_event_name: 'SessionEnd' });
+    expect(runHippo(['session-end', '--log-file', logFile], dir, env, payload).status).toBe(0);
+
+    await waitUntil(() => closeStepLogged(logFile));
+    const logText = fs.readFileSync(logFile, 'utf8');
+    expect(logText).toContain('skip: empty summary');
+    expect(logText).toContain('wrote handoff for session sess-own');
+    expect(loadLatestHandoff(hippoRoot, 'default', 'sess-own')?.taskId).toBe('from the snapshot');
   });
 
   it('a payload whose transcript is missing skips capture instead of reading another project\'s newest transcript', async () => {

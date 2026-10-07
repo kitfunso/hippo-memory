@@ -1,0 +1,240 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`cli sleep golden output > sleep --dry-run --json 1`] = `
+{
+  "status": 0,
+  "stderr": "",
+  "stdout": "Dry run: skipped learning from git commits and coding agents' own memories (\`hippo import --agents --dry-run\` previews those).
+Running consolidation (dry run)...
+
+Results:
+   Active memories:  10
+   Removed (decayed): 0
+   Merged episodic:   5
+   New semantic:      0
+
+Details:
+  💭 replayed 5 memories: mem_sleep_valued, mem_sleep_b, mem_sleep_c, mem_sleep_dup2, mem_sleep_junk
+  🔀 merged 2 episodic entries into semantic: "[Consolidated from 2 related memories, newest first]
+
+- the ..."
+  🔀 merged 3 episodic entries into semantic: "[Consolidated pattern from 3 related memories, newest first]..."
+
+(dry run  - nothing written)
+
+Would dedupe 1 duplicates (1 duplicate episodic lessons). Would keep stronger copies.
+
+Audit: would remove 1 junk memories (too short/empty).
+",
+}
+`;
+
+exports[`cli sleep golden output > sleep --dry-run --no-learn 1`] = `
+{
+  "status": 0,
+  "stderr": "",
+  "stdout": "Running consolidation (dry run)...
+
+Results:
+   Active memories:  10
+   Removed (decayed): 0
+   Merged episodic:   5
+   New semantic:      0
+
+Details:
+  💭 replayed 5 memories: mem_sleep_valued, mem_sleep_b, mem_sleep_c, mem_sleep_dup2, mem_sleep_junk
+  🔀 merged 2 episodic entries into semantic: "[Consolidated from 2 related memories, newest first]
+
+- the ..."
+  🔀 merged 3 episodic entries into semantic: "[Consolidated pattern from 3 related memories, newest first]..."
+
+(dry run  - nothing written)
+
+Would dedupe 1 duplicates (1 duplicate episodic lessons). Would keep stronger copies.
+
+Audit: would remove 1 junk memories (too short/empty).
+",
+}
+`;
+
+exports[`cli sleep golden output > sleep --dry-run 1`] = `
+{
+  "status": 0,
+  "stderr": "",
+  "stdout": "Dry run: skipped learning from git commits and coding agents' own memories (\`hippo import --agents --dry-run\` previews those).
+Running consolidation (dry run)...
+
+Results:
+   Active memories:  10
+   Removed (decayed): 0
+   Merged episodic:   5
+   New semantic:      0
+
+Details:
+  💭 replayed 5 memories: mem_sleep_valued, mem_sleep_b, mem_sleep_c, mem_sleep_dup2, mem_sleep_junk
+  🔀 merged 2 episodic entries into semantic: "[Consolidated from 2 related memories, newest first]
+
+- the ..."
+  🔀 merged 3 episodic entries into semantic: "[Consolidated pattern from 3 related memories, newest first]..."
+
+(dry run  - nothing written)
+
+Would dedupe 1 duplicates (1 duplicate episodic lessons). Would keep stronger copies.
+
+Audit: would remove 1 junk memories (too short/empty).
+",
+}
+`;
+
+exports[`cli sleep golden output > sleep --json 1`] = `
+{
+  "status": 0,
+  "stderr": "",
+  "stdout": "Running consolidation...
+
+Results:
+   Active memories:  10
+   Removed (decayed): 0
+   Merged episodic:   5
+   New semantic:      2
+
+Details:
+  💭 replayed 5 memories: mem_sleep_valued, mem_sleep_b, mem_sleep_c, mem_sleep_dup2, mem_sleep_junk
+  🔀 merged 2 episodic entries into semantic: "[Consolidated from 2 related memories, newest first]
+
+- the ..."
+  🔀 merged 3 episodic entries into semantic: "[Consolidated pattern from 3 related memories, newest first]..."
+
+Deduped 1 duplicates (1 duplicate episodic lessons). Kept stronger copies.
+
+Audit: removed 1 junk memories (too short/empty).
+
+Auto-shared 2 high-value memories to global store.
+
+Memory state: 10 memories, high avg strength, diverse topics.
+",
+}
+`;
+
+exports[`cli sleep golden output > sleep --log-file 1`] = `
+{
+  "log": "[hippo] <ts> consolidating memory...
+Running consolidation...
+
+Results:
+   Active memories:  10
+   Removed (decayed): 0
+   Merged episodic:   5
+   New semantic:      2
+
+Details:
+  💭 replayed 5 memories: mem_sleep_valued, mem_sleep_b, mem_sleep_c, mem_sleep_dup2, mem_sleep_junk
+  🔀 merged 2 episodic entries into semantic: "[Consolidated from 2 related memories, newest first]
+
+- the ..."
+  🔀 merged 3 episodic entries into semantic: "[Consolidated pattern from 3 related memories, newest first]..."
+
+Deduped 1 duplicates (1 duplicate episodic lessons). Kept stronger copies.
+
+Audit: removed 1 junk memories (too short/empty).
+
+Auto-shared 2 high-value memories to global store.
+
+Memory state: 10 memories, high avg strength, diverse topics.
+[hippo] sleep complete
+",
+  "status": 0,
+  "stderr": "",
+  "stdout": "Running consolidation...
+
+Results:
+   Active memories:  10
+   Removed (decayed): 0
+   Merged episodic:   5
+   New semantic:      2
+
+Details:
+  💭 replayed 5 memories: mem_sleep_valued, mem_sleep_b, mem_sleep_c, mem_sleep_dup2, mem_sleep_junk
+  🔀 merged 2 episodic entries into semantic: "[Consolidated from 2 related memories, newest first]
+
+- the ..."
+  🔀 merged 3 episodic entries into semantic: "[Consolidated pattern from 3 related memories, newest first]..."
+
+Deduped 1 duplicates (1 duplicate episodic lessons). Kept stronger copies.
+
+Audit: removed 1 junk memories (too short/empty).
+
+Auto-shared 2 high-value memories to global store.
+
+Memory state: 10 memories, high avg strength, diverse topics.
+[hippo] sleep complete
+",
+}
+`;
+
+exports[`cli sleep golden output > sleep --no-learn --no-share 1`] = `
+{
+  "status": 0,
+  "stderr": "",
+  "stdout": "Running consolidation...
+
+Results:
+   Active memories:  10
+   Removed (decayed): 0
+   Merged episodic:   5
+   New semantic:      2
+
+Details:
+  💭 replayed 5 memories: mem_sleep_valued, mem_sleep_b, mem_sleep_c, mem_sleep_dup2, mem_sleep_junk
+  🔀 merged 2 episodic entries into semantic: "[Consolidated from 2 related memories, newest first]
+
+- the ..."
+  🔀 merged 3 episodic entries into semantic: "[Consolidated pattern from 3 related memories, newest first]..."
+
+Deduped 1 duplicates (1 duplicate episodic lessons). Kept stronger copies.
+
+Audit: removed 1 junk memories (too short/empty).
+
+Memory state: 10 memories, high avg strength, diverse topics.
+",
+}
+`;
+
+exports[`cli sleep golden output > sleep default 1`] = `
+{
+  "status": 0,
+  "stderr": "",
+  "stdout": "Running consolidation...
+
+Results:
+   Active memories:  10
+   Removed (decayed): 0
+   Merged episodic:   5
+   New semantic:      2
+
+Details:
+  💭 replayed 5 memories: mem_sleep_valued, mem_sleep_b, mem_sleep_c, mem_sleep_dup2, mem_sleep_junk
+  🔀 merged 2 episodic entries into semantic: "[Consolidated from 2 related memories, newest first]
+
+- the ..."
+  🔀 merged 3 episodic entries into semantic: "[Consolidated pattern from 3 related memories, newest first]..."
+
+Deduped 1 duplicates (1 duplicate episodic lessons). Kept stronger copies.
+
+Audit: removed 1 junk memories (too short/empty).
+
+Auto-shared 2 high-value memories to global store.
+
+Memory state: 10 memories, high avg strength, diverse topics.
+",
+}
+`;
+
+exports[`cli sleep golden output > sleep on an uninitialised store 1`] = `
+{
+  "status": 1,
+  "stderr": "No hippo store at <home>/.hippo (searched <home> and its parents up to your home directory). Run \`hippo init\` first.
+",
+  "stdout": "",
+}
+`;

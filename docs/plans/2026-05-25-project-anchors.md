@@ -59,18 +59,18 @@ Add per-project anchor forces driven by a **persisted append-only project orderi
 ## Discover findings (these drive the plan)
 
 ```
-Tag distribution (from C:/Users/skf_s/.hippo/hippo.db):
+Tag distribution (from C:/Users/<user>/.hippo/hippo.db):
   18 unique path:* tags total
   Top tier (>50 mems):
-    path:skf_s             830  ← FILESYSTEM ROOT, not a project (filter out)
-    path:quantamental      247
+    path:<user>            830  ← FILESYSTEM ROOT, not a project (filter out)
+    path:project-e         247
     path:hippo             173
-    path:phzse             155
-    path:luminus-dashboard  75
-    path:mure               55
-  Mid tier (10-50): luminus 33, clawd 22, resona 18, production 12, synth 11
-  Tail tier (<10): aegis 8, 2chain 5, part-l-hrt-challenge- 4, boring-maths 3
-  After filtering skf_s: 17 anchor candidates packed by golden-angle on a circle
+    path:project-d         155
+    path:project-c-dashboard 75
+    path:project-g          55
+  Mid tier (10-50): project-c 33, project-b 22, project-h 18, production 12, project-j 11
+  Tail tier (<10): project-k 8, project-i 5, project-l 4, project-a 3
+  After filtering <user>: 17 anchor candidates packed by golden-angle on a circle
 
 Existing UI state:
   No localStorage usage in ui/src — clean slate.
@@ -242,7 +242,7 @@ import { pickShortestPathTag } from "./tagPalette.js"; // shared helper (HIGH-3 
 
 /** Filter: which path:* tags are "real projects". Excludes the root
  *  filesystem dir which is not a project. */
-const EXCLUDED_PATH_TAGS = new Set(["path:skf_s"]);
+const EXCLUDED_PATH_TAGS = new Set(["path:<user>"]);
 
 /**
  * Vogel sunflower spiral packing angle. Each persistent index gets a
@@ -296,7 +296,7 @@ const DEFAULT_ANCHOR_STRENGTH = 0.08;
  * `(i × GOLDEN_ANGLE) mod 2π` — a stable, collision-free packing that
  * depends only on `i`, not on the total tag count.
  *
- * Filters out EXCLUDED_PATH_TAGS (path:skf_s is the filesystem root,
+ * Filters out EXCLUDED_PATH_TAGS (path:<user> is the filesystem root,
  * 60% of memories — would dominate the layout).
  *
  * Each memory gets the anchor of its shortest qualifying path tag
@@ -661,7 +661,7 @@ NEW `ui/src/state/projectAnchorOrder.test.ts`:
 - `reconcileProjectOrder` with deleted tags: index retained in ordering, slot left empty.
 
 NEW `ui/src/engine/projectAnchors.test.ts`:
-- `computeProjectAnchors` filters `path:skf_s`.
+- `computeProjectAnchors` filters `path:<user>`.
 - Each anchor at `(cos(i × GOLDEN_ANGLE) × radius, sin(i × GOLDEN_ANGLE) × radius)` where `radius = LAYOUT_BOUND × 0.6` — golden-angle formula.
 - Memories with no qualifying path tag → not in `byMemoryId`.
 - Memories with multiple path tags → shortest-wins (alpha tiebreak) via shared `pickShortestPathTag`.
@@ -695,12 +695,12 @@ NEW `ui/src/components/ProjectsPanel.test.tsx`:
 
 ```
 Test: stability across tag-set growth (golden-angle invariant).
-  Setup: 3 memories with tags [path:hippo], [path:quantamental], [path:phzse].
-  Reconcile order → indices {hippo:0, quantamental:1, phzse:2}, nextIndex=3.
-  Run computeProjectAnchors → record anchors{hippo:A, quantamental:B, phzse:C}.
-  Add memory with new tag [path:resona].
-  Reconcile → indices {hippo:0, quantamental:1, phzse:2, resona:3}, nextIndex=4.
-  Run computeProjectAnchors → anchors{hippo:A', quantamental:B', phzse:C', resona:D}.
+  Setup: 3 memories with tags [path:hippo], [path:project-e], [path:project-d].
+  Reconcile order → indices {hippo:0, project-e:1, project-d:2}, nextIndex=3.
+  Run computeProjectAnchors → record anchors{hippo:A, project-e:B, project-d:C}.
+  Add memory with new tag [path:project-h].
+  Reconcile → indices {hippo:0, project-e:1, project-d:2, project-h:3}, nextIndex=4.
+  Run computeProjectAnchors → anchors{hippo:A', project-e:B', project-d:C', project-h:D}.
   Assert A === A', B === B', C === C' (byte-identical via strict equality
   on .x and .y for each).
   Why this passes now: golden-angle formula uses ONLY i, not slotCount.
@@ -717,7 +717,7 @@ Test: stability across tag-set growth (golden-angle invariant).
 | AC3 | `reconcileProjectOrder` keeps existing tags' indices stable | S1 / S8 stability |
 | AC4 | `reconcileProjectOrder` returns same-reference when no change | S1 perf-skip |
 | AC5 | `loadProjectAnchorOrder` returns empty on shape mismatch (no `tags` array OR no `nextIndex` number OR any entry not a `[string, number]` tuple) | S1 / HIGH-2 + v2.1 inner-tuple |
-| AC6 | `computeProjectAnchors` filters `path:skf_s` | S2 |
+| AC6 | `computeProjectAnchors` filters `path:<user>` | S2 |
 | AC7 | Anchor positions at `(cos(i × GOLDEN_ANGLE) × r, sin(i × GOLDEN_ANGLE) × r)` where r = `LAYOUT_BOUND × 0.6` | S2 / CRIT-1 |
 | AC8 | Memories pick shortest path tag (alpha tiebreak) via shared `pickShortestPathTag` — path-mode dedup only; `pickColorTag`'s "tag" branch keeps its inline non-path filter | S2 + S4 / HIGH-3 (v2.1 scoped) |
 | AC9 | `orderedTags` includes ONLY tags actually picked as anchored tag for ≥1 memory | S2 / HIGH-4 |
@@ -744,9 +744,9 @@ Test: stability across tag-set growth (golden-angle invariant).
 | R3 | Anchor strength 0.08 too strong / weak | M | Tunable in config. **Failure mode (visual smoke):** if 17-project clusters collapse to anchor centroids with no inter-project edges visible, halve to 0.04 and re-test. **Worst-case force balance:** a node with 1 cross-project link (0.4 strength) + 1 anchor pull (0.08) → link wins 5×. Sum of edge forces dominates anchor sum for any node with ≥1 inter-project edge. |
 | R4 | Sidebar Projects mini-map too small / cluttered | L | 20×20 SVG with stroke `var(--border)` for visible ring; 2-radius dot. Visual smoke; bump to 32×32 if dot lost. |
 | R5 | Project ordering becomes stale after long sessions (many deleted+added projects → high nextIndex, sparse-feeling list) | L | Golden-angle packing keeps anchors well-distributed regardless of N. List sparseness is purely cosmetic. v0.3.0 "reset layout" button (helper `clearProjectAnchorOrder` already exists as `@internal` test-only export). |
-| R6 | path:skf_s exclusion list grows over time | L | Single exclusion for now (filesystem root). If more "non-project" path tags surface (e.g. path:tmp), add to EXCLUDED_PATH_TAGS — single source of truth. |
+| R6 | `path:<user>` exclusion list grows over time | L | Single exclusion for now (filesystem root). If more "non-project" path tags surface (e.g. path:tmp), add to EXCLUDED_PATH_TAGS — single source of truth. |
 | R7 | reconcileProjectOrder sort-by-alpha for new tags is deterministic per session, NOT cross-user | L | Documented in S1 docstring. Each user's local indices are stable; cross-session anchor sync deferred indefinitely. |
-| R8 | **Unanchored memories cluster at origin** (path:skf_s + memories with no path tag → ~870 memories pulled to (0,0) by forceCenter) | L | **Design choice (M4):** intentional visual nucleus — the un-projected core sits at the center surrounded by project rings. If it dominates the canvas visually (smoke test reveals a giant blob), follow-up: assign a low-strength "general" anchor at a quiet angle, or filter unanchored memories from layout entirely. |
+| R8 | **Unanchored memories cluster at origin** (`path:<user>` + memories with no path tag → ~870 memories pulled to (0,0) by forceCenter) | L | **Design choice (M4):** intentional visual nucleus — the un-projected core sits at the center surrounded by project rings. If it dominates the canvas visually (smoke test reveals a giant blob), follow-up: assign a low-strength "general" anchor at a quiet angle, or filter unanchored memories from layout entirely. |
 | R9 | Plan-design first-seen-order surprise (Sidebar list not alpha / by-count) | L | Subtitle "(ordered by first-seen)" makes the rule explicit. |
 
 ## Out of scope (named, deferred)
@@ -780,7 +780,7 @@ Single PR, revertible:
 
 2. **Sidebar Projects panel position** — between ViewPanel and Filters (matches E1's ViewPanel insertion pattern). Alternative: above ViewPanel (more prominent). Plan picks between-ViewPanel-and-Filters; flag if wrong.
 
-3. **`path:skf_s` filter** — hard-coded EXCLUDED_PATH_TAGS list. Alternative: heuristic (skip path tags carrying >50% of memories). Hard-coded simpler; revisit if other "root" tags surface.
+3. **`path:<user>` filter** — hard-coded EXCLUDED_PATH_TAGS list. Alternative: heuristic (skip path tags carrying >50% of memories). Hard-coded simpler; revisit if other "root" tags surface.
 
 4. **Click handler `setQuery(tag)`** — uses existing free-text query filter. The raw `path:X` query-text drift is acknowledged + deferred to v0.3.0 chip-pill rewrite. Flag if a dedicated "active project" state is preferred for v1.
 

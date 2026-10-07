@@ -3,16 +3,21 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHmac } from 'node:crypto';
-import { initStore, loadAllEntries, writeEntry } from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
+import type { Context } from '../src/api.js';
+import { Layer } from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb, getCurrentSchemaVersion, getSchemaVersion } from '../src/db.js';
 import { resolveTenantForTeam } from '../src/connectors/slack/tenant-routing.js';
 import { ingestMessage } from '../src/connectors/slack/ingest.js';
-import { writeToDlq, listDlq, replayDlqEntry } from '../src/connectors/slack/dlq.js';
+import { writeToDlq, replayDlqEntry } from '../src/connectors/slack/dlq.js';
 import { archiveRawMemory } from '../src/raw-archive.js';
 import { verifySlackSignature } from '../src/connectors/slack/signature.js';
 import { slackHistoryFetcher } from '../src/connectors/slack/web-client.js';
 import { serve, type ServerHandle } from '../src/server.js';
+import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 
 const SECRET = 'shhh-current';
 const PREVIOUS_SECRET = 'shhh-old';
@@ -51,10 +56,10 @@ describe('v0.39 commit 3 — Slack hardening + migration v19', () => {
 
   // 1. Migration v19 schema additions present.
   it('migration v19: slack_dlq has team_id, bucket, retry_count, signature, slack_timestamp', () => {
-    expect(getCurrentSchemaVersion()).toBe(48);
+    expect(getCurrentSchemaVersion()).toBe(LATEST_SCHEMA_VERSION);
     const db = openHippoDb(root);
     try {
-      expect(getSchemaVersion(db)).toBe(48);
+      expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
       // SAFETY: PRAGMA table_info() always returns rows with a name column.
       const cols = db.prepare(`PRAGMA table_info(slack_dlq)`).all() as Array<{ name: string }>;
       const names = cols.map((c) => c.name);
@@ -198,7 +203,7 @@ describe('v0.39 commit 3 — Slack hardening + migration v19', () => {
   it('ingest race: duplicate event_id yields exactly one memory + skipped_duplicate via afterWrite throw', async () => {
     const { remember } = await import('../src/api.js');
     const { DuplicateEventError } = await import('../src/connectors/slack/idempotency.js');
-    const ctx = { hippoRoot: root, tenantId: 'default', actor: { subject: 'connector:slack', role: 'admin' } };
+    const ctx: Context = { hippoRoot: root, tenantId: 'default', actor: { subject: 'connector:slack', role: 'admin' } };
 
     // First call: ordinary ingest succeeds and writes to slack_event_log.
     const r1 = ingestMessage(ctx, {
@@ -253,7 +258,6 @@ describe('v0.39 commit 3 — Slack hardening + migration v19', () => {
     expect(() =>
       remember(ctx, {
         content: seedMem.content,
-        layer: seedMem.layer,
         tags: seedMem.tags,
         kind: 'raw',
         afterWrite: (innerDb, memoryId) => {

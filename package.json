@@ -1,12 +1,16 @@
 {
   "name": "hippo-memory",
-  "version": "1.52.7",
-  "description": "Memory for AI agents that learns what is wrong and stops repeating it. MCP server and hooks for Claude Code, Codex and Cursor. SQLite, zero runtime deps.",
+  "version": "1.64.0",
+  "description": "Make your agent's memory work like a brain. Hippo is long-term memory for coding agents.",
   "mcpName": "io.github.kitfunso/hippo-memory",
   "type": "module",
   "main": "./dist/index.js",
   "exports": {
-    ".": "./dist/index.js"
+    ".": "./dist/index.js",
+    "./server": "./dist/server.js",
+    "./project-identity": "./dist/entry/project-identity.js",
+    "./json-hooks": "./dist/entry/json-hooks.js",
+    "./session-text": "./dist/entry/session-text.js"
   },
   "openclaw": {
     "extensions": [
@@ -29,10 +33,14 @@
   "scripts": {
     "baseline": "npm run build && npm test",
     "build": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && tsc && tsc -p tsconfig.benchmarks.json && tsc -p tsconfig.extensions.json",
+    "typecheck:tests": "tsc -p tsconfig.tests.json",
     "dev": "tsc --watch",
     "pretest": "npm run build",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:delivery-ledger": "vitest run tests/delivery-ledger",
+    "test:eval": "vitest run --config vitest.eval.config.ts",
     "lint": "oxlint",
     "sbom": "node scripts/sbom.mjs",
     "audit:security": "npm audit --audit-level=high && npm --prefix ui audit --audit-level=high",
@@ -41,8 +49,8 @@
     "smoke:openclaw-install": "node scripts/smoke-openclaw-install.mjs",
     "build:ui": "cd ui && npm install && npm run build",
     "build:all": "npm run build && npm run build:ui",
-    "version": "node scripts/sync-version.mjs && node scripts/check-manifest-versions.mjs",
-    "prepublishOnly": "node scripts/check-manifest-versions.mjs && node scripts/changelog-fragments.mjs check && node scripts/check-em-dashes-in-release-notes.mjs && node scripts/check-graph-writes.mjs && npm run build:all && node scripts/check-openclaw-dist.mjs && npm run smoke:openclaw-install && node scripts/check-tests-pass.mjs"
+    "version": "node scripts/sync-version.mjs && node scripts/check-manifest-versions.mjs && node scripts/check-expiring-keys-floor.mjs",
+    "prepublishOnly": "node scripts/check-manifest-versions.mjs && node scripts/check-expiring-keys-floor.mjs && node scripts/changelog-fragments.mjs check && node scripts/check-em-dashes-in-release-notes.mjs && node scripts/check-graph-writes.mjs && npm run build:all && node scripts/check-openclaw-dist.mjs && npm run smoke:openclaw-install && node scripts/check-tests-pass.mjs"
   },
   "keywords": [
     "memory",
@@ -88,9 +96,11 @@
   "devDependencies": {
     "@oxlint/plugins": "^1.78.0",
     "@types/node": "^22.16.0",
+    "@vitest/coverage-v8": "^5.0.3",
     "oxlint": "^1.78.0",
     "typescript": "^5.4.0",
-    "vitest": "^3.2.6"
+    "vite": "^8.3.2",
+    "vitest": "^5.0.3"
   },
   "peerDependenciesMeta": {
     "@xenova/transformers": {

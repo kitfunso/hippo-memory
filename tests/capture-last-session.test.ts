@@ -1,10 +1,11 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { fileURLToPath } from 'url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { spawnSync } from 'child_process';
-import { summariseTranscript, resolveLastSessionTranscript } from '../src/capture.js';
+import { summariseTranscript, resolveLastSessionTranscript } from '../src/capture/transcript.js';
 
 /**
  * Per-test tmpdir so the fake transcript fixtures don't leak between cases.
@@ -140,6 +141,27 @@ describe('summariseTranscript', () => {
     expect(summary).toContain('please fix the login bug');
     expect(summary).not.toContain('session idle timeout reached');
   });
+
+  it('keeps VS Code prompts stored as text blocks, minus IDE context and interrupt notices', () => {
+    const jsonl = transcriptJsonl([
+      {
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [
+            { type: 'text', text: '<ide_selection>const limit = 10;</ide_selection>' },
+            { type: 'text', text: 'raise the webhook rate limit' },
+          ],
+        },
+      },
+      { type: 'user', message: { role: 'user', content: [{ type: 'text', text: '[Request interrupted by user for tool use]' }] } },
+    ]);
+
+    const summary = summariseTranscript(jsonl);
+    expect(summary).toContain('raise the webhook rate limit');
+    expect(summary).not.toContain('const limit');
+    expect(summary).not.toContain('Request interrupted');
+  });
 });
 
 describe('resolveLastSessionTranscript', () => {
@@ -164,7 +186,7 @@ describe('resolveLastSessionTranscript', () => {
   it('prefers an explicit transcript path when the file exists', () => {
     const file = path.join(tmp.dir, 'explicit.jsonl');
     fs.writeFileSync(file, '{}');
-    expect(resolveLastSessionTranscript(file, undefined)).toBe(file);
+    expect(resolveLastSessionTranscript(file, undefined, { mayScan: true })).toBe(file);
   });
 
   it('falls back to stdin JSON payload with transcript_path (Claude Code SessionEnd shape)', () => {
@@ -175,7 +197,7 @@ describe('resolveLastSessionTranscript', () => {
       transcript_path: file,
       cwd: tmp.dir,
     });
-    expect(resolveLastSessionTranscript(undefined, payload)).toBe(file);
+    expect(resolveLastSessionTranscript(undefined, payload, { mayScan: true })).toBe(file);
   });
 
   it('auto-discovers the newest transcript under ~/.claude/projects/', () => {
@@ -189,15 +211,47 @@ describe('resolveLastSessionTranscript', () => {
     const past = new Date(Date.now() - 60_000);
     fs.utimesSync(older, past, past);
 
-    expect(resolveLastSessionTranscript(undefined, undefined)).toBe(newer);
+    expect(resolveLastSessionTranscript(undefined, undefined, { mayScan: true })).toBe(newer);
   });
 
   it('returns null when no transcript can be located', () => {
-    expect(resolveLastSessionTranscript(undefined, undefined)).toBeNull();
+    expect(resolveLastSessionTranscript(undefined, undefined, { mayScan: true })).toBeNull();
+  });
+
+  // os.homedir() would still name a real profile, so with no home variable and no CLAUDE_CONFIG_DIR the scan must not start.
+  it('scans nothing when CLAUDE_CONFIG_DIR, HOME and USERPROFILE are all unset', () => {
+    const prev = process.env.CLAUDE_CONFIG_DIR;
+    delete process.env.CLAUDE_CONFIG_DIR;
+    delete process.env.HOME;
+    delete process.env.USERPROFILE;
+    try {
+      expect(resolveLastSessionTranscript(undefined, undefined, { mayScan: true })).toBeNull();
+    } finally {
+      if (prev !== undefined) process.env.CLAUDE_CONFIG_DIR = prev;
+    }
+  });
+
+  it('scans $CLAUDE_CONFIG_DIR/projects when it is set, and not ~/.claude/projects', () => {
+    const prev = process.env.CLAUDE_CONFIG_DIR;
+    const config = path.join(tmp.dir, 'elsewhere');
+    const mine = path.join(config, 'projects', 'proj-a', 'mine.jsonl');
+    const decoy = path.join(tmp.dir, '.claude', 'projects', 'proj-b', 'decoy.jsonl');
+    for (const file of [mine, decoy]) {
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, '{}');
+    }
+    fs.utimesSync(mine, new Date(Date.now() - 60_000), new Date(Date.now() - 60_000));
+    process.env.CLAUDE_CONFIG_DIR = config;
+    try {
+      expect(resolveLastSessionTranscript(undefined, undefined, { mayScan: true })).toBe(mine);
+    } finally {
+      if (prev === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+      else process.env.CLAUDE_CONFIG_DIR = prev;
+    }
   });
 
   it('does not throw on non-JSON stdin text', () => {
-    expect(resolveLastSessionTranscript(undefined, 'some plain text')).toBeNull();
+    expect(resolveLastSessionTranscript(undefined, 'some plain text', { mayScan: true })).toBeNull();
   });
 
   // Another project's newest transcript, which only a manual run may pick up.
@@ -211,28 +265,38 @@ describe('resolveLastSessionTranscript', () => {
 
   it('a named transcript that is missing returns null instead of scanning every project', () => {
     plantOtherProjectTranscript();
-    expect(resolveLastSessionTranscript(path.join(tmp.dir, 'nope.jsonl'), undefined)).toBeNull();
+    expect(resolveLastSessionTranscript(path.join(tmp.dir, 'nope.jsonl'), undefined, { mayScan: true })).toBeNull();
   });
 
   it('a payload without a readable transcript_path returns null instead of scanning', () => {
     plantOtherProjectTranscript();
     const gone = JSON.stringify({ session_id: 'abc', transcript_path: path.join(tmp.dir, 'gone.jsonl') });
-    expect(resolveLastSessionTranscript(undefined, gone)).toBeNull();
-    expect(resolveLastSessionTranscript(undefined, JSON.stringify({ session_id: 'abc' }))).toBeNull();
-    expect(resolveLastSessionTranscript(undefined, 'some plain text')).toBeNull();
+    expect(resolveLastSessionTranscript(undefined, gone, { mayScan: true })).toBeNull();
+    expect(resolveLastSessionTranscript(undefined, JSON.stringify({ session_id: 'abc' }), { mayScan: true })).toBeNull();
+    expect(resolveLastSessionTranscript(undefined, 'some plain text', { mayScan: true })).toBeNull();
   });
 
-  it('scans only on a proven manual run: no path, no stdin text, no timed-out read', () => {
+  it('scans only when the caller allows it: no path, no stdin text, mayScan true', () => {
     const planted = plantOtherProjectTranscript();
-    expect(resolveLastSessionTranscript(undefined, undefined)).toBe(planted);
-    expect(resolveLastSessionTranscript(undefined, '  \n')).toBe(planted);
-    expect(resolveLastSessionTranscript(undefined, undefined, true)).toBeNull();
+    expect(resolveLastSessionTranscript(undefined, undefined, { mayScan: true })).toBe(planted);
+    expect(resolveLastSessionTranscript(undefined, '  \n', { mayScan: true })).toBe(planted);
+    expect(resolveLastSessionTranscript(undefined, undefined, { mayScan: false })).toBeNull();
+  });
+
+  it('never scans when the caller says mayScan false, even with a newer transcript planted', () => {
+    const older = plantOtherProjectTranscript();
+    const past = new Date(Date.now() - 60_000);
+    fs.utimesSync(older, past, past);
+    const newer = path.join(path.dirname(older), 'newer.jsonl');
+    fs.writeFileSync(newer, '{}');
+    expect(resolveLastSessionTranscript(undefined, undefined, { mayScan: false })).toBeNull();
+    expect(resolveLastSessionTranscript(undefined, '  \n', { mayScan: false })).toBeNull();
   });
 });
 
 describe('session workers never capture a transcript they were not handed', () => {
   let tmp: { dir: string; cleanup: () => void };
-  const binPath = path.resolve(process.cwd(), 'bin', 'hippo.js');
+  const binPath = fileURLToPath(new URL('../bin/hippo.js', import.meta.url));
 
   beforeEach(() => {
     tmp = withTmpDir();
@@ -307,7 +371,7 @@ describe('hippo capture --last-session --log-file (end-to-end via CLI)', () => {
 
     // Init a hippo store in the tmp cwd so capture doesn't bail out
     // on `No .hippo directory found`.
-    const binPath = path.resolve(process.cwd(), 'bin', 'hippo.js');
+    const binPath = fileURLToPath(new URL('../bin/hippo.js', import.meta.url));
     const init = spawnSync(
       process.execPath,
       [binPath, 'init', '--no-hooks', '--no-schedule', '--no-learn'],

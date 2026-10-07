@@ -1,7 +1,7 @@
 {
   "name": "hippo-memory",
-  "description": "Memory for Claude Code that learns what is wrong and stops repeating it. Session-start context, per-prompt pinned rules, compaction snapshot and resume, error capture, session-end sleep.",
-  "version": "0.6.0",
+  "description": "Make your agent's memory work like a brain. Hippo is long-term memory for coding agents.",
+  "version": "0.6.1",
   "author": {
     "name": "Keith So",
     "url": "https://github.com/kitfunso/hippo-memory"

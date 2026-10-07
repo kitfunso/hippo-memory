@@ -66,6 +66,13 @@ never as a closing step:
 hippo remember "<description of what went wrong>" --error
 ```
 
+When you learn something that should outlive this session (a decision and
+its reason, a user preference, a lesson), record it right then, while you
+work, never as a closing step. Leave out secrets and personal details:
+```bash
+hippo remember "<what you learned and why>"
+```
+
 When ending a session, capture a brief summary:
 ```bash
 hippo capture --stdin <<< '<decisions, errors, lessons: 2-5 bullets>'
@@ -83,7 +90,7 @@ If you prefer using OpenClaw's skill system instead of patching AGENTS.md, creat
 ```markdown
 # Hippo Memory Skill
 
-Biologically-inspired memory for AI agents. Decay by default, retrieval strengthening, sleep consolidation.
+Make your agent's memory work like a brain. Hippo is long-term memory for coding agents.
 
 ## When to activate
 

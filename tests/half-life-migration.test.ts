@@ -10,11 +10,14 @@ import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { initStore, writeEntry, readEntry, loadAllEntries, replaceDetectedConflicts, listMemoryConflicts, resolveConflict, HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY } from '../src/store.js';
-import { createMemory, deriveHalfLife, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { initStore, HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { readEntry, loadAllEntries } from '../src/store/entry-reads.js';
+import { replaceDetectedConflicts, listMemoryConflicts, resolveConflict } from '../src/store/conflicts.js';
+import { createMemory, deriveHalfLife, DEFAULT_HALF_LIFE_DAYS, type CreateMemoryOptions } from '../src/memory.js';
 import { migrateDefaultHalfLife, storeHalfLifeBase, planHalfLifeMigration, LEGACY_TYPED_HALF_LIFE } from '../src/half-life-migration.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { consolidate } from '../src/consolidate.js';
+import { consolidate } from '../src/consolidate/sleep.js';
 import { saveDecision, closeDecision } from '../src/decisions.js';
 import { saveIncident, resolveIncident } from '../src/incidents.js';
 import { saveCustomerNote } from '../src/customer-notes.js';
@@ -46,7 +49,7 @@ function legacyStore(entries: ReturnType<typeof createMemory>[]): string {
   unrecord(root, HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY);
   return root;
 }
-const legacy = (content: string, options: Parameters<typeof createMemory>[1] = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });
+const legacy = (content: string, options: Partial<CreateMemoryOptions> = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });
 function byContent(root: string): Map<string, number> {
   return new Map(loadAllEntries(root).map((e) => [e.content, e.half_life_days]));
 }
@@ -160,6 +163,30 @@ describe('default half-life migration', () => {
     expect(result.details.join('\n')).not.toMatch(/half-life/);
     expect([...byContent(root).values()][0]).toBeLessThan(20);
   });
+
+  // The migration holds the write lock throughout, so its audit record must grow with the store, not with its square.
+  it('moves 10,000 memories in under two seconds', () => {
+    const root = legacyStore([legacy('the staging deploy needs the VPN to reach the health check')]);
+    const db = openHippoDb(root);
+    try {
+      // SAFETY: pragma_table_info yields one row per column with its name.
+      const columns = (db.prepare(`SELECT name FROM pragma_table_info('memories') WHERE name != 'id'`).all() as { name: string }[]).map((c) => c.name);
+      db.exec(`
+        WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 9999)
+        INSERT INTO memories(id, ${columns.join(', ')}) SELECT 'mem_bulk_' || n.i, ${columns.join(', ')} FROM memories, n
+      `);
+    } finally {
+      closeHippoDb(db);
+    }
+
+    const started = performance.now();
+    const r = migrateDefaultHalfLife(root, 365);
+    const elapsed = performance.now() - started;
+
+    expect(r).toMatchObject({ from: 7, to: 365, rescaled: 10_000 });
+    expect(migrateAudits(root)[0]).toHaveProperty('ids.length', 10_000);
+    expect(elapsed).toBeLessThan(2_000);
+  }, 120_000);
 });
 
 /** Rewrites memory `id` as a typed writer pinned it before it took the default: 90 days plus 2 per recall. */
@@ -187,7 +214,7 @@ describe('memories of decisions, incidents and other objects pinned to 90 days',
     const note = saveCustomerNote(root, 'default', { customer: 'Acme', note: 'renewal is due in March' }).memoryId!;
     pinTo90(root, decision);
     pinTo90(root, note, 3);
-    const ordinary = createMemory('the staging deploy needs the VPN to reach the health check');
+    const ordinary = createMemory('the staging deploy needs the VPN to reach the health check', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(root, ordinary);
     unrecord(root, TYPED_HALF_LIFE_META_KEY);
 
@@ -237,7 +264,7 @@ describe('memories of decisions, incidents and other objects pinned to 90 days',
     const root = store();
     const decision = saveDecision(root, 'default', { decisionText: 'we release on Tuesdays after the staging soak' }).memoryId!;
     pinTo90(root, decision);
-    const ordinary = createMemory('the staging deploy needs the VPN to reach the health check');
+    const ordinary = createMemory('the staging deploy needs the VPN to reach the health check', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(root, ordinary);
     unrecord(root, TYPED_HALF_LIFE_META_KEY);
     fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ defaultHalfLifeDays: 730 }));

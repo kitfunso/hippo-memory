@@ -1,6 +1,6 @@
 # trap-repo
 
-A minimal quantamental platform scaffold. Contains scripts for model deployment,
+A minimal project-e platform scaffold. Contains scripts for model deployment,
 data refresh, status reporting, and feature engineering.
 
 ## Structure

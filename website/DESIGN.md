@@ -1,7 +1,7 @@
 ---
 name: hippo-memory.com
 direction: terminal-native, receipts-led developer marketing (2026-09-24 redesign)
-updated: 2026-09-28
+updated: 2026-10-04
 source_of_truth: true
 tokens:
   font:
@@ -23,8 +23,8 @@ tokens:
     error_rose: "rgba(251,113,133,0.6)"  # rose-400/60 minimum; /40 fails the 3:1 non-text floor
   layout:
     container: "72rem"              # max-w-6xl. ONE container token sitewide: nav, footer, every section. No max-w-5xl wrappers.
-    section_padding_y: "6rem"       # py-24 rhythm on all pages
-    prose_measure: "65-75ch"        # text-sm footnotes, FAQ answers and summaries cap at max-w-lg
+    section_padding_y: "--section-y: 2.5rem, 3.5rem from md, 4.5rem from lg"  # py-(--section-y) on every section of every page; heroes keep their own top
+    prose_measure: "--measure: 30em"  # about 70 characters at any size in Geist; global.css caps every p and list-disc item, mono captions excluded
   type_scale:
     floor: "0.75rem"                # 12px. No text-[10px]/[11px] anywhere
     h1_leading: "1.1"               # one display leading token
@@ -32,7 +32,7 @@ tokens:
   links:
     color: "#22d3ee"
     underline: "decoration >=40% opacity at rest"   # one treatment sitewide
-  touch_targets: "44px minimum on nav pills, chips, copy buttons"
+  touch_targets: "44px minimum on nav pills, chips, copy buttons, the wordmark and button-styled links; footer links 32px; inline text links follow WCAG 2.5.8"
   glass:
     surface: "rgba(255,255,255,0.035) + 1px rgba(255,255,255,0.08) border + backdrop blur(14px) saturate(140%)"
     header_fallback: "rgba(10,10,15,0.85)"  # header only; verify built dist CSS retains the standard backdrop-filter property
@@ -52,7 +52,7 @@ confirmed findings are the deltas; the strengths it verified are the rules.
 
 ## Identity
 
-Developer tool, receipts-led. The site argues with numbers (98.0% R@5, 3,500+
+Developer tool, receipts-led. The site argues with numbers (85.6% R@5, 3,500+
 tests, 0 deps) and publishes its own bad results. Every page sequences:
 claim, methodology, trust, reproduce. Dark-premium surface; the violet-cyan
 gradient is a scalpel, not a wash.
@@ -80,7 +80,10 @@ AA 4.5:1 for all prose (zinc-400 minimum on bg), 3:1 for non-text glyphs.
 Skip link, landmarks (labeled when repeated), one h1 per page, no skipped
 heading levels, scope attrs on all comparison tables, aria-current on the
 active nav item, the wordmark links home, visible focus (cyan outline), full
-prefers-reduced-motion handling, 44px touch targets.
+prefers-reduced-motion handling, 44px touch targets. `scroll-padding-top` on
+html keeps focus and anchor targets clear of the sticky header (WCAG 2.4.11), so
+sections carry no `scroll-mt`. A scroll container that overflows and holds no
+link joins the tab order (Base.astro), so a keyboard can scroll it.
 
 ## Comparison surfaces
 

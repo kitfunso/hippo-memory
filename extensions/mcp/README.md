@@ -67,6 +67,9 @@ Same pattern: point at `hippo mcp` as the command.
 | `hippo_resolve` | Resolve a conflict (keep winner, weaken/delete loser) |
 | `hippo_share` | Share a memory to global store with transfer scoring |
 | `hippo_peers` | List projects contributing to global store |
+| `hippo_assemble` | Build an ordered context window for a session within a token budget |
+| `hippo_drill` | Open a topic summary to see the memories it replaced |
+| `hippo_predict_baserate` | Past track record for a class of predictions, to check an estimate |
 
 ## Prerequisites
 

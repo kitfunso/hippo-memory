@@ -1,8 +1,13 @@
 import { MemoryEntry, Layer, EmotionalValence, createMemory } from './memory.js';
-import { writeEntry } from './store.js';
+import { writeEntry } from './store/entry-writes.js';
 import { loadConfig } from './config.js';
 import { RejectedValueError } from './rejection.js';
-import { redactSecrets } from './secret-detect.js';
+import { redactSecretsStrict } from './secret-detect.js';
+import { fetchWithRetry, llmTimeoutMs } from './http-retry.js';
+import { neverAutoShareTags } from './shared.js';
+import { log } from './log.js';
+import { isJsonString } from './json.js';
+import { certainDefect } from './memory-quality.js';
 
 export interface ExtractedFact {
   content: string;
@@ -16,14 +21,6 @@ export interface ExtractOptions {
   fetcher?: typeof fetch;
   /** Told why a call produced nothing, so callers can surface it instead of guessing. */
   onError?: (msg: string) => void;
-}
-
-/** JSON value shape for fields pulled off the untyped, parsed LLM response
- *  array before they are individually validated. */
-type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
-
-function isJsonString(value: JsonValue): value is string {
-  return typeof value === 'string';
 }
 
 const EXTRACTION_PROMPT = `You are extracting factual statements from a conversation or memory entry. Extract 1-8 standalone factual statements that would be useful to remember later.
@@ -48,7 +45,7 @@ export async function extractFacts(
 
   let res: Response;
   try {
-    res = await fetchFn('https://api.anthropic.com/v1/messages', {
+    res = await fetchWithRetry('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
@@ -58,9 +55,9 @@ export async function extractFacts(
       body: JSON.stringify({
         model,
         max_tokens: 1200,
-        messages: [{ role: 'user', content: EXTRACTION_PROMPT + redactSecrets(text) }],
+        messages: [{ role: 'user', content: EXTRACTION_PROMPT + redactSecretsStrict(text) }],
       }),
-    });
+    }, { timeoutMs: llmTimeoutMs(), fetchFn });
   } catch (err) {
     opts.onError?.(`request failed: ${err instanceof Error ? err.message : String(err)}`);
     return [];
@@ -117,17 +114,23 @@ export function storeExtractedFacts(
   source: MemoryEntry,
   facts: ExtractedFact[],
 ): MemoryEntry[] {
-  const inheritedTags = source.tags.filter((t) =>
-    INHERITABLE_PREFIXES.some((p) => t.startsWith(p)),
-  );
+  const inheritedTags = [
+    ...source.tags.filter((t) => INHERITABLE_PREFIXES.some((p) => t.startsWith(p))),
+    ...neverAutoShareTags([source]),
+  ];
 
   const entries: MemoryEntry[] = [];
   let rejected = 0;
   const baseHalfLifeDays = loadConfig(hippoRoot).defaultHalfLifeDays;
 
   for (const fact of facts) {
+    const defect = certainDefect(fact.content);
+    if (defect !== null) {
+      log.warn(`storeExtractedFacts: skipped automatic quality defect (${defect})`);
+      continue;
+    }
     const tags = ['extracted', ...inheritedTags, ...fact.tags];
-    const entry = createMemory(fact.content, {
+    const entry: MemoryEntry = { ...createMemory(fact.content, {
       layer: Layer.Semantic,
       tags,
       emotional_valence: fact.valence,
@@ -135,16 +138,13 @@ export function storeExtractedFacts(
       source: source.source,
       extracted_from: source.id,
       scope: source.scope,
-      // T1 executor check (2026-08-15 hardening pass): same defect as the
-      // consolidate.ts merge/trace passes — createMemory with no tenantId
-      // option stamps 'default' (memory.ts:535) regardless of the source
-      // entry's own tenant. Thread it through so extracted facts land in
-      // the same tenant as the episodic memory they were extracted from.
+      // Without it createMemory stamps 'default', and extracted facts leave
+      // the tenant of the episodic memory they were extracted from.
       tenantId: source.tenantId,
       baseHalfLifeDays,
-    });
+    }), origin_project: source.origin_project };
 
-    // AT1 containment: a refusal is per-VALUE — one rejected fact must not
+    // A refusal is per-VALUE: one rejected fact must not
     // drop the rest of this batch. writeEntry has already audited the
     // refusal (reject_refusal) before rethrowing, so skip-and-count here.
     try {
@@ -160,7 +160,7 @@ export function storeExtractedFacts(
   }
 
   if (rejected > 0) {
-    console.error(`storeExtractedFacts: skipped ${rejected} rejected value(s)`);
+    log.warn(`storeExtractedFacts: skipped ${rejected} rejected value(s)`);
   }
 
   return entries;

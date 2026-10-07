@@ -18,9 +18,12 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore, writeEntry, loadAllEntries, appendSessionEvent } from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
-import { consolidate } from '../src/consolidate.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
+import { appendSessionEvent } from '../src/store/sessions.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { consolidate } from '../src/consolidate/sleep.js';
 import { storeExtractedFacts, type ExtractedFact } from '../src/extract.js';
 
 function tmpHome(prefix: string = 'hippo-consolidate-tenant-landing-'): string {
@@ -46,10 +49,10 @@ describe('T1 (a): merge pass partitions by tenant before clustering', () => {
       const shortText = 'rotate the staging tls certificates before expiry';
       const longText = 'rotate the staging tls certificates before expiry and notify the on-call channel';
 
-      const aShort = createMemory(shortText, { layer: Layer.Episodic, tenantId: 'tenant-a' });
-      const aLong = createMemory(longText, { layer: Layer.Episodic, tenantId: 'tenant-a' });
-      const bShort = createMemory(shortText, { layer: Layer.Episodic, tenantId: 'tenant-b' });
-      const bLong = createMemory(longText, { layer: Layer.Episodic, tenantId: 'tenant-b' });
+      const aShort = createMemory(shortText, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, tenantId: 'tenant-a' });
+      const aLong = createMemory(longText, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, tenantId: 'tenant-a' });
+      const bShort = createMemory(shortText, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, tenantId: 'tenant-b' });
+      const bLong = createMemory(longText, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, tenantId: 'tenant-b' });
       writeEntry(home, aShort);
       writeEntry(home, aLong);
       writeEntry(home, bShort);
@@ -73,7 +76,7 @@ describe('T1 (a): merge pass partitions by tenant before clustering', () => {
       // Both directions: neither row is the 4-way "pattern from 4" bulleted
       // form a cross-tenant cluster would have produced.
       for (const row of semanticRows) {
-        expect(row.content).toContain('[Consolidated from 2 related memories]');
+        expect(row.content).toContain('[Consolidated from 2 related memories, newest first]');
         expect(row.content).not.toContain('pattern from 4');
       }
 
@@ -144,6 +147,7 @@ describe('T1 executor check: extract.ts storeExtractedFacts has the same defect,
     try {
       initStore(home);
       const source = createMemory('Alice prefers dark mode and vim keybindings', {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         layer: Layer.Episodic,
         tenantId: 'tenant-extract',
       });

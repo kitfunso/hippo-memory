@@ -9,20 +9,11 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store.js';
+import { rmSync } from 'node:fs';
 import { serve, type ServerHandle } from '../src/server.js';
-import { savePrediction, closePrediction } from '../src/predictions.js';
+import { savePrediction, closePrediction } from '../src/predictions/store.js';
 import type { RecallResult } from '../src/api.js';
-
-function makeRoot(): string {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-http-j32-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
+import { makeRoot } from './_helpers/make-root.js';
 
 function seedBaserate(home: string): void {
   for (const [est, act] of [[2, 4], [3, 6], [4, 8]]) {
@@ -39,7 +30,7 @@ let home: string;
 let handle: ServerHandle;
 
 beforeEach(async () => {
-  home = makeRoot();
+  home = makeRoot('http-j32');
   delete process.env.HIPPO_AUTODEBIAS;
   handle = await serve({ hippoRoot: home, port: 0 });
 });

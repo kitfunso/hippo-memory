@@ -16,22 +16,24 @@ const marks = new Set(rows.flatMap((r) => [r.hippo, r.them]).flatMap((c) => c.ma
 const footnotes = comparison.footnotes.filter((f) => marks.has((f.match(/^(?:\\\*)+/)?.[0] ?? '').replace(/\\/g, '')));
 ---
 
-<div class="overflow-x-auto rounded-2xl border border-white/8">
-  <table class="w-full min-w-[520px] text-left text-sm">
+<div class="overflow-hidden rounded-2xl border border-white/8">
+  <!-- Fixed equal columns: the rival's column is the point of a vs page, so it never scrolls off a phone. -->
+  <table class="w-full table-fixed text-left text-[13px] leading-snug sm:text-sm">
     <caption class="sr-only">hippo and {them.name}, row by row from the README comparison table</caption>
+    <colgroup><col class="w-[30%]" /><col class="w-[35%]" /><col class="w-[35%]" /></colgroup>
     <thead class="bg-white/[0.03] font-mono text-xs uppercase tracking-wider text-zinc-400">
       <tr>
-        <th scope="col" class="px-5 py-3 font-medium">Feature</th>
-        <th scope="col" class="px-5 py-3 font-medium text-zinc-200">hippo</th>
-        <th scope="col" class="px-5 py-3 font-medium">{them.name}</th>
+        <th scope="col" class="px-3 py-3 font-medium sm:px-5">Feature</th>
+        <th scope="col" class="px-3 py-3 font-medium text-zinc-200 sm:px-5">hippo</th>
+        <th scope="col" class="px-3 py-3 font-medium [overflow-wrap:anywhere] sm:px-5">{them.name}</th>
       </tr>
     </thead>
     <tbody class="divide-y divide-white/5">
       {rows.map((r) => (
         <tr class="align-top text-zinc-300">
-          <th scope="row" class="px-5 py-3 text-left font-normal text-zinc-400">{r.feature}</th>
-          <td class="px-5 py-3 font-medium text-zinc-100">{r.hippo}</td>
-          <td class="px-5 py-3">{r.them}</td>
+          <th scope="row" class="px-3 py-3 text-left font-normal text-zinc-400 hyphens-auto [overflow-wrap:anywhere] sm:px-5">{r.feature}</th>
+          <td class="px-3 py-3 font-medium text-zinc-100 [overflow-wrap:anywhere] sm:px-5">{r.hippo}</td>
+          <td class="px-3 py-3 [overflow-wrap:anywhere] sm:px-5">{r.them}</td>
         </tr>
       ))}
     </tbody>

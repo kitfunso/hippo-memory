@@ -17,6 +17,8 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./vitest.setup.ts'],
     include: ['src/**/*.test.{ts,tsx}'],
+    // Vitest blanks unlisted CSS, so a `?raw` read in the token test would see an empty file.
+    css: { include: [/\.css\?raw$/] },
     coverage: {
       reporter: ['text', 'json', 'html'],
       include: ['src/**/*.{ts,tsx}'],

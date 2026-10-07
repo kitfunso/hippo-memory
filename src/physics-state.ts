@@ -69,6 +69,8 @@ interface PhysicsRow {
   last_simulation: string;
 }
 
+const PHYSICS_ID_CHUNK = 500;
+
 /**
  * Load physics state for specific memory IDs (or all if no IDs given).
  */
@@ -78,16 +80,18 @@ export function loadPhysicsState(
 ): Map<string, PhysicsParticle> {
   const map = new Map<string, PhysicsParticle>();
 
-  let rows: PhysicsRow[];
+  let rows: PhysicsRow[] = [];
   if (memoryIds && memoryIds.length > 0) {
-    const placeholders = memoryIds.map(() => '?').join(',');
-    // SAFETY: rows come from the SELECT above, which projects exactly the
-    // PhysicsRow columns (memory_id, position_blob, velocity_blob, mass,
-    // charge, temperature, last_simulation) in that order.
-    rows = db.prepare(
-      `SELECT memory_id, position_blob, velocity_blob, mass, charge, temperature, last_simulation
-       FROM memory_physics WHERE memory_id IN (${placeholders})`
-    ).all(...memoryIds) as PhysicsRow[];
+    // Chunked so a whole-store candidate list stays under SQLite's bound-parameter limit.
+    for (let i = 0; i < memoryIds.length; i += PHYSICS_ID_CHUNK) {
+      const chunk = memoryIds.slice(i, i + PHYSICS_ID_CHUNK);
+      const placeholders = chunk.map(() => '?').join(',');
+      // SAFETY: the SELECT projects exactly the PhysicsRow columns, in order.
+      rows = rows.concat(db.prepare(
+        `SELECT memory_id, position_blob, velocity_blob, mass, charge, temperature, last_simulation
+         FROM memory_physics WHERE memory_id IN (${placeholders})`
+      ).all(...chunk) as PhysicsRow[]);
+    }
   } else {
     // SAFETY: same PhysicsRow column projection as the branch above, just
     // without the memory_id filter.
@@ -134,7 +138,7 @@ export function savePhysicsState(
       updated_at = datetime('now')
   `);
 
-  db.exec('BEGIN');
+  db.exec('BEGIN IMMEDIATE');
   try {
     for (const p of particles) {
       stmt.run(
@@ -175,13 +179,6 @@ export function initializeParticle(
     temperature: computeTemperature(ageDays, 1.0),
     lastSimulation: now.toISOString(),
   };
-}
-
-/**
- * Delete physics state for a memory. (Also handled by CASCADE, but explicit for clarity.)
- */
-export function deletePhysicsState(db: DatabaseSyncLike, memoryId: string): void {
-  db.prepare('DELETE FROM memory_physics WHERE memory_id = ?').run(memoryId);
 }
 
 /**

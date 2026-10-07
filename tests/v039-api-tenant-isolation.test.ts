@@ -1,8 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore, readEntry } from '../src/store.js';
+import { rmSync } from 'node:fs';
+import { readEntry } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
 import { createApiKey } from '../src/auth.js';
 import { queryAuditEvents } from '../src/audit.js';
@@ -14,6 +12,7 @@ import {
   archiveRaw,
 } from '../src/api.js';
 import { serve, type ServerHandle } from '../src/server.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 /**
  * Typed wrapper around a single-row SQL lookup. Every call site below
@@ -32,13 +31,6 @@ function queryRow<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T
 //  - authCreate: HTTP body.tenantId ignored, key bound to caller (CRITICAL #2)
 //  - supersede: BEGIN IMMEDIATE CAS — direct SQL race + clean path + tenant scope
 //    (CRITICAL #4)
-
-function makeRoot(prefix: string): string {
-  const home = mkdtempSync(join(tmpdir(), `hippo-${prefix}-`));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
 
 describe('v039 api tenant isolation', () => {
   let home: string;

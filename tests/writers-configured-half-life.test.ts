@@ -5,15 +5,19 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { initStore, writeEntry, loadAllEntries, readEntry, appendSessionEvent } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
+import { appendSessionEvent } from '../src/store/sessions.js';
 import { createMemory, deriveHalfLife, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../src/memory.js';
 import * as api from '../src/api.js';
-import { consolidate } from '../src/consolidate.js';
+import { consolidate } from '../src/consolidate/sleep.js';
 import { buildDag, buildEntityProfiles } from '../src/dag.js';
 import { storeExtractedFacts } from '../src/extract.js';
-import { importGenericFile, importVault } from '../src/importers.js';
-import { cmdCapture } from '../src/capture.js';
-import { learnFromMemoryMd } from '../src/cli.js';
+import { importGenericFile } from '../src/importers/sources.js';
+import { importVault } from '../src/importers/vault.js';
+import { cmdCapture } from '../src/capture/command.js';
+import { importProjectMemories } from '../src/agent-memories/sync.js';
 
 const HIPPO_BIN = path.resolve(__dirname, '..', 'bin', 'hippo.js');
 const CONFIGURED = 730;
@@ -95,10 +99,11 @@ const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [
   })],
   ['Claude Code memory import', (root) => {
     const home = tmp();
-    const memDir = path.join(home, '.claude', 'projects', 'demo', 'memory');
+    const project = fs.realpathSync.native(path.dirname(root)).replace(/[^a-zA-Z0-9]/g, '-');
+    const memDir = path.join(home, '.claude', 'projects', project, 'memory');
     fs.mkdirSync(memDir, { recursive: true });
     fs.writeFileSync(path.join(memDir, 'lesson.md'), '---\nname: lesson\n---\nPrefer parameterized queries to string concatenation for SQL.\n');
-    return added(root, () => learnFromMemoryMd(root, home));
+    return added(root, () => importProjectMemories(root, { machine: { home, env: {}, platform: process.platform } }));
   }],
   ['capture', (root) => {
     const file = path.join(tmp(), 'session.txt');
@@ -164,7 +169,7 @@ describe('an invalid configured default half-life', () => {
   it.each([0, -30, 'forever'])('%s warns, and writers fall back to the built-in default', async (value) => {
     const root = store();
     fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ defaultHalfLifeDays: value, replay: { count: 0 } }));
-    const warn = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const warn = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const old = seed(root, 'the deploy window is Tuesday afternoon');
     const ctx: api.Context = { hippoRoot: root, tenantId: 'default', actor: api.adminActor('cli') };
     const [entry] = await added(root, () => api.supersede(ctx, old.id, 'the deploy window is Thursday morning'));

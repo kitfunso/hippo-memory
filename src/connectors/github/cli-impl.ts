@@ -10,6 +10,7 @@
  *   - hippo github dlq replay <id> [--force]
  */
 
+import { envGithubToken, envGithubWebhookSecret, envGithubWebhookSecretPrevious } from '../../env.js';
 import { type Context, adminActor } from '../../api.js';
 import { openHippoDb, closeHippoDb } from '../../db.js';
 import { resolveTenantId } from '../../tenant.js';
@@ -24,8 +25,8 @@ import {
   isGitHubIssueCommentEvent,
   isGitHubPullRequestEvent,
   isGitHubPullRequestReviewCommentEvent,
-  type JsonValue,
 } from './types.js';
+import type { JsonValue } from '../../json.js';
 
 type FlagValue = string | boolean | string[];
 type Flags = Record<string, FlagValue>;
@@ -69,6 +70,7 @@ function parsedToIngestEvent(parsed: JsonValue, eventName: string): IngestEvent 
   return null;
 }
 
+// Console lines below are the `hippo github` command's printed result and usage text, so they stay off the logger.
 export function printGithubBackfillUsage(): void {
   console.log('hippo github backfill --repo <owner/name> [--since ISO] [--max <N>]');
   console.log('  --repo   GitHub repository in owner/name format (required, e.g. acme/widgets)');
@@ -91,7 +93,7 @@ export async function cmdGithubBackfill(
     printGithubBackfillUsage();
     process.exit(2);
   }
-  const token = process.env.GITHUB_TOKEN;
+  const token = envGithubToken();
   if (!token) {
     console.error(
       'GITHUB_TOKEN is not set. Backfill requires a personal access token with repo read scope.',
@@ -193,24 +195,19 @@ export async function cmdGithubDlqReplay(
     tenantId: resolveTenantId({}),
     actor: adminActor('cli:github-dlq-replay'),
   };
-  // v1.3.1 hotfix (codex P1): without an ingestHook the v1.3.0 CLI was a
-  // dry-run that printed "replay ok" while only bumping retry_count. Wire the
-  // real hook so `replay` actually re-runs the ingest path.
+  // Without an ingestHook replay only bumps retry_count while printing "replay ok"; the real hook re-runs ingest.
   const result = await replayDlqEntry(ctx, id, {
     force,
-    webhookSecret: process.env.GITHUB_WEBHOOK_SECRET,
-    previousSecret: process.env.GITHUB_WEBHOOK_SECRET_PREVIOUS,
+    webhookSecret: envGithubWebhookSecret(),
+    previousSecret: envGithubWebhookSecretPrevious(),
     ingestHook: async (innerCtx, args) => {
       const parsed = JSON.parse(args.rawPayload);
       const event = parsedToIngestEvent(parsed, args.eventName);
       if (!event) {
         return { memoryId: null };
       }
-      // v1.3.2 (codex round 3 P1): a replayed `issue_comment.deleted` or
-      // `pull_request_review_comment.deleted` row must route to the deletion
-      // handler, NOT to ingestEvent. The v1.3.1 hook unconditionally called
-      // ingestEvent and would have written the deleted comment as a NEW raw
-      // memory instead of archiving the matching ones.
+      // A replayed comment `.deleted` row must route to the deletion handler, NOT to ingestEvent,
+      // which would write the deleted comment as a NEW raw memory instead of archiving the matching ones.
       if (
         (event.eventName === 'issue_comment' || event.eventName === 'pull_request_review_comment') &&
         event.payload.action === 'deleted'

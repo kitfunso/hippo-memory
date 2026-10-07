@@ -1,26 +1,31 @@
 /**
- * AT1 rejected-value tombstone — shared reject/unreject/list flow.
- * docs/plans/2026-08-15-at1-rejected-value-tombstone.md (T2, plan §4).
+ * Rejected-value tombstone: shared reject/unreject/list flow.
  *
  * The CLI (`hippo reject`/`rejections`/`unreject`) and the Context-based
  * `api.reject`/`api.unreject`/`api.listRejections` surfaces both need the
  * SAME multi-step transaction + post-commit mirror-purge flow. Extracted
  * here (leaf module) so neither duplicates it.
  *
- * Module direction: this file imports from store.ts, rejection.ts,
- * raw-archive.ts and dormant.ts. Nothing imports FROM this file except
+ * Module direction: this file imports from store.ts, rejection.ts, raw-archive.ts,
+ * dormant.ts, same-text.ts and merged-row.ts. Nothing imports FROM this file except
  * cli.ts and api.ts, so it introduces no cycle.
  */
 
-import { closeHippoDb } from './db.js';
-import { appendAuditEvent } from './audit.js';
+import { closeHippoDb, type DatabaseSyncLike } from './db.js';
+import { BadRequestError } from './api-errors.js';
+import { appendAuditEvent, reportAuditWriteFailure } from './audit.js';
+import { isPersonalScope } from './recall-scope.js';
 import { archiveRawMemory } from './raw-archive.js';
-import { purgeDormantByDigest } from './dormant.js';
-import {
-  openStore,
-  deleteEntryCore,
-  purgeMirrorBestEffort,
-} from './store.js';
+import { deleteDormantRow, listDormantSnapshots, purgeDormantByDigest, replaceDormantEntry } from './dormant.js';
+import { stampOriginProject } from './store/entry-row.js';
+import { purgeMirrorBestEffort } from './store/mirrors.js';
+import { openStore } from './store/open.js';
+import { writeEntryDbOnly, writeEntryMirrors } from './store/entry-writes.js';
+import { selectAllEntries } from './store/entry-reads.js';
+import { deleteEntryCore } from './store/delete-and-batch.js';
+import type { MemoryEntry } from './memory.js';
+import { heldTexts } from './same-text.js';
+import { mergedSuccessor } from './merged-row.js';
 import {
   rejectionDigest,
   normalizeValueForRejection,
@@ -39,20 +44,163 @@ export interface RejectFlowOpts {
   memoryId?: string;
   /** Pre-emptive form: reject a value not currently stored (or already gone). */
   value?: string;
+  /** The caller's own personal scope: the only personal rows the sweep may remove. Unset (the CLI) skips every personal row. */
+  ownScope?: string;
 }
 
 export interface RejectFlowResult {
   digest: string;
-  /** The rejected content, for the CLI's at-reject-time echo (plan §2: the
+  /** The rejected content, for the CLI's at-reject-time echo (the
    *  tombstone itself stores no content — this is the only place it's seen
    *  again after this call returns). */
   content: string;
-  /** Every live row removed this call (all tenant rows whose normalized
-   *  digest matched — not just the id passed, per the K1/R7 duplicate
-   *  lesson). */
+  /** Every row removed this call, live or dormant: all whose normalized digest matched (not just the id
+   *  passed, since duplicates share a digest), and each sleep-merged row holding the value, whose other
+   *  texts move to a new row: listed in successorIds when it was live, dormantSuccessorIds when dormant. */
   removedIds: string[];
   /** Subset of removedIds that were kind='raw' (archived, not deleted). */
   removedRawIds: string[];
+  successorIds: string[];
+  dormantSuccessorIds: string[];
+}
+
+function assertRejectOpts(opts: RejectFlowOpts): void {
+  if (!opts.reason.trim()) {
+    throw new Error('reject requires a non-empty --reason (the tombstone stores no content; reason is its only identity).');
+  }
+  if (opts.memoryId === undefined && opts.value === undefined) {
+    throw new Error('reject requires either a memory id or --value.');
+  }
+  if (opts.memoryId !== undefined && opts.value !== undefined) {
+    // Enforced here, not only in the CLI parser, so a direct api caller passing both
+    // is refused instead of silently getting the memoryId path with `value` ignored.
+    throw new Error('reject accepts either a memory id or --value, not both.');
+  }
+  if (opts.value !== undefined && normalizeValueForRejection(opts.value).length === 0) {
+    // Direct api callers can pass strings the CLI flag parser would have
+    // refused; an empty-normalized tombstone would refuse nothing meaningful
+    // and pollute the listing.
+    throw new Error('reject --value requires non-empty content.');
+  }
+}
+
+function contentToReject(db: DatabaseSyncLike, opts: RejectFlowOpts): string {
+  if (opts.memoryId === undefined) return opts.value!;
+  // SAFETY: row's shape matches the three columns named in the SELECT above.
+  const row = db
+    .prepare(`SELECT content, tenant_id, scope FROM memories WHERE id = ?`)
+    .get(opts.memoryId) as { content: string; tenant_id: string; scope: string | null } | undefined;
+  if (!row || row.tenant_id !== opts.tenantId) {
+    throw new Error(`memory not found: ${opts.memoryId}`);
+  }
+  // A tombstone is tenant-wide, so one made from personal text would show its reason to everyone.
+  if (isPersonalScope(row.scope)) throw new BadRequestError("Personal memories can't be rejected. Use forget to remove it.");
+  return row.content;
+}
+
+/** Every row but another person's personal one, which is outside the caller's recall and so outside its reject. */
+function inReach(opts: RejectFlowOpts, scope: string | null | undefined): boolean {
+  return !isPersonalScope(scope) || scope === opts.ownScope;
+}
+
+/** What one reject removed and wrote, accumulated across the live and dormant passes. */
+interface RejectRemoval {
+  removedIds: string[];
+  removedRawIds: string[];
+  successors: MemoryEntry[];
+  dormantSuccessorIds: string[];
+}
+
+type HoldsValue = (text: string) => boolean;
+
+function removeLiveRows(db: DatabaseSyncLike, opts: RejectFlowOpts, holdsValue: HoldsValue, removal: RejectRemoval): void {
+  const { removedIds, removedRawIds, successors } = removal;
+  const merged: MemoryEntry[] = [];
+  for (const row of selectAllEntries(db, opts.tenantId)) {
+    if (!inReach(opts, row.scope)) continue;
+    if (!holdsValue(row.content)) {
+      if (heldTexts(row).some(holdsValue)) merged.push(row);
+      continue;
+    }
+    if (row.kind === 'raw') {
+      // Append-only trigger respected — archiveRawMemory is the only
+      // legitimate removal path for kind='raw', and its inner SAVEPOINT
+      // composes safely inside this BEGIN/COMMIT.
+      archiveRawMemory(db, row.id, { reason: opts.reason, who: opts.actor });
+      removedRawIds.push(row.id);
+    } else {
+      // suppressForgetAudit: the aggregate reject_value row below is the
+      // trail for these removals, not N individual forget rows.
+      deleteEntryCore(db, row.id, { actor: opts.actor, suppressForgetAudit: true });
+    }
+    removedIds.push(row.id);
+  }
+  for (const row of merged) {
+    const successor = mergedSuccessor(row, holdsValue, new Set(removedIds));
+    deleteEntryCore(db, row.id, { actor: opts.actor, suppressForgetAudit: true });
+    removedIds.push(row.id);
+    if (!successor) continue;
+    const kept = stampOriginProject(opts.hippoRoot, successor);
+    writeEntryDbOnly(db, kept, { actor: opts.actor });
+    successors.push(kept);
+  }
+}
+
+// Dormant copies (src/dormant.ts), whole or inside a merged row, go too, in the same transaction: a
+// rejected value may not linger where `hippo dormant restore` could
+// bring it back. They have no markdown mirror, so the post-commit
+// mirror purge below is a no-op for them; they join removedIds for the
+// audit trail and the caller's report.
+function removeDormantCopies(db: DatabaseSyncLike, opts: RejectFlowOpts, digest: string, holdsValue: HoldsValue, removal: RejectRemoval): void {
+  const { tenantId } = opts;
+  const { removedIds, dormantSuccessorIds } = removal;
+  removedIds.push(...purgeDormantByDigest(db, tenantId, digest, (scope) => inReach(opts, scope)));
+  for (const dormant of listDormantSnapshots(db, tenantId)) {
+    if (!inReach(opts, dormant.entry.scope)) continue;
+    const successor = mergedSuccessor(dormant.entry, holdsValue, new Set(removedIds));
+    if (successor === undefined) continue;
+    removedIds.push(dormant.entry.id);
+    if (!successor) {
+      deleteDormantRow(db, tenantId, dormant.entry.id);
+      continue;
+    }
+    replaceDormantEntry(db, tenantId, dormant.entry.id, successor);
+    dormantSuccessorIds.push(successor.id);
+  }
+}
+
+function auditRejectValue(db: DatabaseSyncLike, opts: RejectFlowOpts, digest: string, removedIds: string[]): void {
+  try {
+    appendAuditEvent(db, {
+      tenantId: opts.tenantId,
+      actor: opts.actor,
+      op: 'reject_value',
+      targetId: opts.memoryId,
+      metadata: { digest, removedIds, count: removedIds.length },
+    });
+  } catch (error) {
+    // Inside the open transaction: the reject commits without its trail row rather than rolling back over bookkeeping.
+    reportAuditWriteFailure('reject_value', String(error), opts.memoryId);
+  }
+}
+
+// Post-commit, db handle still open (same pattern as api.archiveRaw):
+// best-effort mirror purge per removed id, reaper-backstop stamp for
+// raw ids.
+function purgeRemovedMirrors(db: DatabaseSyncLike, hippoRoot: string, removal: RejectRemoval): void {
+  for (const id of removal.removedIds) {
+    // purgeMirrorBestEffort retries once, then for non-raw ids (which the
+    // reaper never scans) reports the EXPLICIT leftover path(s). See its own doc comment (store.ts, near
+    // removeEntryMirrors) for the full rationale.
+    const mirrorOk = purgeMirrorBestEffort(hippoRoot, id, removal.removedRawIds.includes(id), 'hippo reject');
+    if (mirrorOk && removal.removedRawIds.includes(id)) {
+      db.prepare(`UPDATE raw_archive SET mirror_cleaned_at = ? WHERE memory_id = ?`).run(
+        new Date().toISOString(),
+        id,
+      );
+    }
+  }
+  for (const successor of removal.successors) writeEntryMirrors(hippoRoot, successor);
 }
 
 /**
@@ -65,48 +213,16 @@ export interface RejectFlowResult {
  * index.json itself is only refreshed by `rebuildIndex()`.
  */
 export function rejectValue(opts: RejectFlowOpts): RejectFlowResult {
-  if (!opts.reason.trim()) {
-    throw new Error('reject requires a non-empty --reason (the tombstone stores no content; reason is its only identity).');
-  }
-  if (opts.memoryId === undefined && opts.value === undefined) {
-    throw new Error('reject requires either a memory id or --value.');
-  }
-  if (opts.memoryId !== undefined && opts.value !== undefined) {
-    // P2 fix: the CLI's flag parser already refuses both forms together;
-    // the shared flow itself didn't enforce it, so a direct api caller
-    // passing both silently got the memoryId path with `value` ignored —
-    // surprising for a caller who thought they were rejecting `value`.
-    throw new Error('reject accepts either a memory id or --value, not both.');
-  }
-  if (opts.value !== undefined && normalizeValueForRejection(opts.value).length === 0) {
-    // Direct api callers can pass strings the CLI flag parser would have
-    // refused; an empty-normalized tombstone would refuse nothing meaningful
-    // and pollute the listing.
-    throw new Error('reject --value requires non-empty content.');
-  }
+  assertRejectOpts(opts);
 
   const db = openStore(opts.hippoRoot);
   try {
-    let content: string;
-    if (opts.memoryId !== undefined) {
-      // SAFETY: row's shape matches the two columns named in the SELECT above.
-      const row = db
-        .prepare(`SELECT content, tenant_id FROM memories WHERE id = ?`)
-        .get(opts.memoryId) as { content: string; tenant_id: string } | undefined;
-      if (!row || row.tenant_id !== opts.tenantId) {
-        throw new Error(`memory not found: ${opts.memoryId}`);
-      }
-      content = row.content;
-    } else {
-      content = opts.value!;
-    }
-
+    const content = contentToReject(db, opts);
     const digest = rejectionDigest(content);
     const now = new Date().toISOString();
-    const removedIds: string[] = [];
-    const removedRawIds: string[] = [];
+    const removal: RejectRemoval = { removedIds: [], removedRawIds: [], successors: [], dormantSuccessorIds: [] };
 
-    db.exec('BEGIN');
+    db.exec('BEGIN IMMEDIATE');
     try {
       insertRejectedValue(db, {
         tenantId: opts.tenantId,
@@ -121,49 +237,10 @@ export function rejectValue(opts: RejectFlowOpts): RejectFlowResult {
       // O(N) scan over the tenant's rows (plan §4): human-triggered command
       // on ~1-5k-row stores — acceptable, documented. A digest column on
       // memories is the escape if stores grow 100x; not needed now.
-      // SAFETY: rows' shape matches the three columns named in the SELECT above.
-      const rows = db
-        .prepare(`SELECT id, kind, content FROM memories WHERE tenant_id = ?`)
-        .all(opts.tenantId) as Array<{ id: string; kind: string; content: string }>;
-      for (const row of rows) {
-        if (rejectionDigest(row.content) !== digest) continue;
-        if (row.kind === 'raw') {
-          // Append-only trigger respected — archiveRawMemory is the only
-          // legitimate removal path for kind='raw', and its inner SAVEPOINT
-          // composes safely inside this BEGIN/COMMIT.
-          archiveRawMemory(db, row.id, { reason: opts.reason, who: opts.actor });
-          removedRawIds.push(row.id);
-        } else {
-          // suppressForgetAudit: the aggregate reject_value row below is the
-          // trail for these removals, not N individual forget rows (plan
-          // §4, round-3 advisory 2 — mirrors api.ts:1873-1877).
-          deleteEntryCore(db, row.id, { actor: opts.actor, suppressForgetAudit: true });
-        }
-        removedIds.push(row.id);
-      }
-
-      // Dormant copies (src/dormant.ts) go too, in the same transaction: a
-      // rejected value may not linger where `hippo dormant restore` could
-      // bring it back. They have no markdown mirror, so the post-commit
-      // mirror purge below is a no-op for them; they join removedIds for the
-      // audit trail and the caller's report.
-      removedIds.push(...purgeDormantByDigest(db, opts.tenantId, digest));
-
-      try {
-        appendAuditEvent(db, {
-          tenantId: opts.tenantId,
-          actor: opts.actor,
-          op: 'reject_value',
-          targetId: opts.memoryId,
-          metadata: { digest, removedIds, count: removedIds.length },
-        });
-      } catch {
-        // Best-effort — mirrors store.ts's private audit() semantics. This
-        // runs INSIDE the still-open transaction (COMMIT is the next
-        // statement): a swallowed audit failure lets the tombstone +
-        // removals commit without the trail row, rather than rolling the
-        // whole reject back over bookkeeping.
-      }
+      const holdsValue = (text: string): boolean => rejectionDigest(text) === digest;
+      removeLiveRows(db, opts, holdsValue, removal);
+      removeDormantCopies(db, opts, digest, holdsValue, removal);
+      auditRejectValue(db, opts, digest, removal.removedIds);
 
       db.exec('COMMIT');
     } catch (err) {
@@ -175,25 +252,10 @@ export function rejectValue(opts: RejectFlowOpts): RejectFlowResult {
       throw err;
     }
 
-    // Post-commit, db handle still open (same pattern as api.archiveRaw):
-    // best-effort mirror purge per removed id, reaper-backstop stamp for
-    // raw ids.
-    for (const id of removedIds) {
-      // AT1 fix: purgeMirrorBestEffort retries once, then — for non-raw ids,
-      // which cleanupArchivedMirrors' reaper never scans — reports the
-      // EXPLICIT leftover path(s) instead of the false "will retry via
-      // reaper" claim. See its own doc comment (store.ts, near
-      // removeEntryMirrors) for the full rationale.
-      const mirrorOk = purgeMirrorBestEffort(opts.hippoRoot, id, removedRawIds.includes(id), 'hippo reject');
-      if (mirrorOk && removedRawIds.includes(id)) {
-        db.prepare(`UPDATE raw_archive SET mirror_cleaned_at = ? WHERE memory_id = ?`).run(
-          new Date().toISOString(),
-          id,
-        );
-      }
-    }
+    purgeRemovedMirrors(db, opts.hippoRoot, removal);
 
-    return { digest, content, removedIds, removedRawIds };
+    const { removedIds, removedRawIds, successors, dormantSuccessorIds } = removal;
+    return { digest, content, removedIds, removedRawIds, successorIds: successors.map((s) => s.id), dormantSuccessorIds };
   } finally {
     closeHippoDb(db);
   }
@@ -215,11 +277,8 @@ export function unrejectValue(
   digestOrPrefix: string,
   actor: string,
 ): UnrejectOutcome {
-  // P2 fix: an empty/blank prefix startsWith-matches EVERY digest (every
-  // string starts with ''), which would previously fall through to the
-  // ambiguous-candidates branch and list the whole tombstone set instead of
-  // failing loud on the actually-invalid input. Reject before the DB round
-  // trip.
+  // An empty/blank prefix startsWith-matches EVERY digest and would list the whole
+  // tombstone set as ambiguous, so reject it before the DB round trip.
   if (digestOrPrefix.trim().length === 0) {
     return { status: 'not_found' };
   }
@@ -241,8 +300,8 @@ export function unrejectValue(
         targetId: target.sourceMemoryId ?? undefined,
         metadata: { digest: target.digest, reason: target.reason },
       });
-    } catch {
-      // Best-effort, same as reject's audit call above.
+    } catch (error) {
+      reportAuditWriteFailure('unreject_value', String(error), target.sourceMemoryId);
     }
     return { status: 'ok', digest: target.digest, reason: target.reason };
   } finally {

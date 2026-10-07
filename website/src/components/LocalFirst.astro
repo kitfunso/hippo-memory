@@ -2,8 +2,8 @@
 import { localFirst, importsFrom } from '../content/site';
 ---
 
-<section id="local-first" class="relative scroll-mt-20 border-t border-white/5">
-  <div class="mx-auto max-w-6xl px-5 py-24">
+<section id="local-first" class="relative border-t border-white/5">
+  <div class="mx-auto max-w-6xl px-5 py-(--section-y)">
     <div class="max-w-2xl">
       <p class="font-mono text-xs uppercase tracking-wider text-acc-cyan">{localFirst.kicker}</p>
       <h2 class="mt-4 text-3xl leading-tight sm:text-4xl">
@@ -21,12 +21,12 @@ import { localFirst, importsFrom } from '../content/site';
       ))}
     </div>
 
-    <div class="mt-8 rounded-2xl glass p-6 sm:flex sm:items-center sm:justify-between sm:gap-8" data-reveal>
+    <div class="mt-8 rounded-2xl glass p-6 lg:flex lg:items-center lg:justify-between lg:gap-8" data-reveal>
       <div class="max-w-xl">
         <h3 class="text-lg font-semibold">{localFirst.portability.heading}</h3>
         <p class="mt-2 text-sm leading-relaxed text-zinc-400">{localFirst.portability.body}</p>
       </div>
-      <div class="mt-4 flex flex-wrap items-center gap-2 sm:mt-0 sm:shrink-0">
+      <div class="mt-4 flex flex-wrap items-center gap-2 lg:mt-0 lg:max-w-sm">
         <span class="font-mono text-xs uppercase tracking-wider text-zinc-400">imports from</span>
         {importsFrom.map((s) => (
           <span class="rounded border border-white/10 bg-white/[0.02] px-2 py-0.5 font-mono text-xs text-zinc-300">{s}</span>

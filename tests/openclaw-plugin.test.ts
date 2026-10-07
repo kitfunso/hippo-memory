@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-type ExecFileSyncOpts = { cwd?: string; encoding?: string; timeout?: number; stdio?: string[] };
-type ExecFileSyncArgs = string[];
+import type { HippoPluginDeps } from '../extensions/openclaw-plugin/index.js';
 
-const execFileSyncMock = vi.fn<(cmd: string, args: ExecFileSyncArgs, opts?: ExecFileSyncOpts) => string>();
+type ToolCtx = { workspaceDir?: string; agentId?: string; sessionId?: string; sessionKey?: string };
+
+const execFileSyncMock = vi.fn<HippoPluginDeps['execFileSync']>();
 const spawnUnrefMock = vi.fn();
 const spawnMock = vi.fn(() => ({
   unref: spawnUnrefMock,
@@ -15,7 +16,7 @@ const existsSyncMock = vi.fn((target: string) => target.includes('.hippo'));
 // test always calls through real function references and only the
 // execFileSync/spawn/existsSync implementations are swapped.
 async function loadPlugin() {
-  const mod = await import('../extensions/openclaw-plugin/index.ts');
+  const mod = await import('../extensions/openclaw-plugin/index.js');
   mod.__setHippoPluginDeps({
     execFileSync: execFileSyncMock,
     spawn: spawnMock,
@@ -67,13 +68,13 @@ type HippoPluginConfig = {
 /** Distinguishes a registered ToolDef factory from an already-built ToolDef: only the
  *  factory form is callable, and only the built form carries `execute` directly. */
 function isToolFactory(
-  registration: ToolDef | ((ctx: { workspaceDir?: string }) => ToolDef),
-): registration is (ctx: { workspaceDir?: string }) => ToolDef {
+  registration: ToolDef | ((ctx: ToolCtx) => ToolDef),
+): registration is (ctx: ToolCtx) => ToolDef {
   return !('execute' in registration);
 }
 
 function makeApi(config: HippoPluginConfig) {
-  const toolRegistrations: Array<ToolDef | ((ctx: { workspaceDir?: string }) => ToolDef)> = [];
+  const toolRegistrations: Array<ToolDef | ((ctx: ToolCtx) => ToolDef)> = [];
   const hooks = new Map<string, HookHandler | VoidHookHandler>();
 
   return {
@@ -86,11 +87,11 @@ function makeApi(config: HippoPluginConfig) {
         debug: vi.fn(),
       },
       registerTool: vi.fn(
-        (tool: ToolDef | ((ctx: { workspaceDir?: string }) => ToolDef)) => toolRegistrations.push(tool),
+        (tool: ToolDef | ((ctx: ToolCtx) => ToolDef)) => toolRegistrations.push(tool),
       ),
       on: vi.fn((event: string, handler: HookHandler | VoidHookHandler) => hooks.set(event, handler)),
     },
-    getTool(name: string, ctx: { workspaceDir?: string } = {}) {
+    getTool(name: string, ctx: ToolCtx = {}) {
       for (const registration of toolRegistrations) {
         const tool = isToolFactory(registration) ? registration(ctx) : registration;
         if (tool.name === name) {
@@ -126,13 +127,13 @@ function hippoConfig(overrides: Partial<HippoMemoryPluginConfig> = {}): HippoPlu
   return {
     agents: {
       defaults: {
-        workspace: 'C:/Users/skf_s/.openclaw/workspace',
+        workspace: 'C:/Users/alice/.openclaw/workspace',
       },
       list: [
         {
           id: 'main',
           default: true,
-          workspace: 'C:/Users/skf_s/clawd',
+          workspace: 'C:/Users/alice/project-b',
         },
       ],
     },
@@ -169,12 +170,12 @@ describe('openclaw hippo plugin', () => {
 
     register(harness.api);
 
-    const tool = harness.getTool('hippo_recall', { workspaceDir: 'C:\\repo\\clawd' });
+    const tool = harness.getTool('hippo_recall', { workspaceDir: 'C:\\repo\\project-b' });
     await tool.execute('tool-1', { query: 'cache refresh' });
 
     expect(execFileSyncMock).toHaveBeenCalledTimes(1);
     expect(execFileSyncMock.mock.calls[0]?.[0]).toBe('hippo');
-    expect(execFileSyncMock.mock.calls[0]?.[2]).toMatchObject({ cwd: 'C:/repo/clawd' });
+    expect(execFileSyncMock.mock.calls[0]?.[2]).toMatchObject({ cwd: 'C:/repo/project-b' });
   });
 
   it('uses workspaceDir for prompt hook auto-context', async () => {
@@ -184,14 +185,14 @@ describe('openclaw hippo plugin', () => {
     register(harness.api);
 
     const hook = harness.getHook('before_prompt_build');
-    const result = hook({ prompt: 'help', messages: [] }, { workspaceDir: 'C:\\repo\\clawd' });
+    const result = hook({ prompt: 'help', messages: [] }, { workspaceDir: 'C:\\repo\\project-b' });
 
     // 2 calls: session_start event + context injection
     expect(execFileSyncMock).toHaveBeenCalledTimes(2);
     expect(execFileSyncMock.mock.calls[0]?.[1]).toContain('session');
-    expect(execFileSyncMock.mock.calls[0]?.[2]).toMatchObject({ cwd: 'C:/repo/clawd' });
+    expect(execFileSyncMock.mock.calls[0]?.[2]).toMatchObject({ cwd: 'C:/repo/project-b' });
     expect(execFileSyncMock.mock.calls[1]?.[1]).toContain('context');
-    expect(execFileSyncMock.mock.calls[1]?.[2]).toMatchObject({ cwd: 'C:/repo/clawd' });
+    expect(execFileSyncMock.mock.calls[1]?.[2]).toMatchObject({ cwd: 'C:/repo/project-b' });
     expect(result).toMatchObject({
       appendSystemContext: expect.stringContaining('Project Memory (Hippo)'),
     });
@@ -207,7 +208,7 @@ describe('openclaw hippo plugin', () => {
 
     register(harness.api);
 
-    const tool = harness.getTool('hippo_recall', { workspaceDir: 'C:\\repo\\clawd' });
+    const tool = harness.getTool('hippo_recall', { workspaceDir: 'C:\\repo\\project-b' });
     await tool.execute('tool-2', { query: 'shared memory' });
 
     expect(execFileSyncMock).toHaveBeenCalledTimes(1);
@@ -245,14 +246,14 @@ describe('openclaw hippo plugin', () => {
     expect(args).toContain('--error');
     // tool name sanitized to tag: browser_open -> browser-open
     expect(args).toContain('browser-open');
-    expect(execFileSyncMock.mock.calls[0]?.[2]).toMatchObject({ cwd: 'C:/Users/skf_s/clawd' });
+    expect(execFileSyncMock.mock.calls[0]?.[2]).toMatchObject({ cwd: 'C:/Users/alice/project-b' });
   });
 
   it('autoSleep detaches consolidation only after sessions with at least 10 new memories', async () => {
     const register = await loadPlugin();
     const harness = makeApi(hippoConfig({ autoSleep: true }));
 
-    execFileSyncMock.mockImplementation((_cmd: string, args: string[]) => {
+    execFileSyncMock.mockImplementation((_cmd: string, args: readonly string[]) => {
       if (args?.[0] === 'remember') return 'Remembered [mem-123]';
       return 'Memory context from hippo';
     });
@@ -260,7 +261,7 @@ describe('openclaw hippo plugin', () => {
     register(harness.api);
 
     const lightSessionTool = harness.getTool('hippo_remember', {
-      workspaceDir: 'C:\\repo\\clawd',
+      workspaceDir: 'C:\\repo\\project-b',
       agentId: 'main',
       sessionId: 'session-light',
     });
@@ -283,7 +284,7 @@ describe('openclaw hippo plugin', () => {
     expect(spawnMock).not.toHaveBeenCalled();
 
     const heavySessionTool = harness.getTool('hippo_remember', {
-      workspaceDir: 'C:\\repo\\clawd',
+      workspaceDir: 'C:\\repo\\project-b',
       agentId: 'main',
       sessionId: 'session-heavy',
     });
@@ -303,7 +304,7 @@ describe('openclaw hippo plugin', () => {
       'hippo',
       ['sleep'],
       expect.objectContaining({
-        cwd: 'C:/Users/skf_s/clawd',
+        cwd: 'C:/Users/alice/project-b',
         detached: true,
         stdio: 'ignore',
         windowsHide: true,

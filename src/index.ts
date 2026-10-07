@@ -9,19 +9,24 @@ export { MemoryEntry, Layer, EmotionalValence, ConfidenceLevel, DecayOptions, ca
 export function createMemory(content: string, options: Partial<CreateMemoryOptions> = {}): MemoryEntry {
   return createStoreMemory(content, { ...options, baseHalfLifeDays: options.baseHalfLifeDays ?? DEFAULT_HALF_LIFE_DAYS });
 }
-export { search, hybridSearch, physicsSearch, markRetrieved, estimateTokens, textOverlap, tokenize, explainMatch, detectTemporalDirection, temporalBoost, computeTemporalRange, SearchResult, MatchExplanation } from './search.js';
+export { search } from './search/bm25-search.js';
+export { hybridSearch } from './search/hybrid.js';
+export { physicsSearch } from './search/physics-search.js';
+export { explainMatch, MatchExplanation } from './search/explain.js';
+export { detectTemporalDirection, temporalBoost, computeTemporalRange } from './search/temporal.js';
+export { SearchResult } from './search/types.js';
+export { estimateTokens } from './token-ledger.js';
+export { tokenize, textOverlap } from './tokenize.js';
+export { markRetrieved } from './memory.js';
 export { multihopSearch } from './multihop.js';
 export { graphExpandRecall, MAX_HOPS, DEFAULT_MAX_NEIGHBORS, type GraphExpandOpts } from './graph-recall.js';
+export { initStore } from './store/open.js';
+export { writeEntry } from './store/entry-writes.js';
+export { loadAllEntries, readEntry } from './store/entry-reads.js';
+export { deleteEntry } from './store/delete-and-batch.js';
+export { loadSearchEntries, loadRecallSearchEntries } from './store/search-rows.js';
+export { loadIndex, rebuildIndex, loadSessionDecayContext, SessionDecayContext } from './store/index-and-stats.js';
 export {
-  initStore,
-  loadAllEntries,
-  loadSearchEntries,
-  loadRecallSearchEntries,
-  writeEntry,
-  readEntry,
-  deleteEntry,
-  loadIndex,
-  rebuildIndex,
   saveActiveTaskSnapshot,
   loadActiveTaskSnapshot,
   loadFreshActiveTaskSnapshot,
@@ -30,16 +35,17 @@ export {
   clearActiveTaskSnapshot,
   appendSessionEvent,
   listSessionEvents,
-  listMemoryConflicts,
-  replaceDetectedConflicts,
-  resolveConflict,
+  type ContinuityKey,
+} from './store/sessions.js';
+export { listMemoryConflicts, replaceDetectedConflicts, resolveConflict } from './store/conflicts.js';
+export {
   saveSessionHandoff,
   loadLatestHandoff,
   loadHandoffById,
   stampHandoffOutcome,
   writeSessionEndHandoff,
-  loadSessionDecayContext,
-  SessionDecayContext,
+} from './store/handoffs.js';
+export {
   createCard,
   loadCard,
   listCards,
@@ -54,20 +60,21 @@ export {
   reclaimExpiredCards,
   addCardComment,
   loadLatestHandoffForCard,
-} from './store.js';
+} from './store-cards.js';
 
 // Feature 5: Session handoff
 export { SessionHandoff, HandoffOutcome, HandoffEvidence, isHandoffOutcome } from './handoff.js';
 // W2a: work-queue cards
 export { Card, CardStatus, CardRun, CardComment, CardTransitions, isCardStatus, CARD_TRANSITIONS, CARD_LEASE_MS } from './card.js';
-export { consolidate, ConsolidationResult } from './consolidate.js';
+export { consolidate } from './consolidate/sleep.js';
+export { ConsolidationResult } from './consolidate/run.js';
+export { sleep, type SleepOpts, type SleepResult } from './api/sleep.js';
 // Announced public in CHANGELOG 1.26.3 but never re-exported; the rest of dedupe.js stays internal.
 export { strengthBucket } from './dedupe.js';
 
 // Feature 1: Embedding search
+export { isEmbeddingAvailable, getEmbedding } from './local-embedding.js';
 export {
-  isEmbeddingAvailable,
-  getEmbedding,
   cosineSimilarity,
   loadEmbeddingIndex,
   saveEmbeddingIndex,
@@ -116,12 +123,10 @@ export {
   importClaude,
   importCursor,
   importGenericFile,
-  importMarkdown,
-  importVault,
-  importEntries,
-  ImportResult,
-  ImportOptions,
-} from './importers.js';
+} from './importers/sources.js';
+export { importMarkdown } from './importers/markdown.js';
+export { importVault } from './importers/vault.js';
+export { importEntries, ImportResult, ImportOptions } from './importers/core.js';
 
 // Feature eval suite
 export {
@@ -147,3 +152,14 @@ export {
   formatAmbientVector,
   AmbientState,
 } from './ambient.js';
+export {
+  appendAuditEvent,
+  queryAuditEvents,
+  listAuditEventsAfter,
+  AUDIT_OPS,
+  type AuditEvent,
+  type AuditOp,
+  type QueryAuditOpts,
+  type ListAuditAfterOpts,
+} from './audit.js';
+export { openHippoDb, openHippoDbReadOnly, closeHippoDb, type DatabaseSyncLike } from './db.js';

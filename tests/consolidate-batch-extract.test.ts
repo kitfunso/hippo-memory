@@ -2,9 +2,10 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { consolidate } from '../src/consolidate.js';
-import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { consolidate } from '../src/consolidate/sleep.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 
 let tmpDir: string;
 
@@ -21,9 +22,11 @@ describe('Batch extraction during consolidation', () => {
     initStore(tmpDir);
 
     const ep1 = createMemory('the deploy pipeline uses blue-green strategy on kubernetes', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Episodic,
     });
     const ep2 = createMemory('redis cache eviction policy is set to allkeys-lru in production', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Episodic,
     });
     writeEntry(tmpDir, ep1);
@@ -39,11 +42,13 @@ describe('Batch extraction during consolidation', () => {
     initStore(tmpDir);
 
     const ep = createMemory('nginx reverse proxy listens on port 443 with TLS termination', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Episodic,
     });
     writeEntry(tmpDir, ep);
 
     const fact = createMemory('nginx listens on port 443', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Semantic,
       tags: ['extracted'],
       extracted_from: ep.id,

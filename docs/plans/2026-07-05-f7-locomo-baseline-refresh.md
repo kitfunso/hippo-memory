@@ -70,8 +70,8 @@ starve harness-written rows. Timing: 0.37 s/remember, 0.48 s/recall →
   the baseline is re-derived, not quoted). **The April result JSONs are
   gitignored and exist ONLY in the main repo** — worktrees do not share
   ignored files — so first copy
-  `C:/Users/skf_s/hippo/benchmarks/locomo/results/hippo-v0.32.0.json` and
-  `C:/Users/skf_s/hippo/benchmarks/locomo/results/hippo-v0.34.0-no-salience.json`
+  `C:/Users/<user>/hippo/benchmarks/locomo/results/hippo-v0.32.0.json` and
+  `C:/Users/<user>/hippo/benchmarks/locomo/results/hippo-v0.34.0-no-salience.json`
   into the worktree's `benchmarks/locomo/results/` (they remain gitignored
   there; the main-repo originals are read-only reference and are never
   modified). Note for T4: the second file records `hippo_version: 0.33.0`

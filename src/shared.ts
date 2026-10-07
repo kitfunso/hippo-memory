@@ -5,27 +5,39 @@
  * Local .hippo/ stores are per-project.
  */
 
+import { BadRequestError, NotFoundError } from './api-errors.js';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
-import { MemoryEntry, generateId } from './memory.js';
-import {
-  initStore,
-  loadAllEntries,
-  loadIndex,
-  loadSearchEntries,
-  loadRecallSearchEntries,
-  writeEntry,
-  readEntry,
-} from './store.js';
-import { passesScopeFilterForRecall, passesCliRecallScopeFilter } from './recall-scope.js';
-import { search, hybridSearch, SearchResult } from './search.js';
+import { MemoryEntry, generateId, COMPACTION_MEMORY_TAG } from './memory.js';
+import { AGENT_MEMORY_SOURCE_PREFIX, AGENT_MEMORY_TAGS } from './agent-memories/tools.js';
+import { initStore } from './store/open.js';
+import { writeEntry } from './store/entry-writes.js';
+import { loadAllEntries, readEntry } from './store/entry-reads.js';
+import { loadSearchEntries, loadRecallSearchEntries, recallScopeFilter } from './store/search-rows.js';
+import { tallySources } from './store/candidates.js';
+import { loadIndex } from './store/index-and-stats.js';
+import { isPersonalScope, passesScopeFilterForRecall, passesCliRecallScopeFilter } from './recall-scope.js';
+import { search } from './search/bm25-search.js';
+import { hybridSearch } from './search/hybrid.js';
+import { fitBudget } from './search/finalize.js';
+import { DEFAULT_LOCAL_BUMP, DEFAULT_RECALL_BUDGET, type SearchResult, type ResultCost } from './search/types.js';
+import type { HybridVectorCandidates } from './search/vector.js';
 import { evalNow } from './ablation.js';
-import { deriveOriginProject, classifyOriginProject, resolveGlobalRootDir } from './project-identity.js';
+import { fallbackOrigin, classifyOriginProject, resolveGlobalRootDir, resolveProjectIdentity } from './project-identity.js';
+import { isSharedStore } from './config.js';
 import { detectSecret } from './secret-detect.js';
 import { isQuarantineScope } from './quarantine.js';
 import { RejectedValueError } from './rejection.js';
 import { embedMemory, embedAll } from './embeddings.js';
+import { duplicateKey, storedTextKeys } from './same-text.js';
+import { isReusable } from './memory-quality.js';
+import { log } from './log.js';
+import type { DatabaseSyncLike } from './db.js';
+
+// The rows are already copied; a failed background embed only delays vectors, so it warns instead of throwing.
+function logEmbedAllFailure<E>(caller: string, err: E): void {
+  log.warn(`${caller}: background embed failed (${err instanceof Error ? err.message : String(err)}); run 'hippo embed' to backfill`);
+}
 
 /**
  * Returns the path to the global Hippo store.
@@ -58,21 +70,24 @@ export function initGlobal(): void {
 export function promoteToGlobal(
   localRoot: string,
   id: string,
-  opts?: { actor?: string; tenantId?: string },
+  opts?: { actor?: string; tenantId?: string; afterWrite?: (db: DatabaseSyncLike, globalId: string) => void },
 ): MemoryEntry {
   const entry = readEntry(localRoot, id, opts?.tenantId);
-  if (!entry) throw new Error(`Memory not found: ${id}`);
+  if (!entry) throw new NotFoundError(`Memory not found: ${id}`);
 
-  // CD5: same veto as shareMemory; a promoted copy would have no quarantine record to review.
+  // Same quarantine veto as shareMemory; a promoted copy would have no quarantine record to review.
   if (isQuarantineScope(entry.scope)) {
-    throw new Error(`Refusing to promote ${id}: it is quarantined pending review. Approve it first via 'hippo quarantine approve ${id}'.`);
+    throw new BadRequestError(`Refusing to promote ${id}: it is quarantined pending review. Approve it first via 'hippo quarantine approve ${id}'.`);
+  }
+  if (isPersonalScope(entry.scope ?? null)) {
+    throw new BadRequestError(`Refusing to promote ${id}: it is a personal memory and stays with its owner on this server.`);
   }
 
-  // v39 S4 producer veto: promote is a producer path to the global store
-  // exactly like shareMemory - same hard rule (codex gating review P2).
+  // Secret producer veto: promote is a producer path to the global store
+  // exactly like shareMemory - same hard rule.
   const promoteSecret = detectSecret(entry);
   if (promoteSecret.flagged) {
-    throw new Error(
+    throw new BadRequestError(
       `Refusing to promote ${id} to the global store: content matches secret material (${promoteSecret.reason}). ` +
       `Secrets stay in their owning project's store.`,
     );
@@ -81,23 +96,18 @@ export function promoteToGlobal(
   initGlobal();
   const globalRoot = getGlobalRoot();
 
-  // Mint a new ID for the global store. origin_project rides along from the
-  // local entry's write-time stamp via the spread; back-stop it for pre-v39
-  // local rows so a promoted copy never lands NULL in the global store.
+  // A project store's NULL row gets its folder back; a shared store's folder is no caller's project, so NULL stays and the label names no path.
   const globalEntry: MemoryEntry = {
     ...entry,
     id: generateId('g'),
-    source: `promoted:${localRoot}`,
-    origin_project: entry.origin_project ?? deriveOriginProject(path.dirname(path.resolve(localRoot))),
+    source: isSharedStore(localRoot) ? `shared::${new Date().toISOString()}` : `promoted:${localRoot}`,
+    origin_project: entry.origin_project ?? fallbackOrigin(localRoot),
   };
 
-  writeEntry(globalRoot, globalEntry, { actor: opts?.actor });
+  writeEntry(globalRoot, globalEntry, { actor: opts?.actor, afterWrite: opts?.afterWrite });
 
-  // Fire-and-forget: embedMemory's own availability gate (embeddings.ts:438)
-  // already no-ops when embeddings are unavailable/disabled, so a pre-guard
-  // here would be redundant (capture.ts:598 pre-guards instead; both
-  // contracts are correct, see docs/plans/2026-07-18-global-row-embeddings.md).
-  void embedMemory(globalRoot, globalEntry).catch(() => {});
+  // Fire-and-forget: embedMemory gates on availability and never rejects.
+  void embedMemory(globalRoot, globalEntry);
 
   return globalEntry;
 }
@@ -121,7 +131,7 @@ export function searchBoth(
   globalRoot: string,
   options: SearchOptions = {}
 ): SearchResult[] {
-  const { budget = 4000, now = evalNow(), minResults, tenantId } = options;
+  const { budget = DEFAULT_RECALL_BUDGET, now = evalNow(), minResults, tenantId } = options;
   const effectiveMin = minResults ?? 1;
 
   const localEntries = fs.existsSync(localRoot) ? loadSearchEntries(localRoot, query, undefined, tenantId) : [];
@@ -134,14 +144,13 @@ export function searchBoth(
   const globalResults = search(query, globalEntries, { budget, now, minResults });
 
   // Tag global results. Local memories get a configurable priority bump.
-  const syncLocalBump = 1.2;
   const tagged: Array<SearchResult & { isGlobal: boolean }> = [
     ...localResults.map((r) => ({
       ...r,
       isGlobal: false,
-      score: r.score * syncLocalBump,
+      score: r.score * DEFAULT_LOCAL_BUMP,
       breakdown: r.breakdown
-        ? { ...r.breakdown, sourceBump: syncLocalBump, final: r.breakdown.final * syncLocalBump }
+        ? { ...r.breakdown, sourceBump: DEFAULT_LOCAL_BUMP, final: r.breakdown.final * DEFAULT_LOCAL_BUMP }
         : undefined,
     })),
     ...globalResults.map((r) => ({ ...r, isGlobal: true })),
@@ -150,17 +159,14 @@ export function searchBoth(
   // Remove duplicates by content (local/global IDs differ after promote/share)
   const seen = new Set<string>();
   const deduped = tagged.filter((r) => {
-    const key = r.entry.content.slice(0, 200).toLowerCase();
+    const key = duplicateKey(r.entry.content);
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
   });
 
-  // T2 note: PLAIN stable score sort on purpose -- local/global inputs are
-  // each deterministically ordered (content tail applied in the underlying
-  // search), stability inherits that, and an exact post-bump tie keeps the
-  // LOCAL result ahead of the global one (the concat order), preserving the
-  // pre-T2 semantics.
+  // PLAIN stable score sort on purpose: both inputs are deterministically ordered,
+  // and an exact tie keeps the LOCAL result ahead of the global one (concat order).
   deduped.sort((a, b) => b.score - a.score);
 
   // Apply combined token budget (guarantee at least minResults items)
@@ -190,10 +196,12 @@ export interface HybridSearchOptions extends SearchOptions {
   includeSuperseded?: boolean;
   /** Filter to memories current at this ISO date string. */
   asOf?: string;
-  /** v0.30 / E4 — propagated to underlying hybridSearch calls.
+  /** Budget cost per result, spent the same way in each store and in the merged list. */
+  cost?: ResultCost;
+  /** Propagated to underlying hybridSearch calls.
    *  Per-call > env HIPPO_SUMMARY_DEBOOST > 0.85 default. */
   summaryDeboost?: number;
-  /** v0.30 / E4 — propagated. Default true (1.05 boost if rebuilt within 7d). */
+  /** Propagated. Default true (1.05 boost if rebuilt within 7d). */
   summaryFreshness?: boolean;
   /** v39 memory scope isolation: optional admission predicate applied to the
    *  loaded candidate entries of BOTH stores BEFORE ranking, cross-store
@@ -201,7 +209,7 @@ export interface HybridSearchOptions extends SearchOptions {
    *  its admitted duplicate in the dedupe pass, or saturate the budget.
    *  Default undefined = unchanged behavior (recall paths never set it). */
   entryFilter?: (entry: MemoryEntry) => boolean;
-  /** v1.25.0 — recall-mode scope filter, consumed by `searchBothHybrid` only.
+  /** Recall-mode scope filter, consumed by `searchBothHybrid` only.
    *  ABSENT (undefined) is the only unfiltered mode: both stores load via
    *  `loadSearchEntries` unchanged (background pipelines / eval callers).
    *  PRESENT switches the internal loads to `loadRecallSearchEntries` (SQL
@@ -218,7 +226,7 @@ export interface HybridSearchOptions extends SearchOptions {
    *  `null` a different meaning (boost-neutral), so a flat `string | null`
    *  here would overload null with contradictory semantics. Do NOT pass an
    *  empty object casually from non-recall paths. */
-  recallScope?: { requested?: string; additive?: boolean };
+  recallScope?: { requested?: string; additive?: boolean; ownScope?: string };
 }
 
 /**
@@ -231,20 +239,14 @@ export async function searchBothHybrid(
   globalRoot: string,
   options: HybridSearchOptions = {}
 ): Promise<SearchResult[]> {
-  const { budget = 4000, now = evalNow(), embeddingWeight, explain, mmr, mmrLambda, localBump = 1.2, minResults, scope, includeSuperseded, asOf, tenantId, summaryDeboost, summaryFreshness, entryFilter, recallScope } = options;
+  const { includeSuperseded, asOf, tenantId, entryFilter, recallScope } = options;
 
   // When an admission filter is active, lift the per-store candidate cap
   // (default 200): excluded rows matching the query could otherwise fill the
-  // window before any admitted row is even loaded (codex gating round 6).
-  // Only ambient-context query mode sets entryFilter, and that path is
-  // interactive - never the per-turn pinned-only hook - so ranking the full
-  // match set is acceptable.
-  // 5000 = 25x the default 200-row window: large enough that exclusion
-  // crowding is a non-issue on real stores, bounded so a common query term
-  // on a 100k-row store cannot stall an interactive call by ranking every
-  // match (post-merge adversarial review, 2026-07-02).
+  // window before any admitted row is even loaded. 5000 is bounded so a common
+  // term on a large store cannot stall an interactive call by ranking every match.
   const searchWindow = entryFilter ? 5000 : undefined;
-  // v1.25.0 recall mode: push the scope predicate into SQL exactly like
+  // Recall mode: push the scope predicate into SQL exactly like
   // api.recall (loadRecallSearchEntries), so quarantine/private rows never
   // enter the candidate set, never shadow admitted duplicates in the dedupe
   // pass, and never consume budget. The JS post-filter below is the
@@ -257,32 +259,42 @@ export async function searchBothHybrid(
           root, query, searchWindow, tenantId, recallScope.requested,
           recallScope.additive ? 'additive' : 'exact',
           Boolean(includeSuperseded) || Boolean(asOf),
+          undefined,
+          recallScope.ownScope,
         )
       : loadSearchEntries(root, query, searchWindow, tenantId);
   };
-  let localEntries = loadEntries(localRoot);
-  let globalEntries = loadEntries(globalRoot);
-  if (recallScope) {
-    const passes = (e: MemoryEntry) =>
-      recallScope.additive
-        ? passesCliRecallScopeFilter(e.scope ?? null, recallScope.requested)
-        : passesScopeFilterForRecall(e.scope ?? null, recallScope.requested);
-    localEntries = localEntries.filter(passes);
-    globalEntries = globalEntries.filter(passes);
-  }
-  if (entryFilter) {
-    localEntries = localEntries.filter(entryFilter);
-    globalEntries = globalEntries.filter(entryFilter);
-  }
+  const passesScope = (e: MemoryEntry): boolean =>
+    !recallScope || (recallScope.additive
+      ? passesCliRecallScopeFilter(e.scope ?? null, recallScope.requested) || passesScopeFilterForRecall(e.scope ?? null, undefined, recallScope.ownScope)
+      : passesScopeFilterForRecall(e.scope ?? null, recallScope.requested, recallScope.ownScope));
+  const admit = (e: MemoryEntry): boolean => passesScope(e) && (!entryFilter || entryFilter(e));
+  const localEntries = loadEntries(localRoot).filter(admit);
+  const globalEntries = loadEntries(globalRoot).filter(admit);
 
-  if (localEntries.length === 0 && globalEntries.length === 0) return [];
+  // The vector arm loads under the same SQL rules as loadEntries, then the same JS admission.
+  const vectorCandidates = {
+    tenantId,
+    scope: recallScope ? recallScopeFilter(recallScope.requested, recallScope.additive ? 'additive' : 'exact', recallScope.ownScope) : undefined,
+    includeSuperseded: !recallScope || Boolean(includeSuperseded) || Boolean(asOf),
+    admit,
+  };
+  return rankBothStores(query, { local: localRoot, global: globalRoot }, { local: localEntries, global: globalEntries }, vectorCandidates, options);
+}
 
-  const localResults = await hybridSearch(query, localEntries, {
-    budget, now, hippoRoot: localRoot, embeddingWeight, explain, mmr, mmrLambda, minResults, scope, includeSuperseded, asOf, summaryDeboost, summaryFreshness,
-  });
-  const globalResults = await hybridSearch(query, globalEntries, {
-    budget, now, hippoRoot: globalRoot, embeddingWeight, explain, mmr, mmrLambda, minResults, scope, includeSuperseded, asOf, summaryDeboost, summaryFreshness,
-  });
+/** Hybrid ranking of rows already loaded from each store: the local bump, one copy per text, then the shared budget. */
+export async function rankBothStores(
+  query: string,
+  roots: { local: string; global: string },
+  entries: { local: MemoryEntry[]; global: MemoryEntry[] },
+  vectorCandidates: HybridVectorCandidates,
+  options: HybridSearchOptions = {},
+): Promise<SearchResult[]> {
+  const { budget = DEFAULT_RECALL_BUDGET, now = evalNow(), embeddingWeight, explain, mmr, mmrLambda, localBump = DEFAULT_LOCAL_BUMP, minResults, cost, scope, includeSuperseded, asOf, summaryDeboost, summaryFreshness } = options;
+  if (entries.local.length === 0 && entries.global.length === 0) return [];
+  const shared = { budget, now, embeddingWeight, explain, mmr, mmrLambda, minResults, cost, scope, includeSuperseded, asOf, summaryDeboost, summaryFreshness, vectorCandidates };
+  const localResults = await hybridSearch(query, entries.local, { ...shared, hippoRoot: roots.local });
+  const globalResults = await hybridSearch(query, entries.global, { ...shared, hippoRoot: roots.global });
 
   // Tag global results. Local memories get a configurable priority bump.
   const tagged: Array<SearchResult & { isGlobal: boolean }> = [
@@ -300,28 +312,17 @@ export async function searchBothHybrid(
   // Remove duplicates by content (local/global IDs differ after promote/share)
   const seen = new Set<string>();
   const deduped = tagged.filter((r) => {
-    const key = r.entry.content.slice(0, 200).toLowerCase();
+    const key = duplicateKey(r.entry.content);
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
   });
 
-  // T2 note: PLAIN stable score sort on purpose -- see searchBoth above;
+  // PLAIN stable score sort on purpose -- see searchBoth above;
   // same rationale (deterministic inputs + stability; local-first on ties).
   deduped.sort((a, b) => b.score - a.score);
 
-  // Apply combined token budget (guarantee at least minResults items)
-  const effectiveMinHybrid = minResults ?? 1;
-  const results: typeof deduped = [];
-  let usedTokens = 0;
-
-  for (let i = 0; i < deduped.length; i++) {
-    if (results.length >= effectiveMinHybrid && usedTokens + deduped[i].tokens > budget) continue;
-    usedTokens += deduped[i].tokens;
-    results.push(deduped[i]);
-  }
-
-  return results;
+  return fitBudget(deduped, budget, minResults ?? 1, cost);
 }
 
 // ---------------------------------------------------------------------------
@@ -339,6 +340,25 @@ const TRANSFERABLE_TAGS = new Set([
   'error', 'platform', 'windows', 'encoding', 'python', 'shell',
   'powershell', 'quant', 'backtest', 'pattern', 'rule', 'gotcha',
   'sub-agent', 'review', 'best-practice',
+]);
+
+/** Tags whose rows only a hand-run share or promote may copy to the global store; derived rows inherit them. */
+export const NEVER_AUTO_SHARE_TAGS: ReadonlySet<string> = new Set([
+  'git-learned',
+  'session-digest',
+  ...AGENT_MEMORY_TAGS,
+]);
+
+export function neverAutoShareTags(sources: readonly MemoryEntry[]): string[] {
+  return [...NEVER_AUTO_SHARE_TAGS].filter((tag) => sources.some((s) => s.tags.includes(tag)));
+}
+
+/** Tags whose rows sleep keeps as written: never merged, never sent to LLM extraction. Conflict detection keeps its own list. */
+export const NO_MERGE_TAGS: ReadonlySet<string> = new Set([
+  'extracted',
+  'session-digest',
+  COMPACTION_MEMORY_TAG,
+  ...AGENT_MEMORY_TAGS,
 ]);
 
 /**
@@ -384,24 +404,27 @@ export function shareMemory(
   // B's memory to global. readEntry returns null on cross-tenant lookups
   // when tenantId is provided.
   const entry = readEntry(localRoot, id, options.tenantId);
-  if (!entry) throw new Error(`Memory not found: ${id}`);
+  if (!entry) throw new NotFoundError(`Memory not found: ${id}`);
 
-  // v39 S4 producer veto: secrets never go to the global store, not even
+  // Secret producer veto: secrets never go to the global store, not even
   // with --force. Explicit and loud - a silent null would read as "low
   // transfer score" and invite retries.
   const secret = detectSecret(entry);
   if (secret.flagged) {
-    throw new Error(
+    throw new BadRequestError(
       `Refusing to share ${id} to the global store: content matches secret material (${secret.reason}). ` +
       `Secrets stay in their owning project's store.`,
     );
   }
 
-  // CD5: a quarantined row is unreviewed input, not a lesson; sharing it would spread poison globally.
+  // A quarantined row is unreviewed input, not a lesson; sharing it would spread poison globally.
   if (isQuarantineScope(entry.scope)) {
-    throw new Error(
+    throw new BadRequestError(
       `Refusing to share ${id}: it is quarantined pending review. Approve it first via 'hippo quarantine approve ${id}'.`,
     );
+  }
+  if (isPersonalScope(entry.scope ?? null)) {
+    throw new BadRequestError(`Refusing to share ${id}: it is a personal memory and stays with its owner on this server.`);
   }
 
   const score = transferScore(entry);
@@ -410,15 +433,14 @@ export function shareMemory(
   initGlobal();
   const globalRoot = getGlobalRoot();
 
-  // v39: canonical origin comes from the entry's own stamp (write-time,
-  // store-location-derived); the localRoot parent basename is only a
-  // fallback for pre-v39 rows and keeps the legacy source format intact.
+  // The label keeps the folder name for a user-global row; a NULL row gets `shared::`, which originFromSource reads as no project.
   const fallbackName = path.basename(path.resolve(localRoot, '..'));
-  const originName = entry.origin_project ?? deriveOriginProject(path.dirname(path.resolve(localRoot)));
+  const originName = entry.origin_project ?? fallbackOrigin(localRoot);
+  const label = originName === '' ? fallbackName : (originName ?? '');
   const globalEntry: MemoryEntry = {
     ...entry,
     id: generateId('g'),
-    source: `shared:${originName === '' ? fallbackName : originName}:${new Date().toISOString()}`,
+    source: `shared:${label}:${new Date().toISOString()}`,
     origin_project: originName,
   };
 
@@ -427,10 +449,9 @@ export function shareMemory(
   // Single-row producer: embed here unless the caller opts out. autoShare
   // sets skipEmbed so it can batch its whole run through one embedAll() at
   // the end instead of N serialized full-index rewrites (embedMemory rewrites
-  // the whole index JSON per call). Same redundant-pre-guard reasoning as
-  // promoteToGlobal above.
+  // the whole index JSON per call).
   if (!options.skipEmbed) {
-    void embedMemory(globalRoot, globalEntry).catch(() => {});
+    void embedMemory(globalRoot, globalEntry);
   }
 
   return globalEntry;
@@ -440,7 +461,7 @@ export function shareMemory(
  * List all projects that have contributed memories to the global store.
  * Parses the source field for 'shared:<project>:' or 'promoted:<path>' patterns.
  *
- * D4 v1.12.10: `tenantId` is now optional. When provided, the global entries
+ * `tenantId` is optional. When provided, the global entries
  * are filtered to that tenant before aggregation — matches every other
  * read path's default-safe behaviour. When undefined, host-wide (back-compat
  * for legacy callers like CLI standalone + dashboard internal use). Operators
@@ -454,33 +475,30 @@ export function listPeers(
   const root = globalRoot ?? getGlobalRoot();
   if (!fs.existsSync(root)) return [];
 
-  // D4: tenant-scoped by default when tenantId provided. Host-wide when
+  // Tenant-scoped by default when tenantId provided. Host-wide when
   // undefined (preserves back-compat).
-  const allEntries = loadAllEntries(root);
-  const entries = tenantId !== undefined
-    ? allEntries.filter((e) => e.tenantId === tenantId)
-    : allEntries;
+  const tallies = tallySources(root, tenantId).sort((a, b) => (a.first < b.first ? -1 : a.first > b.first ? 1 : 0));
   const peerMap = new Map<string, { count: number; latest: string }>();
 
-  for (const entry of entries) {
+  for (const tally of tallies) {
     let project = 'unknown';
 
-    if (entry.source.startsWith('shared:')) {
-      const parts = entry.source.split(':');
+    if (tally.source.startsWith('shared:')) {
+      const parts = tally.source.split(':');
       project = parts[1] || 'unknown';
-    } else if (entry.source.startsWith('promoted:')) {
-      const promotedPath = entry.source.slice('promoted:'.length);
+    } else if (tally.source.startsWith('promoted:')) {
+      const promotedPath = tally.source.slice('promoted:'.length);
       project = path.basename(path.resolve(promotedPath, '..'));
-    } else if (entry.source === 'cli-global') {
+    } else if (tally.source === 'cli-global') {
       project = 'global-cli';
     }
 
     const existing = peerMap.get(project);
     if (!existing) {
-      peerMap.set(project, { count: 1, latest: entry.created });
+      peerMap.set(project, { count: tally.count, latest: tally.latest });
     } else {
-      existing.count++;
-      if (entry.created > existing.latest) existing.latest = entry.created;
+      existing.count += tally.count;
+      if (tally.latest > existing.latest) existing.latest = tally.latest;
     }
   }
 
@@ -489,25 +507,87 @@ export function listPeers(
     .sort((a, b) => b.count - a.count);
 }
 
+type AutoShareStats = { secretSkipped: number; rejectedSkipped?: number; neverAutoShareSkipped?: number };
+
+function isAutoShareCandidate(entry: MemoryEntry, globalContentSet: Set<string>, minScore: number, stats: AutoShareStats | undefined): boolean {
+  // shareMemory refuses quarantined and personal rows; filtering here keeps sleep from aborting on one.
+  if (isQuarantineScope(entry.scope ?? null) || isPersonalScope(entry.scope ?? null) || !isReusable(entry)) return false;
+  // Before the score: these rows describe one project only, and a git seed's 'error' tag clears the bar.
+  if (entry.tags.some((t) => NEVER_AUTO_SHARE_TAGS.has(t)) || entry.source.startsWith(AGENT_MEMORY_SOURCE_PREFIX)) {
+    if (stats) stats.neverAutoShareSkipped = (stats.neverAutoShareSkipped ?? 0) + 1;
+    return false;
+  }
+  const score = transferScore(entry);
+  if (score < minScore) return false;
+
+  // Skip if already shared (same text apart from spacing)
+  if (globalContentSet.has(duplicateKey(entry.content))) return false;
+
+  // Secret producer veto: secret rows never auto-share, regardless of
+  // transfer score. (shareMemory would throw; filtering here keeps the
+  // sleep pipeline fail-safe.) Checked LAST so the stats counter
+  // only counts rows the veto actually withheld — a row failing the score
+  // or dedupe gates was never going to share, secret or not.
+  if (detectSecret(entry).flagged) {
+    if (stats) stats.secretSkipped++;
+    return false;
+  }
+
+  return true;
+}
+
+// Rejection containment (sync/promote/share copy paths must not let ONE rejected
+// candidate kill the batch): shareMemory -> writeEntry hits the LIVE guard
+// against the GLOBAL store's tombstones. A matching candidate throws
+// RejectedValueError, which (uncaught) would abort this whole loop and,
+// via api.ts's sleep pipeline, the entire autoShare sleep phase. Mirrors
+// syncGlobalToLocal's per-item catch just above in this file. writeEntry's
+// own catch already writes the reject_refusal audit before rethrowing,
+// so do not double-audit here, just count and continue.
+function shareCandidates(localRoot: string, candidates: readonly MemoryEntry[], stats: AutoShareStats | undefined): MemoryEntry[] {
+  const shared: MemoryEntry[] = [];
+  let rejectedSkipped = 0;
+  for (const entry of candidates) {
+    try {
+      // skipEmbed: batching invariant, this is a batch producer, so it embeds
+      // once via embedAll() below rather than once per row inside shareMemory.
+      const result = shareMemory(localRoot, entry.id, { force: true, skipEmbed: true });
+      if (result) shared.push(result);
+    } catch (err) {
+      if (err instanceof RejectedValueError) {
+        rejectedSkipped++;
+        if (stats) stats.rejectedSkipped = (stats.rejectedSkipped ?? 0) + 1;
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  if (rejectedSkipped > 0) {
+    log.warn(
+      `autoShare: skipped ${rejectedSkipped} candidate(s) refused by the global store's rejection tombstone`,
+    );
+  }
+  return shared;
+}
+
 /**
- * Auto-share: find local memories with high transfer scores that aren't already global.
+ * Auto-share: local memories with high transfer scores, not already global, no NEVER_AUTO_SHARE_TAGS tag.
  * Returns the list of shared entries.
  *
- * L9: `options.tenantId` is opt-in. When provided, the LOCAL-entries read is
+ * `options.tenantId` is opt-in. When provided, the LOCAL-entries read is
  * scoped to that tenant. When undefined, the local read is host-wide (current
  * behaviour). The GLOBAL-entries read is always unioned — the global root IS
- * the cross-tenant aggregate by design. The only intentional unscoped
- * internal caller as of v1.12.1 is `api.sleep` (`src/api.ts:2041`), which
- * passes options without tenantId because `sleep` is host-wide by intent;
- * see `src/api.ts:2073-2077` for the cross-tenant dedup rationale.
+ * the cross-tenant aggregate by design. `api.sleep` passes no tenantId
+ * because `sleep` is host-wide by intent.
  *
- * v1.25.0: `options.stats` is an opt-in out-param. When provided,
+ * `options.stats` is an opt-in out-param. When provided,
  * `stats.secretSkipped` is incremented once per row that passed every OTHER
  * admission gate (transfer score, not-already-global) and was withheld SOLELY
  * by the secret veto — i.e. it counts shares actually prevented, not secret
  * rows merely present. Filled identically under `dryRun`.
  *
- * AT1: `stats.rejectedSkipped` (optional) is incremented once per candidate
+ * `stats.rejectedSkipped` (optional) is incremented once per candidate
  * refused by the GLOBAL store's rejection tombstone (RejectedValueError from
  * shareMemory -> writeEntry). Unlike secretSkipped, this can only be
  * detected by attempting the write — `dryRun` returns candidates before the
@@ -521,7 +601,7 @@ export function autoShare(
     minScore?: number;
     dryRun?: boolean;
     tenantId?: string;
-    stats?: { secretSkipped: number; rejectedSkipped?: number };
+    stats?: AutoShareStats;
   } = {},
 ): MemoryEntry[] {
   const { minScore = 0.6, dryRun = false } = options;
@@ -529,75 +609,21 @@ export function autoShare(
   const localEntries = loadAllEntries(localRoot, options.tenantId);
   initGlobal();
   const globalRoot = getGlobalRoot();
-  // L9: host-wide read. The global store IS the union across all tenants;
+  // Host-wide read. The global store IS the union across all tenants;
   // per-tenant filtering on the global root would defeat the purpose.
   const globalEntries = loadAllEntries(globalRoot);
 
   // Build set of global content hashes to avoid duplicates
-  const globalContentSet = new Set(
-    globalEntries.map((e) => e.content.toLowerCase().trim().slice(0, 200))
-  );
+  const globalContentSet = storedTextKeys(globalEntries);
 
-  const candidates = localEntries.filter((entry) => {
-    // CD5: shareMemory refuses quarantined rows; filtering here keeps sleep from aborting on one.
-    if (isQuarantineScope(entry.scope ?? null)) return false;
-    const score = transferScore(entry);
-    if (score < minScore) return false;
-
-    // Skip if already shared (approximate content match)
-    const contentKey = entry.content.toLowerCase().trim().slice(0, 200);
-    if (globalContentSet.has(contentKey)) return false;
-
-    // v39 S4 producer veto: secret rows never auto-share, regardless of
-    // transfer score. (shareMemory would throw; filtering here keeps the
-    // sleep pipeline fail-safe.) Checked LAST (v1.25.0) so the stats counter
-    // only counts rows the veto actually withheld — a row failing the score
-    // or dedupe gates was never going to share, secret or not.
-    if (detectSecret(entry).flagged) {
-      if (options.stats) options.stats.secretSkipped++;
-      return false;
-    }
-
-    return true;
-  });
+  const candidates = localEntries.filter((entry) => isAutoShareCandidate(entry, globalContentSet, minScore, options.stats));
 
   if (dryRun) return candidates;
 
-  const shared: MemoryEntry[] = [];
-  // AT1 containment (docs/plans/2026-08-15-at1-rejected-value-tombstone.md
-  // plan §3 — sync/promote/share copy paths must not let ONE rejected
-  // candidate kill the batch): shareMemory -> writeEntry hits the LIVE guard
-  // against the GLOBAL store's tombstones. A matching candidate throws
-  // RejectedValueError, which (uncaught) would abort this whole loop and,
-  // via api.ts's sleep pipeline, the entire autoShare sleep phase. Mirrors
-  // syncGlobalToLocal's per-item catch just above in this file. writeEntry's
-  // own catch already writes the reject_refusal audit before rethrowing
-  // (plan §3) — do not double-audit here, just count and continue.
-  let rejectedSkipped = 0;
-  for (const entry of candidates) {
-    try {
-      // skipEmbed: batching invariant, this is a batch producer, so it embeds
-      // once via embedAll() below rather than once per row inside shareMemory.
-      const result = shareMemory(localRoot, entry.id, { force: true, skipEmbed: true });
-      if (result) shared.push(result);
-    } catch (err) {
-      if (err instanceof RejectedValueError) {
-        rejectedSkipped++;
-        if (options.stats) options.stats.rejectedSkipped = (options.stats.rejectedSkipped ?? 0) + 1;
-        continue;
-      }
-      throw err;
-    }
-  }
-
-  if (rejectedSkipped > 0) {
-    console.error(
-      `autoShare: skipped ${rejectedSkipped} candidate(s) refused by the global store's rejection tombstone`,
-    );
-  }
+  const shared = shareCandidates(localRoot, candidates, options.stats);
 
   if (shared.length > 0) {
-    void embedAll(globalRoot).catch(() => {});
+    void embedAll(globalRoot).catch((err) => logEmbedAllFailure('autoShare', err));
   }
 
   return shared;
@@ -605,7 +631,7 @@ export function autoShare(
 
 /**
  * Copy all global memories into the local store.
- * Skips entries that already exist locally (by ID or by near-identical content).
+ * Skips entries that already exist locally, by ID or by text (promote and share copy under a new ID).
  * Returns the count of newly copied entries.
  */
 export function syncGlobalToLocal(
@@ -613,34 +639,38 @@ export function syncGlobalToLocal(
   globalRoot: string,
   opts: { includeCrossProject?: boolean } = {},
 ): number {
+  if (isSharedStore(localRoot)) {
+    throw new BadRequestError(`Refusing to sync into ${localRoot}: a shared store takes no copies of a personal global store, whose rows would reach every member.`);
+  }
   if (!fs.existsSync(globalRoot)) return 0;
 
-  // L9: host-wide read. syncGlobalToLocal copies the global union into a
+  // Host-wide read. syncGlobalToLocal copies the global union into a
   // tenant-scoped local store; writeEntry on each row carries the tenant if
   // the local-root context provides one.
   const globalEntries = loadAllEntries(globalRoot);
   const localIndex = loadIndex(localRoot);
+  const textKey = (e: MemoryEntry): string => `${e.tenantId}\n${e.content}`;
+  const localText = new Set(loadAllEntries(localRoot).map(textKey));
 
-  // v39 (codex P1-4): syncing down must not re-import what ambient context
+  // Syncing down must not re-import what ambient context
   // excludes - other-project rows are skipped by default and secret rows
   // are never copied. origin_project is preserved on the copy (writeEntry
   // only stamps when the field is missing).
-  const currentName = deriveOriginProject(path.dirname(path.resolve(localRoot)));
+  const currentProject = resolveProjectIdentity(path.dirname(path.resolve(localRoot)));
   let count = 0;
-  // AT1 (plan §3 containment, the roadmap threat this whole feature targets
-  // — a locally-rejected value must not silently resurrect via sync down
-  // from global): per-item catch, no signature change (bare number return;
-  // see the syncGlobalToLocal callers in cli.ts + tests). Counted locally
-  // and printed as one summary line, same pattern as learnFromMemoryMd.
+  // A locally rejected value must not come back through sync down: caught per item, printed as one line.
   let rejected = 0;
 
   for (const entry of globalEntries) {
     // Skip if already present by ID
     if (localIndex.entries[entry.id]) continue;
+    // Only the global store's user pass sets an imported note's row aside, so a copy would outlive the note.
+    if (entry.source.startsWith(AGENT_MEMORY_SOURCE_PREFIX)) continue;
+    if (localText.has(textKey(entry))) continue;
     if (detectSecret(entry).flagged) continue;
     if (
       !opts.includeCrossProject &&
-      classifyOriginProject(entry.origin_project, currentName) === 'cross-project'
+      classifyOriginProject(entry.origin_project, currentProject) === 'cross-project'
     ) continue;
 
     try {
@@ -652,17 +682,18 @@ export function syncGlobalToLocal(
       }
       throw err;
     }
+    localText.add(textKey(entry));
     count++;
   }
 
   if (rejected > 0) {
-    console.error(`syncGlobalToLocal: skipped ${rejected} rejected value(s) (run \`hippo unreject\` on the local store to allow).`);
+    log.warn(`syncGlobalToLocal: skipped ${rejected} rejected value(s) (run \`hippo unreject\` on the local store to allow).`);
   }
 
   // Batch producer: one embedAll() on the destination rather than an
   // embedMemory() per copied row (same batching invariant as autoShare).
   if (count > 0) {
-    void embedAll(localRoot).catch(() => {});
+    void embedAll(localRoot).catch((err) => logEmbedAllFailure('syncGlobalToLocal', err));
   }
 
   return count;

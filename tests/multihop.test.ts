@@ -2,8 +2,11 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { initStore, writeEntry, loadAllEntries } from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
+import { Layer} from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { multihopSearch } from '../src/multihop.js';
 
 describe('multihopSearch', () => {
@@ -54,5 +57,43 @@ describe('multihopSearch', () => {
 
     expect(results.length).toBeGreaterThan(0);
     expect(results[0].entry.content).toContain('Alice');
+  });
+
+  // Pass 1 runs at twice the budget, so each return path must fit its list to the caller's budget.
+  describe.each([
+    { path: 'merged union of both passes', tag: 'speaker:Maya', query: 'deploy failure pipeline' },
+    { path: 'early return when pass 1 finds no new entity', tag: 'speaker:Alice', query: 'Alice deploy failure pipeline' },
+  ])('budget on the $path', ({ tag, query }) => {
+    const flat = (): number => 100;
+
+    beforeEach(() => {
+      for (let i = 0; i < 6; i++) {
+        writeEntry(hippoRoot, createMemory(`Deploy failure ${i}: the release pipeline timed out on step ${i}`, {
+          layer: Layer.Semantic, tags: ['extracted', tag],
+        }));
+      }
+    });
+
+    it('spends no more than the budget under a cost', () => {
+      const results = multihopSearch(query, loadAllEntries(hippoRoot), { budget: 250, cost: flat });
+      expect(results).toHaveLength(2);
+    });
+
+    it('keeps the minResults floor whatever it costs', () => {
+      const results = multihopSearch(query, loadAllEntries(hippoRoot), { budget: 50, cost: flat, minResults: 3 });
+      expect(results).toHaveLength(3);
+    });
+
+    it('returns nothing that misses the budget when minResults is 0', () => {
+      const results = multihopSearch(query, loadAllEntries(hippoRoot), { budget: 50, cost: flat, minResults: 0 });
+      expect(results).toHaveLength(0);
+    });
+
+    it('fits to the memory text when no cost is given', () => {
+      const entries = loadAllEntries(hippoRoot);
+      const one = entries[0].content.length / 4;
+      const results = multihopSearch(query, entries, { budget: Math.ceil(one * 2.5) });
+      expect(results.reduce((s, r) => s + r.tokens, 0)).toBeLessThanOrEqual(Math.ceil(one * 2.5));
+    });
   });
 });

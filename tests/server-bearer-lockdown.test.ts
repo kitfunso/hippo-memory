@@ -6,19 +6,22 @@ import { mkdtempSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { initStore } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
 import { serve, type ServerHandle } from '../src/server.js';
 
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 
-// Parses the three route shapes handleRequest uses into 'METHOD /pattern'
-// keys, so completeness below catches a route missing its auth call.
+// Parses the V1_ROUTES entries and the inline route shapes in handleRequest into
+// 'METHOD /pattern' keys, so completeness below catches a route missing its auth call.
 function routesFromServerSource(text: string): Set<string> {
   const lines = text.split('\n');
   const routes = new Set<string>();
   const literalRe = /method === '([A-Z]+)' && path === '([^']+)'/;
   const matchAssignRe = /const (\w+) = matchPath\('([^']+)', path\);/;
   const regexAssignRe = /const (\w+) = path\.match\(\/\^(.+?)\$\/\);/;
+  const tableRe = /\{ method: '([A-Z]+)', (?:path|pattern): '([^']+)'/;
+  const tableRegexRe = /\{ method: '([A-Z]+)', regex: \/\^(.+?)\$\//;
+  const fromRegex = (rawPattern: string): string => rawPattern.replace(/\\\//g, '/').replace(/\(\\d\+\)/g, ':id');
 
   const methodForVar = (startLine: number, varName: string): string | undefined => {
     for (let j = startLine + 1; j < Math.min(startLine + 6, lines.length); j++) {
@@ -30,6 +33,16 @@ function routesFromServerSource(text: string): Set<string> {
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
+    const entry = line.match(tableRe);
+    if (entry) {
+      routes.add(`${entry[1]} ${entry[2]}`);
+      continue;
+    }
+    const regexEntry = line.match(tableRegexRe);
+    if (regexEntry) {
+      routes.add(`${regexEntry[1]} ${fromRegex(regexEntry[2])}`);
+      continue;
+    }
     const lit = line.match(literalRe);
     if (lit) {
       routes.add(`${lit[1]} ${lit[2]}`);
@@ -45,7 +58,7 @@ function routesFromServerSource(text: string): Set<string> {
     const ra = line.match(regexAssignRe);
     if (ra) {
       const [, varName, rawPattern] = ra;
-      const pattern = rawPattern.replace(/\\\//g, '/').replace(/\(\\d\+\)/g, ':id');
+      const pattern = fromRegex(rawPattern);
       const method = methodForVar(i, varName);
       if (method) routes.add(`${method} ${pattern}`);
       continue;
@@ -68,7 +81,8 @@ function publicRoutesFromServerSource(text: string): Set<string> {
 }
 
 const serverSource = readFileSync(join(repoRoot, 'src/server.ts'), 'utf8');
-const handleRequestSource = serverSource.slice(serverSource.indexOf('async function handleRequest'));
+const routeTableSource = serverSource.slice(serverSource.indexOf('const V1_ROUTES'), serverSource.indexOf('async function dispatchV1Route'));
+const dispatchSource = routeTableSource + serverSource.slice(serverSource.indexOf('async function handleRequest'));
 
 // Every authed route with a request shape that clears pre-auth validation, so a
 // 401 (not 400) proves the Bearer check ran. :param segments become '1'.
@@ -173,8 +187,8 @@ describe('server Bearer lockdown', () => {
   it('every method-check dispatch line parses into a route (guards an unknown path shape)', () => {
     // Counts the method axis, not the path axis, so a path shape the parser
     // does not know still shows up here and the two counts disagree loudly.
-    const dispatchCount = (handleRequestSource.match(/^\s*if \(method === '/gm) ?? []).length;
-    const derived = routesFromServerSource(handleRequestSource);
+    const dispatchCount = (dispatchSource.match(/^\s*(?:if \(method === '|\{ method: ')/gm) ?? []).length;
+    const derived = routesFromServerSource(dispatchSource);
     expect(
       dispatchCount,
       `${dispatchCount} method-check dispatch lines must equal parsed routes (${derived.size})`,
@@ -190,7 +204,7 @@ describe('server Bearer lockdown', () => {
   });
 
   it('AUTHED_ROUTES covers exactly the derived routes minus public routes minus GET /health', () => {
-    const derived = routesFromServerSource(handleRequestSource);
+    const derived = routesFromServerSource(dispatchSource);
     const publicRoutes = publicRoutesFromServerSource(serverSource);
     const expected = new Set(derived);
     expected.delete('GET /health');
@@ -201,6 +215,20 @@ describe('server Bearer lockdown', () => {
     const extra = [...actual].filter((r) => !expected.has(r));
     expect(missing, `AUTHED_ROUTES is missing: ${missing.join(', ')}`).toEqual([]);
     expect(extra, `AUTHED_ROUTES has extra rows not in server.ts: ${extra.join(', ')}`).toEqual([]);
+  });
+
+  it('a configured publicJson path needs no Bearer; the unconfigured GET routes beside it still do', async () => {
+    await handle.stop();
+    handle = await serve({ hippoRoot: root, host: '127.0.0.1', port: 0, publicJson: { '/v1/x-public': { ok: true } } });
+    const publicUrl = `http://127.0.0.1:${handle.port}/v1/x-public`;
+    for (const res of [await fetch(publicUrl), await fetch(publicUrl, { headers: { authorization: 'Bearer hk_invalid.deadbeef' } })]) {
+      expect({ status: res.status, body: await res.text() }).toEqual({ status: 200, body: '{"ok":true}' });
+    }
+    for (const r of AUTHED_ROUTES.filter((route) => route.method === 'GET')) {
+      const path = requestPath(r.pattern, r.query);
+      const res = await fetch(`http://127.0.0.1:${handle.port}${path}`);
+      expect(res.status, `GET ${path} -> ${res.status}: ${await res.text()}`).toBe(401);
+    }
   });
 
   it.each(AUTHED_ROUTES)(

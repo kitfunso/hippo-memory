@@ -15,7 +15,7 @@
 
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { mean, stdDev, ciHalfWidth95, pairedPermutationCI } from './aggregate.mjs';
+import { mean, ciHalfWidth95, pairedPermutationCI } from './aggregate.mjs';
 
 /**
  * Pure verdict computation. No I/O. Testable in isolation.
@@ -32,7 +32,7 @@ import { mean, stdDev, ciHalfWidth95, pairedPermutationCI } from './aggregate.mj
  *          tiePass:boolean}} input
  * @returns {'SUPPORTED' | 'NOT_SUPPORTED' | 'SANITY_FAIL' | 'HOOK_FAIL'}
  */
-export function computeVerdict({ c2Late, c3Late, delta, ciLow, ciHigh, hookFailures, sanityPass, tiePass }) {
+export function computeVerdict({ delta, ciLow, hookFailures, sanityPass, tiePass }) {
   if (!sanityPass) return 'SANITY_FAIL';
   if ((hookFailures?.push ?? 0) > 0 || (hookFailures?.complete ?? 0) > 0) return 'HOOK_FAIL';
   if (tiePass === false) return 'NOT_SUPPORTED'; // degenerate, surface in result doc

@@ -25,9 +25,9 @@ const anchor = (q: string) => q.toLowerCase().replace(/[^a-z0-9]+/g, '-').replac
     </PageIntro>
 
     <section class="relative border-t border-white/5" aria-label="Questions and answers">
-      <div class="mx-auto max-w-3xl px-5 py-16 sm:py-20">
+      <div class="mx-auto max-w-6xl px-5 py-(--section-y)">
         {faq.map((item) => (
-          <article id={anchor(item.q)} class="scroll-mt-24 border-b border-white/5 py-8 first:pt-0 last:border-b-0">
+          <article id={anchor(item.q)} class="max-w-3xl border-b border-white/5 py-8 first:pt-0 last:border-b-0 last:pb-0">
             <h2 class="text-xl leading-snug text-zinc-100 sm:text-2xl">
               <a href={`#${anchor(item.q)}`} class="transition hover:text-acc-cyan">{item.q}</a>
             </h2>

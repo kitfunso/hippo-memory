@@ -171,7 +171,7 @@ function setupHippoStore(tmpDir, memories) {
   // stores.
   try {
     hippoCall(['init', '--no-hooks', '--no-schedule', '--no-learn'], { HIPPO_HOME: tmpDir }, undefined, tmpDir);
-  } catch (err) {
+  } catch {
     // Non-fatal: init may warn if already exists.
   }
   for (const m of memories) {

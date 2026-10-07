@@ -3,23 +3,19 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { fileURLToPath } from 'url';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { readEntry, loadAllEntries } from '../src/store/entry-reads.js';
+import { deleteEntry } from '../src/store/delete-and-batch.js';
+import { loadSearchEntries } from '../src/store/search-rows.js';
+import { loadIndex, rebuildIndex, loadStats, updateStats } from '../src/store/index-and-stats.js';
 import {
-  initStore,
-  writeEntry,
-  readEntry,
-  deleteEntry,
-  loadAllEntries,
-  loadSearchEntries,
-  loadIndex,
-  rebuildIndex,
-  loadStats,
-  updateStats,
   saveActiveTaskSnapshot,
   loadActiveTaskSnapshot,
   clearActiveTaskSnapshot,
   appendSessionEvent,
   listSessionEvents,
-} from '../src/store.js';
+} from '../src/store/sessions.js';
 import {
   openHippoDb,
   closeHippoDb,
@@ -27,7 +23,9 @@ import {
   getSchemaVersion,
   getCurrentSchemaVersion,
 } from '../src/db.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { Layer } from '../src/memory.js';
+import { consolidate } from '../src/consolidate/sleep.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const legacyFixtureRoot = path.join(__dirname, 'fixtures', 'legacy-markdown-store');
@@ -73,7 +71,7 @@ describe('store initialization', () => {
     expect(index.entries['mem_legacy_beta']).toBeDefined();
 
     // SAFETY: loadStats' Record<string, unknown> return is buildStatsFromDb's fixed
-    // stats-mirror shape (src/store.ts), which always includes these counter fields.
+    // stats-mirror shape (src/store/mirrors.ts), which always includes these counter fields.
     const stats = loadStats(tmpDir) as {
       total_remembered: number;
       total_recalled: number;
@@ -220,7 +218,7 @@ describe('stats tracking', () => {
     updateStats(tmpDir, { remembered: 2, recalled: 1, forgotten: 1 });
 
     // SAFETY: loadStats' Record<string, unknown> return is buildStatsFromDb's fixed
-    // stats-mirror shape (src/store.ts), which always includes these counter fields.
+    // stats-mirror shape (src/store/mirrors.ts), which always includes these counter fields.
     const stats = loadStats(tmpDir) as {
       total_remembered: number;
       total_recalled: number;
@@ -252,7 +250,7 @@ describe('SQLite-backed search candidates', () => {
     expect(candidates.some((entry) => entry.id === unrelated.id)).toBe(false);
   });
 
-  it('rebuilds the FTS mirror if it goes missing', () => {
+  it('sleep rebuilds the FTS mirror if it goes missing', async () => {
     initStore(tmpDir);
 
     const entry = createMemory('cache refresh failure in gold pipeline', {
@@ -270,6 +268,7 @@ describe('SQLite-backed search candidates', () => {
     const candidates = loadSearchEntries(tmpDir, 'cache refresh');
     expect(candidates.some((candidate) => candidate.id === entry.id)).toBe(true);
 
+    await consolidate(tmpDir);
     const reopened = openHippoDb(tmpDir);
     try {
       if (hadFts) {

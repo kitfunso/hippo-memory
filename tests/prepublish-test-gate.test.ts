@@ -26,33 +26,30 @@ describe('prepublish test gate (scripts/check-tests-pass.mjs)', () => {
     expect(r.status, r.stderr).toBe(0);
   });
 
-  test('exits 1 when the suite fails and names the escape hatch', () => {
+  test('exits 1 when the suite fails and names the counts', () => {
     const r = runGate('failing');
     expect(r.status).toBe(1);
-    expect(r.stderr).toContain('HIPPO_PUBLISH_SKIP_TESTS');
     expect(r.stderr).toContain('numFailedTests=1');
-  });
-
-  test('a non-empty HIPPO_PUBLISH_SKIP_TESTS reason turns a failure into a warning', () => {
-    const r = runGate('failing', { HIPPO_PUBLISH_SKIP_TESTS: 'flaky worker IPC, reran files alone' });
-    expect(r.status, r.stderr).toBe(0);
-    expect(r.stderr).toContain('WARNING');
-    expect(r.stderr).toContain('flaky worker IPC, reran files alone');
-  });
-
-  test.each(['', '   '])('HIPPO_PUBLISH_SKIP_TESTS=%j is not a reason and does not skip', (value) => {
-    const r = runGate('failing', { HIPPO_PUBLISH_SKIP_TESTS: value });
-    expect(r.status).toBe(1);
     expect(r.stderr).toContain('refusing to publish');
   });
 
+  test.each(['flaky worker IPC, reran files alone', 'i-accept-failing-tests', '1'])(
+    'HIPPO_PUBLISH_SKIP_TESTS=%j does not let a red suite publish',
+    (value) => {
+      const r = runGate('failing', { HIPPO_PUBLISH_SKIP_TESTS: value });
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain('refusing to publish');
+      expect(r.stderr).not.toContain('HIPPO_PUBLISH_SKIP_TESTS');
+    },
+  );
+
   // Not covered: an absent/unparseable report also fails closed; no fixture can force that shape (plan 3.3).
-  test('exits 0 with a warning when the suite is green but the process exits non-zero', () => {
+  test('refuses to publish when the report is green but vitest exits non-zero on a worker IPC timeout', () => {
     const r = runGate('unhandled');
-    expect(r.status, r.stderr).toBe(0);
-    expect(r.stderr).toContain('WARNING');
-    expect(r.stderr).toContain('exited with 1');
-    expect(r.stderr).toContain('green');
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('numFailedTests=0');
+    expect(r.stderr).toContain('refusing to publish');
+    expect(r.stderr).not.toContain('WARNING');
   });
 
   test('refuses to publish when the report is green but a global teardown fails', () => {
@@ -60,39 +57,6 @@ describe('prepublish test gate (scripts/check-tests-pass.mjs)', () => {
     expect(r.status).toBe(1);
     expect(r.stderr).toContain('numPassedTests=1');
     expect(r.stderr).toContain('refusing to publish');
-  });
-
-  test('refuses to publish when the unhandled error is not the known worker IPC artifact', () => {
-    const r = runGate('other-rejection');
-    expect(r.status).toBe(1);
-    expect(r.stderr).toContain('numPassedTests=1');
-    expect(r.stderr).toContain('workerIpcArtifactOnly=false');
-    expect(r.stderr).toContain('refusing to publish');
-  });
-
-  test('refuses to publish when vitest tallied more errors than the gate could read', () => {
-    const r = runGate('undercount');
-    expect(r.status).toBe(1);
-    expect(r.stderr).toContain('numPassedTests=1');
-    expect(r.stderr).toContain('workerIpcArtifactOnly=false');
-  });
-
-  test('an extra reporter cannot pad the count past an error the gate could not read', () => {
-    const r = runGate('undercount', {}, ['--reporter=verbose']);
-    expect(r.status).toBe(1);
-    expect(r.stderr).toContain('workerIpcArtifactOnly=false');
-  });
-
-  test('an extra reporter reprints the error section and the artifact is still forgiven', () => {
-    const r = runGate('unhandled', {}, ['--reporter=verbose']);
-    expect(r.status, r.stderr).toBe(0);
-    expect(r.stderr).toContain('WARNING');
-  });
-
-  test('a fake error section printed by a test cannot hide the real one after it', () => {
-    const r = runGate('spoofed-section');
-    expect(r.status).toBe(1);
-    expect(r.stderr).toContain('workerIpcArtifactOnly=false');
   });
 
   test('exits 1 when the suite never collects', () => {
@@ -139,12 +103,16 @@ describe('prepublish test gate (scripts/check-tests-pass.mjs)', () => {
   });
 });
 
+// The fake agent's bare `hippo` is the behaviour under test; token-eval-ab-run pins it to the run's bin/ shim.
+const AGENT_STANDINS = new Set([path.join('tests', 'fixtures', 'fake-claude.mjs')]);
+
 describe('tests run the worktree CLI, never a PATH-resolved hippo', () => {
   test('no test or benchmark helper spawns a bare `hippo` command', () => {
     // benchmarks/ holds adapters the tests import, so it is scanned too (codex round 2).
     const offenders = ['tests', 'benchmarks']
       .flatMap((dir) => readdirSync(path.join(REPO, dir), { recursive: true, encoding: 'utf-8' }).map((f) => path.join(dir, f)))
       .filter((f) => /\.(ts|mjs|js)$/.test(f))
+      .filter((f) => !AGENT_STANDINS.has(f))
       .filter((f) => /(exec|spawn)\w*\(\s*[`'"]hippo\b/.test(readFileSync(path.join(REPO, f), 'utf-8')));
     expect(offenders).toEqual([]);
   });

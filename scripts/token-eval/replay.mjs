@@ -34,7 +34,8 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 import { createMemory, Layer } from '../../dist/memory.js';
-import { writeEntry, initStore } from '../../dist/store.js';
+import { initStore } from '../../dist/store/open.js';
+import { writeEntry } from '../../dist/store/entry-writes.js';
 import { estimateTokens } from '../../dist/token-ledger.js';
 import { uncachedEquivalentInput, DEFAULT_CACHE_RATIOS } from '../../dist/eval-stats.js';
 
@@ -64,9 +65,10 @@ export function replayTrace(trace, arm) {
   const hippoRoot = path.join(workDir, '.hippo');
   try {
     initStore(hippoRoot);
-    if (arm === 'every-turn') {
-      fs.writeFileSync(path.join(hippoRoot, 'config.json'), JSON.stringify({ pinnedInject: { skipUnchanged: false } }));
-    }
+    // Traces carry no prompt text, so prompt recall (default on since 1.55.0) would never fire.
+    const pinnedInject = { promptRecall: false };
+    if (arm === 'every-turn') pinnedInject.skipUnchanged = false;
+    fs.writeFileSync(path.join(hippoRoot, 'config.json'), JSON.stringify({ pinnedInject }));
     for (const text of trace.pinned ?? []) {
       writeEntry(hippoRoot, createMemory(text, { pinned: true, layer: Layer.Episodic }));
     }
@@ -199,6 +201,6 @@ function main() {
   console.log(`\nWrote ${path.relative(REPO, outFile)}`);
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && fs.realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
   main();
 }

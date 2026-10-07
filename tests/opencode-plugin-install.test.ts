@@ -20,8 +20,8 @@ import {
   installOpencodePlugin,
   uninstallOpencodePlugin,
   resolveOpencodePluginPath,
-  detectInstalledTools,
-} from '../src/hooks.js';
+} from '../src/hooks/opencode.js';
+import { detectInstalledTools } from '../src/hooks/shared.js';
 
 describe('OPENCODE_PLUGIN_SOURCE', () => {
   it('contains the versioned hippo marker', () => {
@@ -204,6 +204,25 @@ describe('installOpencodePlugin (real-FS)', () => {
     expect(after.hooks.SessionEnd[0].hooks[0].command).toBe('echo "my custom cleanup"');
     // timeout preserved on the surviving entry
     expect(after.hooks.SessionEnd[0].hooks[0].timeout).toBe(10);
+  });
+
+  it('keeps a user command whose first word merely starts like a hippo verb, in a group it shares with a hippo one', () => {
+    const opencodeJsonPath = path.join(env.home, '.config', 'opencode', 'opencode.json');
+    fs.mkdirSync(path.dirname(opencodeJsonPath), { recursive: true });
+    const mine = { type: 'command', command: 'hippo sleep-report-of-mine --weekly', timeout: 10 };
+    fs.writeFileSync(opencodeJsonPath, JSON.stringify({
+      hooks: {
+        SessionEnd: [{ hooks: [{ type: 'command', command: 'hippo session-end --log-file foo', timeout: 5 }, mine] }],
+        Stop: [{ hooks: [{ type: 'command', command: 'hippo capture-notes' }] }],
+      },
+    }, null, 2));
+
+    const result = installOpencodePlugin();
+    expect(result.migratedLegacyHooks).toBe(true);
+
+    const after = JSON.parse(fs.readFileSync(opencodeJsonPath, 'utf8'));
+    expect(after.hooks.SessionEnd).toEqual([{ hooks: [mine] }]);
+    expect(after.hooks.Stop).toHaveLength(1);
   });
 
   it('does NOT match a third-party `hippo` binary that lacks a canonical hippo verb', () => {

@@ -1,6 +1,6 @@
 /**
- * E3 graph observability + visualization — READ-ONLY over the entity/relation
- * graph (docs/plans/2026-06-02-graph-observability.md).
+ * Graph observability and visualization, READ-ONLY over the entity/relation
+ * graph.
  *
  * This module only READS the graph (`loadEntities` / `loadRelations`) and renders
  * view-models; it issues no INSERT/UPDATE/DELETE, so `scripts/check-graph-writes.mjs`
@@ -16,11 +16,14 @@ import {
   loadNeighborRelations,
   loadRelationsAmong,
   withGraphReadSnapshot,
+} from './graph/read.js';
+import {
   type Entity,
   type Relation,
   type EntityType,
   type RelationType,
-} from './graph.js';
+  type GraphTxDb,
+} from './graph/types.js';
 
 export interface GraphNode {
   id: number;
@@ -43,6 +46,26 @@ export interface GraphModel {
 /** Default bound for the CLI viewer / show so an unbounded set is never laid out. */
 export const DEFAULT_VIEW_LIMIT = 500;
 
+type CanRead = (scope: string | null) => boolean;
+
+// graph/read.ts's IN-list chunk, so one statement stays far under SQLite's bound-parameter limit.
+const MEMORY_ID_CHUNK = 400;
+
+/** The items whose source memory `canRead` admits: a NULL memoryId has no scope to hide, and a missing memory fails closed. */
+function readableOnly<T extends { memoryId: string | null }>(db: GraphTxDb, tenantId: string, items: T[], canRead: CanRead | undefined): T[] {
+  if (!canRead) return items;
+  const ids = [...new Set(items.flatMap((i) => (i.memoryId === null ? [] : [i.memoryId])))];
+  const readable = new Set<string>();
+  for (let i = 0; i < ids.length; i += MEMORY_ID_CHUNK) {
+    const slice = ids.slice(i, i + MEMORY_ID_CHUNK);
+    // SAFETY: rows' shape matches the id and scope columns named in the SELECT.
+    const rows = db.prepare(`SELECT id, scope FROM memories WHERE tenant_id = ? AND id IN (${slice.map(() => '?').join(',')})`)
+      .all(tenantId, ...slice) as Array<{ id: string; scope: string | null }>;
+    for (const r of rows) if (canRead(r.scope)) readable.add(r.id);
+  }
+  return items.filter((i) => i.memoryId === null || readable.has(i.memoryId));
+}
+
 /**
  * Build the view-model from the graph (reads only). With `opts.entity`, returns a
  * focus subgraph: every entity whose name === entity, plus their 1-hop neighbours,
@@ -52,13 +75,13 @@ export const DEFAULT_VIEW_LIMIT = 500;
 export function buildGraphModel(
   hippoRoot: string,
   tenantId: string,
-  opts: { entity?: string; limit?: number } = {},
+  opts: { entity?: string; limit?: number; canRead?: (scope: string | null) => boolean } = {},
 ): GraphModel {
   const limit = opts.limit ?? DEFAULT_VIEW_LIMIT;
 
   // All reads run inside ONE read snapshot so a concurrent `graph extract` /
   // sleep-drain rebuild can't make the model mix old entity ids with new relation
-  // ids (codex P2). Every load* call below is passed the snapshot connection `db`.
+  // ids. Every load* call below is passed the snapshot connection `db`.
   return withGraphReadSnapshot(hippoRoot, (db) => {
     let nodeEntities: Entity[];
     let relations: Relation[];
@@ -70,8 +93,10 @@ export function buildGraphModel(
       // (2) A name can map to MANY entities (e.g. many notes for one customer), so
       // cap the focus matches. (3) Discover 1-hop neighbours and cap the UNION to
       // `limit` nodes. (4) Load ALL edges AMONG the union so neighbour-to-neighbour
-      // edges that don't touch the focus are included too. (codex P2s.)
-      const focus = loadEntitiesByName(hippoRoot, tenantId, opts.entity, { limit }, db);
+      // edges that don't touch the focus are included too.
+      const named = loadEntitiesByName(hippoRoot, tenantId, opts.entity, { limit }, db);
+      // A hidden focus must not answer through its neighbours that the name exists.
+      const focus = readableOnly(db, tenantId, named, opts.canRead);
       if (focus.length === 0) return { nodes: [], edges: [], truncated: false };
       const focusIds = focus.map((e) => e.id);
       const hop = loadNeighborRelations(hippoRoot, tenantId, focusIds, { limit }, db);
@@ -89,12 +114,12 @@ export function buildGraphModel(
       nodeEntities = loadEntitiesByIds(hippoRoot, tenantId, unionIds, db);
       // Edges AMONG the union (BOTH endpoints in the set): includes
       // neighbour-to-neighbour edges, and the LIMIT can never drop a valid in-union
-      // edge in favour of out-of-union rows (codex P2).
+      // edge in favour of out-of-union rows.
       relations = loadRelationsAmong(hippoRoot, tenantId, unionIds, { limit }, db);
       truncated =
-        focus.length >= limit ||
-        hop.length >= limit || // neighbour scan capped -> a 1-hop neighbour may be omitted (codex P2)
-        neighboursCapped || // node cap filled before all neighbours were consumed (codex P2)
+        named.length >= limit ||
+        hop.length >= limit || // neighbour scan capped -> a 1-hop neighbour may be omitted
+        neighboursCapped || // node cap filled before all neighbours were consumed
         union.size > unionIds.length ||
         relations.length >= limit;
     } else {
@@ -102,6 +127,8 @@ export function buildGraphModel(
       relations = loadRelations(hippoRoot, tenantId, { limit }, db);
       truncated = nodeEntities.length >= limit || relations.length >= limit;
     }
+    nodeEntities = readableOnly(db, tenantId, nodeEntities, opts.canRead);
+    relations = readableOnly(db, tenantId, relations, opts.canRead);
 
     const nodeIds = new Set(nodeEntities.map((e) => e.id));
     const nodes: GraphNode[] = nodeEntities.map((e) => ({

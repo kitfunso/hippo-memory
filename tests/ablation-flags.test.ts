@@ -20,8 +20,11 @@ import {
   createMemory,
   applyOutcome,
   type MemoryEntry,
+  DEFAULT_HALF_LIFE_DAYS,
 } from '../src/memory.js';
-import { hybridSearch, markRetrieved, outcomeMultiplier } from '../src/search.js';
+import { hybridSearch } from '../src/search/hybrid.js';
+import { outcomeMultiplier } from '../src/search/boosts.js';
+import { markRetrieved } from '../src/memory.js';
 import { evalNow, _resetAblationCacheForTests } from '../src/ablation.js';
 
 const ABLATION_ENV_VARS = [
@@ -48,7 +51,7 @@ afterEach(clearAblationEnv);
  *  backdated so the helper means the same thing under both decay anchors
  *  (last_retrieved normally, created under HIPPO_ABLATE_RECALL_BOOST). */
 function agedMemory(daysAgo: number, content = 'aged memory content'): MemoryEntry {
-  const m = createMemory(content);
+  const m = createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
   const then = new Date(NOW.getTime() - daysAgo * 24 * 60 * 60 * 1000).toISOString();
   m.created = then;
   m.last_retrieved = then;
@@ -74,7 +77,7 @@ describe('defaults (no flags set)', () => {
     expect(marked.last_retrieved).toBe(NOW.toISOString());
     expect(marked.half_life_days).toBe(9); // 7 + 2
     // Slow outcome channel live.
-    let m = createMemory('outcome-laden');
+    let m = createMemory('outcome-laden', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     m = applyOutcome(m, true);
     expect(calculateRewardFactor(m)).toBeGreaterThan(1);
     // Fast outcome channel live.
@@ -119,7 +122,7 @@ describe('HIPPO_ABLATE_RECENCY / HIPPO_EVAL_RECENCY_DAYS', () => {
   });
 
   it('outcomeMultiplier matches the breakdown outcomeBoost', async () => {
-    const m = applyOutcome(createMemory('outcome parity memory'), true);
+    const m = applyOutcome(createMemory('outcome parity memory', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), true);
     const [r] = await hybridSearch('outcome parity', [m], { budget: 10000, explain: true });
     expect(outcomeMultiplier(m)).toBe(r.breakdown!.outcomeBoost);
     expect(outcomeMultiplier(m)).toBeGreaterThan(1);
@@ -147,7 +150,7 @@ describe('HIPPO_ABLATE_DECAY', () => {
   });
 
   it('isolation: slow outcome channel still runs', () => {
-    let m = createMemory('outcome-laden');
+    let m = createMemory('outcome-laden', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     m = applyOutcome(m, false);
     expect(calculateRewardFactor(m)).toBeLessThan(1);
   });
@@ -256,11 +259,11 @@ describe('HIPPO_ABLATE_RECALL_BOOST', () => {
     // PRIOR unflagged run (persisted last_retrieved reset). Under the flag,
     // decay anchors at created, so both decay identically from creation.
     const created = new Date(NOW.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
-    const reset = createMemory('clock reset by a prior run');
+    const reset = createMemory('clock reset by a prior run', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     reset.created = created;
     reset.last_retrieved = new Date(NOW.getTime() - 1 * 24 * 60 * 60 * 1000).toISOString();
     reset.half_life_days = 7;
-    const untouched = createMemory('never retrieved');
+    const untouched = createMemory('never retrieved', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     untouched.created = created;
     untouched.last_retrieved = created;
     untouched.half_life_days = 7;
@@ -271,7 +274,7 @@ describe('HIPPO_ABLATE_RECALL_BOOST', () => {
   });
 
   it('isolation: both outcome channels still run', async () => {
-    let m = createMemory('outcome-laden');
+    let m = createMemory('outcome-laden', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     m = applyOutcome(m, true);
     expect(calculateRewardFactor(m)).toBeGreaterThan(1);
     const results = await hybridSearch('outcome-laden', [m], { budget: 10000, explain: true });
@@ -290,14 +293,14 @@ describe('HIPPO_ABLATE_OUTCOME', () => {
   });
 
   it('neutralizes the slow channel (rewardFactor = 1 despite outcomes)', () => {
-    let m = createMemory('outcome-laden');
+    let m = createMemory('outcome-laden', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     m = applyOutcome(m, true);
     m = applyOutcome(m, true);
     expect(calculateRewardFactor(m)).toBe(1.0);
   });
 
   it('neutralizes the fast channel (outcomeBoost = 1 despite outcomes)', async () => {
-    let m = createMemory('outcome-laden');
+    let m = createMemory('outcome-laden', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     m = applyOutcome(m, true);
     m = applyOutcome(m, true);
     const results = await hybridSearch('outcome-laden', [m], { budget: 10000, explain: true });
@@ -342,7 +345,7 @@ describe('HIPPO_ABLATE_OUTCOME_SLOW (decomposition arm)', () => {
   });
 
   it('slow off, fast still live', async () => {
-    let m = createMemory('outcome-laden');
+    let m = createMemory('outcome-laden', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     m = applyOutcome(m, true);
     expect(calculateRewardFactor(m)).toBe(1.0); // slow off
     const results = await hybridSearch('outcome-laden', [m], { budget: 10000, explain: true });
@@ -357,7 +360,7 @@ describe('HIPPO_ABLATE_OUTCOME_FAST (decomposition arm)', () => {
   });
 
   it('fast off, slow still live', async () => {
-    let m = createMemory('outcome-laden');
+    let m = createMemory('outcome-laden', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     m = applyOutcome(m, true);
     expect(calculateRewardFactor(m)).toBeGreaterThan(1); // slow on
     const results = await hybridSearch('outcome-laden', [m], { budget: 10000, explain: true });
@@ -377,15 +380,15 @@ describe('HIPPO_FAKE_NOW', () => {
     // Default-now path of calculateStrength uses the fake clock: a memory
     // dated 2026 decays hard against the 2030 clock. (createMemory itself now
     // stamps fake time under the flag, so the 2026 dates are set explicitly.)
-    const realFresh = createMemory('fresh in 2026');
+    const realFresh = createMemory('fresh in 2026', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     realFresh.created = '2026-06-11T00:00:00.000Z';
     realFresh.last_retrieved = '2026-06-11T00:00:00.000Z';
     realFresh.half_life_days = 7;
     expect(calculateStrength(realFresh)).toBeLessThan(0.01);
     // createMemory write-stamps honor the fake clock too (simulated sessions).
-    expect(createMemory('stamped in 2030').created).toBe('2030-01-01T00:00:00.000Z');
+    expect(createMemory('stamped in 2030', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }).created).toBe('2030-01-01T00:00:00.000Z');
     // markRetrieved default stamp = fake now.
-    const [marked] = markRetrieved([createMemory('stamp me')]);
+    const [marked] = markRetrieved([createMemory('stamp me', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS })]);
     expect(marked.last_retrieved).toBe('2030-01-01T00:00:00.000Z');
   });
 
@@ -394,7 +397,7 @@ describe('HIPPO_FAKE_NOW', () => {
     // markRetrieved stamps the fake one - inconsistent simulated time.
     process.env.HIPPO_FAKE_NOW = '2030-01-01T00:00:00.000Z';
     _resetAblationCacheForTests();
-    const m = createMemory('search scoring uses the fake clock');
+    const m = createMemory('search scoring uses the fake clock', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     m.created = '2026-06-11T00:00:00.000Z'; // dated 2026, ancient against the 2030 clock
     m.last_retrieved = '2026-06-11T00:00:00.000Z';
     m.half_life_days = 7;
@@ -441,14 +444,15 @@ describe('HIPPO_FAKE_NOW', () => {
     process.env.HIPPO_FAKE_NOW = '2030-01-01T00:00:00.000Z';
     _resetAblationCacheForTests();
     const { searchBothHybrid } = await import('../src/shared.js');
-    const m = createMemory('wrapper clock consistency check');
+    const m = createMemory('wrapper clock consistency check', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     m.created = '2026-06-11T00:00:00.000Z'; // dated 2026, ancient against the 2030 clock
     m.last_retrieved = '2026-06-11T00:00:00.000Z';
     m.half_life_days = 7;
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-abl-'));
     try {
       // Local-only store via the wrapper (global root nonexistent path).
-      const { initStore, writeEntry } = await import('../src/store.js');
+      const { initStore } = await import('../src/store/open.js');
+      const { writeEntry } = await import('../src/store/entry-writes.js');
       initStore(tmp);
       writeEntry(tmp, m);
       const results = await searchBothHybrid('wrapper clock consistency check', tmp, path.join(tmp, 'no-global'), {

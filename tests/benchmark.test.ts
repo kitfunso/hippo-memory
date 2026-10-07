@@ -18,18 +18,16 @@ import {
   createMemory,
   calculateStrength,
   applyOutcome,
-  Layer,
   type MemoryEntry,
 } from '../src/memory.js';
-import {
-  initStore,
-  writeEntry,
-  loadAllEntries,
-} from '../src/store.js';
-import { search, markRetrieved, estimateTokens } from '../src/search.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
+import { search } from '../src/search/bm25-search.js';
+import { markRetrieved } from '../src/memory.js';
 
 /** These tests pin decay arithmetic to the pre-1.46 7-day base; the default itself is tested in half-life-migration and schema-fit. */
-const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });
+const createMemory7 = (content: string, options: Partial<Parameters<typeof createMemory>[1]> = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -46,7 +44,7 @@ function daysAgo(n: number): string {
 function seed(
   label: string,
   content: string,
-  opts: Parameters<typeof createMemory>[1] = {}
+  opts: Partial<Parameters<typeof createMemory>[1]> = {}
 ): MemoryEntry {
   const entry = createMemory7(content, opts);
   // Use label as a deterministic ID fragment so tests are readable
@@ -203,7 +201,7 @@ Use CPCV-deflated Sharpe for risk management and honest reporting.`, {
     tags: ['quant', 'backtest', 'sharpe', 'cpcv', 'walk-forward'],
   });
 
-  seed('oos_split_distinction', `Walk-Forward OOS vs Holdout OOS are different things. Quantamental
+  seed('oos_split_distinction', `Walk-Forward OOS vs Holdout OOS are different things. Project-e
 models have TWO layers of OOS protection:
 1. Walk-forward OOS (~18 years): every prediction is on unseen data (rolling train window)
 2. Holdout OOS (6 years, 2020-2026): period where NO hyperparameters/thresholds were tuned
@@ -287,8 +285,8 @@ any public-facing PnL claims. Historical live PnL is sacrosanct; never overwrite
 
   // ── Frontend/deploy rules ─────────────────────────────────────────────────
   seed('build_before_deploy', `Always run build before deploying frontend. Build command:
-cd C:/Users/skf_s/quantamental/website/frontend; npm run build
-Deploy command: npx wrangler pages deploy out --project-name=quantamental
+cd ~/project-e/website/frontend; npm run build
+Deploy command: npx wrangler pages deploy out --project-name=project-e
 Missing the build step deploys stale code. The dist/ directory is gitignored.`, {
     tags: ['frontend', 'deploy', 'build'],
   });
@@ -341,7 +339,7 @@ This prevents stale catch-up runs after gateway restarts.`, {
   });
 
   seed('gsc_reauth', `GSC CLI needs re-auth periodically. GSC invalid_grant error means refresh token
-expired or revoked. Fresh gsc_query.py run will require re-auth. Site property: sc-domain:boring-math.com.`, {
+expired or revoked. Fresh gsc_query.py run will require re-auth. Site property: sc-domain:example.com.`, {
     tags: ['ops', 'gsc', 'auth'],
   });
 
@@ -360,7 +358,7 @@ real predictive value that's uncorrelated with standard factors.`, {
 
   seed('node_llama_cpp_install', `node-llama-cpp requires manual install. It's an optional ESM
 dependency that npm skips during npm install. Must install manually:
-cd C:/Users/skf_s/AppData/Roaming/npm/node_modules/openclaw; npm i node-llama-cpp
+cd %APPDATA%/npm/node_modules/openclaw; npm i node-llama-cpp
 Verify with dynamic import, not require().`, {
     tags: ['ops', 'openclaw', 'install', 'llm'],
   });
@@ -371,15 +369,15 @@ from disk, not from conversation history. Keeps context focused and prevents com
     tags: ['ops', 'context', 'sub-agent', 'memory'],
   });
 
-  seed('x_posting_antispam', `X/Twitter posting anti-spam: boring-math account was flagged for spam.
+  seed('x_posting_antispam', `X/Twitter posting anti-spam: project-a account was flagged for spam.
 Cut from hourly (16 runs/day, 5 replies each = ~80 posts) to 3x daily at irregular times
 (9:23, 14:23, 20:23), 2 replies + 1 original per run (~9 posts/day).`, {
     tags: ['social', 'twitter', 'spam', 'cron'],
   });
 
-  seed('boring_maths_url', `boring-math.com correct URL format: https://boring-math.com/calculators/{name}
-NOT: https://www.boring-math.com/{name}. Always use this exact format when linking to calculators.`, {
-    tags: ['boring-maths', 'url', 'seo'],
+  seed('project_a_url', `example.com correct URL format: https://example.com/calculators/{name}
+NOT: https://www.example.com/{name}. Always use this exact format when linking to calculators.`, {
+    tags: ['project-a', 'url', 'seo'],
   });
 });
 

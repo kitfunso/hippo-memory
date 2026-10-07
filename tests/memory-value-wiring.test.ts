@@ -14,16 +14,15 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it, expect, beforeEach, afterEach, afterAll } from 'vitest';
 
-import { consolidate } from '../src/consolidate.js';
-import {
-  initStore,
-  writeEntry,
-  loadAllEntries,
-  listMemoryConflicts,
-  loadSessionDecayContext,
-  batchWriteAndDelete,
-} from '../src/store.js';
-import { createMemory, Layer, calculateStrength, resolveConfidence, type MemoryEntry, type DecayOptions } from '../src/memory.js';
+import { consolidate } from '../src/consolidate/sleep.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
+import { batchWriteAndDelete } from '../src/store/delete-and-batch.js';
+import { loadSessionDecayContext } from '../src/store/index-and-stats.js';
+import { listMemoryConflicts } from '../src/store/conflicts.js';
+import { Layer, calculateStrength, resolveConfidence, type MemoryEntry, type DecayOptions} from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { loadConfig, type HippoConfig } from '../src/config.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { queryAuditEvents, type AuditEvent } from '../src/audit.js';
@@ -32,13 +31,11 @@ import {
   MV_FEATURE_NAMES,
   scoreEntries,
   rescueSet,
-  rankNonPinnedByTenant,
   validateWeights,
   type MvFeatureVector,
 } from '../src/memory-value.js';
 import { MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256 } from '../src/memory-value-weights.js';
 
-// @ts-expect-error - .mjs harness modules have no type declarations
 import { computeFeatures } from '../benchmarks/memory-value/extract.mjs';
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
@@ -46,9 +43,8 @@ const createMemory7 = (content: string, options: Parameters<typeof createMemory>
 
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
-// File-unique scratch root (see file header comment).
-const SCRATCH_ROOT = path.join(os.tmpdir(), 'hippo-mv-wiring-test-scratch');
-fs.mkdirSync(SCRATCH_ROOT, { recursive: true });
+// mkdtemp per process: two worktrees running this suite at once must not share a root.
+const SCRATCH_ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-mv-wiring-test-scratch-'));
 
 let dir: string;
 beforeEach(() => {

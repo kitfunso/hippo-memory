@@ -1,0 +1,32 @@
+{
+  "families": [
+    { "id": "f1", "sequence": "seqA", "lessonSource": "maintainer",
+      "lessons": [
+        { "id": "f1-l1", "rule": "Changelog entries go in changelog.d fragments", "reason": "the release script builds the changelog from them", "keyPhrase": "changelog.d", "check": { "script": "lesson.mjs" } },
+        { "id": "f1-l2", "supersedes": "f1-l1", "rule": "Changelog entries go in NEWS.md now", "reason": "the fragment folder was retired", "keyPhrase": "NEWS.md", "check": { "script": "lesson.mjs" } }
+      ],
+      "screen": { "id": "f1-screen", "baseRef": "HEAD", "fixRef": "HEAD", "prompt": "Note the parser fix for users. LESSON_OK", "test": "node test.js", "testFiles": [] } },
+    { "id": "f2", "sequence": "seqA", "lessonSource": "template",
+      "lessons": [
+        { "id": "f2-l1", "rule": "Log through the repo logger, never console", "reason": "console output is dropped in production", "keyPhrase": "logger", "check": { "script": "lesson.mjs" } }
+      ],
+      "screen": { "id": "f2-screen", "baseRef": "HEAD", "fixRef": "HEAD", "prompt": "Report the retry count. LESSON_OK", "test": "node test.js", "testFiles": [] } }
+  ],
+  "sequences": [
+    { "id": "seqA", "cluster": "toy", "repo": "toy-repo", "fixedOrder": false,
+      "tasks": [
+        { "id": "t1", "kind": "teach", "familyId": "f1", "lessonId": "f1-l1", "baseRef": "HEAD", "fixRef": "HEAD", "prompt": "Note the date fix for users.", "test": "node test.js", "testFiles": [] },
+        { "id": "n1", "kind": "no-lesson", "baseRef": "HEAD", "fixRef": "HEAD", "prompt": "Fix the off-by-one in paging.", "test": "node test.js", "testFiles": [] },
+        { "id": "n2", "kind": "no-lesson", "baseRef": "HEAD", "fixRef": "HEAD", "prompt": "Make the cache key include the locale.", "test": "node test.js", "testFiles": [] },
+        { "id": "a1", "kind": "apply", "familyId": "f1", "lessonId": "f1-l1", "baseRef": "HEAD", "fixRef": "HEAD", "prompt": "Note the timeout fix for users.", "test": "node test.js", "testFiles": [] },
+        { "id": "a2", "kind": "apply", "familyId": "f1", "lessonId": "f1-l1", "baseRef": "HEAD", "fixRef": "HEAD", "prompt": "Note the encoding fix for users.", "test": "node test.js", "testFiles": [] },
+        { "id": "t2", "kind": "teach", "familyId": "f1", "lessonId": "f1-l2", "baseRef": "HEAD", "fixRef": "HEAD", "prompt": "Note the import fix for users.", "test": "node test.js", "testFiles": [] },
+        { "id": "t3", "kind": "teach", "familyId": "f2", "lessonId": "f2-l1", "baseRef": "HEAD", "fixRef": "HEAD", "prompt": "Report how many rows were skipped.", "test": "node test.js", "testFiles": [] },
+        { "id": "n3", "kind": "no-lesson", "baseRef": "HEAD", "fixRef": "HEAD", "prompt": "Sort the tags case-insensitively.", "test": "node test.js", "testFiles": [] },
+        { "id": "a3", "kind": "apply", "familyId": "f1", "lessonId": "f1-l2", "baseRef": "HEAD", "fixRef": "HEAD", "prompt": "Note the rounding fix for users.", "test": "node test.js", "testFiles": [] },
+        { "id": "n4", "kind": "no-lesson", "baseRef": "HEAD", "fixRef": "HEAD", "prompt": "Trim trailing spaces in names.", "test": "node test.js", "testFiles": [] },
+        { "id": "a4", "kind": "apply", "familyId": "f2", "lessonId": "f2-l1", "baseRef": "HEAD", "fixRef": "HEAD", "prompt": "Report how many files were renamed.", "test": "node test.js", "testFiles": [] },
+        { "id": "a5", "kind": "apply", "familyId": "f2", "lessonId": "f2-l1", "baseRef": "HEAD", "fixRef": "HEAD", "prompt": "Report the bytes freed by cleanup.", "test": "node test.js", "testFiles": [] }
+      ] }
+  ]
+}

@@ -1,5 +1,5 @@
 """
-Marketing copy generator for the quantamental platform.
+Marketing copy generator for the project-e platform.
 Auto-generates feature descriptions and landing page copy.
 """
 

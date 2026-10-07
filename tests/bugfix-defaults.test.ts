@@ -14,7 +14,8 @@ import { join, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { DEFAULT_PHYSICS_CONFIG } from '../src/physics-config.js';
 import { loadConfig } from '../src/config.js';
-import { initStore, loadAllEntries } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
 
 const HIPPO_JS = resolve(__dirname, '..', 'bin', 'hippo.js');
 

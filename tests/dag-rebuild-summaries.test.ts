@@ -11,20 +11,17 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
 import {
-  initStore,
-  writeEntry,
   loadAllDirtySummaries,
-  loadChildrenOfSummary,
   applyRebuildResult,
-  clearSummaryDirtyAfterBuild,
-} from '../src/store.js';
+} from '../src/store/summaries.js';
 import { openHippoDb, type DatabaseSyncLike } from '../src/db.js';
-import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
-import { rebuildDirtySummaries, buildDag, generateDagSummary } from '../src/dag.js';
+import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { rebuildDirtySummaries, buildDag } from '../src/dag.js';
 import * as dagModule from '../src/dag.js';
-import { consolidate } from '../src/consolidate.js';
-import { archiveRawMemory } from '../src/raw-archive.js';
+import { consolidate } from '../src/consolidate/sleep.js';
 import { insertRejectedValue, rejectionDigest, normalizeValueForRejection } from '../src/rejection.js';
 
 /**
@@ -39,16 +36,6 @@ function makeOkFetcher(content: string = 'synthetic-summary-from-fetcher-X'): ty
     JSON.stringify({ content: [{ text: content }] }),
     { status: 200, headers: { 'content-type': 'application/json' } },
   ));
-}
-
-function makeThrowingFetcher(): typeof fetch {
-  return vi.fn<typeof fetch>(async () => {
-    throw new Error('network down');
-  });
-}
-
-function makeNonOkFetcher(status: number = 500): typeof fetch {
-  return vi.fn<typeof fetch>(async () => new Response('error', { status }));
 }
 
 /**
@@ -103,6 +90,7 @@ function makeSummary(
   tags: string[] = ['topic:test', 'dag-summary'],
 ): MemoryEntry {
   const s = createMemory(content, {
+    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     layer: Layer.Semantic,
     tags,
     confidence: 'inferred',
@@ -119,6 +107,7 @@ function makeChild(
   tags: string[] = ['extracted'],
 ): MemoryEntry {
   const c = createMemory(content, {
+    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     layer: Layer.Episodic,
     tags,
     dag_level: 1,
@@ -199,9 +188,6 @@ describe('v0.30 / E3 — sleep-cycle rebuildDirtySummaries', () => {
       expect(meta.descendant_count).toBe(3);
 
       // FTS row synced — query content column for the rebuilt token
-      const ftsRow = getRow<{ id: string; content: string }>(db, `
-        SELECT id, content FROM memories_fts WHERE memories_fts MATCH ?
-      `, 'newgensummarycontent');
       // We don't expect the dashed string to tokenize cleanly; just verify
       // FTS row was rewritten by reading its content directly.
       const ftsAll = getRow<{ content: string }>(db, `SELECT content FROM memories_fts WHERE id = ?`, summary.id);
@@ -411,7 +397,8 @@ describe('v0.30 / E3 — sleep-cycle rebuildDirtySummaries', () => {
     let call = 0;
     const fetcher = vi.fn<typeof fetch>(async () => {
       call++;
-      if (call === 1) return new Response('upstream error', { status: 503 });
+      // A 400, because fetchWithRetry would retry a 5xx into the second summary's reply.
+      if (call === 1) return new Response('bad request', { status: 400 });
       return new Response(JSON.stringify({ content: [{ text: 'second-ok-content-zz' }] }), { status: 200 });
     });
 
@@ -506,9 +493,9 @@ describe('v0.30 / E3 — sleep-cycle rebuildDirtySummaries', () => {
 
   it('test #10: REGRESSION LOCK — buildDag clean-up. Born-dirty fix: brand-new summaries are NOT re-rebuilt on same sleep cycle.', async () => {
     // Setup 3 extracted facts (buildDag's minimum cluster size) sharing entity tags
-    const factA = createMemory('alice did X', { layer: Layer.Episodic, dag_level: 1, tags: ['extracted', 'speaker:alice'] });
-    const factB = createMemory('alice said Y', { layer: Layer.Episodic, dag_level: 1, tags: ['extracted', 'speaker:alice'] });
-    const factC = createMemory('alice noted Z', { layer: Layer.Episodic, dag_level: 1, tags: ['extracted', 'speaker:alice'] });
+    const factA = createMemory('alice did X', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, dag_level: 1, tags: ['extracted', 'speaker:alice'] });
+    const factB = createMemory('alice said Y', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, dag_level: 1, tags: ['extracted', 'speaker:alice'] });
+    const factC = createMemory('alice noted Z', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, dag_level: 1, tags: ['extracted', 'speaker:alice'] });
     writeEntry(hippoRoot, factA);
     writeEntry(hippoRoot, factB);
     writeEntry(hippoRoot, factC);
@@ -564,6 +551,7 @@ describe('v0.30 / E3 — sleep-cycle rebuildDirtySummaries', () => {
     // (dag.ts buildDag) instead of consolidate.ts's merge pass.
     const aFacts = ['alice did X', 'alice said Y', 'alice noted Z'].map((c) =>
       createMemory(c, {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         layer: Layer.Episodic,
         dag_level: 1,
         tags: ['extracted', 'speaker:alice'],
@@ -572,6 +560,7 @@ describe('v0.30 / E3 — sleep-cycle rebuildDirtySummaries', () => {
     );
     const bFacts = ['alice ran P', 'alice flagged Q', 'alice closed R'].map((c) =>
       createMemory(c, {
+        baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
         layer: Layer.Episodic,
         dag_level: 1,
         tags: ['extracted', 'speaker:alice'],

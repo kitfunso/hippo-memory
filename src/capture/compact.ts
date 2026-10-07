@@ -1,0 +1,233 @@
+import * as fs from 'fs';
+import * as path from 'path';
+import { type TaskSnapshot } from '../store/rows.js';
+import { isInitialized } from '../store/open.js';
+import { saveActiveTaskSnapshot, loadActiveTaskSnapshot } from '../store/sessions.js';
+import {
+  PRE_COMPACT_INSTRUCTION,
+  parsePostCompactPayload,
+  postCompactLine,
+  recordCompactionStart,
+  recordSnapshotSaved,
+  saveCompaction,
+  replayCompactionsAt,
+  COMPACTION_DB_WAIT_MS,
+} from '../compaction-record.js';
+import { resolveTenantId } from '../tenant.js';
+import { defaultPreCompactLogPath } from '../hooks/shared.js';
+import { readClaudeCodePreCompact } from '../capture-contract.js';
+import { errorMessage } from '../log.js';
+import { resolveLastSessionTranscript } from './transcript.js';
+import { mergeWorkingState, transcriptWorkingState, type WorkingState } from './working-state.js';
+
+// ---------------------------------------------------------------------------
+// `hippo pre-compact` — PreCompact hook producer
+// ---------------------------------------------------------------------------
+
+// Diagnostic-only log; a long-lived install must not grow it unbounded.
+const PRE_COMPACT_LOG_MAX_BYTES = 256 * 1024;
+
+/**
+ * Log-forgery guard: messages here interpolate payload-controlled values
+ * (transcript paths, session ids). Strip C0 control chars — newlines above
+ * all — so a crafted value can't inject fake `[hippo] ...` log lines.
+ * Exported for every `[hippo]`-prefixed log writer that interpolates
+ * payload-controlled values (cli.ts appendSessionEndCloseLog) — one shared
+ * guard, not per-file copies.
+ */
+export function sanitizeLogMessage(message: string): string {
+  // eslint-disable-next-line no-control-regex
+  return message.replace(/[\x00-\x1f]/g, '');
+}
+
+function appendPreCompactLog(logFile: string, message: string): void {
+  try {
+    fs.mkdirSync(path.dirname(logFile), { recursive: true });
+    const stat = fs.existsSync(logFile) ? fs.statSync(logFile) : null;
+    if (stat && stat.size > PRE_COMPACT_LOG_MAX_BYTES) {
+      fs.writeFileSync(logFile, '', 'utf8'); // start fresh — dumb cap, no rotation
+    }
+    fs.appendFileSync(logFile, `[hippo] ${new Date().toISOString()} ${sanitizeLogMessage(message)}\n`, 'utf8');
+  } catch {
+    // Diagnostic-only; a log write failure must never affect the exit-0 contract.
+  }
+}
+
+/** True iff `filePath` exists and is readable — checks both in one call. */
+function isReadableFile(filePath: string): boolean {
+  try {
+    fs.accessSync(filePath, fs.constants.R_OK);
+    return true;
+  } catch {
+    return false; // missing and unreadable both mean "no file" to the caller
+  }
+}
+
+/** PreCompact stdout is the summariser's instructions; sent before the snapshot work because a locked store can run the hook past its 30 s limit, and via writeSync because process.exit drops buffered pipe output. */
+function printPreCompactInstruction(logFile: string): void {
+  try {
+    fs.writeSync(1, `${PRE_COMPACT_INSTRUCTION}\n`);
+  } catch (err) {
+    appendPreCompactLog(logFile, `instruction not printed: ${errorMessage(err)}`);
+  }
+}
+
+/** Runs the PreCompact producer: records the compaction, asks the summariser for memories, saves a working-state snapshot. Never extracts memories itself; SessionEnd capture owns that. */
+function runPreCompact(hippoRoot: string, stdinText: string | undefined, stdinTimedOut: boolean, logFile: string): void {
+  // The PreCompact hook fires in every Claude Code project, including
+  // ones that never ran `hippo init`, so gate before any store-opening call
+  // (saveActiveTaskSnapshot etc. call initStore, which would create one).
+  if (!isInitialized(hippoRoot)) {
+    appendPreCompactLog(logFile, 'skip: store not initialized');
+    return;
+  }
+
+  const receipt = readClaudeCodePreCompact(stdinText, stdinTimedOut);
+  if (receipt.status !== 'received') {
+    appendPreCompactLog(logFile, `skip: ${receipt.reason}`);
+    return;
+  }
+  const { sessionId, transcriptPath: payloadTranscriptPath, cwd: payloadCwd, trigger: payloadTrigger } = receipt.input;
+
+  // The record is the "something saved before every compaction", so it lands even when no snapshot is derivable below.
+  let recordId: string | null = null;
+  if (sessionId !== null && sessionId !== '') {
+    recordId = recordCompactionStart(
+      hippoRoot,
+      { sessionId, trigger: payloadTrigger, cwd: payloadCwd, transcriptPath: payloadTranscriptPath },
+      (message) => appendPreCompactLog(logFile, message),
+    );
+    printPreCompactInstruction(logFile);
+  }
+
+  const transcriptPath = resolvePreCompactTranscript(payloadTranscriptPath, stdinText, logFile);
+  if (!transcriptPath) return;
+
+  // Nothing derivable skips the write, so a user-authored active snapshot is never clobbered with junk.
+  const derived = transcriptWorkingState(transcriptPath, (message) => appendPreCompactLog(logFile, message));
+  if (!derived) return;
+
+  saveDerivedSnapshot(hippoRoot, logFile, sessionId, recordId, derived);
+}
+
+/** The transcript to snapshot, or null after logging why there is none. */
+function resolvePreCompactTranscript(payloadTranscriptPath: string | null, stdinText: string | undefined, logFile: string): string | null {
+  // A payload transcript_path is EXCLUSIVE: auto-discovery would snapshot a DIFFERENT session's
+  // transcript under THIS payload's session_id, so it runs only on a manual invocation (no payload).
+  let transcriptPath: string | null;
+  if (payloadTranscriptPath !== null) {
+    if (isReadableFile(payloadTranscriptPath)) {
+      transcriptPath = payloadTranscriptPath;
+    } else {
+      appendPreCompactLog(logFile, `skip: payload transcript_path unreadable: ${payloadTranscriptPath}`);
+      return null;
+    }
+  } else {
+    transcriptPath = resolveLastSessionTranscript(undefined, stdinText, { mayScan: true });
+  }
+
+  if (!transcriptPath) {
+    appendPreCompactLog(logFile, 'skip: no transcript resolved');
+    return null;
+  }
+  return transcriptPath;
+}
+
+function saveDerivedSnapshot(
+  hippoRoot: string,
+  logFile: string,
+  sessionId: string | null,
+  recordId: string | null,
+  derived: WorkingState,
+): void {
+  const tenantId = resolveTenantId({});
+
+  let existing: TaskSnapshot | null = null;
+  try {
+    existing = loadActiveTaskSnapshot(hippoRoot, tenantId);
+  } catch {
+    // No existing snapshot to merge against — proceed with derived-only.
+  }
+
+  // Carried-over fields are not re-capped, as `hippo snapshot save` stays uncapped; saveActiveTaskSnapshot scrubs every field.
+  const merged = mergeWorkingState(derived, existing, sessionId);
+  if (merged === null) {
+    appendPreCompactLog(logFile, 'skip: no snapshot content for this session (nothing derivable; fallback blocked or empty)');
+  } else {
+    try {
+      saveActiveTaskSnapshot(hippoRoot, tenantId, { ...merged, source: 'pre-compact', session_id: sessionId });
+      appendPreCompactLog(logFile, 'snapshot saved');
+      if (recordId !== null) recordSnapshotSaved(hippoRoot, tenantId, recordId, (message) => appendPreCompactLog(logFile, message));
+    } catch (err) {
+      appendPreCompactLog(logFile, `snapshot save failed: ${errorMessage(err)}`);
+    }
+  }
+}
+
+export interface PreCompactOptions {
+  stdinText?: string;
+  stdinTimedOut?: boolean;
+  logFile?: string;
+}
+
+/**
+ * PreCompact hook entry point. Exit code 2 on PreCompact BLOCKS compaction,
+ * so this verb must exit 0 on every path — malformed stdin, missing
+ * transcript, and store errors all degrade to a logged no-op rather than a
+ * thrown error. Callers (src/cli.ts) must not wrap this in anything that
+ * could turn a caught-and-logged failure back into a non-zero exit.
+ */
+export async function cmdPreCompact(hippoRoot: string, options: PreCompactOptions): Promise<void> {
+  const logFile = options.logFile ?? defaultPreCompactLogPath();
+  try {
+    runPreCompact(hippoRoot, options.stdinText, options.stdinTimedOut ?? false, logFile);
+  } catch (err) {
+    appendPreCompactLog(logFile, `pre-compact failed: ${errorMessage(err)}`);
+  }
+
+  process.exit(0);
+}
+
+export interface PostCompactOptions {
+  stdinText?: string;
+  logFile?: string;
+  afterSave?: (transcriptPath: string, cwd: string | null, log: (message: string) => void) => void;
+}
+
+/** A PostCompact hook has 10 s in all; replay stops starting new records after this. */
+const POST_COMPACT_REPLAY_BUDGET_MS = 6000;
+
+/** PostCompact entry point: saves the summary and its items, replays earlier leftovers, returns the one line to show. Never throws, so the hook exits 0. */
+export function cmdPostCompact(hippoRoot: string, options: PostCompactOptions): string | null {
+  const logFile = options.logFile ?? defaultPreCompactLogPath();
+  const log = (message: string): void => appendPreCompactLog(logFile, `post-compact: ${message}`);
+  const deadline = Date.now() + POST_COMPACT_REPLAY_BUDGET_MS;
+  try {
+    if (!isInitialized(hippoRoot)) {
+      log('skip: no hippo store');
+      return null;
+    }
+    const payload = parsePostCompactPayload(options.stdinText);
+    let line: string | null = null;
+    let storeBusy = false;
+    if (payload === null) {
+      log('skip: no PostCompact payload naming a session');
+    } else {
+      const saved = saveCompaction(hippoRoot, payload, log);
+      line = postCompactLine(saved);
+      storeBusy = saved.deferred;
+      if (!storeBusy && payload.transcriptPath !== null && options.afterSave) {
+        try {
+          options.afterSave(payload.transcriptPath, payload.cwd, log);
+        } catch (err) {
+          log(`agent memory import failed: ${errorMessage(err)}`);
+        }
+      }
+    }
+    if (!storeBusy) replayCompactionsAt(hippoRoot, log, { busyWaitMs: COMPACTION_DB_WAIT_MS, deadline });
+    return line;
+  } catch (err) {
+    log(`failed: ${errorMessage(err)}`);
+    return null;
+  }
+}

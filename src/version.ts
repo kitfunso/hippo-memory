@@ -6,7 +6,7 @@
  * hand. scripts/check-manifest-versions.mjs gates publish on all seven sites.
  *
  * Used by:
- *   - src/db.ts rollback-safety guard (refuses to open a DB stamped with
+ *   - src/db/migrate.ts rollback-safety guard (refuses to open a DB stamped with
  *     min_compatible_binary newer than this).
  *   - src/server.ts HTTP /health.
  *   - src/mcp/server.ts MCP serverInfo.
@@ -16,7 +16,13 @@
  * an ESM `import` can resolve cleanly, and a hardcoded constant survives
  * any packager that drops .json files.
  */
-export const PACKAGE_VERSION = '1.52.7';
+export const PACKAGE_VERSION = '1.64.0';
+
+/** The floor a store takes on its first expiring key: the first release with schema v53, set by hand in that release; scripts/check-expiring-keys-floor.mjs gates it. */
+export const EXPIRING_KEYS_MIN_BINARY = '1.64.0';
+
+/** The floor a store takes on its first session bind or owner snapshot: first release with v54; set by hand in that release. */
+export const TASK_OWNER_MIN_BINARY = '1.64.0';
 
 /** Compares plain x.y.z versions, positive if a > b; tags throw so the rollback guard never misfires silently. */
 export function compareSemver(a: string, b: string): number {

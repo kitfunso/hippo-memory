@@ -1,5 +1,5 @@
 /**
- * Snapshot tests for the CLI render helpers exported from src/cli.ts.
+ * Snapshot tests for the CLI render helpers exported from src/cli/context.ts and src/cli/sleep.ts.
  *
  * Locks the byte-identical output of printContextMarkdown + renderSleepResult
  * across all render branches. Without these, refactors to the render layer
@@ -20,8 +20,9 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from 'vitest';
-import { printContextMarkdown, renderSleepResult } from '../src/cli.js';
-import type { MemoryEntry } from '../src/memory.js';
+import { printContextMarkdown } from '../src/cli/context.js';
+import { renderSleepResult } from '../src/cli/sleep.js';
+import { Layer, type MemoryEntry } from '../src/memory.js';
 import type { SleepResult } from '../src/api.js';
 
 function makeMemory(overrides: Partial<MemoryEntry> & { id: string; content: string }): MemoryEntry {
@@ -33,7 +34,7 @@ function makeMemory(overrides: Partial<MemoryEntry> & { id: string; content: str
     retrieval_count: overrides.retrieval_count ?? 1,
     strength: overrides.strength ?? 0.85,
     half_life_days: overrides.half_life_days ?? 30,
-    layer: overrides.layer ?? 'semantic',
+    layer: overrides.layer ?? Layer.Semantic,
     tags: overrides.tags ?? [],
     emotional_valence: overrides.emotional_valence ?? 'neutral',
     schema_fit: overrides.schema_fit ?? 0.7,
@@ -96,9 +97,9 @@ describe('printContextMarkdown snapshots', () => {
   const memVerifiedSemantic = makeMemory({
     id: 'mem_test_001',
     content: 'always use real DB for tests',
-    tags: ['path:skf_s', 'path:hippo'],
+    tags: ['path:alice', 'path:hippo'],
     confidence: 'verified',
-    layer: 'semantic',
+    layer: Layer.Semantic,
   });
   const memStaleEpisodic = makeMemory({
     id: 'mem_test_002',
@@ -106,7 +107,7 @@ describe('printContextMarkdown snapshots', () => {
     created: '2025-08-12T10:00:00.000Z',
     tags: ['debug'],
     confidence: 'stale',
-    layer: 'episodic',
+    layer: Layer.Episodic,
     strength: 0.4,
   });
   const memInferredGlobal = makeMemory({

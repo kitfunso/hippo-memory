@@ -1,7 +1,7 @@
 /**
  * J3.2 — emitAudit flag on computePredictionBaserate.
  *
- * The flag was added so the J3.2 orchestrator (computePlanningFallacyHint)
+ * The flag was added so the J3.2 orchestrator (computePlanningFallacyOutput)
  * can call the baserate helper WITHOUT emitting a predict_baserate audit
  * row (the orchestrator emits its own recall_autodebias_hint row, with
  * n_closed + mean_ratio in metadata, so no telemetry is lost). This keeps
@@ -18,23 +18,11 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store.js';
+import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import {
-  computePredictionBaserate,
-  savePrediction,
-  closePrediction,
-} from '../src/predictions.js';
+import { computePredictionBaserate, savePrediction, closePrediction } from '../src/predictions/store.js';
+import { makeRoot } from './_helpers/make-root.js';
 
-function makeRoot(prefix: string): string {
-  const root = mkdtempSync(join(tmpdir(), `hippo-${prefix}-`));
-  mkdirSync(join(root, '.hippo'), { recursive: true });
-  initStore(root);
-  return root;
-}
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
 }

@@ -1,7 +1,7 @@
 # Dedupe tenant partition (episode 01M03MP0G3YDXBQXXWY7DP0PSC)
 
 Status: Draft (plan-eng-critic pending)
-Base: origin/master 9cb5616 (v1.32.0). Branch: fix/dedupe-tenant-partition. Worktree: C:/Users/skf_s/hippo-wt-dedupe.
+Base: origin/master 9cb5616 (v1.32.0). Branch: fix/dedupe-tenant-partition. Worktree: ~/hippo-wt-dedupe.
 
 ## Defect (proven, not hypothesized)
 

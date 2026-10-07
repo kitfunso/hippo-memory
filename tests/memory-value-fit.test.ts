@@ -17,11 +17,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { describe, it, expect, beforeEach, afterEach, afterAll } from 'vitest';
 
-// @ts-expect-error - .mjs harness modules have no type declarations
 import { CONFIG } from '../benchmarks/memory-value/config.mjs';
-// @ts-expect-error - .mjs harness modules have no type declarations
 import { evaluateAll, buildScorers, evaluateStore } from '../benchmarks/memory-value/evaluate.mjs';
-// @ts-expect-error - .mjs harness modules have no type declarations
 import { mulberry32, featuresPathFor, readJsonl, writeJsonl } from '../benchmarks/memory-value/common.mjs';
 import {
   FIT_DIMS,
@@ -37,10 +34,13 @@ import {
   verifyFrozenWeights,
   recencyVector,
   initVectorForRestart,
-  // @ts-expect-error - .mjs harness module has no type declarations
 } from '../benchmarks/memory-value/fit.mjs';
 
 import { clearAblationEnv, QUESTIONS, cleanupScratch, runPipeline } from './memory-value-fixtures.js';
+
+type GateOpts = { splitRegistered?: object; registeredResults?: object; expectedFitDims?: readonly string[]; needTrainRows?: boolean };
+// SAFETY: fit.mjs destructures all four options, but its inferred parameter type omits splitRegistered and registeredResults.
+const gate = runIntegrityGate as (opts?: GateOpts) => ReturnType<typeof runIntegrityGate>;
 
 // File-unique scratch root. Vitest runs test FILES in parallel workers, and
 // memory-value-harness.test.ts uses the DEFAULT root with the same fixture
@@ -50,7 +50,8 @@ import { clearAblationEnv, QUESTIONS, cleanupScratch, runPipeline } from './memo
 // Hook order matters: clearAblationEnv deletes HIPPO_MV_SCRATCH_ROOT, so the
 // override is re-set in a LATER beforeEach (vitest runs same-level hooks in
 // registration order).
-const FIT_SCRATCH_ROOT = path.join(os.tmpdir(), 'hippo-mv-fit-test-scratch');
+// mkdtemp per process: two worktrees running this suite at once must not share a root.
+const FIT_SCRATCH_ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-mv-fit-test-scratch-'));
 
 beforeEach(clearAblationEnv);
 beforeEach(() => {
@@ -258,6 +259,7 @@ describe('computeFit (real fixture)', () => {
 
     const recencyObjective = computeTrainObjective(toWeights(recencyVector()), cachedRowsById, trainIds);
     const { winner } = computeFit(trainIds, cachedRowsById, FAST_FIT_OPTS);
+    if (recencyObjective === null) throw new Error('every train id was skipped');
     expect(winner.trainObjective).toBeGreaterThanOrEqual(recencyObjective);
   });
 
@@ -273,7 +275,8 @@ describe('computeFit (real fixture)', () => {
 
     expect(() => buildScorers(CONFIG.FEATURES, weights)).not.toThrow();
     const rows = readJsonl(featuresPathFor(QUESTIONS[0].question_id));
-    expect(() => evaluateStore(rows, [0.3], weights)).not.toThrow();
+    // SAFETY: computeFit returns one numeric weight per FIT_DIMS entry (asserted above); the inferred type is {}.
+    expect(() => evaluateStore(rows, [0.3], weights as Record<string, number>)).not.toThrow();
   });
 });
 
@@ -306,9 +309,9 @@ describe('runIntegrityGate (real fixture)', () => {
       evaluate: { summary: good.summary, varyingFeatures: good.varyingFeatures },
     };
 
-    const gateResult = runIntegrityGate({ splitRegistered, registeredResults, expectedFitDims: good.varyingFeatures });
+    const gateResult = gate({ splitRegistered, registeredResults, expectedFitDims: good.varyingFeatures });
     expect(gateResult.trainIds).toEqual(['fixture_q_a']);
-    expect(gateResult.cachedRowsById.size).toBe(1);
+    expect(gateResult.cachedRowsById?.size).toBe(1);
     expect(gateResult.recencyCrossCheck).toEqual(expect.any(Number));
   });
 
@@ -332,7 +335,7 @@ describe('runIntegrityGate (real fixture)', () => {
     const bogusExpectedFitDims = [...good.varyingFeatures, 'not_a_real_dim'];
 
     expect(() =>
-      runIntegrityGate({ splitRegistered, registeredResults, expectedFitDims: bogusExpectedFitDims }),
+      gate({ splitRegistered, registeredResults, expectedFitDims: bogusExpectedFitDims }),
     ).toThrow(/varying-features set must equal FIT_DIMS/);
   });
 
@@ -353,7 +356,7 @@ describe('runIntegrityGate (real fixture)', () => {
     const gateOpts = { splitRegistered, registeredResults, expectedFitDims: good.varyingFeatures };
 
     // Sanity: the untampered gate passes against this synthetic reference.
-    expect(() => runIntegrityGate(gateOpts)).not.toThrow();
+    expect(() => gate(gateOpts)).not.toThrow();
 
     // Corrupt one non-gold row in the HELDOUT question so its recency
     // ranking (and therefore heldout recency retention) shifts.
@@ -367,7 +370,7 @@ describe('runIntegrityGate (real fixture)', () => {
     target!.features.age_days = 0; // make an old, non-gold row look newest
     writeJsonl(featuresPath, rows);
 
-    expect(() => runIntegrityGate(gateOpts)).toThrow(/\(c\)/);
+    expect(() => gate(gateOpts)).toThrow(/\(c\)/);
   });
 
   it('throws a named disjointness failure (not a raw comparison) when an id appears in both train and heldout', async () => {
@@ -377,7 +380,7 @@ describe('runIntegrityGate (real fixture)', () => {
     const splitRegistered = { train: ['fixture_q_a', 'fixture_q_b'], heldout: ['fixture_q_b'] };
     const registeredResults = { split: { trainCount: 2, heldoutCount: 1 } };
 
-    expect(() => runIntegrityGate({ splitRegistered, registeredResults })).toThrow(/\(a\).*overlap/);
+    expect(() => gate({ splitRegistered, registeredResults })).toThrow(/\(a\).*overlap/);
   });
 
   it('throws a named failure (not a raw TypeError) when the registered summary is missing a cell', async () => {
@@ -388,16 +391,18 @@ describe('runIntegrityGate (real fixture)', () => {
       { questionId: 'fixture_q_b', split: 'heldout' as const },
     ];
     const good = evaluateAll(questionSplits, { budgets: [0.3], primaryBudget: 0.3 });
+    // SAFETY: evaluateAll's summary carries a heldout block (evaluate.mjs); the inferred type is {}.
+    const heldoutSummary = (good.summary as { heldout: unknown }).heldout;
     // `train` summary is present but missing its recency/uniform cells — a
     // realistic "malformed committed JSON" shape, not just an absent key.
     const registeredResults = {
       split: { trainCount: 1, heldoutCount: 1 },
-      evaluate: { summary: { heldout: good.summary.heldout, train: {} }, varyingFeatures: good.varyingFeatures },
+      evaluate: { summary: { heldout: heldoutSummary, train: {} }, varyingFeatures: good.varyingFeatures },
     };
 
     let caught: unknown;
     try {
-      runIntegrityGate({ splitRegistered, registeredResults, expectedFitDims: good.varyingFeatures });
+      gate({ splitRegistered, registeredResults, expectedFitDims: good.varyingFeatures });
     } catch (err) {
       caught = err;
     }

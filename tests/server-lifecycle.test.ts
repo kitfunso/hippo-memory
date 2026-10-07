@@ -1,9 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync, mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { request as httpRequest } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { serve } from '../src/server.js';
 
+// Not initStore'd on purpose: these tests start from an empty `.hippo` dir.
 function makeRoot(): string {
   const home = mkdtempSync(join(tmpdir(), 'hippo-srv-'));
   mkdirSync(join(home, '.hippo'), { recursive: true });
@@ -15,6 +17,7 @@ interface HealthBody {
   version: string;
   started_at: string;
   pid: number;
+  audit_write_failures: number;
 }
 
 /**
@@ -26,6 +29,42 @@ async function healthBody(res: Response): Promise<HealthBody> {
   // SAFETY: see doc comment above — every call site asserts on HealthBody's
   // fields immediately after calling healthBody.
   return (await res.json()) as HealthBody;
+}
+
+interface UploadReply {
+  status: number;
+  body: string;
+  closed: Promise<void>;
+}
+
+// Unpaced and never ended, as a large upload is, so only the server can close the connection.
+function uploadUnpaced(port: number, path: string): Promise<UploadReply> {
+  const chunk = Buffer.alloc(64 * 1024, 'x');
+  return new Promise<UploadReply>((resolve, reject) => {
+    const req = httpRequest({ host: '127.0.0.1', port, path, method: 'POST', headers: { 'content-type': 'application/json' } });
+    let answered = false;
+    req.on('response', (res) => {
+      answered = true;
+      const socket = req.socket;
+      const closed = socket === null || socket.destroyed
+        ? Promise.resolve()
+        : new Promise<void>((done) => socket.once('close', () => done()));
+      const parts: Buffer[] = [];
+      res.on('data', (part: Buffer) => parts.push(part));
+      res.on('end', () => resolve({ status: res.statusCode ?? 0, body: Buffer.concat(parts).toString('utf8'), closed }));
+      res.on('error', reject);
+    });
+    // A reset before the reply is read is the bug this guards: the server closed with request bytes unread.
+    req.on('error', (err) => {
+      if (!answered) reject(err);
+    });
+    const send = async (): Promise<void> => {
+      for (let sent = 0; sent < 8 * 1024 * 1024 && !req.destroyed && !answered; sent += chunk.length) {
+        await new Promise<void>((done) => req.write(chunk, () => done()));
+      }
+    };
+    void send();
+  });
 }
 
 describe('server lifecycle', () => {
@@ -56,6 +95,7 @@ describe('server lifecycle', () => {
       // ISO 8601 sanity check
       expect(Number.isFinite(Date.parse(body.started_at))).toBe(true);
       expect(body.pid).toBe(process.pid);
+      expect(body.audit_write_failures).toEqual(expect.any(Number));
     } finally {
       await handle.stop();
       rmSync(home, { recursive: true, force: true });
@@ -145,29 +185,18 @@ describe('server lifecycle', () => {
     }
   });
 
-  it('rejects an over-1MB request body with 413 and destroys the socket (M3)', async () => {
+  it('answers an upload still streaming past 1 MB with its 413, then closes the connection (M3)', async () => {
     const home = makeRoot();
     const handle = await serve({ hippoRoot: home, port: 0 });
-    // Exactly one byte over readBody's 1 MB cap. The +1 matters: the server
-    // reads the whole body before `total > cap` trips, so the request is fully
-    // consumed and req.destroy() is a clean close (no RST) — the 413 reaches
-    // the client deterministically. A larger body leaves the client mid-upload
-    // when the socket dies, which fetch cannot resolve into a response.
-    const oversize = 'x'.repeat(1024 * 1024 + 1);
-    const postOversize = async (path: string): Promise<number> => {
-      const res = await fetch(`${handle.url}${path}`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: oversize,
-      });
-      await res.text().catch(() => { /* body stream may be cut by req.destroy */ });
-      return res.status;
-    };
     try {
       // The cap lives in readBody, shared by every route — exercise the generic
       // /v1 route and a webhook route, which both call it before any auth.
-      expect(await postOversize('/v1/memories')).toBe(413);
-      expect(await postOversize('/v1/connectors/slack/events')).toBe(413);
+      for (const path of ['/v1/memories', '/v1/connectors/slack/events']) {
+        const reply = await uploadUnpaced(handle.port, path);
+        expect(reply.status).toBe(413);
+        expect(JSON.parse(reply.body)).toEqual({ error: 'request body exceeds 1MB' });
+        await reply.closed;
+      }
       // The server shed the oversized requests without wedging — still serving.
       const health = await fetch(`${handle.url}/health`);
       expect(health.status).toBe(200);
@@ -239,6 +268,31 @@ describe('/v1 rate limiting', () => {
         );
         expect(health.every((r) => r.status === 200)).toBe(true);
       } finally {
+        await handle.stop();
+      }
+    } finally {
+      if (prev === undefined) delete process.env.HIPPO_V1_RPS;
+      else process.env.HIPPO_V1_RPS = prev;
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it('throttles /mcp and /mcp/stream from the same per-IP bucket', async () => {
+    const home = makeRoot();
+    const prev = process.env.HIPPO_V1_RPS;
+    process.env.HIPPO_V1_RPS = '1'; // rate 1/s, burst 2
+    const ac = new AbortController();
+    try {
+      const handle = await serve({ hippoRoot: home, port: 0 });
+      try {
+        const mcp = await Promise.all(
+          Array.from({ length: 12 }, () => fetch(`${handle.url}/mcp`, { method: 'POST', body: '{}' })),
+        );
+        expect(mcp.some((r) => r.status === 429)).toBe(true);
+        const stream = await fetch(`${handle.url}/mcp/stream`, { signal: ac.signal });
+        expect(stream.status).toBe(429);
+      } finally {
+        ac.abort();
         await handle.stop();
       }
     } finally {

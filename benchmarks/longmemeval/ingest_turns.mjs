@@ -5,7 +5,9 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { createMemory } from '../../dist/memory.js';
-import { initStore, writeEntryDbOnly, writeIndexMirror, buildIndexFromDb } from '../../dist/store.js';
+import { writeIndexMirror, buildIndexFromDb } from '../../dist/store/mirrors.js';
+import { initStore } from '../../dist/store/open.js';
+import { writeEntryDbOnly } from '../../dist/store/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../../dist/db.js';
 
 const args = process.argv.slice(2);

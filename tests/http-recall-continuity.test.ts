@@ -1,16 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import {
-  initStore,
-  saveActiveTaskSnapshot,
-  saveSessionHandoff,
-  appendSessionEvent,
-  writeEntry,
-} from '../src/store.js';
-import { createMemory } from '../src/memory.js';
+import { rmSync } from 'node:fs';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { saveActiveTaskSnapshot, appendSessionEvent } from '../src/store/sessions.js';
+import { saveSessionHandoff } from '../src/store/handoffs.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { serve, type ServerHandle } from '../src/server.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 /** Parse a fetch Response body against a caller-declared shape. */
 async function jsonAs<T>(res: Response): Promise<T> {
@@ -20,18 +15,11 @@ async function jsonAs<T>(res: Response): Promise<T> {
   return (await res.json()) as T;
 }
 
-function makeRoot(): string {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-http-cont-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
-}
-
 let home: string;
 let handle: ServerHandle;
 
 beforeEach(async () => {
-  home = makeRoot();
+  home = makeRoot('http-cont');
   handle = await serve({ hippoRoot: home, port: 0 });
 });
 
@@ -42,7 +30,7 @@ afterEach(async () => {
 
 describe('GET /v1/memories continuity + scope', () => {
   it('default: no continuity, no Cache-Control: no-store', async () => {
-    writeEntry(home, createMemory('memory about deploys', {}));
+    writeEntry(home, createMemory('memory about deploys', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
     const res = await fetch(`${handle.url}/v1/memories?q=deploys`);
     expect(res.status).toBe(200);
     expect(res.headers.get('cache-control')).not.toBe('no-store');
@@ -51,7 +39,7 @@ describe('GET /v1/memories continuity + scope', () => {
   });
 
   it('include_continuity=1: returns continuity block with no-store cache header', async () => {
-    writeEntry(home, createMemory('memory about deploys', {}));
+    writeEntry(home, createMemory('memory about deploys', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
     saveActiveTaskSnapshot(home, 'default', {
       task: 'HTTP continuity',
       summary: 's',

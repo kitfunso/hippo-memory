@@ -2640,8 +2640,8 @@
                 "width": 120,
                 "height": 23
               },
-              "snippet": "<button type=\"button\" aria-label=\"Filter to tag path:skf_s (182 memories)\" style=\"background: var(--ink-faint); color: var(--text); border: 1px solid var(--…;\">",
-              "nodeLabel": "path:skf_s182",
+              "snippet": "<button type=\"button\" aria-label=\"Filter to tag path:<user> (182 memories)\" style=\"background: var(--ink-faint); color: var(--text); border: 1px solid var(--…;\">",
+              "nodeLabel": "path:<user>182",
               "explanation": "Fix any of the following:\n  Text inside the element is not included in the accessible name"
             }
           },
@@ -4838,7 +4838,7 @@
                 "height": 25679
               },
               "snippet": "<tbody>",
-              "nodeLabel": "mem_8b5803\tGold model uses TIPS 10y as primary inflation signal\t\t1.00\t70.4d\nmem…"
+              "nodeLabel": "mem_8b5803\t[private text redacted]\t\t1.00\t70.4d\nmem…"
             },
             "value": {
               "type": "numeric",

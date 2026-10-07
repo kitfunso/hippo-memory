@@ -3,7 +3,7 @@
  * Docs: docs/plans/2026-06-01-e3-graph-write-lint.md
  *
  * The lint enforces: graph tables (entities/relations/graph_extraction_queue) may only
- * be written through the sanctioned src/graph.ts. These tests pin the detection +
+ * be written through the sanctioned src/graph/write.ts. These tests pin the detection +
  * the false-positive exclusions (sanctioned writer, comment lines, name substrings).
  */
 
@@ -16,7 +16,7 @@ import { join } from 'node:path';
 import { findGraphWriteViolations } from '../scripts/check-graph-writes.mjs';
 
 describe('check-graph-writes lint (E3.3 criterion 2)', () => {
-  it('the real src/ tree is clean (only src/graph.ts writes the graph tables, and it is excluded)', () => {
+  it('the real src/ tree is clean (only src/graph/write.ts writes the graph tables, and it is excluded)', () => {
     expect(findGraphWriteViolations('src')).toEqual([]);
   });
 
@@ -43,14 +43,14 @@ describe('check-graph-writes lint (E3.3 criterion 2)', () => {
       expect(v.length).toBe(2);
     });
 
-    it('does NOT flag the sanctioned src/graph.ts (exact relative path), but DOES flag subgraph.ts AND a subdir graph.ts', () => {
-      file('graph.ts', `db.prepare('INSERT INTO entities(name) VALUES (?)').run(n);\n`);
+    it('does NOT flag the sanctioned src/graph/write.ts (exact relative path), but DOES flag subgraph.ts AND a subdir graph/write.ts', () => {
+      file('graph/write.ts', `db.prepare('INSERT INTO entities(name) VALUES (?)').run(n);\n`);
       file('subgraph.ts', `db.prepare('INSERT INTO relations(rel_type) VALUES (?)').run(r);\n`);
-      file('connectors/graph.ts', `db.prepare('INSERT INTO entities(name) VALUES (?)').run(n);\n`); // a DIFFERENT graph.ts, not sanctioned
+      file('connectors/graph/write.ts', `db.prepare('INSERT INTO entities(name) VALUES (?)').run(n);\n`); // a DIFFERENT graph/write.ts, not sanctioned
       const files = findGraphWriteViolations(dir).map((x) => x.file.replace(/\\/g, '/'));
-      expect(files.some((f) => f.endsWith('/graph.ts') && !f.includes('connectors'))).toBe(false);
+      expect(files.some((f) => f.endsWith('/graph/write.ts') && !f.includes('connectors'))).toBe(false);
       expect(files.some((f) => f.endsWith('subgraph.ts'))).toBe(true);
-      expect(files.some((f) => f.endsWith('connectors/graph.ts'))).toBe(true); // subdir graph.ts IS linted
+      expect(files.some((f) => f.endsWith('connectors/graph/write.ts'))).toBe(true); // subdir graph/write.ts IS linted
     });
 
     it('catches a MULTI-LINE write (verb and table on separate lines) - codex P2', () => {

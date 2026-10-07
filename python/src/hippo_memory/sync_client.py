@@ -117,6 +117,13 @@ class HippoSync:
         will raise on None — no server route currently returns 204, but if
         one ever does, switch to ``_expect_body`` (v0.3 candidate).
         """
+        response = self._send(method, path, **kwargs)
+        if response.status_code == 204 or not response.content:
+            return None
+        return response.json()
+
+    def _send(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
+        """Send one request and raise HippoError on non-2xx; callers that read headers use this."""
         response = self._client.request(method, path, **kwargs)
         if response.status_code >= 400:
             body: dict[str, Any] | None = None
@@ -126,9 +133,7 @@ class HippoSync:
                 pass
             message = (body or {}).get("error") if body else response.text
             raise HippoError(response.status_code, message or response.text, body)
-        if response.status_code == 204 or not response.content:
-            return None
-        return response.json()
+        return response
 
     # -------------------------------------------------------------------
     # Health
@@ -349,14 +354,23 @@ class HippoSync:
         data = self._request("POST", "/v1/auth/keys", json=body)
         return AuthCreated.model_validate(data)
 
-    def auth_list(self, *, active: bool | None = None) -> list[AuthKey]:
-        """GET /v1/auth/keys. List keys visible to the caller's tenant."""
+    def auth_list(self, *, active: bool | None = None, page_size: int | None = None) -> list[AuthKey]:
+        """GET /v1/auth/keys. List keys visible to the caller's tenant, following X-Next-Cursor across pages."""
         params: dict[str, Any] = {}
         if active is not None:
             params["active"] = "true" if active else "false"
-        data = self._request("GET", "/v1/auth/keys", params=params)
-        items = data if isinstance(data, list) else data.get("keys", [])
-        return [AuthKey.model_validate(item) for item in items]
+        if page_size is not None:
+            params["limit"] = page_size
+        items: list[Any] = []
+        while True:
+            response = self._send("GET", "/v1/auth/keys", params=params)
+            data = response.json()
+            # Server returns either a list directly or {keys: [...]}; handle both.
+            items.extend(data if isinstance(data, list) else data.get("keys", []))
+            cursor = response.headers.get("x-next-cursor")
+            if not cursor:
+                return [AuthKey.model_validate(item) for item in items]
+            params["cursor"] = cursor
 
     def auth_revoke(self, key_id: str) -> AuthRevoked:
         """DELETE /v1/auth/keys/:keyId. Revoke a key."""

@@ -139,9 +139,9 @@
       "id": "noise-02-deploy",
       "type": "noise-rejection",
       "memories": [
-        {"content": "quanta-mental.com deploys via GitHub Actions from the master branch. The workflow file is .github/workflows/deploy.yml. Do NOT use wrangler pages deploy manually — it bypasses the CI lint/test gate.", "pinned": true}
+        {"content": "example.com deploys via GitHub Actions from the master branch. The workflow file is .github/workflows/deploy.yml. Do NOT use wrangler pages deploy manually — it bypasses the CI lint/test gate.", "pinned": true}
       ],
-      "query": "How do I deploy quanta-mental.com?",
+      "query": "How do I deploy example.com?",
       "distractor": "large",
       "rubric": {
         "pass": "Says push to master, GitHub Actions handles it. Does NOT recommend wrangler pages deploy.",

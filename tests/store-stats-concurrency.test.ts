@@ -1,13 +1,14 @@
 // updateStats read-modify-wrote all three meta counters with no transaction and
 // wrote all three back, so concurrent writers lost increments and clobbered
-// counters they had not touched (store.ts:2316 atomic-increment fix).
+// counters they had not touched (store/index-and-stats.ts atomic-increment fix).
 import { describe, it, expect, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
-import { loadStats, initStore } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { loadStats } from '../src/store/index-and-stats.js';
 import { openHippoDb, closeHippoDb, getMeta } from '../src/db.js';
 
 let root: string;
@@ -23,8 +24,8 @@ afterEach(() => {
 // The workers must exercise the shipped updateStats, not a copy of it, so they
 // import the build output. Nothing in `npx vitest run` builds it, so check
 // rather than trust: a stale dist would pass this file against old code.
-const SRC_STORE = join(import.meta.dirname, '..', 'src', 'store.ts');
-const DIST_STORE = join(import.meta.dirname, '..', 'dist', 'store.js');
+const SRC_STORE = join(import.meta.dirname, '..', 'src', 'store', 'index-and-stats.ts');
+const DIST_STORE = join(import.meta.dirname, '..', 'dist', 'store', 'index-and-stats.js');
 const STORE_URL = pathToFileURL(DIST_STORE).href;
 
 function assertFreshBuild(): void {

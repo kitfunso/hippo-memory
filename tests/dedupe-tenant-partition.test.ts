@@ -24,10 +24,11 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore, loadAllEntries } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { remember, type Context } from '../src/api.js';
-import { deduplicateStore } from '../src/dedupe.js';
+import { deduplicateStore, type DedupPair } from '../src/dedupe.js';
 
 function tmpHome(prefix: string) {
   const home = mkdtempSync(join(tmpdir(), prefix));
@@ -51,15 +52,11 @@ function setStrength(home: string, id: string, strength: number): void {
   }
 }
 
-// Same probe pair as tests/dedupe-survivor-determinism.test.ts: 14 tokens per
-// entry, 13 shared, one word swapped ("this" -> "last"). Jaccard = 13/15 =
-// 0.8667 (> 0.7 dedupe threshold), computed against src/search.ts
-// textOverlap's tokenizer (lowercase, punctuation-stripped, length>1 tokens,
-// set-based Jaccard).
+// Same probe pair as tests/dedupe-survivor-determinism.test.ts: one sentence,
+// B with a double space, so the two differ in bytes but match apart from spacing.
 const CONTENT_A =
   'The quarterly finance report shows revenue grew steadily across all four regions this year';
-const CONTENT_B =
-  'The quarterly finance report shows revenue grew steadily across all four regions last year';
+const CONTENT_B = CONTENT_A.replace(' this year', '  this year');
 
 // Byte-identical content used across two tenants for the zero-removal case.
 const SHARED_CONTENT =
@@ -99,7 +96,7 @@ describe('deduplicateStore tenant partition', () => {
 
       // tenant-b: CONTENT_B weak, CONTENT_A strong -> CONTENT_A survives.
       // Deliberately the mirror image of tenant-a's pair, so a leaked
-      // cross-tenant comparison (all four rows overlap pairwise > 0.7)
+      // cross-tenant comparison (all four rows are pairwise duplicates)
       // would produce a different removal count and different survivors
       // than the per-tenant-correct result asserted below.
       const bWeak = remember(ctxFor(home, 'tenant-b'), { content: CONTENT_B });
@@ -150,7 +147,7 @@ describe('deduplicateStore tenant partition', () => {
       expect(dry.removed).toBe(2);
       expect(real.removed).toBe(2);
 
-      const sortByRemoved = (p: { removed: string }[]) =>
+      const sortByRemoved = (p: DedupPair[]) =>
         [...p].sort((x, y) => x.removed.localeCompare(y.removed));
       expect(sortByRemoved(dry.pairs).map((p) => p.removed)).toEqual(
         sortByRemoved(real.pairs).map((p) => p.removed),

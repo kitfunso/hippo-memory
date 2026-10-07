@@ -1,5 +1,5 @@
 """
-Pre-run data check for the quantamental pipeline.
+Pre-run data check for the project-e pipeline.
 Verifies all cache files are present and up to date before running models.
 """
 import subprocess

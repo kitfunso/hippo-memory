@@ -4,7 +4,7 @@
  *
  * Covers the plan's 7-test list against the `includeRecent` block inside
  * `api.getContext`'s `pinnedOnly` branch (src/api.ts:2456-2491), which now
- * filters candidates with `isContentWorthStoring` (src/audit.ts:117) before
+ * filters candidates with `isWorthSurfacing` (src/memory-quality.ts) before
  * slicing to `includeRecent`.
  *
  * Real-DB per project convention. Tests 1-6 seed entries directly via
@@ -22,8 +22,9 @@ import { execFileSync } from 'child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { getContext, type Context } from '../src/api.js';
 
 function tmpHome() {
@@ -54,6 +55,7 @@ function seed(
   opts: { pinned?: boolean; created?: string } = {},
 ) {
   const entry = createMemory(content, {
+    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     pinned: opts.pinned ?? false,
     layer: Layer.Episodic,
     tenantId: 'default',
@@ -368,8 +370,8 @@ describe('DF3 — includeRecent quality floor (CLI end-to-end)', () => {
 
   it('test 7 — `hippo context --pinned-only --include-recent 5` excludes junk against a seeded store', () => {
     initStore(hippoDir);
-    const junk = createMemory('fixed signals', { layer: Layer.Episodic });
-    const clean = createMemory('clean CLI-seeded memory with plenty of specific detail worth keeping', { layer: Layer.Episodic });
+    const junk = createMemory('fixed signals', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic });
+    const clean = createMemory('clean CLI-seeded memory with plenty of specific detail worth keeping', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic });
     junk.created = '2026-08-20T10:00:01.000Z';
     clean.created = '2026-08-20T10:00:00.000Z';
     writeEntry(hippoDir, junk);
@@ -421,6 +423,7 @@ describe('DF3 — pinned budget reserve dedupes mirrored entries', () => {
     // The SAME entry object written to both stores — exactly what
     // syncGlobalToLocal produces (it skips by id, preserving it).
     const pin = createMemory('pinned rule that is mirrored across both stores', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       pinned: true,
       layer: Layer.Episodic,
       tenantId: 'default',
@@ -431,14 +434,14 @@ describe('DF3 — pinned budget reserve dedupes mirrored entries', () => {
 
     const recent = createMemory(
       'a clean recent memory that should still fit alongside the single pin',
-      { pinned: false, layer: Layer.Episodic, tenantId: 'default' },
+      { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, pinned: false, layer: Layer.Episodic, tenantId: 'default' },
     );
     writeEntry(home, recent);
 
     const ctx: Context = {
       hippoRoot: home,
       tenantId: 'default',
-      actor: { kind: 'admin', id: 'test' } as Context['actor'],
+      actor: { subject: 'test', role: 'admin' },
     };
     // Budget sized from the MEASURED token costs (pin 12, recent 17) so the
     // two cases are actually distinguishable:

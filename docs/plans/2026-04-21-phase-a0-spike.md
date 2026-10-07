@@ -6,7 +6,7 @@ Does Claude Code pass the active `model` to the SessionStart hook via stdin? If 
 ## Method
 1. Inspected `~/.claude/scripts/hooks/session-end.js` to see what fields Claude Code's existing Stop hook reads.
 2. Inspected `src/cli.ts:1498-1519` (hippo's `session-end` handler) to confirm the payload shape in production.
-3. Read a real transcript JSONL at `~/.claude/projects/C--Users-skf-s-hippo/a0f143ad-cb25-424c-a956-66d9ee09074e.jsonl`.
+3. Read a real transcript JSONL at `~/.claude/projects/C--Users-<user>-hippo/a0f143ad-cb25-424c-a956-66d9ee09074e.jsonl`.
 
 ## Findings
 
@@ -49,7 +49,7 @@ Cost: one small file-tail per `hippo context --auto` call. Negligible.
 
 ## Evidence snippets
 
-From the transcript (`~/.claude/projects/C--Users-skf-s-hippo/a0f143ad-cb25-424c-a956-66d9ee09074e.jsonl`):
+From the transcript (`~/.claude/projects/C--Users-<user>-hippo/a0f143ad-cb25-424c-a956-66d9ee09074e.jsonl`):
 
 ```json
 {"type":"queue-operation","sessionId":"a0f143ad-...","content":"what is 2+2\n"}

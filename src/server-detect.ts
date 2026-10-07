@@ -41,6 +41,99 @@ const HEALTH_BODY_MAX_BYTES = 64 * 1024;
  */
 const PIDFILE_LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', 'localhost']);
 
+/** False when the pidfile's pid is dead or its url could not be one serve() wrote. */
+function isLiveLoopbackTarget(info: ServerInfo): boolean {
+  // Probe the process. Sending signal 0 throws if the pid is dead or owned
+  // by another user we cannot signal. Either way, treat as stale.
+  // Node's process.kill(pid, 0) is implemented on Windows via OpenProcess +
+  // GetExitCodeProcess, so this works cross-platform for the dead-pid case.
+  try {
+    process.kill(info.pid, 0);
+  } catch {
+    return false;
+  }
+
+  // The pid is live, but it may have been reused by an unrelated process, and
+  // the recorded url is read from a file anyone could forge. serve() only ever
+  // binds a loopback host, so a url that is not http on a loopback host and the
+  // recorded port is malformed or forged. Reject it before probing: the probe,
+  // and the routed request that may follow, can carry HIPPO_API_KEY.
+  let probeUrl: URL;
+  try {
+    probeUrl = new URL(info.url);
+  } catch {
+    return false;
+  }
+  return (
+    probeUrl.protocol === 'http:' &&
+    PIDFILE_LOOPBACK_HOSTS.has(probeUrl.hostname.replace(/^\[(.*)\]$/, '$1')) &&
+    probeUrl.port === String(info.port)
+  );
+}
+
+/** The whole body as text, or null once it passes HEALTH_BODY_MAX_BYTES (the stream is then cancelled). */
+async function readCappedBody(body: ReadableStream<Uint8Array>): Promise<string | null> {
+  // Read the body under a hard byte cap. The process answering on info.url
+  // may not be hippo (pid reuse is the case this probe guards against), so
+  // its response is untrusted: never hand an unbounded stream to a parser.
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let raw = '';
+  let received = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    received += value.byteLength;
+    if (received > HEALTH_BODY_MAX_BYTES) {
+      await reader.cancel();
+      return null;
+    }
+    raw += decoder.decode(value, { stream: true });
+  }
+  raw += decoder.decode();
+  return raw;
+}
+
+/** True when /health on info.url reports the pidfile's started_at; unlinks the pidfile on any definitive mismatch. */
+async function healthMatchesPidfile(hippoRoot: string, info: ServerInfo): Promise<boolean> {
+  // Confirm the process answering on info.url is this hippo server by matching
+  // the /health `started_at` against the pidfile. A connection refusal, a
+  // non-200, or a malformed body unlink the pidfile as stale. A probe timeout
+  // is deliberately left ambiguous: a live but momentarily-busy server (e.g.
+  // blocked on a synchronous query) can miss the 300ms window, so a timeout
+  // returns null WITHOUT unlinking. The pidfile survives for the next probe.
+  try {
+    const res = await fetch(`${info.url}/health`, {
+      signal: AbortSignal.timeout(HEALTH_PROBE_TIMEOUT_MS),
+    });
+    if (!res.ok || !res.body) {
+      removePidfile(hippoRoot);
+      return false;
+    }
+    const raw = await readCappedBody(res.body);
+    if (raw === null) {
+      removePidfile(hippoRoot);
+      return false;
+    }
+    const body: { started_at?: unknown } = JSON.parse(raw);
+    if (body.started_at !== info.started_at) {
+      removePidfile(hippoRoot);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    // A timeout is ambiguous (the server may be alive but busy), so keep the
+    // pidfile. Any other failure (connection refused, malformed body) is
+    // definitive: unlink it as stale.
+    // SAFETY: err's shape is unknown (catch clause); reading an optional
+    // .name property structurally is safe regardless of the object's actual type.
+    if ((err as { name?: unknown })?.name !== 'TimeoutError') {
+      removePidfile(hippoRoot);
+    }
+    return false;
+  }
+}
+
 /**
  * Read .hippo/server.pid and return the embedded ServerInfo if a live hippo
  * server is genuinely answering on the recorded url. Returns null on missing,
@@ -64,93 +157,16 @@ export async function detectServer(hippoRoot: string): Promise<ServerInfo | null
   try {
     info = JSON.parse(readFileSync(path, 'utf8'));
   } catch {
-    try { unlinkSync(path); } catch {}
+    removePidfile(hippoRoot);
     return null;
   }
 
-  // Probe the process. Sending signal 0 throws if the pid is dead or owned
-  // by another user we cannot signal. Either way, treat as stale.
-  // Node's process.kill(pid, 0) is implemented on Windows via OpenProcess +
-  // GetExitCodeProcess, so this works cross-platform for the dead-pid case.
-  try {
-    process.kill(info.pid, 0);
-  } catch {
-    try { unlinkSync(path); } catch {}
+  if (!isLiveLoopbackTarget(info)) {
+    removePidfile(hippoRoot);
     return null;
   }
 
-  // The pid is live, but it may have been reused by an unrelated process, and
-  // the recorded url is read from a file anyone could forge. serve() only ever
-  // binds a loopback host, so a url that is not http on a loopback host and the
-  // recorded port is malformed or forged. Reject it before probing: the probe,
-  // and the routed request that may follow, can carry HIPPO_API_KEY.
-  let probeUrl: URL;
-  try {
-    probeUrl = new URL(info.url);
-  } catch {
-    try { unlinkSync(path); } catch {}
-    return null;
-  }
-  if (
-    probeUrl.protocol !== 'http:' ||
-    !PIDFILE_LOOPBACK_HOSTS.has(probeUrl.hostname) ||
-    probeUrl.port !== String(info.port)
-  ) {
-    try { unlinkSync(path); } catch {}
-    return null;
-  }
-
-  // Confirm the process answering on info.url is this hippo server by matching
-  // the /health `started_at` against the pidfile. A connection refusal, a
-  // non-200, or a malformed body unlink the pidfile as stale. A probe timeout
-  // is deliberately left ambiguous: a live but momentarily-busy server (e.g.
-  // blocked on a synchronous query) can miss the 300ms window, so a timeout
-  // returns null WITHOUT unlinking. The pidfile survives for the next probe.
-  try {
-    const res = await fetch(`${info.url}/health`, {
-      signal: AbortSignal.timeout(HEALTH_PROBE_TIMEOUT_MS),
-    });
-    if (!res.ok || !res.body) {
-      try { unlinkSync(path); } catch {}
-      return null;
-    }
-    // Read the body under a hard byte cap. The process answering on info.url
-    // may not be hippo (pid reuse is the case this probe guards against), so
-    // its response is untrusted: never hand an unbounded stream to a parser.
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let raw = '';
-    let received = 0;
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      received += value.byteLength;
-      if (received > HEALTH_BODY_MAX_BYTES) {
-        await reader.cancel();
-        try { unlinkSync(path); } catch {}
-        return null;
-      }
-      raw += decoder.decode(value, { stream: true });
-    }
-    raw += decoder.decode();
-    const body: { started_at?: unknown } = JSON.parse(raw);
-    if (body.started_at !== info.started_at) {
-      try { unlinkSync(path); } catch {}
-      return null;
-    }
-  } catch (err) {
-    // A timeout is ambiguous (the server may be alive but busy), so keep the
-    // pidfile. Any other failure (connection refused, malformed body) is
-    // definitive: unlink it as stale.
-    // SAFETY: err's shape is unknown (catch clause); reading an optional
-    // .name property structurally is safe regardless of the object's actual type.
-    if ((err as { name?: unknown })?.name !== 'TimeoutError') {
-      try { unlinkSync(path); } catch {}
-    }
-    return null;
-  }
-
-  return info;
+  return (await healthMatchesPidfile(hippoRoot, info)) ? info : null;
 }
 
 /**
@@ -187,7 +203,7 @@ export function writePidfile(
  */
 export function removePidfile(hippoRoot: string): void {
   const path = join(hippoRoot, PIDFILE);
-  try { unlinkSync(path); } catch {}
+  try { unlinkSync(path); } catch { /* already gone or undeletable; the next detectServer probe re-checks */ }
 }
 
 /**

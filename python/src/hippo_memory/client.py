@@ -105,6 +105,13 @@ class Hippo:
         path is dead today. v0.2 should add either a typed empty-result
         sentinel here or a per-caller is-None check before model_validate).
         """
+        response = await self._send(method, path, **kwargs)
+        if response.status_code == 204 or not response.content:
+            return None
+        return response.json()
+
+    async def _send(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
+        """Send one request and raise HippoError on non-2xx; callers that read headers use this."""
         response = await self._client.request(method, path, **kwargs)
         if response.status_code >= 400:
             body: dict[str, Any] | None = None
@@ -114,9 +121,7 @@ class Hippo:
                 pass
             message = (body or {}).get("error") if body else response.text
             raise HippoError(response.status_code, message or response.text, body)
-        if response.status_code == 204 or not response.content:
-            return None
-        return response.json()
+        return response
 
     # -------------------------------------------------------------------
     # Health
@@ -337,15 +342,23 @@ class Hippo:
         data = await self._request("POST", "/v1/auth/keys", json=body)
         return AuthCreated.model_validate(data)
 
-    async def auth_list(self, *, active: bool | None = None) -> list[AuthKey]:
-        """GET /v1/auth/keys. List keys visible to the caller's tenant."""
+    async def auth_list(self, *, active: bool | None = None, page_size: int | None = None) -> list[AuthKey]:
+        """GET /v1/auth/keys. List keys visible to the caller's tenant, following X-Next-Cursor across pages."""
         params: dict[str, Any] = {}
         if active is not None:
             params["active"] = "true" if active else "false"
-        data = await self._request("GET", "/v1/auth/keys", params=params)
-        # Server returns either a list directly or {keys: [...]}; handle both.
-        items = data if isinstance(data, list) else data.get("keys", [])
-        return [AuthKey.model_validate(item) for item in items]
+        if page_size is not None:
+            params["limit"] = page_size
+        items: list[Any] = []
+        while True:
+            response = await self._send("GET", "/v1/auth/keys", params=params)
+            data = response.json()
+            # Server returns either a list directly or {keys: [...]}; handle both.
+            items.extend(data if isinstance(data, list) else data.get("keys", []))
+            cursor = response.headers.get("x-next-cursor")
+            if not cursor:
+                return [AuthKey.model_validate(item) for item in items]
+            params["cursor"] = cursor
 
     async def auth_revoke(self, key_id: str) -> AuthRevoked:
         """DELETE /v1/auth/keys/:keyId. Revoke a key."""

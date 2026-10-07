@@ -3,14 +3,19 @@
  * Real stores, real settings files, the built CLI for the exit code.
  */
 import { describe, it, expect, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs';
+import * as fs from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { initStore, writeEntry } from '../src/store.js';
-import { createMemory } from '../src/memory.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { runDoctor, formatDoctor } from '../src/doctor.js';
+import { startCompaction } from '../src/compaction-record.js';
+import { __setSpoolFs } from '../src/compaction-spool.js';
+import { repairProjects } from '../src/project-merge.js';
 import { openHippoDb, openHippoDbReadOnly, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, setMeta } from '../src/db.js';
 
 function sha256(file: string): string {
@@ -20,10 +25,13 @@ function sha256(file: string): string {
 const HIPPO_JS = resolve(__dirname, '..', 'bin', 'hippo.js');
 const dirs: string[] = [];
 const origHome = process.env.HIPPO_HOME;
+const origConfigDir = process.env.CLAUDE_CONFIG_DIR;
 afterEach(() => {
   while (dirs.length) rmSync(dirs.pop()!, { recursive: true, force: true });
   if (origHome === undefined) delete process.env.HIPPO_HOME;
   else process.env.HIPPO_HOME = origHome;
+  if (origConfigDir === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+  else process.env.CLAUDE_CONFIG_DIR = origConfigDir;
 });
 function tmp(prefix: string): string {
   const d = mkdtempSync(join(tmpdir(), prefix));
@@ -48,7 +56,7 @@ describe('hippo doctor', () => {
     const cwd = tmp('doctor-ok-');
     process.env.HIPPO_HOME = join(cwd, 'global');
     initStore(join(cwd, '.hippo'));
-    writeEntry(join(cwd, '.hippo'), createMemory('the staging deploy needs the VPN to reach the health check'));
+    writeEntry(join(cwd, '.hippo'), createMemory('the staging deploy needs the VPN to reach the health check', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
     mkdirSync(join(cwd, '.claude'));
     writeFileSync(join(cwd, '.claude', 'settings.json'), JSON.stringify({ hooks: {
       UserPromptSubmit: [{ hooks: [{ type: 'command', command: 'hippo context --pinned-only --include-recent 5 --format additional-context' }] }],
@@ -75,6 +83,122 @@ describe('hippo doctor', () => {
     expect(runDoctor({ cwd, home: cwd, version: 'test' }).checks.find((c) => c.id === 'failures')).toMatchObject({ status: 'warn' });
   });
 
+  it('names compactions left unfinished for over 10 minutes and points at sleep, ignoring live, finished and closed ones', () => {
+    const cwd = tmp('doctor-compactions-');
+    process.env.HIPPO_HOME = join(cwd, 'global');
+    const hippoRoot = join(cwd, '.hippo');
+    initStore(hippoRoot);
+    const now = new Date('2026-09-29T12:00:00.000Z');
+    expect(runDoctor({ cwd, home: cwd, version: 'test', now }).checks.find((c) => c.id === 'compactions')).toMatchObject({ status: 'pass', detail: '0 compactions recorded, none stuck' });
+
+    const ago = (minutes: number): Date => new Date(now.getTime() - minutes * 60_000);
+    const db = openHippoDb(hippoRoot);
+    const begin = (session: string, at: Date, transcript: string | null = '/t.jsonl'): string =>
+      startCompaction(db, 'default', { sessionId: session, originProject: '', trigger: 'auto', cwd: null, transcriptPath: transcript }, at);
+    begin('started-stuck', ago(20));
+    begin('started-live', ago(2));
+    begin('started-transcript-gone', ago(40 * 24 * 60));
+    begin('started-no-transcript', ago(20), null);
+    const summarisedStuck = begin('summarised-stuck', ago(30));
+    const summarisedLive = begin('summarised-live', ago(30));
+    const finished = begin('finished', ago(30));
+    const closed = begin('closed-no-summary', ago(30));
+    const setStatus = db.prepare(`UPDATE compactions SET status = ?, summarised_at = ? WHERE id = ?`);
+    setStatus.run('summarised', ago(20).toISOString(), summarisedStuck);
+    setStatus.run('summarised', ago(3).toISOString(), summarisedLive);
+    setStatus.run('done', ago(20).toISOString(), finished);
+    setStatus.run('no-summary', ago(20).toISOString(), closed);
+    closeHippoDb(db);
+
+    const check = runDoctor({ cwd, home: cwd, version: 'test', now }).checks.find((c) => c.id === 'compactions')!;
+    expect(check).toMatchObject({ status: 'warn', fix: expect.stringContaining('hippo sleep') });
+    expect(check.detail).toBe('2 compactions unfinished after 10 minutes (1 with a summary whose memories are not saved yet, 1 with no summary yet)');
+  });
+
+  describe('compaction spool counts', () => {
+    const now = new Date('2026-09-29T12:00:00.000Z');
+    const ago = (minutes: number): Date => new Date(now.getTime() - minutes * 60_000);
+    const stamp = (at: Date): string => String(at.getTime()).padStart(13, '0');
+    interface SpoolStore {
+      cwd: string;
+      hippoRoot: string;
+      spoolAt: (name: string, mtime: Date) => void;
+    }
+    const setup = (prefix: string): SpoolStore => {
+      const cwd = tmp(prefix);
+      process.env.HIPPO_HOME = join(cwd, 'global');
+      const hippoRoot = join(cwd, '.hippo');
+      initStore(hippoRoot);
+      const spoolAt = (name: string, mtime: Date): void => {
+        mkdirSync(join(hippoRoot, 'compactions-spool'), { recursive: true });
+        const file = join(hippoRoot, 'compactions-spool', name);
+        writeFileSync(file, '{}');
+        utimesSync(file, mtime, mtime);
+      };
+      return { cwd, hippoRoot, spoolAt };
+    };
+    const compactions = (cwd: string) => runDoctor({ cwd, home: cwd, version: 'test', now }).checks.find((c) => c.id === 'compactions')!;
+
+    it('adds waiting, stale and .bad spool counts to unfinished compactions', () => {
+      const { cwd, hippoRoot, spoolAt } = setup('doctor-spool-');
+      const db = openHippoDb(hippoRoot);
+      const begin = (session: string): string => startCompaction(db, 'default', { sessionId: session, originProject: '', trigger: 'auto', cwd: null, transcriptPath: '/t.jsonl' }, ago(30));
+      begin('started-stuck');
+      db.prepare(`UPDATE compactions SET status = 'summarised', summarised_at = ? WHERE id = ?`).run(ago(20).toISOString(), begin('summarised-stuck'));
+      closeHippoDb(db);
+      spoolAt(`${stamp(ago(20))}-aaaaaaa1.a0.json`, ago(1));
+      spoolAt('s1-1.json', ago(20));
+      spoolAt(`${stamp(ago(2))}-aaaaaaa2.a0.json`, ago(20));
+      spoolAt('s2-1.json', ago(2));
+      spoolAt(`${stamp(ago(30))}-bbbbbbb1.a1.claim-${stamp(ago(20))}`, ago(1));
+      spoolAt(`${stamp(ago(30))}-bbbbbbb2.a0.claim-${stamp(ago(2))}`, ago(20));
+      spoolAt('s3-1.json.claimed', ago(2));
+      spoolAt(`${stamp(ago(30))}-ccccccc1.a0.json.tmp`, ago(20));
+      spoolAt(`${stamp(ago(30))}-ccccccc2.a0.json.tmp`, ago(2));
+      spoolAt(`${stamp(ago(30))}-ddddddd1.failed.bad`, ago(2));
+      spoolAt('s4-1.json.bad', ago(2));
+      spoolAt('replay.lock', ago(20));
+
+      const check = compactions(cwd);
+      expect(check.status).toBe('warn');
+      expect(check.detail).toBe('2 compactions unfinished after 10 minutes (1 with a summary whose memories are not saved yet, 1 with no summary yet); spool: 2 waiting, 2 left by a replay that stopped, 2 .bad');
+      expect(check.fix).toMatch(/^hippo sleep {3}\(replays them\); open the \.bad files in .+[\\/]\.hippo[\\/]compactions-spool, save what you still need with hippo remember, then delete them$/);
+    });
+
+    it('warns on .bad spool files alone', () => {
+      const { cwd, spoolAt } = setup('doctor-spool-bad-');
+      spoolAt(`${stamp(ago(30))}-ddddddd1.unreadable.bad`, ago(2));
+      const check = compactions(cwd);
+      expect(check.status).toBe('warn');
+      expect(check.detail).toBe('0 compactions recorded, none stuck in the store; spool: 0 waiting, 0 left by a replay that stopped, 1 .bad');
+      expect(check.fix).toContain('.bad files in');
+      expect(check.fix).not.toContain('hippo sleep');
+    });
+
+    it('a fresh waiting file keeps the check at pass', () => {
+      const { cwd, spoolAt } = setup('doctor-spool-fresh-');
+      spoolAt(`${stamp(ago(1))}-aaaaaaa1.a0.json`, ago(1));
+      expect(compactions(cwd)).toMatchObject({ status: 'pass', detail: '0 compactions recorded, none stuck' });
+    });
+
+    it('a spool that cannot be listed still shows the database counts', () => {
+      const { cwd, spoolAt } = setup('doctor-spool-unread-');
+      spoolAt(`${stamp(ago(30))}-ddddddd1.unreadable.bad`, ago(2));
+      __setSpoolFs({
+        ...fs,
+        readdirSync: (dir) => {
+          if (dir.endsWith('compactions-spool')) throw Object.assign(new Error('EPERM: simulated'), { code: 'EPERM' });
+          return fs.readdirSync(dir);
+        },
+      });
+      try {
+        expect(compactions(cwd)).toMatchObject({ status: 'warn', detail: '0 compactions recorded, none stuck in the store; spool not read: EPERM: simulated' });
+      } finally {
+        __setSpoolFs(null);
+      }
+    });
+  });
+
   it('flags old Node, missing Claude Code hooks, and accepts the plugin instead of hooks', () => {
     const cwd = tmp('doctor-warn-');
     process.env.HIPPO_HOME = join(cwd, 'global');
@@ -87,6 +211,28 @@ describe('hippo doctor', () => {
     expect(r.checks.find((c) => c.id === 'memories')!.status).toBe('warn');
 
     writeFileSync(join(cwd, '.claude', 'settings.json'), JSON.stringify({ enabledPlugins: { 'hippo-memory@hippo-memory': true } }));
+    expect(runDoctor({ cwd, home: cwd, version: 'test' }).checks.find((c) => c.id === 'claude-code')!.status).toBe('pass');
+  });
+
+  it('reads the Claude Code settings from CLAUDE_CONFIG_DIR when it is set, not from <home>/.claude', () => {
+    const cwd = tmp('doctor-config-dir-');
+    process.env.HIPPO_HOME = join(cwd, 'global');
+    initStore(join(cwd, '.hippo'));
+    const config = join(cwd, 'elsewhere');
+    mkdirSync(config);
+    writeFileSync(join(config, 'settings.json'), '{}');
+    process.env.CLAUDE_CONFIG_DIR = config;
+    expect(runDoctor({ cwd, home: cwd, version: 'test' }).checks.find((c) => c.id === 'claude-code')).toMatchObject({ status: 'warn', fix: 'hippo hook install claude-code' });
+  });
+
+  it('reads a Claude Code settings.json saved with a byte order mark, which install also reads', () => {
+    const cwd = tmp('doctor-bom-');
+    process.env.HIPPO_HOME = join(cwd, 'global');
+    initStore(join(cwd, '.hippo'));
+    mkdirSync(join(cwd, '.claude'));
+    const commands = ['hippo context --pinned-only', 'hippo session-end', 'hippo pre-compact', 'hippo compact-resume', 'hippo post-compact', 'hippo capture-error'];
+    const hooks = { Mixed: commands.map((command) => ({ hooks: [{ type: 'command', command }] })) };
+    writeFileSync(join(cwd, '.claude', 'settings.json'), String.fromCodePoint(0xfeff) + JSON.stringify({ hooks }));
     expect(runDoctor({ cwd, home: cwd, version: 'test' }).checks.find((c) => c.id === 'claude-code')!.status).toBe('pass');
   });
 
@@ -160,5 +306,26 @@ describe('hippo doctor', () => {
 
     const r = runDoctor({ cwd, home: cwd, version: 'test' });
     expect(r.checks.find((c) => c.id === 'schema')).toMatchObject({ status: 'fail', fix: 'npm install -g hippo-memory@latest' });
+  });
+
+  it('warns about merged rows the global store tagged user-global by mistake, and passes once repaired', () => {
+    const cwd = tmp('doctor-projects-');
+    const global = join(cwd, 'global');
+    process.env.HIPPO_HOME = global;
+    initStore(global);
+    const parent = { ...createMemory('the proj-b deploy needs the staging VPN', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), origin_project: 'proj-b' };
+    writeEntry(global, parent);
+    writeEntry(global, { ...createMemory('merged: the proj-b deploy needs the VPN', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), source: 'consolidation', parents: [parent.id], origin_project: '' });
+
+    expect(runDoctor({ cwd, home: cwd, version: 'test' }).checks.find((c) => c.id === 'projects'))
+      .toMatchObject({ status: 'warn', fix: expect.stringContaining('hippo projects repair --global') });
+
+    const db = openHippoDb(global);
+    try {
+      repairProjects(db, global, { tenantId: 'default', dryRun: false });
+    } finally {
+      closeHippoDb(db);
+    }
+    expect(runDoctor({ cwd, home: cwd, version: 'test' }).checks.find((c) => c.id === 'projects')!.status).toBe('pass');
   });
 });

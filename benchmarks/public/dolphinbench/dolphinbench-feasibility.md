@@ -1,6 +1,6 @@
 # DolphinBench x hippo: feasibility and run plan
 
-2026-09-28. DolphinBench clone `C:/Users/skf_s/hippo-bench/dolphinbench` at 81cb6f8; relative paths below are inside it.
+2026-09-28. DolphinBench clone `C:/Users/<user>/hippo-bench/dolphinbench` at 81cb6f8; relative paths below are inside it.
 
 ## Verdict: feasible with deviations
 
@@ -11,7 +11,7 @@ The stock runner, mock apps and grader ran end to end in WSL with no paid key, a
 - `dolphin_smoke.py`, beside this file, runs the stock `Runner` in WSL on Morgan: 2 history sessions, then test 001, with a scripted agent that places the order through the real mock-app MCP server.
 - Stub judge: `runs/smoke-stub-20260928T103909`, 2 of 2 checks pass. Codex judge: `runs/smoke-codex-20260928T104011`, 2 of 2 pass; the field check went to gpt-5.6-sol, medium, in 8.8 s and 4,716 tokens (`runs/codex-0.log:5-9,38-39`).
 - Judge calibration, `dolphin_judge_calibration.py 10`: 60 judge conversations from the public Claude Code + Mem0 evidence (10 Sol-pass and 10 Sol-fail per persona) re-judged through codex. 59 of 60 agree; the miss is one Morgan-036 field check that Sol failed and codex passed (`runs/judge-calibration.out`).
-- Outputs live in `C:/Users/skf_s/hippo-bench/runs/`. The scratch codex profile and its auth.json copy are deleted.
+- Outputs live in `C:/Users/<user>/hippo-bench/runs/`. The scratch codex profile and its auth.json copy are deleted.
 
 ## Q1. Mock apps and call_app
 
@@ -53,7 +53,7 @@ From the public Claude Code + Sonnet 5 + Mem0 evidence (`dolphin_stats.py eviden
 
 ## Recommended run plan
 
-1. Pin hippo: clone `C:/Users/skf_s/hippo` into WSL ext4 (for example `~/hippo-pinned`), check out a named commit, then `npm ci && npm run build` there (WSL node 22.22.0 meets engines >=22.16.0). The dist in `C:/Users/skf_s/hippo` dates from 2026-09-25, older than HEAD 8690a38, and must not be rebuilt in place.
+1. Pin hippo: clone `C:/Users/<user>/hippo` into WSL ext4 (for example `~/hippo-pinned`), check out a named commit, then `npm ci && npm run build` there (WSL node 22.22.0 meets engines >=22.16.0). The dist in `C:/Users/<user>/hippo` dates from 2026-09-25, older than HEAD 8690a38, and must not be rebuilt in place.
 2. Store, one per persona: POST all 13,539 dated user messages (`[narrative_date] message`, the runner's own format) to /memories with the session timestamp. Hash the stored entries (id, created, content).
 3. Serve two read-only servers from the pinned clone on that data dir: `--arm hippo` (shipped 365-day half-life, v1.52.3 src/memory.ts:505; embeddings off as pre-registered, hippo-mem0-server.mjs:56-57) and `--arm bm25` (:111-113). The server writes the store only in addChunk (:75-96) and deleteUser (:124-129); the hash check catches any other write.
 4. Agent: `npm i -g @anthropic-ai/claude-code@2.1.259` in WSL; Sonnet 5 at medium effort (configuration.json:6); token in the environment only; a fresh config dir per test; no native memory; Claude default built-in tools as in the official run (configuration.json:9).
@@ -85,16 +85,16 @@ From the public Claude Code + Sonnet 5 + Mem0 evidence (`dolphin_stats.py eviden
 1. `claude setup-token` for CLAUDE_CODE_OAUTH_TOKEN: one-time and interactive, the founder only. Keep the token in the environment, never in a file.
 2. The adapter (plan step 6) does not exist yet, about a day of work.
 3. Everything must run in WSL: the runner fails on native Windows (fcntl at runner.py:7, directory fsync at harness/durable_json.py:38, backslash manifest keys at submission.py:505). Claude Code is not yet installed there (plan step 4).
-4. hippo must be built from a pinned clone outside `C:/Users/skf_s/hippo` (plan step 1).
+4. hippo must be built from a pinned clone outside `C:/Users/<user>/hippo` (plan step 1).
 
 Risks, not blockers: the subscription caps for this load are unknown. Codex needs a profile holding auth.json, and a copied auth.json can fail when either copy refreshes the token (refresh_token_reused); pointing `CODEX_HOME` at the real profile with `--ignore-user-config` may avoid the copy (untested).
 
 ## Regenerate
 
-The scripts sit beside this file (`C:/Users/skf_s/hippo-wt-dolphin/benchmarks/public/dolphinbench`, `$DOLPHIN` in WSL); the clone, the venv, the evidence and every output stay in `C:/Users/skf_s/hippo-bench`.
+The scripts sit beside this file (`C:/Users/<user>/hippo-wt-dolphin/benchmarks/public/dolphinbench`, `$DOLPHIN` in WSL); the clone, the venv, the evidence and every output stay in `C:/Users/<user>/hippo-bench`.
 
-- Stats: `C:/Users/skf_s/AppData/Local/Programs/Python/Python312/python.exe C:/Users/skf_s/hippo-wt-dolphin/benchmarks/public/dolphinbench/dolphin_stats.py` (steps: history, tests, results, evidence).
-- Smoke, stub judge: `wsl.exe -e bash -lc '/mnt/c/Users/skf_s/hippo-bench/.venv-dolphin-wsl/bin/python /mnt/c/Users/skf_s/hippo-wt-dolphin/benchmarks/public/dolphinbench/dolphin_smoke.py stub'`
+- Stats: `C:/Users/<user>/AppData/Local/Programs/Python/Python312/python.exe C:/Users/<user>/hippo-wt-dolphin/benchmarks/public/dolphinbench/dolphin_stats.py` (steps: history, tests, results, evidence).
+- Smoke, stub judge: `wsl.exe -e bash -lc '/mnt/c/Users/<user>/hippo-bench/.venv-dolphin-wsl/bin/python /mnt/c/Users/<user>/hippo-wt-dolphin/benchmarks/public/dolphinbench/dolphin_smoke.py stub'`
 - Smoke, codex judge: the same with `DOLPHIN_CODEX_HOME=<clean profile> DOLPHIN_JUDGE_MODEL=gpt-5.6-sol` and `codex` in place of `stub`. A clean profile is a directory holding only a copy of auth.json; delete it afterwards.
-- Calibration: `DOLPHIN_CODEX_HOME=<clean profile> DOLPHIN_JUDGE_MODEL=gpt-5.6-sol .venv-dolphin-wsl/bin/python $DOLPHIN/dolphin_judge_calibration.py 10`, run in WSL from `/mnt/c/Users/skf_s/hippo-bench`.
-- Evidence: `C:/Users/skf_s/hippo-bench/evidence/<persona>-claude-mem0-results.json.gz`, from `https://dolphinbench-review.vercel.app/leaderboard/evidence/<persona>-claude-mem0-results.json.gz`; SHA256 matches `website/content/official-results.json`.
+- Calibration: `DOLPHIN_CODEX_HOME=<clean profile> DOLPHIN_JUDGE_MODEL=gpt-5.6-sol .venv-dolphin-wsl/bin/python $DOLPHIN/dolphin_judge_calibration.py 10`, run in WSL from `/mnt/c/Users/<user>/hippo-bench`.
+- Evidence: `C:/Users/<user>/hippo-bench/evidence/<persona>-claude-mem0-results.json.gz`, from `https://dolphinbench-review.vercel.app/leaderboard/evidence/<persona>-claude-mem0-results.json.gz`; SHA256 matches `website/content/official-results.json`.

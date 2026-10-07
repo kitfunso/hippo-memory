@@ -3,7 +3,9 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execSync } from 'node:child_process';
-import { readEntry, loadAllEntries } from '../src/store.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { readEntry, loadAllEntries } from '../src/store/entry-reads.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 
 const CLI = join(process.cwd(), 'dist', 'cli.js');
 
@@ -52,6 +54,50 @@ describe('hippo supersede', () => {
     expect(newEntry!.content).toContain('X is false now');
     expect(newEntry!.superseded_by).toBeNull();
 
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  it('keeps the old row origin project and session on the new row', () => {
+    const home = mkdtempSync(join(tmpdir(), 'hippo-ss-'));
+    hippo(home, 'init --no-hooks --no-schedule --no-learn');
+    const hippoRoot = join(home, '.hippo');
+    // The origin differs from the one this store would stamp, as a project row held in the global store does.
+    const old = {
+      ...createMemory('the billing service retries a failed charge three times', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+      origin_project: 'proj-a',
+      source_session_id: 'sess-old',
+    };
+    writeEntry(hippoRoot, old);
+
+    hippo(home, `supersede ${old.id} "the billing service retries a failed charge five times"`);
+
+    const next = readEntry(hippoRoot, readEntry(hippoRoot, old.id)!.superseded_by!);
+    expect(next!.origin_project).toBe('proj-a');
+    expect(next!.source_session_id).toBe('sess-old');
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  it('carries layer, tags and pin from the old row unless a flag overrides them', () => {
+    const home = mkdtempSync(join(tmpdir(), 'hippo-ss-'));
+    hippo(home, 'init --no-hooks --no-schedule --no-learn');
+    const hippoRoot = join(home, '.hippo');
+    const seed = (content: string) => {
+      const entry = createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['billing', 'retry'], pinned: true });
+      writeEntry(hippoRoot, entry);
+      return entry.id;
+    };
+    const successor = (id: string) => readEntry(hippoRoot, readEntry(hippoRoot, id)!.superseded_by!)!;
+
+    const kept = seed('the billing service retries a failed charge three times');
+    hippo(home, `supersede ${kept} "the billing service retries a failed charge five times"`);
+    expect(successor(kept).tags).toEqual(['billing', 'retry']);
+    expect(successor(kept).pinned).toBe(true);
+    expect(successor(kept).layer).toBe('episodic');
+
+    const changed = seed('the billing service pages after a failed charge retry');
+    hippo(home, `supersede ${changed} "the billing service pages after two failed charge retries" --tag paging --layer semantic`);
+    expect(successor(changed).tags).toEqual(['paging']);
+    expect(successor(changed).layer).toBe('semantic');
     rmSync(home, { recursive: true, force: true });
   });
 

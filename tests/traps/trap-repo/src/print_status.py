@@ -1,5 +1,5 @@
 """
-Status reporter for the quantamental pipeline.
+Status reporter for the project-e pipeline.
 Prints a human-readable summary of the last run.
 """
 

@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync, execSync } from 'node:child_process';
 import { Worker } from 'node:worker_threads';
+import { saveSessionHandoff } from '../src/store/handoffs.js';
 import {
   createCard,
   loadCard,
@@ -16,9 +17,8 @@ import {
   reviewCard,
   completeCard,
   reclaimExpiredCards,
-  saveSessionHandoff,
   loadLatestHandoffForCard,
-} from '../src/store.js';
+} from '../src/store-cards.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { CARD_LEASE_MS } from '../src/card.js';
 

@@ -9,8 +9,10 @@ import { mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { initStore, writeEntry, readEntry } from '../src/store.js';
-import { createMemory } from '../src/memory.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { readEntry } from '../src/store/entry-reads.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 
 const CLI = resolve(__dirname, '..', 'bin', 'hippo.js');
 
@@ -68,7 +70,7 @@ describe('hippo invalidate CLI contract', () => {
   });
 
   it('--dry-run before the pattern previews without writing (parser allowlist end-to-end)', () => {
-    const mem = createMemory('REST API uses Bearer tokens everywhere', { tags: ['api'] });
+    const mem = createMemory('REST API uses Bearer tokens everywhere', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['api'] });
     writeEntry(hippoRoot, mem);
 
     const { stdout } = runCli(tmpDir, ['invalidate', '--dry-run', 'REST API']);
@@ -80,8 +82,8 @@ describe('hippo invalidate CLI contract', () => {
   });
 
   it('--id invalidates exactly one memory end-to-end', () => {
-    const target = createMemory('Unrelated gardening notes', { tags: ['garden'] });
-    const other = createMemory('Unrelated cooking notes', { tags: ['cooking'] });
+    const target = createMemory('Unrelated gardening notes', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['garden'] });
+    const other = createMemory('Unrelated cooking notes', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['cooking'] });
     writeEntry(hippoRoot, target);
     writeEntry(hippoRoot, other);
 
@@ -92,7 +94,7 @@ describe('hippo invalidate CLI contract', () => {
   });
 
   it('a pattern merely CONTAINING a tag word does not hit that tag (incident shape)', () => {
-    const bystander = createMemory('Weekly grocery budget tracking notes', { tags: ['hippo'] });
+    const bystander = createMemory('Weekly grocery budget tracking notes', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['hippo'] });
     writeEntry(hippoRoot, bystander);
 
     const { stdout } = runCli(tmpDir, ['invalidate', 'hippo salience gate experiment']);

@@ -197,7 +197,7 @@ describe('writeRecallTrace', () => {
     try {
       const db = openHippoDb(home);
       closeHippoDb(db);
-      const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const errSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
       let traceId: number | null = -1;
       expect(() => {
         traceId = writeRecallTrace(db, {
@@ -322,7 +322,7 @@ describe('recordTraceOutcome', () => {
           query: 'q',
           results: [{ memoryId: 'mem-a', score: 1 }],
         });
-        const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const errSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
         recordTraceOutcome(db, {
           traceId: traceId!,
           tenantId: 'tenant_b', // mismatched — trace belongs to 'default'
@@ -345,7 +345,7 @@ describe('recordTraceOutcome', () => {
     try {
       const db = openHippoDb(home);
       try {
-        const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const errSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
         recordTraceOutcome(db, {
           traceId: 999999,
           tenantId: 'default',
@@ -405,7 +405,7 @@ describe('recordTraceOutcome', () => {
           query: 'q',
           results: [{ memoryId: 'mem-a', score: 0.9 }],
         });
-        const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const errSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
         recordTraceOutcome(db, {
           traceId: traceId!,
           tenantId: 'default',
@@ -428,7 +428,7 @@ describe('recordTraceOutcome', () => {
     try {
       const db = openHippoDb(home);
       closeHippoDb(db);
-      const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const errSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
       expect(() => {
         recordTraceOutcome(db, { traceId: 1, tenantId: 'default', outcome: 'positive', memoryIds: ['mem-a'] });
       }).not.toThrow();

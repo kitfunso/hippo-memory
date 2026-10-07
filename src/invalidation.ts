@@ -1,4 +1,6 @@
-import { loadAllEntries, readEntry, writeEntry } from './store.js';
+import { writeEntryOn } from './store/entry-writes.js';
+import { loadAllEntries, selectEntriesByIds } from './store/entry-reads.js';
+import { openStore } from './store/open.js';
 import { openHippoDb, closeHippoDb } from './db.js';
 import { CHURN_STALE_TAG, type MemoryEntry } from './memory.js';
 import {
@@ -115,6 +117,7 @@ export function invalidateMatching(
     dryRun,
     preview: [],
   };
+  const weakened: MemoryEntry[] = [];
 
   for (const entry of entries) {
     if (options?.onlyId !== undefined) {
@@ -150,10 +153,22 @@ export function invalidateMatching(
     if (!entry.tags.includes('invalidated')) {
       entry.tags.push('invalidated');
     }
-    writeEntry(hippoRoot, entry);
+    weakened.push(entry);
   }
 
+  writeEntriesOnOneHandle(hippoRoot, weakened);
   return result;
+}
+
+/** Each row commits alone, as a run of writeEntry calls would, but the store opens once. */
+function writeEntriesOnOneHandle(hippoRoot: string, entries: readonly MemoryEntry[]): void {
+  if (entries.length === 0) return;
+  const db = openStore(hippoRoot);
+  try {
+    for (const entry of entries) writeEntryOn(db, hippoRoot, entry);
+  } finally {
+    closeHippoDb(db);
+  }
 }
 
 const STOPWORDS = new Set([
@@ -224,7 +239,10 @@ export function extractChurnRefs(content: string): ChurnRefs {
 
 export interface DetectChurnStaleOptions {
   tenantId: string;
+  /** The project id; rows under it or legacyName are checked. */
   projectName: string;
+  /** The folder name older rows carry, and the repo folder a memory's paths may start with. */
+  legacyName?: string;
   /** Evaluate matches but write nothing. */
   dryRun?: boolean;
 }
@@ -322,20 +340,21 @@ function emptyChurnResult(dryRun: boolean, skippedPinned: string[] = [], error?:
   return result;
 }
 
-/** Flags memories whose named file/symbol/script changed or disappeared since storage (or last confirmation); only adds/removes CHURN_STALE_TAG, never confidence/half-life/strength. */
-export function detectChurnStale(
-  hippoRoot: string,
-  repoRoot: string,
-  opts: DetectChurnStaleOptions,
-): ChurnStaleResult {
-  const dryRun = opts.dryRun === true;
-  if (!opts.projectName) return emptyChurnResult(dryRun);
+interface ChurnCandidate {
+  entry: MemoryEntry;
+  refs: ChurnRefs;
+}
 
-  const entries = loadAllEntries(hippoRoot, opts.tenantId);
+interface ChurnCandidates {
+  candidates: ChurnCandidate[];
+  skippedPinned: string[];
+}
+
+function collectChurnCandidates(entries: readonly MemoryEntry[], opts: Pick<DetectChurnStaleOptions, 'projectName' | 'legacyName'>): ChurnCandidates {
   const skippedPinned: string[] = [];
-  const candidates: { entry: MemoryEntry; refs: ChurnRefs }[] = [];
+  const candidates: ChurnCandidate[] = [];
   for (const entry of entries) {
-    if (!entry.origin_project || entry.origin_project !== opts.projectName) continue;
+    if (!entry.origin_project || (entry.origin_project !== opts.projectName && entry.origin_project !== opts.legacyName)) continue;
     if (entry.superseded_by) continue;
     if (entry.kind === 'raw' || entry.kind === 'archived') continue;
     if (entry.pinned) {
@@ -346,6 +365,167 @@ export function detectChurnStale(
     if (Number.isNaN(Date.parse(entry.created))) continue;
     candidates.push({ entry, refs: extractChurnRefs(entry.content) });
   }
+  return { candidates, skippedPinned };
+}
+
+/** Git facts every candidate's evidence check shares; per-commit lookups are cached so each runs at most once. */
+interface ChurnGitView {
+  repoRoot: string;
+  projectName: string;
+  windowLog: ChurnCommit[];
+  trackedIndex: TrackedIndex;
+  headIndex: TrackedIndex;
+  presentAtHeadSymbols: Set<string>;
+  headScripts: Record<string, string> | null;
+  resolveAnchorCommit: (anchorIso: string) => string | null;
+  symbolsPresentAt: (hash: string, symbols: string[]) => Set<string>;
+  scriptsAt: (hash: string) => Record<string, string> | null | undefined;
+}
+
+interface ChurnNeeds {
+  paths: boolean;
+  symbols: boolean;
+  scripts: boolean;
+}
+
+function loadChurnGitView(
+  repoRoot: string,
+  projectName: string,
+  candidates: readonly ChurnCandidate[],
+  anchorOf: (entry: MemoryEntry) => string,
+  needs: ChurnNeeds,
+): ChurnGitView {
+  const headFiles = gitLsFilesAtHead(repoRoot);
+  let windowLog: ChurnCommit[] = [];
+  if (needs.paths) {
+    const minAnchor = candidates.reduce<string>((min, c) => {
+      const a = anchorOf(c.entry);
+      return min === '' || a < min ? a : min;
+    }, '');
+    windowLog = fetchChurnWindowLog(repoRoot, minAnchor);
+  }
+  const touchedInWindow = new Set<string>();
+  for (const c of windowLog) for (const f of c.files) touchedInWindow.add(f.path);
+  const trackedIndex = buildTrackedIndex(new Set([...headFiles, ...touchedInWindow]));
+  const headIndex = buildTrackedIndex(headFiles);
+
+  const presentAtHeadSymbols = needs.symbols
+    ? gitGrepPresence(repoRoot, [...new Set(candidates.flatMap((c) => c.refs.symbols))], 'HEAD')
+    : new Set<string>();
+
+  const anchorCommitCache = new Map<string, string | null>();
+  const resolveAnchorCommit = (anchorIso: string): string | null => {
+    if (!anchorCommitCache.has(anchorIso)) {
+      anchorCommitCache.set(anchorIso, resolveCommitBefore(repoRoot, anchorIso));
+    }
+    return anchorCommitCache.get(anchorIso) ?? null;
+  };
+
+  const symbolsAtCommit = new Map<string, Set<string>>();
+  const symbolsPresentAt = (hash: string, symbols: string[]): Set<string> => {
+    const known = symbolsAtCommit.get(hash) ?? new Set<string>();
+    const missing = symbols.filter((s) => !known.has(s));
+    if (missing.length > 0) {
+      for (const s of gitGrepPresence(repoRoot, missing, hash)) known.add(s);
+      symbolsAtCommit.set(hash, known);
+    }
+    return known;
+  };
+
+  const headScripts = needs.scripts ? packageScriptsAt(repoRoot, 'HEAD') : null;
+  const scriptsAtCommit = new Map<string, Record<string, string> | null>();
+  const scriptsAt = (hash: string): Record<string, string> | null | undefined => {
+    if (!scriptsAtCommit.has(hash)) {
+      scriptsAtCommit.set(hash, packageScriptsAt(repoRoot, hash));
+    }
+    return scriptsAtCommit.get(hash);
+  };
+
+  return { repoRoot, projectName, windowLog, trackedIndex, headIndex, presentAtHeadSymbols, headScripts, resolveAnchorCommit, symbolsPresentAt, scriptsAt };
+}
+
+function pathEvidence(git: ChurnGitView, paths: readonly string[], anchorTime: number): string | null {
+  for (const rawPath of paths) {
+    const resolved = resolveTrackedPath(rawPath, git.repoRoot, git.projectName, git.trackedIndex);
+    if (!resolved) continue;
+    if (isTrackedPath(git.headIndex, resolved)) {
+      const changed = git.windowLog.some(
+        (c) => new Date(c.date).getTime() > anchorTime && c.files.some((f) => f.path === resolved),
+      );
+      if (changed) return `file-changed: ${resolved}`;
+    } else {
+      // --no-renames means a rename shows as a D + A pair, so this also fires for renames.
+      const deleted = git.windowLog.some(
+        (c) => new Date(c.date).getTime() > anchorTime &&
+          c.files.some((f) => f.status === 'D' && f.path === resolved),
+      );
+      if (deleted) return `file-deleted: ${resolved}`;
+    }
+  }
+  return null;
+}
+
+function symbolEvidence(git: ChurnGitView, symbols: readonly string[], anchor: string): string | null {
+  const absent = symbols.filter((s) => !git.presentAtHeadSymbols.has(s));
+  if (absent.length === 0) return null;
+  const anchorCommit = git.resolveAnchorCommit(anchor);
+  if (!anchorCommit) return null;
+  const presentAtAnchor = git.symbolsPresentAt(anchorCommit, absent);
+  const hit = absent.find((s) => presentAtAnchor.has(s));
+  return hit ? `symbol-gone: \`${hit}\`` : null;
+}
+
+function scriptEvidence(git: ChurnGitView, scripts: readonly string[], anchor: string, headScripts: Record<string, string>): string | null {
+  const anchorCommit = git.resolveAnchorCommit(anchor);
+  if (!anchorCommit) return null;
+  const anchorScripts = git.scriptsAt(anchorCommit);
+  const hit = anchorScripts
+    ? scripts.find((s) => anchorScripts[s] !== undefined && headScripts[s] === undefined)
+    : undefined;
+  return hit ? `script-gone: ${hit}` : null;
+}
+
+/** The first churn evidence against one candidate: a changed or deleted file, then a gone symbol, then a gone script. */
+function churnEvidence(git: ChurnGitView, refs: ChurnRefs, anchor: string): string | null {
+  let evidence = pathEvidence(git, refs.paths, new Date(anchor).getTime());
+  if (!evidence && refs.symbols.length > 0) evidence = symbolEvidence(git, refs.symbols, anchor);
+  if (!evidence && refs.scripts.length > 0 && git.headScripts !== null) {
+    evidence = scriptEvidence(git, refs.scripts, anchor, git.headScripts);
+  }
+  return evidence;
+}
+
+function tagChurnStale(hippoRoot: string, tenantId: string, toTag: readonly MemoryEntry[], confirmedAt: Map<string, string>): void {
+  // The git calls above can take seconds; a good outcome landing meanwhile moves the anchor past the evidence.
+  const confirmedNow = queryConfirmedAt(hippoRoot, tenantId);
+  const unconfirmed = toTag.filter((stale) => confirmedNow.get(stale.id) === confirmedAt.get(stale.id));
+  if (unconfirmed.length === 0) return;
+  const db = openStore(hippoRoot);
+  try {
+    const live = selectEntriesByIds(db, unconfirmed.map((stale) => stale.id), tenantId);
+    for (const stale of unconfirmed) {
+      const entry = live.get(stale.id);
+      if (!entry || entry.tags.includes(CHURN_STALE_TAG)) continue;
+      const tagged = { ...entry, tags: [...entry.tags, CHURN_STALE_TAG] };
+      writeEntryOn(db, hippoRoot, tagged);
+      live.set(stale.id, tagged); // a repeated id is already tagged, as a fresh read would show
+    }
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/** Flags memories whose named file/symbol/script changed or disappeared since storage (or last confirmation); only adds/removes CHURN_STALE_TAG, never confidence/half-life/strength. */
+export function detectChurnStale(
+  hippoRoot: string,
+  repoRoot: string,
+  opts: DetectChurnStaleOptions,
+): ChurnStaleResult {
+  const dryRun = opts.dryRun === true;
+  if (!opts.projectName) return emptyChurnResult(dryRun);
+
+  const entries = loadAllEntries(hippoRoot, opts.tenantId);
+  const { candidates, skippedPinned } = collectChurnCandidates(entries, opts);
   if (candidates.length === 0) return emptyChurnResult(dryRun, skippedPinned);
 
   const confirmedAt = queryConfirmedAt(hippoRoot, opts.tenantId);
@@ -356,110 +536,26 @@ export function detectChurnStale(
     return confirmedMs > Date.parse(entry.created) ? new Date(confirmedMs).toISOString() : new Date(entry.created).toISOString();
   };
 
-  const needsPaths = candidates.some((c) => c.refs.paths.length > 0);
-  const needsSymbols = candidates.some((c) => c.refs.symbols.length > 0);
-  const needsScripts = candidates.some((c) => c.refs.scripts.length > 0);
-  if (!needsPaths && !needsSymbols && !needsScripts) {
+  const needs: ChurnNeeds = {
+    paths: candidates.some((c) => c.refs.paths.length > 0),
+    symbols: candidates.some((c) => c.refs.symbols.length > 0),
+    scripts: candidates.some((c) => c.refs.scripts.length > 0),
+  };
+  if (!needs.paths && !needs.symbols && !needs.scripts) {
     return { checked: candidates.length, marked: 0, alreadyMarked: 0, skippedPinned, dryRun, preview: [] };
   }
 
   const result: ChurnStaleResult = { checked: 0, marked: 0, alreadyMarked: 0, skippedPinned, dryRun, preview: [] };
 
   try {
-    const headFiles = gitLsFilesAtHead(repoRoot);
-    let windowLog: ChurnCommit[] = [];
-    if (needsPaths) {
-      const minAnchor = candidates.reduce<string>((min, c) => {
-        const a = anchorOf(c.entry);
-        return min === '' || a < min ? a : min;
-      }, '');
-      windowLog = fetchChurnWindowLog(repoRoot, minAnchor);
-    }
-    const touchedInWindow = new Set<string>();
-    for (const c of windowLog) for (const f of c.files) touchedInWindow.add(f.path);
-    const trackedIndex = buildTrackedIndex(new Set([...headFiles, ...touchedInWindow]));
-    const headIndex = buildTrackedIndex(headFiles);
-
-    const presentAtHeadSymbols = needsSymbols
-      ? gitGrepPresence(repoRoot, [...new Set(candidates.flatMap((c) => c.refs.symbols))], 'HEAD')
-      : new Set<string>();
-
-    const anchorCommitCache = new Map<string, string | null>();
-    const resolveAnchorCommit = (anchorIso: string): string | null => {
-      if (!anchorCommitCache.has(anchorIso)) {
-        anchorCommitCache.set(anchorIso, resolveCommitBefore(repoRoot, anchorIso));
-      }
-      return anchorCommitCache.get(anchorIso) ?? null;
-    };
-
-    const symbolsAtCommit = new Map<string, Set<string>>();
-    const symbolsPresentAt = (hash: string, symbols: string[]): Set<string> => {
-      const known = symbolsAtCommit.get(hash) ?? new Set<string>();
-      const missing = symbols.filter((s) => !known.has(s));
-      if (missing.length > 0) {
-        for (const s of gitGrepPresence(repoRoot, missing, hash)) known.add(s);
-        symbolsAtCommit.set(hash, known);
-      }
-      return known;
-    };
-
-    const headScripts = needsScripts ? packageScriptsAt(repoRoot, 'HEAD') : null;
-    const scriptsAtCommit = new Map<string, Record<string, string> | null>();
-
+    const git = loadChurnGitView(repoRoot, opts.legacyName ?? opts.projectName, candidates, anchorOf, needs);
     // Collected here, written only after every candidate's evidence is
     // computed: a GitReadError thrown mid-loop must never leave an earlier
     // candidate tagged while a later one aborts the run untagged.
     const toTag: MemoryEntry[] = [];
     for (const { entry, refs } of candidates) {
       result.checked++;
-      const anchor = anchorOf(entry);
-      const anchorTime = new Date(anchor).getTime();
-      let evidence: string | null = null;
-
-      for (const rawPath of refs.paths) {
-        const resolved = resolveTrackedPath(rawPath, repoRoot, opts.projectName, trackedIndex);
-        if (!resolved) continue;
-        if (isTrackedPath(headIndex, resolved)) {
-          const changed = windowLog.some(
-            (c) => new Date(c.date).getTime() > anchorTime && c.files.some((f) => f.path === resolved),
-          );
-          if (changed) { evidence = `file-changed: ${resolved}`; break; }
-        } else {
-          // --no-renames means a rename shows as a D + A pair, so this also fires for renames.
-          const deleted = windowLog.some(
-            (c) => new Date(c.date).getTime() > anchorTime &&
-              c.files.some((f) => f.status === 'D' && f.path === resolved),
-          );
-          if (deleted) { evidence = `file-deleted: ${resolved}`; break; }
-        }
-      }
-
-      if (!evidence && refs.symbols.length > 0) {
-        const absent = refs.symbols.filter((s) => !presentAtHeadSymbols.has(s));
-        if (absent.length > 0) {
-          const anchorCommit = resolveAnchorCommit(anchor);
-          if (anchorCommit) {
-            const presentAtAnchor = symbolsPresentAt(anchorCommit, absent);
-            const hit = absent.find((s) => presentAtAnchor.has(s));
-            if (hit) evidence = `symbol-gone: \`${hit}\``;
-          }
-        }
-      }
-
-      if (!evidence && refs.scripts.length > 0 && headScripts !== null) {
-        const anchorCommit = resolveAnchorCommit(anchor);
-        if (anchorCommit) {
-          if (!scriptsAtCommit.has(anchorCommit)) {
-            scriptsAtCommit.set(anchorCommit, packageScriptsAt(repoRoot, anchorCommit));
-          }
-          const anchorScripts = scriptsAtCommit.get(anchorCommit);
-          const hit = anchorScripts
-            ? refs.scripts.find((s) => anchorScripts[s] !== undefined && headScripts[s] === undefined)
-            : undefined;
-          if (hit) evidence = `script-gone: ${hit}`;
-        }
-      }
-
+      const evidence = churnEvidence(git, refs, anchorOf(entry));
       if (!evidence) continue;
 
       const headline = entry.content.replace(/\s+/g, ' ').slice(0, 60);
@@ -473,16 +569,7 @@ export function detectChurnStale(
       toTag.push(entry);
     }
 
-    if (!dryRun && toTag.length > 0) {
-      // The git calls above can take seconds; a good outcome landing meanwhile moves the anchor past the evidence.
-      const confirmedNow = queryConfirmedAt(hippoRoot, opts.tenantId);
-      for (const stale of toTag) {
-        if (confirmedNow.get(stale.id) !== confirmedAt.get(stale.id)) continue;
-        const entry = readEntry(hippoRoot, stale.id, opts.tenantId);
-        if (!entry || entry.tags.includes(CHURN_STALE_TAG)) continue;
-        writeEntry(hippoRoot, { ...entry, tags: [...entry.tags, CHURN_STALE_TAG] });
-      }
-    }
+    if (!dryRun && toTag.length > 0) tagChurnStale(hippoRoot, opts.tenantId, toTag, confirmedAt);
   } catch (err) {
     if (err instanceof GitReadError) return emptyChurnResult(dryRun, skippedPinned, err.message);
     throw err;

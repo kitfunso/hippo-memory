@@ -1,5 +1,5 @@
 /**
- * J3.2 forward-claim detector — pure-function regex set + token extraction.
+ * Forward-claim detector: pure-function regex set + token extraction.
  *
  * No DB. No state. No dependencies beyond stdlib regex + String.
  *
@@ -11,15 +11,13 @@
  * Kahneman 2003 inside-vs-outside view).
  *
  * Iteration signal: the `recall_autodebias_hint_no_class_match` audit op
- * (emitted by computePlanningFallacyHint when a phrase matches but no class
+ * (emitted by computePlanningFallacyOutput when a phrase matches but no class
  * resolves) is the telemetry channel for deciding whether to add an
- * embedding-based detector in J3.3.
- *
- * Plan: docs/plans/2026-05-26-j32-auto-injection.md (Task 1).
+ * embedding-based detector.
  */
 
 /**
- * Patterns ship-locked at v1.13.x. Each pattern is intentionally narrow —
+ * Each pattern is intentionally narrow:
  * adding a pattern should require evidence from the
  * `recall_autodebias_hint_no_class_match` audit channel that real forward-
  * claims are slipping through, NOT speculative "this might match more".
@@ -30,8 +28,7 @@
  */
 // Reused fragment for ALL duration-suffix patterns. Requires a digit + unit
 // so 'will take ownership' / 'ship in Docker' (no time component) don't
-// match. Codex round 2 P2: patterns that allowed verb-only matches fired
-// on every-day non-estimate queries that happened to share a class-token.
+// match: verb-only patterns fire on everyday non-estimate queries that share a class-token.
 // Accepts `<N> unit` (3 days), `a/an unit` (a week — implicit 1), and
 // `one unit` so natural English forward-claims aren't lost.
 const DURATION_TAIL = String.raw`(?:about|around|~|≈)?\s*(?:\d+|a|an|one)\s*(?:day|week|month|hour|hr|min(?:ute)?|sec(?:ond)?)s?\b`;
@@ -53,8 +50,7 @@ const FORWARD_CLAIM_PATTERNS: ReadonlyArray<RegExp> = [
   // Lookbehind asserts start-of-string OR whitespace before the tilde
   // because \b before ~ requires a word char immediately preceding (~ is
   // not a word character), so /\b~/ would only match in 'foo~3 days'
-  // (malformed) and silently miss the legitimate cases. Codex review
-  // round 1 catch.
+  // (malformed) and silently miss the legitimate cases.
   /(?<=^|\s)~\s*\d+\s*(?:day|week|month|hour)s?\b/i,
   // Should + verb + duration tail. Same tightening as the leading 'will
   // take' rule: 'should ship by EOD' must include a quantifier.
@@ -81,8 +77,7 @@ const STOP_WORDS: ReadonlySet<string> = new Set([
   // Duration units appear in every forward-claim phrase by design (the
   // regex set REQUIRES a `<N> <unit>` quantifier after the verb). Letting
   // them through to class resolution lets a class tag containing 'days'
-  // win or tie on the unit token instead of the domain token. Codex round
-  // 2 P3 catch.
+  // win or tie on the unit token instead of the domain token.
   'day', 'days', 'week', 'weeks', 'month', 'months',
   'hour', 'hours', 'hr', 'hrs',
   'min', 'mins', 'minute', 'minutes', 'sec', 'secs', 'second', 'seconds',

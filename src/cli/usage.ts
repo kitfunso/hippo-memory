@@ -1,0 +1,759 @@
+// Help text for every verb, keyed like the command table in cli.ts; no command logic lives here.
+
+import { TAIL_MAX_LINES } from '../support-bundle.js';
+import { DEFAULT_LOCAL_BUMP, DEFAULT_RECALL_BUDGET } from '../search/types.js';
+import { DEFAULT_ASSEMBLE_BUDGET } from '../api/assemble.js';
+
+export function printAuditPruneUsage(): void {
+  console.log('hippo audit prune --older-than <Nd> [--dry-run] [--tenant <t>]');
+  console.log('  --older-than <Nd>  Delete audit_log rows with ts older than N days (e.g. 90d).');
+  console.log('  --dry-run          Count matching rows without deleting (operator safety).');
+  console.log('  --tenant <t>       Tenant scope. Defaults to HIPPO_TENANT or "default".');
+  console.log('  --json             Output the result as JSON {cutoff, count, dryRun}.');
+}
+
+export function printSlackBackfillUsage(): void {
+  console.log('hippo slack backfill --channel <id> [--since ISO]');
+  console.log('  --channel  Slack channel id (required, e.g. C0123ABC)');
+  console.log('  --since    backfill from ISO timestamp (default: cursor)');
+}
+
+export function printSlackWorkspacesUsage(): void {
+  console.log('hippo slack workspaces <add|list|remove> [options]');
+  console.log('  add --team <T> --tenant <t>   Register a workspace (upserts on existing team-id)');
+  console.log('  list                          List all registered workspaces');
+  console.log('  remove --team <T>             Remove a workspace registration');
+}
+
+export const USAGE_HEADER = `
+Hippo - Make your agent's memory work like a brain. Hippo is long-term memory for coding agents.
+
+Usage: hippo <command> [options]
+
+Commands:`;
+
+export const USAGE_EXAMPLES = `
+
+Examples:
+  hippo init
+  hippo remember "FRED cache can silently drop series" --tag error
+  hippo recall "data pipeline issues" --budget 2000
+  hippo context --auto --budget 1500
+  hippo conflicts
+  hippo reject mem_abc123 --reason "leaked credential"
+  hippo reject --value "never store my key again" --reason "secret"
+  hippo rejections
+  hippo unreject a1b2c3d4e5f6
+  hippo dormant "staging hostname"
+  hippo dormant restore mem_abc123
+  hippo tokens --days 7
+  hippo session log --id sess_123 --task "Ship feature" --type progress --content "Build is green, next step is docs"
+  hippo session latest --json
+  hippo session resume
+  hippo snapshot save --task "Ship feature" --summary "Tests are green" --next-step "Open the PR" --session sess_123
+  hippo handoff create --summary "PR is open, tests green" --next "Merge after review" --session sess_123 --artifact src/foo.ts
+  hippo handoff create --summary s --constraint a --constraint b --outcome partial --target-runtime codex --card-id c1 --tests pass
+  hippo card create --title "Add cards table" --repo hippo --depends-on card_abc
+  hippo card claim card_abc --runtime codex
+  hippo card complete card_abc --outcome success
+  hippo card heartbeat card_abc --run 7
+  hippo card reclaim
+  hippo embed --status
+  hippo watch "npm run build"
+  hippo learn --git --days 30
+  hippo promote mem_abc123
+  hippo sync
+  hippo setup
+  hippo hook install claude-code
+  hippo decide "Use PostgreSQL for new services" --context "JSONB support"
+  hippo incident "Prod outage: DB connection pool exhausted" --context "spike at 14:00"
+  hippo process new "Release" --step "run tests" --step "bump version" --step "publish"
+  hippo policy new "Data retention" --text "Delete logs after 90 days" --from 2026-01-01
+  hippo policy asof 2026-03-01 --name "Data retention"
+  hippo skill new "Run tests" --instructions "npm test before every commit" --trigger "before commit"
+  hippo skill export
+  hippo brief new "hippo" --summary "Agent-memory library; E2 first-class objects in progress"
+  hippo brief refresh "hippo"
+  hippo note new "Acme Corp" --text "Renewal call: wants SSO before Q3; champion is the VP Eng"
+  hippo note list --customer "Acme Corp" --status active
+  hippo graph extract
+  hippo invalidate "REST API" --dry-run
+  hippo invalidate "REST API" --reason "migrated to GraphQL"
+  hippo invalidate --id mem_a1b2c3d4e5f6 --reason "superseded by new policy"
+  hippo invalidate --churn --dry-run
+  hippo export memories.json
+  hippo export --format markdown memories.md
+  hippo sleep --dry-run
+  hippo outcome --good
+  hippo status
+`;
+
+/** Each verb's help blocks for the command table, keyed like COMMANDS; a block opens with a newline. */
+export const VERB_USAGE = {
+  init: [`
+  init                     Create .hippo/ structure in current directory
+    --scan [dir]           Find all git repos under dir (default: ~) and init each
+    --days <n>             Days of git history to seed (default: 365 for --scan, 30 for single)
+    --global               Init the global store ($HIPPO_HOME or ~/.hippo/)
+    --no-hooks             Skip auto-detecting and installing agent hooks
+                           (HIPPO_SKIP_AUTO_INTEGRATIONS=1 does the same)
+    --no-schedule          Skip auto-creating the machine-level daily runner
+    --no-learn             Skip seeding memories from git history and importing
+                           coding agents' own memories (every init imports those)`],
+  remember: [`
+  remember <text>          Store a memory
+    --tag <tag>            Add a tag (repeatable)
+    --error                Tag as error (boosts retention)
+    --pin                  Pin memory (never decays)
+    --verified             Set confidence: verified (default)
+    --observed             Set confidence: observed
+    --inferred             Set confidence: inferred
+    --global               Store in global store ($HIPPO_HOME or ~/.hippo/)`],
+  recall: [`
+  recall <query>           Search and retrieve memories (local + global)
+    --budget <n>           Token budget for the whole printed block (default: ${DEFAULT_RECALL_BUDGET})
+    --min-results <n>      Minimum results regardless of budget (default: 1)
+    --json                 Output as JSON
+    --why                  Show match reasons and source annotations
+    --hops <n>             E3.2 multi-hop graph recall: also surface memories
+                           reached by walking the entities/relations graph <n>
+                           hops (0..3, default off) out from the lexical seeds.
+                           Graph hits are tagged [graph: Nhop <rel>]. Today the
+                           graph holds supersedes edges (E3.1); cross-object edges
+                           light up the same traversal once extracted.
+    --max-neighbors <n>    Per-hop fanout cap for --hops (1..200, default 25).
+    --graph-stream         L1: fuse a graph-retrieval stream into RRF, re-ranking
+                           in-pool results by graph proximity to the strong lexical
+                           seeds. Implies rrf scoring (default is blend). Local store
+                           only. Distinct from --hops (which injects out-of-pool
+                           neighbours); this re-ranks within the candidate pool.
+    --graph-hops <n>       Hops for --graph-stream (1..3, default 2).
+    --graph-seeds <n>      Lexical anchors for --graph-stream (default 10). The stream
+                           re-ranks the rank>seeds tail; on a pool with <= n candidates
+                           every candidate is a seed and the stream is inert.
+    --no-mmr               Disable MMR diversity re-ranking
+    --mmr-lambda <f>       MMR balance 0..1 (default: 0.7, 1.0 = pure relevance)
+    --evc-adaptive         ACC-style: when top-K shows high inter-item overlap
+                           (= conflict cluster), expand pool and re-rank by
+                           recency. Default off. RESEARCH.md §PFC.ACC.
+    --filter-conflicts     vlPFC interference filter: drop superseded entries
+                           and 0.3x-downweight entries flagged in an open
+                           conflict with a peer in the same result set.
+                           Uses recorded supersession + conflicts only — never
+                           lexical inference. Default off. RESEARCH.md §PFC.vlPFC.
+    --value-aware          vmPFC value attribution: boost memories with positive
+                           cumulative outcomes and demote those with negative
+                           outcomes during ranking. Multiplier
+                           clip(1 + 0.3*tanh(pos - neg), 0.7, 1.3). Reuses
+                           outcome_positive / outcome_negative; no schema
+                           change. Default off. RESEARCH.md §PFC.vmPFC.
+    --rerank-utility       OFC option-value re-ranker: combine relevance,
+                           strength, and integration cost into a single utility
+                           = score * (0.5 + 0.5 * strength) * (1 - cost_factor)
+                           where cost_factor = min(0.3, tokens / 10000). Re-sorts
+                           results by utility. Default off. RESEARCH.md §PFC.OFC.
+    --reranker <name>      Apply a reranker pass after retrieval
+                           (cross-encoder|jev|clef-flash|clef|llm). Looks up
+                           the named reranker from src/rerankers/index.ts and
+                           re-orders the top-K candidates. Default unset (no reranker).
+                           jev calls the hosted TypeSafe Jev API: it needs
+                           TYPESAFE_API_KEY, sends the query and candidate
+                           text to that API, costs about 0.0004 USD a recall,
+                           and falls back to cross-encoder on any failure.
+                           clef-flash and clef send the same request to
+                           Cloudflare Workers AI (CLOUDFLARE_ACCOUNT_ID and
+                           CLOUDFLARE_API_TOKEN) or to HIPPO_CLEF_ENDPOINT, and
+                           keep the native order on any failure.
+                           See docs/evals/2026-09-19-jev-reranker.md and
+                           docs/plans/2026-05-10-f6-reranker-hardening.md.
+    --reranker-top-k <n>   Cap candidates passed to the reranker (default 50;
+                           40 for jev, clef-flash and clef).
+    --goal <tag>           dlPFC goal-conditioned recall: memories tagged with
+                           the goal tag get a 1.5x score boost and results are
+                           re-sorted. Default off. RESEARCH.md §PFC.dlPFC.
+    --session-id <id>      Session identifier for dlPFC goal-stack boost.
+                           Defaults to \$HIPPO_SESSION_ID. When set and the
+                           (tenant, session) has active goals (see
+                           'hippo goal push'), recall auto-boosts memories
+                           whose tags match an active goal name. Boost stacks
+                           on top of base BM25 score, capped at 3.0x.
+    --salience-threshold <n>
+                           Pineal salience: down-weight memories whose
+                           retrieval_count is below n. score *= max(0.5,
+                           retrieval_count / n) for entries with count < n;
+                           entries at or above n are unchanged. Salience emerges
+                           from USE, not from lexical overlap. Default off.
+                           RESEARCH.md §"AI Pineal Gland". (v1's creation-time
+                           lexical gate destroyed LoCoMo 0.28 -> 0.02; this v2
+                           is retrieval-side, opt-in only — see MEMORY.md
+                           "Hippo salience gate destroys benchmark recall".)
+    --continuity           Include continuity block (active task snapshot,
+                           latest matching session handoff, last 5 session
+                           events) above the memory list. Useful at agent
+                           boot when you want both relevant memories AND
+                           where you left off in one call. Anchored on the
+                           active snapshot's session_id; no anchor = no
+                           handoff/events (use 'hippo session resume' for
+                           the explicit handoff-without-snapshot path).`],
+  drill: [`
+  drill <summary-id>       Walk down a DAG level-2 summary to its children
+    --limit N              Cap children list (default 50)
+    --budget N             Token budget for the printed children (≈ chars/4)
+    --json                 Output as JSON`],
+  assemble: [`
+  assemble --session <id>  Build a session's chronological context window
+    --budget N             Token budget for the printed window (default ${DEFAULT_ASSEMBLE_BUDGET})
+    --fresh-tail N         Recent rows always kept verbatim (default 10)
+    --no-summarize-older   Disable older-row summary substitution
+    --scope <s>            Restrict to exact scope (default: deny *:private:*)
+    --json                 Output as JSON`],
+  supersede: [`
+  supersede <id> "<text>"  Replace a memory with a new version; the old one points at it
+    --layer <layer>        Layer for the new memory (default: the old memory's layer)
+    --tag <tag>            Tag for the new memory (repeatable; default: the old memory's tags)
+    --pin                  Pin the new memory (default: pinned if the old one was)`],
+  explain: [`
+  explain <query>          Show full score breakdown for each retrieved memory
+    --budget <n>           Token budget, counted as recall prints (default: ${DEFAULT_RECALL_BUDGET})
+    --limit <n>            Cap the number of results displayed
+    --json                 Output as JSON
+    --physics | --classic  Force search mode (default: from config)
+    --no-mmr               Disable MMR diversity re-ranking
+    --mmr-lambda <f>       MMR balance 0..1 (default: 0.7, 1.0 = pure relevance)`],
+  eval: [`
+  eval [<corpus.json>]     Measure recall quality against a test corpus
+    --bootstrap            Generate a synthetic corpus from current memories
+    --out <path>           With --bootstrap, write to file instead of stdout
+    --max-cases <n>        With --bootstrap, cap case count (default: 50)
+    --show-cases           Print per-case details (query, R@10, missed, top 3)
+    --compare <path>       JSON from a prior \`eval --json\` run; print deltas
+    --no-mmr               Disable MMR for this eval run
+    --mmr-lambda <f>       Override MMR lambda for this run
+    --embedding-weight <f> Override cosine weight (default: 0.6)
+    --local-bump <f>       Local-over-global priority multiplier (default: ${DEFAULT_LOCAL_BUMP})
+    --equal-sources        Shortcut for --local-bump 1.0
+    --min-mrr <f>          Exit non-zero if mean MRR falls below this
+    --json                 Output full summary as JSON`],
+  trace: [`
+  trace <id>               Memory dossier: content, decay trajectory, retrievals,
+                           outcomes, consolidation parents, open conflicts
+    --json                 Output as JSON`],
+  refine: [`
+  refine                   Rewrite consolidated semantic memories with Claude
+    --limit <n>            Cap the number of memories processed this run
+    --all                  Ignore \`llm-refined\` tag and re-refine everything
+    --dry-run              Call the API but don't write results back
+    --model <id>           Override the default model (claude-sonnet-4-6)
+    --json                 Output summary as JSON
+    (requires ANTHROPIC_API_KEY in env)`],
+  sleep: [`
+  sleep                    Run consolidation pass (auto-learns + dedup + auto-shares)
+                           Runs at Claude Code and OpenCode session end and in the daily job.
+                           With ANTHROPIC_API_KEY set it sends memory text to Anthropic for
+                           fact extraction; {"extraction":{"enabled":false}} turns that off
+    --dry-run              Preview without writing
+    --no-learn             Skip auto git-learn and the agent memory import before consolidation
+    --no-share             Skip auto-sharing to global store`],
+  'last-sleep': [`
+  last-sleep               Show the last sleep log on stderr, one problems line to the user, and clear it
+    --path <p>             Log path (default: ~/.hippo/logs/last-sleep.log)
+    --keep                 Print without clearing`],
+  'session-end': [`
+  session-end              SessionEnd hook: count this session's re-read tokens, run sleep, then
+                           capture from the session's last 20 user and 10 assistant messages,
+                           in a detached worker
+    --log-file <path>      Tee the worker's output to a log file (paired with 'hippo last-sleep')`],
+  'pre-compact': [`
+  pre-compact              PreCompact hook: record the compaction, save a working-state snapshot, and
+                           ask the summariser to end with a "Memories for hippo" list
+    --log-file <p>         Diagnostic log path (default: ~/.hippo/logs/pre-compact.log)`],
+  'post-compact': [`
+  post-compact             PostCompact hook: keep that list as memories (a busy store leaves the save to
+                           the next hippo sleep) and print one line saying how many
+    --log-file <p>         Same log path as pre-compact (default: ~/.hippo/logs/pre-compact.log)`],
+  'capture-error': [`
+  capture-error            Store a failed tool call as an error memory (reads the Claude Code
+                           PostToolUseFailure hook payload on stdin; skips routine failures)`],
+  'compact-resume': [`
+  compact-resume           SessionStart(compact) hook: re-print the snapshot, if under 15 minutes old`],
+  'codex-run': [`
+  codex-run [-- ...args]   Launch real Codex behind Hippo's session-end wrapper`],
+  dedup: [`
+  dedup                    Remove duplicate memories (keeps stronger copy)
+    --dry-run              Preview without removing
+    --threshold <n>        Ignored, kept for old scripts: a duplicate is the same text apart from spacing`],
+  dag: [`
+  dag                      Show the summary tree: entity profiles, topic summaries, facts
+    --stats                Count memories per DAG level instead`],
+  auth: [`
+  auth <sub>               Manage API keys (A5 stub auth)
+    auth create            Mint a new API key (plaintext shown ONCE)
+      --label <s>          Optional human label
+      --role <r>           admin | member (default: admin; member blocked from /v1/sleep)
+      --tenant <id>        Override tenant (defaults to HIPPO_TENANT)
+      --json               Output as JSON
+      --global             Operate on the global store
+    auth list              List API keys (active by default)
+      --all                Include revoked and expired keys
+      --json               Output as JSON
+      --global             Operate on the global store
+    auth revoke <key_id>   Revoke an API key (subsequent validate fails)
+      --json               Output as JSON
+      --global             Operate on the global store
+    auth grant <key_id> <scope>    Let a member key read one restricted scope
+      --json               Output as JSON
+      --global             Operate on the global store
+    auth ungrant <key_id> <scope>  Remove a scope grant
+      --json               Output as JSON
+      --global             Operate on the global store`],
+  goal: [`
+  goal <sub>               dlPFC goal stack (B3) — scoped per session
+    goal push <name>       Push a new active goal; prints the new goal id
+      --policy <type>      schema-fit-biased | error-prioritized |
+                           recency-first | hybrid
+      --success "<cond>"   Optional success condition text
+      --level <n>          Goal level (default: 0)
+      --parent <goalId>    Parent goal id (for sub-goals)
+      --session-id <s>     Override session (defaults to HIPPO_SESSION_ID)
+      --tenant-id <t>      Override tenant (defaults to HIPPO_TENANT)
+    goal list              Show active goals as a table
+      --all                Include suspended/completed goals
+    goal complete <id>     Mark a goal completed
+      --outcome <0..1>     Outcome score; >=0.7 boosts, <0.3 decays recalled mems
+      --no-propagate       Close the goal without applying strength side-effects
+    goal suspend <id>      Move an active goal to suspended
+    goal resume <id>       Move a suspended goal back to active (depth-capped)`],
+  slack: [`
+  slack                    Slack connector subcommands (backfill, dlq, workspaces)
+    backfill --channel <id> [--since ISO]
+                           Backfill a channel's history (needs SLACK_BOT_TOKEN)
+    dlq list               List DLQ entries for the active tenant
+    dlq replay <id> [--force]
+                           Re-ingest a DLQ entry (--force skips sig check)
+    workspaces <add|list|remove>
+                           Map Slack workspaces (team ids) to tenants`],
+  github: [`
+  github                   GitHub connector subcommands (backfill, dlq)
+    backfill --repo <owner/name> [--since ISO] [--max <N>]
+                           Paginated backfill of issues + comments
+    dlq list               List DLQ entries for the active tenant
+    dlq replay <id> [--force]
+                           Re-ingest a DLQ entry (--force skips sig check)`],
+  audit: [`
+  audit [--fix]            Check memory quality (--fix removes junk)
+    audit repair [--apply] Preview repair of memories hippo wrote itself; --apply moves certain
+                           defects to dormant storage. Sleep and the daily runner apply it once
+                           per store after an upgrade
+      --json              Report ids, reasons, protections and schema blockers as JSON
+      --global             Operate on the global store without changing its schema
+                           Writes a database backup first; undo with hippo dormant restore <id>,
+                           which marks the memory verified so repair leaves it alone. Sleep's
+                           dormant retention still applies; the backup stays until you remove it.`, `
+  audit <sub>              Query the append-only audit log (A5 stub auth)
+    audit list             List audit events for the active tenant
+      --op <op>            Filter by op (remember | recall | promote |
+                           supersede | forget | archive_raw | auth_revoke)
+      --since <iso>        Lower bound on ts (ISO timestamp)
+      --limit <n>          Max events (default: 100, max: 10000)
+      --json               Output as JSON
+      --global             Operate on the global store`],
+  'correction-latency': [`
+  correction-latency       Wall-clock lag from receipt to supersession (p50/p95/max)
+    --json                 Output as JSON`],
+  provenance: [`
+  provenance               Provenance coverage gate for kind='raw' rows
+    --json                 Output as JSON
+    --strict               Exit non-zero when coverage < 100%`],
+  status: [`
+  status                   Show memory health stats`],
+  outcome: [`
+  outcome                  Apply feedback to last recall
+    --good                 Memories were helpful
+    --bad                  Memories were irrelevant
+    --id <id>              Target a specific memory`],
+  conflicts: [`
+  conflicts                List detected open memory conflicts
+    --status <status>      Filter by status (default: open)
+    --json                 Output as JSON`],
+  resolve: [`
+  resolve <conflict_id>    Resolve a memory conflict
+    --keep <memory_id>     Memory to keep (required)
+    --forget               Delete the losing memory (default: halve half-life)
+    --reject-loser         Tombstone the loser's value too (implies removal)
+    --reason "<why>"       Reason for --reject-loser (default: conflict context)`],
+  reject: [`
+  reject <memory-id>       Tombstone a value so it refuses re-ingestion
+    reject --value "<t>"   Pre-emptive form: tombstone a value not (currently) stored
+    --reason "<why>"       Required. The tombstone stores no content — this
+                           is its only human-readable identity.
+    --global               Reject in the global store`],
+  rejections: [`
+  rejections               List rejected-value tombstones for the active tenant
+    --json                 Output as JSON
+    --global               Operate on the global store`],
+  unreject: [`
+  unreject <digest-prefix> Delete a tombstone (the only escape hatch)
+    --global               Operate on the global store`],
+  dormant: [`
+  dormant [<query>]        List faded memories sleep kept instead of deleting
+                           (on by default; "dormant": {"enabled": false} deletes instead)
+    --limit <n>            Max rows, newest first (default: 20)
+    --json                 Output as JSON
+    --global               Operate on the global store
+    dormant restore <id>   Bring a dormant memory back to active memory
+    dormant forget <id>    Delete a dormant memory permanently`],
+  projects: [`
+  projects [list]          List the project names in a store, with a hint for old worktree names
+    --json                 Output as JSON
+    --global               Operate on the global store
+    projects merge <from> <into> [--apply]
+                           Fold one project name into another (dry run unless --apply;
+                           writes a backup and one audit event first)
+    projects repair [--apply]
+                           Set aside misfiled note imports, fold old project names into
+                           their ids, re-tag merged rows (dry run unless --apply;
+                           writes a backup and one audit event first)`],
+  quarantine: [`
+  quarantine [list]       List memories a connector flagged as an instruction attempt, pending review
+    --all                  Include approved and rejected rows too (default: pending only)
+    --json                 Output as JSON
+    --global               Operate on the global store
+    quarantine approve <id> Restore a quarantined memory to its original scope
+    quarantine reject <id>  Keep a quarantined memory hidden for good`],
+  tokens: [`
+  tokens                   Tokens of memory text hippo handed agents, per surface
+                           (hook, compact-resume, context, recall, MCP, HTTP), what
+                           skipping unchanged hook blocks saved, and how much of the
+                           hook and compact-resume blocks later model calls re-read,
+                           counted when a session ends. Estimates (characters / 4)
+    --days <n>             Window in days (default: 30)
+    --json                 Output as JSON
+    --global               Operate on the global store`],
+  failures: [`
+  failures                 Failed tool calls capture-error saw, by outcome, and how
+                           many errors first happened in another session
+    --days <n>             Window in days (default: 30)
+    --json                 Output as JSON
+    --global               Operate on the global store`],
+  doctor: [`
+  doctor                   Check the install: Node, store, schema, sleep, agent hooks
+    --json                 Machine-readable report (exit code 1 on any failure)`],
+  'support-bundle': [`
+  support-bundle           Write a redacted JSON file for a support ticket: versions, doctor,
+                           config without secrets, store counts, log names; never memory text
+    --out <file>           Where to write it (default: hippo-support-<time>.json here)
+    --include-logs         Add the last ${TAIL_MAX_LINES} lines of each hippo log, known secret shapes removed`],
+  snapshot: [`
+  snapshot <sub>           Persist or inspect the current active task
+    snapshot save          Save active task state
+      --task <task>
+      --summary <summary>
+      --next-step <step>
+      --source <source>    Optional source label
+      --session <id>       Link snapshot to a session trail
+    snapshot show          Show the active task snapshot
+      --json               Output as JSON
+    snapshot clear         Clear the active task snapshot
+      --status <status>    Mark final status (default: cleared)`],
+  session: [`
+  session <sub>            Append or inspect short-term session history
+    session log            Append a structured session event
+      --id <session-id>
+      --content <text>
+      --type <type>        Event type (default: note)
+      --task <task>        Optional task label
+      --source <source>    Optional source label
+    session show           Show recent events for a session or task
+      --id <session-id>
+      --task <task>
+      --limit <n>          Event limit (default: 8)
+      --json               Output as JSON
+    session latest         Show latest task snapshot + events
+      --id <session-id>   Filter by session
+      --json               Output as JSON
+    session resume         Re-inject latest handoff as context output
+      --id <session-id>   Filter by session`],
+  handoff: [`
+  handoff <sub>            Manage session handoffs for continuity
+    handoff create         Create a new session handoff
+      --summary <text>     Handoff summary (required)
+      --next <text>        Next action for successor
+      --session <id>       Session ID (auto-generated if omitted)
+      --task <id>          Associated task ID
+      --artifact <path>    Related file path (repeatable)
+      --constraint <text>  Constraint for the successor to respect (repeatable)
+      --outcome <o>        success | failure | partial
+      --target-runtime <n> Name of the runtime the successor will run in
+      --card-id <id>       Associated card/ticket ID
+      --tests <status>     pass | fail | unknown (default: unknown)
+    handoff latest         Show the most recent handoff
+      --session <id>       Filter by session
+      --json               Output as JSON
+    handoff show <id>      Show a specific handoff by ID`],
+  card: [`
+  card <sub>                Manage claimable work-queue cards
+    card create             Create a new card
+      --title <text>        Card title (required)
+      --repo <name>         Associated repo
+      --contract <text>     Associated contract
+      --budget <n>           Token/step budget
+      --depends-on <id>     Parent card id (repeatable)
+    card show <id>          Show a card, its deps, runs, comments and latest handoff
+      --json                 Output as JSON
+    card list                List cards, newest-updated first
+      --status <status>     Filter by status
+    card claim <id>          Claim a ready or blocked card; prints its run id and lease
+      --runtime <name>       Claiming runtime (required)
+      --session <id>         Session ID
+    card heartbeat <id>       Extend a running card's lease
+      --run <n>              Your run id, as card claim printed it (required)
+    card block <id>           Block a running card
+      --reason "<why>"       Reason recorded as a card comment (required)
+      --run <n>              Refuse unless <n> is the card's live run
+    card review <id>          Move a running card to review
+      --run <n>              Refuse unless <n> is the card's live run
+    card complete <id>       Complete a card in review
+      --outcome <o>          success | failure | partial (required)
+      --run <n>              Refuse unless <n> is the card's live run
+    card reclaim              Return every running card whose lease has expired to ready
+    card comment <id>         Add a comment to a card
+      --body <text>          Comment body (required)
+      --author <name>       Comment author (default: cli)`],
+  predict: [`
+  predict "<claim>"        Record a prediction to score against the actual outcome later
+    --class <c>            Reference class (required)
+    --estimate <v>         Numeric estimate
+    --unit <u>             Unit of the estimate
+    --target <YYYY-MM-DD>  When the outcome is due
+  predict close <id>       Close a prediction
+    --state <s>            closed | closed-unknown (required)
+    --actual <v>           The actual value
+    --note "<text>"        Closure note
+  predict list [--class <c>] [--status open|closed|closed-unknown|all] [--limit N]
+                           List predictions (closed and closed-unknown need --class)
+  predict show <id>        Show one prediction
+  predict baserate --class <c>
+                           How past estimates in a class compared with the actuals`],
+  current: [`
+  current <sub>            Show compact current state for agent injection
+    current show           Active task + recent session events (default)
+      --json               Output as JSON`],
+  forget: [`
+  forget <id>              Force remove a memory
+    --archive              Archive a raw (append-only) memory instead of deleting
+    --reason "<why>"       Reason recorded on the archive (required with --archive)`],
+  inspect: [`
+  inspect <id>             Show full memory detail`],
+  context: [`
+  context                  Smart context injection for AI agents
+    --auto                 Auto-detect task from git state
+    --budget <n>           Token budget for the whole printed block (default: 1500)
+    --pinned-only          Only inject pinned memories (used by UserPromptSubmit hook)
+    --include-recent <n>   With --pinned-only, also inject the last N writes regardless of pinning
+    (the hook payload's "prompt" drives prompt recall instead of --include-recent when pinnedInject.promptRecall is on, the default)
+    --format <fmt>         Output format: markdown (default), json, or additional-context (Claude Code hook JSON)
+    --framing <mode>       Framing: observe (default), suggest, assert`],
+  hook: [`
+  hook <sub> [target]      Manage framework integrations
+    hook list              Show available hooks
+    hook install <target>  Install hook (claude-code|codex|cursor|openclaw|opencode|pi)
+                           claude-code adds 7 hooks to $CLAUDE_CONFIG_DIR/settings.json
+                           (~/.claude by default); opencode installs a plugin; codex
+                           adds 2 hooks to $CODEX_HOME/hooks.json (trust them once in /hooks) and
+                           wraps the detected launcher in place; all but claude-code
+                           also patch an existing AGENTS.md
+    hook uninstall <target> Remove hook`],
+  setup: [`
+  setup                    One-shot: detect installed AI tools and install their hooks:
+                           claude-code gets 7 hooks in $CLAUDE_CONFIG_DIR/settings.json
+                           (~/.claude by default), opencode a plugin, codex 2 hooks in
+                           its hooks.json plus a launcher wrapper; other tools get a
+                           hint. Then imports each agent's
+                           user-level memories into the global store
+    --all                  Install for every JSON-hook tool, even if not detected
+    --dry-run              Show what would be installed without writing
+    --no-schedule          Skip installing or repairing the daily runner
+    --no-learn             Skip the agent memory import`],
+  'daily-runner': [`
+  daily-runner             Sweep registered workspaces and run daily learn+sleep`],
+  embed: [`
+  embed                    Embed all memories for semantic search
+    --status               Show embedding coverage`],
+  watch: [`
+  watch "<command>"        Run command, auto-learn from failures`],
+  learn: [`
+  learn                    Learn lessons from repository history
+    --git                  Scan recent git commits for lessons
+    --days <n>             Scan this many days back (default: 7)
+    --repos <paths>        Comma-separated repo paths to scan`],
+  promote: [`
+  promote <id>             Copy a local memory to the global store`],
+  sync: [`
+  sync                     Pull global memories into local project`],
+  share: [`
+  share <id>               Share a memory with attribution + transfer scoring
+    --force                Share even if transfer score is low
+    --auto                 Auto-share all high-transfer-score memories
+    --dry-run              Preview what would be shared
+    --min-score <n>        Minimum transfer score (default: 0.6)`],
+  peers: [`
+  peers                    List projects contributing to global store`],
+  import: [`
+  import                   Import memories from other AI tools
+    --chatgpt <path>       Import from ChatGPT memory export (JSON or txt)
+    --claude <path>        Import from CLAUDE.md or Claude memory.json
+    --cursor <path>        Import from .cursorrules or .cursor/rules
+    --file <path>          Import from any markdown or text file
+    --markdown <path>      Import from structured MEMORY.md / AGENTS.md
+    --vault <path>         Import a markdown-vault FOLDER as kind='raw' notes
+                             (Obsidian/Foam/Dendron). Requires --name <vault>.
+                             [--scope <scope>]
+    --agents               Sync every coding agent's own memories (Claude Code, Codex,
+                             Gemini CLI, Copilot, OpenClaw, Qwen Code) now; with
+                             --dry-run, print each tool's folders and what would change.
+                             HIPPO_AGENT_MEMORY_TOOLS=<ids> or config agentMemories.tools
+                             picks the tools; "none" or [] turns the import off
+    --dry-run              Preview without writing
+    --global               Write to global store ($HIPPO_HOME or ~/.hippo/)
+    --tag <tag>            Add extra tag (repeatable)`],
+  export: [`
+  export [file]            Export all memories (default: stdout)
+    --format <fmt>         Output format: json (default) or markdown`],
+  capture: [`
+  capture                  Extract memories from conversation text
+    --stdin                Read from piped input
+    --file <path>          Read from a file
+    --last-session         Read the transcript a hook names on stdin, else the newest
+                           Claude Code one from any project
+    --transcript <path>    Explicit transcript path (implies --last-session)
+    --log-file <path>      Tee output to a log file (paired with 'hippo last-sleep')
+    --dry-run              Preview without writing
+    --global               Write to global store ($HIPPO_HOME or ~/.hippo/)`],
+  dashboard: [`
+  dashboard                Open web dashboard for memory health
+    --port <n>             Port to serve on (default: 3333)`],
+  wm: [`
+  wm <sub>                 Working memory — bounded buffer for current state
+    wm push                Push a working memory entry
+      --scope <scope>      Scope name (default: default)
+      --content <text>     Content to store (required)
+      --importance <n>     Priority 0-1 (default: 0.5)
+      --session <id>       Session ID
+      --task <id>          Task ID
+    wm read                Read working memory entries
+      --scope <scope>      Filter by scope
+      --session <id>       Filter by session
+      --limit <n>          Max entries (default: 20)
+      --json               Output as JSON
+    wm clear               Clear working memory entries
+      --scope <scope>      Filter by scope
+      --session <id>       Filter by session
+    wm flush               Same as clear; nothing runs it at session end
+      --scope <scope>      Filter by scope
+      --session <id>       Filter by session`],
+  mcp: [`
+  mcp                      Start MCP server (stdio transport)`],
+  serve: [`
+  serve                    Start the HTTP API server for this store (Ctrl+C stops it)
+    --port <n>             Port to serve on (default: $HIPPO_PORT or 6789)
+    --host <host>          Address to bind (default: 127.0.0.1)`],
+  invalidate: [`
+  invalidate "<pattern>"   Actively weaken memories matching an old pattern
+                           (content overlap, or a tag EXACTLY equal to the
+                           full pattern - never token-level tag matching)
+    --id <memory-id>       Invalidate exactly one memory (instead of a pattern)
+    --dry-run              Preview what would be hit; writes nothing
+                           Note: a pattern equal to the system tag
+                           'invalidated' re-weakens previously invalidated
+                           memories - preview with --dry-run first
+    --reason "<why>"       Optional: what replaced it
+  invalidate --churn       FE2: tag memories 'churn-stale' whose named file
+                           changed or was deleted, or whose named symbol or
+                           npm script was removed, in this repo's git history
+                           since the memory was stored or confirmed
+    --dry-run              Preview what would be tagged; writes nothing`],
+  decide: [`
+  decide "<decision>"      Record a decision (first-class object + memory mirror)
+    --context "<why>"      Why this decision was made
+    --supersedes <mem-id>  Supersede the decision backed by this memory id
+  decide list [--status active|superseded|closed|all] [--limit N]
+                           List decisions (table is authoritative, survives decay)
+  decide get <id>          Show a decision by its table id
+  decide close <id>        Retire (close) an active decision by its table id`],
+  incident: [`
+  incident "<incident>"    Record an incident (first-class object + memory mirror)
+    --context "<details>"  What happened / surrounding detail
+    --link <mem-id>        Link a memory as evidence (repeatable)
+  incident list [--status open|resolved|closed|all] [--limit N]
+                           List incidents (table is authoritative, survives decay)
+  incident get <id>        Show an incident by its table id
+  incident resolve <id>    Resolve an open incident (open -> resolved)
+    --resolution "<text>"  How it was resolved (required)
+  incident close <id>      Retire (close) an open or resolved incident by its table id`],
+  process: [`
+  process new "<name>"     Record a process map (first-class object + memory mirror)
+    --step "<text>"        An ordered step (repeatable)
+    --description "<text>" Optional summary of the process
+  process list [--status active|superseded|closed|all] [--limit N]
+                           List processes (table is authoritative, survives decay)
+  process get <id>         Show a process (with its steps) by its table id
+  process supersede <id>   Record a new version that supersedes an active process
+    --step "<text>"        A step of the new version (repeatable, required)
+    --change "<summary>"   What changed in this version (the delta note)
+    --description "<text>" Optional summary of the new version
+  process close <id>       Retire (close) an active process by its table id`],
+  policy: [`
+  policy new "<name>"      Record a policy (bi-temporal first-class object + mirror)
+    --text "<rule>"        The policy rule/statement (required)
+    --from "<iso>"         Effective-from date (default: now)
+    --to "<iso>"           Effective-to date (optional; open-ended if omitted)
+  policy list [--status active|superseded|closed|all] [--limit N]
+                           List policies (table is authoritative, survives decay)
+  policy get <id>          Show a policy by its table id
+  policy asof "<iso-date>" Show active policies in force at a valid-time
+    --name "<policy>"      Filter to one policy by name
+  policy supersede <id>    Record a new version that supersedes an active policy
+    --text "<rule>"        The new rule (required)
+    --from "<iso>"         New effective-from (default: now)
+    --to "<iso>"           New effective-to (optional)
+    --change "<summary>"   What changed in this version (the delta note)
+  policy close <id>        Retire (close) an active policy by its table id`],
+  skill: [`
+  skill new "<name>"       Record a skill (reusable agent-followable capability)
+    --instructions "<txt>" The skill body (required)
+    --trigger "<when>"     Optional: when to apply this skill
+  skill list [--status active|superseded|closed|all] [--limit N]
+                           List skills (table is authoritative, survives decay)
+  skill get <id>           Show a skill by its table id
+  skill export             Render active skills as an AGENTS.md/CLAUDE.md markdown block
+  skill supersede <id>     Record a new version that supersedes an active skill
+    --instructions "<txt>" The new skill body (required)
+    --trigger "<when>"     Optional new trigger
+    --change "<summary>"   What changed in this version (the delta note)
+  skill close <id>         Retire (close) an active skill by its table id`],
+  brief: [`
+  brief new "<repo>"       Record a repo-scoped project brief
+    --summary "<text>"     The brief body (required)
+  brief list [--status active|superseded|closed|all] [--repo "<repo>"] [--limit N]
+                           List project briefs (table is authoritative, survives decay)
+  brief get <id>           Show a project brief by its table id
+  brief supersede <id>     Record a new version that supersedes an active brief
+    --summary "<text>"     The new brief body (required)
+    --change "<summary>"   What changed in this version (the delta note)
+  brief close <id>         Retire (close) an active project brief by its table id
+  brief refresh "<repo>"   Auto-assemble the brief from the repo's receipts (path:<repo>)
+    --dry-run              Print the assembled brief without writing it`],
+  note: [`
+  note new "<customer>"    Record a customer/account-scoped note
+    --text "<note>"        The note body (required)
+  note list [--status active|superseded|closed|all] [--customer "<id>"] [--limit N]
+                           List customer notes (table is authoritative, survives decay)
+  note get <id>            Show a customer note by its table id
+  note supersede <id>      Record a new version that supersedes an active note
+    --text "<note>"        The new note body (required)
+    --change "<summary>"   What changed in this version (the delta note)
+  note close <id>          Retire (close) an active customer note by its table id`],
+  graph: [`
+  graph extract            Rebuild the entity/relation graph from consolidated objects
+                           (decisions/policies/customer-notes/project-briefs); idempotent`],
+};

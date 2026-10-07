@@ -19,10 +19,12 @@
  */
 import type { DatabaseSyncLike } from './db.js';
 import type { MemoryEntry } from './memory.js';
+import type { SqlFragment } from './recall-scope.js';
 import { rejectionDigest } from './rejection.js';
+import { escapeLike } from './escape.js';
 
-/** Why sleep made a memory dormant. Only the decay pass does today. */
-export type DormantReason = 'decay';
+/** Why a memory went dormant: sleep's decay pass, an imported agent memory whose note was deleted, `hippo projects repair` splitting a two-project merge, or `hippo audit repair` setting aside an automatic memory with a certain defect. */
+export type DormantReason = 'decay' | 'source-deleted' | 'project-repair' | 'quality-repair';
 
 /** One memory that sleep is moving out of active memory into the dormant store. */
 export interface DormantMove {
@@ -43,7 +45,7 @@ export interface DormantMemory {
   tags: string[];
   /** Live strength when it went dormant. */
   strength: number;
-  /** Why it went dormant (`decay`). */
+  /** Why it went dormant: one of the {@link DormantReason} values. */
   reason: string;
   /** ISO time it went dormant. */
   dormantAt: string;
@@ -95,11 +97,6 @@ export function insertDormantRow(db: DatabaseSyncLike, move: DormantMove): void 
   );
 }
 
-/** Escape LIKE metacharacters so a search term matches literally (ESCAPE '\'). */
-function escapeLike(term: string): string {
-  return term.replace(/[\\%_]/g, (ch) => `\\${ch}`);
-}
-
 /**
  * Parse a stored snapshot back into a MemoryEntry, or null when the row no
  * longer matches the snapshot it carries (edited by hand, or truncated).
@@ -114,6 +111,7 @@ function parseSnapshot(row: DormantRow): MemoryEntry | null {
     }
     return entry;
   } catch {
+    // A row that will not parse is out of shape, so it is not restorable.
     return null;
   }
 }
@@ -131,8 +129,12 @@ function rowToDormantMemory(row: DormantRow): DormantMemory {
   };
 }
 
-/** A tenant's dormant memories, newest first, optionally filtered by search terms. */
-export function listDormantRows(db: DatabaseSyncLike, tenantId: string, opts: ListDormantOpts = {}): DormantMemory[] {
+// The snapshot's scope as a `scope` column, so recall-scope's SQL fragments read it as they read memories.scope.
+const DORMANT_WITH_SCOPE = `(SELECT *, CASE WHEN json_valid(entry_json) THEN json_extract(entry_json, '$.scope') END AS scope FROM dormant_memories)`;
+const EVERY_SCOPE: SqlFragment = { sql: '1', params: [] };
+
+/** A tenant's dormant memories whose scope `admit` passes, newest first, optionally filtered by search terms. */
+export function listDormantRows(db: DatabaseSyncLike, tenantId: string, opts: ListDormantOpts = {}, admit: SqlFragment = EVERY_SCOPE): DormantMemory[] {
   const terms = (opts.query ?? '').trim().split(/\s+/).filter((t) => t.length > 0);
   const limit = opts.limit !== undefined && Number.isFinite(opts.limit) && opts.limit >= 1
     ? Math.floor(opts.limit)
@@ -141,11 +143,11 @@ export function listDormantRows(db: DatabaseSyncLike, tenantId: string, opts: Li
   // SAFETY: rows' shape matches the seven columns named in the SELECT.
   const rows = db.prepare(
     `SELECT tenant_id, id, content, entry_json, reason, strength, dormant_at
-       FROM dormant_memories
-      WHERE tenant_id = ?${termClauses}
+       FROM ${DORMANT_WITH_SCOPE}
+      WHERE tenant_id = ? AND ${admit.sql}${termClauses}
       ORDER BY dormant_at DESC, id ASC
       LIMIT ?`,
-  ).all(tenantId, ...terms.map((t) => `%${escapeLike(t)}%`), limit) as DormantRow[];
+  ).all(tenantId, ...admit.params, ...terms.map((t) => `%${escapeLike(t)}%`), limit) as DormantRow[];
   return rows.map(rowToDormantMemory);
 }
 
@@ -167,13 +169,45 @@ export function readDormantSnapshot(db: DatabaseSyncLike, tenantId: string, id: 
     `SELECT tenant_id, id, content, entry_json, reason, strength, dormant_at
        FROM dormant_memories WHERE tenant_id = ? AND id = ?`,
   ).get(tenantId, id) as DormantRow | undefined;
-  const entry = row ? parseSnapshot(row) : null;
-  return row && entry ? { entry, reason: row.reason, strength: row.strength, dormantAt: row.dormant_at } : null;
+  return row ? toSnapshot(row) : null;
 }
 
-/** Whether a tenant has a dormant memory with this id (snapshot readable or not). */
-export function hasDormantRow(db: DatabaseSyncLike, tenantId: string, id: string): boolean {
-  return db.prepare(`SELECT 1 FROM dormant_memories WHERE tenant_id = ? AND id = ?`).get(tenantId, id) !== undefined;
+/** Every dormant memory of a tenant whose snapshot still reads back. */
+export function listDormantSnapshots(db: DatabaseSyncLike, tenantId: string): DormantSnapshot[] {
+  // SAFETY: rows' shape matches the seven columns named in the SELECT.
+  const rows = db.prepare(
+    `SELECT tenant_id, id, content, entry_json, reason, strength, dormant_at
+       FROM dormant_memories WHERE tenant_id = ?`,
+  ).all(tenantId) as DormantRow[];
+  return rows.flatMap((row) => toSnapshot(row) ?? []);
+}
+
+/** Readable snapshots whose entry's source starts with `prefix`; a malformed snapshot is passed over, not an error. */
+export function dormantSnapshotsBySourcePrefix(db: DatabaseSyncLike, tenantId: string, prefix: string): DormantSnapshot[] {
+  // SAFETY: rows' shape matches the seven columns named in the SELECT.
+  const rows = db.prepare(
+    `SELECT tenant_id, id, content, entry_json, reason, strength, dormant_at
+       FROM dormant_memories
+      WHERE tenant_id = ?
+        AND CASE WHEN json_valid(entry_json) THEN json_extract(entry_json, '$.source') END LIKE ? ESCAPE '\\'`,
+  ).all(tenantId, `${escapeLike(prefix)}%`) as DormantRow[];
+  return rows.flatMap((row) => toSnapshot(row) ?? []).filter((s) => String(s.entry.source).startsWith(prefix));
+}
+
+function toSnapshot(row: DormantRow): DormantSnapshot | null {
+  const entry = parseSnapshot(row);
+  return entry ? { entry, reason: row.reason, strength: row.strength, dormantAt: row.dormant_at } : null;
+}
+
+/** Put `entry` in place of a tenant's dormant memory `id`, keeping when and why that one went dormant. */
+export function replaceDormantEntry(db: DatabaseSyncLike, tenantId: string, id: string, entry: MemoryEntry): void {
+  db.prepare(`UPDATE dormant_memories SET id = ?, content = ?, entry_json = ? WHERE tenant_id = ? AND id = ?`)
+    .run(entry.id, entry.content, JSON.stringify(entry), tenantId, id);
+}
+
+/** Whether a tenant has a dormant memory with this id whose scope `admit` passes (snapshot readable or not). */
+export function hasDormantRow(db: DatabaseSyncLike, tenantId: string, id: string, admit: SqlFragment = EVERY_SCOPE): boolean {
+  return db.prepare(`SELECT 1 FROM ${DORMANT_WITH_SCOPE} WHERE tenant_id = ? AND id = ? AND ${admit.sql}`).get(tenantId, id, ...admit.params) !== undefined;
 }
 
 /** Delete a tenant's dormant memory. Returns false when there was none. */
@@ -182,36 +216,36 @@ export function deleteDormantRow(db: DatabaseSyncLike, tenantId: string, id: str
   return Number(result.changes ?? 0) > 0;
 }
 
-/**
- * Delete every dormant memory in the tenant whose content has this rejection
- * digest, so a rejected value cannot linger in dormant storage. Returns the
- * ids removed. Same O(N) scan as the live-row sweep in reject-flow.ts.
- */
-export function purgeDormantByDigest(db: DatabaseSyncLike, tenantId: string, digest: string): string[] {
-  // SAFETY: rows' shape matches the two columns named in the SELECT.
-  const rows = db.prepare(`SELECT id, content FROM dormant_memories WHERE tenant_id = ?`)
-    .all(tenantId) as Array<{ id: string; content: string }>;
+/** Deletes the tenant's dormant copies of a rejected digest whose snapshot scope `inReach` admits, so the value cannot linger; returns their ids. */
+export function purgeDormantByDigest(
+  db: DatabaseSyncLike, tenantId: string, digest: string, inReach: (scope: string | null) => boolean,
+): string[] {
+  // SAFETY: rows' shape matches the three columns named in the SELECT.
+  const rows = db.prepare(
+    `SELECT id, content, CASE WHEN json_valid(entry_json) THEN json_extract(entry_json, '$.scope') END AS scope
+       FROM dormant_memories WHERE tenant_id = ?`,
+  ).all(tenantId) as Array<{ id: string; content: string; scope: string | null }>;
   const removed: string[] = [];
   for (const row of rows) {
-    if (rejectionDigest(row.content) !== digest) continue;
+    if (rejectionDigest(row.content) !== digest || !inReach(row.scope)) continue;
     deleteDormantRow(db, tenantId, row.id);
     removed.push(row.id);
   }
   return removed;
 }
 
-/** How many dormant memories went dormant before `cutoffIso` (a dry-run count). */
-export function countExpiredDormant(db: DatabaseSyncLike, cutoffIso: string): number {
-  // SAFETY: row's shape matches the single aliased COUNT column in the SELECT.
-  const row = db.prepare(`SELECT COUNT(*) AS n FROM dormant_memories WHERE dormant_at < ?`).get(cutoffIso) as { n: number };
-  return Number(row.n);
+export interface DormantKey {
+  readonly tenantId: string;
+  readonly id: string;
 }
 
-/**
- * Delete every dormant memory (all tenants) that went dormant before
- * `cutoffIso`: the `dormant.retentionDays` window. Returns how many went.
- */
-export function purgeExpiredDormant(db: DatabaseSyncLike, cutoffIso: string): number {
-  const result = db.prepare(`DELETE FROM dormant_memories WHERE dormant_at < ?`).run(cutoffIso);
-  return Number(result.changes ?? 0);
+export function expiredDormantKeys(db: DatabaseSyncLike, cutoffIso: string): DormantKey[] {
+  const sql = `SELECT tenant_id AS tenantId, id FROM dormant_memories WHERE dormant_at < ?`;
+  // SAFETY: rows' shape matches the two columns named in the SELECT.
+  return db.prepare(sql).all(cutoffIso) as DormantKey[];
+}
+
+export function deleteExpiredDormantRow(db: DatabaseSyncLike, key: DormantKey, cutoffIso: string): number {
+  const sql = `DELETE FROM dormant_memories WHERE tenant_id = ? AND id = ? AND dormant_at < ?`;
+  return Number(db.prepare(sql).run(key.tenantId, key.id, cutoffIso).changes ?? 0);
 }

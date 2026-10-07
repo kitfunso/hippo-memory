@@ -1,5 +1,5 @@
 """Load-bearing numbers for dolphinbench-feasibility.md, from the clone and the public Claude Code + Mem0 evidence.
-Usage: C:/Users/skf_s/AppData/Local/Programs/Python/Python312/python.exe dolphin_stats.py [history|tests|results|evidence]"""
+Usage: C:/Users/<user>/AppData/Local/Programs/Python/Python312/python.exe dolphin_stats.py [history|tests|results|evidence]"""
 import gzip
 import json
 import statistics as st

@@ -5,13 +5,13 @@
  *   - /repos/{repo}/issues/comments      -> issue_comments_hwm
  *   - /repos/{repo}/pulls/comments       -> pr_review_comments_hwm
  *
- * Crash safety (codex P1 #3): each stream's HWM is persisted ONLY after
+ * Crash safety: each stream's HWM is persisted ONLY after
  * the stream fully drains. If stream 2 throws mid-flight, stream 1's HWM
  * is committed and stream 2's stays NULL (or its prior value). Rerun
  * picks up from stream 1's saved HWM and re-fetches stream 2 from its
  * last committed point.
  *
- * Codex P1 #2: the /issues endpoint returns BOTH issues and PRs (a PR is
+ * The /issues endpoint returns BOTH issues and PRs (a PR is
  * an issue with a `pull_request` field). We skip PRs here so they don't
  * get ingested under the issues schema. PRs are handled via webhook in
  * V1 (no /pulls backfill stream — review comments cover the discussion
@@ -28,7 +28,6 @@ import type { Context } from '../../api.js';
 import { openHippoDb, closeHippoDb } from '../../db.js';
 import { ingestEvent, type IngestEvent } from './ingest.js';
 import type { GitHubFetcher, GitHubBackfillPage } from './octokit-client.js';
-import type { JsonValue } from './types.js';
 import type {
   GitHubIssueEvent,
   GitHubIssueCommentEvent,
@@ -36,6 +35,7 @@ import type {
   GitHubRepository,
   GitHubSender,
 } from './types.js';
+import type { JsonValue } from '../../json.js';
 
 const API = 'https://api.github.com';
 
@@ -193,18 +193,15 @@ function isCommentItem(x: JsonValue): x is JsonValue & (IssueCommentItem | PrRev
 
 /**
  * Drain one stream end-to-end. Pauses and retries on rate-limit. Throws on
- * any other fetch error so the caller leaves the HWM unchanged (round 1
- * codex P1 #3 crash safety).
+ * any other fetch error so the caller leaves the HWM unchanged.
  *
- * v1.3.1 (round 2 codex P1s + claude P1):
  *   - Tracks max(updated_at) across ALL fetched items, including ones
  *     `toIngestEvent` rejects (e.g., PRs returned via `/issues`). Otherwise
  *     a page of pure PRs would never advance the HWM and the next run would
  *     re-fetch the same window forever.
  *   - Returns `drained: boolean` — true only when the stream actually ran
- *     to next=null. Callers MUST NOT advance the HWM when drained=false.
- *     Was a bug in v1.3.0: hitting maxPerStream cap returned the partial
- *     maxUpdatedAt and the caller persisted it, skipping the unfetched tail.
+ *     to next=null. Callers MUST NOT advance the HWM when drained=false,
+ *     or a capped run would persist a partial HWM and skip the unfetched tail.
  */
 async function drainStream(
   ctx: Context,
@@ -234,9 +231,7 @@ async function drainStream(
     pages++;
 
     for (const item of page.items) {
-      // v1.3.1: track updated_at on EVERY item, before the toIngestEvent
-      // filter. Skipped PRs from /issues still contribute to the HWM so
-      // PR-only pages don't loop forever.
+      // Track updated_at on EVERY item, before the toIngestEvent filter, so PR-only pages don't loop forever.
       // SAFETY: updated_at is GitHub's ISO-timestamp field on every item
       // shape this stream returns; a non-string value would only fail the
       // string comparisons below, matching pre-migration passthrough.
@@ -268,6 +263,91 @@ async function drainStream(
   return { ingested, pages, maxUpdatedAt, drained: true };
 }
 
+function issueItemToEvent(item: JsonValue, repository: GitHubRepository): IngestEvent | null {
+  if (!isIssuesItem(item)) return null;
+  // /issues returns PRs too; skip them.
+  if (item.pull_request) return null;
+  const payload: GitHubIssueEvent = {
+    action: 'opened',
+    repository,
+    issue: {
+      number: item.number,
+      title: item.title,
+      body: item.body ?? null,
+      user: { login: item.user.login, id: item.user.id },
+      updated_at: item.updated_at,
+    },
+  };
+  return { eventName: 'issues', payload };
+}
+
+function issueCommentItemToEvent(item: JsonValue, repository: GitHubRepository): IngestEvent | null {
+  if (!isCommentItem(item)) return null;
+  // SAFETY: this closure only runs against the /issues/comments stream,
+  // so every item isCommentItem validates here is genuinely an
+  // IssueCommentItem; a missing issue_url is handled defensively below.
+  const c = item as IssueCommentItem;
+  const issueNumber = parseTrailingNumber(c.issue_url);
+  if (issueNumber === null) return null;
+  const payload: GitHubIssueCommentEvent = {
+    action: 'created',
+    repository,
+    issue: { number: issueNumber },
+    comment: {
+      id: c.id,
+      body: c.body ?? null,
+      user: { login: c.user.login, id: c.user.id },
+      updated_at: c.updated_at,
+    },
+  };
+  return { eventName: 'issue_comment', payload };
+}
+
+function prReviewCommentItemToEvent(item: JsonValue, repository: GitHubRepository): IngestEvent | null {
+  if (!isCommentItem(item)) return null;
+  // SAFETY: this closure only runs against the /pulls/comments stream,
+  // so every item isCommentItem validates here is genuinely a
+  // PrReviewCommentItem; a missing pull_request_url is handled below.
+  const c = item as PrReviewCommentItem;
+  const prNumber = parseTrailingNumber(c.pull_request_url);
+  if (prNumber === null) return null;
+  const payload: GitHubPullRequestReviewCommentEvent = {
+    action: 'created',
+    repository,
+    pull_request: { number: prNumber },
+    comment: {
+      id: c.id,
+      body: c.body ?? null,
+      user: { login: c.user.login, id: c.user.id },
+      updated_at: c.updated_at,
+    },
+  };
+  return { eventName: 'pull_request_review_comment', payload };
+}
+
+/** Drains one stream, then persists its HWM only when the stream ran to the end. */
+async function backfillStream(
+  ctx: Context,
+  opts: BackfillOpts,
+  sleep: (ms: number) => Promise<void>,
+  stream: { url: string; column: HwmColumn; toIngestEvent: (item: JsonValue) => IngestEvent | null },
+): Promise<{ ingested: number; pages: number }> {
+  const res = await drainStream(
+    ctx,
+    stream.url,
+    stream.toIngestEvent,
+    opts.fetcher,
+    opts.token,
+    sleep,
+    opts.maxPerStream,
+  );
+  // A capped run (--max) must leave the HWM at its previous value so the next run re-fetches the unprocessed tail.
+  if (res.drained && res.maxUpdatedAt) {
+    writeOneHwm(ctx.hippoRoot, ctx.tenantId, opts.repoFullName, stream.column, res.maxUpdatedAt);
+  }
+  return { ingested: res.ingested, pages: res.pages };
+}
+
 export async function backfillRepo(
   ctx: Context,
   opts: BackfillOpts,
@@ -283,142 +363,37 @@ export async function backfillRepo(
   };
 
   // ---------- Stream 1: issues (skip PRs) ----------
-  const issuesUrl =
-    `${API}/repos/${opts.repoFullName}/issues?state=all&per_page=100` +
-    (cursors.issues ? `&since=${encodeURIComponent(cursors.issues)}` : '');
-  const issuesRes = await drainStream(
-    ctx,
-    issuesUrl,
-    (item) => {
-      if (!isIssuesItem(item)) return null;
-      // Codex P1 #2: /issues returns PRs too — skip them.
-      if (item.pull_request) return null;
-      const payload: GitHubIssueEvent = {
-        action: 'opened',
-        repository,
-        issue: {
-          number: item.number,
-          title: item.title,
-          body: item.body ?? null,
-          user: { login: item.user.login, id: item.user.id },
-          updated_at: item.updated_at,
-        },
-      };
-      return { eventName: 'issues', payload };
-    },
-    opts.fetcher,
-    opts.token,
-    sleep,
-    opts.maxPerStream,
-  );
+  const issuesRes = await backfillStream(ctx, opts, sleep, {
+    url:
+      `${API}/repos/${opts.repoFullName}/issues?state=all&per_page=100` +
+      (cursors.issues ? `&since=${encodeURIComponent(cursors.issues)}` : ''),
+    column: 'issues_hwm',
+    toIngestEvent: (item) => issueItemToEvent(item, repository),
+  });
   result.ingested.issues = issuesRes.ingested;
   result.pages.issues = issuesRes.pages;
-  // v1.3.1: only advance HWM when the stream actually drained. A capped run
-  // (--max) must leave the HWM at its previous value so the next invocation
-  // re-fetches the unprocessed tail.
-  if (issuesRes.drained && issuesRes.maxUpdatedAt) {
-    writeOneHwm(
-      ctx.hippoRoot,
-      ctx.tenantId,
-      opts.repoFullName,
-      'issues_hwm',
-      issuesRes.maxUpdatedAt,
-    );
-  }
 
   // ---------- Stream 2: repo-level issue comments ----------
-  const commentsUrl =
-    `${API}/repos/${opts.repoFullName}/issues/comments?per_page=100` +
-    (cursors.issueComments
-      ? `&since=${encodeURIComponent(cursors.issueComments)}`
-      : '');
-  const commentsRes = await drainStream(
-    ctx,
-    commentsUrl,
-    (item) => {
-      if (!isCommentItem(item)) return null;
-      // SAFETY: this closure only runs against the /issues/comments stream,
-      // so every item isCommentItem validates here is genuinely an
-      // IssueCommentItem; a missing issue_url is handled defensively below.
-      const c = item as IssueCommentItem;
-      const issueNumber = parseTrailingNumber(c.issue_url);
-      if (issueNumber === null) return null;
-      const payload: GitHubIssueCommentEvent = {
-        action: 'created',
-        repository,
-        issue: { number: issueNumber },
-        comment: {
-          id: c.id,
-          body: c.body ?? null,
-          user: { login: c.user.login, id: c.user.id },
-          updated_at: c.updated_at,
-        },
-      };
-      return { eventName: 'issue_comment', payload };
-    },
-    opts.fetcher,
-    opts.token,
-    sleep,
-    opts.maxPerStream,
-  );
+  const commentsRes = await backfillStream(ctx, opts, sleep, {
+    url:
+      `${API}/repos/${opts.repoFullName}/issues/comments?per_page=100` +
+      (cursors.issueComments ? `&since=${encodeURIComponent(cursors.issueComments)}` : ''),
+    column: 'issue_comments_hwm',
+    toIngestEvent: (item) => issueCommentItemToEvent(item, repository),
+  });
   result.ingested.issueComments = commentsRes.ingested;
   result.pages.issueComments = commentsRes.pages;
-  if (commentsRes.drained && commentsRes.maxUpdatedAt) {
-    writeOneHwm(
-      ctx.hippoRoot,
-      ctx.tenantId,
-      opts.repoFullName,
-      'issue_comments_hwm',
-      commentsRes.maxUpdatedAt,
-    );
-  }
 
   // ---------- Stream 3: repo-level PR review comments ----------
-  const prCommentsUrl =
-    `${API}/repos/${opts.repoFullName}/pulls/comments?per_page=100` +
-    (cursors.prReviewComments
-      ? `&since=${encodeURIComponent(cursors.prReviewComments)}`
-      : '');
-  const prCommentsRes = await drainStream(
-    ctx,
-    prCommentsUrl,
-    (item) => {
-      if (!isCommentItem(item)) return null;
-      // SAFETY: this closure only runs against the /pulls/comments stream,
-      // so every item isCommentItem validates here is genuinely a
-      // PrReviewCommentItem; a missing pull_request_url is handled below.
-      const c = item as PrReviewCommentItem;
-      const prNumber = parseTrailingNumber(c.pull_request_url);
-      if (prNumber === null) return null;
-      const payload: GitHubPullRequestReviewCommentEvent = {
-        action: 'created',
-        repository,
-        pull_request: { number: prNumber },
-        comment: {
-          id: c.id,
-          body: c.body ?? null,
-          user: { login: c.user.login, id: c.user.id },
-          updated_at: c.updated_at,
-        },
-      };
-      return { eventName: 'pull_request_review_comment', payload };
-    },
-    opts.fetcher,
-    opts.token,
-    sleep,
-    opts.maxPerStream,
-  );
+  const prCommentsRes = await backfillStream(ctx, opts, sleep, {
+    url:
+      `${API}/repos/${opts.repoFullName}/pulls/comments?per_page=100` +
+      (cursors.prReviewComments ? `&since=${encodeURIComponent(cursors.prReviewComments)}` : ''),
+    column: 'pr_review_comments_hwm',
+    toIngestEvent: (item) => prReviewCommentItemToEvent(item, repository),
+  });
   result.ingested.prReviewComments = prCommentsRes.ingested;
   result.pages.prReviewComments = prCommentsRes.pages;
-  if (prCommentsRes.drained && prCommentsRes.maxUpdatedAt) {
-    writeOneHwm(
-      ctx.hippoRoot,
-      ctx.tenantId,
-      opts.repoFullName,
-      'pr_review_comments_hwm',
-      prCommentsRes.maxUpdatedAt,
-    );
-  }
 
   return result;
 }

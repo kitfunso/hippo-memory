@@ -1,15 +1,13 @@
 /**
- * Slack workspace registration helpers (T2B follow-up, 2026-05-24).
+ * Slack workspace registration helpers.
  *
  * The `slack_workspaces` table maps Slack `team_id` → hippo `tenant_id`.
  * Empty table = single-tenant install (HIPPO_TENANT fallback).
  * Non-empty = multi-workspace install (fail-closed routing via
  * `resolveTenantForTeam`).
  *
- * Before T2B, populating this table required direct SQL — fine for a
- * single-machine deployment, awkward for operators with multiple
- * workspaces. These helpers give the CLI (`hippo slack workspaces
- * add|list|remove`) a clean surface.
+ * These helpers give the CLI (`hippo slack workspaces add|list|remove`) a
+ * surface, so operators with multiple workspaces need no direct SQL.
  *
  * Design choices:
  *   - `add` is an upsert (ON CONFLICT UPDATE). Re-registering an

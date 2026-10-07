@@ -13,15 +13,14 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import {
-  createMemory,
-  type MemoryEntry,
+  type MemoryEntry
 } from '../src/memory.js';
-import {
-  initStore,
-  writeEntry,
-  loadAllEntries,
-} from '../src/store.js';
-import { hybridSearch, physicsSearch, type SearchResult } from '../src/search.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
+import { hybridSearch } from '../src/search/hybrid.js';
+import { physicsSearch } from '../src/search/physics-search.js';
 import { saveEmbeddingIndex } from '../src/embeddings.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import {
@@ -387,89 +386,98 @@ const CLUSTER_QUERIES: QueryCase[] = [
 // A/B comparison
 // ---------------------------------------------------------------------------
 
+interface Metrics {
+  readonly p3: number;
+  readonly r3: number;
+  readonly mrr: number;
+}
+
+interface QueryScore {
+  readonly query: string;
+  readonly expectedCount: number;
+  readonly classic: Metrics;
+  readonly physics: Metrics;
+}
+
+function metrics(topIds: string[], expectedIds: string[]): Metrics {
+  return { p3: precision3(topIds, expectedIds), r3: recallK(topIds, expectedIds), mrr: mrr(topIds, expectedIds) };
+}
+
+async function scoreQueries(cases: readonly QueryCase[]): Promise<QueryScore[]> {
+  const scores: QueryScore[] = [];
+  for (const tc of cases) {
+    const expectedIds = tc.expectedLabels.map((l) => seedIds[l]).filter(Boolean);
+    const classicIds = await runClassic(tc.query);
+    const physicsIds = await runPhysics(tc.query, tc.queryEmbedding);
+    scores.push({ query: tc.query, expectedCount: expectedIds.length, classic: metrics(classicIds, expectedIds), physics: metrics(physicsIds, expectedIds) });
+  }
+  return scores;
+}
+
+function mean(scores: readonly QueryScore[], side: 'classic' | 'physics', key: keyof Metrics): number {
+  return scores.reduce((sum, s) => sum + s[side][key], 0) / scores.length;
+}
+
+function logRow(s: QueryScore, by: keyof Metrics): void {
+  const c = s.classic;
+  const p = s.physics;
+  const winner = p[by] > c[by] ? 'PHYSICS' : p[by] < c[by] ? 'CLASSIC' : 'TIE';
+  console.log(
+    `  ${winner.padEnd(7)} | C: P@3=${c.p3.toFixed(2)} R@3=${c.r3.toFixed(2)} MRR=${c.mrr.toFixed(2)} | ` +
+    `P: P@3=${p.p3.toFixed(2)} R@3=${p.r3.toFixed(2)} MRR=${p.mrr.toFixed(2)} | ${s.query}`
+  );
+}
+
+function logSummary(title: string, scores: readonly QueryScore[], by: keyof Metrics): void {
+  console.log(`\n  ── ${title} ──`);
+  for (const side of ['classic', 'physics'] as const) {
+    console.log(`  ${side}:  P@3=${mean(scores, side, 'p3').toFixed(3)}  R@3=${mean(scores, side, 'r3').toFixed(3)}  MRR=${mean(scores, side, 'mrr').toFixed(3)}`);
+  }
+  const d = mean(scores, 'physics', by) - mean(scores, 'classic', by);
+  console.log(`  ${by} delta: ${d >= 0 ? '+' : ''}${d.toFixed(3)}`);
+}
+
 describe('Physics vs Classic A/B Benchmark', () => {
+  // Scored once, in a fixed order, before the stability test resets physics state, so no test order can move a total.
+  let standard: QueryScore[] = [];
+  let cluster: QueryScore[] = [];
+  beforeAll(async () => {
+    standard = await scoreQueries(STANDARD_QUERIES);
+    cluster = await scoreQueries(CLUSTER_QUERIES);
+  }, 30_000);
+
   describe('Standard queries', () => {
-    const cAgg = { p3: 0, r3: 0, mrr: 0 };
-    const pAgg = { p3: 0, r3: 0, mrr: 0 };
-
-    for (const tc of STANDARD_QUERIES) {
-      it(`"${tc.query}"`, async () => {
-        const expectedIds = tc.expectedLabels.map((l) => seedIds[l]).filter(Boolean);
-        expect(expectedIds.length).toBeGreaterThan(0);
-
-        const classicIds = await runClassic(tc.query);
-        const physicsIds = await runPhysics(tc.query, tc.queryEmbedding);
-
-        const cM = mrr(classicIds, expectedIds);
-        const pM = mrr(physicsIds, expectedIds);
-        const cP = precision3(classicIds, expectedIds);
-        const pP = precision3(physicsIds, expectedIds);
-        const cR = recallK(classicIds, expectedIds);
-        const pR = recallK(physicsIds, expectedIds);
-
-        cAgg.p3 += cP; cAgg.r3 += cR; cAgg.mrr += cM;
-        pAgg.p3 += pP; pAgg.r3 += pR; pAgg.mrr += pM;
-
-        const winner = pM > cM ? 'PHYSICS' : pM < cM ? 'CLASSIC' : 'TIE';
-        console.log(
-          `  ${winner.padEnd(7)} | C: P@3=${cP.toFixed(2)} R@3=${cR.toFixed(2)} MRR=${cM.toFixed(2)} | ` +
-          `P: P@3=${pP.toFixed(2)} R@3=${pR.toFixed(2)} MRR=${pM.toFixed(2)} | ${tc.query}`
-        );
-
-        // Baseline: both should have MRR > 0
-        expect(cM, `Classic MRR=0 for "${tc.query}"`).toBeGreaterThan(0);
+    STANDARD_QUERIES.forEach((tc, i) => {
+      it(`"${tc.query}"`, () => {
+        const s = standard[i]!;
+        expect(s.expectedCount).toBe(tc.expectedLabels.length);
+        logRow(s, 'mrr');
+        expect(s.classic.mrr, `Classic MRR=0 for "${tc.query}"`).toBeGreaterThan(0);
       });
-    }
+    });
 
-    it('summary', () => {
-      const n = STANDARD_QUERIES.length;
-      console.log('\n  ── Standard Queries ──────────────────────────────────');
-      console.log(`  Classic:  P@3=${(cAgg.p3 / n).toFixed(3)}  R@3=${(cAgg.r3 / n).toFixed(3)}  MRR=${(cAgg.mrr / n).toFixed(3)}`);
-      console.log(`  Physics:  P@3=${(pAgg.p3 / n).toFixed(3)}  R@3=${(pAgg.r3 / n).toFixed(3)}  MRR=${(pAgg.mrr / n).toFixed(3)}`);
-      const d = (pAgg.mrr - cAgg.mrr) / n;
-      console.log(`  MRR delta: ${d >= 0 ? '+' : ''}${d.toFixed(3)}`);
-      console.log('  ──────────────────────────────────────────────────────');
+    it('summary: classic BM25 ranks a right answer near the top on keyword queries', () => {
+      expect(standard).toHaveLength(STANDARD_QUERIES.length);
+      logSummary('Standard Queries', standard, 'mrr');
+      expect(mean(standard, 'classic', 'mrr')).toBeGreaterThanOrEqual(0.8);
+      expect(mean(standard, 'physics', 'mrr')).toBeGreaterThan(0);
     });
   });
 
   describe('Cluster queries (physics should win)', () => {
-    const cAgg = { p3: 0, r3: 0, mrr: 0 };
-    const pAgg = { p3: 0, r3: 0, mrr: 0 };
-
-    for (const tc of CLUSTER_QUERIES) {
-      it(`"${tc.query}"`, async () => {
-        const expectedIds = tc.expectedLabels.map((l) => seedIds[l]).filter(Boolean);
-        expect(expectedIds.length).toBeGreaterThan(0);
-
-        const classicIds = await runClassic(tc.query);
-        const physicsIds = await runPhysics(tc.query, tc.queryEmbedding);
-
-        const cP = precision3(classicIds, expectedIds);
-        const pP = precision3(physicsIds, expectedIds);
-        const cR = recallK(classicIds, expectedIds);
-        const pR = recallK(physicsIds, expectedIds);
-        const cM = mrr(classicIds, expectedIds);
-        const pM = mrr(physicsIds, expectedIds);
-
-        cAgg.p3 += cP; cAgg.r3 += cR; cAgg.mrr += cM;
-        pAgg.p3 += pP; pAgg.r3 += pR; pAgg.mrr += pM;
-
-        const winner = pR > cR ? 'PHYSICS' : pR < cR ? 'CLASSIC' : 'TIE';
-        console.log(
-          `  ${winner.padEnd(7)} | C: P@3=${cP.toFixed(2)} R@3=${cR.toFixed(2)} MRR=${cM.toFixed(2)} | ` +
-          `P: P@3=${pP.toFixed(2)} R@3=${pR.toFixed(2)} MRR=${pM.toFixed(2)} | ${tc.query}`
-        );
+    CLUSTER_QUERIES.forEach((tc, i) => {
+      it(`"${tc.query}"`, () => {
+        const s = cluster[i]!;
+        expect(s.expectedCount).toBe(tc.expectedLabels.length);
+        logRow(s, 'r3');
+        expect(s.physics.mrr, `Physics MRR=0 for "${tc.query}"`).toBeGreaterThan(0);
       });
-    }
+    });
 
-    it('summary', () => {
-      const n = CLUSTER_QUERIES.length;
-      console.log('\n  ── Cluster Queries (Physics Advantage) ───────────────');
-      console.log(`  Classic:  P@3=${(cAgg.p3 / n).toFixed(3)}  R@3=${(cAgg.r3 / n).toFixed(3)}  MRR=${(cAgg.mrr / n).toFixed(3)}`);
-      console.log(`  Physics:  P@3=${(pAgg.p3 / n).toFixed(3)}  R@3=${(pAgg.r3 / n).toFixed(3)}  MRR=${(pAgg.mrr / n).toFixed(3)}`);
-      const d = (pAgg.r3 - cAgg.r3) / n;
-      console.log(`  R@3 delta: ${d >= 0 ? '+' : ''}${d.toFixed(3)}`);
-      console.log('  ──────────────────────────────────────────────────────');
+    it('summary: physics recall@3 is at least classic recall@3 on cluster queries', () => {
+      expect(cluster).toHaveLength(CLUSTER_QUERIES.length);
+      logSummary('Cluster Queries (Physics Advantage)', cluster, 'r3');
+      expect(mean(cluster, 'physics', 'r3')).toBeGreaterThanOrEqual(mean(cluster, 'classic', 'r3'));
     });
   });
 

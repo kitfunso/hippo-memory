@@ -157,7 +157,7 @@ function isPathInside(child, parent) {
 // step 1: collect transcripts
 function collect(projectsDir, outDir) {
   const kept = [];
-  const excluded = { z1c: 0, evalRuns: 0, scratch: 0, stale: 0 };
+  const excluded = { z1c: 0, evalRuns: 0, headless: 0, scratch: 0, stale: 0 };
   const cwds = new Set();
   let latestTs = -Infinity;
   const sinceMs = Date.parse(SINCE);
@@ -170,13 +170,15 @@ function collect(projectsDir, outDir) {
       const filePath = path.join(dirPath, f.name);
       const text = fs.readFileSync(filePath, 'utf8');
       if (text.split(/\r?\n/).some((l) => l && mentionsZ1c(l))) { excluded.z1c++; continue; }
-      let hasEvalRuns = false, hasScratch = false, hasRecent = false;
+      let hasEvalRuns = false, isHeadless = false, hasScratch = false, hasRecent = false;
       const fileCwds = new Set();
       let fileMaxTs = -Infinity;
       for (const line of text.split(/\r?\n/)) {
         if (!line) continue;
         let o;
         try { o = JSON.parse(line); } catch { continue; }
+        // Amendment 2: `claude -p` runs are scripted wherever they ran; a path rule missed the TE5 pilot.
+        if (o.entrypoint === 'sdk-cli') isHeadless = true;
         if (o.cwd) {
           fileCwds.add(o.cwd);
           const segs = String(o.cwd).split(/[\\/]/);
@@ -191,6 +193,7 @@ function collect(projectsDir, outDir) {
       if (hasEvalRuns) { excluded.evalRuns++; continue; }
       if (hasScratch) { excluded.scratch++; continue; }
       if (!hasRecent) { excluded.stale++; continue; }
+      if (isHeadless) { excluded.headless++; continue; }
       const destDir = path.join(outDir, 'corpus', pd.name);
       fs.mkdirSync(destDir, { recursive: true });
       fs.copyFileSync(filePath, path.join(destDir, f.name));
@@ -454,6 +457,20 @@ function selftest() {
   assert.equal(echoed.get(1), 'HELPS');
   assert.equal(echoed.get(2), 'HELPS');
   assert.equal(echoed.get(3), 'NO');
+
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'z1c-selftest-'));
+  try {
+    const proj = path.join(tmp, 'projects', 'p');
+    fs.mkdirSync(proj, { recursive: true });
+    const line = (entrypoint) => JSON.stringify({ type: 'user', timestamp: '2026-09-28T10:00:00Z', cwd: '/w/repo', entrypoint });
+    fs.writeFileSync(path.join(proj, 'human.jsonl'), line('cli') + '\n');
+    fs.writeFileSync(path.join(proj, 'scripted.jsonl'), line('sdk-cli') + '\n');
+    const got = collect(path.join(tmp, 'projects'), path.join(tmp, 'out'));
+    assert.equal(got.excluded.headless, 1);
+    assert.deepEqual(got.kept.map((k) => k.file), ['human.jsonl']);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
 
   console.log('selftest ok');
 }

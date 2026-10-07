@@ -2,8 +2,8 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.kitfunso/hippo-memory",
   "title": "Hippo memory",
-  "description": "Memory for AI agents that learns what is wrong and stops repeating it. Local SQLite store.",
-  "version": "1.52.7",
+  "description": "Make your agent's memory work like a brain. Hippo is long-term memory for coding agents.",
+  "version": "1.64.0",
   "websiteUrl": "https://hippo-memory.com",
   "repository": {
     "url": "https://github.com/kitfunso/hippo-memory",

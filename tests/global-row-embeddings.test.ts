@@ -3,22 +3,25 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import {
   promoteToGlobal,
   shareMemory,
   autoShare,
   syncGlobalToLocal,
 } from '../src/shared.js';
-import { initStore, writeEntry } from '../src/store.js';
-import { createMemory } from '../src/memory.js';
-import { embedAll, loadEmbeddingIndex, isEmbeddingAvailable } from '../src/embeddings.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { embedAll, loadEmbeddingIndex } from '../src/embeddings.js';
+import { isEmbeddingAvailable } from '../src/local-embedding.js';
 import { resolveEmbeddingProvider } from '../src/embedding-provider.js';
 
 // docs/plans/2026-07-18-global-row-embeddings.md: rows written to the global
 // store by promote/share/autoShare/sync/import must enter that store's
 // embedding index under the same best-effort contract as `remember`.
 
-const HIPPO_BIN = path.join(process.cwd(), 'bin', 'hippo.js');
+const HIPPO_BIN = fileURLToPath(new URL('../bin/hippo.js', import.meta.url));
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -114,7 +117,7 @@ describe('global-row-embeddings: embeddings disabled (deterministic)', () => {
   });
 
   it('promoteToGlobal succeeds and writes no embedding index entry', () => {
-    const entry = createMemory('deterministic no-embed promote test content');
+    const entry = createMemory('deterministic no-embed promote test content', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(localRoot, entry);
 
     const promoted = promoteToGlobal(localRoot, entry.id);
@@ -128,7 +131,7 @@ describe('global-row-embeddings: embeddings disabled (deterministic)', () => {
   });
 
   it('shareMemory succeeds and writes no embedding index entry', () => {
-    const entry = createMemory('deterministic no-embed share test content', { tags: ['error'] });
+    const entry = createMemory('deterministic no-embed share test content', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['error'] });
     writeEntry(localRoot, entry);
 
     const shared = shareMemory(localRoot, entry.id, { force: true });
@@ -140,7 +143,7 @@ describe('global-row-embeddings: embeddings disabled (deterministic)', () => {
   });
 
   it('autoShare succeeds and writes no embedding index entry (skipEmbed + batch embedAll no-op)', () => {
-    const entry = createMemory('deterministic no-embed autoshare test content');
+    const entry = createMemory('deterministic no-embed autoshare test content', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(localRoot, entry);
 
     const shared = autoShare(localRoot, { minScore: 0 });
@@ -152,7 +155,7 @@ describe('global-row-embeddings: embeddings disabled (deterministic)', () => {
 
   it('syncGlobalToLocal succeeds and writes no embedding index entry on the local store', () => {
     disableEmbeddings(localRoot);
-    const entry = createMemory('deterministic no-embed sync test content');
+    const entry = createMemory('deterministic no-embed sync test content', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(globalRoot, entry);
 
     const count = syncGlobalToLocal(localRoot, globalRoot);
@@ -190,7 +193,7 @@ describe('global-row-embeddings: awaited batch producers', () => {
       console.warn('SKIP: embeddings unavailable in this environment');
       return;
     }
-    const entry = createMemory('awaited batch sync test content unique alpha');
+    const entry = createMemory('awaited batch sync test content unique alpha', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(globalRoot, entry);
 
     const count = syncGlobalToLocal(localRoot, globalRoot);
@@ -212,7 +215,7 @@ describe('global-row-embeddings: awaited batch producers', () => {
       console.warn('SKIP: embeddings unavailable in this environment');
       return;
     }
-    const entry = createMemory('awaited batch autoshare test content unique beta');
+    const entry = createMemory('awaited batch autoshare test content unique beta', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(localRoot, entry);
 
     const shared = autoShare(localRoot, { minScore: 0 });
@@ -253,7 +256,7 @@ describe('global-row-embeddings: fire-and-forget integration', () => {
       console.warn('SKIP: embeddings unavailable in this environment');
       return;
     }
-    const entry = createMemory('fire and forget integration promote test content gamma');
+    const entry = createMemory('fire and forget integration promote test content gamma', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(localRoot, entry);
 
     const promoted = promoteToGlobal(localRoot, entry.id);
@@ -281,7 +284,7 @@ describe('global-row-embeddings: hippo embed --global CLI', () => {
       // Seed an unembedded global row directly, bypassing the CLI, so the
       // row predates any embed call.
       initStore(globalRoot);
-      const entry = createMemory('cli embed --global test content delta');
+      const entry = createMemory('cli embed --global test content delta', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
       writeEntry(globalRoot, entry);
 
       let exitCode = 0;
@@ -353,7 +356,7 @@ describe('global-row-embeddings: promoteToGlobal producer wiring (subprocess)', 
       // Ensures the local vector exists (deterministic, not racing remember's
       // own fire-and-forget embed) and warms the on-disk model cache before
       // promote runs.
-      execFileSync('node', [HIPPO_BIN, 'embed'], { cwd, env, encoding: 'utf-8' });
+      if (isEmbeddingAvailable()) execFileSync('node', [HIPPO_BIN, 'embed'], { cwd, env, encoding: 'utf-8' });
 
       const promoteOut = execFileSync(
         'node',

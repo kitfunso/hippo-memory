@@ -1,11 +1,13 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync, existsSync, writeFileSync, statSync } from 'node:fs';
+import { mkdtempSync, rmSync, mkdirSync, existsSync, writeFileSync, statSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { spawn, execFileSync, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { initStore } from '../src/store.js';
+import type { Readable } from 'node:stream';
+import { spawn, execFileSync, type ChildProcessByStdio } from 'node:child_process';
+import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb, getMeta } from '../src/db.js';
 import { queryAuditEvents } from '../src/audit.js';
+import { boundPort } from './_helpers/listen.js';
 
 /**
  * Headline parity test for A1: when `hippo serve` is running, CLI invocations
@@ -25,41 +27,24 @@ function makeWorkspace(): string {
   return home;
 }
 
-/**
- * Pick a random high port and verify it's actually free by trying to bind a
- * throwaway server. Retries a handful of times before giving up.
- */
-async function pickFreePort(): Promise<number> {
-  const { createServer } = await import('node:http');
-  for (let attempt = 0; attempt < 8; attempt++) {
-    const port = 30000 + Math.floor(Math.random() * 30000);
-    try {
-      await new Promise<void>((resolve, reject) => {
-        const probe = createServer();
-        probe.once('error', reject);
-        probe.listen(port, '127.0.0.1', () => {
-          probe.close(() => resolve());
-        });
-      });
-      return port;
-    } catch {
-      // taken; try another
-    }
-  }
-  throw new Error('could not find a free port after 8 attempts');
+// writePidfile renames a finished temp file into place, so an existing pidfile is always whole JSON.
+function pidfilePort(pidfilePath: string): number {
+  // SAFETY: serve() writes the pidfile as JSON with the numeric port it bound (src/server-detect.ts writePidfile).
+  return (JSON.parse(readFileSync(pidfilePath, 'utf8')) as { port: number }).port;
 }
 
 interface SpawnedServer {
-  child: ChildProcessWithoutNullStreams;
+  child: ChildProcessByStdio<null, Readable, Readable>;
   port: number;
   url: string;
   stop: () => Promise<void>;
 }
 
-async function startServer(workspace: string, port: number): Promise<SpawnedServer> {
-  const child = spawn(process.execPath, [CLI_PATH, 'serve', '--port', String(port)], {
+// Port 0 lets the OS pick, so there is no probe-then-bind window for another process to take the port.
+async function startServer(workspace: string): Promise<SpawnedServer> {
+  const child = spawn(process.execPath, [CLI_PATH, 'serve', '--port', '0'], {
     cwd: workspace,
-    env: { ...process.env, HIPPO_PORT: String(port) },
+    env: { ...process.env, HIPPO_PORT: '0' },
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
   });
@@ -74,6 +59,7 @@ async function startServer(workspace: string, port: number): Promise<SpawnedServ
   const pidfilePath = join(workspace, '.hippo', 'server.pid');
   const deadline = Date.now() + 10_000;
   let ready = false;
+  let port = 0;
   while (Date.now() < deadline) {
     if (child.exitCode !== null) {
       throw new Error(
@@ -81,6 +67,7 @@ async function startServer(workspace: string, port: number): Promise<SpawnedServ
       );
     }
     if (existsSync(pidfilePath)) {
+      port = pidfilePort(pidfilePath);
       try {
         const res = await fetch(`http://127.0.0.1:${port}/health`);
         if (res.status === 200) { ready = true; break; }
@@ -168,7 +155,6 @@ function getActorForContent(workspace: string, contentNeedle: string): string | 
   try {
     const events = queryAuditEvents(db, { tenantId: 'default', op: 'remember', limit: 200 });
     for (const ev of events) {
-      const meta = ev.metadata ?? {};
       const target = ev.targetId;
       if (!target) continue;
       // Check whether this audit row corresponds to a memory whose content
@@ -200,6 +186,32 @@ function getActorForId(workspace: string, memoryId: string): string | null {
   }
 }
 
+interface StoredRow {
+  tags: string[];
+  halfLifeDays: number;
+  valence: string;
+}
+
+function getRowForContent(workspace: string, contentNeedle: string): StoredRow | null {
+  const db = openHippoDb(join(workspace, '.hippo'));
+  try {
+    // SAFETY: literal SELECT of known columns against the memories schema.
+    const row = db.prepare(
+      `SELECT tags_json, half_life_days, emotional_valence FROM memories WHERE content LIKE ?`,
+    ).get(`%${contentNeedle}%`) as
+      | { tags_json: string; half_life_days: number; emotional_valence: string }
+      | undefined;
+    if (!row) return null;
+    return {
+      tags: JSON.parse(row.tags_json) as string[],
+      halfLifeDays: row.half_life_days,
+      valence: row.emotional_valence,
+    };
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
 describe('cli thin-client mode', () => {
   beforeAll(() => {
     if (!existsSync(CLI_PATH)) {
@@ -214,8 +226,7 @@ describe('cli thin-client mode', () => {
     const workspace = makeWorkspace();
     let server: SpawnedServer | null = null;
     try {
-      const port = await pickFreePort();
-      server = await startServer(workspace, port);
+      server = await startServer(workspace);
 
       // Run remember through the spawned CLI. With pidfile present, this must
       // route over HTTP and audit with actor='localhost:cli'.
@@ -239,6 +250,43 @@ describe('cli thin-client mode', () => {
     } finally {
       if (server) await server.stop();
       rmSync(workspace, { recursive: true, force: true });
+    }
+  }, 30_000);
+
+  it('remember --error stores the same tags and half-life whether it routes or takes the direct path', async () => {
+    // Separate stores: a second remember in one store would shift the direct row's schema fit.
+    const routedWorkspace = makeWorkspace();
+    const directWorkspace = makeWorkspace();
+    let server: SpawnedServer | null = null;
+    try {
+      server = await startServer(routedWorkspace);
+
+      const routedRun = runCli(routedWorkspace, 'remember', 'error-tag-parity-canary', '--error', '--tag', 't');
+      expect(routedRun.stdout, `stderr: ${routedRun.stderr}`).toMatch(/Remembered .*\(via http/);
+      expect(getActorForContent(routedWorkspace, 'error-tag-parity-canary')).toBe('localhost:cli');
+
+      await server.stop();
+      server = null;
+
+      const directRun = runCli(directWorkspace, 'remember', 'error-tag-parity-canary', '--error', '--tag', 't');
+      expect(directRun.stdout, `stderr: ${directRun.stderr}`).toMatch(/Remembered \[/);
+      expect(getActorForContent(directWorkspace, 'error-tag-parity-canary')).toBe('cli');
+
+      const routed = getRowForContent(routedWorkspace, 'error-tag-parity-canary');
+      const direct = getRowForContent(directWorkspace, 'error-tag-parity-canary');
+      expect(routed).not.toBeNull();
+      expect(direct).not.toBeNull();
+      for (const row of [routed!, direct!]) {
+        expect(row.tags).toContain('error');
+        expect(row.tags).toContain('t');
+        expect(row.tags.some((tag) => tag.startsWith('path:'))).toBe(true);
+        expect(row.valence).toBe('negative');
+      }
+      expect(routed!.halfLifeDays).toBe(direct!.halfLifeDays);
+    } finally {
+      if (server) await server.stop();
+      rmSync(routedWorkspace, { recursive: true, force: true });
+      rmSync(directWorkspace, { recursive: true, force: true });
     }
   }, 30_000);
 
@@ -311,8 +359,7 @@ describe('cli thin-client mode', () => {
         closeHippoDb(db);
       }
 
-      const port = await pickFreePort();
-      server = await startServer(workspace, port);
+      server = await startServer(workspace);
 
       // With the server up, forget --archive now routes over HTTP like plain
       // forget does; the archive endpoint has existed since ea155d6.
@@ -392,8 +439,7 @@ describe('cli thin-client mode', () => {
         closeHippoDb(db);
       }
 
-      const port = await pickFreePort();
-      server = await startServer(workspace, port);
+      server = await startServer(workspace);
 
       // raw-archive.ts throws "is not raw" for a non-raw kind; the routed
       // catch must wrap it the same way cmdForget's direct catch does.
@@ -410,7 +456,6 @@ describe('cli thin-client mode', () => {
     const workspace = makeWorkspace();
     const { createServer } = await import('node:http');
     const startedAt = new Date().toISOString();
-    const port = await pickFreePort();
     const pidfilePath = join(workspace, '.hippo', 'server.pid');
 
     // A stub that answers ONE /health probe (so detectServer returns a live
@@ -429,7 +474,8 @@ describe('cli thin-client mode', () => {
       res.writeHead(404);
       res.end();
     });
-    await new Promise<void>((resolve) => stub.listen(port, '127.0.0.1', () => resolve()));
+    stub.listen(0, '127.0.0.1');
+    const port = await boundPort(stub);
 
     try {
       // Pidfile names this stub: pid is the (alive) test process so
@@ -459,8 +505,7 @@ describe('cli thin-client mode', () => {
     const workspace = makeWorkspace();
     let server: SpawnedServer | null = null;
     try {
-      const port = await pickFreePort();
-      server = await startServer(workspace, port);
+      server = await startServer(workspace);
       const pidfilePath = join(workspace, '.hippo', 'server.pid');
 
       // isConnectionRefused reads message text, and the server quotes the id
@@ -484,7 +529,6 @@ describe('cli thin-client mode', () => {
     const hippoRoot = join(workspace, '.hippo');
     const { createServer } = await import('node:http');
     const startedAt = new Date().toISOString();
-    const port = await pickFreePort();
     const pidfilePath = join(hippoRoot, 'server.pid');
 
     // Same stub as the remember case above. The forget dispatch used to catch
@@ -502,7 +546,8 @@ describe('cli thin-client mode', () => {
       res.writeHead(404);
       res.end();
     });
-    await new Promise<void>((resolve) => stub.listen(port, '127.0.0.1', () => resolve()));
+    stub.listen(0, '127.0.0.1');
+    const port = await boundPort(stub);
 
     try {
       const db = openHippoDb(hippoRoot);
@@ -549,8 +594,7 @@ describe('cli thin-client mode', () => {
     const hippoRoot = join(workspace, '.hippo');
     let server: SpawnedServer | null = null;
     try {
-      const port = await pickFreePort();
-      server = await startServer(workspace, port);
+      server = await startServer(workspace);
 
       const routedRemember = runCli(workspace, 'remember', 'routed-counter-canary');
       const routedId = /Remembered \[([^\]]+)\]/.exec(routedRemember.stdout)?.[1];

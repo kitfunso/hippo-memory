@@ -1,10 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 360" width="800" height="360" role="img" aria-labelledby="t d">
-  <title id="t">hippo init --scan ~ — initializing memory across all repos</title>
-  <desc id="d">Animated terminal demonstration of installing the hippo-memory npm package globally and running hippo init with the --scan flag to find every git repo under the home directory and seed each with memory.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 390" width="800" height="390" role="img" aria-labelledby="t d">
+  <title id="t">hippo init adding memory to one project</title>
+  <desc id="d">Animated terminal. hippo init, run inside one project, creates the project's .hippo store, adds a block to the project's CLAUDE.md, installs 7 Claude Code hooks in the user settings, schedules a daily 6:15am run and starts seeding memories from the last 30 days of git history. The lines are the ones hippo init prints; the path is an example.</desc>
 
   <defs>
     <style>
-      /* Color palette matches the README's amber/cream bio tones for visual cohesion */
       .frame  { fill: #1a1a1f; }
       .titlebar { fill: #2b2b33; }
       .dot-r  { fill: #ff5f56; }
@@ -12,32 +11,26 @@
       .dot-g  { fill: #27c93f; }
       .title-text { fill: #888; font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 12px; }
 
-      .term   { font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 16px; }
+      .term   { font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 13px; }
       .prompt { fill: #27c93f; }
       .cmd    { fill: #e5e5e5; }
-      .ok     { fill: #27c93f; }
       .info   { fill: #a8a8a8; }
       .accent { fill: #ffbd2e; }
-      .done   { fill: #fff4dc; font-weight: 600; }
 
-      /* Each line: starts invisible, fades in at its cue, then the whole loop restarts every 10.5s */
-      .line { opacity: 0; animation: reveal 10.5s linear infinite; }
-      .l1 { animation-delay: 0.0s; }
-      .l2 { animation-delay: 1.0s; }
-      .l3 { animation-delay: 2.0s; }
-      .l4 { animation-delay: 3.0s; }
-      .l5 { animation-delay: 4.0s; }
-      .l6 { animation-delay: 5.0s; }
-      .l7 { animation-delay: 6.0s; }
-      .l8 { animation-delay: 7.0s; }
-      .l9 { animation-delay: 8.0s; }
-
-      @keyframes reveal {
-        0%       { opacity: 0; }
-        3%       { opacity: 1; }
-        90%      { opacity: 1; }
-        100%     { opacity: 0; }
-      }
+      /* One shared 9s cycle, so every line fades out together before the next loop. */
+      .line { opacity: 0; animation: s0 9s linear infinite; }
+      .l1 { animation-name: s0; }
+      .l2 { animation-name: s1; }
+      .l3 { animation-name: s2; }
+      .l4 { animation-name: s3; }
+      .l5 { animation-name: s4; }
+      .l6 { animation-name: s5; }
+      @keyframes s0 { 0% { opacity: 0; } 2%, 94% { opacity: 1; } 100% { opacity: 0; } }
+      @keyframes s1 { 0%, 11% { opacity: 0; } 13%, 94% { opacity: 1; } 100% { opacity: 0; } }
+      @keyframes s2 { 0%, 22% { opacity: 0; } 24%, 94% { opacity: 1; } 100% { opacity: 0; } }
+      @keyframes s3 { 0%, 33% { opacity: 0; } 35%, 94% { opacity: 1; } 100% { opacity: 0; } }
+      @keyframes s4 { 0%, 44% { opacity: 0; } 46%, 94% { opacity: 1; } 100% { opacity: 0; } }
+      @keyframes s5 { 0%, 55% { opacity: 0; } 57%, 94% { opacity: 1; } 100% { opacity: 0; } }
 
       .cursor { fill: #e5e5e5; animation: blink 1s steps(2, end) infinite; }
       @keyframes blink {
@@ -45,49 +38,43 @@
         50.01%, 100% { opacity: 0; }
       }
 
-      /* Respect the OS-level reduced-motion preference: freeze the demo
-         on its fully-revealed final frame instead of looping. WCAG 2.3.3. */
+      /* Reduced motion (WCAG 2.3.3): show the final frame instead of looping. */
       @media (prefers-reduced-motion: reduce) {
         .line, .cursor { animation: none; opacity: 1; }
       }
     </style>
   </defs>
 
-  <!-- Terminal frame -->
-  <rect class="frame"    x="0"  y="0"  width="800" height="360" rx="10" />
+  <rect class="frame"    x="0"  y="0"  width="800" height="390" rx="10" />
   <rect class="titlebar" x="0"  y="0"  width="800" height="28"  rx="10" />
   <rect class="titlebar" x="0"  y="18" width="800" height="10"  />
   <circle class="dot-r" cx="18" cy="14" r="6"/>
   <circle class="dot-y" cx="38" cy="14" r="6"/>
   <circle class="dot-g" cx="58" cy="14" r="6"/>
-  <text class="title-text" x="400" y="18" text-anchor="middle">~/projects — hippo</text>
+  <text class="title-text" x="400" y="18" text-anchor="middle">~/billing-service</text>
 
-  <!-- Terminal content. Each text element fades in at its staggered delay. -->
+  <!-- The output is cmdInit's own text in src/cli.ts; the lesson count that follows seeding depends on the repo, so it is left out. -->
   <g class="term">
-    <!-- t = 0.0s -->
-    <text class="line l1" x="20" y="68"><tspan class="prompt">$</tspan> <tspan class="cmd">npm install -g hippo-memory</tspan></text>
-    <!-- t = 1.0s -->
-    <text class="line l2 info" x="20" y="92">added 1 package in 1.2s</text>
-    <text class="line l2" x="20" y="112"><tspan class="info">+ hippo-memory@</tspan><tspan class="accent">1.11.1</tspan></text>
+    <text class="line l1" x="20" y="60"><tspan class="prompt">$</tspan> <tspan class="cmd">hippo init</tspan></text>
 
-    <!-- t = 2.0s -->
-    <text class="line l3" x="20" y="148"><tspan class="prompt">$</tspan> <tspan class="cmd">hippo init --scan ~</tspan></text>
+    <text class="line l2 cmd" x="20" y="88">Initialized Hippo at /home/you/billing-service/.hippo</text>
+    <text class="line l2 info" x="44" y="108">Directories: buffer/ episodic/ semantic/ conflicts/</text>
+    <text class="line l2 info" x="44" y="128">Files: hippo.db stats.json</text>
 
-    <!-- t = 3.0s -->
-    <text class="line l4 info" x="20" y="176">Scanning ~ for git repositories...</text>
-    <!-- t = 4.0s -->
-    <text class="line l5" x="20" y="200"><tspan class="ok">✓</tspan> <tspan class="cmd">Found </tspan><tspan class="accent">23</tspan><tspan class="cmd"> git repositories</tspan></text>
-    <!-- t = 5.0s -->
-    <text class="line l6" x="20" y="224"><tspan class="ok">✓</tspan> <tspan class="cmd">Initialized </tspan><tspan class="accent">.hippo/</tspan><tspan class="cmd"> in all 23 projects</tspan></text>
-    <!-- t = 6.0s -->
-    <text class="line l7" x="20" y="248"><tspan class="ok">✓</tspan> <tspan class="cmd">Seeded </tspan><tspan class="accent">412 lessons</tspan><tspan class="cmd"> from 30 days of commit history</tspan></text>
-    <!-- t = 7.0s -->
-    <text class="line l8" x="20" y="272"><tspan class="ok">✓</tspan> <tspan class="cmd">Installed Stop hook in </tspan><tspan class="accent">CLAUDE.md</tspan></text>
+    <text class="line l3 info" x="44" y="148">Auto-installed claude-code hook in <tspan class="accent">CLAUDE.md</tspan></text>
 
-    <!-- t = 8.0s — closing line, brighter -->
-    <text class="line l9 done" x="20" y="312">Done. Your agents have memory.</text>
+    <text class="line l4 info" x="44" y="168">Auto-installed hippo session-end <tspan class="accent">SessionEnd</tspan> hook in claude-code settings</text>
+    <text class="line l4 info" x="44" y="188">Auto-installed hippo last-sleep <tspan class="accent">SessionStart</tspan> hook in claude-code settings</text>
+    <text class="line l4 info" x="44" y="208">Auto-installed hippo pinned-inject <tspan class="accent">UserPromptSubmit</tspan> hook in claude-code settings</text>
+    <text class="line l4 info" x="44" y="228">Auto-installed hippo pre-compact <tspan class="accent">PreCompact</tspan> hook in claude-code settings</text>
+    <text class="line l4 info" x="44" y="248">Auto-installed hippo compact-resume <tspan class="accent">SessionStart(compact)</tspan> hook in claude-code settings</text>
+    <text class="line l4 info" x="44" y="268">Auto-installed hippo post-compact <tspan class="accent">PostCompact</tspan> hook in claude-code settings</text>
+    <text class="line l4 info" x="44" y="288">Auto-installed hippo capture-error <tspan class="accent">PostToolUseFailure</tspan> hook in claude-code settings</text>
+
+    <text class="line l5 info" x="44" y="308">Scheduled machine-level daily runner <tspan class="accent">(6:15am)</tspan> via crontab</text>
+
+    <text class="line l6 info" x="44" y="344">Seeding memories from last <tspan class="accent">30 days</tspan> of git history...</text>
   </g>
 
-  <!-- Blinking cursor at the final prompt position -->
-  <rect class="cursor" x="20" y="328" width="9" height="16"/>
+  <rect class="cursor" x="20" y="358" width="8" height="15"/>
 </svg>

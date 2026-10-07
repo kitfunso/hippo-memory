@@ -37,9 +37,9 @@ describe('cli.ts cmdRecall zero-result branch preserves planningFallacyHint (J3.
   let cliText: string;
   let zeroResultBlock: string;
 
-  it('the codex-catch comment is present (anchor)', () => {
-    cliText = readFileSync(join(repoRoot, 'src/cli.ts'), 'utf8');
-    expect(cliText).toContain('Codex review round 1 catch');
+  it('the parity comment is present (anchor)', () => {
+    cliText = readFileSync(join(repoRoot, 'src/cli/recall.ts'), 'utf8');
+    expect(cliText).toContain('zero-result JSON keeps it for parity');
   });
 
   it('isolate the zero-result block by line range', () => {
@@ -61,16 +61,22 @@ describe('cli.ts cmdRecall zero-result branch preserves planningFallacyHint (J3.
   });
 
   it('zero-result text render path emits the Planning fallacy hint line', () => {
-    // The text-output branch (continuity OR plain no-memories print)
-    // must call the hint render BEFORE the no-memories message.
-    expect(zeroResultBlock).toContain('if (cmdPlanningFallacyHint)');
-    expect(zeroResultBlock).toContain('Planning fallacy hint');
+    // The text render (continuity OR plain no-memories print) must print the
+    // hint BEFORE the no-memories message; the zero-result branch emits that render.
+    expect(zeroResultBlock).toContain('emit(recallText)');
+    const emptyStart = cliText.indexOf('if (list.length === 0) {');
+    expect(emptyStart).toBeGreaterThan(0);
+    const emptyRender = cliText.slice(emptyStart, emptyStart + 600);
+    expect(emptyRender).toContain('if (showPlan) { console.log(planText);');
+    expect(emptyRender.indexOf('console.log(planText)')).toBeLessThan(emptyRender.indexOf('No memories found for:'));
+    expect(cliText).toContain('Planning fallacy hint');
   });
 
   it('detectedPhrase is sanitised via JSON.stringify on the zero-result text path', () => {
     // Plan-eng-critic round 2 LOW + codex hardening: regex match text
     // could contain quotes/parens; JSON.stringify keeps the render
     // unambiguous regardless of input shape.
-    expect(zeroResultBlock).toMatch(/JSON\.stringify\(cmdPlanningFallacyHint\.detectedPhrase\)/);
+    expect(cliText).toMatch(/JSON\.stringify\(p\.hint\.detectedPhrase\)/);
+    expect(cliText).toMatch(/JSON\.stringify\(p\.watching\.detectedPhrase\)/);
   });
 });

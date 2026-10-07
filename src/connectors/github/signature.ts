@@ -25,24 +25,11 @@ export function verifyGitHubSignature(opts: VerifyOpts): boolean {
 }
 
 /**
- * Source-aware idempotency key. v1.3.1 hotfix (codex round 1 P0 #3 + claude
- * round 2 P0 #3).
- *
- * Round 1 design: sha256(eventName + ':' + rawBody) so an attacker rotating
- * X-GitHub-Delivery cannot bypass dedupe.
- *
- * Round 2 found that key produced different hashes for the SAME source event
- * delivered via webhook vs via REST backfill, because backfill rawBody is the
- * REST list-item shape while webhook rawBody is the envelope. Result:
- * backfill + later webhook of the same issue created two `kind='raw'` rows
- * with the same artifact_ref. Combined with the deletion bug, deletion could
- * not archive both.
- *
- * v1.3.1 fix: key from the SOURCE-NORMALIZED identifier — artifact_ref plus
- * the source-side updated_at timestamp. Same artifact + same revision = same
- * key, regardless of which path delivered it. Different revisions of the same
- * issue (an edit) get different keys, which is correct: each edit IS a new
- * memory revision.
+ * Source-aware idempotency key: artifact_ref plus the source-side updated_at.
+ * A raw-body key would hash a webhook envelope and a REST backfill item of the
+ * SAME source event differently and ingest it twice. Same artifact + same
+ * revision = same key, whichever path delivered it; an edit gets a new key,
+ * which is correct because each edit IS a new memory revision.
  *
  * Both inputs are upstream-derived from the parsed event, not from the
  * unsigned delivery header — replay attacks still cannot bypass dedupe.
@@ -53,33 +40,16 @@ export function verifyGitHubSignature(opts: VerifyOpts): boolean {
  *   - updatedAt: source-side ISO timestamp (issue.updated_at,
  *     comment.updated_at, pull_request.updated_at). Empty string when the
  *     payload omits it (rare; older REST shapes).
- *
- * Migration note for v1.3.0 → v1.3.1: existing github_event_log rows from
- * v1.3.0 used the round-1 key shape and will not collide with v1.3.1 keys.
- * The first webhook delivery after upgrading creates a new log row with the
- * new key. This is acceptable for a hotfix (no production users on v1.3.0)
- * and correct semantics going forward.
  */
 export function computeIdempotencyKey(artifactRef: string, updatedAt: string | null | undefined): string {
   return createHash('sha256').update(`${artifactRef}:${updatedAt ?? ''}`).digest('hex');
 }
 
 /**
- * v1.3.2: deletion-specific idempotency key. Distinct namespace from
- * computeIdempotencyKey so an ingest's row in github_event_log doesn't make
- * a deletion event return 'duplicate' before it gets a chance to archive.
- *
- * The codex round 3 P0 fix on server.ts was to call computeIdempotencyKey
- * with the right (artifactRef, updatedAt) shape for deletions. That made
- * the deletion key MATCH the ingest key — which collapsed to a "deletion
- * always returns duplicate" bug because both shared github_event_log.
- *
- * v1.3.2 splits the namespace: deletion key = sha256('deleted:' +
- * artifactRef + ':' + updatedAt). Two retries of the SAME deletion event
- * still dedupe (same artifact + same updatedAt + same prefix → same key).
- * Ingest of the same artifact + same updatedAt produces a DIFFERENT key,
- * so a deletion event does not get short-circuited by the ingest's prior
- * log row.
+ * Deletion-specific idempotency key: sha256('deleted:' + artifactRef + ':' +
+ * updatedAt). Distinct namespace from computeIdempotencyKey so an ingest's row
+ * in github_event_log doesn't make a deletion return 'duplicate' before it
+ * gets a chance to archive; retries of the SAME deletion still dedupe.
  *
  * Kept as a separate exported function so the namespace prefix is explicit
  * at every call site (server.ts deletion branches, deletion.ts, DLQ replay).

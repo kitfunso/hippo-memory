@@ -20,13 +20,15 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore, writeEntry, loadAllEntries } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { remember, type Context } from '../src/api.js';
 import { deduplicateStore, strengthBucket } from '../src/dedupe.js';
 import { compareEntryIdentity } from '../src/compare.js';
-import { consolidate } from '../src/consolidate.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { consolidate } from '../src/consolidate/sleep.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 
 function tmpHome(prefix: string) {
   const home = mkdtempSync(join(tmpdir(), prefix));
@@ -74,26 +76,19 @@ function permutationsOf3(): number[][] {
   return out;
 }
 
-// Near-duplicate probe pair: 14 tokens per entry, 13 shared, one word swapped
-// ("this" -> "last"). Jaccard = 13/15 = 0.8667 (> 0.7 dedupe threshold),
-// computed against src/search.ts textOverlap's tokenizer (lowercase,
-// punctuation-stripped, length>1 tokens, set-based Jaccard).
+// Duplicate probe pair: the same sentence, B with a double space before "this".
+// Dedup removes only text that matches apart from spacing; a swapped word is a
+// changed value and both copies stay (tests/sleep-keeps-both-versions.test.ts).
 const CONTENT_A =
   'The quarterly finance report shows revenue grew steadily across all four regions this year';
-const CONTENT_B =
-  'The quarterly finance report shows revenue grew steadily across all four regions last year';
+const CONTENT_B = CONTENT_A.replace(' this year', '  this year');
 
-// Three mutually near-duplicate contents for the permutation test: a 20
-// shared-token base sentence, each variant swapping a DIFFERENT single word
-// for a word that appears nowhere else in the set. Any two variants share
-// 18 of 20 tokens each (intersection 18, union 22) -> Jaccard 18/22 = 0.8182
-// (> 0.7), so all three pairs are near-duplicates of each other.
-const VARIANT_A =
-  'our deployment pipeline automatically runs full suite of integration tests before every production release each week without exception this time';
+// Three mutual duplicates for the permutation test: one base sentence (B), with an
+// extra space at a different place in A and C, so A and C tie on length and B is shorter.
 const VARIANT_B =
-  'the nightly pipeline automatically runs full suite of integration tests before every production release each week without exception this time';
-const VARIANT_C =
-  'the deployment pipeline automatically runs full suite of integration tests before every production release each week without exception last time';
+  'our deployment pipeline automatically runs full suite of integration tests before every production release each week without exception this time';
+const VARIANT_A = VARIANT_B.replace(' this time', '  this time');
+const VARIANT_C = VARIANT_B.replace(' each week', '  each week');
 
 describe('dedupe survivor determinism', () => {
   it('1. keeps the same surviving content across opposite ingest orders (red-on-master core)', () => {
@@ -268,15 +263,11 @@ describe('dedupe survivor determinism', () => {
     }
   });
 
-  it('7. mergeContents equal-length tie: merged base identical across opposite ingest orders (content asc tie key)', async () => {
-    // Equal length (verified below), one same-length word swapped -->
-    // Jaccard 5/7 = 0.714 > MERGE_OVERLAP_THRESHOLD (0.35), so the merge
-    // pass fires and mergeContents' content.length primary key is a REAL
-    // tie; only the compareEntryIdentity tie key decides the base. Same
-    // `now` for both consolidate calls guards against decay flakiness.
+  it('7. mergeContents same-created tie: merged base identical across opposite ingest orders (content asc tie key)', async () => {
+    // One word swapped: Jaccard 5/7 = 0.714 > MERGE_OVERLAP_THRESHOLD (0.35), so the merge pass fires.
+    // Both rows share one `created`, so the newest-first key is a REAL tie and only compareEntryIdentity decides the base.
     const contentAlpha = 'cache refresh failure data pipeline alpha';
     const contentOmega = 'cache refresh failure data pipeline omega';
-    expect(contentAlpha.length).toBe(contentOmega.length);
 
     const now = new Date();
     const bases: string[] = [];
@@ -285,18 +276,18 @@ describe('dedupe survivor determinism', () => {
       const { home, restore } = tmpHome('hippo-dedupe-det-7-');
       try {
         for (const content of order) {
-          writeEntry(home, createMemory(content, { layer: Layer.Episodic }));
+          writeEntry(home, { ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic }), created: now.toISOString() });
         }
 
         const result = await consolidate(home, { now });
         expect(result.merged).toBeGreaterThan(0);
 
         const semantics = loadAllEntries(home).filter(
-          (e) => e.layer === Layer.Semantic && e.content.startsWith('[Consolidated from 2 related memories]'),
+          (e) => e.layer === Layer.Semantic && e.content.startsWith('[Consolidated from 2 related memories, newest first]'),
         );
         expect(semantics.length).toBe(1);
-        // Content shape: '[Consolidated from 2 related memories]\n\n<base>'.
-        bases.push(semantics[0].content.split('\n\n')[1]);
+        // Content shape: '[Consolidated from 2 related memories, newest first]\n\n- <base>\n- <other>'.
+        bases.push(semantics[0].content.split('\n\n')[1].split('\n')[0]);
       } finally {
         restore();
       }
@@ -304,7 +295,7 @@ describe('dedupe survivor determinism', () => {
 
     expect(bases[0]).toBe(bases[1]);
     // content asc tie key: the lexicographically smaller content is the base.
-    expect(bases[0]).toBe(contentAlpha);
+    expect(bases[0]).toBe(`- ${contentAlpha}`);
   });
 
   it('8. strengthBucket maps non-finite strength to bucket 0 and the assembled comparator chain never returns NaN', () => {
@@ -357,7 +348,7 @@ describe('dedupe survivor determinism', () => {
   }
 
   it('9. twins differing only in tags keep the copy with the most tags in both ingest orders', () => {
-    const twins = [['a'], ['b'], ['c'], ['d', 'e']].map((tags) => createMemory(TWIN_TEXT, { tags }));
+    const twins = [['a'], ['b'], ['c'], ['d', 'e']].map((tags) => createMemory(TWIN_TEXT, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags }));
     const forward = survivorAfterDedupe(twins).survivor;
     const reversed = survivorAfterDedupe([...twins].reverse()).survivor;
     expect([...forward.tags].sort()).toEqual(['d', 'e']);
@@ -365,14 +356,14 @@ describe('dedupe survivor determinism', () => {
   });
 
   it('10. twins differing only in source keep the lowest source in both ingest orders', () => {
-    const twins = ['src-c', 'src-a', 'src-d', 'src-b'].map((source) => createMemory(TWIN_TEXT, { source }));
+    const twins = ['src-c', 'src-a', 'src-d', 'src-b'].map((source) => createMemory(TWIN_TEXT, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, source }));
     expect(survivorAfterDedupe(twins).survivor.source).toBe('src-a');
     expect(survivorAfterDedupe([...twins].reverse()).survivor.source).toBe('src-a');
   });
 
   it('11. episodic/semantic twins keep the semantic copy in both ingest orders (was the episodic one via the mem_/sem_ id prefix)', () => {
-    const episodic = createMemory(TWIN_TEXT, { layer: Layer.Episodic });
-    const semantic = createMemory(TWIN_TEXT, { layer: Layer.Semantic });
+    const episodic = createMemory(TWIN_TEXT, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic });
+    const semantic = createMemory(TWIN_TEXT, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic });
     for (const order of [[episodic, semantic], [semantic, episodic]]) {
       const { survivor, pairs } = survivorAfterDedupe(order);
       expect(survivor.layer).toBe(Layer.Semantic);
@@ -385,8 +376,8 @@ describe('dedupe survivor determinism', () => {
   // Cases 12-13 (codex round 1): the layer rank made these two lifecycle
   // states deterministic LOSERS, so dedupe must not consider them at all.
   it('12. a raw (append-only) episodic twin is not a dedupe candidate, so sleep no longer aborts on the delete trigger', () => {
-    const raw = createMemory(TWIN_TEXT, { layer: Layer.Episodic, kind: 'raw' });
-    const semantic = createMemory(TWIN_TEXT, { layer: Layer.Semantic });
+    const raw = createMemory(TWIN_TEXT, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, kind: 'raw' });
+    const semantic = createMemory(TWIN_TEXT, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic });
     for (const order of [[raw, semantic], [semantic, raw]]) {
       const { home, restore } = tmpHome('hippo-dedupe-det-raw-');
       try {
@@ -405,13 +396,13 @@ describe('dedupe survivor determinism', () => {
   it('13. a superseded semantic twin never outranks the current episodic re-ingest', () => {
     const { home, restore } = tmpHome('hippo-dedupe-det-superseded-');
     try {
-      const successor = createMemory('unrelated successor text that replaced the old semantic row', { layer: Layer.Semantic });
+      const successor = createMemory('unrelated successor text that replaced the old semantic row', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic });
       const stale = {
-        ...createMemory(TWIN_TEXT, { layer: Layer.Semantic }),
+        ...createMemory(TWIN_TEXT, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic }),
         superseded_by: successor.id,
         kind: 'superseded' as const,
       };
-      const current = createMemory(TWIN_TEXT, { layer: Layer.Episodic });
+      const current = createMemory(TWIN_TEXT, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic });
       for (const entry of [successor, stale, current]) writeEntry(home, entry);
       const result = deduplicateStore(home);
       expect(result.removed).toBe(0);
@@ -423,34 +414,33 @@ describe('dedupe survivor determinism', () => {
     }
   });
 
-  it('14. mergeContents 3+ bullets: bullet order and merged tags identical across all 6 ingest orders (base order: length desc -> content asc)', async () => {
-    // Guards: a future VARIANT_* edit that breaks the length tie/non-tie shape fails here loudly.
-    expect(VARIANT_A.length).toBe(VARIANT_C.length);
-    expect(VARIANT_B.length).toBeLessThan(VARIANT_A.length);
+  it('14. mergeContents 3+ bullets: bullet order and merged tags identical across all 6 ingest orders (base order: created desc -> content asc)', async () => {
+    // Distinct texts, one word swapped each: the merge writes each distinct text once, so the spacing-only VARIANT_* would make one bullet.
+    const textA = 'our deployment pipeline automatically runs full suite of integration tests before every production release each week without exception this time';
+    const textB = 'the nightly pipeline automatically runs full suite of integration tests before every production release each week without exception this time';
+    const textC = 'the deployment pipeline automatically runs full suite of integration tests before every production release each week without exception last time';
 
     const now = new Date();
     const variants = [
-      { content: VARIANT_A, tags: ['t-a'] },
-      { content: VARIANT_B, tags: ['t-b'] },
-      { content: VARIANT_C, tags: ['t-c'] },
+      { content: textA, tags: ['t-a'] },
+      { content: textB, tags: ['t-b'] },
+      { content: textC, tags: ['t-c'] },
     ];
-    const expectedOrder = [...variants].sort(
-      (a, b) => b.content.length - a.content.length || (a.content < b.content ? -1 : a.content > b.content ? 1 : 0),
-    );
-    const expectedBlock = expectedOrder.map((v) => `- ${v.content.slice(0, 120)}`).join('\n');
+    const expectedOrder = [...variants].sort((a, b) => (a.content < b.content ? -1 : a.content > b.content ? 1 : 0));
+    const expectedBlock = expectedOrder.map((v) => `- ${v.content}`).join('\n');
 
     for (const perm of permutationsOf3()) {
       const { home, restore } = tmpHome('hippo-dedupe-det-14-');
       try {
-        for (const idx of perm) {
-          writeEntry(home, createMemory(variants[idx].content, { layer: Layer.Episodic, tags: variants[idx].tags }));
+        for (const idx of perm) { // one shared `created`, so the ingest order cannot reach the primary key
+          writeEntry(home, { ...createMemory(variants[idx].content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, tags: variants[idx].tags }), created: now.toISOString() });
         }
 
         const result = await consolidate(home, { now });
         expect(result.merged).toBeGreaterThan(0);
 
         const semantics = loadAllEntries(home).filter(
-          (e) => e.layer === Layer.Semantic && e.content.startsWith('[Consolidated pattern from 3 related memories]'),
+          (e) => e.layer === Layer.Semantic && e.content.startsWith('[Consolidated pattern from 3 related memories, newest first]'),
         );
         expect(semantics.length).toBe(1);
         expect(semantics[0].content.split('\n\n')[1]).toBe(expectedBlock);

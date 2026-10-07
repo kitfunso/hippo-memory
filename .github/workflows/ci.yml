@@ -20,18 +20,19 @@ permissions:
   contents: read
 
 jobs:
-  test:
+  checks:
     runs-on: ubuntu-latest
     # First-run cold npm cache can be slow. 25 minutes gives headroom;
     # subsequent PRs hit the npm cache. The default install is zero-dep since
     # 1.33.0 (PR #134); only the micro-eval job below installs Transformers.js.
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        # The binary floor check reads release tags, which a shallow clone leaves out.
         with:
-          # Node 24.x: local dev runs 24.13.0 so CI tracks the same major.
-          # The node-floor job below runs the suite on the engines floor.
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
           node-version: '24'
           cache: npm
       - run: npm ci
@@ -40,27 +41,108 @@ jobs:
       # Hit counts per rule may fall but never rise; see scripts/check-lint-ratchet.mjs.
       - name: Lint ratchet
         run: node scripts/check-lint-ratchet.mjs
+      # Ticket codes, versions, reviewer notes and dates in src/ comments may fall per file but never rise.
+      - name: Comment history ratchet
+        run: node scripts/check-comment-history.mjs
       # Publish and site-deploy gates that need no build, so a PR learns about them before release day.
       - run: node scripts/check-manifest-versions.mjs
       - run: node scripts/check-graph-writes.mjs
+      - name: No runtime import cycles in src
+        run: node scripts/check-import-cycles.mjs
+      # Files over 800 lines and functions over 80 in src/ may shrink but never grow, and no new one may appear.
+      - name: Size ratchet
+        run: node scripts/check-size-ratchet.mjs
+      - name: process.env read only through src/env.ts
+        run: node scripts/check-env-reads.mjs
+      - run: node scripts/check-roadmap.mjs
+      - run: node scripts/check-agent-inventory.mjs
       - run: node website/scripts/check-readme-sync.mjs
       - run: npm run build
+      # Tests are type-checked so a wrong-shaped call cannot pass.
+      - run: npm run typecheck:tests
       - run: node scripts/check-openclaw-dist.mjs
+      - name: Request-path timing at 10k memories
+        run: node scripts/check-request-path-timing.mjs
+      # Small N keeps it near 30 s; the 10k-memory ROADMAP gate (benchmarks/a1/p99-recall.ts defaults) stays a manual run.
+      # Warm-up drops the cold first queries; gating on the fastest of 5 rounds drops runner stalls, which hit 3 of 5 rounds on 2026-10-06.
+      # Healthy runners measure a p99 of 16 to 40 ms here, so 60 ms passes them and a 4x slowdown (64 ms or more) fails.
+      - name: p99 recall at 1k memories
+        run: node --experimental-strip-types benchmarks/a1/p99-recall.ts --store-size 1000 --warmup 50 --rounds 5 --queries 200 --gate-ms 60
       - name: Install the packed tarball
         run: npm run smoke:pack
-      # Test stores on tmpfs: some runners' disks are slow enough to time out store-heavy files.
-      - name: Vitest
-        run: npx vitest run
-        env:
-          TMPDIR: /dev/shm
       - name: Provenance gate
         run: node scripts/ci-seed-provenance.mjs
       - name: Upload provenance JSON
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: provenance-coverage
           path: provenance-coverage.json
+          if-no-files-found: warn
+          retention-days: 14
+      # Last and always, so floors still waiting on their release stay visible without hiding the checks above.
+      - name: Binary floors name a release that ships their schema
+        if: always()
+        run: node scripts/check-expiring-keys-floor.mjs
+
+  # The suite is about 28 minutes of test time on a 4-core runner; three shards run it in parallel.
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          # Node 24.x: local dev runs 24.13.0 so CI tracks the same major.
+          # The node-floor job below runs the suite on the engines floor.
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      # Test stores on tmpfs: some runners' disks are slow enough to time out store-heavy files.
+      # Floors are zeroed per shard: each sees a third of the suite, and the coverage job applies them to the merge.
+      - name: Vitest
+        run: npx vitest run --shard=${{ matrix.shard }}/3 --coverage --reporter=default --reporter=blob --coverage.thresholds.lines=0 --coverage.thresholds.branches=0 --coverage.thresholds.functions=0 --coverage.thresholds.statements=0
+        env:
+          TMPDIR: /dev/shm
+      - name: Upload blob report
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: blob-${{ matrix.shard }}
+          path: .vitest/blob/*
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
+  # Thresholds are checked on the merged shards; one shard alone sits below the floor.
+  coverage:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: blob-*
+          path: .vitest/blob
+          merge-multiple: true
+      - name: Merged coverage gate
+        run: npx vitest --merge-reports --coverage
+      - name: Upload coverage summary
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: coverage-summary
+          path: coverage/coverage-summary.json
           if-no-files-found: warn
           retention-days: 14
 
@@ -70,10 +152,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24'
       - name: Open-core line
@@ -88,8 +170,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24'
           cache: npm
@@ -99,7 +181,7 @@ jobs:
       # After the install step: npm would replace the package directory, and
       # the weights live inside it.
       - name: Cache model weights
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: node_modules/@huggingface/transformers/.cache
           key: hf-models-4.2.0-${{ hashFiles('src/embeddings.ts', 'src/rerankers/cross-encoder.ts') }}
@@ -117,9 +199,13 @@ jobs:
   node-floor:
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22.16.0'
           cache: npm
@@ -128,36 +214,44 @@ jobs:
       - run: npm ci
       - run: npm run build
       - name: Vitest
-        run: npx vitest run
+        run: npx vitest run --shard=${{ matrix.shard }}/3
         env:
           TMPDIR: /dev/shm
 
-  # Every other job is Linux, where Windows-only tests skip and win32 branches never run.
-  # Selecting files that name win32 keeps a new Windows test covered without editing this list.
-  windows:
-    runs-on: windows-latest
-    timeout-minutes: 20
+  # Every other job is Linux, where platform branches, path case rules and the temp-inside-home layout never run.
+  suite:
+    name: suite (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24'
           cache: npm
       - run: npm ci
       - run: npm run build
-      - name: Vitest on the test files that name win32
-        shell: bash
+      # Test stores live in the temp dir, and C: takes 5 ms per fsync against 0.15 ms on D:.
+      - name: Temp dir on the D drive
+        if: runner.os == 'Windows'
         run: |
-          files=$(git grep -l win32 -- 'tests/*.test.ts' 'tests/*.test.mjs')
-          npx vitest run $files
+          "TEMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
+          "TMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
+      - name: Vitest
+        # Four cores on the Windows runner; the config's six workers starve store-heavy files of CPU there.
+        run: npx vitest run ${{ runner.os == 'Windows' && '--maxWorkers=4' || '' }}
 
   # The dashboard is its own package with its own tests; the root suite never runs them.
   ui:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24'
           cache: npm
@@ -175,14 +269,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24'
           cache: npm
       - run: npm ci
       - run: npm run build
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
       - name: Pytest against a live server
         working-directory: python
         run: uv run --locked --extra test pytest tests -q -rs

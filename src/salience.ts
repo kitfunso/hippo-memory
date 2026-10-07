@@ -7,7 +7,8 @@
  */
 
 import type { MemoryEntry } from './memory.js';
-import { textOverlap } from './search.js';
+import { textOverlap } from './tokenize.js';
+import { duplicateKey, heldTextKeys } from './same-text.js';
 
 export type SalienceDecision = 'store' | 'skip' | 'start_weak';
 
@@ -68,11 +69,17 @@ export function computeSalience(
       }
       return { decision: 'store', reason: 'error_despite_overlap', score: 0.7 };
     }
-    return {
-      decision: 'skip',
-      reason: `duplicate (${(duplicateMatch.overlap * 100).toFixed(0)}% overlap with ${duplicateMatch.matchId})`,
-      score: 0.1,
-    };
+    // A near-duplicate may be a changed value (port 8080 then 8081), so only the same text is skipped.
+    const key = duplicateKey(trimmed);
+    const same = window.find((m) => heldTextKeys(m).includes(key));
+    if (!same) {
+      return {
+        decision: 'store',
+        reason: `near_duplicate (${(duplicateMatch.overlap * 100).toFixed(0)}% overlap with ${duplicateMatch.matchId})`,
+        score: 0.5,
+      };
+    }
+    return { decision: 'skip', reason: `duplicate (same text as ${same.id})`, score: 0.1 };
   }
 
   if (isError) {

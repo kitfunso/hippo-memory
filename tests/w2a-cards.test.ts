@@ -1,13 +1,14 @@
 // W2a work-queue cards (trajectories/01M2D5VSYJFK4YXQ0RG2NGCPYJ/plan.md), tests 1,2,4-12.
 // Test 3 (self-heal parity) lives in tests/db-continuity-tables-self-heal.test.ts's CONTINUITY_TABLES.
-import { describe, it, expect, beforeEach, afterEach, beforeAll } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, beforeAll, vi } from 'vitest';
 import { mkdtempSync, rmSync, existsSync, statSync, mkdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync, execSync } from 'node:child_process';
 import { Worker } from 'node:worker_threads';
+import { initStore } from '../src/store/open.js';
+import { saveSessionHandoff } from '../src/store/handoffs.js';
 import {
-  initStore,
   createCard,
   loadCard,
   loadCardDeps,
@@ -19,11 +20,13 @@ import {
   addCardComment,
   loadCardComments,
   transitionCard,
-  saveSessionHandoff,
   loadLatestHandoffForCard,
-} from '../src/store.js';
+} from '../src/store-cards.js';
 import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, type DatabaseSyncLike } from '../src/db.js';
 import { CARD_TRANSITIONS, type CardStatus } from '../src/card.js';
+import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
+import { runInProcess } from './_helpers/run-in-process.js';
+import { cmdCard } from '../src/cli/card.js';
 
 const ALL_STATUSES: CardStatus[] = ['backlog', 'ready', 'running', 'blocked', 'review', 'done', 'shelved'];
 
@@ -69,8 +72,8 @@ describe('test 1: fresh store, single open', () => {
       expect(indexNames(db, 'card_runs')).toContain('idx_card_runs_tenant_card');
       expect(indexNames(db, 'card_comments')).toContain('idx_card_comments_tenant_card');
       expect(indexNames(db, 'session_handoffs')).toContain('idx_session_handoffs_tenant_card');
-      expect(getSchemaVersion(db)).toBe(48);
-      expect(getCurrentSchemaVersion()).toBe(48);
+      expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
+      expect(getCurrentSchemaVersion()).toBe(LATEST_SCHEMA_VERSION);
     } finally {
       closeHippoDb(db);
     }
@@ -90,7 +93,7 @@ describe('test 2: a v42 store migrates to v43 with the four tables present, empt
 
     const db2 = openHippoDb(root);
     try {
-      expect(getSchemaVersion(db2)).toBe(48);
+      expect(getSchemaVersion(db2)).toBe(LATEST_SCHEMA_VERSION);
       expect(countRows(db2, 'cards')).toBe(0);
       expect(countRows(db2, 'card_deps')).toBe(0);
       expect(countRows(db2, 'card_runs')).toBe(0);
@@ -501,13 +504,17 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
     }
   });
 
-  it('test 12: an unknown --depends-on id exits 1 with the missing-parent message on stderr', () => {
-    const { home, env } = setupCliHome();
+  it('test 12: an unknown --depends-on id exits 1 with the missing-parent message on stderr', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'hippo-w2a-cli-'));
+    vi.stubEnv('HIPPO_HOME', join(home, 'global'));
     try {
-      const create = runCli(home, env, 'card', 'create', '--title', 'x', '--depends-on', 'nope');
+      initStore(join(home, '.hippo'));
+      // parseArgs collects --depends-on into an array, so the in-process call passes one.
+      const create = await runInProcess(() => cmdCard(join(home, '.hippo'), ['create'], { title: 'x', 'depends-on': ['nope'] }));
       expect(create.status).toBe(1);
-      expect(create.out).toContain('unknown parent card id: nope');
+      expect(create.stderr).toContain('unknown parent card id: nope');
     } finally {
+      vi.unstubAllEnvs();
       rmSync(home, { recursive: true, force: true });
     }
   });
@@ -688,8 +695,8 @@ describe('test 11: audit rule 2 sites return exactly one grep hit each', () => {
     expect(hitCount(join(__dirname, '..', 'src', 'cli.ts'), "key === 'depends-on'")).toBe(1);
   });
 
-  it("case 'card' appears once in the dispatch switch", () => {
-    expect(hitCount(join(__dirname, '..', 'src', 'cli.ts'), "case 'card':")).toBe(1);
+  it('card appears once in the dispatch table', () => {
+    expect(hitCount(join(__dirname, '..', 'src', 'cli.ts'), '  card: {')).toBe(1);
   });
 
   it('createCard is re-exported exactly once from src/index.ts', () => {

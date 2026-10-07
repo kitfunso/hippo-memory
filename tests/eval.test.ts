@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { mrr, recallAtK, ndcgAtK, runEval, bootstrapCorpus, compareSummaries } from '../src/eval.js';
 import type { EvalSummary } from '../src/eval.js';
-import { createMemory } from '../src/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 
 // ---------------------------------------------------------------------------
 // Metric math — hand-computed expected values
@@ -77,9 +77,9 @@ describe('ndcgAtK', () => {
 
 describe('runEval', () => {
   it('scores per-case and aggregates summary metrics', async () => {
-    const m1 = createMemory('FRED cache silently dropped the TIPS series');
-    const m2 = createMemory('Python dict ordering is guaranteed in 3.7+');
-    const m3 = createMemory('backfill script skipped rows before 2023-01-01');
+    const m1 = createMemory('FRED cache silently dropped the TIPS series', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    const m2 = createMemory('Python dict ordering is guaranteed in 3.7+', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    const m3 = createMemory('backfill script skipped rows before 2023-01-01', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     const entries = [m1, m2, m3];
 
     const cases = [
@@ -96,7 +96,7 @@ describe('runEval', () => {
   });
 
   it('reports zero metrics when no expected id is recalled', async () => {
-    const m1 = createMemory('FRED cache silently dropped the TIPS series');
+    const m1 = createMemory('FRED cache silently dropped the TIPS series', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     const cases = [
       { id: 'c1', query: 'unrelated query that matches nothing', expectedIds: ['mem_nonexistent'] },
     ];
@@ -113,8 +113,8 @@ describe('runEval', () => {
 
 describe('bootstrapCorpus', () => {
   it('produces one case per memory with opening-words query and its id expected', () => {
-    const m1 = createMemory('The FRED cache silently dropped the TIPS series after refresh');
-    const m2 = createMemory('Python dict ordering is guaranteed in Python 3.7+');
+    const m1 = createMemory('The FRED cache silently dropped the TIPS series after refresh', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    const m2 = createMemory('Python dict ordering is guaranteed in Python 3.7+', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     const corpus = bootstrapCorpus([m1, m2]);
     expect(corpus).toHaveLength(2);
     expect(corpus[0].expectedIds).toEqual([m1.id]);
@@ -123,8 +123,8 @@ describe('bootstrapCorpus', () => {
 
   it('skips memories with fewer than 3 substantive words', () => {
     // "fix now" = 2 substantive words (>2 chars each), so filtered out
-    const tiny = createMemory('fix now');
-    const full = createMemory('The cache reliably drops entries under load');
+    const tiny = createMemory('fix now', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    const full = createMemory('The cache reliably drops entries under load', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     const corpus = bootstrapCorpus([tiny, full]);
     expect(corpus).toHaveLength(1);
     expect(corpus[0].expectedIds).toEqual([full.id]);
@@ -132,7 +132,7 @@ describe('bootstrapCorpus', () => {
 
   it('respects maxCases cap', () => {
     const entries = Array.from({ length: 10 }, (_, i) =>
-      createMemory(`memory number ${i} about various topics here`),
+      createMemory(`memory number ${i} about various topics here`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
     );
     const corpus = bootstrapCorpus(entries, 3);
     expect(corpus).toHaveLength(3);

@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { search, markRetrieved, estimateTokens, textOverlap } from '../src/search.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { search } from '../src/search/bm25-search.js';
+import { estimateTokens } from '../src/token-ledger.js';
+import { textOverlap } from '../src/tokenize.js';
+import { markRetrieved } from '../src/memory.js';
+import { Layer } from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 
 function makeEntries() {
   return [
@@ -23,13 +27,14 @@ function makeEntries() {
 }
 
 describe('BM25 search', () => {
-  it('returns the most relevant result for a cache-related query', () => {
+  it('ranks the one memory that matches every query term first', () => {
     const entries = makeEntries();
-    const results = search('FRED cache failure', entries, { budget: 10000 });
+    const [fredCache, tipsModel, cacheCheck] = entries;
+    // Only fredCache holds FRED, cache and TIPS; tipsModel shares TIPS and cacheCheck shares cache.
+    const results = search('FRED cache TIPS', entries, { budget: 10000 });
 
-    expect(results.length).toBeGreaterThan(0);
-    // Top result should be about FRED/cache
-    expect(results[0].entry.content.toLowerCase()).toMatch(/fred|cache/);
+    expect(results[0]!.entry.id).toBe(fredCache!.id);
+    expect(results.map((r) => r.entry.id)).toEqual(expect.arrayContaining([tipsModel!.id, cacheCheck!.id]));
   });
 
   it('returns empty results for a query with no matching tokens', () => {

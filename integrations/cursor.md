@@ -9,7 +9,7 @@ Add this to `AGENTS.md` in the project root. Cursor reads that file as an altern
 ```
 ## Memory System (Hippo)
 
-This project uses Hippo for biologically-inspired memory across sessions.
+Make your agent's memory work like a brain. Hippo is long-term memory for coding agents.
 Memories decay. Retrieval strengthens them. Errors stick longer. Sleep consolidates.
 
 ### Before each task
@@ -72,4 +72,5 @@ Older hippo versions wrote their block to `.cursorrules`. `hippo hook uninstall 
 | Full session | `--budget 4000` |
 | Big refactor | `--budget 6000` |
 
-Adjust based on how much context you want injected before starting work.
+Adjust based on how much context you want injected before starting work. The budget counts
+everything recall prints, headings and tags included.

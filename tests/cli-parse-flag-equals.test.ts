@@ -2,12 +2,12 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { BOOLEAN_FLAGS, KNOWN_FLAGS, parseArgs, shouldAutoRepairCodexWrapper } from '../src/cli.js';
-import { loadAllEntries } from '../src/store.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
 
 const argv = (...rest: string[]) => ['node', 'hippo', ...rest];
 
@@ -102,11 +102,17 @@ describe('BOOLEAN_FLAGS: every switch the CLI reads is registered', () => {
   // SHORTCUT: idiom regexes, not a type check; a switch read only through a local variable slips past.
   const ON_OFF = /Boolean\(\s*<>|<>\s*[!=]==\s*true|!\s*<>|if \(\s*<>\s*\)|<>\s*\?(?![?.])|&&\s*<>|<>\s*&&|\|\|\s*<>/;
   const AS_VALUE = /String\(\s*<>|Number\(\s*<>|parse\w*\(\s*<>|<>\s*as string|typeof <>|<>\.\w|`[^`]*\$\{\s*<>/;
+  // Every module under src/cli/, so a verb moved out of cli.ts stays covered.
+  const CLI_SOURCES = [
+    'cli.ts',
+    ...readdirSync(resolve(__dirname, '..', 'src', 'cli')).filter((f) => f.endsWith('.ts')).map((f) => join('cli', f)),
+    join('connectors', 'github', 'cli-impl.ts'),
+  ];
 
   it('case 14d: a flag read only as on/off is in BOOLEAN_FLAGS, so no value can switch it on', () => {
     const onOff = new Set<string>();
     const asValue = new Set<string>();
-    for (const file of ['cli.ts', join('connectors', 'github', 'cli-impl.ts')]) {
+    for (const file of CLI_SOURCES) {
       const src = readFileSync(resolve(__dirname, '..', 'src', file), 'utf8');
       for (const m of src.matchAll(/flags\[['"]([a-z0-9-]+)['"]\]/g)) {
         const at = m.index ?? 0;
@@ -122,7 +128,7 @@ describe('BOOLEAN_FLAGS: every switch the CLI reads is registered', () => {
   it('case 14e: KNOWN_FLAGS is exactly the set of flags the CLI reads, so no typo hides in it', () => {
     const reads = new Set<string>();
     const READ = /flags(?:\[['"]([a-z0-9-]+)['"]\]|\.([a-z][a-z0-9]*)\b)|(?:Flag|hasOwn)\(\s*flags,\s*['"]([a-z0-9-]+)['"]/g;
-    for (const file of ['cli.ts', join('connectors', 'github', 'cli-impl.ts')]) {
+    for (const file of CLI_SOURCES) {
       const src = readFileSync(resolve(__dirname, '..', 'src', file), 'utf8');
       for (const m of src.matchAll(READ)) reads.add(m[1] ?? m[2] ?? m[3]);
     }

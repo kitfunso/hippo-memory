@@ -1,6 +1,8 @@
 # Hippo Memory - Claude Code Plugin
 
-Biologically-inspired memory for Claude Code. Memories decay by default, retrieval strengthens them, errors stick longer, and sleep consolidation compresses episodes into patterns.
+Make your agent's memory work like a brain. Hippo is long-term memory for coding agents.
+
+Memories decay by default, retrieval strengthens them, errors stick longer, and sleep consolidation merges related episodes into one memory.
 
 ## Install
 
@@ -46,19 +48,19 @@ The `SessionStart` hook automatically runs `hippo context --auto --budget 1500` 
 
 ### Pinned rules on every prompt
 
-The `UserPromptSubmit` hook runs `hippo context --pinned-only --include-recent 5 --format additional-context`, so pinned memories and the five newest writes stay in context through long sessions.
+The `UserPromptSubmit` hook runs `hippo context --pinned-only --include-recent 5 --format additional-context`, so pinned memories stay in context through long sessions, with up to 5 memories that share words with the prompt. Set `{"pinnedInject":{"promptRecall":false}}` in `.hippo/config.json` for the five newest writes instead.
 
 ### Auto-capture errors
 
 The `PostToolUseFailure` hook runs `hippo capture-error`, which reads the failure Claude Code sends on stdin and saves the tool name and error (first 200 characters) as an error memory (2x half-life), marked `observed` because nobody verified it. Routine failures are skipped: interrupts, permissions you declined, "permission denied" errors from the system, searches that found nothing, and `grep`/`find`/`diff`-style commands exiting 1. A failure already captured is not stored twice. Every failure, stored or skipped, is also logged for `hippo failures`: the session, the tool and hashes of the error, never its text. A hash is not anonymous, since anyone who guesses an error's text can check it against the hash. The log keeps 90 days. `hippo hook install claude-code` installs the same hook, so both install routes behave alike.
 
-### Working state across compaction
+### Working state and memories across compaction
 
-The `PreCompact` hook runs `hippo pre-compact` to snapshot the working state before the transcript is summarised. After compaction, `hippo compact-resume` puts that snapshot back into context, and `hippo post-compact` (the `PostCompact` hook) tells you what was saved.
+The `PreCompact` hook runs `hippo pre-compact` to record the compaction, snapshot the working state and ask the summariser to end its summary with a "Memories for hippo" list. After compaction, `hippo compact-resume` puts that snapshot back into context, and `hippo post-compact` (the `PostCompact` hook) saves the list as memories that sleep never deletes and tells you how many. `hippo sleep` finishes any save a busy store delayed.
 
 ### Sleep at session end
 
-The `SessionEnd` hook runs `hippo session-end`, which starts a detached `hippo sleep` and `hippo capture --last-session` and writes their output to `~/.hippo/logs/last-sleep.log`. The next session start prints that log through `hippo last-sleep`, so you see what was consolidated.
+The `SessionEnd` hook runs `hippo session-end`, which starts a detached `hippo sleep` and `hippo capture --last-session` and writes their output to `~/.hippo/logs/last-sleep.log`. The next session start prints that log through `hippo last-sleep` on stderr, so the log stays out of the model's context. To see what was consolidated, start `claude --debug` and read `~/.claude/debug/<session-id>.txt`. When the last sleep failed or a compaction summary was set aside, you see one line on screen that points you to `hippo doctor`.
 
 ### Memory skill
 
@@ -83,9 +85,9 @@ claude-code-plugin/
 | | Hippo | claude-mem |
 |---|---|---|
 | Memory model | Decay + retrieval strengthening | Save everything |
-| API calls | Zero (all local) | Uses Claude API for compression |
+| API calls | None by default. If `ANTHROPIC_API_KEY` is set, `hippo sleep` sends memory text to Anthropic; `{"extraction":{"enabled":false}}` stops it | Uses Claude API for compression |
 | Cross-tool | Works across Claude Code, Codex, Cursor, OpenClaw | Claude Code only |
-| Token cost | ~1500 tokens/session (configurable) | Variable |
+| Token cost | About 1,500 tokens at session start (configurable), plus the pinned block when it changes | Variable |
 | Outcome feedback | Yes (strengthens/weakens memories) | No |
 | Error priority | 2x half-life for errors | No distinction |
 | Memecoin | No | Yes ($CMEM on Solana) |

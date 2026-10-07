@@ -15,9 +15,12 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore, writeEntry, loadAllEntries } from '../src/store.js';
-import { consolidate } from '../src/consolidate.js';
-import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
+import { consolidate } from '../src/consolidate/sleep.js';
+import { Layer, type MemoryEntry } from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { auditMemory } from '../src/audit.js';
 import * as api from '../src/api.js';
 

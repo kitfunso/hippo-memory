@@ -2,11 +2,11 @@
  * GitHub event ingest with afterWrite race-safe idempotency.
  *
  * Mirrors src/connectors/slack/ingest.ts. The dedupe key is sha256(eventName +
- * ':' + rawBody) (codex P0 #3) — derived from the signed body, not from the
+ * ':' + rawBody), derived from the signed body, not from the
  * unsigned X-GitHub-Delivery header, so a replay attacker cannot bypass
  * idempotency by rotating the delivery UUID.
  *
- * Race semantics (codex P1 #6):
+ * Race semantics:
  *   - Fast path: hasSeenKey pre-check returns 'duplicate' for the common case.
  *   - Slow path: hasSeenKey passes (no row yet). Two workers may race into
  *     remember() concurrently. Inside the writeEntry SAVEPOINT, INSERT OR
@@ -15,10 +15,8 @@
  *     rolls back this worker's memory row). Exactly one memory exists per
  *     idempotency_key.
  *
- * The Slack precedent's race test was insufficient — it tested the fast path,
- * not the SAVEPOINT collision. The `__testInjectBeforeLog` hook below lets
- * tests pre-populate github_event_log inside the SAVEPOINT to actually
- * exercise the changes=0 -> rollback path.
+ * The `__testInjectBeforeLog` hook below lets tests pre-populate github_event_log
+ * inside the SAVEPOINT to exercise the changes=0 -> rollback path, not just the fast path.
  */
 
 import { remember, type Context, type RememberOpts } from '../../api.js';
@@ -61,7 +59,7 @@ export type IngestEvent =
 export interface IngestInput {
   /** The X-GitHub-Event header value + parsed body, discriminated. */
   event: IngestEvent;
-  /** The raw HTTP body — used for the idempotency key (replay-safe per codex P0 #3). */
+  /** The raw HTTP body, used for the idempotency key (replay-safe). */
   rawBody: string;
   /** X-GitHub-Delivery header value, audit metadata only. */
   deliveryId: string;
@@ -89,7 +87,7 @@ function transformEvent(event: IngestEvent): RememberOpts | null {
 }
 
 /**
- * v1.3.1: extract the source-normalized identifier the idempotency key needs.
+ * Extract the source-normalized identifier the idempotency key needs.
  * Backfill and webhook both produce IngestEvent objects describing the same
  * source revision, so deriving the key from these fields collapses both paths
  * onto the same dedupe row. Mirrors the artifactRef strings in transform.ts.
@@ -121,6 +119,8 @@ function eventUpdatedAt(event: IngestEvent): string | null {
   }
 }
 
+const INSERT_EVENT_LOG_SQL = `INSERT OR IGNORE INTO github_event_log (idempotency_key, delivery_id, event_name, ingested_at, memory_id) VALUES (?, ?, ?, ?, ?)`;
+
 export function ingestEvent(ctx: Context, input: IngestInput): IngestResult {
   const idempotencyKey = computeIdempotencyKey(
     eventArtifactRef(input.event),
@@ -144,16 +144,7 @@ export function ingestEvent(ctx: Context, input: IngestInput): IngestResult {
     // Empty body: no memory to write, but mark seen so a retry of the same
     // empty event returns 'duplicate' (not 'skipped' again — that would
     // re-run the transform on every retry).
-    const db2 = openHippoDb(ctx.hippoRoot);
-    try {
-      db2
-        .prepare(
-          `INSERT OR IGNORE INTO github_event_log (idempotency_key, delivery_id, event_name, ingested_at, memory_id) VALUES (?, ?, ?, ?, ?)`,
-        )
-        .run(idempotencyKey, input.deliveryId, input.event.eventName, new Date().toISOString(), null);
-    } finally {
-      closeHippoDb(db2);
-    }
+    markKeySeenWithoutMemory(ctx.hippoRoot, idempotencyKey, input);
     return { status: 'skipped', memoryId: null };
   }
 
@@ -164,34 +155,7 @@ export function ingestEvent(ctx: Context, input: IngestInput): IngestResult {
   //      the test injection) beat us, changes=0 -> throw -> SAVEPOINT rolls
   //      back our memory row. Other worker's commit stands.
   try {
-    // v1.12.0: drop the legacy `|| 'connector:github'` fallback (see slack/ingest.ts:73 for rationale).
-    const result = remember(
-      ctx,
-      {
-        ...opts,
-        untrusted: true,
-        afterWrite: (innerDb, memoryId) => {
-          if (input.__testInjectBeforeLog) {
-            input.__testInjectBeforeLog(innerDb, idempotencyKey);
-          }
-          const inserted = innerDb
-            .prepare(
-              `INSERT OR IGNORE INTO github_event_log (idempotency_key, delivery_id, event_name, ingested_at, memory_id) VALUES (?, ?, ?, ?, ?)`,
-            )
-            .run(
-              idempotencyKey,
-              input.deliveryId,
-              input.event.eventName,
-              new Date().toISOString(),
-              memoryId,
-            );
-          if (Number(inserted.changes ?? 0) === 0) {
-            throw new DuplicateIdempotencyError(idempotencyKey);
-          }
-        },
-      },
-    );
-    return { status: 'ingested', memoryId: result.id };
+    return rememberWithEventLog(ctx, input, idempotencyKey, opts);
   } catch (e) {
     if (e instanceof DuplicateIdempotencyError) {
       // Other worker's row is committed. Return its memory_id so callers
@@ -204,22 +168,56 @@ export function ingestEvent(ctx: Context, input: IngestInput): IngestResult {
       }
     }
     if (e instanceof RejectedValueError) {
-      // AT1 (plan §3 containment): a tombstone hit is a PERMANENT skip, not
-      // a transient failure — never DLQ-retry it. Mark the idempotency key
-      // seen exactly like the empty-body branch above so a GitHub retry of
-      // the same delivery acks as done, not error.
-      const db4 = openHippoDb(ctx.hippoRoot);
-      try {
-        db4
-          .prepare(
-            `INSERT OR IGNORE INTO github_event_log (idempotency_key, delivery_id, event_name, ingested_at, memory_id) VALUES (?, ?, ?, ?, ?)`,
-          )
-          .run(idempotencyKey, input.deliveryId, input.event.eventName, new Date().toISOString(), null);
-      } finally {
-        closeHippoDb(db4);
-      }
+      // A tombstone hit is a PERMANENT skip, never DLQ-retried: mark the key seen like the empty-body
+      // branch above so a GitHub retry of the same delivery acks as done, not error.
+      markKeySeenWithoutMemory(ctx.hippoRoot, idempotencyKey, input);
       return { status: 'skipped', memoryId: null };
     }
     throw e;
   }
+}
+
+function markKeySeenWithoutMemory(hippoRoot: string, idempotencyKey: string, input: IngestInput): void {
+  const db = openHippoDb(hippoRoot);
+  try {
+    db
+      .prepare(INSERT_EVENT_LOG_SQL)
+      .run(idempotencyKey, input.deliveryId, input.event.eventName, new Date().toISOString(), null);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+function rememberWithEventLog(
+  ctx: Context,
+  input: IngestInput,
+  idempotencyKey: string,
+  opts: RememberOpts,
+): IngestResult {
+  // No `|| 'connector:github'` fallback (see rememberWithEventLog in slack/ingest.ts for rationale).
+  const result = remember(
+    ctx,
+    {
+      ...opts,
+      untrusted: true,
+      afterWrite: (innerDb, memoryId) => {
+        if (input.__testInjectBeforeLog) {
+          input.__testInjectBeforeLog(innerDb, idempotencyKey);
+        }
+        const inserted = innerDb
+          .prepare(INSERT_EVENT_LOG_SQL)
+          .run(
+            idempotencyKey,
+            input.deliveryId,
+            input.event.eventName,
+            new Date().toISOString(),
+            memoryId,
+          );
+        if (Number(inserted.changes ?? 0) === 0) {
+          throw new DuplicateIdempotencyError(idempotencyKey);
+        }
+      },
+    },
+  );
+  return { status: 'ingested', memoryId: result.id };
 }

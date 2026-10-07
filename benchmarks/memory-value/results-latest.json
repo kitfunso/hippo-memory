@@ -3,7 +3,7 @@
  "meta": {
   "generatedAt": "2026-08-09T12:48:06.308Z",
   "mode": "real",
-  "dataPath": "C:/Users/skf_s/hippo/benchmarks/longmemeval/data/longmemeval_s_cleaned.json",
+  "dataPath": "C:/Users/<user>/hippo/benchmarks/longmemeval/data/longmemeval_s_cleaned.json",
   "seed": 42,
   "questionsRequested": 500,
   "questionsProcessed": 500,

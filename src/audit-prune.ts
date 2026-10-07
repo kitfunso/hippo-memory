@@ -1,5 +1,5 @@
 /**
- * Audit log retention pruning (v1.12.9).
+ * Audit log retention pruning.
  *
  * The `audit_log` table grows unbounded by default — every recall, write,
  * outcome, sleep, supersede, promote, forget, archive_raw, auth_revoke,
@@ -7,10 +7,8 @@
  * accumulate to millions of rows and slow down both audit queries and
  * incremental SQLite VACUUMs.
  *
- * Closes TODOS A5 v2 M6: "Audit log unbounded growth. Add a daily `audit
- * prune` cron + `hippo audit prune --older-than 90d` CLI in v2. Mind
- * regulatory retention floors (HIPAA, SOX, GDPR) — the prune should be
- * opt-in per tenant and emit its own audit trail event."
+ * Regulatory retention floors (HIPAA, SOX, GDPR) are why the prune is opt-in
+ * per tenant and emits its own audit trail event.
  *
  * Design notes:
  *   - Per-tenant by default (matches existing audit CLI conventions).
@@ -32,7 +30,7 @@ import { appendAuditEvent } from './audit.js';
 export interface PruneAuditOpts {
   /** Cutoff in days. Rows with `ts < (now - N days)` are deleted. */
   olderThanDays: number;
-  /** Tenant scope. Required — prune is always tenant-scoped per the A5 v2 design. */
+  /** Tenant scope. Required: prune is always tenant-scoped. */
   tenantId: string;
   /** When true, count matching rows but do NOT delete. Default false. */
   dryRun?: boolean;
@@ -93,7 +91,7 @@ export function pruneAuditLog(
       .get(opts.tenantId, cutoff) as { c: number | bigint };
     count = Number(row.c);
   } else {
-    db.exec('BEGIN');
+    db.exec('BEGIN IMMEDIATE');
     try {
       const result = db
         .prepare(`DELETE FROM audit_log WHERE tenant_id = ? AND ts < ?`)

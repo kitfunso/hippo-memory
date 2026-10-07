@@ -52,7 +52,9 @@ function codeLinesChanged(repo, parent, sha, isTest) {
   return lines;
 }
 
-/** Candidate commits, oldest first, past the scope gate (fault 3: bundled commits cost no test runs). */
+/** Candidate commits, oldest first, past the scope gate (fault 3: bundled commits cost no test runs).
+ * @param {string} repo
+ * @param {{since?: string | null, max?: number, testPattern?: string, runExclude?: string, maxTestFiles?: number, maxCodeLines?: number, onSkip?: ((c: {subject: string}, reason: string) => unknown) | null}} [options] */
 export function findCandidates(repo, {
   since = null,
   max = 40,
@@ -155,10 +157,13 @@ export function draftTasks(candidates, { repo, cluster, testCmd, setup = null, p
       id: `${cluster}-${sequences.length + 1}`,
       cluster,
       repo,
+      fixedOrder: false,
       tasks: chunk.map((c) => {
         const runFiles = c.runFiles ?? c.testFiles;
         const task = {
           id: c.sha.slice(0, 10),
+          // History tasks teach nothing on purpose: they are set N (prereg 46).
+          kind: 'no-lesson',
           baseRef: c.parent,
           fixRef: c.sha,
           needsReview: true,
@@ -219,7 +224,7 @@ function main() {
   console.log(JSON.stringify(tasks, null, 2));
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && fs.realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     main();
   } catch (err) {

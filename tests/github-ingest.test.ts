@@ -2,9 +2,11 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { initStore, loadAllEntries } from '../src/store.js';
+import type { Context } from '../src/api.js';
+import { initStore } from '../src/store/open.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { ingestEvent, type IngestEvent } from '../src/connectors/github/ingest.js';
 import { computeIdempotencyKey } from '../src/connectors/github/signature.js';
 import type {
@@ -16,7 +18,7 @@ import type {
 
 // -- Test helpers ----------------------------------------------------------
 
-const ctx = (root: string) => ({
+const ctx = (root: string): Context => ({
   hippoRoot: root,
   tenantId: 'default',
   actor: { subject: 'connector:github', role: 'admin' },
@@ -103,6 +105,7 @@ function makePrReviewCommentEvent(): GitHubPullRequestReviewCommentEvent {
  */
 function injectMemoryRow(db: DatabaseSyncLike, id: string, content: string, artifactRef: string): void {
   const entry = createMemory(content, {
+    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     layer: Layer.Episodic,
     kind: 'raw',
     scope: 'github:public:acme/demo',
@@ -336,21 +339,20 @@ describe('ingestEvent', () => {
         // Single-process simulation of a "worker B already committed" race.
         //
         // SQLite + WAL mode allows multiple connections but serializes
-        // writers. While the ingest path holds `SAVEPOINT write_entry`, no
+        // writers. While the ingest path holds its write transaction, no
         // other connection can write — they wait on busy_timeout (5s) and
         // error. So we cannot simply open a second connection and INSERT.
         //
-        // Instead we briefly ROLLBACK + RELEASE the outer savepoint to
+        // Instead we briefly ROLLBACK the write transaction to
         // return innerDb to autocommit, commit the other-worker rows
         // (which now persist regardless of subsequent rollbacks), then
-        // RE-OPEN a fresh SAVEPOINT under the same name so the calling
-        // writeEntryDbOnly's RELEASE / ROLLBACK TO statements still target
+        // RE-OPEN it with BEGIN IMMEDIATE so the calling
+        // writeEntryDbOnly's COMMIT / ROLLBACK statements still target
         // a valid scope. The DuplicateIdempotencyError thrown by ingest's
         // INSERT OR IGNORE then rolls back the freshly-opened (empty)
-        // savepoint — leaving worker B's committed rows intact, exactly
+        // transaction, leaving worker B's committed rows intact, exactly
         // as a real two-process race would leave them.
-        innerDb.exec('ROLLBACK TO SAVEPOINT write_entry');
-        innerDb.exec('RELEASE SAVEPOINT write_entry');
+        innerDb.exec('ROLLBACK');
         try {
           injectMemoryRow(
             innerDb,
@@ -364,7 +366,7 @@ describe('ingestEvent', () => {
             )
             .run(key, 'd-other-worker', 'issues', new Date().toISOString(), otherWorkerMemoryId);
         } finally {
-          innerDb.exec('SAVEPOINT write_entry');
+          innerDb.exec('BEGIN IMMEDIATE');
         }
       },
     });
@@ -436,12 +438,11 @@ describe('ingestEvent', () => {
       rawBody,
       deliveryId: 'd-this-worker',
       __testInjectBeforeLog: (innerDb, key) => {
-        // Same SAVEPOINT-cycling pattern as test 5. See test 5 for the
+        // Same transaction-cycling pattern as test 5. See test 5 for the
         // full rationale — short version: WAL serializes cross-connection
         // writers, so to simulate worker B's committed state we briefly
-        // exit + re-enter the savepoint on the same connection.
-        innerDb.exec('ROLLBACK TO SAVEPOINT write_entry');
-        innerDb.exec('RELEASE SAVEPOINT write_entry');
+        // exit + re-enter the write transaction on the same connection.
+        innerDb.exec('ROLLBACK');
         try {
           injectMemoryRow(
             innerDb,
@@ -455,7 +456,7 @@ describe('ingestEvent', () => {
             )
             .run(key, 'd-other-worker', 'issues', new Date().toISOString(), otherWorkerMemoryId);
         } finally {
-          innerDb.exec('SAVEPOINT write_entry');
+          innerDb.exec('BEGIN IMMEDIATE');
         }
       },
     });

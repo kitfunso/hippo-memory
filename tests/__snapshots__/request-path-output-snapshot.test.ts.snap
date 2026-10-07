@@ -1,0 +1,3465 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`request-path output on a fixed store > getContext: local-only query ranks the local FTS window 1`] = `
+{
+  "ambientState": {
+    "avgStrength": 0.698687376,
+    "conflictIntensity": 0,
+    "consolidationRatio": 0.339285714,
+    "dagDepth": 0,
+    "emotionalSkew": -0.214285714,
+    "errorDensity": 0.178571429,
+    "extractionCoverage": 0,
+    "recencyFreshness": 0.214285714,
+    "schemaFitRatio": 0,
+    "tagEntropy": 0.932536016,
+    "totalMemories": 56,
+  },
+  "entries": [
+    {
+      "category": "user-global",
+      "id": "ctx-002",
+      "isGlobal": false,
+      "retrieval_count": 3,
+      "score": 0.503753338,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-010",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 0.475813256,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-034",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 0.453288846,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-026",
+      "isGlobal": false,
+      "retrieval_count": 3,
+      "score": 0.446174809,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-050",
+      "isGlobal": false,
+      "retrieval_count": 3,
+      "score": 0.442319321,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-070",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 0.426540719,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-046",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 0.409187914,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-058",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 0.391934478,
+      "tokens": 15,
+    },
+    {
+      "category": "user-global",
+      "id": "ctx-062",
+      "isGlobal": false,
+      "retrieval_count": 3,
+      "score": 0.370492415,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-063",
+      "isGlobal": false,
+      "retrieval_count": 4,
+      "score": 0.331874149,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-015",
+      "isGlobal": false,
+      "retrieval_count": 4,
+      "score": 0.322576826,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-027",
+      "isGlobal": false,
+      "retrieval_count": 4,
+      "score": 0.31494255,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-039",
+      "isGlobal": false,
+      "retrieval_count": 4,
+      "score": 0.308371668,
+      "tokens": 15,
+    },
+    {
+      "category": "user-global",
+      "id": "ctx-022",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 0.303917965,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-005",
+      "isGlobal": false,
+      "retrieval_count": 6,
+      "score": 0.239669375,
+      "tokens": 14,
+    },
+    {
+      "category": "project",
+      "id": "ctx-009",
+      "isGlobal": false,
+      "retrieval_count": 4,
+      "score": 0.237468728,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-025",
+      "isGlobal": false,
+      "retrieval_count": 2,
+      "score": 0.22103093,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-013",
+      "isGlobal": false,
+      "retrieval_count": 2,
+      "score": 0.212947945,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-017",
+      "isGlobal": false,
+      "retrieval_count": 6,
+      "score": 0.200588942,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-049",
+      "isGlobal": false,
+      "retrieval_count": 2,
+      "score": 0.161757448,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-045",
+      "isGlobal": false,
+      "retrieval_count": 4,
+      "score": 0.153211709,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-053",
+      "isGlobal": false,
+      "retrieval_count": 6,
+      "score": 0.129586434,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-057",
+      "isGlobal": false,
+      "retrieval_count": 4,
+      "score": 0.122756363,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-077",
+      "isGlobal": false,
+      "retrieval_count": 6,
+      "score": 0.122058507,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-033",
+      "isGlobal": false,
+      "retrieval_count": 4,
+      "score": 0.115345728,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-065",
+      "isGlobal": false,
+      "retrieval_count": 6,
+      "score": 0.115133323,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-073",
+      "isGlobal": false,
+      "retrieval_count": 2,
+      "score": 0.112645362,
+      "tokens": 15,
+    },
+  ],
+  "tokens": 404,
+}
+`;
+
+exports[`request-path output on a fixed store > getContext: no query 1`] = `
+{
+  "ambientState": {
+    "avgStrength": 0.969082501,
+    "conflictIntensity": 0,
+    "consolidationRatio": 0.208791209,
+    "dagDepth": 0,
+    "emotionalSkew": -0.324175824,
+    "errorDensity": 0.10989011,
+    "extractionCoverage": 0,
+    "recencyFreshness": 0.384615385,
+    "schemaFitRatio": 0,
+    "tagEntropy": 0.737639625,
+    "totalMemories": 91,
+  },
+  "entries": [
+    {
+      "category": "project",
+      "id": "ctx-000",
+      "isGlobal": false,
+      "retrieval_count": 1,
+      "score": 1,
+      "tokens": 14,
+    },
+    {
+      "category": "project",
+      "id": "ctx-010",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-015",
+      "isGlobal": false,
+      "retrieval_count": 4,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-018",
+      "isGlobal": false,
+      "retrieval_count": 1,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-019",
+      "isGlobal": false,
+      "retrieval_count": 2,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "user-global",
+      "id": "ctx-002",
+      "isGlobal": false,
+      "retrieval_count": 3,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-025",
+      "isGlobal": false,
+      "retrieval_count": 2,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-027",
+      "isGlobal": false,
+      "retrieval_count": 4,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-035",
+      "isGlobal": false,
+      "retrieval_count": 6,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-039",
+      "isGlobal": false,
+      "retrieval_count": 4,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-047",
+      "isGlobal": false,
+      "retrieval_count": 6,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-005",
+      "isGlobal": false,
+      "retrieval_count": 6,
+      "score": 1,
+      "tokens": 14,
+    },
+    {
+      "category": "project",
+      "id": "ctx-050",
+      "isGlobal": false,
+      "retrieval_count": 3,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-063",
+      "isGlobal": false,
+      "retrieval_count": 4,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-008",
+      "isGlobal": false,
+      "retrieval_count": 3,
+      "score": 1,
+      "tokens": 14,
+    },
+    {
+      "category": "project",
+      "id": "ctx-009",
+      "isGlobal": false,
+      "retrieval_count": 4,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-034",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 0.99796516,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-merged",
+      "isGlobal": false,
+      "retrieval_count": 1,
+      "score": 0.996209137,
+      "tokens": 30,
+    },
+    {
+      "category": "project",
+      "id": "ctx-043",
+      "isGlobal": false,
+      "retrieval_count": 2,
+      "score": 0.991375509,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-026",
+      "isGlobal": false,
+      "retrieval_count": 3,
+      "score": 0.938277586,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-067",
+      "isGlobal": false,
+      "retrieval_count": 2,
+      "score": 0.917889514,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-079",
+      "isGlobal": false,
+      "retrieval_count": 2,
+      "score": 0.900385441,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-013",
+      "isGlobal": false,
+      "retrieval_count": 2,
+      "score": 0.880304747,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-046",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 0.839185325,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "glob-000",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.833333333,
+      "tokens": 11,
+    },
+    {
+      "category": "user-global",
+      "id": "glob-001",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.833333333,
+      "tokens": 11,
+    },
+    {
+      "category": "user-global",
+      "id": "glob-017",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.833333333,
+      "tokens": 11,
+    },
+    {
+      "category": "user-global",
+      "id": "glob-003",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.822969026,
+      "tokens": 11,
+    },
+    {
+      "category": "user-global",
+      "id": "glob-005",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.812733622,
+      "tokens": 11,
+    },
+    {
+      "category": "user-global",
+      "id": "glob-007",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.802625517,
+      "tokens": 10,
+    },
+    {
+      "category": "user-global",
+      "id": "glob-009",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.792643128,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "ctx-058",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 0.792085472,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "glob-002",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.789813888,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "ctx-017",
+      "isGlobal": false,
+      "retrieval_count": 6,
+      "score": 0.786287862,
+      "tokens": 15,
+    },
+    {
+      "category": "user-global",
+      "id": "glob-011",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.782784892,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "ctx-070",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 0.776793494,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-030",
+      "isGlobal": false,
+      "retrieval_count": 1,
+      "score": 0.764453154,
+      "tokens": 15,
+    },
+    {
+      "category": "user-global",
+      "id": "glob-015",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.76343472,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "glob-004",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.748567174,
+      "tokens": 11,
+    },
+    {
+      "category": "user-global",
+      "id": "glob-019",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.744562878,
+      "tokens": 11,
+    },
+    {
+      "category": "user-global",
+      "id": "glob-021",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.735302624,
+      "tokens": 11,
+    },
+    {
+      "category": "user-global",
+      "id": "glob-023",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.726157541,
+      "tokens": 11,
+    },
+    {
+      "category": "user-global",
+      "id": "glob-025",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.717126198,
+      "tokens": 11,
+    },
+    {
+      "category": "user-global",
+      "id": "ctx-062",
+      "isGlobal": false,
+      "retrieval_count": 3,
+      "score": 0.702913974,
+      "tokens": 15,
+    },
+    {
+      "category": "user-global",
+      "id": "glob-029",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.699399086,
+      "tokens": 11,
+    },
+    {
+      "category": "user-global",
+      "id": "glob-031",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.690700542,
+      "tokens": 11,
+    },
+    {
+      "category": "user-global",
+      "id": "glob-033",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.682110183,
+      "tokens": 11,
+    },
+    {
+      "category": "user-global",
+      "id": "glob-035",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.673626664,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "glob-008",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.672423376,
+      "tokens": 11,
+    },
+    {
+      "category": "user-global",
+      "id": "glob-037",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.665248655,
+      "tokens": 11,
+    },
+    {
+      "category": "user-global",
+      "id": "glob-039",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.656974846,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "glob-010",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.637307186,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "glob-012",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.60402488,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "glob-014",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.572480686,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "glob-016",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.542583836,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "ctx-078",
+      "isGlobal": false,
+      "retrieval_count": 1,
+      "score": 0.540550009,
+      "tokens": 15,
+    },
+    {
+      "category": "user-global",
+      "id": "ctx-012",
+      "isGlobal": false,
+      "retrieval_count": 1,
+      "score": 0.514651118,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "glob-018",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.514248299,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "glob-022",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.461939275,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "glob-024",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.437815266,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "ctx-045",
+      "isGlobal": false,
+      "retrieval_count": 4,
+      "score": 0.434897913,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "glob-026",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.414951093,
+      "tokens": 11,
+    },
+    {
+      "category": "user-global",
+      "id": "ctx-022",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 0.407693131,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-055",
+      "isGlobal": false,
+      "retrieval_count": 2,
+      "score": 0.403010376,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "glob-028",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.393280964,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "glob-030",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.37274252,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "ctx-049",
+      "isGlobal": false,
+      "retrieval_count": 2,
+      "score": 0.367839007,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-016",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 0.355904321,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "glob-032",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.353276663,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "glob-036",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.317341576,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "ctx-028",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 0.31479358,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "glob-038",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.300768941,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "ctx-024",
+      "isGlobal": false,
+      "retrieval_count": 1,
+      "score": 0.288838174,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-066",
+      "isGlobal": false,
+      "retrieval_count": 1,
+      "score": 0.237792938,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-053",
+      "isGlobal": false,
+      "retrieval_count": 6,
+      "score": 0.228048914,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-057",
+      "isGlobal": false,
+      "retrieval_count": 4,
+      "score": 0.169764397,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-033",
+      "isGlobal": false,
+      "retrieval_count": 4,
+      "score": 0.138011189,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-077",
+      "isGlobal": false,
+      "retrieval_count": 6,
+      "score": 0.114338522,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-065",
+      "isGlobal": false,
+      "retrieval_count": 6,
+      "score": 0.108516523,
+      "tokens": 15,
+    },
+    {
+      "category": "user-global",
+      "id": "ctx-032",
+      "isGlobal": false,
+      "retrieval_count": 3,
+      "score": 0.105398047,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-036",
+      "isGlobal": false,
+      "retrieval_count": 1,
+      "score": 0.102119716,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-073",
+      "isGlobal": false,
+      "retrieval_count": 2,
+      "score": 0.094849846,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-040",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 0.035310181,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-056",
+      "isGlobal": false,
+      "retrieval_count": 3,
+      "score": 0.033925253,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-048",
+      "isGlobal": false,
+      "retrieval_count": 1,
+      "score": 0.028656376,
+      "tokens": 15,
+    },
+    {
+      "category": "user-global",
+      "id": "ctx-052",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 0.019817169,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-064",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 0.01112201,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-068",
+      "isGlobal": false,
+      "retrieval_count": 3,
+      "score": 0.005868687,
+      "tokens": 15,
+    },
+    {
+      "category": "user-global",
+      "id": "ctx-072",
+      "isGlobal": false,
+      "retrieval_count": 1,
+      "score": 0.005686145,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-060",
+      "isGlobal": false,
+      "retrieval_count": 1,
+      "score": 0.00506578,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-076",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 0.001966112,
+      "tokens": 15,
+    },
+  ],
+  "tokens": 1236,
+}
+`;
+
+exports[`request-path output on a fixed store > getContext: no query, cross-project 1`] = `
+{
+  "ambientState": {
+    "avgStrength": 0.966352083,
+    "conflictIntensity": 0,
+    "consolidationRatio": 0.232323232,
+    "dagDepth": 0,
+    "emotionalSkew": -0.338383838,
+    "errorDensity": 0.101010101,
+    "extractionCoverage": 0,
+    "recencyFreshness": 0.383838384,
+    "schemaFitRatio": 0,
+    "tagEntropy": 0.751311193,
+    "totalMemories": 99,
+  },
+  "entries": [
+    {
+      "category": "project",
+      "id": "ctx-000",
+      "isGlobal": false,
+      "retrieval_count": 1,
+      "score": 1,
+      "tokens": 14,
+    },
+    {
+      "category": "cross-project",
+      "id": "ctx-001",
+      "isGlobal": false,
+      "retrieval_count": 2,
+      "score": 1,
+      "tokens": 14,
+    },
+    {
+      "category": "project",
+      "id": "ctx-010",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-015",
+      "isGlobal": false,
+      "retrieval_count": 4,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-018",
+      "isGlobal": false,
+      "retrieval_count": 1,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-019",
+      "isGlobal": false,
+      "retrieval_count": 2,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "user-global",
+      "id": "ctx-002",
+      "isGlobal": false,
+      "retrieval_count": 3,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-025",
+      "isGlobal": false,
+      "retrieval_count": 2,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-027",
+      "isGlobal": false,
+      "retrieval_count": 4,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "cross-project",
+      "id": "ctx-031",
+      "isGlobal": false,
+      "retrieval_count": 2,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-035",
+      "isGlobal": false,
+      "retrieval_count": 6,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-039",
+      "isGlobal": false,
+      "retrieval_count": 4,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-047",
+      "isGlobal": false,
+      "retrieval_count": 6,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-005",
+      "isGlobal": false,
+      "retrieval_count": 6,
+      "score": 1,
+      "tokens": 14,
+    },
+    {
+      "category": "project",
+      "id": "ctx-050",
+      "isGlobal": false,
+      "retrieval_count": 3,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "cross-project",
+      "id": "ctx-051",
+      "isGlobal": false,
+      "retrieval_count": 4,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-063",
+      "isGlobal": false,
+      "retrieval_count": 4,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "cross-project",
+      "id": "ctx-075",
+      "isGlobal": false,
+      "retrieval_count": 4,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-008",
+      "isGlobal": false,
+      "retrieval_count": 3,
+      "score": 1,
+      "tokens": 14,
+    },
+    {
+      "category": "project",
+      "id": "ctx-009",
+      "isGlobal": false,
+      "retrieval_count": 4,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-034",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 0.99796516,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-merged",
+      "isGlobal": false,
+      "retrieval_count": 1,
+      "score": 0.996209137,
+      "tokens": 30,
+    },
+    {
+      "category": "project",
+      "id": "ctx-043",
+      "isGlobal": false,
+      "retrieval_count": 2,
+      "score": 0.991375509,
+      "tokens": 15,
+    },
+    {
+      "category": "cross-project",
+      "id": "ctx-006",
+      "isGlobal": false,
+      "retrieval_count": 1,
+      "score": 0.96315062,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-026",
+      "isGlobal": false,
+      "retrieval_count": 3,
+      "score": 0.938277586,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-067",
+      "isGlobal": false,
+      "retrieval_count": 2,
+      "score": 0.917889514,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-079",
+      "isGlobal": false,
+      "retrieval_count": 2,
+      "score": 0.900385441,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-013",
+      "isGlobal": false,
+      "retrieval_count": 2,
+      "score": 0.880304747,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-046",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 0.839185325,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "glob-000",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.833333333,
+      "tokens": 11,
+    },
+    {
+      "category": "user-global",
+      "id": "glob-001",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.833333333,
+      "tokens": 11,
+    },
+    {
+      "category": "user-global",
+      "id": "glob-017",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.833333333,
+      "tokens": 11,
+    },
+    {
+      "category": "user-global",
+      "id": "glob-003",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.822969026,
+      "tokens": 11,
+    },
+    {
+      "category": "user-global",
+      "id": "glob-005",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.812733622,
+      "tokens": 11,
+    },
+    {
+      "category": "user-global",
+      "id": "glob-007",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.802625517,
+      "tokens": 10,
+    },
+    {
+      "category": "user-global",
+      "id": "glob-009",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.792643128,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "ctx-058",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 0.792085472,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "glob-002",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.789813888,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "ctx-017",
+      "isGlobal": false,
+      "retrieval_count": 6,
+      "score": 0.786287862,
+      "tokens": 15,
+    },
+    {
+      "category": "user-global",
+      "id": "glob-011",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.782784892,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "ctx-070",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 0.776793494,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-030",
+      "isGlobal": false,
+      "retrieval_count": 1,
+      "score": 0.764453154,
+      "tokens": 15,
+    },
+    {
+      "category": "user-global",
+      "id": "glob-015",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.76343472,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "glob-004",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.748567174,
+      "tokens": 11,
+    },
+    {
+      "category": "user-global",
+      "id": "glob-019",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.744562878,
+      "tokens": 11,
+    },
+    {
+      "category": "user-global",
+      "id": "glob-021",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.735302624,
+      "tokens": 11,
+    },
+    {
+      "category": "user-global",
+      "id": "glob-023",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.726157541,
+      "tokens": 11,
+    },
+    {
+      "category": "user-global",
+      "id": "glob-025",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.717126198,
+      "tokens": 11,
+    },
+    {
+      "category": "user-global",
+      "id": "ctx-062",
+      "isGlobal": false,
+      "retrieval_count": 3,
+      "score": 0.702913974,
+      "tokens": 15,
+    },
+    {
+      "category": "cross-project",
+      "id": "ctx-021",
+      "isGlobal": false,
+      "retrieval_count": 4,
+      "score": 0.700398885,
+      "tokens": 15,
+    },
+    {
+      "category": "user-global",
+      "id": "glob-029",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.699399086,
+      "tokens": 11,
+    },
+    {
+      "category": "user-global",
+      "id": "glob-031",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.690700542,
+      "tokens": 11,
+    },
+    {
+      "category": "user-global",
+      "id": "glob-033",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.682110183,
+      "tokens": 11,
+    },
+    {
+      "category": "user-global",
+      "id": "glob-035",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.673626664,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "glob-008",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.672423376,
+      "tokens": 11,
+    },
+    {
+      "category": "user-global",
+      "id": "glob-037",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.665248655,
+      "tokens": 11,
+    },
+    {
+      "category": "user-global",
+      "id": "glob-039",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.656974846,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "glob-010",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.637307186,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "glob-012",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.60402488,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "glob-014",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.572480686,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "glob-016",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.542583836,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "ctx-078",
+      "isGlobal": false,
+      "retrieval_count": 1,
+      "score": 0.540550009,
+      "tokens": 15,
+    },
+    {
+      "category": "user-global",
+      "id": "ctx-012",
+      "isGlobal": false,
+      "retrieval_count": 1,
+      "score": 0.514651118,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "glob-018",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.514248299,
+      "tokens": 11,
+    },
+    {
+      "category": "cross-project",
+      "id": "ctx-011",
+      "isGlobal": false,
+      "retrieval_count": 6,
+      "score": 0.482348621,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "glob-022",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.461939275,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "glob-024",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.437815266,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "ctx-045",
+      "isGlobal": false,
+      "retrieval_count": 4,
+      "score": 0.434897913,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "glob-026",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.414951093,
+      "tokens": 11,
+    },
+    {
+      "category": "user-global",
+      "id": "ctx-022",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 0.407693131,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-055",
+      "isGlobal": false,
+      "retrieval_count": 2,
+      "score": 0.403010376,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "glob-028",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.393280964,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "glob-030",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.37274252,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "ctx-049",
+      "isGlobal": false,
+      "retrieval_count": 2,
+      "score": 0.367839007,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-016",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 0.355904321,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "glob-032",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.353276663,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "glob-036",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.317341576,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "ctx-028",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 0.31479358,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "glob-038",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.300768941,
+      "tokens": 11,
+    },
+    {
+      "category": "cross-project",
+      "id": "ctx-041",
+      "isGlobal": false,
+      "retrieval_count": 6,
+      "score": 0.292104818,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-024",
+      "isGlobal": false,
+      "retrieval_count": 1,
+      "score": 0.288838174,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-066",
+      "isGlobal": false,
+      "retrieval_count": 1,
+      "score": 0.237792938,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-053",
+      "isGlobal": false,
+      "retrieval_count": 6,
+      "score": 0.228048914,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-057",
+      "isGlobal": false,
+      "retrieval_count": 4,
+      "score": 0.169764397,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-033",
+      "isGlobal": false,
+      "retrieval_count": 4,
+      "score": 0.138011189,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-077",
+      "isGlobal": false,
+      "retrieval_count": 6,
+      "score": 0.114338522,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-065",
+      "isGlobal": false,
+      "retrieval_count": 6,
+      "score": 0.108516523,
+      "tokens": 15,
+    },
+    {
+      "category": "user-global",
+      "id": "ctx-032",
+      "isGlobal": false,
+      "retrieval_count": 3,
+      "score": 0.105398047,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-036",
+      "isGlobal": false,
+      "retrieval_count": 1,
+      "score": 0.102119716,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-073",
+      "isGlobal": false,
+      "retrieval_count": 2,
+      "score": 0.094849846,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-040",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 0.035310181,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-056",
+      "isGlobal": false,
+      "retrieval_count": 3,
+      "score": 0.033925253,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-048",
+      "isGlobal": false,
+      "retrieval_count": 1,
+      "score": 0.028656376,
+      "tokens": 15,
+    },
+    {
+      "category": "user-global",
+      "id": "ctx-052",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 0.019817169,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-064",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 0.01112201,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-068",
+      "isGlobal": false,
+      "retrieval_count": 3,
+      "score": 0.005868687,
+      "tokens": 15,
+    },
+    {
+      "category": "user-global",
+      "id": "ctx-072",
+      "isGlobal": false,
+      "retrieval_count": 1,
+      "score": 0.005686145,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-060",
+      "isGlobal": false,
+      "retrieval_count": 1,
+      "score": 0.00506578,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-076",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 0.001966112,
+      "tokens": 15,
+    },
+  ],
+  "tokens": 1355,
+}
+`;
+
+exports[`request-path output on a fixed store > getContext: no query, exact scope 1`] = `
+{
+  "ambientState": {
+    "avgStrength": 1,
+    "conflictIntensity": 0,
+    "consolidationRatio": 0.5,
+    "dagDepth": 0,
+    "emotionalSkew": 0,
+    "errorDensity": 0,
+    "extractionCoverage": 0,
+    "recencyFreshness": 0.25,
+    "schemaFitRatio": 0,
+    "tagEntropy": 1,
+    "totalMemories": 4,
+  },
+  "entries": [
+    {
+      "category": "project",
+      "id": "ctx-018",
+      "isGlobal": false,
+      "retrieval_count": 1,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-005",
+      "isGlobal": false,
+      "retrieval_count": 6,
+      "score": 1,
+      "tokens": 14,
+    },
+    {
+      "category": "project",
+      "id": "ctx-070",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 0.776793494,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-057",
+      "isGlobal": false,
+      "retrieval_count": 4,
+      "score": 0.169764397,
+      "tokens": 15,
+    },
+  ],
+  "tokens": 59,
+}
+`;
+
+exports[`request-path output on a fixed store > getContext: no query, limit 5 1`] = `
+{
+  "ambientState": {
+    "avgStrength": 0.650999129,
+    "conflictIntensity": 0,
+    "consolidationRatio": 0.208791209,
+    "dagDepth": 0,
+    "emotionalSkew": -0.324175824,
+    "errorDensity": 0.10989011,
+    "extractionCoverage": 0,
+    "recencyFreshness": 0.384615385,
+    "schemaFitRatio": 0,
+    "tagEntropy": 0.737639625,
+    "totalMemories": 91,
+  },
+  "entries": [
+    {
+      "category": "project",
+      "id": "ctx-000",
+      "isGlobal": false,
+      "retrieval_count": 1,
+      "score": 1,
+      "tokens": 14,
+    },
+    {
+      "category": "project",
+      "id": "ctx-010",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-015",
+      "isGlobal": false,
+      "retrieval_count": 4,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-018",
+      "isGlobal": false,
+      "retrieval_count": 1,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-019",
+      "isGlobal": false,
+      "retrieval_count": 2,
+      "score": 1,
+      "tokens": 15,
+    },
+  ],
+  "tokens": 74,
+}
+`;
+
+exports[`request-path output on a fixed store > getContext: no query, outside a project 1`] = `
+{
+  "ambientState": {
+    "avgStrength": 0.965658312,
+    "conflictIntensity": 0,
+    "consolidationRatio": 0.226804124,
+    "dagDepth": 0,
+    "emotionalSkew": -0.355670103,
+    "errorDensity": 0.103092784,
+    "extractionCoverage": 0,
+    "recencyFreshness": 0.381443299,
+    "schemaFitRatio": 0,
+    "tagEntropy": 0.795704827,
+    "totalMemories": 97,
+  },
+  "entries": [
+    {
+      "category": "project",
+      "id": "ctx-000",
+      "isGlobal": false,
+      "retrieval_count": 1,
+      "score": 1,
+      "tokens": 14,
+    },
+    {
+      "category": "project",
+      "id": "ctx-001",
+      "isGlobal": false,
+      "retrieval_count": 2,
+      "score": 1,
+      "tokens": 14,
+    },
+    {
+      "category": "project",
+      "id": "ctx-010",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-015",
+      "isGlobal": false,
+      "retrieval_count": 4,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-018",
+      "isGlobal": false,
+      "retrieval_count": 1,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-019",
+      "isGlobal": false,
+      "retrieval_count": 2,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-002",
+      "isGlobal": false,
+      "retrieval_count": 3,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-025",
+      "isGlobal": false,
+      "retrieval_count": 2,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-027",
+      "isGlobal": false,
+      "retrieval_count": 4,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-031",
+      "isGlobal": false,
+      "retrieval_count": 2,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-035",
+      "isGlobal": false,
+      "retrieval_count": 6,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-039",
+      "isGlobal": false,
+      "retrieval_count": 4,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-047",
+      "isGlobal": false,
+      "retrieval_count": 6,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-005",
+      "isGlobal": false,
+      "retrieval_count": 6,
+      "score": 1,
+      "tokens": 14,
+    },
+    {
+      "category": "project",
+      "id": "ctx-050",
+      "isGlobal": false,
+      "retrieval_count": 3,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-051",
+      "isGlobal": false,
+      "retrieval_count": 4,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-063",
+      "isGlobal": false,
+      "retrieval_count": 4,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-075",
+      "isGlobal": false,
+      "retrieval_count": 4,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-008",
+      "isGlobal": false,
+      "retrieval_count": 3,
+      "score": 1,
+      "tokens": 14,
+    },
+    {
+      "category": "project",
+      "id": "ctx-034",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 0.99796516,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-merged",
+      "isGlobal": false,
+      "retrieval_count": 1,
+      "score": 0.996209137,
+      "tokens": 30,
+    },
+    {
+      "category": "project",
+      "id": "ctx-043",
+      "isGlobal": false,
+      "retrieval_count": 2,
+      "score": 0.991375509,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-006",
+      "isGlobal": false,
+      "retrieval_count": 1,
+      "score": 0.96315062,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-026",
+      "isGlobal": false,
+      "retrieval_count": 3,
+      "score": 0.938277586,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-079",
+      "isGlobal": false,
+      "retrieval_count": 2,
+      "score": 0.900385441,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-013",
+      "isGlobal": false,
+      "retrieval_count": 2,
+      "score": 0.880304747,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-046",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 0.839185325,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "glob-000",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.833333333,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "glob-001",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.833333333,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "glob-017",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.833333333,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "glob-003",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.822969026,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "glob-005",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.812733622,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "glob-007",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.802625517,
+      "tokens": 10,
+    },
+    {
+      "category": "project",
+      "id": "glob-009",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.792643128,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "ctx-058",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 0.792085472,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "glob-002",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.789813888,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "ctx-017",
+      "isGlobal": false,
+      "retrieval_count": 6,
+      "score": 0.786287862,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "glob-011",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.782784892,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "ctx-070",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 0.776793494,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-030",
+      "isGlobal": false,
+      "retrieval_count": 1,
+      "score": 0.764453154,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "glob-015",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.76343472,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "glob-004",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.748567174,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "glob-019",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.744562878,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "glob-021",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.735302624,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "glob-023",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.726157541,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "glob-025",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.717126198,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "ctx-062",
+      "isGlobal": false,
+      "retrieval_count": 3,
+      "score": 0.702913974,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-021",
+      "isGlobal": false,
+      "retrieval_count": 4,
+      "score": 0.700398885,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "glob-029",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.699399086,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "glob-031",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.690700542,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "glob-033",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.682110183,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "glob-035",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.673626664,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "glob-008",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.672423376,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "glob-037",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.665248655,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "glob-039",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.656974846,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "glob-010",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.637307186,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "glob-012",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.60402488,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "glob-014",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.572480686,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "glob-016",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.542583836,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "ctx-078",
+      "isGlobal": false,
+      "retrieval_count": 1,
+      "score": 0.540550009,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-012",
+      "isGlobal": false,
+      "retrieval_count": 1,
+      "score": 0.514651118,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "glob-018",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.514248299,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "ctx-011",
+      "isGlobal": false,
+      "retrieval_count": 6,
+      "score": 0.482348621,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "glob-022",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.461939275,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "glob-024",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.437815266,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "ctx-045",
+      "isGlobal": false,
+      "retrieval_count": 4,
+      "score": 0.434897913,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "glob-026",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.414951093,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "ctx-022",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 0.407693131,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-055",
+      "isGlobal": false,
+      "retrieval_count": 2,
+      "score": 0.403010376,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "glob-028",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.393280964,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "glob-030",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.37274252,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "ctx-049",
+      "isGlobal": false,
+      "retrieval_count": 2,
+      "score": 0.367839007,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-016",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 0.355904321,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "glob-032",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.353276663,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "glob-036",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.317341576,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "ctx-028",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 0.31479358,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "glob-038",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.300768941,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "ctx-041",
+      "isGlobal": false,
+      "retrieval_count": 6,
+      "score": 0.292104818,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-024",
+      "isGlobal": false,
+      "retrieval_count": 1,
+      "score": 0.288838174,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-066",
+      "isGlobal": false,
+      "retrieval_count": 1,
+      "score": 0.237792938,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-053",
+      "isGlobal": false,
+      "retrieval_count": 6,
+      "score": 0.228048914,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-057",
+      "isGlobal": false,
+      "retrieval_count": 4,
+      "score": 0.169764397,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-033",
+      "isGlobal": false,
+      "retrieval_count": 4,
+      "score": 0.138011189,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-077",
+      "isGlobal": false,
+      "retrieval_count": 6,
+      "score": 0.114338522,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-065",
+      "isGlobal": false,
+      "retrieval_count": 6,
+      "score": 0.108516523,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-032",
+      "isGlobal": false,
+      "retrieval_count": 3,
+      "score": 0.105398047,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-036",
+      "isGlobal": false,
+      "retrieval_count": 1,
+      "score": 0.102119716,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-073",
+      "isGlobal": false,
+      "retrieval_count": 2,
+      "score": 0.094849846,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-040",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 0.035310181,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-056",
+      "isGlobal": false,
+      "retrieval_count": 3,
+      "score": 0.033925253,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-048",
+      "isGlobal": false,
+      "retrieval_count": 1,
+      "score": 0.028656376,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-052",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 0.019817169,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-064",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 0.01112201,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-068",
+      "isGlobal": false,
+      "retrieval_count": 3,
+      "score": 0.005868687,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-072",
+      "isGlobal": false,
+      "retrieval_count": 1,
+      "score": 0.005686145,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-060",
+      "isGlobal": false,
+      "retrieval_count": 1,
+      "score": 0.00506578,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-076",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 0.001966112,
+      "tokens": 15,
+    },
+  ],
+  "tokens": 1325,
+}
+`;
+
+exports[`request-path output on a fixed store > getContext: no query, small budget 1`] = `
+{
+  "ambientState": {
+    "avgStrength": 0.650999129,
+    "conflictIntensity": 0,
+    "consolidationRatio": 0.208791209,
+    "dagDepth": 0,
+    "emotionalSkew": -0.324175824,
+    "errorDensity": 0.10989011,
+    "extractionCoverage": 0,
+    "recencyFreshness": 0.384615385,
+    "schemaFitRatio": 0,
+    "tagEntropy": 0.737639625,
+    "totalMemories": 91,
+  },
+  "entries": [
+    {
+      "category": "project",
+      "id": "ctx-000",
+      "isGlobal": false,
+      "retrieval_count": 1,
+      "score": 1,
+      "tokens": 14,
+    },
+    {
+      "category": "project",
+      "id": "ctx-010",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-015",
+      "isGlobal": false,
+      "retrieval_count": 4,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-018",
+      "isGlobal": false,
+      "retrieval_count": 1,
+      "score": 1,
+      "tokens": 15,
+    },
+  ],
+  "tokens": 59,
+}
+`;
+
+exports[`request-path output on a fixed store > getContext: pinned only with recent 1`] = `
+{
+  "ambientState": undefined,
+  "entries": [
+    {
+      "category": "user-global",
+      "id": "glob-001",
+      "isGlobal": true,
+      "retrieval_count": 0,
+      "score": 0.833333333,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "glob-000",
+      "isGlobal": true,
+      "retrieval_count": 0,
+      "score": 0.833333333,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "ctx-000",
+      "isGlobal": false,
+      "retrieval_count": 0,
+      "score": 1,
+      "tokens": 14,
+    },
+    {
+      "category": "user-global",
+      "id": "glob-003",
+      "isGlobal": true,
+      "retrieval_count": 0,
+      "score": 0.822969026,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "ctx-025",
+      "isGlobal": false,
+      "retrieval_count": 1,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-050",
+      "isGlobal": false,
+      "retrieval_count": 2,
+      "score": 1,
+      "tokens": 15,
+    },
+    {
+      "category": "user-global",
+      "id": "glob-017",
+      "isGlobal": true,
+      "retrieval_count": 0,
+      "score": 0.833333333,
+      "tokens": 11,
+    },
+  ],
+  "tokens": 88,
+}
+`;
+
+exports[`request-path output on a fixed store > getContext: query 1`] = `
+{
+  "ambientState": {
+    "avgStrength": 0.752792136,
+    "conflictIntensity": 0,
+    "consolidationRatio": 0.208791209,
+    "dagDepth": 0,
+    "emotionalSkew": -0.324175824,
+    "errorDensity": 0.10989011,
+    "extractionCoverage": 0,
+    "recencyFreshness": 0.384615385,
+    "schemaFitRatio": 0,
+    "tagEntropy": 0.737639625,
+    "totalMemories": 91,
+  },
+  "entries": [
+    {
+      "category": "user-global",
+      "id": "glob-003",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.76431127,
+      "tokens": 11,
+    },
+    {
+      "category": "user-global",
+      "id": "glob-015",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.695703263,
+      "tokens": 11,
+    },
+    {
+      "category": "user-global",
+      "id": "glob-039",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.626482851,
+      "tokens": 11,
+    },
+    {
+      "category": "user-global",
+      "id": "ctx-002",
+      "isGlobal": false,
+      "retrieval_count": 3,
+      "score": 0.604504005,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-010",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 0.570975907,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-034",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 0.543946615,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-026",
+      "isGlobal": false,
+      "retrieval_count": 3,
+      "score": 0.535409771,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-050",
+      "isGlobal": false,
+      "retrieval_count": 3,
+      "score": 0.530783185,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-070",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 0.511848862,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-046",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 0.491025496,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-058",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 0.470321374,
+      "tokens": 15,
+    },
+    {
+      "category": "user-global",
+      "id": "ctx-062",
+      "isGlobal": false,
+      "retrieval_count": 3,
+      "score": 0.444590898,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-063",
+      "isGlobal": false,
+      "retrieval_count": 4,
+      "score": 0.398248978,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-015",
+      "isGlobal": false,
+      "retrieval_count": 4,
+      "score": 0.387092192,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-027",
+      "isGlobal": false,
+      "retrieval_count": 4,
+      "score": 0.37793106,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-039",
+      "isGlobal": false,
+      "retrieval_count": 4,
+      "score": 0.370046002,
+      "tokens": 15,
+    },
+    {
+      "category": "user-global",
+      "id": "ctx-022",
+      "isGlobal": false,
+      "retrieval_count": 5,
+      "score": 0.364701558,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-005",
+      "isGlobal": false,
+      "retrieval_count": 6,
+      "score": 0.28760325,
+      "tokens": 14,
+    },
+    {
+      "category": "project",
+      "id": "ctx-009",
+      "isGlobal": false,
+      "retrieval_count": 4,
+      "score": 0.284962474,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-025",
+      "isGlobal": false,
+      "retrieval_count": 2,
+      "score": 0.265237116,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-013",
+      "isGlobal": false,
+      "retrieval_count": 2,
+      "score": 0.255537534,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-017",
+      "isGlobal": false,
+      "retrieval_count": 6,
+      "score": 0.240706731,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "glob-002",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.21769685,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "ctx-049",
+      "isGlobal": false,
+      "retrieval_count": 2,
+      "score": 0.194108938,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "glob-010",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.184672912,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "ctx-045",
+      "isGlobal": false,
+      "retrieval_count": 4,
+      "score": 0.18385405,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "glob-014",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.17536823,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "glob-022",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.159546184,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "ctx-053",
+      "isGlobal": false,
+      "retrieval_count": 6,
+      "score": 0.155503721,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "glob-026",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.152830757,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "ctx-057",
+      "isGlobal": false,
+      "retrieval_count": 4,
+      "score": 0.147307635,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-077",
+      "isGlobal": false,
+      "retrieval_count": 6,
+      "score": 0.146470209,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-033",
+      "isGlobal": false,
+      "retrieval_count": 4,
+      "score": 0.138414874,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "ctx-065",
+      "isGlobal": false,
+      "retrieval_count": 6,
+      "score": 0.138159987,
+      "tokens": 15,
+    },
+    {
+      "category": "project",
+      "id": "glob-038",
+      "isGlobal": true,
+      "retrieval_count": 1,
+      "score": 0.136497962,
+      "tokens": 11,
+    },
+    {
+      "category": "project",
+      "id": "ctx-073",
+      "isGlobal": false,
+      "retrieval_count": 2,
+      "score": 0.135174435,
+      "tokens": 15,
+    },
+  ],
+  "tokens": 503,
+}
+`;
+
+exports[`request-path output on a fixed store > mcp hippo_context {"scope":"team:x"} 1`] = `
+"Found 4 memories:
+
+[verified] tags: t2 (strength=1.00)
+fixture 18 note about schema and schema with the schema step
+
+[verified] tags: t1 (strength=1.00)
+fixture 5 note about lint and redis with the deploy step
+
+[verified] tags: t2 (strength=1.00)
+fixture 70 note about token and schema with the kafka step
+
+[verified] tags: t1 (strength=1.00)
+fixture 57 note about backup and redis with the backup step
+"
+`;
+
+exports[`request-path output on a fixed store > mcp hippo_context {} 1`] = `
+"Found 91 memories:
+
+[verified] tags: error (strength=1.00)
+fixture 0 note about cache and cache with the cache step
+
+[verified] tags: t2 (strength=1.00)
+fixture 10 note about token and schema with the kafka step
+
+[verified] tags: t3 (strength=1.00)
+fixture 15 note about redis and backup with the redis step
+
+[verified] tags: t2 (strength=1.00)
+fixture 18 note about schema and schema with the schema step
+
+[verified] tags: t3 (strength=1.00)
+fixture 19 note about queue and backup with the hook step
+
+[verified] tags: t2 (strength=1.00)
+fixture 2 note about kafka and schema with the token step
+
+[verified] tags: t1 (strength=1.00)
+fixture 25 note about deploy and redis with the lint step
+
+[verified] tags: t3 (strength=1.00)
+fixture 27 note about redis and backup with the redis step
+
+[verified] tags: t3 (strength=1.00)
+fixture 35 note about hook and backup with the queue step
+
+[verified] tags: t3 (strength=1.00)
+fixture 39 note about redis and backup with the redis step
+
+[verified] tags: t3 (strength=1.00)
+fixture 47 note about hook and backup with the queue step
+
+[verified] tags: t1 (strength=1.00)
+fixture 5 note about lint and redis with the deploy step
+
+[verified] tags: t2 (strength=1.00)
+fixture 50 note about kafka and schema with the token step
+
+[verified] tags: t3 (strength=1.00)
+fixture 63 note about redis and backup with the redis step
+
+[verified] tags: error (strength=1.00)
+fixture 8 note about retry and cache with the merge step
+
+[verified] tags: secret (strength=1.00)
+fixture 9 note about backup and redis with the backup step
+
+[verified] tags: t2 (strength=1.00)
+fixture 34 note about token and schema with the kafka step
+
+[verified] (strength=1.00)
+Two related fixes
+
+- the loader must handle a null cache key before it reads the
+  index file
+- the loader retries twice
+
+[verified] tags: t3 (strength=1.00)
+fixture 43 note about queue and backup with the hook step
+
+[verified] tags: t2 (strength=1.00)
+fixture 26 note about kafka and schema with the token step
+
+[verified] tags: secret (strength=1.00)
+fixture 67 note about queue and backup with the hook step
+
+[verified] tags: t3 (strength=1.00)
+fixture 79 note about queue and backup with the hook step
+
+[verified] tags: t1 (strength=1.00)
+fixture 13 note about deploy and redis with the lint step
+
+[verified] tags: t2 (strength=1.00)
+fixture 46 note about token and schema with the kafka step
+
+[verified] (strength=1.00)
+global note 0 on cache for the cache team
+
+[verified] (strength=1.00)
+global note 1 on deploy for the lint team
+
+[verified] (strength=1.00)
+global note 17 on lint for the deploy team
+
+[verified] (strength=1.00)
+global note 3 on redis for the redis team
+
+[verified] (strength=1.00)
+global note 5 on lint for the deploy team
+
+[verified] (strength=1.00)
+global note 7 on queue for the hook team
+
+[verified] (strength=1.00)
+global note 9 on backup for the backup team
+
+[verified] tags: t2 (strength=1.00)
+fixture 58 note about token and schema with the kafka step
+
+[verified] (strength=1.00)
+global note 2 on kafka for the token team
+
+[verified] tags: t1 (strength=1.00)
+fixture 17 note about lint and redis with the deploy step
+
+[verified] (strength=1.00)
+global note 11 on hook for the queue team
+
+[verified] tags: t2 (strength=1.00)
+fixture 70 note about token and schema with the kafka step
+
+[verified] tags: t2 (strength=1.00)
+fixture 30 note about schema and schema with the schema step
+
+[verified] (strength=1.00)
+global note 15 on redis for the redis team
+
+[verified] (strength=1.00)
+global note 4 on merge for the retry team
+
+[verified] (strength=1.00)
+global note 19 on queue for the hook team
+
+[verified] (strength=1.00)
+global note 21 on backup for the backup team
+
+[verified] (strength=1.00)
+global note 23 on hook for the queue team
+
+[verified] (strength=1.00)
+global note 25 on deploy for the lint team
+
+[verified] tags: t2 (strength=1.00)
+fixture 62 note about kafka and schema with the token step
+
+[verified] (strength=1.00)
+global note 29 on lint for the deploy team
+
+[verified] (strength=1.00)
+global note 31 on queue for the hook team
+
+[verified] (strength=1.00)
+global note 33 on backup for the backup team
+
+[verified] (strength=1.00)
+global note 35 on hook for the queue team
+
+[verified] (strength=1.00)
+global note 8 on retry for the merge team
+
+[verified] (strength=1.00)
+global note 37 on deploy for the lint team
+
+[verified] (strength=1.00)
+global note 39 on redis for the redis team
+
+[verified] (strength=1.00)
+global note 10 on token for the kafka team
+
+[verified] (strength=1.00)
+global note 12 on cache for the cache team
+
+[verified] (strength=1.00)
+global note 14 on kafka for the token team
+
+[verified] (strength=1.00)
+global note 16 on merge for the retry team
+
+[verified] tags: t2 (strength=1.00)
+fixture 78 note about schema and schema with the schema step
+
+[verified] tags: t0 (strength=1.00)
+fixture 12 note about cache and cache with the cache step
+
+[verified] (strength=1.00)
+global note 18 on schema for the schema team
+
+[verified] (strength=1.00)
+global note 22 on token for the kafka team
+
+[verified] (strength=1.00)
+global note 24 on cache for the cache team
+
+[verified] tags: t1 (strength=1.00)
+fixture 45 note about backup and redis with the backup step
+
+[verified] (strength=1.00)
+global note 26 on kafka for the token team
+
+[verified] tags: t2 (strength=0.41)
+fixture 22 note about token and schema with the kafka step
+
+[verified] tags: t3 (strength=0.40)
+fixture 55 note about queue and backup with the hook step
+
+[verified] (strength=1.00)
+global note 28 on merge for the retry team
+
+[verified] (strength=1.00)
+global note 30 on schema for the schema team
+
+[verified] tags: t1 (strength=1.00)
+fixture 49 note about deploy and redis with the lint step
+
+[verified] tags: error (strength=1.00)
+fixture 16 note about merge and cache with the retry step
+
+[verified] (strength=1.00)
+global note 32 on retry for the merge team
+
+[verified] (strength=1.00)
+global note 36 on cache for the cache team
+
+[verified] tags: t0 (strength=1.00)
+fixture 28 note about merge and cache with the retry step
+
+[verified] (strength=1.00)
+global note 38 on kafka for the token team
+
+[verified] tags: error (strength=1.00)
+fixture 24 note about cache and cache with the cache step
+
+[verified] tags: t2 (strength=0.24)
+fixture 66 note about schema and schema with the schema step
+
+[verified] tags: t1 (strength=1.00)
+fixture 53 note about lint and redis with the deploy step
+
+[verified] tags: t1 (strength=1.00)
+fixture 57 note about backup and redis with the backup step
+
+[verified] tags: t1 (strength=0.14)
+fixture 33 note about backup and redis with the backup step
+
+[verified] tags: t1 (strength=1.00)
+fixture 77 note about lint and redis with the deploy step
+
+[verified] tags: t1 (strength=1.00)
+fixture 65 note about lint and redis with the deploy step
+
+[verified] tags: error (strength=1.00)
+fixture 32 note about retry and cache with the merge step
+
+[verified] tags: t0 (strength=1.00)
+fixture 36 note about cache and cache with the cache step
+
+[verified] tags: t1 (strength=1.00)
+fixture 73 note about deploy and redis with the lint step
+
+[verified] tags: error (strength=1.00)
+fixture 40 note about merge and cache with the retry step
+
+[verified] tags: error (strength=1.00)
+fixture 56 note about retry and cache with the merge step
+
+[verified] tags: error (strength=1.00)
+fixture 48 note about cache and cache with the cache step
+
+[verified] tags: t0 (strength=1.00)
+fixture 52 note about merge and cache with the retry step
+
+[verified] tags: error (strength=1.00)
+fixture 64 note about merge and cache with the retry step
+
+[verified] tags: t0 (strength=1.00)
+fixture 68 note about retry and cache with the merge step
+
+[verified] tags: error (strength=1.00)
+fixture 72 note about cache and cache with the cache step
+
+[verified] tags: t0 (strength=1.00)
+fixture 60 note about cache and cache with the cache step
+
+[verified] tags: t0 (strength=1.00)
+fixture 76 note about merge and cache with the retry step
+"
+`;
+
+exports[`request-path output on a fixed store > mcp hippo_learn skips texts the store already holds, including inside a merged row 1`] = `
+{
+  "added": [
+    "bump the redis client to the next minor",
+    "refresh the token before the queue worker retries",
+  ],
+  "out": "Git learn: 2 new, 2 duplicates skipped (scanned 7 days)",
+}
+`;
+
+exports[`request-path output on a fixed store > mcp hippo_peers {} 1`] = `
+"projB: 11 memories (latest: 2026-06-01)
+unknown: 10 memories (latest: 2026-05-31)
+proj0: 4 memories (latest: 2026-06-01)
+proj3: 3 memories (latest: 2026-05-31)
+proj1: 3 memories (latest: 2026-05-29)
+global-cli: 2 memories (latest: 2026-05-30)
+proj2: 2 memories (latest: 2026-05-27)"
+`;
+
+exports[`request-path output on a fixed store > mcp hippo_status {} 1`] = `
+"Memories: 76 (4 pinned, 10 errors)
+Avg strength: 0.62
+At risk (<0.1): 10
+Open conflicts: 0
+Half-life default: 365d"
+`;

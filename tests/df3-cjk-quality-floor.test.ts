@@ -16,9 +16,10 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { isContentWorthStoring } from '../src/audit.js';
-import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { isContentWorthStoring } from '../src/memory-quality.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { getContext, type Context } from '../src/api.js';
 
 function tmpHome() {
@@ -42,7 +43,7 @@ function tmpHome() {
 }
 
 function seed(home: string, content: string, opts: { created?: string } = {}) {
-  const entry = createMemory(content, { layer: Layer.Episodic, tenantId: 'default' });
+  const entry = createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, tenantId: 'default' });
   if (opts.created) entry.created = opts.created;
   writeEntry(home, entry);
   return entry;

@@ -1,6 +1,8 @@
 # Hippo Memory - OpenClaw Plugin
 
-Biologically-inspired memory for OpenClaw agents. Memories decay by default, retrieval strengthens them, errors stick longer, and sleep consolidation compresses episodes into patterns.
+Make your agent's memory work like a brain. Hippo is long-term memory for coding agents.
+
+Memories decay by default, retrieval strengthens them, errors stick longer, and sleep consolidation merges related episodes into one memory.
 
 ## Install
 
@@ -97,17 +99,17 @@ When `autoLearn` is enabled, the plugin captures tool errors as memories. To pre
 2. **Per-session rate limit.** Maximum 5 error memories per session. Prevents runaway error storms from flooding the store.
 3. **Per-session deduplication.** The same error from the same tool is only captured once per session, even if it fires repeatedly.
 
-Only genuinely novel, domain-specific errors make it through to `hippo remember`.
+Errors that pass these three filters are stored with `hippo remember`.
 
 ### How it differs from claude-mem
 
 | | Hippo | claude-mem |
 |---|---|---|
-| Decay | Yes, 7-day half-life | No, saves everything |
+| Decay | Yes, 365-day half-life by default | No, saves everything |
 | Retrieval strengthening | Yes | No |
 | Outcome feedback | Yes | No |
 | Cross-tool | Claude Code, Codex, Cursor, OpenClaw | Claude Code only |
-| API calls | Zero | Uses Claude API for compression |
+| API calls | None by default. If `ANTHROPIC_API_KEY` is set, `hippo sleep` sends memory text to Anthropic; `{"extraction":{"enabled":false}}` stops it | Uses Claude API for compression |
 | Token cost | ~1500 tokens/session (configurable) | Variable |
 | Memecoin | No | Yes ($CMEM on Solana) |
 

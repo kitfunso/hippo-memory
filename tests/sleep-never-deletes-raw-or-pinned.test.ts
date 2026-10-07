@@ -4,16 +4,20 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createMemory, Layer, type MemoryEntry } from '../src/memory.js';
-import {
-  initStore, writeEntry, readEntry, deleteEntry, loadAllEntries, loadAllDirtySummaries, batchWriteAndDelete,
-} from '../src/store.js';
-import { consolidate } from '../src/consolidate.js';
+import { Layer, type MemoryEntry } from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { readEntry, loadAllEntries } from '../src/store/entry-reads.js';
+import { deleteEntry, batchWriteAndDelete } from '../src/store/delete-and-batch.js';
+import { loadAllDirtySummaries } from '../src/store/summaries.js';
+import { consolidate } from '../src/consolidate/sleep.js';
 import { deduplicateStore } from '../src/dedupe.js';
 import { sleep, supersede, type Context } from '../src/api.js';
+import { runSleep } from '../src/api/sleep-run.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { queryAuditEvents } from '../src/audit.js';
-import { renderSleepResult } from '../src/cli.js';
+import { renderSleepResult } from '../src/cli/sleep.js';
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
 const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });
@@ -121,9 +125,8 @@ describe('H10: the sleep audit and dedup respect raw and pinned rows', () => {
     writeEntry(root, pinned);
     const staleIssue = { memoryId: pinned.id, content: 'nope', severity: 'error' as const, reason: 'too short' };
 
-    const result = await sleep(ctxFor(root), {
-      noShare: true,
-      __phases: { auditMemories: () => ({ total: 1, clean: 0, issues: [staleIssue] }) },
+    const result = await runSleep(ctxFor(root), { noShare: true }, {
+      auditMemories: () => ({ total: 1, clean: 0, issues: [staleIssue] }),
     });
 
     expect(readEntry(root, pinned.id)).not.toBeNull();

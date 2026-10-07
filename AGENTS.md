@@ -9,6 +9,7 @@
 ```bash
 npm run build
 npm test
+npm run test:eval   # the token-eval harness tests, which npm test skips
 npm run build:ui
 npm run build:all
 npm run smoke:pack
@@ -23,8 +24,11 @@ npm run smoke:openclaw-install
 - Do not commit generated `dist/` or UI build output unless the repo expects it for a release.
 - A PR's changelog entry goes in its own `changelog.d/<branch-with-dashes>.md`, never in `CHANGELOG.md`; the release commit folds them in (`changelog.d/README.md`).
 - CI fails when any oxlint rule's hit count rises above `.oxlint-baseline.json`. Fix new hits in the files you touch; after clearing old ones, `node scripts/check-lint-ratchet.mjs --update` and commit the lower baseline.
+- Comments say why, in one line. Ticket codes, versions, reviewer notes and dates go to docs or the git log; CI fails when a file's count of them rises above `.comment-history-baseline.json`. After rewriting old ones, `node scripts/check-comment-history.mjs --update` and commit the lower baseline.
+- No `src/` file over 800 lines and no function over 80. CI fails when a new one appears or one in `.size-baseline.json` grows; after shrinking old ones, `node scripts/check-size-ratchet.mjs --update` and commit the lower baseline.
 - An eval that reads host transcripts (`~/.claude/projects/*.jsonl`) copies its corpus outside the repo at registration and names the copy in the prereg: Claude Code deletes sessions after 30 days by default, so a live-path corpus cannot be re-run.
 - Use Hippo memory commands when useful, but do not store secrets.
+- The `compactions` table is one record per Claude Code compaction, not a memory row: recall, FTS, context and sleep's memory passes never read it. Memories saved from a compaction carry the `compaction-memory` tag and a `compaction:` source and fade like any other memory; a restated item is skipped, and another session's restatement strengthens the row it repeats. The keep rule (`KEEP_PAIRS` in `src/memory.ts`) covers imported agent memories only and needs tag and source both; `canAutoDelete` and `AUTO_DELETABLE_SQL` must change together. No automatic pass (sleep, dedupe, audit) deletes a memory that backs an object: `AUTOMATIC_DELETE_SQL` in `src/store/delete-and-batch.ts` checks every table in `MEMORY_BACKED_TABLES`.
 
 ## Never Do
 - Never store secrets, API keys, tokens, raw private emails, or sensitive personal data in Hippo memories.
@@ -42,19 +46,22 @@ hippo context --auto --budget 1500
 ```
 Read the output before writing any code.
 
-On errors or unexpected behaviour:
+On errors or unexpected behaviour, record it right then, while you work,
+never as a closing step:
 ```bash
 hippo remember "<description of what went wrong>" --error
 ```
 
-On task completion:
+When you learn something that should outlive this session (a decision and
+its reason, a user preference, a lesson), record it right then, while you
+work, never as a closing step. Leave out secrets and personal details:
 ```bash
-hippo outcome --good
+hippo remember "<what you learned and why>"
 ```
 
 When Hippo's Codex wrapper is installed, session-end capture runs automatically.
 If the wrapper is not installed, capture a brief summary manually:
 ```bash
-hippo capture --stdin <<< '<decisions, errors, lessons — 2-5 bullets>'
+hippo capture --stdin <<< '<decisions, errors, lessons: 2-5 bullets>'
 ```
 <!-- hippo:end -->

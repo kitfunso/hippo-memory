@@ -127,7 +127,7 @@ The prereg's table (What each verdict does to the paper), lane by lane. Quoted w
 5. **decay-off's trap row is not a decay effect.** decay-off leaves marked-wrong memories in the top five 20.2 pp more often (0.202 against 0.000) because it also turns off the wrongness penalty and the slow outcome channel (Caution flags). M3's null is about stale intrusion only, and the paper must not credit decay with the trap row.
 6. **Every hygiene number sits on a floor.** C2, C4, C5 and M1 each compare an arm at 0.000, which correct marks and a ±15% multiplier are enough to reach. E1 cannot say how much of that survives a `hippo outcome --bad` that marks a whole recall batch (NOT-DONE, noisy marks).
 7. **I ran an exploratory arm on verdict seeds before the batch finished** (Deviations 5). It read nothing and wrote only to its own directory, so the Provenance promise about opening files holds, but a cleaner run would have waited for `ALL-DONE`.
-8. **Nobody outside can check the run files yet.** The archive sits in the paper's private repository until the paper posts, and no one but the author has re-run E1 from the README (NOT-DONE).
+8. **Nobody outside can check the run files yet.** The archive sits in the paper's private repository until the paper posts, and no one but the author has re-run E1 from the README (NOT-DONE). A separate agent session has since rerun 28 of the runs from a fresh clone (Clean-room rerun); that tests the instructions, not the author.
 9. **M3's gate does not check what it says, and the null's cause is untested.** The gate (decay-off stale intrusion at least 0.20) was meant to show superseded versions in the top five for decay to remove (prereg, gates). But the stale measure counts any older version's token in the top five (`run.mjs:155-157`), and each updated fact has two lookalikes that paraphrase v1 with v1's token and can land in any of the 20 sessions (`generate.mjs:107`, `:257`, `:264-267`). Decay does not demote a late arrival. So the gate can pass on paraphrases alone, and the null may come from them, from the horizon (19 weeks is about 0.36 of a half-life), or from both. The paper gives M3's bound instead of a cause.
 10. **The drift's cause is not isolated.** 12 commits in `f3e916d..fcd432e`, merges included, touch `search.ts`, `memory.ts`, `ablation.ts` or `store.ts` (`git log --oneline f3e916d..fcd432e -- src/search.ts src/memory.ts src/ablation.ts src/store.ts`), and no lifecycle arm without the penalty ran on both builds. "Fits `e79d71b`" is the likeliest reading, not a tested one.
 11. **C1's non-inferiority clears its margin by 0.05 to 0.15 pp at 95%.** A percentile bootstrap over 20 seeds may give intervals that are too narrow (a hypothesis, untested), so the 95% reading is fragile. The 99% reading already fails, and the paper keeps it out of the abstract.
@@ -152,7 +152,7 @@ Every call behind a verdict, a gate or a diagnostic is printed verbatim, with it
 #!/usr/bin/env bash
 # The prereg's run command (04e1e6d), plus one exit-code line per run.
 unset ANTHROPIC_API_KEY OPENAI_API_KEY VOYAGE_API_KEY COHERE_API_KEY HIPPO_LLM_RERANKER_KEY TYPESAFE_API_KEY
-export W=C:/Users/skf_s/hippo-wt-r3run3 R=C:/Users/skf_s/hippo-mech-runs/r3
+export W=C:/Users/<user>/hippo-wt-r3run3 R=C:/Users/<user>/hippo-mech-runs/r3
 mkdir -p "$R" && { git -C "$W" rev-parse HEAD; git -C "$W" status --porcelain; node --version; } > "$R/build.txt"
 {
   for s in $(seq 121 140); do for a in full bm25-static bm25-outcome all-off outcome-off strengthen-off decay-off recency-off; do echo "main $a 365 $s"; done; done
@@ -169,8 +169,8 @@ The analysis script, run once after `ALL-DONE`, output to `raw`:
 # The prereg's analysis block (04e1e6d, prereg lines 219-240), run from an archive of the locked commit.
 # Ends with the post-lock check: gates from d91bd51 must print exactly what gates from 04e1e6d printed.
 S=<scratch directory>
-DOC=C:/Users/skf_s/hippo-wt-r3doc W=C:/Users/skf_s/hippo-wt-r3run3 R=C:/Users/skf_s/hippo-mech-runs/r3
-OLD=C:/Users/skf_s/hippo-mech-runs/r2/e1-am1/r2 LOCK=2026-09-28T12:30:36+01:00
+DOC=C:/Users/<user>/hippo-wt-r3doc W=C:/Users/<user>/hippo-wt-r3run3 R=C:/Users/<user>/hippo-mech-runs/r3
+OLD=C:/Users/<user>/hippo-mech-runs/r2/e1-am1/r2 LOCK=2026-09-28T12:30:36+01:00
 rm -rf "$S/lock04" && mkdir -p "$S/lock04" && git -C "$DOC" archive 04e1e6d scripts/e1-lifecycle scripts/lifecycle-stress | tar -x -C "$S/lock04"
 K="node $S/lock04/scripts/e1-lifecycle/confirm-check.mjs"
 C="node $W/scripts/e1-lifecycle/compare.mjs"
@@ -248,3 +248,31 @@ Paper changes are in `hippo-paper` commit `394948f`.
 - 7, accepted. Self-audit 10 records the 12 commits and that no arm without the penalty ran on both builds.
 - 8, accepted. The paragraph under the table gives the 0.05 to 0.15 pp clearance, and Self-audit 11 records it with the bootstrap hypothesis.
 - 9, accepted. The NOT-DONE row says the figure plots the exploratory 7-day arm and makes no claim from it, and Figure 1's caption says the same.
+
+## Clean-room rerun (added 2026-09-28)
+
+A separate agent session reran 28 of the 320 runs to test the instructions. Its brief gave it a fresh clone of this repository, `scripts/e1-lifecycle/README.md`, this document and the release archive (`e1-release-runs.tar.gz`), and let it write only inside its own folder.
+
+- **Runs:** seeds 121 to 123 for the eight main arms and seed 141 for the four `r4` arms, at `fcd432e`, installed and built in the fresh clone before the first run, through the launcher line in Commands: `--half-life 365`, a fresh `HIPPO_HOME` per run, the paid keys unset, 4 runs at a time. Node v24.13.0, the version the archive's `build.txt` records.
+- **Result:** all 28 files match the archive in every field except `meta.ranAt`, the time the run finished (`run.mjs:293`), so none is byte-identical. The session's comparison and a second one outside it agree (command below).
+- **Gaps in the instructions:** the README (`398af8a`) and this document came after `fcd432e`, so a checkout of the release holds neither, and the session read both from `master`. The README now says so.
+- **Not an outside check.** An agent session of the same model family ran it, from instructions the author wrote. It shows the README and the build are enough to reproduce the files; the rerun by another person stays in NOT-DONE.
+
+From the clean-room folder, with the new files in `r3/` and the archive extracted into `archive/r3/`:
+
+```bash
+python - <<'EOF'
+import json
+from pathlib import Path
+new, old = Path("r3"), Path("archive/r3")
+def body(p):
+    d = json.loads(p.read_bytes())
+    d["meta"].pop("ranAt")
+    return d
+files = sorted(f.relative_to(new) for f in new.rglob("*.json"))
+print(len(files), sum((new / f).read_bytes() == (old / f).read_bytes() for f in files),
+      sum(body(new / f) == body(old / f) for f in files))
+EOF
+```
+
+Output: `28 0 28` (files, byte-identical, identical without `meta.ranAt`).

@@ -236,6 +236,7 @@ function runHippo(args: readonly string[], cwd?: string): string {
       encoding: 'utf8',
       timeout: 30_000,
       stdio: ['pipe', 'pipe', 'pipe'],
+      windowsHide: true,
     });
     // `encoding: 'utf8'` above selects the ExecFileSyncOptionsWithStringEncoding
     // overload, so `result` is always a `string` here — no runtime check needed.

@@ -13,7 +13,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "hippo last-sleep 2>/dev/null || true",
+            "command": "hippo last-sleep || true",
             "timeout": 5
           }
         ]

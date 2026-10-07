@@ -14,6 +14,8 @@ export interface HandoffEvidence {
   gitRef?: string | null;
   dirtyTree?: boolean | null;
   testStatus?: 'pass' | 'fail' | 'unknown' | null;
+  /** 'transcript' when hippo read the handoff off the session's transcript at session end; a later exit may replace it. */
+  derivedFrom?: 'transcript';
 }
 
 /** Narrows an unvalidated value (e.g. CLI input or event content) to a HandoffOutcome. */
@@ -71,6 +73,7 @@ export function rowToSessionHandoff(row: SessionHandoffRow): SessionHandoff {
       artifacts = parsed.map((item) => String(item));
     }
   } catch {
+    // A corrupt column degrades to empty instead of hiding the whole handoff.
     artifacts = [];
   }
 
@@ -81,6 +84,7 @@ export function rowToSessionHandoff(row: SessionHandoffRow): SessionHandoff {
       constraints = parsed.map((item) => String(item));
     }
   } catch {
+    // Same degrade-to-empty rule as artifacts.
     constraints = [];
   }
 
@@ -89,6 +93,7 @@ export function rowToSessionHandoff(row: SessionHandoffRow): SessionHandoff {
     // SAFETY: catch below falls back to null on malformed JSON, so a wrong shape never escapes.
     evidence = row.evidence_json ? (JSON.parse(row.evidence_json) as HandoffEvidence) : null;
   } catch {
+    // Same degrade rule as artifacts: bad evidence reads as none.
     evidence = null;
   }
 

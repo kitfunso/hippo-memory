@@ -5,8 +5,9 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRequire } from 'module';
-import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { openHippoDb, closeHippoDb, getMeta } from '../src/db.js';
 
 const require = createRequire(import.meta.url);
@@ -61,7 +62,7 @@ describe('openHippoDb on an already-current store is write-free', () => {
 
   it('self-heal is intact: dropping memories_fts rebuilds and backfills it on reopen', () => {
     initStore(root);
-    const m = createMemory('fts self-heal probe content', { layer: Layer.Episodic });
+    const m = createMemory('fts self-heal probe content', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic });
     writeEntry(root, m);
 
     const db1 = openHippoDb(root);

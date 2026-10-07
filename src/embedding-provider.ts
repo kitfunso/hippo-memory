@@ -8,18 +8,15 @@
  * read their key from a conventional env var. The provider is selected by
  * `config.embeddings.provider` (default `'local'`).
  *
- * Design contract (see docs/plans/2026-06-08-b-pluggable-embedding-provider.md):
- *   - Local provider `id` is the BARE model string. (Historical note: this
- *     originally guaranteed NO identity change on upgrade; since the
- *     embed-text-format versioning in embeddings.ts (`embeddingIndexIdentity`,
- *     `${id}#t2`, docs/plans/2026-07-09-recall-determinism.md T1), the STORED
- *     identity carries a `#t<N>` suffix and pre-#t2 stores get exactly one
- *     forced reindex on their next embed-touching operation — deliberate,
- *     because their vectors were computed over path-contaminated text.)
+ * Design contract:
+ *   - Local provider `id` is the BARE model string; the STORED identity adds a `#t<N>`
+ *     embed-text-format suffix (`embeddingIndexIdentity`), so older stores reindex once:
+ *     their vectors were computed over path-contaminated text.
  *   - API provider `id` is `${kind}:${model}`; switching to/from an API embedder
  *     (or a dimension change) flips the identity and triggers the existing
  *     reindex-on-change path.
- *   - `resolveEmbeddingProvider` NEVER throws. `isAvailable()` is provider-aware
+ *   - `resolveEmbeddingProvider` throws on an invalid config (unknown provider,
+ *     bad apiBaseUrl); `embedMemory` turns that into a warning. `isAvailable()` is provider-aware
  *     (local -> dependency installed; api -> key present). `embed()` MAY throw on
  *     a hard transport/auth failure so a reindex can abort atomically; hot paths
  *     wrap it and fall back to BM25.
@@ -30,15 +27,19 @@
  * egress-blocked in the build sandbox).
  */
 
+import { envByName } from './env.js';
 import {
   type EmbeddingRole,
   getEmbedding,
   isEmbeddingAvailable,
+  requireLocalPipeline,
   resolveEmbeddingModel,
   DEFAULT_EMBEDDING_MODEL,
-} from './embeddings.js';
+} from './local-embedding.js';
 import { loadConfig } from './config.js';
-import { redactSecrets } from './secret-detect.js';
+import { redactSecretsStrict } from './secret-detect.js';
+import { fetchWithRetry } from './http-retry.js';
+import type { JsonValue } from './json.js';
 
 export type EmbeddingProviderKind = 'local' | 'openai' | 'voyage' | 'cohere';
 
@@ -89,8 +90,8 @@ class LocalEmbeddingProvider implements EmbeddingProvider {
     return this.enabled && isEmbeddingAvailable();
   }
   async embed(texts: string[], role?: EmbeddingRole): Promise<number[][]> {
-    // Sequential to preserve the historical single-pipeline behaviour and avoid
-    // contending the one cached pipeline instance with N concurrent calls.
+    // A model that cannot load fails the call, as an API outage does; items then run one at a time on the shared pipeline.
+    if (texts.length > 0) await requireLocalPipeline(this.model);
     const out: number[][] = [];
     for (const text of texts) {
       out.push(await getEmbedding(text, this.model, role));
@@ -102,11 +103,6 @@ class LocalEmbeddingProvider implements EmbeddingProvider {
 // ---------------------------------------------------------------------------
 // API providers — OpenAI / Voyage / Cohere over native fetch.
 // ---------------------------------------------------------------------------
-
-/** The full value space `JSON.parse` (via `resp.json()`) can produce. Keeps a
- *  vendor response's origin as unparsed external JSON visible in its type
- *  instead of collapsing it to `unknown`. */
-type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
 /** POST body for an embeddings request. Each provider's `buildBody` populates
  *  only the fields its API expects; the rest stay unset. */
@@ -229,12 +225,12 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
   }
 
   isAvailable(): boolean {
-    return this.enabled && !!process.env[this.keyEnv]?.trim();
+    return this.enabled && !!envByName(this.keyEnv)?.trim();
   }
 
   async embed(texts: string[], role?: EmbeddingRole): Promise<number[][]> {
     if (texts.length === 0) return [];
-    const key = process.env[this.keyEnv]?.trim();
+    const key = envByName(this.keyEnv)?.trim();
     if (!key) {
       // Hard, actionable failure — never includes a key value (there is none).
       throw new Error(
@@ -257,15 +253,14 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
     const url = `${this.baseUrl.replace(/\/$/, '')}/${spec.path}`;
     let resp: Response;
     try {
-      resp = await fetch(url, {
+      resp = await fetchWithRetry(url, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
           authorization: `Bearer ${key}`,
         },
-        body: JSON.stringify(spec.buildBody(this.model, chunk.map(redactSecrets), role)),
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-      });
+        body: JSON.stringify(spec.buildBody(this.model, chunk.map(redactSecretsStrict), role)),
+      }, { timeoutMs: REQUEST_TIMEOUT_MS });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       throw new Error(redact(`embedding request to ${this.kind} failed: ${msg}`, key));
@@ -326,6 +321,7 @@ function readEmbeddingsConfig(hippoRoot: string): EmbeddingsConfigValues {
   try {
     return loadConfig(hippoRoot).embeddings;
   } catch {
+    // An unreadable config falls back to provider defaults; loadConfig warns on a bad parse.
     return {};
   }
 }

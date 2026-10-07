@@ -367,7 +367,7 @@ A reviewer that did not build or run this campaign (a separate Claude Opus agent
 
 ### Critique, verbatim
 
-Method: read-only. Bare `:N` means a line of the result file. Besides reading the docs and source, I joined each E1 final-epoch probe row with `generateProtocol(seed)`. All 80 protocol hashes match. For each fact I counted the memories of its key that use its sentence template and are dated after its current version. Script: `node C:/Users/skf_s/AppData/Local/Temp/claude/C--Users-skf-s/3e8af126-85de-4c79-b53d-8f12f784993e/scratchpad/critic/strat.mjs`.
+Method: read-only. Bare `:N` means a line of the result file. Besides reading the docs and source, I joined each E1 final-epoch probe row with `generateProtocol(seed)`. All 80 protocol hashes match. For each fact I counted the memories of its key that use its sentence template and are dated after its current version. Script: `node C:/Users/<user>/AppData/Local/Temp/claude/C--Users-<user>/3e8af126-85de-4c79-b53d-8f12f784993e/scratchpad/critic/strat.mjs`.
 
 **1. WEAKENS A CLAIM. Attacks: the 365-day default proposal (:315). The L2 verdict itself stands.**
 - 365 was the longest half-life tried, and June's sweep was still rising there (prereg:143). At 365, decay with only one other mechanism does not beat all-off: .687 and .681 against .692 (:74-77). So "365 beats 7" is shown. "365 is the right value" is not.

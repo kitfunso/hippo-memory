@@ -1,5 +1,7 @@
 # E5 Lighthouse audit report — 2026-05-24
 
+> Note: private memory text and a home-directory tag in `2026-05-24-e5-lighthouse.json` were redacted on 2026-09-28; no score or count changed.
+
 **Episode:** `01KSDSXYT180T08V0WY73ECDHW`
 **Target build:** `ui-revamp-e5-a11y` branch tip, served via `hippo dashboard --port 3333`
 **Tool:** `lighthouse@13.3.0` via `npx lighthouse@latest`
@@ -82,7 +84,7 @@ input. v0.27 perf epic tracks 4 fixes above. Not blocking ship because:
 ## Reproducibility
 
 ```bash
-cd C:/Users/skf_s/hippo
+cd ~/hippo
 hippo dashboard --port 3333 &  # or already running
 npx lighthouse@latest http://localhost:3333 \
   --only-categories=accessibility,performance \

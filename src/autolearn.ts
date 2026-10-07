@@ -5,9 +5,11 @@
 
 import { execSync, execFileSync, spawn } from 'child_process';
 import { MemoryEntry, createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from './memory.js';
-import { loadAllEntries } from './store.js';
-import { textOverlap } from './search.js';
-import { isContentWorthStoring } from './audit.js';
+import { loadAllEntries } from './store/entry-reads.js';
+import { textOverlap } from './tokenize.js';
+import { assessAutomaticMemory } from './memory-quality.js';
+import { redactSecretsStrict } from './secret-detect.js';
+import { log } from './log.js';
 
 /** A memory of a failed command, "Command '<cmd>' failed: <truncated stderr>"; no store is in reach, so `hippo watch` re-derives its half-life from the store's config. */
 export function captureError(
@@ -17,11 +19,12 @@ export function captureError(
   tenantId?: string,
 ): MemoryEntry {
   // Truncate to first 500 chars to avoid storing megabytes of build logs
-  const wasTruncated = stderr.length > 500;
-  const truncated = stderr.slice(0, 500).trim();
+  const clean = redactSecretsStrict(stderr);
+  const wasTruncated = clean.length > 500;
+  const truncated = clean.slice(0, 500).trim();
   const suffix = wasTruncated ? ' [truncated]' : '';
   // Strip leading env var assignments (KEY=val or key=val) before the actual command name
-  const safeCmd = command.replace(/^([A-Za-z_][A-Za-z0-9_]*=\S+\s+)+/, '').trim() || '(redacted)';
+  const safeCmd = redactSecretsStrict(command.replace(/^([A-Za-z_][A-Za-z0-9_]*=\S+\s+)+/, '').trim()) || '(redacted)';
   const content = `Command '${safeCmd}' failed (exit ${exitCode}): ${truncated}${suffix}`;
 
   // Derive a sanitized tag from the command name (first word, strip path)
@@ -93,13 +96,13 @@ export function extractLessons(gitLog: string, customPatterns?: string[]): strin
  * steps: this function is the write-path gate, called by each caller that
  * actually stores a lesson, not by the parser itself.
  *
- * Order is preserved in both output arrays.
+ * Order is preserved in both output arrays; both hold lessons with secret shapes redacted.
  */
 export function partitionLessons(lessons: string[]): { kept: string[]; dropped: string[] } {
   const kept: string[] = [];
   const dropped: string[] = [];
-  for (const lesson of lessons) {
-    if (isContentWorthStoring(lesson)) {
+  for (const lesson of lessons.map((l) => redactSecretsStrict(l))) {
+    if (assessAutomaticMemory(lesson).accepted) {
       kept.push(lesson);
     } else {
       dropped.push(lesson);
@@ -112,7 +115,7 @@ export function partitionLessons(lessons: string[]): { kept: string[]; dropped: 
  * Check if a substantially similar memory already exists.
  * Returns true if overlap > threshold (default 0.7).
  *
- * L9: `tenantId` is opt-in. Only takes effect when the first argument is a
+ * `tenantId` is opt-in. Only takes effect when the first argument is a
  * root string (string-overload path). When the first argument is a
  * pre-loaded MemoryEntry[], the caller has already scoped — tenantId is
  * ignored on that path.
@@ -142,7 +145,7 @@ export function deduplicateLesson(
 export function runWatched(command: string): Promise<{ exitCode: number; stderr: string }> {
   return new Promise((resolve) => {
     // Use shell: true so the command string is handled by the shell as-is
-    const child = spawn(command, { shell: true, stdio: ['inherit', 'inherit', 'pipe'] });
+    const child = spawn(command, { shell: true, stdio: ['inherit', 'inherit', 'pipe'], windowsHide: true });
 
     const stderrChunks: Buffer[] = [];
 
@@ -175,9 +178,11 @@ export function isGitRepo(cwd: string): boolean {
       cwd,
       timeout: 10000,
       stdio: ['ignore', 'pipe', 'ignore'],
+      windowsHide: true,
     });
     return raw.trim() === 'true';
-  } catch {
+  } catch (err) {
+    log.debug(`autolearn: not a git repo: ${err instanceof Error ? err.message : String(err)}`);
     return false;
   }
 }
@@ -190,9 +195,10 @@ export function fetchGitLog(cwd: string, days: number): string {
   try {
     const raw = execFileSync('git', [
       'log', `--since=${days} days ago`, '--pretty=format:%s',
-    ], { encoding: 'utf8', cwd, timeout: 10000, stdio: ['pipe', 'pipe', 'pipe'] });
+    ], { encoding: 'utf8', cwd, timeout: 10000, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
     return raw;
-  } catch {
+  } catch (err) {
+    log.debug(`autolearn: git log unavailable: ${err instanceof Error ? err.message : String(err)}`);
     return '';
   }
 }

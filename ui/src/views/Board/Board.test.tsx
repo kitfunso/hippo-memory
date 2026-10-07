@@ -68,7 +68,7 @@ function makeDetail(card: Card, overrides: Partial<CardDetail> = {}): CardDetail
 
 function renderBoard(router: ReturnType<typeof createRouter>) {
   vi.stubGlobal("fetch", router.fetchStub);
-  return render(<Board viewSwitch={<div />} />);
+  return render(<Board />);
 }
 
 describe("Board", () => {
@@ -263,7 +263,7 @@ describe("Board", () => {
     await waitFor(() => expect(within(dialog).queryByRole("alert")).not.toBeInTheDocument());
   });
 
-  it("B13: the dialog panel starts under the 48px board bar", async () => {
+  it("B13: the dialog panel starts under the 44px board toolbar", async () => {
     const router = createRouter();
     const card = makeCard({ id: "card_1", title: "Panel offset" });
     router.queue("/api/cards", { status: 200, body: { cards: [card] } });
@@ -274,7 +274,7 @@ describe("Board", () => {
     fireEvent.click(tile);
     const dialog = await screen.findByRole("dialog", { name: "Card details" });
 
-    expect(dialog).toHaveStyle({ top: "48px" });
+    expect(dialog).toHaveStyle({ top: "44px" });
   });
 
   it("B14: a failed first detail load shows an alert in the dialog", async () => {
@@ -313,7 +313,8 @@ describe("Board", () => {
     expect(count).toHaveClass("bar-live");
     expect(count).not.toHaveClass("bar-decorative");
     expect(count).toHaveAttribute("aria-live", "polite");
-    expect(screen.getByText("brain observatory")).toHaveClass("bar-decorative");
+    expect(screen.queryByText("brain observatory")).toBeNull();
+    expect(within(count.parentElement ?? document.body).queryByText("hippo")).toBeNull();
   });
 
   it("B11: two refreshes where the first response resolves last shows the second response", async () => {

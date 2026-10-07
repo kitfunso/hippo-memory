@@ -111,8 +111,8 @@
       "description": "data provenance rule"
     },
     {
-      "id": "quantamental-cta-split",
-      "query": "Quantamental and CTA are independent pipelines",
+      "id": "project-e-cta-split",
+      "query": "project-e and CTA are independent pipelines",
       "expectedIds": [
         "mem_5aad3e052b87"
       ],

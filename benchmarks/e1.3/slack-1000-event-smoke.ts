@@ -15,7 +15,7 @@
  */
 
 import { ingestMessage } from '../../src/connectors/slack/ingest.js';
-import { loadAllEntries } from '../../src/store.js';
+import { loadAllEntries } from '../../src/store/entry-reads.js';
 import { adminActor } from '../../src/api.js';
 
 export interface SmokeOpts {
@@ -92,7 +92,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const { mkdtempSync, rmSync } = await import('fs');
   const { tmpdir } = await import('os');
   const { join } = await import('path');
-  const { initStore } = await import('../../src/store.js');
+  const { initStore } = await import('../../src/store/open.js');
 
   const root = mkdtempSync(join(tmpdir(), 'hippo-slack-smoke-cli-'));
   try {

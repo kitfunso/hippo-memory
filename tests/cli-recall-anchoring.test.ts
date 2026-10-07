@@ -22,13 +22,13 @@ const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 describe('cli.ts cmdRecall J1 anchoring wire-up (structural guard)', () => {
   let cliText: string;
 
-  it('reads cli.ts (anchor for the rest of the tests)', () => {
-    cliText = readFileSync(join(repoRoot, 'src/cli.ts'), 'utf8');
+  it('reads the recall verb module (anchor for the rest of the tests)', () => {
+    cliText = readFileSync(join(repoRoot, 'src/cli/recall.ts'), 'utf8');
     expect(cliText.length).toBeGreaterThan(0);
   });
 
   it('imports the J1 helpers from recall-history', () => {
-    expect(cliText).toContain("from './recall-history.js'");
+    expect(cliText).toContain("from '../recall-history.js'");
     expect(cliText).toContain('detectAnchoring');
     expect(cliText).toContain('hashQueryText');
     expect(cliText).toContain('buildSessionKey');
@@ -48,7 +48,7 @@ describe('cli.ts cmdRecall J1 anchoring wire-up (structural guard)', () => {
   it('gates the detector behind HIPPO_ANCHORING env knob (zero-work when off)', () => {
     // Lock that the env check happens BEFORE the ring lookup so the
     // off path truly costs zero work.
-    expect(cliText).toContain("process.env.HIPPO_ANCHORING !== 'off'");
+    expect(cliText).toContain("biasHintEnabled('anchoring')");
   });
 
   it('uses buildSessionKey (not colon string-concat) for the ring key', () => {
@@ -58,15 +58,16 @@ describe('cli.ts cmdRecall J1 anchoring wire-up (structural guard)', () => {
   });
 
   it('bumps cmdSuppressionSummary.suppressedByInterference on R2', () => {
-    expect(cliText).toMatch(/cmdSuppressedByInterference\s*=\s*cmdAnchoringHint\?\.reason\s*===\s*['"]memory_dominance['"]\s*\?\s*1\s*:\s*0/);
+    expect(cliText).toMatch(/suppressedByInterference:\s*anchoring\?\.reason\s*===\s*['"]memory_dominance['"]\s*\?\s*1\s*:\s*0/);
   });
 
   it('renders the anchoring hint line above the result list', () => {
-    expect(cliText).toContain('[anchored_on: ${cmdAnchoringHint.memoryId}]');
+    expect(cliText).toContain('[anchored_on: ${h.anchoring.memoryId}]');
+    expect(cliText.indexOf('[anchored_on: ${h.anchoring.memoryId}]')).toBeLessThan(cliText.indexOf('console.log(recallHeading('));
   });
 
   it('appends to the ring AFTER detect with anchoredOn from the hint (cooldown feed)', () => {
-    expect(cliText).toMatch(/appendRecall\(ring,\s*queryHash,\s*topId,\s*cmdAnchoringHint\?\.memoryId\)/);
+    expect(cliText).toMatch(/appendRecall\(anchorRing,\s*queryHash,\s*results\[0\]\?\.entry\.id \?\? null,\s*cmdAnchoringHint\?\.memoryId\)/);
   });
 
   it('emits recall_anchor_skipped_no_session telemetry when sessionId absent', () => {

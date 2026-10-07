@@ -20,8 +20,13 @@ import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, getSchemaVersion } from '../src/db.js';
-import { initStore, writeEntry, readEntry, loadAllEntries, rebuildIndex, appendSessionEvent } from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { initStore } from '../src/store/open.js';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { readEntry, loadAllEntries } from '../src/store/entry-reads.js';
+import { rebuildIndex } from '../src/store/index-and-stats.js';
+import { appendSessionEvent } from '../src/store/sessions.js';
+import { Layer} from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
 import { queryAuditEvents } from '../src/audit.js';
 import {
   RejectedValueError,
@@ -30,11 +35,12 @@ import {
   insertRejectedValue,
   findRejectedValue,
 } from '../src/rejection.js';
-import { cmdCapture } from '../src/capture.js';
+import { cmdCapture } from '../src/capture/command.js';
 import { syncGlobalToLocal, autoShare } from '../src/shared.js';
 import * as api from '../src/api.js';
-import { consolidate } from '../src/consolidate.js';
-import { importEntries } from '../src/importers.js';
+import { consolidate } from '../src/consolidate/sleep.js';
+import { importEntries } from '../src/importers/core.js';
+import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 
 function tmpHome(prefix: string = 'hippo-rejection-acceptance-'): string {
   return mkdtempSync(join(tmpdir(), prefix));
@@ -171,7 +177,7 @@ describe('AT1 case 3: copy-path refusal (syncGlobalToLocal)', () => {
       // mockRestore() (unlike a bare unspy) also clears recorded call
       // history, so every assertion against errorSpy must run BEFORE it —
       // restore happens last, after the spy has served its purpose.
-      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const errorSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
       const count = syncGlobalToLocal(localRoot, globalRoot);
       expect(count).toBe(2); // siblings only — Z was skipped, not counted as copied
 
@@ -261,7 +267,7 @@ describe('AT1 case 5: migration v41 idempotence', () => {
 
       const db1 = openHippoDb(home);
       try {
-        expect(getSchemaVersion(db1)).toBe(48);
+        expect(getSchemaVersion(db1)).toBe(LATEST_SCHEMA_VERSION);
         insertRejectedValue(db1, {
           tenantId: 'default',
           digest,
@@ -279,7 +285,7 @@ describe('AT1 case 5: migration v41 idempotence', () => {
       // skipped — a no-op that must not disturb existing data.
       const db2 = openHippoDb(home);
       try {
-        expect(getSchemaVersion(db2)).toBe(48);
+        expect(getSchemaVersion(db2)).toBe(LATEST_SCHEMA_VERSION);
         const row = findRejectedValue(db2, 'default', digest);
         expect(row).not.toBeNull();
         expect(row!.reason).toBe('idempotence check');
@@ -299,7 +305,7 @@ describe('AT1 case 5: migration v41 idempotence', () => {
       let minCompatBefore: string | undefined;
       const db1 = openHippoDb(home);
       try {
-        expect(getSchemaVersion(db1)).toBe(48);
+        expect(getSchemaVersion(db1)).toBe(LATEST_SCHEMA_VERSION);
         // SAFETY: row's shape matches the single `value` column named in
         // the SELECT above.
         minCompatBefore = (
@@ -319,7 +325,7 @@ describe('AT1 case 5: migration v41 idempotence', () => {
 
       const db2 = openHippoDb(home); // re-open re-runs runMigrations
       try {
-        expect(getSchemaVersion(db2)).toBe(48);
+        expect(getSchemaVersion(db2)).toBe(LATEST_SCHEMA_VERSION);
         expect(() =>
           insertRejectedValue(db2, {
             tenantId: 'default',
@@ -390,16 +396,16 @@ describe('AT1 consolidation-loop fix: merge tombstone check', () => {
       // "sources not demoted" half_life_days assertion below.
       writeFileSync(join(home, 'config.json'), JSON.stringify({ replay: { count: 0 } }), 'utf8');
 
-      // longText is the longer of the two, so mergeContents' length-sort
-      // deterministically picks it as the 2-entry merge base.
+      // longText is the newer of the two, so mergeContents' newest-first
+      // sort deterministically puts it first in the 2-entry merge.
       const shortText = 'migrate the billing database before the next release window';
       const longText = 'migrate the billing database before the next release window with full backups enabled';
-      const e1 = createMemory(shortText, { layer: Layer.Episodic });
+      const e1 = { ...createMemory(shortText, { layer: Layer.Episodic }), created: new Date(Date.now() - 60_000).toISOString() };
       const e2 = createMemory(longText, { layer: Layer.Episodic });
       writeEntry(home, e1);
       writeEntry(home, e2);
 
-      const mergedContent = `[Consolidated from 2 related memories]\n\n${longText}`;
+      const mergedContent = `[Consolidated from 2 related memories, newest first]\n\n- ${longText}\n- ${shortText}`;
       const mergedDigest = rejectionDigest(mergedContent);
       const db = openHippoDb(home);
       try {
@@ -415,7 +421,7 @@ describe('AT1 consolidation-loop fix: merge tombstone check', () => {
         closeHippoDb(db);
       }
 
-      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const errorSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
       const result = await consolidate(home, { dryRun: false });
       expect(errorSpy).toHaveBeenCalledWith(
         expect.stringContaining('skipped 1 merge(s) whose content matches a rejected value'),
@@ -550,7 +556,7 @@ describe('AT1 codex-P1 fix 1: auto-promoted trace tombstone check', () => {
       api.reject(ctx(home), { memoryId: traceBefore!.id, reason: 'trace content was wrong' });
       expect(readEntry(home, traceBefore!.id)).toBeNull();
 
-      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const errorSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
       const secondResult = await consolidate(home, { now: new Date() });
       expect(errorSpy).toHaveBeenCalledWith(
         expect.stringContaining('skipped 1 auto-promoted trace'),
@@ -590,12 +596,12 @@ describe('AT1 codex-P1 fix 2: merge tombstone check uses the destination tenant'
 
       const shortText = 'rotate the staging tls certificates before expiry';
       const longText = 'rotate the staging tls certificates before expiry and notify the on-call channel';
-      const e1 = createMemory(shortText, { layer: Layer.Episodic, tenantId: 'tenant-a' });
+      const e1 = { ...createMemory(shortText, { layer: Layer.Episodic, tenantId: 'tenant-a' }), created: new Date(Date.now() - 60_000).toISOString() };
       const e2 = createMemory(longText, { layer: Layer.Episodic, tenantId: 'tenant-a' });
       writeEntry(home, e1);
       writeEntry(home, e2);
 
-      const mergedContent = `[Consolidated from 2 related memories]\n\n${longText}`;
+      const mergedContent = `[Consolidated from 2 related memories, newest first]\n\n- ${longText}\n- ${shortText}`;
       const mergedDigest = rejectionDigest(mergedContent);
 
       // Tombstone lives in 'tenant-a' — the cluster's own tenant, and (post
@@ -614,7 +620,7 @@ describe('AT1 codex-P1 fix 2: merge tombstone check uses the destination tenant'
         closeHippoDb(db);
       }
 
-      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const errorSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
       const result = await consolidate(home, { dryRun: false });
       expect(errorSpy).toHaveBeenCalledWith(
         expect.stringContaining('skipped 1 merge(s) whose content matches a rejected value'),
@@ -645,12 +651,12 @@ describe('AT1 codex-P1 fix 2: merge tombstone check uses the destination tenant'
 
       const shortText = 'archive the quarterly billing export before cleanup';
       const longText = 'archive the quarterly billing export before cleanup and confirm checksum';
-      const e1 = createMemory(shortText, { layer: Layer.Episodic, tenantId: 'tenant-a' });
+      const e1 = { ...createMemory(shortText, { layer: Layer.Episodic, tenantId: 'tenant-a' }), created: new Date(Date.now() - 60_000).toISOString() };
       const e2 = createMemory(longText, { layer: Layer.Episodic, tenantId: 'tenant-a' });
       writeEntry(home, e1);
       writeEntry(home, e2);
 
-      const mergedContent = `[Consolidated from 2 related memories]\n\n${longText}`;
+      const mergedContent = `[Consolidated from 2 related memories, newest first]\n\n- ${longText}\n- ${shortText}`;
       const mergedDigest = rejectionDigest(mergedContent);
 
       // Tombstone lives in an unrelated tenant ('default') — the write now
@@ -708,7 +714,7 @@ describe('AT1 codex-P1 fix 3: autoShare per-candidate rejection containment', ()
       api.reject(ctx(globalRoot), { value: rejectedContent, reason: 'must not be shared globally' });
 
       const stats = { secretSkipped: 0, rejectedSkipped: 0 };
-      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const errorSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
       const shared = autoShare(localRoot, { minScore: 0, stats });
       expect(errorSpy).toHaveBeenCalledWith(
         expect.stringContaining('skipped 1 candidate(s) refused'),

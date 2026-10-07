@@ -1,15 +1,17 @@
+import { envJevModel, envJevTimeoutMs, envTypesafeApiKey } from '../env.js';
 import { crossEncoderReranker } from './cross-encoder.js';
 import type { RerankerFn, RerankResult, RerankerOptions } from './types.js';
-import type { SearchResult } from '../search.js';
-import { redactSecrets } from '../secret-detect.js';
+import type { SearchResult } from '../search/types.js';
+import { redactSecretsStrict } from '../secret-detect.js';
+import { log } from '../log.js';
 
 const ENDPOINT = 'https://api.typesafe.ai/v1/systemone';
 const DEFAULT_TIMEOUT_MS = 5_000;
 const TRUNCATE_CHARS = 1200;
-// Pinned, not `jev-latest`: every number in docs/evals/2026-09-19-jev-reranker.md was
-// measured on this version, and the alias moves whenever the vendor ships a release.
+// Pinned, not `jev-latest`: the eval numbers were measured on this version,
+// and the alias moves whenever the vendor ships a release.
 const DEFAULT_MODEL = 'jev-1.13.0';
-// The pool size every number in docs/evals/2026-09-19-jev-reranker.md was measured at.
+// The pool size the eval numbers were measured at.
 export const JEV_DEFAULT_TOP_K = 40;
 
 interface JevAnswer {
@@ -38,23 +40,35 @@ function parseScores(answers: Record<string, JevAnswer> | undefined, n: number):
   return out;
 }
 
-/** One batched request for the whole candidate list. Rejects with the reason when there are no usable scores. */
-async function requestScores(query: string, head: SearchResult[]): Promise<number[]> {
-  const key = process.env.TYPESAFE_API_KEY;
-  if (!key) throw new Error('TYPESAFE_API_KEY not set');
+/** The System One `state` and one `noul` question per candidate (`c1`..`cN`). */
+export interface RelevanceRequest {
+  state: string;
+  questions: Record<string, { type: 'noul'; instructions: string }>;
+}
 
-  const lines = head.map((r, i) => `[${i + 1}] ${truncate(redactSecrets(r.entry.content), TRUNCATE_CHARS)}`);
-  const state = `Query: ${redactSecrets(query)}\n\nNumbered candidate memories from an AI coding agent's project store:\n\n${lines.join('\n\n')}`;
-  const questions: Record<string, { type: string; instructions: string }> = {};
+/** Redacted query plus numbered, redacted, truncated candidates. Shared with CLEF so both arms see matched input. */
+export function buildRelevanceRequest(query: string, head: readonly SearchResult[]): RelevanceRequest {
+  // Strict: this text leaves the machine, so Bearer, Basic-auth and JWT shapes go too.
+  const lines = head.map((r, i) => `[${i + 1}] ${truncate(redactSecretsStrict(r.entry.content), TRUNCATE_CHARS)}`);
+  const state = `Query: ${redactSecretsStrict(query)}\n\nNumbered candidate memories from an AI coding agent's project store:\n\n${lines.join('\n\n')}`;
+  const questions: RelevanceRequest['questions'] = {};
   for (let i = 1; i <= head.length; i++) {
     questions[`c${i}`] = {
       type: 'noul',
       instructions: `Probability that candidate ${i} (numbered in the state above) helps answer the query.`,
     };
   }
+  return { state, questions };
+}
 
-  const parsed = Number.parseInt(process.env.HIPPO_JEV_TIMEOUT_MS ?? '', 10);
-  const timeoutMs = parsed > 0 ? parsed : DEFAULT_TIMEOUT_MS;
+/** One batched request for the whole candidate list. Rejects with the reason when there are no usable scores. */
+async function requestScores(query: string, head: SearchResult[]): Promise<number[]> {
+  const key = envTypesafeApiKey();
+  if (!key) throw new Error('TYPESAFE_API_KEY not set');
+
+  const { state, questions } = buildRelevanceRequest(query, head);
+
+  const timeoutMs = envJevTimeoutMs() ?? DEFAULT_TIMEOUT_MS;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -63,7 +77,7 @@ async function requestScores(query: string, head: SearchResult[]): Promise<numbe
       headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
       body: JSON.stringify({
         state,
-        model: process.env.HIPPO_JEV_MODEL ?? DEFAULT_MODEL,
+        model: envJevModel() ?? DEFAULT_MODEL,
         questions,
       }),
       signal: controller.signal,
@@ -104,29 +118,31 @@ export function createJevReranker(localFallback: RerankerFn): RerankerFn {
       if (!warned) {
         warned = true;
         const reason = err instanceof Error ? err.message : 'unknown error';
-        // eslint-disable-next-line no-console
-        console.warn(
-          `[hippo] jev reranker unavailable (${reason}); falling back to the local cross-encoder. Subsequent calls will not repeat this warning.`,
+        log.warn(
+          `jev reranker unavailable (${reason}); falling back to the local cross-encoder. Subsequent calls will not repeat this warning.`,
         );
       }
       return localFallback(query, head, options);
     }
 
-    const scored = head.map((r, i) => ({
-      ...r,
-      rerankScore: scores[i],
-      preRerankRank: r.preRerankRank ?? i + 1,
-      postRerankRank: 0,
-    }));
-
-    // Stable sort: ties fall back to the prior relevance order.
-    scored.sort((a, b) => b.rerankScore - a.rerankScore);
-    scored.forEach((r, i) => (r.postRerankRank = i + 1));
-    return scored;
+    return rankByScores(head, scores);
   };
 }
 
+/** Orders `head` by `scores[i]`, keeping any upstream pre-rerank rank. Shared with CLEF. */
+export function rankByScores(head: readonly SearchResult[], scores: readonly number[]): RerankResult[] {
+  const scored = head.map((r, i) => ({
+    ...r,
+    rerankScore: scores[i],
+    preRerankRank: r.preRerankRank ?? i + 1,
+    postRerankRank: 0,
+  }));
+  // Stable sort: ties fall back to the prior relevance order.
+  scored.sort((a, b) => b.rerankScore - a.rerankScore);
+  scored.forEach((r, i) => (r.postRerankRank = i + 1));
+  return scored;
+}
+
 /** Track 4 reranker: hosted TypeSafe Jev, opt-in and paid (TYPESAFE_API_KEY), one batched call per recall.
- *  Any failure warns once and delegates to the local cross-encoder. Scores are not bit-stable run to run.
- *  Cost, env vars, evidence and limits: docs/evals/2026-09-19-jev-reranker.md. */
+ *  Any failure warns once and delegates to the local cross-encoder. Scores are not bit-stable run to run. */
 export const jevReranker: RerankerFn = createJevReranker(crossEncoderReranker);

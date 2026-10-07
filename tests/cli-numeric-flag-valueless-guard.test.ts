@@ -87,6 +87,12 @@ describe('global numeric-flag value-less/non-numeric guard - exit-1 cases', () =
 
   // Pins the GLOBAL semantics: cmdStatus takes no flags at all (mirrors the
   // --scope test's status case), yet the guard still exits 1 pre-dispatch.
+  it.each(['0', '2.5'])('recall --reranker-top-k %s exits 1, since a slice would quietly drop candidates', (value) => {
+    const res = hippoRun(home, env, 'recall', 'some query', '--reranker', 'clef-flash', '--reranker-top-k', value);
+    expect(res.status).toBe(1);
+    expect(res.stderr).toContain('Must be a positive integer');
+  });
+
   it('status (a command that reads none of the twelve): value-less --limit still exits 1', () => {
     const res = hippoRun(home, env, 'status', '--limit');
     expect(res.status).toBe(1);
@@ -121,8 +127,8 @@ describe('refine --limit: the paid-API-runaway pin', () => {
 describe('dedup --threshold: the no-undo data-loss pin', () => {
   let home: string;
   let env: GuardEnv;
-  // Deliberately NOT near-duplicates: dedupe.ts only deletes a pair whose
-  // similarity exceeds the threshold, so a NaN threshold is the only way in.
+  // Deliberately different texts: dedup removes only copies of the same text,
+  // so a bad --threshold value must fail loud and delete nothing.
   const CONTENT_A = 'The quarterly budget review meeting moved to Thursday afternoon.';
   const CONTENT_B = 'Bananas are a good source of potassium and dietary fiber.';
 

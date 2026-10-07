@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>hippo round 6 holo</title>
+<link href="https://fonts.googleapis.com/css2?family=Martian+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>html,body{margin:0;background:#0b0f0c}canvas{display:block}</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}</script>
+<body>
+<script type="module">
+import * as THREE from 'three';
+import { createScene } from './scene.js';
+
+const q = Object.fromEntries(new URLSearchParams(location.search));
+const SIZE = +(q.size || 1024);
+const alpha = q.bg === 'none';
+const renderer = new THREE.WebGLRenderer({ antialias: alpha || q.mode === 'icon', preserveDrawingBuffer: true, alpha, premultipliedAlpha: false });
+renderer.setPixelRatio(1);
+renderer.setSize(SIZE, SIZE);
+document.body.appendChild(renderer.domElement);
+
+try {
+  await Promise.all([document.fonts.load('700 64px "Martian Mono"'), document.fonts.load('400 32px "Martian Mono"')]);
+  const { render } = await createScene(renderer, SIZE, q);
+  let frames = 0;
+  const tick = () => { render(); if (++frames < 3) requestAnimationFrame(tick); else window.__done = true; };
+  tick();
+} catch (e) {
+  console.error('scene failed:', e.stack || e);
+  window.__done = true;
+}
+</script>
+</body></html>

@@ -3,7 +3,7 @@
  * E3.3 graph-on-consolidated guard - criterion 2 (CI-level enforcement).
  *
  * The graph layer (entities / relations / graph_extraction_queue) must only ever be
- * written through the single audited writer `src/graph.ts`, whose
+ * written through the single audited writer `src/graph/write.ts`, whose
  * `resolveConsolidatedSource` guard + the v37 DB triggers make a raw-layer reference
  * unrepresentable. This lint enforces the architectural invariant at PR/CI time as
  * defense-in-depth on top of the runtime DB guard: it fails if any other source file
@@ -44,9 +44,9 @@ const WRITE_RE = new RegExp(
   'gi',
 );
 /** The one sanctioned writer, as a path RELATIVE TO srcDir (exact, not basename): a
- *  hypothetical `src/sub/graph.ts` is NOT the sanctioned writer and must be linted
+ *  hypothetical `src/sub/graph/write.ts` is NOT the sanctioned writer and must be linted
  *  (codex-review 2026-06-01, P2). */
-const SANCTIONED_REL = 'graph.ts';
+const SANCTIONED_REL = 'graph/write.ts';
 
 /**
  * Blank out comments (block `/* *​/` and line `//`) by replacing their characters with
@@ -73,7 +73,7 @@ function walk(dir, onFile) {
 
 /**
  * Scan `srcDir` for graph-table DATA writes outside the sanctioned writer
- * (`<srcDir>/graph.ts`). Catches multi-line writes; ignores comments + DDL.
+ * (`<srcDir>/graph/write.ts`). Catches multi-line writes; ignores comments + DDL.
  * Returns `[{ file, line, text }]` (empty when clean).
  */
 export function findGraphWriteViolations(srcDir) {
@@ -110,7 +110,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       console.error(`  ${v.file}:${v.line}: ${v.text}`);
     }
     console.error('');
-    console.error('Fix: route the write through src/graph.ts (insertEntity / insertRelation /');
+    console.error('Fix: route the write through src/graph/write.ts (insertEntity / insertRelation /');
     console.error('enqueueExtraction), which applies the consolidated-source guard. The graph must');
     console.error('never index the raw layer (ROADMAP-RESEARCH E3.3).');
     console.error('');

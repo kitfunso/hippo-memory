@@ -1,26 +1,18 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore } from '../src/store.js';
+import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { createApiKey, revokeApiKey } from '../src/auth.js';
 import { queryAuditEvents } from '../src/audit.js';
 import { serve, type ServerHandle, isLoopback } from '../src/server.js';
 import type { RememberResult } from '../src/api.js';
+import { presentConnectionsAsRemote } from './_helpers/listen.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 async function jsonAs<T>(res: Response): Promise<T> {
   // SAFETY: T is pinned by each call site to the exact JSON envelope the
   // route handler (src/server.ts) returns for that request; every call
   // site asserts the specific fields it reads immediately after this call.
   return res.json() as Promise<T>;
-}
-
-function makeRoot(): string {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-srv-auth-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
 }
 
 describe('isLoopback helper', () => {
@@ -68,8 +60,8 @@ describe('server auth middleware', () => {
   let handle: ServerHandle;
 
   beforeEach(async () => {
-    home = makeRoot();
-    globalHome = makeRoot();
+    home = makeRoot('srv-auth');
+    globalHome = makeRoot('srv-auth');
     originalHippoHome = process.env.HIPPO_HOME;
     process.env.HIPPO_HOME = globalHome;
     handle = await serve({ hippoRoot: home, port: 0 });
@@ -221,15 +213,67 @@ describe('server auth middleware', () => {
     const body = await jsonAs<{ ok: boolean }>(res);
     expect(body.ok).toBe(true);
   });
+});
 
-  // Integration-test of "non-loopback request without auth → 401" requires
-  // binding the server to a non-loopback interface, which is fragile across
-  // CI/dev machines (NIC presence, firewall, OS dual-stack behaviour). The
-  // unit test in `describe('isLoopback helper')` above covers the address
-  // classification side; this skipped block documents what the full
-  // round-trip would look like once we have a stable test fixture.
-  it.skip('non-loopback no-auth: 401 (skipped - requires real network interface)', async () => {
-    // Would require: serve({ hippoRoot, host: '0.0.0.0' }) plus a way to
-    // dial in from a non-loopback address. Lifted in the soak harness.
+// The server binds loopback; every accepted socket is relabelled with a public peer address before the request handler reads it.
+describe('server auth middleware for a non-loopback peer', () => {
+  let home: string;
+  let globalHome: string;
+  let originalHippoHome: string | undefined;
+  let handle: ServerHandle;
+
+  beforeEach(async () => {
+    home = makeRoot('srv-auth');
+    globalHome = makeRoot('srv-auth');
+    originalHippoHome = process.env.HIPPO_HOME;
+    process.env.HIPPO_HOME = globalHome;
+    handle = await serve({ hippoRoot: home, port: 0 });
+    presentConnectionsAsRemote(handle.server!);
+  });
+
+  afterEach(async () => {
+    await handle.stop();
+    if (originalHippoHome === undefined) delete process.env.HIPPO_HOME;
+    else process.env.HIPPO_HOME = originalHippoHome;
+    rmSync(home, { recursive: true, force: true });
+    rmSync(globalHome, { recursive: true, force: true });
+  });
+
+  function rememberAs(content: string, headers: Record<string, string> = {}): Promise<Response> {
+    return fetch(`${handle.url}/v1/memories`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...headers },
+      body: JSON.stringify({ content }),
+    });
+  }
+
+  function rememberEvents(): ReturnType<typeof queryAuditEvents> {
+    const db = openHippoDb(home);
+    try {
+      return queryAuditEvents(db, { tenantId: 'default', op: 'remember' });
+    } finally {
+      closeHippoDb(db);
+    }
+  }
+
+  it('no Authorization: 401 and nothing is written', async () => {
+    const res = await rememberAs('auth-canary-remote-noauth');
+    expect(res.status).toBe(401);
+    expect((await jsonAs<{ error: string }>(res)).error).toBe('auth required');
+    expect(rememberEvents()).toEqual([]);
+  });
+
+  it('valid Bearer: 200, so the 401 above comes from the missing key and not the relabelled socket', async () => {
+    const db = openHippoDb(home);
+    let created: ReturnType<typeof createApiKey>;
+    try {
+      created = createApiKey(db, { tenantId: 'default', label: 'remote-test' });
+    } finally {
+      closeHippoDb(db);
+    }
+    const res = await rememberAs('auth-canary-remote-bearer', { authorization: `Bearer ${created.plaintext}` });
+    expect(res.status).toBe(200);
+    const body = await jsonAs<RememberResult>(res);
+    expect(rememberEvents().find((e) => e.targetId === body.id)?.actor).toBe(`api_key:${created.keyId}`);
   });
 });

@@ -34,7 +34,7 @@ import { fileURLToPath } from 'node:url';
 import { openHippoDb, closeHippoDb } from '../../dist/db.js';
 import { tokensBySession } from '../../dist/token-ledger.js';
 import { getGlobalRoot } from '../../dist/shared.js';
-import { isInitialized } from '../../dist/store.js';
+import { isInitialized } from '../../dist/store/open.js';
 import { priceUsage, uncachedEquivalentInput } from '../../dist/eval-stats.js';
 
 const BUCKETS = [
@@ -227,6 +227,6 @@ function main() {
   if (outFile) console.log(`\nWrote ${outFile}`);
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && fs.realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
   main();
 }

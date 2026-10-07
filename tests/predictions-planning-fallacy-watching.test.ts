@@ -12,33 +12,22 @@
  * Tests:
  *   1. Output.watching set on no_class_match (regex matched, no classes scored >=1)
  *   2. Output.watching set on tiebreak (>=2 classes tied at best score)
- *   3. Backward-compat: computePlanningFallacyHint wrapper still returns null on watching paths
- *   4. api.recall populates RecallResult.planningFallacyWatching when output is watching
- *   5. Mutual exclusivity: hint and watching never co-exist
+ *   3. api.recall populates RecallResult.planningFallacyWatching when output is watching
+ *   4. Mutual exclusivity: hint and watching never co-exist
  *
  * Project rule: always use real DB for tests.
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore, writeEntry } from '../src/store.js';
-import { createMemory, Layer } from '../src/memory.js';
-import {
-  computePlanningFallacyOutput,
-  computePlanningFallacyHint,
-  savePrediction,
-  closePrediction,
-} from '../src/predictions.js';
+import { rmSync } from 'node:fs';
+import { writeEntry } from '../src/store/entry-writes.js';
+import { Layer} from '../src/memory.js';
+import { createMemory } from './_helpers/default-half-life-memory.js';
+import { computePlanningFallacyOutput } from '../src/predictions/planning-fallacy.js';
+import { savePrediction, closePrediction } from '../src/predictions/store.js';
 import { recall, type Context } from '../src/api.js';
+import { makeRoot } from './_helpers/make-root.js';
 
-function makeRoot(prefix: string): string {
-  const root = mkdtempSync(join(tmpdir(), `hippo-${prefix}-`));
-  mkdirSync(join(root, '.hippo'), { recursive: true });
-  initStore(root);
-  return root;
-}
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
 }
@@ -55,12 +44,10 @@ function seedClosedPredictions(root: string, classTag: string, n: number): void 
       classTag,
       estimateValue: 2,
       estimateUnit: 'days',
-      actor: 'cli',
     });
     closePrediction(root, 'default', p.id, {
       closureState: 'closed',
       actualValue: 4,
-      actor: 'cli',
     });
   }
 }
@@ -105,20 +92,6 @@ describe('PlanningFallacyWatching (v1.13.4 / J3.2 follow-up)', () => {
     expect(out.watching).toBeDefined();
     expect(out.watching!.reason).toBe('tiebreak');
     expect(out.watching!.suggestion).toMatch(/tied|rename|refine/i);
-  });
-
-  it('backward-compat: computePlanningFallacyHint wrapper returns null on watching paths', () => {
-    // The pre-v1.13.4 contract was: returns PlanningFallacyHint | null.
-    // The watching variant only surfaces via computePlanningFallacyOutput.
-    // The wrapper MUST still return null on no_class_match (otherwise
-    // existing callers that haven't migrated yet would see undefined).
-    const hint = computePlanningFallacyHint(
-      root,
-      'default',
-      'this will take 2 days to finish',
-      { actor: 'test' },
-    );
-    expect(hint).toBeNull();
   });
 
   it('Output returns {} (neither variant) when AUTODEBIAS=off (env-gated short-circuit)', () => {

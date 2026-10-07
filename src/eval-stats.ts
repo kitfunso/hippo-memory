@@ -1,6 +1,5 @@
 /**
- * Statistics and cost accounting for the token-efficiency evals (ROADMAP
- * Part IX, TE3-TE5).
+ * Statistics and cost accounting for the token-efficiency evals.
  *
  * - Cost: price provider usage over four buckets (uncached input, cache
  *   write, cache read, output). Raw token counts overstate savings when most
@@ -276,4 +275,167 @@ export function passHatK(runsByTask: boolean[][], k: number): number {
   const eligible = runsByTask.filter((r) => r.length >= k);
   if (eligible.length === 0) return Number.NaN;
   return eligible.filter((r) => r.slice(0, k).every(Boolean)).length / eligible.length;
+}
+
+/** All units of one family (tasks by seeds), resampled as one block so seeds stay together. */
+export type Family<T> = readonly T[];
+
+/** One repository's families; a task with no lesson is a family of one. */
+export type Repository<T> = readonly Family<T>[];
+
+/** An {@link Estimate} with a two-sided p-value from the same resamples. */
+export interface TestedEstimate extends Estimate {
+  /** 2 x min(share <= null, share >= null), capped at 1; NaN with fewer than two repositories. */
+  readonly p: number;
+  /** Non-finite resamples, dropped; `iterations + dropped` is the number requested. */
+  readonly dropped: number;
+  /** The null the p-value tested against; {@link verdict} reads its sides from here. */
+  readonly nullValue: number;
+}
+
+/** Options for {@link twoLevelBootstrap}. */
+export interface TwoLevelOpts extends BootstrapOpts {
+  /** Resamples. Default 10,000. */
+  readonly iterations?: number;
+  /** Value the p-value tests against: 0 for differences, 1 for ratios. Default 0. */
+  readonly nullValue?: number;
+}
+
+function notANumber(nullValue: number, dropped: number): TestedEstimate {
+  const nan = Number.NaN;
+  return { estimate: nan, low: nan, high: nan, p: nan, iterations: 0, dropped, nullValue };
+}
+
+function resampleUnits<T>(repos: readonly Repository<T>[], rand: () => number): T[] {
+  const units: T[] = [];
+  for (let i = 0; i < repos.length; i++) {
+    const repo = repos[Math.floor(rand() * repos.length)]!;
+    for (let j = 0; j < repo.length; j++) {
+      for (const unit of repo[Math.floor(rand() * repo.length)]!) units.push(unit);
+    }
+  }
+  return units;
+}
+
+// Inclusive on both sides, as the p-value is worded; float noise around the null breaks a tie.
+function twoSidedP(samples: readonly number[], nullValue: number): number {
+  let below = 0;
+  let above = 0;
+  for (const s of samples) {
+    if (s <= nullValue) below++;
+    if (s >= nullValue) above++;
+  }
+  return Math.min(1, (2 * Math.min(below, above)) / samples.length);
+}
+
+/** Resamples repositories, then families inside each; only the repository draw carries a shared-store fault.
+ * The statistic never uses the PRNG, so a second call on one seed draws the same resamples. */
+export function twoLevelBootstrap<T>(
+  repos: readonly Repository<T>[],
+  statistic: (units: readonly T[]) => number,
+  opts: TwoLevelOpts = {},
+): TestedEstimate {
+  const requested = opts.iterations ?? 10_000;
+  if (!Number.isInteger(requested) || requested <= 0) {
+    throw new RangeError(`iterations must be a positive integer, got ${requested}`);
+  }
+  const nullValue = opts.nullValue ?? 0;
+  const kept = repos.map((r) => r.filter((f) => f.length > 0)).filter((r) => r.length > 0);
+  if (kept.length === 0) return notANumber(nullValue, 0);
+  const rand = seededRandom(opts.seed ?? 1);
+  const samples: number[] = [];
+  for (let b = 0; b < requested; b++) {
+    const value = statistic(resampleUnits(kept, rand));
+    if (Number.isFinite(value)) samples.push(value);
+  }
+  const dropped = requested - samples.length;
+  if (samples.length === 0) return notANumber(nullValue, dropped);
+  const estimate = statistic(kept.flatMap((r) => r.flat()));
+  const p = kept.length < 2 ? Number.NaN : twoSidedP(samples, nullValue);
+  const interval = percentileInterval(samples, opts.alpha ?? 0.05);
+  return { estimate, ...interval, p, iterations: samples.length, dropped, nullValue };
+}
+
+/** Holm step-down in input order; the family size is `ps.length`, as preregistered.
+ * A NaN stays NaN but ranks as 1, so it never loosens the others; a finite p outside [0, 1] throws. */
+export function holmAdjust(ps: readonly number[]): number[] {
+  for (const p of ps) {
+    if (!Number.isNaN(p) && !(p >= 0 && p <= 1)) throw new RangeError(`p-value out of range: ${p}`);
+  }
+  const ranked = ps
+    .map((p, index) => ({ index, key: Number.isNaN(p) ? 1 : p }))
+    .sort((a, b) => a.key - b.key || a.index - b.index);
+  const adjusted = Array.from({ length: ps.length }, () => Number.NaN);
+  let running = 0;
+  ranked.forEach(({ index, key }, rank) => {
+    running = Math.max(running, (ps.length - rank) * key);
+    if (!Number.isNaN(ps[index]!)) adjusted[index] = Math.min(1, running);
+  });
+  return adjusted;
+}
+
+/** One of the four mutually exclusive outcomes the preregistration allows per hypothesis. */
+export type Verdict = 'loss' | 'win' | 'tie' | 'inconclusive';
+
+/** What a hypothesis needs to be read; see {@link verdict}. */
+export interface VerdictSpec {
+  /** Direction that favours the treatment arm. */
+  readonly helpful: 'lower' | 'higher';
+  /** Inclusive band the interval must sit inside for a tie. */
+  readonly tieBand: readonly [number, number];
+  /** An estimate on this value or beyond it, on the helpful side, reaches the minimum effect. */
+  readonly minimumEffectAt: number;
+  /** Default 0.05. */
+  readonly alpha?: number;
+}
+
+/** A verdict, plus whether a win reaches the minimum effect (a win below it is a small win). */
+export interface VerdictResult {
+  readonly verdict: Verdict;
+  readonly reachesMinimum: boolean;
+}
+
+/** Checks in the preregistered order; the null comes from `e.nullValue`, so p and sides cannot disagree.
+ * A NaN estimate, p or bound is inconclusive, since a win or loss cannot be ruled out. */
+export function verdict(e: TestedEstimate, adjustedP: number, spec: VerdictSpec): VerdictResult {
+  const inconclusive: VerdictResult = { verdict: 'inconclusive', reachesMinimum: false };
+  if ([adjustedP, e.estimate, e.low, e.high].some(Number.isNaN)) return inconclusive;
+  const nullValue = e.nullValue;
+  const lowerIsHelpful = spec.helpful === 'lower';
+  if (adjustedP < (spec.alpha ?? 0.05)) {
+    const helpfulSide = lowerIsHelpful ? e.estimate < nullValue : e.estimate > nullValue;
+    const harmfulSide = lowerIsHelpful ? e.estimate > nullValue : e.estimate < nullValue;
+    if (harmfulSide) return { verdict: 'loss', reachesMinimum: false };
+    if (helpfulSide) {
+      const reaches = lowerIsHelpful ? e.estimate <= spec.minimumEffectAt : e.estimate >= spec.minimumEffectAt;
+      return { verdict: 'win', reachesMinimum: reaches };
+    }
+  }
+  const insideBand = e.low >= spec.tieBand[0] && e.high <= spec.tieBand[1];
+  return insideBand ? { verdict: 'tie', reachesMinimum: false } : inconclusive;
+}
+
+/** A win must hold under both codings of not-applicable, while a loss under either is reported. */
+export function combineCodings(a: VerdictResult, b: VerdictResult): VerdictResult {
+  if (a.verdict === 'loss' || b.verdict === 'loss') return { verdict: 'loss', reachesMinimum: false };
+  if (a.verdict === 'win' && b.verdict === 'win') {
+    return { verdict: 'win', reachesMinimum: a.reachesMinimum && b.reachesMinimum };
+  }
+  if (a.verdict === 'tie' && b.verdict === 'tie') return { verdict: 'tie', reachesMinimum: false };
+  return { verdict: 'inconclusive', reachesMinimum: false };
+}
+
+/** Outcome of the harm gate; see {@link harmGate}. */
+export interface HarmGate {
+  readonly pass: boolean;
+  readonly costOk: boolean;
+  readonly resolveOk: boolean;
+}
+
+/** Cost ratio's upper bound below 1.10, resolve difference's lower bound (a fraction) above -0.05.
+ * Both estimates must use alpha 0.05, the conservative reading of "upper 95% bound"; a NaN bound fails. */
+export function harmGate(costRatio: Estimate, resolveDiff: Estimate): HarmGate {
+  const costOk = costRatio.high < 1.1;
+  const resolveOk = resolveDiff.low > -0.05;
+  return { pass: costOk && resolveOk, costOk, resolveOk };
 }

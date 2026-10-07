@@ -133,7 +133,7 @@ Keep each fixture small (1-10 remembers, 1-5 queries). If a fixture takes > 5s, 
 When micro passes and you want a real-distribution check before a PR:
 
 ```powershell
-$env:HIPPO_BIN='node C:/Users/skf_s/hippo/bin/hippo.js'
+$env:HIPPO_BIN='node C:/Users/<user>/hippo/bin/hippo.js'
 python benchmarks/locomo/run.py `
   --data benchmarks/locomo/data/locomo10.json `
   --output-dir benchmarks/locomo/results `

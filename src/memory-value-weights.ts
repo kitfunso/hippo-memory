@@ -1,21 +1,18 @@
 /**
- * LC2-E2 frozen learned memory-value weight vector.
+ * Frozen learned memory-value weight vector.
  *
- * GENERATED FROM the E2 frozen artifact
+ * GENERATED FROM the frozen artifact
  * (benchmarks/memory-value/weights-learned.json +
  * benchmarks/memory-value/weights-learned.meta.json). NEVER EDIT BY HAND —
  * tests/memory-value-wiring.test.ts's weights-sync test asserts this constant
  * equals the committed JSON artifact (value equality + digest match), so
  * drift between the artifact and this file fails CI.
  *
- * CAVEAT (verbatim from the E2 result doc, carried by design decision D3 /
- * binding constraint 4 in docs/plans/2026-08-10-lc2-e3-mv-wiring.md):
- * usage-feature signs reflect E1's anti-oracle simulation, NOT real usage
- * value. Never read this as production ranking advice — LC3 tests real
- * usage value.
+ * CAVEAT: usage-feature signs reflect an anti-oracle simulation, NOT real usage
+ * value. Never read this as production ranking advice.
  */
 
-/** The 8 live feature dims the E2 fitter optimized over (FIT_DIMS). */
+/** The 8 live feature dims the fitter optimized over (FIT_DIMS). */
 export const MEMORY_VALUE_WEIGHTS: Readonly<Record<string, number>> = Object.freeze({
   age_days: -0.3245577821391783,
   half_life_days: 0.11410695580440973,

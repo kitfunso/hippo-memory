@@ -4,24 +4,18 @@ import * as path from 'path';
 import { spawnSync, type SpawnSyncReturns } from 'child_process';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import {
-  getHippoRoot,
-  loadActiveTaskSnapshot,
-  saveActiveTaskSnapshot,
-  appendSessionEvent,
-  loadAllEntries,
-} from '../src/store.js';
-import { defaultSleepLogPath } from '../src/hooks.js';
-import {
-  PRE_COMPACT_TASK_CAP,
-  PRE_COMPACT_SUMMARY_CAP,
-  PRE_COMPACT_NEXT_STEP_CAP,
-} from '../src/capture.js';
+import { getHippoRoot } from '../src/store/open.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
+import { loadActiveTaskSnapshot, saveActiveTaskSnapshot, appendSessionEvent } from '../src/store/sessions.js';
+import { writeSessionEndHandoff } from '../src/store/handoffs.js';
+import { defaultSleepLogPath } from '../src/hooks/shared.js';
+import { PRE_COMPACT_TASK_CAP, PRE_COMPACT_SUMMARY_CAP, PRE_COMPACT_NEXT_STEP_CAP } from '../src/capture/working-state.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 
 // Always run against the local built CLI so we're testing our source, not a
 // stale globally-installed version (mirrors tests/pinned-inject.test.ts).
 const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
+const FAKE_JWT = ['eyJ' + 'FAKEHEADER', 'eyJ' + 'FAKEPAYLOAD', 'FAKESIG'].join('.');
 
 /**
  * Scratch $HOME + $HIPPO_HOME + tmp cwd for every test — never a repo
@@ -479,6 +473,49 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
     expect(snapshot!.task).toContain('[REDACTED]');
     expect(snapshot!.summary).toContain('[REDACTED]');
     expect(snapshot!.next_step).toContain('[REDACTED]');
+  });
+
+  it('a Bearer JWT an older build left in the snapshot survives neither compaction nor the session-end handoff', () => {
+    const hippoRoot = getHippoRoot(dir);
+    // Raw SQL, because saveActiveTaskSnapshot now scrubs: this is the row a build without the scrub left behind.
+    const db = openHippoDb(hippoRoot);
+    try {
+      const now = new Date().toISOString();
+      db.prepare(
+        `INSERT INTO task_snapshots(task, summary, next_step, status, source, session_id, tenant_id, created_at, updated_at)
+         VALUES ('ship the export', 'export wired', ?, 'active', 'cli', 'sess-old-jwt', 'default', ?, ?)`,
+      ).run(`retry the export with Authorization: Bearer ${FAKE_JWT}`, now, now);
+    } finally {
+      closeHippoDb(db);
+    }
+    const transcriptPath = path.join(dir, 'carry-jwt.jsonl');
+    fs.writeFileSync(
+      transcriptPath,
+      transcriptJsonl([
+        { type: 'user', message: { role: 'user', content: 'Keep going with the export.' } },
+        { type: 'assistant', message: { role: 'assistant', content: [{ type: 'tool_use', name: 'Bash', input: {} }] } },
+      ]),
+    );
+    const payload = JSON.stringify({ session_id: 'sess-old-jwt', transcript_path: transcriptPath, cwd: dir, hook_event_name: 'PreCompact' });
+
+    expect(runHippo(['pre-compact'], dir, env, payload).status).toBe(0);
+    const snapshot = loadActiveTaskSnapshot(hippoRoot, 'default');
+    expect(snapshot!.next_step).toBe('retry the export with Authorization: [REDACTED]');
+    const handoff = writeSessionEndHandoff(hippoRoot, 'default', 'sess-old-jwt', null);
+    expect(handoff!.nextAction).toBe('retry the export with Authorization: [REDACTED]');
+  });
+
+  it('hippo snapshot save stores a JWT scrubbed', () => {
+    const result = runHippo(
+      ['snapshot', 'save', '--task', 'call the export API', '--summary', `the token is ${FAKE_JWT}`, '--next-step', `use Bearer ${FAKE_JWT}`],
+      dir,
+      env,
+    );
+    expect(result.status).toBe(0);
+    expect(result.stdout).not.toContain('eyJ');
+    const snapshot = loadActiveTaskSnapshot(getHippoRoot(dir), 'default');
+    expect(snapshot!.summary).toBe('the token is [REDACTED]');
+    expect(snapshot!.next_step).toBe('use [REDACTED]');
   });
 });
 
@@ -970,8 +1007,10 @@ describe('combined firing: last-sleep + compact-resume against the same store/lo
 
     const lastSleep = runHippo(['last-sleep'], dir, env);
     expect(lastSleep.status).toBe(0);
-    expect(lastSleep.stdout).toContain('Previous session hippo consolidation');
-    expect(lastSleep.stdout).toContain('a previous session already consolidated memory');
+    // The log goes to stderr: SessionStart stdout would put it in the model's context.
+    expect(lastSleep.stdout.trim()).toBe('');
+    expect(lastSleep.stderr).toContain('Previous session hippo consolidation');
+    expect(lastSleep.stderr).toContain('a previous session already consolidated memory');
     // last-sleep clears the log by default — confirms it ran the real path,
     // not a no-op, and that clearing doesn't touch the sqlite-backed snapshot.
     expect(fs.existsSync(logPath)).toBe(false);

@@ -9,7 +9,7 @@ on:
       - 'python-v*.*.*'
 
 permissions:
-  contents: read    # required for actions/checkout@v4 (top-level permissions defaults unlisted to none)
+  contents: read    # required for actions/checkout (top-level permissions defaults unlisted to none)
   id-token: write   # required for PyPI trusted publisher OIDC
 
 jobs:
@@ -20,15 +20,15 @@ jobs:
       url: https://pypi.org/project/hippo-memory-sdk
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
 
       - name: Install uv (pinned)
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3
         with:
           version: "0.10.9"  # uv_build backend requires >= 0.5.0
 
@@ -37,6 +37,6 @@ jobs:
         run: uv build
 
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
         with:
           packages-dir: python/dist/

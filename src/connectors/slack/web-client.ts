@@ -1,23 +1,18 @@
-import { fetchWithRetry } from './ratelimit.js';
+import { fetchWithRetry, isRetryableStatus } from '../../http-retry.js';
 import type { SlackHistoryFetcher } from './backfill.js';
 import type { SlackMessageEvent } from './types.js';
+import { type JsonValue, isJsonString } from '../../json.js';
 
 /**
  * Build a SlackHistoryFetcher that pages `conversations.history` over real
- * HTTP. Wraps `fetchWithRetry` so 429 handling is automatic. The returned
- * fetcher is the one Task 13's `backfillChannel` consumes.
+ * HTTP. Wraps `fetchWithRetry` so 429 and 5xx handling is automatic. The returned
+ * fetcher is the one `backfillChannel` consumes.
  *
  * Slack omits `channel` from messages in the history response, so we stamp
  * the request channel id onto each parsed message — downstream ingest needs
  * it on every event.
  */
-/** JSON value shape for the parts of the Slack history response not yet
- *  narrowed to a known message shape. */
-type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
-
-function isJsonString(value: JsonValue | undefined): value is string {
-  return typeof value === 'string';
-}
+const SLACK_TIMEOUT_MS = 30_000;
 
 export function slackHistoryFetcher(
   token: string,
@@ -29,11 +24,11 @@ export function slackHistoryFetcher(
     url.searchParams.set('limit', '200');
     if (cursor) url.searchParams.set('cursor', cursor);
     if (oldest) url.searchParams.set('oldest', oldest);
-    const r = await fetchWithRetry({
-      url: url.toString(),
-      init: { method: 'GET', headers: { authorization: `Bearer ${token}` } },
-      fetchImpl,
+    const r = await fetchWithRetry(url, { method: 'GET', headers: { authorization: `Bearer ${token}` } }, {
+      timeoutMs: SLACK_TIMEOUT_MS,
+      fetchFn: fetchImpl,
     });
+    if (isRetryableStatus(r.status)) throw new Error(`slack: still rate-limited or unavailable (HTTP ${r.status})`);
     // SAFETY: body is the Slack `conversations.history` response; per the
     // documented shape it's `{ ok, error?, messages?, response_metadata? }`.
     const body = (await r.json()) as {

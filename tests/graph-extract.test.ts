@@ -6,25 +6,98 @@
  * customer_note/project_brief -> entities + supersedes relations). Real DB, no mocks.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { initStore, deleteEntry } from '../src/store.js';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { cpSync, rmSync } from 'node:fs';
+import { once } from 'node:events';
+import { createRequire } from 'node:module';
+import { Worker } from 'node:worker_threads';
+import { deleteEntry } from '../src/store/delete-and-batch.js';
 import { saveDecision, closeDecision } from '../src/decisions.js';
 import { savePolicy } from '../src/policies.js';
 import { saveCustomerNote } from '../src/customer-notes.js';
 import { saveProjectBrief } from '../src/project-briefs.js';
-import { loadEntities, loadRelations } from '../src/graph.js';
-import { extractGraph } from '../src/graph-extract.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { loadEntities, loadRelations, loadNeighborRelations, loadRelationsAmong } from '../src/graph/read.js';
+import type { Entity } from '../src/graph/types.js';
+import { extractGraph, extractGraphChunked } from '../src/graph-extract.js';
+import { openHippoDb, closeHippoDb, getHippoDbPath, withBusyWait, type DatabaseSyncLike } from '../src/db.js';
+import { WRITE_BUDGET, type WriteBudget } from '../src/write-budget.js';
+import { makeRoot } from './_helpers/make-root.js';
 
-function makeRoot(): string {
-  const home = mkdtempSync(join(tmpdir(), 'hippo-graph-extract-'));
-  mkdirSync(join(home, '.hippo'), { recursive: true });
-  initStore(home);
-  return home;
+// SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike.
+const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as {
+  DatabaseSync: { prototype: DatabaseSyncLike };
+};
+
+const yieldOnce = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
+
+// A thread, not a timer: the rebuild's busy wait blocks this thread until the holder commits.
+const HOLD_LOCK_WORKER = `
+const { parentPort, workerData } = require('node:worker_threads');
+const { DatabaseSync } = require('node:sqlite');
+const db = new DatabaseSync(workerData.file);
+db.exec('PRAGMA busy_timeout = 5000');
+db.exec('BEGIN IMMEDIATE');
+parentPort.postMessage('locked');
+Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, workerData.ms);
+db.exec('COMMIT');
+db.close();
+`;
+
+/** The real clock with the hold a test picks, and a pause that yields once instead of waiting out the real gap. */
+const budget = (holdMs: number, pause: WriteBudget['pause'] = yieldOnce): WriteBudget => ({ ...WRITE_BUDGET, holdMs, pause });
+
+const GRAPH_WRITE_SQL = /\b(INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+(entities|relations)\b/i;
+
+/** The graph-table writes `run` prepares, on any connection. */
+function graphWritesDuring(run: () => void): string[] {
+  const writes: string[] = [];
+  const prepare = DatabaseSync.prototype.prepare;
+  const spy = vi.spyOn(DatabaseSync.prototype, 'prepare').mockImplementation(function (this: DatabaseSyncLike, sql: string) {
+    if (GRAPH_WRITE_SQL.test(sql)) writes.push(sql.trim());
+    return prepare.call(this, sql);
+  });
+  try {
+    run();
+  } finally {
+    spy.mockRestore();
+  }
+  return writes;
 }
+
+function callStack(): string {
+  const limit = Error.stackTraceLimit;
+  Error.stackTraceLimit = 50;
+  try {
+    return new Error().stack ?? '';
+  } finally {
+    Error.stackTraceLimit = limit;
+  }
+}
+
+/** Counts the graph writer's BEGIN IMMEDIATEs, leaving out every other writer's. */
+function countRebuildBegins() {
+  let begins = 0;
+  const exec = DatabaseSync.prototype.exec;
+  const spy = vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (this: DatabaseSyncLike, sql: string) {
+    if (sql === 'BEGIN IMMEDIATE' && callStack().includes('runGraphRebuildTransaction')) begins++;
+    exec.call(this, sql);
+  });
+  return { count: () => begins, restore: () => spy.mockRestore() };
+}
+
+/** A tenant's graph by natural key, leaving out ids and timestamps. */
+function graphByKey(home: string, tenant = 'default') {
+  const ents = loadEntities(home, tenant, { limit: 10_000 });
+  const keyOf = (e: Entity) => `${e.entityType}|${e.sourceObjectType}:${e.sourceObjectId}`;
+  const keyById = new Map(ents.map((e) => [e.id, keyOf(e)]));
+  return {
+    entities: ents.map((e) => `${keyOf(e)} ${e.name} ${e.memoryId} ${e.sourceKind}`).sort(),
+    relations: loadRelations(home, tenant, { limit: 10_000 })
+      .map((r) => `${keyById.get(r.fromEntityId)}>${keyById.get(r.toEntityId)} ${r.relType} ${r.memoryId} ${r.sourceKind} ${r.sourceObjectType}:${r.sourceObjectId}`)
+      .sort(),
+  };
+}
+
 function entityCount(home: string): number {
   const db = openHippoDb(home);
   try {
@@ -37,13 +110,13 @@ function entityCount(home: string): number {
 
 describe('graph extraction (E3.1 deterministic, from consolidated E2 objects)', () => {
   let home: string;
-  beforeEach(() => { home = makeRoot(); });
+  beforeEach(() => { home = makeRoot('graph-extract'); });
   afterEach(() => { try { rmSync(home, { recursive: true, force: true }); } catch { /* ignore */ } });
 
   it('extracts entities (4 types) + a supersedes relation; excludes closed; idempotent', () => {
     // decision v1 -> superseded by v2 (active)
     const d1 = saveDecision(home, 'default', { decisionText: 'Adopt Postgres' });
-    const d2 = saveDecision(home, 'default', { decisionText: 'Adopt Postgres (managed)', supersedesDecisionId: d1.id });
+    saveDecision(home, 'default', { decisionText: 'Adopt Postgres (managed)', supersedesDecisionId: d1.id });
     // a closed decision (must be excluded)
     const dc = saveDecision(home, 'default', { decisionText: 'Retired idea' });
     closeDecision(home, 'default', dc.id);
@@ -159,5 +232,110 @@ describe('graph extraction (E3.1 deterministic, from consolidated E2 objects)', 
   it('empty store extracts to an empty graph (no crash)', () => {
     const r = extractGraph(home, 'default');
     expect(r).toEqual({ entities: 0, relations: 0, references: 0, byType: { decision: 0, policy: 0, customer: 0, project: 0 }, truncated: [] });
+  });
+
+  it('a rerun on unchanged objects prepares no write to entities or relations', () => {
+    const d1 = saveDecision(home, 'default', { decisionText: 'Adopt Postgres' });
+    saveDecision(home, 'default', { decisionText: 'Adopt Postgres (managed) under RetryPolicy', supersedesDecisionId: d1.id });
+    deleteEntry(home, saveDecision(home, 'default', { decisionText: 'RetryPolicy covers search too' }).memoryId!);
+    savePolicy(home, 'default', { policyName: 'RetryPolicy', policyText: 'retry 3x' });
+    saveCustomerNote(home, 'default', { customer: 'Acme Corp', note: 'renewal in Q3, wants RetryPolicy' });
+    saveProjectBrief(home, 'default', { repo: 'hippo', summary: 'agent-memory lib for Acme Corp' });
+    const first = extractGraph(home, 'default');
+    expect(first.references).toBeGreaterThan(0);
+
+    expect(graphWritesDuring(() => extractGraph(home, 'default'))).toEqual([]);
+  });
+
+  it('renaming a policy three decisions reference keeps its entity id and all three references', () => {
+    const pol = savePolicy(home, 'default', { policyName: 'Retry Policy', policyText: 'retry 3x' });
+    for (const team of ['billing', 'search', 'checkout']) saveDecision(home, 'default', { decisionText: `${team} adopts Retry Policy v2` });
+    extractGraph(home, 'default');
+    const before = loadEntities(home, 'default', { entityType: 'policy', limit: 10 })[0];
+    const db = openHippoDb(home);
+    try {
+      db.prepare(`UPDATE policies SET policy_name = ? WHERE id = ?`).run('Retry Policy v2', pol.id);
+    } finally { closeHippoDb(db); }
+
+    extractGraph(home, 'default');
+
+    const after = loadEntities(home, 'default', { entityType: 'policy', limit: 10 });
+    expect(after.map((e) => [e.id, e.name])).toEqual([[before.id, 'Retry Policy v2']]);
+    const refs = loadRelations(home, 'default', { limit: 100 }).filter((r) => r.relType === 'references');
+    expect(refs.map((r) => r.toEntityId)).toEqual([before.id, before.id, before.id]);
+  });
+
+  it('a chunked rebuild commits in several transactions and ends where one transaction would', async () => {
+    savePolicy(home, 'default', { policyName: 'RetryPolicy', policyText: 'retry 3x' });
+    let prev: number | undefined;
+    for (let i = 0; i < 40; i++) {
+      prev = saveDecision(home, 'default', { decisionText: `Call ${i} adopts RetryPolicy`, supersedesDecisionId: i % 10 === 9 ? prev : undefined }).id;
+    }
+    const copy = `${home}-copy`;
+    cpSync(home, copy, { recursive: true });
+    try {
+      const begins = countRebuildBegins();
+      const chunked = await extractGraphChunked(home, 'default', budget(0)).finally(begins.restore);
+
+      expect(begins.count()).toBeGreaterThanOrEqual(2);
+      expect(chunked).toEqual(extractGraph(copy, 'default'));
+      expect(graphByKey(home)).toEqual(graphByKey(copy));
+    } finally {
+      rmSync(copy, { recursive: true, force: true });
+    }
+  });
+
+  it('a mirrorless object closed between the load and its chunk gets no entity row', async () => {
+    // Loaders return newest first, so the older decision's insert lands in a later chunk than the newer one's.
+    const older = saveDecision(home, 'default', { decisionText: 'Older call, mirror forgotten' });
+    deleteEntry(home, older.memoryId!);
+    saveDecision(home, 'default', { decisionText: 'Newer call' });
+    let pauses = 0;
+    const closeOlderOnce = async (): Promise<void> => {
+      if (pauses++ === 0) closeDecision(home, 'default', older.id);
+      await yieldOnce();
+    };
+
+    const r = await extractGraphChunked(home, 'default', budget(0, closeOlderOnce));
+
+    expect(pauses).toBeGreaterThan(0);
+    expect(loadEntities(home, 'default', { limit: 10 }).map((e) => e.name)).toEqual(['Newer call']);
+    expect(r.skipped).toBe(1);
+  });
+
+  it('an incremental rebuild keeps unchanged rows, so the new entity and relation sort first in the graph reads', () => {
+    savePolicy(home, 'default', { policyName: 'RetryPolicy', policyText: 'retry 3x' });
+    saveDecision(home, 'default', { decisionText: 'D1 adopts RetryPolicy' });
+    extractGraph(home, 'default');
+    saveDecision(home, 'default', { decisionText: 'D2 adopts RetryPolicy' });
+
+    extractGraph(home, 'default');
+
+    const ents = loadEntities(home, 'default', { limit: 10 });
+    expect(ents.map((e) => e.name)).toEqual(['D2 adopts RetryPolicy', 'RetryPolicy', 'D1 adopts RetryPolicy']);
+    const [d2, pol, d1] = ents;
+    const fromNames = (rels: { fromEntityId: number }[]) => rels.map((r) => ents.find((e) => e.id === r.fromEntityId)?.name);
+    const newestFirst = ['D2 adopts RetryPolicy', 'D1 adopts RetryPolicy'];
+    expect(fromNames(loadRelations(home, 'default', { limit: 10 }))).toEqual(newestFirst);
+    expect(fromNames(loadNeighborRelations(home, 'default', [pol.id]))).toEqual(newestFirst);
+    expect(fromNames(loadRelationsAmong(home, 'default', [d1.id, d2.id, pol.id]))).toEqual(newestFirst);
+  });
+
+  it('a chunked rebuild inside a server request waits out a writer that holds the lock between chunks', async () => {
+    savePolicy(home, 'default', { policyName: 'RetryPolicy', policyText: 'retry 3x' });
+    for (let i = 0; i < 10; i++) saveDecision(home, 'default', { decisionText: `Call ${i} adopts RetryPolicy` });
+    let exited: Promise<unknown[]> | undefined;
+    const holdsOnFirstPause = budget(0, async () => {
+      if (exited) return yieldOnce();
+      const holder = new Worker(HOLD_LOCK_WORKER, { eval: true, workerData: { file: getHippoDbPath(home), ms: 400 } });
+      exited = once(holder, 'exit');
+      await once(holder, 'message');
+    });
+
+    const r = await withBusyWait(250, () => extractGraphChunked(home, 'default', holdsOnFirstPause));
+
+    expect(exited).toBeDefined();
+    expect(await exited).toEqual([0]);
+    expect(r.entities).toBe(11);
   });
 });

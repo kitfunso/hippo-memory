@@ -75,6 +75,14 @@ Found by the count-only dry run; no gate, threshold, prompt or window changed.
 - **Gate arithmetic.** Rates are compared as integer counts (for example `100 * (T - C) >= 15 * n`), so an exact boundary is not lost to floating-point rounding. Each judge's own rates, the replay aggregates and the raw labels are written beside the verdict.
 - **Expected date.** The frozen corpus produced 68 eligible events under this configuration over about 25.5 days (about 2.7 a day). At that rate the window reaches 30 around 2026-10-08. The count is checked then, counts only.
 
+## Amendment 2 (2026-10-03, before any fresh-window event was judged; no marker exists)
+
+Found by a count-only dry run (`--dry-run 3`); no gate, threshold, prompt, judge or window start changed.
+
+- **Headless sessions excluded.** The `eval-runs` path rule missed the 2026-09-28 TE5 pilot, which ran under `hippo-archive/te5-pilot/runs/...`: 80 of the 111 kept files were its scripted `claude -p` sessions, and 21 more held `claude -p` entries (scripted runs, and copies of interactive sessions later resumed headless). Any transcript with an entry whose `entrypoint` is `sdk-cli` is now excluded, wherever it ran, and counted as `headless`, after the staleness check so the count is the window's. Only `cli` and `sdk-cli` appear in the local transcripts. The `eval-runs` rule stays.
+- **Counts after the change** (window 2026-09-26T23:00Z to 2026-10-03, 154 hours): 10 files kept, 101 headless, 5 non-routine Bash failures, 15 hook prompts, 0 eligible events. Before it: 111 kept, 21 failures, 0 eligible.
+- **Expected date withdrawn.** The 2.7 a day rate came from a corpus that had not been checked for headless runs. At 0 eligible in 6.4 days the window will not reach 30 on organic use; it is checked by counts only, and scored only if it does.
+
 ## NOT DONE
 
 - Whether the agent behaves differently. TE5 is the paired test.

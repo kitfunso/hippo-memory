@@ -12,10 +12,11 @@ import {
   importClaude,
   importCursor,
   importGenericFile,
-  importMarkdown,
-  ImportOptions,
-} from '../src/importers.js';
-import { initStore, loadAllEntries } from '../src/store.js';
+} from '../src/importers/sources.js';
+import { importMarkdown } from '../src/importers/markdown.js';
+import { ImportOptions } from '../src/importers/core.js';
+import { initStore } from '../src/store/open.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
 
 // ---------------------------------------------------------------------------
 // Setup
@@ -368,7 +369,7 @@ describe('--global: writes to global store', () => {
         'Document public APIs with JSDoc',
       ]));
 
-      const result = importChatGPT(file, {
+      importChatGPT(file, {
         hippoRoot: tmpDir,
         global: true,
         dryRun: false,

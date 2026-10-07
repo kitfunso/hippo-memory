@@ -1,6 +1,6 @@
 # K8s readiness code audit — `hippo serve`
 
-Read-only audit, 2026-09-25. Repo: `C:/Users/skf_s/hippo`. No dedicated Helm chart
+Read-only audit, 2026-09-25. Repo: `C:/Users/<user>/hippo`. No dedicated Helm chart
 or Kubernetes manifests exist in this repo today — the only container reference is
 `deploy/aml/` (a Fly.io evaluation deployment). EI10 ("Deployment tiers", ROADMAP.md:1331,
 "[planned, 6-10w]") is where Helm/Terraform/Postgres packaging is scoped; nothing there

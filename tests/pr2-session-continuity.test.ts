@@ -2,24 +2,22 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { initStore } from '../src/store/open.js';
 import {
-  initStore,
-  saveSessionHandoff,
-  loadLatestHandoff,
-  loadHandoffById,
   appendSessionEvent,
   listSessionEvents,
   loadActiveTaskSnapshot,
   saveActiveTaskSnapshot,
-} from '../src/store.js';
+} from '../src/store/sessions.js';
+import { saveSessionHandoff, loadLatestHandoff, loadHandoffById } from '../src/store/handoffs.js';
 import {
   openHippoDb,
   closeHippoDb,
   getSchemaVersion,
   getCurrentSchemaVersion,
 } from '../src/db.js';
-import type { SessionHandoff } from '../src/handoff.js';
 import { rowToSessionHandoff } from '../src/handoff.js';
+import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 
 let tmpDir: string;
 
@@ -36,8 +34,8 @@ describe('schema v5+v6 migration', () => {
     initStore(tmpDir);
     const db = openHippoDb(tmpDir);
     try {
-      expect(getSchemaVersion(db)).toBe(48);
-      expect(getCurrentSchemaVersion()).toBe(48);
+      expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
+      expect(getCurrentSchemaVersion()).toBe(LATEST_SCHEMA_VERSION);
     } finally {
       closeHippoDb(db);
     }
@@ -184,7 +182,7 @@ describe('loadHandoffById', () => {
     initStore(tmpDir);
 
     // Save handoff and verify we can get it by ID from the DB
-    const handoff = saveSessionHandoff(tmpDir, 'default', {
+    saveSessionHandoff(tmpDir, 'default', {
       version: 1,
       sessionId: 'sess-byid',
       summary: 'Find me by ID',
@@ -264,6 +262,7 @@ describe('rowToSessionHandoff', () => {
       outcome: null,
       target_runtime: null,
       card_id: null,
+      scope: null,
     };
 
     const handoff = rowToSessionHandoff(row);
@@ -292,6 +291,7 @@ describe('rowToSessionHandoff', () => {
       outcome: null,
       target_runtime: null,
       card_id: null,
+      scope: null,
     };
 
     const handoff = rowToSessionHandoff(row);
@@ -316,6 +316,7 @@ describe('rowToSessionHandoff', () => {
       outcome: null,
       target_runtime: null,
       card_id: null,
+      scope: null,
     };
 
     const handoff = rowToSessionHandoff(row);

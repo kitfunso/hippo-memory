@@ -2,14 +2,16 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStore } from '../src/store.js';
+import { initStore } from '../src/store/open.js';
+import type { Context } from '../src/api.js';
 import {
   backfillChannel,
   type SlackHistoryFetcher,
+  type SlackHistoryPage,
 } from '../src/connectors/slack/backfill.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 
-const ctx = (root: string) => ({
+const ctx = (root: string): Context => ({
   hippoRoot: root,
   tenantId: 'default',
   actor: { subject: 'connector:slack', role: 'admin' },
@@ -92,8 +94,8 @@ describe('backfillChannel cursor / oldest semantics', () => {
     // TODOS v0.38.0 asked for a "stop at cursor" mode on the claim that backfill
     // drains a channel every run. It does not: the persisted cursor is replayed as
     // `oldest`, so Slack bounds the range server-side. This pins that.
-    const mkPage = (tss: string[], next: string | null) => ({
-      messages: tss.map((ts) => ({ ts, text: `m${ts}`, user: 'U1', type: 'message' })),
+    const mkPage = (tss: string[], next: string | null): SlackHistoryPage => ({
+      messages: tss.map((ts) => ({ ts, text: `m${ts}`, user: 'U1', type: 'message', channel: 'C1' })),
       next_cursor: next,
     });
 
