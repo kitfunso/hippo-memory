@@ -6,6 +6,8 @@ import {
   gatePromptRecall,
   promptRecallFtsQuery,
   rarestPromptTerms,
+  ftsTermParts,
+  rarestFtsQuery,
   RAREST_TERM_COUNT,
   PROMPT_RECALL_MAX_CHARS,
   type PromptRecallGate,
@@ -154,5 +156,42 @@ describe('rarestPromptTerms', () => {
     const terms = Array.from({ length: 20 }, (_, i) => `t${i}`);
     const out = rarestPromptTerms(terms, () => 1, RAREST_TERM_COUNT);
     expect(out).toHaveLength(RAREST_TERM_COUNT);
+  });
+});
+
+describe('ftsTermParts', () => {
+  it('splits on what unicode61 treats as a separator, keeping letters and digits of any script', () => {
+    expect(ftsTermParts('journal_mode')).toEqual(['journal', 'mode']);
+    expect(ftsTermParts('café2go')).toEqual(['café2go']);
+    expect(ftsTermParts('--')).toEqual([]);
+  });
+});
+
+describe('rarestFtsQuery', () => {
+  it('counts a split term as its rarest part and asks docCount about parts only', () => {
+    const counts = new Map([['journal', 9], ['mode', 2], ['wal', 5]]);
+    const asked: string[] = [];
+    const out = rarestFtsQuery(['wal', 'journal_mode'], (part) => {
+      asked.push(part);
+      return counts.get(part) ?? 0;
+    });
+    expect(out).toBe('journal_mode wal');
+    expect(asked.sort()).toEqual(['journal', 'mode', 'wal']);
+  });
+
+  it('drops a term with an unindexed part or no part at all', () => {
+    const counts = new Map([['journal', 9], ['wal', 5]]);
+    expect(rarestFtsQuery(['journal_nothing', '__', 'wal'], (part) => counts.get(part) ?? 0)).toBe('wal');
+  });
+
+  it('breaks ties by term and caps at RAREST_TERM_COUNT unless told otherwise', () => {
+    const terms = Array.from({ length: 20 }, (_, i) => `t${String(i).padStart(2, '0')}`).reverse();
+    expect(rarestFtsQuery(terms, () => 1).split(' ')).toEqual(terms.slice().sort().slice(0, RAREST_TERM_COUNT));
+    expect(rarestFtsQuery(terms, () => 1, 2)).toBe('t00 t01');
+  });
+
+  it('is the empty query when no term is indexed', () => {
+    expect(rarestFtsQuery(['nothing', 'indexed'], () => 0)).toBe('');
+    expect(rarestFtsQuery([], () => 1)).toBe('');
   });
 });

@@ -105,11 +105,6 @@ export function canTouchScope(actor: { owner?: string }, scope: string | null): 
  * - When `requested` is undefined/empty: default-deny on any
  *   `<source>:private:*` scope and on the `RECALL_DEFAULT_DENY_SCOPES`
  *   quarantine buckets. `null` and public scopes pass, and so does `ownScope`, the caller's own personal scope.
- *
- * @internal Exported for test parity with
- * `RECALL_DEFAULT_DENY_SCOPES` (single-source-of-truth verification). NOT part
- * of the public API surface; not re-exported from `src/index.ts`. Subject to
- * change without semver bump.
  */
 export function passesScopeFilterForRecall(
   scope: string | null,

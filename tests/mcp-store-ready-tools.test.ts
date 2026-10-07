@@ -7,6 +7,7 @@ import { STORE_NOT_PORTED_MESSAGE } from '../src/http-util.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../src/mcp/server.js';
 import { TOOLS } from '../src/mcp/tools.js';
 import { sqliteStore } from '../src/store-port.js';
+import { portOnlyStore } from './_helpers/port-only-store.js';
 
 let root: string;
 
@@ -26,6 +27,9 @@ const ctxOn = (kind: string | undefined): McpContext => ({
   store: kind === undefined ? undefined : { ...sqliteStore(root), kind },
 });
 
+// An add-on store built before the contextReads group.
+const ctxWithoutContextReads = (): McpContext => ({ hippoRoot: root, tenantId: 'default', actor: 'mcp', store: portOnlyStore(root) });
+
 function listedNames(res: McpResponse | null): string[] {
   // SAFETY: src/mcp/request.ts answers tools/list with { tools: McpToolDefinition[] }.
   const result = res?.result as { tools: { name: string }[] } | undefined;
@@ -33,11 +37,22 @@ function listedNames(res: McpResponse | null): string[] {
 }
 
 const declared = TOOLS.map((t) => t.name);
+const notPorted = { jsonrpc: '2.0', id: 1, error: { code: -32603, message: STORE_NOT_PORTED_MESSAGE } };
 
 describe('store-ready MCP tools', () => {
-  it('tools/list under another store lists only hippo_recall', async () => {
+  it('tools/list under another store lists only hippo_recall and hippo_context', async () => {
     const res = await handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/list' }, ctxOn('stub'));
-    expect(listedNames(res)).toEqual(['hippo_recall']);
+    expect(listedNames(res)).toEqual(['hippo_recall', 'hippo_context']);
+  });
+
+  it('tools/list under a store without contextReads leaves hippo_context out, and a call to it answers store_not_ported', async () => {
+    const listed = await handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/list' }, ctxWithoutContextReads());
+    expect(listedNames(listed)).toEqual(['hippo_recall']);
+    const called = await handleMcpRequest(
+      { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_context', arguments: {} } }, ctxWithoutContextReads(),
+    );
+    expect(called).toEqual(notPorted);
+    expect(readdirSync(root)).toEqual([]);
   });
 
   it.each([['the sqlite store', 'sqlite'], ['a context with no store', undefined]] as const)('tools/list on %s lists every tool', async (_name, kind) => {
@@ -46,11 +61,11 @@ describe('store-ready MCP tools', () => {
   });
 
   it('a call to any other tool under another store answers store_not_ported, and the tool never runs', async () => {
-    const unready = declared.filter((name) => name !== 'hippo_recall');
+    const unready = declared.filter((name) => name !== 'hippo_recall' && name !== 'hippo_context');
     expect(unready.length).toBeGreaterThan(0);
     for (const name of unready) {
       const res = await handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: {} } }, ctxOn('stub'));
-      expect(res).toEqual({ jsonrpc: '2.0', id: 1, error: { code: -32603, message: STORE_NOT_PORTED_MESSAGE } });
+      expect(res).toEqual(notPorted);
     }
     expect(readdirSync(root)).toEqual([]);
   });

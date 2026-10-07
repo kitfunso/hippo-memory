@@ -1,0 +1,1990 @@
+{
+  "result": {
+    "entries": [
+      {
+        "entry": {
+          "id": "mem_a_error",
+          "created": "2026-03-08T13:00:00.000Z",
+          "last_retrieved": "2026-03-10T12:00:00.000Z",
+          "retrieval_count": 1,
+          "strength": 1,
+          "half_life_days": 549.5,
+          "layer": "semantic",
+          "tags": [
+            "error:build"
+          ],
+          "emotional_valence": "negative",
+          "schema_fit": 0.9,
+          "source": "cli",
+          "outcome_score": null,
+          "outcome_positive": 0,
+          "outcome_negative": 0,
+          "conflicts_with": [
+            "mem_a_own_1"
+          ],
+          "pinned": false,
+          "confidence": "verified",
+          "content": "build failed when the zebra cache was cold",
+          "parents": [],
+          "starred": false,
+          "trace_outcome": null,
+          "source_session_id": null,
+          "valid_from": "2026-03-08T13:00:00.000Z",
+          "superseded_by": null,
+          "extracted_from": "mem_a_own_0",
+          "dag_level": 2,
+          "dag_parent_id": null,
+          "kind": "distilled",
+          "scope": null,
+          "owner": null,
+          "artifact_ref": null,
+          "tenantId": "acme",
+          "origin_project": "proj",
+          "descendant_count": 0,
+          "earliest_at": null,
+          "latest_at": null,
+          "summary_dirty": 0,
+          "last_rebuilt_at": null,
+          "rebuild_count": 0,
+          "dag_level_3_built_at": null
+        },
+        "score": 1,
+        "tokens": 11,
+        "isGlobal": false,
+        "origin": "proj",
+        "category": "project"
+      },
+      {
+        "entry": {
+          "id": "mem_a_pin",
+          "created": "2026-02-17T16:00:00.000Z",
+          "last_retrieved": "2026-03-10T12:00:00.000Z",
+          "retrieval_count": 1,
+          "strength": 1,
+          "half_life_days": 367,
+          "layer": "episodic",
+          "tags": [],
+          "emotional_valence": "neutral",
+          "schema_fit": 0.5,
+          "source": "cli",
+          "outcome_score": null,
+          "outcome_positive": 0,
+          "outcome_negative": 0,
+          "conflicts_with": [],
+          "pinned": true,
+          "confidence": "verified",
+          "content": "pinned rule: no deploys to the billing service on fridays",
+          "parents": [],
+          "starred": false,
+          "trace_outcome": null,
+          "source_session_id": null,
+          "valid_from": "2026-02-17T16:00:00.000Z",
+          "superseded_by": null,
+          "extracted_from": null,
+          "dag_level": 0,
+          "dag_parent_id": null,
+          "kind": "distilled",
+          "scope": null,
+          "owner": null,
+          "artifact_ref": null,
+          "tenantId": "acme",
+          "origin_project": "proj",
+          "descendant_count": 0,
+          "earliest_at": null,
+          "latest_at": null,
+          "summary_dirty": 0,
+          "last_rebuilt_at": null,
+          "rebuild_count": 0,
+          "dag_level_3_built_at": null
+        },
+        "score": 1,
+        "tokens": 15,
+        "isGlobal": false,
+        "origin": "proj",
+        "category": "project"
+      },
+      {
+        "entry": {
+          "id": "mem_a_liked",
+          "created": "2026-03-06T08:00:00.000Z",
+          "last_retrieved": "2026-03-10T12:00:00.000Z",
+          "retrieval_count": 1,
+          "strength": 1,
+          "half_life_days": 367,
+          "layer": "episodic",
+          "tags": [],
+          "emotional_valence": "neutral",
+          "schema_fit": 0.5,
+          "source": "cli",
+          "outcome_score": null,
+          "outcome_positive": 3,
+          "outcome_negative": 0,
+          "conflicts_with": [],
+          "pinned": false,
+          "confidence": "verified",
+          "content": "rollout lesson that kept paying off",
+          "parents": [],
+          "starred": false,
+          "trace_outcome": null,
+          "source_session_id": null,
+          "valid_from": "2026-03-06T08:00:00.000Z",
+          "superseded_by": null,
+          "extracted_from": null,
+          "dag_level": 0,
+          "dag_parent_id": null,
+          "kind": "distilled",
+          "scope": null,
+          "owner": null,
+          "artifact_ref": null,
+          "tenantId": "acme",
+          "origin_project": "proj",
+          "descendant_count": 0,
+          "earliest_at": null,
+          "latest_at": null,
+          "summary_dirty": 0,
+          "last_rebuilt_at": null,
+          "rebuild_count": 0,
+          "dag_level_3_built_at": null
+        },
+        "score": 0.9998849136913376,
+        "tokens": 9,
+        "isGlobal": false,
+        "origin": "proj",
+        "category": "project"
+      },
+      {
+        "entry": {
+          "id": "mem_a_own_0",
+          "created": "2026-03-10T02:00:00.000Z",
+          "last_retrieved": "2026-03-10T12:00:00.000Z",
+          "retrieval_count": 1,
+          "strength": 1,
+          "half_life_days": 367,
+          "layer": "episodic",
+          "tags": [],
+          "emotional_valence": "neutral",
+          "schema_fit": 0.5,
+          "source": "cli",
+          "outcome_score": null,
+          "outcome_positive": 0,
+          "outcome_negative": 0,
+          "conflicts_with": [],
+          "pinned": false,
+          "confidence": "verified",
+          "content": "own project rollout step 0 moved the queue workers",
+          "parents": [],
+          "starred": false,
+          "trace_outcome": null,
+          "source_session_id": null,
+          "valid_from": "2026-03-10T02:00:00.000Z",
+          "superseded_by": null,
+          "extracted_from": null,
+          "dag_level": 0,
+          "dag_parent_id": null,
+          "kind": "distilled",
+          "scope": null,
+          "owner": null,
+          "artifact_ref": null,
+          "tenantId": "acme",
+          "origin_project": "proj",
+          "descendant_count": 0,
+          "earliest_at": null,
+          "latest_at": null,
+          "summary_dirty": 0,
+          "last_rebuilt_at": null,
+          "rebuild_count": 0,
+          "dag_level_3_built_at": null
+        },
+        "score": 0.9992090490619828,
+        "tokens": 13,
+        "isGlobal": false,
+        "origin": "proj",
+        "category": "project"
+      },
+      {
+        "entry": {
+          "id": "mem_a_own_1",
+          "created": "2026-03-10T01:00:00.000Z",
+          "last_retrieved": "2026-03-10T12:00:00.000Z",
+          "retrieval_count": 1,
+          "strength": 1,
+          "half_life_days": 367,
+          "layer": "episodic",
+          "tags": [],
+          "emotional_valence": "neutral",
+          "schema_fit": 0.5,
+          "source": "cli",
+          "outcome_score": null,
+          "outcome_positive": 0,
+          "outcome_negative": 0,
+          "conflicts_with": [],
+          "pinned": false,
+          "confidence": "verified",
+          "content": "own project rollout step 1 moved the queue workers",
+          "parents": [],
+          "starred": false,
+          "trace_outcome": null,
+          "source_session_id": null,
+          "valid_from": "2026-03-10T01:00:00.000Z",
+          "superseded_by": null,
+          "extracted_from": null,
+          "dag_level": 0,
+          "dag_parent_id": null,
+          "kind": "distilled",
+          "scope": null,
+          "owner": null,
+          "artifact_ref": null,
+          "tenantId": "acme",
+          "origin_project": "proj",
+          "descendant_count": 0,
+          "earliest_at": null,
+          "latest_at": null,
+          "summary_dirty": 0,
+          "last_rebuilt_at": null,
+          "rebuild_count": 0,
+          "dag_level_3_built_at": null
+        },
+        "score": 0.9991299883845349,
+        "tokens": 13,
+        "isGlobal": false,
+        "origin": "proj",
+        "category": "project"
+      },
+      {
+        "entry": {
+          "id": "mem_a_own_2",
+          "created": "2026-03-10T00:00:00.000Z",
+          "last_retrieved": "2026-03-10T12:00:00.000Z",
+          "retrieval_count": 1,
+          "strength": 1,
+          "half_life_days": 367,
+          "layer": "episodic",
+          "tags": [],
+          "emotional_valence": "neutral",
+          "schema_fit": 0.5,
+          "source": "cli",
+          "outcome_score": null,
+          "outcome_positive": 0,
+          "outcome_negative": 0,
+          "conflicts_with": [],
+          "pinned": false,
+          "confidence": "verified",
+          "content": "own project rollout step 2 moved the queue workers",
+          "parents": [],
+          "starred": false,
+          "trace_outcome": null,
+          "source_session_id": null,
+          "valid_from": "2026-03-10T00:00:00.000Z",
+          "superseded_by": null,
+          "extracted_from": null,
+          "dag_level": 0,
+          "dag_parent_id": null,
+          "kind": "distilled",
+          "scope": null,
+          "owner": null,
+          "artifact_ref": null,
+          "tenantId": "acme",
+          "origin_project": "proj",
+          "descendant_count": 0,
+          "earliest_at": null,
+          "latest_at": null,
+          "summary_dirty": 0,
+          "last_rebuilt_at": null,
+          "rebuild_count": 0,
+          "dag_level_3_built_at": null
+        },
+        "score": 0.9990509339626257,
+        "tokens": 13,
+        "isGlobal": false,
+        "origin": "proj",
+        "category": "project"
+      },
+      {
+        "entry": {
+          "id": "mem_a_own_3",
+          "created": "2026-03-09T23:00:00.000Z",
+          "last_retrieved": "2026-03-10T12:00:00.000Z",
+          "retrieval_count": 1,
+          "strength": 1,
+          "half_life_days": 367,
+          "layer": "episodic",
+          "tags": [],
+          "emotional_valence": "neutral",
+          "schema_fit": 0.5,
+          "source": "cli",
+          "outcome_score": null,
+          "outcome_positive": 0,
+          "outcome_negative": 0,
+          "conflicts_with": [],
+          "pinned": false,
+          "confidence": "verified",
+          "content": "own project rollout step 3 moved the queue workers",
+          "parents": [],
+          "starred": false,
+          "trace_outcome": null,
+          "source_session_id": null,
+          "valid_from": "2026-03-09T23:00:00.000Z",
+          "superseded_by": null,
+          "extracted_from": null,
+          "dag_level": 0,
+          "dag_parent_id": null,
+          "kind": "distilled",
+          "scope": null,
+          "owner": null,
+          "artifact_ref": null,
+          "tenantId": "acme",
+          "origin_project": "proj",
+          "descendant_count": 0,
+          "earliest_at": null,
+          "latest_at": null,
+          "summary_dirty": 0,
+          "last_rebuilt_at": null,
+          "rebuild_count": 0,
+          "dag_level_3_built_at": null
+        },
+        "score": 0.9989718857957599,
+        "tokens": 13,
+        "isGlobal": false,
+        "origin": "proj",
+        "category": "project"
+      },
+      {
+        "entry": {
+          "id": "mem_a_own_4",
+          "created": "2026-03-09T22:00:00.000Z",
+          "last_retrieved": "2026-03-10T12:00:00.000Z",
+          "retrieval_count": 1,
+          "strength": 1,
+          "half_life_days": 367,
+          "layer": "episodic",
+          "tags": [],
+          "emotional_valence": "neutral",
+          "schema_fit": 0.5,
+          "source": "cli",
+          "outcome_score": null,
+          "outcome_positive": 0,
+          "outcome_negative": 0,
+          "conflicts_with": [],
+          "pinned": false,
+          "confidence": "verified",
+          "content": "own project rollout step 4 moved the queue workers",
+          "parents": [],
+          "starred": false,
+          "trace_outcome": null,
+          "source_session_id": null,
+          "valid_from": "2026-03-09T22:00:00.000Z",
+          "superseded_by": null,
+          "extracted_from": null,
+          "dag_level": 0,
+          "dag_parent_id": null,
+          "kind": "distilled",
+          "scope": null,
+          "owner": null,
+          "artifact_ref": null,
+          "tenantId": "acme",
+          "origin_project": "proj",
+          "descendant_count": 0,
+          "earliest_at": null,
+          "latest_at": null,
+          "summary_dirty": 0,
+          "last_rebuilt_at": null,
+          "rebuild_count": 0,
+          "dag_level_3_built_at": null
+        },
+        "score": 0.9988928438834429,
+        "tokens": 13,
+        "isGlobal": false,
+        "origin": "proj",
+        "category": "project"
+      },
+      {
+        "entry": {
+          "id": "mem_a_own_5",
+          "created": "2026-03-09T21:00:00.000Z",
+          "last_retrieved": "2026-03-10T12:00:00.000Z",
+          "retrieval_count": 1,
+          "strength": 1,
+          "half_life_days": 367,
+          "layer": "episodic",
+          "tags": [],
+          "emotional_valence": "neutral",
+          "schema_fit": 0.5,
+          "source": "cli",
+          "outcome_score": null,
+          "outcome_positive": 0,
+          "outcome_negative": 0,
+          "conflicts_with": [],
+          "pinned": false,
+          "confidence": "verified",
+          "content": "own project rollout step 5 moved the queue workers",
+          "parents": [],
+          "starred": false,
+          "trace_outcome": null,
+          "source_session_id": null,
+          "valid_from": "2026-03-09T21:00:00.000Z",
+          "superseded_by": null,
+          "extracted_from": null,
+          "dag_level": 0,
+          "dag_parent_id": null,
+          "kind": "distilled",
+          "scope": null,
+          "owner": null,
+          "artifact_ref": null,
+          "tenantId": "acme",
+          "origin_project": "proj",
+          "descendant_count": 0,
+          "earliest_at": null,
+          "latest_at": null,
+          "summary_dirty": 0,
+          "last_rebuilt_at": null,
+          "rebuild_count": 0,
+          "dag_level_3_built_at": null
+        },
+        "score": 0.9988138082251796,
+        "tokens": 13,
+        "isGlobal": false,
+        "origin": "proj",
+        "category": "project"
+      },
+      {
+        "entry": {
+          "id": "mem_a_global_0",
+          "created": "2026-03-09T16:00:00.000Z",
+          "last_retrieved": "2026-03-10T12:00:00.000Z",
+          "retrieval_count": 1,
+          "strength": 1,
+          "half_life_days": 367,
+          "layer": "episodic",
+          "tags": [],
+          "emotional_valence": "neutral",
+          "schema_fit": 0.5,
+          "source": "cli",
+          "outcome_score": null,
+          "outcome_positive": 0,
+          "outcome_negative": 0,
+          "conflicts_with": [],
+          "pinned": false,
+          "confidence": "verified",
+          "content": "user global preference 0: keep commits small for review",
+          "parents": [],
+          "starred": false,
+          "trace_outcome": null,
+          "source_session_id": null,
+          "valid_from": "2026-03-09T16:00:00.000Z",
+          "superseded_by": null,
+          "extracted_from": null,
+          "dag_level": 0,
+          "dag_parent_id": null,
+          "kind": "distilled",
+          "scope": null,
+          "owner": null,
+          "artifact_ref": null,
+          "tenantId": "acme",
+          "origin_project": "",
+          "descendant_count": 0,
+          "earliest_at": null,
+          "latest_at": null,
+          "summary_dirty": 0,
+          "last_rebuilt_at": null,
+          "rebuild_count": 0,
+          "dag_level_3_built_at": null
+        },
+        "score": 0.998418723727352,
+        "tokens": 14,
+        "isGlobal": false,
+        "origin": "",
+        "category": "user-global"
+      },
+      {
+        "entry": {
+          "id": "mem_a_global_1",
+          "created": "2026-03-09T15:00:00.000Z",
+          "last_retrieved": "2026-03-10T12:00:00.000Z",
+          "retrieval_count": 1,
+          "strength": 1,
+          "half_life_days": 367,
+          "layer": "episodic",
+          "tags": [],
+          "emotional_valence": "neutral",
+          "schema_fit": 0.5,
+          "source": "cli",
+          "outcome_score": null,
+          "outcome_positive": 0,
+          "outcome_negative": 0,
+          "conflicts_with": [],
+          "pinned": false,
+          "confidence": "verified",
+          "content": "user global preference 1: keep commits small for review",
+          "parents": [],
+          "starred": false,
+          "trace_outcome": null,
+          "source_session_id": null,
+          "valid_from": "2026-03-09T15:00:00.000Z",
+          "superseded_by": null,
+          "extracted_from": null,
+          "dag_level": 0,
+          "dag_parent_id": null,
+          "kind": "distilled",
+          "scope": null,
+          "owner": null,
+          "artifact_ref": null,
+          "tenantId": "acme",
+          "origin_project": "",
+          "descendant_count": 0,
+          "earliest_at": null,
+          "latest_at": null,
+          "summary_dirty": 0,
+          "last_rebuilt_at": null,
+          "rebuild_count": 0,
+          "dag_level_3_built_at": null
+        },
+        "score": 0.9983397255830211,
+        "tokens": 14,
+        "isGlobal": false,
+        "origin": "",
+        "category": "user-global"
+      },
+      {
+        "entry": {
+          "id": "mem_a_global_2",
+          "created": "2026-03-09T14:00:00.000Z",
+          "last_retrieved": "2026-03-10T12:00:00.000Z",
+          "retrieval_count": 1,
+          "strength": 1,
+          "half_life_days": 367,
+          "layer": "episodic",
+          "tags": [],
+          "emotional_valence": "neutral",
+          "schema_fit": 0.5,
+          "source": "cli",
+          "outcome_score": null,
+          "outcome_positive": 0,
+          "outcome_negative": 0,
+          "conflicts_with": [],
+          "pinned": false,
+          "confidence": "verified",
+          "content": "user global preference 2: keep commits small for review",
+          "parents": [],
+          "starred": false,
+          "trace_outcome": null,
+          "source_session_id": null,
+          "valid_from": "2026-03-09T14:00:00.000Z",
+          "superseded_by": null,
+          "extracted_from": null,
+          "dag_level": 0,
+          "dag_parent_id": null,
+          "kind": "distilled",
+          "scope": null,
+          "owner": null,
+          "artifact_ref": null,
+          "tenantId": "acme",
+          "origin_project": "",
+          "descendant_count": 0,
+          "earliest_at": null,
+          "latest_at": null,
+          "summary_dirty": 0,
+          "last_rebuilt_at": null,
+          "rebuild_count": 0,
+          "dag_level_3_built_at": null
+        },
+        "score": 0.998260733689281,
+        "tokens": 14,
+        "isGlobal": false,
+        "origin": "",
+        "category": "user-global"
+      },
+      {
+        "entry": {
+          "id": "mem_a_team",
+          "created": "2026-03-09T06:00:00.000Z",
+          "last_retrieved": "2026-03-10T12:00:00.000Z",
+          "retrieval_count": 1,
+          "strength": 1,
+          "half_life_days": 367,
+          "layer": "episodic",
+          "tags": [],
+          "emotional_valence": "neutral",
+          "schema_fit": 0.5,
+          "source": "cli",
+          "outcome_score": null,
+          "outcome_positive": 0,
+          "outcome_negative": 0,
+          "conflicts_with": [],
+          "pinned": false,
+          "confidence": "verified",
+          "content": "team rota covers the rollout pager this week",
+          "parents": [],
+          "starred": false,
+          "trace_outcome": null,
+          "source_session_id": null,
+          "valid_from": "2026-03-09T06:00:00.000Z",
+          "superseded_by": null,
+          "extracted_from": null,
+          "dag_level": 0,
+          "dag_parent_id": null,
+          "kind": "distilled",
+          "scope": "team:eng",
+          "owner": null,
+          "artifact_ref": null,
+          "tenantId": "acme",
+          "origin_project": "proj",
+          "descendant_count": 0,
+          "earliest_at": null,
+          "latest_at": null,
+          "summary_dirty": 0,
+          "last_rebuilt_at": null,
+          "rebuild_count": 0,
+          "dag_level_3_built_at": null
+        },
+        "score": 0.9976290235012859,
+        "tokens": 11,
+        "isGlobal": false,
+        "origin": "proj",
+        "category": "project"
+      },
+      {
+        "entry": {
+          "id": "mem_a_new",
+          "created": "2026-03-08T19:00:00.000Z",
+          "last_retrieved": "2026-03-10T12:00:00.000Z",
+          "retrieval_count": 1,
+          "strength": 1,
+          "half_life_days": 367,
+          "layer": "episodic",
+          "tags": [],
+          "emotional_valence": "neutral",
+          "schema_fit": 0.5,
+          "source": "cli",
+          "outcome_score": null,
+          "outcome_positive": 0,
+          "outcome_negative": 0,
+          "conflicts_with": [],
+          "pinned": false,
+          "confidence": "verified",
+          "content": "rollout target is the new staging cluster",
+          "parents": [],
+          "starred": false,
+          "trace_outcome": null,
+          "source_session_id": null,
+          "valid_from": "2026-03-08T19:00:00.000Z",
+          "superseded_by": null,
+          "extracted_from": null,
+          "dag_level": 0,
+          "dag_parent_id": null,
+          "kind": "distilled",
+          "scope": null,
+          "owner": null,
+          "artifact_ref": null,
+          "tenantId": "acme",
+          "origin_project": "proj",
+          "descendant_count": 0,
+          "earliest_at": null,
+          "latest_at": null,
+          "summary_dirty": 0,
+          "last_rebuilt_at": null,
+          "rebuild_count": 0,
+          "dag_level_3_built_at": null
+        },
+        "score": 0.9967610746629147,
+        "tokens": 11,
+        "isGlobal": false,
+        "origin": "proj",
+        "category": "project"
+      },
+      {
+        "entry": {
+          "id": "mem_a_blank",
+          "created": "2026-03-08T18:00:00.000Z",
+          "last_retrieved": "2026-03-10T12:00:00.000Z",
+          "retrieval_count": 1,
+          "strength": 1,
+          "half_life_days": 367,
+          "layer": "episodic",
+          "tags": [],
+          "emotional_valence": "neutral",
+          "schema_fit": 0.5,
+          "source": "cli",
+          "outcome_score": null,
+          "outcome_positive": 0,
+          "outcome_negative": 0,
+          "conflicts_with": [],
+          "pinned": false,
+          "confidence": "verified",
+          "content": "rollout note whose supersede link was blanked",
+          "parents": [],
+          "starred": false,
+          "trace_outcome": null,
+          "source_session_id": null,
+          "valid_from": "2026-03-08T18:00:00.000Z",
+          "superseded_by": "",
+          "extracted_from": null,
+          "dag_level": 0,
+          "dag_parent_id": null,
+          "kind": "distilled",
+          "scope": null,
+          "owner": null,
+          "artifact_ref": null,
+          "tenantId": "acme",
+          "origin_project": "proj",
+          "descendant_count": 0,
+          "earliest_at": null,
+          "latest_at": null,
+          "summary_dirty": 0,
+          "last_rebuilt_at": null,
+          "rebuild_count": 0,
+          "dag_level_3_built_at": null
+        },
+        "score": 0.996682207677182,
+        "tokens": 12,
+        "isGlobal": false,
+        "origin": "proj",
+        "category": "project"
+      },
+      {
+        "entry": {
+          "id": "mem_a_archived",
+          "created": "2026-03-08T17:00:00.000Z",
+          "last_retrieved": "2026-03-10T12:00:00.000Z",
+          "retrieval_count": 1,
+          "strength": 1,
+          "half_life_days": 367,
+          "layer": "episodic",
+          "tags": [],
+          "emotional_valence": "neutral",
+          "schema_fit": 0.5,
+          "source": "cli",
+          "outcome_score": null,
+          "outcome_positive": 0,
+          "outcome_negative": 0,
+          "conflicts_with": [],
+          "pinned": false,
+          "confidence": "verified",
+          "content": "archived rollout plan from last quarter",
+          "parents": [],
+          "starred": false,
+          "trace_outcome": null,
+          "source_session_id": null,
+          "valid_from": "2026-03-08T17:00:00.000Z",
+          "superseded_by": null,
+          "extracted_from": null,
+          "dag_level": 0,
+          "dag_parent_id": null,
+          "kind": "archived",
+          "scope": null,
+          "owner": null,
+          "artifact_ref": null,
+          "tenantId": "acme",
+          "origin_project": "proj",
+          "descendant_count": 0,
+          "earliest_at": null,
+          "latest_at": null,
+          "summary_dirty": 0,
+          "last_rebuilt_at": null,
+          "rebuild_count": 0,
+          "dag_level_3_built_at": null
+        },
+        "score": 0.9966033469316621,
+        "tokens": 10,
+        "isGlobal": false,
+        "origin": "proj",
+        "category": "project"
+      },
+      {
+        "entry": {
+          "id": "mem_a_secret_own",
+          "created": "2026-03-08T16:00:00.000Z",
+          "last_retrieved": "2026-03-10T12:00:00.000Z",
+          "retrieval_count": 1,
+          "strength": 1,
+          "half_life_days": 367,
+          "layer": "episodic",
+          "tags": [
+            "secret"
+          ],
+          "emotional_valence": "neutral",
+          "schema_fit": 0.5,
+          "source": "cli",
+          "outcome_score": null,
+          "outcome_positive": 0,
+          "outcome_negative": 0,
+          "conflicts_with": [],
+          "pinned": false,
+          "confidence": "verified",
+          "content": "own project vault path lives in the ops runbook",
+          "parents": [],
+          "starred": false,
+          "trace_outcome": null,
+          "source_session_id": null,
+          "valid_from": "2026-03-08T16:00:00.000Z",
+          "superseded_by": null,
+          "extracted_from": null,
+          "dag_level": 0,
+          "dag_parent_id": null,
+          "kind": "distilled",
+          "scope": null,
+          "owner": null,
+          "artifact_ref": null,
+          "tenantId": "acme",
+          "origin_project": "proj",
+          "descendant_count": 0,
+          "earliest_at": null,
+          "latest_at": null,
+          "summary_dirty": 0,
+          "last_rebuilt_at": null,
+          "rebuild_count": 0,
+          "dag_level_3_built_at": null
+        },
+        "score": 0.9965244924258616,
+        "tokens": 12,
+        "isGlobal": false,
+        "origin": "proj",
+        "category": "project"
+      },
+      {
+        "entry": {
+          "id": "mem_g_pin",
+          "created": "2026-02-13T12:00:00.000Z",
+          "last_retrieved": "2026-03-10T12:00:00.000Z",
+          "retrieval_count": 1,
+          "strength": 1,
+          "half_life_days": 367,
+          "layer": "episodic",
+          "tags": [],
+          "emotional_valence": "neutral",
+          "schema_fit": 0.5,
+          "source": "cli",
+          "outcome_score": null,
+          "outcome_positive": 0,
+          "outcome_negative": 0,
+          "conflicts_with": [],
+          "pinned": true,
+          "confidence": "verified",
+          "content": "global pinned rule: rollout notes go in the team channel",
+          "parents": [],
+          "starred": false,
+          "trace_outcome": null,
+          "source_session_id": null,
+          "valid_from": "2026-02-13T12:00:00.000Z",
+          "superseded_by": null,
+          "extracted_from": null,
+          "dag_level": 0,
+          "dag_parent_id": null,
+          "kind": "distilled",
+          "scope": null,
+          "owner": null,
+          "artifact_ref": null,
+          "tenantId": "acme",
+          "origin_project": "",
+          "descendant_count": 0,
+          "earliest_at": null,
+          "latest_at": null,
+          "summary_dirty": 0,
+          "last_rebuilt_at": null,
+          "rebuild_count": 0,
+          "dag_level_3_built_at": null
+        },
+        "score": 0.8333333333333334,
+        "tokens": 14,
+        "isGlobal": true,
+        "origin": "",
+        "category": "user-global"
+      },
+      {
+        "entry": {
+          "id": "mem_g_note",
+          "created": "2026-03-10T00:00:00.000Z",
+          "last_retrieved": "2026-03-10T12:00:00.000Z",
+          "retrieval_count": 1,
+          "strength": 1,
+          "half_life_days": 367,
+          "layer": "episodic",
+          "tags": [],
+          "emotional_valence": "neutral",
+          "schema_fit": 0.5,
+          "source": "cli",
+          "outcome_score": null,
+          "outcome_positive": 0,
+          "outcome_negative": 0,
+          "conflicts_with": [],
+          "pinned": false,
+          "confidence": "verified",
+          "content": "global rollout note from the home store",
+          "parents": [],
+          "starred": false,
+          "trace_outcome": null,
+          "source_session_id": null,
+          "valid_from": "2026-03-10T00:00:00.000Z",
+          "superseded_by": null,
+          "extracted_from": null,
+          "dag_level": 0,
+          "dag_parent_id": null,
+          "kind": "distilled",
+          "scope": null,
+          "owner": null,
+          "artifact_ref": null,
+          "tenantId": "acme",
+          "origin_project": "",
+          "descendant_count": 0,
+          "earliest_at": null,
+          "latest_at": null,
+          "summary_dirty": 0,
+          "last_rebuilt_at": null,
+          "rebuild_count": 0,
+          "dag_level_3_built_at": null
+        },
+        "score": 0.8325424449688548,
+        "tokens": 10,
+        "isGlobal": true,
+        "origin": "",
+        "category": "user-global"
+      },
+      {
+        "entry": {
+          "id": "mem_a_decayed",
+          "created": "2026-03-02T04:00:00.000Z",
+          "last_retrieved": "2026-03-10T12:00:00.000Z",
+          "retrieval_count": 1,
+          "strength": 1,
+          "half_life_days": 3,
+          "layer": "episodic",
+          "tags": [],
+          "emotional_valence": "neutral",
+          "schema_fit": 0.5,
+          "source": "cli",
+          "outcome_score": null,
+          "outcome_positive": 0,
+          "outcome_negative": 0,
+          "conflicts_with": [],
+          "pinned": false,
+          "confidence": "verified",
+          "content": "rollout lesson that decays within a day",
+          "parents": [],
+          "starred": false,
+          "trace_outcome": null,
+          "source_session_id": null,
+          "valid_from": "2026-03-02T04:00:00.000Z",
+          "superseded_by": null,
+          "extracted_from": null,
+          "dag_level": 0,
+          "dag_parent_id": null,
+          "kind": "distilled",
+          "scope": null,
+          "owner": null,
+          "artifact_ref": null,
+          "tenantId": "acme",
+          "origin_project": "proj",
+          "descendant_count": 0,
+          "earliest_at": null,
+          "latest_at": null,
+          "summary_dirty": 0,
+          "last_rebuilt_at": null,
+          "rebuild_count": 0,
+          "dag_level_3_built_at": null
+        },
+        "score": 0.0031003926796253885,
+        "tokens": 10,
+        "isGlobal": false,
+        "origin": "proj",
+        "category": "project"
+      },
+      {
+        "entry": {
+          "id": "mem_a_flat",
+          "created": "2026-03-08T11:00:00.000Z",
+          "last_retrieved": "2026-03-10T12:00:00.000Z",
+          "retrieval_count": 1,
+          "strength": 1,
+          "half_life_days": 2,
+          "layer": "episodic",
+          "tags": [],
+          "emotional_valence": "neutral",
+          "schema_fit": 0.5,
+          "source": "cli",
+          "outcome_score": null,
+          "outcome_positive": 0,
+          "outcome_negative": 0,
+          "conflicts_with": [],
+          "pinned": false,
+          "confidence": "verified",
+          "content": "rollout lesson with no half life",
+          "parents": [],
+          "starred": false,
+          "trace_outcome": null,
+          "source_session_id": null,
+          "valid_from": "2026-03-08T11:00:00.000Z",
+          "superseded_by": null,
+          "extracted_from": null,
+          "dag_level": 0,
+          "dag_parent_id": null,
+          "kind": "distilled",
+          "scope": null,
+          "owner": null,
+          "artifact_ref": null,
+          "tenantId": "acme",
+          "origin_project": "proj",
+          "descendant_count": 0,
+          "earliest_at": null,
+          "latest_at": null,
+          "summary_dirty": 0,
+          "last_rebuilt_at": null,
+          "rebuild_count": 0,
+          "dag_level_3_built_at": null
+        },
+        "score": 0,
+        "tokens": 8,
+        "isGlobal": false,
+        "origin": "proj",
+        "category": "project"
+      }
+    ],
+    "tokens": 253,
+    "activeSnapshot": {
+      "id": 2,
+      "task": "unkeyed task for session a",
+      "summary": "summary of unkeyed task for session a",
+      "next_step": "next step of unkeyed task for session a",
+      "status": "active",
+      "source": "cli",
+      "session_id": "ctx-session-a",
+      "scope": null,
+      "created_at": "2026-03-10T08:00:00.000Z",
+      "updated_at": "2026-03-10T09:00:00.000Z"
+    },
+    "sessionHandoff": {
+      "version": 1,
+      "sessionId": "ctx-session-a",
+      "repoRoot": "/repo",
+      "taskId": "task-1",
+      "summary": "second handoff for session a",
+      "nextAction": "ship it",
+      "artifacts": [
+        "a.ts",
+        "b.ts"
+      ],
+      "scope": null,
+      "updatedAt": "2026-03-10T11:00:00.000Z",
+      "constraints": [
+        "no force push"
+      ],
+      "evidence": {
+        "gitRef": "abc123",
+        "dirtyTree": false
+      },
+      "outcome": "success",
+      "targetRuntime": "claude-code",
+      "cardId": null
+    },
+    "recentEvents": [
+      {
+        "id": 4,
+        "session_id": "ctx-session-a",
+        "task": null,
+        "event_type": "note",
+        "content": "promoted the canary",
+        "source": "cli",
+        "scope": null,
+        "metadata": {},
+        "created_at": "2026-03-10T08:00:00.000Z"
+      },
+      {
+        "id": 5,
+        "session_id": "ctx-session-a",
+        "task": null,
+        "event_type": "note",
+        "content": "paged the on-call",
+        "source": "cli",
+        "scope": null,
+        "metadata": {},
+        "created_at": "2026-03-10T09:00:00.000Z"
+      },
+      {
+        "id": 6,
+        "session_id": "ctx-session-a",
+        "task": null,
+        "event_type": "note",
+        "content": "same time, lower id",
+        "source": "cli",
+        "scope": null,
+        "metadata": {},
+        "created_at": "2026-03-10T11:00:00.000Z"
+      },
+      {
+        "id": 7,
+        "session_id": "ctx-session-a",
+        "task": null,
+        "event_type": "note",
+        "content": "same time, higher id",
+        "source": "cli",
+        "scope": null,
+        "metadata": {},
+        "created_at": "2026-03-10T11:00:00.000Z"
+      }
+    ],
+    "ambientState": {
+      "tagEntropy": 0.4321928094887363,
+      "avgStrength": 1,
+      "recencyFreshness": 0.85,
+      "emotionalSkew": -0.4,
+      "schemaFitRatio": 0.05,
+      "errorDensity": 0.05,
+      "consolidationRatio": 0.05,
+      "conflictIntensity": 0.025,
+      "extractionCoverage": 0.05263157894736842,
+      "dagDepth": 2,
+      "totalMemories": 20
+    }
+  },
+  "rows": {
+    "local": {
+      "audit": [],
+      "goalRecallLog": [],
+      "stats": [
+        {
+          "key": "total_forgotten",
+          "value": "0"
+        },
+        {
+          "key": "total_recalled",
+          "value": "21"
+        },
+        {
+          "key": "total_remembered",
+          "value": "0"
+        }
+      ],
+      "traces": [
+        {
+          "id": 1,
+          "tenant_id": "acme",
+          "session_id": "ctx-session-a",
+          "pipeline": "context",
+          "result_count": 21,
+          "explain_mode": 0
+        }
+      ],
+      "traceResults": [
+        {
+          "trace_id": 1,
+          "memory_id": "mem_a_error",
+          "result_rank": 1,
+          "score": 1
+        },
+        {
+          "trace_id": 1,
+          "memory_id": "mem_a_pin",
+          "result_rank": 2,
+          "score": 1
+        },
+        {
+          "trace_id": 1,
+          "memory_id": "mem_a_liked",
+          "result_rank": 3,
+          "score": 0.9998849136913376
+        },
+        {
+          "trace_id": 1,
+          "memory_id": "mem_a_own_0",
+          "result_rank": 4,
+          "score": 0.9992090490619828
+        },
+        {
+          "trace_id": 1,
+          "memory_id": "mem_a_own_1",
+          "result_rank": 5,
+          "score": 0.9991299883845349
+        },
+        {
+          "trace_id": 1,
+          "memory_id": "mem_a_own_2",
+          "result_rank": 6,
+          "score": 0.9990509339626257
+        },
+        {
+          "trace_id": 1,
+          "memory_id": "mem_a_own_3",
+          "result_rank": 7,
+          "score": 0.9989718857957599
+        },
+        {
+          "trace_id": 1,
+          "memory_id": "mem_a_own_4",
+          "result_rank": 8,
+          "score": 0.9988928438834429
+        },
+        {
+          "trace_id": 1,
+          "memory_id": "mem_a_own_5",
+          "result_rank": 9,
+          "score": 0.9988138082251796
+        },
+        {
+          "trace_id": 1,
+          "memory_id": "mem_a_global_0",
+          "result_rank": 10,
+          "score": 0.998418723727352
+        },
+        {
+          "trace_id": 1,
+          "memory_id": "mem_a_global_1",
+          "result_rank": 11,
+          "score": 0.9983397255830211
+        },
+        {
+          "trace_id": 1,
+          "memory_id": "mem_a_global_2",
+          "result_rank": 12,
+          "score": 0.998260733689281
+        },
+        {
+          "trace_id": 1,
+          "memory_id": "mem_a_team",
+          "result_rank": 13,
+          "score": 0.9976290235012859
+        },
+        {
+          "trace_id": 1,
+          "memory_id": "mem_a_new",
+          "result_rank": 14,
+          "score": 0.9967610746629147
+        },
+        {
+          "trace_id": 1,
+          "memory_id": "mem_a_blank",
+          "result_rank": 15,
+          "score": 0.996682207677182
+        },
+        {
+          "trace_id": 1,
+          "memory_id": "mem_a_archived",
+          "result_rank": 16,
+          "score": 0.9966033469316621
+        },
+        {
+          "trace_id": 1,
+          "memory_id": "mem_a_secret_own",
+          "result_rank": 17,
+          "score": 0.9965244924258616
+        },
+        {
+          "trace_id": 1,
+          "memory_id": "mem_g_pin",
+          "result_rank": 18,
+          "score": 0.8333333333333334
+        },
+        {
+          "trace_id": 1,
+          "memory_id": "mem_g_note",
+          "result_rank": 19,
+          "score": 0.8325424449688548
+        },
+        {
+          "trace_id": 1,
+          "memory_id": "mem_a_decayed",
+          "result_rank": 20,
+          "score": 0.0031003926796253885
+        },
+        {
+          "trace_id": 1,
+          "memory_id": "mem_a_flat",
+          "result_rank": 21,
+          "score": 0
+        }
+      ],
+      "ledger": [],
+      "retrieved": [
+        {
+          "id": "mem_a_archived",
+          "retrieval_count": 1,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_blank",
+          "retrieval_count": 1,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_decayed",
+          "retrieval_count": 1,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_error",
+          "retrieval_count": 1,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_flat",
+          "retrieval_count": 1,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_global_0",
+          "retrieval_count": 1,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_global_1",
+          "retrieval_count": 1,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_global_2",
+          "retrieval_count": 1,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_liked",
+          "retrieval_count": 1,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_new",
+          "retrieval_count": 1,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_own_0",
+          "retrieval_count": 1,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_own_1",
+          "retrieval_count": 1,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_own_2",
+          "retrieval_count": 1,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_own_3",
+          "retrieval_count": 1,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_own_4",
+          "retrieval_count": 1,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_own_5",
+          "retrieval_count": 1,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_pin",
+          "retrieval_count": 1,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_secret_own",
+          "retrieval_count": 1,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_team",
+          "retrieval_count": 1,
+          "strength": 1
+        }
+      ],
+      "strengthened": [
+        {
+          "id": "mem_a_alice",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-09T05:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_archived",
+          "retrieval_count": 1,
+          "last_retrieved": "2026-03-10T12:00:00.000Z",
+          "half_life_days": 367,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_blank",
+          "retrieval_count": 1,
+          "last_retrieved": "2026-03-10T12:00:00.000Z",
+          "half_life_days": 367,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_bob",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-09T04:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_decayed",
+          "retrieval_count": 1,
+          "last_retrieved": "2026-03-10T12:00:00.000Z",
+          "half_life_days": 3,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_error",
+          "retrieval_count": 1,
+          "last_retrieved": "2026-03-10T12:00:00.000Z",
+          "half_life_days": 549.5,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_flat",
+          "retrieval_count": 1,
+          "last_retrieved": "2026-03-10T12:00:00.000Z",
+          "half_life_days": 2,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_global_0",
+          "retrieval_count": 1,
+          "last_retrieved": "2026-03-10T12:00:00.000Z",
+          "half_life_days": 367,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_global_1",
+          "retrieval_count": 1,
+          "last_retrieved": "2026-03-10T12:00:00.000Z",
+          "half_life_days": 367,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_global_2",
+          "retrieval_count": 1,
+          "last_retrieved": "2026-03-10T12:00:00.000Z",
+          "half_life_days": 367,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_legacy",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-09T03:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_liked",
+          "retrieval_count": 1,
+          "last_retrieved": "2026-03-10T12:00:00.000Z",
+          "half_life_days": 367,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_new",
+          "retrieval_count": 1,
+          "last_retrieved": "2026-03-10T12:00:00.000Z",
+          "half_life_days": 367,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_no_origin",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-08T12:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_old",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-08T00:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_00",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T11:30:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_01",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T11:24:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_02",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T11:18:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_03",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T11:12:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_04",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T11:06:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_05",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T11:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_06",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T10:54:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_07",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T10:48:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_08",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T10:42:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_09",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T10:36:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_10",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T10:30:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_11",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T10:24:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_12",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T10:18:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_13",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T10:12:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_14",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T10:06:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_15",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T10:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_16",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T09:54:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_17",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T09:48:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_18",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T09:42:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_19",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T09:36:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_20",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T09:30:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_21",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T09:24:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_22",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T09:18:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_23",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T09:12:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_24",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T09:06:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_25",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T09:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_26",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T08:54:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_27",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T08:48:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_28",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T08:42:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_29",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T08:36:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_30",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T08:30:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_31",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T08:24:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_32",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T08:18:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_33",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T08:12:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_34",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T08:06:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_35",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T08:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_36",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T07:54:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_37",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T07:48:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_38",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T07:42:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_39",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T07:36:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_own_0",
+          "retrieval_count": 1,
+          "last_retrieved": "2026-03-10T12:00:00.000Z",
+          "half_life_days": 367,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_own_1",
+          "retrieval_count": 1,
+          "last_retrieved": "2026-03-10T12:00:00.000Z",
+          "half_life_days": 367,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_own_2",
+          "retrieval_count": 1,
+          "last_retrieved": "2026-03-10T12:00:00.000Z",
+          "half_life_days": 367,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_own_3",
+          "retrieval_count": 1,
+          "last_retrieved": "2026-03-10T12:00:00.000Z",
+          "half_life_days": 367,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_own_4",
+          "retrieval_count": 1,
+          "last_retrieved": "2026-03-10T12:00:00.000Z",
+          "half_life_days": 367,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_own_5",
+          "retrieval_count": 1,
+          "last_retrieved": "2026-03-10T12:00:00.000Z",
+          "half_life_days": 367,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_pin",
+          "retrieval_count": 1,
+          "last_retrieved": "2026-03-10T12:00:00.000Z",
+          "half_life_days": 367,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_pin_other",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-02-21T20:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_pin_private",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-02-26T00:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_secret_global",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-08T14:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_secret_other",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-08T15:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_secret_own",
+          "retrieval_count": 1,
+          "last_retrieved": "2026-03-10T12:00:00.000Z",
+          "half_life_days": 367,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_team",
+          "retrieval_count": 1,
+          "last_retrieved": "2026-03-10T12:00:00.000Z",
+          "half_life_days": 367,
+          "strength": 1
+        },
+        {
+          "id": "mem_b_0",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T07:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_b_1",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T06:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_b_2",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T05:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_b_3",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T04:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_b_4",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T03:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_b_drift",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-05 10:00:00",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_b_pin",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-08T10:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        }
+      ]
+    },
+    "global": {
+      "audit": [],
+      "goalRecallLog": [],
+      "stats": [
+        {
+          "key": "total_forgotten",
+          "value": "0"
+        },
+        {
+          "key": "total_recalled",
+          "value": "0"
+        },
+        {
+          "key": "total_remembered",
+          "value": "0"
+        }
+      ],
+      "traces": [],
+      "traceResults": [],
+      "ledger": [],
+      "retrieved": [
+        {
+          "id": "mem_g_note",
+          "retrieval_count": 1,
+          "strength": 1
+        },
+        {
+          "id": "mem_g_pin",
+          "retrieval_count": 1,
+          "strength": 1
+        }
+      ],
+      "strengthened": [
+        {
+          "id": "mem_g_note",
+          "retrieval_count": 1,
+          "last_retrieved": "2026-03-10T12:00:00.000Z",
+          "half_life_days": 367,
+          "strength": 1
+        },
+        {
+          "id": "mem_g_pin",
+          "retrieval_count": 1,
+          "last_retrieved": "2026-03-10T12:00:00.000Z",
+          "half_life_days": 367,
+          "strength": 1
+        }
+      ]
+    }
+  },
+  "lastRecall": [
+    {
+      "key": "last_retrieval_ids",
+      "value": "[\"mem_a_error\",\"mem_a_pin\",\"mem_a_liked\",\"mem_a_own_0\",\"mem_a_own_1\",\"mem_a_own_2\",\"mem_a_own_3\",\"mem_a_own_4\",\"mem_a_own_5\",\"mem_a_global_0\",\"mem_a_global_1\",\"mem_a_global_2\",\"mem_a_team\",\"mem_a_new\",\"mem_a_blank\",\"mem_a_archived\",\"mem_a_secret_own\",\"mem_g_pin\",\"mem_g_note\",\"mem_a_decayed\",\"mem_a_flat\"]"
+    },
+    {
+      "key": "last_trace_id",
+      "value": "1"
+    }
+  ],
+  "stats": "{\n  \"total_remembered\": 0,\n  \"total_recalled\": 21,\n  \"total_forgotten\": 0,\n  \"consolidation_runs\": []\n}",
+  "files": [
+    [
+      "buffer/active-task.acme.md",
+      "---\nid: 2\ntask: unkeyed task for session a\nstatus: active\nsource: cli\nsession_id: ctx-session-a\ncreated_at: \"2026-03-10T08:00:00.000Z\"\nupdated_at: \"2026-03-10T09:00:00.000Z\"\nnext_step: next step of unkeyed task for session a\n---\n\n# Active Task Snapshot\n\n## Summary\nsummary of unkeyed task for session a\n\n## Next step\nnext step of unkeyed task for session a\n\n## Task\nunkeyed task for session a\n\n## Session\nctx-session-a\n"
+    ],
+    [
+      "stats.json",
+      "{\n  \"total_remembered\": 0,\n  \"total_recalled\": 21,\n  \"total_forgotten\": 0,\n  \"consolidation_runs\": []\n}"
+    ]
+  ]
+}

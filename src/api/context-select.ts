@@ -5,7 +5,8 @@ import { recallScopeFilter } from '../store/search-rows.js';
 import type { AmbientLoadResult } from '../store/candidates.js';
 import { loadIndex } from '../store/index-and-stats.js';
 import { calculateStrength, type MemoryEntry } from '../memory.js';
-import { appendAuditEvent, auditQueryFields } from '../audit.js';
+import { appendAuditEvent, auditQueryFields, type AppendAuditOpts } from '../audit.js';
+import type { ContextReads, HippoStore } from '../store-port.js';
 import { isWorthSurfacing } from '../memory-quality.js';
 import { rankBothStores } from '../shared.js';
 import { evalNow } from '../ablation.js';
@@ -30,8 +31,18 @@ import type { Context } from './types.js';
 
 const GLOBAL_DISCOUNT = 1 / DEFAULT_LOCAL_BUMP;
 
+/** One store getContext reads rows from: its base search and its context reads. */
+export interface ContextSource {
+  readonly store: HippoStore;
+  readonly reads: ContextReads;
+}
+
 /** What getContext resolved from opts and config before it read a row. */
 export interface ContextPlan {
+  /** The served store, else hippo.db under the root. */
+  local: ContextSource;
+  /** The served store when it is not hippo.db; then every read and write goes through it and no hippo.db opens. */
+  other: HippoStore | undefined;
   pinnedOnly: boolean;
   limit: number;
   includeRecent: number;
@@ -362,7 +373,7 @@ export async function selectBySearch(
   const results = plan.hasGlobal && !plan.primaryIsGlobal
     ? await searchBothStores(ctx, plan, left, minResults, pools, admission.bothStoresAdmit)
     : await searchLocalRows(ctx, plan, left, minResults, pools.local.entries, admission.admit);
-  auditContextRecall(ctx, plan, results.length);
+  await auditContextRecall(ctx, plan, results.length);
   return results;
 }
 
@@ -411,6 +422,7 @@ async function searchLocalRows(
   const usePhysicsCtx = ctxConfig.physics?.enabled !== false;
   const localCost = cost && ((r: SearchResult) => price(r.entry, primaryIsGlobal));
   const vectorCandidates = contextVectorSpec(ctx, plan, admit);
+  const store = plan.local.store;
   const ctxResults = usePhysicsCtx
     ? await physicsSearch(query, localEntries, {
         budget: left,
@@ -420,6 +432,7 @@ async function searchLocalRows(
         physicsConfig: ctxConfig.physics,
         scope: plan.activeScope,
         vectorCandidates,
+        store,
       })
     : await hybridSearch(query, localEntries, {
         budget: left,
@@ -428,6 +441,7 @@ async function searchLocalRows(
         hippoRoot: ctx.hippoRoot,
         scope: plan.activeScope,
         vectorCandidates,
+        store,
       });
   return ctxResults.map((r) => ({
     entry: r.entry,
@@ -438,21 +452,21 @@ async function searchLocalRows(
 }
 
 // Same 'recall' op api.recall emits; the pinned-only and no-query branches never search, so they never emit.
-function auditContextRecall(ctx: Context, plan: ContextPlan, resultCount: number): void {
-  const ctxRecallMetadata = {
-    ...auditQueryFields(plan.query),
-    results: resultCount,
-    mode: 'context',
+async function auditContextRecall(ctx: Context, plan: ContextPlan, resultCount: number): Promise<void> {
+  const row: AppendAuditOpts = {
+    tenantId: ctx.tenantId,
+    actor: ctx.actor.subject,
+    op: 'recall',
+    metadata: { ...auditQueryFields(plan.query), results: resultCount, mode: 'context' },
   };
+  if (plan.other) {
+    await plan.other.appendAuditEvents([row]);
+    return;
+  }
   if (plan.hasLocal) {
     const localDb = openHippoDb(ctx.hippoRoot);
     try {
-      appendAuditEvent(localDb, {
-        tenantId: ctx.tenantId,
-        actor: ctx.actor.subject,
-        op: 'recall',
-        metadata: ctxRecallMetadata,
-      });
+      appendAuditEvent(localDb, row);
     } finally {
       closeHippoDb(localDb);
     }
@@ -460,12 +474,7 @@ function auditContextRecall(ctx: Context, plan: ContextPlan, resultCount: number
   if (plan.hasGlobal && !plan.primaryIsGlobal) {
     const globalDb = openHippoDb(plan.globalRoot);
     try {
-      appendAuditEvent(globalDb, {
-        tenantId: ctx.tenantId,
-        actor: ctx.actor.subject,
-        op: 'recall',
-        metadata: ctxRecallMetadata,
-      });
+      appendAuditEvent(globalDb, row);
     } finally {
       closeHippoDb(globalDb);
     }

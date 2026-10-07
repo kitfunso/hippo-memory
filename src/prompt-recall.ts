@@ -91,3 +91,22 @@ export function rarestPromptTerms(
     .slice(0, maxTerms)
     .map((x) => x.t);
 }
+
+/** The pieces FTS5's unicode61 tokenizer indexes a term as, so `journal_mode` is `journal` and `mode`. */
+export function ftsTermParts(term: string): string[] {
+  return term.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+}
+
+/** The rarest terms as a space-joined FTS query, given each part's document count; a term counts as its rarest part,
+ *  an upper bound on rows holding the whole term, and a term with no parts counts 0, so it is dropped. */
+export function rarestFtsQuery(
+  terms: readonly string[],
+  docCount: (part: string) => number,
+  maxTerms = RAREST_TERM_COUNT,
+): string {
+  const termCount = (t: string): number => {
+    const parts = ftsTermParts(t);
+    return parts.length === 0 ? 0 : Math.min(...parts.map(docCount));
+  };
+  return rarestPromptTerms(terms, termCount, maxTerms).join(' ');
+}

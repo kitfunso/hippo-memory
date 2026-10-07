@@ -77,7 +77,7 @@ const TOOL_HANDLERS: ReadonlyMap<string, ToolEntry> = new Map<string, ToolEntry>
   ['hippo_predict_baserate', { handler: runPredictBaserateTool }],
   ['hippo_remember', { handler: runRememberTool }],
   ['hippo_outcome', { handler: runOutcomeTool }],
-  ['hippo_context', { handler: runContextTool }],
+  ['hippo_context', { handler: runContextTool, storeReady: 'contextReads' }],
   ['hippo_status', { handler: runStatusTool }],
   ['hippo_learn', { handler: runLearnTool }],
   ['hippo_conflicts', { handler: runConflictsTool }],

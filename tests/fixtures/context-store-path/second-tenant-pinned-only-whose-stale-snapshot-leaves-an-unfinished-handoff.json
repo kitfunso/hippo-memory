@@ -1,0 +1,822 @@
+{
+  "result": {
+    "entries": [
+      {
+        "entry": {
+          "id": "mem_b_0",
+          "created": "2026-03-10T07:00:00.000Z",
+          "last_retrieved": "2026-03-10T07:00:00.000Z",
+          "retrieval_count": 0,
+          "strength": 1,
+          "half_life_days": 365,
+          "layer": "episodic",
+          "tags": [],
+          "emotional_valence": "neutral",
+          "schema_fit": 0.5,
+          "source": "cli",
+          "outcome_score": null,
+          "outcome_positive": 0,
+          "outcome_negative": 0,
+          "conflicts_with": [],
+          "pinned": false,
+          "confidence": "verified",
+          "content": "globex note 0 about the rollout plan",
+          "parents": [],
+          "starred": false,
+          "trace_outcome": null,
+          "source_session_id": null,
+          "valid_from": "2026-03-10T07:00:00.000Z",
+          "superseded_by": null,
+          "extracted_from": null,
+          "dag_level": 0,
+          "dag_parent_id": null,
+          "kind": "distilled",
+          "scope": null,
+          "owner": null,
+          "artifact_ref": null,
+          "tenantId": "globex",
+          "origin_project": "proj",
+          "descendant_count": 0,
+          "earliest_at": null,
+          "latest_at": null,
+          "summary_dirty": 0,
+          "last_rebuilt_at": null,
+          "rebuild_count": 0,
+          "dag_level_3_built_at": null
+        },
+        "score": 0.9996044462996264,
+        "tokens": 9,
+        "isGlobal": false,
+        "origin": "proj",
+        "category": "project"
+      },
+      {
+        "entry": {
+          "id": "mem_b_1",
+          "created": "2026-03-10T06:00:00.000Z",
+          "last_retrieved": "2026-03-10T06:00:00.000Z",
+          "retrieval_count": 0,
+          "strength": 1,
+          "half_life_days": 365,
+          "layer": "episodic",
+          "tags": [],
+          "emotional_valence": "neutral",
+          "schema_fit": 0.5,
+          "source": "cli",
+          "outcome_score": null,
+          "outcome_positive": 0,
+          "outcome_negative": 0,
+          "conflicts_with": [],
+          "pinned": false,
+          "confidence": "verified",
+          "content": "globex note 1 about the rollout plan",
+          "parents": [],
+          "starred": false,
+          "trace_outcome": null,
+          "source_session_id": null,
+          "valid_from": "2026-03-10T06:00:00.000Z",
+          "superseded_by": null,
+          "extracted_from": null,
+          "dag_level": 0,
+          "dag_parent_id": null,
+          "kind": "distilled",
+          "scope": null,
+          "owner": null,
+          "artifact_ref": null,
+          "tenantId": "globex",
+          "origin_project": "proj",
+          "descendant_count": 0,
+          "earliest_at": null,
+          "latest_at": null,
+          "summary_dirty": 0,
+          "last_rebuilt_at": null,
+          "rebuild_count": 0,
+          "dag_level_3_built_at": null
+        },
+        "score": 0.9995253543370601,
+        "tokens": 9,
+        "isGlobal": false,
+        "origin": "proj",
+        "category": "project"
+      },
+      {
+        "entry": {
+          "id": "mem_b_2",
+          "created": "2026-03-10T05:00:00.000Z",
+          "last_retrieved": "2026-03-10T05:00:00.000Z",
+          "retrieval_count": 0,
+          "strength": 1,
+          "half_life_days": 365,
+          "layer": "episodic",
+          "tags": [],
+          "emotional_valence": "neutral",
+          "schema_fit": 0.5,
+          "source": "cli",
+          "outcome_score": null,
+          "outcome_positive": 0,
+          "outcome_negative": 0,
+          "conflicts_with": [],
+          "pinned": false,
+          "confidence": "verified",
+          "content": "globex note 2 about the rollout plan",
+          "parents": [],
+          "starred": false,
+          "trace_outcome": null,
+          "source_session_id": null,
+          "valid_from": "2026-03-10T05:00:00.000Z",
+          "superseded_by": null,
+          "extracted_from": null,
+          "dag_level": 0,
+          "dag_parent_id": null,
+          "kind": "distilled",
+          "scope": null,
+          "owner": null,
+          "artifact_ref": null,
+          "tenantId": "globex",
+          "origin_project": "proj",
+          "descendant_count": 0,
+          "earliest_at": null,
+          "latest_at": null,
+          "summary_dirty": 0,
+          "last_rebuilt_at": null,
+          "rebuild_count": 0,
+          "dag_level_3_built_at": null
+        },
+        "score": 0.9994462686325077,
+        "tokens": 9,
+        "isGlobal": false,
+        "origin": "proj",
+        "category": "project"
+      },
+      {
+        "entry": {
+          "id": "mem_b_pin",
+          "created": "2026-03-08T10:00:00.000Z",
+          "last_retrieved": "2026-03-08T10:00:00.000Z",
+          "retrieval_count": 0,
+          "strength": 1,
+          "half_life_days": 365,
+          "layer": "episodic",
+          "tags": [],
+          "emotional_valence": "neutral",
+          "schema_fit": 0.5,
+          "source": "cli",
+          "outcome_score": null,
+          "outcome_positive": 0,
+          "outcome_negative": 0,
+          "conflicts_with": [],
+          "pinned": true,
+          "confidence": "verified",
+          "content": "globex pinned rule about the deploy window",
+          "parents": [],
+          "starred": false,
+          "trace_outcome": null,
+          "source_session_id": null,
+          "valid_from": "2026-03-08T10:00:00.000Z",
+          "superseded_by": null,
+          "extracted_from": null,
+          "dag_level": 0,
+          "dag_parent_id": null,
+          "kind": "distilled",
+          "scope": null,
+          "owner": null,
+          "artifact_ref": null,
+          "tenantId": "globex",
+          "origin_project": "proj",
+          "descendant_count": 0,
+          "earliest_at": null,
+          "latest_at": null,
+          "summary_dirty": 0,
+          "last_rebuilt_at": null,
+          "rebuild_count": 0,
+          "dag_level_3_built_at": null
+        },
+        "score": 1,
+        "tokens": 11,
+        "isGlobal": false,
+        "origin": "proj",
+        "category": "project"
+      }
+    ],
+    "tokens": 38,
+    "sessionHandoff": {
+      "version": 1,
+      "sessionId": "ctx-session-a",
+      "summary": "globex handoff",
+      "artifacts": [],
+      "scope": null,
+      "updatedAt": "2026-03-10T11:00:00.000Z",
+      "constraints": [],
+      "evidence": null,
+      "outcome": null,
+      "targetRuntime": null,
+      "cardId": null
+    }
+  },
+  "rows": {
+    "local": {
+      "audit": [],
+      "goalRecallLog": [],
+      "stats": [
+        {
+          "key": "total_forgotten",
+          "value": "0"
+        },
+        {
+          "key": "total_recalled",
+          "value": "0"
+        },
+        {
+          "key": "total_remembered",
+          "value": "0"
+        }
+      ],
+      "traces": [],
+      "traceResults": [],
+      "ledger": [],
+      "retrieved": [],
+      "strengthened": [
+        {
+          "id": "mem_a_alice",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-09T05:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_archived",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-08T17:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_blank",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-08T18:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_bob",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-09T04:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_decayed",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-02T04:00:00.000Z",
+          "half_life_days": 1,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_error",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-08T13:00:00.000Z",
+          "half_life_days": 547.5,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_flat",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-08T11:00:00.000Z",
+          "half_life_days": 0,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_global_0",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-09T16:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_global_1",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-09T15:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_global_2",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-09T14:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_legacy",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-09T03:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_liked",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T10:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_new",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-08T19:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_no_origin",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-08T12:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_old",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-08T00:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_00",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T11:30:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_01",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T11:24:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_02",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T11:18:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_03",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T11:12:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_04",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T11:06:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_05",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T11:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_06",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T10:54:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_07",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T10:48:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_08",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T10:42:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_09",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T10:36:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_10",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T10:30:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_11",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T10:24:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_12",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T10:18:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_13",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T10:12:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_14",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T10:06:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_15",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T10:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_16",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T09:54:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_17",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T09:48:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_18",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T09:42:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_19",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T09:36:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_20",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T09:30:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_21",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T09:24:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_22",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T09:18:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_23",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T09:12:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_24",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T09:06:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_25",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T09:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_26",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T08:54:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_27",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T08:48:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_28",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T08:42:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_29",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T08:36:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_30",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T08:30:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_31",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T08:24:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_32",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T08:18:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_33",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T08:12:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_34",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T08:06:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_35",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T08:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_36",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T07:54:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_37",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T07:48:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_38",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T07:42:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_other_39",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T07:36:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_own_0",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T02:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_own_1",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T01:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_own_2",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T00:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_own_3",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-09T23:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_own_4",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-09T22:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_own_5",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-09T21:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_pin",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-02-17T16:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_pin_other",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-02-21T20:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_pin_private",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-02-26T00:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_secret_global",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-08T14:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_secret_other",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-08T15:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_secret_own",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-08T16:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_a_team",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-09T06:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_b_0",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T07:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_b_1",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T06:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_b_2",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T05:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_b_3",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T04:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_b_4",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T03:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_b_drift",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-05 10:00:00",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_b_pin",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-08T10:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        }
+      ]
+    },
+    "global": {
+      "audit": [],
+      "goalRecallLog": [],
+      "stats": [
+        {
+          "key": "total_forgotten",
+          "value": "0"
+        },
+        {
+          "key": "total_recalled",
+          "value": "0"
+        },
+        {
+          "key": "total_remembered",
+          "value": "0"
+        }
+      ],
+      "traces": [],
+      "traceResults": [],
+      "ledger": [],
+      "retrieved": [],
+      "strengthened": [
+        {
+          "id": "mem_g_note",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-03-10T00:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        },
+        {
+          "id": "mem_g_pin",
+          "retrieval_count": 0,
+          "last_retrieved": "2026-02-13T12:00:00.000Z",
+          "half_life_days": 365,
+          "strength": 1
+        }
+      ]
+    }
+  },
+  "lastRecall": [
+    {
+      "key": "last_retrieval_ids",
+      "value": "[]"
+    },
+    {
+      "key": "last_trace_id",
+      "value": ""
+    }
+  ],
+  "stats": null,
+  "files": [
+    [
+      "buffer/active-task.globex.md",
+      "---\nid: 7\ntask: globex task gone stale\nstatus: active\nsource: cli\nsession_id: ctx-session-a\ncreated_at: \"2026-03-06T07:00:00.000Z\"\nupdated_at: \"2026-03-06T08:00:00.000Z\"\nnext_step: next step of globex task gone stale\n---\n\n# Active Task Snapshot\n\n## Summary\nsummary of globex task gone stale\n\n## Next step\nnext step of globex task gone stale\n\n## Task\nglobex task gone stale\n\n## Session\nctx-session-a\n"
+    ]
+  ]
+}

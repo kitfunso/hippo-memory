@@ -58,7 +58,8 @@ export { captureSessionTexts, type SessionCaptureRequest, type SessionCaptureRes
 // An add-on serves from another database by passing serve() its own HippoStore.
 export {
   hasGroup, sqliteStore,
-  type HippoStore, type KeyAudit, type KeyRevoke, type RecallSearchArgs, type RecallWrites, type StoreGroup, type StoreGroups, type VectorReads,
+  type AmbientCandidateRequest, type ContextReads, type HippoStore, type KeyAudit, type KeyRevoke, type RecallSearchArgs, type RecallWrites,
+  type StoreGroup, type StoreGroups, type VectorReads,
   type VectorBackfillQuery, type VectorRowWrite, type VectorWrite, type VectorWriteResult, type VectorWrites,
 } from './store-port.js';
 export type { ApiKeyRecord } from './auth.js';
@@ -73,6 +74,11 @@ export type { RecallTraceInput } from './recall-trace.js';
 export type { StrengthenOptions } from './store/entry-writes.js';
 export type { OriginFilter, RecallScopeFilter, VectorCandidateSpec } from './store/search-rows.js';
 export type { ContinuityKey } from './store/sessions.js';
+export type { SessionEvent, TaskSnapshot } from './store/rows.js';
+export type { SessionHandoff } from './handoff.js';
+export type { AmbientLoadResult, AmbientRecallRequest, ContextCandidateFilter, RecentOrigins } from './store/candidates.js';
+export type { AmbientStoreFilter } from './ambient-store.js';
+export type { AmbientTallies } from './ambient.js';
 export type { TokenUse } from './token-ledger.js';
 export type { EmbeddingIndexState } from './embeddings.js';
 export type { PhysicsParticle } from './physics.js';
@@ -82,6 +88,11 @@ export { StoreBusyError } from './db.js';
 export { decodeVector, EMBEDDING_MODEL_META_KEY, encodeVector, rankVectorRows, type VectorMatch, type VectorRow } from './vector-store.js';
 export { bufferToFloat32, float32ToBuffer } from './physics-state.js';
 export { replacesIndex } from './embeddings.js';
+// An add-on's ContextReads applies hippo.db's scope, secret, tally and rarest-term rules with the same code.
+export { passesScopeFilterForRecall, RECALL_DEFAULT_DENY_SCOPES } from './recall-scope.js';
+export { SECRET_TAGS } from './secret-detect.js';
+export { tallyAmbientEntries } from './ambient.js';
+export { ftsTermParts, rarestFtsQuery } from './prompt-recall.js';
 // store copy --db writes the marker and reads the old hippo.db under the waiver.
 export { OTHER_STORE_MARKER, OtherStoreFolderError, withSqliteAllowed } from './db.js';
 // An add-on's install step mints the first admin key into a store folder it names, which `hippo auth create` cannot reach.
@@ -147,7 +158,7 @@ const V1_ROUTES: readonly Route[] = [
   { method: 'POST', pattern: '/v1/memories/:id/promote', handler: handlePromoteMemory },
   { method: 'DELETE', pattern: '/v1/memories/:id', handler: handleForgetMemory },
   { method: 'POST', path: '/v1/outcome', handler: handleApplyOutcome },
-  { method: 'GET', path: '/v1/context', handler: handleGetContext },
+  { method: 'GET', path: '/v1/context', storeReady: 'contextReads', handler: handleGetContext },
   { method: 'POST', path: '/v1/sleep', handler: handleSleep },
   { method: 'POST', path: '/v1/auth/keys', handler: handleCreateAuthKey },
   { method: 'GET', path: '/v1/auth/keys', handler: handleListAuthKeys },

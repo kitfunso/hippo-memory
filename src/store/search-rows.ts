@@ -3,7 +3,7 @@ import type { MemoryEntry } from '../memory.js';
 import { openHippoDb, isFtsAvailable, closeHippoDb, type DatabaseSyncLike } from '../db.js';
 import { tokenize } from '../tokenize.js';
 import { isPersonalScope, scopeAdmitSql, type SqlFragment } from '../recall-scope.js';
-import { RAREST_TERM_COUNT, rarestPromptTerms } from '../prompt-recall.js';
+import { ftsTermParts, RAREST_TERM_COUNT, rarestFtsQuery } from '../prompt-recall.js';
 import { log } from '../log.js';
 import { originInSql } from '../project-identity.js';
 import { topVectorMatches } from '../vector-store.js';
@@ -311,18 +311,12 @@ export function pickRarestFtsQuery(db: DatabaseSyncLike, terms: readonly string[
   // The LIKE path has no bm25 ranking to bound, so it keeps the pre-rarest 32-term query.
   if (!isFtsAvailable(db)) return terms.slice(0, 32).join(' ');
   db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS temp.z1_rarest_vocab USING fts5vocab(main, 'memories_fts', 'row')`);
-  // unicode61 splits `journal_mode` into two vocab terms; a term's count is its rarest part's (an upper bound).
-  const partsOf = (t: string): string[] => t.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
-  const vocab = Array.from(new Set(terms.flatMap(partsOf)));
+  const vocab = Array.from(new Set(terms.flatMap(ftsTermParts)));
   if (vocab.length === 0) return '';
   // SAFETY: rows' shape matches the two columns named in the SELECT.
   const rows = db
     .prepare(`SELECT term, doc FROM temp.z1_rarest_vocab WHERE term IN (${vocab.map(() => '?').join(', ')})`)
     .all(...vocab) as Array<{ term: string; doc: number }>;
   const counts = new Map(rows.map((r) => [r.term, r.doc]));
-  const docCount = (t: string): number => {
-    const parts = partsOf(t);
-    return parts.length === 0 ? 0 : Math.min(...parts.map((x) => counts.get(x) ?? 0));
-  };
-  return rarestPromptTerms(terms, docCount, maxTerms).join(' ');
+  return rarestFtsQuery(terms, (part) => counts.get(part) ?? 0, maxTerms);
 }

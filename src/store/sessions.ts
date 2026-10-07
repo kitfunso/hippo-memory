@@ -200,7 +200,14 @@ export function loadFreshActiveTaskSnapshot(
   opts: { maxAgeMs?: number; sessionId?: string | null } = {},
   key?: ContinuityKey,
 ): TaskSnapshot | null {
-  const snapshot = loadActiveTaskSnapshot(hippoRoot, tenantId, key);
+  return freshActiveSnapshot(loadActiveTaskSnapshot(hippoRoot, tenantId, key), opts);
+}
+
+/** `loadFreshActiveTaskSnapshot`'s owner-match-or-age rule, for a snapshot a store read. */
+export function freshActiveSnapshot(
+  snapshot: TaskSnapshot | null,
+  opts: { maxAgeMs?: number; sessionId?: string | null } = {},
+): TaskSnapshot | null {
   if (!snapshot) return null;
 
   const callerSessionId = opts.sessionId;

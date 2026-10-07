@@ -1,4 +1,6 @@
 // The async seam the server reaches its store through, so an add-on can serve from a database other than hippo.db.
+import type { AmbientTallies } from './ambient.js';
+import { loadAmbientTallies, type AmbientStoreFilter } from './ambient-store.js';
 import { readApiKeyRecord, type ApiKeyRecord } from './auth.js';
 import { appendAuditEvent, listAuditEventsAfter, type AppendAuditOpts, type AuditEvent, type ListAuditAfterOpts } from './audit.js';
 import type { ContinuityBlock } from './api/recall-types.js';
@@ -9,11 +11,16 @@ import {
   activeGoalsWithPolicies, localGoalRecallRows, writeGoalRecallLog,
   type ActiveGoals, type GetActiveGoalsOpts, type GoalRecallLogRow,
 } from './goals.js';
+import type { SessionHandoff } from './handoff.js';
 import type { MemoryEntry } from './memory.js';
 import type { PhysicsParticle } from './physics.js';
 import { loadPhysicsState } from './physics-state.js';
 import { planningFallacyEvidenceAt, type PlanningFallacyEvidence } from './predictions/planning-fallacy.js';
 import { writeRecallTrace, type RecallTraceInput } from './recall-trace.js';
+import {
+  loadAmbientCandidates, loadContextCandidates,
+  type AmbientLoadResult, type AmbientRecallRequest, type ContextCandidateFilter, type RecentOrigins,
+} from './store/candidates.js';
 import { loadEntriesByIds, loadFreshRawMemories } from './store/entry-reads.js';
 import { auditHighIdAt, revokeKeyAt } from './store/key-audit.js';
 import { strengthenRetrievedInOwnTx, type StrengthenOptions } from './store/entry-writes.js';
@@ -121,6 +128,30 @@ export interface KeyAudit {
   auditHighId(): Promise<number>;
 }
 
+/** One ambient load: the pins, the `recentNeeded` newest rows `admit` keeps, and the prompt-recall candidates. */
+export interface AmbientCandidateRequest {
+  readonly recentNeeded: number;
+  /** Sees each row in the order `loadAmbientCandidates` reads them, since the delivery ledger counts its refusals. */
+  readonly admit: (e: MemoryEntry) => boolean;
+  readonly recall?: AmbientRecallRequest;
+  readonly origins?: RecentOrigins;
+}
+
+/** The reads behind getContext beyond the base `continuity`: its fallback handoff, candidate rows and ambient tallies.
+ *  getContext with a query under an embedding provider needs `vectors` too, and answers 501 without it. */
+export interface ContextReads {
+  /** The newest handoff of the last `maxAgeMs` that is its session's highest id, has no outcome or a partial or failed one, and
+   *  passes recall's default scope deny, as `loadLatestHandoff` with `unfinishedOnly` and `scopeFilter: 'default-deny'`. Rejects an empty tenant id. */
+  unfinishedHandoff(tenantId: string, maxAgeMs: number, key: ContinuityKey | null): Promise<SessionHandoff | null>;
+  /** As `loadAmbientCandidates`; `recall` searches with the query `rarestFtsQuery` builds from FTS document counts over every tenant's rows,
+   *  and finds nothing when no term is indexed. Core keeps only `tenantId`'s rows that its own admit passes, whatever the store returns. */
+  ambientCandidates(tenantId: string, request: AmbientCandidateRequest): Promise<AmbientLoadResult>;
+  /** As `loadContextCandidates`: at most `filter.cap` live rows, pins and then the least decayed first, returned by created, then id. */
+  contextCandidates(tenantId: string, filter: ContextCandidateFilter): Promise<MemoryEntry[]>;
+  /** As `loadAmbientTallies`: one aggregate over the live, unarchived rows `filter` admits, less other projects' secret-tagged rows. */
+  ambientTallies(tenantId: string, filter: AmbientStoreFilter): Promise<AmbientTallies>;
+}
+
 /** The optional groups: a store sets each one whole or leaves it unset, and a route or MCP tool names the one it needs. */
 export interface StoreGroups {
   /** Unset on a store built before them, where hybrid and physics recall under an embedding provider answer 501. */
@@ -128,6 +159,7 @@ export interface StoreGroups {
   readonly keyAudit: KeyAudit;
   /** embedMemory and embedAll with a store need it and `vectors`. */
   readonly vectorWrites: VectorWrites;
+  readonly contextReads: ContextReads;
 }
 
 export type StoreGroup = 'base' | keyof StoreGroups;
@@ -258,7 +290,25 @@ export function sqliteStore(hippoRoot: string): HippoStore & StoreGroups {
         return onHandle(hippoRoot, (db) => writeVectorsAt(db, write));
       },
     },
+    contextReads: sqliteContextReads(hippoRoot),
     async close(): Promise<void> {},
+  };
+}
+
+function sqliteContextReads(hippoRoot: string): ContextReads {
+  return {
+    async unfinishedHandoff(tenantId, maxAgeMs, key) {
+      return loadLatestHandoff(hippoRoot, tenantId, undefined, { unfinishedOnly: true, maxAgeMs, scopeFilter: 'default-deny' }, key ?? undefined);
+    },
+    async ambientCandidates(tenantId, { recentNeeded, admit, recall, origins }) {
+      return loadAmbientCandidates(hippoRoot, tenantId, recentNeeded, admit, recall, origins);
+    },
+    async contextCandidates(tenantId, filter) {
+      return loadContextCandidates(hippoRoot, tenantId, filter);
+    },
+    async ambientTallies(tenantId, filter) {
+      return loadAmbientTallies(hippoRoot, tenantId, filter);
+    },
   };
 }
 
