@@ -4,8 +4,7 @@ import { envAnthropicApiKey } from '../env.js';
 import { loadAllEntries } from '../store/entry-reads.js';
 import { deduplicateStore } from '../dedupe.js';
 import { embedAll, loadEmbeddingIndex } from '../embeddings.js';
-import { resolveEmbeddingModel } from '../local-embedding.js';
-import { resolveEmbeddingProvider } from '../embedding-provider.js';
+import { resolveEmbeddingProvider, type EmbeddingProvider } from '../embedding-provider.js';
 import { resetAllPhysicsState } from '../physics-state.js';
 import { loadConfig } from '../config.js';
 import { openHippoDb, closeHippoDb } from '../db.js';
@@ -118,7 +117,8 @@ export function cmdDedup(
 
 export async function cmdEmbed(
   hippoRoot: string,
-  flags: Record<string, string | boolean | string[]>
+  flags: Record<string, string | boolean | string[]>,
+  given?: EmbeddingProvider,
 ): Promise<void> {
   // --global mirrors resolveAuthRoot (cli.ts:6900): initGlobal() + the global
   // root, skipping the local requireInit entirely, so this is the healing
@@ -138,12 +138,13 @@ export async function cmdEmbed(
     return;
   }
 
-  if (!embedProviderReady(root)) return;
+  const provider = readyEmbedProvider(root, given);
+  if (!provider) return;
 
   console.log('Embedding all memories (this may take a moment on first run to download model)...');
   let count: number;
   try {
-    count = await embedAll(root, resolveEmbeddingModel(root));
+    count = await embedAll(root, undefined, provider);
   } catch (err) {
     printError(`Embedding failed: ${err instanceof Error ? err.message : String(err)}`);
     const partial = loadEmbeddingIndex(root);
@@ -156,6 +157,11 @@ export async function cmdEmbed(
   const entriesAfter = loadAllEntries(root);
   const embIndexAfter = loadEmbeddingIndex(root);
   console.log(`Done. ${count} new embeddings created. ${Object.keys(embIndexAfter).length}/${entriesAfter.length} total.`);
+  const unembedded = entriesAfter.filter((e) => !embIndexAfter[e.id]).length;
+  if (unembedded > 0) {
+    printError(`${unembedded} memories are still not embedded (the warnings above name them). Re-run \`hippo embed\` to retry.`);
+    process.exitCode = 1;
+  }
 }
 
 function resetPhysics(root: string): void {
@@ -186,10 +192,10 @@ function printEmbedStatus(root: string): void {
   }
 }
 
-/** False, after saying why, when no usable provider exists. */
-function embedProviderReady(root: string): boolean {
+/** The provider to embed with, or null after saying why none is usable. */
+function readyEmbedProvider(root: string, given?: EmbeddingProvider): EmbeddingProvider | null {
   // Embedding (unlike status/reset) needs an available provider.
-  const embedProvider = (() => {
+  const embedProvider = given ?? (() => {
     try {
       return resolveEmbeddingProvider(root);
     } catch (err) {
@@ -199,16 +205,17 @@ function embedProviderReady(root: string): boolean {
   })();
   if (!embedProvider) {
     process.exitCode = 1;
-    return false;
+    return null;
   }
-  if (embedProvider.isAvailable()) return true;
+  if (embedProvider.isAvailable()) return embedProvider;
   if (loadConfig(root).embeddings.enabled === false) {
     console.log('Embeddings are disabled in config (embeddings.enabled = false). Set it to true or "auto" to enable.');
-    return false;
+    return null;
   }
   if (embedProvider.kind === 'local') {
     console.log('Embeddings not available. Install @huggingface/transformers to enable:');
     console.log('  npm install @huggingface/transformers');
+    process.exitCode = 1;
   } else {
     printError(
       `Embedding provider '${embedProvider.kind}' is configured but ${embedProvider.keyEnv} is not set.`,
@@ -216,5 +223,5 @@ function embedProviderReady(root: string): boolean {
     printError(`Export ${embedProvider.keyEnv}, or set config.embeddings.provider back to 'local'.`);
     process.exitCode = 1;
   }
-  return false;
+  return null;
 }
