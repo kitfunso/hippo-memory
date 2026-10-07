@@ -108,11 +108,14 @@ interface CliResult {
   stderr: string;
 }
 
+// A loaded runner can miss the 300 ms /health default, and the CLI then writes directly instead of routing.
+const PROBE_ENV = { HIPPO_HEALTH_PROBE_MS: '5000' };
+
 function runCli(workspace: string, ...cliArgs: string[]): CliResult {
   try {
     const stdout = execFileSync(process.execPath, [CLI_PATH, ...cliArgs], {
       cwd: workspace,
-      env: { ...process.env },
+      env: { ...process.env, ...PROBE_ENV },
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -138,7 +141,7 @@ function runCliAsync(workspace: string, ...cliArgs: string[]): Promise<CliResult
   return new Promise((resolve) => {
     const child = spawn(process.execPath, [CLI_PATH, ...cliArgs], {
       cwd: workspace,
-      env: { ...process.env },
+      env: { ...process.env, ...PROBE_ENV },
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
     });

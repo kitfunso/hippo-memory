@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, writeFileSync, unlinkSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
+import { envHealthProbeMs } from './env.js';
 
 export interface ServerInfo {
   /**
@@ -23,7 +24,7 @@ const PIDFILE = 'server.pid';
  * How long detectServer waits for the `/health` liveness probe before
  * treating the pidfile as stale. Short by design: the probe only fires on
  * the rare path where a pidfile exists and its pid is live, and the target
- * is always loopback, so a healthy server answers well within this bound.
+ * is always loopback, so a healthy server answers well within this bound. HIPPO_HEALTH_PROBE_MS overrides it.
  */
 const HEALTH_PROBE_TIMEOUT_MS = 300;
 
@@ -104,7 +105,7 @@ async function healthMatchesPidfile(hippoRoot: string, info: ServerInfo): Promis
   // returns null WITHOUT unlinking. The pidfile survives for the next probe.
   try {
     const res = await fetch(`${info.url}/health`, {
-      signal: AbortSignal.timeout(HEALTH_PROBE_TIMEOUT_MS),
+      signal: AbortSignal.timeout(envHealthProbeMs() ?? HEALTH_PROBE_TIMEOUT_MS),
     });
     if (!res.ok || !res.body) {
       removePidfile(hippoRoot);

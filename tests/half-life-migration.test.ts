@@ -22,6 +22,7 @@ import { saveDecision, closeDecision } from '../src/decisions.js';
 import { saveIncident, resolveIncident } from '../src/incidents.js';
 import { saveCustomerNote } from '../src/customer-notes.js';
 import { supersede, adminActor } from '../src/api.js';
+import { fastestRatio, type TimedRun } from './_helpers/fastest-ratio.js';
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -182,21 +183,20 @@ describe('default half-life migration', () => {
 
   // The migration holds the write lock throughout, so its audit record must grow with the store, not with its square.
   // A ratio, not a wall-clock bound: Windows CI runners took 2.3 to 3.3 s for the linear 10,000-row run.
-  it('takes about 4 times as long for 4 times the memories', () => {
-    const timed = (n: number): number => {
-      const root = bulkLegacyStore(n);
-      const started = performance.now();
-      const r = migrateDefaultHalfLife(root, 365);
-      const elapsed = performance.now() - started;
-      expect(r).toMatchObject({ from: 7, to: 365, rescaled: n });
-      expect(migrateAudits(root)[0]).toHaveProperty('ids.length', n);
-      return elapsed;
-    };
+  it('takes at most about 8 times as long for 8 times the memories', () => {
+    const runs: { root: string; n: number; result: ReturnType<typeof migrateDefaultHalfLife> }[] = [];
+    const migrating = (n: number): TimedRun<string> => ({
+      setup: () => bulkLegacyStore(n),
+      run: (root) => runs.push({ root, n, result: migrateDefaultHalfLife(root, 365) }),
+    });
 
-    const small = timed(2_500);
-    const large = timed(10_000);
-    // Linear work gives about 4; a quadratic audit gives 16.
-    expect(large / small).toBeLessThan(8);
+    const ratio = fastestRatio(migrating(5_000), migrating(625), 3);
+    for (const { root, n, result } of runs) {
+      expect(result).toMatchObject({ from: 7, to: 365, rescaled: n });
+      expect(migrateAudits(root)[0]).toHaveProperty('ids.length', n);
+    }
+    // Linear work gives 8 at most and copying the record per row 64 or more, so the bound sits near their geometric mean.
+    expect(ratio).toBeLessThan(22);
   }, 120_000);
 });
 

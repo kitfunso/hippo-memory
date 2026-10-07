@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   envClaudeCodeSessionId,
+  envHealthProbeMs,
   envHippoSessionId,
   envLlmRerankerTimeoutMs,
   envMcpSseHeartbeatMs,
@@ -13,7 +14,7 @@ import {
 
 const NAMES = [
   'MCP_SSE_HEARTBEAT_MS', 'MCP_SSE_MAX_AGE_SEC', 'HIPPO_LLM_RERANKER_TIMEOUT_MS', 'HIPPO_REQUIRE_SERVER',
-  'HIPPO_SESSION_ID', 'CLAUDE_CODE_SESSION_ID', 'HIPPO_MODEL_CACHE', 'TYPESAFE_API_KEY',
+  'HIPPO_SESSION_ID', 'CLAUDE_CODE_SESSION_ID', 'HIPPO_MODEL_CACHE', 'TYPESAFE_API_KEY', 'HIPPO_HEALTH_PROBE_MS',
 ];
 const saved = new Map(NAMES.map((n) => [n, process.env[n]]));
 afterEach(() => {
@@ -28,6 +29,7 @@ describe('timeouts', () => {
     ['MCP_SSE_HEARTBEAT_MS', envMcpSseHeartbeatMs],
     ['MCP_SSE_MAX_AGE_SEC', envMcpSseMaxAgeSec],
     ['HIPPO_LLM_RERANKER_TIMEOUT_MS', envLlmRerankerTimeoutMs],
+    ['HIPPO_HEALTH_PROBE_MS', envHealthProbeMs],
   ];
   it.each(readers)('%s drops a negative or zero value so the caller default applies', (name, read) => {
     for (const bad of ['-5', '0', 'soon', '']) {

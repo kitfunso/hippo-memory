@@ -17,6 +17,7 @@ import { shareMemory, autoShare, syncGlobalToLocal, promoteToGlobal, getGlobalRo
 import { getContext, type Context } from '../src/api.js';
 import { clearProjectIdentityCache } from '../src/project-identity.js';
 import { ASSIGNED_SECRET_LINES, ORDINARY_CONFIG_LINES } from './_helpers/secret-shapes.js';
+import { fastestRatio, type TimedRun } from './_helpers/fastest-ratio.js';
 
 // Built at runtime, so no secret-shaped literal sits in source.
 const HIPPO_KEY = 'hk_' + 'a'.repeat(24) + '.' + 'b'.repeat(32);
@@ -164,23 +165,14 @@ describe('redactSecrets / redactSecretsStrict', () => {
     }
   });
 
-  it('redactSecretsStrict scrubs crafted 128 KiB runs of eyJ- and token= within 5x the time of prose', () => {
+  it('redactSecretsStrict scrubs crafted 128 KiB runs of eyJ- and token= within 50x the time of prose', () => {
     const fill = (unit: string): string => unit.repeat(Math.ceil(131072 / unit.length)).slice(0, 131072);
     const prose = fill('the quarterly review covers risk-free rate assumptions and nothing else. ');
+    const scrubbing = (text: string): TimedRun<string> => ({ setup: () => text, run: redactSecretsStrict });
     for (const crafted of [fill('eyJ-'), fill('token=')]) {
-      // The fastest of five interleaved runs of each text, so a GC pause or a busy runner weighs on both alike.
-      let hostile = Infinity;
-      let baseline = Infinity;
-      for (let run = 0; run < 5; run++) {
-        let started = performance.now();
-        redactSecretsStrict(crafted);
-        hostile = Math.min(hostile, performance.now() - started);
-        started = performance.now();
-        redactSecretsStrict(prose);
-        baseline = Math.min(baseline, performance.now() - started);
-      }
-      // A ratio to prose holds on any runner speed, and rescanning the run from each repeat costs thousands of times prose.
-      expect(hostile / baseline, crafted.slice(0, 6)).toBeLessThan(5);
+      const ratio = fastestRatio(scrubbing(crafted), scrubbing(prose));
+      // Dense matches run at a few times prose and rescanning the run from each repeat at thousands, so 50 sits between.
+      expect(ratio, crafted.slice(0, 6)).toBeLessThan(50);
     }
   });
 });

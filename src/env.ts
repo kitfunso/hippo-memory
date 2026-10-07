@@ -98,6 +98,8 @@ export function envLogLevel(): string { return raw('HIPPO_LOG')?.trim().toLowerC
 
 // Server.
 export function envPort(): string | undefined { return raw('HIPPO_PORT'); }
+/** How long a client waits for a running server's /health before writing to the store directly; server-detect.ts holds the default. */
+export function envHealthProbeMs(): number | undefined { return positiveInt('HIPPO_HEALTH_PROBE_MS'); }
 export function envRequireAuth(): boolean { return isOne('HIPPO_REQUIRE_AUTH'); }
 export function envV1Rps(): string | undefined { return raw('HIPPO_V1_RPS'); }
 export function envApiKey(): string | undefined { return raw('HIPPO_API_KEY'); }
