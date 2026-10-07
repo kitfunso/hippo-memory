@@ -1,11 +1,13 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { log } from '../log.js';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { errorMessage, log } from '../log.js';
 import { DatabaseSync, type DatabaseSyncLike } from './sqlite.js';
 import { tableExists } from './tables.js';
 import { assertBinaryCompatible } from './migrate.js';
 import { connectHippoDb, getHippoDbPath } from './connect.js';
 import { currentRequestStores, isScopedHandle, runWithRequestStores } from './request-stores.js';
-import { SqliteBlockedError } from './sqlite-blocked.js';
+import { OtherStoreFolderError, SqliteBlockedError } from './sqlite-blocked.js';
 
 export { getHippoDbPath };
 
@@ -42,9 +44,9 @@ export function withSqliteBlocked<T>(storeKind: string, fn: () => T): T {
   return sqliteBlockedBy.run(storeKind, fn);
 }
 
-/** Runs `fn` with hippo.db opens allowed again, for a store whose own methods are backed by hippo.db. */
+/** Runs `fn` with hippo.db opens allowed again, for a store whose own methods are backed by hippo.db, or a copy that reads the old hippo.db. */
 export function withSqliteAllowed<T>(fn: () => T): T {
-  return sqliteBlockedBy.exit(fn);
+  return sqliteBlockedBy.exit(() => markerWaived.run(true, fn));
 }
 
 /** First line of a best-effort catch around a hippo.db open: an unported path must fail closed, not fall back silently. */
@@ -52,21 +54,39 @@ export function rethrowIfSqliteBlocked<E>(err: E): void {
   if (err instanceof SqliteBlockedError) throw err;
 }
 
-function assertSqliteAllowed(): void {
+/** store init --db, store copy --db and serve --db write this file in the hippo root; its text is the store kind. */
+export const OTHER_STORE_MARKER = 'other-store';
+const markerWaived = new AsyncLocalStorage<true>();
+
+// An empty or unreadable marker still refuses: falling through would write the hippo.db the marker forbids.
+function markerKind(marker: string): string {
+  try {
+    return readFileSync(marker, 'utf8').trim() || 'unknown';
+  } catch (err) {
+    log.debug(`${marker} is unreadable, so its store kind reads as unknown: ${errorMessage(err)}`);
+    return 'unknown';
+  }
+}
+
+/** Throws where hippo.db must not open; checked on every open, not cached, since the marker can appear while a process runs. */
+export function assertSqliteAllowed(hippoRoot: string): void {
   const storeKind = sqliteBlockedBy.getStore();
   if (storeKind !== undefined) throw new SqliteBlockedError(storeKind);
+  if (markerWaived.getStore()) return;
+  const marker = join(hippoRoot, OTHER_STORE_MARKER);
+  if (existsSync(marker)) throw new OtherStoreFolderError(markerKind(marker), marker);
 }
 
 /** `busyWaitMs` shortens every lock wait of this open, for a hook that must finish inside its own timeout. */
 export function openHippoDb(hippoRoot: string, opts?: { busyWaitMs?: number }): DatabaseSyncLike {
-  assertSqliteAllowed();
+  assertSqliteAllowed(hippoRoot);
   const stores = currentRequestStores();
   return stores ? stores.get(hippoRoot, opts) : connectHippoDb(hippoRoot, opts?.busyWaitMs);
 }
 
 /** Open an existing store without changing it: no mkdir, WAL switch, migration or mirror cleanup. Throws when hippo.db is missing. */
 export function openHippoDbReadOnly(hippoRoot: string): DatabaseSyncLike {
-  assertSqliteAllowed();
+  assertSqliteAllowed(hippoRoot);
   const db = new DatabaseSync(getHippoDbPath(hippoRoot), { readOnly: true });
   try {
     db.exec('PRAGMA busy_timeout = 5000');

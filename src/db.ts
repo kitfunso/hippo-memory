@@ -15,9 +15,10 @@ export {
   withSqliteBlocked,
   withSqliteAllowed,
   rethrowIfSqliteBlocked,
+  OTHER_STORE_MARKER,
   openHippoDb,
   openHippoDbReadOnly,
   closeHippoDb,
 } from './db/open.js';
 export { RequestStores, runWithRequestStores, currentRequestStores, outsideRequestStores } from './db/request-stores.js';
-export { SqliteBlockedError } from './db/sqlite-blocked.js';
+export { OtherStoreFolderError, SqliteBlockedError } from './db/sqlite-blocked.js';

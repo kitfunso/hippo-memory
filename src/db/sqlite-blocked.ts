@@ -15,3 +15,11 @@ export class StoreNotPortedError extends SqliteBlockedError {
     this.name = 'StoreNotPortedError';
   }
 }
+
+/** Thrown by a hippo.db open in a folder whose marker file names the store that holds its memories, from the CLI as from a request. */
+export class OtherStoreFolderError extends SqliteBlockedError {
+  constructor(storeKind: string, readonly markerPath: string) {
+    super(storeKind, `This folder's memories live in the '${storeKind}' store, so hippo.db is not used here (marker: ${markerPath})`);
+    this.name = 'OtherStoreFolderError';
+  }
+}

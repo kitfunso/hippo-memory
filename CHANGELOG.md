@@ -1,5 +1,37 @@
 # Changelog
 
+## 1.65.0 - 2026-10-07
+
+### Added
+
+- **Recall over HTTP and MCP now reads and writes through the `HippoStore` port, so an add-on can serve recall from a database other than hippo.db.** `GET /v1/memories` and MCP `hippo_recall` read candidates, goals, fresh rows, continuity and planning evidence through the store, and write the goal log and audit rows in one transaction through `finishRecall`. On hippo.db nothing changes: replies and the rows written match the previous release, pinned by golden tests over both surfaces.
+
+### Changed
+
+- **On a store other than hippo.db, a route that has not been ported answers 501 `store_not_ported`, and any hippo.db open inside a request throws.** A request can no longer fall back to a local file the served store never sees.
+- **`serve()` treats any store other than hippo.db as shared, whatever the folder's `config.json` says.** A team's central server keys continuity to the caller's owner and project, so MCP `hippo_recall` on such a store needs the caller's project (`X-Hippo-Project`).
+- **Each HTTP request, MCP tool call and api-backed CLI command opens each store once.** A request scope now carries one connection per store, opened lazily and closed when the request ends, so the api helpers a request runs share it. A recall over `GET /v1/memories` or MCP `hippo_recall` used to open the store 6 times; it now opens it once. The scope covers the `/v1` routes, the add-on routes and public JSON paths `serve()` mounts, the connector webhooks, `POST /mcp`, every MCP `tools/call` (stdio and HTTP), and the CLI verbs `recall`, `drill`, `assemble`, `explain`, `sleep`, `auth`, `goal`, `audit`, `outcome`, `dormant`, `quarantine`, `forget`, `tokens`, `failures`, `learn` and `promote`. Concurrent requests and interleaved stdio calls each get their own connection. A caller that is mid-transaction on the shared connection gets a fresh one, and code that outlives its request opens its own.
+- **The hook store sharing and the server's 250 ms lock wait now run on that one request scope.** They used to be two separate ambient mechanisms. Hooks keep their 1000 ms wait and still drop it to zero once the store reports busy.
+- **MCP auto-sleep starts outside the `hippo_remember` call's request scope.** It outlives the call and holds a connection across its pauses between write chunks, so the call's scope must not close that connection.
+- **`GET /mcp/stream` runs outside any request scope.** Its heartbeat outlives the request, so its auth reads now open with the default lock wait instead of 250 ms.
+- **MCP `hippo_recall` now rejects an empty `query`** with an `isError` result, as `GET /v1/memories` rejects an empty `q`.
+- **MCP `hippo_recall` now rejects a `scorer_window` above 1,000** with an `isError` result, the same cap HTTP applies.
+- **MCP `hippo_recall` now rejects a negative `fresh_tail_count`** with an `isError` result; it used to ignore it.
+- **MCP `hippo_recall` now caps `fresh_tail_session_id` at 256 characters**, as HTTP does.
+- **MCP `hippo_recall` now checks `limit` and `mode` by the HTTP rules** and answers a bad value with an `isError` result; it still ranks its own 50-row band in the store's search mode.
+- **MCP `hippo_context` now caps `scope` at 256 characters and rejects a `limit` of 0 or less**, as `GET /v1/context` does.
+- HTTP recall and context answers are unchanged: both surfaces now share one set of input checks in `src/api/recall-request.ts`.
+- **The MCP `hippo_recall` `recall` audit row now counts the memories it shows**, as the CLI and HTTP rows count the memories they return. It used to count the whole ranked band, so a small budget logged more results than the agent saw.
+- The recall session rings and recall audit rows for the CLI, MCP and HTTP now live in one module, `src/api/recall-record.ts`. Each surface keeps its own rings, and audit rows keep their order and actors.
+
+### Security
+
+- **The store port's owner, project and personal-scope filters are required parameters, and recall drops a cross-project fresh-tail row in core even when a store ignores them.** Before this, a store could drop the continuity key and return another developer's task snapshot, handoff and events.
+
+### Tests
+
+- **`tests/request-open-count.test.ts` counts real SQLite connections per request on a live `serve()`.** It covers `POST /v1/memories`, recall over `GET /v1/memories`, MCP `hippo_recall` over `POST /mcp`, an add-on route that runs two api helpers, four concurrent requests, three interleaved stdio MCP calls, and the server's held connection surviving every request. `tests/request-stores.test.ts` covers the scope itself: a late timer gets its own connection, an unscoped open survives the scope, interleaved scopes stay apart, a nested scope joins the outer one, one exit listener is installed, and the busy wait drops only in a fail-fast scope. `tests/mcp-auto-sleep.test.ts` checks that MCP auto-sleep runs outside the call's scope.
+
 ## 1.64.1 - 2026-10-07
 
 ### Fixed

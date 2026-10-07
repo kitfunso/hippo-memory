@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { appendAuditEvent } from './audit.js';
 import { withBackup } from './db/backup.js';
+import { assertSqliteAllowed } from './db/open.js';
 import { DatabaseSync, type DatabaseSyncLike } from './db/sqlite.js';
 import { getMeta, setMeta } from './db/meta.js';
 import { tableColumns } from './db/tables.js';
@@ -194,6 +195,8 @@ function repairOn(db: DatabaseSyncLike, root: string, opts: { tenantId: string; 
 }
 
 function openForRepair<T>(root: string, readOnly: boolean, fn: (db: DatabaseSyncLike) => T): T {
+  // Opens without openHippoDb to skip migrations, so it takes the same refusal itself.
+  assertSqliteAllowed(root);
   const file = path.join(root, 'hippo.db');
   if (!fs.existsSync(file)) throw new Error(`No existing Hippo database at ${file}`);
   const db = new DatabaseSync(file, { readOnly });

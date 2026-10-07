@@ -71,6 +71,8 @@ export { StoreBusyError } from './db.js';
 // An add-on store decodes and ranks with hippo.db's own code, so both return the same ids in the same order.
 export { decodeVector, EMBEDDING_MODEL_META_KEY, rankVectorRows, type VectorMatch, type VectorRow } from './vector-store.js';
 export { bufferToFloat32 } from './physics-state.js';
+// store copy --db writes the marker and reads the old hippo.db under the waiver.
+export { OTHER_STORE_MARKER, OtherStoreFolderError, withSqliteAllowed } from './db.js';
 // An add-on's install step mints the first admin key into a store folder it names, which `hippo auth create` cannot reach.
 export { authCreate, type AuthCreateOpts, type AuthCreateResult } from './api.js';
 

@@ -30,9 +30,10 @@ export function initStore(hippoRoot: string): void {
 
 /** One open connection with init done on it, for callers who used to pay for `initStore` + a second `openHippoDb`. */
 export function openStore(hippoRoot: string, opts?: { busyWaitMs?: number }): DatabaseSyncLike {
-  ensureMirrorDirectories(hippoRoot);
+  // Open first: a folder marked for another store must refuse before any mirror folder appears.
   const db = openHippoDb(hippoRoot, opts);
   try {
+    ensureMirrorDirectories(hippoRoot);
     const bootstrapped = bootstrapLegacyStore(db, hippoRoot);
     if (bootstrapped) {
       syncMirrorFiles(hippoRoot, db);
