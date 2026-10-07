@@ -31,8 +31,8 @@ export function encodeVector(vector: readonly number[]): Uint8Array {
 }
 
 export function decodeVector(blob: Uint8Array): Float32Array {
-  // A view needs 4-byte alignment; copy when SQLite hands back an unaligned slice.
-  const bytes = blob.byteOffset % 4 === 0 ? blob : blob.slice();
+  // A view needs 4-byte alignment; Buffer#slice is a view too, so copy with the constructor.
+  const bytes = blob.byteOffset % 4 === 0 ? blob : new Uint8Array(blob);
   return new Float32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 4);
 }
 
@@ -106,6 +106,42 @@ export interface VectorMatch {
   score: number;
 }
 
+/** A stored vector, decoded. */
+export interface VectorRow {
+  readonly id: string;
+  readonly vector: Float32Array;
+}
+
+/** The `k` rows closest to `query` by cosine, best first; ties go to the smaller id, so row order never changes the top k.
+ *  The query rounds to Float32 as stored vectors are, and scores add up in float64, so every store that feeds it the same bytes ranks alike. */
+export function rankVectorRows(query: readonly number[], rows: Iterable<VectorRow>, k: number): VectorMatch[] {
+  const top: VectorMatch[] = [];
+  if (k <= 0 || query.length === 0) return top;
+  const q = Float32Array.from(query);
+  let qNorm = 0;
+  for (let i = 0; i < q.length; i++) qNorm += q[i] * q[i];
+  qNorm = Math.sqrt(qNorm);
+  if (qNorm < 1e-10) return top;
+  for (const { id, vector: v } of rows) {
+    if (v.length !== q.length) continue;
+    let dot = 0;
+    let norm = 0;
+    for (let i = 0; i < v.length; i++) {
+      dot += q[i] * v[i];
+      norm += v[i] * v[i];
+    }
+    if (norm < 1e-20) continue;
+    const score = dot / (qNorm * Math.sqrt(norm));
+    if (top.length === k && !beats(score, id, top[k - 1])) continue;
+    insertSorted(top, { id, score }, k);
+  }
+  return top;
+}
+
+function* decodedRows(rows: Iterable<{ id: string; vector: Uint8Array }>): Generator<VectorRow> {
+  for (const row of rows) yield { id: row.id, vector: decodeVector(row.vector) };
+}
+
 /** The `k` stored vectors closest to `query` among `memories m` rows passing `where` (SQL starting with ` AND`).
  *  Filters run before the cut, so rows a caller may not see can never push admitted rows out of the top k. */
 export function topVectorMatches(
@@ -116,33 +152,14 @@ export function topVectorMatches(
   params: readonly (string | number)[],
 ): VectorMatch[] {
   if (k <= 0 || query.length === 0) return [];
-  const q = Float32Array.from(query);
-  let qNorm = 0;
-  for (let i = 0; i < q.length; i++) qNorm += q[i] * q[i];
-  qNorm = Math.sqrt(qNorm);
-  if (qNorm < 1e-10) return [];
   // SHORTCUT: brute-force cosine over every vector of matching dim, fine to ~100k rows; an ANN index (sqlite-vec, HNSW) is the upgrade.
   const rows = db.prepare(`
     SELECT v.memory_id AS id, v.vector AS vector
     FROM memory_vectors v JOIN memories m ON m.id = v.memory_id
     WHERE v.dim = ?${where}
-  `).iterate(q.length, ...params);
-  const top: VectorMatch[] = [];
+  `).iterate(query.length, ...params);
   // SAFETY: the SELECT above names exactly these two columns; node:sqlite returns BLOBs as Uint8Array.
-  for (const row of rows as Iterable<{ id: string; vector: Uint8Array }>) {
-    const v = decodeVector(row.vector);
-    let dot = 0;
-    let norm = 0;
-    for (let i = 0; i < v.length; i++) {
-      dot += q[i] * v[i];
-      norm += v[i] * v[i];
-    }
-    if (norm < 1e-20) continue;
-    const score = dot / (qNorm * Math.sqrt(norm));
-    if (top.length === k && !beats(score, row.id, top[k - 1])) continue;
-    insertSorted(top, { id: row.id, score }, k);
-  }
-  return top;
+  return rankVectorRows(query, decodedRows(rows as Iterable<{ id: string; vector: Uint8Array }>), k);
 }
 
 // Ties break on id so the cut is the same on every run.

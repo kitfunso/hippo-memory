@@ -1,31 +1,36 @@
 // Each sqliteStore recall method returns and writes what the hippo.db function behind it does on the golden seed, and a
 // recall over serve() opens no more hippo.db handles than today, since every open re-runs the PRAGMAs and migrations.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { closeHippoDb, openHippoDb } from '../src/db.js';
+import { closeHippoDb, getMeta, openHippoDb, setMeta } from '../src/db.js';
 import { recordTokens } from '../src/api.js';
 import { appendAuditEvent, type AppendAuditOpts } from '../src/audit.js';
 import { _resetAblationCacheForTests } from '../src/ablation.js';
+import { embeddingIndexIdentity, loadStoredVectors } from '../src/embeddings.js';
 import { detectForwardClaim } from '../src/forward-claim-detector.js';
 import { boostByGoals, getActiveGoalsWithDb, loadGoalPolicies, localGoalRecallRows, pushGoal, writeGoalRecallLog } from '../src/goals.js';
 import { __resetSessionRecallHistoryMcp } from '../src/mcp/server.js';
 import { lastRecalledIds } from '../src/mcp/session-state.js';
+import { loadPhysicsState, resetAllPhysicsState } from '../src/physics-state.js';
 import { resolveClassFromTokens } from '../src/predictions/planning-fallacy.js';
 import { computePredictionBaserate } from '../src/predictions/store.js';
 import { writeRecallTraceAtRoot } from '../src/recall-trace.js';
 import {
   serve, sqliteStore, __resetSessionRecallHistoryHttp,
   type ActiveGoals, type GoalRecallLogRow, type HippoStore, type MemoryEntry, type RecallSearchArgs, type RecallTraceInput, type RecallWrites,
+  type VectorCandidateSpec, type VectorReads,
 } from '../src/server.js';
 import { loadEntriesByIds, loadFreshRawMemories } from '../src/store/entry-reads.js';
 import { strengthenRetrieved } from '../src/store/entry-writes.js';
 import { loadLatestHandoff } from '../src/store/handoffs.js';
 import { updateStats } from '../src/store/index-and-stats.js';
-import { loadRecallSearchEntries } from '../src/store/search-rows.js';
+import { loadRecallSearchEntries, loadVectorCandidateEntries } from '../src/store/search-rows.js';
 import { listSessionEvents, loadActiveTaskSnapshot } from '../src/store/sessions.js';
+import { EMBEDDING_MODEL_META_KEY, hasStoredVectors, upsertVectors } from '../src/vector-store.js';
 import { countMatching, recordStatementsAsync, STORE_OPEN } from './_helpers/count-statements.js';
+import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from './_helpers/hashed-embedding-server.js';
 import {
   CLEARED_ENV, FAKE_NOW, freshStore, normalise, rowsOf, seeded, SESSION, seedPortBranches, seedTemplates, statsMirror, TENANT, type Store, type Templates,
 } from './_helpers/recall-golden-seed.js';
@@ -62,7 +67,7 @@ async function onCopy<T>(kind: Kind, fn: (s: Store) => T | Promise<T>): Promise<
 /** The direct hippo.db call on one copy and the store method on another must return the same value and leave the same rows. */
 async function parity<D, P>(
   direct: (s: Store) => D | Promise<D>,
-  port: (store: HippoStore) => Promise<P>,
+  port: (store: HippoStore & VectorReads) => Promise<P>,
   kind: Kind = 'local',
 ): Promise<{ direct: Outcome<D>; port: Outcome<P> }> {
   const a = await onCopy(kind, direct);
@@ -76,11 +81,33 @@ function idsOf(entries: readonly MemoryEntry[]): string[] {
   return entries.map((e) => e.id);
 }
 
+/** A Map as sorted entries, since normalise's JSON round trip turns a Map into {}. */
+function entriesOf<V>(map: ReadonlyMap<string, V>): [string, V][] {
+  return [...map].sort(([a], [b]) => (a < b ? -1 : 1));
+}
+
+const VECTOR_IDENTITY = embeddingIndexIdentity('openai:hashed-16');
+
+/** Vectors and particles for a current, a newer, a private and a superseded row, an 8-dim row, and a vector whose row is gone. */
+function seedVectors(root: string): void {
+  const entries = loadEntriesByIds(root, ['mem_p_plain', 'mem_p_new', 'mem_p_private', 'mem_p_old', 'mem_p_noise']);
+  const index = Object.fromEntries(entries.map((e): [string, number[]] => [e.id, e.id === 'mem_p_noise' ? [1, 0, 0, 0, 0, 0, 0, 0] : hashedVector(e.content)]));
+  const db = openHippoDb(root);
+  try {
+    upsertVectors(db, [...Object.entries(index), ['mem_x_orphan', hashedVector('deploy')]], VECTOR_IDENTITY);
+    setMeta(db, EMBEDDING_MODEL_META_KEY, VECTOR_IDENTITY);
+    resetAllPhysicsState(db, entries, index, new Date(FAKE_NOW));
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
 beforeAll(() => {
   templates = seedTemplates((root) => {
     seedPortBranches(root);
     // A goal with a retrieval policy, so activeGoals has a policy row to read.
     pushGoal(root, { sessionId: SESSION, tenantId: TENANT, goalName: 'goal-beta', policy: { policyType: 'recency-first', weightRecency: 1.5 } });
+    seedVectors(root);
   });
 });
 
@@ -192,6 +219,61 @@ describe('sqliteStore reads equal the hippo.db functions they wrap and open no m
     }, (store) => store.planningFallacyEvidence(TENANT, tokens));
     expect(direct.value).toMatchObject({ classTag, tiebreak: false, baserate: classTag ? { nClosed: 1 } : null });
     expect(port.opens).toBe(direct.opens);
+  });
+
+  it.each([
+    ['vectors under a stored model', 'local', { storedModel: VECTOR_IDENTITY, hasVectors: true }],
+    ['no vectors', 'wide', { storedModel: null, hasVectors: false }],
+  ] as const)('embeddingIndexState with %s: the meta row and the EXISTS on one handle', async (_name, kind, state) => {
+    // Before the port the vector arm read these on two handles.
+    const { direct, port } = await parity((s) => {
+      const db = openHippoDb(s.root);
+      try {
+        return { storedModel: getMeta(db, EMBEDDING_MODEL_META_KEY, '').trim() || null, hasVectors: hasStoredVectors(db) };
+      } finally {
+        closeHippoDb(db);
+      }
+    }, (store) => store.embeddingIndexState(), kind);
+    expect(direct.value).toEqual(state);
+    expect([direct.opens, port.opens]).toEqual([1, 1]);
+  });
+
+  it('storedVectors returns what loadStoredVectors does, an 8-dim row and a vector without a row included', async () => {
+    const ids = ['mem_p_plain', 'mem_p_noise', 'mem_x_orphan', 'mem_missing'];
+    const { direct, port } = await parity((s) => entriesOf(loadStoredVectors(s.root, ids)), async (store) => entriesOf(await store.storedVectors(ids)));
+    expect(direct.value.map(([id, v]) => [id, v.length])).toEqual([['mem_p_noise', 8], ['mem_p_plain', 16], ['mem_x_orphan', 16]]);
+    expect(port.opens).toBe(direct.opens);
+  });
+
+  const nearTo = hashedVector('deploy pipeline uses blue green rollout for the api');
+  const NEAREST: readonly [string, VectorCandidateSpec, readonly string[]][] = [
+    ['current rows in the default scopes', { tenantId: TENANT, scope: { mode: 'default-deny' }, includeSuperseded: false }, ['mem_p_new', 'mem_p_plain']],
+    ['superseded rows kept, no scope rule', { tenantId: TENANT, includeSuperseded: true }, ['mem_p_new', 'mem_p_old', 'mem_p_plain', 'mem_p_private']],
+    ['a private scope asked for exactly', { tenantId: TENANT, scope: { mode: 'exact', value: 'slack:private:C1' }, includeSuperseded: false }, ['mem_p_private']],
+    ['another tenant', { tenantId: 'other', includeSuperseded: true }, []],
+    ['a cut at 1', { includeSuperseded: false, limit: 1 }, ['mem_p_plain']],
+  ];
+
+  it.each(NEAREST)('nearestEntries: %s', async (_name, spec, ids) => {
+    const { direct, port } = await parity((s) => loadVectorCandidateEntries(s.root, nearTo, spec), (store) => store.nearestEntries(nearTo, spec));
+    expect([...idsOf(direct.value)].sort()).toEqual(ids);
+    expect(port.opens).toBe(direct.opens);
+  });
+
+  it('physicsParticles reads only the ids asked for, as loadPhysicsState does, and opens nothing for none', async () => {
+    const ids = ['mem_p_plain', 'mem_p_noise', 'mem_x_orphan', 'mem_missing'];
+    const { direct, port } = await parity((s) => {
+      const db = openHippoDb(s.root);
+      try {
+        return entriesOf(loadPhysicsState(db, ids));
+      } finally {
+        closeHippoDb(db);
+      }
+    }, async (store) => entriesOf(await store.physicsParticles(ids)));
+    expect(direct.value.map(([id]) => id)).toEqual(['mem_p_noise', 'mem_p_plain']);
+    expect(port.opens).toBe(direct.opens);
+    const none = await onCopy('local', async (s) => (await sqliteStore(s.root).physicsParticles([])).size);
+    expect([none.value, none.opens]).toEqual([0, 0]);
   });
 });
 
@@ -348,13 +430,24 @@ async function recallOver(url: string, call: Recall): Promise<void> {
 
 describe('hippo.db opens per recall over serve()', () => {
   // Exact, so a second open fails here: the request scope hands every port call the one handle.
-  const OPENS: readonly [string, number, Recall][] = [
+  const OPENS: readonly [string, number, Recall, boolean?][] = [
     ['http, no session', 1, { via: 'http', params: { q: 'deploy' } }],
     ['http, a session with active goals', 1, { via: 'http', params: { q: 'deploy', session_id: SESSION } }],
     ['http, continuity and a forward claim', 1, { via: 'http', params: { q: 'the deploy will take 3 days', include_continuity: 'true' } }],
     ['mcp, no session', 1, { via: 'mcp', args: { query: 'deploy' } }],
     ['mcp, a session with active goals', 1, { via: 'mcp', args: { query: 'deploy', session_id: SESSION } }],
+    ['http hybrid, the vector arm on', 1, { via: 'http', params: { q: 'deploy', mode: 'hybrid' } }, true],
+    ['http physics, the vector arm on', 1, { via: 'http', params: { q: 'deploy', mode: 'physics' } }, true],
   ];
+  let embeddings: HashedEmbeddings;
+
+  beforeAll(async () => {
+    embeddings = await startHashedEmbeddings();
+  });
+
+  afterAll(async () => {
+    await embeddings.close();
+  });
 
   beforeEach(() => {
     __resetSessionRecallHistoryHttp();
@@ -362,13 +455,20 @@ describe('hippo.db opens per recall over serve()', () => {
     lastRecalledIds.clear();
   });
 
-  it.each(OPENS)('%s: %i opens', async (_name, opens, call) => {
+  it.each(OPENS)('%s: %i opens', async (_name, opens, call, vectorArm = false) => {
     const s = freshStore(templates, 'local');
     try {
+      if (vectorArm) {
+        vi.stubEnv('OPENAI_API_KEY', 'test-key-not-secret');
+        const embeddingsConfig = { provider: 'openai', model: 'hashed-16', apiBaseUrl: embeddings.url };
+        writeFileSync(join(s.root, 'config.json'), JSON.stringify({ embeddings: embeddingsConfig, physics: { enabled: true } }));
+      }
+      const before = embeddings.requests();
       const handle = await serve({ hippoRoot: s.root, port: 0 });
       try {
         const { statements } = await recordStatementsAsync(() => recallOver(handle.url, call));
         expect(countMatching(statements, STORE_OPEN)).toBe(opens);
+        expect(embeddings.requests() > before).toBe(vectorArm);
       } finally {
         await handle.stop();
       }

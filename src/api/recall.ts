@@ -101,7 +101,7 @@ export async function retrieve(ctx: Context, opts: RecallOpts): Promise<RecallRe
   const store = storeFor(ctx);
   let candidates = await store.searchRecallEntries(opts.query, recallSearchArgs(ctx, opts, windowSize, own));
   if (opts.mode === 'hybrid' || opts.mode === 'physics') {
-    const searchOpts = { budget: Infinity, hippoRoot: ctx.hippoRoot, scope: opts.scope ?? null, vectorCandidates: recallVectorSpec(ctx, opts, own) };
+    const searchOpts = { budget: Infinity, hippoRoot: ctx.hippoRoot, scope: opts.scope ?? null, vectorCandidates: recallVectorSpec(ctx, opts, own), store };
     const ranked = opts.mode === 'physics'
       ? await physicsSearch(opts.query, candidates, { ...searchOpts, physicsConfig: loadConfig(ctx.hippoRoot).physics })
       : await hybridSearch(opts.query, candidates, searchOpts);
@@ -157,7 +157,7 @@ async function retrieveFromStore(
   const loaded = await store.searchRecallEntries(opts.query, recallSearchArgs(ctx, opts, Math.max(windowSize, SHOW_RANKED_LEXICAL_WINDOW), own));
   const pool = loaded.filter((e) => passesScopeFilterForRecall(e.scope ?? null, opts.scope, own));
   // No scope option: the scope boost follows HIPPO_SCOPE and the skill env, as MCP recall always ranked.
-  const searchOpts = { budget: Infinity, hippoRoot: ctx.hippoRoot, vectorCandidates: recallVectorSpec(ctx, opts, own) };
+  const searchOpts = { budget: Infinity, hippoRoot: ctx.hippoRoot, vectorCandidates: recallVectorSpec(ctx, opts, own), store };
   let ranked = opts.mode === 'physics'
     ? await physicsSearch(opts.query, pool, { ...searchOpts, physicsConfig: loadConfig(ctx.hippoRoot).physics })
     : await hybridSearch(opts.query, pool, searchOpts);

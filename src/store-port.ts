@@ -3,18 +3,22 @@ import { readApiKeyRecord, type ApiKeyRecord } from './auth.js';
 import { appendAuditEvent, type AppendAuditOpts } from './audit.js';
 import type { ContinuityBlock } from './api/recall-types.js';
 import { closeHippoDb, openHippoDb, withWriteScope, type DatabaseSyncLike } from './db.js';
+import { embeddingIndexStateAt, loadStoredVectors, type EmbeddingIndexState } from './embeddings.js';
 import {
   activeGoalsWithPolicies, localGoalRecallRows, writeGoalRecallLog,
   type ActiveGoals, type GetActiveGoalsOpts, type GoalRecallLogRow,
 } from './goals.js';
+import { log } from './log.js';
 import type { MemoryEntry } from './memory.js';
+import type { PhysicsParticle } from './physics.js';
+import { loadPhysicsState } from './physics-state.js';
 import { planningFallacyEvidenceAt, type PlanningFallacyEvidence } from './predictions/planning-fallacy.js';
 import { writeRecallTrace, type RecallTraceInput } from './recall-trace.js';
 import { loadEntriesByIds, loadFreshRawMemories } from './store/entry-reads.js';
 import { strengthenRetrievedInOwnTx, type StrengthenOptions } from './store/entry-writes.js';
 import { loadLatestHandoff } from './store/handoffs.js';
 import { updateStats } from './store/index-and-stats.js';
-import { loadRecallSearchEntries, type OriginFilter } from './store/search-rows.js';
+import { loadRecallSearchEntries, loadVectorCandidateEntries, type OriginFilter, type VectorCandidateSpec } from './store/search-rows.js';
 import { type ContinuityKey, listSessionEvents, loadActiveTaskSnapshot } from './store/sessions.js';
 import { recordTokenUse, type TokenUse } from './token-ledger.js';
 
@@ -43,8 +47,28 @@ export interface RecallWrites {
   readonly strengthen?: { readonly ids: readonly string[]; readonly opts: StrengthenOptions };
 }
 
+/** The reads behind recall's vector arm, optional on HippoStore since an add-on built before them lacks them; reach them through `vectorReads`. */
+export interface VectorReads {
+  /** The stored model and whether any vector exists, in one snapshot. */
+  embeddingIndexState(): Promise<EmbeddingIndexState>;
+  storedVectors(ids: readonly string[]): Promise<Map<string, number[]>>;
+  /** The `spec.limit ?? 50` rows nearest `queryVector` that pass `spec` before the cut, ranked by `rankVectorRows`, as `loadVectorCandidateEntries` does. */
+  nearestEntries(queryVector: readonly number[], spec: VectorCandidateSpec): Promise<MemoryEntry[]>;
+  /** The particles of `ids` only; an empty list reads nothing. */
+  physicsParticles(ids: readonly string[]): Promise<Map<string, PhysicsParticle>>;
+}
+
+const VECTOR_READS = ['embeddingIndexState', 'storedVectors', 'nearestEntries', 'physicsParticles'] as const;
+
+/** Logs the vector reads a store lacks, once per store kind. */
+export function vectorReads(store: HippoStore): store is HippoStore & VectorReads {
+  const missing = VECTOR_READS.filter((name) => store[name] === undefined);
+  if (missing.length > 0) log.once(`store.vector-reads.${store.kind}`, 'warn', `the '${store.kind}' store lacks ${missing.join(', ')}, so recall's vector arm cannot run on it`);
+  return missing.length === 0;
+}
+
 /** What `serve()` reads and writes through. Each method is atomic and no transaction spans an await, since SQLite's lock wait blocks the event loop; a lock timeout throws `StoreBusyError`. */
-export interface HippoStore {
+export interface HippoStore extends Partial<VectorReads> {
   /** 'sqlite' is hippo.db under the served root. Under any other kind, an unported route answers 501 and a hippo.db open inside a request throws. */
   readonly kind: string;
   /** The api_keys row for `keyId` with its scope grants, revoked or not; null when no row matches. */
@@ -92,7 +116,7 @@ export function storeFor(ctx: { readonly hippoRoot: string; readonly store?: Hip
 }
 
 /** The built-in store: today's synchronous hippo.db functions behind the port, each call on its own short-lived handles, so close has nothing to release. */
-export function sqliteStore(hippoRoot: string): HippoStore {
+export function sqliteStore(hippoRoot: string): HippoStore & VectorReads {
   return {
     kind: 'sqlite',
     async findApiKey(keyId) {
@@ -132,6 +156,19 @@ export function sqliteStore(hippoRoot: string): HippoStore {
     },
     async recordTokens(use) {
       onHandle(hippoRoot, (db) => recordTokenUse(db, use));
+    },
+    async embeddingIndexState() {
+      return embeddingIndexStateAt(hippoRoot);
+    },
+    async storedVectors(ids) {
+      return loadStoredVectors(hippoRoot, ids);
+    },
+    async nearestEntries(queryVector, spec) {
+      return loadVectorCandidateEntries(hippoRoot, queryVector, spec);
+    },
+    async physicsParticles(ids) {
+      // loadPhysicsState reads every row for an empty list.
+      return ids.length === 0 ? new Map() : onHandle(hippoRoot, (db) => loadPhysicsState(db, [...ids]));
     },
     async close(): Promise<void> {},
   };

@@ -109,14 +109,29 @@ export function saveStoredEmbeddingModel(hippoRoot: string, model: string): void
   }
 }
 
+/** What a store's vector index was built by: the stored identity, and whether any vector exists. */
+export interface EmbeddingIndexState {
+  readonly storedModel: string | null;
+  readonly hasVectors: boolean;
+}
+
+/** The model the index was built by: the stored identity, else the default model when vectors exist. */
+export function indexedModel(state: EmbeddingIndexState): string | null {
+  return state.storedModel ?? (state.hasVectors ? DEFAULT_EMBEDDING_MODEL : null);
+}
+
+/** The one rebuild rule every store applies to its indexed model. */
+export function indexNeedsRebuild(indexed: string | null, providerId: string): boolean {
+  return indexed !== null && indexed !== embeddingIndexIdentity(providerId);
+}
+
 export function resolveIndexedEmbeddingModel(
   hippoRoot: string,
   index?: Record<string, number[]>,
 ): string | null {
-  const stored = loadStoredEmbeddingModel(hippoRoot);
-  if (stored) return stored;
-  const hasVectors = index ? Object.keys(index).length > 0 : withVectorDb(hippoRoot, hasStoredVectors);
-  return hasVectors ? DEFAULT_EMBEDDING_MODEL : null;
+  const storedModel = loadStoredEmbeddingModel(hippoRoot);
+  if (storedModel) return storedModel;
+  return indexedModel({ storedModel, hasVectors: index ? Object.keys(index).length > 0 : withVectorDb(hippoRoot, hasStoredVectors) });
 }
 
 export function embeddingModelRequiresReindex(
@@ -124,8 +139,15 @@ export function embeddingModelRequiresReindex(
   model: string,
   index?: Record<string, number[]>,
 ): boolean {
-  const stored = resolveIndexedEmbeddingModel(hippoRoot, index);
-  return stored !== null && stored !== embeddingIndexIdentity(model);
+  return indexNeedsRebuild(resolveIndexedEmbeddingModel(hippoRoot, index), model);
+}
+
+/** hippo.db's index state, the meta row and the EXISTS on one handle. */
+export function embeddingIndexStateAt(hippoRoot: string): EmbeddingIndexState {
+  return withVectorDb(hippoRoot, (db) => ({
+    storedModel: getMeta(db, EMBEDDING_MODEL_META_KEY, '').trim() || null,
+    hasVectors: hasStoredVectors(db),
+  }));
 }
 
 async function rebuildEmbeddingIndex(
@@ -215,11 +237,6 @@ export function loadEmbeddingIndex(hippoRoot: string): Record<string, number[]> 
 /** Stored vectors for `ids` only. */
 export function loadStoredVectors(hippoRoot: string, ids: readonly string[]): Map<string, number[]> {
   return ids.length === 0 ? new Map() : withVectorDb(hippoRoot, (db) => loadVectors(db, ids));
-}
-
-/** Whether the store holds any vector at all. */
-export function hasEmbeddings(hippoRoot: string): boolean {
-  return withVectorDb(hippoRoot, hasStoredVectors);
 }
 
 /** Replace every stored vector with `index`; `model` defaults to the stored index identity. */

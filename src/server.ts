@@ -50,7 +50,7 @@ export type { JsonValue } from './json.js';
 // A session-end route stores the turns its caller read from a transcript on the caller's own machine.
 export { captureSessionTexts, type SessionCaptureRequest, type SessionCaptureResult } from './capture/session-texts.js';
 // An add-on serves from another database by passing serve() its own HippoStore.
-export { sqliteStore, type HippoStore, type RecallSearchArgs, type RecallWrites } from './store-port.js';
+export { sqliteStore, type HippoStore, type RecallSearchArgs, type RecallWrites, type VectorReads } from './store-port.js';
 export type { ApiKeyRecord } from './auth.js';
 // The types HippoStore's recall methods take and return, so an add-on store can implement them from this subpath.
 export type { AppendAuditOpts } from './audit.js';
@@ -61,10 +61,15 @@ export type { ClassResolution, PlanningFallacyEvidence } from './predictions/pla
 export type { PredictionBaserate } from './predictions/store.js';
 export type { RecallTraceInput } from './recall-trace.js';
 export type { StrengthenOptions } from './store/entry-writes.js';
-export type { OriginFilter } from './store/search-rows.js';
+export type { OriginFilter, RecallScopeFilter, VectorCandidateSpec } from './store/search-rows.js';
 export type { ContinuityKey } from './store/sessions.js';
 export type { TokenUse } from './token-ledger.js';
+export type { EmbeddingIndexState } from './embeddings.js';
+export type { PhysicsParticle } from './physics.js';
 export { StoreBusyError } from './db.js';
+// An add-on store decodes and ranks with hippo.db's own code, so both return the same ids in the same order.
+export { decodeVector, EMBEDDING_MODEL_META_KEY, rankVectorRows, type VectorMatch, type VectorRow } from './vector-store.js';
+export { bufferToFloat32 } from './physics-state.js';
 // An add-on's install step mints the first admin key into a store folder it names, which `hippo auth create` cannot reach.
 export { authCreate, type AuthCreateOpts, type AuthCreateResult } from './api.js';
 
