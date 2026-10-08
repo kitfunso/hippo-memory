@@ -1,17 +1,20 @@
 // Store passes that walk many rows open the store once and read rows in chunked IN lists, so query counts stay flat as rows grow.
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { makeRoot } from './_helpers/make-root.js';
-import { recordStatements, countMatching, STORE_OPEN } from './_helpers/count-statements.js';
+import { recordStatements, recordStatementsAsync, countMatching, STORE_OPEN } from './_helpers/count-statements.js';
 import { openStore } from '../src/store/open.js';
-import { writeEntryOn } from '../src/store/entry-writes.js';
+import { writeEntryOn, strengthenRetrieved } from '../src/store/entry-writes.js';
 import { MEMORY_SELECT_COLUMNS } from '../src/store/rows.js';
 import { closeHippoDb } from '../src/db.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/memory.js';
-import { readEntry } from '../src/store/entry-reads.js';
+import { readEntry, loadAllEntries } from '../src/store/entry-reads.js';
 import { adminActor, type HippoDbContext } from '../src/api/types.js';
+import { learn, CLI_LEARN } from '../src/api/learn.js';
+import { cmdRemember } from '../src/cli/remember.js';
+import { cmdCapture } from '../src/capture/command.js';
 import { outcome } from '../src/api/outcome.js';
 import { quarantineList } from '../src/api/quarantine.js';
 import { drillDown } from '../src/api/drill-down.js';
@@ -23,6 +26,8 @@ import { deduplicateStore } from '../src/dedupe.js';
 
 const SIZES = [10, 200] as const;
 const ROW_READ = MEMORY_SELECT_COLUMNS;
+/** loadAllEntries' statement: every full row of one tenant. */
+const TENANT_READ = /FROM memories WHERE tenant_id = \? ORDER BY created ASC, id ASC$/;
 const roots: string[] = [];
 
 afterEach(() => {
@@ -215,6 +220,139 @@ describe('deduplicateStore', () => {
       return countMatching(statements, STORE_OPEN);
     });
     expect(opens[1]).toBe(opens[0]);
+  });
+});
+
+describe('strengthenRetrieved', () => {
+  it('reads every id in one query', () => {
+    for (const n of SIZES) {
+      const root = freshRoot('qc-strengthen');
+      const entries = rows(n, 'strengthen');
+      seed(root, entries);
+      const { result, statements } = recordStatements(() => strengthenRetrieved(root, entries.map((e) => e.id), { recallBoostAblated: false }));
+      expect(result.size).toBe(n);
+      expect(countMatching(statements, ROW_READ)).toBe(1);
+    }
+  });
+
+  it('moves a repeated id once, as one read per id did', () => {
+    const root = freshRoot('qc-strengthen-repeat');
+    const [entry] = rows(1, 'repeat');
+    seed(root, [entry]);
+    expect([...strengthenRetrieved(root, [entry.id, entry.id], { recallBoostAblated: false })]).toEqual([entry.id]);
+    const after = readEntry(root, entry.id);
+    expect(after?.retrieval_count).toBe(entry.retrieval_count + 1);
+    expect(after?.half_life_days).toBe(entry.half_life_days + 2);
+  });
+});
+
+describe('learn', () => {
+  /** A repo whose last `lessons` commits each replace the quuxlib client, so each lesson invalidates what mentions it. */
+  function repoWith(lessons: number): string {
+    const repo = freshRoot('qc-learn-repo');
+    const git = (...args: string[]): void => {
+      execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', '-c', 'commit.gpgsign=false', ...args], { cwd: repo, stdio: 'ignore' });
+    };
+    git('init');
+    for (let i = 0; i < lessons; i++) git('commit', '--allow-empty', '-m', `fix: replace quuxlib client with fetch wrapper ${i} in src/api${i}.ts`);
+    return repo;
+  }
+
+  function learnInto(repo: string, n: number) {
+    const root = freshRoot('qc-learn');
+    fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { enabled: false } }));
+    seed(root, [...rows(n, 'learn'), memory('the quuxlib client retries twice'), memory('quuxlib client timeouts are 30s')]);
+    const { result, statements } = recordStatements(() => learn(ctxFor(root), { repoPath: repo, days: 7, profile: CLI_LEARN }));
+    return { root, result, opens: countMatching(statements, STORE_OPEN), tenantReads: countMatching(statements, TENANT_READ) };
+  }
+
+  it('opens the store and reads the tenant once per batch, however many lessons or rows', () => {
+    const one = repoWith(1);
+    const ten = repoWith(10);
+    const counts = SIZES.map((n) => {
+      const single = learnInto(one, n);
+      const batch = learnInto(ten, n);
+      expect(single.result.added).toBe(1);
+      expect(batch.result.added).toBe(10);
+      expect(batch.tenantReads).toBe(1);
+      expect(batch.opens).toBe(single.opens);
+      return batch.opens;
+    });
+    expect(counts[1]).toBe(counts[0]);
+  });
+
+  it('a later lesson still invalidates a lesson written earlier in the batch', () => {
+    const { root, result } = learnInto(repoWith(3), 10);
+    // Each lesson names the quuxlib client, so the second and third also weaken the lessons before them.
+    expect(result.invalidations.map((i) => i.count)).toEqual([2, 3, 4]);
+    const lessons = loadAllEntries(root, 'default').filter((e) => e.source === CLI_LEARN.source);
+    const base = lessons.find((e) => !e.tags.includes('invalidated'))?.half_life_days ?? 0;
+    expect(lessons.map((e) => e.half_life_days).sort((a, b) => a - b)).toEqual([Math.floor(Math.floor(base / 2) / 2), Math.floor(base / 2), base]);
+    expect(lessons.filter((e) => e.confidence === 'stale')).toHaveLength(2);
+  });
+});
+
+describe('cmdRemember', () => {
+  async function remember(root: string, text: string) {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    try {
+      const { statements } = await recordStatementsAsync(() => cmdRemember(root, text, { tag: ['topic:cache'] }));
+      return { statements, printed: log.mock.calls.map((call) => String(call[0])) };
+    } finally {
+      log.mockRestore();
+    }
+  }
+
+  it('scores schema fit without reading a full row', async () => {
+    for (const n of SIZES) {
+      const root = freshRoot('qc-remember');
+      fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { enabled: false } }));
+      seed(root, rows(n, 'remember', { tags: ['topic:cache'] }));
+      const { statements, printed } = await remember(root, 'a new note about the zephyrine cache');
+      expect(printed[0]).toMatch(/^Remembered \[/);
+      expect(countMatching(statements, ROW_READ)).toBe(0);
+      // One open scores the fit; the row and the counter share the other.
+      expect(countMatching(statements, STORE_OPEN)).toBe(2);
+    }
+  });
+
+  it('reads only the salience window when the gate runs, and judges as the whole list did', async () => {
+    for (const n of SIZES) {
+      const root = freshRoot('qc-remember-salience');
+      fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { enabled: false }, salience: { enabled: true, recentWindow: 3 } }));
+      const stored = rows(n, 'salience').map((e, i) => ({ ...e, created: new Date(Date.UTC(2026, 0, 1, 0, 0, i)).toISOString() }));
+      seed(root, stored);
+
+      const inWindow = await remember(root, stored[n - 1].content);
+      expect(inWindow.printed[0]).toMatch(/^Skipped \(salience: duplicate/);
+      expect(countMatching(inWindow.statements, ROW_READ)).toBe(1);
+      expect(countMatching(inWindow.statements, /ORDER BY created DESC, id DESC LIMIT \?$/)).toBe(1);
+
+      const beforeWindow = await remember(root, stored[n - 4].content);
+      expect(beforeWindow.printed[0]).toMatch(/^Remembered \[/);
+    }
+  });
+});
+
+describe('cmdCapture', () => {
+  it('reads no full row for its copy check and keeps every write on one handle', () => {
+    const counts = SIZES.flatMap((n) => [1, 10].map((items) => {
+      const root = freshRoot('qc-capture');
+      fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { enabled: false } }));
+      const held = 'Never deploy service 0 on Fridays because the on-call rota is thin';
+      seed(root, [...rows(n, 'capture'), memory(held)]);
+      const sessionTurns = Array.from({ length: items + 1 }, (_, i) => ({ role: 'user' as const, text: `Never deploy service ${i} on Fridays because the on-call rota is thin.` }));
+      const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+      try {
+        const { statements } = recordStatements(() => cmdCapture(root, { source: 'last-session', sessionTurns, dryRun: false, global: false, tenantId: 'default' }));
+        expect(log.mock.calls.at(-1)?.[0]).toContain(`Captured ${items} items (1 skipped as duplicates)`);
+        expect(countMatching(statements, ROW_READ)).toBe(0);
+        return countMatching(statements, STORE_OPEN);
+      } finally {
+        log.mockRestore();
+      }
+    }));
+    expect(new Set(counts).size).toBe(1);
   });
 });
 

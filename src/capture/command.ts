@@ -1,12 +1,12 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { createMemory, Layer, type MemoryEntry } from '../memory.js';
-import { duplicateKey, storedTextKeys } from '../same-text.js';
+import { duplicateKey, longestWord, storedTextKeys } from '../same-text.js';
 import { stampOriginProject } from '../store/entry-row.js';
 import { isInitialized, openStore } from '../store/open.js';
 import { writeEntryMirrors } from '../store/entry-writes.js';
-import { loadAllEntries } from '../store/entry-reads.js';
-import { updateStats } from '../store/index-and-stats.js';
+import { EVERY_SCOPE, loadTextsHoldingWords } from '../store/candidates.js';
+import { updateStatsOn } from '../store/index-and-stats.js';
 import { gatedWrite } from '../gated-write.js';
 import { getGlobalRoot, initGlobal } from '../shared.js';
 import { embedMemory } from '../embeddings.js';
@@ -172,7 +172,10 @@ function cmdCaptureCore(
 
   // Dedup only against rows this capture's reader sees: another tenant's rows, or another
   // project's, are hidden from it, so they must not stop its own copy.
-  const stored = loadAllEntries(targetRoot, useGlobal ? undefined : options.tenantId);
+  // Only a row holding an item's longest word can hold that item, so the store returns those rows and no others.
+  const stored = loadTextsHoldingWords(
+    targetRoot, useGlobal ? undefined : options.tenantId, extracted.map((item) => longestWord(item.content)), undefined, EVERY_SCOPE,
+  );
   const origin = options.originProject;
   const keys = storedTextKeys(origin === undefined
     ? stored
@@ -333,7 +336,7 @@ function captureOne(ctx: CaptureWriteContext, item: ExtractedItem, entry: Memory
     if (outcome === 'skipped:rejected') return 'rejected';
     if (outcome !== 'written') return 'skipped';
     writeEntryMirrors(targetRoot, stamped);
-    if (!options.lean) updateStats(targetRoot, { remembered: 1 });
+    if (!options.lean) updateStatsOn(writeDb, targetRoot, { remembered: 1 });
     keys.add(duplicateKey(item.content)); // within-batch dedup
     if (!options.lean) void embedMemory(targetRoot, entry);
   }

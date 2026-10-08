@@ -1,7 +1,7 @@
 import { writeEntryOn } from './store/entry-writes.js';
 import { loadAllEntries, selectEntriesByIds } from './store/entry-reads.js';
 import { openStore } from './store/open.js';
-import { openHippoDb, closeHippoDb } from './db.js';
+import { type DatabaseSyncLike, openHippoDb, closeHippoDb } from './db.js';
 import { CHURN_STALE_TAG, type MemoryEntry } from './memory.js';
 import {
   GitReadError,
@@ -106,7 +106,32 @@ export function invalidateMatching(
   // (host-wide invalidation across all tenants in the store).
   // options.onlyId resolves by FILTERING this tenant-scoped list — never a
   // direct id lookup — so an id from another tenant is invisible here.
-  const entries = loadAllEntries(hippoRoot, tenantId);
+  const { result, weakened } = weakenMatches(loadAllEntries(hippoRoot, tenantId), target, options);
+  writeEntriesOnOneHandle(hippoRoot, weakened);
+  return result;
+}
+
+/** invalidateMatching for a batch on one open store: matches against `live`, the caller's list of the tenant's rows, and keeps it current.
+ *  Each match is read again before it is weakened, so a row another writer changed since the list was read is never written back stale. */
+export function invalidateMatchingOn(
+  db: DatabaseSyncLike,
+  hippoRoot: string,
+  live: MemoryEntry[],
+  target: InvalidationTarget,
+  tenantId?: string,
+): InvalidationResult {
+  const seen = weakenMatches(live, target, { dryRun: true }).result;
+  const ids = [...seen.targets, ...seen.skippedPinned];
+  const fresh = selectEntriesByIds(db, ids, tenantId);
+  const { result, weakened } = weakenMatches(ids.flatMap((id) => fresh.get(id) ?? []), target);
+  for (const entry of weakened) writeEntryOn(db, hippoRoot, entry);
+  const byId = new Map(weakened.map((entry) => [entry.id, entry]));
+  for (let i = 0; i < live.length; i++) live[i] = byId.get(live[i].id) ?? live[i];
+  return result;
+}
+
+/** The match pass: weakens each unpinned match in place and returns them, writing nothing. */
+function weakenMatches(entries: readonly MemoryEntry[], target: InvalidationTarget, options?: InvalidationOptions) {
   const fromTokens = invalidationTokenize(target.from);
   const exactTag = target.from.toLowerCase().trim();
   const dryRun = options?.dryRun === true;
@@ -156,8 +181,7 @@ export function invalidateMatching(
     weakened.push(entry);
   }
 
-  writeEntriesOnOneHandle(hippoRoot, weakened);
-  return result;
+  return { result, weakened };
 }
 
 /** Each row commits alone, as a run of writeEntry calls would, but the store opens once. */

@@ -4,6 +4,7 @@ import { scopeAdmitSql, type SqlFragment } from '../recall-scope.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
 import { openStore } from './open.js';
 import { originInSql } from '../project-identity.js';
+import { schemaFitFrom } from '../schema-fit.js';
 import { pickRarestFtsQuery, loadRecallSearchEntriesFromDb } from './search-rows.js';
 
 export interface AmbientRecallRequest {
@@ -193,13 +194,18 @@ export type HeldText = Pick<MemoryEntry, 'content' | 'source' | 'origin_project'
 // No owner: for session capture, a personal or connector-private row must never stop a team copy being written.
 const TEAM_VISIBLE = scopeAdmitSql('');
 
+/** Admits every scope, for a reader that sees the whole store, such as the CLI on its own machine. */
+export const EVERY_SCOPE: SqlFragment = Object.freeze({ sql: '1', params: [] });
+
 /** Text, source and origin of tenant rows holding any of `words` that `admit` passes, by default the team-visible ones; a row equal to a text apart from spacing holds its every word.
- *  With `project`, only rows carrying one of those names and user-global rows, as loadContextCandidates' filter. */
+ *  With `project`, only rows carrying one of those names and user-global rows, as loadContextCandidates' filter. No `tenantId` reads every tenant. */
 export function loadTextsHoldingWords(
-  hippoRoot: string, tenantId: string, words: readonly string[], project?: readonly string[], admit: SqlFragment = TEAM_VISIBLE,
+  hippoRoot: string, tenantId: string | undefined, words: readonly string[], project?: readonly string[], admit: SqlFragment = TEAM_VISIBLE,
 ): HeldText[] {
   const unique = [...new Set(words)];
   const out: HeldText[] = [];
+  const tenantWhere = tenantId === undefined ? '1' : 'tenant_id = ?';
+  const tenantParams = tenantId === undefined ? [] : [tenantId];
   const originWhere = project === undefined ? '' : ` AND (origin_project = '' OR ${originInSql(project)})`;
   const db = openStore(hippoRoot);
   try {
@@ -208,11 +214,58 @@ export function loadTextsHoldingWords(
       const chunk = unique.slice(i, i + 200);
       // SAFETY: rows' shape matches the three columns named in the SELECT below.
       const rows = db.prepare(
-        `SELECT content, source, origin_project FROM memories WHERE tenant_id = ?${originWhere} AND ${admit.sql} AND (${chunk.map(() => 'instr(content, ?) > 0').join(' OR ')})`,
-      ).all(tenantId, ...(project ?? []), ...admit.params, ...chunk) as Array<{ content: string; source: string | null; origin_project: string | null }>;
+        `SELECT content, source, origin_project FROM memories WHERE ${tenantWhere}${originWhere} AND ${admit.sql} AND (${chunk.map(() => 'instr(content, ?) > 0').join(' OR ')})`,
+      ).all(...tenantParams, ...(project ?? []), ...admit.params, ...chunk) as Array<{ content: string; source: string | null; origin_project: string | null }>;
       for (const row of rows) out.push({ content: row.content, source: row.source ?? 'cli', origin_project: row.origin_project });
     }
     return out;
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/** A tenant's `limit` newest rows, oldest first: the tail of loadAllEntries' order, without reading the rows before it. */
+export function loadNewestEntries(hippoRoot: string, tenantId: string, limit: number): MemoryEntry[] {
+  const db = openStore(hippoRoot);
+  try {
+    // SAFETY: the SELECT names exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
+    const rows = db.prepare(
+      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE tenant_id = ? ORDER BY created DESC, id DESC LIMIT ?`,
+    ).all(tenantId, limit) as MemoryRow[];
+    return rows.reverse().map(rowToEntry);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+function* contentsOf(rows: Iterable<{ content: string }>): Generator<string> {
+  for (const row of rows) yield row.content;
+}
+
+/** computeSchemaFit against every row of a tenant: tag counts come from one aggregate and texts stream one column, so no row is loaded. */
+export function schemaFitInStore(hippoRoot: string, tenantId: string, content: string, tags: readonly string[]): number {
+  const db = openStore(hippoRoot);
+  try {
+    // One read transaction, so the row count and the texts come from the same snapshot.
+    db.exec('BEGIN');
+    try {
+      // SAFETY: rows' shape matches the two columns named in the SELECT.
+      const groups = db.prepare(
+        'SELECT tags_json, COUNT(*) AS n FROM memories WHERE tenant_id = ? GROUP BY tags_json',
+      ).all(tenantId) as Array<{ tags_json: string | null; n: number }>;
+      let rows = 0;
+      const tagCounts = new Map<string, number>();
+      for (const group of groups) {
+        rows += group.n;
+        for (const tag of parseJsonArray(group.tags_json)) tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + group.n);
+      }
+      // SHORTCUT: the text walk visits rows until a tenth of the tenant matches; a stored token count per tenant is the upgrade.
+      // SAFETY: the SELECT names exactly the one column read.
+      const texts = db.prepare('SELECT content FROM memories WHERE tenant_id = ?').iterate(tenantId) as Iterable<{ content: string }>;
+      return schemaFitFrom(content, tags, { rows, tagCounts, contents: contentsOf(texts) });
+    } finally {
+      db.exec('COMMIT');
+    }
   } finally {
     closeHippoDb(db);
   }

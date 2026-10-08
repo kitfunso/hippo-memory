@@ -2,10 +2,11 @@
 
 import * as path from 'path';
 import * as fs from 'fs';
-import { calculateStrength, deriveHalfLife, computeSchemaFit } from '../memory.js';
+import { calculateStrength, deriveHalfLife } from '../memory.js';
 import { isInitialized } from '../store/open.js';
 import { writeEntry } from '../store/entry-writes.js';
 import { readEntry, loadAllEntries } from '../store/entry-reads.js';
+import { schemaFitInStore } from '../store/candidates.js';
 import { updateStats } from '../store/index-and-stats.js';
 import { RejectedValueError } from '../rejection.js';
 import { embedAll, embedMemory } from '../embeddings.js';
@@ -61,10 +62,7 @@ async function cmdWatch(command: string, hippoRoot: string): Promise<void> {
   }
 
   const entry = captureError(exitCode, stderr, command, resolveTenantId({}));
-  // Compute schema fit against existing memories
-  const existingWatch = loadAllEntries(hippoRoot, entry.tenantId);
-  const watchFit = computeSchemaFit(entry.content, entry.tags, existingWatch);
-  entry.schema_fit = watchFit;
+  entry.schema_fit = schemaFitInStore(hippoRoot, entry.tenantId, entry.content, entry.tags);
   entry.half_life_days = deriveHalfLife(loadConfig(hippoRoot).defaultHalfLifeDays, entry);
   entry.strength = calculateStrength(entry);
   // A rejection-guard refusal of a failed command's output must not crash the watcher:
