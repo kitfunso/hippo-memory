@@ -73,6 +73,29 @@ describe('Decay pass', () => {
     expect(remaining.find((e) => e.id === ancient.id)).toBeDefined();
   });
 
+  it('a dry run reports the same counts and detail lines the real run then produces', async () => {
+    initStore(tmpDir);
+    fs.writeFileSync(path.join(tmpDir, 'config.json'), JSON.stringify({ replay: { count: 0 } }), 'utf8');
+    const now = new Date('2026-06-01T00:00:00.000Z');
+    const at = new Date(now.getTime() - 400 * 24 * 60 * 60 * 1000).toISOString();
+    const faded = { half_life_days: 1, created: at, last_retrieved: at };
+    writeEntry(tmpDir, { ...createMemory7('an old note about a retired staging hostname nobody uses'), ...faded });
+    writeEntry(tmpDir, { ...createMemory7('an old note about rotating the staging deploy key', { tags: ['credential'] }), ...faded });
+    writeEntry(tmpDir, createMemory7('cache refresh failure data pipeline error', { layer: Layer.Episodic }));
+    writeEntry(tmpDir, createMemory7('cache refresh failure data pipeline problem', { layer: Layer.Episodic }));
+
+    const dry = await consolidate(tmpDir, { dryRun: true, now });
+    const real = await consolidate(tmpDir, { now });
+
+    expect(dry.dryRun).toBe(true);
+    expect([dry.decayed, dry.dormant, dry.removed, dry.merged]).toEqual([real.decayed, real.dormant, real.removed, real.merged]);
+    expect(real.dormant).toBe(1);
+    expect(real.removed).toBe(1);
+    expect(real.merged).toBe(2);
+    expect(dry.details).toEqual(real.details);
+    expect(real.details.filter((l) => l.includes('💤') || l.includes('🗑'))).toHaveLength(2);
+  });
+
   it('keeps the stored confidence tier for old non-verified memories through sleep, while resolveConfidence reports stale', async () => {
     initStore(tmpDir);
 
@@ -168,6 +191,7 @@ describe('Replay pass (integration)', () => {
     const result = await consolidate(tmpDir, { now: new Date() });
 
     expect(result.replayed).toBe(2);
+    expect(result.details.some((l) => /^ {2}💭 replayed 2 memories: /.test(l))).toBe(true);
     const after = loadAllEntries(tmpDir);
     const touched = after.filter((e) => e.retrieval_count > 0);
     expect(touched).toHaveLength(2);
@@ -188,6 +212,7 @@ describe('Merge pass', () => {
 
     expect(result.merged).toBeGreaterThan(0);
     expect(result.semanticCreated).toBeGreaterThan(0);
+    expect(result.details.some((l) => l.startsWith('  🔀 merged 2 episodic entries into semantic: '))).toBe(true);
 
     const all = loadAllEntries(tmpDir);
     const semantics = all.filter((e) => e.layer === Layer.Semantic);
@@ -264,8 +289,9 @@ describe('Merge pass', () => {
     writeEntry(tmpDir, a);
     writeEntry(tmpDir, b);
 
-    await consolidate(tmpDir, { now: new Date() });
+    const result = await consolidate(tmpDir, { now: new Date() });
 
+    expect(result.details).toContain('  ⚠️ detected 1 memory conflict');
     const conflicts = listMemoryConflicts(tmpDir);
     expect(conflicts).toHaveLength(1);
     expect(conflicts[0].reason).toMatch(/enabled\/disabled mismatch|negation polarity mismatch/i);

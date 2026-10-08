@@ -418,6 +418,9 @@ describe('(e) rescue semantics', () => {
 
     const result = await consolidate(dir, { now: NOW });
     expect(result.removed).toBe(7);
+    const rescueLines = result.details.filter((l) => l.includes('🛟'));
+    expect(rescueLines).toHaveLength(3);
+    for (const l of rescueLines) expect(l).toMatch(/ - rescued \(rank [123]\/10 in tenant ta, top 3\)$/);
 
     const remainingIds = new Set(loadAllEntries(dir).map((e) => e.id));
     for (const id of expectedRescued) expect(remainingIds.has(id)).toBe(true);
