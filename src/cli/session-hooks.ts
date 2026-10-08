@@ -47,6 +47,8 @@ import { normaliseHookPayload, readHookStdin, readStdinBounded, type BoundedStdi
 import { resolveTenantId } from '../tenant.js';
 import { errorMessage, log } from '../log.js';
 import { withLedgerDb } from '../ledger-db.js';
+import { flushDeliveryRecorder } from '../prompt-hook.js';
+import type { DeliveryRecorder } from '../delivery-recorder.js';
 import { printError } from './output.js';
 import { cmdLastSleep } from './last-sleep.js';
 import {
@@ -59,6 +61,7 @@ import {
   payloadCwdRoot,
   runHookWithStores,
   inPilotHoldout,
+  startDeliveryRecorder,
 } from './shared.js';
 import type { JsonValue } from '../json.js';
 
@@ -75,6 +78,7 @@ import type { JsonValue } from '../json.js';
  * hook must not pollute session startup.
  */
 function cmdCompactResume(hippoRoot: string, stdinText: string | undefined, stdinTimedOut: boolean): void {
+  let rec: DeliveryRecorder | null = null;
   try {
     // Gate on the non-exiting isInitialized check first: the store reads below call initStore, which would
     // silently create a store in a project that never ran `hippo init`, and this hook fires globally.
@@ -92,6 +96,8 @@ function cmdCompactResume(hippoRoot: string, stdinText: string | undefined, stdi
     // never fire, so a timed-out empty read must not reach the print path.
     let suppressOutput = stdinTimedOut && !nonEmptyStdin;
     let payloadSessionId: string | null = null;
+    // A boundary is a manual run or a payload that says it follows a compaction; anything else is not one.
+    let boundary = !nonEmptyStdin && !stdinTimedOut;
 
     if (nonEmptyStdin) {
       let payload: Record<string, unknown> | null = null;
@@ -108,6 +114,7 @@ function cmdCompactResume(hippoRoot: string, stdinText: string | undefined, stdi
         // Fail closed on structurally incomplete payloads too ({}, [], source missing/non-string): real
         // SessionStart payloads always carry source, so a parsed one must say 'compact' to print.
         // A sub-agent's payload carries its parent's session id, so the mismatch guard would pass and restore the parent's snapshot into it.
+        boundary = payload.source === 'compact';
         if (payload.source !== 'compact' || isSubagentPayload(stdinText)) {
           suppressOutput = true;
         }
@@ -117,20 +124,25 @@ function cmdCompactResume(hippoRoot: string, stdinText: string | undefined, stdi
       }
     }
 
+    if (boundary) rec = startDeliveryRecorder(hippoRoot, stdinText, 'claude-code', 'compact-resume');
+
     // A compaction follows a prompt or SessionStart that booked the arm, so this only reads it.
     if (!suppressOutput && payloadSessionId !== null && inPilotHoldout(hippoRoot, resolveTenantId({}), payloadSessionId, false)) {
       suppressOutput = true;
+      rec?.disabled();
     }
 
-    if (!suppressOutput) restoreCompactSnapshot(hippoRoot, payloadSessionId);
+    if (!suppressOutput) restoreCompactSnapshot(hippoRoot, payloadSessionId, rec);
   } catch (err) {
     // Empty stdout on any store error, never a crashed SessionStart; the reason goes to stderr, which the model never sees.
     log.warn(`hippo compact-resume: skipped: ${err instanceof Error ? err.message : String(err)}`);
   }
+  // A no-op when the token ledger's handle already wrote the row; exit would drop it otherwise.
+  flushDeliveryRecorder(rec);
   process.exit(0);
 }
 
-function restoreCompactSnapshot(hippoRoot: string, payloadSessionId: string | null): void {
+function restoreCompactSnapshot(hippoRoot: string, payloadSessionId: string | null, rec: DeliveryRecorder | null): void {
   const tenantId = resolveTenantId({});
   const snapshot = loadFreshActiveTaskSnapshot(hippoRoot, tenantId, { maxAgeMs: COMPACT_RESUME_MAX_AGE_MS });
   // Concurrent sessions must not cross-restore. Only suppress when BOTH ids are present and differ;
@@ -157,9 +169,13 @@ function restoreCompactSnapshot(hippoRoot: string, payloadSessionId: string | nu
   // Printed in one write so the ledger books exactly the text the model is handed.
   const text = compactResumeText(snapshot, events);
   console.log(text);
-  withLedgerDb(hippoRoot, (db) => recordTokenUse(db, {
-    tenantId, sessionId: payloadSessionId, surface: 'compact_resume', event: 'inject', items: 1, tokens: estimateTokens(text),
-  }));
+  rec?.delivered({ state: 'sent', emittedText: `${text}\n` });
+  withLedgerDb(hippoRoot, (db) => {
+    recordTokenUse(db, {
+      tenantId, sessionId: payloadSessionId, surface: 'compact_resume', event: 'inject', items: 1, tokens: estimateTokens(text),
+    });
+    flushDeliveryRecorder(rec, db);
+  });
 }
 
 /**
@@ -658,12 +674,18 @@ export async function handlePreCompact({ hippoRoot, flags }: CommandContext): Pr
   const runtime = hookRuntime(flags);
   const root = payloadCwdRoot(hippoRoot, stdinText, runtime);
   await runHookWithStores(async () => {
+    // Started before any store wait, so two fires of one hook carry timestamps close enough to match as duplicates.
+    const rec = startDeliveryRecorder(hookStoreRoot(root), stdinText, runtime, 'pre-compact');
     resetHookInjection(root, stdinText, null);
     await cmdPreCompact(hookStoreRoot(root), {
       stdinText,
       stdinTimedOut,
       logFile: typeof flags['log-file'] === 'string' ? (flags['log-file'] as string) : undefined,
       runtime,
+      onBoundary: (printed) => {
+        rec?.delivered(printed === null ? { state: 'empty' } : { state: 'sent', emittedText: printed });
+        flushDeliveryRecorder(rec);
+      },
     });
   });
 }
