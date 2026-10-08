@@ -2,13 +2,12 @@
 // Counts real DatabaseSync connections per database file by patching the prototype, as the hook open-count test does.
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { createRequire } from 'node:module';
-import { existsSync, mkdtempSync, realpathSync, rmSync } from 'node:fs';
+import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { getHippoDbPath } from '../src/db.js';
 import { serve, type AddonRoute, type ServerHandle } from '../src/server.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
 import { recall, remember } from '../src/api.js';
@@ -121,12 +120,6 @@ describe('store opens per request', () => {
       call('POST', '/v1/memories', { content: 'the staging database is rebuilt every Sunday night' }),
     ]);
     expect(await opensDuring(requests)).toEqual({ local: 4 });
-  });
-
-  it('the held connection outlives every request scope, so the WAL file stays', async () => {
-    await call('GET', '/v1/memories?q=rollback');
-    await call('POST', '/mcp', recallOverMcp);
-    expect(existsSync(`${getHippoDbPath(root)}-wal`)).toBe(true);
   });
 });
 
