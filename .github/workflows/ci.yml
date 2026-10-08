@@ -58,6 +58,8 @@ jobs:
         run: node scripts/check-store-port.mjs
       - name: Layer order ratchet
         run: node scripts/check-layers.mjs
+      - name: Test-only export ratchet
+        run: node scripts/check-test-only-exports.mjs
       - run: node scripts/check-roadmap.mjs
       - run: node scripts/check-agent-inventory.mjs
       - run: node website/scripts/check-readme-sync.mjs

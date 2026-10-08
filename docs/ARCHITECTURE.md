@@ -5,6 +5,10 @@
 Six layers, lowest first: base (pure helpers and core types), db (SQLite connection and schema), store (persistence and embeddings), domain (recall, graph, consolidation, hooks), api (operations over the store), surface (CLI, server, MCP, importers, dashboard).
 A file imports only from its own layer or a lower one. `layers.json` is the map and `scripts/check-layers.mjs` enforces it against `.layers-baseline.json`.
 
+## Test-only exports
+
+A production export that no other `src/` file names but a test does is a seam added for the test. `scripts/check-test-only-exports.mjs` finds them and fails CI on any not listed in `.test-only-exports-baseline.json`; exports in a package entry file (derived from `package.json` `exports` and `bin`) are exempt. The list can only shrink: move the helper to `tests/_helpers` or give it a production caller, then run the script with `--update` to lock the lower count in.
+
 Design provenance for src/: which roadmap item or release added a behaviour, schema history, measurements and alternatives tried. Source comments keep the one-line reason; this file keeps the record, quoted from the comment it came from.
 
 ## History moved out of src/ comments, by module
