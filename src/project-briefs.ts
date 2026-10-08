@@ -24,14 +24,17 @@
 import { BadRequestError, ConflictError, NotFoundError } from './api-errors.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
 import { writeEntry } from './store/entry-writes.js';
+import { onHandle } from './store/open.js';
 import { assertTenantId } from './tenant.js';
 import { scopeAdmitSql } from './recall-scope.js';
-import { markGraphDirty, removeGraphEntitiesForObject } from './graph/write.js';
+import { markGraphDirty } from './graph/write.js';
 import { createMemory, Layer } from './memory.js';
 import { appendAuditEvent } from './audit.js';
 import { objectHalfLifeDays } from './half-life-migration.js';
-import { keysetAfter, type KeysetPosition } from './keyset.js';
+import type { KeysetPosition } from './keyset.js';
 import { escapeLike } from './escape.js';
+import type { ObjectDescriptor } from './objects/descriptor.js';
+import { assertObjectStatus, closeObjectOn, dropClosedObjectFromGraph, loadObjectByIdOn, loadObjectsOn } from './objects/lifecycle.js';
 
 // ---------------------------------------------------------------------------
 // Domain types
@@ -194,6 +197,21 @@ const BRIEF_COLS = `
   id, memory_id, tenant_id, repo, summary, version, status,
   superseded_by, superseded_at, change_summary, closed_at, created_at
 `;
+
+const BRIEF: ObjectDescriptor<ProjectBrief, ProjectBriefRow, 'repo'> = {
+  table: 'project_briefs',
+  cols: BRIEF_COLS,
+  label: 'brief',
+  plural: 'briefs',
+  fn: { get: 'loadProjectBriefById', close: 'closeProjectBrief', list: 'loadProjectBriefs' },
+  states: VALID_BRIEF_STATES,
+  closableFrom: ['active'],
+  ops: { close: 'project_brief_close' },
+  idKey: 'brief_id',
+  graphType: 'project',
+  listFilters: { repo: 'repo' },
+  rowTo: rowToProjectBrief,
+};
 
 /** Recall-surface content for the memory mirror: repo + summary. Named (mirrors
  *  buildSkillContent) so the recall surface is deterministic + unit-testable. */
@@ -377,8 +395,7 @@ export function saveProjectBrief(
 }
 
 /**
- * Close (retire) an active brief. CAS guard WHERE status='active'; 0 changes
- * distinguishes not-found from not-active. A superseded row is terminal.
+ * Close (retire) an active brief. A superseded row is terminal.
  */
 export function closeProjectBrief(
   hippoRoot: string,
@@ -386,70 +403,13 @@ export function closeProjectBrief(
   id: number,
   actor: string = 'cli',
 ): ProjectBrief {
-  assertTenantId('closeProjectBrief', tenantId);
+  assertTenantId(BRIEF.fn.close, tenantId);
   const now = new Date().toISOString();
-  const db = openHippoDb(hippoRoot);
-  try {
-    db.exec('BEGIN IMMEDIATE');
-    try {
-      const updateResult = db.prepare(`
-        UPDATE project_briefs
-        SET status = 'closed', closed_at = ?
-        WHERE id = ? AND tenant_id = ? AND status = 'active'
-      `).run(now, id, tenantId);
-
-      if (updateResult.changes === 0) {
-        // SAFETY: SELECT projects exactly the status column; .get() returns that
-        // shape, or undefined when the id/tenant pair doesn't exist.
-        const existing = db.prepare(
-          `SELECT status FROM project_briefs WHERE id = ? AND tenant_id = ?`,
-        ).get(id, tenantId) as { status: string } | undefined;
-        if (!existing) {
-          throw new NotFoundError(`closeProjectBrief: brief ${id} not found for tenant ${tenantId}`);
-        }
-        throw new ConflictError(
-          `closeProjectBrief: brief ${id} is not active (status='${existing.status}'); only active briefs can be closed.`,
-        );
-      }
-
-      // SAFETY: SELECT ${BRIEF_COLS} projects exactly the ProjectBriefRow
-      // columns; .get() returns that row for the just-updated id, or undefined
-      // only in an impossible race since the UPDATE above already matched it.
-      const row = db.prepare(`SELECT ${BRIEF_COLS} FROM project_briefs WHERE id = ? AND tenant_id = ?`)
-        .get(id, tenantId) as ProjectBriefRow | undefined;
-      if (!row) throw new NotFoundError(`closeProjectBrief: brief ${id} not found after UPDATE`);
-
-      appendAuditEvent(db, {
-        tenantId,
-        actor,
-        op: 'project_brief_close',
-        targetId: String(id),
-        metadata: { brief_id: id },
-      });
-
-      db.exec('COMMIT');
-      const closed = rowToProjectBrief(row);
-      // Closing removes the object from the graph. Remove its rows DIRECTLY (deterministic),
-      // not only via an enqueued rebuild whose queue item is lost if the mirror is later
-      // forgotten (the queue row cascade-deletes with the memory), which would leave the closed
-      // object stale and could block that forget. Still enqueue when a mirror exists
-      // so a concurrent rebuild re-derives consistently (harmless if it also runs).
-      removeGraphEntitiesForObject(hippoRoot, tenantId, 'project', closed.id);
-      if (closed.memoryId) {
-        markGraphDirty(hippoRoot, tenantId, closed.memoryId);
-      }
-      return closed;
-    } catch (e) {
-      try {
-        db.exec('ROLLBACK');
-      } catch {
-        // Ignore rollback failures — the throw below is what matters.
-      }
-      throw e;
-    }
-  } finally {
-    closeHippoDb(db);
-  }
+  return onHandle(hippoRoot, (db) => {
+    const closed = closeObjectOn(db, BRIEF, tenantId, id, { actor, now });
+    dropClosedObjectFromGraph(hippoRoot, BRIEF, tenantId, closed);
+    return closed;
+  });
 }
 
 export function loadProjectBriefById(
@@ -457,18 +417,8 @@ export function loadProjectBriefById(
   tenantId: string,
   id: number,
 ): ProjectBrief | null {
-  assertTenantId('loadProjectBriefById', tenantId);
-  const db = openHippoDb(hippoRoot);
-  try {
-    // SAFETY: SELECT ${BRIEF_COLS} projects exactly the ProjectBriefRow
-    // columns; .get() returns that row, or undefined when the id/tenant pair
-    // doesn't exist.
-    const row = db.prepare(`SELECT ${BRIEF_COLS} FROM project_briefs WHERE id = ? AND tenant_id = ?`)
-      .get(id, tenantId) as ProjectBriefRow | undefined;
-    return row ? rowToProjectBrief(row) : null;
-  } finally {
-    closeHippoDb(db);
-  }
+  assertTenantId(BRIEF.fn.get, tenantId);
+  return onHandle(hippoRoot, (db) => loadObjectByIdOn(db, BRIEF, tenantId, id));
 }
 
 export function loadProjectBriefs(
@@ -476,40 +426,9 @@ export function loadProjectBriefs(
   tenantId: string,
   opts: ListProjectBriefsOpts = {},
 ): ProjectBrief[] {
-  assertTenantId('loadProjectBriefs', tenantId);
-  const limit = opts.limit ?? 100;
-  const after = keysetAfter('created_at', 'id', opts.after);
-  if (opts.status && !VALID_BRIEF_STATES.has(opts.status)) {
-    throw new BadRequestError(
-      `loadProjectBriefs: status must be one of ${Array.from(VALID_BRIEF_STATES).join('|')}; got ${opts.status}`,
-    );
-  }
-  const db = openHippoDb(hippoRoot);
-  try {
-    const clauses = ['tenant_id = ?'];
-    const params: unknown[] = [tenantId];
-    if (opts.status) {
-      clauses.push('status = ?');
-      params.push(opts.status);
-    }
-    if (opts.repo) {
-      clauses.push('repo = ?');
-      params.push(opts.repo);
-    }
-    params.push(...after.params, limit);
-    // SAFETY: SELECT ${BRIEF_COLS} projects exactly the ProjectBriefRow columns
-    // regardless of the dynamic WHERE clause built above; .all() returns rows
-    // in that shape.
-    const rows = db.prepare(`
-      SELECT ${BRIEF_COLS} FROM project_briefs
-      WHERE ${clauses.join(' AND ')}${after.sql}
-      ORDER BY created_at DESC, id DESC
-      LIMIT ?
-    `).all(...params) as ProjectBriefRow[];
-    return rows.map(rowToProjectBrief);
-  } finally {
-    closeHippoDb(db);
-  }
+  assertTenantId(BRIEF.fn.list, tenantId);
+  assertObjectStatus(BRIEF, opts.status);
+  return onHandle(hippoRoot, (db) => loadObjectsOn(db, BRIEF, tenantId, opts));
 }
 
 /**

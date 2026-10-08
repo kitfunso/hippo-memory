@@ -20,6 +20,7 @@
     "hooks": "domain",
     "importers": "surface",
     "mcp": "surface",
+    "objects": "domain",
     "predictions": "domain",
     "rerankers": "domain",
     "search": "domain",
