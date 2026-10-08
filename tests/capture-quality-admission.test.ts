@@ -52,7 +52,7 @@ describe('capture retains complete supported assertions', () => {
   });
 
   it('excludes fenced and quoted output while retaining inline code', () => {
-    const text = ['```text', 'Error: migrate users to the production database.', '```', '> Rule: succeeds (inserts or updates)', 'Never call `write(a, b)` before validating the tenant.'].join('\n');
+    const text = ['```text', 'Error: migrate users to the production database.', '```', '> Never touch the generated config, because the deploy step rewrites it.', 'Never call `write(a, b)` before validating the tenant.'].join('\n');
     expect(extractFromText(text).map((item) => item.content)).toEqual(['Never call `write(a, b)` before validating the tenant']);
   });
 
