@@ -63,8 +63,7 @@ describe('cli.ts cmdRecall J1 anchoring wire-up (structural guard)', () => {
   });
 
   it('feeds the ring after the final detect, with anchoredOn from the shown hint (cooldown feed)', () => {
-    expect(cliText).toMatch(/recordShownRecall\(who,\s*\{\s*query,\s*ring:\s*fit\.anchorRing,\s*topId:\s*results\[0\]\?\.entry\.id \?\? null,\s*anchoring:\s*hints\.anchoring/);
-    expect(recordText).toMatch(/noteRecall\(shown\.ring,\s*shown\.query,\s*shown\.topId,\s*shown\.anchoring\?\.memoryId\)/);
+    expect(cliText).toMatch(/noteRecall\(fit\.anchorRing,\s*query,\s*results\[0\]\?\.entry\.id \?\? null,\s*hints\.anchoring\?\.memoryId\)/);
   });
 
   it('emits recall_anchor_skipped_no_session telemetry when sessionId absent', () => {

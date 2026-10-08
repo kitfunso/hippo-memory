@@ -2,7 +2,7 @@
 // writes and no direct output. Callers own flag parsing, printing, budget fitting and persistence.
 
 import { evalNow } from './ablation.js';
-import { oneCopyPerMemory } from './api.js';
+import { oneCopyPerMemory } from './api/context-select.js';
 import { compareEntryIdentity } from './compare.js';
 import { closeHippoDb, openHippoDb } from './db.js';
 import { isEmbeddingAvailable } from './local-embedding.js';

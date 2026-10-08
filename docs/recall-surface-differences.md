@@ -1,24 +1,24 @@
 # Recall surface differences
 
-Recall has three surfaces: CLI `hippo recall` (`src/cli/recall.ts`), MCP `hippo_recall` (`src/mcp/recall-tools.ts`) and HTTP `GET /v1/memories` (`src/server/routes/recall.ts`). The same query on the same store gives a different answer on each one. This file lists the 18 differences found in the code. Each one is pinned by `tests/recall-surface-parity-golden.test.ts`; the test comments name the entries they pin (D1 to D18).
+Recall has three surfaces: CLI `hippo recall` (`src/cli/recall.ts`), MCP `hippo_recall` (`src/mcp/recall-tools.ts`) and HTTP `GET /v1/memories` (`src/server/routes/recall.ts`). All three call one entry, `retrieve()` in `src/api/recall.ts`, which ranks with the ranker the surface names and writes the recall. The rankers still differ, so the same query on the same store gives a different answer on each one. This file lists the 18 differences found in the code. Each one is pinned by `tests/recall-surface-parity-golden.test.ts`; the test comments name the entries they pin (D1 to D18).
 
 When a change closes a difference, update its entry and the goldens in the same PR, and add one changelog line for each surface whose output moves.
 
 ## Ranking
 
-- **D1 Ranking core.** CLI ranks with `rankRecall` (`src/recall-pipeline.ts`). MCP ranks under the `showRanked` callback of `retrieve` (`retrieveFromStore` in `src/api/recall.ts`). HTTP keeps the SQL BM25 load order plus a churn sort, unless `mode` asks for hybrid or physics. CLI and MCP default to physics search.
+- **D1 Ranking core.** Each surface names its ranker to `retrieve`. CLI passes `cliCore`, which runs `rankRecall` (`src/recall-pipeline.ts`) from `src/api/recall-core.ts`, for the host admin only; `hippo explain` uses the same ranker read-only. MCP ranks under the `showRanked` callback (`retrieveFromStore` in `src/api/recall.ts`). HTTP names none and keeps the SQL BM25 load order plus a churn sort, unless `mode` asks for hybrid or physics. CLI and MCP default to physics search.
 - **D2 Candidate window.** CLI loads 200 rows per store. MCP loads at least 1,000 rows; `scorer_window` only shapes the fresh-tail and summary appendix. HTTP loads `scorer_window` rows, 200 by default.
-- **D3 Global store.** Only CLI searches the global store (`HIPPO_HOME`), and only CLI writes a `recall` audit row there.
+- **D3 Global store.** Only CLI searches the global store (`HIPPO_HOME`), as `cliCore.sources.globalRoot`, and only that ranker writes a `recall` audit row there.
 - **D4 Scores.** HTTP scores are list positions, `1 - idx / limit`, in every mode; `mode=hybrid` and `mode=physics` only reorder. CLI and MCP scores come from the search engine. MCP prints no score; its trace stores the engine score.
 - **D5 Result count.** CLI fits the token budget with no default limit. MCP ranks a 50-row band and shows what fits the budget. HTTP returns `limit` rows, 10 by default, and has no budget.
 - **D6 Goal boost.** CLI applies the goal-stack boost once, in `rankRecall`. HTTP applies it once, to the position scores. MCP applies it twice: to the ranked list, then again to the band's position scores.
 
 ## Side effects
 
-- **D7 Strengthening and stats.** CLI strengthens the rows it shows, in the local and global stores, and adds them to `total_recalled`. HTTP strengthens every row it returns and adds them to `total_recalled`. MCP strengthens the rows it shows and never updates `total_recalled`.
+- **D7 Strengthening and stats.** CLI strengthens the rows it shows, in the local and global stores, adds them to `total_recalled` and saves the last-recall markers `hippo outcome` reads; `retrieve` does all of it. HTTP strengthens every row it returns, and its route adds them to `total_recalled`. MCP strengthens the rows it shows and never updates `total_recalled`. On every surface the audit rows go first, in one transaction with the goal log: a recall whose audit write fails leaves no strengthen, trace or count. HTTP and MCP then fail the call; CLI logs the failure and still prints (pinned by `tests/recall-recording-parity.test.ts`).
 - **D8 Audit count.** Closed. Every surface's `recall` audit row counts the rows it returns or shows. MCP used to count its 50-row band.
 - **D9 Audit order and actor.** CLI writes `recall_anchor_skipped_no_session` before `recall`, as actor `cli`. HTTP writes them in the same order, as the key's subject. MCP writes `recall` first, as `mcp`.
-- **D10 Trace and token ledger.** CLI traces with pipeline `cli`, MCP with `mcp` and HTTP with `api`. The ledger surfaces are `recall`, `mcp_recall` and `http_recall`; the MCP row records 0 items.
+- **D10 Trace and token ledger.** CLI traces with pipeline `cli`, MCP with `mcp` and HTTP with `api`. The ledger surfaces are `recall`, `mcp_recall` and `http_recall`; the MCP row records 0 items. `retrieve` books the CLI row; the HTTP route and the MCP request handler book their own after it returns.
 - **D11 Session ring.** The rings and the hint audit rows live in one module, `src/api/recall-record.ts`, keyed by surface, tenant and session. Each surface still keeps its own rings, so a repeat on one surface is a first recall on another. CLI and MCP create the ring before ranking and judge the hint against the list they show. HTTP creates the ring only after a successful recall and judges the hint against the first returned row.
 
 ## Validation, MCP against HTTP

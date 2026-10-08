@@ -1,7 +1,7 @@
 // The recall session rings and the recall audit rows, in one place for the CLI, MCP and HTTP surfaces.
-import { appendAuditEvent, auditQueryFields, reportAuditWriteFailure, type AppendAuditOpts, type AuditOp } from '../audit.js';
+import { isRecallBoostAblated } from '../ablation.js';
+import { auditQueryFields, type AppendAuditOpts, type AuditOp } from '../audit.js';
 import type { AvailabilityHint } from '../availability.js';
-import { closeHippoDb, openHippoDb } from '../db.js';
 import {
   appendRecall,
   biasHintEnabled,
@@ -13,6 +13,8 @@ import {
   type AnchoringHint,
   type RecallHistorySnapshot,
 } from '../recall-history.js';
+import type { RecallWrites } from '../store-port.js';
+import type { Context } from './types.js';
 
 export type RecallSurface = 'cli' | 'mcp' | 'http';
 
@@ -44,40 +46,25 @@ export function resetSessionRings(surface: RecallSurface): void {
   rings[surface].clear();
 }
 
-export interface RecallAuditor {
-  readonly hippoRoot: string;
+/** Whom a recall audit row names. */
+export interface RecallAuditCaller {
   readonly tenantId: string;
   readonly actor: string;
-  /** Log and count a failed write instead of throwing, for a CLI command that has already done its work. */
-  readonly bestEffort?: boolean;
 }
 
-/** Whom a recall audit row names; a surface that writes through the store port needs no root. */
-export type RecallAuditCaller = Pick<RecallAuditor, 'tenantId' | 'actor'>;
+export function callerOf(ctx: Context): RecallAuditCaller {
+  return { tenantId: ctx.tenantId, actor: ctx.actor.subject };
+}
+
+/** The strengthen every ranker of `retrieve` hands to the recall's write: the shown ids, in the caller's tenant. */
+export function strengthenOf(ctx: Context, ids: readonly string[]): NonNullable<RecallWrites['strengthen']> {
+  return { ids, opts: { tenantId: ctx.tenantId, recallBoostAblated: isRecallBoostAblated() } };
+}
 
 type RecallAuditMetadata = Readonly<Record<string, string | number | null>>;
 
 export function recallAuditRow(who: RecallAuditCaller, op: AuditOp, targetId?: string, metadata?: RecallAuditMetadata): AppendAuditOpts {
   return { tenantId: who.tenantId, actor: who.actor, op, targetId, metadata };
-}
-
-function writeRecallAudit(who: RecallAuditor, row: AppendAuditOpts): void {
-  try {
-    const db = openHippoDb(who.hippoRoot);
-    try {
-      appendAuditEvent(db, row);
-    } finally {
-      closeHippoDb(db);
-    }
-  } catch (err) {
-    if (!who.bestEffort) throw err;
-    reportAuditWriteFailure(row.op, String(err), row.targetId);
-  }
-}
-
-/** One audit row on its own short-lived handle. */
-export function appendRecallAudit(who: RecallAuditor, op: AuditOp, targetId?: string, metadata?: RecallAuditMetadata): void {
-  writeRecallAudit(who, recallAuditRow(who, op, targetId, metadata));
 }
 
 // The row stores a hash of the query, never its text, so an archived memory's words cannot persist there.
@@ -128,10 +115,4 @@ export function shownRecallRows(who: RecallAuditCaller, shown: ShownRecall): App
     ...anchoringRows(who, shown.anchoring),
     ...availabilityRows(who, shown.availability),
   ];
-}
-
-/** For a surface that computes its hints over the list it shows: feeds the ring after the final detect, then audits the hints. */
-export function recordShownRecall(who: RecallAuditor, shown: ShownRecall): void {
-  if (shown.ring) noteRecall(shown.ring, shown.query, shown.topId, shown.anchoring?.memoryId);
-  for (const row of shownRecallRows(who, shown)) writeRecallAudit(who, row);
 }

@@ -23,7 +23,7 @@ export function loadIndex(hippoRoot: string): HippoIndex {
  * `last_retrieval_ids` and `last_trace_id` commit in one transaction: callers fold a fresh trace id
  * into the index and rely on both keys moving together. index.json is left to `rebuildIndex`.
  */
-export function saveIndex(hippoRoot: string, index: HippoIndex): void {
+export function saveIndex(hippoRoot: string, index: Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'>): void {
   const db = openStore(hippoRoot);
   try {
     db.exec('BEGIN IMMEDIATE');

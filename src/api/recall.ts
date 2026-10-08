@@ -2,7 +2,6 @@
 
 import { envRequireSessionScopedFreshTail } from '../env.js';
 import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../store/rows.js';
-import { isRecallBoostAblated } from '../ablation.js';
 import { loadEntriesByIds, loadFreshRawMemories } from '../store/entry-reads.js';
 import { loadRecallSearchEntries, recallScopeFilter } from '../store/search-rows.js';
 import type { ContinuityKey } from '../store/sessions.js';
@@ -28,7 +27,8 @@ import { detectAvailabilityBias, type AvailabilityHint } from '../availability.j
 import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../recall-scope.js';
 import type { RecallSuppressionSummary, RecallOpts, RecallResult, RecallResultItem, ContinuityBlock } from './recall-types.js';
 import { type Context, ownerOrSubject, RecallContractError } from './types.js';
-import { anchoringRows, availabilityRows, recallAuditMetadata, recallAuditRow, type RecallAuditCaller } from './recall-record.js';
+import { anchoringRows, availabilityRows, callerOf, recallAuditMetadata, recallAuditRow, strengthenOf } from './recall-record.js';
+import { retrieveWithCliCore } from './recall-core.js';
 
 /**
  * Shared construction helper for `RecallSuppressionSummary`. Used by
@@ -91,9 +91,10 @@ function inCallerProject(entry: MemoryEntry, opts: RecallOpts): boolean {
   return !opts.project || classifyOriginProject(entry.origin_project, opts.project) !== 'cross-project';
 }
 
-/** Mode-aware recall through the served store that strengthens each returned row; never writes last_retrieval_ids (contract lock). */
+/** The one recall entry: ranks with the ranker `opts` names, then writes the recall. Only the CLI core ranker writes last_retrieval_ids (contract lock). */
 export async function retrieve(ctx: Context, opts: RecallOpts): Promise<RecallResult> {
   assertScopeRequestAllowed(ctx.actor, opts.scope);
+  if (opts.cliCore) return retrieveWithCliCore(ctx, opts, opts.cliCore);
   const windowSize = recallWindowSize(opts);
   // From the authenticated actor, never from RecallOpts, which a caller fills in.
   const own = personalScopeOf(ctx.actor) ?? undefined;
@@ -125,10 +126,6 @@ function recallSearchArgs(ctx: Context, opts: RecallOpts, limit: number, own: st
     originProjects: recallOrigin(opts),
     ownScope: own,
   };
-}
-
-function strengthenOf(ctx: Context, ids: readonly string[]): NonNullable<RecallWrites['strengthen']> {
-  return { ids, opts: { tenantId: ctx.tenantId, recallBoostAblated: isRecallBoostAblated() } };
 }
 
 /** api.retrieve's vector arm: the recall load's exact-scope rule, current rows only. */
@@ -594,10 +591,6 @@ function continuityTokensOf(c: ContinuityBlock): number {
     tokenize(filteredHandoff?.targetRuntime) +
     tokenize(filteredHandoff?.cardId) +
     c.recentSessionEvents.reduce((acc, e) => acc + tokenize(e.content), 0);
-}
-
-function callerOf(ctx: Context): RecallAuditCaller {
-  return { tenantId: ctx.tenantId, actor: ctx.actor.subject };
 }
 
 // A pure read of the caller's recallHistory snapshot against this top-1. HIPPO_ANCHORING=off skips even the detect

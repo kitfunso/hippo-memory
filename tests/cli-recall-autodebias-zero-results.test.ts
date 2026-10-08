@@ -63,7 +63,7 @@ describe('cli.ts cmdRecall zero-result branch preserves planningFallacyHint (J3.
   it('zero-result text render path emits the Planning fallacy hint line', () => {
     // The text render (continuity OR plain no-memories print) must print the
     // hint BEFORE the no-memories message; the zero-result branch emits that render.
-    expect(zeroResultBlock).toContain('emit(recallText)');
+    expect(zeroResultBlock).toMatch(/:\s*recallText;/);
     const emptyStart = cliText.indexOf('if (list.length === 0) {');
     expect(emptyStart).toBeGreaterThan(0);
     const emptyRender = cliText.slice(emptyStart, emptyStart + 600);
