@@ -7,7 +7,7 @@ import type { JsonObject } from '../working-memory.js';
 import { type JsonValue, readJsonFile } from '../json.js';
 import { HOOK_MARKERS, hippoBlock } from '../cli/hook-blocks.js';
 import { copilotHomeDir, isJsonObject, vscodeUserDirs } from './shared.js';
-import { writeFileAtomic } from '../atomic-write.js';
+import { writeFileAtomic } from '../util/atomic-write.js';
 import { installJsonHooks, resolveJsonHookPaths, uninstallJsonHooks, writeSettingsFile } from './json-hooks.js';
 
 const MCP_KEY = 'hippo';

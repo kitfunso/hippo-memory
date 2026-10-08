@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 import { errorMessage, log } from '../log.js';
 import { HIPPO_CODEX_WRAPPER_MARKER, homeDir, codexHomeDir, ensureDir } from './shared.js';
 import { isJsonString } from '../json.js';
-import { writeFileAtomic } from '../atomic-write.js';
+import { writeFileAtomic } from '../util/atomic-write.js';
 
 export interface CodexWrapperPaths {
   wrapperDir: string;

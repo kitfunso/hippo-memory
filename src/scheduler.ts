@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { log } from './log.js';
-import { writeFileAtomic } from './atomic-write.js';
+import { writeFileAtomic } from './util/atomic-write.js';
 
 export const DAILY_TASK_NAME = 'hippo-daily-runner';
 

@@ -39,7 +39,7 @@ import { getGlobalRoot } from '../shared.js';
 import { listRegisteredWorkspaces, runDailyMaintenance } from '../scheduler.js';
 import { replayCompactionsAt } from '../compaction-record.js';
 import { log } from '../log.js';
-import { writeFileAtomic } from '../atomic-write.js';
+import { writeFileAtomic } from '../util/atomic-write.js';
 import { printError } from './output.js';
 import { printAgentImport, installCodexMemoryHooks, setupDailySchedule, warnClaudeSettingsUnusable } from './shared.js';
 import { repairQualityOnceAt } from './quality-repair-once.js';
