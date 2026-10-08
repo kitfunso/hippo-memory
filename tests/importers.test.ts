@@ -14,7 +14,7 @@ import {
   importGenericFile,
 } from '../src/importers/sources.js';
 import { importMarkdown } from '../src/importers/markdown.js';
-import { ImportOptions } from '../src/importers/core.js';
+import { importEntries, ImportOptions } from '../src/importers/core.js';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 
@@ -457,5 +457,33 @@ describe('extraTags option', () => {
       expect(e.tags).toContain('project-x');
       expect(e.tags).toContain('ops');
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// importEntries counts and ordering
+// ---------------------------------------------------------------------------
+
+describe('importEntries', () => {
+  const LONG = 'Deploy the importer only after the schema check passes. '.repeat(30);
+
+  it('truncates long chunks, skips short and duplicate ones, and dedups within a real batch', () => {
+    const result = importEntries(
+      ['tiny', LONG, 'Always run the migration dry-run first.', 'Always run the migration dry-run first.'],
+      'test-source',
+      ['imported'],
+      { hippoRoot: tmpDir, extraTags: ['extra', 'imported'] },
+    );
+    expect(result).toMatchObject({ total: 3, imported: 2, skipped: 2, rejected: 0, redacted: 0 });
+    expect(result.entries.map((e) => e.content.length)).toEqual([1000, 39]);
+    expect(result.entries[0].tags).toEqual(['imported', 'extra']);
+    expect(loadAllEntries(tmpDir).map((e) => e.source)).toEqual(['test-source', 'test-source']);
+  });
+
+  it('dry run writes nothing and does not dedup within the batch', () => {
+    const chunk = 'Prefer small pull requests over large ones.';
+    const result = importEntries([chunk, chunk], 'test-source', [], { hippoRoot: tmpDir, dryRun: true });
+    expect(result).toMatchObject({ total: 2, imported: 2, skipped: 0, rejected: 0 });
+    expect(loadAllEntries(tmpDir)).toEqual([]);
   });
 });

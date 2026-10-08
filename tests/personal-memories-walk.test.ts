@@ -336,11 +336,17 @@ describe('personal memories walk (plan lane T)', () => {
     for (const p of paths) {
       const id = await post(keys.A.plaintext, { content: `walk ${p.name} target row`, personal: true, kind: p.kind });
       for (const who of OTHERS) await sameAsMissing(id, (x) => p.call(keys[who].plaintext, x), p.othersStatus);
-      expect(readEntry(store, id)?.outcome_positive, `${p.name} row untouched`).toBe(0);
+      const kept = readEntry(store, id);
+      expect([kept?.outcome_positive, kept?.scope, kept?.superseded_by ?? null], `${p.name} row untouched`).toEqual([0, A_SCOPE, null]);
+      expect(api.listRejections(ctxOf('A')), `${p.name} made no rejection`).toHaveLength(0);
       const mine = await p.call(keys.A.plaintext, id);
       expect(mine.status, `${p.name}: ${mine.text}`).toBe(p.aStatus);
       if (p.name === 'outcome') expect(json<{ applied: number }>(mine).applied).toBe(1);
     }
+
+    const teamRow = await post(keys.B.plaintext, { content: 'walk team promote control row' });
+    const promoted = await http(keys.B.plaintext, 'POST', `/v1/memories/${teamRow}/promote`, {});
+    expect(promoted.status, promoted.text).toBe(200);
 
     expect(await contextIds(keys.A.plaintext, 'project=alpha&q=zircon')).toContain(ids.aZircon);
     const before = readEntry(store, ids.aZircon);
