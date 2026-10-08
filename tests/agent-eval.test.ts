@@ -412,29 +412,3 @@ describe('Condition: hippo (learns from mistakes)', () => {
     expect(improvement).toBeGreaterThanOrEqual(0.30);
   });
 });
-
-describe('Comparative summary', () => {
-  it('prints full comparison table', () => {
-    const noMem = simulate(tasks, 'none');
-    const staticMem = simulate(tasks, 'static');
-    const hippoMem = simulate(tasks, 'hippo');
-
-    const noMemPhases = hitRateByPhase(noMem);
-    const staticPhases = hitRateByPhase(staticMem);
-    const hippoPhases = hitRateByPhase(hippoMem);
-
-    console.log('\n  ══ Agent Evaluation Benchmark ═══════════════════════════');
-    console.log('  50 tasks, 10 trap categories, 25+ trap encounters');
-    console.log('  ──────────────────────────────────────────────────────────');
-    console.log('  Condition     │ Overall │ Early │  Mid  │  Late │ Learns?');
-    console.log('  ──────────────┼─────────┼───────┼───────┼───────┼────────');
-    console.log(`  No memory     │  ${fmt(trapHitRate(noMem))}  │ ${fmt(noMemPhases.early)} │ ${fmt(noMemPhases.mid)} │ ${fmt(noMemPhases.late)} │   No`);
-    console.log(`  Static memory │  ${fmt(trapHitRate(staticMem))}  │ ${fmt(staticPhases.early)} │ ${fmt(staticPhases.mid)} │ ${fmt(staticPhases.late)} │   No`);
-    console.log(`  Hippo         │  ${fmt(trapHitRate(hippoMem))}  │ ${fmt(hippoPhases.early)} │ ${fmt(hippoPhases.mid)} │ ${fmt(hippoPhases.late)} │  Yes`);
-    console.log('  ══════════════════════════════════════════════════════════');
-  });
-});
-
-function fmt(rate: number): string {
-  return `${(rate * 100).toFixed(0).padStart(3)}%`;
-}

@@ -1,6 +1,7 @@
 // authCreateSelf mints a signed-in caller its own expiring member key; the member key list and the body-first admin mint are covered beside it.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { connect } from 'node:net';
+import type { IncomingMessage } from 'node:http';
 import { existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
@@ -95,6 +96,14 @@ function postInTwoParts(path: string, token: string, body: string, between: () =
     socket.on('end', () => resolve(Number(data.split(' ')[1])));
     socket.on('error', reject);
   });
+}
+
+/** Settles once the next request's handler has started reading the body; arm it before the body is sent. */
+function handlerAwaitsBody(): Promise<void> {
+  return new Promise((resolve) => handle!.server!.once('request', (req: IncomingMessage) => {
+    const poll = (): void => { if (req.listenerCount('data') > 0 || req.destroyed) resolve(); else setImmediate(poll); };
+    poll();
+  }));
 }
 
 beforeEach(() => {
@@ -283,7 +292,7 @@ describe('POST /v1/auth/keys reads its body before auth', () => {
       return active ? PEOPLE.get('tok.boss')! : null;
     });
     const status = await postInTwoParts('/v1/auth/keys', 'tok.boss', '{"label":"handed-out"}', async () => {
-      await new Promise((ok) => setTimeout(ok, 200));
+      await handlerAwaitsBody();
       expect(checks).toBe(0);
       active = false;
     });

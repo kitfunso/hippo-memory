@@ -24,6 +24,14 @@ const neverResolves: AuthResolver = () => new Promise(() => undefined);
 /** The built module's URL as a string literal, for a script the test spawns. */
 const dist = (file: string): string => JSON.stringify(pathToFileURL(resolve('dist', file)).href);
 
+/** The resolver, plus a promise that settles once a request is held inside it: the request is then in flight on the server. */
+function watched(inner: AuthResolver) {
+  let mark!: () => void;
+  const asked = new Promise<void>((ok) => { mark = ok; });
+  const resolver: AuthResolver = (token) => { mark(); return inner(token); };
+  return { resolver, asked };
+}
+
 function slowRecall(handle: ServerHandle): Promise<Response> {
   return fetch(`${handle.url}/v1/memories?q=anything`, { headers: { authorization: 'Bearer slow-idp-token' } });
 }
@@ -34,9 +42,10 @@ afterEach(() => {
 
 describe('serve() graceful stop', () => {
   it('lets a request already running finish instead of cutting its socket', async () => {
-    const handle = await serve({ hippoRoot: trackedRoot(), port: 0, authResolver: delayedResolver(400), shutdownDrainMs: 5000 });
+    const { resolver, asked } = watched(delayedResolver(400));
+    const handle = await serve({ hippoRoot: trackedRoot(), port: 0, authResolver: resolver, shutdownDrainMs: 5000 });
     const pending = slowRecall(handle);
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await asked;
     const stopped = handle.stop();
 
     const res = await pending;
@@ -46,15 +55,16 @@ describe('serve() graceful stop', () => {
   }, 15000);
 
   it('closes a request that outlives the drain window so stop() still returns', async () => {
+    const { resolver, asked } = watched(neverResolves);
     const handle = await serve({
       hippoRoot: trackedRoot(),
       port: 0,
-      authResolver: neverResolves,
+      authResolver: resolver,
       authResolverTimeoutMs: 60_000,
       shutdownDrainMs: 200,
     });
     const pending = slowRecall(handle).then(() => 'answered', () => 'reset');
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await asked;
     const started = Date.now();
     await handle.stop();
     expect(Date.now() - started).toBeLessThan(3000);

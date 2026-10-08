@@ -1,7 +1,7 @@
 // W2a work-queue cards (trajectories/01M2D5VSYJFK4YXQ0RG2NGCPYJ/plan.md), tests 1,2,4-12.
 // Test 3 (self-heal parity) lives in tests/db-continuity-tables-self-heal.test.ts's CONTINUITY_TABLES.
 import { describe, it, expect, beforeEach, afterEach, beforeAll, vi } from 'vitest';
-import { mkdtempSync, rmSync, existsSync, statSync, mkdirSync, readFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, existsSync, statSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync, execSync } from 'node:child_process';
@@ -27,6 +27,8 @@ import { CARD_TRANSITIONS, type CardStatus } from '../src/card.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 import { cmdCard } from '../src/cli/card.js';
+import { COMMANDS, parseArgs } from '../src/cli.js';
+import * as packageEntry from '../src/index.js';
 
 const ALL_STATUSES: CardStatus[] = ['backlog', 'ready', 'running', 'blocked', 'review', 'done', 'shelved'];
 
@@ -684,23 +686,22 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
   });
 });
 
-describe('test 11: audit rule 2 sites return exactly one grep hit each', () => {
-  // In-process regex count, not a `grep` shell-out: a bare Windows runner may lack the binary.
-  function hitCount(filePath: string, needle: string): number {
-    const text = readFileSync(filePath, 'utf8');
-    return text.split('\n').filter((line) => line.includes(needle)).length;
-  }
+describe('test 11: the card verb is wired through the flag parser, the command table and the package entry', () => {
+  it('`card create` with a repeated --depends-on reaches the card verb and records every parent', async () => {
+    initStore(root);
+    const a = createCard(root, 'default', { title: 'A' });
+    const b = createCard(root, 'default', { title: 'B' });
+    const { args, flags } = parseArgs(['node', 'hippo', 'card', 'create', '--title', 'child', '--depends-on', a.id, '--depends-on', b.id]);
 
-  it('depends-on appears once in the repeatable-flag allow-list', () => {
-    expect(hitCount(join(__dirname, '..', 'src', 'cli.ts'), "key === 'depends-on'")).toBe(1);
+    const run = await runInProcess(() => COMMANDS.card.run({ hippoRoot: root, args, flags }));
+
+    expect(run.status, run.stderr).toBe(0);
+    const child = /Created card (\S+)/.exec(run.stdout)?.[1] ?? '';
+    expect(loadCardDeps(root, 'default', child).parents.sort()).toEqual([a.id, b.id].sort());
   });
 
-  it('card appears once in the dispatch table', () => {
-    expect(hitCount(join(__dirname, '..', 'src', 'cli.ts'), '  card: {')).toBe(1);
-  });
-
-  it('createCard is re-exported exactly once from src/index.ts', () => {
-    expect(hitCount(join(__dirname, '..', 'src', 'index.ts'), 'createCard')).toBe(1);
+  it('the package entry exports the store createCard', () => {
+    expect(packageEntry.createCard).toBe(createCard);
   });
 });
 

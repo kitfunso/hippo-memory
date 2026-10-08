@@ -17,6 +17,8 @@ const PROJ_PIN = 'The proj auth client keeps its retry budget in src/auth/retry.
 const GLOBAL_PIN = 'Global pin: prefer small pull requests over large ones';
 const SESSION = 'copilot-sess-1';
 const WORKER_DONE = `active snapshot(s) for session ${SESSION}`;
+// Forward slashes, since NODE_OPTIONS reads a backslash as an escape.
+const RECORD_SPAWN = path.resolve(__dirname, '_helpers', 'record-spawn.cjs').split(path.sep).join('/');
 
 let s: CopilotScratch;
 
@@ -311,17 +313,28 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     if (!autoSleep.enabled || autoSleep.threshold > 1) expect(log).not.toContain('consolidating memory...');
   });
 
+  /** How many session-end workers one Stop hook run started; the preload records each spawn before the hook exits. */
+  function workersStartedBy(payload: string): number {
+    const record = path.join(s.dir, 'spawns.jsonl');
+    fs.rmSync(record, { force: true });
+    const env = { ...s.env, RECORD_SPAWN_FILE: record, NODE_OPTIONS: `${s.env.NODE_OPTIONS ?? ''} --require "${RECORD_SPAWN}"` };
+    const r = runHippo(['session-end', '--runtime', 'copilot', '--turn', '--log-file', logFile()], s.dir, env, payload);
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout).toBe('');
+    return fs.existsSync(record) ? fs.readFileSync(record, 'utf8').split('__session-end-worker').length - 1 : 0;
+  }
+
   it('does nothing for the Copilot CLI agentStop on the same hook line, or for no payload', async () => {
     const transcript = writeVscodeTranscript(copilotEventsJsonl());
     for (const payload of [copilotPayload('agentStop', s.proj, transcript), '']) {
-      const r = runHippo(['session-end', '--runtime', 'copilot', '--turn', '--log-file', logFile()], s.dir, s.env, payload);
-      expect(r.status, r.stderr).toBe(0);
-      expect(r.stdout).toBe('');
+      expect(workersStartedBy(payload)).toBe(0);
     }
-    // The parent returns before the spawn, so a worker would have to start within this wait to write anything.
-    await sleepMs(2_000);
     expect(fs.existsSync(logFile())).toBe(false);
     expect(fs.existsSync(path.join(s.dir, '.hippo', 'sessions'))).toBe(false);
+
+    // VS Code's Stop on the same line does start a worker, so the zeros above are not a blind recorder.
+    expect(workersStartedBy(copilotPayload('Stop', s.proj, transcript))).toBe(1);
+    await waitForLog(logFile(), TURN_DONE);
   });
 });
 
