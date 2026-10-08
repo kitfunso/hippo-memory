@@ -4,7 +4,7 @@ import type { Migration } from './types.js';
 export const v31: Migration = {
     version: 31,
     up: (db) => {
-      // E2 incident first-class object (docs/plans/2026-05-29-e2-incident-object.md).
+      // Incident first-class object.
       // Mirrors the v30 decisions block but for an open -> resolved -> closed
       // lifecycle (NOT supersede): there is no superseded_by self-FK and no
       // supersede trigger. An incident is a postmortem capsule: a recorded

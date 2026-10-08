@@ -15,7 +15,6 @@ import * as os from 'os';
 import * as path from 'path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { loadAllL2Summaries } from '../src/store/summaries.js';
 import { openHippoDb } from '../src/db.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import {

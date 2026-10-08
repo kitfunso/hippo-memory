@@ -3,6 +3,8 @@
  * Spec: https://api.slack.com/events-api
  */
 
+import { type JsonValue, isJsonString } from '../../json.js';
+
 export interface SlackUrlVerification {
   type: 'url_verification';
   challenge: string;
@@ -20,7 +22,7 @@ export interface SlackMessageEvent {
   thread_ts?: string;
   /**
    * Slack `bot_message` subtype carries `bot_id` instead of `user`. The
-   * v0.40.0 provenance gate requires a non-null `owner`, so transform.ts
+   * provenance gate requires a non-null `owner`, so transform.ts
    * derives `owner: bot:<bot_id>` when `user` is absent.
    */
   bot_id?: string;
@@ -28,20 +30,12 @@ export interface SlackMessageEvent {
   deleted_ts?: string;
 }
 
-/** JSON value shape for the parts of an inbound Slack payload not yet
- *  narrowed to a known envelope/event shape. */
-export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
-
 export interface SlackEventEnvelope {
   type: 'event_callback';
   team_id: string;
   event_id: string;
   event_time: number;
   event: SlackMessageEvent | { type: string; [k: string]: JsonValue };
-}
-
-function isJsonString(value: JsonValue | undefined): value is string {
-  return typeof value === 'string';
 }
 
 function isJsonNumber(value: JsonValue | undefined): value is number {

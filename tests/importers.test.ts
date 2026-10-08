@@ -369,7 +369,7 @@ describe('--global: writes to global store', () => {
         'Document public APIs with JSDoc',
       ]));
 
-      const result = importChatGPT(file, {
+      importChatGPT(file, {
         hippoRoot: tmpDir,
         global: true,
         dryRun: false,

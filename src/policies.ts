@@ -1,5 +1,5 @@
 /**
- * E2 policy first-class object (docs/plans/2026-05-30-e2-policy-object.md).
+ * Policy first-class object.
  *
  * The "bi-temporal-first" object type: a named rule/statement that is in force
  * over an EFFECTIVE-TIME range and evolves via supersession. Two time axes:
@@ -30,8 +30,8 @@
  * loadPoliciesAsOf's asOfDate) is normalized to canonical ISO-8601 datetime
  * (`toISOString`) at the store boundary BEFORE any persist or compare, so the
  * fixed-width values sort lexically and the half-open [valid_from, valid_to)
- * comparison is correct (plan-eng-critic round-1 CRIT fix: a date-only asOf vs a
- * datetime valid_from otherwise made a same-day policy invisible).
+ * comparison is correct (a date-only asOf vs a datetime valid_from would
+ * otherwise make a same-day policy invisible).
  *
  * Dual-write atomicity: `savePolicy` writes the memory + policies row (and, on
  * supersede, the predecessor's UPDATE) inside writeEntry's SAVEPOINT.
@@ -223,7 +223,7 @@ interface PolicyWrite {
 // Preflight the supersede target BEFORE inserting the new row (so the new
 // autoincrement id can never be its own supersede target); read the
 // predecessor version in the same SELECT for server-derived versioning.
-// Mirrors saveProcess / saveDecision (codex P1 2026-05-28).
+// Mirrors saveProcess / saveDecision.
 function preflightPolicySupersede(db: DatabaseSyncLike, tenantId: string, supersedesId: number): number {
   // SAFETY: SELECT projects exactly status, version; .get() returns that
   // shape for the matching row, or undefined when no policy/tenant pair matches.
@@ -351,8 +351,7 @@ export function savePolicy(
   // (a date-only asOf resolves to end-of-day in loadPoliciesAsOf), NOT by
   // backdating the stored valid_from - backdating to midnight would make an
   // earlier-same-day as-of wrongly report the policy already in force and would
-  // hide a superseded predecessor for that earlier time (codex review
-  // 2026-05-30 round 2). An explicit --from is honored as-is.
+  // hide a superseded predecessor for that earlier time. An explicit --from is honored as-is.
   const { validFrom, validTo } = validatePolicyDates(opts.validFrom, opts.validTo, now);
   const isSupersede = opts.supersedesPolicyId !== undefined;
   const changeSummary = isSupersede ? (opts.changeSummary ?? null) : null;
@@ -452,7 +451,7 @@ export function closePolicy(
       // Closing removes the object from the graph. Remove its rows DIRECTLY (deterministic),
       // not only via an enqueued rebuild whose queue item is lost if the mirror is later
       // forgotten (the queue row cascade-deletes with the memory), which would leave the closed
-      // object stale and could block that forget (codex P1). Still enqueue when a mirror exists
+      // object stale and could block that forget. Still enqueue when a mirror exists
       // so a concurrent rebuild re-derives consistently (harmless if it also runs).
       removeGraphEntitiesForObject(hippoRoot, tenantId, 'policy', closed.id);
       if (closed.memoryId) {
@@ -550,21 +549,20 @@ export function loadActivePolicies(
  *  - `superseded` rows that cover T BUT whose successor was not yet effective at T
  *    (successor.valid_from > asOf) - i.e. an earlier version that was genuinely in
  *    force then. This is the core valid-time correctness: a Jan-Jun policy
- *    superseded in May is still the answer for `asof March`. (codex review
- *    2026-05-30, P2 #2: filtering on status='active' alone dropped historically-
- *    valid superseded versions, conflating transaction-time with valid-time. The
- *    successor-aware filter mirrors the existing recall-history.ts asOf pattern.)
+ *    superseded in May is still the answer for `asof March`. Filtering on
+ *    status='active' alone would conflate transaction-time with valid-time; the
+ *    successor-aware filter mirrors the existing recall-history.ts asOf pattern.
  *
  * `closed` rows are EXCLUDED: closing is a deliberate transaction-time retirement,
  * and resurrecting closed policies for a historical valid-time is full
  * transaction-time-travel (deferred). Returns an ARRAY (overlapping same-name
  * ranges are allowed in v1). Optionally filtered to one policy_name.
  *
- * Date-only `asOfDate` (e.g. "2026-05-30", no time component) resolves to the END
+ * Date-only `asOfDate` (YYYY-MM-DD, no time component) resolves to the END
  * of that UTC day (23:59:59.999Z), so "as of [day D]" includes a policy that
  * became effective at any instant during D - this is the read-side fix for the
- * common create-then-asof-today workflow, keeping the stored valid_from honest
- * (codex review 2026-05-30). A full datetime asOf is used as the precise instant.
+ * common create-then-asof-today workflow, keeping the stored valid_from honest.
+ * A full datetime asOf is used as the precise instant.
  */
 export function loadPoliciesAsOf(
   hippoRoot: string,

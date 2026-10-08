@@ -50,17 +50,8 @@ function keepSurvivor(run: SleepRun, entry: MemoryEntry, strength: number): Memo
 // -------------------------------------------------------------------------
 // 1. Decay pass
 // -------------------------------------------------------------------------
-// LC2-E3 (opt-in, default off; docs/plans/2026-08-10-lc2-e3-mv-wiring.md):
-// flag OFF keeps the single-phase loop below byte-identical to pre-E3
-// behavior (pre-registered gate G2). Flag ON restructures into two phases:
-// phase 1 classifies every entry (condemned vs survivor) with ZERO
-// commits; phase 2 runs rescueSet over the per-tenant candidate groups,
-// then commits — rescued entries get the standard survivor bookkeeping
-// refresh (stored strength + effective confidence; no half-life edits, no
-// rank-derived writes) and are pushed to survivors so they fully
-// participate in this cycle's merge/physics/conflict passes; non-rescued
-// condemned entries follow the existing pendingDeletes/result.removed/
-// details path.
+// Memory-value flag OFF runs the single-phase loop below. Flag ON classifies every entry with ZERO commits,
+// runs rescueSet per tenant, then commits; rescued entries stay full survivors for this cycle's later passes.
 export function decayPass(run: SleepRun): DecayOutcome {
   if (run.config.memoryValue.enabled) return decayWithMemoryValue(run);
   for (const entry of run.all) {
@@ -91,10 +82,8 @@ function reportNonFiniteScores(result: ConsolidationResult, rankById: Map<string
 
 function decayWithMemoryValue(run: SleepRun): DecayOutcome {
   const { all, now, result } = run;
-  // Carried forward to logRun, where the mv_rescue audit rows are actually
-  // written (code-review fix: writing them here, before batchWriteAndDelete,
-  // would assert rescues for a cycle whose effects might never land if a
-  // later phase throws).
+  // Carried forward to logRun, where the mv_rescue audit rows are written: writing them here, before
+  // batchWriteAndDelete, would assert rescues whose effects might never land if a later phase throws.
   const rescuedEntries: MemoryEntry[] = [];
   let rescuedIds: Set<string> = new Set();
   let rankById: Map<string, MvRankInfo> = new Map();
@@ -115,32 +104,23 @@ function decayWithMemoryValue(run: SleepRun): DecayOutcome {
   // logRun stay !dryRun-gated), so the preview matches what a
   // real run would decide.
   const condemnedIds = new Set(condemned.map((e) => e.id));
-  // Fail-loud must not depend on condemnation traffic (round-2 code-review
-  // P2-2): validate the frozen weights constant unconditionally, even on a
-  // sleep with nothing condemned.
+  // Fail-loud must not depend on condemnation traffic: validate the frozen weights even when nothing is condemned.
   validateWeights();
   if (condemnedIds.size > 0) {
-    // Compute the per-tenant ranking ONCE (round-2 code-review P2-2):
-    // rankById feeds both rescueSet's decision (via precomputedRanks,
-    // skipping its own internal rankNonPinnedByTenant call) and the
-    // detail/audit rank context below, so the whole-store ranking pass
-    // runs a single time per sleep instead of twice, and only when there
-    // is actually something condemned to rank against.
+    // Rank per tenant ONCE: rankById feeds both rescueSet (via precomputedRanks) and the detail/audit
+    // context below, so the whole-store ranking runs once per sleep and only when something is condemned.
     rankById = rankNonPinnedByTenant(all, now);
     rescuedIds = rescueSet(all, condemnedIds, now, MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256, rankById);
     reportNonFiniteScores(result, rankById);
   }
 
   // --- Phase 2b: commit, one pass over `all` in ITS ORIGINAL ORDER ---
-  // (review-round F4: rescued entries used to be appended at the tail of
-  // survivors, systematically starving them in downstream order-sensitive
-  // passes like extraction's slice(0,20) — a single pass over `all`
-  // preserves flag-off's ordering semantics exactly.)
+  // Rescued entries appended at the tail would be starved by order-sensitive passes like extraction's slice(0,20).
   for (const entry of all) {
     const strength = strengthById.get(entry.id)!;
     if (run.retirable(entry) && strength < DECAY_THRESHOLD) {
       if (rescuedIds.has(entry.id)) {
-        // Rescued (D1): standard survivor stored-strength refresh (P2-1).
+        // Rescued: standard survivor stored-strength refresh.
         // Confidence is left alone here: it is an epistemic tier, not a
         // cached computation, so resolveConfidence derives it on read.
         rescuedEntries.push(keepSurvivor(run, entry, strength));

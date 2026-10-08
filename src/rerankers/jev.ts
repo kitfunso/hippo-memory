@@ -8,10 +8,10 @@ import { log } from '../log.js';
 const ENDPOINT = 'https://api.typesafe.ai/v1/systemone';
 const DEFAULT_TIMEOUT_MS = 5_000;
 const TRUNCATE_CHARS = 1200;
-// Pinned, not `jev-latest`: every number in docs/evals/2026-09-19-jev-reranker.md was
-// measured on this version, and the alias moves whenever the vendor ships a release.
+// Pinned, not `jev-latest`: the eval numbers were measured on this version,
+// and the alias moves whenever the vendor ships a release.
 const DEFAULT_MODEL = 'jev-1.13.0';
-// The pool size every number in docs/evals/2026-09-19-jev-reranker.md was measured at.
+// The pool size the eval numbers were measured at.
 export const JEV_DEFAULT_TOP_K = 40;
 
 interface JevAnswer {
@@ -144,6 +144,5 @@ export function rankByScores(head: readonly SearchResult[], scores: readonly num
 }
 
 /** Track 4 reranker: hosted TypeSafe Jev, opt-in and paid (TYPESAFE_API_KEY), one batched call per recall.
- *  Any failure warns once and delegates to the local cross-encoder. Scores are not bit-stable run to run.
- *  Cost, env vars, evidence and limits: docs/evals/2026-09-19-jev-reranker.md. */
+ *  Any failure warns once and delegates to the local cross-encoder. Scores are not bit-stable run to run. */
 export const jevReranker: RerankerFn = createJevReranker(crossEncoderReranker);

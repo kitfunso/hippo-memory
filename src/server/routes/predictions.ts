@@ -1,19 +1,19 @@
 // /v1/predictions routes.
-import { closePrediction, computePredictionBaserate, loadOpenPredictions, loadPredictionById, loadPredictionsByClass, savePrediction, VALID_CLOSURE_STATES } from '../../predictions/store.js';
-import { HttpError, sendJson } from '../../http-util.js';
+import { closePrediction, computePredictionBaserate, loadAllPredictions, loadOpenPredictions, loadPredictionById, loadPredictionsByClass, savePrediction, VALID_CLOSURE_STATES } from '../../predictions/store.js';
+import { HttpError, MAX_ID_LEN, sendJson } from '../../http-util.js';
 import { buildContextWithAuth } from '../auth.js';
 import { byCreatedAt, pageOf, parseCursor } from '../cursor.js';
 import type { RouteRequest } from '../types.js';
-import { isJsonNumber, isJsonString, isSetMember, parseJsonBody, parseListLimit } from '../validation.js';
+import { isJsonNumber, isSetMember, parseJsonBody, parseListLimit } from '../validation.js';
+import { isJsonString } from '../../json.js';
 
-// ── E2 prediction first-class object (v0.31) ──
-// docs/plans/2026-05-26-e2-prediction-object.md
+// ── prediction first-class object ──
 //
 // 4 routes: POST /v1/predictions (create), GET /v1/predictions (list),
 // GET /v1/predictions/:id (show), POST /v1/predictions/:id/close (close).
 // All Bearer-authed + tenant-scoped via buildContextWithAuth. closure_state
 // validated against VALID_CLOSURE_STATES (3 states). DoS caps on claim
-// (4096 chars) + closureNote (2048 chars) per v1.11.4 pattern.
+// (4096 chars) + closureNote (2048 chars).
 export async function handleCreatePrediction({ req, res, opts }: RouteRequest): Promise<void> {
   const ctx = await buildContextWithAuth(req, opts);
   const body = await parseJsonBody(req, ctx);
@@ -71,11 +71,9 @@ export async function handleListPredictions({ req, res, opts, query }: RouteRequ
   const ctx = await buildContextWithAuth(req, opts);
   let predictions;
   if (status === 'all') {
-    if (classTag) {
-      predictions = loadPredictionsByClass(opts.hippoRoot, ctx.tenantId, classTag, { limit: limit + 1, after });
-    } else {
-      predictions = loadOpenPredictions(opts.hippoRoot, ctx.tenantId, { limit: limit + 1, after });
-    }
+    predictions = classTag
+      ? loadPredictionsByClass(opts.hippoRoot, ctx.tenantId, classTag, { limit: limit + 1, after })
+      : loadAllPredictions(opts.hippoRoot, ctx.tenantId, { limit: limit + 1, after });
   } else if (status === 'open') {
     predictions = loadOpenPredictions(opts.hippoRoot, ctx.tenantId, {
       classTag: classTag || undefined,
@@ -100,7 +98,7 @@ export async function handleListPredictions({ req, res, opts, query }: RouteRequ
   return;
 }
 
-// J3 reference-class / planning-fallacy detector (v0.31).
+// Reference-class / planning-fallacy detector.
 // Order matters: this must match BEFORE /v1/predictions/:id since 'stats'
 // is not a number — the :id regex requires \d+ so they don't conflict,
 // but routing this first avoids the dispatch order risk.
@@ -109,8 +107,8 @@ export async function handlePredictionStats({ req, res, opts, query }: RouteRequ
   if (!classTag || classTag.length === 0) {
     throw new HttpError(400, 'class param is required');
   }
-  if (classTag.length > 256) {
-    throw new HttpError(400, 'class exceeds 256-character cap');
+  if (classTag.length > MAX_ID_LEN) {
+    throw new HttpError(400, `class exceeds ${MAX_ID_LEN}-character cap`);
   }
   const ctx = await buildContextWithAuth(req, opts);
   const baserate = computePredictionBaserate(opts.hippoRoot, ctx.tenantId, classTag, ctx.actor.subject);

@@ -32,8 +32,7 @@ function parseObjectId(idRaw: string, noun: string): number {
 }
 
 // ---------------------------------------------------------------------------
-// E2 prediction first-class object (v0.31)
-// docs/plans/2026-05-26-e2-prediction-object.md
+// Prediction first-class object
 // ---------------------------------------------------------------------------
 
 function predictClose(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): void {
@@ -73,14 +72,9 @@ function loadPredictionList(hippoRoot: string, tenantId: string, status: string,
     });
   }
   if (status === 'all') {
-    // No closure-state filter; pull both via loadPredictionsByClass if class given
-    if (classTag) {
-      return predictionsModule.loadPredictionsByClass(hippoRoot, tenantId, classTag, { limit });
-    }
-    // No class filter + status=all = pull open + closed across all classes
-    // (kept simple: report open via loadOpenPredictions; closed via two
-    // class scans isn't symmetrical. v1 callers typically pass --class.)
-    return predictionsModule.loadOpenPredictions(hippoRoot, tenantId, { limit });
+    return classTag
+      ? predictionsModule.loadPredictionsByClass(hippoRoot, tenantId, classTag, { limit })
+      : predictionsModule.loadAllPredictions(hippoRoot, tenantId, { limit });
   }
   if (!predictionsModule.VALID_CLOSURE_STATES.has(status as predictionsModule.ClosureState)) {
     printError(`Invalid --status: "${status}". Must be one of: open | closed | closed-unknown | all.`);
@@ -146,7 +140,7 @@ function predictShow(hippoRoot: string, tenantId: string, args: string[]): void 
 }
 
 function predictBaserate(hippoRoot: string, tenantId: string, flags: CliFlags): void {
-  // J3 reference-class / planning-fallacy detector
+  // Reference-class / planning-fallacy detector
   const classTagRaw = flags['class'];
   if (typeof classTagRaw !== 'string' || !classTagRaw.trim()) {
     printError('Usage: hippo predict baserate --class <c>');
@@ -314,9 +308,8 @@ function decideCreate(hippoRoot: string, tenantId: string, decisionText: string,
   }
   const contextRaw = flags['context'];
   const context = typeof contextRaw === 'string' && contextRaw ? contextRaw : undefined;
-  // A value-less `--supersedes` (parseArgs stores boolean true) is a malformed
-  // request: the user asked to supersede but gave no memory id. Reject it rather
-  // than silently creating a non-superseding decision (codex review 2026-05-28).
+  // A value-less `--supersedes` asks to supersede but gives no memory id: reject it rather
+  // than silently creating a non-superseding decision.
   if (flags['supersedes'] === true) {
     printError('--supersedes requires a memory id, e.g. hippo decide "<text>" --supersedes mem_abc123.');
     process.exit(1);
@@ -324,7 +317,7 @@ function decideCreate(hippoRoot: string, tenantId: string, decisionText: string,
   const supersedesMemId = typeof flags['supersedes'] === 'string' ? flags['supersedes'] : null;
 
   // Backward-compat: --supersedes takes a MEMORY id. Validate it exists and
-  // resolve it to the active decision row (if any). Grill fix: commit the
+  // resolve it to the active decision row (if any). Commit the
   // canonical table create+supersede FIRST (inside saveDecision's SAVEPOINT),
   // weaken the old memory LAST (best-effort) so a memory-write failure cannot
   // leave the memory stale without the table reflecting the supersession.
@@ -352,11 +345,8 @@ function decideCreate(hippoRoot: string, tenantId: string, decisionText: string,
   // 'superseded' tag. Preserves the exact pre-promotion behavior for the memory
   // mirror; the canonical table supersession already committed above.
   if (oldEntry) {
-    // Best-effort: saveDecision already committed the canonical mutation (new
-    // decision created + old row superseded). If this legacy memory-weaken
-    // throws, do NOT fail the command — a retry would find no active decision
-    // for the old memory and create a duplicate active successor. Warn instead
-    // (codex review 2026-05-28).
+    // Best-effort: saveDecision already committed. Failing here would make a retry find no active
+    // decision for the old memory and create a duplicate active successor, so warn instead.
     try {
       oldEntry.half_life_days = Math.max(1, Math.floor(oldEntry.half_life_days / 2));
       oldEntry.confidence = 'stale';
@@ -381,7 +371,6 @@ function decideCreate(hippoRoot: string, tenantId: string, decisionText: string,
 // Strict positive-integer parse for incident id args. parseInt() alone accepts
 // trailing junk ("1abc" -> 1), which would let a mutating subcommand (close/
 // resolve) silently hit the wrong row; require the whole arg to be digits.
-// (codex P2, 2026-05-29.)
 function parsePositiveIncidentId(idRaw: unknown): number {
   const s = String(idRaw ?? '').trim();
   const id = parseInt(s, 10);

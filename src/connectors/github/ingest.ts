@@ -2,11 +2,11 @@
  * GitHub event ingest with afterWrite race-safe idempotency.
  *
  * Mirrors src/connectors/slack/ingest.ts. The dedupe key is sha256(eventName +
- * ':' + rawBody) (codex P0 #3) — derived from the signed body, not from the
+ * ':' + rawBody), derived from the signed body, not from the
  * unsigned X-GitHub-Delivery header, so a replay attacker cannot bypass
  * idempotency by rotating the delivery UUID.
  *
- * Race semantics (codex P1 #6):
+ * Race semantics:
  *   - Fast path: hasSeenKey pre-check returns 'duplicate' for the common case.
  *   - Slow path: hasSeenKey passes (no row yet). Two workers may race into
  *     remember() concurrently. Inside the writeEntry SAVEPOINT, INSERT OR
@@ -15,10 +15,8 @@
  *     rolls back this worker's memory row). Exactly one memory exists per
  *     idempotency_key.
  *
- * The Slack precedent's race test was insufficient — it tested the fast path,
- * not the SAVEPOINT collision. The `__testInjectBeforeLog` hook below lets
- * tests pre-populate github_event_log inside the SAVEPOINT to actually
- * exercise the changes=0 -> rollback path.
+ * The `__testInjectBeforeLog` hook below lets tests pre-populate github_event_log
+ * inside the SAVEPOINT to exercise the changes=0 -> rollback path, not just the fast path.
  */
 
 import { remember, type Context, type RememberOpts } from '../../api.js';
@@ -61,7 +59,7 @@ export type IngestEvent =
 export interface IngestInput {
   /** The X-GitHub-Event header value + parsed body, discriminated. */
   event: IngestEvent;
-  /** The raw HTTP body — used for the idempotency key (replay-safe per codex P0 #3). */
+  /** The raw HTTP body, used for the idempotency key (replay-safe). */
   rawBody: string;
   /** X-GitHub-Delivery header value, audit metadata only. */
   deliveryId: string;
@@ -89,7 +87,7 @@ function transformEvent(event: IngestEvent): RememberOpts | null {
 }
 
 /**
- * v1.3.1: extract the source-normalized identifier the idempotency key needs.
+ * Extract the source-normalized identifier the idempotency key needs.
  * Backfill and webhook both produce IngestEvent objects describing the same
  * source revision, so deriving the key from these fields collapses both paths
  * onto the same dedupe row. Mirrors the artifactRef strings in transform.ts.
@@ -170,10 +168,8 @@ export function ingestEvent(ctx: Context, input: IngestInput): IngestResult {
       }
     }
     if (e instanceof RejectedValueError) {
-      // AT1 (plan §3 containment): a tombstone hit is a PERMANENT skip, not
-      // a transient failure — never DLQ-retry it. Mark the idempotency key
-      // seen exactly like the empty-body branch above so a GitHub retry of
-      // the same delivery acks as done, not error.
+      // A tombstone hit is a PERMANENT skip, never DLQ-retried: mark the key seen like the empty-body
+      // branch above so a GitHub retry of the same delivery acks as done, not error.
       markKeySeenWithoutMemory(ctx.hippoRoot, idempotencyKey, input);
       return { status: 'skipped', memoryId: null };
     }
@@ -198,9 +194,9 @@ function rememberWithEventLog(
   idempotencyKey: string,
   opts: RememberOpts,
 ): IngestResult {
-  // v1.12.0: drop the legacy `|| 'connector:github'` fallback (see slack/ingest.ts:73 for rationale).
+  // No `|| 'connector:github'` fallback (see rememberWithEventLog in slack/ingest.ts for rationale).
   const result = remember(
-    ctx,
+    { ...ctx, store: undefined }, // the event log row commits with the memory on hippo.db's own handle, never through a store
     {
       ...opts,
       untrusted: true,

@@ -2,7 +2,7 @@ import { openHippoDb } from '../db.js';
 import { resolveTenantId } from '../tenant.js';
 import { type AuditOp, appendAuditEvent, reportAuditWriteFailure } from '../audit.js';
 import { RejectedValueError } from '../rejection.js';
-import type { JsonValue } from './rows.js';
+import type { JsonValue } from '../json.js';
 
 /**
  * Emit an audit event for a mutation against `db`. Wrapped so a broken audit
@@ -32,9 +32,9 @@ export function audit(
 }
 
 /**
- * Refusal audit for the AT1 rejection guard (plan §3). Written by the
+ * Refusal audit for the rejected-value guard. Written by the
  * transaction OWNER post-rollback — writeEntry's catch (no outer tx exists
- * there, so this lands in a fresh implicit transaction) and api.supersede's
+ * there, so this lands in a fresh implicit transaction) and commitSupersede's
  * catch (after its own ROLLBACK) — never inside a scope the caller's own
  * rollback could claw back. Best-effort `audit()` semantics: never throws.
  */

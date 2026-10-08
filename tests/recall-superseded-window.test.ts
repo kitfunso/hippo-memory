@@ -1,6 +1,6 @@
 // Superseded rows must not use up the recall candidate window, and a superseded
 // summary must never stand in for its children in recall overflow or assemble.
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -8,7 +8,7 @@ import { Layer, type MemoryEntry} from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { loadRecallSearchEntries } from '../src/store/search-rows.js';
+import { _forceLikePathForTests, loadRecallSearchEntries } from '../src/store/search-rows.js';
 import { assemble, recall, supersede, type Context } from '../src/api.js';
 
 const roots: string[] = [];
@@ -24,7 +24,7 @@ const ctxFor = (hippoRoot: string): Context =>
   ({ hippoRoot, tenantId: 'default', actor: { subject: 'superseded-window-test', role: 'admin' } });
 
 afterEach(() => {
-  vi.unstubAllEnvs();
+  _forceLikePathForTests(false);
   for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true });
 });
 
@@ -56,7 +56,7 @@ const LOADER_PATHS: Array<[string, string, boolean, boolean]> = [
 
 describe('the recall candidate window drops superseded rows before its LIMIT', () => {
   it.each(LOADER_PATHS)('%s path', (_path, query, oldCreatedFirst, forceLike) => {
-    if (forceLike) vi.stubEnv('HIPPO_FORCE_LIKE_PATH', '1');
+    _forceLikePathForTests(forceLike);
     const root = newRoot();
     const { current, old } = seedVersions(root, oldCreatedFirst);
     const windowIds = (includeSuperseded: boolean): string[] =>

@@ -3,15 +3,19 @@
 import { loadEntriesByIds, loadSessionRawMemories, countSessionRawMemories } from '../store/entry-reads.js';
 import { estimateTokens } from '../token-ledger.js';
 import type { MemoryEntry } from '../memory.js';
-import { passesScopeFilterForRecall, assertScopeRequestAllowed } from '../recall-scope.js';
+import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../recall-scope.js';
+import { classifyOriginProject, projectNames } from '../project-identity.js';
+import type { CallerProject } from '../prompt-hook.js';
 import type { Context } from './types.js';
+
+export const DEFAULT_ASSEMBLE_BUDGET = 4000;
 
 // ---------------------------------------------------------------------------
 // assemble — Hippo DAG Phase 2 (bio-aware context engine)
 // ---------------------------------------------------------------------------
 
 export interface AssembleOpts {
-  /** Token budget. Default 4000. */
+  /** Token budget. Default DEFAULT_ASSEMBLE_BUDGET. */
   budget?: number;
   /** Recent raw rows always kept verbatim. Default 10. */
   freshTailCount?: number;
@@ -19,7 +23,7 @@ export interface AssembleOpts {
    *  ancestor. Default true. */
   summarizeOlder?: boolean;
   /**
-   * Restrict to a specific scope. v1.6.1 senior-review P1 #3 parity with
+   * Restrict to a specific scope, same rule as
    * `recall`: when set, exact match required (so an authorised caller can
    * assemble a `slack:private:CSEC` session by passing scope explicitly).
    * When undefined, default-deny applies to ANY `<source>:private:*` and
@@ -33,6 +37,7 @@ export interface AssembleOpts {
    */
   rowCap?: number;
   cost?: AssembleCost;
+  project?: CallerProject;
 }
 
 // Absent, the budget pays for content alone. `fixed` gets the largest count the header can print.
@@ -64,19 +69,15 @@ export interface AssembleResult {
   items: AssembledContextItem[];
   tokens: number;
   /**
-   * Tenant + scope-filtered raw row count for the session — what the caller
-   * could have seen given their grant. Pre-v1.6.1 was pre-filter (confusing
-   * for all-private sessions); pre-v1.6.3 was capped (under-reported on
-   * sessions > rowCap). v1.6.3 reports the FULL post-filter count via a
-   * separate COUNT(*) query so consumers can render "session has N msgs"
-   * accurately even when items[] is the windowed view.
+   * Tenant + scope-filtered raw row count for the session, uncapped by `rowCap`, so
+   * "session has N msgs" stays accurate when items[] is the windowed view.
    */
   totalRaw: number;
   summarized: number;
   evicted: number;
   /**
-   * True when `rowCap` truncated the loaded window. With v1.6.2's NEWEST-cap
-   * semantics, the items[] array represents the freshest tail of the session;
+   * True when `rowCap` truncated the loaded window. The cap keeps the NEWEST
+   * rows, so the items[] array represents the freshest tail of the session;
    * older rows beyond the cap are silently absent. Use `totalRaw - items.length
    * - summarized + ...` to estimate how much you didn't see, or widen `rowCap`.
    */
@@ -111,31 +112,28 @@ export function assemble(
   opts: AssembleOpts = {},
 ): AssembleResult {
   assertScopeRequestAllowed(ctx.actor, opts.scope);
-  const budget = opts.budget ?? 4000;
+  const budget = opts.budget ?? DEFAULT_ASSEMBLE_BUDGET;
   const freshTailCount = opts.freshTailCount ?? 10;
   const summarizeOlder = opts.summarizeOlder ?? true;
   const rowCap = opts.rowCap ?? 5000;
+  const own = personalScopeOf(ctx.actor) ?? undefined;
 
   if (!sessionId) {
     return { sessionId, items: [], tokens: 0, totalRaw: 0, summarized: 0, evicted: 0, truncated: false };
   }
 
-  const rows = loadSessionRawMemories(ctx.hippoRoot, sessionId, ctx.tenantId, rowCap);
+  const origins = opts.project ? projectNames(opts.project) : undefined;
+  const rows = loadSessionRawMemories(ctx.hippoRoot, sessionId, ctx.tenantId, rowCap, origins);
   const truncated = rows.length === rowCap;
-  // v1.6.3 senior-review P0-1: report the FULL post-filter row count even
-  // when the cap windows the loaded set. Pre-v1.6.3 used `scoped.length`
-  // which under-reported on long sessions and made consumers render
-  // wrong "session has N msgs" UX.
+  // `scoped.length` under-counts a capped session, so totalRaw falls back to a COUNT below.
   const scoped = rows.filter((r) =>
-    passesScopeFilterForRecall(r.scope ?? null, opts.scope),
+    passesScopeFilterForRecall(r.scope ?? null, opts.scope, own),
   );
   let totalRaw: number;
   if (truncated) {
-    // v1.6.3 codex P1 / senior P0: scope-aware unbounded COUNT. The helper
-    // SQL-encodes the same default-deny rule passesScopeFilterForRecall
-    // applies in TS, so a no-scope caller cannot infer private rows by
-    // comparing totalRaw to items.length on a truncated session.
-    totalRaw = countSessionRawMemories(ctx.hippoRoot, sessionId, ctx.tenantId, opts.scope);
+    // The COUNT applies the same default-deny scope rule in SQL, so a no-scope
+    // caller cannot infer private rows by comparing totalRaw to items.length.
+    totalRaw = countSessionRawMemories(ctx.hippoRoot, sessionId, ctx.tenantId, opts.scope, own, origins);
   } else {
     totalRaw = scoped.length;
   }
@@ -150,7 +148,7 @@ export function assemble(
 
   // Substitute parent summaries for older rows that share one.
   const { olderItems, summarized } = summarizeOlder && olderRows.length > 0
-    ? substituteSummaries(ctx, olderRows, opts.scope)
+    ? substituteSummaries(ctx, olderRows, opts.scope, own, opts.project)
     : { olderItems: olderRows.map(rawItem), summarized: 0 };
 
   const tailItems: AssembledContextItem[] = tailRows.map((r) => ({
@@ -161,9 +159,8 @@ export function assemble(
     strength: r.strength,
   }));
 
-  // F4 (v1.6.5): byte compare canonical UTC ISO timestamps. ~50× faster than
-  // localeCompare and chronological by virtue of the timestamp invariant
-  // documented in src/memory.ts above MemoryEntry.
+  // Byte compare is chronological for the fixed-form UTC ISO timestamps
+  // (invariant documented in src/memory.ts above MemoryEntry).
   const cmpIso = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
   olderItems.sort((a, b) => cmpIso(a.createdAt, b.createdAt));
   tailItems.sort((a, b) => cmpIso(a.createdAt, b.createdAt));
@@ -193,6 +190,8 @@ function substituteSummaries(
   ctx: Context,
   olderRows: MemoryEntry[],
   scope: string | undefined,
+  own: string | undefined,
+  project: CallerProject | undefined,
 ): SubstitutedOlder {
   const olderItems: AssembledContextItem[] = [];
   let summarized = 0;
@@ -209,7 +208,8 @@ function substituteSummaries(
   const parents = eligibleParentIds.length > 0
     ? loadEntriesByIds(ctx.hippoRoot, eligibleParentIds, ctx.tenantId)
         .filter((p) => (p.dag_level ?? 0) === 2 && !p.superseded_by)
-        .filter((p) => passesScopeFilterForRecall(p.scope ?? null, scope))
+        .filter((p) => passesScopeFilterForRecall(p.scope ?? null, scope, own))
+        .filter((p) => !project || classifyOriginProject(p.origin_project, project) !== 'cross-project')
     : [];
   const claimedRawIds = new Set<string>();
   for (const parent of parents) {

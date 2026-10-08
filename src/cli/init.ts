@@ -15,7 +15,7 @@ import { currentMachine, importForStore, importProjectMemories, importUserMemori
 import { emptyReport, mergeReports } from '../agent-memories/report.js';
 import { getGlobalRoot, initGlobal } from '../shared.js';
 import { registerWorkspace } from '../scheduler.js';
-import { printAgentImport, installCodexMemoryHooks, setupDailySchedule, learnFromRepo } from './shared.js';
+import { printAgentImport, installCodexMemoryHooks, setupDailySchedule, learnFromRepo, skipLearnOnSharedStore, warnClaudeSettingsUnusable } from './shared.js';
 import { HOOK_MARKERS, HOOKS, hippoBlock } from './hook-blocks.js';
 
 function scanForGitRepos(rootDir: string, maxDepth = 2): string[] {
@@ -160,8 +160,9 @@ export function cmdInit(hippoRoot: string, flags: Record<string, string | boolea
     setupDailySchedule(globalRoot);
   }
 
+  const learn = !flags['no-learn'] && !skipLearnOnSharedStore(hippoRoot);
   // Seed with git history on first init (unless --no-learn)
-  if (!alreadyExists && !flags['no-learn'] && !flags['global']) {
+  if (!alreadyExists && learn && !flags['global']) {
     if (isGitRepo(process.cwd())) {
       const seedDays = 30;
       console.log(`\n   Seeding memories from last ${seedDays} days of git history...`);
@@ -175,7 +176,7 @@ export function cmdInit(hippoRoot: string, flags: Record<string, string | boolea
   }
 
   // Every run, not only the first: an agent's notes change between inits.
-  if (!flags['no-learn']) printAgentImport(importForStore(hippoRoot, { machine: currentMachine() }));
+  if (learn) printAgentImport(importForStore(hippoRoot, { machine: currentMachine() }));
 }
 
 /** Every write init makes into agent config (instruction blocks, hooks, plugins) is an automatic integration, so one switch skips them all. */
@@ -254,7 +255,7 @@ function refreshShippedBlock(filePath: string, text: string, hook: string): void
 /** Claude Code settings hooks, Codex's hooks.json and the OpenCode plugin, under the home directory; idempotent, so re-running init adds newer hooks. */
 function installUserLevelHooks(agents: readonly string[], codexHint: boolean): void {
   for (const hook of agents) {
-    // The Codex capture wrapper swaps the codex launcher binary, so init only points at the opt-in (issue #133).
+    // The Codex capture wrapper swaps the codex launcher binary, so init only points at the opt-in.
     if (hook === 'codex' && codexHint && !isCodexWrapperInstalled()) {
       console.log('   Codex detected. To capture Codex sessions: hippo hook install codex');
     }
@@ -266,6 +267,7 @@ function installUserLevelHooks(agents: readonly string[], codexHint: boolean): v
     // claude-code` and `hippo setup`.
     if (hook === 'claude-code') {
       const result = installJsonHooks(hook);
+      warnClaudeSettingsUnusable(result, '   ');
       if (result.installedSessionEnd) {
         console.log(`   Auto-installed hippo session-end SessionEnd hook in ${hook} settings`);
       }

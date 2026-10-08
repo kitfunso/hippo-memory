@@ -13,7 +13,7 @@ import type { SessionHandoff } from '../handoff.js';
 import { passesScopeFilterForRecall } from '../recall-scope.js';
 import { fitBudget } from '../search/finalize.js';
 import { explainMatch } from '../search/explain.js';
-import type { SearchResult } from '../search/types.js';
+import { DEFAULT_RECALL_BUDGET, type SearchResult } from '../search/types.js';
 import { writeRecallTraceAtRoot } from '../recall-trace.js';
 import { loadConfig } from '../config.js';
 import { openHippoDb, closeHippoDb } from '../db.js';
@@ -23,19 +23,10 @@ import { dropHeldCopies } from '../same-text.js';
 import { isGlobalStoreRoot } from '../project-identity.js';
 import { detectScope } from '../scope.js';
 import { getGlobalRoot } from '../shared.js';
-import { auditQueryFields } from '../audit.js';
 import * as api from '../api.js';
 import { computePlanningFallacyOutput, type PlanningFallacyOutput } from '../predictions/planning-fallacy.js';
-import {
-  detectAnchoring,
-  hashQueryText,
-  biasHintEnabled,
-  buildSessionKey,
-  getOrCreateRing,
-  appendRecall,
-  snapshotRing,
-  RingBuffer,
-} from '../recall-history.js';
+import { detectAnchoring, hashQueryText, biasHintEnabled, snapshotRing } from '../recall-history.js';
+import { appendRecallAudit, recallAuditMetadata, recordShownRecall, resetSessionRings, sessionRing } from '../api/recall-record.js';
 import { detectAvailabilityBias } from '../availability.js';
 import { resolveTenantId } from '../tenant.js';
 import { MAX_HOPS, DEFAULT_MAX_NEIGHBORS } from '../graph-recall.js';
@@ -51,11 +42,11 @@ import {
 import { JEV_DEFAULT_TOP_K } from '../rerankers/jev.js';
 import { isClefModel } from '../rerankers/clef.js';
 import { handoffText, printedTokens, sessionTrailText, settleTokens, snapshotText } from '../context-render.js';
+import { withLedgerDb } from '../ledger-db.js';
 import { printError } from './output.js';
 import {
   parseLimitFlag,
   parseBudgetFlag,
-  emitCliAudit,
   requireInit,
   recallEntryText,
   recallHeading,
@@ -69,16 +60,13 @@ import {
   hostSessionId,
   captureConsole,
   hookStoreRoot,
-  withLedgerDb,
 } from './shared.js';
 
 // Per-process rings: a single-shot `hippo recall` starts empty, so anchoring only accumulates in long-lived
 // hosts (in-process loops, `hippo serve`, the MCP server).
-const sessionRecallHistoryCli = new Map<string, RingBuffer>();
-
-/** Test-only: reset the module-level recall-history Map. Call from beforeEach. */
+/** Test-only: reset the CLI recall rings. Call from beforeEach. */
 export function __resetSessionRecallHistoryCli(): void {
-  sessionRecallHistoryCli.clear();
+  resetSessionRings('cli');
 }
 
 // JSON.stringify keeps quotes or parens in the matched phrase from blurring the line.
@@ -230,13 +218,13 @@ export async function cmdRecall(
   const o = parseRecallOptions(hippoRoot, flags);
   const ranked = await rankForRecall(hippoRoot, query, flags, o);
   const fit = fitRecallBlock(hippoRoot, query, o, ranked, loadRecallContinuity(hippoRoot, o));
-  auditRecall(hippoRoot, o.globalRoot, query, fit);
+  auditRecall(hippoRoot, o, query, fit);
   writeRecallResult(hippoRoot, query, o, fit, ranked.localIndex);
 }
 
 /** Every flag recall reads, parsed in the order the single-body command checked them. */
 function parseRecallOptions(hippoRoot: string, flags: CliFlags) {
-  const budget = parseBudgetFlag(flags['budget'], 4000);
+  const budget = parseBudgetFlag(flags['budget'], DEFAULT_RECALL_BUDGET);
   const limit = parseLimitFlag(flags['limit']);
   const asJson = Boolean(flags['json']);
   const showWhy = Boolean(flags['why']);
@@ -346,9 +334,7 @@ function loadRecallContinuity(hippoRoot: string, o: RecallOptions): RecallContin
 function recallHinter(query: string, o: RecallOptions, rank: RankedRecall['rank']) {
   const { tenantId, sessionId } = o;
   // HIPPO_ANCHORING=off and HIPPO_AVAILABILITY=off skip the work entirely.
-  const anchorRing = biasHintEnabled('anchoring') && sessionId
-    ? getOrCreateRing(sessionRecallHistoryCli, buildSessionKey(tenantId, sessionId))
-    : null;
+  const anchorRing = sessionRing('cli', tenantId, sessionId);
   const queryHash = hashQueryText(query);
   const availabilityPool = biasHintEnabled('availability')
     ? [...rank.localEntries, ...rank.globalEntries].map((e) => ({ id: e.id, created: e.created }))
@@ -369,7 +355,7 @@ function recallHinter(query: string, o: RecallOptions, rank: RankedRecall['rank'
     });
     return { anchoring, availability, summary };
   };
-  return { anchorRing, queryHash, hintsFor };
+  return { anchorRing, hintsFor };
 }
 
 type RecallHints = ReturnType<ReturnType<typeof recallHinter>['hintsFor']>;
@@ -449,7 +435,7 @@ function fitRecallBlock(hippoRoot: string, query: string, o: RecallOptions, rank
   let kept = fitted.length;
   let results = shown(kept);
 
-  const { anchorRing, queryHash, hintsFor } = recallHinter(query, o, ranked.rank);
+  const { anchorRing, hintsFor } = recallHinter(query, o, ranked.rank);
   const view: RecallRenderView = { query, showWhy: o.showWhy, showPlan, planText, hasContinuity, continuity, entryText: ranked.entryText };
   let hints = hintsFor(results, kept - results.length);
   let recallText = renderRecallBlock(results, hints, view);
@@ -460,47 +446,20 @@ function fitRecallBlock(hippoRoot: string, query: string, o: RecallOptions, rank
     hints = hintsFor(results, kept - results.length);
     recallText = renderRecallBlock(results, hints, view);
   }
-  return { results, hints, recallText, continuity, continuityTokens, cmdPlanningFallacyHint, cmdPlanningFallacyWatching, anchorRing, queryHash };
+  return { results, hints, recallText, continuity, continuityTokens, cmdPlanningFallacyHint, cmdPlanningFallacyWatching, anchorRing };
 }
 
 type FittedRecall = ReturnType<typeof fitRecallBlock>;
 
-function auditRecall(hippoRoot: string, globalRoot: string, query: string, fit: FittedRecall): void {
-  const { results, anchorRing, queryHash } = fit;
-  const { anchoring: cmdAnchoringHint, availability: cmdAvailabilityHint } = fit.hints;
-  if (anchorRing) {
-    // Appended after every detect: anchoredOn feeds the cooldown for the next recall on this session.
-    appendRecall(anchorRing, queryHash, results[0]?.entry.id ?? null, cmdAnchoringHint?.memoryId);
-  } else if (biasHintEnabled('anchoring')) {
-    // SHA-256/16 per the recall-audit convention; hashQueryText is FNV-1a and brute-forceable on short queries.
-    emitCliAudit(hippoRoot, 'recall_anchor_skipped_no_session', undefined, auditQueryFields(query));
-  }
-  if (cmdAnchoringHint?.reason === 'memory_dominance') {
-    emitCliAudit(hippoRoot, 'recall_anchor_detected_memory_dominance', cmdAnchoringHint.memoryId, {
-      memory_id: cmdAnchoringHint.memoryId,
-      query_count: cmdAnchoringHint.queryCount ?? null,
-    });
-  } else if (cmdAnchoringHint?.reason === 'query_repeat') {
-    emitCliAudit(hippoRoot, 'recall_anchor_detected_query_repeat', cmdAnchoringHint.memoryId, {
-      memory_id: cmdAnchoringHint.memoryId,
-    });
-  }
-  if (cmdAvailabilityHint) {
-    emitCliAudit(hippoRoot, 'recall_availability_detected', undefined, {
-      recent_fraction: cmdAvailabilityHint.recentFraction,
-      older_passed_over: cmdAvailabilityHint.olderCandidatesPassedOver,
-      returned_count: cmdAvailabilityHint.returnedCount,
-    });
-  }
-
+function auditRecall(hippoRoot: string, o: RecallOptions, query: string, fit: FittedRecall): void {
+  const { results, hints } = fit;
+  const who = { hippoRoot, tenantId: o.tenantId, actor: 'cli', bestEffort: true };
+  recordShownRecall(who, { query, ring: fit.anchorRing, topId: results[0]?.entry.id ?? null, anchoring: hints.anchoring, availability: hints.availability });
   // One 'recall' event per query, before the early-empty return, in every participating store.
-  const recallMetadata: Record<string, unknown> = {
-    ...auditQueryFields(query),
-    results: results.length,
-  };
-  emitCliAudit(hippoRoot, 'recall', undefined, recallMetadata);
-  if (isInitialized(globalRoot) && globalRoot !== hippoRoot) {
-    emitCliAudit(globalRoot, 'recall', undefined, recallMetadata);
+  const metadata = recallAuditMetadata(query, results.length);
+  appendRecallAudit(who, 'recall', undefined, metadata);
+  if (isInitialized(o.globalRoot) && o.globalRoot !== hippoRoot) {
+    appendRecallAudit({ ...who, hippoRoot: o.globalRoot }, 'recall', undefined, metadata);
   }
 }
 

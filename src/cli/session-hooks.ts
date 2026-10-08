@@ -3,9 +3,9 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import { spawn } from 'child_process';
-import { defaultSleepLogPath } from '../hooks/shared.js';
 import { resolveCodexSessionTranscript } from '../hooks/codex-session.js';
 import { resolveCodexWrapperPaths, type CodexWrapperMetadata } from '../hooks/codex-wrapper.js';
+import { resolveJsonHookPaths } from '../hooks/json-hooks.js';
 import { SessionEvent } from '../store/rows.js';
 import { isInitialized } from '../store/open.js';
 import {
@@ -18,7 +18,6 @@ import { writeSessionEndHandoff } from '../store/handoffs.js';
 import { readSessionScan, recordSessionDigest } from '../session-digest.js';
 import { openHippoDb, closeHippoDb } from '../db.js';
 import { captureToolFailure } from '../capture-error.js';
-import type { JsonValue } from '../working-memory.js';
 import {
   estimateTokens,
   isSubagentPayload,
@@ -29,60 +28,39 @@ import {
 } from '../token-ledger.js';
 import { currentMachine, importSessionFolder } from '../agent-memories/sync.js';
 import { summaryLine } from '../agent-memories/report.js';
-import { deriveOriginProject } from '../project-identity.js';
+import { resolveProjectIdentity } from '../project-identity.js';
 import { getGlobalRoot } from '../shared.js';
 import { cmdCapture, CaptureOptions } from '../capture/command.js';
-import { cmdPreCompact, cmdPostCompact, transcriptWorkingState } from '../capture/compact.js';
-import { resolveLastSessionTranscript } from '../capture/transcript.js';
+import { cmdPreCompact, cmdPostCompact } from '../capture/compact.js';
+import { transcriptWorkingState } from '../capture/working-state.js';
+import { collectHandoffEvidence } from '../handoff-evidence.js';
+import { resolveLastSessionTranscript, type SessionTurn } from '../capture/transcript.js';
+import { copilotTranscriptFor, SESSION_ID_RE } from '../capture/copilot-transcript.js';
+import { loadTurnPosition, runSessionWorker, saveTurnPosition, turnsAfter, type WorkerMode } from '../capture/session-worker.js';
+import { isStringValue, readVscodeStop } from '../capture-contract.js';
+import { loadConfig } from '../config.js';
+import { countCreatedSinceLastSleep } from '../store/index-and-stats.js';
 import { truncateCodePointSafe } from '../transcript-tail.js';
 import { COMPACTION_DB_WAIT_MS } from '../compaction-record.js';
-import { readStdinBounded } from '../stdin.js';
+import { COMPACT_RESUME_EVENT_CONTENT_CAP, COMPACT_RESUME_MAX_AGE_MS, compactResumeText } from '../context-render.js';
+import { normaliseHookPayload, readHookStdin, readStdinBounded, type BoundedStdin } from '../stdin.js';
 import { resolveTenantId } from '../tenant.js';
-import { log } from '../log.js';
+import { errorMessage, log } from '../log.js';
+import { withLedgerDb } from '../ledger-db.js';
 import { printError } from './output.js';
+import { cmdLastSleep } from './last-sleep.js';
 import {
   type CommandContext,
-  collectHandoffEvidence,
   logSessionEndImport,
   appendSessionEndCloseLog,
-  printActiveTaskSnapshot,
-  printSessionEvents,
   resetHookInjection,
-  captureConsole,
   hookStoreRoot,
-  withLedgerDb,
+  hookRuntime,
+  payloadCwdRoot,
   runHookWithStores,
   inPilotHoldout,
 } from './shared.js';
-
-/** Prints the SessionEnd sleep log, then clears it. Stderr, because Claude Code adds
- *  SessionStart stdout to the model's context and this log is for the user. */
-export function cmdLastSleep(flags: Record<string, string | boolean | string[]>): void {
-  const logPath = typeof flags['path'] === 'string'
-    ? (flags['path'] as string)
-    : defaultSleepLogPath();
-
-  if (!fs.existsSync(logPath)) return;
-
-  let content: string;
-  try {
-    content = fs.readFileSync(logPath, 'utf8');
-  } catch {
-    // Removed or locked since the exists check: there is nothing to show this session.
-    return;
-  }
-
-  if (content.trim().length > 0) {
-    printError('=== Previous session hippo consolidation ===');
-    process.stderr.write(content);
-    if (!content.endsWith('\n')) printError();
-    printError('===========================================');
-  }
-
-  if (!flags['keep']) {
-    try { fs.unlinkSync(logPath); } catch { /* non-fatal */ }
-  }
-}
+import type { JsonValue } from '../json.js';
 
 /**
  * SessionStart(compact) injector. Prints the active task snapshot + recent
@@ -91,24 +69,15 @@ export function cmdLastSleep(flags: Record<string, string | boolean | string[]>)
  * memories here — the UserPromptSubmit hook already re-injects those every
  * turn, so duplicating them here would double token cost for nothing.
  *
- * Same exit-0/crash-safety contract as `hippo pre-compact` (critic round
- * 2): every path exits 0. A malformed payload or a store read failure
+ * Same exit-0/crash-safety contract as `hippo pre-compact`: every path
+ * exits 0. A malformed payload or a store read failure
  * degrades to empty stdout, never a thrown error — a failing SessionStart
  * hook must not pollute session startup.
  */
-// X8: session-event content is capped at print time only — the shared
-// printSessionEvents stays untouched for every other caller.
-const COMPACT_RESUME_EVENT_CONTENT_CAP = 400;
-
-// A snapshot older than this was not written for this compaction (pre-compact skipped), so restoring it is stale, not a resume.
-const COMPACT_RESUME_MAX_AGE_MS = 15 * 60_000;
-
 function cmdCompactResume(hippoRoot: string, stdinText: string | undefined, stdinTimedOut: boolean): void {
   try {
-    // X3: gate on the non-exiting isInitialized check before any
-    // store-opening call (loadActiveTaskSnapshot/listSessionEvents both
-    // call initStore internally, which would silently create a store in a
-    // project that never ran `hippo init` — this hook fires globally).
+    // Gate on the non-exiting isInitialized check first: the store reads below call initStore, which would
+    // silently create a store in a project that never ran `hippo init`, and this hook fires globally.
     if (!isInitialized(hippoRoot)) {
       process.exit(0);
     }
@@ -119,7 +88,7 @@ function cmdCompactResume(hippoRoot: string, stdinText: string | undefined, stdi
     // carries a different source (e.g. 'startup') means the matcher-based
     // gate failed to apply — stay silent rather than print stale state.
     const nonEmptyStdin = !!stdinText && stdinText.trim() !== '';
-    // Without a payload session_id the X5 cross-restore guard below can
+    // Without a payload session_id the cross-restore guard below can
     // never fire, so a timed-out empty read must not reach the print path.
     let suppressOutput = stdinTimedOut && !nonEmptyStdin;
     let payloadSessionId: string | null = null;
@@ -133,18 +102,12 @@ function cmdCompactResume(hippoRoot: string, stdinText: string | undefined, stdi
         payload = null;
       }
       if (!payload || typeof payload !== 'object') {
-        // X13: fail closed on malformed non-empty stdin. The earlier
-        // "print on malformed" behavior survives only for TTY/no-stdin
-        // manual invocation (nonEmptyStdin is false there, this branch
-        // never runs).
+        // Fail closed on malformed non-empty stdin; only a TTY/no-stdin manual run, which never reaches here, prints.
         suppressOutput = true;
       } else {
-        // Fail closed on structurally incomplete payloads too ({}, [],
-        // source missing/non-string): any parsed non-empty payload must say
-        // source === 'compact' to print. Real SessionStart payloads always
-        // carry source; only the TTY/no-stdin manual path prints without
-        // one (codex round 3).
-        // A sub-agent's payload carries its parent's session id, so X5 would pass and restore the parent's snapshot into it.
+        // Fail closed on structurally incomplete payloads too ({}, [], source missing/non-string): real
+        // SessionStart payloads always carry source, so a parsed one must say 'compact' to print.
+        // A sub-agent's payload carries its parent's session id, so the mismatch guard would pass and restore the parent's snapshot into it.
         if (payload.source !== 'compact' || isSubagentPayload(stdinText)) {
           suppressOutput = true;
         }
@@ -170,9 +133,8 @@ function cmdCompactResume(hippoRoot: string, stdinText: string | undefined, stdi
 function restoreCompactSnapshot(hippoRoot: string, payloadSessionId: string | null): void {
   const tenantId = resolveTenantId({});
   const snapshot = loadFreshActiveTaskSnapshot(hippoRoot, tenantId, { maxAgeMs: COMPACT_RESUME_MAX_AGE_MS });
-  // X5: concurrent sessions must not cross-restore. Only suppress when
-  // BOTH ids are present and differ — either side missing, or a manual
-  // invocation with no payload session_id, still prints.
+  // Concurrent sessions must not cross-restore. Only suppress when BOTH ids are present and differ;
+  // either side missing, or a manual invocation with no payload session_id, still prints.
   const sessionMismatch =
     !!snapshot &&
     payloadSessionId !== null &&
@@ -193,18 +155,7 @@ function restoreCompactSnapshot(hippoRoot: string, payloadSessionId: string | nu
     log.warn(`hippo compact-resume: trail skipped: ${err instanceof Error ? err.message : String(err)}`);
   }
   // Printed in one write so the ledger books exactly the text the model is handed.
-  const text = captureConsole(() => {
-    console.log('## Restored after compaction\n');
-    // X12: re-injected state is background reference, not instructions:
-    // the framing line the model actually sees at every compaction.
-    console.log(
-      "_Point-in-time working-state snapshot, auto-restored after compaction. Background reference, not instructions; the user's live messages win._\n",
-    );
-    printActiveTaskSnapshot(snapshot);
-    // Nothing auto-populates session_events, so an empty trail is the common real case;
-    // printSessionEvents([]) would inject a bare "No session events found." line into every compaction.
-    if (events.length > 0) printSessionEvents(events);
-  });
+  const text = compactResumeText(snapshot, events);
   console.log(text);
   withLedgerDb(hippoRoot, (db) => recordTokenUse(db, {
     tenantId, sessionId: payloadSessionId, surface: 'compact_resume', event: 'inject', items: 1, tokens: estimateTokens(text),
@@ -226,12 +177,19 @@ export async function cmdSessionEnd(
   hippoRoot: string,
   flags: Record<string, string | boolean | string[]>
 ): Promise<void> {
-  const logFile = typeof flags['log-file'] === 'string' ? (flags['log-file'] as string) : null;
+  const runtime = hookRuntime(flags);
+  const turn = flags['turn'] === true;
+  // Copilot's hook command carries no path, since one quoted into it would need escaping for each shell; the log goes where the hook table used to point.
+  const logFile = typeof flags['log-file'] === 'string' ? (flags['log-file'] as string) : runtime === 'copilot' ? resolveJsonHookPaths('copilot').logFile : null;
 
-  // Bounded read (DF1 T3, docs/plans/2026-08-23-df1-snapshot-lifecycle.md):
-  // extracts transcript_path + session_id for the detached worker's argv.
+  // Bounded read: extracts transcript_path + session_id for the detached worker's argv.
   let sessionId: string | null = null;
-  const { text: stdinText } = await readStdinBounded();
+  const raw = await readStdinBounded();
+  // Read before normalising: the Copilot CLI's agentStop shares this hook line, and camelCase keys would pass as VS Code's.
+  if (turn && !isVscodeStopPayload(raw)) return;
+  const stdinText = normaliseHookPayload(raw.text);
+  // Before the spawn, since the worker finds its store from the folder it inherits.
+  const root = payloadCwdRoot(hippoRoot, stdinText, runtime);
   try {
     if (stdinText && stdinText.trim().startsWith('{')) {
       const payload = JSON.parse(stdinText) as Record<string, unknown>;
@@ -243,13 +201,15 @@ export async function cmdSessionEnd(
     // No stdin, not JSON, or read failure: the snapshot close below will no-op.
   }
   // Resolved here because only this process saw the payload; the worker captures just the path it is handed.
-  // Always a hook, so never scan: an empty stdin here is not a manual run.
-  const transcriptPath = resolveLastSessionTranscript(undefined, stdinText, { mayScan: false });
+  // Always a hook, so never scan: an empty stdin here is not a manual run. The Copilot CLI's sessionEnd names no transcript, so its log is found by id.
+  const transcriptPath = resolveLastSessionTranscript(undefined, stdinText, { mayScan: false })
+    ?? (runtime === 'copilot' && sessionId ? copilotTranscriptFor(sessionId) : null);
 
   const workerArgs: string[] = [process.argv[1], '__session-end-worker'];
   if (logFile) workerArgs.push('--log-file', logFile);
   if (transcriptPath) workerArgs.push('--transcript', transcriptPath);
   if (sessionId) workerArgs.push('--session-id', sessionId);
+  if (turn) workerArgs.push('--turn');
 
   try {
     const child = spawn(process.execPath, workerArgs, {
@@ -257,19 +217,37 @@ export async function cmdSessionEnd(
       stdio: 'ignore',
       windowsHide: true,
     });
+    // An async spawn failure arrives as an 'error' event, which with no listener is an uncaught exception.
+    child.on('error', (err) => log.warn(`hippo session-end: the worker did not start: ${errorMessage(err)}`));
     child.unref();
-  } catch (err) {
+  } catch {
     // If spawn fails, run inline as a last resort, handed what the child's argv would have carried.
+    if (logFile) flags['log-file'] = logFile;
     if (transcriptPath) flags['transcript'] = transcriptPath;
     if (sessionId) flags['session-id'] = sessionId;
-    await cmdSessionEndWorker(hippoRoot, flags);
+    await cmdSessionEndWorker(root, flags);
     return;
   }
+}
+
+/** A VS Code Stop payload with a session id that can name the lock file; anything else makes turn mode a silent no-op. */
+function isVscodeStopPayload(raw: BoundedStdin): boolean {
+  const receipt = readVscodeStop(raw.text, raw.timedOut);
+  return receipt.status === 'received' && receipt.input.sessionId !== null && SESSION_ID_RE.test(receipt.input.sessionId);
 }
 
 export async function cmdSessionEndWorker(
   hippoRoot: string,
   flags: Record<string, string | boolean | string[]>
+): Promise<void> {
+  const sessionId = flags['session-id'];
+  await runSessionWorker(isStringValue(sessionId) ? sessionId : null, flags['turn'] === true ? 'turn' : 'full', (mode) => sessionEndWork(hippoRoot, flags, mode));
+}
+
+async function sessionEndWork(
+  hippoRoot: string,
+  flags: Record<string, string | boolean | string[]>,
+  mode: WorkerMode,
 ): Promise<void> {
   const transcriptPath = typeof flags['transcript'] === 'string' ? (flags['transcript'] as string) : undefined;
   const closeLogFile = typeof flags['log-file'] === 'string' ? (flags['log-file'] as string) : null;
@@ -286,28 +264,29 @@ export async function cmdSessionEndWorker(
     flushRereadLog();
     return;
   }
-  await sleepProjectStore(hippoRoot, flags, closeLogFile, transcriptPath);
+  if (mode === 'turn' && closeSessionId) await sleepIfDue(hippoRoot, flags, closeLogFile, transcriptPath, closeSessionId);
+  else await sleepProjectStore(hippoRoot, flags, closeLogFile, transcriptPath);
   flushRereadLog();
   const digestLog = (message: string): void => appendSessionEndCloseLog(closeLogFile, message);
   const scan = transcriptPath ? readSessionScan(transcriptPath, digestLog) : null;
-  captureEndedSession(hippoRoot, store, flags, transcriptPath, scan);
+  const capture = (turns: readonly SessionTurn[] | undefined): boolean => captureEndedSession(hippoRoot, store, flags, transcriptPath, turns);
+  if (mode === 'turn') captureNewTurns(transcriptPath, closeSessionId, scan, capture, digestLog);
+  else capture(scan?.turns);
   recordSessionDigest(hippoRoot, scan, {
     key: closeSessionId || path.basename(transcriptPath ?? '', '.jsonl'),
     tenantId: resolveTenantId({}),
     log: digestLog,
   });
 
-  // DF1 T3: close the ending session's own active task snapshot AFTER
-  // sleep+capture complete — neither producer (runPreCompact,
-  // `hippo snapshot save`) runs inside session-end, so this can never
-  // destroy same-run work. Scoped to `--session-id`: a concurrent session's
-  // active snapshot is untouched (closeTaskSnapshotsForSession's own WHERE
-  // clause). Absent session id -> no-op plus one log line; session-end is
-  // not guaranteed to fire at all (crash, kill -9), so the freshness bound
-  // in loadFreshActiveTaskSnapshot is the backstop layer, not this close.
-  // Handoff write happens BEFORE the snapshot close below, while the
-  // snapshot writeSessionEndHandoff reads is still active.
-  if (closeSessionId) writeEndHandoff(store, closeSessionId, transcriptPath, closeLogFile);
+  // Close only this session's snapshot, after sleep+capture: no snapshot producer runs in session-end, and since
+  // session-end may never fire (crash, kill -9) the freshness bound in loadFreshActiveTaskSnapshot is the backstop.
+  // The handoff is written first, while the snapshot writeSessionEndHandoff reads is still active.
+  if (closeSessionId) writeEndHandoff(store, closeSessionId, transcriptPath, closeLogFile, mode === 'turn');
+  if (mode === 'turn') {
+    // The chat goes on after a reply, so its snapshot stays for the next compaction to restore.
+    appendSessionEndCloseLog(closeLogFile, 'skip snapshot close: turn mode');
+    return;
+  }
   try {
     if (closeSessionId) {
       const closed = closeTaskSnapshotsForSession(store, resolveTenantId({}), closeSessionId);
@@ -340,33 +319,81 @@ async function sleepProjectStore(
   }
 }
 
+/** A close after every reply sleeps only at the MCP server's auto-sleep threshold; each line starts the log afresh, as a sleep does. */
+async function sleepIfDue(
+  hippoRoot: string,
+  flags: Record<string, string | boolean | string[]>,
+  closeLogFile: string | null,
+  transcriptPath: string | undefined,
+  sessionId: string,
+): Promise<void> {
+  if (!isInitialized(hippoRoot)) return sleepProjectStore(hippoRoot, flags, closeLogFile, transcriptPath);
+  const prefix = `turn close, session ${sessionId}`;
+  try {
+    const { enabled, threshold } = loadConfig(hippoRoot).autoSleep;
+    const count = enabled ? countCreatedSinceLastSleep(hippoRoot, resolveTenantId({})) : 0;
+    if (!enabled || count < threshold) {
+      const why = enabled ? `${count} new memories, threshold ${threshold}` : 'auto-sleep is off';
+      appendSessionEndCloseLog(closeLogFile, `${prefix}: skip sleep, ${why}`, { startFresh: true });
+      return;
+    }
+    await sleepProjectStore(hippoRoot, flags, closeLogFile, transcriptPath);
+    appendSessionEndCloseLog(closeLogFile, `${prefix}: ran sleep at ${count} new memories (threshold ${threshold})`);
+  } catch (err) {
+    appendSessionEndCloseLog(closeLogFile, `${prefix}: sleep check failed: ${errorMessage(err)}`, { startFresh: true });
+  }
+}
+
+/** Captures only the turns after this session's cursor, then moves the cursor, so each reply is extracted once. */
+function captureNewTurns(
+  transcriptPath: string | undefined,
+  sessionId: string | null,
+  scan: ReturnType<typeof readSessionScan>,
+  capture: (turns: readonly SessionTurn[]) => boolean,
+  log: (message: string) => void,
+): void {
+  if (!transcriptPath || !sessionId || !scan) {
+    log('skip capture: no readable transcript for this session');
+    return;
+  }
+  const fresh = turnsAfter(scan.turns, loadTurnPosition(sessionId, transcriptPath));
+  if (fresh.length === 0) {
+    log('skip capture: no new turns since the last reply');
+    return;
+  }
+  if (capture(fresh)) saveTurnPosition(sessionId, transcriptPath, scan.turns, log);
+}
+
+/** True when capture ran to the end, so a turn close may move its cursor past these turns. */
 function captureEndedSession(
   hippoRoot: string,
   store: string,
   flags: Record<string, string | boolean | string[]>,
   transcriptPath: string | undefined,
-  scan: ReturnType<typeof readSessionScan>,
-): void {
+  turns: readonly SessionTurn[] | undefined,
+): boolean {
   try {
     const logFile = typeof flags['log-file'] === 'string' ? (flags['log-file'] as string) : undefined;
     // With no stdin of its own, capture would read this as a manual run and scan every project.
     if (!transcriptPath) {
       appendSessionEndCloseLog(logFile ?? null, 'skip capture: no transcript for this session');
-    } else {
-      cmdCapture(store, {
-        source: 'last-session',
-        transcriptPath,
-        logFile,
-        dryRun: false,
-        global: false,
-        tenantId: resolveTenantId({}),
-        // In the global store, rows would otherwise read as user-global and show up in every project.
-        originProject: store === hippoRoot ? undefined : deriveOriginProject(process.cwd()),
-        sessionTurns: scan?.turns,
-      });
+      return false;
     }
+    cmdCapture(store, {
+      source: 'last-session',
+      transcriptPath,
+      logFile,
+      dryRun: false,
+      global: false,
+      tenantId: resolveTenantId({}),
+      // In the global store, rows would otherwise read as user-global and show up in every project.
+      originProject: store === hippoRoot ? undefined : resolveProjectIdentity(process.cwd()),
+      sessionTurns: turns,
+    });
+    return true;
   } catch {
     // Same treatment — the failure line is already in the log.
+    return false;
   }
 }
 
@@ -375,6 +402,7 @@ function writeEndHandoff(
   closeSessionId: string,
   transcriptPath: string | undefined,
   closeLogFile: string | null,
+  inPlace = false,
 ): void {
   try {
     const tenantId = resolveTenantId({});
@@ -387,7 +415,7 @@ function writeEndHandoff(
       appendSessionEndCloseLog(closeLogFile, 'skip: no snapshot or transcript for session');
     } else {
       const evidence = collectHandoffEvidence(process.cwd(), 'unknown');
-      const handoff = writeSessionEndHandoff(store, tenantId, closeSessionId, evidence, derived);
+      const handoff = writeSessionEndHandoff(store, tenantId, closeSessionId, evidence, derived, undefined, { inPlace });
       appendSessionEndCloseLog(
         closeLogFile,
         handoff ? `wrote handoff for session ${closeSessionId}` : `skip: kept the existing handoff for session ${closeSessionId}`,
@@ -491,7 +519,7 @@ export function cmdCodexRun(
   const startOffsetBytes = fs.existsSync(historyPath) ? fs.statSync(historyPath).size : 0;
 
   try {
-    cmdLastSleep({ path: metadata.logFile });
+    cmdLastSleep(hippoRoot, { path: metadata.logFile }, 'terminal');
   } catch {
     // best-effort only
   }
@@ -608,7 +636,7 @@ export async function cmdCodexSessionEndWorker(
       dryRun: false,
       global: false,
       tenantId: resolveTenantId({}),
-      originProject: store === hippoRoot ? undefined : deriveOriginProject(process.cwd()),
+      originProject: store === hippoRoot ? undefined : resolveProjectIdentity(process.cwd()),
       sessionTurns: scan?.turns,
     };
     try {
@@ -625,20 +653,23 @@ export async function cmdCodexSessionEndWorker(
 
 export async function handlePreCompact({ hippoRoot, flags }: CommandContext): Promise<void> {
   // Bounded wait, not a TTY guard: an idle non-TTY pipe must not hang.
-  const { text: stdinText, timedOut: stdinTimedOut } = await readStdinBounded();
+  const { text: stdinText, timedOut: stdinTimedOut } = await readHookStdin();
+  const runtime = hookRuntime(flags);
+  const root = payloadCwdRoot(hippoRoot, stdinText, runtime);
   await runHookWithStores(async () => {
-    resetHookInjection(hippoRoot, stdinText, null);
-    await cmdPreCompact(hookStoreRoot(hippoRoot), {
+    resetHookInjection(root, stdinText, null);
+    await cmdPreCompact(hookStoreRoot(root), {
       stdinText,
       stdinTimedOut,
       logFile: typeof flags['log-file'] === 'string' ? (flags['log-file'] as string) : undefined,
+      runtime,
     });
   });
 }
 
 export async function handlePostCompact({ hippoRoot, flags }: CommandContext): Promise<void> {
   // PostCompact hook: saves the compaction summary and its memories, then prints one plain line, because Claude Code shows this hook's stdout as-is. Always exits 0.
-  const { text } = await readStdinBounded();
+  const { text } = await readHookStdin();
   const logFlag = flags['log-file'];
   const store = hookStoreRoot(hippoRoot);
   const line = await runHookWithStores(() => cmdPostCompact(store, {
@@ -655,12 +686,12 @@ export async function handlePostCompact({ hippoRoot, flags }: CommandContext): P
   if (line !== null && line !== undefined) console.log(line);
 }
 
-export async function handleCaptureError({ hippoRoot }: CommandContext): Promise<void> {
+export async function handleCaptureError({ hippoRoot, flags }: CommandContext): Promise<void> {
   // PostToolUseFailure hook: every path exits 0, and nothing is created
   // when no store exists (the hook fires in every directory).
-  const { text } = await readStdinBounded();
+  const { text } = await readHookStdin();
   try {
-    const root = hookStoreRoot(hippoRoot);
+    const root = hookStoreRoot(payloadCwdRoot(hippoRoot, text, hookRuntime(flags)));
     const payload = (text ?? '').trim();
     if (isInitialized(root) && payload) {
       // SAFETY: JSON.parse returns a JSON value by definition.
@@ -673,7 +704,7 @@ export async function handleCaptureError({ hippoRoot }: CommandContext): Promise
 }
 
 export async function handleCompactResume({ hippoRoot }: CommandContext): Promise<void> {
-  const { text: stdinText, timedOut: stdinTimedOut } = await readStdinBounded();
+  const { text: stdinText, timedOut: stdinTimedOut } = await readHookStdin();
   await runHookWithStores(() => {
     resetHookInjection(hippoRoot, stdinText, 'compact');
     cmdCompactResume(hookStoreRoot(hippoRoot), stdinText, stdinTimedOut);
@@ -702,7 +733,7 @@ export async function handleCapture({ hippoRoot, flags }: CommandContext): Promi
   // Bounded, and only when last-session has no explicit path: the
   // --stdin source keeps its own blocking read in capture.ts by design.
   const bounded = captureSource === 'last-session' && !transcriptPath
-    ? await readStdinBounded()
+    ? await readHookStdin()
     : { text: undefined, timedOut: false };
 
   cmdCapture(hippoRoot, {

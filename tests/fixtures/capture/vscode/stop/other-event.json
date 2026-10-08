@@ -1,0 +1,8 @@
+{
+  "stdin": "{\"hook_event_name\":\"PreCompact\",\"session_id\":\"vscode-sess-1\",\"cwd\":\"/work/repo\",\"transcript_path\":\"/home/u/.config/Code/User/workspaceStorage/9b1e/GitHub.copilot-chat/transcripts/vscode-sess-1.jsonl\",\"trigger\":\"auto\"}",
+  "timedOut": false,
+  "expect": {
+    "status": "skipped",
+    "reason": "not a VS Code Stop payload (no snake_case hook_event_name \"Stop\")"
+  }
+}

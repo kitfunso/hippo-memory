@@ -3,8 +3,7 @@ import type { Migration } from './types.js';
 export const v17: Migration = {
     version: 17,
     up: (db) => {
-      // E1.3 Slack ingestion: idempotency log, per-channel backfill cursors, DLQ.
-      // See docs/plans/2026-04-29-e1.3-slack-ingestion.md.
+      // Slack ingestion: idempotency log, per-channel backfill cursors, DLQ.
       db.exec(`
         CREATE TABLE IF NOT EXISTS slack_event_log (
           event_id TEXT PRIMARY KEY,
@@ -33,7 +32,7 @@ export const v17: Migration = {
         )
       `);
       db.exec(`CREATE INDEX IF NOT EXISTS idx_slack_dlq_tenant_received ON slack_dlq(tenant_id, received_at)`);
-      // Multi-tenant routing seam (review patch #6). Empty by default — single-
+      // Multi-tenant routing seam. Empty by default: single-
       // tenant deployments resolve via HIPPO_TENANT fallback. Multi-workspace
       // deployments populate this table to map team_id → tenant_id.
       db.exec(`

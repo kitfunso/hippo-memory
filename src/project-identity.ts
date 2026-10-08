@@ -2,11 +2,14 @@ import { envHippoHome, envXdgDataHome } from './env.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { BadRequestError } from './api-errors.js';
+import { isSharedStore, loadConfig } from './config.js';
+import { MAX_ID_LEN } from './http-util.js';
 import { log } from './log.js';
+import { originRemoteId, projectFileId } from './project-remote.js';
 
 /**
- * Project identity resolution for memory scope isolation (ROADMAP.md Part I
- * [Committed] "Memory scope isolation"; plan docs/plans/2026-07-01-memory-scope-isolation.md S1).
+ * Project identity resolution for memory scope isolation.
  *
  * Resolution rules:
  * - The nearest ancestor of cwd (including cwd itself) containing a `.hippo`
@@ -17,6 +20,9 @@ import { log } from './log.js';
  * - A directory with no marker anywhere up the walk is NOT a project: it
  *   resolves to the user-global identity (empty name), so memories written
  *   there stay injectable everywhere (matches pre-isolation behavior).
+ * - A project's name is its id: `.hippo-project.json` at the root, else the
+ *   checkout's normalised `origin` remote, else the folder rule (legacyName),
+ *   so two repos in folders of one name stay apart.
  *
  * NOTE: this module must stay free of imports from shared.ts / store.ts /
  * api.ts so any of them can import it without creating a cycle.
@@ -26,8 +32,12 @@ import { log } from './log.js';
 export interface ProjectIdentity {
   /** Realpath-resolved root directory of the project (the start dir when not in a project). */
   root: string;
-  /** Lowercased basename of the project root, or of its repo for a linked worktree with no `.hippo` (a store keeps the name its rows carry); '' outside a project. */
+  /** The project id rows are stamped with: the project file's id, the origin remote, or legacyName; '' outside a project. */
   name: string;
+  /** The folder rule rows written before ids carry: the root's lowercased basename, or its repo's for a linked worktree with no `.hippo`. */
+  legacyName: string;
+  /** Every other name this root resolves to (the project file id, the origin remote even with the rule off, legacyName), so rows written under an earlier id stay readable. */
+  aliases?: readonly string[];
   /** True when the directory resolves to the user home working set. */
   isHome: boolean;
 }
@@ -46,9 +56,28 @@ const MAX_WALK_DEPTH = 64;
 
 const identityCache = new Map<string, ProjectIdentity>();
 
-/** Clear the per-process identity cache (test seam). */
+let remoteSwitch: { readonly globalRoot: string; readonly on: boolean } | null = null;
+
+/** Clear the per-process identity cache and the remote switch it read (test seam). */
 export function clearProjectIdentityCache(): void {
   identityCache.clear();
+  remoteSwitch = null;
+}
+
+// The global store's config only: a per-store switch would stamp one checkout two ways.
+function remoteRuleOn(): boolean {
+  const globalRoot = resolveGlobalRootDir();
+  if (remoteSwitch?.globalRoot !== globalRoot) remoteSwitch = { globalRoot, on: loadConfig(globalRoot).projectIdentity.remote };
+  return remoteSwitch.on;
+}
+
+/** The id a root names itself by plus every rung that resolves; only the root's own `.git` is read, so a store nested in another checkout keeps its folder name. */
+function namesAt(root: string, legacyName: string): Pick<ProjectIdentity, 'name' | 'aliases'> {
+  const fileId = projectFileId(root);
+  const remoteId = originRemoteId(root);
+  const name = fileId ?? (remoteRuleOn() ? remoteId : null) ?? legacyName;
+  const aliases = [...new Set([fileId, remoteId, legacyName])].filter((n): n is string => n !== null && n !== name);
+  return aliases.length > 0 ? { name, aliases } : { name };
 }
 
 /**
@@ -118,14 +147,14 @@ export function resolveProjectIdentity(
   let identity: ProjectIdentity;
   const root = hippoRoot ?? gitRoot;
   if (root !== null) {
-    const name = (hippoRoot === null ? linkedWorktreeRepoName(root, home) : null) ?? path.basename(root).toLowerCase();
-    identity = { root, name, isHome: false };
+    const legacyName = (hippoRoot === null ? linkedWorktreeRepoName(root, home) : null) ?? path.basename(root).toLowerCase();
+    identity = { root, ...namesAt(root, legacyName), legacyName, isHome: false };
   } else if (reachedHome || isUnder(start, home)) {
-    identity = { root: home, name: '', isHome: true };
+    identity = { root: home, name: '', legacyName: '', isHome: true };
   } else {
     // No markers anywhere: not a project. Empty name keeps these memories
     // user-global rather than fabricating an origin from a basename.
-    identity = { root: start, name: '', isHome: false };
+    identity = { root: start, name: '', legacyName: '', isHome: false };
   }
 
   if (cacheable) identityCache.set(startInput, identity);
@@ -184,7 +213,7 @@ function walkProjectMarkers(start: string, home: string, stopDirs: readonly stri
 }
 
 /** Nearest ancestor `.hippo` below home and the temp root (never projects; on Windows the temp root sits inside home).
- *  Everything is realpath'd so a symlinked temp root or cwd still matches its bound. Design notes: docs/plans/2026-09-05-*.md */
+ *  Everything is realpath'd so a symlinked temp root or cwd still matches its bound. */
 export function findHippoStoreDir(cwd?: string, opts?: ResolveProjectIdentityOpts): string | null {
   const home = realpathOrResolve(opts?.homeDir ?? os.homedir());
   const stops = [realpathOrResolve(os.tmpdir())];
@@ -194,22 +223,62 @@ export function findHippoStoreDir(cwd?: string, opts?: ResolveProjectIdentityOpt
   return hippoRoot === null ? null : path.join(hippoRoot, '.hippo');
 }
 
+/** A reader's project: a bare name, or an identity whose own rows may also carry its legacy folder name. */
+export type ProjectRef = string | Pick<ProjectIdentity, 'name' | 'legacyName' | 'aliases'>;
+
+function isBareName(project: ProjectRef): project is string {
+  return typeof project === 'string';
+}
+
+/** The id a reader's new rows are stamped with; '' outside a project. */
+export function projectId(project: ProjectRef): string {
+  return isBareName(project) ? project : project.name;
+}
+
+/** Every origin_project value the reader's own rows carry: the id first, then each alias and the legacy name. */
+export function projectNames(project: ProjectRef): readonly string[] {
+  if (isBareName(project) || project.name === '') return [projectId(project)];
+  return [...new Set([project.name, ...(project.aliases ?? []), project.legacyName])].filter((n) => n !== '');
+}
+
+// Each project name is matched against every candidate row, so the caller's list stays short.
+export const MAX_PROJECT_ALIASES = 10;
+export const MCP_PROJECT_SCOPED_HEADER = 'X-Hippo-Project-Scoped';
+
+/** Refuses a caller's project that is blank (it would stamp user-global), past the caps, or unlike the resolver's ids: rows match verbatim, so a rewrite would split a project. Inner spaces pass, since a checkout with no remote is named by its folder. */
+export function assertCallerProject(project: { readonly name: string; readonly aliases?: readonly string[] }): void {
+  const { name, aliases = [] } = project;
+  if (name.trim() === '') throw new BadRequestError('project name must not be blank');
+  if (aliases.length > MAX_PROJECT_ALIASES) throw new BadRequestError(`project aliases: at most ${MAX_PROJECT_ALIASES}`);
+  if ([name, ...aliases].some((n) => n.length > MAX_ID_LEN)) {
+    throw new BadRequestError(`project names: at most ${MAX_ID_LEN} characters each`);
+  }
+  if ([name, ...aliases].some((n) => n !== n.trim().toLowerCase() || /[:\p{Cc}]/u.test(n))) {
+    throw new BadRequestError('project names: lowercase, not padded, with no colon or control character');
+  }
+}
+
+/** `origin_project IN (?, ...)` with one placeholder per name; an empty list matches nothing. */
+export function originInSql(names: readonly string[], column = 'origin_project'): string {
+  return names.length === 0 ? '0' : `${column} IN (${names.map(() => '?').join(', ')})`;
+}
+
 /**
  * v39 memory scope isolation: classify a memory's origin_project against the
- * active project. `currentName === ''` means the session is not in a project
+ * active project. An empty current id means the session is not in a project
  * (home dir or markerless cwd) - everything is in scope there, matching
- * pre-isolation behavior. NULL/undefined origin is a legacy pre-v39 row and
- * is treated as cross-project (deny by default) - the safe direction for a
- * security partition.
+ * pre-isolation behavior. NULL/undefined origin means no known project (a legacy
+ * row, or a shared-store write that named none) and is treated as cross-project
+ * (deny by default) - the safe direction for a security partition.
  */
 export function classifyOriginProject(
   origin: string | null | undefined,
-  currentName: string,
+  current: ProjectRef,
 ): 'project' | 'user-global' | 'cross-project' {
-  if (currentName === '') return 'project';
+  if (projectId(current) === '') return 'project';
   if (origin === undefined || origin === null) return 'cross-project';
   if (origin === '') return 'user-global';
-  return origin === currentName ? 'project' : 'cross-project';
+  return projectNames(current).includes(origin) ? 'project' : 'cross-project';
 }
 
 /**
@@ -265,17 +334,16 @@ export function originFromSource(
   return null;
 }
 
-/**
- * The origin project to stamp on a memory written from cwd.
- * Returns the project name, or '' for user-global (written at/under home or
- * in a markerless directory) - injectable everywhere. Write sites must always
- * persist this value; a NULL origin_project column is reserved for legacy
- * pre-migration rows, which ambient context treats as deny (see plan
- * docs/plans/2026-07-01-memory-scope-isolation.md "Origin model").
- */
+/** The origin to stamp on a memory written from cwd: its project name, or '' (user-global, injectable everywhere) outside a project.
+ *  NULL means no known project: a legacy row with no evidence, or a write to a shared store that named none; ambient context treats it as deny. */
 export function deriveOriginProject(
   cwd?: string,
   opts?: ResolveProjectIdentityOpts,
 ): string {
   return resolveProjectIdentity(cwd, opts).name;
+}
+
+/** The origin for a write that names none: NULL on a shared store, whose folder is no caller's project, else the folder's project. */
+export function fallbackOrigin(hippoRoot: string): string | null {
+  return isSharedStore(hippoRoot) ? null : deriveOriginProject(path.dirname(path.resolve(hippoRoot)));
 }

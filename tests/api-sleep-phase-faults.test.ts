@@ -1,7 +1,7 @@
 /**
  * Mid-phase failure-path coverage for `api.sleep` (v1.12.2).
  *
- * Uses the test-only `SleepOpts.__phases` DI seam to inject a throwing stub
+ * Uses the test-only phase overrides of `runSleep` to inject a throwing stub
  * at each of the 5 phase boundaries. Asserts the `finally` block emits a
  * `consolidate` audit_log row with `partial: true` + `errorMessage` set to
  * the injected error's message — the path that was reachable via store-
@@ -16,8 +16,10 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { sleep, adminActor, type Context, type SleepPhases } from '../src/api.js';
+import { sleep, adminActor, type Context } from '../src/api.js';
+import { runSleep, type SleepPhases } from '../src/api/sleep-run.js';
 import { initStore } from '../src/store/open.js';
+import { sqliteStore } from '../src/store-port.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { createMemory, Layer } from '../src/memory.js';
@@ -65,7 +67,7 @@ function newCtx() {
   };
 }
 
-function getLastConsolidateAuditRow(hippoRoot: string, tenantId = 'default'): {
+function getLastConsolidateAuditRow(hippoRoot: string): {
   metadata: AuditEvent['metadata'];
 } | null {
   const db = openHippoDb(hippoRoot);
@@ -96,7 +98,7 @@ describe('api.sleep mid-phase failure paths emit partial+errorMessage audit row'
     };
 
     await expect(
-      sleep(testCtx.ctx, { __phases: stubPhases }),
+      runSleep(testCtx.ctx, {}, stubPhases),
     ).rejects.toThrow('phase 1 fault: consolidate threw');
 
     const row = getLastConsolidateAuditRow(testCtx.ctx.hippoRoot);
@@ -115,7 +117,7 @@ describe('api.sleep mid-phase failure paths emit partial+errorMessage audit row'
     };
 
     await expect(
-      sleep(testCtx.ctx, { __phases: stubPhases }),
+      runSleep(testCtx.ctx, {}, stubPhases),
     ).rejects.toThrow('phase 2 fault: deduplicateStore threw');
 
     const row = getLastConsolidateAuditRow(testCtx.ctx.hippoRoot);
@@ -136,7 +138,7 @@ describe('api.sleep mid-phase failure paths emit partial+errorMessage audit row'
     };
 
     await expect(
-      sleep(testCtx.ctx, { __phases: stubPhases }),
+      runSleep(testCtx.ctx, {}, stubPhases),
     ).rejects.toThrow('phase 3 fault: auditMemories threw');
 
     const row = getLastConsolidateAuditRow(testCtx.ctx.hippoRoot);
@@ -163,7 +165,7 @@ describe('api.sleep mid-phase failure paths emit partial+errorMessage audit row'
     };
 
     await expect(
-      sleep(testCtx.ctx, { __phases: stubPhases }),
+      runSleep(testCtx.ctx, {}, stubPhases),
     ).rejects.toThrow('phase 4 fault: autoShare threw');
 
     const row = getLastConsolidateAuditRow(testCtx.ctx.hippoRoot);
@@ -183,7 +185,7 @@ describe('api.sleep mid-phase failure paths emit partial+errorMessage audit row'
     };
 
     await expect(
-      sleep(testCtx.ctx, { __phases: stubPhases }),
+      runSleep(testCtx.ctx, {}, stubPhases),
     ).rejects.toThrow('phase 5 fault: computeAmbientState threw');
 
     const row = getLastConsolidateAuditRow(testCtx.ctx.hippoRoot);
@@ -197,12 +199,20 @@ describe('api.sleep mid-phase failure paths emit partial+errorMessage audit row'
   });
 
   it('happy path (no faults) → partial:false + no errorMessage', async () => {
-    // No __phases override — uses DEFAULT_SLEEP_PHASES.
+    // No phase overrides: the public entry runs the real phases.
     await sleep(testCtx.ctx);
 
     const row = getLastConsolidateAuditRow(testCtx.ctx.hippoRoot);
     expect(row).not.toBeNull();
     expect(row!.metadata.partial).toBe(false);
     expect(row!.metadata.errorMessage).toBeUndefined();
+  });
+
+  it('a non-sqlite store throws before any phase runs, leaving no audit row', async () => {
+    const ctx: Context = { ...testCtx.ctx, store: { ...sqliteStore(testCtx.ctx.hippoRoot), kind: 'postgres' } };
+
+    await expect(sleep(ctx)).rejects.toThrow("sleep supports only the sqlite store, not 'postgres'");
+
+    expect(getLastConsolidateAuditRow(testCtx.ctx.hippoRoot)).toBeNull();
   });
 });

@@ -17,14 +17,9 @@ export interface DeletionResult {
 }
 
 /**
- * Handle Slack `message_deleted`. v0.39 commit 3 closes the prior race where
- * the archive committed but `markEventSeen` ran on a second db handle — a
- * crash between them left the deletion event un-acked, and the next retry
- * hit a now-archived row and returned `not_found` instead of `duplicate`.
- *
- * Fix: pass `afterArchive` to `archiveRaw`, which runs inside the same
- * SAVEPOINT as the archive itself. The slack_event_log row commits with the
- * archive or not at all.
+ * Handle Slack `message_deleted`. `afterArchive` runs inside the archive's own
+ * SAVEPOINT, so the slack_event_log row commits with the archive or not at all
+ * and a crash cannot leave a retry hitting `not_found` instead of `duplicate`.
  */
 export function handleMessageDeleted(ctx: Context, input: DeletionInput): DeletionResult {
   const db = openHippoDb(ctx.hippoRoot);
@@ -60,7 +55,7 @@ export function handleMessageDeleted(ctx: Context, input: DeletionInput): Deleti
   // receives the same db handle the archive is using, so the INSERT lives
   // inside the SAVEPOINT.
   archiveRaw(
-    ctx,
+    { ...ctx, store: undefined }, // afterArchive runs on hippo.db's own handle, never through a store
     memoryId,
     `source_deleted:slack:${input.teamId}:${input.channelId}:${input.deletedTs}`,
     {

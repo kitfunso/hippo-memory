@@ -1,13 +1,14 @@
 // /v1/customer-notes routes.
-import { closeCustomerNote, loadCustomerNoteById, loadCustomerNotes, type NoteStatus, saveCustomerNote, VALID_NOTE_STATES } from '../../customer-notes.js';
+import { closeCustomerNote, loadCustomerNoteById, loadCustomerNotes, MAX_CUSTOMER_LEN, type NoteStatus, saveCustomerNote, VALID_NOTE_STATES } from '../../customer-notes.js';
 import { HttpError, sendJson } from '../../http-util.js';
 import type { KeysetPosition } from '../../keyset.js';
 import { buildContextWithAuth } from '../auth.js';
 import { byCreatedAt, pageOf, parseCursor } from '../cursor.js';
 import type { RouteRequest } from '../types.js';
-import { isJsonString, isSetMember, parseJsonBody, parseListLimit } from '../validation.js';
+import { isSetMember, parseJsonBody, parseListLimit } from '../validation.js';
+import { isJsonString } from '../../json.js';
 
-// ── E2 customer_note routes ──
+// ── customer_note routes ──
 //
 // 5 routes (no assembler/refresh): POST /v1/customer-notes (new; body customer +
 // note), GET /v1/customer-notes (list; status + customer filter; shared
@@ -22,8 +23,8 @@ export async function handleCreateCustomerNote({ req, res, opts }: RouteRequest)
   if (!isJsonString(customer) || customer.trim().length === 0) {
     throw new HttpError(400, 'customer is required (non-empty string)');
   }
-  if (customer.length > 256) {
-    throw new HttpError(400, 'customer exceeds 256-character cap');
+  if (customer.length > MAX_CUSTOMER_LEN) {
+    throw new HttpError(400, `customer exceeds ${MAX_CUSTOMER_LEN}-character cap`);
   }
   const note = body['note'];
   if (!isJsonString(note) || note.trim().length === 0) {

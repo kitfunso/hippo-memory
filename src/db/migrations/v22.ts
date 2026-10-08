@@ -4,10 +4,8 @@ import type { Migration } from './types.js';
 export const v22: Migration = {
     version: 22,
     up: (db) => {
-      // Tenant-isolation gap on continuity tables (codex review 2026-05-02).
-      // session_events and session_handoffs predate the v16 tenant migration
-      // and were never added to it, so the v0.40.0 provenance gate work
-      // exposed a real cross-tenant leak when continuity primitives are used.
+      // session_events and session_handoffs predate the v16 tenant migration and were
+      // never added to it: a cross-tenant leak whenever continuity primitives are used.
       // Adds tenant_id (NOT NULL DEFAULT 'default') with smart backfill from
       // task_snapshots.session_id when unambiguous, plus an optional scope
       // column so a private-channel-derived handoff can default-deny via the

@@ -4,7 +4,8 @@
  */
 
 import { createMemory, Layer, MemoryEntry } from '../memory.js';
-import { writeEntry } from '../store/entry-writes.js';
+import { writeEntryOn } from '../store/entry-writes.js';
+import { openStore } from '../store/open.js';
 import { loadAllEntries } from '../store/entry-reads.js';
 import { duplicateKey, storedTextKeys } from '../same-text.js';
 import { getGlobalRoot, initGlobal } from '../shared.js';
@@ -13,6 +14,7 @@ import { RejectedValueError, checkRejectionGuard } from '../rejection.js';
 import { loadConfig } from '../config.js';
 import { vetSecrets } from '../secret-detect.js';
 import { log } from '../log.js';
+import type { JsonValue } from '../json.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -60,7 +62,7 @@ export interface ImportOptions {
    * sharing a basename would collide and clobber each other). importVault throws
    * if it is missing or blank. Optional in this shared type only because the
    * other importers ignore it. Operator-supplied, so the loader query LIKE-escapes
-   * it (see `escapeLike` below).
+   * it (`escapeLike` in src/escape.ts).
    */
   name?: string;
   /**
@@ -105,12 +107,8 @@ export function importEntries(
   let redacted = 0;
   const entries: MemoryEntry[] = [];
 
-  // AT1 P2 fix: a dry-run preview never called writeEntry, so it never
-  // checked tombstones either — every non-duplicate chunk counted as
-  // `imported` even when a real run would refuse it, making the preview's
-  // `rejected` count silently 0. Probe (read-only) via the same guard
-  // writeEntry uses internally, without ever writing.
-  const dryRunDb = options.dryRun ? openHippoDb(targetRoot) : null;
+  // A dry run probes the rejection guard read-only; a real run writes every chunk on this one handle.
+  const db = options.dryRun ? openHippoDb(targetRoot) : openStore(targetRoot);
   try {
     for (const raw of chunks) {
       const { chunk, wasRedacted } = prepareImportChunk(raw, allTags);
@@ -130,7 +128,7 @@ export function importEntries(
       }
 
       const entry = createImportEntry(chunk, source, allTags, options, baseHalfLifeDays);
-      if (!writeOrProbeImport(targetRoot, entry, options, dryRunDb)) {
+      if (!writeOrProbeImport(db, targetRoot, entry, options)) {
         rejected++;
         continue;
       }
@@ -144,7 +142,7 @@ export function importEntries(
 
     return { total, imported, skipped, rejected, redacted, entries };
   } finally {
-    if (dryRunDb) closeHippoDb(dryRunDb);
+    closeHippoDb(db);
   }
 }
 
@@ -189,26 +187,15 @@ function createImportEntry(
 
 /** Writes the entry, or on a dry run only probes the guard; false when a rejected value refuses it. */
 function writeOrProbeImport(
+  db: DatabaseSyncLike,
   targetRoot: string,
   entry: MemoryEntry,
   options: ImportOptions,
-  dryRunDb: DatabaseSyncLike | null,
 ): boolean {
-  if (options.dryRun) {
-    if (dryRunDb) {
-      try {
-        checkRejectionGuard(dryRunDb, entry.tenantId ?? 'default', entry.id, entry.content);
-      } catch (err) {
-        if (err instanceof RejectedValueError) return false;
-        throw err;
-      }
-    }
-    return true;
-  }
-  // AT1 (plan §3 containment): a rejection refuses one CHUNK, not the
-  // whole import batch. Caught per-item so siblings still land.
+  // A rejection refuses one chunk, not the whole import, so siblings still land.
   try {
-    writeEntry(targetRoot, entry);
+    if (options.dryRun) checkRejectionGuard(db, entry.tenantId ?? 'default', entry.id, entry.content);
+    else writeEntryOn(db, targetRoot, entry);
   } catch (err) {
     if (err instanceof RejectedValueError) return false;
     throw err;
@@ -219,16 +206,6 @@ function writeOrProbeImport(
 // ---------------------------------------------------------------------------
 // ChatGPT importer
 // ---------------------------------------------------------------------------
-
-/** The full value space `JSON.parse` can produce. Boundary-guard functions in
- *  this file accept `JsonValue` (never `unknown`) so a value's origin as
- *  unparsed external JSON stays visible in its type, then narrow it via the
- *  `isJson*` predicates below. */
-export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
-
-export function isJsonString(x: JsonValue): x is string {
-  return typeof x === 'string';
-}
 
 export function isJsonPlainObject(x: JsonValue): x is { [key: string]: JsonValue } {
   return x !== null && !Array.isArray(x) && typeof x === 'object';

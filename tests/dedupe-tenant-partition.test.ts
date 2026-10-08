@@ -27,7 +27,7 @@ import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { remember, type Context } from '../src/api.js';
+import { remember, type HippoDbContext } from '../src/api.js';
 import { deduplicateStore, type DedupPair } from '../src/dedupe.js';
 
 function tmpHome(prefix: string) {
@@ -39,7 +39,7 @@ function tmpHome(prefix: string) {
   };
 }
 
-function ctxFor(home: string, tenantId: string): Context {
+function ctxFor(home: string, tenantId: string): HippoDbContext {
   return { hippoRoot: home, tenantId, actor: { subject: 'test', role: 'admin' } };
 }
 

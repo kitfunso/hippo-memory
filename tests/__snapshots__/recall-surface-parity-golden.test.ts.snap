@@ -1,0 +1,2130 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`recall and context validation drift, MCP vs HTTP > context: budget -1 1`] = `
+{
+  "http": {
+    "code": null,
+    "error": "budget must be a non-negative number",
+    "status": 400,
+  },
+  "mcp": {
+    "isError": "Invalid arguments for hippo_context: budget must be >= 0 (got -1)",
+  },
+}
+`;
+
+exports[`recall and context validation drift, MCP vs HTTP > context: budget abc 1`] = `
+{
+  "http": {
+    "code": null,
+    "error": "budget must be a non-negative number",
+    "status": 400,
+  },
+  "mcp": {
+    "isError": "Invalid arguments for hippo_context: budget must be a number (got "abc")",
+  },
+}
+`;
+
+exports[`recall and context validation drift, MCP vs HTTP > context: limit 0 1`] = `
+{
+  "http": {
+    "code": null,
+    "error": "limit must be a positive number",
+    "status": 400,
+  },
+  "mcp": {
+    "isError": "Invalid arguments for hippo_context: limit must be a positive number",
+  },
+}
+`;
+
+exports[`recall and context validation drift, MCP vs HTTP > context: q 1100 chars 1`] = `
+{
+  "http": {
+    "code": null,
+    "error": "q exceeds 1024-character cap",
+    "status": 400,
+  },
+  "mcp": {
+    "ok": true,
+  },
+}
+`;
+
+exports[`recall and context validation drift, MCP vs HTTP > context: scope 300 chars 1`] = `
+{
+  "http": {
+    "code": null,
+    "error": "scope exceeds 256-character cap",
+    "status": 400,
+  },
+  "mcp": {
+    "isError": "Invalid arguments for hippo_context: scope exceeds 256-character cap",
+  },
+}
+`;
+
+exports[`recall and context validation drift, MCP vs HTTP > recall: budget -1 1`] = `
+{
+  "http": {
+    "status": 200,
+  },
+  "mcp": {
+    "isError": "Invalid arguments for hippo_recall: budget must be >= 0 (got -1)",
+  },
+}
+`;
+
+exports[`recall and context validation drift, MCP vs HTTP > recall: empty query 1`] = `
+{
+  "http": {
+    "code": null,
+    "error": "q is required",
+    "status": 400,
+  },
+  "mcp": {
+    "isError": "Invalid arguments for hippo_recall: query is required",
+  },
+}
+`;
+
+exports[`recall and context validation drift, MCP vs HTTP > recall: fresh_tail_count -1 1`] = `
+{
+  "http": {
+    "code": null,
+    "error": "fresh_tail_count must be a non-negative number",
+    "status": 400,
+  },
+  "mcp": {
+    "isError": "Invalid arguments for hippo_recall: fresh_tail_count must be a non-negative number",
+  },
+}
+`;
+
+exports[`recall and context validation drift, MCP vs HTTP > recall: fresh_tail_count abc 1`] = `
+{
+  "http": {
+    "code": null,
+    "error": "fresh_tail_count must be a non-negative number",
+    "status": 400,
+  },
+  "mcp": {
+    "isError": "Invalid arguments for hippo_recall: fresh_tail_count must be a number (got "abc")",
+  },
+}
+`;
+
+exports[`recall and context validation drift, MCP vs HTTP > recall: fresh_tail_session_id 300 chars 1`] = `
+{
+  "http": {
+    "code": null,
+    "error": "fresh_tail_session_id exceeds 256-character cap",
+    "status": 400,
+  },
+  "mcp": {
+    "isError": "Invalid arguments for hippo_recall: fresh_tail_session_id exceeds 256-character cap",
+  },
+}
+`;
+
+exports[`recall and context validation drift, MCP vs HTTP > recall: limit 0 1`] = `
+{
+  "http": {
+    "code": null,
+    "error": "limit must be a positive integer <= 1000",
+    "status": 400,
+  },
+  "mcp": {
+    "isError": "Invalid arguments for hippo_recall: limit must be a positive integer <= 1000",
+  },
+}
+`;
+
+exports[`recall and context validation drift, MCP vs HTTP > recall: mode bogus 1`] = `
+{
+  "http": {
+    "code": null,
+    "error": "mode must be 'bm25', 'hybrid', or 'physics'",
+    "status": 400,
+  },
+  "mcp": {
+    "isError": "Invalid arguments for hippo_recall: mode must be 'bm25', 'hybrid', or 'physics'",
+  },
+}
+`;
+
+exports[`recall and context validation drift, MCP vs HTTP > recall: scope empty 1`] = `
+{
+  "http": {
+    "status": 200,
+  },
+  "mcp": {
+    "ok": "Found 12 memories:",
+  },
+}
+`;
+
+exports[`recall and context validation drift, MCP vs HTTP > recall: scorer_window 0 1`] = `
+{
+  "http": {
+    "code": "invalid_scorer_window",
+    "error": "scorerWindow must be a positive integer; got 0",
+    "status": 400,
+  },
+  "mcp": {
+    "code": "invalid_scorer_window",
+    "message": "scorerWindow must be a positive integer; got 0",
+    "thrown": "RecallContractError",
+  },
+}
+`;
+
+exports[`recall and context validation drift, MCP vs HTTP > recall: scorer_window 5000 1`] = `
+{
+  "http": {
+    "code": null,
+    "error": "scorer_window must be <= 1000",
+    "status": 400,
+  },
+  "mcp": {
+    "isError": "Invalid arguments for hippo_recall: scorer_window must be <= 1000",
+  },
+}
+`;
+
+exports[`recall and context validation drift, MCP vs HTTP > recall: scorer_window abc 1`] = `
+{
+  "http": {
+    "code": "invalid_scorer_window",
+    "error": "scorerWindow must be a positive integer; got NaN",
+    "status": 400,
+  },
+  "mcp": {
+    "code": "invalid_scorer_window",
+    "message": "scorerWindow must be a positive integer; got NaN",
+    "thrown": "RecallContractError",
+  },
+}
+`;
+
+exports[`recall and context validation drift, MCP vs HTTP > recall: session_id 300 chars 1`] = `
+{
+  "http": {
+    "code": null,
+    "error": "session_id exceeds 256-character cap",
+    "status": 400,
+  },
+  "mcp": {
+    "isError": "Invalid arguments for hippo_recall: session_id must be at most 256 characters (got 300)",
+  },
+}
+`;
+
+exports[`recall and context validation drift, MCP vs HTTP > recall: session_id blank 1`] = `
+{
+  "http": {
+    "status": 200,
+  },
+  "mcp": {
+    "ok": "Found 12 memories:",
+  },
+}
+`;
+
+exports[`recall and context validation drift, MCP vs HTTP > recall: summarize_overflow banana 1`] = `
+{
+  "http": {
+    "status": 200,
+  },
+  "mcp": {
+    "isError": "Invalid arguments for hippo_recall: summarize_overflow must be a boolean (got "banana")",
+  },
+}
+`;
+
+exports[`recall surface parity goldens > candidate window per surface 1`] = `
+{
+  "cli": {
+    "droppedByBudget": 148,
+    "droppedPreRank": 0,
+    "freshTailAdded": 0,
+    "summarySubstitutionsAdded": 0,
+    "suppressedByInterference": 0,
+    "totalCandidates": 201,
+  },
+  "http": {
+    "returned": 10,
+    "summary": {
+      "droppedByBudget": 190,
+      "droppedPreRank": 0,
+      "freshTailAdded": 0,
+      "summarySubstitutionsAdded": 0,
+      "suppressedByInterference": 0,
+      "totalCandidates": 200,
+    },
+    "windowSize": 200,
+  },
+  "httpScorerWindow50": {
+    "returned": 10,
+    "summary": {
+      "droppedByBudget": 40,
+      "droppedPreRank": 0,
+      "freshTailAdded": 0,
+      "summarySubstitutionsAdded": 0,
+      "suppressedByInterference": 0,
+      "totalCandidates": 50,
+    },
+    "windowSize": 50,
+  },
+  "mcpHead": [
+    "Found 230 memories:",
+    "",
+    "[verified] (strength=1.00)",
+    "deploy step 0 of the wide rollout",
+  ],
+}
+`;
+
+exports[`recall surface parity goldens > cli: anchoring hints over repeated recalls in one session 1`] = `
+{
+  "audit": [
+    {
+      "actor": "cli",
+      "metadata_json": "{"query_hash":"b7bd55c11b781b0c","query_length":6,"results":13}",
+      "op": "recall",
+      "target_id": null,
+    },
+    {
+      "actor": "cli",
+      "metadata_json": "{"memory_id":"mem_p_global"}",
+      "op": "recall_anchor_detected_query_repeat",
+      "target_id": "mem_p_global",
+    },
+    {
+      "actor": "cli",
+      "metadata_json": "{"query_hash":"b7bd55c11b781b0c","query_length":6,"results":13}",
+      "op": "recall",
+      "target_id": null,
+    },
+    {
+      "actor": "cli",
+      "metadata_json": "{"query_hash":"f5a86c7381d51087","query_length":13,"results":13}",
+      "op": "recall",
+      "target_id": null,
+    },
+    {
+      "actor": "cli",
+      "metadata_json": "{"query_hash":"d2490aef6a340d48","query_length":14,"results":13}",
+      "op": "recall",
+      "target_id": null,
+    },
+  ],
+  "hints": [
+    null,
+    "mem_p_global",
+    null,
+    null,
+  ],
+}
+`;
+
+exports[`recall surface parity goldens > cli: plain recall, no session 1`] = `
+{
+  "globalAudit": [
+    {
+      "actor": "cli",
+      "metadata_json": "{"query_hash":"b7bd55c11b781b0c","query_length":6,"results":13}",
+      "op": "recall",
+      "target_id": null,
+    },
+  ],
+  "local": {
+    "audit": [
+      {
+        "actor": "cli",
+        "metadata_json": "{"query_hash":"b7bd55c11b781b0c","query_length":6}",
+        "op": "recall_anchor_skipped_no_session",
+        "target_id": null,
+        "tenant_id": "default",
+        "ts": "<ts>",
+      },
+      {
+        "actor": "cli",
+        "metadata_json": "{"query_hash":"b7bd55c11b781b0c","query_length":6,"results":13}",
+        "op": "recall",
+        "target_id": null,
+        "tenant_id": "default",
+        "ts": "<ts>",
+      },
+    ],
+    "goalRecallLog": [],
+    "ledger": [
+      {
+        "event": "inject",
+        "items": 13,
+        "session_id": null,
+        "surface": "recall",
+        "tenant_id": "default",
+        "tokens": 527,
+      },
+    ],
+    "retrieved": [
+      {
+        "id": "mem_p_fill0",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill1",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill2",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill3",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill4",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill5",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_goal",
+        "retrieval_count": 4,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_new",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_pinned",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_plain",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_scoped",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_trace",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+    ],
+    "stats": [
+      {
+        "key": "total_forgotten",
+        "value": "0",
+      },
+      {
+        "key": "total_recalled",
+        "value": "13",
+      },
+      {
+        "key": "total_remembered",
+        "value": "0",
+      },
+    ],
+    "traceResults": [
+      {
+        "memory_id": "mem_p_global",
+        "result_rank": 1,
+        "score": 0.25484679415358286,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_plain",
+        "result_rank": 2,
+        "score": 0.05876165935157657,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_pinned",
+        "result_rank": 3,
+        "score": 0.056074872590673994,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill5",
+        "result_rank": 4,
+        "score": 0.045959780294907854,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill4",
+        "result_rank": 5,
+        "score": 0.04572987682922222,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill3",
+        "result_rank": 6,
+        "score": 0.04550652864764334,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill2",
+        "result_rank": 7,
+        "score": 0.045289516866653695,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_trace",
+        "result_rank": 8,
+        "score": 0.04517480137920127,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill1",
+        "result_rank": 9,
+        "score": 0.04507862998825776,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill0",
+        "result_rank": 10,
+        "score": 0.04487366365046071,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_scoped",
+        "result_rank": 11,
+        "score": 0.04187485073917768,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_new",
+        "result_rank": 12,
+        "score": 0.04151159163940429,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_goal",
+        "result_rank": 13,
+        "score": 0.03472113364054895,
+        "trace_id": 1,
+      },
+    ],
+    "traces": [
+      {
+        "explain_mode": 0,
+        "id": 1,
+        "pipeline": "cli",
+        "result_count": 13,
+        "session_id": null,
+        "tenant_id": "default",
+      },
+    ],
+  },
+  "output": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "Found 13 memories (527 tokens) for: "deploy"
+
+--- mem_p_global [episodic] [verified] [global] score=0.255 strength=1.00
+    [██████████] tags: none | retrieved: 0x
+
+deploy notes from the global store about rollbacks
+
+--- mem_p_plain [episodic] [verified] score=0.059 strength=1.00
+    [██████████] tags: deploy | retrieved: 0x
+
+deploy pipeline uses blue green rollout for the api
+
+--- mem_p_pinned [episodic] [verified] score=0.056 strength=1.00
+    [██████████] tags: deploy | retrieved: 0x
+
+deploy freeze applies to the billing service on fridays
+
+--- mem_p_fill5 [episodic] [verified] score=0.046 strength=1.00
+    [██████████] tags: none | retrieved: 0x
+
+deploy log line 5 for the nightly batch
+
+--- mem_p_fill4 [episodic] [verified] score=0.046 strength=1.00
+    [██████████] tags: none | retrieved: 0x
+
+deploy log line 4 for the nightly batch
+
+--- mem_p_fill3 [episodic] [verified] score=0.046 strength=1.00
+    [██████████] tags: none | retrieved: 0x
+
+deploy log line 3 for the nightly batch
+
+--- mem_p_fill2 [episodic] [verified] score=0.045 strength=1.00
+    [██████████] tags: none | retrieved: 0x
+
+deploy log line 2 for the nightly batch
+
+--- mem_p_trace [trace] [verified] score=0.045 strength=1.00
+    [██████████] tags: none | retrieved: 0x
+
+deploy trace: ran the canary and promoted it
+
+--- mem_p_fill1 [episodic] [verified] score=0.045 strength=1.00
+    [██████████] tags: none | retrieved: 0x
+
+deploy log line 1 for the nightly batch
+
+--- mem_p_fill0 [episodic] [verified] score=0.045 strength=1.00
+    [██████████] tags: none | retrieved: 0x
+
+deploy log line 0 for the nightly batch
+
+--- mem_p_scoped [episodic] [verified] score=0.042 strength=1.00
+    [██████████] tags: none | retrieved: 0x
+
+deploy checklist for team alpha runs smoke tests first
+
+--- mem_p_new [episodic] [verified] score=0.042 strength=1.00
+    [██████████] tags: none | retrieved: 0x
+
+deploy target is the new staging cluster in eu west
+
+--- mem_p_goal [episodic] [verified] score=0.035 strength=1.00
+    [██████████] tags: goal-alpha | retrieved: 3x
+
+deploy goal work: migrate the rollout scripts to the new runner
+
+",
+  },
+}
+`;
+
+exports[`recall surface parity goldens > cli: recall with a session that has an active goal 1`] = `
+{
+  "local": {
+    "audit": [
+      {
+        "actor": "cli",
+        "metadata_json": "{"query_hash":"b7bd55c11b781b0c","query_length":6,"results":13}",
+        "op": "recall",
+        "target_id": null,
+        "tenant_id": "default",
+        "ts": "<ts>",
+      },
+    ],
+    "goalRecallLog": [
+      {
+        "goal_id": "<goal>",
+        "memory_id": "mem_p_goal",
+        "score": 0.0694422672810979,
+        "session_id": "golden-session",
+      },
+    ],
+    "ledger": [
+      {
+        "event": "inject",
+        "items": 13,
+        "session_id": null,
+        "surface": "recall",
+        "tenant_id": "default",
+        "tokens": 527,
+      },
+    ],
+    "retrieved": [
+      {
+        "id": "mem_p_fill0",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill1",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill2",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill3",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill4",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill5",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_goal",
+        "retrieval_count": 4,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_new",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_pinned",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_plain",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_scoped",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_trace",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+    ],
+    "stats": [
+      {
+        "key": "total_forgotten",
+        "value": "0",
+      },
+      {
+        "key": "total_recalled",
+        "value": "13",
+      },
+      {
+        "key": "total_remembered",
+        "value": "0",
+      },
+    ],
+    "traceResults": [
+      {
+        "memory_id": "mem_p_global",
+        "result_rank": 1,
+        "score": 0.25484679415358286,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_goal",
+        "result_rank": 2,
+        "score": 0.0694422672810979,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_plain",
+        "result_rank": 3,
+        "score": 0.05876165935157657,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_pinned",
+        "result_rank": 4,
+        "score": 0.056074872590673994,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill5",
+        "result_rank": 5,
+        "score": 0.045959780294907854,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill4",
+        "result_rank": 6,
+        "score": 0.04572987682922222,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill3",
+        "result_rank": 7,
+        "score": 0.04550652864764334,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill2",
+        "result_rank": 8,
+        "score": 0.045289516866653695,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_trace",
+        "result_rank": 9,
+        "score": 0.04517480137920127,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill1",
+        "result_rank": 10,
+        "score": 0.04507862998825776,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill0",
+        "result_rank": 11,
+        "score": 0.04487366365046071,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_scoped",
+        "result_rank": 12,
+        "score": 0.04187485073917768,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_new",
+        "result_rank": 13,
+        "score": 0.04151159163940429,
+        "trace_id": 1,
+      },
+    ],
+    "traces": [
+      {
+        "explain_mode": 0,
+        "id": 1,
+        "pipeline": "cli",
+        "result_count": 13,
+        "session_id": "golden-session",
+        "tenant_id": "default",
+      },
+    ],
+  },
+  "output": {
+    "status": 0,
+    "stderr": "",
+    "stdout": "Found 13 memories (527 tokens) for: "deploy"
+
+--- mem_p_global [episodic] [verified] [global] score=0.255 strength=1.00
+    [██████████] tags: none | retrieved: 0x
+
+deploy notes from the global store about rollbacks
+
+--- mem_p_goal [episodic] [verified] score=0.069 strength=1.00
+    [██████████] tags: goal-alpha | retrieved: 3x
+
+deploy goal work: migrate the rollout scripts to the new runner
+
+--- mem_p_plain [episodic] [verified] score=0.059 strength=1.00
+    [██████████] tags: deploy | retrieved: 0x
+
+deploy pipeline uses blue green rollout for the api
+
+--- mem_p_pinned [episodic] [verified] score=0.056 strength=1.00
+    [██████████] tags: deploy | retrieved: 0x
+
+deploy freeze applies to the billing service on fridays
+
+--- mem_p_fill5 [episodic] [verified] score=0.046 strength=1.00
+    [██████████] tags: none | retrieved: 0x
+
+deploy log line 5 for the nightly batch
+
+--- mem_p_fill4 [episodic] [verified] score=0.046 strength=1.00
+    [██████████] tags: none | retrieved: 0x
+
+deploy log line 4 for the nightly batch
+
+--- mem_p_fill3 [episodic] [verified] score=0.046 strength=1.00
+    [██████████] tags: none | retrieved: 0x
+
+deploy log line 3 for the nightly batch
+
+--- mem_p_fill2 [episodic] [verified] score=0.045 strength=1.00
+    [██████████] tags: none | retrieved: 0x
+
+deploy log line 2 for the nightly batch
+
+--- mem_p_trace [trace] [verified] score=0.045 strength=1.00
+    [██████████] tags: none | retrieved: 0x
+
+deploy trace: ran the canary and promoted it
+
+--- mem_p_fill1 [episodic] [verified] score=0.045 strength=1.00
+    [██████████] tags: none | retrieved: 0x
+
+deploy log line 1 for the nightly batch
+
+--- mem_p_fill0 [episodic] [verified] score=0.045 strength=1.00
+    [██████████] tags: none | retrieved: 0x
+
+deploy log line 0 for the nightly batch
+
+--- mem_p_scoped [episodic] [verified] score=0.042 strength=1.00
+    [██████████] tags: none | retrieved: 0x
+
+deploy checklist for team alpha runs smoke tests first
+
+--- mem_p_new [episodic] [verified] score=0.042 strength=1.00
+    [██████████] tags: none | retrieved: 0x
+
+deploy target is the new staging cluster in eu west
+
+",
+  },
+}
+`;
+
+exports[`recall surface parity goldens > http scores are positions in bm25, hybrid and physics modes 1`] = `
+[
+  [
+    [
+      "mem_p_pinned",
+      1,
+    ],
+    [
+      "mem_p_plain",
+      0.9,
+    ],
+    [
+      "mem_p_fill0",
+      0.8,
+    ],
+    [
+      "mem_p_fill1",
+      0.7,
+    ],
+    [
+      "mem_p_fill2",
+      0.6,
+    ],
+    [
+      "mem_p_fill3",
+      0.5,
+    ],
+    [
+      "mem_p_fill4",
+      0.4,
+    ],
+    [
+      "mem_p_fill5",
+      0.30000000000000004,
+    ],
+    [
+      "mem_p_trace",
+      0.19999999999999996,
+    ],
+    [
+      "mem_p_scoped",
+      0.09999999999999998,
+    ],
+  ],
+  [
+    [
+      "mem_p_plain",
+      1,
+    ],
+    [
+      "mem_p_pinned",
+      0.9,
+    ],
+    [
+      "mem_p_fill5",
+      0.8,
+    ],
+    [
+      "mem_p_fill4",
+      0.7,
+    ],
+    [
+      "mem_p_fill3",
+      0.6,
+    ],
+    [
+      "mem_p_fill2",
+      0.5,
+    ],
+    [
+      "mem_p_fill1",
+      0.4,
+    ],
+    [
+      "mem_p_fill0",
+      0.30000000000000004,
+    ],
+    [
+      "mem_p_trace",
+      0.19999999999999996,
+    ],
+    [
+      "mem_p_scoped",
+      0.09999999999999998,
+    ],
+  ],
+  [
+    [
+      "mem_p_plain",
+      1,
+    ],
+    [
+      "mem_p_pinned",
+      0.9,
+    ],
+    [
+      "mem_p_fill5",
+      0.8,
+    ],
+    [
+      "mem_p_fill4",
+      0.7,
+    ],
+    [
+      "mem_p_fill3",
+      0.6,
+    ],
+    [
+      "mem_p_fill2",
+      0.5,
+    ],
+    [
+      "mem_p_fill1",
+      0.4,
+    ],
+    [
+      "mem_p_fill0",
+      0.30000000000000004,
+    ],
+    [
+      "mem_p_trace",
+      0.19999999999999996,
+    ],
+    [
+      "mem_p_scoped",
+      0.09999999999999998,
+    ],
+  ],
+]
+`;
+
+exports[`recall surface parity goldens > http: anchoring hints over repeated recalls in one session 1`] = `
+{
+  "audit": [
+    {
+      "actor": "localhost:cli",
+      "metadata_json": "{"query_hash":"b7bd55c11b781b0c","query_length":6,"results":10}",
+      "op": "recall",
+      "target_id": null,
+    },
+    {
+      "actor": "localhost:cli",
+      "metadata_json": "{"query_hash":"b7bd55c11b781b0c","query_length":6,"results":10}",
+      "op": "recall",
+      "target_id": null,
+    },
+    {
+      "actor": "localhost:cli",
+      "metadata_json": "{"memory_id":"mem_p_pinned"}",
+      "op": "recall_anchor_detected_query_repeat",
+      "target_id": "mem_p_pinned",
+    },
+    {
+      "actor": "localhost:cli",
+      "metadata_json": "{"query_hash":"f5a86c7381d51087","query_length":13,"results":10}",
+      "op": "recall",
+      "target_id": null,
+    },
+    {
+      "actor": "localhost:cli",
+      "metadata_json": "{"query_hash":"d2490aef6a340d48","query_length":14,"results":10}",
+      "op": "recall",
+      "target_id": null,
+    },
+  ],
+  "hints": [
+    null,
+    "mem_p_pinned",
+    null,
+    null,
+  ],
+}
+`;
+
+exports[`recall surface parity goldens > http: plain recall, no session 1`] = `
+{
+  "globalAudit": [],
+  "local": {
+    "audit": [
+      {
+        "actor": "localhost:cli",
+        "metadata_json": "{"query_hash":"b7bd55c11b781b0c","query_length":6}",
+        "op": "recall_anchor_skipped_no_session",
+        "target_id": null,
+        "tenant_id": "default",
+        "ts": "<ts>",
+      },
+      {
+        "actor": "localhost:cli",
+        "metadata_json": "{"query_hash":"b7bd55c11b781b0c","query_length":6,"results":10}",
+        "op": "recall",
+        "target_id": null,
+        "tenant_id": "default",
+        "ts": "<ts>",
+      },
+    ],
+    "goalRecallLog": [],
+    "ledger": [
+      {
+        "event": "inject",
+        "items": 10,
+        "session_id": null,
+        "surface": "http_recall",
+        "tenant_id": "default",
+        "tokens": 112,
+      },
+    ],
+    "retrieved": [
+      {
+        "id": "mem_p_fill0",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill1",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill2",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill3",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill4",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill5",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_goal",
+        "retrieval_count": 3,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_pinned",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_plain",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_scoped",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_trace",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+    ],
+    "stats": [
+      {
+        "key": "total_forgotten",
+        "value": "0",
+      },
+      {
+        "key": "total_recalled",
+        "value": "10",
+      },
+      {
+        "key": "total_remembered",
+        "value": "0",
+      },
+    ],
+    "traceResults": [
+      {
+        "memory_id": "mem_p_pinned",
+        "result_rank": 1,
+        "score": 1,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_plain",
+        "result_rank": 2,
+        "score": 0.9,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill0",
+        "result_rank": 3,
+        "score": 0.8,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill1",
+        "result_rank": 4,
+        "score": 0.7,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill2",
+        "result_rank": 5,
+        "score": 0.6,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill3",
+        "result_rank": 6,
+        "score": 0.5,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill4",
+        "result_rank": 7,
+        "score": 0.4,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill5",
+        "result_rank": 8,
+        "score": 0.30000000000000004,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_trace",
+        "result_rank": 9,
+        "score": 0.19999999999999996,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_scoped",
+        "result_rank": 10,
+        "score": 0.09999999999999998,
+        "trace_id": 1,
+      },
+    ],
+    "traces": [
+      {
+        "explain_mode": 0,
+        "id": 1,
+        "pipeline": "api",
+        "result_count": 10,
+        "session_id": null,
+        "tenant_id": "default",
+      },
+    ],
+  },
+  "output": {
+    "body": {
+      "results": [
+        {
+          "content": "deploy freeze applies to the billing service on fridays",
+          "id": "mem_p_pinned",
+          "layer": "episodic",
+          "score": 1,
+          "strength": 1,
+        },
+        {
+          "content": "deploy pipeline uses blue green rollout for the api",
+          "id": "mem_p_plain",
+          "layer": "episodic",
+          "score": 0.9,
+          "strength": 1,
+        },
+        {
+          "content": "deploy log line 0 for the nightly batch",
+          "id": "mem_p_fill0",
+          "layer": "episodic",
+          "score": 0.8,
+          "strength": 1,
+        },
+        {
+          "content": "deploy log line 1 for the nightly batch",
+          "id": "mem_p_fill1",
+          "layer": "episodic",
+          "score": 0.7,
+          "strength": 1,
+        },
+        {
+          "content": "deploy log line 2 for the nightly batch",
+          "id": "mem_p_fill2",
+          "layer": "episodic",
+          "score": 0.6,
+          "strength": 1,
+        },
+        {
+          "content": "deploy log line 3 for the nightly batch",
+          "id": "mem_p_fill3",
+          "layer": "episodic",
+          "score": 0.5,
+          "strength": 1,
+        },
+        {
+          "content": "deploy log line 4 for the nightly batch",
+          "id": "mem_p_fill4",
+          "layer": "episodic",
+          "score": 0.4,
+          "strength": 1,
+        },
+        {
+          "content": "deploy log line 5 for the nightly batch",
+          "id": "mem_p_fill5",
+          "layer": "episodic",
+          "score": 0.30000000000000004,
+          "strength": 1,
+        },
+        {
+          "content": "deploy trace: ran the canary and promoted it",
+          "id": "mem_p_trace",
+          "layer": "trace",
+          "score": 0.19999999999999996,
+          "strength": 1,
+        },
+        {
+          "content": "deploy checklist for team alpha runs smoke tests first",
+          "id": "mem_p_scoped",
+          "layer": "episodic",
+          "score": 0.09999999999999998,
+          "strength": 1,
+        },
+      ],
+      "suppressionSummary": {
+        "droppedByBudget": 2,
+        "droppedPreRank": 0,
+        "freshTailAdded": 0,
+        "summarySubstitutionsAdded": 0,
+        "suppressedByInterference": 0,
+        "totalCandidates": 12,
+      },
+      "tokens": 112,
+      "total": 12,
+      "windowSize": 200,
+    },
+    "status": 200,
+  },
+}
+`;
+
+exports[`recall surface parity goldens > http: recall with a session that has an active goal 1`] = `
+{
+  "local": {
+    "audit": [
+      {
+        "actor": "localhost:cli",
+        "metadata_json": "{"query_hash":"b7bd55c11b781b0c","query_length":6,"results":10}",
+        "op": "recall",
+        "target_id": null,
+        "tenant_id": "default",
+        "ts": "<ts>",
+      },
+    ],
+    "goalRecallLog": [],
+    "ledger": [
+      {
+        "event": "inject",
+        "items": 10,
+        "session_id": "golden-session",
+        "surface": "http_recall",
+        "tenant_id": "default",
+        "tokens": 112,
+      },
+    ],
+    "retrieved": [
+      {
+        "id": "mem_p_fill0",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill1",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill2",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill3",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill4",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill5",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_goal",
+        "retrieval_count": 3,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_pinned",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_plain",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_scoped",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_trace",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+    ],
+    "stats": [
+      {
+        "key": "total_forgotten",
+        "value": "0",
+      },
+      {
+        "key": "total_recalled",
+        "value": "10",
+      },
+      {
+        "key": "total_remembered",
+        "value": "0",
+      },
+    ],
+    "traceResults": [
+      {
+        "memory_id": "mem_p_pinned",
+        "result_rank": 1,
+        "score": 1,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_plain",
+        "result_rank": 2,
+        "score": 0.9,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill0",
+        "result_rank": 3,
+        "score": 0.8,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill1",
+        "result_rank": 4,
+        "score": 0.7,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill2",
+        "result_rank": 5,
+        "score": 0.6,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill3",
+        "result_rank": 6,
+        "score": 0.5,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill4",
+        "result_rank": 7,
+        "score": 0.4,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill5",
+        "result_rank": 8,
+        "score": 0.30000000000000004,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_trace",
+        "result_rank": 9,
+        "score": 0.19999999999999996,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_scoped",
+        "result_rank": 10,
+        "score": 0.09999999999999998,
+        "trace_id": 1,
+      },
+    ],
+    "traces": [
+      {
+        "explain_mode": 0,
+        "id": 1,
+        "pipeline": "api",
+        "result_count": 10,
+        "session_id": "golden-session",
+        "tenant_id": "default",
+      },
+    ],
+  },
+  "output": {
+    "body": {
+      "results": [
+        {
+          "content": "deploy freeze applies to the billing service on fridays",
+          "id": "mem_p_pinned",
+          "layer": "episodic",
+          "score": 1,
+          "strength": 1,
+        },
+        {
+          "content": "deploy pipeline uses blue green rollout for the api",
+          "id": "mem_p_plain",
+          "layer": "episodic",
+          "score": 0.9,
+          "strength": 1,
+        },
+        {
+          "content": "deploy log line 0 for the nightly batch",
+          "id": "mem_p_fill0",
+          "layer": "episodic",
+          "score": 0.8,
+          "strength": 1,
+        },
+        {
+          "content": "deploy log line 1 for the nightly batch",
+          "id": "mem_p_fill1",
+          "layer": "episodic",
+          "score": 0.7,
+          "strength": 1,
+        },
+        {
+          "content": "deploy log line 2 for the nightly batch",
+          "id": "mem_p_fill2",
+          "layer": "episodic",
+          "score": 0.6,
+          "strength": 1,
+        },
+        {
+          "content": "deploy log line 3 for the nightly batch",
+          "id": "mem_p_fill3",
+          "layer": "episodic",
+          "score": 0.5,
+          "strength": 1,
+        },
+        {
+          "content": "deploy log line 4 for the nightly batch",
+          "id": "mem_p_fill4",
+          "layer": "episodic",
+          "score": 0.4,
+          "strength": 1,
+        },
+        {
+          "content": "deploy log line 5 for the nightly batch",
+          "id": "mem_p_fill5",
+          "layer": "episodic",
+          "score": 0.30000000000000004,
+          "strength": 1,
+        },
+        {
+          "content": "deploy trace: ran the canary and promoted it",
+          "id": "mem_p_trace",
+          "layer": "trace",
+          "score": 0.19999999999999996,
+          "strength": 1,
+        },
+        {
+          "content": "deploy checklist for team alpha runs smoke tests first",
+          "id": "mem_p_scoped",
+          "layer": "episodic",
+          "score": 0.09999999999999998,
+          "strength": 1,
+        },
+      ],
+      "suppressionSummary": {
+        "droppedByBudget": 2,
+        "droppedPreRank": 0,
+        "freshTailAdded": 0,
+        "summarySubstitutionsAdded": 0,
+        "suppressedByInterference": 0,
+        "totalCandidates": 12,
+      },
+      "tokens": 112,
+      "total": 12,
+      "windowSize": 200,
+    },
+    "status": 200,
+  },
+}
+`;
+
+exports[`recall surface parity goldens > mcp audit counts the rows shown 1`] = `
+{
+  "auditResults": 2,
+  "shownHeading": "Found 2 memories",
+}
+`;
+
+exports[`recall surface parity goldens > mcp path applies the goal boost twice 1`] = `
+{
+  "bandIndex": 0,
+  "bandScore": 2,
+  "positionScore": 1,
+  "rankedScore": 0.05786855606758159,
+}
+`;
+
+exports[`recall surface parity goldens > mcp: anchoring hints over repeated recalls in one session 1`] = `
+{
+  "audit": [
+    {
+      "actor": "mcp",
+      "metadata_json": "{"query_hash":"b7bd55c11b781b0c","query_length":6,"results":12}",
+      "op": "recall",
+      "target_id": null,
+    },
+    {
+      "actor": "mcp",
+      "metadata_json": "{"query_hash":"b7bd55c11b781b0c","query_length":6,"results":12}",
+      "op": "recall",
+      "target_id": null,
+    },
+    {
+      "actor": "mcp",
+      "metadata_json": "{"memory_id":"mem_p_goal"}",
+      "op": "recall_anchor_detected_query_repeat",
+      "target_id": "mem_p_goal",
+    },
+    {
+      "actor": "mcp",
+      "metadata_json": "{"query_hash":"f5a86c7381d51087","query_length":13,"results":12}",
+      "op": "recall",
+      "target_id": null,
+    },
+    {
+      "actor": "mcp",
+      "metadata_json": "{"query_hash":"d2490aef6a340d48","query_length":14,"results":12}",
+      "op": "recall",
+      "target_id": null,
+    },
+  ],
+  "hints": [
+    null,
+    "mem_p_goal",
+    null,
+    null,
+  ],
+}
+`;
+
+exports[`recall surface parity goldens > mcp: plain recall, no session 1`] = `
+{
+  "globalAudit": [],
+  "local": {
+    "audit": [
+      {
+        "actor": "mcp",
+        "metadata_json": "{"query_hash":"b7bd55c11b781b0c","query_length":6,"results":12}",
+        "op": "recall",
+        "target_id": null,
+        "tenant_id": "default",
+        "ts": "<ts>",
+      },
+      {
+        "actor": "mcp",
+        "metadata_json": "{"query_hash":"b7bd55c11b781b0c","query_length":6}",
+        "op": "recall_anchor_skipped_no_session",
+        "target_id": null,
+        "tenant_id": "default",
+        "ts": "<ts>",
+      },
+    ],
+    "goalRecallLog": [],
+    "ledger": [
+      {
+        "event": "inject",
+        "items": 0,
+        "session_id": null,
+        "surface": "mcp_recall",
+        "tenant_id": "default",
+        "tokens": 241,
+      },
+    ],
+    "retrieved": [
+      {
+        "id": "mem_p_fill0",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill1",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill2",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill3",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill4",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill5",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_goal",
+        "retrieval_count": 4,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_new",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_pinned",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_plain",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_scoped",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_trace",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+    ],
+    "stats": [
+      {
+        "key": "total_forgotten",
+        "value": "0",
+      },
+      {
+        "key": "total_recalled",
+        "value": "0",
+      },
+      {
+        "key": "total_remembered",
+        "value": "0",
+      },
+    ],
+    "traceResults": [
+      {
+        "memory_id": "mem_p_plain",
+        "result_rank": 1,
+        "score": 0.04896804945964714,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_pinned",
+        "result_rank": 2,
+        "score": 0.04672906049222833,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill5",
+        "result_rank": 3,
+        "score": 0.038299816912423214,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill4",
+        "result_rank": 4,
+        "score": 0.03810823069101852,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill3",
+        "result_rank": 5,
+        "score": 0.03792210720636945,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill2",
+        "result_rank": 6,
+        "score": 0.037741264055544746,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_trace",
+        "result_rank": 7,
+        "score": 0.03764566781600106,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill1",
+        "result_rank": 8,
+        "score": 0.0375655249902148,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill0",
+        "result_rank": 9,
+        "score": 0.03739471970871726,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_scoped",
+        "result_rank": 10,
+        "score": 0.034895708949314735,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_new",
+        "result_rank": 11,
+        "score": 0.03459299303283691,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_goal",
+        "result_rank": 12,
+        "score": 0.028934278033790794,
+        "trace_id": 1,
+      },
+    ],
+    "traces": [
+      {
+        "explain_mode": 0,
+        "id": 1,
+        "pipeline": "mcp",
+        "result_count": 12,
+        "session_id": null,
+        "tenant_id": "default",
+      },
+    ],
+  },
+  "output": "Found 12 memories:
+
+[verified] tags: deploy (strength=1.00)
+deploy pipeline uses blue green rollout for the api
+
+[verified] tags: deploy (strength=1.00)
+deploy freeze applies to the billing service on fridays
+
+[verified] (strength=1.00)
+deploy log line 5 for the nightly batch
+
+[verified] (strength=1.00)
+deploy log line 4 for the nightly batch
+
+[verified] (strength=1.00)
+deploy log line 3 for the nightly batch
+
+[verified] (strength=1.00)
+deploy log line 2 for the nightly batch
+
+[verified] (strength=1.00)
+deploy trace: ran the canary and promoted it
+
+[verified] (strength=1.00)
+deploy log line 1 for the nightly batch
+
+[verified] (strength=1.00)
+deploy log line 0 for the nightly batch
+
+[verified] (strength=1.00)
+deploy checklist for team alpha runs smoke tests first
+
+[verified] (strength=1.00)
+deploy target is the new staging cluster in eu west
+
+[verified] tags: goal-alpha (strength=1.00)
+deploy goal work: migrate the rollout scripts to the new runner
+",
+}
+`;
+
+exports[`recall surface parity goldens > mcp: recall with a session that has an active goal 1`] = `
+{
+  "local": {
+    "audit": [
+      {
+        "actor": "mcp",
+        "metadata_json": "{"query_hash":"b7bd55c11b781b0c","query_length":6,"results":12}",
+        "op": "recall",
+        "target_id": null,
+        "tenant_id": "default",
+        "ts": "<ts>",
+      },
+    ],
+    "goalRecallLog": [
+      {
+        "goal_id": "<goal>",
+        "memory_id": "mem_p_goal",
+        "score": 0.05786855606758159,
+        "session_id": "golden-session",
+      },
+    ],
+    "ledger": [
+      {
+        "event": "inject",
+        "items": 0,
+        "session_id": null,
+        "surface": "mcp_recall",
+        "tenant_id": "default",
+        "tokens": 241,
+      },
+    ],
+    "retrieved": [
+      {
+        "id": "mem_p_fill0",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill1",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill2",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill3",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill4",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_fill5",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_goal",
+        "retrieval_count": 4,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_new",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_pinned",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_plain",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_scoped",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+      {
+        "id": "mem_p_trace",
+        "retrieval_count": 1,
+        "strength": 1,
+      },
+    ],
+    "stats": [
+      {
+        "key": "total_forgotten",
+        "value": "0",
+      },
+      {
+        "key": "total_recalled",
+        "value": "0",
+      },
+      {
+        "key": "total_remembered",
+        "value": "0",
+      },
+    ],
+    "traceResults": [
+      {
+        "memory_id": "mem_p_goal",
+        "result_rank": 1,
+        "score": 0.05786855606758159,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_plain",
+        "result_rank": 2,
+        "score": 0.04896804945964714,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_pinned",
+        "result_rank": 3,
+        "score": 0.04672906049222833,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill5",
+        "result_rank": 4,
+        "score": 0.038299816912423214,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill4",
+        "result_rank": 5,
+        "score": 0.03810823069101852,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill3",
+        "result_rank": 6,
+        "score": 0.03792210720636945,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill2",
+        "result_rank": 7,
+        "score": 0.037741264055544746,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_trace",
+        "result_rank": 8,
+        "score": 0.03764566781600106,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill1",
+        "result_rank": 9,
+        "score": 0.0375655249902148,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_fill0",
+        "result_rank": 10,
+        "score": 0.03739471970871726,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_scoped",
+        "result_rank": 11,
+        "score": 0.034895708949314735,
+        "trace_id": 1,
+      },
+      {
+        "memory_id": "mem_p_new",
+        "result_rank": 12,
+        "score": 0.03459299303283691,
+        "trace_id": 1,
+      },
+    ],
+    "traces": [
+      {
+        "explain_mode": 0,
+        "id": 1,
+        "pipeline": "mcp",
+        "result_count": 12,
+        "session_id": "golden-session",
+        "tenant_id": "default",
+      },
+    ],
+  },
+  "output": "Found 12 memories:
+
+[verified] tags: goal-alpha (strength=1.00)
+deploy goal work: migrate the rollout scripts to the new runner
+
+[verified] tags: deploy (strength=1.00)
+deploy pipeline uses blue green rollout for the api
+
+[verified] tags: deploy (strength=1.00)
+deploy freeze applies to the billing service on fridays
+
+[verified] (strength=1.00)
+deploy log line 5 for the nightly batch
+
+[verified] (strength=1.00)
+deploy log line 4 for the nightly batch
+
+[verified] (strength=1.00)
+deploy log line 3 for the nightly batch
+
+[verified] (strength=1.00)
+deploy log line 2 for the nightly batch
+
+[verified] (strength=1.00)
+deploy trace: ran the canary and promoted it
+
+[verified] (strength=1.00)
+deploy log line 1 for the nightly batch
+
+[verified] (strength=1.00)
+deploy log line 0 for the nightly batch
+
+[verified] (strength=1.00)
+deploy checklist for team alpha runs smoke tests first
+
+[verified] (strength=1.00)
+deploy target is the new staging cluster in eu west
+",
+}
+`;
+
+exports[`recall surface parity goldens > rings do not cross surfaces: a repeat on another surface is a first recall there 1`] = `
+{
+  "cli": [
+    null,
+    "mem_p_global",
+  ],
+  "http": [
+    null,
+    "mem_p_pinned",
+  ],
+  "mcp": [
+    null,
+    "mem_p_goal",
+  ],
+}
+`;

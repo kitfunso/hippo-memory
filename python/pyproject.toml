@@ -4,8 +4,8 @@ build-backend = "uv_build"
 
 [project]
 name = "hippo-memory-sdk"
-version = "0.3.0"
-description = "Python SDK (async + sync) for hippo-memory, memory for AI agents that learns what is wrong and ranks it down. Wraps the HTTP API of the hippo-memory npm package."
+version = "0.3.1"
+description = "Make your agent's memory work like a brain. Hippo is long-term memory for coding agents."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"

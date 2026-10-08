@@ -3,14 +3,17 @@ import * as path from 'path';
 import { createHash } from 'node:crypto';
 import { createMemory, MemoryEntry } from '../memory.js';
 import { initStore } from '../store/open.js';
-import { remember, archiveRaw, isPrivateScope, type Context } from '../api.js';
+import { remember, archiveRaw, isPrivateScope, type HippoDbContext } from '../api.js';
+import { assertClientScope } from '../recall-scope.js';
 import { openHippoDb, closeHippoDb } from '../db.js';
 import { RejectedValueError, checkRejectionGuard } from '../rejection.js';
 import { loadConfig } from '../config.js';
 import { vetSecrets } from '../secret-detect.js';
 import { log } from '../log.js';
-import { type ImportResult, type ImportOptions, type JsonValue, isJsonString } from './core.js';
+import { type ImportResult, type ImportOptions } from './core.js';
 import { parseFrontmatter, frontmatterList, parseWikilinks, collectMarkdownFiles, realpathOrResolve } from './markdown-parse.js';
+import { type JsonValue, isJsonString } from '../json.js';
+import { escapeLike } from '../escape.js';
 
 // ---------------------------------------------------------------------------
 // K1 vault importer (markdown-vault FOLDER → kind='raw' memories)
@@ -24,14 +27,6 @@ import { parseFrontmatter, frontmatterList, parseWikilinks, collectMarkdownFiles
 // and escaping the kind='raw' deletion rescan) — all raw deletions route through
 // `archiveRaw` (the only trigger-legit raw delete).
 // ---------------------------------------------------------------------------
-
-/** Escape LIKE wildcards in operator-supplied text (mirror of
- *  src/project-briefs.ts:477 / src/store/search-rows.ts, kept local since neither is
- *  exported). Used so a `%`/`_`/`\` in the vault name cannot over-match the
- *  loader prefix and archive another vault's rows. */
-function escapeLike(term: string): string {
-  return term.replace(/[%_\\]/g, '\\$&');
-}
 
 interface VaultRow {
   id: string;
@@ -77,7 +72,7 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
     return { total: 0, imported: 0, skipped: 0, rejected: 0, archived: 0, entries: [] };
   }
 
-  const ctx: Context = {
+  const ctx: HippoDbContext = {
     hippoRoot,
     tenantId,
     // Process-local actor; the vault importer is a CLI/SDK ingestion path, not
@@ -132,7 +127,7 @@ interface VaultTally {
 }
 
 interface VaultImportRun {
-  ctx: Context;
+  ctx: HippoDbContext;
   folderPath: string;
   vaultName: string;
   scope: string | null;
@@ -179,6 +174,7 @@ function vaultIdentityOrThrow(options: ImportOptions): VaultIdentity {
   // isPrivateScope as the single source of truth: reject a scope that names a
   // `private` segment yet is NOT a valid `<source>:private:*` (catches `private`,
   // `private:x`, and `vault:private` with a missing trailing segment).
+  assertClientScope(scope);
   if (scope !== null && scope.split(':').includes('private') && !isPrivateScope(scope)) {
     throw new Error(
       `vault scope '${scope}' is not recognized as private by recall (only '<source>:private:*' scopes are default-denied). Use a source-prefixed scope such as 'vault:private:${vaultName}'.`,

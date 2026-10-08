@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { JsonObject } from '../working-memory.js';
-import { isJsonString } from './shared.js';
+import { isJsonString } from '../json.js';
 
 export interface CodexSessionTranscriptOptions {
   codexHome: string;

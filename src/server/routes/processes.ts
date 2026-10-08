@@ -1,10 +1,11 @@
 // /v1/processes routes.
 import { closeProcess, loadProcessById, loadProcesses, saveProcess, VALID_PROCESS_STATES } from '../../processes.js';
-import { HttpError, type JsonValue, sendJson } from '../../http-util.js';
+import { HttpError, sendJson } from '../../http-util.js';
 import { buildContextWithAuth } from '../auth.js';
 import { byCreatedAt, pageOf, parseCursor } from '../cursor.js';
 import type { RouteRequest } from '../types.js';
-import { isJsonString, isSetMember, parseJsonBody, parseListLimit } from '../validation.js';
+import { isSetMember, parseJsonBody, parseListLimit } from '../validation.js';
+import { type JsonValue, isJsonString } from '../../json.js';
 
 // HTTP-boundary validation for a process `steps` body (untrusted). Returns the
 // step strings (saveProcess re-validates + trims, this is the fail-fast 400
@@ -32,7 +33,7 @@ function validateProcessStepsBody(raw: JsonValue | undefined): string[] {
   return raw as string[];
 }
 
-// ── processes (E2 first-class object) ──
+// ── processes (first-class object) ──
 //
 // 5 routes: POST /v1/processes (new; body processName + steps[] + description),
 // GET /v1/processes (list, status filter), GET /v1/processes/:id (show),

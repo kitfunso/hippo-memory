@@ -3,7 +3,7 @@ import type { Migration } from './types.js';
 export const v20: Migration = {
     version: 20,
     up: (db) => {
-      // v0.39 commit 4 (GDPR Path A backfill): redact every existing
+      // GDPR Path A backfill: redact every existing
       // raw_archive.payload_json so historical archives match the new
       // metadata-only contract from src/raw-archive.ts. Read each row, parse
       // the existing JSON to extract tenant_id and kind (best effort), then

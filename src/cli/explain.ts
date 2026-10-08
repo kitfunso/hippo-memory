@@ -4,7 +4,7 @@ import { confidenceFacets } from '../memory.js';
 import { isInitialized } from '../store/open.js';
 import { loadSearchEntries } from '../store/search-rows.js';
 import { loadIndex } from '../store/index-and-stats.js';
-import type { SearchResult } from '../search/types.js';
+import { DEFAULT_RECALL_BUDGET, type SearchResult } from '../search/types.js';
 import { loadConfig } from '../config.js';
 import { dropHeldCopies } from '../same-text.js';
 import { detectScope } from '../scope.js';
@@ -47,7 +47,7 @@ export async function cmdExplain(
 ): Promise<void> {
   requireInit(hippoRoot);
 
-  const budget = parseBudgetFlag(flags['budget'], 4000);
+  const budget = parseBudgetFlag(flags['budget'], DEFAULT_RECALL_BUDGET);
   const limit = parseLimitFlag(flags['limit']);
   const asJson = Boolean(flags['json']);
   const includeSuperseded = Boolean(flags['include-superseded']);

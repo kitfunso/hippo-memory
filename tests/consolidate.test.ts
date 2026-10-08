@@ -48,7 +48,7 @@ describe('Decay pass', () => {
     const ancient = { ...entry, last_retrieved: veryOldDate, pinned: true };
     writeEntry(tmpDir, ancient);
 
-    const result = await consolidate(tmpDir, { now: new Date() });
+    await consolidate(tmpDir, { now: new Date() });
 
     const remaining = loadAllEntries(tmpDir);
     const found = remaining.find((e) => e.id === ancient.id);

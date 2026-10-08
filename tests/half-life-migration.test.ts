@@ -22,6 +22,9 @@ import { saveDecision, closeDecision } from '../src/decisions.js';
 import { saveIncident, resolveIncident } from '../src/incidents.js';
 import { saveCustomerNote } from '../src/customer-notes.js';
 import { supersede, adminActor } from '../src/api.js';
+import { MEMORY_SELECT_COLUMNS } from '../src/store/rows.js';
+import { recordStatements, countMatching, STORE_OPEN } from './_helpers/count-statements.js';
+import { allocatedBytes } from './_helpers/allocated-bytes.js';
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -47,6 +50,22 @@ function legacyStore(entries: ReturnType<typeof createMemory>[]): string {
   const root = store();
   for (const e of entries) writeEntry(root, e);
   unrecord(root, HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY);
+  return root;
+}
+/** A legacy store of `n` copies of one 7-day memory, made in SQL so the setup stays fast. */
+function bulkLegacyStore(n: number): string {
+  const root = legacyStore([legacy('the staging deploy needs the VPN to reach the health check')]);
+  const db = openHippoDb(root);
+  try {
+    // SAFETY: pragma_table_info yields one row per column with its name.
+    const columns = (db.prepare(`SELECT name FROM pragma_table_info('memories') WHERE name != 'id'`).all() as { name: string }[]).map((c) => c.name);
+    db.prepare(`
+      WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ?)
+      INSERT INTO memories(id, ${columns.join(', ')}) SELECT 'mem_bulk_' || n.i, ${columns.join(', ')} FROM memories, n
+    `).run(n - 1);
+  } finally {
+    closeHippoDb(db);
+  }
   return root;
 }
 const legacy = (content: string, options: Partial<CreateMemoryOptions> = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });
@@ -163,6 +182,38 @@ describe('default half-life migration', () => {
     expect(result.details.join('\n')).not.toMatch(/half-life/);
     expect([...byContent(root).values()][0]).toBeLessThan(20);
   });
+
+  // The migration holds the write lock throughout, so its work must grow with the store, not with its square.
+  it('runs one indexed update per moved memory and a fixed number of other statements', () => {
+    const fixed = [20, 400].map((n) => {
+      const root = bulkLegacyStore(n);
+      const { result, statements } = recordStatements(() => migrateDefaultHalfLife(root, 365));
+      expect(result).toMatchObject({ from: 7, to: 365, rescaled: n });
+      expect(migrateAudits(root)[0]).toHaveProperty('ids.length', n);
+      expect(countMatching(statements, STORE_OPEN)).toBe(1);
+      expect(countMatching(statements, MEMORY_SELECT_COLUMNS)).toBe(1);
+      const updates = statements.filter((sql) => sql.startsWith('UPDATE memories SET half_life_days'));
+      expect(updates).toHaveLength(n);
+      expect(queryPlan(root, updates[0]!)).toEqual([expect.stringMatching(/^SEARCH memories USING INDEX/)]);
+      return statements.length - n;
+    });
+    expect(fixed[1]).toBe(fixed[0]);
+  });
+
+  // Statement counts miss work done in JS: copying the audit record once per memory runs no SQL at all.
+  it('allocates about 4 times the heap for 4 times the memories', () => {
+    const allocated = (n: number): number => {
+      const root = bulkLegacyStore(n);
+      return allocatedBytes(() => migrateDefaultHalfLife(root, 365));
+    };
+    // The first call compiles the migration onto the heap, a fixed cost that would blunt the ratio.
+    allocated(10);
+    // Past about 1,000 keys V8 copies a record more cheaply, so larger stores would hide a per-row copy.
+    const ratio = allocated(1_000) / allocated(250);
+    // Near 1 the measure saw only fixed overhead; linear work gives 4 and a per-row copy 16 or more, so 8 is their geometric mean.
+    expect(ratio).toBeGreaterThan(2);
+    expect(ratio).toBeLessThan(8);
+  });
 });
 
 /** Rewrites memory `id` as a typed writer pinned it before it took the default: 90 days plus 2 per recall. */
@@ -171,6 +222,16 @@ function pinTo90(root: string, id: string, recalls = 0): void {
 }
 function halfLifeOf(root: string, id: string): number {
   return readEntry(root, id, 'default')!.half_life_days;
+}
+function queryPlan(root: string, sql: string): string[] {
+  const db = openHippoDb(root);
+  try {
+    // SAFETY: each EXPLAIN QUERY PLAN row carries its plan step in the TEXT column `detail`.
+    const rows = db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all() as { detail: string }[];
+    return rows.map((r) => r.detail);
+  } finally {
+    closeHippoDb(db);
+  }
 }
 function migrateAudits(root: string): unknown[] {
   const db = openHippoDb(root);

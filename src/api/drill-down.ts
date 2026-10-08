@@ -1,9 +1,13 @@
 // DAG drill-down from a summary to its children.
 
-import { readEntry, loadChildrenOf } from '../store/entry-reads.js';
+import { closeHippoDb, type DatabaseSyncLike } from '../db.js';
+import { openStore } from '../store/open.js';
+import { selectEntriesByIds, selectChildrenByParent } from '../store/entry-reads.js';
 import { estimateTokens } from '../token-ledger.js';
 import type { MemoryEntry } from '../memory.js';
-import { passesScopeFilterForRecall } from '../recall-scope.js';
+import { passesScopeFilterForRecall, personalScopeOf } from '../recall-scope.js';
+import { classifyOriginProject } from '../project-identity.js';
+import type { CallerProject } from '../prompt-hook.js';
 import type { Context } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -30,6 +34,7 @@ export interface DrillDownOpts {
    */
   depth?: number;
   cost?: DrillDownCost;
+  project?: CallerProject;
 }
 
 export interface DrillDownSummary { id: string; content: string; descendantCount: number; earliestAt: string | null; latestAt: string | null }
@@ -79,11 +84,11 @@ export type DrillDownOutcome = DrillDownResult | DrillDownFailure;
  * if the underlying DAG accidentally linked across scopes.
  *
  * Returns a discriminated `DrillDownOutcome`: `DrillDownResult` on success,
- * or `{failure: '...'}` for `not_found` (covers genuinely-missing AND wrong-
- * tenant, intentionally indistinguishable), `not_drillable` (id is a leaf
- * row), or `scope_blocked` (caller has no scope grant for the row's scope).
+ * or `{failure: '...'}` for `not_found` (covers genuinely-missing, wrong-
+ * tenant and scope-blocked, intentionally indistinguishable) or
+ * `not_drillable` (id is a leaf row).
  *
- * Pre-v1.6.4 returned null for all four cases. JS callers migrate via
+ * Pre-v1.6.4 returned null for all three cases. JS callers migrate via
  * `'failure' in result` checks; HTTP route maps `not_drillable` to 422.
  */
 export function drillDown(
@@ -95,22 +100,42 @@ export function drillDown(
   // v0.30 / E5: depth defaults 1 (backward compat); hard cap 10 levels
   // prevents pathological deep trees. CLI/HTTP/MCP reject invalid values.
   const depth = Math.max(1, Math.min(Math.trunc(opts.depth ?? 1), 10));
-  const summary = readEntry(ctx.hippoRoot, summaryId, ctx.tenantId);
-  // No unscoped cross-tenant probe here — readEntry's null return covers
+  const db = openStore(ctx.hippoRoot);
+  try {
+    return drillDownOn(db, ctx, summaryId, depth, opts, limit);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+function drillDownOn(
+  db: DatabaseSyncLike,
+  ctx: Context,
+  summaryId: string,
+  depth: number,
+  opts: DrillDownOpts,
+  limit: number,
+): DrillDownOutcome {
+  const summary = selectEntriesByIds(db, [summaryId], ctx.tenantId).get(summaryId) ?? null;
+  // No unscoped cross-tenant probe here: the tenant-scoped read's miss covers
   // both "doesn't exist" and "exists in another tenant" by design.
   // Distinguishing them via an unscoped lookup would leak existence to
   // unauthorised tenants. The two cases collapse into not_found.
   if (!summary) return { failure: 'not_found' };
-  if ((summary.dag_level ?? 0) < 2) return { failure: 'not_drillable' };
-  if (!passesScopeFilterForRecall(summary.scope ?? null, undefined)) {
+  const own = personalScopeOf(ctx.actor) ?? undefined;
+  if (!passesScopeFilterForRecall(summary.scope ?? null, undefined, own)) {
     // codex round 3 P1: collapse to not_found. A distinguishable
     // "scope_blocked" tells a no-scope caller "this row exists, just
     // not for you" — same existence-leak the HTTP 404 collapse was
     // already preventing. Match the HTTP behaviour at the API level.
     return { failure: 'not_found' };
   }
+  const shown = (row: MemoryEntry): boolean =>
+    !opts.project || classifyOriginProject(row.origin_project, opts.project) !== 'cross-project';
+  if (!shown(summary)) return { failure: 'not_found' };
+  if ((summary.dag_level ?? 0) < 2) return { failure: 'not_drillable' };
 
-  const { collected, level0DirectCount } = collectDescendants(ctx, summaryId, depth);
+  const { collected, level0DirectCount } = collectDescendants(db, ctx.tenantId, summaryId, depth, own, shown);
 
   const summaryOut: DrillDownSummary = {
     id: summary.id,
@@ -155,9 +180,12 @@ interface CappedChildren {
 // BFS with a visited set: dag_parent_id is not unique, so a misconfigured tree could emit a child twice past depth 1.
 // The level-0 count is kept apart so a legacy summary's descendantCount fallback counts direct children only.
 function collectDescendants(
-  ctx: Context,
+  db: DatabaseSyncLike,
+  tenantId: string,
   summaryId: string,
   depth: number,
+  own: string | undefined,
+  shown: (row: MemoryEntry) => boolean,
 ): DescendantWalk {
   const collected: MemoryEntry[] = [];
   const visited = new Set<string>([summaryId]);
@@ -165,9 +193,10 @@ function collectDescendants(
   let level0DirectCount = 0;
   for (let level = 0; level < depth; level++) {
     const nextFrontier: string[] = [];
+    const kidsByParent = selectChildrenByParent(db, frontier, tenantId);
     for (const parentId of frontier) {
-      const kids = loadChildrenOf(ctx.hippoRoot, parentId, ctx.tenantId);
-      const eligibleKids = kids.filter((c) => passesScopeFilterForRecall(c.scope ?? null, undefined));
+      const kids = kidsByParent.get(parentId) ?? [];
+      const eligibleKids = kids.filter((c) => passesScopeFilterForRecall(c.scope ?? null, undefined, own) && shown(c));
       for (const k of eligibleKids) {
         if (visited.has(k.id)) continue;
         visited.add(k.id);

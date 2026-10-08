@@ -27,11 +27,11 @@ const HIPPO_BIN = join(process.cwd(), 'bin', 'hippo.js');
 
 const ISOLATION_OFF = { config: { contextProjectIsolation: false } };
 
-function adminCtx(home: string): api.Context {
+function adminCtx(home: string): api.HippoDbContext {
   return { hippoRoot: home, tenantId: 'default', actor: api.adminActor('test') };
 }
 
-function memberCtx(home: string, keyId = 'k1'): api.Context {
+function memberCtx(home: string, keyId = 'k1'): api.HippoDbContext {
   return { hippoRoot: home, tenantId: 'default', actor: { subject: `api_key:${keyId}`, role: 'member' } };
 }
 
@@ -142,7 +142,7 @@ describe('recall visibility and the approve/reject lifecycle', () => {
   });
 
   it('another tenant cannot see, approve or reject the row', () => {
-    const other: api.Context = { hippoRoot: home, tenantId: 'other', actor: api.adminActor('test') };
+    const other: api.HippoDbContext = { hippoRoot: home, tenantId: 'other', actor: api.adminActor('test') };
     expect(api.quarantineList(other, { status: 'all' })).toHaveLength(0);
     expect(() => api.quarantineApprove(other, id)).toThrow(/not quarantined/);
     expect(() => api.quarantineReject(other, id)).toThrow(/not quarantined/);
@@ -377,7 +377,7 @@ describe('CLI drive via the built binary', () => {
       execFileSync('node', [HIPPO_BIN, 'init', '--no-hooks', '--no-schedule', '--no-learn'], { cwd: cliHome, env });
       const hippoDir = join(cliHome, '.hippo');
 
-      const ctx: api.Context = { hippoRoot: hippoDir, tenantId: 'default', actor: api.adminActor('cli') };
+      const ctx: api.HippoDbContext = { hippoRoot: hippoDir, tenantId: 'default', actor: api.adminActor('cli') };
       const result = ingestEvent(ctx, { event: githubCommentEvent(INJECTION), rawBody: 'x', deliveryId: 'd1' });
 
       const listOut = execFileSync('node', [HIPPO_BIN, 'quarantine', 'list', '--json'], { cwd: cliHome, env }).toString();

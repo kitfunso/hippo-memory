@@ -2,8 +2,9 @@
 
 import { errorFields, log } from '../log.js';
 import { parseFrame } from './framing.js';
-import { mcpErrorResponse, isJsonObjectRecord, isJsonString, type JsonValue, type McpRequest, type McpResponse } from './protocol.js';
+import { mcpErrorResponse, isJsonObjectRecord, type McpRequest, type McpResponse } from './protocol.js';
 import { handleMcpRequest } from './request.js';
+import { type JsonValue, isJsonString } from '../json.js';
 
 // MCP stdio transport spec: messages are newline-delimited JSON-RPC, no embedded newlines.
 // https://modelcontextprotocol.io/specification/.../basic/transports#stdio

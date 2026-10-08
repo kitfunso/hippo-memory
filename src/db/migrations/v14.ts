@@ -4,7 +4,7 @@ import type { Migration } from './types.js';
 export const v14: Migration = {
     version: 14,
     up: (db) => {
-      // A3 provenance envelope: kind, scope, owner, artifact_ref.
+      // Provenance envelope: kind, scope, owner, artifact_ref.
       // SQLite ALTER TABLE ADD COLUMN cannot add CHECK; CHECK enforcement lives
       // in INSERT/UPDATE triggers added later in this migration.
       if (!tableHasColumn(db, 'memories', 'kind')) {

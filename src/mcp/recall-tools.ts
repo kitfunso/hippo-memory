@@ -6,24 +6,15 @@ import type { SearchResult } from '../search/types.js';
 import { dropHeldCopies, duplicateKey, storedTextKeys } from '../same-text.js';
 import { retrieve as apiRetrieve, drillDown as apiDrillDown, assemble as apiAssemble, getContext as apiGetContext, buildSuppressionSummary, type Context as ApiContext, type RecallOpts } from '../api.js';
 import { autoDetectContext } from '../context-auto.js';
-import { resolveProjectIdentity } from '../project-identity.js';
-import { appendAuditEvent, auditQueryFields } from '../audit.js';
-import {
-  detectAnchoring,
-  hashQueryText,
-  biasHintEnabled,
-  buildSessionKey,
-  getOrCreateRing,
-  appendRecall,
-  snapshotRing,
-  RingBuffer,
-} from '../recall-history.js';
+import { resolveProjectIdentity, type ProjectIdentity } from '../project-identity.js';
+import { isSharedStore } from '../config.js';
+import type { AppendAuditOpts } from '../audit.js';
+import { detectAnchoring, hashQueryText, biasHintEnabled, snapshotRing, type RingBuffer } from '../recall-history.js';
 import { detectAvailabilityBias } from '../availability.js';
-import { openHippoDb, closeHippoDb } from '../db.js';
 import { estimateTokens } from '../token-ledger.js';
 import { assembleCost, assembleText, drillCost, drillText } from '../context-render.js';
-import { mcpActor, isJsonString, isJsonBoolean, type JsonValue, type ToolCall } from './protocol.js';
-import { sessionRecallHistoryMcp, lastRecalledIds, resolveClientKey } from './session-state.js';
+import { mcpActor, type ToolCall } from './protocol.js';
+import { lastRecalledIds, resolveClientKey } from './session-state.js';
 import {
   formatContinuityBlock,
   formatMemories,
@@ -38,20 +29,15 @@ import {
   type RenderedRecall,
   type RenderSlot,
 } from './format.js';
+import { isJsonString } from '../json.js';
+import { parseContextRequest, parseRecallRequest, toolParams } from '../api/recall-request.js';
+import { noteRecall, sessionRing, shownRecallRows } from '../api/recall-record.js';
 
 // Named shapes for the optional fields each api.* call only wants to pass
 // when the caller actually supplied them. Built via `const extra: T = {};
 // if (cond) extra.field = value;` then spread once, unconditionally — keeps
 // the same per-field omission semantics as a conditional spread without the
 // `...(cond ? { field } : {})` pattern.
-interface RecallExtraOpts {
-  freshTailCount?: number;
-  freshTailSessionId?: string;
-  summarizeOverflow?: boolean;
-  scorerWindow?: number;
-  sessionId?: string;
-}
-
 interface AssembleExtraOpts {
   budget?: number;
   freshTailCount?: number;
@@ -64,57 +50,14 @@ interface DrillDownExtraOpts {
   depth?: number;
 }
 
-interface RecallToolArgs {
-  query: string;
-  budget: number;
-  includeContinuity: boolean;
-  explicitScope: string | undefined;
-  sessionId: string | undefined;
-  recallExtra: RecallExtraOpts;
-}
-
-function parseRecallArgs(args: Record<string, JsonValue>, defaultBudget: number): RecallToolArgs {
-  const query = String(args.query || '');
-  const budget = Number(args.budget) || defaultBudget;
-  const includeContinuity = Boolean(args.include_continuity);
-  const explicitScope = isJsonString(args.scope) && args.scope.length > 0
-    ? args.scope
-    : undefined;
-  const freshTailCountArg = Number(args.fresh_tail_count);
-  const freshTailCount = Number.isFinite(freshTailCountArg) && freshTailCountArg > 0
-    ? freshTailCountArg
-    : undefined;
-  const freshTailSessionId = isJsonString(args.fresh_tail_session_id) && args.fresh_tail_session_id.length > 0
-    ? args.fresh_tail_session_id
-    : undefined;
-  const summarizeOverflow = isJsonBoolean(args.summarize_overflow)
-    ? args.summarize_overflow
-    : undefined;
-  // Number-coerce, never typeof-check: "abc" must reach api.retrieve and fail as invalid_scorer_window, the same code HTTP returns.
-  const scorerWindow = args.scorer_window === undefined
-    ? undefined
-    : Number(args.scorer_window);
-  // session_id drives the goal-stack boost inside api.retrieve; same trim and 256-char cap as fresh_tail_session_id.
-  const sessionIdRaw = isJsonString(args.session_id) ? args.session_id.trim() : '';
-  const sessionId = sessionIdRaw.length > 0 && sessionIdRaw.length <= 256
-    ? sessionIdRaw
-    : undefined;
-  const recallExtra: RecallExtraOpts = {};
-  if (freshTailCount !== undefined) recallExtra.freshTailCount = freshTailCount;
-  if (freshTailSessionId !== undefined) recallExtra.freshTailSessionId = freshTailSessionId;
-  if (summarizeOverflow !== undefined) recallExtra.summarizeOverflow = summarizeOverflow;
-  if (scorerWindow !== undefined) recallExtra.scorerWindow = scorerWindow;
-  if (sessionId !== undefined) recallExtra.sessionId = sessionId;
-  return { query, budget, includeContinuity, explicitScope, sessionId, recallExtra };
-}
-
-/** Builds the showRanked callback that renders the list MCP shows and parks the render in `out`. */
+/** Builds the showRanked callback that renders the list MCP shows, parks the render in `out` and hands back its hint rows. */
 function recallPresenter(
   budget: number,
   includeContinuity: boolean,
   anchorRing: RingBuffer | null,
   queryHash: number,
   out: RenderSlot,
+  hintRows: (rendered: RenderedRecall) => AppendAuditOpts[],
 ): NonNullable<RecallOpts['showRanked']> {
   return ({ ranked, pool, droppedByScope }, apiResult) => {
     // Sections are paid in print order, ahead of the memories and after the heading; one that does not fit is dropped whole.
@@ -132,7 +75,7 @@ function recallPresenter(
     const continuityPiece = includeContinuity && apiResult.continuity ? `\n\n${formatContinuityBlock(apiResult.continuity)}` : '';
     const showContinuity = continuityPiece !== '' && pays(continuityPiece);
 
-    // J1, J2 and C5: the hints and Cutoff block describe the list MCP shows, not the window band in apiResult.
+    // The hints and Cutoff block describe the list MCP shows, not the window band in apiResult.
     const render = (cut: SearchResult[]): RenderedRecall => {
       const list = dropHeldCopies(cut, (r) => r.entry); // after every cut, so a merged row cut here never hides its sources
       const anchoring = anchorRing ? detectAnchoring(snapshotRing(anchorRing), queryHash, list[0]?.entry.id ?? null) : null;
@@ -180,106 +123,45 @@ function recallPresenter(
       rendered = render(results);
     }
     out.rendered = rendered;
-    return rendered.list.map((r) => r.entry.id);
+    return { ids: rendered.list.map((r) => r.entry.id), audit: hintRows(rendered) };
   };
 }
 
-function appendRecallAudit(hippoRoot: string, event: Parameters<typeof appendAuditEvent>[1]): void {
-  const dbForAudit = openHippoDb(hippoRoot);
-  try {
-    appendAuditEvent(dbForAudit, event);
-  } finally {
-    closeHippoDb(dbForAudit);
-  }
-}
-
-function auditRecallHints(call: ToolCall, query: string, anchorRing: RingBuffer | null, queryHash: number, rendered: RenderedRecall): void {
-  const { hippoRoot, tenantId, ctx } = call;
-  const { anchoring: mcpAnchoringHint, availability: mcpAvailabilityHint, list: shown } = rendered;
-  if (biasHintEnabled('anchoring')) {
-    if (anchorRing) {
-      // Appended after the final detect: anchoredOn feeds the cooldown for the next recall on this session.
-      appendRecall(anchorRing, queryHash, shown[0]?.entry.id ?? null, mcpAnchoringHint?.memoryId);
-      if (mcpAnchoringHint?.reason === 'memory_dominance') {
-        appendRecallAudit(hippoRoot, {
-          tenantId,
-          actor: ctx?.actor ?? 'mcp',
-          op: 'recall_anchor_detected_memory_dominance',
-          targetId: mcpAnchoringHint.memoryId,
-          metadata: {
-            memory_id: mcpAnchoringHint.memoryId,
-            query_count: mcpAnchoringHint.queryCount ?? null,
-          },
-        });
-      } else if (mcpAnchoringHint?.reason === 'query_repeat') {
-        appendRecallAudit(hippoRoot, {
-          tenantId,
-          actor: ctx?.actor ?? 'mcp',
-          op: 'recall_anchor_detected_query_repeat',
-          targetId: mcpAnchoringHint.memoryId,
-          metadata: { memory_id: mcpAnchoringHint.memoryId },
-        });
-      }
-    } else {
-      // Telemetry: caller had no sessionId so ring tracking skipped.
-      // Per the recall-audit convention at api.ts:854, use SHA-256/16
-      // for prompt hashing (NOT hashQueryText which is FNV-1a 32-bit
-      // for recall matching; brute-force trivial for low-entropy
-      // queries). Codex round-2 P2 catch.
-      appendRecallAudit(hippoRoot, {
-        tenantId,
-        actor: ctx?.actor ?? 'mcp',
-        op: 'recall_anchor_skipped_no_session',
-        targetId: undefined,
-        metadata: auditQueryFields(query),
-      });
-    }
-  }
-
-  if (mcpAvailabilityHint) {
-    appendRecallAudit(hippoRoot, {
-      tenantId,
-      actor: ctx?.actor ?? 'mcp',
-      op: 'recall_availability_detected',
-      metadata: {
-        recent_fraction: mcpAvailabilityHint.recentFraction,
-        older_passed_over: mcpAvailabilityHint.olderCandidatesPassedOver,
-        returned_count: mcpAvailabilityHint.returnedCount,
-      },
-    });
-  }
-}
-
 export async function runRecallTool(call: ToolCall): Promise<string> {
-  const { ctx, hippoRoot, config, tenantId } = call;
-  const { query, budget, includeContinuity, explicitScope, sessionId, recallExtra } = parseRecallArgs(call.args, config.defaultBudget);
+  const { ctx, hippoRoot, config, tenantId, args } = call;
+  // MCP keeps its own band size and search mode, so limit, mode and explain are checked but not passed on.
+  const { opts: recallOpts } = parseRecallRequest(toolParams(args));
+  const { query, includeContinuity, sessionId } = recallOpts;
+  const budget = Number(args.budget) || config.defaultBudget;
   const apiCtx: ApiContext = {
     hippoRoot,
     tenantId,
     actor: mcpActor(ctx),
+    store: ctx?.store,
   };
-  const anchorRing = biasHintEnabled('anchoring') && sessionId
-    ? getOrCreateRing(sessionRecallHistoryMcp, buildSessionKey(tenantId, sessionId))
-    : null;
+  const anchorRing = sessionRing('mcp', tenantId, sessionId);
+  const who = { tenantId, actor: ctx?.actor ?? 'mcp' };
   const queryHash = hashQueryText(query);
   const out: RenderSlot = {};
   // RecallContractError throws reach the MCP caller raw, as mcp-recall-fresh-tail-policy.test.ts pins.
   await apiRetrieve(apiCtx, {
-    query,
+    ...recallOpts,
     limit: 50,
-    scope: explicitScope,
-    includeContinuity,
     mode: config.physics?.enabled !== false ? 'physics' : 'hybrid',
     // The hint is computed below over the list MCP shows; the window band's copy would emit its audit row twice.
     suppressAvailabilityHint: true,
     keepHeldCopies: true,
-    ...recallExtra,
-    showRanked: recallPresenter(budget, includeContinuity, anchorRing, queryHash, out),
+    project: ctx?.project,
+    showRanked: recallPresenter(budget, includeContinuity, anchorRing, queryHash, out, ({ list, anchoring, availability }) => shownRecallRows(who, {
+      query, ring: anchorRing, topId: list[0]?.entry.id ?? null, anchoring, availability,
+    })),
   });
-  if (!out.rendered) throw new Error('hippo_recall: api.retrieve returned without calling showRanked');
-  lastRecalledIds.set(resolveClientKey(ctx), out.rendered.list.map((r) => r.entry.id));
-  auditRecallHints(call, query, anchorRing, queryHash, out.rendered);
-  return out.rendered.text;
+  const { rendered } = out;
+  if (!rendered) throw new Error('hippo_recall: api.retrieve returned without calling showRanked');
+  lastRecalledIds.set(resolveClientKey(ctx), rendered.list.map((r) => r.entry.id));
+  // Fed once the recall's rows are written, after the final detect: anchoredOn feeds the cooldown for the next recall on this session.
+  if (anchorRing) noteRecall(anchorRing, query, rendered.list[0]?.entry.id ?? null, rendered.anchoring?.memoryId);
+  return rendered.text;
 }
 
 export function runAssembleTool({ args, ctx, hippoRoot, tenantId }: ToolCall): string {
@@ -292,6 +174,7 @@ export function runAssembleTool({ args, ctx, hippoRoot, tenantId }: ToolCall): s
     hippoRoot,
     tenantId,
     actor: mcpActor(ctx),
+    store: ctx?.store,
   };
   const explicitScope = isJsonString(args.scope) && args.scope.length > 0
     ? args.scope
@@ -302,6 +185,7 @@ export function runAssembleTool({ args, ctx, hippoRoot, tenantId }: ToolCall): s
   if (explicitScope !== undefined) assembleExtra.scope = explicitScope;
   const r = apiAssemble(apiCtx, sessionId, {
     summarizeOlder,
+    project: ctx?.project,
     ...assembleExtra,
     cost: assembleCost(sessionId),
   });
@@ -319,17 +203,16 @@ export function runDrillTool({ args, ctx, hippoRoot, tenantId }: ToolCall): stri
     hippoRoot,
     tenantId,
     actor: mcpActor(ctx),
+    store: ctx?.store,
   };
   const drillExtra: DrillDownExtraOpts = {};
   if (Number.isFinite(limit) && limit > 0) drillExtra.limit = limit;
   if (Number.isFinite(budget) && budget > 0) drillExtra.budget = budget;
   if (depth !== undefined) drillExtra.depth = depth;
-  const r = apiDrillDown(apiCtx, summaryId, { ...drillExtra, cost: drillCost });
+  const r = apiDrillDown(apiCtx, summaryId, { ...drillExtra, project: ctx?.project, cost: drillCost });
   if ('failure' in r) {
-    // v1.6.4: only not_drillable is caller-actionable. not_found
-    // intentionally collapses cross-tenant + scope-blocked + missing
-    // (codex round 3 P1: distinguishing scope_blocked would leak
-    // private-row existence on this surface).
+    // Only not_drillable is caller-actionable. not_found merges cross-tenant, scope-blocked and
+    // missing, because telling scope_blocked apart would leak private-row existence.
     if (r.failure === 'not_drillable') {
       return `Id ${summaryId} is a leaf row, not a level-2+ summary; nothing to drill into.`;
     }
@@ -338,25 +221,27 @@ export function runDrillTool({ args, ctx, hippoRoot, tenantId }: ToolCall): stri
   return drillText(r);
 }
 
+// The served store names the project (an HTTP daemon runs from anywhere); the global root names none, so stdio falls back to its launch cwd.
+function localProject(hippoRoot: string): ProjectIdentity {
+  const storeProject = resolveProjectIdentity(path.dirname(path.resolve(hippoRoot)));
+  return storeProject.name !== '' ? storeProject : resolveProjectIdentity(process.cwd());
+}
+
 export async function runContextTool({ args, ctx, hippoRoot, config, tenantId }: ToolCall): Promise<string> {
-  const budget = args.budget === undefined
-    ? config.defaultContextBudget
-    : Number(args.budget);
-  if (!Number.isFinite(budget) || budget < 0) return 'budget must be a non-negative number.';
+  // Stdio names no project, and the store's folder or the launch cwd is no caller's; HTTP sends X-Hippo-Project.
+  if (isSharedStore(hippoRoot) && ctx?.project === undefined) return 'hippo_context needs a project on a shared store; use hippo_recall';
+  const { budget: budgetArg, scope: exactScope } = parseContextRequest(toolParams(args));
+  const budget = budgetArg ?? config.defaultContextBudget;
   if (budget === 0) return '';
   if (budget < memoriesReserve(budget)) return ''; // not even the heading fits, so nothing prints, as at budget 0
-  const exactScope = isJsonString(args.scope) && args.scope.length > 0
-    ? args.scope
-    : undefined;
-  // The served store names the project (an HTTP daemon runs from anywhere); the global root names none, so stdio falls back to its launch cwd.
-  const storeProject = resolveProjectIdentity(path.dirname(path.resolve(hippoRoot))).name;
   const result = await apiGetContext(
-    { hippoRoot, tenantId, actor: mcpActor(ctx) },
+    { hippoRoot, tenantId, actor: mcpActor(ctx), store: ctx?.store },
     {
-      q: autoDetectContext(),
+      // The server's git state is no caller's, so a shared-store caller gets its project's rows without a query.
+      q: ctx?.project ? undefined : autoDetectContext(),
       budget,
       exactScope,
-      currentProject: storeProject !== '' ? storeProject : resolveProjectIdentity(process.cwd()).name,
+      currentProject: ctx?.project ?? localProject(hippoRoot),
       cost: contextCost,
     },
   );

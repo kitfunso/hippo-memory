@@ -8,10 +8,10 @@
 
 import { closeHippoDb } from './db.js';
 import { openStore } from './store/open.js';
+import type { JsonValue } from './json.js';
 
 export const WM_MAX_ENTRIES = 20;
 
-export type JsonValue = string | number | boolean | null | JsonValue[] | JsonObject;
 export type JsonObject = { [key: string]: JsonValue };
 
 export interface WorkingMemoryItem {
@@ -80,7 +80,7 @@ export function wmPush(hippoRoot: string, opts: {
     const now = new Date().toISOString();
     const importance = opts.importance ?? 0;
 
-    db.exec('BEGIN');
+    db.exec('BEGIN IMMEDIATE');
     try {
       const result = db.prepare(`
         INSERT INTO working_memory(scope, session_id, task_id, importance, content, metadata_json, created_at, updated_at)

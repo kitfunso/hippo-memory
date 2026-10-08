@@ -1,13 +1,17 @@
 // Outcome feedback on recalled memories.
 
-import { openHippoDb, closeHippoDb } from '../db.js';
-import { writeEntry } from '../store/entry-writes.js';
-import { readEntry } from '../store/entry-reads.js';
+import { closeHippoDb } from '../db.js';
+import { openStore } from '../store/open.js';
+import { writeEntryOn } from '../store/entry-writes.js';
+import { selectEntriesByIds } from '../store/entry-reads.js';
 import { loadIndex } from '../store/index-and-stats.js';
-import { applyOutcome, CHURN_STALE_TAG } from '../memory.js';
+import { entryAfterOutcome } from '../memory.js';
 import { appendAuditEvent } from '../audit.js';
 import { recordTraceOutcome } from '../recall-trace.js';
-import type { Context } from './types.js';
+import { canTouchScope, personalScopeOf } from '../recall-scope.js';
+import { SqliteBlockedError } from '../db/sqlite-blocked.js';
+import { requireGroup, type HippoStore } from '../store-port.js';
+import type { Context, HippoDbContext, StoreReply } from './types.js';
 
 // ---------------------------------------------------------------------------
 // outcome
@@ -16,20 +20,19 @@ import type { Context } from './types.js';
 /**
  * Apply a positive/negative outcome to a list of recently-recalled memory ids.
  * Used by the MCP `hippo_outcome` tool and the HTTP `POST /v1/outcome` route.
- * Tenant-scoped: ids that don't belong to ctx.tenantId are silently skipped
+ * Tenant-scoped: ids outside ctx.tenantId, or in someone else's personal scope, are silently skipped
  * (matches the prior MCP semantics — a stale id from another tenant doesn't
  * crash the call). Each successful outcome emits one audit_log row with
  * op='outcome' tagged with ctx.actor.subject.
  *
  * Returns `{applied, appliedIds}`. `appliedIds` is the tenant-filtered subset
- * of input ids that actually had `applyOutcome` run on them (i.e. ids whose
- * `readEntry(..., ctx.tenantId)` resolved). Callers that surface the id list
+ * of input ids that actually had `applyOutcome` run on them (i.e. ids found
+ * in ctx.tenantId). Callers that surface the id list
  * over a multi-tenant boundary (HTTP /v1/outcome last-recall path, Python SDK)
  * MUST return `appliedIds` instead of the raw input list — otherwise the
- * non-applied (cross-tenant) ids leak to the caller. Added in v1.11.4 to
- * close that disclosure path on POST /v1/outcome.
+ * non-applied (cross-tenant) ids leak to the caller.
  *
- * `opts.traceId` (LC1, docs/plans/2026-08-02-lc1-recall-trace-persistence.md):
+ * `opts.traceId`:
  * OPTIONAL additive opt so a programmatic caller can link this outcome to
  * the recall_traces row it judges. NOT applied unconditionally — an SDK
  * caller passing explicit ids with no preceding CLI/context recall would
@@ -42,23 +45,38 @@ export interface OutcomeResult {
   applied: number;
   appliedIds: string[];
 }
-export function outcome(
-  ctx: Context,
+export function outcome<C extends Context>(
+  ctx: C,
   ids: ReadonlyArray<string>,
   good: boolean,
   opts?: { traceId?: number },
-): OutcomeResult {
+): StoreReply<C, OutcomeResult> {
+  const reply = ctx.store ? outcomeThroughStore(ctx, ctx.store, ids, good, opts) : outcomeOnHippoDb(ctx, ids, good, opts);
+  // SAFETY: a C typed with a store gets the promise its path returns; a wide C is typed as the union, which a caller has to await anyway.
+  return reply as StoreReply<C, OutcomeResult>;
+}
+
+/** The rows and their audit rows commit together here; the trace link has no store method, since only the last-recall path sends one. */
+async function outcomeThroughStore(
+  ctx: Context, store: HippoStore, ids: ReadonlyArray<string>, good: boolean, opts?: { traceId?: number },
+): Promise<OutcomeResult> {
+  const entryWrites = requireGroup(store, 'entryWrites');
+  if (opts?.traceId !== undefined) throw new Error('an outcome links its recall trace on hippo.db only, never through a store');
+  const appliedIds = await entryWrites.applyOutcome({ tenantId: ctx.tenantId, actor: ctx.actor.subject, ownScope: personalScopeOf(ctx.actor), ids, good });
+  return { applied: appliedIds.length, appliedIds };
+}
+
+function outcomeOnHippoDb(ctx: Context, ids: ReadonlyArray<string>, good: boolean, opts?: { traceId?: number }): OutcomeResult {
   const appliedIds: string[] = [];
-  const db = openHippoDb(ctx.hippoRoot);
+  const db = openStore(ctx.hippoRoot);
   try {
+    const live = selectEntriesByIds(db, ids, ctx.tenantId);
     for (const id of ids) {
-      const entry = readEntry(ctx.hippoRoot, id, ctx.tenantId);
-      if (!entry) continue;
-      let updated = applyOutcome(entry, good);
-      if (good && updated.tags.includes(CHURN_STALE_TAG)) { // FE2: a good outcome reconfirms the entry
-        updated = { ...updated, tags: updated.tags.filter((t) => t !== CHURN_STALE_TAG) };
-      }
-      writeEntry(ctx.hippoRoot, updated, { actor: ctx.actor.subject });
+      const entry = live.get(id);
+      if (!entry || !canTouchScope(ctx.actor, entry.scope ?? null)) continue;
+      const updated = entryAfterOutcome(entry, good);
+      writeEntryOn(db, ctx.hippoRoot, updated, { actor: ctx.actor.subject });
+      live.set(id, updated); // a repeated id builds on its first outcome, as a fresh read would
       appendAuditEvent(db, {
         tenantId: ctx.tenantId,
         actor: ctx.actor.subject,
@@ -68,7 +86,7 @@ export function outcome(
       });
       appliedIds.push(id);
     }
-    // LC1: link the outcome to its trace, recording only the ids actually
+    // Link the outcome to its trace, recording only the ids actually
     // credited (post tenant-filtering, matches appliedIds). Lives in its own
     // append-only table so audit_log pruning can never erase training data.
     if (opts?.traceId !== undefined && appliedIds.length > 0) {
@@ -86,7 +104,7 @@ export function outcome(
 }
 
 // ---------------------------------------------------------------------------
-// outcomeForLastRecall (last-recall wrapper around outcome — Task 3)
+// outcomeForLastRecall (last-recall wrapper around outcome)
 // ---------------------------------------------------------------------------
 
 /**
@@ -94,18 +112,14 @@ export function outcome(
  *
  * Reads `loadIndex(ctx.hippoRoot).last_retrieval_ids` (per-hippoRoot local
  * state; not tenant-scoped at the index layer) and forwards to `outcome()`,
- * which DOES tenant-filter via `readEntry(..., ctx.tenantId)`. Cross-tenant
+ * which DOES tenant-filter its read by `ctx.tenantId`. Cross-tenant
  * ids in `last_retrieval_ids` are silently skipped, matching the MCP
  * `hippo_outcome` semantics.
  *
- * **Tenant-safe response shape (v1.11.4 security fix):** the returned `ids`
+ * **Tenant-safe response shape:** the returned `ids`
  * field contains ONLY the tenant-filtered subset that actually had outcomes
- * applied (i.e. `appliedIds` from the inner `outcome()` call). Earlier
- * versions returned the raw `last_retrieval_ids` regardless of tenant, which
- * leaked cross-tenant memory IDs to the caller via POST /v1/outcome's
- * no-body last-recall response. The fix is at this helper so all callers
- * (CLI cmdOutcome, HTTP /v1/outcome, MCP `hippo_outcome` if added later)
- * inherit the tenant-safe contract.
+ * applied (i.e. `appliedIds` from the inner `outcome()` call). It lives in this
+ * helper so every caller (CLI, HTTP /v1/outcome, MCP) inherits the contract.
  *
  * Do NOT tighten `loadIndex` with `tenantId` inside this helper — doing so
  * would break the (correct) cross-tenant-silent-skip behavior covered by
@@ -115,22 +129,27 @@ export interface OutcomeForLastRecallResult {
   applied: number;
   ids: string[];
 }
-export function outcomeForLastRecall(
-  ctx: Context,
+export function outcomeForLastRecall<C extends Context>(
+  ctx: C,
   good: boolean,
-): OutcomeForLastRecallResult {
+): StoreReply<C, OutcomeForLastRecallResult> {
+  const reply = ctx.store ? lastRecallUnderStore(ctx, ctx.store, good) : outcomeForLastRecallOnHippoDb({ ...ctx, store: undefined }, good);
+  // SAFETY: a C typed with a store gets the promise its path returns; a wide C is typed as the union, which a caller has to await anyway.
+  return reply as StoreReply<C, OutcomeForLastRecallResult>;
+}
+
+/** The last recall's ids and trace sit in hippo.db's meta table, which only the CLI and context write, so no other store holds them. */
+async function lastRecallUnderStore(ctx: Context, store: HippoStore, good: boolean): Promise<OutcomeForLastRecallResult> {
+  if (store.kind !== 'sqlite') throw new SqliteBlockedError(store.kind);
+  return outcomeForLastRecallOnHippoDb({ ...ctx, store: undefined }, good);
+}
+
+function outcomeForLastRecallOnHippoDb(ctx: HippoDbContext, good: boolean): OutcomeForLastRecallResult {
   const idx = loadIndex(ctx.hippoRoot);
   const ids = idx.last_retrieval_ids;
   if (ids.length === 0) return { applied: 0, ids: [] };
-  // LC1 F1(d) structural fix (docs/plans/2026-08-02-lc1-recall-trace-persistence.md):
-  // read the trace id from the SAME `loadIndex` snapshot already in hand
-  // (idx.last_trace_id) — a single-snapshot read, not a second DB round
-  // trip via a now-deleted readLastTraceId helper. The value is already
-  // strict-parsed by buildIndexFromDb's parseLastTraceId (store.ts): every
-  // consumer gets a clean positive-integer string or null, never a garbage
-  // value that could reach outcome() and INSERT trace_id=0/NaN. null on a
-  // fresh store / pre-v40 flow / api.recall-only usage — outcome() skips
-  // linkage silently when traceId is undefined.
+  // Same `loadIndex` snapshot as the ids; buildIndexFromDb already strict-parses it to a
+  // positive-integer string or null, so no trace_id=0/NaN reaches outcome().
   const traceId = idx.last_trace_id !== null ? Number(idx.last_trace_id) : null;
   const { applied, appliedIds } = outcome(ctx, ids, good, traceId !== null ? { traceId } : undefined);
   return { applied, ids: appliedIds };

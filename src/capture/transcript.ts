@@ -1,13 +1,15 @@
-import { envHomeDir } from '../env.js';
+import { envHomeDir, processEnv } from '../env.js';
+import { claudeConfigDir } from '../hooks/shared.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { isObjectLike, isStringValue } from '../capture-contract.js';
+import { copilotTurn } from './copilot-transcript.js';
 
 /**
- * Build a compact text summary from a Claude Code / OpenCode JSONL transcript.
+ * Build a compact text summary from a Claude Code / OpenCode / Copilot JSONL transcript.
  * Keeps plain user messages and the final chunk of assistant text, drops
- * thinking blocks, tool_use, and tool_result noise. Output is fed to the
- * existing `extractFromText` pipeline.
+ * thinking blocks, tool_use, and tool_result noise. Capture reads the same
+ * turns through `sessionTail`, one text per turn.
  *
  * Exported for tests.
  */
@@ -79,6 +81,12 @@ export function collectSessionTurns(jsonl: string, visit?: (record: TranscriptRe
     if (!isObjectLike(entry) || !('type' in entry)) continue;
     visit?.(entry);
 
+    const copilot = copilotTurn(entry);
+    if (copilot !== null) {
+      turns.push(copilot);
+      continue;
+    }
+
     if (entry.type === 'user' || entry.type === 'assistant') {
       const message = 'message' in entry && isObjectLike(entry.message) ? entry.message : undefined;
       if (!message) continue;
@@ -139,24 +147,27 @@ export function summariseTranscript(jsonl: string): string {
   return summariseSessionTurns(collectSessionTurns(jsonl));
 }
 
-export function summariseSessionTurns(turns: readonly SessionTurn[]): string {
-  const userMessages = turns.filter((t) => t.role === 'user').map((t) => t.text);
-  const assistantTexts = turns.filter((t) => t.role === 'assistant').map((t) => t.text);
-  if (userMessages.length === 0 && assistantTexts.length === 0) return '';
+/** The last 20 user turns and last 10 replies: session-end is about what was decided near the end, not at the start. */
+export function sessionTail(turns: readonly SessionTurn[]) {
+  return {
+    users: turns.filter((t) => t.role === 'user').map((t) => t.text).slice(-20),
+    assistants: turns.filter((t) => t.role === 'assistant').map((t) => t.text).slice(-10),
+  };
+}
 
-  // Keep the tail: last ~20 user turns and last ~10 assistant replies.
-  // Session-end is about what was decided near the end, not at the start.
-  const tailUsers = userMessages.slice(-20);
-  const tailAssistants = assistantTexts.slice(-10);
+export function summariseSessionTurns(turns: readonly SessionTurn[]): string {
+  const { users: tailUsers, assistants: tailAssistants } = sessionTail(turns);
+  if (tailUsers.length === 0 && tailAssistants.length === 0) return '';
 
   return [
     '# Session Summary',
     '',
     '## User Messages',
-    ...tailUsers.map((m) => `- ${m.replace(/\s+/g, ' ').slice(0, 500)}`),
+    ...tailUsers.map((m) => `- ${m}`),
     '',
     '## Assistant Responses',
-    ...tailAssistants.map((t) => t.slice(0, 2000)),
+    // A blank line between replies keeps capture from joining two of them; each user turn opens its own list item.
+    tailAssistants.join('\n\n'),
   ].join('\n');
 }
 
@@ -166,7 +177,7 @@ export function summariseSessionTurns(turns: readonly SessionTurn[]): string {
  * Priority, where the first source present is the only one tried:
  *   1. Explicit `transcriptPath` option (from `--transcript <path>`)
  *   2. Stdin JSON payload (Claude Code / OpenCode SessionEnd hook shape)
- *   3. Most recent `.jsonl` under `~/.claude/projects/<any>/`, only when the caller passes `mayScan` (only the caller knows it is not a hook) and there is no path and no stdin text, because this scan spans every project on the box
+ *   3. Most recent `.jsonl` under `<claude config dir>/projects/<any>/` (`~/.claude` unless CLAUDE_CONFIG_DIR is set), only when the caller passes `mayScan` (only the caller knows it is not a hook) and there is no path and no stdin text, because this scan spans every project on the box
  *
  * Returns null when nothing resolves, a named transcript or payload whose file is missing included. Never throws.
  */
@@ -191,10 +202,10 @@ export function resolveLastSessionTranscript(
   }
 
   if (!opts.mayScan) return null;
+  // With no home set, os.homedir() would send the scan into the real profile's transcripts.
+  if (!processEnv().CLAUDE_CONFIG_DIR && !envHomeDir()) return null;
 
-  const home = envHomeDir();
-  if (!home) return null;
-  const projectsDir = path.join(home, '.claude', 'projects');
+  const projectsDir = path.join(claudeConfigDir(), 'projects');
   if (!fs.existsSync(projectsDir)) return null;
 
   let newest: { path: string; mtime: number } | null = null;

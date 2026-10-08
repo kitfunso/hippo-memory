@@ -1,9 +1,6 @@
-// MCP stdio transport framing.
-//
-// Spec: messages are newline-delimited JSON-RPC, with no embedded newlines.
-//   https://modelcontextprotocol.io/specification/.../basic/transports#stdio
-// We also accept legacy LSP-style `Content-Length` framing so the
-// printf-and-pipe smoke test from issue #13 still works.
+// MCP stdio transport framing: newline-delimited JSON-RPC, no embedded newlines
+// (https://modelcontextprotocol.io/specification/.../basic/transports#stdio). Legacy LSP-style
+// `Content-Length` framing is also accepted so a printf-and-pipe smoke test still works.
 
 const HEADER_DELIM = Buffer.from('\r\n\r\n');
 

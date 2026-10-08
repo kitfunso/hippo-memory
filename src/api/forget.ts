@@ -6,8 +6,10 @@ import { deleteEntry } from '../store/delete-and-batch.js';
 import { updateStatsUnlessBusy } from '../store/index-and-stats.js';
 import type { RejectedValueRow } from '../rejection.js';
 import { rejectValue, unrejectValue, listRejectionsForTenant } from '../reject-flow.js';
-import type { Context } from './types.js';
-import { selectMemoryTenant } from '../store/tenant-lookup.js';
+import type { Context, StoreReply } from './types.js';
+import { requireGroup, type HippoStore } from '../store-port.js';
+import { selectMemoryReach } from '../store/tenant-lookup.js';
+import { canTouchScope, personalScopeOf } from '../recall-scope.js';
 
 // ---------------------------------------------------------------------------
 // forget
@@ -27,10 +29,23 @@ export interface ForgetResult {
   ok: true;
   id: string;
 }
-export function forget(ctx: Context, id: string): ForgetResult {
+export function forget<C extends Context>(ctx: C, id: string): StoreReply<C, ForgetResult> {
+  const reply = ctx.store ? forgetThroughStore(ctx, ctx.store, id) : forgetOnHippoDb(ctx, id);
+  // SAFETY: a C typed with a store gets the promise its path returns; a wide C is typed as the union, which a caller has to await anyway.
+  return reply as StoreReply<C, ForgetResult>;
+}
+
+async function forgetThroughStore(ctx: Context, store: HippoStore, id: string): Promise<ForgetResult> {
+  const entryWrites = requireGroup(store, 'entryWrites');
+  await entryWrites.forget({ tenantId: ctx.tenantId, actor: ctx.actor.subject, ownScope: personalScopeOf(ctx.actor), id });
+  return { ok: true, id };
+}
+
+function forgetOnHippoDb(ctx: Context, id: string): ForgetResult {
   const db = openHippoDb(ctx.hippoRoot);
   try {
-    if (selectMemoryTenant(db, id) !== ctx.tenantId) {
+    const reach = selectMemoryReach(db, id);
+    if (reach?.tenantId !== ctx.tenantId || !canTouchScope(ctx.actor, reach.scope)) {
       throw new NotFoundError(`memory not found: ${id}`);
     }
   } finally {
@@ -48,8 +63,7 @@ export function forget(ctx: Context, id: string): ForgetResult {
 }
 
 // ---------------------------------------------------------------------------
-// AT1: reject / unreject / listRejections
-// docs/plans/2026-08-15-at1-rejected-value-tombstone.md §4
+// reject / unreject / listRejections
 //
 // Context-based, tenant-checked, so HTTP/MCP reject-administration endpoints
 // can be added later without touching store internals (the write-path guard
@@ -79,7 +93,7 @@ export interface RejectResult {
  * forms — pass exactly one:
  *  - `memoryId`: reject the CURRENT content of an existing memory. Removes
  *    that row and every other live row in the tenant whose normalized
- *    digest matches (not just the id passed).
+ *    digest matches (not just the id passed), except another person's personal rows.
  *  - `value`: pre-emptive form — tombstone content that may not currently
  *    be stored (or is already gone). Zero removals.
  *
@@ -94,7 +108,8 @@ export function reject(ctx: Context, opts: RejectOpts): RejectResult {
     // keeps the error message consistent with the rest of this module.
     const db = openHippoDb(ctx.hippoRoot);
     try {
-      if (selectMemoryTenant(db, opts.memoryId) !== ctx.tenantId) {
+      const reach = selectMemoryReach(db, opts.memoryId);
+      if (reach?.tenantId !== ctx.tenantId || !canTouchScope(ctx.actor, reach.scope)) {
         throw new NotFoundError(`memory not found: ${opts.memoryId}`);
       }
     } finally {
@@ -108,6 +123,7 @@ export function reject(ctx: Context, opts: RejectOpts): RejectResult {
     reason: opts.reason,
     memoryId: opts.memoryId,
     value: opts.value,
+    ownScope: personalScopeOf(ctx.actor) ?? undefined,
   });
   return { digest: result.digest, removedIds: result.removedIds };
 }

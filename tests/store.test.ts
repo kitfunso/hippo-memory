@@ -24,6 +24,7 @@ import {
   getCurrentSchemaVersion,
 } from '../src/db.js';
 import { Layer } from '../src/memory.js';
+import { consolidate } from '../src/consolidate/sleep.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -249,7 +250,7 @@ describe('SQLite-backed search candidates', () => {
     expect(candidates.some((entry) => entry.id === unrelated.id)).toBe(false);
   });
 
-  it('rebuilds the FTS mirror if it goes missing', () => {
+  it('sleep rebuilds the FTS mirror if it goes missing', async () => {
     initStore(tmpDir);
 
     const entry = createMemory('cache refresh failure in gold pipeline', {
@@ -267,6 +268,7 @@ describe('SQLite-backed search candidates', () => {
     const candidates = loadSearchEntries(tmpDir, 'cache refresh');
     expect(candidates.some((candidate) => candidate.id === entry.id)).toBe(true);
 
+    await consolidate(tmpDir);
     const reopened = openHippoDb(tmpDir);
     try {
       if (hadFts) {

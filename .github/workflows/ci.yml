@@ -27,8 +27,11 @@ jobs:
     # 1.33.0 (PR #134); only the micro-eval job below installs Transformers.js.
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        # The binary floor check reads release tags, which a shallow clone leaves out.
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
           cache: npm
@@ -51,6 +54,8 @@ jobs:
         run: node scripts/check-size-ratchet.mjs
       - name: process.env read only through src/env.ts
         run: node scripts/check-env-reads.mjs
+      - name: Store-port ratchet
+        run: node scripts/check-store-port.mjs
       - run: node scripts/check-roadmap.mjs
       - run: node scripts/check-agent-inventory.mjs
       - run: node website/scripts/check-readme-sync.mjs
@@ -61,7 +66,7 @@ jobs:
       - name: Request-path timing at 10k memories
         run: node scripts/check-request-path-timing.mjs
       # Small N keeps it near 30 s; the 10k-memory ROADMAP gate (benchmarks/a1/p99-recall.ts defaults) stays a manual run.
-      # Warm-up drops the cold first queries and the median of 5 rounds drops a runner stall that hits one round.
+      # Warm-up drops the cold first queries; gating on the fastest of 5 rounds drops runner stalls, which hit 3 of 5 rounds on 2026-10-06.
       # Healthy runners measure a p99 of 16 to 40 ms here, so 60 ms passes them and a 4x slowdown (64 ms or more) fails.
       - name: p99 recall at 1k memories
         run: node --experimental-strip-types benchmarks/a1/p99-recall.ts --store-size 1000 --warmup 50 --rounds 5 --queries 200 --gate-ms 60
@@ -71,12 +76,16 @@ jobs:
         run: node scripts/ci-seed-provenance.mjs
       - name: Upload provenance JSON
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: provenance-coverage
           path: provenance-coverage.json
           if-no-files-found: warn
           retention-days: 14
+      # Last and always, so floors still waiting on their release stay visible without hiding the checks above.
+      - name: Binary floors name a release that ships their schema
+        if: always()
+        run: node scripts/check-expiring-keys-floor.mjs
 
   # The suite is about 28 minutes of test time on a 4-core runner; three shards run it in parallel.
   test:
@@ -87,8 +96,8 @@ jobs:
       matrix:
         shard: [1, 2, 3]
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           # Node 24.x: local dev runs 24.13.0 so CI tracks the same major.
           # The node-floor job below runs the suite on the engines floor.
@@ -103,7 +112,7 @@ jobs:
         env:
           TMPDIR: /dev/shm
       - name: Upload blob report
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: blob-${{ matrix.shard }}
           path: .vitest/blob/*
@@ -117,13 +126,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
           cache: npm
       - run: npm ci
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: blob-*
           path: .vitest/blob
@@ -132,7 +141,7 @@ jobs:
         run: npx vitest --merge-reports --coverage
       - name: Upload coverage summary
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: coverage-summary
           path: coverage/coverage-summary.json
@@ -145,10 +154,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
       - name: Open-core line
@@ -163,8 +172,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
           cache: npm
@@ -174,7 +183,7 @@ jobs:
       # After the install step: npm would replace the package directory, and
       # the weights live inside it.
       - name: Cache model weights
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: node_modules/@huggingface/transformers/.cache
           key: hf-models-4.2.0-${{ hashFiles('src/embeddings.ts', 'src/rerankers/cross-encoder.ts') }}
@@ -197,8 +206,8 @@ jobs:
       matrix:
         shard: [1, 2, 3]
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22.16.0'
           cache: npm
@@ -221,8 +230,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
           cache: npm
@@ -243,8 +252,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
           cache: npm
@@ -262,14 +271,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
           cache: npm
       - run: npm ci
       - run: npm run build
-      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
       - name: Pytest against a live server
         working-directory: python
         run: uv run --locked --extra test pytest tests -q -rs

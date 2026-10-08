@@ -76,8 +76,7 @@ const VALENCES: readonly EmotionalValence[] = ['critical', 'negative', 'positive
 
 /** Absent key means hippo keeps its pre-Jev behaviour and makes no HTTP call. */
 export function judgmentApiKey(): string | undefined {
-  const key = envTypesafeApiKey()?.trim();
-  return key ? key : undefined;
+  return envTypesafeApiKey();
 }
 
 function oneOf<T extends string>(value: string | undefined, allowed: readonly T[]): T | null {

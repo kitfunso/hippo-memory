@@ -1,5 +1,5 @@
 /**
- * E2 prediction first-class object (v0.31 / docs/plans/2026-05-26-e2-prediction-object.md).
+ * Prediction first-class object.
  *
  * Canonical store for ex-ante claims that can be closed against ex-post
  * outcomes. The `predictions` table holds every field (including
@@ -19,10 +19,8 @@
  * a failure in either step rolls back both. Pattern matches supersede
  * (api.ts:1486) and the Slack/GitHub connectors.
  *
- * J3 (reference-class / planning-fallacy detector) reads from
- * `loadPredictionsByClass` to compute per-class base rates from
- * (estimate_value, actual_value) at query time. J3 is a follow-up episode;
- * this module ships the data layer.
+ * The planning-fallacy detector reads `loadPredictionsByClass` and computes
+ * per-class base rates from (estimate_value, actual_value) at query time.
  */
 
 import { BadRequestError, NotFoundError } from '../api-errors.js';
@@ -138,7 +136,7 @@ function rowToPrediction(row: PredictionRow): Prediction {
  * The memory is tagged `['prediction', classTag]` with `source='prediction'`
  * and `kind='distilled'`. It surfaces in `hippo recall` so the agent can
  * see open predictions naturally; the predictions table is the canonical
- * structured store used by J3.
+ * structured store used by the planning-fallacy detector.
  */
 export function savePrediction(
   hippoRoot: string,
@@ -240,8 +238,7 @@ function insertPredictionRow(
 /**
  * Close an existing open prediction. Updates the predictions row only;
  * the memory mirror is NOT mutated in v1 (predictions table is canonical).
- * J3 computes accuracy (clean vs regressed) from (estimateValue,
- * actualValue) at query time.
+ * Accuracy is computed from (estimateValue, actualValue) at query time.
  */
 export function closePrediction(
   hippoRoot: string,
@@ -287,13 +284,8 @@ function closeOpenPredictionRow(
   now: string,
   actor: string,
 ): PredictionRow {
-  // Codex review finding 2026-05-26: WHERE clause requires
-  // closure_state='open' so duplicate close requests / retries against
-  // an already-closed prediction return a clear error instead of
-  // silently overwriting actual_value + emitting a duplicate
-  // predict_close audit row. Zero changed rows → caller decides
-  // whether it's a "not found" or "already closed" case based on the
-  // load-then-close pattern.
+  // closure_state='open' in the WHERE stops a retried close from overwriting
+  // actual_value and auditing twice; zero changed rows means not found or already closed.
   const updateResult = db.prepare(`
         UPDATE predictions
         SET actual_value = ?, closure_state = ?, closed_at = ?, closure_note = ?
@@ -419,8 +411,34 @@ export function loadPredictionsByClass(
   }
 }
 
+/** Every prediction in the tenant, open and closed, across all classes: the `status=all` list without a class. */
+export function loadAllPredictions(
+  hippoRoot: string,
+  tenantId: string,
+  opts: { limit?: number; after?: KeysetPosition } = {},
+): Prediction[] {
+  assertTenantId('loadAllPredictions', tenantId);
+  const after = keysetAfter('created_at', 'id', opts.after);
+  const db = openHippoDb(hippoRoot);
+  try {
+    // SAFETY: rows' shape matches the columns named in the SELECT.
+    const rows = db.prepare(`
+      SELECT id, memory_id, tenant_id, class_tag, claim_text,
+             estimate_value, estimate_unit, target_date,
+             actual_value, closure_state, closed_at, closure_note, created_at
+      FROM predictions
+      WHERE tenant_id = ?${after.sql}
+      ORDER BY created_at DESC, id DESC
+      LIMIT ?
+    `).all(tenantId, ...after.params, opts.limit ?? 100) as PredictionRow[];
+    return rows.map(rowToPrediction);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
 // ---------------------------------------------------------------------------
-// v0.31 / J3 — reference-class / planning-fallacy detector
+// Reference-class / planning-fallacy detector
 // ---------------------------------------------------------------------------
 
 export interface PredictionBaserate {
@@ -451,32 +469,22 @@ interface BaserateRow {
 }
 
 /**
- * Compute base-rate stats for closed predictions in a class. Used by J3
- * reference-class / planning-fallacy detector. Direct application of
- * Lovallo-Kahneman (2003) inside-vs-outside view.
+ * Compute base-rate stats for closed predictions in a class for the
+ * planning-fallacy detector: Lovallo-Kahneman (2003) inside-vs-outside view.
  *
  * Filter: closure_state='closed' AND estimate_value IS NOT NULL AND
  * actual_value IS NOT NULL. Excludes closed-unknown (no actual to
  * compare against) and open (not yet resolved).
  *
- * Audit-emit is BUILT IN here (single source of truth, no caller-site
- * drift risk). Plan-eng-critic round 1 HIGH recommendation: emit inside
- * helper, not at 3 call sites.
+ * Audit-emit is built in here, not at the 3 call sites, so callers cannot drift.
  */
 export function computePredictionBaserate(
   hippoRoot: string,
   tenantId: string,
   classTag: string,
   actor: string = 'cli',
-  /** v0.32 / J3.2 — when false, skip the predict_baserate audit emit. The
-   *  J3.2 orchestrator (computePlanningFallacyOutput, below) calls this with
-   *  emitAudit=false and emits its own `recall_autodebias_hint` audit row
-   *  instead, so the predict_baserate channel stays scoped to deliberate
-   *  CLI / HTTP / MCP predict-baserate calls and does NOT pollute on every
-   *  recall containing a forward-claim phrase. Default true preserves the
-   *  v1.13.0 J3 audit semantics for the 3 direct callers (cmdPredict
-   *  baserate, /v1/predictions/stats route, hippo_predict_baserate MCP
-   *  handler) — none of them pass this argument. */
+  /** False skips the predict_baserate audit so that channel only records deliberate
+   *  baserate calls, not every recall the planning-fallacy orchestrator inspects. */
   emitAudit: boolean = true,
 ): PredictionBaserate {
   assertTenantId('computePredictionBaserate', tenantId);
@@ -498,9 +506,8 @@ export function computePredictionBaserate(
     const nClosed = rows.length;
     if (nClosed === 0) {
       // Audit zero-result reads too — agents probing empty classes is
-      // a signal worth recording. Skipped when emitAudit=false (J3.2
-      // orchestrator path; its own recall_autodebias_hint audit fires
-      // only when nClosed > 0 anyway, so no signal is lost).
+      // a signal worth recording. Skipped when emitAudit=false: the orchestrator's own
+      // recall_autodebias_hint audit fires only when nClosed > 0, so no signal is lost.
       if (emitAudit) auditBaserateRead(db, tenantId, actor, classTag, 0);
       return {
         classTag,

@@ -1,7 +1,7 @@
 /** serve({ authResolver }) vouches for external bearer tokens; the core sanitises what it returns. */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtempSync, rmSync, existsSync, realpathSync } from 'node:fs';
+import { mkdtempSync, rmSync, existsSync, realpathSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -413,9 +413,9 @@ describe('exported authRevoke for add-ons', () => {
     }
   }
 
-  it('revokes a member key and audits it under the add-on actor', () => {
+  it('revokes a member key and audits it under the add-on actor', async () => {
     const member = mint('ext-tenant', 'member');
-    expect(authRevoke(ctx('ext-tenant'), member.keyId).ok).toBe(true);
+    expect((await authRevoke(ctx('ext-tenant'), member.keyId)).ok).toBe(true);
     const row = auditRows('ext-tenant').find((r) => r.op === 'auth_revoke');
     expect(row).toMatchObject({ actor: 'system:addon:u1', targetId: member.keyId });
   });
@@ -610,7 +610,7 @@ describe('package surface', () => {
       "const srv = await import('hippo-memory/server');",
       "const idx = await import('hippo-memory');",
       "const names = ['appendAuditEvent','queryAuditEvents','listAuditEventsAfter','AUDIT_OPS','openHippoDb','closeHippoDb'];",
-      'console.log(JSON.stringify({ url, serve: typeof srv.serve, authRevoke: typeof srv.authRevoke, isReservedActor: typeof srv.isReservedActor, forbidden: typeof srv.ForbiddenError, missing: names.filter((n) => idx[n] === undefined), indexServe: "serve" in idx }));',
+      'console.log(JSON.stringify({ url, serve: typeof srv.serve, authRevoke: typeof srv.authRevoke, authCreateSelf: typeof srv.authCreateSelf, isReservedActor: typeof srv.isReservedActor, forbidden: typeof srv.ForbiddenError, missing: names.filter((n) => idx[n] === undefined), indexServe: "serve" in idx }));',
     ].join('\n');
     // cwd is the checkout because self-reference resolves from the nearest package.json.
     const child = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
@@ -622,14 +622,20 @@ describe('package surface', () => {
     const lines = child.stdout.trim().split('\n');
     // SAFETY: the child script above is the only writer of the last stdout line and always emits these keys.
     const out = JSON.parse(lines[lines.length - 1]!) as {
-      url: string; serve: string; authRevoke: string; isReservedActor: string; forbidden: string; missing: string[]; indexServe: boolean;
+      url: string; serve: string; authRevoke: string; authCreateSelf: string; isReservedActor: string; forbidden: string; missing: string[]; indexServe: boolean;
     };
     expect(out.authRevoke).toBe('function');
+    expect(out.authCreateSelf).toBe('function');
     expect(out.isReservedActor).toBe('function');
     expect(out.forbidden).toBe('function');
     expect(realpathSync(fileURLToPath(out.url))).toBe(realpathSync(join(root, 'dist', 'server.js')));
     expect(out.serve).toBe('function');
     expect(out.missing).toEqual([]);
     expect(out.indexServe).toBe(false);
+  });
+
+  it.each(['authCreateSelf', 'AuthCreateSelfOpts', 'AuthCreateSelfResult'])('exports %s on the built server entry', (name) => {
+    const dts = readFileSync(join(root, 'dist', 'server.d.ts'), 'utf-8');
+    expect(dts).toMatch(new RegExp(`^export \\{[^}]*\\b${name}\\b`, 'm'));
   });
 });

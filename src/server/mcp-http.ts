@@ -2,13 +2,17 @@
 import { envMcpSseHeartbeatMs, envMcpSseMaxAgeSec, envMcpSseMaxStreams } from '../env.js';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createHash } from 'node:crypto';
-import { handleMcpRequest, mcpErrorResponse, type McpRequest } from '../mcp/server.js';
-import { HttpError, isJsonObjectRecord, type JsonValue, readBody, sendJson } from '../http-util.js';
+import type { Context } from '../api.js';
+import { isSharedStore } from '../config.js';
+import { handleMcpRequest, mcpErrorResponse, type McpContext, type McpRequest } from '../mcp/server.js';
+import { HttpError, isJsonObjectRecord, readBody, sendJson } from '../http-util.js';
+import { assertCallerProject } from '../project-identity.js';
+import type { CallerProject } from '../prompt-hook.js';
 import { buildContextWithAuth, heartbeatVerdict, readAuthHeader, requireAuth } from './auth.js';
 import { clientIpForRateLimit } from './client-ip.js';
 import { requestIds } from './request.js';
-import type { ServeOpts } from './types.js';
-import { isJsonString } from './validation.js';
+import type { ResolvedServeOpts } from './types.js';
+import { type JsonValue, isJsonString } from '../json.js';
 
 /**
  * Build a per-client key for MCP state isolation under HTTP-MCP. Used by
@@ -30,7 +34,7 @@ function buildMcpClientKey(req: IncomingMessage): string {
   return `http:${tokenHash}:${addr}`;
 }
 
-// ── MCP-over-HTTP/SSE transport (Task 11) ──
+// ── MCP-over-HTTP/SSE transport ──
 //
 // Two routes implement an MCP HTTP transport alongside the stdio one. Both
 // dispatch to the same `handleMcpRequest` as the stdio loop in src/mcp/server.ts.
@@ -49,13 +53,63 @@ function buildMcpClientKey(req: IncomingMessage): string {
 // Auth: same as /v1/* — Bearer token validated via `requireAuth`, with the
 // loopback no-auth fallback. SSE check runs once at stream-open.
 
-export async function handleMcpPost(req: IncomingMessage, res: ServerResponse, opts: ServeOpts): Promise<void> {
+// Percent-encoded by the client, so any lowercase Unicode name fits a Latin-1 header.
+const HEADER_PIECE = /^[A-Za-z0-9\-_.!~*'()%]+$/;
+
+function decodeHeaderPiece(raw: string, header: string): string {
+  if (!HEADER_PIECE.test(raw)) throw new HttpError(400, `${header} must be percent-encoded, with no empty names`);
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    throw new HttpError(400, `${header} holds a bad percent escape`);
+  }
+}
+
+/** On a shared store, the caller's project from X-Hippo-Project and the comma-separated X-Hippo-Project-Aliases; any other store ignores both. */
+export function callerProjectFromHeaders(req: IncomingMessage, hippoRoot: string): CallerProject | undefined {
+  if (!isSharedStore(hippoRoot)) return undefined;
+  const names = req.headersDistinct['x-hippo-project'];
+  const aliasHeaders = req.headersDistinct['x-hippo-project-aliases'];
+  if (names === undefined) {
+    if (aliasHeaders !== undefined) throw new HttpError(400, 'X-Hippo-Project-Aliases needs X-Hippo-Project');
+    return undefined;
+  }
+  if (names.length > 1 || (aliasHeaders?.length ?? 0) > 1) throw new HttpError(400, 'send X-Hippo-Project and X-Hippo-Project-Aliases once each');
+  const name = decodeHeaderPiece(names[0]!, 'X-Hippo-Project');
+  const rawAliases = aliasHeaders?.[0] ?? '';
+  const aliases = rawAliases === '' ? [] : rawAliases.split(',').map((a) => decodeHeaderPiece(a, 'X-Hippo-Project-Aliases'));
+  assertCallerProject({ name, aliases });
+  return { name, legacyName: name, aliases };
+}
+
+export function mcpContextFor(ctx: Context, clientKey: string, autoSleep: McpContext['autoSleep'], project?: CallerProject): McpContext {
+  const mcpCtx: McpContext = {
+    hippoRoot: ctx.hippoRoot,
+    tenantId: ctx.tenantId,
+    // McpContext.actor stays string; extract subject at the boundary.
+    actor: ctx.actor.subject,
+    // The caller's real role: MCP tools must not run a member key as admin.
+    role: ctx.actor.role,
+    scopes: ctx.actor.scopes,
+    viaAuthResolver: ctx.actor.viaAuthResolver,
+    hostAdmin: ctx.actor.hostAdmin,
+    owner: ctx.actor.owner,
+    clientKey,
+    store: ctx.store,
+    autoSleep,
+  };
+  if (project !== undefined) mcpCtx.project = project;
+  return mcpCtx;
+}
+
+export async function handleMcpPost(req: IncomingMessage, res: ServerResponse, opts: ResolvedServeOpts): Promise<void> {
   // Build the same Context the /v1/* routes use so MCP tool calls inherit
   // the server's bound hippoRoot and the auth-resolved tenantId / actor.
   // Without this, executeTool would walk from cwd via findHippoRoot() and
   // pull tenant from HIPPO_TENANT, dropping a valid Bearer for tenant B
   // back to whatever the env says.
   const ctx = await buildContextWithAuth(req, opts);
+  const project = callerProjectFromHeaders(req, ctx.hippoRoot);
   const raw = await readBody(req);
   let mcpReq: JsonValue;
   try {
@@ -72,18 +126,7 @@ export async function handleMcpPost(req: IncomingMessage, res: ServerResponse, o
   const rpcReq = mcpReq as McpRequest & Record<string, JsonValue>;
   let mcpRes;
   try {
-    mcpRes = await handleMcpRequest(rpcReq, {
-      hippoRoot: ctx.hippoRoot,
-      tenantId: ctx.tenantId,
-      // v1.12.0: McpContext.actor stays string; extract subject at the boundary.
-      actor: ctx.actor.subject,
-      // The caller's real role: MCP tools must not run a member key as admin.
-      role: ctx.actor.role,
-      scopes: ctx.actor.scopes,
-      viaAuthResolver: ctx.actor.viaAuthResolver,
-      hostAdmin: ctx.actor.hostAdmin,
-      clientKey: buildMcpClientKey(req),
-    });
+    mcpRes = await handleMcpRequest(rpcReq, mcpContextFor(ctx, buildMcpClientKey(req), opts.autoSleep, project));
   } catch (err) {
     mcpRes = mcpErrorResponse(rpcReq.id, err, requestIds.get(req));
   }
@@ -111,7 +154,7 @@ function acquireStreamSlot(req: IncomingMessage, res: ServerResponse, slots: Map
   const max = envMcpSseMaxStreams() ?? DEFAULT_MAX_STREAMS_PER_CLIENT;
   const key = streamSlotKey(req);
   const open = slots.get(key) ?? 0;
-  if (open >= max) throw new HttpError(429, `too many open streams for this client (limit ${max}); close one first`);
+  if (open >= max) throw new HttpError(429, `too many open streams for this client (limit ${max}); close one first`, 60);
   slots.set(key, open + 1);
   res.once('close', () => {
     const left = (slots.get(key) ?? 1) - 1;
@@ -123,7 +166,7 @@ function acquireStreamSlot(req: IncomingMessage, res: ServerResponse, slots: Map
 export async function handleMcpStream(
   req: IncomingMessage,
   res: ServerResponse,
-  opts: ServeOpts,
+  opts: ResolvedServeOpts,
   streamSlots: Map<string, number>,
 ): Promise<void> {
   await requireAuth(req, opts);
@@ -139,7 +182,7 @@ export async function handleMcpStream(
   // waiting for the first keepalive interval.
   res.write(': ping\n\n');
 
-  // v0.39 SSE hardening:
+  // SSE hardening:
   //   - Heartbeat re-validates the bearer (default 60s). If the key was
   //     revoked or rotated, close the stream with reason='auth_revoked'.
   //   - MCP_SSE_MAX_AGE_SEC (default 3600) caps stream lifetime; close

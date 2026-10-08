@@ -7,7 +7,7 @@ import { execSync, execFileSync, spawn } from 'child_process';
 import { MemoryEntry, createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from './memory.js';
 import { loadAllEntries } from './store/entry-reads.js';
 import { textOverlap } from './tokenize.js';
-import { isContentWorthStoring } from './audit.js';
+import { assessAutomaticMemory } from './memory-quality.js';
 import { redactSecretsStrict } from './secret-detect.js';
 import { log } from './log.js';
 
@@ -102,7 +102,7 @@ export function partitionLessons(lessons: string[]): { kept: string[]; dropped: 
   const kept: string[] = [];
   const dropped: string[] = [];
   for (const lesson of lessons.map((l) => redactSecretsStrict(l))) {
-    if (isContentWorthStoring(lesson)) {
+    if (assessAutomaticMemory(lesson).accepted) {
       kept.push(lesson);
     } else {
       dropped.push(lesson);
@@ -115,7 +115,7 @@ export function partitionLessons(lessons: string[]): { kept: string[]; dropped: 
  * Check if a substantially similar memory already exists.
  * Returns true if overlap > threshold (default 0.7).
  *
- * L9: `tenantId` is opt-in. Only takes effect when the first argument is a
+ * `tenantId` is opt-in. Only takes effect when the first argument is a
  * root string (string-overload path). When the first argument is a
  * pre-loaded MemoryEntry[], the caller has already scoped — tenantId is
  * ignored on that path.

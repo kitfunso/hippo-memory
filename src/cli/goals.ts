@@ -7,7 +7,7 @@ import { resolveTenantId } from '../tenant.js';
 import { printError } from './output.js';
 
 // ---------------------------------------------------------------------------
-// `hippo goal <push|list|complete|suspend|resume>` — B3 dlPFC depth (Task 10)
+// `hippo goal <push|list|complete|suspend|resume>`
 // ---------------------------------------------------------------------------
 
 const GOAL_POLICY_TYPES: ReadonlyArray<PolicyType> = [

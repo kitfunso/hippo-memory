@@ -23,7 +23,9 @@
 
 import { textOverlap } from './tokenize.js';
 import { loadAllEntries } from './store/entry-reads.js';
-import { deleteEntry, memoriesBackingObjects } from './store/delete-and-batch.js';
+import { deleteEntryOn, memoriesBackingObjects } from './store/delete-and-batch.js';
+import { openStore } from './store/open.js';
+import { closeHippoDb } from './db.js';
 import { compareEntryIdentity } from './compare.js';
 import { canAutoDelete, type MemoryEntry } from './memory.js';
 import { derivationPartitionKey } from './recall-scope.js';
@@ -78,6 +80,72 @@ export function strengthBucket(strength: number | null | undefined): number {
   return Number.isFinite(s) ? Math.round(s / STRENGTH_TIE_EPSILON) : 0;
 }
 
+// finiteCount mirrors strengthBucket's non-finite hardening on the
+// retrieval leg: a NaN retrieval_count would make the comparator return
+// NaN and break the total order the same way a NaN bucket would.
+// Unreachable via the schema (non-nullable INTEGER column), so this is
+// symmetry, not a live bug.
+const finiteCount = (n: number | null | undefined): number =>
+  Number.isFinite(n ?? 0) ? (n ?? 0) : 0;
+
+/** The v1.26.3 survivor total order: strength bucket desc, then retrieval_count desc, then compareEntryIdentity. */
+function survivorOrder(a: MemoryEntry, b: MemoryEntry): number {
+  const bucketDiff = strengthBucket(b.strength) - strengthBucket(a.strength);
+  if (bucketDiff !== 0) return bucketDiff;
+  const retrievalDiff = finiteCount(b.retrieval_count) - finiteCount(a.retrieval_count);
+  if (retrievalDiff !== 0) return retrievalDiff;
+  return compareEntryIdentity(a, b);
+}
+
+// Tenant partition (mirrors consolidate.ts mergeCandidatesByTenant and
+// dag.ts unparentedByTenant): group by tenantId BEFORE the sort so a
+// duplicate pair can never form across tenants. Map preserves insertion
+// order, so a single-tenant store (every row 'default') gets exactly one
+// group and the sort plus pair loop below run byte-identical to the
+// pre-fix global pass.
+function entriesByPartition(entries: readonly MemoryEntry[]): Map<string, MemoryEntry[]> {
+  const entriesByTenant = new Map<string, MemoryEntry[]>();
+  for (const entry of entries) {
+    // EI2: also split by restricted scope, else a private copy can delete the readable one.
+    const key = derivationPartitionKey(entry.tenantId, entry.scope, entry.origin_project);
+    const bucket = entriesByTenant.get(key);
+    if (bucket) bucket.push(entry);
+    else entriesByTenant.set(key, [entry]);
+  }
+  return entriesByTenant;
+}
+
+function dedupPair(kept: MemoryEntry, dropped: MemoryEntry): DedupPair {
+  return {
+    kept: kept.id,
+    keptContent: kept.content,
+    keptLayer: kept.layer,
+    keptStrength: kept.strength ?? 0,
+    removed: dropped.id,
+    removedContent: dropped.content,
+    removedLayer: dropped.layer,
+    removedStrength: dropped.strength ?? 0,
+    similarity: textOverlap(kept.content, dropped.content),
+  };
+}
+
+/** Pairs within one partition, already in survivor order, grouped by survivor; marks each loser in `removed`. */
+function partitionPairs(tenantEntries: readonly MemoryEntry[], removed: Set<string>, backing: ReadonlySet<string>): DedupPair[] {
+  const groups = new Map<string, { survivor: MemoryEntry; pairs: DedupPair[] }>();
+  for (const entry of tenantEntries) {
+    const key = duplicateKey(entry.content);
+    const group = groups.get(key);
+    if (!group) {
+      groups.set(key, { survivor: entry, pairs: [] });
+      continue;
+    }
+    if (!canAutoDelete(entry) || backing.has(entry.id)) continue;
+    removed.add(entry.id);
+    group.pairs.push(dedupPair(group.survivor, entry));
+  }
+  return [...groups.values()].flatMap((group) => group.pairs);
+}
+
 /**
  * Scan the store for duplicates and remove the weaker copy: same text apart
  * from spacing, since a near-duplicate can differ in a value (port, version,
@@ -95,29 +163,7 @@ export function deduplicateStore(
   // Only current distilled rows compete: raw rows are append-only (the delete
   // trigger would abort sleep mid-loop) and superseded rows are history, as in consolidate.ts.
   const entries = loadAllEntries(hippoRoot).filter((e) => e.kind === 'distilled' && !e.superseded_by);
-
-  // Tenant partition (mirrors consolidate.ts mergeCandidatesByTenant and
-  // dag.ts unparentedByTenant): group by tenantId BEFORE the sort so a
-  // duplicate pair can never form across tenants. Map preserves insertion
-  // order, so a single-tenant store (every row 'default') gets exactly one
-  // group and the sort plus pair loop below run byte-identical to the
-  // pre-fix global pass.
-  const entriesByTenant = new Map<string, MemoryEntry[]>();
-  for (const entry of entries) {
-    // EI2: also split by restricted scope, else a private copy can delete the readable one.
-    const key = derivationPartitionKey(entry.tenantId, entry.scope, entry.origin_project);
-    const bucket = entriesByTenant.get(key);
-    if (bucket) bucket.push(entry);
-    else entriesByTenant.set(key, [entry]);
-  }
-
-  // finiteCount mirrors strengthBucket's non-finite hardening on the
-  // retrieval leg: a NaN retrieval_count would make the comparator return
-  // NaN and break the total order the same way a NaN bucket would.
-  // Unreachable via the schema (non-nullable INTEGER column), so this is
-  // symmetry, not a live bug.
-  const finiteCount = (n: number | null | undefined): number =>
-    Number.isFinite(n ?? 0) ? (n ?? 0) : 0;
+  const entriesByTenant = entriesByPartition(entries);
 
   // Shared across tenant groups: safe because memory ids are globally
   // unique (crypto.randomUUID at creation), so an id in `removed` can never
@@ -128,43 +174,24 @@ export function deduplicateStore(
   const backing = memoriesBackingObjects(hippoRoot);
 
   for (const tenantEntries of entriesByTenant.values()) {
-    // The v1.26.3 survivor total order (see the file-level docstring:
-    // strength bucket desc -> retrieval_count desc -> compareEntryIdentity),
-    // scoped per tenant group: the total order holds within a tenant only,
-    // matching the partition above.
-    tenantEntries.sort((a, b) => {
-      const bucketDiff = strengthBucket(b.strength) - strengthBucket(a.strength);
-      if (bucketDiff !== 0) return bucketDiff;
-      const retrievalDiff = finiteCount(b.retrieval_count) - finiteCount(a.retrieval_count);
-      if (retrievalDiff !== 0) return retrievalDiff;
-      return compareEntryIdentity(a, b);
-    });
-
-    const texts = tenantEntries.map((e) => duplicateKey(e.content));
-    for (let i = 0; i < tenantEntries.length; i++) {
-      if (removed.has(tenantEntries[i].id)) continue;
-      for (let j = i + 1; j < tenantEntries.length; j++) {
-        if (removed.has(tenantEntries[j].id) || !canAutoDelete(tenantEntries[j]) || backing.has(tenantEntries[j].id)) continue;
-        if (texts[j] !== texts[i]) continue;
-
-        const similarity = textOverlap(tenantEntries[i].content, tenantEntries[j].content);
-        removed.add(tenantEntries[j].id);
-        pairs.push({
-          kept: tenantEntries[i].id,
-          keptContent: tenantEntries[i].content,
-          keptLayer: tenantEntries[i].layer,
-          keptStrength: tenantEntries[i].strength ?? 0,
-          removed: tenantEntries[j].id,
-          removedContent: tenantEntries[j].content,
-          removedLayer: tenantEntries[j].layer,
-          removedStrength: tenantEntries[j].strength ?? 0,
-          similarity,
-        });
-      }
-    }
+    // The survivor total order (see the file-level docstring), scoped per
+    // tenant group: the total order holds within a tenant only, matching the partition above.
+    tenantEntries.sort(survivorOrder);
+    pairs.push(...partitionPairs(tenantEntries, removed, backing));
   }
 
-  const done = dryRun ? pairs : pairs.filter((p) =>
-    deleteEntry(hippoRoot, p.removed, { actor: options.actor, reason: `dedup: duplicate of ${p.kept}`, automatic: true }));
+  const done = dryRun ? pairs : deletePairs(hippoRoot, pairs, options.actor);
   return { removed: done.length, pairs: done };
+}
+
+/** The pairs whose loser was deleted; one store handle, one transaction per delete. */
+function deletePairs(hippoRoot: string, pairs: readonly DedupPair[], actor: string | undefined): DedupPair[] {
+  if (pairs.length === 0) return [];
+  const db = openStore(hippoRoot);
+  try {
+    return pairs.filter((p) =>
+      deleteEntryOn(db, hippoRoot, p.removed, { actor, reason: `dedup: duplicate of ${p.kept}`, automatic: true }));
+  } finally {
+    closeHippoDb(db);
+  }
 }

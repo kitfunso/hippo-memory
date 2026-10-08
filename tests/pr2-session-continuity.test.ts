@@ -16,7 +16,6 @@ import {
   getSchemaVersion,
   getCurrentSchemaVersion,
 } from '../src/db.js';
-import type { SessionHandoff } from '../src/handoff.js';
 import { rowToSessionHandoff } from '../src/handoff.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 
@@ -183,7 +182,7 @@ describe('loadHandoffById', () => {
     initStore(tmpDir);
 
     // Save handoff and verify we can get it by ID from the DB
-    const handoff = saveSessionHandoff(tmpDir, 'default', {
+    saveSessionHandoff(tmpDir, 'default', {
       version: 1,
       sessionId: 'sess-byid',
       summary: 'Find me by ID',

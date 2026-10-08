@@ -1,11 +1,10 @@
 // In-memory observer for one pinned-only context call: what was considered, why each was rejected, what reached stdout.
 // No DB access (the caller hands build()'s output to src/recall-trace.ts); hashes, ids, counts and enums only, never text.
-import { envTestDeliveryFault } from './env.js';
 import type { MemoryEntry } from './memory.js';
 import { evalNow } from './ablation.js';
 import { scoreOverlap, type PromptRecallGate } from './prompt-recall.js';
 import { blockHash, estimateTokens, hookPayloadSessionId, hookPayloadString, isSubagentPayload } from './token-ledger.js';
-export type DeliveryRuntime = 'claude-code' | 'codex' | 'unknown';
+export type DeliveryRuntime = 'claude-code' | 'codex' | 'copilot' | 'unknown';
 export type DeliveryEventType = 'prompt-submit' | 'pinned-manual';
 export type DeliverySurface = 'hook' | 'context';
 export type DeliveryWriteStore = 'local' | 'global';
@@ -139,6 +138,8 @@ export interface DeliveryRecorderInit {
   tenantId: string;
   stdinText?: string;
   envSessionId?: string;
+  /** Set by the caller's runtime flag; Copilot payloads carry hook_event_name too, so inference would say claude-code. */
+  runtime?: DeliveryRuntime;
 }
 
 interface Candidate {
@@ -172,13 +173,33 @@ function byDepthThenScore(a: Candidate, b: Candidate): number {
   return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }
 
-/** A recorder for one call; every observer method is guarded, and a throw marks it broken instead of escaping. */
-export function createDeliveryRecorder(init: DeliveryRecorderInit): DeliveryRecorder {
-  const startedMs = Date.now();
-  const ts = evalNow().toISOString();
-  // Test-only fault injection, as HIPPO_FAKE_NOW is for time.
-  const fault = envTestDeliveryFault();
+/** What the hook payload and env say about the call, read once at creation. */
+interface PayloadFacts {
+  payloadSession: string | null;
+  envSession: string | null;
+  prompt: string | null;
+  hostTurnId: string | null;
+  hookEvent: string | null;
+  sessionState: DeliverySessionState;
+}
 
+/** Everything the observer methods write and build reads; one per recorder. */
+interface RecorderState {
+  readonly candidates: Map<string, Candidate>;
+  readonly picked: Map<string, Picked>;
+  readonly filtered: Set<string>;
+  facts: DeliveryFacts | null;
+  shown: number;
+  dropped: number;
+  disabledSeen: boolean;
+  outcome: DeliveryOutcomeInput;
+  broken: string | null;
+  flushed: boolean;
+}
+
+type Guard = (fn: () => void) => void;
+
+function readPayload(init: DeliveryRecorderInit): PayloadFacts {
   const payloadSession = hookPayloadSessionId(init.stdinText);
   const subagent = isSubagentPayload(init.stdinText);
   const envSession = init.envSessionId !== undefined && init.envSessionId !== '' ? init.envSessionId : null;
@@ -189,141 +210,139 @@ export function createDeliveryRecorder(init: DeliveryRecorderInit): DeliveryReco
   const sessionState: DeliverySessionState = subagent
     ? 'subagent'
     : payloadSession !== null ? 'payload' : envSession !== null ? 'env' : 'missing';
+  return { payloadSession, envSession, prompt, hostTurnId, hookEvent, sessionState };
+}
 
-  const candidates = new Map<string, Candidate>();
-  const picked = new Map<string, Picked>();
-  const filtered = new Set<string>();
-  let facts: DeliveryFacts | null = null;
-  let shown = 0;
-  let dropped = 0;
-  let disabledSeen = false;
-  let outcome: DeliveryOutcomeInput = { state: 'empty' };
-  let broken: string | null = null;
-  let flushed = false;
+function rejectId(
+  state: RecorderState, id: string, stage: DeliveryStage, reason: DeliveryRejectReason, score: number | null, tokens: number | null,
+): void {
+  const held = state.candidates.get(id);
+  // First rejection wins; an id never offered is not a candidate of this call.
+  if (!held || held.reason !== null) return;
+  state.candidates.set(id, { ...held, stage, reason, score, tokens });
+}
 
-  const guard = (fn: () => void): void => {
-    if (broken !== null) return;
-    try {
-      if (fault === 'observe') throw new Error('injected observe fault');
-      fn();
-    } catch (error) {
-      broken = error instanceof Error ? error.message : String(error);
-    }
-  };
+function pickedRows(state: RecorderState): DeliveryCandidateInput[] {
+  const staticReused = state.outcome.staticReused === true;
+  const rows: DeliveryCandidateInput[] = [];
+  for (const p of state.picked.values()) {
+    const held = state.candidates.get(p.entry.id);
+    rows.push({
+      memoryId: p.entry.id,
+      sourceStore: p.sourceStore,
+      pool: p.promptRecall ? 'prompt-recall' : held?.pool === 'pin' || p.entry.pinned ? 'pin' : 'recent',
+      stage: 'final',
+      outcome: staticReused && !p.promptRecall ? 'reused' : 'emitted',
+      reason: null,
+      rank: p.rank,
+      score: p.score,
+      tokens: p.tokens,
+    });
+  }
+  return rows;
+}
 
-  const rejectId = (id: string, stage: DeliveryStage, reason: DeliveryRejectReason, score: number | null, tokens: number | null): void => {
-    const held = candidates.get(id);
-    // First rejection wins; an id never offered is not a candidate of this call.
-    if (!held || held.reason !== null) return;
-    candidates.set(id, { ...held, stage, reason, score, tokens });
-  };
+interface RejectedRows {
+  rows: DeliveryCandidateInput[];
+  rejected: number;
+  /** Offered but never judged. */
+  undecided: number;
+  overflow: number;
+}
 
-  const build = (): DeliveryEventInput => {
-    if (fault === 'build') throw new Error('injected build fault');
-    const staticReused = outcome.staticReused === true;
-    const rows: DeliveryCandidateInput[] = [];
-    for (const p of picked.values()) {
-      const held = candidates.get(p.entry.id);
-      rows.push({
-        memoryId: p.entry.id,
-        sourceStore: p.sourceStore,
-        pool: p.promptRecall ? 'prompt-recall' : held?.pool === 'pin' || p.entry.pinned ? 'pin' : 'recent',
-        stage: 'final',
-        outcome: staticReused && !p.promptRecall ? 'reused' : 'emitted',
-        reason: null,
-        rank: p.rank,
-        score: p.score,
-        tokens: p.tokens,
-      });
-    }
-    const rejected: Candidate[] = [];
-    let undecided = 0;
-    for (const c of candidates.values()) {
-      if (picked.has(c.id)) continue;
-      if (c.reason === null) undecided += 1;
-      else rejected.push(c);
-    }
-    rejected.sort(byDepthThenScore);
-    for (const c of rejected.slice(0, DELIVERY_REJECTED_ROW_CAP)) {
-      rows.push({
-        memoryId: c.id, sourceStore: c.sourceStore, pool: c.pool, stage: c.stage ?? 'load', outcome: 'rejected',
-        reason: c.reason, rank: null, score: c.score, tokens: c.tokens,
-      });
-    }
-    const overflow = Math.max(0, rejected.length - DELIVERY_REJECTED_ROW_CAP);
-    const emitted = outcome.emittedText ?? null;
-    return {
-      ts,
-      tenantId: init.tenantId,
-      runtime: hostTurnId !== null ? 'codex' : hookEvent !== null ? 'claude-code' : 'unknown',
-      eventType: hookEvent === 'UserPromptSubmit' ? 'prompt-submit' : 'pinned-manual',
-      surface: 'hook',
-      storeHash: init.storeHash,
-      writeStore: init.writeStore,
-      projectHash: facts !== null && facts.projectName !== '' ? blockHash(facts.projectName) : null,
-      sessionId: payloadSession ?? envSession,
-      sessionState,
-      hostTurnId,
-      promptHash: prompt !== null ? blockHash(prompt) : null,
-      promptLength: prompt?.length ?? 0,
-      queryHash: null,
-      recallTraceId: null,
-      blockState: disabledSeen ? 'disabled' : outcome.state,
-      promptRecall: facts?.promptRecall === true,
-      consideredCount: new Set([...candidates.keys(), ...picked.keys()]).size,
-      filteredCount: filtered.size,
-      selectedCount: picked.size,
-      emittedCount: rows.filter((r) => r.outcome === 'emitted').length,
-      rejectedCount: rejected.length + undecided,
-      rejectedUnlisted: overflow + undecided,
-      sectionsShown: shown,
-      sectionsDropped: dropped,
-      budgetTokens: facts?.budgetTokens ?? 0,
-      selectedTokens: [...picked.values()].reduce((sum, p) => sum + p.tokens, 0),
-      injectedTokens: emitted !== null ? estimateTokens(emitted) : 0,
-      staticHash: outcome.staticHash ?? null,
-      recallHash: outcome.recallHash ?? null,
-      emittedHash: emitted !== null ? blockHash(emitted) : null,
-      elapsedMs: Math.max(0, Date.now() - startedMs),
-      candidates: rows,
-    };
-  };
+/** Rejected candidates deepest first, capped at DELIVERY_REJECTED_ROW_CAP rows. */
+function rejectedRows(state: RecorderState): RejectedRows {
+  const rejected: Candidate[] = [];
+  let undecided = 0;
+  for (const c of state.candidates.values()) {
+    if (state.picked.has(c.id)) continue;
+    if (c.reason === null) undecided += 1;
+    else rejected.push(c);
+  }
+  rejected.sort(byDepthThenScore);
+  const rows = rejected.slice(0, DELIVERY_REJECTED_ROW_CAP).map((c): DeliveryCandidateInput => ({
+    memoryId: c.id, sourceStore: c.sourceStore, pool: c.pool, stage: c.stage ?? 'load', outcome: 'rejected',
+    reason: c.reason, rank: null, score: c.score, tokens: c.tokens,
+  }));
+  const overflow = Math.max(0, rejected.length - DELIVERY_REJECTED_ROW_CAP);
+  return { rows, rejected: rejected.length, undecided, overflow };
+}
 
+function buildEvent(
+  init: DeliveryRecorderInit, payload: PayloadFacts, state: RecorderState, ts: string, startedMs: number,
+): DeliveryEventInput {
+  const { facts, outcome } = state;
+  const picked = pickedRows(state);
+  const rejected = rejectedRows(state);
+  const rows = [...picked, ...rejected.rows];
+  const emitted = outcome.emittedText ?? null;
   return {
-    root: init.root,
-    facts: (f) => guard(() => { facts = { ...f }; }),
-    sections: (s, d) => guard(() => { shown = s; dropped = d; }),
-    watchAdmit: (admit) => (e) => {
-      const ok = admit(e);
-      if (!ok) guard(() => { filtered.add(e.id); });
-      return ok;
-    },
+    ts,
+    tenantId: init.tenantId,
+    runtime: init.runtime ?? (payload.hostTurnId !== null ? 'codex' : payload.hookEvent !== null ? 'claude-code' : 'unknown'),
+    eventType: payload.hookEvent === 'UserPromptSubmit' ? 'prompt-submit' : 'pinned-manual',
+    surface: 'hook',
+    storeHash: init.storeHash,
+    writeStore: init.writeStore,
+    projectHash: facts !== null && facts.projectName !== '' ? blockHash(facts.projectName) : null,
+    sessionId: payload.payloadSession ?? payload.envSession,
+    sessionState: payload.sessionState,
+    hostTurnId: payload.hostTurnId,
+    promptHash: payload.prompt !== null ? blockHash(payload.prompt) : null,
+    promptLength: payload.prompt?.length ?? 0,
+    queryHash: null,
+    recallTraceId: null,
+    blockState: state.disabledSeen ? 'disabled' : outcome.state,
+    promptRecall: facts?.promptRecall === true,
+    consideredCount: new Set([...state.candidates.keys(), ...state.picked.keys()]).size,
+    filteredCount: state.filtered.size,
+    selectedCount: state.picked.size,
+    emittedCount: rows.filter((r) => r.outcome === 'emitted').length,
+    rejectedCount: rejected.rejected + rejected.undecided,
+    rejectedUnlisted: rejected.overflow + rejected.undecided,
+    sectionsShown: state.shown,
+    sectionsDropped: state.dropped,
+    budgetTokens: facts?.budgetTokens ?? 0,
+    selectedTokens: [...state.picked.values()].reduce((sum, p) => sum + p.tokens, 0),
+    injectedTokens: emitted !== null ? estimateTokens(emitted) : 0,
+    staticHash: outcome.staticHash ?? null,
+    recallHash: outcome.recallHash ?? null,
+    emittedHash: emitted !== null ? blockHash(emitted) : null,
+    elapsedMs: Math.max(0, Date.now() - startedMs),
+    candidates: rows,
+  };
+}
+
+type CandidateMethods = Pick<DeliveryObserver, 'qualityDropped' | 'offer' | 'reject' | 'dropMissing' | 'gated' | 'selected'>;
+
+/** The candidate-tracking half of the observer, each method run through `guard`. */
+function candidateMethods(state: RecorderState, guard: Guard): CandidateMethods {
+  return {
     qualityDropped: (e, isGlobal) => guard(() => {
-      filtered.add(e.id);
-      if (!candidates.has(e.id)) {
-        candidates.set(e.id, {
+      state.filtered.add(e.id);
+      if (!state.candidates.has(e.id)) {
+        state.candidates.set(e.id, {
           id: e.id, sourceStore: storeOf(isGlobal), pool: 'recent', stage: null, reason: null, score: null, tokens: null,
         });
       }
-      rejectId(e.id, 'load', 'quality', null, null);
+      rejectId(state, e.id, 'load', 'quality', null, null);
     }),
-    disabled: () => guard(() => { disabledSeen = true; }),
     offer: (entries, isGlobal, pool) => guard(() => {
       for (const e of entries) {
-        const held = candidates.get(e.id);
+        const held = state.candidates.get(e.id);
         const wanted: DeliveryPool = pool ?? (e.pinned ? 'pin' : 'recent');
         // A loaded recent row the prompt-recall gate then judges belongs to that pool.
         const relabel = held !== undefined && held.reason === null && held.pool === 'recent' && wanted === 'prompt-recall';
         if (held !== undefined && !relabel) continue;
-        candidates.set(e.id, {
+        state.candidates.set(e.id, {
           id: e.id, sourceStore: storeOf(isGlobal), pool: wanted, stage: null, reason: null, score: null, tokens: null,
         });
       }
     }),
-    reject: (e, stage, reason, score, tokens) => guard(() => rejectId(e.id, stage, reason, score ?? null, tokens ?? null)),
+    reject: (e, stage, reason, score, tokens) => guard(() => rejectId(state, e.id, stage, reason, score ?? null, tokens ?? null)),
     dropMissing: (before, after, stage, reason) => guard(() => {
       const kept = new Set(after.map((e) => e.id));
-      for (const e of before) if (!kept.has(e.id)) rejectId(e.id, stage, reason, null, null);
+      for (const e of before) if (!kept.has(e.id)) rejectId(state, e.id, stage, reason, null, null);
     }),
     gated: (prompt, items, gate, kept) => guard(() => {
       const keptIds = new Set(kept.map((g) => g.item.id));
@@ -331,28 +350,79 @@ export function createDeliveryRecorder(init: DeliveryRecorderInit): DeliveryReco
         if (keptIds.has(c.id)) continue;
         const { score, shared } = scoreOverlap(prompt, c.tokens, gate.metric);
         const cleared = score >= gate.threshold && shared >= gate.minShared;
-        rejectId(c.id, 'gate', cleared ? 'gate-max-items' : 'gate-below-threshold', score, null);
+        rejectId(state, c.id, 'gate', cleared ? 'gate-max-items' : 'gate-below-threshold', score, null);
       }
     }),
     selected: (items) => guard(() => {
-      picked.clear();
+      state.picked.clear();
       items.forEach((r, i) => {
-        picked.set(r.entry.id, {
+        state.picked.set(r.entry.id, {
           entry: r.entry, rank: i + 1, score: r.score, tokens: r.tokens,
           sourceStore: storeOf(r.isGlobal), promptRecall: r.promptRecall === true,
         });
       });
     }),
-    delivered: (o) => guard(() => { outcome = { ...o }; }),
+  };
+}
+
+export type DeliveryFault = 'observe' | 'build' | 'flush';
+
+let injectedFault: DeliveryFault | null = null;
+
+/** Makes every recorder created afterwards throw at one stage. Only tests call it; the shipped CLI and server have no route here. */
+export function _setDeliveryFaultForTests(fault: DeliveryFault | null): void {
+  injectedFault = fault;
+}
+
+/** A recorder for one call; every observer method is guarded, and a throw marks it broken instead of escaping. */
+export function createDeliveryRecorder(init: DeliveryRecorderInit): DeliveryRecorder {
+  const startedMs = Date.now();
+  const ts = evalNow().toISOString();
+  const fault = injectedFault;
+  const payload = readPayload(init);
+  const state: RecorderState = {
+    candidates: new Map(), picked: new Map(), filtered: new Set(), facts: null, shown: 0, dropped: 0,
+    disabledSeen: false, outcome: { state: 'empty' }, broken: null, flushed: false,
+  };
+
+  const guard: Guard = (fn) => {
+    if (state.broken !== null) return;
+    try {
+      if (fault === 'observe') throw new Error('injected observe fault');
+      fn();
+    } catch (error) {
+      state.broken = error instanceof Error ? error.message : String(error);
+    }
+  };
+  const { qualityDropped, offer, reject, dropMissing, gated, selected } = candidateMethods(state, guard);
+
+  return {
+    root: init.root,
+    facts: (f) => guard(() => { state.facts = { ...f }; }),
+    sections: (s, d) => guard(() => { state.shown = s; state.dropped = d; }),
+    watchAdmit: (admit) => (e) => {
+      const ok = admit(e);
+      if (!ok) guard(() => { state.filtered.add(e.id); });
+      return ok;
+    },
+    qualityDropped,
+    disabled: () => guard(() => { state.disabledSeen = true; }),
+    offer,
+    reject,
+    dropMissing,
+    gated,
+    selected,
+    delivered: (o) => guard(() => { state.outcome = { ...o }; }),
     flush: (write) => {
-      if (flushed) return;
-      flushed = true;
-      if (broken !== null) {
+      if (state.flushed) return;
+      state.flushed = true;
+      if (state.broken !== null) {
         // Same pinned `[hippo] delivery ledger` hook stderr line as recall-trace.ts's write failure.
-        console.error(`[hippo] delivery ledger skipped: recorder failed: ${broken}`);
+        console.error(`[hippo] delivery ledger skipped: recorder failed: ${state.broken}`);
         return;
       }
-      const input = build();
+      if (fault === 'build') throw new Error('injected build fault');
+      const input = buildEvent(init, payload, state, ts, startedMs);
       if (fault === 'flush') throw new Error('injected flush fault');
       write(input);
     },

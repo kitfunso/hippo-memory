@@ -42,6 +42,7 @@ import { repairCodexWrapperIfInstalled } from './hooks/codex-wrapper.js';
 import { getHippoRoot } from './store/open.js';
 import { cmdGithub, printGithubBackfillUsage } from './connectors/github/cli-impl.js';
 import { printError } from './cli/output.js';
+import { isStoreBusy, STORE_BUSY_MESSAGE } from './db/busy.js';
 import type { CommandContext } from './cli/shared.js';
 import { VERB_USAGE, USAGE_HEADER, USAGE_EXAMPLES, printAuditPruneUsage, printSlackBackfillUsage, printSlackWorkspacesUsage } from './cli/usage.js';
 
@@ -60,7 +61,7 @@ export const BOOLEAN_FLAGS: ReadonlySet<string> = new Set([
   'no-learn', 'no-mmr', 'no-propagate', 'no-schedule', 'no-share', 'no-summarize-older',
   'observed', 'open', 'physics', 'pin', 'pinned-only', 'reject-loser', 'rerank-utility',
   'reset-physics', 'save-baseline', 'show-cases', 'stats', 'stdin',
-  'strict', 'suite', 'value-aware', 'verified', 'version', 'why',
+  'strict', 'suite', 'turn', 'value-aware', 'verified', 'version', 'why',
 ]);
 
 // Every flag some command reads. Anything else is a typo that no command would act on.
@@ -190,7 +191,7 @@ export function shouldAutoRepairCodexWrapper(currentCommand: string, flags: Reco
 // hook install codex` (a Codex update can restore the real binary over our
 // shim). Never first-installs — silently swapping the codex binary on routine
 // commands is a consent violation and reads as binary hijacking to
-// supply-chain scanners (issue #133).
+// supply-chain scanners.
 function maybeRepairCodexWrapper(currentCommand: string, flags: Record<string, string | boolean | string[]>): void {
   if (!shouldAutoRepairCodexWrapper(currentCommand, flags)) return;
   try {
@@ -203,6 +204,8 @@ function maybeRepairCodexWrapper(currentCommand: string, flags: Record<string, s
 interface CommandSpec {
   readonly run: (ctx: CommandContext) => void | Promise<void>;
   readonly aliases?: readonly string[];
+  /** Runs in a request scope, opening each store once; set on api-backed verbs, as hook verbs open their own. */
+  readonly scoped?: true;
   // Each block opens with a newline so the full listing is their concatenation.
   readonly usage: readonly string[];
 }
@@ -219,14 +222,17 @@ export const COMMANDS = {
   },
   recall: {
     run: async (c) => { await (await import('./cli/recall.js')).handleRecall(c); },
+    scoped: true,
     usage: VERB_USAGE.recall,
   },
   drill: {
     run: async (c) => { await (await import('./cli/dag.js')).handleDrill(c); },
+    scoped: true,
     usage: VERB_USAGE.drill,
   },
   assemble: {
     run: async (c) => { await (await import('./cli/dag.js')).handleAssemble(c); },
+    scoped: true,
     usage: VERB_USAGE.assemble,
   },
   supersede: {
@@ -235,6 +241,7 @@ export const COMMANDS = {
   },
   explain: {
     run: async (c) => { await (await import('./cli/explain.js')).handleExplain(c); },
+    scoped: true,
     usage: VERB_USAGE.explain,
   },
   eval: {
@@ -251,10 +258,11 @@ export const COMMANDS = {
   },
   sleep: {
     run: async ({ hippoRoot, flags }) => { await (await import('./cli/sleep.js')).cmdSleep(hippoRoot, flags); },
+    scoped: true,
     usage: VERB_USAGE.sleep,
   },
   'last-sleep': {
-    run: async ({ flags }) => { (await import('./cli/session-hooks.js')).cmdLastSleep(flags); },
+    run: async ({ hippoRoot, flags }) => { (await import('./cli/last-sleep.js')).cmdLastSleep(hippoRoot, flags); },
     usage: VERB_USAGE['last-sleep'],
   },
   'session-end': {
@@ -299,10 +307,12 @@ export const COMMANDS = {
   },
   auth: {
     run: async ({ hippoRoot, args, flags }) => { (await import('./cli/auth.js')).cmdAuth(hippoRoot, args, flags); },
+    scoped: true,
     usage: VERB_USAGE.auth,
   },
   goal: {
     run: async ({ hippoRoot, args, flags }) => { (await import('./cli/goals.js')).cmdGoal(hippoRoot, args, flags); },
+    scoped: true,
     usage: VERB_USAGE.goal,
   },
   slack: {
@@ -315,6 +325,7 @@ export const COMMANDS = {
   },
   audit: {
     run: async (c) => { await (await import('./cli/audit.js')).handleAudit(c); },
+    scoped: true,
     usage: VERB_USAGE.audit,
   },
   'correction-latency': {
@@ -331,6 +342,7 @@ export const COMMANDS = {
   },
   outcome: {
     run: async ({ hippoRoot, flags }) => { (await import('./cli/curate.js')).cmdOutcome(hippoRoot, flags); },
+    scoped: true,
     usage: VERB_USAGE.outcome,
   },
   conflicts: {
@@ -355,6 +367,7 @@ export const COMMANDS = {
   },
   dormant: {
     run: async ({ hippoRoot, args, flags }) => { (await import('./cli/curate.js')).cmdDormant(hippoRoot, args, flags); },
+    scoped: true,
     usage: VERB_USAGE.dormant,
   },
   projects: {
@@ -363,14 +376,17 @@ export const COMMANDS = {
   },
   quarantine: {
     run: async ({ hippoRoot, args, flags }) => { (await import('./cli/curate.js')).cmdQuarantine(hippoRoot, args, flags); },
+    scoped: true,
     usage: VERB_USAGE.quarantine,
   },
   tokens: {
     run: async ({ hippoRoot, flags }) => { (await import('./cli/status.js')).cmdTokens(hippoRoot, flags); },
+    scoped: true,
     usage: VERB_USAGE.tokens,
   },
   failures: {
     run: async ({ hippoRoot, flags }) => { (await import('./cli/status.js')).cmdFailures(hippoRoot, flags); },
+    scoped: true,
     usage: VERB_USAGE.failures,
   },
   doctor: {
@@ -407,6 +423,7 @@ export const COMMANDS = {
   },
   forget: {
     run: async (c) => { await (await import('./cli/curate.js')).handleForget(c); },
+    scoped: true,
     usage: VERB_USAGE.forget,
   },
   inspect: {
@@ -418,7 +435,7 @@ export const COMMANDS = {
     usage: VERB_USAGE.context,
   },
   hook: {
-    run: async ({ args, flags }) => { (await import('./cli/setup.js')).cmdHook(args, flags); },
+    run: async ({ args }) => { (await import('./cli/setup.js')).cmdHook(args); },
     usage: VERB_USAGE.hook,
   },
   setup: {
@@ -439,10 +456,12 @@ export const COMMANDS = {
   },
   learn: {
     run: async ({ hippoRoot, flags }) => { (await import('./cli/transfer.js')).cmdLearn(hippoRoot, flags); },
+    scoped: true,
     usage: VERB_USAGE.learn,
   },
   promote: {
     run: async (c) => { await (await import('./cli/transfer.js')).handlePromote(c); },
+    scoped: true,
     usage: VERB_USAGE.promote,
   },
   sync: {
@@ -605,13 +624,8 @@ async function main(
     return;
   }
   maybeRepairCodexWrapper(command, flags);
-  /** Global --scope well-formedness guard (v1.26.2). parseArgs stores a value-less
-   *  flag as boolean true; downstream the 14 consumer sites either coerced that to
-   *  the literal scope string 'true' (recall filter/unlock input, wm session scope,
-   *  the remember scope-tag dual-write) or silently dropped the user's scoping
-   *  intent (the remember envelope WRITE). Reject it once here, mirroring the
-   *  --hops value-less guard, so every current and future command - including the
-   *  thin-client dispatch relays - sees --scope only as a non-empty string. */
+  /** A value-less --scope parses as boolean true, which consumers coerced to the scope 'true' or dropped;
+   *  reject it once here so every command, thin-client relays included, sees only a non-empty string. */
   if ('scope' in flags && (typeof flags['scope'] !== 'string' || !flags['scope'].trim())) {
     printError('--scope requires a non-empty value (e.g. --scope slack:private:C1).');
     process.exit(1);
@@ -659,7 +673,8 @@ async function main(
     printUsage();
     process.exit(1);
   }
-  await spec.run({ hippoRoot, args, flags });
+  const run = (): void | Promise<void> => spec.run({ hippoRoot, args, flags });
+  await (spec.scoped ? (await import('./db/request-stores.js')).runWithRequestStores(run) : run());
 }
 
 export async function runCli(argv: string[] = process.argv): Promise<void> {
@@ -667,7 +682,7 @@ export async function runCli(argv: string[] = process.argv): Promise<void> {
   try {
     await main(command, args, flags, getHippoRoot(process.cwd()));
   } catch (err) {
-    printError('Error:', err instanceof Error ? err.message : err);
+    printError('Error:', isStoreBusy(err) ? STORE_BUSY_MESSAGE : err instanceof Error ? err.message : err);
     process.exit(1);
   }
 }

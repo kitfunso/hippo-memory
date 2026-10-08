@@ -3,17 +3,15 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { detectRealCodexPath, isCodexWrapperInstalled, repairCodexWrapperIfInstalled } from './hooks/codex-wrapper.js';
+import { claudeConfigDir } from './hooks/shared.js';
 
 function main(): void {
   if (envSkipPostinstall()) return;
 
   try {
-    // Repair-only: re-ensure the wrapper for users who previously opted in
-    // (e.g. a Codex update restored the real binary over our shim). A first
-    // install never happens here — swapping the codex binary from a package
-    // postinstall is a consent violation and reads as binary hijacking to
-    // supply-chain scanners (issue #133). First install is `hippo hook
-    // install codex` only.
+    // Repair-only, for users who opted in (a Codex update can restore the real binary over our shim).
+    // Swapping the binary from postinstall is a consent violation that supply-chain scanners read as
+    // hijacking, so first install is `hippo hook install codex` only.
     repairCodexWrapperIfInstalled();
   } catch {
     // Never fail package install because auto-integration could not be applied.
@@ -43,8 +41,7 @@ function main(): void {
  * middle ground.
  */
 function printClaudeCodeNudge(): void {
-  const home = os.homedir();
-  const claudeDir = path.join(home, '.claude');
+  const claudeDir = claudeConfigDir(os.homedir());
   if (!fs.existsSync(claudeDir)) return; // Claude Code not installed — silent
 
   const settingsPath = path.join(claudeDir, 'settings.json');

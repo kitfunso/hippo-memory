@@ -3,7 +3,7 @@
 import * as api from './api.js';
 import { NotFoundError } from './api-errors.js';
 import type { MemoryEntry } from './memory.js';
-import { listMemoryConflicts, resolveConflict } from './store/conflicts.js';
+import { listTouchableConflicts, resolveConflict } from './store/conflicts.js';
 import { readEntry } from './store/entry-reads.js';
 import { writeEntry } from './store/entry-writes.js';
 import { ParamError, parseMemoryId, type ActionBody } from './dashboard-params.js';
@@ -47,7 +47,7 @@ export function pinMemory(hippoRoot: string, tenantId: string, rawId: string, bo
 export function markWrong(hippoRoot: string, tenantId: string, rawId: string): ActionResult {
   const id = parseMemoryId(rawId);
   if (liveEntry(hippoRoot, tenantId, id) === null) return notFound();
-  const ctx: api.Context = { hippoRoot, tenantId, actor: api.adminActor(ACTOR) };
+  const ctx: api.HippoDbContext = { hippoRoot, tenantId, actor: api.adminActor(ACTOR) };
   // outcome() answers `applied: 0` for a missing or other-tenant id instead of throwing.
   if (api.outcome(ctx, [id], false).applied === 0) return notFound();
   const entry = readEntry(hippoRoot, id, tenantId);
@@ -58,7 +58,7 @@ export function markWrong(hippoRoot: string, tenantId: string, rawId: string): A
 export function forgetMemory(hippoRoot: string, tenantId: string, rawId: string): ActionResult {
   const id = parseMemoryId(rawId);
   if (liveEntry(hippoRoot, tenantId, id) === null) return notFound();
-  const ctx: api.Context = { hippoRoot, tenantId, actor: api.adminActor(ACTOR) };
+  const ctx: api.HippoDbContext = { hippoRoot, tenantId, actor: api.adminActor(ACTOR) };
   try {
     const done: ForgetResult = api.forget(ctx, id);
     return { status: 200, body: done, changed: true };
@@ -78,7 +78,8 @@ export function resolveOpenConflict(hippoRoot: string, tenantId: string, conflic
   const { keep } = body;
   if (keep === undefined) throw new ParamError('keep must be a memory id');
   parseMemoryId(keep);
-  const conflict = listMemoryConflicts(hippoRoot, '*', tenantId).find((c) => c.id === conflictId);
+  // The dashboard acts as an unowned admin, so a pair holding a personal row reads as missing, open or resolved.
+  const conflict = listTouchableConflicts(hippoRoot, '*', tenantId, api.adminActor(ACTOR)).find((c) => c.id === conflictId);
   if (!conflict) return notFound();
   const already = (): ActionResult => ({ status: 409, body: { error: 'This conflict is already resolved' }, changed: false });
   if (conflict.status !== 'open') return already();

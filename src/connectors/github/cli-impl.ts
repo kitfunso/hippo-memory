@@ -25,8 +25,8 @@ import {
   isGitHubIssueCommentEvent,
   isGitHubPullRequestEvent,
   isGitHubPullRequestReviewCommentEvent,
-  type JsonValue,
 } from './types.js';
+import type { JsonValue } from '../../json.js';
 
 type FlagValue = string | boolean | string[];
 type Flags = Record<string, FlagValue>;
@@ -195,9 +195,7 @@ export async function cmdGithubDlqReplay(
     tenantId: resolveTenantId({}),
     actor: adminActor('cli:github-dlq-replay'),
   };
-  // v1.3.1 hotfix (codex P1): without an ingestHook the v1.3.0 CLI was a
-  // dry-run that printed "replay ok" while only bumping retry_count. Wire the
-  // real hook so `replay` actually re-runs the ingest path.
+  // Without an ingestHook replay only bumps retry_count while printing "replay ok"; the real hook re-runs ingest.
   const result = await replayDlqEntry(ctx, id, {
     force,
     webhookSecret: envGithubWebhookSecret(),
@@ -208,11 +206,8 @@ export async function cmdGithubDlqReplay(
       if (!event) {
         return { memoryId: null };
       }
-      // v1.3.2 (codex round 3 P1): a replayed `issue_comment.deleted` or
-      // `pull_request_review_comment.deleted` row must route to the deletion
-      // handler, NOT to ingestEvent. The v1.3.1 hook unconditionally called
-      // ingestEvent and would have written the deleted comment as a NEW raw
-      // memory instead of archiving the matching ones.
+      // A replayed comment `.deleted` row must route to the deletion handler, NOT to ingestEvent,
+      // which would write the deleted comment as a NEW raw memory instead of archiving the matching ones.
       if (
         (event.eventName === 'issue_comment' || event.eventName === 'pull_request_review_comment') &&
         event.payload.action === 'deleted'

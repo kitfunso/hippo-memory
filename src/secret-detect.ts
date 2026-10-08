@@ -1,6 +1,5 @@
 /**
- * Secret detection for memory content (v39 memory scope isolation, S4;
- * docs/plans/2026-07-01-memory-scope-isolation.md).
+ * Secret detection for memory content (memory scope isolation).
  *
  * Conservative, provider-bounded patterns only - a bare `sk-` in prose must
  * NOT flag. Detection gates two surfaces:
@@ -11,7 +10,7 @@
  *    project origin. Explicit recall is unaffected - recalling a secret is
  *    a deliberate act.
  *
- * This is deliberately a thin slice of the A4 lifecycle-compliance item
+ * This is deliberately a thin slice of lifecycle compliance
  * (no PII detection). Write-time scrubbing covers only text no person
  * typed into hippo; see `vetSecrets`.
  *
@@ -53,15 +52,10 @@ const SECRET_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }> = [
   // does.
   { name: 'sk-style-key', re: /\bsk-[A-Za-z0-9_-]{20,}\b/ },
   { name: 'sk-underscore-key', re: /\bsk_[A-Za-z0-9]+_[A-Za-z0-9_]{6,}\b/ },
-  // Generic assignment: api_key=..., password: ..., token = "..." where the
-  // value actually LOOKS like a credential: 12+ chars drawn only from
-  // token-safe characters AND containing at least one digit. Without both
-  // constraints this pattern flags ordinary code snippets and prose -
-  // `token = estimateTokens(entry.content)` and "the secret: incremental-
-  // rollout worked well" were verified false positives that would silently
-  // hide real code-lesson memories from ambient context (post-merge
-  // adversarial review, 2026-07-02).
-  { name: 'secret-assignment', re: /\b(?:api[_-]?key|secret|token|password)\s*[:=]\s*['"]?(?=[A-Za-z0-9_\-+/]*\d)[A-Za-z0-9_\-+/=]{12,}/i },
+  // The value needs 12+ token-safe chars and a digit, or `token = estimateTokens(...)` and doc templates like user:password@ would hide code lessons from ambient context.
+  // Secret names end in the keyword (dbPassword, PGPASSWORD) and token_url does not, so the match opens there and scans no prefix; pwd and pass need a _ as OLDPWD and bypass are not secrets.
+  { name: 'secret-assignment', re: /(?:(?:api[_-]?key|access[_-]?key|private[_-]?key|secret|token|passw(?:or)?d|(?<=_)(?:pwd|pass))(?:[_-]?(?:key(?:[_-]?base)?|value|secret))?['"]?\s*(?::=?|=>?)\s*['"]?|(?<=--)password(?:=|\s+))(?=[A-Za-z0-9_\-+/]*\d)[A-Za-z0-9_\-+/=]{12,}/i },
+  { name: 'url-password', re: /(?<=[A-Za-z0-9]:\/\/)[^\s/:@?#]*:(?=[^\s/@?#]*\d)[^\s/@?#]+(?=@)/ },
 ];
 
 const KEYISH_CONTEXT_RE = /key|token|secret|credential|bearer|auth|password/i;
@@ -72,6 +66,7 @@ const STRICT_ONLY_PATTERNS: readonly RegExp[] = [
   /\bbearer\s+[A-Za-z0-9._~+/-]{16,}=*/gi,
   /\bauthorization["']?\s*[:=]\s*["']?basic\s+[A-Za-z0-9+/]{8,}={0,2}/gi,
   /(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]*/g,
+  /(?<=[A-Za-z0-9]:\/\/)[^\s/:@?#]*:[^\s/@?#]+(?=@)/g,
 ];
 
 /**
@@ -96,15 +91,15 @@ export function detectSecret(entry: { content: string; tags: string[] }): Secret
  * Replace secret-shaped substrings in free text with a redaction marker.
  * Reuses the same `SECRET_PATTERNS` / co-occurrence guard as `detectSecret`
  * (which only flags whole-entry content) so callers that must persist raw
- * text that never passes through the normal capture content gate — e.g. the
- * CS1 pre-compact snapshot fields — can scrub it in place instead.
+ * text that never passes through the normal capture content gate (e.g. the
+ * pre-compact snapshot fields) can scrub it in place instead.
  */
 export function redactSecrets(text: string): string {
   return redactText(text, false);
 }
 
-/** A domain's first label must open on a letter, so asset names like logo@2x.png and pins like react@18.2.0 stay. */
-const EMAIL = /\b[A-Za-z0-9._%+-]+@[A-Za-z][A-Za-z0-9-]*(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\b/g;
+/** Only a run's first character starts a match, so a long run is scanned once; a domain's first label opens on a letter, so logo@2x.png and react@18.2.0 stay. */
+const EMAIL = /(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]{1,64}@[A-Za-z][A-Za-z0-9-]*(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\b/g;
 
 /** Memories never hold a raw email address (AGENTS.md); phone numbers are left alone, as their patterns misfire on ids. */
 export function maskEmails(text: string): string {

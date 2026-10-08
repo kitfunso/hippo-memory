@@ -1,4 +1,4 @@
-/** Prompt-injection detection for untrusted memory content (CD5). Same shape as secret-detect.ts; leaf module, no store/api/shared imports. */
+/** Prompt-injection detection for untrusted memory content. Same shape as secret-detect.ts; leaf module, no store/api/shared imports. */
 
 export interface InstructionDetection {
   flagged: boolean;

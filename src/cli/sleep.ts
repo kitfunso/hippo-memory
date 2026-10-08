@@ -9,8 +9,11 @@ import { replayCompactionsAt } from '../compaction-record.js';
 import * as api from '../api.js';
 import { resolveTenantId } from '../tenant.js';
 import { renderAmbientSummary } from '../ambient.js';
-import { log } from '../log.js';
-import { requireInit, learnFromRepo, runChurnStaleForRepo, printAgentImport } from './shared.js';
+import { errorMessage, log } from '../log.js';
+import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../db.js';
+import { repairOnceOnSleep } from '../project-merge.js';
+import { requireInit, learnFromRepo, runChurnStaleForRepo, printAgentImport, skipLearnOnSharedStore } from './shared.js';
+import { repairQualityOnceAt } from './quality-repair-once.js';
 import { printError } from './output.js';
 
 /** Runs `hippo sleep`; with `--log-file` it also tees its output to that file. */
@@ -135,6 +138,26 @@ export function renderSleepResult(result: api.SleepResult): void {
   }
 }
 
+/** Fault-isolated: a failed repair warns and runs again next sleep, and never stops the sleep. */
+function repairProjectTagsOnce(hippoRoot: string): void {
+  let db: DatabaseSyncLike | undefined;
+  try {
+    db = openHippoDb(hippoRoot);
+    const r = repairOnceOnSleep(db, hippoRoot, resolveTenantId({}));
+    if (r === null) return;
+    const parts = [
+      r.copies.length > 0 ? `set aside ${r.copies.length} misfiled note imports` : '',
+      r.folds.length > 0 ? `folded ${r.folds.map((f) => `${f.from} into ${f.into}`).join(', ')}` : '',
+      r.toProject.length + r.setAside.length > 0 ? `re-tagged ${r.toProject.length + r.setAside.length} merged memories` : '',
+    ].filter((p) => p !== '');
+    console.log(`Repaired project tags once after the upgrade: ${parts.join('; ')} (backup: ${r.backup}).`);
+  } catch (err) {
+    log.warn(`project tag repair skipped, retried next sleep: ${errorMessage(err)}`);
+  } finally {
+    if (db) closeHippoDb(db);
+  }
+}
+
 async function cmdSleepCore(
   hippoRoot: string,
   flags: Record<string, string | boolean | string[]>
@@ -143,9 +166,10 @@ async function cmdSleepCore(
 
   // Phase 1: Auto-learn from git and every coding agent's own memories (CLI-only, uses process.cwd() / os.homedir()).
   // Stays in cli.ts; api.sleep covers Phase 2-6 only.
-  if (!flags['no-learn'] && flags['dry-run']) {
+  const learn = !flags['no-learn'] && !skipLearnOnSharedStore(hippoRoot);
+  if (learn && flags['dry-run']) {
     console.log("Dry run: skipped learning from git commits and coding agents' own memories (`hippo import --agents --dry-run` previews those).");
-  } else if (!flags['no-learn']) {
+  } else if (learn) {
     const config = loadConfig(hippoRoot);
     if (config.autoLearnOnSleep && isGitRepo(process.cwd())) {
       const { added } = learnFromRepo(hippoRoot, process.cwd(), 1);
@@ -167,6 +191,8 @@ async function cmdSleepCore(
   if (!flags['dry-run']) {
     const finished = replayCompactionsAt(hippoRoot, (message) => log.warn(`compaction replay: ${message}`));
     if (finished > 0) console.log(`Finished saving ${finished} compaction${finished === 1 ? '' : 's'} left over from earlier sessions.`);
+    repairProjectTagsOnce(hippoRoot);
+    repairQualityOnceAt(hippoRoot);
   }
 
   // Phase 2-6: Pure-storage pipeline (consolidate + dedup + audit + share + ambient).

@@ -16,8 +16,7 @@ interface FetchHeaders {
  * OpenAI-compatible endpoint. Gated on HIPPO_LLM_RERANKER_URL to prevent
  * accidental cost.
  *
- * Skeleton only — see docs/plans/2026-05-10-f6-reranker-hardening.md Task 8.
- * Full characterisation deferred to a follow-on plan.
+ * Skeleton only; full characterisation is deferred.
  *
  * Timeout: defaults to 30s; overridable via HIPPO_LLM_RERANKER_TIMEOUT_MS.
  * On timeout or any fetch failure, the reranker warns once per process and

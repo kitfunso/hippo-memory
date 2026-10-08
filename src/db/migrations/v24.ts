@@ -3,7 +3,7 @@ import type { Migration } from './types.js';
 export const v24: Migration = {
     version: 24,
     up: (db) => {
-      // v1.3.0 GitHub connector schema (codex round 1, 2026-05-04).
+      // GitHub connector schema.
       // Six tables + a min_compatible_binary meta row for rollback safety.
 
       db.exec(`
@@ -57,7 +57,7 @@ export const v24: Migration = {
         )
       `);
 
-      // PAT-mode multi-tenant routing (codex P0 #4). Maps repo_full_name to
+      // PAT-mode multi-tenant routing. Maps repo_full_name to
       // tenant when the webhook envelope has no `installation` field. Composite
       // PK so the same repo can intentionally be visible to multiple tenants
       // (e.g., shared tooling accounts) — collision is on (repo, tenant) pair.
@@ -70,10 +70,8 @@ export const v24: Migration = {
         )
       `);
 
-      // Rollback-safety guard (codex P0 #2). Any binary < 1.2.1 lacks the
-      // generic *:private:* default-deny and would leak github:private:* rows
-      // if it opened this DB. The startup guard in v1.2.1+ refuses to open a
-      // DB whose min_compatible_binary is newer than its own version.
+      // Rollback-safety guard: an older binary lacks the *:private:* default-deny and would leak
+      // github:private:* rows; the startup guard refuses a DB whose min_compatible_binary is newer.
       db.prepare(`INSERT INTO meta(key, value) VALUES('min_compatible_binary', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`).run('1.2.1');
     },
 };

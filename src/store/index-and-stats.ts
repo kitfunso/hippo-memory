@@ -20,17 +20,13 @@ export function loadIndex(hippoRoot: string): HippoIndex {
 /**
  * Persist mutable index metadata. Entry rows themselves are derived from SQLite.
  *
- * LC1 F1(c) structural fix: `last_retrieval_ids` and `last_trace_id` must
- * land atomically — callers (getContext, cmdRecall) fold a freshly-written
- * trace id into `index.last_trace_id` before calling this, relying on BOTH
- * meta keys committing together. Wrapped in BEGIN/COMMIT so a crash or a
- * mid-write failure can never advance one key without the other. index.json
- * is left untouched; only `rebuildIndex` writes it.
+ * `last_retrieval_ids` and `last_trace_id` commit in one transaction: callers fold a fresh trace id
+ * into the index and rely on both keys moving together. index.json is left to `rebuildIndex`.
  */
 export function saveIndex(hippoRoot: string, index: HippoIndex): void {
   const db = openStore(hippoRoot);
   try {
-    db.exec('BEGIN');
+    db.exec('BEGIN IMMEDIATE');
     try {
       setMeta(db, 'last_retrieval_ids', JSON.stringify(index.last_retrieval_ids ?? []));
       setMeta(db, 'last_trace_id', index.last_trace_id ?? '');
@@ -56,12 +52,10 @@ export function rebuildIndex(hippoRoot: string): HippoIndex {
     );
     const legacyEntries = loadLegacyEntriesFromMarkdown(hippoRoot).filter((entry) => !existingIds.has(entry.id));
     if (legacyEntries.length > 0) {
-      db.exec('BEGIN');
+      db.exec('BEGIN IMMEDIATE');
       try {
-        // AT1 (plan §3, round-3 redesign): same guard-with-per-row-skip as
-        // bootstrapLegacyStore — rebuildIndex is the other channel through
-        // which a stale markdown mirror could resurrect a rejected value.
-        // Refusal audit written INLINE (nothing rolls back on a skip).
+        // Guard with per-row skip, like bootstrapLegacyStore: a stale markdown mirror could resurrect a
+        // rejected value here. Refusal audit is written inline because nothing rolls back on a skip.
         let rejectedCount = 0;
         for (const entry of legacyEntries) {
           // v39: same store-derived origin stamp as bootstrapLegacyStore.

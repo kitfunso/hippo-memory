@@ -1,6 +1,5 @@
 /**
- * E2 project_brief first-class object
- * (docs/plans/2026-05-30-e2-project-brief-object.md).
+ * Project_brief first-class object.
  *
  * A `project_brief` is the living, repo-scoped summary of a repository's state: a
  * `summary` body scoped to a `repo`, evolving via the supersede delta lifecycle.
@@ -26,12 +25,13 @@ import { BadRequestError, ConflictError, NotFoundError } from './api-errors.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
 import { writeEntry } from './store/entry-writes.js';
 import { assertTenantId } from './tenant.js';
-import { RECALL_DEFAULT_DENY_SCOPES } from './recall-scope.js';
+import { scopeAdmitSql } from './recall-scope.js';
 import { markGraphDirty, removeGraphEntitiesForObject } from './graph/write.js';
 import { createMemory, Layer } from './memory.js';
 import { appendAuditEvent } from './audit.js';
 import { objectHalfLifeDays } from './half-life-migration.js';
 import { keysetAfter, type KeysetPosition } from './keyset.js';
+import { escapeLike } from './escape.js';
 
 // ---------------------------------------------------------------------------
 // Domain types
@@ -221,7 +221,7 @@ interface BriefWrite {
 // Preflight the supersede target BEFORE inserting the new row (so the new
 // autoincrement id can never be its own supersede target); read the
 // predecessor version in the same SELECT for server-derived versioning.
-// Mirrors saveSkill / saveProcess (codex P1 2026-05-28).
+// Mirrors saveSkill / saveProcess.
 function preflightBriefSupersede(db: DatabaseSyncLike, tenantId: string, supersedesId: number): number {
   // SAFETY: SELECT projects exactly status, version; .get() returns that
   // shape for the matching row, or undefined when no brief/tenant pair matches.
@@ -432,7 +432,7 @@ export function closeProjectBrief(
       // Closing removes the object from the graph. Remove its rows DIRECTLY (deterministic),
       // not only via an enqueued rebuild whose queue item is lost if the mirror is later
       // forgotten (the queue row cascade-deletes with the memory), which would leave the closed
-      // object stale and could block that forget (codex P1). Still enqueue when a mirror exists
+      // object stale and could block that forget. Still enqueue when a mirror exists
       // so a concurrent rebuild re-derives consistently (harmless if it also runs).
       removeGraphEntitiesForObject(hippoRoot, tenantId, 'project', closed.id);
       if (closed.memoryId) {
@@ -515,7 +515,7 @@ export function loadProjectBriefs(
 /**
  * The repo's CURRENT active brief, or null. By convention there is one active brief
  * per (tenant, repo); if an operator created more than one (the DB does not prevent
- * it, consistent with every other E2 object), the MOST-RECENT active row wins.
+ * it, consistent with every other first-class object), the MOST-RECENT active row wins.
  */
 export function loadActiveBriefForRepo(
   hippoRoot: string,
@@ -544,11 +544,6 @@ export function loadActiveBriefForRepo(
 // Refresh assembler (the distinguishing deliverable)
 // ---------------------------------------------------------------------------
 
-/** Escape LIKE wildcards in operator-supplied text (mirror of store/search-rows.ts). */
-function escapeLike(term: string): string {
-  return term.replace(/[%_\\]/g, '\\$&');
-}
-
 /** Single-line headline for a receipt: first non-empty line, newline-stripped,
  *  truncated. Deterministic + safe for the markdown bullet list. */
 function receiptHeadline(content: string): string {
@@ -563,7 +558,7 @@ function receiptHeadline(content: string): string {
 function loadBriefReceipts(hippoRoot: string, tenantId: string, normalizedRepo: string): ReceiptRow[] {
   const tag = `path:${normalizedRepo.toLowerCase()}`;
   const likeParam = `%"${escapeLike(tag)}"%`;
-  const denyPlaceholders = RECALL_DEFAULT_DENY_SCOPES.map(() => '?').join(', ');
+  const deny = scopeAdmitSql('');
 
   const db = openHippoDb(hippoRoot);
   try {
@@ -574,10 +569,10 @@ function loadBriefReceipts(hippoRoot: string, tenantId: string, normalizedRepo: 
       WHERE tenant_id = ?
         AND source != 'project_brief'
         AND LOWER(tags_json) LIKE ? ESCAPE '\\'
-        AND (scope IS NULL OR (scope NOT IN (${denyPlaceholders}) AND scope NOT LIKE '%:private:%'))
+        AND ${deny.sql}
       ORDER BY created DESC, id DESC
       LIMIT ?
-    `).all(tenantId, likeParam, ...RECALL_DEFAULT_DENY_SCOPES, MAX_BRIEF_RECEIPTS) as ReceiptRow[];
+    `).all(tenantId, likeParam, ...deny.params, MAX_BRIEF_RECEIPTS) as ReceiptRow[];
   } finally {
     closeHippoDb(db);
   }
@@ -586,9 +581,9 @@ function loadBriefReceipts(hippoRoot: string, tenantId: string, normalizedRepo: 
 // NOTE on ordering: the `id DESC` tiebreak is lexical on a random-ish memory id
 // (e.g. `sem_<hex>`), NOT chronological — within the same `created` timestamp the
 // order is stable-but-arbitrary, not insertion order. `created DESC` is the real
-// recency ordering. (plan-eng-critic 2026-05-30, med.)
+// recency ordering.
 //
-// Budget-aware assembly (codex-review-critic 2026-05-30, P2): the digest is the
+// Budget-aware assembly: the digest is the
 // brief `summary`, which saveProjectBrief caps at MAX_BRIEF_SUMMARY_LEN. The
 // receipt/headline caps (50 x ~200) could otherwise build an ~11KB body that the
 // store then REJECTS, breaking refresh for inputs within the advertised caps. So
@@ -708,8 +703,8 @@ export function refreshBrief(
       supersedesBriefId: active ? active.id : undefined,
       refreshReceiptCount: receiptCount,
       // Tag the refreshed brief's mirror as repo-local so path-aware recall boosts
-      // it like the manual `brief new`/`supersede` paths do (codex-review 2026-05-30,
-      // P2). Safe vs self-recursion: assembleBriefFromReceipts excludes
+      // it like the manual `brief new`/`supersede` paths do.
+      // Safe vs self-recursion: assembleBriefFromReceipts excludes
       // source='project_brief', so the brief never becomes its own receipt.
       extraTags: [`path:${normalizedRepo.toLowerCase()}`],
     },

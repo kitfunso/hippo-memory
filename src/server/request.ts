@@ -1,7 +1,7 @@
 // Request plumbing: request ids, error replies, URL parsing and path matching.
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { randomUUID } from 'node:crypto';
-import { isSqliteBusy, STORE_BUSY_MESSAGE } from '../db.js';
+import { isStoreBusy, STORE_BUSY_MESSAGE } from '../db.js';
 import { errorFields, log } from '../log.js';
 import { HttpError, mapApiError, sendJson } from '../http-util.js';
 
@@ -14,17 +14,18 @@ export function resolveRequestId(header: string | string[] | undefined): string 
   return value && REQUEST_ID_RE.test(value) ? value : randomUUID();
 }
 
-/** One line per failed request; 4xx is the caller's mistake, so it stays below the default level and skips the stack. */
+/** One line per failed request; 4xx is the caller's mistake, a busy 503 is back-pressure and a 501 is a route not on this store, so none logs as an error. */
 export function logRequestFailure<E>(req: IncomingMessage, err: E, requestId: string, status: number): void {
   const message = err instanceof Error ? err.message : String(err);
   const line = `${req.method ?? 'GET'} ${(req.url ?? '/').split('?')[0]} failed: ${message}`;
-  if (status >= 500) log.error(line, { requestId, status, ...errorFields(err) });
+  if (isStoreBusy(err)) log.warn(line, { requestId, status });
+  else if (status >= 500 && status !== 501) log.error(line, { requestId, status, ...errorFields(err) });
   else log.info(line, { requestId, status });
 }
 
 /** The status and client message for a failed request; a held write lock is a retryable 503, never a 500. */
 export function replyFor<E>(err: E): { status: number; message: string } {
-  return isSqliteBusy(err) ? { status: 503, message: STORE_BUSY_MESSAGE } : mapApiError(err);
+  return isStoreBusy(err) ? { status: 503, message: STORE_BUSY_MESSAGE } : mapApiError(err);
 }
 
 export function sendError(res: ServerResponse, status: number, message: string): void {
@@ -96,11 +97,8 @@ export const requestIds = new WeakMap<IncomingMessage, string>();
  * them — otherwise `%2F` becomes `/`, path-split runs, and the route either
  * silently 404s or matches the wrong template.
  *
- * codex round 3 P2: only scan the PATHNAME portion of the raw URL, not the
- * query string. Pre-fix, `?q=https%3A%2F%2Fexample.com` would 400 because
- * the regex matched `%2F` anywhere in `req.url`. Recall queries containing
- * URLs would have been rejected as bypass attempts. Splitting on the first
- * `?` confines the check to the path.
+ * Only the PATHNAME is scanned (split on the first `?`), so recall queries
+ * containing URLs like `?q=https%3A%2F%2Fexample.com` are not rejected.
  */
 export function rejectEncodedSlash(rawUrl: string): void {
   const queryIdx = rawUrl.indexOf('?');

@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// J2 — Availability-bias detector (Track J: biases-over-memory-state)
+// Availability-bias detector (biases over memory state)
 // ---------------------------------------------------------------------------
 //
 // Flags when a recall's returned top-K is dominated by recent entries while
@@ -10,10 +10,8 @@
 // creation timestamp, so we can compare the age distribution of what was
 // RETURNED against the age distribution of the pool it was drawn from.
 //
-// Soft warning ONLY (ROADMAP-RESEARCH.md Track J discipline note): this never
-// filters, reorders, or suppresses a result. It surfaces a hint the calling
-// agent may choose to act on, exactly like J1 anchoringHint / J3
-// planningFallacyHint / C5 suppressionSummary.
+// Soft warning ONLY: this never filters, reorders, or suppresses a result. It surfaces
+// a hint the calling agent may act on, like anchoringHint / planningFallacyHint / suppressionSummary.
 //
 // PURE: no I/O, no env reads. The env gate (HIPPO_AVAILABILITY=off) and the
 // audit emission live in the callers (api.recall, cmdRecall, MCP), mirroring

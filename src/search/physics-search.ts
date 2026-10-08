@@ -1,21 +1,21 @@
 import { calculateStrength, type MemoryEntry } from '../memory.js';
 import { estimateTokens } from '../token-ledger.js';
 import { evalNow, isRecallBoostAblated } from '../ablation.js';
-import { embeddingModelRequiresReindex } from '../embeddings.js';
+import { indexedModel, indexNeedsRebuild } from '../embeddings.js';
 import { resolveEmbeddingProvider } from '../embedding-provider.js';
 import { physicsScore as computePhysicsScores, computeMass, type PhysicsParticle } from '../physics.js';
 import { DEFAULT_PHYSICS_CONFIG, type PhysicsConfig } from '../physics-config.js';
-import { loadPhysicsState } from '../physics-state.js';
-import { openHippoDb, closeHippoDb } from '../db.js';
+import { rethrowIfSqliteBlocked } from '../db.js';
 import { compareScoredResults } from '../compare.js';
 import { log } from '../log.js';
+import { sqliteStore, type HippoStore, type VectorReads } from '../store-port.js';
 import { churnStaleFactor, summaryMultipliers, summaryScoring, type SummaryScoring } from './boosts.js';
 import { addDagFields, ageInDays } from './breakdown.js';
 import { fitBudget } from './finalize.js';
 import { hybridSearch } from './hybrid.js';
 import { currentEntries } from './as-of.js';
-import { vectorCandidatesOutside, type HybridVectorCandidates } from './vector.js';
-import type { ResultCost, ScoreBreakdown, SearchResult } from './types.js';
+import { requireVectorReads, vectorCandidatesOutside, type HybridVectorCandidates } from './vector.js';
+import { DEFAULT_RECALL_BUDGET, type ResultCost, type ScoreBreakdown, type SearchResult } from './types.js';
 
 export interface PhysicsSearchOptions {
   budget?: number;
@@ -38,6 +38,8 @@ export interface PhysicsSearchOptions {
   summaryFreshness?: boolean;
   /** Same as hybridSearch's: rows nearest the query join the pool before physics scoring. */
   vectorCandidates?: HybridVectorCandidates;
+  /** Where vectors and particles are read; hippo.db under `hippoRoot` when unset. */
+  store?: HippoStore;
 }
 
 interface PhysicsPools {
@@ -61,11 +63,14 @@ export async function physicsSearch(query: string, entries: MemoryEntry[], optio
   // memory_physics keeps only current positions and masses, so a past-dated query must rank without them.
   if (options.asOf) return hybridSearch(query, entries, options);
   const root = options.hippoRoot;
+  const store = options.store ?? sqliteStore(root);
 
-  const queryVector = await physicsQueryVector(query, root, options.queryEmbedding);
+  const queryVector = await physicsQueryVector(query, root, store, options.queryEmbedding);
   if (!queryVector) return hybridSearch(query, entries, options);
-  const pool = currentEntries(withVectorCandidates(root, entries, queryVector, options.vectorCandidates), options);
-  const physicsMap = loadCandidateParticles(root, pool);
+  // Checked here too, since a caller's own query vector skips the check inside physicsQueryVector.
+  const reads = requireVectorReads(store);
+  const pool = currentEntries(await withVectorCandidates(reads, entries, queryVector, options.vectorCandidates), options);
+  const physicsMap = await loadCandidateParticles(reads, pool);
   if (!physicsMap) return hybridSearch(query, pool, options);
 
   const pools = splitByParticle(pool, physicsMap, queryVector, now);
@@ -76,46 +81,45 @@ export async function physicsSearch(query: string, entries: MemoryEntry[], optio
     : [];
   const merged = mergeScorePools(physicsResults, classicResults);
   merged.sort(compareScoredResults);
-  return fitBudget(merged, options.budget ?? 4000, options.minResults ?? 1, options.cost);
+  return fitBudget(merged, options.budget ?? DEFAULT_RECALL_BUDGET, options.minResults ?? 1, options.cost);
 }
 
 /** The caller's vector, else the provider's; null sends the caller to hybridSearch. */
-async function physicsQueryVector(query: string, root: string, given: number[] | undefined): Promise<number[] | null> {
+async function physicsQueryVector(query: string, root: string, store: HippoStore, given: number[] | undefined): Promise<number[] | null> {
   if (given && given.length > 0) return given;
   // Physics scores against particle positions, not the stored vector index, so a pruned index must not block it.
   try {
     const provider = resolveEmbeddingProvider(root);
-    if (!provider.isAvailable() || embeddingModelRequiresReindex(root, provider.id)) return null;
+    if (!provider.isAvailable()) return null;
+    if (indexNeedsRebuild(indexedModel(await requireVectorReads(store).embeddingIndexState()), provider.id)) return null;
     const [vec] = await provider.embed([query], 'query');
     return vec && vec.length > 0 ? vec : null;
   } catch (err) {
+    rethrowIfSqliteBlocked(err);
     log.debug(`physics search: query embed failed, using hybrid: ${err instanceof Error ? err.message : String(err)}`);
     return null;
   }
 }
 
-function withVectorCandidates(
-  root: string, entries: MemoryEntry[], queryVector: number[], spec: HybridVectorCandidates | undefined,
-): MemoryEntry[] {
+async function withVectorCandidates(
+  reads: VectorReads, entries: MemoryEntry[], queryVector: number[], spec: HybridVectorCandidates | undefined,
+): Promise<MemoryEntry[]> {
   if (!spec) return entries;
   try {
-    return [...entries, ...vectorCandidatesOutside(root, entries, queryVector, spec)];
+    return [...entries, ...await vectorCandidatesOutside(reads, entries, queryVector, spec)];
   } catch (err) {
+    rethrowIfSqliteBlocked(err);
     log.warn(`physics search ranked the lexical pool only; the vector lookup failed: ${err instanceof Error ? err.message : String(err)}`);
     return entries;
   }
 }
 
 /** Particles for the candidate rows only, so one tenant's search never reads every tenant's physics state. */
-function loadCandidateParticles(root: string, pool: MemoryEntry[]): Map<string, PhysicsParticle> | null {
+async function loadCandidateParticles(reads: VectorReads, pool: MemoryEntry[]): Promise<Map<string, PhysicsParticle> | null> {
   try {
-    const db = openHippoDb(root);
-    try {
-      return loadPhysicsState(db, pool.map((e) => e.id));
-    } finally {
-      closeHippoDb(db);
-    }
+    return await reads.physicsParticles(pool.map((e) => e.id));
   } catch (err) {
+    rethrowIfSqliteBlocked(err);
     log.debug(`physics search: state load failed, using hybrid: ${err instanceof Error ? err.message : String(err)}`);
     return null;
   }

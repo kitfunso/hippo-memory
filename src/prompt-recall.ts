@@ -1,7 +1,6 @@
-/** Z1: recall gated on the hook prompt, not the five newest memories (pure, no I/O).
- *  See docs/plans/2026-09-26-z1-prompt-recall.md. */
+/** Recall gated on the hook prompt, not the five newest memories (pure, no I/O). */
 import { tokenize } from './tokenize.js';
-import { STOP_WORDS } from './audit.js';
+import { STOP_WORDS } from './memory-quality.js';
 
 export type PromptRecallMetric = 'jaccard' | 'cosine';
 
@@ -91,4 +90,23 @@ export function rarestPromptTerms(
     .sort((a, b) => (a.c - b.c) || (a.t < b.t ? -1 : a.t > b.t ? 1 : 0))
     .slice(0, maxTerms)
     .map((x) => x.t);
+}
+
+/** The pieces FTS5's unicode61 tokenizer indexes a term as, so `journal_mode` is `journal` and `mode`. */
+export function ftsTermParts(term: string): string[] {
+  return term.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+}
+
+/** The rarest terms as a space-joined FTS query, given each part's document count; a term counts as its rarest part,
+ *  an upper bound on rows holding the whole term, and a term with no parts counts 0, so it is dropped. */
+export function rarestFtsQuery(
+  terms: readonly string[],
+  docCount: (part: string) => number,
+  maxTerms = RAREST_TERM_COUNT,
+): string {
+  const termCount = (t: string): number => {
+    const parts = ftsTermParts(t);
+    return parts.length === 0 ? 0 : Math.min(...parts.map(docCount));
+  };
+  return rarestPromptTerms(terms, termCount, maxTerms).join(' ');
 }

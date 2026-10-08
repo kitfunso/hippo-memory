@@ -11,7 +11,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { recall, type Context } from '../src/api.js';
+import { recall, retrieve, type Context } from '../src/api.js';
+import { sqliteStore, type HippoStore } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 function safeRmSync(p: string): void { try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ } }
@@ -123,5 +124,16 @@ describe('fresh-tail recall', () => {
     // Both rows surface, both flagged as expected.
     const queryMatchHit = r.results.find((it) => it.id === queryHit.id);
     expect(queryMatchHit).toBeDefined();
+  });
+
+  it('7. fresh-tail drops another project\'s row a store handed back despite the origins', async () => {
+    const [mine, theirs, global] = ['proj-a', 'proj-b', ''].map((origin) => ({ ...makeRaw(`raw row from ${origin || 'no project'}`), origin_project: origin }));
+    const store: HippoStore = { ...sqliteStore(root), freshRawEntries: async () => [mine!, theirs!, global!] };
+    const r = await retrieve({ ...ctxFor(root), store }, {
+      query: 'unmatched',
+      freshTailCount: 5,
+      project: { name: 'proj-a', legacyName: '' },
+    });
+    expect(r.results.map((it) => [it.id, it.isFreshTail])).toEqual([[mine!.id, true], [global!.id, true]]);
   });
 });

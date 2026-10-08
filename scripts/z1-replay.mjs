@@ -12,7 +12,7 @@ const DIST = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace
 const distImport = (f) => import(pathToFileURL(path.join(DIST, f)).href);
 const { textOverlap } = await distImport('tokenize.js');
 const { estimateTokens, blockHash, shouldSkipUnchanged } = await distImport('token-ledger.js');
-const { isContentWorthStoring } = await distImport('audit.js');
+const { isWorthSurfacing } = await distImport('memory-quality.js');
 const { ambientSecretAdmit } = await distImport('api.js');
 const { resolveProjectIdentity, classifyOriginProject } = await distImport('project-identity.js');
 const { passesScopeFilterForRecall } = await distImport('recall-scope.js');
@@ -44,7 +44,7 @@ function parseArgs(argv) {
   return out;
 }
 
-// Z1b tool-failure block: same LEADING_CD as src/capture-error.ts, its cd-stripping is query-only here.
+// Z1b tool-failure block: same LEADING_CD as src/capture/failure-reading.ts, its cd-stripping is query-only here.
 const LEADING_CD = /^\s*(?:(?:cd|pushd)\b[^;&|]*(?:&&|\|\||;)\s*)+/;
 
 // ---------------------------------------------------------------------------
@@ -56,7 +56,8 @@ function loadStore(dir) {
   try {
     const rows = db
       .prepare(
-        `SELECT id, content, tags_json, created, pinned, superseded_by, origin_project, scope
+        `SELECT id, content, tags_json, created, pinned, superseded_by, origin_project, scope,
+                source, confidence, extracted_from, dag_level
          FROM memories WHERE tenant_id = ?`,
       )
       .all('default');
@@ -69,6 +70,11 @@ function loadStore(dir) {
       superseded_by: r.superseded_by ?? null,
       origin_project: r.origin_project ?? null,
       scope: r.scope ?? null,
+      // isWorthSurfacing judges by provenance, so without these every row would get a person's looser floor.
+      source: String(r.source ?? ''),
+      confidence: r.confidence ?? null,
+      extracted_from: r.extracted_from ?? null,
+      dag_level: Number(r.dag_level ?? 0),
     }));
   } finally {
     db.close();
@@ -275,7 +281,7 @@ function selectA1(localEntries, globalEntries, ts, projectName) {
       if (byCreated !== 0) return byCreated;
       return b.entry.id < a.entry.id ? -1 : b.entry.id > a.entry.id ? 1 : 0;
     })
-    .filter(({ entry }) => entry.pinned || isContentWorthStoring(entry.content))
+    .filter(({ entry }) => entry.pinned || isWorthSurfacing(entry))
     .slice(0, 5);
 
   for (const r of recent) {
@@ -335,7 +341,7 @@ function z1Candidates(localAdm, globalAdm, promptTok, opts = {}) {
     { entries: globalAdm, isGlobal: true },
   ]) {
     for (const entry of entries) {
-      if (entry.pinned || seen.has(entry.id) || !isContentWorthStoring(entry.content)) continue;
+      if (entry.pinned || seen.has(entry.id) || !isWorthSurfacing(entry)) continue;
       if (excludeAutoCaptured && entry.tags.includes('auto-captured')) continue;
       seen.add(entry.id);
       const tokens = tokensOf(entry);

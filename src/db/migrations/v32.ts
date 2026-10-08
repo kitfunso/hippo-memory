@@ -79,7 +79,7 @@ const TRG_PROCESSES_SUPERSEDE_TENANT_MATCH_UPDATE = `
 export const v32: Migration = {
     version: 32,
     up: (db) => {
-      // E2 process first-class object (docs/plans/2026-05-29-e2-process-object.md).
+      // Process first-class object.
       // A process is a "living process map": a named, ordered list of steps that
       // evolves. Unlike incident (open->resolved->closed, no supersede), process
       // REUSES the v30 decisions supersede path as its delta mechanism: a process

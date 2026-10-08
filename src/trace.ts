@@ -6,6 +6,8 @@
  * markdown in `content`; `renderTraceContent` is the canonical formatter.
  */
 
+import { type JsonValue, isJsonString } from './json.js';
+
 export interface TraceStep {
   action: string;
   observation: string;
@@ -43,15 +45,8 @@ export function renderTraceContent(rec: TraceRecord): string {
   return lines.join('\n');
 }
 
-/** JSON value shape for the parsed-but-unvalidated trace step payload. */
-type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
-
 function isJsonRecord(value: JsonValue): value is { [key: string]: JsonValue } {
   return value !== null && !Array.isArray(value) && typeof value === 'object';
-}
-
-function isJsonString(value: JsonValue | undefined): value is string {
-  return typeof value === 'string';
 }
 
 /**

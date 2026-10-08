@@ -10,7 +10,7 @@ import { initStore } from '../src/store/open.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { createApiKey } from '../src/auth.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import type { JsonValue } from '../src/http-util.js';
+import type { JsonValue } from '../src/json.js';
 
 let home: string;
 let handle: ServerHandle;

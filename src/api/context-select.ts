@@ -5,16 +5,19 @@ import { recallScopeFilter } from '../store/search-rows.js';
 import type { AmbientLoadResult } from '../store/candidates.js';
 import { loadIndex } from '../store/index-and-stats.js';
 import { calculateStrength, type MemoryEntry } from '../memory.js';
-import { appendAuditEvent, auditQueryFields, isContentWorthStoring } from '../audit.js';
+import { appendAuditEvent, auditQueryFields, type AppendAuditOpts } from '../audit.js';
+import type { ContextReads, HippoStore } from '../store-port.js';
+import { isWorthSurfacing } from '../memory-quality.js';
 import { rankBothStores } from '../shared.js';
 import { evalNow } from '../ablation.js';
 import { hybridSearch } from '../search/hybrid.js';
 import { physicsSearch } from '../search/physics-search.js';
 import type { HybridVectorCandidates } from '../search/vector.js';
-import type { SearchResult } from '../search/types.js';
+import { DEFAULT_LOCAL_BUMP, type SearchResult } from '../search/types.js';
 import { compareScoredResults } from '../compare.js';
 import { scopeMatch } from '../scope.js';
-import { loadConfig, type HippoConfig } from '../config.js';
+import { type HippoConfig } from '../config.js';
+import type { ProjectRef } from '../project-identity.js';
 import {
   promptTokens,
   contentTokens,
@@ -26,36 +29,50 @@ import type { DeliveryObserver } from '../delivery-recorder.js';
 import type { ContextCost, ContextOpts, ContextResultEntry } from './context-types.js';
 import type { Context } from './types.js';
 
+const GLOBAL_DISCOUNT = 1 / DEFAULT_LOCAL_BUMP;
+
+/** One store getContext reads rows from: its base search and its context reads. */
+export interface ContextSource {
+  readonly store: HippoStore;
+  readonly reads: ContextReads;
+}
+
 /** What getContext resolved from opts and config before it read a row. */
 export interface ContextPlan {
+  /** The served store, else hippo.db under the root. */
+  local: ContextSource;
+  /** The served store when it is not hippo.db; then every read and write goes through it and no hippo.db opens. */
+  other: HippoStore | undefined;
   pinnedOnly: boolean;
   limit: number;
   includeRecent: number;
   activeScope: string;
   exactScope: string | undefined;
+  /** The caller's personal scope, from its authenticated owner; the default deny admits it. */
+  ownScope: string | undefined;
   query: string;
   hasLocal: boolean;
   hasGlobal: boolean;
   globalRoot: string;
   primaryIsGlobal: boolean;
   hasLocalTaskState: boolean;
+  sharedStore: boolean;
   config: HippoConfig;
-  currentProjectName: string;
+  currentProject: ProjectRef;
   includeCrossProject: boolean;
-  originProject: string | undefined;
+  originProject: readonly string[] | undefined;
   promptRecallPending: boolean;
   cost: ContextCost | undefined;
   price: (entry: MemoryEntry, isGlobal: boolean, promptRecall?: boolean) => number;
   obs: DeliveryObserver | undefined;
 }
 
-/** The ambient admit rules; `digestHidden` is read late because a prompt-recall eligibility check can still set it. */
+/** The ambient admit rules. */
 export interface ContextAdmission {
   ambientAdmit: (e: MemoryEntry) => boolean;
   admit: (e: MemoryEntry) => boolean;
   /** What the two-store search admits: `admit` without the own-session compaction rule. */
   bothStoresAdmit: (e: MemoryEntry) => boolean;
-  digestHidden: () => boolean;
 }
 
 export interface ContextPools {
@@ -70,7 +87,7 @@ export function oneCopyPerMemory(
   global: readonly MemoryEntry[],
   now: Date,
 ): [MemoryEntry[], MemoryEntry[]] {
-  const score = (e: MemoryEntry, isGlobal: boolean): number => calculateStrength(e, now) * (isGlobal ? 1 / 1.2 : 1);
+  const score = (e: MemoryEntry, isGlobal: boolean): number => calculateStrength(e, now) * (isGlobal ? GLOBAL_DISCOUNT : 1);
   const best = new Map<string, { entry: MemoryEntry; isGlobal: boolean }>();
   const offer = (entry: MemoryEntry, isGlobal: boolean): void => {
     const held = best.get(entry.content);
@@ -102,18 +119,15 @@ interface PromptCandidate {
   isGlobal: boolean;
 }
 
-/** Pins plus the prompt-recall or recent-N backfill; null means the block is empty. */
+/** Pins plus the prompt-recall or recent-N backfill; null means the hook block is turned off, so task state stays out too. */
 export function selectPinned(
-  ctx: Context,
   opts: ContextOpts,
   plan: ContextPlan,
   left: number,
   pools: ContextPools,
   admission: ContextAdmission,
 ): ContextResultEntry[] | null {
-  const { obs, primaryIsGlobal } = plan;
-  // loadConfig is safe even when local isn't initialised — returns defaults.
-  const pinnedCfg = loadConfig(ctx.hippoRoot);
+  const { obs, primaryIsGlobal, config: pinnedCfg } = plan;
   if (!pinnedCfg.pinnedInject.enabled) {
     return null;
   }
@@ -144,14 +158,6 @@ export function selectPinned(
     backfillRecent(plan, localPool, globalPool, picked, recentBudget, nowP);
   }
 
-  if (
-    pinnedLocal.length === 0 &&
-    pinnedGlobal.length === 0 &&
-    picked.items.length === 0 &&
-    !admission.digestHidden()
-  ) {
-    return null;
-  }
   admitWithinBudget(rankedPinned, picked, effBudget, obs);
   return picked.items;
 }
@@ -171,7 +177,7 @@ function rankPinned(
       const sBst = scopeSig === 1 ? 1.5 : scopeSig === -1 ? 0.5 : 1.0;
       return {
         entry,
-        score: calculateStrength(entry, nowP) * (isGlobal ? 1 / 1.2 : 1) * sBst,
+        score: calculateStrength(entry, nowP) * (isGlobal ? GLOBAL_DISCOUNT : 1) * sBst,
         tokens: plan.price(entry, isGlobal),
         isGlobal,
       };
@@ -261,7 +267,7 @@ function promptRecallCandidates(
   const ineligibleReason = (e: MemoryEntry): 'scope' | 'pinned' | 'quality' | 'duplicate' | null =>
     !admit(e) ? 'scope'
       : e.pinned ? 'pinned'
-        : !isContentWorthStoring(e.content) ? 'quality'
+        : !isWorthSurfacing(e) ? 'quality'
           : pinnedText.has(e.content) ? 'duplicate'
             : null;
   const eligible = (e: MemoryEntry): boolean => {
@@ -310,11 +316,11 @@ function backfillRecent(
     })
     // Filter before slice so a junk row is backfilled past, not counted against N. Pins bypass the floor: a dropped
     // pin's share of the shared budget would go to a backfilled row, and the pin loop could not win it back.
-    .filter(({ entry }) => entry.pinned || isContentWorthStoring(entry.content))
+    .filter(({ entry }) => entry.pinned || isWorthSurfacing(entry))
     .slice(0, plan.includeRecent)
     .map(({ entry, isGlobal }) => ({
       entry,
-      score: calculateStrength(entry, nowP) * (isGlobal ? 1 / 1.2 : 1),
+      score: calculateStrength(entry, nowP) * (isGlobal ? GLOBAL_DISCOUNT : 1),
       tokens: plan.price(entry, isGlobal),
       isGlobal,
     }));
@@ -337,7 +343,7 @@ export function selectStrongest(plan: ContextPlan, left: number, pools: ContextP
   const globalRanked = globalPool
     .map((e) => ({
       entry: e,
-      score: calculateStrength(e, now) * (1 / 1.2),
+      score: calculateStrength(e, now) * GLOBAL_DISCOUNT,
       tokens: plan.price(e, true),
       isGlobal: true,
     }))
@@ -367,7 +373,7 @@ export async function selectBySearch(
   const results = plan.hasGlobal && !plan.primaryIsGlobal
     ? await searchBothStores(ctx, plan, left, minResults, pools, admission.bothStoresAdmit)
     : await searchLocalRows(ctx, plan, left, minResults, pools.local.entries, admission.admit);
-  auditContextRecall(ctx, plan, results.length);
+  await auditContextRecall(ctx, plan, results.length);
   return results;
 }
 
@@ -401,7 +407,7 @@ async function searchBothStores(
 
 /** The vector arm under the lexical window's own tenant, scope and current-row rules. */
 function contextVectorSpec(ctx: Context, plan: ContextPlan, admit: (e: MemoryEntry) => boolean): HybridVectorCandidates {
-  return { tenantId: ctx.tenantId, scope: recallScopeFilter(plan.exactScope, 'exact'), includeSuperseded: false, admit };
+  return { tenantId: ctx.tenantId, scope: recallScopeFilter(plan.exactScope, 'exact', plan.ownScope), includeSuperseded: false, admit };
 }
 
 async function searchLocalRows(
@@ -412,11 +418,11 @@ async function searchLocalRows(
   localEntries: MemoryEntry[],
   admit: (e: MemoryEntry) => boolean,
 ): Promise<ContextResultEntry[]> {
-  const { cost, price, primaryIsGlobal, query } = plan;
-  const ctxConfig = loadConfig(ctx.hippoRoot);
+  const { cost, price, primaryIsGlobal, query, config: ctxConfig } = plan;
   const usePhysicsCtx = ctxConfig.physics?.enabled !== false;
   const localCost = cost && ((r: SearchResult) => price(r.entry, primaryIsGlobal));
   const vectorCandidates = contextVectorSpec(ctx, plan, admit);
+  const store = plan.local.store;
   const ctxResults = usePhysicsCtx
     ? await physicsSearch(query, localEntries, {
         budget: left,
@@ -426,6 +432,7 @@ async function searchLocalRows(
         physicsConfig: ctxConfig.physics,
         scope: plan.activeScope,
         vectorCandidates,
+        store,
       })
     : await hybridSearch(query, localEntries, {
         budget: left,
@@ -434,6 +441,7 @@ async function searchLocalRows(
         hippoRoot: ctx.hippoRoot,
         scope: plan.activeScope,
         vectorCandidates,
+        store,
       });
   return ctxResults.map((r) => ({
     entry: r.entry,
@@ -444,21 +452,21 @@ async function searchLocalRows(
 }
 
 // Same 'recall' op api.recall emits; the pinned-only and no-query branches never search, so they never emit.
-function auditContextRecall(ctx: Context, plan: ContextPlan, resultCount: number): void {
-  const ctxRecallMetadata = {
-    ...auditQueryFields(plan.query),
-    results: resultCount,
-    mode: 'context',
+async function auditContextRecall(ctx: Context, plan: ContextPlan, resultCount: number): Promise<void> {
+  const row: AppendAuditOpts = {
+    tenantId: ctx.tenantId,
+    actor: ctx.actor.subject,
+    op: 'recall',
+    metadata: { ...auditQueryFields(plan.query), results: resultCount, mode: 'context' },
   };
+  if (plan.other) {
+    await plan.other.appendAuditEvents([row]);
+    return;
+  }
   if (plan.hasLocal) {
     const localDb = openHippoDb(ctx.hippoRoot);
     try {
-      appendAuditEvent(localDb, {
-        tenantId: ctx.tenantId,
-        actor: ctx.actor.subject,
-        op: 'recall',
-        metadata: ctxRecallMetadata,
-      });
+      appendAuditEvent(localDb, row);
     } finally {
       closeHippoDb(localDb);
     }
@@ -466,12 +474,7 @@ function auditContextRecall(ctx: Context, plan: ContextPlan, resultCount: number
   if (plan.hasGlobal && !plan.primaryIsGlobal) {
     const globalDb = openHippoDb(plan.globalRoot);
     try {
-      appendAuditEvent(globalDb, {
-        tenantId: ctx.tenantId,
-        actor: ctx.actor.subject,
-        op: 'recall',
-        metadata: ctxRecallMetadata,
-      });
+      appendAuditEvent(globalDb, row);
     } finally {
       closeHippoDb(globalDb);
     }

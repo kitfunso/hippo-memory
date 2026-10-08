@@ -1,7 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import type { JsonValue, JsonObject } from '../working-memory.js';
-import { isJsonString, isJsonObject, homeDir } from './shared.js';
+import type { JsonObject } from '../working-memory.js';
+import { isJsonObject, homeDir } from './shared.js';
+import { type JsonValue, isJsonString } from '../json.js';
 
 const HIPPO_OPENCODE_PLUGIN_MARKER = 'HIPPO_OPENCODE_PLUGIN_V1';
 
@@ -13,7 +14,7 @@ const HIPPO_OPENCODE_PLUGIN_MARKER = 'HIPPO_OPENCODE_PLUGIN_V1';
  *   session.idle    → `hippo session-end` (Claude Code's SessionEnd equiv)
  *   session.created → `hippo last-sleep` (Claude Code's SessionStart equiv)
  *
- * Design choices forced by plan-eng-critic Rev 0 review (2026-05-23):
+ * Design choices:
  *
  * 1. No `import type { Plugin } from "@opencode-ai/plugin"`. The package's npm
  *    publication status was unverifiable from the build sandbox (npmjs.com
@@ -70,15 +71,8 @@ export const HippoPlugin = async ({ $ }) => {
 
 export { HIPPO_OPENCODE_PLUGIN_MARKER };
 
-// ---------------------------------------------------------------------------
-// OpenCode plugin installer (fix for issue #24).
-//
-// OpenCode does NOT share Claude Code's JSON-hook schema. Its config has
-// `additionalProperties: false` and no `hooks` key, so the v1.10.x-v1.11.1
-// installer broke opencode launch. The fix writes a TS plugin at the canonical
-// plugin path and surgically migrates any pre-existing broken hooks block out
-// of opencode.json.
-// ---------------------------------------------------------------------------
+// OpenCode plugin installer. OpenCode's config has `additionalProperties: false` and no `hooks` key,
+// so a JSON-hook install breaks its launch: write a TS plugin, migrate any old hooks block out.
 
 export interface OpencodePluginInstallResult {
   installed: boolean;
@@ -103,16 +97,16 @@ function resolveOpencodeConfigPath(): string {
  * hippo itself installs (session-end, last-sleep, sleep, capture, context),
  * not any third-party tool that happens to be named `hippo`.
  *
- * Critic-mandated structural check (Rev 0): substring matching against
+ * Structural check: substring matching against
  * arbitrary user content is unsafe — a user's
  * `echo "remember to hippo sleep your laptop"` is not a hippo-owned hook.
  *
- * Per-hook (not per-entry) granularity (Rev 1 review): an entry whose inner
+ * Per-hook (not per-entry) granularity: an entry whose inner
  * hooks array mixes hippo-installed commands with user-authored commands
  * must NOT lose the user-authored commands. The migration filters the inner
  * array per-hook, then drops the entry only when its inner array is empty.
  */
-const HIPPO_OWNED_COMMAND_RE = /^\s*hippo\s+(session-end|last-sleep|sleep|capture|context)\b/;
+const HIPPO_OWNED_COMMAND_RE = /^\s*hippo\s+(session-end|last-sleep|sleep|capture|context)(?=\s|$)/;
 
 function hookIsHippoOwned(hook: JsonValue | undefined): boolean {
   if (!isJsonObject(hook)) return false;

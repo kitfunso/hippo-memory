@@ -10,7 +10,7 @@ const PRODUCTS = ['Code', 'Code - Insiders'] as const;
 const MEMORY_TOOL = ['github.copilot-chat', 'memory-tool', 'memories'] as const;
 
 /** VS Code's user-data resolution: portable install first, then the app-data override, then the platform default. */
-function dataFolders(ctx: AdapterContext): string[] {
+export function vscodeDataFolders(ctx: Pick<AdapterContext, 'env' | 'home' | 'platform'>): string[] {
   const { env, home, platform } = ctx;
   if (env.VSCODE_PORTABLE) return [path.join(env.VSCODE_PORTABLE, 'user-data')];
   let appData: string;
@@ -103,7 +103,7 @@ function projectContainers(data: string, ctx: AdapterContext, matches: (f: strin
 export const copilotAdapter: Adapter = {
   tool: 'copilot',
   list(ctx, scope) {
-    const data = dataFolders(ctx);
+    const data = vscodeDataFolders(ctx);
     const warnings: string[] = [];
     const found: Container[] = [];
     if (scope === 'user') {

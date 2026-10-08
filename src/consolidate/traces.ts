@@ -8,7 +8,8 @@ import { resolveTenantId } from '../tenant.js';
 import { appendAuditEvent, reportAuditWriteFailure } from '../audit.js';
 import { commonDerivationScope } from '../recall-scope.js';
 import { log } from '../log.js';
-import { REPLAY_COUNT_DEFAULT, type JsonValue, isJsonString, type SleepRun } from './run.js';
+import { REPLAY_COUNT_DEFAULT, type SleepRun } from './run.js';
+import { type JsonValue, isJsonString } from '../json.js';
 
 // -------------------------------------------------------------------------
 // 1.4. Auto-promote complete sessions to traces
@@ -24,10 +25,8 @@ export function promoteSessionTraces(run: SleepRun): void {
   let tracesSkippedRejected = 0;
   const windowDays = run.config.autoTraceWindowDays ?? 7;
   const sinceMs = run.now.getTime() - windowDays * 24 * 60 * 60 * 1000;
-  // Auto-trace currently runs in a single-tenant context (the env-resolved
-  // tenant for this process). Multi-tenant deployments that want
-  // consolidation across all tenants need a per-tenant loop layered on top
-  // of this — tracked in docs/plans/2026-05-02-continuity-tables-tenant-scope.md.
+  // Auto-trace runs single-tenant (the env-resolved tenant); consolidating
+  // every tenant needs a per-tenant loop layered on top of this.
   const consolidationTenant = resolveTenantId({});
   const promotable = findPromotableSessions(run.hippoRoot, consolidationTenant, sinceMs);
 
@@ -72,7 +71,7 @@ function sessionTrace(run: SleepRun, consolidationTenant: string, sessionId: str
     limit: 1000,
   });
 
-  // T7: a mixed-scope session would otherwise leak into one trace.
+  // A mixed-scope session would otherwise leak into one trace.
   const sessionScope = commonDerivationScope(events.map((e) => e.scope));
   if (!sessionScope.ok) {
     run.result.tracesSkippedMixedScope++;
@@ -109,13 +108,8 @@ function sessionTrace(run: SleepRun, consolidationTenant: string, sessionId: str
       tags: ['auto-promoted'],
       source: 'auto-promote',
       scope: sessionScope.scope,
-      // T1 fix (2026-08-15 hardening pass): stamp the trace into the SAME
-      // tenant the traceExistsForSession idempotency check (above) runs
-      // under. Before
-      // this, createMemory omitted tenantId and the trace always landed
-      // 'default' (memory.ts:535) while the idempotency check ran under
-      // consolidationTenant — for any non-default tenant that check never
-      // hit, and the trace regenerated every sleep.
+      // Same tenant as the traceExistsForSession check above, or a
+      // non-default tenant's trace regenerates every sleep.
       tenantId: consolidationTenant,
       baseHalfLifeDays: run.config.defaultHalfLifeDays,
     },
@@ -123,14 +117,8 @@ function sessionTrace(run: SleepRun, consolidationTenant: string, sessionId: str
   return { trace, outcome };
 }
 
-// AT1 (same producer-side pattern as the merge pass below): traceExistsForSession
-// only sees rows CURRENTLY in the store — once a rejected trace is
-// removed, that idempotency check no longer blocks regeneration, and
-// this write would otherwise reach batchWriteAndDelete's guard bypass
-// unchecked, resurrecting it every sleep. Check under THE ENTRY'S OWN
-// stamped tenantId (read off `trace` after createMemory — never guess
-// the tenant) + the built content's digest. A hit skips the push
-// entirely: not counted as promoted, not added to survivors.
+// traceExistsForSession only sees live rows, so a removed rejected trace would regenerate every
+// sleep; check the tombstone under the entry's own stamped tenantId, never a guessed one.
 function traceRejected(run: SleepRun, trace: MemoryEntry, sessionId: string): boolean {
   const consolidateDb = run.getConsolidateDb();
   if (!consolidateDb) return false;

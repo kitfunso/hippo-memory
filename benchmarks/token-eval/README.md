@@ -1,6 +1,6 @@
 # Token-efficiency evals (ROADMAP Part IX, Track TE)
 
-Three harnesses, from cheapest to most convincing. Build first with `npm run build`.
+Three harnesses, from cheapest to most convincing. Build first with `npm run build`. Their tests (`tests/token-eval*`) run with `npm run test:eval`, not `npm test`; CI runs them in `token-eval.yml`.
 
 | Harness | Roadmap | Needs | What it answers |
 |---|---|---|---|

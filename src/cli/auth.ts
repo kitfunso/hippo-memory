@@ -8,7 +8,7 @@ import { printError } from './output.js';
 import { resolveAuthRoot } from './shared.js';
 
 // ---------------------------------------------------------------------------
-// Auth subcommands (A5 stub auth)
+// Auth subcommands
 // ---------------------------------------------------------------------------
 
 function cmdAuthCreate(hippoRoot: string, flags: Record<string, string | boolean | string[]>): void {
@@ -17,9 +17,7 @@ function cmdAuthCreate(hippoRoot: string, flags: Record<string, string | boolean
   const labelFlag = typeof flags['label'] === 'string' ? (flags['label'] as string) : undefined;
   const asJson = Boolean(flags['json']);
 
-  // v1.12.3: --role flag surfaces the api_keys.role column added v1.12.0
-  // sub-1. Accepts 'admin' | 'member' only; anything else exits 1 with a
-  // typed error so a typo doesn't silently default to admin.
+  // Accepts 'admin' | 'member' only; anything else exits 1 so a typo doesn't silently default to admin.
   const roleFlag = typeof flags['role'] === 'string' ? (flags['role'] as string) : undefined;
   let role: 'admin' | 'member' = 'admin';
   if (roleFlag !== undefined) {
@@ -35,7 +33,7 @@ function cmdAuthCreate(hippoRoot: string, flags: Record<string, string | boolean
   // flows through ctx.tenantId, NOT through opts — authCreate's opts no
   // longer accepts a tenantId field, so the HTTP layer cannot smuggle a
   // body.tenantId across.
-  const ctx: api.Context = {
+  const ctx: api.HippoDbContext = {
     hippoRoot: root,
     tenantId: tenantFlag ?? resolveTenantId({}),
     actor: api.adminActor('cli'),
@@ -64,9 +62,9 @@ function cmdAuthCreate(hippoRoot: string, flags: Record<string, string | boolean
 function formatKeyRow(item: ApiKeyListItem): string {
   const label = item.label ?? '-';
   const created = item.createdAt;
+  const expires = item.expiresAt ?? '-';
   const revoked = item.revokedAt ?? '-';
-  // v1.12.3: role column surfaced
-  return `${item.keyId}  ${item.tenantId}  ${item.role}  ${label}  ${created}  ${revoked}`;
+  return `${item.keyId}  ${item.tenantId}  ${item.role}  ${label}  ${created}  ${expires}  ${revoked}`;
 }
 
 function cmdAuthList(hippoRoot: string, flags: Record<string, string | boolean | string[]>): void {
@@ -88,19 +86,19 @@ function cmdAuthList(hippoRoot: string, flags: Record<string, string | boolean |
   }
 
   if (items.length === 0) {
-    console.log(includeRevoked ? 'No API keys.' : 'No active API keys. (Use --all to include revoked.)');
+    console.log(includeRevoked ? 'No API keys.' : 'No active API keys. (Use --all to include revoked and expired.)');
     return;
   }
 
-  console.log('key_id  tenant  role  label  created  revoked');
+  console.log('key_id  tenant  role  label  created  expires  revoked');
   for (const item of items) {
     console.log(formatKeyRow(item));
   }
 }
 
 // The local CLI owns every tenant, so revoke and grant run in the key's own tenant.
-function keyContext(root: string, keyId: string): api.Context {
-  const hostCtx: api.Context = { hippoRoot: root, tenantId: resolveTenantId({}), actor: api.adminActor('cli') };
+function keyContext(root: string, keyId: string): api.HippoDbContext {
+  const hostCtx = { hippoRoot: root, tenantId: resolveTenantId({}), actor: api.adminActor('cli') };
   const keyTenant = api.authKeyTenant(hostCtx, keyId);
   if (keyTenant === undefined) {
     printError(`Unknown key_id: ${keyId}`);
@@ -125,7 +123,7 @@ function cmdAuthRevoke(hippoRoot: string, keyId: string, flags: Record<string, s
   console.log(`Revoked ${keyId} at ${revokedAt}`);
 }
 
-/** EI2: `hippo auth grant|ungrant <key_id> <scope>`, routed through api so the tenant, restricted-scope and audit checks live in one place. */
+/** `hippo auth grant|ungrant <key_id> <scope>`, routed through api so the tenant, restricted-scope and audit checks live in one place. */
 function cmdAuthScopeGrant(hippoRoot: string, keyId: string, scope: string, grant: boolean, flags: Record<string, string | boolean | string[]>): void {
   const ctx = keyContext(resolveAuthRoot(hippoRoot, flags), keyId);
   try {

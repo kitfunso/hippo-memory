@@ -4,16 +4,8 @@ import type { Migration } from './types.js';
 export const v27: Migration = {
     version: 27,
     up: (db) => {
-      // v1.12.7 self-heal — re-assert the v16 schema (api_keys + audit_log).
-      //
-      // Surfaced 2026-05-24 on Keith's ~/.hippo/hippo.db: schema_version
-      // recorded as 25 but api_keys and audit_log tables were missing from
-      // migration v16. Root cause unknown — the migration runner has wrapped
-      // each migration in BEGIN/COMMIT since the first SQLite commit, so
-      // atomicity isn't the bug. Possible causes: DROP TABLE post-migration,
-      // SQL import / restore from a pre-v16 backup over a v16+ schema_version,
-      // or some edge case the wrapping doesn't catch. Cause may be operator
-      // action; either way the practical fix is the same.
+      // Self-heal: re-assert the v16 schema (api_keys + audit_log) on stores stamped past
+      // v16 whose tables are missing anyway (a dropped table or an old-backup restore).
       //
       // All CREATE IF NOT EXISTS — zero-cost no-op for users without the
       // bug, fixes anyone who has it. Includes the role column from the

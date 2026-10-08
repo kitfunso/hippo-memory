@@ -2,7 +2,8 @@ import { envPath } from '../env.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
-import { isJsonString, HIPPO_CODEX_WRAPPER_MARKER, homeDir, codexHomeDir, ensureDir } from './shared.js';
+import { HIPPO_CODEX_WRAPPER_MARKER, homeDir, codexHomeDir, ensureDir } from './shared.js';
+import { isJsonString } from '../json.js';
 
 export interface CodexWrapperPaths {
   wrapperDir: string;
@@ -355,7 +356,7 @@ export function isCodexWrapperInstalled(): boolean {
  * opt-in record. Never performs a first install. Replacing another vendor's
  * binary must stay behind the explicit `hippo hook install codex` command;
  * doing it from postinstall or routine commands is a consent violation and
- * reads as binary hijacking to security scanners (issue #133).
+ * reads as binary hijacking to security scanners.
  */
 export function repairCodexWrapperIfInstalled(hippoCliPath: string = resolveHippoCliPath()): EnsureCodexWrapperResult {
   if (readCodexWrapperMetadata() === null) {

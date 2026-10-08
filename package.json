@@ -1,13 +1,16 @@
 {
   "name": "hippo-memory",
-  "version": "1.62.0",
-  "description": "Memory for AI agents that learns what is wrong and ranks it down. MCP server, hooks for Claude Code, OpenCode and Codex, AGENTS.md instructions for Codex, Cursor, OpenClaw and Pi. SQLite, zero runtime deps.",
+  "version": "1.69.0",
+  "description": "Make your agent's memory work like a brain. Hippo is long-term memory for coding agents.",
   "mcpName": "io.github.kitfunso/hippo-memory",
   "type": "module",
   "main": "./dist/index.js",
   "exports": {
     ".": "./dist/index.js",
-    "./server": "./dist/server.js"
+    "./server": "./dist/server.js",
+    "./project-identity": "./dist/entry/project-identity.js",
+    "./json-hooks": "./dist/entry/json-hooks.js",
+    "./session-text": "./dist/entry/session-text.js"
   },
   "openclaw": {
     "extensions": [
@@ -37,6 +40,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:delivery-ledger": "vitest run tests/delivery-ledger",
+    "test:eval": "vitest run --config vitest.eval.config.ts",
     "lint": "oxlint",
     "sbom": "node scripts/sbom.mjs",
     "audit:security": "npm audit --audit-level=high && npm --prefix ui audit --audit-level=high",
@@ -45,8 +49,8 @@
     "smoke:openclaw-install": "node scripts/smoke-openclaw-install.mjs",
     "build:ui": "cd ui && npm install && npm run build",
     "build:all": "npm run build && npm run build:ui",
-    "version": "node scripts/sync-version.mjs && node scripts/check-manifest-versions.mjs",
-    "prepublishOnly": "node scripts/check-manifest-versions.mjs && node scripts/changelog-fragments.mjs check && node scripts/check-em-dashes-in-release-notes.mjs && node scripts/check-graph-writes.mjs && npm run build:all && node scripts/check-openclaw-dist.mjs && npm run smoke:openclaw-install && node scripts/check-tests-pass.mjs"
+    "version": "node scripts/sync-version.mjs && node scripts/check-manifest-versions.mjs && node scripts/check-expiring-keys-floor.mjs",
+    "prepublishOnly": "node scripts/check-manifest-versions.mjs && node scripts/check-expiring-keys-floor.mjs && node scripts/changelog-fragments.mjs check && node scripts/check-em-dashes-in-release-notes.mjs && node scripts/check-graph-writes.mjs && npm run build:all && node scripts/check-openclaw-dist.mjs && npm run smoke:openclaw-install && node scripts/check-tests-pass.mjs"
   },
   "keywords": [
     "memory",

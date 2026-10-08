@@ -14,8 +14,6 @@
 
 import { createMemory, Layer, type MemoryEntry } from './memory.js';
 import { search } from './search/bm25-search.js';
-import { hybridSearch } from './search/hybrid.js';
-import { detectTemporalDirection, computeTemporalRange, temporalBoost } from './search/temporal.js';
 import { multihopSearch } from './multihop.js';
 import { mrr, recallAtK, ndcgAtK } from './eval.js';
 
@@ -110,14 +108,8 @@ function mem(id: string, content: string, opts: {
   return entry;
 }
 
-export function buildSyntheticCorpus() {
-  const entries: MemoryEntry[] = [];
-  const cases: FeatureTestCase[] = [];
-
-  // =========================================================================
-  // 1. DIRECT RECALL — basic keyword matching
-  // =========================================================================
-
+/** Direct recall: basic keyword matching. */
+function addDirectRecall(entries: MemoryEntry[], cases: FeatureTestCase[]): void {
   entries.push(
     mem('dr-1', 'The PostgreSQL database migration failed because the users table had a NOT NULL constraint on the email column', { created: dateOffset(1), tags: ['topic:database'] }),
     mem('dr-2', 'React component rendering performance improved by 40% after memoizing the expensive computation in useMemo', { created: dateOffset(2), tags: ['topic:frontend'] }),
@@ -139,11 +131,10 @@ export function buildSyntheticCorpus() {
     { id: 'dr-q7', category: 'direct-recall', query: 'Redis cache TTL session expiration', expectedIds: ['dr-7'], description: 'cache TTL config' },
     { id: 'dr-q8', category: 'direct-recall', query: 'GraphQL N+1 DataLoader batching', expectedIds: ['dr-8'], description: 'GraphQL N+1 fix' },
   );
+}
 
-  // =========================================================================
-  // 2. EXTRACTION PREFERENCE — extracted facts should rank above raw source
-  // =========================================================================
-
+/** Extraction preference: extracted facts should rank above raw source. */
+function addExtractionPreference(entries: MemoryEntry[], cases: FeatureTestCase[]): void {
   entries.push(
     mem('ep-src-1', 'speaker:Alice: So we had this big meeting yesterday about the deployment pipeline and Bob mentioned that the staging environment is using Kubernetes 1.28 and we should upgrade to 1.30 before the end of Q2 because of the security patches', {
       created: dateOffset(10), tags: ['speaker:Alice', 'topic:infrastructure', 'session:meeting-1'],
@@ -173,11 +164,10 @@ export function buildSyntheticCorpus() {
     { id: 'ep-q2', category: 'extraction-preference', query: 'Datadog Grafana alerting migration', expectedIds: ['ep-ext-2'], description: 'extracted fact about monitoring switch' },
     { id: 'ep-q3', category: 'extraction-preference', query: 'OAuth2 PKCE login page redesign', expectedIds: ['ep-ext-3'], description: 'extracted fact about auth work' },
   );
+}
 
-  // =========================================================================
-  // 3. DAG DRILL-DOWN — summary nodes should surface children
-  // =========================================================================
-
+/** Dag drill-down: summary nodes should surface children. */
+function addDagDrilldown(entries: MemoryEntry[], cases: FeatureTestCase[]): void {
   entries.push(
     mem('dag-child-1', 'The API response time for /users endpoint degraded from 50ms to 300ms after adding the permissions check', {
       created: dateOffset(15), layer: Layer.Semantic, tags: ['topic:api-performance', 'extracted'],
@@ -205,11 +195,10 @@ export function buildSyntheticCorpus() {
     { id: 'dag-q1', category: 'dag-drilldown', query: 'API performance problems latency', expectedIds: ['dag-child-1', 'dag-child-2', 'dag-child-3', 'dag-summary-1'], description: 'summary should drill down to all children' },
     { id: 'dag-q2', category: 'dag-drilldown', query: 'endpoint response time degradation', expectedIds: ['dag-child-1', 'dag-child-2', 'dag-summary-1'], description: 'query matching summary should surface relevant children' },
   );
+}
 
-  // =========================================================================
-  // 4. TEMPORAL — recency/oldest cues should affect ranking
-  // =========================================================================
-
+/** Temporal: recency/oldest cues should affect ranking. */
+function addTemporal(entries: MemoryEntry[], cases: FeatureTestCase[]): void {
   entries.push(
     mem('tmp-1', 'The team decided to use TypeScript for the new service', { created: dateOffset(-30), tags: ['topic:architecture'] }),
     mem('tmp-2', 'The team evaluated Rust as an alternative language for the service', { created: dateOffset(-20), tags: ['topic:architecture'] }),
@@ -223,11 +212,10 @@ export function buildSyntheticCorpus() {
     { id: 'tmp-q3', category: 'temporal', query: 'latest update on the service rewrite language', expectedIds: ['tmp-4'], description: 'latest should boost most recent' },
     { id: 'tmp-q4', category: 'temporal', query: 'original architecture decision for the service', expectedIds: ['tmp-1'], description: 'original should boost earliest' },
   );
+}
 
-  // =========================================================================
-  // 5. NOISE RESISTANCE — relevant memories found despite noise
-  // =========================================================================
-
+/** Noise resistance: relevant memories found despite noise. */
+function addNoiseResistance(entries: MemoryEntry[], cases: FeatureTestCase[]): void {
   // Add 30 noise entries
   const noiseTopics = [
     'breakfast meeting catering ordered sandwiches', 'office temperature thermostat adjusted',
@@ -265,11 +253,10 @@ export function buildSyntheticCorpus() {
     { id: 'nr-q3', category: 'noise-resistance', query: 'PostgreSQL migration constraint', expectedIds: ['dr-1'], description: 'find earlier DB entry despite noise' },
     { id: 'nr-q4', category: 'noise-resistance', query: 'JWT token security expiration', expectedIds: ['dr-5'], description: 'find security entry despite noise' },
   );
+}
 
-  // =========================================================================
-  // 6. MULTI-HOP — entity chaining across sessions
-  // =========================================================================
-
+/** Multi-hop: entity chaining across sessions. */
+function addMultiHop(entries: MemoryEntry[], cases: FeatureTestCase[]): void {
   entries.push(
     mem('mh-1', 'speaker:Alice works on the payment gateway integration with Stripe. She found a webhook signature validation bug.', {
       created: dateOffset(25), tags: ['speaker:Alice', 'topic:payments'],
@@ -289,7 +276,18 @@ export function buildSyntheticCorpus() {
     { id: 'mh-q1', category: 'multi-hop', query: 'Who fixed the Stripe webhook bug and what was the root cause?', expectedIds: ['mh-1', 'mh-2', 'mh-3'], description: 'chain Alice -> Stripe -> Bob -> fix' },
     { id: 'mh-q2', category: 'multi-hop', query: 'What are all the payment-related issues the team discussed?', expectedIds: ['mh-1', 'mh-2', 'mh-3', 'mh-4'], description: 'find all payment topics across speakers' },
   );
+}
 
+export function buildSyntheticCorpus() {
+  const entries: MemoryEntry[] = [];
+  const cases: FeatureTestCase[] = [];
+
+  addDirectRecall(entries, cases);
+  addExtractionPreference(entries, cases);
+  addDagDrilldown(entries, cases);
+  addTemporal(entries, cases);
+  addNoiseResistance(entries, cases);
+  addMultiHop(entries, cases);
   return { entries, cases };
 }
 

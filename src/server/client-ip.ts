@@ -66,6 +66,20 @@ function trustedProxyList(raw: string | undefined): BlockList | undefined {
   return list;
 }
 
+/** The key for one subscriber: an IPv6 address's /64, since one host may hold the whole /64; any other key as is. */
+export function subscriberKey(ip: string): string {
+  const bare = ip.split('%')[0]!;
+  if (bare.toLowerCase().startsWith('::ffff:') && isIP(bare.slice(7)) === 4) return bare.slice(7);
+  if (isIP(bare) !== 6) return ip;
+  const [head = '', tail] = bare.toLowerCase().split('::');
+  const left = head ? head.split(':') : [];
+  const right = tail ? tail.split(':') : [];
+  // A trailing dotted quad holds two groups; isIP has already checked the shape.
+  const rightGroups = right.length + (right.at(-1)?.includes('.') ? 1 : 0);
+  const groups = tail === undefined ? left : [...left, ...Array<string>(8 - left.length - rightGroups).fill('0'), ...right];
+  return `${groups.slice(0, 4).map((g) => parseInt(g, 16).toString(16)).join(':')}::/64`;
+}
+
 function isTrustedProxy(list: BlockList, ip: string): boolean {
   const bare = ip.startsWith('::ffff:') && isIP(ip.slice(7)) === 4 ? ip.slice(7) : ip;
   const family = isIP(bare);
@@ -73,7 +87,7 @@ function isTrustedProxy(list: BlockList, ip: string): boolean {
 }
 
 export function enforceRateLimit(req: IncomingMessage, path: string, limiter?: RateLimiter): void {
-  // E3: per-IP rate limit on /v1/* and /mcp* to bound api-key-id enumeration. /health
+  // Per-IP rate limit on /v1/* and /mcp* to bound api-key-id enumeration. /health
   // (a liveness probe) and other paths are never throttled. A 429 thrown
   // here lands in the createServer catch like any other HttpError.
   //
@@ -85,7 +99,7 @@ export function enforceRateLimit(req: IncomingMessage, path: string, limiter?: R
   if (limiter && (path.startsWith('/v1/') || path === '/mcp' || path === '/mcp/stream')) {
     const ip = clientIpForRateLimit(req);
     if (!limiter.check(ip)) {
-      throw new HttpError(429, 'rate limit exceeded');
+      throw new HttpError(429, 'rate limit exceeded', limiter.retryAfterSec);
     }
   }
 }

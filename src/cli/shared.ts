@@ -5,18 +5,20 @@ import { envApiKey, envClaudeCodeSessionId, envHippoSessionId, envRequireServer 
 import * as path from 'path';
 import * as fs from 'fs';
 import { execFileSync, execSync } from 'child_process';
-import { installJsonHooks } from '../hooks/json-hooks.js';
+import { installJsonHooks, type InstallResult } from '../hooks/json-hooks.js';
 import { CODEX_TRUST_LINE } from '../hooks/shared.js';
 import { confidenceLabel } from '../memory.js';
 import { TaskSnapshot, SessionEvent } from '../store/rows.js';
-import { isInitialized } from '../store/open.js';
-import type { HandoffEvidence, SessionHandoff } from '../handoff.js';
+import { getHippoRoot, isInitialized } from '../store/open.js';
+import type { HookRuntime } from '../capture-contract.js';
+import type { SessionHandoff } from '../handoff.js';
 import type { SearchResult } from '../search/types.js';
 import { explainMatch } from '../search/explain.js';
-import { type HippoConfig, loadConfig } from '../config.js';
-import { openHippoDb, closeHippoDb, isSqliteBusy, noteStoreBusy, withSharedStoreHandles, HOOK_DB_WAIT_MS } from '../db.js';
-import { ensurePilotArm, hashArm, readPilotArm } from '../pilot-arm.js';
-import { hookPayloadSessionId, isSubagentPayload, recordTokenUse } from '../token-ledger.js';
+import { isSharedStore, type HippoConfig } from '../config.js';
+import { openHippoDb, closeHippoDb, isSqliteBusy, noteStoreBusy, runWithRequestStores, HOOK_DB_WAIT_MS } from '../db.js';
+import { withLedgerDb } from '../ledger-db.js';
+import { sessionPilotArm } from '../pilot-arm.js';
+import { hookPayloadSessionId, hookPayloadString, isSubagentPayload, recordTokenUse } from '../token-ledger.js';
 import { importAtSessionEnd, currentMachine } from '../agent-memories/sync.js';
 import { type ImportReport, summaryLine } from '../agent-memories/report.js';
 import { type ChurnStaleResult, detectChurnStale } from '../invalidation.js';
@@ -31,7 +33,7 @@ import { resolveTenantId } from '../tenant.js';
 import { type Context, adminActor, learn, CLI_LEARN } from '../api.js';
 import type { RecallSearchOpts } from '../recall-pipeline.js';
 import { snapshotText, sessionTrailText, handoffText } from '../context-render.js';
-import { log } from '../log.js';
+import { errorMessage, log } from '../log.js';
 import { printError } from './output.js';
 
 export function parseLimitFlag(value: string | boolean | string[] | undefined): number {
@@ -102,14 +104,14 @@ export function requireInit(hippoRoot: string): void {
 /** Runs detectChurnStale against every store this repo's memories can live in. */
 export function runChurnStaleForRepo(hippoRoot: string, dryRun: boolean): { root: string; result: ChurnStaleResult }[] {
   const repoRoot = execFileSync('git', ['rev-parse', '--show-toplevel'], { cwd: process.cwd(), encoding: 'utf8', timeout: 10_000, windowsHide: true }).trim();
-  const projectName = resolveProjectIdentity(process.cwd()).name;
+  const { name: projectName, legacyName } = resolveProjectIdentity(process.cwd());
   const globalRoot = getGlobalRoot();
   const roots = globalRoot !== hippoRoot && isInitialized(globalRoot) ? [hippoRoot, globalRoot] : [hippoRoot];
   const tenantId = resolveTenantId({});
   return roots.map((root) => {
     // One store failing must not abort sleep's later phases or skip the other store.
     try {
-      return { root, result: detectChurnStale(root, repoRoot, { tenantId, projectName, dryRun }) };
+      return { root, result: detectChurnStale(root, repoRoot, { tenantId, projectName, legacyName, dryRun }) };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return { root, result: { checked: 0, marked: 0, alreadyMarked: 0, skippedPinned: [], dryRun, preview: [], error: message } };
@@ -235,6 +237,13 @@ export function printAgentImport(report: ImportReport, indent = '   '): void {
   for (const warning of report.warnings) printError(`hippo: agent memories: ${warning}`);
 }
 
+/** True, after one line, on a shared store: this account's commits and agent notes are not its members' memories. */
+export function skipLearnOnSharedStore(hippoRoot: string): boolean {
+  if (!isSharedStore(hippoRoot)) return false;
+  console.log("Shared store: skipped learning from this account's git commits and coding agents' own memories.");
+  return true;
+}
+
 /** Adds hippo's two Codex hooks and says what changed; each install ends on the trust reminder, since Codex skips an untrusted hook. */
 export function installCodexMemoryHooks(indent: string): void {
   const result = installJsonHooks('codex');
@@ -250,6 +259,13 @@ export function installCodexMemoryHooks(indent: string): void {
     ? `${indent}Installed hippo's Codex memory hooks (${added.join(', ')}) in ${result.settingsPath}`
     : `${indent}hippo's Codex memory hooks already in ${result.settingsPath}`);
   console.log(`${indent}${CODEX_TRUST_LINE}`);
+}
+
+/** The one line init, hook install, hook uninstall and setup print when Claude Code's settings.json is not JSON hippo can edit and so was left unchanged; true when it printed. */
+export function warnClaudeSettingsUnusable(result: Pick<InstallResult, 'settingsPath' | 'invalidJson'>, indent: string, action: 'install' | 'uninstall' = 'install'): boolean {
+  if (!result.invalidJson) return false;
+  console.log(`${indent}WARNING: ${result.settingsPath} is not a JSON object hippo can merge into, so it was left unchanged; fix it, then run \`hippo hook ${action} claude-code\`.`);
+  return true;
 }
 
 /**
@@ -351,31 +367,6 @@ export function engineFlags(flags: CliFlags, config: HippoConfig): EngineFlags {
  * `__session-end-worker` subcommand (not user-facing). Failures in one stage
  * do not block the other.
  */
-// Best-effort git state; a missing git, non-repo cwd, or the timeout all
-// yield null fields rather than throw (autolearn.ts execFileSync shape).
-export function collectHandoffEvidence(cwd: string, testStatus: HandoffEvidence['testStatus']): HandoffEvidence {
-  let gitRef: string | null = null;
-  try {
-    gitRef = execFileSync('git', ['rev-parse', 'HEAD'], {
-      cwd, encoding: 'utf8', timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true,
-    }).trim() || null;
-  } catch {
-    // No git, not a repo, or timed out: evidence is optional, so the field stays null.
-    gitRef = null;
-  }
-  let dirtyTree: boolean | null = null;
-  try {
-    const status = execFileSync('git', ['status', '--porcelain'], {
-      cwd, encoding: 'utf8', timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true,
-    });
-    dirtyTree = status.trim().length > 0;
-  } catch {
-    // Same as gitRef: unknown tree state is reported as null, never as an error.
-    dirtyTree = null;
-  }
-  return { gitRef, dirtyTree, testStatus };
-}
-
 /** A folder without its own store never sleeps at session end, so its project's agent notes go to the global store here. */
 export function logSessionEndImport(logFile: string | null, transcriptPath: string | undefined): void {
   try {
@@ -432,7 +423,7 @@ export function cardStringFlag(flags: Record<string, string | boolean | string[]
 
 // Claude Code exports its own session var, not ours; without the fallback agent-run recalls trace with no session.
 export function hostSessionId(): string | undefined {
-  return envHippoSessionId()?.trim() || envClaudeCodeSessionId()?.trim() || undefined;
+  return envHippoSessionId() ?? envClaudeCodeSessionId();
 }
 
 /**
@@ -480,33 +471,23 @@ export function hookStoreRoot(hippoRoot: string): string {
   return isInitialized(globalRoot) ? globalRoot : hippoRoot;
 }
 
-/**
- * Run `fn` against the token ledger's store: the local store when it is
- * initialized, else the global one (the per-prompt hook runs in directories
- * without a local store). Best-effort: returns undefined and never throws,
- * because a ledger failure must not break context or recall.
- */
-export function withLedgerDb<T>(hippoRoot: string, fn: (db: ReturnType<typeof openHippoDb>) => T): T | undefined {
-  let root: string | null = null;
+/** `--runtime copilot`, or `--format copilot` on `hippo context`, marks a Copilot hook: the flag decides, never the payload. */
+export function hookRuntime(flags: CliFlags): HookRuntime {
+  return flags['runtime'] === 'copilot' || flags['format'] === 'copilot' ? 'copilot' : 'claude-code';
+}
+
+/** A Copilot hook's project root, from the payload's `cwd`, since VS Code runs user-level hooks in the home folder; other runtimes keep `hippoRoot`. */
+export function payloadCwdRoot(hippoRoot: string, stdinText: string | undefined, runtime: HookRuntime): string {
+  const cwd = runtime === 'copilot' ? hookPayloadString(stdinText, 'cwd') : null;
+  if (cwd === null || cwd.trim() === '') return hippoRoot;
   try {
-    if (isInitialized(hippoRoot)) root = hippoRoot;
-    else if (isInitialized(getGlobalRoot())) root = getGlobalRoot();
-  } catch {
-    // An unreadable store root means no ledger write; the ledger must never break context or recall.
-    return undefined;
+    // Moving, not just re-rooting, keeps project identity, scope, handoff evidence and the session-end worker on that folder too.
+    process.chdir(cwd);
+  } catch (err) {
+    log.warn(`hippo: payload cwd ${cwd} is not usable, so the hook stays in ${process.cwd()}: ${errorMessage(err)}`);
+    return hippoRoot;
   }
-  if (root === null) return undefined;
-  let db: ReturnType<typeof openHippoDb> | undefined;
-  try {
-    db = openHippoDb(root);
-    return fn(db);
-  } catch (error) {
-    // Best effort, but a busy store is the one failure an operator can act on, so it warns once.
-    if (isSqliteBusy(error)) noteStoreBusy('token ledger row skipped');
-    return undefined;
-  } finally {
-    if (db) closeHippoDb(db);
-  }
+  return getHippoRoot(process.cwd());
 }
 
 export function learnFromRepo(
@@ -551,7 +532,7 @@ export function resolveAuthRoot(hippoRoot: string, flags: Record<string, string 
 /** Hook commands share one handle per store and wait at most HOOK_DB_WAIT_MS for a lock; a store still busy after that skips the hook's work with one warning, exit 0. */
 export async function runHookWithStores<T>(fn: () => T | Promise<T>): Promise<T | undefined> {
   try {
-    return await withSharedStoreHandles(fn, { busyWaitMs: HOOK_DB_WAIT_MS });
+    return await runWithRequestStores(fn, { busyWaitMs: HOOK_DB_WAIT_MS, failFastWhenBusy: true });
   } catch (error) {
     if (!isSqliteBusy(error)) throw error;
     noteStoreBusy('hook skipped');
@@ -559,17 +540,7 @@ export async function runHookWithStores<T>(fn: () => T | Promise<T>): Promise<T 
   }
 }
 
-/**
- * Whether this session sits in the pilot's holdout arm (src/pilot-arm.ts). Off at rate 0 and with no session id.
- * `write` books the arm row; a read-only caller (env-only id, sub-agent) follows the stored arm, else the hash.
- */
+/** Whether this session sits in the pilot's holdout arm; off at rate 0 and with no session id. */
 export function inPilotHoldout(hippoRoot: string, tenantId: string, sessionId: string | undefined, write: boolean): boolean {
-  if (sessionId === undefined || sessionId.trim() === '') return false;
-  const root = isInitialized(hippoRoot) ? hippoRoot : isInitialized(getGlobalRoot()) ? getGlobalRoot() : null;
-  if (root === null) return false;
-  const rate = loadConfig(root).pilot.holdoutRateBp;
-  if (rate <= 0) return false;
-  const arm = withLedgerDb(hippoRoot, (db) =>
-    write ? ensurePilotArm(db, tenantId, sessionId, rate) : readPilotArm(db, sessionId) ?? hashArm(sessionId, rate));
-  return (arm ?? hashArm(sessionId, rate)) === 'holdout';
+  return sessionPilotArm(hippoRoot, tenantId, sessionId, write) === 'holdout';
 }

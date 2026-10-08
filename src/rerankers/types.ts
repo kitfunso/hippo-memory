@@ -10,8 +10,7 @@ import type { SearchResult } from '../search/types.js';
  * Rerankers MUST be deterministic for a given (query, results) input
  * unless explicitly documented as stochastic (the LLM track, and the
  * hosted jev reranker, whose scores move slightly run to run).
- * Determinism is required for paired A/B and for the workload-validity
- * gate in docs/evals/2026-05-10-f6-reranker-prereg.md.
+ * Determinism is required for paired A/B and for the workload-validity gate.
  *
  * @returns Reordered (and optionally rescaled) results.
  */

@@ -67,10 +67,8 @@ async function cmdWatch(command: string, hippoRoot: string): Promise<void> {
   entry.schema_fit = watchFit;
   entry.half_life_days = deriveHalfLife(loadConfig(hippoRoot).defaultHalfLifeDays, entry);
   entry.strength = calculateStrength(entry);
-  // AT1 (plan §3 containment): mechanical content from a failed command — a
-  // rejection-guard refusal here must not crash the watcher. Skip silently
-  // (loud enough via the message below) and still exit with the wrapped
-  // command's real exit code.
+  // A rejection-guard refusal of a failed command's output must not crash the watcher:
+  // skip with the message below and still exit with the wrapped command's real exit code.
   try {
     writeEntry(hippoRoot, entry);
     updateStats(hippoRoot, { remembered: 1 });
@@ -166,7 +164,7 @@ export function cmdImport(
     hippoRoot,
   };
 
-  // K1 vault import: a FOLDER importer that mirrors the connector pattern
+  // Vault import: a FOLDER importer that mirrors the connector pattern
   // (kind='raw' + tag provenance + archiveRaw deletions), so it dispatches
   // separately from the single-file `importer` function-pointer slot below.
   // It writes through api.remember/archiveRaw which are tenant-scoped, so we
@@ -281,16 +279,15 @@ function importVaultFolder(
     process.exit(1);
   }
   if (typeof flags['name'] !== 'string' || !flags['name'].trim()) {
-    // --name is the vault identity key for the destructive source-deletion sync; inferring it from the folder basename let
-    // same-basename vaults collide and clobber each other (codex R10 P2). A valueless `--name` parses as boolean true, and
-    // String(true) === "true" would silently import under vault:true:* - reject a non-string so it fails fast instead (codex R11 P2).
+    // --name keys the destructive source-deletion sync; a folder-basename default lets same-basename vaults clobber
+    // each other, and a valueless `--name` (boolean true) would silently import under vault:true:*.
     printError('hippo import --vault requires --name <vault> (a non-empty identity key for source-deletion sync).');
     process.exit(1);
   }
   if (flags['scope'] !== undefined && (typeof flags['scope'] !== 'string' || !flags['scope'].trim())) {
     // Same valueless-flag trap: a bare `--scope` must not become scope "true".
     // Example uses the source-prefixed private form, since a bare `private` scope
-    // is NOT treated as private by recall and importVault rejects it (R13 P2).
+    // is NOT treated as private by recall and importVault rejects it.
     printError('hippo import --vault: --scope requires a value (e.g. --scope vault:private:notes).');
     process.exit(1);
   }
@@ -312,7 +309,7 @@ function importVaultFolder(
   warnRedacted(vaultResult.redacted);
   console.log(`  ${dryRun ? 'Would archive:        ' : 'Archived (removed):   '}${vaultResult.archived ?? 0}`);
   console.log(`  Store:                 ${hippoRoot}`);
-  // Batch producer, same contract as the single-file import below: vault rows
+  // Batch producer, same contract as the single-file import above: vault rows
   // write through api.remember (which never embeds), so backfill them here.
   // Floating promise is deliberate; see the comment at the single-file site.
   if (!dryRun && vaultResult.imported >= 1) {
@@ -438,9 +435,7 @@ export function handleShare({ hippoRoot, args, flags }: CommandContext): void {
 }
 
 export function handlePeers({ flags }: CommandContext): void {
-  // D4 v1.12.10: tenant-scoped by default. --all-tenants restores the
-  // pre-D4 host-wide view for the rare operator who genuinely wants
-  // cross-tenant peer discovery.
+  // Tenant-scoped by default; --all-tenants gives the host-wide view for cross-tenant peer discovery.
   const allTenants = flags['all-tenants'] === true;
   const tenantScope = allTenants ? undefined : resolveTenantId({});
   const peers = listPeers(undefined, tenantScope);

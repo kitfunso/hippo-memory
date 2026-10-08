@@ -9,7 +9,6 @@ import {
   wmClear,
   wmFlush,
   WM_MAX_ENTRIES,
-  WorkingMemoryItem,
 } from '../src/working-memory.js';
 import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion } from '../src/db.js';
 

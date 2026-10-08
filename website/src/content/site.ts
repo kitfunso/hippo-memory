@@ -19,11 +19,14 @@ export const site = {
   name: 'hippo',
   pkg: 'hippo-memory',
   version: pkg.version, // Build-source version; publication is verified separately.
-  positioning: 'memory for AI agents that learns what is wrong', // page title and hero eyebrow
-  // Hero headline, split for accent emphasis. The per-agent install detail lives in Get started.
-  tagline: { lead: 'Stop re‑teaching', accent: 'your agent.' }, // non-breaking hyphen keeps the word whole
-  description:
-    "The mistake your agent made on Monday is a memory by Tuesday. Hippo plugs into Claude Code, Codex, Cursor and any MCP client, keeps what worked, drops what turned out to be wrong, and replaces facts that changed.",
+  positioning: pkg.description,
+  tagline: {
+    lead: 'Stop re‑teaching', // non-breaking hyphen keeps the word whole
+    accent: 'your agent.',
+    summary:
+      "Make your agent's memory work like a brain. Hippo is long-term memory for coding agents. It's a critical layer for your AI harness that connects across your different tools (Cursor, Claude Code, Codex). It keeps your proprietary data completely local, and it actually learns over time. By strengthening memories each time they are recalled, Hippo preserves what works, lets mistakes decay, and continuously compounds your agents' intelligence.",
+  },
+  description: pkg.description,
   installCmd: 'npm install -g hippo-memory',
   initCmd: 'hippo init --scan ~',
   // A floor stays true as the suite grows; check-readme-sync.mjs holds README and llms.txt to it.
@@ -159,19 +162,21 @@ export const importsFrom = ['ChatGPT', 'CLAUDE.md', '.cursorrules', 'Slack', 'ma
 
 export const compare = {
   heading: 'Learn what is wrong. Stop repeating it.',
-  body: 'How hippo compares to the strongest tools in the category, on the features that define a memory lifecycle.',
+  body: 'How hippo compares with nine other memory tools on the features that define a memory lifecycle.',
   sourceHref: `${REPO}#comparison`,
-  sourceLabel: 'Full 10-tool matrix on GitHub',
+  sourceLabel: 'Every feature, with sources and check dates, on GitHub',
   scrollCue: 'scroll for more tools',
-  qualifierNote:
-    'Verdicts are shortened for scanning; the qualifier behind each Yes/No/Partial is in the full matrix.',
+  // Short forms of the README footnotes; the long ones stay on GitHub and the vs pages.
+  notes: [
+    '* LongMemEval retrieval recall at 5. "Any" counts a hit when one answer session is in the top 5, "all" only when every one is. gbrain leads on "all".',
+    '** Answer accuracy with a reader model, a different metric from recall.',
+  ],
 } as const;
 
 /** README.md's Comparison table, parsed at build by readme.ts, plus the site's own closing line. */
 export const comparison = {
   ...readmeComparison,
-  closing:
-    'Different tools answer different questions. Mem0 and Basic Memory implement "save everything, search later." MemPalace organizes spatially. gbrain, Zep, and Cognee extract typed entities into a knowledge graph. Letta lets the agent edit its own memory blocks. Memoria is Git-style version control over memory. EverMind is self-evolving Skill Memory. Hippo implements "learn what is wrong and stop repeating it."',
+  closing: 'Most of the others save everything and search it later, or build a knowledge graph. Hippo learns what is wrong and stops repeating it.',
 } as const;
 
 /** Get started = quickstart + the zero-config auto-install differentiator. */

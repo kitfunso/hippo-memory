@@ -5,16 +5,17 @@ import { NotFoundError } from '../../api-errors.js';
 import { buildContextWithAuth } from '../auth.js';
 import { byCreatedAt, pageOf, parseCursor } from '../cursor.js';
 import type { RouteRequest } from '../types.js';
-import { isJsonNumber, isJsonString, isSetMember, parseJsonBody, parseListLimit } from '../validation.js';
+import { isJsonNumber, isSetMember, parseJsonBody, parseListLimit } from '../validation.js';
+import { isJsonString } from '../../json.js';
 
-// ── decisions (E2 first-class object) ──
+// ── decisions (first-class object) ──
 //
 // 5 routes: POST /v1/decisions (create, optional supersedesDecisionId),
 // GET /v1/decisions (list, status filter), GET /v1/decisions/:id (show),
 // POST /v1/decisions/:id/supersede (create a successor + supersede :id),
 // POST /v1/decisions/:id/close (retire). Bearer-authed + tenant-scoped via
 // buildContextWithAuth. status validated against VALID_DECISION_STATES.
-// DoS caps: text 4096, context 4096 (v1.11.4 pattern). The HTTP surface is
+// DoS caps: text 4096, context 4096. The HTTP surface is
 // new (no legacy --supersedes <memory-id> constraint), so it supersedes by
 // table id and never weakens a memory mirror.
 export async function handleCreateDecision({ req, res, opts }: RouteRequest): Promise<void> {

@@ -38,7 +38,7 @@ export interface IngestResult {
  *   and the SAVEPOINT, we throw `DuplicateEventError` to roll back the memory
  *   write. The pre-check `hasSeenEvent` stays as a fast path for the common
  *   already-seen case, but the afterWrite throw is what makes idempotency
- *   correct under two-worker concurrency (v0.39 commit 3 fix).
+ *   correct under two-worker concurrency.
  * - Empty-body messages return 'skipped' but still mark seen so a replay
  *   returns 'duplicate' rather than re-running the transform.
  */
@@ -48,12 +48,8 @@ export function ingestMessage(ctx: Context, input: IngestInput): IngestResult {
   const db = openHippoDb(ctx.hippoRoot);
   try {
     if (hasSeenEvent(db, input.eventId)) {
-      // v1.12.6 fix (B3): empty-body events mark seen with memory_id=NULL on
-      // first call (see line further down). Their replay should return the
-      // same 'skipped' status they originally returned, not 'duplicate' —
-      // the asymmetry was a paper-cut for callers that switch/case on
-      // status. memory_id=NULL is the discriminator. Non-NULL memory_id
-      // means an actual memory was ingested before, so 'duplicate' is correct.
+      // Empty-body events are marked seen with memory_id=NULL, so their replay returns the same 'skipped'
+      // they first returned; a non-NULL memory_id means a memory was ingested, so 'duplicate'.
       const cachedId = lookupMemoryByEvent(db, input.eventId);
       return { status: cachedId === null ? 'skipped' : 'duplicate', memoryId: cachedId };
     }
@@ -90,13 +86,10 @@ function rememberWithEventLog(
   eventId: string,
   opts: RememberOpts,
 ): IngestResult {
-  // v1.12.0: drop the legacy `|| 'connector:slack'` fallback — ctx is always
-  // provided by server.ts:1039 which constructs it with the connector subject.
-  // Under the new object-shaped Context.actor, an OR-fallback would evaluate
-  // an object as truthy and skip the fallback anyway (logic bug if ctx were
-  // ever missing); explicit reliance on the caller is safer.
+  // No `|| 'connector:slack'` fallback: the caller always builds ctx with the connector subject, and with
+  // an object-shaped Context.actor an OR-fallback would never fire anyway.
   const result = remember(
-    ctx,
+    { ...ctx, store: undefined }, // the event log row commits with the memory on hippo.db's own handle, never through a store
     {
       ...opts,
       untrusted: true,
@@ -132,10 +125,8 @@ function lostRaceResult(ctx: Context, eventId: string): IngestResult {
 }
 
 function rejectedValueResult(ctx: Context, eventId: string): IngestResult {
-  // AT1 (plan §3 containment): a tombstone hit is a PERMANENT skip, not
-  // a transient failure — never DLQ-retry it (retrying would just hit
-  // the same refusal forever). Mark the event seen exactly like the
-  // empty-body branch above so a Slack retry acks as done, not error.
+  // A tombstone hit is a PERMANENT skip: a DLQ retry would hit the same refusal forever, so mark the
+  // event seen like the empty-body branch above and let a Slack retry ack as done, not error.
   const db4 = openHippoDb(ctx.hippoRoot);
   try {
     markEventSeen(db4, eventId, null);

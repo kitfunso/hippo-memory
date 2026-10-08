@@ -16,7 +16,7 @@ import { printError } from './output.js';
 import { printSlackBackfillUsage, printSlackWorkspacesUsage } from './usage.js';
 
 // ---------------------------------------------------------------------------
-// Slack subcommands (E1.3 — `hippo slack backfill` / `hippo slack dlq list`)
+// Slack subcommands (`hippo slack backfill` / `hippo slack dlq list`)
 // ---------------------------------------------------------------------------
 
 function cmdSlackBackfill(hippoRoot: string, flags: Record<string, string | boolean | string[]>): void {

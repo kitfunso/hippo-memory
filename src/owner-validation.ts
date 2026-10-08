@@ -1,14 +1,13 @@
 /**
- * --owner format validation (B2 v1.12.6).
+ * --owner format validation.
  *
  * Documented MEMORY_ENVELOPE.md contract: owner = `user:<id>` | `agent:<id>`
- * with id ∈ `[A-Za-z0-9_-]+`. Pre-v1.12.6 any string was accepted, leaving
- * the documented contract unenforced.
+ * with id ∈ `[A-Za-z0-9_-]+`.
  *
  * Default: WARN-ONLY (log + accept) to preserve back-compat with existing
  * scripted callers passing legacy owner strings. Set `HIPPO_STRICT_OWNER=1`
- * to reject + exit. Strict mode will become the default once A5 v2 lands
- * (see `TODOS.md` A3 follow-ups for the migration path).
+ * to reject + exit. Strict mode will become the default once real auth replaces
+ * the stub (see `TODOS.md` for the migration path).
  */
 
 import { processEnv } from './env.js';

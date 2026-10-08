@@ -1,11 +1,8 @@
 // Request-body and path-segment validators shared by the /v1 route handlers.
 import type { IncomingMessage } from 'node:http';
-import type { Context } from '../api.js';
-import { HttpError, isJsonObjectRecord, type JsonValue, readBody } from '../http-util.js';
-
-export function isJsonString(value: JsonValue | undefined): value is string {
-  return typeof value === 'string';
-}
+import type { Context, RememberOpts } from '../api.js';
+import { HttpError, isJsonObjectRecord, MAX_ID_LEN, readBody } from '../http-util.js';
+import { type JsonValue, isJsonString } from '../json.js';
 
 export function isJsonNumber(value: JsonValue | undefined): value is number {
   return typeof value === 'number';
@@ -29,13 +26,8 @@ export function isSetMember<T extends string>(set: ReadonlySet<T>, value: string
   return set.has(value as T);
 }
 
-// Parse a `?limit=` query param for the E2 list routes. Defaults to 100; requires
-// a positive INTEGER <= 1000. Number.isInteger rejects fractional values like
-// "1.5" that Number.isFinite would pass but SQLite `LIMIT ?` rejects with a
-// datatype mismatch (a 500). Shared across the decision/incident/process/policy
-// list routes so the guard cannot drift (codex review 2026-05-30 P2: fractional
-// limit reached SQLite on the policy route; the same latent hole existed in the
-// sibling routes this was copied from).
+// Number.isInteger, not isFinite: SQLite `LIMIT ?` rejects "1.5" with a 500.
+// Shared by every first-class-object list route so the guard cannot drift.
 export function parseListLimit(limitRaw: string | null, defaultLimit = 100, maxLimit = 1000): number {
   if (limitRaw === null) return defaultLimit;
   const limit = Number(limitRaw);
@@ -45,9 +37,12 @@ export function parseListLimit(limitRaw: string | null, defaultLimit = 100, maxL
   return limit;
 }
 
-/** `_authed` is proof the caller passed auth: an unauthenticated request must never make the server read its body. */
+/** `_authed` is proof the caller passed auth, so a full-size body is read only for an authenticated caller; the key mint reads first under its own small cap. */
 export async function parseJsonBody(req: IncomingMessage, _authed: Context): Promise<Record<string, JsonValue>> {
-  const raw = await readBody(req);
+  return parseJsonObjectText(await readBody(req));
+}
+
+export function parseJsonObjectText(raw: string): Record<string, JsonValue> {
   if (raw.length === 0) return {};
   try {
     const parsed: JsonValue = JSON.parse(raw);
@@ -73,8 +68,22 @@ export function getStringArray(obj: Record<string, JsonValue>, key: string): str
   return v;
 }
 
+/** Keeps only `name` and `aliases`: a client's `legacy_name` is a folder name, which must never become a row's origin. */
+export function getCallerProject(body: Record<string, JsonValue>): RememberOpts['project'] {
+  const v = body.project;
+  if (v === undefined || v === null) return undefined;
+  if (!isJsonObjectRecord(v) || !isJsonString(v.name)) {
+    throw new HttpError(400, 'project must be an object with a "name" string');
+  }
+  if (v.aliases === undefined) return { name: v.name };
+  if (!Array.isArray(v.aliases) || !v.aliases.every(isJsonString)) {
+    throw new HttpError(400, 'project.aliases must be an array of strings');
+  }
+  return { name: v.name, aliases: v.aliases };
+}
+
 /**
- * v1.6.4: charset + length validation for `:id` route captures. Routes call
+ * Charset + length validation for `:id` route captures. Routes call
  * this immediately after `matchPath` to reject empty / overlong / illegal
  * ids with a useful 400 instead of silently falling through to "not found".
  *
@@ -87,7 +96,7 @@ export function getStringArray(obj: Record<string, JsonValue>, key: string): str
 const ID_SEGMENT_RE = /^[A-Za-z0-9_:.\-]+$/;
 export function validateIdSegment(id: string, fieldName: string): void {
   if (id.length === 0) throw new HttpError(400, `${fieldName} is required`);
-  if (id.length > 256) throw new HttpError(400, `${fieldName} exceeds 256-character cap`);
+  if (id.length > MAX_ID_LEN) throw new HttpError(400, `${fieldName} exceeds ${MAX_ID_LEN}-character cap`);
   if (!ID_SEGMENT_RE.test(id)) {
     throw new HttpError(400, `${fieldName} contains invalid characters; allowed: A-Z a-z 0-9 _ : . -`);
   }

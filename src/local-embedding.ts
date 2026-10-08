@@ -13,6 +13,7 @@ let _embeddingAvailable: boolean | null = null;
 // A pipeline is expensive to load, so one instance per model is kept for the process.
 const _pipelineInstances = new Map<string, unknown>();
 const _pipelineLoading = new Map<string, Promise<unknown>>();
+const _pipelineErrors = new Map<string, string>();
 
 export const DEFAULT_EMBEDDING_MODEL = 'Xenova/all-MiniLM-L6-v2';
 
@@ -88,7 +89,10 @@ async function loadPipeline(model: string): Promise<any> {
   const loading = (async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const pkg = resolveTransformersPackage();
-    if (!pkg) return null;
+    if (!pkg) {
+      _pipelineErrors.set(model, 'no transformers package is installed');
+      return null;
+    }
 
     let pipelineFn: any = null;
     try {
@@ -106,14 +110,20 @@ async function loadPipeline(model: string): Promise<any> {
       }
       pipelineFn = mod.pipeline ?? mod.default?.pipeline;
     } catch (err) {
-      log.debug(`transformers import failed (${pkg}): ${err instanceof Error ? err.message : String(err)}`);
+      // String(err) keeps a Node error's [ERR_...] code, which callers match on.
+      const reason = `transformers import failed (${pkg}): ${String(err)}`;
+      log.debug(reason);
+      _pipelineErrors.set(model, reason);
       return null;
     }
 
-    if (!pipelineFn) return null;
+    if (!pipelineFn) {
+      _pipelineErrors.set(model, `${pkg} exports no pipeline function`);
+      return null;
+    }
 
     // The offline bundle used in egress-blocked sandboxes ships only the FP32 model, so use whichever file is on disk.
-    const cacheRoot = envModelCache()?.trim();
+    const cacheRoot = envModelCache();
     const quantized = !cacheRoot
       || fs.existsSync(path.join(cacheRoot, model, 'onnx', 'model_quantized.onnx'));
 
@@ -122,7 +132,9 @@ async function loadPipeline(model: string): Promise<any> {
       _pipelineInstances.set(model, instance);
       return instance;
     } catch (err) {
-      log.debug(`embedding pipeline load failed (${model}): ${err instanceof Error ? err.message : String(err)}`);
+      const reason = `embedding pipeline load failed (${model}): ${String(err)}`;
+      log.debug(reason);
+      _pipelineErrors.set(model, reason);
       return null;
     } finally {
       _pipelineLoading.delete(model);
@@ -131,6 +143,12 @@ async function loadPipeline(model: string): Promise<any> {
 
   _pipelineLoading.set(model, loading);
   return loading;
+}
+
+/** Throws, with the reason, when the model's pipeline cannot load: a provider-level failure, not a per-item skip. */
+export async function requireLocalPipeline(model: string): Promise<void> {
+  if (await loadPipeline(model)) return;
+  throw new Error(`local embedding model did not load: ${_pipelineErrors.get(model) ?? 'unknown reason'}`);
 }
 
 export function resolveEmbeddingModel(hippoRoot: string, explicitModel?: string): string {

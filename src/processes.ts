@@ -1,5 +1,5 @@
 /**
- * E2 process first-class object (docs/plans/2026-05-29-e2-process-object.md).
+ * Process first-class object.
  *
  * A `process` is a "living process map": a named, ordered list of steps that
  * evolves over time. Unlike `incident` (open->resolved->closed, no supersede),
@@ -39,6 +39,7 @@ import { createMemory, Layer } from './memory.js';
 import { appendAuditEvent } from './audit.js';
 import { objectHalfLifeDays } from './half-life-migration.js';
 import { keysetAfter, type KeysetPosition } from './keyset.js';
+import type { JsonValue } from './json.js';
 
 // ---------------------------------------------------------------------------
 // Domain types
@@ -51,10 +52,6 @@ export const VALID_PROCESS_STATES: ReadonlySet<ProcessStatus> = new Set<ProcessS
   'superseded',
   'closed',
 ]);
-
-/** Arbitrary JSON-shaped value; the domain type for untrusted input at the
- *  steps I/O boundary (validateProcessSteps parses this into string[]). */
-type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
 function isString(v: JsonValue): v is string {
   return typeof v === 'string';
@@ -233,8 +230,8 @@ interface ProcessWrite {
 // row's autoincrement id could otherwise collide with a non-existent
 // supersedesProcessId (e.g. superseding id 1 on an empty store), making
 // the row supersede itself. Validating first means the new row is never a
-// candidate for its own supersede UPDATE. Mirrors saveDecision (codex P1
-// 2026-05-28). The same SELECT reads the predecessor version so the
+// candidate for its own supersede UPDATE. Mirrors saveDecision.
+// The same SELECT reads the predecessor version so the
 // successor's version is server-derived, never client-supplied.
 function preflightProcessSupersede(db: DatabaseSyncLike, tenantId: string, supersedesId: number): number {
   // SAFETY: SELECT status, version FROM processes; row shape matches

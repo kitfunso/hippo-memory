@@ -101,4 +101,26 @@ describe('archiveRawMemory', () => {
     closeHippoDb(db);
     rmSync(home, { recursive: true, force: true });
   });
+
+  it('a failed full-text purge fails the archive and rolls all of it back', () => {
+    const home = mkdtempSync(join(tmpdir(), 'hippo-arch-'));
+    const db = openHippoDb(home);
+    try {
+      db.prepare(
+        `INSERT INTO memories (id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, conflicts_with_json, pinned, confidence, content, kind) VALUES ('rfail','2026-01-01','2026-01-01',0,1.0,7,'episodic','[]','neutral',0.5,'test','[]',0,'observed','purge must not half-happen','raw')`,
+      ).run();
+      // fts5_available stays '1', so the archive still tries the purge and it fails.
+      db.prepare(`INSERT INTO meta(key, value) VALUES ('fts5_available', '1') ON CONFLICT(key) DO UPDATE SET value = '1'`).run();
+      db.exec('DROP TABLE memories_fts');
+
+      expect(() => archiveRawMemory(db, 'rfail', { reason: 'GDPR delete', who: 'user:7' })).toThrow(/memories_fts/);
+
+      expect(db.prepare(`SELECT id FROM memories WHERE id = 'rfail'`).get()).toBeDefined();
+      expect(db.prepare(`SELECT memory_id FROM raw_archive WHERE memory_id = 'rfail'`).get()).toBeUndefined();
+      expect(db.prepare(`SELECT 1 AS x FROM audit_log WHERE op = 'archive_raw' AND target_id = 'rfail'`).get()).toBeUndefined();
+    } finally {
+      closeHippoDb(db);
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
 });

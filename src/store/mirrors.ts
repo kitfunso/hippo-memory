@@ -184,15 +184,8 @@ export function writeMarkdownMirror(hippoRoot: string, entry: MemoryEntry): void
   fs.writeFileSync(path.join(dir, `${entry.id}.md`), serializeEntry(entry), 'utf8');
 }
 
-// AT1 P1 fix (codex): `writeMarkdownMirror` writes ANY layer's mirror,
-// including `trace/<id>.md` for Layer.Trace rows (auto-promoted traces,
-// consolidate.ts) — but this enumeration only walked
-// Buffer/Episodic/Semantic. A rejected/forgotten trace row's markdown
-// content survived on disk while the purge (and `hippo reject`/plain
-// `forget`) reported success, and a stale trace mirror is exactly the
-// resurrection channel bootstrapLegacyStore/rebuildIndex guard against.
-// Fixes BOTH the AT1 reject-flow purge and the pre-existing plain-`forget`
-// gap for trace rows (deleteEntry has always called this same function).
+// Every layer, Trace included: `writeMarkdownMirror` writes any layer, and a stale trace mirror
+// is the resurrection channel bootstrapLegacyStore/rebuildIndex guard against.
 export function removeEntryMirrors(hippoRoot: string, id: string): void {
   for (const layer of [Layer.Buffer, Layer.Episodic, Layer.Semantic, Layer.Trace]) {
     const file = path.join(layerDir(hippoRoot, layer), `${id}.md`);
@@ -203,37 +196,19 @@ export function removeEntryMirrors(hippoRoot: string, id: string): void {
 }
 
 /**
- * AT1 mirror-purge honesty fix (docs/plans/2026-08-15-at1-rejected-value-tombstone.md):
- * the candidate markdown mirror paths still on disk for `id`, computed the
- * same way `removeEntryMirrors` walks them (one per layer: buffer/episodic/
- * semantic), filtered to the ones that still `fs.existsSync`. Used to report
- * an EXPLICIT path when a best-effort purge fails and no reaper exists to
- * retry it — plain `removeEntryMirrors` returns void, giving no way to name
- * which file is stuck.
+ * Mirror paths for `id` still on disk, walked like `removeEntryMirrors`, so a failed purge
+ * with no reaper to retry it can name the stuck file.
  */
 export function getExistingEntryMirrorPaths(hippoRoot: string, id: string): string[] {
-  // AT1 P1 fix (codex): same missing Layer.Trace as removeEntryMirrors above
-  // — kept in lockstep with it since this function's whole purpose is
-  // walking the mirror paths "the same way removeEntryMirrors walks them"
-  // (see its own doc comment).
+  // Layer list kept in lockstep with removeEntryMirrors.
   return [Layer.Buffer, Layer.Episodic, Layer.Semantic, Layer.Trace]
     .map((layer) => path.join(layerDir(hippoRoot, layer), `${id}.md`))
     .filter((file) => fs.existsSync(file));
 }
 
 /**
- * AT1 fix: best-effort markdown-mirror purge shared by `reject-flow.ts`'s
- * `rejectValue` and `resolveConflict`'s post-commit purge. Both used to log
- * "will retry via reaper on next open" for EVERY failure, but the reaper
- * (`cleanupArchivedMirrors`, raw-archive-mirror-cleanup.ts) only scans
- * `raw_archive` — that message was false for a non-raw id, which has no
- * reaper at all.
- *
- * Retries the unlink once synchronously (the common real-world failure is a
- * transient lock/AV-scanner false positive, not a permanent one). On a
- * second failure: raw ids still get the honest reaper message (true); non-raw
- * ids get the EXPLICIT leftover file path(s) and a manual-delete instruction,
- * since nothing will ever retry them automatically.
+ * Best-effort mirror purge. Retries the unlink once (most failures are transient locks); the reaper only
+ * scans `raw_archive`, so a non-raw id's second failure logs the leftover path(s) to delete by hand.
  *
  * Returns true if the mirror ended up purged (first or second attempt).
  */
@@ -300,12 +275,8 @@ export function buildIndexFromDb(db: ReturnType<typeof openHippoDb>): HippoIndex
     };
   }
 
-  // LC1 codex round-2 med: the two lockstep keys must be read in ONE
-  // statement. Two autocommit SELECTs leave a window where a concurrent
-  // saveIndex (which commits both keys in one transaction) lands between
-  // them, handing the reader mismatched last_retrieval_ids / last_trace_id
-  // and re-opening the mislinkage hole saveIndex's BEGIN/COMMIT closed on
-  // the write side. One SELECT = one SQLite read snapshot.
+  // Read both lockstep keys in ONE statement: two autocommit SELECTs could straddle a concurrent
+  // saveIndex and hand back a mismatched last_retrieval_ids / last_trace_id pair.
   // SAFETY: lockstepRows' shape matches the key/value columns named above.
   const lockstepRows = db.prepare(
     `SELECT key, value FROM meta WHERE key IN ('last_retrieval_ids', 'last_trace_id')`,
@@ -360,9 +331,13 @@ export function syncMirrorFiles(hippoRoot: string, db: ReturnType<typeof openHip
   // SAFETY: this query selects exactly MEMORY_SELECT_COLUMNS, matching
   // MemoryRow's field set.
   const entries = db.prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ORDER BY created ASC, id ASC`).all() as MemoryRow[];
+  syncChangedMirrors(hippoRoot, db, entries.map(rowToEntry));
+}
 
+/** syncMirrorFiles for a pass that changed only `changed`: the other rows' markdown is already current. */
+export function syncChangedMirrors(hippoRoot: string, db: ReturnType<typeof openHippoDb>, changed: readonly MemoryEntry[]): void {
   mirrorBestEffort('markdown mirrors', () => {
-    for (const entry of entries.map(rowToEntry)) writeMarkdownMirror(hippoRoot, entry);
+    for (const entry of changed) writeMarkdownMirror(hippoRoot, entry);
   });
 
   // SAFETY: conflicts' shape matches the eight columns named in the SELECT

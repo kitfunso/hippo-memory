@@ -167,7 +167,6 @@ describe('v0.30 / E4 — first-class DAG recall (scoring layer)', () => {
     writeEntry(hippoRoot, summary);
 
     // Seed physics state so physicsSearch picks the physics-particle path
-    const dim = 4;
     const queryVec = [1, 0, 0, 0];
     const particle: PhysicsParticle = {
       memoryId: summary.id,

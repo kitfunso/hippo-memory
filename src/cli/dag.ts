@@ -31,9 +31,7 @@ export function cmdDag(hippoRoot: string, flags: Record<string, string | boolean
     return;
   }
 
-  // Tree view: v0.30 / E5 renders L3 entity profiles as roots (with L2
-  // children indented), then orphan L2 summaries (no L3 parent) at top
-  // level. Pre-E5 behavior was L2-only roots; rendering now covers L3.
+  // Tree view: L3 entity profiles as roots with L2 children indented, then orphan L2 summaries at top level.
   const profiles = entries.filter((e) => e.dag_level === 3);
   const l2List = entries.filter((e) => e.dag_level === 2);
   const orphanL2 = l2List.filter((e) => !e.dag_parent_id);
@@ -67,7 +65,7 @@ export function cmdDag(hippoRoot: string, flags: Record<string, string | boolean
     }
   }
 
-  // Orphan L2 summaries (no L3 parent) at top level — pre-E5 default shape.
+  // Orphan L2 summaries (no L3 parent) at top level.
   for (const summary of orphanL2) {
     const summaryTags = summary.tags.filter((t) => t !== 'dag-summary').join(', ');
     console.log(`\n📌 ${summary.content.slice(0, 80)}`);
@@ -119,8 +117,7 @@ function cmdDrillDown(hippoRoot: string, summaryId: string, flags: Record<string
   const limit = typeof flags['limit'] === 'string' ? Number(flags['limit']) : undefined;
   // Absent stays undefined so the api default applies; the 0 fallback is unreachable.
   const budget = flags['budget'] === undefined ? undefined : parseBudgetFlag(flags['budget'], 0);
-  // v0.30 / E5: --depth N walks N levels down (default 1, hard cap 10).
-  // L4 fold: reject out-of-range explicitly (no silent clamp).
+  // --depth N walks N levels down (default 1, hard cap 10); out-of-range is rejected, never silently clamped.
   const rawDepth = typeof flags['depth'] === 'string' ? Number(flags['depth']) : undefined;
   let depth: number | undefined;
   if (rawDepth !== undefined) {
@@ -142,9 +139,8 @@ function cmdDrillDown(hippoRoot: string, summaryId: string, flags: Record<string
     cost: drillCost,
   });
   if ('failure' in r) {
-    // v1.6.4: only `not_drillable` is caller-actionable. `not_found`
-    // intentionally collapses cross-tenant + scope-blocked + missing
-    // (codex round 3 P1: distinguishing scope_blocked leaked existence).
+    // Only `not_drillable` is caller-actionable. `not_found` collapses cross-tenant, scope-blocked
+    // and missing on purpose: telling scope_blocked apart would leak that the row exists.
     if (r.failure === 'not_drillable') {
       printError(`Id ${summaryId} is a leaf row, not a level-2+ summary; nothing to drill into.`);
     } else {

@@ -1,10 +1,11 @@
 // /v1/policies routes.
 import { closePolicy, loadPolicies, loadPoliciesAsOf, loadPolicyById, savePolicy, VALID_POLICY_STATES } from '../../policies.js';
-import { HttpError, type JsonValue, sendJson } from '../../http-util.js';
+import { HttpError, sendJson } from '../../http-util.js';
 import { buildContextWithAuth } from '../auth.js';
 import { byCreatedAt, pageOf, parseCursor } from '../cursor.js';
 import type { RouteRequest } from '../types.js';
-import { isJsonString, isSetMember, parseJsonBody, parseListLimit } from '../validation.js';
+import { isSetMember, parseJsonBody, parseListLimit } from '../validation.js';
+import { type JsonValue, isJsonString } from '../../json.js';
 
 // HTTP-boundary check for an optional policy date field (validFrom/validTo).
 // Type + length only; savePolicy/loadPoliciesAsOf normalize + format-validate the
@@ -21,7 +22,7 @@ function optionalDateField(raw: JsonValue | undefined, label: string): string | 
   return raw;
 }
 
-// ── policies (E2 first-class object, bi-temporal-first) ──
+// ── policies (first-class object, bi-temporal-first) ──
 //
 // 6 routes: POST /v1/policies (new; processName-style body policyName +
 // policyText + validFrom? + validTo?), GET /v1/policies (list, status filter),

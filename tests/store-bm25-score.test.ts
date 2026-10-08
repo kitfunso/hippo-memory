@@ -16,7 +16,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { loadSearchEntries } from '../src/store/search-rows.js';
+import { _forceLikePathForTests, loadSearchEntries } from '../src/store/search-rows.js';
 import { withSharedStoreHandles } from '../src/db.js';
 import { Layer, type MemoryEntry } from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
@@ -129,25 +129,24 @@ describe('loadSearchEntries bm25_score (F1, v1.7.0)', () => {
     expect(got).toEqual(expectedOrder);
   });
 
-  it('LIKE fallback path: HIPPO_FORCE_LIKE_PATH=1 routes through LIKE deterministically; bm25_score undefined; expected row anchored (v1.7.1 senior P2.3 + INFO #7)', () => {
+  it('LIKE fallback path: the forced LIKE route is deterministic; bm25_score undefined; expected row anchored (v1.7.1 senior P2.3 + INFO #7)', () => {
     // v1.7.0 used a substring "alphab" tokenizer-miss to route through LIKE
     // — fragile under porter/trigram tokenizers (senior P2.3). Both rev.1
     // alternatives (DROP TABLE, setMeta('fts5_available','0')) are no-ops
     // because ensureOptionalFts runs CREATE+backfill+meta-write on every
     // openHippoDb (db.ts:998-1029).
     //
-    // v1.7.1 fix: HIPPO_FORCE_LIKE_PATH=1 is read at the start of
-    // loadSearchRows so loadSearchRows skips the FTS branch unconditionally
+    // v1.7.1 fix: the _forceLikePathForTests switch is read in
+    // loadSearchRows, which then skips the FTS branch unconditionally
     // and runs the LIKE query. Gated at the read site (NOT inside
     // isFtsAvailable) so writes (syncFtsRow, deleteFtsRow, raw-archive)
     // keep maintaining the FTS index honestly — no on-disk poisoning.
     //
     // INFO #7: anchor on the expected content so a partial hit cannot let
     // the test pass spuriously.
-    const prevEnv = process.env.HIPPO_FORCE_LIKE_PATH;
     try {
       writeEntry(root, makeRaw('alphabet soup contents'));
-      process.env.HIPPO_FORCE_LIKE_PATH = '1';
+      _forceLikePathForTests(true);
       const results = loadSearchEntries(root, 'alphabet', 200, 'default');
       expect(results.length).toBeGreaterThan(0);
       // Anchor: the expected row must come back via the LIKE branch.
@@ -157,8 +156,21 @@ describe('loadSearchEntries bm25_score (F1, v1.7.0)', () => {
         expect(e.bm25_score).toBeUndefined();
       }
     } finally {
-      if (prevEnv === undefined) delete process.env.HIPPO_FORCE_LIKE_PATH;
-      else process.env.HIPPO_FORCE_LIKE_PATH = prevEnv;
+      _forceLikePathForTests(false);
+    }
+  });
+
+  it('the environment cannot force the LIKE route: with the old variable set, a term query still comes back through FTS', () => {
+    writeEntry(root, makeRaw('alphabet soup contents'));
+    const prev = process.env.HIPPO_FORCE_LIKE_PATH;
+    process.env.HIPPO_FORCE_LIKE_PATH = '1';
+    try {
+      const results = loadSearchEntries(root, 'alphabet', 200, 'default');
+      expect(results.map((e) => e.content)).toEqual(['alphabet soup contents']);
+      expect(results[0]!.bm25_score).toEqual(expect.any(Number));
+    } finally {
+      if (prev === undefined) delete process.env.HIPPO_FORCE_LIKE_PATH;
+      else process.env.HIPPO_FORCE_LIKE_PATH = prev;
     }
   });
 
