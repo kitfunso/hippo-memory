@@ -1,7 +1,7 @@
 /** Leveled stderr logger. `HIPPO_LOG` picks the threshold (error, warn, info, debug); unset or unknown means warn. `HIPPO_LOG_FORMAT=json` writes JSON lines. */
 
 import { envLogJson, envLogLevel } from './env.js';
-import { currentRequestId } from './request-scope.js';
+import { currentRequestId } from './util/request-scope.js';
 
 export type LogLevel = 'error' | 'warn' | 'info' | 'debug';
 

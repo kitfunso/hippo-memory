@@ -7,7 +7,7 @@ import { mcpErrorResponse, isJsonObjectRecord, type McpRequest, type McpResponse
 import { handleMcpRequest } from './request.js';
 import { type JsonValue, isJsonString } from '../json.js';
 import { randomUUID } from 'node:crypto';
-import { runWithRequestId } from '../request-scope.js';
+import { runWithRequestId } from '../util/request-scope.js';
 
 // MCP stdio transport spec: messages are newline-delimited JSON-RPC, no embedded newlines.
 // https://modelcontextprotocol.io/specification/.../basic/transports#stdio

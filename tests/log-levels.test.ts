@@ -1,7 +1,7 @@
 // HIPPO_LOG picks the stderr threshold; the timestamp and fields such as the request id ride on the same line.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { formatLogLine, isLevelEnabled, log, logThreshold, resetLogOnce } from '../src/log.js';
-import { runWithRequestId } from '../src/request-scope.js';
+import { runWithRequestId } from '../src/util/request-scope.js';
 
 const AT = '2026-01-02T03:04:05.678Z';
 

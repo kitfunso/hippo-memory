@@ -9,7 +9,7 @@ import { markSharedStore } from './config.js';
 import { auditWriteFailureCount } from './audit.js';
 import { PACKAGE_VERSION } from './version.js';
 import { errorFields, log } from './log.js';
-import { runWithRequestId } from './request-scope.js';
+import { runWithRequestId } from './util/request-scope.js';
 import { createRateLimiter, type RateLimiter } from './rate-limit.js';
 import {
   type Actor, authCreateSelf, type AuthCreateSelfOpts, type AuthCreateSelfResult, authRevoke, type AuthRevokeReply, type AuthRevokeResult, type Context, RecallContractError,

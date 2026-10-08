@@ -22,7 +22,7 @@ import {
 import {
   ParamError, parseActionBody, parseConflictId, parseMemoryId, parseMemoryQuery, parseSearchText, type ActionBody,
 } from './dashboard-params.js';
-import { runWithRequestId } from './request-scope.js';
+import { runWithRequestId } from './util/request-scope.js';
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',

@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 import type { DatabaseSyncLike } from './sqlite.js';
 import { connectHippoDb, getHippoDbPath } from './connect.js';
-import { currentRequestId, requestScopes, type RequestScope } from '../request-scope.js';
+import { currentRequestId, requestScopes, type RequestScope } from '../util/request-scope.js';
 
 export interface RequestStoresOptions {
   /** Lock wait of every open in the scope that does not pass its own. */

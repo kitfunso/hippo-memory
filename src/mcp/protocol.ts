@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import { randomUUID } from 'node:crypto';
 import { INTERNAL_ERROR_MESSAGE, mapApiError } from '../http-util.js';
 import { log } from '../log.js';
-import { currentRequestId } from '../request-scope.js';
+import { currentRequestId } from '../util/request-scope.js';
 import { getGlobalRoot } from '../shared.js';
 import { loadConfig } from '../config.js';
 import type { Actor as ApiActor } from '../api.js';
