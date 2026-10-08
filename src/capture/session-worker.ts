@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { createHash } from 'node:crypto';
 import { homeDir } from '../hooks/shared.js';
-import { errorMessage } from '../log.js';
+import { errorMessage, log as logger } from '../log.js';
 import { isObjectLike, isStringValue, type ProgressCursor } from '../capture-contract.js';
 import { SESSION_ID_RE } from './copilot-transcript.js';
 import type { SessionTurn } from './transcript.js';
@@ -81,8 +81,9 @@ function takeSessionLock(lock: string): Take {
 function releaseSessionLock(lock: string): void {
   try {
     fs.rmSync(lock, { force: true });
-  } catch {
+  } catch (err) {
     // A lock left behind names this pid, which is dead once the worker exits, so the next taker clears it.
+    logger.debug(`session lock not removed: ${errorMessage(err)}`);
   }
 }
 

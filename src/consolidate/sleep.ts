@@ -19,7 +19,7 @@ import { deleteExpiredDormantRow, type DormantKey, expiredDormantKeys } from '..
 import { loadConfig } from '../config.js';
 import { appendAuditEvent, reportAuditWriteFailure } from '../audit.js';
 import { migrateDefaultHalfLife, LEGACY_TYPED_HALF_LIFE } from '../half-life-migration.js';
-import { log } from '../log.js';
+import { errorMessage, log } from '../log.js';
 import { WRITE_BUDGET, type WriteBudget } from '../write-budget.js';
 import { type DecayOutcome, decayPass } from './decay.js';
 import { familyUnits, groupFlush } from './flush-units.js';
@@ -261,9 +261,9 @@ function auditRescues(run: SleepRun, { rescuedEntries, rankById }: DecayOutcome)
     } finally {
       closeHippoDb(auditDb);
     }
-  } catch {
-    // openHippoDb/closeHippoDb-level failure: audit must never crash a
-    // mutation (mirrors store.ts's audit() posture).
+  } catch (err) {
+    // An audit store that will not open must never crash the mutation it records.
+    log.debug(`mv_rescue audit unavailable: ${errorMessage(err)}`);
     result.details.push(
       `  ⚠️ memory-value: mv_rescue audit unavailable this cycle ` +
       `(${rescuedEntries.length} rescue${rescuedEntries.length === 1 ? '' : 's'} not audited)`,

@@ -25,6 +25,7 @@ import { buildProvenanceCoverage } from '../provenance-coverage.js';
 import { buildCorrectionLatency } from '../correction-latency.js';
 import * as api from '../api.js';
 import { resolveTenantId } from '../tenant.js';
+import { errorMessage, log } from '../log.js';
 import { printError } from './output.js';
 import {
   parseCountFlag,
@@ -178,8 +179,9 @@ function printPhysicsStatus(hippoRoot: string): void {
     } finally {
       closeHippoDb(db);
     }
-  } catch {
-    // Physics table may not exist yet — degrade gracefully
+  } catch (err) {
+    // The physics table may not exist yet, so status prints without that line.
+    log.debug(`physics status skipped: ${errorMessage(err)}`);
   }
 }
 

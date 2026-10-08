@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import type { RerankerFn, RerankResult, RerankerOptions } from './types.js';
-import { log } from '../log.js';
+import { errorMessage, log } from '../log.js';
 
 const MODEL_NAME = 'Xenova/ms-marco-MiniLM-L-6-v2';
 
@@ -154,8 +154,9 @@ export const crossEncoderReranker: RerankerFn = async (
       let ceScore: number;
       try {
         ceScore = await pipe(query, r.entry.content);
-      } catch {
+      } catch (err) {
         // One bad inference must not sink the whole pass.
+        log.debug(`cross-encoder inference failed, keeping the base score: ${errorMessage(err)}`);
         ceScore = r.score;
       }
       return {

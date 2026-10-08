@@ -2,6 +2,7 @@ import { envPath } from '../env.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+import { errorMessage, log } from '../log.js';
 import { HIPPO_CODEX_WRAPPER_MARKER, homeDir, codexHomeDir, ensureDir } from './shared.js';
 import { isJsonString } from '../json.js';
 
@@ -221,8 +222,9 @@ function writeExecutableFile(filePath: string, content: string): void {
   fs.writeFileSync(filePath, content, 'utf8');
   try {
     fs.chmodSync(filePath, 0o755);
-  } catch {
-    // chmod is best-effort on Windows
+  } catch (err) {
+    // The mode bit means nothing on Windows; elsewhere a wrapper that is not executable breaks `codex`, so say so.
+    log.warn(`could not mark ${filePath} executable: ${errorMessage(err)}`);
   }
 }
 

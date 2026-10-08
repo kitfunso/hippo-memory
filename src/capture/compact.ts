@@ -16,7 +16,7 @@ import {
 import { resolveTenantId } from '../tenant.js';
 import { defaultPreCompactLogPath, vscodeUserHooksFile } from '../hooks/shared.js';
 import { readClaudeCodePreCompact, type HookRuntime } from '../capture-contract.js';
-import { errorMessage } from '../log.js';
+import { errorMessage, log as logger } from '../log.js';
 import { resolveLastSessionTranscript } from './transcript.js';
 import { isVscodeTranscript } from './copilot-transcript.js';
 import { mergeWorkingState, transcriptWorkingState, type WorkingState } from './working-state.js';
@@ -49,8 +49,9 @@ function appendPreCompactLog(logFile: string, message: string): void {
       fs.writeFileSync(logFile, '', 'utf8'); // start fresh — dumb cap, no rotation
     }
     fs.appendFileSync(logFile, `[hippo] ${new Date().toISOString()} ${sanitizeLogMessage(message)}\n`, 'utf8');
-  } catch {
+  } catch (err) {
     // Diagnostic-only; a log write failure must never affect the exit-0 contract.
+    logger.debug(`pre-compact log not written: ${errorMessage(err)}`);
   }
 }
 
@@ -175,8 +176,8 @@ function saveDerivedSnapshot(
   let existing: TaskSnapshot | null = null;
   try {
     existing = loadActiveTaskSnapshot(hippoRoot, tenantId);
-  } catch {
-    // No existing snapshot to merge against — proceed with derived-only.
+  } catch (err) {
+    logger.debug(`pre-compact: stored snapshot unreadable, saving the derived one alone: ${errorMessage(err)}`);
   }
 
   // Carried-over fields are not re-capped, as `hippo snapshot save` stays uncapped; saveActiveTaskSnapshot scrubs every field.

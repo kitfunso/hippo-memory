@@ -4,7 +4,7 @@ import { isStringValue } from '../capture-contract.js';
 import { REPLAY_AFTER_MS } from '../compaction-record.js';
 import { SPOOL_PROBLEM, spoolCounts } from '../compaction-spool.js';
 import { defaultSleepLogPath } from '../hooks/shared.js';
-import { errorMessage } from '../log.js';
+import { errorMessage, log } from '../log.js';
 import { truncateCodePointSafe } from '../transcript-tail.js';
 import { printError } from './output.js';
 import { hookStoreRoot } from './shared.js';
@@ -66,6 +66,6 @@ export function cmdLastSleep(
   if (problems !== null && out === 'terminal') printError(problems);
 
   if (!flags['keep']) {
-    try { fs.unlinkSync(logPath); } catch { /* non-fatal */ }
+    try { fs.unlinkSync(logPath); } catch (err) { log.debug(`last-sleep log not removed, it shows again next session: ${errorMessage(err)}`); }
   }
 }

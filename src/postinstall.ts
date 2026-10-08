@@ -4,6 +4,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { detectRealCodexPath, isCodexWrapperInstalled, repairCodexWrapperIfInstalled } from './hooks/codex-wrapper.js';
 import { claudeConfigDir } from './hooks/shared.js';
+import { errorMessage, log } from './log.js';
 
 function main(): void {
   if (envSkipPostinstall()) return;
@@ -13,8 +14,9 @@ function main(): void {
     // Swapping the binary from postinstall is a consent violation that supply-chain scanners read as
     // hijacking, so first install is `hippo hook install codex` only.
     repairCodexWrapperIfInstalled();
-  } catch {
+  } catch (err) {
     // Never fail package install because auto-integration could not be applied.
+    log.debug(`postinstall: codex wrapper not repaired: ${errorMessage(err)}`);
   }
 
   try {

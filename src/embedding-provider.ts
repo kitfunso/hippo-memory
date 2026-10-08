@@ -37,6 +37,7 @@ import {
   DEFAULT_EMBEDDING_MODEL,
 } from './local-embedding.js';
 import { loadConfig } from './config.js';
+import { errorMessage, log } from './log.js';
 import { redactSecretsStrict } from './secret-detect.js';
 import { fetchWithRetry } from './http-retry.js';
 import type { JsonValue } from './json.js';
@@ -411,9 +412,9 @@ export function resolveEmbeddingIdentity(hippoRoot: string, opts: ResolveProvide
 export function isEmbeddingConfigured(hippoRoot: string): boolean {
   try {
     return resolveEmbeddingProvider(hippoRoot).isAvailable();
-  } catch {
-    // Invalid embedding config (e.g. an insecure apiBaseUrl) must not crash the
-    // best-effort ingestion guard — treat it as "not configured" and skip.
+  } catch (err) {
+    // An invalid embedding config must not crash the best-effort ingestion guard, so it reads as not configured.
+    log.debug(`embedding config unusable: ${errorMessage(err)}`);
     return false;
   }
 }

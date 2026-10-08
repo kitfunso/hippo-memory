@@ -232,6 +232,18 @@ describe('failed-tool capture', () => {
       fs.rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it('with a store, a payload the hook cannot read still exits 0 and says why on stderr', () => {
+    const { dir, env } = scratch();
+    try {
+      initStore(path.join(dir, '.hippo'));
+      const r = run(['capture-error'], dir, env, '{"tool_name": "Bash", ');
+      expect(r.status).toBe(0);
+      expect(r.stderr).toMatch(/\[hippo\] warn: failure capture skipped: \S/);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('both install routes wire compaction and failed-tool capture', () => {

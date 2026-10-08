@@ -19,7 +19,7 @@ import { loadConfig } from './config.js';
 import { resolveEmbeddingProvider, type EmbeddingProvider } from './embedding-provider.js';
 import { DEFAULT_EMBEDDING_MODEL } from './local-embedding.js';
 import { redactSecretsStrict } from './secret-detect.js';
-import { log } from './log.js';
+import { errorMessage, log } from './log.js';
 import { StoreNotPortedError } from './db/sqlite-blocked.js';
 import type { HippoStore, VectorReads, VectorRowWrite, VectorWrite, VectorWriteResult, VectorWrites } from './store-port.js';
 
@@ -481,8 +481,9 @@ export async function embedMemory(
         } finally {
           closeHippoDb(db);
         }
-      } catch {
-        // Physics init is best-effort — don't break embedding
+      } catch (err) {
+        // Physics init is best-effort and must not fail the embedding that just landed.
+        log.debug(`physics state not initialised for ${entry.id}: ${errorMessage(err)}`);
       }
     } catch (err) {
       // Provider failure (API down / bad key). Best-effort: leave the index as-is, but say so once.

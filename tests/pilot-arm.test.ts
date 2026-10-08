@@ -6,6 +6,7 @@ import * as path from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { loadConfig } from '../src/config.js';
 import { openHippoDb, closeHippoDb, HOOK_DB_WAIT_MS, runWithRequestStores, SERVER_DB_WAIT_MS, type DatabaseSyncLike } from '../src/db.js';
+import { withLedgerDb } from '../src/ledger-db.js';
 import { ensurePilotArm, hashArm, readPilotArm } from '../src/pilot-arm.js';
 import { recordTokenUse, summarizeTokenUse, tokensBySession } from '../src/token-ledger.js';
 import { runDoctor } from '../src/doctor.js';
@@ -180,6 +181,21 @@ describe('pilot arm helpers', () => {
     expect(ensurePilotArm(db, 'default', 's1', 10000)).toBe('holdout');
     expect(() => db.exec('BEGIN IMMEDIATE')).not.toThrow();
     db.exec('ROLLBACK');
+  });
+
+  it('says at debug level why an arm or a ledger row was not stored', () => {
+    process.env.HIPPO_LOG = 'debug';
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    db.exec('DROP TABLE token_ledger');
+    try {
+      ensurePilotArm(db, 'default', 's1', 10000);
+      withLedgerDb(root, (ledger) => recordTokenUse(ledger, { tenantId: 'default', surface: 'hook', event: 'inject', items: 1, tokens: 40 }));
+    } finally {
+      delete process.env.HIPPO_LOG;
+    }
+    const text = stderr.mock.calls.map((c) => String(c[0])).join('');
+    expect(text).toMatch(/debug: pilot arm not stored, using the hash arm: .*token_ledger/);
+    expect(text).toMatch(/debug: token ledger row skipped: .*token_ledger/);
   });
 });
 
