@@ -226,7 +226,7 @@ describe('when the vector arm cannot run, both stores fall back to BM25 alike', 
   it('a stale index names the rebuild each store needs', async () => {
     const onHippoDb = await runPass([http('hybrid')], false, false, staleModel);
     const onMemory = await runPass([http('hybrid')], false, true, staleModel);
-    expect(onHippoDb.log).toContain("is being rebuilt; run 'hippo embed'\n");
+    expect(onHippoDb.log).toContain("is being rebuilt; run 'hippo embed' ts=");
     expect(onMemory.log).toContain("run 'hippo embed' on the SQLite store, then rebuild the 'in-memory' database from it");
   }, 60_000);
 });

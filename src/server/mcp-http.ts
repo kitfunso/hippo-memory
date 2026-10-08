@@ -10,7 +10,6 @@ import { assertCallerProject } from '../project-identity.js';
 import type { CallerProject } from '../prompt-hook.js';
 import { buildContextWithAuth, heartbeatVerdict, readAuthHeader, requireAuth } from './auth.js';
 import { clientIpForRateLimit } from './client-ip.js';
-import { requestIds } from './request.js';
 import type { ResolvedServeOpts } from './types.js';
 import { type JsonValue, isJsonString } from '../json.js';
 
@@ -128,7 +127,7 @@ export async function handleMcpPost(req: IncomingMessage, res: ServerResponse, o
   try {
     mcpRes = await handleMcpRequest(rpcReq, mcpContextFor(ctx, buildMcpClientKey(req), opts.autoSleep, project));
   } catch (err) {
-    mcpRes = mcpErrorResponse(rpcReq.id, err, requestIds.get(req));
+    mcpRes = mcpErrorResponse(rpcReq.id, err);
   }
   if (mcpRes === null) {
     // Notification — no body, 202 Accepted.

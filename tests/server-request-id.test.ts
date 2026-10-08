@@ -1,7 +1,7 @@
 // Every API response carries an X-Request-Id: the caller's when it is a sane token, else a fresh one.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { request } from 'node:http';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
@@ -74,6 +74,19 @@ describe('X-Request-Id', () => {
       const logged = stderrSpy.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('requestId=req-err-1'));
       expect(logged).toHaveLength(1);
       expect(logged[0]).toMatch(/^\[hippo\] info: GET \/v1\/memories\/a%2Fb failed: .* requestId=req-err-1 status=400\n$/);
+    } finally {
+      stderrSpy.mockRestore();
+    }
+  });
+
+  it('rides, with a timestamp, on a line logged below the route by code that was never handed the id', async () => {
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      // A bad value makes the config reader warn from inside the request.
+      writeFileSync(join(home, 'config.json'), JSON.stringify({ pilot: { holdoutRateBp: -1 } }));
+      await send('/v1/context?q=anything', { 'x-request-id': 'req-deep-1' });
+      const warned = stderrSpy.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('"pilot"'));
+      expect(warned.join('')).toMatch(/^\[hippo\] warn: .* ts=\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z requestId=req-deep-1\n/);
     } finally {
       stderrSpy.mockRestore();
     }

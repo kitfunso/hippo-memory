@@ -7,7 +7,6 @@ import { API_KEY_PREFIX, verifyApiKeyCached } from '../auth.js';
 import { type Actor, type Context, ownerOrSubject } from '../api.js';
 import { HttpError, isCrossSite, isHeaderString, LOOPBACK_HOST_HEADER, MAX_ID_LEN } from '../http-util.js';
 import { clientIpForRateLimit, subscriberKey } from './client-ip.js';
-import { requestIds } from './request.js';
 import type { AuthResolver, ResolvedBearer, ResolvedServeOpts } from './types.js';
 import { isJsonString } from '../json.js';
 
@@ -37,7 +36,6 @@ function assertLocalCaller(req: IncomingMessage): void {
     log.warn(
       `proxied loopback request refused: it carries ${proxyHeader}, so the no-key local fallback does not apply. ` +
         'Send an API key (hippo auth create, then Authorization: Bearer hk_...).',
-      { requestId: requestIds.get(req) },
     );
     throw new HttpError(401, 'auth required');
   }
@@ -212,7 +210,7 @@ export const LIMITER_MAX_KEYS = 10_000;
 const CALLER_WARN_EVERY_MS = 60_000;
 const callerWarnedAt = new Map<string, number>();
 
-function warnCallerLimited(req: IncomingMessage, key: string, tenantId: string, person: string): void {
+function warnCallerLimited(key: string, tenantId: string, person: string): void {
   const now = Date.now();
   const last = callerWarnedAt.get(key);
   if (last !== undefined && now - last < CALLER_WARN_EVERY_MS) return;
@@ -222,16 +220,16 @@ function warnCallerLimited(req: IncomingMessage, key: string, tenantId: string, 
     if (!oldest.done) callerWarnedAt.delete(oldest.value);
   }
   callerWarnedAt.set(key, now);
-  log.warn('caller over its rate limit; its further 429s this minute are not logged', { tenant: tenantId, person, requestId: requestIds.get(req) });
+  log.warn('caller over its rate limit; its further 429s this minute are not logged', { tenant: tenantId, person });
 }
 
-function chargeCaller(req: IncomingMessage, tenantId: string, actor: Actor, opts: AuthOpts): void {
+function chargeCaller(tenantId: string, actor: Actor, opts: AuthOpts): void {
   const limiter = opts.callerLimiter;
   if (!limiter) return;
   const person = ownerOrSubject(actor);
   const key = `${tenantId}\u0000${person}`;
   if (limiter.check(key)) return;
-  warnCallerLimited(req, key, tenantId, person);
+  warnCallerLimited(key, tenantId, person);
   throw new HttpError(429, 'rate limit exceeded for this caller', limiter.retryAfterSec);
 }
 
@@ -245,7 +243,7 @@ export async function buildContextWithAuth(req: IncomingMessage, opts: AuthOpts)
   const id = await checkAuth(req, opts);
   if (id !== null) {
     const actor = bearerActor(id);
-    chargeCaller(req, id.tenantId, actor, opts);
+    chargeCaller(id.tenantId, actor, opts);
     return { hippoRoot: opts.hippoRoot, tenantId: id.tenantId, actor, store: opts.store };
   }
 
@@ -266,7 +264,7 @@ export async function buildContextWithAuth(req: IncomingMessage, opts: AuthOpts)
  */
 export async function requireAuth(req: IncomingMessage, opts: AuthOpts): Promise<void> {
   const id = await checkAuth(req, opts);
-  if (id !== null) chargeCaller(req, id.tenantId, bearerActor(id), opts);
+  if (id !== null) chargeCaller(id.tenantId, bearerActor(id), opts);
 }
 
 /** Never rejects or charges a caller bucket: an outage (5xx) or a throttle (429) skips one tick; only a definite 4xx denial closes the stream. */

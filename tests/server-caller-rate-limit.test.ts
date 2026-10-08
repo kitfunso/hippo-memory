@@ -4,7 +4,6 @@ import { existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { closeHippoDb, openHippoDb } from '../src/db.js';
 import { apiKeyVerifyStats, createApiKey, revokeApiKey, VERIFIED_KEY_TTL_MS, type CreateApiKeyOpts } from '../src/auth.js';
-import { log } from '../src/log.js';
 import { serve, sqliteStore, StoreBusyError, type AddonRoute, type HippoStore, type ServeOpts } from '../src/server.js';
 import { subscriberKey } from '../src/server/client-ip.js';
 import { makeRoot } from './_helpers/make-root.js';
@@ -387,14 +386,16 @@ describe('boot and the other Retry-After replies', () => {
   });
 
   it('logs one warn line for two 429s in a minute, naming tenant, person and request id but never the token', async () => {
-    const warn = vi.spyOn(log, 'warn').mockImplementation(() => {});
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const a = mint({ ownerSubject: 'oid-log' });
     await start({ perCaller: { ratePerSec: 0.1, burst: 1 }, perAddress: WIDE });
     expect((await recall(bearer(a, { 'x-request-id': 'req-one' }))).status).toBe(200);
     expect((await recall(bearer(a, { 'x-request-id': 'req-two' }))).status).toBe(429);
     expect((await recall(bearer(a, { 'x-request-id': 'req-three' }))).status).toBe(429);
-    const lines = warn.mock.calls.filter(([message]) => message.includes('rate limit'));
-    expect(lines).toEqual([[expect.stringContaining('caller over its rate limit'), { tenant: 'default', person: 'oid-log', requestId: 'req-two' }]]);
-    expect(JSON.stringify(warn.mock.calls)).not.toContain(a.slice(a.indexOf('.') + 1));
+    const written = stderr.mock.calls.map(([chunk]) => String(chunk));
+    expect(written.filter((line) => line.includes('rate limit'))).toEqual([
+      expect.stringMatching(/^\[hippo\] warn: caller over its rate limit.* requestId=req-two tenant=default person=oid-log\n$/),
+    ]);
+    expect(written.join('')).not.toContain(a.slice(a.indexOf('.') + 1));
   });
 });

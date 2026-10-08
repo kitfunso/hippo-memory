@@ -93,6 +93,8 @@ export function envRequireServer(): boolean { return isOneOrTrue('HIPPO_REQUIRE_
 export function envRequireSessionScopedFreshTail(): boolean { return isOne('HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL'); }
 export function envStdinWaitMs(): number | undefined { return positiveInt('HIPPO_STDIN_WAIT_MS'); }
 export function envLogLevel(): string { return raw('HIPPO_LOG')?.trim().toLowerCase() ?? ''; }
+/** `HIPPO_LOG_FORMAT=json` writes each log line as one JSON object; anything else keeps the text line. */
+export function envLogJson(): boolean { return raw('HIPPO_LOG_FORMAT')?.trim().toLowerCase() === 'json'; }
 
 // Server.
 export function envPort(): string | undefined { return raw('HIPPO_PORT'); }

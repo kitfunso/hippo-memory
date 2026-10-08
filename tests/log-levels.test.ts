@@ -1,6 +1,9 @@
-// HIPPO_LOG picks the stderr threshold; fields such as the request id ride on the same line.
+// HIPPO_LOG picks the stderr threshold; the timestamp and fields such as the request id ride on the same line.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { formatLogLine, isLevelEnabled, log, logThreshold, resetLogOnce } from '../src/log.js';
+import { runWithRequestId } from '../src/request-scope.js';
+
+const AT = '2026-01-02T03:04:05.678Z';
 
 let saved: string | undefined;
 let stderrSpy: ReturnType<typeof vi.spyOn>;
@@ -12,12 +15,16 @@ function lines(): string[] {
 beforeEach(() => {
   saved = process.env.HIPPO_LOG;
   delete process.env.HIPPO_LOG;
+  vi.stubEnv('HIPPO_LOG_FORMAT', '');
+  vi.useFakeTimers({ toFake: ['Date'], now: new Date(AT) });
   stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
   resetLogOnce();
 });
 
 afterEach(() => {
   stderrSpy.mockRestore();
+  vi.useRealTimers();
+  vi.unstubAllEnvs();
   if (saved === undefined) delete process.env.HIPPO_LOG;
   else process.env.HIPPO_LOG = saved;
 });
@@ -29,21 +36,21 @@ describe('log level filtering', () => {
     log.warn('w');
     log.info('i');
     log.debug('d');
-    expect(lines()).toEqual(['[hippo] error: e\n', '[hippo] warn: w\n']);
+    expect(lines()).toEqual([`[hippo] error: e ts=${AT}\n`, `[hippo] warn: w ts=${AT}\n`]);
   });
 
   it('HIPPO_LOG=debug prints every level, case-insensitively', () => {
     process.env.HIPPO_LOG = ' DEBUG ';
     log.info('i');
     log.debug('d');
-    expect(lines()).toEqual(['[hippo] info: i\n', '[hippo] debug: d\n']);
+    expect(lines()).toEqual([`[hippo] info: i ts=${AT}\n`, `[hippo] debug: d ts=${AT}\n`]);
   });
 
   it('HIPPO_LOG=error drops warnings', () => {
     process.env.HIPPO_LOG = 'error';
     log.warn('w');
     log.error('e');
-    expect(lines()).toEqual(['[hippo] error: e\n']);
+    expect(lines()).toEqual([`[hippo] error: e ts=${AT}\n`]);
     expect(isLevelEnabled('warn')).toBe(false);
   });
 
@@ -57,7 +64,7 @@ describe('log level filtering', () => {
     log.once('k', 'warn', 'first');
     log.once('k', 'warn', 'second');
     log.once('other', 'warn', 'third');
-    expect(lines()).toEqual(['[hippo] warn: first\n', '[hippo] warn: third\n']);
+    expect(lines()).toEqual([`[hippo] warn: first ts=${AT}\n`, `[hippo] warn: third ts=${AT}\n`]);
   });
 });
 
@@ -69,5 +76,12 @@ describe('log fields', () => {
 
   it('flattens newlines so one event stays on one line', () => {
     expect(formatLogLine('error', 'a\nb', { requestId: 'x\r\ny' })).toBe('[hippo] error: a b requestId=x y');
+  });
+
+  it('HIPPO_LOG_FORMAT=json writes the same fields as one JSON object per line', () => {
+    vi.stubEnv('HIPPO_LOG_FORMAT', 'json');
+    runWithRequestId('req-7', () => log.warn('a\nb', { status: 503 }));
+    expect(lines().map((line) => JSON.parse(line))).toEqual([{ ts: AT, level: 'warn', msg: 'a\nb', requestId: 'req-7', status: 503 }]);
+    expect(lines()[0].endsWith('}\n')).toBe(true);
   });
 });

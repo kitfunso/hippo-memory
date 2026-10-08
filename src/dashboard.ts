@@ -4,7 +4,7 @@ import * as http from 'http';
 import * as path from 'path';
 import * as fs from 'fs';
 import type { AddressInfo } from 'net';
-import { randomBytes, timingSafeEqual } from 'crypto';
+import { randomBytes, randomUUID, timingSafeEqual } from 'crypto';
 import { evalNow } from './ablation.js';
 import { readEntry } from './store/entry-reads.js';
 import { listCards } from './store-cards.js';
@@ -22,6 +22,7 @@ import {
 import {
   ParamError, parseActionBody, parseConflictId, parseMemoryId, parseMemoryQuery, parseSearchText, type ActionBody,
 } from './dashboard-params.js';
+import { runWithRequestId } from './request-scope.js';
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -287,7 +288,7 @@ export function serveDashboard(
     notBuilt(res);
   };
 
-  const server = http.createServer((req, res) => {
+  const onRequest = (req: http.IncomingMessage, res: http.ServerResponse): void => {
     handleRequest(req, res).catch((err) => {
       const clientFault = err instanceof ParamError || err instanceof URIError || err instanceof BodyTimeoutError;
       // A cut-short response is logged even for a client fault; a bare 400 is not.
@@ -308,7 +309,9 @@ export function serveDashboard(
       if (err instanceof URIError) return jsonResponse(res, { error: 'Malformed URL path' }, 400);
       jsonResponse(res, { error: 'Internal error' }, 500);
     });
-  });
+  };
+  // One id per request, so the lines it logs can be told apart from a concurrent request's.
+  const server = http.createServer((req, res) => runWithRequestId(randomUUID(), () => onRequest(req, res)));
   server.on('close', () => snapshots.close());
 
   server.listen(port, '127.0.0.1', () => {
