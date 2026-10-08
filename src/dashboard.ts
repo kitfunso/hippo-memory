@@ -10,7 +10,7 @@ import { readEntry } from './store/entry-reads.js';
 import { listCards } from './store-cards.js';
 import { resolveTenantId } from './tenant.js';
 import { loadCardDetail } from './card-detail.js';
-import { closeAfterReply, isCrossSite, LOOPBACK_HOST_HEADER } from './http-util.js';
+import { bodyDeadlineMs, BodyTimeoutError, closeAfterReply, isCrossSite, LOOPBACK_HOST_HEADER } from './http-util.js';
 import { log } from './log.js';
 import { createSnapshotService, isLiveMemory, type SnapshotService } from './dashboard-snapshot.js';
 import {
@@ -89,6 +89,10 @@ function readActionBody(req: http.IncomingMessage): Promise<ActionBody> {
     const chunks: Buffer[] = [];
     let size = 0;
     let aborted = false;
+    const deadlineMs = bodyDeadlineMs();
+    const timer = setTimeout(() => reject(new BodyTimeoutError(`request body not received within ${deadlineMs} ms`)), deadlineMs);
+    // Unref: a request that already failed another way must not hold the process open for the rest of the deadline.
+    timer.unref();
     req.on('data', (chunk: Buffer) => {
       size += chunk.length;
       if (size <= BODY_MAX_BYTES) chunks.push(chunk);
@@ -99,6 +103,7 @@ function readActionBody(req: http.IncomingMessage): Promise<ActionBody> {
     });
     req.on('error', reject);
     req.on('end', () => {
+      clearTimeout(timer);
       if (size > BODY_MAX_BYTES) return reject(new ParamError(`Body must be at most ${BODY_MAX_BYTES} bytes`));
       try {
         resolve(parseActionBody(Buffer.concat(chunks).toString('utf8').trim()));
@@ -284,7 +289,7 @@ export function serveDashboard(
 
   const server = http.createServer((req, res) => {
     handleRequest(req, res).catch((err) => {
-      const clientFault = err instanceof ParamError || err instanceof URIError;
+      const clientFault = err instanceof ParamError || err instanceof URIError || err instanceof BodyTimeoutError;
       // A cut-short response is logged even for a client fault; a bare 400 is not.
       if (res.headersSent || !clientFault) {
         log.error('dashboard request failed', { error: err instanceof Error ? err.message : String(err), path: req.url });
@@ -293,9 +298,9 @@ export function serveDashboard(
         res.end();
         return;
       }
-      if (err instanceof BodyDrainExceeded) {
+      if (err instanceof BodyDrainExceeded || err instanceof BodyTimeoutError) {
         // No `Connection: close` header: Node then destroys the socket as soon as the reply is written.
-        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.writeHead(err instanceof BodyTimeoutError ? 408 : 400, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({ error: err.message }), () => closeAfterReply(req));
         return;
       }

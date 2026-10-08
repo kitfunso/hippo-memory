@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { ApiError } from './api-errors.js';
 import { SqliteBlockedError } from './db/sqlite-blocked.js';
+import { envBodyTimeoutMs } from './env.js';
 import type { JsonValue } from './json.js';
 
 // Leaf module shared by server.ts and the connector webhook receivers; it must not import either.
@@ -79,19 +80,25 @@ export function sendJson<T>(res: ServerResponse, status: number, body: T): void 
   res.end(text);
 }
 
+const DEFAULT_BODY_DEADLINE_MS = 30_000;
+
+/** How long any route waits for a request body, so a client that sends headers and then stalls cannot hold a request open: 30 s, or HIPPO_BODY_TIMEOUT_MS. */
+export function bodyDeadlineMs(): number {
+  return envBodyTimeoutMs() ?? DEFAULT_BODY_DEADLINE_MS;
+}
+
 export interface ReadBodyOpts {
   /** Defaults to 1 MB. */
   maxBytes?: number;
-  /** Fails with BodyTimeoutError when the whole body has not arrived by then; unset waits for as long as the socket stays open. */
+  /** Fails with BodyTimeoutError when the whole body has not arrived by then; defaults to bodyDeadlineMs(). */
   deadlineMs?: number;
 }
 
 /** The body as text, refused mid-stream past maxBytes and past deadlineMs, so an oversized or slow sender cannot tie up the server. */
-export function readBody(req: IncomingMessage, { maxBytes = MAX_BODY_BYTES, deadlineMs }: ReadBodyOpts = {}): Promise<string> {
+export function readBody(req: IncomingMessage, { maxBytes = MAX_BODY_BYTES, deadlineMs = bodyDeadlineMs() }: ReadBodyOpts = {}): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     const chunks: Buffer[] = [];
     let total = 0;
-    let timer: NodeJS.Timeout | undefined;
     const refuse = (err: Error): void => {
       clearTimeout(timer);
       req.off('data', onData);
@@ -107,9 +114,7 @@ export function readBody(req: IncomingMessage, { maxBytes = MAX_BODY_BYTES, dead
       }
       refuse(new BodyTooLargeError(`request body exceeds ${sizeLabel(maxBytes)}`));
     };
-    if (deadlineMs !== undefined) {
-      timer = setTimeout(() => refuse(new BodyTimeoutError(`request body not received within ${deadlineMs} ms`)), deadlineMs);
-    }
+    const timer = setTimeout(() => refuse(new BodyTimeoutError(`request body not received within ${deadlineMs} ms`)), deadlineMs);
     req.on('data', onData);
     req.once('end', () => {
       clearTimeout(timer);
