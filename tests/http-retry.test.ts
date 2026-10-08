@@ -14,14 +14,18 @@ interface Reply {
 let server: http.Server | null = null;
 const stalled: http.ServerResponse[] = [];
 
-/** Serves `replies` in order (the last one repeats); a null reply never answers. */
-async function startServer(replies: readonly (Reply | null)[]): Promise<{ url: string; hits: () => number }> {
+/** Serves `replies` in order (the last one repeats); a null reply never answers and 'reset' drops the socket unanswered. */
+async function startServer(replies: readonly (Reply | 'reset' | null)[]): Promise<{ url: string; hits: () => number }> {
   let hits = 0;
-  server = http.createServer((_req, res) => {
+  server = http.createServer((req, res) => {
     const reply = replies[Math.min(hits, replies.length - 1)];
     hits++;
     if (reply === null) {
       stalled.push(res);
+      return;
+    }
+    if (reply === 'reset') {
+      req.socket.destroy();
       return;
     }
     res.writeHead(reply.status, reply.headers ?? {});
@@ -46,15 +50,55 @@ afterEach(async () => {
 const noSleep = { sleep: async () => undefined };
 
 describe('fetchWithRetry against a local server', () => {
-  it('ends a stalled request with a TimeoutError instead of hanging', async () => {
+  it('ends a stalled write with a TimeoutError instead of hanging, and never sends it twice', async () => {
     const { url, hits } = await startServer([null]);
     const started = Date.now();
-    const err = await fetchWithRetry(url, {}, { timeoutMs: 200 }).then(() => null, (e: Error) => e);
+    const err = await fetchWithRetry(url, { method: 'POST', body: '{}' }, { timeoutMs: 200 }).then(() => null, (e: Error) => e);
     expect(err?.name).toBe('TimeoutError');
     expect(Date.now() - started).toBeLessThan(5000);
     expect(hits()).toBe(1);
     // A timed-out write to `hippo serve` may have landed, so the CLI must not replay it locally.
     expect(classifyTransportFailure(err)).toBe('delivery-unknown');
+  });
+
+  it('retries a GET whose connection the server dropped, and returns the answer that follows', async () => {
+    const { url, hits } = await startServer(['reset', 'reset', { status: 200, body: 'ok' }]);
+    const sleeps: number[] = [];
+    const res = await fetchWithRetry(url, {}, { timeoutMs: 2000, random: () => 0, sleep: async (ms) => { sleeps.push(ms); } });
+    expect(await res.text()).toBe('ok');
+    expect(hits()).toBe(3);
+    // The same backoff a 5xx gets.
+    expect(sleeps).toEqual([125, 250]);
+  });
+
+  it('retries a GET attempt that timed out', async () => {
+    const { url, hits } = await startServer([null, { status: 200, body: 'ok' }]);
+    const res = await fetchWithRetry(url, { method: 'get' }, { timeoutMs: 200, ...noSleep });
+    expect(await res.text()).toBe('ok');
+    expect(hits()).toBe(2);
+  });
+
+  it('gives up on a dropped connection after the attempt cap and throws the transport error', async () => {
+    const { url, hits } = await startServer(['reset']);
+    const err = await fetchWithRetry(url, { method: 'HEAD' }, { timeoutMs: 2000, ...noSleep }).then(() => null, (e: Error) => e);
+    expect(classifyTransportFailure(err)).toBe('delivery-unknown');
+    expect(hits()).toBe(3);
+  });
+
+  it('replays a dropped POST for a caller that says a replay is safe', async () => {
+    const { url, hits } = await startServer(['reset', { status: 200, body: 'ok' }]);
+    const res = await fetchWithRetry(url, { method: 'POST', body: '{}' }, { timeoutMs: 2000, retryTransport: true, ...noSleep });
+    expect(await res.text()).toBe('ok');
+    expect(hits()).toBe(2);
+  });
+
+  it('does not retry a refused connection, so a caller with a local fallback takes it at once', async () => {
+    const { url } = await startServer([{ status: 200 }]);
+    await new Promise<void>((resolve) => server?.close(() => resolve()));
+    server = null;
+    const sleeps: number[] = [];
+    await expect(fetchWithRetry(url, {}, { timeoutMs: 2000, sleep: async (ms) => { sleeps.push(ms); } })).rejects.toThrow();
+    expect(sleeps).toEqual([]);
   });
 
   it('retries a 503 and returns the 200 that follows', async () => {
@@ -101,9 +145,12 @@ describe('fetchWithRetry against a local server', () => {
   it('still honours a caller abort signal alongside its own timeout', async () => {
     const { url } = await startServer([null]);
     const controller = new AbortController();
-    const pending = fetchWithRetry(url, { signal: controller.signal }, { timeoutMs: 60_000 });
+    const sleeps: number[] = [];
+    const pending = fetchWithRetry(url, { signal: controller.signal }, { timeoutMs: 60_000, sleep: async (ms) => { sleeps.push(ms); } });
     setTimeout(() => controller.abort(), 50);
     await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    // The caller gave up, so no second attempt is queued.
+    expect(sleeps).toEqual([]);
   });
 });
 

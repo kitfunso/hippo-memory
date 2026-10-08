@@ -117,9 +117,9 @@ describe('clef rerankers', () => {
 
   it('keeps the native order on a non-2xx status, a non-JSON body and a timeout', async () => {
     const rerank = createClefReranker('clef-flash');
-    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(json({}, 429));
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => json({}, 401));
     expect(contents(await rerank('q', inputs()))).toEqual(NATIVE);
-    expect(String(warnSpy.mock.calls[0][0])).toContain('HTTP 429');
+    expect(String(warnSpy.mock.calls[0][0])).toContain('HTTP 401');
 
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response('not json', { status: 200 }));
     expect(contents(await rerank('q', inputs()))).toEqual(NATIVE);
@@ -257,10 +257,13 @@ describe('clef rerankers', () => {
 
   it.each(['15s', '-1', '1.5', '999999999999'])('uses the default timeout for HIPPO_CLEF_TIMEOUT_MS=%s', async (value) => {
     process.env.HIPPO_CLEF_TIMEOUT_MS = value;
-    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(workersReply([0.1, 0.2, 0.3]));
-    await createClefReranker('clef-flash')('q', inputs());
-    expect(setTimeoutSpy.mock.calls.map((c) => c[1])).toContain(15_000);
+    // An answer 60 ms in beats the 15 s default; a misread value (15 ms, 1 ms, out of range) would lose to it and keep the native order.
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => new Promise((resolve, reject) => {
+      init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+      setTimeout(() => resolve(workersReply([0.1, 0.2, 0.3])), 60);
+    }));
+    const out = await createClefReranker('clef-flash')('q', inputs());
+    expect(contents(out)).toEqual(['gamma', 'beta', 'alpha']);
   });
 
   it('keeps the native order when a reply runs past the byte cap', async () => {

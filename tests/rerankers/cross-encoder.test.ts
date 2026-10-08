@@ -86,9 +86,8 @@ describe('crossEncoderReranker', () => {
   });
 
   it('does not spam console.warn on repeated fallback calls', async () => {
-    // The warn fires at most once per process on first identity-fallback.
-    // beforeAll's probe call may have already consumed the warn on
-    // fallback-mode machines, so the upper bound holds in both modes.
+    // Calls inside the five-minute repeat window share one warning, and beforeAll's
+    // probe may already have used it, so the upper bound holds in both modes.
     const warnSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const inputs = [asResult('alpha', 1.0), asResult('beta', 0.5)];
     await crossEncoderReranker('q', inputs);
