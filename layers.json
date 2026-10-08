@@ -24,7 +24,8 @@
     "rerankers": "domain",
     "search": "domain",
     "server": "surface",
-    "store": "store"
+    "store": "store",
+    "util": "base"
   },
   "rootFiles": {
     "ablation.ts": "base",

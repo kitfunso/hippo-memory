@@ -51,7 +51,7 @@ export interface ServeOpts {
   authResolverTimeoutMs?: number;
   port?: number;
   host?: string;
-  /** Stop and exit on SIGINT/SIGTERM. Only `hippo serve` owns the process, so only it sets this. */
+  /** Stop and exit on SIGINT/SIGTERM, and drain then exit 1 on an uncaught exception or unhandled rejection. Only `hippo serve` owns the process, so only it sets this. */
   handleSignals?: boolean;
   /** How long stop() lets in-flight requests finish before closing their sockets; defaults to 5000 ms. */
   shutdownDrainMs?: number;

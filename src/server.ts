@@ -19,6 +19,7 @@ import { ForbiddenError, NotFoundError } from './api-errors.js';
 import { buildContextWithAuth, isLoopback, LIMITER_MAX_KEYS, requireAuth } from './server/auth.js';
 import { enforceRateLimit } from './server/client-ip.js';
 import { drainAndClose } from './server/lifecycle.js';
+import { installCrashHandlers } from './util/crash-handlers.js';
 import { handleMcpPost, handleMcpStream } from './server/mcp-http.js';
 import { MCP_PROJECT_SCOPED_HEADER } from './project-identity.js';
 import { logRequestFailure, matchPath, parseRequest, rejectEncodedSlash, replyFor, requestIds, resolveRequestId, sendError } from './server/request.js';
@@ -550,6 +551,8 @@ function listenOn(server: Server, port: number, host: string): Promise<void> {
     };
     const onListening = (): void => {
       server.removeListener('error', onError);
+      // With no listener, an 'error' event after boot is an uncaught exception that stops the server for every caller.
+      server.on('error', (err) => log.error(`serve: listener error: ${err.message}`, errorFields(err)));
       resolve();
     };
     server.once('error', onError);
@@ -666,7 +669,10 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
     if (!opts.store) await served.store.close();
   };
 
-  if (opts.handleSignals) installSignalHandlers(stop);
+  if (opts.handleSignals) {
+    installSignalHandlers(stop);
+    installCrashHandlers('serve', stop);
+  }
 
   return { port: actualPort, url, stop, server };
 }

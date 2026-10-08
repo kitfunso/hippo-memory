@@ -1,5 +1,6 @@
 // Long-running verbs: `hippo dashboard`, `hippo mcp` and `hippo serve`.
 
+import { installCrashHandlers } from '../util/crash-handlers.js';
 import { envPort } from '../env.js';
 import * as path from 'path';
 import { printError } from './output.js';
@@ -10,6 +11,8 @@ export async function handleDashboard({ hippoRoot, flags }: CommandContext): Pro
   const port = parseInt(String(flags['port'] ?? '3333'), 10);
   const { serveDashboard } = await import('../dashboard.js');
   serveDashboard(hippoRoot, port);
+  // A busy port or a later throw ends in one log line and exit 1, as it does for serve and mcp.
+  installCrashHandlers('dashboard');
   await new Promise(() => {}); // run until Ctrl+C
 }
 
