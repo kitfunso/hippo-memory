@@ -1,6 +1,6 @@
 import { envAutodebiasOff } from '../env.js';
 import { openHippoDb, closeHippoDb } from '../db.js';
-import { appendAuditEvent, type AppendAuditOpts } from '../audit.js';
+import type { AppendAuditOpts } from '../audit.js';
 import { detectForwardClaim, type ForwardClaimMatch } from '../forward-claim-detector.js';
 import { computePredictionBaserate, type PredictionBaserate } from './store.js';
 
@@ -56,8 +56,7 @@ export interface PlanningFallacyWatching {
 }
 
 /**
- * Richer return type for
- * `computePlanningFallacyOutput`. Carries EITHER `hint` (baserate
+ * What `decidePlanningFallacy` hands to recall. Carries EITHER `hint` (baserate
  * available) OR `watching` (regex fired, no baserate), or NEITHER (mode=off,
  * no queryText, no regex match, or nClosed=0 silent path). Never both.
  */
@@ -74,11 +73,6 @@ export interface ComputePlanningFallacyHintOpts {
    *  reload). 'off' short-circuits to null BEFORE the regex gate so the
    *  AUTODEBIAS=off path pays zero work. */
   mode?: AutodebiasMode;
-  /** Actor for any audit emissions. Defaults to 'recall' (caller didn't
-   *  specify). MUST thread through to the inner computePredictionBaserate
-   *  call (passed as its `actor` arg) so MCP/HTTP-originated auto-hints
-   *  carry the right attribution instead of the 'cli' default. */
-  actor?: string;
 }
 
 export interface ClassResolution {
@@ -172,45 +166,6 @@ export function resolveClassFromTokens(
   }
 }
 
-/**
- * Planning-fallacy orchestrator.
- *
- * Composes the forward-claim detector + class resolver + baserate compute,
- * with telemetry-grade audit emission at every decision point (success,
- * no-class-match, tiebreak).
- *
- * Returns `{}` (neither hint nor watching) on:
- *   - mode === 'off' (env-disabled; pays only the env read, skips regex)
- *   - empty queryText
- *   - no forward-claim regex match
- *   - resolved class has nClosed=0 (no historical data yet; silent)
- *
- * Returns `{ watching: ... }` on:
- *   - resolver returns no class (no overlap ≥ 1; emits no_class_match audit)
- *   - resolver returns tiebreak (≥2 classes tied at best; emits tiebreak audit)
- *
- * Returns `{ hint: ... }` on success: calls computePredictionBaserate(...,
- * emitAudit=false) so the predict_baserate audit channel stays scoped to
- * deliberate predict-baserate calls (the orchestrator's own recall_autodebias_hint
- * audit carries n_closed + mean_ratio in metadata so no telemetry is lost),
- * then emits recall_autodebias_hint audit + returns the hint.
- *
- * Latency budget: well under 50ms; a miss pays only the regex.
- */
-export function computePlanningFallacyOutput(
-  hippoRoot: string,
-  tenantId: string,
-  queryText: string,
-  opts: ComputePlanningFallacyHintOpts = {},
-): PlanningFallacyOutput {
-  const match = detectPlanningClaim(queryText, opts);
-  if (!match) return {};
-  const actor = opts.actor ?? 'recall';
-  const { output, audit } = decidePlanningFallacy(match, planningFallacyEvidenceAt(hippoRoot, tenantId, match.classQueryTokens), tenantId, actor);
-  if (audit) appendAuditEventOnce(hippoRoot, audit);
-  return output;
-}
-
 /** The forward claim in a recall query; null when HIPPO_AUTODEBIAS=off, the query is empty or no claim matches. */
 export function detectPlanningClaim(queryText: string, opts: ComputePlanningFallacyHintOpts = {}): ForwardClaimMatch | null {
   // Env read FIRST so AUTODEBIAS=off pays zero regex cost; read per call so tests can toggle it without a module reload.
@@ -278,16 +233,6 @@ const TIEBREAK_SUGGESTION =
   'Multiple prediction classes tied on this query. Refine the query or rename overlapping classes to break the tie.';
 const NO_CLASS_MATCH_SUGGESTION =
   'No matching prediction class for this forward-claim. Tag your prediction with `hippo predict --class <name>` to start tracking this class.';
-
-/** One audit row on its own short-lived connection. */
-function appendAuditEventOnce(hippoRoot: string, event: Parameters<typeof appendAuditEvent>[1]): void {
-  const db = openHippoDb(hippoRoot);
-  try {
-    appendAuditEvent(db, event);
-  } finally {
-    closeHippoDb(db);
-  }
-}
 
 function watchingWithAudit(
   tenantId: string,

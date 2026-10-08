@@ -23,7 +23,7 @@ import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { Layer} from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { computePlanningFallacyOutput } from '../src/predictions/planning-fallacy.js';
+import { detectPlanningClaim } from '../src/predictions/planning-fallacy.js';
 import { savePrediction, closePrediction } from '../src/predictions/store.js';
 import { recall, type Context } from '../src/api.js';
 import { makeRoot } from './_helpers/make-root.js';
@@ -57,21 +57,6 @@ describe('PlanningFallacyWatching (v1.13.4 / J3.2 follow-up)', () => {
   beforeEach(() => { root = makeRoot('j32-watch'); });
   afterEach(() => safeRmSync(root));
 
-  it('Output.watching set with reason=no_class_match when regex matches but no class scores >=1', () => {
-    // No predictions seeded. Regex-matching query has no class to overlap with.
-    const out = computePlanningFallacyOutput(
-      root,
-      'default',
-      'this will take 2 days to finish the project',
-      { actor: 'test' },
-    );
-    expect(out.hint).toBeUndefined();
-    expect(out.watching).toBeDefined();
-    expect(out.watching!.reason).toBe('no_class_match');
-    expect(out.watching!.detectedPhrase).toMatch(/will\s+take\s+2\s+days/i);
-    expect(out.watching!.suggestion).toMatch(/hippo predict --class/i);
-  });
-
   it('Output.watching set with reason=tiebreak when >=2 classes tied at best overlap', () => {
     // Seed predictions in TWO classes that share NO query tokens between
     // themselves but each share 1 token with the query. Both classes should
@@ -82,53 +67,23 @@ describe('PlanningFallacyWatching (v1.13.4 / J3.2 follow-up)', () => {
     // -> tie at score 1.
     seedClosedPredictions(root, 'migration-effort', 1);
     seedClosedPredictions(root, 'feature-effort', 1);
-    const out = computePlanningFallacyOutput(
-      root,
-      'default',
-      'the migration feature will take 2 days',
-      { actor: 'test' },
-    );
-    expect(out.hint).toBeUndefined();
-    expect(out.watching).toBeDefined();
-    expect(out.watching!.reason).toBe('tiebreak');
-    expect(out.watching!.suggestion).toMatch(/tied|rename|refine/i);
+    const out = recall(ctxFor(root), { query: 'the migration feature will take 2 days' });
+    expect(out.planningFallacyHint).toBeUndefined();
+    expect(out.planningFallacyWatching).toBeDefined();
+    expect(out.planningFallacyWatching!.reason).toBe('tiebreak');
+    expect(out.planningFallacyWatching!.suggestion).toMatch(/tied|rename|refine/i);
   });
 
-  it('Output returns {} (neither variant) when AUTODEBIAS=off (env-gated short-circuit)', () => {
-    seedClosedPredictions(root, 'estimate-task', 3);
-    const out = computePlanningFallacyOutput(
-      root,
-      'default',
-      'the next task will take 2 days',
-      { actor: 'test', mode: 'off' },
-    );
-    expect(out.hint).toBeUndefined();
-    expect(out.watching).toBeUndefined();
+  it('no claim is detected when mode is off, so neither variant can follow (short-circuit)', () => {
+    expect(detectPlanningClaim('the next task will take 2 days', { mode: 'off' })).toBeNull();
+    expect(detectPlanningClaim('the next task will take 2 days', { mode: 'regex' })).not.toBeNull();
   });
 
   it('Output returns {} (neither variant) on non-forward-claim queries', () => {
     seedClosedPredictions(root, 'estimate-task', 3);
-    const out = computePlanningFallacyOutput(
-      root,
-      'default',
-      'what is the architecture of this system',
-      { actor: 'test' },
-    );
-    expect(out.hint).toBeUndefined();
-    expect(out.watching).toBeUndefined();
-  });
-
-  it('Output returns {hint} (not watching) when class resolves AND nClosed > 0 (regression guard)', () => {
-    seedClosedPredictions(root, 'estimate-task', 3);
-    const out = computePlanningFallacyOutput(
-      root,
-      'default',
-      'the next task will take 2 days',
-      { actor: 'test' },
-    );
-    expect(out.hint).toBeDefined();
-    expect(out.watching).toBeUndefined();
-    expect(out.hint!.classTag).toBe('estimate-task');
+    const out = recall(ctxFor(root), { query: 'what is the architecture of this system' });
+    expect(out.planningFallacyHint).toBeUndefined();
+    expect(out.planningFallacyWatching).toBeUndefined();
   });
 
   it('api.recall populates RecallResult.planningFallacyWatching when output is watching', () => {
@@ -142,6 +97,8 @@ describe('PlanningFallacyWatching (v1.13.4 / J3.2 follow-up)', () => {
     const result = recall(ctxFor(root), { query: 'this will take 2 days to finish the project' });
     expect(result.planningFallacyWatching).toBeDefined();
     expect(result.planningFallacyWatching!.reason).toBe('no_class_match');
+    expect(result.planningFallacyWatching!.detectedPhrase).toMatch(/will\s+take\s+2\s+days/i);
+    expect(result.planningFallacyWatching!.suggestion).toMatch(/hippo predict --class/i);
     expect(result.planningFallacyHint).toBeUndefined();
   });
 
@@ -154,6 +111,7 @@ describe('PlanningFallacyWatching (v1.13.4 / J3.2 follow-up)', () => {
     }));
     const result = recall(ctxFor(root), { query: 'the next task will take 2 days' });
     expect(result.planningFallacyHint).toBeDefined();
+    expect(result.planningFallacyHint!.classTag).toBe('estimate-task');
     expect(result.planningFallacyWatching).toBeUndefined();
   });
 });

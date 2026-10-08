@@ -261,7 +261,7 @@ describe('sqliteStore reads equal the hippo.db functions they wrap and open no m
     ['tokens naming no class', ['lunch'], null],
     ['no tokens', [], null],
   ] as const)('planningFallacyEvidence for %s, with no audit row', async (_name, tokens, classTag) => {
-    // computePlanningFallacyOutput's reads; its audit rows stay with the caller.
+    // The planning-fallacy reads of a recall; its audit rows stay with the caller.
     const { direct, port } = await parity((s) => {
       const resolution = resolveClassFromTokens(s.root, TENANT, tokens);
       const baserate = resolution.classTag ? computePredictionBaserate(s.root, TENANT, resolution.classTag, 'recall', false) : null;

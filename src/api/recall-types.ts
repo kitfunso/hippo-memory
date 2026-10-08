@@ -303,7 +303,7 @@ export interface RecallResult {
    * the calling agent sees its track record at the moment of forecasting
    * (Lovallo-Kahneman 2003 inside-vs-outside view).
    *
-   * Populated by `api.recall` itself via `computePlanningFallacyOutput`.
+   * Populated by `api.recall` itself via `decidePlanningFallacy`.
    * Pipeline-invariant: the value depends only on (queryText, tenantId,
    * predictions table state) — all three are identical regardless of
    * which downstream search pipeline produces the memory list, so MCP
