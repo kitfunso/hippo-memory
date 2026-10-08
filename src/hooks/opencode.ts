@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { JsonObject } from '../working-memory.js';
 import { isJsonObject, homeDir } from './shared.js';
+import { writeFileAtomic } from '../atomic-write.js';
 import { type JsonValue, isJsonString } from '../json.js';
 
 const HIPPO_OPENCODE_PLUGIN_MARKER = 'HIPPO_OPENCODE_PLUGIN_V1';
@@ -179,7 +180,7 @@ function migrateLegacyOpencodeHooksBlock() {
   if (!changed) return { migrated: false, jsonRepairFailed: false };
 
   if (Object.keys(hooksObj).length === 0) delete settings.hooks;
-  fs.writeFileSync(configPath, JSON.stringify(settings, null, 2) + '\n', 'utf8');
+  writeFileAtomic(configPath, JSON.stringify(settings, null, 2) + '\n');
   return { migrated: true, jsonRepairFailed: false };
 }
 
@@ -197,8 +198,7 @@ export function installOpencodePlugin(): OpencodePluginInstallResult {
       return { installed: false, pluginPath, migratedLegacyHooks: migrated, jsonRepairFailed };
     }
   }
-  fs.mkdirSync(path.dirname(pluginPath), { recursive: true });
-  fs.writeFileSync(pluginPath, OPENCODE_PLUGIN_SOURCE, 'utf8');
+  writeFileAtomic(pluginPath, OPENCODE_PLUGIN_SOURCE);
   return { installed: true, pluginPath, migratedLegacyHooks: migrated, jsonRepairFailed };
 }
 

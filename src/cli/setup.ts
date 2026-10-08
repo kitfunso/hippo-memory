@@ -39,6 +39,7 @@ import { getGlobalRoot } from '../shared.js';
 import { listRegisteredWorkspaces, runDailyMaintenance } from '../scheduler.js';
 import { replayCompactionsAt } from '../compaction-record.js';
 import { log } from '../log.js';
+import { writeFileAtomic } from '../atomic-write.js';
 import { printError } from './output.js';
 import { printAgentImport, installCodexMemoryHooks, setupDailySchedule, warnClaudeSettingsUnusable } from './shared.js';
 import { repairQualityOnceAt } from './quality-repair-once.js';
@@ -123,11 +124,11 @@ function patchAgentFile(hook: HookSpec, target: string): void {
         'g',
       );
       const updated = existing.replace(re, block);
-      fs.writeFileSync(filepath, updated, 'utf8');
+      writeFileAtomic(filepath, updated);
       console.log(`Updated Hippo hook in ${hook.file}`);
     } else {
       const sep = existing.endsWith('\n') ? '\n' : '\n\n';
-      fs.writeFileSync(filepath, existing + sep + block + '\n', 'utf8');
+      writeFileAtomic(filepath, existing + sep + block + '\n');
       console.log(`Installed Hippo hook in ${hook.file} (appended)`);
     }
   } else {
@@ -329,7 +330,7 @@ function unpatchAgentFile(hook: HookSpec, target: string): void {
     const whose = owner ? `hippo wrote it for ${owner}` : 'it has been edited, so hippo cannot tell whose it is';
     console.log(`Left the hippo block in ${hook.file}: ${whose}. Delete it by hand if no agent needs it.`);
   } else if (existing.includes(HOOK_MARKERS.start)) {
-    fs.writeFileSync(filepath, withoutHookBlock(existing) + '\n', 'utf8');
+    writeFileAtomic(filepath, withoutHookBlock(existing) + '\n');
     console.log(`Removed Hippo hook from ${hook.file}`);
   } else {
     console.log(`No Hippo hook found in ${hook.file}.`);
@@ -342,7 +343,7 @@ function removeLegacyCursorRules(): void {
   const old = fs.existsSync(legacy) ? fs.readFileSync(legacy, 'utf8') : '';
   if (old.includes(HOOK_MARKERS.start)) {
     const left = withoutHookBlock(old);
-    if (left) fs.writeFileSync(legacy, left + '\n', 'utf8');
+    if (left) writeFileAtomic(legacy, left + '\n');
     else fs.unlinkSync(legacy);
     console.log(left ? 'Removed the old Hippo hook from .cursorrules' : 'Deleted .cursorrules, which held only the old Hippo hook');
   }

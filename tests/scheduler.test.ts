@@ -16,7 +16,7 @@ const fsMock = {
   existsSync: vi.fn(),
   mkdirSync: vi.fn(),
   readFileSync: vi.fn(),
-  writeFileSync: vi.fn(),
+  writeFile: vi.fn(),
 };
 
 __setSchedulerFsDeps(fsMock);
@@ -30,7 +30,7 @@ describe.skipIf(process.platform !== 'win32')('scheduler', () => {
     fsMock.existsSync.mockReset();
     fsMock.mkdirSync.mockReset();
     fsMock.readFileSync.mockReset();
-    fsMock.writeFileSync.mockReset();
+    fsMock.writeFile.mockReset();
   });
 
   it('registerWorkspace stores unique project roots in the global registry', () => {
@@ -42,14 +42,14 @@ describe.skipIf(process.platform !== 'win32')('scheduler', () => {
 
     fsMock.existsSync.mockImplementation((target: string) => target === registryFile);
     fsMock.readFileSync.mockImplementation(() => registryText);
-    fsMock.writeFileSync.mockImplementation((_target: string, text: string) => {
+    fsMock.writeFile.mockImplementation((_target: string, text: string) => {
       registryText = text;
     });
 
     registerWorkspace('C:/Users/alice/.hippo', 'C:/Users/alice/repo-b');
     registerWorkspace('C:/Users/alice/.hippo', 'C:/Users/alice/repo-a');
 
-    expect(fsMock.writeFileSync).toHaveBeenLastCalledWith(
+    expect(fsMock.writeFile).toHaveBeenLastCalledWith(
       workspaceRegistryPath('C:/Users/alice/.hippo'),
       JSON.stringify(
         {
@@ -59,7 +59,6 @@ describe.skipIf(process.platform !== 'win32')('scheduler', () => {
         null,
         2,
       ) + '\n',
-      'utf8',
     );
   });
 
