@@ -93,8 +93,8 @@ describe('writeDeliveryEvent', () => {
     expect(first).not.toBeNull();
     const rows = readDeliveryEvents(db, 'default', 'sess-1');
     expect(rows.map((r) => [r.id, r.turn_seq, r.duplicate_of, r.ledger_version])).toEqual([
-      [first, 1, null, 1],
-      [second, 2, null, 1],
+      [first, 1, null, 2],
+      [second, 2, null, 2],
     ]);
     expect(rows[0].candidates).toEqual([{
       event_id: first, tenant_id: 'default', memory_id: 'mem-1', source_store: 'local', pool: 'pin', stage: 'final',
@@ -140,6 +140,76 @@ describe('writeDeliveryEvent', () => {
     expect(inSession.map((r) => [r.id === parent, r.session_state, r.turn_seq, r.duplicate_of])).toEqual([
       [true, 'payload', 1, null],
       [false, 'subagent', null, null],
+    ]);
+  });
+
+  const boundary = (eventType: 'pre-compact' | 'compact-resume', overrides: Partial<DeliveryEventInput> = {}): DeliveryEventInput =>
+    event({ eventType, promptHash: null, promptLength: 0, ...overrides });
+
+  describe.each(['pre-compact', 'compact-resume'] as const)('%s boundary duplicates', (type) => {
+    it('W1 flags a second prompt-less event 500 ms later as a duplicate of the first', () => {
+      const first = writeDeliveryEvent(db, boundary(type));
+      const second = writeDeliveryEvent(db, boundary(type, { ts: at(500) }));
+      expect(readDeliveryEvents(db, 'default', 'sess-1').map((r) => [r.id, r.turn_seq, r.duplicate_of])).toEqual([
+        [first, 1, null],
+        [second, null, first],
+      ]);
+    });
+
+    it('W2 numbers the same pair 3000 ms apart as turns 1 and 2', () => {
+      writeDeliveryEvent(db, boundary(type));
+      writeDeliveryEvent(db, boundary(type, { ts: at(3000) }));
+      expect(readDeliveryEvents(db, 'default', 'sess-1').map((r) => [r.turn_seq, r.duplicate_of])).toEqual([[1, null], [2, null]]);
+    });
+
+    it('W6 with one host turn id, flags 500 ms apart and numbers 3000 ms apart', () => {
+      const first = writeDeliveryEvent(db, boundary(type, { hostTurnId: 'turn-a' }));
+      const near = writeDeliveryEvent(db, boundary(type, { hostTurnId: 'turn-a', ts: at(500) }));
+      const far = writeDeliveryEvent(db, boundary(type, { hostTurnId: 'turn-a', ts: at(3000) }));
+      expect(readDeliveryEvents(db, 'default', 'sess-1').map((r) => [r.id, r.turn_seq, r.duplicate_of])).toEqual([
+        [first, 1, null],
+        [near, null, first],
+        [far, 2, null],
+      ]);
+    });
+
+    it('W5 gives a missing-session or sub-agent boundary no number and no duplicate', () => {
+      writeDeliveryEvent(db, boundary(type, { sessionId: null, sessionState: 'missing' }));
+      writeDeliveryEvent(db, boundary(type, { sessionId: null, sessionState: 'missing', ts: at(500) }));
+      writeDeliveryEvent(db, boundary(type, { sessionState: 'subagent' }));
+      writeDeliveryEvent(db, boundary(type, { sessionState: 'subagent', ts: at(500) }));
+      expect(readDeliveryEvents(db, 'default', null).map((r) => [r.turn_seq, r.duplicate_of])).toEqual([[null, null], [null, null]]);
+      expect(readDeliveryEvents(db, 'default', 'sess-1').map((r) => [r.session_state, r.turn_seq, r.duplicate_of])).toEqual([
+        ['subagent', null, null], ['subagent', null, null],
+      ]);
+    });
+  });
+
+  it('W3 keeps numbering a prompt-less prompt-submit pair 500 ms apart', () => {
+    writeDeliveryEvent(db, event({ promptHash: null, promptLength: 0 }));
+    writeDeliveryEvent(db, event({ promptHash: null, promptLength: 0, ts: at(500) }));
+    expect(readDeliveryEvents(db, 'default', 'sess-1').map((r) => [r.turn_seq, r.duplicate_of])).toEqual([[1, null], [2, null]]);
+  });
+
+  it('W6 still flags a prompt-submit pair with one turn id 3000 ms apart', () => {
+    const first = writeDeliveryEvent(db, event({ hostTurnId: 'turn-a' }));
+    const repeat = writeDeliveryEvent(db, event({ hostTurnId: 'turn-a', ts: at(3000) }));
+    expect(readDeliveryEvents(db, 'default', 'sess-1').map((r) => [r.id, r.turn_seq, r.duplicate_of])).toEqual([
+      [first, 1, null],
+      [repeat, null, first],
+    ]);
+  });
+
+  it('W4 numbers each event type on its own, and never matches another session', () => {
+    writeDeliveryEvent(db, event({ promptHash: 'p1' }));
+    writeDeliveryEvent(db, boundary('pre-compact', { ts: at(100) }));
+    writeDeliveryEvent(db, boundary('compact-resume', { ts: at(200) }));
+    writeDeliveryEvent(db, boundary('pre-compact', { sessionId: 'sess-2', ts: at(300) }));
+    expect(readDeliveryEvents(db, 'default', 'sess-1').map((r) => [r.event_type, r.turn_seq, r.duplicate_of])).toEqual([
+      ['prompt-submit', 1, null], ['pre-compact', 1, null], ['compact-resume', 1, null],
+    ]);
+    expect(readDeliveryEvents(db, 'default', 'sess-2').map((r) => [r.event_type, r.turn_seq, r.duplicate_of])).toEqual([
+      ['pre-compact', 1, null],
     ]);
   });
 

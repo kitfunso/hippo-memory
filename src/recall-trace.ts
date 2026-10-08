@@ -304,7 +304,20 @@ export interface DeliveryEventRow {
   candidates: DeliveryCandidateRow[];
 }
 
+function findDuplicateBoundary(db: DatabaseSyncLike, input: DeliveryEventInput): number | null {
+  // SAFETY: rows carry exactly the `id` and `ts` columns selected.
+  const rows = db.prepare(`
+    SELECT id, ts FROM delivery_events
+    WHERE tenant_id = ? AND session_id = ? AND event_type = ? AND turn_seq IS NOT NULL
+    ORDER BY id
+  `).all(input.tenantId, input.sessionId, input.eventType) as Array<{ id: number; ts: string }>;
+  const at = Date.parse(input.ts);
+  return rows.find((r) => Math.abs(Date.parse(r.ts) - at) <= DELIVERY_DUPLICATE_WINDOW_MS)?.id ?? null;
+}
+
 function findDuplicateTurn(db: DatabaseSyncLike, input: DeliveryEventInput): number | null {
+  // A boundary has no prompt, and two compactions of one session never start within the window, so time alone decides.
+  if (input.eventType === 'pre-compact' || input.eventType === 'compact-resume') return findDuplicateBoundary(db, input);
   if (input.hostTurnId !== null) {
     // SAFETY: a single `id` column, undefined when no row matches.
     const row = db.prepare(`

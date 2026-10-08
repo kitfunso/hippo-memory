@@ -234,3 +234,21 @@ describe('rejection reasons', () => {
     expect(event.filteredCount).toBe(3);
   });
 });
+
+describe('the event type of a recorder', () => {
+  it('R1 takes eventType over a UserPromptSubmit payload', () => {
+    const rec = createDeliveryRecorder({
+      root: local, storeHash: 'aaaaaaaaaaaaaaaa', writeStore: 'local', tenantId: 'default', eventType: 'pre-compact',
+      stdinText: JSON.stringify({ session_id: 's1', prompt: PROMPT, hook_event_name: 'UserPromptSubmit' }),
+    });
+    expect(eventOf(rec).eventType).toBe('pre-compact');
+  });
+
+  it('R2 without eventType keeps the payload inference', () => {
+    expect(eventOf(recorder()).eventType).toBe('prompt-submit');
+    const manual = createDeliveryRecorder({
+      root: local, storeHash: 'aaaaaaaaaaaaaaaa', writeStore: 'local', tenantId: 'default', stdinText: JSON.stringify({ session_id: 's1' }),
+    });
+    expect(eventOf(manual).eventType).toBe('pinned-manual');
+  });
+});

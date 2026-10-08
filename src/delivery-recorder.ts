@@ -5,7 +5,7 @@ import { evalNow } from './ablation.js';
 import { scoreOverlap, type PromptRecallGate } from './prompt-recall.js';
 import { blockHash, estimateTokens, hookPayloadSessionId, hookPayloadString, isSubagentPayload } from './token-ledger.js';
 export type DeliveryRuntime = 'claude-code' | 'codex' | 'copilot' | 'unknown';
-export type DeliveryEventType = 'prompt-submit' | 'pinned-manual';
+export type DeliveryEventType = 'prompt-submit' | 'pinned-manual' | 'pre-compact' | 'compact-resume';
 export type DeliverySurface = 'hook' | 'context';
 export type DeliveryWriteStore = 'local' | 'global';
 export type DeliverySessionState = 'payload' | 'env' | 'missing' | 'subagent';
@@ -16,8 +16,8 @@ export type DeliveryOutcome = 'emitted' | 'reused' | 'rejected';
 export type DeliveryRejectReason =
   | 'budget' | 'gate-below-threshold' | 'gate-max-items' | 'duplicate' | 'scope' | 'quality' | 'limit';
 
-/** Row format version written to `delivery_events.ledger_version`. */
-export const DELIVERY_LEDGER_VERSION = 1;
+/** Row format version in `delivery_events.ledger_version`: 2 = written by a binary that can write boundary rows, so `event_type` has four values. */
+export const DELIVERY_LEDGER_VERSION = 2;
 /** Rejected candidate rows kept per event; the rest only add to `rejected_unlisted`. */
 export const DELIVERY_REJECTED_ROW_CAP = 16;
 
@@ -140,6 +140,8 @@ export interface DeliveryRecorderInit {
   envSessionId?: string;
   /** Set by the caller's runtime flag; Copilot payloads carry hook_event_name too, so inference would say claude-code. */
   runtime?: DeliveryRuntime;
+  /** Set by hooks that are not prompt or context calls; without it the payload's hook event decides. */
+  eventType?: DeliveryEventType;
 }
 
 interface Candidate {
@@ -280,7 +282,7 @@ function buildEvent(
     ts,
     tenantId: init.tenantId,
     runtime: init.runtime ?? (payload.hostTurnId !== null ? 'codex' : payload.hookEvent !== null ? 'claude-code' : 'unknown'),
-    eventType: payload.hookEvent === 'UserPromptSubmit' ? 'prompt-submit' : 'pinned-manual',
+    eventType: init.eventType ?? (payload.hookEvent === 'UserPromptSubmit' ? 'prompt-submit' : 'pinned-manual'),
     surface: 'hook',
     storeHash: init.storeHash,
     writeStore: init.writeStore,
