@@ -21,14 +21,17 @@ export const STORE_OPEN = /^PRAGMA busy_timeout = [1-9]/;
 export interface StatementLog<T> {
   result: T;
   statements: string[];
+  /** Rows the statements handed to JavaScript, the work a caller then hydrates and scores. */
+  rowsRead: number;
 }
 
 /** Runs `fn` and returns the SQL of every exec and every prepared-statement execution, in call order. */
 export function recordStatements<T>(fn: () => T): StatementLog<T> {
   const statements: string[] = [];
-  const spies = spyOnStatements(statements);
+  const tally = { rows: 0 };
+  const spies = spyOnStatements(statements, tally);
   try {
-    return { result: fn(), statements };
+    return { result: fn(), statements, rowsRead: tally.rows };
   } finally {
     for (const spy of spies) spy.mockRestore();
   }
@@ -37,15 +40,23 @@ export function recordStatements<T>(fn: () => T): StatementLog<T> {
 /** recordStatements for async work, such as a request to an in-process server, until `fn` settles. */
 export async function recordStatementsAsync<T>(fn: () => Promise<T>): Promise<StatementLog<T>> {
   const statements: string[] = [];
-  const spies = spyOnStatements(statements);
+  const tally = { rows: 0 };
+  const spies = spyOnStatements(statements, tally);
   try {
-    return { result: await fn(), statements };
+    return { result: await fn(), statements, rowsRead: tally.rows };
   } finally {
     for (const spy of spies) spy.mockRestore();
   }
 }
 
-function spyOnStatements(statements: string[]): Array<{ mockRestore(): void }> {
+function* countEach(rows: Iterable<object>, tally: { rows: number }): Generator<object> {
+  for (const row of rows) {
+    tally.rows += 1;
+    yield row;
+  }
+}
+
+function spyOnStatements(statements: string[], tally: { rows: number }): Array<{ mockRestore(): void }> {
   const exec = DatabaseSync.prototype.exec;
   const spies: Array<{ mockRestore(): void }> = [vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (this: DatabaseProto, sql: string) {
     statements.push(sql);
@@ -56,7 +67,12 @@ function spyOnStatements(statements: string[]): Array<{ mockRestore(): void }> {
     // SQL is read at call time: once the store closes, a finalized statement's sourceSQL throws.
     spies.push(vi.spyOn(StatementSync.prototype, method).mockImplementation(function (this: StatementProto, ...params: SqlParams) {
       statements.push(this.sourceSQL);
-      return original.apply(this, params);
+      const out = original.apply(this, params);
+      if (method === 'run' || out === undefined) return out;
+      if (method === 'get') tally.rows += 1;
+      if (Array.isArray(out)) tally.rows += out.length;
+      // SAFETY: iterate() returns an iterator of row objects, counted as the caller pulls them.
+      return method === 'iterate' ? countEach(out as Iterable<object>, tally) : out;
     }));
   }
   return spies;
