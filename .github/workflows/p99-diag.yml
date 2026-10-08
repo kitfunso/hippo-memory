@@ -1,0 +1,46 @@
+# Temporary: compares the p99 recall stalls of the parent commit and the fix on one hosted runner. Never merge.
+name: p99-diag
+
+on:
+  push:
+    branches: [diag/p99-recall-tail]
+
+permissions:
+  contents: read
+
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        copy: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npx tsc
+      - name: Variants
+        run: |
+          command -v strace || sudo apt-get install -y strace
+          git worktree add --detach ../parent HEAD~1
+          ln -s "$PWD/node_modules" ../parent/node_modules
+          (cd ../parent && npx tsc)
+          git worktree add --detach ../trunc HEAD
+          ln -s "$PWD/node_modules" ../trunc/node_modules
+          cp -r dist ../trunc/dist
+          sed -i 's/fs.constants.O_WRONLY | fs.constants.O_CREAT,/fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_TRUNC,/' ../trunc/dist/store/mirrors.js
+          grep -n "O_WRONLY" dist/store/mirrors.js ../trunc/dist/store/mirrors.js
+      - name: Arms
+        run: |
+          for rep in 1 2 3; do
+            bash scripts/diag/arm.sh "parent-$rep" ../parent
+            bash scripts/diag/arm.sh "fix-$rep" .
+            bash scripts/diag/arm.sh "trunc-$rep" ../trunc
+          done

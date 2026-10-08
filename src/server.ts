@@ -3,6 +3,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { existsSync } from 'node:fs';
 import { detectServer, removePidfileIfOwned, writePidfile } from './server-detect.js';
 import { closeHippoDb, type DatabaseSyncLike, getHippoDbPath, isStoreBusy, openHippoDb, outsideRequestStores, runWithRequestStores, SERVER_DB_WAIT_MS, withSqliteBlocked } from './db.js';
+import { startWalCheckpointer, type WalCheckpointer } from './db/wal-checkpointer.js';
 import { hasGroup, sqliteStore, type HippoStore, type StoreGroup } from './store-port.js';
 import { markSharedStore } from './config.js';
 import { auditWriteFailureCount } from './audit.js';
@@ -471,34 +472,43 @@ function bootLimiters(rateLimits: ServeOpts['rateLimits']): BootedLimiters {
 
 interface StoreHolder {
   hold: () => void;
-  release: () => void;
+  afterResponse: () => void;
+  release: () => Promise<void>;
 }
 
 function createStoreHolder(hippoRoot: string, store: HippoStore): StoreHolder {
   if (store.kind !== 'sqlite') {
     log.info(`serve: the '${store.kind}' store serves ${hippoRoot}, so no hippo.db connection is held`);
-    return { hold: () => {}, release: () => {} };
+    return { hold: () => {}, afterResponse: () => {}, release: async () => {} };
   }
   // Handlers open and close their own connections; while this one is held, none of those closes is SQLite's last,
   // which checkpoints and deletes the WAL. It opens only once the store exists, so serving never creates one.
   let heldDb: DatabaseSyncLike | undefined;
+  let checkpointer: WalCheckpointer | undefined;
   let stopHolding = false;
   const hold = (): void => {
     if (heldDb || stopHolding || !existsSync(getHippoDbPath(hippoRoot))) return;
     try {
       // The 'finish' listener can fire inside a request scope, which would close this connection with the request.
       heldDb = outsideRequestStores(() => openHippoDb(hippoRoot));
+      checkpointer = startWalCheckpointer(getHippoDbPath(hippoRoot));
     } catch (err) {
       stopHolding = true;
       log.warn(`serve: could not hold a store connection; requests still work, only slower: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
-  const release = (): void => {
+  const afterResponse = (): void => {
+    hold();
+    checkpointer?.noteResponse();
+  };
+  const release = async (): Promise<void> => {
     stopHolding = true;
+    // The worker's connection closes first, so the held one is SQLite's last and its close checkpoints and deletes the WAL.
+    await checkpointer?.stop();
     if (heldDb) closeHippoDb(heldDb);
     heldDb = undefined;
   };
-  return { hold, release };
+  return { hold, afterResponse, release };
 }
 
 function replyWithFailure<E>(req: IncomingMessage, res: ServerResponse, err: E, requestId: string): void {
@@ -627,7 +637,7 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
 
   const inflight = new Set<ServerResponse>();
   const server: Server = createServer((req, res) => {
-    res.once('finish', holder.hold);
+    res.once('finish', holder.afterResponse);
     inflight.add(res);
     res.once('close', () => inflight.delete(res));
     const requestId = resolveRequestId(req.headers['x-request-id']);
@@ -662,7 +672,7 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
     // unconditional unlink here would orphan it.
     removePidfileIfOwned(opts.hippoRoot, { pid: process.pid, startedAt });
     await drainAndClose(server, inflight, opts.shutdownDrainMs ?? 5000);
-    holder.release();
+    await holder.release();
     if (!opts.store) await served.store.close();
   };
 
