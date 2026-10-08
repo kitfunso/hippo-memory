@@ -7,7 +7,7 @@ import { syncBuiltinESMExports } from 'node:module';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { escapeRegex } from '../src/escape.js';
-import { ensureInstructionsBlock } from '../src/hooks/copilot.js';
+import { installCopilot } from '../src/hooks/copilot.js';
 import { installJsonHooks, resolveJsonHookPaths } from '../src/hooks/json-hooks.js';
 import { installOpencodePlugin } from '../src/hooks/opencode.js';
 import { registerWorkspace, workspaceRegistryPath } from '../src/scheduler.js';
@@ -210,8 +210,10 @@ const OTHER_CONFIG_FILES: ReadonlyArray<readonly [string, (home: string) => Rewr
     return { file: workspaceRegistryPath(globalRoot), rewrite: () => { registerWorkspace(globalRoot, path.join(home, 'repo-b')); } };
   }],
   ['copilot-instructions.md', (home) => {
-    const file = seedFile(path.join(home, 'repo', '.github', 'copilot-instructions.md'), '# House rules\n\nAlways run the linter before a commit.\n');
-    return { file, rewrite: () => { ensureInstructionsBlock(file); } };
+    // A first install leaves the hooks and MCP files current, so the rerun's only write is the instructions file.
+    fs.mkdirSync(path.join(home, '.copilot'));
+    const file = seedFile(installCopilot().paths.instructions, '# House rules\n\nAlways run the linter before a commit.\n');
+    return { file, rewrite: () => { installCopilot(); } };
   }],
 ];
 

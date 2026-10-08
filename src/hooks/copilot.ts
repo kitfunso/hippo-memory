@@ -221,7 +221,7 @@ function withCopilotBlock(text: string, found: FoundBlock | null): string {
 export type InstructionsInstallStatus = 'written' | 'present' | 'kept' | 'unclosed';
 
 /** Creates the file when missing; any block but hippo's own Copilot one, and a start marker with no end, leave the file as it is. */
-export function ensureInstructionsBlock(file: string): InstructionsInstallStatus {
+function ensureInstructionsBlock(file: string): InstructionsInstallStatus {
   const old = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
   const found = hippoBlock(old);
   if (found === null && old.includes(HOOK_MARKERS.start)) return 'unclosed';
