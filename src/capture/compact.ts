@@ -88,7 +88,8 @@ function snapshotJustSaved(hippoRoot: string, sessionId: string | null): boolean
 
 /** Runs the PreCompact producer: records the compaction, asks the summariser for memories, saves a working-state snapshot. Never extracts memories itself; SessionEnd capture owns that. */
 function runPreCompact(hippoRoot: string, options: PreCompactOptions, logFile: string): void {
-  const { stdinText, stdinTimedOut = false, runtime = 'claude-code' } = options;  // The PreCompact hook fires in every Claude Code project, including
+  const { stdinText, stdinTimedOut = false, runtime = 'claude-code' } = options;
+  // The PreCompact hook fires in every Claude Code project, including
   // ones that never ran `hippo init`, so gate before any store-opening call
   // (saveActiveTaskSnapshot etc. call initStore, which would create one).
   if (!isInitialized(hippoRoot)) {
