@@ -21,7 +21,8 @@ import {
   HttpError,
   JSON_HEADERS,
   isHeaderString,
-  readBody,
+  closeIfBodyUnread,
+  readWebhookBody,
   sendJson,
   type WebhookRequest,
 } from '../../http-util.js';
@@ -43,10 +44,12 @@ import type { JsonValue } from '../../json.js';
  *
  * Bearer auth is skipped on purpose: server.ts checks isPublicRoute before calling this.
  */
-export async function handleGitHubEventsWebhook({ req, res, opts }: WebhookRequest): Promise<void> {
-  const rawBody = await readBody(req);
+export async function handleGitHubEventsWebhook(request: WebhookRequest): Promise<void> {
+  const { req, res, opts } = request;
+  // Secret and signature header before the body, so a caller with neither cannot make the server buffer one.
   const secret = envGithubWebhookSecret();
   if (!secret) {
+    closeIfBodyUnread(request);
     res.writeHead(404, JSON_HEADERS);
     res.end(JSON.stringify({ error: 'not found' }));
     return;
@@ -59,8 +62,12 @@ export async function handleGitHubEventsWebhook({ req, res, opts }: WebhookReque
   const eventName = isHeaderString(eventHdr) ? eventHdr : null;
   const deliveryId = isHeaderString(deliveryHdr) ? deliveryHdr : null;
 
+  if (sigStr === null) {
+    closeIfBodyUnread(request);
+    throw new HttpError(401, 'invalid GitHub signature');
+  }
+  const rawBody = await readWebhookBody(request);
   if (
-    sigStr === null ||
     !verifyGitHubSignature({
       rawBody,
       signature: sigStr,

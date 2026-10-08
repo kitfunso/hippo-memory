@@ -9,7 +9,7 @@ import { HttpError, isJsonObjectRecord, readBody, sendJson } from '../http-util.
 import { assertCallerProject } from '../project-identity.js';
 import type { CallerProject } from '../prompt-hook.js';
 import { buildContextWithAuth, heartbeatVerdict, readAuthHeader, requireAuth } from './auth.js';
-import { clientIpForRateLimit } from './client-ip.js';
+import { clientLimitKey, subscriberKey } from './client-ip.js';
 import type { ResolvedServeOpts } from './types.js';
 import { type JsonValue, isJsonString } from '../json.js';
 
@@ -29,7 +29,7 @@ function buildMcpClientKey(req: IncomingMessage): string {
   const tokenHash = auth.kind === 'bearer'
     ? createHash('sha256').update(auth.token).digest('hex').slice(0, 16)
     : 'noauth';
-  const addr = req.socket.remoteAddress ?? 'unknown';
+  const addr = subscriberKey(req.socket.remoteAddress ?? 'unknown');
   return `http:${tokenHash}:${addr}`;
 }
 
@@ -145,7 +145,7 @@ const DEFAULT_MAX_STREAMS_PER_CLIENT = 8;
 function streamSlotKey(req: IncomingMessage): string {
   const auth = readAuthHeader(req);
   if (auth.kind === 'bearer') return `key:${createHash('sha256').update(auth.token).digest('hex').slice(0, 16)}`;
-  return `ip:${clientIpForRateLimit(req)}`;
+  return `ip:${clientLimitKey(req)}`;
 }
 
 /** Takes a stream slot or throws 429; the slot is released once, when the response closes. */

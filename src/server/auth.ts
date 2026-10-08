@@ -6,7 +6,7 @@ import { log } from '../log.js';
 import { API_KEY_PREFIX, verifyApiKeyCached } from '../auth.js';
 import { type Actor, type Context, ownerOrSubject } from '../api.js';
 import { HttpError, isCrossSite, isHeaderString, LOOPBACK_HOST_HEADER, MAX_ID_LEN } from '../http-util.js';
-import { clientIpForRateLimit, subscriberKey } from './client-ip.js';
+import { clientLimitKey } from './client-ip.js';
 import type { AuthResolver, ResolvedBearer, ResolvedServeOpts } from './types.js';
 import { isJsonString } from '../json.js';
 
@@ -160,7 +160,7 @@ const DEFAULT_RESOLVER_DEADLINE_MS = 5000;
 function chargeScryptRun(req: IncomingMessage, opts: AuthOpts): void {
   const limiter = opts.failedAuthLimiter;
   // Reserving rather than peeking bounds scrypt runs exactly, even when concurrent misses await a slow store.
-  if (limiter && !limiter.check(subscriberKey(clientIpForRateLimit(req)))) {
+  if (limiter && !limiter.check(clientLimitKey(req))) {
     throw new HttpError(429, 'too many key checks from this address', limiter.retryAfterSec);
   }
 }

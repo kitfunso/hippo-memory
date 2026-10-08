@@ -109,6 +109,9 @@ export function envSleepTimeoutMs(): number | undefined { return positiveInt('HI
 export function envApiKey(): string | undefined { return raw('HIPPO_API_KEY'); }
 export function envClientIpHeader(): string | undefined { return raw('HIPPO_CLIENT_IP_HEADER')?.trim().toLowerCase(); }
 export function envTrustedProxies(): string | undefined { return raw('HIPPO_TRUSTED_PROXIES'); }
+/** Paths to the PEM certificate and key `hippo serve` answers HTTPS with; the --tls-cert and --tls-key flags win. */
+export function envTlsCert(): string | undefined { return trimmed('HIPPO_TLS_CERT'); }
+export function envTlsKey(): string | undefined { return trimmed('HIPPO_TLS_KEY'); }
 export function envMcpSseMaxStreams(): number | undefined { return positiveInt('MCP_SSE_MAX_STREAMS'); }
 export function envMcpSseHeartbeatMs(): number | undefined { return positiveInt('MCP_SSE_HEARTBEAT_MS'); }
 export function envMcpSseMaxAgeSec(): number | undefined { return positiveInt('MCP_SSE_MAX_AGE_SEC'); }

@@ -152,5 +152,20 @@ export function isCrossSite(req: IncomingMessage): boolean {
 export interface WebhookRequest {
   req: IncomingMessage;
   res: ServerResponse;
-  opts: { hippoRoot: string };
+  opts: { hippoRoot: string; webhookBodyDeadlineMs?: number };
+}
+
+// A webhook route takes no key, so anyone holding a signature header could otherwise keep a socket open with a body that never ends.
+const WEBHOOK_BODY_DEADLINE_MS = 10_000;
+
+/** Call before refusing a webhook unread: a caller still sending its body loses the socket once the reply is out, as it does after a 413. */
+export function closeIfBodyUnread({ req, res }: WebhookRequest): void {
+  res.once('finish', () => {
+    if (!req.complete) closeAfterReply(req);
+  });
+}
+
+/** A webhook's raw body, exactly as sent, for the receiver's HMAC check; call it only once a secret is configured and the signature headers are present. */
+export function readWebhookBody({ req, opts }: WebhookRequest): Promise<string> {
+  return readBody(req, { deadlineMs: opts.webhookBodyDeadlineMs ?? WEBHOOK_BODY_DEADLINE_MS });
 }

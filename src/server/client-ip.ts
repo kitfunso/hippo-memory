@@ -80,6 +80,11 @@ export function subscriberKey(ip: string): string {
   return `${groups.slice(0, 4).map((g) => parseInt(g, 16).toString(16)).join(':')}::/64`;
 }
 
+/** The one key every per-address limit and slot count uses, so rotating inside a /64 never buys a fresh bucket. */
+export function clientLimitKey(req: IncomingMessage): string {
+  return subscriberKey(clientIpForRateLimit(req));
+}
+
 function isTrustedProxy(list: BlockList, ip: string): boolean {
   const bare = ip.startsWith('::ffff:') && isIP(ip.slice(7)) === 4 ? ip.slice(7) : ip;
   const family = isIP(bare);
@@ -97,8 +102,7 @@ export function enforceRateLimit(req: IncomingMessage, path: string, limiter?: R
   // HIPPO_CLIENT_IP_HEADER there so each real client gets its own bucket
   // (see clientIpForRateLimit).
   if (limiter && (path.startsWith('/v1/') || path === '/mcp' || path === '/mcp/stream')) {
-    const ip = clientIpForRateLimit(req);
-    if (!limiter.check(ip)) {
+    if (!limiter.check(clientLimitKey(req))) {
       throw new HttpError(429, 'rate limit exceeded', limiter.retryAfterSec);
     }
   }

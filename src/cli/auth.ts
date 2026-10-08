@@ -26,6 +26,9 @@ function cmdAuthCreate(hippoRoot: string, flags: Record<string, string | boolean
       process.exit(1);
     }
     role = roleFlag;
+  } else {
+    // The default is the widest key hippo mints, so the operator is told at the moment of choosing. Stderr keeps --json output clean.
+    printError('hippo auth create: no --role given, so this is an admin key, and it never expires. Pass --role member for a narrower key; revoke either with `hippo auth revoke <key_id>`.');
   }
 
   // The CLI's --tenant flag is the only legitimate cross-tenant override

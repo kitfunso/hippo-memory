@@ -80,7 +80,7 @@ export const KNOWN_FLAGS: ReadonlySet<string> = new Set([
   'role', 'run', 'runtime', 'salience-threshold', 'scan', 'scope', 'session', 'session-id', 'since',
   'source', 'start-offset', 'started-at', 'state', 'status', 'step', 'steps', 'success', 'summary',
   'supersedes', 'tag', 'target', 'target-runtime', 'task', 'team', 'tenant', 'tenant-id', 'tests',
-  'text', 'threshold', 'title', 'to', 'transcript', 'trigger', 'type', 'unit', 'value', 'vault',
+  'text', 'threshold', 'title', 'tls-cert', 'tls-key', 'to', 'transcript', 'trigger', 'type', 'unit', 'value', 'vault',
 ]);
 
 // Commands that delete or hide memories: an unknown flag here stops the run instead of being ignored.

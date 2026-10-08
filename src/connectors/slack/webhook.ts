@@ -14,7 +14,8 @@ import {
   JSON_HEADERS,
   isHeaderString,
   isJsonObjectRecord,
-  readBody,
+  closeIfBodyUnread,
+  readWebhookBody,
   sendJson,
   type WebhookRequest,
 } from '../../http-util.js';
@@ -39,10 +40,12 @@ import type { JsonValue } from '../../json.js';
  *
  * Bearer auth is skipped on purpose: server.ts checks isPublicRoute before calling this.
  */
-export async function handleSlackEventsWebhook({ req, res, opts }: WebhookRequest): Promise<void> {
-  const rawBody = await readBody(req);
+export async function handleSlackEventsWebhook(request: WebhookRequest): Promise<void> {
+  const { req, res, opts } = request;
+  // Secret and headers before the body, so a caller with neither cannot make the server buffer one.
   const secret = envSlackSigningSecret();
   if (!secret) {
+    closeIfBodyUnread(request);
     res.writeHead(404, JSON_HEADERS);
     res.end(JSON.stringify({ error: 'not found' }));
     return;
@@ -52,9 +55,12 @@ export async function handleSlackEventsWebhook({ req, res, opts }: WebhookReques
   const tsHdr = req.headers['x-slack-request-timestamp'];
   const sigStr = isHeaderString(sig) ? sig : null;
   const tsStr = isHeaderString(tsHdr) ? tsHdr : null;
+  if (sigStr === null || tsStr === null) {
+    closeIfBodyUnread(request);
+    throw new HttpError(401, 'invalid Slack signature');
+  }
+  const rawBody = await readWebhookBody(request);
   if (
-    sigStr === null ||
-    tsStr === null ||
     !verifySlackSignature({
       rawBody,
       timestamp: tsStr,

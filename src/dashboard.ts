@@ -4,7 +4,7 @@ import * as http from 'http';
 import * as path from 'path';
 import * as fs from 'fs';
 import type { AddressInfo } from 'net';
-import { randomBytes, randomUUID, timingSafeEqual } from 'crypto';
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'crypto';
 import { evalNow } from './ablation.js';
 import { readEntry } from './store/entry-reads.js';
 import { listCards } from './store-cards.js';
@@ -208,14 +208,38 @@ async function handlePost(ctx: RouteContext, segments: string[]): Promise<boolea
   return true;
 }
 
+// One style block, not style attributes, so the policy below can name its hash and allow no other inline style.
+const NOT_BUILT_CSS =
+  "body{font-family:Georgia,'Palatino Linotype',serif;max-width:640px;margin:60px auto;padding:24px;line-height:1.6;background:#f4efe6;color:#3a3228}" +
+  'h1{color:#c45c3c}' +
+  'pre{background:#faf7f2;padding:16px;border:1px solid #c4b9a8;border-radius:3px;font-family:Consolas,monospace}';
+
+// Memory text is written by other tools and people, so every reply tells the browser to load code only from this server and never to frame, sniff or name the page elsewhere.
+const SECURITY_HEADERS = {
+  'Content-Security-Policy': [
+    "default-src 'none'",
+    "script-src 'self'",
+    `style-src 'self' 'sha256-${createHash('sha256').update(NOT_BUILT_CSS).digest('base64')}'`,
+    "img-src 'self' data:",
+    "font-src 'self'",
+    "connect-src 'self'",
+    "base-uri 'none'",
+    "form-action 'none'",
+    "frame-ancestors 'none'",
+  ].join('; '),
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'no-referrer',
+  'X-Frame-Options': 'DENY',
+} as const;
+
 function notBuilt(res: http.ServerResponse): void {
   res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8' });
   res.end(`<!doctype html>
-<html lang="en"><head><title>Hippo Dashboard</title><meta charset="utf-8"></head>
-<body style="font-family:Georgia,'Palatino Linotype',serif;max-width:640px;margin:60px auto;padding:24px;line-height:1.6;background:#f4efe6;color:#3a3228">
-<h1 style="color:#c45c3c">Hippo Dashboard</h1>
+<html lang="en"><head><title>Hippo Dashboard</title><meta charset="utf-8"><style>${NOT_BUILT_CSS}</style></head>
+<body>
+<h1>Hippo Dashboard</h1>
 <p>The React UI bundle is not built yet. Run:</p>
-<pre style="background:#faf7f2;padding:16px;border:1px solid #c4b9a8;border-radius:3px;font-family:Consolas,monospace">cd ui && npm install && npm run build</pre>
+<pre>cd ui && npm install && npm run build</pre>
 <p>Then refresh this page. The dashboard server will serve <code>dist-ui/index.html</code> automatically once present.</p>
 </body></html>`);
 }
@@ -246,6 +270,29 @@ function cookieValue(header: string | undefined, name: string): string | undefin
   return undefined;
 }
 
+/** Where a page load that carried the token goes next, without it; null for an API call or a write, which is answered in place. */
+function tokenFreeLocation(req: http.IncomingMessage, url: URL): string | null {
+  if ((req.method !== 'GET' && req.method !== 'HEAD') || url.pathname.startsWith('/api/')) return null;
+  const query = new URLSearchParams(url.searchParams);
+  query.delete('token');
+  const rest = query.toString();
+  // One leading slash only: `//host` would send the browser to another site.
+  return `${url.pathname.replace(/^\/+/, '/')}${rest ? `?${rest}` : ''}`;
+}
+
+/** Moves the browser off the URL that carries the token, so the token stays out of history, bookmarks and copied links. */
+function leaveTokenUrl(req: http.IncomingMessage, res: http.ServerResponse, location: string): void {
+  if (req.headers['sec-fetch-site'] !== 'cross-site') {
+    res.writeHead(303, { Location: location });
+    res.end();
+    return;
+  }
+  // A browser withholds a SameSite=Strict cookie from a redirect another site started; a refresh from this page is same-site.
+  const target = location.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+  res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+  res.end(`<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=${target}"><title>Hippo Dashboard</title></head><body></body></html>`);
+}
+
 /** Serves the dashboard on 127.0.0.1 behind a per-start `token` (tests pass one), since loopback alone lets any local process read every memory; `opts` sets the projection and cache clocks. */
 export function serveDashboard(
   hippoRoot: string,
@@ -267,6 +314,8 @@ export function serveDashboard(
     const cookieName = `hippo_dashboard_${req.socket.localPort ?? port}`;
     if (sameToken(url.searchParams.get('token') ?? undefined, token)) {
       res.setHeader('Set-Cookie', `${cookieName}=${token}; HttpOnly; SameSite=Strict; Path=/`);
+      const location = tokenFreeLocation(req, url);
+      if (location !== null) return leaveTokenUrl(req, res, location);
     } else if (!sameToken(cookieValue(req.headers.cookie, cookieName), token)) {
       res.writeHead(401, { 'Content-Type': 'text/plain' });
       res.end('Unauthorized: open the dashboard with the URL `hippo dashboard` printed; it carries the access token.');
@@ -289,6 +338,7 @@ export function serveDashboard(
   };
 
   const onRequest = (req: http.IncomingMessage, res: http.ServerResponse): void => {
+    for (const [name, value] of Object.entries(SECURITY_HEADERS)) res.setHeader(name, value);
     handleRequest(req, res).catch((err) => {
       const clientFault = err instanceof ParamError || err instanceof URIError || err instanceof BodyTimeoutError;
       // A cut-short response is logged even for a client fault; a bare 400 is not.

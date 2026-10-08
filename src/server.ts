@@ -1,5 +1,5 @@
 import { envPort, envRequireAuth, envV1Rps } from './env.js';
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { existsSync } from 'node:fs';
 import { detectServer, removePidfileIfOwned, writePidfile } from './server-detect.js';
 import { closeHippoDb, type DatabaseSyncLike, getHippoDbPath, isStoreBusy, openHippoDb, outsideRequestStores, runWithRequestStores, SERVER_DB_WAIT_MS, withSqliteBlocked } from './db.js';
@@ -36,6 +36,7 @@ import { handleCloseProcess, handleCreateProcess, handleGetProcess, handleListPr
 import { handleCloseProjectBrief, handleCreateProjectBrief, handleGetProjectBrief, handleListProjectBriefs, handleRefreshProjectBrief, handleSupersedeProjectBrief } from './server/routes/project-briefs.js';
 import { handleAssembleSession, handleDrillRecall, handleGetContext, handleRecallMemories } from './server/routes/recall.js';
 import { handleCloseSkill, handleCreateSkill, handleExportSkills, handleGetSkill, handleListSkills, handleSupersedeSkill } from './server/routes/skills.js';
+import { createListener, warnIfCleartext } from './server/tls.js';
 import { parseJsonBody } from './server/validation.js';
 import type { AddonRoute, RateLimitSpec, ResolvedServeOpts, Route, RouteRequest, ServeOpts, ServerHandle } from './server/types.js';
 import type { JsonValue } from './json.js';
@@ -640,12 +641,14 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   const holder = createStoreHolder(opts.hippoRoot, served.store);
 
   const inflight = new Set<ServerResponse>();
-  const server: Server = createServer((req, res) => {
+  const server: Server = createListener(opts.tls, (req, res) => {
     res.once('finish', holder.afterResponse);
     inflight.add(res);
     res.once('close', () => inflight.delete(res));
     const requestId = resolveRequestId(req.headers['x-request-id']);
     res.setHeader('X-Request-Id', requestId);
+    // Memory text is caller-written, so no browser may guess a reply into HTML or script.
+    res.setHeader('X-Content-Type-Options', 'nosniff');
     const run = (): Promise<void> => handleRequest(req, res, served, startedAt, streamSlots, limiter);
     // A missed port under another store would otherwise create and write a hippo.db that store never reads.
     const guarded = (): Promise<void> => (kind === 'sqlite' ? run() : withSqliteBlocked(kind, run));
@@ -663,7 +666,8 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   }
   const addressInfo = address;
   const actualPort = addressInfo.port;
-  const url = `http://${host.includes(':') ? `[${host}]` : host}:${actualPort}`;
+  const url = `${opts.tls ? 'https' : 'http'}://${host.includes(':') ? `[${host}]` : host}:${actualPort}`;
+  warnIfCleartext(host, opts.tls, LOOPBACK_HOSTS);
 
   writePidfile(opts.hippoRoot, { port: actualPort, url, startedAt });
   holder.hold();

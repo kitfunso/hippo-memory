@@ -60,6 +60,10 @@ export interface ServeOpts {
   autoSleep?: false;
   routes?: readonly AddonRoute[];
   mintBodyDeadlineMs?: number;
+  /** Tests only: shortens the wait for a signed webhook's body, which defaults to 10 s. */
+  webhookBodyDeadlineMs?: number;
+  /** PEM certificate and key: serve() then answers HTTPS only. Unset means cleartext HTTP, which needs a TLS-terminating proxy in front on any non-loopback bind. */
+  tls?: { cert: string | Buffer; key: string | Buffer };
   /** Static JSON served to anyone at GET <path>; built once at boot and never authenticated, so it must hold nothing secret. */
   publicJson?: Readonly<Record<string, JsonValue>>;
   /** Request limits: perCaller after auth; perAddress replaces HIPPO_V1_RPS when set, 'off' disables it; failedAuthPerAddress guards scrypt. */
