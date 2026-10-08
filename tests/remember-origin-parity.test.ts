@@ -41,14 +41,15 @@ async function directRemember(store: string, text: string): Promise<string> {
 /** `hippo remember` with a server up: the CLI itself decides to route and builds the body, so the test fails if it stops routing. */
 async function thinRemember(store: string, text: string): Promise<string> {
   handle = await serve({ hippoRoot: store, port: 0 });
-  const lines: string[] = [];
-  const log = vi.spyOn(console, 'log').mockImplementation((line: unknown) => { lines.push(String(line)); });
+  const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+  let printed = '';
   try {
     await handleRemember({ hippoRoot: store, args: [text], flags: {} });
   } finally {
+    printed = log.mock.calls.map((c) => String(c[0])).join(' ');
     log.mockRestore();
   }
-  expect(lines.join(' ')).toMatch(/Remembered \[.*\] \(via http/);
+  expect(printed).toMatch(/Remembered \[.*\] \(via http/);
   const row = loadAllEntries(store).find((e) => e.content === text);
   expect(row).toBeDefined();
   return row?.id ?? '';
