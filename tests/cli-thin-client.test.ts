@@ -8,6 +8,7 @@ import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb, getMeta } from '../src/db.js';
 import { queryAuditEvents } from '../src/audit.js';
 import { boundPort } from './_helpers/listen.js';
+import { ROUTED_CLI_ENV } from './_helpers/routed-cli-env.js';
 
 /**
  * Headline parity test for A1: when `hippo serve` is running, CLI invocations
@@ -108,14 +109,11 @@ interface CliResult {
   stderr: string;
 }
 
-// A loaded runner can miss the 300 ms /health default, and the CLI then writes directly instead of routing.
-const PROBE_ENV = { HIPPO_HEALTH_PROBE_MS: '5000' };
-
 function runCli(workspace: string, ...cliArgs: string[]): CliResult {
   try {
     const stdout = execFileSync(process.execPath, [CLI_PATH, ...cliArgs], {
       cwd: workspace,
-      env: { ...process.env, ...PROBE_ENV },
+      env: { ...process.env, ...ROUTED_CLI_ENV },
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -141,7 +139,7 @@ function runCliAsync(workspace: string, ...cliArgs: string[]): Promise<CliResult
   return new Promise((resolve) => {
     const child = spawn(process.execPath, [CLI_PATH, ...cliArgs], {
       cwd: workspace,
-      env: { ...process.env, ...PROBE_ENV },
+      env: { ...process.env, ...ROUTED_CLI_ENV },
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
     });

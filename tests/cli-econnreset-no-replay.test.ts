@@ -9,6 +9,7 @@ import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { remember } from '../src/api.js';
 import { classifyTransportFailure, HttpResponseError } from '../src/client.js';
 import { boundPort } from './_helpers/listen.js';
+import { ROUTED_CLI_ENV } from './_helpers/routed-cli-env.js';
 
 // A server that commits the row then drops the socket looks identical to a
 // refused connection through `isConnectionRefused`, so the CLI used to self-heal
@@ -58,8 +59,7 @@ async function startResettingServer(hippoRoot: string, startedAt: string): Promi
 
 function runCli(cwd: string, args: string[]): Promise<{ status: number; stdout: string; stderr: string }> {
   return new Promise((resolve) => {
-    // A loaded runner can miss the 300 ms /health default, and the CLI then writes directly instead of routing.
-    const env = { ...process.env, HIPPO_HEALTH_PROBE_MS: '5000' };
+    const env = { ...process.env, ...ROUTED_CLI_ENV };
     const child = spawn(process.execPath, [CLI_PATH, ...args], { cwd, env, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
     let stdout = '';
     let stderr = '';
