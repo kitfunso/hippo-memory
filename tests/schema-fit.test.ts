@@ -2,9 +2,14 @@
  * Tests for schema_fit computation — how well new memories fit existing patterns.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
+import * as fs from 'node:fs';
 import { computeSchemaFit, deriveHalfLife, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/memory.js';
+import { schemaFitInStore } from '../src/store/candidates.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
+import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
+import { makeRoot } from './_helpers/make-root.js';
 
 function makePool(): MemoryEntry[] {
   return [
@@ -89,6 +94,44 @@ describe('computeSchemaFit', () => {
     );
     expect(fit).toBeGreaterThanOrEqual(0);
     expect(fit).toBeLessThanOrEqual(1);
+  });
+});
+
+describe('schemaFitInStore', () => {
+  const roots: string[] = [];
+  afterEach(() => {
+    for (const dir of roots.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('scores a tenant from the store as computeSchemaFit scores the same rows loaded', () => {
+    const root = makeRoot('schema-fit-store');
+    roots.push(root);
+    const pool = [
+      ...makePool(),
+      createMemory('One row carrying a tag twice', { tags: ['rule', 'rule'] }),
+      createMemory('A row with no tags at all'),
+      // Eight matching texts pass the five that cap the content score, so the store's text walk stops early.
+      ...Array.from({ length: 8 }, (_, i) => createMemory(`zephyrine refresh dropped series ${i}`, { tags: ['data-pipeline'] })),
+    ];
+    const elsewhere = createMemory('zephyrine refresh for another tenant', { tags: ['data-pipeline', 'error', 'kubernetes'], tenantId: 'other' });
+    for (const entry of [...pool, elsewhere]) writeEntry(root, entry);
+    const loaded = loadAllEntries(root, 'default');
+    expect(loaded).toHaveLength(pool.length);
+
+    // Each probe scores below the caps, so a wrong row count, tag count or text set moves it.
+    const probes: ReadonlyArray<readonly [string, string[]]> = [
+      ['', ['data-pipeline']],
+      ['Never overwrite production files', ['rule', 'rule', 'unseen']],
+      ['Kubernetes pod scaling requires HPA configuration', ['kubernetes']],
+      ['Walk-forward Sharpe overestimates returns', []],
+      ['another tenant', []],
+    ];
+    const fits = probes.map(([content, tags]) => schemaFitInStore(root, 'default', content, tags));
+    expect(fits).toEqual(probes.map(([content, tags]) => computeSchemaFit(content, tags, loaded)));
+    expect(fits.filter((fit) => fit > 0 && fit < 1)).toHaveLength(3);
+    // No tags and a capped content score: 0.6 * 0 + 0.4 * 1.
+    expect(schemaFitInStore(root, 'default', 'zephyrine refresh', [])).toBe(0.4);
+    expect(schemaFitInStore(root, 'nobody', 'zephyrine refresh', ['data-pipeline'])).toBe(0.5);
   });
 });
 
