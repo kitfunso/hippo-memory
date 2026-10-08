@@ -5,6 +5,7 @@ import { log } from '../log.js';
 import { DatabaseSync, type DatabaseSyncLike } from './sqlite.js';
 import { execWithBusyRetry } from './busy.js';
 import { runMigrations } from './migrate.js';
+import { autoCheckpointPages } from './wal-checkpointer.js';
 
 export function getHippoDbPath(hippoRoot: string): string {
   return path.join(hippoRoot, 'hippo.db');
@@ -28,7 +29,7 @@ export function connectHippoDb(hippoRoot: string, busyWaitMs?: number): Database
     db.exec(`PRAGMA busy_timeout = ${busyWaitMs ?? 5000}`);
     execWithBusyRetry(db, 'PRAGMA journal_mode = WAL', busyWaitMs);
     db.exec('PRAGMA synchronous = NORMAL');
-    db.exec('PRAGMA wal_autocheckpoint = 100');
+    db.exec(`PRAGMA wal_autocheckpoint = ${autoCheckpointPages(getHippoDbPath(hippoRoot))}`);
     db.exec('PRAGMA foreign_keys = ON');
     runMigrations(db, hippoRoot, busyWaitMs);
     // Orphan mirrors of archived raw rows go here; a filesystem failure must not block the open.
