@@ -40,11 +40,11 @@ function statusBeforeBodyArrives(port: number, path: string, timeoutMs = 3000): 
 }
 
 /** Sends headers that promise a body and never the body; resolves with the status line once the server closes the socket. */
-function statusUntilServerCloses(port: number, path: string): Promise<string> {
+function statusUntilServerCloses(port: number, path: string, credential = 'Authorization: Bearer hk_bogus.notakey\r\n'): Promise<string> {
   return new Promise((resolve, reject) => {
     const socket = connect(port, '127.0.0.1', () => {
       socket.write(
-        `POST ${path} HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\nAuthorization: Bearer hk_bogus.notakey\r\n` +
+        `POST ${path} HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\n${credential}` +
           `Content-Type: application/json\r\nContent-Length: 100\r\n\r\n`,
       );
     });
@@ -96,5 +96,15 @@ describe('no route reads an unauthenticated body beyond a stated cap and deadlin
     await handle.stop();
     handle = await serve({ hippoRoot: root, port: 0, mintBodyDeadlineMs: 50 });
     expect(await statusUntilServerCloses(handle.port, '/v1/auth/keys')).toBe('HTTP/1.1 408 Request Timeout');
+  });
+
+  // Past auth (a keyless loopback store accepts the caller) every other route reads through one shared reader, so one route stands for all.
+  it('POST /mcp answers 408 and drops the socket when an accepted caller never sends the promised body', async () => {
+    process.env.HIPPO_BODY_TIMEOUT_MS = '50';
+    try {
+      expect(await statusUntilServerCloses(handle.port, '/mcp', '')).toBe('HTTP/1.1 408 Request Timeout');
+    } finally {
+      delete process.env.HIPPO_BODY_TIMEOUT_MS;
+    }
   });
 });

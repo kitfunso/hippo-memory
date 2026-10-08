@@ -262,6 +262,29 @@ describe('request guards', () => {
     expect((await get(dash.port, '/api/overview')).status).toBe(200);
   });
 
+  it('answers 408 when the promised body never arrives', async () => {
+    const target = seed(store.hippoRoot, 'stalled row');
+    process.env.HIPPO_BODY_TIMEOUT_MS = '50';
+    try {
+      const status = await new Promise<number>((resolve, reject) => {
+        const req = httpRequest({
+          host: '127.0.0.1', port: dash.port, path: `/api/memory/${target.id}/pin`, method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Content-Length': 100, cookie: `hippo_dashboard_${dash.port}=${DASHBOARD_TOKEN}` },
+        }, (res) => {
+          res.resume();
+          resolve(res.statusCode ?? 0);
+        });
+        req.on('error', reject);
+        // Headers only: the body they promise is never written.
+        req.flushHeaders();
+      });
+      expect(status).toBe(408);
+    } finally {
+      delete process.env.HIPPO_BODY_TIMEOUT_MS;
+    }
+    expect(row(target.id).pinned).toBe(false);
+  });
+
   it('answers 400 for a malformed percent sequence in a path, and keeps serving', async () => {
     expect((await get(dash.port, '/api/memory/%E0%A4%A')).status).toBe(400);
     expect((await postJson(dash.port, '/api/memory/%E0%A4%A/pin', { pinned: true })).status).toBe(400);
