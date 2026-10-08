@@ -3,7 +3,8 @@ import { buildRelevanceRequest, JEV_DEFAULT_TOP_K, rankByScores } from './jev.js
 import type { RerankerFn, RerankResult, RerankerOptions, RerankProvenance } from './types.js';
 import type { SearchResult } from '../search/types.js';
 import { isJsonObjectRecord } from '../http-util.js';
-import { log } from '../log.js';
+import { createOutageWarning } from './outage-warning.js';
+import { rerankerPost } from './remote.js';
 import type { JsonValue } from '../json.js';
 
 /** The two pretrained CLEF decision models served by Cloudflare Workers AI. */
@@ -158,31 +159,17 @@ async function requestScores(model: ClefModel, query: string, head: SearchResult
   const timeoutMs = Number.isInteger(requested) && requested > 0 && requested <= MAX_TIMEOUT_MS ? requested : DEFAULT_TIMEOUT_MS;
   const headers = new Headers({ 'content-type': 'application/json' });
   if (route.token) headers.set('authorization', `Bearer ${route.token}`);
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const resp = await fetch(route.url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ state, model, questions }),
-      signal: controller.signal,
-    });
-    if (!resp.ok) {
-      // A third-party header ends up on stderr, so keep printable ASCII only.
-      const ray = resp.headers.get('cf-ray')?.replace(/[^\x20-\x7e]/g, '').slice(0, 64);
-      await resp.body?.cancel();
-      throw new Error(`HTTP ${resp.status}${ray ? `, ray ${ray}` : ''}`);
-    }
-    const body = await readCappedJson(resp);
-    const parsed = parseClefReply(body, head.length, model, route.backend === 'cloudflare');
-    if (isRejection(parsed)) throw new Error(parsed);
-    return parsed;
-  } catch (err) {
-    if (err instanceof Error && err.name === 'AbortError') throw new Error(`no answer within ${timeoutMs} ms`);
-    throw err;
-  } finally {
-    clearTimeout(timer);
+  const resp = await rerankerPost(route.url, { headers, body: JSON.stringify({ state, model, questions }) }, timeoutMs);
+  if (!resp.ok) {
+    // A third-party header ends up on stderr, so keep printable ASCII only.
+    const ray = resp.headers.get('cf-ray')?.replace(/[^\x20-\x7e]/g, '').slice(0, 64);
+    await resp.body?.cancel();
+    throw new Error(`HTTP ${resp.status}${ray ? `, ray ${ray}` : ''}`);
   }
+  const body = await readCappedJson(resp);
+  const parsed = parseClefReply(body, head.length, model, route.backend === 'cloudflare');
+  if (isRejection(parsed)) throw new Error(parsed);
+  return parsed;
 }
 
 /** The input order, unchanged, with the reason recorded. Never a partial reorder. */
@@ -197,9 +184,9 @@ function nativeOrder(head: SearchResult[], provenance: RerankProvenance): Rerank
   }));
 }
 
-/** A CLEF reranker for one model: Jev's request shape and pool; any failure keeps the native order (never paid Jev), warning once. */
+/** A CLEF reranker for one model: Jev's request shape and pool; any failure keeps the native order (never paid Jev) and warns. */
 export function createClefReranker(model: ClefModel): RerankerFn {
-  let warned = false;
+  const outage = createOutageWarning(model, 'keeping the native order');
   return async (query, results, options?: RerankerOptions): Promise<RerankResult[]> => {
     const head = results.slice(0, options?.topK ?? JEV_DEFAULT_TOP_K);
     if (head.length === 0) return [];
@@ -210,14 +197,10 @@ export function createClefReranker(model: ClefModel): RerankerFn {
       if (head.length > MAX_CANDIDATES) throw new Error(`more than ${MAX_CANDIDATES} candidates`);
       route = resolveClefRoute(model);
       got = await requestScores(model, query, head, route);
+      outage.answered();
     } catch (err) {
       const reason = err instanceof Error ? err.message : 'unknown error';
-      if (!warned) {
-        warned = true;
-        log.warn(
-          `${model} reranker unavailable (${reason}); keeping the native order. Subsequent calls will not repeat this warning.`,
-        );
-      }
+      outage.failed(reason);
       return nativeOrder(head, { backend: 'native', requestedModel: model, fallbackReason: reason });
     }
 

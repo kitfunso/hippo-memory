@@ -100,6 +100,8 @@ export function envPort(): string | undefined { return raw('HIPPO_PORT'); }
 export function envHealthProbeMs(): number | undefined { return positiveInt('HIPPO_HEALTH_PROBE_MS'); }
 export function envRequireAuth(): boolean { return isOne('HIPPO_REQUIRE_AUTH'); }
 export function envV1Rps(): string | undefined { return raw('HIPPO_V1_RPS'); }
+/** How long a request body may take to arrive; http-util.ts holds the default. */
+export function envBodyTimeoutMs(): number | undefined { return positiveInt('HIPPO_BODY_TIMEOUT_MS'); }
 export function envApiKey(): string | undefined { return raw('HIPPO_API_KEY'); }
 export function envClientIpHeader(): string | undefined { return raw('HIPPO_CLIENT_IP_HEADER')?.trim().toLowerCase(); }
 export function envTrustedProxies(): string | undefined { return raw('HIPPO_TRUSTED_PROXIES'); }

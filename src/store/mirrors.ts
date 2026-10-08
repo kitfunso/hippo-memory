@@ -315,7 +315,19 @@ export function writeIndexMirror(hippoRoot: string, index: HippoIndex): void {
 }
 
 export function writeStatsMirror(hippoRoot: string, stats: LegacyStats): void {
-  mirrorBestEffort('stats.json', () => fs.writeFileSync(path.join(hippoRoot, 'stats.json'), JSON.stringify(stats, null, 2), 'utf8'));
+  mirrorBestEffort('stats.json', () => overwriteInPlace(path.join(hippoRoot, 'stats.json'), JSON.stringify(stats, null, 2)));
+}
+
+// A truncate waits for the file's last write to reach the disk, so a file rewritten on every recall keeps its blocks.
+function overwriteInPlace(file: string, text: string): void {
+  const bytes = Buffer.from(text, 'utf8');
+  const fd = fs.openSync(file, fs.constants.O_WRONLY | fs.constants.O_CREAT, 0o666);
+  try {
+    fs.writeSync(fd, bytes, 0, bytes.length, 0);
+    fs.ftruncateSync(fd, bytes.length);
+  } finally {
+    fs.closeSync(fd);
+  }
 }
 
 /** Mirrors are derived from SQLite and written after COMMIT, so a failed write warns instead of failing a committed change. */

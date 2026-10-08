@@ -395,8 +395,9 @@ export function appendSessionEndCloseLog(logFile: string | null, message: string
     // session_id — same log-forgery guard appendPreCompactLog applies.
     const write = opts.startFresh ? fs.writeFileSync : fs.appendFileSync;
     write(logFile, `[hippo] ${new Date().toISOString()} ${sanitizeLogMessage(message)}\n`, 'utf8');
-  } catch {
-    // Best-effort only — never let a log-write failure surface as an error.
+  } catch (err) {
+    // Best-effort only: a log-write failure must never fail the hook.
+    log.debug(`session-end log not written: ${errorMessage(err)}`);
   }
 }
 

@@ -1,5 +1,5 @@
 {
-  "openersOutside": 198,
+  "openersOutside": 185,
   "openersInCli": 13,
   "storeBranches": 13,
   "routesWithoutStore": 52,
@@ -67,7 +67,6 @@
     "src/session-owners.ts": 1,
     "src/skills.ts": 4,
     "src/store-cards.ts": 14,
-    "src/store-port.ts": 13,
     "src/support-bundle.ts": 1,
     "src/working-memory.ts": 3
   }

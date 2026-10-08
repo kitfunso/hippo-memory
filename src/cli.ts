@@ -42,6 +42,7 @@ import { repairCodexWrapperIfInstalled } from './hooks/codex-wrapper.js';
 import { getHippoRoot } from './store/open.js';
 import { cmdGithub, printGithubBackfillUsage } from './connectors/github/cli-impl.js';
 import { printError } from './cli/output.js';
+import { errorMessage, log } from './log.js';
 import { isStoreBusy, STORE_BUSY_MESSAGE } from './db/busy.js';
 import type { CommandContext } from './cli/shared.js';
 import { VERB_USAGE, USAGE_HEADER, USAGE_EXAMPLES, printAuditPruneUsage, printSlackBackfillUsage, printSlackWorkspacesUsage } from './cli/usage.js';
@@ -196,8 +197,8 @@ function maybeRepairCodexWrapper(currentCommand: string, flags: Record<string, s
   if (!shouldAutoRepairCodexWrapper(currentCommand, flags)) return;
   try {
     repairCodexWrapperIfInstalled();
-  } catch {
-    // best-effort only
+  } catch (err) {
+    log.debug(`codex wrapper not repaired: ${errorMessage(err)}`);
   }
 }
 

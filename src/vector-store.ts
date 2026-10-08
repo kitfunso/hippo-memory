@@ -115,51 +115,85 @@ export interface VectorRow {
 /** The `k` rows closest to `query` by cosine, best first; ties go to the smaller id, so row order never changes the top k.
  *  The query rounds to Float32 as stored vectors are, and scores add up in float64, so every store that feeds it the same bytes ranks alike. */
 export function rankVectorRows(query: readonly number[], rows: Iterable<VectorRow>, k: number): VectorMatch[] {
-  const top: VectorMatch[] = [];
-  if (k <= 0 || query.length === 0) return top;
+  const best = bestMatches(query, k);
+  if (!best) return [];
+  for (const { id, vector } of rows) best.offer(id, vector);
+  return best.top;
+}
+
+interface BestMatches {
+  readonly top: VectorMatch[];
+  /** Scores `v` at once, so the caller may overwrite it for the next row. */
+  offer(id: string, v: Float32Array): void;
+}
+
+// One scoring loop for rows in memory and rows streamed from the store, so the two can never rank apart.
+function bestMatches(query: readonly number[], k: number): BestMatches | null {
+  if (k <= 0 || query.length === 0) return null;
   const q = Float32Array.from(query);
   let qNorm = 0;
   for (let i = 0; i < q.length; i++) qNorm += q[i] * q[i];
   qNorm = Math.sqrt(qNorm);
-  if (qNorm < 1e-10) return top;
-  for (const { id, vector: v } of rows) {
-    if (v.length !== q.length) continue;
-    let dot = 0;
-    let norm = 0;
-    for (let i = 0; i < v.length; i++) {
-      dot += q[i] * v[i];
-      norm += v[i] * v[i];
-    }
-    if (norm < 1e-20) continue;
-    const score = dot / (qNorm * Math.sqrt(norm));
-    if (top.length === k && !beats(score, id, top[k - 1])) continue;
-    insertSorted(top, { id, score }, k);
-  }
-  return top;
+  if (qNorm < 1e-10) return null;
+  const top: VectorMatch[] = [];
+  return {
+    top,
+    offer(id, v) {
+      if (v.length !== q.length) return;
+      let dot = 0;
+      let norm = 0;
+      for (let i = 0; i < v.length; i++) {
+        dot += q[i] * v[i];
+        norm += v[i] * v[i];
+      }
+      if (norm < 1e-20) return;
+      const score = dot / (qNorm * Math.sqrt(norm));
+      if (top.length === k && !beats(score, id, top[k - 1])) return;
+      insertSorted(top, { id, score }, k);
+    },
+  };
 }
 
-function* decodedRows(rows: Iterable<{ id: string; vector: Uint8Array }>): Generator<VectorRow> {
-  for (const row of rows) yield { id: row.id, vector: decodeVector(row.vector) };
+/** Rows the nearest-vector scan scores between two turns of the event loop. */
+const VECTOR_SCAN_CHUNK = 256;
+
+function nextTurn(): Promise<void> {
+  return new Promise((resolve) => { setImmediate(resolve); });
 }
 
 /** The `k` stored vectors closest to `query` among `memories m` rows passing `where` (SQL starting with ` AND`).
  *  Filters run before the cut, so rows a caller may not see can never push admitted rows out of the top k. */
-export function topVectorMatches(
+export async function topVectorMatches(
   db: DatabaseSyncLike,
   query: readonly number[],
   k: number,
   where: string,
   params: readonly (string | number)[],
-): VectorMatch[] {
-  if (k <= 0 || query.length === 0) return [];
-  // SHORTCUT: brute-force cosine over every vector of matching dim, fine to ~100k rows; an ANN index (sqlite-vec, HNSW) is the upgrade.
+): Promise<VectorMatch[]> {
+  const best = bestMatches(query, k);
+  if (!best) return [];
+  // SHORTCUT: brute-force cosine over every admitted vector, a chunk per event-loop turn; latency still grows with rows, fine to ~100k, and an ANN index (sqlite-vec, HNSW) is the upgrade.
+  // SAFETY: the SELECT names exactly these two columns; node:sqlite returns BLOBs as Uint8Array.
   const rows = db.prepare(`
     SELECT v.memory_id AS id, v.vector AS vector
     FROM memory_vectors v JOIN memories m ON m.id = v.memory_id
     WHERE v.dim = ?${where}
-  `).iterate(query.length, ...params);
-  // SAFETY: the SELECT above names exactly these two columns; node:sqlite returns BLOBs as Uint8Array.
-  return rankVectorRows(query, decodedRows(rows as Iterable<{ id: string; vector: Uint8Array }>), k);
+  `).iterate(query.length, ...params) as Iterable<{ id: string; vector: Uint8Array }>;
+  const floats = new Float32Array(query.length);
+  const bytes = new Uint8Array(floats.buffer);
+  let scored = 0;
+  for (const row of rows) {
+    // The cursor stays open across the pause: under WAL a reader blocks no writer, and the scan keeps one snapshot.
+    if (scored > 0 && scored % VECTOR_SCAN_CHUNK === 0) await nextTurn();
+    scored++;
+    if (row.vector.byteLength === bytes.byteLength) {
+      bytes.set(row.vector);
+      best.offer(row.id, floats);
+    } else {
+      best.offer(row.id, decodeVector(row.vector));
+    }
+  }
+  return best.top;
 }
 
 // Ties break on id so the cut is the same on every run.

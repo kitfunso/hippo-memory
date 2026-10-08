@@ -220,8 +220,9 @@ export async function cmdSessionEnd(
     // An async spawn failure arrives as an 'error' event, which with no listener is an uncaught exception.
     child.on('error', (err) => log.warn(`hippo session-end: the worker did not start: ${errorMessage(err)}`));
     child.unref();
-  } catch {
-    // If spawn fails, run inline as a last resort, handed what the child's argv would have carried.
+  } catch (err) {
+    log.debug(`session-end: the worker did not spawn, running inline: ${errorMessage(err)}`);
+    // Inline is the last resort, handed what the child's argv would have carried.
     if (logFile) flags['log-file'] = logFile;
     if (transcriptPath) flags['transcript'] = transcriptPath;
     if (sessionId) flags['session-id'] = sessionId;
@@ -309,9 +310,9 @@ async function sleepProjectStore(
   if (isInitialized(hippoRoot)) {
     try {
       await (await import('./sleep.js')).cmdSleep(hippoRoot, flags);
-    } catch {
-      // sleep errors are already tee'd to the log file via cmdSleep's
-      // `[hippo] sleep failed: ...` line. Continue to capture regardless.
+    } catch (err) {
+      // cmdSleep writes its failure line only when it has a log file, and capture runs regardless.
+      log.debug(`session-end: sleep failed: ${errorMessage(err)}`);
     }
   } else {
     appendSessionEndCloseLog(closeLogFile, 'skip sleep: this folder has no store of its own', { startFresh: true });
@@ -391,8 +392,8 @@ function captureEndedSession(
       sessionTurns: turns,
     });
     return true;
-  } catch {
-    // Same treatment — the failure line is already in the log.
+  } catch (err) {
+    log.debug(`session-end: capture failed: ${errorMessage(err)}`);
     return false;
   }
 }
@@ -520,8 +521,8 @@ export function cmdCodexRun(
 
   try {
     cmdLastSleep(hippoRoot, { path: metadata.logFile }, 'terminal');
-  } catch {
-    // best-effort only
+  } catch (err) {
+    log.debug(`codex run: the last sleep summary was not shown: ${errorMessage(err)}`);
   }
 
   const child = spawnRealCodex(metadata.realCodexPath, args, process.cwd());
@@ -553,8 +554,8 @@ export function cmdCodexRun(
         windowsHide: true,
       });
       worker.unref();
-    } catch {
-      // Fall back to the inline path if the detached worker cannot be created.
+    } catch (err) {
+      log.debug(`codex run: the session-end worker did not spawn, running inline: ${errorMessage(err)}`);
       // Awaited so the sleep write can't be killed by the exit calls below.
       try {
         await cmdCodexSessionEndWorker(hippoRoot, {
@@ -564,8 +565,8 @@ export function cmdCodexRun(
           'started-at': String(startedAtMs),
           'log-file': metadata.logFile,
         });
-      } catch {
-        // cmdCodexSessionEndWorker already fail-softs internally; this is belt-and-braces.
+      } catch (inlineErr) {
+        log.debug(`codex run: the inline session-end failed: ${errorMessage(inlineErr)}`);
       }
     }
 
@@ -598,8 +599,8 @@ export async function cmdCodexSessionEndWorker(
   if (isInitialized(hippoRoot)) {
     try {
       await (await import('./sleep.js')).cmdSleep(hippoRoot, logFile ? { 'log-file': logFile } : {});
-    } catch {
-      // sleep errors are already written via cmdSleep
+    } catch (err) {
+      log.debug(`codex session-end: sleep failed: ${errorMessage(err)}`);
     }
   } else {
     appendSessionEndCloseLog(logFile ?? null, 'skip sleep: this folder has no store of its own', { startFresh: true });
@@ -641,13 +642,13 @@ export async function cmdCodexSessionEndWorker(
     };
     try {
       cmdCapture(store, captureOpts);
-    } catch {
-      // capture path logs its own failures
+    } catch (err) {
+      log.debug(`codex session-end: capture failed: ${errorMessage(err)}`);
     }
     // The Codex wrapper passes no session id, so the rollout file names the session.
     recordSessionDigest(hippoRoot, scan, { key: path.basename(transcriptPath, '.jsonl'), tenantId: resolveTenantId({}), log: digestLog });
-  } catch {
-    // capture path logs its own failures
+  } catch (err) {
+    log.debug(`codex session-end: transcript scan or digest failed: ${errorMessage(err)}`);
   }
 }
 
@@ -698,8 +699,9 @@ export async function handleCaptureError({ hippoRoot, flags }: CommandContext): 
       const failure = JSON.parse(payload) as JsonValue;
       await runHookWithStores(() => captureToolFailure(root, resolveTenantId({}), failure));
     }
-  } catch {
-    // A malformed payload or store error must never fail the agent's tool call.
+  } catch (err) {
+    // A malformed payload or store error must never fail the agent's tool call, so it is reported and dropped.
+    log.warn(`failure capture skipped: ${errorMessage(err)}`);
   }
 }
 

@@ -9,7 +9,7 @@ import { openHippoDb, closeHippoDb } from '../db.js';
 import { RejectedValueError, checkRejectionGuard } from '../rejection.js';
 import { loadConfig } from '../config.js';
 import { vetSecrets } from '../secret-detect.js';
-import { log } from '../log.js';
+import { errorMessage, log } from '../log.js';
 import { type ImportResult, type ImportOptions } from './core.js';
 import { parseFrontmatter, frontmatterList, parseWikilinks, collectMarkdownFiles, realpathOrResolve } from './markdown-parse.js';
 import { type JsonValue, isJsonString } from '../json.js';
@@ -295,10 +295,9 @@ function importVaultNote(run: VaultImportRun, relpath: string): void {
 function readVaultNote(run: VaultImportRun, relpath: string): string | null {
   try {
     return fs.readFileSync(path.join(run.folderPath, relpath), 'utf8');
-  } catch {
-    // File vanished between enumeration and read (TOCTOU), or a transient
-    // IO/permission error. Skip this one file rather than aborting the whole
-    // import (incl. the deletion-sync pass); an idempotent re-run picks it up.
+  } catch (err) {
+    // One unreadable note (gone since the listing, or a transient IO error) must not abort the import; a re-run picks it up.
+    log.debug(`vault note skipped: ${relpath}: ${errorMessage(err)}`);
     run.tally.skipped++;
     return null;
   }

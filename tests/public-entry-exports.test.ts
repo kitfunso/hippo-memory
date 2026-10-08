@@ -70,3 +70,92 @@ describe('package entry re-exports sleep', () => {
     expect(readFileSync(resolve(REPO_ROOT, 'dist', 'api', 'sleep.d.ts'), 'utf-8')).not.toMatch(/__phases|SleepPhases/);
   });
 });
+
+/** One line per initial letter, so a snapshot diff shows the one name that came or went. */
+function byInitial(names: readonly string[]): string {
+  const lines = new Map<string, string[]>();
+  for (const name of [...names].sort()) lines.set(name[0], [...(lines.get(name[0]) ?? []), name]);
+  return [...lines.values()].map((line) => line.join(' ')).join('\n');
+}
+
+// The one list of what the built package publishes at runtime: a name leaving an entry breaks an installed add-on.
+describe('published runtime exports', () => {
+  it('lists every name each package entry exports', () => {
+    const script = [
+      "import { readFileSync } from 'node:fs';",
+      "const subpaths = Object.keys(JSON.parse(readFileSync('package.json', 'utf-8')).exports);",
+      'const names = {};',
+      "for (const subpath of subpaths) names[subpath] = Object.keys(await import('hippo-memory' + subpath.slice(1)));",
+      'console.log(JSON.stringify(names));',
+    ].join('\n');
+    const names = importBuiltEntry<Record<string, string[]>>(script);
+    expect(Object.fromEntries(Object.entries(names).map(([subpath, list]) => [subpath, byInitial(list)]))).toMatchInlineSnapshot(`
+      {
+        ".": "AUDIT_OPS
+      CARD_LEASE_MS CARD_TRANSITIONS
+      DEFAULT_MAX_NEIGHBORS
+      Layer
+      MAX_HOPS
+      SNAPSHOT_AMBIENT_MAX_AGE_MS
+      WM_MAX_ENTRIES
+      addCardComment appendAuditEvent appendSessionEvent applyOutcome autoShare
+      blockCard buildSyntheticCorpus
+      calculateStrength captureError claimCard clearActiveTaskSnapshot closeHippoDb closeTaskSnapshotsForSession completeCard computeAmbientState computeSalience computeSchemaFit computeTemporalRange confidenceFacets consolidate cosineSimilarity createCard createMemory
+      deduplicateLesson deleteEntry detectRegressions detectTemporalDirection
+      embedAll embedMemory estimateTokens explainMatch extractLessons
+      fetchGitLog formatAmbientVector formatResult
+      generateId getEmbedding getGlobalRoot graphExpandRecall
+      heartbeatCard hybridSearch
+      importChatGPT importClaude importCursor importEntries importGenericFile importMarkdown importVault initGlobal initStore isCardStatus isEmbeddingAvailable isHandoffOutcome
+      listAuditEventsAfter listCards listMemoryConflicts listPeers listSessionEvents loadActiveTaskSnapshot loadAllEntries loadCard loadCardComments loadCardDeps loadCardRuns loadEmbeddingIndex loadFreshActiveTaskSnapshot loadHandoffById loadIndex loadLatestHandoff loadLatestHandoffForCard loadRecallSearchEntries loadSearchEntries loadSessionDecayContext
+      markRetrieved multihopSearch
+      openHippoDb openHippoDbReadOnly
+      partitionLessons physicsSearch promoteToGlobal
+      queryAuditEvents
+      readEntry rebuildIndex reclaimExpiredCards renderAmbientSummary replaceDetectedConflicts resolveConfidence resolveConflict resultToBaseline reviewCard runFeatureEval runWatched
+      saveActiveTaskSnapshot saveEmbeddingIndex saveSessionHandoff search searchBoth searchBothHybrid shareMemory sleep stampHandoffOutcome strengthBucket syncGlobalToLocal
+      temporalBoost textOverlap tokenize transferScore
+      wmClear wmFlush wmPush wmRead writeEntry writeSessionEndHandoff",
+        "./json-hooks": "installJsonHooks
+      readJsonFile resolveJsonHookPaths
+      uninstallJsonHooks
+      writeSettingsFile",
+        "./project-identity": "MAX_PROJECT_ALIASES MCP_PROJECT_SCOPED_HEADER
+      resolveProjectIdentity",
+        "./server": "BadRequestError
+      ConflictError
+      EMBEDDING_MODEL_META_KEY
+      ForbiddenError
+      HttpError
+      LOOPBACK_HOST_HEADER
+      NotFoundError
+      OTHER_STORE_MARKER OtherStoreFolderError
+      RECALL_DEFAULT_DENY_SCOPES RejectedValueError
+      SECRET_TAGS StoreBusyError
+      __resetSessionRecallHistoryHttp
+      authCreate authCreateSelf authRevoke
+      bindSessionOwner bufferToFloat32
+      captureFailureForCaller captureSessionTexts clientIpForRateLimit compactResumeForCaller
+      decodeVector
+      encodeVector entryAfterOutcome
+      float32ToBuffer ftsTermParts
+      hasGroup
+      isCrossSite isLoopback isReservedActor isSharedStore
+      ownScopeTouches ownerOrSubject
+      passesScopeFilterForRecall preCompactForCaller promptHookContext
+      rankVectorRows rarestFtsQuery rejectionDigest replacesIndex
+      saveCompactionItemsForCaller serve sessionEndHandoffForCaller sqliteStore
+      tallyAmbientEntries
+      withSqliteAllowed",
+        "./session-text": "COMPACTION_ITEM_MAX_CHARS COMPACTION_ITEM_ROW_CAP
+      WORKING_STATE_CAPS
+      collectHandoffEvidence collectSessionTurns compactSummaryBody
+      failureReport
+      lessonFromFailure
+      parseCompactionItems
+      scrubForSharing sessionTail
+      transcriptWorkingState",
+      }
+    `);
+  });
+});

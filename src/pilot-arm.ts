@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { loadConfig } from './config.js';
 import { execWithBusyRetry, HOOK_DB_WAIT_MS, scopedBusyWait, type DatabaseSyncLike } from './db.js';
 import { ledgerRoot, withLedgerDb, type LedgerRootOpts } from './ledger-db.js';
+import { errorMessage, log } from './log.js';
 import { recordTokenUse } from './token-ledger.js';
 
 export type PilotArm = 'hippo' | 'holdout';
@@ -50,8 +51,9 @@ export function ensurePilotArm(
     }
     db.exec('COMMIT');
     return stored ?? hashed;
-  } catch {
+  } catch (err) {
     // A prompt hook must not fail on pilot bookkeeping; concurrent callers still agree on the hash arm.
+    log.debug(`pilot arm not stored, using the hash arm: ${errorMessage(err)}`);
     if (began) {
       try { db.exec('ROLLBACK'); } catch { /* keep the hash arm */ }
     }

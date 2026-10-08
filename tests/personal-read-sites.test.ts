@@ -80,12 +80,12 @@ describe('owner-taking read sites', () => {
     expect(load(SCOPES.slack)).toEqual(['slack', 'team']);
   });
 
-  it('vector recall: A sees its row, B and no-owner do not', () => {
-    const load = (own?: string): string[] =>
-      keysOf(loadVectorCandidateEntries(root, QUERY, { tenantId: T, scope: recallScopeFilter(undefined, 'exact', own), includeSuperseded: false }));
-    expect(load(OWN_A)).toEqual(['a', 'team']);
-    expect(load(OWN_B)).toEqual(['b', 'team']);
-    expect(load()).toEqual(['team']);
+  it('vector recall: A sees its row, B and no-owner do not', async () => {
+    const load = async (own?: string): Promise<string[]> =>
+      keysOf(await loadVectorCandidateEntries(root, QUERY, { tenantId: T, scope: recallScopeFilter(undefined, 'exact', own), includeSuperseded: false }));
+    expect(await load(OWN_A)).toEqual(['a', 'team']);
+    expect(await load(OWN_B)).toEqual(['b', 'team']);
+    expect(await load()).toEqual(['team']);
   });
 
   it('context candidates: A sees its row, B and no-owner do not', () => {

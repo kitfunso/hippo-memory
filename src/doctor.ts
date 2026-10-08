@@ -18,6 +18,7 @@ import { isEmbeddingAvailable } from './local-embedding.js';
 import { CODEX_TRUST_LINE, claudeConfigDir, codexHomeDir, isCodexPresent, isJsonObject } from './hooks/shared.js';
 import { planProjectRepair } from './project-merge.js';
 import { resolveTenantId } from './tenant.js';
+import { errorMessage, log } from './log.js';
 import { readJsonFile, type JsonValue } from './json.js';
 
 /** Outcome of one check. `fail` makes `hippo doctor` exit 1. */
@@ -286,7 +287,8 @@ function tokensCheck(db: DatabaseSyncLike, since: string): DoctorCheck {
       status: 'info',
       detail: `${Number(row?.n ?? 0)} memory blocks sent to agents in 7 days, about ${Number(row?.t ?? 0)} tokens sent and ${Number(row?.r ?? 0)} re-read by later model calls (hippo tokens for detail)`,
     };
-  } catch {
+  } catch (err) {
+    log.debug(`doctor: token ledger not read: ${errorMessage(err)}`);
     return { id: 'tokens', status: 'info', detail: 'no token ledger yet (created on the next write)' };
   }
 }

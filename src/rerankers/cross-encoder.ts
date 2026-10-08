@@ -1,7 +1,8 @@
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
+import { createOutageWarning } from './outage-warning.js';
 import type { RerankerFn, RerankResult, RerankerOptions } from './types.js';
-import { log } from '../log.js';
+import { errorMessage, log } from '../log.js';
 
 const MODEL_NAME = 'Xenova/ms-marco-MiniLM-L-6-v2';
 
@@ -70,7 +71,7 @@ async function loadTransformersModule(): Promise<Required<TransformersExports> |
 
 type CrossEncoderFn = (query: string, candidate: string) => Promise<number>;
 let pipelineLoading: Promise<CrossEncoderFn | null> | null = null;
-let warnedOnFallback = false;
+const outage = createOutageWarning('cross-encoder', 'falling back to identity ordering');
 
 /**
  * True if a Transformers.js backend is importable. Note: this does NOT confirm
@@ -133,14 +134,8 @@ export const crossEncoderReranker: RerankerFn = async (
 
   const pipe = await loadPipeline();
   if (!pipe) {
-    // Warn once per process: a silent identity fallback otherwise reads as a
-    // working reranker.
-    if (!warnedOnFallback) {
-      warnedOnFallback = true;
-      log.warn(
-        'cross-encoder reranker unavailable (no Transformers.js backend, or model fetch blocked); falling back to identity ordering. Subsequent calls will not repeat this warning.',
-      );
-    }
+    // A silent identity fallback otherwise reads as a working reranker.
+    outage.failed('no Transformers.js backend, or model fetch blocked');
     return head.map((r, i) => ({
       ...r,
       rerankScore: r.score,
@@ -148,14 +143,16 @@ export const crossEncoderReranker: RerankerFn = async (
       postRerankRank: i + 1,
     }));
   }
+  outage.answered();
 
   const scored = await Promise.all(
     head.map(async (r, i) => {
       let ceScore: number;
       try {
         ceScore = await pipe(query, r.entry.content);
-      } catch {
+      } catch (err) {
         // One bad inference must not sink the whole pass.
+        log.debug(`cross-encoder inference failed, keeping the base score: ${errorMessage(err)}`);
         ceScore = r.score;
       }
       return {

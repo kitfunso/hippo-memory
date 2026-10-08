@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { mkdtempSync, rmSync, mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { request as httpRequest } from 'node:http';
 import { tmpdir } from 'node:os';
@@ -144,6 +144,22 @@ describe('server lifecycle', () => {
     await handle.stop();
     await expect(handle.stop()).resolves.toBeUndefined();
     rmSync(home, { recursive: true, force: true });
+  });
+
+  it('logs a listener error raised after boot and keeps serving', async () => {
+    const home = makeRoot();
+    const handle = await serve({ hippoRoot: home, port: 0 });
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      // What Node emits when accept() fails, as it does when the process runs out of file descriptors.
+      handle.server?.emit('error', Object.assign(new Error('accept EMFILE'), { code: 'EMFILE' }));
+      expect(stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).toMatch(/^\[hippo\] error: serve: listener error: accept EMFILE /);
+      expect((await fetch(`${handle.url}/health`)).status).toBe(200);
+    } finally {
+      stderr.mockRestore();
+      await handle.stop();
+      rmSync(home, { recursive: true, force: true });
+    }
   });
 
   it('full lifecycle: start, health, stop, second start succeeds', async () => {

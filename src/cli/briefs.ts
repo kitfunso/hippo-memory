@@ -8,6 +8,7 @@ import * as customerNotesModule from '../customer-notes.js';
 import { extractGraph } from '../graph-extract.js';
 import { buildGraphModel, renderGraphHtml, renderGraphCanvas, DEFAULT_VIEW_LIMIT } from '../graph-view.js';
 import { resolveTenantId } from '../tenant.js';
+import { errorMessage, log } from '../log.js';
 import { printError } from './output.js';
 import { requireInit, type CliFlags } from './shared.js';
 
@@ -284,8 +285,9 @@ function openInBrowser(out: string): void {
     // already written and its path printed above.
     child.on('error', () => { /* best-effort launch */ });
     child.unref();
-  } catch {
-    /* ignore — the file is written; the path is printed above */
+  } catch (err) {
+    // The file is written and its path printed above, so a browser that will not start costs nothing.
+    log.debug(`browser not opened: ${errorMessage(err)}`);
   }
 }
 

@@ -1,5 +1,6 @@
 // The store the token ledger writes to for a caller's root; context, recall and the session hooks share it.
 import { closeHippoDb, isSqliteBusy, noteStoreBusy, openHippoDb } from './db.js';
+import { errorMessage, log } from './log.js';
 import { getGlobalRoot } from './shared.js';
 import { isInitialized } from './store/open.js';
 
@@ -21,8 +22,9 @@ export function withLedgerDb<T>(hippoRoot: string, fn: (db: ReturnType<typeof op
   let root: string | null = null;
   try {
     root = ledgerRoot(hippoRoot, opts);
-  } catch {
+  } catch (error) {
     // An unreadable store root means no ledger write; the ledger must never break context or recall.
+    log.debug(`token ledger skipped, store root unreadable: ${errorMessage(error)}`);
     return undefined;
   }
   if (root === null) return undefined;
@@ -33,6 +35,7 @@ export function withLedgerDb<T>(hippoRoot: string, fn: (db: ReturnType<typeof op
   } catch (error) {
     // Best effort, but a busy store is the one failure an operator can act on, so it warns once.
     if (isSqliteBusy(error)) noteStoreBusy('token ledger row skipped');
+    else log.debug(`token ledger row skipped: ${errorMessage(error)}`);
     return undefined;
   } finally {
     if (db) closeHippoDb(db);
