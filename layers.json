@@ -129,7 +129,7 @@
     "raw-archive-mirror-cleanup.ts": "db",
     "raw-archive.ts": "store",
     "recall-history.ts": "api",
-    "recall-pipeline.ts": "surface",
+    "recall-pipeline.ts": "api",
     "recall-scope.ts": "store",
     "recall-trace.ts": "store",
     "refine-llm.ts": "surface",
