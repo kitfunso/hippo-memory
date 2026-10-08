@@ -106,47 +106,20 @@ function pairKey(a: string, b: string): string {
   return a < b ? `${a}:${b}` : `${b}:${a}`;
 }
 
-/**
- * Load a type's ACTIVE + SUPERSEDED rows (excluding `closed` = retired), normalised.
- * Calls the loader once per status so MAX_EXTRACT_PER_TYPE is a per-status budget
- * (closed rows never consume it). Sets `hitCap` when either status load is full.
- */
-function loadType(
-  hippoRoot: string,
-  tenantId: string,
-  entityType: EntityType,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  loadFn: (root: string, tenant: string, opts: any) => any[],
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  nameOf: (row: any) => string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  textOf: (row: any) => string,
-): LoadedType {
-  const rows: ExtractRow[] = [];
-  let hitCap = false;
-  for (const status of ['active', 'superseded'] as const) {
-    const loaded = loadFn(hippoRoot, tenantId, { status, limit: MAX_EXTRACT_PER_TYPE });
-    if (loaded.length === MAX_EXTRACT_PER_TYPE) hitCap = true;
-    for (const r of loaded) {
-      // SAFETY: loadFn is always one of loadDecisions/loadPolicies/loadCustomerNotes/
-      // loadProjectBriefs (wired in GRAPH_SOURCES); every one of their row
-      // types declares id: number, memoryId: string | null, supersededBy: number | null.
-      // `any` here is the deliberate type-erasure boundary (see eslint-disable above)
-      // that lets one loop handle all four object row shapes.
-      rows.push({
-        entityType,
-        e2Id: r.id as number,
-        name: nameOf(r),
-        searchText: textOf(r),
-        memoryId: (r.memoryId ?? null) as string | null,
-        supersededBy: (r.supersededBy ?? null) as number | null,
-      });
-    }
-  }
-  return { entityType, rows, hitCap };
+/** The row fields extraction reads; every object loader's row type declares them. */
+interface SourceRow {
+  id: number;
+  memoryId: string | null;
+  supersededBy: number | null;
 }
 
-/** One object type's loaded rows. */
+/** The slice of each loader's options extraction uses, assignable to every loader's own. */
+interface SourceLoadOpts {
+  status: 'active' | 'superseded';
+  limit: number;
+}
+
+/** One object type's rows, loaded and normalised. */
 export interface LoadedType {
   entityType: EntityType;
   rows: ExtractRow[];
@@ -154,25 +127,42 @@ export interface LoadedType {
   hitCap: boolean;
 }
 
-const GRAPH_SOURCES: Array<{
-  entityType: EntityType;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  loadFn: (root: string, tenant: string, opts: any) => any[];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  nameOf: (row: any) => string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  textOf: (row: any) => string;
-}> = [
-  { entityType: 'decision', loadFn: loadDecisions, nameOf: (r) => r.decisionText, textOf: (r) => [r.decisionText, r.context].filter(Boolean).join(' ') },
-  { entityType: 'policy', loadFn: loadPolicies, nameOf: (r) => r.policyName, textOf: (r) => [r.policyName, r.policyText].filter(Boolean).join(' ') },
-  { entityType: 'customer', loadFn: loadCustomerNotes, nameOf: (r) => r.customer, textOf: (r) => [r.customer, r.note].filter(Boolean).join(' ') },
-  { entityType: 'project', loadFn: loadProjectBriefs, nameOf: (r) => r.repo, textOf: (r) => [r.repo, r.summary].filter(Boolean).join(' ') },
+/**
+ * Close over one loader's row type so the table below holds uniform functions without erasing it.
+ * Loads ACTIVE + SUPERSEDED rows (excluding `closed` = retired) in one call per status, so
+ * MAX_EXTRACT_PER_TYPE is a per-status budget; `hitCap` is set when either load is full.
+ */
+function source<T extends SourceRow>(
+  entityType: EntityType,
+  load: (root: string, tenant: string, opts: SourceLoadOpts) => T[],
+  nameOf: (row: T) => string,
+  textOf: (row: T) => string,
+): (hippoRoot: string, tenantId: string) => LoadedType {
+  return (hippoRoot, tenantId) => {
+    const rows: ExtractRow[] = [];
+    let hitCap = false;
+    for (const status of ['active', 'superseded'] as const) {
+      const loaded = load(hippoRoot, tenantId, { status, limit: MAX_EXTRACT_PER_TYPE });
+      if (loaded.length === MAX_EXTRACT_PER_TYPE) hitCap = true;
+      for (const r of loaded) {
+        rows.push({ entityType, e2Id: r.id, name: nameOf(r), searchText: textOf(r), memoryId: r.memoryId, supersededBy: r.supersededBy });
+      }
+    }
+    return { entityType, rows, hitCap };
+  };
+}
+
+const GRAPH_SOURCES: ReadonlyArray<(hippoRoot: string, tenantId: string) => LoadedType> = [
+  source('decision', loadDecisions, (r) => r.decisionText, (r) => [r.decisionText, r.context].filter(Boolean).join(' ')),
+  source('policy', loadPolicies, (r) => r.policyName, (r) => [r.policyName, r.policyText].filter(Boolean).join(' ')),
+  source('customer', loadCustomerNotes, (r) => r.customer, (r) => [r.customer, r.note].filter(Boolean).join(' ')),
+  source('project', loadProjectBriefs, (r) => r.repo, (r) => [r.repo, r.summary].filter(Boolean).join(' ')),
 ];
 
 /** Every source type's rows, each read on its own connection; callers load before any write lock is taken. */
 export function loadGraphSources(hippoRoot: string, tenantId: string): LoadedType[] {
   assertTenantId('loadGraphSources', tenantId);
-  return GRAPH_SOURCES.map((src) => loadType(hippoRoot, tenantId, src.entityType, src.loadFn, src.nameOf, src.textOf));
+  return GRAPH_SOURCES.map((load) => load(hippoRoot, tenantId));
 }
 
 /** The graph the loaded objects imply, plus the counts ExtractResult reports. */
