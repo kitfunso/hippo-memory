@@ -1,4 +1,4 @@
-// Every API response carries an X-Request-Id: the caller's when it is a sane token, else a fresh one.
+// Every API response carries an X-Request-Id, the caller's when it is a sane token, else a fresh one, and tells a browser not to guess its type.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { request } from 'node:http';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -11,13 +11,14 @@ let home: string;
 let handle: ServerHandle;
 let savedLevel: string | undefined;
 
-function send(path: string, headers: Record<string, string> = {}): Promise<{ status: number; requestId: string | undefined }> {
+function send(path: string, headers: Record<string, string> = {}): Promise<{ status: number; requestId: string | undefined; sniffing: string | undefined }> {
   return new Promise((resolve, reject) => {
     const req = request({ host: '127.0.0.1', port: handle.port, method: 'GET', path, headers }, (res) => {
       res.resume();
       res.on('end', () => {
         const id = res.headers['x-request-id'];
-        resolve({ status: res.statusCode ?? 0, requestId: Array.isArray(id) ? id[0] : id });
+        const sniffing = res.headers['x-content-type-options'];
+        resolve({ status: res.statusCode ?? 0, requestId: Array.isArray(id) ? id[0] : id, sniffing: Array.isArray(sniffing) ? sniffing[0] : sniffing });
       });
     });
     req.on('error', reject);
@@ -38,6 +39,13 @@ afterEach(async () => {
   rmSync(home, { recursive: true, force: true });
   if (savedLevel === undefined) delete process.env.HIPPO_LOG;
   else process.env.HIPPO_LOG = savedLevel;
+});
+
+describe('X-Content-Type-Options', () => {
+  it('is nosniff on data, refused and unknown-route replies, since memory text is caller-written', async () => {
+    const replies = [await send('/v1/memories?q=x'), await send('/v1/memories?q=x', { authorization: 'Bearer hk_not_a_real_key' }), await send('/nope')];
+    expect(replies.map((r) => [r.status, r.sniffing])).toEqual([[200, 'nosniff'], [401, 'nosniff'], [404, 'nosniff']]);
+  });
 });
 
 describe('X-Request-Id', () => {

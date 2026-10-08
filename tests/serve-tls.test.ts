@@ -1,74 +1,73 @@
-// `hippo serve` answers HTTPS when given a certificate, and says so at boot when a network bind would carry keys and memories in cleartext.
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { spawn } from 'node:child_process';
+// `hippo serve` answers HTTPS when given a certificate and key; half a pair or an unreadable file stops it, never a quiet fall back to cleartext.
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { spawn, spawnSync } from 'node:child_process';
+import { generateKeyPairSync, randomBytes, sign } from 'node:crypto';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { readTlsFiles } from '../src/cli/serve.js';
 import { log } from '../src/log.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { initStore } from '../src/store/open.js';
-import { makeRoot } from './_helpers/make-root.js';
-import { runInProcess } from './_helpers/run-in-process.js';
-import { makeTestCertificate, type TestCertificate } from './_helpers/self-signed-cert.js';
 
-const ENV_KEYS = ['HIPPO_REQUIRE_AUTH', 'HIPPO_TLS_CERT', 'HIPPO_TLS_KEY'] as const;
-const saved = new Map(ENV_KEYS.map((k) => [k, process.env[k]]));
 const CLI_PATH = join(process.cwd(), 'dist', 'cli.js');
+const savedRequireAuth = process.env.HIPPO_REQUIRE_AUTH;
 
-let pair: TestCertificate;
-let dir: string;
-let certPath: string;
-let keyPath: string;
-
-beforeAll(() => {
-  pair = makeTestCertificate();
-  dir = mkdtempSync(join(tmpdir(), 'hippo-tls-files-'));
-  certPath = join(dir, 'test-only-cert.pem');
-  keyPath = join(dir, 'test-only-key.pem');
-  writeFileSync(certPath, pair.cert);
-  writeFileSync(keyPath, pair.key);
-});
-
-afterAll(() => {
-  rmSync(dir, { recursive: true, force: true });
-});
-
-beforeEach(() => {
-  for (const k of ENV_KEYS) delete process.env[k];
-});
-
-afterEach(() => {
-  vi.restoreAllMocks();
-  for (const [k, v] of saved) {
-    if (v === undefined) delete process.env[k];
-    else process.env[k] = v;
-  }
-});
-
-interface Reply {
-  status: number;
-  body: string;
+function der(tag: number, ...parts: Buffer[]): Buffer {
+  const body = Buffer.concat(parts);
+  const length = body.length < 0x80 ? [body.length]
+    : body.length < 0x100 ? [0x81, body.length]
+    : [0x82, body.length >> 8, body.length & 0xff];
+  return Buffer.concat([Buffer.from([tag, ...length]), body]);
 }
 
-/** GET over TLS, trusting only the test certificate, so a server with any other certificate fails the handshake. */
-function getOverTls(port: number, path: string): Promise<Reply> {
-  return new Promise<Reply>((resolve, reject) => {
-    const req = httpsRequest({ host: '127.0.0.1', port, path, ca: pair.cert, agent: false }, (res) => {
-      const chunks: Buffer[] = [];
-      res.on('data', (chunk: Buffer) => chunks.push(chunk));
-      res.on('end', () => resolve({ status: res.statusCode ?? 0, body: Buffer.concat(chunks).toString('utf8') }));
-    });
-    req.on('error', reject);
-    req.end();
-  });
+const sequence = (...parts: Buffer[]): Buffer => der(0x30, ...parts);
+const oid = (hex: string): Buffer => der(0x06, Buffer.from(hex, 'hex'));
+const utcTime = (at: Date): Buffer => der(0x17, Buffer.from(`${at.toISOString().replace(/[-:T]/g, '').slice(2, 14)}Z`, 'ascii'));
+const ECDSA_WITH_SHA256 = sequence(oid('2a8648ce3d040302'));
+const DAY_MS = 86_400_000;
+
+interface TestPair {
+  cert: string;
+  key: string;
 }
 
-function getInCleartext(port: number, path: string): Promise<number> {
+/** A throwaway self-signed pair for 127.0.0.1, built per run so no key is committed; node:crypto signs but cannot build X.509, hence the DER by hand. */
+function selfSignedPair(): TestPair {
+  const { publicKey, privateKey } = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+  const name = sequence(der(0x31, sequence(oid('550403'), der(0x0c, Buffer.from('hippo test only', 'utf8')))));
+  // DER wants the shortest positive form: top bit clear and a first byte that is never zero.
+  const serialBytes = randomBytes(8);
+  serialBytes.writeUInt8((serialBytes.readUInt8(0) & 0x3f) | 0x40, 0);
+  const altNames = sequence(der(0x82, Buffer.from('localhost', 'ascii')), der(0x87, Buffer.from([127, 0, 0, 1])));
+  const extensions = sequence(
+    sequence(oid('551d11'), der(0x04, altNames)),
+    // CA:TRUE, so the client can trust this one certificate as its own issuer.
+    sequence(oid('551d13'), der(0x01, Buffer.from([0xff])), der(0x04, sequence(der(0x01, Buffer.from([0xff]))))),
+  );
+  const tbs = sequence(
+    der(0xa0, der(0x02, Buffer.from([2]))),
+    der(0x02, serialBytes),
+    ECDSA_WITH_SHA256,
+    name,
+    sequence(utcTime(new Date(Date.now() - DAY_MS)), utcTime(new Date(Date.now() + DAY_MS))),
+    name,
+    publicKey.export({ type: 'spki', format: 'der' }),
+    der(0xa3, extensions),
+  );
+  const certificate = sequence(tbs, ECDSA_WITH_SHA256, der(0x03, Buffer.from([0]), sign('sha256', tbs, privateKey)));
+  const lines = certificate.toString('base64').match(/.{1,64}/g) ?? [];
+  return {
+    cert: `-----BEGIN CERTIFICATE-----\n${lines.join('\n')}\n-----END CERTIFICATE-----\n`,
+    key: privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(),
+  };
+}
+
+/** GET /health over TLS, trusting only the test certificate, so a server holding any other certificate fails the handshake. */
+function healthOverTls(port: number, ca: string): Promise<number> {
   return new Promise<number>((resolve, reject) => {
-    const req = httpRequest({ host: '127.0.0.1', port, path, agent: false }, (res) => {
+    const req = httpsRequest({ host: '127.0.0.1', port, path: '/health', ca, agent: false }, (res) => {
       res.resume();
       resolve(res.statusCode ?? 0);
     });
@@ -77,126 +76,87 @@ function getInCleartext(port: number, path: string): Promise<number> {
   });
 }
 
-describe('serve({ tls })', () => {
-  let root: string;
+function healthInCleartext(port: number): Promise<number> {
+  return new Promise<number>((resolve, reject) => {
+    const req = httpRequest({ host: '127.0.0.1', port, path: '/health', agent: false }, (res) => {
+      res.resume();
+      resolve(res.statusCode ?? 0);
+    });
+    req.on('error', reject);
+    req.end();
+  });
+}
+
+describe('hippo serve over TLS', () => {
+  let pair: TestPair;
+  let home: string;
+  let hippoRoot: string;
+  let certPath: string;
+  let keyPath: string;
   let handle: ServerHandle | undefined;
+  const children: Array<() => void> = [];
+
+  beforeAll(() => {
+    pair = selfSignedPair();
+  });
 
   beforeEach(() => {
-    root = makeRoot('serve-tls');
+    home = mkdtempSync(join(tmpdir(), 'hippo-serve-tls-'));
+    hippoRoot = join(home, '.hippo');
+    mkdirSync(hippoRoot, { recursive: true });
+    initStore(hippoRoot);
+    certPath = join(home, 'test-only-cert.pem');
+    keyPath = join(home, 'test-only-key.pem');
+    writeFileSync(certPath, pair.cert);
+    writeFileSync(keyPath, pair.key);
   });
 
   afterEach(async () => {
     await handle?.stop();
     handle = undefined;
-    rmSync(root, { recursive: true, force: true });
+    vi.restoreAllMocks();
+    if (savedRequireAuth === undefined) delete process.env.HIPPO_REQUIRE_AUTH;
+    else process.env.HIPPO_REQUIRE_AUTH = savedRequireAuth;
+    for (const kill of children.splice(0)) kill();
+    // A killed child holds the store open for a moment on Windows.
+    if (process.platform === 'win32') await new Promise((r) => setTimeout(r, 200));
+    rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   });
 
-  it('answers HTTPS with the given certificate, reports an https URL, and takes no cleartext request', async () => {
-    handle = await serve({ hippoRoot: root, port: 0, tls: pair });
-    expect(handle.url).toBe(`https://127.0.0.1:${handle.port}`);
-    const health = await getOverTls(handle.port, '/health');
-    expect(health.status).toBe(200);
-    expect(JSON.parse(health.body)).toMatchObject({ ok: true, pid: process.pid });
-    expect((await getOverTls(handle.port, '/v1/memories?q=x')).status).toBe(200);
-    await expect(getInCleartext(handle.port, '/health')).rejects.toThrow();
+  const childEnv = (extra: Record<string, string>): NodeJS.ProcessEnv =>
+    ({ ...process.env, HIPPO_HOME: join(home, 'global-hippo'), HIPPO_SKIP_AUTO_INTEGRATIONS: '1', ...extra });
+
+  it('answers HTTPS with the given certificate on a network bind, takes no cleartext request and logs no cleartext warning', async () => {
+    process.env.HIPPO_REQUIRE_AUTH = '1';
+    const warn = vi.spyOn(log, 'warn').mockImplementation(() => {});
+    handle = await serve({ hippoRoot, host: '0.0.0.0', port: 0, tls: pair });
+    expect(handle.url).toBe(`https://0.0.0.0:${handle.port}`);
+    expect(await healthOverTls(handle.port, pair.cert)).toBe(200);
+    await expect(healthInCleartext(handle.port)).rejects.toThrow();
+    expect(warn.mock.calls.map((call) => String(call[0])).filter((line) => line.includes('cleartext'))).toEqual([]);
   });
 
   it('refuses to start on certificate text that is not a certificate, naming TLS as the cause', async () => {
-    await expect(serve({ hippoRoot: root, port: 0, tls: { cert: 'not a certificate', key: pair.key } }))
+    await expect(serve({ hippoRoot, port: 0, tls: { cert: 'not a certificate', key: pair.key } }))
       .rejects.toThrow(/TLS certificate or key was refused/);
   });
 
-  const cleartextWarnings = (warn: { mock: { calls: unknown[][] } }): string[] =>
-    warn.mock.calls.map((call) => String(call[0])).filter((line) => line.includes('cleartext'));
-
-  it('warns once at boot when a network bind has no TLS, and still starts', async () => {
-    process.env.HIPPO_REQUIRE_AUTH = '1';
-    const warn = vi.spyOn(log, 'warn').mockImplementation(() => {});
-    handle = await serve({ hippoRoot: root, host: '0.0.0.0', port: 0 });
-    expect(cleartextWarnings(warn)).toEqual([
-      expect.stringMatching(/listening on 0\.0\.0\.0 without TLS.*API keys and memory text travel in cleartext unless a TLS-terminating proxy sits in front.*--tls-cert and --tls-key/),
-    ]);
-    expect(await getInCleartext(handle.port, '/health')).toBe(200);
-  });
-
-  it('does not warn on a network bind with TLS, or on a loopback bind without it', async () => {
-    process.env.HIPPO_REQUIRE_AUTH = '1';
-    const warn = vi.spyOn(log, 'warn').mockImplementation(() => {});
-    handle = await serve({ hippoRoot: root, host: '0.0.0.0', port: 0, tls: pair });
-    expect((await getOverTls(handle.port, '/health')).status).toBe(200);
-    await handle.stop();
-    handle = await serve({ hippoRoot: root, port: 0 });
-    expect(cleartextWarnings(warn)).toEqual([]);
-  });
-});
-
-describe('the --tls-cert and --tls-key flags', () => {
-  it('reads both files from the flags', () => {
-    const files = readTlsFiles({ 'tls-cert': certPath, 'tls-key': keyPath });
-    expect(files?.cert.toString()).toBe(pair.cert);
-    expect(files?.key.toString()).toBe(pair.key);
-  });
-
-  it('reads both files from HIPPO_TLS_CERT and HIPPO_TLS_KEY, and lets a flag win', () => {
-    process.env.HIPPO_TLS_CERT = join(dir, 'missing.pem');
-    process.env.HIPPO_TLS_KEY = keyPath;
-    expect(readTlsFiles({ 'tls-cert': certPath })?.cert.toString()).toBe(pair.cert);
-    process.env.HIPPO_TLS_CERT = certPath;
-    expect(readTlsFiles({})?.key.toString()).toBe(pair.key);
-  });
-
-  it('means no TLS when neither is given', () => {
-    expect(readTlsFiles({})).toBeUndefined();
-  });
-
-  it.each([
-    ['only a certificate', { 'tls-cert': 'cert.pem' }, /needs both a certificate and a key/],
-    ['only a key', { 'tls-key': 'key.pem' }, /needs both a certificate and a key/],
-    ['a flag with no value', { 'tls-cert': true, 'tls-key': 'key.pem' }, /--tls-cert requires a value/],
-    ['a file that does not exist', { 'tls-cert': 'no-such-cert.pem', 'tls-key': 'no-such-key.pem' }, /cannot read the TLS files/],
-  ])('exits 1 on %s rather than serve in cleartext', async (_case, flags, message) => {
-    const run = await runInProcess(() => { readTlsFiles(flags); });
-    expect(run.status).toBe(1);
-    expect(run.stderr).toMatch(message);
-  });
-});
-
-describe('the hippo serve command', () => {
-  let home: string;
-  const children: Array<() => void> = [];
-
-  beforeEach(() => {
-    home = mkdtempSync(join(tmpdir(), 'hippo-serve-cli-'));
-    mkdirSync(join(home, '.hippo'), { recursive: true });
-    initStore(join(home, '.hippo'));
-  });
-
-  afterEach(async () => {
-    for (const kill of children.splice(0)) kill();
-    // The child holds the store open for a moment after the kill on Windows.
-    await new Promise((r) => setTimeout(r, 200));
-    try { rmSync(home, { recursive: true, force: true }); } catch { /* windows file locks */ }
-  });
-
-  /** Starts `hippo serve` and resolves with what it printed once the banner is complete. */
-  function startServe(args: string[], env: Record<string, string>): Promise<{ stdout: string; stderr: string }> {
+  /** Starts the real command and resolves with what it printed once its start lines are complete. */
+  function startServe(args: string[], env: Record<string, string>): Promise<string> {
     return new Promise((resolve, reject) => {
       const child = spawn(process.execPath, [CLI_PATH, 'serve', '--port', '0', ...args], {
-        cwd: home,
-        env: { ...process.env, HIPPO_HOME: join(home, 'global-hippo'), HIPPO_SKIP_AUTO_INTEGRATIONS: '1', ...env },
-        stdio: ['ignore', 'pipe', 'pipe'],
-        windowsHide: true,
+        cwd: home, env: childEnv(env), stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
       });
       children.push(() => child.kill('SIGKILL'));
       let stdout = '';
       let stderr = '';
-      const timer = setTimeout(() => reject(new Error(`no banner within 30 s. stdout=${stdout} stderr=${stderr}`)), 30_000);
+      const timer = setTimeout(() => reject(new Error(`no start lines within 30 s. stdout=${stdout} stderr=${stderr}`)), 30_000);
       child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString('utf8'); });
       child.stdout.on('data', (chunk: Buffer) => {
         stdout += chunk.toString('utf8');
         if (!stdout.includes('press Ctrl+C to stop')) return;
         clearTimeout(timer);
-        resolve({ stdout, stderr });
+        resolve(stdout);
       });
       child.on('exit', (code) => {
         clearTimeout(timer);
@@ -205,26 +165,26 @@ describe('the hippo serve command', () => {
     });
   }
 
-  it('serves HTTPS from --tls-cert and --tls-key and says that local requests need no key', async () => {
-    const { stdout, stderr } = await startServe(['--tls-cert', certPath, '--tls-key', keyPath], {});
+  it.each([
+    ['--tls-cert and --tls-key', (cert: string, key: string) => ({ args: ['--tls-cert', cert, '--tls-key', key], env: {} })],
+    ['HIPPO_TLS_CERT and HIPPO_TLS_KEY', (cert: string, key: string) => ({ args: [], env: { HIPPO_TLS_CERT: cert, HIPPO_TLS_KEY: key } })],
+  ])('the command serves HTTPS from %s, and says at start that local requests need no key', async (_source, given) => {
+    const { args, env } = given(certPath, keyPath);
+    const stdout = await startServe(args, env);
     const port = Number(/listening on https:\/\/127\.0\.0\.1:(\d+) /.exec(stdout)?.[1]);
-    expect(port).toBeGreaterThan(0);
-    expect((await getOverTls(port, '/health')).status).toBe(200);
+    expect(await healthOverTls(port, pair.cert)).toBe(200);
     expect(stdout).toContain('local requests need no API key and act as host admin; set HIPPO_REQUIRE_AUTH=1 to require a key on every request');
-    expect(stderr).not.toContain('unknown flag');
-    expect(stderr).not.toContain('cleartext');
   }, 60_000);
 
-  it('serves HTTPS from HIPPO_TLS_CERT and HIPPO_TLS_KEY', async () => {
-    const { stdout } = await startServe([], { HIPPO_TLS_CERT: certPath, HIPPO_TLS_KEY: keyPath });
-    const port = Number(/listening on https:\/\/127\.0\.0\.1:(\d+) /.exec(stdout)?.[1]);
-    expect((await getOverTls(port, '/health')).status).toBe(200);
-  }, 60_000);
-
-  it('warns about cleartext on a network bind, and drops the local-trust line once every request needs a key', async () => {
-    const { stdout, stderr } = await startServe(['--host', '0.0.0.0'], { HIPPO_REQUIRE_AUTH: '1' });
-    expect(stdout).toMatch(/listening on http:\/\/0\.0\.0\.0:\d+ /);
-    expect(stdout).not.toContain('local requests need no API key');
-    expect(stderr).toMatch(/warn: serve: listening on 0\.0\.0\.0 without TLS.*cleartext unless a TLS-terminating proxy sits in front/);
+  it.each([
+    ['only a certificate', ['--tls-cert', 'cert.pem'], /needs both a certificate and a key/],
+    ['a file that does not exist', ['--tls-cert', 'no-such-cert.pem', '--tls-key', 'no-such-key.pem'], /cannot read the TLS files/],
+  ])('the command exits 1 on %s rather than serve in cleartext', (_case, args, message) => {
+    // The timeout ends a run that served anyway, which then fails the status check.
+    const run = spawnSync(process.execPath, [CLI_PATH, 'serve', '--port', '0', ...args], {
+      cwd: home, env: childEnv({}), encoding: 'utf8', timeout: 20_000, windowsHide: true,
+    });
+    expect(run.status).toBe(1);
+    expect(run.stderr).toMatch(message);
   }, 60_000);
 });

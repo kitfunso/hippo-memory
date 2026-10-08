@@ -16,13 +16,14 @@
 // makeEnv: the store root passed to initStore/serve IS the .hippo directory
 // itself, not its parent.
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { createApiKey } from '../src/auth.js';
+import { log } from '../src/log.js';
 import { serve, type ServerHandle } from '../src/server.js';
 
 describe('serve() non-loopback host guard', () => {
@@ -59,6 +60,21 @@ describe('serve() non-loopback host guard', () => {
     handle = await serve({ hippoRoot, host: '127.0.0.1', port: 0 });
     const res = await fetch(`http://127.0.0.1:${handle.port}/health`);
     expect(res.status).toBe(200);
+  });
+
+  it('warns once at start that a network bind without TLS is cleartext, and stays quiet on loopback', async () => {
+    process.env.HIPPO_REQUIRE_AUTH = '1';
+    const warn = vi.spyOn(log, 'warn').mockImplementation(() => {});
+    try {
+      handle = await serve({ hippoRoot, host: '0.0.0.0', port: 0 });
+      await handle.stop();
+      handle = await serve({ hippoRoot, host: '127.0.0.1', port: 0 });
+      expect(warn.mock.calls.map((call) => String(call[0])).filter((line) => line.includes('cleartext'))).toEqual([
+        expect.stringMatching(/listening on 0\.0\.0\.0 without TLS.*unless a TLS-terminating proxy sits in front.*--tls-cert and --tls-key/),
+      ]);
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   describe('with HIPPO_REQUIRE_AUTH=1', () => {

@@ -339,6 +339,20 @@ describe('subscriberKey', () => {
 });
 
 describe('the per-address bucket', () => {
+  it('keys an IPv6 address on its /64 and an IPv4-mapped one on its IPv4 address', async () => {
+    process.env.HIPPO_CLIENT_IP_HEADER = 'x-forwarded-for';
+    process.env.HIPPO_TRUSTED_PROXIES = '127.0.0.1';
+    freezeClock();
+    const key = mint();
+    await start({ perCaller: WIDE, perAddress: SLOW });
+    const from = (address: string): Promise<Reply> => recall(bearer(key, { 'x-forwarded-for': address }));
+    const drained = { status: 429, retryAfter: '10' };
+    expect([await from('2001:db8:1:2::a'), await from('2001:db8:1:2:ffff:1:2:3'), await from('2001:0db8:0001:0002::b')]).toEqual([OK, OK, drained]);
+    expect(await from('2001:db8:1:3::a')).toEqual(OK);
+    expect([await from('::ffff:198.51.100.1'), await from('198.51.100.1'), await from('198.51.100.1')]).toEqual([OK, OK, drained]);
+    expect(await from('198.51.100.2')).toEqual(OK);
+  });
+
   it("turns off with perAddress 'off' and never reads HIPPO_V1_RPS", async () => {
     process.env.HIPPO_V1_RPS = '1';
     await start({ perAddress: 'off' });

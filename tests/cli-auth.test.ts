@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { execSync } from 'node:child_process';
+import { execSync, spawnSync } from 'node:child_process';
 
 const cli = resolve(__dirname, '..', 'dist', 'cli.js');
 
@@ -14,12 +14,18 @@ describe('hippo auth CLI', () => {
     try {
       execSync(`node "${cli}" init --global`, { env, cwd: home });
 
-      const createOut = execSync(`node "${cli}" auth create --label test --global`, { env, cwd: home }).toString();
+      const created = spawnSync(process.execPath, [cli, 'auth', 'create', '--label', 'test', '--global'], { env, cwd: home, encoding: 'utf8' });
+      const createOut = created.stdout;
       const keyMatch = createOut.match(/(hk_[a-z2-7]{24})/);
       const plainMatch = createOut.match(/(hk_[a-z2-7]{24}\.[a-z2-7]+)/);
       expect(keyMatch, 'key_id missing in output').toBeTruthy();
       expect(plainMatch, 'plaintext missing in output').toBeTruthy();
       const keyId = keyMatch![1]!;
+      // No --role means an admin key that never expires, so the mint says so: on stderr, and without the key.
+      expect(created.stderr).toContain('no --role given, so this is an admin key, and it never expires');
+      expect(created.stderr).not.toContain(plainMatch![1]!);
+      const narrow = spawnSync(process.execPath, [cli, 'auth', 'create', '--role', 'member', '--global'], { env, cwd: home, encoding: 'utf8' });
+      expect([narrow.status, narrow.stderr.includes('admin key')]).toEqual([0, false]);
 
       const listOut = execSync(`node "${cli}" auth list --global`, { env, cwd: home }).toString();
       expect(listOut).toContain(keyId);

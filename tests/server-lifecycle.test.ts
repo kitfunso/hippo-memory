@@ -215,11 +215,6 @@ describe('server lifecycle', () => {
         expect(JSON.parse(reply.body)).toEqual({ error: 'request body exceeds 1MB' });
         await reply.closed;
       }
-      // A webhook with no secret configured reads nothing, and still drops the uploader.
-      delete process.env.SLACK_SIGNING_SECRET;
-      const unconfigured = await uploadUnpaced(handle.port, '/v1/connectors/slack/events', signed);
-      expect(unconfigured.status).toBe(404);
-      await unconfigured.closed;
       // The server shed the oversized requests without wedging — still serving.
       const health = await fetch(`${handle.url}/health`);
       expect(health.status).toBe(200);

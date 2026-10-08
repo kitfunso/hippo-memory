@@ -1,5 +1,6 @@
 // No unauthenticated caller can make the server buffer a large body or wait long for one: most routes check
 // the credential before they read, and the key mint, which reads first, has a 4 KB cap and a deadline.
+// The two webhook routes take no API key, so they check the signing secret and the signature headers first.
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -55,6 +56,12 @@ function statusUntilServerCloses(port: number, path: string, credential = 'Autho
   });
 }
 
+const WEBHOOKS = [
+  ['/v1/connectors/slack/events', 'SLACK_SIGNING_SECRET', 'X-Slack-Signature: v0=00\r\nX-Slack-Request-Timestamp: 1\r\n'],
+  ['/v1/connectors/github/events', 'GITHUB_WEBHOOK_SECRET', 'X-Hub-Signature-256: sha256=00\r\n'],
+] as const;
+const savedSecrets = new Map(WEBHOOKS.map(([, name]) => [name, process.env[name]]));
+
 describe('no route reads an unauthenticated body beyond a stated cap and deadline', () => {
   let root: string;
   let handle: ServerHandle;
@@ -67,6 +74,10 @@ describe('no route reads an unauthenticated body beyond a stated cap and deadlin
 
   afterEach(async () => {
     await handle.stop();
+    for (const [name, value] of savedSecrets) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
     rmSync(root, { recursive: true, force: true });
   });
 
@@ -106,5 +117,17 @@ describe('no route reads an unauthenticated body beyond a stated cap and deadlin
     } finally {
       delete process.env.HIPPO_BODY_TIMEOUT_MS;
     }
+  });
+
+  // A webhook's credential is its signature, so the signature headers stand where the bearer token does.
+  it.each(WEBHOOKS)('POST %s drops a caller whose body never arrives: 404 with no signing secret, 401 with no signature, 408 once a signed body stalls', async (path, secretEnv, signatureHeaders) => {
+    await handle.stop();
+    handle = await serve({ hippoRoot: root, port: 0, webhookBodyDeadlineMs: 50 });
+    delete process.env[secretEnv];
+    expect(await statusUntilServerCloses(handle.port, path, signatureHeaders)).toBe('HTTP/1.1 404 Not Found');
+    // Test-only signing material, not a real secret.
+    process.env[secretEnv] = 'test-only-webhook-signing-material';
+    expect(await statusUntilServerCloses(handle.port, path, '')).toBe('HTTP/1.1 401 Unauthorized');
+    expect(await statusUntilServerCloses(handle.port, path, signatureHeaders)).toBe('HTTP/1.1 408 Request Timeout');
   });
 });

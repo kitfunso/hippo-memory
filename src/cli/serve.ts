@@ -29,7 +29,7 @@ export async function handleMcp(): Promise<void> {
 }
 
 /** The certificate and key for HTTPS, from --tls-cert and --tls-key or HIPPO_TLS_CERT and HIPPO_TLS_KEY; undefined when neither is set. */
-export function readTlsFiles(flags: CommandContext['flags']): { cert: Buffer; key: Buffer } | undefined {
+function readTlsFiles(flags: CommandContext['flags']): { cert: Buffer; key: Buffer } | undefined {
   // A flag with no value exits here; falling back to cleartext would hide the mistake.
   const certPath = cardStringFlag(flags, 'tls-cert') ?? envTlsCert();
   const keyPath = cardStringFlag(flags, 'tls-key') ?? envTlsKey();
