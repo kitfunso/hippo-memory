@@ -82,7 +82,7 @@ export function callerProjectFromHeaders(req: IncomingMessage, hippoRoot: string
   return { name, legacyName: name, aliases };
 }
 
-export function mcpContextFor(ctx: Context, clientKey: string, autoSleep: McpContext['autoSleep'], project?: CallerProject): McpContext {
+function mcpContextFor(ctx: Context, clientKey: string, autoSleep: McpContext['autoSleep'], project?: CallerProject): McpContext {
   const mcpCtx: McpContext = {
     hippoRoot: ctx.hippoRoot,
     tenantId: ctx.tenantId,
