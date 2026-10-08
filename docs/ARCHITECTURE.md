@@ -1,5 +1,10 @@
 # Architecture notes
 
+## Layers
+
+Six layers, lowest first: base (pure helpers and core types), db (SQLite connection and schema), store (persistence and embeddings), domain (recall, graph, consolidation, hooks), api (operations over the store), surface (CLI, server, MCP, importers, dashboard).
+A file imports only from its own layer or a lower one. `layers.json` is the map and `scripts/check-layers.mjs` enforces it against `.layers-baseline.json`.
+
 Design provenance for src/: which roadmap item or release added a behaviour, schema history, measurements and alternatives tried. Source comments keep the one-line reason; this file keeps the record, quoted from the comment it came from.
 
 ## History moved out of src/ comments, by module
