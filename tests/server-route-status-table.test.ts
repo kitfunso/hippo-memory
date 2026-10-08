@@ -238,7 +238,7 @@ describe('HTTP route status table: status and error text per route', () => {
   const post = (path: string, body?: JsonObject): Promise<Reply> =>
     call({ method: 'POST', path, body: body === undefined ? undefined : JSON.stringify(body) });
   const get = (path: string): Promise<Reply> => call({ method: 'GET', path });
-  const shows = (r: Reply, status: number, json: Record<string, unknown>): void => {
+  const shows = (r: Reply, status: number, json: JsonObject): void => {
     expect(r).toMatchObject({ status, json });
   };
 
