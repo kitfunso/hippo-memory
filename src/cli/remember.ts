@@ -14,11 +14,11 @@ import {
   ConfidenceLevel,
   type MemoryEntry,
 } from '../memory.js';
-import { isInitialized, onHandle, openStore } from '../store/open.js';
-import { writeEntry, writeEntryOn } from '../store/entry-writes.js';
+import { isInitialized } from '../store/open.js';
+import { writeEntry } from '../store/entry-writes.js';
 import { readEntry, loadAllEntries } from '../store/entry-reads.js';
 import { loadNewestEntries, schemaFitInStore } from '../store/candidates.js';
-import { updateStatsOn } from '../store/index-and-stats.js';
+import { updateStats } from '../store/index-and-stats.js';
 import { listMemoryConflicts } from '../store/conflicts.js';
 import { RejectedValueError } from '../rejection.js';
 import { renderTraceContent, parseSteps } from '../trace.js';
@@ -154,10 +154,8 @@ export async function cmdRemember(
 
   if (!passesSalienceGate(entry, text, targetRoot, rememberConfig, flags)) return;
 
-  onHandle(targetRoot, (db) => {
-    writeEntryOn(db, targetRoot, entry);
-    updateStatsOn(db, targetRoot, { remembered: 1 });
-  }, openStore);
+  writeEntry(targetRoot, entry);
+  updateStats(targetRoot, { remembered: 1 });
   printRemembered(entry, useGlobal);
 
   void embedMemory(targetRoot, entry);

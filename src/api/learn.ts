@@ -3,19 +3,18 @@
 import { ForbiddenError } from '../api-errors.js';
 import { fetchGitLog, extractLessons, partitionLessons, isGitRepo } from '../autolearn.js';
 import { type HippoConfig, loadConfig } from '../config.js';
+import { withRequestStoresSync } from '../db/request-stores.js';
 import { embedMemory } from '../embeddings.js';
-import { closeHippoDb } from '../db.js';
-import { extractInvalidationTarget, invalidateMatchingOn } from '../invalidation.js';
+import { extractInvalidationTarget, invalidateMatchingAmong } from '../invalidation.js';
 import { computeSchemaFit, createMemory, Layer } from '../memory.js';
 import { extractPathTags } from '../path-context.js';
 import { canReadScope, personalScopeOf, touchableScopeSql } from '../recall-scope.js';
 import { RejectedValueError } from '../rejection.js';
 import { duplicateKey, longestWord, storedTextKeys } from '../same-text.js';
 import { loadTextsHoldingWords } from '../store/candidates.js';
-import { selectAllEntries } from '../store/entry-reads.js';
-import { writeEntryOn } from '../store/entry-writes.js';
-import { updateStatsOn } from '../store/index-and-stats.js';
-import { openStore } from '../store/open.js';
+import { loadAllEntries } from '../store/entry-reads.js';
+import { writeEntry } from '../store/entry-writes.js';
+import { updateStats } from '../store/index-and-stats.js';
 import type { Context } from './types.js';
 
 /** How a surface writes what it learns. */
@@ -68,10 +67,10 @@ export function learn(ctx: Context, opts: LearnOpts): LearnResult {
 function writeLessons(ctx: Context, lessons: readonly string[], opts: LearnOpts, config: HippoConfig): LessonCounts {
   const { hippoRoot, tenantId } = ctx;
   const { profile } = opts;
-  const db = openStore(hippoRoot);
-  try {
+  // `hippo init` calls this outside any request, so the batch brings its own scope: every read and write below shares one handle.
+  return withRequestStoresSync(() => {
     // One read serves the batch: invalidation matches against `live`, which follows every write below, as a reload per lesson did.
-    const live = profile.full ? selectAllEntries(db, tenantId) : [];
+    const live = profile.full ? loadAllEntries(hippoRoot, tenantId) : [];
     // Schema fit needs every row; without it, only rows holding a lesson's longest word can be its copy. Learn is host-admin only, so both read what an admin can.
     const existing = profile.full ? live.filter((e) => e.scope == null || canReadScope(ctx.actor, e.scope)) : undefined;
     const readable = touchableScopeSql('', personalScopeOf(ctx.actor));
@@ -82,7 +81,7 @@ function writeLessons(ctx: Context, lessons: readonly string[], opts: LearnOpts,
       if (keys.has(duplicateKey(lesson))) { counts.skipped++; continue; }
       const target = profile.full ? extractInvalidationTarget(lesson) : null;
       if (target) {
-        const { invalidated } = invalidateMatchingOn(db, hippoRoot, live, target, tenantId);
+        const { invalidated } = invalidateMatchingAmong(hippoRoot, live, target, tenantId);
         if (invalidated > 0) counts.invalidations.push({ from: target.from, count: invalidated });
       }
       const entry = createMemory(lesson, {
@@ -97,13 +96,13 @@ function writeLessons(ctx: Context, lessons: readonly string[], opts: LearnOpts,
       for (const tag of pathTags) if (!entry.tags.includes(tag)) entry.tags.push(tag);
       // A refused lesson must not abort the rest of the git-log scan.
       try {
-        writeEntryOn(db, hippoRoot, entry, { actor: ctx.actor.subject });
+        writeEntry(hippoRoot, entry, { actor: ctx.actor.subject });
       } catch (err) {
         if (err instanceof RejectedValueError) { counts.rejected++; continue; }
         throw err;
       }
       if (profile.full) {
-        updateStatsOn(db, hippoRoot, { remembered: 1 });
+        updateStats(hippoRoot, { remembered: 1 });
         live.push(entry);
       }
       keys.add(duplicateKey(lesson));
@@ -111,7 +110,5 @@ function writeLessons(ctx: Context, lessons: readonly string[], opts: LearnOpts,
       counts.added++;
     }
     return counts;
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }

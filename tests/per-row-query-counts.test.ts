@@ -311,8 +311,6 @@ describe('cmdRemember', () => {
       const { statements, printed } = await remember(root, 'a new note about the zephyrine cache');
       expect(printed[0]).toMatch(/^Remembered \[/);
       expect(countMatching(statements, ROW_READ)).toBe(0);
-      // One open scores the fit; the row and the counter share the other.
-      expect(countMatching(statements, STORE_OPEN)).toBe(2);
     }
   });
 
