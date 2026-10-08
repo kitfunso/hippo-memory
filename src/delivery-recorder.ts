@@ -1,6 +1,5 @@
 // In-memory observer for one pinned-only context call: what was considered, why each was rejected, what reached stdout.
 // No DB access (the caller hands build()'s output to src/recall-trace.ts); hashes, ids, counts and enums only, never text.
-import { envTestDeliveryFault } from './env.js';
 import type { MemoryEntry } from './memory.js';
 import { evalNow } from './ablation.js';
 import { scoreOverlap, type PromptRecallGate } from './prompt-recall.js';
@@ -366,12 +365,20 @@ function candidateMethods(state: RecorderState, guard: Guard): CandidateMethods 
   };
 }
 
+export type DeliveryFault = 'observe' | 'build' | 'flush';
+
+let injectedFault: DeliveryFault | null = null;
+
+/** Makes every recorder created afterwards throw at one stage. Only tests call it; the shipped CLI and server have no route here. */
+export function _setDeliveryFaultForTests(fault: DeliveryFault | null): void {
+  injectedFault = fault;
+}
+
 /** A recorder for one call; every observer method is guarded, and a throw marks it broken instead of escaping. */
 export function createDeliveryRecorder(init: DeliveryRecorderInit): DeliveryRecorder {
   const startedMs = Date.now();
   const ts = evalNow().toISOString();
-  // Test-only fault injection, as HIPPO_FAKE_NOW is for time.
-  const fault = envTestDeliveryFault();
+  const fault = injectedFault;
   const payload = readPayload(init);
   const state: RecorderState = {
     candidates: new Map(), picked: new Map(), filtered: new Set(), facts: null, shown: 0, dropped: 0,

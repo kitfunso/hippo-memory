@@ -116,7 +116,7 @@ const failure = (text) => JSON.stringify({
 
 const WARMUPS = 3;
 const LEDGER_ENV = Object.fromEntries(Object.entries(process.env).filter(([k]) =>
-  !['HIPPO_SESSION_ID', 'CLAUDE_CODE_SESSION_ID', 'HIPPO_TEST_DELIVERY_FAULT', 'HIPPO_FAKE_NOW'].includes(k)));
+  !['HIPPO_SESSION_ID', 'CLAUDE_CODE_SESSION_ID', 'HIPPO_FAKE_NOW'].includes(k)));
 // Holds the write lock 30 ms at a time, so a ledger write meets a busy store.
 const CONTENDER = `const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[1]);

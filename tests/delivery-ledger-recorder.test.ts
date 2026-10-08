@@ -10,7 +10,7 @@ import { getContext, type Context, type ContextOpts } from '../src/api.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { _resetAblationCacheForTests } from '../src/ablation.js';
 import type { HippoConfig } from '../src/config.js';
-import { createDeliveryRecorder, type DeliveryEventInput, type DeliveryRecorder } from '../src/delivery-recorder.js';
+import { _setDeliveryFaultForTests, createDeliveryRecorder, type DeliveryEventInput, type DeliveryRecorder } from '../src/delivery-recorder.js';
 
 const PROJECT = 'proj-a';
 const PROMPT = 'how should the postgres migration rollback plan work';
@@ -102,7 +102,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   delete process.env.HIPPO_HOME;
   delete process.env.HIPPO_FAKE_NOW;
-  delete process.env.HIPPO_TEST_DELIVERY_FAULT;
+  _setDeliveryFaultForTests(null);
   _resetAblationCacheForTests();
   fs.rmSync(tmpRoot, { recursive: true, force: true });
 });
@@ -139,7 +139,7 @@ describe('the observer never changes getContext', () => {
     configure({ promptRecall: true });
     seedMixedStore();
     const err = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    process.env.HIPPO_TEST_DELIVERY_FAULT = 'observe';
+    _setDeliveryFaultForTests('observe');
     const without = await getContext(ctx, baseOpts);
     const rec = recorder();
     expect(await getContext(ctx, { ...baseOpts, deliveryObserver: rec })).toEqual(without);

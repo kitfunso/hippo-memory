@@ -30,8 +30,6 @@
  * --warmup sends N untimed queries first; --rounds repeats the timed pass and
  * gates on the fastest round's p99. Defaults (0, 1) keep the cold single pass.
  *
- * Or via vitest harness (downsized) — see tests/server-p99.test.ts.
- *
  * Output JSON lands in benchmarks/a1/results/p99-<timestamp>.json.
  * Exit code 0 if the gated p99 < --gate-ms, else 1 (CI gate).
  */

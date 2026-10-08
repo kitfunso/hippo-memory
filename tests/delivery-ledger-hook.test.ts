@@ -10,10 +10,13 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { readDeliveryEvents, type DeliveryEventRow } from '../src/recall-trace.js';
+import type { DeliveryFault } from '../src/delivery-recorder.js';
 import { blockHash, estimateTokens } from '../src/token-ledger.js';
 import type { HippoConfig } from '../src/config.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
+// The fault switch has no environment or flag route, so a faulted run starts the same CLI through this entry file.
+const FAULT_CLI = path.resolve(__dirname, 'fixtures', 'delivery-fault-cli.mjs');
 const HOOK_ARGS = ['context', '--pinned-only', '--include-recent', '5', '--format', 'additional-context'];
 const PROMPT = 'how should the postgres migration rollback plan work';
 // After every seeded `created`, real or fixed, so no memory is dated in the future.
@@ -22,7 +25,6 @@ const FAKE_NOW = '2099-01-01T00:00:00.000Z';
 const BASE_ENV: NodeJS.ProcessEnv = { ...process.env };
 delete BASE_ENV.HIPPO_SESSION_ID;
 delete BASE_ENV.CLAUDE_CODE_SESSION_ID;
-delete BASE_ENV.HIPPO_TEST_DELIVERY_FAULT;
 delete BASE_ENV.HIPPO_FAKE_NOW;
 
 interface Payload {
@@ -36,6 +38,7 @@ interface Payload {
 interface RunOpts {
   args?: string[];
   env?: NodeJS.ProcessEnv;
+  fault?: DeliveryFault;
 }
 
 let tmp: string;
@@ -67,7 +70,8 @@ function clone(ledger: boolean, pinnedInject: Partial<HippoConfig['pinnedInject'
 }
 
 function run(dir: string, payload: Payload | null, opts: RunOpts = {}): SpawnSyncReturns<string> {
-  return spawnSync(process.execPath, [HIPPO_JS, ...(opts.args ?? HOOK_ARGS)], {
+  const entry = opts.fault ? [FAULT_CLI, opts.fault] : [HIPPO_JS];
+  return spawnSync(process.execPath, [...entry, ...(opts.args ?? HOOK_ARGS)], {
     cwd: dir,
     env: { ...BASE_ENV, HIPPO_HOME: path.join(dir, 'global'), ...opts.env },
     input: payload === null ? '' : JSON.stringify(payload),
@@ -338,18 +342,31 @@ describe('the ledger never changes the hook', () => {
     }
   }
 
-  it.each([
+  it.each<[DeliveryFault]>([
     ['build'],
     ['flush'],
   ])('F7c: a recorder that throws at %s leaves stdout and the exit code as flag-off, with one stderr line', (fault) => {
     fixture();
     const off = run(clone(false), claude('f7c'), { env: { HIPPO_FAKE_NOW: FAKE_NOW } });
     const dir = clone(true);
-    const on = run(dir, claude('f7c'), { env: { HIPPO_FAKE_NOW: FAKE_NOW, HIPPO_TEST_DELIVERY_FAULT: fault } });
+    const on = run(dir, claude('f7c'), { env: { HIPPO_FAKE_NOW: FAKE_NOW }, fault });
     expect(off.stdout).not.toBe('');
     expect([on.status, on.stdout]).toEqual([off.status, off.stdout]);
     expect(ledgerLines(on.stderr)).toHaveLength(1);
     expect(eventCount(dir)).toBe(0);
+  });
+
+  it.each<[DeliveryFault]>([
+    ['observe'],
+    ['build'],
+    ['flush'],
+  ])('the shipped CLI takes no %s fault from the environment: the event is written and stderr stays clean', (fault) => {
+    fixture();
+    const dir = clone(true);
+    const on = run(dir, claude('env-fault'), { env: { HIPPO_FAKE_NOW: FAKE_NOW, HIPPO_TEST_DELIVERY_FAULT: fault } });
+    expect(on.status, on.stderr).toBe(0);
+    expect(ledgerLines(on.stderr)).toEqual([]);
+    expect(eventCount(dir)).toBe(1);
   });
 
   it('F7a: a failing write rolls back, keeps stdout and the exit code, and prints one stderr line', () => {

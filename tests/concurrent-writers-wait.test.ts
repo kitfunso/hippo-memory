@@ -9,7 +9,7 @@ import { closeHippoDb, openHippoDb } from '../src/db.js';
 import { createMemory } from '../src/memory.js';
 import { writeEntryDbOnly } from '../src/store/entry-writes.js';
 import { initStore } from '../src/store/open.js';
-import { assertFreshDist, distUrl, withDb } from './_helpers/agent-memories-world.js';
+import { distUrl, withDb } from './_helpers/agent-memories-world.js';
 
 const WORKERS = 2;
 const ROWS = 60;
@@ -61,7 +61,6 @@ function storeCounts(hippoRoot: string): StoreCounts {
 
 describe('two hippo processes writing to one store at once', () => {
   it('both wait for the write lock, and every row lands with one remember audit row', async () => {
-    assertFreshDist('store/entry-writes.js');
     root = join(mkdtempSync(join(tmpdir(), 'hippo-writers-wait-')), '.hippo');
     initStore(root);
     writeFileSync(join(root, 'worker.mjs'), WORKER, 'utf8');

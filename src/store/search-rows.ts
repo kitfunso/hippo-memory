@@ -1,4 +1,3 @@
-import { envForceLikePath } from '../env.js';
 import type { MemoryEntry } from '../memory.js';
 import { openHippoDb, isFtsAvailable, closeHippoDb, type DatabaseSyncLike } from '../db.js';
 import { tokenize } from '../tokenize.js';
@@ -80,6 +79,13 @@ interface SearchPredicates {
   currentNoAlias: string;
 }
 
+let forceLikePath = false;
+
+/** Sends term queries down the LIKE path on a build that has FTS. Only tests call it. */
+export function _forceLikePathForTests(on: boolean): void {
+  forceLikePath = on;
+}
+
 function loadSearchRows(
   db: ReturnType<typeof openHippoDb>,
   query: string,
@@ -97,9 +103,7 @@ function loadSearchRows(
     return selectAllCandidates(db, p, limit);
   }
 
-  // `HIPPO_FORCE_LIKE_PATH=1` forces the LIKE path for tests; gated at this read site so
-  // writes keep using `isFtsAvailable` and never silently skip FTS index sync.
-  const forceLikePath = envForceLikePath();
+  // The test switch is read here, not in `isFtsAvailable`, so writes never skip FTS index sync.
   if (!forceLikePath && isFtsAvailable(db)) {
     const rows = selectFtsCandidates(db, terms, p, limit);
     if (rows.length > 0) return rows;

@@ -1,5 +1,5 @@
-# The token-eval harness tests, kept out of ci.yml's per-PR suite because they take a quarter of its Windows time.
-# Every push to master runs them, so a src change that breaks the harness shows before a release tag.
+# The token-eval harness tests, kept out of ci.yml's shards because they take a quarter of its Windows time.
+# A PR that touches src or the harness runs them here, beside ci.yml, so a src change that breaks the harness shows before merge.
 name: Token eval
 
 on:
@@ -7,12 +7,14 @@ on:
     branches: [master]
   pull_request:
     paths:
+      - 'src/**'
       - 'scripts/token-eval/**'
       - 'tests/token-eval*'
       - 'tests/fixtures/fake-claude.mjs'
       - 'tests/fixtures/z0-checks/**'
       - 'tests/fixtures/z0-contract.ts'
       - 'tests/fixtures/z0-gen.ts'
+      - 'vitest.config.ts'
       - 'vitest.eval.config.ts'
       - '.github/workflows/token-eval.yml'
   workflow_dispatch:

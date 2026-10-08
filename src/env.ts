@@ -58,8 +58,6 @@ export function envFakeNowMs(): number | null {
   return Number.isFinite(parsed) && new Date(parsed).toISOString() === value ? parsed : null;
 }
 
-export function envTestDeliveryFault(): string { return raw('HIPPO_TEST_DELIVERY_FAULT') ?? ''; }
-export function envForceLikePath(): boolean { return isOne('HIPPO_FORCE_LIKE_PATH'); }
 export function envLossAversionRatio(): string | undefined { return raw('HIPPO_LOSS_AVERSION_RATIO'); }
 export function envSummaryDeboost(): string | undefined { return raw('HIPPO_SUMMARY_DEBOOST'); }
 export function envAutodebiasOff(): boolean { return raw('HIPPO_AUTODEBIAS') === 'off'; }
