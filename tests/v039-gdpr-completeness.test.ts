@@ -11,6 +11,7 @@ import {
 import type { HippoDbContext } from '../src/api.js';
 import { remember, archiveRaw, recall } from '../src/api.js';
 import { queryAuditEvents } from '../src/audit.js';
+import { recordStatements, countMatching } from './_helpers/count-statements.js';
 
 /** Query a single row from the hippo SQLite handle. */
 function queryOne<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T | undefined {
@@ -188,21 +189,22 @@ describe('v0.39 GDPR Path A completeness fixes', () => {
     expect(liveStillPresent).toBe(true);
   });
 
-  it('2c. reaper retries: mirror_cleaned_at stays NULL when no work done, set on next open', () => {
-    // Per-row contract: a row with mirror_cleaned_at IS NULL is processed every
-    // open until it succeeds. We verify the success path here by:
-    //   1. Inserting a raw_archive row + planting a mirror file.
-    //   2. Asserting first open clears the mirror and stamps the row.
-    //   3. Asserting a second open's reaper SELECT returns 0 pending rows
-    //      (proving the row is no longer revisited — the steady state).
-    //
-    // Reproducing a real unlink failure on Windows requires either ACL
-    // manipulation (flaky in CI) or a held file handle (race-sensitive). We
-    // use the more direct contract test: assert the SELECT WHERE NULL bound
-    // shrinks to 0 once cleanup succeeds, which is the load-bearing property
-    // for "retry on next open" — failures keep the row in the SELECT, success
-    // removes it.
+  it('2c. reaper retries a failed unlink on every open, then stops scanning once the archive is clean', () => {
     const memId = 'mem_retry_canary_1';
+    const opensThatSweep = (opens: number): number => {
+      const { statements } = recordStatements(() => {
+        for (let i = 0; i < opens; i++) closeHippoDb(openHippoDb(root));
+      });
+      return countMatching(statements, /^SELECT memory_id FROM raw_archive WHERE mirror_cleaned_at IS NULL/);
+    };
+    const pending = (): number | undefined => {
+      const db = openHippoDb(root);
+      try {
+        return queryOne<{ c?: number }>(db, `SELECT COUNT(*) AS c FROM raw_archive WHERE mirror_cleaned_at IS NULL`)?.c;
+      } finally {
+        closeHippoDb(db);
+      }
+    };
 
     const db1 = openHippoDb(root);
     try {
@@ -217,57 +219,24 @@ describe('v0.39 GDPR Path A completeness fixes', () => {
           'cli',
           JSON.stringify({ redacted: true, tenant_id: 'default', kind: 'raw' }),
         );
-      // Pre-condition: row is in the reaper's SELECT set.
-      const pendingBefore = queryOne<{ c?: number }>(
-        db1,
-        `SELECT COUNT(*) AS c FROM raw_archive WHERE mirror_cleaned_at IS NULL`,
-      )?.c;
-      expect(pendingBefore).toBe(1);
     } finally {
       closeHippoDb(db1);
     }
 
-    // Plant the mirror in episodic (one of the LAYERS the reaper sweeps).
-    const episodicDir = join(root, 'episodic');
-    mkdirSync(episodicDir, { recursive: true });
-    const mirrorPath = join(episodicDir, `${memId}.md`);
+    // A directory where the mirror file belongs: unlink fails on every platform.
+    const mirrorPath = join(root, 'episodic', `${memId}.md`);
+    mkdirSync(mirrorPath, { recursive: true });
+    expect(opensThatSweep(3)).toBe(3);
+    expect(pending()).toBe(1);
+
+    rmSync(mirrorPath, { recursive: true });
     writeFileSync(mirrorPath, 'legacy mirror content', 'utf8');
+    expect(opensThatSweep(1)).toBe(1);
+    expect(existsSync(mirrorPath)).toBe(false);
+    expect(pending()).toBe(0);
 
-    // Open #1: reaper runs, unlinks mirror, stamps row.
-    const db2 = openHippoDb(root);
-    try {
-      expect(existsSync(mirrorPath)).toBe(false);
-      const pendingAfter = queryOne<{ c?: number }>(
-        db2,
-        `SELECT COUNT(*) AS c FROM raw_archive WHERE mirror_cleaned_at IS NULL`,
-      )?.c;
-      expect(pendingAfter).toBe(0);
-    } finally {
-      closeHippoDb(db2);
-    }
-
-    // Open #2: reaper SELECTs WHERE NULL and gets 0 rows — no re-processing
-    // of a row that's already been cleaned. This is the regression guard
-    // against the previous one-shot meta gate that, once flipped to 'done',
-    // never revisited stale work.
-    const db3 = openHippoDb(root);
-    try {
-      const stillNoPending = queryOne<{ c?: number }>(
-        db3,
-        `SELECT COUNT(*) AS c FROM raw_archive WHERE mirror_cleaned_at IS NULL`,
-      )?.c;
-      expect(stillNoPending).toBe(0);
-      // Idempotency belt-and-braces: timestamp is unchanged across opens
-      // (we don't re-stamp already-cleaned rows).
-      const cleanedAt = queryOne<{ mirror_cleaned_at?: string }>(
-        db3,
-        `SELECT mirror_cleaned_at FROM raw_archive WHERE memory_id = ?`,
-        memId,
-      )?.mirror_cleaned_at;
-      expect(cleanedAt).toBeTruthy();
-    } finally {
-      closeHippoDb(db3);
-    }
+    // A clean archive is not scanned again: the scan has no index, so it costs time on every open.
+    expect(opensThatSweep(5)).toBe(0);
   });
 
   // ---------------------------------------------------------------------------

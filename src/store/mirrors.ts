@@ -3,6 +3,7 @@ import * as path from 'path';
 import { Layer, type MemoryEntry } from '../memory.js';
 import { dumpFrontmatter } from '../yaml.js';
 import { openHippoDb, getMeta } from '../db.js';
+import { oncePerStore } from '../db/connect.js';
 import { log } from '../log.js';
 import {
   type TaskSnapshot,
@@ -27,18 +28,16 @@ export function layerDir(root: string, layer: Layer): string {
   return path.join(root, layer);
 }
 
-export function ensureMirrorDirectories(hippoRoot: string): void {
-  const dirs = [
-    hippoRoot,
-    path.join(hippoRoot, 'buffer'),
-    path.join(hippoRoot, 'episodic'),
-    path.join(hippoRoot, 'semantic'),
-    path.join(hippoRoot, 'conflicts'),
-  ];
+// Owner-only wherever a mirror folder is made, at open or by a writer that finds it gone.
+const MIRROR_FOLDER = { recursive: true, mode: 0o700 } as const;
 
-  for (const dir of dirs) {
-    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
-  }
+/** Makes the mirror folders on a store's first open in this process; a writer makes its own folder if one goes missing later. */
+export function ensureMirrorDirectories(hippoRoot: string): void {
+  oncePerStore(hippoRoot, 'mirror-folders', () => {
+    for (const sub of ['buffer', 'episodic', 'semantic', 'conflicts']) {
+      fs.mkdirSync(path.join(hippoRoot, sub), MIRROR_FOLDER);
+    }
+  });
 }
 
 // Tenant-scoped mirror file paths. The single-tenant 'default' deployment
@@ -86,7 +85,7 @@ export function writeActiveTaskMirror(hippoRoot: string, tenantId: string, snaps
     body.push(`## Session`, snapshot.session_id, '');
   }
 
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.mkdirSync(path.dirname(filePath), MIRROR_FOLDER);
   fs.writeFileSync(filePath, `${fm}\n\n${body.join('\n')}`, 'utf8');
 }
 
@@ -131,13 +130,13 @@ export function writeRecentSessionMirror(hippoRoot: string, tenantId: string, ev
 
   lines.push('');
 
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.mkdirSync(path.dirname(filePath), MIRROR_FOLDER);
   fs.writeFileSync(filePath, `${fm}\n\n${lines.join('\n')}`, 'utf8');
 }
 
 function writeConflictMirrors(hippoRoot: string, conflicts: MemoryConflict[]): void {
   const conflictDir = path.join(hippoRoot, 'conflicts');
-  fs.mkdirSync(conflictDir, { recursive: true });
+  fs.mkdirSync(conflictDir, MIRROR_FOLDER);
 
   const keep = new Set<string>();
   for (const conflict of conflicts) {
@@ -180,7 +179,7 @@ function writeConflictMirrors(hippoRoot: string, conflicts: MemoryConflict[]): v
 export function writeMarkdownMirror(hippoRoot: string, entry: MemoryEntry): void {
   removeEntryMirrors(hippoRoot, entry.id);
   const dir = layerDir(hippoRoot, entry.layer);
-  fs.mkdirSync(dir, { recursive: true });
+  fs.mkdirSync(dir, MIRROR_FOLDER);
   fs.writeFileSync(path.join(dir, `${entry.id}.md`), serializeEntry(entry), 'utf8');
 }
 

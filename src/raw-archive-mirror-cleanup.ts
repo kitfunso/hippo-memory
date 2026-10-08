@@ -18,23 +18,24 @@ const MAX_WARN_LOGS = 5;
  *   - On success (every layer either deleted or didn't exist), UPDATE the row
  *     with the cleanup timestamp.
  *   - On any unlink failure, leave mirror_cleaned_at NULL so the next
- *     openHippoDb call retries. Warn (capped at MAX_WARN_LOGS rows per call).
+ *     connection retries. Warn (capped at MAX_WARN_LOGS rows per call).
  *
- * Steady-state cost is one SELECT returning empty after every row has been
- * cleaned successfully.
+ * Returns whether every pending row was cleaned; the SELECT has no index to
+ * use, so a connection runs it only when the archive has changed since.
  */
-export function cleanupArchivedMirrors(hippoRoot: string, db: DatabaseSyncLike): void {
+export function cleanupArchivedMirrors(hippoRoot: string, db: DatabaseSyncLike): boolean {
   // SAFETY: the SELECT above names exactly one column, memory_id (raw_archive.memory_id
   // is NOT NULL TEXT), so the row shape matches this assertion.
   const rows = db
     .prepare(`SELECT memory_id FROM raw_archive WHERE mirror_cleaned_at IS NULL`)
     .all() as Array<{ memory_id: string }>;
 
-  if (rows.length === 0) return;
+  if (rows.length === 0) return true;
 
   const update = db.prepare(`UPDATE raw_archive SET mirror_cleaned_at = ? WHERE memory_id = ?`);
   const now = new Date().toISOString();
   let warnCount = 0;
+  let everyRowCleaned = true;
 
   for (const row of rows) {
     let allOk = true;
@@ -56,6 +57,9 @@ export function cleanupArchivedMirrors(hippoRoot: string, db: DatabaseSyncLike):
     }
     if (allOk) {
       update.run(now, row.memory_id);
+    } else {
+      everyRowCleaned = false;
     }
   }
+  return everyRowCleaned;
 }
