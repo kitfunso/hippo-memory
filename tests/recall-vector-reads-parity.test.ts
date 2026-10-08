@@ -17,7 +17,7 @@ import { resetAllPhysicsState } from '../src/physics-state.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { initStore } from '../src/store/open.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../src/vector-store.js';
-import { CLEARED_ENV, FAKE_NOW, freshStore, normalise, rowsOf, seeded, type Templates } from './_helpers/recall-golden-seed.js';
+import { CLEARED_ENV, FAKE_NOW, freshStore, normalise, rowsOf, seeded, sendRecall, type Templates } from './_helpers/recall-golden-seed.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from './_helpers/hashed-embedding-server.js';
 import { inMemoryVectorStore } from './_helpers/in-memory-vector-store.js';
 
@@ -89,16 +89,7 @@ interface Pass { replies: Reply[]; mcpIds: string[][]; rows: ReturnType<typeof r
 const http = (mode: string): Call => ({ via: 'http', args: { q: QUERY, mode, limit: '20' } });
 const MCP: Call = { via: 'mcp', args: { query: QUERY } };
 
-async function send(url: string, call: Call): Promise<Reply> {
-  if (call.via === 'http') {
-    const res = await fetch(`${url}/v1/memories?${new URLSearchParams(call.args).toString()}`);
-    return { status: res.status, body: await res.json() };
-  }
-  const rpc = { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: call.args } };
-  const headers = { 'content-type': 'application/json', 'x-hippo-project': PROJECT };
-  const res = await fetch(`${url}/mcp`, { method: 'POST', headers, body: JSON.stringify(rpc) });
-  return { status: res.status, body: await res.json() };
-}
+const send = (url: string, call: Call): Promise<Reply> => sendRecall(url, call.via, call.args, PROJECT);
 
 function shownIds(pass: Pass): string[] {
   // SAFETY: a GET /v1/memories reply is a serialised RecallResult; an MCP reply has no results field.
