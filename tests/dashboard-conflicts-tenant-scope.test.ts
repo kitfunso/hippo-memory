@@ -1,5 +1,5 @@
 // The overview's open-conflict count and a memory's conflicts follow HIPPO_TENANT, like the memory list.
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { writeEntry } from '../src/store/entry-writes.js';
 import * as conflicts from '../src/store/conflicts.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
@@ -29,6 +29,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await dash.close();
   tmp.cleanup();
 });
@@ -50,5 +51,19 @@ describe('dashboard conflicts are tenant-scoped', () => {
     expect(own.conflicts[0].other.id).toBe(a2.id);
 
     expect((await get(dash.port, `/api/memory/${b1.id}`)).status).toBe(404);
+  }, 15_000);
+
+  it('passes the running tenant to every conflict load, so later filters are not the only guard', async () => {
+    const { a1 } = seedTwoTenants();
+    const load = vi.spyOn(conflicts, 'listMemoryConflicts');
+
+    await get(dash.port, '/api/overview');
+    expect(load).toHaveBeenCalled();
+    expect(load.mock.calls.every(([, , tenantId]) => tenantId === 'tenant_a')).toBe(true);
+
+    load.mockClear();
+    await get(dash.port, `/api/memory/${a1.id}`);
+    expect(load).toHaveBeenCalled();
+    expect(load.mock.calls.every(([, , tenantId]) => tenantId === 'tenant_a')).toBe(true);
   }, 15_000);
 });
