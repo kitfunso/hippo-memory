@@ -250,11 +250,14 @@ describe('learn', () => {
   /** A repo whose last `lessons` commits each replace the quuxlib client, so each lesson invalidates what mentions it. */
   function repoWith(lessons: number): string {
     const repo = freshRoot('qc-learn-repo');
-    const git = (...args: string[]): void => {
-      execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', '-c', 'commit.gpgsign=false', ...args], { cwd: repo, stdio: 'ignore' });
-    };
-    git('init');
-    for (let i = 0; i < lessons; i++) git('commit', '--allow-empty', '-m', `fix: replace quuxlib client with fetch wrapper ${i} in src/api${i}.ts`);
+    const stamp = `t <t@example.com> ${Math.floor(Date.now() / 1000)} +0000`;
+    const commits = Array.from({ length: lessons }, (_, i) => {
+      const message = `fix: replace quuxlib client with fetch wrapper ${i} in src/api${i}.ts`;
+      return `commit refs/heads/main\ncommitter ${stamp}\ndata ${Buffer.byteLength(message)}\n${message}\n`;
+    });
+    execFileSync('git', ['-c', 'init.defaultBranch=main', 'init'], { cwd: repo, stdio: 'ignore' });
+    // One fast-import writes every commit, where a `git commit` each costs a process spawn.
+    execFileSync('git', ['fast-import', '--quiet'], { cwd: repo, input: commits.join('\n'), stdio: ['pipe', 'ignore', 'ignore'] });
     return repo;
   }
 

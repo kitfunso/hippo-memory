@@ -1,10 +1,9 @@
-import type { MemoryEntry, StrengthInputs } from '../memory.js';
+import { type MemoryEntry, type StrengthInputs, schemaFitFrom } from '../memory.js';
 import { closeHippoDb } from '../db.js';
 import { scopeAdmitSql, type SqlFragment } from '../recall-scope.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
 import { openStore } from './open.js';
 import { originInSql } from '../project-identity.js';
-import { schemaFitFrom } from '../schema-fit.js';
 import { pickRarestFtsQuery, loadRecallSearchEntriesFromDb } from './search-rows.js';
 
 export interface AmbientRecallRequest {
