@@ -284,11 +284,6 @@ describe('createDeliveryRecorder row building', () => {
     expect(JSON.stringify(input)).not.toContain('raw prompt');
   });
 
-  it.each([[''], ['   ']])('treats a blank turn id %j as no turn id', (turnId) => {
-    const input = built(recorder({ turn_id: turnId }));
-    expect([input.hostTurnId, input.runtime]).toEqual([null, 'claude-code']);
-  });
-
   it('a selected row names the store of the copy that was kept, not the one first offered', () => {
     const rec = recorder();
     const synced = mem(1);

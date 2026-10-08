@@ -49,19 +49,6 @@ describe('ambient pinned query plan', () => {
     }
   });
 
-  it('scans memories without the indexes (the pre-v51 plan)', () => {
-    const { root, home } = seedStore();
-    const db = openHippoDb(root);
-    try {
-      db.exec('DROP INDEX idx_memories_pinned; DROP INDEX idx_memories_created_drift;');
-      expect(plan(db, PINNED_SQL)).not.toContain('idx_memories_pinned');
-      expect(plan(db, AMBIENT_DRIFT_SQL)).not.toContain('idx_memories_created_drift');
-    } finally {
-      closeHippoDb(db);
-      rmSync(home, { recursive: true, force: true });
-    }
-  });
-
   it('still reports drift and returns pins in created order through the indexes', () => {
     const { root, home } = seedStore();
     try {

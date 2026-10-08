@@ -7,6 +7,7 @@ import * as path from 'node:path';
 import { DatabaseSync } from '../src/db/sqlite.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
+import { readEntry } from '../src/store/entry-reads.js';
 import { batchWriteAndDelete } from '../src/store/delete-and-batch.js';
 import { getHippoDbPath, withSharedStoreHandles } from '../src/db.js';
 import type { MemoryEntry } from '../src/memory.js';
@@ -60,6 +61,15 @@ function breakFtsIndex(): void {
   db.close();
 }
 
+function dormantRows(id: string): number {
+  const db = new DatabaseSync(getHippoDbPath(root));
+  try {
+    return (db.prepare('SELECT COUNT(*) AS n FROM dormant_memories WHERE id = ?').get(id) as { n: number }).n;
+  } finally {
+    db.close();
+  }
+}
+
 function linesWith(text: string): string[] {
   return stderrSpy.mock.calls.map((c) => String(c[0])).filter((l) => l.includes(text));
 }
@@ -102,6 +112,16 @@ describe('batchWriteAndDelete full-text upkeep', () => {
     expect(new Set(fts)).toEqual(new Set(idsOf('SELECT id FROM memories')));
     expect(linesWith('FTS index')).toHaveLength(1);
     expect(linesWith('FTS index delete failed')).toHaveLength(1);
+  });
+
+  it('a memory queued for a dormant move twice moves once', () => {
+    const [row] = seedRows(1);
+    const move = { entry: row!, strength: 0.01, reason: 'decay' as const, dormantAt: new Date().toISOString() };
+
+    expect(batchWriteAndDelete(root, [], [], { dormant: [move, { ...move }] })).toEqual([row!.id]);
+
+    expect(readEntry(root, row!.id)).toBeNull();
+    expect(dormantRows(row!.id)).toBe(1);
   });
 
   it('an id written and deleted in one call keeps no full-text row', () => {

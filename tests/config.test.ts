@@ -132,6 +132,17 @@ describe('loadConfig characterization', () => {
     });
   });
 
+  it('keeps deliveryLedger off unless a real boolean sits inside an object', () => {
+    expect(load(null).cfg.deliveryLedger).toEqual({ enabled: false });
+    expect(load(JSON.stringify({ pinnedInject: { promptRecall: false } })).cfg.deliveryLedger).toEqual({ enabled: false });
+    for (const body of [{ deliveryLedger: true }, { deliveryLedger: { enabled: 'true' } }, { deliveryLedger: [true] }]) {
+      const { cfg, warnings } = load(JSON.stringify(body));
+      expect(cfg.deliveryLedger, JSON.stringify(body)).toEqual({ enabled: false });
+      expect(warnings, JSON.stringify(body)).toHaveLength(1);
+      expect(warnings[0]).toContain('deliveryLedger');
+    }
+  });
+
   it('falls back to the defaults with one warning on unparsable or null JSON', () => {
     const defaults = load(null).cfg;
     for (const json of ['{not json', 'null']) {
