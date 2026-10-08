@@ -3,7 +3,7 @@ import { NotFoundError } from '../api-errors.js';
 import { appendAuditEvent } from '../audit.js';
 import { revokeApiKey } from '../auth.js';
 import { withWriteScope, type DatabaseSyncLike } from '../db.js';
-import type { KeyRevoke } from '../store-port.js';
+import type { KeyRevoke } from './port.js';
 import { selectApiKeyOwner } from './tenant-lookup.js';
 
 /** The revoke and its audit row commit together, so a failed audit write leaves the key live and the caller sees the error. */

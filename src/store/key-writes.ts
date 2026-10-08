@@ -2,7 +2,7 @@
 import { appendAuditEvent, type AppendAuditOpts } from '../audit.js';
 import { insertApiKey, listLiveOwnedKeyIds, revokeApiKey } from '../auth.js';
 import { withWriteScope, type DatabaseSyncLike } from '../db.js';
-import type { KeyMint, SelfKeyMint } from '../store-port.js';
+import type { KeyMint, SelfKeyMint } from './port.js';
 
 /** The auth_create row a mint writes; the plaintext never reaches it. */
 export function createAuditOf({ key, actor, metadata }: KeyMint): AppendAuditOpts {

@@ -1,7 +1,6 @@
 // Option and result shapes for recall and retrieve.
 
-import type { TaskSnapshot, SessionEvent } from '../store/rows.js';
-import type { SessionHandoff } from '../handoff.js';
+import type { ContinuityBlock } from '../store/port.js';
 import type { MemoryEntry } from '../memory.js';
 import type { RerankStep, SearchResult } from '../search/types.js';
 import type { PlanningFallacyHint, PlanningFallacyWatching } from '../predictions/planning-fallacy.js';
@@ -177,11 +176,7 @@ export interface StoreRanking {
   droppedByScope: number;
 }
 
-export interface ContinuityBlock {
-  activeSnapshot: TaskSnapshot | null;
-  sessionHandoff: SessionHandoff | null;
-  recentSessionEvents: SessionEvent[];
-}
+export type { ContinuityBlock } from '../store/port.js';
 
 export interface RecallResultItem {
   id: string;

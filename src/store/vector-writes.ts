@@ -3,7 +3,7 @@ import { setMeta, withWriteScope, type DatabaseSyncLike } from '../db.js';
 import { embeddingIndexStateOn, replacesIndex } from '../embeddings.js';
 import type { MemoryEntry } from '../memory.js';
 import { float32ToBuffer } from '../physics-state.js';
-import type { VectorBackfillQuery, VectorRowWrite, VectorWrite, VectorWriteResult } from '../store-port.js';
+import type { VectorBackfillQuery, VectorRowWrite, VectorWrite, VectorWriteResult } from './port.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../vector-store.js';
 import { chunked } from './entry-reads.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from './rows.js';

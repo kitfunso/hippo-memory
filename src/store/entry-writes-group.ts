@@ -7,7 +7,7 @@ import { entryAfterOutcome, type MemoryEntry } from '../memory.js';
 import { archiveRawMemory } from '../raw-archive.js';
 import { ownScopeTouches } from '../recall-scope.js';
 import { RejectedValueError } from '../rejection.js';
-import type { EntryTarget, EntryWrites, OutcomeWrite, SupersedeWrite } from '../store-port.js';
+import type { EntryTarget, EntryWrites, OutcomeWrite, SupersedeWrite } from './port.js';
 import { markSummaryDirtyInTx } from '../summary-dirty.js';
 import { auditRejectionRefusal } from './audit-event.js';
 import { deleteEntryCore } from './delete-and-batch.js';
