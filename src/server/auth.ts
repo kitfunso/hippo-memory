@@ -26,6 +26,7 @@ export function isLoopback(remoteAddress: string | undefined): boolean {
 // A proxy on this host (nginx, Caddy, cloudflared) connects from loopback, so these headers mean the caller is not local.
 const PROXY_HEADERS = [
   'forwarded', 'x-forwarded-for', 'x-forwarded-host', 'x-forwarded-proto', 'x-real-ip', 'cf-connecting-ip', 'true-client-ip',
+  'fly-client-ip',
 ] as const;
 
 // A browser on this machine is loopback too, so the no-key fallback also needs a local Host and a same-site caller.
