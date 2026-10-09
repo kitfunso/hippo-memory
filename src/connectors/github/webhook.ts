@@ -11,7 +11,8 @@ import {
 } from './types.js';
 import { ingestEvent as ingestGitHubEvent, type IngestEvent as GitHubIngestEvent } from './ingest.js';
 import { handleCommentDeleted as handleGitHubCommentDeleted } from './deletion.js';
-import { parkInDlq as parkInGitHubDlq, type DlqBucket } from './dlq.js';
+import { parkInDlq } from '../dlq.js';
+import { githubDlq, type DlqBucket } from './dlq.js';
 import { resolveTenantForGitHub } from './tenant-routing.js';
 import { computeDeletionKey as computeGitHubDeletionKey } from './signature.js';
 import { resolveTenantId } from '../../tenant.js';
@@ -106,11 +107,11 @@ interface DlqRouting {
   repoFullName: string | null;
 }
 
-function parkInDlq(
+function parkAndAck(
   d: SignedDelivery,
   park: DlqRouting & { tenantId: string | null; error: string; bucket: DlqBucket },
 ): void {
-  parkInGitHubDlq(d.hippoRoot, {
+  parkInDlq(githubDlq, d.hippoRoot, {
     tenantId: park.tenantId,
     rawPayload: d.rawBody,
     error: park.error,
@@ -137,7 +138,7 @@ function routeSignedDelivery(d: SignedDelivery): void {
   // routing - same policy as Slack.
   const resolvedTenant = resolveTenantForGitHub(d.hippoRoot, routing);
   if (resolvedTenant === null) {
-    parkInDlq(d, {
+    parkAndAck(d, {
       ...routing,
       tenantId: null,
       error: `unroutable: installation_id=${routing.installationId ?? '(none)'} repo=${routing.repoFullName ?? '(none)'}`,
@@ -154,7 +155,7 @@ function routeSignedDelivery(d: SignedDelivery): void {
   if (dispatchGitHubEvent(d, ctx, body, d.deliveryId, routing)) return;
 
   // Header allow-listed but body shape didn't satisfy the matching guard.
-  parkInDlq(d, {
+  parkAndAck(d, {
     ...routing,
     tenantId: resolvedTenant,
     error: `body shape did not match X-GitHub-Event=${d.eventName}`,
@@ -175,7 +176,7 @@ function parseEnvelopeOrPark(d: SignedDelivery): SignedEnvelope | null {
     return m ? m[1] : null;
   })();
   const parkRaw = (error: string, bucket: DlqBucket): null => {
-    parkInDlq(d, {
+    parkAndAck(d, {
       tenantId: resolveTenantId({}),
       error,
       bucket,
@@ -246,7 +247,7 @@ function dispatchGitHubEvent(
       // GitHub does fire issues.deleted (admin-initiated). Don't archive - V1
       // policy is to log and let an operator decide. Archive could lose the
       // memory if the issue is being moved between accounts.
-      parkInDlq(d, {
+      parkAndAck(d, {
         ...routing,
         tenantId: ctx.tenantId,
         error: 'issues.deleted requires manual review',

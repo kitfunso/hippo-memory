@@ -16,7 +16,8 @@ import { seedCursors } from '../../store/connectors/github.js';
 import { resolveTenantId } from '../../tenant.js';
 import { backfillRepo } from './backfill.js';
 import { realGitHubFetcher, type GitHubFetcher } from './octokit-client.js';
-import { listDlqIn, replayDlqEntry } from './dlq.js';
+import { listDlq } from '../dlq.js';
+import { githubDlq, replayDlqEntry } from './dlq.js';
 import { ingestEvent, type IngestEvent } from './ingest.js';
 import { handleCommentDeleted } from './deletion.js';
 import { computeDeletionKey } from './signature.js';
@@ -141,7 +142,7 @@ export async function cmdGithubBackfill(
 }
 
 export function cmdGithubDlqList(hippoRoot: string, _flags: Flags): void {
-  const items = listDlqIn(hippoRoot, { tenantId: resolveTenantId({}) });
+  const items = listDlq(githubDlq, hippoRoot, { tenantId: resolveTenantId({}) });
   if (items.length === 0) {
     console.log('no entries');
     return;

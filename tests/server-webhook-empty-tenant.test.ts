@@ -5,9 +5,9 @@ import { join } from 'node:path';
 import { createHmac } from 'node:crypto';
 import { initStore } from '../src/store/open.js';
 import { serve, type ServerHandle } from '../src/server.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { listDlq as listGitHubDlq } from '../src/connectors/github/dlq.js';
-import { listDlq as listSlackDlq } from '../src/connectors/slack/dlq.js';
+import { listDlq } from '../src/connectors/dlq.js';
+import { githubDlq } from '../src/connectors/github/dlq.js';
+import { slackDlq } from '../src/connectors/slack/dlq.js';
 
 const GH_SECRET = 'gh-secret';
 const SLACK_SECRET = 'slack-secret';
@@ -64,28 +64,23 @@ describe.each(['', '   '])('webhook DLQ rows with HIPPO_TENANT=%j', (envValue) =
     rmSync(root, { recursive: true, force: true });
   });
 
-  function tenantsOf(list: (db: ReturnType<typeof openHippoDb>, tenant: string) => unknown[]) {
-    const db = openHippoDb(root);
-    try {
-      return { def: list(db, 'default').length, empty: list(db, '').length };
-    } finally {
-      closeHippoDb(db);
-    }
+  function tenantsOf(list: (tenant: string) => unknown[]) {
+    return { def: list('default').length, empty: list('').length };
   }
 
   it('github unhandled-event DLQ row lands under tenant default', async () => {
     const res = await ghPost(handle.port, '{}', 'not-an-allowed-event');
     expect(res.status).toBe(200);
-    expect(tenantsOf((db, t) => listGitHubDlq(db, { tenantId: t }))).toEqual({ def: 1, empty: 0 });
+    expect(tenantsOf((t) => listDlq(githubDlq, root, { tenantId: t }))).toEqual({ def: 1, empty: 0 });
   });
 
   it('github invalid-JSON DLQ row lands under tenant default', async () => {
     await ghPost(handle.port, '{broken', 'issues');
-    expect(tenantsOf((db, t) => listGitHubDlq(db, { tenantId: t }))).toEqual({ def: 1, empty: 0 });
+    expect(tenantsOf((t) => listDlq(githubDlq, root, { tenantId: t }))).toEqual({ def: 1, empty: 0 });
   });
 
   it('slack non-envelope DLQ row lands under tenant default', async () => {
     await slackPost(handle.port, '{"foo":1}');
-    expect(tenantsOf((db, t) => listSlackDlq(db, { tenantId: t }))).toEqual({ def: 1, empty: 0 });
+    expect(tenantsOf((t) => listDlq(slackDlq, root, { tenantId: t }))).toEqual({ def: 1, empty: 0 });
   });
 });

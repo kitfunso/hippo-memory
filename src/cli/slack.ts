@@ -4,7 +4,8 @@ import { envSlackBotToken, envSlackSigningSecret, envSlackTeamId } from '../env.
 import { openHippoDb, closeHippoDb } from '../db.js';
 import * as api from '../api.js';
 import { resolveTenantId } from '../tenant.js';
-import { listDlq, replayDlqEntry } from '../connectors/slack/dlq.js';
+import { listDlq } from '../connectors/dlq.js';
+import { replayDlqEntry, slackDlq } from '../connectors/slack/dlq.js';
 import { backfillChannel } from '../connectors/slack/backfill.js';
 import { slackHistoryFetcher } from '../connectors/slack/web-client.js';
 import {
@@ -58,15 +59,9 @@ function cmdSlackBackfill(hippoRoot: string, flags: CliFlags): void {
 }
 
 function cmdSlackDlqList(hippoRoot: string, _flags: CliFlags): void {
-  const db = openHippoDb(hippoRoot);
-  try {
-    const tenantId = resolveTenantId({});
-    const items = listDlq(db, { tenantId });
-    for (const it of items) {
-      console.log(`${it.id}\t${it.receivedAt}\t${it.error}`);
-    }
-  } finally {
-    closeHippoDb(db);
+  const items = listDlq(slackDlq, hippoRoot, { tenantId: resolveTenantId({}) });
+  for (const it of items) {
+    console.log(`${it.id}\t${it.receivedAt}\t${it.error}`);
   }
 }
 

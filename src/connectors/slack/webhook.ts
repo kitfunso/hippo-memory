@@ -4,7 +4,8 @@ import { verifySlackSignature } from './signature.js';
 import { isSlackEventEnvelope, isSlackMessageEvent, type SlackEventEnvelope } from './types.js';
 import { ingestMessage } from './ingest.js';
 import { handleMessageDeleted } from './deletion.js';
-import { writeToDlqOnRoot, type DlqBucket } from './dlq.js';
+import { parkInDlq } from '../dlq.js';
+import { slackDlq, type DlqBucket } from './dlq.js';
 import { resolveTenantForTeamOnRoot } from './tenant-routing.js';
 import { resolveTenantId } from '../../tenant.js';
 import type { Context } from '../../api.js';
@@ -82,11 +83,11 @@ interface SignedSlackRequest {
   slackTimestamp: string;
 }
 
-function parkInDlq(
+function parkAndAck(
   d: SignedSlackRequest,
   park: { tenantId: string | null; teamId: string | null; error: string; bucket: DlqBucket },
 ): void {
-  writeToDlqOnRoot(d.hippoRoot, {
+  parkInDlq(slackDlq, d.hippoRoot, {
     tenantId: park.tenantId,
     teamId: park.teamId,
     rawPayload: d.rawBody,
@@ -130,7 +131,7 @@ function routeSignedSlackPayload(d: SignedSlackRequest): void {
   if (body !== undefined && isSlackEventEnvelope(body)) {
     resolvedTenant = resolveTenantForTeamOnRoot(d.hippoRoot, body.team_id);
     if (resolvedTenant === null) {
-      parkInDlq(d, {
+      parkAndAck(d, {
         tenantId: null, // unroutable - stored as '__unroutable__'
         teamId: body.team_id,
         error: `unroutable team_id: ${body.team_id}`,
@@ -148,7 +149,7 @@ function routeSignedSlackPayload(d: SignedSlackRequest): void {
     actor: { subject: 'connector:slack', role: 'admin' },
   };
   if (body === undefined || !isSlackEventEnvelope(body)) {
-    parkInDlq(d, {
+    parkAndAck(d, {
       tenantId: ctx.tenantId,
       teamId: teamIdFromRaw,
       error: 'not an event_callback envelope',
@@ -164,16 +165,12 @@ function parkUnparseable(d: SignedSlackRequest, teamIdFromRaw: string | null): v
   // team_id; a null or unknown team writes tenantId=null, which lands as '__unroutable__'.
   const parseFailTenant =
     teamIdFromRaw !== null ? resolveTenantForTeamOnRoot(d.hippoRoot, teamIdFromRaw) : null;
-  writeToDlqOnRoot(d.hippoRoot, {
+  parkAndAck(d, {
     tenantId: parseFailTenant, // null → '__unroutable__' sentinel
     teamId: teamIdFromRaw,
-    rawPayload: d.rawBody,
     error: 'invalid JSON',
     bucket: 'parse_error',
-    signature: d.signature,
-    slackTimestamp: d.slackTimestamp,
   });
-  sendJson(d.res, 200, { ok: true, status: 'dlq' });
 }
 
 function dispatchSlackEvent(
@@ -211,7 +208,7 @@ function dispatchSlackEvent(
     sendJson(res, 200, { ok: true, status: r.status, memoryId: r.memoryId });
     return;
   }
-  parkInDlq(d, {
+  parkAndAck(d, {
     tenantId: ctx.tenantId,
     teamId: body.team_id,
     error: `unhandled event type: ${inner.type ?? 'unknown'}`,

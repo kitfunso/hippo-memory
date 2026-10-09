@@ -1,95 +1,27 @@
-import type { DatabaseSyncLike } from '../../db.js';
 import type { Context } from '../../api.js';
 import {
   bumpDlqRetry,
   dlqEntry,
-  dlqEntryAt,
   insertDlq,
-  insertDlqAt,
-  listDlqAt,
   listDlqRows,
   type DlqBucket,
   type DlqItem,
   type GithubDlqWrite,
 } from '../../store/connectors/github.js';
+import { replayFailed, type ConnectorDlq, type ReplayResult } from '../dlq.js';
 import { verifyGitHubSignature } from './signature.js';
 import { isGitHubWebhookEnvelope } from './types.js';
-import { redactPayload, DLQ_REDACTED_NOTE } from '../../secret-detect.js';
 import type { JsonValue } from '../../json.js';
 
-/**
- * GitHub webhook DLQ. Mirrors the Slack DLQ shape (src/connectors/slack/dlq.ts)
- * but carries GitHub-specific metadata: event_name, delivery_id, signature,
- * installation_id, repo_full_name, so a `hippo gh dlq replay` operator can
- * triage without re-deriving anything from the raw payload.
- *
- * Buckets:
- *   - parse_error     — raw_payload was not valid JSON
- *   - unroutable      — no tenant resolved for installation_id / repo_full_name
- *   - signature_failed — HMAC did not verify against the active webhook secret
- *   - unhandled       — parsed but no handler matched the event
- */
-export type { DlqBucket, DlqItem } from '../../store/connectors/github.js';
+export type { DlqBucket, DlqItem };
 
-/**
- * `tenantId: null` means the connector could not resolve a tenant for the
- * envelope (unroutable installation/repo). Stored as the sentinel
- * `'__unroutable__'` so the NOT NULL column is honored — same convention as
- * Slack DLQ.
- */
-export interface WriteDlqOpts {
-  tenantId: string | null;
-  rawPayload: string;
-  error: string;
-  bucket?: DlqBucket;
-  eventName?: string | null;
-  deliveryId?: string | null;
-  signature?: string | null;
-  installationId?: string | null;
-  repoFullName?: string | null;
-}
+type GithubOwnColumns = Pick<GithubDlqWrite, 'eventName' | 'deliveryId' | 'installationId' | 'repoFullName'>;
 
-/** The row as stored: secrets redacted, and the signature dropped once redaction changed the signed bytes. */
-function dlqWrite(opts: WriteDlqOpts): GithubDlqWrite {
-  const rawPayload = redactPayload(opts.rawPayload);
-  const redacted = rawPayload !== opts.rawPayload;
-  return {
-    tenantId: opts.tenantId ?? '__unroutable__',
-    rawPayload,
-    error: redacted ? `${opts.error}; ${DLQ_REDACTED_NOTE}` : opts.error,
-    eventName: opts.eventName ?? null,
-    deliveryId: opts.deliveryId ?? null,
-    signature: redacted ? null : opts.signature ?? null,
-    installationId: opts.installationId ?? null,
-    repoFullName: opts.repoFullName ?? null,
-    bucket: opts.bucket ?? 'parse_error',
-  };
-}
-
-export function writeToDlq(db: DatabaseSyncLike, opts: WriteDlqOpts): number {
-  return insertDlqAt(db, dlqWrite(opts));
-}
-
-/** writeToDlq on a handle of its own. */
-export function parkInDlq(hippoRoot: string, opts: WriteDlqOpts): number {
-  return insertDlq(hippoRoot, dlqWrite(opts));
-}
-
-export function listDlq(
-  db: DatabaseSyncLike,
-  opts: { tenantId: string; limit?: number },
-): DlqItem[] {
-  return listDlqAt(db, opts.tenantId, opts.limit ?? 100);
-}
-
-/** listDlq on a handle of its own. */
-export function listDlqIn(hippoRoot: string, opts: { tenantId: string; limit?: number }): DlqItem[] {
-  return listDlqRows(hippoRoot, opts.tenantId, opts.limit ?? 100);
-}
-
-export function getDlqEntry(db: DatabaseSyncLike, id: number): DlqItem | null {
-  return dlqEntryAt(db, id);
-}
+/** GitHub's dead-letter table; the event, delivery, installation and repo columns let an operator triage a row without re-reading the payload. */
+export const githubDlq: ConnectorDlq<GithubOwnColumns, DlqBucket, DlqItem> = {
+  insert: insertDlq,
+  list: listDlqRows,
+};
 
 export interface ReplayDlqOpts {
   /** Current webhook secret. If omitted, signature check is skipped (force-only path). */
@@ -103,22 +35,6 @@ export interface ReplayDlqOpts {
   previousSecret?: string;
   /** When true, skip signature verification (used for legacy entries after secret rotation). */
   force?: boolean;
-}
-
-export type ReplayStatus =
-  | 'replayed'
-  | 'parse_error'
-  | 'sig_fail'
-  | 'sig_missing'
-  | 'unhandled'
-  | 'not_found';
-
-export interface ReplayResult {
-  ok: boolean;
-  status: ReplayStatus;
-  memoryId: string | null;
-  retryCount: number;
-  reason?: string;
 }
 
 /**
@@ -160,15 +76,7 @@ export async function replayDlqEntry(
   opts: ReplayDlqOpts & { ingestHook?: IngestHook } = {},
 ): Promise<ReplayResult> {
   const row = dlqEntry(ctx.hippoRoot, id);
-  if (!row) {
-    return {
-      ok: false,
-      status: 'not_found',
-      memoryId: null,
-      retryCount: 0,
-      reason: `dlq id ${id} not found`,
-    };
-  }
+  if (!row) return replayFailed('not_found', 0, `dlq id ${id} not found`);
 
   // Signature verification (current secret, not the one in effect when DLQed).
   if (!opts.force && opts.webhookSecret) {
@@ -220,13 +128,11 @@ function checkReplaySignature(
   previousSecret: string | undefined,
 ): ReplayResult | null {
   if (!row.signature) {
-    return {
-      ok: false,
-      status: 'sig_missing',
-      memoryId: null,
-      retryCount: row.retryCount,
-      reason: 'row has no signature (legacy, or redacted before storing); pass --force to replay',
-    };
+    return replayFailed(
+      'sig_missing',
+      row.retryCount,
+      'row has no signature (legacy, or redacted before storing); pass --force to replay',
+    );
   }
   const sigOk = verifyGitHubSignature({
     rawBody: row.rawPayload,
@@ -236,14 +142,11 @@ function checkReplaySignature(
   });
   if (!sigOk) {
     bumpDlqRetry(hippoRoot, id);
-    return {
-      ok: false,
-      status: 'sig_fail',
-      memoryId: null,
-      retryCount: row.retryCount + 1,
-      reason:
-        'signature did not verify against current GITHUB_WEBHOOK_SECRET; pass --force to replay anyway',
-    };
+    return replayFailed(
+      'sig_fail',
+      row.retryCount + 1,
+      'signature did not verify against current GITHUB_WEBHOOK_SECRET; pass --force to replay anyway',
+    );
   }
   return null;
 }
@@ -259,23 +162,11 @@ function checkReplayEnvelope(hippoRoot: string, id: number, row: DlqItem): Repla
     // any JS value is safe (undefined if absent), preserving the existing
     // lenient formatting even when something non-Error was thrown.
     const message = (e as Error).message;
-    return {
-      ok: false,
-      status: 'parse_error',
-      memoryId: null,
-      retryCount: row.retryCount + 1,
-      reason: `still unparseable: ${message}`,
-    };
+    return replayFailed('parse_error', row.retryCount + 1, `still unparseable: ${message}`);
   }
   if (!isGitHubWebhookEnvelope(parsed)) {
     bumpDlqRetry(hippoRoot, id);
-    return {
-      ok: false,
-      status: 'unhandled',
-      memoryId: null,
-      retryCount: row.retryCount + 1,
-      reason: 'not a GitHub webhook envelope',
-    };
+    return replayFailed('unhandled', row.retryCount + 1, 'not a GitHub webhook envelope');
   }
   return null;
 }

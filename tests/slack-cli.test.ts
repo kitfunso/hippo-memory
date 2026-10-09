@@ -3,8 +3,8 @@ import { mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { initStore } from '../src/store/open.js';
-import { writeToDlq } from '../src/connectors/slack/dlq.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { parkInDlq } from '../src/connectors/dlq.js';
+import { slackDlq } from '../src/connectors/slack/dlq.js';
 import { hippoOut } from './_helpers/spawn-hippo.js';
 
 const CLI = resolve(__dirname, '..', 'bin', 'hippo.js');
@@ -29,12 +29,7 @@ describe('hippo slack CLI', () => {
   });
 
   it('hippo slack dlq list prints DLQ rows', () => {
-    const db = openHippoDb(join(root, '.hippo'));
-    try {
-      writeToDlq(db, { tenantId: 'default', rawPayload: '{"x":1}', error: 'bad event' });
-    } finally {
-      closeHippoDb(db);
-    }
+    parkInDlq(slackDlq, join(root, '.hippo'), { tenantId: 'default', rawPayload: '{"x":1}', error: 'bad event' });
     const out = runCli(root, ['slack', 'dlq', 'list']);
     expect(out).toContain('bad event');
   });

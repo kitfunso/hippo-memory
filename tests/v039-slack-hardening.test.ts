@@ -12,7 +12,8 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb, getCurrentSchemaVersion, getSchemaVersion } from '../src/db.js';
 import { resolveTenantForTeam } from '../src/connectors/slack/tenant-routing.js';
 import { ingestMessage } from '../src/connectors/slack/ingest.js';
-import { writeToDlq, replayDlqEntry } from '../src/connectors/slack/dlq.js';
+import { parkInDlq } from '../src/connectors/dlq.js';
+import { replayDlqEntry, slackDlq } from '../src/connectors/slack/dlq.js';
 import { archiveRawMemory } from '../src/raw-archive.js';
 import { verifySlackSignature } from '../src/connectors/slack/signature.js';
 import { slackHistoryFetcher } from '../src/connectors/slack/web-client.js';
@@ -370,23 +371,15 @@ describe('v0.39 commit 3 — Slack hardening + migration v19', () => {
     }
 
     // Seed the DLQ row.
-    let dlqId: number;
-    {
-      const db = openHippoDb(root);
-      try {
-        dlqId = writeToDlq(db, {
-          tenantId: 'default',
-          teamId: 'TREPLAY',
-          rawPayload: body,
-          error: 'historical parse_error',
-          bucket: 'parse_error',
-          signature: sigVal,
-          slackTimestamp: ts,
-        });
-      } finally {
-        closeHippoDb(db);
-      }
-    }
+    const dlqId = parkInDlq(slackDlq, root, {
+      tenantId: 'default',
+      teamId: 'TREPLAY',
+      rawPayload: body,
+      error: 'historical parse_error',
+      bucket: 'parse_error',
+      signature: sigVal,
+      slackTimestamp: ts,
+    });
 
     // Replay using the current secret. Use a wide skew override so the test is
     // not flaky against the now/skew check inside verifySlackSignature.

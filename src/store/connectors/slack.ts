@@ -110,15 +110,15 @@ export interface DlqItem {
   slackTimestamp: string | null;
 }
 
-/** One row to park, every column already decided by the caller. */
+/** One row to park; the two Slack-only columns are stored NULL when left out. */
 export interface SlackDlqInsert {
   tenantId: string;
-  teamId: string | null;
+  teamId?: string | null;
   rawPayload: string;
   error: string;
   bucket: DlqBucket;
   signature: string | null;
-  slackTimestamp: string | null;
+  slackTimestamp?: string | null;
 }
 
 /** Raw `slack_dlq` row shape, matching the columns named in the SELECTs below. */
@@ -152,7 +152,7 @@ function rowToItem(r: DlqRow): DlqItem {
   };
 }
 
-export function insertSlackDlqAt(db: DatabaseSyncLike, row: SlackDlqInsert): number {
+function insertSlackDlqAt(db: DatabaseSyncLike, row: SlackDlqInsert): number {
   const result = db
     .prepare(
       `INSERT INTO slack_dlq
@@ -161,18 +161,18 @@ export function insertSlackDlqAt(db: DatabaseSyncLike, row: SlackDlqInsert): num
     )
     .run(
       row.tenantId,
-      row.teamId,
+      row.teamId ?? null,
       row.rawPayload,
       row.error,
       new Date().toISOString(),
       row.bucket,
       row.signature,
-      row.slackTimestamp,
+      row.slackTimestamp ?? null,
     );
   return Number(result.lastInsertRowid);
 }
 
-export function listSlackDlqAt(db: DatabaseSyncLike, tenantId: string, limit: number): DlqItem[] {
+function listSlackDlqAt(db: DatabaseSyncLike, tenantId: string, limit: number): DlqItem[] {
   // SAFETY: row shape matches the columns named in the SELECT below.
   const rows = db
     .prepare(
@@ -187,7 +187,7 @@ export function listSlackDlqAt(db: DatabaseSyncLike, tenantId: string, limit: nu
   return rows.map(rowToItem);
 }
 
-export function slackDlqEntryAt(db: DatabaseSyncLike, id: number): DlqItem | null {
+function slackDlqEntryAt(db: DatabaseSyncLike, id: number): DlqItem | null {
   // SAFETY: row shape matches the columns named in the SELECT below.
   const row = db
     .prepare(
@@ -201,7 +201,7 @@ export function slackDlqEntryAt(db: DatabaseSyncLike, id: number): DlqItem | nul
   return rowToItem(row);
 }
 
-export function markSlackDlqRetriedAt(db: DatabaseSyncLike, id: number): void {
+function markSlackDlqRetriedAt(db: DatabaseSyncLike, id: number): void {
   db.prepare(`UPDATE slack_dlq SET retried_at = ?, retry_count = retry_count + 1 WHERE id = ?`)
     .run(new Date().toISOString(), id);
 }
@@ -213,6 +213,10 @@ export function bumpSlackDlqRetryCountAt(db: DatabaseSyncLike, id: number): void
 
 export function insertSlackDlq(hippoRoot: string, row: SlackDlqInsert): number {
   return onHandle(hippoRoot, (db) => insertSlackDlqAt(db, row));
+}
+
+export function listSlackDlq(hippoRoot: string, tenantId: string, limit: number): DlqItem[] {
+  return onHandle(hippoRoot, (db) => listSlackDlqAt(db, tenantId, limit));
 }
 
 export function slackDlqEntry(hippoRoot: string, id: number): DlqItem | null {

@@ -1,74 +1,29 @@
-import type { DatabaseSyncLike } from '../../db.js';
 import { type Context, adminActor } from '../../api.js';
 import {
   bumpSlackDlqRetryCount,
   insertSlackDlq,
-  insertSlackDlqAt,
-  listSlackDlqAt,
+  listSlackDlq,
   markSlackDlqRetried,
   slackDlqEntry,
   type DlqBucket,
   type DlqItem,
   type SlackDlqInsert,
 } from '../../store/connectors/slack.js';
+import { replayFailed, type ConnectorDlq, type ReplayResult, type ReplayStatus } from '../dlq.js';
 import { ingestMessage } from './ingest.js';
 import { resolveTenantForTeamOnRoot } from './tenant-routing.js';
 import { verifySlackSignature } from './signature.js';
 import { isSlackEventEnvelope, isSlackMessageEvent, type SlackEventEnvelope } from './types.js';
 import { handleMessageDeleted } from './deletion.js';
-import { redactPayload, DLQ_REDACTED_NOTE } from '../../secret-detect.js';
 import type { JsonValue } from '../../json.js';
 
 export type { DlqBucket, DlqItem };
-export { slackDlqEntryAt as getDlqEntry, markSlackDlqRetriedAt as markDlqRetried } from '../../store/connectors/slack.js';
 
-/**
- * writeToDlq is bucket-aware. `bucket` defaults to
- * 'parse_error' to preserve the legacy single-arg call sites while letting
- * new callers tag rows for `hippo slack dlq replay` triage.
- *
- * `tenantId: null` means "no tenant resolved" (unroutable team). Stored as
- * the sentinel '__unroutable__' so the column stays NOT NULL — a mismatch
- * the listing CLI surfaces explicitly.
- */
-export interface WriteDlqOpts {
-  tenantId: string | null;
-  rawPayload: string;
-  error: string;
-  bucket?: DlqBucket;
-  teamId?: string | null;
-  signature?: string | null;
-  slackTimestamp?: string | null;
-}
-
-/** The row to park: secrets redacted, the unroutable sentinel and the default bucket filled in. */
-function dlqInsert(opts: WriteDlqOpts): SlackDlqInsert {
-  const rawPayload = redactPayload(opts.rawPayload);
-  // A redacted body can never match its signature, so the row keeps none and replay needs --force.
-  const redacted = rawPayload !== opts.rawPayload;
-  return {
-    tenantId: opts.tenantId ?? '__unroutable__',
-    teamId: opts.teamId ?? null,
-    rawPayload,
-    error: redacted ? `${opts.error}; ${DLQ_REDACTED_NOTE}` : opts.error,
-    bucket: opts.bucket ?? 'parse_error',
-    signature: redacted ? null : opts.signature ?? null,
-    slackTimestamp: opts.slackTimestamp ?? null,
-  };
-}
-
-export function writeToDlq(db: DatabaseSyncLike, opts: WriteDlqOpts): number {
-  return insertSlackDlqAt(db, dlqInsert(opts));
-}
-
-/** writeToDlq on a handle opened for the one insert. */
-export function writeToDlqOnRoot(hippoRoot: string, opts: WriteDlqOpts): number {
-  return insertSlackDlq(hippoRoot, dlqInsert(opts));
-}
-
-export function listDlq(db: DatabaseSyncLike, opts: { tenantId: string; limit?: number }): DlqItem[] {
-  return listSlackDlqAt(db, opts.tenantId, opts.limit ?? 100);
-}
+/** Slack's dead-letter table; `teamId` and `slackTimestamp` are the columns only it has. */
+export const slackDlq: ConnectorDlq<Pick<SlackDlqInsert, 'teamId' | 'slackTimestamp'>, DlqBucket, DlqItem> = {
+  insert: insertSlackDlq,
+  list: listSlackDlq,
+};
 
 export interface ReplayDlqOpts {
   /** Skip signature verification when the row's signature/timestamp are missing or stale. */
@@ -79,14 +34,6 @@ export interface ReplayDlqOpts {
   now?: number;
   /** Skew window override for tests. */
   skewSeconds?: number;
-}
-
-export interface ReplayDlqResult {
-  ok: boolean;
-  status: string;
-  memoryId: string | null;
-  retryCount: number;
-  reason?: string;
 }
 
 /**
@@ -112,11 +59,9 @@ export function replayDlqEntry(
   ctx: Pick<Context, 'hippoRoot'>,
   id: number,
   opts: ReplayDlqOpts = {},
-): ReplayDlqResult {
+): ReplayResult {
   const row = slackDlqEntry(ctx.hippoRoot, id);
-  if (!row) {
-    return { ok: false, status: 'not_found', memoryId: null, retryCount: 0, reason: `dlq id ${id} not found` };
-  }
+  if (!row) return replayFailed('not_found', 0, `dlq id ${id} not found`);
 
   // Signature verification (current secret, not previous).
   if (!opts.force) {
@@ -150,15 +95,13 @@ export function replayDlqEntry(
 }
 
 /** The failure result when the row cannot pass the signature gate, else null; never bumps the count. */
-function checkReplaySignature(row: DlqItem, opts: ReplayDlqOpts): ReplayDlqResult | null {
+function checkReplaySignature(row: DlqItem, opts: ReplayDlqOpts): ReplayResult | null {
   if (!row.signature || !row.slackTimestamp) {
-    return {
-      ok: false,
-      status: 'sig_missing',
-      memoryId: null,
-      retryCount: row.retryCount,
-      reason: 'row has no signature/timestamp (legacy, or redacted before storing); pass --force to replay',
-    };
+    return replayFailed(
+      'sig_missing',
+      row.retryCount,
+      'row has no signature/timestamp (legacy, or redacted before storing); pass --force to replay',
+    );
   }
   if (opts.signingSecret) {
     const ok = verifySlackSignature({
@@ -171,28 +114,26 @@ function checkReplaySignature(row: DlqItem, opts: ReplayDlqOpts): ReplayDlqResul
       skewSeconds: opts.skewSeconds ?? 60 * 60 * 24 * 365,
     });
     if (!ok) {
-      return {
-        ok: false,
-        status: 'sig_fail',
-        memoryId: null,
-        retryCount: row.retryCount,
-        reason: 'signature did not verify against current SLACK_SIGNING_SECRET; pass --force to replay anyway',
-      };
+      return replayFailed(
+        'sig_fail',
+        row.retryCount,
+        'signature did not verify against current SLACK_SIGNING_SECRET; pass --force to replay anyway',
+      );
     }
   }
   return null;
 }
 
-function failAndBump(hippoRoot: string, row: DlqItem, status: string, reason: string): ReplayDlqResult {
+function failAndBump(hippoRoot: string, row: DlqItem, status: ReplayStatus, reason: string): ReplayResult {
   bumpSlackDlqRetryCount(hippoRoot, row.id);
-  return { ok: false, status, memoryId: null, retryCount: row.retryCount + 1, reason };
+  return replayFailed(status, row.retryCount + 1, reason);
 }
 
 function dispatchReplay(
   replayCtx: Context,
   row: DlqItem,
   parsed: JsonValue & SlackEventEnvelope,
-): ReplayDlqResult {
+): ReplayResult {
   const { hippoRoot } = replayCtx;
   const id = row.id;
   const inner = parsed.event;

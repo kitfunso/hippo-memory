@@ -103,20 +103,20 @@ export interface DlqItem {
   bucket: DlqBucket | string;
 }
 
-/** One github_dlq row to write, already redacted by the caller. */
+/** One github_dlq row to write, already redacted by the caller; the four GitHub-only columns are stored NULL when left out. */
 export interface GithubDlqWrite {
   tenantId: string;
   rawPayload: string;
   error: string;
-  eventName: string | null;
-  deliveryId: string | null;
+  eventName?: string | null;
+  deliveryId?: string | null;
   signature: string | null;
-  installationId: string | null;
-  repoFullName: string | null;
-  bucket: string;
+  installationId?: string | null;
+  repoFullName?: string | null;
+  bucket: DlqBucket;
 }
 
-export function insertDlqAt(db: DatabaseSyncLike, row: GithubDlqWrite): number {
+function insertDlqAt(db: DatabaseSyncLike, row: GithubDlqWrite): number {
   const result = db
     .prepare(
       `INSERT INTO github_dlq
@@ -128,11 +128,11 @@ export function insertDlqAt(db: DatabaseSyncLike, row: GithubDlqWrite): number {
       row.tenantId,
       row.rawPayload,
       row.error,
-      row.eventName,
-      row.deliveryId,
+      row.eventName ?? null,
+      row.deliveryId ?? null,
       row.signature,
-      row.installationId,
-      row.repoFullName,
+      row.installationId ?? null,
+      row.repoFullName ?? null,
       new Date().toISOString(),
       row.bucket,
     );
@@ -182,7 +182,7 @@ function rowToItem(r: DlqRawRow): DlqItem {
   };
 }
 
-export function listDlqAt(db: DatabaseSyncLike, tenantId: string, limit: number): DlqItem[] {
+function listDlqAt(db: DatabaseSyncLike, tenantId: string, limit: number): DlqItem[] {
   // SAFETY: SELECT_COLUMNS projects exactly DlqRawRow's fields.
   const rows = db
     .prepare(
@@ -200,7 +200,7 @@ export function listDlqRows(hippoRoot: string, tenantId: string, limit: number):
   return onHandle(hippoRoot, (db) => listDlqAt(db, tenantId, limit));
 }
 
-export function dlqEntryAt(db: DatabaseSyncLike, id: number): DlqItem | null {
+function dlqEntryAt(db: DatabaseSyncLike, id: number): DlqItem | null {
   // SAFETY: SELECT_COLUMNS projects exactly DlqRawRow's fields.
   const row = db
     .prepare(
