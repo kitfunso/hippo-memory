@@ -27,3 +27,12 @@ updates:
       npm-ui:
         patterns: ['*']
         update-types: [minor, patch]
+  - package-ecosystem: npm
+    directory: /website
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 2
+    groups:
+      npm-website:
+        patterns: ['*']
+        update-types: [minor, patch]
