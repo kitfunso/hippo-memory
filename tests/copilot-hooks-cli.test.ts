@@ -498,6 +498,7 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     expect(secondStop.status, secondStop.stderr).toBe(0);
     await waitForLog(secondLog, TURN_DONE, 50_000);
     expect(pidAlive(pid)).toBe(true);
+    expect(fs.existsSync(sessionFile('.lock'))).toBe(true);
     expect(memoriesWith(FIRST_LESSON)).toBe(1);
     expect(memoriesWith(SECOND_LESSON)).toBe(1);
     expect(fs.existsSync(sessionFile('.cursor.json'))).toBe(false);
