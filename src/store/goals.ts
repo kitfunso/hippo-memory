@@ -413,9 +413,8 @@ export function localGoalRecallRows(db: DatabaseSyncLike, rows: readonly GoalRec
   return rows.filter((r) => localIds.has(r.memoryId));
 }
 
-/** The dlPFC goal-stack boost over goals already read, touching no store: the boosted rows and the log rows for the top `limit` of them.
- *  The caller skips it under an explicit goal tag and recomputes tokens after. Its log keeps rows whose memory is global,
- *  since only the store can tell them apart; {@link localGoalRecallRows} drops those before the write. */
+/** The goal-stack boost over goals already read, touching no store; a caller skips it under an explicit goal tag. Its log covers the top
+ *  `limit` rows and keeps those whose memory is global, since only the store can tell them apart; {@link localGoalRecallRows} drops those before the write. */
 export function boostByGoals<R extends { entry: MemoryEntry; score: number }>(
   results: R[],
   active: ActiveGoals,

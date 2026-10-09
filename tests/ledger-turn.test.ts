@@ -62,7 +62,7 @@ describe('recordLedgerTurn', () => {
       delivery: (write) => rec.flush(write),
     }));
     expect(countMatching(log.statements, STORE_OPEN)).toBe(1);
-    const lastTokenRow = log.statements.findLastIndex((sql) => sql.includes('INSERT INTO token_ledger'));
+    const lastTokenRow = log.statements.map((sql) => sql.includes('INSERT INTO token_ledger')).lastIndexOf(true);
     expect(log.statements.findIndex((sql) => sql.includes('INSERT INTO delivery_events'))).toBeGreaterThan(lastTokenRow);
     expect(ledgerSurfaces()).toEqual(['hook', 'hook_recall']);
     expect(deliveryCount()).toBe(1);

@@ -64,7 +64,7 @@ function startDeliveryRecorder(
 ): DeliveryRecorder | null {
   if (flags['pinned-only'] !== true) return null;
   try {
-    // The same store the token ledger is written to, so its config governs both.
+    // The same store withLedgerDb writes the token ledger to, so its config governs both.
     const root = ledgerRoot(hippoRoot);
     if (root === null || !loadConfig(root).deliveryLedger.enabled) return null;
     return createDeliveryRecorder({
