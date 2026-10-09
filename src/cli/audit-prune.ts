@@ -25,7 +25,7 @@
  */
 
 import type { DatabaseSyncLike } from '../db.js';
-import { appendAuditEvent } from '../store/audit.js';
+import { appendAuditEvent, countAuditBefore, deleteAuditBefore } from '../store/audit.js';
 import { DAY_MS } from '../util/time.js';
 
 export interface PruneAuditOpts {
@@ -84,20 +84,11 @@ export function pruneAuditLog(
   let count = 0;
   if (dryRun) {
     // Dry-run: just count, no DELETE.
-    // SAFETY: row comes from `SELECT COUNT(*) AS c` above; COUNT(*) always
-    // yields exactly one row with a numeric `c` column (number or bigint
-    // depending on the node:sqlite driver's integer handling).
-    const row = db
-      .prepare(`SELECT COUNT(*) AS c FROM audit_log WHERE tenant_id = ? AND ts < ?`)
-      .get(opts.tenantId, cutoff) as { c: number | bigint };
-    count = Number(row.c);
+    count = countAuditBefore(db, opts.tenantId, cutoff);
   } else {
     db.exec('BEGIN IMMEDIATE');
     try {
-      const result = db
-        .prepare(`DELETE FROM audit_log WHERE tenant_id = ? AND ts < ?`)
-        .run(opts.tenantId, cutoff);
-      count = Number(result.changes ?? 0);
+      count = deleteAuditBefore(db, opts.tenantId, cutoff);
       // Record the prune itself in the audit trail. This row has ts = now,
       // so it's not eligible for the cutoff that was just applied.
       appendAuditEvent(db, {

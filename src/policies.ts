@@ -34,51 +34,29 @@
  * otherwise make a same-day policy invisible).
  *
  * Dual-write atomicity: `savePolicy` writes the memory + policies row (and, on
- * supersede, the predecessor's UPDATE) inside writeEntry's SAVEPOINT.
+ * supersede, the predecessor's UPDATE) in the `objects` store group's one transaction.
  */
 
 import { BadRequestError } from './api-errors.js';
 import { openHippoDb, closeHippoDb } from './db.js';
-import { onHandle } from './store/open.js';
 import { assertTenantId } from './tenant.js';
 import type { KeysetPosition } from './keyset.js';
 import type { SavableDescriptor } from './objects/descriptor.js';
-import { assertObjectStatus, closeObjectOn, dropClosedObjectFromGraph, loadObjectByIdOn, loadObjectsOn, saveObject } from './objects/lifecycle.js';
+import { closeObjectAt, listObjectsAt, objectByIdAt, saveObjectAt } from './objects/lifecycle.js';
+import type { Policy, PolicyStatus } from './store/object-types.js';
+import { rowSpec, type RowByKind } from './store/sqlite/object-rows.js';
+
+export type { Policy, PolicyStatus } from './store/object-types.js';
 
 // ---------------------------------------------------------------------------
 // Domain types
 // ---------------------------------------------------------------------------
-
-export type PolicyStatus = 'active' | 'superseded' | 'closed';
 
 export const VALID_POLICY_STATES: ReadonlySet<PolicyStatus> = new Set<PolicyStatus>([
   'active',
   'superseded',
   'closed',
 ]);
-
-export interface Policy {
-  id: number;
-  /** Nullable: ON DELETE SET NULL lets memory deletion proceed without breaking
-   *  the policy row. */
-  memoryId: string | null;
-  tenantId: string;
-  policyName: string;
-  policyText: string;
-  /** Canonical ISO-8601 datetime; when the policy takes effect. Always set. */
-  validFrom: string;
-  /** Canonical ISO-8601 datetime; when it expires. null = open-ended. */
-  validTo: string | null;
-  /** Server-derived: 1 on a fresh create, predecessor.version + 1 on supersede. */
-  version: number;
-  status: PolicyStatus;
-  supersededBy: number | null;
-  supersededAt: string | null;
-  /** The per-version delta note; set on a successor row only (NULL on a v1). */
-  changeSummary: string | null;
-  closedAt: string | null;
-  createdAt: string;
-}
 
 export interface SavePolicyOpts {
   policyName: string;
@@ -143,53 +121,6 @@ export function validatePolicyDates(
   return { validFrom, validTo };
 }
 
-// ---------------------------------------------------------------------------
-// Row <-> domain mapping
-// ---------------------------------------------------------------------------
-
-interface PolicyRow {
-  id: number;
-  memory_id: string | null;
-  tenant_id: string;
-  policy_name: string;
-  policy_text: string;
-  valid_from: string;
-  valid_to: string | null;
-  version: number;
-  status: string;
-  superseded_by: number | null;
-  superseded_at: string | null;
-  change_summary: string | null;
-  closed_at: string | null;
-  created_at: string;
-}
-
-function rowToPolicy(row: PolicyRow): Policy {
-  return {
-    id: row.id,
-    memoryId: row.memory_id,
-    tenantId: row.tenant_id,
-    policyName: row.policy_name,
-    policyText: row.policy_text,
-    validFrom: row.valid_from,
-    validTo: row.valid_to,
-    version: row.version,
-    // SAFETY: row.status is DB-constrained to PolicyStatus values; every INSERT/
-    // UPDATE in this file writes only the literal 'active' | 'superseded' | 'closed'.
-    status: row.status as PolicyStatus,
-    supersededBy: row.superseded_by,
-    supersededAt: row.superseded_at,
-    changeSummary: row.change_summary,
-    closedAt: row.closed_at,
-    createdAt: row.created_at,
-  };
-}
-
-const POLICY_COLS = `
-  id, memory_id, tenant_id, policy_name, policy_text, valid_from, valid_to,
-  version, status, superseded_by, superseded_at, change_summary, closed_at, created_at
-`;
-
 /** Recall-surface content for the memory mirror: name + rule + effective range. */
 function buildPolicyContent(
   policyName: string,
@@ -201,33 +132,33 @@ function buildPolicyContent(
   return `${policyName}\n\n${policyText}\n\nEffective: ${range}`;
 }
 
-/** What one policy write stores, with both dates already normalized. */
-interface PolicyFields {
-  readonly policyName: string;
-  readonly policyText: string;
-  readonly validFrom: string;
-  readonly validTo: string | null;
-}
-
-const POLICY: SavableDescriptor<Policy, PolicyRow, never, PolicyFields> = {
-  table: 'policies',
-  cols: POLICY_COLS,
+export const POLICY: SavableDescriptor<'policy', SavePolicyOpts> = {
+  kind: 'policy',
   label: 'policy',
   plural: 'policies',
   fn: { get: 'loadPolicyById', close: 'closePolicy', list: 'loadPolicies', save: 'savePolicy' },
   states: VALID_POLICY_STATES,
   closableFrom: ['active'],
-  ops: { close: 'policy_close', create: 'policy_create', supersede: 'policy_supersede' },
-  idKey: 'policy_id',
-  graphType: 'policy',
-  listFilters: {},
-  rowTo: rowToPolicy,
-  source: 'policy',
-  versioned: true,
-  columns: ['policy_name', 'policy_text', 'valid_from', 'valid_to'],
-  values: (w) => [w.policyName, w.policyText, w.validFrom, w.validTo],
-  // Ids and flags only, never the policy text.
-  createMeta: (w, version) => ({ version, open_ended: w.validTo === null }),
+  draft(opts) {
+    if (!opts.policyName || opts.policyName.trim().length === 0) {
+      throw new BadRequestError('savePolicy: policyName is required');
+    }
+    if (!opts.policyText || opts.policyText.trim().length === 0) {
+      throw new BadRequestError('savePolicy: policyText is required');
+    }
+    const at = new Date().toISOString();
+    // valid_from defaults to the creation instant. A date-only as-of is widened to end-of-day on the read side,
+    // because backdating valid_from to midnight would report the policy in force earlier that day.
+    const { validFrom, validTo } = validatePolicyDates(opts.validFrom, opts.validTo, at);
+    return {
+      fields: { policyName: opts.policyName, policyText: opts.policyText, validFrom, validTo },
+      content: buildPolicyContent(opts.policyName, opts.policyText, validFrom, validTo),
+      tags: opts.extraTags ?? [],
+      supersedesId: opts.supersedesPolicyId,
+      changeSummary: opts.changeSummary,
+      at,
+    };
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -236,11 +167,11 @@ const POLICY: SavableDescriptor<Policy, PolicyRow, never, PolicyFields> = {
 
 /**
  * Create a policy (or a new version that supersedes an existing one). Writes the
- * memory mirror + the policies row atomically inside writeEntry's SAVEPOINT.
+ * memory mirror + the policies row in the `objects` store group's one transaction.
  * valid_from defaults to now; valid_to must be > valid_from (validatePolicyDates).
  * When supersedesPolicyId is given, the referenced ACTIVE row is preflighted
  * (status + version) BEFORE the INSERT, then CAS-UPDATEd -> superseded in the same
- * SAVEPOINT; the new version = predecessor.version + 1 (server-derived).
+ * transaction; the new version = predecessor.version + 1 (server-derived).
  */
 export function savePolicy(
   hippoRoot: string,
@@ -248,31 +179,7 @@ export function savePolicy(
   opts: SavePolicyOpts,
   actor: string = 'cli',
 ): Policy {
-  assertTenantId(POLICY.fn.save, tenantId);
-  if (!opts.policyName || opts.policyName.trim().length === 0) {
-    throw new BadRequestError('savePolicy: policyName is required');
-  }
-  if (!opts.policyText || opts.policyText.trim().length === 0) {
-    throw new BadRequestError('savePolicy: policyText is required');
-  }
-
-  const now = new Date().toISOString();
-  // valid_from defaults to the precise creation instant (the honest effective
-  // time). The same-day date-only as-of workflow is handled on the READ side
-  // (a date-only asOf resolves to end-of-day in loadPoliciesAsOf), NOT by
-  // backdating the stored valid_from - backdating to midnight would make an
-  // earlier-same-day as-of wrongly report the policy already in force and would
-  // hide a superseded predecessor for that earlier time. An explicit --from is honored as-is.
-  const { validFrom, validTo } = validatePolicyDates(opts.validFrom, opts.validTo, now);
-  return saveObject(hippoRoot, POLICY, tenantId, {
-    actor,
-    now,
-    fields: { policyName: opts.policyName, policyText: opts.policyText, validFrom, validTo },
-    content: buildPolicyContent(opts.policyName, opts.policyText, validFrom, validTo),
-    tags: opts.extraTags ?? [],
-    supersedesId: opts.supersedesPolicyId,
-    changeSummary: opts.changeSummary,
-  });
+  return saveObjectAt(POLICY, { hippoRoot, tenantId, actor }, opts);
 }
 
 /**
@@ -286,13 +193,7 @@ export function closePolicy(
   id: number,
   actor: string = 'cli',
 ): Policy {
-  assertTenantId(POLICY.fn.close, tenantId);
-  const now = new Date().toISOString();
-  return onHandle(hippoRoot, (db) => {
-    const closed = closeObjectOn(db, POLICY, tenantId, id, { actor, now });
-    dropClosedObjectFromGraph(hippoRoot, POLICY, tenantId, closed);
-    return closed;
-  });
+  return closeObjectAt(hippoRoot, POLICY, tenantId, id, actor);
 }
 
 export function loadPolicyById(
@@ -300,8 +201,7 @@ export function loadPolicyById(
   tenantId: string,
   id: number,
 ): Policy | null {
-  assertTenantId(POLICY.fn.get, tenantId);
-  return onHandle(hippoRoot, (db) => loadObjectByIdOn(db, POLICY, tenantId, id));
+  return objectByIdAt(hippoRoot, POLICY, tenantId, id);
 }
 
 export function loadPolicies(
@@ -309,9 +209,7 @@ export function loadPolicies(
   tenantId: string,
   opts: ListPoliciesOpts = {},
 ): Policy[] {
-  assertTenantId(POLICY.fn.list, tenantId);
-  assertObjectStatus(POLICY, opts.status);
-  return onHandle(hippoRoot, (db) => loadObjectsOn(db, POLICY, tenantId, opts));
+  return listObjectsAt(hippoRoot, POLICY, tenantId, opts);
 }
 
 export function loadActivePolicies(
@@ -386,8 +284,8 @@ export function loadPoliciesAsOf(
         ${nameClause}
       ORDER BY p.valid_from DESC, p.id DESC
       LIMIT ?
-    `).all(...params) as PolicyRow[];
-    return rows.map(rowToPolicy);
+    `).all(...params) as RowByKind['policy'][];
+    return rows.map(rowSpec('policy').rowTo);
   } finally {
     closeHippoDb(db);
   }

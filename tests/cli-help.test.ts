@@ -7,6 +7,7 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { COMMANDS, parseArgs, runCli, usageText, verbUsage } from '../src/cli.js';
+import { ownStderr } from './_helpers/own-stderr.js';
 import { runInProcess, type InProcessResult } from './_helpers/run-in-process.js';
 
 // Read from the dispatch table so a verb added later is covered without editing this file.
@@ -16,8 +17,6 @@ const OWN_FLAG = new Map([
   ['audit prune', '--older-than'], ['slack backfill', '--channel'], ['slack workspaces', '--tenant'], ['github backfill', '--repo'],
 ]);
 const CLI = resolve(__dirname, '..', 'bin', 'hippo.js');
-// Whether Node prints the SQLite warning depends on its version, so it stays out of the comparison.
-const SQLITE_WARNING = /\(node:\d+\) ExperimentalWarning: SQLite is an experimental feature[^\n]*\r?\n\(Use `node --trace-warnings[^\n]*(?:\r?\n)?/g;
 // No PATH, so a spawned verb that ignored --help could not reach schtasks, crontab or codex.
 const ENV = Object.fromEntries(Object.entries(process.env).filter(([key]) => key.toUpperCase() !== 'PATH'));
 const ISOLATED_KEYS = ['HOME', 'USERPROFILE', 'HIPPO_HOME', 'HIPPO_SKIP_AUTO_INTEGRATIONS'];
@@ -138,7 +137,7 @@ describe('built CLI', () => {
       encoding: 'utf8',
       timeout: 10_000,
     });
-    expect({ status: res.status, stdout: res.stdout, stderr: res.stderr.replace(SQLITE_WARNING, '') }).toEqual(full);
+    expect({ status: res.status, stdout: res.stdout, stderr: ownStderr(res.stderr) }).toEqual(full);
     expect(written()).toEqual([]);
   });
 });
