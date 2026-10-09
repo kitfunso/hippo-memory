@@ -2,10 +2,10 @@
 // Pure build functions plus one cache; the queries over it live in dashboard-queries.ts.
 
 import * as fs from 'fs';
-import { calculateStrength, confidenceFacets, netWrong, Layer as MemoryLayer, type MemoryEntry } from '../memory.js';
+import { calculateStrength, facetsOf, netWrong, Layer as MemoryLayer, type ConfidenceInputs, type MemoryEntry, type StrengthInputs } from '../memory.js';
 import { isQuarantineScope } from '../quarantine.js';
 import { listMemoryConflicts } from '../store/conflicts.js';
-import { loadAllEntries } from '../store/entry-reads.js';
+import { loadDashboardRows, type DashboardRow, type DashboardRows, type ExcludedCounts } from '../store/dashboard-reads.js';
 import type { MemoryConflict } from '../store/rows.js';
 import { closeHippoDb, getHippoDbPath, openHippoDbReadOnly, type DatabaseSyncLike } from '../db.js';
 import { storedVectorIds } from '../db/vector-store.js';
@@ -79,12 +79,12 @@ function daysBetween(thenIso: string, nowMs: number): number {
 }
 
 /** Strength now and at +7d and +30d, band, age and the confidence split for one entry at `nowMs`. */
-export function memoryFacts(entry: MemoryEntry, nowMs: number): MemoryFacts {
+export function memoryFacts(entry: StrengthInputs & ConfidenceInputs & Pick<MemoryEntry, 'layer'>, nowMs: number): MemoryFacts {
   const now = new Date(nowMs);
   const strength = calculateStrength(entry, now);
   const strength7d = calculateStrength(entry, new Date(nowMs + 7 * DAY_MS));
   const strength30d = calculateStrength(entry, new Date(nowMs + 30 * DAY_MS));
-  const facets = confidenceFacets(entry, now);
+  const facets = facetsOf(entry, now);
   const band = entry.pinned ? BAND_PINNED : strength30d < 0.2 ? BAND_AT_RISK : strength >= 0.5 ? BAND_STRONG : BAND_FADING;
   return {
     strength,
@@ -194,7 +194,9 @@ export interface SnapshotInput {
   id: number;
   tenantId: string;
   nowMs: number;
-  entries: readonly MemoryEntry[];
+  entries: readonly DashboardRow[];
+  /** Rows counted out before `entries` was read; any entry here that is not live adds to them. */
+  excluded?: ExcludedCounts;
   openConflicts: readonly Pick<MemoryConflict, 'memory_a_id' | 'memory_b_id'>[];
   embeddedIds: ReadonlySet<string> | null;
 }
@@ -236,7 +238,7 @@ function newDraft(identity: { key: string; name: string; kind: ProjectKind }): P
   };
 }
 
-function toFact(entry: MemoryEntry, f: ReturnType<typeof memoryFacts>, project: number, embedded: boolean, createdMs: number): Fact {
+function toFact(entry: DashboardRow, f: ReturnType<typeof memoryFacts>, project: number, embedded: boolean, createdMs: number): Fact {
   const { head, truncated } = cutHead(entry.content);
   const tier = CONFIDENCE_ORDER.indexOf(f.confidence);
   return {
@@ -265,7 +267,7 @@ function toFact(entry: MemoryEntry, f: ReturnType<typeof memoryFacts>, project: 
   };
 }
 
-function tallyExcluded(entry: MemoryEntry, excluded: { superseded: number; archived: number; quarantined: number }): void {
+function tallyExcluded(entry: Pick<MemoryEntry, 'superseded_by' | 'kind' | 'scope'>, excluded: ExcludedCounts): void {
   if (isQuarantineScope(entry.scope)) excluded.quarantined++;
   else if (entry.superseded_by || entry.kind === 'superseded') excluded.superseded++;
   else if (entry.kind === 'archived') excluded.archived++;
@@ -291,7 +293,7 @@ function finishProject(d: ProjectDraft): ProjectAgg {
 /** Builds the snapshot from already-loaded rows; it touches no store, so tests can feed it directly. */
 export function buildSnapshot(input: SnapshotInput): Snapshot {
   const { entries, embeddedIds, nowMs } = input;
-  const excluded = { superseded: 0, archived: 0, quarantined: 0 };
+  const excluded: ExcludedCounts = { superseded: 0, archived: 0, quarantined: 0, ...input.excluded };
   const facts: Fact[] = [];
   const projectIndex = new Map<string, number>();
   const drafts: ProjectDraft[] = [];
@@ -415,13 +417,13 @@ class SnapshotCacheService implements SnapshotService {
   }
 
   private build(tenantId: string, dv: number | null, nowMs: number): Snapshot {
-    const entries = dv === null ? [] : loadAllEntries(this.hippoRoot, tenantId);
+    const rows: DashboardRows | null = dv === null ? null : loadDashboardRows(this.hippoRoot, tenantId);
     const openConflicts = dv === null ? [] : listMemoryConflicts(this.hippoRoot, 'open', tenantId);
     this.lastId += 1;
     highestIssuedId = Math.max(highestIssuedId, this.lastId);
-    // After loadAllEntries, whose writable open has run any pending migration and legacy embeddings.json import.
+    // After loadDashboardRows, whose writable open has run any pending migration and legacy embeddings.json import.
     this.lastEmbeddedIds = readEmbeddedIds(this.db);
-    return buildSnapshot({ id: this.lastId, tenantId, nowMs, entries, openConflicts, embeddedIds: this.lastEmbeddedIds });
+    return buildSnapshot({ id: this.lastId, tenantId, nowMs, entries: rows?.live ?? [], excluded: rows?.excluded, openConflicts, embeddedIds: this.lastEmbeddedIds });
   }
 
   get(tenantId: string, fresh = false): Snapshot {

@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { createApiKey, listScopeGrants } from '../src/auth.js';
+import { createApiKey, listScopeGrants } from '../src/store/auth.js';
 import { Layer } from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { serve, type ServerHandle } from '../src/server.js';

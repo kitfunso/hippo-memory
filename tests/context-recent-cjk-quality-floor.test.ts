@@ -1,5 +1,5 @@
 /**
- * DF3 follow-up (codex review) — `substantiveWordCount` (src/audit.ts) is not
+ * DF3 follow-up (codex review) — `substantiveWordCount` (src/store/audit.ts) is not
  * locale-aware: it splits on `/\s+/`, so a whitespace-free CJK sentence reads
  * as a single "word" and fails the `< 2` substantive-word-count check inside
  * `isContentWorthStoring`. That heuristic gates both the `includeRecent`
@@ -51,7 +51,7 @@ function seed(home: string, content: string, opts: { created?: string } = {}) {
 
 const CJK_SENTENCE = 'データベース接続がタイムアウトしたときは再試行の間隔を二倍にする';
 
-describe('CJK-aware substantiveWordCount (src/audit.ts)', () => {
+describe('CJK-aware substantiveWordCount (src/store/audit.ts)', () => {
   it('(a) a substantive CJK sentence passes isContentWorthStoring', () => {
     expect(isContentWorthStoring(CJK_SENTENCE)).toBe(true);
   });

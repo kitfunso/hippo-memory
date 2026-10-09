@@ -15,7 +15,7 @@ import { estimateTokens } from '../token-ledger.js';
 import { markRetrieved, type MemoryEntry, COMPACTION_MEMORY_TAG } from '../memory.js';
 import { isWorthSurfacing } from '../memory-quality.js';
 import { getGlobalRoot } from '../shared.js';
-import type { RecallTraceInput } from '../recall-trace.js';
+import type { RecallTraceInput } from '../store/recall-trace.js';
 import { evalNow } from '../ablation.js';
 import { dropHeldCopies } from '../same-text.js';
 import { BadRequestError } from '../api-errors.js';
@@ -236,18 +236,31 @@ function warnIsolationIgnored(hippoRoot: string): void {
   log.warn(`${hippoRoot}: "contextProjectIsolation": false is ignored on a shared store; a read opts in with cross_project.`);
 }
 
-function planContext(ctx: Context, opts: ContextOpts, local: ContextSource): ContextPlan {
-  const pinnedOnly = opts.pinnedOnly === true;
+/** Which stores this read can draw on, and what kind the primary one is. */
+function storesInReach(ctx: Context, opts: ContextOpts, local: ContextSource) {
   const other = local.store.kind !== 'sqlite' ? local.store : undefined;
   // Global memories do not establish a project boundary for task state.
   const hasLocal = other !== undefined || isInitialized(ctx.hippoRoot);
-  const query = (opts.q ?? '').trim() || '*';
   const globalRoot = getGlobalRoot();
   // The store's own flag counts too, so no surface can read a shared store as its owner.
   const sharedStore = opts.sharedStore === true || isSharedStore(ctx.hippoRoot);
   // A store serving many people is not its operator's, so the operator's own global store stays out.
   const hasGlobal = !sharedStore && other === undefined && isInitialized(globalRoot);
   const primaryIsGlobal = isGlobalStoreRoot(ctx.hippoRoot);
+  return { other, hasLocal, globalRoot, sharedStore, hasGlobal, primaryIsGlobal };
+}
+
+/** Prices one entry against the budget: the caller's cost model when it gave one, else a token estimate. */
+function entryPricer(cost: ContextOpts['cost'], currentProject: ContextPlan['currentProject']): ContextPlan['price'] {
+  return (entry: MemoryEntry, isGlobal: boolean, promptRecall?: boolean): number => cost
+    ? cost.entry({ entry, isGlobal, promptRecall, origin: entry.origin_project ?? null, category: classifyOriginProject(entry.origin_project, currentProject) })
+    : estimateTokens(entry.content);
+}
+
+function planContext(ctx: Context, opts: ContextOpts, local: ContextSource): ContextPlan {
+  const pinnedOnly = opts.pinnedOnly === true;
+  const { other, hasLocal, globalRoot, sharedStore, hasGlobal, primaryIsGlobal } = storesInReach(ctx, opts, local);
+  const query = (opts.q ?? '').trim() || '*';
 
   // opts.scope is only the tag boost, opts.exactScope the envelope request; other-project memories are
   // excluded unless the caller asks for them (crossProject) or isolation is disabled.
@@ -264,9 +277,7 @@ function planContext(ctx: Context, opts: ContextOpts, local: ContextSource): Con
   const promptRecallPending = pinnedOnly && Boolean(opts.prompt?.trim()) && config.pinnedInject.promptRecall === true;
 
   const cost = opts.cost;
-  const price = (entry: MemoryEntry, isGlobal: boolean, promptRecall?: boolean): number => cost
-    ? cost.entry({ entry, isGlobal, promptRecall, origin: entry.origin_project ?? null, category: classifyOriginProject(entry.origin_project, currentProject) })
-    : estimateTokens(entry.content);
+  const price = entryPricer(cost, currentProject);
   return {
     local,
     other,

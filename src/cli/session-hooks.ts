@@ -325,7 +325,7 @@ function closeEndedSessionSnapshot(store: string, closeSessionId: string | null,
       appendSessionEndCloseLog(closeLogFile, 'skip: no session_id in SessionEnd payload, active snapshot left untouched');
     }
   } catch (err) {
-    appendSessionEndCloseLog(closeLogFile, `snapshot close failed: ${(err as Error).message}`);
+    appendSessionEndCloseLog(closeLogFile, `snapshot close failed: ${errorMessage(err)}`);
   }
 }
 
@@ -452,7 +452,7 @@ function writeEndHandoff(
     }
   } catch (err) {
     // SAFETY: catch clauses bind unknown, but Node/V8 always throws an Error here.
-    appendSessionEndCloseLog(closeLogFile, `handoff write failed: ${(err as Error).message}`);
+    appendSessionEndCloseLog(closeLogFile, `handoff write failed: ${errorMessage(err)}`);
   }
 }
 

@@ -9,7 +9,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { authCreate, authRevoke, adminActor, type HippoDbContext } from '../src/api.js';
-import { queryAuditEvents } from '../src/audit.js';
+import { queryAuditEvents } from '../src/store/audit.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 
 function newCtx(tenantId = 'default') {

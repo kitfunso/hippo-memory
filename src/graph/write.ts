@@ -1,15 +1,11 @@
 // Applies a rebuild's op list on the caller's transaction. The statements and the consolidated-source guard sit in the store's graph writers.
 import { assertTenantId } from '../tenant.js';
 import { clock } from '../write-budget.js';
-import type { GraphTxDb } from './types.js';
+import type { DatabaseSyncLike } from '../db.js';
 import { deleteEntityRow, deleteRelationRow, entityIdBySource, insertEntity, insertRelation, objectInForce, relationPresent, updateEntity } from '../store/graph-writes.js';
 import type { DesiredRelation, GraphOp } from './delta.js';
 
-// Importers and tests still reach the writers and the queue through this module.
-export { insertEntity, insertRelation, removeGraphEntitiesForObject, runGraphRebuildTransaction, updateEntity } from '../store/graph-writes.js';
-export { enqueueExtraction, markExtractionProcessed, markGraphDirty, markPendingProcessedUpTo } from '../store/graph-queue.js';
-
-function insertDesiredRelation(db: GraphTxDb, hippoRoot: string, tenantId: string, rel: DesiredRelation): boolean {
+function insertDesiredRelation(db: DatabaseSyncLike, hippoRoot: string, tenantId: string, rel: DesiredRelation): boolean {
   const fromEntityId = entityIdBySource(db, tenantId, rel.from.entityType, rel.from.sourceObject);
   const toEntityId = entityIdBySource(db, tenantId, rel.to.entityType, rel.to.sourceObject);
   if (fromEntityId === undefined || toEntityId === undefined || !objectInForce(db, tenantId, rel.sourceObject)) return false;
@@ -19,7 +15,7 @@ function insertDesiredRelation(db: GraphTxDb, hippoRoot: string, tenantId: strin
 }
 
 /** Applies one op; false when a writer since the diff made it stale, which the next run's diff repairs. */
-function applyGraphOp(db: GraphTxDb, hippoRoot: string, tenantId: string, op: GraphOp): boolean {
+function applyGraphOp(db: DatabaseSyncLike, hippoRoot: string, tenantId: string, op: GraphOp): boolean {
   switch (op.op) {
     case 'deleteEntity':
       deleteEntityRow(db, tenantId, op.id);
@@ -48,7 +44,7 @@ export interface ApplyGraphOpsResult {
 /** Applies `ops` from index `opts.from` on the caller's open transaction and stops at the first op boundary past `opts.holdMs`.
  *  Returns where the next chunk starts and how many ops were skipped as stale. */
 export function applyGraphOps(
-  db: GraphTxDb,
+  db: DatabaseSyncLike,
   hippoRoot: string,
   tenantId: string,
   ops: readonly GraphOp[],

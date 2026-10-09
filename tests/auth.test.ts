@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { createApiKey, validateApiKey, revokeApiKey, listApiKeys } from '../src/auth.js';
+import { createApiKey, validateApiKey, revokeApiKey, listApiKeys } from '../src/store/auth.js';
 
 describe('auth', () => {
   it('createApiKey returns plaintext exactly once and stores hash', () => {

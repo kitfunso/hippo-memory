@@ -18,7 +18,7 @@ import {
   completeCard,
   reclaimExpiredCards,
   loadLatestHandoffForCard,
-} from '../src/store-cards.js';
+} from '../src/store/cards.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { CARD_LEASE_MS } from '../src/card.js';
 

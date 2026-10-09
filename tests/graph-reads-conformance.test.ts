@@ -1,7 +1,7 @@
 // GraphReads answers alike on hippo.db and on a store held in memory: the same rows, the same order, the same rows hidden and the same truncated flag.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
-import type { AuditEvent } from '../src/audit.js';
+import type { AuditEvent } from '../src/store/audit.js';
 import type { ScopeActor } from '../src/recall-scope.js';
 import type { GraphRows, GraphViewQuery } from '../src/store/port.js';
 import {

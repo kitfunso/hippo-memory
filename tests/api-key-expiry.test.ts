@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb, getSchemaVersion, type DatabaseSyncLike } from '../src/db.js';
 import { raiseMinBinary } from '../src/db/meta.js';
-import { createApiKey, readApiKeyRecord, validateApiKey, verifyApiKeyCached, apiKeyVerifyStats, type ApiKeyRecord } from '../src/auth.js';
+import { createApiKey, readApiKeyRecord, validateApiKey, verifyApiKeyCached, apiKeyVerifyStats, type ApiKeyRecord } from '../src/store/auth.js';
 import { adminActor, authCreateSelf, authList, authListRows, type Actor, type AuthCreateSelfResult } from '../src/api.js';
 import { cmdAuth } from '../src/cli/auth.js';
 import { serve, type ServerHandle } from '../src/server.js';

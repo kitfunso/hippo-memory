@@ -1,5 +1,5 @@
 /**
- * Schema v50: the per-turn delivery ledger tables (src/recall-trace.ts writes them).
+ * Schema v50: the per-turn delivery ledger tables (src/store/recall-trace.ts writes them).
  */
 
 import { describe, it, expect } from 'vitest';

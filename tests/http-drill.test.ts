@@ -94,6 +94,19 @@ describe('GET /v1/recall/drill/:id', () => {
     expect(res.status).toBe(400);
   });
 
+  it('400 past the list ceiling in the words the list routes use, and 200 at it', async () => {
+    const summary: MemoryEntry = createMemory('any summary', {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      layer: Layer.Semantic, dag_level: 2, confidence: 'inferred',
+    });
+    writeEntry(home, summary);
+    const over = await fetch(`${handle.url}/v1/recall/drill/${summary.id}?limit=1001`);
+    expect(over.status).toBe(400);
+    expect(await over.json()).toMatchObject({ error: 'limit must be a positive integer <= 1000' });
+    expect((await fetch(`${handle.url}/v1/recall/drill/${summary.id}?limit=1000`)).status).toBe(200);
+    expect((await fetch(`${handle.url}/v1/recall/drill/${summary.id}?limit=2.5`)).status).toBe(200);
+  });
+
   it('400 on bad budget', async () => {
     const summary: MemoryEntry = createMemory('any summary', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,

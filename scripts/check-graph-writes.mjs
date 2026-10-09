@@ -44,9 +44,8 @@ const WRITE_RE = new RegExp(
   'gi',
 );
 /** The sanctioned writers, as paths RELATIVE TO srcDir (exact, not basename): a
- *  hypothetical `src/sub/graph/write.ts` is NOT a sanctioned writer and must be linted. */
-// graph/write.ts stays listed as the module callers import the writers from; it holds no SQL, and check-store-port fails if any returns.
-const SANCTIONED_RELS = new Set(['store/graph-writes.ts', 'store/graph-queue.ts', 'graph/write.ts']);
+ *  hypothetical `src/sub/store/graph-writes.ts` is NOT a sanctioned writer and must be linted. */
+const SANCTIONED_RELS = new Set(['store/graph-writes.ts', 'store/graph-queue.ts']);
 const WRITER_NAMES = 'src/store/graph-writes.ts and src/store/graph-queue.ts';
 
 /**

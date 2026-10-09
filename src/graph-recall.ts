@@ -40,9 +40,9 @@ import type { MemoryEntry } from './memory.js';
 import { DEFAULT_RECALL_BUDGET, type ResultCost, type SearchResult } from './core/search-types.js';
 import { estimateTokens } from './token-ledger.js';
 import { compareEntryIdentity } from './compare.js';
-import { loadEntitiesByMemoryId, loadEntitiesByIds, loadNeighborRelations } from './graph/read.js';
+import { loadEntitiesByMemoryId, loadEntitiesByIds, loadNeighborRelations } from './store/graph-reads.js';
+import type { Entity } from './store/graph-rows.js';
 import { passesCliRecallScopeFilter, passesScopeFilterForRecall } from './recall-scope.js';
-import type { Entity } from './graph/types.js';
 
 /** Hard cap on `--hops` (a higher value just walks more of a finite graph; this bounds
  *  worst-case work and keeps the flag honest). */

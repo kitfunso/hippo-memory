@@ -10,7 +10,7 @@ import { loadAllEntries } from '../src/store/entry-reads.js';
 import { Layer, type MemoryEntry } from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
-import { listDormantSnapshots } from '../src/dormant.js';
+import { listDormantSnapshots } from '../src/store/dormant.js';
 import { listProjects, mergeProjects, repairProjects } from '../src/project-merge.js';
 
 let home: string;

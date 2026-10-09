@@ -157,23 +157,14 @@ async function drainStream(
   url0: string,
   options: DrainStreamOptions,
 ): Promise<{ ingested: number; pages: number; maxUpdatedAt: string | null; drained: boolean }> {
-  const { toIngestEvent, fetcher, token, sleep, maxItems } = options;
+  const { toIngestEvent, maxItems } = options;
   let url: string | null = url0;
   let ingested = 0;
   let pages = 0;
   let maxUpdatedAt: string | null = null;
 
   while (url) {
-    // Fetch with rate-limit retry loop.
-    let page: GitHubBackfillPage;
-    while (true) {
-      page = await fetcher({ url, token });
-      if (page.rateLimit.reason !== 'none') {
-        await sleep(page.rateLimit.sleepSeconds * 1000);
-        continue;
-      }
-      break;
-    }
+    const page = await fetchPagePastRateLimit(options, url);
     pages++;
 
     for (const item of page.items) {
@@ -207,6 +198,16 @@ async function drainStream(
   }
 
   return { ingested, pages, maxUpdatedAt, drained: true };
+}
+
+async function fetchPagePastRateLimit(options: DrainStreamOptions, url: string): Promise<GitHubBackfillPage> {
+  const { fetcher, token, sleep } = options;
+  // Fetch with rate-limit retry loop.
+  while (true) {
+    const page = await fetcher({ url, token });
+    if (page.rateLimit.reason === 'none') return page;
+    await sleep(page.rateLimit.sleepSeconds * 1000);
+  }
 }
 
 function issueItemToEvent(item: JsonValue, repository: GitHubRepository): IngestEvent | null {

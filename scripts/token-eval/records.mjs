@@ -33,6 +33,61 @@ export function sessionFiles(projectsDir, sessionId) {
   return files;
 }
 
+/** Every transcript under projects/, subagent files included. */
+export function listTranscripts(projectsDir) {
+  if (!fs.existsSync(projectsDir)) return [];
+  return fs.readdirSync(projectsDir, { recursive: true, withFileTypes: true })
+    .filter((e) => e.isFile() && e.name.endsWith('.jsonl'))
+    .map((e) => path.join(e.parentPath, e.name));
+}
+
+/** A `{file, fromBytes, toBytes}` segment, one turn's share of a file; a bare path is the whole file. */
+export const asSegment = (item) => (item.file === undefined ? { file: item } : item);
+
+export function segmentText(seg) {
+  const { file, fromBytes = 0, toBytes } = asSegment(seg);
+  const bytes = fs.readFileSync(file);
+  return bytes.subarray(fromBytes, toBytes ?? bytes.length).toString('utf8');
+}
+
+/** Parsed lines of each segment; a missing file has none. */
+function* segmentLines(segments) {
+  for (const seg of segments) {
+    if (!seg.file || !fs.existsSync(seg.file)) continue;
+    for (const line of segmentText(seg).split('\n')) {
+      const o = parseLine(line);
+      if (o) yield o;
+    }
+  }
+}
+
+/** Usage of a turn with no result: per message id not in skip, the largest value in each bucket (a streamed message repeats its id), summed over ids. */
+export function transcriptUsage(segments, skip = new Set()) {
+  const byId = new Map();
+  let anon = 0;
+  for (const o of segmentLines(segments)) {
+    const u = o.type === 'assistant' ? o.message?.usage : null;
+    if (!u || skip.has(o.message.id)) continue;
+    const key = o.message.id ?? `anon-${anon++}`;
+    const prev = byId.get(key) ?? [0, 0, 0, 0];
+    const cur = [u.input_tokens, u.cache_creation_input_tokens, u.cache_read_input_tokens, u.output_tokens].map((n) => Number(n) || 0);
+    byId.set(key, prev.map((p, i) => Math.max(p, cur[i])));
+  }
+  const total = [0, 0, 0, 0];
+  for (const v of byId.values()) v.forEach((n, i) => { total[i] += n; });
+  return { inputTokens: total[0], cacheWriteTokens: total[1], cacheReadTokens: total[2], outputTokens: total[3] };
+}
+
+/** The distinct assistant message ids in segments. */
+export function assistantIds(segments) {
+  const ids = new Set();
+  for (const o of segmentLines(segments)) if (o.type === 'assistant' && o.message?.id) ids.add(o.message.id);
+  return ids;
+}
+
+/** Turns of a turn with no result: distinct assistant message ids not in skip, a different unit from the result's num_turns. */
+export const assistantTurns = (segments, skip = new Set()) => [...assistantIds(segments)].filter((id) => !skip.has(id)).length;
+
 const SHELL_TOOLS = new Set(['Bash', 'PowerShell']);
 const BASH_READ = /^(?:cat|head|tail|less|more|grep|rg)(?=\s|$)|^sed\s+-n(?=\s|$)/;
 // `type` reads a file only in PowerShell; in Git Bash it is a builtin that names a command.
@@ -58,23 +113,64 @@ function parseLine(line) {
   }
 }
 
-/** tool_use and tool_result blocks across transcript files, each file once and each tool_use id once. */
-function* toolBlocks(files) {
-  const seen = new Set();
-  for (const file of uniqueFiles(files)) {
-    for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
+/** Each path or segment once, its path resolved. */
+function uniqueSegments(items) {
+  const seen = new Map();
+  for (const item of (items ?? []).filter(Boolean)) {
+    const seg = asSegment(item);
+    const file = path.resolve(seg.file);
+    const key = `${file}|${seg.fromBytes ?? 0}|${seg.toBytes ?? ''}`;
+    if (!seen.has(key)) seen.set(key, { ...seg, file });
+  }
+  return [...seen.values()];
+}
+
+/** Parsed lines of each transcript file or segment, each once, as `{file, o}`. */
+function* fileLines(items) {
+  for (const seg of uniqueSegments(items)) {
+    for (const line of segmentText(seg).split('\n')) {
       const o = parseLine(line);
-      const content = Array.isArray(o?.message?.content) ? o.message.content : [];
-      for (const block of content) {
-        if (block.type !== 'tool_use' && block.type !== 'tool_result') continue;
-        const id = block.type === 'tool_use' ? block.id : block.tool_use_id;
-        const key = id === undefined ? null : `${block.type}:${id}`;
-        if (key && seen.has(key)) continue;
-        if (key) seen.add(key);
-        yield block;
-      }
+      if (o) yield { file: seg.file, o };
     }
   }
+}
+
+/** tool_use and tool_result blocks across transcript files as `{file, block}`, each tool_use id once. */
+function* fileBlocks(files) {
+  const seen = new Set();
+  for (const { file, o } of fileLines(files)) {
+    const content = Array.isArray(o.message?.content) ? o.message.content : [];
+    for (const block of content) {
+      if (block.type !== 'tool_use' && block.type !== 'tool_result') continue;
+      const id = block.type === 'tool_use' ? block.id : block.tool_use_id;
+      const key = id === undefined ? null : `${block.type}:${id}`;
+      if (key && seen.has(key)) continue;
+      if (key) seen.add(key);
+      yield { file, block };
+    }
+  }
+}
+
+function* toolBlocks(files) {
+  for (const { block } of fileBlocks(files)) yield block;
+}
+
+/** Every tool call as `{file, name, input}`. */
+export function toolInputs(files) {
+  return [...fileBlocks(files)].filter(({ block }) => block.type === 'tool_use').map(({ file, block }) => ({ file, name: block.name, input: block.input ?? {} }));
+}
+
+const blockText = (content) => (Array.isArray(content) ? content.map((c) => c.text ?? '').join('\n') : String(content ?? ''));
+
+/** Every tool result's text as `{file, text}`. */
+export function toolResultTexts(files) {
+  return [...fileBlocks(files)].filter(({ block }) => block.type === 'tool_result').map(({ file, block }) => ({ file, text: blockText(block.content) }));
+}
+
+/** Text a hook added to the context (`hook_additional_context` attachments, as z1-replay.mjs reads them) as `{file, text}`. */
+export function hookContexts(files) {
+  const text = (c) => (Array.isArray(c) ? c.join('\n') : String(c ?? ''));
+  return [...fileLines(files)].filter(({ o }) => o.attachment?.type === 'hook_additional_context').map(({ file, o }) => ({ file, text: text(o.attachment.content) }));
 }
 
 /** Tool calls, file reads (Read, Grep and shell reads; `shellReads` is the shell share) and repeated error signatures; all null with no transcript. */
@@ -90,7 +186,7 @@ export function transcriptWork(files, seenErrors) {
         work.shellReads++;
       }
     } else if (block.is_error) {
-      const text = Array.isArray(block.content) ? block.content.map((c) => c.text ?? '').join(' ') : String(block.content ?? '');
+      const text = blockText(block.content);
       const sig = text.replace(/\d+/g, '#').replace(/\s+/g, ' ').trim().slice(0, 160);
       if (!sig) continue;
       if (seenErrors.has(sig)) work.repeatedErrors++;
@@ -144,5 +240,5 @@ export function invalidRecord(base, reason, fields) {
 /** A graded record; `resolved` is the prereg's literal formula. */
 export function validRecord(base, fields) {
   const resolved = fields.acceptancePassed && fields.lessons.every((l) => l.final === 'pass') && !fields.timedOut;
-  return { ...base, ...fields, resolved, void: null, leak: false, invalid: null };
+  return { ...base, ...fields, resolved, void: fields.void ?? null, leak: false, invalid: null };
 }

@@ -11,7 +11,7 @@ import { anchorSkippedRows, noteRecall, peekSessionRing, resetSessionRings, sess
 import { HttpError, sendJson } from '../../http-util.js';
 import { buildContextWithAuth } from '../auth.js';
 import type { RouteRequest } from '../types.js';
-import { validateIdSegment } from '../validation.js';
+import { MAX_LIST_LIMIT, parseListLimit, validateIdSegment } from '../validation.js';
 
 /** Test-only: reset the HTTP recall rings. Call from beforeEach. */
 export function __resetSessionRecallHistoryHttp(): void {
@@ -100,6 +100,8 @@ export async function handleDrillRecall({ req, res, opts, query }: RouteRequest,
   if (limit !== undefined && (!Number.isFinite(limit) || limit <= 0)) {
     throw new HttpError(400, 'limit must be a positive number');
   }
+  // Past the list ceiling the shared parser refuses, so the reply is the one every other list route gives.
+  if (limit !== undefined && limit > MAX_LIST_LIMIT) parseListLimit(limitRaw);
   const budgetRaw = query.get('budget');
   const budget = budgetRaw === null ? undefined : Number(budgetRaw);
   if (budget !== undefined && (!Number.isFinite(budget) || budget <= 0)) {

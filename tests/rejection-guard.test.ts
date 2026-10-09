@@ -10,13 +10,13 @@ import { deleteEntry, batchWriteAndDelete } from '../src/store/delete-and-batch.
 import { applyRebuildResult } from '../src/store/summaries.js';
 import { Layer} from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { queryAuditEvents } from '../src/audit.js';
+import { queryAuditEvents } from '../src/store/audit.js';
 import {
   insertRejectedValue,
   rejectionDigest,
   normalizeValueForRejection,
   RejectedValueError,
-} from '../src/rejection.js';
+} from '../src/store/rejection.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 
 function tmpHome(): string {

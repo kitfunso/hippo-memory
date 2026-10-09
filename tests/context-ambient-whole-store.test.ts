@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry, writeEntryDbOnly } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { loadAmbientTallies } from '../src/ambient-store.js';
+import { loadAmbientTallies } from '../src/store/ambient.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { Layer, _resetLossAversionRatioCacheForTests, type EmotionalValence, type MemoryEntry } from '../src/memory.js';
 import { _resetAblationCacheForTests } from '../src/ablation.js';

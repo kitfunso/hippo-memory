@@ -12,7 +12,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { remember } from '../src/api.js';
-import { pushGoal } from '../src/goals.js';
+import { pushGoal } from '../src/store/goals.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../src/mcp/server.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
 import { makeRoot } from './_helpers/make-root.js';

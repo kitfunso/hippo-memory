@@ -5,7 +5,7 @@ import { recallScopeFilter } from '../store/search-rows.js';
 import type { AmbientLoadResult } from '../store/candidates.js';
 import { heldIdLookup } from '../store/entry-reads.js';
 import { calculateStrength, type MemoryEntry } from '../memory.js';
-import { appendAuditEvent, auditQueryFields, type AppendAuditOpts } from '../audit.js';
+import { appendAuditEvent, auditQueryFields, type AppendAuditOpts } from '../store/audit.js';
 import type { ContextReads, HippoStore } from '../store-port.js';
 import { isWorthSurfacing } from '../memory-quality.js';
 import { rankBothStores } from '../shared.js';

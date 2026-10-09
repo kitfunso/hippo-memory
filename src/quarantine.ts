@@ -1,7 +1,7 @@
 /** Quarantine tier (CD5, AT3): pending/approved/rejected record for a memory `remember` flagged as untrusted. */
 
 import type { DatabaseSyncLike } from './db.js';
-import { appendAuditEvent } from './audit.js';
+import { appendAuditEvent } from './store/audit.js';
 import { QUARANTINE_SCOPE_PREFIX } from './store/quarantine.js';
 
 // The scope a held memory is stored under is the table's own rule, so the store module owns it.

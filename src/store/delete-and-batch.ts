@@ -1,8 +1,8 @@
 import { AUTO_DELETABLE_SQL, type MemoryEntry } from '../memory.js';
 import { openHippoDb, closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../db.js';
-import { checkRejectionGuard, RejectedValueError } from '../rejection.js';
-import { markSummaryDirtyInTx } from '../summary-dirty.js';
-import { type DormantMove, insertDormantRow } from '../dormant.js';
+import { checkRejectionGuard, RejectedValueError } from './rejection.js';
+import { markSummaryDirtyInTx } from './summary-dirty.js';
+import { type DormantMove, insertDormantRow } from './dormant.js';
 import { log } from '../log.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry } from './rows.js';
 import { audit } from './audit-event.js';
@@ -131,7 +131,7 @@ function mergeOwnChanges(base: MemoryEntry, ours: MemoryEntry, live: MemoryEntry
 /** Writes, deletes and dormant moves in one transaction. With `snapshot` (rows as the caller loaded them), a write keeps only
  *  the fields the caller changed, takes the rest from the live row, and never resurrects a row that is gone.
  *
- *  `dormant` (src/dormant.ts): each move's snapshot is inserted into `dormant_memories` and its `memories` row
+ *  `dormant` (src/store/dormant.ts): each move's snapshot is inserted into `dormant_memories` and its `memories` row
  *  leaves exactly like a delete (FTS row, DAG parent dirty-mark, mirrors), in the same transaction, so a memory
  *  is never in both places or in neither. Deletes and moves both skip rows that are no longer auto-deletable
  *  (pinned, raw, kept for good or backing an object since the caller decided). Returns the ids that left `memories`, deleted or moved. */

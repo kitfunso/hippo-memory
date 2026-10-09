@@ -16,7 +16,7 @@ import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
 import { remember, type Context } from '../src/api.js';
-import { pushGoal, completeGoal } from '../src/goals.js';
+import { pushGoal, completeGoal } from '../src/store/goals.js';
 
 const CLI = join(process.cwd(), 'dist', 'cli.js');
 

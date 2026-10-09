@@ -7,7 +7,7 @@ import { startWalCheckpointer, type WalCheckpointer } from '../db/wal-checkpoint
 import type { HippoStore } from '../store-port.js';
 import { workerSqliteStore } from '../store/sqlite/worker-store.js';
 import { markSharedStore } from '../config.js';
-import { auditWriteFailureCount } from '../audit.js';
+import { auditWriteFailureCount } from '../store/audit.js';
 import { PACKAGE_VERSION } from '../version.js';
 import { errorFields, errorMessage, log } from '../log.js';
 import { runWithRequestId } from '../util/request-scope.js';
@@ -15,9 +15,11 @@ import { createRateLimiter, type RateLimiter } from '../rate-limit.js';
 import { RecallContractError } from '../api.js';
 import { handleSlackEventsWebhook } from '../connectors/slack/webhook.js';
 import { handleGitHubEventsWebhook } from '../connectors/github/webhook.js';
-import { bodyDeadlineMs, BodyTimeoutError, BodyTooLargeError, closeAfterReply, HttpError, JSON_HEADERS, sendJson } from '../http-util.js';
+import { bodyDeadlineMs, BodyTimeoutError, BodyTooLargeError, closeAfterReply, DeadlineExceededError, HttpError, JSON_HEADERS, sendJson } from '../http-util.js';
+import { workerCounts } from '../store/sqlite/executor-counts.js';
 import { isLoopback, LIMITER_MAX_KEYS } from './auth.js';
 import { enforceRateLimit, warnIfClientIpHeaderUnpinned } from './client-ip.js';
+import { answerAtDeadline, handlerDeadlineCount, isAbandoned, requestDeadlineFor } from './deadline.js';
 import { drainAndClose } from './lifecycle.js';
 import { installCrashHandlers } from '../util/crash-handlers.js';
 import { handleMcpPost, handleMcpStream } from './mcp-http.js';
@@ -140,6 +142,10 @@ function sendHealth(req: IncomingMessage, res: ServerResponse, startedAt: string
       started_at: startedAt,
       pid: process.pid,
       audit_write_failures: auditWriteFailureCount(),
+      store_queue_refusals: workerCounts.queueRefusals,
+      store_jobs_expired: workerCounts.jobsExpired,
+      store_workers_replaced: workerCounts.workersReplaced,
+      handler_deadlines: handlerDeadlineCount(),
     });
   } else {
     sendJson(res, 200, { ok: true });
@@ -297,9 +303,20 @@ function replyWithFailure<E>(req: IncomingMessage, res: ServerResponse, err: E, 
     sendJson(res, 400, { error: err.message, code: err.code });
     return;
   }
+  if (err instanceof DeadlineExceededError) {
+    sendJson(res, 504, { error: err.message, code: err.code, requestId });
+    return;
+  }
   // readBody hit its cap or deadline, so close once the 413 or 408 is out rather than drain what the client keeps sending.
   if (err instanceof BodyTooLargeError || err instanceof BodyTimeoutError) res.once('finish', () => closeAfterReply(req));
   sendError(res, mapped.status, mapped.message);
+}
+
+const HANDLER_LATE = 'the request did not finish by its deadline and was abandoned; a write it started may or may not be saved';
+
+// The caller already has its 504, so a second reply would be written into a finished response.
+function logLateFailure<E>(req: IncomingMessage, err: E): void {
+  log.debug(`${req.method ?? 'GET'} ${(req.url ?? '/').split('?')[0]} ended after its deadline reply: ${errorMessage(err)}`);
 }
 
 function replyOrClose<E>(req: IncomingMessage, res: ServerResponse, err: E, requestId: string): void {
@@ -310,6 +327,20 @@ function replyOrClose<E>(req: IncomingMessage, res: ServerResponse, err: E, requ
     log.error(`serve: failure reply not sent, socket closed: ${errorMessage(replyErr)}`);
     res.destroy();
   }
+}
+
+/** Runs `handle` under the request's id and deadline; a failure becomes the reply, unless the deadline has already answered. */
+function answerRequest(req: IncomingMessage, res: ServerResponse, handle: () => Promise<void>, slowWarnMs: number | undefined): void {
+  const requestId = openRequest(req, res, slowWarnMs);
+  const deadline = requestDeadlineFor(req);
+  // Inside the scope, so the failure reply's log line carries the id too.
+  runWithRequestId(requestId, () => {
+    if (deadline) answerAtDeadline(res, deadline, () => replyOrClose(req, res, new DeadlineExceededError(HANDLER_LATE), requestId));
+    handle().catch(<E>(err: E) => {
+      if (isAbandoned(res)) logLateFailure(req, err);
+      else replyOrClose(req, res, err, requestId);
+    });
+  }, deadline);
 }
 
 // Node's own default, named so the three socket deadlines read together. It times the request arriving, never the handler, so a 10 minute sleep is not cut.
@@ -415,12 +446,9 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
     res.once('finish', holder.afterResponse);
     inflight.add(res);
     res.once('close', () => inflight.delete(res));
-    const requestId = openRequest(req, res, opts.slowRequestWarnMs);
     const run = (): Promise<void> => handleRequest(req, res, served, { startedAt, streamSlots, limiter });
     // A missed port under another store would otherwise create and write a hippo.db that store never reads.
-    const guarded = (): Promise<void> => (kind === 'sqlite' ? run() : withSqliteBlocked(kind, run));
-    // Inside the scope, so the failure reply's log line carries the id too.
-    runWithRequestId(requestId, () => { guarded().catch(<E>(err: E) => replyOrClose(req, res, err, requestId)); });
+    answerRequest(req, res, () => (kind === 'sqlite' ? run() : withSqliteBlocked(kind, run)), opts.slowRequestWarnMs);
   });
 
   setKeepAliveTimeouts(server);

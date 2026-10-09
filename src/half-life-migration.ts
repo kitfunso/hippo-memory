@@ -25,7 +25,7 @@ import { selectAllEntries } from './store/entry-reads.js';
 import { conflictResolveAuditsAt, resolvedConflictsAt } from './store/conflicts.js';
 import { setHalfLivesAt } from './store/entry-writes.js';
 import { openHippoDb, closeHippoDb, getMeta, setMeta, type DatabaseSyncLike } from './db.js';
-import { appendAuditEvent } from './audit.js';
+import { appendAuditEvent } from './store/audit.js';
 
 /** The base every store used before the base was recorded. */
 export const LEGACY_HALF_LIFE_BASE = 7;

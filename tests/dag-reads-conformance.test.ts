@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { cpSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { listAuditEventsAfter } from '../src/audit.js';
+import { listAuditEventsAfter } from '../src/store/audit.js';
 import { _resetSharedStoreCacheForTests, markSharedStore } from '../src/config.js';
 import { closeHippoDb, openHippoDb } from '../src/db.js';
 import { passesScopeFilterForRecall, serve, type AuditEvent, type HippoStore, type MemoryEntry } from '../src/server.js';
@@ -221,6 +221,11 @@ const SERVED: readonly (readonly [string, number])[] = [
   ['/v1/recall/drill/profile_a?depth=3&limit=4', 200],
   ['/v1/recall/drill/fact_a_0', 422],
   ['/v1/recall/drill/sum_b', 404],
+  ['/v1/recall/drill/profile_a?limit=1', 200],
+  ['/v1/recall/drill/sum_a?limit=3', 200],
+  ['/v1/recall/drill/profile_a?depth=2&limit=5', 200],
+  ['/v1/recall/drill/profile_a?depth=3&limit=11&budget=100000', 200],
+  ['/v1/recall/drill/loop_a?depth=2&limit=1', 200],
 ];
 
 /** Every SERVED path over serve() on a fresh copy of the fixture, as the first tenant's admin. */
@@ -268,6 +273,13 @@ describe('assemble and drill over serve()', () => {
     expect(onHippoDb.map((r) => r.status)).toEqual(SERVED.map(([, status]) => status));
     expect(onHippoDb[0]?.body).toMatchObject({ summarized: 3, items: expect.arrayContaining([expect.objectContaining({ id: 'sum_a', isSummary: true })]) });
     expect(onHippoDb[5]?.body).toMatchObject({ totalChildren: 12, truncated: true });
+    expect(onHippoDb.slice(8).map((r) => r.body)).toMatchObject([
+      { totalChildren: 2, truncated: true, children: [{ id: 'sum_a2' }] },
+      { totalChildren: 7, truncated: true, children: [{ id: 'raw_a_0' }, { id: 'raw_a_1' }, { id: 'raw_a_2' }] },
+      { totalChildren: 10, truncated: true, children: [{ id: 'sum_a2' }, { id: 'sum_a' }, { id: 'fact_a2_0' }, { id: 'raw_a_0' }, { id: 'raw_a_1' }] },
+      { totalChildren: 12, truncated: true },
+      { totalChildren: 1, truncated: false, children: [{ id: 'loop_b' }] },
+    ]);
     expect(await runServed((root) => inMemoryDagReadsStore(root).store)).toEqual(onHippoDb);
   }, 120_000);
 });

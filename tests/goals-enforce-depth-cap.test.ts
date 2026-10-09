@@ -9,7 +9,7 @@ import os from 'node:os';
 import fs from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { initStore } from '../src/store/open.js';
-import { pushGoal, enforceDepthCapWithinTx, MAX_ACTIVE_GOAL_DEPTH } from '../src/goals.js';
+import { pushGoal, enforceDepthCapWithinTx, MAX_ACTIVE_GOAL_DEPTH } from '../src/store/goals.js';
 
 describe('enforceDepthCapWithinTx helper', () => {
   let hippoRoot: string;

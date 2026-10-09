@@ -14,7 +14,7 @@ import { appendSessionEvent, saveActiveTaskSnapshot } from '../src/store/session
 import { saveSessionHandoff } from '../src/store/handoffs.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { queryAuditEvents } from '../src/audit.js';
+import { queryAuditEvents } from '../src/store/audit.js';
 import { adminActor, recall as apiRecall } from '../src/api.js';
 import { findHippoStoreDir } from '../src/project-identity.js';
 import { findHippoRoot } from '../src/mcp/server.js';

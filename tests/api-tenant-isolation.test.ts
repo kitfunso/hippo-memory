@@ -3,8 +3,8 @@ import { createRequire } from 'node:module';
 import { rmSync } from 'node:fs';
 import { readEntry } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
-import { createApiKey } from '../src/auth.js';
-import { queryAuditEvents } from '../src/audit.js';
+import { createApiKey } from '../src/store/auth.js';
+import { queryAuditEvents } from '../src/store/audit.js';
 import {
   remember,
   promote,

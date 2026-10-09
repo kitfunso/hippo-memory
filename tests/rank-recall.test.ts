@@ -8,7 +8,7 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { Layer, type MemoryEntry} from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { pushGoal } from '../src/goals.js';
+import { pushGoal } from '../src/store/goals.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { loadConfig } from '../src/config.js';
 import { rankRecall, type RankRecallCtx, type RankRecallOpts } from '../src/recall-pipeline.js';

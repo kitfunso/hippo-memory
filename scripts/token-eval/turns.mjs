@@ -2,8 +2,9 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { sh } from './exec.mjs';
-import { isUsageLimit, sessionFiles } from './records.mjs';
+import { randomUUID } from 'node:crypto';
+import { spawnTree } from './exec.mjs';
+import { isUsageLimit, sessionFiles, findTranscript, listTranscripts } from './records.mjs';
 import { sleep } from './runs.mjs';
 import { agentGit } from './checks.mjs';
 import { instructionSnapshot, restoreInstructions } from './workspace.mjs';
@@ -24,16 +25,17 @@ function lastJson(stdout) {
   }
 }
 
-/** Run claude until it is not at the plan limit, calling `reset` before each rerun; a truthy reset skips the rerun (`stopped`). */
+/** Run claude until it is not at the plan limit, calling `reset` before each rerun (a truthy reset skips it: `stopped`); `args()` is called once per attempt. */
 async function untilNotLimited(ctx, run, t, { args, input, rawName, reset }) {
   // Every cut-off attempt, its wait and its reset: none of it is the kept attempt's work, so wallMs leaves it out.
   let cutOffMs = 0;
   // SHORTCUT: 15-minute polls up to 24h; parse the reset time if waits get long.
   for (let attempt = 1; ; attempt++) {
     const start = performance.now();
-    const cc = sh(`${ctx.claude} ${args.join(' ')}`, run.dirs.work, run.env, ctx.sessionTimeoutMs, input);
+    const cc = await spawnTree(`${ctx.claude} ${args().join(' ')}`, run.dirs.work, run.env, ctx.sessionTimeoutMs, input);
     const result = lastJson(cc.stdout);
-    if (!isUsageLimit(result, `${cc.stdout}\n${cc.stderr}`)) return { cc, result, limitRetries: attempt - 1, cutOffMs };
+    // A hung session can print overloaded_error before it hangs; a timeout is a graded result, never a limit wait (prereg 165).
+    if (cc.timedOut || !isUsageLimit(result, `${cc.stdout}\n${cc.stderr}`)) return { cc, result, limitRetries: attempt - 1, cutOffMs };
     fs.writeFileSync(path.join(run.rawDir, `${t.id}.${rawName}${attempt}.txt`), `${cc.stdout}\n${cc.stderr}`.slice(-20000));
     // Prereg: a run that stops partway is abandoned and never analysed, so a limit that outlasts every wait ends the run.
     if (attempt > ctx.limitMaxWaits) throw new Error(`${run.s.id} ${t.id} ${run.arm} seed${run.seed}: still at the plan limit after ${ctx.limitMaxWaits} waits`);
@@ -45,9 +47,16 @@ async function untilNotLimited(ctx, run, t, { args, input, rawName, reset }) {
   }
 }
 
-/** Session 1 on the task prompt. */
+/** Session 1 on the task prompt, under an id fixed before it starts, so a session killed before its result still names its transcript. */
 export async function runSession(ctx, run, t, reset) {
-  return untilNotLimited(ctx, run, t, { args: claudeArgs(ctx, run), input: t.prompt, rawName: 'limit', reset });
+  let sessionId = null;
+  const args = () => {
+    // Fresh per attempt: a cut-off attempt's transcript keeps its own id.
+    sessionId = randomUUID();
+    return [...claudeArgs(ctx, run), '--session-id', sessionId];
+  };
+  const session = await untilNotLimited(ctx, run, t, { args, input: t.prompt, rawName: 'limit', reset });
+  return { ...session, sessionId };
 }
 
 /** One resume of `sessionId` with `message` on stdin; a cut-off attempt is undone exactly before the rerun. */
@@ -62,7 +71,12 @@ export async function resumeSession(ctx, run, t, sessionId, message, afterReset 
       restoreWork(run, snap, sessionId);
       return afterReset();
     };
-    return await untilNotLimited(ctx, run, t, { args, input: message, rawName: 'resume-limit', reset });
+    const projects = path.join(run.dirs.claudeConfig, 'projects');
+    const main = findTranscript(projects, sessionId);
+    // Where session 1 ends in every file it wrote, subagents included, since a resume can append to any of them.
+    const sizesBefore = new Map([...snap.transcripts].map(([f, bytes]) => [f, bytes.length]));
+    const before = { bytesBefore: (main && sizesBefore.get(main)) || 0, sizesBefore, filesBefore: new Set(listTranscripts(projects)) };
+    return { ...(await untilNotLimited(ctx, run, t, { args: () => args, input: message, rawName: 'resume-limit', reset })), ...before };
   } finally {
     if (dir) fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
   }

@@ -8,7 +8,7 @@ export { ApiError, BadRequestError, ConflictError, ForbiddenError, NotFoundError
 export { isPrivateScope, passesScopeFilterForRecall } from './recall-scope.js';
 export { passesCliRecallScopeFilter, ScopeForbiddenError } from './recall-scope.js';
 export type { TokenSummary, TokenSurface, TokenSurfaceSummary } from './token-ledger.js';
-export type { FailureSummary } from './failure-log.js';
+export type { FailureSummary } from './store/failure-log.js';
 
 // classifyOriginProject lives in project-identity.ts (leaf) for the same reason.
 export { classifyOriginProject } from './project-identity.js';

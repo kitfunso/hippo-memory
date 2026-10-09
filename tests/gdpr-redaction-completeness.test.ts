@@ -10,7 +10,7 @@ import {
 } from '../src/db.js';
 import type { HippoDbContext } from '../src/api.js';
 import { remember, archiveRaw, recall } from '../src/api.js';
-import { queryAuditEvents } from '../src/audit.js';
+import { queryAuditEvents } from '../src/store/audit.js';
 import { recordStatements, countMatching } from './_helpers/count-statements.js';
 
 /** Query a single row from the hippo SQLite handle. */

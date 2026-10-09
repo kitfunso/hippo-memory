@@ -7,7 +7,7 @@ import type { AddressInfo } from 'net';
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'crypto';
 import { evalNow } from '../ablation.js';
 import { readEntry } from '../store/entry-reads.js';
-import { listCards } from '../store-cards.js';
+import { listCards } from '../store/cards.js';
 import { resolveTenantId } from '../tenant.js';
 import { loadCardDetail } from '../card-detail.js';
 import { bodyDeadlineMs, BodyTimeoutError, closeAfterReply, isCrossSite, LOOPBACK_HOST_HEADER } from '../http-util.js';

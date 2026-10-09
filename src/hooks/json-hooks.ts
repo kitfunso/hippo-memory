@@ -36,7 +36,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import type { JsonObject } from '../working-memory.js';
+import type { JsonObject } from '../store/working-memory.js';
 import { type JsonHookTarget, HIPPO_SLEEP_MARKER, HIPPO_LAST_SLEEP_MARKER, HIPPO_CAPTURE_MARKER, HIPPO_SESSION_END_MARKER, HIPPO_PINNED_INJECT_MARKER, HIPPO_PINNED_INJECT_COMMAND, HIPPO_PRE_COMPACT_MARKER, HIPPO_COMPACT_RESUME_MARKER, HIPPO_CAPTURE_ERROR_MARKER, HIPPO_POST_COMPACT_MARKER, homeDir, claudeConfigDir, codexHomeDir, copilotHooksFile, defaultPreCompactLogPath } from './shared.js';
 import { type JsonValue, isJsonString, readJsonFile, isJsonObjectLiteral } from '../json.js';
 import { escapeRegex } from '../escape.js';
@@ -346,13 +346,7 @@ const CLAUDE_HOOK_MARKERS: ReadonlyArray<readonly [string, readonly string[]]> =
 // Stop is only ever migrated away, so install never appends to it and a Stop that is not a list does not block the install.
 const CLAUDE_APPENDED_EVENTS = CLAUDE_HOOK_MARKERS.map(([event]) => event).filter((event) => event !== 'Stop');
 
-function installClaudeCodeHooks(settingsPath: string, settings: JsonObject, logFile: string): InstallResult {
-  const merge = ensureHooksObject(settings, CLAUDE_APPENDED_EVENTS);
-  if (merge === null) return { ...nothingInstalled('claude-code', settingsPath), invalidJson: true };
-  // SAFETY: ensureHooksObject left every event hippo appends to absent or an array.
-  const hooks = merge as ClaudeHooks;
-  const migration = migrateLegacyClaudeHooks(hooks);
-
+function appendSessionHooks(hooks: ClaudeHooks, logFile: string) {
   const installedSessionEnd = appendHookIfMissing(hooks, 'SessionEnd', HIPPO_SESSION_END_MARKER,
     claudeCommandGroup(`hippo session-end --log-file "${logFile}"`, 5));
   const installedSessionStart = appendHookIfMissing(hooks, 'SessionStart', HIPPO_LAST_SLEEP_MARKER,
@@ -366,7 +360,10 @@ function installClaudeCodeHooks(settingsPath: string, settings: JsonObject, logF
   const migratedPinnedInjectRecent = migratePinnedInjectRecentCommands(hooks.UserPromptSubmit);
   const installedUserPromptSubmit = appendHookIfMissing(hooks, 'UserPromptSubmit', HIPPO_PINNED_INJECT_MARKER,
     claudeCommandGroup(HIPPO_PINNED_INJECT_COMMAND, 5));
+  return { installedSessionEnd, installedSessionStart, migratedPinnedInjectRecent, installedUserPromptSubmit };
+}
 
+function appendCompactionHooks(hooks: ClaudeHooks) {
   // PreCompact: fires on manual AND auto compaction (no matcher). Records the compaction, asks the
   // summariser for a "Memories for hippo" list and saves a working-state snapshot before the summary drops detail.
   // Exit-0 contract lives in the verb itself (src/capture.ts cmdPreCompact),
@@ -387,6 +384,19 @@ function installClaudeCodeHooks(settingsPath: string, settings: JsonObject, logF
   // PreCompact stdout, by contrast, is handed to the summariser as instructions, so pre-compact prints just the request.
   const installedPostCompact = appendHookIfMissing(hooks, 'PostCompact', HIPPO_POST_COMPACT_MARKER,
     claudeCommandGroup(`hippo post-compact --log-file "${defaultPreCompactLogPath()}"`, 10));
+  return { installedPreCompact, installedCompactResume, installedPostCompact };
+}
+
+function installClaudeCodeHooks(settingsPath: string, settings: JsonObject, logFile: string): InstallResult {
+  const merge = ensureHooksObject(settings, CLAUDE_APPENDED_EVENTS);
+  if (merge === null) return { ...nothingInstalled('claude-code', settingsPath), invalidJson: true };
+  // SAFETY: ensureHooksObject left every event hippo appends to absent or an array.
+  const hooks = merge as ClaudeHooks;
+  const migration = migrateLegacyClaudeHooks(hooks);
+
+  const { installedSessionEnd, installedSessionStart, migratedPinnedInjectRecent, installedUserPromptSubmit } =
+    appendSessionHooks(hooks, logFile);
+  const { installedPreCompact, installedCompactResume, installedPostCompact } = appendCompactionHooks(hooks);
 
   // PostToolUseFailure: a failed tool call becomes an error memory, after
   // `hippo capture-error` drops routine failures (interrupts, declined
