@@ -16,7 +16,7 @@ export function __resetSessionRecallHistoryMcp(): void {
 // back to `'stdio-${pid}'` (one process = one client) or
 // `${tenantId}:default` if a McpContext is constructed in tests without a
 // pid-bound transport.
-export const MAX_RECALL_CLIENTS = 4096;
+const MAX_RECALL_CLIENTS = 4096;
 
 // The caller names the project half of each key, so a set past the cap drops the client that recalled longest ago.
 class RecentRecalls extends Map<string, string[]> {

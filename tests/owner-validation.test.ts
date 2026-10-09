@@ -4,12 +4,11 @@
 
 import { describe, it, expect } from 'vitest';
 import {
-  OWNER_RE,
   validateOwner,
   isStrictOwnerEnv,
 } from '../src/cli/owner-validation.js';
 
-describe('OWNER_RE', () => {
+describe('owner format', () => {
   it.each([
     'user:alice',
     'user:alice_smith',
@@ -20,7 +19,7 @@ describe('OWNER_RE', () => {
     'user:a',
     'agent:1',
   ])('matches valid owner string %s', (owner) => {
-    expect(OWNER_RE.test(owner)).toBe(true);
+    expect(validateOwner(owner, { strict: true }).ok).toBe(true);
   });
 
   it.each([
@@ -34,7 +33,7 @@ describe('OWNER_RE', () => {
     ':alice',                      // empty prefix
     'user:alice:extra',            // extra colon
   ])('rejects invalid owner string %s', (owner) => {
-    expect(OWNER_RE.test(owner)).toBe(false);
+    expect(validateOwner(owner, { strict: true }).ok).toBe(false);
   });
 });
 
