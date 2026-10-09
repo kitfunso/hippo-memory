@@ -16,6 +16,7 @@ import { calculateStrength, type MemoryEntry } from './memory.js';
 import { isObjectLike, isStringValue } from './capture-contract.js';
 import { isGlobalStoreRoot, projectNames, resolveProjectIdentity } from './project-identity.js';
 import { duplicateKey } from './same-text.js';
+import { compactionOriginsWithCwd, compactionTranscripts, holdsOrigin, restampCompactionOrigin } from './store/compactions.js';
 import { removeEntryMirrors } from './store/mirrors.js';
 import { deleteEntryRowInTx, restampOriginProjectAt, stampOriginProjectsAt, writeEntryMirrors } from './store/entry-writes.js';
 import { selectAllEntries, selectLiveEntriesBySourcePrefix } from './store/entry-reads.js';
@@ -158,8 +159,7 @@ function foldInTx(db: DatabaseSyncLike, tenantId: string, from: string, into: st
     replaceDormantEntry(db, tenantId, snap.entry.id, { ...snap.entry, origin_project: into });
     dormantRestamped.push(snap.entry.id);
   }
-  const compactions = Number(db.prepare(`UPDATE compactions SET origin_project = ? WHERE tenant_id = ? AND origin_project = ?`)
-    .run(into, tenantId, from).changes ?? 0);
+  const compactions = restampCompactionOrigin(db, tenantId, from, into);
   return { setAside, restamped, dormantRestamped, compactions };
 }
 
@@ -182,9 +182,7 @@ function strayImports(db: DatabaseSyncLike, hippoRoot: string, tenantId: string)
   if (!isGlobalStoreRoot(hippoRoot)) return copies;
   const machine = { platform: process.platform, env: processEnv() };
   const { platform } = machine;
-  // SAFETY: the SELECT names the two columns of the row type.
-  const sessions = db.prepare(`SELECT DISTINCT transcript_path AS transcript, cwd FROM compactions WHERE tenant_id = ? AND transcript_path IS NOT NULL`)
-    .all(tenantId) as Array<{ transcript: string; cwd: string | null }>;
+  const sessions = compactionTranscripts(db, tenantId);
   const owners = new Map<string, Map<string, string[]>>();
   for (const { transcript, cwd } of sessions) {
     const project = transcriptNotesProject(transcript, cwd, machine);
@@ -217,9 +215,7 @@ function planFolds(db: DatabaseSyncLike, hippoRoot: string, tenantId: string, gl
   // A name someone merged into by hand stays: undoing their choice would rest on the resolver alone.
   const chosen = new Set(queryAuditEvents(db, { tenantId, op: 'project_merge', limit: 10000 }).map((e) => e.metadata.into));
   if (!isGlobalStoreRoot(hippoRoot)) return { folds: ownLegacyFold(db, hippoRoot, tenantId).filter((f) => !chosen.has(f.from)), collisions: [] };
-  // SAFETY: the SELECT names the two columns of the row type.
-  const rows = db.prepare(`SELECT DISTINCT origin_project AS origin, cwd FROM compactions WHERE tenant_id = ? AND origin_project <> '' AND cwd IS NOT NULL`)
-    .all(tenantId) as Array<{ origin: string; cwd: string }>;
+  const rows = compactionOriginsWithCwd(db, tenantId);
   const today = new Map<string, Set<string>>();
   for (const { origin, cwd } of rows) {
     if (fs.existsSync(cwd)) today.set(origin, (today.get(origin) ?? new Set<string>()).add(resolveProjectIdentity(cwd).name));
@@ -243,8 +239,7 @@ function ownLegacyFold(db: DatabaseSyncLike, hippoRoot: string, tenantId: string
   if (isSharedStore(hippoRoot)) return [];
   const { name, legacyName } = resolveProjectIdentity(path.dirname(path.resolve(hippoRoot)));
   if (legacyName === '' || legacyName === name) return [];
-  const heldIn = (table: string) => db.prepare(`SELECT 1 FROM ${table} WHERE tenant_id = ? AND origin_project = ? LIMIT 1`).get(tenantId, legacyName) !== undefined;
-  const held = heldIn('memories') || heldIn('compactions') || listDormantSnapshots(db, tenantId).some((s) => s.entry.origin_project === legacyName);
+  const held = holdsOrigin(db, 'memories', tenantId, legacyName) || holdsOrigin(db, 'compactions', tenantId, legacyName) || listDormantSnapshots(db, tenantId).some((s) => s.entry.origin_project === legacyName);
   return held ? [{ from: legacyName, into: name }] : [];
 }
 
