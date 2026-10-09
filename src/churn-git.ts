@@ -19,7 +19,7 @@ function runGit(args: string[], repoRoot: string): string {
   try {
     return execFileSync('git', args, { cwd: repoRoot, encoding: 'utf8', maxBuffer: GIT_MAX_BUFFER, timeout: GIT_TIMEOUT_MS, windowsHide: true });
   } catch (err) {
-    throw new GitReadError(`git ${args.join(' ')} failed: ${errorMessage(err)}`);
+    throw new GitReadError(`git ${args.join(' ')} failed: ${errorMessage(err)}`, { cause: err });
   }
 }
 
@@ -31,7 +31,7 @@ function runGitGrepOrEmpty(args: string[], repoRoot: string): string {
     // SAFETY: execFileSync attaches `status` to the thrown Error on a non-zero child exit.
     const status = (err as { status?: number }).status;
     if (status === 1) return '';
-    throw new GitReadError(`git ${args.join(' ')} failed: ${errorMessage(err)}`);
+    throw new GitReadError(`git ${args.join(' ')} failed: ${errorMessage(err)}`, { cause: err });
   }
 }
 

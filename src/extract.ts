@@ -3,7 +3,7 @@ import { writeEntry } from './store/entry-writes.js';
 import { loadConfig } from './config.js';
 import { RejectedValueError } from './store/rejection.js';
 import { redactSecretsStrict } from './secret-detect.js';
-import { fetchWithRetry, llmTimeoutMs } from './http-retry.js';
+import { describeMessageFailure, sendAnthropicMessage } from './util/anthropic-messages.js';
 import { neverAutoShareTags } from './shared.js';
 import { errorMessage, log } from './log.js';
 import { isJsonString } from './json.js';
@@ -36,41 +36,27 @@ Rules:
 Input text:
 `;
 
+// Output budget for one extraction reply.
+const EXTRACTION_MAX_TOKENS = 1200;
+
 export async function extractFacts(
   text: string,
   opts: ExtractOptions,
 ): Promise<ExtractedFact[]> {
-  const model = opts.model ?? 'claude-sonnet-4-6';
-  const fetchFn = opts.fetcher ?? fetch;
-
-  let res: Response;
-  try {
-    res = await fetchWithRetry('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': opts.apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model,
-        max_tokens: 1200,
-        messages: [{ role: 'user', content: EXTRACTION_PROMPT + redactSecretsStrict(text) }],
-      }),
-    }, { timeoutMs: llmTimeoutMs(), fetchFn });
-  } catch (err) {
-    opts.onError?.(`request failed: ${errorMessage(err)}`);
-    return [];
-  }
-
-  if (!res.ok) {
-    opts.onError?.(`HTTP ${res.status}`);
+  const reply = await sendAnthropicMessage({
+    apiKey: opts.apiKey,
+    model: opts.model,
+    maxTokens: EXTRACTION_MAX_TOKENS,
+    prompt: EXTRACTION_PROMPT + redactSecretsStrict(text),
+    fetcher: opts.fetcher,
+  });
+  if (!reply.ok) {
+    opts.onError?.(describeMessageFailure(reply.failure));
     return [];
   }
 
   try {
-    const data: { content?: Array<{ text?: string }> } = await res.json();
-    const raw = data.content?.[0]?.text?.trim() ?? '';
+    const raw = reply.text;
     if (!raw) return [];
 
     const parsed = JSON.parse(raw);

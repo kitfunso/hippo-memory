@@ -11,7 +11,7 @@ import { captureSessionTexts } from '../src/capture/session-texts.js';
 import { cmdRecall } from '../src/cli/recall.js';
 import { _resetSharedStoreCacheForTests } from '../src/config.js';
 import { closeHippoDb, openHippoDb } from '../src/db.js';
-import { insertEntity } from '../src/graph/write.js';
+import { insertEntity } from '../src/store/graph-writes.js';
 import type { JsonValue } from '../src/json.js';
 import { Layer, generateId, type CreateMemoryOptions, type MemoryEntry } from '../src/memory.js';
 import { clearProjectIdentityCache } from '../src/project-identity.js';

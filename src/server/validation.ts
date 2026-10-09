@@ -20,7 +20,9 @@ export function isSetMember<T extends string>(set: ReadonlySet<T>, value: string
 
 // Number.isInteger, not isFinite: SQLite `LIMIT ?` rejects "1.5" with a 500.
 // Shared by every first-class-object list route so the guard cannot drift.
-export function parseListLimit(limitRaw: string | null, defaultLimit = 100, maxLimit = 1000): number {
+export const MAX_LIST_LIMIT = 1000;
+
+export function parseListLimit(limitRaw: string | null, defaultLimit = 100, maxLimit = MAX_LIST_LIMIT): number {
   if (limitRaw === null) return defaultLimit;
   const limit = Number(limitRaw);
   if (!Number.isInteger(limit) || limit <= 0 || limit > maxLimit) {
