@@ -15,6 +15,7 @@ type BaseMethods = Omit<HippoStore, keyof StoreGroups | 'kind' | 'close'>;
 /** The store methods that answer from a worker, the base ones under `base`. Tagged by effect, not by name: predictionBaserate appends an audit row, so it is a write,
  *  and so is a read that opens through `openStore`, which records the half-life base and imports legacy rows on a store with no memory. */
 export const WORKER_OPS = {
+  // SHORTCUT: every openStore-backed read is tagged 'write', so it queues behind real writes on the one writer thread; run store setup once on the writer before readers serve, then tag them 'read'.
   base: {
     findApiKey: 'read',
     entriesByIds: 'write',
