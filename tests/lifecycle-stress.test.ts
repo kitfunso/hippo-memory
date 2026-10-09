@@ -24,6 +24,7 @@ import { loadAllEntries } from '../src/store/entry-reads.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { embedMemory } from '../src/store/embeddings/index.js';
 import { isEmbeddingAvailable } from '../src/store/embeddings/local.js';
+import { skipWithoutEmbeddings } from './_helpers/embedding-backend.js';
 import { physicsSearch } from '../src/search/physics-search.js';
 import { consolidate } from '../src/consolidate/sleep.js';
 import { DEFAULT_PHYSICS_CONFIG } from '../src/core/physics-config.js';
@@ -152,11 +153,8 @@ describe('lifecycle-stress mechanism (real DB, mirrors the probe)', () => {
     fs.rmSync(base, { recursive: true, force: true });
   });
 
-  it('merges near-duplicate clusters and the summary carries each answer token', async () => {
-    if (!isEmbeddingAvailable()) {
-      console.warn('SKIP: embeddings unavailable in this environment');
-      return;
-    }
+  it('merges near-duplicate clusters and the summary carries each answer token', async (ctx) => {
+    skipWithoutEmbeddings(ctx, isEmbeddingAvailable());
     const { memories, labels } = injectStream({ seed: 42, scaleMemories: 40, numFacts: 4, dupesPerFact: 3 });
     for (const m of memories) writeEntry(root, createMemory(m.content, { tags: m.tags, source: 'lse-test' }));
     for (const e of loadAllEntries(root)) await embedMemory(root, e);
@@ -177,11 +175,8 @@ describe('lifecycle-stress mechanism (real DB, mirrors the probe)', () => {
     }
   }, 60_000);
 
-  it('answers each queried fact via physicsSearch after consolidate (token present)', async () => {
-    if (!isEmbeddingAvailable()) {
-      console.warn('SKIP: embeddings unavailable in this environment');
-      return;
-    }
+  it('answers each queried fact via physicsSearch after consolidate (token present)', async (ctx) => {
+    skipWithoutEmbeddings(ctx, isEmbeddingAvailable());
     const { memories, labels } = injectStream({ seed: 11, scaleMemories: 40, numFacts: 4, dupesPerFact: 3 });
     for (const m of memories) writeEntry(root, createMemory(m.content, { tags: m.tags, source: 'lse-test' }));
     for (const e of loadAllEntries(root)) await embedMemory(root, e);
@@ -197,11 +192,8 @@ describe('lifecycle-stress mechanism (real DB, mirrors the probe)', () => {
     }
   }, 60_000);
 
-  it('G1 leak sanity: a noise-only store does not surface any fact answer token', async () => {
-    if (!isEmbeddingAvailable()) {
-      console.warn('SKIP: embeddings unavailable in this environment');
-      return;
-    }
+  it('G1 leak sanity: a noise-only store does not surface any fact answer token', async (ctx) => {
+    skipWithoutEmbeddings(ctx, isEmbeddingAvailable());
     // labels for facts that are NEVER injected (noise-only store)
     const { labels } = injectStream({ seed: 99, scaleMemories: 40, numFacts: 4, dupesPerFact: 3 });
     // Noise-only: facts are injected first, so the distractors are everything after
