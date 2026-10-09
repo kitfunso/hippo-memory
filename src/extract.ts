@@ -73,11 +73,11 @@ export async function extractFacts(
 interface RawExtractedFact {
   content?: JsonValue;
   tags?: JsonValue;
-  valence?: string;
+  valence?: JsonValue;
 }
 
 function parseExtractedFacts(parsed: (RawExtractedFact | null)[]): ExtractedFact[] {
-  const validValences = new Set<string | undefined>(['neutral', 'positive', 'negative', 'critical']);
+  const validValences = new Set<string>(['neutral', 'positive', 'negative', 'critical']);
   const facts: ExtractedFact[] = [];
 
   for (const item of parsed) {
@@ -93,8 +93,8 @@ function parseExtractedFacts(parsed: (RawExtractedFact | null)[]): ExtractedFact
     const tags = Array.isArray(itemTags)
       ? itemTags.filter((t) => isJsonString(t))
       : [];
-    // SAFETY: validValences.has(item.valence) above confirms item.valence is one of the four literal strings of EmotionalValence.
-    const valence: EmotionalValence = validValences.has(item.valence)
+    // SAFETY: the isJsonString + validValences.has guard below confirms item.valence is one of the four literal strings of EmotionalValence.
+    const valence: EmotionalValence = isJsonString(item.valence) && validValences.has(item.valence)
       ? (item.valence as EmotionalValence)
       : 'neutral';
 
