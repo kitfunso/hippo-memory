@@ -1,11 +1,10 @@
 // getContext's selection stages: the pinned-only branch, the strongest-first branch and the search branch.
 
-import { openHippoDb, closeHippoDb } from '../db.js';
 import { recallScopeFilter } from '../store/search-rows.js';
 import type { AmbientLoadResult } from '../store/candidates.js';
 import { heldIdLookup } from '../store/entry-reads.js';
 import { calculateStrength, type MemoryEntry } from '../memory.js';
-import { appendAuditEvent, auditQueryFields, type AppendAuditOpts } from '../store/audit.js';
+import { auditQueryFields, recordAuditEvent, type AppendAuditOpts } from '../store/audit.js';
 import type { ContextReads, HippoStore } from '../store-port.js';
 import { isWorthSurfacing } from '../memory-quality.js';
 import { rankBothStores } from '../shared.js';
@@ -474,20 +473,6 @@ async function auditContextRecall(ctx: Context, plan: ContextPlan, resultCount: 
     await plan.other.appendAuditEvents([row]);
     return;
   }
-  if (plan.hasLocal) {
-    const localDb = openHippoDb(ctx.hippoRoot);
-    try {
-      appendAuditEvent(localDb, row);
-    } finally {
-      closeHippoDb(localDb);
-    }
-  }
-  if (plan.hasGlobal && !plan.primaryIsGlobal) {
-    const globalDb = openHippoDb(plan.globalRoot);
-    try {
-      appendAuditEvent(globalDb, row);
-    } finally {
-      closeHippoDb(globalDb);
-    }
-  }
+  if (plan.hasLocal) recordAuditEvent(ctx.hippoRoot, row);
+  if (plan.hasGlobal && !plan.primaryIsGlobal) recordAuditEvent(plan.globalRoot, row);
 }

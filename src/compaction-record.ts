@@ -2,7 +2,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { ConflictError } from './api-errors.js';
-import { isObjectLike, isStringValue } from './capture-contract.js';
+import { isStringValue } from './capture-contract.js';
 import { COMPACTION_ITEM_MAX_CHARS, compactSummaryBody, parseCompactionItems, selectItemRows } from './compaction-items.js';
 import { importSpool, spool, type SpoolImporter } from './compaction-spool.js';
 import { isSharedStore, loadConfig } from './config.js';
@@ -400,24 +400,6 @@ export interface PostCompactPayload {
   transcriptPath: string | null;
   /** null when Claude Code sent none; the transcript fills the record later. */
   compactSummary: string | null;
-}
-
-/** null when the text is not a PostCompact payload naming a session. */
-export function parsePostCompactPayload(stdinText: string | undefined): PostCompactPayload | null {
-  let raw: unknown;
-  try {
-    raw = JSON.parse((stdinText ?? '').trim());
-  } catch {
-    return null; // non-JSON stdin is not a PostCompact payload; the caller skips it
-  }
-  if (!isObjectLike(raw) || !('session_id' in raw) || !isStringValue(raw.session_id) || raw.session_id === '') return null;
-  return {
-    sessionId: raw.session_id,
-    trigger: 'trigger' in raw && isStringValue(raw.trigger) ? raw.trigger : null,
-    cwd: 'cwd' in raw && isStringValue(raw.cwd) ? raw.cwd : null,
-    transcriptPath: 'transcript_path' in raw && isStringValue(raw.transcript_path) ? raw.transcript_path : null,
-    compactSummary: 'compact_summary' in raw && isStringValue(raw.compact_summary) ? raw.compact_summary : null,
-  };
 }
 
 export interface CompactionSaveResult {

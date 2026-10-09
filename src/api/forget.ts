@@ -1,12 +1,11 @@
 // Forget a memory, and reject or unreject a value so it cannot be stored again.
 
-import { openHippoDb, closeHippoDb } from '../db.js';
 import { BadRequestError, NotFoundError } from '../api-errors.js';
 import type { RejectedValueRow } from '../store/rejection.js';
 import { rejectValue, unrejectValue, listRejectionsForTenant } from '../reject-flow.js';
 import { andThen, notPorted, onStore } from './on-store.js';
 import type { Context, StoreReply } from './types.js';
-import { selectMemoryReach } from '../store/tenant-lookup.js';
+import { readEntry } from '../store/entry-reads.js';
 import { canTouchScope, personalScopeOf } from '../recall-scope.js';
 
 // ---------------------------------------------------------------------------
@@ -70,14 +69,9 @@ export function reject(ctx: Context, opts: RejectOpts): RejectResult {
     // Tenant scope, same not-found-shaped denial as forget/promote above:
     // rejectValue itself also tenant-checks the id, but pre-checking here
     // keeps the error message consistent with the rest of this module.
-    const db = openHippoDb(ctx.hippoRoot);
-    try {
-      const reach = selectMemoryReach(db, opts.memoryId);
-      if (reach?.tenantId !== ctx.tenantId || !canTouchScope(ctx.actor, reach.scope)) {
-        throw new NotFoundError(`memory not found: ${opts.memoryId}`);
-      }
-    } finally {
-      closeHippoDb(db);
+    const entry = readEntry(ctx.hippoRoot, opts.memoryId);
+    if (entry?.tenantId !== ctx.tenantId || !canTouchScope(ctx.actor, entry.scope)) {
+      throw new NotFoundError(`memory not found: ${opts.memoryId}`);
     }
   }
   const result = rejectValue({

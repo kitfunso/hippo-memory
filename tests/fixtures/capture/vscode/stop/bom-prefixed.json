@@ -1,0 +1,16 @@
+{
+  "stdin": "\uFEFF{\"hook_event_name\":\"Stop\",\"session_id\":\"0f5c2a7e-1b3d-4e8f-9a6c-2d4b8e1f7a90\",\"timestamp\":\"2026-10-07T12:05:00.000Z\",\"cwd\":\"C:\\\\work\\\\repo\",\"transcript_path\":\"C:\\\\Users\\\\u\\\\AppData\\\\Roaming\\\\Code\\\\User\\\\workspaceStorage\\\\9b1e\\\\GitHub.copilot-chat\\\\transcripts\\\\0f5c2a7e-1b3d-4e8f-9a6c-2d4b8e1f7a90.jsonl\",\"stop_hook_active\":false}",
+  "timedOut": false,
+  "expect": {
+    "status": "received",
+    "input": {
+      "runtime": "vscode",
+      "event": "turn-end",
+      "manual": false,
+      "sessionId": "0f5c2a7e-1b3d-4e8f-9a6c-2d4b8e1f7a90",
+      "cwd": "C:\\work\\repo",
+      "transcriptPath": "C:\\Users\\u\\AppData\\Roaming\\Code\\User\\workspaceStorage\\9b1e\\GitHub.copilot-chat\\transcripts\\0f5c2a7e-1b3d-4e8f-9a6c-2d4b8e1f7a90.jsonl",
+      "trigger": null
+    }
+  }
+}

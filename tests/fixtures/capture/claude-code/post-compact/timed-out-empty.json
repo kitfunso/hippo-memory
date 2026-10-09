@@ -1,0 +1,8 @@
+{
+  "stdin": "",
+  "timedOut": true,
+  "expect": {
+    "status": "unavailable",
+    "reason": "no PostCompact payload arrived before the stdin wait window closed"
+  }
+}

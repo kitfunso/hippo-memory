@@ -1,5 +1,5 @@
 import type { MemoryEntry } from '../memory.js';
-import { openHippoDb, isFtsAvailable } from '../db.js';
+import { closeHippoDb, ftsRowCounts, openHippoDb, isFtsAvailable, repairFtsDrift } from '../db.js';
 import { fallbackOrigin, originFromSource } from '../project-identity.js';
 import { checkRejectionGuard } from './rejection.js';
 import { errorMessage, log } from '../log.js';
@@ -166,6 +166,20 @@ export function replaceFtsRows(db: ReturnType<typeof openHippoDb>, rows: readonl
     } catch (err) {
       log.warnThenDebug('fts-sync', `FTS index update failed for ${row.id}; keyword recall may miss it: ${errorMessage(err)}`);
     }
+  }
+}
+
+/** Row counts of a full-text index that has drifted from `memories`, re-synced after the count when `repair`; null when the two agree or there is no index. */
+export function ftsDrift(hippoRoot: string, repair: boolean): { memories: number; fts: number } | null {
+  const db = openHippoDb(hippoRoot);
+  try {
+    if (!isFtsAvailable(db)) return null;
+    const counts = ftsRowCounts(db);
+    if (counts === null || counts.memories === counts.fts) return null;
+    if (repair) repairFtsDrift(db);
+    return counts;
+  } finally {
+    closeHippoDb(db);
   }
 }
 
