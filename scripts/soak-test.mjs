@@ -226,6 +226,25 @@ function initState() {
   return state;
 }
 
+function printSummary(rows, config, started) {
+  const lastRow = rows[rows.length - 1];
+  const totalEnergy = Number(lastRow[5]);
+  const firstEnergy = Number(rows[1]?.[5] ?? rows[0][5]);
+  const maxEnergyAbs = Math.max(...rows.slice(1).map(r => Math.abs(Number(r[5]))));
+  const maxVel = Math.max(...rows.slice(1).map(r => Number(r[7])));
+  console.error('\n=== Summary ===');
+  console.error(`  profile:         ${PROFILE}`);
+  console.error(`  ticks completed: ${rows.length - 1} / ${TICKS}`);
+  console.error(`  wall time:       ${((Date.now() - started) / 1000).toFixed(1)}s`);
+  console.error(`  final particles: ${lastRow[2]}`);
+  console.error(`  first energy:    ${firstEnergy.toFixed(4)}`);
+  console.error(`  final energy:    ${totalEnergy.toFixed(4)}`);
+  console.error(`  |max energy|:    ${maxEnergyAbs.toFixed(4)}`);
+  console.error(`  max |velocity|:  ${maxVel.toFixed(4)} (config cap: ${config.max_velocity})`);
+  console.error(`  bounded:         ${Number.isFinite(totalEnergy) && maxVel <= config.max_velocity * 10 ? 'YES' : 'NO'}`);
+  console.error(`  CSV written to:  ${OUT}`);
+}
+
 function run() {
   if (!PROFILES[PROFILE]) {
     console.error(`Unknown profile: ${PROFILE}. Available: ${Object.keys(PROFILES).join(', ')}`);
@@ -298,23 +317,7 @@ function run() {
   const csv = [header.join(','), ...rows.map(r => r.join(','))].join('\n');
   fs.writeFileSync(OUT, csv);
 
-  // ---- summary ----
-  const lastRow = rows[rows.length - 1];
-  const totalEnergy = Number(lastRow[5]);
-  const firstEnergy = Number(rows[1]?.[5] ?? rows[0][5]);
-  const maxEnergyAbs = Math.max(...rows.slice(1).map(r => Math.abs(Number(r[5]))));
-  const maxVel = Math.max(...rows.slice(1).map(r => Number(r[7])));
-  console.error('\n=== Summary ===');
-  console.error(`  profile:         ${PROFILE}`);
-  console.error(`  ticks completed: ${rows.length - 1} / ${TICKS}`);
-  console.error(`  wall time:       ${((Date.now() - started) / 1000).toFixed(1)}s`);
-  console.error(`  final particles: ${lastRow[2]}`);
-  console.error(`  first energy:    ${firstEnergy.toFixed(4)}`);
-  console.error(`  final energy:    ${totalEnergy.toFixed(4)}`);
-  console.error(`  |max energy|:    ${maxEnergyAbs.toFixed(4)}`);
-  console.error(`  max |velocity|:  ${maxVel.toFixed(4)} (config cap: ${config.max_velocity})`);
-  console.error(`  bounded:         ${Number.isFinite(totalEnergy) && maxVel <= config.max_velocity * 10 ? 'YES' : 'NO'}`);
-  console.error(`  CSV written to:  ${OUT}`);
+  printSummary(rows, config, started);
 }
 
 run();
