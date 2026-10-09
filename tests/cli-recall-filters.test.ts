@@ -13,7 +13,7 @@ function hippo(cwd: string, env: HippoEnv, ...args: string[]): string {
   return hippoOut(args, { cwd, env: { ...process.env, ...env }, exe: 'node' });
 }
 
-describe('recall --layer filter (v0.30.1)', () => {
+describe('recall --layer filter', () => {
   let home: string;
   let env: HippoEnv;
 

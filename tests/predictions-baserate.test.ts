@@ -23,7 +23,7 @@ function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
 }
 
-describe('computePredictionBaserate (J3 baserate detector, v0.31)', () => {
+describe('computePredictionBaserate (baserate detector)', () => {
   let home: string;
   beforeEach(() => { home = makeRoot('j3'); });
   afterEach(() => safeRmSync(home));

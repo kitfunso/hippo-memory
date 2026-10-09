@@ -28,7 +28,7 @@ function boostAndLog(db: DatabaseSyncLike, rows: ScoredRow[], opts: GoalStackBoo
   return boost.results;
 }
 
-describe('computeGoalStackBoost plus writeGoalRecallLog (v1.7.4)', () => {
+describe('computeGoalStackBoost plus writeGoalRecallLog', () => {
   let hippoRoot: string;
   const tenantId = 'default';
   const sessionId = 'sess-1.7.4';

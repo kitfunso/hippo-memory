@@ -204,7 +204,7 @@ describe('partitionLessons', () => {
 // drops it before storage).
 // ---------------------------------------------------------------------------
 
-describe('extractLessons unchanged by DF4', () => {
+describe('extractLessons is unchanged by the write-path gate', () => {
   it('still returns a low-information subject the parser recognizes', () => {
     // "fixed signals" matches the loose \b(fixed|...)\b pattern - the parser
     // has no quality predicate and never should; admission happens later.
@@ -240,7 +240,7 @@ function initGitRepoWithCommits(subjects: string[]): string {
   return repoDir;
 }
 
-describe('DF4 write-path gate: CLI `hippo learn --git`', () => {
+describe('write-path gate: CLI `hippo learn --git`', () => {
   let repoDir: string;
   let globalRoot: string;
   let env: NodeJS.ProcessEnv;
@@ -283,7 +283,7 @@ describe('DF4 write-path gate: CLI `hippo learn --git`', () => {
   });
 });
 
-describe('DF4: a gated lesson still invalidates', () => {
+describe('a gated lesson still invalidates', () => {
   let repoDir: string;
   let globalRoot: string;
   let env: NodeJS.ProcessEnv;
@@ -351,7 +351,7 @@ describe('DF4: a gated lesson still invalidates', () => {
   });
 });
 
-describe('DF4 write-path gate: MCP hippo_learn tool', () => {
+describe('write-path gate: MCP hippo_learn tool', () => {
   let repoDir: string;
   let hippoRoot: string;
   let originalCwd: string;

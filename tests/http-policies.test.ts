@@ -67,7 +67,7 @@ async function createPolicy(body: CreatePolicyBody, key: CreateApiKeyResult = ap
   return fetch(`${handle.url}/v1/policies`, { method: 'POST', headers: authHeaders(key), body: JSON.stringify(body) });
 }
 
-describe('HTTP /v1/policies (E2 bi-temporal first-class object)', () => {
+describe('HTTP /v1/policies (bi-temporal first-class object)', () => {
   it('POST /v1/policies creates a policy (201 + Policy, version 1)', async () => {
     const res = await createPolicy({ policyName: 'Retention', policyText: 'delete after 90d', validFrom: '2026-01-01' });
     expect(res.status).toBe(201);

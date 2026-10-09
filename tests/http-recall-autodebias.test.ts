@@ -48,7 +48,7 @@ async function jsonAs<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-describe('HTTP /v1/memories planningFallacyHint (J3.2 v0.32)', () => {
+describe('HTTP /v1/memories planningFallacyHint', () => {
   it('response includes planningFallacyHint with camelCase shape when query matches', async () => {
     seedBaserate(home);
     const q = encodeURIComponent('migration effort will take 3 days');

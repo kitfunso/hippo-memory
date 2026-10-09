@@ -28,7 +28,7 @@ function readerFor(owner: string): (scope: string | null) => boolean {
 
 const names = (m: { nodes: { name: string }[] }): string[] => m.nodes.map((n) => n.name).sort();
 
-describe('graph-view personal scope (E10 lane A)', () => {
+describe('graph-view personal scope', () => {
   let home: string;
   const alice = readerFor('alice');
   const bob = readerFor('bob');

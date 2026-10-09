@@ -117,7 +117,7 @@ function makeChild(
   return c;
 }
 
-describe('v0.30 / E3 — sleep-cycle rebuildDirtySummaries', () => {
+describe('sleep-cycle rebuildDirtySummaries', () => {
   let hippoRoot: string;
 
   beforeEach(() => {

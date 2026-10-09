@@ -42,7 +42,7 @@ function hippo(cwd: string, env: RecallScopeEnv, ...args: string[]): string {
   return hippoOut(args, { cwd, env: { ...process.env, ...env }, exe: 'node' });
 }
 
-describe('cli recall scope default-deny (v1.25.0)', () => {
+describe('cli recall scope default-deny', () => {
   let home: string;
   let env: RecallScopeEnv;
 

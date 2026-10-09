@@ -76,7 +76,7 @@ function hippoAsync(
   });
 }
 
-describe('global --scope value-less guard (v1.26.2 T1) — exit-1 cases', () => {
+describe('global --scope value-less guard: exit-1 cases', () => {
   let home: string;
   let env: ScopeGuardEnv;
 
@@ -145,7 +145,7 @@ describe('global --scope value-less guard (v1.26.2 T1) — exit-1 cases', () => 
   });
 });
 
-describe('valued --scope regression coverage (v1.26.2 acceptance criterion 2)', () => {
+describe('valued --scope regression coverage', () => {
   let home: string;
   let env: ScopeGuardEnv;
 

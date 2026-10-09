@@ -22,7 +22,7 @@ function hippo(cwd: string, env: CliEnv, ...args: string[]): string {
   return hippoOut(args, { cwd, env: { ...process.env, ...env }, exe: 'node' });
 }
 
-describe('recall --graph-stream (L1 CLI)', () => {
+describe('recall --graph-stream', () => {
   let home: string;
   let env: CliEnv;
 

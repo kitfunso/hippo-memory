@@ -57,7 +57,7 @@ function findResult(results: SearchResult[], id: string): SearchResult | undefin
   return results.find((r) => r.entry.id === id);
 }
 
-describe('v0.30 / E4 — first-class DAG recall (scoring layer)', () => {
+describe('first-class DAG recall (scoring layer)', () => {
   let hippoRoot: string;
   let savedDeboost: string | undefined;
 

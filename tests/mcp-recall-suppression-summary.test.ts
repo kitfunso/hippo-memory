@@ -55,7 +55,7 @@ function extractText(res: McpResponse | null): string {
   return result?.content?.[0]?.text ?? '';
 }
 
-describe('mcp hippo_recall Cutoff suppressionSummary (C5, v1.12.13 + v1.13.3)', () => {
+describe('mcp hippo_recall Cutoff suppressionSummary', () => {
   let home: string;
   let originalHome: string | undefined;
 

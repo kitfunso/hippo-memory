@@ -63,7 +63,7 @@ function countAuditOps(root: string, op: string): number {
   }
 }
 
-describe('api.recall anchoringHint (J1, v0.33)', () => {
+describe('api.recall anchoringHint', () => {
   let root: string;
   beforeEach(() => {
     root = makeRoot('j1-api');

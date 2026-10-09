@@ -29,7 +29,7 @@ function hitsIn(file: string, text: string): string[] {
 const hits = (file: string): string[] => hitsIn(file, readFileSync(join(SRC, file), 'utf8'));
 const sources = readdirSync(SRC, { recursive: true, encoding: 'utf8' }).filter((f) => f.endsWith('.ts'));
 
-describe('scope SQL guard (E10 lane A)', () => {
+describe('scope SQL guard', () => {
   it('finds the patterns where they belong, so the scan is live', () => {
     expect(sources.length).toBeGreaterThan(50);
     expect(hits('recall-scope.ts').length).toBeGreaterThan(0);

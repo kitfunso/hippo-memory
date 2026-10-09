@@ -474,7 +474,7 @@ describe('importVault (q) — dryRun previews deletions without archiving', () =
   });
 });
 
-describe('importVault (r) — does not import the Hippo store mirror files (codex R5 P1)', () => {
+describe('importVault (r): does not import the Hippo store mirror files', () => {
   it('skips .hippo / dot-dirs when the vault contains the store', () => {
     writeNote('real-note.md', 'a genuine vault note, long enough to store');
     // markdown mirror file inside a .hippo store dir under the vault
@@ -492,7 +492,7 @@ describe('importVault (r) — does not import the Hippo store mirror files (code
   });
 });
 
-describe('importVault (s) — vault root IS the store imports nothing (codex R6 P2)', () => {
+describe('importVault (s): vault root IS the store imports nothing', () => {
   it('returns empty when folderPath resolves to hippoRoot', () => {
     fs.mkdirSync(path.join(tmpDir, 'episodic'), { recursive: true });
     fs.writeFileSync(path.join(tmpDir, 'episodic', 'mirror.md'), 'store mirror content here', 'utf8');

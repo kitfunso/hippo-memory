@@ -117,7 +117,7 @@ escape hatch either: it skips the manifest, em-dash and graph-write guards too.
 Tests that mutate `process.env.HIPPO_LOSS_AVERSION_RATIO` (or any other
 lazy-cached env var) must call the corresponding `_resetCacheForTests()`
 hook in BOTH `beforeEach` AND `afterEach`. The canonical pattern lives
-in `tests/emotional-multipliers-j5.test.ts`. Skipping the reset hook
+in `tests/emotional-multipliers.test.ts`. Skipping the reset hook
 makes test order significant (the cache holds a stale read from a
 previous test); skipping the `afterEach` reset leaks state into the
 NEXT test file that doesn't touch the env var.

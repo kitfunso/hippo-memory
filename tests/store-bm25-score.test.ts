@@ -34,7 +34,7 @@ function makeRaw(text: string): MemoryEntry {
   });
 }
 
-describe('loadSearchEntries bm25_score (F1, v1.7.0)', () => {
+describe('loadSearchEntries bm25_score', () => {
   let root: string;
   beforeEach(() => { root = makeRoot('f1'); });
   afterEach(() => safeRmSync(root));

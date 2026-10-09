@@ -222,7 +222,7 @@ function getLossAversionRatio(): number {
  *     the env var for this test.
  *   - afterEach: clear the cache so the next test (which may not set the env
  *     var) reads the clean default instead of this test's value.
- * See `tests/emotional-multipliers-j5.test.ts` for the canonical pattern.
+ * See `tests/emotional-multipliers.test.ts` for the pattern.
  */
 export function _resetLossAversionRatioCacheForTests(): void {
   _lossAversionRatioCache = undefined;

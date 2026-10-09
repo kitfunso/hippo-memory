@@ -38,7 +38,7 @@ function countPredictBaserateAudits(root: string): number {
   }
 }
 
-describe('computePredictionBaserate emitAudit flag (J3.2 v0.32)', () => {
+describe('computePredictionBaserate emitAudit flag', () => {
   let root: string;
   beforeEach(() => { root = makeRoot('emitaudit'); });
   afterEach(() => safeRmSync(root));

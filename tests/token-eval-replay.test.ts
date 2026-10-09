@@ -23,7 +23,7 @@ const TRACE = {
   ],
 };
 
-describe('session replay (TE4)', () => {
+describe('session replay', () => {
   it('every-turn injects on every prompt with byte-identical unchanged blocks', () => {
     const r = replayTrace(TRACE, 'every-turn');
     expect(r.prompts).toBe(6);

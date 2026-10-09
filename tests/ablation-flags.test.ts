@@ -5,7 +5,7 @@
  * its intended mechanism. Every block therefore asserts BOTH the ablation
  * (target mechanism off) AND the isolation (the other mechanisms intact).
  *
- * Env isolation pattern (canonical: tests/emotional-multipliers-j5.test.ts):
+ * Env isolation pattern (see tests/emotional-multipliers.test.ts):
  * beforeEach AND afterEach clear all ablation env vars + reset the module
  * cache, so no test leaks flags into the next.
  */

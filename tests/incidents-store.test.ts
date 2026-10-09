@@ -82,7 +82,7 @@ function seedMemory(home: string, content: string, tenantId: string): string {
   return mem.id;
 }
 
-describe('incidents store (E2 first-class object)', () => {
+describe('incidents store (first-class object)', () => {
   let home: string;
   beforeEach(() => { home = makeRoot('incidents'); });
   afterEach(() => safeRmSync(home));

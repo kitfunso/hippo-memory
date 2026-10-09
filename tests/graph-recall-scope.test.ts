@@ -47,7 +47,7 @@ function hippo(cwd: string, env: Record<string, string>, ...args: string[]): str
   return hippoOut(args, { cwd, env: { ...process.env, ...env }, exe: 'node' });
 }
 
-describe('graph-recall scope parity (v1.26.1)', () => {
+describe('graph-recall scope parity', () => {
   let home: string;
   const T = 'default';
   beforeEach(() => { home = makeRoot('graphrecall-scope'); });
@@ -155,7 +155,7 @@ describe('graph-recall scope parity (v1.26.1)', () => {
 
 type GraphRecallCliEnv = { HIPPO_HOME: string; HIPPO_SKIP_AUTO_INTEGRATIONS: string };
 
-describe('graph-recall scope parity — CLI e2e (v1.26.1)', () => {
+describe('graph-recall scope parity: CLI e2e', () => {
   let cliHome: string;
   let env: GraphRecallCliEnv;
 

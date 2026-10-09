@@ -72,7 +72,7 @@ async function createDecision(
   });
 }
 
-describe('HTTP /v1/decisions (E2 decision first-class object)', () => {
+describe('HTTP /v1/decisions (decision first-class object)', () => {
   it('POST /v1/decisions creates a decision (201 + Decision body)', async () => {
     const res = await createDecision('use Postgres', { context: 'scale' });
     expect(res.status).toBe(201);

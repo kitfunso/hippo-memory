@@ -15,7 +15,7 @@ import { openHippoDb, closeHippoDb, getCurrentSchemaVersion, getSchemaVersion } 
 import { createApiKey, validateApiKey } from '../src/auth.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 
-describe('v1.12.0 migration v26: api_keys.role', () => {
+describe('migration v26: api_keys.role', () => {
   it('CURRENT_SCHEMA_VERSION is 26', () => {
     expect(getCurrentSchemaVersion()).toBe(LATEST_SCHEMA_VERSION);
   });

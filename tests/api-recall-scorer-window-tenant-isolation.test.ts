@@ -32,7 +32,7 @@ function makeRaw(text: string, tenantId: string): MemoryEntry {
   });
 }
 
-describe('scorerWindow tenant isolation (v1.7.1 INFO #5)', () => {
+describe('scorerWindow tenant isolation', () => {
   let root: string;
   beforeEach(() => { root = makeRoot('f3-tenant'); });
   afterEach(() => safeRmSync(root));

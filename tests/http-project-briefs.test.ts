@@ -63,7 +63,7 @@ async function createBrief(body: { repo: string; summary: string }, key: CreateA
   return fetch(`${handle.url}/v1/project-briefs`, { method: 'POST', headers: authHeaders(key), body: JSON.stringify(body) });
 }
 
-describe('HTTP /v1/project-briefs (E2 repo-scoped first-class object)', () => {
+describe('HTTP /v1/project-briefs (repo-scoped first-class object)', () => {
   it('POST /v1/project-briefs creates a brief (201 + brief, version 1)', async () => {
     const res = await createBrief({ repo: 'hippo', summary: 'agent-memory lib' });
     expect(res.status).toBe(201);

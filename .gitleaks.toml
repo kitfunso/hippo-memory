@@ -42,5 +42,5 @@ targetRules = ["generic-api-key", "stripe-access-token"]
 
 [[allowlists]]
 description = "server-hardening test: made-up Slack signing secret"
-paths = ['''^tests/v039-server-hardening\.test\.ts$''']
+paths = ['''^tests/v039-server-hardening\.test\.ts$''', '''^tests/server-hardening\.test\.ts$''']
 targetRules = ["generic-api-key"]

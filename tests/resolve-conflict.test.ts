@@ -137,7 +137,7 @@ describe('resolveConflict', () => {
   });
 });
 
-describe('conflict tenant isolation (E2)', () => {
+describe('conflict tenant isolation', () => {
   function seedTenantConflict(tenant: string) {
     const a = createMemory7(`semicolons rule for ${tenant}`, { tenantId: tenant, tags: ['x'] });
     const b = createMemory7(`chaining rule for ${tenant}`, { tenantId: tenant, tags: ['x'] });

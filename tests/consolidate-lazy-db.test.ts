@@ -31,7 +31,7 @@ function tmpHome(prefix: string = 'hippo-consolidate-lazy-db-'): string {
   return mkdtempSync(join(tmpdir(), prefix));
 }
 
-describe('T3: consolidateDb lazy open', () => {
+describe('consolidateDb lazy open', () => {
   it('a no-op sleep (no entries, no promotable sessions, no merge clusters) completes clean', async () => {
     const home = tmpHome();
     try {

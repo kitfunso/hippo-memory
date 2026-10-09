@@ -53,7 +53,7 @@ afterEach(() => {
   for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true });
 });
 
-describe('C1: consolidate never deletes a raw row', () => {
+describe('consolidate never deletes a raw row', () => {
   it.each([false, true])('memoryValue.enabled=%s: the decayed raw row stays, the plain row goes', async (mv) => {
     const root = newRoot(JSON.stringify({ memoryValue: { enabled: mv } }));
     const raw = rawRow('slack message: the deploy moved to friday');
@@ -69,7 +69,7 @@ describe('C1: consolidate never deletes a raw row', () => {
   });
 });
 
-describe('H10: the sleep audit and dedup respect raw and pinned rows', () => {
+describe('the sleep audit and dedup respect raw and pinned rows', () => {
   it('audit deletes only the plain junk row and logs the caller and a reason', async () => {
     const root = newRoot();
     const raw = rawRow('yes!');
@@ -161,7 +161,7 @@ describe('H10: the sleep audit and dedup respect raw and pinned rows', () => {
   });
 });
 
-describe('C1: a row changed while sleep awaits the LLM keeps the change', () => {
+describe('a row changed while sleep awaits the LLM keeps the change', () => {
   it('a mid-sleep pin, forget and supersede all survive the batch flush', async () => {
     const root = newRoot();
     const condemned = createMemory7('a fact that decays below the threshold by day sixty');

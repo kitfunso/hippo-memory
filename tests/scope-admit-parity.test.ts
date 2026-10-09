@@ -14,7 +14,7 @@ const SCOPES: ReadonlyArray<string | null> = [
   null, '', 'team', 'slack:private:C1', 'SLACK:PRIVATE:x', 'unknown:legacy', OWN_A, 'personal:private:b', 'Personal:private:a',
 ];
 
-describe('scopeAdmitSql parity on a real store (E10 lane A)', () => {
+describe('scopeAdmitSql parity on a real store', () => {
   let root: string;
   let stored: Array<{ id: string; scope: string | null }>;
 

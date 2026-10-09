@@ -63,7 +63,7 @@ function lastAuditActor(root: string, op: string): string | null {
   }
 }
 
-describe('api.recall planningFallacyHint (J3.2, v0.32)', () => {
+describe('api.recall planningFallacyHint', () => {
   let root: string;
   beforeEach(() => {
     root = makeRoot('j32');

@@ -52,7 +52,7 @@ function seedClosedPredictions(root: string, classTag: string, n: number): void 
   }
 }
 
-describe('PlanningFallacyWatching (v1.13.4 / J3.2 follow-up)', () => {
+describe('PlanningFallacyWatching', () => {
   let root: string;
   beforeEach(() => { root = makeRoot('j32-watch'); });
   afterEach(() => safeRmSync(root));

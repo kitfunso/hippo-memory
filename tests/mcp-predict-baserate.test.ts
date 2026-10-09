@@ -43,7 +43,7 @@ function extractText(res: McpResponse | null): string {
   return result?.content?.[0]?.text ?? '';
 }
 
-describe('mcp hippo_predict_baserate (J3, v0.31)', () => {
+describe('mcp hippo_predict_baserate', () => {
   let home: string;
   let originalHome: string | undefined;
 

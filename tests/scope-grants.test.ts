@@ -271,7 +271,7 @@ describe('supersede keeps the old row\'s scope', () => {
   });
 });
 
-describe('graph view carries no private receipt text (T4 withdrawn, T6 closes the transitive path)', () => {
+describe('graph view carries no private receipt text', () => {
   let home: string;
   let handle: ServerHandle;
 

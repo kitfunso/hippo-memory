@@ -44,7 +44,7 @@ function legacyRow(content: string, file: string): MemoryEntry {
   return entry;
 }
 
-describe('agent memory sync: the PR 2 list', () => {
+describe('agent memory sync', () => {
   it('a new note is imported as one tagged, distilled row keyed by its folder, file and hash', () => {
     const dir = projectNotes(w);
     note(dir, 'deploy.md', DEPLOY);

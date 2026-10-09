@@ -12,7 +12,7 @@
 //      created row is actually retrievable through the authed path),
 //   3. the loopback default path is unaffected (no regression).
 //
-// Store-root convention follows tests/c5-cli-cutoff-counters.test.ts's
+// Store-root convention follows tests/cli-recall-cutoff-counters.test.ts's
 // makeEnv: the store root passed to initStore/serve IS the .hippo directory
 // itself, not its parent.
 

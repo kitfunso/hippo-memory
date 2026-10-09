@@ -46,7 +46,7 @@ function callTool(
   );
 }
 
-describe('mcp hippo_recall fresh-tail policy F5 (v1.6.5)', () => {
+describe('mcp hippo_recall fresh-tail policy', () => {
   let home: string;
   let prevEnv: string | undefined;
 

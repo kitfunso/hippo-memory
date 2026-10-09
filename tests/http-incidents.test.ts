@@ -71,7 +71,7 @@ async function createIncident(
   });
 }
 
-describe('HTTP /v1/incidents (E2 incident first-class object)', () => {
+describe('HTTP /v1/incidents (incident first-class object)', () => {
   it('POST /v1/incidents creates an incident (201 + Incident body)', async () => {
     const res = await createIncident('DB pool exhausted', { context: 'spike at 14:00' });
     expect(res.status).toBe(201);

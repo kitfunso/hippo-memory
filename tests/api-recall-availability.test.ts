@@ -65,7 +65,7 @@ function seedFiringFixture(root: string): void {
   for (let i = 0; i < 6; i++) seedAged(root, `zephyr older weak ${i}`, 40);
 }
 
-describe('api.recall availabilityHint (J2 integration)', () => {
+describe('api.recall availabilityHint', () => {
   let root: string;
   beforeEach(() => { root = makeRoot('j2-api'); delete process.env.HIPPO_AVAILABILITY; });
   afterEach(() => { safeRmSync(root); delete process.env.HIPPO_AVAILABILITY; });

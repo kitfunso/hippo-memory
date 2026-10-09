@@ -15,7 +15,7 @@ import { join } from 'node:path';
 // NOT run the check or process.exit.
 import { findGraphWriteViolations } from '../scripts/check-graph-writes.mjs';
 
-describe('check-graph-writes lint (E3.3 criterion 2)', () => {
+describe('check-graph-writes lint', () => {
   it('the real src/ tree is clean (only src/graph/write.ts writes the graph tables, and it is excluded)', () => {
     expect(findGraphWriteViolations('src')).toEqual([]);
   });

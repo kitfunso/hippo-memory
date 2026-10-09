@@ -6,7 +6,7 @@ import { join } from 'node:path';
 
 const HIPPO_BIN = join(process.cwd(), 'bin', 'hippo.js');
 
-describe('hippo status (v0.30.1)', () => {
+describe('hippo status', () => {
   it('shows trace layer count after recording a trace', () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-status-'));
     const env = { ...process.env, HIPPO_HOME: join(home, '.hippo') };

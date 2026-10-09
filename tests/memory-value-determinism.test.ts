@@ -40,7 +40,7 @@ import { clearAblationEnv, QUESTIONS } from './memory-value-fixtures.js';
 beforeEach(clearAblationEnv);
 afterEach(clearAblationEnv);
 
-describe('cross-ingest determinism (codex review P1 fix verification)', () => {
+describe('cross-ingest determinism', () => {
   it('two separate scratch-root ingests of the same fixture, FULL 30-round protocol, produce identical retention (every scorer x budget) and identical per-row features joined on provenance key', async () => {
     const rootA = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-mv-xingest-a-'));
     const rootB = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-mv-xingest-b-'));

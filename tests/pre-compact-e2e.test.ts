@@ -514,7 +514,7 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
   });
 });
 
-describe('codex round-2 regressions (CX5/CX6/CX7)', () => {
+describe('redaction, per-session fallback and oversized-record regressions', () => {
   let dir: string;
   let env: NodeJS.ProcessEnv;
 
@@ -700,7 +700,7 @@ describe('codex round-2 regressions (CX5/CX6/CX7)', () => {
   });
 });
 
-describe('uninitialized store gate (X3): neither verb may create a store', () => {
+describe('uninitialized store gate: neither verb may create a store', () => {
   let dir: string;
   let homeDir: string;
   let env: NodeJS.ProcessEnv;

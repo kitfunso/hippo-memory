@@ -57,7 +57,7 @@ function seedBaserate(home: string): void {
   }
 }
 
-describe('mcp hippo_recall planningFallacyHint text block (J3.2 v0.32)', () => {
+describe('mcp hippo_recall planningFallacyHint text block', () => {
   let home: string;
   let originalHome: string | undefined;
 

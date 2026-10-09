@@ -23,7 +23,7 @@ import { seededRandom } from '../src/eval/eval-stats.js';
  *      raw rows inserted in shuffled creation order; assert items come back
  *      sorted ascending by createdAt under the byte-cmp swap.
  */
-describe('assemble ISO sort (F4) — byte compare equivalence', () => {
+describe('assemble ISO sort: byte compare equivalence', () => {
   it('byte compare matches localeCompare for canonical UTC ISO timestamps', () => {
     const isoSamples = [
       '2026-05-06T00:00:00.000Z',
@@ -70,7 +70,7 @@ describe('assemble ISO sort (F4) — byte compare equivalence', () => {
  * calls api.assemble, asserts the returned items are chronologically
  * ascending by `createdAt`.
  */
-describe('assemble ISO sort (F4) — integration', () => {
+describe('assemble ISO sort: integration', () => {
   let root: string;
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'hippo-f4-int-'));

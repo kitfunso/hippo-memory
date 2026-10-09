@@ -29,7 +29,7 @@ function sign(ts: string, body: string): string {
   return `v0=${createHmac('sha256', SECRET).update(`v0:${ts}:${body}`).digest('hex')}`;
 }
 
-describe('POST /v1/connectors/slack/events parse-failure tenant attribution (B4 v1.12.6)', () => {
+describe('POST /v1/connectors/slack/events parse-failure tenant attribution', () => {
   let root: string;
   let handle: ServerHandle;
 

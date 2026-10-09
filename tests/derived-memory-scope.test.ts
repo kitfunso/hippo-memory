@@ -51,7 +51,7 @@ describe('derivationScope / commonDerivationScope', () => {
   });
 });
 
-describe('T3: consolidate() merge pass partitions by scope', () => {
+describe('consolidate() merge pass partitions by scope', () => {
   it('a private-scope cluster merges into that scope; a same-tenant unscoped cluster never absorbs the private text', async () => {
     const home = tmpHome();
     try {
@@ -115,7 +115,7 @@ describe('dedupe partitions by restricted scope', () => {
   });
 });
 
-describe('T7: auto-promote stamps the session scope, or skips a mixed one', () => {
+describe('auto-promote stamps the session scope, or skips a mixed one', () => {
   it('a session whose events are all slack:private:C1 promotes a trace in that scope', async () => {
     const home = tmpHome();
     try {
@@ -169,7 +169,7 @@ describe('T7: auto-promote stamps the session scope, or skips a mixed one', () =
   });
 });
 
-describe('T3: dag buildDag / buildEntityProfiles partition by scope', () => {
+describe('dag buildDag / buildEntityProfiles partition by scope', () => {
   it('buildDag never parents a private fact and a public fact under the same L2, and the private L2 carries the scope', async () => {
     const home = tmpHome();
     try {
@@ -267,7 +267,7 @@ describe('T3: dag buildDag / buildEntityProfiles partition by scope', () => {
   });
 });
 
-describe('T3: extract.ts storeExtractedFacts copies the source scope', () => {
+describe('extract.ts storeExtractedFacts copies the source scope', () => {
   it('facts extracted from a private-scope source carry that scope', () => {
     const home = tmpHome();
     try {
@@ -294,7 +294,7 @@ describe('T3: extract.ts storeExtractedFacts copies the source scope', () => {
   });
 });
 
-describe('T6: assembleBriefFromReceipts excludes restricted receipts', () => {
+describe('assembleBriefFromReceipts excludes restricted receipts', () => {
   function addReceipt(home: string, repo: string, content: string, scope: string | null): string {
     const mem = createMemory(content, {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,

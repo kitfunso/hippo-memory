@@ -43,7 +43,7 @@ function initHippo(cwd: string, env: NodeJS.ProcessEnv): void {
 
 // The detached session-end worker can still hold a brief Windows lock on the
 // SQLite WAL/shm files after our poll condition is satisfied (same class of
-// issue as tests/github-v1.3.1-hotfix.test.ts's safeRmSync). Best-effort.
+// issue as tests/github-rollback-guard-and-deletion-atomicity.test.ts's safeRmSync). Best-effort.
 function safeRmSync(p: string): void {
   try {
     fs.rmSync(p, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
@@ -127,7 +127,7 @@ async function waitUntil(check: () => boolean, timeoutMs = 25_000, intervalMs = 
   );
 }
 
-describe('6. session-end wiring: --session-id argv + worker close (DF1 T3)', () => {
+describe('6. session-end wiring: --session-id argv + worker close', () => {
   let dir: string;
   let env: NodeJS.ProcessEnv;
 

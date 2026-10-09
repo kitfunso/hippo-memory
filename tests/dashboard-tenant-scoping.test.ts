@@ -36,7 +36,7 @@ function post(
   });
 }
 
-describe('dashboard tenant-scoping (v1.11.0 residue)', () => {
+describe('dashboard tenant-scoping', () => {
   let home: string;
   let hippoRoot: string;
   let server: Server | undefined;

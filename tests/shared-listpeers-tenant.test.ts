@@ -53,7 +53,7 @@ function makeSharedEntry(opts: { id: string; project: string; tenantId: string }
   };
 }
 
-describe('listPeers tenant scoping (D4 v1.12.10)', () => {
+describe('listPeers tenant scoping', () => {
   let globalRoot: string;
 
   beforeEach(() => {
