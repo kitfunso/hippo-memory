@@ -181,9 +181,9 @@ export function readSessionEnd(
   if (timedOut && empty) {
     return { status: 'unavailable', reason: 'no SessionEnd payload arrived before the stdin wait window closed' };
   }
-  const base = { runtime, event: 'session-end' as const, trigger: null };
+  const base = { runtime, event: 'session-end' as const };
   if (empty) {
-    return { status: 'received', input: { ...base, manual: true, sessionId: null, cwd: null, transcriptPath: null } };
+    return { status: 'received', input: { ...base, manual: true, sessionId: null, cwd: null, transcriptPath: null, trigger: null } };
   }
   let payload: unknown;
   try {
@@ -203,6 +203,8 @@ export function readSessionEnd(
       sessionId: 'session_id' in payload && isStringValue(payload.session_id) && payload.session_id !== '' ? payload.session_id : null,
       cwd: 'cwd' in payload && isStringValue(payload.cwd) ? payload.cwd : null,
       transcriptPath: 'transcript_path' in payload && isStringValue(payload.transcript_path) && payload.transcript_path !== '' ? payload.transcript_path : null,
+      // Both hosts name a session end's trigger `reason`.
+      trigger: 'reason' in payload && isStringValue(payload.reason) ? payload.reason : null,
     },
   };
 }

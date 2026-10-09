@@ -10,7 +10,7 @@
       "sessionId": null,
       "cwd": "/work/repo",
       "transcriptPath": null,
-      "trigger": null
+      "trigger": "user_exit"
     }
   }
 }

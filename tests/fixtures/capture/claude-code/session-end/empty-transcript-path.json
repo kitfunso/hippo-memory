@@ -10,7 +10,7 @@
       "sessionId": "sess-1",
       "cwd": "/work/repo",
       "transcriptPath": null,
-      "trigger": null
+      "trigger": "exit"
     }
   }
 }
