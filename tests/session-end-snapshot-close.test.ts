@@ -91,8 +91,8 @@ async function loadSnapshotRetrying(
  * observable-signal.md). A throw from `check()` counts as "not yet"; only
  * running out of the clock fails the test.
  *
- * Default bound is generous (25s, under this project's 30s global
- * `testTimeout` in vitest.config.ts) because the detached worker is a real
+ * Default bound is generous (25s, under the 30s `testTimeout` of the
+ * process project in vitest.config.ts) because the detached worker is a real
  * separate OS process competing for CPU/IO with the rest of a full `npm
  * test` run — under full-suite parallel load this project's own heavier
  * tests (e.g. dag-rebuild-summaries.test.ts) observably take well over a

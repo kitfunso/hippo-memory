@@ -11,7 +11,7 @@
  * (`private-secret-marker-N` etc.) makes the no-scope denial check greppable.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
@@ -28,6 +28,9 @@ import type {
 } from '../src/connectors/github/types.js';
 import { randomUUID } from 'node:crypto';
 import { makeRoot } from './_helpers/make-root.js';
+
+// The one case ingests 200 webhook events, each its own write to a real store.
+vi.setConfig({ testTimeout: 30_000 });
 
 // ---------------------------------------------------------------------------
 // Fixtures
