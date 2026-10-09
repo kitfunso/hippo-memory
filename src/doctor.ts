@@ -10,6 +10,9 @@ import * as path from 'node:path';
 import { findHippoStoreDir } from './project-identity.js';
 import { getGlobalRoot } from './shared.js';
 import { isInitialized } from './store/open.js';
+import { countFailuresSince } from './store/failure-log.js';
+import { lastConsolidationAt } from './store/index-and-stats.js';
+import { compactionCountsAt, tokenTallySince } from './store/doctor-reads.js';
 import { loadConfig } from './config.js';
 import { openHippoDbReadOnly, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, countTableRows, ftsRowCounts, IncompatibleBinaryError, type DatabaseSyncLike } from './db.js';
 import { REPLAY_AFTER_MS, TRANSCRIPT_FILL_WINDOW_MS } from './compaction-record.js';
@@ -105,9 +108,7 @@ const FAILURE_LOG_SCHEMA = 46;
 /** The failed-tool-call count over the last 7 days, or why it could not be read. */
 function failuresCheck(db: DatabaseSyncLike, since: string, schemaVersion: number): DoctorCheck {
   try {
-    // SAFETY: COUNT aggregate row.
-    const row = db.prepare(`SELECT COUNT(*) AS n FROM failure_log WHERE ts >= ?`).get(since) as { n: number } | undefined;
-    return { id: 'failures', status: 'info', detail: `${Number(row?.n ?? 0)} failed tool calls logged in 7 days (hippo failures for detail)` };
+    return { id: 'failures', status: 'info', detail: `${countFailuresSince(db, since)} failed tool calls logged in 7 days (hippo failures for detail)` };
   } catch (err) {
     const message = errorMessage(err);
     if (!message.includes('no such table')) {
@@ -122,9 +123,8 @@ function failuresCheck(db: DatabaseSyncLike, since: string, schemaVersion: numbe
 /** How long ago the store last slept (consolidated), or why that history could not be read. */
 function sleepCheck(db: DatabaseSyncLike, now: Date): DoctorCheck {
   try {
-    // SAFETY: row's shape matches the single `timestamp` column named in the SELECT above.
-    const row = db.prepare(`SELECT timestamp FROM consolidation_runs ORDER BY timestamp DESC, id DESC LIMIT 1`).get() as { timestamp?: string } | undefined;
-    const when = row?.timestamp !== undefined ? Date.parse(row.timestamp) : Number.NaN;
+    const last = lastConsolidationAt(db);
+    const when = last !== undefined ? Date.parse(last) : Number.NaN;
     if (Number.isNaN(when)) {
       return { id: 'sleep', status: 'warn', detail: 'hippo has never slept (consolidated) in this store', fix: 'hippo sleep   (the session-end hook runs it automatically)' };
     }
@@ -158,16 +158,7 @@ function compactionsCheck(db: DatabaseSyncLike, store: string, now: Date): Docto
   const stuckBefore = new Date(now.getTime() - REPLAY_AFTER_MS).toISOString();
   const transcriptFloor = new Date(now.getTime() - TRANSCRIPT_FILL_WINDOW_MS).toISOString();
   try {
-    // SAFETY: COUNT aggregate row.
-    const row = db.prepare(
-      `SELECT COUNT(*) AS total,
-              COUNT(CASE WHEN status = 'summarised' AND summarised_at < ? THEN 1 END) AS summarised,
-              COUNT(CASE WHEN status = 'started' AND started_at < ? AND started_at > ? AND transcript_path IS NOT NULL THEN 1 END) AS started
-       FROM compactions`,
-    ).get(stuckBefore, stuckBefore, transcriptFloor) as { total: number; summarised: number; started: number } | undefined;
-    const total = Number(row?.total ?? 0);
-    const summarised = Number(row?.summarised ?? 0);
-    const started = Number(row?.started ?? 0);
+    const { total, summarised, started } = compactionCountsAt(db, stuckBefore, transcriptFloor);
     const stuck = summarised + started;
     const { counts: spool, unread } = readSpool(store, now);
     const spooled = spool.waiting + spool.stale + spool.bad > 0;
@@ -276,17 +267,11 @@ function ftsCheck(db: DatabaseSyncLike): DoctorCheck {
 
 function tokensCheck(db: DatabaseSyncLike, since: string): DoctorCheck {
   try {
-    // SAFETY: COUNT/SUM aggregate row.
-    const row = db.prepare(
-      `SELECT COUNT(CASE WHEN event = 'inject' THEN 1 END) AS n,
-              COALESCE(SUM(CASE WHEN event = 'inject' THEN tokens END), 0) AS t,
-              COALESCE(SUM(CASE WHEN event = 'reread' THEN tokens END), 0) AS r
-       FROM token_ledger WHERE ts >= ?`,
-    ).get(since) as { n: number; t: number; r: number } | undefined;
+    const tally = tokenTallySince(db, since);
     return {
       id: 'tokens',
       status: 'info',
-      detail: `${Number(row?.n ?? 0)} memory blocks sent to agents in 7 days, about ${Number(row?.t ?? 0)} tokens sent and ${Number(row?.r ?? 0)} re-read by later model calls (hippo tokens for detail)`,
+      detail: `${tally.injected} memory blocks sent to agents in 7 days, about ${tally.tokensSent} tokens sent and ${tally.tokensReread} re-read by later model calls (hippo tokens for detail)`,
     };
   } catch (err) {
     log.debug(`doctor: token ledger not read: ${errorMessage(err)}`);

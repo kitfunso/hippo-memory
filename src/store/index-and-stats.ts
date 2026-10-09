@@ -188,6 +188,13 @@ export interface SessionDecayContext {
   avgSessionIntervalDays: number;
 }
 
+/** Timestamp of the latest consolidation run, or undefined when there is none. */
+export function lastConsolidationAt(db: DatabaseSyncLike): string | undefined {
+  // SAFETY: row's shape matches the single `timestamp` column named in the SELECT.
+  const row = db.prepare(`SELECT timestamp FROM consolidation_runs ORDER BY timestamp DESC, id DESC LIMIT 1`).get() as { timestamp?: string } | undefined;
+  return row?.timestamp;
+}
+
 /**
  * Load the session decay context from the store.
  * Uses consolidation_runs timestamps to compute session intervals.
