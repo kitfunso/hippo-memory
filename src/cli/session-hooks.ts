@@ -20,7 +20,6 @@ import { openHippoDb, closeHippoDb } from '../db.js';
 import { captureToolFailure } from '../capture-error.js';
 import {
   estimateTokens,
-  isSubagentPayload,
   readApiCalls,
   recordRereads,
   recordTokenUse,
@@ -51,6 +50,7 @@ import { flushDeliveryRecorder } from '../prompt-hook.js';
 import type { DeliveryRecorder } from '../delivery-recorder.js';
 import { printError } from './output.js';
 import { cmdLastSleep } from './last-sleep.js';
+import { readCompactResumePayload } from './compact-resume-payload.js';
 import {
   type CliFlags,
   type CommandContext,
@@ -110,49 +110,6 @@ function cmdCompactResume(hippoRoot: string, stdinText: string | undefined, stdi
   // A no-op when the token ledger's handle already wrote the row; exit would drop it otherwise.
   flushDeliveryRecorder(rec);
   process.exit(0);
-}
-
-interface CompactResumePayload { suppressOutput: boolean; payloadSessionId: string | null; boundary: boolean }
-
-function readCompactResumePayload(stdinText: string | undefined, stdinTimedOut: boolean): CompactResumePayload {
-  // The matcher is an optimization, not a dependency: older Claude Code
-  // that ignores `matcher: 'compact'` would run this on every SessionStart,
-  // so we also gate on payload.source here. A payload that parses but
-  // carries a different source (e.g. 'startup') means the matcher-based
-  // gate failed to apply — stay silent rather than print stale state.
-  const nonEmptyStdin = !!stdinText && stdinText.trim() !== '';
-  // Without a payload session_id the cross-restore guard below can
-  // never fire, so a timed-out empty read must not reach the print path.
-  let suppressOutput = stdinTimedOut && !nonEmptyStdin;
-  let payloadSessionId: string | null = null;
-  // A boundary is a manual run or a payload that says it follows a compaction; anything else is not one.
-  let boundary = !nonEmptyStdin && !stdinTimedOut;
-
-  if (nonEmptyStdin) {
-    let payload: Record<string, unknown> | null = null;
-    try {
-      payload = JSON.parse(stdinText!.trim()) as Record<string, unknown>;
-    } catch {
-      // Malformed JSON is handled as a null payload by the fail-closed check below.
-      payload = null;
-    }
-    if (!payload || typeof payload !== 'object') {
-      // Fail closed on malformed non-empty stdin; only a TTY/no-stdin manual run, which never reaches here, prints.
-      suppressOutput = true;
-    } else {
-      // Fail closed on structurally incomplete payloads too ({}, [], source missing/non-string): real
-      // SessionStart payloads always carry source, so a parsed one must say 'compact' to print.
-      // A sub-agent's payload carries its parent's session id, so the mismatch guard would pass and restore the parent's snapshot into it.
-      boundary = payload.source === 'compact';
-      if (payload.source !== 'compact' || isSubagentPayload(stdinText)) {
-        suppressOutput = true;
-      }
-      if (typeof payload.session_id === 'string') {
-        payloadSessionId = payload.session_id;
-      }
-    }
-  }
-  return { suppressOutput, payloadSessionId, boundary };
 }
 
 function restoreCompactSnapshot(hippoRoot: string, payloadSessionId: string | null, rec: DeliveryRecorder | null): void {
