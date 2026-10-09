@@ -1,4 +1,6 @@
 // The one place an api function picks between a served store and hippo.db, so each operation has one body.
+// Only functions published as StoreReply use this carrier (see "Sync core, async port" in docs/ARCHITECTURE.md);
+// a new operation is async and goes through storeFor(ctx).
 import { SqliteBlockedError, StoreNotPortedError } from '../util/sqlite-blocked.js';
 import type { HippoStore, StoreGroups } from '../store/port.js';
 import { REFUSED_ON_A_STORE, sqliteLocal, type SqliteLocal } from '../store/sqlite/local.js';

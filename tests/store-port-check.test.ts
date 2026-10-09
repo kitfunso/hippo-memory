@@ -19,6 +19,8 @@ type Counts = {
   openersOutsideByFile: Record<string, number>;
   sqlOutsideByFile: Record<string, number>;
   sqliteLocalMethods: string[];
+  carrierFiles: number;
+  carrierFilesList: string[];
 };
 type Run = (...args: string[]) => { status: number | null; stdout: string; stderr: string };
 
@@ -33,6 +35,8 @@ const zero: Counts = {
   openersOutsideByFile: {},
   sqlOutsideByFile: {},
   sqliteLocalMethods: [],
+  carrierFiles: 0,
+  carrierFilesList: [],
 };
 
 function withFixture(files: Record<string, string>, baseline: Partial<Counts> | null, body: (f: { run: Run; baseline: () => Counts }) => void) {
@@ -194,6 +198,18 @@ describe('check-store-port.mjs', () => {
       const r = run('--list');
       expect(r.status).toBe(1);
       expect(r.stderr).toContain('V1_ROUTES');
+    });
+  });
+
+  it('fails and names a file outside the list that calls onStore, and ignores the carrier file itself', () => {
+    const use = "import { onStore } from './on-store.js';\nexport const f = (ctx: any) => onStore(ctx, () => 1);\n";
+    const files = { 'src/api/on-store.ts': 'export const onStore = andThen;\n', 'src/api/old.ts': use, 'src/api/new.ts': use };
+    withFixture(files, { carrierFiles: 2, carrierFilesList: ['src/api/old.ts', 'src/api/gone.ts'] }, ({ run }) => {
+      const r = run();
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain('src/api/new.ts: not a carrier file -> uses andThen or onStore');
+      expect(r.stderr).not.toContain('src/api/on-store.ts');
+      expect(r.stderr).not.toContain('src/api/old.ts');
     });
   });
 

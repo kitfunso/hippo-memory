@@ -5,6 +5,12 @@
 Six layers, lowest first: base (pure helpers and core types), db (SQLite connection and schema), store (persistence and embeddings), domain (recall, graph, consolidation, hooks), api (operations over the store), surface (CLI, server, MCP, importers, dashboard).
 A file imports only from its own layer or a lower one. `layers.json` is the map and `scripts/check-layers.mjs` enforces it against `.layers-baseline.json`.
 
+## Store port
+
+### Sync core, async port
+
+node:sqlite is synchronous, and the store port is async so another store can do I/O. `authCreate`, `authCreateSelf` and `authRevoke` from `./server` return a value when the context has no store and a Promise when it has one. `importVault` from `.` is synchronous and calls `remember` and `archiveRaw` with no store. `Reply<T>` and `andThen` in `src/api/on-store.ts` carry that for exactly these functions and what they call. Every other operation is async and goes through `storeFor(ctx)`. Removing the carrier means making those published functions async, which is a breaking change. `scripts/check-store-port.mjs` counts the files that use the carrier so the list cannot grow.
+
 ## Test-only exports
 
 A production export that no other `src/` file names but a test does is a seam added for the test. `scripts/check-test-only-exports.mjs` finds them and fails CI on any not listed in `.test-only-exports-baseline.json`; exports in a package entry file (derived from `package.json` `exports` and `bin`) are exempt. The list can only shrink: move the helper to `tests/_helpers` or give it a production caller, then run the script with `--update` to lock the lower count in.

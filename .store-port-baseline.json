@@ -101,5 +101,14 @@
     "archiveRaw",
     "finishLastRecall",
     "writeEntry"
+  ],
+  "carrierFiles": 6,
+  "carrierFilesList": [
+    "src/api/auth.ts",
+    "src/api/context.ts",
+    "src/api/forget.ts",
+    "src/api/outcome.ts",
+    "src/api/promote.ts",
+    "src/api/remember.ts"
   ]
 }
