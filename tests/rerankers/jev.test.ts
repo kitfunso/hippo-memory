@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import type { SearchResult } from '../../src/core/search-types.js';
 import { getReranker } from '../../src/rerankers/index.js';
-import { createJevReranker, jevReranker } from '../../src/rerankers/jev.js';
+import { createJevReranker } from '../../src/rerankers/jev.js';
 import type { RerankerFn } from '../../src/rerankers/types.js';
 
 // The stand-in fallback REVERSES its input, so a fallback is distinguishable
@@ -37,7 +37,7 @@ function jevResponse(nouls: Array<number | undefined>, status = 200): Response {
 
 const contents = (out: Array<{ entry: { content: string } }>) => out.map((r) => r.entry.content);
 
-describe('jevReranker', () => {
+describe('jev reranker', () => {
   let warnSpy: ReturnType<typeof vi.spyOn>;
   const inputs = () => [asResult('alpha', 1.0), asResult('beta', 0.9), asResult('gamma', 0.8)];
   const many = (n: number): SearchResult[] =>
@@ -148,8 +148,9 @@ describe('jevReranker', () => {
     expect(warnSpy).not.toHaveBeenCalled();
   });
 
-  it('is registered under the name jev, wired to the shipped reranker', () => {
-    expect(getReranker('jev')).toBe(jevReranker);
+  it('is registered under the name jev, wired to the shipped reranker', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(jevResponse([0.1, 0.9, 0.5]));
+    expect(contents(await getReranker('jev')!('q', inputs()))).toEqual(['beta', 'gamma', 'alpha']);
   });
 
   it("sends the default 40 candidates, or the caller's topK", async () => {

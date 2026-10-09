@@ -334,42 +334,19 @@ export function calculateStrength(
 
   // Reward-proportional half-life modulation
   const rewardFactor = calculateRewardFactor(entry);
-  let effectiveHalfLife = entry.half_life_days * rewardFactor;
+  const effectiveHalfLife = entry.half_life_days * rewardFactor;
 
   // Guard: zero half-life causes 0/0 = NaN in the exponent
   if (effectiveHalfLife <= 0) return 0.0;
 
-  const basis = options.decayBasis ?? 'clock';
-  let decayExponent: number;
-
-  if (basis === 'session') {
-    // Decay by session count: each sleep cycle = 1 "day" in the decay formula.
-    // Estimate sessions since last retrieval from wall-clock time and avg interval.
-    const avgInterval = options.avgSessionIntervalDays ?? 1;
-    const sessionsSince = avgInterval > 0 ? Math.max(0, daysSince / avgInterval) : daysSince;
-    decayExponent = sessionsSince / effectiveHalfLife;
-  } else if (basis === 'adaptive') {
-    // Scale half-life by session frequency: infrequent agents get longer half-lives
-    const avgInterval = options.avgSessionIntervalDays ?? 0;
-    if (avgInterval > 1) {
-      effectiveHalfLife *= avgInterval;
-    }
-    decayExponent = daysSince / effectiveHalfLife;
-  } else {
-    // clock: classic wall-clock decay
-    decayExponent = daysSince / effectiveHalfLife;
-  }
+  const decayExponent = decayExponentFor(options, daysSince, effectiveHalfLife);
 
   // EVAL-ONLY ablation (see ablation.ts): decay term := 1. NOTE the [0,1]
   // clamp below then caps retrievalBoost at baseline - see ablation.ts
   // formula note.
   const decay = isDecayAblated() ? 1.0 : Math.pow(DECAY_BASE, decayExponent);
 
-  // Retrieval boost: 1 + 0.1 * log2(retrieval_count + 1). EVAL-ONLY ablation (see ablation.ts) neutralizes
-  // the READ side too, so counts written before the flag cannot leak strengthening into an ablated arm.
-  const retrievalBoost = isRecallBoostAblated() || netWrong(entry) > 0
-    ? 1.0
-    : 1 + RETRIEVAL_BOOST_SLOPE * Math.log2(entry.retrieval_count + 1);
+  const retrievalBoost = retrievalBoostFor(entry);
 
   // Emotional multiplier. HIPPO_LOSS_AVERSION_RATIO scales the negative one ONLY; the lazy
   // module cache makes this one lookup + one multiply, not a per-call process.env read.
@@ -381,6 +358,36 @@ export function calculateStrength(
   // Clamp to [0, 1] with NaN guard
   const clamped = Math.min(1.0, Math.max(0.0, raw));
   return Number.isFinite(clamped) ? clamped * wrongPenalty : 0.0;
+}
+
+function decayExponentFor(options: DecayOptions, daysSince: number, halfLifeDays: number): number {
+  let effectiveHalfLife = halfLifeDays;
+  const basis = options.decayBasis ?? 'clock';
+  if (basis === 'session') {
+    // Decay by session count: each sleep cycle = 1 "day" in the decay formula.
+    // Estimate sessions since last retrieval from wall-clock time and avg interval.
+    const avgInterval = options.avgSessionIntervalDays ?? 1;
+    const sessionsSince = avgInterval > 0 ? Math.max(0, daysSince / avgInterval) : daysSince;
+    return sessionsSince / effectiveHalfLife;
+  }
+  if (basis === 'adaptive') {
+    // Scale half-life by session frequency: infrequent agents get longer half-lives
+    const avgInterval = options.avgSessionIntervalDays ?? 0;
+    if (avgInterval > 1) {
+      effectiveHalfLife *= avgInterval;
+    }
+    return daysSince / effectiveHalfLife;
+  }
+  // clock: classic wall-clock decay
+  return daysSince / effectiveHalfLife;
+}
+
+// Retrieval boost: 1 + 0.1 * log2(retrieval_count + 1). EVAL-ONLY ablation (see ablation.ts) neutralizes
+// the READ side too, so counts written before the flag cannot leak strengthening into an ablated arm.
+function retrievalBoostFor(entry: StrengthInputs): number {
+  return isRecallBoostAblated() || netWrong(entry) > 0
+    ? 1.0
+    : 1 + RETRIEVAL_BOOST_SLOPE * Math.log2(entry.retrieval_count + 1);
 }
 
 /** calculateStrength's clock-basis formula as SQL over `memories` columns, flags and multipliers baked in; keep in step.
@@ -583,15 +590,7 @@ export interface CreateMemoryOptions {
 /** Create a new memory entry with defaults. Untyped JavaScript callers that omit the options get the compiled default half-life. */
 export function createMemory(content: string, options: CreateMemoryOptions): MemoryEntry;
 export function createMemory(content: string, options: Partial<CreateMemoryOptions> = {}): MemoryEntry {
-  const trimmed = content.trim();
-  if (trimmed.length < 3) {
-    throw new BadRequestError(`Memory content too short (${trimmed.length} chars, minimum 3): "${trimmed}"`);
-  }
-
-  const validOutcomes: (string | null)[] = ['success', 'failure', 'partial', null];
-  if (options.trace_outcome !== undefined && !validOutcomes.includes(options.trace_outcome)) {
-    throw new BadRequestError(`Invalid trace_outcome: ${options.trace_outcome}. Must be 'success', 'failure', 'partial', or null.`);
-  }
+  assertValidMemoryInput(content, options);
 
   const now = evalNow().toISOString(); // honors HIPPO_FAKE_NOW (eval-only)
   const layer = options.layer ?? Layer.Episodic;
@@ -599,8 +598,7 @@ export function createMemory(content: string, options: Partial<CreateMemoryOptio
   const emotional_valence = options.emotional_valence ?? inferValence(tags);
   const schema_fit = options.schema_fit ?? 0.5;
 
-  const partial: Partial<MemoryEntry> = { tags, schema_fit };
-  const half_life_days = deriveHalfLife(options.baseHalfLifeDays ?? DEFAULT_HALF_LIFE_DAYS, partial);
+  const half_life_days = deriveHalfLife(options.baseHalfLifeDays ?? DEFAULT_HALF_LIFE_DAYS, { tags, schema_fit });
 
   const entry: MemoryEntry = {
     id: generateId(layer === Layer.Semantic ? 'sem' : 'mem'),
@@ -640,6 +638,18 @@ export function createMemory(content: string, options: Partial<CreateMemoryOptio
   // Recalculate strength with the emotional multiplier applied
   entry.strength = calculateStrength(entry);
   return entry;
+}
+
+function assertValidMemoryInput(content: string, options: Partial<CreateMemoryOptions>): void {
+  const trimmed = content.trim();
+  if (trimmed.length < 3) {
+    throw new BadRequestError(`Memory content too short (${trimmed.length} chars, minimum 3): "${trimmed}"`);
+  }
+
+  const validOutcomes: (string | null)[] = ['success', 'failure', 'partial', null];
+  if (options.trace_outcome !== undefined && !validOutcomes.includes(options.trace_outcome)) {
+    throw new BadRequestError(`Invalid trace_outcome: ${options.trace_outcome}. Must be 'success', 'failure', 'partial', or null.`);
+  }
 }
 
 /** The row that replaces `old`: a supersede never changes where a memory belongs, so source, scope, session and a stamped origin carry over. */

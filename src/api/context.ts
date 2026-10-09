@@ -85,7 +85,7 @@ export function ambientSecretAdmit(e: MemoryEntry, currentProject: ProjectRef): 
 }
 
 /** Most rows per store a no-query context reads; past it, ranking and ambientState see the strongest by decay. */
-export const CONTEXT_CANDIDATE_CAP = 2000;
+const CONTEXT_CANDIDATE_CAP = 2000;
 
 /** A query reads recall's FTS window from each store; the search's vector arm adds the nearest rows. */
 interface ContextQueryWindow {

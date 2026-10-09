@@ -5,14 +5,12 @@ import { loadStrengthTallies } from '../store/candidates.js';
 import { countOpenConflicts, listTouchableConflicts, resolveConflict } from '../store/conflicts.js';
 import { shareMemory, listPeers } from '../shared.js';
 import { requireGroup, storeFor } from '../store-port.js';
-import { closeHippoDb, openHippoDb } from '../db.js';
 import { NotFoundError } from '../api-errors.js';
 import { classifyOriginProject } from '../project-identity.js';
 import type { CallerProject } from '../prompt-hook.js';
 import { canTouchScope, passesScopeFilterForRecall, personalScopeOf } from '../recall-scope.js';
-import { selectEntriesByIds } from '../store/entry-reads.js';
+import { chunked, loadEntriesByIds, readEntry } from '../store/entry-reads.js';
 import type { MemoryConflict } from '../store/rows.js';
-import { selectMemoryReach } from '../store/tenant-lookup.js';
 import { mcpActor, type ToolCall } from './protocol.js';
 import { isJsonString } from '../json.js';
 
@@ -20,12 +18,7 @@ const NOT_RESOLVED = 'Could not resolve. Check the conflict ID and --keep value.
 
 /** The scope of memory `id`, null when it has none or does not exist. */
 function memoryScope(hippoRoot: string, id: string): string | null {
-  const db = openHippoDb(hippoRoot);
-  try {
-    return selectMemoryReach(db, id)?.scope ?? null;
-  } finally {
-    closeHippoDb(db);
-  }
+  return readEntry(hippoRoot, id)?.scope ?? null;
 }
 
 export async function runPredictBaserateTool({ args, ctx, hippoRoot, tenantId }: ToolCall): Promise<string> {
@@ -64,18 +57,15 @@ export function runStatusTool({ hippoRoot, config, tenantId }: ToolCall): string
 /** Pairs whose two rows the caller could recall: its repo or user-global, and no scope it was not asked for. */
 function recallablePairs(call: ToolCall, conflicts: MemoryConflict[], project: CallerProject): MemoryConflict[] {
   const own = personalScopeOf(mcpActor(call.ctx));
-  const db = openHippoDb(call.hippoRoot);
-  try {
-    const rows = selectEntriesByIds(db, conflicts.flatMap((c) => [c.memory_a_id, c.memory_b_id]), call.tenantId);
-    const shown = (id: string): boolean => {
-      const row = rows.get(id);
-      return row !== undefined && classifyOriginProject(row.origin_project, project) !== 'cross-project'
-        && passesScopeFilterForRecall(row.scope ?? null, undefined, own);
-    };
-    return conflicts.filter((c) => shown(c.memory_a_id) && shown(c.memory_b_id));
-  } finally {
-    closeHippoDb(db);
-  }
+  const ids = [...new Set(conflicts.flatMap((c) => [c.memory_a_id, c.memory_b_id]))];
+  // loadEntriesByIds reads at most one chunk of ids per call.
+  const rows = new Map(chunked(ids).flatMap((chunk) => loadEntriesByIds(call.hippoRoot, chunk, call.tenantId)).map((row) => [row.id, row]));
+  const shown = (id: string): boolean => {
+    const row = rows.get(id);
+    return row !== undefined && classifyOriginProject(row.origin_project, project) !== 'cross-project'
+      && passesScopeFilterForRecall(row.scope ?? null, undefined, own);
+  };
+  return conflicts.filter((c) => shown(c.memory_a_id) && shown(c.memory_b_id));
 }
 
 export function runConflictsTool(call: ToolCall): string {

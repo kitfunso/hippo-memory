@@ -2,7 +2,7 @@ import { envHomeDir, processEnv } from '../env.js';
 import { claudeConfigDir } from '../hooks/shared.js';
 import * as fs from 'fs';
 import * as path from 'path';
-import { isObjectLike, isStringValue } from '../capture-contract.js';
+import { isObjectLike, isStringValue, readSessionEnd } from '../capture-contract.js';
 import { copilotTurn } from './copilot-transcript.js';
 
 /**
@@ -187,16 +187,10 @@ export function resolveLastSessionTranscript(
   if (explicit) return fs.existsSync(explicit) ? explicit : null;
 
   if (stdinText && stdinText.trim() !== '') {
-    try {
-      const payload: unknown = JSON.parse(stdinText);
-      if (isObjectLike(payload) && 'transcript_path' in payload) {
-        const tp = payload.transcript_path;
-        if (isStringValue(tp) && fs.existsSync(tp)) return tp;
-      }
-    } catch {
-      // not JSON, but still a payload, so no scan
-    }
-    return null;
+    const receipt = readSessionEnd(stdinText, false);
+    // A refused payload is still a payload, so no scan.
+    const tp = receipt.status === 'received' ? receipt.input.transcriptPath : null;
+    return tp !== null && fs.existsSync(tp) ? tp : null;
   }
 
   if (!opts.mayScan) return null;

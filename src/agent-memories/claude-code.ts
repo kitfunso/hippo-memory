@@ -16,7 +16,7 @@ import { errorMessage } from '../log.js';
 const PROJECT_DIR_NAME = /^[A-Za-z0-9_-]{1,64}$/;
 
 /** Claude Code's auto memory folder names for a project: its checkout, which subfolders share, or the folder itself outside a repository. */
-export function claudeMemoryFolderNames(projectRoot: string, platform: NodeJS.Platform): Set<string> {
+function claudeMemoryFolderNames(projectRoot: string, platform: NodeJS.Platform): Set<string> {
   const roots = [projectRoot, realpathOrResolve(projectRoot)];
   const layout = gitLayout(projectRoot);
   if (layout) roots.push(claudeCheckoutRoot(layout.top, layout.gitDir, layout.common));

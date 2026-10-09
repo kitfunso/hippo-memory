@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getHippoRoot } from '../src/store/open.js';
 import { loadActiveTaskSnapshot } from '../src/store/sessions.js';
+import { compactionRows } from './_helpers/compaction-hooks.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
 
 // Plan: hippo/trajectories/01M2ZSMFG8JXSM7PH10EVZNZBW/plan.md. Real spawn,
@@ -343,6 +344,22 @@ describe('hippo stdin: bounded read for the optional hook payload (plan: stdin-i
     expect(fs.readFileSync(logFile, 'utf8')).toContain(
       'skip: no PreCompact payload arrived before the stdin wait window closed',
     );
+  });
+
+  it('a timed-out post-compact saves no compaction record and logs that no payload arrived', async () => {
+    const logFile = path.join(dir, 'post-compact-guard.log');
+    const result = await spawnBounded(
+      ['post-compact', '--log-file', logFile],
+      dir,
+      { ...env, HIPPO_STDIN_WAIT_MS: '200' },
+      { mode: 'idle' },
+    );
+    expect(result.status).toBe(0);
+    expect(result.signal).toBeNull();
+    expect(fs.readFileSync(logFile, 'utf8')).toContain(
+      'skip: no PostCompact payload arrived before the stdin wait window closed',
+    );
+    expect(compactionRows(getHippoRoot(dir))).toEqual([]);
   });
 
   /** Plants a transcript where resolveLastSessionTranscript's step-3 scan looks. */

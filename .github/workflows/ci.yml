@@ -21,6 +21,11 @@ on:
 permissions:
   contents: read
 
+# A new push to a PR cancels the run for the commit it replaced. On master a started run finishes and only the newest waiting run is kept.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   checks:
     runs-on: ubuntu-latest

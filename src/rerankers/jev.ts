@@ -1,10 +1,10 @@
 import { envJevModel, envJevTimeoutMs, envTypesafeApiKey } from '../env.js';
-import { crossEncoderReranker } from './cross-encoder.js';
 import type { RerankerFn, RerankResult, RerankerOptions } from './types.js';
 import type { SearchResult } from '../core/search-types.js';
 import { redactSecretsStrict } from '../secret-detect.js';
 import { createOutageWarning } from './outage-warning.js';
 import { rerankerPost } from './remote.js';
+import { compareScoresDesc } from '../compare.js';
 import { errorMessage } from '../log.js';
 
 const ENDPOINT = 'https://api.typesafe.ai/v1/systemone';
@@ -121,11 +121,7 @@ export function rankByScores(head: readonly SearchResult[], scores: readonly num
     postRerankRank: 0,
   }));
   // Stable sort: ties fall back to the prior relevance order.
-  scored.sort((a, b) => b.rerankScore - a.rerankScore);
+  scored.sort((a, b) => compareScoresDesc(a.rerankScore, b.rerankScore));
   scored.forEach((r, i) => (r.postRerankRank = i + 1));
   return scored;
 }
-
-/** Track 4 reranker: hosted TypeSafe Jev, opt-in and paid (TYPESAFE_API_KEY), one batched call per recall.
- *  Any failure warns and delegates to the local cross-encoder. Scores are not bit-stable run to run. */
-export const jevReranker: RerankerFn = createJevReranker(crossEncoderReranker);

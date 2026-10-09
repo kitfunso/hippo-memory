@@ -47,7 +47,7 @@
         }
       ],
       "owner": "maintainer",
-      "nextAction": "Save lessons before compaction, not only after it from the summary; record a live save-and-resume run for automatic and manual compaction; move the session-end, post-compact and tool-failure payload readers onto src/capture-contract.ts.",
+      "nextAction": "Save lessons before compaction, not only after it from the summary; record a live save-and-resume run for automatic and manual compaction; move the tool-failure payload reader onto src/capture-contract.ts.",
       "roadmap": "AZ4"
     },
     {

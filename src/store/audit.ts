@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { canAutoDelete, type MemoryEntry } from '../memory.js';
-import type { DatabaseSyncLike } from '../db.js';
+import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../db.js';
 import type { JsonObject } from './working-memory.js';
 import { log } from '../log.js';
 import { keysetAfter, type KeysetPosition } from '../keyset.js';
@@ -211,6 +211,16 @@ export function appendAuditEvent(db: DatabaseSyncLike, opts: AppendAuditOpts): v
     opts.targetId ?? null,
     JSON.stringify(opts.metadata ?? {}, bigintSafeReplacer),
   );
+}
+
+/** One audit row in the store under `hippoRoot`, as its own write. */
+export function recordAuditEvent(hippoRoot: string, event: AppendAuditOpts): void {
+  const db = openHippoDb(hippoRoot);
+  try {
+    appendAuditEvent(db, event);
+  } finally {
+    closeHippoDb(db);
+  }
 }
 
 let auditWriteFailures = 0;

@@ -4,12 +4,16 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { copilotHomeDir, detectInstalledTools } from '../src/hooks/shared.js';
-import { COPILOT_INSTRUCTIONS, VSCODE_INSTRUCTIONS, VSCODE_MCP, copilotMcpSnippet, copilotPaths, installCopilot, mergeMcpServer, uninstallCopilot } from '../src/hooks/copilot.js';
+import { VSCODE_MCP, copilotMcpSnippet, copilotPaths, installCopilot, uninstallCopilot } from '../src/hooks/copilot.js';
 import { HOOKS } from '../src/hooks/hook-blocks.js';
 import { withFakeHome, type FakeHomeHandle } from './_helpers/with-fake-home.js';
 import type { JsonValue } from '../src/json.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
+// The committed text installCopilot must write; edit it with the instructions in src/hooks/copilot.ts.
+const COPILOT_INSTRUCTIONS = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'copilot', 'instructions.md'), 'utf8').trim();
+const VSCODE_INSTRUCTIONS = `---\napplyTo: "**"\n---\n${COPILOT_INSTRUCTIONS}\n`;
 const START = '<!-- hippo:start -->';
 const END = '<!-- hippo:end -->';
 const BOM = String.fromCodePoint(0xfeff);
@@ -190,7 +194,6 @@ describe('installCopilot and uninstallCopilot', () => {
   ])('never overwrites or removes a "hippo" MCP key with %s, which hippo did not write', (_label, server) => {
     const text = JSON.stringify({ mcpServers: { hippo: server } });
     writeFile(files.mcp, text);
-    expect(mergeMcpServer(files.mcp)).toBe('user-owned');
     expect(installCopilot().mcp).toBe('user-owned');
     expect(uninstallCopilot().mcp).toBe('user-owned');
     expect(read(files.mcp)).toBe(text);
@@ -327,7 +330,6 @@ describe('installCopilot and uninstallCopilot', () => {
     expect(readJson(stable.mcp)).toEqual({ servers: { playwright: USER_SERVER, hippo: VSCODE_SERVER }, inputs: [] });
     expect(readJson(insiders.mcp)).toEqual({ servers: { hippo: VSCODE_SERVER } });
     expect(read(stable.instructions)).toBe(VSCODE_INSTRUCTIONS);
-    expect(VSCODE_INSTRUCTIONS).toBe(`---\napplyTo: "**"\n---\n${COPILOT_INSTRUCTIONS}\n`);
     expect(statuses(installCopilot())).toEqual([[stable.dir, 'present', 'present'], [insiders.dir, 'present', 'present']]);
 
     expect(statuses(uninstallCopilot())).toEqual([[stable.dir, 'removed', 'removed'], [insiders.dir, 'removed', 'removed']]);
