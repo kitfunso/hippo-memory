@@ -18,7 +18,7 @@
  * not just to slack/github by coincidence of test fixture choice.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
@@ -27,6 +27,9 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import { recall } from '../src/api.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
 import { makeRoot } from './_helpers/make-root.js';
+
+// A hippo_context call with no query asks git for the recent work of the checkout, in child processes.
+vi.setConfig({ testTimeout: 30_000 });
 
 function ctx(home: string): Context {
   return { hippoRoot: home, tenantId: 'default', actor: { subject: 'test', role: 'admin' } };

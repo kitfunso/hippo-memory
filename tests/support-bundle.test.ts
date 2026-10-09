@@ -351,6 +351,19 @@ describe('buildSupportBundle', () => {
     expect(bare.stores).toHaveLength(1);
     expect(bare.stores[0].error).toMatch(/no hippo\.db here/);
   });
+
+  it('a hippo.db that is not a database is one error entry with the open error', () => {
+    const home = tmp('hippo-bundle-notdb-home-');
+    const cwd = join(home, 'proj');
+    mkdirSync(join(cwd, '.hippo'), { recursive: true });
+    writeFileSync(join(cwd, '.hippo', 'hippo.db'), 'this file is not a database. '.repeat(400));
+    process.env.HIPPO_HOME = join(home, 'unused-global');
+
+    const parsed = JSON.parse(JSON.stringify(
+      buildSupportBundle({ cwd, home, version: 'test', includeLogs: false, now: new Date() }),
+    ));
+    expect(parsed.stores).toEqual([{ kind: 'project', path: expect.stringMatching(/\.hippo$/), error: 'file is not a database' }]);
+  });
 });
 
 describe('hippo support-bundle (CLI)', () => {

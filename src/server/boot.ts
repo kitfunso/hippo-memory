@@ -4,7 +4,7 @@ import { existsSync } from 'node:fs';
 import { detectServer, removePidfileIfOwned, writePidfile } from '../server-detect.js';
 import { closeHippoDb, type DatabaseSyncLike, getHippoDbPath, isStoreBusy, openHippoDb, outsideRequestStores, outsideSqliteOffLoop, runWithRequestStores, SERVER_DB_WAIT_MS, withSqliteBlocked } from '../db.js';
 import { startWalCheckpointer, type WalCheckpointer } from '../db/wal-checkpointer.js';
-import type { HippoStore } from '../store-port.js';
+import { requireGroup, type HippoStore } from '../store-port.js';
 import { workerSqliteStore } from '../store/sqlite/worker-store.js';
 import { markSharedStore } from '../config.js';
 import { auditWriteFailureCount } from '../store/audit.js';
@@ -27,7 +27,7 @@ import { handleMcpPost, handleMcpStream } from './mcp-http.js';
 import { MCP_PROJECT_SCOPED_HEADER } from '../project-identity.js';
 import { logRequestFailure, noteAccess, openRequest, parseRequest, rejectEncodedSlash, replyFor, sendError } from './request.js';
 import { createListener, warnIfCleartext } from './tls.js';
-import { assertAddonRoutes, assertPublicJson, assertSqliteStore, dispatchAddonRoute, dispatchPublicJson, dispatchV1Route, isPublicRoute } from './route-table.js';
+import { assertAddonRoutes, assertPublicJson, dispatchAddonRoute, dispatchPublicJson, dispatchV1Route, isPublicRoute } from './route-table.js';
 import type { AuthResolver, RateLimitSpec, ResolvedServeOpts, RouteRequest, ServeOpts, ServerHandle } from './types.js';
 
 // server.address() returns AddressInfo once a TCP socket is bound; null before
@@ -93,6 +93,13 @@ async function handleRequest(
   res.end(JSON.stringify({ error: 'not found' }));
 }
 
+const WEBHOOK_GROUPS = ['entryWrites', 'connectorWrites', 'connectorEvents'] as const;
+
+/** A store missing a group a delivery writes through refuses the webhook up front, so no delivery is acknowledged and then half stored. */
+function requireWebhookGroups(store: HippoStore): void {
+  for (const group of WEBHOOK_GROUPS) requireGroup(store, group);
+}
+
 /** Every route that runs inside a request scope, so it opens each store once: the /v1 table, public JSON, add-on routes, the webhooks and POST /mcp. */
 async function dispatchScopedRoute(r: RouteRequest, method: string, path: string): Promise<boolean> {
   if (await dispatchV1Route(r, method, path)) return true;
@@ -107,8 +114,8 @@ async function dispatchScopedRoute(r: RouteRequest, method: string, path: string
       // Defensive: PUBLIC_ROUTES drift would land here. Fail closed.
       throw new HttpError(401, 'auth required');
     }
-    assertSqliteStore(opts);
-    await handleSlackEventsWebhook({ req, res, opts });
+    requireWebhookGroups(opts.store);
+    await handleSlackEventsWebhook({ req, res, opts }, opts.store);
     return true;
   }
 
@@ -117,8 +124,8 @@ async function dispatchScopedRoute(r: RouteRequest, method: string, path: string
     if (!isPublicRoute(method, path)) {
       throw new HttpError(401, 'auth required');
     }
-    assertSqliteStore(opts);
-    await handleGitHubEventsWebhook({ req, res, opts });
+    requireWebhookGroups(opts.store);
+    await handleGitHubEventsWebhook({ req, res, opts }, opts.store);
     return true;
   }
 

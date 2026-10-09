@@ -1,6 +1,7 @@
 import { envSlackAllowUnknownTeamFallback, envTenant } from '../../env.js';
 import type { DatabaseSyncLike } from '../../db.js';
-import { slackTeamRoute, slackTeamRouteAt, type SlackTeamRoute } from '../../store/connectors/slack.js';
+import { requireGroup, storeFor, type HippoStore } from '../../store-port.js';
+import { slackTeamRouteAt, type SlackTeamRoute } from '../../store/connectors/slack.js';
 
 /**
  * Look up the tenant_id for a Slack team_id.
@@ -22,9 +23,9 @@ export function resolveTenantForTeam(db: DatabaseSyncLike, teamId: string): stri
   return tenantForRoute(slackTeamRouteAt(db, teamId));
 }
 
-/** resolveTenantForTeam on a handle opened for the one lookup. */
-export function resolveTenantForTeamOnRoot(hippoRoot: string, teamId: string): string | null {
-  return tenantForRoute(slackTeamRoute(hippoRoot, teamId));
+/** resolveTenantForTeam through `store`, else hippo.db under `hippoRoot`. */
+export async function resolveTenantForSlackTeam(hippoRoot: string, teamId: string, store?: HippoStore): Promise<string | null> {
+  return tenantForRoute(await requireGroup(storeFor({ hippoRoot, store }), 'connectorEvents').slackTeamRoute(teamId));
 }
 
 function tenantForRoute(route: SlackTeamRoute): string | null {

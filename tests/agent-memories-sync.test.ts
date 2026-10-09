@@ -21,6 +21,9 @@ import {
   tally, toolTally, withDb, type World,
 } from './_helpers/agent-memories-world.js';
 
+// Every sync asks git for each folder's layout in a child process, and a case runs several syncs.
+vi.setConfig({ testTimeout: 30_000 });
+
 const DEPLOY = 'Run the schema check before this service deploys.';
 const STAGING = 'The staging database moved to the eu-central region.';
 // AWS's documented example access key: a public placeholder, not a credential.

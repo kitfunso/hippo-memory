@@ -8,7 +8,7 @@
  * This isolates the physics scoring logic from embedding model quality.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -30,6 +30,9 @@ import {
 } from '../src/db/physics-state.js';
 import { simulate, type ForceContext } from '../src/physics.js';
 import { DEFAULT_PHYSICS_CONFIG } from '../src/physics-config.js';
+
+// A benchmark: 50 simulate-and-save cycles of a pairwise force loop, which coverage instrumentation slows far more than other code.
+vi.setConfig({ testTimeout: 60_000 });
 
 // ---------------------------------------------------------------------------
 // Synthetic embedding generator

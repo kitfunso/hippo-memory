@@ -175,7 +175,7 @@ const reingestParkedDelivery: IngestHook = async (innerCtx, args) => {
       ? `github://${repo}/issue/${event.payload.issue.number}/comment/${event.payload.comment.id}`
       : `github://${repo}/pull/${event.payload.pull_request.number}/review_comment/${event.payload.comment.id}`;
     const idempotencyKey = computeDeletionKey(artifactRef, event.payload.comment.updated_at ?? null);
-    const r = handleCommentDeleted(innerCtx, {
+    const r = await handleCommentDeleted(innerCtx, {
       artifactRef,
       idempotencyKey,
       deliveryId: args.deliveryId,
@@ -186,7 +186,7 @@ const reingestParkedDelivery: IngestHook = async (innerCtx, args) => {
     // trail is in github_dlq.retry_count + retried_at.
     return { memoryId: r.archivedCount > 0 ? 'archived' : null };
   }
-  const r = ingestEvent(innerCtx, {
+  const r = await ingestEvent(innerCtx, {
     event,
     rawBody: args.rawPayload,
     deliveryId: args.deliveryId,

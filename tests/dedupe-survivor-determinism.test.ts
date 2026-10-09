@@ -16,7 +16,7 @@
  * file-private.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -29,6 +29,9 @@ import { deduplicateStore, strengthBucket } from '../src/dedupe.js';
 import { compareEntryIdentity } from '../src/compare.js';
 import { consolidate } from '../src/consolidate/sleep.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+
+// Two cases build and consolidate a separate store for each of six ingest orders.
+vi.setConfig({ testTimeout: 30_000 });
 
 function tmpHome(prefix: string) {
   const home = mkdtempSync(join(tmpdir(), prefix));

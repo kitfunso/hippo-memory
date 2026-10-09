@@ -1,7 +1,7 @@
 import { MemoryEntry, type DecayOptions } from '../memory.js';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../db.js';
 import { type DormantMove } from '../store/dormant.js';
 import { ftsDrift } from '../store/entry-row.js';
+import { type TombstoneChecks } from '../store/tombstone-checks.js';
 import { loadConfig } from '../config.js';
 import { NO_MERGE_TAGS } from '../shared.js';
 
@@ -48,32 +48,6 @@ export function keptAsWritten(entry: MemoryEntry): boolean {
   return entry.tags.some((tag) => NO_MERGE_TAGS.has(tag));
 }
 
-/** The sleep's one tombstone-check handle: opened on first use, never under dryRun, closed once. */
-interface LazyDb {
-  get: () => DatabaseSyncLike | null;
-  close: () => void;
-}
-
-// Auto-promote (1.4) and merge (3) write deterministic content through the guard's bypass, so both
-// need this tombstone check. Lazy so a sleep reaching neither never opens it; call it IMMEDIATELY
-// before the try whose finally closes it, so a throw in any phase cannot leak the handle.
-export function lazyConsolidateDb(hippoRoot: string, dryRun: boolean): LazyDb {
-  let consolidateDbHandle: DatabaseSyncLike | null = null;
-  let consolidateDbOpened = false;
-  const get = (): DatabaseSyncLike | null => {
-    if (dryRun) return null;
-    if (!consolidateDbOpened) {
-      consolidateDbHandle = openHippoDb(hippoRoot);
-      consolidateDbOpened = true;
-    }
-    return consolidateDbHandle;
-  };
-  const close = (): void => {
-    if (consolidateDbHandle) closeHippoDb(consolidateDbHandle);
-  };
-  return { get, close };
-}
-
 /** Re-syncs the full-text index with `memories`; a store open that is already current no longer counts the two. */
 export function syncFtsIndex(hippoRoot: string, dryRun: boolean, result: ConsolidationResult): void {
   const counts = ftsDrift(hippoRoot, !dryRun);
@@ -91,7 +65,8 @@ export interface SleepRun {
   result: ConsolidationResult;
   all: MemoryEntry[];
   retirable: (entry: MemoryEntry) => boolean;
-  getConsolidateDb: () => DatabaseSyncLike | null;
+  /** Auto-promote (1.4) and merge (3) write deterministic content through the guard's bypass, so both check tombstones here first. */
+  tombstones: TombstoneChecks;
   survivors: MemoryEntry[];
   pendingWrites: MemoryEntry[];
   pendingDeletes: string[];

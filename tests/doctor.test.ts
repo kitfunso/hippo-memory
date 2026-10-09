@@ -308,6 +308,19 @@ describe('hippo doctor', () => {
     expect(r.checks.find((c) => c.id === 'schema')).toMatchObject({ status: 'fail', fix: 'npm install -g hippo-memory@latest' });
   });
 
+  it('a hippo.db that is not a database is one failed schema check and no other database check', () => {
+    const cwd = tmp('doctor-notdb-');
+    process.env.HIPPO_HOME = join(cwd, 'global');
+    mkdirSync(join(cwd, '.hippo'));
+    writeFileSync(join(cwd, '.hippo', 'hippo.db'), 'this file is not a database. '.repeat(400));
+
+    const r = runDoctor({ cwd, home: cwd, version: 'test' });
+    expect(r.ok).toBe(false);
+    expect(r.checks.filter((c) => !['node', 'store', 'claude-code', 'embeddings'].includes(c.id))).toEqual([
+      { id: 'schema', status: 'fail', detail: 'cannot open the database: file is not a database', fix: 'check file permissions on the .hippo folder' },
+    ]);
+  });
+
   it('warns about merged rows the global store tagged user-global by mistake, and passes once repaired', () => {
     const cwd = tmp('doctor-projects-');
     const global = join(cwd, 'global');

@@ -44,7 +44,8 @@ function start(args: string[], env: NodeJS.ProcessEnv = {}): Run {
     }
   });
   proc.stderr.on('data', (chunk: Buffer) => { err += chunk.toString('utf8'); });
-  const exited = new Promise<number | null>((resolve) => proc.once('exit', (code) => resolve(code)));
+  // 'close' fires after stdio drains; 'exit' can beat the last stderr chunk.
+  const exited = new Promise<number | null>((resolve) => proc.once('close', (code) => resolve(code)));
   const nextLine = (timeoutMs: number): Promise<string> => new Promise((resolve, reject) => {
     const cached = lines.shift();
     if (cached) return resolve(cached);
@@ -115,8 +116,10 @@ describe('MCP stdio fault handling', () => {
     run.proc.stdin.write('{"jsonrpc":"2.0","params":{}}\n');
     run.proc.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: 3, method: 'tools/list' })}\n`);
     expect(JSON.parse(await run.nextLine(5000)).id).toBe(3);
-    const dropped = run.stderr().split('\n').filter((l) => l.includes('dropped a frame with no method and no id'));
-    expect(dropped).toHaveLength(1);
+    // stderr is a second pipe with no ordering against stdout, so the warning can land after the reply.
+    const droppedLines = (): string[] => run.stderr().split('\n').filter((l) => l.includes('dropped a frame with no method and no id'));
+    await vi.waitFor(() => expect(droppedLines()).toHaveLength(1), { timeout: 5000 });
+    const dropped = droppedLines();
     expect(dropped[0]).toMatch(/^\[hippo\] warn: mcp: dropped a frame with no method and no id/);
     expect(run.proc.exitCode).toBeNull();
   }, 15000);

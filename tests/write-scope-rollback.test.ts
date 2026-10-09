@@ -61,12 +61,7 @@ describe('a write scope that fails in the middle rolls back', () => {
     const old = new Date(Date.now() - 100 * 86_400_000).toISOString();
     run(`INSERT INTO audit_log (ts, tenant_id, actor, op, target_id, metadata_json) VALUES ('${old}', 'default', 't', 'recall', NULL, '{}')`);
     refuse('audit_log', "NEW.op = 'audit_prune'");
-    const db = openHippoDb(root);
-    try {
-      expect(() => pruneAuditLog(db, { olderThanDays: 30, tenantId: 'default' })).toThrow('refused');
-    } finally {
-      closeHippoDb(db);
-    }
+    expect(() => pruneAuditLog(root, { olderThanDays: 30, tenantId: 'default' })).toThrow('refused');
     expect(count(`SELECT COUNT(*) AS n FROM audit_log WHERE op = 'recall'`)).toBe(1);
   });
 

@@ -23,9 +23,7 @@
 
 import { textOverlap } from './tokenize.js';
 import { loadCurrentDistilledEntries } from './store/entry-reads.js';
-import { deleteEntryOn, memoriesBackingObjects } from './store/delete-and-batch.js';
-import { openStore } from './store/open.js';
-import { closeHippoDb } from './db.js';
+import { deleteEntriesOneByOne, memoriesBackingObjects } from './store/delete-and-batch.js';
 import { compareEntryIdentity } from './compare.js';
 import { canAutoDelete, type MemoryEntry } from './memory.js';
 import { derivationPartitionKey } from './recall-scope.js';
@@ -186,12 +184,7 @@ export function deduplicateStore(
 
 /** The pairs whose loser was deleted; one store handle, one transaction per delete. */
 function deletePairs(hippoRoot: string, pairs: readonly DedupPair[], actor: string | undefined): DedupPair[] {
-  if (pairs.length === 0) return [];
-  const db = openStore(hippoRoot);
-  try {
-    return pairs.filter((p) =>
-      deleteEntryOn(db, hippoRoot, p.removed, { actor, reason: `dedup: duplicate of ${p.kept}`, automatic: true }));
-  } finally {
-    closeHippoDb(db);
-  }
+  const targets = pairs.map((p) => ({ id: p.removed, reason: `dedup: duplicate of ${p.kept}` }));
+  const gone = deleteEntriesOneByOne(hippoRoot, targets, { actor, automatic: true });
+  return pairs.filter((_, i) => gone[i]);
 }

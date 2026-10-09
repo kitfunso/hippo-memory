@@ -71,7 +71,7 @@ export async function runIncidentRecallEval(opts: {
     const sentinel = (m: { ts: string }): string => `[s:${sc.id}:${m.ts}]`;
 
     for (const m of sc.transcript) {
-      ingestMessage(ctx, {
+      await ingestMessage(ctx, {
         teamId: 'T1',
         channel: { id: sc.channel, is_private: false },
         message: {

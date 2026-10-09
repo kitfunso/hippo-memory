@@ -310,7 +310,7 @@ export const COMMANDS = {
     flags: VERB_FLAGS.goal,
   },
   slack: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/slack.js')).cmdSlack(hippoRoot, args, flags); },
+    run: async ({ hippoRoot, args, flags }) => { await (await import('./cli/slack.js')).cmdSlack(hippoRoot, args, flags); },
     usage: VERB_USAGE.slack,
     flags: VERB_FLAGS.slack,
   },

@@ -6,7 +6,7 @@ import * as path from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { loadConfig } from '../src/config.js';
 import { openHippoDb, closeHippoDb, HOOK_DB_WAIT_MS, runWithRequestStores, SERVER_DB_WAIT_MS, type DatabaseSyncLike } from '../src/db.js';
-import { withLedgerDb } from '../src/ledger-db.js';
+import { bookTokenUse } from '../src/ledger-db.js';
 import { ensurePilotArm, hashArm, readPilotArm } from '../src/pilot-arm.js';
 import { recordTokenUse, summarizeTokenUse, tokensBySession } from '../src/token-ledger.js';
 import { runDoctor } from '../src/doctor.js';
@@ -193,7 +193,7 @@ describe('pilot arm helpers', () => {
     db.exec('DROP TABLE token_ledger');
     try {
       ensurePilotArm(db, 'default', 's1', 10000);
-      withLedgerDb(root, (ledger) => recordTokenUse(ledger, { tenantId: 'default', surface: 'hook', event: 'inject', items: 1, tokens: 40 }));
+      bookTokenUse(root, { tenantId: 'default', surface: 'hook', event: 'inject', items: 1, tokens: 40 });
     } finally {
       delete process.env.HIPPO_LOG;
     }

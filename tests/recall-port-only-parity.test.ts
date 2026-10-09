@@ -2,7 +2,7 @@
 // store that answers only through the port; the replies and the rows written must match.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { serve, __resetSessionRecallHistoryHttp, type HippoStore } from '../src/server.js';
+import { serve, __resetSessionRecallHistoryHttp, sqliteStore, type HippoStore } from '../src/server.js';
 import { markSharedStore } from '../src/config.js';
 import { __resetSessionRecallHistoryMcp } from '../src/mcp/server.js';
 import { lastRecalledIds } from '../src/mcp/session-state.js';
@@ -129,5 +129,9 @@ describe('recall over the port matches recall on hippo.db', () => {
     const onPort = await runPass(scenario, portOnlyStore);
     expect(onPort.replies).toEqual(onHippoDb.replies);
     expect(onPort.rows).toEqual(onHippoDb.rows);
+    // The default store answers from worker threads; the same store in process must agree with it.
+    const inProcess = await runPass(scenario, sqliteStore);
+    expect(onHippoDb.replies).toEqual(inProcess.replies);
+    expect(onHippoDb.rows).toEqual(inProcess.rows);
   }, 120_000);
 });

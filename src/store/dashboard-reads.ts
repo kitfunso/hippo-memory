@@ -1,6 +1,10 @@
 // The dashboard snapshot's read of one tenant: live rows with only the columns it shows, and SQL counts of the rows it leaves out.
-import { closeHippoDb } from '../db.js';
+import * as fs from 'fs';
+import { closeHippoDb, getHippoDbPath, openHippoDbReadOnly, type DatabaseSyncLike } from '../db.js';
 import { withReadSnapshot } from '../db/busy.js';
+import { pragmaDataVersion } from '../db/meta.js';
+import { tableExists } from '../db/tables.js';
+import { storedVectorIds } from '../db/vector-store.js';
 import type { ConfidenceInputs, Layer, MemoryEntry, MemoryKind, StrengthInputs } from '../memory.js';
 import { openStore } from './open.js';
 import { QUARANTINE_SCOPE_PREFIX } from './quarantine.js';
@@ -74,5 +78,32 @@ export function loadDashboardRows(hippoRoot: string, tenantId: string): Dashboar
     });
   } finally {
     closeHippoDb(db);
+  }
+}
+
+/** The dashboard's one read-only connection, kept across refreshes for the commit signal; it opens on the first read that finds a database. */
+export class DashboardConnection {
+  private db: DatabaseSyncLike | null = null;
+
+  constructor(private readonly hippoRoot: string) {}
+
+  /** `PRAGMA data_version`, which moves when another connection commits; null while the store has no hippo.db. */
+  dataVersion(): number | null {
+    if (this.db === null) {
+      if (!fs.existsSync(getHippoDbPath(this.hippoRoot))) return null;
+      this.db = openHippoDbReadOnly(this.hippoRoot);
+    }
+    return pragmaDataVersion(this.db);
+  }
+
+  /** Ids with a stored vector: none before the connection opens, null on a store older than the vector table (schema v52). */
+  embeddedIds(): ReadonlySet<string> | null {
+    if (this.db === null) return new Set();
+    return tableExists(this.db, 'memory_vectors') ? storedVectorIds(this.db) : null;
+  }
+
+  close(): void {
+    if (this.db !== null) closeHippoDb(this.db);
+    this.db = null;
   }
 }

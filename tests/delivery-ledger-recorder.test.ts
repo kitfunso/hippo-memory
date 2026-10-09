@@ -234,3 +234,42 @@ describe('rejection reasons', () => {
     expect(event.filteredCount).toBe(3);
   });
 });
+
+describe('the event type of a recorder', () => {
+  it('R1 takes eventType over a UserPromptSubmit payload', () => {
+    const rec = createDeliveryRecorder({
+      root: local, storeHash: 'aaaaaaaaaaaaaaaa', writeStore: 'local', tenantId: 'default', eventType: 'pre-compact',
+      stdinText: JSON.stringify({ session_id: 's1', prompt: PROMPT, hook_event_name: 'UserPromptSubmit' }),
+    });
+    expect(eventOf(rec).eventType).toBe('pre-compact');
+  });
+
+  it('R2 without eventType keeps the payload inference', () => {
+    expect(eventOf(recorder()).eventType).toBe('prompt-submit');
+    const manual = createDeliveryRecorder({
+      root: local, storeHash: 'aaaaaaaaaaaaaaaa', writeStore: 'local', tenantId: 'default', stdinText: JSON.stringify({ session_id: 's1' }),
+    });
+    expect(eventOf(manual).eventType).toBe('pinned-manual');
+  });
+});
+
+describe('prompt facts on a boundary row', () => {
+  const withPrompt = (eventType?: 'pre-compact' | 'compact-resume') => createDeliveryRecorder({
+    root: local, storeHash: 'aaaaaaaaaaaaaaaa', writeStore: 'local', tenantId: 'default', eventType,
+    stdinText: JSON.stringify({ session_id: 's1', prompt: 'secret prompt', hook_event_name: 'UserPromptSubmit' }),
+  });
+
+  for (const type of ['pre-compact', 'compact-resume'] as const) {
+    it(`R3 a ${type} row keeps no prompt hash or length although the payload carries a prompt`, () => {
+      const event = eventOf(withPrompt(type));
+      expect([event.eventType, event.promptHash, event.promptLength]).toEqual([type, null, 0]);
+    });
+  }
+
+  it('R4 a prompt-submit row still carries the prompt hash and length', () => {
+    const event = eventOf(withPrompt());
+    expect(event.eventType).toBe('prompt-submit');
+    expect(event.promptHash).not.toBeNull();
+    expect(event.promptLength).toBe(13);
+  });
+});

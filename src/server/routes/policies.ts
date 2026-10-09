@@ -1,10 +1,10 @@
 // /v1/policies routes.
-import { loadPoliciesAsOf, POLICY, type SavePolicyOpts } from '../../policies.js';
+import { policiesAsOf, POLICY, type SavePolicyOpts } from '../../policies.js';
 import { HttpError, sendJson } from '../../http-util.js';
 import { buildContextWithAuth } from '../auth.js';
 import type { RouteRequest } from '../types.js';
 import { parseJsonBody } from '../validation.js';
-import { closeRoute, getRoute, listRoute, optionalString, requiredString, saveFor, supersedeRoute, type VersionedRouteConfig } from './object-routes.js';
+import { closeRoute, getRoute, listRoute, objectsOf, optionalString, requiredString, saveFor, supersedeRoute, type VersionedRouteConfig } from './object-routes.js';
 
 // The date fields get a type and length check only: the store parses the date, and the cap bounds a junk string before it reaches the Date parser.
 const MAX_DATE_LEN = 64;
@@ -50,14 +50,15 @@ export function handleListPolicies(rr: RouteRequest): Promise<void> {
 
 // The as-of query: must precede the /:id GET (literal 'asof' is non-numeric so
 // the /(\d+)/ route would not match it, but order it first for clarity).
-export async function handlePoliciesAsOf({ req, res, opts, query }: RouteRequest): Promise<void> {
+export async function handlePoliciesAsOf(rr: RouteRequest): Promise<void> {
+  const { req, res, opts, query } = rr;
   const date = query.get('date');
   if (date === null || date.length === 0) {
     throw new HttpError(400, 'date is required (ISO-8601 valid-time)');
   }
   const name = query.get('name') ?? undefined;
   const ctx = await buildContextWithAuth(req, opts);
-  const policies = loadPoliciesAsOf(opts.hippoRoot, ctx.tenantId, date, { name });
+  const policies = await policiesAsOf(objectsOf(rr), ctx.tenantId, date, { name });
   sendJson(res, 200, { policies });
   return;
 }

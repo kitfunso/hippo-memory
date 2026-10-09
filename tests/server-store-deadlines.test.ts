@@ -257,11 +257,15 @@ describe("a read still running at its request's deadline", () => {
   it('answers 504 while the lock is still held, then serves the next read on a fresh thread', async () => {
     // No hippo.db at boot, so the server holds no connection and another one can lock the whole file.
     const root = removeLater(mkdtempSync(join(tmpdir(), 'hippo-store-deadlines-bare-')));
-    const { store } = patientStore(root);
-    const server = await start(root, { store });
+    const executor = createSqliteExecutor(root, { busyWaitMs: LONG_WAIT_MS });
+    const server = await start(root, { store: workerSqliteStore(root, executor) });
     const before = await counts(server);
     mkdirSync(join(root, '.hippo'), { recursive: true });
     initStore(root);
+    // The setup runs on the writer before any read. It is asked of the executor, since after any response the server would hold a connection, as the idle writer would.
+    await executor.call('readiness.ping', [], { mode: 'write', requestId: undefined });
+    executor.terminateWriter();
+    while (executor.liveThreads() > 0) await new Promise((resolve) => setImmediate(resolve));
     const other = new DatabaseSync(getHippoDbPath(root));
     cleanups.push(() => {
       if (other.isOpen !== false) other.close();

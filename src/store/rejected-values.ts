@@ -1,7 +1,7 @@
 // Reject, unreject and list rejected values, each on one handle of its own.
 // A file apart from rejection.ts: store/open.ts imports that one, so an open there would be an import cycle.
 
-import { closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../db.js';
+import { closeHippoDb, openHippoDb, withWriteScope, type DatabaseSyncLike } from '../db.js';
 import type { MemoryEntry } from '../memory.js';
 import { heldTexts } from '../same-text.js';
 import { audit } from './audit-event.js';
@@ -14,6 +14,8 @@ import { purgeMirrorBestEffort } from './mirrors.js';
 import { openStore } from './open.js';
 import { archiveRawMemory, markMirrorCleaned } from './raw-archive.js';
 import {
+  RejectedValueError,
+  checkRejectionGuard,
   deleteRejectedValue,
   insertRejectedValue,
   listRejectedValues,
@@ -190,6 +192,21 @@ export function loadRejectedValues(hippoRoot: string, tenantId: string): Rejecte
   const db = openStore(hippoRoot);
   try {
     return listRejectedValues(db, tenantId);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/** Whether the write guard would refuse `content` under `entryId`, as a write of that row would find it. Reads on a plain open
+ *  and writes nothing, so a dry run counts the values a real run refuses. */
+export function rejectionGuardRefuses(hippoRoot: string, tenantId: string, entryId: string, content: string): boolean {
+  const db = openHippoDb(hippoRoot);
+  try {
+    checkRejectionGuard(db, tenantId, entryId, content);
+    return false;
+  } catch (err) {
+    if (err instanceof RejectedValueError) return true;
+    throw err;
   } finally {
     closeHippoDb(db);
   }

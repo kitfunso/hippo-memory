@@ -1,4 +1,4 @@
-// applyRejection, liftRejection and loadRejectedValues against a real store: what each writes, and what a refusal leaves unwritten.
+// applyRejection, liftRejection, loadRejectedValues and rejectionGuardRefuses against a real store: what each writes, and what a refusal leaves unwritten.
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import * as fs from 'fs';
@@ -9,7 +9,7 @@ import { queryAuditEvents, type AuditEvent, type AuditOp } from '../src/store/au
 import { readEntry } from '../src/store/entry-reads.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { initStore } from '../src/store/open.js';
-import { applyRejection, liftRejection, loadRejectedValues, type Rejection, type RejectionSource } from '../src/store/rejected-values.js';
+import { applyRejection, liftRejection, loadRejectedValues, rejectionGuardRefuses, type Rejection, type RejectionSource } from '../src/store/rejected-values.js';
 import { rejectionDigest } from '../src/store/rejection.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 
@@ -110,5 +110,28 @@ describe('liftRejection', () => {
     expect(loadRejectedValues(root, 'tenant-b')).toEqual([]);
     expect(liftRejection(root, 'tenant-b', digest, 'lifter')).toEqual({ status: 'not_found' });
     expect(loadRejectedValues(root, 'tenant-a').map((r) => r.digest)).toEqual([digest]);
+  });
+});
+
+describe('rejectionGuardRefuses', () => {
+  it('is true only for the rejected text in the tenant that rejected it, and writes neither a row nor a refusal', () => {
+    rejectText('tenant-a', 'never store this again');
+    const entry = createMemory('Never  store this AGAIN', { tags: [] });
+
+    expect(rejectionGuardRefuses(root, 'tenant-a', entry.id, entry.content)).toBe(true);
+    expect(rejectionGuardRefuses(root, 'tenant-b', entry.id, entry.content)).toBe(false);
+    expect(rejectionGuardRefuses(root, 'tenant-a', entry.id, 'some other text')).toBe(false);
+
+    expect(readEntry(root, entry.id)).toBeNull();
+    expect(auditRows('tenant-a', 'reject_refusal')).toEqual([]);
+  });
+
+  it('is false for the row that already holds the rejected text and true for a new id bringing it in', () => {
+    const entry = createMemory('held before the rejection', { tags: [] });
+    writeEntry(root, entry);
+    applyRejection(root, rejection('default', { textOf: () => entry.content, inReach: () => false }));
+
+    expect(rejectionGuardRefuses(root, 'default', entry.id, entry.content)).toBe(false);
+    expect(rejectionGuardRefuses(root, 'default', 'mem_other_id', entry.content)).toBe(true);
   });
 });

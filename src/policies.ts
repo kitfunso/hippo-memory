@@ -38,13 +38,13 @@
  */
 
 import { BadRequestError } from './api-errors.js';
-import { openHippoDb, closeHippoDb } from './db.js';
 import { assertTenantId } from './tenant.js';
 import type { KeysetPosition } from './keyset.js';
 import type { SavableDescriptor } from './objects/descriptor.js';
 import { closeObjectAt, listObjectsAt, objectByIdAt, saveObjectAt } from './objects/lifecycle.js';
 import type { Policy, PolicyStatus } from './store/object-types.js';
-import { rowSpec, type RowByKind } from './store/sqlite/object-rows.js';
+import type { Objects, PoliciesInForceQuery } from './store/port.js';
+import { sqliteObjects } from './store/sqlite/objects-group.js';
 
 export type { Policy, PolicyStatus } from './store/object-types.js';
 
@@ -252,41 +252,20 @@ export function loadPoliciesAsOf(
   asOfDate: string,
   opts: { name?: string; limit?: number } = {},
 ): Policy[] {
+  return sqliteObjects(hippoRoot).policiesInForce(tenantId, inForceQuery(tenantId, asOfDate, opts));
+}
+
+/** `loadPoliciesAsOf` over a served store's group. */
+export async function policiesAsOf(objects: Objects, tenantId: string, asOfDate: string, opts: { name?: string; limit?: number } = {}): Promise<Policy[]> {
+  return objects.policiesInForce(tenantId, inForceQuery(tenantId, asOfDate, opts));
+}
+
+/** The as-of read, checked before a store is asked. */
+function inForceQuery(tenantId: string, asOfDate: string, opts: { name?: string; limit?: number }): PoliciesInForceQuery {
   assertTenantId('loadPoliciesAsOf', tenantId);
-  // A bare date means "as of (the whole of) that day" -> end-of-day instant; a
-  // datetime is used precisely. normalizePolicyDate validates/canonicalizes both.
+  // A bare date means the whole of that day, so it reads as the day's last instant; a datetime is used as given.
   const asOf = /^\d{4}-\d{2}-\d{2}$/.test(asOfDate.trim())
     ? normalizePolicyDate(`${asOfDate.trim()}T23:59:59.999Z`, 'asOfDate')
     : normalizePolicyDate(asOfDate, 'asOfDate');
-  const limit = opts.limit ?? 100;
-  const db = openHippoDb(hippoRoot);
-  try {
-    // LEFT JOIN the successor so a superseded row is kept only while its
-    // successor is not yet effective at asOf. p.status != 'closed' drops retired
-    // rows; the OR keeps active heads + still-in-force superseded versions.
-    const nameClause = opts.name !== undefined ? 'AND p.policy_name = ?' : '';
-    const params: Array<string | number> = [tenantId, asOf, asOf, asOf];
-    if (opts.name !== undefined) params.push(opts.name);
-    params.push(limit);
-    // SAFETY: the SELECT list explicitly aliases p.* to exactly the PolicyRow
-    // columns (id, memory_id, tenant_id, policy_name, policy_text, valid_from,
-    // valid_to, version, status, superseded_by, superseded_at, change_summary,
-    // closed_at, created_at); .all() returns rows in that shape.
-    const rows = db.prepare(`
-      SELECT p.id, p.memory_id, p.tenant_id, p.policy_name, p.policy_text,
-             p.valid_from, p.valid_to, p.version, p.status, p.superseded_by,
-             p.superseded_at, p.change_summary, p.closed_at, p.created_at
-      FROM policies p
-      LEFT JOIN policies s ON s.id = p.superseded_by
-      WHERE p.tenant_id = ? AND p.status != 'closed'
-        AND p.valid_from <= ? AND (p.valid_to IS NULL OR ? < p.valid_to)
-        AND (p.status = 'active' OR (s.id IS NOT NULL AND s.valid_from > ?))
-        ${nameClause}
-      ORDER BY p.valid_from DESC, p.id DESC
-      LIMIT ?
-    `).all(...params) as RowByKind['policy'][];
-    return rows.map(rowSpec('policy').rowTo);
-  } finally {
-    closeHippoDb(db);
-  }
+  return { asOf, name: opts.name, limit: opts.limit ?? 100 };
 }

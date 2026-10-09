@@ -1,4 +1,4 @@
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { configDefaults, defineConfig } from 'vitest/config';
@@ -44,10 +44,37 @@ for (const k of PROVIDER_ENV_KEYS) delete process.env[k];
 // Each of these builds real git repositories and worktrees per case, too slow for every shard; token-eval.yml runs them.
 export const EVAL_TESTS = ['ab-run', 'make-tasks', 'z0-homes', 'z0-turns'].map((name) => `tests/token-eval-${name}.test.ts`);
 
+const TEST_GLOBS = ['tests/**/*.test.ts', 'tests/**/*.test.mjs'];
+const SKIPPED = [...configDefaults.exclude, ...EVAL_TESTS];
+const STARTS_A_PROCESS = /\bchild_process\b|\bworker_threads\b|\bserve\(/;
+
+/** Test files that start a process, a worker thread or the HTTP server, in their own code or through a tests/_helpers module. */
+function processTests(): string[] {
+  const tests = join(import.meta.dirname, 'tests');
+  const read = (file: string): string => readFileSync(join(tests, file), 'utf8');
+  const helpers = readdirSync(join(tests, '_helpers')).map((file) => ({ name: file.replace(/\.\w+$/, ''), source: read(join('_helpers', file)) }));
+  const starters = new Set(helpers.filter((helper) => STARTS_A_PROCESS.test(helper.source)).map((helper) => helper.name));
+  const importsStarter = (source: string): boolean => new RegExp(`(?:_helpers|\\.)/(?:${[...starters].join('|')})\\.`).test(source);
+  // A helper that imports a starter is one too, so this repeats until a pass adds none.
+  for (let known = -1; known !== starters.size;) {
+    known = starters.size;
+    for (const helper of helpers) if (importsStarter(helper.source)) starters.add(helper.name);
+  }
+  return readdirSync(tests, { recursive: true, encoding: 'utf8' })
+    .filter((file) => /\.test\.(ts|mjs)$/.test(file))
+    .filter((file) => { const source = read(file); return STARTS_A_PROCESS.test(source) || importsStarter(source); })
+    .map((file) => `tests/${file.replaceAll('\\', '/')}`);
+}
+const PROCESS_TESTS = processTests();
+
 export default defineConfig({
   test: {
-    include: ['tests/**/*.test.ts', 'tests/**/*.test.mjs'],
-    exclude: [...configDefaults.exclude, ...EVAL_TESTS],
+    // A test that starts a process waits on the operating system and keeps 30 s; the rest get 5 s, read from each file's source, as a list of names goes stale.
+    // A file that is slow for a reason this split cannot see raises its own timeout at its top, with one line saying what is slow.
+    projects: [
+      { extends: true, test: { name: 'unit', include: TEST_GLOBS, exclude: [...SKIPPED, ...PROCESS_TESTS], testTimeout: 5_000, hookTimeout: 10_000 } },
+      { extends: true, test: { name: 'process', include: PROCESS_TESTS, exclude: SKIPPED, testTimeout: 30_000, hookTimeout: 30_000 } },
+    ],
     environment: 'node',
     // Workers get the isolated homes and blank provider keys (a real key would bill and leak prompts);
     // the process.env writes at module scope above cover the main process. Both are required.
@@ -62,10 +89,6 @@ export default defineConfig({
     // 55 of 384 files spawn git/hippo/nested-vitest children, so one fork per
     // core oversubscribes a big box. Detail: CHANGELOG 1.38.3.
     maxWorkers: 6,
-    // Real-SQLite tests that take ~2s alone blow the 5s default under that
-    // contention, and setup hooks fork more children still, so both get 30s.
-    testTimeout: 30_000,
-    hookTimeout: 30_000,
     coverage: {
       provider: 'custom',
       customProviderModule: './tests/_coverage-provider.ts',

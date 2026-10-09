@@ -287,7 +287,7 @@ export interface GoalRecallLogRow {
   score: number;
 }
 
-/** Options shared by {@link computeGoalStackBoost} and {@link boostByGoals}. */
+/** Options of {@link boostByGoals}. */
 export interface GoalStackBoostOpts {
   sessionId: string;
   tenantId: string;
@@ -413,38 +413,8 @@ export function localGoalRecallRows(db: DatabaseSyncLike, rows: readonly GoalRec
   return rows.filter((r) => localIds.has(r.memoryId));
 }
 
-/**
- * dlPFC goal-stack boost. Applies the multi-goal boost to entry-backed scored
- * rows when (tenant, session) has active goals and returns the log rows to
- * write, without writing them; {@link writeGoalRecallLog} persists them.
- *
- * Caller responsibilities:
- *   - Do NOT call when an explicit `goalTag` is set (caller's gate)
- *   - Pass entry-backed rows (with `entry.tags`, `entry.id`, optional
- *     `entry.schema_fit`)
- *   - Manage the db handle lifecycle (helper neither opens nor closes)
- *   - Recompute `tokens` after if returned rows are projected to a budgeted
- *     shape
- *
- * Log rows cover the top `limit` boosted rows that live in this store's
- * `memories` table (global-only ids are skipped to keep the FK on
- * goal_recall_log.memory_id valid).
- *
- * @internal Recall ranking helper. Subject to change.
- */
-export function computeGoalStackBoost<R extends { entry: MemoryEntry; score: number }>(
-  db: DatabaseSyncLike,
-  results: R[],
-  opts: GoalStackBoostOpts,
-): GoalStackBoost<R> {
-  const goals = getActiveGoalsWithDb(db, { sessionId: opts.sessionId, tenantId: opts.tenantId });
-  if (goals.length === 0) return { results, log: [] };
-  const boost = boostByGoals(results, { goals, policies: loadGoalPolicies(db, goals) }, opts);
-  return { results: boost.results, log: localGoalRecallRows(db, boost.log) };
-}
-
-/** {@link computeGoalStackBoost} over goals already read, touching no store. Its log keeps rows whose memory is global,
- *  since only the store can tell them apart; {@link localGoalRecallRows} drops those before the write. */
+/** The goal-stack boost over goals already read, touching no store; a caller skips it under an explicit goal tag. Its log covers the top
+ *  `limit` rows and keeps those whose memory is global, since only the store can tell them apart; {@link localGoalRecallRows} drops those before the write. */
 export function boostByGoals<R extends { entry: MemoryEntry; score: number }>(
   results: R[],
   active: ActiveGoals,
