@@ -1,9 +1,7 @@
 // Write path: remember stores one memory after secret vetting and, for untrusted content, the instruction check.
 
 import type { DatabaseSyncLike } from '../db.js';
-import { writeEntry } from '../store/entry-writes.js';
 import { stampOriginProject } from '../store/entry-row.js';
-import { requireGroup, type HippoStore } from '../store-port.js';
 import { detectInstruction } from '../instruction-detect.js';
 import { quarantineScopeFor, recordQuarantine } from '../quarantine.js';
 import { createMemory, type MemoryEntry, type MemoryKind } from '../memory.js';
@@ -12,6 +10,7 @@ import { vetSecrets } from '../secret-detect.js';
 import { assertCallerProject } from '../project-identity.js';
 import { BadRequestError } from '../api-errors.js';
 import { assertClientScope, personalScopeOf } from '../recall-scope.js';
+import { andThen, notPorted, onStore } from './on-store.js';
 import type { Context, StoreReply } from './types.js';
 
 export interface RememberOpts {
@@ -99,40 +98,26 @@ function rememberResult(ctx: Context, prepared: PreparedRemember): RememberResul
   return result;
 }
 
-/** Store one memory. With `ctx.store`, its entryWrites group writes the row and its remember row; hippo.db is opened only when there is no store. */
+/** Store one memory: the store's entryWrites group writes the row and its one remember audit row, under the caller's subject. */
 export function remember<C extends Context>(ctx: C, opts: RememberOpts): StoreReply<C, RememberResult> {
-  const reply = ctx.store ? rememberThroughStore(ctx, ctx.store, opts) : rememberOnHippoDb(ctx, opts);
-  // SAFETY: a C typed with a store gets the promise its path returns; a wide C is typed as the union, which a caller has to await anyway.
-  return reply as StoreReply<C, RememberResult>;
+  return onStore(ctx, (port, local) => {
+    const entryWrites = port.entryWrites ?? notPorted(port, 'entryWrites');
+    const prepared = prepareRemember(ctx, opts);
+    // A store writes origin_project as given, so the served folder's fallback is stamped here.
+    const write = { entry: stampOriginProject(ctx.hippoRoot, prepared.entry), actor: ctx.actor.subject };
+    // afterWrite and the quarantine record write on hippo.db's own handle, and only connectors send them, so a served store refuses both.
+    const fromConnector = opts.untrusted === true || opts.afterWrite !== undefined;
+    const written = fromConnector ? local.writeEntry(write, hookOf(ctx, opts, prepared)) : entryWrites.writeEntry(write);
+    return andThen(written, () => rememberResult(ctx, prepared));
+  });
 }
 
-/** afterWrite and the quarantine row write on hippo.db's own handle, and only connectors send them, so a store refuses both. */
-async function rememberThroughStore(ctx: Context, store: HippoStore, opts: RememberOpts): Promise<RememberResult> {
-  const entryWrites = requireGroup(store, 'entryWrites');
-  if (opts.afterWrite || opts.untrusted) throw new Error('afterWrite and untrusted content are written to hippo.db only, never through a store');
-  const prepared = prepareRemember(ctx, opts);
-  // The store writes origin_project as given, so the served folder's fallback is stamped here.
-  await entryWrites.writeEntry({ entry: stampOriginProject(ctx.hippoRoot, prepared.entry), actor: ctx.actor.subject });
-  return rememberResult(ctx, prepared);
-}
-
-function rememberOnHippoDb(ctx: Context, opts: RememberOpts): RememberResult {
-  const prepared = prepareRemember(ctx, opts);
+/** A flagged row's quarantine record is written in the row's own transaction, ahead of the connector's hook. */
+function hookOf(ctx: Context, opts: RememberOpts, prepared: PreparedRemember): RememberOpts['afterWrite'] {
   const { requestedScope, detection } = prepared;
-  // writeEntry threads ctx.actor.subject into its internal audit hook, so exactly
-  // one 'remember' event lands in the log with the supplied actor.
-  const afterWrite = detection.flagged
-    ? (db: DatabaseSyncLike, memoryId: string) => {
-        recordQuarantine(db, {
-          tenantId: ctx.tenantId,
-          memoryId,
-          originalScope: requestedScope,
-          reason: detection.reason ?? 'unknown',
-          actor: ctx.actor.subject,
-        });
-        opts.afterWrite?.(db, memoryId);
-      }
-    : opts.afterWrite;
-  writeEntry(ctx.hippoRoot, prepared.entry, { actor: ctx.actor.subject, afterWrite });
-  return rememberResult(ctx, prepared);
+  if (!detection.flagged) return opts.afterWrite;
+  return (db, memoryId) => {
+    recordQuarantine(db, { tenantId: ctx.tenantId, memoryId, originalScope: requestedScope, reason: detection.reason ?? 'unknown', actor: ctx.actor.subject });
+    opts.afterWrite?.(db, memoryId);
+  };
 }

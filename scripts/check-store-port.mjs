@@ -92,10 +92,17 @@ function countRoutesWithoutStore(text) {
   return block.split('\n').filter((l) => /^\s*\{ method:/.test(l) && !l.includes('storeReady')).length;
 }
 
-/** All five numbers plus the per-file opener counts for src/, keys sorted. */
+/** Method names of `interface SqliteLocal`: each is a write only hippo.db can run, so the list grows only by a hand edit of the baseline. */
+function localMethods(sf) {
+  const local = sf.statements.find((s) => ts.isInterfaceDeclaration(s) && s.name.text === 'SqliteLocal');
+  return local ? local.members.map((m) => m.name.getText(sf)).sort() : [];
+}
+
+/** All five numbers plus the per-file opener counts for src/, keys sorted, and the SqliteLocal method names. */
 function measure() {
   const out = { openersOutside: 0, openersInCli: 0, storeBranches: 0, routesWithoutStore: 0, twinFunctions: 0 };
   const byFile = {};
+  let sqliteLocalMethods = [];
   for (const file of existsSync('src') ? tsFiles('src') : []) {
     const text = readFileSync(file, 'utf8');
     const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
@@ -108,16 +115,19 @@ function measure() {
     if (file.startsWith('src/api/')) out.storeBranches += countStoreBranches(sf);
     out.twinFunctions += countTwins(sf);
     if (file === 'src/server.ts') out.routesWithoutStore = countRoutesWithoutStore(text);
+    if (file === 'src/store/sqlite/local.ts') sqliteLocalMethods = localMethods(sf);
   }
-  return { ...out, openersOutsideByFile: byFile };
+  return { ...out, openersOutsideByFile: byFile, sqliteLocalMethods };
 }
 
-/** Numbers and files that went above the baseline, as [label, was, now]. */
+/** Numbers, files and SqliteLocal methods that went above the baseline, as [label, was, now]. */
 function rises(base, cur) {
   const rose = [];
   for (const k of NUMBERS) if (cur[k] > (base[k] ?? 0)) rose.push([k, base[k] ?? 0, cur[k]]);
   const was = base.openersOutsideByFile ?? {};
   for (const [f, n] of Object.entries(cur.openersOutsideByFile)) if (n > (was[f] ?? 0)) rose.push([f, was[f] ?? 'new', n]);
+  const listed = base.sqliteLocalMethods ?? [];
+  for (const m of cur.sqliteLocalMethods) if (!listed.includes(m)) rose.push([`SqliteLocal.${m}`, 'unlisted', 'declared']);
   return rose;
 }
 
@@ -153,6 +163,7 @@ if (rose.length > 0) {
   process.exit(1);
 }
 const fell = baseline && (NUMBERS.some((k) => current[k] < (baseline[k] ?? 0)) ||
-  Object.entries(baseline.openersOutsideByFile ?? {}).some(([f, n]) => (current.openersOutsideByFile[f] ?? 0) < n));
+  Object.entries(baseline.openersOutsideByFile ?? {}).some(([f, n]) => (current.openersOutsideByFile[f] ?? 0) < n) ||
+  (baseline.sqliteLocalMethods ?? []).length > current.sqliteLocalMethods.length);
 if (fell) console.log('Some counts fell below the baseline; run `node scripts/check-store-port.mjs --update` to lock that in.');
 console.log(`Store-port ratchet OK: ${total}, none above ${BASELINE}.`);

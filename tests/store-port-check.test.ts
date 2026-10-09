@@ -15,6 +15,7 @@ type Counts = {
   routesWithoutStore: number;
   twinFunctions: number;
   openersOutsideByFile: Record<string, number>;
+  sqliteLocalMethods: string[];
 };
 type Run = (...args: string[]) => { status: number | null; stdout: string; stderr: string };
 
@@ -25,6 +26,7 @@ const zero: Counts = {
   routesWithoutStore: 0,
   twinFunctions: 0,
   openersOutsideByFile: {},
+  sqliteLocalMethods: [],
 };
 
 function withFixture(files: Record<string, string>, baseline: Partial<Counts> | null, body: (f: { run: Run; baseline: () => Counts }) => void) {
@@ -127,6 +129,23 @@ describe('check-store-port.mjs', () => {
       expect(r.status).toBe(1);
       expect(r.stderr).toContain('Refusing to raise');
       expect(baseline().openersOutside).toBe(0);
+    });
+  });
+
+  it('fails on a SqliteLocal method the baseline does not list, and --update will not add it', () => {
+    const local = 'export interface SqliteLocal {\n  archiveRaw(id: string): string;\n  writeEntry(id: string): void;\n}\n';
+    withFixture({ 'src/store/sqlite/local.ts': local }, { sqliteLocalMethods: ['archiveRaw'] }, ({ run, baseline }) => {
+      const r = run();
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain('SqliteLocal.writeEntry: unlisted -> declared');
+      expect(r.stderr).not.toContain('SqliteLocal.archiveRaw');
+      expect(run('--update').status).toBe(1);
+      expect(baseline().sqliteLocalMethods).toEqual(['archiveRaw']);
+    });
+    withFixture({ 'src/store/sqlite/local.ts': local }, { sqliteLocalMethods: ['archiveRaw', 'writeEntry', 'gone'] }, ({ run, baseline }) => {
+      expect(run().status).toBe(0);
+      expect(run('--update').status).toBe(0);
+      expect(baseline().sqliteLocalMethods).toEqual(['archiveRaw', 'writeEntry']);
     });
   });
 

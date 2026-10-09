@@ -1,7 +1,7 @@
 // The one place an api function picks between a served store and hippo.db, so each operation has one body.
-import { StoreNotPortedError } from '../util/sqlite-blocked.js';
+import { SqliteBlockedError, StoreNotPortedError } from '../util/sqlite-blocked.js';
 import type { HippoStore, StoreGroups } from '../store/port.js';
-import { NO_LOCAL, sqliteLocal, type SqliteLocal } from '../store/sqlite/local.js';
+import { REFUSED_ON_A_STORE, sqliteLocal, type SqliteLocal } from '../store/sqlite/local.js';
 import { sqliteSyncStore, type SqliteSyncStore } from '../store/sqlite/store.js';
 import type { Context, StoreReply } from './types.js';
 
@@ -21,12 +21,23 @@ export function notPorted(port: StorePort, group: keyof StoreGroups): never {
   throw new StoreNotPortedError(port.kind, group);
 }
 
+/** A served store's stand-in for SqliteLocal. The last recall sits in hippo.db's meta table, so only a store that is hippo.db answers for it, on `hippoRoot`. */
+function servedLocal(store: HippoStore, hippoRoot: string): SqliteLocal {
+  return {
+    ...REFUSED_ON_A_STORE,
+    applyOutcomeToLastRecall(target, good) {
+      if (store.kind !== 'sqlite') throw new SqliteBlockedError(store.kind);
+      return sqliteLocal(hippoRoot).applyOutcomeToLastRecall(target, good);
+    },
+  };
+}
+
 /** Runs `run` on `ctx.store`, where a throw rejects, else on hippo.db under `ctx.hippoRoot`, where it throws. The store path never reads `hippoRoot`.
  *  `local` runs an option that needs hippo.db's own handle, and refuses it on a served store. */
 export function onStore<C extends Context, R>(ctx: C, run: (port: StorePort, local: SqliteLocal) => Reply<R>): StoreReply<C, R> {
   const { store } = ctx;
   // No await before `run`: an add-on relies on the first port call starting inside this call.
-  const reply = store ? (async () => run(store, NO_LOCAL))() : run(sqliteSyncStore(ctx.hippoRoot), sqliteLocal(ctx.hippoRoot));
+  const reply = store ? (async () => run(store, servedLocal(store, ctx.hippoRoot)))() : run(sqliteSyncStore(ctx.hippoRoot), sqliteLocal(ctx.hippoRoot));
   // SAFETY: the store path is an async function's Promise and hippo.db's port calls answer values, so the Promise comes back exactly when ctx has a store, as StoreReply says.
   return reply as StoreReply<C, R>;
 }

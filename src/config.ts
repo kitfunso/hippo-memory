@@ -422,6 +422,8 @@ function sharedStoreFlag(raw: Partial<HippoConfig>): boolean {
 }
 
 export function loadConfig(hippoRoot: string): HippoConfig {
+  // A caller that names no folder, as an add-on serving another store does, gets the defaults, never the working folder's config.json.
+  if (hippoRoot === '') return { ...DEFAULT_CONFIG };
   const configPath = path.join(hippoRoot, 'config.json');
   if (!fs.existsSync(configPath)) return { ...DEFAULT_CONFIG };
   try {

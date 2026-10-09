@@ -1,9 +1,9 @@
 {
-  "openersOutside": 167,
+  "openersOutside": 166,
   "openersInCli": 12,
-  "storeBranches": 7,
+  "storeBranches": 4,
   "routesWithoutStore": 52,
-  "twinFunctions": 8,
+  "twinFunctions": 2,
   "openersOutsideByFile": {
     "src/agent-memories/sync.ts": 3,
     "src/ambient-store.ts": 1,
@@ -12,7 +12,6 @@
     "src/api/dormant.ts": 4,
     "src/api/drill-down.ts": 1,
     "src/api/forget.ts": 1,
-    "src/api/outcome.ts": 1,
     "src/api/promote.ts": 1,
     "src/api/quarantine.ts": 3,
     "src/api/sleep-run.ts": 1,
@@ -65,5 +64,11 @@
     "src/store-cards.ts": 14,
     "src/support-bundle.ts": 1,
     "src/working-memory.ts": 3
-  }
+  },
+  "sqliteLocalMethods": [
+    "applyOutcome",
+    "applyOutcomeToLastRecall",
+    "archiveRaw",
+    "writeEntry"
+  ]
 }

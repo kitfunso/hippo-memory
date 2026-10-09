@@ -6,14 +6,15 @@ import { log } from '../../log.js';
 import { entryAfterOutcome, type MemoryEntry } from '../../memory.js';
 import { archiveRawMemory, type ArchiveOpts } from '../../raw-archive.js';
 import { ownScopeTouches } from '../../recall-scope.js';
+import { recordTraceOutcome } from '../../recall-trace.js';
 import { RejectedValueError } from '../../rejection.js';
-import type { EntryTarget, EntryWrites, OutcomeWrite, RawArchive, SupersedeWrite, Sync } from '../port.js';
+import type { EntryTarget, EntryWrite, EntryWrites, OutcomeWrite, RawArchive, SupersedeWrite, Sync } from '../port.js';
 import { markSummaryDirtyInTx } from '../../summary-dirty.js';
 import { auditRejectionRefusal } from '../audit-event.js';
 import { deleteEntryCore } from '../delete-and-batch.js';
 import { selectEntriesByIds } from '../entry-reads.js';
 import { stampOriginProject } from '../entry-row.js';
-import { writeEntryDbOnly, writeEntryMirrors } from '../entry-writes.js';
+import { writeEntryDbOnly, writeEntryMirrors, type WriteEntryOptions } from '../entry-writes.js';
 import { updateStatsUnlessBusy } from '../index-and-stats.js';
 import { purgeMirrorBestEffort, removeEntryMirrors } from '../mirrors.js';
 import { onHandle, openStore } from '../open.js';
@@ -22,15 +23,11 @@ import { selectMemoryReach } from '../tenant-lookup.js';
 /** Each call on its own handle; mirrors and the forgotten counter follow the commit, so a rolled-back write leaves neither. */
 export function sqliteEntryWrites(hippoRoot: string): Sync<EntryWrites> {
   return {
-    writeEntry({ entry, actor }) {
-      const stamped = stampOriginProject(hippoRoot, entry);
-      onHandle(hippoRoot, (db) => writeInOwnTenant(db, stamped, actor), openStore);
-      writeEntryMirrors(hippoRoot, stamped);
+    writeEntry(write) {
+      writeEntryAt(hippoRoot, write);
     },
     applyOutcome(outcome) {
-      const applied = onHandle(hippoRoot, (db) => applyOutcomeOn(db, outcome), openStore);
-      for (const entry of applied) writeEntryMirrors(hippoRoot, entry);
-      return applied.map((entry) => entry.id);
+      return applyOutcomeAt(hippoRoot, outcome);
     },
     supersede(write) {
       const successor = stampOriginProject(hippoRoot, write.successor);
@@ -49,6 +46,27 @@ export function sqliteEntryWrites(hippoRoot: string): Sync<EntryWrites> {
       updateStatsUnlessBusy(hippoRoot, { forgotten: 1 }, `removed ${removal.id}`);
     },
   };
+}
+
+/** A connector's hook writes on the row's handle inside its write scope, so its throw undoes the row. */
+export function writeEntryAt(hippoRoot: string, { entry, actor }: EntryWrite, afterWrite?: WriteEntryOptions['afterWrite']): void {
+  const stamped = stampOriginProject(hippoRoot, entry);
+  onHandle(hippoRoot, (db) => writeInOwnTenant(db, stamped, actor, afterWrite), openStore);
+  writeEntryMirrors(hippoRoot, stamped);
+}
+
+/** A trace link follows the commit on the same handle and names only the ids applied, so a rolled-back outcome leaves none. */
+export function applyOutcomeAt(hippoRoot: string, outcome: OutcomeWrite, traceId?: number): string[] {
+  const applied = onHandle(hippoRoot, (db) => {
+    const rows = applyOutcomeOn(db, outcome);
+    const memoryIds = rows.map((entry) => entry.id);
+    if (traceId !== undefined && rows.length > 0) {
+      recordTraceOutcome(db, { traceId, tenantId: outcome.tenantId, outcome: outcome.good ? 'positive' : 'negative', memoryIds });
+    }
+    return rows;
+  }, openStore);
+  for (const entry of applied) writeEntryMirrors(hippoRoot, entry);
+  return applied.map((entry) => entry.id);
 }
 
 /** Reach is checked inside the archive's write scope. A connector's hook writes on the same handle inside that scope, so its throw undoes the archive. */
@@ -81,22 +99,26 @@ function assertIdInTenant(db: DatabaseSyncLike, entry: MemoryEntry): void {
   if (holder !== undefined && holder !== entry.tenantId) throw new ConflictError(`Memory ${entry.id} belongs to another tenant`);
 }
 
-/** The refusal row lands after the rollback, in a fresh implicit transaction the aborted one cannot undo. */
-function writeInOwnTenant(db: DatabaseSyncLike, entry: MemoryEntry, actor: string): void {
+/** The refusal row lands after `write` has rolled back, in a fresh implicit transaction the aborted one cannot undo. */
+function auditingRefusal<T>(db: DatabaseSyncLike, actor: string, write: () => T): T {
   try {
-    withWriteScope(db, 'write_entry_in_tenant', () => {
-      assertIdInTenant(db, entry);
-      writeEntryDbOnly(db, entry, { actor });
-    });
+    return write();
   } catch (err) {
     if (err instanceof RejectedValueError) auditRejectionRefusal(db, err, actor);
     throw err;
   }
 }
 
+function writeInOwnTenant(db: DatabaseSyncLike, entry: MemoryEntry, actor: string, afterWrite?: WriteEntryOptions['afterWrite']): void {
+  auditingRefusal(db, actor, () => withWriteScope(db, 'write_entry_in_tenant', () => {
+    assertIdInTenant(db, entry);
+    writeEntryDbOnly(db, entry, { actor, afterWrite });
+  }));
+}
+
 /** The reads, rewrites and outcome rows share one BEGIN IMMEDIATE transaction, hippo.db's form of the port's row lock; the caller writes the mirrors after. */
 function applyOutcomeOn(db: DatabaseSyncLike, outcome: OutcomeWrite): MemoryEntry[] {
-  return withWriteScope(db, 'apply_outcome', () => {
+  return auditingRefusal(db, outcome.actor, () => withWriteScope(db, 'apply_outcome', () => {
     const live = selectEntriesByIds(db, outcome.ids, outcome.tenantId);
     const applied: MemoryEntry[] = [];
     for (const id of outcome.ids) {
@@ -109,7 +131,7 @@ function applyOutcomeOn(db: DatabaseSyncLike, outcome: OutcomeWrite): MemoryEntr
       applied.push(updated);
     }
     return applied;
-  });
+  }));
 }
 
 /** Reach, the CAS on the old row, the successor's insert and the supersede row in one BEGIN IMMEDIATE transaction. Two racing supersedes: one CAS wins. */
