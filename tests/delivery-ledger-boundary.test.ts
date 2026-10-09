@@ -75,6 +75,23 @@ describe('what one boundary hook call records', () => {
     ]);
   });
 
+  it('V6: a sub-agent payload on compact-resume in a holdout session records empty, not disabled', () => {
+    writeConfig(p, { holdout: true });
+    saveSnapshot(p, 'v6');
+    const r = hippo(p, ['compact-resume'], { input: resumePayload('v6', { agent_id: 'agent-1' }) });
+    expect([r.status, r.stdout]).toEqual([0, '']);
+    const [e] = eventsN(p, 'v6', 1);
+    expect([e.session_state, e.turn_seq, e.block_state]).toEqual(['subagent', null, 'empty']);
+  });
+
+  it('V7b: a VS Code payload on pre-compact with no hippo.json records runtime claude-code and state empty', () => {
+    const input = preCompactPayload('v7b', { transcript_path: writeVscodeTranscript(p) });
+    const r = hippo(p, ['pre-compact'], { input });
+    expect(r.status, r.stderr).toBe(0);
+    const [e] = eventsN(p, 'v7b', 1);
+    expect([e.event_type, e.runtime, e.block_state]).toEqual(['pre-compact', 'claude-code', 'empty']);
+  });
+
   it('B12: a manual run records a row; the session comes from the environment, else it is missing and unnumbered', () => {
     saveSnapshot(p, null);
     const bare = hippo(p, ['compact-resume']);
@@ -145,7 +162,7 @@ describe('B5: calls the hooks do not accept leave no row', () => {
     fs.mkdirSync(bare);
     expect(hippo(p, [hook], { input, cwd: bare }).status).toBe(0);
     expect(fs.existsSync(path.join(bare, '.hippo'))).toBe(false);
-    noRow();
+    expect(fs.existsSync(p.globalRoot)).toBe(false);
   });
 
   it('a VS Code payload with hippo.json present on pre-compact', () => {

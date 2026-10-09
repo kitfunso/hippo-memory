@@ -173,6 +173,15 @@ describe('writeDeliveryEvent', () => {
       ]);
     });
 
+    it('W7 measures the window from the numbered row, so a third fire 1500 ms after a duplicate is numbered', () => {
+      const first = writeDeliveryEvent(db, boundary(type));
+      writeDeliveryEvent(db, boundary(type, { ts: at(1500) }));
+      writeDeliveryEvent(db, boundary(type, { ts: at(3000) }));
+      expect(readDeliveryEvents(db, 'default', 'sess-1').map((r) => [r.turn_seq, r.duplicate_of])).toEqual([
+        [1, null], [null, first], [2, null],
+      ]);
+    });
+
     it('W5 gives a missing-session or sub-agent boundary no number and no duplicate', () => {
       writeDeliveryEvent(db, boundary(type, { sessionId: null, sessionState: 'missing' }));
       writeDeliveryEvent(db, boundary(type, { sessionId: null, sessionState: 'missing', ts: at(500) }));
