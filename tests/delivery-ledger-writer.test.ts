@@ -19,6 +19,7 @@ import {
   type DeliveryStage,
 } from '../src/store/delivery-recorder.js';
 import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { runWithRequestId } from '../src/util/request-scope.js';
 import { countMatching, recordStatements, type StatementLog } from './_helpers/count-statements.js';
 
 // A prompt hook waits a second for a lock in all; the ledger may spend a fraction of it.
@@ -250,19 +251,27 @@ describe('writeDeliveryEvent', () => {
   });
 
   it('rolls back and returns null with one stderr line when a write fails', () => {
-    const err = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const err = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     db.exec('DROP TABLE delivery_candidates');
     expect(writeDeliveryEvent(db, event())).toBeNull();
     expect(count('delivery_events')).toBe(0);
     expect(err).toHaveBeenCalledTimes(1);
-    expect(String(err.mock.calls[0][0])).toMatch(/^\[hippo\] delivery ledger write failed: /);
+    expect(String(err.mock.calls[0][0])).toMatch(/^\[hippo\] error: delivery ledger write failed: /);
+  });
+
+  it('names the request on the failure line when the write runs inside one', () => {
+    const err = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    db.exec('DROP TABLE delivery_candidates');
+    expect(runWithRequestId('req-ledger-7', () => writeDeliveryEvent(db, event()))).toBeNull();
+    expect(err).toHaveBeenCalledTimes(1);
+    expect(String(err.mock.calls[0][0])).toMatch(/^\[hippo\] error: delivery ledger write failed: .* requestId=req-ledger-7\n$/);
   });
 });
 
 describe('writeDeliveryEventAtRoot under a held write lock', () => {
   it('drops the row fast, then numbers the next written turn after the last recorded one', () => {
     expect(writeDeliveryEventAtRoot(root, event({ promptHash: 'p1' }))).not.toBeNull();
-    const err = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const err = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const holder = openHippoDb(root);
     holder.exec('BEGIN IMMEDIATE');
     let dropped: StatementLog<number | null>;
@@ -275,14 +284,14 @@ describe('writeDeliveryEventAtRoot under a held write lock', () => {
     expect(dropped.result).toBeNull();
     expectOneShortWait(dropped.statements);
     expect(err).toHaveBeenCalledTimes(1);
-    expect(String(err.mock.calls[0][0])).toMatch(/^\[hippo\] delivery ledger/);
+    expect(String(err.mock.calls[0][0])).toMatch(/^\[hippo\] error: delivery ledger write failed: /);
     const next = writeDeliveryEventAtRoot(root, event({ promptHash: 'p3', ts: at(10_000) }));
     expect(next).not.toBeNull();
     expect(readDeliveryEvents(db, 'default', 'sess-1').map((r) => r.turn_seq)).toEqual([1, 2]);
   });
 
   it("on a caller's handle, waits only the ledger's short wait, then gives the handle its 5 s wait back", () => {
-    const err = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const err = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const holder = openHippoDb(root);
     holder.exec('BEGIN IMMEDIATE');
     let dropped: StatementLog<number | null>;

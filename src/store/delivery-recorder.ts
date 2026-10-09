@@ -5,7 +5,7 @@ import { evalNow } from '../core/ablation.js';
 import { scoreOverlap, type PromptRecallGate } from '../core/prompt-recall.js';
 import { hookPayloadSessionId, hookPayloadString, isSubagentPayload } from './token-ledger.js';
 import { blockHash, estimateTokens } from '../util/token-text.js';
-import { errorMessage } from '../util/log.js';
+import { errorMessage, log } from '../util/log.js';
 export type DeliveryRuntime = 'claude-code' | 'codex' | 'copilot' | 'unknown';
 export type DeliveryEventType = 'prompt-submit' | 'pinned-manual' | 'pre-compact' | 'compact-resume';
 /** True for the two compaction boundary types. */
@@ -424,8 +424,7 @@ export function createDeliveryRecorder(init: DeliveryRecorderInit): DeliveryReco
       if (state.flushed) return;
       state.flushed = true;
       if (state.broken !== null) {
-        // Same pinned `[hippo] delivery ledger` hook stderr line as recall-trace.ts's write failure.
-        console.error(`[hippo] delivery ledger skipped: recorder failed: ${state.broken}`);
+        log.warn(`delivery ledger skipped: recorder failed: ${state.broken}`);
         return;
       }
       if (fault === 'build') throw new Error('injected build fault');

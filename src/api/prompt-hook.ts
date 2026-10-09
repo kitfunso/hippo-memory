@@ -21,7 +21,7 @@ import {
   type TokenUse,
 } from '../store/token-ledger.js';
 import { blockHash, estimateTokens } from '../util/token-text.js';
-import { errorMessage } from '../util/log.js';
+import { errorMessage, log } from '../util/log.js';
 
 /** With `write`, stores on the token ledger's connection (same store); without it, opens its own. A second flush is a no-op. */
 export function flushDeliveryRecorder(rec: DeliveryRecorder | null, write?: DeliveryWrite): void {
@@ -29,8 +29,7 @@ export function flushDeliveryRecorder(rec: DeliveryRecorder | null, write?: Deli
   try {
     rec.flush(write ?? ((input) => writeDeliveryEventAtRoot(rec.root, input)));
   } catch (error) {
-    // The hook's one-line stderr contract pins this exact text, so it bypasses the leveled logger.
-    console.error(`[hippo] delivery ledger write failed:${errorMessage(error)}`);
+    log.error(`delivery ledger write failed: ${errorMessage(error)}`);
   }
 }
 

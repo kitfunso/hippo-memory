@@ -369,7 +369,7 @@ describe('the ledger never changes the hook', () => {
     const on = run(dir, claude('f7a'), { env: { HIPPO_FAKE_NOW: FAKE_NOW } });
     expect(off.stdout).not.toBe('');
     expect([on.status, on.stdout]).toEqual([off.status, off.stdout]);
-    expect(ledgerLines(on.stderr)).toEqual([expect.stringMatching(/^\[hippo\] delivery ledger write failed: /)]);
+    expect(ledgerLines(on.stderr)).toEqual([expect.stringMatching(/^\[hippo\] error: delivery ledger write failed: /)]);
     expect(eventCount(dir)).toBe(0);
   });
 
