@@ -1,38 +1,6 @@
 #!/usr/bin/env node
-/**
- * Hippo CLI  - biologically-inspired memory system for AI agents.
- *
- * Commands:
- *   hippo init [--global]
- *   hippo remember <text> [--tag <t>] [--error] [--pin] [--global]
- *   hippo recall <query> [--budget <n>] [--json] [--why]
- *   hippo sleep [--dry-run]
- *   hippo status
- *   hippo outcome --good | --bad [--id <id>]
- *   hippo conflicts [--status <status>] [--json]
- *   hippo snapshot <save|show|clear>
- *   hippo session <log|show|latest|resume|complete>
- *   hippo handoff <create|latest|show>
- *   hippo card <create|show|list|claim|heartbeat|block|review|complete|reclaim|comment>
- *   hippo current <show>
- *   hippo forget <id> [--archive --reason "<why>"]
- *   hippo reject <id>|--value "<text>" --reason "<why>"
- *   hippo rejections
- *   hippo unreject <digest-prefix>
- *   hippo dormant [<query>] [--limit <n>] [--json] | restore <id> | forget <id>
- *   hippo projects [--json] | merge <from> <into> [--apply] | repair [--apply]
- *   hippo tokens [--days <n>] [--json] [--global]
- *   hippo doctor [--json]
- *   hippo inspect <id>
- *   hippo embed [--status]
- *   hippo watch "<command>"
- *   hippo learn --git [--days <n>] [--repos <paths>]
- *   hippo daily-runner
- *   hippo promote <id>
- *   hippo sync
- *   hippo decide "<decision>" [--context "<why>"] [--supersedes <id>]
- *   hippo wm <push|read|clear|flush>
- */
+// Hippo CLI entry point: parses argv and dispatches each verb through the table below.
+// `hippo help` prints the verb list from that table, so no list is kept here.
 
 import { envSkipAutoIntegrations } from './util/env.js';
 import * as path from 'path';
@@ -169,428 +137,293 @@ function maybeRepairCodexWrapper(currentCommand: string, flags: CliFlags): void 
   }
 }
 
-interface CommandSpec {
+/** What a verb's row states; its help blocks and flags are looked up by the row's key. */
+interface VerbHandler {
   readonly run: (ctx: CommandContext) => void | Promise<void>;
   readonly aliases?: readonly string[];
   /** Runs in a request scope, opening each store once; set on api-backed verbs, as hook verbs open their own. */
   readonly scoped?: true;
+}
+
+interface CommandSpec extends VerbHandler {
   // Each block opens with a newline so the full listing is their concatenation.
   readonly usage: readonly string[];
   /** The flags this verb reads; any other flag still parses, and the verb says it ignores it. */
   readonly flags: VerbFlags;
 }
 
-/** Every verb main() dispatches, keyed by name, with its handler, aliases and help blocks. */
-export const COMMANDS = {
+type VerbName = keyof typeof VERB_FLAGS;
+
+/** Every verb main() dispatches, keyed by name; a verb without a VERB_FLAGS entry, or the reverse, fails to compile. */
+export const VERB_HANDLERS = {
   init: {
     run: async ({ hippoRoot, flags }) => { (await import('./cli/init.js')).cmdInit(hippoRoot, flags); },
-    usage: VERB_USAGE.init,
-    flags: VERB_FLAGS.init,
   },
   remember: {
     run: async (c) => { await (await import('./cli/remember.js')).handleRemember(c); },
-    usage: VERB_USAGE.remember,
-    flags: VERB_FLAGS.remember,
   },
   recall: {
     run: async (c) => { await (await import('./cli/recall.js')).handleRecall(c); },
     scoped: true,
-    usage: VERB_USAGE.recall,
-    flags: VERB_FLAGS.recall,
   },
   drill: {
     run: async (c) => { await (await import('./cli/dag.js')).handleDrill(c); },
     scoped: true,
-    usage: VERB_USAGE.drill,
-    flags: VERB_FLAGS.drill,
   },
   assemble: {
     run: async (c) => { await (await import('./cli/dag.js')).handleAssemble(c); },
     scoped: true,
-    usage: VERB_USAGE.assemble,
-    flags: VERB_FLAGS.assemble,
   },
   supersede: {
     run: async (c) => { await (await import('./cli/remember.js')).handleSupersede(c); },
-    usage: VERB_USAGE.supersede,
-    flags: VERB_FLAGS.supersede,
   },
   explain: {
     run: async (c) => { await (await import('./cli/explain.js')).handleExplain(c); },
     scoped: true,
-    usage: VERB_USAGE.explain,
-    flags: VERB_FLAGS.explain,
   },
   eval: {
     run: async (c) => { await (await import('./cli/eval.js')).handleEval(c); },
-    usage: VERB_USAGE.eval,
-    flags: VERB_FLAGS.eval,
   },
   trace: {
     run: async (c) => { await (await import('./cli/remember.js')).handleTrace(c); },
-    usage: VERB_USAGE.trace,
-    flags: VERB_FLAGS.trace,
   },
   refine: {
     run: async ({ hippoRoot, flags }) => { await (await import('./cli/maintenance.js')).cmdRefine(hippoRoot, flags); },
-    usage: VERB_USAGE.refine,
-    flags: VERB_FLAGS.refine,
   },
   sleep: {
     run: async ({ hippoRoot, flags }) => { await (await import('./cli/sleep.js')).cmdSleep(hippoRoot, flags); },
     scoped: true,
-    usage: VERB_USAGE.sleep,
-    flags: VERB_FLAGS.sleep,
   },
   'last-sleep': {
     run: async ({ hippoRoot, flags }) => { (await import('./cli/last-sleep.js')).cmdLastSleep(hippoRoot, flags); },
-    usage: VERB_USAGE['last-sleep'],
-    flags: VERB_FLAGS['last-sleep'],
   },
   'session-end': {
     run: async ({ hippoRoot, flags }) => { await (await import('./cli/session-hooks.js')).cmdSessionEnd(hippoRoot, flags); },
-    usage: VERB_USAGE['session-end'],
-    flags: VERB_FLAGS['session-end'],
   },
   '__session-end-worker': {
     run: async ({ hippoRoot, flags }) => { await (await import('./cli/session-hooks.js')).cmdSessionEndWorker(hippoRoot, flags); },
-    usage: [],
-    flags: VERB_FLAGS['__session-end-worker'],
   },
   'pre-compact': {
     run: async (c) => { await (await import('./cli/session-hooks.js')).handlePreCompact(c); },
-    usage: VERB_USAGE['pre-compact'],
-    flags: VERB_FLAGS['pre-compact'],
   },
   'post-compact': {
     run: async (c) => { await (await import('./cli/session-hooks.js')).handlePostCompact(c); },
-    usage: VERB_USAGE['post-compact'],
-    flags: VERB_FLAGS['post-compact'],
   },
   'capture-error': {
     run: async (c) => { await (await import('./cli/session-hooks.js')).handleCaptureError(c); },
-    usage: VERB_USAGE['capture-error'],
-    flags: VERB_FLAGS['capture-error'],
   },
   'compact-resume': {
     run: async (c) => { await (await import('./cli/session-hooks.js')).handleCompactResume(c); },
-    usage: VERB_USAGE['compact-resume'],
-    flags: VERB_FLAGS['compact-resume'],
   },
   'codex-run': {
     run: async ({ hippoRoot, args }) => { (await import('./cli/session-hooks.js')).cmdCodexRun(hippoRoot, args); },
-    usage: VERB_USAGE['codex-run'],
-    flags: VERB_FLAGS['codex-run'],
   },
   '__codex-session-end-worker': {
     run: async ({ hippoRoot, flags }) => { await (await import('./cli/session-hooks.js')).cmdCodexSessionEndWorker(hippoRoot, flags); },
-    usage: [],
-    flags: VERB_FLAGS['__codex-session-end-worker'],
   },
   dedup: {
     run: async ({ hippoRoot, flags }) => { (await import('./cli/maintenance.js')).cmdDedup(hippoRoot, flags); },
-    usage: VERB_USAGE.dedup,
-    flags: VERB_FLAGS.dedup,
   },
   dag: {
     run: async ({ hippoRoot, flags }) => { (await import('./cli/dag.js')).cmdDag(hippoRoot, flags); },
-    usage: VERB_USAGE.dag,
-    flags: VERB_FLAGS.dag,
   },
   auth: {
     run: async ({ hippoRoot, args, flags }) => { (await import('./cli/auth.js')).cmdAuth(hippoRoot, args, flags); },
     scoped: true,
-    usage: VERB_USAGE.auth,
-    flags: VERB_FLAGS.auth,
   },
   goal: {
     run: async ({ hippoRoot, args, flags }) => { (await import('./cli/goals.js')).cmdGoal(hippoRoot, args, flags); },
     scoped: true,
-    usage: VERB_USAGE.goal,
-    flags: VERB_FLAGS.goal,
   },
   slack: {
     run: async ({ hippoRoot, args, flags }) => { await (await import('./cli/slack.js')).cmdSlack(hippoRoot, args, flags); },
-    usage: VERB_USAGE.slack,
-    flags: VERB_FLAGS.slack,
   },
   github: {
     run: async ({ hippoRoot, args, flags }) => { await cmdGithub(hippoRoot, args, flags); },
-    usage: VERB_USAGE.github,
-    flags: VERB_FLAGS.github,
   },
   audit: {
     run: async (c) => { await (await import('./cli/audit.js')).handleAudit(c); },
     scoped: true,
-    usage: VERB_USAGE.audit,
-    flags: VERB_FLAGS.audit,
   },
   'correction-latency': {
     run: async (c) => { await (await import('./cli/status.js')).handleCorrectionLatency(c); },
-    usage: VERB_USAGE['correction-latency'],
-    flags: VERB_FLAGS['correction-latency'],
   },
   provenance: {
     run: async (c) => { await (await import('./cli/status.js')).handleProvenance(c); },
-    usage: VERB_USAGE.provenance,
-    flags: VERB_FLAGS.provenance,
   },
   status: {
     run: async ({ hippoRoot }) => { (await import('./cli/status.js')).cmdStatus(hippoRoot); },
-    usage: VERB_USAGE.status,
-    flags: VERB_FLAGS.status,
   },
   outcome: {
     run: async ({ hippoRoot, flags }) => { (await import('./cli/curate.js')).cmdOutcome(hippoRoot, flags); },
     scoped: true,
-    usage: VERB_USAGE.outcome,
-    flags: VERB_FLAGS.outcome,
   },
   conflicts: {
     run: async ({ hippoRoot, flags }) => { (await import('./cli/curate.js')).cmdConflicts(hippoRoot, flags); },
-    usage: VERB_USAGE.conflicts,
-    flags: VERB_FLAGS.conflicts,
   },
   resolve: {
     run: async ({ hippoRoot, args, flags }) => { (await import('./cli/curate.js')).cmdResolve(hippoRoot, args, flags); },
-    usage: VERB_USAGE.resolve,
-    flags: VERB_FLAGS.resolve,
   },
   reject: {
     run: async ({ hippoRoot, args, flags }) => { (await import('./cli/curate.js')).cmdReject(hippoRoot, args, flags); },
-    usage: VERB_USAGE.reject,
-    flags: VERB_FLAGS.reject,
   },
   rejections: {
     run: async ({ hippoRoot, flags }) => { (await import('./cli/curate.js')).cmdRejections(hippoRoot, flags); },
-    usage: VERB_USAGE.rejections,
-    flags: VERB_FLAGS.rejections,
   },
   unreject: {
     run: async ({ hippoRoot, args, flags }) => { (await import('./cli/curate.js')).cmdUnreject(hippoRoot, args, flags); },
-    usage: VERB_USAGE.unreject,
-    flags: VERB_FLAGS.unreject,
   },
   dormant: {
     run: async ({ hippoRoot, args, flags }) => { (await import('./cli/curate.js')).cmdDormant(hippoRoot, args, flags); },
     scoped: true,
-    usage: VERB_USAGE.dormant,
-    flags: VERB_FLAGS.dormant,
   },
   projects: {
     run: async ({ hippoRoot, args, flags }) => { (await import('./cli/projects.js')).cmdProjects(hippoRoot, args, flags); },
-    usage: VERB_USAGE.projects,
-    flags: VERB_FLAGS.projects,
   },
   quarantine: {
     run: async ({ hippoRoot, args, flags }) => { await (await import('./cli/curate.js')).cmdQuarantine(hippoRoot, args, flags); },
     scoped: true,
-    usage: VERB_USAGE.quarantine,
-    flags: VERB_FLAGS.quarantine,
   },
   tokens: {
     run: async ({ hippoRoot, flags }) => { (await import('./cli/status.js')).cmdTokens(hippoRoot, flags); },
     scoped: true,
-    usage: VERB_USAGE.tokens,
-    flags: VERB_FLAGS.tokens,
   },
   failures: {
     run: async ({ hippoRoot, flags }) => { (await import('./cli/status.js')).cmdFailures(hippoRoot, flags); },
     scoped: true,
-    usage: VERB_USAGE.failures,
-    flags: VERB_FLAGS.failures,
   },
   doctor: {
     run: async (c) => { await (await import('./cli/status.js')).handleDoctor(c); },
-    usage: VERB_USAGE.doctor,
-    flags: VERB_FLAGS.doctor,
   },
   'support-bundle': {
     run: async (c) => { await (await import('./cli/status.js')).handleSupportBundle(c); },
-    usage: VERB_USAGE['support-bundle'],
-    flags: VERB_FLAGS['support-bundle'],
   },
   snapshot: {
     run: async ({ hippoRoot, args, flags }) => { (await import('./cli/continuity.js')).cmdSnapshot(hippoRoot, args, flags); },
-    usage: VERB_USAGE.snapshot,
-    flags: VERB_FLAGS.snapshot,
   },
   session: {
     run: async ({ hippoRoot, args, flags }) => { (await import('./cli/continuity.js')).cmdSession(hippoRoot, args, flags); },
-    usage: VERB_USAGE.session,
-    flags: VERB_FLAGS.session,
   },
   handoff: {
     run: async ({ hippoRoot, args, flags }) => { (await import('./cli/continuity.js')).cmdHandoff(hippoRoot, args, flags); },
-    usage: VERB_USAGE.handoff,
-    flags: VERB_FLAGS.handoff,
   },
   card: {
     run: async ({ hippoRoot, args, flags }) => { (await import('./cli/card.js')).cmdCard(hippoRoot, args, flags); },
-    usage: VERB_USAGE.card,
-    flags: VERB_FLAGS.card,
   },
   predict: {
     run: async ({ hippoRoot, args, flags }) => { (await import('./cli/decisions.js')).cmdPredict(hippoRoot, args, flags); },
-    usage: VERB_USAGE.predict,
-    flags: VERB_FLAGS.predict,
   },
   current: {
     run: async ({ hippoRoot, args, flags }) => { (await import('./cli/continuity.js')).cmdCurrent(hippoRoot, args, flags); },
-    usage: VERB_USAGE.current,
-    flags: VERB_FLAGS.current,
   },
   forget: {
     run: async (c) => { await (await import('./cli/curate.js')).handleForget(c); },
     scoped: true,
-    usage: VERB_USAGE.forget,
-    flags: VERB_FLAGS.forget,
   },
   inspect: {
     run: async (c) => { await (await import('./cli/status.js')).handleInspect(c); },
-    usage: VERB_USAGE.inspect,
-    flags: VERB_FLAGS.inspect,
   },
   context: {
     run: async (c) => { await (await import('./cli/context.js')).handleContext(c); },
-    usage: VERB_USAGE.context,
-    flags: VERB_FLAGS.context,
   },
   hook: {
     run: async ({ args }) => { (await import('./cli/setup.js')).cmdHook(args); },
-    usage: VERB_USAGE.hook,
-    flags: VERB_FLAGS.hook,
   },
   setup: {
     run: async ({ flags }) => { (await import('./cli/setup.js')).cmdSetup(flags); },
-    usage: VERB_USAGE.setup,
-    flags: VERB_FLAGS.setup,
   },
   'daily-runner': {
     run: async () => { (await import('./cli/setup.js')).cmdDailyRunner(); },
-    usage: VERB_USAGE['daily-runner'],
-    flags: VERB_FLAGS['daily-runner'],
   },
   embed: {
     run: async ({ hippoRoot, flags }) => { await (await import('./cli/maintenance.js')).cmdEmbed(hippoRoot, flags); },
-    usage: VERB_USAGE.embed,
-    flags: VERB_FLAGS.embed,
   },
   watch: {
     run: async (c) => { await (await import('./cli/transfer.js')).handleWatch(c); },
-    usage: VERB_USAGE.watch,
-    flags: VERB_FLAGS.watch,
   },
   learn: {
     run: async ({ hippoRoot, flags }) => { (await import('./cli/transfer.js')).cmdLearn(hippoRoot, flags); },
     scoped: true,
-    usage: VERB_USAGE.learn,
-    flags: VERB_FLAGS.learn,
   },
   promote: {
     run: async (c) => { await (await import('./cli/transfer.js')).handlePromote(c); },
     scoped: true,
-    usage: VERB_USAGE.promote,
-    flags: VERB_FLAGS.promote,
   },
   sync: {
     run: async ({ hippoRoot, flags }) => { (await import('./cli/transfer.js')).cmdSync(hippoRoot, flags); },
-    usage: VERB_USAGE.sync,
-    flags: VERB_FLAGS.sync,
   },
   share: {
     run: async (c) => { await (await import('./cli/transfer.js')).handleShare(c); },
-    usage: VERB_USAGE.share,
-    flags: VERB_FLAGS.share,
   },
   peers: {
     run: async (c) => { await (await import('./cli/transfer.js')).handlePeers(c); },
-    usage: VERB_USAGE.peers,
-    flags: VERB_FLAGS.peers,
   },
   import: {
     run: async ({ hippoRoot, args, flags }) => { (await import('./cli/transfer.js')).cmdImport(hippoRoot, args, flags); },
-    usage: VERB_USAGE.import,
-    flags: VERB_FLAGS.import,
   },
   export: {
     run: async (c) => { await (await import('./cli/transfer.js')).handleExport(c); },
-    usage: VERB_USAGE.export,
-    flags: VERB_FLAGS.export,
   },
   capture: {
     run: async (c) => { await (await import('./cli/session-hooks.js')).handleCapture(c); },
-    usage: VERB_USAGE.capture,
-    flags: VERB_FLAGS.capture,
   },
   dashboard: {
     run: async (c) => { await (await import('./cli/serve.js')).handleDashboard(c); },
-    usage: VERB_USAGE.dashboard,
-    flags: VERB_FLAGS.dashboard,
   },
   wm: {
     run: async ({ hippoRoot, args, flags }) => { (await import('./cli/continuity.js')).cmdWm(hippoRoot, args, flags); },
-    usage: VERB_USAGE.wm,
-    flags: VERB_FLAGS.wm,
   },
   mcp: {
     run: async () => { await (await import('./cli/serve.js')).handleMcp(); },
-    usage: VERB_USAGE.mcp,
-    flags: VERB_FLAGS.mcp,
   },
   serve: {
     run: async (c) => { await (await import('./cli/serve.js')).handleServe(c); },
-    usage: VERB_USAGE.serve,
-    flags: VERB_FLAGS.serve,
   },
   invalidate: {
     run: async (c) => { await (await import('./cli/curate.js')).handleInvalidate(c); },
-    usage: VERB_USAGE.invalidate,
-    flags: VERB_FLAGS.invalidate,
   },
   decide: {
     run: async ({ hippoRoot, args, flags }) => { (await import('./cli/decisions.js')).cmdDecide(hippoRoot, args, flags); },
-    usage: VERB_USAGE.decide,
-    flags: VERB_FLAGS.decide,
   },
   incident: {
     run: async ({ hippoRoot, args, flags }) => { (await import('./cli/decisions.js')).cmdIncident(hippoRoot, args, flags); },
-    usage: VERB_USAGE.incident,
-    flags: VERB_FLAGS.incident,
   },
   process: {
     run: async ({ hippoRoot, args, flags }) => { (await import('./cli/playbooks.js')).cmdProcess(hippoRoot, args, flags); },
-    usage: VERB_USAGE.process,
-    flags: VERB_FLAGS.process,
   },
   policy: {
     run: async ({ hippoRoot, args, flags }) => { (await import('./cli/playbooks.js')).cmdPolicy(hippoRoot, args, flags); },
-    usage: VERB_USAGE.policy,
-    flags: VERB_FLAGS.policy,
   },
   skill: {
     run: async ({ hippoRoot, args, flags }) => { (await import('./cli/playbooks.js')).cmdSkill(hippoRoot, args, flags); },
-    usage: VERB_USAGE.skill,
-    flags: VERB_FLAGS.skill,
   },
   brief: {
     run: async ({ hippoRoot, args, flags }) => { (await import('./cli/briefs.js')).cmdProjectBrief(hippoRoot, args, flags); },
     aliases: ['project-brief'],
-    usage: VERB_USAGE.brief,
-    flags: VERB_FLAGS.brief,
   },
   note: {
     run: async ({ hippoRoot, args, flags }) => { (await import('./cli/briefs.js')).cmdCustomerNote(hippoRoot, args, flags); },
     aliases: ['customer-note'],
-    usage: VERB_USAGE.note,
-    flags: VERB_FLAGS.note,
   },
   graph: {
     run: async ({ hippoRoot, args, flags }) => { (await import('./cli/briefs.js')).cmdGraph(hippoRoot, args, flags); },
-    usage: VERB_USAGE.graph,
-    flags: VERB_FLAGS.graph,
   },
-} satisfies Record<string, CommandSpec>;
+} satisfies Record<VerbName, VerbHandler>;
+
+const USAGE_BLOCKS: Readonly<Record<string, readonly string[]>> = VERB_USAGE;
+const FLAGS_BY_VERB: Readonly<Record<string, VerbFlags>> = VERB_FLAGS;
+
+function buildCommands(): Readonly<Record<VerbName, CommandSpec>> {
+  const specs = Object.entries<VerbHandler>(VERB_HANDLERS).map(([verb, handler]) => {
+    const spec: CommandSpec = { ...handler, usage: USAGE_BLOCKS[verb] ?? [], flags: FLAGS_BY_VERB[verb] };
+    return [verb, spec] as const;
+  });
+  // SAFETY: VERB_HANDLERS is checked above to have exactly the VerbName keys, so every key is present.
+  return Object.fromEntries(specs) as Record<VerbName, CommandSpec>;
+}
+
+/** Every verb's handler, aliases, help blocks and flags, keyed by name. */
+export const COMMANDS = buildCommands();
 
 const COMMAND_INDEX: ReadonlyMap<string, CommandSpec> = new Map(
   Object.entries<CommandSpec>(COMMANDS).flatMap(([verb, spec]) =>

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Per-verb flag reads: for each row of COMMANDS in src/cli.ts, the flags its handler and every function it hands the flags object to read.
+// Per-verb flag reads: for each row of VERB_HANDLERS in src/cli.ts, the flags its handler and every function it hands the flags object to read.
 // It follows the object, so a flags object built elsewhere does not count toward a verb. Usage: cli-flag-reads.mjs [--json]
 
 import { createRequire } from 'node:module';
@@ -300,18 +300,18 @@ function analyze(env, fn, taint) {
   return scope;
 }
 
-/** The `run` handler of every row of COMMANDS, in table order. */
+/** The `run` handler of every row of VERB_HANDLERS, in table order. */
 function commandRows(env) {
   const { ts, program, repo } = env;
   const cliPath = path.resolve(repo, 'src', 'cli.ts');
   const cliFile = program.getSourceFiles().find((sf) => path.resolve(sf.fileName) === cliPath);
   let table = null;
   const find = (node) => {
-    if (ts.isVariableDeclaration(node) && node.name.getText() === 'COMMANDS' && node.initializer) table = strip(ts, node.initializer);
+    if (ts.isVariableDeclaration(node) && node.name.getText() === 'VERB_HANDLERS' && node.initializer) table = strip(ts, node.initializer);
     ts.forEachChild(node, find);
   };
   if (cliFile) find(cliFile);
-  if (!table || !ts.isObjectLiteralExpression(table)) throw new Error('COMMANDS not found in src/cli.ts');
+  if (!table || !ts.isObjectLiteralExpression(table)) throw new Error('VERB_HANDLERS not found in src/cli.ts');
   return table.properties.filter(ts.isPropertyAssignment).map((prop) => {
     const run = strip(ts, prop.initializer).properties.find((field) => ts.isPropertyAssignment(field) && field.name.getText() === 'run');
     return { verb: ts.isStringLiteral(prop.name) ? prop.name.text : prop.name.getText(), run: strip(ts, run.initializer) };
