@@ -14,7 +14,7 @@ import { readDormantSnapshot } from '../src/dormant.js';
 import { findRejectedValue, rejectionDigest } from '../src/rejection.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { Layer, type MemoryEntry } from '../src/memory.js';
-import { savePrediction } from '../src/predictions/store.js';
+import { savePrediction } from '../src/store/predictions.js';
 import { mergedText } from '../src/same-text.js';
 import { restoreDormant, type Context } from '../src/api.js';
 import { importForStore } from '../src/agent-memories/sync.js';

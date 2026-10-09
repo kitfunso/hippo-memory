@@ -31,7 +31,7 @@ import {
   loadPredictionsByClass,
   loadOpenPredictions,
   VALID_CLOSURE_STATES,
-} from '../src/predictions/store.js';
+} from '../src/store/predictions.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 function safeRmSync(p: string): void {

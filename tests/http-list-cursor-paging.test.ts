@@ -15,7 +15,7 @@ import { loadPolicies, savePolicy } from '../src/policies.js';
 import { loadSkills, saveSkill } from '../src/skills.js';
 import { loadProjectBriefs, saveProjectBrief } from '../src/project-briefs.js';
 import { loadCustomerNotes, saveCustomerNote } from '../src/customer-notes.js';
-import { loadAllPredictions, savePrediction } from '../src/predictions/store.js';
+import { loadAllPredictions, savePrediction } from '../src/store/predictions.js';
 import { isJsonObjectRecord } from '../src/http-util.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { type JsonValue, isJsonString } from '../src/json.js';

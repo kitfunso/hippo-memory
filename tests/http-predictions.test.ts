@@ -16,7 +16,7 @@ import { rmSync } from 'node:fs';
 import { serve, type ServerHandle } from '../src/server.js';
 import { createApiKey, type CreateApiKeyResult } from '../src/auth.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { closePrediction, savePrediction, type Prediction } from '../src/predictions/store.js';
+import { closePrediction, savePrediction, type Prediction } from '../src/store/predictions.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 /** Parse a fetch Response body against a caller-declared shape. */

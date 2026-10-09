@@ -4,7 +4,7 @@ import { MemoryEntry } from '../memory.js';
 import { writeEntry } from '../store/entry-writes.js';
 import { readEntry } from '../store/entry-reads.js';
 import { extractPathTags } from '../path-context.js';
-import * as predictionsModule from '../predictions/store.js';
+import * as predictionsModule from '../store/predictions.js';
 import * as decisionsModule from '../decisions.js';
 import * as incidentsModule from '../incidents.js';
 import { resolveTenantId } from '../tenant.js';

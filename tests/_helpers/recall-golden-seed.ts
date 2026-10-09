@@ -11,7 +11,7 @@ import { pushGoal } from '../../src/goals.js';
 import { openHippoDb, closeHippoDb } from '../../src/db.js';
 import { appendSessionEvent, saveActiveTaskSnapshot } from '../../src/store/sessions.js';
 import { saveSessionHandoff } from '../../src/store/handoffs.js';
-import { closePrediction, savePrediction } from '../../src/predictions/store.js';
+import { closePrediction, savePrediction } from '../../src/store/predictions.js';
 import type { RecallResult } from '../../src/api.js';
 
 export const FAKE_NOW = '2026-02-01T00:00:00.000Z';

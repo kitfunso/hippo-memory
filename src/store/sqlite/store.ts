@@ -6,7 +6,7 @@ import { withWriteScope } from '../../db.js';
 import { embeddingIndexStateAt, loadStoredVectors } from '../../embeddings.js';
 import { activeGoalsWithPolicies, localGoalRecallRows, writeGoalRecallLog } from '../../goals.js';
 import { loadPhysicsState } from '../../physics-state.js';
-import { planningFallacyEvidenceAt } from '../../predictions/planning-fallacy.js';
+import { planningFallacyEvidenceAt } from '../planning-fallacy-evidence.js';
 import { writeRecallTrace } from '../../recall-trace.js';
 import { recordTokenUse } from '../../token-ledger.js';
 import { loadAmbientCandidates, loadContextCandidates } from '../candidates.js';

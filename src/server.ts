@@ -79,8 +79,8 @@ export type { AppendAuditOpts, AuditEvent, ListAuditAfterOpts } from './audit.js
 export type { ContinuityBlock } from './api/recall-types.js';
 export type { ActiveGoals, GetActiveGoalsOpts, Goal, GoalRecallLogRow, RetrievalPolicy } from './goals.js';
 export type { MemoryEntry } from './memory.js';
-export type { ClassResolution, PlanningFallacyEvidence } from './predictions/planning-fallacy.js';
-export type { PredictionBaserate } from './predictions/store.js';
+export type { ClassResolution, PlanningFallacyEvidence } from './store/planning-fallacy-evidence.js';
+export type { PredictionBaserate } from './store/predictions.js';
 export type { RecallTraceInput } from './recall-trace.js';
 export type { StrengthenOptions } from './store/entry-writes.js';
 export type { OriginFilter, RecallScopeFilter, VectorCandidateSpec } from './store/search-rows.js';

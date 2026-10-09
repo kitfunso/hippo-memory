@@ -1,5 +1,5 @@
 {
-  "count": 182,
+  "count": 181,
   "exports": [
     "src/ablation.ts:_resetAblationCacheForTests",
     "src/agent-memories/claude-code.ts:claudeFolderName",
@@ -161,7 +161,6 @@
     "src/secret-detect.ts:redactSecrets",
     "src/server-detect.ts:removePidfile",
     "src/session-digest.ts:MAX_DIGEST_CHARS",
-    "src/session-digest.ts:SESSION_DIGEST_TAG",
     "src/session-digest.ts:__setDigestExistsProbe",
     "src/session-digest.ts:buildSessionDigest",
     "src/session-digest.ts:digestSentences",

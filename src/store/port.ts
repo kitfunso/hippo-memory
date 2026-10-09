@@ -10,7 +10,7 @@ import type { SessionHandoff } from '../handoff.js';
 import type { JsonValue } from '../json.js';
 import type { MemoryEntry } from '../memory.js';
 import type { PhysicsParticle } from '../physics.js';
-import type { PlanningFallacyEvidence } from '../predictions/planning-fallacy.js';
+import type { PlanningFallacyEvidence } from './planning-fallacy-evidence.js';
 import type { RecallTraceInput } from '../recall-trace.js';
 import type { AmbientLoadResult, AmbientRecallRequest, ContextCandidateFilter, RecentOrigins } from './candidates.js';
 import type { StrengthenOptions } from './entry-writes.js';

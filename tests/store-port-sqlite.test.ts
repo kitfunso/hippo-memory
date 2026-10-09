@@ -14,8 +14,8 @@ import { boostByGoals, getActiveGoalsWithDb, loadGoalPolicies, localGoalRecallRo
 import { __resetSessionRecallHistoryMcp } from '../src/mcp/server.js';
 import { lastRecalledIds } from '../src/mcp/session-state.js';
 import { loadPhysicsState, resetAllPhysicsState } from '../src/physics-state.js';
-import { resolveClassFromTokens } from '../src/predictions/planning-fallacy.js';
-import { computePredictionBaserate } from '../src/predictions/store.js';
+import { resolveClassFromTokens } from '../src/store/planning-fallacy-evidence.js';
+import { computePredictionBaserate } from '../src/store/predictions.js';
 import { writeRecallTraceAtRoot } from '../src/recall-trace.js';
 import {
   serve, sqliteStore, __resetSessionRecallHistoryHttp,

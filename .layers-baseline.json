@@ -1,17 +1,6 @@
 {
-  "runtime": 1,
-  "typeOnly": 1,
+  "runtime": 0,
+  "typeOnly": 0,
   "rootFiles": 136,
-  "edges": [
-    {
-      "from": "store/port.ts",
-      "to": "predictions/planning-fallacy.ts",
-      "kind": "typeOnly"
-    },
-    {
-      "from": "store/sqlite/store.ts",
-      "to": "predictions/planning-fallacy.ts",
-      "kind": "runtime"
-    }
-  ]
+  "edges": []
 }

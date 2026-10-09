@@ -27,7 +27,7 @@ import { savePolicy } from '../src/policies.js';
 import { saveSkill } from '../src/skills.js';
 import { saveProjectBrief } from '../src/project-briefs.js';
 import { saveCustomerNote } from '../src/customer-notes.js';
-import { savePrediction } from '../src/predictions/store.js';
+import { savePrediction } from '../src/store/predictions.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { consolidate } from '../src/consolidate/sleep.js';
 import { insertDormantRow } from '../src/dormant.js';

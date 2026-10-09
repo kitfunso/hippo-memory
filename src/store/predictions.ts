@@ -25,7 +25,7 @@
 
 import { BadRequestError, NotFoundError } from '../api-errors.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../db.js';
-import { writeEntry } from '../store/entry-writes.js';
+import { writeEntry } from './entry-writes.js';
 import { assertTenantId } from '../tenant.js';
 import { createMemory, Layer, type MemoryKind } from '../memory.js';
 import { appendAuditEvent } from '../audit.js';

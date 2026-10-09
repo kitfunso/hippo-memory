@@ -1,5 +1,5 @@
 // /v1/predictions routes.
-import { closePrediction, computePredictionBaserate, loadAllPredictions, loadOpenPredictions, loadPredictionById, loadPredictionsByClass, savePrediction, VALID_CLOSURE_STATES } from '../../predictions/store.js';
+import { closePrediction, computePredictionBaserate, loadAllPredictions, loadOpenPredictions, loadPredictionById, loadPredictionsByClass, savePrediction, VALID_CLOSURE_STATES } from '../../store/predictions.js';
 import { HttpError, MAX_ID_LEN, sendJson } from '../../http-util.js';
 import { buildContextWithAuth } from '../auth.js';
 import { byCreatedAt, pageOf, parseCursor } from '../cursor.js';

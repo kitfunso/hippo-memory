@@ -643,7 +643,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `computePlanningFallacyOutput`: Telemetry: forward-claim detected, ≥2 classes tied at best overlap. v1.13.4: now ALSO returns a watching variant so the caller surface can render a "watching but no baserate (tiebreak)" line. Audit emission unchanged (the audit channel is the telemetry-grade source of truth).
 - `computePlanningFallacyOutput`: Telemetry: forward-claim detected, no class scored ≥ 1. This is the channel that drives the embedding-fallback decision for J3.3 — high volume here = regex+token-overlap is missing legitimate forward-claims that have NO obvious class signal. v1.13.4: now ALSO returns a watching variant so the caller surface can render a "watching but no baserate (no class match)" line.
 
-### src/predictions/store.ts
+### src/store/predictions.ts
 - `module header`: E2 prediction first-class object (v0.31 / docs/plans/2026-05-26-e2-prediction-object.md).
 - `module header`: J3 (reference-class / planning-fallacy detector) reads from `loadPredictionsByClass` to compute per-class base rates from (estimate_value, actual_value) at query time. J3 is a follow-up episode; this module ships the data layer.
 - `savePrediction`: the predictions table is the canonical structured store used by J3.

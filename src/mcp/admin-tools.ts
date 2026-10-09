@@ -5,7 +5,7 @@ import { evalNow } from '../ablation.js';
 import { loadStrengthRows } from '../store/candidates.js';
 import { listMemoryConflicts, listTouchableConflicts, resolveConflict } from '../store/conflicts.js';
 import { shareMemory, listPeers } from '../shared.js';
-import { computePredictionBaserate } from '../predictions/store.js';
+import { computePredictionBaserate } from '../store/predictions.js';
 import { closeHippoDb, openHippoDb } from '../db.js';
 import { NotFoundError } from '../api-errors.js';
 import { classifyOriginProject } from '../project-identity.js';
