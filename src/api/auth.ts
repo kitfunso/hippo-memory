@@ -1,18 +1,17 @@
 // API key management: create, list, revoke, and grant or ungrant restricted scopes.
 
-import { openHippoDb, closeHippoDb } from '../db.js';
-import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../api-errors.js';
-import { appendAuditEvent, reportAuditWriteFailure } from '../audit.js';
+import { ForbiddenError, NotFoundError } from '../api-errors.js';
 import {
-  forgetVerifiedKey, insertApiKey, listApiKeyRows, mintApiKey, revokeApiKey, grantScope, ungrantScope,
+  forgetVerifiedKey, mintApiKey,
   type ApiKeyListItem, type ApiKeyListRow, type ApiKeyRecord, type ListApiKeysOpts, type NewApiKey,
 } from '../auth.js';
-import { DAY_MS } from '../dashboard-snapshot.js';
 import type { KeysetPosition } from '../keyset.js';
-import { isRestrictedScope } from '../recall-scope.js';
-import { requireGroup, type HippoStore, type KeyMint, type SelfKeyMint } from '../store-port.js';
-import { createAuditOf, createKeyAt, createSelfKeyAt } from '../store/key-writes.js';
-import { selectApiKeyOwner, type ApiKeyOwner } from '../store/tenant-lookup.js';
+import type { KeyMint, SelfKeyMint } from '../store-port.js';
+import { changeScopeGrant } from '../store/sqlite/local.js';
+import { sqliteSyncStore } from '../store/sqlite/store.js';
+import type { ApiKeyOwner } from '../store/tenant-lookup.js';
+import { DAY_MS } from '../util/time.js';
+import { andThen, notPorted, onStore, type Reply, type StorePort } from './on-store.js';
 import type { Actor, Context, StoreReply } from './types.js';
 
 const API_KEY_SUBJECT = 'api_key:';
@@ -57,10 +56,12 @@ export interface AuthCreateResult {
  * outranks its minter: a resolver admin is tenant-only, so it mints members.
  */
 export function authCreate<C extends Context>(ctx: C, opts: AuthCreateOpts): StoreReply<C, AuthCreateResult> {
-  // With a store, its keyWrites group stores the key and its auth_create row together, and hippo.db is never opened.
-  const reply = ctx.store ? createThroughStore(ctx, ctx.store, opts) : createOnHippoDb(ctx, opts);
-  // SAFETY: as in authRevoke, a C typed with a store gets the promise its path returns and a C that hides one gets the union.
-  return reply as StoreReply<C, AuthCreateResult>;
+  // The key and its auth_create row commit together on either store, so a failed audit write leaves no key.
+  return onStore(ctx, (port) => {
+    const keyWrites = port.keyWrites ?? notPorted(port, 'keyWrites');
+    const { plaintext, mint } = adminKeyMint(ctx, opts);
+    return andThen(keyWrites.createApiKey(mint), () => createResult(mint, plaintext));
+  });
 }
 
 /** What a mint stores, and the plaintext only its caller sees. */
@@ -100,35 +101,6 @@ function createResult({ key }: KeyMint, plaintext: string): AuthCreateResult {
   return { keyId: key.keyId, plaintext, tenantId: key.tenantId, role: key.role };
 }
 
-async function createThroughStore(ctx: Context, store: HippoStore, opts: AuthCreateOpts): Promise<AuthCreateResult> {
-  const keyWrites = requireGroup(store, 'keyWrites');
-  const { plaintext, mint } = adminKeyMint(ctx, opts);
-  await keyWrites.createApiKey(mint);
-  return createResult(mint, plaintext);
-}
-
-function createOnHippoDb(ctx: Context, opts: AuthCreateOpts): AuthCreateResult {
-  const { plaintext, mint } = adminKeyMint(ctx, opts);
-  const db = openHippoDb(ctx.hippoRoot);
-  try {
-    // A resolver admin's keys are found again only through their audit rows, so the key and its row commit together.
-    if (ctx.actor.viaAuthResolver) {
-      createKeyAt(db, mint);
-      return createResult(mint, plaintext);
-    }
-    insertApiKey(db, mint.key);
-    try {
-      appendAuditEvent(db, createAuditOf(mint));
-    } catch (error) {
-      // Audit must not crash a successful mint.
-      reportAuditWriteFailure('auth_create', String(error), mint.key.keyId);
-    }
-    return createResult(mint, plaintext);
-  } finally {
-    closeHippoDb(db);
-  }
-}
-
 const MAX_TTL_DAYS = 3650;
 
 export interface AuthCreateSelfOpts {
@@ -154,12 +126,17 @@ function assertSelfMintOpts({ ttlDays, perSubject }: AuthCreateSelfOpts): void {
   }
 }
 
-/** Mint a member key for the caller an auth resolver vouched for, whatever its role; the binary floor, the cap's revokes, the mint and its audit rows commit or fail together.
- *  With `ctx.store`, its keyWrites group runs that transaction; hippo.db is opened only when there is no store. */
+/** Mint a member key for the caller an auth resolver vouched for, whatever its role; the binary floor, the cap's revokes, the mint and its audit rows commit or fail together. */
 export function authCreateSelf<C extends Context>(ctx: C, opts: AuthCreateSelfOpts): StoreReply<C, AuthCreateSelfResult> {
-  const reply = ctx.store ? createSelfThroughStore(ctx, ctx.store, opts) : createSelfOnHippoDb(ctx, opts);
-  // SAFETY: as in authRevoke, a C typed with a store gets the promise its path returns and a C that hides one gets the union.
-  return reply as StoreReply<C, AuthCreateSelfResult>;
+  return onStore(ctx, (port) => {
+    const keyWrites = port.keyWrites ?? notPorted(port, 'keyWrites');
+    const { plaintext, mint } = selfKeyMint(ctx, opts);
+    return andThen(keyWrites.createSelfApiKey(mint), (replaced) => {
+      // A store revokes the replaced keys without this process's verified-key cache, so they leave it once the mint commits.
+      for (const keyId of replaced) forgetVerifiedKey(keyId);
+      return selfResult(mint, plaintext);
+    });
+  });
 }
 
 function selfKeyMint(ctx: Context, opts: AuthCreateSelfOpts): KeyMintPlan<SelfKeyMint> {
@@ -180,25 +157,6 @@ function selfResult({ key }: SelfKeyMint, plaintext: string): AuthCreateSelfResu
   return { keyId: key.keyId, plaintext, tenantId: key.tenantId, role: 'member', expiresAt: key.expiresAt };
 }
 
-/** The store revokes the replaced keys without this process's verified-key cache, so they leave it here once the mint commits. */
-async function createSelfThroughStore(ctx: Context, store: HippoStore, opts: AuthCreateSelfOpts): Promise<AuthCreateSelfResult> {
-  const keyWrites = requireGroup(store, 'keyWrites');
-  const { plaintext, mint } = selfKeyMint(ctx, opts);
-  for (const keyId of await keyWrites.createSelfApiKey(mint)) forgetVerifiedKey(keyId);
-  return selfResult(mint, plaintext);
-}
-
-function createSelfOnHippoDb(ctx: Context, opts: AuthCreateSelfOpts): AuthCreateSelfResult {
-  const { plaintext, mint } = selfKeyMint(ctx, opts);
-  const db = openHippoDb(ctx.hippoRoot);
-  try {
-    createSelfKeyAt(db, mint);
-    return selfResult(mint, plaintext);
-  } finally {
-    closeHippoDb(db);
-  }
-}
-
 /**
  * List API keys visible to the calling tenant.
  *
@@ -211,41 +169,23 @@ export function authList<C extends Context>(
   ctx: C,
   opts: { active: boolean },
 ): StoreReply<C, ApiKeyListItem[]> {
-  const keysOf = (rows: ApiKeyListRow[]): ApiKeyListItem[] => rows.map((r) => r.key);
-  const rows = listRows(ctx, opts);
-  // SAFETY: the promise comes back exactly when ctx has a store, as StoreReply says.
-  return (rows instanceof Promise ? rows.then(keysOf) : keysOf(rows)) as StoreReply<C, ApiKeyListItem[]>;
+  return onStore(ctx, (port) => andThen(listRows(ctx, port, opts), (rows) => rows.map((r) => r.key)));
 }
 
 type KeyListOpts = { active: boolean; limit?: number; after?: KeysetPosition };
 
-/** One page of the caller's tenant's keys, newest first, with the row ids a next-page cursor is built from.
- *  With `ctx.store`, its keyWrites group reads them; hippo.db is opened only when there is no store. */
+/** One page of the caller's tenant's keys, newest first, with the row ids a next-page cursor is built from. */
 export function authListRows<C extends Context>(ctx: C, opts: KeyListOpts): StoreReply<C, ApiKeyListRow[]> {
-  // SAFETY: the promise comes back exactly when ctx has a store, as StoreReply says.
-  return listRows(ctx, opts) as StoreReply<C, ApiKeyListRow[]>;
+  return onStore(ctx, (port) => listRows(ctx, port, opts));
 }
 
-function listRows(ctx: Context, opts: KeyListOpts): ApiKeyListRow[] | Promise<ApiKeyListRow[]> {
-  return ctx.store ? listThroughStore(ctx, ctx.store, opts) : listOnHippoDb(ctx, opts);
-}
-
-async function listThroughStore(ctx: Context, store: HippoStore, opts: KeyListOpts): Promise<ApiKeyListRow[]> {
-  const keyWrites = requireGroup(store, 'keyWrites');
+function listRows(ctx: Context, port: StorePort, opts: KeyListOpts): Reply<ApiKeyListRow[]> {
+  const keyWrites = port.keyWrites ?? notPorted(port, 'keyWrites');
   const keyId = memberKeyIdOf(ctx.actor);
-  const filter = memberListFilter(ctx.actor, keyId === null ? undefined : (await store.findApiKey(keyId))?.ownerSubject);
-  return filter === null ? [] : keyWrites.listApiKeys({ ...opts, tenantId: ctx.tenantId, ...filter });
-}
-
-function listOnHippoDb(ctx: Context, opts: KeyListOpts): ApiKeyListRow[] {
-  const db = openHippoDb(ctx.hippoRoot);
-  try {
-    const keyId = memberKeyIdOf(ctx.actor);
-    const filter = memberListFilter(ctx.actor, keyId === null ? undefined : selectApiKeyOwner(db, keyId)?.ownerSubject);
-    return filter === null ? [] : listApiKeyRows(db, { ...opts, tenantId: ctx.tenantId, ...filter });
-  } finally {
-    closeHippoDb(db);
-  }
+  return andThen(keyId === null ? undefined : port.findApiKey(keyId), (record) => {
+    const filter = memberListFilter(ctx.actor, record?.ownerSubject);
+    return filter === null ? [] : keyWrites.listApiKeys({ ...opts, tenantId: ctx.tenantId, ...filter });
+  });
 }
 
 /** The key id of a member API key caller, whose owner decides what it lists; null for any other caller. */
@@ -285,12 +225,21 @@ export interface AuthRevokeResult {
 export type AuthRevokeReply<C extends Context> = StoreReply<C, AuthRevokeResult>;
 
 /** Revoke a key in the caller's tenant: a member API key may revoke only itself, a resolver member only the keys it minted.
- *  With `ctx.store`, its keyAudit group revokes and writes the auth_revoke row; hippo.db is opened only when there is no store. */
+ *  The revoke and its auth_revoke row commit together on either store, so a failed audit write leaves the key live. */
 export function authRevoke<C extends Context>(ctx: C, keyId: string): AuthRevokeReply<C> {
-  const reply = ctx.store ? revokeThroughStore(ctx, ctx.store, keyId) : revokeOnHippoDb(ctx, keyId);
-  // SAFETY: a C typed with a store gets the promise its path returns; a C whose type hides a runtime store (a Pick of
-  // Context) is typed as the union, which a caller has to await anyway.
-  return reply as AuthRevokeReply<C>;
+  return onStore(ctx, (port) => {
+    const keyAudit = port.keyAudit ?? notPorted(port, 'keyAudit');
+    assertMemberKeyRevokesSelf(ctx, keyId);
+    return andThen(port.findApiKey(keyId), (record) => {
+      assertMayRevoke(ctx, keyId, keyOwnerOf(record));
+      const revoke = { tenantId: ctx.tenantId, keyId, actor: ctx.actor.subject, at: new Date().toISOString() };
+      return andThen(keyAudit.revokeApiKey(revoke), (revokedAt): AuthRevokeResult => {
+        // A store keeps no handle on this process's verified-key cache, so the key leaves it once the revoke commits.
+        forgetVerifiedKey(keyId);
+        return { ok: true, revokedAt };
+      });
+    });
+  });
 }
 
 function assertMemberKeyRevokesSelf(ctx: Context, keyId: string): void {
@@ -303,54 +252,6 @@ function keyOwnerOf(record: ApiKeyRecord | null): ApiKeyOwner | undefined {
   return record ? { tenantId: record.tenantId, revokedAt: record.revokedAt, role: record.role, ownerSubject: record.ownerSubject ?? null } : undefined;
 }
 
-/** The store keeps no handle on this process's verified-key cache, so the key leaves it here once the revoke commits. */
-async function revokeThroughStore(ctx: Context, store: HippoStore, keyId: string): Promise<AuthRevokeResult> {
-  const keyAudit = requireGroup(store, 'keyAudit');
-  assertMemberKeyRevokesSelf(ctx, keyId);
-  assertMayRevoke(ctx, keyId, keyOwnerOf(await store.findApiKey(keyId)));
-  const revokedAt = await keyAudit.revokeApiKey({ tenantId: ctx.tenantId, keyId, actor: ctx.actor.subject, at: new Date().toISOString() });
-  forgetVerifiedKey(keyId);
-  return { ok: true, revokedAt };
-}
-
-/** The auth_revoke row carries the KEY ROW's tenant, as cmdAuthRevoke does, and is skipped for an already-revoked key. */
-function revokeOnHippoDb(ctx: Context, keyId: string): AuthRevokeResult {
-  assertMemberKeyRevokesSelf(ctx, keyId);
-  const db = openHippoDb(ctx.hippoRoot);
-  try {
-    const row = selectApiKeyOwner(db, keyId);
-    assertMayRevoke(ctx, keyId, row);
-
-    let revokedAt: string;
-    let alreadyRevoked = false;
-    if (row.revokedAt) {
-      alreadyRevoked = true;
-      revokedAt = row.revokedAt;
-    } else {
-      revokeApiKey(db, keyId);
-      revokedAt = selectApiKeyOwner(db, keyId)?.revokedAt ?? new Date().toISOString();
-    }
-
-    if (!alreadyRevoked) {
-      try {
-        appendAuditEvent(db, {
-          tenantId: row.tenantId, // KEY's tenant, not ctx.tenantId.
-          actor: ctx.actor.subject,
-          op: 'auth_revoke',
-          targetId: keyId,
-        });
-      } catch (error) {
-        // Audit must not crash a successful revoke.
-        reportAuditWriteFailure('auth_revoke', String(error), keyId);
-      }
-    }
-
-    return { ok: true, revokedAt };
-  } finally {
-    closeHippoDb(db);
-  }
-}
-
 /**
  * The tenant that owns `keyId`, or undefined for an unknown key. Host admin only: it reads across tenants,
  * so the local CLI can run revoke and grant in the key's own tenant.
@@ -359,12 +260,8 @@ export function authKeyTenant(ctx: Context, keyId: string): string | undefined {
   if (!ctx.actor.hostAdmin) {
     throw new ForbiddenError('Only the host admin can look up a key across tenants');
   }
-  const db = openHippoDb(ctx.hippoRoot);
-  try {
-    return selectApiKeyOwner(db, keyId)?.tenantId;
-  } finally {
-    closeHippoDb(db);
-  }
+  // Synchronous for the CLI, so it reads hippo.db whatever store ctx names.
+  return sqliteSyncStore(ctx.hippoRoot).findApiKey(keyId)?.tenantId;
 }
 
 /** Shared result shape for authGrant/authUngrant, named per the file's oxlint anti-slop rule. */
@@ -374,43 +271,19 @@ export interface AuthGrantResult {
 
 /** Grant `keyId` read access to one restricted `scope`. Admin only. */
 export function authGrant(ctx: Context, keyId: string, scope: string): AuthGrantResult {
-  return changeScopeGrant(ctx, keyId, scope, 'auth_grant');
+  return changeGrant(ctx, keyId, scope, 'auth_grant');
 }
 
 /** Revoke `keyId`'s grant on `scope`. Same authorization and lookup rules as authGrant. */
 export function authUngrant(ctx: Context, keyId: string, scope: string): AuthGrantResult {
-  return changeScopeGrant(ctx, keyId, scope, 'auth_ungrant');
+  return changeGrant(ctx, keyId, scope, 'auth_ungrant');
 }
 
-function changeScopeGrant(ctx: Context, keyId: string, scope: string, op: 'auth_grant' | 'auth_ungrant'): AuthGrantResult {
+/** hippo.db only: both callers are synchronous published functions, so no store's Promise can answer them. */
+function changeGrant(ctx: Context, keyId: string, scope: string, op: 'auth_grant' | 'auth_ungrant'): AuthGrantResult {
   if (ctx.actor.role !== 'admin') {
     throw new ForbiddenError('Only an admin key can change scope grants');
   }
-  const db = openHippoDb(ctx.hippoRoot);
-  try {
-    const row = selectApiKeyOwner(db, keyId);
-    if (!row || row.tenantId !== ctx.tenantId) {
-      throw new NotFoundError(`Unknown key_id: ${keyId}`);
-    }
-    if (op === 'auth_grant' && row.revokedAt) {
-      throw new ConflictError(`${keyId} is revoked; a grant on it would never apply`);
-    }
-    if (op === 'auth_grant' && /^personal:/i.test(scope)) {
-      throw new BadRequestError(`${scope} is a personal scope: only its owner reads it, and no grant can change that`);
-    }
-    if (!isRestrictedScope(scope)) {
-      throw new BadRequestError(`${scope} is not a restricted scope; it is already readable by default`);
-    }
-    if (op === 'auth_grant') grantScope(db, keyId, scope);
-    else ungrantScope(db, keyId, scope);
-    try {
-      appendAuditEvent(db, { tenantId: ctx.tenantId, actor: ctx.actor.subject, op, targetId: keyId, metadata: { scope } });
-    } catch (err) {
-      // Audit must not undo a grant change that already committed; surface it instead.
-      reportAuditWriteFailure(op, String(err), keyId);
-    }
-    return { ok: true };
-  } finally {
-    closeHippoDb(db);
-  }
+  changeScopeGrant(ctx.hippoRoot, { tenantId: ctx.tenantId, keyId, scope, op, actor: ctx.actor.subject });
+  return { ok: true };
 }

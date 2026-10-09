@@ -10,7 +10,6 @@ import {
   archiveRaw, authCreate, authCreateSelf, authGrant, authList, authListRows, authRevoke, authUngrant, forget, outcome, outcomeForLastRecall, reject,
   remember, supersede, type Actor, type Context,
 } from '../src/api.js';
-import { auditWriteFailureCount } from '../src/audit.js';
 import { grantScope, insertApiKey, revokeApiKey } from '../src/auth.js';
 import { closeHippoDb, openHippoDb } from '../src/db.js';
 import type { ImportResult } from '../src/importers/core.js';
@@ -37,22 +36,6 @@ interface Difference {
 }
 
 const KNOWN_DIFFERENCES = {
-  mintAudit: {
-    fn: 'authCreate',
-    differs: 'an API-key admin mint whose audit row fails keeps the key on hippo.db and leaves no key through the store',
-    onHippoDb: 'src/api/auth.ts:119-125',
-    throughStore: 'src/store/key-writes.ts:12-17',
-    winner: 'store: the key and its audit row commit together',
-    pinnedBy: 'tests/auth-key-writes-store.test.ts "an API-key admin\'s mint leaves no key when its audit row fails; with no store it keeps the key"',
-  },
-  revokeAudit: {
-    fn: 'authRevoke',
-    differs: 'a revoke whose audit row fails stays revoked on hippo.db; through the store it rejects and the key stays live',
-    onHippoDb: 'src/api/auth.ts:334-345',
-    throughStore: 'src/store/key-audit.ts:10-19',
-    winner: 'store: the revoke and its audit row commit together',
-    pinnedBy: 'here for hippo.db; tests/self-service-keys.test.ts "answers 500 and leaves the key live when the audit write fails" for the store',
-  },
   forgetLock: {
     fn: 'forget',
     differs: 'hippo.db checks reach on one handle and deletes on a second; the store checks inside the delete\'s write lock',
@@ -103,10 +86,10 @@ const KNOWN_DIFFERENCES = {
   },
   grants: {
     fn: 'authGrant, authUngrant',
-    differs: 'no store path: with ctx.store set they still write hippo.db at ctx.hippoRoot, synchronously, and keep the change when its audit row fails',
-    onHippoDb: 'src/api/auth.ts:385-416',
+    differs: 'no store path: with ctx.store set they still write hippo.db at ctx.hippoRoot, synchronously, and undo the change when its audit row fails',
+    onHippoDb: 'src/store/key-writes.ts:48-67',
     throughStore: 'none',
-    winner: 'open: a store path needs a new port method on the frozen surface; none leaves grants unusable under another store',
+    winner: 'hippo.db: their published replies are synchronous and only the local CLI calls them, so they stay off the port; the change and its audit row commit together',
     pinnedBy: 'here',
   },
   hippoDbOnlyOptions: {
@@ -347,11 +330,14 @@ interface Case {
   readonly call: Call;
   /** The error class both paths answer with; without it both return. */
   readonly refused?: string;
+  /** Run with an audit log that refuses every insert. */
+  readonly auditBroken?: true;
 }
 
 async function bothPaths(c: Case): Promise<{ onHippoDb: Side; throughStore: Side }> {
   const dbRoot = copyOfTemplate('db');
   const storeRoot = copyOfTemplate('store');
+  if (c.auditBroken) for (const root of [dbRoot, storeRoot]) breakAuditLog(root);
   const base = { tenantId: c.tenantId ?? ACME, actor: c.actor ?? HOST };
   const onHippoDb = await sideOf(dbRoot, () => c.call({ ...base, hippoRoot: dbRoot }));
   const throughStore = await sideOf(storeRoot, () => c.call({ ...base, hippoRoot: storeRoot, store: storeAt(storeRoot) }));
@@ -364,6 +350,7 @@ const PARITY = {
   'authCreate: resolver admin mints a member key': { actor: RESOLVER_ADMIN, call: (ctx) => authCreate(ctx, { label: 'dana' }) },
   'authCreate: member is refused': { actor: MEMBER_KEY, call: (ctx) => authCreate(ctx, {}), refused: 'ForbiddenError' },
   'authCreate: resolver admin asking for admin is refused': { actor: RESOLVER_ADMIN, call: (ctx) => authCreate(ctx, { role: 'admin' }), refused: 'ForbiddenError' },
+  'authCreate: an unwritable audit log refuses the mint and leaves no key': { auditBroken: true, call: (ctx) => authCreate(ctx, {}), refused: 'Error' },
   'authCreateSelf: resolver member mints under the cap': { actor: CAROL, call: (ctx) => authCreateSelf(ctx, { ttlDays: 1, perSubject: 5, label: 'laptop' }) },
   'authCreateSelf: minting at the cap revokes the oldest': { actor: CAROL, call: (ctx) => authCreateSelf(ctx, { ttlDays: 7, perSubject: 2 }) },
   'authCreateSelf: a caller without a resolver is refused': { actor: MEMBER_KEY, call: (ctx) => authCreateSelf(ctx, { ttlDays: 1, perSubject: 5 }), refused: 'ForbiddenError' },
@@ -385,6 +372,7 @@ const PARITY = {
   'authRevoke: resolver member revokes a key it minted': { actor: CAROL, call: (ctx) => authRevoke(ctx, 'hk_seedcarol1') },
   'authRevoke: resolver member revoking a key it did not mint is refused': { actor: CAROL, call: (ctx) => authRevoke(ctx, 'hk_seedmember'), refused: 'ForbiddenError' },
   'authRevoke: resolver admin revoking an admin key is refused': { actor: RESOLVER_ADMIN, call: (ctx) => authRevoke(ctx, 'hk_seedadmin'), refused: 'ForbiddenError' },
+  'authRevoke: an unwritable audit log refuses the revoke and leaves the key live': { auditBroken: true, call: (ctx) => authRevoke(ctx, 'hk_seedmember'), refused: 'Error' },
   'forget: a row of the tenant': { call: (ctx) => forget(ctx, 'mem_seed_plain') },
   'forget: unknown id': { call: (ctx) => forget(ctx, 'mem_missing'), refused: 'NotFoundError' },
   'forget: another tenant\'s row': { call: (ctx) => forget(ctx, 'mem_seed_globex'), refused: 'NotFoundError' },
@@ -597,16 +585,6 @@ describe('the store path and the hippo.db path agree', () => {
 });
 
 describe('where the two paths differ today', () => {
-  it(named('revokeAudit'), () => {
-    vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    const root = copyOfTemplate('db');
-    breakAuditLog(root);
-    const failures = auditWriteFailureCount();
-    expect(authRevoke({ hippoRoot: root, tenantId: ACME, actor: HOST }, 'hk_seedmember')).toEqual({ ok: true, revokedAt: NOW });
-    expect(rowsOf(root, `SELECT revoked_at FROM api_keys WHERE key_id = 'hk_seedmember'`)).toEqual([{ revoked_at: NOW }]);
-    expect(auditWriteFailureCount()).toBe(failures + 1);
-  });
-
   it.each([
     [named('forgetLock'), (ctx: Context) => forget(ctx, 'mem_seed_plain'), 'reach check, then write lock on a second handle'],
     [named('archiveLock'), (ctx: Context) => archiveRaw(ctx, 'mem_seed_raw', 'user asked'), 'reach check, then write lock'],
@@ -649,17 +627,18 @@ describe('where the two paths differ today', () => {
   });
 
   it(named('grants'), () => {
-    vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const root = copyOfTemplate('store');
-    breakAuditLog(root);
     const { store, calls } = watched(sqliteStore(root));
     const ctx = { hippoRoot: root, tenantId: ACME, actor: HOST, store };
-    const failures = auditWriteFailureCount();
+    const grants = (): Row[] => rowsOf(root, `SELECT key_id, scope FROM api_key_scope_grants ORDER BY key_id, scope`);
+    const seededGrant = { key_id: 'hk_seedmember', scope: 'slack:private:C1' };
     expect(authGrant(ctx, 'hk_seedalice', 'slack:private:C2')).toEqual({ ok: true });
-    expect(rowsOf(root, `SELECT scope FROM api_key_scope_grants WHERE key_id = 'hk_seedalice'`)).toEqual([{ scope: 'slack:private:C2' }]);
+    expect(grants()).toEqual([{ key_id: 'hk_seedalice', scope: 'slack:private:C2' }, seededGrant]);
     expect(authUngrant(ctx, 'hk_seedalice', 'slack:private:C2')).toEqual({ ok: true });
-    expect(rowsOf(root, `SELECT scope FROM api_key_scope_grants WHERE key_id = 'hk_seedalice'`)).toEqual([]);
-    expect(auditWriteFailureCount()).toBe(failures + 2);
+    breakAuditLog(root);
+    expect(() => authGrant(ctx, 'hk_seedalice', 'slack:private:C2')).toThrow(/audit table unwritable/);
+    expect(() => authUngrant(ctx, 'hk_seedmember', 'slack:private:C1')).toThrow(/audit table unwritable/);
+    expect(grants()).toEqual([seededGrant]);
     expect(calls).toEqual([]);
   });
 

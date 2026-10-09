@@ -8,7 +8,6 @@ import {
   authCreate, authCreateSelf, authList, authListRows,
   type AuthCreateResult, type AuthCreateSelfResult,
 } from '../src/api.js';
-import { auditWriteFailureCount } from '../src/audit.js';
 import { verifyApiKeyCached, type ApiKeyListItem, type ApiKeyListRow } from '../src/auth.js';
 import { closeHippoDb, openHippoDb } from '../src/db.js';
 import { StoreNotPortedError } from '../src/db/sqlite-blocked.js';
@@ -131,18 +130,14 @@ describe('authCreate and authCreateSelf with ctx.store', () => {
     expect(hippoDbState(storeRoot)).toEqual(before);
   });
 
-  it("on hippo.db's own store, an API-key admin's mint leaves no key when its audit row fails; with no store it keeps the key", async () => {
-    vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+  it("an API-key admin's mint leaves no key when its audit row fails, on hippo.db's own store and with no store", async () => {
     const root = copyOf();
     breakAuditLog(root);
     const before = hippoDbState(root);
     const actor: Actor = { subject: `api_key:${fixture.keys.adminA}`, role: 'admin' };
     await expect(authCreate({ hippoRoot: root, tenantId: TENANT_A, actor, store: sqliteStore(root) }, { label: 'x' })).rejects.toThrow(/audit table unwritable/);
+    expect(() => authCreate({ hippoRoot: root, tenantId: TENANT_A, actor }, { label: 'y' })).toThrow(/audit table unwritable/);
     expect(hippoDbState(root)).toEqual(before);
-    const failures = auditWriteFailureCount();
-    const kept = authCreate({ hippoRoot: root, tenantId: TENANT_A, actor }, { label: 'y' });
-    expect(hippoDbState(root).keyIds).toEqual([...before.keyIds, kept.keyId]);
-    expect(auditWriteFailureCount()).toBe(failures + 1);
   });
 
   it('keeps the plain result for a ctx with no store, and the promise for one with a store', () => {

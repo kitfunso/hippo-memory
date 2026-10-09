@@ -223,17 +223,13 @@ describe('authCreateSelf', () => {
 });
 
 describe('authCreate audit rows', () => {
-  it('leaves no key behind when a resolver admin mint cannot write its audit row', () => {
+  it.each([
+    ['a resolver admin', actorOf('tok.boss')],
+    ['the local admin', adminActor('cli')],
+  ])('leaves no key behind when a mint by %s cannot write its audit row', (_name, actor) => {
     breakAuditLog();
-    expect(() => authCreate({ hippoRoot: home, tenantId: TENANT, actor: actorOf('tok.boss') }, { label: 'x' })).toThrow(/audit table unwritable/);
+    expect(() => authCreate({ hippoRoot: home, tenantId: TENANT, actor }, { label: 'x' })).toThrow(/audit table unwritable/);
     expect(keyRows()).toEqual([]);
-  });
-
-  it('still returns the key to the local admin when the audit write fails', () => {
-    breakAuditLog();
-    vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    const minted = authCreate({ hippoRoot: home, tenantId: TENANT, actor: adminActor('cli') }, { label: 'x' });
-    expect(keyRows()).toEqual([expect.objectContaining({ key_id: minted.keyId, revoked_at: null })]);
   });
 });
 

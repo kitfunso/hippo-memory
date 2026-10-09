@@ -1,13 +1,8 @@
 {
-  "runtime": 7,
+  "runtime": 6,
   "typeOnly": 4,
   "rootFiles": 136,
   "edges": [
-    {
-      "from": "api/auth.ts",
-      "to": "dashboard-snapshot.ts",
-      "kind": "runtime"
-    },
     {
       "from": "api/context.ts",
       "to": "session-digest.ts",

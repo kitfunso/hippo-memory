@@ -7,7 +7,7 @@ import { entryAfterOutcome, type MemoryEntry } from '../memory.js';
 import { archiveRawMemory } from '../raw-archive.js';
 import { ownScopeTouches } from '../recall-scope.js';
 import { RejectedValueError } from '../rejection.js';
-import type { EntryTarget, EntryWrites, OutcomeWrite, SupersedeWrite } from './port.js';
+import type { EntryTarget, EntryWrites, OutcomeWrite, SupersedeWrite, Sync } from './port.js';
 import { markSummaryDirtyInTx } from '../summary-dirty.js';
 import { auditRejectionRefusal } from './audit-event.js';
 import { deleteEntryCore } from './delete-and-batch.js';
@@ -20,24 +20,24 @@ import { onHandle, openStore } from './open.js';
 import { selectMemoryReach } from './tenant-lookup.js';
 
 /** Each call on its own handle; mirrors and the forgotten counter follow the commit, so a rolled-back write leaves neither. */
-export function sqliteEntryWrites(hippoRoot: string): EntryWrites {
+export function sqliteEntryWrites(hippoRoot: string): Sync<EntryWrites> {
   return {
-    async writeEntry({ entry, actor }) {
+    writeEntry({ entry, actor }) {
       const stamped = stampOriginProject(hippoRoot, entry);
       onHandle(hippoRoot, (db) => writeInOwnTenant(db, stamped, actor), openStore);
       writeEntryMirrors(hippoRoot, stamped);
     },
-    async applyOutcome(outcome) {
+    applyOutcome(outcome) {
       const applied = onHandle(hippoRoot, (db) => applyOutcomeOn(db, outcome), openStore);
       for (const entry of applied) writeEntryMirrors(hippoRoot, entry);
       return applied.map((entry) => entry.id);
     },
-    async supersede(write) {
+    supersede(write) {
       const successor = stampOriginProject(hippoRoot, write.successor);
       onHandle(hippoRoot, (db) => commitSupersede(db, { ...write, successor }));
       writeEntryMirrors(hippoRoot, successor);
     },
-    async archiveRaw(archive) {
+    archiveRaw(archive) {
       const archivedAt = onHandle(hippoRoot, (db) => {
         const at = withWriteScope(db, 'archive_raw_in_reach', () => {
           assertInReach(db, archive, archive.id);
@@ -49,7 +49,7 @@ export function sqliteEntryWrites(hippoRoot: string): EntryWrites {
       updateStatsUnlessBusy(hippoRoot, { forgotten: 1 }, `removed ${archive.id}`);
       return archivedAt;
     },
-    async forget(removal) {
+    forget(removal) {
       onHandle(hippoRoot, (db) => withWriteScope(db, 'forget_in_reach', () => {
         assertInReach(db, removal, removal.id);
         if (!deleteEntryCore(db, removal.id, { actor: removal.actor })) throw notFound(removal.id);
