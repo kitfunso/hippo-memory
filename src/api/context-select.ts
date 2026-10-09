@@ -153,9 +153,9 @@ export function selectPinned(
   // Prompt recall gates the backfill on the prompt instead of recency.
   if (plan.promptRecallPending) {
     const candidates = (): PromptCandidate[] => promptRecallCandidates(plan, pools, admission.admit, rankedPinned, nowP);
-    backfillFromPrompt(opts, plan, pinnedCfg, candidates, picked, recentBudget);
+    backfillFromPrompt(opts, plan, { pinnedCfg, candidates, picked, recentBudget });
   } else if (plan.includeRecent > 0) {
-    backfillRecent(plan, localPool, globalPool, picked, recentBudget, nowP);
+    backfillRecent(plan, { localPool, globalPool, picked, recentBudget, nowP });
   }
 
   admitWithinBudget(rankedPinned, picked, effBudget, obs);
@@ -219,14 +219,15 @@ function admitWithinBudget(
   }
 }
 
-function backfillFromPrompt(
-  opts: ContextOpts,
-  plan: ContextPlan,
-  pinnedCfg: HippoConfig,
-  candidates: () => PromptCandidate[],
-  picked: Picked,
-  recentBudget: number,
-): void {
+interface BackfillFromPromptOptions {
+  readonly pinnedCfg: HippoConfig;
+  readonly candidates: () => PromptCandidate[];
+  readonly picked: Picked;
+  readonly recentBudget: number;
+}
+
+function backfillFromPrompt(opts: ContextOpts, plan: ContextPlan, options: BackfillFromPromptOptions): void {
+  const { pinnedCfg, candidates, picked, recentBudget } = options;
   const rawMetric = pinnedCfg.pinnedInject.promptRecallMetric;
   const metric: PromptRecallMetric = rawMetric === 'cosine' ? 'cosine' : 'jaccard';
   const gate: PromptRecallGate = {
@@ -297,14 +298,16 @@ function promptRecallCandidates(
   return candidateItems;
 }
 
-function backfillRecent(
-  plan: ContextPlan,
-  localPool: MemoryEntry[],
-  globalPool: MemoryEntry[],
-  picked: Picked,
-  recentBudget: number,
-  nowP: Date,
-): void {
+interface BackfillRecentOptions {
+  readonly localPool: MemoryEntry[];
+  readonly globalPool: MemoryEntry[];
+  readonly picked: Picked;
+  readonly recentBudget: number;
+  readonly nowP: Date;
+}
+
+function backfillRecent(plan: ContextPlan, options: BackfillRecentOptions): void {
+  const { localPool, globalPool, picked, recentBudget, nowP } = options;
   const recent = [
     ...localPool.map((entry) => ({ entry, isGlobal: plan.primaryIsGlobal })),
     ...globalPool.map((entry) => ({ entry, isGlobal: true })),
@@ -371,22 +374,23 @@ export async function selectBySearch(
 ): Promise<ContextResultEntry[]> {
   const minResults = plan.cost ? 0 : undefined; // a priced block skips an oversize top hit too, so the budget bounds it
   const results = plan.hasGlobal && !plan.primaryIsGlobal
-    ? await searchBothStores(ctx, plan, left, minResults, pools, admission.bothStoresAdmit)
-    : await searchLocalRows(ctx, plan, left, minResults, pools.local.entries, admission.admit);
+    ? await searchBothStores(ctx, plan, { left, minResults, pools, admit: admission.bothStoresAdmit })
+    : await searchLocalRows(ctx, plan, { left, minResults, localEntries: pools.local.entries, admit: admission.admit });
   await auditContextRecall(ctx, plan, results.length);
   return results;
 }
 
 // The pools were admitted at load, before ranking, dedupe and budget: a post-filter would let an excluded row fill the
 // budget or shadow its admitted duplicate.
-async function searchBothStores(
-  ctx: Context,
-  plan: ContextPlan,
-  left: number,
-  minResults: number | undefined,
-  pools: ContextPools,
-  admit: (e: MemoryEntry) => boolean,
-): Promise<ContextResultEntry[]> {
+interface SearchBothStoresOptions {
+  readonly left: number;
+  readonly minResults: number | undefined;
+  readonly pools: ContextPools;
+  readonly admit: (e: MemoryEntry) => boolean;
+}
+
+async function searchBothStores(ctx: Context, plan: ContextPlan, options: SearchBothStoresOptions): Promise<ContextResultEntry[]> {
+  const { left, minResults, pools, admit } = options;
   const { cost, price } = plan;
   const localIndex = loadIndex(ctx.hippoRoot);
   const isGlobalHit = (e: MemoryEntry): boolean => !localIndex.entries[e.id];
@@ -410,14 +414,15 @@ function contextVectorSpec(ctx: Context, plan: ContextPlan, admit: (e: MemoryEnt
   return { tenantId: ctx.tenantId, scope: recallScopeFilter(plan.exactScope, 'exact', plan.ownScope), includeSuperseded: false, admit };
 }
 
-async function searchLocalRows(
-  ctx: Context,
-  plan: ContextPlan,
-  left: number,
-  minResults: number | undefined,
-  localEntries: MemoryEntry[],
-  admit: (e: MemoryEntry) => boolean,
-): Promise<ContextResultEntry[]> {
+interface SearchLocalRowsOptions {
+  readonly left: number;
+  readonly minResults: number | undefined;
+  readonly localEntries: MemoryEntry[];
+  readonly admit: (e: MemoryEntry) => boolean;
+}
+
+async function searchLocalRows(ctx: Context, plan: ContextPlan, options: SearchLocalRowsOptions): Promise<ContextResultEntry[]> {
+  const { left, minResults, localEntries, admit } = options;
   const { cost, price, primaryIsGlobal, query, config: ctxConfig } = plan;
   const usePhysicsCtx = ctxConfig.physics?.enabled !== false;
   const localCost = cost && ((r: SearchResult) => price(r.entry, primaryIsGlobal));

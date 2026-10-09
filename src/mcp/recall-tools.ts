@@ -51,14 +51,16 @@ interface DrillDownExtraOpts {
 }
 
 /** Builds the showRanked callback that renders the list MCP shows, parks the render in `out` and hands back its hint rows. */
-function recallPresenter(
-  budget: number,
-  includeContinuity: boolean,
-  anchorRing: RingBuffer | null,
-  queryHash: number,
-  out: RenderSlot,
-  hintRows: (rendered: RenderedRecall) => AppendAuditOpts[],
-): NonNullable<RecallOpts['showRanked']> {
+interface RecallPresenterOptions {
+  readonly includeContinuity: boolean;
+  readonly anchorRing: RingBuffer | null;
+  readonly queryHash: number;
+  readonly out: RenderSlot;
+  readonly hintRows: (rendered: RenderedRecall) => AppendAuditOpts[];
+}
+
+function recallPresenter(budget: number, options: RecallPresenterOptions): NonNullable<RecallOpts['showRanked']> {
+  const { includeContinuity, anchorRing, queryHash, out, hintRows } = options;
   return ({ ranked, pool, droppedByScope }, apiResult) => {
     // Sections are paid in print order, ahead of the memories and after the heading; one that does not fit is dropped whole.
     let left = budget - memoriesReserve(budget);
@@ -152,9 +154,12 @@ export async function runRecallTool(call: ToolCall): Promise<string> {
     suppressAvailabilityHint: true,
     keepHeldCopies: true,
     project: ctx?.project,
-    showRanked: recallPresenter(budget, includeContinuity, anchorRing, queryHash, out, ({ list, anchoring, availability }) => shownRecallRows(who, {
-      query, ring: anchorRing, topId: list[0]?.entry.id ?? null, anchoring, availability,
-    })),
+    showRanked: recallPresenter(budget, {
+      includeContinuity, anchorRing, queryHash, out,
+      hintRows: ({ list, anchoring, availability }) => shownRecallRows(who, {
+        query, ring: anchorRing, topId: list[0]?.entry.id ?? null, anchoring, availability,
+      }),
+    }),
   });
   const { rendered } = out;
   if (!rendered) throw new Error('hippo_recall: api.retrieve returned without calling showRanked');

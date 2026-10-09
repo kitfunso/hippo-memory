@@ -102,20 +102,20 @@ export function drillDown(
   const depth = Math.max(1, Math.min(Math.trunc(opts.depth ?? 1), 10));
   const db = openStore(ctx.hippoRoot);
   try {
-    return drillDownOn(db, ctx, summaryId, depth, opts, limit);
+    return drillDownOn(db, ctx, summaryId, { depth, opts, limit });
   } finally {
     closeHippoDb(db);
   }
 }
 
-function drillDownOn(
-  db: DatabaseSyncLike,
-  ctx: Context,
-  summaryId: string,
-  depth: number,
-  opts: DrillDownOpts,
-  limit: number,
-): DrillDownOutcome {
+interface DrillDownOnOptions {
+  readonly depth: number;
+  readonly opts: DrillDownOpts;
+  readonly limit: number;
+}
+
+function drillDownOn(db: DatabaseSyncLike, ctx: Context, summaryId: string, options: DrillDownOnOptions): DrillDownOutcome {
+  const { depth, opts, limit } = options;
   const summary = selectEntriesByIds(db, [summaryId], ctx.tenantId).get(summaryId) ?? null;
   // No unscoped cross-tenant probe here: the tenant-scoped read's miss covers
   // both "doesn't exist" and "exists in another tenant" by design.
@@ -135,7 +135,7 @@ function drillDownOn(
   if (!shown(summary)) return { failure: 'not_found' };
   if ((summary.dag_level ?? 0) < 2) return { failure: 'not_drillable' };
 
-  const { collected, level0DirectCount } = collectDescendants(db, ctx.tenantId, summaryId, depth, own, shown);
+  const { collected, level0DirectCount } = collectDescendants(db, ctx.tenantId, summaryId, { depth, own, shown });
 
   const summaryOut: DrillDownSummary = {
     id: summary.id,
@@ -179,14 +179,14 @@ interface CappedChildren {
 
 // BFS with a visited set: dag_parent_id is not unique, so a misconfigured tree could emit a child twice past depth 1.
 // The level-0 count is kept apart so a legacy summary's descendantCount fallback counts direct children only.
-function collectDescendants(
-  db: DatabaseSyncLike,
-  tenantId: string,
-  summaryId: string,
-  depth: number,
-  own: string | undefined,
-  shown: (row: MemoryEntry) => boolean,
-): DescendantWalk {
+interface CollectDescendantsOptions {
+  readonly depth: number;
+  readonly own: string | undefined;
+  readonly shown: (row: MemoryEntry) => boolean;
+}
+
+function collectDescendants(db: DatabaseSyncLike, tenantId: string, summaryId: string, options: CollectDescendantsOptions): DescendantWalk {
+  const { depth, own, shown } = options;
   const collected: MemoryEntry[] = [];
   const visited = new Set<string>([summaryId]);
   let frontier: string[] = [summaryId];

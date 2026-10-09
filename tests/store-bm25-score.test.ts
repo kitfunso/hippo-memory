@@ -188,7 +188,7 @@ describe('loadSearchEntries bm25_score (F1, v1.7.0)', () => {
         for (let i = step * 3000; i < size; i++) writeEntryDbOnly(db, makeRaw(`deploy note ${i}`));
         db.exec('COMMIT');
         lowered = 0;
-        expect(loadRecallSearchEntriesFromDb(db, 'zzzznonexistenttokenxxxxxx', 200, 'default')).toHaveLength(200);
+        expect(loadRecallSearchEntriesFromDb(db, 'zzzznonexistenttokenxxxxxx', { limit: 200, tenantId: 'default' })).toHaveLength(200);
         // The LIKE predicate lowers content and tags once per term for each row it tests.
         return lowered / 2;
       });

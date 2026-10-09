@@ -37,9 +37,16 @@ function inOrigins(e: MemoryEntry, origins: RecentOrigins): boolean {
   return origin === '' ? origins.userGlobal : origin !== null && origins.names.includes(origin);
 }
 
+interface RecentRowsOptions {
+  readonly needed: number;
+  readonly admit: (e: MemoryEntry) => boolean;
+  readonly origins?: RecentOrigins;
+}
+
 // The newest rows `admit` keeps, newest first. The first window stays unfiltered so admit still sees, and the
 // delivery ledger still counts, the other-project rows it refuses; past it, the reads narrow to the caller's origins.
-function loadRecentRows(run: RunSql, drifted: boolean, tenantId: string, needed: number, admit: (e: MemoryEntry) => boolean, origins?: RecentOrigins): MemoryEntry[] {
+function loadRecentRows(run: RunSql, drifted: boolean, tenantId: string, options: RecentRowsOptions): MemoryEntry[] {
+  const { needed, admit, origins } = options;
   const keep = origins ? (e: MemoryEntry): boolean => admit(e) && inOrigins(e, origins) : admit;
   // `id DESC` mirrors getContext's comparator, not loadFreshRawMemories'
   // cross-ingest-stable order: that would change what the hook injects.
@@ -90,7 +97,7 @@ export function loadAmbientCandidates(
 
     if (needed > 0) {
       const drifted = db.prepare(AMBIENT_DRIFT_SQL).get(tenantId) !== undefined;
-      for (const e of loadRecentRows(run, drifted, tenantId, needed, admit, origins)) byId.set(e.id, e);
+      for (const e of loadRecentRows(run, drifted, tenantId, { needed, admit, origins })) byId.set(e.id, e);
     }
 
     // loadAllEntries' order: rankedPinned's comparator can tie and Array.sort
@@ -102,7 +109,7 @@ export function loadAmbientCandidates(
     if (!recall) return { entries };
     const ftsQuery = pickRarestFtsQuery(db, recall.terms);
     const recallEntries = ftsQuery
-      ? loadRecallSearchEntriesFromDb(db, ftsQuery, recall.limit, tenantId, undefined, 'exact', false, undefined, recall.ownScope)
+      ? loadRecallSearchEntriesFromDb(db, ftsQuery, { limit: recall.limit, tenantId, includeSuperseded: false, ownScope: recall.ownScope })
       : [];
     return { entries, recall: recallEntries };
   } finally {

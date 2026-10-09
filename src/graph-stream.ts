@@ -114,16 +114,21 @@ function bestStrengthAtDepth(
   return bestStrengthThisDepth;
 }
 
+interface ReachedEntityScoresOptions {
+  readonly hops: number;
+  readonly decay: number;
+  readonly maxNeighbors: number;
+}
+
 /** BFS from the seed entities: entityId -> best originSeedStrength x decay^depth over every reached entity. */
 function reachedEntityScores(
   root: string,
   tenantId: string,
   seedIds: number[],
   originStrength: ReadonlyMap<number, number>,
-  hops: number,
-  decay: number,
-  maxNeighbors: number,
+  options: ReachedEntityScoresOptions,
 ): Map<number, number> {
+  const { hops, decay, maxNeighbors } = options;
   const visited = new Set<number>(seedIds); // seeds never re-reached
   const reachedScore = new Map<number, number>();                 // entityId -> best score
   let frontier: number[] = seedIds;
@@ -158,6 +163,15 @@ function reachedEntityScores(
   return reachedScore;
 }
 
+interface AccumulateForRootOptions {
+  readonly memIdToIndex: ReadonlyMap<string, number>;
+  readonly graphScore: Map<number, number>;
+  readonly hops: number;
+  readonly decay: number;
+  readonly maxNeighbors: number;
+  readonly tenantId: string;
+}
+
 /**
  * Accumulate per-entryIndex graph-proximity scores from ONE store's graph into
  * `graphScore`. Pure reads. `seeds` are the lexical seeds (index + strength); only the
@@ -169,13 +183,9 @@ function accumulateForRoot(
   root: string,
   seeds: ReadonlyArray<GraphSeed>,
   entries: ReadonlyArray<MemoryEntry>,
-  memIdToIndex: ReadonlyMap<string, number>,
-  graphScore: Map<number, number>,
-  hops: number,
-  decay: number,
-  maxNeighbors: number,
-  tenantId: string,
+  options: AccumulateForRootOptions,
 ): void {
+  const { memIdToIndex, graphScore, hops, decay, maxNeighbors, tenantId } = options;
   if (seeds.length === 0) return;
   // The strongest seed strength per source memory id (a memId could appear once, but
   // guard against dup indices mapping to the same memId).
@@ -197,7 +207,7 @@ function accumulateForRoot(
     originStrength.set(e.id, Math.max(originStrength.get(e.id) ?? 0, st));
   }
 
-  const reachedScore = reachedEntityScores(root, tenantId, seedEntities.map((e) => e.id), originStrength, hops, decay, maxNeighbors);
+  const reachedScore = reachedEntityScores(root, tenantId, seedEntities.map((e) => e.id), originStrength, { hops, decay, maxNeighbors });
   if (reachedScore.size === 0) return;
 
   // Reached entity ids -> source memory ids -> in-pool entry indices.
@@ -238,9 +248,7 @@ export function graphRankStream(
     ? [opts.hippoRoot, opts.globalRoot]
     : [opts.hippoRoot];
   for (const root of roots) {
-    accumulateForRoot(
-      root, seeds, entries, memIdToIndex, graphScore, hops, decay, maxNeighbors, opts.tenantId,
-    );
+    accumulateForRoot(root, seeds, entries, { memIdToIndex, graphScore, hops, decay, maxNeighbors, tenantId: opts.tenantId });
   }
 
   // Seed-exclusion guard: graphScore is keyed by entryIndex

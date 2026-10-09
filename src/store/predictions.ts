@@ -167,7 +167,7 @@ export function savePrediction(
   writeEntry(hippoRoot, mem, {
     actor,
     afterWrite: (db, memoryId) => {
-      savedRow = insertPredictionRow(db, memoryId, tenantId, opts, now, actor);
+      savedRow = insertPredictionRow(db, memoryId, tenantId, opts, { now, actor });
     },
   });
 
@@ -179,14 +179,19 @@ export function savePrediction(
 }
 
 /** Inserts, reloads and audits the predictions row inside writeEntry's SAVEPOINT. */
+interface PredictionStamp {
+  readonly now: string;
+  readonly actor: string;
+}
+
 function insertPredictionRow(
   db: DatabaseSyncLike,
   memoryId: string,
   tenantId: string,
   opts: SavePredictionOpts,
-  now: string,
-  actor: string,
+  stamp: PredictionStamp,
 ): PredictionRow {
+  const { now, actor } = stamp;
   const result = db.prepare(`
         INSERT INTO predictions(
           memory_id, tenant_id, class_tag, claim_text,
@@ -259,7 +264,7 @@ export function closePrediction(
   try {
     db.exec('BEGIN IMMEDIATE');
     try {
-      const row = closeOpenPredictionRow(db, tenantId, id, opts, now, actor);
+      const row = closeOpenPredictionRow(db, tenantId, id, opts, { now, actor });
       db.exec('COMMIT');
       return rowToPrediction(row);
     } catch (e) {
@@ -281,9 +286,9 @@ function closeOpenPredictionRow(
   tenantId: string,
   id: number,
   opts: ClosePredictionOpts,
-  now: string,
-  actor: string,
+  stamp: PredictionStamp,
 ): PredictionRow {
+  const { now, actor } = stamp;
   // closure_state='open' in the WHERE stops a retried close from overwriting
   // actual_value and auditing twice; zero changed rows means not found or already closed.
   const updateResult = db.prepare(`

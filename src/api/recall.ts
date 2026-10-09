@@ -79,7 +79,7 @@ export function recall(ctx: Context, opts: RecallOpts): RecallResult {
   const own = personalScopeOf(ctx.actor) ?? undefined;
   const all = loadRecallSearchEntries(ctx.hippoRoot, opts.query, windowSize, ctx.tenantId, opts.scope, 'exact', false, recallOrigin(opts), own);
   const plan = planRecall(ctx, opts, all, own);
-  const { result, writes } = composeRecall(ctx, opts, windowSize, all, plan, readRecallSync(ctx, opts, plan));
+  const { result, writes } = composeRecall(ctx, opts, { windowSize, all, plan, reads: readRecallSync(ctx, opts, plan) });
   finishRecallAt(ctx.hippoRoot, { ...writes, audit: [...(opts.leadingAudit ?? []), ...writes.audit] });
   return result;
 }
@@ -111,7 +111,7 @@ export async function retrieve(ctx: Context, opts: RecallOpts): Promise<RecallRe
     candidates = [...ranked.map((r) => r.entry), ...candidates.filter((e) => !rankedIds.has(e.id))];
   }
   const plan = planRecall(ctx, opts, candidates, own);
-  const { result, writes } = composeRecall(ctx, opts, windowSize, candidates, plan, await readRecall(store, ctx, opts, plan));
+  const { result, writes } = composeRecall(ctx, opts, { windowSize, all: candidates, plan, reads: await readRecall(store, ctx, opts, plan) });
   await store.finishRecall({ ...writes, audit: [...(opts.leadingAudit ?? []), ...writes.audit], strengthen: strengthenOf(ctx, result.results.map((r) => r.id)) });
   return result;
 }
@@ -170,7 +170,7 @@ async function retrieveFromStore(
   const window = ranked.slice(0, windowSize).map((r) => r.entry);
   const bandOpts = { ...opts, suppressRecallTrace: true };
   const plan = planRecall(ctx, bandOpts, window, own);
-  const { result, writes } = composeRecall(ctx, bandOpts, windowSize, window, plan, await readRecall(store, ctx, bandOpts, plan, goals), false);
+  const { result, writes } = composeRecall(ctx, bandOpts, { windowSize, all: window, plan, reads: await readRecall(store, ctx, bandOpts, plan, goals), auditBand: false });
   // Rows the vector arm added count as candidates too.
   const inPool = new Set(pool.map((e) => e.id));
   const candidates = [...pool, ...ranked.map((r) => r.entry).filter((e) => !inPool.has(e.id))];
@@ -328,15 +328,16 @@ function continuityKey(ctx: Context, opts: RecallOpts): ContinuityKey | null {
 
 /** The reply and the rows it writes, from the candidates and the plan's reads; touches no store.
  *  `auditBand` false: the caller shows a cut of the band and audits the rows it shows. */
-function composeRecall(
-  ctx: Context,
-  opts: RecallOpts,
-  windowSize: number,
-  all: MemoryEntry[],
-  plan: RecallPlan,
-  reads: RecallReads,
-  auditBand = true,
-): ComposedRecall {
+interface ComposeRecallOptions {
+  readonly windowSize: number;
+  readonly all: MemoryEntry[];
+  readonly plan: RecallPlan;
+  readonly reads: RecallReads;
+  readonly auditBand?: boolean;
+}
+
+function composeRecall(ctx: Context, opts: RecallOpts, options: ComposeRecallOptions): ComposedRecall {
+  const { windowSize, all, plan, reads, auditBand = true } = options;
   const { window } = plan;
   const bands = rankBands(opts, plan, reads);
   const rankedOut = bands.rankedOut;
@@ -423,7 +424,9 @@ function rankBands(opts: RecallOpts, plan: RecallPlan, reads: RecallReads): Rank
   const baseRanked = baseScored.map((r) => baseItem(r, opts, explainTrace));
   const summaryRanked = substituted.map((s) => summaryItem(s, opts));
   const freshRanked = (opts.freshTailCount ?? 0) > 0
-    ? freshTailBand(opts, reads.freshRaws, baseRanked, summaryRanked, opts.keepHeldCopies ? [] : [...baseSlice, ...substituted.map((s) => s.entry)], own)
+    ? freshTailBand(opts, {
+        recent: reads.freshRaws, baseRanked, summaryRanked, shownEntries: opts.keepHeldCopies ? [] : [...baseSlice, ...substituted.map((s) => s.entry)], own,
+      })
     : [];
   return {
     rankedOut: [...freshRanked, ...baseRanked, ...summaryRanked],
@@ -511,14 +514,16 @@ function summaryItem(s: SummaryDecoration, opts: RecallOpts): RecallResultItem {
 
 // The last N raw rows, so "what did I just see" always covers the recent window. A recent row already in the BM25
 // band is only tagged isFreshTail; new ones are prepended, so every recent row appears exactly once.
-function freshTailBand(
-  opts: RecallOpts,
-  recent: MemoryEntry[],
-  baseRanked: RecallResultItem[],
-  summaryRanked: RecallResultItem[],
-  shownEntries: MemoryEntry[],
-  own: string | undefined,
-): RecallResultItem[] {
+interface FreshTailBandOptions {
+  readonly recent: MemoryEntry[];
+  readonly baseRanked: RecallResultItem[];
+  readonly summaryRanked: RecallResultItem[];
+  readonly shownEntries: MemoryEntry[];
+  readonly own: string | undefined;
+}
+
+function freshTailBand(opts: RecallOpts, options: FreshTailBandOptions): RecallResultItem[] {
+  const { recent, baseRanked, summaryRanked, shownEntries, own } = options;
   const recentScoped = recent.filter((m) => passesScopeFilterForRecall(m.scope ?? null, opts.scope, own) && inCallerProject(m, opts));
   const recentIdSet = new Set(recentScoped.map((m) => m.id));
   for (const r of baseRanked) {

@@ -84,15 +84,20 @@ export function _forceLikePathForTests(on: boolean): void {
   forceLikePath = on;
 }
 
+interface SearchRowsOptions {
+  readonly scopeFilter?: RecallScopeFilter;
+  readonly includeSuperseded?: boolean;
+  readonly originProjects?: OriginFilter;
+}
+
 function loadSearchRows(
   db: ReturnType<typeof openHippoDb>,
   query: string,
   limit: number,
   tenantId: string | undefined,
-  scopeFilter?: RecallScopeFilter,
-  includeSuperseded = true,
-  originProjects?: OriginFilter,
+  options: SearchRowsOptions = {},
 ): MemoryRow[] {
+  const { scopeFilter, includeSuperseded = true, originProjects } = options;
   const p = searchPredicates(tenantId, scopeFilter, includeSuperseded, originProjects);
 
   const terms = Array.from(new Set(tokenize(query)));
@@ -264,10 +269,20 @@ export function loadRecallSearchEntries(
 ): MemoryEntry[] {
   const db = openStore(hippoRoot);
   try {
-    return loadRecallSearchEntriesFromDb(db, query, limit, tenantId, requestedScope, explicitScopeMode, includeSuperseded, originProjects, ownScope);
+    return loadRecallSearchEntriesFromDb(db, query, { limit, tenantId, requestedScope, explicitScopeMode, includeSuperseded, originProjects, ownScope });
   } finally {
     closeHippoDb(db);
   }
+}
+
+export interface RecallSearchEntriesOptions {
+  readonly limit?: number;
+  readonly tenantId?: string;
+  readonly requestedScope?: string;
+  readonly explicitScopeMode?: 'exact' | 'additive';
+  readonly includeSuperseded?: boolean;
+  readonly originProjects?: OriginFilter;
+  readonly ownScope?: string;
 }
 
 // Split out so callers with an already-open db (the prompt-recall path) skip
@@ -275,15 +290,11 @@ export function loadRecallSearchEntries(
 export function loadRecallSearchEntriesFromDb(
   db: DatabaseSyncLike,
   query: string,
-  limit: number = DEFAULT_SEARCH_CANDIDATE_LIMIT,
-  tenantId?: string,
-  requestedScope?: string,
-  explicitScopeMode: 'exact' | 'additive' = 'exact',
-  includeSuperseded = true,
-  originProjects?: OriginFilter,
-  ownScope?: string,
+  options: RecallSearchEntriesOptions = {},
 ): MemoryEntry[] {
-  return loadSearchRows(db, query, limit, tenantId, recallScopeFilter(requestedScope, explicitScopeMode, ownScope), includeSuperseded, originProjects).map(rowToEntry);
+  const { limit = DEFAULT_SEARCH_CANDIDATE_LIMIT, tenantId, requestedScope, explicitScopeMode = 'exact', includeSuperseded = true, originProjects, ownScope } = options;
+  const scopeFilter = recallScopeFilter(requestedScope, explicitScopeMode, ownScope);
+  return loadSearchRows(db, query, limit, tenantId, { scopeFilter, includeSuperseded, originProjects }).map(rowToEntry);
 }
 
 /** Which rows the vector arm of hybrid search may add: the same tenant, scope and superseded rules as the lexical load. */

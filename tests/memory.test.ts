@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calculateStrength, calculateRewardFactor, applyOutcome, strengthSql, Layer, type TraceOutcome} from '../src/memory.js';
+import { calculateStrength, calculateRewardFactor, applyOutcome, strengthSql, Layer, type MemoryEntry, type TraceOutcome} from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { rmSync } from 'node:fs';
@@ -312,7 +312,7 @@ describe('strengthSql parity', () => {
   it('scores each stored row as calculateStrength does', () => {
     const now = new Date('2026-06-01T00:00:00.000Z');
     const at = (days: number) => new Date(now.getTime() - days * 86_400_000).toISOString();
-    const row = (id: string, days: number, extra: Record<string, unknown> = {}) => ({
+    const row = (id: string, days: number, extra: Partial<MemoryEntry> = {}) => ({
       ...createMemory7(`parity ${id}`), id, last_retrieved: at(days), ...extra,
     });
     const entries = [
@@ -330,10 +330,12 @@ describe('strengthSql parity', () => {
       for (const e of entries) writeEntry(home, e);
       const db = openHippoDb(home);
       try {
+        // SAFETY: the SELECT names exactly the columns id and s.
         const rows = db.prepare(`SELECT id, ${strengthSql(now)} AS s FROM memories`).all() as Array<{ id: string; s: number }>;
         expect(rows).toHaveLength(entries.length);
         for (const r of rows) {
-          const entry = entries.find((e) => e.id === r.id)!;
+          const entry = entries.find((e) => e.id === r.id);
+          if (!entry) throw new Error(`unexpected row ${r.id}`);
           expect(Math.abs(r.s - calculateStrength(entry, now))).toBeLessThan(1e-9);
         }
       } finally {

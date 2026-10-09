@@ -327,15 +327,15 @@ function openConflictsOf(hippoRoot: string, tenantId: string, entry: MemoryEntry
   return out;
 }
 
+export interface MemoryDetailOptions {
+  readonly snapshotId: number;
+  readonly nowMs: number;
+  readonly embedded: boolean;
+}
+
 /** Full detail read fresh from the store, never from the snapshot, so the drawer is current inside the coalescing window. */
-export function buildMemoryDetail(
-  hippoRoot: string,
-  tenantId: string,
-  entry: MemoryEntry,
-  snapshotId: number,
-  nowMs: number,
-  embedded: boolean,
-): MemoryDetail {
+export function buildMemoryDetail(hippoRoot: string, tenantId: string, entry: MemoryEntry, options: MemoryDetailOptions): MemoryDetail {
+  const { snapshotId, nowMs, embedded } = options;
   const f = memoryFacts(entry, nowMs);
   const project = projectIdentity(entry.origin_project);
   return {

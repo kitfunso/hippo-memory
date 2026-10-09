@@ -184,17 +184,22 @@ function passesRecallFilters(mem: MemoryEntry, via: GraphVia, successorValidFrom
     : passesScopeFilterForRecall(mem.scope ?? null, recallScope.requested, recallScope.ownScope);
 }
 
+interface HitAccumulators {
+  readonly baseScoreByMemId: Map<string, number>;
+  readonly seenMemoryIds: Set<string>;
+  readonly seenContent: Set<string>;
+  readonly hitsByOrigin: Map<string, GraphHit[]>;
+}
+
 /** Traverse one store's graph from its seeds into `hitsByOrigin`. Pure reads; mutates `seenMemoryIds`
  *  and `seenContent` so a memory, or a share/promote copy of it, surfaces at most once across stores. */
 function produceHitsForRoot(
   root: string,
   baseResults: SearchResult[],
-  baseScoreByMemId: Map<string, number>,
-  seenMemoryIds: Set<string>,
-  seenContent: Set<string>,
-  hitsByOrigin: Map<string, GraphHit[]>,
+  accumulators: HitAccumulators,
   opts: HitOpts,
 ): void {
+  const { baseScoreByMemId, seenMemoryIds, seenContent, hitsByOrigin } = accumulators;
   const { hops, maxNeighbors, tenantId, asOfDate } = opts;
 
   // Seeds = graph entities (in THIS store) whose source memory is a base result.
@@ -279,7 +284,7 @@ export function graphExpandRecall(
   // Expand against each distinct store the seeds may live in (local + global).
   const roots = globalRoot && globalRoot !== hippoRoot ? [hippoRoot, globalRoot] : [hippoRoot];
   for (const root of roots) {
-    produceHitsForRoot(root, baseResults, baseScoreByMemId, seenMemoryIds, seenContent, hitsByOrigin, {
+    produceHitsForRoot(root, baseResults, { baseScoreByMemId, seenMemoryIds, seenContent, hitsByOrigin }, {
       hops, maxNeighbors, tenantId, includeSuperseded, asOfDate, recallScope,
     });
   }

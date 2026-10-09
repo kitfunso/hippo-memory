@@ -148,15 +148,20 @@ function isCommentItem(x: JsonValue): x is JsonValue & (IssueCommentItem | PrRev
  *     to next=null. Callers MUST NOT advance the HWM when drained=false,
  *     or a capped run would persist a partial HWM and skip the unfetched tail.
  */
+interface DrainStreamOptions {
+  readonly toIngestEvent: (item: JsonValue) => IngestEvent | null;
+  readonly fetcher: GitHubFetcher;
+  readonly token: string;
+  readonly sleep: (ms: number) => Promise<void>;
+  readonly maxItems?: number;
+}
+
 async function drainStream(
   ctx: Context,
   url0: string,
-  toIngestEvent: (item: JsonValue) => IngestEvent | null,
-  fetcher: GitHubFetcher,
-  token: string,
-  sleep: (ms: number) => Promise<void>,
-  maxItems?: number,
+  options: DrainStreamOptions,
 ): Promise<{ ingested: number; pages: number; maxUpdatedAt: string | null; drained: boolean }> {
+  const { toIngestEvent, fetcher, token, sleep, maxItems } = options;
   let url: string | null = url0;
   let ingested = 0;
   let pages = 0;
@@ -277,15 +282,13 @@ async function backfillStream(
   sleep: (ms: number) => Promise<void>,
   stream: { url: string; column: HwmColumn; toIngestEvent: (item: JsonValue) => IngestEvent | null },
 ): Promise<{ ingested: number; pages: number }> {
-  const res = await drainStream(
-    ctx,
-    stream.url,
-    stream.toIngestEvent,
-    opts.fetcher,
-    opts.token,
+  const res = await drainStream(ctx, stream.url, {
+    toIngestEvent: stream.toIngestEvent,
+    fetcher: opts.fetcher,
+    token: opts.token,
     sleep,
-    opts.maxPerStream,
-  );
+    maxItems: opts.maxPerStream,
+  });
   // A capped run (--max) must leave the HWM at its previous value so the next run re-fetches the unprocessed tail.
   if (res.drained && res.maxUpdatedAt) {
     writeHwm(ctx.hippoRoot, ctx.tenantId, opts.repoFullName, stream.column, res.maxUpdatedAt);

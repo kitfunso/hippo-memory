@@ -182,7 +182,7 @@ export function cmdImport(
   // resolve the tenant and pass it through. --global is not supported for
   // vault import (the connector raw-archive path is tenant-local).
   if (flags['vault']) return importVaultFolder(hippoRoot, flags, importOptions, useGlobal, dryRun);
-  importFromFile(targetRoot, args, flags, importOptions, useGlobal, dryRun);
+  importFromFile(targetRoot, args, flags, { importOptions, useGlobal, dryRun });
 }
 
 type FileImporter = (fp: string, opts: ImportOptions) => ReturnType<typeof importChatGPT>;
@@ -205,14 +205,14 @@ function pickImporter(args: string[], flags: CliFlags): PickedImporter {
   return { filePath: undefined, importer: undefined, importerName: '' };
 }
 
-function importFromFile(
-  targetRoot: string,
-  args: string[],
-  flags: CliFlags,
-  importOptions: ImportOptions,
-  useGlobal: boolean,
-  dryRun: boolean,
-): void {
+interface ImportFromFileOptions {
+  readonly importOptions: ImportOptions;
+  readonly useGlobal: boolean;
+  readonly dryRun: boolean;
+}
+
+function importFromFile(targetRoot: string, args: string[], flags: CliFlags, options: ImportFromFileOptions): void {
+  const { importOptions, useGlobal, dryRun } = options;
   const { filePath, importer, importerName } = pickImporter(args, flags);
 
   if (!filePath || !importer) {

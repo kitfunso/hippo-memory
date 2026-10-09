@@ -107,7 +107,7 @@ async function runSleepPhases(
   if (dedupResult.removed > 0) result.deduped = dedupSummary(dedupResult);
 
   // Phase 3: Quality audit (remove junk, report warnings; a dry run skips rows earlier phases would remove).
-  counts.auditDeleted = runQualityAudit(ctx, phases, dryRun, consolidateResult, dedupResult, result);
+  counts.auditDeleted = runQualityAudit(ctx, phases, { dryRun, consolidateResult, dedupResult, result });
 
   if (dryRun) return result;
 
@@ -177,14 +177,15 @@ function dedupSummary(dedupResult: DedupOutcome): NonNullable<SleepResult['dedup
 }
 
 /** Returns how many audit errors were deleted, or would be under dryRun. */
-function runQualityAudit(
-  ctx: Context,
-  phases: SleepPhases,
-  dryRun: boolean,
-  consolidateResult: ConsolidateOutcome,
-  dedupResult: DedupOutcome,
-  result: SleepResult,
-): number {
+interface QualityAuditOptions {
+  readonly dryRun: boolean;
+  readonly consolidateResult: ConsolidateOutcome;
+  readonly dedupResult: DedupOutcome;
+  readonly result: SleepResult;
+}
+
+function runQualityAudit(ctx: Context, phases: SleepPhases, options: QualityAuditOptions): number {
+  const { dryRun, consolidateResult, dedupResult, result } = options;
   const planned = new Set(dryRun ? [...(consolidateResult.removedIds ?? []), ...dedupResult.pairs.map((p) => p.removed)] : []);
   const allEntries = phases.loadAllEntries(ctx.hippoRoot).filter((e) => !planned.has(e.id));
   const auditOut = phases.auditMemories(allEntries, memoriesBackingObjects(ctx.hippoRoot));
