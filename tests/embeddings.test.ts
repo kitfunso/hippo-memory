@@ -48,7 +48,7 @@ describe('isEmbeddingAvailable', () => {
   it('returns a boolean', async () => {
     const { isEmbeddingAvailable } = await import('../src/store/embeddings/local.js');
     const available = await isEmbeddingAvailable();
-    expect(available).toEqual(expect.any(Boolean));
+    expect([true, false]).toContain(available);
     // We don't assert true/false since the test env may or may not have the lib
   });
 });

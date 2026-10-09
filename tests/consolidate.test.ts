@@ -59,7 +59,8 @@ describe('Decay pass', () => {
 
     const remaining = loadAllEntries(tmpDir);
     const found = remaining.find((e) => e.id === ancient.id);
-    expect(found).toBeDefined();
+    expect(found?.content).toBe('permanent rule');
+    expect(found?.pinned).toBe(true);
   });
 
   it('dry-run does not remove entries', async () => {

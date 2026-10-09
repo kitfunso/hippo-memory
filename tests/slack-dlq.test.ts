@@ -26,7 +26,7 @@ describe('slack DLQ', () => {
     const [item] = listDlq(slackDlq, root, { tenantId: 'default' });
     markSlackDlqRetried(root, item.id);
     const [after] = listDlq(slackDlq, root, { tenantId: 'default' });
-    expect(after.retriedAt).not.toBeNull();
+    expect(Number.isNaN(Date.parse(String(after.retriedAt)))).toBe(false);
   });
 
   it('listDlq scopes by tenantId', async () => {

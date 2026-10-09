@@ -103,8 +103,8 @@ describe('the sleep audit and dedup respect raw and pinned rows', () => {
 
     deduplicateStore(root);
 
-    expect(readEntry(root, keeper.id)).not.toBeNull();
-    expect(readEntry(root, pinnedCopy.id)).not.toBeNull();
+    expect(readEntry(root, keeper.id)?.content).toBe(CACHE_FACT);
+    expect(readEntry(root, pinnedCopy.id)).toMatchObject({ content: CACHE_FACT, pinned: true });
   });
 
   it('an automatic delete refuses a pinned or raw row; an explicit forget still deletes', () => {

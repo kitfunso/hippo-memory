@@ -20,12 +20,12 @@ describe('detectForwardClaim — positive matches', () => {
 
   it('matches "should take" verb phrase', () => {
     const m = detectForwardClaim('the refactor should take a week');
-    expect(m).not.toBeNull();
+    expect(m?.phrase.toLowerCase()).toContain('should take');
   });
 
   it('matches "ship by" verb phrase', () => {
     const m = detectForwardClaim('we should ship by Friday');
-    expect(m).not.toBeNull();
+    expect(m?.phrase.toLowerCase()).toContain('ship by');
   });
 
   it('matches "estimate <N>"', () => {
@@ -36,49 +36,49 @@ describe('detectForwardClaim — positive matches', () => {
 
   it('matches "ETA 10 days"', () => {
     const m = detectForwardClaim('ETA: 10 days');
-    expect(m).not.toBeNull();
+    expect(m?.phrase.toLowerCase()).toContain('eta');
   });
 
   it('matches "by next <day>"', () => {
     const m = detectForwardClaim('done by next Monday');
-    expect(m).not.toBeNull();
+    expect(m?.phrase.toLowerCase()).toContain('by next');
   });
 
   it('matches "in ~2 weeks"', () => {
     const m = detectForwardClaim('in ~2 weeks');
-    expect(m).not.toBeNull();
+    expect(m?.phrase.toLowerCase()).toContain('~2 weeks');
   });
 
   // Codex review round 1 caught: \b before ~ requires a word char
   // immediately preceding. These three cases previously failed silently.
   it('matches "~3 days for migration" (tilde at start of string)', () => {
     const m = detectForwardClaim('~3 days for migration');
-    expect(m).not.toBeNull();
+    expect(m?.phrase.toLowerCase()).toContain('~3 days');
   });
 
   it('matches "estimate ~3 days" (tilde after whitespace)', () => {
     const m = detectForwardClaim('estimate ~3 days');
-    expect(m).not.toBeNull();
+    expect(m?.phrase.toLowerCase()).toContain('estimate ~3');
   });
 
   it('matches "~5 hour build" (tilde after newline)', () => {
     const m = detectForwardClaim('build target:\n~5 hour build');
-    expect(m).not.toBeNull();
+    expect(m?.phrase.toLowerCase()).toContain('~5 hour');
   });
 
   it('matches "should finish by"', () => {
     const m = detectForwardClaim('should finish by Tuesday');
-    expect(m).not.toBeNull();
+    expect(m?.phrase.toLowerCase()).toContain('should finish by');
   });
 
   it('matches "will take 1 hour"', () => {
     const m = detectForwardClaim('this will take 1 hour');
-    expect(m).not.toBeNull();
+    expect(m?.phrase.toLowerCase()).toContain('will take 1 hour');
   });
 
   it('case-insensitive', () => {
     const m = detectForwardClaim('Will Take 3 Days');
-    expect(m).not.toBeNull();
+    expect(m?.phrase.toLowerCase()).toContain('will take');
   });
 });
 
