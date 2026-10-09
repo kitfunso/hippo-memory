@@ -4,6 +4,7 @@ import * as fs from 'node:fs';
 import * as http from 'node:http';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { inspect } from 'node:util';
 import { GitReadError, gitLsFilesAtHead } from '../src/churn-git.js';
 import { resolveEmbeddingProvider } from '../src/embedding-provider.js';
 import { createListener } from '../src/server/tls.js';
@@ -97,7 +98,16 @@ describe('rethrown errors keep their cause', () => {
       const provider = resolveEmbeddingProvider(embeddingRoot(port));
       const err = await caught(() => provider.embed(['hello']));
       expect(err.message).toContain('returned invalid JSON');
-      expect(err.cause).toBeInstanceOf(SyntaxError);
+      expect(err.cause).toBeInstanceOf(Error);
+      expect(err.cause instanceof Error ? err.cause.name : '').toBe('SyntaxError');
+    });
+
+    it('keeps the key out of the cause when the transport refuses the header', async () => {
+      process.env['OPENAI_API_KEY'] = 'sk-test' + String.fromCharCode(10) + 'SECRETPART';
+      const provider = resolveEmbeddingProvider(embeddingRoot(await closedPort()));
+      const err = await caught(() => provider.embed(['hello']));
+      expect(err.cause).toBeInstanceOf(Error);
+      expect(inspect(err, { depth: 5 })).not.toContain('SECRETPART');
     });
   });
 });

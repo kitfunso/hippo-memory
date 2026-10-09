@@ -200,6 +200,13 @@ function redact(text: string, secret: string | undefined): string {
   return text.split(secret).join('***');
 }
 
+/** A cause with the key cut out: the caught error's own text or cause chain can echo the Authorization header. */
+function redactedCause<E>(err: E, key: string | undefined): Error {
+  const copy = new Error(redact(errorMessage(err), key));
+  if (err instanceof Error) copy.name = err.name;
+  return copy;
+}
+
 function l2normalize(v: number[]): number[] {
   let norm = 0;
   for (const x of v) norm += x * x;
@@ -264,7 +271,7 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
       }, { timeoutMs: REQUEST_TIMEOUT_MS });
     } catch (err) {
       const msg = errorMessage(err);
-      throw new Error(redact(`embedding request to ${this.kind} failed: ${msg}`, key), { cause: err });
+      throw new Error(redact(`embedding request to ${this.kind} failed: ${msg}`, key), { cause: redactedCause(err, key) });
     }
 
     if (!resp.ok) {
@@ -284,7 +291,7 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
       json = await resp.json();
     } catch (err) {
       const msg = errorMessage(err);
-      throw new Error(redact(`${this.kind} embeddings returned invalid JSON: ${msg}`, key), { cause: err });
+      throw new Error(redact(`${this.kind} embeddings returned invalid JSON: ${msg}`, key), { cause: redactedCause(err, key) });
     }
 
     const vectors = spec.extractVectors(json);
