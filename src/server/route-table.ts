@@ -120,7 +120,7 @@ export async function dispatchV1Route(r: RouteRequest, method: string, path: str
   for (const route of V1_ROUTES) {
     const run = routeMatches(route, method, path);
     if (run === null) continue;
-    await refuseUnportedRoute(r.req, r.opts, route.storeReady, route.sqliteOnly);
+    await refuseUnportedRoute(r.req, r.opts, route.storeReady);
     await run(r);
     return true;
   }
@@ -186,13 +186,13 @@ export function dispatchPublicJson({ res, opts }: RouteRequest, method: string, 
   return true;
 }
 
-export function assertSqliteStore(opts: ResolvedServeOpts, sqliteOnlyReason?: string): void {
-  if (opts.store.kind !== 'sqlite') throw new HttpError(501, sqliteOnlyReason === undefined ? STORE_NOT_PORTED_MESSAGE : `${STORE_NOT_PORTED_MESSAGE}: ${sqliteOnlyReason}`);
+export function assertSqliteStore(opts: ResolvedServeOpts): void {
+  if (opts.store.kind !== 'sqlite') throw new HttpError(501, STORE_NOT_PORTED_MESSAGE);
 }
 
-/** Under another store, a route that names no group, or one the store lacks, answers 501 without running (a sqliteOnly route adds its reason); the caller is checked first, so a bad key is still a 401. */
-async function refuseUnportedRoute(req: IncomingMessage, opts: ResolvedServeOpts, group?: StoreGroup, sqliteOnlyReason?: string): Promise<void> {
+/** Under another store, a route that names no group, or one the store lacks, answers 501 without running; the caller is checked first, so a bad key is still a 401. */
+async function refuseUnportedRoute(req: IncomingMessage, opts: ResolvedServeOpts, group?: StoreGroup): Promise<void> {
   if (opts.store.kind === 'sqlite' || (group !== undefined && hasGroup(opts.store, group))) return;
   await requireAuth(req, opts);
-  assertSqliteStore(opts, sqliteOnlyReason);
+  assertSqliteStore(opts);
 }
