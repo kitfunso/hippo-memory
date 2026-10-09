@@ -1,5 +1,5 @@
 // Design 4, 5, 8 and 11: tool switches, busy stores, dry runs, the summary line and the item's own time.
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { unlinkSync, utimesSync } from 'node:fs';
 import { join } from 'node:path';
 import { getContext } from '../src/api.js';
@@ -16,6 +16,9 @@ import {
   auditTotal, closeWorld, codexSummary, ctxFor, dormantRows, liveRows, liveTexts, note, openWorld, projectNotes, tally, toolTally, userNotes,
   writeConfig, type World,
 } from './_helpers/agent-memories-world.js';
+
+// Every sync asks git for each folder's layout in a child process, and a case runs several syncs.
+vi.setConfig({ testTimeout: 30_000 });
 
 const A = 'Run the schema check before this service deploys.';
 const B = 'The staging database moved to the eu-central region.';

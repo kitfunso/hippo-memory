@@ -71,7 +71,7 @@ export function addTagToEntries(hippoRoot: string, tenantId: string, ids: readon
 }
 
 /** writeEntry on the caller's open store, so a loop of writes opens the store once; each row still commits alone. */
-export function writeEntryOn(db: DatabaseSyncLike, hippoRoot: string, entry: MemoryEntry, opts?: WriteEntryOptions): void {
+function writeEntryOn(db: DatabaseSyncLike, hippoRoot: string, entry: MemoryEntry, opts?: WriteEntryOptions): void {
   try {
     const stamped = stampOriginProject(hippoRoot, entry);
     writeEntryDbOnly(db, stamped, opts);

@@ -11,6 +11,9 @@ import { openHippoDb, closeHippoDb, getMeta, setMeta, getSchemaVersion, getCurre
 import { loadEmbeddingIndex, saveEmbeddingIndex } from '../src/embeddings.js';
 import { decodeVector, deleteOrphanVectors, encodeVector, rankVectorRows, topVectorMatches, type VectorMatch, type VectorRow } from '../src/db/vector-store.js';
 
+// The scan case seeds 600 rows and their vectors, so that the scan runs long enough to yield part way.
+vi.setConfig({ testTimeout: 30_000 });
+
 let root: string;
 
 beforeEach(() => {

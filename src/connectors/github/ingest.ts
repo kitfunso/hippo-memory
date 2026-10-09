@@ -3,7 +3,8 @@
 // the store logs the key in the memory's own transaction, which is what holds when two workers race.
 
 import { remember, type Context, type RememberOpts } from '../../api.js';
-import { logEvent, seenEvent } from '../../store/connectors/github.js';
+import { requireGroup, storeFor } from '../../store-port.js';
+import type { ConnectorEvent } from '../../store/port.js';
 import { RejectedValueError } from '../../store/rejection.js';
 import { computeIdempotencyKey } from './signature.js';
 import {
@@ -93,16 +94,18 @@ function eventUpdatedAt(event: IngestEvent): string | null {
   }
 }
 
-export function ingestEvent(ctx: Context, input: IngestInput): IngestResult {
+export async function ingestEvent(ctx: Context, input: IngestInput): Promise<IngestResult> {
+  const events = requireGroup(storeFor(ctx), 'connectorEvents');
   const idempotencyKey = computeIdempotencyKey(
     eventArtifactRef(input.event),
     eventUpdatedAt(input.event),
   );
+  const event: ConnectorEvent = { connector: 'github', idempotencyKey, deliveryId: input.deliveryId, eventName: input.event.eventName };
 
   // Fast path: pre-check. Avoids running the transform / opening a write tx
   // for the common already-seen case (GitHub auto-retries with the same body).
-  const seen = seenEvent(ctx.hippoRoot, idempotencyKey);
-  if (seen) return { status: 'duplicate', memoryId: seen.memoryId };
+  const seen = await events.eventRecord(event);
+  if (seen.seen) return { status: 'duplicate', memoryId: seen.memoryId };
 
   const opts = transformEvent(input.event);
 
@@ -110,38 +113,26 @@ export function ingestEvent(ctx: Context, input: IngestInput): IngestResult {
     // Empty body: no memory to write, but mark seen so a retry of the same
     // empty event returns 'duplicate' (not 'skipped' again — that would
     // re-run the transform on every retry).
-    markKeySeenWithoutMemory(ctx.hippoRoot, idempotencyKey, input);
+    await events.markEventSeen(event);
     return { status: 'skipped', memoryId: null };
   }
 
   try {
-    return rememberWithEventLog(ctx, input, idempotencyKey, opts);
+    return await rememberWithEventLog(ctx, event, opts);
   } catch (e) {
     if (e instanceof RejectedValueError) {
       // A tombstone hit is a PERMANENT skip, never DLQ-retried: mark the key seen like the empty-body
       // branch above so a GitHub retry of the same delivery acks as done, not error.
-      markKeySeenWithoutMemory(ctx.hippoRoot, idempotencyKey, input);
+      await events.markEventSeen(event);
       return { status: 'skipped', memoryId: null };
     }
     throw e;
   }
 }
 
-function markKeySeenWithoutMemory(hippoRoot: string, idempotencyKey: string, input: IngestInput): void {
-  logEvent(hippoRoot, { idempotencyKey, deliveryId: input.deliveryId, eventName: input.event.eventName, memoryId: null });
-}
-
-function rememberWithEventLog(
-  ctx: Context,
-  input: IngestInput,
-  idempotencyKey: string,
-  opts: RememberOpts,
-): IngestResult {
+async function rememberWithEventLog(ctx: Context, event: ConnectorEvent, opts: RememberOpts): Promise<IngestResult> {
   // No `|| 'connector:github'` fallback (see rememberWithEventLog in slack/ingest.ts for rationale).
-  const result = remember(
-    { ...ctx, store: undefined }, // this function answers at once and its event reads go by root, so the write runs on hippo.db too
-    { ...opts, untrusted: true, event: { connector: 'github', idempotencyKey, deliveryId: input.deliveryId, eventName: input.event.eventName } },
-  );
+  const result = await remember(ctx, { ...opts, untrusted: true, event });
   // Another worker logged this key between the pre-check and the write: its memory stands and ours was not stored.
   if (result.duplicate) return { status: 'skipped_duplicate', memoryId: result.duplicate.memoryId };
   return { status: 'ingested', memoryId: result.id };

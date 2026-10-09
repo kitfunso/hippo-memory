@@ -2,7 +2,6 @@
 
 import { loadAllEntries } from '../store/entry-reads.js';
 import { deleteEntry, memoriesBackingObjects } from '../store/delete-and-batch.js';
-import { openHippoDb, closeHippoDb } from '../db.js';
 import { auditMemories, AUDIT_OPS, type AuditEvent, type AuditOp } from '../store/audit.js';
 import * as api from '../api.js';
 import { resolveTenantId } from '../tenant.js';
@@ -105,13 +104,7 @@ function cmdAuditPrune(hippoRoot: string, flags: CliFlags): void {
   const dryRun = flagIsTrue(flags, 'dry-run');
   const asJson = boolFlag(flags, 'json');
 
-  const db = openHippoDb(hippoRoot);
-  let result;
-  try {
-    result = pruneAuditLog(db, { olderThanDays, tenantId, dryRun, actor: 'cli' });
-  } finally {
-    closeHippoDb(db);
-  }
+  const result = pruneAuditLog(hippoRoot, { olderThanDays, tenantId, dryRun, actor: 'cli' });
 
   if (asJson) {
     console.log(JSON.stringify(result));

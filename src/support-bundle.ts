@@ -8,8 +8,7 @@ import { findHippoStoreDir, isGlobalStoreRoot } from './project-identity.js';
 import { realpathOrResolve } from './util/real-path.js';
 import { getGlobalRoot } from './shared.js';
 import { isInitialized } from './store/open.js';
-import { openHippoDbReadOnly, closeHippoDb, getSchemaVersion, getMeta, countTableRows, type DatabaseSyncLike } from './db.js';
-import { listTableNames } from './db/tables.js';
+import { readStoreInventory } from './store/diagnostics.js';
 import { runDoctor, type DoctorOpts } from './doctor.js';
 import { loadConfig } from './config.js';
 import { redactSecretsStrict } from './secret-detect.js';
@@ -50,12 +49,6 @@ function buildRuntime(): JsonObject {
     arch: process.arch,
     osRelease: os.release(),
   };
-}
-
-function countTables(db: DatabaseSyncLike): JsonObject {
-  const tables: JsonObject = {};
-  for (const name of listTableNames(db)) tables[name] = countTableRows(db, name);
-  return tables;
 }
 
 function redactConfigValue(value: JsonValue): JsonValue {
@@ -101,18 +94,12 @@ function buildStoreEntry(kind: 'project' | 'global', storeDir: string): JsonObje
   const walPath = `${dbPath}-wal`;
   if (fs.existsSync(walPath)) files['hippo.db-wal'] = fs.statSync(walPath).size;
 
-  let db: DatabaseSyncLike | null = null;
   try {
-    db = openHippoDbReadOnly(storeDir);
-    const schemaVersion = getSchemaVersion(db);
-    const minCompatibleBinary = getMeta(db, 'min_compatible_binary', '') || null;
-    const tables = countTables(db);
+    const { schemaVersion, minCompatibleBinary, tables } = readStoreInventory(storeDir);
     const { configFile, config } = readStoreConfig(storeDir);
     return { kind, path: storeDir, schemaVersion, minCompatibleBinary, files, tables, configFile, config };
   } catch (err) {
     return { kind, path: storeDir, error: errorMessage(err) };
-  } finally {
-    if (db !== null) closeHippoDb(db);
   }
 }
 

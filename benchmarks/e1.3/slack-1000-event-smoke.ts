@@ -52,7 +52,7 @@ export async function runSlackSmoke(opts: SmokeOpts): Promise<SmokeResult> {
   try {
     for (let pass = 0; pass < opts.replay; pass++) {
       for (let i = 0; i < opts.count; i++) {
-        ingestMessage(ctx, {
+        await ingestMessage(ctx, {
           teamId: 'T1',
           channel: { id: 'C1', is_private: false },
           message: {

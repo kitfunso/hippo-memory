@@ -5,7 +5,7 @@ import { closeHippoDb, openHippoDb } from '../../src/db.js';
 import type { EntryWrites, HippoStore } from '../../src/server.js';
 import { sqliteStore } from '../../src/store-port.js';
 import type { ConnectorEvent, ConnectorWrites } from '../../src/store/port.js';
-import { inMemoryEntryWritesStore } from './in-memory-entry-writes-store.js';
+import { inMemoryEntryWritesStore, type InMemoryEntryWritesStore } from './in-memory-entry-writes-store.js';
 import type { StoreSide } from './store-conformance.js';
 
 /** One event log row; the delivery id and event name are GitHub's and null for Slack. */
@@ -33,9 +33,13 @@ export interface ConnectorSide extends StoreSide {
   readonly records: () => readonly HeldRecord[];
 }
 
-export interface InMemoryConnectorWritesStore extends ConnectorSide {
+export interface InMemoryConnectorWritesStore extends ConnectorSide, Pick<InMemoryEntryWritesStore, 'rawIdsFor' | 'archiveAllWith'> {
   readonly store: HippoStore & { readonly entryWrites: EntryWrites; readonly connectorWrites: ConnectorWrites };
   readonly forgotten: () => number;
+  /** The log row under the event's key, if one is there. */
+  readonly logged: (event: ConnectorEvent) => LoggedEvent | undefined;
+  /** Logs the event unless its key already has a row, which then stays as it is. */
+  readonly logOnce: (event: ConnectorEvent, memoryId: string | null) => void;
 }
 
 const EVENTS_SQL = `SELECT 'slack' AS connector, event_id AS eventKey, memory_id AS memoryId, NULL AS deliveryId, NULL AS eventName, ingested_at AS loggedAt FROM slack_event_log
@@ -52,8 +56,9 @@ function onDb<T>(hippoRoot: string, read: (db: ReturnType<typeof openHippoDb>) =
   }
 }
 
-function rowsOf<T>(hippoRoot: string, sql: string): T[] {
-  // SAFETY: each of the two statements above names its row type's six columns under their field names.
+/** Every row of a statement that names its row type's columns under their field names. */
+export function rowsOf<T>(hippoRoot: string, sql: string): T[] {
+  // SAFETY: the caller's statement aliases each column to a field of T.
   return onDb(hippoRoot, (db) => db.prepare(sql).all() as T[]).map((row) => ({ ...row }));
 }
 
@@ -77,7 +82,7 @@ const eventKeyOf = (event: ConnectorEvent): string => (event.connector === 'slac
 /** One key space per connector, as hippo.db keeps one log table for each. */
 const slotOf = (connector: string, eventKey: string): string => `${connector}\u0000${eventKey}`;
 
-function logRow(event: ConnectorEvent, memoryId: string): LoggedEvent {
+function logRow(event: ConnectorEvent, memoryId: string | null): LoggedEvent {
   const github = event.connector === 'github' ? event : null;
   return {
     connector: event.connector, eventKey: eventKeyOf(event), memoryId,
@@ -95,6 +100,9 @@ export function inMemoryConnectorWritesStore(hippoRoot: string): InMemoryConnect
   const events = new Map(eventsAt(hippoRoot).map((row): [string, LoggedEvent] => [slotOf(row.connector, row.eventKey), row]));
   const records = recordsAt(hippoRoot);
   const slot = (event: ConnectorEvent): string => slotOf(event.connector, eventKeyOf(event));
+  const logOnce = (event: ConnectorEvent, memoryId: string | null): void => {
+    if (!events.has(slot(event))) events.set(slot(event), logRow(event, memoryId));
+  };
 
   const connectorWrites: ConnectorWrites = {
     async writeConnectorEntry({ entry, actor, event, quarantine }) {
@@ -116,9 +124,7 @@ export function inMemoryConnectorWritesStore(hippoRoot: string): InMemoryConnect
       }
     },
     async archiveConnectorEntry({ event, ...archive }) {
-      return base.archiveWith(archive, () => {
-        if (!events.has(slot(event))) events.set(slot(event), logRow(event, archive.id));
-      });
+      return base.archiveWith(archive, () => logOnce(event, archive.id));
     },
   };
 
@@ -128,5 +134,9 @@ export function inMemoryConnectorWritesStore(hippoRoot: string): InMemoryConnect
     events: () => [...events.values()].sort(slackFirst),
     records: () => structuredClone(records).sort(oldestFirst),
     forgotten: base.forgotten,
+    rawIdsFor: base.rawIdsFor,
+    archiveAllWith: base.archiveAllWith,
+    logged: (event) => events.get(slot(event)),
+    logOnce,
   };
 }

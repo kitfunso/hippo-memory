@@ -1,4 +1,4 @@
-// Each HTTP request and MCP tool call opens each store it reads once, however many api helpers it runs.
+// A request opens each store it reads on the server thread once, however many api helpers it runs, and not at all when its store work runs on worker threads.
 // Counts real DatabaseSync connections per database file by patching the prototype, as the hook open-count test does.
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { createRequire } from 'node:module';
@@ -100,26 +100,26 @@ describe('store opens per request', () => {
     expect(await opensDuring(() => call('POST', '/v1/memories', { content: 'canary rollouts start at five percent of traffic' }))).toEqual({});
   });
 
-  it('GET /v1/memories (recall) opens the store once', async () => {
-    expect(await opensDuring(() => call('GET', '/v1/memories?q=rollback%20plan'))).toEqual({ local: 1 });
+  it("GET /v1/memories (recall) opens no connection on the server thread, its reads running on the store's reader threads", async () => {
+    expect(await opensDuring(() => call('GET', '/v1/memories?q=rollback%20plan'))).toEqual({});
   });
 
-  it('MCP hippo_recall over POST /mcp opens the store once', async () => {
-    expect(await opensDuring(() => call('POST', '/mcp', recallOverMcp))).toEqual({ local: 1 });
+  it('MCP hippo_recall over POST /mcp opens no connection on the server thread', async () => {
+    expect(await opensDuring(() => call('POST', '/mcp', recallOverMcp))).toEqual({});
   });
 
   it('an add-on route opens the store once across the api helpers it runs', async () => {
     expect(await opensDuring(() => call('POST', '/v1/test/remember-then-recall', {}))).toEqual({ local: 1 });
   });
 
-  it('concurrent reads each open their own handle, and a write among them opens none', async () => {
+  it('concurrent recalls and a write among them open no connection on the server thread', async () => {
     const requests = async () => void await Promise.all([
       call('GET', '/v1/memories?q=rollback'),
       call('GET', '/v1/memories?q=deploy'),
       call('POST', '/mcp', recallOverMcp),
       call('POST', '/v1/memories', { content: 'the staging database is rebuilt every Sunday night' }),
     ]);
-    expect(await opensDuring(requests)).toEqual({ local: 3 });
+    expect(await opensDuring(requests)).toEqual({});
   });
 });
 

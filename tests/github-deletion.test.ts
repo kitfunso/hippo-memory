@@ -69,10 +69,10 @@ describe('handleCommentDeleted', () => {
   });
   afterEach(() => rmSync(root, { recursive: true, force: true }));
 
-  it('1. archives a single matching raw row', () => {
+  it('1. archives a single matching raw row', async () => {
     const id = seedMemory(root, { content: 'comment body v1' });
 
-    const result = handleCommentDeleted(ctxFor(root), {
+    const result = await handleCommentDeleted(ctxFor(root), {
       artifactRef: ARTIFACT,
       idempotencyKey: 'idem-1',
       deliveryId: 'd-1',
@@ -85,12 +85,12 @@ describe('handleCommentDeleted', () => {
     expect(archiveRowCount(root, id)).toBe(1);
   });
 
-  it('2. archives ALL raw rows sharing artifact_ref (edit history)', () => {
+  it('2. archives ALL raw rows sharing artifact_ref (edit history)', async () => {
     const id1 = seedMemory(root, { content: 'edit v1' });
     const id2 = seedMemory(root, { content: 'edit v2' });
     const id3 = seedMemory(root, { content: 'edit v3' });
 
-    const result = handleCommentDeleted(ctxFor(root), {
+    const result = await handleCommentDeleted(ctxFor(root), {
       artifactRef: ARTIFACT,
       idempotencyKey: 'idem-edit',
       deliveryId: 'd-edit',
@@ -107,11 +107,11 @@ describe('handleCommentDeleted', () => {
     expect(archiveRowCount(root, id3)).toBe(1);
   });
 
-  it('3. cross-tenant: deletion under tenant A does not touch tenant B row', () => {
+  it('3. cross-tenant: deletion under tenant A does not touch tenant B row', async () => {
     const idA = seedMemory(root, { content: 'tenant A comment', tenantId: 'a' });
     const idB = seedMemory(root, { content: 'tenant B comment', tenantId: 'b' });
 
-    const result = handleCommentDeleted(ctxFor(root, 'a'), {
+    const result = await handleCommentDeleted(ctxFor(root, 'a'), {
       artifactRef: ARTIFACT,
       idempotencyKey: 'idem-a',
       deliveryId: 'd-a',
@@ -126,14 +126,14 @@ describe('handleCommentDeleted', () => {
     expect(archiveRowCount(root, idB)).toBe(0);
   });
 
-  it('4. cross-kind: only archives kind=raw, leaves distilled alone', () => {
+  it('4. cross-kind: only archives kind=raw, leaves distilled alone', async () => {
     const rawId = seedMemory(root, { content: 'the raw row', kind: 'raw' });
     const distilledId = seedMemory(root, {
       content: 'the distilled row',
       kind: 'distilled',
     });
 
-    const result = handleCommentDeleted(ctxFor(root), {
+    const result = await handleCommentDeleted(ctxFor(root), {
       artifactRef: ARTIFACT,
       idempotencyKey: 'idem-kind',
       deliveryId: 'd-kind',
@@ -146,8 +146,8 @@ describe('handleCommentDeleted', () => {
     expect(rawRowExists(root, distilledId)).toBe(true);
   });
 
-  it('5. missing memory: returns archive_skipped_not_found and marks key seen', () => {
-    const result = handleCommentDeleted(ctxFor(root), {
+  it('5. missing memory: returns archive_skipped_not_found and marks key seen', async () => {
+    const result = await handleCommentDeleted(ctxFor(root), {
       artifactRef: 'github://acme/repo/issue/999/comment/never',
       idempotencyKey: 'idem-missing',
       deliveryId: 'd-missing',
@@ -158,7 +158,7 @@ describe('handleCommentDeleted', () => {
     expect(result.archivedCount).toBe(0);
 
     // Replay returns 'duplicate' because key was marked seen.
-    const replay = handleCommentDeleted(ctxFor(root), {
+    const replay = await handleCommentDeleted(ctxFor(root), {
       artifactRef: 'github://acme/repo/issue/999/comment/never',
       idempotencyKey: 'idem-missing',
       deliveryId: 'd-missing',
@@ -167,10 +167,10 @@ describe('handleCommentDeleted', () => {
     expect(replay.status).toBe('duplicate');
   });
 
-  it('6. duplicate delivery: second call returns duplicate, no double-archive', () => {
+  it('6. duplicate delivery: second call returns duplicate, no double-archive', async () => {
     const id = seedMemory(root, { content: 'dup target' });
 
-    const first = handleCommentDeleted(ctxFor(root), {
+    const first = await handleCommentDeleted(ctxFor(root), {
       artifactRef: ARTIFACT,
       idempotencyKey: 'idem-dup',
       deliveryId: 'd-dup',
@@ -182,7 +182,7 @@ describe('handleCommentDeleted', () => {
     const archCountAfterFirst = archiveRowCount(root, id);
     expect(archCountAfterFirst).toBe(1);
 
-    const second = handleCommentDeleted(ctxFor(root), {
+    const second = await handleCommentDeleted(ctxFor(root), {
       artifactRef: ARTIFACT,
       idempotencyKey: 'idem-dup',
       deliveryId: 'd-dup',
@@ -195,10 +195,10 @@ describe('handleCommentDeleted', () => {
     expect(archiveRowCount(root, id)).toBe(1);
   });
 
-  it('7. already-archived (re-deletion attempt with new key): no rows match', () => {
+  it('7. already-archived (re-deletion attempt with new key): no rows match', async () => {
     seedMemory(root, { content: 'first delete target' });
 
-    const first = handleCommentDeleted(ctxFor(root), {
+    const first = await handleCommentDeleted(ctxFor(root), {
       artifactRef: ARTIFACT,
       idempotencyKey: 'idem-redel-1',
       deliveryId: 'd-redel-1',
@@ -207,7 +207,7 @@ describe('handleCommentDeleted', () => {
     expect(first.status).toBe('archived');
 
     // New key, same artifactRef. No raw rows remain -> archive_skipped_not_found.
-    const second = handleCommentDeleted(ctxFor(root), {
+    const second = await handleCommentDeleted(ctxFor(root), {
       artifactRef: ARTIFACT,
       idempotencyKey: 'idem-redel-2',
       deliveryId: 'd-redel-2',
@@ -217,7 +217,7 @@ describe('handleCommentDeleted', () => {
     expect(second.archivedCount).toBe(0);
 
     // The new key is now marked seen -> a third attempt with same key is duplicate.
-    const third = handleCommentDeleted(ctxFor(root), {
+    const third = await handleCommentDeleted(ctxFor(root), {
       artifactRef: ARTIFACT,
       idempotencyKey: 'idem-redel-2',
       deliveryId: 'd-redel-2',
@@ -226,7 +226,7 @@ describe('handleCommentDeleted', () => {
     expect(third.status).toBe('duplicate');
   });
 
-  it('8. archived private-scope content does not surface via no-scope recall', () => {
+  it('8. archived private-scope content does not surface via no-scope recall', async () => {
     const distinctive = 'octopus-canary-token-zaqxsw';
     seedMemory(root, {
       content: distinctive,
@@ -238,7 +238,7 @@ describe('handleCommentDeleted', () => {
     expect(before.results.some((r) => r.content.includes(distinctive))).toBe(true);
 
     // Archive via deletion.
-    const result = handleCommentDeleted(ctxFor(root), {
+    const result = await handleCommentDeleted(ctxFor(root), {
       artifactRef: ARTIFACT,
       idempotencyKey: 'idem-private',
       deliveryId: 'd-private',

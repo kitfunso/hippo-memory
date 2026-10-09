@@ -62,7 +62,7 @@ export async function backfillChannel(
     });
     pages++;
     for (const msg of page.messages) {
-      const r = ingestMessage(ctx, {
+      const r = await ingestMessage(ctx, {
         teamId: opts.teamId,
         channel: opts.channel,
         message: msg,

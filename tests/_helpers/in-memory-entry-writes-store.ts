@@ -29,6 +29,10 @@ export interface InMemoryEntryWritesStore extends StoreSide {
   readonly writeWith: (write: EntryWrite, companion: (tx: Tx, rememberAt: number) => void) => Promise<void>;
   /** archiveRaw with `companion` run as the archive commits. */
   readonly archiveWith: (archive: RawArchive, companion: () => void) => Promise<string>;
+  /** The ids of the raw rows the tenant holds under the ref, in the order they were written. */
+  readonly rawIdsFor: (artifactRef: string, tenantId: string) => string[];
+  /** Archives every id in one staged write, with `companion` run before it commits: no reach check, and one failed id drops them all. */
+  readonly archiveAllWith: (ids: readonly string[], by: Pick<RawArchive, 'actor' | 'reason'>, companion: () => void) => Promise<void>;
 }
 
 /** One write's rows and audit rows, staged so a throw drops both, as a rolled-back transaction would. */
@@ -126,20 +130,40 @@ export function inMemoryEntryWritesStore(hippoRoot: string): InMemoryEntryWrites
     });
   };
 
+  const archiveRow = (tx: Tx, row: MemoryEntry, { actor, reason }: Pick<RawArchive, 'actor' | 'reason'>): ArchivedRow => {
+    if (row.kind !== 'raw') throw new BadRequestError(`memory ${row.id} is not raw (kind=${row.kind})`);
+    const archivedAt = new Date().toISOString();
+    tx.rows.delete(row.id);
+    tx.audit.push({ tenantId: row.tenantId, actor, op: 'archive_raw', targetId: row.id, metadata: { reason } });
+    if (row.dag_parent_id) markParentDirty(tx, row.dag_parent_id, row.tenantId, actor);
+    return { memoryId: row.id, archivedAt, reason, archivedBy: actor };
+  };
+
   const archiveWith: InMemoryEntryWritesStore['archiveWith'] = async (archive, companion) => {
-    const archivedAt = await inTx(archive.actor, (tx) => {
-      const row = inReach(tx, archive, archive.id);
-      if (row.kind !== 'raw') throw new BadRequestError(`memory ${archive.id} is not raw (kind=${row.kind})`);
-      const at = new Date().toISOString();
-      tx.rows.delete(archive.id);
-      tx.audit.push({ tenantId: row.tenantId, actor: archive.actor, op: 'archive_raw', targetId: archive.id, metadata: { reason: archive.reason } });
-      if (row.dag_parent_id) markParentDirty(tx, row.dag_parent_id, row.tenantId, archive.actor);
+    const row = await inTx(archive.actor, (tx) => {
+      const done = archiveRow(tx, inReach(tx, archive, archive.id), archive);
       companion();
-      return at;
+      return done;
     });
-    archived.push({ memoryId: archive.id, archivedAt, reason: archive.reason, archivedBy: archive.actor });
+    archived.push(row);
     forgotten += 1;
-    return archivedAt;
+    return row.archivedAt;
+  };
+
+  const rawIdsFor: InMemoryEntryWritesStore['rawIdsFor'] = (artifactRef, tenantId) =>
+    [...memories.values()].filter((e) => e.artifact_ref === artifactRef && e.tenantId === tenantId && e.kind === 'raw').map((e) => e.id);
+
+  const archiveAllWith: InMemoryEntryWritesStore['archiveAllWith'] = async (ids, by, companion) => {
+    const rows = await inTx(by.actor, (tx) => {
+      const done = ids.map((id) => {
+        const row = tx.rows.get(id);
+        if (!row) throw new NotFoundError(`memory not found: ${id}`);
+        return archiveRow(tx, row, by);
+      });
+      companion();
+      return done;
+    });
+    archived.push(...rows);
   };
 
   const entryWrites: EntryWrites = {
@@ -192,5 +216,7 @@ export function inMemoryEntryWritesStore(hippoRoot: string): InMemoryEntryWrites
     },
     entryWrites,
   };
-  return { store, auditRows: base.auditRows, archived: () => structuredClone(archived), forgotten: () => forgotten, writeWith, archiveWith };
+  return {
+    store, auditRows: base.auditRows, archived: () => structuredClone(archived), forgotten: () => forgotten, writeWith, archiveWith, rawIdsFor, archiveAllWith,
+  };
 }

@@ -42,8 +42,8 @@ export function isPublicRoute(method: string, path: string): boolean {
 /** The /v1 routes in dispatch order; the first entry whose method and path match handles the request. */
 const V1_ROUTES: readonly Route[] = [
   { method: 'POST', path: '/v1/memories', storeReady: 'entryWrites', loop: 'off', handler: handleCreateMemory },
-  { method: 'GET', path: '/v1/graph', storeReady: 'graphReads', handler: handleGetGraph },
-  { method: 'GET', path: '/v1/memories', storeReady: 'base', handler: handleRecallMemories },
+  { method: 'GET', path: '/v1/graph', storeReady: 'graphReads', loop: 'off', handler: handleGetGraph },
+  { method: 'GET', path: '/v1/memories', storeReady: 'base', loop: 'off', handler: handleRecallMemories },
   { method: 'GET', pattern: '/v1/sessions/:id/assemble', storeReady: 'dagReads', loop: 'off', handler: handleAssembleSession },
   { method: 'GET', pattern: '/v1/recall/drill/:id', storeReady: 'dagReads', handler: handleDrillRecall },
   { method: 'POST', pattern: '/v1/memories/:id/archive', storeReady: 'entryWrites', loop: 'off', handler: handleArchiveMemory },
@@ -56,9 +56,9 @@ const V1_ROUTES: readonly Route[] = [
   { method: 'POST', path: '/v1/auth/keys', storeReady: 'keyWrites', loop: 'off', handler: handleCreateAuthKey },
   { method: 'GET', path: '/v1/auth/keys', storeReady: 'keyWrites', loop: 'off', handler: handleListAuthKeys },
   { method: 'DELETE', pattern: '/v1/auth/keys/:keyId', storeReady: 'keyAudit', loop: 'off', handler: handleRevokeAuthKey },
-  { method: 'GET', path: '/v1/quarantine', storeReady: 'quarantine', handler: handleListQuarantine },
-  { method: 'POST', pattern: '/v1/quarantine/:id/approve', storeReady: 'quarantine', handler: handleApproveQuarantine },
-  { method: 'POST', pattern: '/v1/quarantine/:id/reject', storeReady: 'quarantine', handler: handleRejectQuarantine },
+  { method: 'GET', path: '/v1/quarantine', storeReady: 'quarantine', loop: 'off', handler: handleListQuarantine },
+  { method: 'POST', pattern: '/v1/quarantine/:id/approve', storeReady: 'quarantine', loop: 'off', handler: handleApproveQuarantine },
+  { method: 'POST', pattern: '/v1/quarantine/:id/reject', storeReady: 'quarantine', loop: 'off', handler: handleRejectQuarantine },
   { method: 'GET', path: '/v1/audit', storeReady: 'auditLog', loop: 'off', handler: handleListAudit },
   { method: 'POST', path: '/v1/predictions', storeReady: 'predictions', loop: 'off', handler: handleCreatePrediction },
   { method: 'GET', path: '/v1/predictions', storeReady: 'predictions', loop: 'off', handler: handleListPredictions },

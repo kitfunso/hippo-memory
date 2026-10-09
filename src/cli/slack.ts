@@ -64,11 +64,11 @@ function cmdSlackDlqList(hippoRoot: string, _flags: CliFlags): void {
   }
 }
 
-function cmdSlackDlqReplay(
+async function cmdSlackDlqReplay(
   hippoRoot: string,
   args: string[],
   flags: CliFlags,
-): void {
+): Promise<void> {
   const idArg = args[2];
   if (!idArg) {
     printError('Usage: hippo slack dlq replay <id> [--force]');
@@ -80,7 +80,7 @@ function cmdSlackDlqReplay(
     process.exit(1);
   }
   const force = flags.force === true;
-  const result = replayDlqEntry(
+  const result = await replayDlqEntry(
     { hippoRoot },
     id,
     {
@@ -141,7 +141,7 @@ function cmdSlackWorkspacesRemove(
   console.log(`removed: ${teamId}`);
 }
 
-export function cmdSlack(hippoRoot: string, args: string[], flags: CliFlags): void {
+export async function cmdSlack(hippoRoot: string, args: string[], flags: CliFlags): Promise<void> {
   const sub = args[0];
   if (sub === 'backfill') {
     cmdSlackBackfill(hippoRoot, flags);
@@ -152,7 +152,7 @@ export function cmdSlack(hippoRoot: string, args: string[], flags: CliFlags): vo
     return;
   }
   if (sub === 'dlq' && args[1] === 'replay') {
-    cmdSlackDlqReplay(hippoRoot, args, flags);
+    await cmdSlackDlqReplay(hippoRoot, args, flags);
     return;
   }
   if (sub === 'workspaces') {

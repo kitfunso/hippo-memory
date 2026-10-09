@@ -24,8 +24,7 @@
  *     written AFTER the DELETE WHERE ts < cutoff, so ts > cutoff).
  */
 
-import { withWriteScope, type DatabaseSyncLike } from '../db.js';
-import { appendAuditEvent, countAuditBefore, deleteAuditBefore } from '../store/audit.js';
+import { pruneAuditRows } from '../store/audit.js';
 import { DAY_MS } from '../util/time.js';
 
 export interface PruneAuditOpts {
@@ -68,7 +67,7 @@ function isTenantIdString(value: string): value is string {
  * Throws on invalid inputs (non-positive days, missing tenantId).
  */
 export function pruneAuditLog(
-  db: DatabaseSyncLike,
+  hippoRoot: string,
   opts: PruneAuditOpts,
 ): PruneAuditResult {
   if (!Number.isFinite(opts.olderThanDays) || opts.olderThanDays <= 0) {
@@ -81,24 +80,7 @@ export function pruneAuditLog(
   const actor = opts.actor ?? 'cli';
   const cutoff = computeCutoff(opts.olderThanDays);
 
-  let count = 0;
-  if (dryRun) {
-    // Dry-run: just count, no DELETE.
-    count = countAuditBefore(db, opts.tenantId, cutoff);
-  } else {
-    withWriteScope(db, 'audit_prune', () => {
-      count = deleteAuditBefore(db, opts.tenantId, cutoff);
-      // Record the prune itself in the audit trail. This row has ts = now,
-      // so it's not eligible for the cutoff that was just applied.
-      appendAuditEvent(db, {
-        tenantId: opts.tenantId,
-        actor,
-        op: 'audit_prune',
-        metadata: { cutoff, count, dryRun: false, olderThanDays: opts.olderThanDays },
-      });
-    });
-  }
-
+  const count = pruneAuditRows(hippoRoot, { tenantId: opts.tenantId, cutoff, actor, olderThanDays: opts.olderThanDays, dryRun });
   return { cutoff, count, dryRun };
 }
 

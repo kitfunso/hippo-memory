@@ -4,6 +4,7 @@ import { rmSync } from 'node:fs';
 import * as api from '../src/api.js';
 import { detectInstruction } from '../src/instruction-detect.js';
 import { readEntry } from '../src/store/entry-reads.js';
+import { withSharedStoreHandles } from '../src/db.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { arr, both, forAll, int, map, oneOf, pick, type Gen } from './_helpers/property.js';
 
@@ -94,14 +95,14 @@ describe('injection screening leaves the stored text alone', () => {
   beforeAll(() => { root = makeRoot('property-screen'); });
   afterAll(() => { rmSync(root, { recursive: true, force: true }); });
 
-  it('untrusted content is stored as it was sent, flagged or not', () => {
+  it('untrusted content is stored as it was sent, flagged or not', async () => {
     const ctx: api.HippoDbContext = { hippoRoot: root, tenantId: 'default', actor: api.adminActor('test') };
     // A visible word at each end: the store trims what it is given.
     const sent = map(arr(oneOf([PROSE, map(SMUGGLED, (s) => s.content)]), 1, 3), (bodies) => `note ${bodies.join('\n')} end`);
-    // Each run is a real write and read, so this one property runs fewer times than the others.
-    forAll(0x570e, 100, sent, (content) => {
+    // Each run is a real write and read, so this one property runs fewer times than the others, on one connection.
+    await withSharedStoreHandles(() => forAll(0x570e, 100, sent, (content) => {
       const { id } = api.remember(ctx, { content, untrusted: true });
       expect(readEntry(root, id, 'default')?.content).toBe(content);
-    });
+    }));
   });
 });

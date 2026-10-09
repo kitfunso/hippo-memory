@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -12,6 +12,9 @@ import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { loadConfig } from '../src/config.js';
 import { loadPhysicsState, savePhysicsState, refreshParticleProperties } from '../src/db/physics-state.js';
 import { simulate, type PhysicsParticle } from '../src/physics.js';
+
+// One merge case builds and consolidates five separate stores.
+vi.setConfig({ testTimeout: 30_000 });
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
 const createMemory7 = (content: string, options: Partial<Parameters<typeof createMemory>[1]> = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });

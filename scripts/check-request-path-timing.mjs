@@ -35,6 +35,7 @@ const { openHippoDb, closeHippoDb } = await load('db.js');
 const { createApiKey } = await load('store/auth.js');
 const { getContext, adminActor } = await load('api.js');
 const { handleMcpRequest } = await load('mcp/server.js');
+const { sqliteStore } = await load('store/sqlite/store.js');
 const { workerSqliteStore } = await load('store/sqlite/worker-store.js');
 const { serve } = await load('server.js');
 
@@ -111,6 +112,9 @@ function seed(root, sourceOf) {
 
 seed(localRoot, () => 'cli');
 seed(globalRoot, (i) => `shared:proj${i % 12}:seed`);
+// serve() refuses a second server on one root, and the copy is taken while no connection holds the store.
+const copyRoot = path.join(tmp, 'copy', '.hippo');
+fs.cpSync(localRoot, copyRoot, { recursive: true });
 
 const ctx = { hippoRoot: localRoot, tenantId: 'default', actor: adminActor('ci:timing') };
 const mcpCtx = { hippoRoot: localRoot, tenantId: 'default', actor: 'ci:timing' };
@@ -146,10 +150,13 @@ const keyLookup = async () => {
   if ((await served.findApiKey(keyId)) === null) throw new Error('the served store did not find the key the script minted');
 };
 
-// The request benchmarks/a1/p99-recall.ts times, through a real server and socket.
+// The request benchmarks/a1/p99-recall.ts times, through a real server and socket. serve() answers it from store worker threads, where this thread
+// counts nothing, so its work is counted on a second server over a copy of the store, in process.
 const server = await serve({ hippoRoot: localRoot, port: 0 });
-const httpRecall = (limit) => async () => {
-  const res = await fetch(`${server.url}/v1/memories?q=${encodeURIComponent('kafka redis')}&limit=${limit}`);
+const inProcess = sqliteStore(copyRoot);
+const inProcessServer = await serve({ hippoRoot: copyRoot, port: 0, store: inProcess });
+const httpRecall = (url, limit) => async () => {
+  const res = await fetch(`${url}/v1/memories?q=${encodeURIComponent('kafka redis')}&limit=${limit}`);
   const body = await res.json();
   if (!res.ok || body.results.length === 0) throw new Error(`GET /v1/memories failed: ${res.status} ${JSON.stringify(body).slice(0, 200)}`);
 };
@@ -169,9 +176,12 @@ const cases = [
   ['mcp hippo_peers', tool('hippo_peers'), [10, 17, 1]],
   ['served predictions list', () => served.predictions.listPredictions('default', { limit: 20 }), [0, 0, 0]],
   ['served key lookup', keyLookup, [0, 0, 0]],
-  ['http recall, limit 10', httpRecall(10), [62, 287, 1]],
+  ['http recall, limit 10', httpRecall(inProcessServer.url, 10), [62, 287, 1]],
   // Fifty rows back, so one extra statement per returned row passes the ceiling, which ten rows would not.
-  ['http recall, limit 50', httpRecall(50), [166, 335, 1]],
+  ['http recall, limit 50', httpRecall(inProcessServer.url, 50), [166, 335, 1]],
+  // As serve() answers by default: a statement or an open on the server thread during a recall fails here.
+  ['served http recall, limit 10', httpRecall(server.url, 10), [0, 0, 0]],
+  ['served http recall, limit 50', httpRecall(server.url, 50), [0, 0, 0]],
 ];
 
 let overworked = false;
@@ -192,12 +202,14 @@ try {
     overworked ||= overWork;
     // A request that moves to a worker thread, or an open whose pragma text changes, counts nothing here, and the ceiling would pass it unread.
     uncounted ||= (maxStatements > 0 && work.statements === 0) || (maxOpens > 0 && work.opens === 0);
-    console.log(`${label.padEnd(26)} ${median.toFixed(1).padStart(8)} ms  ${String(work.statements).padStart(4)} of ${maxStatements} statements, ${String(work.rows).padStart(6)} of ${maxRows} rows, ${String(work.opens).padStart(2)} of ${maxOpens} opens${overWork ? '  OVER CEILING' : ''}`);
+    console.log(`${label.padEnd(28)} ${median.toFixed(1).padStart(8)} ms  ${String(work.statements).padStart(4)} of ${maxStatements} statements, ${String(work.rows).padStart(6)} of ${maxRows} rows, ${String(work.opens).padStart(2)} of ${maxOpens} opens${overWork ? '  OVER CEILING' : ''}`);
     summary.push(`| ${label} | ${median.toFixed(1)} | ${work.statements} of ${maxStatements} | ${work.rows} of ${maxRows} | ${work.opens} of ${maxOpens} |`);
   }
 } finally {
   // The threads hold the store's files until they exit, and Windows cannot remove a folder with an open file.
   await server.stop();
+  await inProcessServer.stop();
+  await inProcess.close();
   await served.close();
   process.chdir(os.tmpdir());
   fs.rmSync(tmp, { recursive: true, force: true });

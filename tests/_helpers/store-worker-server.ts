@@ -1,7 +1,8 @@
 // A real server on a real store, on store workers or in process, for the tests that compare the two.
 import { vi } from 'vitest';
 import { createRequire } from 'node:module';
-import { rmSync } from 'node:fs';
+import { readdirSync, readFileSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
 import { createApiKey } from '../../src/store/auth.js';
 import { closeHippoDb, getHippoDbPath, openHippoDb, type DatabaseSyncLike } from '../../src/db.js';
 import type { JsonValue } from '../../src/json.js';
@@ -154,4 +155,10 @@ export async function seen(label: string, res: Response, keyIds: readonly string
 export function auditRows(root: string, keyIds: readonly string[]): string[] {
   const rows = onDb(root, (db) => db.prepare('SELECT tenant_id, actor, op, target_id, metadata_json FROM audit_log ORDER BY id').all());
   return rows.map((row) => scrub(JSON.stringify(row), keyIds));
+}
+
+/** Every markdown mirror and the stats mirror under `root`, as path and text. */
+export function mirrorFiles(root: string): string[] {
+  const names = readdirSync(root, { recursive: true, encoding: 'utf8' }).filter((name) => name.endsWith('.md') || name.endsWith('stats.json'));
+  return names.map((name) => scrub(`${name}\n${readFileSync(join(root, name), 'utf8')}`)).sort();
 }

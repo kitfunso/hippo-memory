@@ -12,14 +12,30 @@ export type OpPlaces<G> = { readonly [M in keyof G]: OpPlace };
 
 type BaseMethods = Omit<HippoStore, keyof StoreGroups | 'kind' | 'close'>;
 
-/** The store methods that answer from a worker, the base ones under `base`. Tagged by effect, not by name: predictionBaserate appends an audit row, so it is a write,
- *  and so is a read that opens through `openStore`, which records the half-life base and imports legacy rows on a store with no memory. */
+/** The store methods that answer from a worker, the base ones under `base`. Tagged by effect, not by name: predictionBaserate appends an audit row and
+ *  bumpRecallStats rewrites stats.json, so both are writes. A read that opens through `openStore` is a read: the writer runs that open's setup before any reader serves. */
 export const WORKER_OPS = {
-  // SHORTCUT: every openStore-backed read is tagged 'write', so it queues behind real writes on the one writer thread; run store setup once on the writer before readers serve, then tag them 'read'.
   base: {
     findApiKey: 'read',
-    entriesByIds: 'write',
+    searchRecallEntries: 'read',
+    entriesByIds: 'read',
+    activeGoals: 'read',
+    freshRawEntries: 'read',
+    continuity: 'read',
+    planningFallacyEvidence: 'read',
+    appendAuditEvents: 'write',
+    finishRecall: 'write',
+    bumpRecallStats: 'write',
     recordTokens: 'write',
+  },
+  vectors: {
+    embeddingIndexState: 'read',
+    storedVectors: 'read',
+    nearestEntries: 'read',
+    physicsParticles: 'read',
+  },
+  vectorViews: {
+    storedVectorViews: 'read',
   },
   keyAudit: {
     revokeApiKey: 'write',
@@ -31,12 +47,22 @@ export const WORKER_OPS = {
     createSelfApiKey: 'write',
     listApiKeys: 'read',
   },
+  vectorWrites: {
+    entriesWithoutVector: 'read',
+    writeVectors: 'write',
+  },
   entryWrites: {
     writeEntry: 'write',
     applyOutcome: 'write',
     supersede: 'write',
     archiveRaw: 'write',
     forget: 'write',
+  },
+  contextReads: {
+    unfinishedHandoff: 'read',
+    ambientCandidates: 'server',
+    contextCandidates: 'read',
+    ambientTallies: 'read',
   },
   predictions: {
     savePrediction: 'write',
@@ -46,14 +72,28 @@ export const WORKER_OPS = {
     predictionBaserate: 'write',
   },
   dagReads: {
-    sessionRawEntries: 'write',
-    sessionRawCount: 'write',
+    sessionRawEntries: 'read',
+    sessionRawCount: 'read',
     summaryWithDescendants: 'server',
   },
   auditLog: {
     listAuditEvents: 'read',
   },
+  quarantine: {
+    listQuarantined: 'read',
+    approveQuarantined: 'write',
+    rejectQuarantined: 'write',
+  },
+  graphReads: {
+    graphRows: 'read',
+  },
+  readiness: {
+    ping: 'read',
+  },
 } as const satisfies { readonly [G in keyof StoreGroups]?: OpPlaces<StoreGroups[G]> } & { readonly base: Partial<OpPlaces<BaseMethods>> };
+
+/** Sent by the executor itself and by no store method: the writer runs the store's open-time setup once, before any reader is sent a job. */
+export const STORE_SETUP_OP = 'setup';
 
 export type WorkerGroup = keyof typeof WORKER_OPS;
 

@@ -1,6 +1,8 @@
 // The dead-letter queue every webhook connector parks into: one redaction, one unroutable sentinel, one set of defaults, one replay result.
 
 import { DLQ_REDACTED_NOTE, redactPayload } from '../secret-detect.js';
+import { requireGroup, storeFor, type HippoStore } from '../store-port.js';
+import type { ConnectorDeadLetter } from '../store/port.js';
 
 /** The tenant stored on a row no tenant was resolved for; the column is NOT NULL. */
 const UNROUTABLE_TENANT = '__unroutable__';
@@ -27,21 +29,23 @@ export interface ParkedRow<Bucket extends string> {
   signature: string | null;
 }
 
-/** What one connector supplies: its table functions. `Own` is the columns only its table has. */
+/** What one connector supplies: the tag that names its table to the store, and its list. `Own` is the columns only its table has. */
 export interface ConnectorDlq<Own, Bucket extends string, Item> {
-  readonly insert: (hippoRoot: string, row: ParkedRow<Bucket> & Own) => number;
+  readonly letter: (row: ParkedRow<Bucket> & Own) => ConnectorDeadLetter;
   readonly list: (hippoRoot: string, tenantId: string, limit: number) => Item[];
 }
 
-export function parkInDlq<Own, Bucket extends string>(
+/** Parks on `store`, else on hippo.db under `hippoRoot`. */
+export async function parkInDlq<Own, Bucket extends string>(
   dlq: ConnectorDlq<Own, Bucket, unknown>,
   hippoRoot: string,
   opts: ParkOpts<Bucket> & NoInfer<Own>,
-): number {
+  store?: HippoStore,
+): Promise<number> {
   const rawPayload = redactPayload(opts.rawPayload);
   // A redacted body can never match its signature, so the row keeps none and replay needs --force.
   const redacted = rawPayload !== opts.rawPayload;
-  return dlq.insert(hippoRoot, {
+  const letter = dlq.letter({
     ...opts,
     tenantId: opts.tenantId ?? UNROUTABLE_TENANT,
     rawPayload,
@@ -49,6 +53,7 @@ export function parkInDlq<Own, Bucket extends string>(
     bucket: opts.bucket ?? DEFAULT_BUCKET,
     signature: redacted ? null : opts.signature ?? null,
   });
+  return requireGroup(storeFor({ hippoRoot, store }), 'connectorEvents').parkDeadLetter(letter);
 }
 
 export function listDlq<Item>(

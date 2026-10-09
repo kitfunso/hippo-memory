@@ -1,5 +1,5 @@
 import { envGithubAllowUnknownInstallationFallback, envTenant } from '../../env.js';
-import { githubRouting } from '../../store/connectors/github.js';
+import { requireGroup, storeFor, type HippoStore } from '../../store-port.js';
 
 export interface ResolveArgs {
   /** String form of `installation.id`. `null`/`undefined` means "no installation field" (PAT-mode webhook). */
@@ -32,14 +32,15 @@ export interface ResolveArgs {
  * The fail-closed contract lives here so every caller (route handler, CLI
  * replay, future MCP) gets identical protection.
  */
-export function resolveTenantForGitHub(
+export async function resolveTenantForGitHub(
   hippoRoot: string,
   args: ResolveArgs,
-): string | null {
+  store?: HippoStore,
+): Promise<string | null> {
   const envFallback = (): string => envTenant();
   const escapeHatch = envGithubAllowUnknownInstallationFallback();
 
-  const routing = githubRouting(hippoRoot, args);
+  const routing = await requireGroup(storeFor({ hippoRoot, store }), 'connectorEvents').githubRouting(args);
   if (routing.tenant) return routing.tenant;
 
   if (args.installationId) {
