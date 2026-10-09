@@ -131,6 +131,10 @@ export function syncFtsRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntr
   }
 }
 
+export function ftsRowExists(db: ReturnType<typeof openHippoDb>, id: string): boolean {
+  return db.prepare('SELECT id FROM memories_fts WHERE id = ?').get(id) !== undefined;
+}
+
 export function deleteFtsRow(db: ReturnType<typeof openHippoDb>, id: string): void {
   if (!isFtsAvailable(db)) return;
   try {

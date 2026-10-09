@@ -9,6 +9,8 @@ import { loadAllEntries } from '../store/entry-reads.js';
 import type { MemoryConflict } from '../store/rows.js';
 import { closeHippoDb, getHippoDbPath, openHippoDbReadOnly, type DatabaseSyncLike } from '../db.js';
 import { storedVectorIds } from '../db/vector-store.js';
+import { pragmaDataVersion } from '../db/meta.js';
+import { tableExists } from '../db/tables.js';
 import type { Band, ChipCounts, Layer, Overview, ProjectKind, ProjectSummary, ScatterGrid, ScatterPoints } from './dashboard-types.js';
 import { DAY_MS } from '../util/time.js';
 
@@ -380,17 +382,13 @@ export function createSnapshotService(hippoRoot: string, now: () => number, cach
       if (!fs.existsSync(getHippoDbPath(hippoRoot))) return null;
       db = openHippoDbReadOnly(hippoRoot);
     }
-    // SAFETY: PRAGMA data_version returns one row with that single integer column.
-    const row = db.prepare('PRAGMA data_version').get() as { data_version: number };
-    return row.data_version;
+    return pragmaDataVersion(db);
   };
 
   // No database means no vectors; a store not yet on schema v52 has no table to count, so coverage is unknown.
   const readEmbeddedIds = (): ReadonlySet<string> | null => {
     if (db === null) return new Set();
-    // SAFETY: sqlite_master rows carry a text name; the query only tests presence.
-    const table = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'memory_vectors'").get() as { name: string } | undefined;
-    return table === undefined ? null : storedVectorIds(db);
+    return tableExists(db, 'memory_vectors') ? storedVectorIds(db) : null;
   };
 
   const build = (tenantId: string, dv: number | null, nowMs: number): Snapshot => {

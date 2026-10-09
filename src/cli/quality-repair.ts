@@ -4,7 +4,7 @@ import { appendAuditEvent } from '../audit.js';
 import { withBackup } from '../db/backup.js';
 import { assertSqliteAllowed } from '../db/open.js';
 import { DatabaseSync, type DatabaseSyncLike } from '../db/sqlite.js';
-import { getMeta, setMeta } from '../db/meta.js';
+import { getMeta, pragmaUserVersion, setMeta } from '../db/meta.js';
 import { tableColumns } from '../db/tables.js';
 import { assertBinaryCompatible } from '../db/migrate.js';
 import { insertDormantRow, listDormantSnapshots } from '../dormant.js';
@@ -12,7 +12,8 @@ import { calculateStrength, canAutoDelete, type MemoryEntry } from '../memory.js
 import { assessAutomaticMemory, BUNDLE_HEADER, isAutomaticEntry, isCertainReason, type AutomaticMemoryDefect } from '../memory-quality.js';
 import { heldTexts } from '../same-text.js';
 import { deleteEntryCore, MEMORY_BACKED_TABLES, memoriesBackingObjectsOn } from '../store/delete-and-batch.js';
-import { selectAllEntries } from '../store/entry-reads.js';
+import { selectAllEntries, selectPreviewRows } from '../store/entry-reads.js';
+import { ftsRowExists } from '../store/entry-row.js';
 import { MEMORY_SELECT_COLUMNS, parseJsonArray } from '../store/rows.js';
 import { purgeMirrorBestEffort } from '../store/mirrors.js';
 
@@ -117,13 +118,7 @@ function planRows(db: DatabaseSyncLike, tenantId: string) {
 function unsupportedPreview(db: DatabaseSyncLike, tenantId: string) {
   const columns = tableColumns(db, 'memories');
   if (!columns.has('id') || !columns.has('content')) return { total: 0, issues: [] };
-  const tenant = columns.has('tenant_id') ? ' WHERE tenant_id = ?' : '';
-  const column = (name: string, fallback: string): string => (columns.has(name) ? name : `${fallback} AS ${name}`);
-  const statement = db.prepare(`SELECT id, content, ${column('source', "''")}, ${column('confidence', 'NULL')}, ${column('extracted_from', 'NULL')}, ${column('dag_level', '0')}, ${column('tags_json', "'[]'")} FROM memories${tenant}`);
-  // SAFETY: the SELECT names every Row field, each a literal fallback when its column is missing.
-  const rows = (tenant ? statement.all(tenantId) : statement.all()) as Array<{
-    id: string; content: string; source: string | null; confidence: MemoryEntry['confidence'] | null; extracted_from: string | null; dag_level: number | null; tags_json: string | null;
-  }>;
+  const rows = selectPreviewRows(db, columns, tenantId);
   const issues = rows.flatMap((row): QualityRepairIssue[] => {
     const provenance = { ...row, source: row.source ?? '', confidence: row.confidence ?? 'observed', dag_level: row.dag_level ?? 0, tags: parseJsonArray(row.tags_json) };
     if (!isAutomaticEntry(provenance)) return [];
@@ -135,8 +130,7 @@ function unsupportedPreview(db: DatabaseSyncLike, tenantId: string) {
 
 function initialResult(db: DatabaseSyncLike, root: string, tenantId: string): QualityRepairResult {
   const blockers = capabilityBlockers(db);
-  // SAFETY: PRAGMA user_version returns one row with one integer column.
-  const schema = (db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version;
+  const schema = pragmaUserVersion(db);
   const plan = blockers.length > 0 ? unsupportedPreview(db, tenantId) : planRows(db, tenantId);
   return {
     root, schema, supported: blockers.length === 0, blockers,
@@ -150,7 +144,7 @@ function setAsideIssue(db: DatabaseSyncLike, entry: MemoryEntry, reason: string,
   const actor = 'quality-repair';
   if (deleteEntryCore(db, entry.id, { actor, automatic: true, suppressForgetAudit: true }) === null) return false;
   insertDormantRow(db, { entry, strength: calculateStrength(entry, now), reason: 'quality-repair', dormantAt: now.toISOString() });
-  if (getMeta(db, 'fts5_available', '0') === '1' && db.prepare('SELECT id FROM memories_fts WHERE id = ?').get(entry.id)) {
+  if (getMeta(db, 'fts5_available', '0') === '1' && ftsRowExists(db, entry.id)) {
     throw new Error(`Quality repair could not remove the full-text row for ${entry.id}`);
   }
   appendAuditEvent(db, { tenantId: entry.tenantId, actor, op: 'quality_repair', targetId: entry.id, metadata: { reason, backup } });

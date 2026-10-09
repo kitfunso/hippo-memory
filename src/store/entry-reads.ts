@@ -337,3 +337,41 @@ export function loadContentsWithTag(hippoRoot: string, tenantId: string, tag: st
     closeHippoDb(db);
   }
 }
+
+export interface VaultRawRow {
+  id: string;
+  artifact_ref: string;
+  tags_json: string;
+  scope: string | null;
+}
+
+/** Live raw rows whose artifact_ref matches a LIKE pattern, for one tenant. */
+export function selectVaultRawRows(db: DatabaseSyncLike, likeParam: string, tenantId: string): VaultRawRow[] {
+  // SAFETY: query selects exactly the columns of VaultRawRow, in the same
+  // names, from the memories table this module owns.
+  return db
+    .prepare(
+      `SELECT id, artifact_ref, tags_json, scope FROM memories
+           WHERE artifact_ref LIKE ? ESCAPE '\\' AND tenant_id = ? AND kind = 'raw'`,
+    )
+    .all(likeParam, tenantId) as VaultRawRow[];
+}
+
+export interface PreviewRow {
+  id: string;
+  content: string;
+  source: string | null;
+  confidence: MemoryEntry['confidence'] | null;
+  extracted_from: string | null;
+  dag_level: number | null;
+  tags_json: string | null;
+}
+
+/** Reads memories from a store whose schema may predate some columns; `columns` is the table's real column set. */
+export function selectPreviewRows(db: DatabaseSyncLike, columns: ReadonlySet<string>, tenantId: string): PreviewRow[] {
+  const tenant = columns.has('tenant_id') ? ' WHERE tenant_id = ?' : '';
+  const column = (name: string, fallback: string): string => (columns.has(name) ? name : `${fallback} AS ${name}`);
+  const statement = db.prepare(`SELECT id, content, ${column('source', "''")}, ${column('confidence', 'NULL')}, ${column('extracted_from', 'NULL')}, ${column('dag_level', '0')}, ${column('tags_json', "'[]'")} FROM memories${tenant}`);
+  // SAFETY: the SELECT names every PreviewRow field, each a literal fallback when its column is missing.
+  return (tenant ? statement.all(tenantId) : statement.all()) as PreviewRow[];
+}

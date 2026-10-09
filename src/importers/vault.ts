@@ -3,6 +3,7 @@ import * as path from 'path';
 import { createHash } from 'node:crypto';
 import { createMemory, MemoryEntry } from '../memory.js';
 import { initStore } from '../store/open.js';
+import { selectVaultRawRows, type VaultRawRow } from '../store/entry-reads.js';
 import { remember, archiveRaw, isPrivateScope, type HippoDbContext } from '../api.js';
 import { assertClientScope } from '../recall-scope.js';
 import { openHippoDb, closeHippoDb } from '../db.js';
@@ -28,12 +29,7 @@ import { escapeLike } from '../escape.js';
 // `archiveRaw` (the only trigger-legit raw delete).
 // ---------------------------------------------------------------------------
 
-interface VaultRow {
-  id: string;
-  artifact_ref: string;
-  tags_json: string;
-  scope: string | null;
-}
+type VaultRow = VaultRawRow;
 
 /**
  * Import a markdown vault FOLDER as `kind='raw'` memories.
@@ -196,14 +192,7 @@ function loadVaultRows(hippoRoot: string, tenantId: string, vaultName: string): 
   const db = openHippoDb(hippoRoot);
   try {
     const likeParam = `vault:${escapeLike(vaultName)}:%`;
-    // SAFETY: query selects exactly the columns of VaultRow, in the same
-    // names, from the memories table this module owns.
-    const rows = db
-      .prepare(
-        `SELECT id, artifact_ref, tags_json, scope FROM memories
-           WHERE artifact_ref LIKE ? ESCAPE '\\' AND tenant_id = ? AND kind = 'raw'`,
-      )
-      .all(likeParam, tenantId) as VaultRow[];
+    const rows = selectVaultRawRows(db, likeParam, tenantId);
     // SQLite LIKE is case-insensitive for ASCII, so the query over-fetches
     // (vault 'A' also matches 'vault:a:%'). Filter to the EXACT-case prefix in
     // JS so deletion-sync never archives a different-cased vault's rows (codex P2).

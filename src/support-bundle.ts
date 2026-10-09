@@ -8,6 +8,7 @@ import { findHippoStoreDir, isGlobalStoreRoot, realpathOrResolve } from './proje
 import { getGlobalRoot } from './shared.js';
 import { isInitialized } from './store/open.js';
 import { openHippoDbReadOnly, closeHippoDb, getSchemaVersion, getMeta, countTableRows, type DatabaseSyncLike } from './db.js';
+import { listTableNames } from './db/tables.js';
 import { runDoctor, type DoctorOpts } from './doctor.js';
 import { loadConfig } from './config.js';
 import { redactSecretsStrict } from './secret-detect.js';
@@ -51,14 +52,6 @@ function buildRuntime(): JsonObject {
     arch: process.arch,
     osRelease: os.release(),
   };
-}
-
-function listTableNames(db: DatabaseSyncLike): string[] {
-  // SAFETY: each row's shape matches the single `name` column named in the SELECT above.
-  const rows = db.prepare(
-    `SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND sql NOT LIKE 'CREATE VIRTUAL TABLE%' ORDER BY name`,
-  ).all() as { name: string }[];
-  return rows.map((r) => r.name);
 }
 
 function countTables(db: DatabaseSyncLike): JsonObject {
