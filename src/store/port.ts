@@ -8,9 +8,11 @@ import type { EmbeddingIndexState } from '../embeddings.js';
 import type { ActiveGoals, GetActiveGoalsOpts, GoalRecallLogRow } from '../goals.js';
 import type { SessionHandoff } from '../handoff.js';
 import type { JsonValue } from '../json.js';
+import type { KeysetPosition } from '../keyset.js';
 import type { MemoryEntry } from '../memory.js';
 import type { PhysicsParticle } from '../physics.js';
 import type { PlanningFallacyEvidence } from './planning-fallacy-evidence.js';
+import type { ClosureState, Prediction, PredictionBaserate, SavePredictionOpts } from './predictions.js';
 import type { RecallTraceInput } from '../recall-trace.js';
 import type { AmbientLoadResult, AmbientRecallRequest, ContextCandidateFilter, RecentOrigins } from './candidates.js';
 import type { StrengthenOptions } from './entry-writes.js';
@@ -220,6 +222,42 @@ export interface KeyWrites {
   listApiKeys(query: KeyListQuery): Promise<ApiKeyListRow[]>;
 }
 
+/** A claim to save and the memory row that mirrors it into recall: core builds it with `predictionMirror` in the tenant the save names, so every store keeps the same row. */
+export interface PredictionSave extends SavePredictionOpts {
+  readonly mirror: MemoryEntry;
+}
+
+export interface PredictionClose {
+  readonly closureState: Exclude<ClosureState, 'open'>;
+  readonly actualValue?: number;
+  readonly closureNote?: string;
+}
+
+/** Which of a tenant's predictions a list reads: every class when `classTag` is unset (it is never empty), every state when `closureState` is, and a closed state only inside a class. */
+export type PredictionFilter =
+  | { readonly classTag?: string; readonly closureState?: 'open' }
+  | { readonly classTag: string; readonly closureState: ClosureState };
+
+export type PredictionListQuery = PredictionFilter & { readonly limit: number; readonly after?: KeysetPosition };
+
+/** The reads and writes behind the predictions routes. createdAt and closedAt are the store's own clock at the write, as `toISOString` gives it, since the list orders createdAt as text. */
+export interface Predictions {
+  /** In one transaction: writes `mirror` as `EntryWrites.writeEntry` does, inserts the open row pointing at it under the next id, and appends one predict_create row
+   *  ({prediction_id, class_tag, has_estimate, target_date}, target the id) ahead of the mirror's remember row. Resolves to the row saved. */
+  savePrediction(tenantId: string, input: PredictionSave, actor: string): Promise<Prediction>;
+  /** Closes the tenant's open row and appends one predict_close row ({prediction_id, closure_state, has_actual}, target the id) in one transaction; the mirror stays as saved. A missing
+   *  id or another tenant's rejects with NotFoundError `closePrediction: prediction <id> not found for tenant <tenantId>`, a row already closed with BadRequestError, neither writing anything. */
+  closePrediction(tenantId: string, id: number, close: PredictionClose, actor: string): Promise<Prediction>;
+  /** The tenant's row; null for a missing id or another tenant's. No audit row. */
+  predictionById(tenantId: string, id: number): Promise<Prediction | null>;
+  /** At most `limit` rows, newest first: by createdAt compared as text in byte order, then by id, both descending, so the order is total.
+   *  `after` keeps only the rows below its (createdAt, id) pair in that order. No audit row. */
+  listPredictions(tenantId: string, query: PredictionListQuery): Promise<Prediction[]>;
+  /** `predictionBaserateOf` over the tenant's rows of the class that are closed (not closed-unknown) with an estimate and an actual, handed over in ascending id order
+   *  because its float sums depend on the order. Then appends one predict_baserate row ({class_tag, n_closed}, target the class), for a class with no such row too. */
+  predictionBaserate(tenantId: string, classTag: string, actor: string): Promise<PredictionBaserate>;
+}
+
 /** The optional groups: a store sets each one whole or leaves it unset, and a route or MCP tool names the one it needs. */
 export interface StoreGroups {
   /** Unset on a store built before them, where hybrid and physics recall under an embedding provider answer 501. */
@@ -230,6 +268,7 @@ export interface StoreGroups {
   readonly vectorWrites: VectorWrites;
   readonly entryWrites: EntryWrites;
   readonly contextReads: ContextReads;
+  readonly predictions: Predictions;
 }
 
 export type StoreGroup = 'base' | keyof StoreGroups;

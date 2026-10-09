@@ -2,7 +2,7 @@
   "openersOutside": 139,
   "openersInCli": 12,
   "storeBranches": 4,
-  "routesWithoutStore": 52,
+  "routesWithoutStore": 47,
   "twinFunctions": 0,
   "sqlOutside": 206,
   "txLiterals": 28,

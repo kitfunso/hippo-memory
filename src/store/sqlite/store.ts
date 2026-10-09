@@ -13,6 +13,7 @@ import { loadAmbientCandidates, loadContextCandidates } from '../candidates.js';
 import { loadEntriesByIds, loadFreshRawMemories } from '../entry-reads.js';
 import { strengthenRetrievedInOwnTx } from '../entry-writes.js';
 import { sqliteEntryWrites } from './entry-writes-group.js';
+import { servedPredictions, sqlitePredictions } from './predictions-group.js';
 import { loadLatestHandoff } from '../handoffs.js';
 import { updateStats } from '../index-and-stats.js';
 import { auditHighIdAt, revokeKeyAt } from '../key-audit.js';
@@ -90,6 +91,7 @@ export function sqliteSyncStore(hippoRoot: string): SqliteSyncStore & Sync<Omit<
     },
     entryWrites: sqliteEntryWrites(hippoRoot),
     contextReads: sqliteContextReads(hippoRoot),
+    predictions: sqlitePredictions(hippoRoot),
     close() {},
   };
 }
@@ -139,6 +141,7 @@ export function sqliteStore(hippoRoot: string): HippoStore & StoreGroups {
       contextCandidates: async (tenantId, filter) => contextReads.contextCandidates(tenantId, filter),
       ambientTallies: async (tenantId, filter) => contextReads.ambientTallies(tenantId, filter),
     },
+    predictions: servedPredictions(sync.predictions),
     close: async () => sync.close(),
   };
 }

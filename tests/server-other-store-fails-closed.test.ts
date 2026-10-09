@@ -17,8 +17,10 @@ import { requireVectorReads } from '../src/search/vector.js';
 import { loadEntriesByIds } from '../src/store/entry-reads.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from './_helpers/hashed-embedding-server.js';
+import { inMemoryPredictionsStore, type InMemoryPredictionsStore } from './_helpers/in-memory-predictions-store.js';
 import { portOnlyStoreWithoutVectorReads } from './_helpers/port-only-store.js';
 import { seeded } from './_helpers/recall-golden-seed.js';
+import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from './_helpers/store-conformance.js';
 
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const serverSource = readFileSync(join(repoRoot, 'src/server/route-table.ts'), 'utf8');
@@ -256,6 +258,63 @@ describe('serve() under a store that is not hippo.db', () => {
   it('leaves nothing under the served root but the pidfile: no hippo.db, no .hippo folder', () => {
     expect(readdirSync(root)).toEqual(['server.pid']);
     expect(existsSync(join(root, '.hippo'))).toBe(false);
+  });
+});
+
+describe('serve() under a store that has the predictions group', () => {
+  let fixture: TwoTenantFixture;
+  let memory: InMemoryPredictionsStore;
+  let handle: ServerHandle;
+
+  const hippoDbRows = () => {
+    const db = openHippoDb(fixture.dir);
+    try {
+      // SAFETY: each SELECT names the one column n.
+      const count = (table: string): number => (db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n;
+      return { predictions: count('predictions'), memories: count('memories'), audit: count('audit_log') };
+    } finally {
+      closeHippoDb(db);
+    }
+  };
+
+  beforeAll(async () => {
+    vi.stubEnv('HIPPO_V1_RPS', '0');
+    fixture = seedTwoTenants();
+    memory = inMemoryPredictionsStore(fixture.dir);
+    handle = await serve({ hippoRoot: fixture.dir, port: 0, store: memory.store });
+  });
+
+  afterAll(async () => {
+    await handle.stop();
+    vi.unstubAllEnvs();
+    rmSync(fixture.dir, { recursive: true, force: true });
+  });
+
+  it('runs the five predictions routes on that store, inside the caller\'s tenant, and writes nothing to hippo.db', async () => {
+    const before = hippoDbRows();
+    const call = async (token: string, method: string, path: string, body?: string): Promise<{ status: number; body: unknown }> => {
+      const headers = { authorization: `Bearer ${token}`, 'content-type': 'application/json' };
+      const res = await fetch(`${handle.url}${path}`, { method, headers, body });
+      return { status: res.status, body: await res.json() };
+    };
+    const { memberA, memberB } = fixture.tokens;
+    expect(await call(memberA, 'POST', '/v1/predictions', '{"claim":"the cutover takes two days","classTag":"cutover","estimate":2}')).toMatchObject({
+      status: 201, body: { prediction: { id: 1, tenantId: TENANT_A, classTag: 'cutover', estimateValue: 2, closureState: 'open' } },
+    });
+    expect(await call(memberA, 'GET', '/v1/predictions?status=open')).toMatchObject({ status: 200, body: { predictions: [{ id: 1 }], next_cursor: null } });
+    expect(await call(memberA, 'GET', '/v1/predictions/1')).toMatchObject({ status: 200, body: { prediction: { id: 1, claimText: 'the cutover takes two days' } } });
+    expect(await call(memberA, 'POST', '/v1/predictions/1/close', '{"state":"closed","actual":3}')).toMatchObject({
+      status: 200, body: { prediction: { id: 1, closureState: 'closed', actualValue: 3 } },
+    });
+    expect(await call(memberA, 'GET', '/v1/predictions/stats?class=cutover')).toMatchObject({ status: 200, body: { baserate: { nClosed: 1, meanRatio: 1.5 } } });
+    expect(await call(memberB, 'GET', '/v1/predictions')).toEqual({ status: 200, body: { predictions: [], next_cursor: null } });
+    expect((await call(memberB, 'GET', '/v1/predictions/1')).status).toBe(404);
+    expect((await call(memberB, 'POST', '/v1/predictions/1/close', '{"state":"closed","actual":3}')).status).toBe(404);
+    const actor = `api_key:${fixture.keys.memberA}`;
+    expect(memory.auditRows().slice(-4).map((e) => [e.op, e.actor, e.tenantId])).toEqual([
+      ['predict_create', actor, TENANT_A], ['remember', actor, TENANT_A], ['predict_close', actor, TENANT_A], ['predict_baserate', actor, TENANT_A],
+    ]);
+    expect(hippoDbRows()).toEqual(before);
   });
 });
 

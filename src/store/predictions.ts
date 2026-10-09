@@ -25,12 +25,13 @@
 
 import { BadRequestError, NotFoundError } from '../api-errors.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../db.js';
-import { writeEntry } from './entry-writes.js';
+import { writeEntryAt } from './sqlite/entry-writes-group.js';
 import { assertTenantId } from '../tenant.js';
-import { createMemory, Layer, type MemoryKind } from '../memory.js';
+import { createMemory, Layer, type MemoryEntry, type MemoryKind } from '../memory.js';
 import { appendAuditEvent } from '../audit.js';
 import { loadConfig } from '../config.js';
 import { keysetAfter, type KeysetPosition } from '../keyset.js';
+import type { PredictionSave } from './port.js';
 
 // ---------------------------------------------------------------------------
 // Domain types
@@ -148,27 +149,35 @@ export function savePrediction(
   if (!opts.classTag) throw new BadRequestError('savePrediction: classTag is required');
   if (!opts.claimText) throw new BadRequestError('savePrediction: claimText is required');
 
-  const now = new Date().toISOString();
-  const mem = createMemory(opts.claimText, {
-    tags: ['prediction', opts.classTag],
+  const mirror = predictionMirror(tenantId, opts, loadConfig(hippoRoot).defaultHalfLifeDays);
+  return writePrediction(hippoRoot, tenantId, { ...opts, mirror }, actor);
+}
+
+/** The memory row that mirrors a claim into recall, built here alone so every store keeps the same row for it. */
+export function predictionMirror(tenantId: string, claim: SavePredictionOpts, baseHalfLifeDays: number): MemoryEntry {
+  return createMemory(claim.claimText, {
+    tags: ['prediction', claim.classTag],
     layer: Layer.Semantic,
     confidence: 'observed',
     source: 'prediction',
     // SAFETY: 'distilled' is a valid MemoryKind literal (see memory.ts).
     kind: 'distilled' as MemoryKind,
-    baseHalfLifeDays: loadConfig(hippoRoot).defaultHalfLifeDays,
+    baseHalfLifeDays,
     tenantId,
   });
+}
+
+/** The store port's save on hippo.db: the mirror goes in as the port's writeEntry has it, tenant check included, and its predictions row shares that write scope, so neither lands alone. */
+export function writePrediction(hippoRoot: string, tenantId: string, save: PredictionSave, actor: string): Prediction {
+  assertTenantId('savePrediction', tenantId);
+  const now = new Date().toISOString();
 
   // Captured for the return value; populated inside afterWrite hook so the
   // INSERT and the memory write share a SAVEPOINT.
   let savedRow: PredictionRow | undefined;
 
-  writeEntry(hippoRoot, mem, {
-    actor,
-    afterWrite: (db, memoryId) => {
-      savedRow = insertPredictionRow(db, memoryId, tenantId, opts, { now, actor });
-    },
+  writeEntryAt(hippoRoot, { entry: save.mirror, actor }, (db, memoryId) => {
+    savedRow = insertPredictionRow(db, memoryId, tenantId, save, { now, actor });
   });
 
   if (!savedRow) {
@@ -468,7 +477,8 @@ export interface PredictionBaserate {
   summary: string;
 }
 
-interface BaserateRow {
+/** One closed prediction as the baserate reads it: both values set. */
+export interface BaserateRow {
   estimate_value: number;
   actual_value: number;
 }
@@ -508,27 +518,9 @@ export function computePredictionBaserate(
         AND actual_value IS NOT NULL
     `).all(tenantId, classTag) as BaserateRow[];
 
-    const nClosed = rows.length;
-    if (nClosed === 0) {
-      // Audit zero-result reads too — agents probing empty classes is
-      // a signal worth recording. Skipped when emitAudit=false: the orchestrator's own
-      // recall_autodebias_hint audit fires only when nClosed > 0, so no signal is lost.
-      if (emitAudit) auditBaserateRead(db, tenantId, actor, classTag, 0);
-      return {
-        classTag,
-        nClosed: 0,
-        nRatioEligible: 0,
-        meanEstimate: null,
-        meanActual: null,
-        meanRatio: null,
-        p50Ratio: null,
-        mae: null,
-        summary: '',
-      };
-    }
-
-    const baserate = baserateFromRows(classTag, rows);
-    if (emitAudit) auditBaserateRead(db, tenantId, actor, classTag, nClosed);
+    const baserate = predictionBaserateOf(classTag, rows);
+    // An empty class is audited too, since an agent probing one is a signal; the recall path passes false and audits its own hint.
+    if (emitAudit) auditBaserateRead(db, tenantId, actor, classTag, baserate.nClosed);
     return baserate;
   } finally {
     closeHippoDb(db);
@@ -545,9 +537,12 @@ function auditBaserateRead(db: DatabaseSyncLike, tenantId: string, actor: string
   });
 }
 
-/** Stats over a non-empty set of closed rows. */
-function baserateFromRows(classTag: string, rows: BaserateRow[]): PredictionBaserate {
+/** A class's stats over its closed rows, summed in the order given. Every store computes them here, so no two can disagree on the arithmetic. */
+export function predictionBaserateOf(classTag: string, rows: readonly BaserateRow[]): PredictionBaserate {
   const nClosed = rows.length;
+  if (nClosed === 0) {
+    return { classTag, nClosed: 0, nRatioEligible: 0, meanEstimate: null, meanActual: null, meanRatio: null, p50Ratio: null, mae: null, summary: '' };
+  }
   const ratioEligible = rows.filter((r) => r.estimate_value > 0);
   const nRatioEligible = ratioEligible.length;
 
