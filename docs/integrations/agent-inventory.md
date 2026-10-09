@@ -75,9 +75,25 @@ Four payload readers exist: `readClaudeCodePreCompact`, `readVscodeStop`, `readC
 
 Fixtures live in `tests/fixtures/capture/<runtime>/<event>/*.json`. Each holds `{ "stdin", "timedOut", "expect" }`, where `expect` is the exact receipt, skip reasons included. `tests/capture-contract-conformance.test.ts` runs every fixture through its runtime's reader. A fixture directory with no reader fails the suite, so new fixtures cannot sit unexercised.
 
+## Store-level fixtures
+
+`tests/copilot-hooks-cli.test.ts` runs the built CLI against a real store, for the hazards a payload fixture cannot show.
+
+- **Busy store.** While another process holds the store's write lock, a VS Code reply saves no memory and no progress cursor. The next reply in that chat saves the lesson once. Copilot's pre-compact waits once, warns once and saves no snapshot.
+- **Crash and retry.** A worker killed after it wrote the memories and before it saved the progress cursor leaves one copy. The next reply finds the lesson already stored and saves the cursor.
+- **Two sessions at once.** A reply that ends while the last reply's worker still runs is saved by that worker. Two chats that end a reply at the same moment each save their own lesson.
+- **Wrong project.** The lesson goes to the project the payload names, also when the hook runs from another project. A project folder with no store saves to the global store under that project. When the named transcript is not on disk and the Copilot CLI has no log for that session, the reply saves nothing, also with another chat's transcript beside it. A payload folder that no longer exists makes the hook warn and save from the folder it ran in.
+
+Limits found in one-off runs of the built CLI while these tests were written. No test pins the third. The busy-store test covers only the retry in the first, and the crash test sees the second only right after the kill:
+
+- A capture that meets a busy store is not queued. Only the next reply in the same chat retries a VS Code reply, and nothing retries a full session end. The spool that keeps a busy post-compact does not cover these two paths.
+- A worker killed during the progress cursor save leaves its `<session id>.cursor.json.<pid>.tmp` file in `~/.hippo/sessions`.
+- Two sessions that save the same sentence at the same moment both write it. One after the other, the second save is skipped. The next sleep drops one of the two copies and merges the pair into one consolidated memory, so two rows still hold the sentence.
+
 ## Next steps (AZ4)
 
 - Move the tool-failure payload reader onto the contract.
-- Add store-level fixtures for a busy store, a crash and retry, two sessions at once, and a save into the wrong project.
+- Spool a session-end capture that meets a busy store, as post-compact does, so a chat's last reply is not lost.
+- Check for an existing copy inside the write, so two sessions that save one sentence at the same moment write it once.
 - Save Claude Code lessons before compaction, not only after it.
 - Record live save-and-resume runs, so modes can reach `verified`.
