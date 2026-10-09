@@ -50,7 +50,9 @@ export async function vectorCandidatesOutside(
   reads: VectorReads, entries: readonly MemoryEntry[], queryVector: readonly number[], spec: HybridVectorCandidates,
 ): Promise<MemoryEntry[]> {
   const inPool = new Set(entries.map((e) => e.id));
-  return (await reads.nearestEntries(queryVector, spec)).filter((e) => !inPool.has(e.id) && (spec.admit?.(e) ?? true));
+  // The port takes data alone: `admit` is this side's rule, and a function cannot be sent to a store on another thread.
+  const { admit, ...stored } = spec;
+  return (await reads.nearestEntries(queryVector, stored)).filter((e) => !inPool.has(e.id) && (admit?.(e) ?? true));
 }
 
 /** Embeds the query and loads stored vectors; any failure leaves BM25 to rank alone. */

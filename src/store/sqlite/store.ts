@@ -4,9 +4,8 @@ import { listApiKeyRows, readApiKeyRecord } from '../auth.js';
 import { existsSync } from 'node:fs';
 import { appendAuditEvent, listAuditEventsAfter, queryAuditEvents } from '../audit.js';
 import { getHippoDbPath, withWriteScope } from '../../db.js';
-import { embeddingIndexStateAt, loadStoredVectors, loadStoredVectorViews } from '../../embeddings.js';
+import { loadStoredVectorViews } from '../../embeddings.js';
 import { activeGoalsWithPolicies, localGoalRecallRows, writeGoalRecallLog } from '../goals.js';
-import { loadPhysicsState } from '../../db/physics-state.js';
 import { planningFallacyEvidenceAt } from '../planning-fallacy-evidence.js';
 import { writeRecallTrace } from '../recall-trace.js';
 import { recordTokenUse } from '../../token-ledger.js';
@@ -20,15 +19,16 @@ import { servedGraphReads, sqliteGraphReads } from './graph-reads-group.js';
 import { servedObjects, sqliteObjects } from './objects-group.js';
 import { servedPredictions, sqlitePredictions } from './predictions-group.js';
 import { servedQuarantine, sqliteQuarantine } from './quarantine-group.js';
+import { sqliteVectorReads } from './vector-reads-group.js';
 import { loadLatestHandoff } from '../handoffs.js';
 import { updateStats } from '../index-and-stats.js';
 import { auditHighIdAt, revokeKeyAt } from '../key-audit.js';
 import { createKeyAt, createSelfKeyAt } from '../key-writes.js';
 import { onHandle } from '../open.js';
 import type {
-  ContextReads, ContinuityBlock, HippoStore, KeyAudit, KeyWrites, RecallWrites, StoreGroups, Sync, VectorReads,
+  ContextReads, ContinuityBlock, HippoStore, KeyAudit, KeyWrites, RecallWrites, StoreGroups, Sync,
 } from '../port.js';
-import { loadRecallSearchEntries, loadVectorCandidateEntries } from '../search-rows.js';
+import { loadRecallSearchEntries } from '../search-rows.js';
 import { type ContinuityKey, listSessionEvents, loadActiveTaskSnapshot } from '../sessions.js';
 import { entriesWithoutVectorAt, writeVectorsAt } from '../vector-writes.js';
 
@@ -185,24 +185,6 @@ export function sqliteStore(hippoRoot: string): HippoStore & StoreGroups {
     objects: servedObjects(sqliteObjects(hippoRoot)),
     readiness: { ping: async () => sync.readiness.ping() },
     close: async () => sync.close(),
-  };
-}
-
-function sqliteVectorReads(hippoRoot: string): VectorReads {
-  return {
-    async embeddingIndexState() {
-      return embeddingIndexStateAt(hippoRoot);
-    },
-    async storedVectors(ids) {
-      return loadStoredVectors(hippoRoot, ids);
-    },
-    async nearestEntries(queryVector, spec) {
-      return loadVectorCandidateEntries(hippoRoot, queryVector, spec);
-    },
-    async physicsParticles(ids) {
-      // loadPhysicsState reads every row for an empty list.
-      return ids.length === 0 ? new Map() : onHandle(hippoRoot, (db) => loadPhysicsState(db, [...ids]));
-    },
   };
 }
 

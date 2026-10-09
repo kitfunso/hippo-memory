@@ -9,6 +9,8 @@ export interface RequestStoresOptions {
   readonly busyWaitMs?: number;
   /** Set for hook scopes: after one lock wait runs out, {@link RequestStores.noteBusy} makes the scope's later writes skip at once. */
   readonly failFastWhenBusy?: boolean;
+  /** The store whose open-time setup another connection has already run, so an open in this scope skips it: a store worker's reader, which cannot write it. */
+  readonly setupDoneFor?: string;
 }
 
 // Handles a scope owns, so closeHippoDb leaves them open for the rest of the request.
@@ -35,12 +37,14 @@ export class RequestStores implements RequestScope {
   // Taken from the scope this one opens inside, so the request's log lines keep their id.
   readonly requestId: string | undefined = currentRequestId();
   readonly deadline = currentDeadline();
+  readonly setupDoneFor: string | undefined;
   readonly #failFastWhenBusy: boolean;
   readonly #handles = new Map<string, DatabaseSyncLike>();
   #closed = false;
 
   constructor(opts: RequestStoresOptions = {}) {
     this.busyWaitMs = opts.busyWaitMs;
+    this.setupDoneFor = opts.setupDoneFor;
     this.#failFastWhenBusy = opts.failFastWhenBusy === true;
   }
 

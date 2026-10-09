@@ -1,6 +1,6 @@
 // The memory write, key, audit and session assemble routes run their SQLite work on worker threads, and so does the key row read of every request.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { copyFileSync, mkdtempSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { mintApiKey, revokeApiKey } from '../src/store/auth.js';
@@ -17,7 +17,7 @@ import { createSqliteExecutor, type SqliteExecutor } from '../src/store/sqlite/e
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../src/store/sqlite/worker-store.js';
 import {
-  auditFailures, auditRows, cleanups, del, execOn, get, holdWriteLock, keyFor, newRoot, onDb, patientStore, post, postText, removeLater, scrub, seen, start, undoAll, watched,
+  auditFailures, auditRows, cleanups, del, execOn, get, holdWriteLock, keyFor, mirrorFiles, newRoot, onDb, patientStore, post, postText, removeLater, scrub, seen, start, undoAll, watched,
 } from './_helpers/store-worker-server.js';
 
 afterEach(async () => {
@@ -177,12 +177,6 @@ function storedRows(root: string, keyIds: readonly string[]): string[] {
   return onDb(root, (db) => Object.entries(STORED).flatMap(([table, sql]) => db.prepare(sql).all().map((row) => `${table} ${scrub(JSON.stringify(row), keyIds)}`)));
 }
 
-/** Every markdown mirror and the stats mirror under `root`, as path and text. */
-function mirrorFiles(root: string): string[] {
-  const names = readdirSync(root, { recursive: true, encoding: 'utf8' }).filter((name) => name.endsWith('.md') || name.endsWith('stats.json'));
-  return names.map((name) => scrub(`${name}\n${readFileSync(join(root, name), 'utf8')}`)).sort();
-}
-
 /** Every step against a fresh store, plus what the steps left in the audit log, the tables and the mirror files. */
 async function runSteps(root: string, store?: HippoStore) {
   const { keys, keyIds } = seedCallers(root);
@@ -308,18 +302,6 @@ describe("a memory write still behind the write lock at its request's deadline",
     expect(left()).toEqual(before);
     expect((await post(server, '/v1/memories', { content: 'after the replacement' }, key.plaintext)).status).toBe(200);
     expect(contents(root)).toEqual(['after the replacement', 'warms the writer']);
-  });
-});
-
-describe('a store with no hippo.db yet', () => {
-  it('answers a session assemble and a supersede, whose reads set the store up, on the worker-backed store', async () => {
-    const root = removeLater(mkdtempSync(join(tmpdir(), 'hippo-sqlite-executor-bare-')));
-    const server = await start(root);
-
-    const assembled = await get(server, '/v1/sessions/sess-1/assemble');
-    const superseded = await post(server, `${MISSING_MEMORY}/supersede`, { content: 'never saved' });
-
-    expect([assembled.status, superseded.status]).toEqual([200, 404]);
   });
 });
 

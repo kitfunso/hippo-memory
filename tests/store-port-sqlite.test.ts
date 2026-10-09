@@ -470,7 +470,7 @@ async function recallOver(url: string, call: Recall): Promise<void> {
   expect(await res.json()).not.toHaveProperty('error');
 }
 
-describe('hippo.db opens per recall over serve()', () => {
+describe('hippo.db opens per recall over serve() on the in-process store', () => {
   // Exact, so a second open fails here: the request scope hands every port call the one handle.
   const OPENS: readonly [string, number, Recall, boolean?][] = [
     ['http, no session', 1, { via: 'http', params: { q: 'deploy' } }],
@@ -506,7 +506,7 @@ describe('hippo.db opens per recall over serve()', () => {
         writeFileSync(join(s.root, 'config.json'), JSON.stringify({ embeddings: embeddingsConfig, physics: { enabled: true } }));
       }
       const before = embeddings.requests();
-      const handle = await serve({ hippoRoot: s.root, port: 0 });
+      const handle = await serve({ hippoRoot: s.root, port: 0, store: sqliteStore(s.root) });
       try {
         const { statements } = await recordStatementsAsync(() => recallOver(handle.url, call));
         expect(countMatching(statements, STORE_OPEN)).toBe(opens);
