@@ -87,7 +87,12 @@ export function migrateDefaultHalfLife(hippoRoot: string, to: number, opts: { dr
     const plan = [...basePlan, ...typedPlan];
     return {
       moves: [{ from: rows.from, to, entries: basePlan }, { from: LEGACY_TYPED_HALF_LIFE, to, entries: typedPlan }],
-      outcome: { rescaled: basePlan.length, typed: typedPlan.length, kept: rows.all.length - plan.length, halfLives: new Map(plan.map((e) => [e.id, e.half_life_days])) },
+      outcome: {
+        rescaled: basePlan.length,
+        typed: typedPlan.length,
+        kept: rows.all.length - plan.length,
+        halfLives: new Map(plan.map((e) => [e.id, e.half_life_days]))
+      },
     };
   });
   const moved = outcome ?? { rescaled: 0, typed: 0, kept: 0, halfLives: new Map<string, number>() };
@@ -119,7 +124,8 @@ function objectMemoryIds(objectRows: HalfLifeRows['objectRows']) {
   return { all, retired };
 }
 
-/** Memories that lost a conflict, which resolveConflict halved untagged. A resolved conflict with no audit row (resolved before resolves were audited, or found stale) names no winner, so both sides count. */
+/** Memories that lost a conflict, which resolveConflict halved untagged. A resolved conflict with no audit
+ * row (resolved before resolves were audited, or found stale) names no winner, so both sides count. */
 function conflictLosers(audited: HalfLifeRows['conflictAudits'], resolved: HalfLifeRows['resolvedConflicts']): Set<string> {
   const losers = new Set(audited.map((a) => a.loserId));
   const named = new Set(audited.map((a) => a.conflictId));

@@ -84,6 +84,7 @@ export function flagIsTrue(flags: CliFlags, name: string): boolean {
 /** What the command table hands each verb's run(). */
 export interface CommandContext {
   readonly hippoRoot: string;
+  readonly tenantId: string;
   readonly args: string[];
   readonly flags: CliFlags;
 }

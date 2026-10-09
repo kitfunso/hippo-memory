@@ -169,7 +169,8 @@ export function predictionMirror(tenantId: string, claim: SavePredictionOpts, ba
   });
 }
 
-/** The store port's save on hippo.db: the mirror goes in as the port's writeEntry has it, tenant check included, and its predictions row shares that write scope, so neither lands alone. */
+/** The store port's save on hippo.db: the mirror goes in as the port's writeEntry has it, tenant
+ * check included, and its predictions row shares that write scope, so neither lands alone. */
 export function writePrediction(hippoRoot: string, tenantId: string, save: PredictionSave, actor: string): Prediction {
   assertTenantId('savePrediction', tenantId);
   const now = new Date().toISOString();

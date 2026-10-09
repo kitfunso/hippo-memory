@@ -3,7 +3,20 @@
  */
 
 import { createMemory as createStoreMemory, DEFAULT_HALF_LIFE_DAYS, type CreateMemoryOptions, type MemoryEntry } from './core/memory.js';
-export { MemoryEntry, Layer, EmotionalValence, ConfidenceLevel, DecayOptions, calculateStrength, resolveConfidence, confidenceFacets, type ConfidenceFacets, applyOutcome, generateId, computeSchemaFit } from './core/memory.js';
+export {
+  MemoryEntry,
+  Layer,
+  EmotionalValence,
+  ConfidenceLevel,
+  DecayOptions,
+  calculateStrength,
+  resolveConfidence,
+  confidenceFacets,
+  type ConfidenceFacets,
+  applyOutcome,
+  generateId,
+  computeSchemaFit
+} from './core/memory.js';
 
 /** Published signature, so `baseHalfLifeDays` stays optional here; hippo's own writers use the strict one in memory.ts. */
 export function createMemory(content: string, options: Partial<CreateMemoryOptions> = {}): MemoryEntry {

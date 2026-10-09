@@ -8,7 +8,7 @@ const SCRIPT = join(import.meta.dirname, '..', 'scripts', 'check-size-ratchet.mj
 const BASELINE = '.size-baseline.json';
 
 type Run = (...args: string[]) => { status: number | null; stdout: string; stderr: string };
-type Baseline = { files?: Record<string, number>; functions?: Record<string, number> };
+type Baseline = { files?: Record<string, number>; functions?: Record<string, number>; longLines?: Record<string, number> };
 
 function withFixture(files: Record<string, string>, baseline: Baseline, body: (f: { run: Run; baseline: () => Baseline }) => void) {
   const root = mkdtempSync(join(tmpdir(), 'hippo-size-ratchet-'));
@@ -35,6 +35,9 @@ function withFixture(files: Record<string, string>, baseline: Baseline, body: (f
 
 /** A function declaration spanning exactly `lines` lines. */
 const fn = (name: string, lines: number) => `export function ${name}() {\n${'  void 0;\n'.repeat(lines - 2)}}\n`;
+
+/** A one-line statement of exactly `width` characters. */
+const lineOf = (width: number) => `const x = '${'a'.repeat(width - 13)}';\n`;
 
 describe('check-size-ratchet.mjs', () => {
   it('passes a small file with an empty baseline', () => {
@@ -75,7 +78,7 @@ describe('check-size-ratchet.mjs', () => {
       expect(before.status).toBe(0);
       expect(before.stdout).toContain('2 offenders shrank or went');
       expect(run('--update').status).toBe(0);
-      expect(baseline()).toEqual({ files: {}, functions: { 'src/a.ts:big': 85 } });
+      expect(baseline()).toEqual({ files: {}, functions: { 'src/a.ts:big': 85 }, longLines: {} });
       expect(run().stdout).not.toContain('shrank');
     });
   });
@@ -111,6 +114,41 @@ describe('check-size-ratchet.mjs', () => {
         'src/a.ts:twice > map(callback)',
         'src/a.ts:twice > map(callback) #2',
       ]);
+    });
+  });
+
+  it('fails when a file gains a line over 160 characters', () => {
+    withFixture({ 'src/a.ts': lineOf(161) + lineOf(161) }, { longLines: { 'src/a.ts': 1 } }, ({ run }) => {
+      const r = run();
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain('src/a.ts: 1 -> 2');
+    });
+  });
+
+  it('passes when a file loses a long line, counts exactly 160 as short, and --update lowers the baseline', () => {
+    withFixture({ 'src/a.ts': lineOf(161) + lineOf(160) }, { longLines: { 'src/a.ts': 2 } }, ({ run, baseline }) => {
+      const r = run();
+      expect(r.status).toBe(0);
+      expect(r.stdout).toContain('1 src lines over 160 characters');
+      expect(run('--update').status).toBe(0);
+      expect(baseline().longLines).toEqual({ 'src/a.ts': 1 });
+    });
+  });
+
+  it('fails on a new src file with a long line, and ignores long lines in scripts/', () => {
+    withFixture({ 'src/new.ts': lineOf(200), 'scripts/job.mjs': lineOf(200) }, { longLines: {} }, ({ run }) => {
+      const r = run();
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain('src/new.ts: new -> 1');
+      expect(r.stderr).not.toContain('scripts/job.mjs');
+    });
+  });
+
+  it('treats a baseline without the longLines key as a first write, not a rise', () => {
+    withFixture({ 'src/a.ts': lineOf(200) }, { files: {}, functions: {} }, ({ run }) => {
+      const r = run();
+      expect(r.status).toBe(0);
+      expect(r.stdout).toContain('1 src lines over 160 characters');
     });
   });
 });

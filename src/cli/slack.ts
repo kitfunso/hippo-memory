@@ -2,7 +2,6 @@
 
 import { envSlackBotToken, envSlackSigningSecret, envSlackTeamId } from '../util/env.js';
 import * as api from '../api/index.js';
-import { resolveTenantId } from '../store/tenant.js';
 import { listDlq } from '../connectors/dlq.js';
 import { replayDlqEntry, slackDlq } from '../connectors/slack/dlq.js';
 import { backfillChannel } from '../connectors/slack/backfill.js';
@@ -20,7 +19,7 @@ import { type CliFlags, stringFlag, type CommandContext } from './flag-values.js
 // Slack subcommands (`hippo slack backfill` / `hippo slack dlq list`)
 // ---------------------------------------------------------------------------
 
-function cmdSlackBackfill(hippoRoot: string, flags: CliFlags): void {
+function cmdSlackBackfill(hippoRoot: string, tenantId: string, flags: CliFlags): void {
   const channel = stringFlag(flags, 'channel');
   if (!channel) {
     printSlackBackfillUsage();
@@ -40,7 +39,7 @@ function cmdSlackBackfill(hippoRoot: string, flags: CliFlags): void {
   const fetcher = slackHistoryFetcher(token);
   const ctx = {
     hippoRoot,
-    tenantId: resolveTenantId({}),
+    tenantId,
     actor: api.adminActor('cli:slack-backfill'),
   };
   backfillChannel(ctx, {
@@ -57,8 +56,8 @@ function cmdSlackBackfill(hippoRoot: string, flags: CliFlags): void {
     });
 }
 
-function cmdSlackDlqList(hippoRoot: string, _flags: CliFlags): void {
-  const items = listDlq(slackDlq, hippoRoot, { tenantId: resolveTenantId({}) });
+function cmdSlackDlqList(hippoRoot: string, tenantId: string, _flags: CliFlags): void {
+  const items = listDlq(slackDlq, hippoRoot, { tenantId });
   for (const it of items) {
     console.log(`${it.id}\t${it.receivedAt}\t${it.error}`);
   }
@@ -141,14 +140,14 @@ function cmdSlackWorkspacesRemove(
   console.log(`removed: ${teamId}`);
 }
 
-export async function handleSlack({ hippoRoot, args, flags }: CommandContext): Promise<void> {
+export async function handleSlack({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   const sub = args[0];
   if (sub === 'backfill') {
-    cmdSlackBackfill(hippoRoot, flags);
+    cmdSlackBackfill(hippoRoot, tenantId, flags);
     return;
   }
   if (sub === 'dlq' && args[1] === 'list') {
-    cmdSlackDlqList(hippoRoot, flags);
+    cmdSlackDlqList(hippoRoot, tenantId, flags);
     return;
   }
   if (sub === 'dlq' && args[1] === 'replay') {

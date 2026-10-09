@@ -2,10 +2,21 @@
 
 import { fetchWithRetry, llmTimeoutMs } from './http-retry.js';
 import { errorMessage } from './log.js';
+import { readCappedJson } from './capped-json.js';
+import { type JsonValue, isJsonObject, isJsonString } from './json.js';
 
 const MESSAGES_URL = 'https://api.anthropic.com/v1/messages';
 const API_VERSION = '2023-06-01';
 const DEFAULT_MODEL = 'claude-sonnet-4-6';
+// Callers ask for at most 1,200 tokens, a reply of a few KB; 1 MiB leaves room for a verbose envelope.
+const MAX_REPLY_BYTES = 1024 * 1024;
+
+/** The first content block's text, trimmed; empty when the reply has no such block. */
+function firstText(reply: { [key: string]: JsonValue }): string {
+  const first = Array.isArray(reply.content) ? reply.content[0] : undefined;
+  const text = isJsonObject(first) ? first.text : undefined;
+  return isJsonString(text) ? text.trim() : '';
+}
 
 export interface AnthropicMessageRequest {
   apiKey: string;
@@ -48,8 +59,9 @@ export async function sendAnthropicMessage(req: AnthropicMessageRequest): Promis
   if (!res.ok) return { ok: false, failure: { kind: 'http', status: res.status } };
 
   try {
-    const data: { content?: Array<{ text?: string }> } = await res.json();
-    return { ok: true, text: data.content?.[0]?.text?.trim() ?? '' };
+    const data = await readCappedJson(res, MAX_REPLY_BYTES);
+    if (!isJsonObject(data)) return { ok: false, failure: { kind: 'unreadable', message: 'the reply is not a JSON object' } };
+    return { ok: true, text: firstText(data) };
   } catch (err) {
     return { ok: false, failure: { kind: 'unreadable', message: errorMessage(err) } };
   }

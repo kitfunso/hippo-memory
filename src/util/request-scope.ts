@@ -53,7 +53,8 @@ export function currentDeadline(): RequestDeadline | undefined {
   return requestScopes.getStore()?.deadline;
 }
 
-/** Runs `fn` with `requestId` on every log line it writes, including the ones from timers and promises it starts. `deadline` reaches every store call made inside. */
+/** Runs `fn` with `requestId` on every log line it writes, including the ones from
+ * timers and promises it starts. `deadline` reaches every store call made inside. */
 export function runWithRequestId<T>(requestId: string, fn: () => T, deadline?: RequestDeadline): T {
   return requestScopes.run({ requestId, deadline }, fn);
 }

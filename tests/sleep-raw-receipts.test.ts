@@ -18,6 +18,8 @@ import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
+import { deleteEntry } from '../src/store/delete-and-batch.js';
+import { RawAppendOnlyError } from '../src/core/raw-append-only.js';
 import { consolidate } from '../src/consolidate/sleep.js';
 import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
@@ -47,6 +49,27 @@ function aged(entry: MemoryEntry, days: number): MemoryEntry {
 function ctxFor(home: string): api.Context {
   return { hippoRoot: home, tenantId: 'default', actor: { subject: 'test', role: 'admin' } };
 }
+
+describe('deleting a raw row', () => {
+  it('throws RawAppendOnlyError carrying the SQLite abort as its cause', () => {
+    const { home, restore } = tmpHome('hippo-raw-delete-');
+    try {
+      const receipt = createMemory7('slack receipt: deploy log', { layer: Layer.Episodic, kind: 'raw' });
+      writeEntry(home, receipt);
+      let caught: unknown;
+      try {
+        deleteEntry(home, receipt.id);
+      } catch (err) {
+        caught = err;
+      }
+      expect(caught).toBeInstanceOf(RawAppendOnlyError);
+      expect(caught).toMatchObject({ message: 'raw is append-only', cause: expect.any(Error) });
+      expect(String(caught)).toBe('Error: raw is append-only');
+    } finally {
+      restore();
+    }
+  });
+});
 
 describe('sleep keeps raw receipts instead of aborting on the append-only trigger', () => {
   it('a faded raw receipt no longer aborts consolidate, and the rest of the cycle still commits', async () => {

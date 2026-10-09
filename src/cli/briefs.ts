@@ -7,7 +7,6 @@ import * as briefsModule from '../objects/project-briefs.js';
 import * as customerNotesModule from '../objects/customer-notes.js';
 import { extractGraph } from '../graph/extract.js';
 import { buildGraphModel, renderGraphHtml, renderGraphCanvas, DEFAULT_VIEW_LIMIT } from '../graph/view.js';
-import { resolveTenantId } from '../store/tenant.js';
 import { errorMessage, log } from '../util/log.js';
 import { printError } from './output.js';
 import { nonEmptyStringFlag, type CliFlags, boolFlag, stringFlag, type CommandContext } from './flag-values.js';
@@ -128,9 +127,8 @@ function briefCreate(hippoRoot: string, tenantId: string, args: string[], flags:
   }
 }
 
-export function handleProjectBrief({ hippoRoot, args, flags }: CommandContext): void {
+export function handleProjectBrief({ hippoRoot, tenantId, args, flags }: CommandContext): void {
   requireInit(hippoRoot);
-  const tenantId = resolveTenantId({});
   const subcommand = args[0] ?? '';
   if (subcommand === 'list') return briefList(hippoRoot, tenantId, flags);
   if (subcommand === 'refresh') return briefRefresh(hippoRoot, tenantId, args, flags);
@@ -231,9 +229,8 @@ function graphView(hippoRoot: string, tenantId: string, entity: string | undefin
   if (flags['open'] && format === 'html') openInBrowser(out);
 }
 
-export function handleGraph({ hippoRoot, args, flags }: CommandContext): void {
+export function handleGraph({ hippoRoot, tenantId, args, flags }: CommandContext): void {
   requireInit(hippoRoot);
-  const tenantId = resolveTenantId({});
   const subcommand = args[0] ?? '';
   if (subcommand === 'extract') return graphExtract(hippoRoot, tenantId);
   const entity = stringFlag(flags, 'entity');
@@ -298,9 +295,8 @@ function noteClose(hippoRoot: string, tenantId: string, args: string[]): void {
   closeObject(args, NOTE, (id) => customerNotesModule.closeCustomerNote(hippoRoot, tenantId, id));
 }
 
-export function handleCustomerNote({ hippoRoot, args, flags }: CommandContext): void {
+export function handleCustomerNote({ hippoRoot, tenantId, args, flags }: CommandContext): void {
   requireInit(hippoRoot);
-  const tenantId = resolveTenantId({});
   const subcommand = args[0] ?? '';
   if (subcommand === 'list') return noteList(hippoRoot, tenantId, flags);
   if (subcommand === 'get') return noteGet(hippoRoot, tenantId, args);

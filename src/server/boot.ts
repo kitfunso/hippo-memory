@@ -2,7 +2,18 @@ import { envPort, envRequireAuth, envV1Rps } from '../util/env.js';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { existsSync } from 'node:fs';
 import { detectServer, removePidfileIfOwned, writePidfile } from './server-detect.js';
-import { closeHippoDb, type DatabaseSyncLike, getHippoDbPath, isStoreBusy, openHippoDb, outsideRequestStores, outsideSqliteOffLoop, runWithRequestStores, SERVER_DB_WAIT_MS, withSqliteBlocked } from '../db/index.js';
+import {
+  closeHippoDb,
+  type DatabaseSyncLike,
+  getHippoDbPath,
+  isStoreBusy,
+  openHippoDb,
+  outsideRequestStores,
+  outsideSqliteOffLoop,
+  runWithRequestStores,
+  SERVER_DB_WAIT_MS,
+  withSqliteBlocked
+} from '../db/index.js';
 import { startWalCheckpointer, type WalCheckpointer } from '../db/wal-checkpointer.js';
 import { requireGroup, type HippoStore } from '../store/index.js';
 import { workerSqliteStore } from '../store/sqlite/worker-store.js';
@@ -15,12 +26,12 @@ import { createRateLimiter, type RateLimiter } from './rate-limit.js';
 import { RecallContractError } from '../api/index.js';
 import { handleSlackEventsWebhook } from '../connectors/slack/webhook.js';
 import { handleGitHubEventsWebhook } from '../connectors/github/webhook.js';
-import { bodyDeadlineMs, BodyTimeoutError, BodyTooLargeError, closeAfterReply, DeadlineExceededError, HttpError, JSON_HEADERS, sendJson } from '../util/http-util.js';
+import { BodyTimeoutError, BodyTooLargeError, closeAfterReply, DeadlineExceededError, HttpError, JSON_HEADERS, sendJson } from '../util/http-util.js';
 import { workerCounts } from '../store/sqlite/executor-counts.js';
 import { isLoopback, LIMITER_MAX_KEYS } from './auth.js';
 import { enforceRateLimit, warnIfClientIpHeaderUnpinned } from './client-ip.js';
 import { answerAtDeadline, handlerDeadlineCount, isAbandoned, requestDeadlineFor } from './deadline.js';
-import { drainAndClose } from './lifecycle.js';
+import { DEFAULT_SHUTDOWN_DRAIN_MS, drainAndClose, setKeepAliveTimeouts, shutdownBoundMs } from './lifecycle.js';
 import { readyProbeFor } from './ready.js';
 import { installCrashHandlers, installSignalHandlers } from '../util/crash-handlers.js';
 import { handleMcpPost, handleMcpStream } from './mcp-http.js';
@@ -82,7 +93,8 @@ async function handleRequest(
   const routeRequest: RouteRequest = { req, res, opts, query };
   if (await runWithRequestStores(() => dispatchScopedRoute(routeRequest, method, path), { busyWaitMs: SERVER_DB_WAIT_MS })) return;
 
-  // A scope of its own, which the heartbeat timer keeps after it closes, so the key check and every heartbeat wait the server's lock wait. Store-ready: the stream only authenticates, through the port.
+  // A scope of its own, which the heartbeat timer keeps after it closes, so the key check and every
+  // heartbeat wait the server's lock wait. Store-ready: the stream only authenticates, through the port.
   if (method === 'GET' && path === '/mcp/stream') {
     noteAccess(req, { route: path });
     await runWithRequestStores(() => handleMcpStream(req, res, opts, streamSlots), { busyWaitMs: SERVER_DB_WAIT_MS });
@@ -160,7 +172,8 @@ function sendHealth(req: IncomingMessage, res: ServerResponse, startedAt: string
   }
 }
 
-/** Readiness: one cheap read on the served store under the server's lock wait. /health stays liveness only, so a probe can tell a store that does not answer from a dead process. */
+/** Readiness: one cheap read on the served store under the server's lock wait. /health stays
+ * liveness only, so a probe can tell a store that does not answer from a dead process. */
 async function sendReady(res: ServerResponse, store: HippoStore): Promise<void> {
   const { readiness } = store;
   if (readiness === undefined) {
@@ -348,17 +361,6 @@ function answerRequest(req: IncomingMessage, res: ServerResponse, handle: () => 
   }, deadline);
 }
 
-// Node's own default, named so the three socket deadlines read together. It times the request arriving, never the handler, so a 10 minute sleep is not cut.
-const REQUEST_RECEIVE_TIMEOUT_MS = 300_000;
-
-function setKeepAliveTimeouts(server: Server): void {
-  // The default 5s keepAliveTimeout closes idle sockets just as clients reuse them (ECONNRESET).
-  // headersTimeout must stay ABOVE keepAliveTimeout + keepAliveTimeoutBuffer (1s), or it closes idle reused sockets itself.
-  server.keepAliveTimeout = 65_000;
-  server.headersTimeout = 70_000;
-  // Never below what a raised body deadline allows, or Node's bare 408 would come before the route's own.
-  server.requestTimeout = Math.max(REQUEST_RECEIVE_TIMEOUT_MS, server.headersTimeout + bodyDeadlineMs());
-}
 
 function listenOn(server: Server, port: number, host: string): Promise<void> {
   return new Promise<void>((resolve, reject) => {
@@ -378,13 +380,9 @@ function listenOn(server: Server, port: number, host: string): Promise<void> {
   });
 }
 
-const DEFAULT_SHUTDOWN_DRAIN_MS = 5000;
-
-// Past the request drain, stop() only waits for each store thread to end its statement and close: seconds at most, so longer means a thread that will not end.
-const STORE_CLOSE_GRACE_MS = 10_000;
 
 function exitOnSignalOrCrash(stop: () => Promise<void>, drainMs: number): void {
-  const shutdown = { run: stop, boundMs: drainMs + STORE_CLOSE_GRACE_MS };
+  const shutdown = { run: stop, boundMs: shutdownBoundMs(drainMs) };
   installSignalHandlers('serve', shutdown);
   installCrashHandlers('serve', shutdown);
 }
@@ -460,7 +458,9 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
 
 function frozenAddonRoutes(addonRoutes: ServeOpts['routes']): NonNullable<ServeOpts['routes']> {
   // A frozen copy, so a route the caller adds or renames after boot never skips the check below.
-  const routes = Object.freeze((addonRoutes ?? []).map(({ path, handler, storeReady }) => Object.freeze(storeReady === undefined ? { path, handler } : { path, handler, storeReady })));
+  const routes = Object.freeze((addonRoutes ?? []).map(({ path, handler, storeReady }) => Object.freeze(storeReady === undefined
+    ? { path, handler }
+    : { path, handler, storeReady })));
   assertAddonRoutes(routes);
   return routes;
 }

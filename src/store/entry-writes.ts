@@ -25,7 +25,8 @@ export function writeEntry(hippoRoot: string, entry: MemoryEntry, opts?: WriteEn
   }
 }
 
-/** writeEntry for each of `entries` in one transaction, so all land or none; each keeps its audit row, and mirrors follow the commit. Returns how many were written. */
+/** writeEntry for each of `entries` in one transaction, so all land or none; each
+ * keeps its audit row, and mirrors follow the commit. Returns how many were written. */
 export function writeEntriesTogether(hippoRoot: string, entries: readonly MemoryEntry[]): number {
   const stamped = entries.map((entry) => stampOriginProject(hippoRoot, entry));
   const db = openStore(hippoRoot);
@@ -44,7 +45,8 @@ export function writeEntriesTogether(hippoRoot: string, entries: readonly Memory
   return stamped.length;
 }
 
-/** writeEntry for each of `entries` on one open store, so the open and its lock wait are paid once; each row commits alone, and none opens the store when the list is empty. */
+/** writeEntry for each of `entries` on one open store, so the open and its lock wait are
+ * paid once; each row commits alone, and none opens the store when the list is empty. */
 export function writeEntriesSeparately(hippoRoot: string, entries: readonly MemoryEntry[]): void {
   if (entries.length === 0) return;
   const db = openStore(hippoRoot);
@@ -55,7 +57,8 @@ export function writeEntriesSeparately(hippoRoot: string, entries: readonly Memo
   }
 }
 
-/** Adds `tag` to each of a tenant's rows that lacks it, in `ids` order, each read fresh on one open store and committed alone; an id the tenant does not hold is skipped. */
+/** Adds `tag` to each of a tenant's rows that lacks it, in `ids` order, each read fresh
+ * on one open store and committed alone; an id the tenant does not hold is skipped. */
 export function addTagToEntries(hippoRoot: string, tenantId: string, ids: readonly string[], tag: string): void {
   const db = openStore(hippoRoot);
   try {

@@ -55,16 +55,43 @@ function removeTemp(tmp: string): void {
   }
 }
 
+/** Flushed before the rename, or a crash soon after could leave the file's name on bytes that never reached the disk. */
+function writeFlushed(tmp: string, text: string, old: fs.Stats | undefined): void {
+  const fd = fs.openSync(tmp, 'w', (old?.mode ?? 0o666) & 0o777);
+  try {
+    fs.writeFileSync(fd, text, 'utf8');
+    if (old) keepAccess(tmp, old);
+    fs.fsyncSync(fd);
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+/** Stores the rename itself. Windows cannot flush a folder handle, and a failure here costs durability, not content, so it only warns. */
+function flushFolder(dir: string): void {
+  if (process.platform === 'win32') return;
+  try {
+    const fd = fs.openSync(dir, 'r');
+    try {
+      fs.fsyncSync(fd);
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch (err) {
+    log.warn(`could not flush the folder ${dir} to disk after replacing a file in it: ${errorMessage(err)}`);
+  }
+}
+
 function replaceViaTemp(target: string, text: string, old: fs.Stats | undefined): void {
   const tmp = `${target}.${process.pid}.tmp`;
   try {
-    fs.writeFileSync(tmp, text, { encoding: 'utf8', mode: (old?.mode ?? 0o666) & 0o777 });
-    if (old) keepAccess(tmp, old);
+    writeFlushed(tmp, text, old);
     renameOnto(tmp, target);
   } catch (err) {
     removeTemp(tmp);
     throw err;
   }
+  flushFolder(path.dirname(target));
 }
 
 /** The pre-rename write: it truncates first, so it is only the fallback, but it needs just a writable file and keeps hard links together. */
@@ -80,7 +107,8 @@ function writeInPlace(target: string, text: string): void {
   }
 }
 
-/** Writes `text` to `file` so a reader sees the old content or the new, never a truncated file: a crash mid-write leaves the old one. */
+/** Replaces `file` through a flushed temp file and a rename, so a reader, or a crash at any point, finds the old content or the new, whole.
+ *  A file with other hard links, or a rename the platform refuses (logged), is written in place: a crash mid-write can leave it truncated. */
 export function writeFileAtomic(file: string, text: string): void {
   const target = writeTarget(file);
   const old = fs.statSync(target, { throwIfNoEntry: false });
@@ -99,6 +127,9 @@ export function writeFileAtomic(file: string, text: string): void {
     replaceViaTemp(target, text, old);
   } catch (err) {
     if (!(err instanceof Error) || !REPLACE_REFUSALS.includes(errnoCode(err))) throw err;
+    log.warn(
+      `${target} could not be replaced by a rename (${errnoCode(err)}), so it is written in place: not atomic, a crash mid-write can leave it truncated`
+    );
     writeInPlace(target, text);
   }
 }

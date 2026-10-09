@@ -1,13 +1,16 @@
 // The Copilot hook commands through the built CLI, run from the home folder as VS Code runs user-level hooks, so the store must come from the payload's cwd.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import type { ChildProcess } from 'node:child_process';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { openHippoDb, closeHippoDb, getHippoDbPath, HOOK_DB_WAIT_MS } from '../src/db/index.js';
 import { readDeliveryEvents, type DeliveryEventRow } from '../src/store/recall-trace.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { loadActiveTaskSnapshot, saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import type { JsonValue } from '../src/util/json.js';
 import { compactionRows, initGlobal, initProject, runHippo } from './_helpers/compaction-hooks.js';
+import { lockWaitAskedMs, tracingLockWaits } from './_helpers/lock-waits.js';
+import { holdStoreWriteLock, releaseStoreWriteLock } from './_helpers/store-write-lock.js';
 import {
   CLAUDE_SESSION, claudeCodePayload, copilotEventsJsonl, copilotPayload, copilotScratch, writeClaudeTranscript, writeCopilotSessionLog, type CopilotScratch,
 } from './_helpers/copilot-hooks.js';
@@ -19,8 +22,10 @@ const SESSION = 'copilot-sess-1';
 const WORKER_DONE = `active snapshot(s) for session ${SESSION}`;
 // Forward slashes, since NODE_OPTIONS reads a backslash as an escape.
 const RECORD_SPAWN = path.resolve(__dirname, '_helpers', 'record-spawn.cjs').split(path.sep).join('/');
+const CURSOR_SAVE_FAULT = path.resolve(__dirname, '_helpers', 'cursor-save-fault.cjs').split(path.sep).join('/');
 
 let s: CopilotScratch;
+let holder: ChildProcess | null = null;
 
 function pin(text: string, global: boolean): void {
   const r = runHippo(['remember', text, '--pin', ...(global ? ['--global'] : [])], s.proj, s.env);
@@ -60,18 +65,31 @@ function rows<T>(sql: string, hippoRoot = s.hippoRoot): T[] {
   }
 }
 
+/** A git-marked folder with its own project store, as a second project the hook may run from. */
+function initStoreIn(dir: string): string {
+  fs.mkdirSync(path.join(dir, '.git'), { recursive: true });
+  expect(runHippo(['init', '--no-hooks', '--no-schedule', '--no-learn'], dir, s.env).status).toBe(0);
+  return path.join(dir, '.hippo');
+}
+
 function sleepMs(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function waitForLog(logFile: string, marker: string, timeoutMs = 25_000): Promise<string> {
+async function waitUntil(test: () => boolean, what: string, timeoutMs = 25_000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const text = fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8') : '';
-    if (text.includes(marker)) return text;
+    if (test()) return;
     await sleepMs(50);
   }
-  throw new Error(`${marker} not logged within ${timeoutMs}ms`);
+  throw new Error(`${what} within ${timeoutMs}ms`);
+}
+
+const readLog = (logFile: string): string => (fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8') : '');
+
+async function waitForLog(logFile: string, marker: string, timeoutMs = 25_000): Promise<string> {
+  await waitUntil(() => readLog(logFile).includes(marker), `${marker} not logged`, timeoutMs);
+  return readLog(logFile);
 }
 
 beforeEach(() => {
@@ -80,7 +98,9 @@ beforeEach(() => {
   initGlobal(s);
 });
 
-afterEach(() => {
+afterEach(async () => {
+  await releaseStoreWriteLock(holder);
+  holder = null;
   try {
     fs.rmSync(s.dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   } catch {
@@ -241,10 +261,30 @@ describe('hippo pre-compact --runtime copilot (critic test 7)', () => {
     expect(r.stdout).not.toBe('');
     expect(compactionRows(s.hippoRoot)).toHaveLength(1);
   });
+
+  it('on a busy store waits once for the hook wait, warns once and saves no snapshot', async () => {
+    const transcript = writeCopilotSessionLog(s.copilotHome, SESSION, copilotEventsJsonl());
+    const logFile = path.join(s.dir, 'pre-compact.log');
+    const traceDir = path.join(s.dir, 'lock-waits');
+    holder = await holdStoreWriteLock(getHippoDbPath(s.hippoRoot));
+    const r = runHippo(
+      ['pre-compact', '--runtime', 'copilot', '--log-file', logFile], s.dir,
+      tracingLockWaits({ ...s.env, HIPPO_LOG: 'warn' }, traceDir), copilotPayload('preCompact', s.proj, transcript),
+    );
+    await releaseStoreWriteLock(holder);
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout).toBe('');
+    expect(r.stderr.split('\n').filter((line) => line.includes('store busy'))).toHaveLength(1);
+    expect(lockWaitAskedMs(traceDir, r.pid)).toBe(HOOK_DB_WAIT_MS);
+    expect(fs.readFileSync(logFile, 'utf8')).toContain('snapshot save failed: database is locked');
+    expect(loadActiveTaskSnapshot(s.hippoRoot, 'default')).toBeNull();
+  }, 60_000);
 });
 
 const VSCODE_SESSION = 'vscode-sess-1';
 const TURN_DONE = 'skip snapshot close: turn mode';
+const FIRST_LESSON = 'retry budget at three attempts';
+const SECOND_LESSON = 'every pull request in CI';
 const SECOND_TURN = [
   { type: 'user.message', data: { content: 'now run the auth suite in CI on every pull request', attachments: [] }, id: 'e13', timestamp: '2026-10-07T12:01:00.000Z', parentId: 'e12' },
   { type: 'assistant.turn_start', data: { turnId: '1.0' }, id: 'e14', timestamp: '2026-10-07T12:01:01.000Z', parentId: 'e13' },
@@ -253,8 +293,8 @@ const SECOND_TURN = [
 ].map((line) => `${JSON.stringify(line)}\n`).join('');
 
 /** Writes the chat log where VS Code keeps it, `<User>/workspaceStorage/<id>/github.copilot-chat/transcripts/<session id>.jsonl`. */
-function writeVscodeTranscript(text: string): string {
-  const file = path.join(s.dir, 'vscode-data', 'Code', 'User', 'workspaceStorage', 'h1', 'github.copilot-chat', 'transcripts', `${VSCODE_SESSION}.jsonl`);
+function writeVscodeTranscript(text: string, sessionId = VSCODE_SESSION): string {
+  const file = path.join(s.dir, 'vscode-data', 'Code', 'User', 'workspaceStorage', 'h1', 'github.copilot-chat', 'transcripts', `${sessionId}.jsonl`);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, text);
   return file;
@@ -262,15 +302,63 @@ function writeVscodeTranscript(text: string): string {
 
 describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', () => {
   const logFile = (): string => path.join(s.dir, 'turn.log');
-  const memoriesWith = (text: string): number => loadAllEntries(s.hippoRoot).filter((e) => e.content.includes(text)).length;
+  const memoriesWith = (text: string, hippoRoot = s.hippoRoot): number => loadAllEntries(hippoRoot).filter((e) => e.content.includes(text)).length;
+  const stopArgs = (log: string): string[] => ['session-end', '--runtime', 'copilot', '--turn', '--log-file', log];
+  const sessionFile = (suffix: string, id = VSCODE_SESSION): string => path.join(s.dir, '.hippo', 'sessions', `${id}${suffix}`);
+
+  function stopPayload(transcript: string, over: { cwd?: string; sessionId?: string } = {}): string {
+    const payload = copilotPayload('Stop', over.cwd ?? s.proj, transcript);
+    if (over.sessionId === undefined) return payload;
+    // SAFETY: copilotPayload returns the JSON object of one fixture.
+    return JSON.stringify({ ...JSON.parse(payload), session_id: over.sessionId });
+  }
 
   /** One reply's Stop hook; the log starts afresh each turn, so the old one goes first. */
-  async function stop(transcript: string): Promise<string> {
+  async function stop(
+    transcript: string,
+    run: { cwd?: string; from?: string; waitMs?: number; env?: NodeJS.ProcessEnv } = {},
+  ): Promise<string> {
     fs.rmSync(logFile(), { force: true });
-    const r = runHippo(['session-end', '--runtime', 'copilot', '--turn', '--log-file', logFile()], s.dir, s.env, copilotPayload('Stop', s.proj, transcript));
+    const r = runHippo(stopArgs(logFile()), run.from ?? s.dir, run.env ?? s.env, stopPayload(transcript, { cwd: run.cwd }));
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toBe('');
-    return waitForLog(logFile(), TURN_DONE);
+    return waitForLog(logFile(), TURN_DONE, run.waitMs);
+  }
+
+  /** Env that stops the detached worker at the progress cursor save; `mark` gains the worker's pid line there. */
+  function cursorSaveFault(mode: 'kill' | 'hold') {
+    const mark = path.join(s.dir, 'cursor-save.mark');
+    const releaseFile = path.join(s.dir, 'cursor-save.release');
+    const env: NodeJS.ProcessEnv = {
+      ...s.env,
+      CURSOR_SAVE_FAULT: mode,
+      CURSOR_SAVE_MARK: mark,
+      CURSOR_SAVE_RELEASE: mode === 'hold' ? releaseFile : undefined,
+      NODE_OPTIONS: `${s.env.NODE_OPTIONS ?? ''} --require "${CURSOR_SAVE_FAULT}"`,
+    };
+    const marked = (): string => (fs.existsSync(mark) ? fs.readFileSync(mark, 'utf8') : '');
+    return {
+      env,
+      async reached(): Promise<number> {
+        // A poll can see the file created and still empty, which must never parse as pid 0.
+        await waitUntil(() => marked().includes('\n'), 'no worker reached the progress cursor save', 40_000);
+        const pid = Number(marked().split('\n')[0]);
+        if (!Number.isInteger(pid) || pid <= 0) throw new Error(`bad pid in the cursor save mark: ${marked()}`);
+        return pid;
+      },
+      saves: (): number[] => marked().split('\n').filter((line) => line !== '').map(Number),
+      release: (): void => fs.writeFileSync(releaseFile, ''),
+    };
+  }
+
+  function pidAlive(pid: number): boolean {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch (err) {
+      // SAFETY: process.kill throws a NodeJS.ErrnoException.
+      return (err as NodeJS.ErrnoException).code === 'EPERM';
+    }
   }
 
   it('captures each reply once, keeps one handoff for the chat, and leaves the snapshot open', async () => {
@@ -336,6 +424,140 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     expect(workersStartedBy(copilotPayload('Stop', s.proj, transcript))).toBe(1);
     await waitForLog(logFile(), TURN_DONE);
   });
+
+  it('on a busy store saves nothing and no progress cursor, then saves once the lock is gone and not again', async () => {
+    const transcript = writeVscodeTranscript(copilotEventsJsonl());
+    holder = await holdStoreWriteLock(getHippoDbPath(s.hippoRoot), 120_000);
+    const busy = await stop(transcript, { waitMs: 90_000 });
+    expect(busy).toContain('capture failed: database is locked');
+    await releaseStoreWriteLock(holder);
+    expect(memoriesWith(FIRST_LESSON)).toBe(0);
+    expect(fs.existsSync(sessionFile('.cursor.json'))).toBe(false);
+
+    expect(await stop(transcript)).toContain('Captured 1 items (0 skipped as duplicates');
+    expect(memoriesWith(FIRST_LESSON)).toBe(1);
+    expect(fs.existsSync(sessionFile('.cursor.json'))).toBe(true);
+
+    expect(await stop(transcript)).toContain('skip capture: no new turns since the last reply');
+    expect(memoriesWith(FIRST_LESSON)).toBe(1);
+  }, 120_000);
+
+  it('after a worker is killed before the progress cursor save, the next reply keeps one copy and saves the cursor', async () => {
+    const transcript = writeVscodeTranscript(copilotEventsJsonl());
+    const fault = cursorSaveFault('kill');
+    const first = runHippo(stopArgs(logFile()), s.dir, fault.env, stopPayload(transcript));
+    expect(first.status, first.stderr).toBe(0);
+    const pid = await fault.reached();
+    await waitUntil(() => !pidAlive(pid), `worker ${pid} not dead`);
+    expect(memoriesWith(FIRST_LESSON)).toBe(1);
+    expect(fs.existsSync(sessionFile('.cursor.json'))).toBe(false);
+    expect(fs.existsSync(sessionFile('.lock'))).toBe(true);
+    // The temp file shows the kill landed between the write and the rename.
+    expect(fs.existsSync(sessionFile(`.cursor.json.${pid}.tmp`))).toBe(true);
+
+    expect(await stop(transcript)).toContain('Captured 0 items (1 skipped as duplicates');
+    expect(memoriesWith(FIRST_LESSON)).toBe(1);
+    expect(fs.existsSync(sessionFile('.cursor.json'))).toBe(true);
+    await waitUntil(() => !fs.existsSync(sessionFile('.lock')), 'session lock not released');
+
+    expect(await stop(transcript)).toContain('skip capture: no new turns since the last reply');
+  }, 60_000);
+
+  it('saves a reply that ends while the last reply\'s worker still runs, in that same worker', async () => {
+    const transcript = writeVscodeTranscript(copilotEventsJsonl());
+    const fault = cursorSaveFault('hold');
+    fs.rmSync(logFile(), { force: true });
+    const first = runHippo(stopArgs(logFile()), s.dir, fault.env, stopPayload(transcript));
+    expect(first.status, first.stderr).toBe(0);
+    const pid = await fault.reached();
+    fs.appendFileSync(transcript, SECOND_TURN);
+    const second = runHippo(stopArgs(logFile()), s.dir, s.env, stopPayload(transcript));
+    expect(second.status, second.stderr).toBe(0);
+    await waitUntil(() => fs.existsSync(sessionFile('.queued')), 'second reply not queued');
+    fault.release();
+    await waitUntil(() => !fs.existsSync(sessionFile('.lock')), 'session lock not released', 60_000);
+    expect(memoriesWith(FIRST_LESSON)).toBe(1);
+    expect(memoriesWith(SECOND_LESSON)).toBe(1);
+    // The second worker has no preload, so two lines with this pid mean the first worker saved the cursor twice.
+    expect(fault.saves()).toEqual([pid, pid]);
+    expect(readLog(logFile())).toContain('Captured 1 items (0 skipped as duplicates');
+    expect(fs.existsSync(sessionFile('.queued'))).toBe(false);
+    expect(fs.existsSync(sessionFile('.cursor.json'))).toBe(true);
+  }, 90_000);
+
+  it('keeps each lesson when a second chat ends a reply while the first chat\'s worker still runs', async () => {
+    const second = 'vscode-sess-2';
+    const secondLog = path.join(s.dir, 'turn-2.log');
+    const fault = cursorSaveFault('hold');
+    const firstStop = runHippo(stopArgs(logFile()), s.dir, fault.env, stopPayload(writeVscodeTranscript(copilotEventsJsonl())));
+    expect(firstStop.status, firstStop.stderr).toBe(0);
+    // The first chat's worker is held at its cursor save before the second chat starts, so the whole second save falls inside that worker's life.
+    const pid = await fault.reached();
+    const secondPayload = stopPayload(writeVscodeTranscript(SECOND_TURN, second), { sessionId: second });
+    const secondStop = runHippo(stopArgs(secondLog), s.dir, s.env, secondPayload);
+    expect(secondStop.status, secondStop.stderr).toBe(0);
+    await waitForLog(secondLog, TURN_DONE, 50_000);
+    expect(pidAlive(pid)).toBe(true);
+    expect(fs.existsSync(sessionFile('.lock'))).toBe(true);
+    expect(memoriesWith(FIRST_LESSON)).toBe(1);
+    expect(memoriesWith(SECOND_LESSON)).toBe(1);
+    expect(fs.existsSync(sessionFile('.cursor.json'))).toBe(false);
+    expect(fs.existsSync(sessionFile('.cursor.json', second))).toBe(true);
+
+    fault.release();
+    await waitUntil(() => !fs.existsSync(sessionFile('.lock')), 'session lock not released', 60_000);
+    expect(fs.existsSync(sessionFile('.cursor.json'))).toBe(true);
+    expect(memoriesWith(FIRST_LESSON)).toBe(1);
+    expect(memoriesWith(SECOND_LESSON)).toBe(1);
+  }, 90_000);
+
+  it('files a reply under the payload cwd project when that folder has no store', async () => {
+    const billing = path.join(s.dir, 'billing');
+    fs.mkdirSync(path.join(billing, '.git'), { recursive: true });
+    await stop(writeVscodeTranscript(copilotEventsJsonl()), { cwd: billing, waitMs: 50_000 });
+    const sql = `SELECT origin_project FROM memories WHERE instr(content, '${FIRST_LESSON}') > 0`;
+    expect(rows<{ origin_project: string }>(sql, s.globalRoot)).toEqual([{ origin_project: 'billing' }]);
+    expect(memoriesWith(FIRST_LESSON)).toBe(0);
+    expect(fs.existsSync(path.join(billing, '.hippo'))).toBe(false);
+  }, 60_000);
+
+  it('saves into the payload cwd store when the hook runs from another project with its own store', async () => {
+    const otherRoot = initStoreIn(path.join(s.dir, 'other'));
+    await stop(writeVscodeTranscript(copilotEventsJsonl()), { from: path.join(s.dir, 'other'), waitMs: 50_000 });
+    expect(memoriesWith(FIRST_LESSON)).toBe(1);
+    expect(memoriesWith(FIRST_LESSON, otherRoot)).toBe(0);
+    expect(memoriesWith(FIRST_LESSON, s.globalRoot)).toBe(0);
+  }, 60_000);
+
+  it('saves nothing for a transcript that is not on disk, with other chats\' transcripts where a fallback could look', async () => {
+    const beside = writeVscodeTranscript(copilotEventsJsonl(), 'vscode-sess-2');
+    writeCopilotSessionLog(s.copilotHome, 'vscode-sess-2', copilotEventsJsonl());
+    const claudeProject = path.join(s.dir, 'claude', 'projects', 'proj');
+    fs.mkdirSync(claudeProject, { recursive: true });
+    writeClaudeTranscript(claudeProject);
+    const missing = path.join(path.dirname(beside), `${VSCODE_SESSION}.jsonl`);
+    const log = await stop(missing, { env: { ...s.env, CLAUDE_CONFIG_DIR: path.join(s.dir, 'claude') }, waitMs: 50_000 });
+    expect(log).toContain('skip capture: no readable transcript for this session');
+    for (const root of [s.hippoRoot, s.globalRoot]) {
+      expect(rows<{ n: number }>('SELECT COUNT(*) AS n FROM memories', root)).toEqual([{ n: 0 }]);
+    }
+    expect(fs.existsSync(sessionFile('.cursor.json'))).toBe(false);
+  }, 60_000);
+
+  it('warns once when the payload cwd does not exist, and saves into the store of the folder it ran in', async () => {
+    const other = path.join(s.dir, 'other');
+    const otherRoot = initStoreIn(other);
+    const payload = stopPayload(writeVscodeTranscript(copilotEventsJsonl()), { cwd: path.join(s.dir, 'gone') });
+    fs.rmSync(logFile(), { force: true });
+    const r = runHippo(stopArgs(logFile()), other, { ...s.env, HIPPO_LOG: 'warn' }, payload);
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout).toBe('');
+    expect(r.stderr.split('\n').filter((line) => line.includes('is not usable'))).toHaveLength(1);
+    await waitForLog(logFile(), TURN_DONE, 50_000);
+    expect(memoriesWith(FIRST_LESSON, otherRoot)).toBe(1);
+    expect(memoriesWith(FIRST_LESSON)).toBe(0);
+    expect(memoriesWith(FIRST_LESSON, s.globalRoot)).toBe(0);
+  }, 60_000);
 });
 
 describe('hippo pre-compact from Claude Code settings on a VS Code chat', () => {
@@ -382,9 +604,7 @@ describe('a Claude Code payload run from another folder with no --runtime', () =
 
   beforeEach(() => {
     other = path.join(s.dir, 'other');
-    fs.mkdirSync(path.join(other, '.git'), { recursive: true });
-    expect(runHippo(['init', '--no-hooks', '--no-schedule', '--no-learn'], other, s.env).status).toBe(0);
-    otherRoot = path.join(other, '.hippo');
+    otherRoot = initStoreIn(other);
   });
 
   it('capture-error logs the failure in the store of the folder it runs in', () => {

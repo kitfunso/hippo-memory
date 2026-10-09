@@ -1,5 +1,7 @@
-// A thrown error crosses the worker boundary as plain data and arrives as an instance of its class: the server's mappers test `instanceof`, `errcode` and fields.
+// A thrown error crosses the worker boundary as plain data and arrives as an instance
+// of its class: the server's mappers test `instanceof`, `errcode` and fields.
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../../core/api-errors.js';
+import { RawAppendOnlyError } from '../../core/raw-append-only.js';
 import { IncompatibleBinaryError, StoreBusyError } from '../../db/index.js';
 import { BodyTimeoutError, BodyTooLargeError, HttpError } from '../../util/http-util.js';
 import { errorMessage, log } from '../../util/log.js';
@@ -24,7 +26,7 @@ export interface WireError {
 const CLASSES = [
   Error, TypeError, RangeError, SyntaxError, ReferenceError, EvalError, URIError,
   HttpError, BodyTooLargeError, BodyTimeoutError,
-  BadRequestError, ForbiddenError, NotFoundError, ConflictError, RejectedValueError, ScopeForbiddenError,
+  BadRequestError, ForbiddenError, NotFoundError, ConflictError, RejectedValueError, ScopeForbiddenError, RawAppendOnlyError,
   SqliteBlockedError, StoreNotPortedError, OtherStoreFolderError,
   StoreBusyError, IncompatibleBinaryError,
 ] as const;

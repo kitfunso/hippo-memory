@@ -24,6 +24,8 @@
  */
 
 import { BadRequestError } from '../core/api-errors.js';
+import type { MemoryEntry } from '../core/memory.js';
+import { writeEntry } from '../store/entry-writes.js';
 import { assertTenantId } from '../store/tenant.js';
 import type { KeysetPosition } from '../util/keyset.js';
 import type { SavableDescriptor } from './descriptor.js';
@@ -36,6 +38,8 @@ export type { Decision, DecisionStatus } from '../store/object-types.js';
 // ---------------------------------------------------------------------------
 // Domain types
 // ---------------------------------------------------------------------------
+
+const SUPERSEDED_TAG = 'superseded';
 
 export const VALID_DECISION_STATES: ReadonlySet<DecisionStatus> = new Set<DecisionStatus>([
   'active',
@@ -104,6 +108,13 @@ export function saveDecision(
   actor: string = 'cli',
 ): Decision {
   return saveObjectAt(DECISION, { hippoRoot, tenantId, actor }, opts);
+}
+
+/** Weaken the memory a new decision replaces, once the save has committed: half-life halved to a day at least, marked stale, tagged `superseded`. */
+export function weakenSupersededMemory(hippoRoot: string, entry: MemoryEntry, actor: string = 'cli'): void {
+  const tags = entry.tags.includes(SUPERSEDED_TAG) ? entry.tags : [...entry.tags, SUPERSEDED_TAG];
+  const halved = Math.max(1, Math.floor(entry.half_life_days / 2));
+  writeEntry(hippoRoot, { ...entry, half_life_days: halved, confidence: 'stale', tags }, { actor });
 }
 
 /**

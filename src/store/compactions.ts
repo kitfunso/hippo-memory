@@ -122,7 +122,20 @@ export function insertSummarisedCompaction(db: DatabaseSyncLike, tenantId: strin
   db.prepare(
     `INSERT INTO compactions(tenant_id, id, session_id, origin_project, compact_trigger, cwd, transcript_path, started_at, summarised_at, summary, items_json, status${col})
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'summarised'${mark})`,
-  ).run(tenantId, id, meta.sessionId, meta.originProject, meta.trigger, meta.cwd, meta.transcriptPath, meta.startedAt, summarisedAt, summary, itemsJson, ...stamp);
+  ).run(
+    tenantId,
+    id,
+    meta.sessionId,
+    meta.originProject,
+    meta.trigger,
+    meta.cwd,
+    meta.transcriptPath,
+    meta.startedAt,
+    summarisedAt,
+    summary,
+    itemsJson,
+    ...stamp
+  );
 }
 
 export function markSnapshotSavedRow(db: DatabaseSyncLike, tenantId: string, recordId: string): void {

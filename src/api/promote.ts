@@ -113,7 +113,8 @@ function assertSupersedable(ctx: Context, oldId: string, old: MemoryEntry | null
 // archive_raw
 // ---------------------------------------------------------------------------
 
-/** Archive a kind='raw' memory: its metadata moves to raw_archive and the row is deleted. The store writes the one archive_raw audit row, under the caller's subject. */
+/** Archive a kind='raw' memory: its metadata moves to raw_archive and the row is
+ * deleted. The store writes the one archive_raw audit row, under the caller's subject. */
 export interface ArchiveRawOpts {
   /** The connector event this archive answers. The store logs it in the archive's own transaction, so a redelivery finds it logged. */
   event?: ConnectorEvent;

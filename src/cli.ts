@@ -8,6 +8,7 @@ import * as fs from 'fs';
 import { fileURLToPath } from 'node:url';
 import { repairCodexWrapperIfInstalled } from './hooks/codex-wrapper.js';
 import { getHippoRoot } from './store/open.js';
+import { resolveTenantId } from './store/tenant.js';
 import { handleGithub, printGithubBackfillUsage } from './connectors/github/cli-impl.js';
 import { printError } from './cli/output.js';
 import { errorFields, errorMessage, isLevelEnabled, log } from './util/log.js';
@@ -569,7 +570,7 @@ async function main(
     printUsage();
     process.exit(1);
   }
-  const run = (): void | Promise<void> => spec.run({ hippoRoot, args, flags });
+  const run = (): void | Promise<void> => spec.run({ hippoRoot, tenantId: resolveTenantId({}), args, flags });
   await (spec.scoped ? (await import('./db/request-stores.js')).runWithRequestStores(run) : run());
 }
 

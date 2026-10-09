@@ -9,6 +9,7 @@ import { bookLedgerTurn } from '../api/ledger-db.js';
 import { readHookStdin } from './stdin.js';
 import * as api from '../api/index.js';
 import { resolveTenantId } from '../store/tenant.js';
+import { cliApiContext } from './api-context.js';
 import { renderAmbientSummary } from '../core/ambient.js';
 import { contextBlockLines, contextCost, crossProjectLines, settleTokens } from '../api/context-render.js';
 import {
@@ -91,7 +92,7 @@ async function renderContext(
   // --auto shells out to git, so it stays CLI-side; api.getContext stays host-agnostic and falls back to '*'.
   const query = contextQuery(args, flags);
 
-  const ctx: api.Context = { hippoRoot, tenantId: resolvedTenant, actor: api.adminActor('cli') };
+  const ctx = cliApiContext(hippoRoot, resolvedTenant);
   const format = String(flags['format'] ?? 'markdown');
   const framing = String(flags['framing'] ?? 'observe');
   const opts = buildContextOpts(flags, { query, budget, pinnedOnly, format, framing, session, rec });

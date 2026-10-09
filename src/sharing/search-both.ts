@@ -203,9 +203,15 @@ export async function rankBothStores(
   vectorCandidates: HybridVectorCandidates,
   options: HybridSearchOptions = {},
 ): Promise<SearchResult[]> {
-  const { budget = DEFAULT_RECALL_BUDGET, now = evalNow(), embeddingWeight, explain, mmr, mmrLambda, localBump = DEFAULT_LOCAL_BUMP, minResults, cost, scope, includeSuperseded, asOf, summaryDeboost, summaryFreshness } = options;
+  const {
+    budget = DEFAULT_RECALL_BUDGET, now = evalNow(), embeddingWeight, explain, mmr, mmrLambda, localBump = DEFAULT_LOCAL_BUMP, minResults, cost, scope,
+    includeSuperseded, asOf, summaryDeboost, summaryFreshness
+  } = options;
   if (entries.local.length === 0 && entries.global.length === 0) return [];
-  const shared = { budget, now, embeddingWeight, explain, mmr, mmrLambda, minResults, cost, scope, includeSuperseded, asOf, summaryDeboost, summaryFreshness, vectorCandidates };
+  const shared = {
+    budget, now, embeddingWeight, explain, mmr, mmrLambda, minResults, cost, scope, includeSuperseded, asOf, summaryDeboost, summaryFreshness,
+    vectorCandidates
+  };
   const localResults = await hybridSearch(query, entries.local, { ...shared, hippoRoot: roots.local });
   const globalResults = await hybridSearch(query, entries.global, { ...shared, hippoRoot: roots.global });
 

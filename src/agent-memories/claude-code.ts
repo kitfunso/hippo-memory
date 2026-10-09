@@ -25,7 +25,8 @@ function claudeMemoryFolderNames(projectRoot: string, platform: NodeJS.Platform)
   return new Set(roots.map((root) => (platform === 'win32' ? claudeFolderName(root).toLowerCase() : claudeFolderName(root))));
 }
 
-/** Claude Code's rule: a linked worktree shares its main checkout's folder, or the git folder's when that sits outside a checkout (a bare repository, or --separate-git-dir); any other checkout, a submodule included, keeps its own. */
+/** Claude Code's rule: a linked worktree shares its main checkout's folder, or the git folder's when that sits outside
+ * a checkout (a bare repository, or --separate-git-dir); any other checkout, a submodule included, keeps its own. */
 export function claudeCheckoutRoot(top: string, gitDir: string, common: string): string {
   if (gitDir === common) return top;
   if (path.basename(common) === '.git') return path.dirname(common);
@@ -59,7 +60,8 @@ export function claudeTranscriptListing(ctx: AdapterContext, transcriptPath: str
   return { tool: 'claude-code', home: config, containers: readFolders([folder], 'project', ctx.platform), warnings: [] };
 }
 
-/** The project a session folder's notes belong to: the one Claude named the folder for, the session's start folder, else cwd or a parent; null when none matches. */
+/** The project a session folder's notes belong to: the one Claude named the folder
+ * for, the session's start folder, else cwd or a parent; null when none matches. */
 export function transcriptNotesProject(transcriptPath: string, cwd: string | null, machine: Pick<AdapterContext, 'platform' | 'env'>): ProjectIdentity | null {
   const fold = (name: string) => (machine.platform === 'win32' ? name.toLowerCase() : name);
   const folder = fold(path.basename(path.dirname(transcriptPath)));

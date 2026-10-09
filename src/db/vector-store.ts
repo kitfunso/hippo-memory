@@ -180,7 +180,8 @@ export async function topVectorMatches(
 ): Promise<VectorMatch[]> {
   const best = bestMatches(query, k);
   if (!best) return [];
-  // SHORTCUT: brute-force cosine over every admitted vector, a chunk per event-loop turn; latency still grows with rows, fine to ~100k, and an ANN index (sqlite-vec, HNSW) is the upgrade.
+  // SHORTCUT: brute-force cosine over every admitted vector, a chunk per event-loop turn; latency
+  // still grows with rows, fine to ~100k, and an ANN index (sqlite-vec, HNSW) is the upgrade.
   // SAFETY: the SELECT names exactly these two columns; node:sqlite returns BLOBs as Uint8Array.
   const rows = db.prepare(`
     SELECT v.memory_id AS id, v.vector AS vector

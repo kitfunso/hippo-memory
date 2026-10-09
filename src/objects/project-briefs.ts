@@ -323,7 +323,8 @@ function refreshWrite(normalizedRepo: string, digest: BriefDigest, active: Proje
   };
 }
 
-/** Saves a new version of the repo's brief from its receipts. The receipts are read before the save's transaction, so a receipt written in between shows in the next refresh. */
+/** Saves a new version of the repo's brief from its receipts. The receipts are read before
+ * the save's transaction, so a receipt written in between shows in the next refresh. */
 export function refreshBrief(
   hippoRoot: string,
   tenantId: string,

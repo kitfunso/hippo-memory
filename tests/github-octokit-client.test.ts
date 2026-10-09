@@ -4,6 +4,7 @@ import {
   parseNextLink,
   realGitHubFetcher,
 } from '../src/connectors/github/octokit-client.js';
+import { paddedJsonResponse } from './_helpers/padded-response.js';
 
 describe('parseNextLink', () => {
   it('parses a sole rel="next" link', () => {
@@ -100,5 +101,64 @@ describe('realGitHubFetcher: non-200 must throw', () => {
         token: 't',
       }),
     ).rejects.toBeInstanceOf(GitHubFetchError);
+  });
+});
+
+describe('realGitHubFetcher: a 200 reply that is not a list', () => {
+  const URL_WITH_QUERY = 'https://api.github.com/repos/acme/app/issues?state=all&per_page=100&since=2026-01-01';
+  const GITHUB_CAP_BYTES = 32 * 1024 * 1024;
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  /** The rejection of one page fetch whose reply is `reply`; a page that came back fails the test, since ingest would take its items. */
+  async function failure(reply: Response): Promise<GitHubFetchError> {
+    vi.stubGlobal('fetch', vi.fn(async () => reply));
+    const outcome = await realGitHubFetcher({ url: URL_WITH_QUERY, token: 'ghp_secret' }).then((page) => page, (err: Error) => err);
+    if (!(outcome instanceof GitHubFetchError)) throw new Error(`expected a GitHubFetchError, got ${JSON.stringify(outcome)}`);
+    return outcome;
+  }
+
+  function expectNamesTheReply(err: GitHubFetchError, reason: RegExp): void {
+    expect(err.status).toBe(200);
+    expect(err.message).toMatch(/^GitHub 200 on \/repos\/acme\/app\/issues: /);
+    expect(err.message).toMatch(reason);
+    expect(err.message).not.toMatch(/per_page|since=|ghp_/);
+  }
+
+  it('throws on an HTML error page served with status 200', async () => {
+    const err = await failure(new Response('<html><body>Whoa there!</body></html>', { status: 200 }));
+    expectNamesTheReply(err, /reply is not JSON/);
+    expect(err.cause).toBeInstanceOf(Error);
+  });
+
+  it('throws on a null body', async () => {
+    expectNamesTheReply(await failure(new Response('null', { status: 200 })), /not a JSON array/);
+  });
+
+  it('throws on an object body, so an error document never reaches ingest as items', async () => {
+    const body = JSON.stringify({ message: 'Moved Permanently', documentation_url: 'https://docs.github.com' });
+    expectNamesTheReply(await failure(new Response(body, { status: 200 })), /not a JSON array/);
+  });
+
+  it('throws on a body over the byte cap', async () => {
+    const err = await failure(paddedJsonResponse('[', ']', GITHUB_CAP_BYTES));
+    expectNamesTheReply(err, new RegExp(`reply over ${GITHUB_CAP_BYTES} bytes`));
+  }, 60_000);
+
+  it('still returns the items and the next link of a well-formed page', async () => {
+    const reply = new Response(JSON.stringify([{ id: 1 }, { id: 2 }]), { status: 200, headers: { link: '<https://api.github.com/x?page=2>; rel="next"' } });
+    vi.stubGlobal('fetch', vi.fn(async () => reply));
+    const page = await realGitHubFetcher({ url: URL_WITH_QUERY, token: 't' });
+    expect(page.items).toEqual([{ id: 1 }, { id: 2 }]);
+    expect(page.next).toBe('https://api.github.com/x?page=2');
+  });
+
+  it('keeps only a short excerpt of a large error body', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('x'.repeat(1024 * 1024), { status: 500 })));
+    const err = await realGitHubFetcher({ url: URL_WITH_QUERY, token: 't' }).then(() => null, (e: GitHubFetchError) => e);
+    expect(err?.status).toBe(500);
+    expect(err?.bodyExcerpt).toBe('x'.repeat(256));
   });
 });

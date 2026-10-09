@@ -34,7 +34,8 @@ const SECRET_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }> = [
   { name: 'aws-access-key', re: /\bAKIA[0-9A-Z]{16}\b/ },
   { name: 'github-token', re: /\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{36}\b/ },
   { name: 'github-fine-grained-pat', re: /\bgithub_pat_[A-Za-z0-9_]{22,}\b/ },
-  // A token may end in a hyphen, where `\b` holds only before a word character: a class that holds `-` runs to its end, and a fixed length may also close on a hyphen.
+  // A token may end in a hyphen, where `\b` holds only before a word character: a class
+  // that holds `-` runs to its end, and a fixed length may also close on a hyphen.
   { name: 'slack-token', re: /\bxox[baprs]-[A-Za-z0-9-]{10,}/ },
   { name: 'stripe-key', re: /\b[sr]k_(?:live|test)_[A-Za-z0-9]{16,}\b/ },
   { name: 'google-api-key', re: /\bAIza[0-9A-Za-z_-]{35}(?:\b|(?<=-))/ },
@@ -53,8 +54,10 @@ const SECRET_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }> = [
   // does.
   { name: 'sk-style-key', re: /\bsk-[A-Za-z0-9_-]{20,}/ },
   { name: 'sk-underscore-key', re: /\bsk_[A-Za-z0-9]+_[A-Za-z0-9_]{6,}\b/ },
-  // The value needs 12+ token-safe chars and a digit, or `token = estimateTokens(...)` and doc templates like user:password@ would hide code lessons from ambient context.
-  // Secret names end in the keyword (dbPassword, PGPASSWORD) and token_url does not, so the match opens there and scans no prefix; pwd and pass need a _ as OLDPWD and bypass are not secrets.
+  // The value needs 12+ token-safe chars and a digit, or `token = estimateTokens(...)`
+  // and doc templates like user:password@ would hide code lessons from ambient context.
+  // Secret names end in the keyword (dbPassword, PGPASSWORD) and token_url does not, so the match
+  // opens there and scans no prefix; pwd and pass need a _ as OLDPWD and bypass are not secrets.
   { name: 'secret-assignment', re: /(?:(?:api[_-]?key|access[_-]?key|private[_-]?key|secret|token|passw(?:or)?d|(?<=_)(?:pwd|pass))(?:[_-]?(?:key(?:[_-]?base)?|value|secret))?['"]?\s*(?::=?|=>?)\s*['"]?|(?<=--)password(?:=|\s+))(?=[A-Za-z0-9_\-+/]*\d)[A-Za-z0-9_\-+/=]{12,}/i },
   { name: 'url-password', re: /(?<=[A-Za-z0-9]:\/\/)[^\s/:@?#]*:(?=[^\s/@?#]*\d)[^\s/@?#]+(?=@)/ },
 ];
@@ -99,7 +102,8 @@ export function redactSecrets(text: string): string {
   return redactText(text, false);
 }
 
-/** Only a run's first character starts a match, so a long run is scanned once; a domain's first label opens on a letter, so logo@2x.png and react@18.2.0 stay. */
+/** Only a run's first character starts a match, so a long run is scanned once; a
+ * domain's first label opens on a letter, so logo@2x.png and react@18.2.0 stay. */
 const EMAIL = /(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]{1,64}@[A-Za-z][A-Za-z0-9-]*(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\b/g;
 
 /** Memories never hold a raw email address (AGENTS.md); phone numbers are left alone, as their patterns misfire on ids. */

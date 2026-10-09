@@ -376,8 +376,7 @@ export function writeDeliveryEvent(db: DatabaseSyncLike, input: DeliveryEventInp
       return eventId;
     });
   } catch (error) {
-    // The prompt hook's stderr shows this exact `[hippo] delivery ledger` line, so it stays off the logger's format.
-    console.error(`[hippo] delivery ledger write failed: ${errorMessage(error)}`);
+    log.error(`delivery ledger write failed: ${errorMessage(error)}`);
     return null;
   }
 }
@@ -388,8 +387,7 @@ export function writeDeliveryEventAtRoot(root: string, input: DeliveryEventInput
   try {
     db = openHippoDb(root);
   } catch (error) {
-    // Same hook stderr line as writeDeliveryEvent above.
-    console.error(`[hippo] delivery ledger write failed: ${errorMessage(error)}`);
+    log.error(`delivery ledger write failed: ${errorMessage(error)}`);
     return null;
   }
   try {

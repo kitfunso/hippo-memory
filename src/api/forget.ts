@@ -12,7 +12,8 @@ import { canTouchScope, personalScopeOf } from '../store/recall-scope.js';
 // forget
 // ---------------------------------------------------------------------------
 
-/** Delete a memory by id. Reach is checked inside the delete's write scope, and a row out of reach answers as not found, so a caller learns nothing about it. */
+/** Delete a memory by id. Reach is checked inside the delete's write scope, and a
+ * row out of reach answers as not found, so a caller learns nothing about it. */
 export interface ForgetResult {
   ok: true;
   id: string;

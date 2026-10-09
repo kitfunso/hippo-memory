@@ -1,4 +1,5 @@
-/** `hippo support-bundle`: one redacted JSON snapshot for a support ticket. Read-only (SQLite may leave empty -wal and -shm files); never touches memory content. */
+/** `hippo support-bundle`: one redacted JSON snapshot for a support ticket. Read-only
+ * (SQLite may leave empty -wal and -shm files); never touches memory content. */
 import { envByName, processEnv } from './util/env.js';
 import * as fs from 'fs';
 import * as os from 'os';

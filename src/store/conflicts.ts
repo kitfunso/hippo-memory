@@ -174,7 +174,11 @@ function readConflictRefresh(db: DatabaseSyncLike): ConflictRefreshReads {
   const tenantById = new Map<string, string>();
   const storedRefs = new Map<string, string | null>();
   // SAFETY: rows' shape matches the three columns named in the SELECT.
-  for (const r of db.prepare(`SELECT id, tenant_id, conflicts_with_json FROM memories`).all() as Array<{ id: string; tenant_id: string; conflicts_with_json: string | null }>) {
+  for (const r of db.prepare(`SELECT id, tenant_id, conflicts_with_json FROM memories`).all() as Array<{
+    id: string;
+    tenant_id: string;
+    conflicts_with_json: string | null;
+  }>) {
     tenantById.set(r.id, r.tenant_id);
     if (r.conflicts_with_json !== '[]') storedRefs.set(r.id, r.conflicts_with_json);
   }
@@ -578,7 +582,10 @@ function stripConflictRefs(db: DatabaseSyncLike, t: ResolveTarget, loserRemoved:
   // Clean up conflicts_with references
   // SAFETY: keepRow's shape matches the single `conflicts_with_json`
   // column selected above.
-  const keepRow = db.prepare(`SELECT conflicts_with_json FROM memories WHERE id = ?${memScope}`).get(keepId, ...memArgs) as { conflicts_with_json: string } | undefined;
+  const keepRow = db.prepare(`SELECT conflicts_with_json FROM memories WHERE id = ?${memScope}`).get(
+    keepId,
+    ...memArgs
+  ) as { conflicts_with_json: string } | undefined;
   if (keepRow) {
     const refs: string[] = JSON.parse(keepRow.conflicts_with_json || '[]');
     const cleaned = refs.filter((r: string) => r !== loserId);
@@ -589,7 +596,10 @@ function stripConflictRefs(db: DatabaseSyncLike, t: ResolveTarget, loserRemoved:
   if (!loserRemoved) {
     // SAFETY: loserRow's shape matches the single `conflicts_with_json`
     // column named in the SELECT below.
-    const loserRow = db.prepare(`SELECT conflicts_with_json FROM memories WHERE id = ?${memScope}`).get(loserId, ...memArgs) as { conflicts_with_json: string } | undefined;
+    const loserRow = db.prepare(`SELECT conflicts_with_json FROM memories WHERE id = ?${memScope}`).get(
+      loserId,
+      ...memArgs
+    ) as { conflicts_with_json: string } | undefined;
     if (loserRow) {
       const refs: string[] = JSON.parse(loserRow.conflicts_with_json || '[]');
       const cleaned = refs.filter((r: string) => r !== keepId);
@@ -680,5 +690,9 @@ export function conflictResolveAuditsAt(db: DatabaseSyncLike): Array<{ conflictI
 /** Every resolved conflict with both sides. */
 export function resolvedConflictsAt(db: DatabaseSyncLike): Array<{ id: number; memory_a_id: string; memory_b_id: string }> {
   // SAFETY: SELECT of three columns of resolved conflicts.
-  return db.prepare(`SELECT id, memory_a_id, memory_b_id FROM memory_conflicts WHERE status = 'resolved'`).all() as { id: number; memory_a_id: string; memory_b_id: string }[];
+  return db.prepare(`SELECT id, memory_a_id, memory_b_id FROM memory_conflicts WHERE status = 'resolved'`).all() as {
+    id: number;
+    memory_a_id: string;
+    memory_b_id: string;
+  }[];
 }

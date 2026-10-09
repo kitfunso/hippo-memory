@@ -1,5 +1,6 @@
 // The per-prompt hook's block and ledger rows, rendered here for `hippo context` and for promptHookContext (a remote hook route's call).
-// promptHookContext keeps the server-side copy of the CLI's getContext flags (cli/context.ts); the CLI parity case in tests/prompt-hook-context.test.ts is all that ties the two.
+// promptHookContext keeps the server-side copy of the CLI's getContext flags (cli/context.ts);
+// the CLI parity case in tests/prompt-hook-context.test.ts is all that ties the two.
 import { getContext, type Context, type ContextResult, type ContextResultEntry } from './index.js';
 import { BadRequestError } from '../core/api-errors.js';
 import { isSharedStore, loadConfig } from '../core/config.js';
@@ -21,7 +22,7 @@ import {
   type TokenUse,
 } from '../store/token-ledger.js';
 import { blockHash, estimateTokens } from '../util/token-text.js';
-import { errorMessage } from '../util/log.js';
+import { errorMessage, log } from '../util/log.js';
 
 /** With `write`, stores on the token ledger's connection (same store); without it, opens its own. A second flush is a no-op. */
 export function flushDeliveryRecorder(rec: DeliveryRecorder | null, write?: DeliveryWrite): void {
@@ -29,8 +30,7 @@ export function flushDeliveryRecorder(rec: DeliveryRecorder | null, write?: Deli
   try {
     rec.flush(write ?? ((input) => writeDeliveryEventAtRoot(rec.root, input)));
   } catch (error) {
-    // The hook's one-line stderr contract pins this exact text, so it bypasses the leveled logger.
-    console.error(`[hippo] delivery ledger write failed:${errorMessage(error)}`);
+    log.error(`delivery ledger write failed: ${errorMessage(error)}`);
   }
 }
 
@@ -236,8 +236,10 @@ function assertPromptHookRequest(req: PromptHookRequest): void {
   }
 }
 
-/** The text `hippo context --pinned-only --include-recent 5 --format additional-context` prints for this session, read on `ctx`'s store for the caller's project, leaving out an unchanged static block only when `printedHash` matches it.
- *  `arm` is the raw ledger arm (`hippo` or `holdout`), null at rate 0; a holdout session gets an empty stdout. `staticHash` is the hash to echo back: null with no static block, for a sub-agent or a holdout.
+/** The text `hippo context --pinned-only --include-recent 5 --format additional-context` prints for this session, read
+ * on `ctx`'s store for the caller's project, leaving out an unchanged static block only when `printedHash` matches it.
+ * `arm` is the raw ledger arm (`hippo` or `holdout`), null at rate 0; a holdout session gets an empty
+ * stdout. `staticHash` is the hash to echo back: null with no static block, for a sub-agent or a holdout.
  *  Scope detection (HIPPO_SCOPE and skill env vars) and delivery-ledger events are CLI-only.
  *  Throws BadRequestError past the input caps, and on a shared store for a project assertCallerProject refuses, before any arm is booked. */
 export async function promptHookContext(

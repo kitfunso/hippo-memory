@@ -11,10 +11,19 @@ const INSTRUCTION_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }> = [
   { name: 'chat-role-markup', re: /<\|im_start\|>|<\|system\|>|\[INST\]|<\/?system>|###\s*system\s*:/i },
   { name: 'system-prompt-reference', re: /\b(?:(?:override|ignore|bypass|replace|reveal)\b[^.\n]{0,40}\b(?:system prompt|developer message)|(?:system prompt|developer message)\b[^.\n]{0,40}\b(?:override|ignore|bypass|replace|reveal))\b/i },
   // "always"/"never" alone (ordinary PR prose) doesn't flag without an agent-facing target nearby too.
-  { name: 'standing-order', re: /\b(?:from now on|whenever you|always|never)\b[^.\n]{0,50}\b(?:you must|(?:the ai|the assistant|the agent|claude|copilot)\s+(?:must|should|will)\b)/i },
+  {
+    name: 'standing-order',
+    re: /\b(?:from now on|whenever you|always|never)\b[^.\n]{0,50}\b(?:you must|(?:the ai|the assistant|the agent|claude|copilot)\s+(?:must|should|will)\b)/i
+  },
   { name: 'concealment', re: /\b(?:do not|never|don't)\b[^.\n]{0,40}\b(?:tell|mention|reveal)\b[^.\n]{0,40}\bthe user\b/i },
-  { name: 'remote-script-exec', re: /\b(?:curl|wget)\b[^\n|]{0,80}\|\s*(?:sudo\s+)?(?:sh|bash|zsh)\b|\biex\s*\(\s*(?:iwr|invoke-webrequest|new-object\s+net\.webclient)/i },
-  { name: 'exfiltration', re: /\b(?:send|post|upload|exfiltrate)\b[^.\n]{0,40}\b(?:secrets?|tokens?|api[- ]?keys?|credentials?|env(?:ironment)? variables?)\b/i },
+  {
+    name: 'remote-script-exec',
+    re: /\b(?:curl|wget)\b[^\n|]{0,80}\|\s*(?:sudo\s+)?(?:sh|bash|zsh)\b|\biex\s*\(\s*(?:iwr|invoke-webrequest|new-object\s+net\.webclient)/i
+  },
+  {
+    name: 'exfiltration',
+    re: /\b(?:send|post|upload|exfiltrate)\b[^.\n]{0,40}\b(?:secrets?|tokens?|api[- ]?keys?|credentials?|env(?:ironment)? variables?)\b/i
+  },
   { name: 'unicode-tag-chars', re: /[\u{E0000}-\u{E007F}]/u },
 ];
 
@@ -33,8 +42,10 @@ const INVISIBLE_RE = /[\u034F\u00AD\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064
 
 // Cyrillic, then Greek, letters drawn like a c e i j o p s x y; closed at those, so Russian or Greek prose folds into no phrase a pattern names.
 const LOOKALIKES: ReadonlyMap<string, string> = new Map([
-  ['\u0430', 'a'], ['\u0441', 'c'], ['\u0435', 'e'], ['\u0456', 'i'], ['\u0458', 'j'], ['\u043E', 'o'], ['\u0440', 'p'], ['\u0455', 's'], ['\u0445', 'x'], ['\u0443', 'y'],
-  ['\u0410', 'A'], ['\u0421', 'C'], ['\u0415', 'E'], ['\u0406', 'I'], ['\u0408', 'J'], ['\u041E', 'O'], ['\u0420', 'P'], ['\u0405', 'S'], ['\u0425', 'X'], ['\u0423', 'Y'],
+  ['\u0430', 'a'], ['\u0441', 'c'], ['\u0435', 'e'], ['\u0456', 'i'], ['\u0458', 'j'], ['\u043E', 'o'], ['\u0440', 'p'], ['\u0455', 's'],
+  ['\u0445', 'x'], ['\u0443', 'y'],
+  ['\u0410', 'A'], ['\u0421', 'C'], ['\u0415', 'E'], ['\u0406', 'I'], ['\u0408', 'J'], ['\u041E', 'O'], ['\u0420', 'P'], ['\u0405', 'S'],
+  ['\u0425', 'X'], ['\u0423', 'Y'],
   ['\u03B1', 'a'], ['\u03B5', 'e'], ['\u03B9', 'i'], ['\u03F3', 'j'], ['\u03BF', 'o'], ['\u03C1', 'p'], ['\u03C7', 'x'], ['\u03B3', 'y'],
   ['\u0391', 'A'], ['\u0395', 'E'], ['\u0399', 'I'], ['\u037F', 'J'], ['\u039F', 'O'], ['\u03A1', 'P'], ['\u03A7', 'X'], ['\u03A5', 'Y'],
 ]);

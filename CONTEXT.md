@@ -232,6 +232,11 @@ hippo refuses the payload, or `unavailable` when the read timed out with nothing
 payload only; the hook command decides what still runs after a skip.
 _Avoid_: receipt on its own (a raw receipt is a memory), parse result
 
+**Progress cursor**:
+How far capture has read one session's transcript. Capture saves it only after a run that reached
+the end, so a run that failed reads the same turns again.
+_Avoid_: turn cursor, position file, bookmark
+
 **Compaction record**:
 The row in the `compactions` table for one Claude Code compaction: `hippo pre-compact` writes it
 `started`, `hippo post-compact` moves it to `summarised` and then `done`. It holds the session,

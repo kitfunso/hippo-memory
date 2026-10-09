@@ -44,7 +44,7 @@ describe('hippo eval --suite', () => {
   });
 
   const run = (extra: Record<string, boolean> = {}) =>
-    runInProcess(() => handleEval({ hippoRoot: join(dir, '.hippo'), args: [], flags: { suite: true, baseline: join(dir, 'base.json'), ...extra } }));
+    runInProcess(() => handleEval({ hippoRoot: join(dir, '.hippo'), tenantId: 'default', args: [], flags: { suite: true, baseline: join(dir, 'base.json'), ...extra } }));
 
   it('writes a baseline file on --save-baseline and then passes against it', async () => {
     const saved = await run({ 'save-baseline': true });

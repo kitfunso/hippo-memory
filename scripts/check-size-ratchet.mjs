@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// CI size gate. No file over 800 lines and no function over 50 in src/ (80 in scripts/) is the goal; existing offenders sit in
-// .size-baseline.json and may shrink or go but never grow, and no new one may appear.
+// CI size gate. No file over 800 lines, no function over 50 in src/ (80 in scripts/) and no src/ line over 160 characters is the goal;
+// existing offenders sit in .size-baseline.json and may shrink or go but never grow, and no new one may appear.
 // Usage: check-size-ratchet.mjs [--list] [--update]. --update rewrites the baseline; run it only after shrinking offenders.
 
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -9,6 +9,7 @@ import ts from 'typescript';
 
 const BASELINE = '.size-baseline.json';
 const FILE_LIMIT = 800;
+const LINE_LIMIT = 160;
 const FUNCTION_LIMITS = { src: 50, scripts: 80 };
 const SCAN_DIRS = Object.keys(FUNCTION_LIMITS);
 const LIMITS_TEXT = `${FUNCTION_LIMITS.src} in src and ${FUNCTION_LIMITS.scripts} in scripts`;
@@ -98,24 +99,33 @@ function physicalLines(text) {
   return text.endsWith('\n') ? lines - 1 : lines;
 }
 
-/** Offenders under src/ and scripts/: { files: { path: lines }, functions: { 'path:name': lines } }, keys sorted. */
+/** Lines longer than LINE_LIMIT characters; a trailing CR is not counted. */
+function longLineCount(text) {
+  return text.split('\n').filter((l) => l.replace(/\r$/, '').length > LINE_LIMIT).length;
+}
+
+/** Offenders under src/ and scripts/: { files: { path: lines }, functions: { 'path:name': lines }, longLines: { path: n } (src only) }, keys sorted. */
 function findOffenders() {
   const files = {};
   const functions = {};
+  const longLines = {};
   for (const file of SCAN_DIRS.filter((d) => existsSync(d)).flatMap((d) => tsFiles(d))) {
     const text = readFileSync(file, 'utf8');
     const lines = physicalLines(text);
     if (lines > FILE_LIMIT) files[file] = lines;
+    const long = file.startsWith('src/') ? longLineCount(text) : 0;
+    if (long > 0) longLines[file] = long;
     const limit = FUNCTION_LIMITS[file.split('/')[0]];
     for (const [key, n] of functionLengths(file, text)) if (n > limit) functions[key] = n;
   }
   const sorted = (o) => Object.fromEntries(Object.entries(o).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
-  return { files: sorted(files), functions: sorted(functions) };
+  return { files: sorted(files), functions: sorted(functions), longLines: sorted(longLines) };
 }
 
 const current = findOffenders();
 const args = process.argv.slice(2);
-const total = `${Object.keys(current.files).length} files over ${FILE_LIMIT} lines, ${Object.keys(current.functions).length} functions over ${LIMITS_TEXT}`;
+const total = `${Object.keys(current.files).length} files over ${FILE_LIMIT} lines, ${Object.keys(current.functions).length} functions over ${LIMITS_TEXT}` +
+  `, ${Object.values(current.longLines).reduce((a, b) => a + b, 0)} src lines over ${LINE_LIMIT} characters`;
 
 if (args.includes('--update')) {
   writeFileSync(BASELINE, JSON.stringify(current, null, 2) + '\n');
@@ -133,16 +143,18 @@ if (args.includes('--list')) {
 const baseline = existsSync(BASELINE) ? JSON.parse(readFileSync(BASELINE, 'utf8')) : {};
 const rose = [];
 const fell = [];
-for (const kind of ['files', 'functions']) {
+for (const kind of ['files', 'functions', 'longLines']) {
+  // A baseline that has never held the longLines key is a first write, not a rise; once written it ratchets like the rest.
+  if (kind === 'longLines' && baseline.longLines === undefined) continue;
   const was = baseline[kind] ?? {};
   for (const [key, n] of Object.entries(current[kind])) if (n > (was[key] ?? 0)) rose.push([key, was[key] ?? 'new', n]);
   for (const [key, n] of Object.entries(was)) if ((current[kind][key] ?? 0) < n) fell.push(key);
 }
 
 if (rose.length > 0) {
-  console.error(`Files over ${FILE_LIMIT} lines or functions over ${LIMITS_TEXT} appeared or grew past the baseline:`);
+  console.error(`Files over ${FILE_LIMIT} lines, functions over ${LIMITS_TEXT} or src lines over ${LINE_LIMIT} characters appeared or grew past the baseline:`);
   for (const [key, was, n] of rose) console.error(`  ${key}: ${was} -> ${n}`);
-  console.error('Split the new code into a smaller function or module instead of growing an offender.');
+  console.error('Split the new code into a smaller function or module, or wrap the long line, instead of growing an offender.');
   console.error('`node scripts/check-size-ratchet.mjs --list` shows every offender, longest first.');
   process.exit(1);
 }

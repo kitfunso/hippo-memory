@@ -524,7 +524,7 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
     try {
       initStore(join(home, '.hippo'));
       // parseArgs collects --depends-on into an array, so the in-process call passes one.
-      const create = await runInProcess(() => handleCard({ hippoRoot: join(home, '.hippo'), args: ['create'], flags: { title: 'x', 'depends-on': ['nope'] } }));
+      const create = await runInProcess(() => handleCard({ hippoRoot: join(home, '.hippo'), tenantId: 'default', args: ['create'], flags: { title: 'x', 'depends-on': ['nope'] } }));
       expect(create.status).toBe(1);
       expect(create.stderr).toContain('unknown parent card id: nope');
     } finally {
@@ -705,7 +705,7 @@ describe('test 11: the card verb is wired through the flag parser, the command t
     const b = createCard(root, 'default', { title: 'B' });
     const { args, flags } = parseArgs(['node', 'hippo', 'card', 'create', '--title', 'child', '--depends-on', a.id, '--depends-on', b.id]);
 
-    const run = await runInProcess(() => COMMANDS.card.run({ hippoRoot: root, args, flags }));
+    const run = await runInProcess(() => COMMANDS.card.run({ hippoRoot: root, tenantId: 'default', args, flags }));
 
     expect(run.status, run.stderr).toBe(0);
     const child = /Created card (\S+)/.exec(run.stdout)?.[1] ?? '';

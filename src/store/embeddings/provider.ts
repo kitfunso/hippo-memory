@@ -323,7 +323,9 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
       return await readCappedJson(resp, EMBED_REPLY_BASE_BYTES + inputs * EMBED_REPLY_BYTES_PER_INPUT);
     } catch (err) {
       const msg = errorMessage(err);
-      throw new Error(redact(`${this.kind} embeddings returned invalid JSON: ${msg}`, key), { cause: redactedCause(err instanceof Error && err.cause ? err.cause : err, key) });
+      throw new Error(redact(`${this.kind} embeddings returned invalid JSON: ${msg}`, key), {
+        cause: redactedCause(err instanceof Error && err.cause ? err.cause : err, key)
+      });
     }
   }
 }

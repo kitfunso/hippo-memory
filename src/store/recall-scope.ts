@@ -136,7 +136,8 @@ export function scopeAdmitSql(col: '' | 'm.', ownScope?: string | null): SqlFrag
   return { sql: `(${admitted} OR ${col}scope = ?)`, params: [...RECALL_DEFAULT_DENY_SCOPES, ownScope] };
 }
 
-/** SQL twin of canTouchScope, which is also canReadScope for an admin: every row but another person's personal one. LIKE folds ASCII case as isPersonalScope's /i does. */
+/** SQL twin of canTouchScope, which is also canReadScope for an admin: every row but
+ * another person's personal one. LIKE folds ASCII case as isPersonalScope's /i does. */
 export function touchableScopeSql(col: '' | 'm.', ownScope?: string | null): SqlFragment {
   const notPersonal = `${col}scope IS NULL OR ${col}scope NOT LIKE '${PERSONAL_SCOPE_PREFIX}%'`;
   if (ownScope == null) return { sql: `(${notPersonal})`, params: [] };
@@ -204,7 +205,8 @@ export interface ScopeActor {
   owner?: string;
 }
 
-/** Personal rows answer to their owner alone: role, key grants and resolver scopes never open one. Else admin reads all; a member needs an exact grant on a restricted scope. */
+/** Personal rows answer to their owner alone: role, key grants and resolver scopes never
+ * open one. Else admin reads all; a member needs an exact grant on a restricted scope. */
 export function canReadScope(actor: ScopeActor, scope: string): boolean {
   if (isPersonalScope(scope)) return scope === personalScopeOf(actor);
   if (actor.role === 'admin') return true;
