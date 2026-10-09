@@ -11,6 +11,7 @@ import { ensurePilotArm, hashArm, readPilotArm } from '../src/pilot-arm.js';
 import { recordTokenUse, summarizeTokenUse, tokensBySession } from '../src/token-ledger.js';
 import { runDoctor } from '../src/doctor.js';
 import type { JsonValue } from '../src/json.js';
+import { countMatching, recordStatements } from './_helpers/count-statements.js';
 
 let tmp: string;
 let root: string;
@@ -167,9 +168,9 @@ describe('pilot arm helpers', () => {
     const holder = openHippoDb(root);
     try {
       holder.exec('BEGIN IMMEDIATE');
-      const started = Date.now();
-      expect(ensurePilotArm(db, 'default', 'kept', 1)).toBe('holdout');
-      expect(Date.now() - started).toBeLessThan(500);
+      const { result, statements } = recordStatements(() => ensurePilotArm(db, 'default', 'kept', 1));
+      expect(result).toBe('holdout');
+      expect(countMatching(statements, 'BEGIN')).toBe(0);
     } finally {
       holder.exec('ROLLBACK');
       closeHippoDb(holder);

@@ -412,8 +412,10 @@ describe('HIPPO_FAKE_NOW', () => {
   it('invalid value falls back to the real clock', () => {
     process.env.HIPPO_FAKE_NOW = 'not-a-date';
     _resetAblationCacheForTests();
-    const drift = Math.abs(evalNow().getTime() - Date.now());
-    expect(drift).toBeLessThan(5000);
+    const before = Date.now();
+    const now = evalNow().getTime();
+    expect(now).toBeGreaterThanOrEqual(before);
+    expect(now).toBeLessThanOrEqual(Date.now());
   });
 
   it('rejects non-canonical formats Date.parse would accept (codex P2)', () => {
@@ -432,8 +434,10 @@ describe('HIPPO_FAKE_NOW', () => {
     ]) {
       process.env.HIPPO_FAKE_NOW = junk;
       _resetAblationCacheForTests();
-      const drift = Math.abs(evalNow().getTime() - Date.now());
-      expect(drift, `format '${junk}' must fall back to real clock`).toBeLessThan(5000);
+      const before = Date.now();
+      const now = evalNow().getTime();
+      expect(now, `format '${junk}' must fall back to real clock`).toBeGreaterThanOrEqual(before);
+      expect(now, `format '${junk}' must fall back to real clock`).toBeLessThanOrEqual(Date.now());
     }
   });
 

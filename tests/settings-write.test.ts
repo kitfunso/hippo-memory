@@ -163,11 +163,15 @@ describe.skipIf(ROOT)('a read-only settings.json', () => {
   it('is refused at once, as the in-place write was, not replaced by a rename or retried', () => {
     const file = seed();
     fs.chmodSync(file, 0o444);
-    const started = Date.now();
+    // A retry pauses between renames, so no pause means no retry, however slow the runner.
+    const pause = vi.spyOn(Atomics, 'wait');
+    try {
+      expect(() => installJsonHooks('claude-code')).toThrow(/EACCES|EPERM/);
+      expect(pause).not.toHaveBeenCalled();
+    } finally {
+      pause.mockRestore();
+    }
 
-    expect(() => installJsonHooks('claude-code')).toThrow(/EACCES|EPERM/);
-
-    expect(Date.now() - started).toBeLessThan(500);
     expect(fs.readFileSync(file, 'utf8')).toBe('{"theme":"dark"}');
     expect(fs.readdirSync(path.dirname(file))).toEqual(['settings.json']);
   });

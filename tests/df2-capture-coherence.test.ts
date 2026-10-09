@@ -144,12 +144,6 @@ describe('DF2 capture coherence', () => {
     expect(extractFromText(`Always keep going ${'x'.repeat(500)} no matter what happens here today`)).toEqual([]);
   });
 
-  it('10. no-regression placeholder: covered by the pre-existing tests/capture*.test.ts suite', () => {
-    // This suite deliberately does not duplicate capture-last-session.test.ts;
-    // the verification step runs that suite alongside this one instead.
-    expect(true).toBe(true);
-  });
-
   /**
    * Ship-gate findings. Every case here is a regression this branch
    * introduced against master, each verified by running BOTH versions - not

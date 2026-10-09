@@ -19,6 +19,17 @@ import {
   type DeliveryStage,
 } from '../src/delivery-recorder.js';
 import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { countMatching, recordStatements, type StatementLog } from './_helpers/count-statements.js';
+
+// A prompt hook waits a second for a lock in all; the ledger may spend a fraction of it.
+const MAX_LEDGER_WAIT_MS = 100;
+
+/** One write attempt, made under a short lock wait: a bounded delay on any runner, which elapsed time is not. */
+function expectOneShortWait(statements: readonly string[]): void {
+  expect(countMatching(statements, /^BEGIN IMMEDIATE$/)).toBe(1);
+  const waitsSet = statements.slice(0, statements.indexOf('BEGIN IMMEDIATE')).filter((sql) => sql.startsWith('PRAGMA busy_timeout = '));
+  expect(Number(waitsSet.at(-1)?.split(' = ')[1])).toBeLessThanOrEqual(MAX_LEDGER_WAIT_MS);
+}
 
 let root: string;
 let db: DatabaseSyncLike;
@@ -175,16 +186,15 @@ describe('writeDeliveryEventAtRoot under a held write lock', () => {
     const err = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const holder = openHippoDb(root);
     holder.exec('BEGIN IMMEDIATE');
-    const started = Date.now();
-    let dropped: number | null;
+    let dropped: StatementLog<number | null>;
     try {
-      dropped = writeDeliveryEventAtRoot(root, event({ promptHash: 'p2', ts: at(5000) }));
+      dropped = recordStatements(() => writeDeliveryEventAtRoot(root, event({ promptHash: 'p2', ts: at(5000) })));
     } finally {
       holder.exec('COMMIT');
       closeHippoDb(holder);
     }
-    expect(dropped).toBeNull();
-    expect(Date.now() - started).toBeLessThan(1000);
+    expect(dropped.result).toBeNull();
+    expectOneShortWait(dropped.statements);
     expect(err).toHaveBeenCalledTimes(1);
     expect(String(err.mock.calls[0][0])).toMatch(/^\[hippo\] delivery ledger/);
     const next = writeDeliveryEventAtRoot(root, event({ promptHash: 'p3', ts: at(10_000) }));
@@ -196,16 +206,15 @@ describe('writeDeliveryEventAtRoot under a held write lock', () => {
     const err = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const holder = openHippoDb(root);
     holder.exec('BEGIN IMMEDIATE');
-    const started = Date.now();
-    let dropped: number | null;
+    let dropped: StatementLog<number | null>;
     try {
-      dropped = writeDeliveryEventOnHandle(db, event());
+      dropped = recordStatements(() => writeDeliveryEventOnHandle(db, event()));
     } finally {
       holder.exec('COMMIT');
       closeHippoDb(holder);
     }
-    expect(dropped).toBeNull();
-    expect(Date.now() - started).toBeLessThan(1000);
+    expect(dropped.result).toBeNull();
+    expectOneShortWait(dropped.statements);
     expect(err).toHaveBeenCalledTimes(1);
     // SAFETY: PRAGMA busy_timeout returns one row with one `timeout` column.
     expect((db.prepare('PRAGMA busy_timeout').get() as { timeout: number }).timeout).toBe(5000);
