@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 import { closeHippoDb, openHippoDb } from '../src/db.js';
 import { createPhysicsTable, savePhysicsState } from '../src/db/physics-state.js';
 import { pruneAuditLog } from '../src/cli/audit-prune.js';
-import { writeRecallTrace } from '../src/recall-trace.js';
+import { writeRecallTrace } from '../src/store/recall-trace.js';
 import { saveIndex } from '../src/store/index-and-stats.js';
 import { closePrediction, savePrediction } from '../src/store/predictions.js';
 import { saveActiveTaskSnapshot } from '../src/store/sessions.js';

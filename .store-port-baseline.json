@@ -7,7 +7,7 @@
   "routesOnLoop": 64,
   "twinFunctions": 0,
   "sqlOutside": 54,
-  "txLiterals": 28,
+  "txLiterals": 12,
   "openersOutsideByFile": {
     "src/agent-memories/sync.ts": 3,
     "src/api/context-select.ts": 2,
