@@ -185,6 +185,39 @@ describe('compactSummaryBody', () => {
     const text = '<summary>\nWork.\n\nMemories for hippo:\n- one\n- two\n</summary>';
     expect(parseCompactionItems(compactSummaryBody(text)).items).toEqual(['one', 'two']);
   });
+
+  it('removes every closed analysis block, from its first opening tag, and keeps an unclosed one', () => {
+    expect(compactSummaryBody('a<analysis>1</analysis>b<analysis><analysis>2</analysis>c<analysis>open')).toBe('abc<analysis>open');
+  });
+});
+
+describe('hostile input is read in linear time', () => {
+  const REPEATS = 100_000;
+  const LIMIT_MS = 2_000;
+
+  it('leaves 200,000 unclosed analysis tags as they are', () => {
+    const text = '<analysis>'.repeat(2 * REPEATS);
+    expect(compactSummaryBody(text)).toBe(text);
+  }, LIMIT_MS);
+
+  it('finds no heading in a line of 300,000 tabs between two letters', () => {
+    expect(parseCompactionItems(`x${'\t'.repeat(3 * REPEATS)}x`)).toEqual({ found: false, items: [] });
+  }, LIMIT_MS);
+
+  it('ends the list at a marker line whose text holds a bare carriage return after 200,000 spaces', () => {
+    const line = `* ${'  '.repeat(REPEATS)}a\rb`;
+    expect(parseCompactionItems(`Memories for hippo:\n- one\n${line}\n- two`)).toEqual({ found: true, items: ['one'] });
+  }, LIMIT_MS);
+});
+
+describe('parseCompactionItems: odd whitespace', () => {
+  it('reads an item whose gap after the marker holds a carriage return or a line separator', () => {
+    expect(parse('Memories for hippo:', '- \r\rone', '* two', '-   ', '- three  ').items).toEqual(['one', 'two', 'three']);
+  });
+
+  it('finds a heading behind a long run of trailing stars, colons and spaces', () => {
+    expect(parse(`## **Memories for hippo${'*: \t'.repeat(50)}`, '- one')).toEqual({ found: true, items: ['one'] });
+  });
 });
 
 describe('post-compact payload fixtures', () => {

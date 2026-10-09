@@ -14,11 +14,35 @@ export interface CompactionItemRows {
 }
 
 const HEADING = 'memories for hippo';
-const ITEM_LINE = /^\s*(?:[-*]|\d+[.)])(?:\s+(.*))?$/;
+// `\S` parts the gap from the text, so a line that fails to match is scanned once, not once per space.
+const ITEM_LINE = /^\s*(?:[-*]|\d+[.)])(?:\s+(\S.*)?)?$/;
+const ANALYSIS_OPEN = '<analysis>';
+const ANALYSIS_CLOSE = '</analysis>';
+const HEADING_TRAILER = /[*:\s]/;
+
+/** `text` minus each closed <analysis> block; a search, as a lazy pattern rescans the rest from every unclosed tag. */
+function withoutAnalysis(text: string): string {
+  let kept = '';
+  let from = 0;
+  for (;;) {
+    const open = text.indexOf(ANALYSIS_OPEN, from);
+    const close = open < 0 ? -1 : text.indexOf(ANALYSIS_CLOSE, open + ANALYSIS_OPEN.length);
+    if (close < 0) return kept + text.slice(from);
+    kept += text.slice(from, open);
+    from = close + ANALYSIS_CLOSE.length;
+  }
+}
+
+/** `text` minus its trailing run of `*`, `:` and spaces; read from the end, as a `+$` pattern retries the run from each character. */
+function withoutHeadingTrailer(text: string): string {
+  let end = text.length;
+  while (end > 0 && HEADING_TRAILER.test(text[end - 1])) end--;
+  return text.slice(0, end);
+}
 
 /** The <summary> body of a PostCompact compact_summary with any <analysis> block removed; the whole text trimmed when there is no <summary> tag. */
 export function compactSummaryBody(compactSummary: string): string {
-  const text = compactSummary.replace(/<analysis>[\s\S]*?<\/analysis>/g, '');
+  const text = withoutAnalysis(compactSummary);
   const open = text.lastIndexOf('<summary>');
   if (open < 0) return text.trim();
   const from = open + '<summary>'.length;
@@ -27,7 +51,7 @@ export function compactSummaryBody(compactSummary: string): string {
 }
 
 function isHeading(line: string): boolean {
-  const bare = line.replace(/^(?:[#*\s]|\d+\.)+/, '').replace(/[*:\s]+$/, '');
+  const bare = withoutHeadingTrailer(line.replace(/^(?:[#*\s]|\d+\.)+/, ''));
   return bare.toLowerCase() === HEADING;
 }
 
