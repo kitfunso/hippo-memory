@@ -2,6 +2,7 @@
 import type { MessagePort } from 'node:worker_threads';
 import { auditWriteFailureCount } from '../audit.js';
 import { type DatabaseSyncLike, RequestStores } from '../../db.js';
+import type { OpenedDb } from '../../db/connect.js';
 import { requestScopes } from '../../util/request-scope.js';
 import { watchCommits } from './commit-watch.js';
 import { encodeError } from './error-codec.js';
@@ -26,8 +27,10 @@ class WorkerStores extends RequestStores {
     this.#commitFlag = init.commitFlag && new Int32Array(init.commitFlag);
   }
 
-  override get(hippoRoot: string, opts?: { busyWaitMs?: number }): DatabaseSyncLike {
-    const db = super.get(hippoRoot, opts);
+  // The one path every open of the scope takes: `get` is a wrapper over it.
+  override getWithFacts(hippoRoot: string, opts?: { busyWaitMs?: number }): OpenedDb {
+    const opened = super.getWithFacts(hippoRoot, opts);
+    const { db } = opened;
     if (!this.#prepared.has(db)) {
       this.#prepared.add(db);
       // A reader that could write would let a method wrongly tagged 'read' take the write lock off the writer thread.
@@ -40,7 +43,7 @@ class WorkerStores extends RequestStores {
       db.exec(`PRAGMA wal_autocheckpoint = ${this.walPages}`);
       this.#walPagesOn.set(db, this.walPages);
     }
-    return db;
+    return opened;
   }
 }
 

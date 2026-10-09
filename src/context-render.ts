@@ -1,7 +1,7 @@
 // The strings a context block prints. The budget prices these same strings, so selection and print cannot drift.
 import { calculateStrength, confidenceFacets, confidenceLabel, type MemoryEntry } from './memory.js';
 import { evalNow } from './ablation.js';
-import { estimateTokens } from './token-ledger.js';
+import { estimateTokens } from './util/token-text.js';
 import { renderAmbientSummary, type AmbientState } from './ambient.js';
 import { formatHandoffEvidenceLine, type SessionHandoff } from './handoff.js';
 import type { SessionEvent, TaskSnapshot } from './store/rows.js';

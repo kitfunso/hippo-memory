@@ -144,17 +144,17 @@ const keyLookup = async () => {
 
 // Each case: label, request, and its ceilings on statements run and rows read.
 const cases = [
-  ['getContext, no query', () => getContext(ctx, { currentProject: 'proj' }), [360, 5400]],
-  ['getContext, query', () => getContext(ctx, { q: 'kafka redis', currentProject: 'proj' }), [415, 705]],
-  ['getContext, pinned only', () => getContext(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: 'proj' }), [58, 155]],
-  ['getContext, local query', withoutGlobal(() => getContext(ctx, { q: 'kafka redis', currentProject: 'proj' })), [350, 420]],
+  ['getContext, no query', () => getContext(ctx, { currentProject: 'proj' }), [330, 5335]],
+  ['getContext, query', () => getContext(ctx, { q: 'kafka redis', currentProject: 'proj' }), [375, 665]],
+  ['getContext, pinned only', () => getContext(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: 'proj' }), [42, 141]],
+  ['getContext, local query', withoutGlobal(() => getContext(ctx, { q: 'kafka redis', currentProject: 'proj' })), [325, 395]],
   ['ambient tallies, 2 stores', () => {
     for (const root of [localRoot, globalRoot]) loadAmbientTallies(root, 'default', { project: ['proj'], currentProject: ['proj'], now: new Date() });
-  }, [26, 14]],
-  ['mcp hippo_context', tool('hippo_context'), [360, 5400]],
-  ['mcp hippo_recall', tool('hippo_recall', { query: 'kafka redis' }), [415, 1500]],
-  ['mcp hippo_status', tool('hippo_status'), [17, 11]],
-  ['mcp hippo_peers', tool('hippo_peers'), [14, 22]],
+  }, [19, 6]],
+  ['mcp hippo_context', tool('hippo_context'), [345, 5370]],
+  ['mcp hippo_recall', tool('hippo_recall', { query: 'kafka redis' }), [411, 1495]],
+  ['mcp hippo_status', tool('hippo_status'), [13, 7]],
+  ['mcp hippo_peers', tool('hippo_peers'), [10, 17]],
   ['served predictions list', () => served.predictions.listPredictions('default', { limit: 20 }), [0, 0]],
   ['served key lookup', keyLookup, [0, 0]],
 ];

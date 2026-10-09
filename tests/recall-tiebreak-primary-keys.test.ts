@@ -20,7 +20,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { Layer, type MemoryEntry} from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { recall, type Context } from '../src/api.js';
-import { estimateTokens } from '../src/token-ledger.js';
+import { estimateTokens } from '../src/util/token-text.js';
 import type { SearchResult } from '../src/core/search-types.js';
 import { insertEntity, insertRelation } from '../src/store/graph-writes.js';
 import { graphExpandRecall } from '../src/graph-recall.js';
