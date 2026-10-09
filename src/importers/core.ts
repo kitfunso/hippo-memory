@@ -3,6 +3,7 @@
  * Imports memories from ChatGPT, Claude, Cursor, generic files, and structured markdown.
  */
 
+import { DEFAULT_TENANT_ID } from '../util/env.js';
 import { createMemory, Layer, MemoryEntry } from '../core/memory.js';
 import { writeEntry } from '../store/entry-writes.js';
 import { loadAllEntries } from '../store/entry-reads.js';
@@ -190,7 +191,7 @@ function createImportEntry(
 
 /** Writes the entry, or on a dry run only probes the guard; false when a rejected value refuses it. */
 function writeOrProbeImport(targetRoot: string, entry: MemoryEntry, options: ImportOptions): boolean {
-  if (options.dryRun) return !rejectionGuardRefuses(targetRoot, entry.tenantId ?? 'default', entry.id, entry.content);
+  if (options.dryRun) return !rejectionGuardRefuses(targetRoot, entry.tenantId ?? DEFAULT_TENANT_ID, entry.id, entry.content);
   // A rejection refuses one chunk, not the whole import, so siblings still land.
   try {
     writeEntry(targetRoot, entry);

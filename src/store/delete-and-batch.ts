@@ -1,3 +1,4 @@
+import { DEFAULT_TENANT_ID } from '../util/env.js';
 import { type MemoryEntry } from '../core/memory.js';
 import { AUTO_DELETABLE_SQL } from './rule-sql.js';
 import { openHippoDb, closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
@@ -74,9 +75,9 @@ export function deleteEntryCore(
   // Forgetting a child of a summary marks the parent dirty. Not atomic with the DELETE, but
   // markSummaryDirtyInTx is idempotent, so the next child mutation re-marks the parent if this fails.
   if (row.dag_parent_id) {
-    markSummaryDirtyInTx(db, row.dag_parent_id, row.tenant_id ?? 'default', opts?.actor ?? 'cli');
+    markSummaryDirtyInTx(db, row.dag_parent_id, row.tenant_id ?? DEFAULT_TENANT_ID, opts?.actor ?? 'cli');
   }
-  return { tenantId: row.tenant_id ?? 'default', dagParentId: row.dag_parent_id ?? null };
+  return { tenantId: row.tenant_id ?? DEFAULT_TENANT_ID, dagParentId: row.dag_parent_id ?? null };
 }
 
 /**
@@ -206,7 +207,7 @@ function batchWriteAndDeleteOn(
     // Fire dirty-mark for every collected parent INSIDE the BEGIN, so the
     // dirty flag commits atomically with the writes + deletes.
     for (const parentId of out.dirty.parents) {
-      markSummaryDirtyInTx(db, parentId, out.dirty.tenantById.get(parentId) ?? 'default', 'batch');
+      markSummaryDirtyInTx(db, parentId, out.dirty.tenantById.get(parentId) ?? DEFAULT_TENANT_ID, 'batch');
     }
   });
   reportChunk(hippoRoot, out);
@@ -306,7 +307,7 @@ function selectAutoDeletableRows(
   for (const row of rows) {
     if (row.dag_parent_id) {
       dirty.parents.add(row.dag_parent_id);
-      dirty.tenantById.set(row.dag_parent_id, row.tenant_id ?? 'default');
+      dirty.tenantById.set(row.dag_parent_id, row.tenant_id ?? DEFAULT_TENANT_ID);
     }
   }
   return rows;
@@ -358,7 +359,7 @@ interface FtsChanges {
 
 /** True, after auditing the refusal, when the write would introduce a rejected value. */
 function isRejectedBatchWrite(db: DatabaseSyncLike, row: MemoryEntry): boolean {
-  const entryTenantId = row.tenantId ?? 'default';
+  const entryTenantId = row.tenantId ?? DEFAULT_TENANT_ID;
   // checkRejectionGuard, not a bare tombstone probe: a tombstone can coexist with a live same-content row,
   // and skipping every re-persist would starve it of decay/replay updates; only new or changed content is refused.
   try {

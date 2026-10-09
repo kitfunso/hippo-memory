@@ -19,6 +19,7 @@
  * function can only ever shrink the condemned set, never grow it.
  */
 
+import { DEFAULT_TENANT_ID } from '../util/env.js';
 import { type MemoryEntry, calculateStrength } from '../core/memory.js';
 import { compareEntryIdentity } from '../core/compare.js';
 import { MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256 } from './memory-value-weights.js';
@@ -234,7 +235,7 @@ export function rankNonPinnedByTenant(
     if (e.pinned) continue; // pinned entries never compete for rescue (never condemned)
     // Default an undefined tenantId as dag.ts:341 does: a raw/legacy row can carry one at runtime,
     // and keying it "undefined" would split it into its own singleton tenant.
-    const tenantId = e.tenantId ?? 'default';
+    const tenantId = e.tenantId ?? DEFAULT_TENANT_ID;
     const list = byTenant.get(tenantId);
     if (list) list.push(e);
     else byTenant.set(tenantId, [e]);

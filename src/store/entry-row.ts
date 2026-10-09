@@ -1,3 +1,4 @@
+import { DEFAULT_TENANT_ID } from '../util/env.js';
 import type { MemoryEntry } from '../core/memory.js';
 import { closeHippoDb, ftsRowCounts, openHippoDb, isFtsAvailable, repairFtsDrift } from '../db/index.js';
 import { fallbackOrigin, originFromSource } from '../core/project-identity.js';
@@ -5,7 +6,7 @@ import { checkRejectionGuard } from './rejection.js';
 import { errorMessage, log } from '../util/log.js';
 
 export function upsertEntryRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry): void {
-  checkRejectionGuard(db, entry.tenantId ?? 'default', entry.id, entry.content);
+  checkRejectionGuard(db, entry.tenantId ?? DEFAULT_TENANT_ID, entry.id, entry.content);
   syncFtsRow(db, entry, upsertMemoryRow(db, entry));
 }
 
@@ -107,7 +108,7 @@ function memoryRowValues(entry: MemoryEntry): Array<string | number | null> {
     entry.scope ?? null,
     entry.owner ?? null,
     entry.artifact_ref ?? null,
-    entry.tenantId ?? 'default',
+    entry.tenantId ?? DEFAULT_TENANT_ID,
     entry.origin_project ?? null,
     entry.descendant_count ?? 0,
     entry.earliest_at ?? null,

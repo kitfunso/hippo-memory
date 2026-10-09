@@ -1,6 +1,6 @@
 // `hippo goal`: the per-session goal stack that recall boosts.
 
-import { envHippoSessionId } from '../util/env.js';
+import { DEFAULT_TENANT_ID, envHippoSessionId } from '../util/env.js';
 import type { PolicyType } from '../store/goals.js';
 import * as api from '../api/index.js';
 import { resolveTenantId } from '../store/tenant.js';
@@ -37,7 +37,7 @@ function resolveGoalSession(flags: CliFlags): { sessionId: string; tenantId: str
     flags['tenant-id'] !== undefined
       ? String(flags['tenant-id'])
       : resolveTenantId({})
-  ).trim() || 'default';
+  ).trim() || DEFAULT_TENANT_ID;
   return { sessionId, tenantId };
 }
 

@@ -1,3 +1,4 @@
+import { DEFAULT_TENANT_ID } from '../util/env.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Layer, type MemoryEntry } from '../core/memory.js';
@@ -47,12 +48,12 @@ export function ensureMirrorDirectories(hippoRoot: string): void {
 // on-disk back-compat; multi-tenant deployments get a `.<tenantId>` suffix
 // so tenant B saving cannot overwrite tenant A's mirror file.
 function activeTaskMirrorPath(hippoRoot: string, tenantId: string): string {
-  const file = tenantId === 'default' ? 'active-task.md' : `active-task.${tenantId}.md`;
+  const file = tenantId === DEFAULT_TENANT_ID ? 'active-task.md' : `active-task.${tenantId}.md`;
   return path.join(hippoRoot, 'buffer', file);
 }
 
 function recentSessionMirrorPath(hippoRoot: string, tenantId: string): string {
-  const file = tenantId === 'default' ? 'recent-session.md' : `recent-session.${tenantId}.md`;
+  const file = tenantId === DEFAULT_TENANT_ID ? 'recent-session.md' : `recent-session.${tenantId}.md`;
   return path.join(hippoRoot, 'buffer', file);
 }
 

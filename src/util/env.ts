@@ -85,9 +85,12 @@ export function envScope(): string | undefined { return raw('HIPPO_SCOPE'); }
 export function envGstackSkill(): string | undefined { return raw('GSTACK_SKILL'); }
 export function envOpenclawSkill(): string | undefined { return raw('OPENCLAW_SKILL'); }
 
-/** HIPPO_TENANT trimmed; empty or whitespace-only falls through to 'default'. */
+/** The tenant of a store that names none. */
+export const DEFAULT_TENANT_ID = 'default';
+
+/** HIPPO_TENANT trimmed; empty or whitespace-only falls through to the default tenant. */
 export function envTenant(): string {
-  return raw('HIPPO_TENANT')?.trim() || 'default';
+  return raw('HIPPO_TENANT')?.trim() || DEFAULT_TENANT_ID;
 }
 
 // Install and CLI switches.

@@ -1,3 +1,4 @@
+import { DEFAULT_TENANT_ID } from '../util/env.js';
 import { Layer, FALLBACK_HALF_LIFE_DAYS, DEFAULT_SCHEMA_FIT, type MemoryEntry, type ConfidenceLevel, type MemoryKind } from '../core/memory.js';
 import { errorMessage, log } from '../util/log.js';
 import { type JsonValue, isJsonObject } from '../util/json.js';
@@ -208,7 +209,7 @@ function rowToPlacementFields(row: MemoryRow): PlacementFields {
     scope: row.scope ?? null,
     owner: row.owner ?? null,
     artifact_ref: row.artifact_ref ?? null,
-    tenantId: row.tenant_id ?? 'default',
+    tenantId: row.tenant_id ?? DEFAULT_TENANT_ID,
     origin_project: row.origin_project ?? null,
     descendant_count: Number(row.descendant_count ?? 0),
     earliest_at: row.earliest_at ?? null,

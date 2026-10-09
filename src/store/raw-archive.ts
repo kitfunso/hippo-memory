@@ -1,3 +1,4 @@
+import { DEFAULT_TENANT_ID } from '../util/env.js';
 import { BadRequestError, NotFoundError } from '../core/api-errors.js';
 import type { DatabaseSyncLike } from '../db/index.js';
 import { isFtsAvailable, withWriteScope } from '../db/index.js';
@@ -52,7 +53,7 @@ function moveRowToArchive(db: DatabaseSyncLike, id: string, row: ArchivedMemoryR
   const redactedPayload = JSON.stringify({
     redacted: true,
     archived_at: archivedAt,
-    tenant_id: row.tenant_id ?? 'default',
+    tenant_id: row.tenant_id ?? DEFAULT_TENANT_ID,
     kind: row.kind,
     reason: opts.reason,
   });
@@ -75,7 +76,7 @@ function moveRowToArchive(db: DatabaseSyncLike, id: string, row: ArchivedMemoryR
 function auditArchive(db: DatabaseSyncLike, id: string, row: ArchivedMemoryRow, opts: ArchiveOpts): void {
   try {
     appendAuditEvent(db, {
-      tenantId: String(row.tenant_id ?? 'default'),
+      tenantId: String(row.tenant_id ?? DEFAULT_TENANT_ID),
       actor: opts.who || 'cli',
       op: 'archive_raw',
       targetId: id,
@@ -110,7 +111,7 @@ export function archiveRawMemory(db: DatabaseSyncLike, id: string, opts: Archive
       markSummaryDirtyInTx(
         db,
         String(row.dag_parent_id),
-        String(row.tenant_id ?? 'default'),
+        String(row.tenant_id ?? DEFAULT_TENANT_ID),
         opts.who || 'cli',
       );
     }

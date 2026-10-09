@@ -2,11 +2,10 @@
 import { DAY_MS } from '../util/time.js';
 import { isDecayAblated, isOutcomeSlowAblated, isRecallBoostAblated } from '../core/ablation.js';
 import {
-  DECAY_BASE, EMOTIONAL_MULTIPLIERS, KEEP_PAIRS, MAX_WRONG_HALVINGS, RETRIEVAL_BOOST_SLOPE, REWARD_SLOPE,
+  DECAY_BASE, EMOTIONAL_MULTIPLIERS, FALLBACK_HALF_LIFE_DAYS, KEEP_PAIRS, MAX_WRONG_HALVINGS, RETRIEVAL_BOOST_SLOPE, REWARD_SLOPE,
   applyLossAversionRatio, type EmotionalValence, type KeepPair,
 } from '../core/memory.js';
 
-const SQL_DEFAULT_HALF_LIFE_DAYS = 7;
 const UNIX_EPOCH_JULIAN_DAY = 2440587.5;
 
 /** calculateStrength's clock-basis formula as SQL over `memories` columns, flags and multipliers baked in; keep in step.
@@ -19,7 +18,7 @@ export function strengthSql(now: Date): string {
   const reward = isOutcomeSlowAblated()
     ? '1.0'
     : `(CASE WHEN ${pos} = 0 AND ${neg} = 0 THEN 1.0 ELSE 1.0 + ${REWARD_SLOPE} * (${pos} - ${neg}) / (${pos} + ${neg} + 1.0) END)`;
-  const halfLife = `(COALESCE(half_life_days, ${SQL_DEFAULT_HALF_LIFE_DAYS}) * ${reward})`;
+  const halfLife = `(COALESCE(half_life_days, ${FALLBACK_HALF_LIFE_DAYS}) * ${reward})`;
   const anchor = isRecallBoostAblated() ? 'created' : 'last_retrieved';
   const nowJulian = num(now.getTime() / DAY_MS + UNIX_EPOCH_JULIAN_DAY);
   const decay = isDecayAblated() ? '1.0' : `pow(${DECAY_BASE}, (${nowJulian} - julianday(${anchor})) / ${halfLife})`;

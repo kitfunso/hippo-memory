@@ -1,3 +1,4 @@
+import { DEFAULT_TENANT_ID } from '../util/env.js';
 import { closeHippoDb, openHippoDb, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import type { MemoryEntry } from '../core/memory.js';
 import { rejectionDigest, insertRejectedValue, normalizeValueForRejection } from './rejection.js';
@@ -514,7 +515,7 @@ function recordRejectedLoserValue(
   who: { actor: string; reason: string },
 ): void {
   insertRejectedValue(db, {
-    tenantId: loserRow.tenant_id ?? 'default',
+    tenantId: loserRow.tenant_id ?? DEFAULT_TENANT_ID,
     digest,
     reason: who.reason,
     rejectedBy: who.actor,
@@ -551,7 +552,7 @@ function tombstoneLoserValue(
   // its content coincidentally matches: the human explicitly chose
   // to keep it in this same resolution, and this branch must not
   // undo that choice in the same transaction.
-  const loserTenantId = loserRow.tenant_id ?? 'default';
+  const loserTenantId = loserRow.tenant_id ?? DEFAULT_TENANT_ID;
   // SAFETY: dupRows' shape matches the four columns named in the SELECT above.
   const dupRows = db
     .prepare(`SELECT id, kind, content, scope FROM memories WHERE tenant_id = ? AND id != ? AND id != ?`)

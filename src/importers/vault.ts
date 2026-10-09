@@ -1,3 +1,4 @@
+import { DEFAULT_TENANT_ID } from '../util/env.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { createHash } from 'node:crypto';
@@ -70,7 +71,7 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
 
 function syncVaultFolder(folderPath: string, options: ImportOptions, { vaultName, scope }: VaultIdentity): ImportResult {
   const hippoRoot = options.hippoRoot;
-  const tenantId = options.tenantId ?? 'default';
+  const tenantId = options.tenantId ?? DEFAULT_TENANT_ID;
   const extraTags = options.extraTags ?? [];
   const dryRun = options.dryRun ?? false;
 
