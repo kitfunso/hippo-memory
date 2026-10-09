@@ -86,7 +86,7 @@ const LOOSE_PIECES = [
   '[REDACTED]', '[email]', '[home]', 'password=', 'token: ', 'Bearer ', 'authorization: basic ', 'https://', 'bob@example.com', '@', ':', '=',
   pemLine('BEGIN', ''), pemLine('END', ''), 'eyJ', 'AKIA', `${SK}-`, 'hooks.slack.com/services/',
 ];
-const HOME_PATHS = ['/home/kit', '/root', '/Users/alice', 'C:\\Users\\kit', '/mnt/c/Users/kit', '/var/home/kit'];
+const HOME_PATHS = ['/home/kit', '/root', '/Users/alice', 'C:\\Users\\kit', '/mnt/c/Users/kit', '/var/home/kit', '/KITSO~1', 'KITSO~1/', '\\\\srv\\homes\\kit'];
 
 // Two secrets of one kind on a line, as in a pasted list of keys: a scrub that stops at the first leaves the second for the next pass.
 const TWINS = oneOf(KINDS.map((kind) => map(both(kind, kind), ([a, b]) => `${a.text} ${b.text}`)));
@@ -126,7 +126,7 @@ describe('secret scrubbing properties', () => {
     });
   });
 
-  // A home path glued under another is uncovered only once the first is masked, so one pass over the text is not enough.
+  // A home path glued after another, or after a short name, is uncovered only once the text before it is masked, so masking each shape once is not enough.
   it('scrubForSharing changes nothing on a second pass over home paths, nested or not', () => {
     const paths = map(both(WORD_RUN, arr(pick(HOME_PATHS), 1, 3)), ([words, nested]) => [...words, nested.join('')].join(' '));
     forAll(0x1de1, 200, paths, (text) => {
