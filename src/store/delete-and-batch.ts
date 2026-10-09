@@ -1,5 +1,5 @@
 import { AUTO_DELETABLE_SQL, type MemoryEntry } from '../memory.js';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../db.js';
+import { openHippoDb, closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../db.js';
 import { checkRejectionGuard, RejectedValueError } from '../rejection.js';
 import { markSummaryDirtyInTx } from '../summary-dirty.js';
 import { type DormantMove, insertDormantRow } from '../dormant.js';
@@ -109,15 +109,7 @@ export function deleteEntryOn(
   id: string,
   opts?: { actor?: string; reason?: string; automatic?: boolean },
 ): boolean {
-  db.exec('BEGIN IMMEDIATE');
-  let result: ReturnType<typeof deleteEntryCore>;
-  try {
-    result = deleteEntryCore(db, id, opts);
-    db.exec('COMMIT');
-  } catch (err) {
-    if (db.isTransaction !== false) db.exec('ROLLBACK');
-    throw err;
-  }
+  const result = withWriteScope(db, 'delete_entry', () => deleteEntryCore(db, id, opts));
   if (!result) return false;
 
   purgeMirrorBestEffort(hippoRoot, id, false, 'deleteEntry');
@@ -193,13 +185,12 @@ export function batchWriteAndDeleteOn(
   opts: { snapshot?: ReadonlyMap<string, MemoryEntry>; holdMs: number; clock?: () => number },
 ): FlushChunk {
   const now = opts.clock ?? clock;
-  // IMMEDIATE: the tombstone probes below read before the first write, and under a deferred BEGIN a
-  // concurrent `hippo reject` would make the lock upgrade fail with SQLITE_BUSY and roll back the batch.
-  db.exec('BEGIN IMMEDIATE');
-  const begunAt = now();
   const out: ChunkLog = { written: [], removedIds: [], rejectedSkips: 0, fts: { rows: [], staleIds: [] }, dirty: { parents: new Set(), tenantById: new Map() } };
   let next = from;
-  try {
+  // IMMEDIATE: the tombstone probes below read before the first write, and under a deferred BEGIN a
+  // concurrent `hippo reject` would make the lock upgrade fail with SQLITE_BUSY and roll back the batch.
+  withWriteScope(db, 'flush_chunk', () => {
+    const begunAt = now();
     do {
       const at = next++;
       try {
@@ -216,13 +207,7 @@ export function batchWriteAndDeleteOn(
     for (const parentId of out.dirty.parents) {
       markSummaryDirtyInTx(db, parentId, out.dirty.tenantById.get(parentId) ?? 'default', 'batch');
     }
-    db.exec('COMMIT');
-  } catch (error) {
-    if (db.isTransaction !== false) {
-      try { db.exec('ROLLBACK'); } catch { /* preserve the original throw and its unit tag */ }
-    }
-    throw error;
-  }
+  });
   reportChunk(hippoRoot, out);
   return { next, removedIds: out.removedIds };
 }

@@ -3,7 +3,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { DEFAULT_HALF_LIFE_DAYS, type MemoryEntry, Layer } from '../memory.js';
-import { closeHippoDb, type DatabaseSyncLike, openHippoDb, getMeta, setMeta } from '../db.js';
+import { closeHippoDb, type DatabaseSyncLike, openHippoDb, getMeta, setMeta, withWriteScope } from '../db.js';
 import { type ResolveProjectIdentityOpts, findHippoStoreDir, realpathOrResolve } from '../project-identity.js';
 import { RejectedValueError } from '../rejection.js';
 import { log } from '../log.js';
@@ -88,18 +88,13 @@ function bootstrapLegacyStore(db: ReturnType<typeof openHippoDb>, hippoRoot: str
   const legacyEntries = loadLegacyEntriesFromMarkdown(hippoRoot);
   if (legacyEntries.length === 0) return false;
 
-  db.exec('BEGIN IMMEDIATE');
-  try {
+  withWriteScope(db, 'bootstrap_legacy_store', () => {
     importLegacyEntries(db, hippoRoot, legacyEntries);
     importLegacyIndexAndStats(db, hippoRoot);
 
     // Stamp completion even when every row was rejected; see the gate above.
     setMeta(db, 'legacy_bootstrap_completed', '1');
-    db.exec('COMMIT');
-  } catch (error) {
-    try { db.exec('ROLLBACK'); } catch { /* already rolled back; keep the original error */ }
-    throw error;
-  }
+  });
   return true;
 }
 

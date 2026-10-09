@@ -3,6 +3,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { DatabaseSyncLike } from '../db.js';
+import { withWriteScope } from './busy.js';
 import { log } from '../log.js';
 
 /** Legacy whole-file index; imported once into `memory_vectors`, then kept beside the store as a renamed backup. */
@@ -48,21 +49,9 @@ export function upsertVectors(db: DatabaseSyncLike, rows: Iterable<readonly [str
   return written;
 }
 
-function inTransaction<T>(db: DatabaseSyncLike, fn: () => T): T {
-  db.exec('BEGIN IMMEDIATE');
-  try {
-    const out = fn();
-    db.exec('COMMIT');
-    return out;
-  } catch (err) {
-    try { db.exec('ROLLBACK'); } catch { /* keep the original error */ }
-    throw err;
-  }
-}
-
 /** Replace the whole table with `index` in one transaction, as a full rebuild does. */
 export function replaceAllVectors(db: DatabaseSyncLike, index: Readonly<Record<string, readonly number[]>>, model: string): void {
-  inTransaction(db, () => {
+  withWriteScope(db, 'replace_all_vectors', () => {
     db.exec('DELETE FROM memory_vectors');
     upsertVectors(db, Object.entries(index), model);
   });
@@ -263,7 +252,7 @@ export function importLegacyEmbeddingIndex(db: DatabaseSyncLike, hippoRoot: stri
   }
   // SAFETY: the SELECT names exactly the one column read.
   const model = (db.prepare(`SELECT value FROM meta WHERE key = ?`).get(EMBEDDING_MODEL_META_KEY) as { value?: string } | undefined)?.value ?? '';
-  const written = inTransaction(db, () => upsertVectors(db, index, model));
+  const written = withWriteScope(db, 'import_legacy_vectors', () => upsertVectors(db, index, model));
   const backup = `${fp}.imported-${stamp()}`;
   if (moveAside(fp, backup)) {
     log.info(`moved ${written} vectors from ${LEGACY_EMBEDDINGS_FILE} into the store; the file is kept as ${path.basename(backup)}`, { hippoRoot });
