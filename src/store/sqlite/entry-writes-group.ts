@@ -137,8 +137,8 @@ function applyOutcomeOn(db: DatabaseSyncLike, outcome: OutcomeWrite): MemoryEntr
 /** Reach, the CAS on the old row, the successor's insert and the supersede row in one BEGIN IMMEDIATE transaction. Two racing supersedes: one CAS wins. */
 function commitSupersede(db: DatabaseSyncLike, write: SupersedeWrite): void {
   const { tenantId, actor, oldId, successor } = write;
-  db.exec('BEGIN IMMEDIATE');
-  try {
+  // The refusal row lands after the scope has rolled back, in a fresh implicit transaction the aborted one cannot undo.
+  auditingRefusal(db, actor, () => withWriteScope(db, 'supersede', () => {
     assertInReach(db, write, oldId);
     // SAFETY: RETURNING names one column, dag_parent_id; no row means another writer got there first.
     const won = db.prepare('UPDATE memories SET superseded_by = ? WHERE id = ? AND tenant_id = ? AND superseded_by IS NULL RETURNING dag_parent_id')
@@ -149,13 +149,7 @@ function commitSupersede(db: DatabaseSyncLike, write: SupersedeWrite): void {
     assertIdInTenant(db, successor);
     writeEntryDbOnly(db, successor, { actor });
     appendAuditEvent(db, { tenantId, actor, op: 'supersede', targetId: oldId, metadata: { newId: successor.id } });
-    db.exec('COMMIT');
-  } catch (err) {
-    try { db.exec('ROLLBACK'); } catch { /* already rolled back */ }
-    // The refusal row lands after ROLLBACK, in a fresh implicit transaction the aborted one cannot undo.
-    if (err instanceof RejectedValueError) auditRejectionRefusal(db, err, actor);
-    throw err;
-  }
+  }));
 }
 
 /** A mirror left on disk would bring the archived row back on the next import; on failure the reaper retries, as mirror_cleaned_at stays NULL. */
