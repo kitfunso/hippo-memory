@@ -21,10 +21,9 @@
  */
 import { deriveHalfLife, type MemoryEntry } from './memory.js';
 import { openStore, HALF_LIFE_BASE_META_KEY, LEGACY_TYPED_HALF_LIFE, TYPED_HALF_LIFE_META_KEY } from './store/open.js';
-import { selectAllEntries } from './store/entry-reads.js';
+import { objectMemoryRowsAt, selectAllEntries } from './store/entry-reads.js';
 import { conflictResolveAuditsAt, resolvedConflictsAt } from './store/conflicts.js';
 import { setHalfLivesAt } from './store/entry-writes.js';
-import { objectMemoryRowsAt } from './store/sqlite/object-rows.js';
 import { openHippoDb, closeHippoDb, getMeta, setMeta, type DatabaseSyncLike } from './db.js';
 import { appendAuditEvent } from './store/audit.js';
 
@@ -32,6 +31,7 @@ import { appendAuditEvent } from './store/audit.js';
 export const LEGACY_HALF_LIFE_BASE = 7;
 
 const TYPED_SOURCES: ReadonlySet<string> = new Set(['decision', 'incident', 'process', 'policy', 'skill', 'project_brief', 'customer_note']);
+
 export { HALF_LIFE_BASE_META_KEY, LEGACY_TYPED_HALF_LIFE };
 
 /** What {@link migrateDefaultHalfLife} did, or would do under `dryRun`. */

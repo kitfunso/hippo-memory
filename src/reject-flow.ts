@@ -15,13 +15,13 @@ import { closeHippoDb, withWriteScope, type DatabaseSyncLike } from './db.js';
 import { BadRequestError } from './api-errors.js';
 import { appendAuditEvent, reportAuditWriteFailure } from './store/audit.js';
 import { isPersonalScope } from './recall-scope.js';
-import { archiveRawMemory } from './store/raw-archive.js';
+import { archiveRawMemory, markMirrorCleaned } from './store/raw-archive.js';
 import { deleteDormantRow, listDormantSnapshots, purgeDormantByDigest, replaceDormantEntry } from './store/dormant.js';
 import { stampOriginProject } from './store/entry-row.js';
 import { purgeMirrorBestEffort } from './store/mirrors.js';
 import { openStore } from './store/open.js';
 import { writeEntryDbOnly, writeEntryMirrors } from './store/entry-writes.js';
-import { selectAllEntries } from './store/entry-reads.js';
+import { entryRejectRowAt, selectAllEntries } from './store/entry-reads.js';
 import { deleteEntryCore } from './store/delete-and-batch.js';
 import type { MemoryEntry } from './memory.js';
 import { heldTexts } from './same-text.js';
@@ -86,10 +86,7 @@ function assertRejectOpts(opts: RejectFlowOpts): void {
 
 function contentToReject(db: DatabaseSyncLike, opts: RejectFlowOpts): string {
   if (opts.memoryId === undefined) return opts.value!;
-  // SAFETY: row's shape matches the three columns named in the SELECT above.
-  const row = db
-    .prepare(`SELECT content, tenant_id, scope FROM memories WHERE id = ?`)
-    .get(opts.memoryId) as { content: string; tenant_id: string; scope: string | null } | undefined;
+  const row = entryRejectRowAt(db, opts.memoryId);
   if (!row || row.tenant_id !== opts.tenantId) {
     throw new Error(`memory not found: ${opts.memoryId}`);
   }
@@ -194,10 +191,7 @@ function purgeRemovedMirrors(db: DatabaseSyncLike, hippoRoot: string, removal: R
     // removeEntryMirrors) for the full rationale.
     const mirrorOk = purgeMirrorBestEffort(hippoRoot, id, removal.removedRawIds.includes(id), 'hippo reject');
     if (mirrorOk && removal.removedRawIds.includes(id)) {
-      db.prepare(`UPDATE raw_archive SET mirror_cleaned_at = ? WHERE memory_id = ?`).run(
-        new Date().toISOString(),
-        id,
-      );
+      markMirrorCleaned(db, id, new Date().toISOString());
     }
   }
   for (const successor of removal.successors) writeEntryMirrors(hippoRoot, successor);
