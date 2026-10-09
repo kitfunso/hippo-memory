@@ -1,5 +1,5 @@
 {
-  "stdin": "{\"transcript_path\":\"/home/u/.claude/projects/p/sess-1.jsonl\",\"cwd\":\"/work/repo\",\"hook_event_name\":\"SessionEnd\",\"reason\":\"exit\"}",
+  "stdin": "{\"transcript_path\":\"/home/u/.claude/projects/p/sess-1.jsonl\",\"cwd\":\"/work/repo\",\"hook_event_name\":\"SessionEnd\",\"reason\":\"other\"}",
   "timedOut": false,
   "expect": {
     "status": "received",
@@ -10,7 +10,7 @@
       "sessionId": null,
       "cwd": "/work/repo",
       "transcriptPath": "/home/u/.claude/projects/p/sess-1.jsonl",
-      "trigger": "exit"
+      "trigger": "other"
     }
   }
 }
