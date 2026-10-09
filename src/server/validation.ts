@@ -18,6 +18,9 @@ export function isSetMember<T extends string>(set: ReadonlySet<T>, value: string
   return set.has(value as T);
 }
 
+// Cap for short free-text HTTP fields (names, text, context, change summaries) on the object routes.
+export const MAX_SHORT_FIELD_LEN = 4096;
+
 // Number.isInteger, not isFinite: SQLite `LIMIT ?` rejects "1.5" with a 500.
 // Shared by every first-class-object list route so the guard cannot drift.
 export const MAX_LIST_LIMIT = 1000;

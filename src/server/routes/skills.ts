@@ -3,7 +3,7 @@ import { MAX_SKILL_NAME_LEN, type SaveSkillOpts, SKILL, skillsMarkdown } from '.
 import { sendJson } from '../../util/http-util.js';
 import { buildContextWithAuth } from '../auth.js';
 import type { RouteRequest } from '../types.js';
-import { parseJsonBody } from '../validation.js';
+import { MAX_SHORT_FIELD_LEN, parseJsonBody } from '../validation.js';
 import { closeRoute, getRoute, listRoute, objectsOf, optionalString, type RequiredStringRule, requiredString, saveFor, supersedeRoute, type VersionedRouteConfig } from './object-routes.js';
 
 const INSTRUCTIONS: RequiredStringRule = { max: 8192, plural: true };
@@ -16,7 +16,7 @@ const skillRoutes: VersionedRouteConfig<'skill', SaveSkillOpts> = {
   revise: (body) => {
     const instructions = requiredString(body, 'instructions', INSTRUCTIONS);
     const trigger = optionalString(body, 'trigger', 1024);
-    const changeSummary = optionalString(body, 'changeSummary', 4096);
+    const changeSummary = optionalString(body, 'changeSummary', MAX_SHORT_FIELD_LEN);
     return (existing, id) => ({ skillName: existing.skillName, instructions, trigger, changeSummary, supersedesSkillId: id });
   },
 };
@@ -29,7 +29,7 @@ const skillRoutes: VersionedRouteConfig<'skill', SaveSkillOpts> = {
 // block -> {markdown}; literal 'export' is non-numeric so the /:id (\d+) route
 // cannot capture it, but it is ordered first regardless), GET /v1/skills/:id,
 // POST /v1/skills/:id/supersede, POST /v1/skills/:id/close. DoS caps:
-// skillName 256, instructions 8192, trigger 1024, changeSummary 4096. The store
+// skillName 256, instructions 8192, trigger 1024, changeSummary MAX_SHORT_FIELD_LEN. The store
 // validates + throws; the boundary maps validation -> 400, not-found -> 404,
 // not-active -> 409. Mirrors /v1/processes; "executable" = exportable
 // instruction (no code exec).
@@ -55,7 +55,6 @@ export async function handleExportSkills(rr: RouteRequest): Promise<void> {
   const ctx = await buildContextWithAuth(req, opts);
   const markdown = await skillsMarkdown(objectsOf(rr), ctx.tenantId);
   sendJson(res, 200, { markdown });
-  return;
 }
 
 export function handleSupersedeSkill(rr: RouteRequest, match: RegExpMatchArray): Promise<void> {

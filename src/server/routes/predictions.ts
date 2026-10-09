@@ -6,7 +6,7 @@ import { HttpError, MAX_ID_LEN, sendJson } from '../../util/http-util.js';
 import { buildContextWithAuth } from '../auth.js';
 import { byCreatedAt, pageOf, parseCursor } from '../cursor.js';
 import type { RouteRequest } from '../types.js';
-import { isSetMember, parseJsonBody, parseListLimit } from '../validation.js';
+import { isSetMember, MAX_SHORT_FIELD_LEN, parseJsonBody, parseListLimit } from '../validation.js';
 import { isJsonString, isJsonNumber } from '../../util/json.js';
 
 // ── prediction first-class object ──
@@ -15,7 +15,7 @@ import { isJsonString, isJsonNumber } from '../../util/json.js';
 // GET /v1/predictions/:id (show), POST /v1/predictions/:id/close (close).
 // All Bearer-authed + tenant-scoped via buildContextWithAuth. closure_state
 // validated against VALID_CLOSURE_STATES (3 states). DoS caps on claim
-// (4096 chars) + closureNote (2048 chars).
+// (MAX_SHORT_FIELD_LEN chars) + closureNote (2048 chars).
 export async function handleCreatePrediction({ req, res, opts }: RouteRequest): Promise<void> {
   const ctx = await buildContextWithAuth(req, opts);
   const body = await parseJsonBody(req, ctx);
@@ -23,8 +23,8 @@ export async function handleCreatePrediction({ req, res, opts }: RouteRequest): 
   if (!isJsonString(claim) || claim.length === 0) {
     throw new HttpError(400, 'claim is required (non-empty string)');
   }
-  if (claim.length > 4096) {
-    throw new HttpError(400, 'claim exceeds 4096-character cap');
+  if (claim.length > MAX_SHORT_FIELD_LEN) {
+    throw new HttpError(400, `claim exceeds ${MAX_SHORT_FIELD_LEN}-character cap`);
   }
   const classTag = body['classTag'];
   if (!isJsonString(classTag) || classTag.length === 0) {
@@ -58,7 +58,6 @@ export async function handleCreatePrediction({ req, res, opts }: RouteRequest): 
   const mirror = predictionMirror(ctx.tenantId, claimed, loadConfig(opts.hippoRoot).defaultHalfLifeDays);
   const prediction = await requireGroup(opts.store, 'predictions').savePrediction(ctx.tenantId, { ...claimed, mirror }, ctx.actor.subject);
   sendJson(res, 201, { prediction });
-  return;
 }
 
 /** Which rows a list reads; a status other than all or open needs a class, as no store reads one closed state across classes. */
@@ -83,7 +82,6 @@ export async function handleListPredictions({ req, res, opts, query }: RouteRequ
   const predictions = await requireGroup(opts.store, 'predictions').listPredictions(ctx.tenantId, { ...listFilter(classTag, status), limit: limit + 1, after });
   const page = pageOf(predictions, limit, byCreatedAt);
   sendJson(res, 200, { predictions: page.items, next_cursor: page.nextCursor });
-  return;
 }
 
 // Reference-class / planning-fallacy detector.
@@ -101,7 +99,6 @@ export async function handlePredictionStats({ req, res, opts, query }: RouteRequ
   const ctx = await buildContextWithAuth(req, opts);
   const baserate = await requireGroup(opts.store, 'predictions').predictionBaserate(ctx.tenantId, classTag, ctx.actor.subject);
   sendJson(res, 200, { baserate });
-  return;
 }
 
 export async function handleGetPrediction({ req, res, opts }: RouteRequest, predictionByIdMatch: RegExpMatchArray): Promise<void> {
@@ -112,7 +109,6 @@ export async function handleGetPrediction({ req, res, opts }: RouteRequest, pred
     throw new HttpError(404, `prediction ${id} not found`);
   }
   sendJson(res, 200, { prediction });
-  return;
 }
 
 export async function handleClosePrediction({ req, res, opts }: RouteRequest, predictionCloseMatch: RegExpMatchArray): Promise<void> {
@@ -145,5 +141,4 @@ export async function handleClosePrediction({ req, res, opts }: RouteRequest, pr
   const close = { closureState: state, actualValue, closureNote };
   const prediction = await requireGroup(opts.store, 'predictions').closePrediction(ctx.tenantId, id, close, ctx.actor.subject);
   sendJson(res, 200, { prediction });
-  return;
 }
