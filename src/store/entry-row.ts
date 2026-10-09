@@ -1,8 +1,8 @@
-import type { MemoryEntry } from '../memory.js';
-import { closeHippoDb, ftsRowCounts, openHippoDb, isFtsAvailable, repairFtsDrift } from '../db.js';
-import { fallbackOrigin, originFromSource } from '../project-identity.js';
+import type { MemoryEntry } from '../core/memory.js';
+import { closeHippoDb, ftsRowCounts, openHippoDb, isFtsAvailable, repairFtsDrift } from '../db/index.js';
+import { fallbackOrigin, originFromSource } from '../core/project-identity.js';
 import { checkRejectionGuard } from './rejection.js';
-import { errorMessage, log } from '../log.js';
+import { errorMessage, log } from '../util/log.js';
 
 export function upsertEntryRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry): void {
   checkRejectionGuard(db, entry.tenantId ?? 'default', entry.id, entry.content);

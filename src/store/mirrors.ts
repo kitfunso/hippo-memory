@@ -1,10 +1,10 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { Layer, type MemoryEntry } from '../memory.js';
-import { dumpFrontmatter } from '../yaml.js';
-import { openHippoDb, getMeta } from '../db.js';
+import { Layer, type MemoryEntry } from '../core/memory.js';
+import { dumpFrontmatter } from './yaml.js';
+import { openHippoDb, getMeta } from '../db/index.js';
 import { oncePerStore } from '../db/connect.js';
-import { errorMessage, log } from '../log.js';
+import { errorMessage, log } from '../util/log.js';
 import {
   type TaskSnapshot,
   type SessionEvent,

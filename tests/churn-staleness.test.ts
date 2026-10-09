@@ -8,20 +8,20 @@ import { execSync, execFileSync } from 'child_process';
 import {
   extractChurnRefs,
   detectChurnStale,
-} from '../src/invalidation.js';
+} from '../src/learn/invalidation.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
-import { createMemory, CHURN_STALE_TAG, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { createMemory, CHURN_STALE_TAG, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { search } from '../src/search/bm25-search.js';
 import { hybridSearch } from '../src/search/hybrid.js';
 import { physicsSearch } from '../src/search/physics-search.js';
 import { CHURN_STALE_RANK_MULTIPLIER } from '../src/search/boosts.js';
-import { openHippoDb } from '../src/db.js';
+import { openHippoDb } from '../src/db/index.js';
 import { savePhysicsState } from '../src/db/physics-state.js';
-import type { PhysicsParticle } from '../src/physics.js';
-import { loadConfig } from '../src/config.js';
-import * as api from '../src/api.js';
+import type { PhysicsParticle } from '../src/core/physics.js';
+import { loadConfig } from '../src/core/config.js';
+import * as api from '../src/api/index.js';
 
 // ---------------------------------------------------------------------------
 // extractChurnRefs (pure syntax, no repo access)
@@ -29,7 +29,7 @@ import * as api from '../src/api.js';
 
 describe('extractChurnRefs', () => {
   it('extracts a plain path reference', () => {
-    expect(extractChurnRefs('see src/invalidation.ts for details').paths).toEqual(['src/invalidation.ts']);
+    expect(extractChurnRefs('see src/learn/invalidation.ts for details').paths).toEqual(['src/learn/invalidation.ts']);
   });
 
   it('strips a :line or :line-line suffix from a path', () => {
@@ -38,7 +38,7 @@ describe('extractChurnRefs', () => {
   });
 
   it('normalizes backslashes and strips a leading ./', () => {
-    expect(extractChurnRefs('see ./src\\churn-git.ts').paths).toEqual(['src/churn-git.ts']);
+    expect(extractChurnRefs('see ./src\\learn\\churn-git.ts').paths).toEqual(['src/learn/churn-git.ts']);
   });
 
   it('captures an extension whole when a shorter one is its prefix (json/js, tsx/ts)', () => {

@@ -5,12 +5,12 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { getContext, type Context, type ContextOpts } from '../src/api.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { _resetAblationCacheForTests } from '../src/ablation.js';
-import type { HippoConfig } from '../src/config.js';
-import { _setDeliveryFaultForTests, createDeliveryRecorder, type DeliveryEventInput, type DeliveryRecorder } from '../src/delivery-recorder.js';
+import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { getContext, type Context, type ContextOpts } from '../src/api/index.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { _resetAblationCacheForTests } from '../src/core/ablation.js';
+import type { HippoConfig } from '../src/core/config.js';
+import { _setDeliveryFaultForTests, createDeliveryRecorder, type DeliveryEventInput, type DeliveryRecorder } from '../src/store/delivery-recorder.js';
 
 const PROJECT = 'proj-a';
 const PROMPT = 'how should the postgres migration rollback plan work';

@@ -1,4 +1,4 @@
-import { cosineOf } from '../embeddings.js';
+import { cosineOf } from '../store/embeddings/index.js';
 import type { RerankerFn, RerankerOptions } from '../rerankers/types.js';
 import type { SearchResult } from '../core/search-types.js';
 

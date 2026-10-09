@@ -1,10 +1,10 @@
-import { envPath } from '../env.js';
+import { envPath } from '../util/env.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
-import { errorMessage, log } from '../log.js';
+import { errorMessage, log } from '../util/log.js';
 import { HIPPO_CODEX_WRAPPER_MARKER, homeDir, codexHomeDir, ensureDir } from './shared.js';
-import { isJsonString } from '../json.js';
+import { isJsonString } from '../util/json.js';
 import { writeFileAtomic } from '../util/atomic-write.js';
 
 export interface CodexWrapperPaths {

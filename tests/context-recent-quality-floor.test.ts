@@ -3,8 +3,8 @@
  * (docs/plans/2026-08-23-df3-include-recent-quality-floor.md).
  *
  * Covers the plan's 7-test list against the `includeRecent` block inside
- * `api.getContext`'s `pinnedOnly` branch (src/api.ts:2456-2491), which now
- * filters candidates with `isWorthSurfacing` (src/memory-quality.ts) before
+ * `api.getContext`'s `pinnedOnly` branch (src/api/index.ts:2456-2491), which now
+ * filters candidates with `isWorthSurfacing` (src/core/memory-quality.ts) before
  * slicing to `includeRecent`.
  *
  * Real-DB per project convention. Tests 1-6 seed entries directly via
@@ -23,8 +23,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { getContext, type Context } from '../src/api.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { getContext, type Context } from '../src/api/index.js';
 import { hippoOut } from './_helpers/spawn-hippo.js';
 
 function tmpHome() {

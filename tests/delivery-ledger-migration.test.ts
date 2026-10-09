@@ -6,7 +6,7 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, type DatabaseSyncLike } from '../src/db.js';
+import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, type DatabaseSyncLike } from '../src/db/index.js';
 import { LATEST_SCHEMA_VERSION, LATEST_SCHEMA_VERSION_STR } from './_helpers/schema-version.js';
 
 const EVENT_COLUMNS = [

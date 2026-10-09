@@ -9,15 +9,15 @@ import { basename, join, relative } from 'node:path';
 import {
   archiveRaw, authCreate, authCreateSelf, authGrant, authListRows, authRevoke, authUngrant, forget, outcome, outcomeForLastRecall, reject,
   remember, supersede, type Actor, type Context,
-} from '../src/api.js';
+} from '../src/api/index.js';
 import { grantScope, insertApiKey, revokeApiKey } from '../src/store/auth.js';
-import { closeHippoDb, openHippoDb } from '../src/db.js';
+import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import type { ImportResult } from '../src/importers/core.js';
 import { importVault } from '../src/importers/vault.js';
-import { DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { writeRecallTraceAtRoot } from '../src/store/recall-trace.js';
 import { rejectionDigest } from '../src/store/rejection.js';
-import { sqliteStore, type HippoStore, type StoreGroup } from '../src/store-port.js';
+import { sqliteStore, type HippoStore, type StoreGroup } from '../src/store/index.js';
 import type { ConnectorEvent } from '../src/store/port.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadIndex, saveIndex } from '../src/store/index-and-stats.js';
@@ -66,7 +66,7 @@ const KNOWN_DIFFERENCES = {
     fn: 'remember, supersede',
     differs: 'the half-life comes from config.json in ctx.hippoRoot on both paths, so through a store it is never the store\'s own; an empty hippoRoot gives the built-in default',
     onHippoDb: 'src/api/remember.ts:85, src/api/promote.ts:94',
-    throughStore: 'src/config.ts:425-426',
+    throughStore: 'src/core/config.ts:425-426',
     winner: 'the folder the caller names: hippo.db\'s result is unchanged and a store-served write no longer reads the working folder; a half-life the store itself holds would need a port read, which is not added',
     pinnedBy: 'here',
   },

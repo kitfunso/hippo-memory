@@ -1,11 +1,11 @@
 // Session context assembly under a token budget.
 
-import { requireGroup, storeFor } from '../store-port.js';
+import { requireGroup, storeFor } from '../store/index.js';
 import { estimateTokens } from '../util/token-text.js';
-import type { MemoryEntry } from '../memory.js';
-import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../recall-scope.js';
-import { classifyOriginProject, projectNames } from '../project-identity.js';
-import type { CallerProject } from '../prompt-hook.js';
+import type { MemoryEntry } from '../core/memory.js';
+import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../store/recall-scope.js';
+import { classifyOriginProject, projectNames } from '../core/project-identity.js';
+import type { CallerProject } from './prompt-hook.js';
 import type { Context } from './types.js';
 
 const DEFAULT_FRESH_TAIL_COUNT = 10;
@@ -142,7 +142,7 @@ export async function assemble(
   const tailItems = tailRows.map(freshTailItem);
 
   // Byte compare is chronological for the fixed-form UTC ISO timestamps
-  // (invariant documented in src/memory.ts above MemoryEntry).
+  // (invariant documented in src/core/memory.ts above MemoryEntry).
   const cmpIso = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
   olderItems.sort((a, b) => cmpIso(a.createdAt, b.createdAt));
   tailItems.sort((a, b) => cmpIso(a.createdAt, b.createdAt));

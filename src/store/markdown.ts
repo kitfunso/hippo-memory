@@ -1,5 +1,5 @@
-import { type MemoryEntry, Layer, FALLBACK_HALF_LIFE_DAYS, DEFAULT_SCHEMA_FIT, type ConfidenceLevel, type MemoryKind } from '../memory.js';
-import { dumpFrontmatter, parseFrontmatter } from '../yaml.js';
+import { type MemoryEntry, Layer, FALLBACK_HALF_LIFE_DAYS, DEFAULT_SCHEMA_FIT, type ConfidenceLevel, type MemoryKind } from '../core/memory.js';
+import { dumpFrontmatter, parseFrontmatter } from './yaml.js';
 
 type FrontmatterValue = string | number | boolean | null | string[] | number[];
 

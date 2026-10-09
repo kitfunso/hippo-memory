@@ -1,18 +1,18 @@
 // MCP over HTTP: POST /mcp and the GET /mcp/stream SSE keepalive.
-import { envMcpSseHeartbeatMs, envMcpSseMaxAgeSec, envMcpSseMaxStreams } from '../env.js';
+import { envMcpSseHeartbeatMs, envMcpSseMaxAgeSec, envMcpSseMaxStreams } from '../util/env.js';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createHash } from 'node:crypto';
-import type { Context } from '../api.js';
-import { isSharedStore } from '../config.js';
+import type { Context } from '../api/index.js';
+import { isSharedStore } from '../core/config.js';
 import { handleMcpRequest, mcpErrorResponse, type McpContext, type McpRequest } from '../mcp/server.js';
-import { HttpError, readBody, sendJson } from '../http-util.js';
-import { assertCallerProject } from '../project-identity.js';
-import type { CallerProject } from '../prompt-hook.js';
+import { HttpError, readBody, sendJson } from '../util/http-util.js';
+import { assertCallerProject } from '../core/project-identity.js';
+import type { CallerProject } from '../api/prompt-hook.js';
 import { buildContextWithAuth, heartbeatVerdict, readAuthHeader, requireAuth } from './auth.js';
 import { clientLimitKey, subscriberKey } from './client-ip.js';
 import { noteAccess } from './request.js';
 import type { ResolvedServeOpts } from './types.js';
-import { type JsonValue, isJsonString, isJsonObject } from '../json.js';
+import { type JsonValue, isJsonString, isJsonObject } from '../util/json.js';
 import { FINGERPRINT_HEX_CHARS } from '../util/token-text.js';
 
 const DEFAULT_SSE_HEARTBEAT_MS = 60000;

@@ -69,13 +69,13 @@ for (const path of LOCKSTEP_MANIFESTS) {
   }
 }
 
-// src/version.ts carries PACKAGE_VERSION as a TS constant (not JSON). Its own
+// src/util/version.ts carries PACKAGE_VERSION as a TS constant (not JSON). Its own
 // header names it the "fifth manifest" bumped manually every release, but it was
 // historically excluded from this guard, so it silently drifted (1.12.10 vs
 // published 1.14.0) across two releases while feeding MCP serverInfo, the HTTP
 // /health endpoint, and the DB rollback-compat gate. Assert it here so the
 // documented manual bump can never be silently skipped again.
-const VERSION_TS = 'src/version.ts';
+const VERSION_TS = 'src/util/version.ts';
 if (!existsSync(VERSION_TS)) {
   drifts.push({ path: VERSION_TS, found: '(missing)', expected: expectedVersion });
 } else {
@@ -137,4 +137,4 @@ if (drifts.length > 0) {
   process.exit(1);
 }
 
-console.log(`All ${LOCKSTEP_MANIFESTS.length} lockstep manifests + src/version.ts + the two package-lock.json root fields at version ${expectedVersion}. OK.`);
+console.log(`All ${LOCKSTEP_MANIFESTS.length} lockstep manifests + src/util/version.ts + the two package-lock.json root fields at version ${expectedVersion}. OK.`);

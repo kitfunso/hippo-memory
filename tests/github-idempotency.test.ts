@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { eventSeenAt as hasSeenKey, logEventAt as markKeySeen, eventMemoryAt as lookupMemoryByKey } from '../src/store/connectors/github.js';
 
 describe('github idempotency', () => {

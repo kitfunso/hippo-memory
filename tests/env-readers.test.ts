@@ -1,4 +1,4 @@
-/** src/env.ts readers: timeouts refuse negatives, HIPPO_REQUIRE_SERVER reads like the other switches, ids and keys come back trimmed. */
+/** src/util/env.ts readers: timeouts refuse negatives, HIPPO_REQUIRE_SERVER reads like the other switches, ids and keys come back trimmed. */
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   envAnchoringOff,
@@ -12,7 +12,7 @@ import {
   envModelCache,
   envRequireServer,
   envTypesafeApiKey,
-} from '../src/env.js';
+} from '../src/util/env.js';
 
 const NAMES = [
   'HIPPO_ANCHORING', 'HIPPO_AVAILABILITY',

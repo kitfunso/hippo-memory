@@ -1,9 +1,9 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { closeHippoDb, openHippoDb } from '../src/db.js';
-import { classifyOriginProject } from '../src/project-identity.js';
-import { syncGlobalToLocal } from '../src/shared.js';
+import { closeHippoDb, openHippoDb } from '../src/db/index.js';
+import { classifyOriginProject } from '../src/core/project-identity.js';
+import { syncGlobalToLocal } from '../src/sharing/shared.js';
 import { initStore } from '../src/store/open.js';
 import {
   compactionMemories,

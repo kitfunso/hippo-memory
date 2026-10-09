@@ -13,13 +13,13 @@ import {
   reclaimExpiredCards,
   addCardComment,
 } from '../store/cards.js';
-import { isHandoffOutcome } from '../handoff.js';
-import { type Card, isCardStatus } from '../card.js';
-import { loadCardDetail, type CardDetail } from '../card-detail.js';
-import { resolveTenantId } from '../tenant.js';
+import { isHandoffOutcome } from '../core/handoff.js';
+import { type Card, isCardStatus } from '../core/card.js';
+import { loadCardDetail, type CardDetail } from '../store/card-detail.js';
+import { resolveTenantId } from '../store/tenant.js';
 import { printError } from './output.js';
 import { type CliFlags, requireInit, stringFlagOrExit } from './shared.js';
-import { errorMessage } from '../log.js';
+import { errorMessage } from '../util/log.js';
 
 // Mirrors ARCHIVE_REASON_REQUIRED so the block message can't drift from its usage line.
 const CARD_BLOCK_REASON_REQUIRED = 'hippo card block <id> requires --reason "<why>" (recorded as a comment).';

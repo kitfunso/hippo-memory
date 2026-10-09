@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { dumpFrontmatter, parseFrontmatter } from '../src/yaml.js';
+import { dumpFrontmatter, parseFrontmatter } from '../src/store/yaml.js';
 
 type Frontmatter = Parameters<typeof dumpFrontmatter>[0];
 

@@ -1,6 +1,6 @@
 // The payload gate for `hippo compact-resume`.
 
-import { isSubagentPayload } from '../token-ledger.js';
+import { isSubagentPayload } from '../store/token-ledger.js';
 
 export interface CompactResumePayload { suppressOutput: boolean; payloadSessionId: string | null; boundary: boolean }
 

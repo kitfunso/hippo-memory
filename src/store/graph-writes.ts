@@ -1,8 +1,8 @@
 // The writer of the entities and relations tables. Every row resolves a consolidated source first, never a raw memory;
 // the schema triggers are the backstop for a write that skips this module.
-import { openHippoDb, closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../db.js';
-import { assertTenantId } from '../tenant.js';
-import { errorMessage, log } from '../log.js';
+import { openHippoDb, closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
+import { assertTenantId } from './tenant.js';
+import { errorMessage, log } from '../util/log.js';
 import { type EntityType, type RelationType, type SourceKind, type SourceObjectType, type SourceObjectRef, GRAPH_ENTITY_TYPES, GRAPH_RELATION_TYPES, MAX_ENTITY_NAME_LEN, type Entity, type Relation, type InsertEntityOpts, type InsertRelationOpts, type UpdateEntityOpts, type EntityRow, type RelationRow, rowToEntity, rowToRelation, ENTITY_COLS, RELATION_COLS } from './graph-rows.js';
 
 /** source_object_type -> its object table, for the object-path validation 4-way branch.

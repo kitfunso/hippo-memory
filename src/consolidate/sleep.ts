@@ -7,20 +7,20 @@
  * 3. Stats tracking
  */
 
-import { evalNow } from '../ablation.js';
-import { MemoryEntry, canAutoDelete, type DecayOptions } from '../memory.js';
+import { evalNow } from '../core/ablation.js';
+import { MemoryEntry, canAutoDelete, type DecayOptions } from '../core/memory.js';
 import { loadAllEntries } from '../store/entry-reads.js';
 import { commitInChunks, memoriesBackingObjects } from '../store/delete-and-batch.js';
 import { appendConsolidationRun, loadSessionDecayContext, incrementSleepCount } from '../store/index-and-stats.js';
 import { replaceDetectedConflicts } from '../store/conflicts.js';
-import { SLEEP_DB_WAIT_MS } from '../db.js';
+import { SLEEP_DB_WAIT_MS } from '../db/index.js';
 import { expireDormantBefore } from '../store/dormant.js';
-import { loadConfig } from '../config.js';
+import { loadConfig } from '../core/config.js';
 import { type AppendAuditOpts, recordAuditEventsRowByRow, reportAuditWriteFailure } from '../store/audit.js';
 import { lazyTombstoneChecks } from '../store/tombstone-checks.js';
-import { migrateDefaultHalfLife, LEGACY_TYPED_HALF_LIFE } from '../half-life-migration.js';
-import { errorMessage, log } from '../log.js';
-import { WRITE_BUDGET, type WriteBudget } from '../write-budget.js';
+import { migrateDefaultHalfLife, LEGACY_TYPED_HALF_LIFE } from './half-life-migration.js';
+import { errorMessage, log } from '../util/log.js';
+import { WRITE_BUDGET, type WriteBudget } from '../util/write-budget.js';
 import { type DecayOutcome, decayPass } from './decay.js';
 import { familyUnits, groupFlush } from './flush-units.js';
 import { retireHeldTexts, mergePass } from './merge.js';
@@ -109,7 +109,7 @@ async function runPassesAfterDecay(run: SleepRun, fetcher: typeof fetch | undefi
 }
 
 // A changed default half-life moves memories still on the old base first,
-// so this pass decays them at the new one (src/half-life-migration.ts).
+// so this pass decays them at the new one (src/consolidate/half-life-migration.ts).
 function migrateHalfLives(hippoRoot: string, dryRun: boolean, result: ConsolidationResult): ReturnType<typeof migrateDefaultHalfLife> {
   const halfLife = migrateDefaultHalfLife(hippoRoot, loadConfig(hippoRoot).defaultHalfLifeDays, { dryRun });
   if (halfLife.rescaled > 0) {

@@ -3,13 +3,13 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { spawn, spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import { expect } from 'vitest';
-import { closeHippoDb, openHippoDb } from '../../src/db.js';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { readDeliveryEvents, type DeliveryEventRow } from '../../src/store/recall-trace.js';
 import { initStore } from '../../src/store/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
 import { saveActiveTaskSnapshot } from '../../src/store/sessions.js';
-import type { DeliveryFault } from '../../src/delivery-recorder.js';
+import type { DeliveryFault } from '../../src/store/delivery-recorder.js';
 import { removeScratch, scratch, type Scratch } from './compaction-hooks.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', '..', 'bin', 'hippo.js');

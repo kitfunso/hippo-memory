@@ -1,8 +1,8 @@
 // hippo.db's half of the VectorWrites store group.
-import { closeHippoDb, openHippoDb, setMeta, withWriteScope, type DatabaseSyncLike } from '../db.js';
-import { embeddingIndexStateOn, replacesIndex } from '../embeddings.js';
-import type { MemoryEntry } from '../memory.js';
-import type { PhysicsParticle } from '../physics.js';
+import { closeHippoDb, openHippoDb, setMeta, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
+import { embeddingIndexStateOn, replacesIndex } from './embeddings/index.js';
+import type { MemoryEntry } from '../core/memory.js';
+import type { PhysicsParticle } from '../core/physics.js';
 import { float32ToBuffer, loadPhysicsState, resetAllPhysicsState, savePhysicsState } from '../db/physics-state.js';
 import type { VectorBackfillQuery, VectorRowWrite, VectorWrite, VectorWriteResult } from './port.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../db/vector-store.js';

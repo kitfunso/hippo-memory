@@ -1,11 +1,11 @@
 // No grant opens a personal scope: granting one is a 400, a grant row already stored opens nothing, and ungrant still clears it (F8).
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import * as api from '../src/api.js';
+import * as api from '../src/api/index.js';
 import { createApiKey, grantScope, readApiKeyRecord } from '../src/store/auth.js';
-import { closeHippoDb, openHippoDb } from '../src/db.js';
-import { mapApiError } from '../src/http-util.js';
-import { canReadScope } from '../src/recall-scope.js';
+import { closeHippoDb, openHippoDb } from '../src/db/index.js';
+import { mapApiError } from '../src/util/http-util.js';
+import { canReadScope } from '../src/store/recall-scope.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
 

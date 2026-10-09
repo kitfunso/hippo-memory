@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { AGENT_MEMORY_TOOLS, toolSourcePrefix } from '../src/core/agent-memory-tools.js';
 import {
   AUTO_DELETABLE_SQL, COMPACTION_MEMORY_TAG, COMPACTION_SOURCE_PREFIX, KEEP_PAIRS, canAutoDelete, type MemoryEntry
-} from '../src/memory.js';
+} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -15,11 +15,11 @@ import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
 import { batchWriteAndDelete, deleteEntry } from '../src/store/delete-and-batch.js';
 import { listMemoryConflicts } from '../src/store/conflicts.js';
 import { consolidate } from '../src/consolidate/sleep.js';
-import { deduplicateStore } from '../src/dedupe.js';
+import { deduplicateStore } from '../src/consolidate/dedupe.js';
 import { auditMemory } from '../src/store/audit.js';
-import { closeHippoDb, openHippoDb, withSharedStoreHandles } from '../src/db.js';
-import { NO_MERGE_TAGS } from '../src/shared.js';
-import { forget, listDormant, sleep, supersede, type HippoDbContext } from '../src/api.js';
+import { closeHippoDb, openHippoDb, withSharedStoreHandles } from '../src/db/index.js';
+import { NO_MERGE_TAGS } from '../src/sharing/shared.js';
+import { forget, listDormant, sleep, supersede, type HippoDbContext } from '../src/api/index.js';
 
 // Each case commits rows to a real store, so its time follows the runner's disk.
 vi.setConfig({ testTimeout: 30_000 });

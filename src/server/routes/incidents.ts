@@ -1,11 +1,11 @@
 // /v1/incidents routes.
-import { INCIDENT, openIncident, resolveOpenIncident } from '../../incidents.js';
-import { HttpError, sendJson } from '../../http-util.js';
-import { NotFoundError } from '../../api-errors.js';
+import { INCIDENT, openIncident, resolveOpenIncident } from '../../objects/incidents.js';
+import { HttpError, sendJson } from '../../util/http-util.js';
+import { NotFoundError } from '../../core/api-errors.js';
 import { buildContextWithAuth } from '../auth.js';
 import type { RouteRequest } from '../types.js';
 import { parseJsonBody } from '../validation.js';
-import { type JsonValue, isJsonString } from '../../json.js';
+import { type JsonValue, isJsonString } from '../../util/json.js';
 import { closeRoute, getRoute, listRoute, type ObjectRouteConfig, objectsOf, optionalString, requiredString } from './object-routes.js';
 
 const MAX_LINKED_MEMORY_IDS = 256;

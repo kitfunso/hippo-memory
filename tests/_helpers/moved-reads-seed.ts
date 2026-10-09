@@ -1,14 +1,14 @@
 // One seeded store for the tests of the reads that answer from worker threads: the recall golden rows plus vectors, a graph, held memories and callers.
 import { vi } from 'vitest';
 import { dirname, join } from 'node:path';
-import { adminActor, remember } from '../../src/api.js';
-import { setMeta } from '../../src/db.js';
+import { adminActor, remember } from '../../src/api/index.js';
+import { setMeta } from '../../src/db/index.js';
 import { resetAllPhysicsState } from '../../src/db/physics-state.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../../src/db/vector-store.js';
-import { saveDecision } from '../../src/decisions.js';
-import { embeddingIndexIdentity } from '../../src/embeddings.js';
-import { extractGraph } from '../../src/graph-extract.js';
-import { savePolicy } from '../../src/policies.js';
+import { saveDecision } from '../../src/objects/decisions.js';
+import { embeddingIndexIdentity } from '../../src/store/embeddings/index.js';
+import { extractGraph } from '../../src/graph/extract.js';
+import { savePolicy } from '../../src/objects/policies.js';
 import { mintApiKey } from '../../src/store/auth.js';
 import { loadEntriesByIds } from '../../src/store/entry-reads.js';
 import { hashedVector } from './hashed-embedding-server.js';

@@ -1,15 +1,15 @@
 // Memory write routes: create, graph, archive, supersede, promote, forget, outcome, sleep.
-import { archiveRaw, forget, outcome, outcomeForLastRecall, promote, remember, supersede } from '../../api.js';
-import type { MemoryKind } from '../../memory.js';
-import { graphModelOf } from '../../graph-view.js';
+import { archiveRaw, forget, outcome, outcomeForLastRecall, promote, remember, supersede } from '../../api/index.js';
+import type { MemoryKind } from '../../core/memory.js';
+import { graphModelOf } from '../../graph/view.js';
 import { MAX_ENTITY_NAME_LEN } from '../../store/graph-rows.js';
-import { HttpError, sendJson } from '../../http-util.js';
+import { HttpError, sendJson } from '../../util/http-util.js';
 import { requireGroup } from '../../store/port.js';
 import { assertCrossTenantAdmin, buildContextWithAuth, isLoopback } from '../auth.js';
 import { sleepInChild } from '../sleep-offload.js';
 import type { RouteRequest } from '../types.js';
 import { getCallerProject, getString, getStringArray, isSetMember, parseJsonBody, parseListLimit, validateIdSegment } from '../validation.js';
-import { type JsonValue, isJsonString, isJsonBoolean } from '../../json.js';
+import { type JsonValue, isJsonString, isJsonBoolean } from '../../util/json.js';
 
 const VALID_KINDS: ReadonlySet<MemoryKind> = new Set([
   'raw',

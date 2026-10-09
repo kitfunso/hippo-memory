@@ -16,15 +16,15 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { sleep, adminActor, type Context } from '../src/api.js';
+import { sleep, adminActor, type Context } from '../src/api/index.js';
 import { runSleep, type SleepPhases } from '../src/api/sleep-run.js';
 import { initStore } from '../src/store/open.js';
-import { sqliteStore } from '../src/store-port.js';
+import { sqliteStore } from '../src/store/index.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { createMemory, Layer } from '../src/memory.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { createMemory, Layer } from '../src/core/memory.js';
 import { queryAuditEvents, type AuditEvent } from '../src/store/audit.js';
-import { loadConfig as realLoadConfig } from '../src/config.js';
+import { loadConfig as realLoadConfig } from '../src/core/config.js';
 
 function newCtx() {
   const tmpDir = mkdtempSync(join(tmpdir(), 'hippo-sleep-fault-'));

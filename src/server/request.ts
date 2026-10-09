@@ -1,9 +1,9 @@
 // Request plumbing: request ids, error replies, URL parsing and path matching.
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { randomUUID } from 'node:crypto';
-import { isStoreBusy, STORE_BUSY_MESSAGE } from '../db.js';
-import { errorFields, errorMessage, log } from '../log.js';
-import { HttpError, mapApiError, sendJson } from '../http-util.js';
+import { isStoreBusy, STORE_BUSY_MESSAGE } from '../db/index.js';
+import { errorFields, errorMessage, log } from '../util/log.js';
+import { HttpError, mapApiError, sendJson } from '../util/http-util.js';
 
 // The caller's id lands in a response header and in logs, so only a short plain token is echoed back.
 const REQUEST_ID_RE = /^[A-Za-z0-9._:-]{1,128}$/;

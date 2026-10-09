@@ -1,9 +1,9 @@
 // What a PostToolUseFailure payload says, read with no store, so a hook with no store sends the same reading the local log keeps.
-import { redactSecretsStrict } from '../secret-detect.js';
-import { scrubForSharing } from '../share-scrub.js';
+import { redactSecretsStrict } from '../util/secret-detect.js';
+import { scrubForSharing } from './share-scrub.js';
 import { blockHash } from '../util/token-text.js';
-import { truncateCodePointSafe } from '../transcript-tail.js';
-import { type JsonValue, isJsonObjectLiteral } from '../json.js';
+import { truncateCodePointSafe } from '../util/transcript-tail.js';
+import { type JsonValue, isJsonObjectLiteral } from '../util/json.js';
 import type { CaptureErrorOutcome, RoutineRule } from '../store/failure-log.js';
 
 const COMMAND_HEAD_WORDS = 2;

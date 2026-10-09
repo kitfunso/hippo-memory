@@ -1,30 +1,30 @@
 // Read-only report verbs: status, inspect, tokens, failures, provenance, correction latency, doctor and support bundle.
 
-import { envHomeDir } from '../env.js';
-import { evalNow } from '../ablation.js';
+import { envHomeDir } from '../util/env.js';
+import { evalNow } from '../core/ablation.js';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import { fileURLToPath } from 'node:url';
-import { calculateStrength, calculateRewardFactor, resolveConfidence, confidenceFacets, Layer, type MemoryEntry } from '../memory.js';
+import { calculateStrength, calculateRewardFactor, resolveConfidence, confidenceFacets, Layer, type MemoryEntry } from '../core/memory.js';
 import { readEntry, loadAllEntries } from '../store/entry-reads.js';
 import { loadStats } from '../store/index-and-stats.js';
 import { listMemoryConflicts } from '../store/conflicts.js';
-import { loadEmbeddingIndex, embeddingModelRequiresReindex } from '../embeddings.js';
-import { resolveEmbeddingProvider } from '../embedding-provider.js';
+import { loadEmbeddingIndex, embeddingModelRequiresReindex } from '../store/embeddings/index.js';
+import { resolveEmbeddingProvider } from '../store/embeddings/provider.js';
 import { loadStoredParticles } from '../store/vector-writes.js';
-import { computeSystemEnergy, vecNorm } from '../physics.js';
-import { loadConfig } from '../config.js';
+import { computeSystemEnergy, vecNorm } from '../core/physics.js';
+import { loadConfig } from '../core/config.js';
 import { runDoctor, formatDoctor } from '../doctor.js';
 import { buildSupportBundle, TAIL_MAX_LINES } from '../support-bundle.js';
-import { PACKAGE_VERSION } from '../version.js';
+import { PACKAGE_VERSION } from '../util/version.js';
 import { FAILURE_LOG_RETENTION_DAYS } from '../store/failure-log.js';
-import { getGlobalRoot } from '../shared.js';
+import { getGlobalRoot } from '../sharing/shared.js';
 import { buildProvenanceCoverage } from './provenance-coverage.js';
 import { buildCorrectionLatency } from './correction-latency.js';
-import * as api from '../api.js';
-import { resolveTenantId } from '../tenant.js';
-import { errorMessage, log } from '../log.js';
+import * as api from '../api/index.js';
+import { resolveTenantId } from '../store/tenant.js';
+import { errorMessage, log } from '../util/log.js';
 import { printError } from './output.js';
 import {
   type CliFlags,

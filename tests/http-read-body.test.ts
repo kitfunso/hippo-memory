@@ -2,7 +2,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { IncomingMessage } from 'node:http';
 import { Readable } from 'node:stream';
-import { BodyTimeoutError, BodyTooLargeError, readBody } from '../src/http-util.js';
+import { BodyTimeoutError, BodyTooLargeError, readBody } from '../src/util/http-util.js';
 
 // SAFETY: readBody only iterates the request's chunks, which any Readable also yields.
 const asRequest = (stream: Readable): IncomingMessage => stream as IncomingMessage;

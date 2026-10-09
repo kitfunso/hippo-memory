@@ -2,12 +2,12 @@
 
 import type { SearchResult } from '../core/search-types.js';
 import type { SessionEvent, TaskSnapshot } from '../store/rows.js';
-import { confidenceLabel } from '../memory.js';
-import type { ContextCost, ContinuityBlock, RecallResult, RecallResultItem } from '../api.js';
-import { formatHandoffEvidenceLine, type SessionHandoff } from '../handoff.js';
-import { printedTokens } from '../context-render.js';
-import { detectAnchoring } from '../recall-history.js';
-import { detectAvailabilityBias } from '../availability.js';
+import { confidenceLabel } from '../core/memory.js';
+import type { ContextCost, ContinuityBlock, RecallResult, RecallResultItem } from '../api/index.js';
+import { formatHandoffEvidenceLine, type SessionHandoff } from '../core/handoff.js';
+import { printedTokens } from '../api/context-render.js';
+import { detectAnchoring } from '../api/recall-history.js';
+import { detectAvailabilityBias } from '../api/availability.js';
 import { estimateTokens } from '../util/token-text.js';
 
 const MCP_PREVIEW_CHARS = 200;

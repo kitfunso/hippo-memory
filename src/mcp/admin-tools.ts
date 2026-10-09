@@ -1,18 +1,18 @@
 // Store health and admin tool handlers: base rates, status, conflicts, resolve, share and peers.
 
-import { evalNow } from '../ablation.js';
+import { evalNow } from '../core/ablation.js';
 import { loadStrengthTallies } from '../store/candidates.js';
 import { countOpenConflicts, listTouchableConflicts, resolveConflict } from '../store/conflicts.js';
-import { shareMemory, listPeers } from '../shared.js';
-import { requireGroup, storeFor } from '../store-port.js';
-import { NotFoundError } from '../api-errors.js';
-import { classifyOriginProject } from '../project-identity.js';
-import type { CallerProject } from '../prompt-hook.js';
-import { canTouchScope, passesScopeFilterForRecall, personalScopeOf } from '../recall-scope.js';
+import { shareMemory, listPeers } from '../sharing/shared.js';
+import { requireGroup, storeFor } from '../store/index.js';
+import { NotFoundError } from '../core/api-errors.js';
+import { classifyOriginProject } from '../core/project-identity.js';
+import type { CallerProject } from '../api/prompt-hook.js';
+import { canTouchScope, passesScopeFilterForRecall, personalScopeOf } from '../store/recall-scope.js';
 import { chunked, loadEntriesByIds, readEntry } from '../store/entry-reads.js';
 import type { MemoryConflict } from '../store/rows.js';
 import { mcpActor, type ToolCall } from './protocol.js';
-import { isJsonString } from '../json.js';
+import { isJsonString } from '../util/json.js';
 import { DATE_PREFIX_CHARS } from '../util/token-text.js';
 
 const BASERATE_DECIMALS = 3;

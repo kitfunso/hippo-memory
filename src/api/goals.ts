@@ -1,6 +1,6 @@
 // The per-session goal stack that recall boosts: push, list, complete, suspend and resume.
 
-import { ForbiddenError } from '../api-errors.js';
+import { ForbiddenError } from '../core/api-errors.js';
 import {
   completeGoal, getActiveGoals, getSessionGoals, pushGoal, resumeGoal, suspendGoal,
   type CompleteGoalOpts, type Goal, type PushGoalOpts,

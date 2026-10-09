@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { claudeFolderName } from '../src/agent-memories/claude-code.js';
-import { deriveOriginProject } from '../src/project-identity.js';
+import { deriveOriginProject } from '../src/core/project-identity.js';
 import { isInitialized } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 

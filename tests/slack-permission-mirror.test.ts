@@ -3,9 +3,9 @@ import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { initStore } from '../src/store/open.js';
-import type { Context } from '../src/api.js';
+import type { Context } from '../src/api/index.js';
 import { ingestMessage } from '../src/connectors/slack/ingest.js';
-import { recall } from '../src/api.js';
+import { recall } from '../src/api/index.js';
 
 const ctx = (root: string): Context => ({
   hippoRoot: root,

@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { closeHippoDb, openHippoDb } from '../src/db.js';
+import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { initStore } from '../src/store/open.js';
 import { queryAuditEvents, type AppendAuditOpts } from '../src/store/audit.js';
 import { insertRejectedValue, rejectionDigest } from '../src/store/rejection.js';

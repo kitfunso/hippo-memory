@@ -1,4 +1,4 @@
-import type { MemoryEntry } from '../memory.js';
+import type { MemoryEntry } from '../core/memory.js';
 
 const TEMPORAL_RECENT_CUES = new Set(['recently', 'latest', 'last', 'newest', 'current', 'today']);
 const TEMPORAL_OLDEST_CUES = new Set(['first', 'earliest', 'oldest', 'initially', 'originally']);

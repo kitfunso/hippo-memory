@@ -26,7 +26,7 @@ import {
   snapshotRing,
   type RecallHistoryEntry,
   type RecallHistorySnapshot,
-} from '../src/recall-history.js';
+} from '../src/api/recall-history.js';
 
 function entry(queryHash: number, topMemoryId: string | null, anchoredOn?: string): RecallHistoryEntry {
   const e: RecallHistoryEntry = { queryHash, topMemoryId, ts: '2026-05-27T00:00:00Z' };

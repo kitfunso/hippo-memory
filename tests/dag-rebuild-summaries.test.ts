@@ -17,10 +17,10 @@ import {
   loadAllDirtySummaries,
   applyRebuildResult,
 } from '../src/store/summaries.js';
-import { openHippoDb, withSharedStoreHandles, type DatabaseSyncLike } from '../src/db.js';
-import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { rebuildDirtySummaries, buildDag } from '../src/dag.js';
-import * as dagModule from '../src/dag.js';
+import { openHippoDb, withSharedStoreHandles, type DatabaseSyncLike } from '../src/db/index.js';
+import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { rebuildDirtySummaries, buildDag } from '../src/consolidate/dag.js';
+import * as dagModule from '../src/consolidate/dag.js';
 import { consolidate } from '../src/consolidate/sleep.js';
 import { insertRejectedValue, rejectionDigest, normalizeValueForRejection } from '../src/store/rejection.js';
 

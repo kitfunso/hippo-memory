@@ -15,9 +15,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
-import { remember, type HippoDbContext } from '../src/api.js';
+import { remember, type HippoDbContext } from '../src/api/index.js';
 import { pushGoal, completeGoal } from '../src/store/goals.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 
 const CLI = join(process.cwd(), 'dist', 'cli.js');
 

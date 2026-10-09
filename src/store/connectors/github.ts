@@ -1,6 +1,6 @@
 // The GitHub connector's tables: event log, dead-letter queue, tenant routing and backfill cursors.
 
-import { withWriteScope, type DatabaseSyncLike } from '../../db.js';
+import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
 import { archiveRawMemory } from '../raw-archive.js';
 import { onHandle } from '../open.js';
 

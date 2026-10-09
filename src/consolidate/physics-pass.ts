@@ -1,8 +1,8 @@
 import { refreshParticleProperties } from '../db/physics-state.js';
 import { loadStoredParticles, saveStoredParticles } from '../store/vector-writes.js';
-import { simulate, type ForceContext } from '../physics.js';
+import { simulate, type ForceContext } from '../core/physics.js';
 import type { SleepRun } from './run.js';
-import { errorMessage } from '../log.js';
+import { errorMessage } from '../util/log.js';
 
 const STATS_DECIMALS = 4;
 

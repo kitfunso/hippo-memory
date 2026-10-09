@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildDailyRunnerCommand, buildSchtasksCreateArgs, buildWindowsTaskRun, quoteInsideWindowsArg } from '../src/scheduler.js';
+import { buildDailyRunnerCommand, buildSchtasksCreateArgs, buildWindowsTaskRun, quoteInsideWindowsArg } from '../src/cli/scheduler.js';
 
 describe('Windows daily task', () => {
   it('runs the runner under a headless console', () => {

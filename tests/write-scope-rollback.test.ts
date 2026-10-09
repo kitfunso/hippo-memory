@@ -1,14 +1,14 @@
 // A failure in the middle of a write scope leaves nothing behind. Real SQLite; a trigger makes the second write refuse.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
-import { closeHippoDb, openHippoDb } from '../src/db.js';
+import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { createPhysicsTable, savePhysicsState } from '../src/db/physics-state.js';
 import { pruneAuditLog } from '../src/cli/audit-prune.js';
 import { writeRecallTrace } from '../src/store/recall-trace.js';
 import { saveIndex } from '../src/store/index-and-stats.js';
 import { closePrediction, savePrediction } from '../src/store/predictions.js';
 import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
-import { recordRereads, recordTokenUse } from '../src/token-ledger.js';
+import { recordRereads, recordTokenUse } from '../src/store/token-ledger.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { makeRoot } from './_helpers/make-root.js';

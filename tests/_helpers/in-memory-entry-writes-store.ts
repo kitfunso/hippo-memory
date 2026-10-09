@@ -1,6 +1,6 @@
 // A store other than hippo.db for the EntryWrites group: it copies memories and tombstones out of hippo.db once, keeps them in
 // memory and writes what hippo.db writes, with only what hippo-memory/server exports, so a conformance test shows that is enough.
-import { closeHippoDb, openHippoDb } from '../../src/db.js';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { selectAllEntries } from '../../src/store/entry-reads.js';
 import {
   BadRequestError, ConflictError, entryAfterOutcome, NotFoundError, ownScopeTouches, rejectionDigest, RejectedValueError,

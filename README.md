@@ -257,7 +257,7 @@ hippo handoff create \
   --summary "Finished schema migration, tests green" \
   --next "Wire handoff injection into context output" \
   --session sess_20260403 \
-  --artifact src/db.ts
+  --artifact src/db/index.ts
 
 hippo handoff latest              # show the most recent handoff
 hippo handoff show 3              # show a specific handoff by ID

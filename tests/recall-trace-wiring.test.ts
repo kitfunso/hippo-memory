@@ -24,9 +24,9 @@ import { execFileSync } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadIndex } from '../src/store/index-and-stats.js';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { remember, recall, getContext, type Context } from '../src/api.js';
+import { remember, recall, getContext, type Context } from '../src/api/index.js';
 
 // Invoke this worktree's own bin/hippo.js directly (not the `hippo` binary
 // on PATH) so the CLI test exercises THIS build, not whatever hippo-memory

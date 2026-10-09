@@ -22,8 +22,8 @@ import {
   transitionCard,
   loadLatestHandoffForCard,
 } from '../src/store/cards.js';
-import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, type DatabaseSyncLike } from '../src/db.js';
-import { CARD_TRANSITIONS, type CardStatus } from '../src/card.js';
+import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, type DatabaseSyncLike } from '../src/db/index.js';
+import { CARD_TRANSITIONS, type CardStatus } from '../src/core/card.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 import { cmdCard } from '../src/cli/card.js';

@@ -1,7 +1,7 @@
-import { MemoryEntry, calculateStrength } from '../memory.js';
-import { detectSecret } from '../secret-detect.js';
-import { rescueSet, rankNonPinnedByTenant, validateWeights, type MvRankInfo } from '../memory-value.js';
-import { MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256 } from '../memory-value-weights.js';
+import { MemoryEntry, calculateStrength } from '../core/memory.js';
+import { detectSecret } from '../util/secret-detect.js';
+import { rescueSet, rankNonPinnedByTenant, validateWeights, type MvRankInfo } from './memory-value.js';
+import { MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256 } from './memory-value-weights.js';
 import type { ConsolidationResult, SleepRun } from './run.js';
 
 const STRENGTH_DECIMALS = 4;

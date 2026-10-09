@@ -41,7 +41,7 @@
  * structural closure): the round-3 fix above (provenance-keyed query
  * sampling + provenance-keyed store ordering) still left ONE id-dependent
  * path — hybridSearch's OWN internal ranking falls back to `entry.id`
- * whenever two candidates have IDENTICAL content (src/compare.ts
+ * whenever two candidates have IDENTICAL content (src/core/compare.ts
  * compareEntryIdentity: content primary, id secondary). This is not a rare
  * edge case: codex measured 267/500 real questions contain duplicate turn
  * text, and reproduced a real membership divergence (re-ingesting
@@ -58,12 +58,12 @@
  */
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { applyOutcome } from '../../dist/memory.js';
+import { applyOutcome } from '../../dist/core/memory.js';
 import { writeEntry } from '../../dist/store/entry-writes.js';
 import { loadAllEntries, readEntry } from '../../dist/store/entry-reads.js';
 import { hybridSearch } from '../../dist/search/hybrid.js';
 import { buildCorpus } from '../../dist/search/bm25.js';
-import { markRetrieved } from '../../dist/memory.js';
+import { markRetrieved } from '../../dist/core/memory.js';
 import { withSharedStoreHandles } from '../../dist/db/open.js';
 import { CONFIG } from './config.mjs';
 import { rngFor, pickUniform, setFakeNow, clearFakeNow, hippoRootFor, metaPathFor, questionDir, readJson, writeJsonl, loadDataset } from './common.mjs';

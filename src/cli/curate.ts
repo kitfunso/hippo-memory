@@ -3,14 +3,14 @@
 import * as path from 'path';
 import { readEntry } from '../store/entry-reads.js';
 import { listMemoryConflicts, resolveConflict } from '../store/conflicts.js';
-import { rejectValue, unrejectValue, listRejectionsForTenant } from '../reject-flow.js';
+import { rejectValue, unrejectValue, listRejectionsForTenant } from '../trust/reject-flow.js';
 import { RejectedValueError } from '../store/rejection.js';
-import { loadConfig } from '../config.js';
-import { isGitRepo } from '../autolearn.js';
-import { invalidateMatching, InvalidationTarget } from '../invalidation.js';
-import * as api from '../api.js';
+import { loadConfig } from '../core/config.js';
+import { isGitRepo } from '../learn/autolearn.js';
+import { invalidateMatching, InvalidationTarget } from '../learn/invalidation.js';
+import * as api from '../api/index.js';
 import * as client from './client.js';
-import { resolveTenantId } from '../tenant.js';
+import { resolveTenantId } from '../store/tenant.js';
 import { printError } from './output.js';
 import {
   type CliFlags,
@@ -25,7 +25,7 @@ import {
   flagIsTrue,
   stringFlag,
 } from './shared.js';
-import { errorMessage } from '../log.js';
+import { errorMessage } from '../util/log.js';
 import { DIGEST_DISPLAY_CHARS, CONTENT_PREVIEW_CHARS, DATE_PREFIX_CHARS } from '../util/token-text.js';
 
 const CONFLICT_PREVIEW_CHARS = 120;

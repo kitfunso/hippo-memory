@@ -1,42 +1,42 @@
 // Helpers two or more CLI verbs use, split from cli.ts so a verb can move to its own file without importing cli.ts.
 // This module must never import cli.ts.
 
-import { envApiKey, envClaudeCodeSessionId, envHippoSessionId, envRequireServer } from '../env.js';
+import { envApiKey, envClaudeCodeSessionId, envHippoSessionId, envRequireServer } from '../util/env.js';
 import * as path from 'path';
 import * as fs from 'fs';
 import { execFileSync, execSync } from 'child_process';
 import { installJsonHooks, type InstallResult } from '../hooks/json-hooks.js';
 import { CODEX_TRUST_LINE } from '../hooks/shared.js';
-import { confidenceLabel } from '../memory.js';
+import { confidenceLabel } from '../core/memory.js';
 import { TaskSnapshot, SessionEvent } from '../store/rows.js';
 import { getHippoRoot, isInitialized } from '../store/open.js';
-import type { HookRuntime } from '../capture-contract.js';
-import type { SessionHandoff } from '../handoff.js';
+import type { HookRuntime } from '../core/capture-contract.js';
+import type { SessionHandoff } from '../core/handoff.js';
 import type { SearchResult } from '../core/search-types.js';
 import { explainMatch } from '../search/explain.js';
-import { isSharedStore, loadConfig, type HippoConfig } from '../config.js';
-import { createDeliveryRecorder, type DeliveryEventType, type DeliveryRecorder } from '../delivery-recorder.js';
-import { isSqliteBusy, noteStoreBusy, runWithRequestStores, HOOK_DB_WAIT_MS } from '../db.js';
-import { bookTokenUse, ledgerRoot } from '../ledger-db.js';
-import { sessionPilotArm } from '../pilot-arm.js';
-import { hookPayloadSessionId, hookPayloadString, isSubagentPayload } from '../token-ledger.js';
+import { isSharedStore, loadConfig, type HippoConfig } from '../core/config.js';
+import { createDeliveryRecorder, type DeliveryEventType, type DeliveryRecorder } from '../store/delivery-recorder.js';
+import { isSqliteBusy, noteStoreBusy, runWithRequestStores, HOOK_DB_WAIT_MS } from '../db/index.js';
+import { bookTokenUse, ledgerRoot } from '../api/ledger-db.js';
+import { sessionPilotArm } from '../api/pilot-arm.js';
+import { hookPayloadSessionId, hookPayloadString, isSubagentPayload } from '../store/token-ledger.js';
 import { blockHash } from '../util/token-text.js';
 import { importAtSessionEnd, currentMachine } from '../agent-memories/sync.js';
 import { type ImportReport, summaryLine } from '../agent-memories/report.js';
-import { type ChurnStaleResult, detectChurnStale } from '../invalidation.js';
-import { isGlobalStoreRoot, resolveProjectIdentity } from '../project-identity.js';
-import { getGlobalRoot, initGlobal } from '../shared.js';
-import { DAILY_TASK_NAME, buildDailyRunnerCommand, buildSchtasksCreateArgs, buildWindowsTaskRun, quoteInsideWindowsArg } from '../scheduler.js';
+import { type ChurnStaleResult, detectChurnStale } from '../learn/invalidation.js';
+import { isGlobalStoreRoot, resolveProjectIdentity } from '../core/project-identity.js';
+import { getGlobalRoot, initGlobal } from '../sharing/shared.js';
+import { DAILY_TASK_NAME, buildDailyRunnerCommand, buildSchtasksCreateArgs, buildWindowsTaskRun, quoteInsideWindowsArg } from './scheduler.js';
 import { sanitizeLogMessage } from '../capture/compact.js';
 import { type AuditOp, reportAuditWriteFailure } from '../store/audit.js';
 import { sqliteSyncStore } from '../store/sqlite/store.js';
 import * as client from './client.js';
-import { type ServerInfo, detectServer, removePidfileIfOwned } from '../server-detect.js';
-import { resolveTenantId } from '../tenant.js';
-import { type Context, adminActor, learn, CLI_LEARN } from '../api.js';
-import type { RecallSearchOpts } from '../recall-pipeline.js';
-import { snapshotText, sessionTrailText, handoffText } from '../context-render.js';
-import { errorMessage, log } from '../log.js';
+import { type ServerInfo, detectServer, removePidfileIfOwned } from '../server/server-detect.js';
+import { resolveTenantId } from '../store/tenant.js';
+import { type Context, adminActor, learn, CLI_LEARN } from '../api/index.js';
+import type { RecallSearchOpts } from '../api/recall-pipeline.js';
+import { snapshotText, sessionTrailText, handoffText } from '../api/context-render.js';
+import { errorMessage, log } from '../util/log.js';
 import { printError } from './output.js';
 
 export function parseLimitFlag(value: string | boolean | string[] | undefined): number {

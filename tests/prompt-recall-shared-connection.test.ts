@@ -8,9 +8,9 @@ import { createRequire } from 'module';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { getContext, type Context } from '../src/api.js';
-import { _resetAblationCacheForTests } from '../src/ablation.js';
-import type { DatabaseSyncLike } from '../src/db.js';
+import { getContext, type Context } from '../src/api/index.js';
+import { _resetAblationCacheForTests } from '../src/core/ablation.js';
+import type { DatabaseSyncLike } from '../src/db/index.js';
 
 const require = createRequire(import.meta.url);
 // SAFETY: node:sqlite has no bundled types; mirrors tests/db-open-write-free.test.ts.

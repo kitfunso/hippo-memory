@@ -1,9 +1,9 @@
 // A store worker's thrown error crosses to the server as plain data: for generated errors of every listed class the server still gets the class, the message, the fields and the cause chain.
 import { describe, it, expect } from 'vitest';
-import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../src/api-errors.js';
-import { IncompatibleBinaryError, StoreBusyError } from '../src/db.js';
-import { BodyTimeoutError, BodyTooLargeError, HttpError } from '../src/http-util.js';
-import { ScopeForbiddenError } from '../src/recall-scope.js';
+import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../src/core/api-errors.js';
+import { IncompatibleBinaryError, StoreBusyError } from '../src/db/index.js';
+import { BodyTimeoutError, BodyTooLargeError, HttpError } from '../src/util/http-util.js';
+import { ScopeForbiddenError } from '../src/store/recall-scope.js';
 import { RejectedValueError } from '../src/store/rejection.js';
 import { decodeError, encodeError } from '../src/store/sqlite/error-codec.js';
 import { OtherStoreFolderError, SqliteBlockedError, StoreNotPortedError } from '../src/util/sqlite-blocked.js';

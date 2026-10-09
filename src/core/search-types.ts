@@ -1,4 +1,4 @@
-import type { MemoryEntry } from '../memory.js';
+import type { MemoryEntry } from './memory.js';
 
 export const DEFAULT_RECALL_BUDGET = 4000;
 // Local memories outrank global ones by this factor; getContext applies it as a 1/x global discount.

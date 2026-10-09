@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { errorMessage, log } from '../log.js';
+import { errorMessage, log } from '../util/log.js';
 import { DatabaseSync, type DatabaseSyncLike } from './sqlite.js';
 import { tableExists } from './tables.js';
 import { assertBinaryCompatible } from './migrate.js';

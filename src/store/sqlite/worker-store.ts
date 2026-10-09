@@ -1,6 +1,6 @@
 // hippo.db as serve() runs it by default: the methods in the op table answer from worker threads, the rest still run on the calling thread.
 import { existsSync } from 'node:fs';
-import { getHippoDbPath } from '../../db.js';
+import { getHippoDbPath } from '../../db/index.js';
 import { currentDeadline, currentRequestId } from '../../util/request-scope.js';
 import type { HippoStore, Readiness, StoreGroups, VectorReads } from '../port.js';
 import { createSqliteExecutor, type SqliteExecutor } from './executor.js';

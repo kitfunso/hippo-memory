@@ -12,17 +12,17 @@ import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { createMemory, Layer } from '../src/memory.js';
-import { invalidateMatching } from '../src/invalidation.js';
-import { refineStore } from '../src/refine-llm.js';
-import { deduplicateLesson } from '../src/autolearn.js';
+import { createMemory, Layer } from '../src/core/memory.js';
+import { invalidateMatching } from '../src/learn/invalidation.js';
+import { refineStore } from '../src/cli/refine-llm.js';
+import { deduplicateLesson } from '../src/learn/autolearn.js';
 import { cmdCapture } from '../src/capture/command.js';
 // importEntries still used by case 6 for ImportOptions.tenantId path
 import { importEntries } from '../src/importers/core.js';
-import { autoShare } from '../src/shared.js';
+import { autoShare } from '../src/sharing/shared.js';
 import { consolidate } from '../src/consolidate/sleep.js';
-import { listPeers, syncGlobalToLocal } from '../src/shared.js';
-import { embedAll } from '../src/embeddings.js';
+import { listPeers, syncGlobalToLocal } from '../src/sharing/shared.js';
+import { embedAll } from '../src/store/embeddings/index.js';
 
 // ---------------------------------------------------------------------------
 // Helpers

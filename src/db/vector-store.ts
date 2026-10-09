@@ -2,9 +2,9 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import type { DatabaseSyncLike } from '../db.js';
+import type { DatabaseSyncLike } from './index.js';
 import { withWriteScope } from './busy.js';
-import { log } from '../log.js';
+import { log } from '../util/log.js';
 
 /** Legacy whole-file index; imported once into `memory_vectors`, then kept beside the store as a renamed backup. */
 const LEGACY_EMBEDDINGS_FILE = 'embeddings.json';

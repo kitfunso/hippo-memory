@@ -12,8 +12,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { recall, buildSuppressionSummary, type Context } from '../src/api.js';
+import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { recall, buildSuppressionSummary, type Context } from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 function safeRmSync(p: string): void {
@@ -48,7 +48,7 @@ describe('RecallResult.suppressionSummary', () => {
     // New field always present from api.recall.
     expect(result.suppressionSummary).toBeDefined();
     // Each field is a non-negative integer counter (RecallSuppressionSummary,
-    // src/api.ts); Number.isInteger is the domain-correct runtime shape check.
+    // src/api/index.ts); Number.isInteger is the domain-correct runtime shape check.
     expect(Number.isInteger(result.suppressionSummary!.totalCandidates)).toBe(true);
     expect(Number.isInteger(result.suppressionSummary!.droppedPreRank)).toBe(true);
     expect(Number.isInteger(result.suppressionSummary!.droppedByBudget)).toBe(true);

@@ -3,7 +3,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import type { SearchResult } from '../../src/core/search-types.js';
 import { getReranker } from '../../src/rerankers/index.js';
 import { createClefReranker, parseClefReply } from '../../src/rerankers/clef.js';
-import type { JsonValue } from '../../src/json.js';
+import type { JsonValue } from '../../src/util/json.js';
 
 const ACCOUNT = '0123456789abcdef0123456789abcdef';
 const FAKE_TOKEN = 'fake-cloudflare-token-for-tests';

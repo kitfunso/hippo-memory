@@ -1,10 +1,10 @@
-import type { MemoryEntry } from '../memory.js';
-import { closeHippoDb, type DatabaseSyncLike } from '../db.js';
+import type { MemoryEntry } from '../core/memory.js';
+import { closeHippoDb, type DatabaseSyncLike } from '../db/index.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
 import { openStore } from './open.js';
-import { escapeLike } from '../escape.js';
-import { originInSql } from '../project-identity.js';
-import { scopeAdmitSql } from '../recall-scope.js';
+import { escapeLike } from '../util/escape.js';
+import { originInSql } from '../core/project-identity.js';
+import { scopeAdmitSql } from './recall-scope.js';
 
 const MAX_IDS_PER_READ = 500;
 

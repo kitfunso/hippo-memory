@@ -1,10 +1,10 @@
 // Quarantine review: list, approve and reject held memories.
 
-import { ConflictError, ForbiddenError, NotFoundError } from '../api-errors.js';
-import { requireGroup, storeFor } from '../store-port.js';
+import { ConflictError, ForbiddenError, NotFoundError } from '../core/api-errors.js';
+import { requireGroup, storeFor } from '../store/index.js';
 import type { QuarantineRefusal } from '../store/port.js';
 import type { QuarantineStatus } from '../store/quarantine.js';
-import type { KeysetPosition } from '../keyset.js';
+import type { KeysetPosition } from '../util/keyset.js';
 import type { Context } from './types.js';
 
 // ---------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-import { envGithubWebhookSecret, envGithubWebhookSecretPrevious } from '../../env.js';
+import { envGithubWebhookSecret, envGithubWebhookSecretPrevious } from '../../util/env.js';
 import type { ServerResponse } from 'node:http';
 import { verifyGitHubSignature } from './signature.js';
 import {
@@ -15,9 +15,9 @@ import { parkInDlq } from '../dlq.js';
 import { githubDlq, type DlqBucket } from './dlq.js';
 import { resolveTenantForGitHub } from './tenant-routing.js';
 import { computeDeletionKey as computeGitHubDeletionKey } from './signature.js';
-import { resolveTenantId } from '../../tenant.js';
-import type { Context } from '../../api.js';
-import type { HippoStore } from '../../store-port.js';
+import { resolveTenantId } from '../../store/tenant.js';
+import type { Context } from '../../api/index.js';
+import type { HippoStore } from '../../store/index.js';
 import {
   HttpError,
   JSON_HEADERS,
@@ -26,8 +26,8 @@ import {
   readWebhookBody,
   sendJson,
   type WebhookRequest,
-} from '../../http-util.js';
-import type { JsonValue } from '../../json.js';
+} from '../../util/http-util.js';
+import type { JsonValue } from '../../util/json.js';
 
 /**
  * GitHub webhook receiver. Mirrors the Slack route shape but with

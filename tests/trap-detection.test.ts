@@ -17,7 +17,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { type MemoryEntry } from '../src/memory.js';
+import { type MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -223,7 +223,7 @@ describe('Trap repo files contain expected issues', () => {
   });
 
   it('config.ts has RISK_PER_TRADE mismatch (0.02 vs 0.015)', () => {
-    const code = fs.readFileSync(path.join(repoDir, 'config.ts'), 'utf8');
+    const code = fs.readFileSync(path.join(repoDir, 'core/config.ts'), 'utf8');
     expect(code).toContain('RISK_PER_TRADE = 0.02');
     expect(code).toContain('0.015');  // commented reference to the correct value
   });

@@ -1,6 +1,6 @@
 // One hook or context turn's token-ledger work by store root: each call opens hippo.db, runs on one connection and closes it.
-import type { DeliveryEventInput } from '../delivery-recorder.js';
-import { lastSentState, recordTokenUse, type LastSent, type TokenSurface, type TokenUse } from '../token-ledger.js';
+import type { DeliveryEventInput } from './delivery-recorder.js';
+import { lastSentState, recordTokenUse, type LastSent, type TokenSurface, type TokenUse } from './token-ledger.js';
 import { onHandle } from './open.js';
 import { writeDeliveryEventOnHandle } from './recall-trace.js';
 

@@ -2,16 +2,16 @@
 
 import * as path from 'path';
 import * as fs from 'fs';
-import { loadConfig } from '../config.js';
-import { isGitRepo } from '../autolearn.js';
+import { loadConfig } from '../core/config.js';
+import { isGitRepo } from '../learn/autolearn.js';
 import { importForStore, currentMachine } from '../agent-memories/sync.js';
-import { replayCompactionsAt } from '../compaction-record.js';
-import * as api from '../api.js';
-import { resolveTenantId } from '../tenant.js';
+import { replayCompactionsAt } from '../capture/compaction-record.js';
+import * as api from '../api/index.js';
+import { resolveTenantId } from '../store/tenant.js';
 import { sleepResultLines } from './sleep-render.js';
-import { errorMessage, log } from '../log.js';
-import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../db.js';
-import { repairOnceOnSleep } from '../project-merge.js';
+import { errorMessage, log } from '../util/log.js';
+import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../db/index.js';
+import { repairOnceOnSleep } from '../sharing/project-merge.js';
 import { type CliFlags, requireInit, learnFromRepo, runChurnStaleForRepo, printAgentImport, skipLearnOnSharedStore, boolFlag, stringFlag } from './shared.js';
 import { repairQualityOnceAt } from './quality-repair-once.js';
 import { printError } from './output.js';

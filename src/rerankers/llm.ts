@@ -1,10 +1,10 @@
-import { envLlmRerankerKey, envLlmRerankerModel, envLlmRerankerTimeoutMs, envLlmRerankerUrl } from '../env.js';
+import { envLlmRerankerKey, envLlmRerankerModel, envLlmRerankerTimeoutMs, envLlmRerankerUrl } from '../util/env.js';
 import type { RerankerFn, RerankResult, RerankerOptions } from './types.js';
 import type { SearchResult } from '../core/search-types.js';
-import { redactSecretsStrict } from '../secret-detect.js';
+import { redactSecretsStrict } from '../util/secret-detect.js';
 import { createOutageWarning } from './outage-warning.js';
 import { rerankerPost } from './remote.js';
-import { errorMessage } from '../log.js';
+import { errorMessage } from '../util/log.js';
 
 const DEFAULT_LLM_RERANK_TOP_K = 20;
 

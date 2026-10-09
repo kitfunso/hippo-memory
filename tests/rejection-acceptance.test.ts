@@ -19,13 +19,13 @@ import { describe, it, expect, vi } from 'vitest';
 import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { openHippoDb, closeHippoDb, getSchemaVersion } from '../src/db.js';
+import { openHippoDb, closeHippoDb, getSchemaVersion } from '../src/db/index.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry, loadAllEntries } from '../src/store/entry-reads.js';
 import { rebuildIndex } from '../src/store/index-and-stats.js';
 import { appendSessionEvent } from '../src/store/sessions.js';
-import { Layer} from '../src/memory.js';
+import { Layer} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { queryAuditEvents } from '../src/store/audit.js';
 import {
@@ -36,8 +36,8 @@ import {
   findRejectedValue,
 } from '../src/store/rejection.js';
 import { cmdCapture } from '../src/capture/command.js';
-import { syncGlobalToLocal, autoShare } from '../src/shared.js';
-import * as api from '../src/api.js';
+import { syncGlobalToLocal, autoShare } from '../src/sharing/shared.js';
+import * as api from '../src/api/index.js';
 import { consolidate } from '../src/consolidate/sleep.js';
 import { importEntries } from '../src/importers/core.js';
 import { importVault } from '../src/importers/vault.js';

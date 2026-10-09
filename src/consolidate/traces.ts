@@ -1,15 +1,15 @@
-import { isRecallBoostAblated } from '../ablation.js';
-import { MemoryEntry, Layer, createMemory, markRetrieved } from '../memory.js';
+import { isRecallBoostAblated } from '../core/ablation.js';
+import { MemoryEntry, Layer, createMemory, markRetrieved } from '../core/memory.js';
 import { findPromotableSessions, traceExistsForSession, listSessionEvents } from '../store/sessions.js';
 import { rejectionDigest } from '../store/rejection.js';
-import { sampleForReplay } from '../replay.js';
-import { renderTraceContent } from '../trace.js';
-import { resolveTenantId } from '../tenant.js';
+import { sampleForReplay } from './replay.js';
+import { renderTraceContent } from './trace.js';
+import { resolveTenantId } from '../store/tenant.js';
 import { reportAuditWriteFailure } from '../store/audit.js';
-import { commonDerivationScope } from '../recall-scope.js';
-import { log } from '../log.js';
+import { commonDerivationScope } from '../store/recall-scope.js';
+import { log } from '../util/log.js';
 import { REPLAY_COUNT_DEFAULT, type SleepRun } from './run.js';
-import { type JsonValue, isJsonString } from '../json.js';
+import { type JsonValue, isJsonString } from '../util/json.js';
 import { DAY_MS } from '../util/time.js';
 
 // -------------------------------------------------------------------------

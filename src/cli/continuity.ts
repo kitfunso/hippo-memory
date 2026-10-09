@@ -8,10 +8,10 @@ import {
   listSessionEvents,
 } from '../store/sessions.js';
 import { saveSessionHandoff, loadLatestHandoff, loadHandoffById, stampHandoffOutcome } from '../store/handoffs.js';
-import { isHandoffOutcome, formatHandoffEvidenceLine, type HandoffOutcome } from '../handoff.js';
-import { resolveTenantId } from '../tenant.js';
+import { isHandoffOutcome, formatHandoffEvidenceLine, type HandoffOutcome } from '../core/handoff.js';
+import { resolveTenantId } from '../store/tenant.js';
 import { wmPush, wmRead, wmClear, wmFlush } from '../store/working-memory.js';
-import { collectHandoffEvidence } from '../handoff-evidence.js';
+import { collectHandoffEvidence } from '../capture/handoff-evidence.js';
 import type { SessionEvent, TaskSnapshot } from '../store/rows.js';
 import { printError } from './output.js';
 import {

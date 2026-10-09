@@ -3,7 +3,7 @@
  * Spec: https://api.slack.com/events-api
  */
 
-import { type JsonValue, isJsonString, isJsonObject, isJsonNumber } from '../../json.js';
+import { type JsonValue, isJsonString, isJsonObject, isJsonNumber } from '../../util/json.js';
 
 export interface SlackUrlVerification {
   type: 'url_verification';

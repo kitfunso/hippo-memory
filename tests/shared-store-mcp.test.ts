@@ -6,12 +6,12 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { adminActor, learn, MCP_LEARN } from '../src/api.js';
-import { _resetSharedStoreCacheForTests } from '../src/config.js';
-import type { JsonValue } from '../src/json.js';
+import { adminActor, learn, MCP_LEARN } from '../src/api/index.js';
+import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
+import type { JsonValue } from '../src/util/json.js';
 import { sharedStoreRefusal } from '../src/mcp/shared-gate.js';
 import { TOOLS } from '../src/mcp/tools.js';
-import { clearProjectIdentityCache } from '../src/project-identity.js';
+import { clearProjectIdentityCache } from '../src/core/project-identity.js';
 import { serve, type ServerHandle } from '../src/server.js';
 
 type ToolReply = { result?: { content: Array<{ text: string }>; isError?: boolean } };
@@ -51,7 +51,7 @@ function repoWithOneFix(): string {
   git('config', 'user.email', 'test@example.com');
   fs.writeFileSync(path.join(repo, 'db.ts'), 'export const timeout = 30;\n');
   git('add', '.');
-  git('commit', '-m', 'fix: pool timeout bumped to 30s in src/db.ts');
+  git('commit', '-m', 'fix: pool timeout bumped to 30s in src/db/index.ts');
   return repo;
 }
 

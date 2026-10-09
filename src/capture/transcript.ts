@@ -1,8 +1,8 @@
-import { envHomeDir, processEnv } from '../env.js';
+import { envHomeDir, processEnv } from '../util/env.js';
 import { claudeConfigDir } from '../hooks/shared.js';
 import * as fs from 'fs';
 import * as path from 'path';
-import { isObjectLike, isStringValue, readSessionEnd } from '../capture-contract.js';
+import { isObjectLike, isStringValue, readSessionEnd } from '../core/capture-contract.js';
 import { copilotTurn } from './copilot-transcript.js';
 
 const RECENT_USER_TURNS = 20;

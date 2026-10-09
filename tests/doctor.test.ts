@@ -11,12 +11,12 @@ import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { runDoctor, formatDoctor } from '../src/doctor.js';
-import { startCompaction } from '../src/compaction-record.js';
-import { __setSpoolFs } from '../src/compaction-spool.js';
-import { repairProjects } from '../src/project-merge.js';
-import { openHippoDb, openHippoDbReadOnly, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, setMeta } from '../src/db.js';
+import { startCompaction } from '../src/capture/compaction-record.js';
+import { __setSpoolFs } from '../src/capture/compaction-spool.js';
+import { repairProjects } from '../src/sharing/project-merge.js';
+import { openHippoDb, openHippoDbReadOnly, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, setMeta } from '../src/db/index.js';
 
 function sha256(file: string): string {
   return createHash('sha256').update(readFileSync(file)).digest('hex');

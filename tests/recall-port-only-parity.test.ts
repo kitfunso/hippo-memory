@@ -3,11 +3,11 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { serve, __resetSessionRecallHistoryHttp, sqliteStore, type HippoStore } from '../src/server.js';
-import { markSharedStore } from '../src/config.js';
+import { markSharedStore } from '../src/core/config.js';
 import { __resetSessionRecallHistoryMcp } from '../src/mcp/server.js';
 import { lastRecalledIds } from '../src/mcp/session-state.js';
-import { _resetAblationCacheForTests } from '../src/ablation.js';
-import type { RecallResult } from '../src/api.js';
+import { _resetAblationCacheForTests } from '../src/core/ablation.js';
+import type { RecallResult } from '../src/api/index.js';
 import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import {
   CLEARED_ENV, FAKE_NOW, freshStore, normalise, RECALL_BRANCHES, RECALL_INPUTS, rowsOf, SESSION, seedPortBranches, sendRecall, seedTemplates, TENANT, type Templates,

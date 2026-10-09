@@ -1,17 +1,17 @@
 // Store upkeep verbs: `hippo refine`, `hippo dedup` and `hippo embed`.
 
-import { envAnthropicApiKey } from '../env.js';
+import { envAnthropicApiKey } from '../util/env.js';
 import { loadAllEntries } from '../store/entry-reads.js';
-import { deduplicateStore } from '../dedupe.js';
-import { embedAll, loadEmbeddingIndex } from '../embeddings.js';
-import { resolveEmbeddingProvider, type EmbeddingProvider } from '../embedding-provider.js';
+import { deduplicateStore } from '../consolidate/dedupe.js';
+import { embedAll, loadEmbeddingIndex } from '../store/embeddings/index.js';
+import { resolveEmbeddingProvider, type EmbeddingProvider } from '../store/embeddings/provider.js';
 import { resetStoredParticles } from '../store/vector-writes.js';
-import { loadConfig } from '../config.js';
-import { resolveTenantId } from '../tenant.js';
-import { refineStore } from '../refine-llm.js';
+import { loadConfig } from '../core/config.js';
+import { resolveTenantId } from '../store/tenant.js';
+import { refineStore } from './refine-llm.js';
 import { printError } from './output.js';
 import { type CliFlags, requireInit, resolveAuthRoot, boolFlag } from './shared.js';
-import { errorMessage } from '../log.js';
+import { errorMessage } from '../util/log.js';
 
 const MAX_FAILED_SHOWN = 5;
 const MAX_PAIRS_SHOWN = 15;

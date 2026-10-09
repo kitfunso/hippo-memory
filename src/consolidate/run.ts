@@ -1,9 +1,9 @@
-import { MemoryEntry, type DecayOptions } from '../memory.js';
+import { MemoryEntry, type DecayOptions } from '../core/memory.js';
 import { type DormantMove } from '../store/dormant.js';
 import { ftsDrift } from '../store/entry-row.js';
 import { type TombstoneChecks } from '../store/tombstone-checks.js';
-import { loadConfig } from '../config.js';
-import { NO_MERGE_TAGS } from '../shared.js';
+import { loadConfig } from '../core/config.js';
+import { NO_MERGE_TAGS } from '../sharing/shared.js';
 
 export interface ConsolidationResult {
   decayed: number;

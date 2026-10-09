@@ -1,10 +1,10 @@
 // Client IP keying and the per-IP rate limit for /v1 and /mcp.
-import { envClientIpHeader, envTrustedProxies } from '../env.js';
+import { envClientIpHeader, envTrustedProxies } from '../util/env.js';
 import type { IncomingMessage } from 'node:http';
 import { BlockList, isIP } from 'node:net';
-import { log } from '../log.js';
-import type { RateLimiter } from '../rate-limit.js';
-import { HttpError } from '../http-util.js';
+import { log } from '../util/log.js';
+import type { RateLimiter } from './rate-limit.js';
+import { HttpError } from '../util/http-util.js';
 
 const IPV6_PREFIX_GROUPS = 4;
 

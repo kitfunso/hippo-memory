@@ -7,8 +7,8 @@ import { join } from 'node:path';
 import { createRequire } from 'module';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { openHippoDb, closeHippoDb, getMeta } from '../src/db.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { openHippoDb, closeHippoDb, getMeta } from '../src/db/index.js';
 import { recordStatements } from './_helpers/count-statements.js';
 
 const require = createRequire(import.meta.url);

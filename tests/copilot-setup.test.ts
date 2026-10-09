@@ -9,7 +9,7 @@ import { copilotHomeDir, detectInstalledTools } from '../src/hooks/shared.js';
 import { VSCODE_MCP, copilotMcpSnippet, copilotPaths, installCopilot, uninstallCopilot } from '../src/hooks/copilot.js';
 import { HOOKS } from '../src/hooks/hook-blocks.js';
 import { withFakeHome, type FakeHomeHandle } from './_helpers/with-fake-home.js';
-import type { JsonValue } from '../src/json.js';
+import type { JsonValue } from '../src/util/json.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
 // The committed text installCopilot must write; edit it with the instructions in src/hooks/copilot.ts.
 const COPILOT_INSTRUCTIONS = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'copilot', 'instructions.md'), 'utf8').trim();

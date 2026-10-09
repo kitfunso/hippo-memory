@@ -5,13 +5,13 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadEntriesByIds } from '../src/store/entry-reads.js';
 import { loadIndex } from '../src/store/index-and-stats.js';
 import { serve, __resetSessionRecallHistoryHttp, type ServerHandle } from '../src/server.js';
-import { recall, supersede, type HippoDbContext } from '../src/api.js';
+import { recall, supersede, type HippoDbContext } from '../src/api/index.js';
 
 let home: string;
 let handle: ServerHandle;

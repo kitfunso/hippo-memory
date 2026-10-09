@@ -182,7 +182,7 @@ const rootDirs = (rootBase) => {
 function rootBaseOk(rel) {
   return rel !== '' && !path.isAbsolute(rel) && !rel.startsWith('..');
 }
-// Outside the temp dir hippo's store walk (src/project-identity.ts:161-170) can reach the user's real ~/.hippo.
+// Outside the temp dir hippo's store walk (src/core/project-identity.ts:161-170) can reach the user's real ~/.hippo.
 function checkRootBase(base) {
   fs.mkdirSync(base, { recursive: true });
   const rel = path.relative(fs.realpathSync(os.tmpdir()), fs.realpathSync(base));
@@ -633,7 +633,7 @@ function labelChange(rows, finalIds, statements, contextText, rankedIds, blocks,
   const sShownRec = presentS.some(showsRec), cShownRec = presentC.some(showsRec);
   const sShownAuto = presentS.some(showsAuto), cShownAuto = presentC.some(showsAuto);
   const sShownAny = sShownCtx || sShownRec || sShownAuto, cShownAny = cShownCtx || cShownRec || cShownAuto;
-  // Only superseded_by hides a row (src/api.ts:2591, 863); a stale or tagged S still shows, and this counts it.
+  // Only superseded_by hides a row (src/api/index.ts:2591, 863); a stale or tagged S still shows, and this counts it.
   const retiredS = presentS.filter(isRetired);
   const shown = { sRetired: retiredS.length, sRetiredShown: retiredS.filter((r) => showsCtx(r) || showsRec(r) || showsAuto(r)).length };
 
@@ -959,7 +959,7 @@ function selftestFixtureContract(fx, check) {
 }
 
 async function selftestQuestionReach(fx, check) {
-  const search = await import(pathToFileURL(path.join(REPO, 'dist', 'tokenize.js')).href);
+  const search = await import(pathToFileURL(path.join(REPO, 'dist', 'util/tokenize.js')).href);
   const tokenize = search.tokenize;
   const content = (t) => new Set(tokenize(t).filter((w) => !STOP.has(w)));
   const shares = (a, b) => { const B = content(b); return [...content(a)].some((w) => B.has(w)); };

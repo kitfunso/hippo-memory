@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generateDagSummary } from '../src/dag.js';
+import { generateDagSummary } from '../src/consolidate/dag.js';
 
 describe('generateDagSummary', () => {
   it('produces a summary from cluster label and member contents', async () => {

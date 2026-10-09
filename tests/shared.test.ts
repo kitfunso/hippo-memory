@@ -7,7 +7,7 @@ import {
   promoteToGlobal,
   searchBoth,
   syncGlobalToLocal,
-} from '../src/shared.js';
+} from '../src/sharing/shared.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';

@@ -11,11 +11,11 @@ import {
   saveCompaction,
   replayCompactionsAt,
   COMPACTION_DB_WAIT_MS,
-} from '../compaction-record.js';
-import { resolveTenantId } from '../tenant.js';
+} from './compaction-record.js';
+import { resolveTenantId } from '../store/tenant.js';
 import { defaultPreCompactLogPath, vscodeUserHooksFile } from '../hooks/shared.js';
-import { readClaudeCodePostCompact, readClaudeCodePreCompact, type CaptureInput, type HookRuntime } from '../capture-contract.js';
-import { errorMessage, log as logger } from '../log.js';
+import { readClaudeCodePostCompact, readClaudeCodePreCompact, type CaptureInput, type HookRuntime } from '../core/capture-contract.js';
+import { errorMessage, log as logger } from '../util/log.js';
 import { resolveLastSessionTranscript } from './transcript.js';
 import { isVscodeTranscript } from './copilot-transcript.js';
 import { mergeWorkingState, transcriptWorkingState, type WorkingState } from './working-state.js';

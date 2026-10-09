@@ -15,38 +15,38 @@ import {
   listSessionEvents,
 } from '../store/sessions.js';
 import { writeSessionEndHandoff } from '../store/handoffs.js';
-import { readSessionScan, recordSessionDigest } from '../session-digest.js';
-import { openHippoDb, closeHippoDb } from '../db.js';
-import { captureToolFailure } from '../capture-error.js';
+import { readSessionScan, recordSessionDigest } from '../capture/session-digest.js';
+import { openHippoDb, closeHippoDb } from '../db/index.js';
+import { captureToolFailure } from '../capture/capture-error.js';
 import {
   readApiCalls,
   recordRereads,
   type TranscriptCalls,
-} from '../token-ledger.js';
+} from '../store/token-ledger.js';
 import { estimateTokens } from '../util/token-text.js';
 import { currentMachine, importSessionFolder } from '../agent-memories/sync.js';
 import { summaryLine } from '../agent-memories/report.js';
-import { resolveProjectIdentity } from '../project-identity.js';
-import { getGlobalRoot } from '../shared.js';
+import { resolveProjectIdentity } from '../core/project-identity.js';
+import { getGlobalRoot } from '../sharing/shared.js';
 import { cmdCapture, CaptureOptions } from '../capture/command.js';
 import { cmdPreCompact, cmdPostCompact } from '../capture/compact.js';
 import { transcriptWorkingState } from '../capture/working-state.js';
-import { collectHandoffEvidence } from '../handoff-evidence.js';
+import { collectHandoffEvidence } from '../capture/handoff-evidence.js';
 import { type SessionTurn } from '../capture/transcript.js';
 import { copilotTranscriptFor, SESSION_ID_RE } from '../capture/copilot-transcript.js';
 import { loadTurnPosition, runSessionWorker, saveTurnPosition, turnsAfter, type WorkerMode } from '../capture/session-worker.js';
-import { isStringValue, readSessionEnd, readVscodeStop, type CaptureInput, type HookRuntime } from '../capture-contract.js';
-import { loadConfig } from '../config.js';
+import { isStringValue, readSessionEnd, readVscodeStop, type CaptureInput, type HookRuntime } from '../core/capture-contract.js';
+import { loadConfig } from '../core/config.js';
 import { autoSleepDue } from '../api/auto-sleep.js';
-import { truncateCodePointSafe } from '../transcript-tail.js';
-import { COMPACTION_DB_WAIT_MS } from '../compaction-record.js';
-import { COMPACT_RESUME_EVENT_CONTENT_CAP, COMPACT_RESUME_MAX_AGE_MS, compactResumeText } from '../context-render.js';
-import { normaliseHookPayload, readHookStdin, readStdinBounded, type BoundedStdin } from '../stdin.js';
-import { resolveTenantId } from '../tenant.js';
-import { errorMessage, log } from '../log.js';
-import { bookLedgerTurn } from '../ledger-db.js';
-import { flushDeliveryRecorder } from '../prompt-hook.js';
-import type { DeliveryRecorder } from '../delivery-recorder.js';
+import { truncateCodePointSafe } from '../util/transcript-tail.js';
+import { COMPACTION_DB_WAIT_MS } from '../capture/compaction-record.js';
+import { COMPACT_RESUME_EVENT_CONTENT_CAP, COMPACT_RESUME_MAX_AGE_MS, compactResumeText } from '../api/context-render.js';
+import { normaliseHookPayload, readHookStdin, readStdinBounded, type BoundedStdin } from './stdin.js';
+import { resolveTenantId } from '../store/tenant.js';
+import { errorMessage, log } from '../util/log.js';
+import { bookLedgerTurn } from '../api/ledger-db.js';
+import { flushDeliveryRecorder } from '../api/prompt-hook.js';
+import type { DeliveryRecorder } from '../store/delivery-recorder.js';
 import { printError } from './output.js';
 import { cmdLastSleep } from './last-sleep.js';
 import { readCompactResumePayload } from './compact-resume-payload.js';
@@ -66,7 +66,7 @@ import {
   flagIsTrue,
   stringFlag,
 } from './shared.js';
-import type { JsonValue } from '../json.js';
+import type { JsonValue } from '../util/json.js';
 
 /**
  * SessionStart(compact) injector. Prints the active task snapshot + recent

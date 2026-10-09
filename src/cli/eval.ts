@@ -2,16 +2,16 @@
 
 import * as path from 'path';
 import * as fs from 'fs';
-import type { MemoryEntry } from '../memory.js';
+import type { MemoryEntry } from '../core/memory.js';
 import { loadAllEntries } from '../store/entry-reads.js';
-import { loadConfig } from '../config.js';
-import { getGlobalRoot } from '../shared.js';
+import { loadConfig } from '../core/config.js';
+import { getGlobalRoot } from '../sharing/shared.js';
 import { runEval, bootstrapCorpus, compareSummaries, type EvalCase, type EvalSummary } from '../eval/eval.js';
 import { runFeatureEval, formatResult, resultToBaseline, detectRegressions, type EvalBaseline } from '../eval/eval-suite.js';
-import { PACKAGE_VERSION } from '../version.js';
+import { PACKAGE_VERSION } from '../util/version.js';
 import { printError } from './output.js';
 import { requireInit, fmt, type CliFlags, type CommandContext, boolFlag } from './shared.js';
-import { errorMessage } from '../log.js';
+import { errorMessage } from '../util/log.js';
 
 const HIT_TOP_K = 10;
 const MAX_FAILING_SHOWN = 10;

@@ -1,9 +1,9 @@
 // `hippo goal`: the per-session goal stack that recall boosts.
 
-import { envHippoSessionId } from '../env.js';
+import { envHippoSessionId } from '../util/env.js';
 import type { PolicyType } from '../store/goals.js';
-import * as api from '../api.js';
-import { resolveTenantId } from '../tenant.js';
+import * as api from '../api/index.js';
+import { resolveTenantId } from '../store/tenant.js';
 import { printError } from './output.js';
 import { type CliFlags, boolFlag, flagIsTrue, stringFlag } from './shared.js';
 

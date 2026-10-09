@@ -1,6 +1,6 @@
 // Owner lookups by id: the tenant and scope checks in src/api and the CLI's key-tenant lookup share these queries.
 
-import type { DatabaseSyncLike } from '../db.js';
+import type { DatabaseSyncLike } from '../db/index.js';
 
 /** The api_keys fields a tenant, revocation, rank or self-service ownership check reads. */
 export interface ApiKeyOwner {

@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
-import { getCurrentSchemaVersion } from '../src/db.js';
+import { getCurrentSchemaVersion } from '../src/db/index.js';
 
 let root: string;
 
@@ -20,7 +20,7 @@ afterEach(() => {
 });
 
 // The race only exists across processes, so the workers import the build output.
-const DIST_DB = join(import.meta.dirname, '..', 'dist', 'db.js');
+const DIST_DB = join(import.meta.dirname, '..', 'dist', 'db/index.js');
 const DB_URL = pathToFileURL(DIST_DB).href;
 
 // Spawn latency alone staggers the workers too far apart to collide, so each one

@@ -88,7 +88,7 @@ export const v35: Migration = {
       // change_summary). This table = the v34 skills table with
       // skill_name/trigger_text replaced by `repo` (the repo-scoping dimension)
       // PLUS `summary` (the brief body). The distinguishing op (refreshBrief, in
-      // src/project-briefs.ts) auto-assembles the summary from the repo's receipts
+      // src/objects/project-briefs.ts) auto-assembles the summary from the repo's receipts
       // (memory rows tagged path:<repo>); it needs no schema support beyond `repo`.
       // All column names were checked against SQLite reserved words:
       // repo/summary/version/status/etc. are non-reserved.

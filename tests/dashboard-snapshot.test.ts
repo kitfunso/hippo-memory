@@ -1,11 +1,11 @@
 // The snapshot groups live memories by origin project and counts bands, layers, conflicts and embeddings over that one population.
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { Layer } from '../src/memory.js';
+import { Layer } from '../src/core/memory.js';
 import { listMemoryConflicts, replaceDetectedConflicts, resolveConflict } from '../src/store/conflicts.js';
-import { quarantineScopeFor } from '../src/quarantine.js';
+import { quarantineScopeFor } from '../src/trust/quarantine.js';
 import { buildSnapshot, createSnapshotService } from '../src/dashboard/dashboard-snapshot.js';
-import { closeHippoDb, openHippoDb } from '../src/db.js';
+import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { storedVectorIds } from '../src/db/vector-store.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { buildOverview } from '../src/dashboard/dashboard-queries.js';

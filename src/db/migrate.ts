@@ -1,5 +1,5 @@
-import { PACKAGE_VERSION, compareSemver } from '../version.js';
-import { errorMessage, log } from '../log.js';
+import { PACKAGE_VERSION, compareSemver } from '../util/version.js';
+import { errorMessage, log } from '../util/log.js';
 import { importLegacyEmbeddingIndex } from './vector-store.js';
 import type { DatabaseSyncLike } from './sqlite.js';
 import { execWithBusyRetry, withWriteScope } from './busy.js';

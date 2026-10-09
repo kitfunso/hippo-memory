@@ -1,8 +1,8 @@
-import type { MemoryEntry } from '../memory.js';
-import { closeHippoDb, type DatabaseSyncLike, withWriteScope } from '../db.js';
-import { assertTenantId } from '../tenant.js';
+import type { MemoryEntry } from '../core/memory.js';
+import { closeHippoDb, type DatabaseSyncLike, withWriteScope } from '../db/index.js';
+import { assertTenantId } from './tenant.js';
 import { findRejectedValue, rejectionDigest } from './rejection.js';
-import { log } from '../log.js';
+import { log } from '../util/log.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry } from './rows.js';
 import { audit } from './audit-event.js';
 import { syncFtsRow } from './entry-row.js';

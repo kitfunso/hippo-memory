@@ -1,4 +1,4 @@
-import { tokenize } from '../tokenize.js';
+import { tokenize } from '../util/tokenize.js';
 import { matchedQueryTerms } from './bm25.js';
 import type { SearchResult } from '../core/search-types.js';
 

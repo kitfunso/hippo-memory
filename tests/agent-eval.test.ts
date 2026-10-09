@@ -22,12 +22,12 @@ import * as os from 'os';
 import {
   createMemory,
   DEFAULT_HALF_LIFE_DAYS,
-} from '../src/memory.js';
+} from '../src/core/memory.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { search } from '../src/search/bm25-search.js';
-import { markRetrieved } from '../src/memory.js';
+import { markRetrieved } from '../src/core/memory.js';
 
 // ---------------------------------------------------------------------------
 // Trap categories — each has a lesson and 2-3 task instances

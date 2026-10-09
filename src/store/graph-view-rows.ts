@@ -1,5 +1,5 @@
 // The rows one graph view shows: the newest of the whole graph, or the neighbourhood of one entity name.
-import type { DatabaseSyncLike } from '../db.js';
+import type { DatabaseSyncLike } from '../db/index.js';
 import { IN_LIST_CHUNK, loadEntities, loadEntitiesByIds, loadEntitiesByName, loadNeighborRelations, loadRelations, loadRelationsAmong } from './graph-reads.js';
 import type { GraphRows } from './port.js';
 

@@ -1,4 +1,4 @@
-import { type Context, adminActor } from '../../api.js';
+import { type Context, adminActor } from '../../api/index.js';
 import {
   bumpSlackDlqRetryCount,
   listSlackDlq,
@@ -14,8 +14,8 @@ import { resolveTenantForSlackTeam } from './tenant-routing.js';
 import { verifySlackSignature } from './signature.js';
 import { isSlackEventEnvelope, isSlackMessageEvent, type SlackEventEnvelope } from './types.js';
 import { handleMessageDeleted } from './deletion.js';
-import type { JsonValue } from '../../json.js';
-import { errorMessage } from '../../log.js';
+import type { JsonValue } from '../../util/json.js';
+import { errorMessage } from '../../util/log.js';
 
 export type { DlqBucket, DlqItem };
 

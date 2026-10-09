@@ -1,8 +1,8 @@
 // The dashboard's read model: one in-memory snapshot of a tenant's live memories, grouped by origin project.
 // Pure build functions plus one cache; the queries over it live in dashboard-queries.ts.
 
-import { calculateStrength, facetsOf, netWrong, Layer as MemoryLayer, type ConfidenceInputs, type MemoryEntry, type StrengthInputs } from '../memory.js';
-import { isQuarantineScope } from '../quarantine.js';
+import { calculateStrength, facetsOf, netWrong, Layer as MemoryLayer, type ConfidenceInputs, type MemoryEntry, type StrengthInputs } from '../core/memory.js';
+import { isQuarantineScope } from '../trust/quarantine.js';
 import { listMemoryConflicts } from '../store/conflicts.js';
 import { DashboardConnection, loadDashboardRows, type DashboardRow, type DashboardRows, type ExcludedCounts } from '../store/dashboard-reads.js';
 import type { MemoryConflict } from '../store/rows.js';

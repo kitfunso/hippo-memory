@@ -2,7 +2,7 @@
 // (https://modelcontextprotocol.io/specification/.../basic/transports#stdio). Legacy LSP-style
 // `Content-Length` framing is also accepted so a printf-and-pipe smoke test still works.
 
-import { MAX_BODY_BYTES } from '../http-util.js';
+import { MAX_BODY_BYTES } from '../util/http-util.js';
 
 const HEADER_DELIM = Buffer.from('\r\n\r\n');
 const EMPTY = Buffer.alloc(0);

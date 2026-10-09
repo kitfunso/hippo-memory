@@ -1,5 +1,5 @@
-import { duplicateKey } from '../same-text.js';
-import { assessAutomaticMemory } from '../memory-quality.js';
+import { duplicateKey } from '../util/same-text.js';
+import { assessAutomaticMemory } from '../core/memory-quality.js';
 
 export interface ExtractedItem {
   content: string;

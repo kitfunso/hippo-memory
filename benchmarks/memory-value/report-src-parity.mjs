@@ -2,8 +2,8 @@
 /**
  * G1 gate adapter — LC2-E3 (docs/evals/2026-08-10-lc2-e3-wiring-prereg.md).
  *
- * Proves the COMPILED src scorer (dist/memory-value.js, built from
- * src/memory-value.ts) reproduces the registered E2 held-out weighted
+ * Proves the COMPILED src scorer (dist/consolidate/memory-value.js, built from
+ * src/consolidate/memory-value.ts) reproduces the registered E2 held-out weighted
  * retention through the harness's OWN evaluation (evaluate.mjs), over the
  * real fit-time scratch stores — NOT a re-derivation from features.jsonl.
  *
@@ -77,7 +77,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.join(HERE, '..', '..');
 const SPLIT_REGISTERED_PATH = path.join(HERE, 'split-registered.json');
 
-// dist/store.js and dist/memory-value.js are loaded lazily via
+// dist/store.js and dist/consolidate/memory-value.js are loaded lazily via
 // loadDistScorer() below, AFTER the freshness guard passes — never a bare
 // static import (which would run before any guard could fire). Populated
 // once by main() before srcWeightedRetentionForQuestion is ever called.
@@ -101,23 +101,23 @@ function guard(cond, message) {
 
 // ---------------------------------------------------------------------------
 // dist/ freshness guard (round-2 code-review P2-3). This gate validates the
-// COMPILED src scorer (dist/memory-value.js), not the TypeScript source
+// COMPILED src scorer (dist/consolidate/memory-value.js), not the TypeScript source
 // directly — importing a stale dist file after an un-built src edit would
 // silently validate the PREVIOUS scoring logic and report a pass that says
 // nothing about the code actually on disk. Checked, and the dist modules
 // dynamically imported, only after this guard passes.
 // ---------------------------------------------------------------------------
-const DIST_MEMORY_VALUE_PATH = path.join(REPO_ROOT, 'dist', 'memory-value.js');
+const DIST_MEMORY_VALUE_PATH = path.join(REPO_ROOT, 'dist', 'consolidate/memory-value.js');
 const DIST_STORE_PATH = path.join(REPO_ROOT, 'dist', 'store', 'entry-reads.js');
 const SRC_WATCH_PATHS = [
-  path.join(REPO_ROOT, 'src', 'memory-value.ts'),
-  path.join(REPO_ROOT, 'src', 'memory-value-weights.ts'),
+  path.join(REPO_ROOT, 'src', 'consolidate/memory-value.ts'),
+  path.join(REPO_ROOT, 'src', 'consolidate/memory-value-weights.ts'),
 ];
 
 function assertDistFresh() {
   guard(
     fs.existsSync(DIST_MEMORY_VALUE_PATH),
-    `dist/memory-value.js not found (${DIST_MEMORY_VALUE_PATH}) — rebuild first: npm run build`,
+    `dist/consolidate/memory-value.js not found (${DIST_MEMORY_VALUE_PATH}) — rebuild first: npm run build`,
   );
   const distMtimeMs = fs.statSync(DIST_MEMORY_VALUE_PATH).mtimeMs;
   for (const srcPath of SRC_WATCH_PATHS) {
@@ -125,7 +125,7 @@ function assertDistFresh() {
     const srcMtimeMs = fs.statSync(srcPath).mtimeMs;
     guard(
       srcMtimeMs <= distMtimeMs,
-      `${path.relative(REPO_ROOT, srcPath)} is newer than dist/memory-value.js — rebuild first: npm run build`,
+      `${path.relative(REPO_ROOT, srcPath)} is newer than dist/consolidate/memory-value.js — rebuild first: npm run build`,
     );
   }
 }

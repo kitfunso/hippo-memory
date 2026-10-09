@@ -1,6 +1,6 @@
 // The graph reads a view and a traversal share. Each opens hippo.db itself unless the caller hands it the handle its snapshot runs on.
-import { openHippoDb, closeHippoDb, withReadSnapshot, type DatabaseSyncLike } from '../db.js';
-import { assertTenantId } from '../tenant.js';
+import { openHippoDb, closeHippoDb, withReadSnapshot, type DatabaseSyncLike } from '../db/index.js';
+import { assertTenantId } from './tenant.js';
 import { type EntityType, GRAPH_ENTITY_TYPES, type Entity, type Relation, type EntityRow, type RelationRow, type StoredEntity, type StoredGraph, type StoredRelation, rowToEntity, rowToRelation, ENTITY_COLS, RELATION_COLS } from './graph-rows.js';
 
 const DEFAULT_GRAPH_PAGE_SIZE = 100;

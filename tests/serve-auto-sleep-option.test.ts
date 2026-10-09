@@ -1,7 +1,7 @@
 // serve({ autoSleep: false }): a host-tenant remember over POST /mcp never starts consolidation in the server process.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createApiKey } from '../src/store/auth.js';
 import { serve, type ServerHandle, type ServeOpts } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';

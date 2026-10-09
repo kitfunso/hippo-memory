@@ -6,9 +6,9 @@ import { consolidate } from '../src/consolidate/sleep.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
-import { createMemory, resolveConfidence, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { markRetrieved } from '../src/memory.js';
-import { sampleForReplay } from '../src/replay.js';
+import { createMemory, resolveConfidence, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { markRetrieved } from '../src/core/memory.js';
+import { sampleForReplay } from '../src/consolidate/replay.js';
 
 let tmpDir: string;
 

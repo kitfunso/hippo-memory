@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { remember, recall, type HippoDbContext } from '../src/api.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { remember, recall, type HippoDbContext } from '../src/api/index.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { handleCommentDeleted } from '../src/connectors/github/deletion.js';
 
 const ARTIFACT = 'github://acme/repo/issue/42/comment/123';

@@ -1,14 +1,14 @@
 import { createHash } from 'node:crypto';
-import { canAutoDelete, type MemoryEntry } from '../memory.js';
-import { closeHippoDb, openHippoDb, withWriteScope, type DatabaseSyncLike } from '../db.js';
+import { canAutoDelete, type MemoryEntry } from '../core/memory.js';
+import { closeHippoDb, openHippoDb, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import type { JsonObject } from './working-memory.js';
-import { log } from '../log.js';
-import { keysetAfter, type KeysetPosition } from '../keyset.js';
-import type { JsonValue } from '../json.js';
+import { log } from '../util/log.js';
+import { keysetAfter, type KeysetPosition } from '../util/keyset.js';
+import type { JsonValue } from '../util/json.js';
 import { warnDamagedColumn } from '../util/stored-json.js';
 import {
   automaticDefect, hasNoSpecificity, isFragment, isReleaseCommitNoise, substantiveWordCount,
-} from '../memory-quality.js';
+} from '../core/memory-quality.js';
 
 export type AuditSeverity = 'warning' | 'error';
 

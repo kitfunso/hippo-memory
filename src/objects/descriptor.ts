@@ -1,7 +1,7 @@
 // The words and rules that differ between the typed objects (decision, project brief and the rest), held as data so one lifecycle serves every kind.
 // A kind's table, columns and audit keys sit behind the `objects` store group.
 
-import type { KeysetPosition } from '../keyset.js';
+import type { KeysetPosition } from '../util/keyset.js';
 import type { ObjectByKind, ObjectFields, ObjectKind, SavableKind } from '../store/object-types.js';
 
 export interface ObjectDescriptor<K extends ObjectKind> {

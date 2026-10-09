@@ -1,11 +1,11 @@
-import { envClefEndpoint, envClefEndpointToken, envClefTimeoutMs, envCloudflareAccountId, envCloudflareApiToken } from '../env.js';
+import { envClefEndpoint, envClefEndpointToken, envClefTimeoutMs, envCloudflareAccountId, envCloudflareApiToken } from '../util/env.js';
 import { buildRelevanceRequest, JEV_DEFAULT_TOP_K, rankByScores } from './jev.js';
 import type { RerankerFn, RerankResult, RerankerOptions, RerankProvenance } from './types.js';
 import type { SearchResult } from '../core/search-types.js';
 import { createOutageWarning } from './outage-warning.js';
 import { rerankerPost } from './remote.js';
-import { type JsonValue, isJsonObject } from '../json.js';
-import { errorMessage } from '../log.js';
+import { type JsonValue, isJsonObject } from '../util/json.js';
+import { errorMessage } from '../util/log.js';
 
 const RAY_ID_MAX_CHARS = 64;
 

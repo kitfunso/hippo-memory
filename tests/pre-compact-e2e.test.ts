@@ -10,7 +10,7 @@ import { loadActiveTaskSnapshot, saveActiveTaskSnapshot, appendSessionEvent } fr
 import { writeSessionEndHandoff } from '../src/store/handoffs.js';
 import { defaultSleepLogPath } from '../src/hooks/shared.js';
 import { WORKING_STATE_CAPS } from '../src/capture/working-state.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
 
 // Always run against the local built CLI so we're testing our source, not a

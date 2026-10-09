@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import {
   readDeliveryEvents,
   writeDeliveryEvent,
@@ -17,8 +17,8 @@ import {
   type DeliveryEventInput,
   type DeliveryRejectReason,
   type DeliveryStage,
-} from '../src/delivery-recorder.js';
-import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+} from '../src/store/delivery-recorder.js';
+import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { countMatching, recordStatements, type StatementLog } from './_helpers/count-statements.js';
 
 // A prompt hook waits a second for a lock in all; the ledger may spend a fraction of it.

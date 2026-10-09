@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, it, expect, vi, type MockInstance } from 'vitest';
-import { refineSemanticMemory, refineStore } from '../src/refine-llm.js';
-import { Layer} from '../src/memory.js';
+import { refineSemanticMemory, refineStore } from '../src/cli/refine-llm.js';
+import { Layer} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';

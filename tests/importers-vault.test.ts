@@ -23,8 +23,8 @@ import { importVault } from '../src/importers/vault.js';
 import { type ImportOptions } from '../src/importers/core.js';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { remember, type Context } from '../src/api.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { remember, type Context } from '../src/api/index.js';
 
 let tmpDir: string; // hippo root (the store)
 let vaultDir: string; // a scratch vault folder we mutate per-test

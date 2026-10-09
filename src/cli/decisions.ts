@@ -1,17 +1,17 @@
 // First-class object verbs for predictions, decisions and incidents.
 
-import { MemoryEntry } from '../memory.js';
+import { MemoryEntry } from '../core/memory.js';
 import { writeEntry } from '../store/entry-writes.js';
 import { readEntry } from '../store/entry-reads.js';
-import { extractPathTags } from '../path-context.js';
+import { extractPathTags } from '../search/path-context.js';
 import * as predictionsModule from '../store/predictions.js';
-import * as decisionsModule from '../decisions.js';
-import * as incidentsModule from '../incidents.js';
-import { resolveTenantId } from '../tenant.js';
+import * as decisionsModule from '../objects/decisions.js';
+import * as incidentsModule from '../objects/incidents.js';
+import { resolveTenantId } from '../store/tenant.js';
 import { printError } from './output.js';
 import { nonEmptyStringFlag, parseListLimit, requireInit, type CliFlags, flagIsTrue, stringFlag } from './shared.js';
 import { closeObject, foundOrExit, idArgOrExit, listObjects, printLifecycleTail, requireStatus, type ObjectNames } from './object-verbs.js';
-import { errorMessage } from '../log.js';
+import { errorMessage } from '../util/log.js';
 
 const BASERATE_DECIMALS = 3;
 const DECISION: ObjectNames = { cmd: 'decide', noun: 'Decision', idLabel: 'decision' };

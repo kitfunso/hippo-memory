@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { spawn } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { closeHippoDb, openHippoDb, withTrialScope, withWriteScope, type DatabaseSyncLike } from '../src/db.js';
+import { closeHippoDb, openHippoDb, withTrialScope, withWriteScope, type DatabaseSyncLike } from '../src/db/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 let root: string;

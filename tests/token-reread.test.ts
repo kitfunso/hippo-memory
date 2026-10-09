@@ -8,9 +8,9 @@ import { type SpawnSyncReturns } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { appendSessionEvent, saveActiveTaskSnapshot } from '../src/store/sessions.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { runDoctor } from '../src/doctor.js';
-import { Layer } from '../src/memory.js';
+import { Layer } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import {
   carryingCalls,
@@ -24,7 +24,7 @@ import {
   type TokenEvent,
   type TokenSummary,
   type TokenSurface,
-} from '../src/token-ledger.js';
+} from '../src/store/token-ledger.js';
 import { estimateTokens } from '../src/util/token-text.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
 const SESSION = 'sess-reread';

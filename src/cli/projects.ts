@@ -2,12 +2,12 @@
 
 import * as path from 'path';
 import { execFileSync } from 'child_process';
-import { closeHippoDb, openHippoDb } from '../db.js';
-import { listProjects, mergeProjects, repairProjects, type ProjectSummary } from '../project-merge.js';
-import { resolveTenantId } from '../tenant.js';
+import { closeHippoDb, openHippoDb } from '../db/index.js';
+import { listProjects, mergeProjects, repairProjects, type ProjectSummary } from '../sharing/project-merge.js';
+import { resolveTenantId } from '../store/tenant.js';
 import { type CliFlags, resolveAuthRoot, flagIsTrue } from './shared.js';
 import { printError } from './output.js';
-import { errorMessage } from '../log.js';
+import { errorMessage } from '../util/log.js';
 import { DATE_PREFIX_CHARS } from '../util/token-text.js';
 
 

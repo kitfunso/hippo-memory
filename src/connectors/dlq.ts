@@ -1,7 +1,7 @@
 // The dead-letter queue every webhook connector parks into: one redaction, one unroutable sentinel, one set of defaults, one replay result.
 
-import { DLQ_REDACTED_NOTE, redactPayload } from '../secret-detect.js';
-import { requireGroup, storeFor, type HippoStore } from '../store-port.js';
+import { DLQ_REDACTED_NOTE, redactPayload } from '../util/secret-detect.js';
+import { requireGroup, storeFor, type HippoStore } from '../store/index.js';
 import type { ConnectorDeadLetter } from '../store/port.js';
 
 /** The tenant stored on a row no tenant was resolved for; the column is NOT NULL. */

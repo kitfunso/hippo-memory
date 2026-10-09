@@ -6,11 +6,11 @@ import fs from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { escapeRegex } from '../src/escape.js';
+import { escapeRegex } from '../src/util/escape.js';
 import { installCopilot } from '../src/hooks/copilot.js';
 import { installJsonHooks, resolveJsonHookPaths } from '../src/hooks/json-hooks.js';
 import { installOpencodePlugin } from '../src/hooks/opencode.js';
-import { registerWorkspace, workspaceRegistryPath } from '../src/scheduler.js';
+import { registerWorkspace, workspaceRegistryPath } from '../src/cli/scheduler.js';
 import { withFakeHome, type FakeHomeHandle } from './_helpers/with-fake-home.js';
 
 const WINDOWS = process.platform === 'win32';

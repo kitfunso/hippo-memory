@@ -1,7 +1,7 @@
 // The write verbs: `hippo remember`, `hippo supersede` and `hippo trace`.
 
-import { envAnthropicApiKey } from '../env.js';
-import { evalNow } from '../ablation.js';
+import { envAnthropicApiKey } from '../util/env.js';
+import { evalNow } from '../core/ablation.js';
 import * as fs from 'fs';
 import {
   createMemory,
@@ -13,7 +13,7 @@ import {
   Layer,
   ConfidenceLevel,
   type MemoryEntry,
-} from '../memory.js';
+} from '../core/memory.js';
 import { isInitialized } from '../store/open.js';
 import { writeEntry } from '../store/entry-writes.js';
 import { readEntry, loadAllEntries } from '../store/entry-reads.js';
@@ -21,22 +21,22 @@ import { loadNewestEntries, schemaFitInStore } from '../store/candidates.js';
 import { updateStats } from '../store/index-and-stats.js';
 import { listMemoryConflicts } from '../store/conflicts.js';
 import { RejectedValueError } from '../store/rejection.js';
-import { renderTraceContent, parseSteps } from '../trace.js';
-import { embedMemory } from '../embeddings.js';
-import { loadConfig, type HippoConfig } from '../config.js';
-import { extractPathTags } from '../path-context.js';
-import { detectScope } from '../scope.js';
-import { assertClientScope } from '../recall-scope.js';
-import { getGlobalRoot, initGlobal } from '../shared.js';
-import { vetSecrets } from '../secret-detect.js';
+import { renderTraceContent, parseSteps } from '../consolidate/trace.js';
+import { embedMemory } from '../store/embeddings/index.js';
+import { loadConfig, type HippoConfig } from '../core/config.js';
+import { extractPathTags } from '../search/path-context.js';
+import { detectScope } from '../sharing/scope.js';
+import { assertClientScope } from '../store/recall-scope.js';
+import { getGlobalRoot, initGlobal } from '../sharing/shared.js';
+import { vetSecrets } from '../util/secret-detect.js';
 import * as client from './client.js';
-import { resolveTenantId } from '../tenant.js';
-import { computeSalience } from '../salience.js';
+import { resolveTenantId } from '../store/tenant.js';
+import { computeSalience } from '../core/salience.js';
 import { validateOwner, isStrictOwnerEnv } from './owner-validation.js';
 import { printError } from './output.js';
 import { emitCliAudit, requireInit, runViaServerIfAvailable, fmt, type CliFlags, type CommandContext, boolFlag, flagIsTrue, stringFlag } from './shared.js';
 import { DAY_MS } from '../util/time.js';
-import { errorMessage } from '../log.js';
+import { errorMessage } from '../util/log.js';
 
 const PARENT_PREVIEW_CHARS = 70;
 const DETAIL_CONTENT_CHARS = 160;
@@ -214,7 +214,7 @@ async function extractRememberFacts(targetRoot: string, entry: MemoryEntry, flag
 
   if (shouldExtract && apiKey) {
     try {
-      const { extractFacts, storeExtractedFacts } = await import('../extract.js');
+      const { extractFacts, storeExtractedFacts } = await import('../learn/extract.js');
       const facts = await extractFacts(entry.content, {
         apiKey,
         model: config.extraction.model,

@@ -1,15 +1,15 @@
 // /v1/processes routes.
-import { PROCESS, type SaveProcessOpts } from '../../processes.js';
-import { HttpError, sendJson } from '../../http-util.js';
+import { PROCESS, type SaveProcessOpts } from '../../objects/processes.js';
+import { HttpError, sendJson } from '../../util/http-util.js';
 import { buildContextWithAuth } from '../auth.js';
 import type { RouteRequest } from '../types.js';
 import { parseJsonBody } from '../validation.js';
-import { type JsonValue, isJsonString } from '../../json.js';
+import { type JsonValue, isJsonString } from '../../util/json.js';
 import { closeRoute, getRoute, listRoute, optionalString, requiredString, saveFor, supersedeRoute, type VersionedRouteConfig } from './object-routes.js';
 
 // HTTP-boundary validation for a process `steps` body (untrusted). Returns the
 // step strings (saveProcess re-validates + trims, this is the fail-fast 400
-// gate). Caps mirror src/processes.ts MAX_PROCESS_STEPS / MAX_PROCESS_STEP_LEN.
+// gate). Caps mirror src/objects/processes.ts MAX_PROCESS_STEPS / MAX_PROCESS_STEP_LEN.
 function validateProcessStepsBody(raw: JsonValue | undefined): string[] {
   if (raw === undefined || raw === null) return [];
   if (!Array.isArray(raw)) {

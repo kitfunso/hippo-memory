@@ -25,7 +25,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { loadIndex } from '../src/store/index-and-stats.js';
-import { remember, recall, getContext, type Context } from '../src/api.js';
+import { remember, recall, getContext, type Context } from '../src/api/index.js';
 
 function tmpHome() {
   const home = mkdtempSync(join(tmpdir(), 'hippo-api-recall-noside-'));

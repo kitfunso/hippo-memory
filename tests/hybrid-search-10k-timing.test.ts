@@ -6,10 +6,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { batchWriteAndDelete } from '../src/store/delete-and-batch.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { saveEmbeddingIndex, saveStoredEmbeddingModel } from '../src/embeddings.js';
-import { resolveEmbeddingProvider } from '../src/embedding-provider.js';
-import { searchBothHybrid } from '../src/shared.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { saveEmbeddingIndex, saveStoredEmbeddingModel } from '../src/store/embeddings/index.js';
+import { resolveEmbeddingProvider } from '../src/store/embeddings/provider.js';
+import { searchBothHybrid } from '../src/sharing/shared.js';
 import { recordStatementsAsync } from './_helpers/count-statements.js';
 
 const ROWS = 10_000;

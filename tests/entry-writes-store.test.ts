@@ -7,10 +7,10 @@ import { join } from 'node:path';
 import {
   archiveRaw, forget, outcome, outcomeForLastRecall, remember, supersede, type Actor, type ArchiveRawResult, type Context, type ForgetResult,
   type HippoDbContext, type OutcomeResult, type RememberResult, type SupersedeResult,
-} from '../src/api.js';
-import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../src/db.js';
+} from '../src/api/index.js';
+import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../src/db/index.js';
 import { SqliteBlockedError, StoreNotPortedError } from '../src/util/sqlite-blocked.js';
-import { STORE_NOT_PORTED_MESSAGE } from '../src/http-util.js';
+import { STORE_NOT_PORTED_MESSAGE } from '../src/util/http-util.js';
 import { handleMcpRequest, type McpContext } from '../src/mcp/server.js';
 import { lastRecalledIds, resolveClientKey } from '../src/mcp/session-state.js';
 import { OTHER_STORE_MARKER, serve, type HippoStore, type ServerHandle } from '../src/server.js';

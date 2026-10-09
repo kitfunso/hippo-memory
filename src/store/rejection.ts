@@ -12,8 +12,8 @@
  */
 
 import { createHash } from 'node:crypto';
-import type { DatabaseSyncLike } from '../db.js';
-import { BadRequestError } from '../api-errors.js';
+import type { DatabaseSyncLike } from '../db/index.js';
+import { BadRequestError } from '../core/api-errors.js';
 import { DIGEST_DISPLAY_CHARS } from '../util/token-text.js';
 
 /**

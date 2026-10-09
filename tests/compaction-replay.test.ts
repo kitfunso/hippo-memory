@@ -1,8 +1,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { COMPACTION_DB_WAIT_MS, replayCompactionsAt, saveCompaction, saveItems } from '../src/compaction-record.js';
-import { closeHippoDb, openHippoDb } from '../src/db.js';
+import { COMPACTION_DB_WAIT_MS, replayCompactionsAt, saveCompaction, saveItems } from '../src/capture/compaction-record.js';
+import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { initStore } from '../src/store/open.js';
 import {
   compactionMemories,

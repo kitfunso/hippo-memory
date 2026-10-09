@@ -8,8 +8,8 @@ import {
   readSessionEnd,
   readVscodeStop,
   type CaptureReceipt,
-} from '../src/capture-contract.js';
-import { normaliseHookPayload } from '../src/stdin.js';
+} from '../src/core/capture-contract.js';
+import { normaliseHookPayload } from '../src/cli/stdin.js';
 
 interface Fixture {
   readonly stdin: string | null;

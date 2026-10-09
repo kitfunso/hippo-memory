@@ -7,7 +7,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { embedAll } from '../src/embeddings.js';
+import { embedAll } from '../src/store/embeddings/index.js';
 
 const serverPath = path.resolve('dist/mcp/server.js');
 let tmpHome: string;

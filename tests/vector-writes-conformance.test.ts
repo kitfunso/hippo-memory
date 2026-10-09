@@ -1,9 +1,9 @@
 // VectorWrites answers alike on hippo.db and on a store held in memory: the same values, the same errors and no audit rows.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
-import { closeHippoDb, openHippoDb, setMeta } from '../src/db.js';
-import { embeddingIndexIdentity } from '../src/embeddings.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/memory.js';
+import { closeHippoDb, openHippoDb, setMeta } from '../src/db/index.js';
+import { embeddingIndexIdentity } from '../src/store/embeddings/index.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';
 import { initializeParticle, savePhysicsState } from '../src/db/physics-state.js';
 import type { EmbeddingIndexState, PhysicsParticle, VectorBackfillQuery, VectorRowWrite, VectorWriteResult } from '../src/server.js';
 import { writeEntry } from '../src/store/entry-writes.js';

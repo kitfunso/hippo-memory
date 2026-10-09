@@ -1,9 +1,9 @@
-import type { MemoryEntry } from '../memory.js';
-import { tokenize } from '../tokenize.js';
-import { evalNow } from '../ablation.js';
-import { extractPathTags } from '../path-context.js';
-import { detectScope } from '../scope.js';
-import { compareScoredResults } from '../compare.js';
+import type { MemoryEntry } from '../core/memory.js';
+import { tokenize } from '../util/tokenize.js';
+import { evalNow } from '../core/ablation.js';
+import { extractPathTags } from './path-context.js';
+import { detectScope } from '../sharing/scope.js';
+import { compareScoredResults } from '../core/compare.js';
 import type { RerankerFn, RerankerOptions } from '../rerankers/types.js';
 import { bm25Score, buildCorpus, entryText, type BM25Corpus } from './bm25.js';
 import { currentEntries } from './as-of.js';
@@ -15,7 +15,7 @@ import { scoreHybridPool } from './hybrid-score.js';
 import { applyMmrWindow, applyReranker } from './rerank.js';
 import { dedupeExtracted, fitBudget, withDagChildren } from './finalize.js';
 import { DEFAULT_RECALL_BUDGET, type ResultCost, type SearchResult } from '../core/search-types.js';
-import type { HippoStore } from '../store-port.js';
+import type { HippoStore } from '../store/index.js';
 
 export interface HybridSearchOptions {
   budget?: number;
@@ -49,7 +49,7 @@ export interface HybridSearchOptions {
   summaryDeboost?: number;
   /** 1.05 micro-boost for summaries rebuilt within 7 days. Default true. */
   summaryFreshness?: boolean;
-  /** Graph-proximity third RRF list; active only with `scoring: 'rrf'`, embeddings and a `hippoRoot`. See src/graph-stream.ts. */
+  /** Graph-proximity third RRF list; active only with `scoring: 'rrf'`, embeddings and a `hippoRoot`. See src/graph/stream.ts. */
   graphStream?: GraphStreamOptions;
   /** Add the rows nearest the query vector, not only rescore `entries`; without it a row no query word matches cannot surface. */
   vectorCandidates?: HybridVectorCandidates;

@@ -8,9 +8,9 @@ import {
   clearProjectIdentityCache,
   assertCallerProject,
   MAX_PROJECT_ALIASES,
-} from '../src/project-identity.js';
-import { BadRequestError } from '../src/api-errors.js';
-import { MAX_ID_LEN } from '../src/http-util.js';
+} from '../src/core/project-identity.js';
+import { BadRequestError } from '../src/core/api-errors.js';
+import { MAX_ID_LEN } from '../src/util/http-util.js';
 
 let tmpRoot: string;
 let home: string;

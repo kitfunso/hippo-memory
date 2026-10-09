@@ -2,16 +2,16 @@
 
 import * as path from 'path';
 import * as fs from 'fs';
-import { calculateStrength, deriveHalfLife } from '../memory.js';
+import { calculateStrength, deriveHalfLife } from '../core/memory.js';
 import { isInitialized } from '../store/open.js';
 import { writeEntry } from '../store/entry-writes.js';
 import { readEntry, loadAllEntries } from '../store/entry-reads.js';
 import { schemaFitInStore } from '../store/candidates.js';
 import { updateStats } from '../store/index-and-stats.js';
 import { RejectedValueError } from '../store/rejection.js';
-import { embedAll, embedMemory, loadEmbeddingIndex } from '../embeddings.js';
-import { loadConfig } from '../config.js';
-import { captureError, runWatched } from '../autolearn.js';
+import { embedAll, embedMemory, loadEmbeddingIndex } from '../store/embeddings/index.js';
+import { loadConfig } from '../core/config.js';
+import { captureError, runWatched } from '../learn/autolearn.js';
 import { currentMachine, importAtSessionEnd, importForStore } from '../agent-memories/sync.js';
 import { detailLines } from '../agent-memories/report.js';
 import {
@@ -22,7 +22,7 @@ import {
   autoShare,
   transferScore,
   syncGlobalToLocal,
-} from '../shared.js';
+} from '../sharing/shared.js';
 import {
   importChatGPT,
   importClaude,
@@ -32,11 +32,11 @@ import {
 import { importMarkdown } from '../importers/markdown.js';
 import { importVault } from '../importers/vault.js';
 import { ImportOptions, type ImportResult } from '../importers/core.js';
-import * as api from '../api.js';
+import * as api from '../api/index.js';
 import * as client from './client.js';
-import { resolveTenantId } from '../tenant.js';
+import { resolveTenantId } from '../store/tenant.js';
 import { printError } from './output.js';
-import { errorMessage, log } from '../log.js';
+import { errorMessage, log } from '../util/log.js';
 import { requireInit, runViaServerIfAvailable, fmt, type CliFlags, type CommandContext, learnFromRepo, boolFlag, flagIsTrue, nonEmptyStringFlag } from './shared.js';
 import { CONTENT_PREVIEW_CHARS, DATE_PREFIX_CHARS } from '../util/token-text.js';
 

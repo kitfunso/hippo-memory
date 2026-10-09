@@ -1,10 +1,10 @@
 // DAG summary verbs: `hippo dag`, `hippo assemble` and `hippo drill`.
 
 import { loadAllEntries } from '../store/entry-reads.js';
-import type { MemoryEntry } from '../memory.js';
-import * as api from '../api.js';
-import { resolveTenantId } from '../tenant.js';
-import { assembleCost, assembleHeading, drillCost, settleTokens } from '../context-render.js';
+import type { MemoryEntry } from '../core/memory.js';
+import * as api from '../api/index.js';
+import { resolveTenantId } from '../store/tenant.js';
+import { assembleCost, assembleHeading, drillCost, settleTokens } from '../api/context-render.js';
 import { printError } from './output.js';
 import { type CliFlags, parseBudgetFlag, requireInit, type CommandContext, captureConsole, flagIsTrue, stringFlag, numberFlag } from './shared.js';
 import { CONTENT_PREVIEW_CHARS } from '../util/token-text.js';

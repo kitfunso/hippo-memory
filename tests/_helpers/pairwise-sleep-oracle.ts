@@ -1,7 +1,7 @@
 // The all-pairs conflict and merge-partner passes sleep ran before the inverted index; kept as the oracle the indexed versions must match.
-import { calculateStrength, Layer, type DecayOptions, type MemoryEntry } from '../../src/memory.js';
-import { isQuarantineScope } from '../../src/quarantine.js';
-import { textOverlap } from '../../src/tokenize.js';
+import { calculateStrength, Layer, type DecayOptions, type MemoryEntry } from '../../src/core/memory.js';
+import { isQuarantineScope } from '../../src/trust/quarantine.js';
+import { textOverlap } from '../../src/util/tokenize.js';
 
 const DECAY_THRESHOLD = 0.05;
 const MERGE_OVERLAP_THRESHOLD = 0.35;

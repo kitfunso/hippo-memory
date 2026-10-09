@@ -18,7 +18,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { ingestMessage } from '../src/connectors/slack/ingest.js';
-import { adminActor } from '../src/api.js';
+import { adminActor } from '../src/api/index.js';
 import type { ChannelMeta } from '../src/connectors/slack/scope.js';
 
 function ctx(hippoRoot: string) {

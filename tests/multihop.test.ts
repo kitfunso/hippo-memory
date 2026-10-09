@@ -5,9 +5,9 @@ import * as path from 'path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { Layer} from '../src/memory.js';
+import { Layer} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { multihopSearch } from '../src/multihop.js';
+import { multihopSearch } from '../src/search/multihop.js';
 
 describe('multihopSearch', () => {
   let hippoRoot: string;

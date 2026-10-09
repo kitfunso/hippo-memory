@@ -16,9 +16,9 @@ import {
 import { importMarkdown } from '../src/importers/markdown.js';
 import { importVault } from '../src/importers/vault.js';
 import { type ImportOptions, type ImportResult } from '../src/importers/core.js';
-import { captureToolFailure } from '../src/capture-error.js';
-import { captureError, partitionLessons } from '../src/autolearn.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { captureToolFailure } from '../src/capture/capture-error.js';
+import { captureError, partitionLessons } from '../src/learn/autolearn.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { addWorkspace } from '../src/connectors/slack/workspaces.js';
 import { replayDlqEntry } from '../src/connectors/slack/dlq.js';
 

@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { serve, type ServerHandle } from '../src/server.js';
-import { remember, type Context, type RecallResult } from '../src/api.js';
+import { remember, type Context, type RecallResult } from '../src/api/index.js';
 
 let home: string;
 let handle: ServerHandle;
@@ -40,7 +40,7 @@ describe('HTTP /v1/memories rerank-trace wire-format', () => {
     const res = await fetch(`${handle.url}/v1/memories?q=auth&explain=1`);
     expect(res.status).toBe(200);
     // SAFETY: /v1/memories's JSON response body is the serialized
-    // RecallResult produced by src/api.ts's recall(), checked immediately by
+    // RecallResult produced by src/api/index.ts's recall(), checked immediately by
     // the assertions that follow.
     const body = (await res.json()) as RecallResult;
     expect(body.results.length).toBeGreaterThan(0);
@@ -53,7 +53,7 @@ describe('HTTP /v1/memories rerank-trace wire-format', () => {
     const res = await fetch(`${handle.url}/v1/memories?q=auth`);
     expect(res.status).toBe(200);
     // SAFETY: /v1/memories's JSON response body is the serialized
-    // RecallResult produced by src/api.ts's recall(), checked immediately by
+    // RecallResult produced by src/api/index.ts's recall(), checked immediately by
     // the assertions that follow.
     const body = (await res.json()) as RecallResult;
     expect(body.results.length).toBeGreaterThan(0);

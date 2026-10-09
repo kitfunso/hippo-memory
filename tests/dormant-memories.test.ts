@@ -20,23 +20,23 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { MEMORY_BACKED_TABLES } from '../src/store/delete-and-batch.js';
 import { loadStats } from '../src/store/index-and-stats.js';
-import { saveDecision } from '../src/decisions.js';
-import { saveIncident } from '../src/incidents.js';
-import { saveProcess } from '../src/processes.js';
-import { savePolicy } from '../src/policies.js';
-import { saveSkill } from '../src/skills.js';
-import { saveProjectBrief } from '../src/project-briefs.js';
-import { saveCustomerNote } from '../src/customer-notes.js';
+import { saveDecision } from '../src/objects/decisions.js';
+import { saveIncident } from '../src/objects/incidents.js';
+import { saveProcess } from '../src/objects/processes.js';
+import { savePolicy } from '../src/objects/policies.js';
+import { saveSkill } from '../src/objects/skills.js';
+import { saveProjectBrief } from '../src/objects/project-briefs.js';
+import { saveCustomerNote } from '../src/objects/customer-notes.js';
 import { savePrediction } from '../src/store/predictions.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { queryAuditEvents, type AuditEvent, type AuditOp } from '../src/store/audit.js';
 import { consolidate } from '../src/consolidate/sleep.js';
 import { insertDormantRow } from '../src/store/dormant.js';
-import { loadConfig } from '../src/config.js';
-import { createMemory, Layer, calculateStrength, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/memory.js';
+import { loadConfig } from '../src/core/config.js';
+import { createMemory, Layer, calculateStrength, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';
 import { RejectedValueError, rejectionDigest, insertRejectedValue } from '../src/store/rejection.js';
-import * as api from '../src/api.js';
-import { WRITE_BUDGET } from '../src/write-budget.js';
+import * as api from '../src/api/index.js';
+import { WRITE_BUDGET } from '../src/util/write-budget.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DORMANT_ON = JSON.stringify({ replay: { count: 0 }, dormant: { enabled: true } });
@@ -645,7 +645,7 @@ describe('memories that back a first-class object', () => {
       // SAFETY: each row is the single aliased TEXT column in the SELECT.
       const rows = db.prepare(`SELECT m.name AS name FROM sqlite_master m JOIN pragma_foreign_key_list(m.name) f
         WHERE m.type = 'table' AND f."table" = 'memories' AND f.on_delete = 'SET NULL'`).all() as { name: string }[];
-      // Graph rows drop their memory pointer by design (src/db.ts, the entities and relations schema).
+      // Graph rows drop their memory pointer by design (src/db/index.ts, the entities and relations schema).
       const objectTables = rows.map((r) => r.name).filter((t) => t !== 'entities' && t !== 'relations');
       expect([...MEMORY_BACKED_TABLES].sort()).toEqual(objectTables.sort());
     } finally {

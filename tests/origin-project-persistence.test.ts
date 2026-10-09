@@ -9,8 +9,8 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { batchWriteAndDelete } from '../src/store/delete-and-batch.js';
-import { openHippoDb, closeHippoDb, getSchemaVersion } from '../src/db.js';
-import { clearProjectIdentityCache } from '../src/project-identity.js';
+import { openHippoDb, closeHippoDb, getSchemaVersion } from '../src/db/index.js';
+import { clearProjectIdentityCache } from '../src/core/project-identity.js';
 
 let tmpRoot: string;
 

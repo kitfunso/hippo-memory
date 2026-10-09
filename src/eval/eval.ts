@@ -9,9 +9,9 @@
  * of intuition.
  */
 
-import type { MemoryEntry } from '../memory.js';
+import type { MemoryEntry } from '../core/memory.js';
 import { hybridSearch } from '../search/hybrid.js';
-import { searchBothHybrid } from '../shared.js';
+import { searchBothHybrid } from '../sharing/shared.js';
 import { isInitialized } from '../store/open.js';
 
 // Generous so metrics are not truncated.

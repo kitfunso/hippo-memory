@@ -1,11 +1,11 @@
-import { envJevModel, envJevTimeoutMs, envTypesafeApiKey } from '../env.js';
+import { envJevModel, envJevTimeoutMs, envTypesafeApiKey } from '../util/env.js';
 import type { RerankerFn, RerankResult, RerankerOptions } from './types.js';
 import type { SearchResult } from '../core/search-types.js';
-import { redactSecretsStrict } from '../secret-detect.js';
+import { redactSecretsStrict } from '../util/secret-detect.js';
 import { createOutageWarning } from './outage-warning.js';
 import { rerankerPost } from './remote.js';
-import { compareScoresDesc } from '../compare.js';
-import { errorMessage } from '../log.js';
+import { compareScoresDesc } from '../core/compare.js';
+import { errorMessage } from '../util/log.js';
 
 const REQUEST_ID_MAX_CHARS = 64;
 

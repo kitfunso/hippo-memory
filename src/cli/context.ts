@@ -1,16 +1,16 @@
 // The `hippo context` verb, which the per-prompt hook also runs; main() loads it lazily from the command table.
 
-import type { DeliveryRecorder } from '../delivery-recorder.js';
-import { isSubagentPayload } from '../token-ledger.js';
+import type { DeliveryRecorder } from '../store/delivery-recorder.js';
+import { isSubagentPayload } from '../store/token-ledger.js';
 import { estimateTokens } from '../util/token-text.js';
-import { autoDetectContext } from '../context-auto.js';
-import { detectScope } from '../scope.js';
-import { bookLedgerTurn } from '../ledger-db.js';
-import { readHookStdin } from '../stdin.js';
-import * as api from '../api.js';
-import { resolveTenantId } from '../tenant.js';
-import { renderAmbientSummary } from '../ambient.js';
-import { contextBlockLines, contextCost, crossProjectLines, settleTokens } from '../context-render.js';
+import { autoDetectContext } from '../api/context-auto.js';
+import { detectScope } from '../sharing/scope.js';
+import { bookLedgerTurn } from '../api/ledger-db.js';
+import { readHookStdin } from './stdin.js';
+import * as api from '../api/index.js';
+import { resolveTenantId } from '../store/tenant.js';
+import { renderAmbientSummary } from '../core/ambient.js';
+import { contextBlockLines, contextCost, crossProjectLines, settleTokens } from '../api/context-render.js';
 import {
   additionalContextOutput,
   type ContextView,
@@ -18,7 +18,7 @@ import {
   hasContextData,
   sessionStartEnvelope,
   toRenderItems,
-} from '../prompt-hook.js';
+} from '../api/prompt-hook.js';
 import {
   type CliFlags,
   parseLimitFlag,

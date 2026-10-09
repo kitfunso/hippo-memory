@@ -25,7 +25,7 @@ function makeRepo(version: string, overrides: Overrides = {}): string {
   for (const path of ['package.json', 'openclaw.plugin.json', 'extensions/openclaw-plugin/package.json', 'extensions/openclaw-plugin/openclaw.plugin.json', 'server.json']) {
     writeFileSync(join(root, path), JSON.stringify({ name: 'fixture', version }));
   }
-  writeFileSync(join(root, 'src', 'version.ts'), `export const PACKAGE_VERSION = '${version}';\n`);
+  writeFileSync(join(root, 'src', 'util/version.ts'), `export const PACKAGE_VERSION = '${version}';\n`);
   if (overrides.rawLockfile !== undefined) {
     writeFileSync(join(root, 'package-lock.json'), overrides.rawLockfile);
   } else if (!overrides.omitLockfile) {

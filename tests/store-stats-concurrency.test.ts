@@ -9,7 +9,7 @@ import { spawn } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { initStore } from '../src/store/open.js';
 import { loadStats } from '../src/store/index-and-stats.js';
-import { openHippoDb, closeHippoDb, getMeta } from '../src/db.js';
+import { openHippoDb, closeHippoDb, getMeta } from '../src/db/index.js';
 
 let root: string;
 

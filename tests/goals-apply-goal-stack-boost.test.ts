@@ -14,11 +14,11 @@ import type { RerankStep } from '../src/core/search-types.js';
 import { createMemory as createDefaultMemory } from './_helpers/default-half-life-memory.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { initStore } from '../src/store/open.js';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { pushGoal, writeGoalRecallLog, type GoalStackBoostOpts } from '../src/store/goals.js';
 import { sessionGoalBoost } from './_helpers/session-goal-boost.js';
-import { remember } from '../src/api.js';
-import { Layer, type MemoryEntry } from '../src/memory.js';
+import { remember } from '../src/api/index.js';
+import { Layer, type MemoryEntry } from '../src/core/memory.js';
 
 interface ScoredRow { entry: MemoryEntry; score: number; }
 

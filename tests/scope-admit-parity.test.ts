@@ -3,11 +3,11 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { closeHippoDb } from '../src/db.js';
+import { closeHippoDb } from '../src/db/index.js';
 import { initStore, openStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { passesScopeFilterForRecall, scopeAdmitSql } from '../src/recall-scope.js';
+import { passesScopeFilterForRecall, scopeAdmitSql } from '../src/store/recall-scope.js';
 
 const OWN_A = 'personal:private:a';
 const SCOPES: ReadonlyArray<string | null> = [

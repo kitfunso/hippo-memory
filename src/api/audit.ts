@@ -1,8 +1,8 @@
 // Audit log queries.
 
 import type { AuditEvent, AuditOp } from '../store/audit.js';
-import { requireGroup, storeFor } from '../store-port.js';
-import type { KeysetPosition } from '../keyset.js';
+import { requireGroup, storeFor } from '../store/index.js';
+import type { KeysetPosition } from '../util/keyset.js';
 import type { Context } from './types.js';
 
 // ---------------------------------------------------------------------------

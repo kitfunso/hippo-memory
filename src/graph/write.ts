@@ -1,7 +1,7 @@
 // Applies a rebuild's op list on the caller's transaction. The statements and the consolidated-source guard sit in the store's graph writers.
-import { assertTenantId } from '../tenant.js';
-import { clock } from '../write-budget.js';
-import type { DatabaseSyncLike } from '../db.js';
+import { assertTenantId } from '../store/tenant.js';
+import { clock } from '../util/write-budget.js';
+import type { DatabaseSyncLike } from '../db/index.js';
 import { deleteEntityRow, deleteRelationRow, entityIdBySource, insertEntity, insertRelation, objectInForce, relationPresent, updateEntity } from '../store/graph-writes.js';
 import type { DesiredRelation, GraphOp } from './delta.js';
 

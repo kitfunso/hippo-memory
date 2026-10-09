@@ -6,13 +6,13 @@ import { join, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { recordFailure, summarizeFailures, failuresBySession, type FailureOutcome } from '../src/store/failure-log.js';
-import { captureToolFailure } from '../src/capture-error.js';
+import { captureToolFailure } from '../src/capture/capture-error.js';
 import { failureSignature, lessonFromFailure } from '../src/capture/failure-reading.js';
 import { blockHash } from '../src/util/token-text.js';
 import { insertRejectedValue, normalizeValueForRejection, rejectionDigest, RejectedValueError } from '../src/store/rejection.js';
-import type { JsonValue } from '../src/json.js';
+import type { JsonValue } from '../src/util/json.js';
 
 const HIPPO_JS = resolve(__dirname, '..', 'bin', 'hippo.js');
 const ago = (days: number): string => new Date(Date.now() - days * 86_400_000).toISOString();

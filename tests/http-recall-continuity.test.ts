@@ -3,7 +3,7 @@ import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { saveActiveTaskSnapshot, appendSessionEvent } from '../src/store/sessions.js';
 import { saveSessionHandoff } from '../src/store/handoffs.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
 
