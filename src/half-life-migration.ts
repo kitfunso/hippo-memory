@@ -21,7 +21,7 @@
  */
 import { deriveHalfLife, type MemoryEntry } from './memory.js';
 import { openStore, HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY } from './store/open.js';
-import { selectAllEntries } from './store/entry-reads.js';
+import { objectMemoryRowsAt, selectAllEntries } from './store/entry-reads.js';
 import { conflictResolveAuditsAt, resolvedConflictsAt } from './store/conflicts.js';
 import { setHalfLivesAt } from './store/entry-writes.js';
 import { openHippoDb, closeHippoDb, getMeta, setMeta, type DatabaseSyncLike } from './db.js';
@@ -34,7 +34,6 @@ export const LEGACY_HALF_LIFE_BASE = 7;
 /** The flat half-life the decision, incident and other object writers gave their memories before they took the default. */
 export const LEGACY_TYPED_HALF_LIFE = 90;
 const TYPED_SOURCES: ReadonlySet<string> = new Set(['decision', 'incident', 'process', 'policy', 'skill', 'project_brief', 'customer_note']);
-const OBJECT_TABLES = ['decisions', 'incidents', 'processes', 'policies', 'skills', 'project_briefs', 'customer_notes'] as const;
 
 export { HALF_LIFE_BASE_META_KEY };
 
@@ -155,13 +154,9 @@ export function migrateDefaultHalfLife(hippoRoot: string, to: number, opts: { dr
 function objectMemoryIds(db: DatabaseSyncLike) {
   const all = new Set<string>();
   const retired = new Set<string>();
-  for (const table of OBJECT_TABLES) {
-    // SAFETY: SELECT of two TEXT columns, filtered to a non-null memory_id.
-    const rows = db.prepare(`SELECT memory_id, status FROM ${table} WHERE memory_id IS NOT NULL`).all() as { memory_id: string; status: string }[];
-    for (const r of rows) {
-      all.add(r.memory_id);
-      if (r.status === 'superseded' || r.status === 'closed') retired.add(r.memory_id);
-    }
+  for (const r of objectMemoryRowsAt(db)) {
+    all.add(r.memory_id);
+    if (r.status === 'superseded' || r.status === 'closed') retired.add(r.memory_id);
   }
   return { all, retired };
 }
