@@ -106,19 +106,21 @@ function sourceOf(store: HippoStore): ContextSource {
   return { store, reads: requireGroup(store, 'contextReads') };
 }
 
-// The pinned-only branch needs pins and recent-N candidates, not the corpus; `recent` and `recall` apply there only.
-// `recheck` is `admit` without the delivery observer, so a row checked twice is not refused twice in the ledger.
-async function loadAmbientEntries(
-  source: ContextSource,
-  tenantId: string,
-  pinnedOnly: boolean,
-  recent: RecentRequest,
-  admit: (e: MemoryEntry) => boolean,
-  recheck: (e: MemoryEntry) => boolean,
-  window: ContextCandidateFilter | ContextQueryWindow,
-  recall?: AmbientRecallRequest,
-  onQualityDrop?: (e: MemoryEntry) => void,
-): Promise<AmbientLoadResult> {
+/** What one store's ambient read is asked for. `recent`, `recall` and `onQualityDrop` apply to the pinned-only branch alone. */
+interface LoadAmbientEntriesOptions {
+  readonly pinnedOnly: boolean;
+  readonly recent: RecentRequest;
+  readonly admit: (e: MemoryEntry) => boolean;
+  /** `admit` without the delivery observer, so a row checked twice is not refused twice in the ledger. */
+  readonly recheck: (e: MemoryEntry) => boolean;
+  readonly window: ContextCandidateFilter | ContextQueryWindow;
+  readonly recall?: AmbientRecallRequest;
+  readonly onQualityDrop?: (e: MemoryEntry) => void;
+}
+
+// The pinned-only branch needs pins and recent-N candidates, not the corpus.
+async function loadAmbientEntries(source: ContextSource, tenantId: string, options: LoadAmbientEntriesOptions): Promise<AmbientLoadResult> {
+  const { pinnedOnly, recent, admit, recheck, window, recall, onQualityDrop } = options;
   const ownTenant = (e: MemoryEntry): boolean => e.tenantId === tenantId;
   if (!pinnedOnly) {
     const rows = 'query' in window
@@ -416,11 +418,12 @@ async function loadPools(
         now: evalNow(),
       };
   // Tenant-scoped loads: never resolveTenantId({}) here.
+  const read = { pinnedOnly, recent, admit: loadAdmit, recheck: poolAdmit, window, recall: recallRequest };
   const local: AmbientLoadResult = plan.hasLocal
-    ? await loadAmbientEntries(plan.local, ctx.tenantId, pinnedOnly, recent, loadAdmit, poolAdmit, window, recallRequest, qualityDrop(primaryIsGlobal))
+    ? await loadAmbientEntries(plan.local, ctx.tenantId, { ...read, onQualityDrop: qualityDrop(primaryIsGlobal) })
     : { entries: [] };
   const global: AmbientLoadResult = hasGlobal && !primaryIsGlobal
-    ? await loadAmbientEntries(sourceOf(sqliteStore(plan.globalRoot)), ctx.tenantId, pinnedOnly, recent, loadAdmit, poolAdmit, window, recallRequest, qualityDrop(true))
+    ? await loadAmbientEntries(sourceOf(sqliteStore(plan.globalRoot)), ctx.tenantId, { ...read, onQualityDrop: qualityDrop(true) })
     : { entries: [] };
   return { local, global };
 }
