@@ -223,7 +223,8 @@ describe('config.sharedStore', () => {
     try {
       expect(stickyThrough(link, tmp)).toBe(true);
     } finally {
-      fs.rmSync(link, { force: true });
+      // unlink removes the link alone on every platform; rmSync without recursive rejects a junction on some Node 24 builds.
+      fs.unlinkSync(link);
     }
   });
 
