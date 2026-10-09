@@ -88,7 +88,7 @@ Limits found in one-off runs of the built CLI while these tests were written. No
 
 - A capture that meets a busy store is not queued. Only the next reply in the same chat retries a VS Code reply, and nothing retries a full session end. The spool that keeps a busy post-compact does not cover these two paths.
 - A worker killed during the progress cursor save leaves its `<session id>.cursor.json.<pid>.tmp` file in `~/.hippo/sessions`.
-- Two sessions that save the same sentence at the same moment both write it. One after the other, the second save is skipped. The next sleep drops one of the two copies and merges the pair into one consolidated memory, so two rows still hold the sentence.
+- Two sessions that save the same sentence at the same moment both write it. One after the other in one project, the second save is skipped. The next sleep drops one of the two copies and merges the pair into one consolidated memory, so two rows still hold the sentence.
 
 ## Next steps (AZ4)
 

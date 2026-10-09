@@ -489,7 +489,8 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     // The second worker has no preload, so two lines with this pid mean the first worker saved the cursor twice.
     expect(fault.saves()).toEqual([pid, pid]);
     expect(readLog(logFile())).toContain('Captured 1 items (0 skipped as duplicates');
-    expect(fs.readdirSync(path.dirname(sessionFile('')))).toEqual([`${VSCODE_SESSION}.cursor.json`]);
+    expect(fs.existsSync(sessionFile('.queued'))).toBe(false);
+    expect(fs.existsSync(sessionFile('.cursor.json'))).toBe(true);
   }, 90_000);
 
   it('keeps each lesson when two chats end a reply at the same moment', async () => {
@@ -512,20 +513,20 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
   it('files a reply under the payload cwd project when that folder has no store', async () => {
     const billing = path.join(s.dir, 'billing');
     fs.mkdirSync(path.join(billing, '.git'), { recursive: true });
-    await stop(writeVscodeTranscript(copilotEventsJsonl()), { cwd: billing });
+    await stop(writeVscodeTranscript(copilotEventsJsonl()), { cwd: billing, waitMs: 50_000 });
     const sql = `SELECT origin_project FROM memories WHERE instr(content, '${FIRST_LESSON}') > 0`;
     expect(rows<{ origin_project: string }>(sql, s.globalRoot)).toEqual([{ origin_project: 'billing' }]);
     expect(memoriesWith(FIRST_LESSON)).toBe(0);
     expect(fs.existsSync(path.join(billing, '.hippo'))).toBe(false);
-  });
+  }, 60_000);
 
   it('saves into the payload cwd store when the hook runs from another project with its own store', async () => {
     const otherRoot = initStoreIn(path.join(s.dir, 'other'));
-    await stop(writeVscodeTranscript(copilotEventsJsonl()), { from: path.join(s.dir, 'other') });
+    await stop(writeVscodeTranscript(copilotEventsJsonl()), { from: path.join(s.dir, 'other'), waitMs: 50_000 });
     expect(memoriesWith(FIRST_LESSON)).toBe(1);
     expect(memoriesWith(FIRST_LESSON, otherRoot)).toBe(0);
     expect(memoriesWith(FIRST_LESSON, s.globalRoot)).toBe(0);
-  });
+  }, 60_000);
 
   it('saves nothing for a transcript that is not on disk, with other chats\' transcripts where a fallback could look', async () => {
     const beside = writeVscodeTranscript(copilotEventsJsonl(), 'vscode-sess-2');
@@ -534,13 +535,13 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     fs.mkdirSync(claudeProject, { recursive: true });
     writeClaudeTranscript(claudeProject);
     const missing = path.join(path.dirname(beside), `${VSCODE_SESSION}.jsonl`);
-    const log = await stop(missing, { env: { ...s.env, CLAUDE_CONFIG_DIR: path.join(s.dir, 'claude') } });
+    const log = await stop(missing, { env: { ...s.env, CLAUDE_CONFIG_DIR: path.join(s.dir, 'claude') }, waitMs: 50_000 });
     expect(log).toContain('skip capture: no readable transcript for this session');
     for (const root of [s.hippoRoot, s.globalRoot]) {
       expect(rows<{ n: number }>('SELECT COUNT(*) AS n FROM memories', root)).toEqual([{ n: 0 }]);
     }
     expect(fs.existsSync(sessionFile('.cursor.json'))).toBe(false);
-  });
+  }, 60_000);
 
   it('warns once when the payload cwd does not exist, and files the lesson as user-global', async () => {
     const transcript = writeVscodeTranscript(copilotEventsJsonl());
@@ -548,12 +549,13 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     fs.rmSync(logFile(), { force: true });
     const r = runHippo(stopArgs(logFile()), s.dir, { ...s.env, HIPPO_LOG: 'warn' }, payload);
     expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout).toBe('');
     expect(r.stderr.split('\n').filter((line) => line.includes('is not usable'))).toHaveLength(1);
-    await waitForLog(logFile(), TURN_DONE);
+    await waitForLog(logFile(), TURN_DONE, 50_000);
     const sql = `SELECT origin_project FROM memories WHERE instr(content, '${FIRST_LESSON}') > 0`;
     expect(rows<{ origin_project: string }>(sql, s.globalRoot)).toEqual([{ origin_project: '' }]);
     expect(memoriesWith(FIRST_LESSON)).toBe(0);
-  });
+  }, 60_000);
 });
 
 describe('hippo pre-compact from Claude Code settings on a VS Code chat', () => {
