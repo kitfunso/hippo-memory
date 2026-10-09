@@ -6,7 +6,7 @@
   "sqliteOnlyRoutes": 2,
   "routesOnLoop": 64,
   "twinFunctions": 0,
-  "sqlOutside": 54,
+  "sqlOutside": 40,
   "txLiterals": 12,
   "openersOutsideByFile": {
     "src/agent-memories/sync.ts": 3,
@@ -50,7 +50,6 @@
   "sqlOutsideByFile": {
     "src/api/dormant.ts": 1,
     "src/cli/audit-prune.ts": 2,
-    "src/compaction-record.ts": 10,
     "src/decisions.ts": 1,
     "src/doctor.ts": 4,
     "src/half-life-migration.ts": 1,
@@ -60,7 +59,6 @@
     "src/pilot-arm.ts": 1,
     "src/policies.ts": 1,
     "src/project-briefs.ts": 2,
-    "src/project-merge.ts": 4,
     "src/quarantine.ts": 1,
     "src/reject-flow.ts": 2,
     "src/skills.ts": 1,

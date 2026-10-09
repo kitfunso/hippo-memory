@@ -9,9 +9,13 @@ import { isSharedStore, loadConfig } from './config.js';
 import { closeHippoDb, isSqliteBusy, openHippoDb, withWriteScopeOr, type DatabaseSyncLike } from './db.js';
 import { gatedWrite } from './gated-write.js';
 import { COMPACTION_MEMORY_TAG, COMPACTION_SOURCE_PREFIX, Layer, createMemory, generateId, type MemoryEntry } from './memory.js';
-import { fallbackOrigin, isGlobalStoreRoot, originInSql, projectId, projectNames, resolveProjectIdentity, type ProjectRef } from './project-identity.js';
-import { scopeAdmitSql } from './recall-scope.js';
+import { fallbackOrigin, isGlobalStoreRoot, projectId, projectNames, resolveProjectIdentity, type ProjectRef } from './project-identity.js';
 import { maskEmails, redactSecretsStrict } from './secret-detect.js';
+import {
+  closeStartedWithoutSummary, compactionProgress, compactionRowsByRequest, heldMemoryRows, insertStartedCompaction, insertSummarisedCompaction,
+  latestCompactionRows, latestStartedRows, markCompactionDone, markCompactionSummarised, markSnapshotSavedRow, nextCompactionStart, openTranscriptRows, stalledSummarisedRows,
+  type CompactionRow, type CompactionStatus,
+} from './store/compactions.js';
 import { strengthenRetrievedOn, writeEntryMirrors } from './store/entry-writes.js';
 import { isRecallBoostAblated } from './ablation.js';
 import { updateStats } from './store/index-and-stats.js';
@@ -35,7 +39,7 @@ const TRANSCRIPT_TAIL_CAPS = [1 << 20, 8 << 20, 64 << 20];
 /** The marker redactSecretsStrict writes; an item holding it was a secret before it was stored. */
 const REDACTED = '[REDACTED]';
 
-export type CompactionStatus = 'started' | 'summarised' | 'done' | 'no-summary';
+export type { CompactionStatus };
 
 export interface CompactionRecord {
   id: string;
@@ -51,23 +55,6 @@ export interface CompactionRecord {
   summary: string | null;
   items: string[];
   itemsWritten: number;
-  status: CompactionStatus;
-}
-
-interface CompactionRow {
-  tenant_id: string;
-  id: string;
-  session_id: string;
-  origin_project: string;
-  compact_trigger: string | null;
-  cwd: string | null;
-  transcript_path: string | null;
-  snapshot_saved: number;
-  started_at: string;
-  summarised_at: string | null;
-  summary: string | null;
-  items_json: string | null;
-  items_written: number;
   status: CompactionStatus;
 }
 
@@ -138,14 +125,6 @@ function toRecord(row: CompactionRow): CompactionRecord {
   };
 }
 
-const COLUMNS = 'tenant_id, id, session_id, origin_project, compact_trigger, cwd, transcript_path, snapshot_saved, started_at, summarised_at, summary, items_json, items_written, status';
-
-function selectRecords(db: DatabaseSyncLike, where: string, ...params: Array<string | number>): CompactionRecord[] {
-  // SAFETY: the SELECT names exactly COLUMNS, matching CompactionRow's field set.
-  const rows = db.prepare(`SELECT ${COLUMNS} FROM compactions WHERE ${where}`).all(...params) as CompactionRow[];
-  return rows.map(toRecord);
-}
-
 export interface CompactionStart {
   sessionId: string;
   originProject: string;
@@ -156,21 +135,18 @@ export interface CompactionStart {
 
 export function startCompaction(db: DatabaseSyncLike, tenantId: string, start: CompactionStart, at: Date = new Date()): string {
   const id = generateId('cmp');
-  db.prepare(
-    `INSERT INTO compactions(tenant_id, id, session_id, origin_project, compact_trigger, cwd, transcript_path, started_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(tenantId, id, start.sessionId, start.originProject, start.trigger, start.cwd, start.transcriptPath, at.toISOString());
+  insertStartedCompaction(db, tenantId, { id, ...start, startedAt: at.toISOString() });
   return id;
 }
 
 /** A session's newest record, or null. */
 export function latestCompaction(db: DatabaseSyncLike, tenantId: string, sessionId: string): CompactionRecord | null {
-  return selectRecords(db, 'tenant_id = ? AND session_id = ? ORDER BY started_at DESC, id DESC LIMIT 1', tenantId, sessionId)[0] ?? null;
+  return latestCompactionRows(db, tenantId, sessionId).map(toRecord)[0] ?? null;
 }
 
 /** The record a caller's request made, whatever state it reached, so a retry neither writes its items twice nor starts a second record; another session's id is a ConflictError. */
 export function compactionByRequest(db: DatabaseSyncLike, tenantId: string, requestId: string, sessionId: string): CompactionRecord | null {
-  const record = selectRecords(db, 'tenant_id = ? AND request_id = ?', tenantId, requestId)[0] ?? null;
+  const record = compactionRowsByRequest(db, tenantId, requestId).map(toRecord)[0] ?? null;
   // Sessions are owner-bound, so this also keeps one owner from reading or finishing another's record.
   if (record !== null && record.sessionId !== sessionId) throw new ConflictError('request id belongs to another session');
   return record;
@@ -178,14 +154,7 @@ export function compactionByRequest(db: DatabaseSyncLike, tenantId: string, requ
 
 /** Pre-compact's record for the compaction that is ending: the session's newest `started` one within REPLAY_AFTER_MS before `at`, so an older one is left for the transcript fill. */
 function latestStarted(db: DatabaseSyncLike, tenantId: string, sessionId: string, at: Date): CompactionRecord | null {
-  return selectRecords(
-    db,
-    `tenant_id = ? AND session_id = ? AND status = 'started' AND started_at <= ? AND started_at >= ? ORDER BY started_at DESC, id DESC LIMIT 1`,
-    tenantId,
-    sessionId,
-    at.toISOString(),
-    new Date(at.getTime() - REPLAY_AFTER_MS).toISOString(),
-  )[0] ?? null;
+  return latestStartedRows(db, tenantId, sessionId, at.toISOString(), new Date(at.getTime() - REPLAY_AFTER_MS).toISOString()).map(toRecord)[0] ?? null;
 }
 
 /** Moves a `started` record to `summarised`; false when another process already moved it. The request id lands in the same statement, so no crash leaves the record unfindable by its retry. */
@@ -197,13 +166,7 @@ interface MarkSummarisedOptions {
 
 function markSummarised(db: DatabaseSyncLike, tenantId: string, id: string, options: MarkSummarisedOptions): boolean {
   const { text, summarisedAt, requestId } = options;
-  // Only a caller names the column, so a store from before it was added still takes local writes.
-  const stamp = requestId === undefined ? [] : [requestId];
-  const result = db.prepare(
-    `UPDATE compactions SET summary = ?, items_json = ?, summarised_at = ?, status = 'summarised'${stamp.length === 0 ? '' : ', request_id = ?'}
-     WHERE tenant_id = ? AND id = ? AND status = 'started'`,
-  ).run(text.summary, JSON.stringify(text.items), summarisedAt, ...stamp, tenantId, id);
-  return (result.changes ?? 0) > 0;
+  return markCompactionSummarised(db, tenantId, id, { summary: text.summary, itemsJson: JSON.stringify(text.items), summarisedAt, requestId });
 }
 
 /** Best effort, never throws: a compaction must not fail because its record could not be written. */
@@ -222,7 +185,7 @@ export function recordCompactionStart(hippoRoot: string, start: Omit<CompactionS
 
 /** On the caller's handle and tenant, so a server marks the record under the caller's tenant with its own wait. */
 export function markSnapshotSaved(db: DatabaseSyncLike, tenantId: string, recordId: string): void {
-  db.prepare(`UPDATE compactions SET snapshot_saved = 1 WHERE tenant_id = ? AND id = ?`).run(tenantId, recordId);
+  markSnapshotSavedRow(db, tenantId, recordId);
 }
 
 export function recordSnapshotSaved(hippoRoot: string, tenantId: string, recordId: string, log: Log): void {
@@ -272,13 +235,7 @@ export function recordSummary(
   }
   const originProject = caller.originProject ?? compactionOrigin(hippoRoot, meta.cwd);
   const id = generateId('cmp');
-  // Only a caller names the column, so a store from before it was added still takes local writes.
-  const stamp = requestId === undefined ? [] : [requestId];
-  const [col, mark] = stamp.length === 0 ? ['', ''] : [', request_id', ', ?'];
-  db.prepare(
-    `INSERT INTO compactions(tenant_id, id, session_id, origin_project, compact_trigger, cwd, transcript_path, started_at, summarised_at, summary, items_json, status${col})
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'summarised'${mark})`,
-  ).run(tenantId, id, meta.sessionId, originProject, meta.trigger, meta.cwd, meta.transcriptPath, at.toISOString(), now, text.summary, itemsJson, ...stamp);
+  insertSummarisedCompaction(db, tenantId, { ...meta, originProject, startedAt: at.toISOString() }, { id, summary: text.summary, itemsJson, summarisedAt: now, requestId });
   return {
     id, tenantId, sessionId: meta.sessionId, originProject, trigger: meta.trigger, cwd: meta.cwd, transcriptPath: meta.transcriptPath,
     snapshotSaved: false, startedAt: at.toISOString(), summarisedAt: now, summary: text.summary, items: text.items, itemsWritten: 0, status: 'summarised',
@@ -328,13 +285,7 @@ interface Held {
 
 /** Live rows of one tenant and origin that default recall shows: a compaction often restates what an earlier one, or the user, already saved. */
 function heldRows(db: DatabaseSyncLike, tenantId: string, origins: readonly string[]): Held[] {
-  const deny = scopeAdmitSql('');
-  // SAFETY: the SELECT names the id, source_session_id and content columns.
-  const rows = db.prepare(
-    `SELECT id, source_session_id, content FROM memories WHERE tenant_id = ? AND ${originInSql(origins)} AND superseded_by IS NULL AND kind != 'raw'
-       AND ${deny.sql}`,
-  ).all(tenantId, ...origins, ...deny.params) as Array<{ id: string; source_session_id: string | null; content: string }>;
-  return rows.map((r) => ({ id: r.id, sessionId: r.source_session_id, words: words(r.content) }));
+  return heldMemoryRows(db, tenantId, origins).map((r) => ({ id: r.id, sessionId: r.source_session_id, words: words(r.content) }));
 }
 
 interface ItemWrites {
@@ -419,8 +370,7 @@ export function saveItems(db: DatabaseSyncLike, hippoRoot: string, ctx: ItemCont
   const writes = withWriteScopeOr<ItemWrites, null>(db, 'save_items', (rollback) => {
     if (ctx.recordId !== null) {
       // A replayer that read the record before another finished it must not write its items again.
-      const current = db.prepare(`SELECT status, items_written FROM compactions WHERE tenant_id = ? AND id = ?`)
-        .get<{ status: CompactionStatus; items_written: number } | undefined>(ctx.tenantId, ctx.recordId);
+      const current = compactionProgress(db, ctx.tenantId, ctx.recordId);
       if (current?.status !== 'summarised') {
         finishedItems = current?.items_written ?? 0;
         return rollback(null);
@@ -430,7 +380,7 @@ export function saveItems(db: DatabaseSyncLike, hippoRoot: string, ctx: ItemCont
     // Said again by another session is the same signal as being recalled; the same session carrying it forward is not.
     strengthenRetrievedOn(db, written.restated, { tenantId: ctx.tenantId, recallBoostAblated: isRecallBoostAblated() });
     if (ctx.recordId !== null) {
-      db.prepare(`UPDATE compactions SET items_written = ?, status = 'done' WHERE tenant_id = ? AND id = ?`).run(written.written.length, ctx.tenantId, ctx.recordId);
+      markCompactionDone(db, ctx.tenantId, ctx.recordId, written.written.length);
     }
     return written;
   });
@@ -580,14 +530,11 @@ function transcriptSummary(transcriptPath: string, afterMs: number, beforeMs: nu
 }
 
 function closeWithoutSummary(db: DatabaseSyncLike, tenantId: string, id: string, log: Log): void {
-  const result = db.prepare(`UPDATE compactions SET status = 'no-summary' WHERE tenant_id = ? AND id = ? AND status = 'started'`).run(tenantId, id);
-  if ((result.changes ?? 0) > 0) log(`${id} closed as no-summary: its transcript holds no summary for it`);
+  if (closeStartedWithoutSummary(db, tenantId, id) > 0) log(`${id} closed as no-summary: its transcript holds no summary for it`);
 }
 
 function nextStartedAt(db: DatabaseSyncLike, record: CompactionRecord): string | null {
-  const row = db.prepare(`SELECT MIN(started_at) AS at FROM compactions WHERE tenant_id = ? AND session_id = ? AND started_at > ?`)
-    .get<{ at: string | null } | undefined>(record.tenantId, record.sessionId, record.startedAt);
-  return row?.at ?? null;
+  return nextCompactionStart(db, record.tenantId, record.sessionId, record.startedAt);
 }
 
 /** Records a spooled summary, then writes its items. */
@@ -606,7 +553,7 @@ export function replayCompactions(db: DatabaseSyncLike, hippoRoot: string, log: 
   const now = Date.now();
   let finished = 0;
 
-  const stalled = selectRecords(db, `tenant_id = ? AND status = 'summarised' AND summarised_at < ?`, tenantId, new Date(now - REPLAY_AFTER_MS).toISOString());
+  const stalled = stalledSummarisedRows(db, tenantId, new Date(now - REPLAY_AFTER_MS).toISOString()).map(toRecord);
   for (const record of stalled) {
     if (Date.now() > deadline) break;
     try {
@@ -623,13 +570,12 @@ export function replayCompactions(db: DatabaseSyncLike, hippoRoot: string, log: 
     log(`spool import failed: ${errorMessage(err)}`);
   }
 
-  const open = selectRecords(
+  const open = openTranscriptRows(
     db,
-    `tenant_id = ? AND status = 'started' AND started_at < ? AND started_at > ? AND transcript_path IS NOT NULL ORDER BY started_at`,
     tenantId,
     new Date(now - REPLAY_AFTER_MS).toISOString(),
     new Date(now - TRANSCRIPT_FILL_WINDOW_MS).toISOString(),
-  );
+  ).map(toRecord);
   for (const record of open) {
     if (Date.now() > deadline) break;
     try {
