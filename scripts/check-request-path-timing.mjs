@@ -174,8 +174,8 @@ try {
     const work = await countWork(run);
     const overWork = MEMORIES === CEILING_MEMORIES && (work.statements > maxStatements || work.rows > maxRows || work.opens > maxOpens);
     overworked ||= overWork;
-    // A request that moves to a worker thread counts nothing here, and every ceiling would pass it unread.
-    uncounted ||= maxStatements > 0 && work.statements === 0;
+    // A request that moves to a worker thread, or an open whose pragma text changes, counts nothing here, and the ceiling would pass it unread.
+    uncounted ||= (maxStatements > 0 && work.statements === 0) || (maxOpens > 0 && work.opens === 0);
     console.log(`${label.padEnd(26)} ${median.toFixed(1).padStart(8)} ms  ${String(work.statements).padStart(4)} of ${maxStatements} statements, ${String(work.rows).padStart(6)} of ${maxRows} rows, ${String(work.opens).padStart(2)} of ${maxOpens} opens${overWork ? '  OVER CEILING' : ''}`);
     summary.push(`| ${label} | ${median.toFixed(1)} | ${work.statements} of ${maxStatements} | ${work.rows} of ${maxRows} | ${work.opens} of ${maxOpens} |`);
   }
@@ -188,5 +188,5 @@ try {
 }
 if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `### Request-path work at ${MEMORIES} memories\n\n${summary.join('\n')}\n\n`);
 if (overworked) console.error('request-path work: a request ran more statements, read more rows or opened more stores than its ceiling; find the new query before raising a ceiling');
-if (uncounted) console.error('request-path work: a request with ceilings ran no statement on this thread; count its work where it now runs');
+if (uncounted) console.error('request-path work: a request with ceilings ran no statement or opened no store on this thread; count its work where it now runs');
 if (overworked || uncounted) process.exit(1);

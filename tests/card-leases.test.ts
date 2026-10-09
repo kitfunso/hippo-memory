@@ -375,14 +375,15 @@ function holdLockThenRun(dbPath: string, sql: string, params: unknown[], holdMs:
     db.prepare(workerData.sql).run(...workerData.params);
     parentPort.postMessage('locked');
     parentPort.once('message', () => setTimeout(() => {
+      Atomics.store(workerData.holdEnded, 0, 1);
       db.exec('COMMIT');
-      Atomics.store(workerData.committed, 0, 1);
       db.close();
       parentPort.postMessage('released');
     }, workerData.holdMs));
   `;
-  const committed = new Int32Array(new SharedArrayBuffer(4));
-  const worker = new Worker(workerCode, { eval: true, workerData: { dbPath, sql, params, holdMs, committed } });
+  // Set before COMMIT: the commit frees the lock, and the waiting call can return before this thread runs its next line.
+  const holdEnded = new Int32Array(new SharedArrayBuffer(4));
+  const worker = new Worker(workerCode, { eval: true, workerData: { dbPath, sql, params, holdMs, holdEnded } });
   const locked = new Promise<void>((resolve) => {
     worker.once('message', (msg) => { if (msg === 'locked') resolve(); });
   });
@@ -391,7 +392,7 @@ function holdLockThenRun(dbPath: string, sql: string, params: unknown[], holdMs:
   });
   // The hold is counted from this call, made right before the blocking one, so a stalled test thread cannot let the lock go early.
   const startHold = (): void => worker.postMessage('hold');
-  return { locked, released, startHold, hasCommitted: () => Atomics.load(committed, 0) === 1 };
+  return { locked, released, startHold, holdHadEnded: () => Atomics.load(holdEnded, 0) === 1 };
 }
 
 describe('reclaim under a real second connection', () => {
@@ -408,7 +409,7 @@ describe('reclaim under a real second connection', () => {
     }
 
     const dbPath = join(root, 'hippo.db');
-    const { locked, released, startHold, hasCommitted } = holdLockThenRun(
+    const { locked, released, startHold, holdHadEnded } = holdLockThenRun(
       dbPath,
       `UPDATE cards SET title = ? WHERE id = ?`,
       ['retitled', otherReady.id],
@@ -418,11 +419,11 @@ describe('reclaim under a real second connection', () => {
 
     startHold();
     const reclaimed = reclaimExpiredCards(root, 'default');
-    const committedByReturn = hasCommitted();
+    const endedByReturn = holdHadEnded();
 
     expect(reclaimed).toEqual([expiredCard.id]);
-    // The other connection committed while the sweep ran, so the sweep waited for the lock and did not return early.
-    expect(committedByReturn).toBe(true);
+    // A sweep that did not wait returns while the lock is still held, before the hold ends.
+    expect(endedByReturn).toBe(true);
     await released;
   });
 });
