@@ -35,6 +35,7 @@ import { computeSalience } from '../salience.js';
 import { validateOwner, isStrictOwnerEnv } from './owner-validation.js';
 import { printError } from './output.js';
 import { emitCliAudit, requireInit, runViaServerIfAvailable, fmt, type CliFlags, type CommandContext } from './shared.js';
+import { DAY_MS } from '../util/time.js';
 
 // `requested` is what the caller typed; `all` adds path and scope tags from this process's cwd and env.
 interface RememberTags {
@@ -386,15 +387,15 @@ function traceStats(entry: MemoryEntry) {
   const rewardFactor = calculateRewardFactor(entry);
   const effHalfLife = halfLife * rewardFactor;
   const createdMs = new Date(entry.created).getTime();
-  const ageDays = (now.getTime() - createdMs) / 86_400_000;
+  const ageDays = (now.getTime() - createdMs) / DAY_MS;
   const lastMs = new Date(entry.last_retrieved).getTime();
-  const sinceLast = (now.getTime() - lastMs) / 86_400_000;
+  const sinceLast = (now.getTime() - lastMs) / DAY_MS;
   const facets = confidenceFacets(entry, now);
   const conf = confidenceLabel(entry, now).text;
 
   // Projected strength: same decay curve, just push `now` out.
   const projectedAt = (days: number): number =>
-    calculateStrength(entry, new Date(now.getTime() + days * 86_400_000));
+    calculateStrength(entry, new Date(now.getTime() + days * DAY_MS));
   return { strength, halfLife, rewardFactor, effHalfLife, ageDays, sinceLast, facets, conf, projectedAt };
 }
 

@@ -5,6 +5,7 @@ import { closeHippoDb, execWithBusyRetry, HOOK_DB_WAIT_MS, openHippoDb, scopedBu
 import { raiseMinBinary } from './db/meta.js';
 import { assertTenantId } from './tenant.js';
 import { TASK_OWNER_MIN_BINARY } from './version.js';
+import { DAY_MS } from './util/time.js';
 
 /** Bindings older than this are pruned when a new session binds. */
 const BINDING_RETENTION_DAYS = 90;
@@ -25,7 +26,7 @@ export function insertBinding(db: DatabaseSyncLike, tenantId: string, sessionId:
     if (Number(result.changes ?? 0) === 1) raiseMinBinary(db, TASK_OWNER_MIN_BINARY);
     // Pruned on write, as the failure log is; a pruned session id is a UUID no other caller knows.
     // SHORTCUT: no created_at index, so each first bind scans the table; add one past a few hundred thousand rows.
-    db.prepare(`DELETE FROM session_owners WHERE created_at < ?`).run(new Date(Date.now() - BINDING_RETENTION_DAYS * 86_400_000).toISOString());
+    db.prepare(`DELETE FROM session_owners WHERE created_at < ?`).run(new Date(Date.now() - BINDING_RETENTION_DAYS * DAY_MS).toISOString());
     db.exec('COMMIT');
   } catch (err) {
     try { db.exec('ROLLBACK'); } catch { /* the insert's error is the one to surface */ }

@@ -10,6 +10,7 @@ import { commonDerivationScope } from '../recall-scope.js';
 import { log } from '../log.js';
 import { REPLAY_COUNT_DEFAULT, type SleepRun } from './run.js';
 import { type JsonValue, isJsonString } from '../json.js';
+import { DAY_MS } from '../util/time.js';
 
 // -------------------------------------------------------------------------
 // 1.4. Auto-promote complete sessions to traces
@@ -24,7 +25,7 @@ export function promoteSessionTraces(run: SleepRun): void {
   if (run.dryRun || run.config.autoTraceCapture === false) return;
   let tracesSkippedRejected = 0;
   const windowDays = run.config.autoTraceWindowDays ?? 7;
-  const sinceMs = run.now.getTime() - windowDays * 24 * 60 * 60 * 1000;
+  const sinceMs = run.now.getTime() - windowDays * DAY_MS;
   // Auto-trace runs single-tenant (the env-resolved tenant); consolidating
   // every tenant needs a per-tenant loop layered on top of this.
   const consolidationTenant = resolveTenantId({});

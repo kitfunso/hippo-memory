@@ -4,13 +4,14 @@ import { isOutcomeFastAblated, isRecencyAblated, evalRecencyScaleDays } from '..
 import { pathBoostMultiplier } from '../path-context.js';
 import { scopeMatch } from '../scope.js';
 import { temporalBoost, type TemporalDirection, type TemporalRange } from './temporal.js';
+import { DAY_MS } from '../util/time.js';
 
 export const CHURN_STALE_RANK_MULTIPLIER = 0.5; // SHORTCUT: untuned; measure on real recall before any default.
 
 const DECISION_TAG_BOOST = 1.2;
 const DEFAULT_SUMMARY_DEBOOST = 0.85;
 const DEFAULT_FRESHNESS_BOOST = 1.05;
-const FRESHNESS_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+const FRESHNESS_WINDOW_MS = 7 * DAY_MS;
 
 export function churnStaleFactor(entry: MemoryEntry): number {
   return entry.tags.includes(CHURN_STALE_TAG) ? CHURN_STALE_RANK_MULTIPLIER : 1.0;
@@ -19,7 +20,7 @@ export function churnStaleFactor(entry: MemoryEntry): number {
 export function recencyBoost(entry: MemoryEntry, now: Date): number {
   if (isRecencyAblated()) return 1; // EVAL-ONLY ablation (see ablation.ts)
   const created = new Date(entry.created);
-  const ageDays = (now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24);
+  const ageDays = (now.getTime() - created.getTime()) / DAY_MS;
   return Math.exp(-ageDays / (evalRecencyScaleDays() ?? 30));
 }
 

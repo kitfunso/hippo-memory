@@ -29,6 +29,7 @@ import { type ConsolidationResult, lazyConsolidateDb, type SleepRun, newConsolid
 import { promoteSessionTraces, replayPass } from './traces.js';
 import { llmPasses } from './llm-passes.js';
 import { physicsPass } from './physics-pass.js';
+import { DAY_MS } from '../util/time.js';
 
 /**
  * Run a full consolidation pass.
@@ -191,7 +192,7 @@ async function expireInChunks(db: DatabaseSyncLike, keys: readonly DormantKey[],
 async function expireDormant(run: SleepRun, budget: WriteBudget): Promise<void> {
   const { config, result, dryRun } = run;
   if (!(config.dormant.retentionDays > 0)) return;
-  const cutoff = new Date(run.now.getTime() - config.dormant.retentionDays * 24 * 60 * 60 * 1000).toISOString();
+  const cutoff = new Date(run.now.getTime() - config.dormant.retentionDays * DAY_MS).toISOString();
   const db = openHippoDb(run.hippoRoot, { busyWaitMs: SLEEP_DB_WAIT_MS });
   try {
     // The keys come from a read, so a sleep with nothing to expire never takes the write lock; one DELETE scanned every stored entry under it.

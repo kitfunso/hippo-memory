@@ -20,6 +20,7 @@ import { openHippoDb, closeHippoDb, rethrowIfSqliteBlocked, type DatabaseSyncLik
 import type { RerankStep } from './core/search-types.js';
 import { DELIVERY_LEDGER_VERSION, type DeliveryEventInput } from './delivery-recorder.js';
 import { log } from './log.js';
+import { DAY_MS } from './util/time.js';
 
 /** One ranked result to persist alongside its trace row. */
 export interface RecallTraceResultInput {
@@ -364,7 +365,7 @@ export function writeDeliveryEvent(db: DatabaseSyncLike, input: DeliveryEventInp
         insertCandidate.run(eventId, input.tenantId, c.memoryId, c.sourceStore, c.pool, c.stage, c.outcome, c.reason, c.rank, c.score, c.tokens);
       }
       const pruneFrom = Math.min(Date.parse(input.ts), Date.now());
-      const cutoff = new Date(pruneFrom - DELIVERY_LEDGER_RETENTION_DAYS * 86_400_000).toISOString();
+      const cutoff = new Date(pruneFrom - DELIVERY_LEDGER_RETENTION_DAYS * DAY_MS).toISOString();
       db.prepare(`DELETE FROM delivery_events WHERE ts < ?`).run(cutoff);
       db.exec('COMMIT');
       return eventId;

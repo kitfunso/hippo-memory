@@ -11,6 +11,7 @@ import { evalNow } from './ablation.js';
 import type { MemoryEntry } from './memory.js';
 import { Layer } from './memory.js';
 import { calculateStrength } from './memory.js';
+import { DAY_MS } from './util/time.js';
 
 export interface AmbientState {
   tagEntropy: number;
@@ -70,7 +71,7 @@ export function isErrorTagged(tags: readonly string[]): boolean {
 /** Tallies over loaded entries; superseded rows count toward the total only, as they always have here. */
 export function tallyAmbientEntries(entries: readonly MemoryEntry[], now?: Date): AmbientTallies {
   const currentTime = now ?? evalNow(); // honors HIPPO_FAKE_NOW (eval-only)
-  const sevenDaysAgo = currentTime.getTime() - 7 * 86400000;
+  const sevenDaysAgo = currentTime.getTime() - 7 * DAY_MS;
   const t: AmbientTallies = {
     total: entries.length, strengthSum: 0, fresh: 0, negative: 0, highSchemaFit: 0, errors: 0,
     semantic: 0, episodic: 0, conflicts: 0, extracted: 0, maxDagLevel: 0, tagCounts: new Map(),

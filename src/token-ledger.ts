@@ -28,6 +28,7 @@ import { open } from 'node:fs/promises';
 import type { DatabaseSyncLike } from './db.js';
 import type { JsonObject } from './working-memory.js';
 import { type JsonValue, isJsonString } from './json.js';
+import { DAY_MS } from './util/time.js';
 
 /**
  * Where a block of memory text was sent.
@@ -122,7 +123,7 @@ export function recordTokenUse(db: DatabaseSyncLike, use: TokenUse): void {
     Math.max(0, Math.round(use.tokens)),
     use.hash ?? null,
   );
-  const cutoff = new Date(Date.parse(now) - TOKEN_LEDGER_RETENTION_DAYS * 86_400_000).toISOString();
+  const cutoff = new Date(Date.parse(now) - TOKEN_LEDGER_RETENTION_DAYS * DAY_MS).toISOString();
   db.prepare(`DELETE FROM token_ledger WHERE ts < ?`).run(cutoff);
 }
 

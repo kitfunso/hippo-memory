@@ -10,6 +10,7 @@ import type { MemoryEntry } from '../memory.js';
 import type { PhysicsParticle } from '../physics.js';
 import { computeMass, computeCharge, computeTemperature, vecZero } from '../physics.js';
 import { calculateStrength } from '../memory.js';
+import { DAY_MS } from '../util/time.js';
 
 // ---------------------------------------------------------------------------
 // Float32Array <-> Buffer serialization
@@ -168,7 +169,7 @@ export function initializeParticle(
   now: Date = evalNow(),
 ): PhysicsParticle {
   const strength = calculateStrength(entry, now);
-  const ageDays = (now.getTime() - new Date(entry.created).getTime()) / (1000 * 60 * 60 * 24);
+  const ageDays = (now.getTime() - new Date(entry.created).getTime()) / DAY_MS;
 
   return {
     memoryId: entry.id,
@@ -221,7 +222,7 @@ export function refreshParticleProperties(
     if (!entry) continue;
 
     const strength = calculateStrength(entry, now);
-    const ageDays = (now.getTime() - new Date(entry.created).getTime()) / (1000 * 60 * 60 * 24);
+    const ageDays = (now.getTime() - new Date(entry.created).getTime()) / DAY_MS;
 
     p.mass = computeMass(strength, entry.retrieval_count);
     p.charge = computeCharge(entry.emotional_valence);

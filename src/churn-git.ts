@@ -4,6 +4,7 @@ import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { DAY_MS } from './util/time.js';
 
 // A `git log --name-status` dump can run to tens of MB; default 1MB pipe would truncate it.
 const GIT_MAX_BUFFER = 64 * 1024 * 1024;
@@ -52,7 +53,7 @@ export interface ChurnCommit {
 
 // 1-day buffer guards against git's --since boundary excluding a commit dated exactly at the anchor.
 export function fetchChurnWindowLog(repoRoot: string, sinceIso: string): ChurnCommit[] {
-  const buffered = new Date(new Date(sinceIso).getTime() - 24 * 60 * 60 * 1000).toISOString();
+  const buffered = new Date(new Date(sinceIso).getTime() - DAY_MS).toISOString();
   const raw = runGit(
     // --first-parent -m: a merge's changes land as one diff against its mainline parent.
     ['log', '--no-renames', '--first-parent', '-m', `--since=${buffered}`, '--pretty=format:%x01%H%x02%cI', '--name-status'],

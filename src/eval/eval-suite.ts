@@ -16,6 +16,7 @@ import { createMemory, Layer, type MemoryEntry } from '../memory.js';
 import { search } from '../search/bm25-search.js';
 import { multihopSearch } from '../multihop.js';
 import { mrr, recallAtK, ndcgAtK } from './eval.js';
+import { DAY_MS } from '../util/time.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -87,7 +88,7 @@ export interface RegressionReport {
 const BASE_DATE = new Date('2026-01-15T10:00:00Z');
 
 function dateOffset(days: number): string {
-  const d = new Date(BASE_DATE.getTime() + days * 86400000);
+  const d = new Date(BASE_DATE.getTime() + days * DAY_MS);
   return d.toISOString();
 }
 

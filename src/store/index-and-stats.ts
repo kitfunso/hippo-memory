@@ -6,6 +6,7 @@ import { audit } from './audit-event.js';
 import { stampOriginProjectForImport, upsertEntryRow } from './entry-row.js';
 import { buildIndexFromDb, syncMirrorFiles, writeIndexMirror, writeStatsMirror, buildStatsFromDb } from './mirrors.js';
 import { openStore, loadLegacyEntriesFromMarkdown } from './open.js';
+import { DAY_MS } from '../util/time.js';
 
 /** Load the derived index from SQLite. Read-only: index.json is only ever written by `rebuildIndex`. */
 export function loadIndex(hippoRoot: string): HippoIndex {
@@ -166,7 +167,7 @@ export function appendConsolidationRun(
 export function countCreatedSinceLastSleep(hippoRoot: string, tenantId: string, now: Date = new Date()): number {
   const db = openStore(hippoRoot);
   try {
-    const dayAgo = new Date(now.getTime() - 86_400_000).toISOString();
+    const dayAgo = new Date(now.getTime() - DAY_MS).toISOString();
     const row = db.prepare(
       `SELECT COUNT(*) AS n FROM memories WHERE tenant_id = ?
          AND created > MAX(?, COALESCE((SELECT MAX(timestamp) FROM consolidation_runs), ''))`,
@@ -213,7 +214,7 @@ export function loadSessionDecayContext(hippoRoot: string): SessionDecayContext 
       totalInterval += timestamps[i] - timestamps[i - 1];
     }
     const avgMs = totalInterval / (timestamps.length - 1);
-    const avgDays = avgMs / (1000 * 60 * 60 * 24);
+    const avgDays = avgMs / DAY_MS;
 
     return { sleepCount, avgSessionIntervalDays: Math.max(0, avgDays) };
   } finally {

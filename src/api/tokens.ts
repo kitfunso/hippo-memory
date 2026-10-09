@@ -6,6 +6,7 @@ import { storeFor } from '../store-port.js';
 import { summarizeFailures, type FailureSummary } from '../failure-log.js';
 import { log } from '../log.js';
 import type { Context } from './types.js';
+import { DAY_MS } from '../util/time.js';
 
 /**
  * Record memory text handed to an agent in the token ledger.
@@ -58,5 +59,5 @@ export function failureSummary(ctx: Context, opts: { days?: number } = {}): Fail
 
 function reportWindowStart(days: number | undefined): string {
   const span = days !== undefined && Number.isFinite(days) && days > 0 ? days : 30;
-  return new Date(Date.now() - span * 86_400_000).toISOString();
+  return new Date(Date.now() - span * DAY_MS).toISOString();
 }

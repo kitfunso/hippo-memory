@@ -20,6 +20,7 @@ import { appendAuditEvent, reportAuditWriteFailure } from '../audit.js';
 import { loadConfig } from '../config.js';
 import { canTouchScope, personalScopeOf, touchableScopeSql, type SqlFragment } from '../recall-scope.js';
 import type { Context } from './types.js';
+import { DAY_MS } from '../util/time.js';
 
 const touchable = (ctx: Context): SqlFragment => touchableScopeSql('', personalScopeOf(ctx.actor));
 
@@ -88,7 +89,7 @@ export function restoreDormant(ctx: Context, id: string): MemoryEntry {
           reason: dormant.reason,
           strengthAtDormancy: dormant.strength,
           dormantAt: dormant.dormantAt,
-          daysDormant: Math.max(0, (now.getTime() - Date.parse(dormant.dormantAt)) / (24 * 60 * 60 * 1000)),
+          daysDormant: Math.max(0, (now.getTime() - Date.parse(dormant.dormantAt)) / DAY_MS),
         },
       });
       db.exec('COMMIT');

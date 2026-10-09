@@ -20,6 +20,7 @@ import { planProjectRepair } from './project-merge.js';
 import { resolveTenantId } from './tenant.js';
 import { errorMessage, log } from './log.js';
 import { readJsonFile, type JsonValue } from './json.js';
+import { DAY_MS } from './util/time.js';
 
 /** Outcome of one check. `fail` makes `hippo doctor` exit 1. */
 export type DoctorStatus = 'pass' | 'warn' | 'fail' | 'info';
@@ -127,7 +128,7 @@ function sleepCheck(db: DatabaseSyncLike, now: Date): DoctorCheck {
     if (Number.isNaN(when)) {
       return { id: 'sleep', status: 'warn', detail: 'hippo has never slept (consolidated) in this store', fix: 'hippo sleep   (the session-end hook runs it automatically)' };
     }
-    const days = Math.floor((now.getTime() - when) / 86_400_000);
+    const days = Math.floor((now.getTime() - when) / DAY_MS);
     return days > 7
       ? { id: 'sleep', status: 'warn', detail: `last sleep ${days} days ago`, fix: 'hippo sleep, and check the session-end hook is installed' }
       : { id: 'sleep', status: 'pass', detail: `last sleep ${days === 0 ? 'today' : `${days} day${days === 1 ? '' : 's'} ago`}` };
@@ -303,7 +304,7 @@ function databaseChecks(store: string, now: Date): DoctorCheck[] {
     checks.push(schemaCheck(have, getCurrentSchemaVersion()));
     checks.push(memoriesCheck(db));
     checks.push(ftsCheck(db));
-    const since = new Date(now.getTime() - 7 * 86_400_000).toISOString();
+    const since = new Date(now.getTime() - 7 * DAY_MS).toISOString();
     checks.push(tokensCheck(db, since));
     checks.push(failuresCheck(db, since, have));
     checks.push(sleepCheck(db, now));

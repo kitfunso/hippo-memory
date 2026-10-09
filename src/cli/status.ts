@@ -36,6 +36,7 @@ import { type CliFlags,
   hookStoreRoot,
   resolveAuthRoot,
 } from './shared.js';
+import { DAY_MS } from '../util/time.js';
 
 export function cmdStatus(hippoRoot: string): void {
   requireInit(hippoRoot);
@@ -198,8 +199,8 @@ function cmdInspect(hippoRoot: string, id: string): void {
   const currentStrength = calculateStrength(entry, now);
   const lastRetrieved = new Date(entry.last_retrieved);
   const created = new Date(entry.created);
-  const ageDays = (now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24);
-  const daysSince = (now.getTime() - lastRetrieved.getTime()) / (1000 * 60 * 60 * 24);
+  const ageDays = (now.getTime() - created.getTime()) / DAY_MS;
+  const daysSince = (now.getTime() - lastRetrieved.getTime()) / DAY_MS;
 
   const effectiveConfidence = resolveConfidence(entry, now);
 

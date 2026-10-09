@@ -26,6 +26,7 @@
 
 import type { DatabaseSyncLike } from '../db.js';
 import { appendAuditEvent } from '../audit.js';
+import { DAY_MS } from '../util/time.js';
 
 export interface PruneAuditOpts {
   /** Cutoff in days. Rows with `ts < (now - N days)` are deleted. */
@@ -52,7 +53,7 @@ export interface PruneAuditResult {
  * testability so tests can pin "now" without mocking Date.
  */
 export function computeCutoff(days: number, now: Date = new Date()): string {
-  const cutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+  const cutoff = new Date(now.getTime() - days * DAY_MS);
   return cutoff.toISOString();
 }
 

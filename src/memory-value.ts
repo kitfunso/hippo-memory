@@ -22,6 +22,7 @@
 import { type MemoryEntry, calculateStrength } from './memory.js';
 import { compareEntryIdentity } from './compare.js';
 import { MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256 } from './memory-value-weights.js';
+import { DAY_MS } from './util/time.js';
 
 /** The 8 live feature dims (FIT_DIMS) — canonical order for iteration. */
 export const MV_FEATURE_NAMES: ReadonlyArray<keyof MvFeatureVector> = [
@@ -78,7 +79,7 @@ export interface MvFeatureVector {
  * FEATURE is clock-basis.
  */
 export function computeMvFeatures(entry: MemoryEntry, now: Date): MvFeatureVector {
-  const ageDays = (now.getTime() - Date.parse(entry.created)) / (1000 * 60 * 60 * 24);
+  const ageDays = (now.getTime() - Date.parse(entry.created)) / DAY_MS;
   const pos = entry.outcome_positive ?? 0;
   const neg = entry.outcome_negative ?? 0;
   return {
