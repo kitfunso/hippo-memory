@@ -3,6 +3,7 @@
 import * as api from '../api/index.js';
 import { NotFoundError } from '../core/api-errors.js';
 import type { MemoryEntry } from '../core/memory.js';
+import { RawAppendOnlyError } from '../core/raw-append-only.js';
 import { listTouchableConflicts, resolveConflict } from '../store/conflicts.js';
 import { readEntry } from '../store/entry-reads.js';
 import { writeEntry } from '../store/entry-writes.js';
@@ -64,8 +65,7 @@ export function forgetMemory(hippoRoot: string, tenantId: string, rawId: string)
     return { status: 200, body: done, changed: true };
   } catch (err) {
     if (err instanceof NotFoundError) return notFound();
-    // Same match as cmdForget: the append-only trigger names itself in the message.
-    if (err instanceof Error && /append-only/i.test(err.message)) {
+    if (err instanceof RawAppendOnlyError) {
       const error = `Cannot forget ${id}: it is a raw, append-only memory. Archive it instead: hippo forget ${id} --archive --reason "<why>"`;
       return { status: 409, body: { error }, changed: false };
     }

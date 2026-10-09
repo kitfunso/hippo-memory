@@ -90,7 +90,7 @@ interface CallerSpec {
 }
 
 const TIMEOUT_MESSAGE = /aborted due to timeout/;
-const NOT_JSON = /Unexpected token/;
+const NOT_JSON = /reply is not JSON/;
 const FACT: ExtractedFact = { content: 'Alice likes tea', tags: ['speaker:Alice'], valence: 'positive' };
 const DAG_TEXT = 'Alice likes tea and drinks it every morning before work.';
 const REFINE_TEXT = 'People prefer tea in the morning.';

@@ -6,6 +6,7 @@ import { listMemoryConflicts, resolveConflict } from '../store/conflicts.js';
 import { rejectValue, unrejectValue, listRejectionsForTenant } from '../trust/reject-flow.js';
 import { RejectedValueError } from '../store/rejection.js';
 import { loadConfig } from '../core/config.js';
+import { RawAppendOnlyError } from '../core/raw-append-only.js';
 import { isGitRepo } from '../learn/autolearn.js';
 import { invalidateMatching, InvalidationTarget } from '../learn/invalidation.js';
 import * as api from '../api/index.js';
@@ -86,7 +87,7 @@ function cmdForget(
     api.forget(ctx, id);
     console.log(`Forgot ${id}`);
   } catch (err) {
-    reportForgetFailure(ctx, id, errorMessage(err));
+    reportForgetFailure(ctx, id, err);
     process.exit(1);
   }
 }
@@ -105,8 +106,8 @@ function archiveForgottenRaw(ctx: api.HippoDbContext, id: string, reason: string
   }
 }
 
-function reportForgetFailure(ctx: api.HippoDbContext, id: string, msg: string): void {
-  if (/append-only/i.test(msg)) {
+function reportForgetFailure(ctx: api.HippoDbContext, id: string, cause: unknown): void {
+  if (cause instanceof RawAppendOnlyError) {
     // The delete was refused by the append-only trigger — this is a raw
     // memory, not a missing one. Point the user at the archive path.
     printError(rawForgetRefusal(id));

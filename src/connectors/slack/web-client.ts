@@ -1,7 +1,9 @@
 import { fetchWithRetry, isRetryableStatus } from '../../util/http-retry.js';
 import type { SlackHistoryFetcher } from './backfill.js';
 import type { SlackMessageEvent } from './types.js';
-import { type JsonValue, isJsonString } from '../../util/json.js';
+import { readCappedJson } from '../../util/capped-json.js';
+import { errorMessage } from '../../util/log.js';
+import { type JsonValue, isJsonObject, isJsonString } from '../../util/json.js';
 
 /**
  * Build a SlackHistoryFetcher that pages `conversations.history` over real
@@ -13,6 +15,26 @@ import { type JsonValue, isJsonString } from '../../util/json.js';
  * it on every event.
  */
 const SLACK_TIMEOUT_MS = 30_000;
+// A page is at most 200 messages, each up to 40,000 characters at 4 bytes, carried once as text and once as rich-text blocks.
+const SLACK_MAX_REPLY_BYTES = 64 * 1024 * 1024;
+
+function isSlackMessage(m: JsonValue): m is { [key: string]: JsonValue } & SlackMessageEvent {
+  return isJsonObject(m) && m.type === 'message' && isJsonString(m.ts);
+}
+
+/** The reply as a JSON object. The error names the status and the path only, since the query string carries channel ids and cursors. */
+async function readHistoryReply(r: Response, url: URL): Promise<{ [key: string]: JsonValue }> {
+  const where = `slack: HTTP ${r.status} on ${url.pathname}`;
+  let body: JsonValue;
+  try {
+    body = await readCappedJson(r, SLACK_MAX_REPLY_BYTES);
+  } catch (err) {
+    throw new Error(`${where}: ${errorMessage(err)}`, { cause: err });
+  }
+  if (!isJsonObject(body)) throw new Error(`${where}: the reply is not a JSON object`);
+  if (body.messages !== undefined && !Array.isArray(body.messages)) throw new Error(`${where}: \`messages\` is not an array`);
+  return body;
+}
 
 export function slackHistoryFetcher(
   token: string,
@@ -29,31 +51,16 @@ export function slackHistoryFetcher(
       fetchFn: fetchImpl,
     });
     if (isRetryableStatus(r.status)) throw new Error(`slack: still rate-limited or unavailable (HTTP ${r.status})`);
-    // SAFETY: body is the Slack `conversations.history` response; per the
-    // documented shape it's `{ ok, error?, messages?, response_metadata? }`.
-    const body = (await r.json()) as {
-      ok: boolean;
-      error?: string;
-      messages?: unknown[];
-      response_metadata?: { next_cursor?: string };
-    };
-    if (!body.ok) throw new Error(`slack: ${body.error ?? 'unknown error'}`);
-    const messages: SlackMessageEvent[] = (body.messages ?? [])
-      .filter((m): m is SlackMessageEvent => {
-        if (m === null || Array.isArray(m) || typeof m !== 'object') {
-          return false;
-        }
-        // SAFETY: the check above just confirmed m is a non-null, non-array
-        // plain object, so it's safe to treat as a JSON-shaped record; the
-        // `m is SlackMessageEvent` predicate is what validates the fields.
-        const o = m as { [key: string]: JsonValue };
-        return o.type === 'message' && isJsonString(o.ts);
-      })
+    const body = await readHistoryReply(r, url);
+    if (body.ok !== true) throw new Error(`slack: ${isJsonString(body.error) ? body.error : 'unknown error'}`);
+    const messages: SlackMessageEvent[] = (Array.isArray(body.messages) ? body.messages : [])
+      .filter(isSlackMessage)
       // Slack returns messages without `channel`; stamp it from the request.
       .map((m) => ({ ...m, channel: channelId }));
+    const nextCursor = isJsonObject(body.response_metadata) ? body.response_metadata.next_cursor : undefined;
     return {
       messages,
-      next_cursor: body.response_metadata?.next_cursor ?? null,
+      next_cursor: isJsonString(nextCursor) ? nextCursor : null,
     };
   };
 }

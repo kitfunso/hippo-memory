@@ -96,6 +96,24 @@ describe('judge', () => {
     }
   });
 
+  it('returns null, never throws, on a body that is not an object or is not JSON', async () => {
+    const reply = (body: string): typeof fetch => async () => new Response(body, { status: 200 });
+    for (const body of ['null', '[]', '"ok"', '{"answers":null}', '{"answers":{"durable":null,"kind":7,"valence":[]}}', '<html>busy</html>']) {
+      expect(await judge('x y z', { apiKey: 'k', fetcher: reply(body) })).toBeNull();
+    }
+  });
+
+  it('returns null when a number arrives as a string, which would pass the range check by coercion', async () => {
+    const body = JSON.stringify({ answers: { durable: { noul: '0.9' }, kind: { choice: 'error' }, valence: { choice: 'neutral' } } });
+    expect(await judge('x y z', { apiKey: 'k', fetcher: async () => new Response(body, { status: 200 }) })).toBeNull();
+  });
+
+  it('returns null for a reply over the 1 MiB cap, even one whose answers are valid', async () => {
+    const padded = JSON.stringify(GOOD).replace(/}$/, `${' '.repeat(1024 * 1024)}}`);
+    expect(JSON.parse(padded)).toEqual(GOOD);
+    expect(await judge('x y z', { apiKey: 'k', fetcher: async () => new Response(padded, { status: 200 }) })).toBeNull();
+  });
+
   it('fails open on transport and HTTP errors', async () => {
     const thrower: typeof fetch = async () => { throw new Error('offline'); };
     expect(await judge('abc', { apiKey: 'k', fetcher: thrower })).toBeNull();

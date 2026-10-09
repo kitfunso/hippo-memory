@@ -1,6 +1,7 @@
 // A store worker's thrown error crosses to the server as plain data: for generated errors of every listed class the server still gets the class, the message, the fields and the cause chain.
 import { describe, it, expect } from 'vitest';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../src/core/api-errors.js';
+import { RawAppendOnlyError } from '../src/core/raw-append-only.js';
 import { IncompatibleBinaryError, StoreBusyError } from '../src/db/index.js';
 import { BodyTimeoutError, BodyTooLargeError, HttpError } from '../src/util/http-util.js';
 import { ScopeForbiddenError } from '../src/store/recall-scope.js';
@@ -18,7 +19,7 @@ const MAKERS: readonly ((text: string) => Error)[] = [
   (m) => new RejectedValueError({ digest: m, tenantId: 't1', entryId: 'mem_1', reason: null, rejectedAt: '2026-01-01T00:00:00.000Z' }),
   (m) => new ScopeForbiddenError(m),
   (m) => new SqliteBlockedError('other', m), (m) => new StoreNotPortedError('other', m), (m) => new OtherStoreFolderError('other', m),
-  (m) => new StoreBusyError(m), (m) => new IncompatibleBinaryError(m),
+  (m) => new StoreBusyError(m), (m) => new IncompatibleBinaryError(m), (m) => Object.assign(new RawAppendOnlyError(new Error(m)), { cause: undefined }),
 ];
 
 // The codec keeps this many causes under an error and cuts the rest.

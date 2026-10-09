@@ -138,7 +138,7 @@ describe('the observer never changes getContext', () => {
   it('a throwing observer leaves the result the same and writes nothing at flush', async () => {
     configure({ promptRecall: true });
     seedMixedStore();
-    const err = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const err = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     _setDeliveryFaultForTests('observe');
     const without = await getContext(ctx, baseOpts);
     const rec = recorder();
@@ -146,7 +146,7 @@ describe('the observer never changes getContext', () => {
     const write = vi.fn(() => 1);
     rec.flush(write);
     expect(write).not.toHaveBeenCalled();
-    expect(String(err.mock.calls[0][0])).toMatch(/^\[hippo\] delivery ledger skipped: recorder failed: /);
+    expect(String(err.mock.calls[0][0])).toMatch(/^\[hippo\] warn: delivery ledger skipped: recorder failed: /);
   });
 
   it("lets admit's own throw through and counts a rejected row once however often it is admitted", () => {

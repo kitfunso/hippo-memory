@@ -1,7 +1,7 @@
 import { envPath } from '../util/env.js';
 import * as fs from 'fs';
 import * as path from 'path';
-import { fileURLToPath } from 'url';
+import { PACKAGE_ROOT } from '../core/package-root.js';
 import { errorMessage, log } from '../util/log.js';
 import { HIPPO_CODEX_WRAPPER_MARKER, homeDir, codexHomeDir, ensureDir } from './shared.js';
 import { isJsonString } from '../util/json.js';
@@ -111,7 +111,7 @@ function isCodexWrapperMetadataValid(metadata: CodexWrapperMetadata | null): met
 }
 
 function resolveHippoCliPath(): string {
-  return fileURLToPath(new URL('../bin/hippo.js', import.meta.url));
+  return path.join(PACKAGE_ROOT, 'bin', 'hippo.js');
 }
 
 function quoteForShell(value: string): string {

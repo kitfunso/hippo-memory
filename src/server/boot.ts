@@ -15,12 +15,12 @@ import { createRateLimiter, type RateLimiter } from './rate-limit.js';
 import { RecallContractError } from '../api/index.js';
 import { handleSlackEventsWebhook } from '../connectors/slack/webhook.js';
 import { handleGitHubEventsWebhook } from '../connectors/github/webhook.js';
-import { bodyDeadlineMs, BodyTimeoutError, BodyTooLargeError, closeAfterReply, DeadlineExceededError, HttpError, JSON_HEADERS, sendJson } from '../util/http-util.js';
+import { BodyTimeoutError, BodyTooLargeError, closeAfterReply, DeadlineExceededError, HttpError, JSON_HEADERS, sendJson } from '../util/http-util.js';
 import { workerCounts } from '../store/sqlite/executor-counts.js';
 import { isLoopback, LIMITER_MAX_KEYS } from './auth.js';
 import { enforceRateLimit, warnIfClientIpHeaderUnpinned } from './client-ip.js';
 import { answerAtDeadline, handlerDeadlineCount, isAbandoned, requestDeadlineFor } from './deadline.js';
-import { drainAndClose } from './lifecycle.js';
+import { DEFAULT_SHUTDOWN_DRAIN_MS, drainAndClose, setKeepAliveTimeouts, shutdownBoundMs } from './lifecycle.js';
 import { readyProbeFor } from './ready.js';
 import { installCrashHandlers, installSignalHandlers } from '../util/crash-handlers.js';
 import { handleMcpPost, handleMcpStream } from './mcp-http.js';
@@ -348,17 +348,6 @@ function answerRequest(req: IncomingMessage, res: ServerResponse, handle: () => 
   }, deadline);
 }
 
-// Node's own default, named so the three socket deadlines read together. It times the request arriving, never the handler, so a 10 minute sleep is not cut.
-const REQUEST_RECEIVE_TIMEOUT_MS = 300_000;
-
-function setKeepAliveTimeouts(server: Server): void {
-  // The default 5s keepAliveTimeout closes idle sockets just as clients reuse them (ECONNRESET).
-  // headersTimeout must stay ABOVE keepAliveTimeout + keepAliveTimeoutBuffer (1s), or it closes idle reused sockets itself.
-  server.keepAliveTimeout = 65_000;
-  server.headersTimeout = 70_000;
-  // Never below what a raised body deadline allows, or Node's bare 408 would come before the route's own.
-  server.requestTimeout = Math.max(REQUEST_RECEIVE_TIMEOUT_MS, server.headersTimeout + bodyDeadlineMs());
-}
 
 function listenOn(server: Server, port: number, host: string): Promise<void> {
   return new Promise<void>((resolve, reject) => {
@@ -378,13 +367,9 @@ function listenOn(server: Server, port: number, host: string): Promise<void> {
   });
 }
 
-const DEFAULT_SHUTDOWN_DRAIN_MS = 5000;
-
-// Past the request drain, stop() only waits for each store thread to end its statement and close: seconds at most, so longer means a thread that will not end.
-const STORE_CLOSE_GRACE_MS = 10_000;
 
 function exitOnSignalOrCrash(stop: () => Promise<void>, drainMs: number): void {
-  const shutdown = { run: stop, boundMs: drainMs + STORE_CLOSE_GRACE_MS };
+  const shutdown = { run: stop, boundMs: shutdownBoundMs(drainMs) };
   installSignalHandlers('serve', shutdown);
   installCrashHandlers('serve', shutdown);
 }

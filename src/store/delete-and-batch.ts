@@ -1,5 +1,6 @@
 import { DEFAULT_TENANT_ID } from '../util/env.js';
 import { type MemoryEntry } from '../core/memory.js';
+import { RawAppendOnlyError } from '../core/raw-append-only.js';
 import { AUTO_DELETABLE_SQL } from './rule-sql.js';
 import { openHippoDb, closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import { checkRejectionGuard, RejectedValueError } from './rejection.js';
@@ -45,6 +46,22 @@ export function memoriesBackingObjectsOn(db: DatabaseSyncLike): Set<string> {
   return ids;
 }
 
+// The abort text of trg_memories_raw_append_only (migration v14), the one place src matches it.
+const RAW_TRIGGER_TEXT = 'raw is append-only';
+
+function isRawTriggerAbort(cause: unknown): cause is Error {
+  return cause instanceof Error && cause.message.includes(RAW_TRIGGER_TEXT);
+}
+
+/** Runs the DELETE and returns the rows it removed; the raw-row trigger's abort becomes RawAppendOnlyError. */
+function deleteMemoryRow(db: ReturnType<typeof openHippoDb>, sql: string, id: string): number {
+  try {
+    return Number(db.prepare(sql).run(id).changes ?? 0);
+  } catch (cause) {
+    throw isRawTriggerAbort(cause) ? new RawAppendOnlyError(cause) : cause;
+  }
+}
+
 /**
  * db-scoped delete core, so a delete can compose inside a caller's transaction.
  * NO filesystem I/O: the caller's transaction may still roll back, and mirrors are written post-commit.
@@ -67,7 +84,7 @@ export function deleteEntryCore(
   if (!row?.id) return null;
 
   const guard = opts?.automatic ? ` AND ${AUTOMATIC_DELETE_SQL}` : '';
-  if (Number(db.prepare(`DELETE FROM memories WHERE id = ?${guard}`).run(id).changes ?? 0) === 0) return null;
+  if (deleteMemoryRow(db, `DELETE FROM memories WHERE id = ?${guard}`, id) === 0) return null;
   deleteFtsRow(db, id);
   if (!opts?.suppressForgetAudit) {
     audit(db, 'forget', { targetId: id, metadata: opts?.reason ? { reason: opts.reason } : undefined, actor: opts?.actor ?? 'cli', tenantId: row.tenant_id });
