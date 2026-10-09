@@ -167,10 +167,28 @@ describe('the pre-compact diagnostic log', () => {
     fs.mkdirSync(path.dirname(logFile), { recursive: true });
     fs.writeFileSync(logFile, `${'x'.repeat(256 * 1024 + 1)}\n`);
     expect(preCompact('s1').status).toBe(0);
+    // Exactly the new line from byte 0: a write left at the old offset would sit behind a run of NUL bytes.
     const lines = logLines();
+    expect(lines).toHaveLength(2);
     expect(lines[0]).toMatch(SKIP_LINE);
-    expect(lines.join('\n')).not.toContain('xx');
-    expect(lines.at(-1)).toBe('');
+    expect(lines[1]).toBe('');
+  });
+
+  it('keeps every line whole when another append handle is writing the same log', () => {
+    fs.mkdirSync(path.dirname(logFile), { recursive: true });
+    const other = fs.openSync(logFile, 'a');
+    try {
+      fs.writeSync(other, '[hippo] a line from another hook\n');
+      expect(preCompact('s1').status).toBe(0);
+      fs.writeSync(other, '[hippo] its next line\n');
+    } finally {
+      fs.closeSync(other);
+    }
+    const lines = logLines();
+    expect(lines).toHaveLength(4);
+    expect(lines[0]).toBe('[hippo] a line from another hook');
+    expect(lines[1]).toMatch(SKIP_LINE);
+    expect(lines.slice(2)).toEqual(['[hippo] its next line', '']);
   });
 
   it('creates the log and its folder when neither is there', () => {
