@@ -9,7 +9,7 @@ import { HttpError, mapApiError, sendJson } from '../http-util.js';
 const REQUEST_ID_RE = /^[A-Za-z0-9._:-]{1,128}$/;
 
 /** The caller's `X-Request-Id` when it is a short plain token, else a fresh UUID. */
-export function resolveRequestId(header: string | string[] | undefined): string {
+function resolveRequestId(header: string | string[] | undefined): string {
   const value = Array.isArray(header) ? undefined : header;
   return value && REQUEST_ID_RE.test(value) ? value : randomUUID();
 }
@@ -26,6 +26,34 @@ export function logRequestFailure<E>(req: IncomingMessage, err: E, status: numbe
 /** The status and client message for a failed request; a held write lock is a retryable 503, never a 500. */
 export function replyFor<E>(err: E): { status: number; message: string } {
   return isStoreBusy(err) ? { status: 503, message: STORE_BUSY_MESSAGE } : mapApiError(err);
+}
+
+// Above the 30 s body deadline and the 5 s resolver deadline, so a request those govern is answered before it is called slow.
+const SLOW_REQUEST_WARN_MS = 60_000;
+
+/** Logs one warn when `res` has sent nothing after `afterMs`. It never ends the request or touches the reply; the timer goes when the reply finishes or the socket closes. */
+function watchSlowRequest(req: IncomingMessage, res: ServerResponse, requestId: string, afterMs: number = SLOW_REQUEST_WARN_MS): void {
+  const startedAt = Date.now();
+  const timer = setTimeout(() => {
+    // A reply already under way is a stream doing its job, not a stuck request.
+    if (res.headersSent) return;
+    log.warn(`${req.method ?? 'GET'} ${(req.url ?? '/').split('?')[0]} is still running`, { requestId, elapsedMs: Date.now() - startedAt });
+  }, afterMs);
+  // The watchdog alone must never keep the process alive.
+  timer.unref();
+  const clear = (): void => clearTimeout(timer);
+  res.once('finish', clear);
+  res.once('close', clear);
+}
+
+/** The request's id, after stamping the headers every reply carries and starting the slow-request watchdog. */
+export function openRequest(req: IncomingMessage, res: ServerResponse, slowWarnMs?: number): string {
+  const requestId = resolveRequestId(req.headers['x-request-id']);
+  res.setHeader('X-Request-Id', requestId);
+  // Memory text is caller-written, so no browser may guess a reply into HTML or script.
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  watchSlowRequest(req, res, requestId, slowWarnMs);
+  return requestId;
 }
 
 export function sendError(res: ServerResponse, status: number, message: string): void {

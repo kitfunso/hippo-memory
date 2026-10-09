@@ -55,6 +55,8 @@ export interface ServeOpts {
   handleSignals?: boolean;
   /** How long stop() lets in-flight requests finish before closing their sockets; defaults to 5000 ms. */
   shutdownDrainMs?: number;
+  /** How long a request may stay unanswered before one warn names it; the request itself is left alone. Defaults to 60000 ms. */
+  slowRequestWarnMs?: number;
   /** Defaults to hippo.db under `hippoRoot`. A store of another kind runs only the routes ported to it; its caller closes it. */
   store?: HippoStore;
   autoSleep?: false;

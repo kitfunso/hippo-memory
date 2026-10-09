@@ -9,6 +9,7 @@
 import { closeHippoDb } from './db.js';
 import { openStore } from './store/open.js';
 import type { JsonValue } from './json.js';
+import { warnDamagedColumn } from './util/stored-json.js';
 
 export const WM_MAX_ENTRIES = 20;
 
@@ -46,7 +47,8 @@ function rowToItem(row: WorkingMemoryRow): WorkingMemoryItem {
     // plain JSON object; malformed content falls through to the catch below.
     metadata = JSON.parse(row.metadata_json) as JsonObject;
   } catch {
-    // malformed JSON — default to empty
+    // The item still lists with its content; only its metadata reads as empty.
+    warnDamagedColumn({ table: 'working_memory', id: row.id, column: 'metadata_json' }, 'not valid JSON');
   }
   return {
     id: row.id,

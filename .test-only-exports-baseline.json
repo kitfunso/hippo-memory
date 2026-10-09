@@ -1,5 +1,5 @@
 {
-  "count": 181,
+  "count": 180,
   "exports": [
     "src/ablation.ts:_resetAblationCacheForTests",
     "src/agent-memories/claude-code.ts:claudeFolderName",
@@ -101,7 +101,6 @@
     "src/local-embedding.ts:poolingFor",
     "src/local-embedding.ts:prefixFor",
     "src/log.ts:formatLogLine",
-    "src/log.ts:isLevelEnabled",
     "src/log.ts:logThreshold",
     "src/log.ts:resetLogOnce",
     "src/mcp/request.ts:recordMcpTokens",

@@ -5,6 +5,7 @@ import type { JsonObject } from './working-memory.js';
 import { log } from './log.js';
 import { keysetAfter, type KeysetPosition } from './keyset.js';
 import type { JsonValue } from './json.js';
+import { warnDamagedColumn } from './util/stored-json.js';
 import {
   automaticDefect, hasNoSpecificity, isFragment, isReleaseCommitNoise, substantiveWordCount,
 } from './memory-quality.js';
@@ -324,11 +325,11 @@ function rowToAuditEvent(r: AuditRow): AuditEvent {
     // typed AuditOp at the INSERT call site, so every stored value is a valid AuditOp.
     op: r.op as AuditOp,
     targetId: r.target_id,
-    metadata: safeJsonParse(r.metadata_json),
+    metadata: safeJsonParse(r.metadata_json, r.id),
   };
 }
 
-function safeJsonParse(raw: string): JsonObject {
+function safeJsonParse(raw: string, id: number): JsonObject {
   try {
     const v = JSON.parse(raw);
     // SAFETY: JSON.parse only ever returns a plain object, array, string, number,
@@ -338,6 +339,7 @@ function safeJsonParse(raw: string): JsonObject {
     return v instanceof Object ? (v as JsonObject) : {};
   } catch {
     // Malformed metadata reads as empty so the audit row itself stays listable.
+    warnDamagedColumn({ table: 'audit_log', id, column: 'metadata_json' }, 'not valid JSON');
     return {};
   }
 }

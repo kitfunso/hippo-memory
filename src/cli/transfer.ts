@@ -9,7 +9,7 @@ import { readEntry, loadAllEntries } from '../store/entry-reads.js';
 import { schemaFitInStore } from '../store/candidates.js';
 import { updateStats } from '../store/index-and-stats.js';
 import { RejectedValueError } from '../rejection.js';
-import { embedAll, embedMemory } from '../embeddings.js';
+import { embedAll, embedMemory, loadEmbeddingIndex } from '../embeddings.js';
 import { loadConfig } from '../config.js';
 import { captureError, runWatched } from '../autolearn.js';
 import { currentMachine, importAtSessionEnd, importForStore } from '../agent-memories/sync.js';
@@ -36,6 +36,7 @@ import * as api from '../api.js';
 import * as client from '../client.js';
 import { resolveTenantId } from '../tenant.js';
 import { printError } from './output.js';
+import { errorMessage, log } from '../log.js';
 import { requireInit, runViaServerIfAvailable, fmt, type CliFlags, type CommandContext, learnFromRepo } from './shared.js';
 
 // ---------------------------------------------------------------------------
@@ -127,6 +128,18 @@ export function cmdLearn(
 // ---------------------------------------------------------------------------
 // Import command
 // ---------------------------------------------------------------------------
+
+/** The rows are saved either way; a failed backfill only delays vectors, so it warns with how many wait and the command that finishes them. */
+function warnBackfillFailed<E>(root: string, embedCommand: string, err: E): void {
+  let waiting: string;
+  try {
+    const vectors = loadEmbeddingIndex(root);
+    waiting = String(loadAllEntries(root).filter((entry) => !Object.hasOwn(vectors, entry.id)).length);
+  } catch (countErr) {
+    waiting = `an unknown number of (count failed: ${errorMessage(countErr)})`;
+  }
+  log.warn(`import: embedding backfill failed (${errorMessage(err)}); ${waiting} rows have no vector; run '${embedCommand}' to backfill`);
+}
 
 function warnRedacted(count: number | undefined): void {
   if (count) printError(`Warning: secret-shaped text was redacted from ${count} imported ${count === 1 ? 'entry' : 'entries'} before storing`);
@@ -221,7 +234,7 @@ function importFromFile(
   // a local `hippo embed`) is the backstop if it does get interrupted. Do not
   // "fix" this by awaiting it, that would block the CLI on model load/backfill.
   if (!dryRun && result.imported >= 1) {
-    void embedAll(targetRoot).catch(() => {});
+    void embedAll(targetRoot).catch((err) => warnBackfillFailed(targetRoot, useGlobal ? 'hippo embed --global' : 'hippo embed', err));
   }
 
   const storeLabel = useGlobal ? `global (${getGlobalRoot()})` : targetRoot;
@@ -311,7 +324,7 @@ function importVaultFolder(
   // write through api.remember (which never embeds), so backfill them here.
   // Floating promise is deliberate; see the comment at the single-file site.
   if (!dryRun && vaultResult.imported >= 1) {
-    void embedAll(hippoRoot).catch(() => {});
+    void embedAll(hippoRoot).catch((err) => warnBackfillFailed(hippoRoot, 'hippo embed', err));
   }
 }
 

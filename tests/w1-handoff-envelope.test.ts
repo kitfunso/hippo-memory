@@ -1,6 +1,6 @@
 // W1 handoff envelope (trajectories/01M2BQTM4AGFVMYY7G2XV5G7WY/plan.md), tests 1-6.
 // Real temp SQLite stores throughout; no mocked DB.
-import { describe, it, expect, beforeEach, afterEach, beforeAll } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, beforeAll, vi } from 'vitest';
 import { mkdtempSync, rmSync, existsSync, statSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -16,6 +16,7 @@ import {
 } from '../src/store/handoffs.js';
 import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, type DatabaseSyncLike } from '../src/db.js';
 import { getContext, adminActor } from '../src/api.js';
+import { resetLogOnce } from '../src/log.js';
 import { LATEST_SCHEMA_VERSION, LATEST_SCHEMA_VERSION_STR } from './_helpers/schema-version.js';
 
 interface ColumnInfo {
@@ -184,6 +185,36 @@ describe('test 3: round trip of new fields', () => {
     const loaded = loadLatestHandoff(root, 'default', 'sess-malformed');
     expect(loaded!.constraints).toEqual([]);
     expect(loaded!.evidence).toBeNull();
+  });
+
+  it('a damaged or wrong-shaped JSON column reads as empty and logs the table, row and column, never the text', () => {
+    initStore(root);
+    saveSessionHandoff(root, 'default', { version: 1, sessionId: 'sess-damaged', summary: 'Damaged columns', artifacts: ['kept.md'] });
+    const db = openHippoDb(root);
+    let id: number;
+    try {
+      db.prepare(`UPDATE session_handoffs SET artifacts_json = '{private-artifact', constraints_json = '[private-constraint', evidence_json = '{"gitRef":42,"note":"private-evidence"}' WHERE session_id = 'sess-damaged'`).run();
+      // SAFETY: the row was saved above, so the id column is there.
+      id = (db.prepare(`SELECT id FROM session_handoffs WHERE session_id = 'sess-damaged'`).get() as { id: number }).id;
+    } finally {
+      closeHippoDb(db);
+    }
+
+    // The warn is once per row and column in a process, and the case above read the same row id in its own store.
+    resetLogOnce();
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    let logged: string;
+    try {
+      const loaded = loadLatestHandoff(root, 'default', 'sess-damaged');
+      expect([loaded!.artifacts, loaded!.constraints, loaded!.evidence]).toEqual([[], [], null]);
+      logged = stderr.mock.calls.map((c) => String(c[0])).join('');
+    } finally {
+      stderr.mockRestore();
+    }
+    expect(logged).toMatch(new RegExp(`warn: store: session_handoffs\\.artifacts_json is not valid JSON; read as empty .*table=session_handoffs id=${id} column=artifacts_json`));
+    expect(logged).toMatch(new RegExp(`session_handoffs\\.constraints_json is not valid JSON.* id=${id} column=constraints_json`));
+    expect(logged).toMatch(new RegExp(`session_handoffs\\.evidence_json is wrong shape.* id=${id} column=evidence_json`));
+    expect(logged).not.toContain('private-');
   });
 });
 

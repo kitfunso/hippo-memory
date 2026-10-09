@@ -5,7 +5,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
-import { serve, type ServerHandle } from '../src/server.js';
+import { serve, type AuthResolver, type ServerHandle } from '../src/server.js';
 
 let home: string;
 let handle: ServerHandle;
@@ -99,4 +99,41 @@ describe('X-Request-Id', () => {
       stderrSpy.mockRestore();
     }
   });
+});
+
+describe('a request still unanswered past the slow threshold', () => {
+  it('logs one warn with its id, route and elapsed time, and the reply is the one it would have had', async () => {
+    let asked!: () => void;
+    let release!: () => void;
+    const held = new Promise<void>((ok) => { asked = ok; });
+    const gate = new Promise<void>((ok) => { release = ok; });
+    const resolver: AuthResolver = async () => { asked(); await gate; return { tenantId: 'default', subject: 'slow-test', role: 'admin' }; };
+    const slowHome = mkdtempSync(join(tmpdir(), 'hippo-request-slow-'));
+    mkdirSync(join(slowHome, '.hippo'), { recursive: true });
+    initStore(slowHome);
+    const slow = await serve({ hippoRoot: slowHome, port: 0, host: '127.0.0.1', authResolver: resolver, authResolverTimeoutMs: 60_000, slowRequestWarnMs: 40 });
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const warned = (): string[] => stderrSpy.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('is still running'));
+    try {
+      const pending = fetch(`${slow.url}/v1/memories?q=private-query`, { headers: { authorization: 'Bearer slow-idp-token', 'x-request-id': 'req-slow-1' } });
+      await held;
+      await vi.waitFor(() => expect(warned()).toHaveLength(1), { timeout: 5000 });
+      expect(warned()[0]).toMatch(/^\[hippo\] warn: GET \/v1\/memories is still running ts=\S+ requestId=req-slow-1 elapsedMs=\d+\n$/);
+
+      release();
+      const res = await pending;
+      expect(res.status).toBe(200);
+      expect(res.headers.get('x-request-id')).toBe('req-slow-1');
+
+      // A request answered inside the threshold never logs: its timer went with the reply.
+      const quick = await fetch(`${slow.url}/health`);
+      expect(quick.status).toBe(200);
+      await new Promise((ok) => setTimeout(ok, 120));
+      expect(warned()).toHaveLength(1);
+    } finally {
+      stderrSpy.mockRestore();
+      await slow.stop();
+      rmSync(slowHome, { recursive: true, force: true });
+    }
+  }, 20000);
 });

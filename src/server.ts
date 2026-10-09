@@ -16,7 +16,7 @@ import {
 } from './api.js';
 import { handleSlackEventsWebhook } from './connectors/slack/webhook.js';
 import { handleGitHubEventsWebhook } from './connectors/github/webhook.js';
-import { BodyTimeoutError, BodyTooLargeError, closeAfterReply, HttpError, JSON_HEADERS, sendJson, STORE_NOT_PORTED_MESSAGE } from './http-util.js';
+import { bodyDeadlineMs, BodyTimeoutError, BodyTooLargeError, closeAfterReply, HttpError, JSON_HEADERS, sendJson, STORE_NOT_PORTED_MESSAGE } from './http-util.js';
 import { ForbiddenError, NotFoundError } from './api-errors.js';
 import { buildContextWithAuth, isLoopback, LIMITER_MAX_KEYS, requireAuth } from './server/auth.js';
 import { enforceRateLimit, warnIfClientIpHeaderUnpinned } from './server/client-ip.js';
@@ -24,7 +24,7 @@ import { drainAndClose } from './server/lifecycle.js';
 import { installCrashHandlers } from './util/crash-handlers.js';
 import { handleMcpPost, handleMcpStream } from './server/mcp-http.js';
 import { MCP_PROJECT_SCOPED_HEADER } from './project-identity.js';
-import { logRequestFailure, matchPath, parseRequest, rejectEncodedSlash, replyFor, resolveRequestId, sendError } from './server/request.js';
+import { logRequestFailure, matchPath, openRequest, parseRequest, rejectEncodedSlash, replyFor, sendError } from './server/request.js';
 import { handleApproveQuarantine, handleCreateAuthKey, handleListAudit, handleListAuthKeys, handleListQuarantine, handleRejectQuarantine, handleRevokeAuthKey } from './server/routes/admin.js';
 import { handleCloseCustomerNote, handleCreateCustomerNote, handleGetCustomerNote, handleListCustomerNotes, handleSupersedeCustomerNote } from './server/routes/customer-notes.js';
 import { handleCloseDecision, handleCreateDecision, handleGetDecision, handleListDecisions, handleSupersedeDecision } from './server/routes/decisions.js';
@@ -549,11 +549,16 @@ function replyOrClose<E>(req: IncomingMessage, res: ServerResponse, err: E, requ
   }
 }
 
+// Node's own default, named so the three socket deadlines read together. It times the request arriving, never the handler, so a 10 minute sleep is not cut.
+const REQUEST_RECEIVE_TIMEOUT_MS = 300_000;
+
 function setKeepAliveTimeouts(server: Server): void {
   // The default 5s keepAliveTimeout closes idle sockets just as clients reuse them (ECONNRESET).
   // headersTimeout must stay ABOVE keepAliveTimeout + keepAliveTimeoutBuffer (1s), or it closes idle reused sockets itself.
   server.keepAliveTimeout = 65_000;
   server.headersTimeout = 70_000;
+  // Never below what a raised body deadline allows, or Node's bare 408 would come before the route's own.
+  server.requestTimeout = Math.max(REQUEST_RECEIVE_TIMEOUT_MS, server.headersTimeout + bodyDeadlineMs());
 }
 
 function listenOn(server: Server, port: number, host: string): Promise<void> {
@@ -646,10 +651,7 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
     res.once('finish', holder.afterResponse);
     inflight.add(res);
     res.once('close', () => inflight.delete(res));
-    const requestId = resolveRequestId(req.headers['x-request-id']);
-    res.setHeader('X-Request-Id', requestId);
-    // Memory text is caller-written, so no browser may guess a reply into HTML or script.
-    res.setHeader('X-Content-Type-Options', 'nosniff');
+    const requestId = openRequest(req, res, opts.slowRequestWarnMs);
     const run = (): Promise<void> => handleRequest(req, res, served, startedAt, streamSlots, limiter);
     // A missed port under another store would otherwise create and write a hippo.db that store never reads.
     const guarded = (): Promise<void> => (kind === 'sqlite' ? run() : withSqliteBlocked(kind, run));

@@ -3,7 +3,7 @@
 import * as fs from 'fs';
 import { randomUUID } from 'node:crypto';
 import { INTERNAL_ERROR_MESSAGE, mapApiError } from '../http-util.js';
-import { log } from '../log.js';
+import { errorFields, log } from '../log.js';
 import { currentRequestId } from '../util/request-scope.js';
 import { getGlobalRoot } from '../shared.js';
 import { loadConfig } from '../config.js';
@@ -51,7 +51,7 @@ export function mcpErrorResponse<E>(id: McpResponse['id'], err: E, requestId: st
   if (isStoreBusy(err)) return { jsonrpc: '2.0', id, error: { code: -32603, message: STORE_BUSY_MESSAGE } };
   const { status, message } = mapApiError(err);
   if (status !== 500) return { jsonrpc: '2.0', id, error: { code: -32603, message } };
-  log.error(`mcp request failed: ${err instanceof Error ? err.message : String(err)}`, { requestId });
+  log.error(`mcp request failed: ${err instanceof Error ? err.message : String(err)}`, { requestId, ...errorFields(err) });
   return {
     jsonrpc: '2.0',
     id,

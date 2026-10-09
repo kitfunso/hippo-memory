@@ -106,6 +106,8 @@ export function envV1Rps(): string | undefined { return raw('HIPPO_V1_RPS'); }
 export function envBodyTimeoutMs(): number | undefined { return positiveInt('HIPPO_BODY_TIMEOUT_MS'); }
 /** How long POST /v1/sleep lets its consolidation run; server/sleep-offload.ts holds the default. */
 export function envSleepTimeoutMs(): number | undefined { return positiveInt('HIPPO_SLEEP_TIMEOUT_MS'); }
+/** How long the daily runner lets one child `hippo` step run; cli/setup.ts holds the default. */
+export function envDailyStepTimeoutMs(): number | undefined { return positiveInt('HIPPO_DAILY_STEP_TIMEOUT_MS'); }
 export function envApiKey(): string | undefined { return raw('HIPPO_API_KEY'); }
 export function envClientIpHeader(): string | undefined { return raw('HIPPO_CLIENT_IP_HEADER')?.trim().toLowerCase(); }
 export function envTrustedProxies(): string | undefined { return raw('HIPPO_TRUSTED_PROXIES'); }

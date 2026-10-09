@@ -36,6 +36,7 @@ import { appendAuditEvent } from './audit.js';
 import type { KeysetPosition } from './keyset.js';
 import type { ObjectDescriptor } from './objects/descriptor.js';
 import { assertObjectStatus, closeObjectOn, loadObjectByIdOn, loadObjectsOn, objectMirrorMemory } from './objects/lifecycle.js';
+import { warnDamagedColumn } from './util/stored-json.js';
 
 // ---------------------------------------------------------------------------
 // Domain types
@@ -103,7 +104,7 @@ interface IncidentRow {
   created_at: string;
 }
 
-function parseLinkedMemoryIds(raw: string): string[] {
+function parseLinkedMemoryIds(raw: string, id: number): string[] {
   try {
     // SAFETY: JSON.parse output is arbitrary; narrowed by Array.isArray plus
     // the per-element string check below before use as string[].
@@ -114,6 +115,7 @@ function parseLinkedMemoryIds(raw: string): string[] {
     return [];
   } catch {
     // A malformed list column reads as empty instead of failing the incident read.
+    warnDamagedColumn({ table: 'incidents', id, column: 'linked_memory_ids' }, 'not valid JSON');
     return [];
   }
 }
@@ -131,7 +133,7 @@ function rowToIncident(row: IncidentRow): Incident {
     resolutionText: row.resolution_text,
     resolvedAt: row.resolved_at,
     closedAt: row.closed_at,
-    linkedMemoryIds: parseLinkedMemoryIds(row.linked_memory_ids),
+    linkedMemoryIds: parseLinkedMemoryIds(row.linked_memory_ids, row.id),
     createdAt: row.created_at,
   };
 }

@@ -2,7 +2,7 @@
 
 import { installCrashHandlers } from '../util/crash-handlers.js';
 import { log } from '../log.js';
-import { parseFrame } from './framing.js';
+import { parseFrame, type FrameRemainder } from './framing.js';
 import { mcpErrorResponse, isJsonObjectRecord, type McpRequest, type McpResponse } from './protocol.js';
 import { handleMcpRequest } from './request.js';
 import { type JsonValue, isJsonString } from '../json.js';
@@ -18,6 +18,20 @@ function send(msg: McpResponse): void {
 // ── Stdio transport ──
 
 let buffer: Buffer = Buffer.alloc(0);
+// The part of a refused frame still on its way, dropped as it arrives so it is never buffered or read as a new frame.
+let refused: FrameRemainder = 0;
+
+function withoutRefused(chunk: Buffer): Buffer {
+  if (refused === 'line') {
+    const newline = chunk.indexOf(0x0a);
+    if (newline === -1) return chunk.subarray(chunk.length);
+    refused = 0;
+    return chunk.subarray(newline + 1);
+  }
+  const dropped = Math.min(refused, chunk.length);
+  refused -= dropped;
+  return chunk.subarray(dropped);
+}
 
 // Only method is checked: handleMcpRequest narrows params where it reads them, as the HTTP transport does.
 function isRoutableRequest(v: JsonValue): v is JsonValue & McpRequest {
@@ -55,11 +69,17 @@ function dispatch(body: string): void {
  */
 export function startStdioLoop(): void {
   process.stdin.on('data', (chunk: Buffer) => {
-    buffer = Buffer.concat([buffer, chunk]);
+    buffer = Buffer.concat([buffer, withoutRefused(chunk)]);
     while (true) {
       const result = parseFrame(buffer);
       if (result.kind === 'incomplete') break;
       buffer = result.rest;
+      if (result.kind === 'oversize') {
+        refused = result.remainder;
+        log.warn('mcp: refused a frame over the size cap with a parse error');
+        send({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error: frame exceeds 1MB' } });
+        continue;
+      }
       // One id per frame, so the error reply and every line logged for the call name the same request.
       if (result.kind === 'message') runWithRequestId(randomUUID(), () => dispatch(result.body));
     }

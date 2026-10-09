@@ -101,6 +101,27 @@ describe('MCP stdio fault handling', () => {
     expect(run.proc.exitCode).toBeNull();
   }, 15000);
 
+  it('refuses a frame over 1 MB with a parse error, buffers none of it, and keeps serving', async () => {
+    const run = start([serverPath]);
+    const list = (id: number): string => `${JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/list' })}\n`;
+    const refusal = { jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error: frame exceeds 1MB' } };
+
+    // A declared length over the cap is refused at the header; its body is dropped as it arrives, so the next frame is read as itself.
+    const declared = 2 * 1024 * 1024;
+    run.proc.stdin.write(`Content-Length: ${declared}\r\n\r\n`);
+    expect(JSON.parse(await run.nextLine(5000))).toEqual(refusal);
+    run.proc.stdin.write(Buffer.alloc(declared, 0x78));
+    run.proc.stdin.write(list(1));
+    expect(JSON.parse(await run.nextLine(10000)).id).toBe(1);
+
+    // A line that never ends is refused once it passes the cap; the frame after its newline still answers.
+    run.proc.stdin.write(Buffer.alloc(1024 * 1024 + 64 * 1024, 0x79));
+    expect(JSON.parse(await run.nextLine(10000))).toEqual(refusal);
+    run.proc.stdin.write(`yyy\n${list(2)}`);
+    expect(JSON.parse(await run.nextLine(10000)).id).toBe(2);
+    expect(run.proc.exitCode).toBeNull();
+  }, 40000);
+
   it('exits non-zero and logs the stack on an uncaught exception', async () => {
     const run = start([crashScript("throw new Error('boom-uncaught');")]);
     const code = await exitWithin(run, 8000);

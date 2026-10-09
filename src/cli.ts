@@ -42,7 +42,7 @@ import { repairCodexWrapperIfInstalled } from './hooks/codex-wrapper.js';
 import { getHippoRoot } from './store/open.js';
 import { cmdGithub, printGithubBackfillUsage } from './connectors/github/cli-impl.js';
 import { printError } from './cli/output.js';
-import { errorMessage, log } from './log.js';
+import { errorFields, errorMessage, isLevelEnabled, log } from './log.js';
 import { isStoreBusy, STORE_BUSY_MESSAGE } from './db/busy.js';
 import type { CliFlags, CommandContext } from './cli/shared.js';
 import { VERB_USAGE, USAGE_HEADER, USAGE_EXAMPLES, printAuditPruneUsage, printSlackBackfillUsage, printSlackWorkspacesUsage } from './cli/usage.js';
@@ -684,6 +684,11 @@ export async function runCli(argv: string[] = process.argv): Promise<void> {
     await main(command, args, flags, getHippoRoot(process.cwd()));
   } catch (err) {
     printError('Error:', isStoreBusy(err) ? STORE_BUSY_MESSAGE : err instanceof Error ? err.message : err);
+    // The message alone rarely says where it came from; debug is the level that asks for the rest.
+    if (isLevelEnabled('debug')) {
+      const { errorClass, stack } = errorFields(err);
+      printError(`  thrown as ${errorClass}${stack ? `\n${stack}` : ''}`);
+    }
     process.exit(1);
   }
 }
