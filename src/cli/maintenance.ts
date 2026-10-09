@@ -10,7 +10,7 @@ import { loadConfig } from '../core/config.js';
 import { resolveTenantId } from '../store/tenant.js';
 import { refineStore } from './refine-llm.js';
 import { printError } from './output.js';
-import { type CliFlags, boolFlag, type CommandContext } from './flag-values.js';
+import { boolFlag, type CommandContext } from './flag-values.js';
 import { requireInit, resolveAuthRoot } from './shared.js';
 import { errorMessage } from '../util/log.js';
 
@@ -124,9 +124,8 @@ function printDedupPairs(result: DedupResult, dryRun: boolean): void {
 // Embed command
 // ---------------------------------------------------------------------------
 
-export async function cmdEmbed(
-  hippoRoot: string,
-  flags: CliFlags,
+export async function handleEmbed(
+  { hippoRoot, flags }: CommandContext,
   given?: EmbeddingProvider,
 ): Promise<void> {
   // --global mirrors resolveAuthRoot (cli.ts:6900): initGlobal() + the global
@@ -171,10 +170,6 @@ export async function cmdEmbed(
     printError(`${unembedded} memories are still not embedded (the warnings above name them). Re-run \`hippo embed\` to retry.`);
     process.exitCode = 1;
   }
-}
-
-export function handleEmbed({ hippoRoot, flags }: CommandContext): Promise<void> {
-  return cmdEmbed(hippoRoot, flags);
 }
 
 function resetPhysics(root: string): void {
