@@ -24,7 +24,7 @@ function formatAuditRow(ev: AuditEvent): string {
   return `${ev.ts}  ${ev.actor}  ${ev.op}  ${target}  ${meta}`;
 }
 
-function cmdAuditList(hippoRoot: string, flags: CliFlags): void {
+async function cmdAuditList(hippoRoot: string, flags: CliFlags): Promise<void> {
   const root = resolveAuthRoot(hippoRoot, flags);
   const asJson = Boolean(flags['json']);
   const tenantId = resolveTenantId({});
@@ -60,7 +60,7 @@ function cmdAuditList(hippoRoot: string, flags: CliFlags): void {
   }
 
   const ctx: api.Context = { hippoRoot: root, tenantId, actor: { subject: 'cli', role: 'admin' } };
-  const events = api.auditList(ctx, { op, since, limit });
+  const events = await api.auditList(ctx, { op, since, limit });
 
   if (asJson) {
     console.log(JSON.stringify(events));
@@ -116,10 +116,10 @@ function cmdAuditPrune(hippoRoot: string, flags: CliFlags): void {
   }
 }
 
-function cmdAuditLog(hippoRoot: string, args: string[], flags: CliFlags): void {
+async function cmdAuditLog(hippoRoot: string, args: string[], flags: CliFlags): Promise<void> {
   const sub = args[0];
   if (sub === 'list') {
-    cmdAuditList(hippoRoot, flags);
+    await cmdAuditList(hippoRoot, flags);
     return;
   }
   if (sub === 'prune') {
@@ -130,7 +130,7 @@ function cmdAuditLog(hippoRoot: string, args: string[], flags: CliFlags): void {
   process.exit(1);
 }
 
-export function handleAudit({ hippoRoot, args, flags }: CommandContext): void {
+export async function handleAudit({ hippoRoot, args, flags }: CommandContext): Promise<void> {
   if (args[0] === 'repair') {
     const apply = flags['apply'] === true && flags['dry-run'] !== true;
     const result = repairAutomaticMemories(flags['global'] ? getGlobalRoot() : hippoRoot, { tenantId: resolveTenantId({}), apply });
@@ -152,7 +152,7 @@ export function handleAudit({ hippoRoot, args, flags }: CommandContext): void {
   // Other forms (no sub, --fix) keep the existing memory-quality auditor
   // for backwards compatibility.
   if (args[0] === 'list' || args[0] === 'prune') {
-    cmdAuditLog(hippoRoot, args, flags);
+    await cmdAuditLog(hippoRoot, args, flags);
     return;
   }
   requireInit(hippoRoot);

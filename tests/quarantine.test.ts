@@ -65,7 +65,7 @@ describe('GitHub ingest quarantines a flagged comment', () => {
   beforeEach(() => { home = makeRoot('quarantine', ISOLATION_OFF); });
   afterEach(() => rmSync(home, { recursive: true, force: true }));
 
-  it('injection body lands under quarantine:private:github:public:acme/demo, pending, with a quarantine audit row', () => {
+  it('injection body lands under quarantine:private:github:public:acme/demo, pending, with a quarantine audit row', async () => {
     const ctx = adminCtx(home);
     const result = ingestEvent(ctx, { event: githubCommentEvent(INJECTION), rawBody: 'x', deliveryId: 'd1' });
     expect(result.status).toBe('ingested');
@@ -78,7 +78,7 @@ describe('GitHub ingest quarantines a flagged comment', () => {
     expect(row?.original_scope).toBe('github:public:acme/demo');
     expect(row?.reason).toBe('pattern:standing-order');
 
-    const audit = api.auditList(ctx, { op: 'quarantine' });
+    const audit = await api.auditList(ctx, { op: 'quarantine' });
     expect(audit.some((e) => e.targetId === result.memoryId)).toBe(true);
   });
 
@@ -108,24 +108,24 @@ describe('recall visibility and the approve/reject lifecycle', () => {
   });
   afterEach(() => rmSync(home, { recursive: true, force: true }));
 
-  it('default recall does not return it; approve restores the scope and recall then returns it', () => {
+  it('default recall does not return it; approve restores the scope and recall then returns it', async () => {
     const ctx = adminCtx(home);
     expect(api.recall(ctx, { query: 'wipe.sh' }).results.some((r) => r.id === id)).toBe(false);
 
     api.quarantineApprove(ctx, id);
     expect(readEntry(home, id, 'default')?.scope).toBe('github:public:acme/demo');
-    const audit = api.auditList(ctx, { op: 'quarantine_approve' });
+    const audit = await api.auditList(ctx, { op: 'quarantine_approve' });
     expect(audit.some((e) => e.targetId === id)).toBe(true);
     expect(api.recall(ctx, { query: 'wipe.sh' }).results.some((r) => r.id === id)).toBe(true);
   });
 
-  it('reject keeps it hidden and marks the row rejected', () => {
+  it('reject keeps it hidden and marks the row rejected', async () => {
     const ctx = adminCtx(home);
     api.quarantineReject(ctx, id);
     expect(readEntry(home, id, 'default')?.scope).toBe('quarantine:private:github:public:acme/demo');
     expect(quarantineRow(home, id)?.status).toBe('rejected');
     expect(api.recall(ctx, { query: 'wipe.sh' }).results.some((r) => r.id === id)).toBe(false);
-    const audit = api.auditList(ctx, { op: 'quarantine_reject' });
+    const audit = await api.auditList(ctx, { op: 'quarantine_reject' });
     expect(audit.some((e) => e.targetId === id)).toBe(true);
   });
 

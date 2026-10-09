@@ -1,6 +1,6 @@
 // Admin routes: API keys, quarantine and the audit log.
 import { AUDIT_OPS, type AuditOp } from '../../audit.js';
-import { auditListServed, authCreate, authListRows, authRevoke, quarantineApprove, quarantineList, quarantineReject } from '../../api.js';
+import { auditList, authCreate, authListRows, authRevoke, quarantineApprove, quarantineList, quarantineReject } from '../../api.js';
 import { HttpError, readBody, sendJson } from '../../http-util.js';
 import { log } from '../../log.js';
 import { assertCrossTenantAdmin, buildContextWithAuth } from '../auth.js';
@@ -170,7 +170,7 @@ export async function handleListAudit({ req, res, opts, query }: RouteRequest): 
   const crossTenant = tenantOverride !== null && tenantOverride !== '' && tenantOverride !== ctx.tenantId;
   if (crossTenant) assertCrossTenantAdmin(ctx, '/v1/audit?tenant= for another tenant');
   const effectiveCtx = crossTenant ? { ...ctx, tenantId: tenantOverride } : ctx;
-  const page = pageOf(await auditListServed(effectiveCtx, { op, since, limit: limit + 1, after }), limit, (e) => ({ key: e.ts, id: e.id }));
+  const page = pageOf(await auditList(effectiveCtx, { op, since, limit: limit + 1, after }), limit, (e) => ({ key: e.ts, id: e.id }));
   setNextCursorHeader(res, page.nextCursor);
   sendJson(res, 200, page.items);
   return;
