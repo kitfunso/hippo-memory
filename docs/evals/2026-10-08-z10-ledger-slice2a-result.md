@@ -19,7 +19,7 @@ npm --prefix C:/Users/skf_s/hippo-wt-z10b run test:delivery-ledger
 ```
 
 - `npm run test:delivery-ledger`: 7 files, 116 tests, all pass (rerun for this document).
-- Targeted vitest list of 9 files (the delivery-ledger files, `tests/prompt-hook-context.test.ts`, `tests/copilot-hooks-cli.test.ts`, `tests/hook-store-open-count.test.ts`, `tests/stdin-bounded.test.ts`): 226 pass, 0 fail. This count comes from the build agents' run on this branch; it was not rerun for this document.
+- Targeted vitest list of 9 files (the delivery-ledger files, `tests/prompt-hook-context.test.ts`, `tests/copilot-hooks-cli.test.ts`, `tests/hook-store-open-count.test.ts`, `tests/stdin-bounded.test.ts`): 226 pass, 0 fail. This count comes from the build run on this branch; it was not rerun for this document.
 - Red first: tests B3 and B7 failed on the old code (B3 found 0 rows; B7 found 3 of 5). W1 and W6 failed for both boundary types before the duplicate rule existed.
 - Mutations, each caught: the duplicate rule limited to `pre-compact` (caught by the `compact-resume` W1 and W6 cases); the boundary callback moved ahead of the early returns in `runPreCompact` (8 tests failed); no try/catch around the callback (only U1 failed); no flush before `process.exit` in `cmdCompactResume` (4 tests failed).
 - Store-open count for `compact-resume`: `{local: 1}` with the delivery ledger on and with it off (`tests/hook-store-open-count.test.ts`).
@@ -75,4 +75,3 @@ The box was under heavy load from other work during these runs. The spread insid
 - The `session-end` event, the `recall_trace_id` and `query_hash` fields, tool-failure events and a `--runtime codex` flag are later slices.
 - The Codex runtime label gap stays: a Codex `compact-resume` row reads `claude-code` unless the payload has a turn id.
 - A missing boundary row is a gap, never evidence that no compaction happened. Remote-caller copies write no row.
-- Plan and code differ in two places. The plan text for V8 cites `snapshotJustSaved` at `src/capture/compact.ts:109`; in the committed code it is at `:112`. The plan's design text for the duplicate rule (D2) is replaced by revision V2, and the code follows V2.
