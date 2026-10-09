@@ -1,5 +1,5 @@
 // Sleep's tombstone checks run on one handle for the whole pass, owned here so no stage holds a raw one.
-import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../db.js';
+import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../db/index.js';
 import { type AppendAuditOpts, appendAuditEvent } from './audit.js';
 import { findRejectedValue, type RejectedValueRow } from './rejection.js';
 

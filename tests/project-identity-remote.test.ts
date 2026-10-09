@@ -3,8 +3,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { clearProjectIdentityCache, projectNames, resolveProjectIdentity } from '../src/project-identity.js';
-import { normaliseRemote, originUrlFromConfig } from '../src/project-remote.js';
+import { clearProjectIdentityCache, projectNames, resolveProjectIdentity } from '../src/core/project-identity.js';
+import { normaliseRemote, originUrlFromConfig } from '../src/core/project-remote.js';
 
 let tmpRoot: string;
 let home: string;

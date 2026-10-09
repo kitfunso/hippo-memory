@@ -2,16 +2,23 @@
 
 import * as path from 'path';
 import * as fs from 'fs';
-import type { MemoryEntry } from '../memory.js';
+import type { MemoryEntry } from '../core/memory.js';
 import { loadAllEntries } from '../store/entry-reads.js';
-import { loadConfig } from '../config.js';
-import { getGlobalRoot } from '../shared.js';
+import { loadConfig } from '../core/config.js';
+import { getGlobalRoot } from '../sharing/shared.js';
 import { runEval, bootstrapCorpus, compareSummaries, type EvalCase, type EvalSummary } from '../eval/eval.js';
 import { runFeatureEval, formatResult, resultToBaseline, detectRegressions, type EvalBaseline } from '../eval/eval-suite.js';
-import { PACKAGE_VERSION } from '../version.js';
+import { PACKAGE_VERSION } from '../util/version.js';
 import { printError } from './output.js';
 import { requireInit, fmt, type CliFlags, type CommandContext, boolFlag } from './shared.js';
-import { errorMessage } from '../log.js';
+import { errorMessage } from '../util/log.js';
+
+const HIT_TOP_K = 10;
+const MAX_FAILING_SHOWN = 10;
+const TOP_IDS_SHOWN = 3;
+const MAX_MISSED_SHOWN = 4;
+const QUERY_PREVIEW_CHARS = 60;
+const MAX_DELTAS_SHOWN = 5;
 
 /** Runs `hippo eval`: --bootstrap writes a corpus, --suite runs the built-in feature eval, else it scores a corpus file. */
 async function cmdEval(
@@ -167,14 +174,14 @@ function printEvalSummary(summary: EvalSummary, showCases: boolean): void {
     for (const c of summary.cases) {
       const exp = c.case.expectedIds.length;
       const expectedSet = new Set(c.case.expectedIds);
-      const hitTop10 = c.returnedIds.slice(0, 10).filter((id) => expectedSet.has(id));
-      const missed = c.case.expectedIds.filter((id) => !c.returnedIds.slice(0, 10).includes(id));
+      const hitTop10 = c.returnedIds.slice(0, HIT_TOP_K).filter((id) => expectedSet.has(id));
+      const missed = c.case.expectedIds.filter((id) => !c.returnedIds.slice(0, HIT_TOP_K).includes(id));
       console.log();
       console.log(`[${c.case.id}] R@10=${fmt(c.recallAt10, 2)}  MRR=${fmt(c.mrr, 2)}  expected=${exp}  hit=${hitTop10.length}`);
       console.log(`  query: ${c.case.query}`);
-      console.log(`  top 3: ${c.returnedIds.slice(0, 3).join(', ') || '(none)'}`);
+      console.log(`  top 3: ${c.returnedIds.slice(0, TOP_IDS_SHOWN).join(', ') || '(none)'}`);
       if (missed.length > 0) {
-        const shown = missed.slice(0, 4);
+        const shown = missed.slice(0, MAX_MISSED_SHOWN);
         const more = missed.length > shown.length ? ` +${missed.length - shown.length} more` : '';
         console.log(`  missed: ${shown.join(', ')}${more}`);
       }
@@ -185,8 +192,8 @@ function printEvalSummary(summary: EvalSummary, showCases: boolean): void {
   const failing = summary.cases.filter((c) => c.mrr === 0);
   if (failing.length > 0) {
     console.log(`${failing.length} case(s) returned zero relevant results:`);
-    for (const f of failing.slice(0, 10)) {
-      console.log(`  [${f.case.id}] "${f.case.query.slice(0, 60)}"`);
+    for (const f of failing.slice(0, MAX_FAILING_SHOWN)) {
+      console.log(`  [${f.case.id}] "${f.case.query.slice(0, QUERY_PREVIEW_CHARS)}"`);
     }
     if (failing.length > 10) console.log(`  ...and ${failing.length - 10} more`);
   }
@@ -226,11 +233,11 @@ function printEvalCompare(summary: EvalSummary, comparePath: string, asJson: boo
 
   const showPerCase = cmp.improved.length + cmp.regressed.length > 0;
   if (showPerCase) {
-    for (const d of cmp.improved.slice(0, 5)) {
+    for (const d of cmp.improved.slice(0, MAX_DELTAS_SHOWN)) {
       const delta = d.ndcgAfter - d.ndcgBefore;
       console.log(`  + [${d.id}] NDCG ${fmt(d.ndcgBefore, 2)} -> ${fmt(d.ndcgAfter, 2)} (+${fmt(delta, 3)})`);
     }
-    for (const d of cmp.regressed.slice(0, 5)) {
+    for (const d of cmp.regressed.slice(0, MAX_DELTAS_SHOWN)) {
       const delta = d.ndcgAfter - d.ndcgBefore;
       console.log(`  - [${d.id}] NDCG ${fmt(d.ndcgBefore, 2)} -> ${fmt(d.ndcgAfter, 2)} (${fmt(delta, 3)})`);
     }

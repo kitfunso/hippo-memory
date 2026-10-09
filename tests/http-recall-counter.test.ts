@@ -7,8 +7,8 @@ import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
-import { openHippoDb, closeHippoDb, getMeta } from '../src/db.js';
-import { remember, recall } from '../src/api.js';
+import { openHippoDb, closeHippoDb, getMeta } from '../src/db/index.js';
+import { remember, recall } from '../src/api/index.js';
 import { serve, __resetSessionRecallHistoryHttp, type ServerHandle } from '../src/server.js';
 
 let home: string;

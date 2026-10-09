@@ -4,13 +4,13 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { createRequire } from 'node:module';
-import { Layer, type MemoryEntry } from '../src/memory.js';
+import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { familyUnits, groupFlush } from '../src/consolidate/flush-units.js';
 import { commitInChunks, type FlushComponent } from '../src/store/delete-and-batch.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { SLEEP_DB_WAIT_MS, type DatabaseSyncLike } from '../src/db.js';
-import type { WriteBudget } from '../src/write-budget.js';
+import { SLEEP_DB_WAIT_MS, type DatabaseSyncLike } from '../src/db/index.js';
+import type { WriteBudget } from '../src/util/write-budget.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 
 // SAFETY: node:sqlite's StatementSync is the class db.ts's prepare returns, and it carries its SQL text.

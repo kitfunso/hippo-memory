@@ -1,12 +1,12 @@
 // API key management: create, list, revoke, and grant or ungrant restricted scopes.
 
-import { ForbiddenError, NotFoundError } from '../api-errors.js';
+import { ForbiddenError, NotFoundError } from '../core/api-errors.js';
 import {
   mintApiKey,
   type ApiKeyListRow, type ApiKeyRecord, type ListApiKeysOpts, type NewApiKey,
 } from '../store/auth.js';
-import type { KeysetPosition } from '../keyset.js';
-import type { KeyMint, SelfKeyMint } from '../store-port.js';
+import type { KeysetPosition } from '../util/keyset.js';
+import type { KeyMint, SelfKeyMint } from '../store/index.js';
 import { changeScopeGrant } from '../store/sqlite/local.js';
 import { sqliteSyncStore } from '../store/sqlite/store.js';
 import type { ApiKeyOwner } from '../store/tenant-lookup.js';

@@ -8,10 +8,10 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { getContext, type Context } from '../src/api.js';
-import { computeAmbientState, renderAmbientSummary } from '../src/ambient.js';
-import { _resetAblationCacheForTests } from '../src/ablation.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { getContext, type Context } from '../src/api/index.js';
+import { computeAmbientState, renderAmbientSummary } from '../src/core/ambient.js';
+import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const HIPPO_JS = path.join(repoRoot, 'bin', 'hippo.js');

@@ -10,7 +10,7 @@ import {
   closeTaskSnapshotsForSession,
   SNAPSHOT_AMBIENT_MAX_AGE_MS,
 } from '../src/store/sessions.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 
 // DF1 (docs/plans/2026-08-23-df1-snapshot-lifecycle.md) T1 tests: the
 // never-expires fix for the active task snapshot ambient-injection surfaces.

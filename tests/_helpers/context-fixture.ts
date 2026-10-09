@@ -1,8 +1,8 @@
 // The rows getContext reads, added to the two-tenant conformance fixture: pins, a recent window one project crowds, every
 // scope and supersede edge, secret tags, a drifted date, and task state with keys, ties, private rows and stale rows.
-import { closeHippoDb, openHippoDb } from '../../src/db.js';
-import type { JsonValue } from '../../src/json.js';
-import { Layer, type MemoryEntry } from '../../src/memory.js';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
+import type { JsonValue } from '../../src/util/json.js';
+import { Layer, type MemoryEntry } from '../../src/core/memory.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { initStore } from '../../src/store/open.js';
 import { rowsOf, seeded } from './recall-golden-seed.js';

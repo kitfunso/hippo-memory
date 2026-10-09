@@ -1,5 +1,5 @@
-import { type MemoryEntry, Layer, type ConfidenceLevel, type MemoryKind } from '../memory.js';
-import { dumpFrontmatter, parseFrontmatter } from '../yaml.js';
+import { type MemoryEntry, Layer, FALLBACK_HALF_LIFE_DAYS, DEFAULT_SCHEMA_FIT, type ConfidenceLevel, type MemoryKind } from '../core/memory.js';
+import { dumpFrontmatter, parseFrontmatter } from './yaml.js';
 
 type FrontmatterValue = string | number | boolean | null | string[] | number[];
 
@@ -105,11 +105,11 @@ export function deserializeEntry(raw: string): MemoryEntry | null {
     last_retrieved: String(data['last_retrieved'] ?? new Date().toISOString()),
     retrieval_count: Number(data['retrieval_count'] ?? 0),
     strength: Number(data['strength'] ?? 1.0),
-    half_life_days: Number(data['half_life_days'] ?? 7),
+    half_life_days: Number(data['half_life_days'] ?? FALLBACK_HALF_LIFE_DAYS),
     layer: data['layer'] as Layer,
     tags: normalizeStringArray(data['tags']),
     emotional_valence: (data['emotional_valence'] as MemoryEntry['emotional_valence']) ?? 'neutral',
-    schema_fit: Number(data['schema_fit'] ?? 0.5),
+    schema_fit: Number(data['schema_fit'] ?? DEFAULT_SCHEMA_FIT),
     source: String(data['source'] ?? 'cli'),
     outcome_score: data['outcome_score'] === null || data['outcome_score'] === undefined ? null : Number(data['outcome_score']),
     outcome_positive: Number(data['outcome_positive'] ?? 0),

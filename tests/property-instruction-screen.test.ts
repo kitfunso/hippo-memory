@@ -1,10 +1,10 @@
 // Injection screening over generated text: a flagged phrase stays flagged with invisible characters inside it, ordinary prose in many scripts never flags, and screening never changes what is stored.
 import { afterAll, beforeAll, describe, it, expect } from 'vitest';
 import { rmSync } from 'node:fs';
-import * as api from '../src/api.js';
-import { detectInstruction } from '../src/instruction-detect.js';
+import * as api from '../src/api/index.js';
+import { detectInstruction } from '../src/api/instruction-detect.js';
 import { readEntry } from '../src/store/entry-reads.js';
-import { withSharedStoreHandles } from '../src/db.js';
+import { withSharedStoreHandles } from '../src/db/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { arr, both, forAll, int, map, oneOf, pick, type Gen } from './_helpers/property.js';
 

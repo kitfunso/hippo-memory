@@ -15,13 +15,13 @@ import * as os from 'os';
 import * as path from 'path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { openHippoDb } from '../src/db.js';
-import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { openHippoDb } from '../src/db/index.js';
+import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import {
   buildEntityProfiles,
   rebuildDirtySummaries,
-} from '../src/dag.js';
-import { drillDown, type Context, type DrillDownOutcome, type DrillDownResult } from '../src/api.js';
+} from '../src/consolidate/dag.js';
+import { drillDown, type Context, type DrillDownOutcome, type DrillDownResult } from '../src/api/index.js';
 import { hybridSearch } from '../src/search/hybrid.js';
 import { isDagSummary } from '../src/search/boosts.js';
 
@@ -272,7 +272,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
     let capturedPrompt: string | undefined;
     const fetcher = vi.fn<typeof fetch>(async (_url, init) => {
       // SAFETY: this fetcher is invoked only by rebuildDirtySummaries's Anthropic call
-      // below, which always sends `body: JSON.stringify({...})` (src/dag.ts).
+      // below, which always sends `body: JSON.stringify({...})` (src/consolidate/dag.ts).
       const body = init?.body ? JSON.parse(init.body as string) : {};
       capturedPrompt = body?.messages?.[0]?.content ?? '';
       return new Response(

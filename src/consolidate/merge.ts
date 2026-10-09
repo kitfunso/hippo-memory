@@ -1,15 +1,15 @@
-import { MemoryEntry, Layer, calculateStrength, createMemory } from '../memory.js';
-import { tokenize } from '../tokenize.js';
-import { jaccardMinShared, overlapPartners } from '../overlap-index.js';
-import { compareEntryIdentity } from '../compare.js';
-import { duplicateKey, mergedText } from '../same-text.js';
-import { successorAfterRetirement } from '../merged-row.js';
+import { MemoryEntry, Layer, calculateStrength, createMemory } from '../core/memory.js';
+import { tokenize } from '../util/tokenize.js';
+import { jaccardMinShared, overlapPartners } from './overlap-index.js';
+import { compareEntryIdentity } from '../core/compare.js';
+import { duplicateKey, mergedText } from '../util/same-text.js';
+import { successorAfterRetirement } from './merged-row.js';
 import { rejectionDigest } from '../store/rejection.js';
 import { reportAuditWriteFailure } from '../store/audit.js';
-import { derivationScope, derivationPartitionKey } from '../recall-scope.js';
+import { derivationScope, derivationPartitionKey } from '../store/recall-scope.js';
 import { jaccardSets } from './conflicts.js';
 import { keptAsWritten, type SleepRun } from './run.js';
-import { isReusable } from '../memory-quality.js';
+import { isReusable } from '../core/memory-quality.js';
 
 const MERGE_OVERLAP_THRESHOLD = 0.35;  // Jaccard similarity for "related"
 const MERGE_MIN_CLUSTER = 2;            // minimum cluster size to merge

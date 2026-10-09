@@ -1,11 +1,13 @@
-import { envJevModel, envJevTimeoutMs, envTypesafeApiKey } from '../env.js';
+import { envJevModel, envJevTimeoutMs, envTypesafeApiKey } from '../util/env.js';
 import type { RerankerFn, RerankResult, RerankerOptions } from './types.js';
 import type { SearchResult } from '../core/search-types.js';
-import { redactSecretsStrict } from '../secret-detect.js';
+import { redactSecretsStrict } from '../util/secret-detect.js';
 import { createOutageWarning } from './outage-warning.js';
 import { rerankerPost } from './remote.js';
-import { compareScoresDesc } from '../compare.js';
-import { errorMessage } from '../log.js';
+import { compareScoresDesc } from '../core/compare.js';
+import { errorMessage } from '../util/log.js';
+
+const REQUEST_ID_MAX_CHARS = 64;
 
 const ENDPOINT = 'https://api.typesafe.ai/v1/systemone';
 const DEFAULT_TIMEOUT_MS = 5_000;
@@ -80,7 +82,7 @@ async function requestScores(query: string, head: SearchResult[]): Promise<numbe
   }, envJevTimeoutMs() ?? DEFAULT_TIMEOUT_MS);
   if (!resp.ok) {
     // A third-party header ends up on stderr, so keep printable ASCII only.
-    const requestId = resp.headers.get('x-request-id')?.replace(/[^\x20-\x7e]/g, '').slice(0, 64);
+    const requestId = resp.headers.get('x-request-id')?.replace(/[^\x20-\x7e]/g, '').slice(0, REQUEST_ID_MAX_CHARS);
     await resp.body?.cancel();
     throw new Error(`HTTP ${resp.status}${requestId ? `, request ${requestId}` : ''}`);
   }

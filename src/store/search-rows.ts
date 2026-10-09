@@ -1,10 +1,10 @@
-import type { MemoryEntry } from '../memory.js';
-import { openHippoDb, isFtsAvailable, closeHippoDb, type DatabaseSyncLike } from '../db.js';
-import { tokenize } from '../tokenize.js';
-import { isPersonalScope, scopeAdmitSql, type SqlFragment } from '../recall-scope.js';
-import { ftsTermParts, RAREST_TERM_COUNT, rarestFtsQuery } from '../prompt-recall.js';
-import { errorMessage, log } from '../log.js';
-import { originInSql } from '../project-identity.js';
+import type { MemoryEntry } from '../core/memory.js';
+import { openHippoDb, isFtsAvailable, closeHippoDb, type DatabaseSyncLike } from '../db/index.js';
+import { tokenize } from '../util/tokenize.js';
+import { isPersonalScope, scopeAdmitSql, type SqlFragment } from './recall-scope.js';
+import { ftsTermParts, RAREST_TERM_COUNT, rarestFtsQuery } from '../core/prompt-recall.js';
+import { errorMessage, log } from '../util/log.js';
+import { originInSql } from '../core/project-identity.js';
 import { topVectorMatches } from '../db/vector-store.js';
 import {
   type MemoryRow,
@@ -14,7 +14,7 @@ import {
   rowToEntry,
 } from './rows.js';
 import { openStore } from './open.js';
-import { escapeLike } from '../escape.js';
+import { escapeLike } from '../util/escape.js';
 
 /**
  * Recall-mode scope filter shape, exported so callers and tests can name it. Three modes:

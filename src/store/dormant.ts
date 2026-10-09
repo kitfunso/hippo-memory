@@ -17,12 +17,12 @@
  * The hippoRoot-taking functions at the end open one of their own, for
  * api.listDormant / restoreDormant / forgetDormant / isDormant.
  */
-import { closeHippoDb, openHippoDb, withWriteScope, withWriteScopeOr, type DatabaseSyncLike } from '../db.js';
-import type { MemoryEntry } from '../memory.js';
-import type { SqlFragment } from '../recall-scope.js';
-import type { WriteBudget } from '../write-budget.js';
+import { closeHippoDb, openHippoDb, withWriteScope, withWriteScopeOr, type DatabaseSyncLike } from '../db/index.js';
+import type { MemoryEntry } from '../core/memory.js';
+import type { SqlFragment } from './recall-scope.js';
+import type { WriteBudget } from '../util/write-budget.js';
 import { RejectedValueError, rejectionDigest } from './rejection.js';
-import { escapeLike } from '../escape.js';
+import { escapeLike } from '../util/escape.js';
 import { warnDamagedColumn } from '../util/stored-json.js';
 import { DAY_MS } from '../util/time.js';
 import { appendAuditEvent } from './audit.js';

@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createApiKey, listApiKeys } from '../src/store/auth.js';
-import { log } from '../src/log.js';
+import { log } from '../src/util/log.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
 

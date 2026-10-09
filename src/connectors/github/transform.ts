@@ -1,4 +1,4 @@
-import type { RememberOpts } from '../../api.js';
+import type { RememberOpts } from '../../api/index.js';
 import { scopeFromRepository } from './scope.js';
 import type {
   GitHubIssueEvent,

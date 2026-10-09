@@ -1,13 +1,13 @@
 // The checks every caller call shares: ids, project, the session's owner and the pilot arm, all from the request, never the server's env or folder.
-import { BadRequestError } from '../api-errors.js';
+import { BadRequestError } from '../core/api-errors.js';
 import { ownerOrSubject, type Context } from '../api/types.js';
-import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../db.js';
-import { MAX_ID_LEN } from '../http-util.js';
-import { sessionPilotArm } from '../pilot-arm.js';
-import { assertCallerIds, type CallerProject } from '../prompt-hook.js';
-import { assertCallerProject, projectNames } from '../project-identity.js';
-import { maskEmails, redactSecretsStrict } from '../secret-detect.js';
-import { bindSessionOwner } from '../session-owners.js';
+import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../db/index.js';
+import { MAX_ID_LEN } from '../util/http-util.js';
+import { sessionPilotArm } from '../api/pilot-arm.js';
+import { assertCallerIds, type CallerProject } from '../api/prompt-hook.js';
+import { assertCallerProject, projectNames } from '../core/project-identity.js';
+import { maskEmails, redactSecretsStrict } from '../util/secret-detect.js';
+import { bindSessionOwner } from '../api/session-owners.js';
 import type { ContinuityKey } from '../store/sessions.js';
 import { fitWorkingState, WORKING_STATE_CAPS, type WorkingState } from './working-state.js';
 

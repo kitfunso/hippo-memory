@@ -1,16 +1,16 @@
 // Promote to the global store, supersede with a successor, and archive raw memories.
 
-import { openHippoDb, closeHippoDb } from '../db.js';
-import { ConflictError, NotFoundError } from '../api-errors.js';
+import { openHippoDb, closeHippoDb } from '../db/index.js';
+import { ConflictError, NotFoundError } from '../core/api-errors.js';
 import { stampOriginProject } from '../store/entry-row.js';
 import type { ConnectorEvent } from '../store/port.js';
-import { createSuccessor, type MemoryEntry } from '../memory.js';
-import { promoteToGlobal } from '../shared.js';
-import { loadConfig } from '../config.js';
+import { createSuccessor, type MemoryEntry } from '../core/memory.js';
+import { promoteToGlobal } from '../sharing/shared.js';
+import { loadConfig } from '../core/config.js';
 import { andThen, notPorted, onStore } from './on-store.js';
 import type { Context, StoreReply } from './types.js';
 import { selectMemoryReach } from '../store/tenant-lookup.js';
-import { canTouchScope, personalScopeOf } from '../recall-scope.js';
+import { canTouchScope, personalScopeOf } from '../store/recall-scope.js';
 
 // ---------------------------------------------------------------------------
 // promote

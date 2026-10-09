@@ -2,7 +2,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { listAuditEventsAfter } from '../src/store/audit.js';
-import { closeHippoDb, openHippoDb } from '../src/db.js';
+import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import type {
   AmbientCandidateRequest, AmbientLoadResult, AmbientStoreFilter, AmbientTallies, AuditEvent, ContinuityKey, MemoryEntry,
 } from '../src/server.js';

@@ -4,13 +4,13 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../dist/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../dist/core/memory.js';
 import { initStore } from '../dist/store/open.js';
 import { upsertEntryRow } from '../dist/store/entry-row.js';
-import { openHippoDb, closeHippoDb } from '../dist/db.js';
-import { saveDecision } from '../dist/decisions.js';
-import { savePolicy } from '../dist/policies.js';
-import { extractGraphChunked } from '../dist/graph-extract.js';
+import { openHippoDb, closeHippoDb } from '../dist/db/index.js';
+import { saveDecision } from '../dist/objects/decisions.js';
+import { savePolicy } from '../dist/objects/policies.js';
+import { extractGraphChunked } from '../dist/graph/extract.js';
 
 const LIMIT_MS = 150;
 const TENANT = 'default';

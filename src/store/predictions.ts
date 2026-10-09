@@ -23,15 +23,17 @@
  * per-class base rates from (estimate_value, actual_value) at query time.
  */
 
-import { BadRequestError, NotFoundError } from '../api-errors.js';
-import { openHippoDb, closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../db.js';
+import { BadRequestError, NotFoundError } from '../core/api-errors.js';
+import { openHippoDb, closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import { writeEntryAt } from './sqlite/entry-writes-group.js';
-import { assertTenantId } from '../tenant.js';
-import { createMemory, Layer, type MemoryEntry, type MemoryKind } from '../memory.js';
+import { assertTenantId } from './tenant.js';
+import { createMemory, Layer, type MemoryEntry, type MemoryKind } from '../core/memory.js';
 import { appendAuditEvent } from './audit.js';
-import { loadConfig } from '../config.js';
-import { keysetAfter, type KeysetPosition } from '../keyset.js';
+import { loadConfig } from '../core/config.js';
+import { keysetAfter, type KeysetPosition } from '../util/keyset.js';
 import type { PredictionSave } from './port.js';
+
+const DEFAULT_PREDICTION_PAGE_SIZE = 100;
 
 // ---------------------------------------------------------------------------
 // Domain types
@@ -383,7 +385,7 @@ export function loadPredictionsByClass(
   opts: ListPredictionsOpts = {},
 ): Prediction[] {
   assertTenantId('loadPredictionsByClass', tenantId);
-  const limit = opts.limit ?? 100;
+  const limit = opts.limit ?? DEFAULT_PREDICTION_PAGE_SIZE;
   const after = keysetAfter('created_at', 'id', opts.after);
   const db = openHippoDb(hippoRoot);
   try {
@@ -441,7 +443,7 @@ export function loadAllPredictions(
       WHERE tenant_id = ?${after.sql}
       ORDER BY created_at DESC, id DESC
       LIMIT ?
-    `).all(tenantId, ...after.params, opts.limit ?? 100) as PredictionRow[];
+    `).all(tenantId, ...after.params, opts.limit ?? DEFAULT_PREDICTION_PAGE_SIZE) as PredictionRow[];
     return rows.map(rowToPrediction);
   } finally {
     closeHippoDb(db);
@@ -584,7 +586,7 @@ export function loadOpenPredictions(
   opts: { classTag?: string; limit?: number; after?: KeysetPosition } = {},
 ): Prediction[] {
   assertTenantId('loadOpenPredictions', tenantId);
-  const limit = opts.limit ?? 100;
+  const limit = opts.limit ?? DEFAULT_PREDICTION_PAGE_SIZE;
   const after = keysetAfter('created_at', 'id', opts.after);
   const db = openHippoDb(hippoRoot);
   try {

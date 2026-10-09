@@ -12,7 +12,7 @@ import {
   pickRarestFtsQuery,
 } from '../src/store/search-rows.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { openHippoDb, closeHippoDb, setMeta } from '../src/db.js';
+import { openHippoDb, closeHippoDb, setMeta } from '../src/db/index.js';
 
 let tmpRoot: string;
 let root: string;

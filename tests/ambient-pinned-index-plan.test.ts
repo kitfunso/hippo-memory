@@ -4,11 +4,11 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAmbientCandidates } from '../src/store/candidates.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { recordStatements } from './_helpers/count-statements.js';
 import { LATEST_SCHEMA_VERSION_STR } from './_helpers/schema-version.js';
 

@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { openHippoDb, closeHippoDb, getHippoDbPath, getSchemaVersion } from '../src/db.js';
+import { openHippoDb, closeHippoDb, getHippoDbPath, getSchemaVersion } from '../src/db/index.js';
 import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 import { dumpSchema } from './_helpers/schema-dump.js';

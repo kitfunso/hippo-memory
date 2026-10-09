@@ -22,7 +22,7 @@ import { simulateQuestion } from '../benchmarks/memory-value/simulate.mjs';
 import { extractQuestion } from '../benchmarks/memory-value/extract.mjs';
 import { metaPathFor } from '../benchmarks/memory-value/common.mjs';
 import { readJson } from '../benchmarks/memory-value/common.mjs';
-import { _resetAblationCacheForTests } from '../dist/ablation.js';
+import { _resetAblationCacheForTests } from '../dist/core/ablation.js';
 
 // HIPPO_MV_SCRATCH_ROOT is included here (not just the ablation vars) so the
 // cross-ingest determinism test can never leak its scratch-root override

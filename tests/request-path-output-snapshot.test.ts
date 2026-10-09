@@ -7,12 +7,12 @@ import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { Layer, type MemoryEntry } from '../src/memory.js';
-import { mergedText } from '../src/same-text.js';
+import { Layer, type MemoryEntry } from '../src/core/memory.js';
+import { mergedText } from '../src/util/same-text.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
-import { _resetAblationCacheForTests } from '../src/ablation.js';
-import { withSharedStoreHandles } from '../src/db.js';
+import { _resetAblationCacheForTests } from '../src/core/ablation.js';
+import { withSharedStoreHandles } from '../src/db/index.js';
 
 // Newest first, as git log prints them.
 const COMMIT_SUBJECTS = [

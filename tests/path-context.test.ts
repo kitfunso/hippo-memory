@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { extractPathTags, pathOverlapScore, pathBoostMultiplier, PATH_BOOST_WEIGHT } from '../src/path-context.js';
+import { extractPathTags, pathOverlapScore, pathBoostMultiplier, PATH_BOOST_WEIGHT } from '../src/search/path-context.js';
 
 describe('extractPathTags', () => {
   it('extracts meaningful segments from Unix path', () => {

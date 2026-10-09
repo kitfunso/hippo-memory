@@ -1,8 +1,8 @@
 // /v1/decisions routes.
-import { DECISION } from '../../decisions.js';
-import { HttpError, sendJson } from '../../http-util.js';
-import { NotFoundError } from '../../api-errors.js';
-import { type JsonValue, isJsonNumber } from '../../json.js';
+import { DECISION } from '../../objects/decisions.js';
+import { HttpError, sendJson } from '../../util/http-util.js';
+import { NotFoundError } from '../../core/api-errors.js';
+import { type JsonValue, isJsonNumber } from '../../util/json.js';
 import { buildContextWithAuth } from '../auth.js';
 import type { RouteRequest } from '../types.js';
 import { parseJsonBody } from '../validation.js';

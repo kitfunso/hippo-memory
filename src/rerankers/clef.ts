@@ -1,11 +1,13 @@
-import { envClefEndpoint, envClefEndpointToken, envClefTimeoutMs, envCloudflareAccountId, envCloudflareApiToken } from '../env.js';
+import { envClefEndpoint, envClefEndpointToken, envClefTimeoutMs, envCloudflareAccountId, envCloudflareApiToken } from '../util/env.js';
 import { buildRelevanceRequest, JEV_DEFAULT_TOP_K, rankByScores } from './jev.js';
 import type { RerankerFn, RerankResult, RerankerOptions, RerankProvenance } from './types.js';
 import type { SearchResult } from '../core/search-types.js';
 import { createOutageWarning } from './outage-warning.js';
 import { rerankerPost } from './remote.js';
-import { type JsonValue, isJsonObject } from '../json.js';
-import { errorMessage } from '../log.js';
+import { type JsonValue, isJsonObject } from '../util/json.js';
+import { errorMessage } from '../util/log.js';
+
+const RAY_ID_MAX_CHARS = 64;
 
 /** The two pretrained CLEF decision models served by Cloudflare Workers AI. */
 export type ClefModel = 'clef-flash' | 'clef';
@@ -162,7 +164,7 @@ async function requestScores(model: ClefModel, query: string, head: SearchResult
   const resp = await rerankerPost(route.url, { headers, body: JSON.stringify({ state, model, questions }) }, timeoutMs);
   if (!resp.ok) {
     // A third-party header ends up on stderr, so keep printable ASCII only.
-    const ray = resp.headers.get('cf-ray')?.replace(/[^\x20-\x7e]/g, '').slice(0, 64);
+    const ray = resp.headers.get('cf-ray')?.replace(/[^\x20-\x7e]/g, '').slice(0, RAY_ID_MAX_CHARS);
     await resp.body?.cancel();
     throw new Error(`HTTP ${resp.status}${ray ? `, ray ${ray}` : ''}`);
   }

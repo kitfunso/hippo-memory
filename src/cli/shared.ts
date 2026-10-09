@@ -1,40 +1,42 @@
 // Helpers two or more CLI verbs use, split from cli.ts so a verb can move to its own file without importing cli.ts.
 // This module must never import cli.ts.
 
-import { envApiKey, envClaudeCodeSessionId, envHippoSessionId, envRequireServer } from '../env.js';
+import { envApiKey, envClaudeCodeSessionId, envHippoSessionId, envRequireServer } from '../util/env.js';
 import * as path from 'path';
 import * as fs from 'fs';
 import { execFileSync, execSync } from 'child_process';
 import { installJsonHooks, type InstallResult } from '../hooks/json-hooks.js';
 import { CODEX_TRUST_LINE } from '../hooks/shared.js';
-import { confidenceLabel } from '../memory.js';
+import { confidenceLabel } from '../core/memory.js';
 import { TaskSnapshot, SessionEvent } from '../store/rows.js';
 import { getHippoRoot, isInitialized } from '../store/open.js';
-import type { HookRuntime } from '../capture-contract.js';
-import type { SessionHandoff } from '../handoff.js';
+import type { HookRuntime } from '../core/capture-contract.js';
+import type { SessionHandoff } from '../core/handoff.js';
 import type { SearchResult } from '../core/search-types.js';
 import { explainMatch } from '../search/explain.js';
-import { isSharedStore, type HippoConfig } from '../config.js';
-import { isSqliteBusy, noteStoreBusy, runWithRequestStores, HOOK_DB_WAIT_MS } from '../db.js';
-import { bookTokenUse } from '../ledger-db.js';
-import { sessionPilotArm } from '../pilot-arm.js';
-import { hookPayloadSessionId, hookPayloadString, isSubagentPayload } from '../token-ledger.js';
+import { isSharedStore, loadConfig, type HippoConfig } from '../core/config.js';
+import { createDeliveryRecorder, type DeliveryEventType, type DeliveryRecorder } from '../store/delivery-recorder.js';
+import { isSqliteBusy, noteStoreBusy, runWithRequestStores, HOOK_DB_WAIT_MS } from '../db/index.js';
+import { bookTokenUse, ledgerRoot } from '../api/ledger-db.js';
+import { sessionPilotArm } from '../api/pilot-arm.js';
+import { hookPayloadSessionId, hookPayloadString, isSubagentPayload } from '../store/token-ledger.js';
+import { blockHash } from '../util/token-text.js';
 import { importAtSessionEnd, currentMachine } from '../agent-memories/sync.js';
 import { type ImportReport, summaryLine } from '../agent-memories/report.js';
-import { type ChurnStaleResult, detectChurnStale } from '../invalidation.js';
-import { resolveProjectIdentity } from '../project-identity.js';
-import { getGlobalRoot, initGlobal } from '../shared.js';
-import { DAILY_TASK_NAME, buildDailyRunnerCommand, buildSchtasksCreateArgs, buildWindowsTaskRun } from '../scheduler.js';
+import { type ChurnStaleResult, detectChurnStale } from '../learn/invalidation.js';
+import { isGlobalStoreRoot, resolveProjectIdentity } from '../core/project-identity.js';
+import { getGlobalRoot, initGlobal } from '../sharing/shared.js';
+import { DAILY_TASK_NAME, buildDailyRunnerCommand, buildSchtasksCreateArgs, buildWindowsTaskRun, quoteInsideWindowsArg } from './scheduler.js';
 import { sanitizeLogMessage } from '../capture/compact.js';
 import { type AuditOp, reportAuditWriteFailure } from '../store/audit.js';
 import { sqliteSyncStore } from '../store/sqlite/store.js';
 import * as client from './client.js';
-import { type ServerInfo, detectServer, removePidfileIfOwned } from '../server-detect.js';
-import { resolveTenantId } from '../tenant.js';
-import { type Context, adminActor, learn, CLI_LEARN } from '../api.js';
-import type { RecallSearchOpts } from '../recall-pipeline.js';
-import { snapshotText, sessionTrailText, handoffText } from '../context-render.js';
-import { errorMessage, log } from '../log.js';
+import { type ServerInfo, detectServer, removePidfileIfOwned } from '../server/server-detect.js';
+import { resolveTenantId } from '../store/tenant.js';
+import { type Context, adminActor, learn, CLI_LEARN } from '../api/index.js';
+import type { RecallSearchOpts } from '../api/recall-pipeline.js';
+import { snapshotText, sessionTrailText, handoffText } from '../api/context-render.js';
+import { errorMessage, log } from '../util/log.js';
 import { printError } from './output.js';
 
 export function parseLimitFlag(value: string | boolean | string[] | undefined): number {
@@ -296,47 +298,52 @@ export function setupDailySchedule(globalRoot: string): void {
   const taskName = DAILY_TASK_NAME;
   const cmd = buildDailyRunnerCommand(runnerDir);
 
-  if (isWindows) {
-    // Check if task already exists
-    try {
-      const existing = execSync(`schtasks /query /tn "${taskName}" 2>nul`, { encoding: 'utf-8', windowsHide: true, timeout: SCHEDULER_CALL_TIMEOUT_MS });
-      if (existing.includes(taskName)) {
-        return; // already scheduled
-      }
-    } catch (err) {
-      // A non-zero exit means the task does not exist yet, so it is created below.
-      if (schedulerTimedOut(err)) warnSchedulerTimedOut('schtasks /query');
+  if (isWindows) scheduleOnWindows(taskName, cmd);
+  else scheduleOnCrontab(taskName, cmd);
+}
+
+function scheduleOnWindows(taskName: string, cmd: string): void {
+  // Check if task already exists
+  try {
+    const existing = execSync(`schtasks /query /tn "${taskName}" 2>nul`, { encoding: 'utf-8', windowsHide: true, timeout: SCHEDULER_CALL_TIMEOUT_MS });
+    if (existing.includes(taskName)) {
+      return; // already scheduled
+    }
+  } catch (err) {
+    // A non-zero exit means the task does not exist yet, so it is created below.
+    if (schedulerTimedOut(err)) warnSchedulerTimedOut('schtasks /query');
+  }
+
+  try {
+    execFileSync('schtasks', buildSchtasksCreateArgs(taskName, cmd), { stdio: 'pipe', windowsHide: true, timeout: SCHEDULER_CALL_TIMEOUT_MS });
+    console.log(`   Scheduled machine-level daily runner (6:15am) via Task Scheduler: ${taskName}`);
+  } catch (err) {
+    if (schedulerTimedOut(err)) warnSchedulerTimedOut('schtasks /create');
+    // No admin rights or schtasks unavailable, fall back to printing instructions
+    console.log(`   To schedule the machine-level daily runner, run:`);
+    console.log(`   schtasks /create /tn "${taskName}" /tr "${quoteInsideWindowsArg(buildWindowsTaskRun(cmd))}" /sc daily /st 06:15`);
+  }
+}
+
+function scheduleOnCrontab(taskName: string, cmd: string): void {
+  // Unix: check crontab for existing entry
+  const marker = `# hippo:${taskName}`;
+  try {
+    const existing = execSync('crontab -l 2>/dev/null', { encoding: 'utf-8', windowsHide: true, timeout: SCHEDULER_CALL_TIMEOUT_MS });
+    if (existing.includes(marker)) {
+      return; // already scheduled
     }
 
-    try {
-      execFileSync('schtasks', buildSchtasksCreateArgs(taskName, cmd), { stdio: 'pipe', windowsHide: true, timeout: SCHEDULER_CALL_TIMEOUT_MS });
-      console.log(`   Scheduled machine-level daily runner (6:15am) via Task Scheduler: ${taskName}`);
-    } catch (err) {
-      if (schedulerTimedOut(err)) warnSchedulerTimedOut('schtasks /create');
-      // No admin rights or schtasks unavailable, fall back to printing instructions
-      console.log(`   To schedule the machine-level daily runner, run:`);
-      console.log(`   schtasks /create /tn "${taskName}" /tr "${buildWindowsTaskRun(cmd).replace(/"/g, '\\"')}" /sc daily /st 06:15`);
-    }
-  } else {
-    // Unix: check crontab for existing entry
-    const marker = `# hippo:${taskName}`;
-    try {
-      const existing = execSync('crontab -l 2>/dev/null', { encoding: 'utf-8', windowsHide: true, timeout: SCHEDULER_CALL_TIMEOUT_MS });
-      if (existing.includes(marker)) {
-        return; // already scheduled
-      }
-
-      const cronLine = `15 6 * * * ${cmd} ${marker}`;
-      const newCrontab = existing.trimEnd() + '\n' + cronLine + '\n';
-      execSync('crontab -', { input: newCrontab, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true, timeout: SCHEDULER_CALL_TIMEOUT_MS });
-      console.log(`   Scheduled machine-level daily runner (6:15am) via crontab`);
-    } catch (err) {
-      if (schedulerTimedOut(err)) warnSchedulerTimedOut('crontab');
-      // No crontab or no permission: print the line for the user to add by hand.
-      const cronLine = `15 6 * * * ${cmd}`;
-      console.log(`   To schedule the machine-level daily runner, add to crontab (crontab -e):`);
-      console.log(`   ${cronLine}`);
-    }
+    const cronLine = `15 6 * * * ${cmd} ${marker}`;
+    const newCrontab = existing.trimEnd() + '\n' + cronLine + '\n';
+    execSync('crontab -', { input: newCrontab, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true, timeout: SCHEDULER_CALL_TIMEOUT_MS });
+    console.log(`   Scheduled machine-level daily runner (6:15am) via crontab`);
+  } catch (err) {
+    if (schedulerTimedOut(err)) warnSchedulerTimedOut('crontab');
+    // No crontab or no permission: print the line for the user to add by hand.
+    const cronLine = `15 6 * * * ${cmd}`;
+    console.log(`   To schedule the machine-level daily runner, add to crontab (crontab -e):`);
+    console.log(`   ${cronLine}`);
   }
 }
 
@@ -533,6 +540,34 @@ export function hookStoreRoot(hippoRoot: string): string {
 /** `--runtime copilot`, or `--format copilot` on `hippo context`, marks a Copilot hook: the flag decides, never the payload. */
 export function hookRuntime(flags: CliFlags): HookRuntime {
   return flags['runtime'] === 'copilot' || flags['format'] === 'copilot' ? 'copilot' : 'claude-code';
+}
+
+/** A delivery recorder when the ledger store enables one, else null; never throws. */
+export function startDeliveryRecorder(
+  hippoRoot: string,
+  stdinText: string | undefined,
+  runtime: HookRuntime,
+  eventType?: DeliveryEventType,
+): DeliveryRecorder | null {
+  try {
+    // The same store withLedgerDb writes the token ledger to, so its config governs both.
+    const root = ledgerRoot(hippoRoot);
+    if (root === null || !loadConfig(root).deliveryLedger.enabled) return null;
+    return createDeliveryRecorder({
+      root,
+      storeHash: blockHash(path.resolve(root)),
+      writeStore: isGlobalStoreRoot(root) ? 'global' : 'local',
+      tenantId: resolveTenantId({}),
+      stdinText,
+      envSessionId: hostSessionId(),
+      runtime: runtime === 'copilot' ? 'copilot' : undefined,
+      eventType,
+    });
+  } catch (error) {
+    // The hook's one-line stderr contract pins this exact text, so it bypasses the leveled logger.
+    printError(`[hippo] delivery ledger skipped:${errorMessage(error)}`);
+    return null;
+  }
 }
 
 /** A Copilot hook's project root, from the payload's `cwd`, since VS Code runs user-level hooks in the home folder; other runtimes keep `hippoRoot`. */

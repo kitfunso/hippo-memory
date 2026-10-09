@@ -3,10 +3,10 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { cpSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { archiveRaw, remember, type Actor, type RememberOpts } from '../src/api.js';
+import { archiveRaw, remember, type Actor, type RememberOpts } from '../src/api/index.js';
 import { issueCommentEventToRememberOpts, issueEventToRememberOpts } from '../src/connectors/github/transform.js';
 import { messageToRememberOpts } from '../src/connectors/slack/transform.js';
-import { withSqliteBlocked } from '../src/db.js';
+import { withSqliteBlocked } from '../src/db/index.js';
 import { OTHER_STORE_MARKER } from '../src/server.js';
 import type { ConnectorEvent } from '../src/store/port.js';
 import { inMemoryConnectorWritesStore } from './_helpers/in-memory-connector-writes-store.js';

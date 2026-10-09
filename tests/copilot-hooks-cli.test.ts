@@ -2,11 +2,11 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { readDeliveryEvents, type DeliveryEventRow } from '../src/store/recall-trace.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { loadActiveTaskSnapshot, saveActiveTaskSnapshot } from '../src/store/sessions.js';
-import type { JsonValue } from '../src/json.js';
+import type { JsonValue } from '../src/util/json.js';
 import { compactionRows, initGlobal, initProject, runHippo } from './_helpers/compaction-hooks.js';
 import {
   CLAUDE_SESSION, claudeCodePayload, copilotEventsJsonl, copilotPayload, copilotScratch, writeClaudeTranscript, writeCopilotSessionLog, type CopilotScratch,

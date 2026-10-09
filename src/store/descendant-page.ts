@@ -1,6 +1,6 @@
 // A summary's descendants read as a page: every level is counted, and only the rows the caller shows are read whole.
-import type { DatabaseSyncLike } from '../db.js';
-import type { MemoryEntry } from '../memory.js';
+import type { DatabaseSyncLike } from '../db/index.js';
+import type { MemoryEntry } from '../core/memory.js';
 import { chunked, selectEntriesByIds, TENANT_IS } from './entry-reads.js';
 import type { DescendantOrigin, DescendantPage, SummaryDescendants } from './port.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from './rows.js';

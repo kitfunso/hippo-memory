@@ -118,13 +118,13 @@ bug:
   leakage-rule note above) — every ingested turn takes hippo's `createMemory`
   defaults on every one of these dims, on every question, by construction.
 - `valence` is inferred from tags only (`inferValence(tags)`,
-  `src/memory.ts:618`); with `tags=[]` always, `neutral` is the one real
+  `src/core/memory.ts:618`); with `tags=[]` always, `neutral` is the one real
   value — this is not a stub, it is what production actually computes for
   untagged content.
 - `schema_fit` is wired to the REAL write-time `computeSchemaFit(text, [],
   entriesIngestedSoFarInThisStore)` call (mirrors `src/cli.ts:740`), but
   measured empirically: `computeSchemaFit`'s tag-overlap guard
-  (`src/memory.ts:568`, `tags.length === 0 && tagFreq.size === 0`) returns
+  (`src/core/memory.ts:568`, `tags.length === 0 && tagFreq.size === 0`) returns
   the neutral `0.5` before ever reaching the content-overlap branch —
   because `tagFreq` is built from OTHER entries' tags, and no entry in this
   substrate ever carries a tag, the guard fires on every call regardless of

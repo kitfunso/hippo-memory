@@ -14,12 +14,12 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createApiKey, listApiKeys } from '../src/store/auth.js';
-import { Layer } from '../src/memory.js';
+import { Layer } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { serve, type ServerHandle } from '../src/server.js';
-import * as api from '../src/api.js';
+import * as api from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 const PRIVATE_SCOPE = 'slack:private:CSECRET1';

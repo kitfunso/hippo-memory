@@ -15,16 +15,16 @@ import * as os from 'os';
 import * as path from 'path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { openHippoDb } from '../src/db.js';
-import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { openHippoDb } from '../src/db/index.js';
+import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { hybridSearch } from '../src/search/hybrid.js';
 import { physicsSearch } from '../src/search/physics-search.js';
 import { isDagSummary } from '../src/search/boosts.js';
 import type { SearchResult } from '../src/core/search-types.js';
 import type { RerankerOptions, RerankResult } from '../src/rerankers/types.js';
-import { searchBothHybrid } from '../src/shared.js';
+import { searchBothHybrid } from '../src/sharing/shared.js';
 import { savePhysicsState } from '../src/db/physics-state.js';
-import type { PhysicsParticle } from '../src/physics.js';
+import type { PhysicsParticle } from '../src/core/physics.js';
 
 function makeL2Summary(
   content: string,

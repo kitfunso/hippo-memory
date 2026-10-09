@@ -7,8 +7,8 @@ import * as path from 'node:path';
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory } from '../src/memory.js';
-import { closeHippoDb, getHippoDbPath, openHippoDb, withSharedStoreHandles, HOOK_DB_WAIT_MS } from '../src/db.js';
+import { createMemory } from '../src/core/memory.js';
+import { closeHippoDb, getHippoDbPath, openHippoDb, withSharedStoreHandles, HOOK_DB_WAIT_MS } from '../src/db/index.js';
 import { lockWaitAskedMs, tracingLockWaits } from './_helpers/lock-waits.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');

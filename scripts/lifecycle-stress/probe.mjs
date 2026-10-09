@@ -14,17 +14,17 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { createMemory } from '../../dist/memory.js';
+import { createMemory } from '../../dist/core/memory.js';
 import { initStore } from '../../dist/store/open.js';
 import { writeEntry } from '../../dist/store/entry-writes.js';
 import { loadAllEntries } from '../../dist/store/entry-reads.js';
-import { embedMemory, loadEmbeddingIndex } from '../../dist/embeddings.js';
-import { isEmbeddingAvailable } from '../../dist/local-embedding.js';
+import { embedMemory, loadEmbeddingIndex } from '../../dist/store/embeddings/index.js';
+import { isEmbeddingAvailable } from '../../dist/store/embeddings/local.js';
 import { physicsSearch } from '../../dist/search/physics-search.js';
 import { consolidate } from '../../dist/consolidate/sleep.js';
 import { resetAllPhysicsState, loadPhysicsState } from '../../dist/db/physics-state.js';
-import { openHippoDb, closeHippoDb } from '../../dist/db.js';
-import { DEFAULT_PHYSICS_CONFIG } from '../../dist/physics-config.js';
+import { openHippoDb, closeHippoDb } from '../../dist/db/index.js';
+import { DEFAULT_PHYSICS_CONFIG } from '../../dist/core/physics-config.js';
 
 // mkdtemp gives a private folder under a name no other user of the temp folder can guess or pre-create.
 const base = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-lse-probe-'));

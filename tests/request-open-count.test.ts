@@ -7,10 +7,10 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { serve, type AddonRoute, type ServerHandle } from '../src/server.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
-import { recall, remember } from '../src/api.js';
+import { recall, remember } from '../src/api/index.js';
 
 interface Connection { location(): string | null }
 type ConnectionMethod = (this: Connection, ...args: never[]) => void;

@@ -58,7 +58,7 @@ Website pages are listed in `claims` but not parsed, since they hold no structur
 
 ## The capture contract
 
-`src/capture-contract.ts` is the shape every adapter turns a host payload into. It has no imports, so any adapter can use it without pulling in the store.
+`src/core/capture-contract.ts` is the shape every adapter turns a host payload into. It has no imports, so any adapter can use it without pulling in the store.
 
 | Type | Role | Stored today as |
 |---|---|---|

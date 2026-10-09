@@ -1,14 +1,14 @@
 // Option and result shapes for recall and retrieve.
 
 import type { ContinuityBlock } from '../store/port.js';
-import type { MemoryEntry } from '../memory.js';
+import type { MemoryEntry } from '../core/memory.js';
 import type { RerankStep, SearchResult } from '../core/search-types.js';
 import type { PlanningFallacyHint, PlanningFallacyOutput, PlanningFallacyWatching } from '../predictions/planning-fallacy.js';
-import type { AnchoringHint, RecallHistorySnapshot } from '../recall-history.js';
-import type { AvailabilityHint } from '../availability.js';
+import type { AnchoringHint, RecallHistorySnapshot } from './recall-history.js';
+import type { AvailabilityHint } from './availability.js';
 import type { AppendAuditOpts } from '../store/audit.js';
-import type { CallerProject } from '../prompt-hook.js';
-import type { RankRecallOpts, RankRecallResult } from '../recall-pipeline.js';
+import type { CallerProject } from './prompt-hook.js';
+import type { RankRecallOpts, RankRecallResult } from './recall-pipeline.js';
 
 // ---------------------------------------------------------------------------
 // recall
@@ -414,7 +414,7 @@ export interface RecallSuppressionSummary {
   /** Counter of memories suppressed by detected interference patterns.
    *  Incremented by 1 PER PIPELINE when that
    *  pipeline's own memory_dominance verdict fires (via the
-   *  anchoring detector, see `detectAnchoring()` in src/recall-history.ts).
+   *  anchoring detector, see `detectAnchoring()` in src/api/recall-history.ts).
    *  Each pipeline (api.recall, cmdRecall, MCP physics/hybrid) bumps its
    *  OWN suppressionSummary independently because each runs its own
    *  detector against its own top-1 + its own per-(tenant, session) ring

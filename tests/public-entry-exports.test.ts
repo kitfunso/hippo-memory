@@ -4,7 +4,7 @@ import { readFileSync, realpathSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as entry from '../src/index.js';
-import { strengthBucket } from '../src/dedupe.js';
+import { strengthBucket } from '../src/consolidate/dedupe.js';
 import { sleep } from '../src/api/sleep.js';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -45,7 +45,7 @@ describe('package entry re-exports strengthBucket', () => {
     expect(out.type).toBe('function');
     expect(out.one).toBe(100);
     const dts = readFileSync(resolve(REPO_ROOT, 'dist', 'index.d.ts'), 'utf-8');
-    expect(dts).toMatch(/^export \{ strengthBucket \} from '\.\/dedupe\.js';$/m);
+    expect(dts).toMatch(/^export \{ strengthBucket \} from '\.\/consolidate\/dedupe\.js';$/m);
   });
 });
 

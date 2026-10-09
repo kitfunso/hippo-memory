@@ -2,13 +2,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { unlinkSync, utimesSync } from 'node:fs';
 import { join } from 'node:path';
-import { getContext } from '../src/api.js';
+import { getContext } from '../src/api/index.js';
 import { summaryLine } from '../src/agent-memories/report.js';
 import { importForStore, type Machine, type SyncOptions } from '../src/agent-memories/sync.js';
 import type { ImportReport } from '../src/agent-memories/report.js';
-import { closeHippoDb, openHippoDb } from '../src/db.js';
-import { createMemory } from '../src/memory.js';
-import { isContentWorthStoring } from '../src/memory-quality.js';
+import { closeHippoDb, openHippoDb } from '../src/db/index.js';
+import { createMemory } from '../src/core/memory.js';
+import { isContentWorthStoring } from '../src/core/memory-quality.js';
 import { claudeFolderName } from '../src/agent-memories/claude-code.js';
 import { isInitialized } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';

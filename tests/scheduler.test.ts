@@ -12,7 +12,7 @@ import {
   registerWorkspace,
   runDailyMaintenance,
   workspaceRegistryPath,
-} from '../src/scheduler.js';
+} from '../src/cli/scheduler.js';
 
 // Fakes injected via __setSchedulerFsDeps (a DI seam on the scheduler module)
 // instead of `vi.mock('fs')`, so the module under test always calls through

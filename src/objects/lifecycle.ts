@@ -2,13 +2,13 @@
 // Each flow is written twice over the same steps: `...At` answers at once on hippo.db for the CLI, and the other awaits a served store's group for the routes.
 // The tenant, the fields and the list status are checked first, so a bad request fails before a store is asked.
 
-import { BadRequestError, ConflictError, NotFoundError } from '../api-errors.js';
-import { loadConfig } from '../config.js';
-import { createMemory, Layer, type MemoryEntry } from '../memory.js';
+import { BadRequestError, ConflictError, NotFoundError } from '../core/api-errors.js';
+import { loadConfig } from '../core/config.js';
+import { createMemory, Layer, type MemoryEntry } from '../core/memory.js';
 import type { ObjectByKind, ObjectKind, SavableKind } from '../store/object-types.js';
 import { isObjectRefusal, type ObjectClose, type ObjectListQuery, type ObjectRefusal, type Objects, type ObjectSave } from '../store/port.js';
 import { sqliteObjects } from '../store/sqlite/objects-group.js';
-import { assertTenantId } from '../tenant.js';
+import { assertTenantId } from '../store/tenant.js';
 import type { ObjectDescriptor, ObjectDraft, ObjectListOpts, SavableDescriptor } from './descriptor.js';
 
 /** An empty status or filter lists every row, as an absent one does. */

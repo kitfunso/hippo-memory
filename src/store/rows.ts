@@ -1,6 +1,6 @@
-import { Layer, type MemoryEntry, type ConfidenceLevel, type MemoryKind } from '../memory.js';
-import { errorMessage, log } from '../log.js';
-import { type JsonValue, isJsonObject } from '../json.js';
+import { Layer, FALLBACK_HALF_LIFE_DAYS, DEFAULT_SCHEMA_FIT, type MemoryEntry, type ConfidenceLevel, type MemoryKind } from '../core/memory.js';
+import { errorMessage, log } from '../util/log.js';
+import { type JsonValue, isJsonObject } from '../util/json.js';
 
 export interface IndexEntry {
   id: string;
@@ -176,11 +176,11 @@ function rowToRetrievalFields(row: MemoryRow): RetrievalFields {
     last_retrieved: row.last_retrieved,
     retrieval_count: Number(row.retrieval_count ?? 0),
     strength: Number(row.strength ?? 1),
-    half_life_days: Number(row.half_life_days ?? 7),
+    half_life_days: Number(row.half_life_days ?? FALLBACK_HALF_LIFE_DAYS),
     layer: row.layer as Layer,
     tags: parseJsonArray(row.tags_json),
     emotional_valence: row.emotional_valence ?? 'neutral',
-    schema_fit: Number(row.schema_fit ?? 0.5),
+    schema_fit: Number(row.schema_fit ?? DEFAULT_SCHEMA_FIT),
     source: row.source ?? 'cli',
     outcome_score: row.outcome_score === null || row.outcome_score === undefined ? null : Number(row.outcome_score),
     outcome_positive: Number(row.outcome_positive ?? 0),

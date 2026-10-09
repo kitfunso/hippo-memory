@@ -1,5 +1,5 @@
 /**
- * Unit tests for the deterministic tie-break comparators in src/compare.ts
+ * Unit tests for the deterministic tie-break comparators in src/core/compare.ts
  * (docs/plans/2026-07-09-recall-determinism.md T2/T3). Pure functions, no
  * store/DB needed.
  */
@@ -9,7 +9,7 @@ import {
   compareEntryIdentity,
   compareScoredResults,
   comparePhysicsResultsBy,
-} from '../src/compare.js';
+} from '../src/core/compare.js';
 
 describe('compareEntryIdentity', () => {
   it('orders by content ascending when content differs', () => {

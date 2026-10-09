@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { cosineSimilarity } from '../src/embeddings.js';
+import { cosineSimilarity } from '../src/store/embeddings/index.js';
 
 // ---------------------------------------------------------------------------
 // Tests that run without a Transformers.js backend installed
@@ -46,7 +46,7 @@ describe('cosineSimilarity', () => {
 
 describe('isEmbeddingAvailable', () => {
   it('returns a boolean', async () => {
-    const { isEmbeddingAvailable } = await import('../src/local-embedding.js');
+    const { isEmbeddingAvailable } = await import('../src/store/embeddings/local.js');
     const available = await isEmbeddingAvailable();
     expect(available).toEqual(expect.any(Boolean));
     // We don't assert true/false since the test env may or may not have the lib
@@ -59,7 +59,7 @@ describe('isEmbeddingAvailable', () => {
 
 describe('embedding index persistence', () => {
   it('round-trips an index via save + load', async () => {
-    const { loadEmbeddingIndex, saveEmbeddingIndex } = await import('../src/embeddings.js');
+    const { loadEmbeddingIndex, saveEmbeddingIndex } = await import('../src/store/embeddings/index.js');
     const fs = await import('fs');
     const os = await import('os');
     const path = await import('path');
@@ -82,7 +82,7 @@ describe('embedding index persistence', () => {
   });
 
   it('returns empty object when index file does not exist', async () => {
-    const { loadEmbeddingIndex } = await import('../src/embeddings.js');
+    const { loadEmbeddingIndex } = await import('../src/store/embeddings/index.js');
     const loaded = loadEmbeddingIndex('/tmp/hippo-nonexistent-' + Date.now());
     expect(loaded).toEqual({});
   });

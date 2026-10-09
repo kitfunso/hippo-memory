@@ -1,7 +1,7 @@
 // Read-only file access shared by the adapters: size, binary and failure checks live in one place.
 import fs from 'node:fs';
 import path from 'node:path';
-import { errorMessage } from '../log.js';
+import { errorMessage } from '../util/log.js';
 
 export const MAX_ITEM_BYTES = 256 * 1024;
 const MAX_DEPTH = 8;

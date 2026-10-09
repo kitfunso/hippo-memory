@@ -13,10 +13,10 @@ import { STORE_BUSY_MESSAGE } from '../src/db/busy.js';
 import { readDormantSnapshot } from '../src/store/dormant.js';
 import { findRejectedValue, rejectionDigest } from '../src/store/rejection.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { Layer, type MemoryEntry } from '../src/memory.js';
+import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { savePrediction } from '../src/store/predictions.js';
-import { mergedText } from '../src/same-text.js';
-import { restoreDormant, type Context } from '../src/api.js';
+import { mergedText } from '../src/util/same-text.js';
+import { restoreDormant, type Context } from '../src/api/index.js';
 import { importForStore } from '../src/agent-memories/sync.js';
 import { closeWorld, note, openWorld, projectNotes } from './_helpers/agent-memories-world.js';
 

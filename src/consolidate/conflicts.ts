@@ -1,7 +1,7 @@
-import { MemoryEntry, Layer, calculateStrength, type DecayOptions } from '../memory.js';
-import { jaccardMinShared, overlapPartners } from '../overlap-index.js';
-import { isQuarantineScope } from '../quarantine.js';
-import { isPersonalScope } from '../recall-scope.js';
+import { MemoryEntry, Layer, calculateStrength, type DecayOptions } from '../core/memory.js';
+import { jaccardMinShared, overlapPartners } from './overlap-index.js';
+import { isQuarantineScope } from '../trust/quarantine.js';
+import { isPersonalScope } from '../store/recall-scope.js';
 import { DECAY_THRESHOLD } from './decay.js';
 
 // Contradictions should be gated by content overlap, not shared tags. Tags like

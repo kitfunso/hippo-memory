@@ -1,8 +1,8 @@
 // A memory marked wrong more often than right fades, whatever shields it: pinning, error tags, heavy recall.
 import { describe, expect, it } from 'vitest';
-import { applyOutcome, calculateStrength, netWrong, type MemoryEntry } from '../src/memory.js';
+import { applyOutcome, calculateStrength, netWrong, type MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { markRetrieved } from '../src/memory.js';
+import { markRetrieved } from '../src/core/memory.js';
 
 const now = new Date('2026-09-25T00:00:00Z');
 

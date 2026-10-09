@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../src/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../src/core/memory.js';
 import { ownStderr } from './_helpers/own-stderr.js';
 
 const CLI = join(process.cwd(), 'dist', 'cli.js');

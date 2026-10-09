@@ -1,10 +1,12 @@
-import { envLlmRerankerKey, envLlmRerankerModel, envLlmRerankerTimeoutMs, envLlmRerankerUrl } from '../env.js';
+import { envLlmRerankerKey, envLlmRerankerModel, envLlmRerankerTimeoutMs, envLlmRerankerUrl } from '../util/env.js';
 import type { RerankerFn, RerankResult, RerankerOptions } from './types.js';
 import type { SearchResult } from '../core/search-types.js';
-import { redactSecretsStrict } from '../secret-detect.js';
+import { redactSecretsStrict } from '../util/secret-detect.js';
 import { createOutageWarning } from './outage-warning.js';
 import { rerankerPost } from './remote.js';
-import { errorMessage } from '../log.js';
+import { errorMessage } from '../util/log.js';
+
+const DEFAULT_LLM_RERANK_TOP_K = 20;
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 
@@ -31,7 +33,7 @@ export function createLlmReranker(): RerankerFn {
     if (!url) {
       throw new Error('HIPPO_LLM_RERANKER_URL not set; refusing to run LLM reranker.');
     }
-    const head = results.slice(0, options?.topK ?? 20);
+    const head = results.slice(0, options?.topK ?? DEFAULT_LLM_RERANK_TOP_K);
 
     let permutation: number[] | null = null;
     try {

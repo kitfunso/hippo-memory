@@ -1,8 +1,8 @@
 // Write-side tool handlers: hippo_remember, hippo_outcome and hippo_learn.
 
-import { storeFor } from '../store-port.js';
+import { storeFor } from '../store/index.js';
 import { startAutoSleepIfDue } from '../api/auto-sleep.js';
-import { remember as apiRemember, outcome as apiOutcome, learn as apiLearn, MCP_LEARN, type Context as ApiContext } from '../api.js';
+import { remember as apiRemember, outcome as apiOutcome, learn as apiLearn, MCP_LEARN, type Context as ApiContext } from '../api/index.js';
 import { mcpActor, type ToolCall } from './protocol.js';
 import { lastRecalledIds, resolveClientKey } from './session-state.js';
 
@@ -46,7 +46,7 @@ export async function runOutcomeTool({ args, ctx, hippoRoot, tenantId }: ToolCal
   const ids = lastRecalledIds.get(clientKey) ?? [];
   if (ids.length === 0) return 'No recent recalls to apply outcome to.';
 
-  // Route through src/api.ts so audit_log captures the caller identity
+  // Route through src/api/index.ts so audit_log captures the caller identity
   // (auth-resolved ctx.actor under HTTP-MCP, 'mcp' for stdio) and tenant
   // scoping is enforced uniformly (same surface as recall/remember).
   // outcome() also handles cross-tenant id skip silently.

@@ -18,7 +18,7 @@ The per-prompt hook path performs no retrieval, so it writes no `recall_traces` 
 ## Decision
 Schema v50 adds `delivery_events` (one row per pinned-only call) and `delivery_candidates`
 (per-memory outcome and reason, at most 16 rejected rows per event). The writer and reader
-live in `src/recall-trace.ts`; `src/delivery-recorder.ts` only holds the in-memory observer.
+live in `src/store/recall-trace.ts`; `src/delivery-recorder.ts` only holds the in-memory observer.
 `recall_trace_id` and `query_hash` are reserved for the `*` and query paths and stay null in
 slice 1. A turn that injects a block writes its event on the token ledger's connection with a
 50 ms lock wait; an empty or disabled turn opens the store itself. Both fail soft. Off by
@@ -34,6 +34,8 @@ default behind `deliveryLedger.enabled`.
 - `turn_seq` is the ordinal among recorded events; a dropped write shifts later numbers.
 - The p95 overhead gate is open (1.44 to 1.75 against 1.10, fixed arm order), so the flag
   stays off by default until a counterbalanced run passes.
+
+- 2026-10-08: the two boundary event types, `pre-compact` and `compact-resume`, use the same table with no schema change, because `event_type` has no CHECK constraint (`src/db/migrations/v50.ts:10`). Row version 2 means a binary that can write boundary rows wrote the row, and `event_type` has four values; it does not mean "no boundary row, so no compaction".
 
 ## Reconsider when
 - Slice 2 adds the `*` and query paths, or `recall_traces` is rebuilt for another reason.

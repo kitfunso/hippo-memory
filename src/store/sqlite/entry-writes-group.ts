@@ -1,11 +1,11 @@
 // hippo.db's half of the EntryWrites store group: the queries remember, outcome, supersede, archive and forget run today.
-import { ConflictError, NotFoundError } from '../../api-errors.js';
+import { ConflictError, NotFoundError } from '../../core/api-errors.js';
 import { appendAuditEvent } from '../audit.js';
-import { isSqliteBusy, withWriteScope, type DatabaseSyncLike } from '../../db.js';
-import { errorMessage, log } from '../../log.js';
-import { entryAfterOutcome, type MemoryEntry } from '../../memory.js';
+import { isSqliteBusy, withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
+import { errorMessage, log } from '../../util/log.js';
+import { entryAfterOutcome, type MemoryEntry } from '../../core/memory.js';
 import { archiveRawMemory, type ArchiveOpts } from '../raw-archive.js';
-import { ownScopeTouches } from '../../recall-scope.js';
+import { ownScopeTouches } from '../recall-scope.js';
 import { recordTraceOutcome } from '../recall-trace.js';
 import { RejectedValueError } from '../rejection.js';
 import type { EntryTarget, EntryWrite, EntryWrites, OutcomeWrite, RawArchive, SupersedeWrite, Sync } from '../port.js';

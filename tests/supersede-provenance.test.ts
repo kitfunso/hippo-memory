@@ -4,11 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createMemory, createSuccessor, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../src/memory.js';
+import { createMemory, createSuccessor, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../src/core/memory.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
-import { supersede, type HippoDbContext } from '../src/api.js';
+import { supersede, type HippoDbContext } from '../src/api/index.js';
 
 let tmpRoot: string;
 let projectStore: string;

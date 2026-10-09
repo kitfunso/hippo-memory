@@ -3,12 +3,12 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { BadRequestError } from '../src/api-errors.js';
-import { HttpError, MAX_ID_LEN } from '../src/http-util.js';
+import { BadRequestError } from '../src/core/api-errors.js';
+import { HttpError, MAX_ID_LEN } from '../src/util/http-util.js';
 import {
   assertClientScope, assertScopeRequestAllowed, canReadScope, canTouchScope, isPersonalScope, passesCliRecallScopeFilter,
   passesScopeFilterForRecall, PERSONAL_OWNER_MAX, personalScopeOf, ScopeForbiddenError, type ScopeActor,
-} from '../src/recall-scope.js';
+} from '../src/store/recall-scope.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { initStore } from '../src/store/open.js';
 

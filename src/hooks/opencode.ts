@@ -3,7 +3,7 @@ import * as path from 'path';
 import type { JsonObject } from '../store/working-memory.js';
 import { homeDir } from './shared.js';
 import { writeFileAtomic } from '../util/atomic-write.js';
-import { type JsonValue, isJsonString, isJsonObjectLiteral } from '../json.js';
+import { type JsonValue, isJsonString, isJsonObjectLiteral } from '../util/json.js';
 
 const HIPPO_OPENCODE_PLUGIN_MARKER = 'HIPPO_OPENCODE_PLUGIN_V1';
 

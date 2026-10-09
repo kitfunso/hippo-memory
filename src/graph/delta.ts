@@ -1,5 +1,5 @@
 // Diffs the derived graph against the stored rows, so a rebuild writes only what changed and an entity keeps the id its relations hang on.
-import type { DatabaseSyncLike } from '../db.js';
+import type { DatabaseSyncLike } from '../db/index.js';
 import { loadStoredGraph, storedGraphOn } from '../store/graph-reads.js';
 import type { EntityType, RelationType, SourceObjectRef, StoredEntity, StoredGraph, StoredRelation } from '../store/graph-rows.js';
 

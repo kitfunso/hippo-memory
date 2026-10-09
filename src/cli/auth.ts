@@ -1,11 +1,11 @@
 // `hippo auth`: create, list, revoke and scope API keys.
 
 import { listApiKeys, type ApiKeyListItem } from '../store/auth.js';
-import * as api from '../api.js';
-import { resolveTenantId } from '../tenant.js';
+import * as api from '../api/index.js';
+import { resolveTenantId } from '../store/tenant.js';
 import { printError } from './output.js';
 import { type CliFlags, resolveAuthRoot, boolFlag, stringFlag } from './shared.js';
-import { errorMessage } from '../log.js';
+import { errorMessage } from '../util/log.js';
 
 // ---------------------------------------------------------------------------
 // Auth subcommands

@@ -2,12 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { v22 } from '../src/db/migrations/v22.js';
 
 function rowsAs<T>(db: DatabaseSyncLike, sql: string): T[] {
   // SAFETY: T is pinned by each call site to the exact column list of the
-  // SQL SELECT/PRAGMA text passed in; the driver's .all() (src/db.ts
+  // SQL SELECT/PRAGMA text passed in; the driver's .all() (src/db/index.ts
   // DatabaseSyncLike, backed by node:sqlite) returns `unknown[]`, so this is
   // the single place that establishes the row contract for every caller.
   return db.prepare(sql).all() as T[];

@@ -48,7 +48,7 @@ describe('Transformers.js backend safety', () => {
     // Count-based, not path-based, so an npm hoist can never false-pass a
     // second runtime. A user may manually install one backend (that is the
     // supported opt-in); the SHIPPED graph must contain none, and the
-    // resolve-before-import logic in src/embeddings.ts guarantees a single
+    // resolve-before-import logic in src/store/embeddings/index.ts guarantees a single
     // native runtime per process even when both are installed manually.
     const nativeOrtPaths = installedPaths.filter((name) =>
       name.endsWith('/onnxruntime-node'),

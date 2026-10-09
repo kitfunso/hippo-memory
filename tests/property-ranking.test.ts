@@ -1,6 +1,6 @@
 // The order recall gives scored candidates must come from the candidates alone: never from the order they arrived in, and a higher score never moves one down.
 import { describe, it, expect } from 'vitest';
-import { comparePhysicsResultsBy, compareScoredResults, type ScoredEntryLike } from '../src/compare.js';
+import { comparePhysicsResultsBy, compareScoredResults, type ScoredEntryLike } from '../src/core/compare.js';
 import { arr, both, forAll, int, map, pick, type Gen } from './_helpers/property.js';
 
 // Few distinct values, so most draws tie on score and many tie on every key before the id; the last three have no difference to subtract.

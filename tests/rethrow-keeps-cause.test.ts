@@ -5,10 +5,10 @@ import * as http from 'node:http';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { inspect } from 'node:util';
-import { GitReadError, gitLsFilesAtHead } from '../src/churn-git.js';
-import { resolveEmbeddingProvider } from '../src/embedding-provider.js';
+import { GitReadError, gitLsFilesAtHead } from '../src/learn/churn-git.js';
+import { resolveEmbeddingProvider } from '../src/store/embeddings/provider.js';
 import { createListener } from '../src/server/tls.js';
-import { parseSteps } from '../src/trace.js';
+import { parseSteps } from '../src/consolidate/trace.js';
 
 const tmpDirs: string[] = [];
 const servers: http.Server[] = [];

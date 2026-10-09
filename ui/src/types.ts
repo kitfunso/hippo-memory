@@ -156,7 +156,7 @@ export interface ForgetResult {
   id: string;
 }
 
-// W2c board view: mirrors src/card.ts field for field, same nullability.
+// W2c board view: mirrors src/core/card.ts field for field, same nullability.
 export type CardStatus = "backlog" | "ready" | "running" | "blocked" | "review" | "done" | "shelved";
 
 export interface Card {
@@ -198,7 +198,7 @@ export interface CardDeps {
   children: string[];
 }
 
-/** Only the handoff fields the UI reads (src/handoff.ts's SessionHandoff has more). */
+/** Only the handoff fields the UI reads (src/core/handoff.ts's SessionHandoff has more). */
 export interface CardHandoff {
   sessionId: string;
   summary: string;

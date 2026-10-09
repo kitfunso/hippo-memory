@@ -2,10 +2,10 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { request as httpRequest } from 'node:http';
-import { closeHippoDb, openHippoDb } from '../src/db.js';
+import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { listMemoryConflicts, replaceDetectedConflicts } from '../src/store/conflicts.js';
 import { readEntry } from '../src/store/entry-reads.js';
-import { quarantineScopeFor } from '../src/quarantine.js';
+import { quarantineScopeFor } from '../src/trust/quarantine.js';
 import type { MemoryDetail, ResolveResult } from '../src/dashboard/dashboard-types.js';
 import {
   DASHBOARD_TOKEN, NOW, call, get, isoAgo, makeStore, parse, postJson, seed, startDashboard, type Json, type RunningDashboard, type TmpStore,

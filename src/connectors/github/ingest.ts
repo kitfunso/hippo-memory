@@ -2,8 +2,8 @@
 // X-GitHub-Delivery header, so a replay cannot get past it by rotating the delivery id. The pre-check is only the fast path:
 // the store logs the key in the memory's own transaction, which is what holds when two workers race.
 
-import { remember, type Context, type RememberOpts } from '../../api.js';
-import { requireGroup, storeFor } from '../../store-port.js';
+import { remember, type Context, type RememberOpts } from '../../api/index.js';
+import { requireGroup, storeFor } from '../../store/index.js';
 import type { ConnectorEvent } from '../../store/port.js';
 import { RejectedValueError } from '../../store/rejection.js';
 import { computeIdempotencyKey } from './signature.js';

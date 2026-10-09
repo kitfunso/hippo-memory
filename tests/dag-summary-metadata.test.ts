@@ -16,8 +16,8 @@ import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries, loadEntriesByIds } from '../src/store/entry-reads.js';
 import { sqliteDagReads } from '../src/store/sqlite/dag-reads-group.js';
-import { openHippoDb, closeHippoDb, getCurrentSchemaVersion, getSchemaVersion } from '../src/db.js';
-import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { openHippoDb, closeHippoDb, getCurrentSchemaVersion, getSchemaVersion } from '../src/db/index.js';
+import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 import { makeRoot } from './_helpers/make-root.js';
 

@@ -4,7 +4,7 @@
  *
  * Per-turn chunking (one MemoryEntry per non-empty haystack turn), matching
  * the plan's "chunk-per-turn precedent". Uses hippo's REAL entry-creation
- * path (createMemory + writeEntry from dist/memory.js + dist/store.js —
+ * path (createMemory + writeEntry from dist/core/memory.js + dist/store.js —
  * the same low-level building blocks scripts/e1-lifecycle/run.mjs uses, so
  * `created`/`last_retrieved`/`half_life_days` are stamped exactly as
  * production would). No api.ts / Context layer needed: remember() is a thin
@@ -41,11 +41,11 @@
  * callers both read `meta.tEval` (never `meta.questionDate`) as their
  * HIPPO_FAKE_NOW, so age_days >= 0 by construction for all 500 questions.
  * Canonical ISO strings byte-compare chronologically (see MemoryEntry
- * timestamp invariant, src/memory.ts) so plain string `>` finds the max.
+ * timestamp invariant, src/core/memory.ts) so plain string `>` finds the max.
  */
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createMemory, computeSchemaFit } from '../../dist/memory.js';
+import { createMemory, computeSchemaFit } from '../../dist/core/memory.js';
 import { initStore } from '../../dist/store/open.js';
 import { writeEntry } from '../../dist/store/entry-writes.js';
 import {

@@ -11,12 +11,12 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { sleep, adminActor, type Context } from '../src/api.js';
+import { sleep, adminActor, type Context } from '../src/api/index.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { getGlobalRoot } from '../src/shared.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { getGlobalRoot } from '../src/sharing/shared.js';
 
 // Same secret shape tests/secret-detect.test.ts proves trips detectSecret;
 // pinned + error/gotcha tags push transferScore over the 0.6 auto-share bar.

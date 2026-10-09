@@ -8,11 +8,11 @@ import * as path from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAmbientCandidates } from '../src/store/candidates.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { isContentWorthStoring } from '../src/memory-quality.js';
-import { getContext, type Context } from '../src/api.js';
-import { _resetAblationCacheForTests } from '../src/ablation.js';
-import { withSharedStoreHandles } from '../src/db.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { isContentWorthStoring } from '../src/core/memory-quality.js';
+import { getContext, type Context } from '../src/api/index.js';
+import { _resetAblationCacheForTests } from '../src/core/ablation.js';
+import { withSharedStoreHandles } from '../src/db/index.js';
 
 const PROJECT = 'proj-a';
 

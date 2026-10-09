@@ -22,7 +22,7 @@ import {
   heartbeatCard,
 } from '../src/store/cards.js';
 import { serveDashboard } from '../src/dashboard/dashboard.js';
-import { resolveTenantId } from '../src/tenant.js';
+import { resolveTenantId } from '../src/store/tenant.js';
 
 const DASHBOARD_TOKEN = 'test-dashboard-token';
 

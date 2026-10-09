@@ -5,7 +5,7 @@
  * Creates a temporary directory, sets HOME/USERPROFILE/HIPPO_HOME to it so the
  * global store (~/.hippo) is also isolated from the user's real store, and
  * clears XDG_DATA_HOME so it can never leak the real user store either
- * (precedence in src/shared.ts:getGlobalRoot is HIPPO_HOME > XDG_DATA_HOME > HOME/.hippo).
+ * (precedence in src/sharing/shared.ts:getGlobalRoot is HIPPO_HOME > XDG_DATA_HOME > HOME/.hippo).
  *
  * v1.7.5 -- adds optional B3 dlPFC goal-stack hooks (pushGoal / completeGoal).
  * pushGoal generates a session id, sets HIPPO_SESSION_ID for the rest of the

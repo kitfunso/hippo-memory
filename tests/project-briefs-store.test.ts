@@ -25,9 +25,9 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { deleteEntry } from '../src/store/delete-and-batch.js';
-import { Layer} from '../src/memory.js';
+import { Layer} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../src/db.js';
+import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../src/db/index.js';
 import {
   saveProjectBrief,
   closeProjectBrief,
@@ -39,7 +39,7 @@ import {
   VALID_BRIEF_STATES,
   MAX_BRIEF_SUMMARY_LEN,
   MAX_RECEIPT_HEADLINE_LEN,
-} from '../src/project-briefs.js';
+} from '../src/objects/project-briefs.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 function safeRmSync(p: string): void {

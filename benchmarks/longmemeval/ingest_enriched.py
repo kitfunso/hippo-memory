@@ -186,7 +186,7 @@ def ingest_enriched(
             fallback_count += 1
 
         # `kind` namespace mismatch: the F10 prompt extracted content-type
-        # values (episodic|semantic|procedural) but the DB schema (src/db.ts
+        # values (episodic|semantic|procedural) but the DB schema (src/db/index.ts
         # triggers) and features.ts KIND_WEIGHT use lifecycle values
         # (raw|distilled|superseded|archived). The prompt's `kind` is therefore
         # discarded for this F10 run; all sessions get kind='raw' (the

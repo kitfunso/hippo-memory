@@ -6,9 +6,10 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
+import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, type MemoryEntry } from '../src/memory.js';
+import { createMemory, type MemoryEntry } from '../src/core/memory.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
 const FAKE_NOW = '2026-06-01T12:00:00.000Z';
@@ -133,6 +134,20 @@ describe('session and tool-failure hooks', () => {
     const run = runHook(['compact-resume'], JSON.stringify({ session_id: 'sess-open-4', source: 'compact' }));
     expect(run.stdout).toMatchInlineSnapshot(`""`);
     expect(run.opens).toEqual({ local: 1 });
+  });
+
+  it('compact-resume opens the store once with the delivery ledger on, as with it off', () => {
+    fs.writeFileSync(path.join(localRoot, 'config.json'), JSON.stringify({ deliveryLedger: { enabled: true } }));
+    const run = runHook(['compact-resume'], JSON.stringify({ session_id: 'sess-open-7', source: 'compact' }));
+    expect(run.stdout).toBe('');
+    expect(run.opens).toEqual({ local: 1 });
+    const db = openHippoDb(localRoot);
+    try {
+      // SAFETY: a single COUNT(*) aggregate aliased `c`; proves the ledger was on, so the count above includes its write.
+      expect((db.prepare('SELECT COUNT(*) AS c FROM delivery_events').get() as { c: number }).c).toBe(1);
+    } finally {
+      closeHippoDb(db);
+    }
   });
 
   it('post-compact opens the store once', () => {

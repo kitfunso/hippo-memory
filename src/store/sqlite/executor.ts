@@ -2,11 +2,11 @@
 import { fileURLToPath } from 'node:url';
 import { SHARE_ENV, Worker } from 'node:worker_threads';
 import { addAuditWriteFailures } from '../audit.js';
-import { getHippoDbPath, SERVER_DB_WAIT_MS, StoreBusyError } from '../../db.js';
+import { getHippoDbPath, SERVER_DB_WAIT_MS, StoreBusyError } from '../../db/index.js';
 import { autoCheckpointPages } from '../../db/wal-checkpointer.js';
-import { envStoreQueueMax } from '../../env.js';
-import { DeadlineExceededError } from '../../http-util.js';
-import { errorMessage, log } from '../../log.js';
+import { envStoreQueueMax } from '../../util/env.js';
+import { DeadlineExceededError } from '../../util/http-util.js';
+import { errorMessage, log } from '../../util/log.js';
 import { requestScopes } from '../../util/request-scope.js';
 import { decodeError } from './error-codec.js';
 import { workerCounts } from './executor-counts.js';

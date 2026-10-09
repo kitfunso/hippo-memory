@@ -15,7 +15,7 @@ import * as path from 'node:path';
 import { hybridSearch } from '../../dist/search/hybrid.js';
 import { physicsSearch } from '../../dist/search/physics-search.js';
 import { buildCorpus } from '../../dist/search/bm25.js';
-import { loadConfig } from '../../dist/config.js';
+import { loadConfig } from '../../dist/core/config.js';
 import { loadAllEntries } from '../../dist/store/entry-reads.js';
 import { getReranker } from '../../dist/rerankers/index.js';
 

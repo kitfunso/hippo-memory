@@ -4,10 +4,10 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { initStore } from '../src/store/open.js';
-import { closeHippoDb, openHippoDb } from '../src/db.js';
-import { captureToolFailure } from '../src/capture-error.js';
+import { closeHippoDb, openHippoDb } from '../src/db/index.js';
+import { captureToolFailure } from '../src/capture/capture-error.js';
 import { failureHash, failureReport, lessonFromFailure } from '../src/capture/failure-reading.js';
-import type { JsonValue } from '../src/json.js';
+import type { JsonValue } from '../src/util/json.js';
 
 interface LogRow {
   tool: string | null;

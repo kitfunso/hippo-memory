@@ -8,8 +8,8 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { deleteEntry } from '../src/store/delete-and-batch.js';
 import { loadSearchEntries } from '../src/store/search-rows.js';
-import { getHippoDbPath, withSharedStoreHandles, type DatabaseSyncLike } from '../src/db.js';
-import { resetLogOnce } from '../src/log.js';
+import { getHippoDbPath, withSharedStoreHandles, type DatabaseSyncLike } from '../src/db/index.js';
+import { resetLogOnce } from '../src/util/log.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 
 // SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike.

@@ -1,7 +1,7 @@
 // One way to replace a file a user or another program depends on: write a temp file beside it, then rename over it.
 import * as fs from 'fs';
 import * as path from 'path';
-import { errorMessage, log } from '../log.js';
+import { errorMessage, log } from './log.js';
 
 const RENAME_RETRY_MS = 1000;
 const WINDOWS_RENAME_REFUSALS = ['EPERM', 'EACCES', 'EBUSY'];

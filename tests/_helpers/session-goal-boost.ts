@@ -1,5 +1,5 @@
-import type { DatabaseSyncLike } from '../../src/db.js';
-import type { MemoryEntry } from '../../src/memory.js';
+import type { DatabaseSyncLike } from '../../src/db/index.js';
+import type { MemoryEntry } from '../../src/core/memory.js';
 import {
   activeGoalsWithPolicies, boostByGoals, localGoalRecallRows, type GoalStackBoost, type GoalStackBoostOpts,
 } from '../../src/store/goals.js';

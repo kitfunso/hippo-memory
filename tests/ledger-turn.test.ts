@@ -1,11 +1,11 @@
 // One turn's token rows and delivery event by store root (src/store/ledger-turn.ts), on a real SQLite store.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
-import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../src/db.js';
-import { createDeliveryRecorder, type DeliveryRecorder } from '../src/delivery-recorder.js';
+import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
+import { createDeliveryRecorder, type DeliveryRecorder } from '../src/store/delivery-recorder.js';
 import { lastSentOnSurface, recordLedgerTurn } from '../src/store/ledger-turn.js';
 import { readDeliveryEvents } from '../src/store/recall-trace.js';
-import type { TokenUse } from '../src/token-ledger.js';
+import type { TokenUse } from '../src/store/token-ledger.js';
 import { countMatching, recordStatements } from './_helpers/count-statements.js';
 import { makeRoot } from './_helpers/make-root.js';
 

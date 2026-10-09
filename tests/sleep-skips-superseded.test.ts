@@ -3,14 +3,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Layer } from '../src/memory.js';
+import { Layer } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { loadChildrenOfSummary, loadAllL2Summaries } from '../src/store/summaries.js';
 import { consolidate } from '../src/consolidate/sleep.js';
-import { supersede, type Context } from '../src/api.js';
+import { supersede, type Context } from '../src/api/index.js';
 
 const DAY = 86_400_000;
 const roots: string[] = [];

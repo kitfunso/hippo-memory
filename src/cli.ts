@@ -34,7 +34,7 @@
  *   hippo wm <push|read|clear|flush>
  */
 
-import { envSkipAutoIntegrations } from './env.js';
+import { envSkipAutoIntegrations } from './util/env.js';
 import * as path from 'path';
 import * as fs from 'fs';
 import { fileURLToPath } from 'node:url';
@@ -42,7 +42,7 @@ import { repairCodexWrapperIfInstalled } from './hooks/codex-wrapper.js';
 import { getHippoRoot } from './store/open.js';
 import { cmdGithub, printGithubBackfillUsage } from './connectors/github/cli-impl.js';
 import { printError } from './cli/output.js';
-import { errorFields, errorMessage, isLevelEnabled, log } from './log.js';
+import { errorFields, errorMessage, isLevelEnabled, log } from './util/log.js';
 import { isStoreBusy, STORE_BUSY_MESSAGE } from './db/busy.js';
 import { type CliFlags, type CommandContext, boolFlag, flagIsTrue } from './cli/shared.js';
 import { VERB_USAGE, USAGE_HEADER, USAGE_EXAMPLES, printAuditPruneUsage, printSlackBackfillUsage, printSlackWorkspacesUsage } from './cli/usage.js';

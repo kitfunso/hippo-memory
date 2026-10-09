@@ -1,6 +1,6 @@
 // A half-life move reads, writes, audits and records its base on one handle, so it commits whole or not at all.
-import { closeHippoDb, getMeta, openHippoDb, setMeta, withWriteScope, type DatabaseSyncLike } from '../db.js';
-import type { MemoryEntry } from '../memory.js';
+import { closeHippoDb, getMeta, openHippoDb, setMeta, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
+import type { MemoryEntry } from '../core/memory.js';
 import { appendAuditEvent } from './audit.js';
 import { conflictResolveAuditsAt, resolvedConflictsAt } from './conflicts.js';
 import { objectMemoryRowsAt, selectAllEntries } from './entry-reads.js';

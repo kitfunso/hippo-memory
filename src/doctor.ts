@@ -7,20 +7,20 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { findHippoStoreDir } from './project-identity.js';
-import { getGlobalRoot } from './shared.js';
+import { findHippoStoreDir } from './core/project-identity.js';
+import { getGlobalRoot } from './sharing/shared.js';
 import { isInitialized } from './store/open.js';
 import { readStoreHealth, type StoreHealth } from './store/diagnostics.js';
-import { loadConfig } from './config.js';
-import { openHippoDbReadOnly, closeHippoDb, getCurrentSchemaVersion, IncompatibleBinaryError, type DatabaseSyncLike } from './db.js';
-import { REPLAY_AFTER_MS, TRANSCRIPT_FILL_WINDOW_MS } from './compaction-record.js';
-import { SPOOL_DIR, spoolCounts, type SpoolCounts } from './compaction-spool.js';
-import { isEmbeddingAvailable } from './local-embedding.js';
+import { loadConfig } from './core/config.js';
+import { openHippoDbReadOnly, closeHippoDb, getCurrentSchemaVersion, IncompatibleBinaryError, type DatabaseSyncLike } from './db/index.js';
+import { REPLAY_AFTER_MS, TRANSCRIPT_FILL_WINDOW_MS } from './capture/compaction-record.js';
+import { SPOOL_DIR, spoolCounts, type SpoolCounts } from './capture/compaction-spool.js';
+import { isEmbeddingAvailable } from './store/embeddings/local.js';
 import { CODEX_TRUST_LINE, claudeConfigDir, codexHomeDir, isCodexPresent } from './hooks/shared.js';
-import { planProjectRepair } from './project-merge.js';
-import { resolveTenantId } from './tenant.js';
-import { errorMessage, log } from './log.js';
-import { readJsonFile, type JsonValue, isJsonObjectLiteral } from './json.js';
+import { planProjectRepair } from './sharing/project-merge.js';
+import { resolveTenantId } from './store/tenant.js';
+import { errorMessage, log } from './util/log.js';
+import { readJsonFile, type JsonValue, isJsonObjectLiteral } from './util/json.js';
 import { DAY_MS } from './util/time.js';
 
 /** Outcome of one check. `fail` makes `hippo doctor` exit 1. */

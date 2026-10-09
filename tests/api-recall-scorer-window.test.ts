@@ -16,8 +16,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { recall, type Context } from '../src/api.js';
+import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { recall, type Context } from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 function safeRmSync(p: string): void {
@@ -142,7 +142,7 @@ describe('RecallOpts.scorerWindow', () => {
   });
 
   it('scorerWindow=1 (smallest legal value) is accepted and honoured (v1.7.1 INFO #2)', () => {
-    // Validator at src/api.ts accepts `>= 1` integers. A regression flipping
+    // Validator at src/api/index.ts accepts `>= 1` integers. A regression flipping
     // `< 1` to `<= 1` or `< 2` would not be caught by the existing 0-rejection
     // test alone. Pin the lower bound: scorerWindow=1 must NOT throw and the
     // candidate pool must shrink to exactly 1.

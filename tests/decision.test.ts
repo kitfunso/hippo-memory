@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer } from '../src/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer } from '../src/core/memory.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';

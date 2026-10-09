@@ -5,8 +5,8 @@ import * as path from 'path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { embedMemory, loadEmbeddingIndex } from '../src/embeddings.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { embedMemory, loadEmbeddingIndex } from '../src/store/embeddings/index.js';
 
 const KEY_ENV = 'OPENAI_API_KEY';
 // Built from parts so the repo's secret scan does not flag the test file.
@@ -74,7 +74,7 @@ describe('embedMemory provider failure', () => {
   it('warns once and resolves when the config names an unknown provider', async () => {
     // A fresh module, since the test above already spent this process's one warning.
     vi.resetModules();
-    const fresh = await import('../src/embeddings.js');
+    const fresh = await import('../src/store/embeddings/index.js');
     fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { provider: 'opneai' } }), 'utf8');
     const entry = createMemory('a memory under a typo in the provider name', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(root, entry);

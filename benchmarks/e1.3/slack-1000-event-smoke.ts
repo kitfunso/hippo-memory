@@ -16,7 +16,7 @@
 
 import { ingestMessage } from '../../src/connectors/slack/ingest.js';
 import { loadAllEntries } from '../../src/store/entry-reads.js';
-import { adminActor } from '../../src/api.js';
+import { adminActor } from '../../src/api/index.js';
 
 export interface SmokeOpts {
   hippoRoot: string;

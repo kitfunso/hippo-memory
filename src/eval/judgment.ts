@@ -2,9 +2,9 @@
  *  Regex picks WHAT is a candidate; it cannot say what is worth keeping, so
  *  every captured memory currently lands on a flat schema_fit of 0.5. */
 
-import { ConfidenceLevel, EmotionalValence } from '../memory.js';
-import { fetchWithRetry } from '../http-retry.js';
-import { errorMessage, log } from '../log.js';
+import { ConfidenceLevel, EmotionalValence } from '../core/memory.js';
+import { fetchWithRetry } from '../util/http-retry.js';
+import { errorMessage, log } from '../util/log.js';
 
 const ENDPOINT = 'https://api.typesafe.ai/v1/systemone';
 const DEFAULT_MODEL = 'jev-1.13.0';

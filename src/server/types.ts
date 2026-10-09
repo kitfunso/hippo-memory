@@ -1,9 +1,9 @@
 // Public option and handle types for serve(), plus the /v1 route shape.
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { Context } from '../api.js';
-import type { JsonValue } from '../json.js';
-import type { RateLimiter } from '../rate-limit.js';
-import type { HippoStore, StoreGroup } from '../store-port.js';
+import type { Context } from '../api/index.js';
+import type { JsonValue } from '../util/json.js';
+import type { RateLimiter } from './rate-limit.js';
+import type { HippoStore, StoreGroup } from '../store/index.js';
 
 export interface ServerHandle {
   port: number;

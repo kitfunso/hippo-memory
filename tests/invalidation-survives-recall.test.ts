@@ -10,9 +10,9 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { markRetrieved } from '../src/memory.js';
-import { invalidateMatching } from '../src/invalidation.js';
-import { remember, getContext } from '../src/api.js';
+import { markRetrieved } from '../src/core/memory.js';
+import { invalidateMatching } from '../src/learn/invalidation.js';
+import { remember, getContext } from '../src/api/index.js';
 
 let home: string;
 

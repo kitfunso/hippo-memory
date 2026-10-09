@@ -6,7 +6,7 @@
  * BM25 corpus (from chunk_per_turn_bm25_index.mjs), runs both signals
  * over a LongMemEval source dataset, max-pools each to session, and
  * fuses the two session orderings via the shared `rrfFuse` helper from
- * src/rrf.ts.
+ * src/search/rrf.ts.
  *
  * Usage:
  *   node benchmarks/longmemeval/chunk_per_turn_hybrid_retrieve.mjs \
@@ -34,8 +34,8 @@
 import { readFileSync, writeFileSync, mkdirSync, createReadStream } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
-import { tokenize } from '../../dist/tokenize.js';
-import { rrfFuse, RRF_K } from '../../dist/rrf.js';
+import { tokenize } from '../../dist/util/tokenize.js';
+import { rrfFuse, RRF_K } from '../../dist/search/rrf.js';
 
 // ---------------------------------------------------------------------------
 // CLI parsing

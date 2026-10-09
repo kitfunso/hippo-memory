@@ -5,7 +5,7 @@ import * as path from 'path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
-import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 
 describe('schema v13: DAG fields', () => {
   let hippoRoot: string;

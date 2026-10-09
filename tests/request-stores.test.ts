@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { openHippoDb, closeHippoDb, noteStoreBusy, runWithRequestStores, currentRequestStores, outsideRequestStores, type DatabaseSyncLike } from '../src/db.js';
+import { openHippoDb, closeHippoDb, noteStoreBusy, runWithRequestStores, currentRequestStores, outsideRequestStores, type DatabaseSyncLike } from '../src/db/index.js';
 import { initStore } from '../src/store/open.js';
 
 let tmp: string;

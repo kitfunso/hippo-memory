@@ -1,6 +1,6 @@
 // /v1/policies routes.
-import { policiesAsOf, POLICY, type SavePolicyOpts } from '../../policies.js';
-import { HttpError, sendJson } from '../../http-util.js';
+import { policiesAsOf, POLICY, type SavePolicyOpts } from '../../objects/policies.js';
+import { HttpError, sendJson } from '../../util/http-util.js';
 import { buildContextWithAuth } from '../auth.js';
 import type { RouteRequest } from '../types.js';
 import { parseJsonBody } from '../validation.js';

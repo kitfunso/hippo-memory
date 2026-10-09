@@ -1,22 +1,22 @@
 // The async store interface and its groups; type-only apart from requireGroup's error, so an add-on can build a store on it alone.
-import type { AmbientTallies } from '../ambient.js';
+import type { AmbientTallies } from '../core/ambient.js';
 import type { AmbientStoreFilter } from './ambient.js';
 import type { ApiKeyListRow, ApiKeyRecord, ListApiKeysOpts, NewApiKey } from './auth.js';
 import type { AppendAuditOpts, AuditEvent, ListAuditAfterOpts, QueryAuditOpts } from './audit.js';
 import { StoreNotPortedError } from '../util/sqlite-blocked.js';
-import type { EmbeddingIndexState } from '../embeddings.js';
+import type { EmbeddingIndexState } from './embeddings/index.js';
 import type { Entity, Relation } from './graph-rows.js';
 import type { ActiveGoals, GetActiveGoalsOpts, GoalRecallLogRow } from './goals.js';
-import type { SessionHandoff } from '../handoff.js';
-import type { JsonValue } from '../json.js';
-import type { KeysetPosition } from '../keyset.js';
-import type { MemoryEntry } from '../memory.js';
-import type { PhysicsParticle } from '../physics.js';
+import type { SessionHandoff } from '../core/handoff.js';
+import type { JsonValue } from '../util/json.js';
+import type { KeysetPosition } from '../util/keyset.js';
+import type { MemoryEntry } from '../core/memory.js';
+import type { PhysicsParticle } from '../core/physics.js';
 import type { BriefReceipt, Incident, IncidentFields, ObjectByKind, ObjectFields, ObjectKind, Policy, SavableKind, Skill } from './object-types.js';
 import type { PlanningFallacyEvidence } from './planning-fallacy-evidence.js';
 import type { ClosureState, Prediction, PredictionBaserate, SavePredictionOpts } from './predictions.js';
 import type { QuarantineRow, QuarantineStatus } from './quarantine.js';
-import type { ScopeActor } from '../recall-scope.js';
+import type { ScopeActor } from './recall-scope.js';
 import type { RecallTraceInput } from './recall-trace.js';
 import type { AmbientLoadResult, AmbientRecallRequest, ContextCandidateFilter, RecentOrigins } from './candidates.js';
 import type { GithubDlqWrite, GithubRouting } from './connectors/github.js';
@@ -25,7 +25,7 @@ import type { StrengthenOptions } from './entry-writes.js';
 import type { SessionEvent, TaskSnapshot } from './rows.js';
 import type { OriginFilter, VectorCandidateSpec } from './search-rows.js';
 import type { ContinuityKey } from './sessions.js';
-import type { TokenUse } from '../token-ledger.js';
+import type { TokenUse } from './token-ledger.js';
 
 /** The arguments of `loadRecallSearchEntries` after the query, by name. */
 export interface RecallSearchArgs {

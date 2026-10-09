@@ -1,8 +1,8 @@
 // The token-use and failure reports, each read on one handle of its own.
-// A file apart from token-ledger-rows.ts: src/token-ledger.ts imports that one, so a summary there would be an import cycle.
+// A file apart from token-ledger-rows.ts: src/store/token-ledger.ts imports that one, so a summary there would be an import cycle.
 
-import { closeHippoDb, openHippoDb } from '../db.js';
-import { summarizeTokenUse, type TokenSummary } from '../token-ledger.js';
+import { closeHippoDb, openHippoDb } from '../db/index.js';
+import { summarizeTokenUse, type TokenSummary } from './token-ledger.js';
 import { summarizeFailures, type FailureSummary } from './failure-log.js';
 
 /** One tenant's token ledger totals since `sinceIso`. */

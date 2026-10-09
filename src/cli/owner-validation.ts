@@ -10,7 +10,7 @@
  * the stub (see `TODOS.md` for the migration path).
  */
 
-import { processEnv } from '../env.js';
+import { processEnv } from '../util/env.js';
 
 const OWNER_RE = /^(user|agent):[A-Za-z0-9_-]+$/;
 export const OWNER_CONTRACT_HINT =

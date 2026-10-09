@@ -6,7 +6,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { calculateStrength } from '../dist/memory.js';
+import { calculateStrength } from '../dist/core/memory.js';
 
 const lane4 = JSON.parse(await import('node:fs/promises').then((m) =>
   m.readFile('results/jev-classify-lane4-cli-holdout-2026-09-18.json', 'utf8')));

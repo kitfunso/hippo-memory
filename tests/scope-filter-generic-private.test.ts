@@ -22,9 +22,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
-import type { Context } from '../src/api.js';
+import type { Context } from '../src/api/index.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { recall } from '../src/api.js';
+import { recall } from '../src/api/index.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
 import { makeRoot } from './_helpers/make-root.js';
 

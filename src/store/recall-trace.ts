@@ -16,10 +16,10 @@
  */
 
 import { createHash } from 'node:crypto';
-import { openHippoDb, closeHippoDb, rethrowIfSqliteBlocked, withWriteScope, type DatabaseSyncLike } from '../db.js';
+import { openHippoDb, closeHippoDb, rethrowIfSqliteBlocked, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import type { RerankStep } from '../core/search-types.js';
-import { DELIVERY_LEDGER_VERSION, type DeliveryEventInput } from '../delivery-recorder.js';
-import { errorMessage, log } from '../log.js';
+import { DELIVERY_LEDGER_VERSION, isBoundaryEvent, type DeliveryEventInput } from './delivery-recorder.js';
+import { errorMessage, log } from '../util/log.js';
 import { DAY_MS } from '../util/time.js';
 
 /** One ranked result to persist alongside its trace row. */
@@ -232,7 +232,7 @@ export function recordTraceOutcome(db: DatabaseSyncLike, input: RecordTraceOutco
 export const DELIVERY_LEDGER_RETENTION_DAYS = 90;
 /** Lock wait for the ledger's own connection: a busy store drops the row rather than slow the hook. */
 export const DELIVERY_LEDGER_WAIT_MS = 50;
-/** Two prompt-identical events without a host turn id this close together are one turn fired twice. */
+/** Two prompt-identical events without a host turn id, or two boundary events of one type, this close are one fire twice. */
 export const DELIVERY_DUPLICATE_WINDOW_MS = 2000;
 
 const DELIVERY_EVENT_COLUMNS = [
@@ -299,7 +299,20 @@ export interface DeliveryEventRow {
   candidates: DeliveryCandidateRow[];
 }
 
+function findDuplicateBoundary(db: DatabaseSyncLike, input: DeliveryEventInput): number | null {
+  // SAFETY: rows carry exactly the `id` and `ts` columns selected.
+  const rows = db.prepare(`
+    SELECT id, ts FROM delivery_events
+    WHERE tenant_id = ? AND session_id = ? AND event_type = ? AND turn_seq IS NOT NULL
+    ORDER BY id
+  `).all(input.tenantId, input.sessionId, input.eventType) as Array<{ id: number; ts: string }>;
+  const at = Date.parse(input.ts);
+  return rows.find((r) => Math.abs(Date.parse(r.ts) - at) <= DELIVERY_DUPLICATE_WINDOW_MS)?.id ?? null;
+}
+
 function findDuplicateTurn(db: DatabaseSyncLike, input: DeliveryEventInput): number | null {
+  // A boundary has no prompt, and two compactions of one session never start within the window, so time alone decides.
+  if (isBoundaryEvent(input.eventType)) return findDuplicateBoundary(db, input);
   if (input.hostTurnId !== null) {
     // SAFETY: a single `id` column, undefined when no row matches.
     const row = db.prepare(`

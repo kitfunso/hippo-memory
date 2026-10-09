@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
-import { currentRequestStores, runWithRequestStores, type RequestStores } from '../src/db.js';
+import { currentRequestStores, runWithRequestStores, type RequestStores } from '../src/db/index.js';
 import { sleepRuns } from './_helpers/sleep-runs.js';
 
 const roots: string[] = [];

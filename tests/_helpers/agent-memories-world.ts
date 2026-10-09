@@ -4,15 +4,15 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { adminActor, type HippoDbContext } from '../../src/api.js';
+import { adminActor, type HippoDbContext } from '../../src/api/index.js';
 import { claudeFolderName } from '../../src/agent-memories/claude-code.js';
 import { emptyTally, totalTally, type ImportReport, type Tally } from '../../src/agent-memories/report.js';
 import type { Machine } from '../../src/agent-memories/sync.js';
 import type { ToolId } from '../../src/core/agent-memory-tools.js';
 import { queryAuditEvents, type AuditOp } from '../../src/store/audit.js';
-import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db.js';
+import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { loadDormantMemories, type DormantMemory } from '../../src/store/dormant.js';
-import type { MemoryEntry } from '../../src/memory.js';
+import type { MemoryEntry } from '../../src/core/memory.js';
 import { initStore, isInitialized } from '../../src/store/open.js';
 import { loadAllEntries } from '../../src/store/entry-reads.js';
 

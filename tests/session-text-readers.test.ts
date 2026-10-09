@@ -9,7 +9,7 @@ import {
   transcriptWorkingState,
   truncateKeepNewest,
 } from '../src/capture/working-state.js';
-import { collectHandoffEvidence } from '../src/handoff-evidence.js';
+import { collectHandoffEvidence } from '../src/capture/handoff-evidence.js';
 
 const made: string[] = [];
 const tmp = (): string => {
