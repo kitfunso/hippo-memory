@@ -8,7 +8,7 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { saveStoredVectors, storedVectorSummary } from '../src/store/vector-index.js';
-import { cmdStatus } from '../src/cli/status.js';
+import { handleStatus } from '../src/cli/status.js';
 
 type Walk = (this: Float32Array) => IterableIterator<number>;
 const HIPPO_BIN = path.join(process.cwd(), 'bin', 'hippo.js');
@@ -74,7 +74,7 @@ describe('hippo status embedding lines', () => {
     proto[Symbol.iterator] = function (this: Float32Array) { walks++; return original.call(this); };
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     try {
-      cmdStatus(root);
+      handleStatus({ hippoRoot: root, args: [], flags: {} });
     } finally {
       proto[Symbol.iterator] = original;
       log.mockRestore();
