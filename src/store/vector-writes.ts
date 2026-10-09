@@ -1,8 +1,9 @@
 // hippo.db's half of the VectorWrites store group.
-import { setMeta, withWriteScope, type DatabaseSyncLike } from '../db.js';
+import { closeHippoDb, openHippoDb, setMeta, withWriteScope, type DatabaseSyncLike } from '../db.js';
 import { embeddingIndexStateOn, replacesIndex } from '../embeddings.js';
 import type { MemoryEntry } from '../memory.js';
-import { float32ToBuffer } from '../db/physics-state.js';
+import type { PhysicsParticle } from '../physics.js';
+import { float32ToBuffer, loadPhysicsState, resetAllPhysicsState } from '../db/physics-state.js';
 import type { VectorBackfillQuery, VectorRowWrite, VectorWrite, VectorWriteResult } from './port.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../db/vector-store.js';
 import { chunked } from './entry-reads.js';
@@ -58,4 +59,24 @@ export function writeVectorsAt(db: DatabaseSyncLike, write: VectorWrite): Vector
     setMeta(db, EMBEDDING_MODEL_META_KEY, write.model);
     return { written, modelMismatch: false };
   });
+}
+
+/** Every particle stored under `hippoRoot`. */
+export function loadStoredParticles(hippoRoot: string): PhysicsParticle[] {
+  const db = openHippoDb(hippoRoot);
+  try {
+    return Array.from(loadPhysicsState(db).values());
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/** Replaces every particle under `hippoRoot` with a fresh one per entry that has an embedding; returns how many. */
+export function resetStoredParticles(hippoRoot: string, entries: MemoryEntry[], embeddingIndex: Record<string, number[]>): number {
+  const db = openHippoDb(hippoRoot);
+  try {
+    return resetAllPhysicsState(db, entries, embeddingIndex);
+  } finally {
+    closeHippoDb(db);
+  }
 }

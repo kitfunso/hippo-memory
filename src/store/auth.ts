@@ -1,6 +1,6 @@
 import { createHash, randomBytes, scrypt, scryptSync, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
-import type { DatabaseSyncLike } from '../db.js';
+import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../db.js';
 import { raiseMinBinary } from '../db/meta.js';
 import { keysetAfter, type KeysetPosition } from '../keyset.js';
 import type { HippoStore } from '../store-port.js';
@@ -408,8 +408,14 @@ export function listApiKeyRows(db: DatabaseSyncLike, opts: ListApiKeysOpts): Api
   }));
 }
 
-export function listApiKeys(db: DatabaseSyncLike, opts: ListApiKeysOpts): ApiKeyListItem[] {
-  return listApiKeyRows(db, opts).map(r => r.key);
+/** Keys of every tenant under `hippoRoot` unless `opts.tenantId` names one. */
+export function listApiKeys(hippoRoot: string, opts: ListApiKeysOpts): ApiKeyListItem[] {
+  const db = openHippoDb(hippoRoot);
+  try {
+    return listApiKeyRows(db, opts).map(r => r.key);
+  } finally {
+    closeHippoDb(db);
+  }
 }
 
 /** Ids of the unrevoked, unexpired keys `ownerSubject` minted in `tenantId`, oldest first. */

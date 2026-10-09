@@ -139,13 +139,9 @@ describe('connector webhooks', () => {
       closeHippoDb(db);
     }
   };
-  const withDb = (fn: (db: ReturnType<typeof openHippoDb>) => void): void => {
-    const db = openHippoDb(root);
-    try { fn(db); } finally { closeHippoDb(db); }
-  };
 
   it('an unroutable Slack message lands in the dead-letter table redacted, and replays once routed', async () => {
-    withDb((db) => addWorkspace(db, { teamId: 'T_OTHER', tenantId: 'default' }));
+    addWorkspace(root, { teamId: 'T_OTHER', tenantId: 'default' });
     const body = JSON.stringify({
       type: 'event_callback',
       team_id: 'T1',
@@ -161,7 +157,7 @@ describe('connector webhooks', () => {
     expect(row.signature).toBeNull();
     expect(JSON.parse(row.raw_payload).event.text).toBe('bot token [REDACTED] expires on friday');
 
-    withDb((db) => addWorkspace(db, { teamId: 'T1', tenantId: 'default' }));
+    addWorkspace(root, { teamId: 'T1', tenantId: 'default' });
     expect(replayDlqEntry({ hippoRoot: root }, row.id, { signingSecret: SIGNING }).status).toBe('sig_missing');
     expect(replayDlqEntry({ hippoRoot: root }, row.id, { force: true }).ok).toBe(true);
     expectRedacted(storedContents(), SLACK_TOKEN, 'expires on friday');
