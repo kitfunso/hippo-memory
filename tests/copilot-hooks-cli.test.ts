@@ -496,19 +496,27 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
   it('keeps each lesson when two chats end a reply at the same moment', async () => {
     const second = 'vscode-sess-2';
     const secondLog = path.join(s.dir, 'turn-2.log');
+    const fault = cursorSaveFault('hold');
     const payloads = [
       stopPayload(writeVscodeTranscript(copilotEventsJsonl())),
       stopPayload(writeVscodeTranscript(SECOND_TURN, second), { sessionId: second }),
     ];
-    // Fired together the counts hold under any interleaving, so this shows neither save loses the other, never that they overlapped.
-    expect(await Promise.all([stopExit(logFile(), payloads[0]), stopExit(secondLog, payloads[1])])).toEqual([0, 0]);
-    await waitForLog(logFile(), TURN_DONE);
-    await waitForLog(secondLog, TURN_DONE);
+    expect(await Promise.all([stopExit(logFile(), payloads[0], fault.env), stopExit(secondLog, payloads[1])])).toEqual([0, 0]);
+    // The first chat's worker waits at its cursor save, so the second chat provably saves while that worker is alive.
+    const pid = await fault.reached();
+    await waitForLog(secondLog, TURN_DONE, 50_000);
+    expect(pidAlive(pid)).toBe(true);
     expect(memoriesWith(FIRST_LESSON)).toBe(1);
     expect(memoriesWith(SECOND_LESSON)).toBe(1);
-    expect(fs.existsSync(sessionFile('.cursor.json'))).toBe(true);
+    expect(fs.existsSync(sessionFile('.cursor.json'))).toBe(false);
     expect(fs.existsSync(sessionFile('.cursor.json', second))).toBe(true);
-  }, 60_000);
+
+    fault.release();
+    await waitUntil(() => !fs.existsSync(sessionFile('.lock')), 'session lock not released', 60_000);
+    expect(fs.existsSync(sessionFile('.cursor.json'))).toBe(true);
+    expect(memoriesWith(FIRST_LESSON)).toBe(1);
+    expect(memoriesWith(SECOND_LESSON)).toBe(1);
+  }, 90_000);
 
   it('files a reply under the payload cwd project when that folder has no store', async () => {
     const billing = path.join(s.dir, 'billing');
@@ -543,18 +551,19 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     expect(fs.existsSync(sessionFile('.cursor.json'))).toBe(false);
   }, 60_000);
 
-  it('warns once when the payload cwd does not exist, and files the lesson as user-global', async () => {
-    const transcript = writeVscodeTranscript(copilotEventsJsonl());
-    const payload = stopPayload(transcript, { cwd: path.join(s.dir, 'gone') });
+  it('warns once when the payload cwd does not exist, and saves into the store of the folder it ran in', async () => {
+    const other = path.join(s.dir, 'other');
+    const otherRoot = initStoreIn(other);
+    const payload = stopPayload(writeVscodeTranscript(copilotEventsJsonl()), { cwd: path.join(s.dir, 'gone') });
     fs.rmSync(logFile(), { force: true });
-    const r = runHippo(stopArgs(logFile()), s.dir, { ...s.env, HIPPO_LOG: 'warn' }, payload);
+    const r = runHippo(stopArgs(logFile()), other, { ...s.env, HIPPO_LOG: 'warn' }, payload);
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toBe('');
     expect(r.stderr.split('\n').filter((line) => line.includes('is not usable'))).toHaveLength(1);
     await waitForLog(logFile(), TURN_DONE, 50_000);
-    const sql = `SELECT origin_project FROM memories WHERE instr(content, '${FIRST_LESSON}') > 0`;
-    expect(rows<{ origin_project: string }>(sql, s.globalRoot)).toEqual([{ origin_project: '' }]);
+    expect(memoriesWith(FIRST_LESSON, otherRoot)).toBe(1);
     expect(memoriesWith(FIRST_LESSON)).toBe(0);
+    expect(memoriesWith(FIRST_LESSON, s.globalRoot)).toBe(0);
   }, 60_000);
 });
 
