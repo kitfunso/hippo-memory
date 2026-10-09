@@ -7,7 +7,7 @@ import { originInSql } from '../project-identity.js';
 import { scopeAdmitSql } from '../recall-scope.js';
 
 // The plus keeps SQLite on the primary key for an id list: with a bare tenant_id it walks every row of the tenant instead.
-const TENANT_IS = '+tenant_id = ?';
+export const TENANT_IS = '+tenant_id = ?';
 
 /**
  * Read a memory entry by ID.
@@ -96,7 +96,7 @@ export function selectChildrenByParent(
   tenantId?: string,
 ): Map<string, MemoryEntry[]> {
   const byParent = new Map<string, MemoryEntry[]>();
-  const tenantClause = tenantId !== undefined ? ' AND tenant_id = ?' : '';
+  const tenantClause = tenantId !== undefined ? ` AND ${TENANT_IS}` : '';
   const tenantArgs = tenantId !== undefined ? [tenantId] : [];
   for (const chunk of chunked([...new Set(parentIds)])) {
     const placeholders = chunk.map(() => '?').join(',');
