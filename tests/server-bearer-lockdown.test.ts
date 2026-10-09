@@ -82,7 +82,7 @@ function publicRoutesFromServerSource(text: string): Set<string> {
 
 const serverSource = readFileSync(join(repoRoot, 'src/server/route-table.ts'), 'utf8');
 const routeTableSource = serverSource.slice(serverSource.indexOf('const V1_ROUTES'), serverSource.indexOf('async function dispatchV1Route'));
-const handlerSource = readFileSync(join(repoRoot, 'src/server.ts'), 'utf8');
+const handlerSource = readFileSync(join(repoRoot, 'src/server/boot.ts'), 'utf8');
 const dispatchSource = routeTableSource + handlerSource.slice(handlerSource.indexOf('async function handleRequest'));
 
 // Every authed route with a request shape that clears pre-auth validation, so a

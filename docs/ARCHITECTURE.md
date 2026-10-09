@@ -732,17 +732,16 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `module header`: This is deliberately a thin slice of the A4 lifecycle-compliance item (no PII detection).
 - `redactSecrets`: e.g. the CS1 pre-compact snapshot fields — can scrub it in place instead.
 
-### src/server.ts
+### src/server/auth.ts
+- `buildContextWithAuth`: v1.12.0: loopback fallback is process-local, treat as admin.
+
+### src/server/boot.ts
 - `handleRequest`: v1.6.4: pre-decode raw-URL slash check.
 - `assertNoLiveServer`: H3: refuse to start if a live hippo server already serves this hippoRoot.
 - `bootRateLimiter`: E3: per-IP rate limiter for /v1/* and /mcp*.
-- `dispatchPublicJson`: E4 (2026-10-06): the `publicJson` seam sits beside the add-on route seam (`dispatchAddonRoute`) so hippo-enterprise can serve its connect info with no key; it is a dispatcher, not an inline `if (method === ...)` line, so the bearer-lockdown parser still counts every route, and it has no add-on collision check because add-ons are POST only (E4 plan review r1, finding 5).
 - `replyWithFailure`: M3: readBody hit the 1 MB cap mid-stream, so drop the socket rather than drain unbounded bytes.
 - `serve`: Refuses non-loopback hosts at boot (Footgun #3 from the A1 plan) unless HIPPO_REQUIRE_AUTH=1 is set. The A5 v2 auth middleware (buildContextWithAuth / requireAuth) has shipped and every route checks it
 - `serve.stop`: an unconditional unlink here would orphan it. (v0.37.0 server-hardening.)
-
-### src/server/auth.ts
-- `buildContextWithAuth`: v1.12.0: loopback fallback is process-local, treat as admin.
 
 ### src/server/client-ip.ts
 - `enforceRateLimit`: E3: per-IP rate limit on /v1/* and /mcp* to bound api-key-id enumeration.
@@ -751,6 +750,9 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `section header`: ── MCP-over-HTTP/SSE transport (Task 11) ──
 - `handleMcpPost`: v1.12.0: McpContext.actor stays string; extract subject at the boundary.
 - `handleMcpStream`: v0.39 SSE hardening:
+
+### src/server/route-table.ts
+- `dispatchPublicJson`: E4 (2026-10-06): the `publicJson` seam sits beside the add-on route seam (`dispatchAddonRoute`) so hippo-enterprise can serve its connect info with no key; it is a dispatcher, not an inline `if (method === ...)` line, so the bearer-lockdown parser still counts every route, and it has no add-on collision check because add-ons are POST only (E4 plan review r1, finding 5).
 
 ### src/server/routes/admin.ts
 - `handleCreateAuthKey`: POST /v1/auth/keys — mint a new API key. Plaintext lands in the response body (Task 8)

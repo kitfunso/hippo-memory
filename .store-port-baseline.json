@@ -54,7 +54,7 @@
     "src/recall-pipeline.ts": 1,
     "src/recall-trace.ts": 2,
     "src/reject-flow.ts": 3,
-    "src/server.ts": 1,
+    "src/server/boot.ts": 1,
     "src/session-owners.ts": 1,
     "src/skills.ts": 4,
     "src/store-cards.ts": 14,
