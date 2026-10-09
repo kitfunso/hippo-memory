@@ -89,7 +89,7 @@ export function pairedPermutationCI(xsA, xsB, alpha = 0.05, nResamples = 10_000)
   const observed = mean(diffs);
 
   const rng = mulberry32(0x9E3779B9);
-  const resampledMeans = new Array(nResamples);
+  const resampledMeans = Array(nResamples);
   for (let r = 0; r < nResamples; r++) {
     let s = 0;
     for (let i = 0; i < n; i++) {

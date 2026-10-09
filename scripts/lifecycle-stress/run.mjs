@@ -105,7 +105,7 @@ function pairedBootstrapCI(diffs, iters = 10000, alpha = 0.05) {
   if (n === 0) return { meanDiff: 0, low: 0, high: 0 };
   const mean = diffs.reduce((a, b) => a + b, 0) / n;
   const rng = mulberry32(0x9e3779b9);
-  const boots = new Array(iters);
+  const boots = Array(iters);
   for (let b = 0; b < iters; b++) {
     let s = 0;
     for (let i = 0; i < n; i++) s += diffs[Math.floor(rng() * n)];

@@ -98,9 +98,9 @@ if (effectiveIndex.endsWith('.jsonl')) {
   var N = idx.count;
   var D = idx.dim;
   var mat = new Float32Array(N * D);
-  var sessionIds = new Array(N);
-  var turnIdxs = new Array(N);
-  var contents = new Array(N);
+  var sessionIds = Array(N);
+  var turnIdxs = Array(N);
+  var contents = Array(N);
   for (let i = 0; i < N; i++) {
     const t = idx.turns[i];
     sessionIds[i] = t.session_id;

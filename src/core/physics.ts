@@ -65,25 +65,25 @@ export function vecNorm(v: number[]): number {
 }
 
 export function vecScale(v: number[], s: number): number[] {
-  const out = new Array<number>(v.length);
+  const out = v.slice();
   for (let i = 0; i < v.length; i++) out[i] = v[i] * s;
   return out;
 }
 
 export function vecAdd(a: number[], b: number[]): number[] {
-  const out = new Array<number>(a.length);
+  const out = a.slice();
   for (let i = 0; i < a.length; i++) out[i] = a[i] + b[i];
   return out;
 }
 
 export function vecSub(a: number[], b: number[]): number[] {
-  const out = new Array<number>(a.length);
+  const out = a.slice();
   for (let i = 0; i < a.length; i++) out[i] = a[i] - b[i];
   return out;
 }
 
 export function vecZero(dim: number): number[] {
-  return new Array<number>(dim).fill(0);
+  return Array<number>(dim).fill(0);
 }
 
 /** Normalize to unit length. Returns zero vector if magnitude < epsilon. */

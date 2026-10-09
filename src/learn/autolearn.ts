@@ -101,7 +101,7 @@ export function extractLessons(gitLog: string, customPatterns?: string[]): strin
  *
  * Order is preserved in both output arrays; both hold lessons with secret shapes redacted.
  */
-export function partitionLessons(lessons: string[]): { kept: string[]; dropped: string[] } {
+export function partitionLessons(lessons: string[]) {
   const kept: string[] = [];
   const dropped: string[] = [];
   for (const lesson of lessons.map((l) => redactSecretsStrict(l))) {

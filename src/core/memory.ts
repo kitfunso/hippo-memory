@@ -13,6 +13,7 @@ import {
   evalNow,
 } from './ablation.js';
 import { AGENT_MEMORY_TOOLS, toolSourcePrefix } from './agent-memory-tools.js';
+import { isJsonString } from '../util/json.js';
 import { DAY_MS } from '../util/time.js';
 import { ID_SUFFIX_CHARS } from '../util/token-text.js';
 export const DEFAULT_SCHEMA_FIT = 0.5;
@@ -329,7 +330,7 @@ export function facetsOf(entry: ConfidenceInputs, now: Date): ConfidenceFacets {
 }
 
 // An aged-out row warns on its own, since its stored tier alone would hide it.
-export function confidenceLabel(entry: MemoryEntry, now: Date = evalNow()): { text: string; warn: boolean } {
+export function confidenceLabel(entry: MemoryEntry, now: Date = evalNow()) {
   const { tier, agedOut } = confidenceFacets(entry, now);
   return {
     text: agedOut ? `${tier}, aged` : tier,
@@ -469,7 +470,7 @@ export function createSuccessor(
     baseHalfLifeDays: opts.baseHalfLifeDays,
   });
   // A legacy null origin has nothing to carry, so the store stamps it from its own location.
-  if (typeof old.origin_project === 'string') {
+  if (isJsonString(old.origin_project)) {
     next.origin_project = old.origin_project;
   }
   return next;
