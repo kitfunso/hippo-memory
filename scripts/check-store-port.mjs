@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // CI store-port gate. Every server route should reach the database through the store port, so the leftovers
-// (database openers outside the data layer, store branches in the API, routes not yet store-ready, twin
+// (database openers outside the data layer, store branches in the API, routes not yet store-ready (a sqliteOnly route is counted apart, and its list is pinned), twin
 // functions, SQL prepared outside the data layer, hand-written BEGIN literals) are counted and may fall but never rise above .store-port-baseline.json.
 // carrierFiles counts src files other than src/api/on-store.ts that name andThen or onStore, the sync-or-async reply carrier; the list is pinned so a new file fails even when another stops.
 // Usage: check-store-port.mjs [--list] [--update]. --update lowers the baseline and refuses to raise any number.
@@ -12,7 +12,7 @@ import ts from 'typescript';
 const BASELINE = '.store-port-baseline.json';
 const OPENERS = new Set(['openHippoDb', 'openHippoDbReadOnly', 'openStore', 'onHandle']);
 const TWIN_SUFFIX = /(ThroughStore|OnHippoDb|UnderStore|OnStore)$/;
-const NUMBERS = ['openersOutside', 'openersInCli', 'storeBranches', 'routesWithoutStore', 'twinFunctions', 'sqlOutside', 'txLiterals'];
+const NUMBERS = ['openersOutside', 'openersInCli', 'storeBranches', 'routesWithoutStore', 'sqliteOnlyRoutes', 'twinFunctions', 'sqlOutside', 'txLiterals'];
 const TX_OWNER = 'src/db/busy.ts';
 const CARRIER_OWNER = 'src/api/on-store.ts';
 
@@ -109,16 +109,48 @@ function countTwins(sf) {
   return n;
 }
 
-/** V1_ROUTES entries (one `{ method:` per line) without a storeReady field. */
-function countRoutesWithoutStore(text) {
-  const start = text.indexOf('const V1_ROUTES');
-  if (start < 0) {
-    console.error('check-store-port: `const V1_ROUTES` not found in src/server/route-table.ts; the route count would read 0. Update countRoutesWithoutStore to the new route table.');
-    process.exit(1);
+const routeFail = (why) => {
+  console.error(`check-store-port: src/server/route-table.ts V1_ROUTES ${why}; the route count would read low. Declare it as an object literal with a string-literal storeReady or sqliteOnly, or update readRoutes.`);
+  process.exit(1);
+};
+
+const propNamed = (row, name) => row.properties.find((p) => p.name && (ts.isIdentifier(p.name) || ts.isStringLiteral(p.name)) && p.name.text === name);
+const rowLabel = (row, sf) => {
+  const m = propNamed(row, 'method');
+  const where = ['path', 'pattern', 'regex'].map((k) => propNamed(row, k)).find(Boolean);
+  const text = (p) => (p && ts.isPropertyAssignment(p) ? p.initializer.getText(sf) : '?');
+  return `${text(m).replace(/'/g, '')} ${text(where).replace(/'/g, '')}`;
+};
+
+/** Reads the V1_ROUTES array literal: rows with neither a string-literal storeReady nor a non-empty string-literal sqliteOnly, and the sorted `METHOD path` of the sqliteOnly rows. */
+function readRoutes(sf) {
+  let array;
+  const visit = (n) => {
+    if (ts.isVariableDeclaration(n) && n.name.getText(sf) === 'V1_ROUTES' && n.initializer) {
+      let init = n.initializer;
+      while (ts.isAsExpression(init) || ts.isSatisfiesExpression(init) || ts.isParenthesizedExpression(init)) init = init.expression;
+      if (ts.isArrayLiteralExpression(init)) array = init;
+    }
+    ts.forEachChild(n, visit);
+  };
+  visit(sf);
+  if (!array) return routeFail('is not declared as an array literal');
+  let without = 0;
+  const sqliteOnly = [];
+  for (const row of array.elements) {
+    const at = `row at line ${sf.getLineAndCharacterOfPosition(row.getStart(sf)).line + 1}`;
+    if (!ts.isObjectLiteralExpression(row)) return routeFail(`has a spread or non-object element (${at})`);
+    const label = rowLabel(row, sf);
+    const store = propNamed(row, 'storeReady');
+    const only = propNamed(row, 'sqliteOnly');
+    if (store && only) return routeFail(`row ${label} declares both storeReady and sqliteOnly`);
+    if (store && !(ts.isPropertyAssignment(store) && ts.isStringLiteralLike(store.initializer))) return routeFail(`row ${label} has a storeReady that is not a string literal`);
+    if (only) {
+      if (!(ts.isPropertyAssignment(only) && ts.isStringLiteralLike(only.initializer) && only.initializer.text.trim() !== '')) return routeFail(`row ${label} has a sqliteOnly that is not a non-empty string literal`);
+      sqliteOnly.push(label);
+    } else if (!store) without++;
   }
-  const end = text.indexOf('\n];', start);
-  const block = text.slice(start, end < 0 ? undefined : end);
-  return block.split('\n').filter((l) => /^\s*\{ method:/.test(l) && !l.includes('storeReady')).length;
+  return { without, sqliteOnly: sqliteOnly.sort() };
 }
 
 /** True when the file names the reply carrier (`andThen` or `onStore`) as an identifier; comments and strings never match. */
@@ -141,10 +173,11 @@ function localMethods(sf) {
 
 /** All numbers plus the per-file opener and prepare counts for src/, keys sorted, and the SqliteLocal method names. */
 function measure() {
-  const out = { openersOutside: 0, openersInCli: 0, storeBranches: 0, routesWithoutStore: 0, twinFunctions: 0, sqlOutside: 0, txLiterals: 0 };
+  const out = { openersOutside: 0, openersInCli: 0, storeBranches: 0, routesWithoutStore: 0, sqliteOnlyRoutes: 0, twinFunctions: 0, sqlOutside: 0, txLiterals: 0 };
   const byFile = {};
   const sqlByFile = {};
   let sqliteLocalMethods = [];
+  let sqliteOnlyRoutesList = [];
   const carrierFilesList = [];
   for (const file of existsSync('src') ? tsFiles('src') : []) {
     const text = readFileSync(file, 'utf8');
@@ -164,10 +197,15 @@ function measure() {
     if (file.startsWith('src/api/')) out.storeBranches += countStoreBranches(sf);
     out.twinFunctions += countTwins(sf);
     if (file !== CARRIER_OWNER && usesCarrier(sf)) carrierFilesList.push(file);
-    if (file === 'src/server/route-table.ts') out.routesWithoutStore = countRoutesWithoutStore(text);
+    if (file === 'src/server/route-table.ts') {
+      const routes = readRoutes(sf);
+      out.routesWithoutStore = routes.without;
+      out.sqliteOnlyRoutes = routes.sqliteOnly.length;
+      sqliteOnlyRoutesList = routes.sqliteOnly;
+    }
     if (file === 'src/store/sqlite/local.ts') sqliteLocalMethods = localMethods(sf);
   }
-  return { ...out, openersOutsideByFile: byFile, sqlOutsideByFile: sqlByFile, sqliteLocalMethods, carrierFiles: carrierFilesList.length, carrierFilesList };
+  return { ...out, openersOutsideByFile: byFile, sqlOutsideByFile: sqlByFile, sqliteLocalMethods, sqliteOnlyRoutesList, carrierFiles: carrierFilesList.length, carrierFilesList };
 }
 
 /** Numbers, files and SqliteLocal methods that went above the baseline, as [label, was, now]. */
@@ -187,6 +225,8 @@ function rises(base, cur) {
   }
   const listed = base?.sqliteLocalMethods ?? [];
   for (const m of cur.sqliteLocalMethods) if (!listed.includes(m)) rose.push([`SqliteLocal.${m}`, 'unlisted', 'declared']);
+  const onlyListed = base?.sqliteOnlyRoutesList ?? [];
+  for (const r of cur.sqliteOnlyRoutesList) if (!onlyListed.includes(r)) rose.push([`sqliteOnly ${r}`, 'unlisted', 'declared']);
   return rose;
 }
 
@@ -227,6 +267,7 @@ if (rose.length > 0) {
 const fell = baseline && (NUMBERS.some((k) => current[k] < (baseline[k] ?? 0)) ||
   ['openersOutsideByFile', 'sqlOutsideByFile'].some((key) => Object.entries(baseline[key] ?? {}).some(([f, n]) => (current[key][f] ?? 0) < n)) ||
   (baseline.sqliteLocalMethods ?? []).length > current.sqliteLocalMethods.length ||
+  (baseline.sqliteOnlyRoutesList ?? []).length > current.sqliteOnlyRoutesList.length ||
   current.carrierFiles < (baseline.carrierFiles ?? 0));
 if (fell) console.log('Some counts fell below the baseline; run `node scripts/check-store-port.mjs --update` to lock that in.');
 console.log(`Store-port ratchet OK: ${total}, none above ${BASELINE}.`);

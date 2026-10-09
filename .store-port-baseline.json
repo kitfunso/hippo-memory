@@ -2,7 +2,8 @@
   "openersOutside": 137,
   "openersInCli": 11,
   "storeBranches": 4,
-  "routesWithoutStore": 44,
+  "routesWithoutStore": 42,
+  "sqliteOnlyRoutes": 2,
   "twinFunctions": 0,
   "sqlOutside": 193,
   "txLiterals": 28,
@@ -96,6 +97,10 @@
     "archiveRaw",
     "finishLastRecall",
     "writeEntry"
+  ],
+  "sqliteOnlyRoutesList": [
+    "POST /v1/memories/:id/promote",
+    "POST /v1/sleep"
   ],
   "carrierFiles": 6,
   "carrierFilesList": [

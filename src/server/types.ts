@@ -91,8 +91,11 @@ export interface RouteRequest {
   query: URLSearchParams;
 }
 
-/** One /v1 route: an exact path, a matchPath pattern, or a regex, each paired with the handler for one method. Under another store it runs only when that store has its `storeReady` group. */
-export type Route = { method: string; storeReady?: StoreGroup } & (
+/** A route's store status: a `storeReady` group, a `sqliteOnly` reason, or neither while it waits for a group; never both. */
+type StoreStatus = { storeReady?: StoreGroup; sqliteOnly?: never } | { sqliteOnly: string; storeReady?: never };
+
+/** One /v1 route: an exact path, a matchPath pattern, or a regex, each paired with the handler for one method. Under another store it runs only when that store has its `storeReady` group; a `sqliteOnly` route never does. */
+export type Route = { method: string } & StoreStatus & (
   | { path: string; handler: (r: RouteRequest) => Promise<void> }
   | { pattern: string; handler: (r: RouteRequest, params: Record<string, string>) => Promise<void> }
   | { regex: RegExp; handler: (r: RouteRequest, match: RegExpMatchArray) => Promise<void> }

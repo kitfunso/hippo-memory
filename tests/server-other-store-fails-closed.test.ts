@@ -38,6 +38,12 @@ function unportedV1Routes(): string[] {
   return routes;
 }
 
+/** The routes that declare `sqliteOnly`, with the refusal text each answers under another store. */
+const SQLITE_ONLY_REFUSALS = new Map([
+  ['POST /v1/memories/1/promote', `${STORE_NOT_PORTED_MESSAGE}: copies a memory between the two local hippo.db files`],
+  ['POST /v1/sleep', `${STORE_NOT_PORTED_MESSAGE}: consolidates every tenant under the local hippo root in this process`],
+]);
+
 const rpc = (method: string, params?: McpRequest['params']): string => JSON.stringify({ jsonrpc: '2.0', id: 1, method, params });
 
 const BASE32 = 'abcdefghijklmnopqrstuvwxyz234567';
@@ -140,9 +146,10 @@ describe('serve() under a store that is not hippo.db', () => {
       expect({ route, status: res.status, body: await res.json() }).toEqual({
         route,
         status: 501,
-        body: { error: STORE_NOT_PORTED_MESSAGE },
+        body: { error: SQLITE_ONLY_REFUSALS.get(route) ?? STORE_NOT_PORTED_MESSAGE },
       });
     }
+    expect(routes).toEqual(expect.arrayContaining([...SQLITE_ONLY_REFUSALS.keys()]));
   });
 
   it('answers 501 on an add-on route and never runs its handler; a bad key is still a 401', async () => {

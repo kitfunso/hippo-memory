@@ -13,12 +13,14 @@ type Counts = {
   openersInCli: number;
   storeBranches: number;
   routesWithoutStore: number;
+  sqliteOnlyRoutes: number;
   twinFunctions: number;
   sqlOutside: number;
   txLiterals: number;
   openersOutsideByFile: Record<string, number>;
   sqlOutsideByFile: Record<string, number>;
   sqliteLocalMethods: string[];
+  sqliteOnlyRoutesList: string[];
   carrierFiles: number;
   carrierFilesList: string[];
 };
@@ -29,12 +31,14 @@ const zero: Counts = {
   openersInCli: 0,
   storeBranches: 0,
   routesWithoutStore: 0,
+  sqliteOnlyRoutes: 0,
   twinFunctions: 0,
   sqlOutside: 0,
   txLiterals: 0,
   openersOutsideByFile: {},
   sqlOutsideByFile: {},
   sqliteLocalMethods: [],
+  sqliteOnlyRoutesList: [],
   carrierFiles: 0,
   carrierFilesList: [],
 };
@@ -190,6 +194,43 @@ describe('check-store-port.mjs', () => {
     });
     withFixture({ 'src/a.ts': call }, { sqlOutside: 0, sqlOutsideByFile: {} }, ({ run }) => {
       expect(run('--update').status).toBe(1);
+    });
+  });
+
+  it('reads route status from the syntax tree: a comment naming storeReady is still not ported', () => {
+    const table = "const V1_ROUTES = [\n  { method: 'GET', path: '/a', /* storeReady */ handler: a },\n  { method: 'GET', path: '/b', storeReady: 'base', handler: b },\n  { method: 'POST', path: '/c', sqliteOnly: 'runs the local process', handler: c },\n];\n";
+    withFixture({ 'src/server/route-table.ts': table }, null, ({ run }) => {
+      expect(list(run)).toMatchObject({ routesWithoutStore: '1', sqliteOnlyRoutes: '1' });
+    });
+  });
+
+  it('fails on a route row whose status is not a literal, names both statuses, or is spread', () => {
+    const bad = (row: string) => `const V1_ROUTES = [\n  ${row}\n];\n`;
+    const cases: [string, string][] = [
+      ["{ method: 'GET', path: '/a', storeReady: someIdentifier, handler: a },", 'GET /a'],
+      ["{ method: 'POST', path: '/b', sqliteOnly: reason, handler: b },", 'POST /b'],
+      ["{ method: 'POST', path: '/c', sqliteOnly: '', handler: c },", 'POST /c'],
+      ["{ method: 'POST', path: '/d', storeReady: 'base', sqliteOnly: 'x', handler: d },", 'POST /d'],
+      ['...MORE_ROUTES,', 'spread'],
+    ];
+    for (const [row, named] of cases) {
+      withFixture({ 'src/server/route-table.ts': bad(row) }, null, ({ run }) => {
+        const r = run();
+        expect(r.status, row).toBe(1);
+        expect(r.stderr).toContain(named);
+      });
+    }
+  });
+
+  it('fails and names a sqliteOnly route the baseline does not list, and --update will not add it', () => {
+    const table = "const V1_ROUTES = [\n  { method: 'POST', path: '/x', sqliteOnly: 'local only', handler: x },\n  { method: 'POST', path: '/y', sqliteOnly: 'local only', handler: y },\n];\n";
+    withFixture({ 'src/server/route-table.ts': table }, { sqliteOnlyRoutes: 2, sqliteOnlyRoutesList: ['POST /x'] }, ({ run, baseline }) => {
+      const r = run();
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain('sqliteOnly POST /y: unlisted -> declared');
+      expect(r.stderr).not.toContain('sqliteOnly POST /x');
+      expect(run('--update').status).toBe(1);
+      expect(baseline().sqliteOnlyRoutesList).toEqual(['POST /x']);
     });
   });
 
