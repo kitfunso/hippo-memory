@@ -38,6 +38,14 @@ export class HttpError extends Error {
   }
 }
 
+/** A request, or a store call it waited on, ran past the request's deadline; the reply carries `code` so a client branches without parsing prose. */
+export class DeadlineExceededError extends HttpError {
+  readonly code = 'deadline_exceeded';
+  constructor(message: string) {
+    super(504, message);
+  }
+}
+
 export class BodyTooLargeError extends Error {}
 
 /** The body did not arrive in time. Its own class so mapApiError answers 408 and the server drops the socket. */

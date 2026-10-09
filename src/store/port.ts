@@ -280,17 +280,31 @@ export interface SessionRawCount extends SessionRawQuery {
   readonly ownScope?: string;
 }
 
+/** The two fields a paged walk judges a row under the summary by. */
+export type DescendantOrigin = Pick<MemoryEntry, 'scope' | 'origin_project'>;
+
+export interface DescendantPage {
+  /** How many rows the caller reads whole, counted from the first row of the first level. */
+  readonly rows: number;
+  /** `DescendantWalk.admit` for a row under the summary, judged on these two fields alone; the two must agree on every such row. */
+  readonly admit: (row: DescendantOrigin) => boolean;
+}
+
 export interface DescendantWalk {
   /** Levels to read under the summary. */
   readonly depth: number;
   /** Asked of the summary, then of each child read: a refused row is left out of the answer and nothing under it is read. */
   readonly admit: (row: MemoryEntry) => boolean;
+  /** Set by a caller that shows only the first rows. A store may ignore it; one that honours it returns just those rows and counts every level in `sizes`. */
+  readonly page?: DescendantPage;
 }
 
 export interface SummaryDescendants {
   readonly summary: MemoryEntry;
   /** The admitted rows of each level, the summary's own children first; a level with none ends the list. */
   readonly levels: MemoryEntry[][];
+  /** Set only by a store that honoured `walk.page`: how many rows each level admits, while `levels` holds just the page, in the same order. */
+  readonly sizes?: readonly number[];
 }
 
 /** The reads behind session assembly and summary drill-down. None writes an audit row. */
@@ -377,10 +391,18 @@ export interface GraphReads {
   graphRows(tenantId: string, query: GraphViewQuery): Promise<GraphRows>;
 }
 
+/** `storedVectors` with no number[] copy, for a store that holds vectors as Float32 bytes. */
+export interface VectorViews {
+  /** The same ids and values as `VectorReads.storedVectors`, each value a Float32 view. */
+  storedVectorViews(ids: readonly string[]): Promise<Map<string, Float32Array>>;
+}
+
 /** The optional groups: a store sets each one whole or leaves it unset, and a route or MCP tool names the one it needs. */
 export interface StoreGroups {
   /** Unset on a store built before them, where hybrid and physics recall under an embedding provider answer 501. */
   readonly vectors: VectorReads;
+  /** Unset on a store without them, where recall scores the number[] copies `vectors` returns, to the same ranking. */
+  readonly vectorViews: VectorViews;
   readonly keyAudit: KeyAudit;
   readonly keyWrites: KeyWrites;
   /** embedMemory and embedAll with a store need it and `vectors`. */

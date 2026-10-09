@@ -14,7 +14,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { getExistingEntryMirrorPaths } from '../src/store/mirrors.js';
+import { entryMirrorFiles } from './_helpers/entry-mirror-files.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
@@ -290,7 +290,7 @@ describe('with dormant memories enabled', () => {
       expect(loadAllEntries(home).map((e) => e.id)).toEqual([fresh.id]);
       // The markdown mirror goes too, so a bootstrap of an empty table
       // cannot re-import the row as active.
-      expect(getExistingEntryMirrorPaths(home, faded.id)).toEqual([]);
+      expect(entryMirrorFiles(home, faded.id)).toEqual([]);
 
       const dormant = api.listDormant(ctxFor(home));
       expect(dormant).toHaveLength(1);

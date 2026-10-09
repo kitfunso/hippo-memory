@@ -318,7 +318,7 @@ export function ungrantScope(db: DatabaseSyncLike, keyId: string, scope: string)
 }
 
 /** Every restricted scope `keyId` may read. */
-export function listScopeGrants(db: DatabaseSyncLike, keyId: string): string[] {
+function listScopeGrants(db: DatabaseSyncLike, keyId: string): string[] {
   // SAFETY: rows' shape matches the single `scope` column named in the SELECT above.
   const rows = db
     .prepare(`SELECT scope FROM api_key_scope_grants WHERE key_id = ? ORDER BY scope`)

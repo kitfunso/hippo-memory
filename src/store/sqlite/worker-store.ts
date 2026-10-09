@@ -1,6 +1,6 @@
 // hippo.db as serve() runs it by default: the groups in the op table answer from worker threads, the rest still run on the calling thread.
 import { outsideSqliteOffLoop } from '../../db.js';
-import { currentRequestId } from '../../util/request-scope.js';
+import { currentDeadline, currentRequestId } from '../../util/request-scope.js';
 import type { HippoStore, Predictions, StoreGroups } from '../port.js';
 import { createSqliteExecutor, type SqliteExecutor } from './executor.js';
 import { sqliteStore } from './store.js';
@@ -17,7 +17,12 @@ export function runsOffLoop(store: HippoStore): boolean {
 function workerGroup<G>(executor: SqliteExecutor, group: WorkerGroup, modes: OpModes<G>): G {
   const methods = Object.entries<OpModes<G>[keyof G]>(modes).map(([method, mode]) => [
     method,
-    (...args: unknown[]) => executor.call(`${group}.${method}`, args, { mode, requestId: currentRequestId() }),
+    (...args: unknown[]) => {
+      const deadline = currentDeadline();
+      const call = executor.call(`${group}.${method}`, args, { mode, requestId: currentRequestId(), deadlineAt: deadline?.at });
+      // The request's own timer then waits for this call's answer, which names what became of a write.
+      return deadline ? deadline.track(call) : call;
+    },
   ]);
   // SAFETY: `modes` names every method of G, and the worker answers each with the synchronous store's own result.
   return Object.fromEntries(methods) as G;

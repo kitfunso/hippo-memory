@@ -54,9 +54,7 @@ export function parseSteps(json: string): TraceStep[] {
   try {
     parsed = JSON.parse(json);
   } catch (err) {
-    throw new Error(
-      `Invalid trace steps JSON: ${errorMessage(err)}`
-    );
+    throw new Error(`Invalid trace steps JSON: ${errorMessage(err)}`, { cause: err });
   }
   if (!Array.isArray(parsed)) {
     throw new Error('trace steps must be an array');

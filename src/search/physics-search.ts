@@ -1,5 +1,5 @@
 import { calculateStrength, type MemoryEntry } from '../memory.js';
-import { estimateTokens } from '../token-ledger.js';
+import { estimateTokens } from '../util/token-text.js';
 import { evalNow, isRecallBoostAblated } from '../ablation.js';
 import { indexedModel, indexNeedsRebuild } from '../embeddings.js';
 import { resolveEmbeddingProvider } from '../embedding-provider.js';

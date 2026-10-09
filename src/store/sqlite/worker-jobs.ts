@@ -2,8 +2,10 @@
 import type { MessagePort } from 'node:worker_threads';
 import { auditWriteFailureCount } from '../audit.js';
 import { type DatabaseSyncLike, RequestStores } from '../../db.js';
+import type { OpenedDb } from '../../db/connect.js';
 import { isScopedHandle } from '../../db/request-stores.js';
 import { requestScopes } from '../../util/request-scope.js';
+import { watchCommits } from './commit-watch.js';
 import { encodeError } from './error-codec.js';
 import { sqliteSyncStore } from './store.js';
 import { type Job, type Reply, type WorkerGroup, type WorkerInit, WORKER_OPS } from './worker-ops.js';
@@ -14,7 +16,9 @@ type SyncStore = ReturnType<typeof sqliteSyncStore>;
 class WorkerStores extends RequestStores {
   override requestId: string | undefined = undefined;
   walPages: number | undefined;
+  jobId = 0;
   readonly #init: WorkerInit;
+  readonly #commitFlag: Int32Array | undefined;
   readonly #prepared = new WeakSet<DatabaseSyncLike>();
   readonly #walPagesOn = new WeakMap<DatabaseSyncLike, number>();
   readonly #held = new Set<DatabaseSyncLike>();
@@ -22,22 +26,27 @@ class WorkerStores extends RequestStores {
   constructor(init: WorkerInit) {
     super({ busyWaitMs: init.busyWaitMs });
     this.#init = init;
+    this.#commitFlag = init.commitFlag && new Int32Array(init.commitFlag);
   }
 
-  override get(hippoRoot: string, opts?: { busyWaitMs?: number }): DatabaseSyncLike {
-    const db = super.get(hippoRoot, opts);
+  // The one path every open of the scope takes: `get` is a wrapper over it.
+  override getWithFacts(hippoRoot: string, opts?: { busyWaitMs?: number }): OpenedDb {
+    const opened = super.getWithFacts(hippoRoot, opts);
+    const { db } = opened;
     if (!this.#prepared.has(db)) {
       this.#prepared.add(db);
       // A reader that could write would let a method wrongly tagged 'read' take the write lock off the writer thread.
       if (this.#init.mode === 'read') db.exec('PRAGMA query_only = ON');
       if (isScopedHandle(db)) this.#held.add(db);
+      const flag = this.#commitFlag;
+      if (flag) watchCommits(db, () => Atomics.store(flag, 0, this.jobId));
     }
     // The connection set its own value from this thread's state, where no checkpointer ever runs.
     if (hippoRoot === this.#init.hippoRoot && this.walPages !== undefined && this.#walPagesOn.get(db) !== this.walPages) {
       db.exec(`PRAGMA wal_autocheckpoint = ${this.walPages}`);
       this.#walPagesOn.set(db, this.walPages);
     }
-    return db;
+    return opened;
   }
 
   /** A job that left a transaction open: the scope would hand every later open a fresh connection, and the lock would stay taken. */
@@ -71,6 +80,7 @@ function answer(sync: SyncStore, stores: WorkerStores, job: Job): Reply {
   const failuresBefore = auditWriteFailureCount();
   stores.requestId = job.requestId;
   stores.walPages = job.walPages;
+  stores.jobId = job.id;
   try {
     const value = requestScopes.run(stores, () => runOp(sync, job.op, job.args));
     return { id: job.id, ok: true, value, auditFailures: auditWriteFailureCount() - failuresBefore };

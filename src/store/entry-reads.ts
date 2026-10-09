@@ -7,7 +7,7 @@ import { originInSql } from '../project-identity.js';
 import { scopeAdmitSql } from '../recall-scope.js';
 
 // The plus keeps SQLite on the primary key for an id list: with a bare tenant_id it walks every row of the tenant instead.
-const TENANT_IS = '+tenant_id = ?';
+export const TENANT_IS = '+tenant_id = ?';
 
 /**
  * Read a memory entry by ID.
@@ -96,7 +96,7 @@ export function selectChildrenByParent(
   tenantId?: string,
 ): Map<string, MemoryEntry[]> {
   const byParent = new Map<string, MemoryEntry[]>();
-  const tenantClause = tenantId !== undefined ? ' AND tenant_id = ?' : '';
+  const tenantClause = tenantId !== undefined ? ` AND ${TENANT_IS}` : '';
   const tenantArgs = tenantId !== undefined ? [tenantId] : [];
   for (const chunk of chunked([...new Set(parentIds)])) {
     const placeholders = chunk.map(() => '?').join(',');
@@ -288,23 +288,6 @@ export function loadFreshRawMemories(
     // SAFETY: sql starts from MEMORY_SELECT_COLUMNS, matching MemoryRow.
     const rows = db.prepare(sql).all(...params) as MemoryRow[];
     return rows.map(rowToEntry);
-  } finally {
-    closeHippoDb(db);
-  }
-}
-
-/**
- * Direct DAG children of a parent summary. Tenant scoped. Returns only rows
- * whose `dag_parent_id` matches `parentId`; does NOT walk recursively.
- */
-export function loadChildrenOf(
-  hippoRoot: string,
-  parentId: string,
-  tenantId?: string,
-): MemoryEntry[] {
-  const db = openStore(hippoRoot);
-  try {
-    return selectChildrenByParent(db, [parentId], tenantId).get(parentId) ?? [];
   } finally {
     closeHippoDb(db);
   }

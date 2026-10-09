@@ -15,7 +15,7 @@ export { physicsSearch } from './search/physics-search.js';
 export { explainMatch, MatchExplanation } from './search/explain.js';
 export { detectTemporalDirection, temporalBoost, computeTemporalRange } from './search/temporal.js';
 export { SearchResult } from './core/search-types.js';
-export { estimateTokens } from './token-ledger.js';
+export { estimateTokens } from './util/token-text.js';
 export { tokenize, textOverlap } from './tokenize.js';
 export { markRetrieved } from './memory.js';
 export { multihopSearch } from './multihop.js';
