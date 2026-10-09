@@ -64,6 +64,7 @@ function breakFtsIndex(): void {
 function dormantRows(id: string): number {
   const db = new DatabaseSync(getHippoDbPath(root));
   try {
+    // SAFETY: an aggregate SELECT returns exactly one row and COUNT(*) is an integer.
     return (db.prepare('SELECT COUNT(*) AS n FROM dormant_memories WHERE id = ?').get(id) as { n: number }).n;
   } finally {
     db.close();

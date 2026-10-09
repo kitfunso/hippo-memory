@@ -504,6 +504,18 @@ describe('CLI cases: card heartbeat and reclaim through the built CLI', () => {
     return { home, env };
   }
 
+  function cardIdFrom(out: string): string {
+    const id = out.match(/Created card (\S+)/)?.[1];
+    if (!id) throw new Error(`no card id in CLI output: ${out}`);
+    return id;
+  }
+
+  function runIdFrom(out: string): string {
+    const runId = out.match(/run (\d+),/)?.[1];
+    if (!runId) throw new Error(`no run id in CLI output: ${out}`);
+    return runId;
+  }
+
   // HIPPO_HOME isolates only the global store; the local store this drives follows cwd (home/.hippo).
   function backdateLease(home: string, cardId: string) {
     const db = openHippoDb(join(home, '.hippo'));
@@ -518,7 +530,7 @@ describe('CLI cases: card heartbeat and reclaim through the built CLI', () => {
     const { home, env } = setupCliHome();
     try {
       const create = runCli(home, env, 'card', 'create', '--title', 't');
-      const id = create.out.match(/Created card (\S+)/)?.[1]!;
+      const id = cardIdFrom(create.out);
       expect(id).toBeTruthy();
 
       const claim = runCli(home, env, 'card', 'claim', id, '--runtime', 'r1');
@@ -539,9 +551,9 @@ describe('CLI cases: card heartbeat and reclaim through the built CLI', () => {
     const { home, env } = setupCliHome();
     try {
       const create = runCli(home, env, 'card', 'create', '--title', 't');
-      const id = create.out.match(/Created card (\S+)/)?.[1]!;
+      const id = cardIdFrom(create.out);
       const claim = runCli(home, env, 'card', 'claim', id, '--runtime', 'r1');
-      const runId = claim.out.match(/run (\d+),/)?.[1]!;
+      const runId = runIdFrom(claim.out);
       expect(runId).toBeTruthy();
 
       const ok = runCli(home, env, 'card', 'heartbeat', id, '--run', runId);
@@ -577,7 +589,7 @@ describe('CLI cases: card heartbeat and reclaim through the built CLI', () => {
     const { home, env } = setupCliHome();
     try {
       const create = runCli(home, env, 'card', 'create', '--title', 't');
-      const id = create.out.match(/Created card (\S+)/)?.[1]!;
+      const id = cardIdFrom(create.out);
       const claim = runCli(home, env, 'card', 'claim', id, '--runtime', 'r1');
       expect(claim.status, claim.out).toBe(0);
 
@@ -609,7 +621,7 @@ describe('CLI cases: card heartbeat and reclaim through the built CLI', () => {
     const { home, env } = setupCliHome();
     try {
       const create = runCli(home, env, 'card', 'create', '--title', 't');
-      const id = create.out.match(/Created card (\S+)/)?.[1]!;
+      const id = cardIdFrom(create.out);
       runCli(home, env, 'card', 'claim', id, '--runtime', 'r1');
       backdateLease(home, id);
 
@@ -628,9 +640,9 @@ describe('CLI cases: card heartbeat and reclaim through the built CLI', () => {
     const { home, env } = setupCliHome();
     try {
       const blockCase = runCli(home, env, 'card', 'create', '--title', 'block me');
-      const blockId = blockCase.out.match(/Created card (\S+)/)?.[1]!;
+      const blockId = cardIdFrom(blockCase.out);
       const blockClaim = runCli(home, env, 'card', 'claim', blockId, '--runtime', 'r1');
-      const blockRunId = blockClaim.out.match(/run (\d+),/)?.[1]!;
+      const blockRunId = runIdFrom(blockClaim.out);
 
       const blockWrong = runCli(home, env, 'card', 'block', blockId, '--reason', 'why', '--run', '999');
       expect(blockWrong.status).toBe(1);
@@ -639,9 +651,9 @@ describe('CLI cases: card heartbeat and reclaim through the built CLI', () => {
       expect(blockRight.status, blockRight.out).toBe(0);
 
       const reviewCase = runCli(home, env, 'card', 'create', '--title', 'review me');
-      const reviewId = reviewCase.out.match(/Created card (\S+)/)?.[1]!;
+      const reviewId = cardIdFrom(reviewCase.out);
       const reviewClaim = runCli(home, env, 'card', 'claim', reviewId, '--runtime', 'r1');
-      const reviewRunId = reviewClaim.out.match(/run (\d+),/)?.[1]!;
+      const reviewRunId = runIdFrom(reviewClaim.out);
 
       const reviewWrong = runCli(home, env, 'card', 'review', reviewId, '--run', '999');
       expect(reviewWrong.status).toBe(1);
@@ -650,9 +662,9 @@ describe('CLI cases: card heartbeat and reclaim through the built CLI', () => {
       expect(reviewRight.status, reviewRight.out).toBe(0);
 
       const completeCase = runCli(home, env, 'card', 'create', '--title', 'complete me');
-      const completeId = completeCase.out.match(/Created card (\S+)/)?.[1]!;
+      const completeId = cardIdFrom(completeCase.out);
       const completeClaim = runCli(home, env, 'card', 'claim', completeId, '--runtime', 'r1');
-      const completeRunId = completeClaim.out.match(/run (\d+),/)?.[1]!;
+      const completeRunId = runIdFrom(completeClaim.out);
       runCli(home, env, 'card', 'review', completeId);
 
       const completeWrong = runCli(home, env, 'card', 'complete', completeId, '--outcome', 'success', '--run', '999');
@@ -669,9 +681,9 @@ describe('CLI cases: card heartbeat and reclaim through the built CLI', () => {
     const { home, env } = setupCliHome();
     try {
       const create = runCli(home, env, 'card', 'create', '--title', 't');
-      const id = create.out.match(/Created card (\S+)/)?.[1]!;
+      const id = cardIdFrom(create.out);
       const claim = runCli(home, env, 'card', 'claim', id, '--runtime', 'r1');
-      const runId = claim.out.match(/run (\d+),/)?.[1]!;
+      const runId = runIdFrom(claim.out);
 
       const hb = runCli(home, env, 'card', 'heartbeat', id, '--run', runId);
       expect(hb.status, hb.out).toBe(0);
@@ -680,7 +692,7 @@ describe('CLI cases: card heartbeat and reclaim through the built CLI', () => {
       expect(block.status, block.out).toBe(0);
 
       const reclaim = runCli(home, env, 'card', 'claim', id, '--runtime', 'r2');
-      const runId2 = reclaim.out.match(/run (\d+),/)?.[1]!;
+      const runId2 = runIdFrom(reclaim.out);
       const review = runCli(home, env, 'card', 'review', id, '--run', runId2);
       expect(review.status, review.out).toBe(0);
 
@@ -707,7 +719,7 @@ describe('CLI cases: card heartbeat and reclaim through the built CLI', () => {
       expect(proto.out).toContain('unknown card id');
 
       const create = runCli(home, env, 'card', 'create', '--title', 't');
-      const id = create.out.match(/Created card (\S+)/)?.[1]!;
+      const id = cardIdFrom(create.out);
       runCli(home, env, 'card', 'claim', id, '--runtime', 'r1');
 
       const runCtor = runCli(home, env, 'card', 'heartbeat', id, '--run', 'constructor');

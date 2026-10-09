@@ -25,6 +25,7 @@ import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createApiKey } from '../src/store/auth.js';
 import { serve, type ServerHandle } from '../src/server.js';
+import type { JsonValue } from '../src/util/json.js';
 
 const ADAPTER_PATH = fileURLToPath(new URL('../deploy/aml/adapter/adapter.mjs', import.meta.url));
 
@@ -73,7 +74,7 @@ function spawnAdapter(hippoPort: number): Promise<AdapterHandle> {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     // No handle reaches the caller on a failed start, so the helper must reap its own child.
-    const fail = (err: unknown): void => {
+    const fail = (err: Error): void => {
       clearTimeout(startupTimer);
       child.kill();
       reject(err);
@@ -147,11 +148,11 @@ describe('AML protocol adapter (deploy/aml/adapter/adapter.mjs)', () => {
     rmSync(hippoRoot, { recursive: true, force: true });
   });
 
-  function authHeader(key: string): Record<string, string> {
+  function authHeader(key: string) {
     return { Authorization: `Bearer ${key}` };
   }
 
-  async function postAdd(body: unknown, headers: Record<string, string> = {}) {
+  async function postAdd(body: JsonValue, headers: Record<string, string> = {}) {
     return fetch(`${baseUrl}/add`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...headers },
@@ -159,7 +160,7 @@ describe('AML protocol adapter (deploy/aml/adapter/adapter.mjs)', () => {
     });
   }
 
-  async function postSearch(body: unknown, headers: Record<string, string> = {}) {
+  async function postSearch(body: JsonValue, headers: Record<string, string> = {}) {
     return fetch(`${baseUrl}/search`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...headers },
@@ -201,9 +202,9 @@ describe('AML protocol adapter (deploy/aml/adapter/adapter.mjs)', () => {
       authHeader(validKey),
     );
     expect(searchRes.status).toBe(200);
-    const searchBody = await searchRes.json();
+    const searchBody: { data: SearchRow[] } = await searchRes.json();
     expect(Array.isArray(searchBody.data)).toBe(true);
-    const found = (searchBody.data as SearchRow[]).some((row) =>
+    const found = searchBody.data.some((row) =>
       row.content.includes('aml-happy-path-marker'),
     );
     expect(found).toBe(true);
@@ -249,8 +250,8 @@ describe('AML protocol adapter (deploy/aml/adapter/adapter.mjs)', () => {
       authHeader(validKey),
     );
     expect(searchRes.status).toBe(200);
-    const searchBody = await searchRes.json();
-    const contents = (searchBody.data as SearchRow[]).map((row) => row.content);
+    const searchBody: { data: SearchRow[] } = await searchRes.json();
+    const contents = searchBody.data.map((row) => row.content);
 
     const hasA = contents.some((c) => c.includes('row-a content'));
     const hasB = contents.some((c) => c.includes('row-b content'));
@@ -299,12 +300,12 @@ describe('AML protocol adapter (deploy/aml/adapter/adapter.mjs)', () => {
 
     const res = await postSearch({ query: marker, user_id, top_k: 1 }, authHeader(validKey));
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body: { data: SearchRow[] } = await res.json();
     expect(Array.isArray(body.data)).toBe(true);
     expect(body.data.length).toBeLessThanOrEqual(1);
-    for (const row of body.data as SearchRow[]) {
-      expect(typeof row.id).toBe('string');
-      expect(typeof row.content).toBe('string');
+    for (const row of body.data) {
+      expect(row.id).toEqual(expect.any(String));
+      expect(row.content).toEqual(expect.any(String));
     }
   });
 
@@ -365,7 +366,7 @@ describe('AML protocol adapter (deploy/aml/adapter/adapter.mjs)', () => {
       );
       expect(res.status).toBe(400);
       const body = await res.json();
-      expect(typeof body.error).toBe('string');
+      expect(body.error).toEqual(expect.any(String));
     });
 
     it('POST /add empty messages -> 400', async () => {
@@ -407,8 +408,8 @@ describe('AML protocol adapter (deploy/aml/adapter/adapter.mjs)', () => {
 
     const searchRes = await postSearch({ query: 'zqx7 wvk3', user_id, top_k: 5 }, authHeader(validKey));
     expect(searchRes.status).toBe(200);
-    const searchBody = await searchRes.json();
-    const row = (searchBody.data as SearchRow[]).find(
+    const searchBody: { data: SearchRow[] } = await searchRes.json();
+    const row = searchBody.data.find(
       (r) => r.content.includes('zqx7') && r.content.includes('wvk3'),
     );
     expect(row).toBeDefined();

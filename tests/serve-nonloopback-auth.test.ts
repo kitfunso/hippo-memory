@@ -131,8 +131,8 @@ describe('serve() non-loopback host guard', () => {
         { headers: authHeaders },
       );
       expect(followUpRes.status).toBe(200);
-      const followUpBody = await followUpRes.json();
-      const found = (followUpBody.results as Array<{ content: string }>).some((r) =>
+      const followUpBody: { results: Array<{ content: string }> } = await followUpRes.json();
+      const found = followUpBody.results.some((r) =>
         r.content.includes('nonloopback-auth-marker'),
       );
       expect(found).toBe(true);
@@ -148,7 +148,8 @@ import { clientIpForRateLimit } from '../src/server.js';
 import type { IncomingMessage } from 'node:http';
 
 function fakeReq(headers: Record<string, string | string[]>, remoteAddress = '10.0.0.9'): IncomingMessage {
-  return { headers, socket: { remoteAddress } } as unknown as IncomingMessage;
+  // SAFETY: clientIpForRateLimit reads only headers and socket.remoteAddress (src/server.ts), the two fields set here.
+  return { headers, socket: { remoteAddress } } as IncomingMessage;
 }
 
 describe('clientIpForRateLimit', () => {

@@ -478,6 +478,12 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
     }
   }
 
+  function cardIdFrom(out: string): string {
+    const id = out.match(/Created card (\S+)/)?.[1];
+    if (!id) throw new Error(`no card id in CLI output: ${out}`);
+    return id;
+  }
+
   function setupCliHome() {
     const home = mkdtempSync(join(tmpdir(), 'hippo-w2a-cli-'));
     const globalDir = join(home, 'global');
@@ -668,12 +674,12 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
     try {
       const parent = runCli(home, env, 'card', 'create', '--title', 'parent');
       expect(parent.status, parent.out).toBe(0);
-      const parentId = parent.out.match(/Created card (\S+)/)?.[1]!;
+      const parentId = cardIdFrom(parent.out);
       expect(parentId).toBeTruthy();
 
       const create = runCli(home, env, 'card', 'create', '--title', 'child', '--repo', 'r', '--contract', 'c', '--budget', '5', '--depends-on', parentId);
       expect(create.status, create.out).toBe(0);
-      const childId = create.out.match(/Created card (\S+)/)?.[1]!;
+      const childId = cardIdFrom(create.out);
       expect(childId).toBeTruthy();
 
       const list = runCli(home, env, 'card', 'list', '--status', 'backlog', '--json');

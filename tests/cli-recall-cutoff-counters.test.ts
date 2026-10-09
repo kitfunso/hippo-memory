@@ -226,8 +226,8 @@ describe('graph-expanded recall keeps the published accounting honest', () => {
       },
     );
     const d = JSON.parse(raw.slice(raw.indexOf('{')));
-    const s = d.suppressionSummary as SuppressionSummary;
-    const rows = (d.memories ?? d.results ?? []) as Array<{ entry?: { id: string }; id?: string }>;
+    const s: SuppressionSummary = d.suppressionSummary;
+    const rows: Array<{ entry?: { id: string }; id?: string }> = d.memories ?? d.results ?? [];
     const ids = rows.map((r) => (r.entry ?? r).id);
 
     // the edge must actually fire, or this test proves nothing
