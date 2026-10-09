@@ -18,7 +18,7 @@
 import { createHash } from 'node:crypto';
 import { openHippoDb, closeHippoDb, rethrowIfSqliteBlocked, type DatabaseSyncLike } from './db.js';
 import type { RerankStep } from './core/search-types.js';
-import { DELIVERY_LEDGER_VERSION, type DeliveryEventInput } from './delivery-recorder.js';
+import { DELIVERY_LEDGER_VERSION, isBoundaryEvent, type DeliveryEventInput } from './delivery-recorder.js';
 import { errorMessage, log } from './log.js';
 import { numberedEventTimes } from './store/delivery-event-reads.js';
 import { DAY_MS } from './util/time.js';
@@ -313,7 +313,7 @@ function findDuplicateBoundary(db: DatabaseSyncLike, input: DeliveryEventInput):
 
 function findDuplicateTurn(db: DatabaseSyncLike, input: DeliveryEventInput): number | null {
   // A boundary has no prompt, and two compactions of one session never start within the window, so time alone decides.
-  if (input.eventType === 'pre-compact' || input.eventType === 'compact-resume') return findDuplicateBoundary(db, input);
+  if (isBoundaryEvent(input.eventType)) return findDuplicateBoundary(db, input);
   if (input.hostTurnId !== null) {
     // SAFETY: a single `id` column, undefined when no row matches.
     const row = db.prepare(`

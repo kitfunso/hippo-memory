@@ -7,6 +7,8 @@ import { blockHash, estimateTokens, hookPayloadSessionId, hookPayloadString, isS
 import { errorMessage } from './log.js';
 export type DeliveryRuntime = 'claude-code' | 'codex' | 'copilot' | 'unknown';
 export type DeliveryEventType = 'prompt-submit' | 'pinned-manual' | 'pre-compact' | 'compact-resume';
+/** True for the two compaction boundary types. */
+export const isBoundaryEvent = (type: DeliveryEventType): boolean => type === 'pre-compact' || type === 'compact-resume';
 export type DeliverySurface = 'hook' | 'context';
 export type DeliveryWriteStore = 'local' | 'global';
 export type DeliverySessionState = 'payload' | 'env' | 'missing' | 'subagent';
@@ -285,11 +287,14 @@ function buildEvent(
   const rejected = rejectedRows(state);
   const rows = [...picked, ...rejected.rows];
   const emitted = outcome.emittedText ?? null;
+  const eventType = init.eventType ?? (payload.hookEvent === 'UserPromptSubmit' ? 'prompt-submit' : 'pinned-manual');
+  // A boundary row carries no prompt facts, whatever the payload holds.
+  const prompt = isBoundaryEvent(eventType) ? null : payload.prompt;
   return {
     ts,
     tenantId: init.tenantId,
     runtime: init.runtime ?? (payload.hostTurnId !== null ? 'codex' : payload.hookEvent !== null ? 'claude-code' : 'unknown'),
-    eventType: init.eventType ?? (payload.hookEvent === 'UserPromptSubmit' ? 'prompt-submit' : 'pinned-manual'),
+    eventType,
     surface: 'hook',
     storeHash: init.storeHash,
     writeStore: init.writeStore,
@@ -297,8 +302,8 @@ function buildEvent(
     sessionId: payload.payloadSession ?? payload.envSession,
     sessionState: payload.sessionState,
     hostTurnId: payload.hostTurnId,
-    promptHash: payload.prompt !== null ? blockHash(payload.prompt) : null,
-    promptLength: payload.prompt?.length ?? 0,
+    promptHash: prompt !== null ? blockHash(prompt) : null,
+    promptLength: prompt?.length ?? 0,
     queryHash: null,
     recallTraceId: null,
     blockState: state.disabledSeen ? 'disabled' : outcome.state,
