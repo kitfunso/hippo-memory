@@ -118,6 +118,35 @@ function pushRepeatableFlag(flags: CliFlags, key: string, value: string): void {
   }
 }
 
+function setGluedFlag(flags: CliFlags, key: string, value: string): void {
+  // Glued form has no following token to swallow, so BOOLEAN_FLAGS gets its
+  // own branch here instead of the swallow-avoidance short-circuit in setSeparatedFlag.
+  if (BOOLEAN_FLAGS.has(key)) {
+    flags[key] = value;
+  } else if (isRepeatableFlag(key)) {
+    if (value !== '') pushRepeatableFlag(flags, key, value);
+  } else {
+    flags[key] = value === '' ? true : value;
+  }
+}
+
+/** Returns how many tokens the flag consumed: its own, plus `next` when that is its value. */
+function setSeparatedFlag(flags: CliFlags, key: string, next: string | undefined): number {
+  if (BOOLEAN_FLAGS.has(key) && (next === 'true' || next === 'false')) {
+    // Kept as a value so main() rejects it, instead of `--pin true` pinning the text "... true".
+    flags[key] = next;
+    return 2;
+  }
+  if (!next || next.startsWith('--') || BOOLEAN_FLAGS.has(key)) {
+    // Boolean flag
+    flags[key] = true;
+    return 1;
+  }
+  if (isRepeatableFlag(key)) pushRepeatableFlag(flags, key, next);
+  else flags[key] = next;
+  return 2;
+}
+
 export function parseArgs(argv: string[]): { command: string; args: string[]; flags: CliFlags } {
   const [, , command = '', ...rest] = argv;
   const args: string[] = [];
@@ -133,38 +162,10 @@ export function parseArgs(argv: string[]): { command: string; args: string[]; fl
     if (part.startsWith('--')) {
       const eqIdx = part.indexOf('=');
       if (eqIdx > 2) {
-        // Glued form has no following token to swallow, so BOOLEAN_FLAGS gets its
-        // own branch here instead of the swallow-avoidance short-circuit below.
-        const key = part.slice(2, eqIdx);
-        const value = part.slice(eqIdx + 1);
-        if (BOOLEAN_FLAGS.has(key)) {
-          flags[key] = value;
-        } else if (isRepeatableFlag(key)) {
-          if (value !== '') pushRepeatableFlag(flags, key, value);
-        } else {
-          flags[key] = value === '' ? true : value;
-        }
+        setGluedFlag(flags, part.slice(2, eqIdx), part.slice(eqIdx + 1));
         i++;
-        continue;
-      }
-
-      const key = part.slice(2);
-      const next = rest[i + 1];
-
-      if (BOOLEAN_FLAGS.has(key) && (next === 'true' || next === 'false')) {
-        // Kept as a value so main() rejects it, instead of `--pin true` pinning the text "... true".
-        flags[key] = next;
-        i += 2;
-      } else if (!next || next.startsWith('--') || BOOLEAN_FLAGS.has(key)) {
-        // Boolean flag
-        flags[key] = true;
-        i++;
-      } else if (isRepeatableFlag(key)) {
-        pushRepeatableFlag(flags, key, next);
-        i += 2;
       } else {
-        flags[key] = next;
-        i += 2;
+        i += setSeparatedFlag(flags, part.slice(2), rest[i + 1]);
       }
     } else if (part === '-h') {
       // Running a verb when help was asked costs more than losing a literal -h; `-- -h` still passes one.
@@ -601,20 +602,72 @@ function printHelp(command: string, args: string[]): void {
 // Entry point
 // ---------------------------------------------------------------------------
 
+function printVersion(): never {
+  const __filename_local = fileURLToPath(import.meta.url);
+  const __dirname_local = path.dirname(__filename_local);
+  const pkgJson = fs.readFileSync(path.join(__dirname_local, '..', 'package.json'), 'utf-8');
+  const { version } = JSON.parse(pkgJson) as { version: string };
+  console.log(version);
+  process.exit(0);
+}
+
+/** A value-less --scope parses as boolean true, which consumers coerced to the scope 'true' or dropped;
+ *  reject it once here so every command, thin-client relays included, sees only a non-empty string. */
+function rejectEmptyScope(flags: CliFlags): void {
+  if ('scope' in flags && (typeof flags['scope'] !== 'string' || !flags['scope'].trim())) {
+    printError('--scope requires a non-empty value (e.g. --scope slack:private:C1).');
+    process.exit(1);
+  }
+}
+
+// parseArgs stores a value-less flag as boolean true, and NaN then survives every
+// downstream guard because each comparison against it is false.
+const NUMERIC_FLAGS = [
+  'days', 'threshold', 'min-score', 'port', 'limit', 'mmr-lambda', 'local-bump',
+  'min-results', 'reranker-top-k', 'min-mrr', 'embedding-weight', 'max-cases',
+];
+
+function rejectNonNumericFlags(flags: CliFlags): void {
+  for (const key of NUMERIC_FLAGS) {
+    const raw = flags[key];
+    if (raw === undefined) continue;
+    if (typeof raw !== 'string' || !raw.trim() || !Number.isFinite(Number(raw))) {
+      printError(`--${key} requires a numeric value.`);
+      process.exit(1);
+    }
+  }
+}
+
+// Reject rather than coerce: consumers read --dry-run both as Boolean() and === true,
+// so no single coercion of an inline value would be correct for every one of them.
+function rejectValuedSwitches(flags: CliFlags): void {
+  for (const key of BOOLEAN_FLAGS) {
+    if (Object.hasOwn(flags, key) && typeof flags[key] !== 'boolean') {
+      printError(`--${key} takes no value`);
+      process.exit(1);
+    }
+  }
+}
+
+function checkUnknownFlags(command: string, flags: CliFlags): void {
+  // card checks its flags per subcommand, with a stricter message.
+  const unknownFlags = command === 'card' ? [] : Object.keys(flags).filter((key) => !KNOWN_FLAGS.has(key));
+  if (unknownFlags.length === 0) return;
+  const names = unknownFlags.map((key) => `--${key}`).join(', ');
+  if (DESTRUCTIVE_COMMANDS.has(command)) {
+    printError(`Unknown flag ${names} for hippo ${command}. Nothing was changed.`);
+    process.exit(2);
+  }
+  printError(`hippo: ignoring unknown flag ${names}. A later release will reject it.`);
+}
+
 async function main(
   command: string,
   args: string[],
   flags: CliFlags,
   hippoRoot: string,
 ): Promise<void> {
-  if (command === '--version' || command === '-v' || flags['version']) {
-    const __filename_local = fileURLToPath(import.meta.url);
-    const __dirname_local = path.dirname(__filename_local);
-    const pkgJson = fs.readFileSync(path.join(__dirname_local, '..', 'package.json'), 'utf-8');
-    const { version } = JSON.parse(pkgJson) as { version: string };
-    console.log(version);
-    process.exit(0);
-  }
+  if (command === '--version' || command === '-v' || flags['version']) printVersion();
   if (command === '' || command === 'help' || command === '--help' || command === '-h') {
     printUsage();
     return;
@@ -625,44 +678,10 @@ async function main(
     return;
   }
   maybeRepairCodexWrapper(command, flags);
-  /** A value-less --scope parses as boolean true, which consumers coerced to the scope 'true' or dropped;
-   *  reject it once here so every command, thin-client relays included, sees only a non-empty string. */
-  if ('scope' in flags && (typeof flags['scope'] !== 'string' || !flags['scope'].trim())) {
-    printError('--scope requires a non-empty value (e.g. --scope slack:private:C1).');
-    process.exit(1);
-  }
-  // parseArgs stores a value-less flag as boolean true, and NaN then survives every
-  // downstream guard because each comparison against it is false.
-  const NUMERIC_FLAGS = [
-    'days', 'threshold', 'min-score', 'port', 'limit', 'mmr-lambda', 'local-bump',
-    'min-results', 'reranker-top-k', 'min-mrr', 'embedding-weight', 'max-cases',
-  ];
-  for (const key of NUMERIC_FLAGS) {
-    const raw = flags[key];
-    if (raw === undefined) continue;
-    if (typeof raw !== 'string' || !raw.trim() || !Number.isFinite(Number(raw))) {
-      printError(`--${key} requires a numeric value.`);
-      process.exit(1);
-    }
-  }
-  // Reject rather than coerce: consumers read --dry-run both as Boolean() and === true,
-  // so no single coercion of an inline value would be correct for every one of them.
-  for (const key of BOOLEAN_FLAGS) {
-    if (Object.hasOwn(flags, key) && typeof flags[key] !== 'boolean') {
-      printError(`--${key} takes no value`);
-      process.exit(1);
-    }
-  }
-  // card checks its flags per subcommand, with a stricter message.
-  const unknownFlags = command === 'card' ? [] : Object.keys(flags).filter((key) => !KNOWN_FLAGS.has(key));
-  if (unknownFlags.length > 0) {
-    const names = unknownFlags.map((key) => `--${key}`).join(', ');
-    if (DESTRUCTIVE_COMMANDS.has(command)) {
-      printError(`Unknown flag ${names} for hippo ${command}. Nothing was changed.`);
-      process.exit(2);
-    }
-    printError(`hippo: ignoring unknown flag ${names}. A later release will reject it.`);
-  }
+  rejectEmptyScope(flags);
+  rejectNonNumericFlags(flags);
+  rejectValuedSwitches(flags);
+  checkUnknownFlags(command, flags);
   const refusal = Object.hasOwn(flags, 'dry-run') ? dryRunRefusal(command, args, flags) : null;
   if (refusal) {
     printError(refusal);

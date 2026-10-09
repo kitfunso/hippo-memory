@@ -37,22 +37,7 @@ export async function cmdEval(
     return;
   }
 
-  const cases = readCorpus(corpusPath);
-  const globalRoot = getGlobalRoot();
-  const localBump = flags['equal-sources']
-    ? 1.0
-    : flags['local-bump'] !== undefined
-      ? parseFloat(String(flags['local-bump']))
-      : loadConfig(hippoRoot).search.localBump;
-
-  const summary = await runEval(cases, entries, {
-    hippoRoot,
-    globalRoot,
-    mmr: !flags['no-mmr'],
-    mmrLambda: flags['mmr-lambda'] !== undefined ? parseFloat(String(flags['mmr-lambda'])) : undefined,
-    embeddingWeight: flags['embedding-weight'] !== undefined ? parseFloat(String(flags['embedding-weight'])) : undefined,
-    localBump,
-  });
+  const summary = await runCorpusEval(hippoRoot, corpusPath, entries, flags);
 
   if (asJson) {
     console.log(JSON.stringify(summary, null, 2));
@@ -66,6 +51,30 @@ export async function cmdEval(
   }
 
   if (comparePath) printEvalCompare(summary, comparePath, asJson);
+}
+
+async function runCorpusEval(
+  hippoRoot: string,
+  corpusPath: string | null,
+  entries: MemoryEntry[],
+  flags: CliFlags,
+): Promise<EvalSummary> {
+  const cases = readCorpus(corpusPath);
+  const globalRoot = getGlobalRoot();
+  const localBump = flags['equal-sources']
+    ? 1.0
+    : flags['local-bump'] !== undefined
+      ? parseFloat(String(flags['local-bump']))
+      : loadConfig(hippoRoot).search.localBump;
+
+  return runEval(cases, entries, {
+    hippoRoot,
+    globalRoot,
+    mmr: !flags['no-mmr'],
+    mmrLambda: flags['mmr-lambda'] !== undefined ? parseFloat(String(flags['mmr-lambda'])) : undefined,
+    embeddingWeight: flags['embedding-weight'] !== undefined ? parseFloat(String(flags['embedding-weight'])) : undefined,
+    localBump,
+  });
 }
 
 /** Bootstrap mode: emit a synthetic corpus built from the store's own memories. */

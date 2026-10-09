@@ -90,8 +90,12 @@ export async function cmdExplain(
   );
   const rank = slot.rank;
   if (!rank) throw new Error('explain ranked but inspected nothing');
+  printExplainResults(rank, engine.usePhysics, query, asJson);
+}
+
+function printExplainResults(rank: RankRecallResult, usePhysics: boolean, query: string, asJson: boolean): void {
   const hasGlobal = rank.globalEntries.length > 0;
-  const modeUsed: 'physics' | 'searchBothHybrid' | 'hybrid' = engine.usePhysics && !hasGlobal
+  const modeUsed: 'physics' | 'searchBothHybrid' | 'hybrid' = usePhysics && !hasGlobal
     ? 'physics'
     : hasGlobal ? 'searchBothHybrid' : 'hybrid';
   const results = dropHeldCopies(rank.results, (r) => r.entry);

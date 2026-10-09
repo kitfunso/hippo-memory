@@ -350,18 +350,7 @@ function removeLegacyCursorRules(): void {
   }
 }
 
-// `hippo setup` -- one-shot configuration for every AI coding tool on the box.
-// Detection and install logic live in ./hooks.ts.
-
-export function cmdSetup(flags: CliFlags): void {
-  const dryRun = boolFlag(flags, 'dry-run');
-  const forceAll = boolFlag(flags, 'all');
-  const tools = detectInstalledTools();
-  const globalRoot = getGlobalRoot();
-
-  console.log('Hippo setup -- configuring SessionEnd + SessionStart hooks');
-  console.log('');
-
+function setupDetectedTools(tools: ReturnType<typeof detectInstalledTools>, forceAll: boolean, dryRun: boolean): void {
   const jsonTools = tools.filter((t) => t.kind === 'json-hook' && (t.detected || forceAll));
   const wrapperTools = tools.filter((t) => t.kind === 'wrapper' && (t.detected || forceAll));
   const skipped = tools.filter((t) => t.kind === 'json-hook' && !t.detected && !forceAll);
@@ -394,6 +383,21 @@ export function cmdSetup(flags: CliFlags): void {
       console.log(`  ${tool.name.padEnd(14)} ${tool.notes}`);
     }
   }
+}
+
+// `hippo setup` -- one-shot configuration for every AI coding tool on the box.
+// Detection and install logic live in ./hooks.ts.
+
+export function cmdSetup(flags: CliFlags): void {
+  const dryRun = boolFlag(flags, 'dry-run');
+  const forceAll = boolFlag(flags, 'all');
+  const tools = detectInstalledTools();
+  const globalRoot = getGlobalRoot();
+
+  console.log('Hippo setup -- configuring SessionEnd + SessionStart hooks');
+  console.log('');
+
+  setupDetectedTools(tools, forceAll, dryRun);
 
   if (!flags['no-schedule']) {
     console.log('');

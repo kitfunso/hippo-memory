@@ -41,6 +41,35 @@ function resolveGoalSession(flags: CliFlags): { sessionId: string; tenantId: str
   return { sessionId, tenantId };
 }
 
+function readGoalPolicy(flags: CliFlags): { policyType: PolicyType } | undefined {
+  const policyRaw = flags['policy'];
+  if (policyRaw === true) {
+    printError('--policy requires a value (e.g., --policy error-prioritized)');
+    process.exit(1);
+  }
+  if (typeof policyRaw !== 'string') return undefined;
+  if (!(GOAL_POLICY_TYPES as readonly string[]).includes(policyRaw)) {
+    printError(`Unknown --policy '${policyRaw}'. Expected one of: ${GOAL_POLICY_TYPES.join(' | ')}.`);
+    process.exit(1);
+  }
+  return { policyType: policyRaw as PolicyType };
+}
+
+function readGoalLevel(flags: CliFlags): number | undefined {
+  const levelRaw = flags['level'];
+  if (levelRaw === true) {
+    printError('--level requires a value (e.g., --level 1)');
+    process.exit(1);
+  }
+  if (levelRaw === undefined) return undefined;
+  const parsed = Number(levelRaw);
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 2 || !Number.isInteger(parsed)) {
+    printError('--level must be an integer in [0, 2]');
+    process.exit(1);
+  }
+  return parsed;
+}
+
 function cmdGoalPush(hippoRoot: string, args: string[], flags: CliFlags): void {
   const rawName = args.join(' ').trim();
   if (!rawName) {
@@ -54,19 +83,7 @@ function cmdGoalPush(hippoRoot: string, args: string[], flags: CliFlags): void {
   }
   const { sessionId, tenantId } = resolveGoalSession(flags);
 
-  let policy: { policyType: PolicyType } | undefined;
-  const policyRaw = flags['policy'];
-  if (policyRaw === true) {
-    printError('--policy requires a value (e.g., --policy error-prioritized)');
-    process.exit(1);
-  }
-  if (typeof policyRaw === 'string') {
-    if (!(GOAL_POLICY_TYPES as readonly string[]).includes(policyRaw)) {
-      printError(`Unknown --policy '${policyRaw}'. Expected one of: ${GOAL_POLICY_TYPES.join(' | ')}.`);
-      process.exit(1);
-    }
-    policy = { policyType: policyRaw as PolicyType };
-  }
+  const policy = readGoalPolicy(flags);
 
   const successRaw = flags['success'];
   if (successRaw === true) {
@@ -75,20 +92,7 @@ function cmdGoalPush(hippoRoot: string, args: string[], flags: CliFlags): void {
   }
   const successCondition = typeof successRaw === 'string' ? successRaw : undefined;
 
-  const levelRaw = flags['level'];
-  let level: number | undefined;
-  if (levelRaw === true) {
-    printError('--level requires a value (e.g., --level 1)');
-    process.exit(1);
-  }
-  if (levelRaw !== undefined) {
-    const parsed = Number(levelRaw);
-    if (!Number.isFinite(parsed) || parsed < 0 || parsed > 2 || !Number.isInteger(parsed)) {
-      printError('--level must be an integer in [0, 2]');
-      process.exit(1);
-    }
-    level = parsed;
-  }
+  const level = readGoalLevel(flags);
 
   const parentRaw = flags['parent'];
   if (parentRaw === true) {

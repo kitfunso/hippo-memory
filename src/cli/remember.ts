@@ -231,6 +231,27 @@ async function extractRememberFacts(targetRoot: string, entry: MemoryEntry, flag
   }
 }
 
+function supersedeTags(flags: CliFlags): string[] | undefined {
+  const rawTags = flags['tag'];
+  return Array.isArray(rawTags)
+    ? (rawTags as string[]).map((t) => String(t))
+    : typeof rawTags === 'string'
+      ? rawTags.split(',').map((t) => t.trim()).filter(Boolean)
+      : undefined;
+}
+
+function writeSuccessor(hippoRoot: string, newEntry: MemoryEntry): void {
+  try {
+    writeEntry(hippoRoot, newEntry);
+  } catch (err) {
+    if (err instanceof RejectedValueError) {
+      printError(`Error: ${err.message}`);
+      process.exit(1);
+    }
+    throw err;
+  }
+}
+
 function cmdSupersede(
   hippoRoot: string,
   oldId: string,
@@ -250,12 +271,7 @@ function cmdSupersede(
   }
 
   const layer = stringFlag(flags, 'layer') as Layer | undefined;
-  const rawTags = flags['tag'];
-  const tags = Array.isArray(rawTags)
-    ? (rawTags as string[]).map((t) => String(t))
-    : typeof rawTags === 'string'
-      ? rawTags.split(',').map((t) => t.trim()).filter(Boolean)
-      : undefined;
+  const tags = supersedeTags(flags);
   const pinned = flagIsTrue(flags, 'pin') || old.pinned;
 
   const newEntry = createSuccessor(old, newContent, {
@@ -268,20 +284,30 @@ function cmdSupersede(
 
   // Write the SUCCESSOR first: a rejection-guard refusal then mutates nothing, and an old-row failure leaves an
   // orphan successor rather than a dangling pointer. Unlike api.supersede this path is two non-atomic writes.
-  try {
-    writeEntry(hippoRoot, newEntry);
-  } catch (err) {
-    if (err instanceof RejectedValueError) {
-      printError(`Error: ${err.message}`);
-      process.exit(1);
-    }
-    throw err;
-  }
+  writeSuccessor(hippoRoot, newEntry);
   old.superseded_by = newEntry.id;
   writeEntry(hippoRoot, old);
   emitCliAudit(hippoRoot, 'supersede', oldId, { newId: newEntry.id });
 
   console.log(`Superseded ${oldId} → ${newEntry.id}`);
+}
+
+function parseStepsOrExit(stepsJson: string): ReturnType<typeof parseSteps> {
+  try {
+    return parseSteps(stepsJson);
+  } catch (err) {
+    printError(String(err instanceof Error ? err.message : err));
+    process.exit(1);
+  }
+}
+
+function traceTags(flags: CliFlags): string[] {
+  const rawTags = flags['tag'];
+  return Array.isArray(rawTags)
+    ? rawTags.map((t) => String(t))
+    : rawTags !== undefined
+      ? [String(rawTags)]
+      : [];
 }
 
 function cmdTraceRecord(
@@ -304,21 +330,10 @@ function cmdTraceRecord(
     process.exit(1);
   }
 
-  let steps;
-  try {
-    steps = parseSteps(stepsJson);
-  } catch (err) {
-    printError(String(err instanceof Error ? err.message : err));
-    process.exit(1);
-  }
+  const steps = parseStepsOrExit(stepsJson);
 
   const sessionId = String(flags['session'] ?? '').trim() || null;
-  const rawTags = flags['tag'];
-  const tags = Array.isArray(rawTags)
-    ? rawTags.map((t) => String(t))
-    : rawTags !== undefined
-      ? [String(rawTags)]
-      : [];
+  const tags = traceTags(flags);
 
   const content = renderTraceContent({
     task,
@@ -506,36 +521,36 @@ export async function handleRemember({ hippoRoot, args, flags }: CommandContext)
     flags['pin'] || flags['global'] || flags['extract'] || flags['force'] ||
     flags['observed'] || flags['inferred'] || flags['verified'] ||
     flags['layer'] !== undefined;
-  if (!richFlag) {
-    const rememberKindRaw = stringFlag(flags, 'kind')?.toLowerCase();
-    const rememberKindAllowed = ['distilled', 'superseded'] as const;
-    if (rememberKindRaw === undefined || (rememberKindAllowed as readonly string[]).includes(rememberKindRaw)) {
-      const tags = rememberTags(flags, process.cwd()).all;
-      // Validate --owner on the thin-client path too, so validation is the same whether or not a server is up.
-      const thinOwnerRaw = stringFlag(flags, 'owner');
-      const thinOwnerCheck = validateOwner(thinOwnerRaw, { strict: isStrictOwnerEnv() });
-      if (!thinOwnerCheck.ok) {
-        printError(thinOwnerCheck.message);
-        process.exit(1);
-      }
-      if (thinOwnerCheck.message) printError(thinOwnerCheck.message);
-      const remembered = await runViaServerIfAvailable(hippoRoot, async (info, apiKey) => {
-        const result = await client.remember(info.url, apiKey, {
-          content: text,
-          kind: rememberKindRaw as ('distilled' | 'superseded' | undefined),
-          scope: stringFlag(flags, 'scope'),
-          owner: thinOwnerCheck.value,
-          artifactRef: stringFlag(flags, 'artifact-ref'),
-          tags,
-        });
-        console.log(`Remembered [${result.id}] (via ${info.url})`);
-        console.log(`   Kind: ${result.kind} | Tenant: ${result.tenantId}`);
-        for (const w of result.warnings ?? []) printError(`Warning: ${w}`);
-      });
-      if (remembered) return;
-    }
-  }
+  if (!richFlag && await rememberViaThinClient(hippoRoot, text, flags)) return;
   await cmdRemember(hippoRoot, text, flags);
+}
+
+async function rememberViaThinClient(hippoRoot: string, text: string, flags: CliFlags): Promise<boolean> {
+  const rememberKindRaw = stringFlag(flags, 'kind')?.toLowerCase();
+  const rememberKindAllowed = ['distilled', 'superseded'] as const;
+  if (rememberKindRaw !== undefined && !(rememberKindAllowed as readonly string[]).includes(rememberKindRaw)) return false;
+  const tags = rememberTags(flags, process.cwd()).all;
+  // Validate --owner on the thin-client path too, so validation is the same whether or not a server is up.
+  const thinOwnerRaw = stringFlag(flags, 'owner');
+  const thinOwnerCheck = validateOwner(thinOwnerRaw, { strict: isStrictOwnerEnv() });
+  if (!thinOwnerCheck.ok) {
+    printError(thinOwnerCheck.message);
+    process.exit(1);
+  }
+  if (thinOwnerCheck.message) printError(thinOwnerCheck.message);
+  return runViaServerIfAvailable(hippoRoot, async (info, apiKey) => {
+    const result = await client.remember(info.url, apiKey, {
+      content: text,
+      kind: rememberKindRaw as ('distilled' | 'superseded' | undefined),
+      scope: stringFlag(flags, 'scope'),
+      owner: thinOwnerCheck.value,
+      artifactRef: stringFlag(flags, 'artifact-ref'),
+      tags,
+    });
+    console.log(`Remembered [${result.id}] (via ${info.url})`);
+    console.log(`   Kind: ${result.kind} | Tenant: ${result.tenantId}`);
+    for (const w of result.warnings ?? []) printError(`Warning: ${w}`);
+  });
 }
 
 export function handleSupersede({ hippoRoot, args, flags }: CommandContext): void {

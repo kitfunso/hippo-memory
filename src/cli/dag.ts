@@ -1,6 +1,7 @@
 // DAG summary verbs: `hippo dag`, `hippo assemble` and `hippo drill`.
 
 import { loadAllEntries } from '../store/entry-reads.js';
+import type { MemoryEntry } from '../memory.js';
 import * as api from '../api.js';
 import { resolveTenantId } from '../tenant.js';
 import { assembleCost, assembleHeading, drillCost, settleTokens } from '../context-render.js';
@@ -22,15 +23,23 @@ export function cmdDag(hippoRoot: string, flags: CliFlags): void {
   }
 
   if (isStats) {
-    console.log('DAG Structure:');
-    console.log(`  Level 3 (entity profiles):  ${byLevel.get(3) ?? 0}`);
-    console.log(`  Level 2 (topic summaries):  ${byLevel.get(2) ?? 0}`);
-    console.log(`  Level 1 (extracted facts):  ${byLevel.get(1) ?? 0}`);
-    console.log(`  Level 0 (raw memories):     ${byLevel.get(0) ?? 0}`);
-    console.log(`  Unlinked facts: ${unlinked}`);
+    printDagStats(byLevel, unlinked);
     return;
   }
 
+  printDagTree(entries);
+}
+
+function printDagStats(byLevel: ReadonlyMap<number, number>, unlinked: number): void {
+  console.log('DAG Structure:');
+  console.log(`  Level 3 (entity profiles):  ${byLevel.get(3) ?? 0}`);
+  console.log(`  Level 2 (topic summaries):  ${byLevel.get(2) ?? 0}`);
+  console.log(`  Level 1 (extracted facts):  ${byLevel.get(1) ?? 0}`);
+  console.log(`  Level 0 (raw memories):     ${byLevel.get(0) ?? 0}`);
+  console.log(`  Unlinked facts: ${unlinked}`);
+}
+
+function printDagTree(entries: readonly MemoryEntry[]): void {
   // Tree view: L3 entity profiles as roots with L2 children indented, then orphan L2 summaries at top level.
   const profiles = entries.filter((e) => e.dag_level === 3);
   const l2List = entries.filter((e) => e.dag_level === 2);

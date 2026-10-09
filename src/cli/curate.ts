@@ -85,18 +85,7 @@ function cmdForget(
   // BEFORE-DELETE trigger aborts any delete. archiveRaw is the sanctioned
   // removal path; it records ctx.actor as the archiver for provenance.
   if (flagIsTrue(flags, 'archive')) {
-    const reason = stringFlag(flags, 'reason') ?? null;
-    if (!reason) {
-      printError(ARCHIVE_REASON_REQUIRED);
-      process.exit(1);
-    }
-    try {
-      api.archiveRaw(ctx, id, reason);
-      console.log(`Archived ${id}`);
-    } catch (err) {
-      printError(`Could not archive ${id}: ${errorMessage(err)}`);
-      process.exit(1);
-    }
+    archiveForgottenRaw(ctx, id, stringFlag(flags, 'reason') ?? null);
     return;
   }
 
@@ -104,22 +93,39 @@ function cmdForget(
     api.forget(ctx, id);
     console.log(`Forgot ${id}`);
   } catch (err) {
-    const msg = errorMessage(err);
-    if (/append-only/i.test(msg)) {
-      // The delete was refused by the append-only trigger — this is a raw
-      // memory, not a missing one. Point the user at the archive path.
-      printError(rawForgetRefusal(id));
-    } else if (api.isDormant(ctx, id)) {
-      // Sleep moved it to the dormant store: it is not in active memory, so
-      // point at the command that owns it.
-      printError(
-        `${id} is dormant, not in active memory. Delete it for good: hippo dormant forget ${id} ` +
-        `(or bring it back: hippo dormant restore ${id})`,
-      );
-    } else {
-      printError(`Memory not found: ${id}`);
-    }
+    reportForgetFailure(ctx, id, errorMessage(err));
     process.exit(1);
+  }
+}
+
+function archiveForgottenRaw(ctx: api.HippoDbContext, id: string, reason: string | null): void {
+  if (!reason) {
+    printError(ARCHIVE_REASON_REQUIRED);
+    process.exit(1);
+  }
+  try {
+    api.archiveRaw(ctx, id, reason);
+    console.log(`Archived ${id}`);
+  } catch (err) {
+    printError(`Could not archive ${id}: ${errorMessage(err)}`);
+    process.exit(1);
+  }
+}
+
+function reportForgetFailure(ctx: api.HippoDbContext, id: string, msg: string): void {
+  if (/append-only/i.test(msg)) {
+    // The delete was refused by the append-only trigger — this is a raw
+    // memory, not a missing one. Point the user at the archive path.
+    printError(rawForgetRefusal(id));
+  } else if (api.isDormant(ctx, id)) {
+    // Sleep moved it to the dormant store: it is not in active memory, so
+    // point at the command that owns it.
+    printError(
+      `${id} is dormant, not in active memory. Delete it for good: hippo dormant forget ${id} ` +
+      `(or bring it back: hippo dormant restore ${id})`,
+    );
+  } else {
+    printError(`Memory not found: ${id}`);
   }
 }
 
@@ -173,6 +179,34 @@ export function cmdConflicts(
   }
 }
 
+/** Shown when --keep is missing, to help the user decide. */
+function showConflictForResolve(hippoRoot: string, conflictId: number, tenantId: string): void {
+  const conflicts = listMemoryConflicts(hippoRoot, 'open', tenantId);
+  const conflict = conflicts.find((c) => c.id === conflictId);
+  if (!conflict) {
+    printError(`Conflict ${conflictId} not found or already resolved.`);
+    process.exit(1);
+  }
+
+  console.log(`Conflict ${conflictId}:`);
+  console.log(`  ${conflict.memory_a_id} <-> ${conflict.memory_b_id}`);
+  console.log(`  Reason: ${conflict.reason}`);
+  console.log('');
+
+  const entryA = readEntry(hippoRoot, conflict.memory_a_id, tenantId);
+  const entryB = readEntry(hippoRoot, conflict.memory_b_id, tenantId);
+  if (entryA) {
+    console.log(`  [A] ${conflict.memory_a_id}:`);
+    console.log(`      ${entryA.content.slice(0, 120)}${entryA.content.length > 120 ? '...' : ''}`);
+  }
+  if (entryB) {
+    console.log(`  [B] ${conflict.memory_b_id}:`);
+    console.log(`      ${entryB.content.slice(0, 120)}${entryB.content.length > 120 ? '...' : ''}`);
+  }
+  console.log('');
+  console.log(`Resolve with: hippo resolve ${conflictId} --keep <memory_id> [--forget] [--reject-loser [--reason "<why>"]]`);
+}
+
 export function cmdResolve(
   hippoRoot: string,
   args: string[],
@@ -191,31 +225,7 @@ export function cmdResolve(
   const tenantId = resolveTenantId({});
   const keepId = String(flags['keep'] ?? '').trim();
   if (!keepId) {
-    // Show the conflict details to help the user decide
-    const conflicts = listMemoryConflicts(hippoRoot, 'open', tenantId);
-    const conflict = conflicts.find((c) => c.id === conflictId);
-    if (!conflict) {
-      printError(`Conflict ${conflictId} not found or already resolved.`);
-      process.exit(1);
-    }
-
-    console.log(`Conflict ${conflictId}:`);
-    console.log(`  ${conflict.memory_a_id} <-> ${conflict.memory_b_id}`);
-    console.log(`  Reason: ${conflict.reason}`);
-    console.log('');
-
-    const entryA = readEntry(hippoRoot, conflict.memory_a_id, tenantId);
-    const entryB = readEntry(hippoRoot, conflict.memory_b_id, tenantId);
-    if (entryA) {
-      console.log(`  [A] ${conflict.memory_a_id}:`);
-      console.log(`      ${entryA.content.slice(0, 120)}${entryA.content.length > 120 ? '...' : ''}`);
-    }
-    if (entryB) {
-      console.log(`  [B] ${conflict.memory_b_id}:`);
-      console.log(`      ${entryB.content.slice(0, 120)}${entryB.content.length > 120 ? '...' : ''}`);
-    }
-    console.log('');
-    console.log(`Resolve with: hippo resolve ${conflictId} --keep <memory_id> [--forget] [--reject-loser [--reason "<why>"]]`);
+    showConflictForResolve(hippoRoot, conflictId, tenantId);
     return;
   }
 
@@ -286,24 +296,28 @@ export function cmdReject(
       memoryId: valueFlag === undefined ? memoryId : undefined,
       value: valueFlag,
     });
-    const digestPrefix = result.digest.slice(0, 12);
-    const preview = result.content.length > 80 ? `${result.content.slice(0, 80)}...` : result.content;
-    console.log(`Rejected [${digestPrefix}...]: "${preview}"`);
-    console.log(`  Reason: ${reason}`);
-    if (result.removedIds.length > 0) {
-      console.log(`  Removed ${result.removedIds.length} matching row(s): ${result.removedIds.join(', ')}`);
-      if (result.successorIds.length > 0) {
-        console.log(`  Merged rows that held it keep their other texts in: ${result.successorIds.join(', ')}`);
-      }
-      if (result.dormantSuccessorIds.length > 0) {
-        console.log(`  Dormant merged rows that held it keep their other texts in: ${result.dormantSuccessorIds.join(', ')}`);
-      }
-    } else {
-      console.log('  No live rows matched (pre-emptive tombstone).');
-    }
+    printRejected(result, reason);
   } catch (err) {
     printError(`Could not reject: ${errorMessage(err)}`);
     process.exit(1);
+  }
+}
+
+function printRejected(result: ReturnType<typeof rejectValue>, reason: string): void {
+  const digestPrefix = result.digest.slice(0, 12);
+  const preview = result.content.length > 80 ? `${result.content.slice(0, 80)}...` : result.content;
+  console.log(`Rejected [${digestPrefix}...]: "${preview}"`);
+  console.log(`  Reason: ${reason}`);
+  if (result.removedIds.length > 0) {
+    console.log(`  Removed ${result.removedIds.length} matching row(s): ${result.removedIds.join(', ')}`);
+    if (result.successorIds.length > 0) {
+      console.log(`  Merged rows that held it keep their other texts in: ${result.successorIds.join(', ')}`);
+    }
+    if (result.dormantSuccessorIds.length > 0) {
+      console.log(`  Dormant merged rows that held it keep their other texts in: ${result.dormantSuccessorIds.join(', ')}`);
+    }
+  } else {
+    console.log('  No live rows matched (pre-emptive tombstone).');
   }
 }
 
@@ -386,27 +400,7 @@ export function cmdDormant(
   const sub = args[0];
 
   if (sub === 'restore' || sub === 'forget') {
-    const id = (args[1] ?? '').trim();
-    if (!id) {
-      printError(`Usage: hippo dormant ${sub} <id>`);
-      process.exit(1);
-    }
-    try {
-      if (sub === 'restore') {
-        api.restoreDormant(ctx, id);
-        console.log(`Restored ${id} to active memory.`);
-      } else {
-        api.forgetDormant(ctx, id);
-        console.log(`Forgot dormant memory ${id} permanently.`);
-      }
-    } catch (err) {
-      if (err instanceof RejectedValueError) {
-        printError(`Cannot restore ${id}: its value was rejected (${err.reason ?? 'no reason given'}). Run \`hippo unreject\` first to allow it.`);
-      } else {
-        printError(`Could not ${sub} ${id}: ${errorMessage(err)}`);
-      }
-      process.exit(1);
-    }
+    changeDormant(ctx, sub, (args[1] ?? '').trim());
     return;
   }
 
@@ -421,15 +415,42 @@ export function cmdDormant(
     console.log(JSON.stringify({ dormant: rows }, null, 2));
     return;
   }
+  printDormantRows(rows, queryArgs.length > 0, root);
+}
+
+function changeDormant(ctx: api.Context, sub: 'restore' | 'forget', id: string): void {
+  if (!id) {
+    printError(`Usage: hippo dormant ${sub} <id>`);
+    process.exit(1);
+  }
+  try {
+    if (sub === 'restore') {
+      api.restoreDormant(ctx, id);
+      console.log(`Restored ${id} to active memory.`);
+    } else {
+      api.forgetDormant(ctx, id);
+      console.log(`Forgot dormant memory ${id} permanently.`);
+    }
+  } catch (err) {
+    if (err instanceof RejectedValueError) {
+      printError(`Cannot restore ${id}: its value was rejected (${err.reason ?? 'no reason given'}). Run \`hippo unreject\` first to allow it.`);
+    } else {
+      printError(`Could not ${sub} ${id}: ${errorMessage(err)}`);
+    }
+    process.exit(1);
+  }
+}
+
+function printDormantRows(rows: ReturnType<typeof api.listDormant>, hasQuery: boolean, root: string): void {
   if (rows.length === 0) {
-    console.log(queryArgs.length > 0 ? 'No dormant memories match.' : 'No dormant memories.');
+    console.log(hasQuery ? 'No dormant memories match.' : 'No dormant memories.');
     if (!loadConfig(root).dormant.enabled) {
       console.log(`Sleep deletes faded memories. To keep them dormant instead, set "dormant": { "enabled": true } in ${path.join(root, 'config.json')}.`);
     }
     return;
   }
 
-  console.log(`${rows.length} dormant memor${rows.length === 1 ? 'y' : 'ies'}${queryArgs.length > 0 ? ' matching' : ''} (newest first):\n`);
+  console.log(`${rows.length} dormant memor${rows.length === 1 ? 'y' : 'ies'}${hasQuery ? ' matching' : ''} (newest first):\n`);
   for (const row of rows) {
     const preview = row.content.length > 100 ? `${row.content.slice(0, 100)}...` : row.content;
     console.log(`--- ${row.id}`);

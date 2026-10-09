@@ -74,6 +74,14 @@ export async function cmdSleep(
  */
 /** @internal — exported for snapshot tests (tests/cli-context-render-snapshot.test.ts). NOT a stable public API. */
 export function renderSleepResult(result: api.SleepResult): void {
+  renderSleepCounts(result);
+
+  if (result.dryRun) console.log('\n(dry run  - nothing written)');
+  renderSleepDedupeAndAudit(result);
+  renderSleepShareAndGraph(result);
+}
+
+function renderSleepCounts(result: api.SleepResult): void {
   console.log(`Running consolidation${result.dryRun ? ' (dry run)' : ''}...`);
 
   console.log(`\nResults:`);
@@ -97,8 +105,9 @@ export function renderSleepResult(result: api.SleepResult): void {
     }
   }
 
-  if (result.dryRun) console.log('\n(dry run  - nothing written)');
+}
 
+function renderSleepDedupeAndAudit(result: api.SleepResult): void {
   if (result.deduped && result.deduped.removed > 0) {
     const { removed, semDups, epiDups, crossDups } = result.deduped;
     const parts: string[] = [];
@@ -117,6 +126,9 @@ export function renderSleepResult(result: api.SleepResult): void {
     }
   }
 
+}
+
+function renderSleepShareAndGraph(result: api.SleepResult): void {
   if (result.shared !== undefined && result.shared > 0) {
     console.log(`\nAuto-shared ${result.shared} high-value memories to global store.`);
   }

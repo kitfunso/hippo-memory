@@ -79,6 +79,13 @@ export function cmdDedup(
     return;
   }
 
+  printDedupGroups(result, dryRun);
+  printDedupPairs(result, dryRun);
+}
+
+type DedupResult = ReturnType<typeof deduplicateStore>;
+
+function printDedupGroups(result: DedupResult, dryRun: boolean): void {
   // Group by reason
   const sameLayerSem = result.pairs.filter(p => p.keptLayer === 'semantic' && p.removedLayer === 'semantic');
   const sameLayerEpi = result.pairs.filter(p => p.keptLayer === 'episodic' && p.removedLayer === 'episodic');
@@ -95,6 +102,9 @@ export function cmdDedup(
     console.log(`  ${crossLayer.length} cross-layer duplicates (episodic content already consolidated into semantic)`);
   }
 
+}
+
+function printDedupPairs(result: DedupResult, dryRun: boolean): void {
   // Show detailed pairs
   console.log('');
   const shown = result.pairs.slice(0, 15);

@@ -136,16 +136,9 @@ async function renderContext(
   }
 
   // --auto shells out to git, so it stays CLI-side; api.getContext stays host-agnostic and falls back to '*'.
-  let query = args.join(' ').trim();
-  if (!query && flags['auto']) {
-    query = autoDetectContext();
-  }
+  const query = contextQuery(args, flags);
 
-  const ctx: api.Context = {
-    hippoRoot,
-    tenantId: resolvedTenant,
-    actor: api.adminActor('cli'),
-  };
+  const ctx: api.Context = { hippoRoot, tenantId: resolvedTenant, actor: api.adminActor('cli') };
   const format = String(flags['format'] ?? 'markdown');
   const framing = String(flags['framing'] ?? 'observe');
   const opts = buildContextOpts(flags, { query, budget, pinnedOnly, format, framing, session, rec });
@@ -158,6 +151,15 @@ async function renderContext(
 
   const envelope = format === 'copilot' ? sessionStartEnvelope(stdinText) : undefined;
   const view: ContextView = { hippoRoot, tenantId: ctx.tenantId, ledgerSessionId, payloadSessionId, pinnedOnly, framing, rec, result, envelope };
+  renderContextView(view, format, query);
+}
+
+function contextQuery(args: string[], flags: CliFlags): string {
+  const query = args.join(' ').trim();
+  return !query && flags['auto'] ? autoDetectContext() : query;
+}
+
+function renderContextView(view: ContextView, format: string, query: string): void {
   if (format === 'json') {
     renderContextJson(view, query);
   } else if (format === 'additional-context' || format === 'copilot') {
