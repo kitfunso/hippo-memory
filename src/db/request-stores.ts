@@ -98,11 +98,11 @@ export async function runWithRequestStores<T>(fn: () => T | Promise<T>, opts?: R
 
 /** runWithRequestStores for a synchronous `fn`, so a batch called from outside any request still opens each store once. */
 export function withRequestStoresSync<T>(fn: () => T): T {
-  const outer = scopes.getStore();
+  const outer = currentRequestStores();
   if (outer && !outer.closed) return fn();
   const stores = new RequestStores();
   try {
-    return scopes.run(stores, fn);
+    return requestScopes.run(stores, fn);
   } finally {
     stores.close();
   }
