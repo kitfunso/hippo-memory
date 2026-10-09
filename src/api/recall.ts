@@ -450,7 +450,7 @@ function substituteOverflow(
   const eligibleParents = parents.filter(
     (p) => (p.dag_level ?? 0) === 2 && !p.superseded_by && passesScopeFilterForRecall(p.scope ?? null, opts.scope, own) && inCallerProject(p, opts),
   );
-  const maxSub = Math.max(1, Math.ceil(limit * 0.3));
+  const maxSub = Math.max(1, Math.ceil(limit * SUMMARY_SUB_FRACTION));
   // Most overflowed children first; compareEntryIdentity only breaks a tie, which used to fall to scan order.
   eligibleParents.sort((a, b) => {
     const ac = overflowByParent.get(a.id)?.length ?? 0;
@@ -496,12 +496,17 @@ function baseItem(r: ScoredEntry, opts: RecallOpts, explainTrace: Map<string, Re
   return item;
 }
 
-// Score 0.5 keeps a summary below the strong top-N matches but above the weakest leaves.
+// A summary scores below the strong top-N matches but above the weakest leaves.
+const SUMMARY_ITEM_SCORE = 0.5;
+const FRESH_TAIL_ITEM_SCORE = 1.0;
+// Summaries may take this share of the limit.
+const SUMMARY_SUB_FRACTION = 0.3;
+
 function summaryItem(s: SummaryDecoration, opts: RecallOpts): RecallResultItem {
   const item: RecallResultItem = {
     id: s.entry.id,
     content: s.entry.content,
-    score: 0.5,
+    score: SUMMARY_ITEM_SCORE,
     layer: s.entry.layer,
     strength: s.entry.strength,
     isSummary: true,
@@ -538,7 +543,7 @@ function freshTailBand(opts: RecallOpts, options: FreshTailBandOptions): RecallR
     const item: RecallResultItem = {
       id: m.id,
       content: m.content,
-      score: 1.0,
+      score: FRESH_TAIL_ITEM_SCORE,
       layer: m.layer,
       strength: m.strength,
       isFreshTail: true,

@@ -156,9 +156,9 @@ describe('test 5: status-transition matrix', () => {
           db.prepare(`UPDATE cards SET status = ? WHERE id = ?`).run(from, card.id);
           const legal = CARD_TRANSITIONS[from].includes(to);
           if (legal) {
-            expect(() => transitionCard(db, 'default', card.id, [from], to)).not.toThrow();
+            expect(() => transitionCard(db, 'default', card.id, { from: [from], to })).not.toThrow();
           } else {
-            expect(() => transitionCard(db, 'default', card.id, [from], to)).toThrow(
+            expect(() => transitionCard(db, 'default', card.id, { from: [from], to })).toThrow(
               `illegal card transition: ${from} -> ${to}`,
             );
           }
@@ -188,7 +188,7 @@ describe('test 5: status-transition matrix', () => {
       db.prepare(`UPDATE cards SET status = 'done' WHERE id = ?`).run(card.id);
       // The row's real status ('done') IS in the from list below; the throw must still fire
       // because CARD_TRANSITIONS.done is empty, proving the check is static, not row-driven.
-      expect(() => transitionCard(db, 'default', card.id, ['done'], 'running')).toThrow(
+      expect(() => transitionCard(db, 'default', card.id, { from: ['done'], to: 'running' })).toThrow(
         'illegal card transition: done -> running',
       );
     } finally {

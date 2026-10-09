@@ -89,17 +89,10 @@ export function writeEntryDbOnly(
     if (opts?.afterWrite) {
       opts.afterWrite(db, entry.id);
     }
-    audit(
-      db,
-      'remember',
-      entry.id,
-      {
+    audit(db, 'remember', { targetId: entry.id, metadata: {
         kind: entry.kind ?? 'distilled',
         scope: entry.scope ?? null,
-      },
-      opts?.actor ?? 'cli',
-      entry.tenantId,
-    );
+      }, actor: opts?.actor ?? 'cli', tenantId: entry.tenantId });
     // A child write marks its summary parent dirty for the sleep-cycle rebuild; most writes
     // have no parent, so the hot path pays one null check.
     if (entry.dag_parent_id) {
@@ -209,10 +202,17 @@ export function renameEntrySourceAt(db: DatabaseSyncLike, tenantId: string, id: 
   return Number(moved.changes ?? 0);
 }
 
+export interface RenameSourceOptions {
+  readonly from: string;
+  readonly to: string;
+  readonly origin: string | null;
+}
+
 /** Renames a row's source and, when `origin` is not null, its project; the count is 0 when the row is gone or moved. */
 export function renameEntrySourceAndOriginAt(
-  db: DatabaseSyncLike, tenantId: string, id: string, from: string, to: string, origin: string | null,
+  db: DatabaseSyncLike, tenantId: string, id: string, options: RenameSourceOptions,
 ): number {
+  const { from, to, origin } = options;
   const done = db.prepare(
     `UPDATE memories SET source = ?, origin_project = COALESCE(?, origin_project) WHERE id = ? AND tenant_id = ? AND source = ?`,
   ).run(to, origin, id, tenantId, from);

@@ -128,14 +128,14 @@ function closeLiveRun(db: DatabaseSyncLike, tenantId: string, cardId: string, ou
 
 // The single status-mutating seam (rule 15): CARD_TRANSITIONS is the one
 // runtime authority, so a hand-copied wrong `from` list fails fast here.
-export function transitionCard(
-  db: DatabaseSyncLike,
-  tenantId: string,
-  cardId: string,
-  from: CardStatus[],
-  to: CardStatus,
-  extra?: { setSql?: string; whereSql?: string; params?: unknown[] },
-): number {
+export interface TransitionCardOptions {
+  readonly from: CardStatus[];
+  readonly to: CardStatus;
+  readonly extra?: { setSql?: string; whereSql?: string; params?: unknown[] };
+}
+
+export function transitionCard(db: DatabaseSyncLike, tenantId: string, cardId: string, options: TransitionCardOptions): number {
+  const { from, to, extra } = options;
   for (const status of from) {
     if (!CARD_TRANSITIONS[status].includes(to)) {
       throw new Error(`illegal card transition: ${status} -> ${to}`);
@@ -316,10 +316,10 @@ export function claimCard(hippoRoot: string, tenantId: string, id: string, runti
   const db = openStore(hippoRoot);
   try {
     const runId = withWriteScopeOr(db, 'claim_card', (rollback) => {
-      const changes = transitionCard(db, tenantId, id, ['ready', 'blocked'], 'running', {
-        setSql: 'assignee_runtime = ?',
-        whereSql: 'assignee_runtime IS NULL',
-        params: [runtime],
+      const changes = transitionCard(db, tenantId, id, {
+        from: ['ready', 'blocked'],
+        to: 'running',
+        extra: { setSql: 'assignee_runtime = ?', whereSql: 'assignee_runtime IS NULL', params: [runtime] },
       });
       if (changes === 0) {
         if (!loadCardRow(db, tenantId, id)) {
@@ -376,7 +376,7 @@ export function blockCard(hippoRoot: string, tenantId: string, id: string, reaso
   try {
     const blocked = withWriteScopeOr(db, 'block_card', (rollback) => {
       const allowed = runId === undefined || isLiveRun(db, tenantId, id, runId);
-      const changes = allowed ? transitionCard(db, tenantId, id, ['running'], 'blocked', { setSql: 'assignee_runtime = NULL' }) : 0;
+      const changes = allowed ? transitionCard(db, tenantId, id, { from: ['running'], to: 'blocked', extra: { setSql: 'assignee_runtime = NULL' } }) : 0;
       if (changes === 0) {
         if (!loadCardRow(db, tenantId, id)) {
           throw new Error(`unknown card id: ${id}`);
@@ -403,7 +403,7 @@ export function reviewCard(hippoRoot: string, tenantId: string, id: string, runI
   try {
     const moved = withWriteScopeOr(db, 'review_card', (rollback) => {
       const allowed = runId === undefined || isLiveRun(db, tenantId, id, runId);
-      const changes = allowed ? transitionCard(db, tenantId, id, ['running'], 'review') : 0;
+      const changes = allowed ? transitionCard(db, tenantId, id, { from: ['running'], to: 'review' }) : 0;
       if (changes === 0) {
         if (!loadCardRow(db, tenantId, id)) {
           throw new Error(`unknown card id: ${id}`);
@@ -437,7 +437,7 @@ export function completeCard(
       const promotedChildren: string[] = [];
       const target: CardStatus = outcome === 'success' ? 'done' : 'shelved';
       const allowed = runId === undefined || isLiveRun(db, tenantId, id, runId);
-      const changes = allowed ? transitionCard(db, tenantId, id, ['review'], target) : 0;
+      const changes = allowed ? transitionCard(db, tenantId, id, { from: ['review'], to: target }) : 0;
       if (changes === 0) {
         if (!loadCardRow(db, tenantId, id)) {
           throw new Error(`unknown card id: ${id}`);
@@ -464,7 +464,7 @@ export function completeCard(
             `SELECT COUNT(*) as c FROM cards WHERE tenant_id = ? AND id IN (${placeholders}) AND status = 'done'`,
           ).get(tenantId, ...parents) as { c: number }).c;
           if (doneCount === parents.length) {
-            transitionCard(db, tenantId, childId, ['backlog'], 'ready');
+            transitionCard(db, tenantId, childId, { from: ['backlog'], to: 'ready' });
             promotedChildren.push(childId);
           }
         }
@@ -492,7 +492,7 @@ export function reclaimExpiredCards(hippoRoot: string, tenantId: string): string
         ORDER BY id
       `).all(tenantId, now) as Array<{ id: string }>).map((r) => r.id);
       for (const id of ids) {
-        transitionCard(db, tenantId, id, ['running'], 'ready', { setSql: 'assignee_runtime = NULL' });
+        transitionCard(db, tenantId, id, { from: ['running'], to: 'ready', extra: { setSql: 'assignee_runtime = NULL' } });
         closeLiveRun(db, tenantId, id, 'reclaimed', now);
       }
       return ids;

@@ -110,7 +110,7 @@ function decayWithMemoryValue(run: SleepRun): DecayOutcome {
     // Rank per tenant ONCE: rankById feeds both rescueSet (via precomputedRanks) and the detail/audit
     // context below, so the whole-store ranking runs once per sleep and only when something is condemned.
     rankById = rankNonPinnedByTenant(all, now);
-    rescuedIds = rescueSet(all, condemnedIds, now, MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256, rankById);
+    rescuedIds = rescueSet(all, condemnedIds, now, { weights: MEMORY_VALUE_WEIGHTS, digest: SOURCE_ARTIFACT_SHA256, precomputedRanks: rankById });
     reportNonFiniteScores(result, rankById);
   }
 

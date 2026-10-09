@@ -16,6 +16,7 @@ import type { HybridVectorCandidates } from '../search/vector.js';
 import { DEFAULT_LOCAL_BUMP, type SearchResult } from '../core/search-types.js';
 import { compareScoredResults } from '../compare.js';
 import { scopeMatch } from '../scope.js';
+import { scopeBoostFor } from '../search/boosts.js';
 import { type HippoConfig } from '../config.js';
 import type { ProjectRef } from '../project-identity.js';
 import {
@@ -173,11 +174,10 @@ function rankPinned(
     ...pinnedGlobal.map((e) => ({ entry: e, isGlobal: true })),
   ]
     .map(({ entry, isGlobal }) => {
-      const scopeSig = scopeMatch(entry.tags, plan.activeScope);
-      const sBst = scopeSig === 1 ? 1.5 : scopeSig === -1 ? 0.5 : 1.0;
+      const scopeBoost = scopeBoostFor(scopeMatch(entry.tags, plan.activeScope));
       return {
         entry,
-        score: calculateStrength(entry, nowP) * (isGlobal ? GLOBAL_DISCOUNT : 1) * sBst,
+        score: calculateStrength(entry, nowP) * (isGlobal ? GLOBAL_DISCOUNT : 1) * scopeBoost,
         tokens: plan.price(entry, isGlobal),
         isGlobal,
       };
@@ -226,13 +226,16 @@ interface BackfillFromPromptOptions {
   readonly recentBudget: number;
 }
 
+// Overlap a candidate needs with the prompt when the config sets none.
+const DEFAULT_PROMPT_RECALL_THRESHOLD = 0.04;
+
 function backfillFromPrompt(opts: ContextOpts, plan: ContextPlan, options: BackfillFromPromptOptions): void {
   const { pinnedCfg, candidates, picked, recentBudget } = options;
   const rawMetric = pinnedCfg.pinnedInject.promptRecallMetric;
   const metric: PromptRecallMetric = rawMetric === 'cosine' ? 'cosine' : 'jaccard';
   const gate: PromptRecallGate = {
     metric,
-    threshold: finiteOr(pinnedCfg.pinnedInject.promptRecallThreshold, 0.04, 0),
+    threshold: finiteOr(pinnedCfg.pinnedInject.promptRecallThreshold, DEFAULT_PROMPT_RECALL_THRESHOLD, 0),
     minShared: finiteOr(pinnedCfg.pinnedInject.promptRecallMinShared, 2, 0),
     maxItems: finiteOr(pinnedCfg.pinnedInject.promptRecallMaxItems, 5, 1),
   };

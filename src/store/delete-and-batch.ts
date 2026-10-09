@@ -68,7 +68,7 @@ export function deleteEntryCore(
   if (Number(db.prepare(`DELETE FROM memories WHERE id = ?${guard}`).run(id).changes ?? 0) === 0) return null;
   deleteFtsRow(db, id);
   if (!opts?.suppressForgetAudit) {
-    audit(db, 'forget', id, opts?.reason ? { reason: opts.reason } : undefined, opts?.actor ?? 'cli', row.tenant_id);
+    audit(db, 'forget', { targetId: id, metadata: opts?.reason ? { reason: opts.reason } : undefined, actor: opts?.actor ?? 'cli', tenantId: row.tenant_id });
   }
   // Forgetting a child of a summary marks the parent dirty. Not atomic with the DELETE, but
   // markSummaryDirtyInTx is idempotent, so the next child mutation re-marks the parent if this fails.
@@ -364,14 +364,7 @@ function isRejectedBatchWrite(db: DatabaseSyncLike, row: MemoryEntry): boolean {
     checkRejectionGuard(db, entryTenantId, row.id, row.content);
   } catch (err) {
     if (err instanceof RejectedValueError) {
-      audit(
-        db,
-        'reject_refusal',
-        row.id,
-        { digest: err.digest, reason: err.reason },
-        'sleep-batch',
-        entryTenantId,
-      );
+      audit(db, 'reject_refusal', { targetId: row.id, metadata: { digest: err.digest, reason: err.reason }, actor: 'sleep-batch', tenantId: entryTenantId });
       return true;
     }
     throw err;

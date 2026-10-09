@@ -367,20 +367,19 @@ export interface ApplyGraphOpsResult {
   readonly skipped: number;
 }
 
-/** Applies `ops` from index `from` on the caller's open transaction and stops at the first op boundary past `opts.holdMs`.
+/** Applies `ops` from index `opts.from` on the caller's open transaction and stops at the first op boundary past `opts.holdMs`.
  *  Returns where the next chunk starts and how many ops were skipped as stale. */
 export function applyGraphOps(
   db: GraphTxDb,
   hippoRoot: string,
   tenantId: string,
   ops: readonly GraphOp[],
-  from: number,
-  opts: { readonly holdMs: number; readonly clock?: () => number },
+  opts: { readonly from: number; readonly holdMs: number; readonly clock?: () => number },
 ): ApplyGraphOpsResult {
   assertTenantId('applyGraphOps', tenantId);
   const now = opts.clock ?? clock;
   const begunAt = now();
-  let next = from;
+  let next = opts.from;
   let skipped = 0;
   while (next < ops.length) {
     if (!applyGraphOp(db, hippoRoot, tenantId, ops[next])) skipped += 1;

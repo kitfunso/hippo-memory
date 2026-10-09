@@ -641,7 +641,7 @@ describe('(g) fail-loud on a malformed weights constant', () => {
     const all = loadAllEntries(dir);
     const badWeights = { ...MEMORY_VALUE_WEIGHTS, strength: Number.POSITIVE_INFINITY };
 
-    expect(() => rescueSet(all, new Set([condemned.id]), NOW, badWeights, SOURCE_ARTIFACT_SHA256)).toThrow(
+    expect(() => rescueSet(all, new Set([condemned.id]), NOW, { weights: badWeights, digest: SOURCE_ARTIFACT_SHA256 })).toThrow(
       /not a finite number/,
     );
     // Sanity: the real frozen constant is valid — the throw above is

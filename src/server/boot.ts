@@ -41,14 +41,19 @@ function isAddressInfo(
 const VERSION = PACKAGE_VERSION;
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', 'localhost']);
+interface HandleRequestOptions {
+  readonly startedAt: string;
+  readonly streamSlots: Map<string, number>;
+  readonly limiter?: RateLimiter;
+}
+
 async function handleRequest(
   req: IncomingMessage,
   res: ServerResponse,
   opts: ResolvedServeOpts,
-  startedAt: string,
-  streamSlots: Map<string, number>,
-  limiter?: RateLimiter,
+  options: HandleRequestOptions,
 ): Promise<void> {
+  const { startedAt, streamSlots, limiter } = options;
   // Pre-decode raw-URL slash check. Catches `%2F` / `%2f` before
   // Node's URL parser collapses them and they slip past the route table.
   rejectEncodedSlash(req.url ?? '/');
@@ -375,7 +380,7 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
     inflight.add(res);
     res.once('close', () => inflight.delete(res));
     const requestId = openRequest(req, res, opts.slowRequestWarnMs);
-    const run = (): Promise<void> => handleRequest(req, res, served, startedAt, streamSlots, limiter);
+    const run = (): Promise<void> => handleRequest(req, res, served, { startedAt, streamSlots, limiter });
     // A missed port under another store would otherwise create and write a hippo.db that store never reads.
     const guarded = (): Promise<void> => (kind === 'sqlite' ? run() : withSqliteBlocked(kind, run));
     // Inside the scope, so the failure reply's log line carries the id too.

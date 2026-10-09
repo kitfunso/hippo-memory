@@ -154,7 +154,7 @@ class ContainerRun {
     let moved = 0;
     for (const row of selectLiveEntriesBySourcePrefix(this.s.db, this.s.tenantId, old)) {
       const source = this.w.prefix + row.source.slice(old.length);
-      if (renameEntrySourceAndOriginAt(this.s.db, row.tenantId, row.id, row.source, source, origin) === 0) continue;
+      if (renameEntrySourceAndOriginAt(this.s.db, row.tenantId, row.id, { from: row.source, to: source, origin }) === 0) continue;
       moved++;
       this.mirror.push({ ...row, source, origin_project: origin ?? row.origin_project });
     }

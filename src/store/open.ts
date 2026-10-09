@@ -111,7 +111,7 @@ function importLegacyEntries(db: DatabaseSyncLike, hippoRoot: string, legacyEntr
     } catch (err) {
       if (err instanceof RejectedValueError) {
         rejectedCount++;
-        audit(db, 'reject_refusal', err.entryId, { digest: err.digest, reason: err.reason }, 'cli', err.tenantId);
+        audit(db, 'reject_refusal', { targetId: err.entryId, metadata: { digest: err.digest, reason: err.reason }, actor: 'cli', tenantId: err.tenantId });
         continue;
       }
       throw err;

@@ -4,19 +4,20 @@ import { type AuditOp, appendAuditEvent, reportAuditWriteFailure } from '../audi
 import { RejectedValueError } from '../rejection.js';
 import type { JsonValue } from '../json.js';
 
+export interface AuditOptions {
+  readonly targetId?: string;
+  readonly metadata?: Record<string, JsonValue>;
+  readonly actor?: string;
+  readonly tenantId?: string;
+}
+
 /**
  * Emit an audit event for a mutation against `db`. Wrapped so a broken audit
  * log can never crash the surrounding mutation — the SQLite store is still the
  * source of truth and audit failures are diagnosable from the missing rows.
  */
-export function audit(
-  db: ReturnType<typeof openHippoDb>,
-  op: AuditOp,
-  targetId?: string,
-  metadata?: Record<string, JsonValue>,
-  actor: string = 'cli',
-  tenantId?: string,
-): void {
+export function audit(db: ReturnType<typeof openHippoDb>, op: AuditOp, options: AuditOptions = {}): void {
+  const { targetId, metadata, actor = 'cli', tenantId } = options;
   try {
     appendAuditEvent(db, {
       tenantId: tenantId ?? resolveTenantId({}),
@@ -43,12 +44,5 @@ export function auditRejectionRefusal(
   err: RejectedValueError,
   actor: string,
 ): void {
-  audit(
-    db,
-    'reject_refusal',
-    err.entryId,
-    { digest: err.digest, reason: err.reason },
-    actor,
-    err.tenantId,
-  );
+  audit(db, 'reject_refusal', { targetId: err.entryId, metadata: { digest: err.digest, reason: err.reason }, actor, tenantId: err.tenantId });
 }

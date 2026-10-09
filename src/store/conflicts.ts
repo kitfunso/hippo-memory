@@ -609,7 +609,7 @@ function auditConflictResolve(
   // index signature) and isn't directly assignable to audit()'s
   // Record<string, JsonValue> metadata param; a spread into a fresh
   // object literal satisfies it without widening the declared type above.
-  audit(db, 'conflict_resolve', t.keepId, { ...conflictResolveMeta }, t.opts?.rejectedBy ?? 'cli', tenantId);
+  audit(db, 'conflict_resolve', { targetId: t.keepId, metadata: { ...conflictResolveMeta }, actor: t.opts?.rejectedBy ?? 'cli', tenantId });
 }
 
 function purgeRemovedLoserMirrors(

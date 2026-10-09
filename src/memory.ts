@@ -412,6 +412,16 @@ export function strengthSql(now: Date): string {
 /**
  * Derive half-life based on signals, as per PLAN.md table.
  */
+const HIGH_SCHEMA_FIT = 0.7;
+const HIGH_FIT_HALF_LIFE_FACTOR = 1.5;
+const LOW_SCHEMA_FIT = 0.3;
+const LOW_FIT_HALF_LIFE_FACTOR = 0.5;
+// Schema fit blends tag coverage and content similarity; a content match needs this share of shared tokens.
+const TAG_FIT_WEIGHT = 0.6;
+const CONTENT_FIT_WEIGHT = 0.4;
+const CONTENT_TOKEN_SHARE_MIN = 0.2;
+const CONTENT_ENOUGH_FRACTION = 0.1;
+
 export function deriveHalfLife(base: number, entry: Partial<MemoryEntry>): number {
   let hl = base;
 
@@ -421,13 +431,13 @@ export function deriveHalfLife(base: number, entry: Partial<MemoryEntry>): numbe
   }
 
   // High schema fit: consolidates faster (1.5x)
-  if (entry.schema_fit !== undefined && entry.schema_fit > 0.7) {
-    hl *= 1.5;
+  if (entry.schema_fit !== undefined && entry.schema_fit > HIGH_SCHEMA_FIT) {
+    hl *= HIGH_FIT_HALF_LIFE_FACTOR;
   }
 
   // Low schema fit: decay faster (0.5x)
-  if (entry.schema_fit !== undefined && entry.schema_fit < 0.3) {
-    hl *= 0.5;
+  if (entry.schema_fit !== undefined && entry.schema_fit < LOW_SCHEMA_FIT) {
+    hl *= LOW_FIT_HALF_LIFE_FACTOR;
   }
 
   return hl;
@@ -709,7 +719,7 @@ export function schemaFitFrom(content: string, tags: readonly string[], source: 
   if (newTokens.size === 0) return Math.min(1, Math.max(0, tagScore));
 
   // The content score is capped at 1, which this many matching memories reach.
-  const enough = Math.max(5, N * 0.1);
+  const enough = Math.max(5, N * CONTENT_ENOUGH_FRACTION);
   let contentMatches = 0;
   for (const text of source.contents) {
     const entryTokens = significantTokens(text);
@@ -717,11 +727,11 @@ export function schemaFitFrom(content: string, tags: readonly string[], source: 
     for (const token of newTokens) {
       if (entryTokens.has(token)) shared++;
     }
-    if (shared / newTokens.size > 0.2 && ++contentMatches >= enough) break;
+    if (shared / newTokens.size > CONTENT_TOKEN_SHARE_MIN && ++contentMatches >= enough) break;
   }
   const contentScore = Math.min(1, contentMatches / enough);
 
-  const fit = 0.6 * tagScore + 0.4 * contentScore;
+  const fit = TAG_FIT_WEIGHT * tagScore + CONTENT_FIT_WEIGHT * contentScore;
   return Math.min(1, Math.max(0, fit));
 }
 
