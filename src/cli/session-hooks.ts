@@ -447,6 +447,7 @@ function loadCodexWrapperMetadata(): CodexWrapperMetadata {
   if (!fs.existsSync(metadataPath)) {
     throw new Error('Codex wrapper is not installed. Run `hippo hook install codex` first.');
   }
+  // SAFETY: the file is the one installCodexWrapper wrote; handleCodexRun reads only logFile and realCodexPath from it.
   return JSON.parse(fs.readFileSync(metadataPath, 'utf8')) as CodexWrapperMetadata;
 }
 

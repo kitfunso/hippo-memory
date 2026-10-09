@@ -5,7 +5,7 @@ import * as processesModule from '../objects/processes.js';
 import * as policiesModule from '../objects/policies.js';
 import * as skillsModule from '../objects/skills.js';
 import { printError } from './output.js';
-import { nonEmptyStringFlag, stringFlag, type CliFlags, type CommandContext } from './flag-values.js';
+import { isStringFlag, nonEmptyStringFlag, stringFlag, type CliFlags, type CommandContext } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { closeObject, foundOrExit, idArgOrExit, listObjects, printLifecycleTail, type ObjectNames } from './object-verbs.js';
 import { errorMessage } from '../util/log.js';
@@ -18,7 +18,7 @@ const SKILL: ObjectNames = { cmd: 'skill', noun: 'Skill', idLabel: 'skill' };
 // --step yields a string; normalize both to string[]. A value-less --step errors.
 function collectProcessSteps(stepRaw: string | boolean | string[] | undefined): string[] {
   if (Array.isArray(stepRaw)) return stepRaw;
-  if (typeof stepRaw === 'string') return [stepRaw];
+  if (isStringFlag(stepRaw)) return [stepRaw];
   if (stepRaw === true) {
     printError('--step requires a value, e.g. hippo process new "<name>" --step "do X".');
     process.exit(1);

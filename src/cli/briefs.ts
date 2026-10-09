@@ -196,13 +196,13 @@ function graphShow(hippoRoot: string, tenantId: string, entity: string | undefin
 function openInBrowser(out: string): void {
   // Best-effort browser launch; never fail the command if it doesn't work.
   try {
-    const [cmd, cmdArgs] =
+    const [cmd, cmdArgs]: [string, string[]] =
       process.platform === 'win32'
         ? ['cmd', ['/c', 'start', '', out]]
         : process.platform === 'darwin'
           ? ['open', [out]]
           : ['xdg-open', [out]];
-    const child = spawn(cmd, cmdArgs as string[], { detached: true, stdio: 'ignore', windowsHide: true });
+    const child = spawn(cmd, cmdArgs, { detached: true, stdio: 'ignore', windowsHide: true });
     // A missing launcher (e.g. xdg-open absent) emits 'error' asynchronously;
     // an unhandled 'error' event would throw, so swallow it — the file is
     // already written and its path printed above.

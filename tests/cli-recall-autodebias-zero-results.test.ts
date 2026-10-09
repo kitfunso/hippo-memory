@@ -64,6 +64,13 @@ describe('hippo recall with no matching memory keeps the planning-fallacy hint',
     expect(out.planningFallacyHint).toMatchObject({ classTag: 'migration-effort', nClosed: 3, meanRatio: 2 });
   });
 
+  it('--json prints the keys in the order scripts have always seen them', async () => {
+    seedBaserateWithNoMemories();
+    const out = await recallJson();
+
+    expect(Object.keys(out)).toEqual(['query', 'results', 'total', 'suppressionSummary', 'planningFallacyHint']);
+  });
+
   it('text prints the hint line, with the detected phrase quoted, above the no-memories line', async () => {
     seedBaserateWithNoMemories();
     const text = await recall();

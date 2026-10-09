@@ -4,6 +4,14 @@ import type { RecallSearchOpts } from '../api/recall-pipeline.js';
 import type { HippoConfig } from '../core/config.js';
 import { printError } from './output.js';
 
+export function isBooleanFlag(value: string | boolean | string[] | undefined): value is boolean {
+  return typeof value === 'boolean';
+}
+
+export function isStringFlag(value: string | boolean | string[] | undefined): value is string {
+  return typeof value === 'string';
+}
+
 export function parseLimitFlag(value: string | boolean | string[] | undefined): number {
   if (!value) return Infinity;
   const parsed = parseInt(String(value), 10);
@@ -19,7 +27,7 @@ export function parseCountFlag(value: string | boolean | string[] | undefined): 
 export function parseBudgetFlag(value: string | boolean | string[] | undefined, fallback: number): number {
   if (value === undefined) return fallback;
   // A value-less flag and a junk value are different typos; the --hops guard already splits them.
-  if (typeof value !== 'string') {
+  if (!isStringFlag(value)) {
     printError('--budget requires an integer value (e.g. --budget 1500).');
     process.exit(1);
   }
@@ -35,7 +43,7 @@ export function parseBudgetFlag(value: string | boolean | string[] | undefined, 
 export type CliFlags = Record<string, string | boolean | string[]>;
 
 // Whole-arg digits only: parseInt alone reads "1abc" as 1 and a mutating verb would hit the wrong row. Digits past 2^53 round to a neighbouring id, so they are refused too.
-export function parsePositiveId(idRaw: unknown, label: string): number {
+export function parsePositiveId(idRaw: string | undefined, label: string): number {
   const s = String(idRaw ?? '').trim();
   const id = parseInt(s, 10);
   if (!/^\d+$/.test(s) || id <= 0 || !Number.isSafeInteger(id)) {
@@ -58,7 +66,7 @@ export function parseListLimit(flags: CliFlags): number {
 // A value-less flag is `true` and a repeated one is a string[]; only a string counts here.
 export function stringFlag(flags: CliFlags, name: string): string | undefined {
   const v = flags[name];
-  return typeof v === 'string' ? v : undefined;
+  return isStringFlag(v) ? v : undefined;
 }
 
 // An empty value reads as absent, so `--change ""` keeps the default.
@@ -68,7 +76,7 @@ export function nonEmptyStringFlag(flags: CliFlags, name: string): string | unde
 
 export function numberFlag(flags: CliFlags, name: string): number | undefined {
   const v = flags[name];
-  return typeof v === 'string' ? Number(v) : undefined;
+  return isStringFlag(v) ? Number(v) : undefined;
 }
 
 // Any truthy value counts, so a string value is true too.

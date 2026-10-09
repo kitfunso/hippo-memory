@@ -31,7 +31,7 @@ import { printError } from './output.js';
 import { errorMessage, log } from '../util/log.js';
 import { requireInit, runViaServerIfAvailable, learnFromRepo } from './shared.js';
 import { fmt } from './print.js';
-import { type CliFlags, type CommandContext, boolFlag, flagIsTrue, nonEmptyStringFlag } from './flag-values.js';
+import { type CliFlags, type CommandContext, boolFlag, flagIsTrue, isStringFlag, nonEmptyStringFlag } from './flag-values.js';
 import { CONTENT_PREVIEW_CHARS, DATE_PREFIX_CHARS } from '../util/token-text.js';
 
 const STDERR_PREVIEW_CHARS = 80;
@@ -147,7 +147,7 @@ export function handleImport({ hippoRoot, tenantId, args, flags }: CommandContex
   const useGlobal = boolFlag(flags, 'global');
   const dryRun = boolFlag(flags, 'dry-run');
   const extraTags: string[] = Array.isArray(flags['tag'])
-    ? (flags['tag'] as string[])
+    ? flags['tag']
     : flags['tag']
       ? [String(flags['tag'])]
       : [];
@@ -305,13 +305,13 @@ function checkVaultArgs(folderPath: string, flags: CliFlags, useGlobal: boolean)
     printError('hippo import --vault does not support --global (raw rows are tenant-local).');
     process.exit(1);
   }
-  if (typeof flags['name'] !== 'string' || !flags['name'].trim()) {
+  if (!isStringFlag(flags['name']) || !flags['name'].trim()) {
     // --name keys the destructive source-deletion sync; a folder-basename default lets same-basename vaults clobber
     // each other, and a valueless `--name` (boolean true) would silently import under vault:true:*.
     printError('hippo import --vault requires --name <vault> (a non-empty identity key for source-deletion sync).');
     process.exit(1);
   }
-  if (flags['scope'] !== undefined && (typeof flags['scope'] !== 'string' || !flags['scope'].trim())) {
+  if (flags['scope'] !== undefined && (!isStringFlag(flags['scope']) || !flags['scope'].trim())) {
     // Same valueless-flag trap: a bare `--scope` must not become scope "true".
     // Example uses the source-prefixed private form, since a bare `private` scope
     // is NOT treated as private by recall and importVault rejects it.
@@ -469,7 +469,7 @@ export function handlePeers({ tenantId, flags }: CommandContext): void {
 
 export function handleExport({ hippoRoot, tenantId, args, flags }: CommandContext): void {
   requireInit(hippoRoot);
-  const format = (flags['format'] || 'json') as string;
+  const format = String(flags['format'] || 'json');
   const outputPath = args[0] || null;
   const entries = loadAllEntries(hippoRoot, tenantId);
 
