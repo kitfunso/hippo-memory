@@ -4,7 +4,7 @@ import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '.
 import { IncompatibleBinaryError, StoreBusyError } from '../src/db.js';
 import { BodyTimeoutError, BodyTooLargeError, HttpError } from '../src/http-util.js';
 import { ScopeForbiddenError } from '../src/recall-scope.js';
-import { RejectedValueError } from '../src/rejection.js';
+import { RejectedValueError } from '../src/store/rejection.js';
 import { decodeError, encodeError } from '../src/store/sqlite/error-codec.js';
 import { OtherStoreFolderError, SqliteBlockedError, StoreNotPortedError } from '../src/util/sqlite-blocked.js';
 import { arr, both, forAll, int, map, pick, str, type Gen } from './_helpers/property.js';
