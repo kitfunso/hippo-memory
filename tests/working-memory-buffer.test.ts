@@ -246,6 +246,30 @@ describe('wmClear', () => {
   });
 });
 
+describe('tenant scoping', () => {
+  it('keeps one tenant from reading, clearing or evicting another tenant\'s rows', () => {
+    wmPush(tmpDir, { scope: 'shared', content: 'acme note', tenantId: 'acme' });
+    for (let i = 0; i < WM_MAX_ENTRIES + 3; i++) wmPush(tmpDir, { scope: 'shared', content: `globex ${i}`, tenantId: 'globex' });
+
+    expect(wmRead(tmpDir, { tenantId: 'acme' }).map((i) => i.content)).toEqual(['acme note']);
+    expect(wmRead(tmpDir, { tenantId: 'globex', limit: 100 })).toHaveLength(WM_MAX_ENTRIES);
+    expect(wmClear(tmpDir, { tenantId: 'globex' })).toBe(WM_MAX_ENTRIES);
+    expect(wmFlush(tmpDir, { tenantId: 'globex' })).toBe(0);
+    expect(wmRead(tmpDir, { tenantId: 'acme' })).toHaveLength(1);
+  });
+
+  it('still lists a row written before the tenant column was filled in, for the default tenant', () => {
+    const db = openHippoDb(tmpDir);
+    try {
+      db.prepare(`INSERT INTO working_memory(scope, importance, content, metadata_json, created_at, updated_at) VALUES ('old', 1, 'pre-change row', '{}', 't', 't')`).run();
+    } finally {
+      closeHippoDb(db);
+    }
+    expect(wmRead(tmpDir).map((i) => i.content)).toEqual(['pre-change row']);
+    expect(wmRead(tmpDir, { tenantId: 'acme' })).toEqual([]);
+  });
+});
+
 describe('wmFlush', () => {
   it('deletes entries just like wmClear', () => {
     wmPush(tmpDir, { scope: 'flush', content: 'temp note', sessionId: 'sess_done' });

@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { closeHippoDb, openHippoDb } from '../src/db.js';
 import { initStore } from '../src/store/open.js';
 import { serve, type ServerHandle } from '../src/server.js';
+import { createReadyProbe, READY_WINDOW_MS } from '../src/server/ready.js';
 import { sqliteStore } from '../src/store-port.js';
 
 const dirs: string[] = [];
@@ -141,6 +142,32 @@ describe('GET /ready', () => {
       expect((await ready(handle, 'POST')).status).toBe(404);
     } finally {
       await handle.stop();
+    }
+  });
+
+  it('runs one store read for any number of calls in the window, and a broken store flips the answer after it', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'hippo-srv-ready-window-'));
+    dirs.push(root);
+    initStore(root);
+    const real = sqliteStore(root).readiness!;
+    let reads = 0;
+    let clock = 5_000;
+    const probe = createReadyProbe({ ping: () => { reads += 1; return real.ping(); } }, () => clock);
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      const first = await Promise.all(Array.from({ length: 50 }, () => probe()));
+      expect(first.every(Boolean)).toBe(true);
+      expect(reads).toBe(1);
+      writeFileSync(join(root, 'hippo.db'), 'this file is not a database. '.repeat(400));
+      clock += READY_WINDOW_MS - 1;
+      expect(await probe()).toBe(true);
+      expect(reads).toBe(1);
+      clock += 1;
+      const after = await Promise.all(Array.from({ length: 50 }, () => probe()));
+      expect(after.some(Boolean)).toBe(false);
+      expect(reads).toBe(2);
+    } finally {
+      stderrSpy.mockRestore();
     }
   });
 
