@@ -392,6 +392,26 @@ export function entryIdTakenAt(db: DatabaseSyncLike, id: string): boolean {
   return db.prepare(`SELECT 1 FROM memories WHERE id = ?`).get(id) !== undefined;
 }
 
+/** The text, tenant and scope of memory `id`, or undefined when no row holds it. */
+export function entryRejectRowAt(db: DatabaseSyncLike, id: string): { content: string; tenant_id: string; scope: string | null } | undefined {
+  // SAFETY: row's shape matches the three columns named in the SELECT.
+  return db
+    .prepare(`SELECT content, tenant_id, scope FROM memories WHERE id = ?`)
+    .get(id) as { content: string; tenant_id: string; scope: string | null } | undefined;
+}
+
+/** Memory ids held by each typed-object table, with the status of the object that holds them. */
+const OBJECT_TABLES = ['decisions', 'incidents', 'processes', 'policies', 'skills', 'project_briefs', 'customer_notes'] as const;
+
+export function objectMemoryRowsAt(db: DatabaseSyncLike): Array<{ memory_id: string; status: string }> {
+  const out: Array<{ memory_id: string; status: string }> = [];
+  for (const table of OBJECT_TABLES) {
+    // SAFETY: SELECT of two TEXT columns, filtered to a non-null memory_id.
+    out.push(...(db.prepare(`SELECT memory_id, status FROM ${table} WHERE memory_id IS NOT NULL`).all() as { memory_id: string; status: string }[]));
+  }
+  return out;
+}
+
 /** Live rows of a tenant whose source does not start with `sourcePrefix`; `origins` (global store only) limits them to user-global rows and those projects. */
 export function selectRowsOutsideSourcePrefixAt(
   db: DatabaseSyncLike, tenantId: string, sourcePrefix: string, origins: readonly string[] | null,
