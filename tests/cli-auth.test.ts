@@ -21,11 +21,11 @@ describe('hippo auth CLI', () => {
       expect(keyMatch, 'key_id missing in output').toBeTruthy();
       expect(plainMatch, 'plaintext missing in output').toBeTruthy();
       const keyId = keyMatch![1]!;
-      // No --role means an admin key that never expires, so the mint says so: on stderr, and without the key.
-      expect(created.stderr).toContain('no --role given, so this is an admin key, and it never expires');
+      // No --role means a member key that expires, so the mint says so: on stderr, and without the key.
+      expect(created.stderr).toContain('no --role given, so this is a member key');
       expect(created.stderr).not.toContain(plainMatch![1]!);
       const narrow = spawnSync(process.execPath, [cli, 'auth', 'create', '--role', 'member', '--global'], { env, cwd: home, encoding: 'utf8' });
-      expect([narrow.status, narrow.stderr.includes('admin key')]).toEqual([0, false]);
+      expect([narrow.status, narrow.stderr.includes('no --role given')]).toEqual([0, false]);
 
       const listOut = execSync(`node "${cli}" auth list --global`, { env, cwd: home }).toString();
       expect(listOut).toContain(keyId);

@@ -1,6 +1,6 @@
 // API key management: create, list, revoke, and grant or ungrant restricted scopes.
 
-import { ForbiddenError, NotFoundError } from '../api-errors.js';
+import { BadRequestError, ForbiddenError, NotFoundError } from '../api-errors.js';
 import {
   mintApiKey,
   type ApiKeyListItem, type ApiKeyListRow, type ApiKeyRecord, type ListApiKeysOpts, type NewApiKey,
@@ -27,13 +27,12 @@ function keyIdOfSubject(subject: string): string | null {
 
 export interface AuthCreateOpts {
   label?: string;
-  /**
-   * Authorization role for the new key. Defaults to `'admin'` for
-   * back-compat with keys minted before roles existed (the api_keys.role column DEFAULT also
-   * resolves to 'admin' if omitted from the INSERT). Member keys are
-   * 403-blocked from admin-gated routes (e.g. `POST /v1/sleep`).
-   */
+  /** Defaults to `'member'`, which admin-gated routes such as `POST /v1/sleep` refuse; an admin key has to be asked for by name. */
   role?: 'admin' | 'member';
+  /** Days until the key expires: above 0 and at most 3650. Defaults to 90. */
+  ttlDays?: number;
+  /** True mints a key that never expires, which has to be asked for by name; refused together with `ttlDays`. */
+  noExpiry?: boolean;
 }
 
 export interface AuthCreateResult {
@@ -42,6 +41,8 @@ export interface AuthCreateResult {
   tenantId: string;
   /** The role bound to the new key (admin | member). */
   role: 'admin' | 'member';
+  /** ISO time the key stops working; null for a key that never expires. */
+  expiresAt: string | null;
 }
 
 /**
@@ -83,6 +84,25 @@ function newKey<F extends KeyFields>(ctx: Context, fields: F): MintedKeyRow<F> {
   return { plaintext, key: { ...fields, keyId, keyHash, tenantId: ctx.tenantId, createdAt: new Date().toISOString() } };
 }
 
+/** Days a key lives when its mint names no expiry, so a key nobody remembers stops working by itself. */
+const DEFAULT_KEY_TTL_DAYS = 90;
+
+// The ceiling keeps toISOString in range.
+const MAX_TTL_DAYS = 3650;
+
+/** A 400, not a RangeError, since the caller of the mint chose these. */
+function mintExpiry({ ttlDays, noExpiry }: AuthCreateOpts): string | null {
+  if (noExpiry && ttlDays !== undefined) {
+    throw new BadRequestError('send ttlDays or noExpiry, not both');
+  }
+  if (noExpiry) return null;
+  const days = ttlDays ?? DEFAULT_KEY_TTL_DAYS;
+  if (!Number.isFinite(days) || days <= 0 || days > MAX_TTL_DAYS) {
+    throw new BadRequestError(`ttlDays must be above 0 and at most ${MAX_TTL_DAYS}`);
+  }
+  return new Date(Date.now() + days * DAY_MS).toISOString();
+}
+
 function adminKeyMint(ctx: Context, opts: AuthCreateOpts): KeyMintPlan<KeyMint> {
   if (ctx.actor.role !== 'admin') {
     throw new ForbiddenError('Only an admin key can create API keys');
@@ -90,18 +110,17 @@ function adminKeyMint(ctx: Context, opts: AuthCreateOpts): KeyMintPlan<KeyMint> 
   if (ctx.actor.viaAuthResolver && opts.role === 'admin') {
     throw new ForbiddenError('A key minted through the auth resolver can only be a member key');
   }
-  const role = opts.role ?? (ctx.actor.viaAuthResolver ? 'member' : 'admin');
+  const role = opts.role ?? 'member';
   const label = opts.label ?? null;
-  const { plaintext, key } = newKey(ctx, { label, role, ownerSubject: null, expiresAt: null });
-  // The plaintext is NEVER logged; metadata carries label + role, keyId is non-secret.
-  return { plaintext, mint: { key, actor: ctx.actor.subject, metadata: { label, role } } };
+  const expiresAt = mintExpiry(opts);
+  const { plaintext, key } = newKey(ctx, { label, role, ownerSubject: null, expiresAt });
+  // The plaintext is NEVER logged; the audit row carries what the key can do and for how long, keyId is non-secret.
+  return { plaintext, mint: { key, actor: ctx.actor.subject, metadata: { label, role, expiresAt } } };
 }
 
 function createResult({ key }: KeyMint, plaintext: string): AuthCreateResult {
-  return { keyId: key.keyId, plaintext, tenantId: key.tenantId, role: key.role };
+  return { keyId: key.keyId, plaintext, tenantId: key.tenantId, role: key.role, expiresAt: key.expiresAt };
 }
-
-const MAX_TTL_DAYS = 3650;
 
 export interface AuthCreateSelfOpts {
   label?: string;

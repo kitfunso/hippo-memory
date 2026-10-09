@@ -59,7 +59,7 @@ export const BOOLEAN_FLAGS: ReadonlySet<string> = new Set([
   'cross-project', 'dry-run', 'equal-sources', 'error', 'evc-adaptive', 'extract',
   'filter-conflicts', 'fix', 'force', 'forget', 'git', 'global', 'good', 'graph-stream',
   'help', 'include-logs', 'include-superseded', 'inferred', 'json', 'last-session', 'multihop', 'no-hooks',
-  'no-learn', 'no-mmr', 'no-propagate', 'no-schedule', 'no-share', 'no-summarize-older',
+  'no-expiry', 'no-learn', 'no-mmr', 'no-propagate', 'no-schedule', 'no-share', 'no-summarize-older',
   'observed', 'open', 'physics', 'pin', 'pinned-only', 'reject-loser', 'rerank-utility',
   'reset-physics', 'save-baseline', 'show-cases', 'stats', 'stdin',
   'strict', 'suite', 'turn', 'value-aware', 'verified', 'version', 'why',
@@ -80,7 +80,7 @@ export const KNOWN_FLAGS: ReadonlySet<string> = new Set([
   'role', 'run', 'runtime', 'salience-threshold', 'scan', 'scope', 'session', 'session-id', 'since',
   'source', 'start-offset', 'started-at', 'state', 'status', 'step', 'steps', 'success', 'summary',
   'supersedes', 'tag', 'target', 'target-runtime', 'task', 'team', 'tenant', 'tenant-id', 'tests',
-  'text', 'threshold', 'title', 'tls-cert', 'tls-key', 'to', 'transcript', 'trigger', 'type', 'unit', 'value', 'vault',
+  'text', 'threshold', 'title', 'tls-cert', 'tls-key', 'to', 'transcript', 'trigger', 'ttl-days', 'type', 'unit', 'value', 'vault',
 ]);
 
 // Commands that delete or hide memories: an unknown flag here stops the run instead of being ignored.
@@ -624,7 +624,7 @@ function rejectEmptyScope(flags: CliFlags): void {
 // downstream guard because each comparison against it is false.
 const NUMERIC_FLAGS = [
   'days', 'threshold', 'min-score', 'port', 'limit', 'mmr-lambda', 'local-bump',
-  'min-results', 'reranker-top-k', 'min-mrr', 'embedding-weight', 'max-cases',
+  'min-results', 'reranker-top-k', 'min-mrr', 'embedding-weight', 'max-cases', 'ttl-days',
 ];
 
 function rejectNonNumericFlags(flags: CliFlags): void {

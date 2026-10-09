@@ -496,6 +496,7 @@ class AuthCreated(_Base):
     label: str | None = None
     created_at: str | None = None
     role: str | None = None
+    expires_at: str | None = None  # None from a server that predates it, or for a key that never expires
 
 
 class AuthKey(_Base):

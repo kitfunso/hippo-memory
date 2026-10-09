@@ -298,7 +298,9 @@ export const VERB_USAGE = {
   auth <sub>               Manage API keys (A5 stub auth)
     auth create            Mint a new API key (plaintext shown ONCE)
       --label <s>          Optional human label
-      --role <r>           admin | member (default: admin; member blocked from /v1/sleep)
+      --role <r>           admin | member (default: member; member blocked from /v1/sleep)
+      --ttl-days <n>       Days until the key expires (default: 90, at most 3650)
+      --no-expiry          Mint a key that never expires
       --tenant <id>        Override tenant (defaults to HIPPO_TENANT)
       --json               Output as JSON
       --global             Operate on the global store

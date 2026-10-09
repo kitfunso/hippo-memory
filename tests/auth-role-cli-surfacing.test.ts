@@ -37,11 +37,11 @@ function newCtx(tenantId = 'default') {
 }
 
 describe('auth CLI role surfacing', () => {
-  it('authCreate({}) without role defaults to admin', () => {
+  it('authCreate({}) without role defaults to member', () => {
     const t = newCtx();
     try {
       const result = authCreate(t.ctx, {});
-      expect(result.role).toBe('admin');
+      expect(result.role).toBe('member');
     } finally {
       t.cleanup();
     }
@@ -70,7 +70,7 @@ describe('auth CLI role surfacing', () => {
   it('listApiKeys returns role column for each row', () => {
     const t = newCtx();
     try {
-      authCreate(t.ctx, { label: 'admin-key' }); // defaults to admin
+      authCreate(t.ctx, { role: 'admin', label: 'admin-key' });
       authCreate(t.ctx, { role: 'member', label: 'member-key' });
 
       const db = openHippoDb(t.ctx.hippoRoot);

@@ -12,25 +12,33 @@ import { errorMessage } from '../log.js';
 // Auth subcommands
 // ---------------------------------------------------------------------------
 
+/** --role as given, or undefined for the default; anything else exits 1, so a typo never picks a role. */
+function roleFlagOrExit(flags: CliFlags): 'admin' | 'member' | undefined {
+  const roleFlag = stringFlag(flags, 'role');
+  if (roleFlag !== undefined && roleFlag !== 'admin' && roleFlag !== 'member') {
+    printError(`Invalid --role value: '${roleFlag}'. Use 'admin' or 'member'.`);
+    process.exit(1);
+  }
+  return roleFlag;
+}
+
+/** Says which defaults a mint took and how to ask for the wider key. Stderr keeps --json output clean. */
+function noteMintDefaults(roleGiven: boolean, expiryGiven: boolean): void {
+  const notes: string[] = [];
+  if (!roleGiven) notes.push('no --role given, so this is a member key (pass --role admin for an admin key)');
+  if (!expiryGiven) notes.push('no --ttl-days or --no-expiry given, so it expires in 90 days');
+  if (notes.length > 0) printError(`hippo auth create: ${notes.join('; ')}.`);
+}
+
 function cmdAuthCreate(hippoRoot: string, flags: CliFlags): void {
   const root = resolveAuthRoot(hippoRoot, flags);
   const tenantFlag = stringFlag(flags, 'tenant');
   const labelFlag = stringFlag(flags, 'label');
   const asJson = boolFlag(flags, 'json');
-
-  // Accepts 'admin' | 'member' only; anything else exits 1 so a typo doesn't silently default to admin.
-  const roleFlag = stringFlag(flags, 'role');
-  let role: 'admin' | 'member' = 'admin';
-  if (roleFlag !== undefined) {
-    if (roleFlag !== 'admin' && roleFlag !== 'member') {
-      printError(`Invalid --role value: '${roleFlag}'. Use 'admin' or 'member'.`);
-      process.exit(1);
-    }
-    role = roleFlag;
-  } else {
-    // The default is the widest key hippo mints, so the operator is told at the moment of choosing. Stderr keeps --json output clean.
-    printError('hippo auth create: no --role given, so this is an admin key, and it never expires. Pass --role member for a narrower key; revoke either with `hippo auth revoke <key_id>`.');
-  }
+  const role = roleFlagOrExit(flags);
+  const ttlFlag = stringFlag(flags, 'ttl-days');
+  const ttlDays = ttlFlag === undefined ? undefined : Number(ttlFlag);
+  const noExpiry = boolFlag(flags, 'no-expiry');
 
   // The CLI's --tenant flag is the only legitimate cross-tenant override
   // (admin minting a key for another tenant from the local machine). It
@@ -42,7 +50,15 @@ function cmdAuthCreate(hippoRoot: string, flags: CliFlags): void {
     tenantId: tenantFlag ?? resolveTenantId({}),
     actor: api.adminActor('cli'),
   };
-  const result = api.authCreate(ctx, { label: labelFlag, role });
+  let result: api.AuthCreateResult;
+  try {
+    result = api.authCreate(ctx, { label: labelFlag, role, ttlDays, noExpiry: noExpiry || undefined });
+  } catch (err) {
+    if (!(err instanceof api.BadRequestError)) throw err;
+    printError(`hippo auth create: ${err.message} (--ttl-days, --no-expiry).`);
+    process.exit(1);
+  }
+  noteMintDefaults(role !== undefined, ttlFlag !== undefined || noExpiry);
 
   if (asJson) {
     console.log(JSON.stringify({
@@ -51,6 +67,7 @@ function cmdAuthCreate(hippoRoot: string, flags: CliFlags): void {
       tenantId: result.tenantId,
       label: labelFlag ?? null,
       role: result.role,
+      expiresAt: result.expiresAt,
     }));
     return;
   }
@@ -58,6 +75,7 @@ function cmdAuthCreate(hippoRoot: string, flags: CliFlags): void {
   console.log(`key_id:    ${result.keyId}`);
   console.log(`plaintext: ${result.plaintext}`);
   console.log(`role:      ${result.role}`);
+  console.log(`expires:   ${result.expiresAt ?? 'never'}`);
   console.log('');
   console.log('!! WARNING: this is the ONLY time the plaintext key will be shown. !!');
   console.log('!! Copy it now. Hippo stores only a scrypt hash and cannot recover it. !!');
