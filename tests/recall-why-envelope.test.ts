@@ -21,7 +21,7 @@ describe('hippo recall --why exposes envelope', () => {
         `node "${cli}" remember "envelope-canary-marker uniq42 distinguishing token" --kind distilled --scope team:eng --owner user:42 --artifact-ref gh://owner/repo/pr/123 --global`,
         { env, cwd: home },
       );
-      const out = execSync(`node "${cli}" recall "envelope-canary-marker uniq42" --why --global`, { env, cwd: home }).toString();
+      const out = execSync(`node "${cli}" recall "envelope-canary-marker uniq42" --why`, { env, cwd: home }).toString();
       expect(out).toContain('kind: distilled');
       expect(out).toContain('scope: team:eng');
       expect(out).toContain('owner: user:42');
@@ -73,7 +73,7 @@ describe('hippo recall --why exposes envelope', () => {
         `node "${cli}" remember "envelope-json-marker rollback-uniq43 token" --kind distilled --owner agent:claude --artifact-ref slack://team/channel/1700.123 --global`,
         { env, cwd: home },
       );
-      const out = execSync(`node "${cli}" recall "envelope-json-marker rollback-uniq43" --why --json --global`, { env, cwd: home }).toString();
+      const out = execSync(`node "${cli}" recall "envelope-json-marker rollback-uniq43" --why --json`, { env, cwd: home }).toString();
       const parsed = JSON.parse(out);
       expect(parsed.results.length).toBeGreaterThan(0);
       const first = parsed.results[0];

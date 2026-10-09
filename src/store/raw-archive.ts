@@ -24,6 +24,11 @@ interface ArchivedMemoryRow {
   dag_parent_id: string | null;
 }
 
+/** Stamps the archived copy of `memoryId` as having its markdown mirror cleaned at `at`. */
+export function markMirrorCleaned(db: DatabaseSyncLike, memoryId: string, at: string): void {
+  db.prepare(`UPDATE raw_archive SET mirror_cleaned_at = ? WHERE memory_id = ?`).run(at, memoryId);
+}
+
 function loadRawRow(db: DatabaseSyncLike, id: string): ArchivedMemoryRow {
   // SAFETY: SELECT * FROM memories returns every column of the memories table; only
   // kind, tenant_id, and dag_parent_id are read below, all guaranteed present (possibly

@@ -218,19 +218,6 @@ export function loadRelationsAmong(
   }
 }
 
-export function loadEntityById(hippoRoot: string, tenantId: string, id: number): Entity | null {
-  assertTenantId('loadEntityById', tenantId);
-  const db = openHippoDb(hippoRoot);
-  try {
-    // SAFETY: row's shape matches the columns named in ENTITY_COLS above.
-    const row = db.prepare(`SELECT ${ENTITY_COLS} FROM entities WHERE id = ? AND tenant_id = ?`)
-      .get(id, tenantId) as EntityRow | undefined;
-    return row ? rowToEntity(row) : null;
-  } finally {
-    closeHippoDb(db);
-  }
-}
-
 /**
  * Map consolidated source memory ids -> their graph entities. The SEED step of
  * multi-hop recall (recall result memory ids -> entities to traverse from). Tenant-

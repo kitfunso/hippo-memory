@@ -17,6 +17,7 @@ import {
 } from '../store/dormant.js';
 import { createMemory, calculateStrength, type MemoryEntry } from '../memory.js';
 import { appendAuditEvent, reportAuditWriteFailure } from '../store/audit.js';
+import { entryIdTakenAt } from '../store/entry-reads.js';
 import { loadConfig } from '../config.js';
 import { canTouchScope, personalScopeOf, touchableScopeSql, type SqlFragment } from '../recall-scope.js';
 import type { Context } from './types.js';
@@ -99,7 +100,7 @@ function restorableSnapshot(db: StoreDb, ctx: Context, id: string): DormantSnaps
   if (!dormant || !canTouchScope(ctx.actor, dormant.entry.scope ?? null)) {
     throw new NotFoundError(`dormant memory not found: ${id}`);
   }
-  if (db.prepare(`SELECT 1 FROM memories WHERE id = ?`).get(id) !== undefined) {
+  if (entryIdTakenAt(db, id)) {
     throw new ConflictError(`memory ${id} is already active; forget it before restoring its dormant copy`);
   }
   return dormant;
