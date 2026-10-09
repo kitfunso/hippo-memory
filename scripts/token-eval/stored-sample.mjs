@@ -87,6 +87,12 @@ export function scoreStored(out, labelsFile) {
   if (!fs.existsSync(keyFile(out))) throw new Error('the stored sample is not drawn');
   const key = readJson(keyFile(out));
   const labels = parseLabels(fs.readFileSync(labelsFile, 'utf8'), key.units.map((u) => u.file), YES_NO);
+  if (fs.existsSync(scoreFile(out))) {
+    // A scored sample is final: new labels after seeing the score would be a reroll of the reported agreement.
+    const old = readJson(scoreFile(out));
+    if (key.units.some((u) => old.labels[u.file] !== labels.get(u.file))) throw new Error('the stored sample is already scored with other labels; a scored sample is final');
+    return `stored sample: ${old.agree} of ${old.n} labels agree with the key-phrase judgement\n`;
+  }
   const table = { yesYes: 0, yesNo: 0, noYes: 0, noNo: 0 };
   const perStratum = { yes: { n: 0, agree: 0 }, no: { n: 0, agree: 0 } };
   for (const u of key.units) {

@@ -8,9 +8,10 @@ import { readerDiff } from '../scripts/token-eval/grading.mjs';
 import { runCli as analyze } from '../scripts/token-eval/z0-analyze.mjs';
 import { checkerIdentity } from '../scripts/token-eval/checker-identity.mjs';
 import { equalShares, fillStrata, kappa, parseLabels, seededOrder, wilson } from '../scripts/token-eval/g5-draw.mjs';
-import { pairDiff } from '../scripts/token-eval/reader-sample.mjs';
-import { listGrades } from '../scripts/token-eval/regrade.mjs';
+import { assertCheckersJudged, pairDiff } from '../scripts/token-eval/reader-sample.mjs';
+import { listGrades, writeRegraded } from '../scripts/token-eval/regrade.mjs';
 import { g5 } from '../scripts/token-eval/z0-gates.mjs';
+import { cellKey } from '../scripts/token-eval/z0-records.mjs';
 import { CHECKS, cleanup, tmp } from './fixtures/z0-harness.js';
 import { GRADING, PRICES, generate, jsonl } from './fixtures/z0-gen.js';
 import { PHRASE, SEQ, bundledOut, cli, gradeDir, readJson, rowOf, runRoot, sealedKey, storedRecord, synthOut, writeRows, type Cell, type Verdict } from './fixtures/z0-g5.js';
@@ -301,6 +302,79 @@ describe('reader sample labels and scoring', () => {
     expect(next(failed, 3)).toMatchObject({ code: 0 });
   });
 
+  it('a passing round covers only the checkers it judged: grading refuses post-fix rows from another one and leaves no grading.json (166)', () => {
+    const s = synthOut([...cells('A0', many('pass', 10)), ...cells('A1', many('fail', 10))]);
+    expect(draw(s.out, s.tasks, ['--n', '6'])).toMatchObject({ code: 0 });
+    expect(score(s.out, labelsFor(pairsOf(s.out)))).toMatchObject({ code: 0 });
+    expect(gradingOf(s.out)).toMatchObject({ readerSample: { n: 6, disagreements: 0 }, g5: { pass: 'repro' } });
+    const turned = (v: Verdict): Verdict => (v === 'pass' ? 'fail' : 'pass');
+    const postfix = (sha: string, turn: boolean) => writeRows(s.out, listGrades(s.out).map((e) => rowOf(e.grade, 'postfix', turn ? { first: turned(e.grade.verdicts.first) } : {}, sha)), 'postfix');
+    // Every verdict turned by a checker no reader saw: the two runs agree, so nothing flips and only the reader score could object.
+    postfix('y', true);
+    const refused = cli(['grading', '--out', s.out]);
+    expect(refused).toMatchObject({ code: 1, stderr: expect.stringContaining('reader round 1 passed') });
+    expect(refused.stderr).toContain('f1-l1');
+    expect(existsSync(join(s.out, 'grading.json'))).toBe(false);
+    postfix('x', false);
+    expect(gradingOf(s.out)).toMatchObject({ readerSample: { n: 6, disagreements: 0 }, g5: { pass: 'postfix', readerRound: 1 } });
+  });
+
+  it('only a passing scored round freezes the checkers, and only to the ones it judged (166)', () => {
+    const fresh = () => synthOut([...cells('A0', many('pass', 10)), ...cells('A1', many('fail', 10))]);
+    const changed = (out: string) => () => assertCheckersJudged(out, [['f1-l1', 'y']]);
+    const passed = fresh();
+    expect(changed(passed.out)).not.toThrow();
+    expect(draw(passed.out, passed.tasks, ['--n', '6'])).toMatchObject({ code: 0 });
+    expect(changed(passed.out)).not.toThrow();
+    expect(score(passed.out, labelsFor(pairsOf(passed.out)))).toMatchObject({ code: 0 });
+    expect(changed(passed.out)).toThrow(/reader round 1 passed.*f1-l1/);
+    expect(() => assertCheckersJudged(passed.out, [['f1-l1', 'x']])).not.toThrow();
+    const failed = fresh();
+    expect(draw(failed.out, failed.tasks, ['--n', '6'])).toMatchObject({ code: 0 });
+    expect(score(failed.out, labelsFor(pairsOf(failed.out), () => true))).toMatchObject({ code: 0 });
+    expect(changed(failed.out)).not.toThrow();
+  });
+
+  it('refuses post-fix rows from two versions of one checker, at grading and at the round draw (166)', () => {
+    const s = synthOut([...cells('A0', many('pass', 10)), ...cells('A1', many('fail', 10))]);
+    expect(draw(s.out, s.tasks, ['--n', '6'])).toMatchObject({ code: 0 });
+    expect(score(s.out, labelsFor(pairsOf(s.out), () => true))).toMatchObject({ code: 0 });
+    const entries = listGrades(s.out);
+    const under = (sha: string) => entries.map((e) => rowOf(e.grade, 'postfix', {}, sha));
+    const odd = entries[3];
+    // A second fix regraded one cell only: its later row wins, so that cell's verdict comes from another checker than the rest.
+    writeRows(s.out, [...under('y'), rowOf(odd.grade, 'postfix', {}, 'z')], 'postfix');
+    for (const r of [cli(['grading', '--out', s.out]), draw(s.out, s.tasks, ['--round', '2', '--n', '6'])]) {
+      expect(r).toMatchObject({ code: 1, stderr: expect.stringContaining('2 versions of the checker') });
+      expect(r.stderr).toContain('f1-l1');
+      expect(r.stderr).toContain(odd.key);
+    }
+    writeRows(s.out, under('z'), 'postfix');
+    expect(draw(s.out, s.tasks, ['--round', '2', '--n', '6'])).toMatchObject({ code: 0 });
+  });
+
+  it('a flip that only a post-fix row holds drops its lesson (19)', () => {
+    const s = synthOut(cells('A0', many('pass', 3)));
+    expect(gradingOf(s.out).flippedLessons).toEqual([]);
+    const rows = listGrades(s.out).map((e, i) => {
+      const row = rowOf(e.grade, 'postfix');
+      return i === 1 ? { ...row, checks: row.checks.map((c) => ({ ...c, second: 'fail', flip: true, reason: 'verdict' })) } : row;
+    });
+    writeRows(s.out, rows, 'postfix');
+    expect(gradingOf(s.out)).toMatchObject({ flippedLessons: ['f1-l1'], g5: { pass: 'postfix' } });
+  });
+
+  it('writeRegraded refuses while a valid cell lacks a done post-fix row, and writes no file', () => {
+    const dir = tmp('z0-g5-regraded-');
+    const records = [0, 1, 2].map((p) => storedRecord('A0', 1, p, true));
+    const runs = join(dir, 'runs.jsonl');
+    writeFileSync(runs, records.map((r) => `${JSON.stringify(r)}\n`).join(''));
+    const done = { status: 'done', checks: [{ which: 'first', regraded: 'pass' }, { which: 'final', regraded: 'pass' }] };
+    const rows = new Map<string, object>(records.map((r, i) => [cellKey(r), i === 1 ? { status: 'error', checks: [] } : done]));
+    expect(() => writeRegraded(runs, rows)).toThrow(`1 valid cells lack a done post-fix row (${cellKey(records[1])})`);
+    expect(existsSync(join(dir, 'runs.regraded.jsonl'))).toBe(false);
+  });
+
   it('refuses a grade.json in the wrong folder, and every alias of --out shares one lock (31)', () => {
     const s = synthOut(cells('A0', many('pass', 3)));
     mkdirSync(gradeDir(s.out, 'A1'), { recursive: true });
@@ -383,6 +457,24 @@ describe('stored sample (179)', () => {
     expect(st.ci95[1]).toBeCloseTo(0.9266, 4);
     expect(wilson(25, 30)?.map((x) => Number(x.toFixed(4)))).toEqual([0.6644, 0.9266]);
     expect(kappa({ yesYes: 4, yesNo: 0, noYes: 0, noNo: 0 })).toBeNull();
+  });
+
+  it('a scored stored sample is final: the same labels print the score again, other labels are refused (179)', () => {
+    const s = storedOut();
+    expect(cli(['stored', '--out', s.out, '--tasks', s.tasks, '--seed', '3'])).toMatchObject({ code: 0 });
+    const units: { file: string; judged: string }[] = sealedKey(s.out, 'stored.key.json').units;
+    const other = (j: string) => (j === 'yes' ? 'no' : 'yes');
+    const scoreWith = (flip: boolean) => {
+      const file = join(tmp('z0-g5-st-'), 'labels.tsv');
+      writeFileSync(file, units.map((u) => `${u.file}\t${flip ? other(u.judged) : u.judged}\n`).join(''));
+      return cli(['stored', '--out', s.out, '--labels', file]);
+    };
+    const first = scoreWith(false);
+    expect(first).toMatchObject({ code: 0, stdout: expect.stringContaining('30 of 30') });
+    const saved = readFileSync(join(s.out, 'g5', 'sealed', 'stored.score.json'), 'utf8');
+    expect(scoreWith(false)).toEqual(first);
+    expect(scoreWith(true)).toMatchObject({ code: 1, stderr: expect.stringContaining('already scored') });
+    expect(readFileSync(join(s.out, 'g5', 'sealed', 'stored.score.json'), 'utf8')).toBe(saved);
   });
 
   it('wilson stays inside [0, 1] at full and zero agreement, and the analyzer takes the scorer\'s own full-agreement output (28d)', () => {

@@ -4,8 +4,8 @@ import { readFileSync, realpathSync, renameSync, rmSync, writeFileSync, statSync
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { checkerIdentity } from '../scripts/token-eval/checker-identity.mjs';
-import { CHECKS, cleanup } from './fixtures/z0-harness.js';
-import { cli, copyOut, dumpsIn, grading, keyOf, lessonOf, readGrading, regrade, rowFor, rowsOf, sharedRun, TOKEN, type Shared } from './fixtures/z0-regrade.js';
+import { CHECKS, cleanup, tmp } from './fixtures/z0-harness.js';
+import { cli, copyOut, dumpsIn, grading, keyOf, lessonOf, readGrading, regrade, rowFor, rowsOf, sharedRun, TOKEN, type RawSpec, type Shared } from './fixtures/z0-regrade.js';
 
 const savedToken = process.env.CLAUDE_CODE_OAUTH_TOKEN;
 let shared: Shared;
@@ -50,6 +50,15 @@ describe('z0-regrade regrade and grading', () => {
     expect(await grading(c.out)).toMatchObject({ code: 0 });
     expect(readGrading(c.out)).toMatchObject({ readerSample: { n: pairs.length, disagreements: 0 }, g5: { readerRound: 1 } });
     expect(pairs.length).toBeGreaterThan(0);
+    // The round passed, so the checkers are frozen: a changed one is refused before any cell runs.
+    const raw: RawSpec = JSON.parse(readFileSync(c.tasks, 'utf8'));
+    const { check } = lessonOf(raw, 'f1-l1');
+    const fixed = join(tmp('z0-rg-fix-'), 'toggle-fixed.mjs');
+    writeFileSync(fixed, `${readFileSync(check.script, 'utf8')}// fixed\n`);
+    check.script = fixed;
+    writeFileSync(c.tasks, JSON.stringify(raw));
+    expect(await regrade(c, ['--post-fix', '--cell', keyOf('a1')])).toMatchObject({ code: 1, stderr: expect.stringContaining('reader round 1 passed') });
+    expect(rowsOf(c.out, 'postfix')).toEqual([]);
   }, 300_000);
 
   it('a checker that fails at the regrade puts its lesson in flippedLessons (2)', async () => {
