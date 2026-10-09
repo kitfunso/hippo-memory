@@ -78,55 +78,59 @@ function splitMarkdown(content: string): string[] {
   const lines = content.split('\n');
   let current = '';
 
-  for (const line of lines) {
-    const trimmed = line.trim();
-
-    // Heading: start a new chunk
-    if (/^#{1,6}\s+/.test(trimmed)) {
-      if (current.trim()) chunks.push(current.trim());
-      current = trimmed;
-      continue;
-    }
-
-    // Bullet point: each bullet is its own chunk (flush previous if not a bullet context)
-    if (/^[-*+]\s+/.test(trimmed)) {
-      if (current.trim() && !/^[-*+]\s+/.test(current.split('\n')[0])) {
-        chunks.push(current.trim());
-        current = '';
-      }
-      if (current.trim()) {
-        chunks.push(current.trim());
-        current = '';
-      }
-      current = trimmed.replace(/^[-*+]\s+/, '').trim();
-      continue;
-    }
-
-    // Numbered list item
-    if (/^\d+\.\s+/.test(trimmed)) {
-      if (current.trim()) {
-        chunks.push(current.trim());
-        current = '';
-      }
-      current = trimmed.replace(/^\d+\.\s+/, '').trim();
-      continue;
-    }
-
-    // Empty line
-    if (!trimmed) {
-      if (current.trim()) {
-        chunks.push(current.trim());
-        current = '';
-      }
-      continue;
-    }
-
-    // Regular line: append to current
-    current = current ? current + ' ' + trimmed : trimmed;
-  }
+  for (const line of lines) current = appendLine(chunks, current, line);
 
   if (current.trim()) chunks.push(current.trim());
   return chunks.filter(Boolean);
+}
+
+/** Takes one line into the chunk being built, pushing that chunk when the line ends it; returns the chunk still open. */
+function appendLine(chunks: string[], open: string, line: string): string {
+  let current = open;
+  const trimmed = line.trim();
+
+  // Heading: start a new chunk
+  if (/^#{1,6}\s+/.test(trimmed)) {
+    if (current.trim()) chunks.push(current.trim());
+    current = trimmed;
+    return current;
+  }
+
+  // Bullet point: each bullet is its own chunk (flush previous if not a bullet context)
+  if (/^[-*+]\s+/.test(trimmed)) {
+    if (current.trim() && !/^[-*+]\s+/.test(current.split('\n')[0])) {
+      chunks.push(current.trim());
+      current = '';
+    }
+    if (current.trim()) {
+      chunks.push(current.trim());
+      current = '';
+    }
+    current = trimmed.replace(/^[-*+]\s+/, '').trim();
+    return current;
+  }
+
+  // Numbered list item
+  if (/^\d+\.\s+/.test(trimmed)) {
+    if (current.trim()) {
+      chunks.push(current.trim());
+      current = '';
+    }
+    current = trimmed.replace(/^\d+\.\s+/, '').trim();
+    return current;
+  }
+
+  // Empty line
+  if (!trimmed) {
+    if (current.trim()) {
+      chunks.push(current.trim());
+      current = '';
+    }
+    return current;
+  }
+
+  // Regular line: append to current
+  return current ? current + ' ' + trimmed : trimmed;
 }
 
 /**

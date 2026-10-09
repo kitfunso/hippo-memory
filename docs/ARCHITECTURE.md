@@ -551,6 +551,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 
 ### src/instruction-detect.ts
 - `module header`: Prompt-injection detection for untrusted memory content (CD5).
+- `screeningForm`: the second text the patterns read, after the text as written. In order: character references decoded once, NFKC, zero-width, soft-hyphen and bidi format characters removed, a closed table of 36 Cyrillic and Greek look-alike letters folded, runs of spaces and tabs collapsed to one space. Line breaks stay a sentence bound: collapsing them too flagged 9 of the 76 rows of the benign corpus in `tests/instruction-detect.test.ts` (lists and chat lines that end with no full stop). On 100 kB of unflagged text the whole check takes 0.8 to 3.9 ms against 0.2 to 1.2 ms before it.
 
 ### src/mcp/admin-tools.ts
 - `runPredictBaserateTool`: J3 reference-class / planning-fallacy detector. Reads from the E2 predictions table; returns text-only response matching the existing MCP tool convention (no structured JSON over the wire). Direct call to computePredictionBaserate; helper opens its own db + emits audit (single source of truth, no caller-site drift).

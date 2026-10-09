@@ -90,14 +90,30 @@ function parkAndAck(
   sendJson(d.res, 200, { ok: true, status: 'dlq' });
 }
 
-function routeSignedSlackPayload(d: SignedSlackRequest): void {
-  const { rawBody, res } = d;
+function teamIdInRawBody(rawBody: string): string | null {
   // Cheap regex extracts team_id from a (possibly malformed) raw body so the
   // DLQ row carries it for triage even when JSON.parse fails.
-  const teamIdFromRaw = (() => {
-    const m = rawBody.match(/"team_id"\s*:\s*"([^"]+)"/);
-    return m ? m[1] : null;
-  })();
+  const m = rawBody.match(/"team_id"\s*:\s*"([^"]+)"/);
+  return m ? m[1] : null;
+}
+
+/** Answers Slack's URL-verification handshake; false when the payload is anything else. */
+function answerUrlVerification(res: ServerResponse, body: JsonValue | undefined): boolean {
+  if (isJsonObject(body)) {
+    const bodyRecord = body;
+    if (bodyRecord.type === 'url_verification') {
+      sendJson(res, 200, {
+        challenge: String(bodyRecord.challenge ?? ''),
+      });
+      return true;
+    }
+  }
+  return false;
+}
+
+function routeSignedSlackPayload(d: SignedSlackRequest): void {
+  const { rawBody, res } = d;
+  const teamIdFromRaw = teamIdInRawBody(rawBody);
   let body: JsonValue | undefined;
   try {
     body = JSON.parse(rawBody);
@@ -105,15 +121,7 @@ function routeSignedSlackPayload(d: SignedSlackRequest): void {
     parkUnparseable(d, teamIdFromRaw);
     return;
   }
-  if (isJsonObject(body)) {
-    const bodyRecord = body;
-    if (bodyRecord.type === 'url_verification') {
-      sendJson(res, 200, {
-        challenge: String(bodyRecord.challenge ?? ''),
-      });
-      return;
-    }
-  }
+  if (answerUrlVerification(res, body)) return;
   // Resolve tenant, failing closed: when slack_workspaces is non-empty
   // and the team_id is unknown, resolveTenantForTeam returns null and we
   // park the envelope in slack_dlq with bucket='unroutable'. Mandatory ACK

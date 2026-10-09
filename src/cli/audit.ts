@@ -11,6 +11,7 @@ import { printError } from './output.js';
 import { type CliFlags, requireInit, type CommandContext, resolveAuthRoot, boolFlag, flagIsTrue, stringFlag } from './shared.js';
 import { repairAutomaticMemories } from './quality-repair.js';
 import { getGlobalRoot } from '../shared.js';
+import { errorMessage } from '../log.js';
 
 // ---------------------------------------------------------------------------
 // Audit log subcommands (`hippo audit list`)
@@ -97,7 +98,7 @@ function cmdAuditPrune(hippoRoot: string, flags: CliFlags): void {
   try {
     olderThanDays = parseOlderThanFlag(olderThanRaw);
   } catch (e) {
-    printError((e as Error).message);
+    printError(errorMessage(e));
     process.exit(1);
   }
   const tenantId = stringFlag(flags, 'tenant')?.trim() || resolveTenantId({});

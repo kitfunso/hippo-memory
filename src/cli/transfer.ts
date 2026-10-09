@@ -367,7 +367,7 @@ function cmdPromote(hippoRoot: string, id: string): void {
     console.log(`Promoted ${id} to global store as ${result.globalId}`);
     console.log(`   Global store: ${getGlobalRoot()}`);
   } catch (err) {
-    printError(`Failed to promote: ${(err as Error).message}`);
+    printError(`Failed to promote: ${errorMessage(err)}`);
     process.exit(1);
   }
 }
@@ -407,7 +407,7 @@ export async function handlePromote({ hippoRoot, args }: CommandContext): Promis
       const result = await client.promote(info.url, apiKey, id);
       console.log(`Promoted ${id} to global store as ${result.globalId}`);
     } catch (err) {
-      printError(`Failed to promote: ${(err as Error).message}`);
+      printError(`Failed to promote: ${errorMessage(err)}`);
       process.exit(1);
     }
   });

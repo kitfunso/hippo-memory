@@ -15,6 +15,7 @@ import { markPendingProcessedUpTo } from '../graph/write.js';
 import { extractGraphChunked, type ExtractResult } from '../graph-extract.js';
 import type { Context } from './types.js';
 import type { SleepOpts, SleepResult } from './sleep.js';
+import { errorMessage } from '../log.js';
 
 /** Test-only seam: `runSleep` overrides force a phase to throw into emitSleepAudit's `partial: true` row; production never sets them. */
 export interface SleepPhases {
@@ -129,10 +130,7 @@ function snapshotDirtyTenants(ctx: Context, phases: SleepPhases, dryRun: boolean
     try {
       snapshot.dirtyTenants = phases.loadPendingExtractionTenants(ctx.hippoRoot);
     } catch (snapErr) {
-      // SAFETY: this is a best-effort log message only; property access on
-      // any JS value is safe (undefined if absent), preserving the existing
-      // lenient formatting even when something non-Error was thrown.
-      snapshot.error = (snapErr as Error).message;
+      snapshot.error = errorMessage(snapErr);
     }
   }
   return snapshot;
@@ -255,12 +253,9 @@ async function drainGraphQueue(ctx: Context, phases: SleepPhases, snapshot: Dirt
       result.graph = rebuilt;
     }
   } catch (graphErr) {
-    // SAFETY: this is a best-effort log message only; property access on
-    // any JS value is safe (undefined if absent), preserving the existing
-    // lenient formatting even when something non-Error was thrown.
     result.details = [
       ...(result.details ?? []),
-      `graph: drain phase failed (skipped): ${(graphErr as Error).message}`,
+      `graph: drain phase failed (skipped): ${errorMessage(graphErr)}`,
     ];
   }
 }
@@ -292,12 +287,9 @@ async function rebuildDirtyTenant(
     // Marked only after the last chunk, so a run stopped between chunks leaves the tenant for the next one.
     markPendingProcessedUpTo(ctx.hippoRoot, dirty.tenantId, dirty.maxPendingId);
   } catch (tenantErr) {
-    // SAFETY: this is a best-effort log message only; property access
-    // on any JS value is safe (undefined if absent), preserving the
-    // existing lenient formatting even when something non-Error was thrown.
     result.details = [
       ...(result.details ?? []),
-      `graph: extract failed for a dirty tenant (left pending): ${(tenantErr as Error).message}`,
+      `graph: extract failed for a dirty tenant (left pending): ${errorMessage(tenantErr)}`,
     ];
   }
 }

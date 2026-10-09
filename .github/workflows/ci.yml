@@ -46,6 +46,9 @@ jobs:
       # Ticket codes, versions, reviewer notes and dates in src/ comments may fall per file but never rise.
       - name: Comment history ratchet
         run: node scripts/check-comment-history.mjs
+      # Hand-spelled caught-error text in src/ may fall per file but never rise; use errorMessage().
+      - name: Error text ratchet
+        run: node scripts/check-error-text.mjs
       # Publish and site-deploy gates that need no build, so a PR learns about them before release day.
       - run: node scripts/check-manifest-versions.mjs
       - run: node scripts/check-graph-writes.mjs

@@ -69,7 +69,7 @@ function briefRefresh(hippoRoot: string, tenantId: string, args: string[], flags
     if (created.changeSummary) console.log(`  change: ${created.changeSummary}`);
     if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
   } catch (e) {
-    printError((e as Error).message);
+    printError(errorMessage(e));
     process.exit(1);
   }
 }
@@ -128,7 +128,7 @@ function briefSupersede(hippoRoot: string, tenantId: string, args: string[], fla
     console.log(`Project brief #${created.id} recorded (v${created.version}), superseding #${id}.`);
     if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
   } catch (e) {
-    printError((e as Error).message);
+    printError(errorMessage(e));
     process.exit(1);
   }
 }
@@ -163,7 +163,7 @@ function briefCreate(hippoRoot: string, tenantId: string, args: string[], flags:
     console.log(`Project brief recorded: #${created.id} (v${created.version}) for repo "${created.repo}"`);
     if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
   } catch (e) {
-    printError((e as Error).message);
+    printError(errorMessage(e));
     process.exit(1);
   }
 }
@@ -374,7 +374,7 @@ function noteSupersede(hippoRoot: string, tenantId: string, args: string[], flag
     console.log(`Customer note #${created.id} recorded (v${created.version}), superseding #${id}.`);
     if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
   } catch (e) {
-    printError((e as Error).message);
+    printError(errorMessage(e));
     process.exit(1);
   }
 }
@@ -420,7 +420,7 @@ export function cmdCustomerNote(
     console.log(`Customer note recorded: #${created.id} (v${created.version}) for customer "${created.customer}"`);
     if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
   } catch (e) {
-    printError((e as Error).message);
+    printError(errorMessage(e));
     process.exit(1);
   }
 }

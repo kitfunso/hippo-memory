@@ -296,7 +296,7 @@ function parseStepsOrExit(stepsJson: string): ReturnType<typeof parseSteps> {
   try {
     return parseSteps(stepsJson);
   } catch (err) {
-    printError(String(err instanceof Error ? err.message : err));
+    printError(errorMessage(err));
     process.exit(1);
   }
 }

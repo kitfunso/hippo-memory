@@ -7,6 +7,7 @@ import * as skillsModule from '../skills.js';
 import { resolveTenantId } from '../tenant.js';
 import { printError } from './output.js';
 import { parseListLimit, parsePositiveId, requireInit, type CliFlags } from './shared.js';
+import { errorMessage } from '../log.js';
 
 // --step is a repeatable flag (collected into an array by parseArgs). A single
 // --step yields a string; normalize both to string[]. A value-less --step errors.
@@ -212,7 +213,7 @@ function policyAsOf(hippoRoot: string, tenantId: string, args: string[], flags: 
   try {
     results = policiesModule.loadPoliciesAsOf(hippoRoot, tenantId, dateRaw, { name });
   } catch (e) {
-    printError((e as Error).message);
+    printError(errorMessage(e));
     process.exit(1);
   }
   if (results.length === 0) {
@@ -283,7 +284,7 @@ function policySupersede(hippoRoot: string, tenantId: string, args: string[], fl
     console.log(`Policy #${created.id} recorded (v${created.version}), superseding #${id}.`);
     if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
   } catch (e) {
-    printError((e as Error).message);
+    printError(errorMessage(e));
     process.exit(1);
   }
 }
@@ -344,7 +345,7 @@ function policyCreate(hippoRoot: string, tenantId: string, args: string[], flags
     console.log(`Policy recorded: #${created.id} (v${created.version}, effective ${range})`);
     if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
   } catch (e) {
-    printError((e as Error).message);
+    printError(errorMessage(e));
     process.exit(1);
   }
 }
@@ -447,7 +448,7 @@ function skillSupersede(hippoRoot: string, tenantId: string, args: string[], fla
     console.log(`Skill #${created.id} recorded (v${created.version}), superseding #${id}.`);
     if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
   } catch (e) {
-    printError((e as Error).message);
+    printError(errorMessage(e));
     process.exit(1);
   }
 }
@@ -505,7 +506,7 @@ function skillCreate(hippoRoot: string, tenantId: string, args: string[], flags:
     console.log(`Skill recorded: #${created.id} (v${created.version})`);
     if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
   } catch (e) {
-    printError((e as Error).message);
+    printError(errorMessage(e));
     process.exit(1);
   }
 }
