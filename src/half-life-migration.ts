@@ -20,16 +20,9 @@
  * moves memories of live decisions, incidents and other objects off the flat 90 days they used to get.
  */
 import { deriveHalfLife, type MemoryEntry } from './memory.js';
-import { openStore, HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY } from './store/open.js';
-import { objectMemoryRowsAt, selectAllEntries } from './store/entry-reads.js';
-import { conflictResolveAuditsAt, resolvedConflictsAt } from './store/conflicts.js';
-import { setHalfLivesAt } from './store/entry-writes.js';
-import { openHippoDb, closeHippoDb, getMeta, setMeta, withWriteScope, type DatabaseSyncLike } from './db.js';
-import { appendAuditEvent } from './store/audit.js';
+import { HALF_LIFE_BASE_META_KEY } from './store/open.js';
+import { moveHalfLives, recordedHalfLifeBase, type HalfLifeRows } from './store/half-life.js';
 import { loadConfig } from './config.js';
-
-/** The base every store used before the base was recorded. */
-export const LEGACY_HALF_LIFE_BASE = 7;
 
 /** The flat half-life the decision, incident and other object writers gave their memories before they took the default. */
 export const LEGACY_TYPED_HALF_LIFE = 90;
@@ -82,17 +75,7 @@ export function planTypedHalfLifeMigration(entries: readonly MemoryEntry[], to: 
 
 /** The base this store's memories are on. */
 export function storeHalfLifeBase(hippoRoot: string): number {
-  const db = openHippoDb(hippoRoot);
-  try {
-    return readBase(db);
-  } finally {
-    closeHippoDb(db);
-  }
-}
-
-function readBase(db: DatabaseSyncLike): number {
-  const raw = Number(getMeta(db, HALF_LIFE_BASE_META_KEY, String(LEGACY_HALF_LIFE_BASE)));
-  return Number.isFinite(raw) && raw > 0 ? raw : LEGACY_HALF_LIFE_BASE;
+  return recordedHalfLifeBase(hippoRoot);
 }
 
 /** The base an object writer gives its memory: the flat 90 days until the store's typed migration has run (`onDefault`), which then moves them, and the default after. */
@@ -107,49 +90,37 @@ export function objectHalfLifeDays(hippoRoot: string, onDefault: boolean): numbe
  */
 export function migrateDefaultHalfLife(hippoRoot: string, to: number, opts: { dryRun?: boolean; actor?: string } = {}): HalfLifeMigrationResult {
   const dryRun = opts.dryRun ?? false;
-  const noop = (from: number): HalfLifeMigrationResult => ({ from, to, rescaled: 0, typed: 0, kept: 0, dryRun, halfLives: new Map() });
-  const db = openStore(hippoRoot);
-  try {
-    // Plan, write, audit and record the base under one write lock, so a concurrent write or sleep cannot interleave.
-    const run = (): HalfLifeMigrationResult => {
-      const from = readBase(db);
-      const typedPending = getMeta(db, TYPED_HALF_LIFE_META_KEY, '') === '';
-      if (!(Number.isFinite(to) && to > 0) || (from === to && !typedPending)) {
-        return noop(from);
-      }
-      const all = selectAllEntries(db);
-      const objects = typedPending ? objectMemoryIds(db) : { all: new Set<string>(), retired: new Set<string>() };
-      const losers = typedPending ? conflictLosers(db) : new Set<string>();
-      const copies = new Set(all.flatMap((e) => (e.superseded_by ? [e.superseded_by] : [])));
-      // Provenance before shape: an object's memory came from its writer, a supersede copy from the base (it keeps the source). Shape decides the rest.
-      const objectWritten = (e: MemoryEntry) =>
-        objects.all.has(e.id) || (!copies.has(e.id) && TYPED_SOURCES.has(e.source) && halfLifeRecallBonus(e, LEGACY_TYPED_HALF_LIFE) !== null);
-      const typedPlan = typedPending ? planTypedHalfLifeMigration(all.filter((e) => objectWritten(e) && !objects.retired.has(e.id) && !losers.has(e.id)), to) : [];
-      const basePlan = planHalfLifeMigration(typedPending ? all.filter((e) => !objectWritten(e)) : all, from, to);
-      const plan = [...basePlan, ...typedPlan];
-      const halfLives = new Map(plan.map((e) => [e.id, e.half_life_days]));
-      const result: HalfLifeMigrationResult = { from, to, rescaled: basePlan.length, typed: typedPlan.length, kept: all.length - plan.length, dryRun, halfLives };
-      if (dryRun) return result;
-
-      const old = new Map(all.map((e) => [e.id, e.half_life_days]));
-      const actor = opts.actor ?? 'system';
-      writePlan(db, basePlan, old, { from, to, actor });
-      writePlan(db, typedPlan, old, { from: LEGACY_TYPED_HALF_LIFE, to, actor });
-      setMeta(db, HALF_LIFE_BASE_META_KEY, String(to));
-      setMeta(db, TYPED_HALF_LIFE_META_KEY, '1');
-      return result;
+  const { from, outcome } = moveHalfLives(hippoRoot, to, { dryRun, actor: opts.actor ?? 'system' }, (rows) => {
+    const { basePlan, typedPlan } = planMoves(rows, to);
+    const plan = [...basePlan, ...typedPlan];
+    return {
+      moves: [{ from: rows.from, to, entries: basePlan }, { from: LEGACY_TYPED_HALF_LIFE, to, entries: typedPlan }],
+      outcome: { rescaled: basePlan.length, typed: typedPlan.length, kept: rows.all.length - plan.length, halfLives: new Map(plan.map((e) => [e.id, e.half_life_days])) },
     };
-    return dryRun ? run() : withWriteScope(db, 'migrate_half_life', run);
-  } finally {
-    closeHippoDb(db);
-  }
+  });
+  const moved = outcome ?? { rescaled: 0, typed: 0, kept: 0, halfLives: new Map<string, number>() };
+  return { from, to, rescaled: moved.rescaled, typed: moved.typed, kept: moved.kept, dryRun, halfLives: moved.halfLives };
+}
+
+/** The base move and the move of object memories, planned from one read of the store. Pure. */
+function planMoves(rows: HalfLifeRows, to: number) {
+  const { all, typedPending } = rows;
+  const objects = objectMemoryIds(rows.objectRows);
+  const losers = conflictLosers(rows.conflictAudits, rows.resolvedConflicts);
+  const copies = new Set(all.flatMap((e) => (e.superseded_by ? [e.superseded_by] : [])));
+  // Provenance before shape: an object's memory came from its writer, a supersede copy from the base (it keeps the source). Shape decides the rest.
+  const objectWritten = (e: MemoryEntry) =>
+    objects.all.has(e.id) || (!copies.has(e.id) && TYPED_SOURCES.has(e.source) && halfLifeRecallBonus(e, LEGACY_TYPED_HALF_LIFE) !== null);
+  const typedPlan = typedPending ? planTypedHalfLifeMigration(all.filter((e) => objectWritten(e) && !objects.retired.has(e.id) && !losers.has(e.id)), to) : [];
+  const basePlan = planHalfLifeMigration(typedPending ? all.filter((e) => !objectWritten(e)) : all, rows.from, to);
+  return { basePlan, typedPlan };
 }
 
 /** Memories behind every object, and those behind a superseded or closed one. Retiring an object leaves its memory untouched, so only its table knows. */
-function objectMemoryIds(db: DatabaseSyncLike) {
+function objectMemoryIds(objectRows: HalfLifeRows['objectRows']) {
   const all = new Set<string>();
   const retired = new Set<string>();
-  for (const r of objectMemoryRowsAt(db)) {
+  for (const r of objectRows) {
     all.add(r.memory_id);
     if (r.status === 'superseded' || r.status === 'closed') retired.add(r.memory_id);
   }
@@ -157,25 +128,9 @@ function objectMemoryIds(db: DatabaseSyncLike) {
 }
 
 /** Memories that lost a conflict, which resolveConflict halved untagged. A resolved conflict with no audit row (resolved before resolves were audited, or found stale) names no winner, so both sides count. */
-function conflictLosers(db: DatabaseSyncLike): Set<string> {
-  const audited = conflictResolveAuditsAt(db);
+function conflictLosers(audited: HalfLifeRows['conflictAudits'], resolved: HalfLifeRows['resolvedConflicts']): Set<string> {
   const losers = new Set(audited.map((a) => a.loserId));
   const named = new Set(audited.map((a) => a.conflictId));
-  for (const c of resolvedConflictsAt(db)) if (!named.has(c.id)) losers.add(c.memory_a_id).add(c.memory_b_id);
+  for (const c of resolved) if (!named.has(c.id)) losers.add(c.memory_a_id).add(c.memory_b_id);
   return losers;
-}
-
-/** Writes `plan`, then one audit event per tenant with each id's old half-life, so the move can be undone. */
-function writePlan(db: DatabaseSyncLike, plan: readonly MemoryEntry[], old: ReadonlyMap<string, number>, move: { from: number; to: number; actor: string }): void {
-  setHalfLivesAt(db, plan.map((e) => ({ id: e.id, halfLifeDays: e.half_life_days })));
-  const byTenant = new Map<string, Record<string, number>>();
-  for (const e of plan) {
-    // One record per tenant, filled in place: copying it per row made the write grow with the square of the store.
-    let record = byTenant.get(e.tenantId);
-    if (!record) byTenant.set(e.tenantId, (record = {}));
-    record[e.id] = old.get(e.id)!;
-  }
-  for (const [tenantId, oldHalfLives] of byTenant) {
-    appendAuditEvent(db, { tenantId, actor: move.actor, op: 'half_life_migrate', metadata: { from: move.from, to: move.to, ids: Object.keys(oldHalfLives), oldHalfLives } });
-  }
 }
