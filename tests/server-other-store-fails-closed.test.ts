@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { closeHippoDb, openHippoDb, rethrowIfSqliteBlocked, SqliteBlockedError, STORE_BUSY_MESSAGE } from '../src/db.js';
 import { StoreNotPortedError } from '../src/util/sqlite-blocked.js';
 import { mapApiError, STORE_NOT_PORTED_MESSAGE } from '../src/http-util.js';
+import { saveIncident } from '../src/incidents.js';
 import { mcpErrorResponse, type McpRequest } from '../src/mcp/server.js';
 import { initStore } from '../src/store/open.js';
 import { serve, sqliteStore, StoreBusyError, type ApiKeyRecord, type ContinuityKey, type HippoStore, type ServerHandle } from '../src/server.js';
@@ -17,6 +18,7 @@ import { loadEntriesByIds } from '../src/store/entry-reads.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from './_helpers/hashed-embedding-server.js';
 import { inMemoryGraphReadsStore, seedGraphRows, type SeededGraph } from './_helpers/in-memory-graph-reads-store.js';
+import { inMemoryObjectsStore, type InMemoryObjectsStore } from './_helpers/in-memory-objects-store.js';
 import { inMemoryPredictionsStore, type InMemoryPredictionsStore } from './_helpers/in-memory-predictions-store.js';
 import { HELD, heldAt, heldContent, inMemoryQuarantineStore, seedQuarantineRecords, type InMemoryQuarantineStore } from './_helpers/in-memory-quarantine-store.js';
 import { portOnlyStoreWithoutVectorReads } from './_helpers/port-only-store.js';
@@ -26,17 +28,22 @@ import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from './_helpers/stor
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const serverSource = readFileSync(join(repoRoot, 'src/server/route-table.ts'), 'utf8');
 
-/** 'METHOD /path' for every V1_ROUTES entry the stub store cannot run (no group named, or one besides 'base'), each :param and (\d+) slot filled with 1. */
-function unportedV1Routes(): string[] {
+/** Every V1_ROUTES entry as 'METHOD /path' beside the group it names, each :param and (\d+) slot filled with 1. */
+function v1Routes(): { route: string; group: string | undefined }[] {
   const table = serverSource.slice(serverSource.indexOf('const V1_ROUTES'), serverSource.indexOf('async function dispatchV1Route'));
-  const routes: string[] = [];
+  const routes: { route: string; group: string | undefined }[] = [];
   for (const m of table.matchAll(/\{ method: '([A-Z]+)', (?:path|pattern): '([^']+)'(?:, storeReady: '(\w+)')?/g)) {
-    if (m[3] !== 'base') routes.push(`${m[1]} ${m[2]!.replace(/:\w+/g, '1')}`);
+    routes.push({ route: `${m[1]} ${m[2]!.replace(/:\w+/g, '1')}`, group: m[3] });
   }
   for (const m of table.matchAll(/\{ method: '([A-Z]+)', regex: \/\^(.+?)\$\/(?:, storeReady: '(\w+)')?/g)) {
-    if (m[3] !== 'base') routes.push(`${m[1]} ${m[2]!.replace(/\\\//g, '/').replace(/\(\\d\+\)/g, '1')}`);
+    routes.push({ route: `${m[1]} ${m[2]!.replace(/\\\//g, '/').replace(/\(\\d\+\)/g, '1')}`, group: m[3] });
   }
   return routes;
+}
+
+/** The entries the stub store cannot run: no group named, or one besides 'base'. */
+function unportedV1Routes(): string[] {
+  return v1Routes().filter((r) => r.group !== 'base').map((r) => r.route);
 }
 
 const rpc = (method: string, params?: McpRequest['params']): string => JSON.stringify({ jsonrpc: '2.0', id: 1, method, params });
@@ -445,6 +452,96 @@ describe('serve() under a store that has the graphReads group', () => {
       status: 200, body: { nodes: [node(e.sharedB, 'project', 'Shared'), node(e.otherB, 'system', 'Other')], edges: [edge(e.sharedB, e.otherB)], truncated: false },
     });
     expect(await get(adminA, '/v1/graph?limit=0')).toEqual({ status: 400, body: { error: 'limit must be a positive integer <= 1000' } });
+    expect(hippoDbRows()).toEqual(before);
+  });
+});
+
+describe('serve() under a store that has the objects group', () => {
+  let fixture: TwoTenantFixture;
+  let memory: InMemoryObjectsStore;
+  let handle: ServerHandle;
+
+  type RouteBody = Readonly<Record<string, string | readonly string[]>>;
+
+  /** One savable kind's routes: its reply fields, a create body, a successor body and the status its supersede answers. */
+  interface SavedKind {
+    readonly path: string;
+    readonly one: string;
+    readonly many: string;
+    readonly create: RouteBody;
+    readonly revise: RouteBody;
+    readonly revised: number;
+  }
+
+  const SAVED: readonly SavedKind[] = [
+    { path: '/v1/decisions', one: 'decision', many: 'decisions', create: { text: 'ship on friday' }, revise: { text: 'ship on monday' }, revised: 201 },
+    { path: '/v1/processes', one: 'process', many: 'processes', create: { processName: 'release', steps: ['tag', 'publish'] }, revise: { steps: ['tag', 'publish', 'announce'] }, revised: 200 },
+    { path: '/v1/policies', one: 'policy', many: 'policies', create: { policyName: 'retention', policyText: 'keep logs 30 days' }, revise: { policyText: 'keep logs 90 days' }, revised: 200 },
+    { path: '/v1/skills', one: 'skill', many: 'skills', create: { skillName: 'triage', instructions: 'read the log first' }, revise: { instructions: 'read the trace first' }, revised: 200 },
+    { path: '/v1/project-briefs', one: 'brief', many: 'briefs', create: { repo: 'hippo', summary: 'memory for agents' }, revise: { summary: 'zero-touch memory' }, revised: 200 },
+    { path: '/v1/customer-notes', one: 'note', many: 'notes', create: { customer: 'acme', note: 'renewal in march' }, revise: { note: 'renewed' }, revised: 200 },
+  ];
+  const TABLES = ['decisions', 'incidents', 'processes', 'policies', 'skills', 'project_briefs', 'customer_notes', 'memories', 'audit_log'];
+
+  const hippoDbRows = (): number[] => {
+    const db = openHippoDb(fixture.dir);
+    try {
+      // SAFETY: each SELECT names the one column n.
+      return TABLES.map((table) => (db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n);
+    } finally {
+      closeHippoDb(db);
+    }
+  };
+
+  beforeAll(async () => {
+    vi.stubEnv('HIPPO_V1_RPS', '0');
+    fixture = seedTwoTenants();
+    // An incident is opened by its own route, which this store does not serve yet, so the row is there before the store copies hippo.db.
+    saveIncident(fixture.dir, TENANT_A, { incidentText: 'checkout latency' }, 'cli');
+    memory = inMemoryObjectsStore(fixture.dir);
+    handle = await serve({ hippoRoot: fixture.dir, port: 0, store: memory.store });
+  });
+
+  afterAll(async () => {
+    await handle.stop();
+    vi.unstubAllEnvs();
+    rmSync(fixture.dir, { recursive: true, force: true });
+  });
+
+  it('runs every route ported to the group on that store, inside the caller\'s tenant, and writes nothing to hippo.db', async () => {
+    const before = hippoDbRows();
+    const { memberA, memberB } = fixture.tokens;
+    const answered = new Set<string>();
+    const call = async (token: string, method: string, path: string, body?: RouteBody): Promise<{ status: number; body: unknown }> => {
+      const headers = { authorization: `Bearer ${token}`, 'content-type': 'application/json' };
+      const res = await fetch(`${handle.url}${path}`, { method, headers, body: body && JSON.stringify(body) });
+      if (token === memberA && res.status < 300) answered.add(`${method} ${path.replace(/\?.*$/, '').replace(/\/\d+/g, '/1')}`);
+      return { status: res.status, body: await res.json() };
+    };
+    for (const k of SAVED) {
+      expect(await call(memberA, 'POST', k.path, k.create)).toMatchObject({ status: 201, body: { [k.one]: { id: 1, tenantId: TENANT_A, status: 'active' } } });
+      expect(await call(memberA, 'GET', k.path)).toMatchObject({ status: 200, body: { [k.many]: [{ id: 1 }], next_cursor: null } });
+      expect(await call(memberA, 'GET', `${k.path}/1`)).toMatchObject({ status: 200, body: { [k.one]: { id: 1 } } });
+      expect(await call(memberA, 'POST', `${k.path}/1/supersede`, k.revise)).toMatchObject({ status: k.revised, body: { [k.one]: { id: 2, status: 'active' } } });
+      expect(await call(memberA, 'GET', `${k.path}?status=superseded`)).toMatchObject({ status: 200, body: { [k.many]: [{ id: 1, supersededBy: 2 }] } });
+      expect(await call(memberA, 'POST', `${k.path}/2/close`, {})).toMatchObject({ status: 200, body: { [k.one]: { id: 2, status: 'closed' } } });
+      expect(await call(memberB, 'GET', k.path)).toEqual({ status: 200, body: { [k.many]: [], next_cursor: null } });
+      expect((await call(memberB, 'GET', `${k.path}/1`)).status).toBe(404);
+      expect((await call(memberB, 'POST', `${k.path}/1/supersede`, k.revise)).status).toBe(404);
+    }
+    expect(await call(memberA, 'GET', '/v1/incidents')).toMatchObject({ status: 200, body: { incidents: [{ id: 1, status: 'open' }], next_cursor: null } });
+    expect(await call(memberA, 'GET', '/v1/incidents/1')).toMatchObject({ status: 200, body: { incident: { id: 1, incidentText: 'checkout latency' } } });
+    expect((await call(memberB, 'POST', '/v1/incidents/1/close', {})).status).toBe(404);
+    expect(await call(memberA, 'POST', '/v1/incidents/1/close', {})).toMatchObject({ status: 200, body: { incident: { id: 1, status: 'closed' } } });
+
+    const ported = v1Routes().filter((r) => r.group === 'objects').map((r) => r.route);
+    expect(ported).toHaveLength(33);
+    expect([...answered].sort()).toEqual([...ported].sort());
+    const actor = `api_key:${fixture.keys.memberA}`;
+    expect(memory.auditRows().slice(-5).map((e) => [e.op, e.actor, e.tenantId])).toEqual([
+      ['customer_note_supersede', actor, TENANT_A], ['customer_note_create', actor, TENANT_A], ['remember', actor, TENANT_A],
+      ['customer_note_close', actor, TENANT_A], ['incident_close', actor, TENANT_A],
+    ]);
     expect(hippoDbRows()).toEqual(before);
   });
 });

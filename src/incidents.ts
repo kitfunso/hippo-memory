@@ -27,7 +27,7 @@
  */
 
 import { BadRequestError, ConflictError, NotFoundError } from './api-errors.js';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
+import type { DatabaseSyncLike } from './db.js';
 import { withWriteScope } from './db/busy.js';
 import { writeEntry } from './store/entry-writes.js';
 import { onHandle } from './store/open.js';
@@ -35,38 +35,22 @@ import { assertTenantId } from './tenant.js';
 import { appendAuditEvent } from './store/audit.js';
 import type { KeysetPosition } from './keyset.js';
 import type { ObjectDescriptor } from './objects/descriptor.js';
-import { assertObjectStatus, closeObjectOn, loadObjectByIdOn, loadObjectsOn, objectMirrorMemory } from './objects/lifecycle.js';
-import { warnDamagedColumn } from './util/stored-json.js';
+import { closeObjectAt, listObjectsAt, objectByIdAt, objectMirror } from './objects/lifecycle.js';
+import type { Incident, IncidentStatus } from './store/object-types.js';
+import { rowSpec, type RowByKind } from './store/sqlite/object-rows.js';
+import { objectIdByMemory, sqliteObjects } from './store/sqlite/objects-group.js';
+
+export type { Incident, IncidentStatus } from './store/object-types.js';
 
 // ---------------------------------------------------------------------------
 // Domain types
 // ---------------------------------------------------------------------------
-
-export type IncidentStatus = 'open' | 'resolved' | 'closed';
 
 export const VALID_INCIDENT_STATES: ReadonlySet<IncidentStatus> = new Set<IncidentStatus>([
   'open',
   'resolved',
   'closed',
 ]);
-
-export interface Incident {
-  id: number;
-  /** Nullable: ON DELETE SET NULL lets memory deletion (forget / consolidate /
-   *  archive) proceed without breaking the incident row. */
-  memoryId: string | null;
-  tenantId: string;
-  incidentText: string;
-  context: string | null;
-  status: IncidentStatus;
-  /** Set only when status === 'resolved'. */
-  resolutionText: string | null;
-  resolvedAt: string | null;
-  closedAt: string | null;
-  /** Linked receipts: memory ids that are this incident's evidence. */
-  linkedMemoryIds: string[];
-  createdAt: string;
-}
 
 export interface SaveIncidentOpts {
   incidentText: string;
@@ -86,78 +70,18 @@ export interface ListIncidentsOpts {
   after?: KeysetPosition;
 }
 
-// ---------------------------------------------------------------------------
-// Row <-> domain mapping
-// ---------------------------------------------------------------------------
-
-interface IncidentRow {
-  id: number;
-  memory_id: string | null;
-  tenant_id: string;
-  incident_text: string;
-  context: string | null;
-  status: string;
-  resolution_text: string | null;
-  resolved_at: string | null;
-  closed_at: string | null;
-  linked_memory_ids: string;
-  created_at: string;
-}
-
-function parseLinkedMemoryIds(raw: string, id: number): string[] {
-  try {
-    // SAFETY: JSON.parse output is arbitrary; narrowed by Array.isArray plus
-    // the per-element string check below before use as string[].
-    const parsed = JSON.parse(raw) as unknown;
-    if (Array.isArray(parsed)) {
-      return parsed.filter((x): x is string => typeof x === 'string');
-    }
-    return [];
-  } catch {
-    // A malformed list column reads as empty instead of failing the incident read.
-    warnDamagedColumn({ table: 'incidents', id, column: 'linked_memory_ids' }, 'not valid JSON');
-    return [];
-  }
-}
-
-function rowToIncident(row: IncidentRow): Incident {
-  return {
-    id: row.id,
-    memoryId: row.memory_id,
-    tenantId: row.tenant_id,
-    incidentText: row.incident_text,
-    context: row.context,
-    // SAFETY: status is DB-constrained to VALID_INCIDENT_STATES; this module
-    // is the only writer and always inserts one of those literal strings.
-    status: row.status as IncidentStatus,
-    resolutionText: row.resolution_text,
-    resolvedAt: row.resolved_at,
-    closedAt: row.closed_at,
-    linkedMemoryIds: parseLinkedMemoryIds(row.linked_memory_ids, row.id),
-    createdAt: row.created_at,
-  };
-}
-
-const INCIDENT_COLS = `
-  id, memory_id, tenant_id, incident_text, context, status,
-  resolution_text, resolved_at, closed_at, linked_memory_ids, created_at
-`;
-
-// No save entry: an incident checks its linked memories inside the write, so it keeps its own save.
-const INCIDENT: ObjectDescriptor<Incident, IncidentRow> = {
-  table: 'incidents',
-  cols: INCIDENT_COLS,
+// No draft: an incident checks its linked memories inside the write, so it keeps its own save.
+export const INCIDENT: ObjectDescriptor<'incident'> = {
+  kind: 'incident',
   label: 'incident',
   plural: 'incidents',
   fn: { get: 'loadIncidentById', close: 'closeIncident', list: 'loadIncidents' },
   states: VALID_INCIDENT_STATES,
   closableFrom: ['open', 'resolved'],
   closeRefusal: 'already closed',
-  ops: { close: 'incident_close' },
-  idKey: 'incident_id',
-  listFilters: {},
-  rowTo: rowToIncident,
 };
+
+const INCIDENT_ROWS = rowSpec('incident');
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -191,7 +115,7 @@ function writeIncidentRow(
   opts: SaveIncidentOpts,
   actor: string,
   now: string,
-): IncidentRow {
+): RowByKind['incident'] {
   const validated = validateLinkedMemoryIds(db, tenantId, opts.linkedMemoryIds ?? []);
 
   const result = db.prepare(`
@@ -209,9 +133,8 @@ function writeIncidentRow(
   );
   const incidentId = Number(result.lastInsertRowid ?? 0);
 
-  // SAFETY: row's shape matches the columns named in INCIDENT_COLS above.
-  const row = db.prepare(`SELECT ${INCIDENT_COLS} FROM incidents WHERE id = ?`)
-    .get(incidentId) as IncidentRow | undefined;
+  const row = db.prepare(`SELECT ${INCIDENT_ROWS.cols} FROM incidents WHERE id = ?`)
+    .get<RowByKind['incident'] | undefined>(incidentId);
   if (!row) throw new Error('saveIncident: failed to reload saved incident row');
 
   // GDPR-light metadata: id + flag only, no incident_text.
@@ -254,11 +177,12 @@ export function saveIncident(
   const content = opts.context
     ? `${opts.incidentText}\n\nContext: ${opts.context}`
     : opts.incidentText;
-  const mem = objectMirrorMemory(hippoRoot, tenantId, 'incident', content, opts.extraTags ?? []);
+  const onDefault = sqliteObjects(hippoRoot).mirrorsOnDefaultHalfLife();
+  const mem = objectMirror(hippoRoot, tenantId, 'incident', { content, tags: opts.extraTags ?? [] }, onDefault);
 
   // Populated inside afterWrite so the linked-id validation, the INSERT, and the
   // memory write all share one SAVEPOINT.
-  let savedRow: IncidentRow | undefined;
+  let savedRow: RowByKind['incident'] | undefined;
 
   writeEntry(hippoRoot, mem, {
     actor,
@@ -271,7 +195,7 @@ export function saveIncident(
     // Unreachable unless afterWrite threw first; defensive.
     throw new Error('saveIncident: afterWrite did not populate the row');
   }
-  return rowToIncident(savedRow);
+  return INCIDENT_ROWS.rowTo(savedRow);
 }
 
 /**
@@ -310,8 +234,9 @@ export function resolveIncident(
       );
     }
 
-    const resolved = loadObjectByIdOn(db, INCIDENT, tenantId, id);
-    if (!resolved) throw new NotFoundError(`resolveIncident: incident ${id} not found after UPDATE`);
+    const row = db.prepare(`SELECT ${INCIDENT_ROWS.cols} FROM incidents WHERE id = ? AND tenant_id = ?`)
+      .get<RowByKind['incident'] | undefined>(id, tenantId);
+    if (!row) throw new NotFoundError(`resolveIncident: incident ${id} not found after UPDATE`);
 
     appendAuditEvent(db, {
       tenantId,
@@ -320,7 +245,7 @@ export function resolveIncident(
       targetId: String(id),
       metadata: { incident_id: id },
     });
-    return resolved;
+    return INCIDENT_ROWS.rowTo(row);
   }));
 }
 
@@ -334,9 +259,7 @@ export function closeIncident(
   id: number,
   actor: string = 'cli',
 ): Incident {
-  assertTenantId(INCIDENT.fn.close, tenantId);
-  const now = new Date().toISOString();
-  return onHandle(hippoRoot, (db) => closeObjectOn(db, INCIDENT, tenantId, id, { actor, now }));
+  return closeObjectAt(hippoRoot, INCIDENT, tenantId, id, actor);
 }
 
 export function loadIncidentById(
@@ -344,8 +267,7 @@ export function loadIncidentById(
   tenantId: string,
   id: number,
 ): Incident | null {
-  assertTenantId(INCIDENT.fn.get, tenantId);
-  return onHandle(hippoRoot, (db) => loadObjectByIdOn(db, INCIDENT, tenantId, id));
+  return objectByIdAt(hippoRoot, INCIDENT, tenantId, id);
 }
 
 export function loadIncidents(
@@ -353,9 +275,7 @@ export function loadIncidents(
   tenantId: string,
   opts: ListIncidentsOpts = {},
 ): Incident[] {
-  assertTenantId(INCIDENT.fn.list, tenantId);
-  assertObjectStatus(INCIDENT, opts.status);
-  return onHandle(hippoRoot, (db) => loadObjectsOn(db, INCIDENT, tenantId, opts));
+  return listObjectsAt(hippoRoot, INCIDENT, tenantId, opts);
 }
 
 export function loadOpenIncidents(
@@ -378,14 +298,5 @@ export function resolveActiveIncidentIdByMemory(
   memoryId: string,
 ): number | null {
   assertTenantId('resolveActiveIncidentIdByMemory', tenantId);
-  const db = openHippoDb(hippoRoot);
-  try {
-    // SAFETY: row shape matches the single `id` column named in the SELECT above.
-    const row = db.prepare(
-      `SELECT id FROM incidents WHERE memory_id = ? AND tenant_id = ? AND status = 'open' ORDER BY id DESC LIMIT 1`,
-    ).get(memoryId, tenantId) as { id: number } | undefined;
-    return row ? row.id : null;
-  } finally {
-    closeHippoDb(db);
-  }
+  return objectIdByMemory(hippoRoot, tenantId, 'incident', 'open', memoryId);
 }
