@@ -21,19 +21,20 @@ export function notPorted(port: StorePort, group: keyof StoreGroups): never {
   throw new StoreNotPortedError(port.kind, group);
 }
 
-/** A served store's stand-in for SqliteLocal. The last recall sits in hippo.db's meta table, so only a store that is hippo.db answers for it, on `hippoRoot`. */
+/** A served store's stand-in for SqliteLocal. The last recall sits in hippo.db's meta table, so only a store that is hippo.db keeps and reads it, on `hippoRoot`. */
 function servedLocal(store: HippoStore, hippoRoot: string): SqliteLocal {
+  if (store.kind === 'sqlite') return { ...sqliteLocal(hippoRoot), ...REFUSED_ON_A_STORE };
   return {
     ...REFUSED_ON_A_STORE,
-    applyOutcomeToLastRecall(target, good) {
-      if (store.kind !== 'sqlite') throw new SqliteBlockedError(store.kind);
-      return sqliteLocal(hippoRoot).applyOutcomeToLastRecall(target, good);
+    applyOutcomeToLastRecall() {
+      throw new SqliteBlockedError(store.kind);
     },
+    finishLastRecall: (writes) => store.finishRecall(writes),
   };
 }
 
 /** Runs `run` on `ctx.store`, where a throw rejects, else on hippo.db under `ctx.hippoRoot`, where it throws. The store path never reads `hippoRoot`.
- *  `local` runs an option that needs hippo.db's own handle, and refuses it on a served store. */
+ *  `local` runs what needs hippo.db's own handle or meta table; a served store refuses it, or does without where the write allows. */
 export function onStore<C extends Context, R>(ctx: C, run: (port: StorePort, local: SqliteLocal) => Reply<R>): StoreReply<C, R> {
   const { store } = ctx;
   // No await before `run`: an add-on relies on the first port call starting inside this call.

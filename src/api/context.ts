@@ -1,7 +1,6 @@
 // Ambient context injection: the admission policy and getContext.
 
 import { isInitialized } from '../store/open.js';
-import { strengthenRetrieved } from '../store/entry-writes.js';
 import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../store/rows.js';
 import {
   type ContextCandidateFilter,
@@ -9,7 +8,6 @@ import {
   type AmbientLoadResult,
   type RecentOrigins,
 } from '../store/candidates.js';
-import { loadIndex, saveIndex, updateStats } from '../store/index-and-stats.js';
 import { type ContinuityKey, freshActiveSnapshot, SNAPSHOT_AMBIENT_MAX_AGE_MS } from '../store/sessions.js';
 import type { SessionEvent, TaskSnapshot } from '../store/rows.js';
 import type { SessionHandoff } from '../handoff.js';
@@ -17,11 +15,12 @@ import { estimateTokens } from '../token-ledger.js';
 import { markRetrieved, type MemoryEntry, COMPACTION_MEMORY_TAG } from '../memory.js';
 import { isWorthSurfacing } from '../memory-quality.js';
 import { getGlobalRoot } from '../shared.js';
-import { writeRecallTraceAtRoot, type RecallTraceInput } from '../recall-trace.js';
-import { evalNow, isRecallBoostAblated } from '../ablation.js';
+import type { RecallTraceInput } from '../recall-trace.js';
+import { evalNow } from '../ablation.js';
 import { dropHeldCopies } from '../same-text.js';
 import { BadRequestError } from '../api-errors.js';
 import { isSharedStore, loadConfig } from '../config.js';
+import { rethrowIfSqliteBlocked } from '../db.js';
 import { log } from '../log.js';
 import { resolveProjectIdentity, classifyOriginProject, isGlobalStoreRoot, projectId, projectNames, type ProjectRef } from '../project-identity.js';
 import { promptTokens } from '../prompt-recall.js';
@@ -41,6 +40,8 @@ import {
   type ContextSource,
 } from './context-select.js';
 import type { ContextOpts, ContextResult, ContextResultEntry } from './context-types.js';
+import { andThen, onStore } from './on-store.js';
+import { strengthenOf } from './recall-record.js';
 import { type Context, ownerOrSubject } from './types.js';
 
 export { oneCopyPerMemory } from './context-select.js';
@@ -464,14 +465,11 @@ async function traceEmptyContext(ctx: Context, opts: ContextOpts, plan: ContextP
     explainMode: false,
     results: [],
   };
-  if (!plan.other) {
-    writeRecallTraceAtRoot(ctx.hippoRoot, trace);
-    return;
-  }
-  // The empty reply is already decided, so a lost trace logs as the hippo.db write does rather than failing the call.
+  // The empty reply is already decided, so a lost trace is logged and the call still answers.
   try {
-    await plan.other.finishRecall({ goalLog: [], audit: [], trace });
+    await onStore(ctx, (port) => port.finishRecall({ goalLog: [], audit: [], trace }));
   } catch (error) {
+    rethrowIfSqliteBlocked(error);
     log.error(`recall trace write failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
@@ -503,8 +501,12 @@ async function recordRetrieval(
       score: s.score,
     })),
   };
-  if (plan.other) await recordOnStore(ctx, plan.other, retrievedIds, trace, selected.length);
-  else recordOnHippoDb(ctx, plan, retrievedIds, trace, selected.length);
+  const writes = { goalLog: [], audit: [], trace, strengthen: strengthenOf(ctx, retrievedIds) };
+  // hippo.db keeps the ids as its last recall, which feeds only outcomeForLastRecall, and it alone reads a second root.
+  await onStore(ctx, (port, local) => andThen(
+    local.finishLastRecall(writes, plan.hasGlobal ? plan.globalRoot : undefined),
+    () => port.bumpRecallStats(selected.length),
+  ));
 
   // Replace selectedItems entries with markRetrieved-updated copies so
   // the returned ContextResult reflects post-recall state.
@@ -515,29 +517,6 @@ async function recordRetrieval(
 
   // Read after strengthenRetrieved commits, so the rows just retrieved count at their new strength.
   return { items, ambientState: plan.config.ambient.enabled ? await readAmbientState(ctx, plan) : undefined };
-}
-
-function recordOnHippoDb(ctx: Context, plan: ContextPlan, retrievedIds: string[], trace: RecallTraceInput, recalled: number): void {
-  const localIndex = loadIndex(ctx.hippoRoot);
-  const strengthenedHere = strengthenRetrieved(ctx.hippoRoot, retrievedIds, { recallBoostAblated: isRecallBoostAblated() });
-  if (plan.hasGlobal) strengthenRetrieved(plan.globalRoot, retrievedIds.filter((id) => !strengthenedHere.has(id)), { recallBoostAblated: isRecallBoostAblated() });
-
-  localIndex.last_retrieval_ids = retrievedIds;
-
-  // Trace first on its own short-lived connection, then fold its id into localIndex so one saveIndex moves
-  // last_retrieval_ids and last_trace_id in lockstep; a failed trace write stores null, never a stale id.
-  const traceId = writeRecallTraceAtRoot(ctx.hippoRoot, trace);
-  localIndex.last_trace_id = traceId !== null ? String(traceId) : null;
-  saveIndex(ctx.hippoRoot, localIndex);
-
-  updateStats(ctx.hippoRoot, { recalled });
-}
-
-// The index's last-recall ids feed only outcomeForLastRecall, which no other store serves, so they are not written here.
-async function recordOnStore(ctx: Context, store: HippoStore, retrievedIds: string[], trace: RecallTraceInput, recalled: number): Promise<void> {
-  const strengthen = { ids: retrievedIds, opts: { tenantId: ctx.tenantId, recallBoostAblated: isRecallBoostAblated() } };
-  await store.finishRecall({ goalLog: [], audit: [], trace, strengthen });
-  await store.bumpRecallStats(recalled);
 }
 
 async function readAmbientState(ctx: Context, plan: ContextPlan): Promise<AmbientState | undefined> {

@@ -70,10 +70,10 @@ function sanitizeRerankSteps(
  * transaction, on the connection handed in. Fail-soft: never throws —
  * logs to stderr and returns null on any failure.
  *
- * Connection policy (per the plan): api.recall calls this directly on its
- * own already-open handle. api.getContext and CLI cmdRecall go through
- * `writeRecallTraceAtRoot` instead, since their audit handles are already
- * closed by the time tracing runs.
+ * Connection policy: api.recall and api.getContext reach this through
+ * `finishRecallAt`, on the handle that recall's other writes use. CLI
+ * cmdRecall goes through `writeRecallTraceAtRoot` instead, since its audit
+ * handle is already closed by the time tracing runs.
  */
 export function writeRecallTrace(db: DatabaseSyncLike, input: RecallTraceInput): number | null {
   try {
@@ -129,11 +129,10 @@ export function writeRecallTrace(db: DatabaseSyncLike, input: RecallTraceInput):
  * writes the trace, and closes. Returns the new trace id, or null on any
  * failure (fail-soft).
  *
- * Used at api.getContext and CLI cmdRecall — sites where the block's own
- * convention is per-call handles (writeEntry, saveIndex) and the earlier
- * audit handles are already closed. NOT used by api.recall, which must
- * reuse the caller's open handle (no-side-effects contract,
- * tests/api-recall-no-side-effects.test.ts).
+ * Used at CLI cmdRecall, where the block's own convention is per-call
+ * handles (writeEntry, saveIndex) and the earlier audit handle is already
+ * closed. NOT used by api.recall, which must reuse the caller's open handle
+ * (no-side-effects contract, tests/api-recall-no-side-effects.test.ts).
  *
  * This function does NOT touch the `last_trace_id` meta key: its own connection
  * would commit apart from `saveIndex`, so a crash could advance one key alone. LOCKSTEP
@@ -142,8 +141,8 @@ export function writeRecallTrace(db: DatabaseSyncLike, input: RecallTraceInput):
  * `localIndex.last_trace_id` from the returned id, THEN call `saveIndex`
  * once — `saveIndex` persists both meta keys in one transaction
  * (store.ts). Call sites that trace WITHOUT advancing `last_retrieval_ids`
- * (CLI cmdRecall's zero-result path, getContext's empty-result path) simply
- * never touch `localIndex` at all — they can't desync by construction.
+ * (CLI cmdRecall's zero-result path) simply never touch `localIndex` at
+ * all, so they can't desync by construction.
  *
  * Fail-soft: never throws, including on connection failure.
  */

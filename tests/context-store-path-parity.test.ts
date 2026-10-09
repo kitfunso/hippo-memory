@@ -12,6 +12,8 @@ import { StoreNotPortedError } from '../src/util/sqlite-blocked.js';
 import { embeddingIndexIdentity } from '../src/embeddings.js';
 import { resetAllPhysicsState } from '../src/db/physics-state.js';
 import type { HippoStore } from '../src/store-port.js';
+import { loadEntriesByIds } from '../src/store/entry-reads.js';
+import { writeEntry } from '../src/store/entry-writes.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from '../src/store/rows.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../src/db/vector-store.js';
 import {
@@ -261,6 +263,8 @@ interface PassOpts {
   readonly withGlobal: boolean;
   /** The store carries vectors and the local hashed-embedding server is its provider. */
   readonly embedded: boolean;
+  /** Runs on the pass's own copies of the two stores, before the call. */
+  readonly prepare?: (root: string, globalRoot: string) => void;
 }
 
 /** The config.json a pass writes, when it sets anything. */
@@ -270,7 +274,7 @@ interface PassConfig {
 }
 
 /** One getContext on a fresh copy of the fixture. */
-async function runPass(c: Case, { withGlobal, embedded }: PassOpts, makeStore?: (root: string) => HippoStore): Promise<Pass> {
+async function runPass(c: Omit<Case, 'name' | 'expected'>, { withGlobal, embedded, prepare }: PassOpts, makeStore?: (root: string) => HippoStore): Promise<Pass> {
   _resetSharedStoreCacheForTests();
   _resetAblationCacheForTests();
   const home = mkdtempSync(join(tmpdir(), 'hippo-context-parity-'));
@@ -286,6 +290,7 @@ async function runPass(c: Case, { withGlobal, embedded }: PassOpts, makeStore?: 
     else if (c.physicsOn && embedded) config.physics = { enabled: true };
     if (Object.keys(config).length > 0) writeFileSync(join(root, 'config.json'), JSON.stringify(config));
     if (c.shared) markSharedStore(root);
+    prepare?.(root, globalRoot);
     const store = makeStore?.(root);
     const ctx = { hippoRoot: root, tenantId: c.tenantId ?? TENANT_A, actor: c.actor ?? ADMIN, store };
     const opts: ContextOpts = { currentProject: PROJECT, ...c.opts };
@@ -317,6 +322,48 @@ describe('getContext on hippo.db returns and records what each case lists', () =
     expect(pass.rows.local.traceResults).toHaveLength(traced ?? 0);
     expect(pass.stats).toEqual(recalled === undefined ? null : expect.stringContaining(`"total_recalled": ${recalled},`));
     expect(pass.rows.global?.retrieved).toEqual(globalRetrieved.map((id) => expect.objectContaining({ id, retrieval_count: 1 })));
+  }, 120_000);
+});
+
+describe('the recall getContext records on hippo.db', () => {
+  const idsOf = (pass: Pass): string[] => pass.result.entries.map((e) => e.entry.id);
+
+  it('strengthens a row both stores hold in the local store only', async () => {
+    const mirror = (root: string, globalRoot: string): void => {
+      for (const entry of loadEntriesByIds(root, ['mem_a_own_0'], TENANT_A)) writeEntry(globalRoot, entry);
+    };
+    const pass = await runPass({ opts: {} }, { withGlobal: true, embedded: false, prepare: mirror });
+    expect(idsOf(pass)).toContain('mem_a_own_0');
+    expect(pass.rows.local.strengthened).toContainEqual(expect.objectContaining({ id: 'mem_a_own_0', retrieval_count: 1 }));
+    expect(pass.rows.global?.strengthened).toContainEqual(expect.objectContaining({ id: 'mem_a_own_0', retrieval_count: 0 }));
+  }, 120_000);
+
+  it('strengthens the row in the global store when the local store holds its id for another tenant', async () => {
+    const copyToOtherTenant = (root: string, globalRoot: string): void => {
+      for (const entry of loadEntriesByIds(globalRoot, ['mem_g_note'], TENANT_A)) writeEntry(root, { ...entry, tenantId: TENANT_B });
+    };
+    const pass = await runPass({ opts: {} }, { withGlobal: true, embedded: false, prepare: copyToOtherTenant });
+    expect(idsOf(pass)).toContain('mem_g_note');
+    expect(pass.rows.local.strengthened).toContainEqual(expect.objectContaining({ id: 'mem_g_note', retrieval_count: 0 }));
+    expect(pass.rows.global?.strengthened).toContainEqual(expect.objectContaining({ id: 'mem_g_note', retrieval_count: 1 }));
+  }, 120_000);
+
+  it('saves the ids with no trace id, never the previous one, when the trace write fails', async () => {
+    const refuseTraces = (root: string): void => {
+      const db = openHippoDb(root);
+      try {
+        setMeta(db, 'last_trace_id', '41');
+        db.exec("CREATE TRIGGER refuse_trace BEFORE INSERT ON recall_traces BEGIN SELECT RAISE(ABORT, 'trace refused'); END");
+      } finally {
+        closeHippoDb(db);
+      }
+    };
+    const pass = await runPass({ opts: {} }, { withGlobal: true, embedded: false, prepare: refuseTraces });
+    expect(pass.rows.local.traces).toEqual([]);
+    expect(pass.lastRecall).toEqual([
+      { key: 'last_retrieval_ids', value: JSON.stringify(idsOf(pass)) },
+      { key: 'last_trace_id', value: '' },
+    ]);
   }, 120_000);
 });
 

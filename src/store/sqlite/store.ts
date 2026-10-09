@@ -217,15 +217,25 @@ export function continuityAt(hippoRoot: string, tenantId: string, eventLimit: nu
   };
 }
 
+/** What a finished recall wrote after its audit rows: the trace's id, null when none was asked or its write failed, and the ids strengthened. */
+interface RecallFinish {
+  readonly traceId: number | null;
+  readonly strengthened: ReadonlySet<string>;
+}
+
 /** sqliteStore's finishRecall, for the synchronous recall that cannot await the port. */
-export function finishRecallAt(hippoRoot: string, writes: RecallWrites): void {
-  onHandle(hippoRoot, (db) => {
-    withWriteScope(db, 'finish_recall', () => {
-      writeGoalRecallLog(db, localGoalRecallRows(db, writes.goalLog));
-      for (const event of writes.audit) appendAuditEvent(db, event);
-    });
+export function finishRecallAt(hippoRoot: string, writes: RecallWrites): RecallFinish {
+  return onHandle(hippoRoot, (db) => {
+    // With no row to write the scope would only take the write lock.
+    if (writes.goalLog.length > 0 || writes.audit.length > 0) {
+      withWriteScope(db, 'finish_recall', () => {
+        writeGoalRecallLog(db, localGoalRecallRows(db, writes.goalLog));
+        for (const event of writes.audit) appendAuditEvent(db, event);
+      });
+    }
     // Each opens its own transaction, so neither can share the scope above.
-    if (writes.trace) writeRecallTrace(db, writes.trace);
-    if (writes.strengthen) strengthenRetrievedInOwnTx(db, writes.strengthen.ids, writes.strengthen.opts);
+    const traceId = writes.trace ? writeRecallTrace(db, writes.trace) : null;
+    const strengthened = writes.strengthen ? strengthenRetrievedInOwnTx(db, writes.strengthen.ids, writes.strengthen.opts) : new Set<string>();
+    return { traceId, strengthened };
   });
 }

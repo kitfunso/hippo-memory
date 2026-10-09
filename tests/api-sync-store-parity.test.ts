@@ -1,5 +1,5 @@
 // Runs each dual-mode api function on hippo.db directly and through sqliteStore, on two copies of one seeded store.
-// It carries the twin collapse: the change that removes the last twin deletes the path comparison and keeps only CONTRACT and the importVault test.
+// Each function has one body; the comparison holds its two ports, hippo.db answering at once and sqliteStore, to one reply and the same rows.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import crypto from 'node:crypto';
 import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -41,7 +41,7 @@ const KNOWN_DIFFERENCES = {
     fn: 'outcome',
     differs: 'hippo.db links the outcome to opts.traceId after the rows commit; the store refuses a traceId',
     onHippoDb: 'src/store/sqlite/entry-writes-group.ts:59-70',
-    throughStore: 'src/store/sqlite/local.ts:44-46',
+    throughStore: 'src/store/sqlite/local.ts:58-60',
     winner: 'hippo.db: the link is written on the outcome\'s own handle after its commit, which no served store can hand out, so a store keeps refusing a traceId',
     pinnedBy: 'tests/recall-trace-outcome-linkage.test.ts for the link; tests/entry-writes-store.test.ts for the refusal',
   },
@@ -57,7 +57,7 @@ const KNOWN_DIFFERENCES = {
     fn: 'archiveRaw',
     differs: 'afterArchive runs on hippo.db, inside the archive\'s write scope, and is refused through a store',
     onHippoDb: 'src/store/sqlite/entry-writes-group.ts:55-66',
-    throughStore: 'src/store/sqlite/local.ts:38-40',
+    throughStore: 'src/store/sqlite/local.ts:52-54',
     winner: 'hippo.db: the hook writes on the archive\'s own handle inside its write scope, which no served store can hand out, so a store keeps refusing it',
     pinnedBy: 'here',
   },
@@ -65,15 +65,15 @@ const KNOWN_DIFFERENCES = {
     fn: 'remember',
     differs: 'afterWrite and untrusted run on hippo.db and are refused through a store',
     onHippoDb: 'src/store/sqlite/entry-writes-group.ts:52-56',
-    throughStore: 'src/store/sqlite/local.ts:41-43',
+    throughStore: 'src/store/sqlite/local.ts:55-57',
     winner: 'hippo.db: the hook and a flagged row\'s quarantine record write on the row\'s own handle inside its write scope, which no served store can hand out, so a store keeps refusing both',
     pinnedBy: 'tests/api-remember-after-write.test.ts and tests/quarantine.test.ts for the write; tests/entry-writes-store.test.ts for the refusal',
   },
   lastRecall: {
     fn: 'outcomeForLastRecall',
     differs: 'no store path, so timing facts 2, 4 and 5 fail: a sqlite store runs the hippo.db code on ctx.hippoRoot, any other kind gets SqliteBlockedError',
-    onHippoDb: 'src/store/sqlite/local.ts:28-32',
-    throughStore: 'src/api/on-store.ts:25-33',
+    onHippoDb: 'src/store/sqlite/local.ts:35-39',
+    throughStore: 'src/api/on-store.ts:25-34',
     winner: 'hippo.db: the last recall and its trace are hippo.db meta that only the CLI and context write, so the function stays hippo.db-only and no port read is added',
     pinnedBy: 'here, in CONTRACT',
   },
