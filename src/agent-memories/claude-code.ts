@@ -12,6 +12,8 @@ import type { Adapter, AdapterContext, Container, Listing, Scope } from './types
 import { type JsonValue, isJsonObjectLiteral } from '../json.js';
 import { errorMessage } from '../log.js';
 
+const NAME_SLUG_MAX_CHARS = 200;
+
 // Keeps a pinned name from carrying a separator or `..` out of the projects folder.
 const PROJECT_DIR_NAME = /^[A-Za-z0-9_-]{1,64}$/;
 
@@ -37,7 +39,7 @@ export function claudeFolderName(root: string): string {
   if (name.length <= 200) return name;
   let hash = 0;
   for (let i = 0; i < full.length; i++) hash = ((hash << 5) - hash + full.charCodeAt(i)) | 0;
-  return `${name.slice(0, 200)}-${Math.abs(hash).toString(36)}`;
+  return `${name.slice(0, NAME_SLUG_MAX_CHARS)}-${Math.abs(hash).toString(36)}`;
 }
 
 export const claudeCodeAdapter: Adapter = {

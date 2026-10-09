@@ -7,6 +7,8 @@ import { execWithBusyRetry } from './busy.js';
 import { type OpenFacts, runMigrations } from './migrate.js';
 import { autoCheckpointPages } from './wal-checkpointer.js';
 
+const DEFAULT_BUSY_WAIT_MS = 5000;
+
 export function getHippoDbPath(hippoRoot: string): string {
   return path.join(hippoRoot, 'hippo.db');
 }
@@ -65,7 +67,7 @@ export function connectWithFacts(hippoRoot: string, busyWaitMs?: number): Opened
   createStoreFilesOwnerOnly(hippoRoot);
   const db = new DatabaseSync(getHippoDbPath(hippoRoot));
   try {
-    db.exec(`PRAGMA busy_timeout = ${busyWaitMs ?? 5000}`);
+    db.exec(`PRAGMA busy_timeout = ${busyWaitMs ?? DEFAULT_BUSY_WAIT_MS}`);
     execWithBusyRetry(db, 'PRAGMA journal_mode = WAL', busyWaitMs);
     db.exec('PRAGMA synchronous = NORMAL');
     db.exec(`PRAGMA wal_autocheckpoint = ${autoCheckpointPages(getHippoDbPath(hippoRoot))}`);

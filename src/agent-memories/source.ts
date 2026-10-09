@@ -5,6 +5,7 @@ import { maskEmails } from '../secret-detect.js';
 import { itemHash, sha256Hex } from './keys.js';
 import { toolSourcePrefix, type ToolId } from '../core/agent-memory-tools.js';
 import type { Scope } from './types.js';
+import { ID_SUFFIX_CHARS } from '../util/token-text.js';
 
 export const CONTENT_CAP = 1500;
 export const MIN_ITEM_CHARS = 10;
@@ -13,7 +14,7 @@ export const MIN_ITEM_CHARS = 10;
 export function containerId(dir: string, scope: Scope, platform: NodeJS.Platform, origin = ''): string {
   const real = realpathOrResolve(dir).replace(/\\/g, '/');
   const folder = platform === 'win32' ? real.toLowerCase() : real;
-  return `${scope === 'project' ? 'p' : 'u'}-${sha256Hex(origin === '' ? folder : `${folder}\n${origin}`).slice(0, 12)}`;
+  return `${scope === 'project' ? 'p' : 'u'}-${sha256Hex(origin === '' ? folder : `${folder}\n${origin}`).slice(0, ID_SUFFIX_CHARS)}`;
 }
 
 export function containerPrefix(tool: ToolId, container: string): string {

@@ -11,6 +11,9 @@ import { assessAutomaticMemory } from './memory-quality.js';
 import { redactSecretsStrict } from './secret-detect.js';
 import { errorMessage, log } from './log.js';
 
+const AUTOLEARN_TEXT_CHARS = 500;
+const AUTOLEARN_TAG_CHARS = 30;
+
 /** A memory of a failed command, "Command '<cmd>' failed: <truncated stderr>"; no store is in reach, so `hippo watch` re-derives its half-life from the store's config. */
 export function captureError(
   exitCode: number,
@@ -21,7 +24,7 @@ export function captureError(
   // Truncate to first 500 chars to avoid storing megabytes of build logs
   const clean = redactSecretsStrict(stderr);
   const wasTruncated = clean.length > 500;
-  const truncated = clean.slice(0, 500).trim();
+  const truncated = clean.slice(0, AUTOLEARN_TEXT_CHARS).trim();
   const suffix = wasTruncated ? ' [truncated]' : '';
   // Strip leading env var assignments (KEY=val or key=val) before the actual command name
   const safeCmd = redactSecretsStrict(command.replace(/^([A-Za-z_][A-Za-z0-9_]*=\S+\s+)+/, '').trim()) || '(redacted)';
@@ -30,7 +33,7 @@ export function captureError(
   // Derive a sanitized tag from the command name (first word, strip path)
   const cmdBase = safeCmd.split(/\s+/)[0].replace(/[^a-zA-Z0-9-]/g, '');
   const tags = ['error', 'autolearn'];
-  if (cmdBase) tags.push(cmdBase.toLowerCase().slice(0, 30));
+  if (cmdBase) tags.push(cmdBase.toLowerCase().slice(0, AUTOLEARN_TAG_CHARS));
 
   return createMemory(content, {
     layer: Layer.Episodic,

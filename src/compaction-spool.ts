@@ -7,6 +7,8 @@ import type { CompactionText, Log, PostCompactPayload } from './compaction-recor
 import { isSqliteBusy } from './db/busy.js';
 import { errorMessage } from './log.js';
 
+const STAMP_DIGITS = 13;
+
 export const SPOOL_DIR = 'compactions-spool';
 /** Starts the log line of a step that broke with an unexpected error, so the session-start banner counts it; a set-aside file is counted by its `.bad` name instead. */
 export const SPOOL_PROBLEM = 'spool problem: ';
@@ -95,7 +97,7 @@ interface HeldLock {
   at: number;
 }
 
-const stamp = (ms: number): string => String(Math.trunc(ms)).padStart(13, '0');
+const stamp = (ms: number): string => String(Math.trunc(ms)).padStart(STAMP_DIGITS, '0');
 const isTime = <T>(value: T): value is T & number => typeof value === 'number' && Number.isFinite(value);
 const idle = new Int32Array(new SharedArrayBuffer(4));
 

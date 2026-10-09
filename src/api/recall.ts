@@ -31,6 +31,8 @@ import { type Context, ownerOrSubject, RecallContractError } from './types.js';
 import { anchoringRows, availabilityRows, callerOf, recallAuditMetadata, recallAuditRow, strengthenOf } from './recall-record.js';
 import { retrieveWithCliCore } from './recall-core.js';
 
+const DEFAULT_RECALL_LIMIT = 10;
+
 /**
  * Shared construction helper for `RecallSuppressionSummary`. Used by
  * `api.recall`, `cmdRecall`, and the MCP `hippo_recall` handler so all three
@@ -282,7 +284,7 @@ type SummaryDecoration = { entry: MemoryEntry; childIds: string[] };
 const CONTINUITY_EVENT_LIMIT = 5;
 
 function planRecall(ctx: Context, opts: RecallOpts, all: MemoryEntry[], own: string | undefined): RecallPlan {
-  const limit = opts.limit ?? 10;
+  const limit = opts.limit ?? DEFAULT_RECALL_LIMIT;
   const window = admitCandidates(opts, all, limit, own);
   return {
     limit,

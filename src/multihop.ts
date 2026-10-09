@@ -4,6 +4,8 @@ import { fitBudget } from './search/finalize.js';
 import { search } from './search/bm25-search.js';
 import { DEFAULT_RECALL_BUDGET, type ResultCost, type SearchResult } from './core/search-types.js';
 
+const PASS1_TOP_K = 10;
+
 export function multihopSearch(
   query: string,
   entries: MemoryEntry[],
@@ -13,7 +15,7 @@ export function multihopSearch(
   // Pass 1 searches wide to find entities, so each return fits the caller's budget, as search() does.
   const fit = (ordered: SearchResult[]): SearchResult[] => fitBudget(ordered, budget, options.minResults ?? 1, options.cost);
   const pass1 = search(query, entries, { ...options, budget: budget * 2 });
-  const topK = pass1.slice(0, 10);
+  const topK = pass1.slice(0, PASS1_TOP_K);
 
   if (topK.length === 0) return [];
 

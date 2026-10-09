@@ -5,6 +5,9 @@ import * as path from 'path';
 import { isObjectLike, isStringValue, readSessionEnd } from '../capture-contract.js';
 import { copilotTurn } from './copilot-transcript.js';
 
+const RECENT_USER_TURNS = 20;
+const RECENT_ASSISTANT_TURNS = 10;
+
 /**
  * Build a compact text summary from a Claude Code / OpenCode / Copilot JSONL transcript.
  * Keeps plain user messages and the final chunk of assistant text, drops
@@ -148,8 +151,8 @@ export function summariseTranscript(jsonl: string): string {
 /** The last 20 user turns and last 10 replies: session-end is about what was decided near the end, not at the start. */
 export function sessionTail(turns: readonly SessionTurn[]) {
   return {
-    users: turns.filter((t) => t.role === 'user').map((t) => t.text).slice(-20),
-    assistants: turns.filter((t) => t.role === 'assistant').map((t) => t.text).slice(-10),
+    users: turns.filter((t) => t.role === 'user').map((t) => t.text).slice(-RECENT_USER_TURNS),
+    assistants: turns.filter((t) => t.role === 'assistant').map((t) => t.text).slice(-RECENT_ASSISTANT_TURNS),
   };
 }
 

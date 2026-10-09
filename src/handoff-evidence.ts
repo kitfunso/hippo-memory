@@ -2,6 +2,8 @@
 import { execFileSync } from 'child_process';
 import type { HandoffEvidence } from './handoff.js';
 
+const DEFAULT_TIMEOUT_MS = 2000;
+
 // Best-effort git state; a missing git, non-repo cwd, or a call past timeoutMs (each call, default 2 s)
 // yields null fields rather than throw, so a hook with a hard deadline can cap a slow repo.
 export function collectHandoffEvidence(
@@ -9,7 +11,7 @@ export function collectHandoffEvidence(
   testStatus: HandoffEvidence['testStatus'],
   options: { timeoutMs?: number } = {},
 ): HandoffEvidence {
-  const timeoutMs = options.timeoutMs ?? 2000;
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   let gitRef: string | null = null;
   try {
     gitRef = execFileSync('git', ['rev-parse', 'HEAD'], {

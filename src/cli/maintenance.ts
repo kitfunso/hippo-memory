@@ -13,6 +13,10 @@ import { printError } from './output.js';
 import { type CliFlags, requireInit, resolveAuthRoot, boolFlag } from './shared.js';
 import { errorMessage } from '../log.js';
 
+const MAX_FAILED_SHOWN = 5;
+const MAX_PAIRS_SHOWN = 15;
+const PAIR_PREVIEW_CHARS = 90;
+
 export async function cmdRefine(
   hippoRoot: string,
   flags: CliFlags,
@@ -51,7 +55,7 @@ export async function cmdRefine(
   console.log(`Failed:   ${result.failed}`);
   if (result.failed > 0) {
     console.log('\nFailures:');
-    for (const d of result.details.filter((x) => x.status === 'failed').slice(0, 5)) {
+    for (const d of result.details.filter((x) => x.status === 'failed').slice(0, MAX_FAILED_SHOWN)) {
       console.log(`  ${d.id}: ${d.reason}`);
     }
   }
@@ -106,14 +110,14 @@ function printDedupGroups(result: DedupResult, dryRun: boolean): void {
 function printDedupPairs(result: DedupResult, dryRun: boolean): void {
   // Show detailed pairs
   console.log('');
-  const shown = result.pairs.slice(0, 15);
+  const shown = result.pairs.slice(0, MAX_PAIRS_SHOWN);
   for (const pair of shown) {
     const simPct = (pair.similarity * 100).toFixed(0);
     const action = dryRun ? 'Would remove' : 'Removed';
     console.log(`  ${simPct}% similar | kept [${pair.keptLayer}] strength=${pair.keptStrength.toFixed(2)}`);
-    console.log(`    ${pair.keptContent.slice(0, 90)}`);
+    console.log(`    ${pair.keptContent.slice(0, PAIR_PREVIEW_CHARS)}`);
     console.log(`  ${action} [${pair.removedLayer}] strength=${pair.removedStrength.toFixed(2)}`);
-    console.log(`    ${pair.removedContent.slice(0, 90)}`);
+    console.log(`    ${pair.removedContent.slice(0, PAIR_PREVIEW_CHARS)}`);
     console.log('');
   }
   if (result.pairs.length > 15) {

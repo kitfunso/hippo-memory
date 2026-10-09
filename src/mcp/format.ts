@@ -10,6 +10,8 @@ import { detectAnchoring } from '../recall-history.js';
 import { detectAvailabilityBias } from '../availability.js';
 import { estimateTokens } from '../util/token-text.js';
 
+const MCP_PREVIEW_CHARS = 200;
+
 // ── Format helpers ──
 
 
@@ -27,7 +29,7 @@ function handoffLines(h: SessionHandoff): string[] {
 
 function trailLines(events: readonly SessionEvent[]): string[] {
   return events.map((e) => {
-    const preview = e.content.length > 200 ? e.content.slice(0, 200) + '…' : e.content;
+    const preview = e.content.length > MCP_PREVIEW_CHARS ? e.content.slice(0, MCP_PREVIEW_CHARS) + '…' : e.content;
     return `- [${e.event_type}] ${preview}`;
   });
 }
@@ -135,7 +137,7 @@ export function tailSection(rows: RecallResultItem[]): string {
   const lines: string[] = ['', '## Fresh tail / substituted summaries'];
   for (const r of rows) {
     const tag = r.isSummary ? '[summary]' : '[tail]';
-    const head = r.content.length > 200 ? r.content.slice(0, 200) + '…' : r.content;
+    const head = r.content.length > MCP_PREVIEW_CHARS ? r.content.slice(0, MCP_PREVIEW_CHARS) + '…' : r.content;
     if (r.isSummary && r.substitutedFor && r.substitutedFor.length > 0) {
       lines.push(`- ${tag} ${r.id} (covers ${r.substitutedFor.length} rows): ${head}`);
     } else {

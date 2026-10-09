@@ -42,6 +42,8 @@ import { redactSecretsStrict } from './secret-detect.js';
 import { fetchWithRetry } from './http-retry.js';
 import type { JsonValue } from './json.js';
 
+const ERROR_DETAIL_CHARS = 300;
+
 export type EmbeddingProviderKind = 'local' | 'openai' | 'voyage' | 'cohere';
 
 export const API_PROVIDER_KINDS: readonly EmbeddingProviderKind[] = ['openai', 'voyage', 'cohere'];
@@ -307,7 +309,7 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
         /* ignore body read error */
       }
       throw new Error(
-        redact(`${this.kind} embeddings HTTP ${resp.status}: ${detail.slice(0, 300)}`, key),
+        redact(`${this.kind} embeddings HTTP ${resp.status}: ${detail.slice(0, ERROR_DETAIL_CHARS)}`, key),
       );
     }
 

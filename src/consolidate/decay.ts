@@ -4,6 +4,8 @@ import { rescueSet, rankNonPinnedByTenant, validateWeights, type MvRankInfo } fr
 import { MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256 } from '../memory-value-weights.js';
 import type { ConsolidationResult, SleepRun } from './run.js';
 
+const STRENGTH_DECIMALS = 4;
+
 export const DECAY_THRESHOLD = 0.05;
 
 /** What the decay pass hands to the conflict check and the rescue audit at the end of the run. */
@@ -22,7 +24,7 @@ export interface DecayOutcome {
 // Only called for rows `retirable` allows (never pinned, raw, kept for good or backing a first-class object).
 function retireFaded(run: SleepRun, entry: MemoryEntry, strength: number): void {
   const { result } = run;
-  const why = `(strength ${strength.toFixed(4)} < ${DECAY_THRESHOLD})`;
+  const why = `(strength ${strength.toFixed(STRENGTH_DECIMALS)} < ${DECAY_THRESHOLD})`;
   // A faded secret is deleted, never kept dormant: keeping it would hold a
   // credential on disk that the user reasonably expects forgetting removed.
   if (run.config.dormant.enabled && !detectSecret(entry).flagged) {
@@ -98,7 +100,7 @@ function reportRescue(result: ConsolidationResult, entry: MemoryEntry, strength:
   const rankNote = rank
     ? ` - rescued (rank ${rank.rank}/${rank.totalNonPinned} in tenant ${rank.tenantId}, top ${rank.keepN})`
     : ' - rescued';
-  result.details.push(`  🛟 ${entry.id} (strength ${strength.toFixed(4)} < ${DECAY_THRESHOLD})${rankNote}`);
+  result.details.push(`  🛟 ${entry.id} (strength ${strength.toFixed(STRENGTH_DECIMALS)} < ${DECAY_THRESHOLD})${rankNote}`);
 }
 
 function decayWithMemoryValue(run: SleepRun): DecayOutcome {

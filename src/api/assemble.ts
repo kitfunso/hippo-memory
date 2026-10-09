@@ -8,6 +8,9 @@ import { classifyOriginProject, projectNames } from '../project-identity.js';
 import type { CallerProject } from '../prompt-hook.js';
 import type { Context } from './types.js';
 
+const DEFAULT_FRESH_TAIL_COUNT = 10;
+const DEFAULT_ROW_CAP = 5000;
+
 export const DEFAULT_ASSEMBLE_BUDGET = 4000;
 
 // ---------------------------------------------------------------------------
@@ -113,7 +116,7 @@ export async function assemble(
 ): Promise<AssembleResult> {
   assertScopeRequestAllowed(ctx.actor, opts.scope);
   const budget = opts.budget ?? DEFAULT_ASSEMBLE_BUDGET;
-  const freshTailCount = opts.freshTailCount ?? 10;
+  const freshTailCount = opts.freshTailCount ?? DEFAULT_FRESH_TAIL_COUNT;
   const summarizeOlder = opts.summarizeOlder ?? true;
   const own = personalScopeOf(ctx.actor) ?? undefined;
 
@@ -158,7 +161,7 @@ interface ScopedRaws {
 }
 
 async function loadScopedRaws(ctx: Context, sessionId: string, opts: AssembleOpts, own: string | undefined): Promise<ScopedRaws> {
-  const rowCap = opts.rowCap ?? 5000;
+  const rowCap = opts.rowCap ?? DEFAULT_ROW_CAP;
   const origins = opts.project ? projectNames(opts.project) : undefined;
   const dag = requireGroup(storeFor(ctx), 'dagReads');
   const rows = await dag.sessionRawEntries({ tenantId: ctx.tenantId, sessionId, cap: rowCap, origins });

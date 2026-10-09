@@ -19,6 +19,7 @@ import { SNAPSHOT_AMBIENT_MAX_AGE_MS } from './store/sessions.js';
 import { loadLatestHandoff } from './store/handoffs.js';
 import { isSyntheticMessage } from './token-ledger.js';
 import { readTranscriptTail } from './transcript-tail.js';
+import { ID_SUFFIX_CHARS } from './util/token-text.js';
 
 /** Five-word runs are stock phrases; six in a row is a copied clause. */
 export const ECHO_WINDOW = 6;
@@ -501,7 +502,7 @@ export function buildSessionDigest(sources: DigestSources): DigestDraft | null {
 
 /** Same session, same row: a second worker for one session updates the digest instead of adding one. */
 export function sessionDigestId(tenantId: string, key: string): string {
-  return `mem_${createHash('sha256').update(`${SESSION_DIGEST_TAG}\n${tenantId}\n${key}`).digest('hex').slice(0, 12)}`;
+  return `mem_${createHash('sha256').update(`${SESSION_DIGEST_TAG}\n${tenantId}\n${key}`).digest('hex').slice(0, ID_SUFFIX_CHARS)}`;
 }
 
 export interface SessionDigestOptions {

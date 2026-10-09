@@ -24,6 +24,8 @@ import {
 } from './rows.js';
 import { serializeEntry } from './markdown.js';
 
+const SCORE_DECIMALS = 3;
+
 export function layerDir(root: string, layer: Layer): string {
   return path.join(root, layer);
 }
@@ -160,7 +162,7 @@ function writeConflictMirrors(hippoRoot: string, conflicts: MemoryConflict[]): v
       `- Memory A: ${conflict.memory_a_id}`,
       `- Memory B: ${conflict.memory_b_id}`,
       `- Reason: ${conflict.reason}`,
-      `- Score: ${conflict.score.toFixed(3)}`,
+      `- Score: ${conflict.score.toFixed(SCORE_DECIMALS)}`,
       `- Status: ${conflict.status}`,
       '',
     ].join('\n');

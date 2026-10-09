@@ -1,6 +1,8 @@
 import * as fs from 'fs';
 import { type ImportResult, type ImportOptions, importEntries } from './core.js';
 
+const SLUG_MAX_CHARS = 50;
+
 // ---------------------------------------------------------------------------
 // Structured markdown importer (MEMORY.md / AGENTS.md format)
 // ---------------------------------------------------------------------------
@@ -16,7 +18,7 @@ function slugify(heading: string): string {
     .trim()
     .replace(/\s+/g, '-')
     .replace(/-+/g, '-')
-    .slice(0, 50);
+    .slice(0, SLUG_MAX_CHARS);
 }
 
 /**

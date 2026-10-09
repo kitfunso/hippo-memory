@@ -2,13 +2,15 @@ import { envStdinWaitMs } from './env.js';
 import { isJsonString, type JsonValue, isJsonObjectLiteral } from './json.js';
 import type { JsonObject } from './store/working-memory.js';
 
+const DEFAULT_STDIN_WAIT_MS = 1000;
+
 /** `timedOut` means the window closed with stdin still open, so absent
  * `text` is "unknown", not "none", and present `text` may be truncated.
  * Treating absence as a manual run is only safe when it is false. */
 export interface BoundedStdin { text?: string; timedOut: boolean; }
 
 function defaultWaitMs(): number {
-  return envStdinWaitMs() ?? 1000;
+  return envStdinWaitMs() ?? DEFAULT_STDIN_WAIT_MS;
 }
 
 /** Never blocks: a TTY resolves at once, otherwise waits up to `waitMs` of

@@ -38,6 +38,9 @@ import { emitCliAudit, requireInit, runViaServerIfAvailable, fmt, type CliFlags,
 import { DAY_MS } from '../util/time.js';
 import { errorMessage } from '../log.js';
 
+const PARENT_PREVIEW_CHARS = 70;
+const DETAIL_CONTENT_CHARS = 160;
+
 // `requested` is what the caller typed; `all` adds path and scope tags from this process's cwd and env.
 interface RememberTags {
   requested: string[];
@@ -419,7 +422,7 @@ function traceLineage(hippoRoot: string, globalRoot: string, entry: MemoryEntry,
   const parents = Array.isArray(entry.parents) ? entry.parents : [];
   const parentPreviews = parents.map((pid) => {
     const p = readEntry(hippoRoot, pid, tenantId) ?? (isInitialized(globalRoot) ? readEntry(globalRoot, pid, tenantId) : null);
-    return { id: pid, content: p ? p.content.replace(/\s+/g, ' ').slice(0, 70) : '(not found)' };
+    return { id: pid, content: p ? p.content.replace(/\s+/g, ' ').slice(0, PARENT_PREVIEW_CHARS) : '(not found)' };
   });
 
   // Open conflicts involving this memory.
@@ -466,7 +469,7 @@ function printTraceText(t: TraceView): void {
   const { parentPreviews, myConflicts } = t;
   console.log(`Memory: ${entry.id}  [${sourceLabel}]`);
   console.log('='.repeat(50));
-  console.log(`Content:   ${entry.content.replace(/\s+/g, ' ').slice(0, 160)}${entry.content.length > 160 ? '...' : ''}`);
+  console.log(`Content:   ${entry.content.replace(/\s+/g, ' ').slice(0, DETAIL_CONTENT_CHARS)}${entry.content.length > DETAIL_CONTENT_CHARS ? '...' : ''}`);
   console.log(`Layer:     ${entry.layer.padEnd(10)} Confidence: ${conf.padEnd(14)} Pinned: ${entry.pinned ? 'yes' : 'no'}${entry.starred ? '  Starred: yes' : ''}`);
   console.log(`Tags:      ${entry.tags.join(', ') || '(none)'}`);
   console.log(`Created:   ${entry.created}  (${fmt(ageDays, 1)} days ago)`);

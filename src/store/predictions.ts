@@ -33,6 +33,8 @@ import { loadConfig } from '../config.js';
 import { keysetAfter, type KeysetPosition } from '../keyset.js';
 import type { PredictionSave } from './port.js';
 
+const DEFAULT_PREDICTION_PAGE_SIZE = 100;
+
 // ---------------------------------------------------------------------------
 // Domain types
 // ---------------------------------------------------------------------------
@@ -383,7 +385,7 @@ export function loadPredictionsByClass(
   opts: ListPredictionsOpts = {},
 ): Prediction[] {
   assertTenantId('loadPredictionsByClass', tenantId);
-  const limit = opts.limit ?? 100;
+  const limit = opts.limit ?? DEFAULT_PREDICTION_PAGE_SIZE;
   const after = keysetAfter('created_at', 'id', opts.after);
   const db = openHippoDb(hippoRoot);
   try {
@@ -441,7 +443,7 @@ export function loadAllPredictions(
       WHERE tenant_id = ?${after.sql}
       ORDER BY created_at DESC, id DESC
       LIMIT ?
-    `).all(tenantId, ...after.params, opts.limit ?? 100) as PredictionRow[];
+    `).all(tenantId, ...after.params, opts.limit ?? DEFAULT_PREDICTION_PAGE_SIZE) as PredictionRow[];
     return rows.map(rowToPrediction);
   } finally {
     closeHippoDb(db);
@@ -584,7 +586,7 @@ export function loadOpenPredictions(
   opts: { classTag?: string; limit?: number; after?: KeysetPosition } = {},
 ): Prediction[] {
   assertTenantId('loadOpenPredictions', tenantId);
-  const limit = opts.limit ?? 100;
+  const limit = opts.limit ?? DEFAULT_PREDICTION_PAGE_SIZE;
   const after = keysetAfter('created_at', 'id', opts.after);
   const db = openHippoDb(hippoRoot);
   try {

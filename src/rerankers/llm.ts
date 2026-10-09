@@ -6,6 +6,8 @@ import { createOutageWarning } from './outage-warning.js';
 import { rerankerPost } from './remote.js';
 import { errorMessage } from '../log.js';
 
+const DEFAULT_LLM_RERANK_TOP_K = 20;
+
 const DEFAULT_TIMEOUT_MS = 30_000;
 
 interface FetchHeaders {
@@ -31,7 +33,7 @@ export function createLlmReranker(): RerankerFn {
     if (!url) {
       throw new Error('HIPPO_LLM_RERANKER_URL not set; refusing to run LLM reranker.');
     }
-    const head = results.slice(0, options?.topK ?? 20);
+    const head = results.slice(0, options?.topK ?? DEFAULT_LLM_RERANK_TOP_K);
 
     let permutation: number[] | null = null;
     try {

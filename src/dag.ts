@@ -15,6 +15,9 @@ import { neverAutoShareTags } from './shared.js';
 import { errorMessage, log } from './log.js';
 import { certainDefect } from './memory-quality.js';
 
+const SUMMARY_FALLBACK_CHARS = 40;
+const DEFAULT_REBUILD_CAP = 20;
+
 export interface FactCluster {
   label: string;
   members: MemoryEntry[];
@@ -53,7 +56,7 @@ export function clusterFacts(facts: MemoryEntry[]): FactCluster[] {
     );
     const label = sharedTags
       .map((t) => t.split(':')[1])
-      .join(': ') || members[0].content.slice(0, 40);
+      .join(': ') || members[0].content.slice(0, SUMMARY_FALLBACK_CHARS);
 
     clusters.push({ label, members, entityTags: sharedTags });
   }
@@ -315,7 +318,7 @@ function summaryLabel(summary: MemoryEntry): string {
   );
   return entityTags.length > 0
     ? entityTags.map((t) => t.split(':')[1]).join(': ')
-    : summary.content.slice(0, 40);
+    : summary.content.slice(0, SUMMARY_FALLBACK_CHARS);
 }
 
 /**
@@ -335,7 +338,7 @@ export async function rebuildDirtySummaries(
   hippoRoot: string,
   opts: DagSummaryOptions & { cap?: number },
 ): Promise<DagRebuildResult> {
-  const cap = opts.cap ?? 20;
+  const cap = opts.cap ?? DEFAULT_REBUILD_CAP;
   const dirty = loadAllDirtySummaries(hippoRoot);
   const capped = dirty.length > cap;
   const queue = dirty.slice(0, cap);

@@ -20,6 +20,9 @@ import { redactSecretsStrict } from './secret-detect.js';
 import { sendAnthropicMessage, type AnthropicMessageFailure } from './util/anthropic-messages.js';
 import { log } from './log.js';
 
+const MAX_REFINE_SOURCES = 8;
+const REFINE_SOURCE_CHARS = 400;
+
 const REFINED_TAG = 'llm-refined';
 // Output budget for one refined memory, and the shortest reply kept as a refinement.
 const REFINE_MAX_TOKENS = 800;
@@ -67,8 +70,8 @@ export async function refineSemanticMemory(
   opts: { apiKey: string; model?: string; fetcher?: typeof fetch },
 ): Promise<string | null> {
   const sourceBlock = sources
-    .slice(0, 8)
-    .map((s, i) => `[source ${i + 1}] ${redactSecretsStrict(s.content).slice(0, 400)}`)
+    .slice(0, MAX_REFINE_SOURCES)
+    .map((s, i) => `[source ${i + 1}] ${redactSecretsStrict(s.content).slice(0, REFINE_SOURCE_CHARS)}`)
     .join('\n\n');
 
   const prompt = `You are refining a semantic memory in an agent's memory store. The rule-based consolidator merged several related episodic memories into one, but the output is clumsy. Produce a single coherent semantic memory that captures the underlying principle.

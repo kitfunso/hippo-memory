@@ -15,6 +15,8 @@ import type { EmotionalValence } from './memory.js';
 import type { PhysicsConfig } from './physics-config.js';
 import { comparePhysicsResultsBy } from './compare.js';
 
+const FALLBACK_HALF_LIFE_DAYS = 7;
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -272,7 +274,7 @@ function computeNetForce(
   }
 
   // Drag
-  const fd = dragForce(pi, ctx.config.drag, ctx.halfLives.get(pi.memoryId) ?? 7);
+  const fd = dragForce(pi, ctx.config.drag, ctx.halfLives.get(pi.memoryId) ?? FALLBACK_HALF_LIFE_DAYS);
   net = vecAdd(net, fd);
 
   return net;

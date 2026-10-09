@@ -8,6 +8,7 @@ import { resolveTenantId } from '../tenant.js';
 import { type CliFlags, resolveAuthRoot, flagIsTrue } from './shared.js';
 import { printError } from './output.js';
 import { errorMessage } from '../log.js';
+import { DATE_PREFIX_CHARS } from '../util/token-text.js';
 
 
 /** Old per-worktree project names of the repo at cwd, mapped to the repo's main checkout name; empty outside git. */
@@ -47,7 +48,7 @@ function projectsList(db: ProjectsDb, tenantId: string, root: string, flags: Cli
   const worktrees = worktreeNames();
   console.log(`${count(projects.length, 'project name')} in ${root} (newest write first):\n`);
   for (const p of projects) {
-    console.log(`${label(p.origin)}  ${count(p.live, 'memory', 'memories')}, ${p.imported} imported from agent notes, newest ${p.newest.slice(0, 10)}${hint(p, worktrees)}`);
+    console.log(`${label(p.origin)}  ${count(p.live, 'memory', 'memories')}, ${p.imported} imported from agent notes, newest ${p.newest.slice(0, DATE_PREFIX_CHARS)}${hint(p, worktrees)}`);
   }
 }
 

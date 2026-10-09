@@ -1,5 +1,7 @@
 import { execFileSync } from 'child_process';
 
+const MAX_DIFF_TERMS = 10;
+
 const SKIPPED_PATH_TERMS = ['src', 'dist', 'test', 'tests', 'node_modules', 'index'];
 
 // stderr is dropped because git's warnings (line-ending notices, for one) would otherwise become query terms.
@@ -17,7 +19,7 @@ export function autoDetectContext(): string {
         .split('\n')
         .flatMap((f: string) => f.replace(/[/\\.]/g, ' ').split(/\s+/))
         .filter((t: string) => t.length > 2 && !SKIPPED_PATH_TERMS.includes(t))
-        .slice(0, 10);
+        .slice(0, MAX_DIFF_TERMS);
       if (terms.length > 0) return terms.join(' ');
     }
 

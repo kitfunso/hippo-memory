@@ -28,6 +28,8 @@ import {
   boolFlag,
 } from './shared.js';
 
+const EXPLAIN_PREVIEW_CHARS = 48;
+
 /** The SQL predicate drops denied rows before the window, so an unscoped probe counts what the policy hides. */
 function noteScopeHidden(hippoRoot: string, globalRoot: string | undefined, query: string, tenantId: string, requested: string | undefined): void {
   const probe = [
@@ -149,7 +151,7 @@ function printExplainTable(results: SearchResult[], query: string, modeUsed: str
   for (let i = 0; i < results.length; i++) {
     const r = results[i];
     const b = r.breakdown;
-    const preview = r.entry.content.replace(/\s+/g, ' ').slice(0, 48);
+    const preview = r.entry.content.replace(/\s+/g, ' ').slice(0, EXPLAIN_PREVIEW_CHARS);
     const ageStr = b ? `${b.ageDays}d` : '?';
     console.log(
       `${String(i + 1).padEnd(5)} ${fmt(r.score, 3).padEnd(7)} ${fmt(r.entry.strength).padEnd(9)} ${ageStr.padEnd(6)} ${r.entry.layer.padEnd(10)} ${r.entry.id.padEnd(17)} ${preview}`,

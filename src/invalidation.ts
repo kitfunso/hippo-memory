@@ -12,6 +12,8 @@ import {
   type ChurnCommit,
 } from './churn-git.js';
 
+const HEADLINE_CHARS = 60;
+
 export interface InvalidationTarget {
   from: string;
   to: string | null;
@@ -167,7 +169,7 @@ function weakenMatches(entries: readonly MemoryEntry[], target: InvalidationTarg
     result.targets.push(entry.id);
     result.preview.push({
       id: entry.id,
-      headline: entry.content.replace(/\s+/g, ' ').slice(0, 60),
+      headline: entry.content.replace(/\s+/g, ' ').slice(0, HEADLINE_CHARS),
     });
     if (dryRun) continue;
 
@@ -514,7 +516,7 @@ function recordChurnEvidence(
     const evidence = churnEvidence(git, refs, anchorOf(entry));
     if (!evidence) continue;
 
-    const headline = entry.content.replace(/\s+/g, ' ').slice(0, 60);
+    const headline = entry.content.replace(/\s+/g, ' ').slice(0, HEADLINE_CHARS);
     if (entry.tags.includes(CHURN_STALE_TAG)) {
       result.alreadyMarked++;
       result.preview.push({ id: entry.id, headline, evidence, already: true });

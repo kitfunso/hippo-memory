@@ -1,4 +1,7 @@
 
+// Keeps the last meaningful segments, the most specific ones.
+const PATH_SEGMENTS_KEPT = 4;
+
 /**
  * Extract meaningful path segments from a directory path.
  * Returns tags like ['path:src', 'path:api', 'path:my-project'].
@@ -17,7 +20,7 @@ export function extractPathTags(dirPath: string): string[] {
 
   return segments
     .filter(s => s.length >= 2 && !noise.has(s.toLowerCase()))
-    .slice(-4)  // keep last 4 meaningful segments (most specific)
+    .slice(-PATH_SEGMENTS_KEPT)
     .map(s => `path:${s.toLowerCase()}`);
 }
 

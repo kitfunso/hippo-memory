@@ -4,6 +4,8 @@ import { simulate, type ForceContext } from '../physics.js';
 import type { SleepRun } from './run.js';
 import { errorMessage } from '../log.js';
 
+const STATS_DECIMALS = 4;
+
 // -------------------------------------------------------------------------
 // 2. Physics simulation pass
 // -------------------------------------------------------------------------
@@ -35,8 +37,8 @@ function simulateStoredParticles(run: SleepRun): void {
   result.physicsSimulated = stats.particleCount;
   result.details.push(
     `  ⚛️  physics: ${stats.particleCount} particles, ` +
-    `avg vel ${stats.avgVelocityMagnitude.toFixed(4)}, ` +
-    `energy ${stats.energy.total.toFixed(4)}`
+    `avg vel ${stats.avgVelocityMagnitude.toFixed(STATS_DECIMALS)}, ` +
+    `energy ${stats.energy.total.toFixed(STATS_DECIMALS)}`
   );
 }
 

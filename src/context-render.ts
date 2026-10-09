@@ -9,6 +9,7 @@ import type {
   AssembleCost, AssembleResult, AssembledContextItem, ContextCost, ContextResultEntry, DrillDownChild, DrillDownCost,
   DrillDownResult, DrillDownSummary,
 } from './api.js';
+import { DATE_PREFIX_CHARS } from './util/token-text.js';
 
 export function snapshotText(s: TaskSnapshot): string {
   return [
@@ -88,7 +89,7 @@ export function contextLine(
   const label = confidenceLabel(e, now);
   const confTag = `[${label.text}]${label.warn ? ' ⚠️' : ''}`;
   if (framing === 'observe') {
-    const dateStr = new Date(e.created).toISOString().slice(0, 10);
+    const dateStr = new Date(e.created).toISOString().slice(0, DATE_PREFIX_CHARS);
     // Verified rules print without the date prefix.
     if (confidenceFacets(e, now).tier === 'verified') return `- **${confTag} ${globalPrefix}${e.content}**${tagStr}${strengthStr}`;
     return `- **${confTag} Previously observed (${dateStr}): ${globalPrefix}${e.content}**${tagStr}${strengthStr}`;

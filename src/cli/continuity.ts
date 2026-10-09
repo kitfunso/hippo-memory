@@ -23,6 +23,8 @@ import {
   boolFlag,
 } from './shared.js';
 
+const ISO_DATETIME_CHARS = 19;
+
 function snapshotSave(hippoRoot: string, flags: CliFlags): void {
   const task = String(flags['task'] ?? '').trim();
   const summary = String(flags['summary'] ?? '').trim();
@@ -420,7 +422,7 @@ function printCurrentState(snapshot: TaskSnapshot | null, events: SessionEvent[]
     console.log('');
     console.log('Recent events:');
     for (const ev of events) {
-      const ts = ev.created_at.slice(0, 19).replace('T', ' ');
+      const ts = ev.created_at.slice(0, ISO_DATETIME_CHARS).replace('T', ' ');
       console.log(`  [${ts}] (${ev.event_type}) ${ev.content}`);
     }
   }

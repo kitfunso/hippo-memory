@@ -14,6 +14,9 @@ import {
 } from './ablation.js';
 import { AGENT_MEMORY_TOOLS, toolSourcePrefix } from './core/agent-memory-tools.js';
 import { DAY_MS } from './util/time.js';
+import { ID_SUFFIX_CHARS } from './util/token-text.js';
+export const DEFAULT_SCHEMA_FIT = 0.5;
+export const FALLBACK_HALF_LIFE_DAYS = 7;
 
 export enum Layer {
   Buffer = 'buffer',
@@ -485,7 +488,7 @@ export function entryAfterOutcome(entry: MemoryEntry, good: boolean): MemoryEntr
  * Generate a random memory ID using crypto.randomUUID().
  */
 export function generateId(prefix: string = 'mem'): string {
-  return `${prefix}_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
+  return `${prefix}_${randomUUID().replace(/-/g, '').slice(0, ID_SUFFIX_CHARS)}`;
 }
 
 // Pinned and verified are exempt from ageing by policy, so this reads "aged out
@@ -596,7 +599,7 @@ export function createMemory(content: string, options: Partial<CreateMemoryOptio
   const layer = options.layer ?? Layer.Episodic;
   const tags = options.tags ?? [];
   const emotional_valence = options.emotional_valence ?? inferValence(tags);
-  const schema_fit = options.schema_fit ?? 0.5;
+  const schema_fit = options.schema_fit ?? DEFAULT_SCHEMA_FIT;
 
   const half_life_days = deriveHalfLife(options.baseHalfLifeDays ?? DEFAULT_HALF_LIFE_DAYS, { tags, schema_fit });
 

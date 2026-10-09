@@ -32,6 +32,7 @@ import {
   countSkipsAfter, deleteRereadRows, injectedBlocks, insertTokenRow, latestInjectOrReset,
   pruneTokenRowsBefore, sessionTokenRows, sessionTotals, surfaceTotals,
 } from './store/token-ledger-rows.js';
+import { DATE_PREFIX_CHARS } from './util/token-text.js';
 
 /**
  * Where a block of memory text was sent.
@@ -371,7 +372,7 @@ export function recordRereads(db: DatabaseSyncLike, tenantId: string, sessionId:
     const rows = injectedBlocks(db, tenantId, sessionId, REREAD_SURFACES);
     const days = new Map<string, RereadDay>();
     const add = (surface: TokenSurface, at: number, rereads: number, tokens: number): void => {
-      const key = `${surface} ${new Date(at).toISOString().slice(0, 10)}`;
+      const key = `${surface} ${new Date(at).toISOString().slice(0, DATE_PREFIX_CHARS)}`;
       const day = days.get(key) ?? { surface, at, rereads: 0, tokens: 0 };
       days.set(key, { surface, at: Math.max(day.at, at), rereads: day.rereads + rereads, tokens: day.tokens + tokens });
     };

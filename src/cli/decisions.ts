@@ -12,6 +12,8 @@ import { printError } from './output.js';
 import { nonEmptyStringFlag, parseListLimit, requireInit, type CliFlags, flagIsTrue, stringFlag } from './shared.js';
 import { closeObject, foundOrExit, idArgOrExit, listObjects, printLifecycleTail, requireStatus, type ObjectNames } from './object-verbs.js';
 import { errorMessage } from '../log.js';
+
+const BASERATE_DECIMALS = 3;
 const DECISION: ObjectNames = { cmd: 'decide', noun: 'Decision', idLabel: 'decision' };
 const INCIDENT: ObjectNames = { cmd: 'incident', noun: 'Incident', idLabel: 'incident' };
 const PREDICTION_NOUN = 'Prediction';
@@ -131,11 +133,11 @@ function predictBaserate(hippoRoot: string, tenantId: string, flags: CliFlags): 
   console.log(baserate.summary);
   console.log(`  n_closed:         ${baserate.nClosed}`);
   console.log(`  n_ratio_eligible: ${baserate.nRatioEligible}`);
-  if (baserate.meanEstimate !== null) console.log(`  mean_estimate:    ${baserate.meanEstimate.toFixed(3)}`);
-  if (baserate.meanActual !== null)   console.log(`  mean_actual:      ${baserate.meanActual.toFixed(3)}`);
-  if (baserate.meanRatio !== null)    console.log(`  mean_ratio:       ${baserate.meanRatio.toFixed(3)}x`);
-  if (baserate.p50Ratio !== null)     console.log(`  p50_ratio:        ${baserate.p50Ratio.toFixed(3)}x`);
-  if (baserate.mae !== null)          console.log(`  mae:              ${baserate.mae.toFixed(3)}`);
+  if (baserate.meanEstimate !== null) console.log(`  mean_estimate:    ${baserate.meanEstimate.toFixed(BASERATE_DECIMALS)}`);
+  if (baserate.meanActual !== null)   console.log(`  mean_actual:      ${baserate.meanActual.toFixed(BASERATE_DECIMALS)}`);
+  if (baserate.meanRatio !== null)    console.log(`  mean_ratio:       ${baserate.meanRatio.toFixed(BASERATE_DECIMALS)}x`);
+  if (baserate.p50Ratio !== null)     console.log(`  p50_ratio:        ${baserate.p50Ratio.toFixed(BASERATE_DECIMALS)}x`);
+  if (baserate.mae !== null)          console.log(`  mae:              ${baserate.mae.toFixed(BASERATE_DECIMALS)}`);
 }
 
 export function cmdPredict(

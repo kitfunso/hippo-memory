@@ -13,6 +13,8 @@ import { Layer } from './memory.js';
 import { calculateStrength } from './memory.js';
 import { DAY_MS } from './util/time.js';
 
+const STATE_DECIMALS = 3;
+
 export interface AmbientState {
   tagEntropy: number;
   avgStrength: number;
@@ -181,15 +183,15 @@ export function renderAmbientSummary(state: AmbientState): string {
 export function formatAmbientVector(state: AmbientState): string {
   const lines: string[] = [];
   lines.push('Ambient State Vector:');
-  lines.push(`  tag_entropy:          ${state.tagEntropy.toFixed(3)}`);
-  lines.push(`  avg_strength:         ${state.avgStrength.toFixed(3)}`);
-  lines.push(`  recency_freshness:    ${state.recencyFreshness.toFixed(3)}`);
-  lines.push(`  emotional_skew:       ${state.emotionalSkew.toFixed(3)}`);
-  lines.push(`  schema_fit_ratio:     ${state.schemaFitRatio.toFixed(3)}`);
-  lines.push(`  error_density:        ${state.errorDensity.toFixed(3)}`);
-  lines.push(`  consolidation_ratio:  ${state.consolidationRatio.toFixed(3)}`);
-  lines.push(`  conflict_intensity:   ${state.conflictIntensity.toFixed(3)}`);
-  lines.push(`  extraction_coverage:  ${state.extractionCoverage.toFixed(3)}`);
+  lines.push(`  tag_entropy:          ${state.tagEntropy.toFixed(STATE_DECIMALS)}`);
+  lines.push(`  avg_strength:         ${state.avgStrength.toFixed(STATE_DECIMALS)}`);
+  lines.push(`  recency_freshness:    ${state.recencyFreshness.toFixed(STATE_DECIMALS)}`);
+  lines.push(`  emotional_skew:       ${state.emotionalSkew.toFixed(STATE_DECIMALS)}`);
+  lines.push(`  schema_fit_ratio:     ${state.schemaFitRatio.toFixed(STATE_DECIMALS)}`);
+  lines.push(`  error_density:        ${state.errorDensity.toFixed(STATE_DECIMALS)}`);
+  lines.push(`  consolidation_ratio:  ${state.consolidationRatio.toFixed(STATE_DECIMALS)}`);
+  lines.push(`  conflict_intensity:   ${state.conflictIntensity.toFixed(STATE_DECIMALS)}`);
+  lines.push(`  extraction_coverage:  ${state.extractionCoverage.toFixed(STATE_DECIMALS)}`);
   lines.push(`  dag_depth:            ${state.dagDepth}`);
   lines.push(`  total_memories:       ${state.totalMemories}`);
   return lines.join('\n');

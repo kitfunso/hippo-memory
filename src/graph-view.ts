@@ -13,6 +13,9 @@ import { graphViewRows } from './store/graph-view-rows.js';
 import type { GraphRows } from './store/port.js';
 import type { EntityType, RelationType } from './store/graph-rows.js';
 
+const DEFAULT_LAYOUT_ITERATIONS = 300;
+const NODE_LABEL_MAX_CHARS = 22;
+
 export interface GraphNode {
   id: number;
   type: EntityType;
@@ -161,7 +164,7 @@ export function layoutGraph(
 ): Map<number, { x: number; y: number }> {
   const width = opts.width ?? LAYOUT_W;
   const height = opts.height ?? LAYOUT_H;
-  const iterations = opts.iterations ?? 300;
+  const iterations = opts.iterations ?? DEFAULT_LAYOUT_ITERATIONS;
   const nodes = model.nodes;
   const n = nodes.length;
   if (n === 0) return new Map();
@@ -266,7 +269,7 @@ function renderNodeSvg(model: GraphModel, pos: Map<number, Point>): string {
     .map((node) => {
       const p = pos.get(node.id);
       if (!p) return '';
-      const label = node.name.length > 22 ? node.name.slice(0, 21) + '…' : node.name;
+      const label = node.name.length > NODE_LABEL_MAX_CHARS ? node.name.slice(0, NODE_LABEL_MAX_CHARS - 1) + '…' : node.name;
       return (
         `<g class="node" data-id="${node.id}" transform="translate(${p.x.toFixed(1)},${p.y.toFixed(1)})">` +
         `<title>${escapeHtml(node.type + ': ' + node.name)}</title>` +

@@ -5,6 +5,8 @@ import type { RerankerFn, RerankResult, RerankerOptions } from './types.js';
 import { compareScoresDesc } from '../compare.js';
 import { errorMessage, log } from '../log.js';
 
+const DEFAULT_CROSS_ENCODER_TOP_K = 50;
+
 const MODEL_NAME = 'Xenova/ms-marco-MiniLM-L-6-v2';
 
 // Opaque here: the tokenizer output goes straight into the model.
@@ -120,7 +122,7 @@ export const crossEncoderReranker: RerankerFn = async (
   results,
   options?: RerankerOptions,
 ): Promise<RerankResult[]> => {
-  const topK = options?.topK ?? 50;
+  const topK = options?.topK ?? DEFAULT_CROSS_ENCODER_TOP_K;
   const head = results.slice(0, topK);
 
   const pipe = await loadPipeline();

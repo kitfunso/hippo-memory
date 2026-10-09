@@ -14,6 +14,10 @@ import { hybridSearch } from '../search/hybrid.js';
 import { searchBothHybrid } from '../shared.js';
 import { isInitialized } from '../store/open.js';
 
+// Generous so metrics are not truncated.
+const DEFAULT_EVAL_BUDGET = 100_000;
+const QUERY_WORDS = 8;
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -162,7 +166,7 @@ export async function runEval(
 
 /** One case's ranking: across the local and global stores when `useBothStores`, else over `entries` alone. */
 function rankForCase(query: string, entries: MemoryEntry[], options: RunEvalOptions, useBothStores: boolean) {
-  const budget = options.budget ?? 100_000;   // generous so metrics aren't truncated
+  const budget = options.budget ?? DEFAULT_EVAL_BUDGET;
   return useBothStores
     ? searchBothHybrid(query, options.hippoRoot!, options.globalRoot!, {
         budget,
@@ -277,7 +281,7 @@ export function bootstrapCorpus(entries: MemoryEntry[], maxCases = 50): EvalCase
     if (cases.length >= maxCases) break;
     const words = e.content.trim().split(/\s+/).filter((w) => w.length > 2);
     if (words.length < 3) continue;
-    const query = words.slice(0, 8).join(' ');
+    const query = words.slice(0, QUERY_WORDS).join(' ');
     cases.push({
       id: `bootstrap_${e.id}`,
       query,

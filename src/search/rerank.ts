@@ -2,6 +2,8 @@ import { cosineOf } from '../embeddings.js';
 import type { RerankerFn, RerankerOptions } from '../rerankers/types.js';
 import type { SearchResult } from '../core/search-types.js';
 
+const DEFAULT_RERANK_TOP_K = 50;
+
 // MMR is O(K^2) cosine ops; candidates below this window never survive budget filtering anyway.
 const MMR_CANDIDATE_CAP = 100;
 
@@ -78,7 +80,7 @@ export function applyMmrWindow(
 export async function applyReranker(
   query: string, ordered: SearchResult[], reranker: RerankerFn, rerankerOptions?: RerankerOptions,
 ): Promise<SearchResult[]> {
-  const topK = rerankerOptions?.topK ?? 50;
+  const topK = rerankerOptions?.topK ?? DEFAULT_RERANK_TOP_K;
   const head = ordered.slice(0, topK).map((r, i) => ({ ...r, preRerankRank: i + 1 }));
   const tail = ordered.slice(topK);
   const reranked = await reranker(query, head, { ...rerankerOptions, topK });

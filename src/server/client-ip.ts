@@ -6,6 +6,8 @@ import { log } from '../log.js';
 import type { RateLimiter } from '../rate-limit.js';
 import { HttpError } from '../http-util.js';
 
+const IPV6_PREFIX_GROUPS = 4;
+
 /**
  * Rate-limit key for a request. Defaults to the socket's remote address.
  *
@@ -87,7 +89,7 @@ export function subscriberKey(ip: string): string {
   // A trailing dotted quad holds two groups; isIP has already checked the shape.
   const rightGroups = right.length + (right.at(-1)?.includes('.') ? 1 : 0);
   const groups = tail === undefined ? left : [...left, ...Array<string>(8 - left.length - rightGroups).fill('0'), ...right];
-  return `${groups.slice(0, 4).map((g) => parseInt(g, 16).toString(16)).join(':')}::/64`;
+  return `${groups.slice(0, IPV6_PREFIX_GROUPS).map((g) => parseInt(g, 16).toString(16)).join(':')}::/64`;
 }
 
 /** The one key every per-address limit and slot count uses, so rotating inside a /64 never buys a fresh bucket. */

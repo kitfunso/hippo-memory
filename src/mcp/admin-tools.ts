@@ -13,6 +13,9 @@ import { chunked, loadEntriesByIds, readEntry } from '../store/entry-reads.js';
 import type { MemoryConflict } from '../store/rows.js';
 import { mcpActor, type ToolCall } from './protocol.js';
 import { isJsonString } from '../json.js';
+import { DATE_PREFIX_CHARS } from '../util/token-text.js';
+
+const BASERATE_DECIMALS = 3;
 
 const NOT_RESOLVED = 'Could not resolve. Check the conflict ID and --keep value.';
 
@@ -32,11 +35,11 @@ export async function runPredictBaserateTool({ args, ctx, hippoRoot, tenantId }:
   const lines: string[] = [baserate.summary, ''];
   lines.push(`n_closed:         ${baserate.nClosed}`);
   lines.push(`n_ratio_eligible: ${baserate.nRatioEligible}`);
-  if (baserate.meanEstimate !== null) lines.push(`mean_estimate:    ${baserate.meanEstimate.toFixed(3)}`);
-  if (baserate.meanActual !== null)   lines.push(`mean_actual:      ${baserate.meanActual.toFixed(3)}`);
-  if (baserate.meanRatio !== null)    lines.push(`mean_ratio:       ${baserate.meanRatio.toFixed(3)}x`);
-  if (baserate.p50Ratio !== null)     lines.push(`p50_ratio:        ${baserate.p50Ratio.toFixed(3)}x`);
-  if (baserate.mae !== null)          lines.push(`mae:              ${baserate.mae.toFixed(3)}`);
+  if (baserate.meanEstimate !== null) lines.push(`mean_estimate:    ${baserate.meanEstimate.toFixed(BASERATE_DECIMALS)}`);
+  if (baserate.meanActual !== null)   lines.push(`mean_actual:      ${baserate.meanActual.toFixed(BASERATE_DECIMALS)}`);
+  if (baserate.meanRatio !== null)    lines.push(`mean_ratio:       ${baserate.meanRatio.toFixed(BASERATE_DECIMALS)}x`);
+  if (baserate.p50Ratio !== null)     lines.push(`p50_ratio:        ${baserate.p50Ratio.toFixed(BASERATE_DECIMALS)}x`);
+  if (baserate.mae !== null)          lines.push(`mae:              ${baserate.mae.toFixed(BASERATE_DECIMALS)}`);
   return lines.join('\n');
 }
 
@@ -118,5 +121,5 @@ export function runPeersTool({ tenantId }: ToolCall): string {
   // Tenant-scope peer discovery to the caller, as hippo_share does; undefined would list host-wide.
   const peers = listPeers(undefined, tenantId);
   if (peers.length === 0) return 'No peers found.';
-  return peers.map((p) => `${p.project}: ${p.count} memories (latest: ${p.latest.slice(0, 10)})`).join('\n');
+  return peers.map((p) => `${p.project}: ${p.count} memories (latest: ${p.latest.slice(0, DATE_PREFIX_CHARS)})`).join('\n');
 }
