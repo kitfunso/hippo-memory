@@ -8,12 +8,12 @@ import { loadConfig } from '../config.js';
 import { closeHippoDb, isSqliteBusy, openHippoDb, outsideRequestStores, type DatabaseSyncLike } from '../db.js';
 import type { MemoryEntry } from '../memory.js';
 import { namesFoldedInto } from '../project-merge.js';
-import { isGlobalStoreRoot, originInSql, projectNames, resolveGlobalRootDir, resolveProjectIdentity, type ProjectIdentity } from '../project-identity.js';
+import { isGlobalStoreRoot, projectNames, resolveGlobalRootDir, resolveProjectIdentity, type ProjectIdentity } from '../project-identity.js';
 import { duplicateKey, heldTextKeys } from '../same-text.js';
 import { removeEntryMirrors } from '../store/mirrors.js';
 import { initStore, isInitialized } from '../store/open.js';
 import { writeEntryMirrors } from '../store/entry-writes.js';
-import { selectLiveEntriesBySourcePrefix } from '../store/entry-reads.js';
+import { selectLiveEntriesBySourcePrefix, selectRowsOutsideSourcePrefixAt } from '../store/entry-reads.js';
 import { updateStats } from '../store/index-and-stats.js';
 import { resolveTenantId } from '../tenant.js';
 import { setAsideRow, syncContainer, type ContainerOutcome, type ContainerWork, type StoreSession } from './apply.js';
@@ -337,13 +337,7 @@ function duplicateCheck(store: OpenStore, tenantId: string, origins: readonly st
 }
 
 function otherPathKeys(store: OpenStore, tenantId: string, origins: readonly string[], adopted: ReadonlySet<string>): Set<string> {
-  const visible = store.global ? ` AND (origin_project = '' OR ${originInSql(origins)})` : '';
-  const params = store.global ? [tenantId, AGENT_MEMORY_SOURCE_PREFIX, ...origins] : [tenantId, AGENT_MEMORY_SOURCE_PREFIX];
-  // SAFETY: the SELECT names the three columns of the row type.
-  const rows = store.db.prepare(
-    `SELECT id, content, source FROM memories
-      WHERE tenant_id = ? AND superseded_by IS NULL AND substr(source, 1, ${AGENT_MEMORY_SOURCE_PREFIX.length}) != ?${visible}`,
-  ).all(...params) as Array<{ id: string; content: string; source: string }>;
+  const rows = selectRowsOutsideSourcePrefixAt(store.db, tenantId, AGENT_MEMORY_SOURCE_PREFIX, store.global ? origins : null);
   return new Set(rows.filter((r) => !adopted.has(r.id)).flatMap(heldTextKeys));
 }
 

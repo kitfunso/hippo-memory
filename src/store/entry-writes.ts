@@ -163,3 +163,46 @@ export function deleteEntryRowInTx(db: DatabaseSyncLike, entry: MemoryEntry, act
   deleteFtsRow(db, entry.id);
   if (entry.dag_parent_id) markSummaryDirtyInTx(db, entry.dag_parent_id, entry.tenantId, actor);
 }
+
+/** One half-life per memory id, on the caller's transaction. */
+export function setHalfLivesAt(db: DatabaseSyncLike, rows: readonly { id: string; halfLifeDays: number }[]): void {
+  const update = db.prepare('UPDATE memories SET half_life_days = ? WHERE id = ?');
+  for (const r of rows) update.run(r.halfLifeDays, r.id);
+}
+
+/** Moves every row of `from` in a tenant to project `into`. */
+export function restampOriginProjectAt(db: DatabaseSyncLike, tenantId: string, from: string, into: string): void {
+  db.prepare(`UPDATE memories SET origin_project = ?, updated_at = datetime('now') WHERE tenant_id = ? AND origin_project = ?`)
+    .run(into, tenantId, from);
+}
+
+/** Stamps each id with its project. */
+export function stampOriginProjectsAt(db: DatabaseSyncLike, tenantId: string, rows: readonly { id: string; origin: string }[]): void {
+  const stamp = db.prepare(`UPDATE memories SET origin_project = ?, updated_at = datetime('now') WHERE tenant_id = ? AND id = ?`);
+  for (const { id, origin } of rows) stamp.run(origin, tenantId, id);
+}
+
+/** Renames a live row's source from `from` to `to`; the count is 0 when another writer moved or superseded it first. */
+export function renameEntrySourceAt(db: DatabaseSyncLike, tenantId: string, id: string, from: string, to: string): number {
+  const moved = db.prepare(
+    `UPDATE memories SET source = ? WHERE id = ? AND tenant_id = ? AND source = ? AND superseded_by IS NULL`,
+  ).run(to, id, tenantId, from);
+  return Number(moved.changes ?? 0);
+}
+
+/** Renames a row's source and, when `origin` is not null, its project; the count is 0 when the row is gone or moved. */
+export function renameEntrySourceAndOriginAt(
+  db: DatabaseSyncLike, tenantId: string, id: string, from: string, to: string, origin: string | null,
+): number {
+  const done = db.prepare(
+    `UPDATE memories SET source = ?, origin_project = COALESCE(?, origin_project) WHERE id = ? AND tenant_id = ? AND source = ?`,
+  ).run(to, origin, id, tenantId, from);
+  return Number(done.changes ?? 0);
+}
+
+/** Marks `id` superseded by `newId`; false when another writer superseded it first. */
+export function supersedeEntryAt(db: DatabaseSyncLike, tenantId: string, id: string, newId: string): boolean {
+  const result = db.prepare(`UPDATE memories SET superseded_by = ? WHERE id = ? AND tenant_id = ? AND superseded_by IS NULL`)
+    .run(newId, id, tenantId);
+  return Number(result.changes ?? 0) !== 0;
+}

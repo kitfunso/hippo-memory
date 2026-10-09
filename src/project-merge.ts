@@ -17,7 +17,7 @@ import { isObjectLike, isStringValue } from './capture-contract.js';
 import { isGlobalStoreRoot, projectNames, resolveProjectIdentity } from './project-identity.js';
 import { duplicateKey } from './same-text.js';
 import { removeEntryMirrors } from './store/mirrors.js';
-import { deleteEntryRowInTx, writeEntryMirrors } from './store/entry-writes.js';
+import { deleteEntryRowInTx, restampOriginProjectAt, stampOriginProjectsAt, writeEntryMirrors } from './store/entry-writes.js';
 import { selectAllEntries, selectLiveEntriesBySourcePrefix } from './store/entry-reads.js';
 import type { JsonValue } from './json.js';
 
@@ -151,8 +151,7 @@ function foldInTx(db: DatabaseSyncLike, tenantId: string, from: string, into: st
   }
   const gone = new Set(setAside);
   const restamped = rows.filter((e) => !gone.has(e.id)).map((e) => e.id);
-  db.prepare(`UPDATE memories SET origin_project = ?, updated_at = datetime('now') WHERE tenant_id = ? AND origin_project = ?`)
-    .run(into, tenantId, from);
+  restampOriginProjectAt(db, tenantId, from, into);
   const dormantRestamped: string[] = [];
   for (const snap of listDormantSnapshots(db, tenantId)) {
     if (snap.entry.origin_project !== from || gone.has(snap.entry.id)) continue;
@@ -325,8 +324,7 @@ export function repairProjects(
     const { folds, collisions } = planFolds(db, hippoRoot, tenantId, globalFolds);
     const folded = folds.map((f) => foldInTx(db, tenantId, f.from, f.into));
     const plan = planUserGlobalRepair(db, tenantId, []);
-    const stamp = db.prepare(`UPDATE memories SET origin_project = ?, updated_at = datetime('now') WHERE tenant_id = ? AND id = ?`);
-    for (const { id, origin } of plan.toProject) stamp.run(origin, tenantId, id);
+    stampOriginProjectsAt(db, tenantId, plan.toProject);
     const aside = new Set(plan.setAside);
     const now = new Date();
     for (const row of selectAllEntries(db, tenantId).filter((e) => aside.has(e.id))) {

@@ -374,4 +374,21 @@ export function selectPreviewRows(db: DatabaseSyncLike, columns: ReadonlySet<str
   const statement = db.prepare(`SELECT id, content, ${column('source', "''")}, ${column('confidence', 'NULL')}, ${column('extracted_from', 'NULL')}, ${column('dag_level', '0')}, ${column('tags_json', "'[]'")} FROM memories${tenant}`);
   // SAFETY: the SELECT names every PreviewRow field, each a literal fallback when its column is missing.
   return (tenant ? statement.all(tenantId) : statement.all()) as PreviewRow[];
+
+/** True when a memory row, of any tenant, already holds `id`. */
+export function entryIdTakenAt(db: DatabaseSyncLike, id: string): boolean {
+  return db.prepare(`SELECT 1 FROM memories WHERE id = ?`).get(id) !== undefined;
+}
+
+/** Live rows of a tenant whose source does not start with `sourcePrefix`; `origins` (global store only) limits them to user-global rows and those projects. */
+export function selectRowsOutsideSourcePrefixAt(
+  db: DatabaseSyncLike, tenantId: string, sourcePrefix: string, origins: readonly string[] | null,
+): Array<{ id: string; content: string; source: string }> {
+  const visible = origins !== null ? ` AND (origin_project = '' OR ${originInSql(origins)})` : '';
+  const params = origins !== null ? [tenantId, sourcePrefix, ...origins] : [tenantId, sourcePrefix];
+  // SAFETY: the SELECT names the three columns of the row type.
+  return db.prepare(
+    `SELECT id, content, source FROM memories
+      WHERE tenant_id = ? AND superseded_by IS NULL AND substr(source, 1, ${sourcePrefix.length}) != ?${visible}`,
+  ).all(...params) as Array<{ id: string; content: string; source: string }>;
 }

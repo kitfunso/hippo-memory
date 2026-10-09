@@ -343,3 +343,15 @@ function safeJsonParse(raw: string, id: number): JsonObject {
     return {};
   }
 }
+
+/** The latest time each memory got a good outcome; the caller's connection, uncapped, so old confirmations count. */
+export function goodOutcomeTimesAt(db: DatabaseSyncLike, tenantId: string): Map<string, string> {
+  // SAFETY: the SELECT list is exactly target_id and ts; no other shape reaches this cast.
+  const rows = db.prepare(
+    `SELECT target_id, MAX(ts) AS ts FROM audit_log
+       WHERE tenant_id = ? AND op = 'outcome' AND target_id IS NOT NULL
+         AND json_extract(metadata_json, '$.good') = 1
+       GROUP BY target_id`,
+  ).all(tenantId) as { target_id: string; ts: string }[];
+  return new Map(rows.map((r) => [r.target_id, r.ts]));
+}

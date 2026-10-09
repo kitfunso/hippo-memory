@@ -424,3 +424,23 @@ export function traceExistsForSession(hippoRoot: string, tenantId: string, sessi
     closeHippoDb(db);
   }
 }
+
+/** The owner a session id is bound to, or null. */
+export function selectSessionOwnerAt(db: DatabaseSyncLike, tenantId: string, sessionId: string): string | null {
+  // SAFETY: the SELECT names exactly this one TEXT column.
+  const row = db.prepare(`SELECT owner_subject FROM session_owners WHERE tenant_id = ? AND session_id = ?`).get(tenantId, sessionId) as { owner_subject: string } | undefined;
+  return row?.owner_subject ?? null;
+}
+
+/** Binds `sessionId` to `owner` unless a binding exists; the count is 1 when this call bound it. */
+export function insertSessionOwnerAt(db: DatabaseSyncLike, tenantId: string, sessionId: string, owner: string, createdAt: string): number {
+  const result = db.prepare(`INSERT OR IGNORE INTO session_owners(tenant_id, session_id, owner_subject, created_at) VALUES (?, ?, ?, ?)`)
+    .run(tenantId, sessionId, owner, createdAt);
+  return Number(result.changes ?? 0);
+}
+
+// SHORTCUT: no created_at index, so each first bind scans the table; add one past a few hundred thousand rows.
+/** Drops bindings created before `cutoffIso`. */
+export function deleteSessionOwnersBeforeAt(db: DatabaseSyncLike, cutoffIso: string): void {
+  db.prepare(`DELETE FROM session_owners WHERE created_at < ?`).run(cutoffIso);
+}
