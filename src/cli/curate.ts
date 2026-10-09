@@ -12,7 +12,8 @@ import * as api from '../api.js';
 import * as client from './client.js';
 import { resolveTenantId } from '../tenant.js';
 import { printError } from './output.js';
-import { type CliFlags,
+import {
+  type CliFlags,
   parseCountFlag,
   requireInit,
   runChurnStaleForRepo,
@@ -20,6 +21,9 @@ import { type CliFlags,
   fmt,
   type CommandContext,
   resolveAuthRoot,
+  boolFlag,
+  flagIsTrue,
+  stringFlag,
 } from './shared.js';
 
 export function cmdOutcome(
@@ -28,8 +32,8 @@ export function cmdOutcome(
 ): void {
   requireInit(hippoRoot);
 
-  const good = Boolean(flags['good']);
-  const bad = Boolean(flags['bad']);
+  const good = boolFlag(flags, 'good');
+  const bad = boolFlag(flags, 'bad');
 
   if (!good && !bad) {
     printError('Specify --good or --bad');
@@ -79,8 +83,8 @@ function cmdForget(
   // Raw memories (Slack / GitHub connector ingestion) are append-only: a
   // BEFORE-DELETE trigger aborts any delete. archiveRaw is the sanctioned
   // removal path; it records ctx.actor as the archiver for provenance.
-  if (flags['archive'] === true) {
-    const reason = typeof flags['reason'] === 'string' ? flags['reason'] : null;
+  if (flagIsTrue(flags, 'archive')) {
+    const reason = stringFlag(flags, 'reason') ?? null;
     if (!reason) {
       printError(ARCHIVE_REASON_REQUIRED);
       process.exit(1);
@@ -214,11 +218,11 @@ export function cmdResolve(
     return;
   }
 
-  const forgetLoser = Boolean(flags['forget']);
+  const forgetLoser = boolFlag(flags, 'forget');
   // --reject-loser tombstones the loser's digest so it cannot be re-asserted, as well as removing it.
   // --reason is optional here, unlike `hippo reject`: resolve already has the conflict id and keepId.
-  const rejectLoser = Boolean(flags['reject-loser']);
-  const reasonFlag = typeof flags['reason'] === 'string' ? (flags['reason'] as string) : undefined;
+  const rejectLoser = boolFlag(flags, 'reject-loser');
+  const reasonFlag = stringFlag(flags, 'reason');
   const result = resolveConflict(hippoRoot, conflictId, keepId, forgetLoser, tenantId, {
     rejectLoserValue: rejectLoser,
     reason: reasonFlag,
@@ -252,13 +256,13 @@ export function cmdReject(
   const tenantId = resolveTenantId({});
 
   // --reason is REQUIRED: the tombstone stores no content, so reason is its only human-readable identity.
-  const reason = typeof flags['reason'] === 'string' ? (flags['reason'] as string).trim() : '';
+  const reason = (stringFlag(flags, 'reason') ?? '').trim();
   if (!reason) {
     printError('hippo reject requires --reason "<why>" (the tombstone stores no content; reason is its only identity).');
     process.exit(1);
   }
 
-  const valueFlag = typeof flags['value'] === 'string' ? (flags['value'] as string) : undefined;
+  const valueFlag = stringFlag(flags, 'value');
   const memoryId = args[0];
 
   if (!memoryId && valueFlag === undefined) {
@@ -500,13 +504,13 @@ export async function handleForget({ hippoRoot, args, flags }: CommandContext): 
   }
   // Archive has its own HTTP route (POST /v1/memories/:id/archive); route
   // both branches the same way the direct path does.
-  const archive = flags['archive'] === true;
-  const reason = typeof flags['reason'] === 'string' ? flags['reason'] : null;
+  const archive = flagIsTrue(flags, 'archive');
+  const reason = stringFlag(flags, 'reason') ?? null;
   if (archive && !reason) {
     printError(ARCHIVE_REASON_REQUIRED);
     process.exit(1);
   }
-  if (flags['dry-run'] === true) {
+  if (flagIsTrue(flags, 'dry-run')) {
     previewForget(hippoRoot, id, archive);
     return;
   }
@@ -542,7 +546,7 @@ function invalidateChurn(hippoRoot: string, args: string[], flags: CommandContex
     printError('hippo invalidate --churn must run inside a git repository.');
     process.exit(1);
   }
-  const churnDryRun = flags['dry-run'] === true;
+  const churnDryRun = flagIsTrue(flags, 'dry-run');
   let churnFailed = false;
   for (const { root, result } of runChurnStaleForRepo(hippoRoot, churnDryRun)) {
     if (result.error) {
@@ -567,23 +571,23 @@ function invalidateChurn(hippoRoot: string, args: string[], flags: CommandContex
 
 export function handleInvalidate({ hippoRoot, args, flags }: CommandContext): void {
   requireInit(hippoRoot);
-  if (flags['churn'] === true) return invalidateChurn(hippoRoot, args, flags);
+  if (flagIsTrue(flags, 'churn')) return invalidateChurn(hippoRoot, args, flags);
   const target = args[0];
-  if (flags['id'] === true) {
+  if (flagIsTrue(flags, 'id')) {
     // Value-less --id must never silently fall through to pattern mode
     // (pattern mode writes broadly; an ignored --id reverses user intent).
     printError('--id requires a memory id');
     process.exit(1);
   }
-  const onlyId = typeof flags['id'] === 'string' ? (flags['id'] as string) : undefined;
-  const dryRun = flags['dry-run'] === true;
+  const onlyId = stringFlag(flags, 'id');
+  const dryRun = flagIsTrue(flags, 'dry-run');
   if ((target && onlyId) || (!target && !onlyId)) {
     printError('Usage: hippo invalidate "<old pattern>" [--dry-run] [--reason "<why>"]');
     printError('       hippo invalidate --id <memory-id> [--dry-run] [--reason "<why>"]');
     printError('Pass a pattern OR --id, not both. Tag matching is EXACT: the full pattern must equal a tag.');
     process.exit(1);
   }
-  const reason = flags['reason'] as string || null;
+  const reason = (flags['reason'] || null) as string | null;
   const invTarget: InvalidationTarget = {
     from: target ?? `id:${onlyId}`,
     to: reason,

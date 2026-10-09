@@ -42,7 +42,7 @@ import { errorMessage, log } from '../log.js';
 import { envDailyStepTimeoutMs } from '../env.js';
 import { writeFileAtomic } from '../util/atomic-write.js';
 import { printError } from './output.js';
-import { type CliFlags, printAgentImport, installCodexMemoryHooks, setupDailySchedule, warnClaudeSettingsUnusable } from './shared.js';
+import { type CliFlags, printAgentImport, installCodexMemoryHooks, setupDailySchedule, warnClaudeSettingsUnusable, boolFlag } from './shared.js';
 import { repairQualityOnceAt } from './quality-repair-once.js';
 import { HOOK_MARKERS, HOOKS, hippoBlock, withoutHookBlock } from '../hooks/hook-blocks.js';
 import { escapeRegex } from '../escape.js';
@@ -354,8 +354,8 @@ function removeLegacyCursorRules(): void {
 // Detection and install logic live in ./hooks.ts.
 
 export function cmdSetup(flags: CliFlags): void {
-  const dryRun = Boolean(flags['dry-run']);
-  const forceAll = Boolean(flags['all']);
+  const dryRun = boolFlag(flags, 'dry-run');
+  const forceAll = boolFlag(flags, 'all');
   const tools = detectInstalledTools();
   const globalRoot = getGlobalRoot();
 

@@ -34,7 +34,7 @@ import { resolveTenantId } from '../tenant.js';
 import { computeSalience } from '../salience.js';
 import { validateOwner, isStrictOwnerEnv } from './owner-validation.js';
 import { printError } from './output.js';
-import { emitCliAudit, requireInit, runViaServerIfAvailable, fmt, type CliFlags, type CommandContext } from './shared.js';
+import { emitCliAudit, requireInit, runViaServerIfAvailable, fmt, type CliFlags, type CommandContext, boolFlag, flagIsTrue, stringFlag } from './shared.js';
 import { DAY_MS } from '../util/time.js';
 
 // `requested` is what the caller typed; `all` adds path and scope tags from this process's cwd and env.
@@ -73,7 +73,7 @@ function rememberConfidence(flags: CliFlags): ConfidenceLevel {
 }
 
 function parseKindFlag(flags: CliFlags): string | undefined {
-  const kindFlagRaw = typeof flags['kind'] === 'string' ? (flags['kind'] as string) : undefined;
+  const kindFlagRaw = stringFlag(flags, 'kind');
   const kindFlag = kindFlagRaw === undefined ? undefined : kindFlagRaw.toLowerCase();
   // CLI surface intentionally restricted: 'raw' is reserved for ingestion connectors
   // that route deletions through archiveRawMemory. Existing
@@ -98,7 +98,7 @@ interface RememberEnvelope {
 
 function parseRememberEnvelope(flags: CliFlags): RememberEnvelope {
   const kind = parseKindFlag(flags);
-  const ownerRaw = typeof flags['owner'] === 'string' ? (flags['owner'] as string) : null;
+  const ownerRaw = stringFlag(flags, 'owner') ?? null;
   const ownerCheck = validateOwner(ownerRaw, { strict: isStrictOwnerEnv() });
   if (!ownerCheck.ok) {
     printError(ownerCheck.message);
@@ -106,8 +106,8 @@ function parseRememberEnvelope(flags: CliFlags): RememberEnvelope {
   }
   if (ownerCheck.message) printError(ownerCheck.message);
   const owner = ownerCheck.value ?? null;
-  const artifactRef = typeof flags['artifact-ref'] === 'string' ? (flags['artifact-ref'] as string) : null;
-  const scope = typeof flags['scope'] === 'string' ? (flags['scope'] as string).trim() || null : null;
+  const artifactRef = stringFlag(flags, 'artifact-ref') ?? null;
+  const scope = stringFlag(flags, 'scope')?.trim() || null;
   assertClientScope(scope);
   return { kind, owner, artifactRef, scope };
 }
@@ -118,7 +118,7 @@ export async function cmdRemember(
   text: string,
   flags: CliFlags
 ): Promise<void> {
-  const useGlobal = Boolean(flags['global']);
+  const useGlobal = boolFlag(flags, 'global');
   const targetRoot = useGlobal ? getGlobalRoot() : hippoRoot;
 
   if (useGlobal) {
@@ -141,7 +141,7 @@ export async function cmdRemember(
   const entry = createMemory(text, {
     layer: Layer.Episodic,
     tags: allTags,
-    pinned: Boolean(flags['pin']),
+    pinned: boolFlag(flags, 'pin'),
     source: useGlobal ? 'cli-global' : 'cli',
     confidence,
     schema_fit: schemaFit,
@@ -171,7 +171,7 @@ function passesSalienceGate(
   rememberConfig: HippoConfig,
   flags: CliFlags,
 ): boolean {
-  if (!rememberConfig.salience.enabled || Boolean(flags['pin']) || Boolean(flags['force'])) return true;
+  if (!rememberConfig.salience.enabled || boolFlag(flags, 'pin') || boolFlag(flags, 'force')) return true;
   // computeSalience compares against the last `recentWindow` rows only; below 1 its slice takes every row, so that case still loads them all.
   const window = Math.trunc(rememberConfig.salience.recentWindow);
   const recent = Number.isSafeInteger(window) && window >= 1
@@ -248,14 +248,14 @@ function cmdSupersede(
     process.exit(1);
   }
 
-  const layer = typeof flags['layer'] === 'string' ? (flags['layer'] as Layer) : undefined;
+  const layer = stringFlag(flags, 'layer') as Layer | undefined;
   const rawTags = flags['tag'];
   const tags = Array.isArray(rawTags)
     ? (rawTags as string[]).map((t) => String(t))
     : typeof rawTags === 'string'
       ? rawTags.split(',').map((t) => t.trim()).filter(Boolean)
       : undefined;
-  const pinned = flags['pin'] === true || old.pinned;
+  const pinned = flagIsTrue(flags, 'pin') || old.pinned;
 
   const newEntry = createSuccessor(old, newContent, {
     tenantId: old.tenantId,
@@ -346,7 +346,7 @@ function cmdTrace(
   flags: CliFlags,
 ): void {
   requireInit(hippoRoot);
-  const asJson = Boolean(flags['json']);
+  const asJson = boolFlag(flags, 'json');
   const tenantId = resolveTenantId({});
 
   // Look in local store first, then global.
@@ -506,12 +506,12 @@ export async function handleRemember({ hippoRoot, args, flags }: CommandContext)
     flags['observed'] || flags['inferred'] || flags['verified'] ||
     flags['layer'] !== undefined;
   if (!richFlag) {
-    const rememberKindRaw = typeof flags['kind'] === 'string' ? (flags['kind'] as string).toLowerCase() : undefined;
+    const rememberKindRaw = stringFlag(flags, 'kind')?.toLowerCase();
     const rememberKindAllowed = ['distilled', 'superseded'] as const;
     if (rememberKindRaw === undefined || (rememberKindAllowed as readonly string[]).includes(rememberKindRaw)) {
       const tags = rememberTags(flags, process.cwd()).all;
       // Validate --owner on the thin-client path too, so validation is the same whether or not a server is up.
-      const thinOwnerRaw = typeof flags['owner'] === 'string' ? (flags['owner'] as string) : undefined;
+      const thinOwnerRaw = stringFlag(flags, 'owner');
       const thinOwnerCheck = validateOwner(thinOwnerRaw, { strict: isStrictOwnerEnv() });
       if (!thinOwnerCheck.ok) {
         printError(thinOwnerCheck.message);
@@ -522,9 +522,9 @@ export async function handleRemember({ hippoRoot, args, flags }: CommandContext)
         const result = await client.remember(info.url, apiKey, {
           content: text,
           kind: rememberKindRaw as ('distilled' | 'superseded' | undefined),
-          scope: typeof flags['scope'] === 'string' ? (flags['scope'] as string) : undefined,
+          scope: stringFlag(flags, 'scope'),
           owner: thinOwnerCheck.value,
-          artifactRef: typeof flags['artifact-ref'] === 'string' ? (flags['artifact-ref'] as string) : undefined,
+          artifactRef: stringFlag(flags, 'artifact-ref'),
           tags,
         });
         console.log(`Remembered [${result.id}] (via ${info.url})`);

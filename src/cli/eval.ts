@@ -10,7 +10,7 @@ import { runEval, bootstrapCorpus, compareSummaries, type EvalCase, type EvalSum
 import { runFeatureEval, formatResult, resultToBaseline, detectRegressions, type EvalBaseline } from '../eval/eval-suite.js';
 import { PACKAGE_VERSION } from '../version.js';
 import { printError } from './output.js';
-import { requireInit, fmt, type CliFlags, type CommandContext } from './shared.js';
+import { requireInit, fmt, type CliFlags, type CommandContext, boolFlag } from './shared.js';
 
 /** Runs `hippo eval`: --bootstrap writes a corpus, --suite runs the built-in feature eval, else it scores a corpus file. */
 export async function cmdEval(
@@ -18,7 +18,7 @@ export async function cmdEval(
   corpusPath: string | null,
   flags: CliFlags
 ): Promise<void> {
-  const asJson = Boolean(flags['json']);
+  const asJson = boolFlag(flags, 'json');
   const minMrr = flags['min-mrr'] !== undefined ? parseFloat(String(flags['min-mrr'])) : null;
   const comparePath = flags['compare'] ? String(flags['compare']) : null;
 
@@ -57,7 +57,7 @@ export async function cmdEval(
   if (asJson) {
     console.log(JSON.stringify(summary, null, 2));
   } else {
-    printEvalSummary(summary, Boolean(flags['show-cases']));
+    printEvalSummary(summary, boolFlag(flags, 'show-cases'));
   }
 
   if (minMrr !== null && summary.meanMrr < minMrr) {

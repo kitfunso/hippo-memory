@@ -44,7 +44,7 @@ import { cmdGithub, printGithubBackfillUsage } from './connectors/github/cli-imp
 import { printError } from './cli/output.js';
 import { errorFields, errorMessage, isLevelEnabled, log } from './log.js';
 import { isStoreBusy, STORE_BUSY_MESSAGE } from './db/busy.js';
-import type { CliFlags, CommandContext } from './cli/shared.js';
+import { type CliFlags, type CommandContext, boolFlag, flagIsTrue } from './cli/shared.js';
 import { VERB_USAGE, USAGE_HEADER, USAGE_EXAMPLES, printAuditPruneUsage, printSlackBackfillUsage, printSlackWorkspacesUsage } from './cli/usage.js';
 
 // ---------------------------------------------------------------------------
@@ -97,7 +97,7 @@ const DRY_RUN_COMMANDS: ReadonlySet<string> = new Set([
 function dryRunRefusal(command: string, args: string[], flags: CliFlags): string | null {
   const isBrief = command === 'brief' || command === 'project-brief';
   const onlyForm = command === 'share' ? 'share --auto' : isBrief ? `${command} refresh` : null;
-  const honoured = command === 'share' ? args[0] === '--auto' || Boolean(flags['auto'])
+  const honoured = command === 'share' ? args[0] === '--auto' || boolFlag(flags, 'auto')
     : isBrief ? args[0] === 'refresh' : DRY_RUN_COMMANDS.has(command);
   if (honoured) return null;
   const where = onlyForm ? ` outside \`hippo ${onlyForm}\`` : '';
@@ -184,7 +184,7 @@ export function shouldAutoRepairCodexWrapper(currentCommand: string, flags: CliF
   if (!['context', 'remember', 'recall', 'sleep', 'capture', 'outcome', 'status', 'init'].includes(currentCommand)) {
     return false;
   }
-  if (currentCommand === 'init' && flags['no-hooks'] === true) return false;
+  if (currentCommand === 'init' && flagIsTrue(flags, 'no-hooks')) return false;
   return true;
 }
 

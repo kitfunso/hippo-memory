@@ -16,7 +16,7 @@ import { currentMachine, importForStore, importProjectMemories, importUserMemori
 import { emptyReport, mergeReports } from '../agent-memories/report.js';
 import { getGlobalRoot, initGlobal } from '../shared.js';
 import { registerWorkspace } from '../scheduler.js';
-import { type CliFlags, printAgentImport, installCodexMemoryHooks, setupDailySchedule, learnFromRepo, skipLearnOnSharedStore, warnClaudeSettingsUnusable } from './shared.js';
+import { type CliFlags, printAgentImport, installCodexMemoryHooks, setupDailySchedule, learnFromRepo, skipLearnOnSharedStore, warnClaudeSettingsUnusable, stringFlag } from './shared.js';
 import { HOOK_MARKERS, HOOKS, hippoBlock } from '../hooks/hook-blocks.js';
 
 function scanForGitRepos(rootDir: string, maxDepth = 2): string[] {
@@ -122,7 +122,7 @@ function cmdInitScan(scanDir: string, flags: CliFlags): void {
 export function cmdInit(hippoRoot: string, flags: CliFlags): void {
   // Handle --scan mode
   if (flags['scan']) {
-    const scanDir = typeof flags['scan'] === 'string' ? flags['scan'] : os.homedir();
+    const scanDir = stringFlag(flags, 'scan') ?? os.homedir();
     cmdInitScan(scanDir, flags);
     return;
   }

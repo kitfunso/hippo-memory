@@ -25,6 +25,7 @@ import {
   type CommandContext,
   parseAsOfFlag,
   engineFlags,
+  boolFlag,
 } from './shared.js';
 
 /** The SQL predicate drops denied rows before the window, so an unscoped probe counts what the policy hides. */
@@ -52,8 +53,8 @@ export async function cmdExplain(
 
   const budget = parseBudgetFlag(flags['budget'], DEFAULT_RECALL_BUDGET);
   const limit = parseLimitFlag(flags['limit']);
-  const asJson = Boolean(flags['json']);
-  const includeSuperseded = Boolean(flags['include-superseded']);
+  const asJson = boolFlag(flags, 'json');
+  const includeSuperseded = boolFlag(flags, 'include-superseded');
   const asOf = parseAsOfFlag(flags);
   const globalRoot = getGlobalRoot();
   const tenantId = resolveTenantId({});

@@ -9,7 +9,7 @@ import * as decisionsModule from '../decisions.js';
 import * as incidentsModule from '../incidents.js';
 import { resolveTenantId } from '../tenant.js';
 import { printError } from './output.js';
-import { parseListLimit, parsePositiveId, requireInit, type CliFlags } from './shared.js';
+import { parseListLimit, parsePositiveId, requireInit, type CliFlags, flagIsTrue, stringFlag } from './shared.js';
 // Lenient on purpose (parseInt reads "1abc" as 1) until the next major version; incidents use the strict parser.
 function parseObjectId(idRaw: string, noun: string): number {
   const id = parseInt(String(idRaw), 10);
@@ -31,7 +31,7 @@ function predictClose(hippoRoot: string, tenantId: string, args: string[], flags
     process.exit(1);
   }
   const id = parseObjectId(idRaw, 'prediction');
-  const stateRaw = typeof flags['state'] === 'string' ? flags['state'].trim() : '';
+  const stateRaw = (stringFlag(flags, 'state') ?? '').trim();
   if (!predictionsModule.VALID_CLOSURE_STATES.has(stateRaw as predictionsModule.ClosureState) || stateRaw === 'open') {
     printError(`Invalid --state: "${stateRaw}". Must be one of: closed | closed-unknown.`);
     process.exit(1);
@@ -299,11 +299,11 @@ function decideCreate(hippoRoot: string, tenantId: string, decisionText: string,
   const context = typeof contextRaw === 'string' && contextRaw ? contextRaw : undefined;
   // A value-less `--supersedes` asks to supersede but gives no memory id: reject it rather
   // than silently creating a non-superseding decision.
-  if (flags['supersedes'] === true) {
+  if (flagIsTrue(flags, 'supersedes')) {
     printError('--supersedes requires a memory id, e.g. hippo decide "<text>" --supersedes mem_abc123.');
     process.exit(1);
   }
-  const supersedesMemId = typeof flags['supersedes'] === 'string' ? flags['supersedes'] : null;
+  const supersedesMemId = stringFlag(flags, 'supersedes') ?? null;
 
   // Backward-compat: --supersedes takes a MEMORY id. Validate it exists and
   // resolve it to the active decision row (if any). Commit the

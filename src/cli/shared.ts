@@ -352,6 +352,27 @@ export function parseListLimit(flags: CliFlags): number {
   return limit;
 }
 
+// A value-less flag is `true` and a repeated one is a string[]; only a string counts here.
+export function stringFlag(flags: CliFlags, name: string): string | undefined {
+  const v = flags[name];
+  return typeof v === 'string' ? v : undefined;
+}
+
+export function numberFlag(flags: CliFlags, name: string): number | undefined {
+  const v = flags[name];
+  return typeof v === 'string' ? Number(v) : undefined;
+}
+
+// Any truthy value counts, so a string value is true too.
+export function boolFlag(flags: CliFlags, name: string): boolean {
+  return Boolean(flags[name]);
+}
+
+// Only a bare switch counts; `--x value` is false.
+export function flagIsTrue(flags: CliFlags, name: string): boolean {
+  return flags[name] === true;
+}
+
 /** What the command table hands each verb's run(). */
 export interface CommandContext {
   readonly hippoRoot: string;
@@ -362,7 +383,7 @@ export interface CommandContext {
 export type EngineFlags = Pick<RecallSearchOpts, 'usePhysics' | 'physicsConfig' | 'mmr' | 'mmrLambda' | 'localBump'>;
 
 export function parseAsOfFlag(flags: CliFlags): string | undefined {
-  const asOf = typeof flags['as-of'] === 'string' ? flags['as-of'] : undefined;
+  const asOf = stringFlag(flags, 'as-of');
   if (asOf !== undefined && Number.isNaN(new Date(asOf).getTime())) {
     printError(`Error: --as-of value "${asOf}" is not a valid ISO date (e.g. 2026-04-22 or 2026-04-22T12:00:00Z).`);
     process.exit(1);
@@ -373,7 +394,7 @@ export function parseAsOfFlag(flags: CliFlags): string | undefined {
 /** --physics forces physics, --classic forces BM25+cosine, else physics unless the config turns it off. */
 export function engineFlags(flags: CliFlags, config: HippoConfig): EngineFlags {
   return {
-    usePhysics: Boolean(flags['physics']) || (!flags['classic'] && config.physics.enabled !== false),
+    usePhysics: boolFlag(flags, 'physics') || (!flags['classic'] && config.physics.enabled !== false),
     physicsConfig: config.physics,
     mmr: !flags['no-mmr'] && config.mmr.enabled,
     mmrLambda: flags['mmr-lambda'] !== undefined ? parseFloat(String(flags['mmr-lambda'])) : config.mmr.lambda,
@@ -436,7 +457,7 @@ export function printHandoff(handoff: SessionHandoff): void {
 
 // parseArgs turns a value-less flag into `true`; refuse rather than silently
 // stringifying it (String(true) === 'true'), mirroring cmdHandoff's guard.
-export function cardStringFlag(flags: CliFlags, key: string): string | undefined {
+export function stringFlagOrExit(flags: CliFlags, key: string): string | undefined {
   const v = flags[key];
   if (v === undefined) return undefined;
   if (v === true || v === false || Array.isArray(v)) { printError(`--${key} requires a value`); process.exit(1); }

@@ -49,7 +49,8 @@ import { errorMessage, log } from '../log.js';
 import { withLedgerDb } from '../ledger-db.js';
 import { printError } from './output.js';
 import { cmdLastSleep } from './last-sleep.js';
-import { type CliFlags,
+import {
+  type CliFlags,
   type CommandContext,
   logSessionEndImport,
   appendSessionEndCloseLog,
@@ -59,6 +60,9 @@ import { type CliFlags,
   payloadCwdRoot,
   runHookWithStores,
   inPilotHoldout,
+  boolFlag,
+  flagIsTrue,
+  stringFlag,
 } from './shared.js';
 import type { JsonValue } from '../json.js';
 
@@ -178,9 +182,9 @@ export async function cmdSessionEnd(
   flags: CliFlags
 ): Promise<void> {
   const runtime = hookRuntime(flags);
-  const turn = flags['turn'] === true;
+  const turn = flagIsTrue(flags, 'turn');
   // Copilot's hook command carries no path, since one quoted into it would need escaping for each shell; the log goes where the hook table used to point.
-  const logFile = typeof flags['log-file'] === 'string' ? (flags['log-file'] as string) : runtime === 'copilot' ? resolveJsonHookPaths('copilot').logFile : null;
+  const logFile = stringFlag(flags, 'log-file') ?? (runtime === 'copilot' ? resolveJsonHookPaths('copilot').logFile : null);
 
   // Bounded read: extracts transcript_path + session_id for the detached worker's argv.
   let sessionId: string | null = null;
@@ -242,7 +246,7 @@ export async function cmdSessionEndWorker(
   flags: CliFlags
 ): Promise<void> {
   const sessionId = flags['session-id'];
-  await runSessionWorker(isStringValue(sessionId) ? sessionId : null, flags['turn'] === true ? 'turn' : 'full', (mode) => sessionEndWork(hippoRoot, flags, mode));
+  await runSessionWorker(isStringValue(sessionId) ? sessionId : null, flagIsTrue(flags, 'turn') ? 'turn' : 'full', (mode) => sessionEndWork(hippoRoot, flags, mode));
 }
 
 async function sessionEndWork(
@@ -250,9 +254,9 @@ async function sessionEndWork(
   flags: CliFlags,
   mode: WorkerMode,
 ): Promise<void> {
-  const transcriptPath = typeof flags['transcript'] === 'string' ? (flags['transcript'] as string) : undefined;
-  const closeLogFile = typeof flags['log-file'] === 'string' ? (flags['log-file'] as string) : null;
-  const closeSessionId = typeof flags['session-id'] === 'string' ? (flags['session-id'] as string) : null;
+  const transcriptPath = stringFlag(flags, 'transcript');
+  const closeLogFile = stringFlag(flags, 'log-file') ?? null;
+  const closeSessionId = stringFlag(flags, 'session-id') ?? null;
   const rereadLog = await bookSessionRereads(hippoRoot, transcriptPath, closeSessionId)
     .catch((err) => [`re-read count failed: ${err instanceof Error ? err.message : String(err)}`]);
   // Sleep starts the log file afresh, so the lines go in after it; on exit too, in case sleep exits the process.
@@ -373,7 +377,7 @@ function captureEndedSession(
   turns: readonly SessionTurn[] | undefined,
 ): boolean {
   try {
-    const logFile = typeof flags['log-file'] === 'string' ? (flags['log-file'] as string) : undefined;
+    const logFile = stringFlag(flags, 'log-file');
     // With no stdin of its own, capture would read this as a manual run and scan every project.
     if (!transcriptPath) {
       appendSessionEndCloseLog(logFile ?? null, 'skip capture: no transcript for this session');
@@ -586,7 +590,7 @@ export async function cmdCodexSessionEndWorker(
   hippoRoot: string,
   flags: CliFlags,
 ): Promise<void> {
-  const logFile = typeof flags['log-file'] === 'string' ? (flags['log-file'] as string) : undefined;
+  const logFile = stringFlag(flags, 'log-file');
   // Like the other hooks: project store, else global; a folder with neither must not get one made.
   const store = hookStoreRoot(hippoRoot);
   if (!isInitialized(store)) {
@@ -607,12 +611,8 @@ export async function cmdCodexSessionEndWorker(
   }
 
   try {
-    const codexHome = typeof flags['codex-home'] === 'string'
-      ? (flags['codex-home'] as string)
-      : resolveCodexWrapperPaths().codexHome;
-    const historyPath = typeof flags['history-path'] === 'string'
-      ? (flags['history-path'] as string)
-      : path.join(codexHome, 'history.jsonl');
+    const codexHome = stringFlag(flags, 'codex-home') ?? resolveCodexWrapperPaths().codexHome;
+    const historyPath = stringFlag(flags, 'history-path') ?? path.join(codexHome, 'history.jsonl');
     const startOffsetBytes = parseInt(String(flags['start-offset'] ?? '0'), 10) || 0;
     const startedAtMs = parseInt(String(flags['started-at'] ?? Date.now()), 10) || Date.now();
     const transcriptPath = resolveCodexSessionTranscript({
@@ -661,7 +661,7 @@ export async function handlePreCompact({ hippoRoot, flags }: CommandContext): Pr
     await cmdPreCompact(hookStoreRoot(root), {
       stdinText,
       stdinTimedOut,
-      logFile: typeof flags['log-file'] === 'string' ? (flags['log-file'] as string) : undefined,
+      logFile: stringFlag(flags, 'log-file'),
       runtime,
     });
   });
@@ -743,9 +743,9 @@ export async function handleCapture({ hippoRoot, flags }: CommandContext): Promi
     transcriptPath,
     stdinText: bounded.text,
     stdinTimedOut: bounded.timedOut,
-    logFile: typeof flags['log-file'] === 'string' ? (flags['log-file'] as string) : undefined,
-    dryRun: Boolean(flags['dry-run']),
-    global: Boolean(flags['global']),
+    logFile: stringFlag(flags, 'log-file'),
+    dryRun: boolFlag(flags, 'dry-run'),
+    global: boolFlag(flags, 'global'),
     tenantId: resolveTenantId({}),
   });
 }

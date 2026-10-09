@@ -5,7 +5,7 @@ import type { PolicyType } from '../goals.js';
 import * as api from '../api.js';
 import { resolveTenantId } from '../tenant.js';
 import { printError } from './output.js';
-import type { CliFlags } from './shared.js';
+import { type CliFlags, boolFlag, flagIsTrue } from './shared.js';
 
 // ---------------------------------------------------------------------------
 // `hippo goal <push|list|complete|suspend|resume>`
@@ -114,7 +114,7 @@ function goalContext(hippoRoot: string, tenantId: string = resolveTenantId({})):
 
 function cmdGoalList(hippoRoot: string, flags: CliFlags): void {
   const { sessionId, tenantId } = resolveGoalSession(flags);
-  const showAll = Boolean(flags['all']);
+  const showAll = boolFlag(flags, 'all');
   const goals = api.goalList(goalContext(hippoRoot, tenantId), { sessionId, all: showAll });
 
   if (goals.length === 0) {
@@ -165,7 +165,7 @@ function cmdGoalComplete(hippoRoot: string, args: string[], flags: CliFlags): vo
     }
     outcomeScore = parsed;
   }
-  const noPropagate = flags['no-propagate'] === true;
+  const noPropagate = flagIsTrue(flags, 'no-propagate');
   api.goalComplete(goalContext(hippoRoot), id, { outcomeScore, noPropagate });
   console.log('ok');
 }

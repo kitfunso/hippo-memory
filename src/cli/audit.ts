@@ -8,7 +8,7 @@ import * as api from '../api.js';
 import { resolveTenantId } from '../tenant.js';
 import { pruneAuditLog, parseOlderThanFlag } from './audit-prune.js';
 import { printError } from './output.js';
-import { type CliFlags, requireInit, type CommandContext, resolveAuthRoot } from './shared.js';
+import { type CliFlags, requireInit, type CommandContext, resolveAuthRoot, boolFlag, flagIsTrue, stringFlag } from './shared.js';
 import { repairAutomaticMemories } from './quality-repair.js';
 import { getGlobalRoot } from '../shared.js';
 
@@ -26,10 +26,10 @@ function formatAuditRow(ev: AuditEvent): string {
 
 async function cmdAuditList(hippoRoot: string, flags: CliFlags): Promise<void> {
   const root = resolveAuthRoot(hippoRoot, flags);
-  const asJson = Boolean(flags['json']);
+  const asJson = boolFlag(flags, 'json');
   const tenantId = resolveTenantId({});
 
-  const opFlag = typeof flags['op'] === 'string' ? (flags['op'] as string) : undefined;
+  const opFlag = stringFlag(flags, 'op');
   if (opFlag && !VALID_AUDIT_OPS.has(opFlag as AuditOp)) {
     // Built from the Set so the message cannot drift from the valid ops.
     const expected = Array.from(VALID_AUDIT_OPS).join(' | ');
@@ -38,7 +38,7 @@ async function cmdAuditList(hippoRoot: string, flags: CliFlags): Promise<void> {
   }
   const op = opFlag as AuditOp | undefined;
 
-  const since = typeof flags['since'] === 'string' ? (flags['since'] as string) : undefined;
+  const since = stringFlag(flags, 'since');
   if (since !== undefined && !Number.isFinite(new Date(since).getTime())) {
     printError(`Invalid --since: ${since} (expected an ISO timestamp like 2026-04-22 or 2026-04-22T12:00:00Z).`);
     process.exit(1);
@@ -79,7 +79,7 @@ async function cmdAuditList(hippoRoot: string, flags: CliFlags): Promise<void> {
 }
 
 function cmdAuditPrune(hippoRoot: string, flags: CliFlags): void {
-  const olderThanRaw = typeof flags['older-than'] === 'string' ? (flags['older-than'] as string) : '';
+  const olderThanRaw = stringFlag(flags, 'older-than') ?? '';
   if (!olderThanRaw) {
     printError('Usage: hippo audit prune --older-than <Nd> [--dry-run] [--tenant <t>]');
     process.exit(1);
@@ -91,11 +91,9 @@ function cmdAuditPrune(hippoRoot: string, flags: CliFlags): void {
     printError((e as Error).message);
     process.exit(1);
   }
-  const tenantId = typeof flags['tenant'] === 'string'
-    ? (flags['tenant'] as string).trim() || resolveTenantId({})
-    : resolveTenantId({});
-  const dryRun = flags['dry-run'] === true;
-  const asJson = Boolean(flags['json']);
+  const tenantId = stringFlag(flags, 'tenant')?.trim() || resolveTenantId({});
+  const dryRun = flagIsTrue(flags, 'dry-run');
+  const asJson = boolFlag(flags, 'json');
 
   const db = openHippoDb(hippoRoot);
   let result;
@@ -132,7 +130,7 @@ async function cmdAuditLog(hippoRoot: string, args: string[], flags: CliFlags): 
 
 export async function handleAudit({ hippoRoot, args, flags }: CommandContext): Promise<void> {
   if (args[0] === 'repair') {
-    const apply = flags['apply'] === true && flags['dry-run'] !== true;
+    const apply = flagIsTrue(flags, 'apply') && flags['dry-run'] !== true;
     const result = repairAutomaticMemories(flags['global'] ? getGlobalRoot() : hippoRoot, { tenantId: resolveTenantId({}), apply });
     if (flags['json']) {
       console.log(JSON.stringify(result));
@@ -158,7 +156,7 @@ export async function handleAudit({ hippoRoot, args, flags }: CommandContext): P
   requireInit(hippoRoot);
   const entries = loadAllEntries(hippoRoot, resolveTenantId({}));
   const result = auditMemories(entries, memoriesBackingObjects(hippoRoot));
-  const shouldFix = Boolean(flags['fix']);
+  const shouldFix = boolFlag(flags, 'fix');
 
   if (result.issues.length === 0) {
     console.log(`All ${result.total} memories passed quality checks.`);
@@ -171,7 +169,7 @@ export async function handleAudit({ hippoRoot, args, flags }: CommandContext): P
     }
     if (shouldFix) {
       const errors = result.issues.filter(i => i.severity === 'error');
-      if (errors.length > 0 && flags['dry-run'] === true) {
+      if (errors.length > 0 && flagIsTrue(flags, 'dry-run')) {
         console.log(`\nWould remove ${errors.length} error-severity memories (dry run, nothing deleted).`);
         console.log(`${result.issues.length - errors.length} warnings would remain (review manually).`);
       } else if (errors.length > 0) {

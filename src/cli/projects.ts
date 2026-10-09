@@ -5,7 +5,7 @@ import { execFileSync } from 'child_process';
 import { closeHippoDb, openHippoDb } from '../db.js';
 import { listProjects, mergeProjects, repairProjects, type ProjectSummary } from '../project-merge.js';
 import { resolveTenantId } from '../tenant.js';
-import { type CliFlags, resolveAuthRoot } from './shared.js';
+import { type CliFlags, resolveAuthRoot, flagIsTrue } from './shared.js';
 import { printError } from './output.js';
 
 
@@ -38,7 +38,7 @@ function count(n: number, one: string, many = `${one}s`): string {
 export function cmdProjects(hippoRoot: string, args: string[], flags: CliFlags): void {
   const root = resolveAuthRoot(hippoRoot, flags);
   const tenantId = resolveTenantId({});
-  const apply = flags['apply'] === true;
+  const apply = flagIsTrue(flags, 'apply');
   const sub = args[0] ?? 'list';
   const db = openHippoDb(root);
   try {

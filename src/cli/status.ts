@@ -27,14 +27,16 @@ import * as api from '../api.js';
 import { resolveTenantId } from '../tenant.js';
 import { errorMessage, log } from '../log.js';
 import { printError } from './output.js';
-import { type CliFlags,
+import {
+  type CliFlags,
   parseCountFlag,
   requireInit,
   fmt,
   type CommandContext,
-  cardStringFlag,
+  stringFlagOrExit,
   hookStoreRoot,
   resolveAuthRoot,
+  flagIsTrue,
 } from './shared.js';
 import { DAY_MS } from '../util/time.js';
 
@@ -388,12 +390,12 @@ export function handleDoctor({ flags }: CommandContext): void {
 }
 
 export function handleSupportBundle({ flags }: CommandContext): void {
-  const outFlag = cardStringFlag(flags, 'out');
+  const outFlag = stringFlagOrExit(flags, 'out');
   if (outFlag === '') {
     printError('--out requires a file path.');
     process.exit(1);
   }
-  const includeLogs = flags['include-logs'] === true;
+  const includeLogs = flagIsTrue(flags, 'include-logs');
   const home = envHomeDir() || os.homedir();
   const now = new Date();
   const bundle = buildSupportBundle({ cwd: process.cwd(), home, version: PACKAGE_VERSION, includeLogs, now });

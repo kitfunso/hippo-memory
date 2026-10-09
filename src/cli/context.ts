@@ -23,7 +23,8 @@ import {
   toRenderItems,
 } from '../prompt-hook.js';
 import { printError } from './output.js';
-import { type CliFlags,
+import {
+  type CliFlags,
   parseLimitFlag,
   parseCountFlag,
   parseBudgetFlag,
@@ -39,6 +40,7 @@ import { type CliFlags,
   payloadCwdRoot,
   runHookWithStores,
   inPilotHoldout,
+  flagIsTrue,
 } from './shared.js';
 
 export async function cmdContext(
@@ -111,7 +113,7 @@ async function renderContext(
 ): Promise<void> {
   // --pinned-only fires on every prompt, even where no local .hippo exists, so it skips requireInit
   // and api.getContext falls back to global-only.
-  const pinnedOnly = flags['pinned-only'] === true;
+  const pinnedOnly = flagIsTrue(flags, 'pinned-only');
   if (!pinnedOnly) {
     requireInit(hippoRoot);
   }
@@ -200,7 +202,7 @@ function buildContextOpts(flags: CliFlags, input: ContextOptsInput): api.Context
   const ctxExplicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
   const ctxActiveScope = ctxExplicitScope || detectScope();
   // --cross-project re-includes other-project memories, rendered under their own section.
-  const crossProject = flags['cross-project'] === true;
+  const crossProject = flagIsTrue(flags, 'cross-project');
   return {
     q: input.query,
     budget: input.budget,

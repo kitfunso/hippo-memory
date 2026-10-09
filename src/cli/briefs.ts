@@ -10,7 +10,7 @@ import { buildGraphModel, renderGraphHtml, renderGraphCanvas, DEFAULT_VIEW_LIMIT
 import { resolveTenantId } from '../tenant.js';
 import { errorMessage, log } from '../log.js';
 import { printError } from './output.js';
-import { parseListLimit, parsePositiveId, requireInit, type CliFlags } from './shared.js';
+import { parseListLimit, parsePositiveId, requireInit, type CliFlags, boolFlag, stringFlag } from './shared.js';
 
 function printBriefRow(b: briefsModule.ProjectBrief): void {
   console.log(`#${b.id} [${b.status}] v${b.version} repo="${b.repo}" memory=${b.memoryId ?? '-'}`);
@@ -56,7 +56,7 @@ function briefRefresh(hippoRoot: string, tenantId: string, args: string[], flags
     printError('Usage: hippo brief refresh "<repo>" [--dry-run]');
     process.exit(1);
   }
-  const dryRun = Boolean(flags['dry-run']);
+  const dryRun = boolFlag(flags, 'dry-run');
   try {
     if (dryRun) {
       const { markdown, receiptCount } = briefsModule.assembleBriefFromReceipts(hippoRoot, tenantId, repoRaw);
@@ -261,7 +261,7 @@ function openInBrowser(out: string): void {
 }
 
 function graphView(hippoRoot: string, tenantId: string, entity: string | undefined, flags: CliFlags): void {
-  const format = typeof flags['format'] === 'string' ? (flags['format'] as string) : 'html';
+  const format = stringFlag(flags, 'format') ?? 'html';
   if (format !== 'html' && format !== 'canvas') {
     printError("graph view: --format must be 'html' or 'canvas'");
     process.exit(1);
@@ -269,7 +269,7 @@ function graphView(hippoRoot: string, tenantId: string, entity: string | undefin
   const model = buildGraphModel(hippoRoot, tenantId, { entity, limit: DEFAULT_VIEW_LIMIT });
   const content = format === 'canvas' ? renderGraphCanvas(model) : renderGraphHtml(model);
   const defaultOut = format === 'canvas' ? 'hippo-graph.canvas' : 'hippo-graph.html';
-  const out = typeof flags['out'] === 'string' ? (flags['out'] as string) : defaultOut;
+  const out = stringFlag(flags, 'out') ?? defaultOut;
   fs.writeFileSync(out, content, 'utf8');
   console.log(`Wrote ${model.nodes.length} entities + ${model.edges.length} relations to ${out}${model.truncated ? ' (truncated)' : ''}`);
   if (flags['open'] && format === 'html') openInBrowser(out);
@@ -284,7 +284,7 @@ export function cmdGraph(
   const tenantId = resolveTenantId({});
   const subcommand = args[0] ?? '';
   if (subcommand === 'extract') return graphExtract(hippoRoot, tenantId);
-  const entity = typeof flags['entity'] === 'string' ? (flags['entity'] as string) : undefined;
+  const entity = stringFlag(flags, 'entity');
   if (subcommand === 'show') return graphShow(hippoRoot, tenantId, entity, flags);
   if (subcommand === 'view') return graphView(hippoRoot, tenantId, entity, flags);
 

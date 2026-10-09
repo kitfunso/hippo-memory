@@ -14,14 +14,14 @@ import {
 } from '../connectors/slack/workspaces.js';
 import { printError } from './output.js';
 import { printSlackBackfillUsage, printSlackWorkspacesUsage } from './usage.js';
-import type { CliFlags } from './shared.js';
+import { type CliFlags, stringFlag } from './shared.js';
 
 // ---------------------------------------------------------------------------
 // Slack subcommands (`hippo slack backfill` / `hippo slack dlq list`)
 // ---------------------------------------------------------------------------
 
 function cmdSlackBackfill(hippoRoot: string, flags: CliFlags): void {
-  const channel = typeof flags['channel'] === 'string' ? (flags['channel'] as string) : undefined;
+  const channel = stringFlag(flags, 'channel');
   if (!channel) {
     printSlackBackfillUsage();
     process.exit(1);
@@ -35,7 +35,7 @@ function cmdSlackBackfill(hippoRoot: string, flags: CliFlags): void {
   // --since is advisory in V1: the slack_cursors row drives resume, so the
   // backfill loop always picks up where it last left off. Honoured-by-cursor
   // semantics keep idempotency clean.
-  const sinceIso = flags['since'] as string | undefined;
+  const sinceIso = stringFlag(flags, 'since');
   void sinceIso;
   const fetcher = slackHistoryFetcher(token);
   const ctx = {
@@ -109,8 +109,8 @@ function cmdSlackWorkspacesAdd(
   hippoRoot: string,
   flags: CliFlags,
 ): void {
-  const teamId = typeof flags['team'] === 'string' ? (flags['team'] as string).trim() : '';
-  const tenantId = typeof flags['tenant'] === 'string' ? (flags['tenant'] as string).trim() : '';
+  const teamId = (stringFlag(flags, 'team') ?? '').trim();
+  const tenantId = (stringFlag(flags, 'tenant') ?? '').trim();
   if (!teamId || !tenantId) {
     printError('Usage: hippo slack workspaces add --team <T> --tenant <t>');
     process.exit(1);
@@ -144,7 +144,7 @@ function cmdSlackWorkspacesRemove(
   hippoRoot: string,
   flags: CliFlags,
 ): void {
-  const teamId = typeof flags['team'] === 'string' ? (flags['team'] as string).trim() : '';
+  const teamId = (stringFlag(flags, 'team') ?? '').trim();
   if (!teamId) {
     printError('Usage: hippo slack workspaces remove --team <T>');
     process.exit(1);

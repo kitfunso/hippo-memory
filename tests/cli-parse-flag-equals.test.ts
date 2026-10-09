@@ -121,6 +121,9 @@ describe('BOOLEAN_FLAGS: every switch the CLI reads is registered', () => {
         if (AS_VALUE.test(read)) asValue.add(m[1]);
         else if (ON_OFF.test(read)) onOff.add(m[1]);
       }
+      for (const m of src.matchAll(/\b(boolFlag|flagIsTrue|stringFlag\w*|numberFlag)\(\s*flags,\s*['"]([a-z0-9-]+)['"]/g)) {
+        (m[1] === 'boolFlag' || m[1] === 'flagIsTrue' ? onOff : asValue).add(m[2]);
+      }
     }
     const unregistered = [...onOff].filter((key) => !asValue.has(key) && !BOOLEAN_FLAGS.has(key));
     expect(unregistered).toEqual([]);
@@ -128,7 +131,7 @@ describe('BOOLEAN_FLAGS: every switch the CLI reads is registered', () => {
 
   it('case 14e: KNOWN_FLAGS is exactly the set of flags the CLI reads, so no typo hides in it', () => {
     const reads = new Set<string>();
-    const READ = /flags(?:\[['"]([a-z0-9-]+)['"]\]|\.([a-z][a-z0-9]*)\b)|(?:Flag|hasOwn)\(\s*flags,\s*['"]([a-z0-9-]+)['"]/g;
+    const READ = /flags(?:\[['"]([a-z0-9-]+)['"]\]|\.([a-z][a-z0-9]*)\b)|(?:Flag|FlagOrExit|IsTrue|hasOwn)\(\s*flags,\s*['"]([a-z0-9-]+)['"]/g;
     for (const file of CLI_SOURCES) {
       const src = readFileSync(resolve(__dirname, '..', 'src', file), 'utf8');
       for (const m of src.matchAll(READ)) reads.add(m[1] ?? m[2] ?? m[3]);

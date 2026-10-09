@@ -5,7 +5,7 @@ import { listApiKeys, type ApiKeyListItem } from '../auth.js';
 import * as api from '../api.js';
 import { resolveTenantId } from '../tenant.js';
 import { printError } from './output.js';
-import { type CliFlags, resolveAuthRoot } from './shared.js';
+import { type CliFlags, resolveAuthRoot, boolFlag, stringFlag } from './shared.js';
 
 // ---------------------------------------------------------------------------
 // Auth subcommands
@@ -13,12 +13,12 @@ import { type CliFlags, resolveAuthRoot } from './shared.js';
 
 function cmdAuthCreate(hippoRoot: string, flags: CliFlags): void {
   const root = resolveAuthRoot(hippoRoot, flags);
-  const tenantFlag = typeof flags['tenant'] === 'string' ? (flags['tenant'] as string) : undefined;
-  const labelFlag = typeof flags['label'] === 'string' ? (flags['label'] as string) : undefined;
-  const asJson = Boolean(flags['json']);
+  const tenantFlag = stringFlag(flags, 'tenant');
+  const labelFlag = stringFlag(flags, 'label');
+  const asJson = boolFlag(flags, 'json');
 
   // Accepts 'admin' | 'member' only; anything else exits 1 so a typo doesn't silently default to admin.
-  const roleFlag = typeof flags['role'] === 'string' ? (flags['role'] as string) : undefined;
+  const roleFlag = stringFlag(flags, 'role');
   let role: 'admin' | 'member' = 'admin';
   if (roleFlag !== undefined) {
     if (roleFlag !== 'admin' && roleFlag !== 'member') {
@@ -72,8 +72,8 @@ function formatKeyRow(item: ApiKeyListItem): string {
 
 function cmdAuthList(hippoRoot: string, flags: CliFlags): void {
   const root = resolveAuthRoot(hippoRoot, flags);
-  const includeRevoked = Boolean(flags['all']);
-  const asJson = Boolean(flags['json']);
+  const includeRevoked = boolFlag(flags, 'all');
+  const asJson = boolFlag(flags, 'json');
 
   const db = openHippoDb(root);
   let items: ApiKeyListItem[];

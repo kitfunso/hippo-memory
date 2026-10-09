@@ -5,12 +5,12 @@ import * as api from '../api.js';
 import { resolveTenantId } from '../tenant.js';
 import { assembleCost, assembleHeading, drillCost, settleTokens } from '../context-render.js';
 import { printError } from './output.js';
-import { type CliFlags, parseBudgetFlag, requireInit, type CommandContext, captureConsole } from './shared.js';
+import { type CliFlags, parseBudgetFlag, requireInit, type CommandContext, captureConsole, flagIsTrue, stringFlag, numberFlag } from './shared.js';
 
 export function cmdDag(hippoRoot: string, flags: CliFlags): void {
   requireInit(hippoRoot);
   const entries = loadAllEntries(hippoRoot);
-  const isStats = flags['stats'] === true;
+  const isStats = flagIsTrue(flags, 'stats');
 
   const byLevel = new Map<number, number>();
   let unlinked = 0;
@@ -81,11 +81,9 @@ async function cmdAssemble(hippoRoot: string, sessionId: string, flags: CliFlags
   requireInit(hippoRoot);
   // Absent stays undefined so the api default applies; the 0 fallback is unreachable.
   const budget = flags['budget'] === undefined ? undefined : parseBudgetFlag(flags['budget'], 0);
-  const freshTailCount = typeof flags['fresh-tail'] === 'string' ? Number(flags['fresh-tail']) : undefined;
+  const freshTailCount = numberFlag(flags, 'fresh-tail');
   const summarizeOlder = flags['no-summarize-older'] !== true;
-  const scope = typeof flags['scope'] === 'string' && (flags['scope'] as string).length > 0
-    ? (flags['scope'] as string)
-    : undefined;
+  const scope = stringFlag(flags, 'scope') || undefined;
   const ctx: api.Context = {
     hippoRoot,
     tenantId: resolveTenantId({}),
@@ -114,11 +112,11 @@ async function cmdAssemble(hippoRoot: string, sessionId: string, flags: CliFlags
 
 async function cmdDrillDown(hippoRoot: string, summaryId: string, flags: CliFlags): Promise<void> {
   requireInit(hippoRoot);
-  const limit = typeof flags['limit'] === 'string' ? Number(flags['limit']) : undefined;
+  const limit = numberFlag(flags, 'limit');
   // Absent stays undefined so the api default applies; the 0 fallback is unreachable.
   const budget = flags['budget'] === undefined ? undefined : parseBudgetFlag(flags['budget'], 0);
   // --depth N walks N levels down (default 1, hard cap 10); out-of-range is rejected, never silently clamped.
-  const rawDepth = typeof flags['depth'] === 'string' ? Number(flags['depth']) : undefined;
+  const rawDepth = numberFlag(flags, 'depth');
   let depth: number | undefined;
   if (rawDepth !== undefined) {
     if (!Number.isInteger(rawDepth) || rawDepth < 1 || rawDepth > 10) {
@@ -170,7 +168,7 @@ export async function handleDrill({ hippoRoot, args, flags }: CommandContext): P
 }
 
 export async function handleAssemble({ hippoRoot, args, flags }: CommandContext): Promise<void> {
-  const sessionId = typeof flags['session'] === 'string' ? (flags['session'] as string) : args[0];
+  const sessionId = stringFlag(flags, 'session') ?? args[0];
   if (!sessionId) {
     printError('Usage: hippo assemble --session <id> [--budget N] [--fresh-tail N] [--no-summarize-older] [--json]');
     process.exit(1);

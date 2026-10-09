@@ -5,7 +5,7 @@ import { envPort, envRequireAuth, envTlsCert, envTlsKey } from '../env.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { printError } from './output.js';
-import { cardStringFlag, requireInit, type CommandContext } from './shared.js';
+import { stringFlagOrExit, requireInit, type CommandContext, stringFlag } from './shared.js';
 
 export async function handleDashboard({ hippoRoot, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
@@ -31,8 +31,8 @@ export async function handleMcp(): Promise<void> {
 /** The certificate and key for HTTPS, from --tls-cert and --tls-key or HIPPO_TLS_CERT and HIPPO_TLS_KEY; undefined when neither is set. */
 function readTlsFiles(flags: CommandContext['flags']): { cert: Buffer; key: Buffer } | undefined {
   // A flag with no value exits here; falling back to cleartext would hide the mistake.
-  const certPath = cardStringFlag(flags, 'tls-cert') ?? envTlsCert();
-  const keyPath = cardStringFlag(flags, 'tls-key') ?? envTlsKey();
+  const certPath = stringFlagOrExit(flags, 'tls-cert') ?? envTlsCert();
+  const keyPath = stringFlagOrExit(flags, 'tls-key') ?? envTlsKey();
   if (certPath === undefined && keyPath === undefined) return undefined;
   if (certPath === undefined || keyPath === undefined) {
     printError('hippo serve: TLS needs both a certificate and a key: --tls-cert and --tls-key, or HIPPO_TLS_CERT and HIPPO_TLS_KEY.');
@@ -54,7 +54,7 @@ export async function handleServe({ hippoRoot, flags }: CommandContext): Promise
     printError(`Invalid --port: ${String(portRaw)}`);
     process.exit(1);
   }
-  const host = typeof flags['host'] === 'string' ? (flags['host'] as string) : '127.0.0.1';
+  const host = stringFlag(flags, 'host') ?? '127.0.0.1';
   const tls = readTlsFiles(flags);
   const { serve } = await import('../server.js');
   const handle = await serve({ hippoRoot, port, host, handleSignals: true, tls });

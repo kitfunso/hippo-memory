@@ -12,7 +12,7 @@ import { renderAmbientSummary } from '../ambient.js';
 import { errorMessage, log } from '../log.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../db.js';
 import { repairOnceOnSleep } from '../project-merge.js';
-import { type CliFlags, requireInit, learnFromRepo, runChurnStaleForRepo, printAgentImport, skipLearnOnSharedStore } from './shared.js';
+import { type CliFlags, requireInit, learnFromRepo, runChurnStaleForRepo, printAgentImport, skipLearnOnSharedStore, boolFlag, stringFlag } from './shared.js';
 import { repairQualityOnceAt } from './quality-repair-once.js';
 import { printError } from './output.js';
 
@@ -24,7 +24,7 @@ export async function cmdSleep(
   // Tee stdout/stderr to a log file when --log-file is set. The SessionEnd
   // hook uses this so the output is captured somewhere the SessionStart hook
   // can re-display it next time the agent UI starts.
-  const logFile = typeof flags['log-file'] === 'string' ? (flags['log-file'] as string) : null;
+  const logFile = stringFlag(flags, 'log-file') ?? null;
   let restoreStdout: (() => void) | null = null;
   if (logFile) {
     try {
@@ -202,8 +202,8 @@ async function cmdSleepCore(
     actor: api.adminActor('cli'),
   };
   const result = await api.sleep(ctx, {
-    dryRun: Boolean(flags['dry-run']),
-    noShare: Boolean(flags['no-share']),
+    dryRun: boolFlag(flags, 'dry-run'),
+    noShare: boolFlag(flags, 'no-share'),
   });
   renderSleepResult(result);
 }

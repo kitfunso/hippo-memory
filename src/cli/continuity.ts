@@ -19,6 +19,7 @@ import {
   printSessionEvents,
   printHandoff,
   type CliFlags,
+  boolFlag,
 } from './shared.js';
 
 export function cmdSnapshot(
@@ -408,7 +409,7 @@ export function cmdCurrent(
   const subcommand = args[0] ?? 'show';
 
   if (subcommand === 'show') {
-    const asJson = Boolean(flags['json']);
+    const asJson = boolFlag(flags, 'json');
     const snapshot = loadActiveTaskSnapshot(hippoRoot, resolveTenantId({}));
     const sessionId = snapshot?.session_id ?? undefined;
     const events = listSessionEvents(hippoRoot, resolveTenantId({}), {

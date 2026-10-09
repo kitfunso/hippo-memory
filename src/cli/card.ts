@@ -18,7 +18,7 @@ import { type Card, isCardStatus } from '../card.js';
 import { loadCardDetail, type CardDetail } from '../card-detail.js';
 import { resolveTenantId } from '../tenant.js';
 import { printError } from './output.js';
-import { type CliFlags, requireInit, cardStringFlag } from './shared.js';
+import { type CliFlags, requireInit, stringFlagOrExit } from './shared.js';
 
 // Mirrors ARCHIVE_REASON_REQUIRED so the block message can't drift from its usage line.
 const CARD_BLOCK_REASON_REQUIRED = 'hippo card block <id> requires --reason "<why>" (recorded as a comment).';
@@ -63,7 +63,7 @@ function printCard(detail: CardDetail): void {
 
 // A too-large --run would silently round to a different id (mirrors parsePositiveIncidentId).
 function cardRunFlag(flags: CliFlags): number | undefined {
-  const raw = cardStringFlag(flags, 'run');
+  const raw = stringFlagOrExit(flags, 'run');
   if (raw === undefined) return undefined;
   const n = Number(raw);
   if (!/^\d+$/.test(raw) || !Number.isSafeInteger(n) || n <= 0) {
@@ -127,14 +127,14 @@ export function cmdCard(
 }
 
 function cardCreate(hippoRoot: string, tenantId: string, _args: string[], flags: CliFlags): void {
-  const title = cardStringFlag(flags, 'title') ?? '';
+  const title = stringFlagOrExit(flags, 'title') ?? '';
   if (!title) {
     printError('Usage: hippo card create --title "..." [--repo <name>] [--contract <text>] [--budget <n>] [--depends-on <id>...]');
     process.exit(1);
   }
-  const repo = cardStringFlag(flags, 'repo') || undefined;
-  const contract = cardStringFlag(flags, 'contract') || undefined;
-  const budgetRaw = cardStringFlag(flags, 'budget');
+  const repo = stringFlagOrExit(flags, 'repo') || undefined;
+  const contract = stringFlagOrExit(flags, 'contract') || undefined;
+  const budgetRaw = stringFlagOrExit(flags, 'budget');
   let budget: number | undefined;
   if (budgetRaw !== undefined) {
     if (!/^\d+$/.test(budgetRaw)) {
@@ -179,7 +179,7 @@ function cardShow(hippoRoot: string, tenantId: string, args: string[], flags: Cl
 }
 
 function cardList(hippoRoot: string, tenantId: string, _args: string[], flags: CliFlags): void {
-  const status = cardStringFlag(flags, 'status');
+  const status = stringFlagOrExit(flags, 'status');
   if (status !== undefined && !isCardStatus(status)) {
     printError(`Invalid status: "${status}".`);
     process.exit(1);
@@ -200,12 +200,12 @@ function cardList(hippoRoot: string, tenantId: string, _args: string[], flags: C
 
 function cardClaim(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): void {
   const id = args[1];
-  const runtime = cardStringFlag(flags, 'runtime') ?? '';
+  const runtime = stringFlagOrExit(flags, 'runtime') ?? '';
   if (!id || !runtime) {
     printError('Usage: hippo card claim <id> --runtime <name> [--session <id>]');
     process.exit(1);
   }
-  const sessionId = cardStringFlag(flags, 'session') || undefined;
+  const sessionId = stringFlagOrExit(flags, 'session') || undefined;
   let card: (Card & { runId: number }) | null;
   try {
     card = claimCard(hippoRoot, tenantId, id, runtime, sessionId);
@@ -243,7 +243,7 @@ function cardHeartbeat(hippoRoot: string, tenantId: string, args: string[], flag
 
 function cardBlock(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): void {
   const id = args[1];
-  const reason = cardStringFlag(flags, 'reason') ?? '';
+  const reason = stringFlagOrExit(flags, 'reason') ?? '';
   if (!id || !reason) {
     printError(CARD_BLOCK_REASON_REQUIRED);
     process.exit(1);
@@ -339,12 +339,12 @@ function cardComment(hippoRoot: string, tenantId: string, args: string[], flags:
     printError(`No card found with id ${id}.`);
     process.exit(1);
   }
-  const body = cardStringFlag(flags, 'body') ?? '';
+  const body = stringFlagOrExit(flags, 'body') ?? '';
   if (!body) {
     printError('Usage: hippo card comment <id> --body "..." [--author <name>]');
     process.exit(1);
   }
-  const author = cardStringFlag(flags, 'author') || 'cli';
+  const author = stringFlagOrExit(flags, 'author') || 'cli';
   const comment = addCardComment(hippoRoot, tenantId, id, author, body);
   console.log(`Added comment ${comment.id} to card ${id}`);
 }

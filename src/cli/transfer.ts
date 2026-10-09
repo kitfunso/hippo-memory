@@ -37,7 +37,7 @@ import * as client from './client.js';
 import { resolveTenantId } from '../tenant.js';
 import { printError } from './output.js';
 import { errorMessage, log } from '../log.js';
-import { requireInit, runViaServerIfAvailable, fmt, type CliFlags, type CommandContext, learnFromRepo } from './shared.js';
+import { requireInit, runViaServerIfAvailable, fmt, type CliFlags, type CommandContext, learnFromRepo, boolFlag, flagIsTrue } from './shared.js';
 
 // ---------------------------------------------------------------------------
 // Watch command
@@ -150,8 +150,8 @@ export function cmdImport(
   args: string[],
   flags: CliFlags
 ): void {
-  const useGlobal = Boolean(flags['global']);
-  const dryRun = Boolean(flags['dry-run']);
+  const useGlobal = boolFlag(flags, 'global');
+  const dryRun = boolFlag(flags, 'dry-run');
   const extraTags: string[] = Array.isArray(flags['tag'])
     ? (flags['tag'] as string[])
     : flags['tag']
@@ -369,7 +369,7 @@ export function cmdSync(hippoRoot: string, flags: CliFlags = {}): void {
   }
 
   // v39: other-project rows are skipped by default; secrets always are.
-  const includeCrossProject = flags['cross-project'] === true;
+  const includeCrossProject = flagIsTrue(flags, 'cross-project');
   const count = syncGlobalToLocal(hippoRoot, globalRoot, { includeCrossProject });
   console.log(`Synced ${count} global memories into local project.${includeCrossProject ? '' : ' (other-project rows skipped; use --cross-project to include them)'}`);
 }
@@ -404,7 +404,7 @@ export function handleShare({ hippoRoot, args, flags }: CommandContext): void {
     // Auto-share mode
     requireInit(hippoRoot);
     const minScore = parseFloat(String(flags['min-score'] ?? '0.6'));
-    const dryRun = Boolean(flags['dry-run']);
+    const dryRun = boolFlag(flags, 'dry-run');
     const results = autoShare(hippoRoot, { minScore, dryRun, tenantId: resolveTenantId({}) });
     if (results.length === 0) {
       console.log('No memories meet the sharing threshold.');
@@ -422,7 +422,7 @@ export function handleShare({ hippoRoot, args, flags }: CommandContext): void {
     }
   } else if (shareId) {
     requireInit(hippoRoot);
-    const force = Boolean(flags['force']);
+    const force = boolFlag(flags, 'force');
     const tenantId = resolveTenantId({});
     const result = shareMemory(hippoRoot, shareId, { force, tenantId });
     if (result) {
@@ -447,7 +447,7 @@ export function handleShare({ hippoRoot, args, flags }: CommandContext): void {
 
 export function handlePeers({ flags }: CommandContext): void {
   // Tenant-scoped by default; --all-tenants gives the host-wide view for cross-tenant peer discovery.
-  const allTenants = flags['all-tenants'] === true;
+  const allTenants = flagIsTrue(flags, 'all-tenants');
   const tenantScope = allTenants ? undefined : resolveTenantId({});
   const peers = listPeers(undefined, tenantScope);
   if (peers.length === 0) {
@@ -463,7 +463,7 @@ export function handlePeers({ flags }: CommandContext): void {
 
 export function handleExport({ hippoRoot, args, flags }: CommandContext): void {
   requireInit(hippoRoot);
-  const format = (flags['format'] as string) || 'json';
+  const format = (flags['format'] || 'json') as string;
   const outputPath = args[0] || null;
   const entries = loadAllEntries(hippoRoot, resolveTenantId({}));
 

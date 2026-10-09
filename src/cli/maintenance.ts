@@ -11,7 +11,7 @@ import { openHippoDb, closeHippoDb } from '../db.js';
 import { resolveTenantId } from '../tenant.js';
 import { refineStore } from '../refine-llm.js';
 import { printError } from './output.js';
-import { type CliFlags, requireInit, resolveAuthRoot } from './shared.js';
+import { type CliFlags, requireInit, resolveAuthRoot, boolFlag } from './shared.js';
 
 export async function cmdRefine(
   hippoRoot: string,
@@ -25,11 +25,11 @@ export async function cmdRefine(
     process.exit(1);
   }
 
-  const dryRun = Boolean(flags['dry-run']);
-  const all = Boolean(flags['all']);
+  const dryRun = boolFlag(flags, 'dry-run');
+  const all = boolFlag(flags, 'all');
   const limit = flags['limit'] !== undefined ? parseInt(String(flags['limit']), 10) : undefined;
   const model = flags['model'] ? String(flags['model']) : undefined;
-  const asJson = Boolean(flags['json']);
+  const asJson = boolFlag(flags, 'json');
 
   const result = await refineStore(hippoRoot, {
     apiKey,
@@ -63,7 +63,7 @@ export function cmdDedup(
 ): void {
   requireInit(hippoRoot);
 
-  const dryRun = Boolean(flags['dry-run']);
+  const dryRun = boolFlag(flags, 'dry-run');
   if (flags['threshold'] !== undefined) {
     printError('hippo dedup: --threshold is ignored; a duplicate is the same text apart from spacing.');
   }
