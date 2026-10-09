@@ -45,7 +45,7 @@ function checkLesson(l, baseDir) {
   try {
     checkerFiles(l.checkPath);
   } catch (e) {
-    throw new Error(`lesson ${l.id}: ${e.message}`);
+    throw new Error(`lesson ${l.id}: ${e.message}`, { cause: e });
   }
 }
 

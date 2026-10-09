@@ -1,7 +1,8 @@
 // Z0 G5 (prereg 166): which files a lesson checker's identity holds, which imports stop the load, and what stays outside.
 import { describe, it, expect, afterEach } from 'vitest';
-import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { checkerIdentity } from '../scripts/token-eval/checker-identity.mjs';
 import { cleanup, tmp } from './fixtures/z0-harness.js';
 
@@ -112,6 +113,11 @@ describe('checker identity follows every local import written with a plain strin
     ['a require after "a < b >" and a regular expression, which is no type argument list in JavaScript', 'check.cjs', `var a = 1, b = 2, g = 1;\nvar r = a < b > /${TICK}/.test('x'); const { v } = require('./h.cjs'); //${TICK}/g\nconsole.log(v, r);\n`, 'h.cjs'],
     ['a class that extends a required base', 'check.cjs', "class A extends require('./h.cjs') {}\nclass B extends A {}\nconsole.log(new B());\n", 'h.cjs'],
     ['a conditional whose else branch is an arrow function', 'check.cjs', "var flag = 0;\nconst pick = flag ? (flag) : (m) => m.v;\nconsole.log(pick(require('./h.cjs')));\n", 'h.cjs'],
+    ['an import after a top-level await of a bracketed regular expression that holds a quote', 'check.mjs', "const r = await (/\"/).test('x');\nconst { v } = await import('./h.mjs');\nconsole.log(v, r);\n", 'h.mjs'],
+    ['the same bracketed regular expression in a .js file', 'check.js', "const r = await (/\"/).test('x');\nconst { v } = await import('./h.mjs');\nconsole.log(v, r);\n", 'h.mjs'],
+    ['a require after "<", a space and a regular expression', 'check.cjs', "var a = 1;\nvar ok = a < /re/.test(String(require('./h.cjs').v));\nconsole.log(ok);\n", 'h.cjs'],
+    ['a bracketed arrow function in a nested conditional', 'check.cjs', "var x = 1, y = 0, b = 2;\nvar f = x ? y ? (b) : (c => require('./h.cjs').v) : 0;\nconsole.log(f());\n", 'h.cjs'],
+    ['a .node helper, which counts by its bytes and is never parsed', 'check.cjs', "console.log(require('./h.node'));\n", 'h.node'],
   ])('still follows %s', (_name, entry, text, helper) => {
     expect(moves({ [entry]: text }, entry, helper)).toBe(true);
   });
@@ -206,7 +212,42 @@ describe('checker identity stops the load on an import it cannot hash', () => {
     ['syntax the parser cannot read, which could hide an import', 'check.mjs', { 'check.mjs': "const one = 1;\nimport source w from './w.wasm';\nconsole.log(one, w);\n", 'w.wasm': 'x' }, /check\.mjs line 2: .*cannot parse/],
     ['an HTML comment in CommonJS, which the parser reads as code', 'check.cjs', { 'check.cjs': `var x = 1, y = 2;\nvar z = x <!--y ${TICK}\nconst { v } = require('./h.cjs'); // ${TICK}\nconsole.log(v, z);\n`, 'h.cjs': CJS }, /check\.cjs line 2: .*<!--/],
     ['an arrow in a case clause, which node runs and the parser reads as a typed arrow', 'check.cjs', { 'check.cjs': "var a = 1, b = 1;\nswitch (b) { case a ? (b) : (p) => q => p : lbl: console.log(require('./h.cjs').v); }\n", 'h.cjs': CJS }, /check\.cjs line 2: .*TypeScript type/],
+    ['a package path that hides ".." behind a tab, which import() drops', 'sub/check.mjs', { 'sub/check.mjs': "import { v } from 'x/.\\t./.\\t./h.mjs';\nconsole.log(v);\n", 'sub/h.mjs': ESM, 'sub/node_modules/x/package.json': '{ "name": "x", "version": "1.0.0" }\n' }, /package path with "\.\."/],
+    ['a package path that writes ".." as %2e, which import() decodes', 'check.mjs', { 'check.mjs': "import { v } from 'x/%2e%2e/%2E%2e/h.mjs';\nconsole.log(v);\n", 'h.mjs': ESM }, /imports "x\/%2e%2e\/%2E%2e\/h\.mjs".*package path with "\.\."/],
+    ['an upper-case .MJS helper on disk', 'check.cjs', { 'check.cjs': "console.log(require('./u.MJS').v);\n", 'u.MJS': ESM }, /imports "\.\/u\.MJS".*lower case/],
+    ['a top-level await before a regular expression that holds a quote, in an .mjs file', 'check.mjs', { 'check.mjs': "const r = await /\"/.test('x');\nconst { v } = await import('./h.mjs');\nconsole.log(v, r);\n", 'h.mjs': ESM }, /check\.mjs line 1: .*cannot parse/],
+    ['a top-level await before a regular expression at a line end, in an .mjs file', 'check.mjs', { 'check.mjs': "const r = await /x/\nconst { v } = await import('./h.mjs');\nconsole.log(v, r);\n", 'h.mjs': ESM }, /check\.mjs line 2: .*cannot parse/],
+    ['"<" right before a regular expression', 'check.cjs', { 'check.cjs': "var a = 1;\nvar ok = a</re/.test(String(require('./h.cjs').v));\nconsole.log(ok);\n", 'h.cjs': CJS }, /check\.cjs line 2: .*cannot parse/],
+    ['"<" right before a line comment, in an .mjs file', 'check.mjs', { 'check.mjs': "const a = 1, b = 2;\nconst r = a <// why\n b;\nimport { v } from './h.mjs';\nconsole.log(v, r);\n", 'h.mjs': ESM }, /check\.mjs line 2: .*cannot parse/],
+    ['a decimal number with a leading zero', 'check.cjs', { 'check.cjs': "var n = 08;\nconsole.log(require('./h.cjs').v, n);\n", 'h.cjs': CJS }, /check\.cjs line 1: .*cannot parse/],
+    ['an arrow function in a nested conditional', 'check.cjs', { 'check.cjs': "var x = 1, y = 0, b = 2;\nvar f = x ? y ? (b) : c => require('./h.cjs').v : 0;\nconsole.log(f());\n", 'h.cjs': CJS }, /check\.cjs line 2: .*cannot parse/],
+    ['a "-->" comment in CommonJS', 'check.cjs', { 'check.cjs': "var x = 1;\n--> require('./h.cjs')\nconsole.log(x);\n", 'h.cjs': CJS }, /check\.cjs line 2: .*cannot parse/],
   ])('stops on %s', (_name, entry, files, message) => {
     expect(() => at(fresh(files), entry)).toThrow(message);
+  });
+});
+
+describe('checker identity names a parser it cannot use', () => {
+  afterEach(cleanup);
+  const MODULE = fileURLToPath(new URL('../scripts/token-eval/checker-identity.mjs', import.meta.url));
+  /** A copy of the module beside a stub typescript package, so the copy loads the stub. */
+  const withParser = async (stub: string) => {
+    const d = fresh({
+      'check.mjs': "console.log('ok');\n",
+      'node_modules/typescript/package.json': '{ "name": "typescript", "main": "index.js" }\n',
+      'node_modules/typescript/index.js': stub,
+    });
+    copyFileSync(MODULE, join(d, 'checker-identity.mjs'));
+    const m = await import(/* @vite-ignore */ pathToFileURL(join(d, 'checker-identity.mjs')).href);
+    return () => m.checkerFiles(join(d, 'check.mjs'));
+  };
+
+  it.each<[name: string, stub: string, message: RegExp]>([
+    ['a typescript package that does not load', "throw Object.assign(new Error('no such module'), { code: 'MODULE_NOT_FOUND' });\n", /typescript package did not load \(MODULE_NOT_FOUND\).*npm install/],
+    ['a typescript with no parser API', "module.exports = { version: '7.0.0' };\n", /installed typescript 7\.0\.0 does not have it/],
+    ['a typescript 5.2, which has no JSDoc parsing mode', "module.exports = { version: '5.2.0', createSourceFile() {}, forEachChild() {}, ScriptTarget: { Latest: 99 } };\n", /installed typescript 5\.2\.0 does not have it/],
+    ['a parser that reports no parse errors', "module.exports = { version: '5.9.0', createSourceFile: () => ({}), forEachChild() {}, ScriptTarget: { Latest: 99 }, JSDocParsingMode: { ParseNone: 1 } };\n", /does not report parse errors/],
+  ])('stops on %s', async (_name, stub, message) => {
+    expect(await withParser(stub)).toThrow(message);
   });
 });

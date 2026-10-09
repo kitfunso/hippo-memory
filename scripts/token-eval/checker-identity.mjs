@@ -24,7 +24,7 @@ const lineError = (sf, pos, text) => new Error(`checker ${path.basename(sf.fileN
 
 let typescript;
 
-// Loaded on first use, so a harness script that never grades does not pay for the parser.
+// Loaded on the first call, so a script that only imports this file does not pay for the parser.
 function parser() {
   if (typescript) return typescript;
   let ts;
@@ -33,8 +33,8 @@ function parser() {
   } catch (e) {
     throw new Error(`${NEEDS_TS5}, and the typescript package did not load (${e.code ?? e.message}); install the dev dependencies with npm install`);
   }
-  // typescript 7 ships no parser API; a text scan in its place would bring the missed imports back.
-  if (!(ts.createSourceFile instanceof Function && ts.forEachChild instanceof Function)) {
+  // typescript 7 ships no parser API and 5.2 has no JSDoc mode; a text scan in its place would bring the missed imports back.
+  if (!(ts.createSourceFile instanceof Function && ts.forEachChild instanceof Function && ts.JSDocParsingMode)) {
     throw new Error(`${NEEDS_TS5}; the installed typescript ${ts.version} does not have it`);
   }
   typescript = ts;
@@ -101,9 +101,10 @@ function localImports(file, text) {
   }
   return [...specs].filter((spec) => {
     if (LOCAL.test(spec)) return true;
-    // A URL parser drops control characters and leading spaces before it reads the scheme.
-    const isUrl = SCHEME.test(spec.replace(/\p{Cc}/gu, '').trimStart());
-    if (!path.isAbsolute(spec) && !isUrl && !CLIMBS.test(spec)) return false;
+    // A URL parser drops control characters before it reads the scheme and the path, so a tab can hide either.
+    const bare = spec.replace(/\p{Cc}/gu, '');
+    const isUrl = SCHEME.test(bare.trimStart());
+    if (!path.isAbsolute(spec) && !isUrl && !CLIMBS.test(bare)) return false;
     throw new Error(`checker ${path.basename(file)} imports "${spec}", which is an absolute path, a URL or a package path with ".."; import a local file by a relative path that starts with ./ or ../`);
   });
 }
