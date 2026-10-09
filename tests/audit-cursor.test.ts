@@ -115,7 +115,7 @@ describe('listAuditEventsAfter', () => {
     add('tenant-a', 4);
     const first = page(0, 3);
     const lastSeen = first[first.length - 1]!.id;
-    pruneAuditLog(db, { olderThanDays: 30, tenantId: 'tenant-a' });
+    pruneAuditLog(home, { olderThanDays: 30, tenantId: 'tenant-a' });
     const rest = listAuditEventsAfter(db, { afterId: lastSeen, limit: 100 });
     expect(rest.every((r) => r.id > lastSeen)).toBe(true);
     expect(new Set(rest.map((r) => r.id)).size).toBe(rest.length);
