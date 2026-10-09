@@ -14,7 +14,7 @@ import { requireInit, fmt, type CliFlags, type CommandContext, boolFlag } from '
 import { errorMessage } from '../log.js';
 
 /** Runs `hippo eval`: --bootstrap writes a corpus, --suite runs the built-in feature eval, else it scores a corpus file. */
-export async function cmdEval(
+async function cmdEval(
   hippoRoot: string,
   corpusPath: string | null,
   flags: CliFlags

@@ -48,8 +48,8 @@ export interface RetrievalPolicy {
   errorPriority: number;
 }
 
-export const MAX_ACTIVE_GOAL_DEPTH = 3;
-export const MAX_FINAL_MULTIPLIER = 3.0;
+const MAX_ACTIVE_GOAL_DEPTH = 3;
+const MAX_FINAL_MULTIPLIER = 3.0;
 
 export function rowToGoal(row: GoalRow): Goal {
   return {
@@ -105,7 +105,7 @@ export function pushGoal(hippoRoot: string, opts: PushGoalOpts): Goal {
  *
  * @internal Internal goal-stack invariant. Subject to change.
  */
-export function enforceDepthCapWithinTx(
+function enforceDepthCapWithinTx(
   db: DatabaseSyncLike,
   tenantId: string,
   sessionId: string,
@@ -251,7 +251,7 @@ export function getSessionGoals(hippoRoot: string, opts: GetActiveGoalsOpts): Go
   }
 }
 
-export function getActiveGoalsWithDb(db: DatabaseSyncLike, opts: GetActiveGoalsOpts): Goal[] {
+function getActiveGoalsWithDb(db: DatabaseSyncLike, opts: GetActiveGoalsOpts): Goal[] {
   // SAFETY: rows come from the SELECT above, which projects exactly
   // GoalRow's columns (in the same order goal_stack defines them).
   const rows = db.prepare(`
@@ -297,7 +297,7 @@ export interface GoalStackBoost<R> {
 // can compose onto the base goal-tag boost. Composed result is hard-capped
 // at MAX_FINAL_MULTIPLIER (3.0x) BEFORE applying to score -- even an
 // `errorPriority: 9.0` policy cannot exceed 3.0x.
-export function loadGoalPolicies(db: DatabaseSyncLike, active: readonly Goal[]): Map<string, RetrievalPolicy> {
+function loadGoalPolicies(db: DatabaseSyncLike, active: readonly Goal[]): Map<string, RetrievalPolicy> {
   const policiesByGoalId = new Map<string, RetrievalPolicy>();
   for (const g of active) {
     if (!g.retrievalPolicyId) continue;

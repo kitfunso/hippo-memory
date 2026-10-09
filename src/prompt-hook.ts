@@ -14,8 +14,14 @@ import { sessionPilotArm, type PilotArm } from './pilot-arm.js';
 import { assertCallerProject, MAX_PROJECT_ALIASES } from './project-identity.js';
 import { writeDeliveryEventAtRoot, writeDeliveryEventOnHandle } from './store/recall-trace.js';
 import {
-  blockHash, estimateTokens, hookPayloadString, isSubagentPayload, lastSentState, recordTokenUse, shouldSkipUnchanged, type TokenSurface,
+  hookPayloadString,
+  isSubagentPayload,
+  lastSentState,
+  recordTokenUse,
+  shouldSkipUnchanged,
+  type TokenSurface,
 } from './token-ledger.js';
+import { blockHash, estimateTokens } from './util/token-text.js';
 import { errorMessage } from './log.js';
 
 /** With `db`, writes on the token ledger's handle (same store); without it, opens its own. A second flush is a no-op. */

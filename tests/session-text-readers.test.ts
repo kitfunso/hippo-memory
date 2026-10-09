@@ -5,7 +5,6 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import {
-  PRE_COMPACT_SUMMARY_CAP,
   WORKING_STATE_CAPS,
   transcriptWorkingState,
   truncateKeepNewest,
@@ -31,7 +30,8 @@ function git(cwd: string, ...args: string[]): void {
 
 describe('WORKING_STATE_CAPS', () => {
   it('is the longest each derived field can be, the summary counting its trim marker', () => {
-    expect(truncateKeepNewest('x'.repeat(PRE_COMPACT_SUMMARY_CAP * 3), PRE_COMPACT_SUMMARY_CAP)).toHaveLength(WORKING_STATE_CAPS.summary);
+    const summaryCap = 2000;
+    expect(truncateKeepNewest('x'.repeat(summaryCap * 3), summaryCap)).toHaveLength(WORKING_STATE_CAPS.summary);
   });
 
   it('holds every field a long transcript derives', () => {

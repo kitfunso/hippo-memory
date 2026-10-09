@@ -12,7 +12,7 @@ import { MemoryEntry } from './memory.js';
 import { loadAllEntries } from './store/entry-reads.js';
 import { openHippoDb, closeHippoDb, getMeta, rethrowIfSqliteBlocked, setMeta, type DatabaseSyncLike } from './db.js';
 import {
-  EMBEDDING_MODEL_META_KEY, deleteOrphanVectors, hasStoredVectors, loadVectors, replaceAllVectors, storedVectorIds, upsertVectors,
+  EMBEDDING_MODEL_META_KEY, deleteOrphanVectors, hasStoredVectors, loadVectors, loadVectorViews, replaceAllVectors, storedVectorIds, upsertVectors,
 } from './db/vector-store.js';
 import { initializeParticle, savePhysicsState, loadPhysicsState, resetAllPhysicsState } from './db/physics-state.js';
 import { loadConfig } from './config.js';
@@ -214,6 +214,11 @@ function noteSkippedEmbedding(id: string): void {
  * Returns 0 for empty or mismatched vectors.
  */
 export function cosineSimilarity(a: number[], b: number[]): number {
+  return cosineOf(a, b);
+}
+
+/** `cosineSimilarity` over any indexable vectors; a Float32 view reads the same doubles as its number[] copy, so the score is the same. */
+export function cosineOf(a: ArrayLike<number>, b: ArrayLike<number>): number {
   if (a.length === 0 || b.length === 0 || a.length !== b.length) return 0;
 
   let dot = 0;
@@ -249,6 +254,11 @@ export function loadEmbeddingIndex(hippoRoot: string): Record<string, number[]> 
 /** Stored vectors for `ids` only. */
 export function loadStoredVectors(hippoRoot: string, ids: readonly string[]): Map<string, number[]> {
   return ids.length === 0 ? new Map() : withVectorDb(hippoRoot, (db) => loadVectors(db, ids));
+}
+
+/** `loadStoredVectors` as Float32 views, for a caller that only scores them. */
+export function loadStoredVectorViews(hippoRoot: string, ids: readonly string[]): Map<string, Float32Array> {
+  return ids.length === 0 ? new Map() : withVectorDb(hippoRoot, (db) => loadVectorViews(db, ids));
 }
 
 /** Replace every stored vector with `index`; `model` defaults to the stored index identity. */

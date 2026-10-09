@@ -1,5 +1,5 @@
 import type { MemoryEntry } from '../memory.js';
-import { cosineSimilarity, indexedModel, indexNeedsRebuild } from '../embeddings.js';
+import { cosineOf, indexedModel, indexNeedsRebuild } from '../embeddings.js';
 import type { VectorCandidateSpec } from '../store/search-rows.js';
 import { resolveEmbeddingProvider } from '../embedding-provider.js';
 import { rethrowIfSqliteBlocked } from '../db.js';
@@ -16,7 +16,7 @@ export interface VectorArm {
   entries: MemoryEntry[];
   addedRows: boolean;
   useEmbeddings: boolean;
-  embeddingIndex: Record<string, number[]>;
+  embeddingIndex: Record<string, ArrayLike<number>>;
   queryVector: number[];
 }
 
@@ -66,6 +66,11 @@ export async function resolveVectorArm(query: string, entries: MemoryEntry[], op
   return arm;
 }
 
+// Views when the store has them, so a search copies no vector; the number[] copies score the same.
+async function storedVectorsOf(store: HippoStore, reads: VectorReads, ids: readonly string[]): Promise<Map<string, ArrayLike<number>>> {
+  return store.vectorViews ? store.vectorViews.storedVectorViews(ids) : reads.storedVectors(ids);
+}
+
 async function fillVectorArm(arm: VectorArm, query: string, root: string, options: VectorArmOptions): Promise<void> {
   const provider = resolveEmbeddingProvider(root);
   if (!provider.isAvailable()) return;
@@ -77,7 +82,7 @@ async function fillVectorArm(arm: VectorArm, query: string, root: string, option
     return;
   }
   const spec = options.vectorCandidates;
-  const vectors = await reads.storedVectors(arm.entries.map((e) => e.id));
+  const vectors = await storedVectorsOf(store, reads, arm.entries.map((e) => e.id));
   // Only spend a (possibly paid, off-box) query embedding when there is a stored vector this search can use.
   if (vectors.size === 0 && !(spec !== undefined && index.hasVectors)) return;
   const [vec] = await provider.embed([query], 'query');
@@ -90,7 +95,7 @@ async function fillVectorArm(arm: VectorArm, query: string, root: string, option
   if (added.length > 0) {
     arm.addedRows = true;
     arm.entries = currentEntries([...arm.entries, ...added], options);
-    for (const [id, v] of await reads.storedVectors(added.map((e) => e.id))) vectors.set(id, v);
+    for (const [id, v] of await storedVectorsOf(store, reads, added.map((e) => e.id))) vectors.set(id, v);
   }
   arm.embeddingIndex = Object.fromEntries(vectors);
   arm.useEmbeddings = true;
@@ -110,7 +115,7 @@ export function denseScores(arm: VectorArm): DenseScores {
   for (let i = 0; i < n; i++) {
     const cached = arm.embeddingIndex[arm.entries[i].id];
     hadVec[i] = Boolean(cached && arm.queryVector.length > 0);
-    cosine[i] = hadVec[i] ? Math.max(0, cosineSimilarity(arm.queryVector, cached)) : 0;
+    cosine[i] = hadVec[i] ? Math.max(0, cosineOf(arm.queryVector, cached)) : 0;
   }
   return { cosine, hadVec };
 }

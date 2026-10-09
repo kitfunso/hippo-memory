@@ -14,37 +14,6 @@ import { openStore } from './open.js';
 // ---------------------------------------------------------------------------
 
 /**
- * Load summaries flagged dirty for the given tenant. Sorted by latest_at
- * DESC (NULLS LAST) so the rebuild cap (HIPPO_DAG_REBUILD_CAP, default 20)
- * takes the most-recently-changed summaries first.
- *
- * Returns full MemoryEntry shape via MEMORY_SELECT_COLUMNS + rowToEntry
- * (v28 fields are part of the standard read path).
- */
-export function loadDirtySummaries(
-  hippoRoot: string,
-  tenantId: string,
-): MemoryEntry[] {
-  assertTenantId('loadDirtySummaries', tenantId);
-  const db = openStore(hippoRoot);
-  try {
-    // SAFETY: this query selects exactly MEMORY_SELECT_COLUMNS, matching
-    // MemoryRow's field set.
-    const rows = db.prepare(`
-      SELECT ${MEMORY_SELECT_COLUMNS}
-        FROM memories
-       WHERE summary_dirty = 1
-         AND tenant_id = ?
-         AND kind != 'archived'
-       ORDER BY latest_at DESC NULLS LAST, id ASC
-    `).all(tenantId) as MemoryRow[];
-    return rows.map(rowToEntry);
-  } finally {
-    closeHippoDb(db);
-  }
-}
-
-/**
  * Mark a summary as dirty. Idempotent (re-marking dirty is a no-op + no
  * second audit row). Tenant-scoped to prevent cross-tenant writes via
  * parent-lookup. Called from invalidation.ts / writeEntry /
@@ -129,7 +98,7 @@ export function loadAllL2Summaries(hippoRoot: string): MemoryEntry[] {
 }
 
 /**
- * Host-wide variant of loadDirtySummaries. Iterates all tenants
+ * Dirty summaries, newest change first. Iterates all tenants
  * in one query so consolidate.ts (host-wide per L106-109) does not need a
  * per-tenant loop. Each returned MemoryEntry carries its own tenantId (via
  * rowToEntry), so per-summary children + rebuild UPDATE stay tenant-scoped.

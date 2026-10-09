@@ -5,6 +5,7 @@ import { loadConfig } from './config.js';
 import { execWithBusyRetry, HOOK_DB_WAIT_MS, scopedBusyWait, type DatabaseSyncLike } from './db.js';
 import { ledgerRoot, withLedgerDb, type LedgerRootOpts } from './ledger-db.js';
 import { errorMessage, log } from './log.js';
+import { firstPilotArmHash } from './store/token-ledger-rows.js';
 import { recordTokenUse } from './token-ledger.js';
 
 export type PilotArm = 'hippo' | 'holdout';
@@ -22,12 +23,7 @@ export function hashArm(sessionId: string, rateBp: number): PilotArm {
 
 /** The session's first stored arm, or null; never writes. Without `tenantId` any tenant's row counts, since on one machine a session has one arm. */
 export function readPilotArm(db: DatabaseSyncLike, sessionId: string, tenantId?: string): PilotArm | null {
-  const params = tenantId === undefined ? [sessionId] : [sessionId, tenantId];
-  // SAFETY: the SELECT names exactly this one column.
-  const row = db.prepare(
-    `SELECT block_hash FROM token_ledger WHERE session_id = ?${tenantId === undefined ? '' : ' AND tenant_id = ?'}
-     AND surface = 'pilot' AND event = 'arm' ORDER BY id LIMIT 1`,
-  ).get(...params) as { block_hash: string | null } | undefined;
+  const row = firstPilotArmHash(db, sessionId, tenantId);
   return row?.block_hash === 'holdout' || row?.block_hash === 'hippo' ? row.block_hash : null;
 }
 

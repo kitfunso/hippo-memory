@@ -5,7 +5,8 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { createRequire } from 'node:module';
-import { initStore } from '../src/store/open.js';
+import { initStore, openStore } from '../src/store/open.js';
+import { withRequestStoresSync } from '../src/db/request-stores.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { consolidate } from '../src/consolidate/sleep.js';
@@ -162,6 +163,41 @@ describe('store open fast path', () => {
 
     expect(openAndClose().some((sql) => DDL.test(sql))).toBe(true);
     withDb((db) => expect(getMeta(db, 'total_recalled', 'missing')).toBe('0'));
+  });
+});
+
+describe('one open reads the store once', () => {
+  const afterPragmas = (open: () => DatabaseSyncLike): string[] =>
+    captureStatements(() => closeHippoDb(open())).filter((sql) => !sql.startsWith('PRAGMA '));
+  const memoryRows = (db: DatabaseSyncLike): number =>
+    // SAFETY: COUNT(*) returns one row with the one aliased column.
+    Number((db.prepare('SELECT COUNT(*) AS c FROM memories').get() as { c: number }).c);
+
+  it('a current store with a memory opens on its PRAGMAs and the one probe, through openHippoDb and openStore', () => {
+    expect(afterPragmas(() => openHippoDb(root))).toHaveLength(1);
+    expect(afterPragmas(() => openStore(root))).toHaveLength(1);
+  });
+
+  it('a store emptied through another connection is re-read by the next openStore, which imports its markdown mirror again', () => {
+    closeHippoDb(openStore(root));
+    withDb((db) => db.exec('DELETE FROM memories'));
+
+    const db = openStore(root);
+    try {
+      expect(memoryRows(db)).toBe(1);
+    } finally {
+      closeHippoDb(db);
+    }
+  });
+
+  it('a request that empties the store on its own handle gets the same re-read from its next openStore', () => {
+    withRequestStoresSync(() => {
+      const handle = openStore(root);
+      expect(memoryRows(handle)).toBe(1);
+      handle.exec('DELETE FROM memories');
+
+      expect(memoryRows(openStore(root))).toBe(1);
+    });
   });
 });
 

@@ -13,7 +13,7 @@ import { fitBudget } from '../search/finalize.js';
 import { explainMatch } from '../search/explain.js';
 import { DEFAULT_RECALL_BUDGET, type SearchResult } from '../core/search-types.js';
 import { loadConfig } from '../config.js';
-import { estimateTokens } from '../token-ledger.js';
+import { estimateTokens } from '../util/token-text.js';
 import { dropHeldCopies } from '../same-text.js';
 import { isGlobalStoreRoot } from '../project-identity.js';
 import { detectScope } from '../scope.js';
@@ -21,7 +21,7 @@ import { getGlobalRoot } from '../shared.js';
 import * as api from '../api.js';
 import type { PlanningFallacyOutput } from '../predictions/planning-fallacy.js';
 import { detectAnchoring, hashQueryText, biasHintEnabled, snapshotRing } from '../recall-history.js';
-import { noteRecall, resetSessionRings, sessionRing, shownRecallRows } from '../api/recall-record.js';
+import { noteRecall, sessionRing, shownRecallRows } from '../api/recall-record.js';
 import { detectAvailabilityBias } from '../availability.js';
 import { resolveTenantId } from '../tenant.js';
 import { MAX_HOPS, DEFAULT_MAX_NEIGHBORS } from '../graph-recall.js';
@@ -51,13 +51,6 @@ import {
   boolFlag,
   flagIsTrue,
 } from './shared.js';
-
-// Per-process rings: a single-shot `hippo recall` starts empty, so anchoring only accumulates in long-lived
-// hosts (in-process loops, `hippo serve`, the MCP server).
-/** Test-only: reset the CLI recall rings. Call from beforeEach. */
-export function __resetSessionRecallHistoryCli(): void {
-  resetSessionRings('cli');
-}
 
 // JSON.stringify keeps quotes or parens in the matched phrase from blurring the line.
 function planningLine(p: PlanningFallacyOutput): string | null {
