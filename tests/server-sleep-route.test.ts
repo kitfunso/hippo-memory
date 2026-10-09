@@ -23,7 +23,7 @@ import type { Context } from '../src/api.js';
 import { remember } from '../src/api.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { createApiKey } from '../src/auth.js';
+import { createApiKey } from '../src/store/auth.js';
 import { presentConnectionsAsRemote } from './_helpers/listen.js';
 import { makeRoot } from './_helpers/make-root.js';
 

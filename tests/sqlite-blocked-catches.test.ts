@@ -9,7 +9,7 @@ import { SqliteBlockedError, withSqliteBlocked } from '../src/db.js';
 import { recordTokens } from '../src/api.js';
 import { recordMcpTokens } from '../src/mcp/request.js';
 import { strengthenRetrieved } from '../src/store/entry-writes.js';
-import { writeRecallTraceAtRoot } from '../src/recall-trace.js';
+import { writeRecallTraceAtRoot } from '../src/store/recall-trace.js';
 import { resolveIndexedEmbeddingModel } from '../src/embeddings.js';
 import { resolveVectorArm } from '../src/search/vector.js';
 import { physicsSearch } from '../src/search/physics-search.js';

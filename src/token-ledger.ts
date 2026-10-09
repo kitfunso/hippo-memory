@@ -26,7 +26,7 @@
 import { createHash } from 'node:crypto';
 import { open } from 'node:fs/promises';
 import type { DatabaseSyncLike } from './db.js';
-import type { JsonObject } from './working-memory.js';
+import type { JsonObject } from './store/working-memory.js';
 import { type JsonValue, isJsonString, isJsonObjectLiteral } from './json.js';
 import { DAY_MS } from './util/time.js';
 

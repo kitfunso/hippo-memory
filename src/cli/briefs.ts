@@ -10,7 +10,11 @@ import { buildGraphModel, renderGraphHtml, renderGraphCanvas, DEFAULT_VIEW_LIMIT
 import { resolveTenantId } from '../tenant.js';
 import { errorMessage, log } from '../log.js';
 import { printError } from './output.js';
-import { parseListLimit, parsePositiveId, requireInit, type CliFlags, boolFlag, stringFlag } from './shared.js';
+import { nonEmptyStringFlag, requireInit, type CliFlags, boolFlag, stringFlag } from './shared.js';
+import { closeObject, foundOrExit, idArgOrExit, listObjects, printLifecycleTail, type ObjectNames } from './object-verbs.js';
+
+const BRIEF: ObjectNames = { cmd: 'brief', noun: 'Project brief', idLabel: 'brief' };
+const NOTE: ObjectNames = { cmd: 'note', noun: 'Customer note', idLabel: 'note' };
 
 function printBriefRow(b: briefsModule.ProjectBrief): void {
   console.log(`#${b.id} [${b.status}] v${b.version} repo="${b.repo}" memory=${b.memoryId ?? '-'}`);
@@ -27,27 +31,13 @@ function briefUsage(): void {
 }
 
 function briefList(hippoRoot: string, tenantId: string, flags: CliFlags): void {
-  const statusRaw = flags['status'];
-  const status = typeof statusRaw === 'string' ? statusRaw.trim() : 'all';
-  const repoRaw = flags['repo'];
-  const repo = typeof repoRaw === 'string' && repoRaw.trim() ? repoRaw.trim() : undefined;
-  const limit = parseListLimit(flags);
-  const opts: briefsModule.ListProjectBriefsOpts = { limit, repo };
-  if (status !== 'all') {
-    if (!briefsModule.VALID_BRIEF_STATES.has(status as briefsModule.BriefStatus)) {
-      printError(`Invalid --status: "${status}". Must be one of: active | superseded | closed | all.`);
-      process.exit(1);
-    }
-    opts.status = status as briefsModule.BriefStatus;
-  }
-  const results = briefsModule.loadProjectBriefs(hippoRoot, tenantId, opts);
-  if (results.length === 0) {
-    console.log('No project briefs.');
-    return;
-  }
-  console.log(`Found ${results.length} project briefs:
-`);
-  for (const b of results) printBriefRow(b);
+  const repo = stringFlag(flags, 'repo')?.trim() || undefined;
+  listObjects(flags, {
+    plural: 'project briefs',
+    states: briefsModule.VALID_BRIEF_STATES,
+    load: (opts) => briefsModule.loadProjectBriefs(hippoRoot, tenantId, { ...opts, repo }),
+    printRow: printBriefRow,
+  });
 }
 
 function briefRefresh(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): void {
@@ -75,53 +65,29 @@ function briefRefresh(hippoRoot: string, tenantId: string, args: string[], flags
 }
 
 function briefGet(hippoRoot: string, tenantId: string, args: string[]): void {
-  const idRaw = args[1];
-  if (!idRaw) {
-    printError('Usage: hippo brief get <id>');
-    process.exit(1);
-  }
-  const id = parsePositiveId(idRaw, 'brief');
-  const b = briefsModule.loadProjectBriefById(hippoRoot, tenantId, id);
-  if (!b) {
-    printError(`Project brief ${id} not found.`);
-    process.exit(1);
-  }
+  const id = idArgOrExit(args, 'Usage: hippo brief get <id>', BRIEF.idLabel);
+  const b = foundOrExit(briefsModule.loadProjectBriefById(hippoRoot, tenantId, id), BRIEF.noun, id);
   console.log(`Project brief #${b.id}`);
   console.log(`  repo: ${b.repo}`);
   console.log(`  status: ${b.status}`);
   console.log(`  version: ${b.version}`);
   console.log(`  summary: ${b.summary}`);
-  if (b.changeSummary) console.log(`  change_summary: ${b.changeSummary}`);
-  if (b.supersededBy !== null) console.log(`  superseded_by: #${b.supersededBy}`);
-  if (b.supersededAt) console.log(`  superseded_at: ${b.supersededAt}`);
-  if (b.closedAt) console.log(`  closed_at: ${b.closedAt}`);
-  if (b.memoryId) console.log(`  memory: ${b.memoryId}`);
-  console.log(`  created: ${b.createdAt}`);
+  printLifecycleTail(b);
 }
 
 function briefSupersede(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): void {
-  const idRaw = args[1];
-  if (!idRaw) {
-    printError('Usage: hippo brief supersede <id> --summary "<text>" [--change "<summary>"]');
-    process.exit(1);
-  }
-  const id = parsePositiveId(idRaw, 'brief');
-  const summaryRaw = flags['summary'];
-  if (typeof summaryRaw !== 'string' || !summaryRaw.trim()) {
+  const id = idArgOrExit(args, 'Usage: hippo brief supersede <id> --summary "<text>" [--change "<summary>"]', BRIEF.idLabel);
+  const summaryRaw = stringFlag(flags, 'summary');
+  if (!summaryRaw?.trim()) {
     printError('hippo brief supersede requires --summary "<text>" for the new version.');
     process.exit(1);
   }
-  const existing = briefsModule.loadProjectBriefById(hippoRoot, tenantId, id);
-  if (!existing) {
-    printError(`Project brief ${id} not found.`);
-    process.exit(1);
-  }
-  const changeRaw = flags['change'];
+  const existing = foundOrExit(briefsModule.loadProjectBriefById(hippoRoot, tenantId, id), BRIEF.noun, id);
   try {
     const created = briefsModule.saveProjectBrief(hippoRoot, tenantId, {
       repo: existing.repo,
       summary: summaryRaw,
-      changeSummary: typeof changeRaw === 'string' && changeRaw ? changeRaw : undefined,
+      changeSummary: nonEmptyStringFlag(flags, 'change'),
       supersedesBriefId: id,
       extraTags: extractPathTags(process.cwd()),
     });
@@ -134,14 +100,7 @@ function briefSupersede(hippoRoot: string, tenantId: string, args: string[], fla
 }
 
 function briefClose(hippoRoot: string, tenantId: string, args: string[]): void {
-  const idRaw = args[1];
-  if (!idRaw) {
-    printError('Usage: hippo brief close <id>');
-    process.exit(1);
-  }
-  const id = parsePositiveId(idRaw, 'brief');
-  const closed = briefsModule.closeProjectBrief(hippoRoot, tenantId, id);
-  console.log(`Project brief #${closed.id} closed.`);
+  closeObject(args, BRIEF, (id) => briefsModule.closeProjectBrief(hippoRoot, tenantId, id));
 }
 
 function briefCreate(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): void {
@@ -149,8 +108,8 @@ function briefCreate(hippoRoot: string, tenantId: string, args: string[], flags:
   // Default subcommand: new (create). Accept both `brief new "<repo>"` and the
   // bare `brief "<repo>"` form: for the `new` keyword the repo is args[1].
   const repo = subcommand === 'new' ? (args[1] ?? '') : subcommand;
-  const summaryRaw = flags['summary'];
-  if (!repo || typeof summaryRaw !== 'string' || !summaryRaw.trim()) {
+  const summaryRaw = stringFlag(flags, 'summary');
+  if (!repo || !summaryRaw?.trim()) {
     briefUsage();
     process.exit(1);
   }
@@ -298,76 +257,39 @@ export function cmdGraph(
 }
 
 function noteList(hippoRoot: string, tenantId: string, flags: CliFlags): void {
-  const statusRaw = flags['status'];
-  const status = typeof statusRaw === 'string' ? statusRaw.trim() : 'all';
-  const customerRaw = flags['customer'];
-  const customer = typeof customerRaw === 'string' && customerRaw.trim() ? customerRaw.trim() : undefined;
-  const limit = parseListLimit(flags);
-  const opts: customerNotesModule.ListCustomerNotesOpts = { limit, customer };
-  if (status !== 'all') {
-    if (!customerNotesModule.VALID_NOTE_STATES.has(status as customerNotesModule.NoteStatus)) {
-      printError(`Invalid --status: "${status}". Must be one of: active | superseded | closed | all.`);
-      process.exit(1);
-    }
-    opts.status = status as customerNotesModule.NoteStatus;
-  }
-  const results = customerNotesModule.loadCustomerNotes(hippoRoot, tenantId, opts);
-  if (results.length === 0) {
-    console.log('No customer notes.');
-    return;
-  }
-  console.log(`Found ${results.length} customer notes:\n`);
-  for (const n of results) printNoteRow(n);
+  const customer = stringFlag(flags, 'customer')?.trim() || undefined;
+  listObjects(flags, {
+    plural: 'customer notes',
+    states: customerNotesModule.VALID_NOTE_STATES,
+    load: (opts) => customerNotesModule.loadCustomerNotes(hippoRoot, tenantId, { ...opts, customer }),
+    printRow: printNoteRow,
+  });
 }
 
 function noteGet(hippoRoot: string, tenantId: string, args: string[]): void {
-  const idRaw = args[1];
-  if (!idRaw) {
-    printError('Usage: hippo note get <id>');
-    process.exit(1);
-  }
-  const id = parsePositiveId(idRaw, 'note');
-  const n = customerNotesModule.loadCustomerNoteById(hippoRoot, tenantId, id);
-  if (!n) {
-    printError(`Customer note ${id} not found.`);
-    process.exit(1);
-  }
+  const id = idArgOrExit(args, 'Usage: hippo note get <id>', NOTE.idLabel);
+  const n = foundOrExit(customerNotesModule.loadCustomerNoteById(hippoRoot, tenantId, id), NOTE.noun, id);
   console.log(`Customer note #${n.id}`);
   console.log(`  customer: ${n.customer}`);
   console.log(`  status: ${n.status}`);
   console.log(`  version: ${n.version}`);
   console.log(`  note: ${n.note}`);
-  if (n.changeSummary) console.log(`  change_summary: ${n.changeSummary}`);
-  if (n.supersededBy !== null) console.log(`  superseded_by: #${n.supersededBy}`);
-  if (n.supersededAt) console.log(`  superseded_at: ${n.supersededAt}`);
-  if (n.closedAt) console.log(`  closed_at: ${n.closedAt}`);
-  if (n.memoryId) console.log(`  memory: ${n.memoryId}`);
-  console.log(`  created: ${n.createdAt}`);
+  printLifecycleTail(n);
 }
 
 function noteSupersede(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): void {
-  const idRaw = args[1];
-  if (!idRaw) {
-    printError('Usage: hippo note supersede <id> --text "<note>" [--change "<summary>"]');
-    process.exit(1);
-  }
-  const id = parsePositiveId(idRaw, 'note');
-  const textRaw = flags['text'];
-  if (typeof textRaw !== 'string' || !textRaw.trim()) {
+  const id = idArgOrExit(args, 'Usage: hippo note supersede <id> --text "<note>" [--change "<summary>"]', NOTE.idLabel);
+  const textRaw = stringFlag(flags, 'text');
+  if (!textRaw?.trim()) {
     printError('hippo note supersede requires --text "<note>" for the new version.');
     process.exit(1);
   }
-  const existing = customerNotesModule.loadCustomerNoteById(hippoRoot, tenantId, id);
-  if (!existing) {
-    printError(`Customer note ${id} not found.`);
-    process.exit(1);
-  }
-  const changeRaw = flags['change'];
+  const existing = foundOrExit(customerNotesModule.loadCustomerNoteById(hippoRoot, tenantId, id), NOTE.noun, id);
   try {
     const created = customerNotesModule.saveCustomerNote(hippoRoot, tenantId, {
       customer: existing.customer,
       note: textRaw,
-      changeSummary: typeof changeRaw === 'string' && changeRaw ? changeRaw : undefined,
+      changeSummary: nonEmptyStringFlag(flags, 'change'),
       supersedesNoteId: id,
       extraTags: extractPathTags(process.cwd()),
     });
@@ -380,14 +302,7 @@ function noteSupersede(hippoRoot: string, tenantId: string, args: string[], flag
 }
 
 function noteClose(hippoRoot: string, tenantId: string, args: string[]): void {
-  const idRaw = args[1];
-  if (!idRaw) {
-    printError('Usage: hippo note close <id>');
-    process.exit(1);
-  }
-  const id = parsePositiveId(idRaw, 'note');
-  const closed = customerNotesModule.closeCustomerNote(hippoRoot, tenantId, id);
-  console.log(`Customer note #${closed.id} closed.`);
+  closeObject(args, NOTE, (id) => customerNotesModule.closeCustomerNote(hippoRoot, tenantId, id));
 }
 
 export function cmdCustomerNote(
@@ -406,8 +321,8 @@ export function cmdCustomerNote(
   // Default subcommand: new (create). Accept both `note new "<customer>"` and the
   // bare `note "<customer>"` form: for the `new` keyword the customer is args[1].
   const customer = subcommand === 'new' ? (args[1] ?? '') : subcommand;
-  const textRaw = flags['text'];
-  if (!customer || typeof textRaw !== 'string' || !textRaw.trim()) {
+  const textRaw = stringFlag(flags, 'text');
+  if (!customer || !textRaw?.trim()) {
     noteUsage();
     process.exit(1);
   }

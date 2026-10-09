@@ -16,12 +16,12 @@
  */
 
 import { createHash } from 'node:crypto';
-import { openHippoDb, closeHippoDb, rethrowIfSqliteBlocked, type DatabaseSyncLike } from './db.js';
-import type { RerankStep } from './core/search-types.js';
-import { DELIVERY_LEDGER_VERSION, isBoundaryEvent, type DeliveryEventInput } from './delivery-recorder.js';
-import { errorMessage, log } from './log.js';
-import { numberedEventTimes } from './store/delivery-event-reads.js';
-import { DAY_MS } from './util/time.js';
+import { openHippoDb, closeHippoDb, rethrowIfSqliteBlocked, type DatabaseSyncLike } from '../db.js';
+import type { RerankStep } from '../core/search-types.js';
+import { DELIVERY_LEDGER_VERSION, isBoundaryEvent, type DeliveryEventInput } from '../delivery-recorder.js';
+import { errorMessage, log } from '../log.js';
+import { DAY_MS } from '../util/time.js';
+import { numberedEventTimes } from './delivery-event-reads.js';
 
 /** One ranked result to persist alongside its trace row. */
 export interface RecallTraceResultInput {

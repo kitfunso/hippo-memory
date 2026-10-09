@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { apiKeyVerifyStats, createApiKey, verifyApiKeyCached, type ApiKeyRecord, type CreateApiKeyResult } from '../src/auth.js';
+import { apiKeyVerifyStats, createApiKey, verifyApiKeyCached, type ApiKeyRecord, type CreateApiKeyResult } from '../src/store/auth.js';
 import { ownerOrSubject, type Actor } from '../src/api.js';
 import { ownerOrSubject as exportedOwnerOrSubject, serve, sqliteStore, type AuthResolver, type HippoStore, type ResolvedBearer, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';

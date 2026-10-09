@@ -3,7 +3,7 @@ import { envRequireAuth } from '../env.js';
 import type { IncomingMessage } from 'node:http';
 import { resolveTenantId } from '../tenant.js';
 import { log } from '../log.js';
-import { API_KEY_PREFIX, verifyApiKeyCached } from '../auth.js';
+import { API_KEY_PREFIX, verifyApiKeyCached } from '../store/auth.js';
 import { type Actor, type Context, ownerOrSubject } from '../api.js';
 import { HttpError, isCrossSite, isHeaderString, LOOPBACK_HOST_HEADER, MAX_ID_LEN } from '../http-util.js';
 import { clientLimitKey } from './client-ip.js';

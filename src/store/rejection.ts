@@ -12,8 +12,8 @@
  */
 
 import { createHash } from 'node:crypto';
-import type { DatabaseSyncLike } from './db.js';
-import { BadRequestError } from './api-errors.js';
+import type { DatabaseSyncLike } from '../db.js';
+import { BadRequestError } from '../api-errors.js';
 
 /**
  * Normalize content for rejection-digest comparisons: Unicode NFC →

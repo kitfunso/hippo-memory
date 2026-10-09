@@ -17,12 +17,12 @@
  * tenant-scoped entry points are api.listDormant / restoreDormant /
  * forgetDormant.
  */
-import type { DatabaseSyncLike } from './db.js';
-import type { MemoryEntry } from './memory.js';
-import type { SqlFragment } from './recall-scope.js';
+import type { DatabaseSyncLike } from '../db.js';
+import type { MemoryEntry } from '../memory.js';
+import type { SqlFragment } from '../recall-scope.js';
 import { rejectionDigest } from './rejection.js';
-import { escapeLike } from './escape.js';
-import { warnDamagedColumn } from './util/stored-json.js';
+import { escapeLike } from '../escape.js';
+import { warnDamagedColumn } from '../util/stored-json.js';
 
 /** Why a memory went dormant: sleep's decay pass, an imported agent memory whose note was deleted, `hippo projects repair` splitting a two-project merge, or `hippo audit repair` setting aside an automatic memory with a certain defect. */
 export type DormantReason = 'decay' | 'source-deleted' | 'project-repair' | 'quality-repair';

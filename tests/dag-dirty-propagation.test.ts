@@ -16,7 +16,7 @@ import { deleteEntry, batchWriteAndDelete } from '../src/store/delete-and-batch.
 import { loadDirtySummaries } from '../src/store/summaries.js';
 import { openHippoDb } from '../src/db.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { archiveRawMemory } from '../src/raw-archive.js';
+import { archiveRawMemory } from '../src/store/raw-archive.js';
 import { invalidateMatching } from '../src/invalidation.js';
 import { supersede, type Context } from '../src/api.js';
 

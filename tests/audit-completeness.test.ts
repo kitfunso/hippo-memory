@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execSync } from 'node:child_process';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
-import { queryAuditEvents } from '../src/audit.js';
-import { archiveRawMemory } from '../src/raw-archive.js';
+import { queryAuditEvents } from '../src/store/audit.js';
+import { archiveRawMemory } from '../src/store/raw-archive.js';
 
 const repoRoot = resolve(__dirname, '..');
 const cli = resolve(repoRoot, 'dist', 'cli.js');

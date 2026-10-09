@@ -1,4 +1,4 @@
-// The delivery ledger writer (src/recall-trace.ts) and the recorder's row building, on a real SQLite store.
+// The delivery ledger writer (src/store/recall-trace.ts) and the recorder's row building, on a real SQLite store.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -10,7 +10,7 @@ import {
   writeDeliveryEventAtRoot,
   writeDeliveryEventOnHandle,
   DELIVERY_LEDGER_RETENTION_DAYS,
-} from '../src/recall-trace.js';
+} from '../src/store/recall-trace.js';
 import {
   createDeliveryRecorder,
   DELIVERY_REJECTED_ROW_CAP,

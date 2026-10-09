@@ -4,7 +4,7 @@ import * as path from 'path';
 import { readEntry } from '../store/entry-reads.js';
 import { listMemoryConflicts, resolveConflict } from '../store/conflicts.js';
 import { rejectValue, unrejectValue, listRejectionsForTenant } from '../reject-flow.js';
-import { RejectedValueError } from '../rejection.js';
+import { RejectedValueError } from '../store/rejection.js';
 import { loadConfig } from '../config.js';
 import { isGitRepo } from '../autolearn.js';
 import { invalidateMatching, InvalidationTarget } from '../invalidation.js';

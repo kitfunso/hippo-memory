@@ -6,7 +6,7 @@ import { getContext } from '../src/api.js';
 import { containerId, containerPrefix } from '../src/agent-memories/source.js';
 import { importAtSessionEnd } from '../src/agent-memories/sync.js';
 import { saveItems } from '../src/compaction-record.js';
-import { listDormantSnapshots } from '../src/dormant.js';
+import { listDormantSnapshots } from '../src/store/dormant.js';
 import { runDoctor } from '../src/doctor.js';
 import { createMemory, type MemoryEntry } from '../src/memory.js';
 import { mergeProjects, planProjectRepair, repairOnceOnSleep, repairProjects } from '../src/project-merge.js';

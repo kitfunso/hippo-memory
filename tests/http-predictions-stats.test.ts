@@ -11,7 +11,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { serve, type ServerHandle } from '../src/server.js';
-import { createApiKey, type CreateApiKeyResult } from '../src/auth.js';
+import { createApiKey, type CreateApiKeyResult } from '../src/store/auth.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { savePrediction, closePrediction, type PredictionBaserate } from '../src/store/predictions.js';
 import { makeRoot } from './_helpers/make-root.js';

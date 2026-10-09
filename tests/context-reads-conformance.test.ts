@@ -1,7 +1,7 @@
 // ContextReads answers alike on hippo.db and on a store held in memory: the same values, the same errors, no audit row.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { listAuditEventsAfter } from '../src/audit.js';
+import { listAuditEventsAfter } from '../src/store/audit.js';
 import { closeHippoDb, openHippoDb } from '../src/db.js';
 import type {
   AmbientCandidateRequest, AmbientLoadResult, AmbientStoreFilter, AmbientTallies, AuditEvent, ContinuityKey, MemoryEntry,

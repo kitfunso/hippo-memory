@@ -1,13 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { appendAuditEvent } from '../audit.js';
+import { appendAuditEvent } from '../store/audit.js';
 import { withBackup } from '../db/backup.js';
 import { assertSqliteAllowed } from '../db/open.js';
 import { DatabaseSync, type DatabaseSyncLike } from '../db/sqlite.js';
 import { getMeta, pragmaUserVersion, setMeta } from '../db/meta.js';
 import { tableColumns } from '../db/tables.js';
 import { assertBinaryCompatible } from '../db/migrate.js';
-import { insertDormantRow, listDormantSnapshots } from '../dormant.js';
+import { insertDormantRow, listDormantSnapshots } from '../store/dormant.js';
 import { calculateStrength, canAutoDelete, type MemoryEntry } from '../memory.js';
 import { assessAutomaticMemory, BUNDLE_HEADER, isAutomaticEntry, isCertainReason, type AutomaticMemoryDefect } from '../memory-quality.js';
 import { heldTexts } from '../same-text.js';

@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { spawn, spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import { expect } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db.js';
-import { readDeliveryEvents, type DeliveryEventRow } from '../../src/recall-trace.js';
+import { readDeliveryEvents, type DeliveryEventRow } from '../../src/store/recall-trace.js';
 import { initStore } from '../../src/store/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/memory.js';

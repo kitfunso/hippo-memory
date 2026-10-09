@@ -30,10 +30,10 @@ import { saveCustomerNote } from '../src/customer-notes.js';
 import { savePrediction } from '../src/store/predictions.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { consolidate } from '../src/consolidate/sleep.js';
-import { insertDormantRow } from '../src/dormant.js';
+import { insertDormantRow } from '../src/store/dormant.js';
 import { loadConfig } from '../src/config.js';
 import { createMemory, Layer, calculateStrength, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/memory.js';
-import { RejectedValueError, rejectionDigest, insertRejectedValue } from '../src/rejection.js';
+import { RejectedValueError, rejectionDigest, insertRejectedValue } from '../src/store/rejection.js';
 import * as api from '../src/api.js';
 import { WRITE_BUDGET } from '../src/write-budget.js';
 

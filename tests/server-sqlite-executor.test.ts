@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createApiKey } from '../src/auth.js';
+import { createApiKey } from '../src/store/auth.js';
 import { closeHippoDb, getHippoDbPath, openHippoDb, type DatabaseSyncLike } from '../src/db.js';
 import type { JsonValue } from '../src/json.js';
 import { log } from '../src/log.js';

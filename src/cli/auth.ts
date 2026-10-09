@@ -1,7 +1,7 @@
 // `hippo auth`: create, list, revoke and scope API keys.
 
 import { openHippoDb, closeHippoDb } from '../db.js';
-import { listApiKeys, type ApiKeyListItem } from '../auth.js';
+import { listApiKeys, type ApiKeyListItem } from '../store/auth.js';
 import * as api from '../api.js';
 import { resolveTenantId } from '../tenant.js';
 import { printError } from './output.js';

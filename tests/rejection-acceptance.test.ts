@@ -27,14 +27,14 @@ import { rebuildIndex } from '../src/store/index-and-stats.js';
 import { appendSessionEvent } from '../src/store/sessions.js';
 import { Layer} from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { queryAuditEvents } from '../src/audit.js';
+import { queryAuditEvents } from '../src/store/audit.js';
 import {
   RejectedValueError,
   rejectionDigest,
   normalizeValueForRejection,
   insertRejectedValue,
   findRejectedValue,
-} from '../src/rejection.js';
+} from '../src/store/rejection.js';
 import { cmdCapture } from '../src/capture/command.js';
 import { syncGlobalToLocal, autoShare } from '../src/shared.js';
 import * as api from '../src/api.js';

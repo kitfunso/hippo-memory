@@ -23,7 +23,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { queryAuditEvents } from '../src/audit.js';
+import { queryAuditEvents } from '../src/store/audit.js';
 import { remember, sleep, getContext, type Context } from '../src/api.js';
 
 // The 'consolidate' audit op's metadata is always the flat scalar phase-counter

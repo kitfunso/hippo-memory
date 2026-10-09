@@ -4,7 +4,7 @@ import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../db.js';
 import { ConflictError, NotFoundError } from '../api-errors.js';
 import { stampOriginProject } from '../store/entry-row.js';
 import { createSuccessor, type MemoryEntry } from '../memory.js';
-import { appendAuditEvent } from '../audit.js';
+import { appendAuditEvent } from '../store/audit.js';
 import { promoteToGlobal } from '../shared.js';
 import { loadConfig } from '../config.js';
 import { andThen, notPorted, onStore } from './on-store.js';

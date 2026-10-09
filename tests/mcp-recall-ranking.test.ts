@@ -9,7 +9,7 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, type CreateMemoryOptions, type MemoryEntry } from '../src/memory.js';
 import { handleMcpRequest, __resetSessionRecallHistoryMcp, type McpContext, type McpResponse } from '../src/mcp/server.js';
-import { pushGoal } from '../src/goals.js';
+import { pushGoal } from '../src/store/goals.js';
 import { saveActiveTaskSnapshot, appendSessionEvent } from '../src/store/sessions.js';
 import { saveEmbeddingIndex, saveStoredEmbeddingModel } from '../src/embeddings.js';
 import { resolveEmbeddingProvider } from '../src/embedding-provider.js';

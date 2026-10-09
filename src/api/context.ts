@@ -15,7 +15,7 @@ import { estimateTokens } from '../token-ledger.js';
 import { markRetrieved, type MemoryEntry, COMPACTION_MEMORY_TAG } from '../memory.js';
 import { isWorthSurfacing } from '../memory-quality.js';
 import { getGlobalRoot } from '../shared.js';
-import type { RecallTraceInput } from '../recall-trace.js';
+import type { RecallTraceInput } from '../store/recall-trace.js';
 import { evalNow } from '../ablation.js';
 import { dropHeldCopies } from '../same-text.js';
 import { BadRequestError } from '../api-errors.js';

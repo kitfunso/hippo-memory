@@ -20,7 +20,7 @@ import { readEntry, loadAllEntries } from '../store/entry-reads.js';
 import { loadNewestEntries, schemaFitInStore } from '../store/candidates.js';
 import { updateStats } from '../store/index-and-stats.js';
 import { listMemoryConflicts } from '../store/conflicts.js';
-import { RejectedValueError } from '../rejection.js';
+import { RejectedValueError } from '../store/rejection.js';
 import { renderTraceContent, parseSteps } from '../trace.js';
 import { embedMemory } from '../embeddings.js';
 import { loadConfig, type HippoConfig } from '../config.js';

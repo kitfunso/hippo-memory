@@ -3,9 +3,9 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { serve, type ServerHandle } from '../src/server.js';
-import { createApiKey, listApiKeys, type CreateApiKeyResult } from '../src/auth.js';
+import { createApiKey, listApiKeys, type CreateApiKeyResult } from '../src/store/auth.js';
 import { closeHippoDb, openHippoDb } from '../src/db.js';
-import { queryAuditEvents } from '../src/audit.js';
+import { queryAuditEvents } from '../src/store/audit.js';
 import { recordQuarantine } from '../src/quarantine.js';
 import * as api from '../src/api.js';
 import { loadDecisions, saveDecision } from '../src/decisions.js';

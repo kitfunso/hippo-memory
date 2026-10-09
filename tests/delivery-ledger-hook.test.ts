@@ -9,7 +9,7 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { readDeliveryEvents, type DeliveryEventRow } from '../src/recall-trace.js';
+import { readDeliveryEvents, type DeliveryEventRow } from '../src/store/recall-trace.js';
 import type { DeliveryFault } from '../src/delivery-recorder.js';
 import { blockHash, estimateTokens } from '../src/token-ledger.js';
 import type { HippoConfig } from '../src/config.js';

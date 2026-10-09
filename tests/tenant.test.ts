@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { createApiKey } from '../src/auth.js';
+import { createApiKey } from '../src/store/auth.js';
 import { resolveTenantId } from '../src/tenant.js';
 
 describe('resolveTenantId', () => {

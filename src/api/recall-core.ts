@@ -1,10 +1,10 @@
 // The CLI ranking core as a ranker of retrieve(): rank, let the caller pick the list it shows, then record that list once.
 
 import { ForbiddenError } from '../api-errors.js';
-import { reportAuditWriteFailure, type AppendAuditOpts } from '../audit.js';
+import { reportAuditWriteFailure, type AppendAuditOpts } from '../store/audit.js';
 import { decidePlanningFallacy, detectPlanningClaim, type PlanningFallacyDecision } from '../predictions/planning-fallacy.js';
 import { rankRecall, type RankRecallResult } from '../recall-pipeline.js';
-import { writeRecallTraceAtRoot } from '../recall-trace.js';
+import { writeRecallTraceAtRoot } from '../store/recall-trace.js';
 import type { SearchResult } from '../core/search-types.js';
 import { saveIndex } from '../store/index-and-stats.js';
 import { sqliteStore, type HippoStore, type RecallWrites } from '../store-port.js';

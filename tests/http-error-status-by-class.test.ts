@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { createApiKey } from '../src/auth.js';
+import { createApiKey } from '../src/store/auth.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../src/api-errors.js';

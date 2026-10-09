@@ -17,7 +17,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { loadDirtySummaries, markSummaryDirty } from '../src/store/summaries.js';
 import { openHippoDb } from '../src/db.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { queryAuditEvents } from '../src/audit.js';
+import { queryAuditEvents } from '../src/store/audit.js';
 
 describe('v28 schema migration + dirty-flag plumbing', () => {
   let hippoRoot: string;
