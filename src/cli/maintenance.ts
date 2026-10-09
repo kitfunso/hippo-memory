@@ -7,7 +7,6 @@ import { embedAll } from '../store/embeddings/index.js';
 import { resolveEmbeddingProvider, type EmbeddingProvider } from '../store/embeddings/provider.js';
 import { loadEmbeddingIndex, resetStoredParticles } from '../store/vector-index.js';
 import { loadConfig } from '../core/config.js';
-import { resolveTenantId } from '../store/tenant.js';
 import { refineStore } from './refine-llm.js';
 import { printError } from './output.js';
 import { boolFlag, type CommandContext } from './flag-values.js';
@@ -18,7 +17,7 @@ const MAX_FAILED_SHOWN = 5;
 const MAX_PAIRS_SHOWN = 15;
 const PAIR_PREVIEW_CHARS = 90;
 
-export async function handleRefine({ hippoRoot, flags }: CommandContext): Promise<void> {
+export async function handleRefine({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
 
   const apiKey = envAnthropicApiKey();
@@ -39,7 +38,7 @@ export async function handleRefine({ hippoRoot, flags }: CommandContext): Promis
     limit,
     dryRun,
     all,
-    tenantId: resolveTenantId({}),
+    tenantId,
   });
 
   if (asJson) {

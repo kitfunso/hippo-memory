@@ -14,7 +14,7 @@ import ts from 'typescript';
 const BASELINE = '.store-port-baseline.json';
 const OPENERS = new Set(['openHippoDb', 'openHippoDbReadOnly', 'openStore', 'onHandle']);
 const TWIN_SUFFIX = /(ThroughStore|OnHippoDb|UnderStore|OnStore)$/;
-const NUMBERS = ['openersOutside', 'openersInCli', 'storeBranches', 'routesWithoutStore', 'sqliteOnlyRoutes', 'routesOnLoop', 'twinFunctions', 'sqlOutside', 'txLiterals'];
+const NUMBERS = ['openersOutside', 'openersInCli', 'storeBranches', 'routesWithoutStore', 'sqliteOnlyRoutes', 'routesOnLoop', 'twinFunctions', 'sqlOutside', 'txLiterals', 'tenantResolvesInCli'];
 // Routes dispatched outside V1_ROUTES. Named here so the count cannot read 0 while they answer on the server thread; a name leaves when its route does.
 const OFF_TABLE_ROUTES = ['POST /mcp', 'GET /mcp/stream', 'POST /v1/connectors/slack/events', 'POST /v1/connectors/github/events', 'GET /health', 'GET /ready', 'POST add-on routes'];
 const TX_OWNER = 'src/db/busy.ts';
@@ -101,6 +101,17 @@ function countTxLiterals(sf) {
   const visit = (node) => {
     const literal = ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isTemplateHead(node);
     if (literal && node.text.trim().startsWith('BEGIN')) n++;
+    ts.forEachChild(node, visit);
+  };
+  visit(sf);
+  return n;
+}
+
+/** Calls of `resolveTenantId(`: the CLI resolves its tenant once, at dispatch, and hands it down. */
+function countTenantResolves(sf) {
+  let n = 0;
+  const visit = (node) => {
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'resolveTenantId') n++;
     ts.forEachChild(node, visit);
   };
   visit(sf);
@@ -211,7 +222,7 @@ function localMethods(sf) {
 
 /** All numbers plus the per-file opener and prepare counts for src/, keys sorted, and the SqliteLocal method names. */
 function measure() {
-  const out = { openersOutside: 0, openersInCli: 0, storeBranches: 0, routesWithoutStore: 0, sqliteOnlyRoutes: 0, routesOnLoop: 0, twinFunctions: 0, sqlOutside: 0, txLiterals: 0 };
+  const out = { openersOutside: 0, openersInCli: 0, storeBranches: 0, routesWithoutStore: 0, sqliteOnlyRoutes: 0, routesOnLoop: 0, twinFunctions: 0, sqlOutside: 0, txLiterals: 0, tenantResolvesInCli: 0 };
   const byFile = {};
   const sqlByFile = {};
   let sqliteLocalMethods = [];
@@ -232,6 +243,7 @@ function measure() {
       if (prepares > 0) sqlByFile[file] = prepares;
     }
     if (file !== TX_OWNER) out.txLiterals += countTxLiterals(sf);
+    if (file.startsWith('src/cli/')) out.tenantResolvesInCli += countTenantResolves(sf);
     if (file.startsWith('src/api/')) out.storeBranches += countStoreBranches(sf);
     out.twinFunctions += countTwins(sf);
     if (file !== CARRIER_OWNER && usesCarrier(sf)) carrierFilesList.push(file);

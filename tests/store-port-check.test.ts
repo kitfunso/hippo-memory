@@ -18,6 +18,7 @@ type Counts = {
   twinFunctions: number;
   sqlOutside: number;
   txLiterals: number;
+  tenantResolvesInCli: number;
   openersOutsideByFile: Record<string, number>;
   sqlOutsideByFile: Record<string, number>;
   sqliteLocalMethods: string[];
@@ -37,6 +38,7 @@ const zero: Counts = {
   twinFunctions: 0,
   sqlOutside: 0,
   txLiterals: 0,
+  tenantResolvesInCli: 0,
   openersOutsideByFile: {},
   sqlOutsideByFile: {},
   sqliteLocalMethods: [],
@@ -204,6 +206,16 @@ describe('check-store-port.mjs', () => {
       expect(r.stderr).toContain('src/a.ts: new -> 1');
       expect(r.stderr).toContain('sqlOutside: 0 -> 1');
       expect(r.stderr).not.toContain('src/store/b.ts');
+    });
+  });
+
+  it('counts resolveTenantId calls under src/cli/ only, not the import or other folders', () => {
+    const call = "import { resolveTenantId } from './t.js';\nexport const f = () => resolveTenantId({});\n";
+    withFixture({ 'src/cli/a.ts': call, 'src/cli.ts': call, 'src/api/b.ts': call }, { tenantResolvesInCli: 0 }, ({ run }) => {
+      expect(list(run).tenantResolvesInCli).toBe('1');
+      const r = run();
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain('tenantResolvesInCli: 0 -> 1');
     });
   });
 

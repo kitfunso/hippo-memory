@@ -3,7 +3,7 @@
 import { DEFAULT_TENANT_ID, envHippoSessionId } from '../util/env.js';
 import type { PolicyType } from '../store/goals.js';
 import * as api from '../api/index.js';
-import { resolveTenantId } from '../store/tenant.js';
+import { cliApiContext } from './api-context.js';
 import { printError } from './output.js';
 import { type CliFlags, boolFlag, flagIsTrue, stringFlag, type CommandContext } from './flag-values.js';
 
@@ -23,7 +23,7 @@ function sanitizeGoalName(s: string): string {
   return s.replace(/[\x00-\x1f\x7f]/g, '?');
 }
 
-function resolveGoalSession(flags: CliFlags): { sessionId: string; tenantId: string } {
+function resolveGoalSession(flags: CliFlags, defaultTenantId: string): { sessionId: string; tenantId: string } {
   const sessionId = (
     flags['session-id'] !== undefined
       ? String(flags['session-id'])
@@ -36,7 +36,7 @@ function resolveGoalSession(flags: CliFlags): { sessionId: string; tenantId: str
   const tenantId = (
     flags['tenant-id'] !== undefined
       ? String(flags['tenant-id'])
-      : resolveTenantId({})
+      : defaultTenantId
   ).trim() || DEFAULT_TENANT_ID;
   return { sessionId, tenantId };
 }
@@ -70,7 +70,7 @@ function readGoalLevel(flags: CliFlags): number | undefined {
   return parsed;
 }
 
-function cmdGoalPush(hippoRoot: string, args: string[], flags: CliFlags): void {
+function cmdGoalPush(hippoRoot: string, defaultTenantId: string, args: string[], flags: CliFlags): void {
   const rawName = args.join(' ').trim();
   if (!rawName) {
     printError('Usage: hippo goal push <name> [--policy <type>] [--success "<condition>"] [--level N] [--parent <goalId>]');
@@ -81,7 +81,7 @@ function cmdGoalPush(hippoRoot: string, args: string[], flags: CliFlags): void {
   if (name !== rawName) {
     printError('note: stripped control characters from goal name');
   }
-  const { sessionId, tenantId } = resolveGoalSession(flags);
+  const { sessionId, tenantId } = resolveGoalSession(flags, defaultTenantId);
 
   const policy = readGoalPolicy(flags);
 
@@ -101,7 +101,7 @@ function cmdGoalPush(hippoRoot: string, args: string[], flags: CliFlags): void {
   }
   const parentGoalId = stringFlag(flags, 'parent');
 
-  const goal = api.goalPush(goalContext(hippoRoot, tenantId), {
+  const goal = api.goalPush(cliApiContext(hippoRoot, tenantId), {
     sessionId,
     goalName: name,
     level,
@@ -112,14 +112,10 @@ function cmdGoalPush(hippoRoot: string, args: string[], flags: CliFlags): void {
   console.log(goal.id);
 }
 
-function goalContext(hippoRoot: string, tenantId: string = resolveTenantId({})): api.Context {
-  return { hippoRoot, tenantId, actor: api.adminActor('cli') };
-}
-
-function cmdGoalList(hippoRoot: string, flags: CliFlags): void {
-  const { sessionId, tenantId } = resolveGoalSession(flags);
+function cmdGoalList(hippoRoot: string, defaultTenantId: string, flags: CliFlags): void {
+  const { sessionId, tenantId } = resolveGoalSession(flags, defaultTenantId);
   const showAll = boolFlag(flags, 'all');
-  const goals = api.goalList(goalContext(hippoRoot, tenantId), { sessionId, all: showAll });
+  const goals = api.goalList(cliApiContext(hippoRoot, tenantId), { sessionId, all: showAll });
 
   if (goals.length === 0) {
     console.log('(no goals)');
@@ -149,7 +145,7 @@ function cmdGoalList(hippoRoot: string, flags: CliFlags): void {
   }
 }
 
-function cmdGoalComplete(hippoRoot: string, args: string[], flags: CliFlags): void {
+function cmdGoalComplete(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): void {
   const id = args[0];
   if (!id) {
     printError('Usage: hippo goal complete <id> [--outcome <0..1>] [--no-propagate]');
@@ -170,31 +166,31 @@ function cmdGoalComplete(hippoRoot: string, args: string[], flags: CliFlags): vo
     outcomeScore = parsed;
   }
   const noPropagate = flagIsTrue(flags, 'no-propagate');
-  api.goalComplete(goalContext(hippoRoot), id, { outcomeScore, noPropagate });
+  api.goalComplete(cliApiContext(hippoRoot, tenantId), id, { outcomeScore, noPropagate });
   console.log('ok');
 }
 
-function cmdGoalSuspend(hippoRoot: string, args: string[]): void {
+function cmdGoalSuspend(hippoRoot: string, tenantId: string, args: string[]): void {
   const id = args[0];
   if (!id) {
     printError('Usage: hippo goal suspend <id>');
     process.exit(1);
   }
-  api.goalSuspend(goalContext(hippoRoot), id);
+  api.goalSuspend(cliApiContext(hippoRoot, tenantId), id);
   console.log('ok');
 }
 
-function cmdGoalResume(hippoRoot: string, args: string[]): void {
+function cmdGoalResume(hippoRoot: string, tenantId: string, args: string[]): void {
   const id = args[0];
   if (!id) {
     printError('Usage: hippo goal resume <id>');
     process.exit(1);
   }
-  api.goalResume(goalContext(hippoRoot), id);
+  api.goalResume(cliApiContext(hippoRoot, tenantId), id);
   console.log('ok');
 }
 
-export function handleGoal({ hippoRoot, args, flags }: CommandContext): void {
+export function handleGoal({ hippoRoot, tenantId, args, flags }: CommandContext): void {
   const sub = args[0];
   if (!sub) {
     printError('Usage: hippo goal <push|list|complete|suspend|resume> [args]');
@@ -203,19 +199,19 @@ export function handleGoal({ hippoRoot, args, flags }: CommandContext): void {
   const subArgs = args.slice(1);
   switch (sub) {
     case 'push':
-      cmdGoalPush(hippoRoot, subArgs, flags);
+      cmdGoalPush(hippoRoot, tenantId, subArgs, flags);
       return;
     case 'list':
-      cmdGoalList(hippoRoot, flags);
+      cmdGoalList(hippoRoot, tenantId, flags);
       return;
     case 'complete':
-      cmdGoalComplete(hippoRoot, subArgs, flags);
+      cmdGoalComplete(hippoRoot, tenantId, subArgs, flags);
       return;
     case 'suspend':
-      cmdGoalSuspend(hippoRoot, subArgs);
+      cmdGoalSuspend(hippoRoot, tenantId, subArgs);
       return;
     case 'resume':
-      cmdGoalResume(hippoRoot, subArgs);
+      cmdGoalResume(hippoRoot, tenantId, subArgs);
       return;
     default:
       printError(`Unknown goal subcommand: ${sub}. Expected: push | list | complete | suspend | resume.`);

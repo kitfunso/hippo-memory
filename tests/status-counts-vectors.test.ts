@@ -84,7 +84,7 @@ describe('hippo status embedding lines', () => {
     proto[Symbol.iterator] = function (this: Float32Array) { walks++; return original.call(this); };
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     try {
-      handleStatus({ hippoRoot: root, args: [], flags: {} });
+      handleStatus({ hippoRoot: root, tenantId: 'default', args: [], flags: {} });
     } finally {
       proto[Symbol.iterator] = original;
       log.mockRestore();
@@ -224,7 +224,7 @@ describe('hippo status read bound', () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const { statements } = (() => {
       try {
-        return recordStatements(() => handleStatus({ hippoRoot: root, args: [], flags: {} }));
+        return recordStatements(() => handleStatus({ hippoRoot: root, tenantId: 'default', args: [], flags: {} }));
       } finally {
         log.mockRestore();
       }

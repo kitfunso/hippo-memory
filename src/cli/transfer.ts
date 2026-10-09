@@ -26,7 +26,7 @@ import { importVault } from '../importers/vault.js';
 import { ImportOptions, type ImportResult } from '../importers/core.js';
 import * as api from '../api/index.js';
 import * as client from './client.js';
-import { resolveTenantId } from '../store/tenant.js';
+import { cliApiContext } from './api-context.js';
 import { printError } from './output.js';
 import { errorMessage, log } from '../util/log.js';
 import { requireInit, runViaServerIfAvailable, learnFromRepo } from './shared.js';
@@ -41,7 +41,7 @@ const MAX_ENTRIES_SHOWN = 10;
 // Watch command
 // ---------------------------------------------------------------------------
 
-async function cmdWatch(command: string, hippoRoot: string): Promise<void> {
+async function cmdWatch(command: string, hippoRoot: string, tenantId: string): Promise<void> {
   if (!command) {
     printError('Usage: hippo watch "<command>"');
     process.exit(1);
@@ -60,13 +60,12 @@ async function cmdWatch(command: string, hippoRoot: string): Promise<void> {
     process.exit(exitCode);
   }
 
-  const tenantId = resolveTenantId({});
   const failure = captureError(exitCode, stderr, command, tenantId);
   const schemaFit = schemaFitInStore(hippoRoot, tenantId, failure.content, failure.tags);
   // A rejection-guard refusal of a failed command's output must not crash the watcher:
   // skip with the message below and still exit with the wrapped command's real exit code.
   try {
-    const { id } = api.remember({ hippoRoot, tenantId, actor: api.adminActor('cli') }, {
+    const { id } = api.remember(cliApiContext(hippoRoot, tenantId), {
       content: failure.content,
       tags: failure.tags,
       local: { layer: failure.layer, source: failure.source, confidence: failure.confidence, schemaFit },
@@ -144,7 +143,7 @@ function warnRedacted(count: number | undefined): void {
   if (count) printError(`Warning: secret-shaped text was redacted from ${count} imported ${count === 1 ? 'entry' : 'entries'} before storing`);
 }
 
-export function handleImport({ hippoRoot, args, flags }: CommandContext): void {
+export function handleImport({ hippoRoot, tenantId, args, flags }: CommandContext): void {
   const useGlobal = boolFlag(flags, 'global');
   const dryRun = boolFlag(flags, 'dry-run');
   const extraTags: string[] = Array.isArray(flags['tag'])
@@ -176,7 +175,7 @@ export function handleImport({ hippoRoot, args, flags }: CommandContext): void {
   // It writes through api.remember/archiveRaw which are tenant-scoped, so we
   // resolve the tenant and pass it through. --global is not supported for
   // vault import (the connector raw-archive path is tenant-local).
-  if (flags['vault']) return importVaultFolder(hippoRoot, flags, importOptions, useGlobal, dryRun);
+  if (flags['vault']) return importVaultFolder(hippoRoot, tenantId, flags, importOptions, useGlobal, dryRun);
   importFromFile(targetRoot, args, flags, { importOptions, useGlobal, dryRun });
 }
 
@@ -279,6 +278,7 @@ function importAgentMemories(hippoRoot: string, useGlobal: boolean, dryRun: bool
 
 function importVaultFolder(
   hippoRoot: string,
+  tenantId: string,
   flags: CliFlags,
   importOptions: ImportOptions,
   useGlobal: boolean,
@@ -286,7 +286,6 @@ function importVaultFolder(
 ): void {
   const folderPath = String(flags['vault']);
   checkVaultArgs(folderPath, flags, useGlobal);
-  const tenantId = resolveTenantId({});
   const vaultOptions: ImportOptions = {
     ...importOptions,
     tenantId,
@@ -344,7 +343,7 @@ function printVaultSummary(vaultResult: ImportResult, folderPath: string, hippoR
 // Promote command
 // ---------------------------------------------------------------------------
 
-function cmdPromote(hippoRoot: string, id: string): void {
+function cmdPromote(hippoRoot: string, tenantId: string, id: string): void {
   requireInit(hippoRoot);
 
   if (!id) {
@@ -352,11 +351,7 @@ function cmdPromote(hippoRoot: string, id: string): void {
     process.exit(1);
   }
 
-  const ctx: api.Context = {
-    hippoRoot,
-    tenantId: resolveTenantId({}),
-    actor: api.adminActor('cli'),
-  };
+  const ctx = cliApiContext(hippoRoot, tenantId);
   try {
     const result = api.promote(ctx, id);
     console.log(`Promoted ${id} to global store as ${result.globalId}`);
@@ -386,12 +381,12 @@ export function handleSync({ hippoRoot, flags }: CommandContext): void {
   console.log(`Synced ${count} global memories into local project.${includeCrossProject ? '' : ' (other-project rows skipped; use --cross-project to include them)'}`);
 }
 
-export async function handleWatch({ hippoRoot, args }: CommandContext): Promise<void> {
+export async function handleWatch({ hippoRoot, tenantId, args }: CommandContext): Promise<void> {
   const watchCmd = args.join(' ').trim();
-  await cmdWatch(watchCmd, hippoRoot);
+  await cmdWatch(watchCmd, hippoRoot, tenantId);
 }
 
-export async function handlePromote({ hippoRoot, args }: CommandContext): Promise<void> {
+export async function handlePromote({ hippoRoot, tenantId, args }: CommandContext): Promise<void> {
   const id = args[0];
   if (!id) {
     printError('Please provide a memory ID.');
@@ -407,17 +402,17 @@ export async function handlePromote({ hippoRoot, args }: CommandContext): Promis
     }
   });
   if (promoted) return;
-  cmdPromote(hippoRoot, id);
+  cmdPromote(hippoRoot, tenantId, id);
 }
 
-export function handleShare({ hippoRoot, args, flags }: CommandContext): void {
+export function handleShare({ hippoRoot, tenantId, args, flags }: CommandContext): void {
   const shareId = args[0];
   if (shareId === '--auto' || flags['auto']) {
     // Auto-share mode
     requireInit(hippoRoot);
     const minScore = parseFloat(String(flags['min-score'] ?? '0.6'));
     const dryRun = boolFlag(flags, 'dry-run');
-    const results = autoShare(hippoRoot, { minScore, dryRun, tenantId: resolveTenantId({}) });
+    const results = autoShare(hippoRoot, { minScore, dryRun, tenantId });
     if (results.length === 0) {
       console.log('No memories meet the sharing threshold.');
     } else if (dryRun) {
@@ -435,7 +430,6 @@ export function handleShare({ hippoRoot, args, flags }: CommandContext): void {
   } else if (shareId) {
     requireInit(hippoRoot);
     const force = boolFlag(flags, 'force');
-    const tenantId = resolveTenantId({});
     const result = shareMemory(hippoRoot, shareId, { force, tenantId });
     if (result) {
       console.log(`Shared [${result.id}] to global store.`);
@@ -457,10 +451,10 @@ export function handleShare({ hippoRoot, args, flags }: CommandContext): void {
   }
 }
 
-export function handlePeers({ flags }: CommandContext): void {
+export function handlePeers({ tenantId, flags }: CommandContext): void {
   // Tenant-scoped by default; --all-tenants gives the host-wide view for cross-tenant peer discovery.
   const allTenants = flagIsTrue(flags, 'all-tenants');
-  const tenantScope = allTenants ? undefined : resolveTenantId({});
+  const tenantScope = allTenants ? undefined : tenantId;
   const peers = listPeers(undefined, tenantScope);
   if (peers.length === 0) {
     console.log('No peers found. Share memories with: hippo share <id>');
@@ -473,11 +467,11 @@ export function handlePeers({ flags }: CommandContext): void {
   }
 }
 
-export function handleExport({ hippoRoot, args, flags }: CommandContext): void {
+export function handleExport({ hippoRoot, tenantId, args, flags }: CommandContext): void {
   requireInit(hippoRoot);
   const format = (flags['format'] || 'json') as string;
   const outputPath = args[0] || null;
-  const entries = loadAllEntries(hippoRoot, resolveTenantId({}));
+  const entries = loadAllEntries(hippoRoot, tenantId);
 
   let output: string;
   if (format === 'markdown' || format === 'md') {

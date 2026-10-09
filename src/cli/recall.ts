@@ -24,6 +24,7 @@ import { detectAnchoring, hashQueryText, biasHintEnabled, snapshotRing } from '.
 import { sessionRing, shownRecallRows } from '../api/recall-record.js';
 import { detectAvailabilityBias } from '../api/availability.js';
 import { resolveTenantId } from '../store/tenant.js';
+import { cliApiContext } from './api-context.js';
 import { MAX_HOPS, DEFAULT_MAX_NEIGHBORS } from '../graph/recall.js';
 import { getReranker } from '../rerankers/index.js';
 import type { RerankerFn } from '../rerankers/types.js';
@@ -187,7 +188,7 @@ export async function cmdRecall(
   const priced = priceRecallEntries(hippoRoot, query, o);
   const slot: PresentedSlot = {};
   await api.retrieve(
-    { hippoRoot, tenantId: o.tenantId, actor: api.adminActor('cli') },
+    cliApiContext(hippoRoot, o.tenantId),
     {
       query,
       goalTag: o.goalTag,

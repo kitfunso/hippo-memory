@@ -6,7 +6,6 @@ import { extractPathTags } from '../search/path-context.js';
 import * as predictionsModule from '../store/predictions.js';
 import * as decisionsModule from '../objects/decisions.js';
 import * as incidentsModule from '../objects/incidents.js';
-import { resolveTenantId } from '../store/tenant.js';
 import { printError } from './output.js';
 import { nonEmptyStringFlag, parseListLimit, type CliFlags, flagIsTrue, stringFlag, type CommandContext } from './flag-values.js';
 import { requireInit } from './shared.js';
@@ -140,9 +139,8 @@ function predictBaserate(hippoRoot: string, tenantId: string, flags: CliFlags): 
   if (baserate.mae !== null)          console.log(`  mae:              ${baserate.mae.toFixed(BASERATE_DECIMALS)}`);
 }
 
-export function handlePredict({ hippoRoot, args, flags }: CommandContext): void {
+export function handlePredict({ hippoRoot, tenantId, args, flags }: CommandContext): void {
   requireInit(hippoRoot);
-  const tenantId = resolveTenantId({});
   const subcommand = args[0] ?? '';
   if (subcommand === 'close') return predictClose(hippoRoot, tenantId, args, flags);
   if (subcommand === 'list') return predictList(hippoRoot, tenantId, flags);
@@ -215,9 +213,8 @@ function decideClose(hippoRoot: string, tenantId: string, args: string[]): void 
   closeObject(args, DECISION, (id) => decisionsModule.closeDecision(hippoRoot, tenantId, id), parseObjectId);
 }
 
-export function handleDecide({ hippoRoot, args, flags }: CommandContext): void {
+export function handleDecide({ hippoRoot, tenantId, args, flags }: CommandContext): void {
   requireInit(hippoRoot);
-  const tenantId = resolveTenantId({});
   const subcommand = args[0] ?? '';
   if (subcommand === 'list') return decideList(hippoRoot, tenantId, flags);
   if (subcommand === 'get') return decideGet(hippoRoot, tenantId, args);
@@ -343,9 +340,8 @@ function incidentClose(hippoRoot: string, tenantId: string, args: string[]): voi
   closeObject(args, INCIDENT, (id) => incidentsModule.closeIncident(hippoRoot, tenantId, id));
 }
 
-export function handleIncident({ hippoRoot, args, flags }: CommandContext): void {
+export function handleIncident({ hippoRoot, tenantId, args, flags }: CommandContext): void {
   requireInit(hippoRoot);
-  const tenantId = resolveTenantId({});
   const subcommand = args[0] ?? '';
   if (subcommand === 'list') return incidentList(hippoRoot, tenantId, flags);
   if (subcommand === 'get') return incidentGet(hippoRoot, tenantId, args);

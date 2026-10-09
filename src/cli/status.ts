@@ -23,7 +23,7 @@ import { getGlobalRoot } from '../sharing/global-store.js';
 import { buildProvenanceCoverage } from './provenance-coverage.js';
 import { buildCorrectionLatency } from './correction-latency.js';
 import * as api from '../api/index.js';
-import { resolveTenantId } from '../store/tenant.js';
+import { cliApiContext } from './api-context.js';
 import { errorMessage, log } from '../util/log.js';
 import { printError } from './output.js';
 import { parseCountFlag, type CommandContext, stringFlagOrExit, flagIsTrue } from './flag-values.js';
@@ -134,10 +134,10 @@ function printPhysicsStatus(hippoRoot: string): void {
   }
 }
 
-function cmdInspect(hippoRoot: string, id: string): void {
+function cmdInspect(hippoRoot: string, tenantId: string, id: string): void {
   requireInit(hippoRoot);
 
-  const entry = readEntry(hippoRoot, id, resolveTenantId({}));
+  const entry = readEntry(hippoRoot, id, tenantId);
   if (!entry) {
     printError(`Memory not found: ${id}`);
     process.exit(1);
@@ -188,13 +188,9 @@ function cmdInspect(hippoRoot: string, id: string): void {
  * and the hook blocks' tokens later model calls re-read, counted when each session ends.
  * Counts are estimates (characters / 4), the same estimate every budget uses.
  */
-export function handleTokens({ hippoRoot, flags }: CommandContext): void {
+export function handleTokens({ hippoRoot, tenantId, flags }: CommandContext): void {
   const root = resolveAuthRoot(hippoRoot, flags);
-  const ctx: api.Context = {
-    hippoRoot: root,
-    tenantId: resolveTenantId({}),
-    actor: api.adminActor('cli'),
-  };
+  const ctx = cliApiContext(root, tenantId);
   const days = parseCountFlag(flags['days']);
   const summary = api.tokenSummary(ctx, { days: days > 0 ? days : undefined });
   if (flags['json']) {
@@ -231,15 +227,11 @@ export function handleTokens({ hippoRoot, flags }: CommandContext): void {
 }
 
 /** `hippo failures [--days <n>] [--json] [--global]`: failed tool calls by outcome, and repeats across sessions. */
-export function handleFailures({ hippoRoot, flags }: CommandContext): void {
+export function handleFailures({ hippoRoot, tenantId, flags }: CommandContext): void {
   // The store the capture-error hook writes to; a report never creates one.
   const root = flags['global'] ? getGlobalRoot() : hookStoreRoot(hippoRoot);
   requireInit(root);
-  const ctx: api.Context = {
-    hippoRoot: root,
-    tenantId: resolveTenantId({}),
-    actor: api.adminActor('cli'),
-  };
+  const ctx = cliApiContext(root, tenantId);
   const days = parseCountFlag(flags['days']);
   const summary = api.failureSummary(ctx, { days: days > 0 ? days : undefined });
   if (flags['json']) {
@@ -359,11 +351,11 @@ export function handleSupportBundle({ flags }: CommandContext): void {
     : 'It holds versions, doctor checks, config with secrets removed, store counts and log file names. It never holds memory text. Read it before you attach it to a ticket.');
 }
 
-export function handleInspect({ hippoRoot, args }: CommandContext): void {
+export function handleInspect({ hippoRoot, tenantId, args }: CommandContext): void {
   const id = args[0];
   if (!id) {
     printError('Please provide a memory ID.');
     process.exit(1);
   }
-  cmdInspect(hippoRoot, id);
+  cmdInspect(hippoRoot, tenantId, id);
 }

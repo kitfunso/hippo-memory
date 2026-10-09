@@ -64,7 +64,7 @@ function rowsOf(root: string): Record<string, { source: string; confidence: stri
 }
 
 async function learn(root: string, flags: Record<string, string | boolean>, repo = ''): Promise<{ status: number; stdout: string; stderr: string }> {
-  const r = await runInProcess(() => handleLearn({ hippoRoot: root, args: [], flags }));
+  const r = await runInProcess(() => handleLearn({ hippoRoot: root, tenantId: 'default', args: [], flags }));
   const mask = (text: string): string => (repo ? text.replaceAll(basename(repo), '<repo>') : text);
   return { status: r.status, stdout: mask(r.stdout), stderr: mask(r.stderr) };
 }

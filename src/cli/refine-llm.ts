@@ -14,7 +14,8 @@
  */
 
 import { MemoryEntry, Layer } from '../core/memory.js';
-import { adminActor, REFINED_TAG, storeRefinement } from '../api/index.js';
+import { REFINED_TAG, storeRefinement } from '../api/index.js';
+import { cliApiContext } from './api-context.js';
 import { loadAllEntries, readEntry } from '../store/entry-reads.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';
 import { sendAnthropicMessage, type AnthropicMessageFailure } from '../util/anthropic-messages.js';
@@ -197,7 +198,7 @@ async function refineOneEntry(
     return;
   }
 
-  storeRefinement({ hippoRoot, tenantId: entry.tenantId, actor: adminActor('cli') }, entry, refined);
+  storeRefinement(cliApiContext(hippoRoot, entry.tenantId), entry, refined);
   result.refined++;
   result.details.push({ id: entry.id, status: 'refined' });
 }

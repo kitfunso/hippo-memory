@@ -7,7 +7,7 @@ import { isGitRepo } from '../learn/autolearn.js';
 import { importForStore, currentMachine } from '../agent-memories/sync.js';
 import { replayCompactionsAt } from '../capture/compaction-record.js';
 import * as api from '../api/index.js';
-import { resolveTenantId } from '../store/tenant.js';
+import { cliApiContext } from './api-context.js';
 import { sleepResultLines } from './sleep-render.js';
 import { errorMessage, log } from '../util/log.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../db/index.js';
@@ -21,6 +21,7 @@ import { printError } from './output.js';
 /** Runs `hippo sleep`; with `--log-file` it also tees its output to that file. */
 export async function cmdSleep(
   hippoRoot: string,
+  tenantId: string,
   flags: CliFlags
 ): Promise<void> {
   // Tee stdout/stderr to a log file when --log-file is set. The SessionEnd
@@ -60,7 +61,7 @@ export async function cmdSleep(
   }
 
   try {
-    await cmdSleepCore(hippoRoot, flags);
+    await cmdSleepCore(hippoRoot, tenantId, flags);
     if (logFile) console.log('[hippo] sleep complete');
   } catch (err) {
     if (logFile) console.log(`[hippo] sleep failed: ${errorMessage(err)}`);
@@ -70,8 +71,8 @@ export async function cmdSleep(
   }
 }
 
-export function handleSleep({ hippoRoot, flags }: CommandContext): Promise<void> {
-  return cmdSleep(hippoRoot, flags);
+export function handleSleep({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
+  return cmdSleep(hippoRoot, tenantId, flags);
 }
 
 function renderSleepResult(result: api.SleepResult): void {
@@ -79,11 +80,11 @@ function renderSleepResult(result: api.SleepResult): void {
 }
 
 /** Fault-isolated: a failed repair warns and runs again next sleep, and never stops the sleep. */
-function repairProjectTagsOnce(hippoRoot: string): void {
+function repairProjectTagsOnce(hippoRoot: string, tenantId: string): void {
   let db: DatabaseSyncLike | undefined;
   try {
     db = openHippoDb(hippoRoot);
-    const r = repairOnceOnSleep(db, hippoRoot, resolveTenantId({}));
+    const r = repairOnceOnSleep(db, hippoRoot, tenantId);
     if (r === null) return;
     const parts = [
       r.copies.length > 0 ? `set aside ${r.copies.length} misfiled note imports` : '',
@@ -100,6 +101,7 @@ function repairProjectTagsOnce(hippoRoot: string): void {
 
 async function cmdSleepCore(
   hippoRoot: string,
+  tenantId: string,
   flags: CliFlags
 ): Promise<void> {
   requireInit(hippoRoot);
@@ -131,16 +133,12 @@ async function cmdSleepCore(
   if (!flags['dry-run']) {
     const finished = replayCompactionsAt(hippoRoot, (message) => log.warn(`compaction replay: ${message}`));
     if (finished > 0) console.log(`Finished saving ${finished} compaction${finished === 1 ? '' : 's'} left over from earlier sessions.`);
-    repairProjectTagsOnce(hippoRoot);
+    repairProjectTagsOnce(hippoRoot, tenantId);
     repairQualityOnceAt(hippoRoot);
   }
 
   // Phase 2-6: Pure-storage pipeline (consolidate + dedup + audit + share + ambient).
-  const ctx: api.Context = {
-    hippoRoot,
-    tenantId: resolveTenantId({}),
-    actor: api.adminActor('cli'),
-  };
+  const ctx = cliApiContext(hippoRoot, tenantId);
   const result = await api.sleep(ctx, {
     dryRun: boolFlag(flags, 'dry-run'),
     noShare: boolFlag(flags, 'no-share'),
