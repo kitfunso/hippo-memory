@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { canAutoDelete, type MemoryEntry } from '../memory.js';
-import type { DatabaseSyncLike } from '../db.js';
+import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../db.js';
 import type { JsonObject } from './working-memory.js';
 import { log } from '../log.js';
 import { keysetAfter, type KeysetPosition } from '../keyset.js';
@@ -326,16 +326,21 @@ export function deleteAuditBefore(db: DatabaseSyncLike, tenantId: string, cutoff
   return Number(result.changes ?? 0);
 }
 
-/** Latest time each target got a good outcome, from the audit rows; unlike queryAuditEvents it has no row cap. */
-export function confirmedOutcomeTimes(db: DatabaseSyncLike, tenantId: string): Map<string, string> {
-  // SAFETY: the SELECT list is exactly target_id and ts; no other shape reaches this cast.
-  const rows = db.prepare(
-    `SELECT target_id, MAX(ts) AS ts FROM audit_log
-       WHERE tenant_id = ? AND op = 'outcome' AND target_id IS NOT NULL
-         AND json_extract(metadata_json, '$.good') = 1
-       GROUP BY target_id`,
-  ).all(tenantId) as { target_id: string; ts: string }[];
-  return new Map(rows.map((r) => [r.target_id, r.ts]));
+/** Latest time each target got a good outcome, from the audit rows, read on a handle of its own; unlike queryAuditEvents it has no row cap. */
+export function confirmedOutcomeTimes(hippoRoot: string, tenantId: string): Map<string, string> {
+  const db = openHippoDb(hippoRoot);
+  try {
+    // SAFETY: the SELECT list is exactly target_id and ts; no other shape reaches this cast.
+    const rows = db.prepare(
+      `SELECT target_id, MAX(ts) AS ts FROM audit_log
+         WHERE tenant_id = ? AND op = 'outcome' AND target_id IS NOT NULL
+           AND json_extract(metadata_json, '$.good') = 1
+         GROUP BY target_id`,
+    ).all(tenantId) as { target_id: string; ts: string }[];
+    return new Map(rows.map((r) => [r.target_id, r.ts]));
+  } finally {
+    closeHippoDb(db);
+  }
 }
 
 const AUDIT_COLUMNS = 'id, ts, tenant_id, actor, op, target_id, metadata_json';
