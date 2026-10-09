@@ -12,7 +12,7 @@
 
 import { processEnv } from '../env.js';
 
-export const OWNER_RE = /^(user|agent):[A-Za-z0-9_-]+$/;
+const OWNER_RE = /^(user|agent):[A-Za-z0-9_-]+$/;
 export const OWNER_CONTRACT_HINT =
   'Must match ^(user|agent):[A-Za-z0-9_-]+$ (e.g. user:alice, agent:capture-bot).';
 

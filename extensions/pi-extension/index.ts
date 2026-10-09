@@ -251,10 +251,7 @@ export default function (pi: any) {
     async execute(_toolCallId: string, params: any, _signal: any, _onUpdate: any, ctx: any) {
       const cwd = ctx.cwd || process.cwd();
       const budget = params.budget || config.budget;
-      const result = runHippo(
-        ['recall', params.query, '--budget', String(budget), '--framing', config.framing],
-        cwd,
-      );
+      const result = runHippo(['recall', params.query, '--budget', String(budget)], cwd);
       return { content: [{ type: 'text', text: result || 'No relevant memories found.' }] };
     },
   });

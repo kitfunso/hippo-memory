@@ -9,6 +9,7 @@ import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../src/memory.js';
+import { ownStderr } from './_helpers/own-stderr.js';
 
 const CLI = join(process.cwd(), 'dist', 'cli.js');
 const FAKE_NOW = '2026-02-01T00:00:00.000Z';
@@ -51,12 +52,8 @@ const CASES: Case[] = [
   { name: 'sleep on an uninitialised store', args: ['sleep'], uninitialised: true },
 ];
 
-// Whether Node prints the SQLite warning depends on its version, so it stays out of the snapshot.
-const SQLITE_WARNING = /\(node:\d+\) ExperimentalWarning: SQLite is an experimental feature[^\n]*\r?\n\(Use `node --trace-warnings[^\n]*(?:\r?\n)?/g;
-
 function normalise(text: string, home: string): string {
-  return text
-    .replace(SQLITE_WARNING, '')
+  return ownStderr(text)
     .split(home).join('<home>')
     .split(home.replace(/\\/g, '/')).join('<home>')
     .replace(/<home>\\/g, '<home>/')
