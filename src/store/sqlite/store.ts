@@ -1,7 +1,7 @@
 // The built-in SQLite adapter behind the store port.
 import { loadAmbientTallies } from '../../ambient-store.js';
 import { listApiKeyRows, readApiKeyRecord } from '../../auth.js';
-import { appendAuditEvent, listAuditEventsAfter } from '../../audit.js';
+import { appendAuditEvent, listAuditEventsAfter, queryAuditEvents } from '../../audit.js';
 import { withWriteScope } from '../../db.js';
 import { embeddingIndexStateAt, loadStoredVectors } from '../../embeddings.js';
 import { activeGoalsWithPolicies, localGoalRecallRows, writeGoalRecallLog } from '../../goals.js';
@@ -94,6 +94,11 @@ export function sqliteSyncStore(hippoRoot: string): SqliteSyncStore & Sync<Omit<
     contextReads: sqliteContextReads(hippoRoot),
     predictions: sqlitePredictions(hippoRoot),
     dagReads: sqliteDagReads(hippoRoot),
+    auditLog: {
+      listAuditEvents(query) {
+        return onHandle(hippoRoot, (db) => queryAuditEvents(db, query));
+      },
+    },
     close() {},
   };
 }
@@ -101,7 +106,7 @@ export function sqliteSyncStore(hippoRoot: string): SqliteSyncStore & Sync<Omit<
 /** `sqliteSyncStore` as a served store: each method runs at once and answers through a Promise, so a throw rejects as another store's would. */
 export function sqliteStore(hippoRoot: string): HippoStore & StoreGroups {
   const sync = sqliteSyncStore(hippoRoot);
-  const { keyAudit, keyWrites, vectorWrites, entryWrites, contextReads, dagReads } = sync;
+  const { keyAudit, keyWrites, vectorWrites, entryWrites, contextReads, dagReads, auditLog } = sync;
   return {
     kind: sync.kind,
     findApiKey: async (keyId) => sync.findApiKey(keyId),
@@ -148,6 +153,9 @@ export function sqliteStore(hippoRoot: string): HippoStore & StoreGroups {
       sessionRawEntries: async (query) => dagReads.sessionRawEntries(query),
       sessionRawCount: async (query) => dagReads.sessionRawCount(query),
       summaryWithDescendants: async (tenantId, id, walk) => dagReads.summaryWithDescendants(tenantId, id, walk),
+    },
+    auditLog: {
+      listAuditEvents: async (query) => auditLog.listAuditEvents(query),
     },
     close: async () => sync.close(),
   };

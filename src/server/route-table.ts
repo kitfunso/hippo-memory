@@ -57,7 +57,7 @@ const V1_ROUTES: readonly Route[] = [
   { method: 'GET', path: '/v1/quarantine', handler: handleListQuarantine },
   { method: 'POST', pattern: '/v1/quarantine/:id/approve', handler: handleApproveQuarantine },
   { method: 'POST', pattern: '/v1/quarantine/:id/reject', handler: handleRejectQuarantine },
-  { method: 'GET', path: '/v1/audit', handler: handleListAudit },
+  { method: 'GET', path: '/v1/audit', handler: handleListAudit, storeReady: 'auditLog' },
   { method: 'POST', path: '/v1/predictions', storeReady: 'predictions', handler: handleCreatePrediction },
   { method: 'GET', path: '/v1/predictions', storeReady: 'predictions', handler: handleListPredictions },
   { method: 'GET', path: '/v1/predictions/stats', storeReady: 'predictions', handler: handlePredictionStats },

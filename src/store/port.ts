@@ -2,7 +2,7 @@
 import type { AmbientTallies } from '../ambient.js';
 import type { AmbientStoreFilter } from '../ambient-store.js';
 import type { ApiKeyListRow, ApiKeyRecord, ListApiKeysOpts, NewApiKey } from '../auth.js';
-import type { AppendAuditOpts, AuditEvent, ListAuditAfterOpts } from '../audit.js';
+import type { AppendAuditOpts, AuditEvent, ListAuditAfterOpts, QueryAuditOpts } from '../audit.js';
 import { StoreNotPortedError } from '../util/sqlite-blocked.js';
 import type { EmbeddingIndexState } from '../embeddings.js';
 import type { ActiveGoals, GetActiveGoalsOpts, GoalRecallLogRow } from '../goals.js';
@@ -301,6 +301,13 @@ export interface DagReads {
   summaryWithDescendants(tenantId: string, id: string, walk: DescendantWalk): Promise<SummaryDescendants | null>;
 }
 
+/** The read behind the audit list. It writes no audit row. */
+export interface AuditLog {
+  /** One tenant's rows newest first, by ts then id descending, narrowed by `op` and by `since` (ts at or after it); `limit` is clamped to 1..10001 and
+   *  defaults to 100, and `after` resumes below the (ts, id) position a page ended on. */
+  listAuditEvents(query: QueryAuditOpts): Promise<AuditEvent[]>;
+}
+
 /** The optional groups: a store sets each one whole or leaves it unset, and a route or MCP tool names the one it needs. */
 export interface StoreGroups {
   /** Unset on a store built before them, where hybrid and physics recall under an embedding provider answer 501. */
@@ -313,6 +320,7 @@ export interface StoreGroups {
   readonly contextReads: ContextReads;
   readonly predictions: Predictions;
   readonly dagReads: DagReads;
+  readonly auditLog: AuditLog;
 }
 
 export type StoreGroup = 'base' | keyof StoreGroups;
