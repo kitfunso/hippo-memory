@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { canAutoDelete, type MemoryEntry } from '../memory.js';
-import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../db.js';
+import { closeHippoDb, openHippoDb, withWriteScope, type DatabaseSyncLike } from '../db.js';
 import type { JsonObject } from './working-memory.js';
 import { log } from '../log.js';
 import { keysetAfter, type KeysetPosition } from '../keyset.js';
@@ -319,7 +319,7 @@ export function listAuditEventsAfter(db: DatabaseSyncLike, opts: ListAuditAfterO
 }
 
 /** How many of a tenant's audit rows are older than `cutoff`. */
-export function countAuditBefore(db: DatabaseSyncLike, tenantId: string, cutoff: string): number {
+function countAuditBefore(db: DatabaseSyncLike, tenantId: string, cutoff: string): number {
   // SAFETY: row comes from `SELECT COUNT(*) AS c`; COUNT(*) always yields exactly one row with a
   // numeric `c` column (number or bigint depending on the node:sqlite driver's integer handling).
   const row = db
@@ -329,7 +329,7 @@ export function countAuditBefore(db: DatabaseSyncLike, tenantId: string, cutoff:
 }
 
 /** Deletes a tenant's audit rows older than `cutoff`; returns how many went. */
-export function deleteAuditBefore(db: DatabaseSyncLike, tenantId: string, cutoff: string): number {
+function deleteAuditBefore(db: DatabaseSyncLike, tenantId: string, cutoff: string): number {
   const result = db
     .prepare(`DELETE FROM audit_log WHERE tenant_id = ? AND ts < ?`)
     .run(tenantId, cutoff);
@@ -413,6 +413,33 @@ export function recordAuditEventsRowByRow(hippoRoot: string, events: readonly Ap
       }
     }
     return failed;
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+export interface AuditPrune {
+  tenantId: string;
+  /** ISO time; rows with `ts` before it go. */
+  cutoff: string;
+  actor: string;
+  olderThanDays: number;
+  /** Count the rows and delete nothing. */
+  dryRun: boolean;
+}
+
+/** Deletes a tenant's audit rows older than the cutoff and records the prune in the same write scope, so neither lands alone; returns the row count. */
+export function pruneAuditRows(hippoRoot: string, prune: AuditPrune): number {
+  const { tenantId, cutoff, actor, olderThanDays } = prune;
+  const db = openHippoDb(hippoRoot);
+  try {
+    if (prune.dryRun) return countAuditBefore(db, tenantId, cutoff);
+    return withWriteScope(db, 'audit_prune', () => {
+      const count = deleteAuditBefore(db, tenantId, cutoff);
+      // Written after the delete with ts = now, so the cutoff just applied cannot take it.
+      appendAuditEvent(db, { tenantId, actor, op: 'audit_prune', metadata: { cutoff, count, dryRun: false, olderThanDays } });
+      return count;
+    });
   } finally {
     closeHippoDb(db);
   }

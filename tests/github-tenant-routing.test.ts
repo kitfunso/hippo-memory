@@ -42,107 +42,107 @@ describe('resolveTenantForGitHub', () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  it('rule 1: installation_id matches a row -> returns mapped tenant', () => {
+  it('rule 1: installation_id matches a row -> returns mapped tenant', async () => {
     const db = openHippoDb(root);
     try {
       insertInstallation(db, '12345', 'tenant-alpha');
-      expect(resolveTenantForGitHub(root, { installationId: '12345' })).toBe('tenant-alpha');
+      expect(await resolveTenantForGitHub(root, { installationId: '12345' })).toBe('tenant-alpha');
     } finally {
       closeHippoDb(db);
     }
   });
 
-  it('rule 2: installation_id present, table non-empty, no row -> returns null', () => {
+  it('rule 2: installation_id present, table non-empty, no row -> returns null', async () => {
     const db = openHippoDb(root);
     try {
       insertInstallation(db, '12345', 'tenant-alpha');
       // Unknown installation id, table non-empty -> fail closed.
       expect(
-        resolveTenantForGitHub(root, { installationId: '99999', repoFullName: 'foo/bar' }),
+        await resolveTenantForGitHub(root, { installationId: '99999', repoFullName: 'foo/bar' }),
       ).toBeNull();
     } finally {
       closeHippoDb(db);
     }
   });
 
-  it('rule 3: no installation_id, both tables empty -> returns env fallback (HIPPO_TENANT)', () => {
+  it('rule 3: no installation_id, both tables empty -> returns env fallback (HIPPO_TENANT)', async () => {
     const db = openHippoDb(root);
     try {
       process.env.HIPPO_TENANT = 'env-tenant';
-      expect(resolveTenantForGitHub(root, {})).toBe('env-tenant');
-      expect(resolveTenantForGitHub(root, { repoFullName: 'foo/bar' })).toBe('env-tenant');
+      expect(await resolveTenantForGitHub(root, {})).toBe('env-tenant');
+      expect(await resolveTenantForGitHub(root, { repoFullName: 'foo/bar' })).toBe('env-tenant');
     } finally {
       closeHippoDb(db);
     }
   });
 
-  it("rule 3 default: no installation_id, both tables empty, no HIPPO_TENANT -> 'default'", () => {
+  it("rule 3 default: no installation_id, both tables empty, no HIPPO_TENANT -> 'default'", async () => {
     const db = openHippoDb(root);
     try {
-      expect(resolveTenantForGitHub(root, {})).toBe('default');
-      expect(resolveTenantForGitHub(root, { repoFullName: 'foo/bar' })).toBe('default');
+      expect(await resolveTenantForGitHub(root, {})).toBe('default');
+      expect(await resolveTenantForGitHub(root, { repoFullName: 'foo/bar' })).toBe('default');
     } finally {
       closeHippoDb(db);
     }
   });
 
-  it('rule 4: no installation_id, github_repositories has matching row -> returns that tenant (PAT-mode)', () => {
+  it('rule 4: no installation_id, github_repositories has matching row -> returns that tenant (PAT-mode)', async () => {
     const db = openHippoDb(root);
     try {
       insertRepository(db, 'octo/widget', 'tenant-pat');
       expect(
-        resolveTenantForGitHub(root, { installationId: null, repoFullName: 'octo/widget' }),
+        await resolveTenantForGitHub(root, { installationId: null, repoFullName: 'octo/widget' }),
       ).toBe('tenant-pat');
     } finally {
       closeHippoDb(db);
     }
   });
 
-  it('rule 5: no installation_id, github_installations non-empty, no repo match -> returns null', () => {
+  it('rule 5: no installation_id, github_installations non-empty, no repo match -> returns null', async () => {
     const db = openHippoDb(root);
     try {
       insertInstallation(db, '12345', 'tenant-alpha');
       expect(
-        resolveTenantForGitHub(root, { installationId: null, repoFullName: 'unknown/repo' }),
+        await resolveTenantForGitHub(root, { installationId: null, repoFullName: 'unknown/repo' }),
       ).toBeNull();
       // Even with no repoFullName supplied — PAT-mode envelope from a foreign source.
-      expect(resolveTenantForGitHub(root, {})).toBeNull();
+      expect(await resolveTenantForGitHub(root, {})).toBeNull();
     } finally {
       closeHippoDb(db);
     }
   });
 
-  it('rule 5 variant: no installation_id, github_repositories non-empty, no repo match -> returns null', () => {
+  it('rule 5 variant: no installation_id, github_repositories non-empty, no repo match -> returns null', async () => {
     const db = openHippoDb(root);
     try {
       insertRepository(db, 'octo/widget', 'tenant-pat');
       expect(
-        resolveTenantForGitHub(root, { installationId: null, repoFullName: 'unknown/repo' }),
+        await resolveTenantForGitHub(root, { installationId: null, repoFullName: 'unknown/repo' }),
       ).toBeNull();
-      expect(resolveTenantForGitHub(root, {})).toBeNull();
+      expect(await resolveTenantForGitHub(root, {})).toBeNull();
     } finally {
       closeHippoDb(db);
     }
   });
 
-  it('rule 6: escape hatch via env var, with mismatch -> returns env fallback', () => {
+  it('rule 6: escape hatch via env var, with mismatch -> returns env fallback', async () => {
     const db = openHippoDb(root);
     try {
       process.env.GITHUB_ALLOW_UNKNOWN_INSTALLATION_FALLBACK = '1';
       process.env.HIPPO_TENANT = 'rollback-tenant';
       // Case 2: installation_id present but unknown.
       insertInstallation(db, '12345', 'tenant-alpha');
-      expect(resolveTenantForGitHub(root, { installationId: '99999' })).toBe('rollback-tenant');
+      expect(await resolveTenantForGitHub(root, { installationId: '99999' })).toBe('rollback-tenant');
       // Case 5: no installation_id, no repo match.
       expect(
-        resolveTenantForGitHub(root, { installationId: null, repoFullName: 'unknown/repo' }),
+        await resolveTenantForGitHub(root, { installationId: null, repoFullName: 'unknown/repo' }),
       ).toBe('rollback-tenant');
     } finally {
       closeHippoDb(db);
     }
   });
 
-  it('codex P0 #4 regression: PAT-mode webhook (no installation_id) with non-empty github_installations and no repo match -> null', () => {
+  it('codex P0 #4 regression: PAT-mode webhook (no installation_id) with non-empty github_installations and no repo match -> null', async () => {
     const db = openHippoDb(root);
     try {
       // Multi-tenant App install populated via installations table.
@@ -153,19 +153,19 @@ describe('resolveTenantForGitHub', () => {
       // Post-fix: must fail closed.
       process.env.HIPPO_TENANT = 'env-tenant';
       expect(
-        resolveTenantForGitHub(root, {
+        await resolveTenantForGitHub(root, {
           installationId: null,
           repoFullName: 'foreign/repo',
         }),
       ).toBeNull();
       // Even with no repoFullName at all (malformed PAT-mode envelope).
-      expect(resolveTenantForGitHub(root, { installationId: undefined })).toBeNull();
+      expect(await resolveTenantForGitHub(root, { installationId: undefined })).toBeNull();
     } finally {
       closeHippoDb(db);
     }
   });
 
-  it('rule 4 deterministic order: multiple tenants share a repo_full_name -> returns first by (added_at, tenant_id)', () => {
+  it('rule 4 deterministic order: multiple tenants share a repo_full_name -> returns first by (added_at, tenant_id)', async () => {
     const db = openHippoDb(root);
     try {
       // Insert in non-sorted order to prove ORDER BY is doing the work.
@@ -174,35 +174,35 @@ describe('resolveTenantForGitHub', () => {
       insertRepository(db, 'shared/tool', 'tenant-bravo', '2026-01-01T00:00:00.000Z');
       // Earliest added_at wins; tie broken by tenant_id ascending -> 'tenant-alpha'.
       expect(
-        resolveTenantForGitHub(root, { installationId: null, repoFullName: 'shared/tool' }),
+        await resolveTenantForGitHub(root, { installationId: null, repoFullName: 'shared/tool' }),
       ).toBe('tenant-alpha');
     } finally {
       closeHippoDb(db);
     }
   });
 
-  it('HIPPO_TENANT env var set -> uses it; cleared -> falls back to "default"', () => {
+  it('HIPPO_TENANT env var set -> uses it; cleared -> falls back to "default"', async () => {
     const db = openHippoDb(root);
     try {
       // Both tables empty -> single-tenant deployment, env fallback path.
       process.env.HIPPO_TENANT = 'custom-env';
-      expect(resolveTenantForGitHub(root, {})).toBe('custom-env');
+      expect(await resolveTenantForGitHub(root, {})).toBe('custom-env');
       // Whitespace-only HIPPO_TENANT must fall back to 'default'.
       process.env.HIPPO_TENANT = '   ';
-      expect(resolveTenantForGitHub(root, {})).toBe('default');
+      expect(await resolveTenantForGitHub(root, {})).toBe('default');
       // Cleared.
       delete process.env.HIPPO_TENANT;
-      expect(resolveTenantForGitHub(root, {})).toBe('default');
+      expect(await resolveTenantForGitHub(root, {})).toBe('default');
     } finally {
       closeHippoDb(db);
     }
   });
 
-  it('installation_id present, both tables empty -> env fallback (single-tenant deployment with App webhook)', () => {
+  it('installation_id present, both tables empty -> env fallback (single-tenant deployment with App webhook)', async () => {
     const db = openHippoDb(root);
     try {
       process.env.HIPPO_TENANT = 'env-tenant';
-      expect(resolveTenantForGitHub(root, { installationId: '12345' })).toBe('env-tenant');
+      expect(await resolveTenantForGitHub(root, { installationId: '12345' })).toBe('env-tenant');
     } finally {
       closeHippoDb(db);
     }

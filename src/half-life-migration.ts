@@ -20,15 +20,12 @@
  * moves memories of live decisions, incidents and other objects off the flat 90 days they used to get.
  */
 import { deriveHalfLife, type MemoryEntry } from './memory.js';
-import { HALF_LIFE_BASE_META_KEY } from './store/open.js';
+import { HALF_LIFE_BASE_META_KEY, LEGACY_TYPED_HALF_LIFE } from './store/open.js';
 import { moveHalfLives, recordedHalfLifeBase, type HalfLifeRows } from './store/half-life.js';
-import { loadConfig } from './config.js';
 
-/** The flat half-life the decision, incident and other object writers gave their memories before they took the default. */
-export const LEGACY_TYPED_HALF_LIFE = 90;
 const TYPED_SOURCES: ReadonlySet<string> = new Set(['decision', 'incident', 'process', 'policy', 'skill', 'project_brief', 'customer_note']);
 
-export { HALF_LIFE_BASE_META_KEY };
+export { HALF_LIFE_BASE_META_KEY, LEGACY_TYPED_HALF_LIFE };
 
 /** What {@link migrateDefaultHalfLife} did, or would do under `dryRun`. */
 export interface HalfLifeMigrationResult {
@@ -76,11 +73,6 @@ export function planTypedHalfLifeMigration(entries: readonly MemoryEntry[], to: 
 /** The base this store's memories are on. */
 export function storeHalfLifeBase(hippoRoot: string): number {
   return recordedHalfLifeBase(hippoRoot);
-}
-
-/** The base an object writer gives its memory: the flat 90 days until the store's typed migration has run (`onDefault`), which then moves them, and the default after. */
-export function objectHalfLifeDays(hippoRoot: string, onDefault: boolean): number {
-  return onDefault ? loadConfig(hippoRoot).defaultHalfLifeDays : LEGACY_TYPED_HALF_LIFE;
 }
 
 /**

@@ -31,7 +31,7 @@
  * retention is exact and reproducible regardless of which random ids win a
  * tie.
  */
-import { describe, it, expect, beforeEach, afterEach, afterAll } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -48,6 +48,9 @@ import { computeSchemaFit } from '../dist/memory.js';
 import type { MemoryEntry } from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { clearAblationEnv, QUESTIONS, QUESTION_C, cleanupScratch, runPipeline, TEST_SIM_ROUNDS } from './memory-value-fixtures.js';
+
+// Each case ingests, simulates and extracts a question against real stores on disk.
+vi.setConfig({ testTimeout: 30_000 });
 
 // mkdtemp per process (two worktrees at once must not share a root); re-set in a LATER beforeEach because clearAblationEnv deletes it.
 const HARNESS_SCRATCH_ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-mv-harness-test-scratch-'));

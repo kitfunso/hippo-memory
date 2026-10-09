@@ -22,7 +22,6 @@ import {
   isSubagentPayload,
   readApiCalls,
   recordRereads,
-  recordTokenUse,
   type TranscriptCalls,
 } from '../token-ledger.js';
 import { estimateTokens } from '../util/token-text.js';
@@ -46,7 +45,7 @@ import { COMPACT_RESUME_EVENT_CONTENT_CAP, COMPACT_RESUME_MAX_AGE_MS, compactRes
 import { normaliseHookPayload, readHookStdin, readStdinBounded, type BoundedStdin } from '../stdin.js';
 import { resolveTenantId } from '../tenant.js';
 import { errorMessage, log } from '../log.js';
-import { withLedgerDb } from '../ledger-db.js';
+import { bookTokenUse } from '../ledger-db.js';
 import { printError } from './output.js';
 import { cmdLastSleep } from './last-sleep.js';
 import {
@@ -170,9 +169,9 @@ function restoreCompactSnapshot(hippoRoot: string, payloadSessionId: string | nu
   // Printed in one write so the ledger books exactly the text the model is handed.
   const text = compactResumeText(snapshot, events);
   console.log(text);
-  withLedgerDb(hippoRoot, (db) => recordTokenUse(db, {
+  bookTokenUse(hippoRoot, {
     tenantId, sessionId: payloadSessionId, surface: 'compact_resume', event: 'inject', items: 1, tokens: estimateTokens(text),
-  }));
+  });
 }
 
 /**

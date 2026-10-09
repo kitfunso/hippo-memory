@@ -3,12 +3,13 @@ import { mkdtempSync, rmSync } from 'fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import type { Context } from '../src/api.js';
+import { remember, type HippoDbContext } from '../src/api.js';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
 import { ingestEvent, type IngestEvent, type IngestInput, type IngestResult } from '../src/connectors/github/ingest.js';
 import { computeIdempotencyKey } from '../src/connectors/github/signature.js';
+import { issueEventToRememberOpts } from '../src/connectors/github/transform.js';
 import type {
   GitHubIssueEvent,
   GitHubIssueCommentEvent,
@@ -21,7 +22,7 @@ const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as { Data
 
 // -- Test helpers ----------------------------------------------------------
 
-const ctx = (root: string): Context => ({
+const ctx = (root: string): HippoDbContext => ({
   hippoRoot: root,
   tenantId: 'default',
   actor: { subject: 'connector:github', role: 'admin' },
@@ -105,20 +106,31 @@ interface LostRace {
   readonly winner: IngestResult;
 }
 
-/** Ingests `input` as the loser of a race: at its first lock request a second worker ingests the same event on its own connection and commits. */
-function ingestBehindAnotherWorker(root: string, input: IngestInput): LostRace {
+/** The second worker's write of the same issue event. It runs on hippo.db at once, with no await, so it commits inside the loser's lock request. */
+function storeAsOtherWorker(root: string, { event }: IngestInput): IngestResult {
+  const opts = event.eventName === 'issues' ? issueEventToRememberOpts(event.payload) : null;
+  if (event.eventName !== 'issues' || !opts) throw new Error('the raced event is an issue with a body');
+  const { issue, repository } = event.payload;
+  const idempotencyKey = computeIdempotencyKey(`github://${repository?.full_name}/issue/${issue.number}`, issue.updated_at ?? null);
+  const logged = { connector: 'github', idempotencyKey, deliveryId: 'd-other-worker', eventName: 'issues' } as const;
+  const stored = remember(ctx(root), { ...opts, untrusted: true, event: logged });
+  return { status: stored.duplicate ? 'skipped_duplicate' : 'ingested', memoryId: stored.duplicate?.memoryId ?? stored.id };
+}
+
+/** Ingests `input` as the loser of a race: at its first lock request a second worker stores the same event on its own connection and commits. */
+async function ingestBehindAnotherWorker(root: string, input: IngestInput): Promise<LostRace> {
   const winners: IngestResult[] = [];
   let winnerRan = false;
   const { exec } = DatabaseSync.prototype;
   const spy = vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (this: DatabaseSyncLike, sql: string) {
     if (sql === 'BEGIN IMMEDIATE' && !winnerRan) {
       winnerRan = true;
-      winners.push(ingestEvent(ctx(root), { ...input, deliveryId: 'd-other-worker' }));
+      winners.push(storeAsOtherWorker(root, input));
     }
     exec.call(this, sql);
   });
   try {
-    return { loser: ingestEvent(ctx(root), input), winner: winners[0] };
+    return { loser: await ingestEvent(ctx(root), input), winner: winners[0] };
   } finally {
     spy.mockRestore();
   }
@@ -136,12 +148,12 @@ describe('ingestEvent', () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  it('1. fresh ingest: writes a kind=raw memory and stamps github_event_log', () => {
+  it('1. fresh ingest: writes a kind=raw memory and stamps github_event_log', async () => {
     const payload = makeIssueEvent();
     const rawBody = JSON.stringify(payload);
     const event: IngestEvent = { eventName: 'issues', payload };
 
-    const result = ingestEvent(ctx(root), {
+    const result = await ingestEvent(ctx(root), {
       event,
       rawBody,
       deliveryId: 'd-1',
@@ -180,15 +192,15 @@ describe('ingestEvent', () => {
     }
   });
 
-  it('2. duplicate fast path: same (eventName, rawBody) returns duplicate with same memoryId', () => {
+  it('2. duplicate fast path: same (eventName, rawBody) returns duplicate with same memoryId', async () => {
     const payload = makeIssueEvent();
     const rawBody = JSON.stringify(payload);
     const event: IngestEvent = { eventName: 'issues', payload };
 
-    const r1 = ingestEvent(ctx(root), { event, rawBody, deliveryId: 'd-1' });
+    const r1 = await ingestEvent(ctx(root), { event, rawBody, deliveryId: 'd-1' });
     expect(r1.status).toBe('ingested');
 
-    const r2 = ingestEvent(ctx(root), { event, rawBody, deliveryId: 'd-2' });
+    const r2 = await ingestEvent(ctx(root), { event, rawBody, deliveryId: 'd-2' });
     expect(r2.status).toBe('duplicate');
     expect(r2.memoryId).toBe(r1.memoryId);
 
@@ -197,7 +209,7 @@ describe('ingestEvent', () => {
     expect(entries.filter((e) => e.tags.includes('source:github'))).toHaveLength(1);
   });
 
-  it('3. empty body skip: returns skipped, log row has memory_id=NULL, replay returns duplicate', () => {
+  it('3. empty body skip: returns skipped, log row has memory_id=NULL, replay returns duplicate', async () => {
     const payload: GitHubIssueEvent = {
       action: 'opened',
       repository: {
@@ -216,7 +228,7 @@ describe('ingestEvent', () => {
     const rawBody = JSON.stringify(payload);
     const event: IngestEvent = { eventName: 'issues', payload };
 
-    const r1 = ingestEvent(ctx(root), { event, rawBody, deliveryId: 'd-1' });
+    const r1 = await ingestEvent(ctx(root), { event, rawBody, deliveryId: 'd-1' });
     expect(r1.status).toBe('skipped');
     expect(r1.memoryId).toBeNull();
 
@@ -239,33 +251,33 @@ describe('ingestEvent', () => {
     }
 
     // Replay returns 'duplicate', not 'skipped' (transform isn't re-run).
-    const r2 = ingestEvent(ctx(root), { event, rawBody, deliveryId: 'd-2' });
+    const r2 = await ingestEvent(ctx(root), { event, rawBody, deliveryId: 'd-2' });
     expect(r2.status).toBe('duplicate');
     expect(r2.memoryId).toBeNull();
   });
 
-  it('4. all four event types ingest with correct artifact_ref shapes', () => {
+  it('4. all four event types ingest with correct artifact_ref shapes', async () => {
     const issuePayload = makeIssueEvent();
     const issueCommentPayload = makeIssueCommentEvent();
     const prPayload = makePullRequestEvent();
     const prReviewCommentPayload = makePrReviewCommentEvent();
 
-    const r1 = ingestEvent(ctx(root), {
+    const r1 = await ingestEvent(ctx(root), {
       event: { eventName: 'issues', payload: issuePayload },
       rawBody: JSON.stringify(issuePayload),
       deliveryId: 'd-1',
     });
-    const r2 = ingestEvent(ctx(root), {
+    const r2 = await ingestEvent(ctx(root), {
       event: { eventName: 'issue_comment', payload: issueCommentPayload },
       rawBody: JSON.stringify(issueCommentPayload),
       deliveryId: 'd-2',
     });
-    const r3 = ingestEvent(ctx(root), {
+    const r3 = await ingestEvent(ctx(root), {
       event: { eventName: 'pull_request', payload: prPayload },
       rawBody: JSON.stringify(prPayload),
       deliveryId: 'd-3',
     });
-    const r4 = ingestEvent(ctx(root), {
+    const r4 = await ingestEvent(ctx(root), {
       event: { eventName: 'pull_request_review_comment', payload: prReviewCommentPayload },
       rawBody: JSON.stringify(prReviewCommentPayload),
       deliveryId: 'd-4',
@@ -284,12 +296,12 @@ describe('ingestEvent', () => {
     expect(refs.has('github://acme/demo/pull/7/review_comment/12345')).toBe(true);
   });
 
-  it('5. race with a second worker: the lost write rolls back, returns skipped_duplicate with other worker memoryId', () => {
+  it('5. race with a second worker: the lost write rolls back, returns skipped_duplicate with other worker memoryId', async () => {
     const payload = makeIssueEvent();
     const rawBody = JSON.stringify(payload);
     const event: IngestEvent = { eventName: 'issues', payload };
 
-    const { loser: result, winner } = ingestBehindAnotherWorker(root, { event, rawBody, deliveryId: 'd-this-worker' });
+    const { loser: result, winner } = await ingestBehindAnotherWorker(root, { event, rawBody, deliveryId: 'd-this-worker' });
     const otherWorkerMemoryId = winner.memoryId;
 
     expect(winner.status).toBe('ingested');
@@ -312,16 +324,16 @@ describe('ingestEvent', () => {
     }
   });
 
-  it('6. replay defense: same body with two different deliveryIds returns duplicate on second call', () => {
+  it('6. replay defense: same body with two different deliveryIds returns duplicate on second call', async () => {
     const payload = makeIssueEvent();
     const rawBody = JSON.stringify(payload);
     const event: IngestEvent = { eventName: 'issues', payload };
 
-    const r1 = ingestEvent(ctx(root), { event, rawBody, deliveryId: 'attacker-replay-uuid-1' });
+    const r1 = await ingestEvent(ctx(root), { event, rawBody, deliveryId: 'attacker-replay-uuid-1' });
     expect(r1.status).toBe('ingested');
 
     // Same signed body, different (unsigned, attacker-controlled) delivery UUID.
-    const r2 = ingestEvent(ctx(root), { event, rawBody, deliveryId: 'attacker-replay-uuid-2' });
+    const r2 = await ingestEvent(ctx(root), { event, rawBody, deliveryId: 'attacker-replay-uuid-2' });
     expect(r2.status).toBe('duplicate');
     expect(r2.memoryId).toBe(r1.memoryId);
   });
@@ -349,12 +361,12 @@ describe('ingestEvent', () => {
     expect(kNull).toBe(kUndef);
   });
 
-  it('8. race rollback verification: only the OTHER worker memory remains after the lost write', () => {
+  it('8. race rollback verification: only the OTHER worker memory remains after the lost write', async () => {
     const payload = makeIssueEvent();
     const rawBody = JSON.stringify(payload);
     const event: IngestEvent = { eventName: 'issues', payload };
 
-    const { loser: result, winner } = ingestBehindAnotherWorker(root, { event, rawBody, deliveryId: 'd-this-worker' });
+    const { loser: result, winner } = await ingestBehindAnotherWorker(root, { event, rawBody, deliveryId: 'd-this-worker' });
     const otherWorkerMemoryId = winner.memoryId;
 
     expect(result.status).toBe('skipped_duplicate');

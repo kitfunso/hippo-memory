@@ -13,17 +13,22 @@
  * `hippo forget --archive`): that path removes a raw receipt's content and
  * keeps only its metadata. A dormant memory keeps its content.
  *
- * DB-only helpers: the caller owns the handle and any transaction. The
- * tenant-scoped entry points are api.listDormant / restoreDormant /
- * forgetDormant.
+ * The db-taking helpers leave the handle and any transaction to the caller.
+ * The hippoRoot-taking functions at the end open one of their own, for
+ * api.listDormant / restoreDormant / forgetDormant / isDormant.
  */
-import { closeHippoDb, openHippoDb, withWriteScope, type DatabaseSyncLike } from '../db.js';
+import { closeHippoDb, openHippoDb, withWriteScope, withWriteScopeOr, type DatabaseSyncLike } from '../db.js';
 import type { MemoryEntry } from '../memory.js';
 import type { SqlFragment } from '../recall-scope.js';
 import type { WriteBudget } from '../write-budget.js';
-import { rejectionDigest } from './rejection.js';
+import { RejectedValueError, rejectionDigest } from './rejection.js';
 import { escapeLike } from '../escape.js';
 import { warnDamagedColumn } from '../util/stored-json.js';
+import { DAY_MS } from '../util/time.js';
+import { appendAuditEvent } from './audit.js';
+import { audit, auditRejectionRefusal } from './audit-event.js';
+import { entryIdTakenAt } from './entry-reads.js';
+import { writeEntryDbOnly, writeEntryMirrors } from './entry-writes.js';
 
 /** Why a memory went dormant: sleep's decay pass, an imported agent memory whose note was deleted, `hippo projects repair` splitting a two-project merge, or `hippo audit repair` setting aside an automatic memory with a certain defect. */
 export type DormantReason = 'decay' | 'source-deleted' | 'project-repair' | 'quality-repair';
@@ -137,7 +142,7 @@ const DORMANT_WITH_SCOPE = `(SELECT *, CASE WHEN json_valid(entry_json) THEN jso
 const EVERY_SCOPE: SqlFragment = { sql: '1', params: [] };
 
 /** A tenant's dormant memories whose scope `admit` passes, newest first, optionally filtered by search terms. */
-export function listDormantRows(db: DatabaseSyncLike, tenantId: string, opts: ListDormantOpts = {}, admit: SqlFragment = EVERY_SCOPE): DormantMemory[] {
+function listDormantRows(db: DatabaseSyncLike, tenantId: string, opts: ListDormantOpts = {}, admit: SqlFragment = EVERY_SCOPE): DormantMemory[] {
   const terms = (opts.query ?? '').trim().split(/\s+/).filter((t) => t.length > 0);
   const limit = opts.limit !== undefined && Number.isFinite(opts.limit) && opts.limit >= 1
     ? Math.floor(opts.limit)
@@ -209,7 +214,7 @@ export function replaceDormantEntry(db: DatabaseSyncLike, tenantId: string, id: 
 }
 
 /** Whether a tenant has a dormant memory with this id whose scope `admit` passes (snapshot readable or not). */
-export function hasDormantRow(db: DatabaseSyncLike, tenantId: string, id: string, admit: SqlFragment = EVERY_SCOPE): boolean {
+function hasDormantRow(db: DatabaseSyncLike, tenantId: string, id: string, admit: SqlFragment = EVERY_SCOPE): boolean {
   return db.prepare(`SELECT 1 FROM ${DORMANT_WITH_SCOPE} WHERE tenant_id = ? AND id = ? AND ${admit.sql}`).get(tenantId, id, ...admit.params) !== undefined;
 }
 
@@ -281,6 +286,118 @@ export async function expireDormantBefore(
     // The keys come from a read, so a run with nothing to expire never takes the write lock.
     const keys = expiredDormantKeys(db, cutoffIso);
     return opts.dryRun ? keys.length : await expireInChunks(db, keys, cutoffIso, opts.budget);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/** A tenant's dormant memories whose scope `admit` passes, newest first, read on a handle of its own. */
+export function loadDormantMemories(hippoRoot: string, tenantId: string, opts: ListDormantOpts = {}, admit: SqlFragment = EVERY_SCOPE): DormantMemory[] {
+  const db = openHippoDb(hippoRoot);
+  try {
+    return listDormantRows(db, tenantId, opts, admit);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/** Whether a tenant holds a dormant memory with this id whose scope `admit` passes, read on a handle of its own. */
+export function holdsDormantMemory(hippoRoot: string, tenantId: string, id: string, admit: SqlFragment = EVERY_SCOPE): boolean {
+  const db = openHippoDb(hippoRoot);
+  try {
+    return hasDormantRow(db, tenantId, id, admit);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/** One restore as the store applies it. The two functions are the caller's policy over plain rows; neither is handed the handle. */
+export interface DormantRestore {
+  readonly tenantId: string;
+  readonly id: string;
+  /** Who restores, for the audit rows. */
+  readonly actor: string;
+  /** False for a snapshot this caller may not touch, which then reads as missing. */
+  readonly inReach: (scope: string | null) => boolean;
+  /** The live memory the snapshot comes back as at `now`; a throw refuses before any write. */
+  readonly revive: (snapshot: DormantSnapshot, now: Date) => MemoryEntry;
+}
+
+/** The restored memory, or why nothing was written: no dormant copy in reach, or a live memory already holds the id. */
+export type DormantRestoreOutcome =
+  | { readonly status: 'restored'; readonly entry: MemoryEntry }
+  | { readonly status: 'missing' }
+  | { readonly status: 'active' };
+
+function auditDormantRestore(db: DatabaseSyncLike, restore: DormantRestore, snapshot: DormantSnapshot, now: Date): void {
+  appendAuditEvent(db, {
+    tenantId: restore.tenantId,
+    actor: restore.actor,
+    op: 'dormant_restore',
+    targetId: restore.id,
+    metadata: {
+      reason: snapshot.reason,
+      strengthAtDormancy: snapshot.strength,
+      dormantAt: snapshot.dormantAt,
+      daysDormant: Math.max(0, (now.getTime() - Date.parse(snapshot.dormantAt)) / DAY_MS),
+    },
+  });
+}
+
+function restoreInWriteScope(db: DatabaseSyncLike, restore: DormantRestore): DormantRestoreOutcome {
+  return withWriteScopeOr<DormantRestoreOutcome, DormantRestoreOutcome>(db, 'restore_dormant', (rollback) => {
+    const snapshot = readDormantSnapshot(db, restore.tenantId, restore.id);
+    if (!snapshot || !restore.inReach(snapshot.entry.scope ?? null)) return rollback({ status: 'missing' });
+    if (entryIdTakenAt(db, restore.id)) return rollback({ status: 'active' });
+    const now = new Date();
+    const entry = restore.revive(snapshot, now);
+    writeEntryDbOnly(db, entry, { actor: restore.actor });
+    deleteDormantRow(db, restore.tenantId, restore.id);
+    // A restore is a labelled "forgot it, then needed it" event, the signal a learned lifecycle trains on.
+    // Same write scope as the restore, so the label exists exactly when the restore does.
+    auditDormantRestore(db, restore, snapshot, now);
+    return { status: 'restored', entry };
+  });
+}
+
+/** Brings one dormant memory back on a single handle: the live row, the dormant delete and the audit row commit together, then its mirrors are written. */
+export function restoreDormantMemory(hippoRoot: string, restore: DormantRestore): DormantRestoreOutcome {
+  const db = openHippoDb(hippoRoot);
+  try {
+    let outcome: DormantRestoreOutcome;
+    try {
+      outcome = restoreInWriteScope(db, restore);
+    } catch (error) {
+      // Written after the rollback, so the refusal row outlives it.
+      if (error instanceof RejectedValueError) auditRejectionRefusal(db, error, restore.actor);
+      throw error;
+    }
+    if (outcome.status === 'restored') writeEntryMirrors(hippoRoot, outcome.entry);
+    return outcome;
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/** One permanent delete of a dormant memory. */
+export interface DormantForget {
+  readonly tenantId: string;
+  readonly id: string;
+  /** Who forgets, for the audit row. */
+  readonly actor: string;
+  /** The scopes this caller may touch; a row outside them reads as missing. */
+  readonly admit: SqlFragment;
+}
+
+/** Deletes a tenant's dormant memory for good and writes its `forget` audit row, on a single handle; false when it holds none `admit` passes. */
+export function forgetDormantMemory(hippoRoot: string, forget: DormantForget): boolean {
+  const { tenantId, id, actor, admit } = forget;
+  const db = openHippoDb(hippoRoot);
+  try {
+    if (!hasDormantRow(db, tenantId, id, admit) || !deleteDormantRow(db, tenantId, id)) return false;
+    // Best-effort, like every other forget audit row: the delete stands.
+    audit(db, 'forget', { tenantId, actor, targetId: id, metadata: { dormant: true } });
+    return true;
   } finally {
     closeHippoDb(db);
   }

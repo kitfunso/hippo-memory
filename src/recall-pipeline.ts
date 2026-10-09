@@ -4,9 +4,8 @@
 import { evalNow } from './ablation.js';
 import { oneCopyPerMemory } from './api/context-select.js';
 import { compareEntryIdentity, compareScoresDesc } from './compare.js';
-import { closeHippoDb, openHippoDb } from './db.js';
 import { isEmbeddingAvailable } from './local-embedding.js';
-import { computeGoalStackBoost, type GoalRecallLogRow } from './store/goals.js';
+import { activeGoalsWithPolicies, boostByGoals, type GoalRecallLogRow } from './store/goals.js';
 import { graphExpandRecall } from './graph-recall.js';
 import { DEFAULT_GRAPH_STREAM_WEIGHT } from './graph-stream.js';
 import { Layer, type MemoryEntry } from './memory.js';
@@ -368,21 +367,13 @@ function applyGoalBoosts(ctx: RankRecallCtx, opts: RankRecallOpts, state: RankSt
     return;
   }
   if (!opts.sessionId) return;
-  const db = openHippoDb(ctx.hippoRoot);
   // The helper re-spreads rows, so its steps come back in a map keyed by entry id.
   const goalBoostTrace = opts.why ? new Map<string, RerankStep>() : undefined;
-  try {
-    const boost = computeGoalStackBoost(db, state.results, {
-      sessionId: opts.sessionId,
-      tenantId: ctx.tenantId,
-      limit: opts.limit,
-      trace: goalBoostTrace,
-    });
-    state.results = boost.results;
-    state.goalRecallLog = boost.log;
-  } finally {
-    closeHippoDb(db);
-  }
+  const session = { sessionId: opts.sessionId, tenantId: ctx.tenantId };
+  // The log may name global rows; the store drops those when it writes, as it does for api.recall.
+  const boost = boostByGoals(state.results, activeGoalsWithPolicies(ctx.hippoRoot, session), { ...session, limit: opts.limit, trace: goalBoostTrace });
+  state.results = boost.results;
+  state.goalRecallLog = boost.log;
   if (goalBoostTrace && goalBoostTrace.size > 0) {
     state.results = state.results.map((r) => {
       const step = goalBoostTrace.get(r.entry.id);

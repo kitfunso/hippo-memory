@@ -8,7 +8,6 @@ import { fileURLToPath } from 'node:url';
 import { closeHippoDb, openHippoDb, rethrowIfSqliteBlocked, SqliteBlockedError, STORE_BUSY_MESSAGE } from '../src/db.js';
 import { StoreNotPortedError } from '../src/util/sqlite-blocked.js';
 import { mapApiError, STORE_NOT_PORTED_MESSAGE } from '../src/http-util.js';
-import { saveIncident } from '../src/incidents.js';
 import { mcpErrorResponse, type McpRequest } from '../src/mcp/server.js';
 import { initStore } from '../src/store/open.js';
 import { serve, sqliteStore, StoreBusyError, type ApiKeyRecord, type ContinuityKey, type HippoStore, type ServerHandle } from '../src/server.js';
@@ -461,7 +460,7 @@ describe('serve() under a store that has the objects group', () => {
   let memory: InMemoryObjectsStore;
   let handle: ServerHandle;
 
-  type RouteBody = Readonly<Record<string, string | readonly string[]>>;
+  type RouteBody = Readonly<Record<string, string | boolean | readonly string[]>>;
 
   /** One savable kind's routes: its reply fields, a create body, a successor body and the status its supersede answers. */
   interface SavedKind {
@@ -496,8 +495,6 @@ describe('serve() under a store that has the objects group', () => {
   beforeAll(async () => {
     vi.stubEnv('HIPPO_V1_RPS', '0');
     fixture = seedTwoTenants();
-    // An incident is opened by its own route, which this store does not serve yet, so the row is there before the store copies hippo.db.
-    saveIncident(fixture.dir, TENANT_A, { incidentText: 'checkout latency' }, 'cli');
     memory = inMemoryObjectsStore(fixture.dir);
     handle = await serve({ hippoRoot: fixture.dir, port: 0, store: memory.store });
   });
@@ -529,18 +526,41 @@ describe('serve() under a store that has the objects group', () => {
       expect((await call(memberB, 'GET', `${k.path}/1`)).status).toBe(404);
       expect((await call(memberB, 'POST', `${k.path}/1/supersede`, k.revise)).status).toBe(404);
     }
+    expect(await call(memberA, 'POST', '/v1/policies', { policyName: 'access', policyText: 'two reviewers', validFrom: '2026-01-01' })).toMatchObject({ status: 201, body: { policy: { id: 3 } } });
+    expect(await call(memberA, 'GET', '/v1/policies/asof?date=2026-02-01')).toMatchObject({ status: 200, body: { policies: [{ id: 3, policyName: 'access' }] } });
+    expect(await call(memberA, 'GET', '/v1/policies/asof?date=2025-12-31')).toEqual({ status: 200, body: { policies: [] } });
+    expect(await call(memberB, 'GET', '/v1/policies/asof?date=2026-02-01')).toEqual({ status: 200, body: { policies: [] } });
+    expect(await call(memberA, 'POST', '/v1/skills', { skillName: 'deploy', instructions: 'tag then publish' })).toMatchObject({ status: 201, body: { skill: { id: 3 } } });
+    expect(await call(memberA, 'GET', '/v1/skills/export')).toEqual({ status: 200, body: { markdown: '## deploy\n\ntag then publish' } });
+    expect(await call(memberB, 'GET', '/v1/skills/export')).toEqual({ status: 200, body: { markdown: '' } });
+    expect(await call(memberA, 'POST', '/v1/project-briefs/refresh', { repo: 'hippo', dryRun: true })).toMatchObject({ status: 200, body: { receiptCount: 0 } });
+    expect(await call(memberA, 'POST', '/v1/project-briefs/refresh', { repo: 'hippo' })).toMatchObject({ status: 200, body: { brief: { id: 3, repo: 'hippo', version: 1, status: 'active' } } });
+    expect(await call(memberA, 'POST', '/v1/project-briefs/refresh', { repo: 'hippo' })).toMatchObject({
+      status: 200, body: { brief: { id: 4, version: 2, changeSummary: 'auto-refresh from 0 receipt(s)', summary: expect.stringContaining('# Project Brief: hippo') } },
+    });
+    expect(await call(memberA, 'GET', '/v1/project-briefs?status=superseded')).toMatchObject({ status: 200, body: { briefs: [{ id: 3, supersededBy: 4 }, { id: 1 }] } });
+
+    expect(await call(memberA, 'POST', '/v1/incidents', { text: 'checkout latency' })).toMatchObject({ status: 201, body: { incident: { id: 1, tenantId: TENANT_A, status: 'open' } } });
+    expect(await call(memberA, 'POST', '/v1/incidents', { text: 'no evidence', linkedMemoryIds: ['mem_never_written'] })).toEqual({
+      status: 409, body: { error: `saveIncident: linked memory mem_never_written not found for tenant ${TENANT_A}` },
+    });
     expect(await call(memberA, 'GET', '/v1/incidents')).toMatchObject({ status: 200, body: { incidents: [{ id: 1, status: 'open' }], next_cursor: null } });
     expect(await call(memberA, 'GET', '/v1/incidents/1')).toMatchObject({ status: 200, body: { incident: { id: 1, incidentText: 'checkout latency' } } });
+    expect((await call(memberB, 'POST', '/v1/incidents/1/resolve', { resolutionText: 'not ours' })).status).toBe(404);
+    expect(await call(memberA, 'POST', '/v1/incidents/1/resolve', { resolutionText: 'scaled the pool' })).toMatchObject({
+      status: 200, body: { incident: { id: 1, status: 'resolved', resolutionText: 'scaled the pool' } },
+    });
+    expect((await call(memberA, 'POST', '/v1/incidents/1/resolve', { resolutionText: 'again' })).status).toBe(409);
     expect((await call(memberB, 'POST', '/v1/incidents/1/close', {})).status).toBe(404);
     expect(await call(memberA, 'POST', '/v1/incidents/1/close', {})).toMatchObject({ status: 200, body: { incident: { id: 1, status: 'closed' } } });
 
     const ported = v1Routes().filter((r) => r.group === 'objects').map((r) => r.route);
-    expect(ported).toHaveLength(33);
+    expect(ported).toHaveLength(38);
     expect([...answered].sort()).toEqual([...ported].sort());
     const actor = `api_key:${fixture.keys.memberA}`;
-    expect(memory.auditRows().slice(-5).map((e) => [e.op, e.actor, e.tenantId])).toEqual([
-      ['customer_note_supersede', actor, TENANT_A], ['customer_note_create', actor, TENANT_A], ['remember', actor, TENANT_A],
-      ['customer_note_close', actor, TENANT_A], ['incident_close', actor, TENANT_A],
+    expect(memory.auditRows().slice(-7).map((e) => [e.op, e.actor, e.tenantId])).toEqual([
+      ['project_brief_supersede', actor, TENANT_A], ['project_brief_create', actor, TENANT_A], ['remember', actor, TENANT_A],
+      ['incident_open', actor, TENANT_A], ['remember', actor, TENANT_A], ['incident_resolve', actor, TENANT_A], ['incident_close', actor, TENANT_A],
     ]);
     expect(hippoDbRows()).toEqual(before);
   });

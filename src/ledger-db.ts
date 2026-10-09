@@ -1,8 +1,11 @@
 // The store the token ledger writes to for a caller's root; context, recall and the session hooks share it.
-import { closeHippoDb, isSqliteBusy, noteStoreBusy, openHippoDb } from './db.js';
+import { isSqliteBusy, noteStoreBusy, type openHippoDb } from './db.js';
 import { errorFields, errorMessage, log } from './log.js';
 import { getGlobalRoot } from './shared.js';
-import { isInitialized } from './store/open.js';
+import { lastSentOnSurface, recordLedgerTurn, type LedgerTurn } from './store/ledger-turn.js';
+import { isInitialized, onHandle } from './store/open.js';
+import { sqliteSyncStore } from './store/sqlite/store.js';
+import type { LastSent, TokenSurface, TokenUse } from './token-ledger.js';
 
 export interface LedgerRootOpts {
   /** The store serves many people, so the global store of the user running it belongs to none of them. */
@@ -44,8 +47,8 @@ export function noteLedgerRowSkipped<E>(error: E): void {
   else log.warnThenDebug('token-ledger-row', message, errorFields(error));
 }
 
-/** Runs `fn` on ledgerRoot's store. Best-effort: undefined on any failure, because a ledger failure must not break context or recall. */
-export function withLedgerDb<T>(hippoRoot: string, fn: (db: ReturnType<typeof openHippoDb>) => T, opts?: LedgerRootOpts): T | undefined {
+/** Runs `call` on ledgerRoot's store root. Best-effort: undefined on any failure, because a ledger failure must not break context or recall. */
+function onLedgerRoot<T>(hippoRoot: string, opts: LedgerRootOpts | undefined, call: (root: string) => T): T | undefined {
   let root: string | null = null;
   try {
     root = ledgerRoot(hippoRoot, opts);
@@ -55,14 +58,32 @@ export function withLedgerDb<T>(hippoRoot: string, fn: (db: ReturnType<typeof op
     return undefined;
   }
   if (root === null) return undefined;
-  let db: ReturnType<typeof openHippoDb> | undefined;
   try {
-    db = openHippoDb(root);
-    return fn(db);
+    return call(root);
   } catch (error) {
     noteLedgerRowSkipped(error);
     return undefined;
-  } finally {
-    if (db) closeHippoDb(db);
   }
+}
+
+/** Books one row in ledgerRoot's store, best-effort. */
+export function bookTokenUse(hippoRoot: string, use: TokenUse, opts?: LedgerRootOpts): void {
+  onLedgerRoot(hippoRoot, opts, (root) => sqliteSyncStore(root).recordTokens(use));
+}
+
+/** Books a turn's rows and then its delivery event on one connection of ledgerRoot's store, best-effort. */
+export function bookLedgerTurn(hippoRoot: string, turn: LedgerTurn, opts?: LedgerRootOpts): void {
+  onLedgerRoot(hippoRoot, opts, (root) => recordLedgerTurn(root, turn));
+}
+
+/** What the session last sent on `surface` in ledgerRoot's store; undefined with no ledger or a failed read. */
+export function ledgerLastSent(
+  hippoRoot: string, tenantId: string, sessionId: string | null | undefined, surface: TokenSurface, opts?: LedgerRootOpts,
+): LastSent | null | undefined {
+  return onLedgerRoot(hippoRoot, opts, (root) => lastSentOnSurface(root, tenantId, sessionId, surface));
+}
+
+/** Runs `fn` on a handle of ledgerRoot's store, best-effort as the calls above. */
+export function withLedgerDb<T>(hippoRoot: string, fn: (db: ReturnType<typeof openHippoDb>) => T, opts?: LedgerRootOpts): T | undefined {
+  return onLedgerRoot(hippoRoot, opts, (root) => onHandle(root, fn));
 }

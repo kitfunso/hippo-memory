@@ -94,7 +94,7 @@ export const DECISION: SavableDescriptor<'decision', SaveDecisionOpts> = {
  *
  * The memory mirror preserves the legacy `hippo decide` shape: tags
  * ['decision', ...extraTags], source 'decision', confidence 'verified',
- * the half-life objectHalfLifeDays picks, content = "<text>\n\nContext: <context>"
+ * the configured default half-life, content = "<text>\n\nContext: <context>"
  * when context is given (so existing recall output is unchanged).
  */
 export function saveDecision(

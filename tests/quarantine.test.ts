@@ -67,7 +67,7 @@ describe('GitHub ingest quarantines a flagged comment', () => {
 
   it('injection body lands under quarantine:private:github:public:acme/demo, pending, with a quarantine audit row', async () => {
     const ctx = adminCtx(home);
-    const result = ingestEvent(ctx, { event: githubCommentEvent(INJECTION), rawBody: 'x', deliveryId: 'd1' });
+    const result = await ingestEvent(ctx, { event: githubCommentEvent(INJECTION), rawBody: 'x', deliveryId: 'd1' });
     expect(result.status).toBe('ingested');
 
     const entry = readEntry(home, result.memoryId!, 'default');
@@ -82,9 +82,9 @@ describe('GitHub ingest quarantines a flagged comment', () => {
     expect(audit.some((e) => e.targetId === result.memoryId)).toBe(true);
   });
 
-  it('a clean comment is not quarantined', () => {
+  it('a clean comment is not quarantined', async () => {
     const ctx = adminCtx(home);
-    const result = ingestEvent(ctx, { event: githubCommentEvent(CLEAN), rawBody: 'y', deliveryId: 'd2' });
+    const result = await ingestEvent(ctx, { event: githubCommentEvent(CLEAN), rawBody: 'y', deliveryId: 'd2' });
     const entry = readEntry(home, result.memoryId!, 'default');
     expect(entry?.scope).toBe('github:public:acme/demo');
     expect(quarantineRow(home, result.memoryId!)).toBeUndefined();
@@ -118,9 +118,9 @@ describe('a disguised instruction from a connector is held like the plain one', 
 describe('recall visibility and the approve/reject lifecycle', () => {
   let home: string;
   let id: string;
-  beforeEach(() => {
+  beforeEach(async () => {
     home = makeRoot('quarantine', ISOLATION_OFF);
-    const result = ingestEvent(adminCtx(home), { event: githubCommentEvent(INJECTION), rawBody: 'x', deliveryId: 'd1' });
+    const result = await ingestEvent(adminCtx(home), { event: githubCommentEvent(INJECTION), rawBody: 'x', deliveryId: 'd1' });
     id = result.memoryId!;
   });
   afterEach(() => rmSync(home, { recursive: true, force: true }));
@@ -151,7 +151,7 @@ describe('recall visibility and the approve/reject lifecycle', () => {
     await api.quarantineApprove(ctx, id);
     await expect(api.quarantineApprove(ctx, id)).rejects.toThrow(/already approved/);
 
-    const other = ingestEvent(ctx, { event: githubCommentEvent(INJECTION, false, 502), rawBody: 'z', deliveryId: 'd3' }).memoryId!;
+    const other = (await ingestEvent(ctx, { event: githubCommentEvent(INJECTION, false, 502), rawBody: 'z', deliveryId: 'd3' })).memoryId!;
     await api.quarantineReject(ctx, other);
     await expect(api.quarantineApprove(ctx, other)).rejects.toThrow(/already rejected/);
 
@@ -251,11 +251,11 @@ describe('atomicity: a connector event log write that throws leaves no memory an
 });
 
 describe('Slack ingest quarantines too', () => {
-  it('an injection message lands under quarantine:private:slack:public:C1', () => {
+  it('an injection message lands under quarantine:private:slack:public:C1', async () => {
     const home = makeRoot('quarantine', ISOLATION_OFF);
     try {
       const ctx = adminCtx(home);
-      const result = ingestMessage(ctx, {
+      const result = await ingestMessage(ctx, {
         teamId: 'T1',
         channel: { id: 'C1', is_private: false },
         message: { type: 'message', channel: 'C1', user: 'U1', text: INJECTION, ts: '1700.0001' },
@@ -312,7 +312,7 @@ describe('quarantine over HTTP and MCP', () => {
 
   beforeEach(async () => {
     home = makeRoot('quarantine', ISOLATION_OFF);
-    const result = ingestEvent(adminCtx(home), { event: githubCommentEvent(INJECTION), rawBody: 'x', deliveryId: 'd1' });
+    const result = await ingestEvent(adminCtx(home), { event: githubCommentEvent(INJECTION), rawBody: 'x', deliveryId: 'd1' });
     id = result.memoryId!;
     handle = await serve({ hippoRoot: home, port: 0 });
   });
@@ -358,7 +358,7 @@ describe('quarantine over HTTP and MCP', () => {
   });
 
   it('a grant on the row\'s original private scope does not reach the distinct quarantine scope', async () => {
-    const privateResult = ingestEvent(adminCtx(home), { event: githubCommentEvent(INJECTION, true, 777), rawBody: 'p', deliveryId: 'dp' });
+    const privateResult = await ingestEvent(adminCtx(home), { event: githubCommentEvent(INJECTION, true, 777), rawBody: 'p', deliveryId: 'dp' });
     const quarantineScope = readEntry(home, privateResult.memoryId!, 'default')?.scope;
     expect(quarantineScope).toBe('quarantine:private:github:private:acme/demo');
 
@@ -393,7 +393,7 @@ describe('quarantine over HTTP and MCP', () => {
 });
 
 describe('CLI drive via the built binary', () => {
-  it('hippo quarantine --json lists the pending id, and approve succeeds', () => {
+  it('hippo quarantine --json lists the pending id, and approve succeeds', async () => {
     const cliHome = mkdtempSync(join(tmpdir(), 'hippo-quarantine-cli-'));
     try {
       const env = { ...process.env, HIPPO_HOME: join(cliHome, 'global-hippo'), HIPPO_SKIP_AUTO_INTEGRATIONS: '1' };
@@ -401,7 +401,7 @@ describe('CLI drive via the built binary', () => {
       const hippoDir = join(cliHome, '.hippo');
 
       const ctx: api.HippoDbContext = { hippoRoot: hippoDir, tenantId: 'default', actor: api.adminActor('cli') };
-      const result = ingestEvent(ctx, { event: githubCommentEvent(INJECTION), rawBody: 'x', deliveryId: 'd1' });
+      const result = await ingestEvent(ctx, { event: githubCommentEvent(INJECTION), rawBody: 'x', deliveryId: 'd1' });
 
       const listOut = execFileSync('node', [HIPPO_BIN, 'quarantine', 'list', '--json'], { cwd: cliHome, env }).toString();
       // SAFETY: cmdQuarantine's --json output is always { quarantine: [...] }.

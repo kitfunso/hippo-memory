@@ -46,13 +46,13 @@ const ghEvent = {
     issue: { number: 1, title: 'ci-seed', body: 'seed', user: { login: 'ciuser', id: 1 } },
   },
 };
-ingestEvent(ctx, {
+await ingestEvent(ctx, {
   event: ghEvent,
   rawBody: JSON.stringify(ghEvent.payload),
   deliveryId: 'ci-seed-1',
 });
 
-ingestMessage(ctx, {
+await ingestMessage(ctx, {
   teamId: 'T_CI',
   channel: { id: 'C_CI', name: 'ci', isPrivate: false },
   message: {

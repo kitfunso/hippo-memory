@@ -158,8 +158,8 @@ describe('connector webhooks', () => {
     expect(JSON.parse(row.raw_payload).event.text).toBe('bot token [REDACTED] expires on friday');
 
     addWorkspace(root, { teamId: 'T1', tenantId: 'default' });
-    expect(replayDlqEntry({ hippoRoot: root }, row.id, { signingSecret: SIGNING }).status).toBe('sig_missing');
-    expect(replayDlqEntry({ hippoRoot: root }, row.id, { force: true }).ok).toBe(true);
+    expect((await replayDlqEntry({ hippoRoot: root }, row.id, { signingSecret: SIGNING })).status).toBe('sig_missing');
+    expect((await replayDlqEntry({ hippoRoot: root }, row.id, { force: true })).ok).toBe(true);
     expectRedacted(storedContents(), SLACK_TOKEN, 'expires on friday');
   });
 

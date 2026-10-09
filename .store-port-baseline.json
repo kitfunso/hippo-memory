@@ -1,12 +1,12 @@
 {
-  "openersOutside": 54,
+  "openersOutside": 43,
   "openersInCli": 11,
   "storeBranches": 4,
-  "routesWithoutStore": 5,
+  "routesWithoutStore": 0,
   "sqliteOnlyRoutes": 2,
   "routesOnLoop": 55,
   "twinFunctions": 0,
-  "sqlOutside": 10,
+  "sqlOutside": 0,
   "txLiterals": 12,
   "openersOutsideByFile": {
     "src/agent-memories/sync.ts": 3,
@@ -26,25 +26,14 @@
     "src/half-life-migration.ts": 2,
     "src/importers/core.ts": 2,
     "src/importers/vault.ts": 1,
-    "src/incidents.ts": 1,
     "src/index.ts": 2,
-    "src/invalidation.ts": 3,
     "src/ledger-db.ts": 1,
-    "src/policies.ts": 1,
-    "src/project-briefs.ts": 2,
     "src/recall-pipeline.ts": 1,
-    "src/reject-flow.ts": 3,
     "src/server/boot.ts": 1,
     "src/session-owners.ts": 1,
-    "src/skills.ts": 1,
     "src/support-bundle.ts": 1
   },
-  "sqlOutsideByFile": {
-    "src/incidents.ts": 6,
-    "src/policies.ts": 1,
-    "src/project-briefs.ts": 2,
-    "src/skills.ts": 1
-  },
+  "sqlOutsideByFile": {},
   "sqliteLocalMethods": [
     "applyOutcome",
     "applyOutcomeToLastRecall",

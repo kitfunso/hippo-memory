@@ -28,6 +28,8 @@ export const SHARED_WRITERS = [
   'recordTokenUse',
   'recordTokens',
   'withLedgerDb',
+  'bookTokenUse',
+  'bookLedgerTurn',
   'updateStats',
   'updateStatsUnlessBusy',
   'openHippoDb',

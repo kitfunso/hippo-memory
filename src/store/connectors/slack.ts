@@ -75,19 +75,6 @@ export function rawMemoryIdForArtifactAt(db: DatabaseSyncLike, artifactRef: stri
   return row?.id ?? null;
 }
 
-/** A deletion event's standing on one handle: already seen, or the raw memory it targets (null when none). */
-export type SlackDeletionTarget = { seen: true } | { seen: false; memoryId: string | null };
-
-export function slackDeletionTarget(
-  hippoRoot: string,
-  target: { eventId: string; artifactRef: string; tenantId: string },
-): SlackDeletionTarget {
-  return onHandle(hippoRoot, (db): SlackDeletionTarget =>
-    slackEventSeenAt(db, target.eventId)
-      ? { seen: true }
-      : { seen: false, memoryId: rawMemoryIdForArtifactAt(db, target.artifactRef, target.tenantId) });
-}
-
 // Dead-letter queue
 
 export type DlqBucket = 'parse_error' | 'unroutable' | 'signature_fail';

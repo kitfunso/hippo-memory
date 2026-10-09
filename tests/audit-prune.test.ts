@@ -93,7 +93,7 @@ describe('pruneAuditLog', () => {
     seedAuditRow(db, { tenantId: 'acme', op: 'recall', daysAgo: 1 });
     expect(countAudit(db, 'acme')).toBe(4);
 
-    const result = pruneAuditLog(db, { olderThanDays: 90, tenantId: 'acme' });
+    const result = pruneAuditLog(root, { olderThanDays: 90, tenantId: 'acme' });
     // 2 rows older than 90 days deleted, 2 rows newer preserved, +1 audit_prune row.
     expect(result.count).toBe(2);
     expect(result.dryRun).toBe(false);
@@ -105,7 +105,7 @@ describe('pruneAuditLog', () => {
     seedAuditRow(db, { tenantId: 'globex', op: 'recall', daysAgo: 100 });
     seedAuditRow(db, { tenantId: 'initech', op: 'recall', daysAgo: 100 });
 
-    const result = pruneAuditLog(db, { olderThanDays: 30, tenantId: 'acme' });
+    const result = pruneAuditLog(root, { olderThanDays: 30, tenantId: 'acme' });
     expect(result.count).toBe(1);
     expect(countAudit(db, 'acme')).toBe(1); // the audit_prune event
     expect(countAudit(db, 'globex')).toBe(1); // untouched
@@ -116,7 +116,7 @@ describe('pruneAuditLog', () => {
     seedAuditRow(db, { tenantId: 'acme', op: 'recall', daysAgo: 100 });
     seedAuditRow(db, { tenantId: 'acme', op: 'recall', daysAgo: 95 });
 
-    const result = pruneAuditLog(db, { olderThanDays: 90, tenantId: 'acme', dryRun: true });
+    const result = pruneAuditLog(root, { olderThanDays: 90, tenantId: 'acme', dryRun: true });
     expect(result.count).toBe(2);
     expect(result.dryRun).toBe(true);
     expect(countAudit(db, 'acme')).toBe(2); // nothing deleted, no audit_prune emitted
@@ -125,7 +125,7 @@ describe('pruneAuditLog', () => {
   it('emits an audit_prune row with metadata after a real prune', () => {
     seedAuditRow(db, { tenantId: 'acme', op: 'recall', daysAgo: 100 });
 
-    pruneAuditLog(db, { olderThanDays: 30, tenantId: 'acme', actor: 'cli:test' });
+    pruneAuditLog(root, { olderThanDays: 30, tenantId: 'acme', actor: 'cli:test' });
 
     // SAFETY: literal SELECT of these three known columns for the
     // audit_prune row pruneAuditLog just emitted.
@@ -145,26 +145,26 @@ describe('pruneAuditLog', () => {
   it('returns count=0 when nothing matches', () => {
     seedAuditRow(db, { tenantId: 'acme', op: 'recall', daysAgo: 1 });
 
-    const result = pruneAuditLog(db, { olderThanDays: 30, tenantId: 'acme' });
+    const result = pruneAuditLog(root, { olderThanDays: 30, tenantId: 'acme' });
     expect(result.count).toBe(0);
     // audit_prune row still emitted even for zero-count prunes (full audit trail).
     expect(countAudit(db, 'acme')).toBe(2);
   });
 
   it('throws on non-positive olderThanDays', () => {
-    expect(() => pruneAuditLog(db, { olderThanDays: 0, tenantId: 'acme' })).toThrow(/positive number/);
-    expect(() => pruneAuditLog(db, { olderThanDays: -1, tenantId: 'acme' })).toThrow(/positive number/);
-    expect(() => pruneAuditLog(db, { olderThanDays: NaN, tenantId: 'acme' })).toThrow(/positive number/);
+    expect(() => pruneAuditLog(root, { olderThanDays: 0, tenantId: 'acme' })).toThrow(/positive number/);
+    expect(() => pruneAuditLog(root, { olderThanDays: -1, tenantId: 'acme' })).toThrow(/positive number/);
+    expect(() => pruneAuditLog(root, { olderThanDays: NaN, tenantId: 'acme' })).toThrow(/positive number/);
   });
 
   it('throws on missing tenantId', () => {
-    expect(() => pruneAuditLog(db, { olderThanDays: 30, tenantId: '' })).toThrow(/tenantId is required/);
+    expect(() => pruneAuditLog(root, { olderThanDays: 30, tenantId: '' })).toThrow(/tenantId is required/);
   });
 
   it('the just-emitted audit_prune row is NOT itself pruned by the same call', () => {
     // Edge case: ensure the audit_prune row's ts > cutoff so it survives.
     seedAuditRow(db, { tenantId: 'acme', op: 'recall', daysAgo: 100 });
-    pruneAuditLog(db, { olderThanDays: 1, tenantId: 'acme' });
+    pruneAuditLog(root, { olderThanDays: 1, tenantId: 'acme' });
     // 1 old row deleted, 1 audit_prune row remaining (its ts is now, way newer than cutoff).
     expect(countAudit(db, 'acme')).toBe(1);
     // SAFETY: literal SELECT of the op column against the known audit_log

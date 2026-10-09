@@ -14,7 +14,8 @@ const fresh = (): Generated => structuredClone(BASE);
 const parse = (recs: readonly Z0Record[]) => parseZ0Records(jsonl(recs), 'runs.jsonl').records;
 const runOf = <R extends { sequence: string; seed: number }>(rs: readonly R[], sequence: string, seed: number): R[] =>
   rs.filter((r) => r.sequence === sequence && r.seed === seed);
-const STAT = { iterations: 2000, seed: 1 };
+// A small resample count: the cases assert verdicts and arithmetic, which the seed fixes, and never the precision of the bootstrap.
+const STAT = { iterations: 200, seed: 1 };
 const scoredOf = (g: Generated) => filterRecords(parse(g.records), g.plan).scored;
 const analyze = (g: Generated, extra = {}) =>
   analyzeZ0(parse(g.records), { planCells: g.plan, prices: PRICES, grading: GRADING, unblind: true, refuse: () => null, ...STAT, ...extra });
@@ -28,8 +29,17 @@ const real = <T>(x: T): Real<T> => {
   // SAFETY: the check above rules out null, undefined and strings; deeper fields are asserted by the tests that read them.
   return x as Real<T>;
 };
-const hyp = (opts: GenOpts) => real(analyze(generate(opts)).hypotheses);
-const gatesOf = (g: Generated) => real(analyze(g, { unblind: false }).gates);
+const blind = (g: Generated) => analyze(g, { unblind: false });
+/** The hypothesis block of a run whose gates pass. An unblinded analyzeZ0 also builds the reported block, most of its cost, which these cases never read. */
+const hypOf = (a: ReturnType<typeof blind>) => {
+  expect(a.status).toBe('valid');
+  return real(computeHypotheses(a.filtered, PRICES, STAT));
+};
+const hyp = (opts: GenOpts) => hypOf(blind(generate(opts)));
+let h1Win: ReturnType<typeof hyp> | undefined;
+/** The run in which A2 wins H1; two cases read it, so it is built once. */
+const winHyp = () => (h1Win ??= hyp({ knobs: { A2: { fail: 0.1 } } }));
+const gatesOf = (g: Generated) => real(blind(g).gates);
 const te = (estimate: number, p: number, low: number, high: number, nullValue = 0) => ({ estimate, low, high, p, iterations: 2000, dropped: 0, nullValue });
 
 function corpus(recs: readonly Z0Record[], plan: readonly object[]) {
@@ -237,7 +247,7 @@ describe('Z0 filters', () => {
 
 describe('Z0 hypotheses', () => {
   it('2, 3, 4: H1 win, a coding split, and a loss under one coding', () => {
-    expect(hyp({ knobs: { A2: { fail: 0.1 } } }).verdicts.H1.final).toEqual({ verdict: 'win', reachesMinimum: true });
+    expect(winHyp().verdicts.H1.final).toEqual({ verdict: 'win', reachesMinimum: true });
     const split = hyp({ knobs: { A2: { na: 0.4, fail: 0.1 } } }).verdicts.H1;
     expect([split.violation.verdict === 'win', split.excluded.verdict, split.final.verdict]).toEqual([false, 'win', 'inconclusive']);
     const loss = hyp({ knobs: { A1: { fail: 0.2 }, A2: { na: 0.6, fail: 0.08 } } });
@@ -264,7 +274,7 @@ describe('Z0 hypotheses', () => {
   it('6: H3 is the ratio of summed costs on heterogeneous tasks, with its splits', () => {
     const heavy = (s: { position: number }) => s.position % 3 === 0;
     const g = generate({ knobs: { A1: { cost: (s) => (heavy(s) ? 10 : 1) }, A2: { cost: (s) => (heavy(s) ? 7 : 1.2) } } });
-    const h = real(analyze(g).hypotheses);
+    const h = hypOf(blind(g));
     const cost = (r: Z0Record) => priceUsage(addUsage(r.usage!.firstSession, r.usage!.extra), PRICES['claude-code']);
     const [t, c] = ['A2', 'A1'].map((arm) => g.records.filter((r) => r.arm === arm && r.set !== 'X').map(cost));
     const sum = (xs: number[]) => xs.reduce((s, x) => s + x, 0);
@@ -287,12 +297,12 @@ describe('Z0 hypotheses', () => {
 
   it('29: H4 is not run without set N in the plan, and fails when filters leave set N empty', () => {
     const records = fresh().records.filter((r) => r.set !== 'N');
-    const none = analyze({ records, plan: planOf(records) });
-    const open = real(none.hypotheses);
+    const none = blind({ records, plan: planOf(records) });
+    const open = hypOf(none);
     expect([open.H4, open.order.at(-2), none.unplanned]).toEqual([NOT_RUN, 'H4', ['set N']]);
     const voided = fresh();
     for (const r of voided.records) if (r.set === 'N' && r.arm === 'A1') r.void = 'read-past-transcript';
-    const h = real(analyze(voided).hypotheses);
+    const h = hypOf(blind(voided));
     expect([h.H4.reason, h.H4.gate.pass, h.order[0]]).toEqual([NO_N_DATA, false, 'H4']);
     const full = fresh();
     const missingN = filterRecords(parse(full.records.filter((r) => r.set !== 'N')), full.plan);
@@ -318,7 +328,7 @@ describe('Z0 hypotheses', () => {
   it('18, 19: attribution words a winning H1 only, the behaviour sentence when A5 is not planned; H2 reads Codex apply records only', () => {
     const behaviour = hyp({ knobs: { A2: { fail: 0.1 }, A5: { fail: 0.1 } } });
     expect([behaviour.verdicts.H1.final.verdict, behaviour.attribution.sentence]).toEqual(['win', BEHAVIOUR_SENTENCE]);
-    expect(hyp({ knobs: { A2: { fail: 0.1 } } }).attribution.sentence).toBe(LESSONS_SENTENCE);
+    expect(winHyp().attribution.sentence).toBe(LESSONS_SENTENCE);
     // A2 beats A5 here, yet a tie gets no sentence.
     const tie = hyp({ knobs: { A5: { fail: 0.9 } } });
     expect([tie.verdicts.H1.final.verdict, tie.attribution.sentence, tie.attribution.reason]).toEqual(['tie', null, 'not applicable, H1 is tie']);
@@ -331,8 +341,8 @@ describe('Z0 hypotheses', () => {
     expect([winH.verdicts.H1.final.verdict, winH.attribution]).toEqual(['win', { sentence: BEHAVIOUR_SENTENCE, reason: 'A5 not run' }]);
     expect(renderText(buildReport(win, { warnings: [] }, {}, null, []))).toContain(`attribution: ${BEHAVIOUR_SENTENCE}; A2 vs A5 not run\n`);
     expect(hyp({ arms: noA5 }).attribution).toEqual({ sentence: null, reason: 'not applicable, H1 is tie' });
-    const h2 = (opts: GenOpts) => bothCodings(scoredOf(generate(opts)), 'X2', 'X3', STAT, codexApply);
-    expect(h2({ knobs: { X2: { teachFail: 1 }, X3: { teachFail: 0 } } })).toEqual(h2({}));
+    const h2 = (g: Generated) => bothCodings(scoredOf(g), 'X2', 'X3', STAT, codexApply);
+    expect(h2(generate({ knobs: { X2: { teachFail: 1 }, X3: { teachFail: 0 } } }))).toEqual(h2(BASE));
   });
 
   it('21, 33: reported subsets, per-arm rates by tasks since teach, the carry-union block and rotation slots', () => {
@@ -376,8 +386,8 @@ describe('Z0 gates', () => {
     expect(analyze(generate({ knobs: { A4: { fail: 0.6 } } }))).toMatchObject({ gates: { failed: ['G2'] }, hypotheses: null });
     const oneCoding = gatesOf(generate({ knobs: { A4: { na: 0.5, fail: 0.05 } } })).G2.claudeCode;
     expect([oneCoding.violation.estimate > -0.3, oneCoding.excluded.estimate <= -0.3, oneCoding.pass]).toEqual([true, true, false]);
-    const noX = analyze(generate({ arms: RN_ARMS }));
-    expect([real(noX.gates).pass, real(noX.gates).G2.codex.status, real(noX.hypotheses).verdicts.H2.final.verdict]).toEqual([true, NOT_RUN, NOT_RUN]);
+    const noX = blind(generate({ arms: RN_ARMS }));
+    expect([real(noX.gates).pass, real(noX.gates).G2.codex.status, hypOf(noX).verdicts.H2.final.verdict]).toEqual([true, NOT_RUN, NOT_RUN]);
     for (const absent of ['A0', 'A4', 'X4']) {
       const g2 = gatesOf(generate({ arms: ARMS.filter((a) => a !== absent) })).G2;
       expect([g2.pass, (absent === 'X4' ? g2.codex : g2.claudeCode).status]).toEqual([false, NOT_RUN]);
