@@ -70,8 +70,9 @@ tokens, and whether it was sent or skipped as unchanged. Counts only, never the 
 _Avoid_: usage log, telemetry, cost log
 
 **Delivery ledger**:
-The optional per-turn record of the per-prompt hook: one event per call and one row per
-candidate memory, saying whether it was emitted, reused or rejected and why.
+The optional record of the per-prompt hook and the two compaction hooks (`pre-compact` and
+`compact-resume`): one event per call, and for a prompt call one row per candidate memory,
+saying whether it was emitted, reused or rejected and why.
 Ids, hashes, counts and reasons only, never the text. Off by default; kept 90 days.
 _Avoid_: delivery log, trace, telemetry
 

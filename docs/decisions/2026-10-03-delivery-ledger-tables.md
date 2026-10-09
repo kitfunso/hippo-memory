@@ -35,5 +35,7 @@ default behind `deliveryLedger.enabled`.
 - The p95 overhead gate is open (1.44 to 1.75 against 1.10, fixed arm order), so the flag
   stays off by default until a counterbalanced run passes.
 
+- 2026-10-08: the two boundary event types, `pre-compact` and `compact-resume`, use the same table with no schema change, because `event_type` has no CHECK constraint (`src/db/migrations/v50.ts:7`). Row version 2 means a binary that can write boundary rows wrote the row, and `event_type` has four values; it does not mean "no boundary row, so no compaction".
+
 ## Reconsider when
 - Slice 2 adds the `*` and query paths, or `recall_traces` is rebuilt for another reason.

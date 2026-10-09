@@ -574,7 +574,7 @@ every budget uses. Rows older than 90 days are pruned.
 **See why a memory did or did not reach the agent.** Turn on the delivery ledger with
 `{"deliveryLedger":{"enabled":true}}` in `.hippo/config.json` (off by default). The flag is
 read from the store the token ledger writes to: the project's local store when it has one,
-else the global store. Each per-prompt hook call then records one event (session, turn
+else the global store. Each per-prompt hook call, and each `hippo pre-compact` and `hippo compact-resume` call, then records one event (session, turn
 number, whether the block was sent, reused, empty or disabled, counts and token totals) and
 one row per candidate memory: emitted, reused or rejected, with the stage and the
 reason it was dropped. With prompt recall on, recent memories dropped by the quality filter

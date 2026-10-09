@@ -2378,7 +2378,9 @@ The mutation audit's recall entry is not the whole trace system. [`src/recall-tr
 
 **Exit.** Known fixture events are reconstructable end to end, existing recall decisions are unchanged, and overhead is measured against H4's budget before broad default installation. No task-benefit claim from instrumentation alone. Draft: [Z10 ledger](docs/evals/2026-09-30-z10-ledger-prereg.md).
 
-Slice 1 [built, off by default]: schema v50 `delivery_events` and `delivery_candidates` record each per-prompt hook turn's candidates, rejection stage and reason, and block state behind `deliveryLedger.enabled`; compaction, resume, session-end, tool-failure and the other context surfaces remain open.
+Slice 1 [built, off by default]: schema v50 `delivery_events` and `delivery_candidates` record each per-prompt hook turn's candidates, rejection stage and reason, and block state behind `deliveryLedger.enabled`; session-end, tool-failure and the other context surfaces remain open.
+
+Slice 2a [built, off by default]: `hippo pre-compact` and `hippo compact-resume` each write one boundary row to `delivery_events` (no schema change, `ledger_version` 2) behind `deliveryLedger.enabled`; result in [the slice 2a result](docs/evals/2026-10-08-z10-ledger-slice2a-result.md).
 
 ### Z1d. Trigger-then-gate [experiment; after Z10]
 
