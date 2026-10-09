@@ -29,6 +29,7 @@ import { saveProjectBrief } from '../src/project-briefs.js';
 import { saveCustomerNote } from '../src/customer-notes.js';
 import { savePrediction } from '../src/store/predictions.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { queryAuditEvents, type AuditEvent, type AuditOp } from '../src/store/audit.js';
 import { consolidate } from '../src/consolidate/sleep.js';
 import { insertDormantRow } from '../src/store/dormant.js';
 import { loadConfig } from '../src/config.js';
@@ -56,6 +57,15 @@ function aged(entry: MemoryEntry, days: number): MemoryEntry {
 
 function ctxFor(home: string, tenantId = 'default'): api.Context {
   return { hippoRoot: home, tenantId, actor: { subject: 'test', role: 'admin' } };
+}
+
+function auditRows(home: string, op: AuditOp): AuditEvent[] {
+  const db = openHippoDb(home);
+  try {
+    return queryAuditEvents(db, { tenantId: 'default', op });
+  } finally {
+    closeHippoDb(db);
+  }
 }
 
 function countDormantRows(home: string): number {
@@ -430,6 +440,7 @@ describe('listing, restoring and forgetting dormant memories', () => {
       const restored = api.restoreDormant(ctxFor(home), ids[0]);
 
       expect(restored.id).toBe(ids[0]);
+      expect(entryMirrorFiles(home, ids[0])).toHaveLength(1);
       expect(Date.parse(restored.last_retrieved)).toBeGreaterThanOrEqual(before - 1000);
       expect(calculateStrength(restored, new Date())).toBeGreaterThan(0.9);
       expect(api.listDormant(ctxFor(home))).toEqual([]);
@@ -515,6 +526,7 @@ describe('listing, restoring and forgetting dormant memories', () => {
       expect(() => api.restoreDormant(ctxFor(home), ids[0])).toThrow(RejectedValueError);
       expect(api.listDormant(ctxFor(home)).map((m) => m.id)).toEqual([ids[0]]);
       expect(loadAllEntries(home).map((e) => e.id)).not.toContain(ids[0]);
+      expect(auditRows(home, 'reject_refusal').map((e) => [e.targetId, e.actor])).toEqual([[ids[0], 'test']]);
     } finally {
       restore();
     }
@@ -555,6 +567,7 @@ describe('listing, restoring and forgetting dormant memories', () => {
       api.forgetDormant(ctxFor(home), ids[0]);
       expect(api.listDormant(ctxFor(home))).toEqual([]);
       expect(() => api.restoreDormant(ctxFor(home), ids[0])).toThrow(/dormant memory not found/);
+      expect(auditRows(home, 'forget').map((e) => [e.targetId, e.actor, e.metadata])).toEqual([[ids[0], 'test', { dormant: true }]]);
       // Counted like forget and archiveRaw (review finding on PR #227).
       expect(Number(loadStats(home).total_forgotten)).toBe(1);
     } finally {

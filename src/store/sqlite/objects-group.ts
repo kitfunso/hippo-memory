@@ -1,15 +1,21 @@
 // hippo.db's half of the Objects store group: every statement the typed objects run, each call on a handle of its own.
 import { appendAuditEvent } from '../audit.js';
 import { getMeta, withWriteScopeOr, type DatabaseSyncLike } from '../../db.js';
+import { escapeLike } from '../../escape.js';
 import { keysetAfter } from '../../keyset.js';
+import { calculateStrength, deriveHalfLife, type MemoryEntry } from '../../memory.js';
+import { scopeAdmitSql } from '../../recall-scope.js';
 import type { JsonObject } from '../working-memory.js';
 import { stampOriginProject, upsertEntryRow } from '../entry-row.js';
 import { auditEntryWrite, writeEntryMirrors } from '../entry-writes.js';
 import { markGraphDirty } from '../graph-queue.js';
 import { removeGraphEntitiesForObject } from '../graph-writes.js';
-import type { ObjectByKind, ObjectKind, SavableKind } from '../object-types.js';
-import { onHandle, openStore, TYPED_HALF_LIFE_META_KEY } from '../open.js';
-import { isObjectRefusal, type ObjectClose, type ObjectListQuery, type ObjectRefusal, type Objects, type ObjectSave } from '../port.js';
+import type { BriefReceipt, Incident, ObjectByKind, ObjectKind, Policy, SavableKind, Skill } from '../object-types.js';
+import { LEGACY_TYPED_HALF_LIFE, onHandle, openStore, TYPED_HALF_LIFE_META_KEY } from '../open.js';
+import {
+  isObjectRefusal, type IncidentOpen, type IncidentOpenRefusal, type IncidentResolve, type ObjectClose, type ObjectListQuery, type ObjectRefusal, type Objects, type ObjectSave,
+  type PoliciesInForceQuery,
+} from '../port.js';
 import { auditingRefusal } from './entry-writes-group.js';
 import { type ColumnValue, insertSpec, rowSpec, type RowByKind } from './object-rows.js';
 
@@ -19,7 +25,11 @@ export interface SyncObjects {
   objectById<K extends ObjectKind>(tenantId: string, kind: K, id: number): ObjectByKind[K] | null;
   closeObject<K extends ObjectKind>(tenantId: string, kind: K, id: number, close: ObjectClose<K>): ObjectByKind[K] | ObjectRefusal;
   saveObject<K extends SavableKind>(tenantId: string, kind: K, save: ObjectSave<K>): ObjectByKind[K] | ObjectRefusal;
-  mirrorsOnDefaultHalfLife(): boolean;
+  openIncident(tenantId: string, open: IncidentOpen): Incident | IncidentOpenRefusal;
+  resolveIncident(tenantId: string, id: number, resolve: IncidentResolve): Incident | ObjectRefusal;
+  policiesInForce(tenantId: string, query: PoliciesInForceQuery): Policy[];
+  activeSkillsByName(tenantId: string, limit: number): Skill[];
+  briefReceipts(tenantId: string, tag: string, limit: number): BriefReceipt[];
 }
 
 export function sqliteObjects(hippoRoot: string): SyncObjects {
@@ -31,7 +41,11 @@ export function sqliteObjects(hippoRoot: string): SyncObjects {
     },
     closeObject: (tenantId, kind, id, close) => closeAt(hippoRoot, tenantId, kind, id, close),
     saveObject: (tenantId, kind, save) => saveAt(hippoRoot, tenantId, kind, save),
-    mirrorsOnDefaultHalfLife: () => onHandle(hippoRoot, (db) => getMeta(db, TYPED_HALF_LIFE_META_KEY, '') !== '', openStore),
+    openIncident: (tenantId, open) => openIncidentAt(hippoRoot, tenantId, open),
+    resolveIncident: (tenantId, id, resolve) => onHandle(hippoRoot, (db) => resolveRow(db, tenantId, id, resolve)),
+    policiesInForce: (tenantId, query) => onHandle(hippoRoot, (db) => policiesInForce(db, tenantId, query)),
+    activeSkillsByName: (tenantId, limit) => onHandle(hippoRoot, (db) => activeSkillsByName(db, tenantId, limit)),
+    briefReceipts: (tenantId, tag, limit) => onHandle(hippoRoot, (db) => briefReceipts(db, tenantId, tag, limit)),
   };
 }
 
@@ -42,7 +56,11 @@ export function servedObjects(sync: SyncObjects): Objects {
     objectById: async (tenantId, kind, id) => sync.objectById(tenantId, kind, id),
     closeObject: async (tenantId, kind, id, close) => sync.closeObject(tenantId, kind, id, close),
     saveObject: async (tenantId, kind, save) => sync.saveObject(tenantId, kind, save),
-    mirrorsOnDefaultHalfLife: async () => sync.mirrorsOnDefaultHalfLife(),
+    openIncident: async (tenantId, open) => sync.openIncident(tenantId, open),
+    resolveIncident: async (tenantId, id, resolve) => sync.resolveIncident(tenantId, id, resolve),
+    policiesInForce: async (tenantId, query) => sync.policiesInForce(tenantId, query),
+    activeSkillsByName: async (tenantId, limit) => sync.activeSkillsByName(tenantId, limit),
+    briefReceipts: async (tenantId, tag, limit) => sync.briefReceipts(tenantId, tag, limit),
   };
 }
 
@@ -192,22 +210,153 @@ function writeObjectRow<K extends SavableKind>(db: DatabaseSyncLike, tenantId: s
   return saved;
 }
 
-/** One write scope on one handle holds the mirror, the object row, the successor link and every audit row, the mirror's remember row last. */
-function saveAt<K extends SavableKind>(hippoRoot: string, tenantId: string, kind: K, save: ObjectSave<K>): ObjectByKind[K] | ObjectRefusal {
-  const spec = rowSpec(kind);
-  return onHandle(hippoRoot, (db) => auditingRefusal(db, save.actor, () => {
-    const mirror = stampOriginProject(hippoRoot, save.mirror);
+/** What a write hands back in place of a row. */
+interface Refused {
+  readonly refused: string;
+}
+
+function refusalOf<R extends object, F extends Refused>(written: R | F): written is F {
+  return 'refused' in written;
+}
+
+interface MirroredWrite {
+  readonly mirror: MemoryEntry;
+  readonly actor: string;
+  /** Set for a kind the graph reads, so its mirror is queued for a rebuild. */
+  readonly graphTenant?: string;
+}
+
+/** Until the typed migration has run, a mirror goes in on the flat half-life that migration moves; the flag is read under the save's write lock, so the two cannot interleave. */
+function onStoreHalfLife(db: DatabaseSyncLike, mirror: MemoryEntry): MemoryEntry {
+  if (getMeta(db, TYPED_HALF_LIFE_META_KEY, '') !== '') return mirror;
+  const legacy = { ...mirror, half_life_days: deriveHalfLife(LEGACY_TYPED_HALF_LIFE, mirror) };
+  return { ...legacy, strength: calculateStrength(legacy) };
+}
+
+/** One write scope on one handle holds the mirror, the row `writeRow` adds, the successor link and every audit row, the mirror's remember row last. */
+function withMirror<R extends object, F extends Refused>(hippoRoot: string, write: MirroredWrite, writeRow: (db: DatabaseSyncLike, memoryId: string) => R | F): R | F {
+  return onHandle(hippoRoot, (db) => auditingRefusal(db, write.actor, () => {
+    let mirror = stampOriginProject(hippoRoot, write.mirror);
     const written = withWriteScopeOr(db, 'write_entry', (rollback) => {
+      mirror = onStoreHalfLife(db, mirror);
       upsertEntryRow(db, mirror);
-      const row = writeObjectRow(db, tenantId, kind, mirror.id, save);
-      if (isObjectRefusal(row)) return rollback(row);
-      auditEntryWrite(db, mirror, save.actor);
+      const row = writeRow(db, mirror.id);
+      if (refusalOf<R, F>(row)) return rollback(row);
+      auditEntryWrite(db, mirror, write.actor);
       return row;
     });
-    if (isObjectRefusal(written)) return written;
+    if (refusalOf<R, F>(written)) return written;
     // The graph mark takes its own write lock, so it waits for the commit.
-    if (spec.graphType) markGraphDirty(hippoRoot, tenantId, mirror.id);
+    if (write.graphTenant !== undefined) markGraphDirty(hippoRoot, write.graphTenant, mirror.id);
     writeEntryMirrors(hippoRoot, mirror);
-    return spec.rowTo(written);
+    return written;
   }), openStore);
+}
+
+function saveAt<K extends SavableKind>(hippoRoot: string, tenantId: string, kind: K, save: ObjectSave<K>): ObjectByKind[K] | ObjectRefusal {
+  const spec = rowSpec(kind);
+  const write: MirroredWrite = { mirror: save.mirror, actor: save.actor, graphTenant: spec.graphType ? tenantId : undefined };
+  const written = withMirror<RowByKind[K], ObjectRefusal>(hippoRoot, write, (db, memoryId) => writeObjectRow(db, tenantId, kind, memoryId, save));
+  return isObjectRefusal(written) ? written : spec.rowTo(written);
+}
+
+/** The linked ids are checked once the mirror is in and before the INSERT, so a refusal undoes the mirror with it. */
+function openIncidentRow(db: DatabaseSyncLike, tenantId: string, memoryId: string, open: IncidentOpen): RowByKind['incident'] | IncidentOpenRefusal {
+  const { incidentText, context, linkedMemoryIds } = open.fields;
+  for (const linkId of linkedMemoryIds) {
+    const held = db.prepare(`SELECT id FROM memories WHERE id = ? AND tenant_id = ?`).get<{ id: string } | undefined>(linkId, tenantId);
+    if (!held) return { refused: 'unlinked', memoryId: linkId };
+  }
+  const result = db.prepare(`
+    INSERT INTO incidents(
+      memory_id, tenant_id, incident_text, context,
+      status, resolution_text, resolved_at, closed_at, linked_memory_ids, created_at
+    ) VALUES (?, ?, ?, ?, 'open', NULL, NULL, NULL, ?, ?)
+  `).run(memoryId, tenantId, incidentText, context ?? null, JSON.stringify(linkedMemoryIds), open.at);
+  const id = Number(result.lastInsertRowid ?? 0);
+  const row = selectRow(db, 'incident', tenantId, id);
+  if (!row) return { refused: 'vanished' };
+  appendAuditEvent(db, {
+    tenantId,
+    actor: open.actor,
+    op: 'incident_open',
+    targetId: String(id),
+    metadata: { incident_id: id, has_context: context !== undefined && context !== '', linked_memory_count: linkedMemoryIds.length },
+  });
+  return row;
+}
+
+function openIncidentAt(hippoRoot: string, tenantId: string, open: IncidentOpen): Incident | IncidentOpenRefusal {
+  const write: MirroredWrite = { mirror: open.mirror, actor: open.actor };
+  const written = withMirror<RowByKind['incident'], IncidentOpenRefusal>(hippoRoot, write, (db, memoryId) => openIncidentRow(db, tenantId, memoryId, open));
+  return 'refused' in written ? written : rowSpec('incident').rowTo(written);
+}
+
+/** The status guard sits in the UPDATE, so zero rows changed means missing or not open; the reread tells which. */
+function resolveRow(db: DatabaseSyncLike, tenantId: string, id: number, resolve: IncidentResolve): Incident | ObjectRefusal {
+  return withWriteScopeOr(db, 'resolve_incident', (rollback) => {
+    const updated = db.prepare(`
+      UPDATE incidents
+      SET status = 'resolved', resolution_text = ?, resolved_at = ?
+      WHERE id = ? AND tenant_id = ? AND status = 'open'
+    `).run(resolve.text, resolve.at, id, tenantId);
+    if (updated.changes === 0) {
+      const existing = db.prepare(`SELECT status FROM incidents WHERE id = ? AND tenant_id = ?`)
+        .get<{ status: string } | undefined>(id, tenantId);
+      return rollback<ObjectRefusal>(existing ? { refused: 'status', status: existing.status } : { refused: 'missing' });
+    }
+    const row = selectRow(db, 'incident', tenantId, id);
+    if (!row) return rollback<ObjectRefusal>({ refused: 'vanished' });
+    appendAuditEvent(db, { tenantId, actor: resolve.actor, op: 'incident_resolve', targetId: String(id), metadata: { incident_id: id } });
+    return rowSpec('incident').rowTo(row);
+  });
+}
+
+/** The successor is joined in so a superseded version is kept only while the row that replaced it is not yet in force. */
+function policiesInForce(db: DatabaseSyncLike, tenantId: string, query: PoliciesInForceQuery): Policy[] {
+  const { asOf, name } = query;
+  const nameClause = name !== undefined ? 'AND p.policy_name = ?' : '';
+  const params: Array<string | number> = [tenantId, asOf, asOf, asOf];
+  if (name !== undefined) params.push(name);
+  // SAFETY: the SELECT names the policy row's own columns, each under the alias p.
+  const rows = db.prepare(`
+      SELECT p.id, p.memory_id, p.tenant_id, p.policy_name, p.policy_text,
+             p.valid_from, p.valid_to, p.version, p.status, p.superseded_by,
+             p.superseded_at, p.change_summary, p.closed_at, p.created_at
+      FROM policies p
+      LEFT JOIN policies s ON s.id = p.superseded_by
+      WHERE p.tenant_id = ? AND p.status != 'closed'
+        AND p.valid_from <= ? AND (p.valid_to IS NULL OR ? < p.valid_to)
+        AND (p.status = 'active' OR (s.id IS NOT NULL AND s.valid_from > ?))
+        ${nameClause}
+      ORDER BY p.valid_from DESC, p.id DESC
+      LIMIT ?
+    `).all(...params, query.limit) as RowByKind['policy'][];
+  return rows.map(rowSpec('policy').rowTo);
+}
+
+function activeSkillsByName(db: DatabaseSyncLike, tenantId: string, limit: number): Skill[] {
+  // SAFETY: the SELECT names the skill row's own column list.
+  const rows = db.prepare(`
+      SELECT ${rowSpec('skill').cols} FROM skills
+      WHERE tenant_id = ? AND status = 'active'
+      ORDER BY skill_name ASC, id ASC
+      LIMIT ?
+    `).all(tenantId, limit) as RowByKind['skill'][];
+  return rows.map(rowSpec('skill').rowTo);
+}
+
+/** The quotes around the tag stop `path:hip` matching a memory tagged `path:hippo`. */
+function briefReceipts(db: DatabaseSyncLike, tenantId: string, tag: string, limit: number): BriefReceipt[] {
+  const admit = scopeAdmitSql('');
+  // SAFETY: the SELECT names the four columns a receipt holds.
+  return db.prepare(`
+      SELECT id, created, source, content FROM memories
+      WHERE tenant_id = ?
+        AND source != 'project_brief'
+        AND LOWER(tags_json) LIKE ? ESCAPE '\\'
+        AND ${admit.sql}
+      ORDER BY created DESC, id DESC
+      LIMIT ?
+    `).all(tenantId, `%"${escapeLike(tag)}"%`, ...admit.params, limit) as BriefReceipt[];
 }

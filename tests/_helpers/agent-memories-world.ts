@@ -11,7 +11,7 @@ import type { Machine } from '../../src/agent-memories/sync.js';
 import type { ToolId } from '../../src/core/agent-memory-tools.js';
 import { queryAuditEvents, type AuditOp } from '../../src/store/audit.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db.js';
-import { listDormantRows, type DormantMemory } from '../../src/store/dormant.js';
+import { loadDormantMemories, type DormantMemory } from '../../src/store/dormant.js';
 import type { MemoryEntry } from '../../src/memory.js';
 import { initStore, isInitialized } from '../../src/store/open.js';
 import { loadAllEntries } from '../../src/store/entry-reads.js';
@@ -94,7 +94,7 @@ export function withDb<T>(root: string, fn: (db: DatabaseSyncLike) => T): T {
 }
 
 export const dormantRows = (root: string): DormantMemory[] =>
-  isInitialized(root) ? withDb(root, (db) => listDormantRows(db, 'default', { limit: 1000 })) : [];
+  isInitialized(root) ? loadDormantMemories(root, 'default', { limit: 1000 }) : [];
 
 export const auditCount = (root: string, op: AuditOp): number =>
   withDb(root, (db) => queryAuditEvents(db, { tenantId: 'default', op, limit: 10000 }).length);

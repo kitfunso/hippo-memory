@@ -22,16 +22,14 @@
  */
 
 import { BadRequestError } from './api-errors.js';
-import { openHippoDb, closeHippoDb } from './db.js';
 import { assertTenantId } from './tenant.js';
-import { scopeAdmitSql } from './recall-scope.js';
 import type { KeysetPosition } from './keyset.js';
-import { escapeLike } from './escape.js';
 import type { SavableDescriptor } from './objects/descriptor.js';
 import { checkText, requireLine } from './objects/fields.js';
-import { closeObjectAt, listObjectsAt, objectByIdAt, saveObjectAt } from './objects/lifecycle.js';
-import type { BriefStatus, ProjectBrief } from './store/object-types.js';
-import { rowSpec, type RowByKind } from './store/sqlite/object-rows.js';
+import { closeObjectAt, listObjectsAt, objectByIdAt, type ObjectSaveSite, saveObject, saveObjectAt } from './objects/lifecycle.js';
+import type { BriefReceipt, BriefStatus, ProjectBrief } from './store/object-types.js';
+import type { ObjectListQuery, Objects } from './store/port.js';
+import { sqliteObjects } from './store/sqlite/objects-group.js';
 
 export type { BriefStatus, ProjectBrief } from './store/object-types.js';
 
@@ -78,14 +76,6 @@ export interface ListProjectBriefsOpts {
   limit?: number;
   /** Resume after this row: the position the previous page ended on. */
   after?: KeysetPosition;
-}
-
-/** A receipt row gathered for the refresh assembler. */
-interface ReceiptRow {
-  id: string;
-  created: string;
-  source: string;
-  content: string;
 }
 
 export const PROJECT_BRIEF: SavableDescriptor<'project_brief', SaveProjectBriefOpts> = {
@@ -185,19 +175,13 @@ export function loadActiveBriefForRepo(
   repo: string,
 ): ProjectBrief | null {
   assertTenantId('loadActiveBriefForRepo', tenantId);
-  const db = openHippoDb(hippoRoot);
-  try {
-    // SAFETY: the SELECT names the brief row's own column list; no row means the repo has no active brief.
-    const row = db.prepare(`
-      SELECT ${rowSpec('project_brief').cols} FROM project_briefs
-      WHERE tenant_id = ? AND repo = ? AND status = 'active'
-      ORDER BY created_at DESC, id DESC
-      LIMIT 1
-    `).get(tenantId, repo) as RowByKind['project_brief'] | undefined;
-    return row ? rowSpec('project_brief').rowTo(row) : null;
-  } finally {
-    closeHippoDb(db);
-  }
+  if (repo === '') return null;
+  return sqliteObjects(hippoRoot).listObjects(tenantId, 'project_brief', newestActive(repo))[0] ?? null;
+}
+
+/** An empty filter lists every repo, so the callers refuse an empty repo first. */
+function newestActive(repo: string): ObjectListQuery<'project_brief'> {
+  return { status: 'active', filter: repo, limit: 1 };
 }
 
 // ---------------------------------------------------------------------------
@@ -214,28 +198,9 @@ function receiptHeadline(content: string): string {
     : trimmed;
 }
 
-/** The repo's receipt rows, newest first, capped at MAX_BRIEF_RECEIPTS. */
-function loadBriefReceipts(hippoRoot: string, tenantId: string, normalizedRepo: string): ReceiptRow[] {
-  const tag = `path:${normalizedRepo.toLowerCase()}`;
-  const likeParam = `%"${escapeLike(tag)}"%`;
-  const deny = scopeAdmitSql('');
-
-  const db = openHippoDb(hippoRoot);
-  try {
-    // SAFETY: SELECT projects exactly id, created, source, content (the
-    // ReceiptRow columns); .all() returns rows in that shape.
-    return db.prepare(`
-      SELECT id, created, source, content FROM memories
-      WHERE tenant_id = ?
-        AND source != 'project_brief'
-        AND LOWER(tags_json) LIKE ? ESCAPE '\\'
-        AND ${deny.sql}
-      ORDER BY created DESC, id DESC
-      LIMIT ?
-    `).all(tenantId, likeParam, ...deny.params, MAX_BRIEF_RECEIPTS) as ReceiptRow[];
-  } finally {
-    closeHippoDb(db);
-  }
+/** The tag a memory of the repo carries; the store matches it whole, so `path:hip` never matches `path:hippo`. */
+function receiptTag(normalizedRepo: string): string {
+  return `path:${normalizedRepo.toLowerCase()}`;
 }
 
 // NOTE on ordering: the `id DESC` tiebreak is lexical on a random-ish memory id
@@ -249,8 +214,8 @@ function loadBriefReceipts(hippoRoot: string, tenantId: string, normalizedRepo: 
 // store then REJECTS, breaking refresh for inputs within the advertised caps. So
 // include receipt lines newest-first only while they fit under the cap (reserving
 // slack for the header + an omission footer), and note the omitted remainder.
-function fitReceiptLines(receipts: ReceiptRow[]): string[] {
-  const buildReceiptLine = (r: ReceiptRow): string =>
+function fitReceiptLines(receipts: readonly BriefReceipt[]): string[] {
+  const buildReceiptLine = (r: BriefReceipt): string =>
     `- ${(r.created ?? '').slice(0, 10)} [${r.source}] ${receiptHeadline(r.content)}`;
 
   const receiptLines: string[] = [];
@@ -319,55 +284,62 @@ export function assembleBriefFromReceipts(
   tenantId: string,
   repo: string,
 ) {
-  assertTenantId('assembleBriefFromReceipts', tenantId);
-  const normalizedRepo = (repo ?? '').trim();
-  if (normalizedRepo.length === 0) {
-    throw new BadRequestError('assembleBriefFromReceipts: repo is required');
-  }
-  const receipts = loadBriefReceipts(hippoRoot, tenantId, normalizedRepo);
-  const markdown = renderBriefDigest(normalizedRepo, receipts.length, fitReceiptLines(receipts));
-  return { markdown, receiptCount: receipts.length };
+  const normalizedRepo = requiredRepo('assembleBriefFromReceipts', tenantId, repo);
+  return briefDigest(normalizedRepo, sqliteObjects(hippoRoot).briefReceipts(tenantId, receiptTag(normalizedRepo), MAX_BRIEF_RECEIPTS));
 }
 
-/**
- * Auto-refresh the repo's brief from its receipts: assemble the digest, then create
- * a new version. If the repo already has an active brief it is superseded (the
- * change_summary records the auto-refresh + the audit metadata carries
- * `refreshed: true`); otherwise a v1 is created. Returns the new brief.
- *
- * The assemble (a read of `memories`) happens BEFORE the save opens its transaction;
- * a concurrent receipt write landing between the read and the brief write simply
- * appears in the NEXT refresh — the brief is a derived snapshot, not a transactional
- * aggregate, so no consistency invariant is violated.
- */
+/** `assembleBriefFromReceipts` over a served store's group. */
+export async function briefFromReceipts(objects: Objects, tenantId: string, repo: string): Promise<BriefDigest> {
+  const normalizedRepo = requiredRepo('assembleBriefFromReceipts', tenantId, repo);
+  return briefDigest(normalizedRepo, await objects.briefReceipts(tenantId, receiptTag(normalizedRepo), MAX_BRIEF_RECEIPTS));
+}
+
+export interface BriefDigest {
+  markdown: string;
+  receiptCount: number;
+}
+
+function requiredRepo(fn: string, tenantId: string, repo: string): string {
+  assertTenantId(fn, tenantId);
+  const normalizedRepo = (repo ?? '').trim();
+  if (normalizedRepo.length === 0) throw new BadRequestError(`${fn}: repo is required`);
+  return normalizedRepo;
+}
+
+function briefDigest(normalizedRepo: string, receipts: readonly BriefReceipt[]): BriefDigest {
+  return { markdown: renderBriefDigest(normalizedRepo, receipts.length, fitReceiptLines(receipts)), receiptCount: receipts.length };
+}
+
+/** The version a refresh saves: a successor of the repo's active brief when it has one, else a first version. */
+function refreshWrite(normalizedRepo: string, digest: BriefDigest, active: ProjectBrief | null): SaveProjectBriefOpts {
+  return {
+    repo: normalizedRepo,
+    summary: digest.markdown,
+    changeSummary: active ? `auto-refresh from ${digest.receiptCount} receipt(s)` : undefined,
+    supersedesBriefId: active ? active.id : undefined,
+    refreshReceiptCount: digest.receiptCount,
+    // The path tag lets path-aware recall boost the brief; it cannot become its own receipt, because receipts leave out source project_brief.
+    extraTags: [receiptTag(normalizedRepo)],
+  };
+}
+
+/** Saves a new version of the repo's brief from its receipts. The receipts are read before the save's transaction, so a receipt written in between shows in the next refresh. */
 export function refreshBrief(
   hippoRoot: string,
   tenantId: string,
   repo: string,
   actor: string = 'cli',
 ): ProjectBrief {
-  assertTenantId('refreshBrief', tenantId);
-  const normalizedRepo = (repo ?? '').trim();
-  if (normalizedRepo.length === 0) throw new BadRequestError('refreshBrief: repo is required');
-
-  const { markdown, receiptCount } = assembleBriefFromReceipts(hippoRoot, tenantId, normalizedRepo);
+  const normalizedRepo = requiredRepo('refreshBrief', tenantId, repo);
+  const digest = assembleBriefFromReceipts(hippoRoot, tenantId, normalizedRepo);
   const active = loadActiveBriefForRepo(hippoRoot, tenantId, normalizedRepo);
+  return saveProjectBrief(hippoRoot, tenantId, refreshWrite(normalizedRepo, digest, active), actor);
+}
 
-  return saveProjectBrief(
-    hippoRoot,
-    tenantId,
-    {
-      repo: normalizedRepo,
-      summary: markdown,
-      changeSummary: active ? `auto-refresh from ${receiptCount} receipt(s)` : undefined,
-      supersedesBriefId: active ? active.id : undefined,
-      refreshReceiptCount: receiptCount,
-      // Tag the refreshed brief's mirror as repo-local so path-aware recall boosts
-      // it like the manual `brief new`/`supersede` paths do.
-      // Safe vs self-recursion: assembleBriefFromReceipts excludes
-      // source='project_brief', so the brief never becomes its own receipt.
-      extraTags: [`path:${normalizedRepo.toLowerCase()}`],
-    },
-    actor,
-  );
+/** `refreshBrief` over a served store's group. */
+export async function refreshedBrief(objects: Objects, site: ObjectSaveSite, repo: string): Promise<ProjectBrief> {
+  const normalizedRepo = requiredRepo('refreshBrief', site.tenantId, repo);
+  const digest = await briefFromReceipts(objects, site.tenantId, normalizedRepo);
+  const [active = null] = await objects.listObjects(site.tenantId, 'project_brief', newestActive(normalizedRepo));
+  return saveObject(objects, PROJECT_BRIEF, site, refreshWrite(normalizedRepo, digest, active));
 }

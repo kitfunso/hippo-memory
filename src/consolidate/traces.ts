@@ -1,11 +1,11 @@
 import { isRecallBoostAblated } from '../ablation.js';
 import { MemoryEntry, Layer, createMemory, markRetrieved } from '../memory.js';
 import { findPromotableSessions, traceExistsForSession, listSessionEvents } from '../store/sessions.js';
-import { rejectionDigest, findRejectedValue } from '../store/rejection.js';
+import { rejectionDigest } from '../store/rejection.js';
 import { sampleForReplay } from '../replay.js';
 import { renderTraceContent } from '../trace.js';
 import { resolveTenantId } from '../tenant.js';
-import { appendAuditEvent, reportAuditWriteFailure } from '../store/audit.js';
+import { reportAuditWriteFailure } from '../store/audit.js';
 import { commonDerivationScope } from '../recall-scope.js';
 import { log } from '../log.js';
 import { REPLAY_COUNT_DEFAULT, type SleepRun } from './run.js';
@@ -128,13 +128,11 @@ function sessionEnding(events: ReturnType<typeof listSessionEvents>): { outcome:
 // traceExistsForSession only sees live rows, so a removed rejected trace would regenerate every
 // sleep; check the tombstone under the entry's own stamped tenantId, never a guessed one.
 function traceRejected(run: SleepRun, trace: MemoryEntry, sessionId: string): boolean {
-  const consolidateDb = run.getConsolidateDb();
-  if (!consolidateDb) return false;
   const traceDigest = rejectionDigest(trace.content);
-  const tombstone = findRejectedValue(consolidateDb, trace.tenantId, traceDigest);
+  const tombstone = run.tombstones.find(trace.tenantId, traceDigest);
   if (!tombstone) return false;
   try {
-    appendAuditEvent(consolidateDb, {
+    run.tombstones.audit({
       tenantId: trace.tenantId,
       actor: 'sleep',
       op: 'reject_refusal',

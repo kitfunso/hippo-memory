@@ -65,11 +65,14 @@ function isReadableFile(filePath: string): boolean {
 }
 
 /** PreCompact stdout is the summariser's instructions; sent before the snapshot work because a locked store can run the hook past its 30 s limit, and via writeSync because process.exit drops buffered pipe output. */
-function printPreCompactInstruction(logFile: string): void {
+function printPreCompactInstruction(logFile: string): string | null {
+  const text = `${PRE_COMPACT_INSTRUCTION}\n`;
   try {
-    fs.writeSync(1, `${PRE_COMPACT_INSTRUCTION}\n`);
+    fs.writeSync(1, text);
+    return text;
   } catch (err) {
     appendPreCompactLog(logFile, `instruction not printed: ${errorMessage(err)}`);
+    return null;
   }
 }
 
@@ -113,13 +116,20 @@ function runPreCompact(hippoRoot: string, options: PreCompactOptions, logFile: s
   // The record is the "something saved before every compaction", so it lands even when no snapshot is derivable below.
   // Copilot has no PostCompact hook to close a record, so its compactions get the snapshot alone.
   let recordId: string | null = null;
+  let printed: string | null = null;
   if (runtime === 'claude-code' && !vscode && sessionId !== null && sessionId !== '') {
     recordId = recordCompactionStart(
       hippoRoot,
       { sessionId, trigger: payloadTrigger, cwd: payloadCwd, transcriptPath: payloadTranscriptPath },
       (message) => appendPreCompactLog(logFile, message),
     );
-    printPreCompactInstruction(logFile);
+    printed = printPreCompactInstruction(logFile);
+  }
+  // Its own guard, so a throwing callback can never skip the snapshot work below.
+  try {
+    options.onBoundary?.(printed);
+  } catch (err) {
+    appendPreCompactLog(logFile, `boundary callback failed: ${errorMessage(err)}`);
   }
 
   const transcriptPath = resolvePreCompactTranscript(payloadTranscriptPath, stdinText, logFile, runtime);
@@ -199,6 +209,8 @@ export interface PreCompactOptions {
   stdinTimedOut?: boolean;
   logFile?: string;
   runtime?: HookRuntime;
+  /** Called once when the hook accepts a compaction, with the text it printed or null when it printed none. */
+  onBoundary?: (printed: string | null) => void;
 }
 
 /**

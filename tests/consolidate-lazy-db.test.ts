@@ -104,8 +104,8 @@ describe('consolidateDb lazy open', () => {
       writeEntry(home, e2);
 
       const result = await consolidate(home, { dryRun: true });
-      // Dry-run previews the merge without writing (getConsolidateDb short
-      // circuits to null before it ever calls openHippoDb).
+      // Dry-run previews the merge without writing (lazyTombstoneChecks
+      // answers null under a dry run before it ever calls openHippoDb).
       expect(result.dryRun).toBe(true);
       expect(loadAllEntries(home)).toHaveLength(2);
     } finally {
