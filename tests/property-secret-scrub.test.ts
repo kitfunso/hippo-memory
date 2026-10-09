@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import { redactSecretsStrict } from '../src/secret-detect.js';
 import { scrubForSharing } from '../src/share-scrub.js';
-import { arr, both, forAll, map, oneOf, pick, str, type Gen } from './_helpers/property.js';
+import { arr, both, forAll, int, map, oneOf, pick, str, type Gen } from './_helpers/property.js';
 import { ASSIGNED_SECRET, ASSIGNED_SECRET_LINES, ORDINARY_CONFIG_LINES } from './_helpers/secret-shapes.js';
 
 const UPPER = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -25,8 +25,8 @@ interface Secret {
   readonly body: string;
 }
 
-/** A body of `min` to `max` characters ending in a letter or digit, as a real token does and as the `\b` that closes most patterns needs. */
-function secret(wrap: (body: string) => string, alphabet: string, min: number, max: number, last = [...alphabet].filter((ch) => ALNUM.includes(ch)).join('')): Gen<Secret> {
+/** A body of `min` to `max` characters over `alphabet`, hyphen endings included; `last` narrows the final one for a shape that needs it. */
+function secret(wrap: (body: string) => string, alphabet: string, min: number, max: number, last = alphabet): Gen<Secret> {
   return map(both(str(alphabet, min - 1, max - 1), str(last, 1, 1)), ([inner, end]) => ({ text: wrap(inner + end), body: inner + end }));
 }
 
@@ -97,6 +97,18 @@ const SOUP: Gen<string> = map(
   (parts) => parts.map(([text, gap]) => text + gap).join(''),
 );
 
+/** `head` and then `length` characters over `alphabet`, the last one to three of them hyphens. */
+function hyphenEnded(head: string, alphabet: string, length: number): Gen<string> {
+  return map(both(str(alphabet, length, length), int(1, 3)), ([body, hyphens]) => head + body.slice(0, length - hyphens) + '-'.repeat(hyphens));
+}
+
+// The shapes whose alphabet holds a hyphen and whose pattern once closed on a word boundary.
+const HYPHEN_ENDED: readonly { name: string; key: Gen<string> }[] = [
+  { name: 'Google API key', key: hyphenEnded('AIza', `${ALNUM}_-`, 35) },
+  { name: 'Slack token', key: hyphenEnded('xoxb-', `${ALNUM}-`, 24) },
+  { name: `${SK}-style key`, key: hyphenEnded(`${SK}-`, `${ALNUM}_-`, 32) },
+];
+
 describe('secret scrubbing properties', () => {
   it('no generated secret of any shape reaches the output of either scrub', () => {
     forAll(0x5ec1, 400, LEAKY_TEXT, ({ text, secrets }) => {
@@ -114,8 +126,8 @@ describe('secret scrubbing properties', () => {
     });
   });
 
-  // Fails today: a home path under another home path is half masked on the first pass, and its tail is masked on the second.
-  it.fails('scrubForSharing changes nothing on a second pass over home paths, nested or not', () => {
+  // A home path glued under another is uncovered only once the first is masked, so one pass over the text is not enough.
+  it('scrubForSharing changes nothing on a second pass over home paths, nested or not', () => {
     const paths = map(both(WORD_RUN, arr(pick(HOME_PATHS), 1, 3)), ([words, nested]) => [...words, nested.join('')].join(' '));
     forAll(0x1de1, 200, paths, (text) => {
       const once = scrubForSharing(text);
@@ -138,11 +150,12 @@ describe('secret scrubbing properties', () => {
     });
   });
 
-  // Fails today: the key pattern ends on a word boundary, which a closing hyphen before a space or the end of the text does not give.
-  it.fails('a Google API key ending in a hyphen is scrubbed', () => {
-    const key = map(str(`${ALNUM}_-`, 34, 34), (inner) => ({ text: `AIza${inner}-`, body: `${inner}-` }));
-    forAll(0x600, 200, map(both(WORD_RUN, key), ([words, s]) => ({ text: [...words, s.text, 'end'].join(' '), s })), ({ text, s }) => {
-      expect(leaked(redactSecretsStrict(text), s)).toBe(false);
+  // A word boundary does not close a token that ends in a hyphen before a space, so the key or its closing hyphens would stay.
+  HYPHEN_ENDED.forEach(({ name, key }, index) => {
+    it(`a ${name} that ends in hyphens is scrubbed whole`, () => {
+      forAll(0x600 + index, 200, both(WORD_RUN, key), ([words, text]) => {
+        expect(redactSecretsStrict([...words, text, 'end'].join(' '))).toBe([...words, '[REDACTED]', 'end'].join(' '));
+      });
     });
   });
 });

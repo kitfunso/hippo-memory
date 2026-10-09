@@ -48,8 +48,8 @@ describe('typed-object id parser properties', () => {
     });
   });
 
-  // Fails today: digits past 2^53 come back as the nearest number a double holds, which is not the id that was typed.
-  it.fails('an id too long to be held exactly is refused', () => {
+  // Digits past 2^53 would come back as the nearest number a double holds, which is not the id that was typed.
+  it('an id too long to be held exactly is refused', () => {
     const digits = map(both(str('123456789', 1, 1), str('0123456789', 16, 24)), ([lead, rest]) => lead + rest);
     forAll(0x1d03, 200, digits, (raw) => {
       expect(idOrExit(raw)).toEqual({ exit: 1 });

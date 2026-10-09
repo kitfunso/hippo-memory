@@ -1,6 +1,7 @@
 // src/store/goals.ts
 import { randomUUID } from 'node:crypto';
 import { openHippoDb, closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../db.js';
+import { compareScoresDesc } from '../compare.js';
 import type { MemoryEntry } from '../memory.js';
 import type { RerankStep } from '../core/search-types.js';
 
@@ -474,7 +475,7 @@ export function boostByGoals<R extends { entry: MemoryEntry; score: number }>(
     // tail -- a re-sort of an already deterministically-ordered ranking
     // inherits its determinism via sort stability, and ties preserve the
     // prior (meaningful) rank instead of reordering by content.
-    .sort((a, b) => b.score - a.score);
+    .sort((a, b) => compareScoresDesc(a.score, b.score));
 
   return { results: boosted, log: buildGoalRecallLog(boosted, matchesByEntryId, goalsByTag, opts) };
 }
