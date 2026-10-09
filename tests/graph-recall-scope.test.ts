@@ -17,7 +17,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { estimateTokens } from '../src/token-ledger.js';
 import type { SearchResult } from '../src/core/search-types.js';
-import { insertEntity, insertRelation } from '../src/graph/write.js';
+import { insertEntity, insertRelation } from '../src/store/graph-writes.js';
 import { graphExpandRecall } from '../src/graph-recall.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { hippoOut } from './_helpers/spawn-hippo.js';

@@ -9,7 +9,7 @@ import { saveDecision } from '../../dist/decisions.js';
 import { savePolicy } from '../../dist/policies.js';
 import { saveCustomerNote } from '../../dist/customer-notes.js';
 import { saveProjectBrief } from '../../dist/project-briefs.js';
-import { loadEntities, loadRelations } from '../../dist/graph/read.js';
+import { loadEntities, loadRelations } from '../../dist/store/graph-reads.js';
 import { extractGraph } from '../../dist/graph-extract.js';
 
 const home = mkdtempSync(join(tmpdir(), 'hippo-e3-xobj-'));

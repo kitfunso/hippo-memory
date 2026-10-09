@@ -17,10 +17,13 @@ import { MemoryEntry, Layer } from './memory.js';
 import { writeEntry } from './store/entry-writes.js';
 import { loadAllEntries, readEntry } from './store/entry-reads.js';
 import { redactSecretsStrict } from './secret-detect.js';
-import { fetchWithRetry, llmTimeoutMs } from './http-retry.js';
-import { errorMessage, log } from './log.js';
+import { sendAnthropicMessage, type AnthropicMessageFailure } from './util/anthropic-messages.js';
+import { log } from './log.js';
 
 const REFINED_TAG = 'llm-refined';
+// Output budget for one refined memory, and the shortest reply kept as a refinement.
+const REFINE_MAX_TOKENS = 800;
+const REFINE_MIN_CHARS = 10;
 const CONSOLIDATED_MARKERS = [
   '[Consolidated from',
   '[Consolidated pattern from',
@@ -63,9 +66,6 @@ export async function refineSemanticMemory(
   sources: MemoryEntry[],
   opts: { apiKey: string; model?: string; fetcher?: typeof fetch },
 ): Promise<string | null> {
-  const model = opts.model ?? 'claude-sonnet-4-6';
-  const fetchFn = opts.fetcher ?? fetch;
-
   const sourceBlock = sources
     .slice(0, 8)
     .map((s, i) => `[source ${i + 1}] ${redactSecretsStrict(s.content).slice(0, 400)}`)
@@ -86,47 +86,30 @@ ${redactSecretsStrict(merged)}
 Source memories (up to 8 shown):
 ${sourceBlock}`;
 
-  let res: Response;
-  try {
-    res = await fetchWithRetry('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': opts.apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model,
-        max_tokens: 800,
-        messages: [{ role: 'user', content: prompt }],
-      }),
-    }, { timeoutMs: llmTimeoutMs(), fetchFn });
-  } catch (err) {
-    log.warn(`refine: request failed: ${errorMessage(err)}`);
+  const reply = await sendAnthropicMessage({
+    apiKey: opts.apiKey,
+    model: opts.model,
+    maxTokens: REFINE_MAX_TOKENS,
+    prompt,
+    fetcher: opts.fetcher,
+  });
+  if (!reply.ok) {
+    log.warn(describeRefineFailure(reply.failure));
     return null;
   }
-
-  if (!res.ok) {
-    log.warn(`refine: API answered HTTP ${res.status}`);
-    return null;
-  }
-
-  let text: string;
-  try {
-    // SAFETY: data is the Anthropic Messages API response body; the
-    // documented response shape is `{ content: [{ type, text, ... }] }`
-    // for a text-generating request like this one.
-    const data = await res.json() as { content?: Array<{ text?: string }> };
-    text = data.content?.[0]?.text?.trim() ?? '';
-  } catch (err) {
-    log.warn(`refine: unreadable response: ${errorMessage(err)}`);
-    return null;
-  }
-  if (text.length < 10) {
+  if (reply.text.length < REFINE_MIN_CHARS) {
     log.warn('refine: response was empty or too short to use');
     return null;
   }
-  return text;
+  return reply.text;
+}
+
+function describeRefineFailure(failure: AnthropicMessageFailure): string {
+  switch (failure.kind) {
+    case 'request': return `refine: request failed: ${failure.message}`;
+    case 'http': return `refine: API answered HTTP ${failure.status}`;
+    case 'unreadable': return `refine: unreadable response: ${failure.message}`;
+  }
 }
 
 function isConsolidated(entry: MemoryEntry): boolean {

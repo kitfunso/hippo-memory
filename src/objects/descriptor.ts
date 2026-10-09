@@ -1,7 +1,7 @@
 // What differs between the typed objects (decision, project brief and the rest), held as data so one lifecycle serves every type.
 
 import type { AuditOp } from '../store/audit.js';
-import type { SourceObjectType } from '../graph/types.js';
+import type { SourceObjectType } from '../store/graph-rows.js';
 import type { KeysetPosition } from '../keyset.js';
 import type { JsonObject } from '../store/working-memory.js';
 
