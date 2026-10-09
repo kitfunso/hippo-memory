@@ -1,7 +1,7 @@
 {
   "files": {
     "scripts/z1-replay.mjs": 1225,
-    "scripts/z6-supersession-eval.mjs": 1472
+    "scripts/z6-supersession-eval.mjs": 1508
   },
   "functions": {
     "scripts/check-comment-history.mjs:commentLines": 88,
@@ -19,7 +19,6 @@
     "scripts/z1-replay.mjs:processFile": 346,
     "scripts/z1-replay.mjs:processFile > fireHookPrompt": 93,
     "scripts/z1c-eval.mjs:main": 116,
-    "scripts/z6-supersession-eval.mjs:runScenarioArm": 95,
-    "scripts/z6-supersession-eval.mjs:selftestLabeller": 405
+    "scripts/z6-supersession-eval.mjs:runScenarioArm": 95
   }
 }

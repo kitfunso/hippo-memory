@@ -986,7 +986,20 @@ function selftestLabeller(check) {
   const throwsHook = (fn) => { try { fn(); return false; } catch (err) { return /hook mismatch/.test(err.message); } };
   const stmts2 = [{ marker: 'Mumbai' }, { marker: 'Delhi' }].map((s, i) => ({ marker: i === 0 ? 'Mumbai' : 'Delhi' }));
   // S = statements[0] (Mumbai), C = statements[1] (Delhi) for these synthetic checks (K=2).
+  const h = { row, ctxLine, throwsHook, stmts2 };
+  selftestLabelCases(check, h);
+  selftestAttribution(check, h);
+  selftestParsers(check, h);
+  selftestControl(check, h);
+  selftestVerdict(check);
+  selftestRetirementLinks(check, h);
+  selftestDiagnostics(check, h);
+  selftestWorkerAndGuards(check, h);
+  selftestLossCauses(check, h);
+}
 
+function selftestLabelCases(check, h) {
+  const { row, ctxLine, stmts2 } = h;
   // a: neither statement captured.
   { const rows = new Map(); computeValues([], stmts2);
     const r = labelChange(rows, new Set(), stmts2, '', [], []);
@@ -1053,7 +1066,10 @@ function selftestLabeller(check) {
     computeValues([s1, c1], stmts2);
     const r = labelChange(rows, new Set(['s1', 'c1']), stmts2, ctxLine('moved to Mumbai') + '\n' + ctxLine('now in Delhi'), ['s1', 'c1'], []);
     check(r.label === 'b', 'labelChange: b when both surfaces show S and C together with S ranked first'); }
+}
 
+function selftestAttribution(check, h) {
+  const { row, stmts2 } = h;
   // attribution: own marker wins even when the other marker also appears.
   { const r1 = row('r1', 'local', 'moved from Delhi to Mumbai', 1, 1);
     computeValues([r1], stmts2);
@@ -1094,7 +1110,10 @@ function selftestLabeller(check) {
     computeValues([r1, r2], rev);
     const r = labelChange(rows, new Set(['r1', 'r2']), rev, '', [], []);
     check(r.label === 'a' && r.detail.missing === 'new', 'reversal: S captured, step-3 C reassertion missing gives a with missing new'); }
+}
 
+function selftestParsers(check, h) {
+  const { row } = h;
   // context regex: all three prefixes match; a substring hit inside a longer stored row does not.
   { const target = row('t', 'local', 'Always use tabs in the web repo.', 1, 1);
     check(contextShows(target, '- **[verified] Always use tabs in the web repo.** [tags]'), 'context: "] " prefix matches');
@@ -1122,7 +1141,10 @@ function selftestLabeller(check) {
     check(reasonTest(blocksC, ['s1'], ['c1'], 'Mumbai', 'Delhi'), 'reason test: C block naming an S id passes');
     const bare = [{ id: 's1', text: 'status: superseded' }];
     check(!reasonTest(bare, ['s1'], ['c1'], 'Mumbai', 'Delhi'), 'reason test: a bare status word with no cross reference fails'); }
+}
 
+function selftestControl(check, h) {
+  const { row } = h;
   // control: pass needs both statements stored; a restatement skipped as a duplicate counts as stored.
   { const ctrlStmts = [{ marker: 'Delhi' }, { marker: 'Delhi' }];
     const r1 = row('r1', 'local', 'I live in Delhi', 1, 1);
@@ -1163,7 +1185,9 @@ function selftestLabeller(check) {
     computeValues([r1], ctrlStmts);
     const lost = labelControl(ctrlStmts, rows, new Set(), []);
     check(lost.label === 'fail' && lost.failLost, 'control: a captured value with no present carrier fails even when not evaluable'); }
+}
 
+function selftestVerdict(check) {
   // wilson(0, 20) upper bound is about 0.161.
   { const [lo, hi] = wilson(0, 20); check(lo === 0 && hi > 0.15 && hi < 0.17, 'wilson(0,20) upper bound is about 0.161'); }
 
@@ -1189,7 +1213,10 @@ function selftestLabeller(check) {
     check(computeVerdict(ctl(['pass', 'pass', 'pass', 'pass', 'n/a']), { arms: null, only: null }).status === 'PASS', 'verdict: 4 control passes and 1 n/a is PASS');
     check(computeVerdict(ctl(['pass', 'pass', 'pass', 'pass', 'fail']), { arms: null, only: null }).status === 'FAIL', 'verdict: any failed control is FAIL');
     check(computeVerdict(ctl(['pass', 'pass', 'pass', 'n/a', 'n/a']), { arms: null, only: null }).status === 'FAIL', 'verdict: 3 control passes is FAIL'); }
+}
 
+function selftestRetirementLinks(check, h) {
+  const { row, ctxLine, stmts2 } = h;
   // R9: each retirement form is honoured.
   { for (const [label, r] of [
       ['superseded_by', row('r', 'local', 'x', 1, 1, { superseded_by: 'y' })],
@@ -1246,7 +1273,10 @@ function selftestLabeller(check) {
     check(hookOnly.label === 'c', 'auto surface: the hook-context view ignores the auto output');
     const autoOnly = labelChange(rows, new Set(['s1', 'c1']), stmts2, ctxLine('now in Delhi'), [], [], { context: false, recall: false }, { autoText });
     check(autoOnly.label === 's', 'auto surface: the auto-only view sees S alone'); }
+}
 
+function selftestDiagnostics(check, h) {
+  const { row, ctxLine, throwsHook, stmts2 } = h;
   // Derived-row diagnostics and the dedup value relation.
   { const s1 = row('s1', 'local', 'moved to Mumbai for the job', 1, 1);
     const c1 = row('c1', 'local', 'now in Delhi for the new job', 2, 2);
@@ -1295,7 +1325,10 @@ function selftestLabeller(check) {
     computeValues([bg, bgGone], stmts2);
     const counts = fillerCounts(rows, new Set(['bg']), fillerNorm);
     check(counts.fillerActive === 1 && counts.fillerRetired === 0, 'filler guard: present filler rows count as active when not retired'); }
+}
 
+function selftestWorkerAndGuards(check, h) {
+  const { row, stmts2 } = h;
   // R4: oracle success additionally needs reach (explain lists an S and a C carrier).
   { const s1 = row('s1', 'local', 'moved to Mumbai', 1, 1, { superseded_by: 'c1' });
     const c1 = row('c1', 'local', 'now in Delhi', 2, 2);
@@ -1336,7 +1369,10 @@ function selftestLabeller(check) {
     check(!rootBaseOk(path.relative('/tmp', '/home/user/zzz')), 'root-base guard: a path outside the temp dir is refused');
     check(!rootBaseOk(''), 'root-base guard: the temp dir itself is refused');
     check(!rootBaseOk('..'), 'root-base guard: a path starting with .. is refused'); }
+}
 
+function selftestLossCauses(check, h) {
+  const { row, stmts2 } = h;
   // R15/R18: filler rows lost (not just retired) count against the verdict, split out by cause.
   { const lost = row('lost', 'local', 'The staging database snapshot runs nightly.', 5, null);
     const fillerNorm = new Set([norm('The staging database snapshot runs nightly.')]);
