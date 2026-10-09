@@ -17,9 +17,10 @@
  * tenant-scoped entry points are api.listDormant / restoreDormant /
  * forgetDormant.
  */
-import type { DatabaseSyncLike } from '../db.js';
+import { closeHippoDb, openHippoDb, withWriteScope, type DatabaseSyncLike } from '../db.js';
 import type { MemoryEntry } from '../memory.js';
 import type { SqlFragment } from '../recall-scope.js';
+import type { WriteBudget } from '../write-budget.js';
 import { rejectionDigest } from './rejection.js';
 import { escapeLike } from '../escape.js';
 import { warnDamagedColumn } from '../util/stored-json.js';
@@ -236,18 +237,51 @@ export function purgeDormantByDigest(
   return removed;
 }
 
-export interface DormantKey {
+interface DormantKey {
   readonly tenantId: string;
   readonly id: string;
 }
 
-export function expiredDormantKeys(db: DatabaseSyncLike, cutoffIso: string): DormantKey[] {
+function expiredDormantKeys(db: DatabaseSyncLike, cutoffIso: string): DormantKey[] {
   const sql = `SELECT tenant_id AS tenantId, id FROM dormant_memories WHERE dormant_at < ?`;
   // SAFETY: rows' shape matches the two columns named in the SELECT.
   return db.prepare(sql).all(cutoffIso) as DormantKey[];
 }
 
-export function deleteExpiredDormantRow(db: DatabaseSyncLike, key: DormantKey, cutoffIso: string): number {
+function deleteExpiredDormantRow(db: DatabaseSyncLike, key: DormantKey, cutoffIso: string): number {
   const sql = `DELETE FROM dormant_memories WHERE tenant_id = ? AND id = ? AND dormant_at < ?`;
   return Number(db.prepare(sql).run(key.tenantId, key.id, cutoffIso).changes ?? 0);
+}
+
+/** Deletes `keys` in transactions of about `budget.holdMs`, letting other writers in between; returns how many went. */
+async function expireInChunks(db: DatabaseSyncLike, keys: readonly DormantKey[], cutoffIso: string, budget: WriteBudget): Promise<number> {
+  let gone = 0;
+  let next = 0;
+  let committedAt = 0;
+  while (next < keys.length) {
+    if (next > 0) await budget.pause(committedAt);
+    withWriteScope(db, 'expire_dormant_chunk', () => {
+      const begunAt = budget.clock();
+      do gone += deleteExpiredDormantRow(db, keys[next++], cutoffIso);
+      while (next < keys.length && budget.clock() - begunAt < budget.holdMs);
+    });
+    committedAt = budget.clock();
+  }
+  return gone;
+}
+
+/** Deletes for good every memory that went dormant before `cutoffIso`, on one handle; returns how many went, or under `dryRun` how many would. */
+export async function expireDormantBefore(
+  hippoRoot: string,
+  cutoffIso: string,
+  opts: { dryRun: boolean; budget: WriteBudget; busyWaitMs: number },
+): Promise<number> {
+  const db = openHippoDb(hippoRoot, { busyWaitMs: opts.busyWaitMs });
+  try {
+    // The keys come from a read, so a run with nothing to expire never takes the write lock.
+    const keys = expiredDormantKeys(db, cutoffIso);
+    return opts.dryRun ? keys.length : await expireInChunks(db, keys, cutoffIso, opts.budget);
+  } finally {
+    closeHippoDb(db);
+  }
 }

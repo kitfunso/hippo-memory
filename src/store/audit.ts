@@ -388,3 +388,27 @@ function safeJsonParse(raw: string, id: number): JsonObject {
     return {};
   }
 }
+
+/** An audit row that did not land, with what its write threw. */
+export interface FailedAuditEvent {
+  event: AppendAuditOpts;
+  error: unknown;
+}
+
+/** Appends each event as its own write on one handle, so a row that fails drops only itself. Returns the rows that failed, for the caller to report. */
+export function recordAuditEventsRowByRow(hippoRoot: string, events: readonly AppendAuditOpts[]): FailedAuditEvent[] {
+  const db = openHippoDb(hippoRoot);
+  try {
+    const failed: FailedAuditEvent[] = [];
+    for (const event of events) {
+      try {
+        appendAuditEvent(db, event);
+      } catch (error) {
+        failed.push({ event, error });
+      }
+    }
+    return failed;
+  } finally {
+    closeHippoDb(db);
+  }
+}

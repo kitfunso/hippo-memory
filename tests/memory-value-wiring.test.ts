@@ -12,7 +12,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, it, expect, beforeEach, afterEach, afterAll } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from 'vitest';
 
 import { consolidate } from '../src/consolidate/sleep.js';
 import { initStore } from '../src/store/open.js';
@@ -440,6 +440,33 @@ describe('(e) rescue semantics', () => {
       expect(meta.rank!).toBeLessThanOrEqual(3);
       expect(meta.score).toBeTypeOf('number');
     }
+  });
+
+  it('a rescue audit row that fails to write is counted and reported, and the other rows still land', async () => {
+    initStore(dir);
+    enableMemoryValue(dir);
+    const built = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((len) => condemnedEntry('w'.repeat(len), { tenantId: 'ta' }));
+    for (const e of built) writeEntry(dir, e);
+    const refused = built[1]!.id;
+    const db = openHippoDb(dir);
+    try {
+      db.exec(`CREATE TRIGGER refuse_one_rescue_audit BEFORE INSERT ON audit_log WHEN NEW.op = 'mv_rescue' AND NEW.target_id = '${refused}' BEGIN SELECT RAISE(ABORT, 'audit row refused'); END`);
+    } finally {
+      closeHippoDb(db);
+    }
+
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    let result: Awaited<ReturnType<typeof consolidate>>;
+    try {
+      result = await consolidate(dir, { now: NOW });
+      expect(stderr).toHaveBeenCalledWith(expect.stringContaining('audit write failed'));
+    } finally {
+      stderr.mockRestore();
+    }
+
+    expect(result.details).toContain('  ⚠️ memory-value: 1 mv_rescue audit row failed to write (the rescue itself still landed)');
+    expect(new Set(auditRescueRows(dir, 'ta').map((e) => e.targetId))).toEqual(new Set([built[0]!.id, built[2]!.id]));
+    expect(loadAllEntries(dir).map((e) => e.id)).toContain(refused);
   });
 
   it('rescued entries get the standard survivor bookkeeping refresh (stored strength), confidence tier preserved', async () => {

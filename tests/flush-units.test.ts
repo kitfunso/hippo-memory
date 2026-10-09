@@ -6,10 +6,11 @@ import * as path from 'node:path';
 import { createRequire } from 'node:module';
 import { Layer, type MemoryEntry } from '../src/memory.js';
 import { familyUnits, groupFlush } from '../src/consolidate/flush-units.js';
-import { batchWriteAndDeleteOn, type FlushComponent } from '../src/store/delete-and-batch.js';
-import { initStore, openStore } from '../src/store/open.js';
+import { commitInChunks, type FlushComponent } from '../src/store/delete-and-batch.js';
+import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
+import { SLEEP_DB_WAIT_MS, type DatabaseSyncLike } from '../src/db.js';
+import type { WriteBudget } from '../src/write-budget.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 
 // SAFETY: node:sqlite's StatementSync is the class db.ts's prepare returns, and it carries its SQL text.
@@ -53,8 +54,8 @@ describe('groupFlush', () => {
   });
 });
 
-describe('batchWriteAndDeleteOn', () => {
-  it('keeps the largest component whole and closes the transaction at the first boundary past the deadline', () => {
+describe('commitInChunks', () => {
+  it('keeps the largest component whole and closes the transaction at the first boundary past the deadline', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-flush-units-'));
     roots.push(root);
     initStore(root);
@@ -77,17 +78,15 @@ describe('batchWriteAndDeleteOn', () => {
       return run.apply(this, params);
     });
 
-    const db = openStore(root);
-    try {
-      const first = batchWriteAndDeleteOn(db, root, [largest, ...singles], 0, { holdMs: 25, clock });
-      expect(now).toBe(110);
-      expect(first.next).toBe(1);
-      expect(first.removedIds.sort()).toEqual(retired.map((e) => e.id).sort());
+    // A pause is the gap after a commit, so the clock at each one says where that transaction closed.
+    const pausedAt: number[] = [];
+    const budget: WriteBudget = { holdMs: 25, clock, pause: async (committedAt) => { pausedAt.push(committedAt); } };
 
-      const second = batchWriteAndDeleteOn(db, root, [largest, ...singles], 1, { holdMs: 25, clock });
-      expect(second.next).toBe(4);
-    } finally {
-      closeHippoDb(db);
-    }
+    const removed = await commitInChunks(root, [largest, ...singles], { snapshot: new Map(), budget, busyWaitMs: SLEEP_DB_WAIT_MS });
+
+    // The 11 row ops of the largest component, then three singles before the 25 ms hold runs out, then the last.
+    expect(pausedAt).toEqual([110, 140]);
+    expect(now).toBe(150);
+    expect(removed.sort()).toEqual(retired.map((e) => e.id).sort());
   });
 });
