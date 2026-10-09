@@ -1,6 +1,6 @@
 // One container's sync in one transaction on the caller's handle: lookup, plan, then every write (plan designs 6 to 8).
 import { appendAuditEvent } from '../store/audit.js';
-import type { DatabaseSyncLike } from '../db.js';
+import { withTrialScope, withWriteScope, type DatabaseSyncLike } from '../db.js';
 import { deleteDormantRow, dormantSnapshotsBySourcePrefix, insertDormantRow, readDormantSnapshot, replaceDormantEntry } from '../store/dormant.js';
 import { gatedWrite } from '../gated-write.js';
 import { Layer, calculateStrength, createMemory, type MemoryEntry } from '../memory.js';
@@ -54,16 +54,8 @@ export interface ContainerOutcome {
 
 /** Throws SQLITE_BUSY when another writer holds the store past its busy timeout; nothing is written then. */
 export function syncContainer(s: StoreSession, work: ContainerWork): ContainerOutcome {
-  // A dry run takes no lock up front and rolls every write back.
-  s.db.exec(s.dryRun ? 'BEGIN' : 'BEGIN IMMEDIATE');
-  try {
-    const out = new ContainerRun(s, work).run();
-    s.db.exec(s.dryRun ? 'ROLLBACK' : 'COMMIT');
-    return out;
-  } catch (err) {
-    try { s.db.exec('ROLLBACK'); } catch { /* already rolled back; keep the original error */ }
-    throw err;
-  }
+  const run = (): ContainerOutcome => new ContainerRun(s, work).run();
+  return s.dryRun ? withTrialScope(s.db, 'sync_container', run) : withWriteScope(s.db, 'sync_container', run);
 }
 
 export type SetAsideWhy = 'note-gone' | 'note-changed' | 'handover' | 'project-merge' | 'project-repair';

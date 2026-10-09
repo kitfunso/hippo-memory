@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { appendAuditEvent } from '../store/audit.js';
 import { withBackup } from '../db/backup.js';
-import { withWriteScope } from '../db/busy.js';
+import { withTrialScope, withWriteScope } from '../db/busy.js';
 import { assertSqliteAllowed } from '../db/open.js';
 import { DatabaseSync, type DatabaseSyncLike } from '../db/sqlite.js';
 import { getMeta, pragmaUserVersion, setMeta } from '../db/meta.js';
@@ -171,9 +171,7 @@ function applyPlan(db: DatabaseSyncLike, root: string, tenantId: string, backup:
 }
 
 function repairOn(db: DatabaseSyncLike, root: string, opts: { tenantId: string; apply?: boolean; doneKey?: string }): QualityRepairResult {
-  db.exec('BEGIN');
-  const initial = initialResult(db, root, opts.tenantId);
-  db.exec('ROLLBACK');
+  const initial = withTrialScope(db, 'quality_repair_plan', () => initialResult(db, root, opts.tenantId));
   if (!opts.apply || !initial.supported || !initial.issues.some((issue) => issue.disposition === 'set-aside')) return initial;
   db.exec('PRAGMA foreign_keys = ON');
   const result = withBackup(db, root, 'before-quality-repair', (backup) => applyPlan(db, root, opts.tenantId, backup, opts.doneKey));
