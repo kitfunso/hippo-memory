@@ -8,7 +8,7 @@ import { writeRecallTraceAtRoot } from '../store/recall-trace.js';
 import type { SearchResult } from '../core/search-types.js';
 import { saveIndex } from '../store/index-and-stats.js';
 import { sqliteStore, type HippoStore, type RecallWrites } from '../store-port.js';
-import { estimateTokens } from '../token-ledger.js';
+import { estimateTokens } from '../util/token-text.js';
 import { callerOf, recallAuditMetadata, recallAuditRow, strengthenOf } from './recall-record.js';
 import type { CliCoreRanker, CliCoreRecall, RecallOpts, RecallResult, ShownCliCore } from './recall-types.js';
 import { recordTokens } from './tokens.js';

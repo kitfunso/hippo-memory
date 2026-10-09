@@ -3,7 +3,8 @@
 exports[`cli sleep golden output > sleep --dry-run --json 1`] = `
 {
   "status": 0,
-  "stderr": "",
+  "stderr": "hippo: ignoring unknown flag --json. A later release will reject it.
+",
   "stdout": "Dry run: skipped learning from git commits and coding agents' own memories (\`hippo import --agents --dry-run\` previews those).
 Running consolidation (dry run)...
 
@@ -89,7 +90,8 @@ Audit: would remove 1 junk memories (too short/empty).
 exports[`cli sleep golden output > sleep --json 1`] = `
 {
   "status": 0,
-  "stderr": "",
+  "stderr": "hippo: ignoring unknown flag --json. A later release will reject it.
+",
   "stdout": "Running consolidation...
 
 Results:

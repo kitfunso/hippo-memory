@@ -5,7 +5,7 @@ import { errorMessage, log } from '../log.js';
 import { DatabaseSync, type DatabaseSyncLike } from './sqlite.js';
 import { tableExists } from './tables.js';
 import { assertBinaryCompatible } from './migrate.js';
-import { connectHippoDb, getHippoDbPath } from './connect.js';
+import { connectWithFacts, getHippoDbPath, type OpenedDb } from './connect.js';
 import { currentRequestStores, isScopedHandle, runWithRequestStores } from './request-stores.js';
 import { OtherStoreFolderError, SqliteBlockedError } from '../util/sqlite-blocked.js';
 
@@ -94,9 +94,14 @@ export function assertSqliteAllowed(hippoRoot: string): void {
 
 /** `busyWaitMs` shortens every lock wait of this open, for a hook that must finish inside its own timeout. */
 export function openHippoDb(hippoRoot: string, opts?: { busyWaitMs?: number }): DatabaseSyncLike {
+  return openHippoDbWithFacts(hippoRoot, opts).db;
+}
+
+/** openHippoDb, with what the open's probe read when this call made the connection. */
+export function openHippoDbWithFacts(hippoRoot: string, opts?: { busyWaitMs?: number }): OpenedDb {
   assertSqliteAllowed(hippoRoot);
   const stores = currentRequestStores();
-  return stores ? stores.get(hippoRoot, opts) : connectHippoDb(hippoRoot, opts?.busyWaitMs);
+  return stores ? stores.getWithFacts(hippoRoot, opts) : connectWithFacts(hippoRoot, opts?.busyWaitMs);
 }
 
 /** Open an existing store without changing it: no mkdir, WAL switch, migration or mirror cleanup. Throws when hippo.db is missing. */

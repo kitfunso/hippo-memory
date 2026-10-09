@@ -141,21 +141,21 @@ const httpRecall = (limit) => async () => {
 
 // Each case: label, request, and its ceilings on statements run, rows read and stores opened.
 const cases = [
-  ['getContext, no query', () => getContext(ctx, { currentProject: 'proj' }), [360, 5400, 11]],
-  ['getContext, query', () => getContext(ctx, { q: 'kafka redis', currentProject: 'proj' }), [415, 705, 16]],
-  ['getContext, pinned only', () => getContext(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: 'proj' }), [58, 155, 5]],
-  ['getContext, local query', withoutGlobal(() => getContext(ctx, { q: 'kafka redis', currentProject: 'proj' })), [350, 420, 10]],
+  ['getContext, no query', () => getContext(ctx, { currentProject: 'proj' }), [330, 5335, 11]],
+  ['getContext, query', () => getContext(ctx, { q: 'kafka redis', currentProject: 'proj' }), [375, 665, 16]],
+  ['getContext, pinned only', () => getContext(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: 'proj' }), [42, 141, 5]],
+  ['getContext, local query', withoutGlobal(() => getContext(ctx, { q: 'kafka redis', currentProject: 'proj' })), [325, 395, 10]],
   ['ambient tallies, 2 stores', () => {
     for (const root of [localRoot, globalRoot]) loadAmbientTallies(root, 'default', { project: ['proj'], currentProject: ['proj'], now: new Date() });
-  }, [26, 14, 2]],
-  ['mcp hippo_context', tool('hippo_context'), [360, 5400, 2]],
-  ['mcp hippo_recall', tool('hippo_recall', { query: 'kafka redis' }), [415, 1500, 1]],
-  ['mcp hippo_status', tool('hippo_status'), [17, 11, 1]],
-  ['mcp hippo_peers', tool('hippo_peers'), [14, 22, 1]],
+  }, [19, 6, 2]],
+  ['mcp hippo_context', tool('hippo_context'), [345, 5370, 2]],
+  ['mcp hippo_recall', tool('hippo_recall', { query: 'kafka redis' }), [411, 1495, 1]],
+  ['mcp hippo_status', tool('hippo_status'), [13, 7, 1]],
+  ['mcp hippo_peers', tool('hippo_peers'), [10, 17, 1]],
   ['served predictions list', () => served.predictions.listPredictions('default', { limit: 20 }), [0, 0, 0]],
-  ['http recall, limit 10', httpRecall(10), [65, 290, 1]],
+  ['http recall, limit 10', httpRecall(10), [62, 287, 1]],
   // Fifty rows back, so one extra statement per returned row passes the ceiling, which ten rows would not.
-  ['http recall, limit 50', httpRecall(50), [169, 338, 1]],
+  ['http recall, limit 50', httpRecall(50), [166, 335, 1]],
 ];
 
 let overworked = false;

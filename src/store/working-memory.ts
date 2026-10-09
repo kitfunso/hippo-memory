@@ -10,6 +10,7 @@ import { closeHippoDb, withWriteScope } from '../db.js';
 import { openStore } from './open.js';
 import type { JsonValue } from '../json.js';
 import { warnDamagedColumn } from '../util/stored-json.js';
+import { resolveTenantId } from '../tenant.js';
 
 export const WM_MAX_ENTRIES = 20;
 
@@ -76,16 +77,18 @@ export function wmPush(hippoRoot: string, opts: {
   sessionId?: string;
   taskId?: string;
   metadata?: JsonObject;
+  tenantId?: string;
 }): number {
   const db = openStore(hippoRoot);
   try {
     const now = new Date().toISOString();
     const importance = opts.importance ?? 0;
+    const tenantId = opts.tenantId ?? resolveTenantId({});
 
     return withWriteScope(db, 'wm_push', () => {
       const result = db.prepare(`
-        INSERT INTO working_memory(scope, session_id, task_id, importance, content, metadata_json, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO working_memory(scope, session_id, task_id, importance, content, metadata_json, created_at, updated_at, tenant_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         opts.scope,
         opts.sessionId ?? null,
@@ -95,6 +98,7 @@ export function wmPush(hippoRoot: string, opts: {
         JSON.stringify(opts.metadata ?? {}),
         now,
         now,
+        tenantId,
       );
 
       const id = Number(result.lastInsertRowid ?? 0);
@@ -104,8 +108,8 @@ export function wmPush(hippoRoot: string, opts: {
       // one row shaped { cnt }; .get() returns undefined only if the driver
       // yields no row, which COUNT(*) never does.
       const countRow = db.prepare(`
-        SELECT COUNT(*) AS cnt FROM working_memory WHERE scope = ?
-      `).get(opts.scope) as { cnt: number } | undefined;
+        SELECT COUNT(*) AS cnt FROM working_memory WHERE scope = ? AND tenant_id = ?
+      `).get(opts.scope, tenantId) as { cnt: number } | undefined;
 
       const count = Number(countRow?.cnt ?? 0);
       if (count > WM_MAX_ENTRIES) {
@@ -114,11 +118,11 @@ export function wmPush(hippoRoot: string, opts: {
           DELETE FROM working_memory
           WHERE id IN (
             SELECT id FROM working_memory
-            WHERE scope = ?
+            WHERE scope = ? AND tenant_id = ?
             ORDER BY importance ASC, created_at ASC
             LIMIT ?
           )
-        `).run(opts.scope, excess);
+        `).run(opts.scope, tenantId, excess);
       }
 
       return id;
@@ -135,11 +139,12 @@ export function wmRead(hippoRoot: string, opts?: {
   scope?: string;
   sessionId?: string;
   limit?: number;
+  tenantId?: string;
 }): WorkingMemoryItem[] {
   const db = openStore(hippoRoot);
   try {
-    const clauses: string[] = [];
-    const params: Array<string | number> = [];
+    const clauses: string[] = ['tenant_id = ?'];
+    const params: Array<string | number> = [opts?.tenantId ?? resolveTenantId({})];
 
     if (opts?.scope) {
       clauses.push('scope = ?');
@@ -176,11 +181,12 @@ export function wmRead(hippoRoot: string, opts?: {
 export function wmClear(hippoRoot: string, opts?: {
   scope?: string;
   sessionId?: string;
+  tenantId?: string;
 }): number {
   const db = openStore(hippoRoot);
   try {
-    const clauses: string[] = [];
-    const params: Array<string | number> = [];
+    const clauses: string[] = ['tenant_id = ?'];
+    const params: Array<string | number> = [opts?.tenantId ?? resolveTenantId({})];
 
     if (opts?.scope) {
       clauses.push('scope = ?');
@@ -208,6 +214,7 @@ export function wmClear(hippoRoot: string, opts?: {
 export function wmFlush(hippoRoot: string, opts?: {
   scope?: string;
   sessionId?: string;
+  tenantId?: string;
 }): number {
   return wmClear(hippoRoot, opts);
 }

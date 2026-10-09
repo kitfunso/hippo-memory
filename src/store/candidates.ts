@@ -18,10 +18,10 @@ export interface AmbientLoadResult {
 }
 
 const AMBIENT_SCOPED = 'superseded_by IS NULL AND tenant_id = ?';
-/** Exported so the plan test runs the exact SQL; idx_memories_pinned (db.ts v51) serves it. */
-export const AMBIENT_PINNED_WHERE = `pinned = 1 AND ${AMBIENT_SCOPED} ORDER BY created ASC, id ASC`;
-/** Exported so the plan test runs the exact SQL; idx_memories_created_drift (db.ts v51) serves it. */
-export const AMBIENT_DRIFT_SQL =
+/** idx_memories_pinned (db.ts v51) serves it. */
+const AMBIENT_PINNED_WHERE = `pinned = 1 AND ${AMBIENT_SCOPED} ORDER BY created ASC, id ASC`;
+/** idx_memories_created_drift (db.ts v51) serves it. */
+const AMBIENT_DRIFT_SQL =
   `SELECT 1 FROM memories WHERE ${AMBIENT_SCOPED} AND (length(created) <> 24 OR created NOT LIKE '%Z') LIMIT 1`;
 
 /** The origins a caller's recent rows may carry: its project names, and user-global ('') rows when `userGlobal`. */

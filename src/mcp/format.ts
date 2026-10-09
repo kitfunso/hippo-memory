@@ -8,7 +8,7 @@ import { formatHandoffEvidenceLine, type SessionHandoff } from '../handoff.js';
 import { printedTokens } from '../context-render.js';
 import { detectAnchoring } from '../recall-history.js';
 import { detectAvailabilityBias } from '../availability.js';
-import { estimateTokens } from '../token-ledger.js';
+import { estimateTokens } from '../util/token-text.js';
 
 // ── Format helpers ──
 
