@@ -78,6 +78,17 @@ describe('markdown that appears on a still empty store after the setup', () => {
 
 describe('a setup still waiting for the write lock', () => {
   it('holds the read sent with it, which answers once the setup has written', async () => {
+    // Positive control: with no lock held, how long a first read takes on a second executor over a second fresh store.
+    const freeRoot = newRoot('setup-first');
+    execOn(freeRoot, `DELETE FROM meta WHERE key = '${HALF_LIFE_BASE_META_KEY}'`);
+    const free = createSqliteExecutor(freeRoot, { busyWaitMs: 60_000 });
+    cleanups.push(() => free.close());
+    const started = performance.now();
+    await free.call('readiness.ping', [], { mode: 'read', requestId: undefined });
+    const unlockedMs = performance.now() - started;
+    // A read that was not held would have answered within the unlocked time, so a window of several times it (floor 1 s) proves the hold.
+    const windowMs = Math.max(1_000, unlockedMs * 5);
+
     const root = newRoot('setup-first');
     // An empty store with no recorded base: the setup has one row to write, and the lock below makes it wait.
     execOn(root, `DELETE FROM meta WHERE key = '${HALF_LIFE_BASE_META_KEY}'`);
@@ -90,8 +101,7 @@ describe('a setup still waiting for the write lock', () => {
       answered = true;
     });
 
-    // Long past a reader thread's start, so a read sent to a reader at once would have answered.
-    await delay(1_500);
+    await delay(windowMs);
 
     expect(answered).toBe(false);
     lock.release();

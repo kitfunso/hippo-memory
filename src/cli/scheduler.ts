@@ -10,35 +10,6 @@ interface WorkspaceRegistry {
   workspaces: string[];
 }
 
-/**
- * Dependency-injection seam for tests. Production code always uses the real
- * `fs` functions imported above; tests override this via
- * __setSchedulerFsDeps to substitute fakes instead of `vi.mock`ing the
- * built-in `fs` module. Never called outside tests -- this module's public
- * behavior is unaffected when it's never invoked.
- */
-export interface SchedulerFsDeps {
-  existsSync: typeof fs.existsSync;
-  readFileSync: typeof fs.readFileSync;
-  mkdirSync: typeof fs.mkdirSync;
-  writeFile: (file: string, text: string) => void;
-  renameSync: typeof fs.renameSync;
-}
-
-let fsDeps: SchedulerFsDeps = {
-  existsSync: fs.existsSync,
-  readFileSync: fs.readFileSync,
-  mkdirSync: fs.mkdirSync,
-  // One rename, so a crash mid-save cannot leave a truncated registry that reads as corrupt.
-  writeFile: writeFileAtomic,
-  renameSync: fs.renameSync,
-};
-
-/** Test-only override. Not part of this module's public API surface. */
-export function __setSchedulerFsDeps(overrides: Partial<SchedulerFsDeps>): void {
-  fsDeps = { ...fsDeps, ...overrides };
-}
-
 function defaultRegistry(): WorkspaceRegistry {
   return {
     version: 1,
@@ -56,11 +27,11 @@ function normalizeWorkspace(projectDir: string): string {
 
 export function loadWorkspaceRegistry(globalRoot: string): WorkspaceRegistry {
   const registryPath = workspaceRegistryPath(globalRoot);
-  if (!fsDeps.existsSync(registryPath)) return defaultRegistry();
+  if (!fs.existsSync(registryPath)) return defaultRegistry();
 
   let text: string;
   try {
-    text = fsDeps.readFileSync(registryPath, 'utf8');
+    text = fs.readFileSync(registryPath, 'utf8');
   } catch (err) {
     log.warn(`workspace registry ${registryPath} could not be read (${errorMessage(err)}); starting with no workspaces`);
     return defaultRegistry();
@@ -85,7 +56,7 @@ function setAsideCorruptRegistry<E>(registryPath: string, err: E): void {
   const reason = errorMessage(err);
   const aside = `${registryPath}.corrupt-${new Date().toISOString().replace(/[:.]/g, '-')}`;
   try {
-    fsDeps.renameSync(registryPath, aside);
+    fs.renameSync(registryPath, aside);
     log.warn(`workspace registry ${registryPath} is corrupt (${reason}); moved it to ${aside} and starting with no workspaces`);
   } catch (renameErr) {
     log.warn(`workspace registry ${registryPath} is corrupt (${reason}) and could not be moved aside (${errorMessage(renameErr)}); starting with no workspaces`);
@@ -93,8 +64,8 @@ function setAsideCorruptRegistry<E>(registryPath: string, err: E): void {
 }
 
 export function saveWorkspaceRegistry(globalRoot: string, registry: WorkspaceRegistry): void {
-  fsDeps.mkdirSync(globalRoot, { recursive: true, mode: 0o700 });
-  fsDeps.writeFile(
+  fs.mkdirSync(globalRoot, { recursive: true, mode: 0o700 });
+  writeFileAtomic(
     workspaceRegistryPath(globalRoot),
     JSON.stringify(
       {
@@ -151,7 +122,7 @@ export function runDailyMaintenance(
 ): void {
   for (const workspace of workspaces) {
     const resolved = normalizeWorkspace(workspace);
-    if (!fsDeps.existsSync(path.join(resolved, '.hippo'))) continue;
+    if (!fs.existsSync(path.join(resolved, '.hippo'))) continue;
     runCommand(resolved, ['learn', '--git', '--days', '1']);
     runCommand(resolved, ['sleep']);
   }

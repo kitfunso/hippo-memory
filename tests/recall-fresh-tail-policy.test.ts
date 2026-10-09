@@ -119,10 +119,12 @@ describe('fresh-tail policy', () => {
   it('env=1, freshTailCount=0 (or unset) → no throw (guard fires only when fresh-tail requested)', () => {
     process.env.HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL = '1';
     for (let i = 0; i < 3; i++) writeEntry(root, makeRaw(`event ${i}`));
-    expect(() => recall(ctxFor(root), { query: 'event' })).not.toThrow();
-    expect(() =>
-      recall(ctxFor(root), { query: 'event', freshTailCount: 0 }),
-    ).not.toThrow();
+    const unset = recall(ctxFor(root), { query: 'event' });
+    const zero = recall(ctxFor(root), { query: 'event', freshTailCount: 0 });
+    for (const r of [unset, zero]) {
+      expect(r.results.map((it) => it.content).sort()).toEqual(['event 0', 'event 1', 'event 2']);
+      expect(r.results.filter((it) => it.isFreshTail)).toEqual([]);
+    }
   });
 
   it('env=anything-other-than-"1" → treated as unset, no throw', () => {
@@ -132,9 +134,15 @@ describe('fresh-tail policy', () => {
     for (const val of ['true', 'yes', '0', '', 'false']) {
       process.env.HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL = val;
       for (let i = 0; i < 3; i++) writeEntry(root, makeRaw(`v-${val}-event ${i}`));
-      expect(() =>
-        recall(ctxFor(root), { query: 'event', freshTailCount: 3 }),
-      ).not.toThrow();
+      const none = recall(ctxFor(root), { query: 'event' });
+      expect(none.results.length).toBeGreaterThanOrEqual(3);
+      expect(none.results.filter((it) => it.isFreshTail)).toEqual([]);
+      // The guard is off, so the newest three raw rows come back tagged, each exactly once.
+      const r = recall(ctxFor(root), { query: 'event', freshTailCount: 3 });
+      const tail = r.results.filter((it) => it.isFreshTail);
+      expect(tail).toHaveLength(3);
+      expect(new Set(tail.map((it) => it.id)).size).toBe(3);
+      expect(r.results.filter((it) => it.content.startsWith(`v-${val}-event`) && it.isFreshTail)).toHaveLength(3);
     }
   });
 });
