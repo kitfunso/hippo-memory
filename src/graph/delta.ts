@@ -1,6 +1,7 @@
 // Diffs the derived graph against the stored rows, so a rebuild writes only what changed and an entity keeps the id its relations hang on.
-import { openHippoDb, closeHippoDb } from '../db.js';
 import type { GraphTxDb, EntityType, RelationType, SourceObjectRef } from './types.js';
+import { loadStoredGraph, storedGraphOn } from '../store/graph-reads.js';
+import type { StoredEntity, StoredGraph, StoredRelation } from '../store/graph-rows.js';
 
 /** What names an object-derived entity across rebuilds; v38 has no UNIQUE on it, so the diff keeps one row per key. */
 export interface NaturalKey {
@@ -33,27 +34,6 @@ export type GraphOp =
   | { readonly op: 'deleteRelation'; readonly id: number }
   | { readonly op: 'insertRelation'; readonly relation: DesiredRelation };
 
-interface StoredEntity {
-  id: number;
-  entity_type: string;
-  name: string;
-  memory_id: string | null;
-  source_kind: string;
-  source_object_type: string | null;
-  source_object_id: number | null;
-}
-
-interface StoredRelation {
-  id: number;
-  from_entity_id: number;
-  to_entity_id: number;
-  rel_type: string;
-  memory_id: string | null;
-  source_kind: string;
-  source_object_type: string | null;
-  source_object_id: number | null;
-}
-
 const keyText = (entityType: string, objectType: string, objectId: number): string => `${entityType}|${objectType}:${objectId}`;
 
 export function entityKey(k: NaturalKey): string {
@@ -76,14 +56,10 @@ function provenanceOf(memoryId: string | null, kinds: MemoryKinds): string {
   return kind === undefined ? '|distilled' : `${memoryId}|${kind}`;
 }
 
-function memoryKindsOf(db: GraphTxDb, desired: DesiredGraph): MemoryKinds {
+function memoryIdsOf(desired: DesiredGraph): string[] {
   const ids = new Set<string>();
   for (const row of [...desired.entities, ...desired.relations]) if (row.memoryId !== null) ids.add(row.memoryId);
-  if (ids.size === 0) return new Map();
-  // SAFETY: the SELECT names exactly the two columns of the row type.
-  const rows = db.prepare(`SELECT id, kind FROM memories WHERE id IN (SELECT value FROM json_each(?))`)
-    .all(JSON.stringify([...ids])) as Array<{ id: string; kind: string }>;
-  return new Map(rows.map((r) => [r.id, r.kind]));
+  return [...ids];
 }
 
 function firstByKey<T>(rows: readonly T[], keyOf: (row: T) => string): Map<string, T> {
@@ -150,27 +126,17 @@ function diffRelations(
   return [...deletes, ...inserts];
 }
 
+function deltaOf(stored: StoredGraph, desired: DesiredGraph): GraphOp[] {
+  const entityDelta = diffEntities(stored.entities, desired.entities, stored.kinds);
+  return [...entityDelta.ops, ...diffRelations(stored.relations, desired.relations, entityDelta.keptKeyById, stored.kinds)];
+}
+
 /** Ops that turn the stored graph into `desired`, in apply order; reads only, and keeps the lowest id per natural key. */
 export function graphDelta(db: GraphTxDb, tenantId: string, desired: DesiredGraph): GraphOp[] {
-  const kinds = memoryKindsOf(db, desired);
-  // SAFETY: the SELECT names exactly the columns of StoredEntity.
-  const entities = db.prepare(
-    `SELECT id, entity_type, name, memory_id, source_kind, source_object_type, source_object_id FROM entities WHERE tenant_id = ? ORDER BY id`,
-  ).all(tenantId) as StoredEntity[];
-  // SAFETY: the SELECT names exactly the columns of StoredRelation.
-  const relations = db.prepare(
-    `SELECT id, from_entity_id, to_entity_id, rel_type, memory_id, source_kind, source_object_type, source_object_id FROM relations WHERE tenant_id = ? ORDER BY id`,
-  ).all(tenantId) as StoredRelation[];
-  const entityDelta = diffEntities(entities, desired.entities, kinds);
-  return [...entityDelta.ops, ...diffRelations(relations, desired.relations, entityDelta.keptKeyById, kinds)];
+  return deltaOf(storedGraphOn(db, tenantId, memoryIdsOf(desired)), desired);
 }
 
 /** graphDelta on its own connection and outside any write lock; the apply re-checks each op against what changed since. */
 export function readGraphDelta(hippoRoot: string, tenantId: string, desired: DesiredGraph): GraphOp[] {
-  const db = openHippoDb(hippoRoot);
-  try {
-    return graphDelta(db, tenantId, desired);
-  } finally {
-    closeHippoDb(db);
-  }
+  return deltaOf(loadStoredGraph(hippoRoot, tenantId, memoryIdsOf(desired)), desired);
 }
