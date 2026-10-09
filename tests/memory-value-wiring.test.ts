@@ -25,7 +25,7 @@ import { Layer, calculateStrength, resolveConfidence, type MemoryEntry, type Dec
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { loadConfig, type HippoConfig } from '../src/config.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { queryAuditEvents, type AuditEvent } from '../src/audit.js';
+import { queryAuditEvents, type AuditEvent } from '../src/store/audit.js';
 import {
   computeMvFeatures,
   MV_FEATURE_NAMES,

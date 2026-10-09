@@ -6,7 +6,7 @@ import { oneCopyPerMemory } from './api/context-select.js';
 import { compareEntryIdentity } from './compare.js';
 import { closeHippoDb, openHippoDb } from './db.js';
 import { isEmbeddingAvailable } from './local-embedding.js';
-import { computeGoalStackBoost, type GoalRecallLogRow } from './goals.js';
+import { computeGoalStackBoost, type GoalRecallLogRow } from './store/goals.js';
 import { graphExpandRecall } from './graph-recall.js';
 import { DEFAULT_GRAPH_STREAM_WEIGHT } from './graph-stream.js';
 import { Layer, type MemoryEntry } from './memory.js';

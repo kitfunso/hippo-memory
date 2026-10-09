@@ -6,7 +6,7 @@ import type { RerankStep, SearchResult } from '../core/search-types.js';
 import type { PlanningFallacyHint, PlanningFallacyOutput, PlanningFallacyWatching } from '../predictions/planning-fallacy.js';
 import type { AnchoringHint, RecallHistorySnapshot } from '../recall-history.js';
 import type { AvailabilityHint } from '../availability.js';
-import type { AppendAuditOpts } from '../audit.js';
+import type { AppendAuditOpts } from '../store/audit.js';
 import type { CallerProject } from '../prompt-hook.js';
 import type { RankRecallOpts, RankRecallResult } from '../recall-pipeline.js';
 

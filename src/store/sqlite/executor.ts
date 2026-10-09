@@ -1,7 +1,7 @@
 // The server thread's side of the store workers: SQLite's synchronous statements and lock waits run on their threads, so the event loop keeps answering.
 import { fileURLToPath } from 'node:url';
 import { SHARE_ENV, Worker } from 'node:worker_threads';
-import { addAuditWriteFailures } from '../../audit.js';
+import { addAuditWriteFailures } from '../audit.js';
 import { getHippoDbPath, SERVER_DB_WAIT_MS, StoreBusyError } from '../../db.js';
 import { autoCheckpointPages } from '../../db/wal-checkpointer.js';
 import { errorMessage, log } from '../../log.js';

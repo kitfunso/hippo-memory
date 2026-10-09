@@ -4,7 +4,7 @@ import { IncompatibleBinaryError, StoreBusyError } from '../../db.js';
 import { BodyTimeoutError, BodyTooLargeError, HttpError } from '../../http-util.js';
 import { errorMessage, log } from '../../log.js';
 import { ScopeForbiddenError } from '../../recall-scope.js';
-import { RejectedValueError } from '../../rejection.js';
+import { RejectedValueError } from '../rejection.js';
 import { OtherStoreFolderError, SqliteBlockedError, StoreNotPortedError } from '../../util/sqlite-blocked.js';
 
 type FieldValue = string | number | boolean | null;

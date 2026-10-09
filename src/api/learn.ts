@@ -9,7 +9,7 @@ import { extractInvalidationTarget, invalidateMatchingAmong } from '../invalidat
 import { computeSchemaFit, createMemory, Layer } from '../memory.js';
 import { extractPathTags } from '../path-context.js';
 import { canReadScope, personalScopeOf, touchableScopeSql } from '../recall-scope.js';
-import { RejectedValueError } from '../rejection.js';
+import { RejectedValueError } from '../store/rejection.js';
 import { duplicateKey, longestWord, storedTextKeys } from '../same-text.js';
 import { loadTextsHoldingWords } from '../store/candidates.js';
 import { loadAllEntries } from '../store/entry-reads.js';

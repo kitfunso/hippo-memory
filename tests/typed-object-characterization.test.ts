@@ -3,7 +3,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { createApiKey } from '../src/auth.js';
+import { createApiKey } from '../src/store/auth.js';
 import { runCli } from '../src/cli.js';
 import { closeHippoDb, openHippoDb } from '../src/db.js';
 import { insertEntity } from '../src/store/graph-writes.js';

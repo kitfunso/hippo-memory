@@ -123,7 +123,7 @@ export interface HippoConfig {
   memoryValue: {
     enabled: boolean;
   };
-  /** Dormant memories (src/dormant.ts): when enabled (the default), the
+  /** Dormant memories (src/store/dormant.ts): when enabled (the default), the
    *  sleep decay pass moves a memory that faded below the threshold into the
    *  dormant store instead of deleting it. A dormant memory leaves recall and
    *  context like a deleted one, but `hippo dormant restore <id>` brings it
@@ -145,7 +145,7 @@ export interface HippoConfig {
   agentMemories: {
     tools: string[] | null;
   };
-  /** Per-turn delivery ledger (src/recall-trace.ts): hashes, ids, counts and rejection reasons for each
+  /** Per-turn delivery ledger (src/store/recall-trace.ts): hashes, ids, counts and rejection reasons for each
    *  pinned-only context call. Default off; read from the store the token ledger writes to. */
   deliveryLedger: {
     enabled: boolean;

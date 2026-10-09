@@ -1,7 +1,7 @@
 import { type MemoryEntry, markRetrieved } from '../memory.js';
 import { type DatabaseSyncLike, closeHippoDb, openHippoDb, rethrowIfSqliteBlocked, withWriteScope } from '../db.js';
-import { RejectedValueError } from '../rejection.js';
-import { markSummaryDirtyInTx } from '../summary-dirty.js';
+import { RejectedValueError } from './rejection.js';
+import { markSummaryDirtyInTx } from './summary-dirty.js';
 import { errorMessage, log } from '../log.js';
 import { auditRejectionRefusal, audit } from './audit-event.js';
 import { selectEntriesByIds } from './entry-reads.js';

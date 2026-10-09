@@ -3,7 +3,7 @@
 import { loadAllEntries } from '../store/entry-reads.js';
 import { deleteEntry, memoriesBackingObjects } from '../store/delete-and-batch.js';
 import { openHippoDb, closeHippoDb } from '../db.js';
-import { auditMemories, AUDIT_OPS, type AuditEvent, type AuditOp } from '../audit.js';
+import { auditMemories, AUDIT_OPS, type AuditEvent, type AuditOp } from '../store/audit.js';
 import * as api from '../api.js';
 import { resolveTenantId } from '../tenant.js';
 import { pruneAuditLog, parseOlderThanFlag } from './audit-prune.js';

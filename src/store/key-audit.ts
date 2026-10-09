@@ -1,7 +1,7 @@
 // hippo.db's half of the KeyAudit store group.
 import { NotFoundError } from '../api-errors.js';
-import { appendAuditEvent } from '../audit.js';
-import { revokeApiKey } from '../auth.js';
+import { appendAuditEvent } from './audit.js';
+import { revokeApiKey } from './auth.js';
 import { withWriteScope, type DatabaseSyncLike } from '../db.js';
 import type { KeyRevoke } from './port.js';
 import { selectApiKeyOwner } from './tenant-lookup.js';

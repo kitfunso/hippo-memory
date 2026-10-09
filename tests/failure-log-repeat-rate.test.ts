@@ -7,11 +7,11 @@ import { execFileSync } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { recordFailure, summarizeFailures, failuresBySession, type FailureOutcome } from '../src/failure-log.js';
+import { recordFailure, summarizeFailures, failuresBySession, type FailureOutcome } from '../src/store/failure-log.js';
 import { captureToolFailure } from '../src/capture-error.js';
 import { failureSignature, lessonFromFailure } from '../src/capture/failure-reading.js';
 import { blockHash } from '../src/token-ledger.js';
-import { insertRejectedValue, normalizeValueForRejection, rejectionDigest, RejectedValueError } from '../src/rejection.js';
+import { insertRejectedValue, normalizeValueForRejection, rejectionDigest, RejectedValueError } from '../src/store/rejection.js';
 import type { JsonValue } from '../src/json.js';
 
 const HIPPO_JS = resolve(__dirname, '..', 'bin', 'hippo.js');

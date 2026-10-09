@@ -3,7 +3,7 @@
 import { openHippoDb, closeHippoDb } from '../db.js';
 import { loadAllEntries } from '../store/entry-reads.js';
 import { deleteEntry, memoriesBackingObjects } from '../store/delete-and-batch.js';
-import { appendAuditEvent, reportAuditWriteFailure, auditMemories } from '../audit.js';
+import { appendAuditEvent, reportAuditWriteFailure, auditMemories } from '../store/audit.js';
 import { autoShare } from '../shared.js';
 import { consolidate } from '../consolidate/sleep.js';
 import { failedUnitOf } from '../store/delete-and-batch.js';

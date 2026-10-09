@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { cpSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { listAuditEventsAfter } from '../src/audit.js';
+import { listAuditEventsAfter } from '../src/store/audit.js';
 import { _resetSharedStoreCacheForTests, markSharedStore } from '../src/config.js';
 import { closeHippoDb, openHippoDb } from '../src/db.js';
 import { passesScopeFilterForRecall, serve, type AuditEvent, type HippoStore, type MemoryEntry } from '../src/server.js';

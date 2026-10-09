@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { createApiKey } from '../src/auth.js';
+import { createApiKey } from '../src/store/auth.js';
 import { adminActor } from '../src/api.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';

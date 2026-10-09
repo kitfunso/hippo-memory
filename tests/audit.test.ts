@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { appendAuditEvent, queryAuditEvents } from '../src/audit.js';
+import { appendAuditEvent, queryAuditEvents } from '../src/store/audit.js';
 
 describe('audit log', () => {
   it('appendAuditEvent persists row with required fields', () => {
