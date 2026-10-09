@@ -369,9 +369,6 @@ export interface RecallResult {
  * See Is All There Is" failure mode, TFAS ch. 7). Each counter reflects
  * filter activity in the pipeline that produced this RecallResult; counts
  * are honest per-path reports, not normalised cross-pipeline numbers.
- *
- * See `buildSuppressionSummary` for the shared construction helper used by
- * all three pipelines (api.recall, cmdRecall, MCP).
  */
 export interface RecallSuppressionSummary {
   /** Total candidates loaded from the store, before any post-load filter or

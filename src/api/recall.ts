@@ -2,28 +2,28 @@
 
 import { envRequireSessionScopedFreshTail } from '../util/env.js';
 import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../store/rows.js';
-import { loadEntriesByIds, loadFreshRawMemories } from '../store/entry-reads.js';
-import { loadRecallSearchEntries, recallScopeFilter } from '../store/search-rows.js';
+import { recallScopeFilter } from '../store/search-rows.js';
 import type { ContinuityKey } from '../store/sessions.js';
 import { estimateTokens } from '../util/token-text.js';
 import { formatHandoffEvidenceLine } from '../core/handoff.js';
 import type { MemoryEntry } from '../core/memory.js';
 import type { RecallTraceInput } from '../store/recall-trace.js';
-import { activeGoalsWithPolicies, type ActiveGoals, type GoalRecallLogRow } from '../store/goals.js';
+import type { ActiveGoals, GoalRecallLogRow } from '../store/goals.js';
 import { boostByGoals, type GoalStackBoostOpts } from '../search/goal-boost.js';
 import type { ForwardClaimMatch } from '../learn/forward-claim-detector.js';
-import { continuityAt, finishRecallAt, storeFor, type HippoStore, type RecallSearchArgs, type RecallWrites } from '../store/index.js';
-import { hybridSearch } from '../search/hybrid.js';
+import { storeFor, type HippoStore, type RecallSearchArgs, type RecallWrites } from '../store/index.js';
+import { sqliteSyncStore, type SqliteSyncStore } from '../store/sqlite/store.js';
+import { hybridSearch, type HybridSearchOptions } from '../search/hybrid.js';
 import { physicsSearch } from '../search/physics-search.js';
 import { churnStaleFactor } from '../search/boosts.js';
 import type { HybridVectorCandidates } from '../search/vector.js';
-import type { RerankStep } from '../core/search-types.js';
+import type { RerankStep, SearchResult } from '../core/search-types.js';
 import { compareEntryIdentity } from '../core/compare.js';
 import { dropHeldCopies, duplicateKey, storedTextKeys } from '../util/same-text.js';
 import { isSharedStore, loadConfig } from '../core/config.js';
 import { classifyOriginProject, projectNames } from '../core/project-identity.js';
 import { decidePlanningFallacy, detectPlanningClaim } from '../predictions/planning-fallacy.js';
-import { planningFallacyEvidenceAt, type PlanningFallacyEvidence } from '../store/planning-fallacy-evidence.js';
+import type { PlanningFallacyEvidence } from '../store/planning-fallacy-evidence.js';
 import { detectAnchoring, hashQueryText, biasHintEnabled, type AnchoringHint } from './recall-history.js';
 import { detectAvailabilityBias, type AvailabilityHint } from './availability.js';
 import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../store/recall-scope.js';
@@ -34,56 +34,18 @@ import { retrieveWithCliCore } from './recall-core.js';
 
 const DEFAULT_RECALL_LIMIT = 10;
 
-/**
- * Shared construction helper for `RecallSuppressionSummary`. Used by
- * `api.recall`, `cmdRecall`, and the MCP `hippo_recall` handler so all three
- * pipelines produce the same shape without duplicating field-construction
- * logic. Pass-through identity today; kept as a helper so future field
- * additions land at one site.
- */
-export function buildSuppressionSummary(counts: {
-  totalCandidates: number;
-  droppedPreRank: number;
-  droppedByBudget: number;
-  summarySubstitutionsAdded: number;
-  freshTailAdded: number;
-  suppressedByInterference: number;
-}): RecallSuppressionSummary {
-  return {
-    totalCandidates: counts.totalCandidates,
-    droppedPreRank: counts.droppedPreRank,
-    droppedByBudget: counts.droppedByBudget,
-    summarySubstitutionsAdded: counts.summarySubstitutionsAdded,
-    freshTailAdded: counts.freshTailAdded,
-    suppressedByInterference: counts.suppressedByInterference,
-  };
-}
-
-/**
- * Domain-level recall on hippo.db only, never `ctx.store`, since it is synchronous: under another store its first open throws
- * `SqliteBlockedError`. Loads BM25-ranked candidates from SQLite scoped to
- * `ctx.tenantId` and keeps that order whatever `mode` says; `retrieve` is the
- * mode-aware, strengthening variant the HTTP route uses.
- *
- * **api.recall does NOT mutate `index.last_retrieval_ids`** (contract
- * lock). The CLI `cmdRecall` (cli.ts) writes `last_retrieval_ids` because the
- * CLI is interactive (user is about to run `hippo outcome --good`). SDK callers
- * are programmatic: they either pass explicit ids to `api.outcome` or call
- * `api.getContext` first for the context-then-outcome workflow (getContext
- * DOES write `last_retrieval_ids`). Adding the side-effect here would change
- * `api.recall` from a pure read into a read+write, breaking SDK callers who
- * batch recall calls in a row. Locked by
- * `tests/api-recall-no-side-effects.test.ts`.
- */
+/** Reads hippo.db directly, never `ctx.store`, because it is synchronous (another store would throw `SqliteBlockedError`).
+ *  It never writes `last_retrieval_ids` (contract lock: tests/api-recall-no-side-effects.test.ts). */
 export function recall(ctx: Context, opts: RecallOpts): RecallResult {
   // A member key may not unlock a private or quarantined scope by naming it.
   assertScopeRequestAllowed(ctx.actor, opts.scope);
   const windowSize = recallWindowSize(opts);
   const own = personalScopeOf(ctx.actor) ?? undefined;
-  const all = loadRecallSearchEntries(ctx.hippoRoot, opts.query, windowSize, ctx.tenantId, opts.scope, 'exact', false, recallOrigin(opts), own);
+  const store = sqliteSyncStore(ctx.hippoRoot);
+  const all = store.searchRecallEntries(opts.query, recallSearchArgs(ctx, opts, windowSize, own));
   const plan = planRecall(ctx, opts, all, own);
-  const { result, writes } = composeRecall(ctx, opts, { windowSize, all, plan, reads: readRecallSync(ctx, opts, plan) });
-  finishRecallAt(ctx.hippoRoot, { ...writes, audit: [...(opts.leadingAudit ?? []), ...writes.audit] });
+  const { result, writes } = composeRecall(ctx, opts, { windowSize, all, plan, reads: readRecallSync(store, ctx, opts, plan) });
+  store.finishRecall({ ...writes, audit: [...(opts.leadingAudit ?? []), ...writes.audit] });
   return result;
 }
 
@@ -107,9 +69,7 @@ export async function retrieve(ctx: Context, opts: RecallOpts): Promise<RecallRe
   let candidates = await store.searchRecallEntries(opts.query, recallSearchArgs(ctx, opts, windowSize, own));
   if (opts.mode === 'hybrid' || opts.mode === 'physics') {
     const searchOpts = { budget: Infinity, hippoRoot: ctx.hippoRoot, scope: opts.scope ?? null, vectorCandidates: recallVectorSpec(ctx, opts, own), store };
-    const ranked = opts.mode === 'physics'
-      ? await physicsSearch(opts.query, candidates, { ...searchOpts, physicsConfig: loadConfig(ctx.hippoRoot).physics })
-      : await hybridSearch(opts.query, candidates, searchOpts);
+    const ranked = await rankPool(ctx, opts, candidates, searchOpts);
     const rankedIds = new Set(ranked.map((r) => r.entry.id));
     candidates = [...ranked.map((r) => r.entry), ...candidates.filter((e) => !rankedIds.has(e.id))];
   }
@@ -117,6 +77,13 @@ export async function retrieve(ctx: Context, opts: RecallOpts): Promise<RecallRe
   const { result, writes } = composeRecall(ctx, opts, { windowSize, all: candidates, plan, reads: await readRecall(store, ctx, opts, plan) });
   await store.finishRecall({ ...writes, audit: [...(opts.leadingAudit ?? []), ...writes.audit], strengthen: strengthenOf(ctx, result.results.map((r) => r.id)) });
   return result;
+}
+
+/** The ranked pool: physics when `mode` says so, hybrid otherwise; each caller supplies its own search options. */
+function rankPool(ctx: Context, opts: RecallOpts, pool: MemoryEntry[], searchOpts: HybridSearchOptions): Promise<SearchResult[]> {
+  return opts.mode === 'physics'
+    ? physicsSearch(opts.query, pool, { ...searchOpts, physicsConfig: loadConfig(ctx.hippoRoot).physics })
+    : hybridSearch(opts.query, pool, searchOpts);
 }
 
 /** The recall load's arguments: exact scope, current rows only, the caller's project and personal scope. */
@@ -159,9 +126,7 @@ async function retrieveFromStore(
   const pool = loaded.filter((e) => passesScopeFilterForRecall(e.scope ?? null, opts.scope, own));
   // No scope option: the scope boost follows HIPPO_SCOPE and the skill env, as MCP recall always ranked.
   const searchOpts = { budget: Infinity, hippoRoot: ctx.hippoRoot, vectorCandidates: recallVectorSpec(ctx, opts, own), store };
-  let ranked = opts.mode === 'physics'
-    ? await physicsSearch(opts.query, pool, { ...searchOpts, physicsConfig: loadConfig(ctx.hippoRoot).physics })
-    : await hybridSearch(opts.query, pool, searchOpts);
+  let ranked = await rankPool(ctx, opts, pool, searchOpts);
   // One goal read serves both boosts; the ranked list's log rows come first, so its scores win the log's first-write.
   const goals = opts.sessionId && !opts.goalTag ? await store.activeGoals({ sessionId: opts.sessionId, tenantId: ctx.tenantId }) : null;
   let rankedLog: GoalRecallLogRow[] = [];
@@ -297,16 +262,16 @@ function planRecall(ctx: Context, opts: RecallOpts, all: MemoryEntry[], own: str
   };
 }
 
-/** The plan's reads on hippo.db directly, for the synchronous recall that cannot await the port. */
-function readRecallSync(ctx: Context, opts: RecallOpts, plan: RecallPlan): RecallReads {
-  const { hippoRoot, tenantId } = ctx;
+/** The plan's reads on the synchronous store, for the recall that cannot await the port. */
+function readRecallSync(store: SqliteSyncStore, ctx: Context, opts: RecallOpts, plan: RecallPlan): RecallReads {
+  const { tenantId } = ctx;
   const freshCount = opts.freshTailCount ?? 0;
   return {
-    goals: plan.goalBoost ? activeGoalsWithPolicies(hippoRoot, { sessionId: plan.goalBoost.sessionId, tenantId }) : null,
-    parents: plan.overflow.size > 0 ? loadEntriesByIds(hippoRoot, [...plan.overflow.keys()], tenantId) : [],
-    freshRaws: freshCount > 0 ? loadFreshRawMemories(hippoRoot, freshCount, tenantId, opts.freshTailSessionId, recallOrigin(opts)) : [],
-    continuity: opts.includeContinuity ? continuityAt(hippoRoot, tenantId, CONTINUITY_EVENT_LIMIT, continuityKey(ctx, opts)) : undefined,
-    planning: plan.claim ? planningFallacyEvidenceAt(hippoRoot, tenantId, plan.claim.classQueryTokens) : null,
+    goals: plan.goalBoost ? store.activeGoals({ sessionId: plan.goalBoost.sessionId, tenantId }) : null,
+    parents: plan.overflow.size > 0 ? store.entriesByIds([...plan.overflow.keys()], tenantId) : [],
+    freshRaws: freshCount > 0 ? store.freshRawEntries(freshCount, tenantId, opts.freshTailSessionId, recallOrigin(opts) ?? null) : [],
+    continuity: opts.includeContinuity ? store.continuity(tenantId, CONTINUITY_EVENT_LIMIT, continuityKey(ctx, opts)) : undefined,
+    planning: plan.claim ? store.planningFallacyEvidence(tenantId, plan.claim.classQueryTokens) : null,
   };
 }
 
@@ -357,14 +322,14 @@ function composeRecall(ctx: Context, opts: RecallOpts, options: ComposeRecallOpt
     continuity,
     continuityTokens: continuity ? continuityTokensOf(continuity) : undefined,
     windowSize,
-    suppressionSummary: buildSuppressionSummary({
+    suppressionSummary: {
       totalCandidates: all.length,
       droppedPreRank: window.droppedPreRank + bands.heldDropped,
       droppedByBudget: window.droppedByBudget,
       summarySubstitutionsAdded: bands.summarySubstitutions,
       freshTailAdded: bands.freshTailAdded,
       suppressedByInterference,
-    }),
+    } satisfies RecallSuppressionSummary,
   };
   // The hint and the no-class-match / tiebreak watching variant are mutually exclusive; both go out as optional fields.
   if (planning?.output.hint) result.planningFallacyHint = planning.output.hint;

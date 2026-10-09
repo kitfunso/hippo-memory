@@ -94,7 +94,6 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `RecallSuppressionSummary.suppressedByInterference`: Future B4-depth work may add additional sources (e.g. vlPFC inhibition scores). No `interference_suppression` table is built — the v1.12.13 doc that referenced one was speculative; J1 uses caller-side in-memory rings instead.
 
 ### src/api/recall.ts
-- `buildSuppressionSummary`: Pass-through identity today; kept as a helper so future field additions (B4 interference counter wiring, etc.) land at one site.
 - `recall`: **api.recall does NOT mutate `index.last_retrieval_ids`** (v1.11.5 contract lock).
 - `retrieve`: Mode-aware recall that strengthens each returned row; never writes last_retrieval_ids (v1.11.5 lock).
 

@@ -4,7 +4,7 @@
  *
  * The counter was hardcoded to 0 since v1.12.13 (C5) as a placeholder
  * for future B4-depth or J1-anchoring work. v1.13.2 / J1 lights it up:
- * each pipeline's buildSuppressionSummary increments the counter by 1
+ * each pipeline's summary increments the counter by 1
  * when ITS OWN R2 memory_dominance verdict fires.
  *
  * This test focuses on api.recall's counter. CLI + MCP increments are

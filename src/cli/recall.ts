@@ -331,7 +331,7 @@ function recallHinter(query: string, o: RecallOptions, rank: RankedRecall['rank'
     const availability = availabilityPool
       ? detectAvailabilityBias({ topK: list.map((r) => ({ id: r.entry.id, created: r.entry.created })), pool: availabilityPool })
       : null;
-    const summary = api.buildSuppressionSummary({
+    const summary: api.RecallSuppressionSummary = {
       // The published total includes graph-surfaced rows, so total == preRank + byBudget + returned holds for callers.
       totalCandidates: rank.totalCandidates + rank.graphAdded,
       droppedPreRank: rank.droppedPreRank + held,
@@ -339,7 +339,7 @@ function recallHinter(query: string, o: RecallOptions, rank: RankedRecall['rank'
       summarySubstitutionsAdded: 0,
       freshTailAdded: 0,
       suppressedByInterference: anchoring?.reason === 'memory_dominance' ? 1 : 0, // a query_repeat is a re-ask, not competition
-    });
+    };
     return { anchoring, availability, summary };
   };
   return { anchorRing, hintsFor };

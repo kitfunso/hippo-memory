@@ -306,7 +306,7 @@ function sqliteKeyAudit(hippoRoot: string): Sync<KeyAudit> {
 }
 
 /** sqliteStore's continuity read, for the synchronous recall that cannot await the port. */
-export function continuityAt(hippoRoot: string, tenantId: string, eventLimit: number, key: ContinuityKey | null): ContinuityBlock {
+function continuityAt(hippoRoot: string, tenantId: string, eventLimit: number, key: ContinuityKey | null): ContinuityBlock {
   const activeSnapshot = loadActiveTaskSnapshot(hippoRoot, tenantId, key ?? undefined);
   const sessionId = activeSnapshot?.session_id ?? undefined;
   return {
