@@ -98,7 +98,7 @@ export function teardown(): void {
     .filter(([dir, snap]) => snapshot(dir) !== snap)
     .map(([dir]) => dir);
 
-  // (3) on a clean run, remove the per-run temp store vitest.config.ts created.
+  // (3) on a clean run, remove the per-run temp dirs vitest.config.ts created.
   // The removal is swallowed on failure: vitest turns a globalSetup teardown
   // throw into process.exitCode = 1, so a stray Windows EBUSY here would itself
   // fail the run — the exact intermittent failure this isolation prevents.
@@ -106,16 +106,14 @@ export function teardown(): void {
     // Defence-in-depth on a destructive op: only remove a directory that is
     // under the OS temp dir and carries vitest.config.ts's mkdtemp prefix, so
     // the rmSync is safe by construction, not merely by the variable's name.
-    for (const tmpHome of [process.env.HIPPO_TEST_TMP_HOME?.trim(), process.env.HIPPO_TEST_TMP_USERHOME?.trim()]) {
-      if (
-        tmpHome &&
-        tmpHome.startsWith(tmpdir()) &&
-        /[\\/]hippo-test-(user)?home-[^\\/]+$/.test(tmpHome)
-      ) {
+    const realTmp = process.env.HIPPO_TEST_REAL_TMP?.trim() || tmpdir();
+    const env = process.env;
+    for (const dir of [env.HIPPO_TEST_TMP_HOME?.trim(), env.HIPPO_TEST_TMP_USERHOME?.trim(), env.HIPPO_TEST_TMP_RUN?.trim()]) {
+      if (dir && dir.startsWith(realTmp) && /[\\/]hippo-test-(home|userhome|tmp)-[^\\/]+$/.test(dir)) {
         try {
-          rmSync(tmpHome, { recursive: true, force: true, maxRetries: 3 });
-        } catch {
-          /* best-effort; the OS temp sweep reclaims it */
+          rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
+        } catch (err) {
+          console.warn(`[real-store-guard] could not remove ${dir}: ${err instanceof Error ? err.message : String(err)}`);
         }
       }
     }

@@ -158,6 +158,24 @@ describe('hippo sleep', () => {
     expect(hippo(b, b.project, ['sleep'])).toContain('Imported 1 agent memory (Claude Code 1).');
     expect(imported(local)).toEqual([PROJECT_NOTE]);
   });
+
+  it('on a shared store, init and sleep skip learning with one line each and import nothing', () => {
+    const b = box();
+    hippo(b, b.project, ['init', '--no-hooks', '--no-schedule', '--no-learn']);
+    const local = join(b.project, '.hippo');
+    writeFileSync(join(local, 'config.json'), JSON.stringify({ sharedStore: true }));
+    note(projectNotes(b), 'schema.md', PROJECT_NOTE);
+    note(userNotes(b), 'voice.md', USER_NOTE);
+
+    const skipped = "Shared store: skipped learning from this account's git commits and coding agents' own memories.";
+    for (const args of [['init', '--no-hooks', '--no-schedule'], ['sleep'], ['sleep', '--dry-run']]) {
+      const out = hippo(b, b.project, args);
+      expect(out.split(skipped), args.join(' ')).toHaveLength(2);
+      expect(out).not.toContain('Imported');
+    }
+    expect(imported(local)).toEqual([]);
+    expect(imported(b.global)).toEqual([]);
+  });
 });
 
 describe('hippo import --agents', () => {
@@ -278,6 +296,21 @@ describe('hooks in a folder without a store', () => {
     hippo(b, plain, ['init', '--no-hooks', '--no-schedule']);
     expect(imported(join(plain, '.hippo'))).toEqual([PROJECT_NOTE]);
     expect(globalRows()).toEqual([]);
+  });
+
+  it('handover finds the global copies filed under a name merged into the project', () => {
+    const b = box();
+    const id = (name: string): void => writeFileSync(join(b.project, '.hippo-project.json'), JSON.stringify({ id: name }));
+    id('old-id');
+    note(projectNotes(b), 'schema.md', PROJECT_NOTE);
+    hippo(b, b.project, ['import', '--agents']);
+    id('new-id');
+    hippo(b, b.project, ['projects', 'merge', 'old-id', 'new-id', '--global', '--apply']);
+    expect(imported(b.global)).toEqual([PROJECT_NOTE]);
+
+    hippo(b, b.project, ['init', '--no-hooks', '--no-schedule']);
+    expect(imported(join(b.project, '.hippo'))).toEqual([PROJECT_NOTE]);
+    expect(imported(b.global)).toEqual([]);
   });
 
   it('handover leaves the global copy of a note the new local store could not read', () => {

@@ -14,6 +14,7 @@ import { loadAllDirtySummaries } from '../src/store/summaries.js';
 import { consolidate } from '../src/consolidate/sleep.js';
 import { deduplicateStore } from '../src/dedupe.js';
 import { sleep, supersede, type Context } from '../src/api.js';
+import { runSleep } from '../src/api/sleep-run.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { queryAuditEvents } from '../src/audit.js';
 import { renderSleepResult } from '../src/cli/sleep.js';
@@ -52,7 +53,7 @@ afterEach(() => {
   for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true });
 });
 
-describe('C1: consolidate never deletes a raw row', () => {
+describe('consolidate never deletes a raw row', () => {
   it.each([false, true])('memoryValue.enabled=%s: the decayed raw row stays, the plain row goes', async (mv) => {
     const root = newRoot(JSON.stringify({ memoryValue: { enabled: mv } }));
     const raw = rawRow('slack message: the deploy moved to friday');
@@ -68,7 +69,7 @@ describe('C1: consolidate never deletes a raw row', () => {
   });
 });
 
-describe('H10: the sleep audit and dedup respect raw and pinned rows', () => {
+describe('the sleep audit and dedup respect raw and pinned rows', () => {
   it('audit deletes only the plain junk row and logs the caller and a reason', async () => {
     const root = newRoot();
     const raw = rawRow('yes!');
@@ -124,9 +125,8 @@ describe('H10: the sleep audit and dedup respect raw and pinned rows', () => {
     writeEntry(root, pinned);
     const staleIssue = { memoryId: pinned.id, content: 'nope', severity: 'error' as const, reason: 'too short' };
 
-    const result = await sleep(ctxFor(root), {
-      noShare: true,
-      __phases: { auditMemories: () => ({ total: 1, clean: 0, issues: [staleIssue] }) },
+    const result = await runSleep(ctxFor(root), { noShare: true }, {
+      auditMemories: () => ({ total: 1, clean: 0, issues: [staleIssue] }),
     });
 
     expect(readEntry(root, pinned.id)).not.toBeNull();
@@ -161,7 +161,7 @@ describe('H10: the sleep audit and dedup respect raw and pinned rows', () => {
   });
 });
 
-describe('C1: a row changed while sleep awaits the LLM keeps the change', () => {
+describe('a row changed while sleep awaits the LLM keeps the change', () => {
   it('a mid-sleep pin, forget and supersede all survive the batch flush', async () => {
     const root = newRoot();
     const condemned = createMemory7('a fact that decays below the threshold by day sixty');

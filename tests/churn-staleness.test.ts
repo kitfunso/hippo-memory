@@ -18,7 +18,7 @@ import { hybridSearch } from '../src/search/hybrid.js';
 import { physicsSearch } from '../src/search/physics-search.js';
 import { CHURN_STALE_RANK_MULTIPLIER } from '../src/search/boosts.js';
 import { openHippoDb } from '../src/db.js';
-import { savePhysicsState } from '../src/physics-state.js';
+import { savePhysicsState } from '../src/db/physics-state.js';
 import type { PhysicsParticle } from '../src/physics.js';
 import { loadConfig } from '../src/config.js';
 import * as api from '../src/api.js';
@@ -133,6 +133,18 @@ describe('detectChurnStale', () => {
     expect(result.marked).toBe(1);
     expect(result.preview[0].evidence).toBe('file-changed: a.ts');
     expect(readEntry(hippoRoot, mem.id)!.tags).toContain(CHURN_STALE_TAG);
+  });
+
+  it('checks rows stamped with the legacy folder name once the project has an id', () => {
+    fs.writeFileSync(path.join(repoDir, 'a.ts'), 'v1');
+    commit(repoDir, BEFORE_ANCHOR);
+    storeMemory('see a.ts for the setup', { created: ANCHOR });
+    fs.writeFileSync(path.join(repoDir, 'a.ts'), 'v2');
+    commit(repoDir, AFTER_ANCHOR);
+
+    const opts = { tenantId: 'default', projectName: 'github.com/acme/churn', dryRun: true };
+    expect(detectChurnStale(hippoRoot, repoDir, opts).preview).toHaveLength(0);
+    expect(detectChurnStale(hippoRoot, repoDir, { ...opts, legacyName: project }).preview).toHaveLength(1);
   });
 
   it('file-deleted: a tracked file removed after the anchor is evidence (--no-renames)', () => {

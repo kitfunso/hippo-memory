@@ -4,7 +4,10 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { embedAll } from '../src/embeddings.js';
 
 const serverPath = path.resolve('dist/mcp/server.js');
 let tmpHome: string;
@@ -17,10 +20,10 @@ interface Run {
   exited: Promise<number | null>;
 }
 
-function start(args: string[]): Run {
+function start(args: string[], env: NodeJS.ProcessEnv = {}): Run {
   const proc = spawn(process.execPath, args, {
     cwd: tmpHome,
-    env: { ...process.env, HIPPO_HOME: path.join(tmpHome, '.hippo') },
+    env: { ...process.env, HIPPO_HOME: path.join(tmpHome, '.hippo'), ...env },
     stdio: ['pipe', 'pipe', 'pipe'],
   });
   procs.push(proc);
@@ -94,12 +97,104 @@ describe('MCP stdio fault handling', () => {
     const reply = JSON.parse(await run.nextLine(5000));
     expect(reply).toEqual({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } });
 
-    run.proc.stdin.write('null\n[1,2]\n{"jsonrpc":"2.0","id":2,"method":7}\n');
+    run.proc.stdin.write('null\n[1,2]\n');
     run.proc.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: 3, method: 'tools/list' })}\n`);
     const list = JSON.parse(await run.nextLine(5000));
     expect(list.id).toBe(3);
     expect(run.proc.exitCode).toBeNull();
   }, 15000);
+
+  it('answers a frame that has an id and no string method with -32600, and only logs one that has neither', async () => {
+    const run = start([serverPath]);
+    run.proc.stdin.write('{"jsonrpc":"2.0","id":2,"method":7}\n{"jsonrpc":"2.0","id":"abc","result":{}}\n');
+    const invalid = { code: -32600, message: 'Invalid Request: method must be a string' };
+    expect(JSON.parse(await run.nextLine(5000))).toEqual({ jsonrpc: '2.0', id: 2, error: invalid });
+    expect(JSON.parse(await run.nextLine(5000))).toEqual({ jsonrpc: '2.0', id: 'abc', error: invalid });
+
+    // No id means a notification, which may not be answered: the next line out is the reply to the frame after it.
+    run.proc.stdin.write('{"jsonrpc":"2.0","params":{}}\n');
+    run.proc.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: 3, method: 'tools/list' })}\n`);
+    expect(JSON.parse(await run.nextLine(5000)).id).toBe(3);
+    const dropped = run.stderr().split('\n').filter((l) => l.includes('dropped a frame with no method and no id'));
+    expect(dropped).toHaveLength(1);
+    expect(dropped[0]).toMatch(/^\[hippo\] warn: mcp: dropped a frame with no method and no id/);
+    expect(run.proc.exitCode).toBeNull();
+  }, 15000);
+
+  it('sends the reply of a call still running when stdin closes, then exits 0', async () => {
+    // An embedding endpoint that answers at once while the store is seeded, then holds the recall's query embedding until the test has closed stdin.
+    let hold = false;
+    let asked!: () => void;
+    const queryAsked = new Promise<void>((ok) => { asked = ok; });
+    let answer!: () => void;
+    const embedServer = createServer((req, res) => {
+      const chunks: Buffer[] = [];
+      req.on('data', (chunk: Buffer) => chunks.push(chunk));
+      req.on('end', () => {
+        // SAFETY: the openai provider posts {model, input: string[]} here.
+        const { input } = JSON.parse(Buffer.concat(chunks).toString('utf8')) as { input: string[] };
+        const reply = (): void => {
+          res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ data: input.map(() => ({ embedding: [1, 0, 0] })) }));
+        };
+        if (!hold) return reply();
+        answer = reply;
+        asked();
+      });
+    });
+    await new Promise<void>((ok) => embedServer.listen(0, '127.0.0.1', ok));
+    // SAFETY: a server listening on TCP reports an AddressInfo.
+    const { port } = embedServer.address() as AddressInfo;
+    const store = path.join(tmpHome, '.hippo');
+    fs.mkdirSync(store, { recursive: true });
+    fs.writeFileSync(path.join(store, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai', apiBaseUrl: `http://127.0.0.1:${port}` } }));
+    vi.stubEnv('OPENAI_API_KEY', 'test-key-not-secret');
+    const call = (id: number, name: string, args: Record<string, string>): string =>
+      `${JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/call', params: { name, arguments: args } })}\n`;
+    try {
+      const run = start([serverPath]);
+      run.proc.stdin.write(call(1, 'hippo_remember', { text: 'the staging queue drains at midnight' }));
+      expect(JSON.parse(await run.nextLine(10000)).id).toBe(1);
+      // Recall embeds its query only when the store holds a vector to compare it with.
+      expect(await embedAll(store)).toBe(1);
+      hold = true;
+      run.proc.stdin.write(call(9, 'hippo_recall', { query: 'staging queue' }));
+      await queryAsked;
+      run.proc.stdin.end();
+      // The child has read the end of stdin once its event loop turns, which this wait outlasts.
+      await new Promise((ok) => setTimeout(ok, 300));
+      expect(run.proc.exitCode).toBeNull();
+      answer();
+      const reply = JSON.parse(await run.nextLine(10000));
+      expect(reply.id).toBe(9);
+      expect(reply.result.content[0].text).toContain('the staging queue drains at midnight');
+      expect(await run.exited).toBe(0);
+    } finally {
+      vi.unstubAllEnvs();
+      embedServer.closeAllConnections();
+      embedServer.close();
+    }
+  }, 30000);
+
+  it('refuses a frame over 1 MB with a parse error, buffers none of it, and keeps serving', async () => {
+    const run = start([serverPath]);
+    const list = (id: number): string => `${JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/list' })}\n`;
+    const refusal = { jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error: frame exceeds 1MB' } };
+
+    // A declared length over the cap is refused at the header; its body is dropped as it arrives, so the next frame is read as itself.
+    const declared = 2 * 1024 * 1024;
+    run.proc.stdin.write(`Content-Length: ${declared}\r\n\r\n`);
+    expect(JSON.parse(await run.nextLine(5000))).toEqual(refusal);
+    run.proc.stdin.write(Buffer.alloc(declared, 0x78));
+    run.proc.stdin.write(list(1));
+    expect(JSON.parse(await run.nextLine(10000)).id).toBe(1);
+
+    // A line that never ends is refused once it passes the cap; the frame after its newline still answers.
+    run.proc.stdin.write(Buffer.alloc(1024 * 1024 + 64 * 1024, 0x79));
+    expect(JSON.parse(await run.nextLine(10000))).toEqual(refusal);
+    run.proc.stdin.write(`yyy\n${list(2)}`);
+    expect(JSON.parse(await run.nextLine(10000)).id).toBe(2);
+    expect(run.proc.exitCode).toBeNull();
+  }, 40000);
 
   it('exits non-zero and logs the stack on an uncaught exception', async () => {
     const run = start([crashScript("throw new Error('boom-uncaught');")]);

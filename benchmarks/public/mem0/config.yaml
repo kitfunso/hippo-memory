@@ -1,0 +1,21 @@
+# The runner's default Mem0 config (configs/openai.yaml at 4b61c5d) with two free swaps: Claude Sonnet 5
+# through claude_llm.py for gpt-4o-mini, and the runner's local embedder (configs/ollama.yaml) for
+# text-embedding-3-small. The server adds Qdrant from QDRANT_HOST, as it does in the runner's compose file.
+version: "v1.1"
+
+llm:
+  provider: openai
+  config:
+    model: claude-sonnet-5
+    temperature: 0.1
+    api_key: not-used
+    openai_base_url: http://127.0.0.1:8790/v1
+
+embedder:
+  provider: ollama
+  config:
+    model: nomic-embed-text
+    ollama_base_url: http://127.0.0.1:11434
+    embedding_dims: 768
+
+history_db_path: ${MEM0_HISTORY_DB}

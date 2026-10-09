@@ -1,7 +1,14 @@
 import { mkdtempSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
+
+// Scratch dirs a test forgets to delete land in this run folder, which the guard's teardown removes.
+process.env.HIPPO_TEST_REAL_TMP ??= tmpdir();
+const TMP_KEYS = ['TMPDIR', 'TEMP', 'TMP'];
+const runTmp = mkdtempSync(join(tmpdir(), 'hippo-test-tmp-'));
+process.env.HIPPO_TEST_TMP_RUN = runTmp;
+for (const k of TMP_KEYS) process.env[k] = runTmp;
 
 // Isolate the global hippo store for the whole test run. getGlobalRoot()
 // (HIPPO_HOME, then XDG_DATA_HOME/hippo, then ~/.hippo) otherwise falls through
@@ -25,7 +32,7 @@ process.env.USERPROFILE = isolatedUserHome;
 const isolatedAppData = join(isolatedUserHome, 'AppData', 'Roaming');
 process.env.APPDATA = isolatedAppData;
 const AGENT_HOME_KEYS = [
-  'XDG_DATA_HOME', 'XDG_CONFIG_HOME', 'CODEX_HOME', 'CLAUDE_CONFIG_DIR', 'CLAUDE_CODE_PROJECT_DIR_NAME', 'VSCODE_PORTABLE', 'VSCODE_APPDATA',
+  'XDG_DATA_HOME', 'XDG_CONFIG_HOME', 'CODEX_HOME', 'COPILOT_HOME', 'CLAUDE_CONFIG_DIR', 'CLAUDE_CODE_PROJECT_DIR_NAME', 'VSCODE_PORTABLE', 'VSCODE_APPDATA',
   'GEMINI_CLI_HOME', 'QWEN_HOME', 'QWEN_RUNTIME_DIR', 'QWEN_CODE_MEMORY_BASE_DIR', 'QWEN_CODE_MEMORY_LOCAL', 'QWEN_CODE_MEMORY_PROJECT_SCOPE',
   'OPENCLAW_WORKSPACE_DIR', 'OPENCLAW_STATE_DIR', 'OPENCLAW_HOME', 'OPENCLAW_PROFILE',
 ];
@@ -34,18 +41,23 @@ delete process.env.HIPPO_AGENT_MEMORY_TOOLS;
 const PROVIDER_ENV_KEYS = ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'VOYAGE_API_KEY', 'COHERE_API_KEY', 'TYPESAFE_API_KEY', 'HIPPO_LLM_RERANKER_URL', 'HIPPO_LLM_RERANKER_KEY', 'CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_API_TOKEN', 'HIPPO_CLEF_ENDPOINT', 'HIPPO_CLEF_ENDPOINT_TOKEN'];
 for (const k of PROVIDER_ENV_KEYS) delete process.env[k];
 
+// Each of these builds real git repositories and worktrees per case, too slow for every shard; token-eval.yml runs them.
+export const EVAL_TESTS = ['ab-run', 'make-tasks', 'z0-homes', 'z0-turns'].map((name) => `tests/token-eval-${name}.test.ts`);
+
 export default defineConfig({
   test: {
     include: ['tests/**/*.test.ts', 'tests/**/*.test.mjs'],
+    exclude: [...configDefaults.exclude, ...EVAL_TESTS],
     environment: 'node',
     // Workers get the isolated homes and blank provider keys (a real key would bill and leak prompts);
     // the process.env writes at module scope above cover the main process. Both are required.
     env: {
       HIPPO_HOME: isolatedHippoHome, HOME: isolatedUserHome, USERPROFILE: isolatedUserHome, APPDATA: isolatedAppData,
+      ...Object.fromEntries(TMP_KEYS.map((k) => [k, runTmp])),
       ...Object.fromEntries(AGENT_HOME_KEYS.map((k) => [k, ''])),
       ...Object.fromEntries(PROVIDER_ENV_KEYS.map((k) => [k, ''])),
     },
-    globalSetup: ['tests/_real-store-guard.ts'],
+    globalSetup: ['tests/_build-freshness.ts', 'tests/_real-store-guard.ts'],
     server: { deps: { external: [/tests[\\/]_coverage-provider\.ts$/] } },
     // 55 of 384 files spawn git/hippo/nested-vitest children, so one fork per
     // core oversubscribes a big box. Detail: CHANGELOG 1.38.3.

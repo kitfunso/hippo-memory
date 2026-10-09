@@ -1,12 +1,11 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
+import { type SpawnSyncReturns } from 'node:child_process';
 import { expect } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db.js';
 import { COMPACTION_MEMORY_TAG } from '../../src/memory.js';
-
-const HIPPO_JS = path.resolve(__dirname, '..', '..', 'bin', 'hippo.js');
+import { hippoRun } from './spawn-hippo.js';
 const FIXTURE = path.resolve(__dirname, '..', 'fixtures', 'compaction', 'post-compact-payloads.jsonl');
 
 export interface Scratch {
@@ -34,7 +33,7 @@ export function removeScratch(s: Scratch): void {
 }
 
 export function runHippo(args: string[], cwd: string, env: NodeJS.ProcessEnv, input?: string): SpawnSyncReturns<string> {
-  return spawnSync(process.execPath, [HIPPO_JS, ...args], { cwd, env, input, encoding: 'utf8' });
+  return hippoRun(args, { cwd, env, input });
 }
 
 export function initProject(s: Scratch): void {

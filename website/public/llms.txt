@@ -1,6 +1,8 @@
 # hippo-memory
 
-> hippo is an open-source (MIT), local-first memory layer for AI agents. Claude Code, Codex, Cursor, OpenClaw, OpenCode, Pi and any MCP client share one SQLite store on your machine. A memory marked wrong drops out of the top results, a newer fact supersedes the old one, memories you use get stronger, and every memory records where it came from.
+> Make your agent's memory work like a brain. Hippo is long-term memory for coding agents.
+
+hippo is an open-source (MIT), local-first memory layer for AI agents. Claude Code, Codex, Cursor, OpenClaw, OpenCode, Pi and any MCP client share one SQLite store on your machine. A memory marked wrong drops out of the top results, a newer fact supersedes the old one, memories you use get stronger, and every memory records where it came from.
 
 hippo is the npm package `hippo-memory`; the CLI is `hippo` and `hippo mcp` is its MCP server. It needs Node.js 22.16+ and has zero runtime dependencies. Recall uses BM25 out of the box; hybrid search with a local or an API embedder is optional, and nothing is auto-installed. 3,500+ tests run against a real database, with no module mocks and no mocked store.
 

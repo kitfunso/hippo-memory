@@ -1,5 +1,5 @@
 /**
- * Token ledger (ROADMAP Part IX, TE0): what memory text hippo hands agents,
+ * Token ledger: what memory text hippo hands agents,
  * and how many tokens it costs.
  *
  * One row per block of memory text sent to an agent, on every surface: the
@@ -11,7 +11,7 @@
  * Every later model call re-reads a sent block until the host compacts; at session end the worker counts
  * those calls from the transcript as `reread` rows for the {@link REREAD_SURFACES} blocks, dated by call day.
  *
- * It also backs TE2, inject only on change: the per-prompt hook compares the
+ * It also backs inject-only-on-change: the per-prompt hook compares the
  * hash of the block it is about to send with the last block it sent in the
  * same session and records a `skip` instead of sending it again.
  *
@@ -26,12 +26,14 @@
 import { createHash } from 'node:crypto';
 import { open } from 'node:fs/promises';
 import type { DatabaseSyncLike } from './db.js';
-import type { JsonObject, JsonValue } from './working-memory.js';
+import type { JsonObject } from './working-memory.js';
+import { type JsonValue, isJsonString, isJsonObjectLiteral } from './json.js';
+import { DAY_MS } from './util/time.js';
 
 /**
  * Where a block of memory text was sent.
  * - `hook`: the per-prompt `UserPromptSubmit` hook (`hippo context --pinned-only`).
- * - `hook_recall`: the same hook's Z1 prompt-recall section (docs/plans/2026-09-26-z1-prompt-recall.md).
+ * - `hook_recall`: the same hook's prompt-recall section.
  * - `compact_resume`: the snapshot the SessionStart(compact) hook prints (`hippo compact-resume`).
  * - `context`, `recall`: the CLI commands.
  * - `mcp_recall`, `mcp_context`: the MCP tools.
@@ -121,7 +123,7 @@ export function recordTokenUse(db: DatabaseSyncLike, use: TokenUse): void {
     Math.max(0, Math.round(use.tokens)),
     use.hash ?? null,
   );
-  const cutoff = new Date(Date.parse(now) - TOKEN_LEDGER_RETENTION_DAYS * 86_400_000).toISOString();
+  const cutoff = new Date(Date.parse(now) - TOKEN_LEDGER_RETENTION_DAYS * DAY_MS).toISOString();
   db.prepare(`DELETE FROM token_ledger WHERE ts < ?`).run(cutoff);
 }
 
@@ -278,22 +280,13 @@ export function isSyntheticMessage(message: ModelTagged): boolean {
   return message.model === '<synthetic>';
 }
 
-function isJsonString(value: JsonValue | undefined): value is string {
-  return value !== undefined && value !== null && value.constructor === String;
-}
-
-/** JSON-value plain-object check (excludes arrays and null). */
-function isJsonObject(value: JsonValue | undefined): value is JsonObject {
-  return value !== undefined && value !== null && !Array.isArray(value) && value.constructor === Object;
-}
-
 /** A Claude Code hook payload on stdin as a JSON object; null when empty, malformed or not an object. */
 function parseHookPayload(stdinText: string | undefined): JsonObject | null {
   if (!stdinText || stdinText.trim() === '') return null;
   try {
     // SAFETY: JSON.parse returns a JSON value by definition.
     const payload = JSON.parse(stdinText.trim()) as JsonValue;
-    return isJsonObject(payload) ? payload : null;
+    return isJsonObjectLiteral(payload) ? payload : null;
   } catch {
     // Malformed is one of the null cases the docblock names.
     return null;
@@ -392,15 +385,15 @@ export async function readApiCalls(transcriptPath: string): Promise<TranscriptCa
         continue;
       }
       // Sidechain calls, sidechain compactions and `<synthetic>` messages never touch the main context.
-      if (!isJsonObject(entry) || entry.isSidechain === true) continue;
+      if (!isJsonObjectLiteral(entry) || entry.isSidechain === true) continue;
       if (entry.subtype === 'compact_boundary') {
         compactions += 1;
         continue;
       }
       // One call spans lines sharing a message id.
       const message = entry.message;
-      if (entry.type !== 'assistant' || !isJsonObject(message)) continue;
-      if (!isJsonObject(message.usage) || isSyntheticMessage(message) || !isJsonString(message.id)) continue;
+      if (entry.type !== 'assistant' || !isJsonObjectLiteral(message)) continue;
+      if (!isJsonObjectLiteral(message.usage) || isSyntheticMessage(message) || !isJsonString(message.id)) continue;
       if (seen.has(message.id)) continue;
       seen.add(message.id);
       const at = isJsonString(entry.timestamp) ? Date.parse(entry.timestamp) : Number.NaN;

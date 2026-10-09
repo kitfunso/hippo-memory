@@ -19,7 +19,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { execFileSync, spawnSync, spawn } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -27,6 +27,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { serve, type ServerHandle } from '../src/server.js';
+import { hippoOut, hippoRun as spawnHippo } from './_helpers/spawn-hippo.js';
 
 const HIPPO_BIN = join(process.cwd(), 'bin', 'hippo.js');
 const USAGE_MSG = '--scope requires a non-empty value (e.g. --scope slack:private:C1).';
@@ -38,11 +39,7 @@ type ScopeGuardEnv = {
 };
 
 function hippo(cwd: string, env: Record<string, string>, ...args: string[]): string {
-  return execFileSync('node', [HIPPO_BIN, ...args], {
-    cwd,
-    env: { ...process.env, ...env },
-    encoding: 'utf-8',
-  });
+  return hippoOut(args, { cwd, env: { ...process.env, ...env }, exe: 'node' });
 }
 
 function hippoRun(
@@ -50,11 +47,7 @@ function hippoRun(
   env: Record<string, string>,
   ...args: string[]
 ) {
-  const res = spawnSync('node', [HIPPO_BIN, ...args], {
-    cwd,
-    env: { ...process.env, ...env },
-    encoding: 'utf-8',
-  });
+  const res = spawnHippo(args, { cwd, env: { ...process.env, ...env }, exe: 'node' });
   return { status: res.status, stdout: res.stdout, stderr: res.stderr };
 }
 
@@ -83,7 +76,7 @@ function hippoAsync(
   });
 }
 
-describe('global --scope value-less guard (v1.26.2 T1) — exit-1 cases', () => {
+describe('global --scope value-less guard: exit-1 cases', () => {
   let home: string;
   let env: ScopeGuardEnv;
 
@@ -152,7 +145,7 @@ describe('global --scope value-less guard (v1.26.2 T1) — exit-1 cases', () => 
   });
 });
 
-describe('valued --scope regression coverage (v1.26.2 acceptance criterion 2)', () => {
+describe('valued --scope regression coverage', () => {
   let home: string;
   let env: ScopeGuardEnv;
 

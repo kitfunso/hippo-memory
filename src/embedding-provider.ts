@@ -8,14 +8,10 @@
  * read their key from a conventional env var. The provider is selected by
  * `config.embeddings.provider` (default `'local'`).
  *
- * Design contract (see docs/plans/2026-06-08-b-pluggable-embedding-provider.md):
- *   - Local provider `id` is the BARE model string. (Historical note: this
- *     originally guaranteed NO identity change on upgrade; since the
- *     embed-text-format versioning in embeddings.ts (`embeddingIndexIdentity`,
- *     `${id}#t2`, docs/plans/2026-07-09-recall-determinism.md T1), the STORED
- *     identity carries a `#t<N>` suffix and pre-#t2 stores get exactly one
- *     forced reindex on their next embed-touching operation — deliberate,
- *     because their vectors were computed over path-contaminated text.)
+ * Design contract:
+ *   - Local provider `id` is the BARE model string; the STORED identity adds a `#t<N>`
+ *     embed-text-format suffix (`embeddingIndexIdentity`), so older stores reindex once:
+ *     their vectors were computed over path-contaminated text.
  *   - API provider `id` is `${kind}:${model}`; switching to/from an API embedder
  *     (or a dimension change) flips the identity and triggers the existing
  *     reindex-on-change path.
@@ -36,12 +32,15 @@ import {
   type EmbeddingRole,
   getEmbedding,
   isEmbeddingAvailable,
+  requireLocalPipeline,
   resolveEmbeddingModel,
   DEFAULT_EMBEDDING_MODEL,
 } from './local-embedding.js';
 import { loadConfig } from './config.js';
+import { errorMessage, log } from './log.js';
 import { redactSecretsStrict } from './secret-detect.js';
 import { fetchWithRetry } from './http-retry.js';
+import type { JsonValue } from './json.js';
 
 export type EmbeddingProviderKind = 'local' | 'openai' | 'voyage' | 'cohere';
 
@@ -92,8 +91,8 @@ class LocalEmbeddingProvider implements EmbeddingProvider {
     return this.enabled && isEmbeddingAvailable();
   }
   async embed(texts: string[], role?: EmbeddingRole): Promise<number[][]> {
-    // Sequential to preserve the historical single-pipeline behaviour and avoid
-    // contending the one cached pipeline instance with N concurrent calls.
+    // A model that cannot load fails the call, as an API outage does; items then run one at a time on the shared pipeline.
+    if (texts.length > 0) await requireLocalPipeline(this.model);
     const out: number[][] = [];
     for (const text of texts) {
       out.push(await getEmbedding(text, this.model, role));
@@ -105,11 +104,6 @@ class LocalEmbeddingProvider implements EmbeddingProvider {
 // ---------------------------------------------------------------------------
 // API providers — OpenAI / Voyage / Cohere over native fetch.
 // ---------------------------------------------------------------------------
-
-/** The full value space `JSON.parse` (via `resp.json()`) can produce. Keeps a
- *  vendor response's origin as unparsed external JSON visible in its type
- *  instead of collapsing it to `unknown`. */
-type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
 /** POST body for an embeddings request. Each provider's `buildBody` populates
  *  only the fields its API expects; the rest stay unset. */
@@ -269,7 +263,7 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
         body: JSON.stringify(spec.buildBody(this.model, chunk.map(redactSecretsStrict), role)),
       }, { timeoutMs: REQUEST_TIMEOUT_MS });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = errorMessage(err);
       throw new Error(redact(`embedding request to ${this.kind} failed: ${msg}`, key));
     }
 
@@ -289,7 +283,7 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
     try {
       json = await resp.json();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = errorMessage(err);
       throw new Error(redact(`${this.kind} embeddings returned invalid JSON: ${msg}`, key));
     }
 
@@ -418,9 +412,9 @@ export function resolveEmbeddingIdentity(hippoRoot: string, opts: ResolveProvide
 export function isEmbeddingConfigured(hippoRoot: string): boolean {
   try {
     return resolveEmbeddingProvider(hippoRoot).isAvailable();
-  } catch {
-    // Invalid embedding config (e.g. an insecure apiBaseUrl) must not crash the
-    // best-effort ingestion guard — treat it as "not configured" and skip.
+  } catch (err) {
+    // An invalid embedding config must not crash the best-effort ingestion guard, so it reads as not configured.
+    log.debug(`embedding config unusable: ${errorMessage(err)}`);
     return false;
   }
 }

@@ -3,23 +3,22 @@ import { createHash } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { collectSessionTurns, type SessionTurn, type TranscriptRecord } from './capture/transcript.js';
-import { splitSentences } from './capture/extract.js';
 import { isObjectLike, isStringValue } from './capture-contract.js';
 import { PATCH_SUCCESS_LINE, patchPaths, shellPatch } from './codex-patch.js';
 import { loadConfig } from './config.js';
+import { USER_SEGMENT } from './home-path.js';
 import { errorMessage } from './log.js';
+import { SESSION_DIGEST_TAG } from './core/session-digest-row.js';
 import { createMemory, Layer, type MemoryEntry } from './memory.js';
 import { RejectedValueError } from './rejection.js';
 import { maskEmails, redactSecretsStrict } from './secret-detect.js';
 import { isInitialized } from './store/open.js';
 import { writeEntry } from './store/entry-writes.js';
-import { loadAllEntries } from './store/entry-reads.js';
+import { loadLiveContentsBySourceAndTag } from './store/entry-reads.js';
 import { SNAPSHOT_AMBIENT_MAX_AGE_MS } from './store/sessions.js';
 import { loadLatestHandoff } from './store/handoffs.js';
 import { isSyntheticMessage } from './token-ledger.js';
 import { readTranscriptTail } from './transcript-tail.js';
-
-export const SESSION_DIGEST_TAG = 'session-digest';
 
 /** Five-word runs are stock phrases; six in a row is a copied clause. */
 export const ECHO_WINDOW = 6;
@@ -346,17 +345,6 @@ function changedFiles(edits: readonly DigestEdit[], repoRoot: string): string[] 
   return files;
 }
 
-// A home-directory path names its user and the store may be shared, so such a sentence is dropped.
-export const USER_SEGMENT: readonly RegExp[] = [
-  /[A-Za-z]:[\\/]+(?:Users|Documents and Settings)[\\/]+[^\\/\s]+/i,
-  /(?<![\w.])(?:\/mnt)?\/[A-Za-z]\/Users\/[^/\s]+/i,
-  /\\\\\?\\/,
-  /(?<![\w.~-])(?:\/var)?\/home\/[^/\s]+/,
-  /(?<![\w.~-])(?:\/var)?\/root(?![\w.-])/,
-  /(?<![\w.~-])\/Users\/[^/\s]+/,
-  /[\\/][A-Z0-9_$]{1,6}~\d{1,6}(?:\.[A-Z0-9]{1,3})?(?![\w~])|\b[A-Z0-9_$]{1,6}~\d{1,6}(?:\.[A-Z0-9]{1,3})?[\\/]/,
-];
-
 const ABSOLUTE_PATH = /(?<![\w.~/\\:-])(?:\\\\\?\\)?(?:[A-Za-z]:[\\/]|\/)[^\s`'"<>|*?()[\]{},;]+/g;
 
 function rewriteRepoPaths(sentence: string, repoRoot: string): string {
@@ -417,7 +405,7 @@ function proseText(text: string): string {
 export function digestSentences(text: string): string[] {
   const held: string[] = [];
   const masked = proseText(text).replace(PROTECTED, (m) => `\uE000${held.push(m) - 1}\uE001`);
-  return splitSentences(masked)
+  return masked.split(/(?<=[.!?])\s+|\n/).filter((s) => s.trim().length > 5)
     .map((s) => s.replace(/\uE000(\d+)\uE001/g, (_m, i: string) => held[Number(i)]).trim())
     .filter(Boolean);
 }
@@ -467,6 +455,7 @@ function rankedSentences(finalText: string, windows: ReadonlySet<string>, repoRo
   digestSentences(maskEmails(redactSecretsStrict(finalText))).forEach((sentence, index) => {
     if (/[?:]$/.test(sentence) || opensOnReferent(sentence) || echoes(sentence, windows)) return;
     const text = rewriteRepoPaths(sentence, repoRoot);
+    // A home-directory path names its user and the store may be shared, so such a sentence is dropped.
     if (text.length > MAX_SENTENCE_CHARS || USER_SEGMENT.some((re) => re.test(text))) return;
     kept.push({ index, text, score: sentenceScore(text) });
   });
@@ -510,11 +499,6 @@ export function buildSessionDigest(sources: DigestSources): DigestDraft | null {
   }
 }
 
-/** Facts extracted from a digest and DAG summaries over one inherit its tag, but they are not the digest itself. */
-export function isSessionDigestRow(entry: Pick<MemoryEntry, 'source' | 'tags' | 'extracted_from'>): boolean {
-  return entry.source === SESSION_DIGEST_TAG && entry.tags.includes(SESSION_DIGEST_TAG) && !entry.extracted_from;
-}
-
 /** Same session, same row: a second worker for one session updates the digest instead of adding one. */
 export function sessionDigestId(tenantId: string, key: string): string {
   return `mem_${createHash('sha256').update(`${SESSION_DIGEST_TAG}\n${tenantId}\n${key}`).digest('hex').slice(0, 12)}`;
@@ -535,9 +519,7 @@ export interface DigestOutcome {
 
 /** What hippo could have injected into the session: any live digest (prompt recall reaches old ones) and the ambient handoff, never this session's own. */
 function injectedTexts(hippoRoot: string, opts: SessionDigestOptions): string[] {
-  const digests = loadAllEntries(hippoRoot, opts.tenantId)
-    .filter((e) => isSessionDigestRow(e) && !e.superseded_by && e.source_session_id !== opts.key)
-    .map((e) => e.content);
+  const digests = loadLiveContentsBySourceAndTag(hippoRoot, opts.tenantId, SESSION_DIGEST_TAG, SESSION_DIGEST_TAG, opts.key);
   const handoff = loadLatestHandoff(hippoRoot, opts.tenantId, undefined, {
     unfinishedOnly: true,
     maxAgeMs: SNAPSHOT_AMBIENT_MAX_AGE_MS,

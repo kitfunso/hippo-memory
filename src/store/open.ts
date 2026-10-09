@@ -3,15 +3,17 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { DEFAULT_HALF_LIFE_DAYS, type MemoryEntry, Layer } from '../memory.js';
-import { closeHippoDb, type DatabaseSyncLike, openHippoDb, getMeta, setMeta } from '../db.js';
-import { type ResolveProjectIdentityOpts, findHippoStoreDir, realpathOrResolve } from '../project-identity.js';
+import { closeHippoDb, type DatabaseSyncLike, openHippoDb, getMeta, setMeta, withWriteScope } from '../db.js';
+import { type ResolveProjectIdentityOpts, findHippoStoreDir } from '../project-identity.js';
+import { realpathOrResolve } from '../util/real-path.js';
 import { RejectedValueError } from '../rejection.js';
-import { log } from '../log.js';
-import { type HippoIndex, type LegacyStats, isPlainJsonObject } from './rows.js';
+import { errorMessage, log } from '../log.js';
+import { type HippoIndex, type LegacyStats } from './rows.js';
 import { audit } from './audit-event.js';
 import { deserializeEntry } from './markdown.js';
 import { stampOriginProjectForImport, upsertEntryRow } from './entry-row.js';
 import { ensureMirrorDirectories, syncMirrorFiles, layerDir } from './mirrors.js';
+import { isJsonObject } from '../json.js';
 
 /** Nearest ancestor store like git; the strict join is the fallback so `hippo init` still creates `<cwd>/.hippo`. */
 export function getHippoRoot(cwd: string = process.cwd(), opts?: ResolveProjectIdentityOpts): string {
@@ -19,13 +21,8 @@ export function getHippoRoot(cwd: string = process.cwd(), opts?: ResolveProjectI
 }
 
 export function isInitialized(hippoRoot: string): boolean {
-  // A bare .hippo directory is not enough — autoInstallHooks /
-  // setupDailySchedule can create it without ever calling initStore,
-  // leaving a partial directory (integrations/, logs/, runs/) with no
-  // hippo.db. Returning true in that state caused `hippo init` to skip
-  // initStore and `hippo recall` to silently fall back to an empty store
-  // (incident 2026-04-26: ingest_direct.py against a bare .hippo).
-  // Treat the store as initialized only if hippo.db actually exists.
+  // autoInstallHooks / setupDailySchedule can create a bare .hippo with no hippo.db; counting
+  // that as initialized makes `hippo init` skip initStore, so only hippo.db counts.
   return fs.existsSync(path.join(hippoRoot, 'hippo.db'));
 }
 
@@ -34,10 +31,11 @@ export function initStore(hippoRoot: string): void {
 }
 
 /** One open connection with init done on it, for callers who used to pay for `initStore` + a second `openHippoDb`. */
-export function openStore(hippoRoot: string): DatabaseSyncLike {
-  ensureMirrorDirectories(hippoRoot);
-  const db = openHippoDb(hippoRoot);
+export function openStore(hippoRoot: string, opts?: { busyWaitMs?: number }): DatabaseSyncLike {
+  // Open first: a folder marked for another store must refuse before any mirror folder appears.
+  const db = openHippoDb(hippoRoot, opts);
   try {
+    ensureMirrorDirectories(hippoRoot);
     const bootstrapped = bootstrapLegacyStore(db, hippoRoot);
     if (bootstrapped) {
       syncMirrorFiles(hippoRoot, db);
@@ -51,6 +49,16 @@ export function openStore(hippoRoot: string): DatabaseSyncLike {
       // Best effort only; surface the original init error.
     }
     throw error;
+  }
+}
+
+/** One call on a handle of its own, closed after; pass openStore where the call also sets up mirror folders and legacy rows. */
+export function onHandle<T>(hippoRoot: string, fn: (db: DatabaseSyncLike) => T, open: (hippoRoot: string) => DatabaseSyncLike = openHippoDb): T {
+  const db = open(hippoRoot);
+  try {
+    return fn(db);
+  } finally {
+    closeHippoDb(db);
   }
 }
 
@@ -73,50 +81,28 @@ function recordHalfLifeBaseForNewStore(db: DatabaseSyncLike): void {
 }
 
 function bootstrapLegacyStore(db: ReturnType<typeof openHippoDb>, hippoRoot: string): boolean {
-  // SAFETY: countRow's shape matches the single `COUNT(*) AS count` column
-  // selected above; `.get()` returns undefined only when no row exists.
-  const countRow = db.prepare(`SELECT COUNT(*) AS count FROM memories`).get() as { count?: number } | undefined;
-  const memoryCount = Number(countRow?.count ?? 0);
-  if (memoryCount > 0) return false;
-  // AT1 P2 fix: memoryCount alone is not a reliable "already bootstrapped"
-  // signal once the rejection guard exists. If EVERY legacy mirror row is
-  // rejected, memories stays at 0 rows even after a successful bootstrap
-  // pass, so the memoryCount>0 gate above never trips — every subsequent
-  // initStore() call would re-run this whole function: re-scan the legacy
-  // mirrors, re-attempt (and re-refuse, re-auditing) every row, and
-  // re-INSERT the legacy consolidation_runs rows with no dedup, duplicating
-  // them on each open. A dedicated meta flag marks bootstrap as
-  // attempted-and-settled regardless of how many rows actually landed.
+  // Existence, not COUNT(*): a count walks every row on each write's open.
+  if (db.prepare(`SELECT 1 AS x FROM memories LIMIT 1`).get() !== undefined) return false;
+  // The row check misses an all-rejected bootstrap (memories stays empty), which would re-run the
+  // import on every open and duplicate consolidation_runs; this meta flag settles it.
   if (getMeta(db, 'legacy_bootstrap_completed', '0') === '1') return false;
 
   const legacyEntries = loadLegacyEntriesFromMarkdown(hippoRoot);
   if (legacyEntries.length === 0) return false;
 
-  db.exec('BEGIN');
-  try {
+  withWriteScope(db, 'bootstrap_legacy_store', () => {
     importLegacyEntries(db, hippoRoot, legacyEntries);
     importLegacyIndexAndStats(db, hippoRoot);
 
-    // AT1 P2 fix: stamp completion regardless of how many rows actually
-    // landed (all-rejected included) — see the gate comment above.
+    // Stamp completion even when every row was rejected; see the gate above.
     setMeta(db, 'legacy_bootstrap_completed', '1');
-    db.exec('COMMIT');
-  } catch (error) {
-    try { db.exec('ROLLBACK'); } catch { /* already rolled back; keep the original error */ }
-    throw error;
-  }
+  });
   return true;
 }
 
 function importLegacyEntries(db: DatabaseSyncLike, hippoRoot: string, legacyEntries: MemoryEntry[]): void {
-  // AT1 (plan §3, round-3 redesign): run the guard LIVE per row rather
-  // than bypassing it. bootstrapLegacyStore is exactly the channel through
-  // which a stale/never-purged markdown mirror could resurrect a rejected
-  // value; a skip-and-count here closes that structurally, independent of
-  // mirror state. The refusal audit is written INLINE inside this
-  // still-open loop transaction (plain audit() — nothing is rolled back
-  // on a per-row skip, so the post-rollback auditRejectionRefusal helper
-  // is the wrong tool here).
+  // Guard live per row: a stale markdown mirror could resurrect a rejected value. Plain audit()
+  // inline, because nothing rolls back on a per-row skip.
   let rejectedCount = 0;
   for (const entry of legacyEntries) {
     // v39: legacy markdown carries no origin_project; stamp from the store
@@ -127,7 +113,7 @@ function importLegacyEntries(db: DatabaseSyncLike, hippoRoot: string, legacyEntr
     } catch (err) {
       if (err instanceof RejectedValueError) {
         rejectedCount++;
-        audit(db, 'reject_refusal', err.entryId, { digest: err.digest, reason: err.reason }, 'cli', err.tenantId);
+        audit(db, 'reject_refusal', { targetId: err.entryId, metadata: { digest: err.digest, reason: err.reason }, actor: 'cli', tenantId: err.tenantId });
         continue;
       }
       throw err;
@@ -141,11 +127,8 @@ function importLegacyEntries(db: DatabaseSyncLike, hippoRoot: string, legacyEntr
 function importLegacyIndexAndStats(db: DatabaseSyncLike, hippoRoot: string): void {
   const legacyIndex = loadLegacyIndexFile(hippoRoot);
   setMeta(db, 'last_retrieval_ids', JSON.stringify(legacyIndex.last_retrieval_ids ?? []));
-  // LC1: legacy index.json predates last_trace_id, so this is '' for every
-  // pre-v40 store — harmless, matches the ensureMetaDefaults default.
-  // Coerce like its neighbors below coerce theirs (independent-review-critic
-  // LOW finding): accept only a clean digit string, else fall back to ''
-  // rather than trusting whatever a hand-edited/corrupt index.json carries.
+  // Legacy index.json predates last_trace_id, so '' is normal; accept only a clean digit
+  // string rather than trusting a hand-edited or corrupt index.json.
   const legacyTraceId = String(legacyIndex.last_trace_id ?? '');
   setMeta(db, 'last_trace_id', /^\d+$/.test(legacyTraceId) ? legacyTraceId : '');
 
@@ -157,7 +140,7 @@ function importLegacyIndexAndStats(db: DatabaseSyncLike, hippoRoot: string): voi
   const runs = Array.isArray(legacyStats.consolidation_runs) ? legacyStats.consolidation_runs : [];
   const insertRun = db.prepare(`INSERT INTO consolidation_runs(timestamp, decayed, merged, removed) VALUES (?, ?, ?, ?)`);
   for (const run of runs) {
-    if (!isPlainJsonObject(run)) continue;
+    if (!isJsonObject(run)) continue;
     const row = run;
     insertRun.run(
       String(row.timestamp ?? new Date().toISOString()),
@@ -196,7 +179,7 @@ function loadLegacyIndexFile(hippoRoot: string): HippoIndex {
     // that violates the shape falls through to the catch block's fallback.
     return JSON.parse(fs.readFileSync(indexPath, 'utf8')) as HippoIndex;
   } catch (err) {
-    log.debug(`store: unreadable index.json read as empty: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`store: unreadable index.json read as empty: ${errorMessage(err)}`);
     return { version: 1, entries: {}, last_retrieval_ids: [], last_trace_id: null };
   }
 }
@@ -219,7 +202,7 @@ function loadLegacyStatsFile(hippoRoot: string): LegacyStats {
     // hand-edited or corrupted file even if this optimistic cast is wrong.
     return JSON.parse(fs.readFileSync(statsPath, 'utf8')) as LegacyStats;
   } catch (err) {
-    log.debug(`store: unreadable stats.json read as zero: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`store: unreadable stats.json read as zero: ${errorMessage(err)}`);
     return {
       total_remembered: 0,
       total_recalled: 0,

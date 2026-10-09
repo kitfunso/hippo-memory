@@ -18,7 +18,7 @@ import { writeEntry } from './store/entry-writes.js';
 import { loadAllEntries, readEntry } from './store/entry-reads.js';
 import { redactSecretsStrict } from './secret-detect.js';
 import { fetchWithRetry, llmTimeoutMs } from './http-retry.js';
-import { log } from './log.js';
+import { errorMessage, log } from './log.js';
 
 const REFINED_TAG = 'llm-refined';
 const CONSOLIDATED_MARKERS = [
@@ -36,7 +36,7 @@ export interface RefineOptions {
   /** Injected for testing — defaults to the real fetch. */
   fetcher?: typeof fetch;
   /**
-   * L9: tenant scope. When provided, refineStore only scans consolidated
+   * Tenant scope. When provided, refineStore only scans consolidated
    * entries belonging to this tenant, and parent lookups are scoped to the
    * same tenant. Cross-tenant parents return null from readEntry and are
    * silently skipped (refine still produces output from merged content).
@@ -102,7 +102,7 @@ ${sourceBlock}`;
       }),
     }, { timeoutMs: llmTimeoutMs(), fetchFn });
   } catch (err) {
-    log.warn(`refine: request failed: ${err instanceof Error ? err.message : String(err)}`);
+    log.warn(`refine: request failed: ${errorMessage(err)}`);
     return null;
   }
 
@@ -119,7 +119,7 @@ ${sourceBlock}`;
     const data = await res.json() as { content?: Array<{ text?: string }> };
     text = data.content?.[0]?.text?.trim() ?? '';
   } catch (err) {
-    log.warn(`refine: unreadable response: ${err instanceof Error ? err.message : String(err)}`);
+    log.warn(`refine: unreadable response: ${errorMessage(err)}`);
     return null;
   }
   if (text.length < 10) {
@@ -151,7 +151,7 @@ export async function refineStore(
     details: [],
   };
 
-  // L9: when opts.tenantId is provided, scope the top-level scan to this
+  // When opts.tenantId is provided, scope the top-level scan to this
   // tenant's consolidated entries.
   const entries = loadAllEntries(hippoRoot, opts.tenantId);
   let processed = 0;
@@ -174,7 +174,7 @@ export async function refineStore(
     const sources: MemoryEntry[] = [];
     const parentIds = Array.isArray(entry.parents) ? entry.parents : [];
     for (const pid of parentIds) {
-      // L9: parent lookup scoped by opts.tenantId when provided.
+      // Parent lookup scoped by opts.tenantId when provided.
       // Cross-tenant parents return null and are silently skipped — refine
       // still produces output from the merged content alone (graceful
       // degradation rather than refuse-to-refine).

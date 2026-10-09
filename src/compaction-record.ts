@@ -1,13 +1,16 @@
 // One record per Claude Code compaction, and what turns its summary into kept memories.
 import * as fs from 'fs';
 import * as path from 'path';
+import { ConflictError } from './api-errors.js';
 import { isObjectLike, isStringValue } from './capture-contract.js';
-import { compactSummaryBody, parseCompactionItems, selectItemRows } from './compaction-items.js';
-import { loadConfig } from './config.js';
+import { COMPACTION_ITEM_MAX_CHARS, compactSummaryBody, parseCompactionItems, selectItemRows } from './compaction-items.js';
+import { importSpool, spool, type SpoolImporter } from './compaction-spool.js';
+import { isSharedStore, loadConfig } from './config.js';
 import { closeHippoDb, isSqliteBusy, openHippoDb, type DatabaseSyncLike } from './db.js';
 import { gatedWrite } from './gated-write.js';
 import { COMPACTION_MEMORY_TAG, COMPACTION_SOURCE_PREFIX, Layer, createMemory, generateId, type MemoryEntry } from './memory.js';
-import { deriveOriginProject, isGlobalStoreRoot } from './project-identity.js';
+import { fallbackOrigin, isGlobalStoreRoot, originInSql, projectId, projectNames, resolveProjectIdentity, type ProjectRef } from './project-identity.js';
+import { scopeAdmitSql } from './recall-scope.js';
 import { maskEmails, redactSecretsStrict } from './secret-detect.js';
 import { strengthenRetrievedOn, writeEntryMirrors } from './store/entry-writes.js';
 import { isRecallBoostAblated } from './ablation.js';
@@ -29,8 +32,6 @@ export const REPLAY_AFTER_MS = 10 * 60_000;
 /** Claude Code deletes transcripts after 30 days, so an older gap can never be filled. */
 export const TRANSCRIPT_FILL_WINDOW_MS = 30 * 24 * 60 * 60_000;
 const TRANSCRIPT_TAIL_CAPS = [1 << 20, 8 << 20, 64 << 20];
-const SPOOL_DIR = 'compactions-spool';
-const CLAIMED_SUFFIX = '.claimed';
 /** The marker redactSecretsStrict writes; an item holding it was a secret before it was stored. */
 const REDACTED = '[REDACTED]';
 
@@ -72,11 +73,26 @@ interface CompactionRow {
 
 export type Log = (message: string) => void;
 
-/** Where the session ran: rows written through the global store keep the project the session was in. */
-function compactionOrigin(hippoRoot: string, cwd: string | null): string {
-  if (!isGlobalStoreRoot(hippoRoot)) return deriveOriginProject(path.dirname(hippoRoot));
+/** Where the session ran: rows written through the global store or a shared store keep the project the session was in. */
+function compactionProject(hippoRoot: string, cwd: string | null): ProjectRef {
+  if (!isGlobalStoreRoot(hippoRoot) && !isSharedStore(hippoRoot)) return resolveProjectIdentity(path.dirname(hippoRoot));
   // No cwd means user-global, as stampOriginProject gives the global store; undefined would fall back to the hook's own cwd.
-  return cwd === null ? '' : deriveOriginProject(cwd);
+  return cwd === null ? '' : resolveProjectIdentity(cwd);
+}
+
+/** The record column cannot hold NULL, but an item from an unknown folder on a shared store must not read as user-global. */
+function itemOrigin(hippoRoot: string, ctx: ItemContext): string | null {
+  return ctx.cwd === null && isSharedStore(hippoRoot) ? fallbackOrigin(hippoRoot) : ctx.originProject;
+}
+
+function compactionOrigin(hippoRoot: string, cwd: string | null): string {
+  return projectId(compactionProject(hippoRoot, cwd));
+}
+
+/** The names a record's held rows may carry: its origin, plus the folder name rows saved before project ids used. */
+function heldOrigins(hippoRoot: string, cwd: string | null, originProject: string): readonly string[] {
+  const names = projectNames(compactionProject(hippoRoot, cwd));
+  return names.includes(originProject) ? names : [originProject];
 }
 
 function scrub(text: string): string {
@@ -95,6 +111,11 @@ export function readCompactionText(compactSummary: string): ScrubbedSummary {
   const body = compactSummaryBody(compactSummary);
   const parsed = parseCompactionItems(body);
   return { summary: truncateCodePointSafe(scrub(body), SUMMARY_MAX_CHARS), items: parsed.items.map(scrub), found: parsed.found };
+}
+
+/** A caller's items scrubbed as readCompactionText scrubs a summary's, since another machine's scrub is not trusted; cut after it, as a mask can run longer than what it hides. */
+export function scrubCompactionItems(items: readonly string[]): string[] {
+  return items.map((item) => truncateCodePointSafe(scrub(item), COMPACTION_ITEM_MAX_CHARS));
 }
 
 function toRecord(row: CompactionRow): CompactionRecord {
@@ -147,6 +168,14 @@ export function latestCompaction(db: DatabaseSyncLike, tenantId: string, session
   return selectRecords(db, 'tenant_id = ? AND session_id = ? ORDER BY started_at DESC, id DESC LIMIT 1', tenantId, sessionId)[0] ?? null;
 }
 
+/** The record a caller's request made, whatever state it reached, so a retry neither writes its items twice nor starts a second record; another session's id is a ConflictError. */
+export function compactionByRequest(db: DatabaseSyncLike, tenantId: string, requestId: string, sessionId: string): CompactionRecord | null {
+  const record = selectRecords(db, 'tenant_id = ? AND request_id = ?', tenantId, requestId)[0] ?? null;
+  // Sessions are owner-bound, so this also keeps one owner from reading or finishing another's record.
+  if (record !== null && record.sessionId !== sessionId) throw new ConflictError('request id belongs to another session');
+  return record;
+}
+
 /** Pre-compact's record for the compaction that is ending: the session's newest `started` one within REPLAY_AFTER_MS before `at`, so an older one is left for the transcript fill. */
 function latestStarted(db: DatabaseSyncLike, tenantId: string, sessionId: string, at: Date): CompactionRecord | null {
   return selectRecords(
@@ -159,11 +188,21 @@ function latestStarted(db: DatabaseSyncLike, tenantId: string, sessionId: string
   )[0] ?? null;
 }
 
-/** Moves a `started` record to `summarised`; false when another process already moved it. */
-function markSummarised(db: DatabaseSyncLike, tenantId: string, id: string, text: CompactionText, summarisedAt: string): boolean {
+/** Moves a `started` record to `summarised`; false when another process already moved it. The request id lands in the same statement, so no crash leaves the record unfindable by its retry. */
+interface MarkSummarisedOptions {
+  readonly text: CompactionText;
+  readonly summarisedAt: string;
+  readonly requestId?: string;
+}
+
+function markSummarised(db: DatabaseSyncLike, tenantId: string, id: string, options: MarkSummarisedOptions): boolean {
+  const { text, summarisedAt, requestId } = options;
+  // Only a caller names the column, so a store from before it was added still takes local writes.
+  const stamp = requestId === undefined ? [] : [requestId];
   const result = db.prepare(
-    `UPDATE compactions SET summary = ?, items_json = ?, summarised_at = ?, status = 'summarised' WHERE tenant_id = ? AND id = ? AND status = 'started'`,
-  ).run(text.summary, JSON.stringify(text.items), summarisedAt, tenantId, id);
+    `UPDATE compactions SET summary = ?, items_json = ?, summarised_at = ?, status = 'summarised'${stamp.length === 0 ? '' : ', request_id = ?'}
+     WHERE tenant_id = ? AND id = ? AND status = 'started'`,
+  ).run(text.summary, JSON.stringify(text.items), summarisedAt, ...stamp, tenantId, id);
   return (result.changes ?? 0) > 0;
 }
 
@@ -181,11 +220,16 @@ export function recordCompactionStart(hippoRoot: string, start: Omit<CompactionS
   }
 }
 
-export function recordSnapshotSaved(hippoRoot: string, recordId: string, log: Log): void {
+/** On the caller's handle and tenant, so a server marks the record under the caller's tenant with its own wait. */
+export function markSnapshotSaved(db: DatabaseSyncLike, tenantId: string, recordId: string): void {
+  db.prepare(`UPDATE compactions SET snapshot_saved = 1 WHERE tenant_id = ? AND id = ?`).run(tenantId, recordId);
+}
+
+export function recordSnapshotSaved(hippoRoot: string, tenantId: string, recordId: string, log: Log): void {
   let db: DatabaseSyncLike | undefined;
   try {
     db = openHippoDb(hippoRoot, { busyWaitMs: COMPACTION_DB_WAIT_MS });
-    db.prepare(`UPDATE compactions SET snapshot_saved = 1 WHERE tenant_id = ? AND id = ?`).run(resolveTenantId({}), recordId);
+    markSnapshotSaved(db, tenantId, recordId);
   } catch (err) {
     log(`compaction record not marked with its snapshot: ${errorMessage(err)}`);
   } finally {
@@ -198,27 +242,43 @@ export interface CompactionText {
   items: string[];
 }
 
+/** A caller's checked project, and the id its retries carry so a retry finds this record. */
+export interface SummaryCaller {
+  originProject?: string;
+  requestId?: string;
+}
+
+export interface RecordSummaryOptions {
+  readonly meta: Omit<CompactionStart, 'originProject'>;
+  readonly text: CompactionText;
+  readonly at: Date;
+  readonly caller?: SummaryCaller;
+}
+
 /** Puts the summary on the session's `started` record, or inserts a `summarised` one when pre-compact wrote none. One statement each. */
-function recordSummary(
+export function recordSummary(
   db: DatabaseSyncLike,
   hippoRoot: string,
   tenantId: string,
-  meta: Omit<CompactionStart, 'originProject'>,
-  text: CompactionText,
-  at: Date,
+  options: RecordSummaryOptions,
 ): CompactionRecord {
+  const { meta, text, at, caller = {} } = options;
   const now = new Date().toISOString();
   const itemsJson = JSON.stringify(text.items);
+  const { requestId } = caller;
   const started = latestStarted(db, tenantId, meta.sessionId, at);
-  if (started && markSummarised(db, tenantId, started.id, text, now)) {
+  if (started && markSummarised(db, tenantId, started.id, { text, summarisedAt: now, requestId })) {
     return { ...started, summary: text.summary, items: text.items, summarisedAt: now, status: 'summarised' };
   }
-  const originProject = compactionOrigin(hippoRoot, meta.cwd);
+  const originProject = caller.originProject ?? compactionOrigin(hippoRoot, meta.cwd);
   const id = generateId('cmp');
+  // Only a caller names the column, so a store from before it was added still takes local writes.
+  const stamp = requestId === undefined ? [] : [requestId];
+  const [col, mark] = stamp.length === 0 ? ['', ''] : [', request_id', ', ?'];
   db.prepare(
-    `INSERT INTO compactions(tenant_id, id, session_id, origin_project, compact_trigger, cwd, transcript_path, started_at, summarised_at, summary, items_json, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'summarised')`,
-  ).run(tenantId, id, meta.sessionId, originProject, meta.trigger, meta.cwd, meta.transcriptPath, at.toISOString(), now, text.summary, itemsJson);
+    `INSERT INTO compactions(tenant_id, id, session_id, origin_project, compact_trigger, cwd, transcript_path, started_at, summarised_at, summary, items_json, status${col})
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'summarised'${mark})`,
+  ).run(tenantId, id, meta.sessionId, originProject, meta.trigger, meta.cwd, meta.transcriptPath, at.toISOString(), now, text.summary, itemsJson, ...stamp);
   return {
     id, tenantId, sessionId: meta.sessionId, originProject, trigger: meta.trigger, cwd: meta.cwd, transcriptPath: meta.transcriptPath,
     snapshotSaved: false, startedAt: at.toISOString(), summarisedAt: now, summary: text.summary, items: text.items, itemsWritten: 0, status: 'summarised',
@@ -231,7 +291,11 @@ export interface ItemContext {
   recordId: string | null;
   sessionId: string;
   originProject: string;
+  /** Where the session ran, so rows held under the project's older folder name count too. */
+  cwd: string | null;
   items: string[];
+  /** Set when another machine sent the items: its audit actor and its project's names, since the server's folder is neither. */
+  caller?: { actor: string; origins: readonly string[] };
 }
 
 /** Words whose loss reverses or narrows a statement: "do not", "can't", "only", "unless". */
@@ -263,13 +327,83 @@ interface Held {
 }
 
 /** Live rows of one tenant and origin that default recall shows: a compaction often restates what an earlier one, or the user, already saved. */
-function heldRows(db: DatabaseSyncLike, tenantId: string, originProject: string): Held[] {
+function heldRows(db: DatabaseSyncLike, tenantId: string, origins: readonly string[]): Held[] {
+  const deny = scopeAdmitSql('');
   // SAFETY: the SELECT names the id, source_session_id and content columns.
   const rows = db.prepare(
-    `SELECT id, source_session_id, content FROM memories WHERE tenant_id = ? AND origin_project = ? AND superseded_by IS NULL AND kind != 'raw'
-       AND (scope IS NULL OR (scope != 'unknown:legacy' AND scope NOT LIKE '%:private:%'))`,
-  ).all(tenantId, originProject) as Array<{ id: string; source_session_id: string | null; content: string }>;
+    `SELECT id, source_session_id, content FROM memories WHERE tenant_id = ? AND ${originInSql(origins)} AND superseded_by IS NULL AND kind != 'raw'
+       AND ${deny.sql}`,
+  ).all(tenantId, ...origins, ...deny.params) as Array<{ id: string; source_session_id: string | null; content: string }>;
   return rows.map((r) => ({ id: r.id, sessionId: r.source_session_id, words: words(r.content) }));
+}
+
+interface ItemWrites {
+  written: MemoryEntry[];
+  repeats: number;
+  refused: number;
+  restated: string[];
+}
+
+function compactionEntry(text: string, ctx: ItemContext, origin: string | null, baseHalfLifeDays: number): MemoryEntry {
+  return {
+    ...createMemory(text, {
+      layer: Layer.Episodic,
+      tags: [COMPACTION_MEMORY_TAG],
+      source: `${COMPACTION_SOURCE_PREFIX}${ctx.sessionId}`,
+      confidence: 'observed',
+      kind: 'distilled',
+      source_session_id: ctx.sessionId,
+      tenantId: ctx.tenantId,
+      baseHalfLifeDays,
+    }),
+    origin_project: origin,
+  };
+}
+
+/** Runs inside saveItems' transaction: restatements of held rows are counted, the rest go through the write gate. */
+function writeItemRows(db: DatabaseSyncLike, hippoRoot: string, ctx: ItemContext, rows: readonly string[], baseHalfLifeDays: number): ItemWrites {
+  const out: ItemWrites = { written: [], repeats: 0, refused: 0, restated: [] };
+  const held = heldRows(db, ctx.tenantId, ctx.caller?.origins ?? heldOrigins(hippoRoot, ctx.cwd, ctx.originProject));
+  const origin = ctx.caller === undefined ? itemOrigin(hippoRoot, ctx) : ctx.originProject;
+  const restated = new Set<string>();
+  for (const text of rows) {
+    const itemWords = words(text);
+    const match = held.find((h) => restates(itemWords, h.words));
+    if (match) {
+      out.repeats++;
+      if (match.id !== null && match.sessionId !== ctx.sessionId) restated.add(match.id);
+      continue;
+    }
+    // createMemory throws below 3 chars, which would sink the whole transaction.
+    if (text.trim().length < 3) {
+      out.refused++;
+      continue;
+    }
+    const entry = compactionEntry(text, ctx, origin, baseHalfLifeDays);
+    if (gatedWrite(db, hippoRoot, entry, { actor: ctx.caller?.actor ?? 'post-compact' }) === 'written') {
+      out.written.push(entry);
+      held.push({ id: null, sessionId: ctx.sessionId, words: itemWords });
+    } else {
+      out.refused++;
+    }
+  }
+  out.restated = [...restated];
+  return out;
+}
+
+/** After commit: report skips, mirror the new rows, bump the counter. */
+function finishItemWrites(hippoRoot: string, writes: ItemWrites, log: Log): void {
+  if (writes.repeats > 0) log(`skipped ${writes.repeats} item(s) the store already holds`);
+  if (writes.refused > 0) log(`skipped ${writes.refused} item(s) the write gate refused`);
+  for (const entry of writes.written) writeEntryMirrors(hippoRoot, entry);
+  if (writes.written.length > 0) {
+    try {
+      updateStats(hippoRoot, { remembered: writes.written.length });
+    } catch (err) {
+      // The rows are committed; a counter that could not be bumped must not turn that into a failed step.
+      log(`remembered counter not updated: ${errorMessage(err)}`);
+    }
+  }
 }
 
 /** Items that become rows, then the record `done`, in one transaction so two sessions cannot both insert one text. Mirrors after commit. */
@@ -281,9 +415,7 @@ export function saveItems(db: DatabaseSyncLike, hippoRoot: string, ctx: ItemCont
   if (capped > 0) log(`capped: ${capped} more kept in the record only`);
 
   const baseHalfLifeDays = loadConfig(hippoRoot).defaultHalfLifeDays;
-  const written: MemoryEntry[] = [];
-  let repeats = 0;
-  let refused = 0;
+  let writes: ItemWrites;
   db.exec('BEGIN IMMEDIATE');
   try {
     if (ctx.recordId !== null) {
@@ -296,63 +428,19 @@ export function saveItems(db: DatabaseSyncLike, hippoRoot: string, ctx: ItemCont
         return current?.items_written ?? 0;
       }
     }
-    const held = heldRows(db, ctx.tenantId, ctx.originProject);
-    const restated = new Set<string>();
-    for (const text of rows) {
-      const itemWords = words(text);
-      const match = held.find((h) => restates(itemWords, h.words));
-      if (match) {
-        repeats++;
-        if (match.id !== null && match.sessionId !== ctx.sessionId) restated.add(match.id);
-        continue;
-      }
-      // createMemory throws below 3 chars, which would sink the whole transaction.
-      if (text.trim().length < 3) {
-        refused++;
-        continue;
-      }
-      const entry: MemoryEntry = {
-        ...createMemory(text, {
-          layer: Layer.Episodic,
-          tags: [COMPACTION_MEMORY_TAG],
-          source: `${COMPACTION_SOURCE_PREFIX}${ctx.sessionId}`,
-          confidence: 'observed',
-          kind: 'distilled',
-          source_session_id: ctx.sessionId,
-          tenantId: ctx.tenantId,
-          baseHalfLifeDays,
-        }),
-        origin_project: ctx.originProject,
-      };
-      if (gatedWrite(db, hippoRoot, entry, { actor: 'post-compact' }) === 'written') {
-        written.push(entry);
-        held.push({ id: null, sessionId: ctx.sessionId, words: itemWords });
-      } else {
-        refused++;
-      }
-    }
+    writes = writeItemRows(db, hippoRoot, ctx, rows, baseHalfLifeDays);
     // Said again by another session is the same signal as being recalled; the same session carrying it forward is not.
-    strengthenRetrievedOn(db, [...restated], { tenantId: ctx.tenantId, recallBoostAblated: isRecallBoostAblated() });
+    strengthenRetrievedOn(db, writes.restated, { tenantId: ctx.tenantId, recallBoostAblated: isRecallBoostAblated() });
     if (ctx.recordId !== null) {
-      db.prepare(`UPDATE compactions SET items_written = ?, status = 'done' WHERE tenant_id = ? AND id = ?`).run(written.length, ctx.tenantId, ctx.recordId);
+      db.prepare(`UPDATE compactions SET items_written = ?, status = 'done' WHERE tenant_id = ? AND id = ?`).run(writes.written.length, ctx.tenantId, ctx.recordId);
     }
     db.exec('COMMIT');
   } catch (err) {
     try { db.exec('ROLLBACK'); } catch { /* already rolled back; keep the original error */ }
     throw err;
   }
-  if (repeats > 0) log(`skipped ${repeats} item(s) the store already holds`);
-  if (refused > 0) log(`skipped ${refused} item(s) the write gate refused`);
-  for (const entry of written) writeEntryMirrors(hippoRoot, entry);
-  if (written.length > 0) {
-    try {
-      updateStats(hippoRoot, { remembered: written.length });
-    } catch (err) {
-      // The rows are committed; a counter that could not be bumped must not turn that into a failed step.
-      log(`remembered counter not updated: ${errorMessage(err)}`);
-    }
-  }
-  return written.length;
+  finishItemWrites(hippoRoot, writes, log);
+  return writes.written.length;
 }
 
 export interface PostCompactPayload {
@@ -390,19 +478,6 @@ export interface CompactionSaveResult {
   snapshotSaved: boolean;
 }
 
-function spoolFile(hippoRoot: string, sessionId: string): string {
-  return path.join(hippoRoot, SPOOL_DIR, `${sessionId.replace(/[^\w-]/g, '_').slice(0, 80)}-${Date.now()}.json`);
-}
-
-function spool(hippoRoot: string, tenantId: string, payload: PostCompactPayload, text: CompactionText, at: Date): void {
-  const file = spoolFile(hippoRoot, payload.sessionId);
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const body = { tenantId, sessionId: payload.sessionId, trigger: payload.trigger, cwd: payload.cwd, transcriptPath: payload.transcriptPath, at: at.toISOString(), summary: text.summary, items: text.items };
-  // Renamed into place so a replayer listing `.json` files never reads half a file.
-  fs.writeFileSync(`${file}.tmp`, JSON.stringify(body), 'utf8');
-  fs.renameSync(`${file}.tmp`, file);
-}
-
 /** The PostCompact work: record the summary, then write its items. Each step is independent; a busy store spools or defers. Never throws. */
 export function saveCompaction(hippoRoot: string, payload: PostCompactPayload, log: Log): CompactionSaveResult {
   const result: CompactionSaveResult = { written: null, deferred: false, snapshotSaved: false };
@@ -420,7 +495,7 @@ export function saveCompaction(hippoRoot: string, payload: PostCompactPayload, l
     const tenantId = resolveTenantId({});
     let record: CompactionRecord | null = null;
     try {
-      record = recordSummary(db, hippoRoot, tenantId, payload, text, at);
+      record = recordSummary(db, hippoRoot, tenantId, { meta: payload, text, at });
       result.snapshotSaved = record.snapshotSaved;
     } catch (err) {
       if (isSqliteBusy(err)) throw err;
@@ -433,6 +508,7 @@ export function saveCompaction(hippoRoot: string, payload: PostCompactPayload, l
         recordId: record?.id ?? null,
         sessionId: payload.sessionId,
         originProject: record?.originProject ?? compactionOrigin(hippoRoot, payload.cwd),
+        cwd: payload.cwd,
         items: text.items,
       }, log);
     } catch (err) {
@@ -515,102 +591,14 @@ function nextStartedAt(db: DatabaseSyncLike, record: CompactionRecord): string |
   return row?.at ?? null;
 }
 
-interface SpooledCompaction {
-  tenantId: string;
-  payload: PostCompactPayload;
-  text: CompactionText;
-  at: Date;
-}
-
-function readSpooled(file: string, fallbackTenantId: string): SpooledCompaction | null {
-  let raw: unknown;
-  try {
-    raw = JSON.parse(fs.readFileSync(file, 'utf8'));
-  } catch {
-    return null; // a half-written or vanished spool file is skipped; the caller treats null as unreadable
-  }
-  if (!isObjectLike(raw) || !('sessionId' in raw) || !isStringValue(raw.sessionId) || !('summary' in raw) || !isStringValue(raw.summary)) return null;
-  if (!('at' in raw) || !isStringValue(raw.at) || Number.isNaN(Date.parse(raw.at))) return null;
-  const items: string[] = 'items' in raw && Array.isArray(raw.items) ? raw.items.filter(isStringValue) : [];
-  return {
-    tenantId: 'tenantId' in raw && isStringValue(raw.tenantId) && raw.tenantId !== '' ? raw.tenantId : fallbackTenantId,
-    payload: {
-      sessionId: raw.sessionId,
-      trigger: 'trigger' in raw && isStringValue(raw.trigger) ? raw.trigger : null,
-      cwd: 'cwd' in raw && isStringValue(raw.cwd) ? raw.cwd : null,
-      transcriptPath: 'transcriptPath' in raw && isStringValue(raw.transcriptPath) ? raw.transcriptPath : null,
-      compactSummary: null,
-    },
-    text: { summary: raw.summary, items },
-    at: new Date(raw.at),
+/** Records a spooled summary, then writes its items. */
+function spoolImporter(db: DatabaseSyncLike, hippoRoot: string, log: Log): SpoolImporter {
+  return (spooled, recorded) => {
+    const record = recordSummary(db, hippoRoot, spooled.tenantId, { meta: spooled.payload, text: spooled.text, at: spooled.at });
+    // The record holds the items now, so the file is done even if the write below fails.
+    recorded();
+    saveItems(db, hippoRoot, { tenantId: spooled.tenantId, recordId: record.id, sessionId: record.sessionId, originProject: record.originProject, cwd: record.cwd, items: record.items }, log);
   };
-}
-
-function isMissingFile(cause: unknown): boolean {
-  return cause instanceof Error && 'code' in cause && cause.code === 'ENOENT';
-}
-
-/** A live replayer refreshes its claim's mtime when it takes it, so an old claim means the replayer died. */
-function recoverStaleClaims(dir: string, log: Log): void {
-  const staleBefore = Date.now() - REPLAY_AFTER_MS;
-  for (const name of fs.readdirSync(dir).filter((n) => n.endsWith(`.json${CLAIMED_SUFFIX}`))) {
-    const claimed = path.join(dir, name);
-    try {
-      if (fs.statSync(claimed).mtimeMs >= staleBefore) continue;
-      fs.renameSync(claimed, claimed.slice(0, -CLAIMED_SUFFIX.length));
-      log(`spool file ${name} was claimed by a replayer that never finished, put back`);
-    } catch (err) {
-      if (!isMissingFile(err)) log(`spool file ${name} not recovered: ${errorMessage(err)}`);
-    }
-  }
-}
-
-function releaseClaim(claimed: string, file: string, log: Log): void {
-  try {
-    fs.renameSync(claimed, file);
-  } catch (err) {
-    log(`spool file ${path.basename(file)} could not be put back: ${errorMessage(err)}`);
-  }
-}
-
-/** Each file is claimed by rename before it is read, so two replayers never import the same one. */
-function importSpool(db: DatabaseSyncLike, hippoRoot: string, tenantId: string, log: Log, deadline: number): number {
-  const dir = path.join(hippoRoot, SPOOL_DIR);
-  if (!fs.existsSync(dir)) return 0;
-  recoverStaleClaims(dir, log);
-  let finished = 0;
-  for (const name of fs.readdirSync(dir).filter((n) => n.endsWith('.json')).sort()) {
-    if (Date.now() > deadline) break;
-    const file = path.join(dir, name);
-    const claimed = `${file}${CLAIMED_SUFFIX}`;
-    try {
-      fs.renameSync(file, claimed);
-      const now = new Date();
-      fs.utimesSync(claimed, now, now);
-    } catch (err) {
-      if (!isMissingFile(err)) log(`spool file ${name} not claimed: ${errorMessage(err)}`);
-      continue;
-    }
-    const spooled = readSpooled(claimed, tenantId);
-    if (!spooled) {
-      log(`spool file ${name} is not readable, set aside`);
-      fs.renameSync(claimed, `${file}.bad`);
-      continue;
-    }
-    let removed = false;
-    try {
-      const record = recordSummary(db, hippoRoot, spooled.tenantId, spooled.payload, spooled.text, spooled.at);
-      // The record holds the items now, so the file is done even if the write below fails.
-      fs.rmSync(claimed, { force: true });
-      removed = true;
-      saveItems(db, hippoRoot, { tenantId: spooled.tenantId, recordId: record.id, sessionId: record.sessionId, originProject: record.originProject, items: record.items }, log);
-      finished++;
-    } catch (err) {
-      log(`spool file ${name} not imported: ${errorMessage(err)}`);
-      if (!removed) releaseClaim(claimed, file, log);
-    }
-  }
-  return finished;
 }
 
 /** Finishes what a killed hook or a busy store left: `summarised` records, spool files, and `started` records the transcript can fill. Returns how many compactions it saved. */
@@ -623,7 +611,7 @@ export function replayCompactions(db: DatabaseSyncLike, hippoRoot: string, log: 
   for (const record of stalled) {
     if (Date.now() > deadline) break;
     try {
-      saveItems(db, hippoRoot, { tenantId, recordId: record.id, sessionId: record.sessionId, originProject: record.originProject, items: record.items }, log);
+      saveItems(db, hippoRoot, { tenantId, recordId: record.id, sessionId: record.sessionId, originProject: record.originProject, cwd: record.cwd, items: record.items }, log);
       finished++;
     } catch (err) {
       log(`replay of ${record.id} failed: ${errorMessage(err)}`);
@@ -631,7 +619,7 @@ export function replayCompactions(db: DatabaseSyncLike, hippoRoot: string, log: 
   }
 
   try {
-    finished += importSpool(db, hippoRoot, tenantId, log, deadline);
+    finished += importSpool(hippoRoot, tenantId, log, deadline, spoolImporter(db, hippoRoot, log));
   } catch (err) {
     log(`spool import failed: ${errorMessage(err)}`);
   }
@@ -656,11 +644,11 @@ export function replayCompactions(db: DatabaseSyncLike, hippoRoot: string, log: 
       }
       const { found: listed, ...text } = readCompactionText(found);
       if (!listed) log(`no memories section in the transcript summary for ${record.id}`);
-      if (!markSummarised(db, tenantId, record.id, text, new Date().toISOString())) {
+      if (!markSummarised(db, tenantId, record.id, { text, summarisedAt: new Date().toISOString() })) {
         log(`${record.id} was filled by another process`);
         continue;
       }
-      saveItems(db, hippoRoot, { tenantId, recordId: record.id, sessionId: record.sessionId, originProject: record.originProject, items: text.items }, log);
+      saveItems(db, hippoRoot, { tenantId, recordId: record.id, sessionId: record.sessionId, originProject: record.originProject, cwd: record.cwd, items: text.items }, log);
       finished++;
     } catch (err) {
       log(`transcript fill of ${record.id} failed: ${errorMessage(err)}`);

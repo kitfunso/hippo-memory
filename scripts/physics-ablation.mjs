@@ -27,9 +27,8 @@ import { createMemory } from '../dist/memory.js';
 import { initStore } from '../dist/store/open.js';
 import { writeEntry } from '../dist/store/entry-writes.js';
 import { loadAllEntries } from '../dist/store/entry-reads.js';
-import { embedMemory, loadEmbeddingIndex } from '../dist/embeddings.js';
+import { embedMemory } from '../dist/embeddings.js';
 import { isEmbeddingAvailable, resolveEmbeddingModel } from '../dist/local-embedding.js';
-import { resetAllPhysicsState, loadPhysicsState } from '../dist/physics-state.js';
 import { openHippoDb, closeHippoDb } from '../dist/db.js';
 import { hybridSearch } from '../dist/search/hybrid.js';
 import { physicsSearch } from '../dist/search/physics-search.js';
@@ -57,7 +56,7 @@ const DATA_PATH = path.join(REPO, 'benchmarks', 'longmemeval', 'data', 'longmeme
 fs.mkdirSync(OUT_DIR, { recursive: true });
 
 // ---------------------------------------------------------------------------
-// Metrics (matching src/eval.ts)
+// Metrics (matching src/eval/eval.ts)
 // ---------------------------------------------------------------------------
 
 function mrr(returned, expectedSet) {

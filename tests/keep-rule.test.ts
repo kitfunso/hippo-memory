@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { AGENT_MEMORY_TOOLS, toolSourcePrefix } from '../src/agent-memories/tools.js';
+import { AGENT_MEMORY_TOOLS, toolSourcePrefix } from '../src/core/agent-memory-tools.js';
 import {
   AUTO_DELETABLE_SQL, COMPACTION_MEMORY_TAG, COMPACTION_SOURCE_PREFIX, KEEP_PAIRS, canAutoDelete, type MemoryEntry
 } from '../src/memory.js';
@@ -19,7 +19,7 @@ import { deduplicateStore } from '../src/dedupe.js';
 import { auditMemory } from '../src/audit.js';
 import { closeHippoDb, openHippoDb } from '../src/db.js';
 import { NO_MERGE_TAGS } from '../src/shared.js';
-import { forget, listDormant, sleep, supersede, type Context } from '../src/api.js';
+import { forget, listDormant, sleep, supersede, type HippoDbContext } from '../src/api.js';
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
 const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });
@@ -40,7 +40,7 @@ function newRoot(configJson?: string): string {
   return root;
 }
 
-const ctxFor = (hippoRoot: string): Context => ({ hippoRoot, tenantId: 'default', actor: { subject: 'keep-rule-test', role: 'admin' } });
+const ctxFor = (hippoRoot: string): HippoDbContext => ({ hippoRoot, tenantId: 'default', actor: { subject: 'keep-rule-test', role: 'admin' } });
 const sixtyDaysOn = (): Date => new Date(Date.now() + 60 * DAY);
 const keptRow = (content: string): MemoryEntry => createMemory7(content, { tags: [TAG], source: KEPT_SOURCE });
 const okFetcher = () => vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ content: [{ text: '[]' }] }), { status: 200 }));

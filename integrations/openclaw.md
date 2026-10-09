@@ -90,7 +90,7 @@ If you prefer using OpenClaw's skill system instead of patching AGENTS.md, creat
 ```markdown
 # Hippo Memory Skill
 
-Biologically-inspired memory for AI agents. Decay by default, retrieval strengthening, sleep consolidation.
+Make your agent's memory work like a brain. Hippo is long-term memory for coding agents.
 
 ## When to activate
 

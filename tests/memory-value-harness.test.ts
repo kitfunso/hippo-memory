@@ -257,7 +257,7 @@ describe('memory-value harness (real stores)', () => {
   });
 });
 
-describe('causal clock clamp (codex review fix round #3 P1 fix verification)', () => {
+describe('causal clock clamp', () => {
   it('T_eval clamps forward past question_date to the latest haystack_date; age_days >= 0 for every row', async () => {
     fs.rmSync(questionDir(QUESTION_C.question_id), { recursive: true, force: true });
     try {
@@ -303,7 +303,7 @@ describe('causal clock clamp (codex review fix round #3 P1 fix verification)', (
   });
 });
 
-describe('--skip-simulate variance-gate exemption (codex review fix round #3 P2 fix verification)', () => {
+describe('--skip-simulate variance-gate exemption', () => {
   it('a real (non-smoke) run without simulation passes at threshold 3 but would fail at the default threshold 6', async () => {
     for (const q of QUESTIONS) {
       fs.rmSync(questionDir(q.question_id), { recursive: true, force: true });
@@ -418,7 +418,7 @@ describe('variance gate (pure logic, no I/O)', () => {
   });
 });
 
-describe('scratch-cleanup containment guard (codex review P2 fix verification)', () => {
+describe('scratch-cleanup containment guard', () => {
   it('sanitizeQuestionId strips path-traversal characters', () => {
     expect(sanitizeQuestionId('../../etc/passwd')).not.toContain('/');
     expect(sanitizeQuestionId('../../etc/passwd')).not.toContain('..');

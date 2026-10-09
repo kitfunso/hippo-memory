@@ -55,7 +55,7 @@ function runCli(
   }
 }
 
-describe('CLI tenant-scoping (v1.11.0 residue)', () => {
+describe('CLI tenant-scoping', () => {
   let home: string;
   let hippoRoot: string;
   let globalRoot: string;

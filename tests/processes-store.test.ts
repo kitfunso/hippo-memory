@@ -54,7 +54,7 @@ function countRows(home: string, table: string): number {
   } finally { closeHippoDb(db); }
 }
 
-describe('processes store (E2 first-class object)', () => {
+describe('processes store (first-class object)', () => {
   let home: string;
   beforeEach(() => { home = makeRoot('processes'); });
   afterEach(() => safeRmSync(home));

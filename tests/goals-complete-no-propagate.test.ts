@@ -7,7 +7,7 @@
  * tests call `recall(ctx, { query: 'auth', sessionId })` which depends on
  * `RecallOpts.sessionId` being added by Task 1. Task 1 is not yet shipped,
  * so we seed `goal_recall_log` directly (mirroring the existing
- * `b3-outcome-propagation.test.ts` pattern via `seedRecallLog`). This
+ * `goal-outcome-propagation.test.ts` pattern via `seedRecallLog`). This
  * makes Task 2 tests independent of Task 1 and exercises the propagation
  * block deterministically without relying on the boost helper to populate
  * the log row.
@@ -18,14 +18,14 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
-import { remember, type Context } from '../src/api.js';
+import { remember, type HippoDbContext } from '../src/api.js';
 import { pushGoal, completeGoal } from '../src/goals.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 
 const tenantId = 'default';
 const sessionId = 'sess-no-prop';
 
-function ctx(root: string): Context {
+function ctx(root: string): HippoDbContext {
   return { hippoRoot: root, tenantId, actor: { subject: 'cli', role: 'admin' } };
 }
 
@@ -63,7 +63,7 @@ function seedRecallLog(root: string, goalId: string, memoryId: string, recalledA
   }
 }
 
-describe('completeGoal noPropagate flag (v1.7.4)', () => {
+describe('completeGoal noPropagate flag', () => {
   let root: string;
 
   beforeEach(() => {

@@ -1,186 +1,52 @@
 // Recall routes: /v1/memories search, assemble, drill and /v1/context.
 import { dirname, resolve } from 'node:path';
-import { resolveProjectIdentity } from '../../project-identity.js';
+import { assertCallerProject, resolveProjectIdentity, type ProjectRef } from '../../project-identity.js';
+import { isSharedStore } from '../../config.js';
 import { assembleCost, contextCost, drillCost } from '../../context-render.js';
-import { closeHippoDb, openHippoDb } from '../../db.js';
-import { updateStats } from '../../store/index-and-stats.js';
-import { appendRecall, biasHintEnabled, buildSessionKey, getOrCreateRing, hashQueryText, RingBuffer, snapshotRing } from '../../recall-history.js';
-import { appendAuditEvent, auditQueryFields } from '../../audit.js';
-import { assemble, type AssembleOpts, drillDown, type DrillDownOpts, getContext, type RecallOpts, recordTokens, retrieve } from '../../api.js';
+import { storeFor } from '../../store-port.js';
+import { biasHintEnabled, type RecallHistorySnapshot } from '../../recall-history.js';
+import { assemble, type AssembleOpts, type Context, drillDown, type DrillDownOpts, getContext, recordTokens, retrieve } from '../../api.js';
+import { httpParams, parseContextRequest, parseRecallRequest } from '../../api/recall-request.js';
+import { anchorSkippedRows, noteRecall, peekSessionRing, resetSessionRings, sessionRing } from '../../api/recall-record.js';
 import { HttpError, sendJson } from '../../http-util.js';
 import { buildContextWithAuth } from '../auth.js';
 import type { RouteRequest } from '../types.js';
-import { parseListLimit, validateIdSegment } from '../validation.js';
+import { validateIdSegment } from '../validation.js';
 
-// v0.33 / J1 — Module-level per-(tenant, session) recall-history ring map
-// for the HTTP pipeline. Separate from CLI/MCP rings per plan v3 (per-
-// pipeline rings; no IPC). HTTP is the only caller that threads its
-// snapshot through opts.recallHistory to api.recall — api.recall's
-// anchoringHint on the returned RecallResult IS the user-visible hint
-// here (no separate compute needed).
-const sessionRecallHistoryHttp = new Map<string, RingBuffer>();
-
-/** Test-only: reset the module-level recall-history Map. Call from beforeEach. */
+/** Test-only: reset the HTTP recall rings. Call from beforeEach. */
 export function __resetSessionRecallHistoryHttp(): void {
-  sessionRecallHistoryHttp.clear();
+  resetSessionRings('http');
+}
+
+// HTTP threads the ring through opts.recallHistory, so the hint retrieve() returns is the one the caller sees.
+function recallHistoryFor(ctx: Context, sessionId: string | undefined): RecallHistorySnapshot | undefined {
+  return sessionId && biasHintEnabled('anchoring') ? peekSessionRing('http', ctx.tenantId, sessionId) : undefined;
 }
 
 // GET /v1/memories?q=...&limit=...&mode=...&scope=...&include_continuity=1
 export async function handleRecallMemories({ req, res, opts, query }: RouteRequest): Promise<void> {
-  const q = query.get('q');
-  if (!q) {
-    throw new HttpError(400, 'q is required');
-  }
-  const limitRaw = query.get('limit');
-  const limit = limitRaw === null ? undefined : parseListLimit(limitRaw);
-  const mode = query.get('mode');
-  if (mode !== null && mode !== 'bm25' && mode !== 'hybrid' && mode !== 'physics') {
-    throw new HttpError(400, "mode must be 'bm25', 'hybrid', or 'physics'");
-  }
-  const scope = query.get('scope');
-  const includeContinuityRaw = query.get('include_continuity');
-  const includeContinuity = includeContinuityRaw === '1'
-    || includeContinuityRaw === 'true';
-  // v1.6.2: surface the v1.5.0/v1.5.2 RecallOpts additions to HTTP
-  // callers. Pre-v1.6.2 the route silently ignored these so the
-  // session-scoped fresh-tail and summary substitution were JS-only.
-  const freshTailCountRaw = query.get('fresh_tail_count');
-  const freshTailCount = freshTailCountRaw === null ? undefined : Number(freshTailCountRaw);
-  if (freshTailCount !== undefined && (!Number.isFinite(freshTailCount) || freshTailCount < 0)) {
-    throw new HttpError(400, 'fresh_tail_count must be a non-negative number');
-  }
-  // v1.6.3 senior-review P1-3: cap session_id length consistent with the
-  // rest of the API. Untrimmed strings round-trip through the SQL layer
-  // and through any downstream metric/log; 256 is generous for a session
-  // id and matches the rest of this file's id-shaped param parsers.
-  const freshTailSessionIdRaw = query.get('fresh_tail_session_id');
-  if (freshTailSessionIdRaw !== null && freshTailSessionIdRaw.length > 256) {
-    throw new HttpError(400, 'fresh_tail_session_id exceeds 256-character cap');
-  }
-  const freshTailSessionId = freshTailSessionIdRaw && freshTailSessionIdRaw.length > 0
-    ? freshTailSessionIdRaw
-    : undefined;
-  // v1.6.3 senior-review P1-4: tighten parser to match the includeContinuity
-  // convention. Pre-v1.6.3 accepted any non-'0'/'false' value as `true`,
-  // so `?summarize_overflow=banana` and `?summarize_overflow=` both
-  // turned it on. Surface convention drift fixed.
-  const summarizeOverflowRaw = query.get('summarize_overflow');
-  const summarizeOverflow = summarizeOverflowRaw === null
-    ? undefined
-    : (summarizeOverflowRaw === '1' || summarizeOverflowRaw === 'true');
-  // recall() owns the shape rule (NaN, 0 and negatives throw invalid_scorer_window); the transport caps remote cost.
-  const scorerWindowRaw = query.get('scorer_window');
-  const scorerWindow = scorerWindowRaw === null ? undefined : Number(scorerWindowRaw);
-  if (scorerWindow !== undefined && scorerWindow > 1000) {
-    throw new HttpError(400, 'scorer_window must be <= 1000');
-  }
-  // v1.7.4: session_id for the dlPFC goal-stack boost. 256-char cap mirrors
-  // fresh_tail_session_id (above). Trim then drop if empty so api.recall
-  // sees undefined when the param is omitted or whitespace-only.
-  const sessionIdRaw = query.get('session_id');
-  if (sessionIdRaw !== null && sessionIdRaw.length > 256) {
-    throw new HttpError(400, 'session_id exceeds 256-character cap');
-  }
-  const sessionId = sessionIdRaw && sessionIdRaw.trim().length > 0
-    ? sessionIdRaw.trim()
-    : undefined;
-  // A7 recall-trace: opt-in explain flag. When set, api.recall attaches the
-  // lifecycle re-ranking trace (goal-boost step on the api pipeline) +
-  // rerankPipeline:'api' to each result item; the field then rides on the
-  // serialized RecallResult. Mirrors the include_continuity convention.
-  const explainRaw = query.get('explain');
-  const explain = explainRaw === '1' || explainRaw === 'true';
+  const { opts: recallOpts, limit, mode, explain } = parseRecallRequest(httpParams(query));
+  const { query: q, includeContinuity, sessionId } = recallOpts;
   const ctx = await buildContextWithAuth(req, opts);
 
-  // v0.33 / J1 — HTTP per-pipeline anchoring detector. HTTP threads its
-  // ring snapshot via opts.recallHistory so api.recall's own
-  // anchoringHint compute path activates. Unlike CLI (which computes
-  // its own hint separately because cmdRecall runs its own physics/
-  // hybrid pipeline outside api.recall), HTTP's /v1/memories response
-  // body IS api.recall's result directly. So the api.recall-computed
-  // hint flows through. HIPPO_ANCHORING=off short-circuits.
-  let httpRecallHistory: ReturnType<typeof snapshotRing> | undefined;
-  let httpRingKey: string | undefined;
-  if (biasHintEnabled('anchoring')) {
-    if (sessionId) {
-      // Codex round-5 P2 catch: do NOT mutate sessionRecallHistoryHttp
-      // before recall() preflight runs. A request with an invalid
-      // scorer_window / fresh_tail_count would create-or-touch the
-      // session ring (LRU-evicting valid sessions) even though recall
-      // throws 400. Snapshot the EXISTING ring if present; only
-      // create-or-touch after the recall returns successfully.
-      httpRingKey = buildSessionKey(ctx.tenantId, sessionId);
-      const existingRing = sessionRecallHistoryHttp.get(httpRingKey);
-      httpRecallHistory = existingRing ? snapshotRing(existingRing) : [];
-    } else {
-      // Telemetry: caller had no session_id so ring tracking skipped.
-      // Per the normal recall-audit convention (api.ts:854 stores
-      // SHA-256/16 hash of the query, NOT raw text), avoid retaining
-      // prompts in audit_log here too — query content can contain
-      // secrets, PII, or RTBF-restricted material. Codex round-2 P2
-      // catch: hashQueryText is a 32-bit FNV-1a designed for recall
-      // matching, NOT a privacy hash; brute-force trivial for low-
-      // entropy queries. Use the same SHA-256/16 truncation as the
-      // canonical recall audit.
-      const dbForAudit = openHippoDb(opts.hippoRoot);
-      try {
-        appendAuditEvent(dbForAudit, {
-          tenantId: ctx.tenantId,
-          actor: ctx.actor.subject,
-          op: 'recall_anchor_skipped_no_session',
-          targetId: undefined,
-          metadata: auditQueryFields(q),
-        });
-      } finally {
-        closeHippoDb(dbForAudit);
-      }
-    }
-  }
+  const recallHistory = recallHistoryFor(ctx, sessionId);
+  // Written first in the recall's own write, so a recall that fails leaves no row.
+  const leadingAudit = sessionId ? [] : anchorSkippedRows({ tenantId: ctx.tenantId, actor: ctx.actor.subject }, q);
+  const result = await retrieve(ctx, { ...recallOpts, limit, mode, explain, recallHistory, leadingAudit });
 
-  const recallExtra: Pick<
-    RecallOpts,
-    'freshTailCount' | 'freshTailSessionId' | 'summarizeOverflow' | 'scorerWindow' | 'sessionId' | 'recallHistory' | 'explain'
-  > = {};
-  if (freshTailCount !== undefined) recallExtra.freshTailCount = freshTailCount;
-  if (freshTailSessionId !== undefined) recallExtra.freshTailSessionId = freshTailSessionId;
-  if (summarizeOverflow !== undefined) recallExtra.summarizeOverflow = summarizeOverflow;
-  if (scorerWindow !== undefined) recallExtra.scorerWindow = scorerWindow;
-  if (sessionId !== undefined) recallExtra.sessionId = sessionId;
-  if (httpRecallHistory !== undefined) recallExtra.recallHistory = httpRecallHistory;
-  if (explain) recallExtra.explain = explain;
+  // The ring is created only after recall succeeds, so a 400 cannot LRU-evict a live session.
+  const ring = sessionRing('http', ctx.tenantId, sessionId);
+  if (ring) noteRecall(ring, q, result.results[0]?.id ?? null, result.anchoringHint?.memoryId);
 
-  const result = await retrieve(ctx, {
-    query: q,
-    limit,
-    mode: mode ?? undefined,
-    scope: scope ?? undefined,
-    includeContinuity,
-    ...recallExtra,
-  });
-
-  // v0.33 / J1 — append AFTER recall completes (snapshot was taken before
-  // recall() ran). anchoredOn carries the memoryId of any hint that fired
-  // (api.recall computed it from the same snapshot we passed in), feeding
-  // the cooldown logic for the NEXT recall on this session.
-  // Codex round-5 P2 fix: create-or-touch the ring ONLY HERE, after recall
-  // returns successfully. Invalid requests that throw 400 in recall()
-  // never reach this point, so they cannot LRU-evict valid sessions.
-  if (httpRingKey) {
-    const httpRing = getOrCreateRing(sessionRecallHistoryHttp, httpRingKey);
-    const topId = result.results[0]?.id ?? null;
-    appendRecall(httpRing, hashQueryText(q), topId, result.anchoringHint?.memoryId);
-  }
-
-  // Each recall surface counts its own hits; api.recall is no chokepoint,
-  // since the CLI never calls it and MCP shows the user a different band.
-  updateStats(opts.hippoRoot, { recalled: result.results.length });
+  // HTTP counts the rows it returns here; `retrieve` cannot count for every ranker, since MCP shows a different band and counts none.
+  await storeFor(ctx).bumpRecallStats(result.results.length);
 
   // Continuity payloads should never be cached. The caller is asking for
   // session-state-aware data; intermediaries must not reuse it across users.
   if (includeContinuity) {
     res.setHeader('Cache-Control', 'no-store');
   }
-  recordTokens(ctx, 'http_recall', { items: result.results.length, tokens: result.tokens + (result.continuityTokens ?? 0), sessionId: sessionId ?? null });
+  await recordTokens(ctx, 'http_recall', { items: result.results.length, tokens: result.tokens + (result.continuityTokens ?? 0), sessionId: sessionId ?? null });
   sendJson(res, 200, result);
   return;
 }
@@ -201,10 +67,8 @@ export async function handleAssembleSession({ req, res, opts, query }: RouteRequ
   if (freshTailCount !== undefined && (!Number.isFinite(freshTailCount) || freshTailCount < 0)) {
     throw new HttpError(400, 'freshTail must be a non-negative number');
   }
-  // v1.6.3 senior review P1: same strict-parse convention as the v1.6.3
-  // summarize_overflow tighten on /v1/memories. Pre-v1.6.3 accepted any
-  // non-'0'/'false' as true; ?summarizeOlder=banana now correctly returns
-  // false (matches includeContinuity convention).
+  // Same strict-parse convention as summarize_overflow on /v1/memories:
+  // ?summarizeOlder=banana is false (matches includeContinuity convention).
   const sumOlderRaw = query.get('summarizeOlder');
   const summarizeOlder = sumOlderRaw === null
     ? undefined
@@ -217,8 +81,8 @@ export async function handleAssembleSession({ req, res, opts, query }: RouteRequ
   if (freshTailCount !== undefined) assembleExtra.freshTailCount = freshTailCount;
   if (summarizeOlder !== undefined) assembleExtra.summarizeOlder = summarizeOlder;
   if (scope !== undefined) assembleExtra.scope = scope;
-  const result = assemble(ctx, assembleMatch.id!, { ...assembleExtra, cost: assembleCost(assembleMatch.id!) });
-  recordTokens(ctx, 'http_assemble', { items: result.items.length, tokens: result.tokens, sessionId: assembleMatch.id! });
+  const result = await assemble(ctx, assembleMatch.id!, { ...assembleExtra, cost: assembleCost(assembleMatch.id!) });
+  await recordTokens(ctx, 'http_assemble', { items: result.items.length, tokens: result.tokens, sessionId: assembleMatch.id! });
   sendJson(res, 200, result);
   return;
 }
@@ -241,12 +105,12 @@ export async function handleDrillRecall({ req, res, opts, query }: RouteRequest,
   if (budget !== undefined && (!Number.isFinite(budget) || budget <= 0)) {
     throw new HttpError(400, 'budget must be a positive number');
   }
-  // v0.30 / E5: depth query param walks N levels (default 1, hard cap 10).
+  // depth query param walks N levels (default 1, hard cap 10).
   const depthRaw = query.get('depth');
   let depth: number | undefined;
   if (depthRaw !== null) {
     const parsed = Number(depthRaw);
-    // L4 fold: reject out-of-range explicitly (no silent clamp).
+    // Reject out-of-range explicitly (no silent clamp).
     if (!Number.isInteger(parsed) || parsed < 1 || parsed > 10) {
       throw new HttpError(400, 'depth must be a positive integer between 1 and 10');
     }
@@ -257,9 +121,9 @@ export async function handleDrillRecall({ req, res, opts, query }: RouteRequest,
   if (limit !== undefined) drillExtra.limit = limit;
   if (budget !== undefined) drillExtra.budget = budget;
   if (depth !== undefined) drillExtra.depth = depth;
-  const result = drillDown(ctx, drillMatch.id!, { ...drillExtra, cost: drillCost });
+  const result = await drillDown(ctx, drillMatch.id!, { ...drillExtra, cost: drillCost });
   if ('failure' in result) {
-    // v1.6.4: leaf id maps to 422 (caller-actionable). Other cases stay
+    // Leaf id maps to 422 (caller-actionable). Other cases stay
     // as 404 to avoid leaking cross-tenant existence or scope grants.
     if (result.failure === 'not_drillable') {
       throw new HttpError(422, 'Id is a leaf row, not a level-2+ summary; nothing to drill into');
@@ -270,70 +134,30 @@ export async function handleDrillRecall({ req, res, opts, query }: RouteRequest,
   return;
 }
 
+/** A shared store's folder is no caller's project, so the caller names it (`project`, repeated `alias`); with none, getContext refuses. */
+function contextReader(hippoRoot: string, query: URLSearchParams): ProjectRef {
+  if (!isSharedStore(hippoRoot)) return resolveProjectIdentity(dirname(resolve(hippoRoot)));
+  const name = query.get('project');
+  if (name === null) return '';
+  const aliases = query.getAll('alias');
+  assertCallerProject({ name, aliases });
+  return { name, legacyName: name, aliases };
+}
+
 // GET /v1/context — assemble a budget-bounded context bundle. Returns
 // ContextResult JSON (entries + tokens + activeSnapshot + sessionHandoff
 // + recentEvents). No server-side rendering; clients render. Tenant-scoped
 // via the Bearer. Pinned-only + '*' fallback skip the recall audit emit
 // (matches cmdContext); real-query hybrid search emits one 'recall' row.
 export async function handleGetContext({ req, res, opts, query }: RouteRequest): Promise<void> {
-  const q = query.get('q') ?? undefined;
-  // v1.11.5: DoS cap on q-param length. 1024 covers real multi-clause queries
-  // (pasted error messages, multi-stem searches) while bounding BM25
-  // tokenisation cost (~150 tokens worst case at 1024 chars).
-  if (q !== undefined && q.length > 1024) {
-    throw new HttpError(400, 'q exceeds 1024-character cap');
-  }
-  const budgetRaw = query.get('budget');
-  let budget: number | undefined;
-  if (budgetRaw !== null) {
-    budget = Number(budgetRaw);
-    if (!Number.isFinite(budget) || budget < 0) {
-      throw new HttpError(400, 'budget must be a non-negative number');
-    }
-  }
-  const limitRaw = query.get('limit');
-  let limit: number | undefined;
-  if (limitRaw !== null) {
-    limit = Number(limitRaw);
-    if (!Number.isFinite(limit) || limit <= 0) {
-      throw new HttpError(400, 'limit must be a positive number');
-    }
-  }
-  const pinnedOnlyRaw = query.get('pinned_only');
-  const pinnedOnly = pinnedOnlyRaw === '1' || pinnedOnlyRaw === 'true';
-  const scopeRaw = query.get('scope');
-  if (scopeRaw !== null && scopeRaw.length > 256) {
-    throw new HttpError(400, 'scope exceeds 256-character cap');
-  }
-  const scope = scopeRaw === null ? undefined : scopeRaw;
-  const includeRecentRaw = query.get('include_recent');
-  let includeRecent: number | undefined;
-  if (includeRecentRaw !== null) {
-    includeRecent = Number(includeRecentRaw);
-    if (!Number.isFinite(includeRecent) || includeRecent < 0) {
-      throw new HttpError(400, 'include_recent must be a non-negative number');
-    }
-  }
-  // v39 memory scope isolation: cross_project=1|true re-includes
-  // other-project rows (tagged category 'cross-project' in the response).
-  // The partition identity comes from the SERVED STORE's location, not the
-  // daemon's process cwd - a daemon started from anywhere still isolates
-  // the project it serves.
-  const crossProjectRaw = query.get('cross_project');
-  const crossProject = crossProjectRaw === '1' || crossProjectRaw === 'true';
+  const parsed = parseContextRequest(httpParams(query));
   const ctx = await buildContextWithAuth(req, opts);
   const result = await getContext(ctx, {
-    q,
-    budget,
-    limit,
-    pinnedOnly,
-    scope,
-    includeRecent,
-    crossProject,
-    currentProject: resolveProjectIdentity(dirname(resolve(opts.hippoRoot))).name,
+    ...parsed,
+    currentProject: contextReader(opts.hippoRoot, query),
     cost: contextCost('markdown', 'observe'), // clients render; the budget prices the block `hippo context` would print
   });
-  recordTokens(ctx, 'http_context', { items: result.entries.length, tokens: result.tokens });
+  await recordTokens(ctx, 'http_context', { items: result.entries.length, tokens: result.tokens });
   sendJson(res, 200, result);
   return;
 }

@@ -13,9 +13,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import {
   transferScore,
-  shareMemory,
   listPeers,
-  autoShare,
 } from '../src/shared.js';
 
 let localDir: string;

@@ -118,7 +118,7 @@ describe('SQL ambient tallies match the JS tallies over the same rows', () => {
       closeHippoDb(db);
     }
 
-    const sql = loadAmbientTallies(store, 'default', { currentProject: '', now: NOW });
+    const sql = loadAmbientTallies(store, 'default', { currentProject: [], now: NOW });
     const js = tallyAmbientEntries(loadAllEntries(store).filter((e) => !e.superseded_by), NOW);
 
     expect({ ...sql, strengthSum: 0 }).toEqual({ ...js, strengthSum: 0 });

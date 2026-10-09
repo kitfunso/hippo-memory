@@ -1,5 +1,5 @@
 /**
- * E2 process first-class object (docs/plans/2026-05-29-e2-process-object.md).
+ * Process first-class object.
  *
  * A `process` is a "living process map": a named, ordered list of steps that
  * evolves over time. Unlike `incident` (open->resolved->closed, no supersede),
@@ -31,14 +31,13 @@
  * them back. Pattern matches saveDecision (decisions.ts).
  */
 
-import { BadRequestError, ConflictError, NotFoundError } from './api-errors.js';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
-import { writeEntry } from './store/entry-writes.js';
+import { BadRequestError } from './api-errors.js';
+import { onHandle } from './store/open.js';
 import { assertTenantId } from './tenant.js';
-import { createMemory, Layer } from './memory.js';
-import { appendAuditEvent } from './audit.js';
-import { objectHalfLifeDays } from './half-life-migration.js';
-import { keysetAfter, type KeysetPosition } from './keyset.js';
+import type { KeysetPosition } from './keyset.js';
+import { type JsonValue, isJsonString } from './json.js';
+import type { SavableDescriptor } from './objects/descriptor.js';
+import { assertObjectStatus, closeObjectOn, loadObjectByIdOn, loadObjectsOn, saveObject } from './objects/lifecycle.js';
 
 // ---------------------------------------------------------------------------
 // Domain types
@@ -51,14 +50,6 @@ export const VALID_PROCESS_STATES: ReadonlySet<ProcessStatus> = new Set<ProcessS
   'superseded',
   'closed',
 ]);
-
-/** Arbitrary JSON-shaped value; the domain type for untrusted input at the
- *  steps I/O boundary (validateProcessSteps parses this into string[]). */
-type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
-
-function isString(v: JsonValue): v is string {
-  return typeof v === 'string';
-}
 
 /** DoS / abuse caps on the steps body (untrusted at the HTTP/SDK boundary). */
 export const MAX_PROCESS_STEPS = 200;
@@ -127,7 +118,7 @@ export function validateProcessSteps(steps: JsonValue): string[] {
   const out: string[] = [];
   for (let i = 0; i < steps.length; i++) {
     const raw = steps[i];
-    if (!isString(raw)) {
+    if (!isJsonString(raw)) {
       throw new BadRequestError(`saveProcess: step ${i + 1} is not a string`);
     }
     const trimmed = raw.trim();
@@ -168,7 +159,7 @@ interface ProcessRow {
 function parseSteps(raw: string): string[] {
   try {
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.every(isString)) {
+    if (Array.isArray(parsed) && parsed.every(isJsonString)) {
       return parsed;
     }
     return [];
@@ -213,126 +204,41 @@ function buildProcessContent(processName: string, steps: string[], description?:
   return content;
 }
 
+/** What one process write stores, resolved before the write. */
+interface ProcessFields {
+  readonly processName: string;
+  readonly description: string | undefined;
+  readonly steps: readonly string[];
+}
+
+// No graphType: the graph does not extract processes, so a save or close leaves it alone.
+const PROCESS: SavableDescriptor<Process, ProcessRow, never, ProcessFields> = {
+  table: 'processes',
+  cols: PROCESS_COLS,
+  label: 'process',
+  plural: 'processes',
+  fn: { get: 'loadProcessById', close: 'closeProcess', list: 'loadProcesses', save: 'saveProcess' },
+  states: VALID_PROCESS_STATES,
+  closableFrom: ['active'],
+  ops: { close: 'process_close', create: 'process_create', supersede: 'process_supersede' },
+  idKey: 'process_id',
+  listFilters: {},
+  rowTo: rowToProcess,
+  source: 'process',
+  versioned: true,
+  columns: ['process_name', 'description', 'steps'],
+  values: (w) => [w.processName, w.description ?? null, JSON.stringify(w.steps)],
+  // Ids and counts only, never the name or the step text.
+  createMeta: (w, version) => ({
+    version,
+    step_count: w.steps.length,
+    has_description: w.description !== undefined && w.description !== null && w.description !== '',
+  }),
+};
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-
-/** Everything the afterWrite SAVEPOINT needs, resolved before the write opens. */
-interface ProcessWrite {
-  tenantId: string;
-  actor: string;
-  processName: string;
-  description: string | undefined;
-  steps: string[];
-  changeSummary: string | null;
-  supersedesId: number | undefined;
-  now: string;
-}
-
-// Preflight the supersede target BEFORE inserting the new row. The new
-// row's autoincrement id could otherwise collide with a non-existent
-// supersedesProcessId (e.g. superseding id 1 on an empty store), making
-// the row supersede itself. Validating first means the new row is never a
-// candidate for its own supersede UPDATE. Mirrors saveDecision (codex P1
-// 2026-05-28). The same SELECT reads the predecessor version so the
-// successor's version is server-derived, never client-supplied.
-function preflightProcessSupersede(db: DatabaseSyncLike, tenantId: string, supersedesId: number): number {
-  // SAFETY: SELECT status, version FROM processes; row shape matches
-  // the two selected columns 1:1.
-  const pred = db.prepare(
-    `SELECT status, version FROM processes WHERE id = ? AND tenant_id = ?`,
-  ).get(supersedesId, tenantId) as
-    | { status: string; version: number }
-    | undefined;
-  if (!pred) {
-    throw new NotFoundError(
-      `saveProcess: process ${supersedesId} to supersede not found for tenant ${tenantId}`,
-    );
-  }
-  if (pred.status !== 'active') {
-    throw new ConflictError(
-      `saveProcess: process ${supersedesId} is not active (status='${pred.status}'); only active processes can be superseded.`,
-    );
-  }
-  return pred.version + 1;
-}
-
-function insertProcessRow(db: DatabaseSyncLike, memoryId: string, w: ProcessWrite, version: number): number {
-  const result = db.prepare(`
-    INSERT INTO processes(
-      memory_id, tenant_id, process_name, description, steps, version,
-      status, superseded_by, superseded_at, change_summary, closed_at, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, 'active', NULL, NULL, ?, NULL, ?)
-  `).run(
-    memoryId,
-    w.tenantId,
-    w.processName,
-    w.description ?? null,
-    JSON.stringify(w.steps),
-    version,
-    w.changeSummary,
-    w.now,
-  );
-  return Number(result.lastInsertRowid ?? 0);
-}
-
-function supersedeProcessRow(
-  db: DatabaseSyncLike,
-  w: ProcessWrite,
-  supersedesId: number,
-  processId: number,
-  version: number,
-): void {
-  const sup = db.prepare(`
-    UPDATE processes
-    SET status = 'superseded', superseded_by = ?, superseded_at = ?
-    WHERE id = ? AND tenant_id = ? AND status = 'active' AND id != ?
-  `).run(processId, w.now, supersedesId, w.tenantId, processId);
-  if (sup.changes === 0) {
-    throw new ConflictError(
-      `saveProcess: process ${supersedesId} could not be superseded (no longer active or self-reference).`,
-    );
-  }
-  appendAuditEvent(db, {
-    tenantId: w.tenantId,
-    actor: w.actor,
-    op: 'process_supersede',
-    targetId: String(supersedesId),
-    metadata: {
-      process_id: supersedesId,
-      superseded_by: processId,
-      new_version: version,
-    },
-  });
-}
-
-/** The afterWrite body: preflight, INSERT, supersede, reload, create audit, all in one SAVEPOINT. */
-function writeProcessRow(db: DatabaseSyncLike, memoryId: string, w: ProcessWrite): ProcessRow {
-  const version = w.supersedesId !== undefined ? preflightProcessSupersede(db, w.tenantId, w.supersedesId) : 1;
-  const processId = insertProcessRow(db, memoryId, w, version);
-  if (w.supersedesId !== undefined) supersedeProcessRow(db, w, w.supersedesId, processId, version);
-
-  // SAFETY: SELECT ${PROCESS_COLS} enumerates every ProcessRow field
-  // 1:1 (see PROCESS_COLS above).
-  const row = db.prepare(`SELECT ${PROCESS_COLS} FROM processes WHERE id = ?`)
-    .get(processId) as ProcessRow | undefined;
-  if (!row) throw new Error('saveProcess: failed to reload saved process row');
-
-  // GDPR-light metadata: ids + counts only, no process_name / step text.
-  appendAuditEvent(db, {
-    tenantId: w.tenantId,
-    actor: w.actor,
-    op: 'process_create',
-    targetId: String(processId),
-    metadata: {
-      process_id: processId,
-      version,
-      step_count: w.steps.length,
-      has_description: w.description !== undefined && w.description !== null && w.description !== '',
-    },
-  });
-  return row;
-}
 
 /**
  * Create a process (or a new version that supersedes an existing one). Writes
@@ -350,56 +256,26 @@ export function saveProcess(
   opts: SaveProcessOpts,
   actor: string = 'cli',
 ): Process {
-  assertTenantId('saveProcess', tenantId);
+  assertTenantId(PROCESS.fn.save, tenantId);
+  // The name is stored as written, so only a blank one is refused.
   if (!opts.processName || opts.processName.trim().length === 0) {
     throw new BadRequestError('saveProcess: processName is required');
   }
   const steps = validateProcessSteps(opts.steps);
-  const isSupersede = opts.supersedesProcessId !== undefined;
-  // change_summary is only meaningful on a supersession; NULL on a fresh create.
-  const changeSummary = isSupersede ? (opts.changeSummary ?? null) : null;
-
-  const now = new Date().toISOString();
-  const content = buildProcessContent(opts.processName, steps, opts.description);
-  const tags = ['process', ...(opts.extraTags ?? [])];
-  const mem = createMemory(content, {
-    tags,
-    layer: Layer.Semantic,
-    confidence: 'verified',
-    source: 'process',
-    baseHalfLifeDays: objectHalfLifeDays(hippoRoot),
-    tenantId,
-  });
-  const w: ProcessWrite = {
-    tenantId,
+  return saveObject(hippoRoot, PROCESS, tenantId, {
     actor,
-    processName: opts.processName,
-    description: opts.description,
-    steps,
-    changeSummary,
+    now: new Date().toISOString(),
+    fields: { processName: opts.processName, description: opts.description, steps },
+    content: buildProcessContent(opts.processName, steps, opts.description),
+    tags: opts.extraTags ?? [],
     supersedesId: opts.supersedesProcessId,
-    now,
-  };
-
-  let savedRow: ProcessRow | undefined;
-
-  writeEntry(hippoRoot, mem, {
-    actor,
-    afterWrite: (db, memoryId) => {
-      savedRow = writeProcessRow(db, memoryId, w);
-    },
+    changeSummary: opts.changeSummary,
   });
-
-  if (!savedRow) {
-    throw new Error('saveProcess: afterWrite did not populate the row');
-  }
-  return rowToProcess(savedRow);
 }
 
 /**
  * Close (retire) an active process with no successor. Updates the processes row
- * only; the memory mirror is not mutated. CAS guard: WHERE status='active'; 0
- * changes distinguishes not-found from not-active. A superseded row is already
+ * only; the memory mirror is not mutated. A superseded row is already
  * terminal in the chain and cannot be closed.
  */
 export function closeProcess(
@@ -408,59 +284,9 @@ export function closeProcess(
   id: number,
   actor: string = 'cli',
 ): Process {
-  assertTenantId('closeProcess', tenantId);
+  assertTenantId(PROCESS.fn.close, tenantId);
   const now = new Date().toISOString();
-  const db = openHippoDb(hippoRoot);
-  try {
-    db.exec('BEGIN IMMEDIATE');
-    try {
-      const updateResult = db.prepare(`
-        UPDATE processes
-        SET status = 'closed', closed_at = ?
-        WHERE id = ? AND tenant_id = ? AND status = 'active'
-      `).run(now, id, tenantId);
-
-      if (updateResult.changes === 0) {
-        // SAFETY: SELECT status FROM processes; row shape matches the
-        // single selected column.
-        const existing = db.prepare(
-          `SELECT status FROM processes WHERE id = ? AND tenant_id = ?`,
-        ).get(id, tenantId) as { status: string } | undefined;
-        if (!existing) {
-          throw new NotFoundError(`closeProcess: process ${id} not found for tenant ${tenantId}`);
-        }
-        throw new ConflictError(
-          `closeProcess: process ${id} is not active (status='${existing.status}'); only active processes can be closed.`,
-        );
-      }
-
-      // SAFETY: SELECT ${PROCESS_COLS} enumerates every ProcessRow field
-      // 1:1 (see PROCESS_COLS above).
-      const row = db.prepare(`SELECT ${PROCESS_COLS} FROM processes WHERE id = ? AND tenant_id = ?`)
-        .get(id, tenantId) as ProcessRow | undefined;
-      if (!row) throw new NotFoundError(`closeProcess: process ${id} not found after UPDATE`);
-
-      appendAuditEvent(db, {
-        tenantId,
-        actor,
-        op: 'process_close',
-        targetId: String(id),
-        metadata: { process_id: id },
-      });
-
-      db.exec('COMMIT');
-      return rowToProcess(row);
-    } catch (e) {
-      try {
-        db.exec('ROLLBACK');
-      } catch {
-        // Ignore rollback failures — the throw below is what matters.
-      }
-      throw e;
-    }
-  } finally {
-    closeHippoDb(db);
-  }
+  return onHandle(hippoRoot, (db) => closeObjectOn(db, PROCESS, tenantId, id, { actor, now }));
 }
 
 export function loadProcessById(
@@ -468,17 +294,8 @@ export function loadProcessById(
   tenantId: string,
   id: number,
 ): Process | null {
-  assertTenantId('loadProcessById', tenantId);
-  const db = openHippoDb(hippoRoot);
-  try {
-    // SAFETY: SELECT ${PROCESS_COLS} enumerates every ProcessRow field 1:1
-    // (see PROCESS_COLS above).
-    const row = db.prepare(`SELECT ${PROCESS_COLS} FROM processes WHERE id = ? AND tenant_id = ?`)
-      .get(id, tenantId) as ProcessRow | undefined;
-    return row ? rowToProcess(row) : null;
-  } finally {
-    closeHippoDb(db);
-  }
+  assertTenantId(PROCESS.fn.get, tenantId);
+  return onHandle(hippoRoot, (db) => loadObjectByIdOn(db, PROCESS, tenantId, id));
 }
 
 export function loadProcesses(
@@ -486,40 +303,9 @@ export function loadProcesses(
   tenantId: string,
   opts: ListProcessesOpts = {},
 ): Process[] {
-  assertTenantId('loadProcesses', tenantId);
-  const limit = opts.limit ?? 100;
-  const after = keysetAfter('created_at', 'id', opts.after);
-  const db = openHippoDb(hippoRoot);
-  try {
-    let rows: ProcessRow[];
-    if (opts.status) {
-      if (!VALID_PROCESS_STATES.has(opts.status)) {
-        throw new BadRequestError(
-          `loadProcesses: status must be one of ${Array.from(VALID_PROCESS_STATES).join('|')}; got ${opts.status}`,
-        );
-      }
-      // SAFETY: SELECT ${PROCESS_COLS} enumerates every ProcessRow field
-      // 1:1 (see PROCESS_COLS above).
-      rows = db.prepare(`
-        SELECT ${PROCESS_COLS} FROM processes
-        WHERE tenant_id = ? AND status = ?${after.sql}
-        ORDER BY created_at DESC, id DESC
-        LIMIT ?
-      `).all(tenantId, opts.status, ...after.params, limit) as ProcessRow[];
-    } else {
-      // SAFETY: SELECT ${PROCESS_COLS} enumerates every ProcessRow field
-      // 1:1 (see PROCESS_COLS above).
-      rows = db.prepare(`
-        SELECT ${PROCESS_COLS} FROM processes
-        WHERE tenant_id = ?${after.sql}
-        ORDER BY created_at DESC, id DESC
-        LIMIT ?
-      `).all(tenantId, ...after.params, limit) as ProcessRow[];
-    }
-    return rows.map(rowToProcess);
-  } finally {
-    closeHippoDb(db);
-  }
+  assertTenantId(PROCESS.fn.list, tenantId);
+  assertObjectStatus(PROCESS, opts.status);
+  return onHandle(hippoRoot, (db) => loadObjectsOn(db, PROCESS, tenantId, opts));
 }
 
 export function loadActiveProcesses(

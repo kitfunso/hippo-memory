@@ -42,7 +42,9 @@ import { repairCodexWrapperIfInstalled } from './hooks/codex-wrapper.js';
 import { getHippoRoot } from './store/open.js';
 import { cmdGithub, printGithubBackfillUsage } from './connectors/github/cli-impl.js';
 import { printError } from './cli/output.js';
-import type { CommandContext } from './cli/shared.js';
+import { errorFields, errorMessage, isLevelEnabled, log } from './log.js';
+import { isStoreBusy, STORE_BUSY_MESSAGE } from './db/busy.js';
+import { type CliFlags, type CommandContext, boolFlag, flagIsTrue } from './cli/shared.js';
 import { VERB_USAGE, USAGE_HEADER, USAGE_EXAMPLES, printAuditPruneUsage, printSlackBackfillUsage, printSlackWorkspacesUsage } from './cli/usage.js';
 
 // ---------------------------------------------------------------------------
@@ -60,7 +62,7 @@ export const BOOLEAN_FLAGS: ReadonlySet<string> = new Set([
   'no-learn', 'no-mmr', 'no-propagate', 'no-schedule', 'no-share', 'no-summarize-older',
   'observed', 'open', 'physics', 'pin', 'pinned-only', 'reject-loser', 'rerank-utility',
   'reset-physics', 'save-baseline', 'show-cases', 'stats', 'stdin',
-  'strict', 'suite', 'value-aware', 'verified', 'version', 'why',
+  'strict', 'suite', 'turn', 'value-aware', 'verified', 'version', 'why',
 ]);
 
 // Every flag some command reads. Anything else is a typo that no command would act on.
@@ -78,7 +80,7 @@ export const KNOWN_FLAGS: ReadonlySet<string> = new Set([
   'role', 'run', 'runtime', 'salience-threshold', 'scan', 'scope', 'session', 'session-id', 'since',
   'source', 'start-offset', 'started-at', 'state', 'status', 'step', 'steps', 'success', 'summary',
   'supersedes', 'tag', 'target', 'target-runtime', 'task', 'team', 'tenant', 'tenant-id', 'tests',
-  'text', 'threshold', 'title', 'to', 'transcript', 'trigger', 'type', 'unit', 'value', 'vault',
+  'text', 'threshold', 'title', 'tls-cert', 'tls-key', 'to', 'transcript', 'trigger', 'type', 'unit', 'value', 'vault',
 ]);
 
 // Commands that delete or hide memories: an unknown flag here stops the run instead of being ignored.
@@ -92,10 +94,10 @@ const DRY_RUN_COMMANDS: ReadonlySet<string> = new Set([
 ]);
 
 // share and brief honour --dry-run in one form only; their other forms write for real.
-function dryRunRefusal(command: string, args: string[], flags: Record<string, string | boolean | string[]>): string | null {
+function dryRunRefusal(command: string, args: string[], flags: CliFlags): string | null {
   const isBrief = command === 'brief' || command === 'project-brief';
   const onlyForm = command === 'share' ? 'share --auto' : isBrief ? `${command} refresh` : null;
-  const honoured = command === 'share' ? args[0] === '--auto' || Boolean(flags['auto'])
+  const honoured = command === 'share' ? args[0] === '--auto' || boolFlag(flags, 'auto')
     : isBrief ? args[0] === 'refresh' : DRY_RUN_COMMANDS.has(command);
   if (honoured) return null;
   const where = onlyForm ? ` outside \`hippo ${onlyForm}\`` : '';
@@ -107,7 +109,7 @@ function isRepeatableFlag(key: string): boolean {
   return key === 'tag' || key === 'artifact' || key === 'link' || key === 'step' || key === 'constraint' || key === 'depends-on';
 }
 
-function pushRepeatableFlag(flags: Record<string, string | boolean | string[]>, key: string, value: string): void {
+function pushRepeatableFlag(flags: CliFlags, key: string, value: string): void {
   if (Array.isArray(flags[key])) {
     // SAFETY: Array.isArray just confirmed flags[key] is an array; the union has no other array member.
     (flags[key] as string[]).push(value);
@@ -116,10 +118,39 @@ function pushRepeatableFlag(flags: Record<string, string | boolean | string[]>, 
   }
 }
 
-export function parseArgs(argv: string[]): { command: string; args: string[]; flags: Record<string, string | boolean | string[]> } {
+function setGluedFlag(flags: CliFlags, key: string, value: string): void {
+  // Glued form has no following token to swallow, so BOOLEAN_FLAGS gets its
+  // own branch here instead of the swallow-avoidance short-circuit in setSeparatedFlag.
+  if (BOOLEAN_FLAGS.has(key)) {
+    flags[key] = value;
+  } else if (isRepeatableFlag(key)) {
+    if (value !== '') pushRepeatableFlag(flags, key, value);
+  } else {
+    flags[key] = value === '' ? true : value;
+  }
+}
+
+/** Returns how many tokens the flag consumed: its own, plus `next` when that is its value. */
+function setSeparatedFlag(flags: CliFlags, key: string, next: string | undefined): number {
+  if (BOOLEAN_FLAGS.has(key) && (next === 'true' || next === 'false')) {
+    // Kept as a value so main() rejects it, instead of `--pin true` pinning the text "... true".
+    flags[key] = next;
+    return 2;
+  }
+  if (!next || next.startsWith('--') || BOOLEAN_FLAGS.has(key)) {
+    // Boolean flag
+    flags[key] = true;
+    return 1;
+  }
+  if (isRepeatableFlag(key)) pushRepeatableFlag(flags, key, next);
+  else flags[key] = next;
+  return 2;
+}
+
+export function parseArgs(argv: string[]): { command: string; args: string[]; flags: CliFlags } {
   const [, , command = '', ...rest] = argv;
   const args: string[] = [];
-  const flags: Record<string, string | boolean | string[]> = {};
+  const flags: CliFlags = {};
 
   let i = 0;
   while (i < rest.length) {
@@ -131,38 +162,10 @@ export function parseArgs(argv: string[]): { command: string; args: string[]; fl
     if (part.startsWith('--')) {
       const eqIdx = part.indexOf('=');
       if (eqIdx > 2) {
-        // Glued form has no following token to swallow, so BOOLEAN_FLAGS gets its
-        // own branch here instead of the swallow-avoidance short-circuit below.
-        const key = part.slice(2, eqIdx);
-        const value = part.slice(eqIdx + 1);
-        if (BOOLEAN_FLAGS.has(key)) {
-          flags[key] = value;
-        } else if (isRepeatableFlag(key)) {
-          if (value !== '') pushRepeatableFlag(flags, key, value);
-        } else {
-          flags[key] = value === '' ? true : value;
-        }
+        setGluedFlag(flags, part.slice(2, eqIdx), part.slice(eqIdx + 1));
         i++;
-        continue;
-      }
-
-      const key = part.slice(2);
-      const next = rest[i + 1];
-
-      if (BOOLEAN_FLAGS.has(key) && (next === 'true' || next === 'false')) {
-        // Kept as a value so main() rejects it, instead of `--pin true` pinning the text "... true".
-        flags[key] = next;
-        i += 2;
-      } else if (!next || next.startsWith('--') || BOOLEAN_FLAGS.has(key)) {
-        // Boolean flag
-        flags[key] = true;
-        i++;
-      } else if (isRepeatableFlag(key)) {
-        pushRepeatableFlag(flags, key, next);
-        i += 2;
       } else {
-        flags[key] = next;
-        i += 2;
+        i += setSeparatedFlag(flags, part.slice(2), rest[i + 1]);
       }
     } else if (part === '-h') {
       // Running a verb when help was asked costs more than losing a literal -h; `-- -h` still passes one.
@@ -177,12 +180,12 @@ export function parseArgs(argv: string[]): { command: string; args: string[]; fl
   return { command, args, flags };
 }
 
-export function shouldAutoRepairCodexWrapper(currentCommand: string, flags: Record<string, string | boolean | string[]>): boolean {
+export function shouldAutoRepairCodexWrapper(currentCommand: string, flags: CliFlags): boolean {
   if (envSkipAutoIntegrations()) return false;
   if (!['context', 'remember', 'recall', 'sleep', 'capture', 'outcome', 'status', 'init'].includes(currentCommand)) {
     return false;
   }
-  if (currentCommand === 'init' && flags['no-hooks'] === true) return false;
+  if (currentCommand === 'init' && flagIsTrue(flags, 'no-hooks')) return false;
   return true;
 }
 
@@ -190,19 +193,21 @@ export function shouldAutoRepairCodexWrapper(currentCommand: string, flags: Reco
 // hook install codex` (a Codex update can restore the real binary over our
 // shim). Never first-installs — silently swapping the codex binary on routine
 // commands is a consent violation and reads as binary hijacking to
-// supply-chain scanners (issue #133).
-function maybeRepairCodexWrapper(currentCommand: string, flags: Record<string, string | boolean | string[]>): void {
+// supply-chain scanners.
+function maybeRepairCodexWrapper(currentCommand: string, flags: CliFlags): void {
   if (!shouldAutoRepairCodexWrapper(currentCommand, flags)) return;
   try {
     repairCodexWrapperIfInstalled();
-  } catch {
-    // best-effort only
+  } catch (err) {
+    log.debug(`codex wrapper not repaired: ${errorMessage(err)}`);
   }
 }
 
 interface CommandSpec {
   readonly run: (ctx: CommandContext) => void | Promise<void>;
   readonly aliases?: readonly string[];
+  /** Runs in a request scope, opening each store once; set on api-backed verbs, as hook verbs open their own. */
+  readonly scoped?: true;
   // Each block opens with a newline so the full listing is their concatenation.
   readonly usage: readonly string[];
 }
@@ -219,14 +224,17 @@ export const COMMANDS = {
   },
   recall: {
     run: async (c) => { await (await import('./cli/recall.js')).handleRecall(c); },
+    scoped: true,
     usage: VERB_USAGE.recall,
   },
   drill: {
     run: async (c) => { await (await import('./cli/dag.js')).handleDrill(c); },
+    scoped: true,
     usage: VERB_USAGE.drill,
   },
   assemble: {
     run: async (c) => { await (await import('./cli/dag.js')).handleAssemble(c); },
+    scoped: true,
     usage: VERB_USAGE.assemble,
   },
   supersede: {
@@ -235,6 +243,7 @@ export const COMMANDS = {
   },
   explain: {
     run: async (c) => { await (await import('./cli/explain.js')).handleExplain(c); },
+    scoped: true,
     usage: VERB_USAGE.explain,
   },
   eval: {
@@ -251,10 +260,11 @@ export const COMMANDS = {
   },
   sleep: {
     run: async ({ hippoRoot, flags }) => { await (await import('./cli/sleep.js')).cmdSleep(hippoRoot, flags); },
+    scoped: true,
     usage: VERB_USAGE.sleep,
   },
   'last-sleep': {
-    run: async ({ flags }) => { (await import('./cli/session-hooks.js')).cmdLastSleep(flags); },
+    run: async ({ hippoRoot, flags }) => { (await import('./cli/last-sleep.js')).cmdLastSleep(hippoRoot, flags); },
     usage: VERB_USAGE['last-sleep'],
   },
   'session-end': {
@@ -299,10 +309,12 @@ export const COMMANDS = {
   },
   auth: {
     run: async ({ hippoRoot, args, flags }) => { (await import('./cli/auth.js')).cmdAuth(hippoRoot, args, flags); },
+    scoped: true,
     usage: VERB_USAGE.auth,
   },
   goal: {
     run: async ({ hippoRoot, args, flags }) => { (await import('./cli/goals.js')).cmdGoal(hippoRoot, args, flags); },
+    scoped: true,
     usage: VERB_USAGE.goal,
   },
   slack: {
@@ -315,6 +327,7 @@ export const COMMANDS = {
   },
   audit: {
     run: async (c) => { await (await import('./cli/audit.js')).handleAudit(c); },
+    scoped: true,
     usage: VERB_USAGE.audit,
   },
   'correction-latency': {
@@ -331,6 +344,7 @@ export const COMMANDS = {
   },
   outcome: {
     run: async ({ hippoRoot, flags }) => { (await import('./cli/curate.js')).cmdOutcome(hippoRoot, flags); },
+    scoped: true,
     usage: VERB_USAGE.outcome,
   },
   conflicts: {
@@ -355,6 +369,7 @@ export const COMMANDS = {
   },
   dormant: {
     run: async ({ hippoRoot, args, flags }) => { (await import('./cli/curate.js')).cmdDormant(hippoRoot, args, flags); },
+    scoped: true,
     usage: VERB_USAGE.dormant,
   },
   projects: {
@@ -362,15 +377,18 @@ export const COMMANDS = {
     usage: VERB_USAGE.projects,
   },
   quarantine: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/curate.js')).cmdQuarantine(hippoRoot, args, flags); },
+    run: async ({ hippoRoot, args, flags }) => { await (await import('./cli/curate.js')).cmdQuarantine(hippoRoot, args, flags); },
+    scoped: true,
     usage: VERB_USAGE.quarantine,
   },
   tokens: {
     run: async ({ hippoRoot, flags }) => { (await import('./cli/status.js')).cmdTokens(hippoRoot, flags); },
+    scoped: true,
     usage: VERB_USAGE.tokens,
   },
   failures: {
     run: async ({ hippoRoot, flags }) => { (await import('./cli/status.js')).cmdFailures(hippoRoot, flags); },
+    scoped: true,
     usage: VERB_USAGE.failures,
   },
   doctor: {
@@ -407,6 +425,7 @@ export const COMMANDS = {
   },
   forget: {
     run: async (c) => { await (await import('./cli/curate.js')).handleForget(c); },
+    scoped: true,
     usage: VERB_USAGE.forget,
   },
   inspect: {
@@ -418,7 +437,7 @@ export const COMMANDS = {
     usage: VERB_USAGE.context,
   },
   hook: {
-    run: async ({ args, flags }) => { (await import('./cli/setup.js')).cmdHook(args, flags); },
+    run: async ({ args }) => { (await import('./cli/setup.js')).cmdHook(args); },
     usage: VERB_USAGE.hook,
   },
   setup: {
@@ -439,10 +458,12 @@ export const COMMANDS = {
   },
   learn: {
     run: async ({ hippoRoot, flags }) => { (await import('./cli/transfer.js')).cmdLearn(hippoRoot, flags); },
+    scoped: true,
     usage: VERB_USAGE.learn,
   },
   promote: {
     run: async (c) => { await (await import('./cli/transfer.js')).handlePromote(c); },
+    scoped: true,
     usage: VERB_USAGE.promote,
   },
   sync: {
@@ -581,20 +602,72 @@ function printHelp(command: string, args: string[]): void {
 // Entry point
 // ---------------------------------------------------------------------------
 
+function printVersion(): never {
+  const __filename_local = fileURLToPath(import.meta.url);
+  const __dirname_local = path.dirname(__filename_local);
+  const pkgJson = fs.readFileSync(path.join(__dirname_local, '..', 'package.json'), 'utf-8');
+  const { version } = JSON.parse(pkgJson) as { version: string };
+  console.log(version);
+  process.exit(0);
+}
+
+/** A value-less --scope parses as boolean true, which consumers coerced to the scope 'true' or dropped;
+ *  reject it once here so every command, thin-client relays included, sees only a non-empty string. */
+function rejectEmptyScope(flags: CliFlags): void {
+  if ('scope' in flags && (typeof flags['scope'] !== 'string' || !flags['scope'].trim())) {
+    printError('--scope requires a non-empty value (e.g. --scope slack:private:C1).');
+    process.exit(1);
+  }
+}
+
+// parseArgs stores a value-less flag as boolean true, and NaN then survives every
+// downstream guard because each comparison against it is false.
+const NUMERIC_FLAGS = [
+  'days', 'threshold', 'min-score', 'port', 'limit', 'mmr-lambda', 'local-bump',
+  'min-results', 'reranker-top-k', 'min-mrr', 'embedding-weight', 'max-cases',
+];
+
+function rejectNonNumericFlags(flags: CliFlags): void {
+  for (const key of NUMERIC_FLAGS) {
+    const raw = flags[key];
+    if (raw === undefined) continue;
+    if (typeof raw !== 'string' || !raw.trim() || !Number.isFinite(Number(raw))) {
+      printError(`--${key} requires a numeric value.`);
+      process.exit(1);
+    }
+  }
+}
+
+// Reject rather than coerce: consumers read --dry-run both as Boolean() and === true,
+// so no single coercion of an inline value would be correct for every one of them.
+function rejectValuedSwitches(flags: CliFlags): void {
+  for (const key of BOOLEAN_FLAGS) {
+    if (Object.hasOwn(flags, key) && typeof flags[key] !== 'boolean') {
+      printError(`--${key} takes no value`);
+      process.exit(1);
+    }
+  }
+}
+
+function checkUnknownFlags(command: string, flags: CliFlags): void {
+  // card checks its flags per subcommand, with a stricter message.
+  const unknownFlags = command === 'card' ? [] : Object.keys(flags).filter((key) => !KNOWN_FLAGS.has(key));
+  if (unknownFlags.length === 0) return;
+  const names = unknownFlags.map((key) => `--${key}`).join(', ');
+  if (DESTRUCTIVE_COMMANDS.has(command)) {
+    printError(`Unknown flag ${names} for hippo ${command}. Nothing was changed.`);
+    process.exit(2);
+  }
+  printError(`hippo: ignoring unknown flag ${names}. A later release will reject it.`);
+}
+
 async function main(
   command: string,
   args: string[],
-  flags: Record<string, string | boolean | string[]>,
+  flags: CliFlags,
   hippoRoot: string,
 ): Promise<void> {
-  if (command === '--version' || command === '-v' || flags['version']) {
-    const __filename_local = fileURLToPath(import.meta.url);
-    const __dirname_local = path.dirname(__filename_local);
-    const pkgJson = fs.readFileSync(path.join(__dirname_local, '..', 'package.json'), 'utf-8');
-    const { version } = JSON.parse(pkgJson) as { version: string };
-    console.log(version);
-    process.exit(0);
-  }
+  if (command === '--version' || command === '-v' || flags['version']) printVersion();
   if (command === '' || command === 'help' || command === '--help' || command === '-h') {
     printUsage();
     return;
@@ -605,49 +678,10 @@ async function main(
     return;
   }
   maybeRepairCodexWrapper(command, flags);
-  /** Global --scope well-formedness guard (v1.26.2). parseArgs stores a value-less
-   *  flag as boolean true; downstream the 14 consumer sites either coerced that to
-   *  the literal scope string 'true' (recall filter/unlock input, wm session scope,
-   *  the remember scope-tag dual-write) or silently dropped the user's scoping
-   *  intent (the remember envelope WRITE). Reject it once here, mirroring the
-   *  --hops value-less guard, so every current and future command - including the
-   *  thin-client dispatch relays - sees --scope only as a non-empty string. */
-  if ('scope' in flags && (typeof flags['scope'] !== 'string' || !flags['scope'].trim())) {
-    printError('--scope requires a non-empty value (e.g. --scope slack:private:C1).');
-    process.exit(1);
-  }
-  // parseArgs stores a value-less flag as boolean true, and NaN then survives every
-  // downstream guard because each comparison against it is false.
-  const NUMERIC_FLAGS = [
-    'days', 'threshold', 'min-score', 'port', 'limit', 'mmr-lambda', 'local-bump',
-    'min-results', 'reranker-top-k', 'min-mrr', 'embedding-weight', 'max-cases',
-  ];
-  for (const key of NUMERIC_FLAGS) {
-    const raw = flags[key];
-    if (raw === undefined) continue;
-    if (typeof raw !== 'string' || !raw.trim() || !Number.isFinite(Number(raw))) {
-      printError(`--${key} requires a numeric value.`);
-      process.exit(1);
-    }
-  }
-  // Reject rather than coerce: consumers read --dry-run both as Boolean() and === true,
-  // so no single coercion of an inline value would be correct for every one of them.
-  for (const key of BOOLEAN_FLAGS) {
-    if (Object.hasOwn(flags, key) && typeof flags[key] !== 'boolean') {
-      printError(`--${key} takes no value`);
-      process.exit(1);
-    }
-  }
-  // card checks its flags per subcommand, with a stricter message.
-  const unknownFlags = command === 'card' ? [] : Object.keys(flags).filter((key) => !KNOWN_FLAGS.has(key));
-  if (unknownFlags.length > 0) {
-    const names = unknownFlags.map((key) => `--${key}`).join(', ');
-    if (DESTRUCTIVE_COMMANDS.has(command)) {
-      printError(`Unknown flag ${names} for hippo ${command}. Nothing was changed.`);
-      process.exit(2);
-    }
-    printError(`hippo: ignoring unknown flag ${names}. A later release will reject it.`);
-  }
+  rejectEmptyScope(flags);
+  rejectNonNumericFlags(flags);
+  rejectValuedSwitches(flags);
+  checkUnknownFlags(command, flags);
   const refusal = Object.hasOwn(flags, 'dry-run') ? dryRunRefusal(command, args, flags) : null;
   if (refusal) {
     printError(refusal);
@@ -659,7 +693,8 @@ async function main(
     printUsage();
     process.exit(1);
   }
-  await spec.run({ hippoRoot, args, flags });
+  const run = (): void | Promise<void> => spec.run({ hippoRoot, args, flags });
+  await (spec.scoped ? (await import('./db/request-stores.js')).runWithRequestStores(run) : run());
 }
 
 export async function runCli(argv: string[] = process.argv): Promise<void> {
@@ -667,7 +702,12 @@ export async function runCli(argv: string[] = process.argv): Promise<void> {
   try {
     await main(command, args, flags, getHippoRoot(process.cwd()));
   } catch (err) {
-    printError('Error:', err instanceof Error ? err.message : err);
+    printError('Error:', isStoreBusy(err) ? STORE_BUSY_MESSAGE : err instanceof Error ? err.message : err);
+    // The message alone rarely says where it came from; debug is the level that asks for the rest.
+    if (isLevelEnabled('debug')) {
+      const { errorClass, stack } = errorFields(err);
+      printError(`  thrown as ${errorClass}${stack ? `\n${stack}` : ''}`);
+    }
     process.exit(1);
   }
 }

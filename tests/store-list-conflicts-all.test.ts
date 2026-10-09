@@ -26,7 +26,7 @@ afterEach(() => {
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
-describe("listMemoryConflicts '*' sentinel (v0.28)", () => {
+describe("listMemoryConflicts '*' sentinel", () => {
   it("returns only open conflicts when status='open' (legacy behaviour)", () => {
     initStore(tmpDir);
     const a = createMemory('alpha', { layer: Layer.Semantic });

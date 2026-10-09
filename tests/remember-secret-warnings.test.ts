@@ -6,7 +6,7 @@ import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { remember, type Context } from '../src/api.js';
+import { remember, type HippoDbContext } from '../src/api.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
 
@@ -16,7 +16,7 @@ const TYPED = `the ci token is ${GHP} for the nightly job`;
 const cli = path.resolve(__dirname, '..', 'dist', 'cli.js');
 
 let root: string;
-const ctx = (): Context => ({ hippoRoot: root, tenantId: 'default', actor: { subject: 'test', role: 'admin' } });
+const ctx = (): HippoDbContext => ({ hippoRoot: root, tenantId: 'default', actor: { subject: 'test', role: 'admin' } });
 
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-remember-warn-'));

@@ -6,6 +6,9 @@
  * markdown in `content`; `renderTraceContent` is the canonical formatter.
  */
 
+import { type JsonValue, isJsonString, isJsonObject } from './json.js';
+import { errorMessage } from './log.js';
+
 export interface TraceStep {
   action: string;
   observation: string;
@@ -43,17 +46,6 @@ export function renderTraceContent(rec: TraceRecord): string {
   return lines.join('\n');
 }
 
-/** JSON value shape for the parsed-but-unvalidated trace step payload. */
-type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
-
-function isJsonRecord(value: JsonValue): value is { [key: string]: JsonValue } {
-  return value !== null && !Array.isArray(value) && typeof value === 'object';
-}
-
-function isJsonString(value: JsonValue | undefined): value is string {
-  return typeof value === 'string';
-}
-
 /**
  * Parse a JSON string into an array of TraceStep. Throws on invalid shape.
  */
@@ -63,14 +55,14 @@ export function parseSteps(json: string): TraceStep[] {
     parsed = JSON.parse(json);
   } catch (err) {
     throw new Error(
-      `Invalid trace steps JSON: ${err instanceof Error ? err.message : String(err)}`
+      `Invalid trace steps JSON: ${errorMessage(err)}`
     );
   }
   if (!Array.isArray(parsed)) {
     throw new Error('trace steps must be an array');
   }
   return parsed.map((s: JsonValue, i) => {
-    if (!isJsonRecord(s)) {
+    if (!isJsonObject(s)) {
       throw new Error(`trace step ${i}: not an object`);
     }
     const action = s.action;

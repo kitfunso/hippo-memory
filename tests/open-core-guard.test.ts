@@ -37,6 +37,8 @@ describe('check-open-core', () => {
     expect(run()).toBe(1);
     commit('ui/app.ts', '// commercial\nexport {};\n', 'feat: ui');
     expect(run()).toBe(1);
+    commit('src/server/route.ts', "export const path = '/v1/hooks/prompt';\n", 'feat: hook route');
+    expect(run()).toBe(1);
     commit('src/processor.ts', 'export const processor = "session";\n', 'feat: core');
     expect(run()).toBe(0);
     commit('docs/sso.md', 'SSO is commercial.\n', 'docs: sso');

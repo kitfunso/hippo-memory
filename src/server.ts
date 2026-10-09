@@ -1,429 +1,88 @@
-import { envPort, envRequireAuth, envV1Rps } from './env.js';
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
-import { existsSync } from 'node:fs';
-import { detectServer, removePidfileIfOwned, writePidfile } from './server-detect.js';
-import { closeHippoDb, type DatabaseSyncLike, getHippoDbPath, isSqliteBusy, openHippoDb, SERVER_DB_WAIT_MS, withBusyWait } from './db.js';
-import { auditWriteFailureCount } from './audit.js';
-import { PACKAGE_VERSION } from './version.js';
-import { errorFields, log } from './log.js';
-import { createRateLimiter, type RateLimiter } from './rate-limit.js';
-import { type Actor, authRevoke, type Context, RecallContractError } from './api.js';
-import { handleSlackEventsWebhook } from './connectors/slack/webhook.js';
-import { handleGitHubEventsWebhook } from './connectors/github/webhook.js';
-import { BodyTooLargeError, HttpError, JSON_HEADERS, sendJson } from './http-util.js';
-import { ForbiddenError } from './api-errors.js';
-import { isLoopback } from './server/auth.js';
-import { enforceRateLimit } from './server/client-ip.js';
-import { drainAndClose } from './server/lifecycle.js';
-import { handleMcpPost, handleMcpStream } from './server/mcp-http.js';
-import { logRequestFailure, matchPath, parseRequest, rejectEncodedSlash, replyFor, requestIds, resolveRequestId, sendError } from './server/request.js';
-import { handleApproveQuarantine, handleCreateAuthKey, handleListAudit, handleListAuthKeys, handleListQuarantine, handleRejectQuarantine, handleRevokeAuthKey } from './server/routes/admin.js';
-import { handleCloseCustomerNote, handleCreateCustomerNote, handleGetCustomerNote, handleListCustomerNotes, handleSupersedeCustomerNote } from './server/routes/customer-notes.js';
-import { handleCloseDecision, handleCreateDecision, handleGetDecision, handleListDecisions, handleSupersedeDecision } from './server/routes/decisions.js';
-import { handleCloseIncident, handleCreateIncident, handleGetIncident, handleListIncidents, handleResolveIncident } from './server/routes/incidents.js';
-import { handleApplyOutcome, handleArchiveMemory, handleCreateMemory, handleForgetMemory, handleGetGraph, handlePromoteMemory, handleSleep, handleSupersedeMemory } from './server/routes/memories.js';
-import { handleClosePolicy, handleCreatePolicy, handleGetPolicy, handleListPolicies, handlePoliciesAsOf, handleSupersedePolicy } from './server/routes/policies.js';
-import { handleClosePrediction, handleCreatePrediction, handleGetPrediction, handleListPredictions, handlePredictionStats } from './server/routes/predictions.js';
-import { handleCloseProcess, handleCreateProcess, handleGetProcess, handleListProcesses, handleSupersedeProcess } from './server/routes/processes.js';
-import { handleCloseProjectBrief, handleCreateProjectBrief, handleGetProjectBrief, handleListProjectBriefs, handleRefreshProjectBrief, handleSupersedeProjectBrief } from './server/routes/project-briefs.js';
-import { handleAssembleSession, handleDrillRecall, handleGetContext, handleRecallMemories } from './server/routes/recall.js';
-import { handleCloseSkill, handleCreateSkill, handleExportSkills, handleGetSkill, handleListSkills, handleSupersedeSkill } from './server/routes/skills.js';
-import type { Route, RouteRequest, ServeOpts, ServerHandle } from './server/types.js';
+import {
+  type Actor, authCreateSelf, type AuthCreateSelfOpts, type AuthCreateSelfResult, authRevoke, type AuthRevokeReply, type AuthRevokeResult, type Context,
+} from './api.js';
+import { ForbiddenError, NotFoundError } from './api-errors.js';
 
-// Add-on packages revoke keys through these without importing the whole api surface.
-export { authRevoke, ForbiddenError, type Context, type Actor };
+export { serve } from './server/boot.js';
+
+// Add-on packages mint and revoke keys through these without importing the whole api surface.
+export {
+  authCreateSelf, authRevoke, ForbiddenError, NotFoundError,
+  type AuthCreateSelfOpts, type AuthCreateSelfResult, type AuthRevokeReply, type AuthRevokeResult, type Context, type Actor,
+};
 // Published on the hippo-memory/server subpath before they moved to http-util.ts, so they stay exported here.
 export { isCrossSite, LOOPBACK_HOST_HEADER } from './http-util.js';
 // The code behind these lives in src/server/; this subpath keeps exporting them.
 export { __resetSessionRecallHistoryHttp } from './server/routes/recall.js';
 export { clientIpForRateLimit } from './server/client-ip.js';
 export { isLoopback, isReservedActor } from './server/auth.js';
-export type { AuthResolver, ResolvedBearer, ServeOpts, ServerHandle } from './server/types.js';
+export type { AddonCall, AddonRoute, AuthResolver, RateLimitSpec, ResolvedBearer, ServeOpts, ServerHandle } from './server/types.js';
+// What an add-on route handler needs: HttpError for its 4xx replies, promptHookContext for a caller that renders the prompt hook elsewhere, JsonValue for its body.
+export { HttpError } from './http-util.js';
+export { promptHookContext, type CallerProject } from './prompt-hook.js';
+export type { JsonValue } from './json.js';
+// A session-end route stores the turns its caller read from a transcript on the caller's own machine.
+export { captureSessionTexts, type SessionCaptureRequest, type SessionCaptureResult } from './capture/session-texts.js';
+// An add-on serves from another database by passing serve() its own HippoStore.
+export {
+  hasGroup, sqliteStore,
+  type AmbientCandidateRequest, type ContextReads, type EntryRemoval, type EntryTarget, type EntryWrite, type EntryWrites, type HippoStore,
+  type KeyAudit, type KeyListQuery, type KeyMint, type KeyRevoke, type KeyWrites, type OutcomeWrite, type RawArchive, type RecallSearchArgs,
+  type RecallWrites, type SelfKeyMint, type StoreGroup, type StoreGroups, type SupersedeWrite, type VectorReads,
+  type VectorBackfillQuery, type VectorRowWrite, type VectorWrite, type VectorWriteResult, type VectorWrites,
+} from './store-port.js';
+// An add-on store's entry writes apply an outcome, guard tombstones and check reach exactly as hippo.db does.
+export { entryAfterOutcome } from './memory.js';
+export { rejectionDigest, RejectedValueError } from './rejection.js';
+export { ownScopeTouches } from './recall-scope.js';
+export { BadRequestError, ConflictError } from './api-errors.js';
+export type { HippoDbContext, StoreReply } from './api/types.js';
+export type { ApiKeyListItem, ApiKeyListRow, ApiKeyRecord, ListApiKeysOpts, NewApiKey } from './auth.js';
+export type { KeysetPosition } from './keyset.js';
+// The types HippoStore's methods take and return, so an add-on store can implement them from this subpath.
+export type { AppendAuditOpts, AuditEvent, ListAuditAfterOpts } from './audit.js';
+export type { ContinuityBlock } from './api/recall-types.js';
+export type { ActiveGoals, GetActiveGoalsOpts, Goal, GoalRecallLogRow, RetrievalPolicy } from './goals.js';
+export type { MemoryEntry } from './memory.js';
+export type { ClassResolution, PlanningFallacyEvidence } from './store/planning-fallacy-evidence.js';
+export type { PredictionBaserate } from './store/predictions.js';
+export type { RecallTraceInput } from './recall-trace.js';
+export type { StrengthenOptions } from './store/entry-writes.js';
+export type { OriginFilter, RecallScopeFilter, VectorCandidateSpec } from './store/search-rows.js';
+export type { ContinuityKey } from './store/sessions.js';
+export type { SessionEvent, TaskSnapshot } from './store/rows.js';
+export type { SessionHandoff } from './handoff.js';
+export type { AmbientLoadResult, AmbientRecallRequest, ContextCandidateFilter, RecentOrigins } from './store/candidates.js';
+export type { AmbientStoreFilter } from './ambient-store.js';
+export type { AmbientTallies } from './ambient.js';
+export type { TokenUse } from './token-ledger.js';
+export type { EmbeddingIndexState } from './embeddings.js';
+export type { PhysicsParticle } from './physics.js';
+export { StoreBusyError } from './db.js';
+// An add-on store encodes, decodes and ranks vectors and particles with hippo.db's own code, and drops the index by its rule,
+// so both stores keep the same bytes and return the same ids in the same order.
+export { decodeVector, EMBEDDING_MODEL_META_KEY, encodeVector, rankVectorRows, type VectorMatch, type VectorRow } from './db/vector-store.js';
+export { bufferToFloat32, float32ToBuffer } from './db/physics-state.js';
+export { replacesIndex } from './embeddings.js';
+// An add-on's ContextReads applies hippo.db's scope, secret, tally and rarest-term rules with the same code.
+export { passesScopeFilterForRecall, RECALL_DEFAULT_DENY_SCOPES } from './recall-scope.js';
+export { SECRET_TAGS } from './secret-detect.js';
+export { tallyAmbientEntries } from './ambient.js';
+export { ftsTermParts, rarestFtsQuery } from './prompt-recall.js';
+// store copy --db writes the marker and reads the old hippo.db under the waiver.
+export { OTHER_STORE_MARKER, OtherStoreFolderError, withSqliteAllowed } from './db.js';
+// An add-on's install step mints the first admin key into a store folder it names, which `hippo auth create` cannot reach.
+export { authCreate, type AuthCreateOpts, type AuthCreateResult } from './api.js';
 
-// Review patch #2: explicit allow-list for unauthenticated /v1/* routes.
-// New unauth routes MUST be added here AND get a corresponding entry in
-// tests/server-bearer-lockdown.test.ts. Do not gate auth elsewhere by
-// `path.startsWith` — pattern-positional auth is bypass-by-accident.
-//
-// The route handlers consult `isPublicRoute` before invoking
-// `buildContextWithAuth` / `requireAuth`. Adding a route here without
-// adding the corresponding `isPublicRoute` short-circuit in a handler is
-// a no-op (auth still applies), so the failure mode is fail-closed.
-const PUBLIC_ROUTES: ReadonlySet<string> = new Set([
-  'POST /v1/connectors/slack/events',
-  'POST /v1/connectors/github/events',
-]);
-
-function isPublicRoute(method: string, path: string): boolean {
-  return PUBLIC_ROUTES.has(`${method} ${path}`);
-}
-
-// server.address() returns AddressInfo once a TCP socket is bound; null before
-// listening, a string only for pipe/unix-socket listeners (never used here).
-function isAddressInfo(
-  a: string | import('node:net').AddressInfo | null,
-): a is import('node:net').AddressInfo {
-  return a !== null && typeof a !== 'string';
-}
-
-// Pinned at module load. Bumped alongside package.json on releases. The
-// HTTP /health response uses this; reading package.json synchronously here
-// would couple the daemon to its on-disk install path, which we want to
-// avoid for tests that mkdtemp a hippoRoot.
-// v1.3.1: source from src/version.ts so /health no longer reports stale 0.39.0.
-const VERSION = PACKAGE_VERSION;
-
-const LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', 'localhost']);
-
-/** The /v1 routes in dispatch order; the first entry whose method and path match handles the request. */
-const V1_ROUTES: readonly Route[] = [
-  { method: 'POST', path: '/v1/memories', handler: handleCreateMemory },
-  { method: 'GET', path: '/v1/graph', handler: handleGetGraph },
-  { method: 'GET', path: '/v1/memories', handler: handleRecallMemories },
-  { method: 'GET', pattern: '/v1/sessions/:id/assemble', handler: handleAssembleSession },
-  { method: 'GET', pattern: '/v1/recall/drill/:id', handler: handleDrillRecall },
-  { method: 'POST', pattern: '/v1/memories/:id/archive', handler: handleArchiveMemory },
-  { method: 'POST', pattern: '/v1/memories/:id/supersede', handler: handleSupersedeMemory },
-  { method: 'POST', pattern: '/v1/memories/:id/promote', handler: handlePromoteMemory },
-  { method: 'DELETE', pattern: '/v1/memories/:id', handler: handleForgetMemory },
-  { method: 'POST', path: '/v1/outcome', handler: handleApplyOutcome },
-  { method: 'GET', path: '/v1/context', handler: handleGetContext },
-  { method: 'POST', path: '/v1/sleep', handler: handleSleep },
-  { method: 'POST', path: '/v1/auth/keys', handler: handleCreateAuthKey },
-  { method: 'GET', path: '/v1/auth/keys', handler: handleListAuthKeys },
-  { method: 'DELETE', pattern: '/v1/auth/keys/:keyId', handler: handleRevokeAuthKey },
-  { method: 'GET', path: '/v1/quarantine', handler: handleListQuarantine },
-  { method: 'POST', pattern: '/v1/quarantine/:id/approve', handler: handleApproveQuarantine },
-  { method: 'POST', pattern: '/v1/quarantine/:id/reject', handler: handleRejectQuarantine },
-  { method: 'GET', path: '/v1/audit', handler: handleListAudit },
-  { method: 'POST', path: '/v1/predictions', handler: handleCreatePrediction },
-  { method: 'GET', path: '/v1/predictions', handler: handleListPredictions },
-  { method: 'GET', path: '/v1/predictions/stats', handler: handlePredictionStats },
-  { method: 'GET', regex: /^\/v1\/predictions\/(\d+)$/, handler: handleGetPrediction },
-  { method: 'POST', regex: /^\/v1\/predictions\/(\d+)\/close$/, handler: handleClosePrediction },
-  { method: 'POST', path: '/v1/decisions', handler: handleCreateDecision },
-  { method: 'GET', path: '/v1/decisions', handler: handleListDecisions },
-  { method: 'POST', regex: /^\/v1\/decisions\/(\d+)\/supersede$/, handler: handleSupersedeDecision },
-  { method: 'POST', regex: /^\/v1\/decisions\/(\d+)\/close$/, handler: handleCloseDecision },
-  { method: 'GET', regex: /^\/v1\/decisions\/(\d+)$/, handler: handleGetDecision },
-  { method: 'POST', path: '/v1/incidents', handler: handleCreateIncident },
-  { method: 'GET', path: '/v1/incidents', handler: handleListIncidents },
-  { method: 'POST', regex: /^\/v1\/incidents\/(\d+)\/resolve$/, handler: handleResolveIncident },
-  { method: 'POST', regex: /^\/v1\/incidents\/(\d+)\/close$/, handler: handleCloseIncident },
-  { method: 'GET', regex: /^\/v1\/incidents\/(\d+)$/, handler: handleGetIncident },
-  { method: 'POST', path: '/v1/processes', handler: handleCreateProcess },
-  { method: 'GET', path: '/v1/processes', handler: handleListProcesses },
-  { method: 'POST', regex: /^\/v1\/processes\/(\d+)\/supersede$/, handler: handleSupersedeProcess },
-  { method: 'POST', regex: /^\/v1\/processes\/(\d+)\/close$/, handler: handleCloseProcess },
-  { method: 'GET', regex: /^\/v1\/processes\/(\d+)$/, handler: handleGetProcess },
-  { method: 'POST', path: '/v1/policies', handler: handleCreatePolicy },
-  { method: 'GET', path: '/v1/policies', handler: handleListPolicies },
-  { method: 'GET', path: '/v1/policies/asof', handler: handlePoliciesAsOf },
-  { method: 'POST', regex: /^\/v1\/policies\/(\d+)\/supersede$/, handler: handleSupersedePolicy },
-  { method: 'POST', regex: /^\/v1\/policies\/(\d+)\/close$/, handler: handleClosePolicy },
-  { method: 'GET', regex: /^\/v1\/policies\/(\d+)$/, handler: handleGetPolicy },
-  { method: 'POST', path: '/v1/skills', handler: handleCreateSkill },
-  { method: 'GET', path: '/v1/skills', handler: handleListSkills },
-  { method: 'GET', path: '/v1/skills/export', handler: handleExportSkills },
-  { method: 'POST', regex: /^\/v1\/skills\/(\d+)\/supersede$/, handler: handleSupersedeSkill },
-  { method: 'POST', regex: /^\/v1\/skills\/(\d+)\/close$/, handler: handleCloseSkill },
-  { method: 'GET', regex: /^\/v1\/skills\/(\d+)$/, handler: handleGetSkill },
-  { method: 'POST', path: '/v1/project-briefs', handler: handleCreateProjectBrief },
-  { method: 'GET', path: '/v1/project-briefs', handler: handleListProjectBriefs },
-  { method: 'POST', path: '/v1/project-briefs/refresh', handler: handleRefreshProjectBrief },
-  { method: 'POST', regex: /^\/v1\/project-briefs\/(\d+)\/supersede$/, handler: handleSupersedeProjectBrief },
-  { method: 'POST', regex: /^\/v1\/project-briefs\/(\d+)\/close$/, handler: handleCloseProjectBrief },
-  { method: 'GET', regex: /^\/v1\/project-briefs\/(\d+)$/, handler: handleGetProjectBrief },
-  { method: 'POST', path: '/v1/customer-notes', handler: handleCreateCustomerNote },
-  { method: 'GET', path: '/v1/customer-notes', handler: handleListCustomerNotes },
-  { method: 'POST', regex: /^\/v1\/customer-notes\/(\d+)\/supersede$/, handler: handleSupersedeCustomerNote },
-  { method: 'POST', regex: /^\/v1\/customer-notes\/(\d+)\/close$/, handler: handleCloseCustomerNote },
-  { method: 'GET', regex: /^\/v1\/customer-notes\/(\d+)$/, handler: handleGetCustomerNote },
-];
-
-/**
- * Run the first /v1 route whose method and path match. Each matcher runs before its method check, as the
- * inline route blocks did, so a malformed `%` escape still throws from matchPath on any method.
- */
-async function dispatchV1Route(r: RouteRequest, method: string, path: string): Promise<boolean> {
-  for (const route of V1_ROUTES) {
-    if ('path' in route) {
-      if (method === route.method && path === route.path) {
-        await route.handler(r);
-        return true;
-      }
-    } else if ('pattern' in route) {
-      const params = matchPath(route.pattern, path);
-      if (method === route.method && params) {
-        await route.handler(r, params);
-        return true;
-      }
-    } else {
-      const match = path.match(route.regex);
-      if (method === route.method && match) {
-        await route.handler(r, match);
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-async function handleRequest(
-  req: IncomingMessage,
-  res: ServerResponse,
-  opts: ServeOpts,
-  startedAt: string,
-  streamSlots: Map<string, number>,
-  limiter?: RateLimiter,
-): Promise<void> {
-  // v1.6.4: pre-decode raw-URL slash check. Catches `%2F` / `%2f` before
-  // Node's URL parser collapses them and they slip past the route table.
-  rejectEncodedSlash(req.url ?? '/');
-
-  const { method, path, query } = parseRequest(req);
-
-  if (method === 'GET' && path === '/health') {
-    sendHealth(req, res, startedAt);
-    return;
-  }
-
-  enforceRateLimit(req, path, limiter);
-
-  if (await dispatchV1Route({ req, res, opts, query }, method, path)) return;
-
-  if (method === 'POST' && path === '/v1/connectors/slack/events') {
-    // Bearer auth deliberately skipped: this route is in PUBLIC_ROUTES and authenticates via the Slack HMAC signature.
-    if (!isPublicRoute(method, path)) {
-      // Defensive: PUBLIC_ROUTES drift would land here. Fail closed.
-      throw new HttpError(401, 'auth required');
-    }
-    await handleSlackEventsWebhook({ req, res, opts });
-    return;
-  }
-
-  if (method === 'POST' && path === '/v1/connectors/github/events') {
-    if (!isPublicRoute(method, path)) {
-      throw new HttpError(401, 'auth required');
-    }
-    await handleGitHubEventsWebhook({ req, res, opts });
-    return;
-  }
-
-  if (method === 'POST' && path === '/mcp') {
-    await handleMcpPost(req, res, opts);
-    return;
-  }
-
-  if (method === 'GET' && path === '/mcp/stream') {
-    await handleMcpStream(req, res, opts, streamSlots);
-    return;
-  }
-
-  res.writeHead(404, JSON_HEADERS);
-  res.end(JSON.stringify({ error: 'not found' }));
-}
-
-function sendHealth(req: IncomingMessage, res: ServerResponse, startedAt: string): void {
-  // Loopback callers (detectServer's stale-pidfile probe reads version and
-  // pid) get the full body. Non-loopback callers get liveness only: the
-  // version string would fingerprint the build for the public internet and
-  // the pid is noise. Platform health checks only need the 200.
-  if (isLoopback(req.socket.remoteAddress)) {
-    sendJson(res, 200, {
-      ok: true,
-      version: VERSION,
-      started_at: startedAt,
-      pid: process.pid,
-      audit_write_failures: auditWriteFailureCount(),
-    });
-  } else {
-    sendJson(res, 200, { ok: true });
-  }
-}
-
-/**
- * Boot the HTTP daemon on host:port and write the pidfile under hippoRoot.
- *
- * Refuses non-loopback hosts at boot (Footgun #3 from the A1 plan) unless
- * HIPPO_REQUIRE_AUTH=1 is set. The A5 v2 auth middleware (buildContextWithAuth /
- * requireAuth) has shipped and every route checks it except GET /health
- * (public by design for platform health checks) and the two connector
- * webhooks in PUBLIC_ROUTES, which are HMAC-gated by their own signing
- * secrets and 404 when those secrets are unset. But the loopback
- * no-auth fallback inside buildContextWithAuth still admits unauthenticated
- * requests from a loopback remote address (unless they carry Forwarded,
- * X-Forwarded-For/-Host/-Proto, X-Real-IP, Cf-Connecting-Ip or True-Client-Ip, which mark a same-host proxy and get
- * a 401 like any keyless remote request), so binding to a non-loopback host
- * is only safe once that fallback is disabled with HIPPO_REQUIRE_AUTH=1,
- * which forces every request (loopback or not) through Bearer-token
- * validation. Without that env var set, a non-loopback bind would expose the
- * DB to the network with no auth, so we fail fast instead.
- *
- * Use port: 0 in tests to bind to an ephemeral port and read the actual
- * port back via server.address() after listen.
- */
-export async function serve(opts: ServeOpts): Promise<ServerHandle> {
-  const host = opts.host ?? '127.0.0.1';
-  const requestedPort = opts.port ?? Number(envPort() ?? 6789);
-
-  if (!LOOPBACK_HOSTS.has(host) && !envRequireAuth()) {
-    throw new Error(
-      `Refusing to bind hippo serve to non-loopback host '${host}' without auth. ` +
-      `Set HIPPO_REQUIRE_AUTH=1 to bind non-loopback; every request then requires ` +
-      `a valid API key. Bind to 127.0.0.1 / ::1 / localhost otherwise.`,
-    );
-  }
-
-  // H3: refuse to start if a live hippo server already serves this hippoRoot.
-  // detectServer probes the recorded /health — a stale pidfile is unlinked and
-  // ignored, but a live peer means a concurrent `hippo serve` would race for
-  // the port and clobber the pidfile.
-  const existing = await detectServer(opts.hippoRoot);
-  if (existing) {
-    throw new Error(
-      `hippo serve: already running on port ${existing.port} (pid ${existing.pid}). ` +
-      `Stop that server before starting another on the same hippoRoot.`,
-    );
-  }
-
-  // The server's start time. Single source of truth: it is returned by every
-  // GET /health response and (below) written into the pidfile, so detectServer
-  // can match the two and prove a pid-reusing impostor is not the real server.
-  const startedAt = new Date().toISOString();
-
-  // E3: per-IP rate limiter for /v1/* and /mcp*. Built here (not at module scope) so
-  // HIPPO_V1_RPS is read at boot, matching HIPPO_PORT above and letting a test
-  // set the rate before serve(). A non-positive or non-finite value disables
-  // limiting (the opt-out knob).
-  const v1Rps = Number(envV1Rps() ?? 20);
-  const limiter: RateLimiter | undefined =
-    Number.isFinite(v1Rps) && v1Rps > 0
-      ? createRateLimiter({ ratePerSec: v1Rps, burst: v1Rps * 2, idleEvictMs: 60000, maxKeys: 10000 })
-      : undefined;
-
-  // Open /mcp/stream count per client key, so the cap is per server rather than per process.
-  const streamSlots = new Map<string, number>();
-
-  // Handlers open and close their own connections; while this one is held, none of those closes is SQLite's last,
-  // which checkpoints and deletes the WAL. It opens only once the store exists, so serving never creates one.
-  let heldDb: DatabaseSyncLike | undefined;
-  let stopHolding = false;
-  const holdStore = (): void => {
-    if (heldDb || stopHolding || !existsSync(getHippoDbPath(opts.hippoRoot))) return;
-    try {
-      heldDb = openHippoDb(opts.hippoRoot);
-    } catch (err) {
-      stopHolding = true;
-      log.warn(`serve: could not hold a store connection; requests still work, only slower: ${err instanceof Error ? err.message : String(err)}`);
-    }
-  };
-
-  const inflight = new Set<ServerResponse>();
-  const server: Server = createServer((req, res) => {
-    res.once('finish', holdStore);
-    inflight.add(res);
-    res.once('close', () => inflight.delete(res));
-    const requestId = resolveRequestId(req.headers['x-request-id']);
-    requestIds.set(req, requestId);
-    res.setHeader('X-Request-Id', requestId);
-    withBusyWait(SERVER_DB_WAIT_MS, () => handleRequest(req, res, opts, startedAt, streamSlots, limiter)).catch(<E>(err: E) => {
-      const mapped = replyFor(err);
-      logRequestFailure(req, err, requestId, mapped.status);
-      if (res.headersSent) {
-        try { res.end(); } catch { /* socket already gone */ }
-        return;
-      }
-      if (isSqliteBusy(err)) res.setHeader('Retry-After', '1');
-      if (mapped.status === 500) {
-        // The id lets an operator find the logged cause without the client seeing internal text.
-        sendJson(res, 500, { error: mapped.message, requestId });
-        return;
-      }
-      // RecallContractError keeps the shared {error} shape and adds `code` so clients branch without parsing prose.
-      if (err instanceof RecallContractError) {
-        sendJson(res, 400, { error: err.message, code: err.code });
-        return;
-      }
-      sendError(res, mapped.status, mapped.message);
-      // M3: readBody hit the 1 MB cap mid-stream, so drop the socket rather than drain unbounded bytes.
-      if (err instanceof BodyTooLargeError) req.destroy();
-    });
-  });
-
-  // T3b capture (v1.26.2): tests/server-concurrency.test.ts's ECONNRESET flake
-  // traced to a chunk-boundary reuse race — a kept-alive socket idled through
-  // a prior response chunk gets closed by the server's default 5s
-  // keepAliveTimeout just as a client reuses it for the next request. Raising
-  // both timeouts shrinks that idle-close/reuse window ~13x. Keep
-  // headersTimeout ABOVE the EFFECTIVE keep-alive expiry, which is
-  // keepAliveTimeout + keepAliveTimeoutBuffer (the buffer defaults to
-  // 1,000ms on Node 22.19+/24.6+ — verified 1,000 on node 24.13, so the
-  // effective expiry here is 66s; codex review caught that a 66s
-  // headersTimeout would sit exactly ON that boundary and recreate the
-  // race). The headers timer also runs while a kept-alive socket waits for
-  // its next request, so a value at or below the effective expiry would
-  // itself close idle reused sockets, and Node would not flag it (no error
-  // or warning at listen time — verified empirically).
-  server.keepAliveTimeout = 65_000;
-  server.headersTimeout = 70_000;
-
-  await new Promise<void>((resolve, reject) => {
-    const onError = (err: Error): void => {
-      server.removeListener('listening', onListening);
-      reject(err);
-    };
-    const onListening = (): void => {
-      server.removeListener('error', onError);
-      resolve();
-    };
-    server.once('error', onError);
-    server.once('listening', onListening);
-    server.listen(requestedPort, host);
-  });
-
-  const address = server.address();
-  if (!isAddressInfo(address)) {
-    throw new Error('server.address() returned unexpected shape');
-  }
-  const addressInfo = address;
-  const actualPort = addressInfo.port;
-  const url = `http://${host}:${actualPort}`;
-
-  writePidfile(opts.hippoRoot, { port: actualPort, url, startedAt });
-  holdStore();
-
-  let stopping = false;
-  const stop = async (): Promise<void> => {
-    if (stopping) return;
-    stopping = true;
-    // Remove the pidfile only if it still names this server. A newer server
-    // may have started on this hippoRoot and rewritten the pidfile; an
-    // unconditional unlink here would orphan it. (v0.37.0 server-hardening.)
-    removePidfileIfOwned(opts.hippoRoot, { pid: process.pid, startedAt });
-    await drainAndClose(server, inflight, opts.shutdownDrainMs ?? 5000);
-    stopHolding = true;
-    if (heldDb) closeHippoDb(heldDb);
-    heldDb = undefined;
-  };
-
-  if (opts.handleSignals) {
-    let shuttingDown = false;
-    const gracefulShutdown = async (signal: string): Promise<void> => {
-      if (shuttingDown) return;
-      shuttingDown = true;
-      log.warn(`received ${signal}, shutting down`);
-      try {
-        await stop();
-        process.exit(0);
-      } catch (err) {
-        log.error(`error during stop: ${err instanceof Error ? err.message : String(err)}`, errorFields(err));
-        process.exit(1);
-      }
-    };
-    process.once('SIGTERM', () => { void gracefulShutdown('SIGTERM'); });
-    process.once('SIGINT', () => { void gracefulShutdown('SIGINT'); });
-  }
-
-  return { port: actualPort, url, stop, server };
-}
+// An add-on that serves a team store checks the flag before it starts.
+export { isSharedStore } from './config.js';
+export { ownerOrSubject } from './api.js';
+// A route that writes for a session binds it to the caller's owner first.
+export { bindSessionOwner } from './session-owners.js';
+// A hook route for a caller on another machine: each call binds the session, then writes under the caller's owner and project.
+export { preCompactForCaller, type CallerHookOutput, type CallerPreCompactRequest } from './capture/pre-compact-caller.js';
+export { compactResumeForCaller, type CallerCompactResumeRequest } from './capture/compact-resume-caller.js';
+export { saveCompactionItemsForCaller, type CallerItemsRequest, type CallerItemsResult } from './capture/compaction-items-caller.js';
+export { captureFailureForCaller, type CallerFailureRequest, type CallerFailureResult } from './capture/failure-caller.js';
+export { sessionEndHandoffForCaller, type CallerEvidence, type CallerSessionEndRequest, type CallerSessionEndResult } from './capture/session-end-caller.js';
+export type { WorkingState } from './capture/working-state.js';

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { runFeatureEval, detectRegressions, resultToBaseline, formatResult } from '../src/eval-suite.js';
+import { buildSyntheticCorpus, runFeatureEval, detectRegressions, resultToBaseline, formatResult } from '../src/eval/eval-suite.js';
 import { cmdEval } from '../src/cli/eval.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 
@@ -67,5 +67,17 @@ describe('hippo eval --suite', () => {
     expect(res.status).toBe(1);
     expect(res.stdout).toContain('REGRESSIONS DETECTED');
     expect(existsSync(join(dir, 'base.json'))).toBe(true);
+  });
+});
+
+describe('buildSyntheticCorpus', () => {
+  it('gives every case a unique id and expected ids that point at corpus entries', () => {
+    const { entries, cases } = buildSyntheticCorpus();
+    expect(cases.length).toBeGreaterThan(0);
+    expect(new Set(cases.map((c) => c.id)).size).toBe(cases.length);
+    expect(cases.filter((c) => c.expectedIds.length === 0)).toEqual([]);
+    const ids = new Set(entries.map((e) => e.id));
+    expect(ids.size).toBe(entries.length);
+    expect(cases.flatMap((c) => c.expectedIds).filter((id) => !ids.has(id))).toEqual([]);
   });
 });

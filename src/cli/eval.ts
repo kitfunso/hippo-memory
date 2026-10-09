@@ -6,19 +6,20 @@ import type { MemoryEntry } from '../memory.js';
 import { loadAllEntries } from '../store/entry-reads.js';
 import { loadConfig } from '../config.js';
 import { getGlobalRoot } from '../shared.js';
-import { runEval, bootstrapCorpus, compareSummaries, type EvalCase, type EvalSummary } from '../eval.js';
-import { runFeatureEval, formatResult, resultToBaseline, detectRegressions, type EvalBaseline } from '../eval-suite.js';
+import { runEval, bootstrapCorpus, compareSummaries, type EvalCase, type EvalSummary } from '../eval/eval.js';
+import { runFeatureEval, formatResult, resultToBaseline, detectRegressions, type EvalBaseline } from '../eval/eval-suite.js';
 import { PACKAGE_VERSION } from '../version.js';
 import { printError } from './output.js';
-import { requireInit, fmt, type CliFlags, type CommandContext } from './shared.js';
+import { requireInit, fmt, type CliFlags, type CommandContext, boolFlag } from './shared.js';
+import { errorMessage } from '../log.js';
 
 /** Runs `hippo eval`: --bootstrap writes a corpus, --suite runs the built-in feature eval, else it scores a corpus file. */
 export async function cmdEval(
   hippoRoot: string,
   corpusPath: string | null,
-  flags: Record<string, string | boolean | string[]>
+  flags: CliFlags
 ): Promise<void> {
-  const asJson = Boolean(flags['json']);
+  const asJson = boolFlag(flags, 'json');
   const minMrr = flags['min-mrr'] !== undefined ? parseFloat(String(flags['min-mrr'])) : null;
   const comparePath = flags['compare'] ? String(flags['compare']) : null;
 
@@ -37,27 +38,12 @@ export async function cmdEval(
     return;
   }
 
-  const cases = readCorpus(corpusPath);
-  const globalRoot = getGlobalRoot();
-  const localBump = flags['equal-sources']
-    ? 1.0
-    : flags['local-bump'] !== undefined
-      ? parseFloat(String(flags['local-bump']))
-      : loadConfig(hippoRoot).search.localBump;
-
-  const summary = await runEval(cases, entries, {
-    hippoRoot,
-    globalRoot,
-    mmr: !flags['no-mmr'],
-    mmrLambda: flags['mmr-lambda'] !== undefined ? parseFloat(String(flags['mmr-lambda'])) : undefined,
-    embeddingWeight: flags['embedding-weight'] !== undefined ? parseFloat(String(flags['embedding-weight'])) : undefined,
-    localBump,
-  });
+  const summary = await runCorpusEval(hippoRoot, corpusPath, entries, flags);
 
   if (asJson) {
     console.log(JSON.stringify(summary, null, 2));
   } else {
-    printEvalSummary(summary, Boolean(flags['show-cases']));
+    printEvalSummary(summary, boolFlag(flags, 'show-cases'));
   }
 
   if (minMrr !== null && summary.meanMrr < minMrr) {
@@ -66,6 +52,30 @@ export async function cmdEval(
   }
 
   if (comparePath) printEvalCompare(summary, comparePath, asJson);
+}
+
+async function runCorpusEval(
+  hippoRoot: string,
+  corpusPath: string | null,
+  entries: MemoryEntry[],
+  flags: CliFlags,
+): Promise<EvalSummary> {
+  const cases = readCorpus(corpusPath);
+  const globalRoot = getGlobalRoot();
+  const localBump = flags['equal-sources']
+    ? 1.0
+    : flags['local-bump'] !== undefined
+      ? parseFloat(String(flags['local-bump']))
+      : loadConfig(hippoRoot).search.localBump;
+
+  return runEval(cases, entries, {
+    hippoRoot,
+    globalRoot,
+    mmr: !flags['no-mmr'],
+    mmrLambda: flags['mmr-lambda'] !== undefined ? parseFloat(String(flags['mmr-lambda'])) : undefined,
+    embeddingWeight: flags['embedding-weight'] !== undefined ? parseFloat(String(flags['embedding-weight'])) : undefined,
+    localBump,
+  });
 }
 
 /** Bootstrap mode: emit a synthetic corpus built from the store's own memories. */
@@ -134,7 +144,7 @@ function readCorpus(corpusPath: string | null): EvalCase[] {
     cases = Array.isArray(raw) ? raw : raw.cases;
     if (!Array.isArray(cases)) throw new Error('Corpus JSON must be an array or { cases: [...] }');
   } catch (err) {
-    printError(`Failed to read corpus: ${err instanceof Error ? err.message : err}`);
+    printError(`Failed to read corpus: ${errorMessage(err)}`);
     process.exit(1);
   }
   return cases;
@@ -188,7 +198,7 @@ function printEvalCompare(summary: EvalSummary, comparePath: string, asJson: boo
   try {
     baseline = JSON.parse(fs.readFileSync(comparePath, 'utf8'));
   } catch (err) {
-    printError(`Failed to parse baseline: ${err instanceof Error ? err.message : err}`);
+    printError(`Failed to parse baseline: ${errorMessage(err)}`);
     process.exit(1);
   }
   const cmp = compareSummaries(baseline, summary);

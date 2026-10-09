@@ -9,19 +9,22 @@ import { replayCompactionsAt } from '../compaction-record.js';
 import * as api from '../api.js';
 import { resolveTenantId } from '../tenant.js';
 import { renderAmbientSummary } from '../ambient.js';
-import { log } from '../log.js';
-import { requireInit, learnFromRepo, runChurnStaleForRepo, printAgentImport } from './shared.js';
+import { errorMessage, log } from '../log.js';
+import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../db.js';
+import { repairOnceOnSleep } from '../project-merge.js';
+import { type CliFlags, requireInit, learnFromRepo, runChurnStaleForRepo, printAgentImport, skipLearnOnSharedStore, boolFlag, stringFlag } from './shared.js';
+import { repairQualityOnceAt } from './quality-repair-once.js';
 import { printError } from './output.js';
 
 /** Runs `hippo sleep`; with `--log-file` it also tees its output to that file. */
 export async function cmdSleep(
   hippoRoot: string,
-  flags: Record<string, string | boolean | string[]>
+  flags: CliFlags
 ): Promise<void> {
   // Tee stdout/stderr to a log file when --log-file is set. The SessionEnd
   // hook uses this so the output is captured somewhere the SessionStart hook
   // can re-display it next time the agent UI starts.
-  const logFile = typeof flags['log-file'] === 'string' ? (flags['log-file'] as string) : null;
+  const logFile = stringFlag(flags, 'log-file') ?? null;
   let restoreStdout: (() => void) | null = null;
   if (logFile) {
     try {
@@ -50,7 +53,7 @@ export async function cmdSleep(
         process.stderr.write = origStderrWrite;
       };
     } catch (err) {
-      log.warn(`could not open log file ${logFile}: ${(err as Error).message}`);
+      log.warn(`could not open log file ${logFile}: ${errorMessage(err)}`);
     }
   }
 
@@ -58,7 +61,7 @@ export async function cmdSleep(
     await cmdSleepCore(hippoRoot, flags);
     if (logFile) console.log('[hippo] sleep complete');
   } catch (err) {
-    if (logFile) console.log(`[hippo] sleep failed: ${(err as Error).message}`);
+    if (logFile) console.log(`[hippo] sleep failed: ${errorMessage(err)}`);
     throw err;
   } finally {
     if (restoreStdout) restoreStdout();
@@ -71,6 +74,14 @@ export async function cmdSleep(
  */
 /** @internal — exported for snapshot tests (tests/cli-context-render-snapshot.test.ts). NOT a stable public API. */
 export function renderSleepResult(result: api.SleepResult): void {
+  renderSleepCounts(result);
+
+  if (result.dryRun) console.log('\n(dry run  - nothing written)');
+  renderSleepDedupeAndAudit(result);
+  renderSleepShareAndGraph(result);
+}
+
+function renderSleepCounts(result: api.SleepResult): void {
   console.log(`Running consolidation${result.dryRun ? ' (dry run)' : ''}...`);
 
   console.log(`\nResults:`);
@@ -94,8 +105,9 @@ export function renderSleepResult(result: api.SleepResult): void {
     }
   }
 
-  if (result.dryRun) console.log('\n(dry run  - nothing written)');
+}
 
+function renderSleepDedupeAndAudit(result: api.SleepResult): void {
   if (result.deduped && result.deduped.removed > 0) {
     const { removed, semDups, epiDups, crossDups } = result.deduped;
     const parts: string[] = [];
@@ -114,6 +126,9 @@ export function renderSleepResult(result: api.SleepResult): void {
     }
   }
 
+}
+
+function renderSleepShareAndGraph(result: api.SleepResult): void {
   if (result.shared !== undefined && result.shared > 0) {
     console.log(`\nAuto-shared ${result.shared} high-value memories to global store.`);
   }
@@ -135,17 +150,38 @@ export function renderSleepResult(result: api.SleepResult): void {
   }
 }
 
+/** Fault-isolated: a failed repair warns and runs again next sleep, and never stops the sleep. */
+function repairProjectTagsOnce(hippoRoot: string): void {
+  let db: DatabaseSyncLike | undefined;
+  try {
+    db = openHippoDb(hippoRoot);
+    const r = repairOnceOnSleep(db, hippoRoot, resolveTenantId({}));
+    if (r === null) return;
+    const parts = [
+      r.copies.length > 0 ? `set aside ${r.copies.length} misfiled note imports` : '',
+      r.folds.length > 0 ? `folded ${r.folds.map((f) => `${f.from} into ${f.into}`).join(', ')}` : '',
+      r.toProject.length + r.setAside.length > 0 ? `re-tagged ${r.toProject.length + r.setAside.length} merged memories` : '',
+    ].filter((p) => p !== '');
+    console.log(`Repaired project tags once after the upgrade: ${parts.join('; ')} (backup: ${r.backup}).`);
+  } catch (err) {
+    log.warn(`project tag repair skipped, retried next sleep: ${errorMessage(err)}`);
+  } finally {
+    if (db) closeHippoDb(db);
+  }
+}
+
 async function cmdSleepCore(
   hippoRoot: string,
-  flags: Record<string, string | boolean | string[]>
+  flags: CliFlags
 ): Promise<void> {
   requireInit(hippoRoot);
 
   // Phase 1: Auto-learn from git and every coding agent's own memories (CLI-only, uses process.cwd() / os.homedir()).
   // Stays in cli.ts; api.sleep covers Phase 2-6 only.
-  if (!flags['no-learn'] && flags['dry-run']) {
+  const learn = !flags['no-learn'] && !skipLearnOnSharedStore(hippoRoot);
+  if (learn && flags['dry-run']) {
     console.log("Dry run: skipped learning from git commits and coding agents' own memories (`hippo import --agents --dry-run` previews those).");
-  } else if (!flags['no-learn']) {
+  } else if (learn) {
     const config = loadConfig(hippoRoot);
     if (config.autoLearnOnSleep && isGitRepo(process.cwd())) {
       const { added } = learnFromRepo(hippoRoot, process.cwd(), 1);
@@ -167,6 +203,8 @@ async function cmdSleepCore(
   if (!flags['dry-run']) {
     const finished = replayCompactionsAt(hippoRoot, (message) => log.warn(`compaction replay: ${message}`));
     if (finished > 0) console.log(`Finished saving ${finished} compaction${finished === 1 ? '' : 's'} left over from earlier sessions.`);
+    repairProjectTagsOnce(hippoRoot);
+    repairQualityOnceAt(hippoRoot);
   }
 
   // Phase 2-6: Pure-storage pipeline (consolidate + dedup + audit + share + ambient).
@@ -176,8 +214,8 @@ async function cmdSleepCore(
     actor: api.adminActor('cli'),
   };
   const result = await api.sleep(ctx, {
-    dryRun: Boolean(flags['dry-run']),
-    noShare: Boolean(flags['no-share']),
+    dryRun: boolFlag(flags, 'dry-run'),
+    noShare: boolFlag(flags, 'no-share'),
   });
   renderSleepResult(result);
 }

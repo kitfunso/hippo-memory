@@ -1,8 +1,8 @@
 // src/goals.ts
 import { randomUUID } from 'node:crypto';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
+import { openHippoDb, closeHippoDb, withWriteScope, type DatabaseSyncLike } from './db.js';
 import type { MemoryEntry } from './memory.js';
-import type { RerankStep } from './search/types.js';
+import type { RerankStep } from './core/search-types.js';
 
 export type GoalStatus = 'active' | 'suspended' | 'completed';
 export type PolicyType = 'schema-fit-biased' | 'error-prioritized' | 'recency-first' | 'hybrid';
@@ -93,7 +93,7 @@ export function pushGoal(hippoRoot: string, opts: PushGoalOpts): Goal {
 }
 
 /**
- * v1.7.4 — depth-cap enforcer extracted from pushGoalWithDb and resumeGoal.
+ * Depth-cap enforcer shared by pushGoalWithDb and resumeGoal.
  * If the (tenant, session) has >= MAX_ACTIVE_GOAL_DEPTH active goals,
  * suspend the oldest `overflow` ones.
  *
@@ -102,7 +102,7 @@ export function pushGoal(hippoRoot: string, opts: PushGoalOpts): Goal {
  * is impossible to misread the contract at a call site. Both existing call
  * sites (pushGoalWithDb, resumeGoal) wrap in `BEGIN IMMEDIATE` already.
  *
- * @internal v1.7.4 -- internal goal-stack invariant. Subject to change.
+ * @internal Internal goal-stack invariant. Subject to change.
  */
 export function enforceDepthCapWithinTx(
   db: DatabaseSyncLike,
@@ -137,8 +137,7 @@ export function pushGoalWithDb(db: DatabaseSyncLike, opts: PushGoalOpts): Goal {
   const createdAt = new Date().toISOString();
   let policyId: string | null = null;
 
-  db.exec('BEGIN IMMEDIATE');
-  try {
+  withWriteScope(db, 'push_goal', () => {
     // Depth cap: count active for (tenant, session); suspend oldest if at cap.
     enforceDepthCapWithinTx(db, opts.tenantId, opts.sessionId);
 
@@ -186,12 +185,7 @@ export function pushGoalWithDb(db: DatabaseSyncLike, opts: PushGoalOpts): Goal {
       );
       db.prepare(`UPDATE goal_stack SET retrieval_policy_id = ? WHERE id = ?`).run(policyId, id);
     }
-
-    db.exec('COMMIT');
-  } catch (err) {
-    try { db.exec('ROLLBACK'); } catch { /* already rolled back; keep the original error */ }
-    throw err;
-  }
+  });
 
   return {
     id,
@@ -216,6 +210,23 @@ export function getActiveGoals(hippoRoot: string, opts: GetActiveGoalsOpts): Goa
   const db = openHippoDb(hippoRoot);
   try {
     return getActiveGoalsWithDb(db, opts);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/** A session's active goals, oldest first, and the retrieval policy of each goal that names one. */
+export interface ActiveGoals {
+  readonly goals: Goal[];
+  readonly policies: ReadonlyMap<string, RetrievalPolicy>;
+}
+
+/** The active goals and their policies on one handle, so a goal and its policy never disagree. */
+export function activeGoalsWithPolicies(hippoRoot: string, opts: GetActiveGoalsOpts): ActiveGoals {
+  const db = openHippoDb(hippoRoot);
+  try {
+    const goals = getActiveGoalsWithDb(db, opts);
+    return { goals, policies: loadGoalPolicies(db, goals) };
   } finally {
     closeHippoDb(db);
   }
@@ -262,7 +273,7 @@ export interface GoalRecallLogRow {
   score: number;
 }
 
-/** Options shared by {@link computeGoalStackBoost} and {@link applyGoalStackBoost}. */
+/** Options shared by {@link computeGoalStackBoost} and {@link boostByGoals}. */
 export interface GoalStackBoostOpts {
   sessionId: string;
   tenantId: string;
@@ -285,7 +296,7 @@ export interface GoalStackBoost<R> {
 // can compose onto the base goal-tag boost. Composed result is hard-capped
 // at MAX_FINAL_MULTIPLIER (3.0x) BEFORE applying to score -- even an
 // `errorPriority: 9.0` policy cannot exceed 3.0x.
-function loadGoalPolicies(db: DatabaseSyncLike, active: Goal[]): Map<string, RetrievalPolicy> {
+export function loadGoalPolicies(db: DatabaseSyncLike, active: readonly Goal[]): Map<string, RetrievalPolicy> {
   const policiesByGoalId = new Map<string, RetrievalPolicy>();
   for (const g of active) {
     if (!g.retrievalPolicyId) continue;
@@ -324,7 +335,7 @@ function goalBoostMultiplier(
   tags: string[],
   matches: string[],
   goalsByTag: Map<string, Goal>,
-  policiesByGoalId: Map<string, RetrievalPolicy>,
+  policiesByGoalId: ReadonlyMap<string, RetrievalPolicy>,
 ): number {
   // Base 2.0x for first match, +0.5x per additional, capped at 3.0x.
   let multiplier = Math.min(
@@ -357,34 +368,15 @@ function goalBoostMultiplier(
 
 /** Log rows for the top `limit` boosted rows, one per matched goal. */
 function buildGoalRecallLog<R extends { entry: MemoryEntry; score: number }>(
-  db: DatabaseSyncLike,
   boosted: R[],
   matchesByEntryId: Map<string, string[]>,
   goalsByTag: Map<string, Goal>,
   opts: GoalStackBoostOpts,
 ): GoalRecallLogRow[] {
   const { sessionId, tenantId, limit } = opts;
-  // Filter to local memories only -- global memory IDs aren't in this DB's
-  // memories table, so the FK on goal_recall_log.memory_id would fail.
-  // dlPFC depth's outcome propagation is session-scoped to local; boost on
-  // ranking still applies to global results, just no log row -> no
-  // propagation.
-  const topKIds = boosted.slice(0, limit).map((r) => r.entry.id);
-  const localIds = new Set<string>();
-  if (topKIds.length > 0) {
-    const placeholders = topKIds.map(() => '?').join(',');
-    // SAFETY: rows come from the SELECT above, which projects exactly one
-    // column, `id`, from memories.
-    const localRows = db.prepare(
-      `SELECT id FROM memories WHERE id IN (${placeholders})`,
-    ).all(...topKIds) as Array<{ id: string }>;
-    for (const row of localRows) localIds.add(row.id);
-  }
-
   const recalledAt = new Date().toISOString();
   const log: GoalRecallLogRow[] = [];
   for (const r of boosted.slice(0, limit)) {
-    if (!localIds.has(r.entry.id)) continue; // global -> skip log insert
     const matches = matchesByEntryId.get(r.entry.id);
     if (!matches || matches.length === 0) continue;
     for (const tag of matches) {
@@ -394,6 +386,17 @@ function buildGoalRecallLog<R extends { entry: MemoryEntry; score: number }>(
     }
   }
   return log;
+}
+
+/** The rows whose memory lives in this store: goal_recall_log.memory_id references memories, so a global row would fail
+ *  the insert. A global result keeps its boost; it only earns no log row, so no outcome propagation. */
+export function localGoalRecallRows(db: DatabaseSyncLike, rows: readonly GoalRecallLogRow[]): GoalRecallLogRow[] {
+  if (rows.length === 0) return [];
+  const ids = [...new Set(rows.map((r) => r.memoryId))];
+  // SAFETY: the SELECT projects exactly one column, `id`, from memories.
+  const local = db.prepare(`SELECT id FROM memories WHERE id IN (${ids.map(() => '?').join(',')})`).all(...ids) as Array<{ id: string }>;
+  const localIds = new Set(local.map((r) => r.id));
+  return rows.filter((r) => localIds.has(r.memoryId));
 }
 
 /**
@@ -420,12 +423,24 @@ export function computeGoalStackBoost<R extends { entry: MemoryEntry; score: num
   results: R[],
   opts: GoalStackBoostOpts,
 ): GoalStackBoost<R> {
-  const { sessionId, tenantId, trace } = opts;
-  const active = getActiveGoalsWithDb(db, { sessionId, tenantId });
-  if (active.length === 0) return { results, log: [] };
+  const goals = getActiveGoalsWithDb(db, { sessionId: opts.sessionId, tenantId: opts.tenantId });
+  if (goals.length === 0) return { results, log: [] };
+  const boost = boostByGoals(results, { goals, policies: loadGoalPolicies(db, goals) }, opts);
+  return { results: boost.results, log: localGoalRecallRows(db, boost.log) };
+}
 
-  const goalsByTag = new Map(active.map((g) => [g.goalName, g]));
-  const policiesByGoalId = loadGoalPolicies(db, active);
+/** {@link computeGoalStackBoost} over goals already read, touching no store. Its log keeps rows whose memory is global,
+ *  since only the store can tell them apart; {@link localGoalRecallRows} drops those before the write. */
+export function boostByGoals<R extends { entry: MemoryEntry; score: number }>(
+  results: R[],
+  active: ActiveGoals,
+  opts: GoalStackBoostOpts,
+): GoalStackBoost<R> {
+  const { trace } = opts;
+  if (active.goals.length === 0) return { results, log: [] };
+
+  const goalsByTag = new Map(active.goals.map((g) => [g.goalName, g]));
+  const policiesByGoalId = active.policies;
 
   // Goal-tag matches per boosted row, keyed by entry id. Kept as a side table
   // (rather than a spread-on `_goalMatches` marker property) so `boosted`
@@ -438,9 +453,8 @@ export function computeGoalStackBoost<R extends { entry: MemoryEntry; score: num
       const matches = tags.filter((t) => goalsByTag.has(t));
       if (matches.length === 0) return r;
       const multiplier = goalBoostMultiplier(r.entry, tags, matches, goalsByTag, policiesByGoalId);
-      // A7 recall-trace side-channel: record the goal-boost step BEFORE the
-      // score is mutated, keyed by entry id. Pure read of r.score here; the
-      // mutation below is byte-identical to pre-A7.
+      // Recall-trace side-channel: record the goal-boost step BEFORE the
+      // score is mutated, keyed by entry id; a pure read of r.score.
       if (trace) {
         trace.set(r.entry.id, {
           stage: 'goal-boost',
@@ -456,13 +470,13 @@ export function computeGoalStackBoost<R extends { entry: MemoryEntry; score: num
       // still satisfies R's shape exactly.
       return { ...r, score: r.score * multiplier } as R;
     })
-    // T2 note: deliberately a PLAIN stable score sort, no compareEntryIdentity
+    // Deliberately a PLAIN stable score sort, no compareEntryIdentity
     // tail -- a re-sort of an already deterministically-ordered ranking
     // inherits its determinism via sort stability, and ties preserve the
     // prior (meaningful) rank instead of reordering by content.
     .sort((a, b) => b.score - a.score);
 
-  return { results: boosted, log: buildGoalRecallLog(db, boosted, matchesByEntryId, goalsByTag, opts) };
+  return { results: boosted, log: buildGoalRecallLog(boosted, matchesByEntryId, goalsByTag, opts) };
 }
 
 /**
@@ -481,22 +495,6 @@ export function writeGoalRecallLog(db: DatabaseSyncLike, rows: readonly GoalReca
   }
 }
 
-/**
- * {@link computeGoalStackBoost} plus {@link writeGoalRecallLog} in one call, for
- * pipelines that boost and log on the same handle.
- *
- * @internal Recall ranking helper. Subject to change.
- */
-export function applyGoalStackBoost<R extends { entry: MemoryEntry; score: number }>(
-  db: DatabaseSyncLike,
-  results: R[],
-  opts: GoalStackBoostOpts,
-): R[] {
-  const boost = computeGoalStackBoost(db, results, opts);
-  writeGoalRecallLog(db, boost.log);
-  return boost.results;
-}
-
 const POSITIVE_OUTCOME_THRESHOLD = 0.7;
 const NEGATIVE_OUTCOME_THRESHOLD = 0.3;
 const STRENGTH_BOOST = 1.10;
@@ -505,7 +503,7 @@ const STRENGTH_DECAY = 0.85;
 export interface CompleteGoalOpts {
   outcomeScore?: number;
   /**
-   * v1.7.4 — when true, skip the strength-multiplier propagation block.
+   * When true, skip the strength-multiplier propagation block.
    * Default false (propagate). The goal's status still transitions to
    * 'completed' and `outcome_score` is still recorded; only the side-effect
    * on recalled memories' strength is suppressed.
@@ -524,20 +522,15 @@ export function completeGoal(hippoRoot: string, goalId: string, opts: CompleteGo
     const completedAt = new Date().toISOString();
     const score = opts.outcomeScore ?? null;
 
-    db.exec('BEGIN IMMEDIATE');
-    try {
+    withWriteScope(db, 'complete_goal', () => {
       // SAFETY: the row comes from the SELECT above, which projects exactly
       // the created_at and status columns of goal_stack.
       const goalRow = db.prepare(
         `SELECT created_at, status FROM goal_stack WHERE id = ?`,
       ).get(goalId) as { created_at: string; status: string } | undefined;
-      if (!goalRow) {
-        db.exec('COMMIT');
-        return;
-      }
+      if (!goalRow) return;
       if (goalRow.status === 'completed') {
         // Already completed -- second call is a no-op for idempotency.
-        db.exec('COMMIT');
         return;
       }
 
@@ -568,12 +561,7 @@ export function completeGoal(hippoRoot: string, goalId: string, opts: CompleteGo
           `).run(multiplier, goalId, goalRow.created_at, completedAt);
         }
       }
-
-      db.exec('COMMIT');
-    } catch (err) {
-      try { db.exec('ROLLBACK'); } catch { /* already rolled back; keep the original error */ }
-      throw err;
-    }
+    });
   } finally {
     closeHippoDb(db);
   }
@@ -591,26 +579,18 @@ export function suspendGoal(hippoRoot: string, goalId: string): void {
 export function resumeGoal(hippoRoot: string, goalId: string): void {
   const db = openHippoDb(hippoRoot);
   try {
-    db.exec('BEGIN IMMEDIATE');
-    try {
+    withWriteScope(db, 'resume_goal', () => {
       // SAFETY: the row comes from the SELECT above, which projects exactly
       // the session_id, tenant_id, and status columns of goal_stack.
       const row = db.prepare(
         `SELECT session_id, tenant_id, status FROM goal_stack WHERE id = ?`,
       ).get(goalId) as { session_id: string; tenant_id: string; status: string } | undefined;
-      if (!row || row.status !== 'suspended') {
-        db.exec('COMMIT');
-        return;
-      }
+      if (!row || row.status !== 'suspended') return;
 
       enforceDepthCapWithinTx(db, row.tenant_id, row.session_id);
 
       db.prepare(`UPDATE goal_stack SET status = 'active' WHERE id = ?`).run(goalId);
-      db.exec('COMMIT');
-    } catch (err) {
-      try { db.exec('ROLLBACK'); } catch { /* already rolled back; keep the original error */ }
-      throw err;
-    }
+    });
   } finally {
     closeHippoDb(db);
   }

@@ -1,6 +1,8 @@
 // Help text for every verb, keyed like the command table in cli.ts; no command logic lives here.
 
 import { TAIL_MAX_LINES } from '../support-bundle.js';
+import { DEFAULT_LOCAL_BUMP, DEFAULT_RECALL_BUDGET } from '../core/search-types.js';
+import { DEFAULT_ASSEMBLE_BUDGET } from '../api/assemble.js';
 
 export function printAuditPruneUsage(): void {
   console.log('hippo audit prune --older-than <Nd> [--dry-run] [--tenant <t>]');
@@ -24,7 +26,7 @@ export function printSlackWorkspacesUsage(): void {
 }
 
 export const USAGE_HEADER = `
-Hippo - memory for AI agents that learns what is wrong and ranks it down
+Hippo - Make your agent's memory work like a brain. Hippo is long-term memory for coding agents.
 
 Usage: hippo <command> [options]
 
@@ -109,7 +111,7 @@ export const VERB_USAGE = {
     --global               Store in global store ($HIPPO_HOME or ~/.hippo/)`],
   recall: [`
   recall <query>           Search and retrieve memories (local + global)
-    --budget <n>           Token budget for the whole printed block (default: 4000)
+    --budget <n>           Token budget for the whole printed block (default: ${DEFAULT_RECALL_BUDGET})
     --min-results <n>      Minimum results regardless of budget (default: 1)
     --json                 Output as JSON
     --why                  Show match reasons and source annotations
@@ -200,7 +202,7 @@ export const VERB_USAGE = {
     --json                 Output as JSON`],
   assemble: [`
   assemble --session <id>  Build a session's chronological context window
-    --budget N             Token budget for the printed window (default 4000)
+    --budget N             Token budget for the printed window (default ${DEFAULT_ASSEMBLE_BUDGET})
     --fresh-tail N         Recent rows always kept verbatim (default 10)
     --no-summarize-older   Disable older-row summary substitution
     --scope <s>            Restrict to exact scope (default: deny *:private:*)
@@ -212,7 +214,7 @@ export const VERB_USAGE = {
     --pin                  Pin the new memory (default: pinned if the old one was)`],
   explain: [`
   explain <query>          Show full score breakdown for each retrieved memory
-    --budget <n>           Token budget, counted as recall prints (default: 4000)
+    --budget <n>           Token budget, counted as recall prints (default: ${DEFAULT_RECALL_BUDGET})
     --limit <n>            Cap the number of results displayed
     --json                 Output as JSON
     --physics | --classic  Force search mode (default: from config)
@@ -228,7 +230,7 @@ export const VERB_USAGE = {
     --no-mmr               Disable MMR for this eval run
     --mmr-lambda <f>       Override MMR lambda for this run
     --embedding-weight <f> Override cosine weight (default: 0.6)
-    --local-bump <f>       Local-over-global priority multiplier (default: 1.2)
+    --local-bump <f>       Local-over-global priority multiplier (default: ${DEFAULT_LOCAL_BUMP})
     --equal-sources        Shortcut for --local-bump 1.0
     --min-mrr <f>          Exit non-zero if mean MRR falls below this
     --json                 Output full summary as JSON`],
@@ -253,25 +255,34 @@ export const VERB_USAGE = {
     --no-learn             Skip auto git-learn and the agent memory import before consolidation
     --no-share             Skip auto-sharing to global store`],
   'last-sleep': [`
-  last-sleep               Print the last 'hippo sleep --log-file' output to stderr and clear it
+  last-sleep               Show the last sleep log on stderr, one problems line to the user, and clear it
     --path <p>             Log path (default: ~/.hippo/logs/last-sleep.log)
     --keep                 Print without clearing`],
   'session-end': [`
   session-end              SessionEnd hook: count this session's re-read tokens, run sleep, then
                            capture from the session's last 20 user and 10 assistant messages,
                            in a detached worker
-    --log-file <path>      Tee the worker's output to a log file (paired with 'hippo last-sleep')`],
+    --log-file <path>      Tee the worker's output to a log file (paired with 'hippo last-sleep')
+    --runtime copilot      The payload came from a Copilot hook: use the store of its cwd and find
+                           the Copilot CLI session log by session id; with no --log-file, log to
+                           ~/.hippo/logs/copilot-sleep.log
+    --turn                 VS Code Stop hook, after each reply: capture only the new turns, sleep
+                           only at the auto-sleep threshold, and keep the session's snapshot; does
+                           nothing for any other payload`],
   'pre-compact': [`
   pre-compact              PreCompact hook: record the compaction, save a working-state snapshot, and
                            ask the summariser to end with a "Memories for hippo" list
-    --log-file <p>         Diagnostic log path (default: ~/.hippo/logs/pre-compact.log)`],
+    --log-file <p>         Diagnostic log path (default: ~/.hippo/logs/pre-compact.log)
+    --runtime copilot      The payload came from a Copilot hook: use the store of its cwd and save
+                           the snapshot only (Copilot has no PostCompact hook to close a record)`],
   'post-compact': [`
   post-compact             PostCompact hook: keep that list as memories (a busy store leaves the save to
                            the next hippo sleep) and print one line saying how many
     --log-file <p>         Same log path as pre-compact (default: ~/.hippo/logs/pre-compact.log)`],
   'capture-error': [`
   capture-error            Store a failed tool call as an error memory (reads the Claude Code
-                           PostToolUseFailure hook payload on stdin; skips routine failures)`],
+                           PostToolUseFailure hook payload on stdin; skips routine failures)
+    --runtime copilot      The payload came from a Copilot hook: use the store of its cwd`],
   'compact-resume': [`
   compact-resume           SessionStart(compact) hook: re-print the snapshot, if under 15 minutes old`],
   'codex-run': [`
@@ -292,7 +303,7 @@ export const VERB_USAGE = {
       --json               Output as JSON
       --global             Operate on the global store
     auth list              List API keys (active by default)
-      --all                Include revoked keys
+      --all                Include revoked and expired keys
       --json               Output as JSON
       --global             Operate on the global store
     auth revoke <key_id>   Revoke an API key (subsequent validate fails)
@@ -338,7 +349,15 @@ export const VERB_USAGE = {
     dlq replay <id> [--force]
                            Re-ingest a DLQ entry (--force skips sig check)`],
   audit: [`
-  audit [--fix]            Check memory quality (--fix removes junk)`, `
+  audit [--fix]            Check memory quality (--fix removes junk)
+    audit repair [--apply] Preview repair of memories hippo wrote itself; --apply moves certain
+                           defects to dormant storage. Sleep and the daily runner apply it once
+                           per store after an upgrade
+      --json              Report ids, reasons, protections and schema blockers as JSON
+      --global             Operate on the global store without changing its schema
+                           Writes a database backup first; undo with hippo dormant restore <id>,
+                           which marks the memory verified so repair leaves it alone. Sleep's
+                           dormant retention still applies; the backup stays until you remove it.`, `
   audit <sub>              Query the append-only audit log (A5 stub auth)
     audit list             List audit events for the active tenant
       --op <op>            Filter by op (remember | recall | promote |
@@ -400,8 +419,9 @@ export const VERB_USAGE = {
                            Fold one project name into another (dry run unless --apply;
                            writes a backup and one audit event first)
     projects repair [--apply]
-                           Re-tag merged rows older versions of sleep saved as user-global,
-                           by their parents' project (dry run unless --apply)`],
+                           Set aside misfiled note imports, fold old project names into
+                           their ids, re-tag merged rows (dry run unless --apply;
+                           writes a backup and one audit event first)`],
   quarantine: [`
   quarantine [list]       List memories a connector flagged as an instruction attempt, pending review
     --all                  Include approved and rejected rows too (default: pending only)
@@ -540,23 +560,29 @@ export const VERB_USAGE = {
     --pinned-only          Only inject pinned memories (used by UserPromptSubmit hook)
     --include-recent <n>   With --pinned-only, also inject the last N writes regardless of pinning
     (the hook payload's "prompt" drives prompt recall instead of --include-recent when pinnedInject.promptRecall is on, the default)
-    --format <fmt>         Output format: markdown (default), json, or additional-context (Claude Code hook JSON)
+    --format <fmt>         Output format: markdown (default), json, additional-context (Claude Code hook JSON),
+                           or copilot (Copilot sessionStart hook JSON, from the store of the payload's cwd)
     --framing <mode>       Framing: observe (default), suggest, assert`],
   hook: [`
   hook <sub> [target]      Manage framework integrations
     hook list              Show available hooks
-    hook install <target>  Install hook (claude-code|codex|cursor|openclaw|opencode|pi)
-                           claude-code adds 7 hooks to ~/.claude/settings.json;
-                           opencode installs a plugin; codex adds 2 hooks to
-                           $CODEX_HOME/hooks.json (trust them once in /hooks) and
-                           wraps the detected launcher in place; all but claude-code
-                           also patch an existing AGENTS.md
-    hook uninstall <target> Remove hook`],
+    hook install <target>  Install hook (claude-code|codex|copilot|cursor|openclaw|opencode|pi)
+                           claude-code adds 7 hooks to $CLAUDE_CONFIG_DIR/settings.json
+                           (~/.claude by default); opencode installs a plugin; codex
+                           adds 2 hooks to $CODEX_HOME/hooks.json (trust them once in /hooks) and
+                           wraps the detected launcher in place; copilot writes
+                           hooks/hippo.json, the "hippo" MCP server and an instructions
+                           block under $COPILOT_HOME (~/.copilot by default); all but
+                           claude-code and copilot also patch an existing AGENTS.md
+    hook uninstall <target> Remove hook; for copilot, only what hippo wrote`],
   setup: [`
   setup                    One-shot: detect installed AI tools and install their hooks:
-                           claude-code gets 7 hooks in ~/.claude/settings.json, opencode
-                           a plugin, codex 2 hooks in its hooks.json plus a launcher
-                           wrapper; other tools get a hint. Then imports each agent's
+                           claude-code gets 7 hooks in $CLAUDE_CONFIG_DIR/settings.json
+                           (~/.claude by default), opencode a plugin, codex 2 hooks in
+                           its hooks.json plus a launcher wrapper, copilot 4 hooks, the
+                           MCP server and an instructions block under $COPILOT_HOME
+                           (~/.copilot by default); other tools get a
+                           hint. Then imports each agent's
                            user-level memories into the global store
     --all                  Install for every JSON-hook tool, even if not detected
     --dry-run              Show what would be installed without writing
@@ -644,7 +670,9 @@ export const VERB_USAGE = {
   serve: [`
   serve                    Start the HTTP API server for this store (Ctrl+C stops it)
     --port <n>             Port to serve on (default: $HIPPO_PORT or 6789)
-    --host <host>          Address to bind (default: 127.0.0.1)`],
+    --host <host>          Address to bind (default: 127.0.0.1)
+    --tls-cert <file>      PEM certificate; serve HTTPS only (or $HIPPO_TLS_CERT)
+    --tls-key <file>       PEM private key for it; give both (or $HIPPO_TLS_KEY)`],
   invalidate: [`
   invalidate "<pattern>"   Actively weaken memories matching an old pattern
                            (content overlap, or a tag EXACTLY equal to the

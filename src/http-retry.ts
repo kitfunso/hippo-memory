@@ -1,4 +1,4 @@
-/** One retry policy for outbound HTTP: a timeout on every attempt, and backoff on 429 and 5xx only. */
+/** One retry policy for outbound HTTP: a timeout on every attempt, backoff on 429 and 5xx, and on a dropped connection where a replay is safe. */
 
 import { envLlmTimeoutMs } from './env.js';
 
@@ -12,6 +12,8 @@ export interface RetryPolicy {
   maxDelayMs?: number;
   /** Which responses to retry; defaults to 429 and 5xx. A write narrows it to answers that prove nothing committed. */
   retryOn?: (res: Response) => boolean;
+  /** Also retry a dropped connection or a timed-out attempt. On for GET and HEAD; any other method turns it on only when a replay cannot commit twice. */
+  retryTransport?: boolean;
   fetchFn?: typeof fetch;
   sleep?: (ms: number) => Promise<void>;
   random?: () => number;
@@ -40,9 +42,28 @@ export function parseRetryAfterMs(header: string | null, now: number = Date.now(
   return Number.isNaN(at) ? null : Math.max(0, at - now);
 }
 
+// Node's fetch reports a broken socket as a bare `fetch failed` with one of these on its cause.
+const TRANSIENT_CODES: ReadonlySet<string> = new Set([
+  'ECONNRESET', 'ETIMEDOUT', 'EAI_AGAIN', 'UND_ERR_SOCKET', 'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_HEADERS_TIMEOUT',
+]);
+
+/** A dropped connection, a DNS hiccup or a timed-out attempt: faults a second try can clear. A refused connection is not one. */
+export function isTransientTransportError<E>(err: E): boolean {
+  if (!(err instanceof Error)) return false;
+  if (err.name === 'TimeoutError') return true;
+  const holder = err.cause instanceof Object ? err.cause : err;
+  const code = 'code' in holder ? String(holder.code) : '';
+  return TRANSIENT_CODES.has(code) || err.message.toLowerCase().includes('socket hang up');
+}
+
+function isIdempotent(method: string | undefined): boolean {
+  const verb = (method ?? 'GET').toUpperCase();
+  return verb === 'GET' || verb === 'HEAD';
+}
+
 const realSleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** `fetch` with a per-attempt timeout and up to `attempts` tries on 429 and 5xx; the last response comes back as is and transport errors throw at once. */
+/** `fetch` with a per-attempt timeout and up to `attempts` tries on 429, 5xx and (see `retryTransport`) transport faults; the last response or error comes back as is. */
 export async function fetchWithRetry(url: string | URL, init: RequestInit, policy: RetryPolicy): Promise<Response> {
   const fetchFn = policy.fetchFn ?? fetch;
   const attempts = Math.max(1, policy.attempts ?? DEFAULT_ATTEMPTS);
@@ -51,20 +72,31 @@ export async function fetchWithRetry(url: string | URL, init: RequestInit, polic
   const sleep = policy.sleep ?? realSleep;
   const random = policy.random ?? Math.random;
   const retryOn = policy.retryOn ?? ((res: Response) => isRetryableStatus(res.status));
+  const retryTransport = policy.retryTransport ?? isIdempotent(init.method);
+  // Jitter over the upper half keeps parallel callers from retrying in lockstep.
+  const backoffMs = (attempt: number): number => {
+    const ceiling = Math.min(maxDelayMs, baseDelayMs * 2 ** (attempt - 1));
+    return ceiling / 2 + random() * (ceiling / 2);
+  };
 
   for (let attempt = 1; ; attempt++) {
     const timeout = AbortSignal.timeout(policy.timeoutMs);
     const signal = init.signal ? AbortSignal.any([init.signal, timeout]) : timeout;
-    const res = await fetchFn(url, { ...init, signal });
+    let res: Response;
+    try {
+      res = await fetchFn(url, { ...init, signal });
+    } catch (err) {
+      // The caller's own abort is a decision, not a fault, so it ends the call.
+      if (!retryTransport || attempt >= attempts || init.signal?.aborted || !isTransientTransportError(err)) throw err;
+      await sleep(backoffMs(attempt));
+      continue;
+    }
     if (!retryOn(res) || attempt >= attempts) return res;
 
     const retryAfter = parseRetryAfterMs(res.headers.get('retry-after'));
     if (retryAfter !== null && retryAfter > maxDelayMs) return res;
-    // Jitter over the upper half keeps parallel callers from retrying in lockstep.
-    const ceiling = Math.min(maxDelayMs, baseDelayMs * 2 ** (attempt - 1));
-    const delay = retryAfter ?? ceiling / 2 + random() * (ceiling / 2);
     // Frees the pooled socket before the next attempt.
     await res.body?.cancel();
-    await sleep(delay);
+    await sleep(retryAfter ?? backoffMs(attempt));
   }
 }

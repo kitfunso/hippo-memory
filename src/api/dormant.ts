@@ -18,7 +18,11 @@ import {
 import { createMemory, calculateStrength, type MemoryEntry } from '../memory.js';
 import { appendAuditEvent, reportAuditWriteFailure } from '../audit.js';
 import { loadConfig } from '../config.js';
+import { canTouchScope, personalScopeOf, touchableScopeSql, type SqlFragment } from '../recall-scope.js';
 import type { Context } from './types.js';
+import { DAY_MS } from '../util/time.js';
+
+const touchable = (ctx: Context): SqlFragment => touchableScopeSql('', personalScopeOf(ctx.actor));
 
 /**
  * A tenant's dormant memories (src/dormant.ts): what sleep moved out of
@@ -28,7 +32,7 @@ import type { Context } from './types.js';
 export function listDormant(ctx: Context, opts: ListDormantOpts = {}): DormantMemory[] {
   const db = openHippoDb(ctx.hippoRoot);
   try {
-    return listDormantRows(db, ctx.tenantId, opts);
+    return listDormantRows(db, ctx.tenantId, opts, touchable(ctx));
   } finally {
     closeHippoDb(db);
   }
@@ -36,12 +40,12 @@ export function listDormant(ctx: Context, opts: ListDormantOpts = {}): DormantMe
 
 /**
  * Bring a dormant memory back into active memory. It returns as if just
- * recalled: `last_retrieved` is now, so it gets a full half-life before it
- * can fade again. Every other field is the snapshot taken when it went
- * dormant.
+ * recalled, with a full half-life. A row audit repair set aside returns
+ * `verified`, so no quality check judges it again. Every other field is the
+ * snapshot taken when it went dormant.
  *
  * Throws when the tenant has no dormant memory with that id (another
- * tenant's id reads the same way), when a live memory already holds the id,
+ * tenant's id, or another person's personal row, reads the same way), when a live memory already holds the id,
  * and RejectedValueError when the value has been rejected since. On any
  * throw the dormant copy stays where it is.
  */
@@ -51,13 +55,7 @@ export function restoreDormant(ctx: Context, id: string): MemoryEntry {
     let restored: MemoryEntry;
     db.exec('BEGIN IMMEDIATE');
     try {
-      const dormant = readDormantSnapshot(db, ctx.tenantId, id);
-      if (!dormant) {
-        throw new NotFoundError(`dormant memory not found: ${id}`);
-      }
-      if (db.prepare(`SELECT 1 FROM memories WHERE id = ?`).get(id) !== undefined) {
-        throw new ConflictError(`memory ${id} is already active; forget it before restoring its dormant copy`);
-      }
+      const dormant = restorableSnapshot(db, ctx, id);
       const now = new Date();
       // Dormant rows are long-lived, so a snapshot can predate a field added
       // later: createMemory supplies a default for anything it lacks, then
@@ -69,24 +67,14 @@ export function restoreDormant(ctx: Context, id: string): MemoryEntry {
         ...dormant.entry,
         last_retrieved: now.toISOString(),
       };
+      if (dormant.reason === 'quality-repair') revived.confidence = 'verified';
       restored = stampOriginProject(ctx.hippoRoot, { ...revived, strength: calculateStrength(revived, now) });
       writeEntryDbOnly(db, restored, { actor: ctx.actor.subject });
       deleteDormantRow(db, ctx.tenantId, id);
       // A restore is a labelled "forgot it, then needed it" event: the
-      // signal a learned lifecycle (ROADMAP LC3) trains on. Same transaction
+      // signal a learned lifecycle trains on. Same transaction
       // as the restore, so the label exists exactly when the restore does.
-      appendAuditEvent(db, {
-        tenantId: ctx.tenantId,
-        actor: ctx.actor.subject,
-        op: 'dormant_restore',
-        targetId: id,
-        metadata: {
-          reason: dormant.reason,
-          strengthAtDormancy: dormant.strength,
-          dormantAt: dormant.dormantAt,
-          daysDormant: Math.max(0, (now.getTime() - Date.parse(dormant.dormantAt)) / (24 * 60 * 60 * 1000)),
-        },
-      });
+      auditDormantRestore(db, ctx, id, dormant, now);
       db.exec('COMMIT');
     } catch (err) {
       try { db.exec('ROLLBACK'); } catch { /* already rolled back */ }
@@ -102,6 +90,36 @@ export function restoreDormant(ctx: Context, id: string): MemoryEntry {
   }
 }
 
+type StoreDb = ReturnType<typeof openHippoDb>;
+type DormantSnapshot = NonNullable<ReturnType<typeof readDormantSnapshot>>;
+
+/** The caller's dormant copy of `id`; throws when there is none it may touch or a live memory already holds the id. */
+function restorableSnapshot(db: StoreDb, ctx: Context, id: string): DormantSnapshot {
+  const dormant = readDormantSnapshot(db, ctx.tenantId, id);
+  if (!dormant || !canTouchScope(ctx.actor, dormant.entry.scope ?? null)) {
+    throw new NotFoundError(`dormant memory not found: ${id}`);
+  }
+  if (db.prepare(`SELECT 1 FROM memories WHERE id = ?`).get(id) !== undefined) {
+    throw new ConflictError(`memory ${id} is already active; forget it before restoring its dormant copy`);
+  }
+  return dormant;
+}
+
+function auditDormantRestore(db: StoreDb, ctx: Context, id: string, dormant: DormantSnapshot, now: Date): void {
+  appendAuditEvent(db, {
+    tenantId: ctx.tenantId,
+    actor: ctx.actor.subject,
+    op: 'dormant_restore',
+    targetId: id,
+    metadata: {
+      reason: dormant.reason,
+      strengthAtDormancy: dormant.strength,
+      dormantAt: dormant.dormantAt,
+      daysDormant: Math.max(0, (now.getTime() - Date.parse(dormant.dormantAt)) / DAY_MS),
+    },
+  });
+}
+
 /**
  * Permanently delete a dormant memory: the explicit "forget it for good"
  * that dormant storage leaves to the user. Throws when the tenant has no
@@ -110,7 +128,7 @@ export function restoreDormant(ctx: Context, id: string): MemoryEntry {
 export function forgetDormant(ctx: Context, id: string): void {
   const db = openHippoDb(ctx.hippoRoot);
   try {
-    if (!deleteDormantRow(db, ctx.tenantId, id)) {
+    if (!hasDormantRow(db, ctx.tenantId, id, touchable(ctx)) || !deleteDormantRow(db, ctx.tenantId, id)) {
       throw new NotFoundError(`dormant memory not found: ${id}`);
     }
     try {
@@ -132,11 +150,11 @@ export function forgetDormant(ctx: Context, id: string): void {
   updateStatsUnlessBusy(ctx.hippoRoot, { forgotten: 1 }, `removed ${id}`);
 }
 
-/** Whether the tenant holds a dormant memory with this id (for "not found" hints). */
+/** Whether the tenant holds a dormant memory with this id that the caller may touch (for "not found" hints). */
 export function isDormant(ctx: Context, id: string): boolean {
   const db = openHippoDb(ctx.hippoRoot);
   try {
-    return hasDormantRow(db, ctx.tenantId, id);
+    return hasDormantRow(db, ctx.tenantId, id, touchable(ctx));
   } finally {
     closeHippoDb(db);
   }

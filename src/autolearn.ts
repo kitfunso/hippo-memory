@@ -7,9 +7,9 @@ import { execSync, execFileSync, spawn } from 'child_process';
 import { MemoryEntry, createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from './memory.js';
 import { loadAllEntries } from './store/entry-reads.js';
 import { textOverlap } from './tokenize.js';
-import { isContentWorthStoring } from './audit.js';
+import { assessAutomaticMemory } from './memory-quality.js';
 import { redactSecretsStrict } from './secret-detect.js';
-import { log } from './log.js';
+import { errorMessage, log } from './log.js';
 
 /** A memory of a failed command, "Command '<cmd>' failed: <truncated stderr>"; no store is in reach, so `hippo watch` re-derives its half-life from the store's config. */
 export function captureError(
@@ -102,7 +102,7 @@ export function partitionLessons(lessons: string[]): { kept: string[]; dropped: 
   const kept: string[] = [];
   const dropped: string[] = [];
   for (const lesson of lessons.map((l) => redactSecretsStrict(l))) {
-    if (isContentWorthStoring(lesson)) {
+    if (assessAutomaticMemory(lesson).accepted) {
       kept.push(lesson);
     } else {
       dropped.push(lesson);
@@ -115,7 +115,7 @@ export function partitionLessons(lessons: string[]): { kept: string[]; dropped: 
  * Check if a substantially similar memory already exists.
  * Returns true if overlap > threshold (default 0.7).
  *
- * L9: `tenantId` is opt-in. Only takes effect when the first argument is a
+ * `tenantId` is opt-in. Only takes effect when the first argument is a
  * root string (string-overload path). When the first argument is a
  * pre-loaded MemoryEntry[], the caller has already scoped — tenantId is
  * ignored on that path.
@@ -182,7 +182,7 @@ export function isGitRepo(cwd: string): boolean {
     });
     return raw.trim() === 'true';
   } catch (err) {
-    log.debug(`autolearn: not a git repo: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`autolearn: not a git repo: ${errorMessage(err)}`);
     return false;
   }
 }
@@ -198,7 +198,7 @@ export function fetchGitLog(cwd: string, days: number): string {
     ], { encoding: 'utf8', cwd, timeout: 10000, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
     return raw;
   } catch (err) {
-    log.debug(`autolearn: git log unavailable: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`autolearn: git log unavailable: ${errorMessage(err)}`);
     return '';
   }
 }

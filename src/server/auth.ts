@@ -4,11 +4,12 @@ import type { IncomingMessage } from 'node:http';
 import { resolveTenantId } from '../tenant.js';
 import { log } from '../log.js';
 import { API_KEY_PREFIX, verifyApiKeyCached } from '../auth.js';
-import type { Actor, Context } from '../api.js';
-import { HttpError, isCrossSite, isHeaderString, LOOPBACK_HOST_HEADER } from '../http-util.js';
-import { requestIds } from './request.js';
-import type { AuthResolver, ResolvedBearer, ServeOpts } from './types.js';
-import { isJsonString } from './validation.js';
+import { type Actor, type Context, ownerOrSubject } from '../api.js';
+import { HttpError, isCrossSite, isHeaderString, LOOPBACK_HOST_HEADER, MAX_ID_LEN } from '../http-util.js';
+import { clientLimitKey } from './client-ip.js';
+import { keyCheckBounds } from './key-check-bounds.js';
+import type { AuthResolver, ResolvedBearer, ResolvedServeOpts } from './types.js';
+import { isJsonString } from '../json.js';
 
 /**
  * Recognise loopback remote addresses. Node reports IPv6-mapped IPv4 as
@@ -26,6 +27,7 @@ export function isLoopback(remoteAddress: string | undefined): boolean {
 // A proxy on this host (nginx, Caddy, cloudflared) connects from loopback, so these headers mean the caller is not local.
 const PROXY_HEADERS = [
   'forwarded', 'x-forwarded-for', 'x-forwarded-host', 'x-forwarded-proto', 'x-real-ip', 'cf-connecting-ip', 'true-client-ip',
+  'fly-client-ip',
 ] as const;
 
 // A browser on this machine is loopback too, so the no-key fallback also needs a local Host and a same-site caller.
@@ -36,7 +38,6 @@ function assertLocalCaller(req: IncomingMessage): void {
     log.warn(
       `proxied loopback request refused: it carries ${proxyHeader}, so the no-key local fallback does not apply. ` +
         'Send an API key (hippo auth create, then Authorization: Bearer hk_...).',
-      { requestId: requestIds.get(req) },
     );
     throw new HttpError(401, 'auth required');
   }
@@ -78,7 +79,8 @@ export function readAuthHeader(req: IncomingMessage): AuthHeader {
   return { kind: 'bearer', token };
 }
 
-type AuthOpts = Pick<ServeOpts, 'hippoRoot' | 'authResolver' | 'authResolverTimeoutMs'>;
+type AuthOpts = Pick<ResolvedServeOpts, 'hippoRoot' | 'authResolver' | 'authResolverTimeoutMs' | 'store' | 'callerLimiter'>
+  & Partial<Pick<ResolvedServeOpts, 'failedAuthLimiter'>>;
 
 // Built-in actors are the bare names below or `<name>:<detail>`; a plain prefix would also reject `clinton@corp`.
 const RESERVED_ACTOR_NAMES = [
@@ -107,8 +109,8 @@ function sanitiseResolved(r: ResolvedBearer): ResolvedBearer | null {
   if (!isJsonString(tenantId) || tenantId.trim().length === 0) return null;
   // Core reserves `__`-prefixed tenants (`__host__`, `__unroutable__`).
   const tenant = tenantId.trim();
-  if (tenant.startsWith('__') || tenant.length > 256 || hasControlChar(tenant)) return null;
-  if (!isJsonString(subject) || subject.length < 1 || subject.length > 256) return null;
+  if (tenant.startsWith('__') || tenant.length > MAX_ID_LEN || hasControlChar(tenant)) return null;
+  if (!isJsonString(subject) || subject.length < 1 || subject.length > MAX_ID_LEN) return null;
   // Padding would let "system " pass the reserved-name check yet read as `system` in an audit log.
   if (hasControlChar(subject) || subject !== subject.trim()) return null;
   if (isReservedActor(subject)) return null;
@@ -151,57 +153,115 @@ async function askResolver(resolver: AuthResolver, token: string, deadlineMs: nu
 /** Set by the core only: sanitiseResolved builds a fresh object, so a resolver cannot claim the tag. */
 interface BearerIdentity extends ResolvedBearer {
   viaAuthResolver?: true;
+  owner?: string;
 }
 
 const DEFAULT_RESOLVER_DEADLINE_MS = 5000;
 
+/** Runs only before scrypt, so junk, unknown, revoked and expired tokens and a proven key's re-check never spend a colleague's budget. */
+function chargeScryptRun(req: IncomingMessage, opts: AuthOpts): void {
+  const limiter = opts.failedAuthLimiter;
+  // Reserving rather than peeking bounds scrypt runs exactly, even when concurrent misses await a slow store.
+  if (limiter && !limiter.check(clientLimitKey(req))) {
+    throw new HttpError(429, 'too many key checks from this address', limiter.retryAfterSec);
+  }
+}
+
 /** Shared by buildContextWithAuth and requireAuth so the two cannot drift. */
-async function resolveBearer(token: string, opts: AuthOpts): Promise<BearerIdentity> {
+async function resolveBearer(req: IncomingMessage, token: string, opts: AuthOpts): Promise<BearerIdentity> {
   // Routing by shape keeps key plaintext out of plugin code and stops a resolver overriding a key's identity.
   if (opts.authResolver && !token.startsWith(API_KEY_PREFIX)) {
     const t = opts.authResolverTimeoutMs;
     const deadlineMs = t !== undefined && Number.isFinite(t) && t > 0 ? t : DEFAULT_RESOLVER_DEADLINE_MS;
-    return { ...(await askResolver(opts.authResolver, token, deadlineMs)), viaAuthResolver: true };
+    const clean = await askResolver(opts.authResolver, token, deadlineMs);
+    return { ...clean, viaAuthResolver: true, owner: clean.subject }; // a resolver vouches for a person, never names one
   }
-  const key = verifyApiKeyCached(opts.hippoRoot, token);
+  const key = await verifyApiKeyCached(token, opts.store, (keyId, derive) => {
+    // The key's own bucket first, so a flood on one key id ends at its five tries and leaves the address's budget to the callers who share it.
+    keyChecks.admit(keyId, clientLimitKey(req));
+    chargeScryptRun(req, opts);
+    return keyChecks.run(derive);
+  });
   if (!key) throw new HttpError(401, 'invalid api key');
-  return { tenantId: key.tenantId, subject: `api_key:${key.keyId}`, role: key.role, scopes: key.scopes };
+  const id: BearerIdentity = { tenantId: key.tenantId, subject: `api_key:${key.keyId}`, role: key.role, scopes: key.scopes };
+  if (key.ownerSubject) id.owner = key.ownerSubject;
+  return id;
 }
 
-/**
- * Build a per-request Context from the Authorization header and remote
- * address. Throws HttpError(401) for invalid / missing credentials. Opens
- * the DB only for an API-key-shaped Bearer token (or any Bearer token when no
- * auth resolver is registered), so loopback no-auth requests stay cheap.
- */
-export async function buildContextWithAuth(req: IncomingMessage, opts: AuthOpts): Promise<Context> {
+/** The auth check without a charge: the bearer's identity, or null for the loopback fallback. */
+async function checkAuth(req: IncomingMessage, opts: AuthOpts): Promise<BearerIdentity | null> {
   const auth = readAuthHeader(req);
-
   if (auth.kind === 'malformed') {
     throw new HttpError(401, 'invalid api key');
   }
-
-  if (auth.kind === 'bearer') {
-    const id = await resolveBearer(auth.token, opts);
-    const actor: Actor = { subject: id.subject, role: id.role, scopes: id.scopes };
-    if (id.viaAuthResolver) actor.viaAuthResolver = true;
-    // Only the server's own tenant owns the host; any other tenant's admin key is a tenant admin.
-    else if (id.role === 'admin' && id.tenantId === resolveTenantId({})) actor.hostAdmin = true;
-    return { hippoRoot: opts.hippoRoot, tenantId: id.tenantId, actor };
-  }
-
-  // No Authorization header. Loopback-only fallback for a direct local caller (no proxy headers),
-  // unless HIPPO_REQUIRE_AUTH=1 forbids the local-CLI escape hatch.
+  if (auth.kind === 'bearer') return resolveBearer(req, auth.token, opts);
+  // No Authorization header: the loopback fallback, unless HIPPO_REQUIRE_AUTH=1 forbids the local-CLI escape hatch.
   if (envRequireAuth()) {
     throw new HttpError(401, 'auth required');
   }
   assertLocalCaller(req);
+  return null;
+}
 
-  // v1.12.0: loopback fallback is process-local, treat as admin.
+function bearerActor(id: BearerIdentity): Actor {
+  const actor: Actor = { subject: id.subject, role: id.role, scopes: id.scopes };
+  if (id.owner !== undefined) actor.owner = id.owner;
+  if (id.viaAuthResolver) actor.viaAuthResolver = true;
+  // Only the server's own tenant owns the host; any other tenant's admin key is a tenant admin.
+  else if (id.role === 'admin' && id.tenantId === resolveTenantId({})) actor.hostAdmin = true;
+  return actor;
+}
+
+/** Key cap for every serve() bucket, shared by the warn map so it never tracks more callers than the buckets do. */
+export const LIMITER_MAX_KEYS = 10_000;
+// One for the process, as the thread pool its derivations run on is.
+const keyChecks = keyCheckBounds(LIMITER_MAX_KEYS);
+const CALLER_WARN_EVERY_MS = 60_000;
+const callerWarnedAt = new Map<string, number>();
+
+function warnCallerLimited(key: string, tenantId: string, person: string): void {
+  const now = Date.now();
+  const last = callerWarnedAt.get(key);
+  if (last !== undefined && now - last < CALLER_WARN_EVERY_MS) return;
+  callerWarnedAt.delete(key);
+  if (callerWarnedAt.size >= LIMITER_MAX_KEYS) {
+    const oldest = callerWarnedAt.keys().next();
+    if (!oldest.done) callerWarnedAt.delete(oldest.value);
+  }
+  callerWarnedAt.set(key, now);
+  log.warn('caller over its rate limit; its further 429s this minute are not logged', { tenant: tenantId, person });
+}
+
+function chargeCaller(tenantId: string, actor: Actor, opts: AuthOpts): void {
+  const limiter = opts.callerLimiter;
+  if (!limiter) return;
+  const person = ownerOrSubject(actor);
+  const key = `${tenantId}\u0000${person}`;
+  if (limiter.check(key)) return;
+  warnCallerLimited(key, tenantId, person);
+  throw new HttpError(429, 'rate limit exceeded for this caller', limiter.retryAfterSec);
+}
+
+/**
+ * Build a per-request Context from the Authorization header and remote
+ * address. Throws HttpError(401) for invalid / missing credentials. Reads
+ * the store only for an API-key-shaped Bearer token (or any Bearer token when no
+ * auth resolver is registered), so loopback no-auth requests stay cheap.
+ */
+export async function buildContextWithAuth(req: IncomingMessage, opts: AuthOpts): Promise<Context> {
+  const id = await checkAuth(req, opts);
+  if (id !== null) {
+    const actor = bearerActor(id);
+    chargeCaller(id.tenantId, actor, opts);
+    return { hippoRoot: opts.hippoRoot, tenantId: id.tenantId, actor, store: opts.store };
+  }
+
+  // Loopback fallback is process-local, treat as admin.
   return {
     hippoRoot: opts.hippoRoot,
     tenantId: resolveTenantId({}),
     actor: { subject: 'localhost:cli', role: 'admin', hostAdmin: true },
+    store: opts.store,
   };
 }
 
@@ -212,27 +272,17 @@ export async function buildContextWithAuth(req: IncomingMessage, opts: AuthOpts)
  * envelope. Loopback no-auth still passes.
  */
 export async function requireAuth(req: IncomingMessage, opts: AuthOpts): Promise<void> {
-  const auth = readAuthHeader(req);
-  if (auth.kind === 'malformed') {
-    throw new HttpError(401, 'invalid api key');
-  }
-  if (auth.kind === 'bearer') {
-    await resolveBearer(auth.token, opts);
-    return;
-  }
-  if (envRequireAuth()) {
-    throw new HttpError(401, 'auth required');
-  }
-  assertLocalCaller(req);
+  const id = await checkAuth(req, opts);
+  if (id !== null) chargeCaller(id.tenantId, bearerActor(id), opts);
 }
 
-/** Never rejects: an outage (5xx) skips one heartbeat tick, only a definite 4xx denial closes the stream. */
+/** Never rejects or charges a caller bucket: an outage (5xx) or a throttle (429) skips one tick; only a definite 4xx denial closes the stream. */
 export async function heartbeatVerdict(req: IncomingMessage, opts: AuthOpts): Promise<'ok' | 'revoked' | 'unavailable'> {
   try {
-    await requireAuth(req, opts);
+    await checkAuth(req, opts);
     return 'ok';
   } catch (err) {
-    return err instanceof HttpError && err.status < 500 ? 'revoked' : 'unavailable';
+    return err instanceof HttpError && err.status < 500 && err.status !== 429 ? 'revoked' : 'unavailable';
   }
 }
 

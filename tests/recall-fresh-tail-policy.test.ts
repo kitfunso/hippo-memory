@@ -38,7 +38,7 @@ function makeRaw(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
   });
 }
 
-describe('fresh-tail policy F5 (v1.6.5)', () => {
+describe('fresh-tail policy', () => {
   let root: string;
   // Snapshot + restore env so other test files are not affected.
   let prevEnv: string | undefined;

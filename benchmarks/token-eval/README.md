@@ -1,6 +1,6 @@
 # Token-efficiency evals (ROADMAP Part IX, Track TE)
 
-Three harnesses, from cheapest to most convincing. Build first with `npm run build`.
+Three harnesses, from cheapest to most convincing. Build first with `npm run build`. Their tests (`tests/token-eval*`) run with `npm test`, except the four that build real git repositories per case (ab-run, make-tasks, z0-homes, z0-turns): those run with `npm run test:eval`, and CI runs them in `token-eval.yml`.
 
 | Harness | Roadmap | Needs | What it answers |
 |---|---|---|---|
@@ -8,7 +8,7 @@ Three harnesses, from cheapest to most convincing. Build first with `npm run bui
 | `scripts/token-eval/budget-curve.mjs` | TE3 | a LongMemEval-format JSON | How many tokens of memory does an agent need to see the evidence, with hippo against recency, full context and no memory? |
 | `scripts/token-eval/ab-analyze.mjs` | TE5 | run records from an agent A/B | Cost per resolved task, resolve rate and work avoided, with bootstrap CIs. Protocol: `docs/evals/2026-09-23-te5-token-ab-preregistration.md` |
 
-Shared statistics and four-bucket cost accounting are in `src/eval-stats.ts`.
+Shared statistics and four-bucket cost accounting are in `src/eval/eval-stats.ts`.
 
 ## What is and is not established
 
@@ -237,7 +237,7 @@ node scripts/token-eval/z0-regrade.mjs grading --out C:/z0-runs/r1
 14. Session 1 decides `void` for every cell, split from the resume at the byte where session 1 ended in each transcript file, subagents included. Every teach resumes, so a teach's resume hits also void it: its reads, and the memory session 1 left that the resume loads. Only a failing apply resumes, so its resume hits would make `void` depend on the verdict; they go to `resumeVoidHits` and never set `void`. An operator canary there still fails the whole run at the analyzer's G1, since a canary anywhere puts the isolation in doubt.
 15. An instruction file a lesson checker leaves above `work/` voids that cell as `ancestor-instructions`. The check runs on every graded cell right after its first lesson check, before the resume decision, so a passing apply is caught too.
 
-**Checked so far.** The runner is exercised end to end with a stand-in for Claude Code in `tests/token-eval-ab-run.test.ts` and the `tests/token-eval-z0-*.test.ts` files (homes, turns, surfaces, timeout, read check, leaks, chain and grading); every corpus those tests write is checked against a local copy of the analyzer's `z0-record/1` contract. No real Claude Code session has run under the Z0 arms yet: the stage 1 smoke report settles that auto memory saves in a per-run config dir, that A0 gets none, and that the OAuth token signs in with an empty config dir.
+**Checked so far.** The runner is exercised end to end with a stand-in for Claude Code in `tests/token-eval-ab-run.test.ts` and the `tests/token-eval-z0-*.test.ts` files (homes, turns, surfaces, surface reads, snapshot failure, timeout, read check, leaks, chain and grading); every corpus those tests write is checked against a local copy of the analyzer's `z0-record/1` contract. No real Claude Code session has run under the Z0 arms yet: the stage 1 smoke report settles that auto memory saves in a per-run config dir, that A0 gets none, and that the OAuth token signs in with an empty config dir.
 
 ## A/B analysis (TE5)
 

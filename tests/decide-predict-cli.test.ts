@@ -92,6 +92,16 @@ describe('hippo predict', () => {
     expect(rate).toContain('mean_ratio:       1.600x');
   });
 
+  it('list with no --status and no --class shows closed predictions in every class', () => {
+    const openId = grab(ok('predict', 'the cache warms in an hour', '--class', 'ops'), /Prediction recorded: #(\d+)/);
+    const closedId = grab(ok('predict', 'the port lands in a week', '--class', 'port', '--estimate', '7'), /Prediction recorded: #(\d+)/);
+    ok('predict', 'close', closedId, '--state', 'closed', '--actual', '9');
+    const all = ok('predict', 'list');
+    expect(all).toContain('Found 2 predictions');
+    expect(all).toContain(`#${openId} [open] class=ops`);
+    expect(all).toContain(`#${closedId} [closed] class=port`);
+  });
+
   it('refuses a missing class, bad numbers, a bad state and a closed filter without a class', () => {
     expect(hippo('predict', 'a claim').stderr).toContain('--class is required');
     expect(hippo('predict', 'a claim', '--class', 'c', '--estimate', 'soon').stderr).toContain('Invalid --estimate: "soon"');

@@ -46,11 +46,11 @@ function tmpHome(prefix: string = 'hippo-rejection-acceptance-'): string {
   return mkdtempSync(join(tmpdir(), prefix));
 }
 
-function ctx(hippoRoot: string, tenantId: string = 'default'): api.Context {
+function ctx(hippoRoot: string, tenantId: string = 'default'): api.HippoDbContext {
   return { hippoRoot, tenantId, actor: { subject: 'cli', role: 'admin' } };
 }
 
-describe('AT1 case 1: acceptance (roadmap-verbatim)', () => {
+describe('case 1: acceptance (roadmap-verbatim)', () => {
   it('reject X by id -> capture re-assertion refused, 2 siblings written, one reject_refusal audit row, extraction does not throw; supersession unchanged', () => {
     const home = tmpHome();
     try {
@@ -124,7 +124,7 @@ describe('AT1 case 1: acceptance (roadmap-verbatim)', () => {
   });
 });
 
-describe('AT1 case 2: refused supersede audit surface', () => {
+describe('case 2: refused supersede audit surface', () => {
   it('api.supersede onto a rejected successor value throws, CAS rolls back (superseded_by unchanged), one reject_refusal audit row', () => {
     const home = tmpHome();
     try {
@@ -156,7 +156,7 @@ describe('AT1 case 2: refused supersede audit surface', () => {
   });
 });
 
-describe('AT1 case 3: copy-path refusal (syncGlobalToLocal)', () => {
+describe('case 3: copy-path refusal (syncGlobalToLocal)', () => {
   it('global store holds Z; local store rejects Z; sync skips Z, syncs siblings, and counts the skip', () => {
     const globalRoot = tmpHome('hippo-rejection-acceptance-global-');
     const localRoot = tmpHome('hippo-rejection-acceptance-local-');
@@ -195,7 +195,7 @@ describe('AT1 case 3: copy-path refusal (syncGlobalToLocal)', () => {
   });
 });
 
-describe('AT1 case 4: rebuild resurrection pin', () => {
+describe('case 4: rebuild resurrection pin', () => {
   it('a stale markdown mirror of a rejected raw row is skipped on rebuildIndex, not resurrected', () => {
     const home = tmpHome();
     try {
@@ -258,7 +258,7 @@ describe('AT1 case 4: rebuild resurrection pin', () => {
   });
 });
 
-describe('AT1 case 5: migration v41 idempotence', () => {
+describe('case 5: migration v41 idempotence', () => {
   it('fresh store stays at schema_version 41 across re-open; rejected_values data survives', () => {
     const home = tmpHome();
     try {
@@ -354,7 +354,7 @@ describe('AT1 case 5: migration v41 idempotence', () => {
   });
 });
 
-describe('AT1 case 6: AT5 paired case — reject removes a value from recall, permanently', () => {
+describe('case 6: reject removes a value from recall, permanently', () => {
   it('reject removes a value from recall; re-remember attempt is refused; recall stays clean', () => {
     const home = tmpHome();
     try {
@@ -386,7 +386,7 @@ describe('AT1 case 6: AT5 paired case — reject removes a value from recall, pe
   });
 });
 
-describe('AT1 consolidation-loop fix: merge tombstone check', () => {
+describe('consolidation-loop fix: merge tombstone check', () => {
   it('a rejected would-be-merged content digest makes consolidate skip that merge: no semantic row with that digest, sources not demoted/deleted, skip counted', async () => {
     const home = tmpHome('hippo-rejection-acceptance-consolidate-');
     try {
@@ -458,7 +458,7 @@ describe('AT1 consolidation-loop fix: merge tombstone check', () => {
   });
 });
 
-describe('AT1 P2 fix: import dry-run tombstone accuracy', () => {
+describe('import dry-run tombstone accuracy', () => {
   it('importEntries dry-run counts a tombstoned chunk as rejected (not imported), writes nothing, and agrees with a real run', () => {
     const home = tmpHome('hippo-rejection-acceptance-import-dryrun-');
     try {
@@ -490,7 +490,7 @@ describe('AT1 P2 fix: import dry-run tombstone accuracy', () => {
   });
 });
 
-describe('AT1 P2 fix: capture dry-run tombstone accuracy', () => {
+describe('capture dry-run tombstone accuracy', () => {
   it('capture dry-run reports a tombstoned extraction as rejected and writes nothing, agreeing with a real run', () => {
     const home = tmpHome('hippo-rejection-acceptance-capture-dryrun-');
     try {
@@ -530,7 +530,7 @@ describe('AT1 P2 fix: capture dry-run tombstone accuracy', () => {
   });
 });
 
-describe('AT1 codex-P1 fix 1: auto-promoted trace tombstone check', () => {
+describe('auto-promoted trace tombstone check', () => {
   it('reject an auto-promoted trace -> next consolidate does not recreate it: skip counted, one reject_refusal audit, no trace row', async () => {
     const home = tmpHome('hippo-rejection-acceptance-trace-');
     try {
@@ -582,7 +582,7 @@ describe('AT1 codex-P1 fix 1: auto-promoted trace tombstone check', () => {
   });
 });
 
-describe('AT1 codex-P1 fix 2: merge tombstone check uses the destination tenant', () => {
+describe('merge tombstone check uses the destination tenant', () => {
   // T1 landing fix (2026-08-15 hardening pass, consolidate.ts): merge rows
   // now stamp the CLUSTER'S OWN tenant, not always 'default' — both cases
   // below were written against the pre-fix 'default' landing and are
@@ -689,7 +689,7 @@ describe('AT1 codex-P1 fix 2: merge tombstone check uses the destination tenant'
   });
 });
 
-describe('AT1 codex-P1 fix 3: autoShare per-candidate rejection containment', () => {
+describe('autoShare per-candidate rejection containment', () => {
   it('one rejected + one clean candidate: the sleep-facing autoShare call completes, the clean one shares, the rejected one is counted', () => {
     const localRoot = tmpHome('hippo-rejection-acceptance-autoshare-local-');
     const globalRoot = tmpHome('hippo-rejection-acceptance-autoshare-global-');

@@ -31,7 +31,6 @@ import {
   MV_FEATURE_NAMES,
   scoreEntries,
   rescueSet,
-  rankNonPinnedByTenant,
   validateWeights,
   type MvFeatureVector,
 } from '../src/memory-value.js';
@@ -419,6 +418,9 @@ describe('(e) rescue semantics', () => {
 
     const result = await consolidate(dir, { now: NOW });
     expect(result.removed).toBe(7);
+    const rescueLines = result.details.filter((l) => l.includes('🛟'));
+    expect(rescueLines).toHaveLength(3);
+    for (const l of rescueLines) expect(l).toMatch(/ - rescued \(rank [123]\/10 in tenant ta, top 3\)$/);
 
     const remainingIds = new Set(loadAllEntries(dir).map((e) => e.id));
     for (const id of expectedRescued) expect(remainingIds.has(id)).toBe(true);
@@ -639,7 +641,7 @@ describe('(g) fail-loud on a malformed weights constant', () => {
     const all = loadAllEntries(dir);
     const badWeights = { ...MEMORY_VALUE_WEIGHTS, strength: Number.POSITIVE_INFINITY };
 
-    expect(() => rescueSet(all, new Set([condemned.id]), NOW, badWeights, SOURCE_ARTIFACT_SHA256)).toThrow(
+    expect(() => rescueSet(all, new Set([condemned.id]), NOW, { weights: badWeights, digest: SOURCE_ARTIFACT_SHA256 })).toThrow(
       /not a finite number/,
     );
     // Sanity: the real frozen constant is valid — the throw above is

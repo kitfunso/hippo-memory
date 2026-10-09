@@ -20,7 +20,7 @@ import {
 // Pure aggregator math
 // ---------------------------------------------------------------------------
 
-describe('aggregate helpers (v1.7.5)', () => {
+describe('aggregate helpers', () => {
   it('mean of [0.1, 0.2, 0.3] = 0.2', () => {
     expect(mean([0.1, 0.2, 0.3])).toBeCloseTo(0.2, 5);
   });
@@ -85,7 +85,7 @@ describe('aggregate helpers (v1.7.5)', () => {
 // Paired permutation CI
 // ---------------------------------------------------------------------------
 
-describe('pairedPermutationCI (v1.7.5)', () => {
+describe('pairedPermutationCI', () => {
   it('zero-delta on identical inputs: CI contains 0', () => {
     const xs = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8];
     const { deltaMean, ciLow, ciHigh } = pairedPermutationCI(xs, xs.slice());
@@ -126,7 +126,7 @@ describe('pairedPermutationCI (v1.7.5)', () => {
 // Seeded task generator -- determinism + variance + structural invariants
 // ---------------------------------------------------------------------------
 
-describe('generateTasks(seed) (v1.7.5)', () => {
+describe('generateTasks(seed)', () => {
   it('without a seed, returns the canonical fixed-position output', () => {
     const a = generateTasks();
     const b = generateTasks();

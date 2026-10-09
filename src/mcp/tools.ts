@@ -1,11 +1,14 @@
 // Tool definitions and input schemas served by tools/list.
 
 import type { ToolInputSchema } from './tool-args.js';
+import { DEFAULT_RECALL_BUDGET } from '../core/search-types.js';
+import { DEFAULT_ASSEMBLE_BUDGET } from '../api/assemble.js';
+import { MAX_ID_LEN } from '../http-util.js';
 
 // ── Tool definitions ──
 
-// HTTP sets no budget cap; 25x the 4000 recall default leaves room for large-context clients while bounding one call's work.
-const MAX_BUDGET_TOKENS = 100_000;
+// HTTP sets no budget cap; 25x the recall default leaves room for large-context clients while bounding one call's work.
+const MAX_BUDGET_TOKENS = 25 * DEFAULT_RECALL_BUDGET;
 // Same ceiling as the HTTP list routes' parseListLimit.
 const MAX_LIST_LIMIT = 1000;
 
@@ -28,7 +31,7 @@ export const TOOLS: readonly McpToolDefinition[] = [
           type: 'number',
           minimum: 0,
           maximum: MAX_BUDGET_TOKENS,
-          description: `Max tokens to return (default: config.defaultBudget, 4000; max ${MAX_BUDGET_TOKENS})`,
+          description: `Max tokens to return (default: config.defaultBudget, ${DEFAULT_RECALL_BUDGET}; max ${MAX_BUDGET_TOKENS})`,
         },
         include_continuity: {
           type: 'boolean',
@@ -56,8 +59,8 @@ export const TOOLS: readonly McpToolDefinition[] = [
         },
         session_id: {
           type: 'string',
-          maxLength: 256,
-          description: 'Optional session id (v1.7.4). When set AND (tenant, session) has active goals, applies the dlPFC goal-stack boost to the ranked memories before formatting. Mirrors fresh_tail_session_id shape (256-char cap).',
+          maxLength: MAX_ID_LEN,
+          description: `Optional session id (v1.7.4). When set AND (tenant, session) has active goals, applies the dlPFC goal-stack boost to the ranked memories before formatting. Mirrors fresh_tail_session_id shape (${MAX_ID_LEN}-char cap).`,
         },
       },
       required: ['query'],
@@ -78,7 +81,7 @@ export const TOOLS: readonly McpToolDefinition[] = [
           type: 'number',
           minimum: 0,
           maximum: MAX_BUDGET_TOKENS,
-          description: `Token budget for the assembled context (default 4000; max ${MAX_BUDGET_TOKENS}). Eviction kicks in over budget.`,
+          description: `Token budget for the assembled context (default ${DEFAULT_ASSEMBLE_BUDGET}; max ${MAX_BUDGET_TOKENS}). Eviction kicks in over budget.`,
         },
         fresh_tail_count: {
           type: 'number',
@@ -143,6 +146,7 @@ export const TOOLS: readonly McpToolDefinition[] = [
         error: { type: 'boolean', description: 'Mark as error memory (doubles half-life)' },
         pin: { type: 'boolean', description: 'Pin memory (never decays)' },
         tag: { type: 'string', description: 'Optional tag for categorization' },
+        personal: { type: 'boolean', description: 'Store it as your own private memory: only you can recall it, in every project. Needs a key you minted or a sign-in.' },
       },
       required: ['text'],
     },

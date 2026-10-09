@@ -1,7 +1,7 @@
 /** Z0 analyzer on generated records with known effects; numbers in test names follow the plan's test list.
  * The records are synthetic: they test the contract, filters and arithmetic, never hippo. CLI tests: token-eval-z0-analyze-cli.test.ts. */
 import { describe, it, expect } from 'vitest';
-import { addUsage, holmAdjust, priceUsage, verdict } from '../dist/eval-stats.js';
+import { addUsage, holmAdjust, priceUsage, verdict } from '../dist/eval/eval-stats.js';
 import { RN_ARMS, parseZ0Records, parsePlan, validateCorpus } from '../scripts/token-eval/z0-records.mjs';
 import { filterRecords, pairTasks } from '../scripts/token-eval/z0-filters.mjs';
 import { BEHAVIOUR_SENTENCE, LESSONS_SENTENCE, NOT_RUN, NO_N_DATA, SPECS, bothCodings, codexApply, computeHypotheses, holmVerdicts, inSets, meanBootstrap, repeatMistake, rotationSlots } from '../scripts/token-eval/z0-hypotheses.mjs';

@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import { execFileSync } from 'node:child_process';
-import { claudeCodeAdapter, claudeFolderName, claudeMemoryFolderNames, claudeTranscriptListing, transcriptNotesOrigin } from '../src/agent-memories/claude-code.js';
+import { claudeCodeAdapter, claudeFolderName, claudeMemoryFolderNames, claudeTranscriptListing, transcriptNotesProject } from '../src/agent-memories/claude-code.js';
 import type { AdapterContext, Container } from '../src/agent-memories/types.js';
 import type { JsonObject } from '../src/working-memory.js';
 
@@ -245,10 +245,10 @@ describe('claudeCodeAdapter config folder and project name rules', () => {
     fs.mkdirSync(path.join(repo, '.git'), { recursive: true });
     const transcriptOf = (dir: string) => path.join(tmp(), 'projects', claudeFolder(dir), 't.jsonl');
 
-    expect(transcriptNotesOrigin(transcriptOf(launch), repo, { platform: process.platform, env: {} })).toBe('');
-    expect(transcriptNotesOrigin(transcriptOf(repo), path.join(repo, 'src'), { platform: process.platform, env: {} })).toBe('repo');
-    expect(transcriptNotesOrigin(transcriptOf(repo), tmp(), { platform: process.platform, env: {} })).toBeNull();
-    expect(transcriptNotesOrigin(transcriptOf(repo), null, { platform: process.platform, env: {} })).toBeNull();
+    expect(transcriptNotesProject(transcriptOf(launch), repo, { platform: process.platform, env: {} })?.name).toBe('');
+    expect(transcriptNotesProject(transcriptOf(repo), path.join(repo, 'src'), { platform: process.platform, env: {} })?.name).toBe('repo');
+    expect(transcriptNotesProject(transcriptOf(repo), tmp(), { platform: process.platform, env: {} })).toBeNull();
+    expect(transcriptNotesProject(transcriptOf(repo), null, { platform: process.platform, env: {} })).toBeNull();
   });
 
   it('reads the start folder from the transcript, which the lossy folder name cannot give back, and decides nothing for a folder gone from disk', () => {
@@ -260,8 +260,8 @@ describe('claudeCodeAdapter config folder and project name rules', () => {
     const gone = path.join(launch, 'gone');
     const goneTranscript = path.join(tmp(), 'projects', claudeFolderName(gone), 't.jsonl');
 
-    expect(transcriptNotesOrigin(transcript, dash, { platform: process.platform, env: {} })).toBe('my_repo');
-    expect(transcriptNotesOrigin(goneTranscript, path.join(gone, 'src'), { platform: process.platform, env: {} })).toBeNull();
+    expect(transcriptNotesProject(transcript, dash, { platform: process.platform, env: {} })?.name).toBe('my_repo');
+    expect(transcriptNotesProject(goneTranscript, path.join(gone, 'src'), { platform: process.platform, env: {} })).toBeNull();
   });
 
   it('gives a pinned session folder the project the session started in', () => {
@@ -271,8 +271,8 @@ describe('claudeCodeAdapter config folder and project name rules', () => {
     writeIn(path.dirname(transcript), 't.jsonl', `${JSON.stringify({ cwd: repo })}\n`);
     const env = { CLAUDE_CONFIG_DIR: tmp(), CLAUDE_CODE_PROJECT_DIR_NAME: 'pinned-name' };
 
-    expect(transcriptNotesOrigin(transcript, tmp(), { platform: process.platform, env })).toBe('repo');
-    expect(transcriptNotesOrigin(transcript, tmp(), { platform: process.platform, env: {} })).toBeNull();
+    expect(transcriptNotesProject(transcript, tmp(), { platform: process.platform, env })?.name).toBe('repo');
+    expect(transcriptNotesProject(transcript, tmp(), { platform: process.platform, env: {} })).toBeNull();
   });
 
   it('lists nothing for a project scope without a project root or name', () => {

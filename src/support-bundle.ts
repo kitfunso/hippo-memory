@@ -4,14 +4,19 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { pathToFileURL } from 'url';
-import { findHippoStoreDir, isGlobalStoreRoot, realpathOrResolve } from './project-identity.js';
+import { findHippoStoreDir, isGlobalStoreRoot } from './project-identity.js';
+import { realpathOrResolve } from './util/real-path.js';
 import { getGlobalRoot } from './shared.js';
 import { isInitialized } from './store/open.js';
 import { openHippoDbReadOnly, closeHippoDb, getSchemaVersion, getMeta, countTableRows, type DatabaseSyncLike } from './db.js';
+import { listTableNames } from './db/tables.js';
 import { runDoctor, type DoctorOpts } from './doctor.js';
 import { loadConfig } from './config.js';
 import { redactSecretsStrict } from './secret-detect.js';
-import type { JsonValue, JsonObject } from './working-memory.js';
+import type { JsonObject } from './working-memory.js';
+import { type JsonValue, isJsonString, isJsonObject } from './json.js';
+import { escapeRegex } from './escape.js';
+import { errorMessage } from './log.js';
 
 export interface SupportBundleOpts extends DoctorOpts {
   readonly cwd: string;
@@ -37,14 +42,6 @@ const OTHER_ENV_NAMES: readonly string[] = [
 
 const CONFIG_SECRET_KEY_RE = /key|token|secret|passw|credential|auth|cookie|bearer|signature|private/i;
 
-function isJsonObject(v: JsonValue): v is JsonObject {
-  return typeof v === 'object' && v !== null && !Array.isArray(v);
-}
-
-function isJsonString(v: JsonValue): v is string {
-  return typeof v === 'string';
-}
-
 function buildRuntime(): JsonObject {
   return {
     node: process.versions.node,
@@ -53,14 +50,6 @@ function buildRuntime(): JsonObject {
     arch: process.arch,
     osRelease: os.release(),
   };
-}
-
-function listTableNames(db: DatabaseSyncLike): string[] {
-  // SAFETY: each row's shape matches the single `name` column named in the SELECT above.
-  const rows = db.prepare(
-    `SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND sql NOT LIKE 'CREATE VIRTUAL TABLE%' ORDER BY name`,
-  ).all() as { name: string }[];
-  return rows.map((r) => r.name);
 }
 
 function countTables(db: DatabaseSyncLike): JsonObject {
@@ -121,7 +110,7 @@ function buildStoreEntry(kind: 'project' | 'global', storeDir: string): JsonObje
     const { configFile, config } = readStoreConfig(storeDir);
     return { kind, path: storeDir, schemaVersion, minCompatibleBinary, files, tables, configFile, config };
   } catch (err) {
-    return { kind, path: storeDir, error: err instanceof Error ? err.message : String(err) };
+    return { kind, path: storeDir, error: errorMessage(err) };
   } finally {
     if (db !== null) closeHippoDb(db);
   }
@@ -198,10 +187,6 @@ function buildLogsSection(opts: SupportBundleOpts): JsonObject {
   return logs;
 }
 
-function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
 // The native realpath is the only form that exposes a short-name (8.3) or symlinked alias for what it is.
 function nativeRealPathKey(p: string): string | null {
   try {
@@ -256,12 +241,12 @@ function mountedDrive(letter: string): string {
 
 /** Regex source for one spelling of the home, or null when too little of it is left to swap safely. */
 function spellingPattern(spelling: string, deep: boolean): string | null {
-  if (process.platform !== 'win32') return spelling.length >= 3 ? escapeRegExp(spelling) : null;
+  if (process.platform !== 'win32') return spelling.length >= 3 ? escapeRegex(spelling) : null;
   // Each tool that mounts a drive writes it its own way, so a home two or more folders below its drive (\Users\<name>)
   // matches after any prefix, with \, / or JSON's \\ between folders. A drive written a known way goes into the swap with it.
   const drive = /^([A-Za-z])[:-]/.exec(spelling);
   const below = drive === null ? spelling : spelling.slice(2);
-  const body = below.split(/[\\/]+/).map(escapeRegExp).join('[\\\\/]+');
+  const body = below.split(/[\\/]+/).map(escapeRegex).join('[\\\\/]+');
   if (drive === null) {
     if (spelling.length < 3) return null;
     return deep ? body : `(?<![\\p{L}\\p{N}_])${body}`;

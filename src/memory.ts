@@ -12,7 +12,8 @@ import {
   isRecallBoostAblated,
   evalNow,
 } from './ablation.js';
-import { AGENT_MEMORY_TOOLS, toolSourcePrefix } from './agent-memories/tools.js';
+import { AGENT_MEMORY_TOOLS, toolSourcePrefix } from './core/agent-memory-tools.js';
+import { DAY_MS } from './util/time.js';
 
 export enum Layer {
   Buffer = 'buffer',
@@ -47,8 +48,8 @@ export type MemoryKind = 'raw' | 'distilled' | 'superseded' | 'archived';
  *
  * Byte-comparison sort (`<` / `>`) is chronological for any pair of
  * canonical UTC ISO strings. ~50× faster than `localeCompare` with no
- * semantic gain. F4 (v1.6.5) uses byte compare on `assemble`; if a future
- * import path admits non-canonical timestamps, the F4 sort and any
+ * semantic gain. `assemble` sorts by byte compare; if a future
+ * import path admits non-canonical timestamps, that sort and any
  * downstream chronological reasoning will need a normalization pass.
  */
 
@@ -80,45 +81,45 @@ export interface MemoryEntry {
   extracted_from: string | null;
   dag_level: number;            // 0=leaf, 1=extracted_fact, 2=topic_summary, 3=entity_profile (independent of envelope `kind`)
   dag_parent_id: string | null; // ID of parent summary node in the DAG; null = root level
-  // Cached DAG metadata (schema v25). Populated for level-2+ summary rows so
+  // Cached DAG metadata. Populated for level-2+ summary rows so
   // recall can reason about scope without re-walking the DAG. Always 0 / null
   // for level-0 leaves and level-1 facts.
   descendant_count?: number;
   earliest_at?: string | null;
   latest_at?: string | null;
-  // DAG live-coupling (schema v28, E1 of 5-episode arc).
-  /** v28: 1 when this summary row has at least one child invalidated,
+  // DAG live-coupling.
+  /** 1 when this summary row has at least one child invalidated,
    *  superseded, forgotten, or archived since it was last rebuilt. Cleared
-   *  by E3's rebuildDirtySummaries during sleep. Always 0 for non-summary
-   *  rows (dag_level !== 2; E5 widens to include 3). */
+   *  by rebuildDirtySummaries during sleep. Always 0 for non-summary
+   *  rows (dag_level !== 2). */
   summary_dirty?: 0 | 1;
-  /** v28: ISO 8601 timestamp of the last successful rebuild for this
+  /** ISO 8601 timestamp of the last successful rebuild for this
    *  summary, or null if never rebuilt. */
   last_rebuilt_at?: string | null;
-  /** v28: monotonically-increasing counter of successful rebuilds for this
-   *  summary. 0 for initial buildDag write; bumped by E3. */
+  /** Monotonically-increasing counter of successful rebuilds for this
+   *  summary. 0 for initial buildDag write; bumped by each rebuild. */
   rebuild_count?: number;
-  /** v28 (reserved for E5): ISO 8601 timestamp the level-3 entity profile
+  /** Reserved: ISO 8601 timestamp the level-3 entity profile
    *  was built. Only ever populated on dag_level=3 rows. */
   dag_level_3_built_at?: string | null;
-  // A3 provenance envelope (schema v14)
+  // Provenance envelope
   kind: MemoryKind;             // raw | distilled | superseded | archived
   scope: string | null;         // e.g. 'team:eng', 'project:foo'; null = global
   owner: string | null;         // 'user:<id>' or 'agent:<id>'
   artifact_ref: string | null;  // URI to source artifact (slack://, gh://, file://)
-  // A5 stub auth (schema v16)
+  // Stub auth
   tenantId: string;             // 'default' for single-tenant deployments
   /**
-   * Memory scope isolation (schema v39): owning project for ambient-context
+   * Memory scope isolation: owning project for ambient-context
    * partitioning. A lowercased project name, '' for user-global (injectable
-   * everywhere), or null for legacy pre-v39 rows - ambient context treats
-   * null as other-project (deny). Stamped from the store's location at write
-   * time (store.ts stampOriginProject); undefined only on entries not yet
-   * written. See docs/plans/2026-07-01-memory-scope-isolation.md.
+   * everywhere), or null for no known project (a legacy row, or a shared-store
+   * write that named none) - ambient context treats null as other-project (deny).
+   * Stamped at write time by store/entry-row.ts stampOriginProject via fallbackOrigin;
+   * undefined only on entries not yet written.
    */
   origin_project?: string | null;
   /**
-   * F1 (v1.7.0): raw SQLite FTS5 bm25() score from the FTS path of
+   * Raw SQLite FTS5 bm25() score from the FTS path of
    * `loadSearchEntries`.
    *
    * Populated ONLY when ALL of the following hold:
@@ -138,20 +139,11 @@ export interface MemoryEntry {
   bm25_score?: number;
 }
 
-/** FE2: tag on a memory whose named file/symbol/script changed after it was stored. */
+/** Tag on a memory whose named file/symbol/script changed after it was stored. */
 export const CHURN_STALE_TAG = 'churn-stale';
 
-// Emotional multipliers from PLAN.md.
-//
-// v1.13.5 / J5 loss-aversion calibration (Lovallo-Kahneman TFAS empirics:
-// losses ~2x larger than equivalent gains). Defaults rebalanced:
-//   - positive (success-tagged): 1.3 -> 1.0
-//   - negative (error-tagged):   1.5 -> 2.0
-//   - critical stays at 2.0 (literal roadmap reading; J5 silent on critical;
-//     ranking signal in consolidate.ts/salience.ts/ambient.ts unchanged)
-//   - neutral stays at 1.0
-//
-// `negative` is further scaled per-process by HIPPO_LOSS_AVERSION_RATIO
+// Emotional multipliers from PLAN.md. Losses weigh ~2x equivalent gains (Lovallo-Kahneman TFAS empirics),
+// so negative is 2.0. `negative` is further scaled per-process by HIPPO_LOSS_AVERSION_RATIO
 // (env var, default 1.0; see getLossAversionRatio + applyLossAversionRatio).
 const EMOTIONAL_MULTIPLIERS = {
   neutral: 1.0,
@@ -161,7 +153,7 @@ const EMOTIONAL_MULTIPLIERS = {
 } satisfies Record<EmotionalValence, number>;
 
 /**
- * v1.13.5 / J5 — module-level lazy-cached read of HIPPO_LOSS_AVERSION_RATIO.
+ * Module-level lazy-cached read of HIPPO_LOSS_AVERSION_RATIO.
  *
  * `calculateStrength` is called per-entry inside hot recall loops
  * (api.ts/consolidate.ts/search.ts), so a per-call `process.env` lookup
@@ -171,21 +163,20 @@ const EMOTIONAL_MULTIPLIERS = {
  */
 
 /**
- * v1.13.5 minimum acceptable ratio. Below this, the negative multiplier
+ * Minimum acceptable ratio. Below this, the negative multiplier
  * (2.0 * ratio) becomes small enough that calculateStrength * decay can fall
  * below `DECAY_THRESHOLD = 0.05` in `src/consolidate.ts:146`, which would
  * permanently delete non-pinned error-tagged memories on the next sleep
- * cycle. 0.5 is chosen as the floor because (a) it recovers the v1.13.4
+ * cycle. 0.5 is chosen as the floor because (a) it recovers the pre-calibration
  * effective multiplier (2.0 * 0.5 = 1.0 + the negative premium, i.e. 1.5x
- * the v1.13.4 default), and (b) below this the user is asking for LESS
+ * the pre-calibration default), and (b) below this the user is asking for LESS
  * loss aversion than has ever shipped — that's outside the supported
- * tuning range. See codex-review-critic round 1 P1.
+ * tuning range.
  */
 const LOSS_AVERSION_RATIO_MIN = 0.5;
 
 /**
- * Validation policy (v1.13.5 + independent-review round-1 HIGH + codex
- * round-1 P1 folds):
+ * Validation policy:
  *   - Valid: finite numbers >= 0.5.
  *   - Invalid (silent fallback to 1.0): empty string, non-numeric,
  *     numbers below 0.5 (including 0 and negatives), NaN, +/-Infinity.
@@ -193,17 +184,16 @@ const LOSS_AVERSION_RATIO_MIN = 0.5;
  *     on a typo.
  *
  * Why the 0.5 floor and not 0:
- *   - codex-review-critic round 1 P1: rejecting only `0` (the original
- *     HIGH fold) leaves the same silent data-loss surface for any ratio
+ *   - Rejecting only `0` leaves the same silent data-loss surface for any ratio
  *     below ~0.025 (and worse for aged memories, where even ratio=0.25
  *     can produce strength < DECAY_THRESHOLD = 0.05 in consolidate.ts).
- *     Floor at the v1.13.4-equivalent (0.5) so the env var's tuning
+ *     Floor at the pre-calibration equivalent (0.5) so the env var's tuning
  *     range never crosses into the deletion regime.
- *   - Users wanting LESS loss aversion than v1.13.4's 1.5 multiplier
- *     should reconsider the design intent of J5 (the calibration was
+ *   - Users wanting LESS loss aversion than the pre-calibration 1.5 multiplier
+ *     should reconsider the design intent (the calibration was
  *     toward MORE loss aversion, not less). If a future use case
  *     genuinely needs ratio < 0.5, the right path is a separate
- *     `HIPPO_NEGATIVE_MULTIPLIER` env override (deferred to J5-v2).
+ *     `HIPPO_NEGATIVE_MULTIPLIER` env override.
  */
 let _lossAversionRatioCache: number | undefined;
 
@@ -232,7 +222,7 @@ function getLossAversionRatio(): number {
  *     the env var for this test.
  *   - afterEach: clear the cache so the next test (which may not set the env
  *     var) reads the clean default instead of this test's value.
- * See `tests/emotional-multipliers-j5.test.ts` for the canonical pattern.
+ * See `tests/emotional-multipliers.test.ts` for the pattern.
  */
 export function _resetLossAversionRatioCacheForTests(): void {
   _lossAversionRatioCache = undefined;
@@ -241,8 +231,7 @@ export function _resetLossAversionRatioCacheForTests(): void {
 /**
  * Apply the loss-aversion ratio scalar to the `negative` multiplier ONLY.
  * Other valences (positive, critical, neutral) pass through unchanged.
- * `critical` is deliberately NOT scaled: J5 roadmap is silent on critical;
- * its multiplier is left alone so the calibration only touches the
+ * `critical` is deliberately NOT scaled, so the calibration only touches the
  * specific empirical claim (TFAS 2x losses-vs-gains).
  */
 function applyLossAversionRatio(
@@ -270,11 +259,18 @@ export function calculateRewardFactor(entry: Pick<MemoryEntry, 'outcome_positive
   const neg = entry.outcome_negative ?? 0;
   if (pos === 0 && neg === 0) return 1.0;
   const ratio = (pos - neg) / (pos + neg + 1);
-  return 1 + 0.5 * ratio;
+  return 1 + REWARD_SLOPE * ratio;
 }
 
 /** Bad marks alone never push a memory under sleep's 0.05 retire line; supersede is the hard correction. */
 const MAX_WRONG_HALVINGS = 3;
+
+// Shared by calculateStrength and strengthSql so the two cannot drift.
+const DECAY_BASE = 0.5;
+const REWARD_SLOPE = 0.5;
+const RETRIEVAL_BOOST_SLOPE = 0.1;
+const SQL_DEFAULT_HALF_LIFE_DAYS = 7;
+const UNIX_EPOCH_JULIAN_DAY = 2440587.5;
 
 /**
  * Net wrongness: bad outcome marks past good ones, never below zero.
@@ -288,9 +284,9 @@ export function netWrong(entry: Pick<MemoryEntry, 'outcome_positive' | 'outcome_
 
 /**
  * Options for decay basis.
- * - clock: wall-clock time (default pre-v0.15)
+ * - clock: wall-clock time (former default)
  * - session: decay by sleep cycle count (for intermittent agents)
- * - adaptive: auto-scale half-life by session frequency (default v0.15+)
+ * - adaptive: auto-scale half-life by session frequency (default)
  */
 /** What calculateStrength reads, so a caller can score a row without loading its text. */
 export type StrengthInputs = Pick<
@@ -325,20 +321,16 @@ export function calculateStrength(
   options: DecayOptions = {},
 ): number {
   // Being marked wrong outranks every shield: pinning, error tags, heavy recall.
-  const wrongPenalty = Math.pow(0.5, Math.min(netWrong(entry), MAX_WRONG_HALVINGS));
+  const wrongPenalty = Math.pow(DECAY_BASE, Math.min(netWrong(entry), MAX_WRONG_HALVINGS));
   if (entry.pinned) return wrongPenalty;
 
-  // EVAL-ONLY ablation (see ablation.ts): with recall-strengthening ablated,
-  // anchor decay at CREATION, not last_retrieved. A never-strengthened memory
-  // decays from when it was made; using last_retrieved would let clock resets
-  // persisted by PRIOR unflagged runs leak strengthening into an ablated
-  // arm's rankings (codex P2). Identity on fresh stores (created ==
-  // last_retrieved at write). Prior-run half_life increments are NOT
-  // reconstructed - see the ablation.ts caveat (fresh stores per arm).
+  // EVAL-ONLY ablation (see ablation.ts): anchor decay at CREATION, so clock resets persisted by PRIOR
+  // unflagged runs cannot leak strengthening into an ablated arm. Prior-run half_life increments are
+  // NOT reconstructed - see the ablation.ts caveat (fresh stores per arm).
   const lastRetrieved = new Date(
     isRecallBoostAblated() ? entry.created : entry.last_retrieved,
   );
-  const daysSince = (now.getTime() - lastRetrieved.getTime()) / (1000 * 60 * 60 * 24);
+  const daysSince = (now.getTime() - lastRetrieved.getTime()) / DAY_MS;
 
   // Reward-proportional half-life modulation
   const rewardFactor = calculateRewardFactor(entry);
@@ -371,22 +363,16 @@ export function calculateStrength(
   // EVAL-ONLY ablation (see ablation.ts): decay term := 1. NOTE the [0,1]
   // clamp below then caps retrievalBoost at baseline - see ablation.ts
   // formula note.
-  const decay = isDecayAblated() ? 1.0 : Math.pow(0.5, decayExponent);
+  const decay = isDecayAblated() ? 1.0 : Math.pow(DECAY_BASE, decayExponent);
 
-  // Retrieval boost: 1 + 0.1 * log2(retrieval_count + 1)
-  // EVAL-ONLY ablation (see ablation.ts): the recall-boost flag neutralizes
-  // the READ side too, so a store with PRIOR retrieval history (counts > 0
-  // written before the flag was set) does not leak strengthening into an
-  // ablated arm's rankings (codex P2).
+  // Retrieval boost: 1 + 0.1 * log2(retrieval_count + 1). EVAL-ONLY ablation (see ablation.ts) neutralizes
+  // the READ side too, so counts written before the flag cannot leak strengthening into an ablated arm.
   const retrievalBoost = isRecallBoostAblated() || netWrong(entry) > 0
     ? 1.0
-    : 1 + 0.1 * Math.log2(entry.retrieval_count + 1);
+    : 1 + RETRIEVAL_BOOST_SLOPE * Math.log2(entry.retrieval_count + 1);
 
-  // Emotional multiplier
-  // v1.13.5 / J5: apply HIPPO_LOSS_AVERSION_RATIO to the negative multiplier
-  // ONLY (positive/critical/neutral pass through unchanged). Lazy module-cache
-  // means this is a single Map lookup + one numeric multiply, not a per-call
-  // process.env read.
+  // Emotional multiplier. HIPPO_LOSS_AVERSION_RATIO scales the negative one ONLY; the lazy
+  // module cache makes this one lookup + one multiply, not a per-call process.env read.
   const baseMultiplier = EMOTIONAL_MULTIPLIERS[entry.emotional_valence] ?? 1.0;
   const emotionalMultiplier = applyLossAversionRatio(entry.emotional_valence, baseMultiplier);
 
@@ -406,19 +392,19 @@ export function strengthSql(now: Date): string {
   const wrong = isOutcomeSlowAblated() || isDecayAblated() ? '0' : `MAX(0, ${neg} - ${pos})`;
   const reward = isOutcomeSlowAblated()
     ? '1.0'
-    : `(CASE WHEN ${pos} = 0 AND ${neg} = 0 THEN 1.0 ELSE 1.0 + 0.5 * (${pos} - ${neg}) / (${pos} + ${neg} + 1.0) END)`;
-  const halfLife = `(COALESCE(half_life_days, 7) * ${reward})`;
+    : `(CASE WHEN ${pos} = 0 AND ${neg} = 0 THEN 1.0 ELSE 1.0 + ${REWARD_SLOPE} * (${pos} - ${neg}) / (${pos} + ${neg} + 1.0) END)`;
+  const halfLife = `(COALESCE(half_life_days, ${SQL_DEFAULT_HALF_LIFE_DAYS}) * ${reward})`;
   const anchor = isRecallBoostAblated() ? 'created' : 'last_retrieved';
-  const nowJulian = num(now.getTime() / 86400000 + 2440587.5);
-  const decay = isDecayAblated() ? '1.0' : `pow(0.5, (${nowJulian} - julianday(${anchor})) / ${halfLife})`;
+  const nowJulian = num(now.getTime() / DAY_MS + UNIX_EPOCH_JULIAN_DAY);
+  const decay = isDecayAblated() ? '1.0' : `pow(${DECAY_BASE}, (${nowJulian} - julianday(${anchor})) / ${halfLife})`;
   const boost = isRecallBoostAblated()
     ? '1.0'
-    : `(CASE WHEN ${wrong} > 0 THEN 1.0 ELSE 1.0 + 0.1 * log2(COALESCE(retrieval_count, 0) + 1) END)`;
+    : `(CASE WHEN ${wrong} > 0 THEN 1.0 ELSE 1.0 + ${RETRIEVAL_BOOST_SLOPE} * log2(COALESCE(retrieval_count, 0) + 1) END)`;
   const valences = /* SAFETY: a Record keyed by EmotionalValence */ Object.keys(EMOTIONAL_MULTIPLIERS) as EmotionalValence[];
   const emotion = `(CASE COALESCE(emotional_valence, 'neutral') ${valences
     .map((v) => `WHEN '${v}' THEN ${num(applyLossAversionRatio(v, EMOTIONAL_MULTIPLIERS[v]))}`)
     .join(' ')} ELSE 1.0 END)`;
-  const penalty = `pow(0.5, MIN(${wrong}, ${MAX_WRONG_HALVINGS}))`;
+  const penalty = `pow(${DECAY_BASE}, MIN(${wrong}, ${MAX_WRONG_HALVINGS}))`;
   return `(CASE WHEN pinned THEN ${penalty} WHEN ${halfLife} <= 0 THEN 0.0
     ELSE MIN(1.0, MAX(0.0, ${decay} * ${boost} * ${emotion})) * ${penalty} END)`;
 }
@@ -426,6 +412,16 @@ export function strengthSql(now: Date): string {
 /**
  * Derive half-life based on signals, as per PLAN.md table.
  */
+const HIGH_SCHEMA_FIT = 0.7;
+const HIGH_FIT_HALF_LIFE_FACTOR = 1.5;
+const LOW_SCHEMA_FIT = 0.3;
+const LOW_FIT_HALF_LIFE_FACTOR = 0.5;
+// Schema fit blends tag coverage and content similarity; a content match needs this share of shared tokens.
+const TAG_FIT_WEIGHT = 0.6;
+const CONTENT_FIT_WEIGHT = 0.4;
+const CONTENT_TOKEN_SHARE_MIN = 0.2;
+const CONTENT_ENOUGH_FRACTION = 0.1;
+
 export function deriveHalfLife(base: number, entry: Partial<MemoryEntry>): number {
   let hl = base;
 
@@ -435,13 +431,13 @@ export function deriveHalfLife(base: number, entry: Partial<MemoryEntry>): numbe
   }
 
   // High schema fit: consolidates faster (1.5x)
-  if (entry.schema_fit !== undefined && entry.schema_fit > 0.7) {
-    hl *= 1.5;
+  if (entry.schema_fit !== undefined && entry.schema_fit > HIGH_SCHEMA_FIT) {
+    hl *= HIGH_FIT_HALF_LIFE_FACTOR;
   }
 
   // Low schema fit: decay faster (0.5x)
-  if (entry.schema_fit !== undefined && entry.schema_fit < 0.3) {
-    hl *= 0.5;
+  if (entry.schema_fit !== undefined && entry.schema_fit < LOW_SCHEMA_FIT) {
+    hl *= LOW_FIT_HALF_LIFE_FACTOR;
   }
 
   return hl;
@@ -471,6 +467,13 @@ export function applyOutcome(entry: MemoryEntry, good: boolean): MemoryEntry {
   return updated;
 }
 
+/** applyOutcome as a served outcome applies it: a good outcome reconfirms the entry, so its churn-stale tag goes. */
+export function entryAfterOutcome(entry: MemoryEntry, good: boolean): MemoryEntry {
+  const updated = applyOutcome(entry, good);
+  if (!good || !updated.tags.includes(CHURN_STALE_TAG)) return updated;
+  return { ...updated, tags: updated.tags.filter((t) => t !== CHURN_STALE_TAG) };
+}
+
 /**
  * Generate a random memory ID using crypto.randomUUID().
  */
@@ -483,7 +486,7 @@ export function generateId(prefix: string = 'mem'): string {
 function isAgedOut(entry: MemoryEntry, now: Date): boolean {
   if (entry.pinned || entry.confidence === 'verified') return false;
   const lastRetrieved = new Date(entry.last_retrieved);
-  return (now.getTime() - lastRetrieved.getTime()) / (1000 * 60 * 60 * 24) > 30;
+  return (now.getTime() - lastRetrieved.getTime()) / DAY_MS > 30;
 }
 
 export interface ConfidenceFacets {
@@ -517,10 +520,8 @@ export function resolveConfidence(entry: MemoryEntry, now: Date = evalNow()): Co
 
 /**
  * Base half-life for a new memory, in days, before `deriveHalfLife`'s
- * write-time multipliers. 365 since 1.46.0: the pre-registered E1 decision
- * (docs/evals/2026-09-24-decay-default-result.md and prereg-2) found 7 days
- * lost the current fact far more often (29% vs 75% in the top five), and
- * 730 days and decay off tied with 365. `hippo sleep` moves memories still
+ * write-time multipliers. 365 because 7 days lost the current fact far more
+ * often, and 730 days or no decay did no better. `hippo sleep` moves memories still
  * on an older base (src/half-life-migration.ts).
  */
 export const DEFAULT_HALF_LIFE_DAYS = 365;
@@ -673,63 +674,64 @@ export function computeSchemaFit(
   tags: string[],
   existingEntries: MemoryEntry[]
 ): number {
-  if (existingEntries.length === 0) return 0.5; // no schema yet, neutral
-
-  // Build tag frequency map across all existing entries
-  const tagFreq = new Map<string, number>();
+  const tagCounts = new Map<string, number>();
   for (const entry of existingEntries) {
     for (const tag of entry.tags) {
-      tagFreq.set(tag, (tagFreq.get(tag) ?? 0) + 1);
+      tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
     }
   }
+  return schemaFitFrom(content, tags, { rows: existingEntries.length, tagCounts, contents: existingEntries.map((e) => e.content) });
+}
 
+/** What schema fit reads from a set of memories, so a store can answer without loading its rows. */
+export interface SchemaFitSource {
+  readonly rows: number;
+  /** How many times each tag appears across the set. */
+  readonly tagCounts: ReadonlyMap<string, number>;
+  /** Each memory's text; the walk stops once more matches cannot move the score. */
+  readonly contents: Iterable<string>;
+}
+
+function significantTokens(text: string): Set<string> {
+  return new Set(text.toLowerCase().replace(/[^\w\s]/g, ' ').split(/\s+/).filter((t) => t.length > 3));
+}
+
+/** computeSchemaFit against `source`, for a caller that holds counts and texts but no rows. */
+export function schemaFitFrom(content: string, tags: readonly string[], source: SchemaFitSource): number {
+  const N = source.rows;
+  if (N === 0) return 0.5; // no schema yet, neutral
+  const tagFreq = source.tagCounts;
   if (tags.length === 0 && tagFreq.size === 0) return 0.5;
 
-  // Tag overlap: IDF-weighted Jaccard
-  // Shared rare tags matter more than shared common tags
+  // Tag overlap, weighted so a shared rare tag counts for more than a shared common one.
   let weightedOverlap = 0;
   let totalWeight = 0;
-  const N = existingEntries.length;
-
+  const maxIdf = Math.log(N + 1) + 1;
   for (const tag of tags) {
     const freq = tagFreq.get(tag) ?? 0;
-    // IDF-weighted: rare shared tags score higher
-    const maxIdf = Math.log(N + 1) + 1;
-
-    if (freq > 0) {
-      const idf = Math.log(N / freq) + 1;
-      weightedOverlap += idf;
-    }
+    if (freq > 0) weightedOverlap += Math.log(N / freq) + 1;
     totalWeight += maxIdf;
   }
-
-  // Scale so that matching half the tags at average IDF gives ~0.5
+  // Scaled so that matching half the tags at average weight gives about 0.5.
   const tagScore = totalWeight > 0 ? Math.min(1, (weightedOverlap / totalWeight) * 2) : 0;
 
-  // Content overlap: check how many existing entries share significant tokens
-  const newTokens = new Set(
-    content.toLowerCase().replace(/[^\w\s]/g, ' ').split(/\s+/).filter((t) => t.length > 3)
-  );
-
+  const newTokens = significantTokens(content);
   if (newTokens.size === 0) return Math.min(1, Math.max(0, tagScore));
 
+  // The content score is capped at 1, which this many matching memories reach.
+  const enough = Math.max(5, N * CONTENT_ENOUGH_FRACTION);
   let contentMatches = 0;
-  for (const entry of existingEntries) {
-    const entryTokens = new Set(
-      entry.content.toLowerCase().replace(/[^\w\s]/g, ' ').split(/\s+/).filter((t) => t.length > 3)
-    );
+  for (const text of source.contents) {
+    const entryTokens = significantTokens(text);
     let shared = 0;
     for (const token of newTokens) {
       if (entryTokens.has(token)) shared++;
     }
-    const overlap = shared / Math.max(newTokens.size, 1);
-    if (overlap > 0.2) contentMatches++;
+    if (shared / newTokens.size > CONTENT_TOKEN_SHARE_MIN && ++contentMatches >= enough) break;
   }
+  const contentScore = Math.min(1, contentMatches / enough);
 
-  const contentScore = Math.min(1, contentMatches / Math.max(5, N * 0.1));
-
-  // Blend: 60% tag overlap, 40% content overlap
-  const fit = 0.6 * tagScore + 0.4 * contentScore;
+  const fit = TAG_FIT_WEIGHT * tagScore + CONTENT_FIT_WEIGHT * contentScore;
   return Math.min(1, Math.max(0, fit));
 }
 

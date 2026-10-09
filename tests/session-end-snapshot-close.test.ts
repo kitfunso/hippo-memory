@@ -1,12 +1,13 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { spawnSync, type SpawnSyncReturns } from 'child_process';
+import { type SpawnSyncReturns } from 'child_process';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 import { getHippoRoot } from '../src/store/open.js';
 import { loadActiveTaskSnapshot, saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import { loadLatestHandoff } from '../src/store/handoffs.js';
+import { hippoRun } from './_helpers/spawn-hippo.js';
 
 // DF1 (docs/plans/2026-08-23-df1-snapshot-lifecycle.md) T3 test 6:
 // session-end wiring. `cmdSessionEnd` extracts `payload.session_id` from the
@@ -14,8 +15,6 @@ import { loadLatestHandoff } from '../src/store/handoffs.js';
 // `__session-end-worker`; the worker closes that session's own active
 // snapshot AFTER sleep+capture. Real built CLI, real detached child, no
 // mocks — same idiom as tests/pre-compact-e2e.test.ts.
-
-const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
 
 function withScratchEnv() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-session-end-e2e-'));
@@ -34,12 +33,7 @@ function runHippo(
   env: NodeJS.ProcessEnv,
   input?: string,
 ): SpawnSyncReturns<string> {
-  return spawnSync(process.execPath, [HIPPO_JS, ...args], {
-    cwd,
-    env,
-    input,
-    encoding: 'utf8',
-  });
+  return hippoRun(args, { cwd, env, input });
 }
 
 function initHippo(cwd: string, env: NodeJS.ProcessEnv): void {
@@ -49,7 +43,7 @@ function initHippo(cwd: string, env: NodeJS.ProcessEnv): void {
 
 // The detached session-end worker can still hold a brief Windows lock on the
 // SQLite WAL/shm files after our poll condition is satisfied (same class of
-// issue as tests/github-v1.3.1-hotfix.test.ts's safeRmSync). Best-effort.
+// issue as tests/github-rollback-guard-and-deletion-atomicity.test.ts's safeRmSync). Best-effort.
 function safeRmSync(p: string): void {
   try {
     fs.rmSync(p, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
@@ -133,7 +127,7 @@ async function waitUntil(check: () => boolean, timeoutMs = 25_000, intervalMs = 
   );
 }
 
-describe('6. session-end wiring: --session-id argv + worker close (DF1 T3)', () => {
+describe('6. session-end wiring: --session-id argv + worker close', () => {
   let dir: string;
   let env: NodeJS.ProcessEnv;
 

@@ -22,7 +22,7 @@ const QUESTION = {
   answer_session_ids: ['s-evidence'],
 };
 
-describe('budget curve (TE3)', () => {
+describe('budget curve', () => {
   it('finds the evidence at a small budget where recency cannot', async () => {
     const budgets = [100, 400, 2000];
     const r = await evaluateQuestion(QUESTION, budgets);

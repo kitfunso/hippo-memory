@@ -23,6 +23,8 @@
 >
 > **2026-10-04 the #1 answer:** Part XXIII, Track HG aims to make hippo the answer to "the most effective and performant memory architecture for agents (validated in production) that understands temporality and supports dreaming." It scores hippo on outcome benchmarks (DreamBench-SWE, MemoryArena, Evo-Memory, MemoryAgentBench conflict resolution), never on retrieval QA, and adds HG1 dreaming that improves outcomes, HG2 event time, HG3 the outcome-benchmark runs with cost per solved task, and HG4 a production evidence ledger. A claim gate page must exist before anyone names hippo in reply. Z0 priority and frozen defaults remain.
 >
+> **2026-10-08 lessons from graded work:** Part XXIV records a review of an outside 25-proposal document and of Harvey's reported wake-sleep experiment (figures unverified). It adds one research item, SI6: an opt-in sleep stage that compiles lessons only from work with an independent grade, tested on Z0's development families against shipping hippo, a plain memory of each failed check and a fixed checklist. The review's other themes map to existing items or are not adopted. Z0 priority, S4's hygiene default, frozen defaults and locked registrations remain.
+>
 > `PLAN.md` remains the architecture and CLS-principles document. `RESEARCH.md` remains the research lineage and seven-mechanisms backgrounder.
 
 ## Current execution index
@@ -39,7 +41,7 @@
 | Next, 4 | EI2/EI10/EV1/EI11/EV6-EV9; required source adapters; EI15/CD11-CD14 | Deliver governed, low-touch memory and customer-defined value in an enterprise pilot | Scope one partner, required sources, identity provider and deployment. Close applicable access/derivation/revocation gates; configure one objective/metric contract and join permitted outcomes through Z10/Z2b. Include developer and administrator burden. Computer is not a prerequisite. | Keith; enterprise maintainer; customer administrator |
 | Next, 5; bounded development can accompany Now | CLF0/CLF1/CLF4/CLF12; CAE0-CAE4 | Improve a specific memory decision without unpredictable costs or recurring backend management | First compare one role at matched eligible candidates/input bounds against native and applicable Jev/local baselines, with quota controls and native fallback. Complete supported-surface conformance and independent task confirmation before adoption; extend all accepted CLEF roles one at a time. | Decision-layer/evaluation maintainer |
 | Alongside all priorities | MSG1-MSG6; canonical product facts; CAE6/CAE7; HG4 maintainer row; K8.6/CD10 registry submission (needs Keith's yes) | Give users consistent capability, setup, edition and evidence information | Correct current source copy, check roadmap IDs/references and affected tool contracts, then verify the tagged package, actual npm listing and deployed website through their release processes. A source commit is not publication evidence. | Product/release maintainer |
-| Later or separately gated research | Wider CLF rollout/private serving; CAE9; optional CW; S2/S8 where justified; HG3 outcome-benchmark runs after Z0 stage 0, then the HG claim gate; LC4/Track G and grant research | Retain optional capabilities only when they improve useful outcomes or total burden against simpler baselines | Keep required runtime coverage visible; register role-specific comparisons, data floors, deployment/permission checks and retain/reject decisions. No provider, learning system or agent dispatcher becomes required for ordinary memory. | Relevant track maintainer; Keith |
+| Later or separately gated research | Wider CLF rollout/private serving; CAE9; optional CW; S2/S8 where justified; HG3 outcome-benchmark runs after Z0 stage 0, then the HG claim gate; SI6 graded-work lessons after Z0 stage 2; LC4/Track G and grant research | Retain optional capabilities only when they improve useful outcomes or total burden against simpler baselines | Keep required runtime coverage visible; register role-specific comparisons, data floors, deployment/permission checks and retain/reject decisions. No provider, learning system or agent dispatcher becomes required for ordinary memory. | Relevant track maintainer; Keith |
 
 **Operating rule.** Prefer one complete memory loop and a small number of bounded experiments over opening every track simultaneously. Engineering fixtures and development prototypes can proceed alongside Z0 prerequisites; task-benefit/default claims retain their independent gates. Measure repeat mistakes, quality, correction/supervision burden, total cost and latency. Simulated intervention counts are proxies; active human time needs its own registered pilot. Historical benchmark scores do not establish these outcomes.
 
@@ -285,9 +287,9 @@ API keys + audit log of every read/write/promote/supersede. Tenant scoping added
 **v2 sub-2 next (next minor):** L9 background pipelines tenant-scoping across 8 files (`consolidate.ts`, `embeddings.ts`, `invalidation.ts`, `refine-llm.ts`, `autolearn.ts`, `capture.ts`, `importers.ts`, `shared.ts`). Closes the unscoped `readEntry` / `loadSearchEntries` residue from v1.11.0; unblocked by sub-1's Actor shape.
 **v2 deferred to TODOS.md:** `hippo auth create-key --role` CLI flag (programmatic API works); `hippo auth list` role column display; `auth create`/`list` are unauthenticated locally (FS access is the trust boundary); audit-log retention/rotation; SSO/SCIM; OAuth scoped tokens; full multi-tenant org > team > project > scope hierarchy.
 
-### A6. Postgres backend [planned]
-For shared deployments only. SQLite stays the local default.
-**Effort:** 3-4w. **Success:** `--db postgres://...` boots; eval suites pass; concurrent-write smoke test green.
+### A6. Postgres backend [in progress: recall port shipped in 1.65.0]
+For shared deployments only. SQLite stays the local default. The Postgres store lives in hippo-enterprise and plugs into core's store port; recall reads and writes go through that port since 1.65.0 (#515).
+**Effort:** the parity program is 54 PRs, about 37,250 lines with tests; the pilot cut is 26 PRs, about 15,350 lines. **Success:** `--db postgres://...` boots; eval suites pass; concurrent-write smoke test green.
 
 ### A7. Observability [partial: audit + rate-limit shipped; dashboard pending]
 Per-query cost, retrieval traces, decay/strengthening rates, conflict counts, sleep-cycle metrics.
@@ -1159,7 +1161,7 @@ Hippo already owns the substrate a learned lifecycle needs (outcome counters, de
 
 Triggered by GitHub issue #137 (neoneye, author of the agent-memory-atlas, 2026-08-04): a Claude Opus 5 authored audit of hippo against 238 other agent-memory systems, at `neoneye.github.io/agent-memory-atlas/systems/hippo-memory/` and `/compare/`. Two verification passes went into this section: (1) the atlas's comparison-matrix membership claims were checked against the atlas page itself (curled and grepped); (2) every claim about hippo's own code behavior was checked against hippo source on 2026-08-09 - and that second pass found the atlas report **wrong or overstated on three of its findings** (noted per item below). An earlier draft of this section propagated those errors; this rewrite corrects them.
 
-**Atlas score: hippo carries 4 of 7 rubric marks** - trust state, bi-temporal validity, scope-enforced retrieval, append-only mutation audit. Marks withheld: rejected-value tombstone (12/238 systems carry it), human review surface (59/238), negative-retrieval eval (50/238). Four systems carry all 7: `memsem`, `perseus-vault`, `provem`, `verel`. Source-verification verdict per withheld mark: the tombstone gap is **real** (AT1); the other two are **partial** - hippo has `hippo conflicts` / `hippo resolve` (cli.ts) and committed cross-tenant negative tests (`tests/l9-tenant-scoping.test.ts`), so the genuine gaps are narrower than the atlas scored (AT4, AT5).
+**Atlas score: hippo carries 4 of 7 rubric marks** - trust state, bi-temporal validity, scope-enforced retrieval, append-only mutation audit. Marks withheld: rejected-value tombstone (12/238 systems carry it), human review surface (59/238), negative-retrieval eval (50/238). Four systems carry all 7: `memsem`, `perseus-vault`, `provem`, `verel`. Source-verification verdict per withheld mark: the tombstone gap is **real** (AT1); the other two are **partial** - hippo has `hippo conflicts` / `hippo resolve` (cli.ts) and committed cross-tenant negative tests (`tests/background-pipeline-tenant-scoping.test.ts`), so the genuine gaps are narrower than the atlas scored (AT4, AT5).
 
 ### AT1. Rejected-value tombstone [SHIPPED 2026-08-15, PR #142, v1.31.0]
 **Verified real.** `deleteEntry` is a hard `DELETE FROM memories` (src/store.ts:1654); no tombstone / rejected-value / suppression-by-value vocabulary exists anywhere in src (grep 2026-08-09). Supersession hides rows on read but keys nothing on the *value* - re-extraction can silently re-assert a fact a human already rejected. `perseus-vault` refuses on every remember-path write via a digest-keyed tombstone table (with an audited trusted-override escape hatch); `memsem` writes a durable value-keyed suppression on human rejection and refuses `memory_add` when the normalized value matches. This is also the same mechanism the Part III DAG consolidation item is blocked on ("do not ship summarization before the tombstone/invalidation story exists") and that E3.4 lists as `[research]`.
@@ -1179,7 +1181,7 @@ Triggered by GitHub issue #137 (neoneye, author of the agent-memory-atlas, 2026-
 
 ### AT5. Negative-retrieval assertions in the eval suites [shipped 2026-09-05, micro-eval]
 **Status (2026-09-05):** `benchmarks/micro/fixtures/negative_retrieval.json` pins superseded (default filter, with an `--include-superseded` positive control), forgotten and rejected rows as must-not-appear, each against a live sibling row; the rejected paired case re-remembers the same text and requires the AT1 guard to refuse it (runner `reject` action). The `conflicts_with` 0.3x down-rank under `--filter-conflicts` is not asserted (it needs a sleep-detected conflict, no deterministic CLI setup). LongMemEval harness unchanged.
-**Atlas overstated; corrected against source.** Committed negative tests DO exist - `tests/l9-tenant-scoping.test.ts` et al. assert cross-tenant isolation (the README/site "proven by a negative test" claim is accurate). What the eval suites (tier-1 micro-eval fixtures, LongMemEval harness) lack is must-NOT-appear assertions: superseded values, suppressed memories, and (once AT1 ships) rejected values. The atlas's own reading of the split matters here: of the 50 systems with the mark, only five assert a *boundary*; the rest assert *content* exclusions - hippo has the boundary tests and lacks the content ones.
+**Atlas overstated; corrected against source.** Committed negative tests DO exist - `tests/background-pipeline-tenant-scoping.test.ts` et al. assert cross-tenant isolation (the README/site "proven by a negative test" claim is accurate). What the eval suites (tier-1 micro-eval fixtures, LongMemEval harness) lack is must-NOT-appear assertions: superseded values, suppressed memories, and (once AT1 ships) rejected values. The atlas's own reading of the split matters here: of the 50 systems with the mark, only five assert a *boundary*; the rest assert *content* exclusions - hippo has the boundary tests and lacks the content ones.
 **Effort:** 1-2d. **Success:** micro-eval fixtures gain must-not-appear cases for superseded + suppressed content; once AT1 ships, a paired case asserts a rejected value never resurfaces via recall.
 
 ### AT6. Document successor-derived expiry on `memories` [resolved 2026-08-10, doc-only]
@@ -1629,6 +1631,8 @@ Anyone who can write a PR comment, an issue or a chat message can try to plant i
 
 **Workflow adoption [planned].** CAE5 uses `build-eval` to review independently labelled poisoning/legitimate-content cases and hard-policy regression fixtures. An optional detector/instruction `hillclimb` is a separate surface; it cannot edit ACLs, quarantine access, labels or release rules to improve an aggregate score.
 
+**Derived rows [planned; added 2026-10-08].** A row built from other rows (an S4 merge, an HG1 profile, an SI6 lesson) takes the lowest trust level and the narrowest scope among its sources. Summarising is not sanitising. The CAE5 poisoning cases gain a class where planted connector text reaches a derived row as a paraphrase.
+
 #### CD6. Admin dashboard [first view shipped 2026-10-03, hippo-enterprise #6; part of A7 observability] [commercial repo]
 One place for the buyer: what is stored per team and repository, who used what, audit log search, dormant and banned memories, and token cost from the TE0 ledger.
 
@@ -1856,6 +1860,8 @@ RRSI's rule, applied to lessons:
 This is the evidence AGENTS.md requires before a lesson graduates.
 
 **Procedural follow-up [planned].** CAE9 applies this trust gate to workflow/skill promotion: repetition, confidence scores and absence of correction are not independent evidence of usefulness. A lesson-derived executable artifact has its own validation, scope and invalidation record.
+
+**Graded-work follow-up [research; added 2026-10-08].** SI6 (Part XXIV) tests lessons that sleep compiles from work with an independent grade. They enter as `observed` and pass this gate like any other lesson.
 
 #### SI4. Write contract for agent-written memories [planned, eval first; added 2026-09-26]
 Clean a memory when it is written instead of ranking junk out later. Each agent-written memory must be:
@@ -2498,6 +2504,8 @@ Pass the recall floor and evidence/temporal integrity checks. Deduplication alon
 
 **Workflow adoption [planned].** CAE5's consolidation `build-eval` covers equivalence, exceptions, provenance and replay/reversal. `hillclimb` may tune an already permitted optional merge/summary prompt, with independent store rebuilds and evidence/recall/task checks; protected rows and reversible writes remain fixed.
 
+**Compiled lessons (added 2026-10-08).** SI6 (Part XXIV) is a separate, opt-in sleep stage that drafts lessons only from work with an independent grade. It does not change this item: default sleep stays hygiene, and ungraded episodes are still never joined into a lesson.
+
 **CLEF integration [planned; CLF7].** Use scoped typed decisions to screen equivalence, contradictions and merge candidates, retaining the current extraction opt-in and reversible hygiene contract. A model score cannot authorise unsupported compression, mixed-scope derivation or protected-row deletion.
 
 ### S5. Scoped experiences
@@ -2615,7 +2623,7 @@ All available modes of these products remain in the coverage register. Missing c
 | Pi coding agent: interactive / RPC / JSON / print modes | Extend the [existing Pi extension](extensions/pi-extension/index.ts) using current [session_before_compact, session_compact and session_compact_failed declarations](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/src/core/extensions/types.ts). Use permitted active-branch preparation/entries for pre-loss writes, handle manual/threshold/overflow reasons and abort/retry without cancelling the host's compaction. Test forks/tree navigation so abandoned branches do not become current facts. Install/update the extension through AZ5 rather than require routine manual copying; remove advice that delegates each save to the user. Revalidate the extension's existing event/tool API against supported versions and each non-interactive mode. |
 | Windsurf / Cascade, including the current Devin Desktop surface | This is explicitly named in Hippo's MCP recipe. The [current Cascade hook docs](https://docs.devin.ai/desktop/cascade/hooks) expose prompt/response events and post_cascade_response_with_transcript; the old Windsurf docs now redirect here. Build permitted incremental capture and bounded transcript processing with trajectory identity/cursors, accounting for asynchronous completion and host file pruning. Verify the exact product/version and supported install route. No documented pre-compaction barrier is established by these response hooks, so test races/context loss and report the achievable checkpoint delay instead of claiming a synchronous flush. |
 | Cline VS Code extension / CLI / SDK | Hippo names Cline as an MCP client. Current [extension hook guidance](https://github.com/cline/cline/blob/main/.clinerules/hooks/README.md) still labels PreCompact coming soon, and [SDK/file-hook examples](https://github.com/cline/cline/blob/main/sdk/examples/hooks/README.md) say that event is not wired for file hooks. Build automatic incremental capture from the validated prompt/tool/run sources; investigate supported before-model/compaction interfaces independently for each mode. Do not treat an enum entry as a working hook. Test OS support, task identity/resume, cancellation and context truncation; revisit the native event when upstream actually ships it. |
-| VS Code agent chat / Copilot Local / remote extension hosts | Already named in Hippo's MCP recipe and CD1. The [current VS Code Local harness docs](https://code.visualstudio.com/docs/agent-customization/hooks) include PreCompact; wire a native package with verified payload/source/output mappings, workspace trust and bounded writes. Remote Development executes on the extension host, whose OS/store may differ from the UI machine. Imported Claude/Copilot configuration formats do not preserve every matcher/schema behaviour. Test alternate harnesses separately; basic capture must not wait for CD3's optional visual extension. |
+| VS Code agent chat / Copilot Local / remote extension hosts | Already named in Hippo's MCP recipe and CD1. The [current VS Code Local harness docs](https://code.visualstudio.com/docs/agent-customization/hooks) include PreCompact; wire a native package with verified payload/source/output mappings, workspace trust and bounded writes. Remote Development executes on the extension host, whose OS/store may differ from the UI machine. Imported Claude/Copilot configuration formats do not preserve every matcher/schema behaviour. Test alternate harnesses separately; basic capture must not wait for CD3's optional visual extension. Checked 2026-10-07 in VS Code's source (`hookTypes.ts`, `hookCompatibility.ts`): a Copilot hooks file's names map through a table that has `agentStop` (VS Code's per-turn Stop) but no `preCompact`, so hippo's Copilot hooks file gives the Local agent session-start context only. The Local agent also runs `~/.claude/settings.json` hooks and reads `~/.copilot/instructions`. Next: per-turn capture on agentStop, a PreCompact entry it reads, a hippo instructions file there and hippo in VS Code's user `mcp.json`, without double runs beside the Claude Code hooks. |
 | Copilot CLI / GitHub Copilot cloud coding agent | Extend CD1 with the [documented preCompact / PreCompact contract](https://docs.github.com/en/copilot/reference/hooks-reference), normalizing camelCase versus compatible snake_case fields and supported transcript format. Verify hook installation and actual execution for CLI/cloud/SDK modes separately; provision scripts, authorised durable store access and any required cloud network policy. Ephemeral workspace loss and non-interactive operation need recovery tests; a VS Code Local result is not cloud evidence. |
 | Gemini CLI: terminal / headless / approved cloud execution | Add a native AZ adapter for [PreCompress](https://geminicli.com/docs/hooks/reference/) plus permitted model/agent/tool inputs and the supported transcript parser. PreCompress is advisory and asynchronous, with flow-control fields ignored: maintain durable incremental checkpoints and test the race rather than assume the host waits for a save. Keep JSON output and event/matcher names native to Gemini, then test automatic/manual compression, headless execution, trust, quotas and store availability. Gemini consumer chat is a separate client registration if pursued. |
 | Devin CLI | Reuse AZ1's [PostCompaction contract](https://docs.devin.ai/cli/extensibility/hooks/lifecycle-hooks), which supplies a nullable summary after compaction. Add permitted incremental prompt/tool capture before loss and verify any further source/flush route; the summary alone cannot prove pre-compaction preservation. Test inherited Claude configuration and duplicate handlers independently from Cascade/Devin Desktop. |
@@ -3219,6 +3227,8 @@ For reusable procedures, derive declarative workflows or referenced scripts with
 
 Exit: independent held-out recurrence tests show fewer repeated errors or lower total burden at preserved quality; supported source reversal/revocation invalidates affected lessons and procedural versions. No RL claim without a learner/environment/reward contract and actual training evidence.
 
+**Core counterpart (added 2026-10-08).** SI6 (Part XXIV) tests the same loop inside hippo's own sleep, on Z0's development families and with no Computer dependency. Its result says whether this item is worth building.
+
 ### CW7. Optional CLEF-assisted context and execution advice [research; CW0-CW5, CLF0/CLF1/CLF4/CLF5/CLF12]
 
 Through the shared CLF contract, evaluate bounded advice such as recall-only versus scoped evidence scan versus abstention; selection among already permitted processing plans; or applicable procedural artifact versus no-match. Keep each decision a separate component study. The external host executes any accepted plan.
@@ -3343,3 +3353,93 @@ The reply may claim only what the page shows. Posting it is Keith's decision.
 ### Sequence and stop rules
 
 HG3's adapters build on Z0 stage 0's isolated-arm runner, so they follow it and share its fixes. HG4's maintainer row can start now. HG1's S4 arm and HG2 enter active work through the execution index's "one diagnosed component" slot when Z10 or HG3 evidence names stale facts, changed facts or missing synthesis as the bottleneck. If the claim gate shows hippo behind on every test, the honest answer to the post is "not yet", and the gate page says so.
+
+---
+
+## Part XXIV - 2026-10-08 update: lessons compiled from graded work (SI6)
+
+### What was reviewed
+
+On 2026-10-08 an outside research review of this roadmap (25 proposals) was read against master. Most of its proposals restate work this file already owns; "Themes other items already own" below maps them. One piece of evidence in it is new: a wake-sleep experiment reported by Harvey ([thread](https://x.com/nikogrupen/status/2108226990792900876)). An agent works graded legal tasks. An offline pass then writes checklists and practice notes from the graded traces, merges and prunes them, and drops lessons tied to one client. Later runs retrieve the lessons that apply.
+
+Reported, over 10 cycles on 196 tasks (110 training, 86 validation):
+- strict all-pass, where every rubric line must pass, rose from 2.9% to 15.7% against an agent with no memory;
+- rubric-level pass rose by over 10% on familiar matters and nearly 5% on novel ones (the copy does not say whether these are points or relative);
+- the first sleep wrote 122 lessons, later revised and pruned;
+- tool use for code, validation and edits rose about 2.5 times;
+- retrieving only the relevant lessons cost about half as much per task as loading the whole lesson bank, at similar quality.
+
+**These figures are unverified.** The thread returned HTTP 402 on 2026-10-08, so they are quoted from a supplied copy. Harvey's [Legal Agent Benchmark](https://www.harvey.ai/blog/introducing-harveys-legal-agent-benchmark) post documents the rubric and all-pass grading method, not this experiment. Re-read the thread before quoting any figure outside this file.
+
+### What does not carry over
+
+- **The loop runs on grades.** Every task in the experiment has a rubric verdict. An ordinary hippo session has none: outcomes are marked by hand or by the agent (Part XI, "The gap"), and SI0's automatic signals sit behind a flag. A lesson compiled from ungraded work is a guess, which S4 already bars: "Do not concatenate episodes to manufacture a lesson."
+- **The comparator had no memory.** Hippo's question is the gain over built-in memory plus shipping hippo (Z0). The experiment does not address it.
+- **The gain may be more checking.** A 2.5 times rise in tool use fits lessons that mostly say "verify your work". A fixed checklist could do that with no sleep model.
+- **Hippo's own record here is poor.** The A1 replay recovered 1 of 18 lessons by extraction (Part XXIII, rejected ideas), and generic durability scoring failed in the Jev campaign (CLF9).
+
+So the idea enters as one research item with a test that can kill it. Nothing else changes.
+
+### SI6. Lessons compiled from graded work [research; hard: Z0 stage 2 development families and checkers, SI2 trust gate; conditional: CLF6 drafting arm; optional producer: SI0, Z3b, CW6; rollout gate: S1, S4, Z0; added 2026-10-08]
+
+**Question.** When something other than the agent grades the work, does a sleep pass that turns the graded traces into lessons improve later work? The bar is shipping hippo, a plain memory of each failed check, and a fixed checklist.
+
+**Precondition: a grade the agent did not write.** Accepted grades are a frozen check or acceptance test run by the host (CW6's rule: agent-written tests, altered check commands and cached output do not count), an SI0 signal that passed its validity rules, and a user correction recorded through Z3b. Anything else is `unknown` and is never a positive or a negative example. A store with no grades compiles nothing.
+
+**Mechanism.** An opt-in stage of `hippo sleep`, off by default and never on the hook path.
+- From a bounded batch of graded traces it proposes two kinds of candidate: a checklist line (a property the finished work must have) and a practice note (a way of working). Each keeps its source trace ids, the checks behind it, its scope and its parent version.
+- A deterministic gate runs first: source permissions and scope (EI2), quarantine and untrusted marks (CD5), and secrets. A candidate takes the narrowest scope and the lowest trust level among its sources. No model score overrides a denial.
+- A generality gate runs second. A candidate that only restates one task stays a scoped memory. Rules go first; a Jev or CLEF classifier is the opt-in second arm (CLF6, CLF8).
+- Merging, revising and retiring follow S4: reversible, provenance kept, conflicts kept for a decision.
+- A candidate stays `observed` until it passes SI2's trust gate. Delivery is ordinary recall, with nothing shown when no lesson applies.
+- Drafting needs a model, so it runs only where `extraction.enabled` and a provider opt-in allow it, free-first. Without that the stage does nothing and sleep stays zero-LLM. No weights change, and this is not RL.
+
+**Test.** Its own registration, never an amendment to Z0. It reuses Z0's isolated-arm runner and its development lesson families, whose checkers need no model judge. The grade replaces the teacher: no arm gets a teach or correction turn. After each training task the runner writes a grade file with each check's name, verdict and output, as a CI log would show them. Half the families train on their teach task. Scoring covers three sets: the apply tasks of trained families, every task of families never graded, and the no-lesson tasks.
+
+Arms, with the same agent and model and built-in memory on in all:
+1. shipping hippo (Z0's A2), the baseline;
+2. the baseline plus one error memory per failed check, stored word for word with no model;
+3. the baseline plus compiled lessons;
+4. the baseline plus one "verify before you finish" checklist, written before the run and never changed;
+5. Z0's perfect-memory arm (each rule written into `CLAUDE.md` by the runner), as the ceiling.
+
+A whole-bank arm (every lesson in context) and a sham arm (another repository's lessons) join at registration if the free inference quota covers them.
+
+Measures: Z0's resolve rate (the acceptance tests and every lesson check pass); the lesson-check pass rate on apply tasks; cost per resolved task, counting sleep inference and tool calls by kind; and the lesson bank's size, duplicates, lessons never retrieved and lessons shown but broken.
+
+**Decision rules, fixed before the run.** A win is a resolve-rate gain over the baseline larger than the paired noise bar, inside the registered cost bound, with no loss on any set.
+- Trained families test project rules. Compiled lessons must also beat arm 2 there. On a tie, ship "a failed check becomes a memory" through SI0 with no model, and drop the compiler.
+- Never-graded families and no-lesson tasks test general practice. Compiled lessons must also beat arm 4 there. On a tie, ship the checklist as a pinned line or a Z4 guard, and drop the compiler. Z0's screen keeps only rules that cannot be worked out from the checkout, so this is a weak test of transfer to new work.
+- A win only on trained families keeps lessons project-scoped, with no general-learning claim.
+- A null result is published. A development result decides whether to run a confirmation and is never a claim. Confirmation needs fresh families from Z0's blind author process and waits for Z0's scored result.
+
+**Edition.** The compiler, its gates and its test are MIT core. Cross-team lesson publishing and customer rubric registries are enterprise work that waits for a scoped partner and a win here.
+
+### Themes other items already own
+
+The review's other themes need no new item:
+- task benefit, supervision and growth studies: Z0, Z12, HG3;
+- capture and recovery across hosts: S6, AZ4 to AZ6;
+- delivery evidence, failure attribution and failures kept as regression cases: Z10, Z2b, CD13, TE4, CAE5;
+- temporality and abstention: HG2, S3, FE5, Z3b;
+- total-cost and cache-aware delivery: Track TE, S9, Z1d;
+- lesson-to-skill promotion: CAE8, CAE9;
+- learned decision models: Track CLF;
+- governed shared memory and customer value reports: EI2, EI10, EI11, EV6 to EV8, CD11 to CD14, EI15;
+- edition and claim wording: MSG1 to MSG6;
+- the trust boundary between memory and agent: CD5, AT3, EI2, CAE6, and CW6's rule that a retrieved memory cannot authorise execution. This review adds one rule to CD5: a derived row takes the lowest trust level and the narrowest scope among its sources.
+
+### Not adopted
+
+Each line names what would reopen it.
+- An OpenTelemetry exporter in core, and vendor profiles for observability or SIEM products: a design partner whose stack needs one. CD12 already joins Claude Code's OpenTelemetry files inside the customer's network.
+- Framework adapters added because another framework shipped a memory gateway: a user asking for that host. AZ6 owns the host list.
+- Observational memory in the Mastra style (a compressed log kept always in context) as a comparison arm: HG3's registration may add it when it locks, if a matched-model adapter exists.
+- A connector registry and organisation policy plane, customer rubric registries and cross-team lesson publishing: a scoped enterprise partner (execution index, Next 4), and for the last two a win on SI6.
+- A professional-work benchmark outside coding: a partner in that field who brings graded tasks. Coding agents stay hippo's home surface.
+- A per-release hash of hippo's MCP tool descriptions and schemas, so a client can pin them: fold it into CAE6 once its inventory exists and a client asks.
+- The review's 14 experiments and six milestones as a schedule: the execution index is the schedule.
+
+### Order and stop rules
+
+SI6 cannot start before Z0 stage 2, because it reuses the development families that stage authors and screens. Until then its only work is the registration draft. It sits in the execution index's research row, and moves to the "one diagnosed component" slot only if Z10 evidence names lessons missed from graded outcomes as the bottleneck. It changes no default: S4 stays hygiene, and Z0's registration and the frozen defaults stand. A win is a second dream ablation for Part XXIII's test (e), beside HG1. A loss is published the same way.

@@ -1,17 +1,16 @@
 /**
- * E2 customer_note first-class object - the LAST E2 object
- * (docs/plans/2026-06-01-e2-customer-note-object.md).
+ * customer_note first-class object.
  *
  * A `customer_note` is a discrete note recorded against an account/customer entity:
  * a `note` body scoped to a `customer`, evolving via the supersede delta lifecycle.
- * Entity-scoping is a free-form `customer` column (the `entities` table is unbuilt -
- * E3.1 planned - so an FK is deferred). Unlike project_brief's one-summary-per-repo,
+ * Entity-scoping is a free-form `customer` column (the `entities` table is unbuilt,
+ * so an FK is deferred). Unlike project_brief's one-summary-per-repo,
  * a customer accrues MANY discrete notes over time, each with its own supersede chain
  * (correct a note -> a new version preserving history; close retires it).
  *
  * Reuses the project_brief/skill supersede machinery verbatim (superseded_by self-FK
  * + CAS + INSERT-preflight + server-derived version + change_summary + supersede
- * tenant-match trigger). It has NO assembler/renderer (the simplest E2 object): the
+ * tenant-match trigger). It has NO assembler/renderer (the simplest first-class object): the
  * contribution is purely the entity-scoping dimension.
  *
  * The `customer_notes` table is the source of truth (survives memory decay); the
@@ -20,15 +19,12 @@
  * Lifecycle: active -> superseded (a corrected version) or active -> closed (retired).
  */
 
-import { BadRequestError, ConflictError, NotFoundError } from './api-errors.js';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
-import { writeEntry } from './store/entry-writes.js';
+import { onHandle } from './store/open.js';
 import { assertTenantId } from './tenant.js';
-import { markGraphDirty, removeGraphEntitiesForObject } from './graph/write.js';
-import { createMemory, Layer } from './memory.js';
-import { appendAuditEvent } from './audit.js';
-import { objectHalfLifeDays } from './half-life-migration.js';
-import { keysetAfter, type KeysetPosition } from './keyset.js';
+import type { KeysetPosition } from './keyset.js';
+import type { SavableDescriptor } from './objects/descriptor.js';
+import { checkText, requireLine } from './objects/fields.js';
+import { assertObjectStatus, closeObjectOn, dropClosedObjectFromGraph, loadObjectByIdOn, loadObjectsOn, saveObject } from './objects/lifecycle.js';
 
 // ---------------------------------------------------------------------------
 // Domain types
@@ -90,40 +86,6 @@ export interface ListCustomerNotesOpts {
 }
 
 // ---------------------------------------------------------------------------
-// Validation
-// ---------------------------------------------------------------------------
-
-/**
- * Validate + normalise note fields. `customer` is trimmed and MUST be a single line
- * (no newlines): it becomes a `customer:<lc>` recall tag AND an identifier. `note` is
- * kept verbatim (operator content) but capped. Returns the normalised customer.
- */
-function validateNoteFields(
-  customer: string,
-  note: string,
-  changeSummary: string | undefined,
-) {
-  const normalizedCustomer = (customer ?? '').trim();
-  if (normalizedCustomer.length === 0) throw new BadRequestError('saveCustomerNote: customer is required');
-  if (/[\r\n]/.test(normalizedCustomer)) {
-    throw new BadRequestError('saveCustomerNote: customer must be a single line (no newlines)');
-  }
-  if (normalizedCustomer.length > MAX_CUSTOMER_LEN) {
-    throw new BadRequestError(`saveCustomerNote: customer exceeds the ${MAX_CUSTOMER_LEN}-char cap`);
-  }
-  if (!note || note.trim().length === 0) {
-    throw new BadRequestError('saveCustomerNote: note is required');
-  }
-  if (note.length > MAX_NOTE_LEN) {
-    throw new BadRequestError(`saveCustomerNote: note exceeds the ${MAX_NOTE_LEN}-char cap`);
-  }
-  if (changeSummary !== undefined && changeSummary.length > MAX_CHANGE_SUMMARY_LEN) {
-    throw new BadRequestError(`saveCustomerNote: changeSummary exceeds the ${MAX_CHANGE_SUMMARY_LEN}-char cap`);
-  }
-  return { customer: normalizedCustomer };
-}
-
-// ---------------------------------------------------------------------------
 // Row <-> domain mapping
 // ---------------------------------------------------------------------------
 
@@ -172,113 +134,36 @@ function buildNoteContent(customer: string, note: string): string {
   return `${customer}\n\n${note}`;
 }
 
+/** What one note write stores, with the customer already trimmed. */
+interface NoteFields {
+  readonly customer: string;
+  readonly note: string;
+}
+
+const NOTE: SavableDescriptor<CustomerNote, CustomerNoteRow, 'customer', NoteFields> = {
+  table: 'customer_notes',
+  cols: NOTE_COLS,
+  label: 'note',
+  plural: 'notes',
+  fn: { get: 'loadCustomerNoteById', close: 'closeCustomerNote', list: 'loadCustomerNotes', save: 'saveCustomerNote' },
+  states: VALID_NOTE_STATES,
+  closableFrom: ['active'],
+  ops: { close: 'customer_note_close', create: 'customer_note_create', supersede: 'customer_note_supersede' },
+  idKey: 'note_id',
+  graphType: 'customer',
+  listFilters: { customer: 'customer' },
+  rowTo: rowToCustomerNote,
+  source: 'customer_note',
+  versioned: true,
+  columns: ['customer', 'note'],
+  values: (w) => [w.customer, w.note],
+  // Ids and the customer name only, never the note text.
+  createMeta: (w, version) => ({ customer: w.customer, version }),
+};
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-
-/** Everything the afterWrite SAVEPOINT needs, resolved before the write opens. */
-interface NoteWrite {
-  tenantId: string;
-  actor: string;
-  customer: string;
-  note: string;
-  changeSummary: string | null;
-  supersedesId: number | undefined;
-  now: string;
-}
-
-// Preflight the supersede target BEFORE inserting the new row (so the new
-// autoincrement id can never be its own supersede target); read the
-// predecessor version in the same SELECT for server-derived versioning.
-// Mirrors saveProjectBrief / saveSkill (codex P1 2026-05-28).
-function preflightNoteSupersede(db: DatabaseSyncLike, tenantId: string, supersedesId: number): number {
-  // SAFETY: SELECT projects exactly status, version; .get() returns that
-  // shape for the matching row, or undefined when no note/tenant pair matches.
-  const pred = db.prepare(
-    `SELECT status, version FROM customer_notes WHERE id = ? AND tenant_id = ?`,
-  ).get(supersedesId, tenantId) as
-    | { status: string; version: number }
-    | undefined;
-  if (!pred) {
-    throw new NotFoundError(
-      `saveCustomerNote: note ${supersedesId} to supersede not found for tenant ${tenantId}`,
-    );
-  }
-  if (pred.status !== 'active') {
-    throw new ConflictError(
-      `saveCustomerNote: note ${supersedesId} is not active (status='${pred.status}'); only active notes can be superseded.`,
-    );
-  }
-  return pred.version + 1;
-}
-
-function insertNoteRow(db: DatabaseSyncLike, memoryId: string, w: NoteWrite, version: number): number {
-  const result = db.prepare(`
-    INSERT INTO customer_notes(
-      memory_id, tenant_id, customer, note, version,
-      status, superseded_by, superseded_at, change_summary, closed_at, created_at
-    ) VALUES (?, ?, ?, ?, ?, 'active', NULL, NULL, ?, NULL, ?)
-  `).run(memoryId, w.tenantId, w.customer, w.note, version, w.changeSummary, w.now);
-  return Number(result.lastInsertRowid ?? 0);
-}
-
-function supersedeNoteRow(
-  db: DatabaseSyncLike,
-  w: NoteWrite,
-  supersedesId: number,
-  noteId: number,
-  version: number,
-): void {
-  const sup = db.prepare(`
-    UPDATE customer_notes
-    SET status = 'superseded', superseded_by = ?, superseded_at = ?
-    WHERE id = ? AND tenant_id = ? AND status = 'active' AND id != ?
-  `).run(noteId, w.now, supersedesId, w.tenantId, noteId);
-  if (sup.changes === 0) {
-    throw new ConflictError(
-      `saveCustomerNote: note ${supersedesId} could not be superseded (no longer active or self-reference).`,
-    );
-  }
-  appendAuditEvent(db, {
-    tenantId: w.tenantId,
-    actor: w.actor,
-    op: 'customer_note_supersede',
-    targetId: String(supersedesId),
-    metadata: {
-      note_id: supersedesId,
-      superseded_by: noteId,
-      new_version: version,
-    },
-  });
-}
-
-/** The afterWrite body: preflight, INSERT, supersede, reload, create audit, all in one SAVEPOINT. */
-function writeNoteRow(db: DatabaseSyncLike, memoryId: string, w: NoteWrite): CustomerNoteRow {
-  const version = w.supersedesId !== undefined ? preflightNoteSupersede(db, w.tenantId, w.supersedesId) : 1;
-  const noteId = insertNoteRow(db, memoryId, w, version);
-  if (w.supersedesId !== undefined) supersedeNoteRow(db, w, w.supersedesId, noteId, version);
-
-  // SAFETY: SELECT ${NOTE_COLS} projects exactly the CustomerNoteRow columns;
-  // .get() returns that row, or undefined only if the just-inserted id can't
-  // be found.
-  const row = db.prepare(`SELECT ${NOTE_COLS} FROM customer_notes WHERE id = ?`)
-    .get(noteId) as CustomerNoteRow | undefined;
-  if (!row) throw new Error('saveCustomerNote: failed to reload saved note row');
-
-  // GDPR-light metadata: ids + flags only, no note text.
-  appendAuditEvent(db, {
-    tenantId: w.tenantId,
-    actor: w.actor,
-    op: 'customer_note_create',
-    targetId: String(noteId),
-    metadata: {
-      note_id: noteId,
-      customer: w.customer,
-      version,
-    },
-  });
-  return row;
-}
 
 /**
  * Create a customer_note (or a new version that supersedes an existing one). Writes
@@ -288,8 +173,7 @@ function writeNoteRow(db: DatabaseSyncLike, memoryId: string, w: NoteWrite): Cus
  * the new version = predecessor.version + 1 (server-derived).
  *
  * The memory mirror carries a `customer:<lc>` tag (in addition to ['customer_note']
- * + caller extraTags) so scope-aware recall treats the note as entity-local - the
- * project_brief codex-P2 recall-locality lesson applied to entity scoping. There is
+ * + caller extraTags) so scope-aware recall treats the note as entity-local. There is
  * no self-recursion path (customer_note has no receipt-query/refresh).
  */
 export function saveCustomerNote(
@@ -298,40 +182,29 @@ export function saveCustomerNote(
   opts: SaveCustomerNoteOpts,
   actor: string = 'cli',
 ): CustomerNote {
-  assertTenantId('saveCustomerNote', tenantId);
-  const { customer } = validateNoteFields(opts.customer, opts.note, opts.changeSummary);
-  const isSupersede = opts.supersedesNoteId !== undefined;
-  const changeSummary = isSupersede ? (opts.changeSummary ?? null) : null;
-
-  const now = new Date().toISOString();
-  const content = buildNoteContent(customer, opts.note);
-  const tags = ['customer_note', `customer:${customer.toLowerCase()}`, ...(opts.extraTags ?? [])];
-  const mem = createMemory(content, {
-    tags,
-    layer: Layer.Semantic,
-    confidence: 'verified',
-    source: 'customer_note',
-    baseHalfLifeDays: objectHalfLifeDays(hippoRoot),
-    tenantId,
+  assertTenantId(NOTE.fn.save, tenantId);
+  // The customer becomes a `customer:<lc>` recall tag and an identifier, so it must be one line.
+  const customer = requireLine(opts.customer, MAX_CUSTOMER_LEN, {
+    required: 'saveCustomerNote: customer is required',
+    singleLine: 'saveCustomerNote: customer must be a single line (no newlines)',
+    tooLong: `saveCustomerNote: customer exceeds the ${MAX_CUSTOMER_LEN}-char cap`,
   });
-  const w: NoteWrite = {
-    tenantId, actor, customer, note: opts.note, changeSummary, supersedesId: opts.supersedesNoteId, now,
-  };
-
-  let savedRow: CustomerNoteRow | undefined;
-
-  writeEntry(hippoRoot, mem, {
+  checkText(opts.note, MAX_NOTE_LEN, {
+    required: 'saveCustomerNote: note is required',
+    tooLong: `saveCustomerNote: note exceeds the ${MAX_NOTE_LEN}-char cap`,
+  });
+  checkText(opts.changeSummary, MAX_CHANGE_SUMMARY_LEN, {
+    tooLong: `saveCustomerNote: changeSummary exceeds the ${MAX_CHANGE_SUMMARY_LEN}-char cap`,
+  });
+  return saveObject(hippoRoot, NOTE, tenantId, {
     actor,
-    afterWrite: (db, memoryId) => {
-      savedRow = writeNoteRow(db, memoryId, w);
-    },
-    afterCommit: () => markGraphDirty(hippoRoot, tenantId, mem.id),
+    now: new Date().toISOString(),
+    fields: { customer, note: opts.note },
+    content: buildNoteContent(customer, opts.note),
+    tags: [`customer:${customer.toLowerCase()}`, ...(opts.extraTags ?? [])],
+    supersedesId: opts.supersedesNoteId,
+    changeSummary: opts.changeSummary,
   });
-
-  if (!savedRow) {
-    throw new Error('saveCustomerNote: afterWrite did not populate the row');
-  }
-  return rowToCustomerNote(savedRow);
 }
 
 /**
@@ -344,70 +217,13 @@ export function closeCustomerNote(
   id: number,
   actor: string = 'cli',
 ): CustomerNote {
-  assertTenantId('closeCustomerNote', tenantId);
+  assertTenantId(NOTE.fn.close, tenantId);
   const now = new Date().toISOString();
-  const db = openHippoDb(hippoRoot);
-  try {
-    db.exec('BEGIN IMMEDIATE');
-    try {
-      const updateResult = db.prepare(`
-        UPDATE customer_notes
-        SET status = 'closed', closed_at = ?
-        WHERE id = ? AND tenant_id = ? AND status = 'active'
-      `).run(now, id, tenantId);
-
-      if (updateResult.changes === 0) {
-        // SAFETY: SELECT projects exactly the status column; .get() returns that
-        // shape, or undefined when the id/tenant pair doesn't exist.
-        const existing = db.prepare(
-          `SELECT status FROM customer_notes WHERE id = ? AND tenant_id = ?`,
-        ).get(id, tenantId) as { status: string } | undefined;
-        if (!existing) {
-          throw new NotFoundError(`closeCustomerNote: note ${id} not found for tenant ${tenantId}`);
-        }
-        throw new ConflictError(
-          `closeCustomerNote: note ${id} is not active (status='${existing.status}'); only active notes can be closed.`,
-        );
-      }
-
-      // SAFETY: SELECT ${NOTE_COLS} projects exactly the CustomerNoteRow columns;
-      // .get() returns that row for the just-updated id, or undefined only in an
-      // impossible race since the UPDATE above already matched it.
-      const row = db.prepare(`SELECT ${NOTE_COLS} FROM customer_notes WHERE id = ? AND tenant_id = ?`)
-        .get(id, tenantId) as CustomerNoteRow | undefined;
-      if (!row) throw new NotFoundError(`closeCustomerNote: note ${id} not found after UPDATE`);
-
-      appendAuditEvent(db, {
-        tenantId,
-        actor,
-        op: 'customer_note_close',
-        targetId: String(id),
-        metadata: { note_id: id },
-      });
-
-      db.exec('COMMIT');
-      const closed = rowToCustomerNote(row);
-      // Closing removes the object from the graph. Remove its rows DIRECTLY (deterministic),
-      // not only via an enqueued rebuild whose queue item is lost if the mirror is later
-      // forgotten (the queue row cascade-deletes with the memory), which would leave the closed
-      // object stale and could block that forget (codex P1). Still enqueue when a mirror exists
-      // so a concurrent rebuild re-derives consistently (harmless if it also runs).
-      removeGraphEntitiesForObject(hippoRoot, tenantId, 'customer', closed.id);
-      if (closed.memoryId) {
-        markGraphDirty(hippoRoot, tenantId, closed.memoryId);
-      }
-      return closed;
-    } catch (e) {
-      try {
-        db.exec('ROLLBACK');
-      } catch {
-        // Ignore rollback failures — the throw below is what matters.
-      }
-      throw e;
-    }
-  } finally {
-    closeHippoDb(db);
-  }
+  return onHandle(hippoRoot, (db) => {
+    const closed = closeObjectOn(db, NOTE, tenantId, id, { actor, now });
+    dropClosedObjectFromGraph(hippoRoot, NOTE, tenantId, closed);
+    return closed;
+  });
 }
 
 export function loadCustomerNoteById(
@@ -415,17 +231,8 @@ export function loadCustomerNoteById(
   tenantId: string,
   id: number,
 ): CustomerNote | null {
-  assertTenantId('loadCustomerNoteById', tenantId);
-  const db = openHippoDb(hippoRoot);
-  try {
-    // SAFETY: SELECT ${NOTE_COLS} projects exactly the CustomerNoteRow columns;
-    // .get() returns that row, or undefined when the id/tenant pair doesn't exist.
-    const row = db.prepare(`SELECT ${NOTE_COLS} FROM customer_notes WHERE id = ? AND tenant_id = ?`)
-      .get(id, tenantId) as CustomerNoteRow | undefined;
-    return row ? rowToCustomerNote(row) : null;
-  } finally {
-    closeHippoDb(db);
-  }
+  assertTenantId(NOTE.fn.get, tenantId);
+  return onHandle(hippoRoot, (db) => loadObjectByIdOn(db, NOTE, tenantId, id));
 }
 
 export function loadCustomerNotes(
@@ -433,40 +240,9 @@ export function loadCustomerNotes(
   tenantId: string,
   opts: ListCustomerNotesOpts = {},
 ): CustomerNote[] {
-  assertTenantId('loadCustomerNotes', tenantId);
-  const limit = opts.limit ?? 100;
-  const after = keysetAfter('created_at', 'id', opts.after);
-  if (opts.status && !VALID_NOTE_STATES.has(opts.status)) {
-    throw new BadRequestError(
-      `loadCustomerNotes: status must be one of ${Array.from(VALID_NOTE_STATES).join('|')}; got ${opts.status}`,
-    );
-  }
-  const db = openHippoDb(hippoRoot);
-  try {
-    const clauses = ['tenant_id = ?'];
-    const params: unknown[] = [tenantId];
-    if (opts.status) {
-      clauses.push('status = ?');
-      params.push(opts.status);
-    }
-    if (opts.customer) {
-      clauses.push('customer = ?');
-      params.push(opts.customer);
-    }
-    params.push(...after.params, limit);
-    // SAFETY: SELECT ${NOTE_COLS} projects exactly the CustomerNoteRow columns
-    // regardless of the dynamic WHERE clause built above; .all() returns rows
-    // in that shape.
-    const rows = db.prepare(`
-      SELECT ${NOTE_COLS} FROM customer_notes
-      WHERE ${clauses.join(' AND ')}${after.sql}
-      ORDER BY created_at DESC, id DESC
-      LIMIT ?
-    `).all(...params) as CustomerNoteRow[];
-    return rows.map(rowToCustomerNote);
-  } finally {
-    closeHippoDb(db);
-  }
+  assertTenantId(NOTE.fn.list, tenantId);
+  assertObjectStatus(NOTE, opts.status);
+  return onHandle(hippoRoot, (db) => loadObjectsOn(db, NOTE, tenantId, opts));
 }
 
 /**

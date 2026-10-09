@@ -10,7 +10,6 @@ import {
   calculateRewardFactor,
   confidenceFacets,
   confidenceLabel,
-  computeSchemaFit,
   Layer,
   ConfidenceLevel,
   type MemoryEntry,
@@ -18,6 +17,7 @@ import {
 import { isInitialized } from '../store/open.js';
 import { writeEntry } from '../store/entry-writes.js';
 import { readEntry, loadAllEntries } from '../store/entry-reads.js';
+import { loadNewestEntries, schemaFitInStore } from '../store/candidates.js';
 import { updateStats } from '../store/index-and-stats.js';
 import { listMemoryConflicts } from '../store/conflicts.js';
 import { RejectedValueError } from '../rejection.js';
@@ -26,14 +26,17 @@ import { embedMemory } from '../embeddings.js';
 import { loadConfig, type HippoConfig } from '../config.js';
 import { extractPathTags } from '../path-context.js';
 import { detectScope } from '../scope.js';
+import { assertClientScope } from '../recall-scope.js';
 import { getGlobalRoot, initGlobal } from '../shared.js';
 import { vetSecrets } from '../secret-detect.js';
-import * as client from '../client.js';
+import * as client from './client.js';
 import { resolveTenantId } from '../tenant.js';
 import { computeSalience } from '../salience.js';
-import { validateOwner, isStrictOwnerEnv } from '../owner-validation.js';
+import { validateOwner, isStrictOwnerEnv } from './owner-validation.js';
 import { printError } from './output.js';
-import { emitCliAudit, requireInit, runViaServerIfAvailable, fmt, type CliFlags, type CommandContext } from './shared.js';
+import { emitCliAudit, requireInit, runViaServerIfAvailable, fmt, type CliFlags, type CommandContext, boolFlag, flagIsTrue, stringFlag } from './shared.js';
+import { DAY_MS } from '../util/time.js';
+import { errorMessage } from '../log.js';
 
 // `requested` is what the caller typed; `all` adds path and scope tags from this process's cwd and env.
 interface RememberTags {
@@ -43,7 +46,7 @@ interface RememberTags {
 
 // Shared by the direct write and the routed request so both store the same tags.
 function rememberTags(
-  flags: Record<string, string | boolean | string[]>,
+  flags: CliFlags,
   cwd: string,
 ): RememberTags {
   const requested: string[] = Array.isArray(flags['tag']) ? [...(flags['tag'] as string[])] : [];
@@ -71,10 +74,10 @@ function rememberConfidence(flags: CliFlags): ConfidenceLevel {
 }
 
 function parseKindFlag(flags: CliFlags): string | undefined {
-  const kindFlagRaw = typeof flags['kind'] === 'string' ? (flags['kind'] as string) : undefined;
+  const kindFlagRaw = stringFlag(flags, 'kind');
   const kindFlag = kindFlagRaw === undefined ? undefined : kindFlagRaw.toLowerCase();
   // CLI surface intentionally restricted: 'raw' is reserved for ingestion connectors
-  // (E1.x: Slack/Jira/Gmail) that route deletions through archiveRawMemory. Existing
+  // that route deletions through archiveRawMemory. Existing
   // forget/consolidate/conflict-resolve paths abort on kind='raw' via the append-only
   // trigger, so exposing --kind raw here would create unforgettable memories.
   // 'archived' is an internal sentinel set only inside archiveRawMemory's transaction.
@@ -94,10 +97,9 @@ interface RememberEnvelope {
   scope: string | null;
 }
 
-// A3 envelope flags
 function parseRememberEnvelope(flags: CliFlags): RememberEnvelope {
   const kind = parseKindFlag(flags);
-  const ownerRaw = typeof flags['owner'] === 'string' ? (flags['owner'] as string) : null;
+  const ownerRaw = stringFlag(flags, 'owner') ?? null;
   const ownerCheck = validateOwner(ownerRaw, { strict: isStrictOwnerEnv() });
   if (!ownerCheck.ok) {
     printError(ownerCheck.message);
@@ -105,17 +107,19 @@ function parseRememberEnvelope(flags: CliFlags): RememberEnvelope {
   }
   if (ownerCheck.message) printError(ownerCheck.message);
   const owner = ownerCheck.value ?? null;
-  const artifactRef = typeof flags['artifact-ref'] === 'string' ? (flags['artifact-ref'] as string) : null;
-  const scope = typeof flags['scope'] === 'string' ? (flags['scope'] as string).trim() || null : null;
+  const artifactRef = stringFlag(flags, 'artifact-ref') ?? null;
+  const scope = stringFlag(flags, 'scope')?.trim() || null;
+  assertClientScope(scope);
   return { kind, owner, artifactRef, scope };
 }
 
-async function cmdRemember(
+/** @internal Exported so tests/remember-origin-parity.test.ts runs the real direct write; not a stable public API. */
+export async function cmdRemember(
   hippoRoot: string,
   text: string,
-  flags: Record<string, string | boolean | string[]>
+  flags: CliFlags
 ): Promise<void> {
-  const useGlobal = Boolean(flags['global']);
+  const useGlobal = boolFlag(flags, 'global');
   const targetRoot = useGlobal ? getGlobalRoot() : hippoRoot;
 
   if (useGlobal) {
@@ -128,19 +132,17 @@ async function cmdRemember(
   const confidence = rememberConfidence(flags);
 
   // Schema fit needs the store, which the routed request has no access to, so it stays here.
-  const existing = loadAllEntries(targetRoot, resolveTenantId({}));
-  const schemaFit = computeSchemaFit(text, requestedTags, existing);
+  const schemaFit = schemaFitInStore(targetRoot, resolveTenantId({}), text, requestedTags);
   const envelope = parseRememberEnvelope(flags);
 
-  // A5 stub auth: stamp tenant_id from env (HIPPO_TENANT) so recall isolation
-  // can filter on this row. Default tenant 'default' for unauthenticated CLI.
+  // Stamp tenant_id from env (HIPPO_TENANT) so recall isolation can filter on this row; unauthenticated CLI gets 'default'.
   const tenantId = resolveTenantId({});
   const rememberConfig = loadConfig(targetRoot);
 
   const entry = createMemory(text, {
     layer: Layer.Episodic,
     tags: allTags,
-    pinned: Boolean(flags['pin']),
+    pinned: boolFlag(flags, 'pin'),
     source: useGlobal ? 'cli-global' : 'cli',
     confidence,
     schema_fit: schemaFit,
@@ -152,7 +154,7 @@ async function cmdRemember(
     baseHalfLifeDays: rememberConfig.defaultHalfLifeDays,
   });
 
-  if (!passesSalienceGate(entry, text, existing, rememberConfig, flags)) return;
+  if (!passesSalienceGate(entry, text, targetRoot, rememberConfig, flags)) return;
 
   writeEntry(targetRoot, entry);
   updateStats(targetRoot, { remembered: 1 });
@@ -166,12 +168,17 @@ async function cmdRemember(
 function passesSalienceGate(
   entry: MemoryEntry,
   text: string,
-  existing: MemoryEntry[],
+  targetRoot: string,
   rememberConfig: HippoConfig,
   flags: CliFlags,
 ): boolean {
-  if (!rememberConfig.salience.enabled || Boolean(flags['pin']) || Boolean(flags['force'])) return true;
-  const salienceResult = computeSalience(text, entry.tags, existing, {
+  if (!rememberConfig.salience.enabled || boolFlag(flags, 'pin') || boolFlag(flags, 'force')) return true;
+  // computeSalience compares against the last `recentWindow` rows only; below 1 its slice takes every row, so that case still loads them all.
+  const window = Math.trunc(rememberConfig.salience.recentWindow);
+  const recent = Number.isSafeInteger(window) && window >= 1
+    ? loadNewestEntries(targetRoot, entry.tenantId, window)
+    : loadAllEntries(targetRoot, entry.tenantId);
+  const salienceResult = computeSalience(text, entry.tags, recent, {
     recentWindow: rememberConfig.salience.recentWindow,
     overlapThreshold: rememberConfig.salience.overlapThreshold,
     minContentLength: rememberConfig.salience.minContentLength,
@@ -217,10 +224,31 @@ async function extractRememberFacts(targetRoot: string, entry: MemoryEntry, flag
       }
     } catch (err) {
       // Extraction is best-effort: report it, never block remember.
-      printError(`  (extraction failed: ${err instanceof Error ? err.message : String(err)})`);
+      printError(`  (extraction failed: ${errorMessage(err)})`);
     }
   } else if (shouldExtract && !apiKey) {
     printError('  (extraction skipped: ANTHROPIC_API_KEY not set)');
+  }
+}
+
+function supersedeTags(flags: CliFlags): string[] | undefined {
+  const rawTags = flags['tag'];
+  return Array.isArray(rawTags)
+    ? (rawTags as string[]).map((t) => String(t))
+    : typeof rawTags === 'string'
+      ? rawTags.split(',').map((t) => t.trim()).filter(Boolean)
+      : undefined;
+}
+
+function writeSuccessor(hippoRoot: string, newEntry: MemoryEntry): void {
+  try {
+    writeEntry(hippoRoot, newEntry);
+  } catch (err) {
+    if (err instanceof RejectedValueError) {
+      printError(`Error: ${err.message}`);
+      process.exit(1);
+    }
+    throw err;
   }
 }
 
@@ -228,7 +256,7 @@ function cmdSupersede(
   hippoRoot: string,
   oldId: string,
   newContent: string,
-  flags: Record<string, string | boolean | string[]>,
+  flags: CliFlags,
 ): void {
   requireInit(hippoRoot);
 
@@ -242,14 +270,9 @@ function cmdSupersede(
     process.exit(1);
   }
 
-  const layer = typeof flags['layer'] === 'string' ? (flags['layer'] as Layer) : undefined;
-  const rawTags = flags['tag'];
-  const tags = Array.isArray(rawTags)
-    ? (rawTags as string[]).map((t) => String(t))
-    : typeof rawTags === 'string'
-      ? rawTags.split(',').map((t) => t.trim()).filter(Boolean)
-      : undefined;
-  const pinned = flags['pin'] === true || old.pinned;
+  const layer = stringFlag(flags, 'layer') as Layer | undefined;
+  const tags = supersedeTags(flags);
+  const pinned = flagIsTrue(flags, 'pin') || old.pinned;
 
   const newEntry = createSuccessor(old, newContent, {
     tenantId: old.tenantId,
@@ -259,24 +282,9 @@ function cmdSupersede(
     pinned,
   });
 
-  // AT1: write the SUCCESSOR first. The rejection guard fires on the new
-  // content — if it refuses, nothing has been mutated yet (the old ordering
-  // committed old.superseded_by before the guarded new write, leaving a
-  // dangling pointer to an id that was never created). If the old-row write
-  // below fails instead, the new row exists unpointered — an orphan
-  // successor, strictly less harmful than a dangling pointer. NOTE: unlike
-  // api.supersede (whose CAS + insert commit in ONE transaction), this CLI
-  // path is two independent writes and stays non-atomic; write order is its
-  // only ordering guarantee.
-  try {
-    writeEntry(hippoRoot, newEntry);
-  } catch (err) {
-    if (err instanceof RejectedValueError) {
-      printError(`Error: ${err.message}`);
-      process.exit(1);
-    }
-    throw err;
-  }
+  // Write the SUCCESSOR first: a rejection-guard refusal then mutates nothing, and an old-row failure leaves an
+  // orphan successor rather than a dangling pointer. Unlike api.supersede this path is two non-atomic writes.
+  writeSuccessor(hippoRoot, newEntry);
   old.superseded_by = newEntry.id;
   writeEntry(hippoRoot, old);
   emitCliAudit(hippoRoot, 'supersede', oldId, { newId: newEntry.id });
@@ -284,9 +292,27 @@ function cmdSupersede(
   console.log(`Superseded ${oldId} → ${newEntry.id}`);
 }
 
+function parseStepsOrExit(stepsJson: string): ReturnType<typeof parseSteps> {
+  try {
+    return parseSteps(stepsJson);
+  } catch (err) {
+    printError(errorMessage(err));
+    process.exit(1);
+  }
+}
+
+function traceTags(flags: CliFlags): string[] {
+  const rawTags = flags['tag'];
+  return Array.isArray(rawTags)
+    ? rawTags.map((t) => String(t))
+    : rawTags !== undefined
+      ? [String(rawTags)]
+      : [];
+}
+
 function cmdTraceRecord(
   hippoRoot: string,
-  flags: Record<string, string | boolean | string[]>,
+  flags: CliFlags,
 ): void {
   requireInit(hippoRoot);
 
@@ -304,21 +330,10 @@ function cmdTraceRecord(
     process.exit(1);
   }
 
-  let steps;
-  try {
-    steps = parseSteps(stepsJson);
-  } catch (err) {
-    printError(String(err instanceof Error ? err.message : err));
-    process.exit(1);
-  }
+  const steps = parseStepsOrExit(stepsJson);
 
   const sessionId = String(flags['session'] ?? '').trim() || null;
-  const rawTags = flags['tag'];
-  const tags = Array.isArray(rawTags)
-    ? rawTags.map((t) => String(t))
-    : rawTags !== undefined
-      ? [String(rawTags)]
-      : [];
+  const tags = traceTags(flags);
 
   const content = renderTraceContent({
     task,
@@ -344,10 +359,10 @@ function cmdTraceRecord(
 function cmdTrace(
   hippoRoot: string,
   id: string,
-  flags: Record<string, string | boolean | string[]>,
+  flags: CliFlags,
 ): void {
   requireInit(hippoRoot);
-  const asJson = Boolean(flags['json']);
+  const asJson = boolFlag(flags, 'json');
   const tenantId = resolveTenantId({});
 
   // Look in local store first, then global.
@@ -388,15 +403,15 @@ function traceStats(entry: MemoryEntry) {
   const rewardFactor = calculateRewardFactor(entry);
   const effHalfLife = halfLife * rewardFactor;
   const createdMs = new Date(entry.created).getTime();
-  const ageDays = (now.getTime() - createdMs) / 86_400_000;
+  const ageDays = (now.getTime() - createdMs) / DAY_MS;
   const lastMs = new Date(entry.last_retrieved).getTime();
-  const sinceLast = (now.getTime() - lastMs) / 86_400_000;
+  const sinceLast = (now.getTime() - lastMs) / DAY_MS;
   const facets = confidenceFacets(entry, now);
   const conf = confidenceLabel(entry, now).text;
 
   // Projected strength: same decay curve, just push `now` out.
   const projectedAt = (days: number): number =>
-    calculateStrength(entry, new Date(now.getTime() + days * 86_400_000));
+    calculateStrength(entry, new Date(now.getTime() + days * DAY_MS));
   return { strength, halfLife, rewardFactor, effHalfLife, ageDays, sinceLast, facets, conf, projectedAt };
 }
 
@@ -501,44 +516,41 @@ export async function handleRemember({ hippoRoot, args, flags }: CommandContext)
   // flags (--pin, --layer, --extract, --global) still need the direct
   // path; we only intercept the minimal envelope. The salience gate is
   // NOT in richFlag and the route does not apply it, so a routed remember
-  // stores what a direct one would skip. Measured 2026-09-07, tracked in
-  // TODOS.md; do not read this list as covering salience.
+  // stores what a direct one would skip; do not read this list as covering salience.
   const richFlag =
     flags['pin'] || flags['global'] || flags['extract'] || flags['force'] ||
     flags['observed'] || flags['inferred'] || flags['verified'] ||
     flags['layer'] !== undefined;
-  if (!richFlag) {
-    const rememberKindRaw = typeof flags['kind'] === 'string' ? (flags['kind'] as string).toLowerCase() : undefined;
-    const rememberKindAllowed = ['distilled', 'superseded'] as const;
-    if (rememberKindRaw === undefined || (rememberKindAllowed as readonly string[]).includes(rememberKindRaw)) {
-      const tags = rememberTags(flags, process.cwd()).all;
-      // B2 v1.12.6 — validate --owner on the thin-client path too.
-      // Failure on this path exits early so the user gets the same
-      // validation experience whether or not a server is up.
-      const thinOwnerRaw = typeof flags['owner'] === 'string' ? (flags['owner'] as string) : undefined;
-      const thinOwnerCheck = validateOwner(thinOwnerRaw, { strict: isStrictOwnerEnv() });
-      if (!thinOwnerCheck.ok) {
-        printError(thinOwnerCheck.message);
-        process.exit(1);
-      }
-      if (thinOwnerCheck.message) printError(thinOwnerCheck.message);
-      const remembered = await runViaServerIfAvailable(hippoRoot, async (info, apiKey) => {
-        const result = await client.remember(info.url, apiKey, {
-          content: text,
-          kind: rememberKindRaw as ('distilled' | 'superseded' | undefined),
-          scope: typeof flags['scope'] === 'string' ? (flags['scope'] as string) : undefined,
-          owner: thinOwnerCheck.value,
-          artifactRef: typeof flags['artifact-ref'] === 'string' ? (flags['artifact-ref'] as string) : undefined,
-          tags,
-        });
-        console.log(`Remembered [${result.id}] (via ${info.url})`);
-        console.log(`   Kind: ${result.kind} | Tenant: ${result.tenantId}`);
-        for (const w of result.warnings ?? []) printError(`Warning: ${w}`);
-      });
-      if (remembered) return;
-    }
-  }
+  if (!richFlag && await rememberViaThinClient(hippoRoot, text, flags)) return;
   await cmdRemember(hippoRoot, text, flags);
+}
+
+async function rememberViaThinClient(hippoRoot: string, text: string, flags: CliFlags): Promise<boolean> {
+  const rememberKindRaw = stringFlag(flags, 'kind')?.toLowerCase();
+  const rememberKindAllowed = ['distilled', 'superseded'] as const;
+  if (rememberKindRaw !== undefined && !(rememberKindAllowed as readonly string[]).includes(rememberKindRaw)) return false;
+  const tags = rememberTags(flags, process.cwd()).all;
+  // Validate --owner on the thin-client path too, so validation is the same whether or not a server is up.
+  const thinOwnerRaw = stringFlag(flags, 'owner');
+  const thinOwnerCheck = validateOwner(thinOwnerRaw, { strict: isStrictOwnerEnv() });
+  if (!thinOwnerCheck.ok) {
+    printError(thinOwnerCheck.message);
+    process.exit(1);
+  }
+  if (thinOwnerCheck.message) printError(thinOwnerCheck.message);
+  return runViaServerIfAvailable(hippoRoot, async (info, apiKey) => {
+    const result = await client.remember(info.url, apiKey, {
+      content: text,
+      kind: rememberKindRaw as ('distilled' | 'superseded' | undefined),
+      scope: stringFlag(flags, 'scope'),
+      owner: thinOwnerCheck.value,
+      artifactRef: stringFlag(flags, 'artifact-ref'),
+      tags,
+    });
+    console.log(`Remembered [${result.id}] (via ${info.url})`);
+    console.log(`   Kind: ${result.kind} | Tenant: ${result.tenantId}`);
+    for (const w of result.warnings ?? []) printError(`Warning: ${w}`);
+  });
 }
 
 export function handleSupersede({ hippoRoot, args, flags }: CommandContext): void {

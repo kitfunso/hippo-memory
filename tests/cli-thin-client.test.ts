@@ -8,6 +8,7 @@ import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb, getMeta } from '../src/db.js';
 import { queryAuditEvents } from '../src/audit.js';
 import { boundPort } from './_helpers/listen.js';
+import { ROUTED_CLI_ENV } from './_helpers/routed-cli-env.js';
 
 /**
  * Headline parity test for A1: when `hippo serve` is running, CLI invocations
@@ -112,7 +113,7 @@ function runCli(workspace: string, ...cliArgs: string[]): CliResult {
   try {
     const stdout = execFileSync(process.execPath, [CLI_PATH, ...cliArgs], {
       cwd: workspace,
-      env: { ...process.env },
+      env: { ...process.env, ...ROUTED_CLI_ENV },
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -138,7 +139,7 @@ function runCliAsync(workspace: string, ...cliArgs: string[]): Promise<CliResult
   return new Promise((resolve) => {
     const child = spawn(process.execPath, [CLI_PATH, ...cliArgs], {
       cwd: workspace,
-      env: { ...process.env },
+      env: { ...process.env, ...ROUTED_CLI_ENV },
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
     });
@@ -155,7 +156,6 @@ function getActorForContent(workspace: string, contentNeedle: string): string | 
   try {
     const events = queryAuditEvents(db, { tenantId: 'default', op: 'remember', limit: 200 });
     for (const ev of events) {
-      const meta = ev.metadata ?? {};
       const target = ev.targetId;
       if (!target) continue;
       // Check whether this audit row corresponds to a memory whose content

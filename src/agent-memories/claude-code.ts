@@ -1,14 +1,16 @@
 // Claude Code's auto memory: frontmatter `.md` notes in a per-project folder, plus the `autoMemoryDirectory` user folder.
 import fs from 'node:fs';
 import path from 'node:path';
-import { deriveOriginProject, realpathOrResolve } from '../project-identity.js';
+import { resolveProjectIdentity, type ProjectIdentity } from '../project-identity.js';
+import { realpathOrResolve } from '../util/real-path.js';
 import { isStringValue } from '../capture-contract.js';
-import { isJsonObject } from '../hooks/shared.js';
-import type { JsonValue } from '../working-memory.js';
+import { claudeConfigDir } from '../hooks/shared.js';
 import { expandHome, frontmatterField, itemTime, readTextFile, splitFrontmatter } from './files.js';
 import { markdownNotes, readFolderStore, uniqueFolders, type FolderRules } from './folder-store.js';
 import { gitLayout } from './git.js';
 import type { Adapter, AdapterContext, Container, Listing, Scope } from './types.js';
+import { type JsonValue, isJsonObjectLiteral } from '../json.js';
+import { errorMessage } from '../log.js';
 
 // Keeps a pinned name from carrying a separator or `..` out of the projects folder.
 const PROJECT_DIR_NAME = /^[A-Za-z0-9_-]{1,64}$/;
@@ -41,7 +43,7 @@ export function claudeFolderName(root: string): string {
 export const claudeCodeAdapter: Adapter = {
   tool: 'claude-code',
   list(ctx, scope) {
-    const config = ctx.env.CLAUDE_CONFIG_DIR || path.join(ctx.home, '.claude');
+    const config = claudeConfigDir(ctx.home, ctx.env);
     const warnings: string[] = [];
     const folders = scope === 'project' ? projectFolders(ctx, config) : userFolders(ctx, config, warnings);
     return { tool: 'claude-code', home: config, containers: readFolders(folders, scope, ctx.platform), warnings };
@@ -50,13 +52,13 @@ export const claudeCodeAdapter: Adapter = {
 
 /** A session's own notes folder and nothing else, with no git call, so post-compact can read it inside the hook's time limit. */
 export function claudeTranscriptListing(ctx: AdapterContext, transcriptPath: string): Listing {
-  const config = ctx.env.CLAUDE_CONFIG_DIR || path.join(ctx.home, '.claude');
+  const config = claudeConfigDir(ctx.home, ctx.env);
   const folder = path.join(path.dirname(transcriptPath), 'memory');
   return { tool: 'claude-code', home: config, containers: readFolders([folder], 'project', ctx.platform), warnings: [] };
 }
 
 /** The project a session folder's notes belong to: the one Claude named the folder for, the session's start folder, else cwd or a parent; null when none matches. */
-export function transcriptNotesOrigin(transcriptPath: string, cwd: string | null, machine: Pick<AdapterContext, 'platform' | 'env'>): string | null {
+export function transcriptNotesProject(transcriptPath: string, cwd: string | null, machine: Pick<AdapterContext, 'platform' | 'env'>): ProjectIdentity | null {
   const fold = (name: string) => (machine.platform === 'win32' ? name.toLowerCase() : name);
   const folder = fold(path.basename(path.dirname(transcriptPath)));
   const start = transcriptStartCwd(transcriptPath);
@@ -64,12 +66,12 @@ export function transcriptNotesOrigin(transcriptPath: string, cwd: string | null
   if (pinned !== null && fold(pinned) === folder) {
     // A pinned name stands for whatever project the session ran in, so its start folder decides.
     const from = start ?? cwd;
-    return from !== null && fs.existsSync(from) ? deriveOriginProject(from) : null;
+    return from !== null && fs.existsSync(from) ? resolveProjectIdentity(from) : null;
   }
   for (const from of [start, cwd]) {
     for (let dir = from === null ? null : path.resolve(from); dir !== null; dir = path.dirname(dir) === dir ? null : path.dirname(dir)) {
       // A folder gone from disk resolves to its bare name, never the project it was in, so it decides nothing.
-      if ([dir, realpathOrResolve(dir)].some((d) => fold(claudeFolderName(d)) === folder)) return fs.existsSync(dir) ? deriveOriginProject(dir) : null;
+      if ([dir, realpathOrResolve(dir)].some((d) => fold(claudeFolderName(d)) === folder)) return fs.existsSync(dir) ? resolveProjectIdentity(dir) : null;
     }
   }
   return null;
@@ -129,10 +131,10 @@ function autoMemoryDirectory(settings: string, home: string, warnings: string[])
     // SAFETY: JSON.parse yields JSON; the object and string checks below decide what is used.
     json = JSON.parse(file.text) as JsonValue;
   } catch (err) {
-    warnings.push(`${settings}: ${err instanceof Error ? err.message : String(err)}`);
+    warnings.push(`${settings}: ${errorMessage(err)}`);
     return null;
   }
-  const value = isJsonObject(json) ? json.autoMemoryDirectory : undefined;
+  const value = isJsonObjectLiteral(json) ? json.autoMemoryDirectory : undefined;
   if (!isStringValue(value) || value === '') return null;
   const dir = expandHome(value, home);
   if (path.isAbsolute(dir)) return dir;

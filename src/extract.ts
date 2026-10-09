@@ -5,7 +5,9 @@ import { RejectedValueError } from './rejection.js';
 import { redactSecretsStrict } from './secret-detect.js';
 import { fetchWithRetry, llmTimeoutMs } from './http-retry.js';
 import { neverAutoShareTags } from './shared.js';
-import { log } from './log.js';
+import { errorMessage, log } from './log.js';
+import { isJsonString } from './json.js';
+import { certainDefect } from './memory-quality.js';
 
 export interface ExtractedFact {
   content: string;
@@ -19,14 +21,6 @@ export interface ExtractOptions {
   fetcher?: typeof fetch;
   /** Told why a call produced nothing, so callers can surface it instead of guessing. */
   onError?: (msg: string) => void;
-}
-
-/** JSON value shape for fields pulled off the untyped, parsed LLM response
- *  array before they are individually validated. */
-type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
-
-function isJsonString(value: JsonValue): value is string {
-  return typeof value === 'string';
 }
 
 const EXTRACTION_PROMPT = `You are extracting factual statements from a conversation or memory entry. Extract 1-8 standalone factual statements that would be useful to remember later.
@@ -65,7 +59,7 @@ export async function extractFacts(
       }),
     }, { timeoutMs: llmTimeoutMs(), fetchFn });
   } catch (err) {
-    opts.onError?.(`request failed: ${err instanceof Error ? err.message : String(err)}`);
+    opts.onError?.(`request failed: ${errorMessage(err)}`);
     return [];
   }
 
@@ -108,7 +102,7 @@ export async function extractFacts(
 
     return facts;
   } catch (err) {
-    opts.onError?.(`unparseable response: ${err instanceof Error ? err.message : String(err)}`);
+    opts.onError?.(`unparseable response: ${errorMessage(err)}`);
     return [];
   }
 }
@@ -130,6 +124,11 @@ export function storeExtractedFacts(
   const baseHalfLifeDays = loadConfig(hippoRoot).defaultHalfLifeDays;
 
   for (const fact of facts) {
+    const defect = certainDefect(fact.content);
+    if (defect !== null) {
+      log.warn(`storeExtractedFacts: skipped automatic quality defect (${defect})`);
+      continue;
+    }
     const tags = ['extracted', ...inheritedTags, ...fact.tags];
     const entry: MemoryEntry = { ...createMemory(fact.content, {
       layer: Layer.Semantic,
@@ -139,16 +138,13 @@ export function storeExtractedFacts(
       source: source.source,
       extracted_from: source.id,
       scope: source.scope,
-      // T1 executor check (2026-08-15 hardening pass): same defect as the
-      // consolidate.ts merge/trace passes — createMemory with no tenantId
-      // option stamps 'default' (memory.ts:535) regardless of the source
-      // entry's own tenant. Thread it through so extracted facts land in
-      // the same tenant as the episodic memory they were extracted from.
+      // Without it createMemory stamps 'default', and extracted facts leave
+      // the tenant of the episodic memory they were extracted from.
       tenantId: source.tenantId,
       baseHalfLifeDays,
     }), origin_project: source.origin_project };
 
-    // AT1 containment: a refusal is per-VALUE — one rejected fact must not
+    // A refusal is per-VALUE: one rejected fact must not
     // drop the rest of this batch. writeEntry has already audited the
     // refusal (reject_refusal) before rethrowing, so skip-and-count here.
     try {

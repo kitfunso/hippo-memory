@@ -6,7 +6,7 @@ import { closeHippoDb, openHippoDb } from '../src/db.js';
 import { listMemoryConflicts, replaceDetectedConflicts } from '../src/store/conflicts.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { quarantineScopeFor } from '../src/quarantine.js';
-import type { MemoryDetail, ResolveResult } from '../src/dashboard-types.js';
+import type { MemoryDetail, ResolveResult } from '../src/dashboard/dashboard-types.js';
 import {
   DASHBOARD_TOKEN, NOW, call, get, isoAgo, makeStore, parse, postJson, seed, startDashboard, type Json, type RunningDashboard, type TmpStore,
 } from './_helpers/dashboard-fixture.js';
@@ -228,7 +228,7 @@ describe('request guards', () => {
     const target = seed(store.hippoRoot, 'drain row');
     const chunk = Buffer.alloc(8 * 1024, 'x');
 
-    const status = await new Promise<number>((resolve, reject) => {
+    const reply = await new Promise<{ status: number; closed: Promise<void> }>((resolve, reject) => {
       const req = httpRequest({
         host: '127.0.0.1', port: dash.port, path: `/api/memory/${target.id}/pin`, method: 'POST',
         headers: { 'Content-Type': 'application/json', cookie: `hippo_dashboard_${dash.port}=${DASHBOARD_TOKEN}` },
@@ -237,26 +237,52 @@ describe('request guards', () => {
       req.on('response', (res) => {
         answered = true;
         res.resume();
-        resolve(res.statusCode ?? 0);
+        const socket = req.socket;
+        const closed = socket === null || socket.destroyed
+          ? Promise.resolve()
+          : new Promise<void>((done) => socket.once('close', () => done()));
+        resolve({ status: res.statusCode ?? 0, closed });
       });
-      // The server destroys the socket after answering, so a late reset is the expected end of the upload.
+      // A reset before the reply is the bug this guards: the server closed with request bytes unread.
       req.on('error', (err) => {
         if (!answered) reject(err);
       });
+      // Unpaced and never ended, as a large upload is, so only the server can close the connection.
       const send = async (): Promise<void> => {
         for (let sent = 0; sent < 1024 * 1024 && !req.destroyed && !answered; sent += chunk.length) {
           await new Promise<void>((done) => req.write(chunk, () => done()));
-          // Paced so the server has read everything before it drops the socket; an unread backlog would reset the reply away.
-          await new Promise<void>((done) => setTimeout(done, 5));
         }
-        req.destroy();
       };
       void send();
     });
 
-    expect(status).toBe(400);
+    expect(reply.status).toBe(400);
+    await reply.closed;
     expect(row(target.id).pinned).toBe(false);
     expect((await get(dash.port, '/api/overview')).status).toBe(200);
+  });
+
+  it('answers 408 when the promised body never arrives', async () => {
+    const target = seed(store.hippoRoot, 'stalled row');
+    process.env.HIPPO_BODY_TIMEOUT_MS = '50';
+    try {
+      const status = await new Promise<number>((resolve, reject) => {
+        const req = httpRequest({
+          host: '127.0.0.1', port: dash.port, path: `/api/memory/${target.id}/pin`, method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Content-Length': 100, cookie: `hippo_dashboard_${dash.port}=${DASHBOARD_TOKEN}` },
+        }, (res) => {
+          res.resume();
+          resolve(res.statusCode ?? 0);
+        });
+        req.on('error', reject);
+        // Headers only: the body they promise is never written.
+        req.flushHeaders();
+      });
+      expect(status).toBe(408);
+    } finally {
+      delete process.env.HIPPO_BODY_TIMEOUT_MS;
+    }
+    expect(row(target.id).pinned).toBe(false);
   });
 
   it('answers 400 for a malformed percent sequence in a path, and keeps serving', async () => {

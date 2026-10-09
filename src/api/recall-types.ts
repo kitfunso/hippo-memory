@@ -1,12 +1,14 @@
 // Option and result shapes for recall and retrieve.
 
-import type { TaskSnapshot, SessionEvent } from '../store/rows.js';
-import type { SessionHandoff } from '../handoff.js';
+import type { ContinuityBlock } from '../store/port.js';
 import type { MemoryEntry } from '../memory.js';
-import type { RerankStep, SearchResult } from '../search/types.js';
-import type { PlanningFallacyHint, PlanningFallacyWatching } from '../predictions/planning-fallacy.js';
+import type { RerankStep, SearchResult } from '../core/search-types.js';
+import type { PlanningFallacyHint, PlanningFallacyOutput, PlanningFallacyWatching } from '../predictions/planning-fallacy.js';
 import type { AnchoringHint, RecallHistorySnapshot } from '../recall-history.js';
 import type { AvailabilityHint } from '../availability.js';
+import type { AppendAuditOpts } from '../audit.js';
+import type { CallerProject } from '../prompt-hook.js';
+import type { RankRecallOpts, RankRecallResult } from '../recall-pipeline.js';
 
 // ---------------------------------------------------------------------------
 // recall
@@ -16,10 +18,9 @@ export interface RecallOpts {
   query: string;
   limit?: number;
   /**
-   * F3 (v1.7.0): scorer-window opt-in. When set, `loadSearchEntries`
+   * Scorer-window opt-in. When set, `loadSearchEntries`
    * loads up to `scorerWindow` candidates. When undefined (default),
-   * the existing behaviour is preserved: store-internal 200-row default,
-   * which every release before v1.7.0 silently relied on.
+   * the store-internal 200-row default applies.
    *
    * `scorerWindow` lets callers decouple "how many candidates do I want
    * the scorer to evaluate" from `limit` ("how many do I want returned").
@@ -33,18 +34,16 @@ export interface RecallOpts {
    *
    * Validated as a positive finite integer when set. `scorerWindow: 0`
    * or non-finite values throw `RecallContractError` with code
-   * `invalid_scorer_window` to prevent the v1.6.x footgun where 0 fell
-   * through to an uncapped fallback (codex v1.7.0 diff-pass P1).
+   * `invalid_scorer_window`, because 0 would otherwise fall through to an
+   * uncapped fallback.
    *
-   * **Input is library-only at v1.7.0.** HTTP `/v1/memories`, MCP
+   * **Input is library-only.** HTTP `/v1/memories`, MCP
    * `hippo_recall`, and `client.ts` thin-client do NOT serialize this
    * INPUT field; remote callers cannot send `scorerWindow` and will see
    * the store default applied. The OUTPUT `RecallResult.windowSize` is
    * always serialized over the wire (HTTP `sendJson` ships the whole
    * RecallResult, so remote callers receive `windowSize: 200` in the
-   * response). Transport exposure for the input planned for v1.7.1
-   * alongside the deferred-queue items that need a wider candidate pool
-   * (e.g. mean-of-children summary re-rank).
+   * response).
    */
   scorerWindow?: number;
   /** Candidate order. `recall` always keeps the BM25 order; `retrieve` honours this. */
@@ -60,21 +59,21 @@ export interface RecallOpts {
    */
   scope?: string;
   /**
-   * v1.5.0 DAG-aware recall. When true (default), entries that overflow the
+   * DAG-aware recall. When true (default), entries that overflow the
    * `limit` and share a level-2 parent summary cause that summary to be
    * appended in their place, capped at ceil(limit * 0.3) extra rows. Set to
-   * false to disable and get the pre-v1.5 strict-limit behaviour.
+   * false for a strict limit.
    */
   summarizeOverflow?: boolean;
   /**
-   * v1.5.2 fresh-tail. When > 0, prepend the last N kind='raw' rows
+   * Fresh tail. When > 0, prepend the last N kind='raw' rows
    * (tenant + scope filtered, dedup against the BM25 hits) so an agent's
    * "what did I just see" recall path always covers the recent window
    * even when the query terms don't match. Capped at 200. Default 0 = off.
    */
   freshTailCount?: number;
   /**
-   * v1.6.2 fresh-tail session scope. When set, restricts the fresh-tail
+   * Fresh-tail session scope. When set, restricts the fresh-tail
    * window to a specific session. Without it, fresh-tail is tenant-wide,
    * which surfaces newest rows across ALL sessions — useful for "anything
    * new in this tenant", but wrong for "what did I just see in this one
@@ -86,8 +85,8 @@ export interface RecallOpts {
    * session handoff, recent session events) on the result. Default false to keep
    * the hot path cheap; agent boot paths should set this to true.
    *
-   * All three lookups are tenant-scoped to ctx.tenantId via the v0.40+ store
-   * helpers. No risk of cross-tenant leak.
+   * All three lookups are tenant-scoped to ctx.tenantId. On a shared store they are
+   * the caller's own, keyed by owner and `project`, and empty without a project.
    *
    * Note: when no active snapshot exists, sessionHandoff is null and
    * recentSessionEvents is []. We deliberately do NOT fall back to the latest
@@ -96,25 +95,25 @@ export interface RecallOpts {
    * `hippo session resume`.
    */
   includeContinuity?: boolean;
+  project?: CallerProject; // keeps rows to this project and user-global ones, and keys the continuity block
   /**
-   * v1.7.4 -- when set AND `(ctx.tenantId, sessionId)` has active goals AND
+   * When set AND `(ctx.tenantId, sessionId)` has active goals AND
    * `goalTag` is unset, `api.recall` applies the dlPFC goal-stack boost lifted
-   * from CLI cmdRecall. Pre-v1.7.4 the boost was CLI-only (env-driven via
-   * HIPPO_SESSION_ID). Undefined preserves v1.7.3 behaviour (no boost).
+   * from CLI cmdRecall. Undefined means no boost.
    *
    * Why on RecallOpts and not Context: Context is shared by remember/recall/
    * assemble/outcome. Goal-stack boost is recall-scoped only.
    */
   sessionId?: string;
   /**
-   * v1.7.4 -- explicit goal-tag override. When set, the goal-stack boost is
-   * SUPPRESSED (mirrors the CLI's `goalTag === ''` gate from v0.38). Use to
+   * Explicit goal-tag override. When set, the goal-stack boost is
+   * SUPPRESSED (mirrors the CLI's `goalTag === ''` gate). Use to
    * pin recall ranking against one specific goal/tag without the multi-goal
    * stack interfering.
    */
   goalTag?: string;
   /**
-   * v0.33 / J1 anchoring detector. Caller-supplied snapshot of the per-
+   * Anchoring detector. Caller-supplied snapshot of the per-
    * (tenant, session) recall ring. When present, api.recall computes
    * `RecallResult.anchoringHint` against this snapshot + the just-computed
    * top-1. When undefined (default), no anchoring detection runs on the
@@ -129,27 +128,25 @@ export interface RecallOpts {
    */
   recallHistory?: RecallHistorySnapshot;
   /**
-   * v1.13.x / J2 — when true, api.recall does NOT compute or emit the
+   * When true, api.recall does NOT compute or emit the
    * availabilityHint. Callers that run their OWN per-pipeline availability
    * detection over a different result set (the MCP handler computes it over
    * physics/hybrid results, not api.recall's BM25 band) pass this to avoid a
    * double audit emission and a hint describing a result set the caller never
-   * surfaces. Mirrors how J1 only computes anchoring when opts.recallHistory
+   * surfaces. Mirrors how anchoring only runs when opts.recallHistory
    * is supplied. HTTP / direct SDK callers leave this unset and receive the hint.
    */
   suppressAvailabilityHint?: boolean;
   /**
-   * A7 recall-trace. When true, api.recall captures the lifecycle re-ranking
+   * Recall trace. When true, api.recall captures the lifecycle re-ranking
    * trace (currently the goal-boost step on the primary band) and attaches it
    * to each `RecallResultItem` as `rerankTrace`, plus `rerankPipeline:'api'`.
-   * When undefined/false (default), both fields are absent on EVERY band so
-   * the response shape is byte-identical to pre-A7. The api pipeline applies
-   * only goal-boost; the richer CLI stages (interference/value/utility/
-   * reranker/retrieval-count-downweight) are A7.2.
+   * When undefined/false (default), both fields are absent on EVERY band.
+   * The api pipeline applies only goal-boost; the richer CLI stages
+   * (interference/value/utility/reranker/retrieval-count-downweight) are not traced here.
    */
   explain?: boolean;
   /**
-   * LC1 (docs/plans/2026-08-02-lc1-recall-trace-persistence.md) / F2 fix.
    * When true, api.recall does NOT write a recall_traces row for this call.
    * Mirrors `suppressAvailabilityHint`'s pattern: callers that run their OWN
    * tracing over a DIFFERENT result set must suppress api.recall's copy so
@@ -162,8 +159,47 @@ export interface RecallOpts {
   /** Set only by the MCP recall tool, which ranks with its own scorer and drops copies from its own final list: this call
    *  then keeps a memory that a merged row in the same result holds word for word. Other callers leave it unset. */
   keepHeldCopies?: boolean;
+  leadingAudit?: readonly AppendAuditOpts[]; // rows this recall writes first in its one write, so a failed recall writes none; the HTTP route sets it, others leave it unset
   /** MCP recall only: `retrieve` ranks the whole scoped store and strengthens and traces (pipeline 'mcp') just the ids this returns; `results` stays the window band. */
-  showRanked?: (ranking: StoreRanking, result: RecallResult) => readonly string[];
+  showRanked?: (ranking: StoreRanking, result: RecallResult) => ShownRanking;
+  /** Named ranker: `retrieve` ranks with the CLI ranking core. Unset, it ranks the SQL BM25 band, or the wide hybrid list under `showRanked`. */
+  cliCore?: CliCoreRanker;
+}
+
+interface CliCoreRanking {
+  rank: Omit<RankRecallOpts, 'query' | 'sessionId' | 'goalTag'>;
+  /** A second store searched beside `ctx.hippoRoot`. */
+  sources?: { globalRoot?: string };
+  /** Receives each operator note when ranking reaches it. */
+  note?: (line: string) => void;
+}
+
+/** A recall the caller prints. `show` runs once ranking ends, unless it halted; `retrieve` then records the list it returns. */
+export interface CliCoreRecall extends CliCoreRanking {
+  /** The host agent's session: it stamps the token ledger row, and the trace when the recall names no session. */
+  hostSessionId?: string;
+  show: (ranking: RankRecallResult, planning: PlanningFallacyOutput) => ShownCliCore;
+}
+
+/** A read-only look at the ranking (`hippo explain`): no hint is evaluated and nothing is written. */
+export interface CliCoreInspection extends CliCoreRanking {
+  inspect: (ranking: RankRecallResult) => void;
+}
+
+/** The CLI ranking core (`rankRecall`) as a ranker of `retrieve`: host admin only, on hippo.db. Of the other RecallOpts it reads `query`, `sessionId` and `goalTag`. */
+export type CliCoreRanker = CliCoreRecall | CliCoreInspection;
+
+/** `results`: the rows the caller shows, best first; `audit`: its hint rows, written ahead of the 'recall' row; `tokens`: the text it prints, for the ledger. */
+export interface ShownCliCore {
+  results: readonly SearchResult[];
+  audit: readonly AppendAuditOpts[];
+  tokens: number;
+}
+
+/** `ids`: what the caller showed; `audit`: its own rows, written after the recall's and in the same transaction, so all land or none. */
+export interface ShownRanking {
+  ids: readonly string[];
+  audit: readonly AppendAuditOpts[];
 }
 
 /** `ranked`: every scored row, best first, goal boost applied, entries as loaded; `pool`: the store after the scope filter. */
@@ -173,11 +209,7 @@ export interface StoreRanking {
   droppedByScope: number;
 }
 
-export interface ContinuityBlock {
-  activeSnapshot: TaskSnapshot | null;
-  sessionHandoff: SessionHandoff | null;
-  recentSessionEvents: SessionEvent[];
-}
+export type { ContinuityBlock } from '../store/port.js';
 
 export interface RecallResultItem {
   id: string;
@@ -186,26 +218,24 @@ export interface RecallResultItem {
   layer: string;
   strength: number;
   /**
-   * v1.5.0 DAG-aware recall (docs/plans/2026-05-05-dag-recall.md Task 2).
    * True when this row is a level-2 topic summary substituted in for
    * overflowed children that didn't fit the limit.
    */
   isSummary?: boolean;
   /**
    * IDs of the overflow leaves this summary covers. Caller can drill
-   * into these via `drillDown` (Task 3) to recover the original detail.
+   * into these via `drillDown` to recover the original detail.
    */
   substitutedFor?: string[];
   /** Cached descendant count from schema v25; non-zero for level-2+ rows. */
   descendantCount?: number;
   /**
-   * v1.5.2 fresh-tail (docs/plans/2026-05-05-dag-recall.md Task 4). True
-   * for rows surfaced via the most-recent-N kind='raw' window, NOT by the
+   * True for rows surfaced via the most-recent-N kind='raw' window, NOT by the
    * BM25 query match. Caller can render them in a separate "recent" band.
    */
   isFreshTail?: boolean;
   /**
-   * A7 recall-trace. Ordered lifecycle re-ranking steps that mutated this
+   * Ordered lifecycle re-ranking steps that mutated this
    * row's `score` after candidate generation. On the api pipeline this carries
    * the goal-boost step (the only re-ranking api.recall applies). Populated
    * ONLY when `RecallOpts.explain` is set; absent on the default path
@@ -214,11 +244,11 @@ export interface RecallResultItem {
    */
   rerankTrace?: RerankStep[];
   /**
-   * A7 recall-trace. Names which pipeline produced `rerankTrace`. `'api'` on
+   * Names which pipeline produced `rerankTrace`. `'api'` on
    * every band returned by `api.recall` when `explain` is set; the CLI carries
    * its trace on `SearchResult` instead and does not set this. Absent on the
    * default path. Distinguishes the api pipeline (goal-boost only) from the
-   * richer CLI pipeline (A7.2 will unify them).
+   * richer CLI pipeline.
    */
   rerankPipeline?: 'cli' | 'api';
 }
@@ -238,20 +268,20 @@ export interface RecallResult {
    */
   continuityTokens?: number;
   /**
-   * F3 (v1.7.0): scorer window actually used for this recall. Equals
+   * Scorer window actually used for this recall. Equals
    * `opts.scorerWindow` when set, otherwise the store-internal default
    * (200) used by `loadSearchEntries(undefined, ...)`. Reported so
    * callers can introspect "did the scorer see enough candidates?"
    * without re-deriving the value.
    *
    * Optional in the type to keep `RecallResult` literal-construction
-   * back-compatible with pre-v1.7 test fakes / mocks (senior review P1-2).
+   * back-compatible with test fakes / mocks that predate the field.
    * Always present on values returned by `api.recall` itself; consumers
    * reading from `api.recall` can treat it as defined.
    */
   windowSize?: number;
   /**
-   * v1.12.13 / C5 — WYSIATI cutoff transparency. When present, gives the
+   * WYSIATI cutoff transparency. When present, gives the
    * calling agent a per-pipeline breakdown of what was excluded from
    * `results[]` and why. Always populated by `api.recall`, `cmdRecall`, and
    * the MCP `hippo_recall` handler. Optional in the type for back-compat
@@ -266,14 +296,14 @@ export interface RecallResult {
    */
   suppressionSummary?: RecallSuppressionSummary;
   /**
-   * v0.32 / J3.2 — auto-injected planning-fallacy hint. When the recall
+   * Auto-injected planning-fallacy hint. When the recall
    * query carries a forward-prediction phrase ("will take ~3 days", "ship
    * by Friday", "ETA in 2 weeks") AND the closest matching prediction
    * class has closed historical data, this carries the base-rate stats so
    * the calling agent sees its track record at the moment of forecasting
    * (Lovallo-Kahneman 2003 inside-vs-outside view).
    *
-   * Populated by `api.recall` itself via `computePlanningFallacyOutput`.
+   * Populated by `api.recall` itself via `decidePlanningFallacy`.
    * Pipeline-invariant: the value depends only on (queryText, tenantId,
    * predictions table state) — all three are identical regardless of
    * which downstream search pipeline produces the memory list, so MCP
@@ -286,15 +316,13 @@ export interface RecallResult {
    */
   planningFallacyHint?: PlanningFallacyHint;
   /**
-   * v1.13.4 / J3.2 follow-up — "watching" variant emitted when the
+   * "Watching" variant emitted when the
    * forward-claim regex matched but no baserate could be produced
    * (either because no prediction class scored ≥ 1 on token overlap,
    * or because ≥2 classes tied at the best score). Mutually exclusive
    * with `planningFallacyHint`: at most one of the two is set per
-   * recall. Dogfood diary (docs/dogfood/2026-05-27-track-j-warnings.md)
-   * Trial 2a confirmed the pre-v1.13.4 silent-no-class-match path was
-   * the dominant J3.2 failure mode, because natural-language queries
-   * rarely share non-stopword tokens with class tags. The watching
+   * recall. Natural-language queries rarely share non-stopword tokens
+   * with class tags, so without it the hint would mostly stay silent. The watching
    * variant gives the agent enough signal to either re-tag the
    * prediction or pass the suggestion through to the user.
    *
@@ -304,9 +332,9 @@ export interface RecallResult {
    */
   planningFallacyWatching?: PlanningFallacyWatching;
   /**
-   * v0.33 / J1 (v1.13.2) — recall-recurrence anchoring hint. Populated
+   * Recall-recurrence anchoring hint. Populated
    * when api.recall's `opts.recallHistory` snapshot + the just-computed
-   * top-1 satisfy R1 (query_repeat) or R2 (memory_dominance).
+   * top-1 satisfy the query_repeat or memory_dominance rule.
    *
    * Per-pipeline detection: each pipeline (api.recall, cmdRecall, MCP)
    * computes its OWN hint against its OWN top-1. This field reflects
@@ -323,7 +351,7 @@ export interface RecallResult {
   anchoringHint?: AnchoringHint;
 
   /**
-   * v1.13.x / J2 — availability/recency-bias hint. Per-pipeline (computed
+   * Availability/recency-bias hint. Per-pipeline (computed
    * against this pipeline's own returned top-K + the matched candidate pool
    * it was drawn from), soft-warning ONLY: never filters, reorders, or
    * suppresses a result. Fires when the returned slice is recency-dominated
@@ -334,7 +362,7 @@ export interface RecallResult {
 }
 
 /**
- * v1.12.13 / C5 — WYSIATI cutoff transparency (Track C Pineal Gland, C5).
+ * WYSIATI cutoff transparency.
  *
  * Surfaces what the recall pipeline excluded from `results[]` so the calling
  * agent does not treat the cutoff as the full picture (Kahneman's "What You
@@ -384,19 +412,17 @@ export interface RecallSuppressionSummary {
    */
   freshTailAdded: number;
   /** Counter of memories suppressed by detected interference patterns.
-   *  v0.33 / J1 (v1.13.2): incremented by 1 PER PIPELINE when that
-   *  pipeline's own R2 memory_dominance verdict fires (via the J1
-   *  anchoring detector — see `detectAnchoring()` in src/recall-history.ts).
+   *  Incremented by 1 PER PIPELINE when that
+   *  pipeline's own memory_dominance verdict fires (via the
+   *  anchoring detector, see `detectAnchoring()` in src/recall-history.ts).
    *  Each pipeline (api.recall, cmdRecall, MCP physics/hybrid) bumps its
    *  OWN suppressionSummary independently because each runs its own
    *  detector against its own top-1 + its own per-(tenant, session) ring
    *  buffer. The number reflects this-pipeline interference only; not a
    *  cross-pipeline aggregate.
    *
-   *  Future B4-depth work may add additional sources (e.g. vlPFC inhibition
-   *  scores). No `interference_suppression` table is built — the v1.12.13
-   *  doc that referenced one was speculative; J1 uses caller-side in-memory
-   *  rings instead.
+   *  No `interference_suppression` table exists; the detector uses
+   *  caller-side in-memory rings instead.
    */
   suppressedByInterference: number;
 }

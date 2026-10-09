@@ -1,9 +1,12 @@
 // DAG drill-down from a summary to its children.
 
-import { readEntry, loadChildrenOf } from '../store/entry-reads.js';
+import { requireGroup, storeFor } from '../store-port.js';
+import type { SummaryDescendants } from '../store/port.js';
 import { estimateTokens } from '../token-ledger.js';
 import type { MemoryEntry } from '../memory.js';
-import { passesScopeFilterForRecall } from '../recall-scope.js';
+import { passesScopeFilterForRecall, personalScopeOf } from '../recall-scope.js';
+import { classifyOriginProject } from '../project-identity.js';
+import type { CallerProject } from '../prompt-hook.js';
 import type { Context } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -30,6 +33,7 @@ export interface DrillDownOpts {
    */
   depth?: number;
   cost?: DrillDownCost;
+  project?: CallerProject;
 }
 
 export interface DrillDownSummary { id: string; content: string; descendantCount: number; earliestAt: string | null; latestAt: string | null }
@@ -79,45 +83,55 @@ export type DrillDownOutcome = DrillDownResult | DrillDownFailure;
  * if the underlying DAG accidentally linked across scopes.
  *
  * Returns a discriminated `DrillDownOutcome`: `DrillDownResult` on success,
- * or `{failure: '...'}` for `not_found` (covers genuinely-missing AND wrong-
- * tenant, intentionally indistinguishable), `not_drillable` (id is a leaf
- * row), or `scope_blocked` (caller has no scope grant for the row's scope).
+ * or `{failure: '...'}` for `not_found` (covers genuinely-missing, wrong-
+ * tenant and scope-blocked, intentionally indistinguishable) or
+ * `not_drillable` (id is a leaf row).
  *
- * Pre-v1.6.4 returned null for all four cases. JS callers migrate via
+ * Pre-v1.6.4 returned null for all three cases. JS callers migrate via
  * `'failure' in result` checks; HTTP route maps `not_drillable` to 422.
  */
-export function drillDown(
+export async function drillDown(
   ctx: Context,
   summaryId: string,
   opts: DrillDownOpts = {},
-): DrillDownOutcome {
+): Promise<DrillDownOutcome> {
   const limit = opts.limit ?? 50;
   // v0.30 / E5: depth defaults 1 (backward compat); hard cap 10 levels
   // prevents pathological deep trees. CLI/HTTP/MCP reject invalid values.
   const depth = Math.max(1, Math.min(Math.trunc(opts.depth ?? 1), 10));
-  const summary = readEntry(ctx.hippoRoot, summaryId, ctx.tenantId);
-  // No unscoped cross-tenant probe here — readEntry's null return covers
+  const own = personalScopeOf(ctx.actor) ?? undefined;
+  const readable = (row: MemoryEntry): boolean =>
+    passesScopeFilterForRecall(row.scope ?? null, undefined, own)
+    && (!opts.project || classifyOriginProject(row.origin_project, opts.project) !== 'cross-project');
+  const walked = await requireGroup(storeFor(ctx), 'dagReads').summaryWithDescendants(ctx.tenantId, summaryId, {
+    depth,
+    // A leaf answers not_drillable, so nothing under it is read.
+    admit: (row) => readable(row) && (row.id !== summaryId || isDrillable(row)),
+  });
+  // No unscoped cross-tenant probe here: the tenant-scoped read's miss covers
   // both "doesn't exist" and "exists in another tenant" by design.
   // Distinguishing them via an unscoped lookup would leak existence to
   // unauthorised tenants. The two cases collapse into not_found.
-  if (!summary) return { failure: 'not_found' };
-  if ((summary.dag_level ?? 0) < 2) return { failure: 'not_drillable' };
-  if (!passesScopeFilterForRecall(summary.scope ?? null, undefined)) {
-    // codex round 3 P1: collapse to not_found. A distinguishable
-    // "scope_blocked" tells a no-scope caller "this row exists, just
-    // not for you" — same existence-leak the HTTP 404 collapse was
-    // already preventing. Match the HTTP behaviour at the API level.
-    return { failure: 'not_found' };
-  }
+  if (!walked) return { failure: 'not_found' };
+  // A distinguishable "scope_blocked" would tell a no-scope caller "this row
+  // exists, just not for you", the existence leak the HTTP 404 collapse prevents.
+  if (!readable(walked.summary)) return { failure: 'not_found' };
+  if (!isDrillable(walked.summary)) return { failure: 'not_drillable' };
+  return drillResult(walked, opts, limit);
+}
 
-  const { collected, level0DirectCount } = collectDescendants(ctx, summaryId, depth);
+function isDrillable(row: MemoryEntry): boolean {
+  return (row.dag_level ?? 0) >= 2;
+}
 
+function drillResult({ summary, levels }: SummaryDescendants, opts: DrillDownOpts, limit: number): DrillDownResult {
+  const collected = levels.flat();
   const summaryOut: DrillDownSummary = {
     id: summary.id,
     content: summary.content,
     // v0.30 / E5: the STORED direct-child count; the legacy fallback counts
     // level-0 children, never the BFS-depth-N total (independent-review MED #4).
-    descendantCount: summary.descendant_count ?? level0DirectCount,
+    descendantCount: summary.descendant_count ?? (levels[0]?.length ?? 0),
     earliestAt: summary.earliest_at ?? null,
     latestAt: summary.latest_at ?? null,
   };
@@ -142,44 +156,9 @@ export function drillDown(
   };
 }
 
-interface DescendantWalk {
-  collected: MemoryEntry[];
-  level0DirectCount: number;
-}
-
 interface CappedChildren {
   children: DrillDownChild[];
   truncated: boolean;
-}
-
-// BFS with a visited set: dag_parent_id is not unique, so a misconfigured tree could emit a child twice past depth 1.
-// The level-0 count is kept apart so a legacy summary's descendantCount fallback counts direct children only.
-function collectDescendants(
-  ctx: Context,
-  summaryId: string,
-  depth: number,
-): DescendantWalk {
-  const collected: MemoryEntry[] = [];
-  const visited = new Set<string>([summaryId]);
-  let frontier: string[] = [summaryId];
-  let level0DirectCount = 0;
-  for (let level = 0; level < depth; level++) {
-    const nextFrontier: string[] = [];
-    for (const parentId of frontier) {
-      const kids = loadChildrenOf(ctx.hippoRoot, parentId, ctx.tenantId);
-      const eligibleKids = kids.filter((c) => passesScopeFilterForRecall(c.scope ?? null, undefined));
-      for (const k of eligibleKids) {
-        if (visited.has(k.id)) continue;
-        visited.add(k.id);
-        collected.push(k);
-        nextFrontier.push(k.id);
-        if (level === 0) level0DirectCount++;
-      }
-    }
-    if (nextFrontier.length === 0) break;
-    frontier = nextFrontier;
-  }
-  return { collected, level0DirectCount };
 }
 
 /** Global cumulative token budget first, then the `limit` cap. */

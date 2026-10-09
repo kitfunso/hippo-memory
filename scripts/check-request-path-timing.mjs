@@ -1,10 +1,11 @@
 #!/usr/bin/env node
-// Request-path latency at 10,000 memories per store: getContext and the MCP tools that read whole stores.
-// Fails when any median passes the bound. Run after `npm run build`:
+// Request-path latency and work at 10,000 memories per store: getContext and the MCP tools that read whole stores.
+// Fails when a median passes the bound, or a request runs more statements or reads more rows than its ceiling. Run after `npm run build`:
 //   node scripts/check-request-path-timing.mjs [--memories 10000] [--bound-ms 2000]
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -15,6 +16,8 @@ const flag = (name, dflt) => {
 const MEMORIES = flag('--memories', 10000);
 const BOUND_MS = flag('--bound-ms', 2000);
 const RUNS = 3;
+// The work ceilings below were set at this size, about 1.3 times what each request does; twice the work fails every one.
+const CEILING_MEMORIES = 10000;
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-request-timing-'));
 const localRoot = path.join(tmp, 'proj', '.hippo');
@@ -32,6 +35,43 @@ const { loadAmbientTallies } = await load('ambient-store.js');
 const { openHippoDb, closeHippoDb } = await load('db.js');
 const { getContext, adminActor } = await load('api.js');
 const { handleMcpRequest } = await load('mcp/server.js');
+const { workerSqliteStore } = await load('store/sqlite/worker-store.js');
+
+const { DatabaseSync, StatementSync } = createRequire(import.meta.url)('node:sqlite');
+
+function* countEach(rows, work) {
+  for (const row of rows) {
+    work.rows += 1;
+    yield row;
+  }
+}
+
+/** Statements `run` executes and rows they hand to JavaScript: the same on every runner, where the wall clock is not. */
+async function countWork(run) {
+  const work = { statements: 0, rows: 0 };
+  const exec = DatabaseSync.prototype.exec;
+  const originals = ['run', 'get', 'all', 'iterate'].map((name) => [name, StatementSync.prototype[name]]);
+  DatabaseSync.prototype.exec = function (sql) {
+    work.statements += 1;
+    return exec.call(this, sql);
+  };
+  for (const [name, original] of originals) {
+    StatementSync.prototype[name] = function (...params) {
+      work.statements += 1;
+      const out = original.apply(this, params);
+      if (name === 'get' && out !== undefined) work.rows += 1;
+      if (name === 'all') work.rows += out.length;
+      return name === 'iterate' ? countEach(out, work) : out;
+    };
+  }
+  try {
+    await run();
+  } finally {
+    DatabaseSync.prototype.exec = exec;
+    for (const [name, original] of originals) StatementSync.prototype[name] = original;
+  }
+  return work;
+}
 
 const WORDS = 'cache index query build deploy test lint merge rebase docker kafka redis postgres auth token schema migration release hook retry queue worker cron backup restore metric alert trace log shard'.split(' ');
 const DAY_MS = 86400000;
@@ -84,24 +124,30 @@ const withoutGlobal = (run) => async () => {
   }
 };
 
+// Answers from a store worker thread, as serve() does by default; the counts below are this thread's, so its ceilings are zero.
+const served = workerSqliteStore(localRoot);
+
+// Each case: label, request, and its ceilings on statements run and rows read.
 const cases = [
-  ['getContext, no query', () => getContext(ctx, { currentProject: 'proj' })],
-  ['getContext, query', () => getContext(ctx, { q: 'kafka redis', currentProject: 'proj' })],
-  ['getContext, pinned only', () => getContext(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: 'proj' })],
-  ['getContext, local query', withoutGlobal(() => getContext(ctx, { q: 'kafka redis', currentProject: 'proj' }))],
+  ['getContext, no query', () => getContext(ctx, { currentProject: 'proj' }), [360, 5400]],
+  ['getContext, query', () => getContext(ctx, { q: 'kafka redis', currentProject: 'proj' }), [415, 705]],
+  ['getContext, pinned only', () => getContext(ctx, { pinnedOnly: true, includeRecent: 5, currentProject: 'proj' }), [58, 155]],
+  ['getContext, local query', withoutGlobal(() => getContext(ctx, { q: 'kafka redis', currentProject: 'proj' })), [350, 420]],
   ['ambient tallies, 2 stores', () => {
-    for (const root of [localRoot, globalRoot]) loadAmbientTallies(root, 'default', { project: 'proj', currentProject: 'proj', now: new Date() });
-  }],
-  ['mcp hippo_context', tool('hippo_context')],
-  ['mcp hippo_recall', tool('hippo_recall', { query: 'kafka redis' })],
-  ['mcp hippo_status', tool('hippo_status')],
-  ['mcp hippo_peers', tool('hippo_peers')],
+    for (const root of [localRoot, globalRoot]) loadAmbientTallies(root, 'default', { project: ['proj'], currentProject: ['proj'], now: new Date() });
+  }, [26, 14]],
+  ['mcp hippo_context', tool('hippo_context'), [360, 5400]],
+  ['mcp hippo_recall', tool('hippo_recall', { query: 'kafka redis' }), [415, 1500]],
+  ['mcp hippo_status', tool('hippo_status'), [17, 11]],
+  ['mcp hippo_peers', tool('hippo_peers'), [14, 22]],
+  ['served predictions list', () => served.predictions.listPredictions('default', { limit: 20 }), [0, 0]],
 ];
 
 let failed = false;
+let overworked = false;
 console.log(`request-path timing, ${MEMORIES} memories in each of the local and global stores, median of ${RUNS}, bound ${BOUND_MS} ms`);
 try {
-  for (const [label, run] of cases) {
+  for (const [label, run, [maxStatements, maxRows]] of cases) {
     const ms = [];
     for (let r = 0; r < RUNS; r++) {
       const t = performance.now();
@@ -111,13 +157,17 @@ try {
     const median = ms.sort((a, b) => a - b)[Math.floor(RUNS / 2)];
     const over = median > BOUND_MS;
     failed ||= over;
-    console.log(`${label.padEnd(26)} ${median.toFixed(1).padStart(8)} ms${over ? '  OVER BOUND' : ''}`);
+    const work = await countWork(run);
+    const overWork = MEMORIES === CEILING_MEMORIES && (work.statements > maxStatements || work.rows > maxRows);
+    overworked ||= overWork;
+    console.log(`${label.padEnd(26)} ${median.toFixed(1).padStart(8)} ms${over ? '  OVER BOUND' : ''}  ${String(work.statements).padStart(4)} of ${maxStatements} statements, ${String(work.rows).padStart(6)} of ${maxRows} rows${overWork ? '  OVER CEILING' : ''}`);
   }
 } finally {
+  // The threads hold the store's files until they exit, and Windows cannot remove a folder with an open file.
+  await served.close();
   process.chdir(os.tmpdir());
   fs.rmSync(tmp, { recursive: true, force: true });
 }
-if (failed) {
-  console.error('request-path timing: a request path passed its bound; a whole-store load is back on it');
-  process.exit(1);
-}
+if (failed) console.error('request-path timing: a request path passed its bound; a whole-store load is back on it');
+if (overworked) console.error('request-path work: a request ran more statements or read more rows than its ceiling; find the new query before raising a ceiling');
+if (failed || overworked) process.exit(1);

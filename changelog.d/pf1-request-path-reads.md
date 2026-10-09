@@ -1,0 +1,3 @@
+### Changed
+
+- **A context query and an outcome for the last recall no longer read the whole memory index.** At 10,000 memories per store a `getContext` with a query read about 10,500 rows and now reads about 540; `outcome` with no ids read about 10,450 and now reads about 450. Reads of a list of ids for one tenant now seek each id on the primary key, where SQLite used to walk every row of the tenant. `config.json` is parsed once per file version: an unchanged file costs one `stat` per call, and an edit shows on the next call. A warning about a bad `config.json` is now logged once per file version, not on every read. Responses are unchanged.

@@ -1,15 +1,10 @@
 // Per-process state the MCP tools share across calls: recall rings, last recalled ids, auto-sleep runs.
 
-import type { RingBuffer } from '../recall-history.js';
+import { resetSessionRings } from '../api/recall-record.js';
 
-// v0.33 / J1 — Module-level per-(tenant, session) recall-history ring map
-// for the MCP pipeline. Separate from CLI/HTTP rings per plan v3
-// architecture (per-pipeline rings; no IPC).
-export const sessionRecallHistoryMcp = new Map<string, RingBuffer>();
-
-/** Test-only: reset the module-level recall-history Map. Call from beforeEach. */
+/** Test-only: reset the MCP recall rings. Call from beforeEach. */
 export function __resetSessionRecallHistoryMcp(): void {
-  sessionRecallHistoryMcp.clear();
+  resetSessionRings('mcp');
 }
 
 // ── Track last recalled IDs for outcome feedback ──
@@ -21,11 +16,23 @@ export function __resetSessionRecallHistoryMcp(): void {
 // back to `'stdio-${pid}'` (one process = one client) or
 // `${tenantId}:default` if a McpContext is constructed in tests without a
 // pid-bound transport.
-export const lastRecalledIds = new Map<string, string[]>();
-export const autoSleepInFlight = new Set<string>();
+export const MAX_RECALL_CLIENTS = 4096;
 
-export function resolveClientKey(ctx: { clientKey?: string; tenantId: string } | undefined): string {
-  if (ctx?.clientKey) return ctx.clientKey;
-  if (ctx?.tenantId) return `stdio-${process.pid}:${ctx.tenantId}`;
-  return `stdio-${process.pid}:default`;
+// The caller names the project half of each key, so a set past the cap drops the client that recalled longest ago.
+class RecentRecalls extends Map<string, string[]> {
+  override set(key: string, ids: string[]): this {
+    this.delete(key);
+    super.set(key, ids);
+    const oldest = this.keys().next().value;
+    if (this.size > MAX_RECALL_CLIENTS && oldest !== undefined) this.delete(oldest);
+    return this;
+  }
+}
+
+export const lastRecalledIds: Map<string, string[]> = new RecentRecalls();
+export { autoSleepInFlight } from '../api/auto-sleep.js';
+
+export function resolveClientKey(ctx: { clientKey?: string; tenantId: string; project?: { name: string } } | undefined): string {
+  const base = ctx?.clientKey ? ctx.clientKey : `stdio-${process.pid}:${ctx?.tenantId || 'default'}`;
+  return ctx?.project ? `${base}:${ctx.project.name}` : base;
 }

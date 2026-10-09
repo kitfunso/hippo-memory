@@ -24,7 +24,7 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { remember, type Context } from '../src/api.js';
+import { remember, type HippoDbContext } from '../src/api.js';
 import { deduplicateStore, strengthBucket } from '../src/dedupe.js';
 import { compareEntryIdentity } from '../src/compare.js';
 import { consolidate } from '../src/consolidate/sleep.js';
@@ -39,7 +39,7 @@ function tmpHome(prefix: string) {
   };
 }
 
-function ctxFor(home: string): Context {
+function ctxFor(home: string): HippoDbContext {
   return { hippoRoot: home, tenantId: 'default', actor: { subject: 'test', role: 'admin' } };
 }
 

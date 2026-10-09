@@ -3,8 +3,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { delimiter, join, resolve } from 'node:path';
-import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
+import { delimiter, join } from 'node:path';
+import { type SpawnSyncReturns } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { appendSessionEvent, saveActiveTaskSnapshot } from '../src/store/sessions.js';
@@ -26,8 +26,7 @@ import {
   type TokenSummary,
   type TokenSurface,
 } from '../src/token-ledger.js';
-
-const HIPPO_JS = resolve(__dirname, '..', 'bin', 'hippo.js');
+import { hippoRun } from './_helpers/spawn-hippo.js';
 const SESSION = 'sess-reread';
 // Noon UTC yesterday: re-read rows are per UTC day, so a run near midnight must not split a test's calls.
 const BASE = Math.floor(Date.now() / 86_400_000) * 86_400_000 - 12 * 3_600_000;
@@ -102,7 +101,7 @@ function scratch(root: string) {
 }
 
 function hippo(args: string[], cwd: string, env: NodeJS.ProcessEnv, input?: string): SpawnSyncReturns<string> {
-  return spawnSync(process.execPath, [HIPPO_JS, ...args], { cwd, env, input, encoding: 'utf8' });
+  return hippoRun(args, { cwd, env, input });
 }
 
 describe('model calls in a transcript', () => {

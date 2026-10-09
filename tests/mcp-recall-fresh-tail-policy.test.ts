@@ -19,8 +19,9 @@ import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { Layer} from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { handleMcpRequest } from '../src/mcp/server.js';
+import { handleMcpRequest, type McpContext } from '../src/mcp/server.js';
 import { RecallContractError } from '../src/api.js';
+import { _resetSharedStoreCacheForTests } from '../src/config.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 type HippoRecallToolArgs = {
@@ -32,7 +33,7 @@ type HippoRecallToolArgs = {
 function callTool(
   name: string,
   args: HippoRecallToolArgs,
-  ctx: { hippoRoot: string; tenantId: string; actor: string },
+  ctx: McpContext,
 ) {
   return handleMcpRequest(
     {
@@ -45,7 +46,7 @@ function callTool(
   );
 }
 
-describe('mcp hippo_recall fresh-tail policy F5 (v1.6.5)', () => {
+describe('mcp hippo_recall fresh-tail policy', () => {
   let home: string;
   let prevEnv: string | undefined;
 
@@ -134,5 +135,35 @@ describe('mcp hippo_recall fresh-tail policy F5 (v1.6.5)', () => {
     );
     const r = res!;
     expect(r.error).toBeUndefined();
+  });
+});
+
+describe('mcp hippo_recall fresh tail on a shared store', () => {
+  let shared: string;
+
+  beforeEach(() => {
+    _resetSharedStoreCacheForTests();
+    shared = makeRoot('mcp-f5-shared', { config: { sharedStore: true } });
+  });
+
+  afterEach(() => {
+    _resetSharedStoreCacheForTests();
+    rmSync(shared, { recursive: true, force: true });
+  });
+
+  it("keeps the tail to the caller's project, with or without a session id", async () => {
+    const rows = (['acme', 'beta', null] as const).map((origin) => {
+      const entry = { ...createMemory(`tail row from ${origin ?? 'no project'}`, { layer: Layer.Buffer, kind: 'raw', source_session_id: 'sess-A' }), origin_project: origin };
+      writeEntry(shared, entry);
+      return entry;
+    });
+    const ctx: McpContext = { hippoRoot: shared, tenantId: 'default', actor: 'mcp', project: { name: 'acme', legacyName: 'acme' } };
+    for (const args of [{ fresh_tail_count: 3 }, { fresh_tail_count: 3, fresh_tail_session_id: 'sess-A' }]) {
+      // SAFETY: hippo_recall's tool result carries result.content, as in the cases above.
+      const r = (await callTool('hippo_recall', { query: 'zzqqxx', ...args }, ctx)) as { result?: { content: Array<{ text: string }> } };
+      const text = r.result?.content?.[0]?.text ?? '';
+      expect(text, JSON.stringify(args)).toContain(`[tail] ${rows[0]!.id}: tail row from acme`);
+      for (const hidden of rows.slice(1)) expect(text, JSON.stringify(args)).not.toContain(hidden.id);
+    }
   });
 });

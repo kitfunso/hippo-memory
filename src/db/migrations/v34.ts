@@ -77,7 +77,7 @@ const TRG_SKILLS_SUPERSEDE_TENANT_MATCH_UPDATE = `
 export const v34: Migration = {
     version: 34,
     up: (db) => {
-      // E2 skill first-class object (docs/plans/2026-05-30-e2-skill-object.md).
+      // Skill first-class object.
       // A skill is a reusable, agent-followable capability: an `instructions` body
       // + an optional `trigger_text` (when to apply), evolving via the v32
       // processes supersede machinery (superseded_by self-FK + supersede

@@ -13,6 +13,7 @@ import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { recall, type Context } from '../src/api.js';
+import { _forceLikePathForTests } from '../src/store/search-rows.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 function safeRmSync(p: string): void {
@@ -31,7 +32,7 @@ function makeRaw(text: string, tenantId: string): MemoryEntry {
   });
 }
 
-describe('scorerWindow tenant isolation (v1.7.1 INFO #5)', () => {
+describe('scorerWindow tenant isolation', () => {
   let root: string;
   beforeEach(() => { root = makeRoot('f3-tenant'); });
   afterEach(() => safeRmSync(root));
@@ -40,7 +41,7 @@ describe('scorerWindow tenant isolation (v1.7.1 INFO #5)', () => {
   // (no-terms, FTS, LIKE fallback, full-store fallback). Cover three of the
   // four explicitly via the recall path: the FTS branch (terms match), the
   // no-terms branch (empty query), and the LIKE-fallback branch
-  // (HIPPO_FORCE_LIKE_PATH=1). The full-store fallback fires only when
+  // (the _forceLikePathForTests switch). The full-store fallback fires only when
   // both FTS and LIKE return zero rows on terms — exotic enough that the
   // shared SQL builder is the relevant unit.
 
@@ -85,12 +86,11 @@ describe('scorerWindow tenant isolation (v1.7.1 INFO #5)', () => {
     }
   });
 
-  it('LIKE-fallback path: HIPPO_FORCE_LIKE_PATH=1 routes through LIKE; tenant isolation preserved', () => {
+  it('LIKE-fallback path: the forced LIKE route keeps tenant isolation', () => {
     const N = 5;
     const tenantAIds = seedTwoTenants(N);
-    const prevEnv = process.env.HIPPO_FORCE_LIKE_PATH;
     try {
-      process.env.HIPPO_FORCE_LIKE_PATH = '1';
+      _forceLikePathForTests(true);
       const result = recall(ctxFor(root, 'tenant-a'), {
         query: 'kappa',
         limit: 100,
@@ -102,8 +102,7 @@ describe('scorerWindow tenant isolation (v1.7.1 INFO #5)', () => {
         expect(r.content).not.toContain('B-');
       }
     } finally {
-      if (prevEnv === undefined) delete process.env.HIPPO_FORCE_LIKE_PATH;
-      else process.env.HIPPO_FORCE_LIKE_PATH = prevEnv;
+      _forceLikePathForTests(false);
     }
   });
 });

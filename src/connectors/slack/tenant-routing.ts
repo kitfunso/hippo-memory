@@ -1,5 +1,6 @@
 import { envSlackAllowUnknownTeamFallback, envTenant } from '../../env.js';
 import type { DatabaseSyncLike } from '../../db.js';
+import { slackTeamRoute, slackTeamRouteAt, type SlackTeamRoute } from '../../store/connectors/slack.js';
 
 /**
  * Look up the tenant_id for a Slack team_id.
@@ -13,26 +14,22 @@ import type { DatabaseSyncLike } from '../../db.js';
  *     deployment's tenant). Escape hatch: SLACK_ALLOW_UNKNOWN_TEAM_FALLBACK=1
  *     restores the env fallback for emergency rollback only.
  *
- * v0.39 commit 3 (CRITICAL #5): the previous version returned null on miss
- * unconditionally, and the route handler then fell back to HIPPO_TENANT —
- * which silently routed events from a foreign workspace into the deployment
- * tenant. The fail-closed contract lives here so every caller (route handler,
- * CLI replay, future MCP) gets the same protection.
+ * The fail-closed contract lives here so every caller (route handler, CLI
+ * replay, future MCP) gets the same protection against routing a foreign
+ * workspace's events into the deployment tenant.
  */
 export function resolveTenantForTeam(db: DatabaseSyncLike, teamId: string): string | null {
-  // SAFETY: query selects only `tenant_id`, so a returned row has that shape;
-  // .get() returns undefined when no row matches.
-  const row = db
-    .prepare(`SELECT tenant_id FROM slack_workspaces WHERE team_id = ?`)
-    .get(teamId) as { tenant_id?: string } | undefined;
-  if (row?.tenant_id) return row.tenant_id;
+  return tenantForRoute(slackTeamRouteAt(db, teamId));
+}
 
-  // SAFETY: `COUNT(*) AS c` always returns exactly one row shaped { c }; sqlite
-  // may return the count as number or bigint depending on driver.
-  const total = (db
-    .prepare(`SELECT COUNT(*) AS c FROM slack_workspaces`)
-    .get() as { c: number | bigint }).c;
-  if (Number(total) === 0) {
+/** resolveTenantForTeam on a handle opened for the one lookup. */
+export function resolveTenantForTeamOnRoot(hippoRoot: string, teamId: string): string | null {
+  return tenantForRoute(slackTeamRoute(hippoRoot, teamId));
+}
+
+function tenantForRoute(route: SlackTeamRoute): string | null {
+  if (route.tenantId !== null) return route.tenantId;
+  if (route.workspaceCount === 0) {
     // Single-workspace install: env fallback is safe.
     return envTenant();
   }

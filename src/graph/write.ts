@@ -1,6 +1,5 @@
 /**
- * E3.3 graph layer over consolidated state - the graph-on-consolidated guard.
- * (docs/plans/2026-06-01-e3-graph-guard.md).
+ * Graph layer over consolidated state - the graph-on-consolidated guard.
  *
  * A graph of canonical `entities` (person/project/customer/system/policy/decision) and
  * `relations` (owns/supersedes/depends-on/blocked-by/references) sits ON TOP OF
@@ -11,20 +10,17 @@
  * actual kind and enforce tenant-match - relations also reject cross-tenant edges), so
  * the forbidden state is unrepresentable regardless of code path. These helpers
  * surface the same guard as clear throws BEFORE hitting the trigger backstop.
- *
- * Scope (E3.3 first slice): the substrate + the guard + a thin insert/load/enqueue
- * API. The `graph_extraction_queue` is the interface the deferred `hippo sleep`
- * enqueue-hook + E3.1 entity extraction will call. No operator surface (CLI/HTTP/SDK)
- * until E3.2 multi-hop recall.
  */
 
-import { openHippoDb, closeHippoDb } from '../db.js';
+import { openHippoDb, closeHippoDb, withWriteScope } from '../db.js';
 import { assertTenantId } from '../tenant.js';
-import { log } from '../log.js';
-import { type GraphTxDb, type SourceKind, type SourceObjectType, type SourceObjectRef, GRAPH_ENTITY_TYPES, GRAPH_RELATION_TYPES, MAX_ENTITY_NAME_LEN, type Entity, type Relation, type GraphQueueItem, type InsertEntityOpts, type InsertRelationOpts } from './types.js';
+import { errorMessage, log } from '../log.js';
+import { clock } from '../write-budget.js';
+import { type GraphTxDb, type SourceKind, type SourceObjectType, type SourceObjectRef, GRAPH_ENTITY_TYPES, GRAPH_RELATION_TYPES, MAX_ENTITY_NAME_LEN, type Entity, type Relation, type GraphQueueItem, type InsertEntityOpts, type InsertRelationOpts, type UpdateEntityOpts } from './types.js';
 import { type EntityRow, type RelationRow, type QueueRow, rowToEntity, rowToRelation, rowToQueueItem, ENTITY_COLS, RELATION_COLS, QUEUE_COLS, type DbLike } from './rows.js';
+import type { DesiredRelation, GraphOp, NaturalKey } from './delta.js';
 
-/** source_object_type -> its E2 table, for the object-path validation 4-way branch.
+/** source_object_type -> its object table, for the object-path validation 4-way branch.
  *  SQLite cannot parametrize a table name, so the SQL trigger mirrors this explicitly. */
 interface SourceObjectTableMap {
   decision: string;
@@ -45,8 +41,8 @@ const SOURCE_OBJECT_TABLE: SourceObjectTableMap = {
  * trigger is the unbypassable backstop). Two paths:
  *  - MEMORY path (`memoryId` not null): the memory must exist, be same-tenant, and be
  *    consolidated (distilled/superseded); raw is rejected. Returns its kind.
- *  - OBJECT path (`memoryId` null, `sourceObject` set): the E2 row must exist, be
- *    same-tenant, and have status active|superseded (4-way per E2 table). E2 objects are
+ *  - OBJECT path (`memoryId` null, `sourceObject` set): the object row must exist, be
+ *    same-tenant, and have status active|superseded (4-way per object table). Objects are
  *    consolidated BY CONSTRUCTION, so this returns 'distilled'.
  * All-null (no memory AND no source object) is rejected.
  */
@@ -61,6 +57,28 @@ function resolveConsolidatedSource(
   sourceObject: SourceObjectRef | null,
   label: string,
 ): ResolvedGraphSource {
+  const { memKind, effectiveMemoryId } = checkSourceMemory(db, tenantId, memoryId, sourceObject, label);
+  assertSourceObjectUsable(db, tenantId, sourceObject, label);
+
+  // source_kind is the memory's kind when a memory is present, else 'distilled' for an
+  // object-only row (objects are consolidated by construction). All-null is rejected.
+  if (memKind != null) return { sourceKind: memKind, memoryId: effectiveMemoryId };
+  if (sourceObject != null) return { sourceKind: 'distilled', memoryId: null };
+  throw new Error(`${label}: graph row needs a memory or a source object`);
+}
+
+interface CheckedSourceMemory {
+  memKind: SourceKind | null;
+  effectiveMemoryId: string | null;
+}
+
+function checkSourceMemory(
+  db: DbLike,
+  tenantId: string,
+  memoryId: string | null,
+  sourceObject: SourceObjectRef | null,
+  label: string,
+): CheckedSourceMemory {
   let memKind: SourceKind | null = null;
   let effectiveMemoryId: string | null = memoryId;
   if (memoryId != null) {
@@ -71,9 +89,9 @@ function resolveConsolidatedSource(
       | undefined;
     if (!row) {
       // Stale / forgotten mirror. Tolerate it IFF a valid source object provides provenance:
-      // graph-extract reads E2 rows then inserts, and a mirror forgotten/pruned in that window
-      // must NOT roll back the whole tenant rebuild - the active E2 object survives mirror loss
-      // (v38 contract; codex round-4 race). Anchor to the object; drop the dead memory pointer.
+      // graph-extract reads object rows then inserts, and a mirror forgotten/pruned in that window
+      // must NOT roll back the whole tenant rebuild - the active object survives mirror loss.
+      // Anchor to the object; drop the dead memory pointer.
       if (sourceObject == null) {
         throw new Error(`${label}: source memory ${memoryId} not found`);
       }
@@ -88,9 +106,12 @@ function resolveConsolidatedSource(
       memKind = row.kind;
     }
   }
+  return { memKind, effectiveMemoryId };
+}
 
-  // Validate the object pointer WHENEVER it is provided - not only when memory is null
-  // (codex review): a dual-set row whose object is wrong/closed/cross-tenant would become
+function assertSourceObjectUsable(db: DbLike, tenantId: string, sourceObject: SourceObjectRef | null, label: string): void {
+  // Validate the object pointer WHENEVER it is provided, not only when memory is null:
+  // a dual-set row whose object is wrong/closed/cross-tenant would become
   // the active provenance after ON DELETE SET NULL and could then block the memory delete.
   if (sourceObject != null) {
     const table = SOURCE_OBJECT_TABLE[sourceObject.type];
@@ -111,12 +132,6 @@ function resolveConsolidatedSource(
       throw new Error(`${label}: source ${sourceObject.type} ${sourceObject.id} has status '${row.status}' (must be active|superseded)`);
     }
   }
-
-  // source_kind is the memory's kind when a memory is present, else 'distilled' for an
-  // object-only row (E2 objects are consolidated by construction). All-null is rejected.
-  if (memKind != null) return { sourceKind: memKind, memoryId: effectiveMemoryId };
-  if (sourceObject != null) return { sourceKind: 'distilled', memoryId: null };
-  throw new Error(`${label}: graph row needs a memory or a source object`);
 }
 
 // ---------------------------------------------------------------------------
@@ -137,11 +152,7 @@ export function insertEntity(
   if (!GRAPH_ENTITY_TYPES.has(opts.entityType)) {
     throw new Error(`insertEntity: entityType must be one of ${Array.from(GRAPH_ENTITY_TYPES).join('|')}; got ${opts.entityType}`);
   }
-  const name = (opts.name ?? '').trim();
-  if (name.length === 0) throw new Error('insertEntity: name is required');
-  if (name.length > MAX_ENTITY_NAME_LEN) {
-    throw new Error(`insertEntity: name exceeds the ${MAX_ENTITY_NAME_LEN}-char cap`);
-  }
+  const name = checkedName('insertEntity', opts.name);
   const now = new Date().toISOString();
   const memoryId = opts.memoryId ?? null;
   const sourceObject = opts.sourceObject ?? null;
@@ -160,6 +171,44 @@ export function insertEntity(
     return rowToEntity(row);
   } finally {
     if (ownDb) closeHippoDb(ownDb);
+  }
+}
+
+function checkedName(label: string, raw: string | undefined): string {
+  const name = (raw ?? '').trim();
+  if (name.length === 0) throw new Error(`${label}: name is required`);
+  if (name.length > MAX_ENTITY_NAME_LEN) {
+    throw new Error(`${label}: name exceeds the ${MAX_ENTITY_NAME_LEN}-char cap`);
+  }
+  return name;
+}
+
+/** Renames an entity or moves its memory provenance in place, keeping id and created_at; null when the row is gone.
+ *  A delete plus an insert would cascade away every relation that points at it. */
+export function updateEntity(
+  hippoRoot: string,
+  tenantId: string,
+  id: number,
+  opts: UpdateEntityOpts,
+  txDb?: GraphTxDb,
+): Entity | null {
+  assertTenantId('updateEntity', tenantId);
+  const name = checkedName('updateEntity', opts.name);
+  const db = txDb ?? openHippoDb(hippoRoot);
+  try {
+    // SAFETY: row's shape matches the columns named in ENTITY_COLS above.
+    const row = db.prepare(`SELECT ${ENTITY_COLS} FROM entities WHERE id = ? AND tenant_id = ?`).get(id, tenantId) as EntityRow | undefined;
+    if (!row) return null;
+    const entity = rowToEntity(row);
+    const sourceObject = entity.sourceObjectType === undefined || entity.sourceObjectId === undefined
+      ? null
+      : { type: entity.sourceObjectType, id: entity.sourceObjectId };
+    const resolved = resolveConsolidatedSource(db, tenantId, opts.memoryId ?? null, sourceObject, 'updateEntity');
+    db.prepare(`UPDATE entities SET name = ?, memory_id = ?, source_kind = ? WHERE id = ? AND tenant_id = ?`)
+      .run(name, resolved.memoryId, resolved.sourceKind, id, tenantId);
+    return { ...entity, name, memoryId: resolved.memoryId, sourceKind: resolved.sourceKind };
+  } finally {
+    if (db !== txDb) closeHippoDb(db);
   }
 }
 
@@ -208,13 +257,12 @@ export function insertRelation(
 }
 
 // ---------------------------------------------------------------------------
-// Extraction queue (the interface the deferred sleep enqueue-hook + E3.1 will use)
+// Extraction queue
 // ---------------------------------------------------------------------------
 
 /**
  * Enqueue a consolidated memory for later graph extraction. Rejects a raw / missing /
- * cross-tenant memory (the DB trigger is the backstop). The producer hook in
- * `hippo sleep` is deferred (E3.1); this is the API it will call.
+ * cross-tenant memory (the DB trigger is the backstop).
  */
 export function enqueueExtraction(
   hippoRoot: string,
@@ -281,70 +329,112 @@ export function markExtractionProcessed(
   }
 }
 
-/**
- * Delete ALL entities for a tenant (relations cascade via the from/to FKs). Returns
- * the number of entities deleted. The rebuild primitive for graph extraction: the
- * deterministic graph is a pure derived function of the consolidated objects, so an
- * extract clears then re-derives. Lives in graph.ts (the sole sanctioned graph
- * writer), so the E3.3 CI lint permits this `DELETE FROM entities`. Does NOT touch
- * graph_extraction_queue (the enqueue-hook's domain).
- */
-export function clearGraph(hippoRoot: string, tenantId: string, txDb?: GraphTxDb): number {
-  assertTenantId('clearGraph', tenantId);
-  const ownDb = txDb ? null : openHippoDb(hippoRoot);
-  const db = txDb ?? ownDb!;
-  try {
-    const res = db.prepare(`DELETE FROM entities WHERE tenant_id = ?`).run(tenantId);
-    return Number(res.changes ?? 0);
-  } finally {
-    if (ownDb) closeHippoDb(ownDb);
+/** The source object still holds the loader's rule (active or superseded); a closed or gone one gets no new graph row. */
+function objectInForce(db: DbLike, tenantId: string, ref: SourceObjectRef): boolean {
+  // `table` comes from the fixed SOURCE_OBJECT_TABLE map, never from input.
+  const table = SOURCE_OBJECT_TABLE[ref.type];
+  // SAFETY: row's shape matches the single `status` column named in the SELECT.
+  const row = db.prepare(`SELECT status FROM ${table} WHERE id = ? AND tenant_id = ?`).get(ref.id, tenantId) as { status: string } | undefined;
+  return row?.status === 'active' || row?.status === 'superseded';
+}
+
+function entityIdByKey(db: DbLike, tenantId: string, key: NaturalKey): number | undefined {
+  // SAFETY: row's shape matches the single `id` column named in the SELECT.
+  const row = db.prepare(
+    `SELECT id FROM entities WHERE tenant_id = ? AND entity_type = ? AND source_object_type = ? AND source_object_id = ? ORDER BY id LIMIT 1`,
+  ).get(tenantId, key.entityType, key.sourceObject.type, key.sourceObject.id) as { id: number } | undefined;
+  return row?.id;
+}
+
+function insertDesiredRelation(db: GraphTxDb, hippoRoot: string, tenantId: string, rel: DesiredRelation): boolean {
+  const fromEntityId = entityIdByKey(db, tenantId, rel.from);
+  const toEntityId = entityIdByKey(db, tenantId, rel.to);
+  if (fromEntityId === undefined || toEntityId === undefined || !objectInForce(db, tenantId, rel.sourceObject)) return false;
+  // SAFETY: row's shape matches the single aliased column named in the SELECT.
+  const present = db.prepare(
+    `SELECT 1 AS hit FROM relations WHERE tenant_id = ? AND from_entity_id = ? AND to_entity_id = ? AND rel_type = ? LIMIT 1`,
+  ).get(tenantId, fromEntityId, toEntityId, rel.relType) as { hit: number } | undefined;
+  if (present) return false;
+  insertRelation(hippoRoot, tenantId, { fromEntityId, toEntityId, relType: rel.relType, memoryId: rel.memoryId, sourceObject: rel.sourceObject }, db);
+  return true;
+}
+
+/** Applies one op; false when a writer since the diff made it stale, which the next run's diff repairs. */
+function applyGraphOp(db: GraphTxDb, hippoRoot: string, tenantId: string, op: GraphOp): boolean {
+  switch (op.op) {
+    case 'deleteEntity':
+      db.prepare(`DELETE FROM entities WHERE id = ? AND tenant_id = ?`).run(op.id, tenantId);
+      return true;
+    case 'deleteRelation':
+      db.prepare(`DELETE FROM relations WHERE id = ? AND tenant_id = ?`).run(op.id, tenantId);
+      return true;
+    case 'updateEntity':
+      if (!objectInForce(db, tenantId, op.entity.sourceObject)) return false;
+      return updateEntity(hippoRoot, tenantId, op.id, op.entity, db) !== null;
+    case 'insertEntity':
+      // A mirrorless object closed since the load is never enqueued again, so a stale insert would stay for good.
+      if (!objectInForce(db, tenantId, op.entity.sourceObject) || entityIdByKey(db, tenantId, op.entity) !== undefined) return false;
+      insertEntity(hippoRoot, tenantId, op.entity, db);
+      return true;
+    case 'insertRelation':
+      return insertDesiredRelation(db, hippoRoot, tenantId, op.relation);
   }
 }
 
-/**
- * Run a full graph rebuild for one tenant inside a single transaction. `clearGraph`
- * + every `insertEntity`/`insertRelation` call made inside `fn` (passing the supplied
- * `txDb`) share the one connection and its `BEGIN IMMEDIATE` write lock, so the
- * rebuild is ATOMIC: two concurrent rebuilds serialize on the write lock (the second
- * waits, then re-derives cleanly) instead of interleaving into duplicate rows, and a
- * throw mid-rebuild ROLLS BACK the clear (no bricked/empty graph). The sole sanctioned
- * place to wrap graph writes in a transaction.
- */
+export interface ApplyGraphOpsResult {
+  readonly next: number;
+  readonly skipped: number;
+}
+
+/** Applies `ops` from index `opts.from` on the caller's open transaction and stops at the first op boundary past `opts.holdMs`.
+ *  Returns where the next chunk starts and how many ops were skipped as stale. */
+export function applyGraphOps(
+  db: GraphTxDb,
+  hippoRoot: string,
+  tenantId: string,
+  ops: readonly GraphOp[],
+  opts: { readonly from: number; readonly holdMs: number; readonly clock?: () => number },
+): ApplyGraphOpsResult {
+  assertTenantId('applyGraphOps', tenantId);
+  const now = opts.clock ?? clock;
+  const begunAt = now();
+  let next = opts.from;
+  let skipped = 0;
+  while (next < ops.length) {
+    if (!applyGraphOp(db, hippoRoot, tenantId, ops[next])) skipped += 1;
+    next += 1;
+    if (now() - begunAt >= opts.holdMs) break;
+  }
+  return { next, skipped };
+}
+
+/** Runs one tenant's graph writes in `fn` on `txDb` under one BEGIN IMMEDIATE, so two rebuilds serialize instead of
+ *  interleaving and a throw rolls back the whole chunk. The sole sanctioned place to wrap graph writes in a transaction. */
 export function runGraphRebuildTransaction<T>(
   hippoRoot: string,
   tenantId: string,
   fn: (txDb: GraphTxDb) => T,
+  opts?: { busyWaitMs?: number },
 ): T {
   assertTenantId('runGraphRebuildTransaction', tenantId);
-  const db = openHippoDb(hippoRoot);
+  const db = openHippoDb(hippoRoot, opts);
   try {
-    db.exec('BEGIN IMMEDIATE');
-    let committed = false;
-    try {
-      const out = fn(db);
-      db.exec('COMMIT');
-      committed = true;
-      return out;
-    } finally {
-      if (!committed) {
-        try { db.exec('ROLLBACK'); } catch { /* preserve the original throw */ }
-      }
-    }
+    return withWriteScope(db, 'graph_rebuild', () => fn(db));
   } finally {
     closeHippoDb(db);
   }
 }
 
 // ---------------------------------------------------------------------------
-// E3 sleep enqueue-hook — producer helper + drain support
+// Sleep enqueue-hook: producer helper + drain support
 // ---------------------------------------------------------------------------
 
 /**
  * Fail-soft producer hook: mark a tenant dirty for graph re-extraction by
  * enqueuing its consolidated mirror memory. NEVER throws into the caller — a
- * graph-dirty signal failing must not abort a core E2 write. Graph staleness is
+ * graph-dirty signal failing must not abort a core object write. Graph staleness is
  * recoverable (next sleep / manual `graph extract`); a broken `hippo decide` is
- * not. Called POST-COMMIT from the E2 graph-source save/close mutations of
+ * not. Called POST-COMMIT from the graph-source save/close mutations of
  * decision, policy, customer_note and project_brief. A null memoryId (a
  * forgotten mirror) is a no-op.
  */
@@ -354,19 +444,19 @@ export function markGraphDirty(hippoRoot: string, tenantId: string, memoryId: st
     enqueueExtraction(hippoRoot, tenantId, memoryId);
   } catch (err) {
     // Logged (warn) so a SYSTEMATIC enqueue failure surfaces to operators, but
-    // swallowed so the already-committed E2 write is never rolled back.
+    // swallowed so the already-committed object write is never rolled back.
     log.warn(
-      `markGraphDirty: enqueue failed for tenant=${tenantId} memory=${memoryId}: ${err instanceof Error ? err.message : String(err)}`,
+      `markGraphDirty: enqueue failed for tenant=${tenantId} memory=${memoryId}: ${errorMessage(err)}`,
     );
   }
 }
 
 /**
- * Remove the graph rows sourced from one E2 object, by its (type, id). Used when a
+ * Remove the graph rows sourced from one first-class object, by its (type, id). Used when a
  * MIRRORLESS object is closed: it has no mirror memory, so `markGraphDirty` cannot
  * enqueue a rebuild (the queue is memory-keyed). Closing must still drop the object's
  * now-stale entity + edges from the graph, so we remove them directly here. Fail-soft
- * like `markGraphDirty` (never throws into the E2 close caller; graph staleness is
+ * like `markGraphDirty` (never throws into the object close caller; graph staleness is
  * recoverable). Deleting the entity cascade-deletes any relation where it is an endpoint
  * (relations FK entities ON DELETE CASCADE); the explicit relations DELETE also covers a
  * relation whose OWN provenance is this object (defensive — every such edge has the object
@@ -383,21 +473,18 @@ export function removeGraphEntitiesForObject(
     assertTenantId('removeGraphEntitiesForObject', tenantId);
     const db = openHippoDb(hippoRoot);
     try {
-      db.exec('BEGIN');
-      db.prepare(`DELETE FROM relations WHERE tenant_id = ? AND source_object_type = ? AND source_object_id = ?`)
-        .run(tenantId, sourceObjectType, sourceObjectId);
-      db.prepare(`DELETE FROM entities WHERE tenant_id = ? AND source_object_type = ? AND source_object_id = ?`)
-        .run(tenantId, sourceObjectType, sourceObjectId);
-      db.exec('COMMIT');
-    } catch (e) {
-      try { db.exec('ROLLBACK'); } catch { /* preserve original throw */ }
-      throw e;
+      withWriteScope(db, 'remove_graph_entities', () => {
+        db.prepare(`DELETE FROM relations WHERE tenant_id = ? AND source_object_type = ? AND source_object_id = ?`)
+          .run(tenantId, sourceObjectType, sourceObjectId);
+        db.prepare(`DELETE FROM entities WHERE tenant_id = ? AND source_object_type = ? AND source_object_id = ?`)
+          .run(tenantId, sourceObjectType, sourceObjectId);
+      });
     } finally {
       closeHippoDb(db);
     }
   } catch (err) {
     log.warn(
-      `removeGraphEntitiesForObject: failed for tenant=${tenantId} ${sourceObjectType}#${sourceObjectId}: ${err instanceof Error ? err.message : String(err)}`,
+      `removeGraphEntitiesForObject: failed for tenant=${tenantId} ${sourceObjectType}#${sourceObjectId}: ${errorMessage(err)}`,
     );
   }
 }

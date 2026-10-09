@@ -15,12 +15,11 @@ import { loadAllEntries } from '../src/store/entry-reads.js';
 import { listMemoryConflicts } from '../src/store/conflicts.js';
 import { saveSessionHandoff } from '../src/store/handoffs.js';
 import {
-  SESSION_DIGEST_TAG,
-  isSessionDigestRow,
   sessionDigestId,
   writeSessionDigest,
   type SessionScan,
 } from '../src/session-digest.js';
+import { SESSION_DIGEST_TAG, isSessionDigestRow } from '../src/core/session-digest-row.js';
 
 const REPLY = 'Retry `upload()` with backoff because the storage token expires mid-transfer.';
 
@@ -133,6 +132,13 @@ describe('text hippo injected is not stored again', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('keeps a sentence restating a digest that has been superseded, since no read injects that row', () => {
+    write('s1', scan(REPLY, { edits: [] }));
+    const [old] = digests();
+    writeEntry(hippoRoot, { ...old, superseded_by: 'mem_successor' });
+    expect(write('s2', scan(`As before, ${REPLY}`, { edits: [] })).written).toBe(true);
   });
 
   it('drops a sentence restating the ambient handoff of another session, but not its own', () => {

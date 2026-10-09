@@ -55,7 +55,7 @@ function queryOne<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T
   return db.prepare(sql).get(...params) as T | undefined;
 }
 
-describe('MCP hippo_recall session_id goal-stack boost (v1.7.4)', () => {
+describe('MCP hippo_recall session_id goal-stack boost', () => {
   let home: string;
   const tenantId = 'default';
   const sessionId = 'sess-mcp-1.7.4';

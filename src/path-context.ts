@@ -1,4 +1,3 @@
-import * as path from 'path';
 
 /**
  * Extract meaningful path segments from a directory path.

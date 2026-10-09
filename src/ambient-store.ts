@@ -1,23 +1,24 @@
 import { closeHippoDb } from './db.js';
 import { strengthSql } from './memory.js';
-import { RECALL_DEFAULT_DENY_SCOPES } from './recall-scope.js';
+import { scopeAdmitSql } from './recall-scope.js';
 import { SECRET_TAGS } from './secret-detect.js';
 import { openStore } from './store/open.js';
+import { jsonList } from './store/candidates.js';
+import { originInSql } from './project-identity.js';
 import { isErrorTagged, type AmbientTallies } from './ambient.js';
+import { DAY_MS } from './util/time.js';
 
 /** The rows an ambient summary describes: a context read's envelope, origin partition and tag secret veto. */
 export interface AmbientStoreFilter {
   exactScope?: string;
-  /** Rows of this project and user-global rows pass; absent admits every origin. */
-  project?: string;
-  /** The reader's project: a secret-tagged row counts only inside its own non-empty origin project. */
-  currentProject: string;
+  /** The reader's personal scope, which the default deny admits. */
+  ownScope?: string;
+  /** Rows carrying one of these project names, and user-global rows, pass; absent admits every origin. */
+  project?: readonly string[];
+  /** The reader's project names: a secret-tagged row counts only inside its own non-empty origin project. */
+  currentProject: readonly string[];
   now: Date;
 }
-
-// A malformed or non-array JSON list reads as empty, as parseJsonArray does, instead of failing json_each.
-const jsonList = (column: string): string =>
-  `(CASE WHEN json_valid(${column}) AND json_type(${column}) = 'array' THEN ${column} ELSE '[]' END)`;
 
 // SHORTCUT: mirrors loadContextCandidates' WHERE (request-path snapshots pin the match); share it once store.ts is split.
 function contextRowsWhere(tenantId: string, filter: AmbientStoreFilter) {
@@ -27,12 +28,13 @@ function contextRowsWhere(tenantId: string, filter: AmbientStoreFilter) {
     where.push('scope = ?');
     params.push(filter.exactScope);
   } else {
-    where.push(`(scope IS NULL OR (scope NOT IN (${RECALL_DEFAULT_DENY_SCOPES.map(() => '?').join(', ')}) AND scope NOT LIKE '%:private:%'))`);
-    params.push(...RECALL_DEFAULT_DENY_SCOPES);
+    const admit = scopeAdmitSql('', filter.ownScope);
+    where.push(admit.sql);
+    params.push(...admit.params);
   }
   if (filter.project !== undefined) {
-    where.push(`(origin_project = '' OR origin_project = ?)`);
-    params.push(filter.project);
+    where.push(`(origin_project = '' OR ${originInSql(filter.project)})`);
+    params.push(...filter.project);
   }
   return { where, params };
 }
@@ -52,7 +54,7 @@ function secretTaggedSql() {
 export function loadAmbientTallies(hippoRoot: string, tenantId: string, filter: AmbientStoreFilter): AmbientTallies {
   const { where, params } = contextRowsWhere(tenantId, filter);
   const secret = secretTaggedSql();
-  const sevenDaysAgo = new Date(filter.now.getTime() - 7 * 86400000).toISOString();
+  const sevenDaysAgo = new Date(filter.now.getTime() - 7 * DAY_MS).toISOString();
   const db = openStore(hippoRoot);
   try {
     // SAFETY: one aggregate row whose columns are the aliases named below. Tag lists come back as one JSON array of
@@ -71,8 +73,8 @@ export function loadAmbientTallies(hippoRoot: string, tenantId: string, filter: 
       '[' || COALESCE(group_concat(${jsonList('tags_json')}, ','), '') || ']' AS tagLists
       FROM memories
       WHERE ${where.join(' AND ')}
-        AND ((origin_project = ? AND origin_project != '') OR NOT ${secret.sql})`,
-    ).get(sevenDaysAgo, ...params, filter.currentProject, ...secret.params) as Record<Exclude<keyof AmbientTallies, 'tagCounts' | 'errors'>, number | bigint> & { tagLists: string };
+        AND ((${originInSql(filter.currentProject)} AND origin_project != '') OR NOT ${secret.sql})`,
+    ).get(sevenDaysAgo, ...params, ...filter.currentProject, ...secret.params) as Record<Exclude<keyof AmbientTallies, 'tagCounts' | 'errors'>, number | bigint> & { tagLists: string };
     const tagCounts = new Map<string, number>();
     let errors = 0;
     const lists = /* SAFETY: jsonList yields an array per row, joined into one array */ JSON.parse(row.tagLists) as unknown[][];

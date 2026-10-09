@@ -166,7 +166,7 @@ def load_rows(path: Path) -> dict[str, dict[str, Any]]:
 
 
 def bootstrap(vectors: dict[str, list[float]]) -> dict[str, Any]:
-    """Percentile bootstrap from src/eval-stats.ts (dist build), B=10000, seed 1."""
+    """Percentile bootstrap from src/eval/eval-stats.ts (dist build), B=10000, seed 1."""
     url = (REPO / "dist" / "eval-stats.js").resolve().as_uri()
     script = (
         "const { pairedBootstrap } = await import(process.argv[1]);"
@@ -225,7 +225,7 @@ def cmd_stats(args: argparse.Namespace, qs: list[dict[str, Any]]) -> None:
     ci = bootstrap(vectors)
     report: dict[str, Any] = {
         "n": len(qs), "chance_r5": round(statistics.mean(chance_r5(q) for q in qs), 4),
-        "bootstrap": "pairedBootstrap (src/eval-stats.ts), 10000 resamples, seed 1, 95% percentile interval",
+        "bootstrap": "pairedBootstrap (src/eval/eval-stats.ts), 10000 resamples, seed 1, 95% percentile interval",
         "runs": {name: {"r5": ci[name], **run_summary(runs[name], qs, hits[name])} for name in runs},
         "pairs": {},
     }

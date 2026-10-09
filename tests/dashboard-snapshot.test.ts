@@ -4,8 +4,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Layer } from '../src/memory.js';
 import { listMemoryConflicts, replaceDetectedConflicts, resolveConflict } from '../src/store/conflicts.js';
 import { quarantineScopeFor } from '../src/quarantine.js';
-import { createSnapshotService } from '../src/dashboard-snapshot.js';
-import { buildOverview } from '../src/dashboard-queries.js';
+import { createSnapshotService } from '../src/dashboard/dashboard-snapshot.js';
+import { buildOverview } from '../src/dashboard/dashboard-queries.js';
 import { embed, isoAgo, makeStore, NOW, seed, type TmpStore } from './_helpers/dashboard-fixture.js';
 
 let store: TmpStore;

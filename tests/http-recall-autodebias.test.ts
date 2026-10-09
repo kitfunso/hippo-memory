@@ -11,7 +11,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { serve, type ServerHandle } from '../src/server.js';
-import { savePrediction, closePrediction } from '../src/predictions/store.js';
+import { savePrediction, closePrediction } from '../src/store/predictions.js';
 import type { RecallResult } from '../src/api.js';
 import { makeRoot } from './_helpers/make-root.js';
 
@@ -48,7 +48,7 @@ async function jsonAs<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-describe('HTTP /v1/memories planningFallacyHint (J3.2 v0.32)', () => {
+describe('HTTP /v1/memories planningFallacyHint', () => {
   it('response includes planningFallacyHint with camelCase shape when query matches', async () => {
     seedBaserate(home);
     const q = encodeURIComponent('migration effort will take 3 days');

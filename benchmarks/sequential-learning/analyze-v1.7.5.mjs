@@ -13,7 +13,7 @@
 
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { mean, stdDev, ciHalfWidth95, pairedPermutationCI } from './aggregate.mjs';
+import { mean, ciHalfWidth95, pairedPermutationCI } from './aggregate.mjs';
 
 const __dirname = import.meta.dirname ?? new URL('.', import.meta.url).pathname.replace(/^\//, '');
 const RESULTS_BASE = join(__dirname, '..', '..', 'results');
@@ -30,8 +30,6 @@ const c0 = loadLatestJson('v1.7.5-eval-C0-none');
 const c1 = loadLatestJson('v1.7.5-eval-C1-static');
 const c2 = loadLatestJson('v1.7.5-eval-C2-hippo-base');
 const c3 = loadLatestJson('v1.7.5-eval-C3-hippo-goalstack');
-
-const conditions = { c0, c1, c2, c3 };
 
 function extractSeedRates(condRoot) {
   // Output schema written by run.mjs::runAdapter when n-seeds>1.

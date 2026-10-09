@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { spawnSync, type SpawnSyncReturns } from 'child_process';
+import { type SpawnSyncReturns } from 'child_process';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getHippoRoot } from '../src/store/open.js';
@@ -9,12 +9,12 @@ import { loadAllEntries } from '../src/store/entry-reads.js';
 import { loadActiveTaskSnapshot, saveActiveTaskSnapshot, appendSessionEvent } from '../src/store/sessions.js';
 import { writeSessionEndHandoff } from '../src/store/handoffs.js';
 import { defaultSleepLogPath } from '../src/hooks/shared.js';
-import { PRE_COMPACT_TASK_CAP, PRE_COMPACT_SUMMARY_CAP, PRE_COMPACT_NEXT_STEP_CAP } from '../src/capture/compact.js';
+import { PRE_COMPACT_TASK_CAP, PRE_COMPACT_SUMMARY_CAP, PRE_COMPACT_NEXT_STEP_CAP } from '../src/capture/working-state.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { hippoRun } from './_helpers/spawn-hippo.js';
 
 // Always run against the local built CLI so we're testing our source, not a
 // stale globally-installed version (mirrors tests/pinned-inject.test.ts).
-const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
 const FAKE_JWT = ['eyJ' + 'FAKEHEADER', 'eyJ' + 'FAKEPAYLOAD', 'FAKESIG'].join('.');
 
 /**
@@ -56,12 +56,7 @@ function runHippo(
   env: NodeJS.ProcessEnv,
   input?: string,
 ): SpawnSyncReturns<string> {
-  return spawnSync(process.execPath, [HIPPO_JS, ...args], {
-    cwd,
-    env,
-    input,
-    encoding: 'utf8',
-  });
+  return hippoRun(args, { cwd, env, input });
 }
 
 function initHippo(cwd: string, env: NodeJS.ProcessEnv): void {
@@ -519,7 +514,7 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
   });
 });
 
-describe('codex round-2 regressions (CX5/CX6/CX7)', () => {
+describe('redaction, per-session fallback and oversized-record regressions', () => {
   let dir: string;
   let env: NodeJS.ProcessEnv;
 
@@ -705,7 +700,7 @@ describe('codex round-2 regressions (CX5/CX6/CX7)', () => {
   });
 });
 
-describe('uninitialized store gate (X3): neither verb may create a store', () => {
+describe('uninitialized store gate: neither verb may create a store', () => {
   let dir: string;
   let homeDir: string;
   let env: NodeJS.ProcessEnv;

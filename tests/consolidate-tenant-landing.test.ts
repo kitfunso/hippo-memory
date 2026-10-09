@@ -30,7 +30,7 @@ function tmpHome(prefix: string = 'hippo-consolidate-tenant-landing-'): string {
   return mkdtempSync(join(tmpdir(), prefix));
 }
 
-describe('T1 (a): merge pass partitions by tenant before clustering', () => {
+describe('merge pass partitions by tenant before clustering', () => {
   it('two tenants with byte-identical overlapping episodic content produce two separate merged rows, each in its own source tenant, never mixed into one', async () => {
     const home = tmpHome();
     try {
@@ -92,7 +92,7 @@ describe('T1 (a): merge pass partitions by tenant before clustering', () => {
   });
 });
 
-describe('T1 (c)+(d): trace pass lands in the resolved tenant and stays idempotent there', () => {
+describe('trace pass lands in the resolved tenant and stays idempotent there', () => {
   it('an auto-promoted trace lands in HIPPO_TENANT (not default), and a second sleep does not regenerate it', async () => {
     const home = tmpHome();
     const prevTenant = process.env.HIPPO_TENANT;
@@ -141,7 +141,7 @@ describe('T1 (c)+(d): trace pass lands in the resolved tenant and stays idempote
   });
 });
 
-describe('T1 executor check: extract.ts storeExtractedFacts has the same defect, folded in', () => {
+describe('extract.ts storeExtractedFacts has the same defect, folded in', () => {
   it('extracted facts inherit the source entry tenant instead of stamping default', () => {
     const home = tmpHome();
     try {

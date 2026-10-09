@@ -1,9 +1,9 @@
 // An imported row's source, `agent-memory:<tool>:<container>/<item>#<hash>`, and the stored text: plan design 3 and 4.
-import { realpathOrResolve } from '../project-identity.js';
+import { realpathOrResolve } from '../util/real-path.js';
 import { truncateCodePointSafe } from '../transcript-tail.js';
 import { maskEmails } from '../secret-detect.js';
 import { itemHash, sha256Hex } from './keys.js';
-import { toolSourcePrefix, type ToolId } from './tools.js';
+import { toolSourcePrefix, type ToolId } from '../core/agent-memory-tools.js';
 import type { Scope } from './types.js';
 
 export const CONTENT_CAP = 1500;

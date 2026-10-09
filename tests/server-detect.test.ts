@@ -54,6 +54,20 @@ describe('server-detect', () => {
     }
   });
 
+  it('finds a live server bound to IPv6 loopback through its http://[::1]:port pidfile url', async () => {
+    const home = makeRoot();
+    const handle = await serve({ hippoRoot: home, port: 0, host: '::1' });
+    try {
+      expect(handle.url).toBe(`http://[::1]:${handle.port}`);
+      const detected = await detectServer(home);
+      expect(detected?.url).toBe(handle.url);
+      expect(existsSync(join(home, 'server.pid'))).toBe(true);
+    } finally {
+      await handle.stop();
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
   it('returns null and unlinks when /health started_at does not match (H1 case b)', async () => {
     const home = makeRoot();
     const handle = await serve({ hippoRoot: home, port: 0 });

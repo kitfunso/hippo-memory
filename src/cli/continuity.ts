@@ -11,82 +11,85 @@ import { saveSessionHandoff, loadLatestHandoff, loadHandoffById, stampHandoffOut
 import { isHandoffOutcome, formatHandoffEvidenceLine, type HandoffOutcome } from '../handoff.js';
 import { resolveTenantId } from '../tenant.js';
 import { wmPush, wmRead, wmClear, wmFlush } from '../working-memory.js';
+import { collectHandoffEvidence } from '../handoff-evidence.js';
+import type { SessionEvent, TaskSnapshot } from '../store/rows.js';
 import { printError } from './output.js';
 import {
   requireInit,
-  collectHandoffEvidence,
   printActiveTaskSnapshot,
   printSessionEvents,
   printHandoff,
   type CliFlags,
+  boolFlag,
 } from './shared.js';
+
+function snapshotSave(hippoRoot: string, flags: CliFlags): void {
+  const task = String(flags['task'] ?? '').trim();
+  const summary = String(flags['summary'] ?? '').trim();
+  const nextStep = String(flags['next-step'] ?? '').trim();
+  const sessionId = String(flags['session'] ?? flags['id'] ?? '').trim();
+
+  if (!task || !summary || !nextStep) {
+    printError('Usage: hippo snapshot save --task <task> --summary <summary> --next-step <step> [--source <source>] [--session <session-id>]');
+    process.exit(1);
+  }
+
+  const snapshot = saveActiveTaskSnapshot(hippoRoot, resolveTenantId({}), {
+    task,
+    summary,
+    next_step: nextStep,
+    source: String(flags['source'] ?? 'cli'),
+    session_id: sessionId || null,
+  });
+
+  console.log(`Saved active task snapshot #${snapshot.id}`);
+  console.log(`   Task: ${snapshot.task}`);
+  console.log(`   Next: ${snapshot.next_step}`);
+  if (snapshot.session_id) {
+    console.log(`   Session: ${snapshot.session_id}`);
+  }
+}
+
+function snapshotClear(hippoRoot: string, flags: CliFlags): void {
+  const cleared = clearActiveTaskSnapshot(hippoRoot, resolveTenantId({}), String(flags['status'] ?? 'cleared'));
+  if (!cleared) {
+    console.log('No active task snapshot to clear.');
+    return;
+  }
+  console.log('Cleared active task snapshot.');
+}
+
+function snapshotShow(hippoRoot: string, flags: CliFlags): void {
+  const snapshot = loadActiveTaskSnapshot(hippoRoot, resolveTenantId({}));
+  if (!snapshot) {
+    if (flags['json']) {
+      console.log(JSON.stringify({ snapshot: null }));
+    } else {
+      console.log('No active task snapshot saved.');
+    }
+    return;
+  }
+
+  if (flags['json']) {
+    console.log(JSON.stringify({ snapshot }, null, 2));
+    return;
+  }
+
+  printActiveTaskSnapshot(snapshot);
+}
 
 export function cmdSnapshot(
   hippoRoot: string,
   args: string[],
-  flags: Record<string, string | boolean | string[]>
+  flags: CliFlags
 ): void {
   requireInit(hippoRoot);
 
   const subcommand = args[0] ?? 'show';
 
-  if (subcommand === 'save') {
-    const task = String(flags['task'] ?? '').trim();
-    const summary = String(flags['summary'] ?? '').trim();
-    const nextStep = String(flags['next-step'] ?? '').trim();
-    const sessionId = String(flags['session'] ?? flags['id'] ?? '').trim();
-
-    if (!task || !summary || !nextStep) {
-      printError('Usage: hippo snapshot save --task <task> --summary <summary> --next-step <step> [--source <source>] [--session <session-id>]');
-      process.exit(1);
-    }
-
-    const snapshot = saveActiveTaskSnapshot(hippoRoot, resolveTenantId({}), {
-      task,
-      summary,
-      next_step: nextStep,
-      source: String(flags['source'] ?? 'cli'),
-      session_id: sessionId || null,
-    });
-
-    console.log(`Saved active task snapshot #${snapshot.id}`);
-    console.log(`   Task: ${snapshot.task}`);
-    console.log(`   Next: ${snapshot.next_step}`);
-    if (snapshot.session_id) {
-      console.log(`   Session: ${snapshot.session_id}`);
-    }
-    return;
-  }
-
-  if (subcommand === 'clear') {
-    const cleared = clearActiveTaskSnapshot(hippoRoot, resolveTenantId({}), String(flags['status'] ?? 'cleared'));
-    if (!cleared) {
-      console.log('No active task snapshot to clear.');
-      return;
-    }
-    console.log('Cleared active task snapshot.');
-    return;
-  }
-
-  if (subcommand === 'show') {
-    const snapshot = loadActiveTaskSnapshot(hippoRoot, resolveTenantId({}));
-    if (!snapshot) {
-      if (flags['json']) {
-        console.log(JSON.stringify({ snapshot: null }));
-      } else {
-        console.log('No active task snapshot saved.');
-      }
-      return;
-    }
-
-    if (flags['json']) {
-      console.log(JSON.stringify({ snapshot }, null, 2));
-      return;
-    }
-
-    printActiveTaskSnapshot(snapshot);
-    return;
-  }
+  if (subcommand === 'save') return snapshotSave(hippoRoot, flags);
+  if (subcommand === 'clear') return snapshotClear(hippoRoot, flags);
+  if (subcommand === 'show') return snapshotShow(hippoRoot, flags);
 
   printError('Usage: hippo snapshot <save|show|clear>');
   process.exit(1);
@@ -196,7 +199,7 @@ function sessionComplete(hippoRoot: string, s: SessionArgs, flags: CliFlags): vo
 export function cmdSession(
   hippoRoot: string,
   args: string[],
-  flags: Record<string, string | boolean | string[]>
+  flags: CliFlags
 ): void {
   requireInit(hippoRoot);
 
@@ -385,7 +388,7 @@ function handoffShow(hippoRoot: string, args: string[], flags: CliFlags): void {
 export function cmdHandoff(
   hippoRoot: string,
   args: string[],
-  flags: Record<string, string | boolean | string[]>
+  flags: CliFlags
 ): void {
   requireInit(hippoRoot);
 
@@ -398,68 +401,72 @@ export function cmdHandoff(
   process.exit(1);
 }
 
+function printCurrentState(snapshot: TaskSnapshot | null, events: SessionEvent[]): void {
+  console.log('# Current State\n');
+
+  if (snapshot) {
+    console.log(`Task: ${snapshot.task}`);
+    console.log(`Status: ${snapshot.status} | Source: ${snapshot.source} | Updated: ${snapshot.updated_at}`);
+    if (snapshot.session_id) {
+      console.log(`Session: ${snapshot.session_id}`);
+    }
+    console.log(`Summary: ${snapshot.summary}`);
+    console.log(`Next: ${snapshot.next_step}`);
+  } else {
+    console.log('No active task snapshot.');
+  }
+
+  if (events.length > 0) {
+    console.log('');
+    console.log('Recent events:');
+    for (const ev of events) {
+      const ts = ev.created_at.slice(0, 19).replace('T', ' ');
+      console.log(`  [${ts}] (${ev.event_type}) ${ev.content}`);
+    }
+  }
+}
+
+function currentShow(hippoRoot: string, flags: CliFlags): void {
+  const asJson = boolFlag(flags, 'json');
+  const snapshot = loadActiveTaskSnapshot(hippoRoot, resolveTenantId({}));
+  const sessionId = snapshot?.session_id ?? undefined;
+  const events = listSessionEvents(hippoRoot, resolveTenantId({}), {
+    session_id: sessionId,
+    limit: 5,
+  });
+
+  if (asJson) {
+    console.log(JSON.stringify({
+      snapshot: snapshot ?? null,
+      events: events.map((ev) => ({
+        id: ev.id,
+        session_id: ev.session_id,
+        event_type: ev.event_type,
+        content: ev.content,
+        created_at: ev.created_at,
+      })),
+    }));
+    return;
+  }
+
+  if (!snapshot && events.length === 0) {
+    console.log('No active task or recent session events.');
+    return;
+  }
+
+  printCurrentState(snapshot, events);
+}
+
 export function cmdCurrent(
   hippoRoot: string,
   args: string[],
-  flags: Record<string, string | boolean | string[]>
+  flags: CliFlags
 ): void {
   requireInit(hippoRoot);
 
   const subcommand = args[0] ?? 'show';
 
-  if (subcommand === 'show') {
-    const asJson = Boolean(flags['json']);
-    const snapshot = loadActiveTaskSnapshot(hippoRoot, resolveTenantId({}));
-    const sessionId = snapshot?.session_id ?? undefined;
-    const events = listSessionEvents(hippoRoot, resolveTenantId({}), {
-      session_id: sessionId,
-      limit: 5,
-    });
-
-    if (asJson) {
-      console.log(JSON.stringify({
-        snapshot: snapshot ?? null,
-        events: events.map((ev) => ({
-          id: ev.id,
-          session_id: ev.session_id,
-          event_type: ev.event_type,
-          content: ev.content,
-          created_at: ev.created_at,
-        })),
-      }));
-      return;
-    }
-
-    if (!snapshot && events.length === 0) {
-      console.log('No active task or recent session events.');
-      return;
-    }
-
-    console.log('# Current State\n');
-
-    if (snapshot) {
-      console.log(`Task: ${snapshot.task}`);
-      console.log(`Status: ${snapshot.status} | Source: ${snapshot.source} | Updated: ${snapshot.updated_at}`);
-      if (snapshot.session_id) {
-        console.log(`Session: ${snapshot.session_id}`);
-      }
-      console.log(`Summary: ${snapshot.summary}`);
-      console.log(`Next: ${snapshot.next_step}`);
-    } else {
-      console.log('No active task snapshot.');
-    }
-
-    if (events.length > 0) {
-      console.log('');
-      console.log('Recent events:');
-      for (const ev of events) {
-        const ts = ev.created_at.slice(0, 19).replace('T', ' ');
-        console.log(`  [${ts}] (${ev.event_type}) ${ev.content}`);
-      }
-    }
-
-    return;
-  }
+  if (subcommand === 'show') return currentShow(hippoRoot, flags);
 
   printError('Usage: hippo current <show>');
   process.exit(1);
@@ -472,7 +479,7 @@ export function cmdCurrent(
 export function cmdWm(
   hippoRoot: string,
   args: string[],
-  flags: Record<string, string | boolean | string[]>,
+  flags: CliFlags,
 ): void {
   requireInit(hippoRoot);
 

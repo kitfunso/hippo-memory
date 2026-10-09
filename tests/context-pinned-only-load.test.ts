@@ -9,7 +9,7 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAmbientCandidates } from '../src/store/candidates.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { isContentWorthStoring } from '../src/audit.js';
+import { isContentWorthStoring } from '../src/memory-quality.js';
 import { getContext, type Context } from '../src/api.js';
 import { _resetAblationCacheForTests } from '../src/ablation.js';
 import { withSharedStoreHandles } from '../src/db.js';
@@ -329,6 +329,29 @@ describe('loadAmbientCandidates', () => {
     const { entries: got } = loadAmbientCandidates(local, 'default', 1, () => true);
 
     expect(got.map((e) => e.id)).toContain(drifted.id);
+  });
+
+  it('finds the caller\'s older rows behind a full window of other projects without reading the corpus', () => {
+    const mine = Array.from({ length: 5 }, (_, i) => ({
+      ...createMemory(`an older row of the caller ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+      origin_project: PROJECT,
+      created: new Date(Date.UTC(2026, 5, 1, i)).toISOString(),
+    }));
+    for (const entry of mine) writeEntry(local, entry);
+    for (let i = 0; i < 100; i++) {
+      writeEntry(local, {
+        ...createMemory(`a newer row of another project ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+        origin_project: 'proj-b',
+        created: new Date(Date.UTC(2026, 6, 1, 0, i)).toISOString(),
+      });
+    }
+    let admitted = 0;
+    const admit = (e: { origin_project?: string | null }): boolean => { admitted++; return e.origin_project === PROJECT; };
+
+    const { entries: got } = loadAmbientCandidates(local, 'default', 5, admit, undefined, { names: [PROJECT], userGlobal: true });
+
+    expect(got.map((e) => e.id).sort()).toEqual(mine.map((e) => e.id).sort());
+    expect(admitted).toBeLessThan(105);
   });
 
   // include_recent is any non-negative finite number at the HTTP edge, and the

@@ -23,7 +23,7 @@
  * Cost: ~11k turns × ~150-300 ms inference = 30-60 min wall time.
  * Set HIPPO_MODEL_CACHE=$(pwd)/benchmarks/longmemeval/data/model-cache before running.
  */
-import { readFileSync, writeFileSync, renameSync, mkdirSync, existsSync, openSync, writeSync, closeSync, createReadStream } from 'node:fs';
+import { readFileSync, renameSync, mkdirSync, existsSync, openSync, writeSync, closeSync, createReadStream } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 

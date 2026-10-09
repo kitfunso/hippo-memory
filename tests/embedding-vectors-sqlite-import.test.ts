@@ -5,11 +5,11 @@ import * as os from 'os';
 import * as path from 'path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { deleteEntry } from '../src/store/delete-and-batch.js';
+import { batchWriteAndDelete, deleteEntry } from '../src/store/delete-and-batch.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { openHippoDb, closeHippoDb, getMeta, setMeta, getSchemaVersion, getCurrentSchemaVersion } from '../src/db.js';
 import { loadEmbeddingIndex, saveEmbeddingIndex } from '../src/embeddings.js';
-import { decodeVector, deleteOrphanVectors, encodeVector, topVectorMatches } from '../src/vector-store.js';
+import { decodeVector, deleteOrphanVectors, encodeVector, rankVectorRows, topVectorMatches, type VectorMatch, type VectorRow } from '../src/db/vector-store.js';
 
 let root: string;
 
@@ -28,6 +28,15 @@ function withDb<T>(fn: (db: ReturnType<typeof openHippoDb>) => T): T {
   const db = openHippoDb(root);
   try {
     return fn(db);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+async function nearest(query: readonly number[], k: number): Promise<VectorMatch[]> {
+  const db = openHippoDb(root);
+  try {
+    return await topVectorMatches(db, query, k, '', []);
   } finally {
     closeHippoDb(db);
   }
@@ -108,14 +117,70 @@ describe('memory_vectors upkeep', () => {
     expect(Array.from(decodeVector(shifted.subarray(1)))).toEqual([1.5, -2]);
   });
 
-  it('the nearest-vector scan breaks ties by id and returns nothing for a zero query', () => {
+  it('decodes an odd-offset Buffer, whose slice is a view and not a copy', () => {
+    const enc = encodeVector([1.5, -2]);
+    const shifted = Buffer.alloc(enc.length + 1);
+    shifted.set(enc, 1);
+    expect(Array.from(decodeVector(shifted.subarray(1)))).toEqual([1.5, -2]);
+  });
+
+  it('the nearest-vector scan breaks ties by id and returns nothing for a zero query', async () => {
     const rows = ['c', 'a', 'b'].map((t) => createMemory(`${t} note`, { tenantId: 'default', baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
     for (const r of rows) writeEntry(root, r);
     saveEmbeddingIndex(root, Object.fromEntries(rows.map((r) => [r.id, [1, 0]])));
     const ids = rows.map((r) => r.id).sort();
 
-    expect(withDb((db) => topVectorMatches(db, [2, 0], 2, '', [])).map((m) => m.id)).toEqual(ids.slice(0, 2));
-    expect(withDb((db) => topVectorMatches(db, [0, 0], 2, '', []))).toEqual([]);
-    expect(withDb((db) => topVectorMatches(db, [1, 0, 0], 2, '', []))).toEqual([]);
+    expect((await nearest([2, 0], 2)).map((m) => m.id)).toEqual(ids.slice(0, 2));
+    expect(await nearest([0, 0], 2)).toEqual([]);
+    expect(await nearest([1, 0, 0], 2)).toEqual([]);
+  });
+
+  it('the nearest-vector scan hands the event loop back part way, and a write on another handle lands meanwhile', async () => {
+    const rows = Array.from({ length: 600 }, (_, i) => createMemory(`note ${i}`, { tenantId: 'default', baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
+    batchWriteAndDelete(root, rows, []);
+    // Row i sits at angle atan(i + 1) from the query, so the nearest three are rows 0, 1 and 2.
+    saveEmbeddingIndex(root, Object.fromEntries(rows.map((r, i) => [r.id, [1, i + 1]])));
+    const late = createMemory('written while the scan ran', { tenantId: 'default', baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    let wrote = 'the scan never gave up the event loop';
+    setImmediate(() => {
+      try {
+        writeEntry(root, late);
+        wrote = 'during the scan';
+      } catch (err) {
+        wrote = String(err);
+      }
+    });
+
+    const top = await nearest([1, 0], 3);
+    expect(wrote).toBe('during the scan');
+    expect(top.map((m) => m.id)).toEqual(rows.slice(0, 3).map((r) => r.id));
+  });
+});
+
+describe('rankVectorRows, the ranking an add-on store shares with hippo.db', () => {
+  const row = (id: string, v: readonly number[]): VectorRow => ({ id, vector: Float32Array.from(v) });
+
+  it('breaks a tie at the cut toward the smaller id, in either row order', () => {
+    const rows = [row('b', [1, 0]), row('c', [3, 0]), row('a', [2, 0])];
+    expect(rankVectorRows([1, 0], rows, 1).map((m) => m.id)).toEqual(['a']);
+    expect(rankVectorRows([1, 0], [...rows].reverse(), 2).map((m) => m.id)).toEqual(['a', 'b']);
+  });
+
+  it('skips a zero-norm row and a row of another dim; a zero query, an empty one or k 0 ranks nothing', () => {
+    const rows = [row('zero', [0, 0]), row('wide', [0, 1, 0]), row('ok', [0, 1])];
+    expect(rankVectorRows([0, 1], rows, 5).map((m) => m.id)).toEqual(['ok']);
+    expect([rankVectorRows([0, 0], rows, 5), rankVectorRows([], rows, 5), rankVectorRows([0, 1], rows, 0)]).toEqual([[], [], []]);
+  });
+
+  it('gives the ids and scores topVectorMatches gives on the same stored rows', async () => {
+    const vectors = [[0.1, 0.7, 0.3], [0.3, 0.1, 0.9], [0.1000001, 0.7, 0.3], [-0.5, 0.2, 0.1]];
+    const rows = vectors.map((_, i) => createMemory(`note ${i}`, { tenantId: 'default', baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
+    for (const r of rows) writeEntry(root, r);
+    saveEmbeddingIndex(root, Object.fromEntries(rows.map((r, i) => [r.id, vectors[i]!])));
+    const q = [0.12345678901, 0.7, 0.29];
+    const stored = Object.entries(loadEmbeddingIndex(root)).map(([id, v]) => row(id, v));
+    const sql = await nearest(q, 3);
+    expect(sql).toHaveLength(3);
+    expect(rankVectorRows(q, stored, 3)).toEqual(sql);
   });
 });

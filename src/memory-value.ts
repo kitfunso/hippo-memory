@@ -1,9 +1,9 @@
 /**
- * LC2-E3 — learned memory-value scorer, wired into the sleep decay pass as a
- * rescue-only veto (design D1/D2, docs/plans/2026-08-10-lc2-e3-mv-wiring.md).
+ * Learned memory-value scorer, wired into the sleep decay pass as a
+ * rescue-only veto.
  *
  * computeMvFeatures mirrors benchmarks/memory-value/extract.mjs's
- * computeFeatures for the 8 live dims the E2 fitter optimized over
+ * computeFeatures for the 8 live dims the fitter optimized over
  * (FIT_DIMS) — the only dims MEMORY_VALUE_WEIGHTS carries a weight for.
  * Any future edit to either side must keep them byte-equivalent; the parity
  * test in tests/memory-value-wiring.test.ts enforces this.
@@ -12,16 +12,17 @@
  * min-max normalization + weighted scorer (no additional orientation
  * multiply — the frozen weights already encode sign/orientation).
  *
- * rescueSet implements D1's rescue-only semantics: a condemned entry is
- * rescued iff its learned score ranks in the top 30% (RESCUE_BUDGET, the E2
- * keep-budget operating point) of its own tenant's non-pinned candidate set
- * (D2). Deletes(flag-on) subset Deletes(flag-off) by construction — this
+ * rescueSet implements rescue-only semantics: a condemned entry is
+ * rescued iff its learned score ranks in the top 30% (RESCUE_BUDGET, the
+ * measured keep-budget operating point) of its own tenant's non-pinned
+ * candidate set. Deletes(flag-on) subset Deletes(flag-off) by construction — this
  * function can only ever shrink the condemned set, never grow it.
  */
 
 import { type MemoryEntry, calculateStrength } from './memory.js';
 import { compareEntryIdentity } from './compare.js';
 import { MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256 } from './memory-value-weights.js';
+import { DAY_MS } from './util/time.js';
 
 /** The 8 live feature dims (FIT_DIMS) — canonical order for iteration. */
 export const MV_FEATURE_NAMES: ReadonlyArray<keyof MvFeatureVector> = [
@@ -35,14 +36,14 @@ export const MV_FEATURE_NAMES: ReadonlyArray<keyof MvFeatureVector> = [
   'content_length',
 ];
 
-/** The E2 keep-budget operating point (the only point with measured
- *  evidence) — a code constant tied to that evidence, not user-tunable. */
+/** The keep-budget operating point (the only point with measured
+ *  evidence): a code constant tied to that evidence, not user-tunable. */
 const RESCUE_BUDGET = 0.3;
 
 /**
- * Review-round F1 (small-tenant degeneracy): below this per-tenant
- * non-pinned candidate-set size, a rank statistic is noise — E2's evidence
- * says nothing about tiny scale — and the floor prevents immortal-entry
+ * Small-tenant degeneracy: below this per-tenant non-pinned candidate-set
+ * size, a rank statistic is noise (the measured evidence says nothing about
+ * tiny scale), and the floor prevents immortal-entry
  * convergence: keepN=ceil(0.3*N) guarantees >=1 rescue at N=1, so without a
  * floor a condemned-only 1-entry tenant would be rescued every single sleep
  * forever. A condemned-only tenant below the floor instead drains normally
@@ -78,7 +79,7 @@ export interface MvFeatureVector {
  * FEATURE is clock-basis.
  */
 export function computeMvFeatures(entry: MemoryEntry, now: Date): MvFeatureVector {
-  const ageDays = (now.getTime() - Date.parse(entry.created)) / (1000 * 60 * 60 * 24);
+  const ageDays = (now.getTime() - Date.parse(entry.created)) / DAY_MS;
   const pos = entry.outcome_positive ?? 0;
   const neg = entry.outcome_negative ?? 0;
   return {
@@ -135,13 +136,13 @@ export function validateWeights(
  * Min-max normalize each of the 8 features over the given entry set
  * (constant feature -> 0, matching evaluate.mjs), then score = dot(weights,
  * normalized). The normalization context is exactly the entries passed in —
- * callers control the bounded scope (D2: per-tenant, non-pinned).
+ * callers control the bounded scope (per-tenant, non-pinned).
  *
  * `weights` defaults to the real frozen singleton; parameterized (like
  * validateWeights) so callers/tests can score against an explicit vector
  * without touching the module singleton.
  *
- * Review-round F2 (non-finite features): Date.parse on a malformed `created`
+ * Non-finite features: Date.parse on a malformed `created`
  * string yields NaN, and NaN would silently corrupt every OTHER entry's
  * min-max in the same group. An entry with ANY non-finite computed feature
  * is excluded from the normalization context entirely (its raw values never
@@ -203,14 +204,14 @@ export interface MvRankInfo {
   score: number;
   /** 1-based rank by score DESC within the tenant's non-pinned candidate set. */
   rank: number;
-  /** Size of the tenant's non-pinned candidate set (D2). */
+  /** Size of the tenant's non-pinned candidate set. */
   totalNonPinned: number;
   /** ceil(RESCUE_BUDGET * totalNonPinned) — the rescue cutoff; rank <= keepN rescues. */
   keepN: number;
 }
 
 /**
- * Groups non-pinned entries by tenantId (D2), scores + ranks each tenant's
+ * Groups non-pinned entries by tenantId, scores + ranks each tenant's
  * group independently, and returns per-entry rank context for every
  * non-pinned entry (not just condemned ones) — the shared basis for both
  * rescueSet's rescue decision and consolidate.ts's audit-row rank context,
@@ -230,11 +231,9 @@ export function rankNonPinnedByTenant(
 
   const byTenant = new Map<string, MemoryEntry[]>();
   for (const e of entries) {
-    if (e.pinned) continue; // D2: pinned entries never compete for rescue (never condemned)
-    // F9: guard undefined tenantId the same way dag.ts:341 does — the
-    // MemoryEntry type says `string`, but a raw/legacy row can still carry
-    // undefined at runtime, and grouping it under the literal key
-    // "undefined" would silently split it into its own singleton tenant.
+    if (e.pinned) continue; // pinned entries never compete for rescue (never condemned)
+    // Default an undefined tenantId as dag.ts:341 does: a raw/legacy row can carry one at runtime,
+    // and keying it "undefined" would split it into its own singleton tenant.
     const tenantId = e.tenantId ?? 'default';
     const list = byTenant.get(tenantId);
     if (list) list.push(e);
@@ -244,19 +243,13 @@ export function rankNonPinnedByTenant(
   const result = new Map<string, MvRankInfo>();
   for (const [tenantId, group] of byTenant) {
     const scores = scoreEntries(group, now, weights);
-    // score DESC -> compareEntryIdentity (content asc -> metadata -> id asc), the shared
-    // deterministic tie-break used by every score-primary sort site in this
-    // codebase (src/compare.ts). F2: `-Infinity - -Infinity` is NaN, not 0 —
-    // two non-finite-feature entries tied at -Infinity would otherwise fall
-    // through to `diff` (NaN), which Array.sort treats as "no preference"
-    // and leaves insertion-order-dependent. Route NaN through the same
-    // deterministic tie-break as an exact-zero diff.
+    // score DESC, then compareEntryIdentity, the shared tie-break of every score-primary sort (src/compare.ts).
+    // `-Infinity - -Infinity` is NaN, which Array.sort leaves insertion-order-dependent, so NaN ties too.
     const sorted = [...group].sort((a, b) => {
       const diff = scores.get(b.id)! - scores.get(a.id)!;
       return diff === 0 || Number.isNaN(diff) ? compareEntryIdentity(a, b) : diff;
     });
-    // F1: tenants smaller than MIN_RESCUE_GROUP never rescue (keepN 0) — see
-    // that constant's doc comment.
+    // Tenants smaller than MIN_RESCUE_GROUP never rescue (keepN 0); see that constant's doc comment.
     const keepN = sorted.length < MIN_RESCUE_GROUP
       ? 0
       : Math.min(sorted.length, Math.ceil(RESCUE_BUDGET * sorted.length));
@@ -273,8 +266,14 @@ export function rankNonPinnedByTenant(
   return result;
 }
 
+export interface RescueSetOptions {
+  readonly weights?: Readonly<Record<string, number>>;
+  readonly digest?: string;
+  readonly precomputedRanks?: Map<string, MvRankInfo>;
+}
+
 /**
- * D1 rescue decision: a condemned entry is rescued iff it ranks in the top
+ * Rescue decision: a condemned entry is rescued iff it ranks in the top
  * 30% of its tenant's non-pinned candidate set by learned score. Returns the
  * subset of condemnedIds that are rescued — the caller filters commits
  * (rescued -> survivors) and threads the same set into detectConflicts.
@@ -284,7 +283,7 @@ export function rankNonPinnedByTenant(
  * "flag on + a broken constant throws" is directly testable end-to-end
  * through this function without mutating the frozen module singleton.
  *
- * `precomputedRanks` (round-2 code-review P2-2): when the caller has already
+ * `precomputedRanks`: when the caller has already
  * computed the per-tenant ranking (e.g. consolidate.ts needs it separately
  * for detail/audit rank context), pass it here to skip the internal
  * rankNonPinnedByTenant call — the whole-store ranking pass then runs
@@ -295,20 +294,16 @@ export function rescueSet(
   entries: MemoryEntry[],
   condemnedIds: Set<string>,
   now: Date,
-  weights: Readonly<Record<string, number>> = MEMORY_VALUE_WEIGHTS,
-  digest: string = SOURCE_ARTIFACT_SHA256,
-  precomputedRanks?: Map<string, MvRankInfo>,
+  options: RescueSetOptions = {},
 ): Set<string> {
-  validateWeights(weights, digest); // fail loud before any rescue computation (constraint 5)
+  const { weights = MEMORY_VALUE_WEIGHTS, digest = SOURCE_ARTIFACT_SHA256, precomputedRanks } = options;
+  validateWeights(weights, digest); // fail loud before any rescue computation
   const ranked = precomputedRanks ?? rankNonPinnedByTenant(entries, now, weights, digest);
   const rescued = new Set<string>();
   for (const id of condemnedIds) {
     const info = ranked.get(id);
-    // F2: Number.isFinite(info.score) is an explicit, absolute guard — not
-    // just reliance on -Infinity naturally sorting last. In the degenerate
-    // case where every entry in a tenant is non-finite-scored (a tie at
-    // -Infinity), rank position alone could otherwise place one inside
-    // keepN; this makes "never rescued" hold regardless.
+    // An explicit finite guard, not just -Infinity sorting last: when a whole tenant
+    // ties at -Infinity, rank alone could place one inside keepN.
     if (info && info.rank <= info.keepN && Number.isFinite(info.score)) rescued.add(id);
   }
   return rescued;

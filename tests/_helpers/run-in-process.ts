@@ -16,27 +16,28 @@ export interface InProcessResult {
   readonly status: number;
 }
 
-/** Captures console and stream writes while `fn` runs; a process.exit(n) ends the run with status n. */
+/** Captures console and stream writes while `fn` runs; the first process.exit(n) ends the run with status n. */
 export async function runInProcess(fn: () => void | Promise<void>): Promise<InProcessResult> {
   const out: string[] = [];
   const err: string[] = [];
-  const toErr = (...parts: unknown[]): void => { err.push(`${format(...parts)}\n`); };
+  let exited: ExitCalled | undefined;
+  // A caller that catches the throw (runCli does) runs on, so output after the first exit is dropped as the real process would.
+  const keep = (sink: string[], text: string): void => { if (!exited) sink.push(text); };
+  const toErr = (...parts: unknown[]): void => { keep(err, `${format(...parts)}\n`); };
   const spies = [
-    vi.spyOn(console, 'log').mockImplementation((...parts: unknown[]) => { out.push(`${format(...parts)}\n`); }),
+    vi.spyOn(console, 'log').mockImplementation((...parts: unknown[]) => { keep(out, `${format(...parts)}\n`); }),
     vi.spyOn(console, 'error').mockImplementation(toErr),
     vi.spyOn(console, 'warn').mockImplementation(toErr),
-    vi.spyOn(process.stdout, 'write').mockImplementation((chunk: string | Uint8Array) => { out.push(String(chunk)); return true; }),
-    vi.spyOn(process.stderr, 'write').mockImplementation((chunk: string | Uint8Array) => { err.push(String(chunk)); return true; }),
-    vi.spyOn(process, 'exit').mockImplementation((code?: string | number | null) => { throw new ExitCalled(Number(code ?? 0)); }),
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk: string | Uint8Array) => { keep(out, String(chunk)); return true; }),
+    vi.spyOn(process.stderr, 'write').mockImplementation((chunk: string | Uint8Array) => { keep(err, String(chunk)); return true; }),
+    vi.spyOn(process, 'exit').mockImplementation((code?: string | number | null) => { throw (exited ??= new ExitCalled(Number(code ?? 0))); }),
   ];
-  let status = 0;
   try {
     await fn();
   } catch (error) {
-    if (!(error instanceof ExitCalled)) throw error;
-    status = error.code;
+    if (!exited) throw error;
   } finally {
     for (const spy of spies) spy.mockRestore();
   }
-  return { stdout: out.join(''), stderr: err.join(''), status };
+  return { stdout: out.join(''), stderr: err.join(''), status: exited?.code ?? 0 };
 }

@@ -1,6 +1,6 @@
 // Text the MCP recall and context tools print, and what each printed piece costs the token budget.
 
-import type { SearchResult } from '../search/types.js';
+import type { SearchResult } from '../core/search-types.js';
 import type { SessionEvent, TaskSnapshot } from '../store/rows.js';
 import { confidenceLabel } from '../memory.js';
 import type { ContextCost, ContinuityBlock, RecallResult, RecallResultItem } from '../api.js';
@@ -145,7 +145,7 @@ export function tailSection(rows: RecallResultItem[]): string {
   return '\n' + lines.join('\n');
 }
 
-// J3.2: the hint depends on the query alone, so api.retrieve's copy is the one shown; JSON.stringify fences the phrase.
+// The hint depends on the query alone, so api.retrieve's copy is the one shown; JSON.stringify fences the phrase.
 export function planningSection(r: RecallResult): string {
   if (r.planningFallacyHint) {
     const h = r.planningFallacyHint;

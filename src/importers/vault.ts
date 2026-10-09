@@ -3,14 +3,19 @@ import * as path from 'path';
 import { createHash } from 'node:crypto';
 import { createMemory, MemoryEntry } from '../memory.js';
 import { initStore } from '../store/open.js';
-import { remember, archiveRaw, isPrivateScope, type Context } from '../api.js';
+import { selectVaultRawRows, type VaultRawRow } from '../store/entry-reads.js';
+import { remember, archiveRaw, isPrivateScope, type HippoDbContext } from '../api.js';
+import { assertClientScope } from '../recall-scope.js';
 import { openHippoDb, closeHippoDb } from '../db.js';
 import { RejectedValueError, checkRejectionGuard } from '../rejection.js';
 import { loadConfig } from '../config.js';
 import { vetSecrets } from '../secret-detect.js';
-import { log } from '../log.js';
-import { type ImportResult, type ImportOptions, type JsonValue, isJsonString } from './core.js';
-import { parseFrontmatter, frontmatterList, parseWikilinks, collectMarkdownFiles, realpathOrResolve } from './markdown-parse.js';
+import { errorMessage, log } from '../log.js';
+import { type ImportResult, type ImportOptions } from './core.js';
+import { splitMarkdownFrontmatter, frontmatterList, parseWikilinks, collectMarkdownFiles } from './markdown-parse.js';
+import { realpathOrResolve } from '../util/real-path.js';
+import { type JsonValue, isJsonString } from '../json.js';
+import { escapeLike } from '../escape.js';
 
 // ---------------------------------------------------------------------------
 // K1 vault importer (markdown-vault FOLDER → kind='raw' memories)
@@ -25,20 +30,7 @@ import { parseFrontmatter, frontmatterList, parseWikilinks, collectMarkdownFiles
 // `archiveRaw` (the only trigger-legit raw delete).
 // ---------------------------------------------------------------------------
 
-/** Escape LIKE wildcards in operator-supplied text (mirror of
- *  src/project-briefs.ts:477 / src/store/search-rows.ts, kept local since neither is
- *  exported). Used so a `%`/`_`/`\` in the vault name cannot over-match the
- *  loader prefix and archive another vault's rows. */
-function escapeLike(term: string): string {
-  return term.replace(/[%_\\]/g, '\\$&');
-}
-
-interface VaultRow {
-  id: string;
-  artifact_ref: string;
-  tags_json: string;
-  scope: string | null;
-}
+type VaultRow = VaultRawRow;
 
 /**
  * Import a markdown vault FOLDER as `kind='raw'` memories.
@@ -50,10 +42,7 @@ interface VaultRow {
  */
 export function importVault(folderPath: string, options: ImportOptions): ImportResult {
   const hippoRoot = options.hippoRoot;
-  const tenantId = options.tenantId ?? 'default';
-  const { vaultName, scope } = vaultIdentityOrThrow(options);
-  const extraTags = options.extraTags ?? [];
-  const dryRun = options.dryRun ?? false;
+  const identity = vaultIdentityOrThrow(options);
   if (options.global) {
     // The raw-archive path is tenant-local; global mode would put raw vault rows
     // in the wrong store. Reject for SDK callers too (the CLI also rejects
@@ -76,8 +65,16 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
   if (resolvedFolder === resolvedStore || resolvedFolder.startsWith(resolvedStore + path.sep)) {
     return { total: 0, imported: 0, skipped: 0, rejected: 0, archived: 0, entries: [] };
   }
+  return syncVaultFolder(folderPath, options, identity);
+}
 
-  const ctx: Context = {
+function syncVaultFolder(folderPath: string, options: ImportOptions, { vaultName, scope }: VaultIdentity): ImportResult {
+  const hippoRoot = options.hippoRoot;
+  const tenantId = options.tenantId ?? 'default';
+  const extraTags = options.extraTags ?? [];
+  const dryRun = options.dryRun ?? false;
+
+  const ctx: HippoDbContext = {
     hippoRoot,
     tenantId,
     // Process-local actor; the vault importer is a CLI/SDK ingestion path, not
@@ -132,7 +129,7 @@ interface VaultTally {
 }
 
 interface VaultImportRun {
-  ctx: Context;
+  ctx: HippoDbContext;
   folderPath: string;
   vaultName: string;
   scope: string | null;
@@ -179,6 +176,7 @@ function vaultIdentityOrThrow(options: ImportOptions): VaultIdentity {
   // isPrivateScope as the single source of truth: reject a scope that names a
   // `private` segment yet is NOT a valid `<source>:private:*` (catches `private`,
   // `private:x`, and `vault:private` with a missing trailing segment).
+  assertClientScope(scope);
   if (scope !== null && scope.split(':').includes('private') && !isPrivateScope(scope)) {
     throw new Error(
       `vault scope '${scope}' is not recognized as private by recall (only '<source>:private:*' scopes are default-denied). Use a source-prefixed scope such as 'vault:private:${vaultName}'.`,
@@ -200,14 +198,7 @@ function loadVaultRows(hippoRoot: string, tenantId: string, vaultName: string): 
   const db = openHippoDb(hippoRoot);
   try {
     const likeParam = `vault:${escapeLike(vaultName)}:%`;
-    // SAFETY: query selects exactly the columns of VaultRow, in the same
-    // names, from the memories table this module owns.
-    const rows = db
-      .prepare(
-        `SELECT id, artifact_ref, tags_json, scope FROM memories
-           WHERE artifact_ref LIKE ? ESCAPE '\\' AND tenant_id = ? AND kind = 'raw'`,
-      )
-      .all(likeParam, tenantId) as VaultRow[];
+    const rows = selectVaultRawRows(db, likeParam, tenantId);
     // SQLite LIKE is case-insensitive for ASCII, so the query over-fetches
     // (vault 'A' also matches 'vault:a:%'). Filter to the EXACT-case prefix in
     // JS so deletion-sync never archives a different-cased vault's rows (codex P2).
@@ -226,7 +217,7 @@ function loadVaultRows(hippoRoot: string, tenantId: string, vaultName: string): 
 }
 
 function importVaultNote(run: VaultImportRun, relpath: string): void {
-  const { ctx, tally } = run;
+  const { tally } = run;
   tally.total++;
   const artifactRef = `vault:${run.vaultName}:${relpath}`;
   run.seen.add(artifactRef);
@@ -244,7 +235,7 @@ function importVaultNote(run: VaultImportRun, relpath: string): void {
   // built, so it can compare the complete envelope rather than a subset.
   const priors = run.existing.get(artifactRef) ?? [];
 
-  const { fm, body } = parseFrontmatter(rawFileContent);
+  const { fm, body } = splitMarkdownFrontmatter(rawFileContent);
 
   // Empty / frontmatter-only note: nothing storable (createMemory enforces a
   // min content length). The note's CONTENT was deleted at source, so this is a
@@ -260,13 +251,16 @@ function importVaultNote(run: VaultImportRun, relpath: string): void {
     return;
   }
 
-  const tags = vaultNoteTags(run, hashTag, fm, body);
-  if (vaultEnvelopeUnchanged(priors, tags, run.scope)) {
+  const tags = vaultNoteTags(run, hashTag, fm, body);  if (vaultEnvelopeUnchanged(priors, tags, run.scope)) {
     // Unchanged file + envelope → skip (idempotent re-import).
     tally.skipped++;
     return;
   }
+  writeChangedNote(run, artifactRef, priors, body, tags);
+}
 
+function writeChangedNote(run: VaultImportRun, artifactRef: string, priors: VaultRow[], body: string, tags: string[]): void {
+  const { ctx, tally } = run;
   // Changed file → archive EVERY old raw row for this ref (normally one; >1
   // only after a concurrent double-insert), then append the new one. NEVER
   // supersede (would yield kind='distilled'). archiveRaw commits + closes its
@@ -299,10 +293,9 @@ function importVaultNote(run: VaultImportRun, relpath: string): void {
 function readVaultNote(run: VaultImportRun, relpath: string): string | null {
   try {
     return fs.readFileSync(path.join(run.folderPath, relpath), 'utf8');
-  } catch {
-    // File vanished between enumeration and read (TOCTOU), or a transient
-    // IO/permission error. Skip this one file rather than aborting the whole
-    // import (incl. the deletion-sync pass); an idempotent re-run picks it up.
+  } catch (err) {
+    // One unreadable note (gone since the listing, or a transient IO error) must not abort the import; a re-run picks it up.
+    log.debug(`vault note skipped: ${relpath}: ${errorMessage(err)}`);
     run.tally.skipped++;
     return null;
   }
@@ -398,7 +391,7 @@ function parseJsonArrayLoose(value: string | null | undefined): string[] {
     const parsed: JsonValue = JSON.parse(value);
     return Array.isArray(parsed) ? parsed.filter(isJsonString) : [];
   } catch (err) {
-    log.debug(`import: unreadable tags_json read as no tags: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`import: unreadable tags_json read as no tags: ${errorMessage(err)}`);
     return [];
   }
 }

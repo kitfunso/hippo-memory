@@ -1,11 +1,13 @@
-/** Leveled stderr logger. `HIPPO_LOG` picks the threshold (error, warn, info, debug); unset or unknown means warn. */
+/** Leveled stderr logger. `HIPPO_LOG` picks the threshold (error, warn, info, debug); unset or unknown means warn. `HIPPO_LOG_FORMAT=json` writes JSON lines. */
 
-import { envLogLevel } from './env.js';
+import { envLogJson, envLogLevel } from './env.js';
+import { currentRequestId } from './util/request-scope.js';
 
 export type LogLevel = 'error' | 'warn' | 'info' | 'debug';
 
-/** Extra key=value pairs appended to the line; `requestId` ties a line to one HTTP request. */
+/** Extra key=value pairs appended to the line. `ts` and, inside a request, `requestId` are added to every line written. */
 export interface LogFields {
+  ts?: string;
   requestId?: string;
   [key: string]: string | number | boolean | undefined;
 }
@@ -38,9 +40,18 @@ export function formatLogLine(level: LogLevel, message: string, fields: LogField
   return `[hippo] ${level}: ${oneLine(message)}${extras}`;
 }
 
+/** One JSON object per line for a log collector; JSON escaping keeps a multi-line value on the one line. */
+export function formatLogJson(level: LogLevel, message: string, fields: LogFields = {}): string {
+  const { ts, ...rest } = fields;
+  return JSON.stringify({ ts, level, msg: message, ...rest });
+}
+
 function write(level: LogLevel, message: string, fields?: LogFields): void {
   if (!isLevelEnabled(level)) return;
-  process.stderr.write(`${formatLogLine(level, message, fields)}\n`);
+  // The request id is ambient, so a line logged deep in a library call still names the request it ran for.
+  const stamped: LogFields = { ts: new Date().toISOString(), requestId: currentRequestId(), ...fields };
+  const format = envLogJson() ? formatLogJson : formatLogLine;
+  process.stderr.write(`${format(level, message, stamped)}\n`);
 }
 
 const onceKeys = new Set<string>();

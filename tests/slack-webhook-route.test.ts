@@ -7,7 +7,7 @@ import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { buildProvenanceCoverage } from '../src/provenance-coverage.js';
+import { buildProvenanceCoverage } from '../src/cli/provenance-coverage.js';
 
 const SECRET = 'shhh';
 

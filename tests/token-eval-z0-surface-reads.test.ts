@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync } from 'node
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { contextLine } from '../src/context-render.js';
+import { contextBlockLines } from '../src/context-render.js';
 import { injectedRows } from '../scripts/token-eval/surfaces.mjs';
 import { storedAt, shownAtStart } from '../scripts/token-eval/leaks.mjs';
 import { surfaceText } from '../scripts/token-eval/grading.mjs';
@@ -99,7 +99,7 @@ describe('leak scan through a directory link', () => {
 describe('injected bullets', () => {
   it('counts a memory whose content holds a blank line, and leaves the next section out of it', () => {
     const imported = createMemory('first paragraph of the note\n\nsecond paragraph of the note', { source: 'agent-memory:claude-code:p/n.md#ab12', baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
-    const bullet = contextLine({ entry: imported, isGlobal: false }, 'observe', true, new Date());
+    const bullet = contextBlockLines([{ entry: imported, isGlobal: false }], 0, 'observe').slice(1).join('\n');
     const text = ['## Project Memory (1 entries, 20 tokens)\n', bullet, '', '## Prompt-Relevant Memory (0 entries, 5 tokens)\n'].join('\n');
     const got = injectedRows([text], [{ ...imported, global: false }]);
     expect(got.counts).toMatchObject({ rows: 1, importedRows: 1, unmatched: 0, chars: bullet.length });

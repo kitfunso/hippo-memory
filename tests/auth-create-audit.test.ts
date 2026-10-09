@@ -8,13 +8,13 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { authCreate, authRevoke, adminActor, type Context } from '../src/api.js';
+import { authCreate, authRevoke, adminActor, type HippoDbContext } from '../src/api.js';
 import { queryAuditEvents } from '../src/audit.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 
 function newCtx(tenantId = 'default') {
   const tmpDir = mkdtempSync(join(tmpdir(), 'hippo-auth-create-audit-'));
-  const ctx: Context = {
+  const ctx: HippoDbContext = {
     hippoRoot: tmpDir,
     tenantId,
     actor: adminActor('cli'),
@@ -50,7 +50,7 @@ function getAuditRows(hippoRoot: string, tenantId: string, op: 'auth_create' | '
   }
 }
 
-describe('v1.12.4 auth_create audit emit', () => {
+describe('auth_create audit emit', () => {
   it('authCreate emits one auth_create audit row with label + role metadata', () => {
     const t = newCtx();
     try {

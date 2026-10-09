@@ -1,6 +1,7 @@
 import { envTenant } from './env.js';
 import type { DatabaseSyncLike } from './db.js';
 import { validateApiKey } from './auth.js';
+import type { JsonValue } from './json.js';
 
 export interface ResolveOpts {
   db?: DatabaseSyncLike;
@@ -19,9 +20,6 @@ export function resolveTenantId(opts: ResolveOpts): string {
   // literal empty string and broke every downstream tenant filter.
   return envTenant();
 }
-
-/** A value that round-trips through JSON.stringify/JSON.parse unchanged. */
-type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
 /**
  * Defensive runtime guard for tenant id arguments.

@@ -140,7 +140,7 @@ describe('api.reject / api.unreject / api.listRejections', () => {
   });
 });
 
-describe('resolveConflict AT1 wiring', () => {
+describe('resolveConflict rejection wiring', () => {
   function seedConflict() {
     const a = createMemory('Always use semicolons in PowerShell', { tags: ['x'] });
     const b = createMemory('Use && to chain commands in PowerShell', { tags: ['x'] });

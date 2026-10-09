@@ -32,6 +32,7 @@ describe('reads outside the cell (one A1 run, one read per task)', () => {
     sessionIdOnly: 'ECHO:{"type":"delivery","sessionId":"not-a-transcript-line"}',
     scattered: 'ECHO:{"user":{"uuid":"u"},"event":{"type":"delivery","sessionId":"s"}}',
     nestedRecord: 'ECHO:{"wrap":{"type":"user","uuid":"u1","sessionId":"other-session"}}',
+    coloured: 'ECHO:{"uuid":"u1",\x1b[0m\x1b[1m\x1b[31m"type":"user"\x1b[0m,"sessionId":"other-session"}',
   };
 
   beforeAll(async () => {
@@ -76,6 +77,7 @@ describe('reads outside the cell (one A1 run, one read per task)', () => {
   it('a sessionId in output that is not a transcript line does not void', () => expect(find(recs, 'A1', 'sessionIdOnly').void).toBeNull());
   it('type, uuid and sessionId from different objects do not make a transcript line', () => expect(find(recs, 'A1', 'scattered').void).toBeNull());
   it('a transcript record nested inside other output still voids', () => expectRead('nestedRecord', 'transcript-content'));
+  it('a transcript line printed with colour escapes still voids', () => expectRead('coloured', 'transcript-content'));
 });
 
 describe('resolveToken', () => {

@@ -1,129 +1,107 @@
-import * as fs from 'fs';
-import * as path from 'path';
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { cleanupArchivedMirrors } from '../raw-archive-mirror-cleanup.js';
-import { log } from '../log.js';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { errorMessage, log } from '../log.js';
 import { DatabaseSync, type DatabaseSyncLike } from './sqlite.js';
-import { execWithBusyRetry } from './busy.js';
 import { tableExists } from './tables.js';
-import { assertBinaryCompatible, runMigrations } from './migrate.js';
+import { assertBinaryCompatible } from './migrate.js';
+import { connectHippoDb, getHippoDbPath } from './connect.js';
+import { currentRequestStores, isScopedHandle, runWithRequestStores } from './request-stores.js';
+import { OtherStoreFolderError, SqliteBlockedError } from '../util/sqlite-blocked.js';
 
-export function getHippoDbPath(hippoRoot: string): string {
-  return path.join(hippoRoot, 'hippo.db');
-}
-
-// Hook commands run on every prompt, so inside withSharedStoreHandles each store pays its pragmas, migration check and mirror cleanup once.
-const sharedHandles = new Map<string, DatabaseSyncLike>();
-const sharedSet = new WeakSet<DatabaseSyncLike>();
-let shareDepth = 0;
-let shareBusyWaitMs: number | undefined;
+export { getHippoDbPath };
 
 /** Lock wait for hook commands: under the 5 s prompt-hook budget even after a few skipped writes, and far above a normal write's hold. */
 export const HOOK_DB_WAIT_MS = 1000;
 
+/** Lock wait inside an HTTP request: SQLite waits synchronously, so a long wait would stall every other request on the event loop. */
+export const SERVER_DB_WAIT_MS = 250;
+
 /** A busy store made a command skip work: warn once per process (the holder is usually `hippo sleep`). */
 export function noteStoreBusy(skipped: string): void {
   log.once('store-busy', 'warn', `store busy (another hippo process holds the write lock); ${skipped}`);
-  // A lock held past one full wait belongs to a long transaction, so the hook's later writes skip at once.
-  for (const db of sharedHandles.values()) {
-    if (db.isOpen !== false) db.exec('PRAGMA busy_timeout = 0');
-  }
-}
-
-function closeSharedStoreHandles(): void {
-  for (const db of sharedHandles.values()) {
-    sharedSet.delete(db);
-    if (db.isOpen !== false) db.close();
-  }
-  sharedHandles.clear();
+  currentRequestStores()?.noteBusy();
 }
 
 /** Runs `fn` with one handle per store: openHippoDb reuses it and closeHippoDb leaves it open until `fn` settles or the process exits.
  *  `busyWaitMs` is the lock wait of every open inside `fn` that does not pass its own. */
 export async function withSharedStoreHandles<T>(fn: () => T | Promise<T>, opts?: { busyWaitMs?: number }): Promise<T> {
-  if (shareDepth++ === 0) {
-    process.once('exit', closeSharedStoreHandles);
-    shareBusyWaitMs = opts?.busyWaitMs;
-  }
+  return runWithRequestStores(fn, { busyWaitMs: opts?.busyWaitMs });
+}
+
+/** Lock wait for each of sleep's short write transactions, even inside a server request: a run stops only on a writer that holds the lock longer. */
+export const SLEEP_DB_WAIT_MS = 5000;
+
+/** The lock wait an open here would get without its own `busyWaitMs`: the request scope's; undefined outside every scope. */
+export function scopedBusyWait(): number | undefined {
+  return currentRequestStores()?.busyWaitMs;
+}
+
+const sqliteBlockedBy = new AsyncLocalStorage<string>();
+
+/** Runs `fn` so that every hippo.db open inside it, across awaits, throws; otherwise a missed port would create and write a hippo.db nobody reads. */
+export function withSqliteBlocked<T>(storeKind: string, fn: () => T): T {
+  return sqliteBlockedBy.run(storeKind, fn);
+}
+
+/** Runs `fn` with hippo.db opens allowed again, for a store whose own methods are backed by hippo.db, or a copy that reads the old hippo.db. */
+export function withSqliteAllowed<T>(fn: () => T): T {
+  return sqliteBlockedBy.exit(() => markerWaived.run(true, fn));
+}
+
+// Not a store kind: the block of a route whose SQLite work belongs on a worker thread, under the hippo.db store itself.
+const OFF_LOOP = 'sqlite (off the event loop)';
+const OFF_LOOP_MESSAGE = 'hippo.db was opened on the server thread by a route whose SQLite work runs on a worker thread';
+
+/** Runs `fn` so that a hippo.db open on this thread throws, across awaits; a block of another store, when one is open, already refuses and stays as it is. */
+export function withSqliteOffLoop<T>(fn: () => T): T {
+  return sqliteBlockedBy.getStore() === undefined ? sqliteBlockedBy.run(OFF_LOOP, fn) : fn();
+}
+
+/** Leaves withSqliteOffLoop's block and nothing else: another store's block and the folder marker still refuse, which withSqliteAllowed would waive. */
+export function outsideSqliteOffLoop<T>(fn: () => T): T {
+  return sqliteBlockedBy.getStore() === OFF_LOOP ? sqliteBlockedBy.exit(fn) : fn();
+}
+
+/** First line of a best-effort catch around a hippo.db open: an unported path must fail closed, not fall back silently. */
+export function rethrowIfSqliteBlocked<E>(err: E): void {
+  if (err instanceof SqliteBlockedError) throw err;
+}
+
+/** store init --db, store copy --db and serve --db write this file in the hippo root; its text is the store kind. */
+export const OTHER_STORE_MARKER = 'other-store';
+const markerWaived = new AsyncLocalStorage<true>();
+
+// An empty or unreadable marker still refuses: falling through would write the hippo.db the marker forbids.
+function markerKind(marker: string): string {
   try {
-    return await fn();
-  } finally {
-    if (--shareDepth === 0) {
-      process.off('exit', closeSharedStoreHandles);
-      closeSharedStoreHandles();
-      shareBusyWaitMs = undefined;
-    }
+    return readFileSync(marker, 'utf8').trim() || 'unknown';
+  } catch (err) {
+    log.debug(`${marker} is unreadable, so its store kind reads as unknown: ${errorMessage(err)}`);
+    return 'unknown';
   }
 }
 
-/** Lock wait inside an HTTP request: SQLite waits synchronously, so a long wait would stall every other request on the event loop. */
-export const SERVER_DB_WAIT_MS = 250;
-
-const scopedBusyWaitMs = new AsyncLocalStorage<number>();
-
-/** Runs `fn` so that every store opened inside it, across awaits, waits at most `busyWaitMs` for a lock unless the open passes its own. */
-export function withBusyWait<T>(busyWaitMs: number, fn: () => T): T {
-  return scopedBusyWaitMs.run(busyWaitMs, fn);
+/** Throws where hippo.db must not open; checked on every open, not cached, since the marker can appear while a process runs. */
+export function assertSqliteAllowed(hippoRoot: string): void {
+  const storeKind = sqliteBlockedBy.getStore();
+  if (storeKind === OFF_LOOP) throw new SqliteBlockedError('sqlite', OFF_LOOP_MESSAGE);
+  if (storeKind !== undefined) throw new SqliteBlockedError(storeKind);
+  if (markerWaived.getStore()) return;
+  const marker = join(hippoRoot, OTHER_STORE_MARKER);
+  if (existsSync(marker)) throw new OtherStoreFolderError(markerKind(marker), marker);
 }
 
 /** `busyWaitMs` shortens every lock wait of this open, for a hook that must finish inside its own timeout. */
 export function openHippoDb(hippoRoot: string, opts?: { busyWaitMs?: number }): DatabaseSyncLike {
-  if (shareDepth === 0) return openOwnHippoDb(hippoRoot, { busyWaitMs: opts?.busyWaitMs ?? scopedBusyWaitMs.getStore() });
-  const busyWaitMs = opts?.busyWaitMs ?? shareBusyWaitMs ?? scopedBusyWaitMs.getStore();
-  const key = `${path.resolve(getHippoDbPath(hippoRoot))}\0${busyWaitMs ?? ''}`;
-  const shared = sharedHandles.get(key);
-  if (shared?.isOpen && !shared.isTransaction) return shared;
-  const db = openOwnHippoDb(hippoRoot, { busyWaitMs });
-  // An open nested inside a transaction gets its own connection, as it did before sharing.
-  if (!shared?.isOpen) {
-    sharedHandles.set(key, db);
-    sharedSet.add(db);
-  }
-  return db;
-}
-
-// Owner-only on create; SQLite gives the WAL and SHM files the db's mode. Existing paths keep theirs.
-function createStoreFilesOwnerOnly(hippoRoot: string): void {
-  fs.mkdirSync(hippoRoot, { recursive: true, mode: 0o700 });
-  try {
-    fs.closeSync(fs.openSync(getHippoDbPath(hippoRoot), 'wx', 0o600));
-  } catch (err) {
-    if (!(err instanceof Error && 'code' in err && err.code === 'EEXIST')) throw err;
-  }
-}
-
-function openOwnHippoDb(hippoRoot: string, opts?: { busyWaitMs?: number }): DatabaseSyncLike {
-  createStoreFilesOwnerOnly(hippoRoot);
-  const db = new DatabaseSync(getHippoDbPath(hippoRoot));
-  const busyWaitMs = opts?.busyWaitMs;
-  try {
-    db.exec(`PRAGMA busy_timeout = ${busyWaitMs ?? 5000}`);
-    execWithBusyRetry(db, 'PRAGMA journal_mode = WAL', busyWaitMs);
-    db.exec('PRAGMA synchronous = NORMAL');
-    db.exec('PRAGMA wal_autocheckpoint = 100');
-    db.exec('PRAGMA foreign_keys = ON');
-    runMigrations(db, hippoRoot, busyWaitMs);
-    // Path A backfill: delete any orphan markdown mirrors for already-archived
-    // raw_archive rows. Idempotent via per-row raw_archive.mirror_cleaned_at
-    // (v21). Wrapped in try/catch — a filesystem failure must not prevent DB open.
-    try {
-      cleanupArchivedMirrors(hippoRoot, db);
-    } catch (cleanupErr) {
-      log.error(`openHippoDb: cleanupArchivedMirrors failed (non-fatal): ${cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr)}`);
-    }
-    return db;
-  } catch (error) {
-    try {
-      db.close();
-    } catch {
-      // Best effort only.
-    }
-    throw error;
-  }
+  assertSqliteAllowed(hippoRoot);
+  const stores = currentRequestStores();
+  return stores ? stores.get(hippoRoot, opts) : connectHippoDb(hippoRoot, opts?.busyWaitMs);
 }
 
 /** Open an existing store without changing it: no mkdir, WAL switch, migration or mirror cleanup. Throws when hippo.db is missing. */
 export function openHippoDbReadOnly(hippoRoot: string): DatabaseSyncLike {
+  assertSqliteAllowed(hippoRoot);
   const db = new DatabaseSync(getHippoDbPath(hippoRoot), { readOnly: true });
   try {
     db.exec('PRAGMA busy_timeout = 5000');
@@ -140,6 +118,6 @@ export function openHippoDbReadOnly(hippoRoot: string): DatabaseSyncLike {
 }
 
 export function closeHippoDb(db: DatabaseSyncLike): void {
-  if (sharedSet.has(db)) return;
+  if (isScopedHandle(db)) return;
   db.close();
 }

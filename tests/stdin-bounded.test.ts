@@ -1,11 +1,12 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { spawn, spawnSync, type SpawnSyncReturns } from 'child_process';
+import { spawn, type SpawnSyncReturns } from 'child_process';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getHippoRoot } from '../src/store/open.js';
 import { loadActiveTaskSnapshot } from '../src/store/sessions.js';
+import { hippoRun } from './_helpers/spawn-hippo.js';
 
 // Plan: hippo/trajectories/01M2ZSMFG8JXSM7PH10EVZNZBW/plan.md. Real spawn,
 // real store, no mocks, same idiom as tests/pre-compact-e2e.test.ts.
@@ -27,7 +28,7 @@ function transcriptJsonl(entries: unknown[]): string {
 }
 
 function runHippo(args: string[], cwd: string, env: NodeJS.ProcessEnv): SpawnSyncReturns<string> {
-  return spawnSync(process.execPath, [HIPPO_JS, ...args], { cwd, env, encoding: 'utf8' });
+  return hippoRun(args, { cwd, env });
 }
 
 function initHippo(cwd: string, env: NodeJS.ProcessEnv): void {

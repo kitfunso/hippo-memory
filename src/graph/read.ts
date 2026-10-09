@@ -112,7 +112,7 @@ export function loadRelations(
 }
 
 // ---------------------------------------------------------------------------
-// E3.2 multi-hop recall read helpers (SELECT-only; the check-graph-writes lint
+// Multi-hop recall read helpers (SELECT-only; the check-graph-writes lint
 // permits these here and in the read-only consumer src/graph-recall.ts).
 // ---------------------------------------------------------------------------
 
@@ -121,7 +121,7 @@ export function loadRelations(
 const IN_LIST_CHUNK = 400;
 
 /**
- * Map consolidated source memory ids -> their graph entities. The SEED step of E3.2
+ * Map consolidated source memory ids -> their graph entities. The SEED step of
  * multi-hop recall (recall result memory ids -> entities to traverse from). Tenant-
  * scoped, read-only; chunks the IN-list under the SQLite variable cap.
  */
@@ -138,8 +138,7 @@ export function loadEntitiesByMemoryId(
     for (let i = 0; i < memoryIds.length; i += IN_LIST_CHUNK) {
       const slice = memoryIds.slice(i, i + IN_LIST_CHUNK);
       const ph = slice.map(() => '?').join(',');
-      // T2: no ORDER BY meant chunk-local scan order decided ties; id ASC
-      // makes it deterministic (entities.id is an autoincrement integer PK).
+      // id ASC so chunk-local scan order never decides ties (id is an autoincrement PK).
       // SAFETY: rows' shape matches the columns named in ENTITY_COLS above.
       const rows = db.prepare(`
         SELECT ${ENTITY_COLS} FROM entities
@@ -188,7 +187,7 @@ export function loadEntitiesByIds(
 
 /**
  * All relations touching ANY of `entityIds` in EITHER direction (from OR to) — the
- * per-hop neighbour query for E3.2 multi-hop traversal. ONE query for the whole frontier
+ * per-hop neighbour query for multi-hop traversal. ONE query for the whole frontier
  * (not one per node): this is the bidirectional read `loadRelations` (from-only) lacks,
  * and avoids an N+1 across BFS frontier nodes. `limit` caps rows for the frontier and
  * must be a non-negative integer (the raw `LIMIT ?` rejects a fractional value).
@@ -210,7 +209,7 @@ export function loadNeighborRelations(
   const db = txDb ?? ownDb!;
   try {
     // `limit` is applied PER CHUNK; a frontier spanning >IN_LIST_CHUNK ids could return
-    // up to limit*chunks rows before the by-id dedup below. Harmless for E3.2 (the
+    // up to limit*chunks rows before the by-id dedup below. Harmless for multi-hop recall (the
     // frontier is bounded by maxNeighbors <= 200 << IN_LIST_CHUNK, so a single chunk,
     // and the BFS re-enforces the per-hop fanout cap), but note the semantics if a
     // tighter total cap is ever needed.

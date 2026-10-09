@@ -131,7 +131,13 @@ export function hippoInit(run, fakeHome) {
   const r = sh(`"${process.execPath}" "${HIPPO_JS}" init --no-schedule`, run.dirs.work, env);
   if (r.status !== 0) throw new Error(`hippo init failed in ${run.dirs.work}: ${r.stderr.slice(-500)}`);
   const cfgPath = path.join(run.dirs.work, '.hippo', 'config.json');
-  const cfg = fs.existsSync(cfgPath) ? JSON.parse(fs.readFileSync(cfgPath, 'utf8')) : {};
+  let cfg = {};
+  try {
+    cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+  } catch (err) {
+    // init may write no config; an existence check first would race the read.
+    if (err.code !== 'ENOENT') throw err;
+  }
   // Pinned, so a change to hippo's promptRecall default cannot move what the arms receive.
   fs.writeFileSync(cfgPath, JSON.stringify({ ...cfg, extraction: { enabled: false }, pinnedInject: { ...cfg.pinnedInject, promptRecall: true } }, null, 2));
 }

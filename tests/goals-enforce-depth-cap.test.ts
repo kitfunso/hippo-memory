@@ -11,7 +11,7 @@ import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { initStore } from '../src/store/open.js';
 import { pushGoal, enforceDepthCapWithinTx, MAX_ACTIVE_GOAL_DEPTH } from '../src/goals.js';
 
-describe('enforceDepthCapWithinTx helper (v1.7.4)', () => {
+describe('enforceDepthCapWithinTx helper', () => {
   let hippoRoot: string;
   const tenantId = 'default';
   const sessionId = 'sess-cap';

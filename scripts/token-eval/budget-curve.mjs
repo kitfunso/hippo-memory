@@ -47,7 +47,7 @@ import { loadAllEntries } from '../../dist/store/entry-reads.js';
 import { hybridSearch } from '../../dist/search/hybrid.js';
 import { isEmbeddingAvailable } from '../../dist/local-embedding.js';
 import { estimateTokens } from '../../dist/token-ledger.js';
-import { pairedBootstrap } from '../../dist/eval-stats.js';
+import { pairedBootstrap } from '../../dist/eval/eval-stats.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..', '..');

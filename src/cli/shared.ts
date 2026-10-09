@@ -5,18 +5,20 @@ import { envApiKey, envClaudeCodeSessionId, envHippoSessionId, envRequireServer 
 import * as path from 'path';
 import * as fs from 'fs';
 import { execFileSync, execSync } from 'child_process';
-import { installJsonHooks } from '../hooks/json-hooks.js';
+import { installJsonHooks, type InstallResult } from '../hooks/json-hooks.js';
 import { CODEX_TRUST_LINE } from '../hooks/shared.js';
 import { confidenceLabel } from '../memory.js';
 import { TaskSnapshot, SessionEvent } from '../store/rows.js';
-import { isInitialized } from '../store/open.js';
-import type { HandoffEvidence, SessionHandoff } from '../handoff.js';
-import type { SearchResult } from '../search/types.js';
+import { getHippoRoot, isInitialized } from '../store/open.js';
+import type { HookRuntime } from '../capture-contract.js';
+import type { SessionHandoff } from '../handoff.js';
+import type { SearchResult } from '../core/search-types.js';
 import { explainMatch } from '../search/explain.js';
-import { type HippoConfig, loadConfig } from '../config.js';
-import { openHippoDb, closeHippoDb, isSqliteBusy, noteStoreBusy, withSharedStoreHandles, HOOK_DB_WAIT_MS } from '../db.js';
-import { ensurePilotArm, hashArm, readPilotArm } from '../pilot-arm.js';
-import { hookPayloadSessionId, isSubagentPayload, recordTokenUse } from '../token-ledger.js';
+import { isSharedStore, type HippoConfig } from '../config.js';
+import { openHippoDb, closeHippoDb, isSqliteBusy, noteStoreBusy, runWithRequestStores, HOOK_DB_WAIT_MS } from '../db.js';
+import { withLedgerDb } from '../ledger-db.js';
+import { sessionPilotArm } from '../pilot-arm.js';
+import { hookPayloadSessionId, hookPayloadString, isSubagentPayload, recordTokenUse } from '../token-ledger.js';
 import { importAtSessionEnd, currentMachine } from '../agent-memories/sync.js';
 import { type ImportReport, summaryLine } from '../agent-memories/report.js';
 import { type ChurnStaleResult, detectChurnStale } from '../invalidation.js';
@@ -25,13 +27,13 @@ import { getGlobalRoot, initGlobal } from '../shared.js';
 import { DAILY_TASK_NAME, buildDailyRunnerCommand, buildSchtasksCreateArgs, buildWindowsTaskRun } from '../scheduler.js';
 import { sanitizeLogMessage } from '../capture/compact.js';
 import { type AuditOp, appendAuditEvent, reportAuditWriteFailure } from '../audit.js';
-import * as client from '../client.js';
+import * as client from './client.js';
 import { type ServerInfo, detectServer, removePidfileIfOwned } from '../server-detect.js';
 import { resolveTenantId } from '../tenant.js';
 import { type Context, adminActor, learn, CLI_LEARN } from '../api.js';
 import type { RecallSearchOpts } from '../recall-pipeline.js';
 import { snapshotText, sessionTrailText, handoffText } from '../context-render.js';
-import { log } from '../log.js';
+import { errorMessage, log } from '../log.js';
 import { printError } from './output.js';
 
 export function parseLimitFlag(value: string | boolean | string[] | undefined): number {
@@ -102,16 +104,16 @@ export function requireInit(hippoRoot: string): void {
 /** Runs detectChurnStale against every store this repo's memories can live in. */
 export function runChurnStaleForRepo(hippoRoot: string, dryRun: boolean): { root: string; result: ChurnStaleResult }[] {
   const repoRoot = execFileSync('git', ['rev-parse', '--show-toplevel'], { cwd: process.cwd(), encoding: 'utf8', timeout: 10_000, windowsHide: true }).trim();
-  const projectName = resolveProjectIdentity(process.cwd()).name;
+  const { name: projectName, legacyName } = resolveProjectIdentity(process.cwd());
   const globalRoot = getGlobalRoot();
   const roots = globalRoot !== hippoRoot && isInitialized(globalRoot) ? [hippoRoot, globalRoot] : [hippoRoot];
   const tenantId = resolveTenantId({});
   return roots.map((root) => {
     // One store failing must not abort sleep's later phases or skip the other store.
     try {
-      return { root, result: detectChurnStale(root, repoRoot, { tenantId, projectName, dryRun }) };
+      return { root, result: detectChurnStale(root, repoRoot, { tenantId, projectName, legacyName, dryRun }) };
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = errorMessage(err);
       return { root, result: { checked: 0, marked: 0, alreadyMarked: 0, skippedPinned: [], dryRun, preview: [], error: message } };
     }
   });
@@ -235,6 +237,13 @@ export function printAgentImport(report: ImportReport, indent = '   '): void {
   for (const warning of report.warnings) printError(`hippo: agent memories: ${warning}`);
 }
 
+/** True, after one line, on a shared store: this account's commits and agent notes are not its members' memories. */
+export function skipLearnOnSharedStore(hippoRoot: string): boolean {
+  if (!isSharedStore(hippoRoot)) return false;
+  console.log("Shared store: skipped learning from this account's git commits and coding agents' own memories.");
+  return true;
+}
+
 /** Adds hippo's two Codex hooks and says what changed; each install ends on the trust reminder, since Codex skips an untrusted hook. */
 export function installCodexMemoryHooks(indent: string): void {
   const result = installJsonHooks('codex');
@@ -252,6 +261,13 @@ export function installCodexMemoryHooks(indent: string): void {
   console.log(`${indent}${CODEX_TRUST_LINE}`);
 }
 
+/** The one line init, hook install, hook uninstall and setup print when Claude Code's settings.json is not JSON hippo can edit and so was left unchanged; true when it printed. */
+export function warnClaudeSettingsUnusable(result: Pick<InstallResult, 'settingsPath' | 'invalidJson'>, indent: string, action: 'install' | 'uninstall' = 'install'): boolean {
+  if (!result.invalidJson) return false;
+  console.log(`${indent}WARNING: ${result.settingsPath} is not a JSON object hippo can merge into, so it was left unchanged; fix it, then run \`hippo hook ${action} claude-code\`.`);
+  return true;
+}
+
 /**
  * Set up a machine-level daily runner that sweeps all registered Hippo
  * workspaces.
@@ -259,6 +275,18 @@ export function installCodexMemoryHooks(indent: string): void {
  * Windows: creates a scheduled task.
  * Skips if already installed.
  */
+/** Bound on each schtasks and crontab call, so a scheduler that never answers cannot hang `hippo init` or `hippo setup`. */
+const SCHEDULER_CALL_TIMEOUT_MS = 30_000;
+
+/** Node kills a child at its timeout and reports ETIMEDOUT; every other failure here means the scheduler refused or is missing. */
+function schedulerTimedOut<E>(err: E): boolean {
+  return err instanceof Error && 'code' in err && err.code === 'ETIMEDOUT';
+}
+
+function warnSchedulerTimedOut(command: string): void {
+  console.log(`   ${command} did not answer within ${SCHEDULER_CALL_TIMEOUT_MS / 1000} s and was stopped, so the daily runner is not scheduled.`);
+}
+
 export function setupDailySchedule(globalRoot: string): void {
   const runnerDir = path.resolve(globalRoot);
   // Reject paths with characters that could break shell/crontab quoting
@@ -275,18 +303,20 @@ export function setupDailySchedule(globalRoot: string): void {
   if (isWindows) {
     // Check if task already exists
     try {
-      const existing = execSync(`schtasks /query /tn "${taskName}" 2>nul`, { encoding: 'utf-8', windowsHide: true });
+      const existing = execSync(`schtasks /query /tn "${taskName}" 2>nul`, { encoding: 'utf-8', windowsHide: true, timeout: SCHEDULER_CALL_TIMEOUT_MS });
       if (existing.includes(taskName)) {
         return; // already scheduled
       }
-    } catch {
-      // Task doesn't exist, create it
+    } catch (err) {
+      // A non-zero exit means the task does not exist yet, so it is created below.
+      if (schedulerTimedOut(err)) warnSchedulerTimedOut('schtasks /query');
     }
 
     try {
-      execFileSync('schtasks', buildSchtasksCreateArgs(taskName, cmd), { stdio: 'pipe', windowsHide: true });
+      execFileSync('schtasks', buildSchtasksCreateArgs(taskName, cmd), { stdio: 'pipe', windowsHide: true, timeout: SCHEDULER_CALL_TIMEOUT_MS });
       console.log(`   Scheduled machine-level daily runner (6:15am) via Task Scheduler: ${taskName}`);
-    } catch {
+    } catch (err) {
+      if (schedulerTimedOut(err)) warnSchedulerTimedOut('schtasks /create');
       // No admin rights or schtasks unavailable, fall back to printing instructions
       console.log(`   To schedule the machine-level daily runner, run:`);
       console.log(`   schtasks /create /tn "${taskName}" /tr "${buildWindowsTaskRun(cmd).replace(/"/g, '\\"')}" /sc daily /st 06:15`);
@@ -295,16 +325,17 @@ export function setupDailySchedule(globalRoot: string): void {
     // Unix: check crontab for existing entry
     const marker = `# hippo:${taskName}`;
     try {
-      const existing = execSync('crontab -l 2>/dev/null', { encoding: 'utf-8', windowsHide: true });
+      const existing = execSync('crontab -l 2>/dev/null', { encoding: 'utf-8', windowsHide: true, timeout: SCHEDULER_CALL_TIMEOUT_MS });
       if (existing.includes(marker)) {
         return; // already scheduled
       }
 
       const cronLine = `15 6 * * * ${cmd} ${marker}`;
       const newCrontab = existing.trimEnd() + '\n' + cronLine + '\n';
-      execSync('crontab -', { input: newCrontab, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+      execSync('crontab -', { input: newCrontab, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true, timeout: SCHEDULER_CALL_TIMEOUT_MS });
       console.log(`   Scheduled machine-level daily runner (6:15am) via crontab`);
-    } catch {
+    } catch (err) {
+      if (schedulerTimedOut(err)) warnSchedulerTimedOut('crontab');
       // No crontab or no permission: print the line for the user to add by hand.
       const cronLine = `15 6 * * * ${cmd}`;
       console.log(`   To schedule the machine-level daily runner, add to crontab (crontab -e):`);
@@ -314,6 +345,48 @@ export function setupDailySchedule(globalRoot: string): void {
 }
 
 export type CliFlags = Record<string, string | boolean | string[]>;
+
+// Whole-arg digits only: parseInt alone reads "1abc" as 1 and a mutating verb would hit the wrong row.
+export function parsePositiveId(idRaw: unknown, label: string): number {
+  const s = String(idRaw ?? '').trim();
+  const id = parseInt(s, 10);
+  if (!/^\d+$/.test(s) || id <= 0) {
+    printError(`Invalid ${label} id: "${idRaw}" (expected a positive integer).`);
+    process.exit(1);
+  }
+  return id;
+}
+
+export function parseListLimit(flags: CliFlags): number {
+  const limitRaw = flags['limit'];
+  const limit = limitRaw !== undefined ? parseInt(String(limitRaw), 10) : 100;
+  if (!Number.isFinite(limit) || limit <= 0) {
+    printError(`Invalid --limit: "${limitRaw}". Must be a positive integer.`);
+    process.exit(1);
+  }
+  return limit;
+}
+
+// A value-less flag is `true` and a repeated one is a string[]; only a string counts here.
+export function stringFlag(flags: CliFlags, name: string): string | undefined {
+  const v = flags[name];
+  return typeof v === 'string' ? v : undefined;
+}
+
+export function numberFlag(flags: CliFlags, name: string): number | undefined {
+  const v = flags[name];
+  return typeof v === 'string' ? Number(v) : undefined;
+}
+
+// Any truthy value counts, so a string value is true too.
+export function boolFlag(flags: CliFlags, name: string): boolean {
+  return Boolean(flags[name]);
+}
+
+// Only a bare switch counts; `--x value` is false.
+export function flagIsTrue(flags: CliFlags, name: string): boolean {
+  return flags[name] === true;
+}
 
 /** What the command table hands each verb's run(). */
 export interface CommandContext {
@@ -325,7 +398,7 @@ export interface CommandContext {
 export type EngineFlags = Pick<RecallSearchOpts, 'usePhysics' | 'physicsConfig' | 'mmr' | 'mmrLambda' | 'localBump'>;
 
 export function parseAsOfFlag(flags: CliFlags): string | undefined {
-  const asOf = typeof flags['as-of'] === 'string' ? flags['as-of'] : undefined;
+  const asOf = stringFlag(flags, 'as-of');
   if (asOf !== undefined && Number.isNaN(new Date(asOf).getTime())) {
     printError(`Error: --as-of value "${asOf}" is not a valid ISO date (e.g. 2026-04-22 or 2026-04-22T12:00:00Z).`);
     process.exit(1);
@@ -336,7 +409,7 @@ export function parseAsOfFlag(flags: CliFlags): string | undefined {
 /** --physics forces physics, --classic forces BM25+cosine, else physics unless the config turns it off. */
 export function engineFlags(flags: CliFlags, config: HippoConfig): EngineFlags {
   return {
-    usePhysics: Boolean(flags['physics']) || (!flags['classic'] && config.physics.enabled !== false),
+    usePhysics: boolFlag(flags, 'physics') || (!flags['classic'] && config.physics.enabled !== false),
     physicsConfig: config.physics,
     mmr: !flags['no-mmr'] && config.mmr.enabled,
     mmrLambda: flags['mmr-lambda'] !== undefined ? parseFloat(String(flags['mmr-lambda'])) : config.mmr.lambda,
@@ -351,31 +424,6 @@ export function engineFlags(flags: CliFlags, config: HippoConfig): EngineFlags {
  * `__session-end-worker` subcommand (not user-facing). Failures in one stage
  * do not block the other.
  */
-// Best-effort git state; a missing git, non-repo cwd, or the timeout all
-// yield null fields rather than throw (autolearn.ts execFileSync shape).
-export function collectHandoffEvidence(cwd: string, testStatus: HandoffEvidence['testStatus']): HandoffEvidence {
-  let gitRef: string | null = null;
-  try {
-    gitRef = execFileSync('git', ['rev-parse', 'HEAD'], {
-      cwd, encoding: 'utf8', timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true,
-    }).trim() || null;
-  } catch {
-    // No git, not a repo, or timed out: evidence is optional, so the field stays null.
-    gitRef = null;
-  }
-  let dirtyTree: boolean | null = null;
-  try {
-    const status = execFileSync('git', ['status', '--porcelain'], {
-      cwd, encoding: 'utf8', timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true,
-    });
-    dirtyTree = status.trim().length > 0;
-  } catch {
-    // Same as gitRef: unknown tree state is reported as null, never as an error.
-    dirtyTree = null;
-  }
-  return { gitRef, dirtyTree, testStatus };
-}
-
 /** A folder without its own store never sleeps at session end, so its project's agent notes go to the global store here. */
 export function logSessionEndImport(logFile: string | null, transcriptPath: string | undefined): void {
   try {
@@ -384,7 +432,7 @@ export function logSessionEndImport(logFile: string | null, transcriptPath: stri
     if (line !== null) appendSessionEndCloseLog(logFile, line);
     for (const warning of report.warnings) appendSessionEndCloseLog(logFile, `agent memories: ${warning}`);
   } catch (err) {
-    appendSessionEndCloseLog(logFile, `agent memory import failed: ${err instanceof Error ? err.message : String(err)}`);
+    appendSessionEndCloseLog(logFile, `agent memory import failed: ${errorMessage(err)}`);
   }
 }
 
@@ -404,8 +452,9 @@ export function appendSessionEndCloseLog(logFile: string | null, message: string
     // session_id — same log-forgery guard appendPreCompactLog applies.
     const write = opts.startFresh ? fs.writeFileSync : fs.appendFileSync;
     write(logFile, `[hippo] ${new Date().toISOString()} ${sanitizeLogMessage(message)}\n`, 'utf8');
-  } catch {
-    // Best-effort only — never let a log-write failure surface as an error.
+  } catch (err) {
+    // Best-effort only: a log-write failure must never fail the hook.
+    log.debug(`session-end log not written: ${errorMessage(err)}`);
   }
 }
 
@@ -423,7 +472,7 @@ export function printHandoff(handoff: SessionHandoff): void {
 
 // parseArgs turns a value-less flag into `true`; refuse rather than silently
 // stringifying it (String(true) === 'true'), mirroring cmdHandoff's guard.
-export function cardStringFlag(flags: Record<string, string | boolean | string[]>, key: string): string | undefined {
+export function stringFlagOrExit(flags: CliFlags, key: string): string | undefined {
   const v = flags[key];
   if (v === undefined) return undefined;
   if (v === true || v === false || Array.isArray(v)) { printError(`--${key} requires a value`); process.exit(1); }
@@ -432,7 +481,7 @@ export function cardStringFlag(flags: Record<string, string | boolean | string[]
 
 // Claude Code exports its own session var, not ours; without the fallback agent-run recalls trace with no session.
 export function hostSessionId(): string | undefined {
-  return envHippoSessionId()?.trim() || envClaudeCodeSessionId()?.trim() || undefined;
+  return envHippoSessionId() ?? envClaudeCodeSessionId();
 }
 
 /**
@@ -480,33 +529,23 @@ export function hookStoreRoot(hippoRoot: string): string {
   return isInitialized(globalRoot) ? globalRoot : hippoRoot;
 }
 
-/**
- * Run `fn` against the token ledger's store: the local store when it is
- * initialized, else the global one (the per-prompt hook runs in directories
- * without a local store). Best-effort: returns undefined and never throws,
- * because a ledger failure must not break context or recall.
- */
-export function withLedgerDb<T>(hippoRoot: string, fn: (db: ReturnType<typeof openHippoDb>) => T): T | undefined {
-  let root: string | null = null;
+/** `--runtime copilot`, or `--format copilot` on `hippo context`, marks a Copilot hook: the flag decides, never the payload. */
+export function hookRuntime(flags: CliFlags): HookRuntime {
+  return flags['runtime'] === 'copilot' || flags['format'] === 'copilot' ? 'copilot' : 'claude-code';
+}
+
+/** A Copilot hook's project root, from the payload's `cwd`, since VS Code runs user-level hooks in the home folder; other runtimes keep `hippoRoot`. */
+export function payloadCwdRoot(hippoRoot: string, stdinText: string | undefined, runtime: HookRuntime): string {
+  const cwd = runtime === 'copilot' ? hookPayloadString(stdinText, 'cwd') : null;
+  if (cwd === null || cwd.trim() === '') return hippoRoot;
   try {
-    if (isInitialized(hippoRoot)) root = hippoRoot;
-    else if (isInitialized(getGlobalRoot())) root = getGlobalRoot();
-  } catch {
-    // An unreadable store root means no ledger write; the ledger must never break context or recall.
-    return undefined;
+    // Moving, not just re-rooting, keeps project identity, scope, handoff evidence and the session-end worker on that folder too.
+    process.chdir(cwd);
+  } catch (err) {
+    log.warn(`hippo: payload cwd ${cwd} is not usable, so the hook stays in ${process.cwd()}: ${errorMessage(err)}`);
+    return hippoRoot;
   }
-  if (root === null) return undefined;
-  let db: ReturnType<typeof openHippoDb> | undefined;
-  try {
-    db = openHippoDb(root);
-    return fn(db);
-  } catch (error) {
-    // Best effort, but a busy store is the one failure an operator can act on, so it warns once.
-    if (isSqliteBusy(error)) noteStoreBusy('token ledger row skipped');
-    return undefined;
-  } finally {
-    if (db) closeHippoDb(db);
-  }
+  return getHippoRoot(process.cwd());
 }
 
 export function learnFromRepo(
@@ -539,7 +578,7 @@ export function learnFromRepo(
   return { added, skipped, lowInfo };
 }
 
-export function resolveAuthRoot(hippoRoot: string, flags: Record<string, string | boolean | string[]>): string {
+export function resolveAuthRoot(hippoRoot: string, flags: CliFlags): string {
   if (flags['global']) {
     initGlobal();
     return getGlobalRoot();
@@ -551,7 +590,7 @@ export function resolveAuthRoot(hippoRoot: string, flags: Record<string, string 
 /** Hook commands share one handle per store and wait at most HOOK_DB_WAIT_MS for a lock; a store still busy after that skips the hook's work with one warning, exit 0. */
 export async function runHookWithStores<T>(fn: () => T | Promise<T>): Promise<T | undefined> {
   try {
-    return await withSharedStoreHandles(fn, { busyWaitMs: HOOK_DB_WAIT_MS });
+    return await runWithRequestStores(fn, { busyWaitMs: HOOK_DB_WAIT_MS, failFastWhenBusy: true });
   } catch (error) {
     if (!isSqliteBusy(error)) throw error;
     noteStoreBusy('hook skipped');
@@ -559,17 +598,7 @@ export async function runHookWithStores<T>(fn: () => T | Promise<T>): Promise<T 
   }
 }
 
-/**
- * Whether this session sits in the pilot's holdout arm (src/pilot-arm.ts). Off at rate 0 and with no session id.
- * `write` books the arm row; a read-only caller (env-only id, sub-agent) follows the stored arm, else the hash.
- */
+/** Whether this session sits in the pilot's holdout arm; off at rate 0 and with no session id. */
 export function inPilotHoldout(hippoRoot: string, tenantId: string, sessionId: string | undefined, write: boolean): boolean {
-  if (sessionId === undefined || sessionId.trim() === '') return false;
-  const root = isInitialized(hippoRoot) ? hippoRoot : isInitialized(getGlobalRoot()) ? getGlobalRoot() : null;
-  if (root === null) return false;
-  const rate = loadConfig(root).pilot.holdoutRateBp;
-  if (rate <= 0) return false;
-  const arm = withLedgerDb(hippoRoot, (db) =>
-    write ? ensurePilotArm(db, tenantId, sessionId, rate) : readPilotArm(db, sessionId) ?? hashArm(sessionId, rate));
-  return (arm ?? hashArm(sessionId, rate)) === 'holdout';
+  return sessionPilotArm(hippoRoot, tenantId, sessionId, write) === 'holdout';
 }

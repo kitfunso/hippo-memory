@@ -243,32 +243,32 @@ describe('api domain — archive_raw / auth / audit', () => {
     }
   });
 
-  it('authCreate + authList + authRevoke flow with cross-tenant guard', () => {
+  it('authCreate + authList + authRevoke flow with cross-tenant guard', async () => {
     const ctxA: Context = { hippoRoot: home, tenantId: 'tenant-a', actor: { subject: 'cli', role: 'admin' } };
     const ctxB: Context = { hippoRoot: home, tenantId: 'tenant-b', actor: { subject: 'cli', role: 'admin' } };
 
-    const k1 = authCreate(ctxA, { label: 'first' });
+    const k1 = await authCreate(ctxA, { label: 'first' });
     expect(k1.keyId).toMatch(/^hk_/);
     expect(k1.plaintext).toContain(`${k1.keyId}.`);
     expect(k1.tenantId).toBe('tenant-a');
 
-    const k2 = authCreate(ctxA, { label: 'second' });
-    const kOther = authCreate(ctxB, { label: 'other-tenant' });
+    const k2 = await authCreate(ctxA, { label: 'second' });
+    const kOther = await authCreate(ctxB, { label: 'other-tenant' });
 
     // List active for tenant-a sees k1 + k2 only (not kOther).
-    const activeA = authList(ctxA, { active: true });
+    const activeA = await authList(ctxA, { active: true });
     const activeIds = activeA.map((k) => k.keyId).sort();
     expect(activeIds).toEqual([k1.keyId, k2.keyId].sort());
 
     // Revoke k2 as tenant-a.
-    const revoked = authRevoke(ctxA, k2.keyId);
+    const revoked = await authRevoke(ctxA, k2.keyId);
     expect(revoked.ok).toBe(true);
     expect(revoked.revokedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
 
     // After revoke: active = [k1], all = [k1, k2].
-    const activeAfter = authList(ctxA, { active: true });
+    const activeAfter = await authList(ctxA, { active: true });
     expect(activeAfter.map((k) => k.keyId)).toEqual([k1.keyId]);
-    const allAfter = authList(ctxA, { active: false });
+    const allAfter = await authList(ctxA, { active: false });
     expect(allAfter.map((k) => k.keyId).sort()).toEqual([k1.keyId, k2.keyId].sort());
 
     // Cross-tenant revoke must be rejected with the same "not found" message
@@ -276,7 +276,7 @@ describe('api domain — archive_raw / auth / audit', () => {
     expect(() => authRevoke(ctxA, kOther.keyId)).toThrow(/Unknown key_id/);
 
     // kOther must still be active on tenant-b.
-    const activeB = authList(ctxB, { active: true });
+    const activeB = await authList(ctxB, { active: true });
     expect(activeB.map((k) => k.keyId)).toEqual([kOther.keyId]);
 
     // Audit: the auth_revoke event uses the KEY's tenant, not ctx.tenantId.
@@ -296,7 +296,7 @@ describe('api domain — archive_raw / auth / audit', () => {
     }
   });
 
-  it('auditList scopes to ctx.tenantId and filters by op', () => {
+  it('auditList scopes to ctx.tenantId and filters by op', async () => {
     // Seed events directly so the test is independent of remember/recall.
     const db = openHippoDb(home);
     try {
@@ -307,21 +307,21 @@ describe('api domain — archive_raw / auth / audit', () => {
       closeHippoDb(db);
     }
 
-    const aAll = auditList(
+    const aAll = await auditList(
       { hippoRoot: home, tenantId: 'tenant-a', actor: { subject: 'cli', role: 'admin' } },
       {},
     );
     expect(aAll.length).toBe(2);
     expect(aAll.every((e) => e.tenantId === 'tenant-a')).toBe(true);
 
-    const aRemember = auditList(
+    const aRemember = await auditList(
       { hippoRoot: home, tenantId: 'tenant-a', actor: { subject: 'cli', role: 'admin' } },
       { op: 'remember' },
     );
     expect(aRemember.length).toBe(1);
     expect(aRemember[0]!.targetId).toBe('a1');
 
-    const bAll = auditList(
+    const bAll = await auditList(
       { hippoRoot: home, tenantId: 'tenant-b', actor: { subject: 'cli', role: 'admin' } },
       {},
     );

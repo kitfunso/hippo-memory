@@ -9,6 +9,7 @@ import { appendAuditEvent, reportAuditWriteFailure } from '../audit.js';
 import { derivationScope, derivationPartitionKey } from '../recall-scope.js';
 import { jaccardSets } from './conflicts.js';
 import { keptAsWritten, type SleepRun } from './run.js';
+import { isReusable } from '../memory-quality.js';
 
 const MERGE_OVERLAP_THRESHOLD = 0.35;  // Jaccard similarity for "related"
 const MERGE_MIN_CLUSTER = 2;            // minimum cluster size to merge
@@ -35,6 +36,7 @@ export function retireHeldTexts(run: SleepRun): void {
     run.result.details.push(`  ✂️  ${row.id} held a retired text${successor ? `, ${successor.id} holds the rest` : ''}`);
     if (run.dryRun) continue;
     run.pendingDeletes.push(row.id);
+    run.units.push(successor ? [row.id, successor.id] : [row.id]);
     if (successor) {
       run.pendingWrites.push(successor);
       survivors[i] = successor;
@@ -51,26 +53,18 @@ interface MergePartition {
   origin: MemoryEntry['origin_project'];
 }
 
-// -------------------------------------------------------------------------
-// 3. Merge pass  - episodic entries only
-// -------------------------------------------------------------------------
-/** Returns how many clusters were skipped because their merged text matches a rejected value. */
-export function mergePass(run: SleepRun): number {
-  const alreadyMergedIds = new Set(run.survivors.flatMap((e) => e.parents));
-  const mergeCandidates = run.survivors.filter(
+/** The episodic survivors a merge may consume, grouped by the partition their merged row would land in. */
+function partitionMergeCandidates(survivors: readonly MemoryEntry[]): Map<string, MemoryEntry[]> {
+  const alreadyMergedIds = new Set(survivors.flatMap((e) => e.parents));
+  const mergeCandidates = survivors.filter(
     (e) => e.layer === Layer.Episodic && !e.superseded_by && !keptAsWritten(e) && !alreadyMergedIds.has(e.id)
       && !e.pinned // a pin merged with a look-alike would read as one of two values
-      && tokenize(e.content).length > 0, // two empty token sets overlap 1, so tokenless text would merge with any other
+      && tokenize(e.content).length > 0 // two empty token sets overlap 1, so tokenless text would merge with any other
+      && isReusable(e),
   );
-  const used = new Set<string>();
 
-  // T1 fix (2026-08-15 hardening pass): partition by tenantId BEFORE the
-  // overlap loop so a cluster can never span tenants. Previously textOverlap
-  // clustered across the whole host-wide `survivors` list with no tenant
-  // boundary, and mergeContents concatenated cross-tenant content into one
-  // row. Map preserves insertion order, so single-tenant stores (every row
-  // 'default') get exactly one partition and iterate in the same order as
-  // before this fix — byte-identical behavior there.
+  // Partition BEFORE the overlap loop so a cluster can never span tenants and merge cross-tenant content.
+  // Map keeps insertion order, so a single-tenant store gets one partition in the original order.
   const mergeCandidatesByTenant = new Map<string, MemoryEntry[]>();
   for (const entry of mergeCandidates) {
     const key = derivationPartitionKey(entry.tenantId, entry.scope, entry.origin_project);
@@ -78,13 +72,19 @@ export function mergePass(run: SleepRun): number {
     if (bucket) bucket.push(entry);
     else mergeCandidatesByTenant.set(key, [entry]);
   }
+  return mergeCandidatesByTenant;
+}
 
-  // AT1 consolidation-loop fix (docs/plans/2026-08-15-at1-rejected-value-tombstone.md):
-  // reuses the single consolidateDb handle opened lazily in consolidate()
-  // for the whole non-dry-run consolidate — see that
-  // declaration's comment. Only needed for real writes — a dry-run preview
-  // never reaches batchWriteAndDelete's guard bypass, so there is nothing
-  // here for it to protect against.
+// -------------------------------------------------------------------------
+// 3. Merge pass  - episodic entries only
+// -------------------------------------------------------------------------
+/** Returns how many clusters were skipped because their merged text matches a rejected value. */
+export function mergePass(run: SleepRun): number {
+  const used = new Set<string>();
+  const mergeCandidatesByTenant = partitionMergeCandidates(run.survivors);
+
+  // The rejection guard reuses the one consolidateDb handle opened lazily in consolidate(); a dry-run
+  // never reaches batchWriteAndDelete's guard bypass, so it has nothing to protect there.
   let mergesSkippedRejected = 0;
   for (const [, tenantCandidates] of mergeCandidatesByTenant) {
     const partition: MergePartition = {
@@ -122,34 +122,10 @@ function mergeCluster(run: SleepRun, partition: MergePartition, cluster: MemoryE
   const { result, dryRun } = run;
   // Create a semantic summary
   const mergedContent = mergeContents(cluster);
-  const allTags = Array.from(new Set(cluster.flatMap((e) => e.tags))).sort();
-  const maxValence = pickStrongestValence(cluster);
 
-  // AT1 P2 fix: build the semantic entry FIRST — createMemory is cheap
-  // and pure — so the tombstone check below runs under the tenant the
-  // row will ACTUALLY land in.
-  // T1 fix: createMemory now receives tenantId: mergeTenant (the
-  // partition's tenant — every member of `cluster` shares it by
-  // construction), so the row lands in its source tenant instead of
-  // always 'default'.
-  let semantic: MemoryEntry | null = null;
-  if (!dryRun) {
-    semantic = {
-      ...createMemory(mergedContent, {
-        layer: Layer.Semantic,
-        tags: allTags,
-        emotional_valence: maxValence,
-        schema_fit: 0.7,
-        source: 'consolidation',
-        confidence: 'inferred',
-        tenantId: partition.tenantId,
-        scope: partition.scope,
-        baseHalfLifeDays: run.config.defaultHalfLifeDays,
-      }),
-      origin_project: partition.origin,
-      parents: cluster.map((e) => e.id),
-    };
-  }
+  // Build the semantic entry FIRST (createMemory is cheap and pure) so the tombstone check below runs
+  // under the partition's tenant, the one every cluster member shares and the row will land in.
+  const semantic = dryRun ? null : semanticSummary(mergedContent, cluster, partition, run.config.defaultHalfLifeDays);
 
   if (semantic && mergeRejected(run, semantic, cluster, related, used)) return false;
 
@@ -163,26 +139,50 @@ function mergeCluster(run: SleepRun, partition: MergePartition, cluster: MemoryE
 
   if (!dryRun && semantic) {
     run.pendingWrites.push(semantic);
+    run.units.push([semantic.id, ...cluster.map((e) => e.id)]);
     result.semanticCreated++;
 
     // Demote source episodics (they've been compressed into neocortex):
     // scale half_life_days so they decay sooner while staying recoverable.
-    // Immediate ranking is deliberately unchanged: the 2026-06-10 DAG
-    // slice-1 eval measured that dropping children below a worse-retrieving
-    // summary regresses budget-bounded QA (docs/evals/). The stored
+    // Immediate ranking is deliberately unchanged: dropping children below a
+    // worse-retrieving summary regresses budget-bounded QA. The stored
     // strength is refreshed to the live value so inspect, replay sampling,
     // and strength-sorted assembly see the truth instead of a fake 0.3.
     // Mutate in place (not a copy): `cluster` holds the same object
     // references as `survivors`, and the later detectConflicts(survivors)
     // pass in this same run must see the post-demotion half-life, or it
     // can persist conflicts for entries the just-written state excludes.
-    for (const e of cluster) {
-      e.half_life_days = Math.max(1, Math.floor(e.half_life_days * MERGE_SOURCE_HALF_LIFE_FACTOR));
-      e.strength = calculateStrength(e, run.now, run.decayOpts);
-      run.pendingWrites.push(e);
-    }
+    demoteMergedSources(run, cluster);
   }
   return true;
+}
+
+function semanticSummary(mergedContent: string, cluster: MemoryEntry[], partition: MergePartition, baseHalfLifeDays: number): MemoryEntry {
+  const allTags = Array.from(new Set(cluster.flatMap((e) => e.tags))).sort();
+  const maxValence = pickStrongestValence(cluster);
+  return {
+    ...createMemory(mergedContent, {
+      layer: Layer.Semantic,
+      tags: allTags,
+      emotional_valence: maxValence,
+      schema_fit: 0.7,
+      source: 'consolidation',
+      confidence: 'inferred',
+      tenantId: partition.tenantId,
+      scope: partition.scope,
+      baseHalfLifeDays,
+    }),
+    origin_project: partition.origin,
+    parents: cluster.map((e) => e.id),
+  };
+}
+
+function demoteMergedSources(run: SleepRun, cluster: MemoryEntry[]): void {
+  for (const e of cluster) {
+    e.half_life_days = Math.max(1, Math.floor(e.half_life_days * MERGE_SOURCE_HALF_LIFE_FACTOR));
+    e.strength = calculateStrength(e, run.now, run.decayOpts);
+    run.pendingWrites.push(e);
+  }
 }
 
 // mergeContents is DETERMINISTIC CONCATENATION (not an LLM paraphrase)

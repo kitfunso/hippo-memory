@@ -1,14 +1,16 @@
 // End to end through bin/hippo.js: the session-end workers write the digest, and context prints the handoff or the digest, never both.
-import { spawn, spawnSync, type SpawnSyncReturns } from 'child_process';
+import { spawn, type SpawnSyncReturns } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { isSessionDigestRow, sessionDigestId } from '../src/session-digest.js';
+import { sessionDigestId } from '../src/session-digest.js';
+import { isSessionDigestRow } from '../src/core/session-digest-row.js';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { loadLatestHandoff, saveSessionHandoff } from '../src/store/handoffs.js';
+import { hippoRun } from './_helpers/spawn-hippo.js';
 
 const HIPPO_JS = fileURLToPath(new URL('../bin/hippo.js', import.meta.url));
 const REPLY = 'Raised the upload timeout in `upload.ts` because large files need more than thirty seconds.';
@@ -44,7 +46,7 @@ afterEach(() => {
 });
 
 function hippo(args: string[], input?: string, cwd = repo): SpawnSyncReturns<string> {
-  return spawnSync(process.execPath, [HIPPO_JS, ...args], { cwd, env, input, encoding: 'utf8' });
+  return hippoRun(args, { cwd, env, input });
 }
 
 function claudeTranscript(name: string, opts: { reply?: string; edited?: string; cwd?: string; prompt?: string } = {}): string {

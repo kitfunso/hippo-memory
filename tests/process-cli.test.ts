@@ -6,7 +6,7 @@
 // (2) a lenient parseInt on a mutating subcommand hitting the wrong row. These
 // tests lock both for `process` pre-emptively, plus the version chain. Uses the
 // real-CLI subprocess harness (isolated cwd .hippo + HIPPO_HOME +
-// HIPPO_SKIP_AUTO_INTEGRATIONS) like incident-cli / b3-goal-cli.
+// HIPPO_SKIP_AUTO_INTEGRATIONS) like incident-cli / goal-cli.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';

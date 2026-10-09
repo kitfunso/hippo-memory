@@ -10,7 +10,7 @@ import { initStore } from '../src/store/open.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { createApiKey } from '../src/auth.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import type { JsonValue } from '../src/http-util.js';
+import type { JsonValue } from '../src/json.js';
 
 let home: string;
 let handle: ServerHandle;
@@ -173,6 +173,7 @@ describe('HTTP input validation', () => {
   it('a create that points at a missing row is a 409, not a 404', async () => {
     const decision = await call('POST', '/v1/decisions', { text: 'replace it', supersedesDecisionId: 99999 });
     expect(decision.status).toBe(409);
+    expect(String(decision.json.error)).toContain('to supersede not found');
     const incident = await call('POST', '/v1/incidents', { text: 'outage', linkedMemoryIds: ['mem_does_not_exist'] });
     expect(incident.status).toBe(409);
   });

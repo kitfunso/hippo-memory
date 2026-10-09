@@ -1,0 +1,56 @@
+# The slow token-eval harness tests (EVAL_TESTS in vitest.config.ts), kept out of ci.yml's shards because they take a quarter of its Windows time.
+# A PR that touches src or the harness runs them here, beside ci.yml, so a src change that breaks the harness shows before merge.
+# npm-publish.yml calls this workflow on the tagged commit and publishes only when it passes.
+name: Token eval
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'scripts/token-eval/**'
+      - 'tests/token-eval*'
+      - 'tests/fixtures/fake-claude.mjs'
+      - 'tests/fixtures/z0-checks/**'
+      - 'tests/fixtures/z0-contract.ts'
+      - 'tests/fixtures/z0-gen.ts'
+      - 'vitest.config.ts'
+      - 'vitest.eval.config.ts'
+      - '.github/workflows/token-eval.yml'
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  token-eval:
+    name: token-eval (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      # The temp dirs ci.yml gives these tests: tmpfs on Linux, and D: on Windows, where C: takes 5 ms per fsync.
+      - name: Temp dir on tmpfs
+        if: runner.os == 'Linux'
+        run: echo "TMPDIR=/dev/shm" >> "$GITHUB_ENV"
+      - name: Temp dir on the D drive
+        if: runner.os == 'Windows'
+        run: |
+          "TEMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
+          "TMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
+      - name: Vitest
+        # Bash on Windows too, so the `--` reaches npm; four workers there, as in ci.yml's suite job.
+        shell: bash
+        run: npm run test:eval -- ${{ runner.os == 'Windows' && '--maxWorkers=4' || '' }}

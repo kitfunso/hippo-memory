@@ -3,13 +3,14 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { spawn, spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { hashArm } from '../src/pilot-arm.js';
+import { hippoRun } from './_helpers/spawn-hippo.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
 const HOOK_ARGS = ['context', '--pinned-only', '--include-recent', '5', '--format', 'additional-context'];
@@ -39,9 +40,7 @@ function env(extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
 }
 
 function run(args: string[], payload: Payload | null, dir = proj, extra: NodeJS.ProcessEnv = {}) {
-  return spawnSync(process.execPath, [HIPPO_JS, ...args], {
-    cwd: dir, env: env(extra), input: payload === null ? '' : JSON.stringify(payload), encoding: 'utf8',
-  });
+  return hippoRun(args, { cwd: dir, env: env(extra), input: payload === null ? '' : JSON.stringify(payload) });
 }
 
 function snapshotFor(sessionId: string): void {
@@ -165,7 +164,7 @@ describe('the per-prompt hook', () => {
     expect(arms()).toHaveLength(1);
   });
 
-  it('a stored row wins over a later rate change', () => {
+  it('rate 0 turns the pilot off even for a stored holdout session, and rate 10000 silences it again', () => {
     run(HOOK_ARGS, prompt('keep'));
     setRate(0);
     expect(run(HOOK_ARGS, prompt('keep')).stdout).toContain('rollback plan');

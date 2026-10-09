@@ -1,12 +1,40 @@
 import { tableHasColumn } from '../tables.js';
 import type { Migration } from './types.js';
 
+const CREATE_TABLE_API_KEYS_SQL = `
+        CREATE TABLE IF NOT EXISTS api_keys (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          key_id TEXT UNIQUE NOT NULL,
+          key_hash TEXT NOT NULL,
+          tenant_id TEXT NOT NULL DEFAULT 'default',
+          label TEXT,
+          created_at TEXT NOT NULL,
+          revoked_at TEXT
+        )
+      `;
+
+const CREATE_INDEX_IDX_API_KEYS_TENANT_ACTIVE_SQL = `
+        CREATE INDEX IF NOT EXISTS idx_api_keys_tenant_active
+        ON api_keys(tenant_id) WHERE revoked_at IS NULL
+      `;
+
+const CREATE_TABLE_AUDIT_LOG_SQL = `
+        CREATE TABLE IF NOT EXISTS audit_log (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          ts TEXT NOT NULL,
+          tenant_id TEXT NOT NULL DEFAULT 'default',
+          actor TEXT NOT NULL,
+          op TEXT NOT NULL,
+          target_id TEXT,
+          metadata_json TEXT NOT NULL DEFAULT '{}'
+        )
+      `;
+
 export const v16: Migration = {
     version: 16,
     up: (db) => {
-      // A5 stub auth: add tenant_id to all data tables. Single-tenant per deployment;
-      // multi-tenant enforcement deferred to v2 (full A5). The columns are needed now
-      // so future B-track tables don't have to backfill.
+      // Stub auth: add tenant_id to all data tables. Single-tenant per deployment for now;
+      // the columns land early so later tables don't have to backfill.
       if (!tableHasColumn(db, 'memories', 'tenant_id')) {
         db.exec(`ALTER TABLE memories ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'`);
       }
@@ -28,35 +56,12 @@ export const v16: Migration = {
       db.exec(`CREATE INDEX IF NOT EXISTS idx_working_memory_tenant ON working_memory(tenant_id, importance DESC, created_at DESC)`);
       db.exec(`CREATE INDEX IF NOT EXISTS idx_consolidation_runs_tenant_ts ON consolidation_runs(tenant_id, timestamp DESC)`);
       db.exec(`CREATE INDEX IF NOT EXISTS idx_task_snapshots_tenant_status ON task_snapshots(tenant_id, status, updated_at DESC)`);
-      // A5 stub auth: api_keys (scrypt-hashed; plaintext returned to caller exactly once)
+      // Stub auth: api_keys (scrypt-hashed; plaintext returned to caller exactly once)
       // and audit_log (append-only mutation trail). Both carry tenant_id from day 1 so
       // future multi-tenant enforcement is a config flip, not a re-migration.
-      db.exec(`
-        CREATE TABLE IF NOT EXISTS api_keys (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          key_id TEXT UNIQUE NOT NULL,
-          key_hash TEXT NOT NULL,
-          tenant_id TEXT NOT NULL DEFAULT 'default',
-          label TEXT,
-          created_at TEXT NOT NULL,
-          revoked_at TEXT
-        )
-      `);
-      db.exec(`
-        CREATE INDEX IF NOT EXISTS idx_api_keys_tenant_active
-        ON api_keys(tenant_id) WHERE revoked_at IS NULL
-      `);
-      db.exec(`
-        CREATE TABLE IF NOT EXISTS audit_log (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          ts TEXT NOT NULL,
-          tenant_id TEXT NOT NULL DEFAULT 'default',
-          actor TEXT NOT NULL,
-          op TEXT NOT NULL,
-          target_id TEXT,
-          metadata_json TEXT NOT NULL DEFAULT '{}'
-        )
-      `);
+      db.exec(CREATE_TABLE_API_KEYS_SQL);
+      db.exec(CREATE_INDEX_IDX_API_KEYS_TENANT_ACTIVE_SQL);
+      db.exec(CREATE_TABLE_AUDIT_LOG_SQL);
       db.exec(`CREATE INDEX IF NOT EXISTS idx_audit_log_tenant_ts ON audit_log(tenant_id, ts DESC)`);
     },
 };

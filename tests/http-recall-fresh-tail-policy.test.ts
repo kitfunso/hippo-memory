@@ -46,7 +46,7 @@ afterEach(async () => {
   rmSync(home, { recursive: true, force: true });
 });
 
-describe('GET /v1/memories fresh-tail policy F5 (v1.6.5)', () => {
+describe('GET /v1/memories fresh-tail policy', () => {
   it('env unset: fresh_tail_count > 0 without session_id → 200 (back-compat tenant-wide)', async () => {
     for (let i = 0; i < 3; i++) {
       writeEntry(home, createMemory(`event ${i}`, {

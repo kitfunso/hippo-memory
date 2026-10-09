@@ -53,6 +53,14 @@ describe('check-size-ratchet.mjs', () => {
     });
   });
 
+  it('fails on a new 81-line function in a scripts/ .mjs file, naming it', () => {
+    withFixture({ 'scripts/job.mjs': fn('big', 81) }, {}, ({ run }) => {
+      const r = run();
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain('scripts/job.mjs:big: new -> 81');
+    });
+  });
+
   it('fails when a baselined function grows', () => {
     withFixture({ 'src/a.ts': fn('big', 95) }, { functions: { 'src/a.ts:big': 90 } }, ({ run }) => {
       const r = run();

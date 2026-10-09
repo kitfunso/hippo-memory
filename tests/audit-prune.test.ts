@@ -10,8 +10,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
-import { appendAuditEvent } from '../src/audit.js';
-import { pruneAuditLog, parseOlderThanFlag, computeCutoff } from '../src/audit-prune.js';
+import { pruneAuditLog, parseOlderThanFlag, computeCutoff } from '../src/cli/audit-prune.js';
 
 function seedAuditRow(
   db: DatabaseSyncLike,

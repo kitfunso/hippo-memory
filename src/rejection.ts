@@ -1,6 +1,5 @@
 /**
- * AT1 rejected-value tombstone — core invariant.
- * docs/plans/2026-08-15-at1-rejected-value-tombstone.md
+ * Rejected-value tombstone: core invariant.
  *
  * Exact-normalized-value semantics: a human who rejects a fact can refuse
  * byte-stable re-ingestion of the same value across remember/capture/import/
@@ -123,7 +122,7 @@ export function findRejectedValue(
 
 /**
  * Insert (or refresh) a tombstone row. Caller owns the transaction — used by
- * the T2 `reject` verb and `resolveConflict`'s `rejectLoserValue` path.
+ * the `reject` verb and `resolveConflict`'s `rejectLoserValue` path.
  */
 export function insertRejectedValue(
   db: DatabaseSyncLike,
@@ -158,15 +157,15 @@ export function insertRejectedValue(
 }
 
 /**
- * Delete a tombstone by tenant + exact digest — the T2 `unreject` verb, the
- * only v1 escape hatch (plan §4).
+ * Delete a tombstone by tenant + exact digest: the `unreject` verb, the
+ * only escape hatch.
  */
 export function deleteRejectedValue(db: DatabaseSyncLike, tenantId: string, digest: string): boolean {
   const result = db.prepare(`DELETE FROM rejected_values WHERE tenant_id = ? AND digest = ?`).run(tenantId, digest);
   return (result.changes ?? 0) > 0;
 }
 
-/** List tombstones for a tenant, newest first — the T2 `rejections` verb. */
+/** List tombstones for a tenant, newest first: the `rejections` verb. */
 export function listRejectedValues(db: DatabaseSyncLike, tenantId: string): RejectedValueRow[] {
   // SAFETY: rows' shape matches the columns named in the SELECT above.
   const rows = db
@@ -208,15 +207,8 @@ export function checkRejectionGuard(
   // id the caller is already writing, and the tombstone lookup above is the
   // tenant-scoped decision. Matches deleteEntry's own by-id SELECT.
   //
-  // P2 fix: also read tenant_id. Content-digest-only comparison let a
-  // same-id upsert that ONLY changes tenantId slip through as an "unchanged
-  // re-persist" — content C sitting quietly (never rejected) in tenant A
-  // could be re-tagged into tenant B, and since C's digest already matched
-  // this row's stored digest, the guard exempted it even though B is the
-  // tenant that rejected C (that is WHY `tombstone` above is non-null: the
-  // lookup already ran under the INCOMING/destination tenantId). A tenant
-  // change on the SAME id is therefore always a content introduction into
-  // the destination tenant, exactly as if the row were new there.
+  // Also read tenant_id: a same-id upsert that only changes tenantId introduces the
+  // content into the destination tenant, exactly as if the row were new there.
   // SAFETY: storedRow's shape matches the two columns named in the SELECT above.
   const storedRow = db.prepare(`SELECT content, tenant_id FROM memories WHERE id = ?`).get(entryId) as
     | { content: string; tenant_id: string }

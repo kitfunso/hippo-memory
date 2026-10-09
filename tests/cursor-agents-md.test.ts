@@ -4,9 +4,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { spawnSync } from 'node:child_process';
-
-const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
+import { hippoRun } from './_helpers/spawn-hippo.js';
 const START = '<!-- hippo:start -->';
 // What hippo wrote to .cursorrules before this change, trimmed.
 const OLD_BLOCK = `${START}\n# Project Memory (Hippo)\n#   hippo context --auto --budget 1500\n<!-- hippo:end -->\n`;
@@ -26,7 +24,7 @@ beforeEach(() => {
 afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 function hippo(...args: string[]): string {
-  const r = spawnSync(process.execPath, [HIPPO_JS, ...args], { cwd: proj, env, encoding: 'utf8' });
+  const r = hippoRun(args, { cwd: proj, env });
   expect(r.status, r.stderr).toBe(0);
   return r.stdout;
 }

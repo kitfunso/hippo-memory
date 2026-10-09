@@ -24,7 +24,7 @@ import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { queryAuditEvents } from '../src/audit.js';
-import { remember, sleep, type Context } from '../src/api.js';
+import { remember, sleep, getContext, type Context } from '../src/api.js';
 
 // The 'consolidate' audit op's metadata is always the flat scalar phase-counter
 // object built at the appendAuditEvent call site for that op in src/api.ts --
@@ -66,6 +66,8 @@ describe('api.sleep', () => {
       const result = await sleep(ctx, { dryRun: true });
 
       expect(result.dryRun).toBe(true);
+      expect(result.removed).toBe(0);
+      expect((await getContext(ctx, { budget: 1500 })).entries).toHaveLength(1);
       // H10: the preview reports what a real sleep would dedupe and audit.
       expect(result.deduped).toBeUndefined();
       expect(result.audit).toEqual({ errorsRemoved: 0, warningCount: 1 });

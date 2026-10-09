@@ -1,12 +1,31 @@
 // /v1/skills routes.
-import { closeSkill, exportSkills, loadSkillById, loadSkills, saveSkill, VALID_SKILL_STATES } from '../../skills.js';
-import { HttpError, sendJson } from '../../http-util.js';
+import { closeSkill, exportSkills, loadSkillById, loadSkills, MAX_SKILL_NAME_LEN, saveSkill, type SaveSkillOpts, type Skill, type SkillStatus, VALID_SKILL_STATES } from '../../skills.js';
+import { sendJson } from '../../http-util.js';
 import { buildContextWithAuth } from '../auth.js';
-import { byCreatedAt, pageOf, parseCursor } from '../cursor.js';
 import type { RouteRequest } from '../types.js';
-import { isJsonString, isSetMember, parseJsonBody, parseListLimit } from '../validation.js';
+import { parseJsonBody } from '../validation.js';
+import { closeRoute, getRoute, listRoute, optionalString, type RequiredStringRule, requiredString, supersedeRoute, type VersionedRouteConfig } from './object-routes.js';
 
-// ── skills (E2 first-class object, executable/exportable) ──
+const INSTRUCTIONS: RequiredStringRule = { max: 8192, plural: true };
+
+const skillRoutes: VersionedRouteConfig<Skill, SkillStatus, SaveSkillOpts> = {
+  noun: 'skill',
+  field: 'skill',
+  listField: 'skills',
+  statuses: VALID_SKILL_STATES,
+  list: loadSkills,
+  get: loadSkillById,
+  close: closeSkill,
+  save: saveSkill,
+  revise: (body) => {
+    const instructions = requiredString(body, 'instructions', INSTRUCTIONS);
+    const trigger = optionalString(body, 'trigger', 1024);
+    const changeSummary = optionalString(body, 'changeSummary', 4096);
+    return (existing, id) => ({ skillName: existing.skillName, instructions, trigger, changeSummary, supersedesSkillId: id });
+  },
+};
+
+// ── skills (first-class object, executable/exportable) ──
 //
 // 6 routes: POST /v1/skills (new; body skillName + instructions + trigger?),
 // GET /v1/skills (list, status filter; shared parseListLimit), GET
@@ -21,61 +40,17 @@ import { isJsonString, isSetMember, parseJsonBody, parseListLimit } from '../val
 export async function handleCreateSkill({ req, res, opts }: RouteRequest): Promise<void> {
   const ctx = await buildContextWithAuth(req, opts);
   const body = await parseJsonBody(req, ctx);
-  const skillName = body['skillName'];
-  if (!isJsonString(skillName) || skillName.trim().length === 0) {
-    throw new HttpError(400, 'skillName is required (non-empty string)');
-  }
-  if (skillName.length > 256) {
-    throw new HttpError(400, 'skillName exceeds 256-character cap');
-  }
-  const instructions = body['instructions'];
-  if (!isJsonString(instructions) || instructions.trim().length === 0) {
-    throw new HttpError(400, 'instructions are required (non-empty string)');
-  }
-  if (instructions.length > 8192) {
-    throw new HttpError(400, 'instructions exceed 8192-character cap');
-  }
-  const triggerRaw = body['trigger'];
-  let trigger: string | undefined;
-  if (triggerRaw !== undefined && triggerRaw !== null) {
-    if (!isJsonString(triggerRaw)) {
-      throw new HttpError(400, 'trigger must be a string');
-    }
-    if (triggerRaw.length > 1024) {
-      throw new HttpError(400, 'trigger exceeds 1024-character cap');
-    }
-    trigger = triggerRaw;
-  }
   const skill = saveSkill(opts.hippoRoot, ctx.tenantId, {
-    skillName,
-    instructions,
-    trigger,
+    skillName: requiredString(body, 'skillName', { max: MAX_SKILL_NAME_LEN }),
+    instructions: requiredString(body, 'instructions', INSTRUCTIONS),
+    trigger: optionalString(body, 'trigger', 1024),
   }, ctx.actor.subject);
   sendJson(res, 201, { skill });
   return;
 }
 
-export async function handleListSkills({ req, res, opts, query }: RouteRequest): Promise<void> {
-  const status = query.get('status') ?? 'all';
-  const limit = parseListLimit(query.get('limit'));
-  const after = parseCursor(query.get('cursor'), 'string', 'integer');
-  const ctx = await buildContextWithAuth(req, opts);
-  let skills;
-  if (status === 'all') {
-    skills = loadSkills(opts.hippoRoot, ctx.tenantId, { limit: limit + 1, after });
-  } else {
-    if (!isSetMember(VALID_SKILL_STATES, status)) {
-      throw new HttpError(400, `status must be one of: active | superseded | closed | all (got "${status}")`);
-    }
-    skills = loadSkills(opts.hippoRoot, ctx.tenantId, {
-      status,
-      limit: limit + 1,
-      after,
-    });
-  }
-  const page = pageOf(skills, limit, byCreatedAt);
-  sendJson(res, 200, { skills: page.items, next_cursor: page.nextCursor });
-  return;
+export function handleListSkills(rr: RouteRequest): Promise<void> {
+  return listRoute(skillRoutes, rr);
 }
 
 // The export renderer: must precede the /:id GET (literal 'export' is
@@ -87,69 +62,14 @@ export async function handleExportSkills({ req, res, opts }: RouteRequest): Prom
   return;
 }
 
-export async function handleSupersedeSkill({ req, res, opts }: RouteRequest, skillSupersedeMatch: RegExpMatchArray): Promise<void> {
-  const id = parseInt(skillSupersedeMatch[1], 10);
-  const ctx = await buildContextWithAuth(req, opts);
-  const body = await parseJsonBody(req, ctx);
-  const instructions = body['instructions'];
-  if (!isJsonString(instructions) || instructions.trim().length === 0) {
-    throw new HttpError(400, 'instructions are required (non-empty string)');
-  }
-  if (instructions.length > 8192) {
-    throw new HttpError(400, 'instructions exceed 8192-character cap');
-  }
-  const triggerRaw = body['trigger'];
-  let trigger: string | undefined;
-  if (triggerRaw !== undefined && triggerRaw !== null) {
-    if (!isJsonString(triggerRaw)) {
-      throw new HttpError(400, 'trigger must be a string');
-    }
-    if (triggerRaw.length > 1024) {
-      throw new HttpError(400, 'trigger exceeds 1024-character cap');
-    }
-    trigger = triggerRaw;
-  }
-  const changeRaw = body['changeSummary'];
-  let changeSummary: string | undefined;
-  if (changeRaw !== undefined && changeRaw !== null) {
-    if (!isJsonString(changeRaw)) {
-      throw new HttpError(400, 'changeSummary must be a string');
-    }
-    if (changeRaw.length > 4096) {
-      throw new HttpError(400, 'changeSummary exceeds 4096-character cap');
-    }
-    changeSummary = changeRaw;
-  }
-  const existing = loadSkillById(opts.hippoRoot, ctx.tenantId, id);
-  if (!existing) {
-    throw new HttpError(404, `skill ${id} not found`);
-  }
-  const skill = saveSkill(opts.hippoRoot, ctx.tenantId, {
-    skillName: existing.skillName,
-    instructions,
-    trigger,
-    changeSummary,
-    supersedesSkillId: id,
-  }, ctx.actor.subject);
-  sendJson(res, 200, { skill });
-  return;
+export function handleSupersedeSkill(rr: RouteRequest, match: RegExpMatchArray): Promise<void> {
+  return supersedeRoute(skillRoutes, rr, match);
 }
 
-export async function handleCloseSkill({ req, res, opts }: RouteRequest, skillCloseMatch: RegExpMatchArray): Promise<void> {
-  const id = parseInt(skillCloseMatch[1], 10);
-  const ctx = await buildContextWithAuth(req, opts);
-  const skill = closeSkill(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
-  sendJson(res, 200, { skill });
-  return;
+export function handleCloseSkill(rr: RouteRequest, match: RegExpMatchArray): Promise<void> {
+  return closeRoute(skillRoutes, rr, match);
 }
 
-export async function handleGetSkill({ req, res, opts }: RouteRequest, skillByIdMatch: RegExpMatchArray): Promise<void> {
-  const id = parseInt(skillByIdMatch[1], 10);
-  const ctx = await buildContextWithAuth(req, opts);
-  const skill = loadSkillById(opts.hippoRoot, ctx.tenantId, id);
-  if (!skill) {
-    throw new HttpError(404, `skill ${id} not found`);
-  }
-  sendJson(res, 200, { skill });
-  return;
+export function handleGetSkill(rr: RouteRequest, match: RegExpMatchArray): Promise<void> {
+  return getRoute(skillRoutes, rr, match);
 }

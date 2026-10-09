@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { spawnSync } from 'child_process';
 import { summariseTranscript, resolveLastSessionTranscript } from '../src/capture/transcript.js';
+import { hippoRun } from './_helpers/spawn-hippo.js';
 
 /**
  * Per-test tmpdir so the fake transcript fixtures don't leak between cases.
@@ -218,6 +219,38 @@ describe('resolveLastSessionTranscript', () => {
     expect(resolveLastSessionTranscript(undefined, undefined, { mayScan: true })).toBeNull();
   });
 
+  // os.homedir() would still name a real profile, so with no home variable and no CLAUDE_CONFIG_DIR the scan must not start.
+  it('scans nothing when CLAUDE_CONFIG_DIR, HOME and USERPROFILE are all unset', () => {
+    const prev = process.env.CLAUDE_CONFIG_DIR;
+    delete process.env.CLAUDE_CONFIG_DIR;
+    delete process.env.HOME;
+    delete process.env.USERPROFILE;
+    try {
+      expect(resolveLastSessionTranscript(undefined, undefined, { mayScan: true })).toBeNull();
+    } finally {
+      if (prev !== undefined) process.env.CLAUDE_CONFIG_DIR = prev;
+    }
+  });
+
+  it('scans $CLAUDE_CONFIG_DIR/projects when it is set, and not ~/.claude/projects', () => {
+    const prev = process.env.CLAUDE_CONFIG_DIR;
+    const config = path.join(tmp.dir, 'elsewhere');
+    const mine = path.join(config, 'projects', 'proj-a', 'mine.jsonl');
+    const decoy = path.join(tmp.dir, '.claude', 'projects', 'proj-b', 'decoy.jsonl');
+    for (const file of [mine, decoy]) {
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, '{}');
+    }
+    fs.utimesSync(mine, new Date(Date.now() - 60_000), new Date(Date.now() - 60_000));
+    process.env.CLAUDE_CONFIG_DIR = config;
+    try {
+      expect(resolveLastSessionTranscript(undefined, undefined, { mayScan: true })).toBe(mine);
+    } finally {
+      if (prev === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+      else process.env.CLAUDE_CONFIG_DIR = prev;
+    }
+  });
+
   it('does not throw on non-JSON stdin text', () => {
     expect(resolveLastSessionTranscript(undefined, 'some plain text', { mayScan: true })).toBeNull();
   });
@@ -286,7 +319,7 @@ describe('session workers never capture a transcript they were not handed', () =
   function runWorker(args: string[]): string {
     const logFile = path.join(tmp.dir, 'worker.log');
     const env = { ...process.env, HIPPO_HOME: tmp.dir, HOME: tmp.dir, USERPROFILE: tmp.dir };
-    const result = spawnSync(process.execPath, [binPath, ...args, '--log-file', logFile], { cwd: tmp.dir, env, encoding: 'utf8' });
+    const result = hippoRun([...args, '--log-file', logFile], { cwd: tmp.dir, env });
     expect(result.status).toBe(0);
     return fs.readFileSync(logFile, 'utf8');
   }

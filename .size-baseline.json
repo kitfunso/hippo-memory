@@ -1,22 +1,24 @@
 {
-  "files": {},
+  "files": {
+    "scripts/z1-replay.mjs": 1225,
+    "scripts/z6-supersession-eval.mjs": 1508
+  },
   "functions": {
-    "src/compaction-record.ts:saveItems": 81,
-    "src/config.ts:loadConfig": 127,
-    "src/dedupe.ts:deduplicateStore": 81,
-    "src/delivery-recorder.ts:createDeliveryRecorder": 185,
-    "src/doctor.ts:runDoctor": 119,
-    "src/embeddings.ts:embedAll": 89,
-    "src/eval-suite.ts:buildSyntheticCorpus": 182,
-    "src/graph-extract.ts:rebuildGraphRows": 95,
-    "src/graph-recall.ts:produceHitsForRoot": 119,
-    "src/graph-stream.ts:accumulateForRoot": 93,
-    "src/invalidation.ts:detectChurnStale": 167,
-    "src/raw-archive.ts:archiveRawMemory": 92,
-    "src/reject-flow.ts:rejectValue": 155,
-    "src/server-detect.ts:detectServer": 96,
-    "src/server.ts:serve": 164,
-    "src/server/routes/recall.ts:handleRecallMemories": 158,
-    "src/shared.ts:autoShare": 89
+    "scripts/check-comment-history.mjs:commentLines": 88,
+    "scripts/e1-lifecycle/generate.mjs:generateProtocol": 215,
+    "scripts/e1-lifecycle/run.mjs:probeEpoch": 86,
+    "scripts/e1-lifecycle/run.mjs:runArmSeed": 95,
+    "scripts/physics-ablation.mjs:main": 89,
+    "scripts/physics-ablation.mjs:runAblation": 89,
+    "scripts/physics-ablation.mjs:writeReport": 166,
+    "scripts/run-benchmark.ts:buildSeedSet": 111,
+    "scripts/run-model-profile-bench.mjs:main": 81,
+    "scripts/soak-test.mjs:run": 90,
+    "scripts/z0-capture-eval.mjs:main": 84,
+    "scripts/z1-replay.mjs:main": 163,
+    "scripts/z1-replay.mjs:processFile": 346,
+    "scripts/z1-replay.mjs:processFile > fireHookPrompt": 93,
+    "scripts/z1c-eval.mjs:main": 116,
+    "scripts/z6-supersession-eval.mjs:runScenarioArm": 95
   }
 }

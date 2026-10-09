@@ -36,7 +36,7 @@ function makeRaw(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
   });
 }
 
-describe('RecallOpts.scorerWindow (F3, v1.7.0)', () => {
+describe('RecallOpts.scorerWindow', () => {
   let root: string;
   beforeEach(() => { root = makeRoot('f3'); });
   afterEach(() => safeRmSync(root));

@@ -41,7 +41,7 @@ afterEach(async () => {
   rmSync(home, { recursive: true, force: true });
 });
 
-describe('HTTP /v1/memories session_id (v1.7.4)', () => {
+describe('HTTP /v1/memories session_id', () => {
   it('session_id is accepted and applies the goal-stack boost (goal_recall_log row written)', async () => {
     const url = `${handle.url}/v1/memories?q=auth&session_id=${encodeURIComponent(sessionId)}`;
     const res = await fetch(url);

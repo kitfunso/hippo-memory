@@ -70,6 +70,10 @@ describe('GET /v1/memories continuity + scope', () => {
     }>(res);
     expect(body.continuity?.activeSnapshot?.task).toBe('HTTP continuity');
     expect(body.continuityTokens).toBeGreaterThan(0);
+
+    const blank = await fetch(`${handle.url}/v1/memories?q=deploys&include_continuity=true&fresh_tail_session_id=&session_id=%20%20`);
+    expect(blank.status).toBe(200);
+    expect(blank.headers.get('cache-control')).toBe('no-store');
   });
 
   it('default-deny scope: private snapshot does NOT leak via HTTP', async () => {

@@ -2,22 +2,9 @@ import { envHomeDir, processEnv } from '../env.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import type { JsonValue, JsonObject } from '../working-memory.js';
+import { vscodeDataFolders } from '../agent-memories/copilot.js';
 
-/** JSON-value string check. `constructor` narrows a primitive via its boxed wrapper
- *  instead of inspecting the `typeof` tag (anti-slop/no-runtime-typeof); equivalent to
- *  `typeof value === 'string'` for every value JSON.parse can ever produce. */
-export function isJsonString(value: JsonValue | undefined): value is string {
-  return value !== undefined && value !== null && value.constructor === String;
-}
-
-/** JSON-value plain-object check (excludes arrays and null), typeof-free for the same
- *  reason as isJsonString above. */
-export function isJsonObject(value: JsonValue | undefined): value is JsonObject {
-  return value !== undefined && value !== null && !Array.isArray(value) && value.constructor === Object;
-}
-
-export type JsonHookTarget = 'claude-code' | 'codex';
+export type JsonHookTarget = 'claude-code' | 'codex' | 'copilot';
 
 export interface ToolDetection {
   name: string;
@@ -48,9 +35,41 @@ export function codexHomeDir(home: string = homeDir(), env: Readonly<Record<stri
   return env.CODEX_HOME || path.join(home, '.codex');
 }
 
+/** Copilot's config folder: $COPILOT_HOME, else ~/.copilot under os.homedir(), as the Copilot apps resolve it (a HOME that differs from the profile must not move it). */
+export function copilotHomeDir(home: string = os.homedir(), env: Readonly<Record<string, string | undefined>> = processEnv()): string {
+  return env.COPILOT_HOME || path.join(home, '.copilot');
+}
+
+/** Claude Code's config folder, where it reads settings.json: $CLAUDE_CONFIG_DIR when set and non-empty, else ~/.claude under os.homedir(), as Claude Code does (a HOME that differs from the profile must not move it). */
+export function claudeConfigDir(home: string = os.homedir(), env: Readonly<Record<string, string | undefined>> = processEnv()): string {
+  return env.CLAUDE_CONFIG_DIR || path.join(home, '.claude');
+}
+
 /** Codex counts as installed only when its config folder exists: Codex itself refuses a CODEX_HOME that is not a folder. */
 export function isCodexPresent(home: string = homeDir()): boolean {
   return fs.statSync(codexHomeDir(home), { throwIfNoEntry: false })?.isDirectory() === true;
+}
+
+/** hippo's own hooks file, in the hooks folder the Copilot CLI reads. */
+export function copilotHooksFile(): string {
+  return path.join(copilotHomeDir(), 'hooks', 'hippo.json');
+}
+
+/** Where VS Code's agent finds hippo.json: its docs name ~/.copilot/hooks as the user hooks folder, whatever COPILOT_HOME says. */
+export function vscodeUserHooksFile(home: string = os.homedir()): string {
+  return path.join(home, '.copilot', 'hooks', 'hippo.json');
+}
+
+/** The VS Code User folders that exist; Stable and Insiders keep their own, and only an edition the user has run has one. */
+export function vscodeUserDirs(env: Readonly<Record<string, string | undefined>> = processEnv(), home: string = os.homedir()): string[] {
+  return vscodeDataFolders({ env, home, platform: process.platform })
+    .map((dir) => path.join(dir, 'User'))
+    .filter((dir) => fs.statSync(dir, { throwIfNoEntry: false })?.isDirectory() === true);
+}
+
+/** Copilot counts as installed only when its config folder or a VS Code User folder exists, so setup never creates ~/.copilot on a machine with neither. */
+export function isCopilotPresent(home: string = os.homedir()): boolean {
+  return fs.statSync(copilotHomeDir(home), { throwIfNoEntry: false })?.isDirectory() === true || vscodeUserDirs(processEnv(), home).length > 0;
 }
 
 /** Codex hashes each hook and skips new or changed ones until the user reviews them in `/hooks`, so the reminder says what they would trust. */
@@ -86,11 +105,13 @@ export function ensureDir(dir: string): void {
 export function detectInstalledTools(): ToolDetection[] {
   const home = homeDir();
   const exists = (...parts: string[]) => fs.existsSync(path.join(home, ...parts));
+  const claudeDir = claudeConfigDir();
   return [
-    { name: 'claude-code', configDir: '~/.claude', detected: exists('.claude'), kind: 'json-hook' },
+    { name: 'claude-code', configDir: claudeDir, detected: fs.existsSync(claudeDir), kind: 'json-hook' },
     { name: 'opencode', configDir: '~/.config/opencode', detected: exists('.config', 'opencode'), kind: 'plugin', notes: 'installs a TS plugin at ~/.config/opencode/plugins/hippo.ts' },
     { name: 'openclaw', configDir: '~/.openclaw', detected: exists('.openclaw'), kind: 'plugin', notes: 'install via `openclaw plugins install hippo-memory`' },
     { name: 'codex', configDir: '~/.codex', detected: isCodexPresent(home), kind: 'wrapper', notes: 'memory hooks in hooks.json, and wraps the detected codex launcher for session-end consolidation' },
+    { name: 'copilot', configDir: copilotHomeDir(), detected: isCopilotPresent(), kind: 'json-hook', notes: 'hooks in hooks/hippo.json, the MCP server in mcp-config.json and a block in copilot-instructions.md; for VS Code, the server in each User mcp.json and prompts/hippo.instructions.md' },
     { name: 'cursor', configDir: '~/.cursor', detected: exists('.cursor'), kind: 'markdown-instruction', notes: 'no hook API - patches AGENTS.md in the project' },
     { name: 'pi', configDir: '~/.pi', detected: exists('.pi'), kind: 'markdown-instruction', notes: 'no hook API - patches AGENTS.md in the project' },
   ];

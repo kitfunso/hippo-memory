@@ -1,5 +1,5 @@
 /**
- * E2 policy first-class object (docs/plans/2026-05-30-e2-policy-object.md).
+ * Policy first-class object.
  *
  * The "bi-temporal-first" object type: a named rule/statement that is in force
  * over an EFFECTIVE-TIME range and evolves via supersession. Two time axes:
@@ -30,22 +30,20 @@
  * loadPoliciesAsOf's asOfDate) is normalized to canonical ISO-8601 datetime
  * (`toISOString`) at the store boundary BEFORE any persist or compare, so the
  * fixed-width values sort lexically and the half-open [valid_from, valid_to)
- * comparison is correct (plan-eng-critic round-1 CRIT fix: a date-only asOf vs a
- * datetime valid_from otherwise made a same-day policy invisible).
+ * comparison is correct (a date-only asOf vs a datetime valid_from would
+ * otherwise make a same-day policy invisible).
  *
  * Dual-write atomicity: `savePolicy` writes the memory + policies row (and, on
  * supersede, the predecessor's UPDATE) inside writeEntry's SAVEPOINT.
  */
 
-import { BadRequestError, ConflictError, NotFoundError } from './api-errors.js';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
-import { writeEntry } from './store/entry-writes.js';
+import { BadRequestError } from './api-errors.js';
+import { openHippoDb, closeHippoDb } from './db.js';
+import { onHandle } from './store/open.js';
 import { assertTenantId } from './tenant.js';
-import { markGraphDirty, removeGraphEntitiesForObject } from './graph/write.js';
-import { createMemory, Layer } from './memory.js';
-import { appendAuditEvent } from './audit.js';
-import { objectHalfLifeDays } from './half-life-migration.js';
-import { keysetAfter, type KeysetPosition } from './keyset.js';
+import type { KeysetPosition } from './keyset.js';
+import type { SavableDescriptor } from './objects/descriptor.js';
+import { assertObjectStatus, closeObjectOn, dropClosedObjectFromGraph, loadObjectByIdOn, loadObjectsOn, saveObject } from './objects/lifecycle.js';
 
 // ---------------------------------------------------------------------------
 // Domain types
@@ -203,125 +201,38 @@ function buildPolicyContent(
   return `${policyName}\n\n${policyText}\n\nEffective: ${range}`;
 }
 
+/** What one policy write stores, with both dates already normalized. */
+interface PolicyFields {
+  readonly policyName: string;
+  readonly policyText: string;
+  readonly validFrom: string;
+  readonly validTo: string | null;
+}
+
+const POLICY: SavableDescriptor<Policy, PolicyRow, never, PolicyFields> = {
+  table: 'policies',
+  cols: POLICY_COLS,
+  label: 'policy',
+  plural: 'policies',
+  fn: { get: 'loadPolicyById', close: 'closePolicy', list: 'loadPolicies', save: 'savePolicy' },
+  states: VALID_POLICY_STATES,
+  closableFrom: ['active'],
+  ops: { close: 'policy_close', create: 'policy_create', supersede: 'policy_supersede' },
+  idKey: 'policy_id',
+  graphType: 'policy',
+  listFilters: {},
+  rowTo: rowToPolicy,
+  source: 'policy',
+  versioned: true,
+  columns: ['policy_name', 'policy_text', 'valid_from', 'valid_to'],
+  values: (w) => [w.policyName, w.policyText, w.validFrom, w.validTo],
+  // Ids and flags only, never the policy text.
+  createMeta: (w, version) => ({ version, open_ended: w.validTo === null }),
+};
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-
-/** Everything the afterWrite SAVEPOINT needs, resolved before the write opens. */
-interface PolicyWrite {
-  tenantId: string;
-  actor: string;
-  policyName: string;
-  policyText: string;
-  validFrom: string;
-  validTo: string | null;
-  changeSummary: string | null;
-  supersedesId: number | undefined;
-  now: string;
-}
-
-// Preflight the supersede target BEFORE inserting the new row (so the new
-// autoincrement id can never be its own supersede target); read the
-// predecessor version in the same SELECT for server-derived versioning.
-// Mirrors saveProcess / saveDecision (codex P1 2026-05-28).
-function preflightPolicySupersede(db: DatabaseSyncLike, tenantId: string, supersedesId: number): number {
-  // SAFETY: SELECT projects exactly status, version; .get() returns that
-  // shape for the matching row, or undefined when no policy/tenant pair matches.
-  const pred = db.prepare(
-    `SELECT status, version FROM policies WHERE id = ? AND tenant_id = ?`,
-  ).get(supersedesId, tenantId) as
-    | { status: string; version: number }
-    | undefined;
-  if (!pred) {
-    throw new NotFoundError(
-      `savePolicy: policy ${supersedesId} to supersede not found for tenant ${tenantId}`,
-    );
-  }
-  if (pred.status !== 'active') {
-    throw new ConflictError(
-      `savePolicy: policy ${supersedesId} is not active (status='${pred.status}'); only active policies can be superseded.`,
-    );
-  }
-  return pred.version + 1;
-}
-
-function insertPolicyRow(db: DatabaseSyncLike, memoryId: string, w: PolicyWrite, version: number): number {
-  const result = db.prepare(`
-    INSERT INTO policies(
-      memory_id, tenant_id, policy_name, policy_text, valid_from, valid_to,
-      version, status, superseded_by, superseded_at, change_summary, closed_at, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', NULL, NULL, ?, NULL, ?)
-  `).run(
-    memoryId,
-    w.tenantId,
-    w.policyName,
-    w.policyText,
-    w.validFrom,
-    w.validTo,
-    version,
-    w.changeSummary,
-    w.now,
-  );
-  return Number(result.lastInsertRowid ?? 0);
-}
-
-function supersedePolicyRow(
-  db: DatabaseSyncLike,
-  w: PolicyWrite,
-  supersedesId: number,
-  policyId: number,
-  version: number,
-): void {
-  const sup = db.prepare(`
-    UPDATE policies
-    SET status = 'superseded', superseded_by = ?, superseded_at = ?
-    WHERE id = ? AND tenant_id = ? AND status = 'active' AND id != ?
-  `).run(policyId, w.now, supersedesId, w.tenantId, policyId);
-  if (sup.changes === 0) {
-    throw new ConflictError(
-      `savePolicy: policy ${supersedesId} could not be superseded (no longer active or self-reference).`,
-    );
-  }
-  appendAuditEvent(db, {
-    tenantId: w.tenantId,
-    actor: w.actor,
-    op: 'policy_supersede',
-    targetId: String(supersedesId),
-    metadata: {
-      policy_id: supersedesId,
-      superseded_by: policyId,
-      new_version: version,
-    },
-  });
-}
-
-/** The afterWrite body: preflight, INSERT, supersede, reload, create audit, all in one SAVEPOINT. */
-function writePolicyRow(db: DatabaseSyncLike, memoryId: string, w: PolicyWrite): PolicyRow {
-  const version = w.supersedesId !== undefined ? preflightPolicySupersede(db, w.tenantId, w.supersedesId) : 1;
-  const policyId = insertPolicyRow(db, memoryId, w, version);
-  if (w.supersedesId !== undefined) supersedePolicyRow(db, w, w.supersedesId, policyId, version);
-
-  // SAFETY: SELECT ${POLICY_COLS} projects exactly the PolicyRow columns;
-  // .get() returns that row, or undefined only if the just-inserted id can't
-  // be found.
-  const row = db.prepare(`SELECT ${POLICY_COLS} FROM policies WHERE id = ?`)
-    .get(policyId) as PolicyRow | undefined;
-  if (!row) throw new Error('savePolicy: failed to reload saved policy row');
-
-  // GDPR-light metadata: ids + flags only, no policy text.
-  appendAuditEvent(db, {
-    tenantId: w.tenantId,
-    actor: w.actor,
-    op: 'policy_create',
-    targetId: String(policyId),
-    metadata: {
-      policy_id: policyId,
-      version,
-      open_ended: w.validTo === null,
-    },
-  });
-  return row;
-}
 
 /**
  * Create a policy (or a new version that supersedes an existing one). Writes the
@@ -337,7 +248,7 @@ export function savePolicy(
   opts: SavePolicyOpts,
   actor: string = 'cli',
 ): Policy {
-  assertTenantId('savePolicy', tenantId);
+  assertTenantId(POLICY.fn.save, tenantId);
   if (!opts.policyName || opts.policyName.trim().length === 0) {
     throw new BadRequestError('savePolicy: policyName is required');
   }
@@ -351,48 +262,17 @@ export function savePolicy(
   // (a date-only asOf resolves to end-of-day in loadPoliciesAsOf), NOT by
   // backdating the stored valid_from - backdating to midnight would make an
   // earlier-same-day as-of wrongly report the policy already in force and would
-  // hide a superseded predecessor for that earlier time (codex review
-  // 2026-05-30 round 2). An explicit --from is honored as-is.
+  // hide a superseded predecessor for that earlier time. An explicit --from is honored as-is.
   const { validFrom, validTo } = validatePolicyDates(opts.validFrom, opts.validTo, now);
-  const isSupersede = opts.supersedesPolicyId !== undefined;
-  const changeSummary = isSupersede ? (opts.changeSummary ?? null) : null;
-
-  const content = buildPolicyContent(opts.policyName, opts.policyText, validFrom, validTo);
-  const tags = ['policy', ...(opts.extraTags ?? [])];
-  const mem = createMemory(content, {
-    tags,
-    layer: Layer.Semantic,
-    confidence: 'verified',
-    source: 'policy',
-    baseHalfLifeDays: objectHalfLifeDays(hippoRoot),
-    tenantId,
-  });
-  const w: PolicyWrite = {
-    tenantId,
+  return saveObject(hippoRoot, POLICY, tenantId, {
     actor,
-    policyName: opts.policyName,
-    policyText: opts.policyText,
-    validFrom,
-    validTo,
-    changeSummary,
-    supersedesId: opts.supersedesPolicyId,
     now,
-  };
-
-  let savedRow: PolicyRow | undefined;
-
-  writeEntry(hippoRoot, mem, {
-    actor,
-    afterWrite: (db, memoryId) => {
-      savedRow = writePolicyRow(db, memoryId, w);
-    },
-    afterCommit: () => markGraphDirty(hippoRoot, tenantId, mem.id),
+    fields: { policyName: opts.policyName, policyText: opts.policyText, validFrom, validTo },
+    content: buildPolicyContent(opts.policyName, opts.policyText, validFrom, validTo),
+    tags: opts.extraTags ?? [],
+    supersedesId: opts.supersedesPolicyId,
+    changeSummary: opts.changeSummary,
   });
-
-  if (!savedRow) {
-    throw new Error('savePolicy: afterWrite did not populate the row');
-  }
-  return rowToPolicy(savedRow);
 }
 
 /**
@@ -406,70 +286,13 @@ export function closePolicy(
   id: number,
   actor: string = 'cli',
 ): Policy {
-  assertTenantId('closePolicy', tenantId);
+  assertTenantId(POLICY.fn.close, tenantId);
   const now = new Date().toISOString();
-  const db = openHippoDb(hippoRoot);
-  try {
-    db.exec('BEGIN IMMEDIATE');
-    try {
-      const updateResult = db.prepare(`
-        UPDATE policies
-        SET status = 'closed', closed_at = ?
-        WHERE id = ? AND tenant_id = ? AND status = 'active'
-      `).run(now, id, tenantId);
-
-      if (updateResult.changes === 0) {
-        // SAFETY: SELECT projects exactly the status column; .get() returns that
-        // shape, or undefined when the id/tenant pair doesn't exist.
-        const existing = db.prepare(
-          `SELECT status FROM policies WHERE id = ? AND tenant_id = ?`,
-        ).get(id, tenantId) as { status: string } | undefined;
-        if (!existing) {
-          throw new NotFoundError(`closePolicy: policy ${id} not found for tenant ${tenantId}`);
-        }
-        throw new ConflictError(
-          `closePolicy: policy ${id} is not active (status='${existing.status}'); only active policies can be closed.`,
-        );
-      }
-
-      // SAFETY: SELECT ${POLICY_COLS} projects exactly the PolicyRow columns;
-      // .get() returns that row for the just-updated id, or undefined only in an
-      // impossible race since the UPDATE above already matched it.
-      const row = db.prepare(`SELECT ${POLICY_COLS} FROM policies WHERE id = ? AND tenant_id = ?`)
-        .get(id, tenantId) as PolicyRow | undefined;
-      if (!row) throw new NotFoundError(`closePolicy: policy ${id} not found after UPDATE`);
-
-      appendAuditEvent(db, {
-        tenantId,
-        actor,
-        op: 'policy_close',
-        targetId: String(id),
-        metadata: { policy_id: id },
-      });
-
-      db.exec('COMMIT');
-      const closed = rowToPolicy(row);
-      // Closing removes the object from the graph. Remove its rows DIRECTLY (deterministic),
-      // not only via an enqueued rebuild whose queue item is lost if the mirror is later
-      // forgotten (the queue row cascade-deletes with the memory), which would leave the closed
-      // object stale and could block that forget (codex P1). Still enqueue when a mirror exists
-      // so a concurrent rebuild re-derives consistently (harmless if it also runs).
-      removeGraphEntitiesForObject(hippoRoot, tenantId, 'policy', closed.id);
-      if (closed.memoryId) {
-        markGraphDirty(hippoRoot, tenantId, closed.memoryId);
-      }
-      return closed;
-    } catch (e) {
-      try {
-        db.exec('ROLLBACK');
-      } catch {
-        // Ignore rollback failures — the throw below is what matters.
-      }
-      throw e;
-    }
-  } finally {
-    closeHippoDb(db);
-  }
+  return onHandle(hippoRoot, (db) => {
+    const closed = closeObjectOn(db, POLICY, tenantId, id, { actor, now });
+    dropClosedObjectFromGraph(hippoRoot, POLICY, tenantId, closed);
+    return closed;
+  });
 }
 
 export function loadPolicyById(
@@ -477,17 +300,8 @@ export function loadPolicyById(
   tenantId: string,
   id: number,
 ): Policy | null {
-  assertTenantId('loadPolicyById', tenantId);
-  const db = openHippoDb(hippoRoot);
-  try {
-    // SAFETY: SELECT ${POLICY_COLS} projects exactly the PolicyRow columns;
-    // .get() returns that row, or undefined when the id/tenant pair doesn't exist.
-    const row = db.prepare(`SELECT ${POLICY_COLS} FROM policies WHERE id = ? AND tenant_id = ?`)
-      .get(id, tenantId) as PolicyRow | undefined;
-    return row ? rowToPolicy(row) : null;
-  } finally {
-    closeHippoDb(db);
-  }
+  assertTenantId(POLICY.fn.get, tenantId);
+  return onHandle(hippoRoot, (db) => loadObjectByIdOn(db, POLICY, tenantId, id));
 }
 
 export function loadPolicies(
@@ -495,40 +309,9 @@ export function loadPolicies(
   tenantId: string,
   opts: ListPoliciesOpts = {},
 ): Policy[] {
-  assertTenantId('loadPolicies', tenantId);
-  const limit = opts.limit ?? 100;
-  const after = keysetAfter('created_at', 'id', opts.after);
-  const db = openHippoDb(hippoRoot);
-  try {
-    let rows: PolicyRow[];
-    if (opts.status) {
-      if (!VALID_POLICY_STATES.has(opts.status)) {
-        throw new BadRequestError(
-          `loadPolicies: status must be one of ${Array.from(VALID_POLICY_STATES).join('|')}; got ${opts.status}`,
-        );
-      }
-      // SAFETY: SELECT ${POLICY_COLS} projects exactly the PolicyRow columns;
-      // .all() returns rows in that shape regardless of the status filter applied.
-      rows = db.prepare(`
-        SELECT ${POLICY_COLS} FROM policies
-        WHERE tenant_id = ? AND status = ?${after.sql}
-        ORDER BY created_at DESC, id DESC
-        LIMIT ?
-      `).all(tenantId, opts.status, ...after.params, limit) as PolicyRow[];
-    } else {
-      // SAFETY: SELECT ${POLICY_COLS} projects exactly the PolicyRow columns;
-      // .all() returns rows in that shape for every tenant-scoped row.
-      rows = db.prepare(`
-        SELECT ${POLICY_COLS} FROM policies
-        WHERE tenant_id = ?${after.sql}
-        ORDER BY created_at DESC, id DESC
-        LIMIT ?
-      `).all(tenantId, ...after.params, limit) as PolicyRow[];
-    }
-    return rows.map(rowToPolicy);
-  } finally {
-    closeHippoDb(db);
-  }
+  assertTenantId(POLICY.fn.list, tenantId);
+  assertObjectStatus(POLICY, opts.status);
+  return onHandle(hippoRoot, (db) => loadObjectsOn(db, POLICY, tenantId, opts));
 }
 
 export function loadActivePolicies(
@@ -550,21 +333,20 @@ export function loadActivePolicies(
  *  - `superseded` rows that cover T BUT whose successor was not yet effective at T
  *    (successor.valid_from > asOf) - i.e. an earlier version that was genuinely in
  *    force then. This is the core valid-time correctness: a Jan-Jun policy
- *    superseded in May is still the answer for `asof March`. (codex review
- *    2026-05-30, P2 #2: filtering on status='active' alone dropped historically-
- *    valid superseded versions, conflating transaction-time with valid-time. The
- *    successor-aware filter mirrors the existing recall-history.ts asOf pattern.)
+ *    superseded in May is still the answer for `asof March`. Filtering on
+ *    status='active' alone would conflate transaction-time with valid-time; the
+ *    successor-aware filter mirrors the existing recall-history.ts asOf pattern.
  *
  * `closed` rows are EXCLUDED: closing is a deliberate transaction-time retirement,
  * and resurrecting closed policies for a historical valid-time is full
  * transaction-time-travel (deferred). Returns an ARRAY (overlapping same-name
  * ranges are allowed in v1). Optionally filtered to one policy_name.
  *
- * Date-only `asOfDate` (e.g. "2026-05-30", no time component) resolves to the END
+ * Date-only `asOfDate` (YYYY-MM-DD, no time component) resolves to the END
  * of that UTC day (23:59:59.999Z), so "as of [day D]" includes a policy that
  * became effective at any instant during D - this is the read-side fix for the
- * common create-then-asof-today workflow, keeping the stored valid_from honest
- * (codex review 2026-05-30). A full datetime asOf is used as the precise instant.
+ * common create-then-asof-today workflow, keeping the stored valid_from honest.
+ * A full datetime asOf is used as the precise instant.
  */
 export function loadPoliciesAsOf(
   hippoRoot: string,

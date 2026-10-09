@@ -6,6 +6,9 @@
  * one left off.
  */
 
+import { isJsonString, type JsonValue } from './json.js';
+import { warnDamagedColumn } from './util/stored-json.js';
+
 /** Terminal state of a handoff's session, denormalized from its `session_complete` event. */
 export type HandoffOutcome = 'success' | 'failure' | 'partial';
 
@@ -65,37 +68,53 @@ export function formatHandoffEvidenceLine(evidence: HandoffEvidence): string {
   return `git ${gitRef}, tree ${tree}, tests ${tests}`;
 }
 
+const TEST_STATUSES: ReadonlySet<JsonValue> = new Set(['pass', 'fail', 'unknown']);
+
+const absent = (v: JsonValue | undefined): v is null | undefined => v === undefined || v === null;
+
+function isHandoffEvidence(v: JsonValue): v is JsonValue & HandoffEvidence {
+  if (!(v instanceof Object) || Array.isArray(v)) return false;
+  const { gitRef, dirtyTree, testStatus, derivedFrom } = v;
+  return (absent(gitRef) || isJsonString(gitRef))
+    && (absent(dirtyTree) || dirtyTree === true || dirtyTree === false)
+    && (absent(testStatus) || TEST_STATUSES.has(testStatus))
+    && (derivedFrom === undefined || derivedFrom === 'transcript');
+}
+
+/** A stored list column as strings; a damaged one logs and reads as empty instead of hiding the whole handoff. */
+function storedList(row: SessionHandoffRow, column: 'artifacts_json' | 'constraints_json'): string[] {
+  const raw = row[column];
+  if (!raw) return [];
+  try {
+    const parsed: JsonValue = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.map((item) => String(item)) : [];
+  } catch {
+    warnDamagedColumn({ table: 'session_handoffs', id: row.id, column }, 'not valid JSON');
+    return [];
+  }
+}
+
+/** Stored evidence, or null (after a log line) when the column is damaged or holds another shape. */
+function storedEvidence(row: SessionHandoffRow): HandoffEvidence | null {
+  if (!row.evidence_json) return null;
+  const site = { table: 'session_handoffs', id: row.id, column: 'evidence_json' };
+  let parsed: JsonValue;
+  try {
+    parsed = JSON.parse(row.evidence_json);
+  } catch {
+    warnDamagedColumn(site, 'not valid JSON');
+    return null;
+  }
+  if (parsed === null) return null;
+  if (isHandoffEvidence(parsed)) return parsed;
+  warnDamagedColumn(site, 'wrong shape');
+  return null;
+}
+
 export function rowToSessionHandoff(row: SessionHandoffRow): SessionHandoff {
-  let artifacts: string[] = [];
-  try {
-    const parsed = JSON.parse(row.artifacts_json);
-    if (Array.isArray(parsed)) {
-      artifacts = parsed.map((item) => String(item));
-    }
-  } catch {
-    // A corrupt column degrades to empty instead of hiding the whole handoff.
-    artifacts = [];
-  }
-
-  let constraints: string[] = [];
-  try {
-    const parsed = row.constraints_json ? JSON.parse(row.constraints_json) : [];
-    if (Array.isArray(parsed)) {
-      constraints = parsed.map((item) => String(item));
-    }
-  } catch {
-    // Same degrade-to-empty rule as artifacts.
-    constraints = [];
-  }
-
-  let evidence: HandoffEvidence | null = null;
-  try {
-    // SAFETY: catch below falls back to null on malformed JSON, so a wrong shape never escapes.
-    evidence = row.evidence_json ? (JSON.parse(row.evidence_json) as HandoffEvidence) : null;
-  } catch {
-    // Same degrade rule as artifacts: bad evidence reads as none.
-    evidence = null;
-  }
+  const artifacts = storedList(row, 'artifacts_json');
+  const constraints = storedList(row, 'constraints_json');
+  const evidence = storedEvidence(row);
 
   return {
     version: 1,

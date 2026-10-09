@@ -1,13 +1,29 @@
 // /v1/customer-notes routes.
-import { closeCustomerNote, loadCustomerNoteById, loadCustomerNotes, type NoteStatus, saveCustomerNote, VALID_NOTE_STATES } from '../../customer-notes.js';
-import { HttpError, sendJson } from '../../http-util.js';
-import type { KeysetPosition } from '../../keyset.js';
+import { closeCustomerNote, type CustomerNote, loadCustomerNoteById, loadCustomerNotes, MAX_CUSTOMER_LEN, type NoteStatus, saveCustomerNote, type SaveCustomerNoteOpts, VALID_NOTE_STATES } from '../../customer-notes.js';
+import { sendJson } from '../../http-util.js';
 import { buildContextWithAuth } from '../auth.js';
-import { byCreatedAt, pageOf, parseCursor } from '../cursor.js';
 import type { RouteRequest } from '../types.js';
-import { isJsonString, isSetMember, parseJsonBody, parseListLimit } from '../validation.js';
+import { parseJsonBody } from '../validation.js';
+import { closeRoute, getRoute, listRoute, optionalString, requiredString, supersedeRoute, type VersionedRouteConfig } from './object-routes.js';
 
-// ── E2 customer_note routes ──
+const noteRoutes: VersionedRouteConfig<CustomerNote, NoteStatus, SaveCustomerNoteOpts> = {
+  noun: 'customer note',
+  field: 'note',
+  listField: 'notes',
+  statuses: VALID_NOTE_STATES,
+  filterParam: 'customer',
+  list: (hippoRoot, tenantId, { status, filter, limit, after }) => loadCustomerNotes(hippoRoot, tenantId, { status, customer: filter, limit, after }),
+  get: loadCustomerNoteById,
+  close: closeCustomerNote,
+  save: saveCustomerNote,
+  revise: (body) => {
+    const note = requiredString(body, 'note', { max: 8192 });
+    const changeSummary = optionalString(body, 'changeSummary', 4096);
+    return (existing, id) => ({ customer: existing.customer, note, changeSummary, supersedesNoteId: id });
+  },
+};
+
+// ── customer_note routes ──
 //
 // 5 routes (no assembler/refresh): POST /v1/customer-notes (new; body customer +
 // note), GET /v1/customer-notes (list; status + customer filter; shared
@@ -18,111 +34,26 @@ import { isJsonString, isSetMember, parseJsonBody, parseListLimit } from '../val
 export async function handleCreateCustomerNote({ req, res, opts }: RouteRequest): Promise<void> {
   const ctx = await buildContextWithAuth(req, opts);
   const body = await parseJsonBody(req, ctx);
-  const customer = body['customer'];
-  if (!isJsonString(customer) || customer.trim().length === 0) {
-    throw new HttpError(400, 'customer is required (non-empty string)');
-  }
-  if (customer.length > 256) {
-    throw new HttpError(400, 'customer exceeds 256-character cap');
-  }
-  const note = body['note'];
-  if (!isJsonString(note) || note.trim().length === 0) {
-    throw new HttpError(400, 'note is required (non-empty string)');
-  }
-  if (note.length > 8192) {
-    throw new HttpError(400, 'note exceeds 8192-character cap');
-  }
   const customerNote = saveCustomerNote(opts.hippoRoot, ctx.tenantId, {
-    customer,
-    note,
+    customer: requiredString(body, 'customer', { max: MAX_CUSTOMER_LEN }),
+    note: requiredString(body, 'note', { max: 8192 }),
   }, ctx.actor.subject);
   sendJson(res, 201, { note: customerNote });
   return;
 }
 
-// Named list-opts shape for GET /v1/customer-notes (see the matching
-// ProjectBriefListOpts comment above: named interfaces are exempt from
-// no-known-value-widening, inline anonymous object types are not).
-interface CustomerNoteListOpts {
-  status?: NoteStatus;
-  customer?: string;
-  limit: number;
-  after?: KeysetPosition;
+export function handleListCustomerNotes(rr: RouteRequest): Promise<void> {
+  return listRoute(noteRoutes, rr);
 }
 
-export async function handleListCustomerNotes({ req, res, opts, query }: RouteRequest): Promise<void> {
-  const status = query.get('status') ?? 'all';
-  const customerFilter = query.get('customer');
-  const limit = parseListLimit(query.get('limit'));
-  const after = parseCursor(query.get('cursor'), 'string', 'integer');
-  const ctx = await buildContextWithAuth(req, opts);
-  const listOpts: CustomerNoteListOpts = { limit: limit + 1, after };
-  if (customerFilter !== null && customerFilter.trim().length > 0) {
-    listOpts.customer = customerFilter.trim();
-  }
-  if (status !== 'all') {
-    if (!isSetMember(VALID_NOTE_STATES, status)) {
-      throw new HttpError(400, `status must be one of: active | superseded | closed | all (got "${status}")`);
-    }
-    listOpts.status = status;
-  }
-  const notes = loadCustomerNotes(opts.hippoRoot, ctx.tenantId, listOpts);
-  const page = pageOf(notes, limit, byCreatedAt);
-  sendJson(res, 200, { notes: page.items, next_cursor: page.nextCursor });
-  return;
+export function handleSupersedeCustomerNote(rr: RouteRequest, match: RegExpMatchArray): Promise<void> {
+  return supersedeRoute(noteRoutes, rr, match);
 }
 
-export async function handleSupersedeCustomerNote({ req, res, opts }: RouteRequest, noteSupersedeMatch: RegExpMatchArray): Promise<void> {
-  const id = parseInt(noteSupersedeMatch[1], 10);
-  const ctx = await buildContextWithAuth(req, opts);
-  const body = await parseJsonBody(req, ctx);
-  const note = body['note'];
-  if (!isJsonString(note) || note.trim().length === 0) {
-    throw new HttpError(400, 'note is required (non-empty string)');
-  }
-  if (note.length > 8192) {
-    throw new HttpError(400, 'note exceeds 8192-character cap');
-  }
-  const changeRaw = body['changeSummary'];
-  let changeSummary: string | undefined;
-  if (changeRaw !== undefined && changeRaw !== null) {
-    if (!isJsonString(changeRaw)) {
-      throw new HttpError(400, 'changeSummary must be a string');
-    }
-    if (changeRaw.length > 4096) {
-      throw new HttpError(400, 'changeSummary exceeds 4096-character cap');
-    }
-    changeSummary = changeRaw;
-  }
-  const existing = loadCustomerNoteById(opts.hippoRoot, ctx.tenantId, id);
-  if (!existing) {
-    throw new HttpError(404, `customer note ${id} not found`);
-  }
-  const customerNote = saveCustomerNote(opts.hippoRoot, ctx.tenantId, {
-    customer: existing.customer,
-    note,
-    changeSummary,
-    supersedesNoteId: id,
-  }, ctx.actor.subject);
-  sendJson(res, 200, { note: customerNote });
-  return;
+export function handleCloseCustomerNote(rr: RouteRequest, match: RegExpMatchArray): Promise<void> {
+  return closeRoute(noteRoutes, rr, match);
 }
 
-export async function handleCloseCustomerNote({ req, res, opts }: RouteRequest, noteCloseMatch: RegExpMatchArray): Promise<void> {
-  const id = parseInt(noteCloseMatch[1], 10);
-  const ctx = await buildContextWithAuth(req, opts);
-  const customerNote = closeCustomerNote(opts.hippoRoot, ctx.tenantId, id, ctx.actor.subject);
-  sendJson(res, 200, { note: customerNote });
-  return;
-}
-
-export async function handleGetCustomerNote({ req, res, opts }: RouteRequest, noteByIdMatch: RegExpMatchArray): Promise<void> {
-  const id = parseInt(noteByIdMatch[1], 10);
-  const ctx = await buildContextWithAuth(req, opts);
-  const customerNote = loadCustomerNoteById(opts.hippoRoot, ctx.tenantId, id);
-  if (!customerNote) {
-    throw new HttpError(404, `customer note ${id} not found`);
-  }
-  sendJson(res, 200, { note: customerNote });
-  return;
+export function handleGetCustomerNote(rr: RouteRequest, match: RegExpMatchArray): Promise<void> {
+  return getRoute(noteRoutes, rr, match);
 }
