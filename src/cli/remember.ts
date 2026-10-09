@@ -113,8 +113,7 @@ function parseRememberEnvelope(flags: CliFlags): RememberEnvelope {
   return { kind, owner, artifactRef, scope };
 }
 
-/** @internal Exported so tests/remember-origin-parity.test.ts runs the real direct write; not a stable public API. */
-export async function cmdRemember(
+async function cmdRemember(
   hippoRoot: string,
   text: string,
   flags: CliFlags

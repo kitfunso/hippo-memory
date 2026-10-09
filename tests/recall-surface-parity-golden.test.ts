@@ -8,7 +8,8 @@ import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { cmdRecall, __resetSessionRecallHistoryCli } from '../src/cli/recall.js';
+import { cmdRecall } from '../src/cli/recall.js';
+import { resetSessionRings } from '../src/api/recall-record.js';
 import { handleMcpRequest, __resetSessionRecallHistoryMcp, type McpResponse } from '../src/mcp/server.js';
 import { serve, __resetSessionRecallHistoryHttp, type ServerHandle } from '../src/server.js';
 import { retrieve, RecallContractError, type RecallResult } from '../src/api.js';
@@ -132,7 +133,7 @@ describe('recall surface parity goldens', () => {
     vi.stubEnv('HIPPO_FAKE_NOW', FAKE_NOW);
     vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
     _resetAblationCacheForTests();
-    __resetSessionRecallHistoryCli();
+    resetSessionRings('cli');
     __resetSessionRecallHistoryMcp();
     __resetSessionRecallHistoryHttp();
   });
