@@ -356,16 +356,21 @@ export interface VaultRawRow {
   scope: string | null;
 }
 
-/** Live raw rows whose artifact_ref matches a LIKE pattern, for one tenant. */
-export function selectVaultRawRows(db: DatabaseSyncLike, likeParam: string, tenantId: string): VaultRawRow[] {
-  // SAFETY: query selects exactly the columns of VaultRawRow, in the same
-  // names, from the memories table this module owns.
-  return db
-    .prepare(
-      `SELECT id, artifact_ref, tags_json, scope FROM memories
+/** Live raw rows whose artifact_ref matches a LIKE pattern, for one tenant; the store is set up first when it is new. */
+export function loadVaultRawRows(hippoRoot: string, likeParam: string, tenantId: string): VaultRawRow[] {
+  const db = openStore(hippoRoot);
+  try {
+    // SAFETY: query selects exactly the columns of VaultRawRow, in the same
+    // names, from the memories table this module owns.
+    return db
+      .prepare(
+        `SELECT id, artifact_ref, tags_json, scope FROM memories
            WHERE artifact_ref LIKE ? ESCAPE '\\' AND tenant_id = ? AND kind = 'raw'`,
-    )
-    .all(likeParam, tenantId) as VaultRawRow[];
+      )
+      .all(likeParam, tenantId) as VaultRawRow[];
+  } finally {
+    closeHippoDb(db);
+  }
 }
 
 export interface PreviewRow {
