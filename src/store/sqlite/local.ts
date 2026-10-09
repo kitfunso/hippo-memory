@@ -1,5 +1,5 @@
 // What only hippo.db does: operations no port method covers, so they never run on another store.
-import type { ArchiveOpts } from '../../raw-archive.js';
+import type { ArchiveOpts } from '../raw-archive.js';
 import { strengthenRetrieved, type WriteEntryOptions } from '../entry-writes.js';
 import { loadLastRecall, saveIndex } from '../index-and-stats.js';
 import { changeScopeGrantAt, type ScopeGrantChange } from '../key-writes.js';

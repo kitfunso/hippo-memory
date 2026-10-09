@@ -26,7 +26,7 @@ import { resolveProjectIdentity } from '../project-identity.js';
 import { getGlobalRoot, initGlobal } from '../shared.js';
 import { DAILY_TASK_NAME, buildDailyRunnerCommand, buildSchtasksCreateArgs, buildWindowsTaskRun } from '../scheduler.js';
 import { sanitizeLogMessage } from '../capture/compact.js';
-import { type AuditOp, appendAuditEvent, reportAuditWriteFailure } from '../audit.js';
+import { type AuditOp, appendAuditEvent, reportAuditWriteFailure } from '../store/audit.js';
 import * as client from './client.js';
 import { type ServerInfo, detectServer, removePidfileIfOwned } from '../server-detect.js';
 import { resolveTenantId } from '../tenant.js';
@@ -371,6 +371,11 @@ export function parseListLimit(flags: CliFlags): number {
 export function stringFlag(flags: CliFlags, name: string): string | undefined {
   const v = flags[name];
   return typeof v === 'string' ? v : undefined;
+}
+
+// An empty value reads as absent, so `--change ""` keeps the default.
+export function nonEmptyStringFlag(flags: CliFlags, name: string): string | undefined {
+  return stringFlag(flags, name) || undefined;
 }
 
 export function numberFlag(flags: CliFlags, name: string): number | undefined {

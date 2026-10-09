@@ -1,20 +1,21 @@
 // The built-in SQLite adapter behind the store port.
-import { loadAmbientTallies } from '../../ambient-store.js';
-import { listApiKeyRows, readApiKeyRecord } from '../../auth.js';
+import { loadAmbientTallies } from '../ambient.js';
+import { listApiKeyRows, readApiKeyRecord } from '../auth.js';
 import { existsSync } from 'node:fs';
-import { appendAuditEvent, listAuditEventsAfter, queryAuditEvents } from '../../audit.js';
+import { appendAuditEvent, listAuditEventsAfter, queryAuditEvents } from '../audit.js';
 import { getHippoDbPath, withWriteScope } from '../../db.js';
 import { embeddingIndexStateAt, loadStoredVectors } from '../../embeddings.js';
-import { activeGoalsWithPolicies, localGoalRecallRows, writeGoalRecallLog } from '../../goals.js';
+import { activeGoalsWithPolicies, localGoalRecallRows, writeGoalRecallLog } from '../goals.js';
 import { loadPhysicsState } from '../../db/physics-state.js';
 import { planningFallacyEvidenceAt } from '../planning-fallacy-evidence.js';
-import { writeRecallTrace } from '../../recall-trace.js';
+import { writeRecallTrace } from '../recall-trace.js';
 import { recordTokenUse } from '../../token-ledger.js';
 import { loadAmbientCandidates, loadContextCandidates } from '../candidates.js';
 import { loadEntriesByIds, loadFreshRawMemories } from '../entry-reads.js';
 import { strengthenRetrievedInOwnTx } from '../entry-writes.js';
 import { sqliteDagReads } from './dag-reads-group.js';
 import { sqliteEntryWrites } from './entry-writes-group.js';
+import { servedGraphReads, sqliteGraphReads } from './graph-reads-group.js';
 import { servedPredictions, sqlitePredictions } from './predictions-group.js';
 import { servedQuarantine, sqliteQuarantine } from './quarantine-group.js';
 import { loadLatestHandoff } from '../handoffs.js';
@@ -102,6 +103,7 @@ export function sqliteSyncStore(hippoRoot: string): SqliteSyncStore & Sync<Omit<
       },
     },
     quarantine: sqliteQuarantine(hippoRoot),
+    graphReads: sqliteGraphReads(hippoRoot),
     readiness: {
       ping() {
         // A probe must not create the store; the first write does, so a root with none yet is ready.
@@ -168,6 +170,7 @@ export function sqliteStore(hippoRoot: string): HippoStore & StoreGroups {
       listAuditEvents: async (query) => auditLog.listAuditEvents(query),
     },
     quarantine: servedQuarantine(sync.quarantine),
+    graphReads: servedGraphReads(sync.graphReads),
     readiness: { ping: async () => sync.readiness.ping() },
     close: async () => sync.close(),
   };

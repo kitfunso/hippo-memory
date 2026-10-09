@@ -4,7 +4,7 @@ import { ForbiddenError, NotFoundError } from '../api-errors.js';
 import {
   mintApiKey,
   type ApiKeyListItem, type ApiKeyListRow, type ApiKeyRecord, type ListApiKeysOpts, type NewApiKey,
-} from '../auth.js';
+} from '../store/auth.js';
 import type { KeysetPosition } from '../keyset.js';
 import type { KeyMint, SelfKeyMint } from '../store-port.js';
 import { changeScopeGrant } from '../store/sqlite/local.js';

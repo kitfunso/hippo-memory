@@ -21,7 +21,7 @@ import {
   loadCardComments,
   transitionCard,
   loadLatestHandoffForCard,
-} from '../src/store-cards.js';
+} from '../src/store/cards.js';
 import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, type DatabaseSyncLike } from '../src/db.js';
 import { CARD_TRANSITIONS, type CardStatus } from '../src/card.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';

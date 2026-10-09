@@ -20,6 +20,12 @@ function positiveInt(name: string): number | undefined {
   return parsed > 0 ? parsed : undefined;
 }
 
+/** parseInt, kept from zero up, for a setting whose 0 means off. */
+function nonNegativeInt(name: string): number | undefined {
+  const parsed = Number.parseInt(raw(name) ?? '', 10);
+  return parsed >= 0 ? parsed : undefined;
+}
+
 /** Trimmed, with an empty or whitespace-only value read as unset. */
 function trimmed(name: string): string | undefined {
   return raw(name)?.trim() || undefined;
@@ -106,6 +112,10 @@ export function envV1Rps(): string | undefined { return raw('HIPPO_V1_RPS'); }
 export function envBodyTimeoutMs(): number | undefined { return positiveInt('HIPPO_BODY_TIMEOUT_MS'); }
 /** How long POST /v1/sleep lets its consolidation run; server/sleep-offload.ts holds the default. */
 export function envSleepTimeoutMs(): number | undefined { return positiveInt('HIPPO_SLEEP_TIMEOUT_MS'); }
+/** How long a /v1 or /mcp request may run before the server answers 504, 0 for no deadline; server/deadline.ts holds the default. */
+export function envRequestDeadlineMs(): number | undefined { return nonNegativeInt('HIPPO_REQUEST_DEADLINE_MS'); }
+/** How many store calls may wait for one worker thread before the next is refused; store/sqlite/executor.ts holds the default. */
+export function envStoreQueueMax(): number | undefined { return positiveInt('HIPPO_STORE_QUEUE_MAX'); }
 /** How long the daily runner lets one child `hippo` step run; cli/setup.ts holds the default. */
 export function envDailyStepTimeoutMs(): number | undefined { return positiveInt('HIPPO_DAILY_STEP_TIMEOUT_MS'); }
 export function envApiKey(): string | undefined { return raw('HIPPO_API_KEY'); }

@@ -3,8 +3,8 @@
 import { cpSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { appendAuditEvent, listAuditEventsAfter, type AuditEvent } from '../../src/audit.js';
-import { createApiKey, revokeApiKey, type CreateApiKeyResult } from '../../src/auth.js';
+import { appendAuditEvent, listAuditEventsAfter, type AuditEvent } from '../../src/store/audit.js';
+import { createApiKey, revokeApiKey, type CreateApiKeyResult } from '../../src/store/auth.js';
 import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../../src/db.js';
 import { requireGroup, sqliteStore, type HippoStore, type StoreGroups } from '../../src/store-port.js';
 import { initStore } from '../../src/store/open.js';

@@ -25,6 +25,7 @@ import { replaceDetectedConflicts, resolveConflict, listMemoryConflicts } from '
 import { deduplicateStore } from '../src/dedupe.js';
 import { buildDag } from '../src/dag.js';
 import { buildMemoryDetail } from '../src/dashboard/dashboard-queries.js';
+import { createSnapshotService } from '../src/dashboard/dashboard-snapshot.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
 import { writeSessionDigest } from '../src/session-digest.js';
 
@@ -121,6 +122,48 @@ describe('drillDown', () => {
       expect('failure' in result ? result.failure : result.totalChildren).toBe(2 * n);
       expect(countMatching(statements, STORE_OPEN)).toBe(1);
       expect(countMatching(statements, ROW_READ)).toBe(3);
+    }
+  });
+
+  it('reads whole rows for the page only, however many children the summary has', async () => {
+    const read: number[] = [];
+    for (const n of SIZES) {
+      const root = freshRoot('qc-drill-page');
+      const summary = memory('summary of the zephyrine cache work', { dag_level: 2, layer: Layer.Semantic });
+      // Newest first on disk, so the page is the oldest five only if the read sorts by created.
+      const children = Array.from({ length: n }, (_, i) => memory(`child ${i} of the zephyrine cache`, {
+        dag_level: 1, dag_parent_id: summary.id, created: new Date(Date.UTC(2026, 0, 1, 0, 0, n - i)).toISOString(),
+      }));
+      seed(root, [summary, ...children]);
+      const { result, rowsRead } = await recordStatementsAsync(() => drillDown(ctxFor(root), summary.id, { limit: 5 }));
+      if ('failure' in result) throw new Error(result.failure);
+      expect(result.children.map((c) => c.id)).toEqual(children.slice(-5).reverse().map((c) => c.id));
+      expect({ total: result.totalChildren, truncated: result.truncated }).toEqual({ total: n, truncated: true });
+      read.push(rowsRead);
+    }
+    expect(read[1]).toBe(read[0]);
+  });
+
+  it('finds children through the parent index, with a page and without one', async () => {
+    const root = freshRoot('qc-drill-plan');
+    const summary = memory('summary of the zephyrine cache work', { dag_level: 2, layer: Layer.Semantic });
+    const mids = rows(3, 'mid', { dag_level: 1, dag_parent_id: summary.id });
+    seed(root, [summary, ...mids, ...mids.map((m, i) => memory(`leaf ${i}`, { dag_level: 0, dag_parent_id: m.id }))]);
+    const { statements } = await recordStatementsAsync(async () => {
+      await drillDown(ctxFor(root), summary.id, { depth: 2, limit: 4 });
+      await drillDown(ctxFor(root), summary.id, { depth: 2, limit: Number.POSITIVE_INFINITY });
+    });
+    const childReads = [...new Set(statements.filter((sql) => sql.includes('WHERE dag_parent_id IN (')))];
+    expect(childReads.length).toBeGreaterThanOrEqual(5);
+    const db = openStore(root);
+    try {
+      for (const sql of childReads) {
+        // SAFETY: EXPLAIN QUERY PLAN answers one row per step, its text in `detail`.
+        const plan = (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all() as Array<{ detail: string }>).map((step) => step.detail);
+        expect(plan[0], sql).toBe('SEARCH memories USING INDEX idx_memories_dag_parent (dag_parent_id=?)');
+      }
+    } finally {
+      closeHippoDb(db);
     }
   });
 });
@@ -416,6 +459,27 @@ describe('buildMemoryDetail', () => {
       return [countMatching(statements, STORE_OPEN), countMatching(statements, ROW_READ)];
     });
     expect(work[1]).toEqual(work[0]);
+  });
+});
+
+describe('the dashboard snapshot build', () => {
+  it('reads no whole row, and no row at all for a memory it leaves out', () => {
+    const read: number[] = [];
+    for (const n of SIZES) {
+      const root = freshRoot('qc-dash-build');
+      seed(root, [...rows(4, 'live'), ...rows(n, 'archived', { kind: 'archived' }), ...rows(n, 'replaced', { kind: 'superseded' })]);
+      const service = createSnapshotService(root, () => Date.now());
+      try {
+        const { result, statements, rowsRead } = recordStatements(() => service.get('default'));
+        expect(result.facts).toHaveLength(4);
+        expect(result.excluded).toEqual({ superseded: n, archived: n, quarantined: 0 });
+        expect(countMatching(statements, ROW_READ)).toBe(0);
+        read.push(rowsRead);
+      } finally {
+        service.close();
+      }
+    }
+    expect(read[1]).toBe(read[0]);
   });
 });
 

@@ -1,6 +1,6 @@
 // The recall session rings and the recall audit rows, in one place for the CLI, MCP and HTTP surfaces.
 import { isRecallBoostAblated } from '../ablation.js';
-import { auditQueryFields, type AppendAuditOpts, type AuditOp } from '../audit.js';
+import { auditQueryFields, type AppendAuditOpts, type AuditOp } from '../store/audit.js';
 import type { AvailabilityHint } from '../availability.js';
 import {
   appendRecall,

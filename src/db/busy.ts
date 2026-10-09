@@ -61,6 +61,17 @@ export function withWriteScope<T>(db: DatabaseSyncLike, name: string, fn: () => 
   }
 }
 
+/** Runs the reads in `fn` against one snapshot, so two statements cannot straddle another process's write. */
+export function withReadSnapshot<T>(db: DatabaseSyncLike, fn: () => T): T {
+  if (db.isTransaction !== false) return fn();
+  db.exec('BEGIN');
+  try {
+    return fn();
+  } finally {
+    db.exec('COMMIT');
+  }
+}
+
 /** What `withWriteScopeOr` hands its callback's `rollback(value)`; a class so no stored value can pass for one. */
 class RolledBack<V> {
   readonly value: V;

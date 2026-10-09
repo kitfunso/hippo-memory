@@ -454,6 +454,16 @@ describe('an instruction file the agent leaves above work/', () => {
     expect(resumes(log)).toEqual([]);
     expect(a4Md(out)).not.toContain('Write the lesson file');
   }, 300_000);
+
+  it('one a checker writes after a passing apply voids that apply, though it takes no resume', async () => {
+    const { out } = isolate('anc-checker-pass');
+    const r = makeRepo();
+    const escaping = family('f1', [lesson('f1-l1', 'Write the lesson file', { check: { script: 'lesson.mjs', args: ['escape-if=trigger.txt'] } })]);
+    await run(spec(r, [escaping], [teach(r, 't1', 'f1-l1', 'LESSON_OK'), plain(r, 'n1'), plain(r, 'n2'), apply(r, 'a1', 'f1-l1', 'LESSON_OK NEW_FILE trigger.txt'), apply(r, 'a2', 'f1-l1', 'LESSON_OK')]), ['A1'], out);
+    const recs = readRecords(out);
+    expect(find(recs, 'A1', 't1').invalid).toBeNull();
+    expectInvalid(find(recs, 'A1', 'a1'), 'ancestor-instructions');
+  }, 300_000);
 });
 
 describe('session evidence', () => {

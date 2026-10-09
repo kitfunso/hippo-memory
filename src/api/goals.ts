@@ -4,7 +4,7 @@ import { ForbiddenError } from '../api-errors.js';
 import {
   completeGoal, getActiveGoals, getSessionGoals, pushGoal, resumeGoal, suspendGoal,
   type CompleteGoalOpts, type Goal, type PushGoalOpts,
-} from '../goals.js';
+} from '../store/goals.js';
 import type { Context } from './types.js';
 
 /** What a new goal carries; its tenant is always the caller's. */

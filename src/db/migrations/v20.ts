@@ -6,7 +6,7 @@ export const v20: Migration = {
     up: (db) => {
       // GDPR Path A backfill: redact every existing
       // raw_archive.payload_json so historical archives match the new
-      // metadata-only contract from src/raw-archive.ts. Read each row, parse
+      // metadata-only contract from src/store/raw-archive.ts. Read each row, parse
       // the existing JSON to extract tenant_id and kind (best effort), then
       // UPDATE with the redacted shape. Rows with unparseable legacy JSON get
       // redacted with tenant_id='unknown', kind='unknown'. The audit_log

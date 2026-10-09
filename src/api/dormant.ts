@@ -6,7 +6,7 @@ import { auditRejectionRefusal } from '../store/audit-event.js';
 import { stampOriginProject } from '../store/entry-row.js';
 import { writeEntryDbOnly, writeEntryMirrors } from '../store/entry-writes.js';
 import { updateStatsUnlessBusy } from '../store/index-and-stats.js';
-import { RejectedValueError } from '../rejection.js';
+import { RejectedValueError } from '../store/rejection.js';
 import {
   listDormantRows,
   readDormantSnapshot,
@@ -14,9 +14,9 @@ import {
   hasDormantRow,
   type DormantMemory,
   type ListDormantOpts,
-} from '../dormant.js';
+} from '../store/dormant.js';
 import { createMemory, calculateStrength, type MemoryEntry } from '../memory.js';
-import { appendAuditEvent, reportAuditWriteFailure } from '../audit.js';
+import { appendAuditEvent, reportAuditWriteFailure } from '../store/audit.js';
 import { loadConfig } from '../config.js';
 import { canTouchScope, personalScopeOf, touchableScopeSql, type SqlFragment } from '../recall-scope.js';
 import type { Context } from './types.js';
@@ -25,7 +25,7 @@ import { DAY_MS } from '../util/time.js';
 const touchable = (ctx: Context): SqlFragment => touchableScopeSql('', personalScopeOf(ctx.actor));
 
 /**
- * A tenant's dormant memories (src/dormant.ts): what sleep moved out of
+ * A tenant's dormant memories (src/store/dormant.ts): what sleep moved out of
  * active memory instead of deleting, when `dormant.enabled` is on. Newest
  * first; `opts.query` keeps rows containing every term (case-insensitive).
  */

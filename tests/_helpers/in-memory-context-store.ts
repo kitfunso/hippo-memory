@@ -1,6 +1,6 @@
 // A store other than hippo.db for the ContextReads group: it copies the rows getContext reads out of hippo.db, then answers
 // each read from memory with the rules hippo-memory/server exports, so a test shows another store can match hippo.db's SQL.
-import { listAuditEventsAfter } from '../../src/audit.js';
+import { listAuditEventsAfter } from '../../src/store/audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db.js';
 import { rowToSessionHandoff, type SessionHandoffRow } from '../../src/handoff.js';
 import {

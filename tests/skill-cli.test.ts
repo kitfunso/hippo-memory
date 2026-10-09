@@ -67,6 +67,10 @@ describe('hippo skill CLI', () => {
     expect(run(env, ['skill', 'export'])).toContain('No active skills');
   });
 
+  it('list rejects an unknown --status and names the allowed values', () => {
+    expect(() => run(env, ['skill', 'list', '--status', 'bogus'])).toThrow(/Invalid --status: "bogus"\. Must be one of: active \| superseded \| closed \| all\./);
+  });
+
   it('rejects a malformed id and does NOT mutate the wrong row (codex P2 regression)', () => {
     run(env, ['skill', 'new', 'still active', '--instructions', 'x']); // becomes #1
     expect(() => run(env, ['skill', 'close', '1abc'])).toThrow();

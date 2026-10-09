@@ -13,19 +13,10 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { deleteEntry } from '../src/store/delete-and-batch.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import {
-  insertEntity,
-  insertRelation,
-  enqueueExtraction,
-  markExtractionProcessed,
-} from '../src/graph/write.js';
-import {
-  loadEntityById,
-  loadEntities,
-  loadRelations,
-  loadExtractionQueue,
-} from '../src/graph/read.js';
-import { MAX_ENTITY_NAME_LEN } from '../src/graph/types.js';
+import { insertEntity, insertRelation } from '../src/store/graph-writes.js';
+import { enqueueExtraction, markExtractionProcessed, loadExtractionQueue } from '../src/store/graph-queue.js';
+import { loadEntityById, loadEntities, loadRelations } from '../src/store/graph-reads.js';
+import { MAX_ENTITY_NAME_LEN } from '../src/store/graph-rows.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 function safeRmSync(p: string): void {

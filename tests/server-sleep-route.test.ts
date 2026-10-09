@@ -23,7 +23,7 @@ import type { Context } from '../src/api.js';
 import { remember } from '../src/api.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { createApiKey } from '../src/auth.js';
+import { createApiKey } from '../src/store/auth.js';
 import { presentConnectionsAsRemote } from './_helpers/listen.js';
 import { makeRoot } from './_helpers/make-root.js';
 
@@ -214,6 +214,28 @@ describe('POST /v1/sleep', () => {
     lock.exec('ROLLBACK');
     closeHippoDb(lock);
     expect([busy.status, busy.headers.get('retry-after')]).toEqual([503, '1']);
+  });
+
+  it('refuses a third sleep at once with 503 and Retry-After 30 while one runs and one waits, then takes sleeps again', async () => {
+    remember({ hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } }, { content: 'a memory for the sleep to write' });
+    // Neither admitted sleep can finish while this lock is held, so the first reply back is the refusal.
+    const lock = openHippoDb(home);
+    lock.exec('BEGIN IMMEDIATE');
+    const sleeps = [postSleep(), postSleep(), postSleep()];
+    const refused = await Promise.race(sleeps);
+    const refusal = [refused.status, refused.headers.get('retry-after'), await jsonAs<{ error: string }>(refused)];
+    lock.exec('ROLLBACK');
+    closeHippoDb(lock);
+    const statuses = (await Promise.all(sleeps)).map((res) => res.status).sort();
+
+    expect(refusal).toEqual([503, '30', { error: 'a sleep is already running and another is waiting; retry when one has finished' }]);
+    expect(statuses).toEqual([200, 200, 503]);
+    expect((await postSleep()).status).toBe(200);
+  });
+
+  it('runs past the request deadline, which only its own HIPPO_SLEEP_TIMEOUT_MS ends', async () => {
+    vi.stubEnv('HIPPO_REQUEST_DEADLINE_MS', '1');
+    expect((await postSleep()).status).toBe(200);
   });
 
   it('stops a sleep at HIPPO_SLEEP_TIMEOUT_MS with 504 and leaves the store usable', async () => {

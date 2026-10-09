@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { assemble, recall, type Context } from '../src/api.js';
-import { createApiKey } from '../src/auth.js';
+import { createApiKey } from '../src/store/auth.js';
 import { _resetSharedStoreCacheForTests } from '../src/config.js';
 import { closeHippoDb, openHippoDb } from '../src/db.js';
 import { resolveEmbeddingProvider } from '../src/embedding-provider.js';

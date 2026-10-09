@@ -1,7 +1,7 @@
 /** Failure log: every failed tool call the capture-error hook sees, stored or not. */
-import { ConflictError } from './api-errors.js';
-import type { DatabaseSyncLike } from './db.js';
-import { DAY_MS } from './util/time.js';
+import { ConflictError } from '../api-errors.js';
+import type { DatabaseSyncLike } from '../db.js';
+import { DAY_MS } from '../util/time.js';
 
 /** Why a failure was not stored, or `stored`. */
 export type CaptureErrorOutcome = 'stored' | 'duplicate' | 'skipped-interrupt' | 'skipped-routine' | 'skipped-invalid';

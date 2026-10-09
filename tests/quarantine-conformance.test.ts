@@ -3,7 +3,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { cpSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { AuditEvent } from '../src/audit.js';
+import type { AuditEvent } from '../src/store/audit.js';
 import { closeHippoDb, openHippoDb } from '../src/db.js';
 import type { KeysetPosition } from '../src/keyset.js';
 import { sqliteStore } from '../src/store-port.js';

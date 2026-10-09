@@ -2,28 +2,16 @@
  * Graph observability and visualization, READ-ONLY over the entity/relation
  * graph.
  *
- * This module only READS the graph (`loadEntities` / `loadRelations`) and renders
+ * This module only READS the graph (through the store's graph reads) and renders
  * view-models; it issues no INSERT/UPDATE/DELETE, so `scripts/check-graph-writes.mjs`
  * stays green. Used by the CLI (`hippo graph show` / `hippo graph view`) and the
  * HTTP `GET /v1/graph` route, which all build the same `GraphModel`.
  */
 
-import {
-  loadEntities,
-  loadEntitiesByName,
-  loadEntitiesByIds,
-  loadRelations,
-  loadNeighborRelations,
-  loadRelationsAmong,
-  withGraphReadSnapshot,
-} from './graph/read.js';
-import {
-  type Entity,
-  type Relation,
-  type EntityType,
-  type RelationType,
-  type GraphTxDb,
-} from './graph/types.js';
+import { withGraphReadSnapshot } from './store/graph-reads.js';
+import { graphViewRows } from './store/graph-view-rows.js';
+import type { GraphRows } from './store/port.js';
+import type { EntityType, RelationType } from './store/graph-rows.js';
 
 export interface GraphNode {
   id: number;
@@ -46,26 +34,6 @@ export interface GraphModel {
 /** Default bound for the CLI viewer / show so an unbounded set is never laid out. */
 export const DEFAULT_VIEW_LIMIT = 500;
 
-type CanRead = (scope: string | null) => boolean;
-
-// graph/read.ts's IN-list chunk, so one statement stays far under SQLite's bound-parameter limit.
-const MEMORY_ID_CHUNK = 400;
-
-/** The items whose source memory `canRead` admits: a NULL memoryId has no scope to hide, and a missing memory fails closed. */
-function readableOnly<T extends { memoryId: string | null }>(db: GraphTxDb, tenantId: string, items: T[], canRead: CanRead | undefined): T[] {
-  if (!canRead) return items;
-  const ids = [...new Set(items.flatMap((i) => (i.memoryId === null ? [] : [i.memoryId])))];
-  const readable = new Set<string>();
-  for (let i = 0; i < ids.length; i += MEMORY_ID_CHUNK) {
-    const slice = ids.slice(i, i + MEMORY_ID_CHUNK);
-    // SAFETY: rows' shape matches the id and scope columns named in the SELECT.
-    const rows = db.prepare(`SELECT id, scope FROM memories WHERE +tenant_id = ? AND id IN (${slice.map(() => '?').join(',')})`)
-      .all(tenantId, ...slice) as Array<{ id: string; scope: string | null }>;
-    for (const r of rows) if (canRead(r.scope)) readable.add(r.id);
-  }
-  return items.filter((i) => i.memoryId === null || readable.has(i.memoryId));
-}
-
 /**
  * Build the view-model from the graph (reads only). With `opts.entity`, returns a
  * focus subgraph: every entity whose name === entity, plus their 1-hop neighbours,
@@ -78,70 +46,22 @@ export function buildGraphModel(
   opts: { entity?: string; limit?: number; canRead?: (scope: string | null) => boolean } = {},
 ): GraphModel {
   const limit = opts.limit ?? DEFAULT_VIEW_LIMIT;
+  // One read snapshot, so a concurrent graph rebuild cannot make the model mix old entity ids with new relation ids.
+  return withGraphReadSnapshot(hippoRoot, (db) => graphModelOf(graphViewRows(hippoRoot, db, tenantId, { entity: opts.entity, limit, canRead: opts.canRead })));
+}
 
-  // All reads run inside ONE read snapshot so a concurrent `graph extract` /
-  // sleep-drain rebuild can't make the model mix old entity ids with new relation
-  // ids. Every load* call below is passed the snapshot connection `db`.
-  return withGraphReadSnapshot(hippoRoot, (db) => {
-    let nodeEntities: Entity[];
-    let relations: Relation[];
-    let truncated: boolean;
-
-    if (opts.entity !== undefined) {
-      // Focus subgraph. (1) Query the named entity DIRECTLY (by name, not from a
-      // globally-capped list) so it is found even on a graph larger than `limit`.
-      // (2) A name can map to MANY entities (e.g. many notes for one customer), so
-      // cap the focus matches. (3) Discover 1-hop neighbours and cap the UNION to
-      // `limit` nodes. (4) Load ALL edges AMONG the union so neighbour-to-neighbour
-      // edges that don't touch the focus are included too.
-      const named = loadEntitiesByName(hippoRoot, tenantId, opts.entity, { limit }, db);
-      // A hidden focus must not answer through its neighbours that the name exists.
-      const focus = readableOnly(db, tenantId, named, opts.canRead);
-      if (focus.length === 0) return { nodes: [], edges: [], truncated: false };
-      const focusIds = focus.map((e) => e.id);
-      const hop = loadNeighborRelations(hippoRoot, tenantId, focusIds, { limit }, db);
-      const union = new Set<number>(focusIds);
-      let neighboursCapped = false;
-      for (const r of hop) {
-        if (union.size >= limit) {
-          neighboursCapped = true; // node cap filled before all neighbours were added
-          break;
-        }
-        union.add(r.fromEntityId);
-        union.add(r.toEntityId);
-      }
-      const unionIds = [...union].slice(0, limit);
-      nodeEntities = loadEntitiesByIds(hippoRoot, tenantId, unionIds, db);
-      // Edges AMONG the union (BOTH endpoints in the set): includes
-      // neighbour-to-neighbour edges, and the LIMIT can never drop a valid in-union
-      // edge in favour of out-of-union rows.
-      relations = loadRelationsAmong(hippoRoot, tenantId, unionIds, { limit }, db);
-      truncated =
-        named.length >= limit ||
-        hop.length >= limit || // neighbour scan capped -> a 1-hop neighbour may be omitted
-        neighboursCapped || // node cap filled before all neighbours were consumed
-        union.size > unionIds.length ||
-        relations.length >= limit;
-    } else {
-      nodeEntities = loadEntities(hippoRoot, tenantId, { limit }, db);
-      relations = loadRelations(hippoRoot, tenantId, { limit }, db);
-      truncated = nodeEntities.length >= limit || relations.length >= limit;
-    }
-    nodeEntities = readableOnly(db, tenantId, nodeEntities, opts.canRead);
-    relations = readableOnly(db, tenantId, relations, opts.canRead);
-
-    const nodeIds = new Set(nodeEntities.map((e) => e.id));
-    const nodes: GraphNode[] = nodeEntities.map((e) => ({
-      id: e.id,
-      type: e.entityType,
-      name: e.name,
-    }));
-    const edges: GraphEdge[] = relations
-      .filter((r) => nodeIds.has(r.fromEntityId) && nodeIds.has(r.toEntityId))
-      .map((r) => ({ from: r.fromEntityId, to: r.toEntityId, relType: r.relType }));
-
-    return { nodes, edges, truncated };
-  });
+/** The reply model of the rows a store read: an edge with an endpoint outside the node set is dropped. */
+export function graphModelOf({ entities, relations, truncated }: GraphRows): GraphModel {
+  const nodeIds = new Set(entities.map((e) => e.id));
+  const nodes: GraphNode[] = entities.map((e) => ({
+    id: e.id,
+    type: e.entityType,
+    name: e.name,
+  }));
+  const edges: GraphEdge[] = relations
+    .filter((r) => nodeIds.has(r.fromEntityId) && nodeIds.has(r.toEntityId))
+    .map((r) => ({ from: r.fromEntityId, to: r.toEntityId, relType: r.relType }));
+  return { nodes, edges, truncated };
 }
 
 const LAYOUT_W = 1000;

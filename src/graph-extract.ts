@@ -7,7 +7,7 @@
  * entities + `supersedes` relations from decisions /
  * policies / customer_notes / project_briefs (the four object types whose kind maps to the
  * `entity_type` enum), then write only their difference from the stored rows. All writes go
- * through the src/graph/write.ts consolidated-source guard; this module issues no raw SQL.
+ * through the src/store/graph-writes.ts consolidated-source guard; this module issues no raw SQL.
  *
  * Pass 3 adds the
  * first CROSS-OBJECT relations: a deterministic NAME-MATCH heuristic that emits a
@@ -20,8 +20,9 @@
  * `hippo sleep` enqueue-hook.
  */
 
-import { applyGraphOps, runGraphRebuildTransaction } from './graph/write.js';
-import { MAX_ENTITY_NAME_LEN, type EntityType, type SourceObjectType, type SourceObjectRef } from './graph/types.js';
+import { applyGraphOps } from './graph/write.js';
+import { runGraphRebuildTransaction } from './store/graph-writes.js';
+import { MAX_ENTITY_NAME_LEN, type EntityType, type SourceObjectType, type SourceObjectRef } from './store/graph-rows.js';
 import { graphDelta, readGraphDelta, type DesiredEntity, type DesiredGraph, type DesiredRelation, type NaturalKey } from './graph/delta.js';
 import { WRITE_BUDGET, type WriteBudget } from './write-budget.js';
 import { SLEEP_DB_WAIT_MS } from './db.js';

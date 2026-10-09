@@ -3,15 +3,16 @@
 // Callers check the tenant, the fields and the list status first, so a bad request fails before a database opens.
 
 import { BadRequestError, ConflictError, NotFoundError } from '../api-errors.js';
-import { appendAuditEvent } from '../audit.js';
+import { appendAuditEvent } from '../store/audit.js';
 import { withWriteScope } from '../db/busy.js';
 import type { DatabaseSyncLike } from '../db.js';
-import { markGraphDirty, removeGraphEntitiesForObject } from '../graph/write.js';
+import { removeGraphEntitiesForObject } from '../store/graph-writes.js';
+import { markGraphDirty } from '../store/graph-queue.js';
 import { objectHalfLifeDays } from '../half-life-migration.js';
 import { keysetAfter } from '../keyset.js';
 import { createMemory, Layer, type MemoryEntry } from '../memory.js';
 import { writeEntry } from '../store/entry-writes.js';
-import type { JsonObject } from '../working-memory.js';
+import type { JsonObject } from '../store/working-memory.js';
 import type { BaseObject, ColumnValue, ObjectDescriptor, ObjectListOpts, ObjectSave, ObjectWrite, SavableDescriptor } from './descriptor.js';
 
 function selectRow<O extends BaseObject, R, F extends string>(

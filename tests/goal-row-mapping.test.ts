@@ -1,6 +1,6 @@
 // tests/goal-row-mapping.test.ts
 import { describe, it, expect } from 'vitest';
-import { rowToGoal, type GoalRow } from '../src/goals.js';
+import { rowToGoal, type GoalRow } from '../src/store/goals.js';
 
 describe('rowToGoal', () => {
   it('maps row → Goal with required fields', () => {

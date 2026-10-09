@@ -3,9 +3,9 @@
  * E3.3 graph-on-consolidated guard - criterion 2 (CI-level enforcement).
  *
  * The graph layer (entities / relations / graph_extraction_queue) must only ever be
- * written through the single audited writer `src/graph/write.ts`, whose
- * `resolveConsolidatedSource` guard + the v37 DB triggers make a raw-layer reference
- * unrepresentable. This lint enforces the architectural invariant at PR/CI time as
+ * written through the audited store writers `src/store/graph-writes.ts` and
+ * `src/store/graph-queue.ts`, whose `resolveConsolidatedSource` guard + the v37 DB
+ * triggers make a raw-layer reference unrepresentable. This lint enforces the architectural invariant at PR/CI time as
  * defense-in-depth on top of the runtime DB guard: it fails if any other source file
  * contains a DATA write (INSERT INTO / UPDATE) to a graph table.
  *
@@ -43,10 +43,10 @@ const WRITE_RE = new RegExp(
   `\\b(INSERT(\\s+OR\\s+\\w+)?\\s+INTO|UPDATE|DELETE\\s+FROM)\\s+["'\\[]?\\s*(${GRAPH_TABLES.join('|')})\\b`,
   'gi',
 );
-/** The one sanctioned writer, as a path RELATIVE TO srcDir (exact, not basename): a
- *  hypothetical `src/sub/graph/write.ts` is NOT the sanctioned writer and must be linted
- *  (codex-review 2026-06-01, P2). */
-const SANCTIONED_REL = 'graph/write.ts';
+/** The sanctioned writers, as paths RELATIVE TO srcDir (exact, not basename): a
+ *  hypothetical `src/sub/store/graph-writes.ts` is NOT a sanctioned writer and must be linted. */
+const SANCTIONED_RELS = new Set(['store/graph-writes.ts', 'store/graph-queue.ts']);
+const WRITER_NAMES = 'src/store/graph-writes.ts and src/store/graph-queue.ts';
 
 /**
  * Blank out comments (block `/* *​/` and line `//`) by replacing their characters with
@@ -72,16 +72,16 @@ function walk(dir, onFile) {
 }
 
 /**
- * Scan `srcDir` for graph-table DATA writes outside the sanctioned writer
- * (`<srcDir>/graph/write.ts`). Catches multi-line writes; ignores comments + DDL.
+ * Scan `srcDir` for graph-table DATA writes outside the sanctioned writers
+ * (`SANCTIONED_RELS` under `srcDir`). Catches multi-line writes; ignores comments + DDL.
  * Returns `[{ file, line, text }]` (empty when clean).
  */
 export function findGraphWriteViolations(srcDir) {
   const violations = [];
   walk(srcDir, (file) => {
     if (!file.endsWith('.ts')) return;
-    // Allow ONLY the single sanctioned writer at the srcDir root (exact relative path).
-    if (relative(srcDir, file).replace(/\\/g, '/') === SANCTIONED_REL) return;
+    // Allow ONLY the sanctioned writers (exact path relative to srcDir).
+    if (SANCTIONED_RELS.has(relative(srcDir, file).replace(/\\/g, '/'))) return;
     const text = readFileSync(file, 'utf8');
     const blanked = blankComments(text);
     const origLines = text.split(/\r?\n/);
@@ -105,16 +105,16 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   if (violations.length > 0) {
     console.error('');
     console.error(`Graph-write violation(s): the graph tables (${GRAPH_TABLES.join(', ')}) may only be`);
-    console.error(`written through the sanctioned writer src/${SANCTIONED_REL}, but found DATA writes elsewhere:`);
+    console.error(`written through the sanctioned writers ${WRITER_NAMES}, but found DATA writes elsewhere:`);
     for (const v of violations) {
       console.error(`  ${v.file}:${v.line}: ${v.text}`);
     }
     console.error('');
-    console.error('Fix: route the write through src/graph/write.ts (insertEntity / insertRelation /');
+    console.error('Fix: route the write through the store graph writers (insertEntity / insertRelation /');
     console.error('enqueueExtraction), which applies the consolidated-source guard. The graph must');
     console.error('never index the raw layer (ROADMAP-RESEARCH E3.3).');
     console.error('');
     process.exit(1);
   }
-  console.log(`No graph-write violations in ${srcDir}/. All graph writes funnel through src/${SANCTIONED_REL}. OK.`);
+  console.log(`No graph-write violations in ${srcDir}/. All graph writes funnel through ${WRITER_NAMES}. OK.`);
 }

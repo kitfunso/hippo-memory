@@ -19,7 +19,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { authCreate, adminActor, type HippoDbContext } from '../src/api.js';
-import { listApiKeys } from '../src/auth.js';
+import { listApiKeys } from '../src/store/auth.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 
 function newCtx(tenantId = 'default') {

@@ -19,7 +19,7 @@ import { openHippoDb, closeHippoDb } from '../db.js';
 import { runDoctor, formatDoctor } from '../doctor.js';
 import { buildSupportBundle, TAIL_MAX_LINES } from '../support-bundle.js';
 import { PACKAGE_VERSION } from '../version.js';
-import { FAILURE_LOG_RETENTION_DAYS } from '../failure-log.js';
+import { FAILURE_LOG_RETENTION_DAYS } from '../store/failure-log.js';
 import { getGlobalRoot } from '../shared.js';
 import { buildProvenanceCoverage } from './provenance-coverage.js';
 import { buildCorrectionLatency } from './correction-latency.js';

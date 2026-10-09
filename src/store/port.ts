@@ -1,11 +1,12 @@
 // The async store interface and its groups; type-only apart from requireGroup's error, so an add-on can build a store on it alone.
 import type { AmbientTallies } from '../ambient.js';
-import type { AmbientStoreFilter } from '../ambient-store.js';
-import type { ApiKeyListRow, ApiKeyRecord, ListApiKeysOpts, NewApiKey } from '../auth.js';
-import type { AppendAuditOpts, AuditEvent, ListAuditAfterOpts, QueryAuditOpts } from '../audit.js';
+import type { AmbientStoreFilter } from './ambient.js';
+import type { ApiKeyListRow, ApiKeyRecord, ListApiKeysOpts, NewApiKey } from './auth.js';
+import type { AppendAuditOpts, AuditEvent, ListAuditAfterOpts, QueryAuditOpts } from './audit.js';
 import { StoreNotPortedError } from '../util/sqlite-blocked.js';
 import type { EmbeddingIndexState } from '../embeddings.js';
-import type { ActiveGoals, GetActiveGoalsOpts, GoalRecallLogRow } from '../goals.js';
+import type { Entity, Relation } from './graph-rows.js';
+import type { ActiveGoals, GetActiveGoalsOpts, GoalRecallLogRow } from './goals.js';
 import type { SessionHandoff } from '../handoff.js';
 import type { JsonValue } from '../json.js';
 import type { KeysetPosition } from '../keyset.js';
@@ -14,7 +15,8 @@ import type { PhysicsParticle } from '../physics.js';
 import type { PlanningFallacyEvidence } from './planning-fallacy-evidence.js';
 import type { ClosureState, Prediction, PredictionBaserate, SavePredictionOpts } from './predictions.js';
 import type { QuarantineRow, QuarantineStatus } from './quarantine.js';
-import type { RecallTraceInput } from '../recall-trace.js';
+import type { ScopeActor } from '../recall-scope.js';
+import type { RecallTraceInput } from './recall-trace.js';
 import type { AmbientLoadResult, AmbientRecallRequest, ContextCandidateFilter, RecentOrigins } from './candidates.js';
 import type { StrengthenOptions } from './entry-writes.js';
 import type { SessionEvent, TaskSnapshot } from './rows.js';
@@ -278,17 +280,31 @@ export interface SessionRawCount extends SessionRawQuery {
   readonly ownScope?: string;
 }
 
+/** The two fields a paged walk judges a row under the summary by. */
+export type DescendantOrigin = Pick<MemoryEntry, 'scope' | 'origin_project'>;
+
+export interface DescendantPage {
+  /** How many rows the caller reads whole, counted from the first row of the first level. */
+  readonly rows: number;
+  /** `DescendantWalk.admit` for a row under the summary, judged on these two fields alone; the two must agree on every such row. */
+  readonly admit: (row: DescendantOrigin) => boolean;
+}
+
 export interface DescendantWalk {
   /** Levels to read under the summary. */
   readonly depth: number;
   /** Asked of the summary, then of each child read: a refused row is left out of the answer and nothing under it is read. */
   readonly admit: (row: MemoryEntry) => boolean;
+  /** Set by a caller that shows only the first rows. A store may ignore it; one that honours it returns just those rows and counts every level in `sizes`. */
+  readonly page?: DescendantPage;
 }
 
 export interface SummaryDescendants {
   readonly summary: MemoryEntry;
   /** The admitted rows of each level, the summary's own children first; a level with none ends the list. */
   readonly levels: MemoryEntry[][];
+  /** Set only by a store that honoured `walk.page`: how many rows each level admits, while `levels` holds just the page, in the same order. */
+  readonly sizes?: readonly number[];
 }
 
 /** The reads behind session assembly and summary drill-down. None writes an audit row. */
@@ -349,6 +365,32 @@ export interface Quarantine {
   rejectQuarantined(tenantId: string, id: string, actor: string): Promise<QuarantineRejection>;
 }
 
+/** What one graph view reads. `limit` is a positive integer and caps each read on its own. Newest means by createdAt, then id, both descending.
+ *  A row shows when it cites no memory, or its memory is in the tenant under a null scope or one `canReadScope(reader, scope)` admits; with no `reader` every row shows. */
+export interface GraphViewQuery {
+  /** Unset reads the whole graph. Set, the start entities are the first `limit` of exactly this name, lowest id first, less the ones that do not show; none left answers empty and not truncated.
+   *  Per 400 start ids in order, the newest `limit` relations with an end among them join in, each once; in that order each adds its other end to the ids held, which begin as the start ids, until `limit` ids are held. */
+  readonly entity?: string;
+  readonly limit: number;
+  readonly reader?: ScopeActor;
+}
+
+export interface GraphRows {
+  readonly entities: Entity[];
+  /** May name an entity `entities` lacks; the caller drops such a relation. */
+  readonly relations: Relation[];
+  /** Judged before a row is hidden: the start entities, the relations joined in, the relations returned or (whole graph) the entities returned came back `limit` long,
+   *  or the walk held `limit` ids with a relation still to join. */
+  readonly truncated: boolean;
+}
+
+/** The rows behind GET /v1/graph. */
+export interface GraphReads {
+  /** Every read from one snapshot, then the rows that do not show are dropped. Whole graph: the tenant's newest `limit` entities and newest `limit` relations.
+   *  From a name: the tenant's entities of the ids held, id ascending within each 400 of them, and the newest `limit` relations with both ends among those ids. */
+  graphRows(tenantId: string, query: GraphViewQuery): Promise<GraphRows>;
+}
+
 /** The optional groups: a store sets each one whole or leaves it unset, and a route or MCP tool names the one it needs. */
 export interface StoreGroups {
   /** Unset on a store built before them, where hybrid and physics recall under an embedding provider answer 501. */
@@ -363,6 +405,7 @@ export interface StoreGroups {
   readonly dagReads: DagReads;
   readonly auditLog: AuditLog;
   readonly quarantine: Quarantine;
+  readonly graphReads: GraphReads;
   /** Unset on a store built before it, where GET /ready answers 200 with `store: "unchecked"`. */
   readonly readiness: Readiness;
 }

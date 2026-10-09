@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { insertEntity, insertRelation } from '../src/graph/write.js';
+import { insertEntity, insertRelation } from '../src/store/graph-writes.js';
 import { savePolicy } from '../src/policies.js';
 import { buildGraphModel } from '../src/graph-view.js';
 import { canReadScope } from '../src/recall-scope.js';

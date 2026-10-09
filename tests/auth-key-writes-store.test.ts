@@ -8,7 +8,7 @@ import {
   authCreate, authCreateSelf, authList, authListRows,
   type AuthCreateResult, type AuthCreateSelfResult,
 } from '../src/api.js';
-import { verifyApiKeyCached, type ApiKeyListItem, type ApiKeyListRow } from '../src/auth.js';
+import { verifyApiKeyCached, type ApiKeyListItem, type ApiKeyListRow } from '../src/store/auth.js';
 import { closeHippoDb, openHippoDb } from '../src/db.js';
 import { StoreNotPortedError } from '../src/util/sqlite-blocked.js';
 import { STORE_NOT_PORTED_MESSAGE } from '../src/http-util.js';

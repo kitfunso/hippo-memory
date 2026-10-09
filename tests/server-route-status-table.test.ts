@@ -440,7 +440,9 @@ describe('HTTP route status table: status and error text per route', () => {
   it('non-routes, wrong methods and malformed paths', async () => {
     expect(await runCases(handle.url, NON_ROUTES)).toEqual(expected(NON_ROUTES));
     const health = await get('/health');
-    expect(Object.keys(isJsonObject(health.json) ? health.json : {}).sort()).toEqual(['audit_write_failures', 'ok', 'pid', 'started_at', 'version']);
+    expect(Object.keys(isJsonObject(health.json) ? health.json : {}).sort()).toEqual([
+      'audit_write_failures', 'handler_deadlines', 'ok', 'pid', 'started_at', 'store_jobs_expired', 'store_queue_refusals', 'store_workers_replaced', 'version',
+    ]);
   });
 });
 
