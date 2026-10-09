@@ -69,8 +69,8 @@ const PROCESS_TESTS = processTests();
 
 export default defineConfig({
   test: {
-    // A test that starts a process waits on the operating system and keeps 30 s; the rest run in this process and get 5 s.
-    // The split is read from each file's source, since a list of names goes stale the day a test starts spawning.
+    // A test that starts a process waits on the operating system and keeps 30 s; the rest get 5 s, read from each file's source, as a list of names goes stale.
+    // A file that is slow for a reason this split cannot see raises its own timeout at its top, with one line saying what is slow.
     projects: [
       { extends: true, test: { name: 'unit', include: TEST_GLOBS, exclude: [...SKIPPED, ...PROCESS_TESTS], testTimeout: 5_000, hookTimeout: 10_000 } },
       { extends: true, test: { name: 'process', include: PROCESS_TESTS, exclude: SKIPPED, testTimeout: 30_000, hookTimeout: 30_000 } },

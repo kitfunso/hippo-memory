@@ -14,7 +14,8 @@ const fresh = (): Generated => structuredClone(BASE);
 const parse = (recs: readonly Z0Record[]) => parseZ0Records(jsonl(recs), 'runs.jsonl').records;
 const runOf = <R extends { sequence: string; seed: number }>(rs: readonly R[], sequence: string, seed: number): R[] =>
   rs.filter((r) => r.sequence === sequence && r.seed === seed);
-const STAT = { iterations: 2000, seed: 1 };
+// A small resample count: the cases assert verdicts and arithmetic, which the seed fixes, and never the precision of the bootstrap.
+const STAT = { iterations: 200, seed: 1 };
 const scoredOf = (g: Generated) => filterRecords(parse(g.records), g.plan).scored;
 const analyze = (g: Generated, extra = {}) =>
   analyzeZ0(parse(g.records), { planCells: g.plan, prices: PRICES, grading: GRADING, unblind: true, refuse: () => null, ...STAT, ...extra });

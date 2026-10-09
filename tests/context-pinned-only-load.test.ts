@@ -331,20 +331,22 @@ describe('loadAmbientCandidates', () => {
     expect(got.map((e) => e.id)).toContain(drifted.id);
   });
 
-  it('finds the caller\'s older rows behind a full window of other projects without reading the corpus', () => {
+  it('finds the caller\'s older rows behind a full window of other projects without reading the corpus', async () => {
     const mine = Array.from({ length: 5 }, (_, i) => ({
       ...createMemory(`an older row of the caller ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
       origin_project: PROJECT,
       created: new Date(Date.UTC(2026, 5, 1, i)).toISOString(),
     }));
-    for (const entry of mine) writeEntry(local, entry);
-    for (let i = 0; i < 100; i++) {
-      writeEntry(local, {
-        ...createMemory(`a newer row of another project ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
-        origin_project: 'proj-b',
-        created: new Date(Date.UTC(2026, 6, 1, 0, i)).toISOString(),
-      });
-    }
+    await withSharedStoreHandles(() => {
+      for (const entry of mine) writeEntry(local, entry);
+      for (let i = 0; i < 100; i++) {
+        writeEntry(local, {
+          ...createMemory(`a newer row of another project ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
+          origin_project: 'proj-b',
+          created: new Date(Date.UTC(2026, 6, 1, 0, i)).toISOString(),
+        });
+      }
+    });
     let admitted = 0;
     const admit = (e: { origin_project?: string | null }): boolean => { admitted++; return e.origin_project === PROJECT; };
 
