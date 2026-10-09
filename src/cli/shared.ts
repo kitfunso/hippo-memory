@@ -373,6 +373,11 @@ export function stringFlag(flags: CliFlags, name: string): string | undefined {
   return typeof v === 'string' ? v : undefined;
 }
 
+// An empty value reads as absent, so `--change ""` keeps the default.
+export function nonEmptyStringFlag(flags: CliFlags, name: string): string | undefined {
+  return stringFlag(flags, name) || undefined;
+}
+
 export function numberFlag(flags: CliFlags, name: string): number | undefined {
   const v = flags[name];
   return typeof v === 'string' ? Number(v) : undefined;
