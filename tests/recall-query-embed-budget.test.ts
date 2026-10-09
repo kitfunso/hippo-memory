@@ -115,6 +115,24 @@ describe("a recall's query embedding", () => {
     expect(fallbackLines()[0]).toMatch(/^\[hippo\] warn: .*openai embeddings HTTP 503/);
   });
 
+  it('ends within the budget when it runs out during the wait a 503 asked for', async () => {
+    const root = seedStore();
+    vi.stubEnv('HIPPO_QUERY_EMBED_TIMEOUT_MS', String(BUDGET_MS));
+    // Two seconds is the longest wait the provider accepts under a deadline; sat out in full it would pass budget plus margin.
+    embeddings.setStatus(503, 2);
+    const before = embeddings.requests();
+
+    const started = performance.now();
+    const shown = await recall(root);
+    const elapsedMs = performance.now() - started;
+
+    expect(shown).toEqual([LEXICAL]);
+    expect(elapsedMs).toBeLessThan(BUDGET_MS + MARGIN_MS);
+    expect(embeddings.requests() - before).toBe(1);
+    expect(fallbackLines()).toHaveLength(1);
+    expect(fallbackLines()[0]).toContain(`the openai embedding provider gave no query vector within ${BUDGET_MS} ms`);
+  });
+
   it('sends the request again after a dropped connection, and ranks with vectors', async () => {
     const root = seedStore();
     embeddings.setFault('reset');

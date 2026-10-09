@@ -35,7 +35,7 @@ export interface VectorArmOptions extends CurrentnessOptions {
 const QUERY_EMBED_BUDGET_MS = 5_000;
 
 /** How long one recall waits for its query vector, retries included; HIPPO_QUERY_EMBED_TIMEOUT_MS overrides the default. */
-export function queryEmbedBudgetMs(): number {
+function queryEmbedBudgetMs(): number {
   return envQueryEmbedTimeoutMs() ?? QUERY_EMBED_BUDGET_MS;
 }
 

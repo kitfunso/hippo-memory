@@ -22,8 +22,8 @@ export interface HashedEmbeddings {
   readonly url: string;
   /** Embedding requests received so far, failed ones included. */
   requests(): number;
-  /** Answer every later request with `status`; 200 serves vectors again. */
-  setStatus(status: number): void;
+  /** Answer every later request with `status`; 200 serves vectors again. A failure asks for `retryAfterSec` (0 unless given). */
+  setStatus(status: number, retryAfterSec?: number): void;
   /** 'stall' never answers; 'reset' drops the next request's socket unanswered, then serves again; a number answers after that many ms; null serves at once. */
   setFault(fault: EmbeddingFault): void;
   close(): Promise<void>;
@@ -34,6 +34,7 @@ export type EmbeddingFault = 'stall' | 'reset' | number | null;
 export async function startHashedEmbeddings(): Promise<HashedEmbeddings> {
   let received = 0;
   let status = 200;
+  let retryAfter = '0';
   let fault: EmbeddingFault = null;
   const server = createServer((req, res) => {
     const chunks: Buffer[] = [];
@@ -47,8 +48,8 @@ export async function startHashedEmbeddings(): Promise<HashedEmbeddings> {
         return;
       }
       if (status !== 200) {
-        // Retry-After 0 lets the provider's three attempts run without a wait.
-        res.writeHead(status, { 'content-type': 'application/json', 'retry-after': '0' }).end('{"error":"injected"}');
+        // Retry-After 0, the default, lets the provider's three attempts run without a wait.
+        res.writeHead(status, { 'content-type': 'application/json', 'retry-after': retryAfter }).end('{"error":"injected"}');
         return;
       }
       // SAFETY: the openai provider posts {model, input: string[]} here.
@@ -66,7 +67,10 @@ export async function startHashedEmbeddings(): Promise<HashedEmbeddings> {
   return {
     url: `http://127.0.0.1:${port}/v1`,
     requests: () => received,
-    setStatus: (next) => { status = next; },
+    setStatus: (next, retryAfterSec = 0) => {
+      status = next;
+      retryAfter = String(retryAfterSec);
+    },
     setFault: (next) => { fault = next; },
     close: () => new Promise<void>((resolve, reject) => {
       server.closeAllConnections();
