@@ -460,15 +460,7 @@ export async function embedMemory(
       const identity = provider.id;
 
       if (embeddingModelRequiresReindex(hippoRoot, identity)) {
-        // Host-wide rebuild. The embedding index is keyed by entry.id
-        // (which is tenant-scoped) but the index itself is one per hippoRoot.
-        // Cross-tenant content equivalence is visible at the vector level.
-        // Per-tenant indices would be a larger architecture change.
-        const entries = loadAllEntries(hippoRoot);
-        const rebuiltIndex = await rebuildEmbeddingIndex(entries, provider);
-        saveEmbeddingIndex(hippoRoot, rebuiltIndex, embeddingIndexIdentity(identity));
-        saveStoredEmbeddingModel(hippoRoot, identity);
-        resetPhysicsFromIndex(hippoRoot, entries, rebuiltIndex);
+        await rebuildIndexForProvider(hippoRoot, provider);
         return;
       }
 
@@ -480,21 +472,7 @@ export async function embedMemory(
       saveStoredEmbeddingModel(hippoRoot, identity);
 
       // Initialize physics state for this memory
-      try {
-        const db = openHippoDb(hippoRoot);
-        try {
-          const existing = loadPhysicsState(db, [entry.id]);
-          if (!existing.has(entry.id)) {
-            const particle = initializeParticle(entry, vector);
-            savePhysicsState(db, [particle]);
-          }
-        } finally {
-          closeHippoDb(db);
-        }
-      } catch (err) {
-        // Physics init is best-effort and must not fail the embedding that just landed.
-        log.debug(`physics state not initialised for ${entry.id}: ${errorMessage(err)}`);
-      }
+      initializePhysicsIfMissing(hippoRoot, entry, vector);
     } catch (err) {
       // Provider failure (API down / bad key). Best-effort: leave the index as-is, but say so once.
       warnEmbedFailureOnce(provider.kind, errorMessage(err));
@@ -502,6 +480,37 @@ export async function embedMemory(
   }).catch((err) => {
     log.warn(`skipped embedding ${entry.id} (${errorMessage(err)}); run 'hippo embed' to backfill`);
   });
+}
+
+async function rebuildIndexForProvider(hippoRoot: string, provider: EmbeddingProvider): Promise<void> {
+  const identity = provider.id;
+  // Host-wide rebuild. The embedding index is keyed by entry.id
+  // (which is tenant-scoped) but the index itself is one per hippoRoot.
+  // Cross-tenant content equivalence is visible at the vector level.
+  // Per-tenant indices would be a larger architecture change.
+  const entries = loadAllEntries(hippoRoot);
+  const rebuiltIndex = await rebuildEmbeddingIndex(entries, provider);
+  saveEmbeddingIndex(hippoRoot, rebuiltIndex, embeddingIndexIdentity(identity));
+  saveStoredEmbeddingModel(hippoRoot, identity);
+  resetPhysicsFromIndex(hippoRoot, entries, rebuiltIndex);
+}
+
+function initializePhysicsIfMissing(hippoRoot: string, entry: MemoryEntry, vector: number[]): void {
+  try {
+    const db = openHippoDb(hippoRoot);
+    try {
+      const existing = loadPhysicsState(db, [entry.id]);
+      if (!existing.has(entry.id)) {
+        const particle = initializeParticle(entry, vector);
+        savePhysicsState(db, [particle]);
+      }
+    } finally {
+      closeHippoDb(db);
+    }
+  } catch (err) {
+    // Physics init is best-effort and must not fail the embedding that just landed.
+    log.debug(`physics state not initialised for ${entry.id}: ${errorMessage(err)}`);
+  }
 }
 
 /** Throws when an unavailable provider is a misconfiguration rather than an intentional no-op. */

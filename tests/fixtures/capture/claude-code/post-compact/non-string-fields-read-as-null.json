@@ -1,0 +1,17 @@
+{
+  "stdin": "{\"session_id\":\"sess-1\",\"transcript_path\":42,\"cwd\":[\"/work/repo\"],\"hook_event_name\":\"PostCompact\",\"trigger\":false,\"compact_summary\":{\"text\":\"x\"}}",
+  "timedOut": false,
+  "expect": {
+    "status": "received",
+    "input": {
+      "runtime": "claude-code",
+      "event": "post-compact",
+      "manual": false,
+      "sessionId": "sess-1",
+      "cwd": null,
+      "transcriptPath": null,
+      "trigger": null,
+      "compactSummary": null
+    }
+  }
+}

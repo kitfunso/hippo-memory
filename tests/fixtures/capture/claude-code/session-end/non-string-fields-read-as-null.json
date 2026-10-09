@@ -1,0 +1,16 @@
+{
+  "stdin": "{\"session_id\":7,\"transcript_path\":[\"/x.jsonl\"],\"cwd\":{\"dir\":\"/work/repo\"},\"hook_event_name\":\"SessionEnd\",\"reason\":3}",
+  "timedOut": false,
+  "expect": {
+    "status": "received",
+    "input": {
+      "runtime": "claude-code",
+      "event": "session-end",
+      "manual": false,
+      "sessionId": null,
+      "cwd": null,
+      "transcriptPath": null,
+      "trigger": null
+    }
+  }
+}

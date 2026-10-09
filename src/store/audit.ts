@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { canAutoDelete, type MemoryEntry } from '../memory.js';
-import type { DatabaseSyncLike } from '../db.js';
+import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../db.js';
 import type { JsonObject } from './working-memory.js';
 import { log } from '../log.js';
 import { keysetAfter, type KeysetPosition } from '../keyset.js';
@@ -213,6 +213,16 @@ export function appendAuditEvent(db: DatabaseSyncLike, opts: AppendAuditOpts): v
   );
 }
 
+/** One audit row in the store under `hippoRoot`, as its own write. */
+export function recordAuditEvent(hippoRoot: string, event: AppendAuditOpts): void {
+  const db = openHippoDb(hippoRoot);
+  try {
+    appendAuditEvent(db, event);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
 let auditWriteFailures = 0;
 
 /** For callers that keep a mutation when its audit row fails: the failure is logged and counted, never silent. */
@@ -306,6 +316,36 @@ export function listAuditEventsAfter(db: DatabaseSyncLike, opts: ListAuditAfterO
     .prepare(`SELECT ${AUDIT_COLUMNS} FROM audit_log WHERE ${where.join(' AND ')} ORDER BY id ASC LIMIT ?`)
     .all(...params, limit) as AuditRow[];
   return rows.map(rowToAuditEvent);
+}
+
+/** How many of a tenant's audit rows are older than `cutoff`. */
+export function countAuditBefore(db: DatabaseSyncLike, tenantId: string, cutoff: string): number {
+  // SAFETY: row comes from `SELECT COUNT(*) AS c`; COUNT(*) always yields exactly one row with a
+  // numeric `c` column (number or bigint depending on the node:sqlite driver's integer handling).
+  const row = db
+    .prepare(`SELECT COUNT(*) AS c FROM audit_log WHERE tenant_id = ? AND ts < ?`)
+    .get(tenantId, cutoff) as { c: number | bigint };
+  return Number(row.c);
+}
+
+/** Deletes a tenant's audit rows older than `cutoff`; returns how many went. */
+export function deleteAuditBefore(db: DatabaseSyncLike, tenantId: string, cutoff: string): number {
+  const result = db
+    .prepare(`DELETE FROM audit_log WHERE tenant_id = ? AND ts < ?`)
+    .run(tenantId, cutoff);
+  return Number(result.changes ?? 0);
+}
+
+/** Latest time each target got a good outcome, from the audit rows; unlike queryAuditEvents it has no row cap. */
+export function confirmedOutcomeTimes(db: DatabaseSyncLike, tenantId: string): Map<string, string> {
+  // SAFETY: the SELECT list is exactly target_id and ts; no other shape reaches this cast.
+  const rows = db.prepare(
+    `SELECT target_id, MAX(ts) AS ts FROM audit_log
+       WHERE tenant_id = ? AND op = 'outcome' AND target_id IS NOT NULL
+         AND json_extract(metadata_json, '$.good') = 1
+       GROUP BY target_id`,
+  ).all(tenantId) as { target_id: string; ts: string }[];
+  return new Map(rows.map((r) => [r.target_id, r.ts]));
 }
 
 const AUDIT_COLUMNS = 'id, ts, tenant_id, actor, op, target_id, metadata_json';

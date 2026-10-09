@@ -7,7 +7,7 @@ import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { basename, join, relative } from 'node:path';
 import {
-  archiveRaw, authCreate, authCreateSelf, authGrant, authList, authListRows, authRevoke, authUngrant, forget, outcome, outcomeForLastRecall, reject,
+  archiveRaw, authCreate, authCreateSelf, authGrant, authListRows, authRevoke, authUngrant, forget, outcome, outcomeForLastRecall, reject,
   remember, supersede, type Actor, type Context,
 } from '../src/api.js';
 import { grantScope, insertApiKey, revokeApiKey } from '../src/store/auth.js';
@@ -325,13 +325,13 @@ const PARITY = {
   'authCreateSelf: a caller without a resolver is refused': { actor: MEMBER_KEY, call: (ctx) => authCreateSelf(ctx, { ttlDays: 1, perSubject: 5 }), refused: 'ForbiddenError' },
   'authCreateSelf: ttlDays 0 is refused': { actor: CAROL, call: (ctx) => authCreateSelf(ctx, { ttlDays: 0, perSubject: 5 }), refused: 'RangeError' },
   'authCreateSelf: perSubject 0 is refused': { actor: CAROL, call: (ctx) => authCreateSelf(ctx, { ttlDays: 1, perSubject: 0 }), refused: 'RangeError' },
-  'authList: admin sees the tenant': { call: (ctx) => authList(ctx, { active: false }) },
-  'authList: active only': { call: (ctx) => authList(ctx, { active: true }) },
-  'authList: member key sees itself': { actor: MEMBER_KEY, call: (ctx) => authList(ctx, { active: false }) },
-  'authList: resolver member sees the keys it minted': { actor: CAROL, call: (ctx) => authList(ctx, { active: true }) },
-  'authList: another tenant': { tenantId: GLOBEX, call: (ctx) => authList(ctx, { active: false }) },
+  'authListRows: admin sees the tenant': { call: (ctx) => authListRows(ctx, { active: false }) },
+  'authListRows: active only': { call: (ctx) => authListRows(ctx, { active: true }) },
+  'authListRows: member key sees itself': { actor: MEMBER_KEY, call: (ctx) => authListRows(ctx, { active: false }) },
+  'authListRows: resolver member sees the keys it minted': { actor: CAROL, call: (ctx) => authListRows(ctx, { active: true }) },
+  'authListRows: another tenant': { tenantId: GLOBEX, call: (ctx) => authListRows(ctx, { active: false }) },
   'authListRows: first page': { call: (ctx) => authListRows(ctx, { active: false, limit: 2 }) },
-  'authListRows: member key sees itself': { actor: MEMBER_KEY, call: (ctx) => authListRows(ctx, { active: true }) },
+  'authListRows: member key sees itself, active only': { actor: MEMBER_KEY, call: (ctx) => authListRows(ctx, { active: true }) },
   'authRevoke: admin revokes a live key': { call: (ctx) => authRevoke(ctx, 'hk_seedmember') },
   'authRevoke: a revoked key keeps its first time': { call: (ctx) => authRevoke(ctx, 'hk_seedrevoked') },
   'authRevoke: unknown key': { call: (ctx) => authRevoke(ctx, 'hk_missing'), refused: 'NotFoundError' },
@@ -445,7 +445,6 @@ const CONTRACT = {
     refused: [(ctx) => authCreateSelf(ctx, { ttlDays: 0, perSubject: 5 }), 'RangeError'],
     firstPortCalls: ['keyWrites.createSelfApiKey'], group: 'keyWrites',
   },
-  authList: { ok: (ctx) => authList(ctx, { active: true }), firstPortCalls: ['keyWrites.listApiKeys'], group: 'keyWrites' },
   authListRows: { ok: (ctx) => authListRows(ctx, { active: true }), firstPortCalls: ['keyWrites.listApiKeys'], group: 'keyWrites' },
   authRevoke: {
     ok: (ctx) => authRevoke(ctx, 'hk_seedmember'),

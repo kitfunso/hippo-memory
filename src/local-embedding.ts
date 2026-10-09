@@ -86,63 +86,75 @@ async function loadPipeline(model: string): Promise<any> {
   if (_pipelineInstances.has(model)) return _pipelineInstances.get(model);
   if (_pipelineLoading.has(model)) return _pipelineLoading.get(model);
 
-  const loading = (async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const pkg = resolveTransformersPackage();
-    if (!pkg) {
-      _pipelineErrors.set(model, 'no transformers package is installed');
-      return null;
-    }
-
-    let pipelineFn: any = null;
-    try {
-      // SAFETY: the resolved module's shape is untyped by design (optional peer
-      // dependency); pipelineFn/mod.env are read defensively below and any
-      // failure to find a usable pipeline falls through to `return null`.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mod = await _dynImport(pkg) as any;
-      if (envModelCache()) {
-        if (mod.env) {
-          mod.env.cacheDir = envModelCache();
-          mod.env.localModelPath = envModelCache();
-          mod.env.allowRemoteModels = false;
-        }
-      }
-      pipelineFn = mod.pipeline ?? mod.default?.pipeline;
-    } catch (err) {
-      // String(err) keeps a Node error's [ERR_...] code, which callers match on.
-      const reason = `transformers import failed (${pkg}): ${String(err)}`;
-      log.debug(reason);
-      _pipelineErrors.set(model, reason);
-      return null;
-    }
-
-    if (!pipelineFn) {
-      _pipelineErrors.set(model, `${pkg} exports no pipeline function`);
-      return null;
-    }
-
-    // The offline bundle used in egress-blocked sandboxes ships only the FP32 model, so use whichever file is on disk.
-    const cacheRoot = envModelCache();
-    const quantized = !cacheRoot
-      || fs.existsSync(path.join(cacheRoot, model, 'onnx', 'model_quantized.onnx'));
-
-    try {
-      const instance = await pipelineFn('feature-extraction', model, { quantized });
-      _pipelineInstances.set(model, instance);
-      return instance;
-    } catch (err) {
-      const reason = `embedding pipeline load failed (${model}): ${String(err)}`;
-      log.debug(reason);
-      _pipelineErrors.set(model, reason);
-      return null;
-    } finally {
-      _pipelineLoading.delete(model);
-    }
-  })();
+  const loading = createPipeline(model);
 
   _pipelineLoading.set(model, loading);
   return loading;
+}
+
+/** The model's pipeline, or null with the reason recorded in `_pipelineErrors`. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function createPipeline(model: string): Promise<any> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const pkg = resolveTransformersPackage();
+  if (!pkg) {
+    _pipelineErrors.set(model, 'no transformers package is installed');
+    return null;
+  }
+
+  const pipelineFn = await importPipelineFactory(pkg, model);
+  if (!pipelineFn) return null;
+
+  // The offline bundle used in egress-blocked sandboxes ships only the FP32 model, so use whichever file is on disk.
+  const cacheRoot = envModelCache();
+  const quantized = !cacheRoot
+    || fs.existsSync(path.join(cacheRoot, model, 'onnx', 'model_quantized.onnx'));
+
+  try {
+    const instance = await pipelineFn('feature-extraction', model, { quantized });
+    _pipelineInstances.set(model, instance);
+    return instance;
+  } catch (err) {
+    const reason = `embedding pipeline load failed (${model}): ${String(err)}`;
+    log.debug(reason);
+    _pipelineErrors.set(model, reason);
+    return null;
+  } finally {
+    _pipelineLoading.delete(model);
+  }
+}
+
+/** The package's `pipeline` function, or null with the reason recorded in `_pipelineErrors`. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function importPipelineFactory(pkg: string, model: string): Promise<any> {
+  let pipelineFn: any = null;
+  try {
+    // SAFETY: the resolved module's shape is untyped by design (optional peer
+    // dependency); pipelineFn/mod.env are read defensively below and any
+    // failure to find a usable pipeline falls through to `return null`.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const mod = await _dynImport(pkg) as any;
+    if (envModelCache()) {
+      if (mod.env) {
+        mod.env.cacheDir = envModelCache();
+        mod.env.localModelPath = envModelCache();
+        mod.env.allowRemoteModels = false;
+      }
+    }
+    pipelineFn = mod.pipeline ?? mod.default?.pipeline;
+  } catch (err) {
+    // String(err) keeps a Node error's [ERR_...] code, which callers match on.
+    const reason = `transformers import failed (${pkg}): ${String(err)}`;
+    log.debug(reason);
+    _pipelineErrors.set(model, reason);
+    return null;
+  }
+
+  if (!pipelineFn) {
+    _pipelineErrors.set(model, `${pkg} exports no pipeline function`);
+    return null;
+  }
+  return pipelineFn;
 }
 
 /** Throws, with the reason, when the model's pipeline cannot load: a provider-level failure, not a per-item skip. */

@@ -5,7 +5,6 @@ import { isInitialized } from '../store/open.js';
 import { saveActiveTaskSnapshot, loadActiveTaskSnapshot } from '../store/sessions.js';
 import {
   PRE_COMPACT_INSTRUCTION,
-  parsePostCompactPayload,
   postCompactLine,
   recordCompactionStart,
   recordSnapshotSaved,
@@ -15,7 +14,7 @@ import {
 } from '../compaction-record.js';
 import { resolveTenantId } from '../tenant.js';
 import { defaultPreCompactLogPath, vscodeUserHooksFile } from '../hooks/shared.js';
-import { readClaudeCodePreCompact, type HookRuntime } from '../capture-contract.js';
+import { readClaudeCodePostCompact, readClaudeCodePreCompact, type HookRuntime } from '../capture-contract.js';
 import { errorMessage, log as logger } from '../log.js';
 import { resolveLastSessionTranscript } from './transcript.js';
 import { isVscodeTranscript } from './copilot-transcript.js';
@@ -234,6 +233,7 @@ export async function cmdPreCompact(hippoRoot: string, options: PreCompactOption
 
 export interface PostCompactOptions {
   stdinText?: string;
+  stdinTimedOut?: boolean;
   logFile?: string;
   afterSave?: (transcriptPath: string, cwd: string | null, log: (message: string) => void) => void;
 }
@@ -251,18 +251,18 @@ export function cmdPostCompact(hippoRoot: string, options: PostCompactOptions): 
       log('skip: no hippo store');
       return null;
     }
-    const payload = parsePostCompactPayload(options.stdinText);
+    const receipt = readClaudeCodePostCompact(options.stdinText, options.stdinTimedOut ?? false);
     let line: string | null = null;
     let storeBusy = false;
-    if (payload === null) {
-      log('skip: no PostCompact payload naming a session');
+    if (receipt.status !== 'received') {
+      log(`skip: ${receipt.reason}`);
     } else {
-      const saved = saveCompaction(hippoRoot, payload, log);
+      const saved = saveCompaction(hippoRoot, receipt.input, log);
       line = postCompactLine(saved);
       storeBusy = saved.deferred;
-      if (!storeBusy && payload.transcriptPath !== null && options.afterSave) {
+      if (!storeBusy && receipt.input.transcriptPath !== null && options.afterSave) {
         try {
-          options.afterSave(payload.transcriptPath, payload.cwd, log);
+          options.afterSave(receipt.input.transcriptPath, receipt.input.cwd, log);
         } catch (err) {
           log(`agent memory import failed: ${errorMessage(err)}`);
         }

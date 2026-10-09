@@ -1,5 +1,4 @@
 import { envJevModel, envJevTimeoutMs, envTypesafeApiKey } from '../env.js';
-import { crossEncoderReranker } from './cross-encoder.js';
 import type { RerankerFn, RerankResult, RerankerOptions } from './types.js';
 import type { SearchResult } from '../core/search-types.js';
 import { redactSecretsStrict } from '../secret-detect.js';
@@ -125,7 +124,3 @@ export function rankByScores(head: readonly SearchResult[], scores: readonly num
   scored.forEach((r, i) => (r.postRerankRank = i + 1));
   return scored;
 }
-
-/** Track 4 reranker: hosted TypeSafe Jev, opt-in and paid (TYPESAFE_API_KEY), one batched call per recall.
- *  Any failure warns and delegates to the local cross-encoder. Scores are not bit-stable run to run. */
-export const jevReranker: RerankerFn = createJevReranker(crossEncoderReranker);

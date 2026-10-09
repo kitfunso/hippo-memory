@@ -25,6 +25,8 @@
 >
 > **2026-10-08 lessons from graded work:** Part XXIV records a review of an outside 25-proposal document and of Harvey's reported wake-sleep experiment (figures unverified). It adds one research item, SI6: an opt-in sleep stage that compiles lessons only from work with an independent grade, tested on Z0's development families against shipping hippo, a plain memory of each failed check and a fixed checklist. The review's other themes map to existing items or are not adopted. Z0 priority, S4's hygiene default, frozen defaults and locked registrations remain.
 >
+> **2026-10-09 admin console:** Part XXV, Track AC plans a served, SSO-gated admin console in hippo-enterprise for the head of AI platform. It turns CD6's and CD12's report files into live pages served by a separate console process, which is a confidential OIDC client with server-side sessions. It starts read-only, adds actions behind a fresh sign-in, and changes no agent-facing API. It is planned for after the first partner's security review and does not block a pilot.
+>
 > `PLAN.md` remains the architecture and CLS-principles document. `RESEARCH.md` remains the research lineage and seven-mechanisms backgrounder.
 
 ## Current execution index
@@ -41,7 +43,7 @@
 | Next, 4 | EI2/EI10/EV1/EI11/EV6-EV9; required source adapters; EI15/CD11-CD14 | Deliver governed, low-touch memory and customer-defined value in an enterprise pilot | Scope one partner, required sources, identity provider and deployment. Close applicable access/derivation/revocation gates; configure one objective/metric contract and join permitted outcomes through Z10/Z2b. Include developer and administrator burden. Computer is not a prerequisite. | Keith; enterprise maintainer; customer administrator |
 | Next, 5; bounded development can accompany Now | CLF0/CLF1/CLF4/CLF12; CAE0-CAE4 | Improve a specific memory decision without unpredictable costs or recurring backend management | First compare one role at matched eligible candidates/input bounds against native and applicable Jev/local baselines, with quota controls and native fallback. Complete supported-surface conformance and independent task confirmation before adoption; extend all accepted CLEF roles one at a time. | Decision-layer/evaluation maintainer |
 | Alongside all priorities | MSG1-MSG6; canonical product facts; CAE6/CAE7; HG4 maintainer row; K8.6/CD10 registry submission (needs Keith's yes) | Give users consistent capability, setup, edition and evidence information | Correct current source copy, check roadmap IDs/references and affected tool contracts, then verify the tagged package, actual npm listing and deployed website through their release processes. A source commit is not publication evidence. | Product/release maintainer |
-| Later or separately gated research | Wider CLF rollout/private serving; CAE9; optional CW; S2/S8 where justified; HG3 outcome-benchmark runs after Z0 stage 0, then the HG claim gate; SI6 graded-work lessons after Z0 stage 2; LC4/Track G and grant research | Retain optional capabilities only when they improve useful outcomes or total burden against simpler baselines | Keep required runtime coverage visible; register role-specific comparisons, data floors, deployment/permission checks and retain/reject decisions. No provider, learning system or agent dispatcher becomes required for ordinary memory. | Relevant track maintainer; Keith |
+| Later or separately gated research | Wider CLF rollout/private serving; CAE9; optional CW; S2/S8 where justified; HG3 outcome-benchmark runs after Z0 stage 0, then the HG claim gate; SI6 graded-work lessons after Z0 stage 2; LC4/Track G and grant research; AC0-AC3/AC8 admin console after the first partner security review | Retain optional capabilities only when they improve useful outcomes or total burden against simpler baselines | Keep required runtime coverage visible; register role-specific comparisons, data floors, deployment/permission checks and retain/reject decisions. No provider, learning system or agent dispatcher becomes required for ordinary memory. | Relevant track maintainer; Keith |
 
 **Operating rule.** Prefer one complete memory loop and a small number of bounded experiments over opening every track simultaneously. Engineering fixtures and development prototypes can proceed alongside Z0 prerequisites; task-benefit/default claims retain their independent gates. Measure repeat mistakes, quality, correction/supervision burden, total cost and latency. Simulated intervention counts are proxies; active human time needs its own registered pilot. Historical benchmark scores do not establish these outcomes.
 
@@ -1637,6 +1639,8 @@ Anyone who can write a PR comment, an issue or a chat message can try to plant i
 One place for the buyer: what is stored per team and repository, who used what, audit log search, dormant and banned memories, and token cost from the TE0 ledger.
 
 **Status (2026-10-03):** `hippo-enterprise admin report` writes one HTML or JSON page with all five sections. It groups by tenant, repository and scope; per-team grouping waits for EV6.
+
+**Served console [planned, 2026-10-09].** Part XXV, Track AC (AC0-AC9) serves these pages live behind the company's SSO.
 
 **Native skill follow-up [planned].** CAE9 reuses this commercial admin surface for evidence-backed promotion exceptions, version/status, managed rollout and rollback. Keep routine developer use automatic after the admin's policy setup and include administrator effort in the pilot result.
 
@@ -3445,3 +3449,133 @@ Each line names what would reopen it.
 ### Order and stop rules
 
 SI6 cannot start before Z0 stage 2, because it reuses the development families that stage authors and screens. Until then its only work is the registration draft. It sits in the execution index's research row, and moves to the "one diagnosed component" slot only if Z10 evidence names lessons missed from graded outcomes as the bottleneck. It changes no default: S4 stays hygiene, and Z0's registration and the frozen defaults stand. A win is a second dream ablation for Part XXIII's test (e), beside HG1. A loss is published the same way.
+
+## Part XXV - 2026-10-09 update: a served admin console for the enterprise buyer (Track AC)
+
+### Why
+
+The buyer is the head of AI platform or AI enablement. Today that person sees hippo only through files and commands. `hippo-enterprise admin report` and `report pilot` write static HTML that an operator runs with `docker compose exec` on the VM. Users and access live in the company's identity provider through SSO and SCIM. Keys are revoked over the API, and the audit log goes to the SIEM. Nothing is live, and nothing opens in a browser behind the company's sign-in.
+
+The core dashboard (`hippo dashboard`) cannot fill the gap. It listens on 127.0.0.1 only, serves one tenant, and has no SSO. In the enterprise deployment the laptops hold no memories, so there is nothing for it to show there.
+
+The enterprise server cannot serve pages either. Core's add-on routes are POST-only JSON under `/v1/` (`src/server/route-table.ts`, `assertAddonRoutes` and `dispatchAddonRoute`). The OIDC resolver record (hippo-enterprise `docs/decisions/2026-10-03-oidc-sso-resolver.md`) says the server "never runs a login flow, holds a client secret or stores a session". The server-reports record deferred served reports: "Later, if partners ask for it."
+
+Track AC plans that later, for when a partner asks. It turns CD6's report into a served console. Planned, not started.
+
+### What comparable products give this buyer (research 2026-10-09)
+
+Sources were read on 2026-10-09, some only as search excerpts. Re-check before quoting outside this file.
+
+- **GitHub Copilot.** It has a 28-day usage dashboard, a usage breakdown by user and agent, an impact view of adoption cohorts against PR output, and an NDJSON export. Data lags by up to two days. A custom role gives read-only metrics access. Team metrics need at least 5 licensed users. Seat records carry a last-activity date ([metrics](https://docs.github.com/en/copilot/concepts/copilot-usage-metrics/copilot-metrics), [team metrics](https://docs.github.com/en/copilot/reference/copilot-usage-metrics/team-level-metrics), [seats](https://docs.github.com/en/rest/copilot/copilot-user-management)).
+- **Claude Code for Enterprise.** It shows lines accepted, daily active users and sessions. It compares PRs made with Claude Code against PRs made without it, and exports a per-user CSV. It refreshes daily, has an analytics API, and admins and owners can view it ([analytics](https://code.claude.com/docs/en/analytics), [roles](https://support.claude.com/en/articles/9267276-roles-and-permissions)).
+- **Cursor.** It covers members and roles, spend limits, a model allowlist and API keys. Its audit log has 80+ event types and filters on date, event, actor and app. It exports the filtered set to CSV and streams to a SIEM. Prompts and code are never logged ([dashboard](https://cursor.com/docs/account/teams/dashboard), [compliance](https://cursor.com/docs/enterprise/compliance-and-monitoring)).
+- **Self-hosted products.** Tabnine's private install ships an admin-only web console with usage pages, CSV and emailed reports ([reporting](https://docs.tabnine.com/main/administering-tabnine/private-installation/managing-your-team/reporting)). Langfuse and LangSmith self-host the same app as their cloud, with role-gated, filterable, exportable audit logs ([Langfuse audit logs](https://langfuse.com/docs/administration/audit-logs), [LangSmith audit logs](https://docs.langchain.com/langsmith/audit-logs)). Sourcegraph moved analytics to a separate hosted portal ([analytics](https://sourcegraph.com/docs/analytics)).
+
+What this buyer expects, distilled:
+- Adoption: active users and sessions over time.
+- Licence use and dormant users.
+- Impact: work done with the tool against work done without it.
+- Spend per user, team and model.
+- A per-user table with CSV export.
+- Team and date filters, with a minimum cohort size.
+- Members and roles as SSO and SCIM state.
+- Keys with revoke.
+- A filterable audit log with CSV and SIEM export.
+- An API behind the views.
+- A visible promise that content stays out of admin views.
+
+CD6's report already covers adoption, dormant memories, usage per actor, token cost and the audit log. CD12's pilot report covers impact. What is missing is the served, signed-in, live layer, plus team filters (EV6) and actions.
+
+### Security design (research 2026-10-09)
+
+- **The console is the backend-for-frontend.** RFC 10017 (BCP 212, OAuth 2.0 for browser-based applications) says the BFF "MUST act as a confidential client". The browser never holds a token ([RFC 10017](https://datatracker.ietf.org/doc/rfc10017/)).
+- **Sign-in.** Authorization code with PKCE, `state` and `nonce`, `response_mode=query`, and a client secret read from `.env`. The ID token gets its own check (audience is the console client id, plus `nonce` and `azp`) and shares the resolver's key cache. The resolver's own check cannot be reused: it wants the API audience and refuses a token that carries `nonce` without `typ: Bearer` (hippo-enterprise `src/sso/resolver.ts`). Sign-in also asks for an access token with the API audience, which AC5's actions use. Agents keep bearer tokens and keys, unchanged.
+- **Tenants.** `sso.json` maps each provider to one tenant. The login page picks the provider, and the console stores that choice with `state` on the server. The callback checks `iss` against it, so one provider's response cannot be replayed into another (RFC 9207, [mix-up defence](https://datatracker.ietf.org/doc/rfc9207/)). The session's tenant comes from its provider, never from a query, and every report call passes it, because an undefined tenant means all tenants.
+- **The session cookie.** One cookie, `__Host-hippo-console`, with `HttpOnly`, `Secure`, `SameSite=Strict` and `Path=/` (so it also reaches `/v1` and `/scim`, which ignore it). It holds a random id, and the server stores only that id's hash, so a backup of the session file holds no live session. The short-lived login cookie that carries `state` must be `SameSite=Lax`, because the identity provider's redirect back is a cross-site navigation. A Strict cookie set on that redirect is often not sent on the next hop, so the callback answers 200 with a same-site link instead of a redirect. A new session id is issued at sign-in and at step-up ([OWASP session management](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html)).
+- **Timeouts.** 30 minutes idle and 8 hours absolute, both stated in the security overview. Both sit inside OWASP's ranges and NIST SP 800-63B-4's AAL2 limits ([800-63B-4](https://pages.nist.gov/800-63-4/sp800-63b.html), [ASVS 5.0 V7](https://asvs.dev/v5.0.0/V7-Session-Management/)).
+- **Roles and drift.** Roles come from the groups claim at sign-in, because SCIM groups are not supported. A group removal therefore takes effect at the next sign-in, at most 8 hours later. SCIM deactivation is checked on every request and ends the session at once.
+- **Re-authentication for actions.** An action sends the identity provider `prompt=login` and `max_age=0`, with its own `state` and `nonce`. The returned `auth_time` must be later than the moment the step-up began. Some providers ignore `max_age` or leave out `auth_time`; with no `auth_time` the action is refused. AC0 records how each supported provider behaves ([OIDC Core](https://openid.net/specs/openid-connect-core-1_0.html)).
+- **Ending sessions.** RP-initiated logout as a CSRF-checked POST, an admin "end sessions" control, SCIM deactivation and the idle timeout. Back-channel logout comes later (AC9), because not every supported provider offers it and a cloud provider often cannot reach a private VM ([RP-initiated logout](https://openid.net/specs/openid-connect-rpinitiated-1_0.html), [back-channel logout](https://openid.net/specs/openid-connect-backchannel-1_0.html)).
+- **Forged requests.** A synchronizer token on every POST, and a request with `Sec-Fetch-Site: cross-site` is refused. No GET changes state. The back-channel logout endpoint is the one exemption, and it validates its logout token instead ([OWASP CSRF](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html)).
+- **Abuse and the proxy.** Per-address rate limits on login and callback. Client addresses come from the forwarded header only through the `HIPPO_CLIENT_IP_HEADER` and `HIPPO_TRUSTED_PROXIES` pair the API already uses. Every redirect URI and absolute link comes from config, never from `Host` or `X-Forwarded-Host`.
+- **Headers.** Sent as real headers, not a meta tag: `default-src 'self'; script-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'`, plus `nosniff` and a Referrer-Policy. HSTS of at least a year is set in Caddy ([OWASP CSP](https://cheatsheetseries.owasp.org/cheatsheets/Content_Security_Policy_Cheat_Sheet.html), [ASVS 5.0 V3](https://asvs.dev/v5.0.0/V3-Web-Frontend-Security/)).
+- **Logging.** Sign-ins, failed sign-ins, denied requests and every console action go to the audit log, so they also reach the SIEM export (ASVS 5.0 V16).
+
+### Build shape
+
+The console is server-rendered HTML with plain forms. It has no framework, no build step and no CDN, so it works in an air-gapped install and under `script-src 'self'`. Sidekiq's web UI and Gitea's server-rendered pages are the precedent. The pages reuse CD6's and CD12's builders (`buildAdminReport`, `buildPilotReport`), which already escape every cell and degrade per section. `renderAdminHtml` emits a whole page with a meta CSP, an inline style and a hash-pinned inline script, which `default-src 'self'` blocks, so AC2 exports its section renderers and moves the CSS and filter script to static files. The core React dashboard is not reused. It only talks to its own `/api`, and it would add a toolchain to the enterprise image.
+
+It runs as its own process, `hippo-enterprise console`, not as a listener inside `serve` (SCIM's listener lives inside `serve`). `buildAdminReport` holds one synchronous `node:sqlite` read transaction for seconds, which inside `serve` would stall prompt hooks and token checks. A separate process also keeps the client secret out of the API process, so the resolver record stays true for the API. It runs as uid 10001 on the store volume, because a read-only WAL open still writes the `-shm` file, and a root-owned file breaks the server (server-reports record). Each (tenant, window) report is built once and cached for 60 s, one build at a time. Caddy sends `handle /admin*` to it, ahead of the catch-all. Core does not change: the add-on route contract stays POST-only JSON, and no HTML or cookie handling enters the MIT core.
+
+### What it will not do
+
+- Manage users or groups. The identity provider owns them through SCIM.
+- Edit or write memories.
+- Show memory text by default. Item AC5 adds an audited reveal, if a partner asks.
+- Run as a hosted service. A10 owns hosting.
+- Change anything for agents, keys, hooks or the API.
+
+### Track AC - Admin console [planned; commercial repo; added 2026-10-09]
+
+#### AC0. Design record and threat model [planned; hard: CD6, EI11; added 2026-10-09] [commercial repo]
+A hippo-enterprise decision record does four things. It amends the OIDC resolver record so the console process, not the API, may hold a client secret and sessions. It fixes the process, the session store and the cookie, timeout and step-up rules above. It records how each supported identity provider handles `max_age`, `prompt=login` and `auth_time`. It also lists the threats and their controls: session theft, forged requests, cross-tenant reads, provider mix-up, privilege drift after a group removal (up to 8 hours) or SCIM removal (immediate), open redirect on login, host-header redirect poisoning and clickjacking. Reviewed before AC1 starts.
+
+#### AC1. Sign-in, sessions and the shell [planned; hard: AC0; added 2026-10-09] [commercial repo]
+- Covers the `console` process, the Caddy route and a per-provider `sso.json` console block (client id, redirect URI, the secret's environment variable name). The config parser rejects unknown keys today, so the block is added to it.
+- Sign-in uses code, PKCE, `state`, `nonce`, `response_mode=query` and the `iss` check. Sessions live in the console's own SQLite file on the volume, stored as id hashes, with idle and absolute expiry.
+- Adds RP-initiated logout, per-address rate limits on login and callback, and the SCIM check on every request. Every response carries the headers above. The landing page shows who is signed in and for which tenant.
+- Gated by the `admin_view` licence feature. Roles: `adminGroups` gives admin; everyone else is refused.
+- **Done when** a test identity provider (the existing `startIdp` helper) signs an admin in and out. The negative tests must pass for: no session, an expired session, a wrong tenant, a mixed-up provider, a cross-site POST, a missing CSRF token, a redirect URI outside config, a forged `Host` header, and a SCIM-removed user.
+
+#### AC2. Live overview pages [planned; hard: AC1, CD6; added 2026-10-09] [commercial repo]
+- One page per CD6 section, built from `buildAdminReport` with the session's tenant and a date window, and served from the 60 s cache: what is stored, who used what, held and dormant memories, and token cost.
+- Exports CD6's section renderers and moves the CSS and filter script to static files.
+- A per-actor table exports to CSV. The store is opened read-only, so the console never writes it.
+- **Done when** each page renders from a seeded store, and a member and a wrong-tenant admin both get 403. On the CD6 scale fixture (1,000,000 audit rows and 100,000 memories): the first build is under 3 s, a cached view is under 200 ms, and the API's prompt-hook p95 does not move during a build. The CD6 record measured 2.7 s for the whole report, before the People section was added.
+
+#### AC3. Audit log browser [planned; hard: AC1; added 2026-10-09] [commercial repo]
+- This is new SQL, so it gets an index on (tenant, ts, id). The existing index cannot serve the `IS NULL OR` tenant filter (admin-report record).
+- Keyset pagination on time and id, with a 30-day default window.
+- Filters for actor, event and repository, inside the session's tenant. CSV export covers exactly the filtered set.
+- Metadata and targets pass through `redactMetadata` and `redactTarget`, as CD6 does.
+- The console's own sign-ins and actions appear here too.
+- **Done when** paging over the scale fixture neither skips nor repeats a row, each page is under 500 ms, and the export matches the filter.
+
+#### AC4. Pilot page [planned; hard: AC1, CD12; added 2026-10-09] [commercial repo]
+- Shows CD12's with-hippo against holdout report for a chosen window, gated by `pilot_report`.
+- It shows "not measured" where CD12 does, and no saving figure before CD11 has measured one.
+- The report builds in the background and is cached, because a large telemetry set takes seconds.
+
+#### AC5. Actions with fresh sign-in [planned; hard: AC2, AC3; added 2026-10-09] [commercial repo]
+- Actions: revoke a key, approve or reject a quarantined memory, and end a user's console sessions.
+- Key and quarantine actions call the core API on the internal network with the signed-in admin's own access token, renewed by the step-up. Core then does the role, tenant and audit checks and records the right actor, so the console adds no SQL and needs no core export.
+- Each one needs a fresh step-up, a CSRF token and an admin role, and each one writes an audit event.
+- An optional audited "show memory text" for one row, off by default.
+- AC8's checklist is re-run for actions before a partner gets them.
+- **Done when** each action's audited event appears in AC3 under the admin's name. A step-up with a missing or stale `auth_time` and a member must each be refused.
+
+#### AC6. Postgres stores [planned; hard: AC2; conditional: a partner on Postgres; added 2026-10-09] [commercial repo]
+CD6's and CD12's readers open SQLite directly, and on a Postgres store the reports do not run. This slice adds store-port readers (or Postgres SQL) for the tables the pages read, so the console works with `serve --db`. It is required before any partner on Postgres gets the console. It is the same gap as hippo-enterprise E12 (server-reports record), and whichever lands first closes both.
+
+#### AC7. Team views [planned; hard: AC2, EV6; rollout gate: EV8; added 2026-10-09] [commercial repo]
+- Adds team filters and per-team rollups once EV6 makes teams first-class.
+- No team metric is shown for a team under 5 people.
+- EV8's roles (team admin, viewer) scope what each viewer sees.
+
+#### AC8. Security acceptance [planned; hard: AC1, AC2, AC3; added 2026-10-09] [commercial repo]
+- An OWASP ASVS 5.0 Level 2 self-check of the read-only console, recorded item by item.
+- The console goes into the security overview, the install runbook and the scope of the planned outside penetration test.
+- No partner gets the console before this passes. AC5 re-runs it for actions.
+
+#### AC9. Auditor role and back-channel logout [planned; hard: AC8; added 2026-10-09] [commercial repo]
+- A new `auditorGroups` gives a read-only role that sees the audit log and takes no action.
+- Back-channel logout, for providers that offer it and can reach the VM. The endpoint is exempt from the CSRF token and validates the logout token instead: `iss`, `aud`, `iat`, `jti` replay, the `events` claim, no `nonce`, and `sid` or `sub`.
+- **Done when** an auditor can read AC3 and is refused every action, and a valid logout token ends the session while a replayed one is refused.
+
+### Order, size and gates
+
+- **Order.** AC0, then AC1 to AC3, then AC8 for the read-only console. AC4, AC5 and AC9 follow. AC6 waits for a partner on Postgres, and AC7 waits for EV6.
+- **Size.** AC0 to AC3 plus AC8 are about 2 to 3 weeks for one maintainer, because AC1 is a full OIDC relying party with sessions and AC8 is a Level 2 check. AC4, AC5 and AC9 add about 1 to 2 weeks. Re-estimate when AC0 is reviewed.
+- **When.** After the first partner's security review, or sooner if a buyer asks to see it. It does not block a pilot: the report files, SSO, SCIM and SIEM export cover a pilot today.
+- **Edition.** All commercial, under `admin_view` and `pilot_report`. The core dashboard stays as it is.
+- **Measure.** Count administrator time against the report-file workflow, in the low-touch spirit of EV9. A console that adds admin work has failed.

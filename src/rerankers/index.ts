@@ -1,15 +1,16 @@
-import { clefFlashReranker, clefReranker } from './clef.js';
+import { createClefReranker } from './clef.js';
 import { crossEncoderReranker } from './cross-encoder.js';
-import { jevReranker } from './jev.js';
-import { llmReranker } from './llm.js';
+import { createJevReranker } from './jev.js';
+import { createLlmReranker } from './llm.js';
 import type { RerankerFn } from './types.js';
 
+// Each hosted reranker is built once here, so its outage warning lasts the process.
 const REGISTRY = {
-  clef: clefReranker,
-  'clef-flash': clefFlashReranker,
+  clef: createClefReranker('clef'),
+  'clef-flash': createClefReranker('clef-flash'),
   'cross-encoder': crossEncoderReranker,
-  jev: jevReranker,
-  llm: llmReranker,
+  jev: createJevReranker(crossEncoderReranker),
+  llm: createLlmReranker(),
 } satisfies Record<string, RerankerFn>;
 
 type RegisteredRerankerName = keyof typeof REGISTRY;

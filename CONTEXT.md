@@ -221,6 +221,17 @@ _Avoid_: kanban, tracker
 The JSON a host writes to a hook command's stdin at spawn. Optional, and absent only counts as a manual run when the read finished on its own; a read that timed out proves nothing either way.
 _Avoid_: stdin text, hook input, hook data
 
+**Payload reader**:
+The one function that turns the hook payload of one host event into a capture receipt. It only
+reads: no store, no disk. Whether a named file exists is the hook command's check.
+_Avoid_: parser, adapter (an adapter is a host's whole integration), handler
+
+**Capture receipt**:
+What a payload reader returns: `received` with the fields hippo read, `skipped` with the reason
+hippo refuses the payload, or `unavailable` when the read timed out with nothing. It describes the
+payload only; the hook command decides what still runs after a skip.
+_Avoid_: receipt on its own (a raw receipt is a memory), parse result
+
 **Compaction record**:
 The row in the `compactions` table for one Claude Code compaction: `hippo pre-compact` writes it
 `started`, `hippo post-compact` moves it to `summarised` and then `done`. It holds the session,

@@ -63,13 +63,13 @@ Website pages are listed in `claims` but not parsed, since they hold no structur
 | Type | Role | Stored today as |
 |---|---|---|
 | `CaptureInput` | What hippo read from one payload, before any write | not stored |
-| `CaptureReceipt` | `received`, `skipped` with a reason, or `unavailable` | the `compactions` row is the receipt record for Claude Code PreCompact; skips go to the pre-compact log |
+| `CaptureReceipt` | `received`, `skipped` with a reason, or `unavailable` | the `compactions` row is the receipt record for Claude Code PreCompact; skips go to the pre-compact log, and post-compact skips go to the same log |
 | `Checkpoint` | Working state saved before loss; not a lesson | `task_snapshots` |
 | `ProgressCursor` | How far capture has read a session's source, so a retry resumes | `~/.hippo/sessions/<session id>.cursor.json`, for VS Code's capture after each reply |
 
 The receipt has no `pending` or `processed` states yet. Those belong to the write side, and AZ4 adds them when a second runtime writes through the contract.
 
-The first reader is `readClaudeCodePreCompact`. `hippo pre-compact` calls it and logs each skip reason word for word. The second, `readVscodeStop`, decides whether `hippo session-end --turn` acts on a payload; any skip ends the run silently, since the Copilot CLI's `agentStop` shares the hook line.
+Four payload readers exist: `readClaudeCodePreCompact`, `readVscodeStop`, `readClaudeCodePostCompact` and `readSessionEnd`. `hippo pre-compact` calls the first and logs each skip reason word for word. `readVscodeStop` decides whether `hippo session-end --turn` acts on a payload; any skip ends the run silently, since the Copilot CLI's `agentStop` shares the hook line. After a skip, `hippo post-compact` logs the reason, saves nothing and still replays earlier leftovers. After a skip, `hippo session-end` still runs sleep but captures no transcript.
 
 ## Conformance fixtures
 
@@ -77,7 +77,7 @@ Fixtures live in `tests/fixtures/capture/<runtime>/<event>/*.json`. Each holds `
 
 ## Next steps (AZ4)
 
-- Move the other payload readers onto the contract: session end, post-compact and tool failure.
+- Move the tool-failure payload reader onto the contract.
 - Add store-level fixtures for a busy store, a crash and retry, two sessions at once, and a save into the wrong project.
 - Save Claude Code lessons before compaction, not only after it.
 - Record live save-and-resume runs, so modes can reach `verified`.

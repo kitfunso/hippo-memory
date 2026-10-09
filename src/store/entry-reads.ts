@@ -356,16 +356,21 @@ export interface VaultRawRow {
   scope: string | null;
 }
 
-/** Live raw rows whose artifact_ref matches a LIKE pattern, for one tenant. */
-export function selectVaultRawRows(db: DatabaseSyncLike, likeParam: string, tenantId: string): VaultRawRow[] {
-  // SAFETY: query selects exactly the columns of VaultRawRow, in the same
-  // names, from the memories table this module owns.
-  return db
-    .prepare(
-      `SELECT id, artifact_ref, tags_json, scope FROM memories
+/** Live raw rows whose artifact_ref matches a LIKE pattern, for one tenant; the store is set up first when it is new. */
+export function loadVaultRawRows(hippoRoot: string, likeParam: string, tenantId: string): VaultRawRow[] {
+  const db = openStore(hippoRoot);
+  try {
+    // SAFETY: query selects exactly the columns of VaultRawRow, in the same
+    // names, from the memories table this module owns.
+    return db
+      .prepare(
+        `SELECT id, artifact_ref, tags_json, scope FROM memories
            WHERE artifact_ref LIKE ? ESCAPE '\\' AND tenant_id = ? AND kind = 'raw'`,
-    )
-    .all(likeParam, tenantId) as VaultRawRow[];
+      )
+      .all(likeParam, tenantId) as VaultRawRow[];
+  } finally {
+    closeHippoDb(db);
+  }
 }
 
 export interface PreviewRow {
@@ -390,6 +395,26 @@ export function selectPreviewRows(db: DatabaseSyncLike, columns: ReadonlySet<str
 /** True when a memory row, of any tenant, already holds `id`. */
 export function entryIdTakenAt(db: DatabaseSyncLike, id: string): boolean {
   return db.prepare(`SELECT 1 FROM memories WHERE id = ?`).get(id) !== undefined;
+}
+
+/** The text, tenant and scope of memory `id`, or undefined when no row holds it. */
+export function entryRejectRowAt(db: DatabaseSyncLike, id: string): { content: string; tenant_id: string; scope: string | null } | undefined {
+  // SAFETY: row's shape matches the three columns named in the SELECT.
+  return db
+    .prepare(`SELECT content, tenant_id, scope FROM memories WHERE id = ?`)
+    .get(id) as { content: string; tenant_id: string; scope: string | null } | undefined;
+}
+
+/** Memory ids held by each typed-object table, with the status of the object that holds them. */
+const OBJECT_TABLES = ['decisions', 'incidents', 'processes', 'policies', 'skills', 'project_briefs', 'customer_notes'] as const;
+
+export function objectMemoryRowsAt(db: DatabaseSyncLike): Array<{ memory_id: string; status: string }> {
+  const out: Array<{ memory_id: string; status: string }> = [];
+  for (const table of OBJECT_TABLES) {
+    // SAFETY: SELECT of two TEXT columns, filtered to a non-null memory_id.
+    out.push(...(db.prepare(`SELECT memory_id, status FROM ${table} WHERE memory_id IS NOT NULL`).all() as { memory_id: string; status: string }[]));
+  }
+  return out;
 }
 
 /** Live rows of a tenant whose source does not start with `sourcePrefix`; `origins` (global store only) limits them to user-global rows and those projects. */
