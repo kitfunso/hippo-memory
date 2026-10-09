@@ -4,6 +4,9 @@ import { fetchWithRetry } from '../util/http-retry.js';
 // A Retry-After longer than this would outlast most budgets, so the answer is handed back and the reranker falls back.
 const RETRY_WAIT_CAP_MS = 2_000;
 
+// Every reranker reads its reply through this cap; the largest honest reply is a few KB, and 1 MiB leaves room for a verbose envelope.
+export const RERANKER_MAX_REPLY_BYTES = 1024 * 1024;
+
 /** POST a scoring request. A dropped connection, 429 or 5xx is retried, since scoring changes nothing on the far side. */
 export async function rerankerPost(url: string, init: RequestInit, budgetMs: number): Promise<Response> {
   // The budget bounds the whole call, retries included, so recall never waits past the configured timeout.

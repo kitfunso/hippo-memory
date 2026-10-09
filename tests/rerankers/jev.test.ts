@@ -227,3 +227,27 @@ describe('jev reranker', () => {
     expect(warnSpy).toHaveBeenCalledOnce();
   });
 });
+
+describe('jev reranker reply size cap', () => {
+  it('falls back, names the cap and stops pulling the body once it passes 1 MiB', async () => {
+    const warn = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    process.env.TYPESAFE_API_KEY = FAKE_KEY;
+    let pulled = 0;
+    let cancelled = false;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulled++;
+        controller.enqueue(new Uint8Array(64 * 1024).fill(0x20));
+      },
+      cancel() { cancelled = true; },
+    });
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(body, { status: 200 }));
+    const items = [asResult('alpha', 1.0), asResult('beta', 0.9), asResult('gamma', 0.8)];
+    const out = await createJevReranker(reversingFallback)('q', items);
+    delete process.env.TYPESAFE_API_KEY;
+    expect(contents(out)).toEqual(['gamma', 'beta', 'alpha']);
+    expect(warn.mock.calls.map((c) => String(c[0])).join('')).toContain('reply over 1048576 bytes');
+    expect(cancelled).toBe(true);
+    expect(pulled).toBeLessThan(100);
+  });
+});

@@ -118,6 +118,14 @@ export function listRegisteredWorkspaces(globalRoot: string): string[] {
   return loadWorkspaceRegistry(globalRoot).workspaces;
 }
 
+// Crontab reads % as a newline and both shells expand $ and backtick; a backslash is a path separator on Windows only.
+const UNSAFE_RUNNER_PATH_CHARS = /["`$%\n\r]/;
+
+/** True when a runner path holds a character that would break the quoted command or split the crontab line. */
+export function hasUnsafeRunnerPathChars(runnerDir: string, platform: NodeJS.Platform): boolean {
+  return UNSAFE_RUNNER_PATH_CHARS.test(runnerDir) || (platform !== 'win32' && runnerDir.includes('\\'));
+}
+
 export function buildDailyRunnerCommand(
   projectDir: string,
   platform: NodeJS.Platform = process.platform,

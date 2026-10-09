@@ -4,7 +4,7 @@ import * as path from 'path';
 import { execFileSync, execSync } from 'child_process';
 import { installJsonHooks, type InstallResult } from '../hooks/json-hooks.js';
 import { CODEX_TRUST_LINE } from '../hooks/shared.js';
-import { DAILY_TASK_NAME, buildDailyRunnerCommand, buildSchtasksCreateArgs, buildWindowsTaskRun, quoteInsideWindowsArg } from './scheduler.js';
+import { DAILY_TASK_NAME, buildDailyRunnerCommand, hasUnsafeRunnerPathChars, buildSchtasksCreateArgs, buildWindowsTaskRun, quoteInsideWindowsArg } from './scheduler.js';
 
 /** Adds hippo's two Codex hooks and says what changed; each install ends on the trust reminder, since Codex skips an untrusted hook. */
 export function installCodexMemoryHooks(indent: string): void {
@@ -51,10 +51,7 @@ function warnSchedulerTimedOut(command: string): void {
 
 export function setupDailySchedule(globalRoot: string): void {
   const runnerDir = path.resolve(globalRoot);
-  // Reject paths with characters that could break shell/crontab quoting
-  // (backslash is normal on Windows, only dangerous in Unix shell/crontab)
-  const unsafeChars = process.platform === 'win32' ? /["`$%\n\r]/ : /["`$\n\r\\]/;
-  if (unsafeChars.test(runnerDir)) {
+  if (hasUnsafeRunnerPathChars(runnerDir, process.platform)) {
     console.log(`   Skipping schedule: runner path contains unsafe characters.`);
     return;
   }

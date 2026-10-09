@@ -3,7 +3,9 @@ import type { RerankerFn, RerankResult, RerankerOptions } from './types.js';
 import type { SearchResult } from '../core/search-types.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';
 import { createOutageWarning } from './outage-warning.js';
-import { rerankerPost } from './remote.js';
+import { rerankerPost, RERANKER_MAX_REPLY_BYTES } from './remote.js';
+import { readCappedJson } from '../util/capped-json.js';
+import { type JsonValue, isJsonNumber, isJsonObject } from '../util/json.js';
 import { compareScoresDesc } from '../core/compare.js';
 import { errorMessage } from '../util/log.js';
 
@@ -18,26 +20,24 @@ const DEFAULT_MODEL = 'jev-1.13.0';
 // The pool size the eval numbers were measured at.
 export const JEV_DEFAULT_TOP_K = 40;
 
-interface JevAnswer {
-  noul?: number;
-}
-
 function truncate(s: string, n: number): string {
   return s.length <= n ? s : `${s.slice(0, n)}...`;
 }
 
 // Number.isFinite rejects a string or null without coercing it, which the
 // declared type cannot promise about a third-party payload.
-function isProbability(v: number | undefined): v is number {
-  return v !== undefined && Number.isFinite(v) && v >= 0 && v <= 1;
+function isProbability(v: JsonValue | undefined): v is number {
+  return isJsonNumber(v) && Number.isFinite(v) && v >= 0 && v <= 1;
 }
 
 // A half-scored list ranks worse than the order it would replace, so one bad
 // answer voids the whole response.
-function parseScores(answers: Record<string, JevAnswer> | undefined, n: number): number[] | null {
+function parseScores(body: JsonValue, n: number): number[] | null {
+  const answers = isJsonObject(body) ? body.answers : undefined;
   const out: number[] = [];
   for (let i = 1; i <= n; i++) {
-    const v = answers?.[`c${i}`]?.noul;
+    const answer = isJsonObject(answers) ? answers[`c${i}`] : undefined;
+    const v = isJsonObject(answer) ? answer.noul : undefined;
     if (!isProbability(v)) return null;
     out.push(v);
   }
@@ -86,8 +86,7 @@ async function requestScores(query: string, head: SearchResult[]): Promise<numbe
     await resp.body?.cancel();
     throw new Error(`HTTP ${resp.status}${requestId ? `, request ${requestId}` : ''}`);
   }
-  const body: { answers?: Record<string, JevAnswer> } = await resp.json();
-  const scores = parseScores(body.answers, head.length);
+  const scores = parseScores(await readCappedJson(resp, RERANKER_MAX_REPLY_BYTES), head.length);
   if (!scores) throw new Error('incomplete or out-of-range answers');
   return scores;
 }
