@@ -1,6 +1,6 @@
 // Quarantine review: list, approve and reject held memories.
 
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../db.js';
+import { openHippoDb, closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../db.js';
 import { ConflictError, ForbiddenError, NotFoundError } from '../api-errors.js';
 import { writeEntryMirrors } from '../store/entry-writes.js';
 import { readEntry, selectEntriesByIds } from '../store/entry-reads.js';
@@ -75,8 +75,7 @@ export function quarantineApprove(ctx: Context, id: string): void {
   }
   const db = openHippoDb(ctx.hippoRoot);
   try {
-    db.exec('BEGIN IMMEDIATE');
-    try {
+    withWriteScope(db, 'quarantine_approve', () => {
       const row = loadPendingQuarantineRow(db, ctx.tenantId, id);
       const quarantineScope = quarantineScopeFor(row.originalScope);
       const updated = db
@@ -93,11 +92,7 @@ export function quarantineApprove(ctx: Context, id: string): void {
         targetId: id,
         metadata: { originalScope: row.originalScope },
       });
-      db.exec('COMMIT');
-    } catch (err) {
-      try { db.exec('ROLLBACK'); } catch { /* already rolled back */ }
-      throw err;
-    }
+    });
   } finally {
     closeHippoDb(db);
   }
@@ -117,8 +112,7 @@ export function quarantineReject(ctx: Context, id: string): void {
   }
   const db = openHippoDb(ctx.hippoRoot);
   try {
-    db.exec('BEGIN IMMEDIATE');
-    try {
+    withWriteScope(db, 'quarantine_reject', () => {
       loadPendingQuarantineRow(db, ctx.tenantId, id);
       rejectQuarantineRow(db, ctx.tenantId, id, ctx.actor.subject);
       appendAuditEvent(db, {
@@ -128,11 +122,7 @@ export function quarantineReject(ctx: Context, id: string): void {
         targetId: id,
         metadata: {},
       });
-      db.exec('COMMIT');
-    } catch (err) {
-      try { db.exec('ROLLBACK'); } catch { /* already rolled back */ }
-      throw err;
-    }
+    });
   } finally {
     closeHippoDb(db);
   }

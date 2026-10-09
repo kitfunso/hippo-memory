@@ -6,7 +6,7 @@
  * exceeds WM_MAX_ENTRIES per scope.
  */
 
-import { closeHippoDb } from './db.js';
+import { closeHippoDb, withWriteScope } from './db.js';
 import { openStore } from './store/open.js';
 import type { JsonValue } from './json.js';
 import { warnDamagedColumn } from './util/stored-json.js';
@@ -82,8 +82,7 @@ export function wmPush(hippoRoot: string, opts: {
     const now = new Date().toISOString();
     const importance = opts.importance ?? 0;
 
-    db.exec('BEGIN IMMEDIATE');
-    try {
+    return withWriteScope(db, 'wm_push', () => {
       const result = db.prepare(`
         INSERT INTO working_memory(scope, session_id, task_id, importance, content, metadata_json, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -122,12 +121,8 @@ export function wmPush(hippoRoot: string, opts: {
         `).run(opts.scope, excess);
       }
 
-      db.exec('COMMIT');
       return id;
-    } catch (error) {
-      try { db.exec('ROLLBACK'); } catch { /* ignore */ }
-      throw error;
-    }
+    });
   } finally {
     closeHippoDb(db);
   }

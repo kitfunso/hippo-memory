@@ -12,7 +12,7 @@
  * surface the same guard as clear throws BEFORE hitting the trigger backstop.
  */
 
-import { openHippoDb, closeHippoDb } from '../db.js';
+import { openHippoDb, closeHippoDb, withWriteScope } from '../db.js';
 import { assertTenantId } from '../tenant.js';
 import { log } from '../log.js';
 import { clock } from '../write-budget.js';
@@ -401,18 +401,7 @@ export function runGraphRebuildTransaction<T>(
   assertTenantId('runGraphRebuildTransaction', tenantId);
   const db = openHippoDb(hippoRoot, opts);
   try {
-    db.exec('BEGIN IMMEDIATE');
-    let committed = false;
-    try {
-      const out = fn(db);
-      db.exec('COMMIT');
-      committed = true;
-      return out;
-    } finally {
-      if (!committed) {
-        try { db.exec('ROLLBACK'); } catch { /* preserve the original throw */ }
-      }
-    }
+    return withWriteScope(db, 'graph_rebuild', () => fn(db));
   } finally {
     closeHippoDb(db);
   }
@@ -466,15 +455,12 @@ export function removeGraphEntitiesForObject(
     assertTenantId('removeGraphEntitiesForObject', tenantId);
     const db = openHippoDb(hippoRoot);
     try {
-      db.exec('BEGIN IMMEDIATE');
-      db.prepare(`DELETE FROM relations WHERE tenant_id = ? AND source_object_type = ? AND source_object_id = ?`)
-        .run(tenantId, sourceObjectType, sourceObjectId);
-      db.prepare(`DELETE FROM entities WHERE tenant_id = ? AND source_object_type = ? AND source_object_id = ?`)
-        .run(tenantId, sourceObjectType, sourceObjectId);
-      db.exec('COMMIT');
-    } catch (e) {
-      try { db.exec('ROLLBACK'); } catch { /* preserve original throw */ }
-      throw e;
+      withWriteScope(db, 'remove_graph_entities', () => {
+        db.prepare(`DELETE FROM relations WHERE tenant_id = ? AND source_object_type = ? AND source_object_id = ?`)
+          .run(tenantId, sourceObjectType, sourceObjectId);
+        db.prepare(`DELETE FROM entities WHERE tenant_id = ? AND source_object_type = ? AND source_object_id = ?`)
+          .run(tenantId, sourceObjectType, sourceObjectId);
+      });
     } finally {
       closeHippoDb(db);
     }

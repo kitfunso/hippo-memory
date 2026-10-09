@@ -1,5 +1,5 @@
 import { generateId } from './memory.js';
-import { closeHippoDb, type DatabaseSyncLike } from './db.js';
+import { closeHippoDb, withWriteScope, withWriteScopeOr, type DatabaseSyncLike } from './db.js';
 import { SessionHandoff, SessionHandoffRow, rowToSessionHandoff, isHandoffOutcome, HandoffOutcome } from './handoff.js';
 import { Card, CardStatus, CardRun, CardComment, CARD_TRANSITIONS, CARD_LEASE_MS } from './card.js';
 import { assertTenantId } from './tenant.js';
@@ -172,8 +172,7 @@ export function createCard(
     const dependsOn = [...new Set(input.dependsOn ?? [])];
     let id = '';
 
-    db.exec('BEGIN IMMEDIATE');
-    try {
+    withWriteScope(db, 'create_card', () => {
       // Probe runs inside the transaction (mirrors batchWriteAndDelete): a parent
       // completing between an outside-the-lock read and the INSERT would strand the child.
       let allParentsDone = true;
@@ -206,11 +205,7 @@ export function createCard(
           INSERT INTO card_deps (parent, child, tenant_id, created_at) VALUES (?, ?, ?, ?)
         `).run(parentId, id, tenantId, now);
       }
-      db.exec('COMMIT');
-    } catch (error) {
-      try { db.exec('ROLLBACK'); } catch { /* commit may have already rolled back */ }
-      throw error;
-    }
+    });
     return loadCardRow(db, tenantId, id)!;
   } finally {
     closeHippoDb(db);
@@ -320,9 +315,7 @@ export function claimCard(hippoRoot: string, tenantId: string, id: string, runti
   }
   const db = openStore(hippoRoot);
   try {
-    db.exec('BEGIN IMMEDIATE');
-    let runId = 0;
-    try {
+    const runId = withWriteScopeOr(db, 'claim_card', (rollback) => {
       const changes = transitionCard(db, tenantId, id, ['ready', 'blocked'], 'running', {
         setSql: 'assignee_runtime = ?',
         whereSql: 'assignee_runtime IS NULL',
@@ -332,21 +325,16 @@ export function claimCard(hippoRoot: string, tenantId: string, id: string, runti
         if (!loadCardRow(db, tenantId, id)) {
           throw new Error(`unknown card id: ${id}`);
         }
-        db.exec('ROLLBACK');
-        return null;
+        return rollback(null);
       }
       const now = new Date().toISOString();
       const insert = db.prepare(`
         INSERT INTO card_runs (card, runtime, session_id, started, created_at, updated_at, tenant_id)
         VALUES (?, ?, ?, ?, ?, ?, ?)
       `).run(id, runtime, sessionId ?? null, now, now, now, tenantId);
-      runId = Number(insert.lastInsertRowid ?? 0);
-      db.exec('COMMIT');
-    } catch (error) {
-      try { db.exec('ROLLBACK'); } catch { /* commit may have already rolled back */ }
-      throw error;
-    }
-    return { ...loadCardRow(db, tenantId, id)!, runId };
+      return Number(insert.lastInsertRowid ?? 0);
+    });
+    return runId === null ? null : { ...loadCardRow(db, tenantId, id)!, runId };
   } finally {
     closeHippoDb(db);
   }
@@ -358,25 +346,20 @@ export function heartbeatCard(hippoRoot: string, tenantId: string, id: string, r
   assertRunId(runId);
   const db = openStore(hippoRoot);
   try {
-    db.exec('BEGIN IMMEDIATE');
-    try {
+    const beat = withWriteScopeOr(db, 'heartbeat_card', (rollback) => {
       const card = loadCardRow(db, tenantId, id);
       if (!card) {
         throw new Error(`unknown card id: ${id}`);
       }
       if (card.status !== 'running' || !isLiveRun(db, tenantId, id, runId)) {
-        db.exec('ROLLBACK');
-        return null;
+        return rollback(false);
       }
       const now = new Date().toISOString();
       db.prepare(`UPDATE cards SET lease_until = ?, heartbeat_at = ? WHERE id = ? AND tenant_id = ?`)
         .run(leaseUntilFrom(now), now, id, tenantId);
-      db.exec('COMMIT');
-    } catch (error) {
-      try { db.exec('ROLLBACK'); } catch { /* commit may have already rolled back */ }
-      throw error;
-    }
-    return loadCardRow(db, tenantId, id);
+      return true;
+    });
+    return beat ? loadCardRow(db, tenantId, id) : null;
   } finally {
     closeHippoDb(db);
   }
@@ -391,27 +374,22 @@ export function blockCard(hippoRoot: string, tenantId: string, id: string, reaso
   if (runId !== undefined) assertRunId(runId);
   const db = openStore(hippoRoot);
   try {
-    db.exec('BEGIN IMMEDIATE');
-    try {
+    const blocked = withWriteScopeOr(db, 'block_card', (rollback) => {
       const allowed = runId === undefined || isLiveRun(db, tenantId, id, runId);
       const changes = allowed ? transitionCard(db, tenantId, id, ['running'], 'blocked', { setSql: 'assignee_runtime = NULL' }) : 0;
       if (changes === 0) {
         if (!loadCardRow(db, tenantId, id)) {
           throw new Error(`unknown card id: ${id}`);
         }
-        db.exec('ROLLBACK');
-        return null;
+        return rollback(false);
       }
       const now = new Date().toISOString();
       // Close the interrupted run here so completeCard's ended IS NULL scope only ever matches the live run.
       closeLiveRun(db, tenantId, id, 'blocked', now);
       insertCardComment(db, tenantId, id, 'system', reason);
-      db.exec('COMMIT');
-    } catch (error) {
-      try { db.exec('ROLLBACK'); } catch { /* commit may have already rolled back */ }
-      throw error;
-    }
-    return loadCardRow(db, tenantId, id);
+      return true;
+    });
+    return blocked ? loadCardRow(db, tenantId, id) : null;
   } finally {
     closeHippoDb(db);
   }
@@ -423,23 +401,18 @@ export function reviewCard(hippoRoot: string, tenantId: string, id: string, runI
   if (runId !== undefined) assertRunId(runId);
   const db = openStore(hippoRoot);
   try {
-    db.exec('BEGIN IMMEDIATE');
-    try {
+    const moved = withWriteScopeOr(db, 'review_card', (rollback) => {
       const allowed = runId === undefined || isLiveRun(db, tenantId, id, runId);
       const changes = allowed ? transitionCard(db, tenantId, id, ['running'], 'review') : 0;
       if (changes === 0) {
         if (!loadCardRow(db, tenantId, id)) {
           throw new Error(`unknown card id: ${id}`);
         }
-        db.exec('ROLLBACK');
-        return null;
+        return rollback(false);
       }
-      db.exec('COMMIT');
-    } catch (error) {
-      try { db.exec('ROLLBACK'); } catch { /* commit may have already rolled back */ }
-      throw error;
-    }
-    return loadCardRow(db, tenantId, id);
+      return true;
+    });
+    return moved ? loadCardRow(db, tenantId, id) : null;
   } finally {
     closeHippoDb(db);
   }
@@ -460,9 +433,8 @@ export function completeCard(
   if (runId !== undefined) assertRunId(runId);
   const db = openStore(hippoRoot);
   try {
-    db.exec('BEGIN IMMEDIATE');
-    let promotedChildren: string[] = [];
-    try {
+    const promoted = withWriteScopeOr(db, 'complete_card', (rollback) => {
+      const promotedChildren: string[] = [];
       const target: CardStatus = outcome === 'success' ? 'done' : 'shelved';
       const allowed = runId === undefined || isLiveRun(db, tenantId, id, runId);
       const changes = allowed ? transitionCard(db, tenantId, id, ['review'], target) : 0;
@@ -470,8 +442,7 @@ export function completeCard(
         if (!loadCardRow(db, tenantId, id)) {
           throw new Error(`unknown card id: ${id}`);
         }
-        db.exec('ROLLBACK');
-        return null;
+        return rollback(null);
       }
       const now = new Date().toISOString();
       closeLiveRun(db, tenantId, id, outcome, now);
@@ -498,13 +469,9 @@ export function completeCard(
           }
         }
       }
-
-      db.exec('COMMIT');
-    } catch (error) {
-      try { db.exec('ROLLBACK'); } catch { /* commit may have already rolled back */ }
-      throw error;
-    }
-    return { card: loadCardRow(db, tenantId, id)!, promotedChildren };
+      return promotedChildren;
+    });
+    return promoted === null ? null : { card: loadCardRow(db, tenantId, id)!, promotedChildren: promoted };
   } finally {
     closeHippoDb(db);
   }
@@ -515,8 +482,7 @@ export function reclaimExpiredCards(hippoRoot: string, tenantId: string): string
   assertTenantId('reclaimExpiredCards', tenantId);
   const db = openStore(hippoRoot);
   try {
-    db.exec('BEGIN IMMEDIATE');
-    try {
+    return withWriteScope(db, 'reclaim_expired_cards', () => {
       // Read lease times under the write lock, so a heartbeat that committed while we waited wins.
       const now = new Date().toISOString();
       // SAFETY: rows' shape matches the single `id` column named in the SELECT below.
@@ -529,12 +495,8 @@ export function reclaimExpiredCards(hippoRoot: string, tenantId: string): string
         transitionCard(db, tenantId, id, ['running'], 'ready', { setSql: 'assignee_runtime = NULL' });
         closeLiveRun(db, tenantId, id, 'reclaimed', now);
       }
-      db.exec('COMMIT');
       return ids;
-    } catch (error) {
-      try { db.exec('ROLLBACK'); } catch { /* commit may have already rolled back */ }
-      throw error;
-    }
+    });
   } finally {
     closeHippoDb(db);
   }
