@@ -264,7 +264,7 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
       }, { timeoutMs: REQUEST_TIMEOUT_MS });
     } catch (err) {
       const msg = errorMessage(err);
-      throw new Error(redact(`embedding request to ${this.kind} failed: ${msg}`, key));
+      throw new Error(redact(`embedding request to ${this.kind} failed: ${msg}`, key), { cause: err });
     }
 
     if (!resp.ok) {
@@ -284,7 +284,7 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
       json = await resp.json();
     } catch (err) {
       const msg = errorMessage(err);
-      throw new Error(redact(`${this.kind} embeddings returned invalid JSON: ${msg}`, key));
+      throw new Error(redact(`${this.kind} embeddings returned invalid JSON: ${msg}`, key), { cause: err });
     }
 
     const vectors = spec.extractVectors(json);
