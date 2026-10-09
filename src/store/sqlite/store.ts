@@ -13,6 +13,7 @@ import { recordTokenUse } from '../../token-ledger.js';
 import { loadAmbientCandidates, loadContextCandidates } from '../candidates.js';
 import { loadEntriesByIds, loadFreshRawMemories } from '../entry-reads.js';
 import { strengthenRetrievedInOwnTx } from '../entry-writes.js';
+import { servedConnectorEvents, sqliteConnectorEvents } from './connector-events-group.js';
 import { servedConnectorWrites, sqliteConnectorWrites } from './connector-writes-group.js';
 import { sqliteDagReads } from './dag-reads-group.js';
 import { sqliteEntryWrites } from './entry-writes-group.js';
@@ -112,6 +113,7 @@ export function sqliteSyncStore(hippoRoot: string): SqliteSyncStore & Sync<Omit<
     quarantine: sqliteQuarantine(hippoRoot),
     graphReads: sqliteGraphReads(hippoRoot),
     connectorWrites: sqliteConnectorWrites(hippoRoot),
+    connectorEvents: sqliteConnectorEvents(hippoRoot),
     objects: sqliteObjects(hippoRoot),
     readiness: {
       ping() {
@@ -182,6 +184,7 @@ export function sqliteStore(hippoRoot: string): HippoStore & StoreGroups {
     quarantine: servedQuarantine(sync.quarantine),
     graphReads: servedGraphReads(sync.graphReads),
     connectorWrites: servedConnectorWrites(sync.connectorWrites),
+    connectorEvents: servedConnectorEvents(sync.connectorEvents),
     objects: servedObjects(sqliteObjects(hippoRoot)),
     readiness: { ping: async () => sync.readiness.ping() },
     close: async () => sync.close(),

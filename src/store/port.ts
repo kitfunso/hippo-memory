@@ -19,6 +19,8 @@ import type { QuarantineRow, QuarantineStatus } from './quarantine.js';
 import type { ScopeActor } from '../recall-scope.js';
 import type { RecallTraceInput } from './recall-trace.js';
 import type { AmbientLoadResult, AmbientRecallRequest, ContextCandidateFilter, RecentOrigins } from './candidates.js';
+import type { GithubDlqWrite, GithubRouting } from './connectors/github.js';
+import type { SlackDlqInsert, SlackTeamRoute } from './connectors/slack.js';
 import type { StrengthenOptions } from './entry-writes.js';
 import type { SessionEvent, TaskSnapshot } from './rows.js';
 import type { OriginFilter, VectorCandidateSpec } from './search-rows.js';
@@ -488,6 +490,48 @@ export interface ConnectorWrites {
   archiveConnectorEntry(archive: ConnectorArchive): Promise<string>;
 }
 
+/** What the event log holds for one event's key; `memoryId` is null for an event logged with no memory. */
+export type ConnectorEventRecord = { readonly seen: false } | { readonly seen: true; readonly memoryId: string | null };
+
+export interface DeletionLookup {
+  readonly event: ConnectorEvent;
+  readonly artifactRef: string;
+  readonly tenantId: string;
+}
+
+/** `memoryId` is null when the tenant holds no raw row for the artifact. */
+export type DeletionTarget = { readonly seen: true } | { readonly seen: false; readonly memoryId: string | null };
+
+export interface ArtifactArchive {
+  readonly tenantId: string;
+  readonly actor: string;
+  readonly artifactRef: string;
+  readonly reason: string;
+  readonly event: Extract<ConnectorEvent, { readonly connector: 'github' }>;
+}
+
+/** One payload a webhook could not use, already redacted, for the dead-letter queue of its connector. */
+export type ConnectorDeadLetter = ({ readonly connector: 'slack' } & SlackDlqInsert) | ({ readonly connector: 'github' } & GithubDlqWrite);
+
+/** What a connector delivery reads and writes beside connectorWrites: the event log, tenant routing, the dead-letter queue and the archive of a deleted artifact. */
+export interface ConnectorEvents {
+  /** The log row of the event's key, in its connector's own key space. */
+  eventRecord(event: ConnectorEvent): Promise<ConnectorEventRecord>;
+  /** Logs an event that stored no memory, so its redelivery finds it. A key logged before keeps its row, the memory id it names included. */
+  markEventSeen(event: ConnectorEvent): Promise<void>;
+  /** Both reads on one snapshot: an event logged before answers `seen`, else the raw row the tenant holds for the artifact. Another tenant's row under the same ref is never returned. */
+  deletionTarget(lookup: DeletionLookup): Promise<DeletionTarget>;
+  /** An event logged before answers `duplicate` and changes nothing. Else, in one transaction, every raw row the tenant holds for the artifact is archived with one archive_raw row
+   *  ({reason}) under `actor`, and the event is logged naming the first of them, or no memory when there was none. One failed archive undoes them all and the log row. No reach check. */
+  archiveDeletedArtifact(archive: ArtifactArchive): Promise<{ readonly duplicate: boolean; readonly archived: number }>;
+  /** The tenant a Slack team is registered to, or how many workspaces are registered when it is not. */
+  slackTeamRoute(teamId: string): Promise<SlackTeamRoute>;
+  /** The tenant of the installation, or of the repository when no installation is named, with the size of both routing tables. */
+  githubRouting(query: { readonly installationId?: string | null; readonly repoFullName?: string | null }): Promise<GithubRouting>;
+  /** Appends the row and answers its id. */
+  parkDeadLetter(letter: ConnectorDeadLetter): Promise<number>;
+}
+
 /** `storedVectors` with no number[] copy, for a store that holds vectors as Float32 bytes. */
 export interface VectorViews {
   /** The same ids and values as `VectorReads.storedVectors`, each value a Float32 view. */
@@ -513,6 +557,8 @@ export interface StoreGroups {
   readonly graphReads: GraphReads;
   /** Unset on a store built before it, where a write that carries a connector event or untrusted content answers 501. */
   readonly connectorWrites: ConnectorWrites;
+  /** Unset on a store built before it, where both connector webhooks answer 501. */
+  readonly connectorEvents: ConnectorEvents;
   readonly objects: Objects;
   /** Unset on a store built before it, where GET /ready answers 200 with `store: "unchecked"`. */
   readonly readiness: Readiness;

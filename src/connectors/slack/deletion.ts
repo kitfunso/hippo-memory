@@ -1,5 +1,6 @@
 import { archiveRaw, type Context } from '../../api.js';
-import { markSlackEventSeen, slackDeletionTarget } from '../../store/connectors/slack.js';
+import { requireGroup, storeFor } from '../../store-port.js';
+import type { ConnectorEvent } from '../../store/port.js';
 
 export interface DeletionInput {
   teamId: string;
@@ -17,28 +18,23 @@ export interface DeletionResult {
 
 /** Handles Slack `message_deleted`. The store logs the event in the archive's own transaction, so a crash cannot leave a retry
  *  answering `not_found` where `duplicate` is due. */
-export function handleMessageDeleted(ctx: Context, input: DeletionInput): DeletionResult {
+export async function handleMessageDeleted(ctx: Context, input: DeletionInput): Promise<DeletionResult> {
+  const events = requireGroup(storeFor(ctx), 'connectorEvents');
+  const event: ConnectorEvent = { connector: 'slack', eventId: input.eventId };
   // The tenant in the lookup is load-bearing: without it a deletion event from
   // tenant A could archive tenant B's raw row sharing the same artifact_ref.
-  const target = slackDeletionTarget(ctx.hippoRoot, {
-    eventId: input.eventId,
+  const target = await events.deletionTarget({
+    event,
     artifactRef: `slack://${input.teamId}/${input.channelId}/${input.deletedTs}`,
     tenantId: ctx.tenantId,
   });
   if (target.seen) return { status: 'duplicate', memoryId: null };
   const memoryId = target.memoryId;
   if (!memoryId) {
-    // No row to archive — still mark the deletion event seen so a retry returns
-    // 'duplicate'. There is nothing to roll back here, so a handle of its own
-    // is fine for this branch.
-    markSlackEventSeen(ctx.hippoRoot, input.eventId, null);
+    // No row to archive: the event is still marked seen, so a retry answers 'duplicate'.
+    await events.markEventSeen(event);
     return { status: 'not_found', memoryId: null };
   }
-  archiveRaw(
-    { ...ctx, store: undefined }, // this function answers at once and its event reads go by root, so the archive runs on hippo.db too
-    memoryId,
-    `source_deleted:slack:${input.teamId}:${input.channelId}:${input.deletedTs}`,
-    { event: { connector: 'slack', eventId: input.eventId } },
-  );
+  await archiveRaw(ctx, memoryId, `source_deleted:slack:${input.teamId}:${input.channelId}:${input.deletedTs}`, { event });
   return { status: 'archived', memoryId };
 }

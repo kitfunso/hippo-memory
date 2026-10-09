@@ -181,7 +181,7 @@ async function drainStream(
 
       const evt = toIngestEvent(item);
       if (!evt) continue;
-      const r = ingestEvent(ctx, {
+      const r = await ingestEvent(ctx, {
         event: evt,
         rawBody: JSON.stringify(item),
         deliveryId: `backfill:${ctx.tenantId}:${updatedAt ?? ''}`,

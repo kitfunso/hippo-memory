@@ -241,7 +241,7 @@ describe('GitHub connector — 200-event smoke test', () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  it('ingests the stream cleanly and enforces every security boundary', () => {
+  it('ingests the stream cleanly and enforces every security boundary', async () => {
     const ctx = ctxFor(root);
     const deliveries = buildDeliveryStream();
     expect(deliveries).toHaveLength(200);
@@ -249,7 +249,7 @@ describe('GitHub connector — 200-event smoke test', () => {
     // ---- Stream 1: ingest all 200 -----------------------------------------
     const results: IngestResult[] = [];
     for (const d of deliveries) {
-      results.push(ingestEvent(ctx, { event: d.event, rawBody: d.rawBody, deliveryId: d.deliveryId }));
+      results.push(await ingestEvent(ctx, { event: d.event, rawBody: d.rawBody, deliveryId: d.deliveryId }));
     }
     const ingested = results.filter((r) => r.status === 'ingested').length;
     expect(ingested).toBe(200);
@@ -266,7 +266,7 @@ describe('GitHub connector — 200-event smoke test', () => {
     let archivedTotal = 0;
     for (const d of toDelete) {
       const idempotencyKey = computeIdempotencyKey(`${d.event.eventName}.deleted`, `delete:${d.artifactRef}`);
-      const res = handleCommentDeleted(ctx, {
+      const res = await handleCommentDeleted(ctx, {
         artifactRef: d.artifactRef,
         idempotencyKey,
         deliveryId: `del-${d.deliveryId}`,
@@ -308,7 +308,7 @@ describe('GitHub connector — 200-event smoke test', () => {
     const beforeReplay = rawCount(root);
     let duplicateCount = 0;
     for (const d of deliveries) {
-      const r = ingestEvent(ctx, { event: d.event, rawBody: d.rawBody, deliveryId: d.deliveryId });
+      const r = await ingestEvent(ctx, { event: d.event, rawBody: d.rawBody, deliveryId: d.deliveryId });
       // Either fast-path 'duplicate' (live row) or 'skipped'/'duplicate' for
       // the 5 archived rows (their event_log row still exists -> 'duplicate').
       expect(['duplicate', 'skipped', 'skipped_duplicate']).toContain(r.status);
@@ -353,7 +353,7 @@ describe('GitHub connector — 200-event smoke test', () => {
     const beforeReplayDef = rawCount(root);
     let replayDuplicates = 0;
     for (const d of deliveries) {
-      const r = ingestEvent(ctx, {
+      const r = await ingestEvent(ctx, {
         event: d.event,
         rawBody: d.rawBody,
         // Fresh UUID — body+eventName must still dedupe.
@@ -374,7 +374,7 @@ describe('GitHub connector — 200-event smoke test', () => {
       db.prepare(
         `INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?, ?, ?)`,
       ).run('99999', 'tenant-known', new Date().toISOString());
-      const resolved = resolveTenantForGitHub(root, { installationId: 'unknown-99' });
+      const resolved = await resolveTenantForGitHub(root, { installationId: 'unknown-99' });
       expect(resolved).toBeNull();
     } finally {
       closeHippoDb(db);

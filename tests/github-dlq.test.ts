@@ -20,8 +20,8 @@ describe('github DLQ', () => {
 
   afterEach(() => rmSync(root, { recursive: true, force: true }));
 
-  it('parkInDlq round-trips all rich metadata fields', () => {
-    const id = parkInDlq(githubDlq, root, {
+  it('parkInDlq round-trips all rich metadata fields', async () => {
+    const id = await parkInDlq(githubDlq, root, {
       tenantId: 'default',
       rawPayload: '{"action":"opened"}',
       error: 'parse fail',
@@ -49,8 +49,8 @@ describe('github DLQ', () => {
     expect(item!.receivedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 
-  it('parkInDlq stores tenantId null as the __unroutable__ sentinel', () => {
-    const id = parkInDlq(githubDlq, root, {
+  it('parkInDlq stores tenantId null as the __unroutable__ sentinel', async () => {
+    const id = await parkInDlq(githubDlq, root, {
       tenantId: null,
       rawPayload: '{}',
       error: 'no tenant',
@@ -63,7 +63,7 @@ describe('github DLQ', () => {
     expect(listed).toHaveLength(1);
   });
 
-  it('parkInDlq round-trips every defined bucket value', () => {
+  it('parkInDlq round-trips every defined bucket value', async () => {
     const buckets: DlqBucket[] = [
       'parse_error',
       'unroutable',
@@ -71,7 +71,7 @@ describe('github DLQ', () => {
       'unhandled',
     ];
     for (const bucket of buckets) {
-      parkInDlq(githubDlq, root, {
+      await parkInDlq(githubDlq, root, {
         tenantId: 'default',
         rawPayload: `{"b":"${bucket}"}`,
         error: bucket,
@@ -85,11 +85,11 @@ describe('github DLQ', () => {
   });
 
   it('listDlq filters by tenant and orders by received_at ASC', async () => {
-    parkInDlq(githubDlq, root, { tenantId: 'default', rawPayload: '{"i":1}', error: 'first' });
+    await parkInDlq(githubDlq, root, { tenantId: 'default', rawPayload: '{"i":1}', error: 'first' });
     // Force a different received_at by sleeping a millisecond.
     await new Promise((r) => setTimeout(r, 5));
-    parkInDlq(githubDlq, root, { tenantId: 'default', rawPayload: '{"i":2}', error: 'second' });
-    parkInDlq(githubDlq, root, { tenantId: 'acme', rawPayload: '{"i":3}', error: 'other tenant' });
+    await parkInDlq(githubDlq, root, { tenantId: 'default', rawPayload: '{"i":2}', error: 'second' });
+    await parkInDlq(githubDlq, root, { tenantId: 'acme', rawPayload: '{"i":3}', error: 'other tenant' });
 
     const defaults = listDlq(githubDlq, root, { tenantId: 'default' });
     expect(defaults).toHaveLength(2);
@@ -101,16 +101,16 @@ describe('github DLQ', () => {
     expect(acme[0].error).toBe('other tenant');
   });
 
-  it('listDlq honors limit', () => {
+  it('listDlq honors limit', async () => {
     for (let i = 0; i < 5; i += 1) {
-      parkInDlq(githubDlq, root, { tenantId: 'default', rawPayload: `{"i":${i}}`, error: `e${i}` });
+      await parkInDlq(githubDlq, root, { tenantId: 'default', rawPayload: `{"i":${i}}`, error: `e${i}` });
     }
     const items = listDlq(githubDlq, root, { tenantId: 'default', limit: 2 });
     expect(items).toHaveLength(2);
   });
 
-  it('dlqEntry returns the row by id and null for unknown ids', () => {
-    const id = parkInDlq(githubDlq, root, {
+  it('dlqEntry returns the row by id and null for unknown ids', async () => {
+    const id = await parkInDlq(githubDlq, root, {
       tenantId: 'default',
       rawPayload: '{}',
       error: 'boom',
@@ -130,7 +130,7 @@ describe('github DLQ', () => {
   });
 
   it('replayDlqEntry on parse-error payload bumps retry_count and reports parse_error', async () => {
-    const id = parkInDlq(githubDlq, root, {
+    const id = await parkInDlq(githubDlq, root, {
       tenantId: 'default',
       rawPayload: 'not-json{{{',
       error: 'original parse fail',

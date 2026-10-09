@@ -16,8 +16,8 @@ describe('handleMessageDeleted', () => {
   beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'hippo-slack-del-')); initStore(root); });
   afterEach(() => rmSync(root, { recursive: true, force: true }));
 
-  it('archives the matching kind=raw row via archiveRawMemory', () => {
-    const ingested = ingestMessage(ctx(root), {
+  it('archives the matching kind=raw row via archiveRawMemory', async () => {
+    const ingested = await ingestMessage(ctx(root), {
       teamId: 'T1',
       channel: { id: 'C1', is_private: false },
       message: { type: 'message', channel: 'C1', user: 'U1', text: 'doomed', ts: '1700.0001' },
@@ -25,7 +25,7 @@ describe('handleMessageDeleted', () => {
     });
     expect(ingested.status).toBe('ingested');
 
-    const result = handleMessageDeleted(ctx(root), {
+    const result = await handleMessageDeleted(ctx(root), {
       teamId: 'T1',
       channelId: 'C1',
       deletedTs: '1700.0001',
@@ -49,17 +49,17 @@ describe('handleMessageDeleted', () => {
     } finally { closeHippoDb(db); }
   });
 
-  it('returns not_found for unknown artifact_ref (idempotent on replay)', () => {
-    const r = handleMessageDeleted(ctx(root), {
+  it('returns not_found for unknown artifact_ref (idempotent on replay)', async () => {
+    const r = await handleMessageDeleted(ctx(root), {
       teamId: 'T1', channelId: 'C1', deletedTs: '9999.9999', eventId: 'EvDel2',
     });
     expect(r.status).toBe('not_found');
   });
 
-  it('cross-tenant deletion event cannot archive another tenants row (review patch #1)', () => {
+  it('cross-tenant deletion event cannot archive another tenants row (review patch #1)', async () => {
     // Ingest under tenant 'acme'.
     const acmeCtx: Context = { hippoRoot: root, tenantId: 'acme', actor: { subject: 'connector:slack', role: 'admin' } };
-    const ingested = ingestMessage(acmeCtx, {
+    const ingested = await ingestMessage(acmeCtx, {
       teamId: 'T1',
       channel: { id: 'C1', is_private: false },
       message: { type: 'message', channel: 'C1', user: 'U1', text: 'acme secret', ts: '1700.0001' },
@@ -69,7 +69,7 @@ describe('handleMessageDeleted', () => {
 
     // Fire deletion under tenant 'default' for the same artifact_ref.
     const defaultCtx: Context = { hippoRoot: root, tenantId: 'default', actor: { subject: 'connector:slack', role: 'admin' } };
-    const r = handleMessageDeleted(defaultCtx, {
+    const r = await handleMessageDeleted(defaultCtx, {
       teamId: 'T1', channelId: 'C1', deletedTs: '1700.0001', eventId: 'EvDelCross',
     });
     expect(r.status).toBe('not_found');

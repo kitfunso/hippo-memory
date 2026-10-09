@@ -4,7 +4,7 @@ import { vi } from 'vitest';
 import { createApiKey } from '../../src/store/auth.js';
 import { closeHippoDb, openHippoDb } from '../../src/db.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/memory.js';
-import { recordQuarantine } from '../../src/quarantine.js';
+import { recordQuarantine } from '../../src/store/quarantine.js';
 import { withSqliteAllowed, type HippoStore, type KeysetPosition, type MemoryEntry } from '../../src/server.js';
 import { selectEntriesByIds } from '../../src/store/entry-reads.js';
 import { writeEntryOn } from '../../src/store/entry-writes.js';
