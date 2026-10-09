@@ -112,7 +112,7 @@ export function envV1Rps(): string | undefined { return raw('HIPPO_V1_RPS'); }
 export function envBodyTimeoutMs(): number | undefined { return positiveInt('HIPPO_BODY_TIMEOUT_MS'); }
 /** How long POST /v1/sleep lets its consolidation run; server/sleep-offload.ts holds the default. */
 export function envSleepTimeoutMs(): number | undefined { return positiveInt('HIPPO_SLEEP_TIMEOUT_MS'); }
-/** How long a /v1 or /mcp request may run before the server answers 504, 0 for no deadline; server/deadline.ts holds the default. */
+/** How long a /v1 or /mcp request may run before the server answers 504, and a stdio MCP request before its timeout error; 0 for no deadline; server/deadline.ts holds the default. */
 export function envRequestDeadlineMs(): number | undefined { return nonNegativeInt('HIPPO_REQUEST_DEADLINE_MS'); }
 /** How many store calls may wait for one worker thread before the next is refused; store/sqlite/executor.ts holds the default. */
 export function envStoreQueueMax(): number | undefined { return positiveInt('HIPPO_STORE_QUEUE_MAX'); }

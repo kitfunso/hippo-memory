@@ -88,7 +88,7 @@ describe('serve() graceful stop', () => {
     let stderr = '';
     child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString('utf8'); });
     const code = await new Promise<number | null>((done) => child.once('exit', done));
-    expect(stderr).toMatch(/error during stop: .*errorClass=/);
+    expect(stderr).toMatch(/serve shutdown after SIGTERM failed: .*errorClass=/);
     expect(code).toBe(1);
   }, 15000);
 

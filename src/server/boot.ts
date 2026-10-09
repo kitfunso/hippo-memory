@@ -22,7 +22,7 @@ import { enforceRateLimit, warnIfClientIpHeaderUnpinned } from './client-ip.js';
 import { answerAtDeadline, handlerDeadlineCount, isAbandoned, requestDeadlineFor } from './deadline.js';
 import { drainAndClose } from './lifecycle.js';
 import { readyProbeFor } from './ready.js';
-import { installCrashHandlers } from '../util/crash-handlers.js';
+import { installCrashHandlers, installSignalHandlers } from '../util/crash-handlers.js';
 import { handleMcpPost, handleMcpStream } from './mcp-http.js';
 import { MCP_PROJECT_SCOPED_HEADER } from '../core/project-identity.js';
 import { logRequestFailure, noteAccess, openRequest, parseRequest, rejectEncodedSlash, replyFor, sendError } from './request.js';
@@ -329,7 +329,7 @@ function replyOrClose<E>(req: IncomingMessage, res: ServerResponse, err: E, requ
     replyWithFailure(req, res, err, requestId);
   } catch (replyErr) {
     // A throw here would be an unhandled rejection, which stops the daemon for every caller.
-    log.error(`serve: failure reply not sent, socket closed: ${errorMessage(replyErr)}`);
+    log.error(`serve: failure reply not sent, socket closed: ${errorMessage(replyErr)}`, errorFields(replyErr));
     res.destroy();
   }
 }
@@ -378,22 +378,15 @@ function listenOn(server: Server, port: number, host: string): Promise<void> {
   });
 }
 
-function installSignalHandlers(stop: () => Promise<void>): void {
-  let shuttingDown = false;
-  const gracefulShutdown = async (signal: string): Promise<void> => {
-    if (shuttingDown) return;
-    shuttingDown = true;
-    log.warn(`received ${signal}, shutting down`);
-    try {
-      await stop();
-      process.exit(0);
-    } catch (err) {
-      log.error(`error during stop: ${errorMessage(err)}`, errorFields(err));
-      process.exit(1);
-    }
-  };
-  process.once('SIGTERM', () => { void gracefulShutdown('SIGTERM'); });
-  process.once('SIGINT', () => { void gracefulShutdown('SIGINT'); });
+const DEFAULT_SHUTDOWN_DRAIN_MS = 5000;
+
+// Past the request drain, stop() only waits for each store thread to end its statement and close: seconds at most, so longer means a thread that will not end.
+const STORE_CLOSE_GRACE_MS = 10_000;
+
+function exitOnSignalOrCrash(stop: () => Promise<void>, drainMs: number): void {
+  const shutdown = { run: stop, boundMs: drainMs + STORE_CLOSE_GRACE_MS };
+  installSignalHandlers('serve', shutdown);
+  installCrashHandlers('serve', shutdown);
 }
 
 /**
@@ -460,10 +453,7 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
     await holder.release();
   };
 
-  if (opts.handleSignals) {
-    installSignalHandlers(stop);
-    installCrashHandlers('serve', stop);
-  }
+  if (opts.handleSignals) exitOnSignalOrCrash(stop, opts.shutdownDrainMs ?? DEFAULT_SHUTDOWN_DRAIN_MS);
 
   return { port: actualPort, url, stop, server };
 }
@@ -518,5 +508,5 @@ async function stopListening(opts: ServeOpts, server: Server, inflight: Set<Serv
   // may have started on this hippoRoot and rewritten the pidfile; an
   // unconditional unlink here would orphan it.
   removePidfileIfOwned(opts.hippoRoot, { pid: process.pid, startedAt });
-  await drainAndClose(server, inflight, opts.shutdownDrainMs ?? 5000);
+  await drainAndClose(server, inflight, opts.shutdownDrainMs ?? DEFAULT_SHUTDOWN_DRAIN_MS);
 }
