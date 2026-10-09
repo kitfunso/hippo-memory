@@ -2,14 +2,13 @@
 // walks them in memory from the port's doc comments alone, so a conformance test shows those words are enough to build on.
 import { vi } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db.js';
-import { insertEntity, insertRelation } from '../../src/graph/write.js';
-import type { Entity, EntityType, Relation } from '../../src/graph/types.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/memory.js';
 import { savePolicy } from '../../src/policies.js';
 import { canReadScope } from '../../src/recall-scope.js';
 import { withSqliteAllowed, type HippoStore } from '../../src/server.js';
 import { writeEntryOn } from '../../src/store/entry-writes.js';
-import { ENTITY_COLS, RELATION_COLS, rowToEntity, rowToRelation, type EntityRow, type RelationRow } from '../../src/store/graph-rows.js';
+import { ENTITY_COLS, RELATION_COLS, rowToEntity, rowToRelation, type Entity, type EntityRow, type EntityType, type Relation, type RelationRow } from '../../src/store/graph-rows.js';
+import { insertEntity, insertRelation } from '../../src/store/graph-writes.js';
 import type { GraphReads, GraphRows, GraphViewQuery } from '../../src/store/port.js';
 import { inMemoryKeyAuditStore } from './in-memory-key-audit-store.js';
 import { TENANT_A, TENANT_B, type StoreSide } from './store-conformance.js';

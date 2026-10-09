@@ -483,7 +483,10 @@ export function generateId(prefix: string = 'mem'): string {
 
 // Pinned and verified are exempt from ageing by policy, so this reads "aged out
 // for trust purposes", not "old". The 30-day threshold lives here and nowhere else.
-function isAgedOut(entry: MemoryEntry, now: Date): boolean {
+/** What the confidence facets read, so a caller can derive them from a row it loaded only in part. */
+export type ConfidenceInputs = Pick<MemoryEntry, 'pinned' | 'confidence' | 'last_retrieved'>;
+
+function isAgedOut(entry: ConfidenceInputs, now: Date): boolean {
   if (entry.pinned || entry.confidence === 'verified') return false;
   const lastRetrieved = new Date(entry.last_retrieved);
   return (now.getTime() - lastRetrieved.getTime()) / DAY_MS > 30;
@@ -496,6 +499,10 @@ export interface ConfidenceFacets {
 }
 
 export function confidenceFacets(entry: MemoryEntry, now: Date = evalNow()): ConfidenceFacets {
+  return facetsOf(entry, now);
+}
+
+export function facetsOf(entry: ConfidenceInputs, now: Date): ConfidenceFacets {
   return { tier: entry.confidence, agedOut: isAgedOut(entry, now) };
 }
 
