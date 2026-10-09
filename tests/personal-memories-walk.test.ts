@@ -5,7 +5,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import * as api from '../src/api.js';
 import { BadRequestError } from '../src/api-errors.js';
-import { createApiKey } from '../src/auth.js';
+import { createApiKey } from '../src/store/auth.js';
 import { extractFromTexts } from '../src/capture/extract.js';
 import { captureSessionTexts } from '../src/capture/session-texts.js';
 import { cmdRecall } from '../src/cli/recall.js';

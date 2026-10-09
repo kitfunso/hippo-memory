@@ -1,7 +1,7 @@
 // A store other than hippo.db for the Quarantine group: it copies memories and memory_quarantine out of hippo.db once, then keeps
 // both in memory and decides from the port's doc comments alone, so a conformance test shows those words are enough to build on.
 import { vi } from 'vitest';
-import { createApiKey } from '../../src/auth.js';
+import { createApiKey } from '../../src/store/auth.js';
 import { closeHippoDb, openHippoDb } from '../../src/db.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/memory.js';
 import { recordQuarantine } from '../../src/quarantine.js';

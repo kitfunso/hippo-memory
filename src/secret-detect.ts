@@ -37,7 +37,7 @@ const SECRET_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }> = [
   { name: 'slack-token', re: /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/ },
   { name: 'stripe-key', re: /\b[sr]k_(?:live|test)_[A-Za-z0-9]{16,}\b/ },
   { name: 'google-api-key', re: /\bAIza[0-9A-Za-z_-]{35}\b/ },
-  // hk_ is hippo's own API key (src/auth.ts); npm, Hugging Face, GitLab and Slack webhook shapes follow gitleaks' rules.
+  // hk_ is hippo's own API key (src/store/auth.ts); npm, Hugging Face, GitLab and Slack webhook shapes follow gitleaks' rules.
   { name: 'hippo-api-key', re: /\bhk_[a-z2-7]{24}\.[a-z2-7]{32}\b/ },
   { name: 'npm-token', re: /\bnpm_[A-Za-z0-9]{36}\b/ },
   { name: 'huggingface-token', re: /\bhf_[A-Za-z]{34}\b/ },

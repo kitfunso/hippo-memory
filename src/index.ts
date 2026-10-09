@@ -60,7 +60,7 @@ export {
   reclaimExpiredCards,
   addCardComment,
   loadLatestHandoffForCard,
-} from './store-cards.js';
+} from './store/cards.js';
 
 // Feature 5: Session handoff
 export { SessionHandoff, HandoffOutcome, HandoffEvidence, isHandoffOutcome } from './handoff.js';
@@ -115,7 +115,7 @@ export {
   wmFlush,
   WorkingMemoryItem,
   WM_MAX_ENTRIES,
-} from './working-memory.js';
+} from './store/working-memory.js';
 
 // Feature 4: Memory importers
 export {
@@ -161,5 +161,5 @@ export {
   type AuditOp,
   type QueryAuditOpts,
   type ListAuditAfterOpts,
-} from './audit.js';
+} from './store/audit.js';
 export { openHippoDb, openHippoDbReadOnly, closeHippoDb, type DatabaseSyncLike } from './db.js';

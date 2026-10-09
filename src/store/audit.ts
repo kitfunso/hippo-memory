@@ -1,14 +1,14 @@
 import { createHash } from 'node:crypto';
-import { canAutoDelete, type MemoryEntry } from './memory.js';
-import type { DatabaseSyncLike } from './db.js';
+import { canAutoDelete, type MemoryEntry } from '../memory.js';
+import type { DatabaseSyncLike } from '../db.js';
 import type { JsonObject } from './working-memory.js';
-import { log } from './log.js';
-import { keysetAfter, type KeysetPosition } from './keyset.js';
-import type { JsonValue } from './json.js';
-import { warnDamagedColumn } from './util/stored-json.js';
+import { log } from '../log.js';
+import { keysetAfter, type KeysetPosition } from '../keyset.js';
+import type { JsonValue } from '../json.js';
+import { warnDamagedColumn } from '../util/stored-json.js';
 import {
   automaticDefect, hasNoSpecificity, isFragment, isReleaseCommitNoise, substantiveWordCount,
-} from './memory-quality.js';
+} from '../memory-quality.js';
 
 export type AuditSeverity = 'warning' | 'error';
 
@@ -173,7 +173,7 @@ export interface AppendAuditOpts {
 // node:sqlite returns INTEGER columns as bigint when the value exceeds
 // Number.MAX_SAFE_INTEGER. Audit metadata can carry such values (row ids,
 // counts), and JSON.stringify cannot serialize bigint without a replacer.
-// Mirrors the bigintSafeReplacer in src/raw-archive.ts.
+// Mirrors the bigintSafeReplacer in src/store/raw-archive.ts.
 // `JsonValueWithBigInt` stands in for JSON.stringify's own `(key: string,
 // value: any) => any` replacer contract without exposing `any`/`unknown` at
 // this function's boundary; it is still assignable where JSON.stringify

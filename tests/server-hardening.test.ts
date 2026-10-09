@@ -6,7 +6,7 @@ import { createHmac } from 'node:crypto';
 import { initStore } from '../src/store/open.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { createApiKey, revokeApiKey } from '../src/auth.js';
+import { createApiKey, revokeApiKey } from '../src/store/auth.js';
 import { remember as apiRemember } from '../src/api.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
 import { log } from '../src/log.js';

@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { createApiKey } from '../src/auth.js';
+import { createApiKey } from '../src/store/auth.js';
 import { getContext, type Context } from '../src/api.js';
 import { BadRequestError } from '../src/api-errors.js';
 import { _resetSharedStoreCacheForTests } from '../src/config.js';

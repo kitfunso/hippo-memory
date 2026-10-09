@@ -22,7 +22,7 @@ import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '.
 import { rebuildDirtySummaries, buildDag } from '../src/dag.js';
 import * as dagModule from '../src/dag.js';
 import { consolidate } from '../src/consolidate/sleep.js';
-import { insertRejectedValue, rejectionDigest, normalizeValueForRejection } from '../src/rejection.js';
+import { insertRejectedValue, rejectionDigest, normalizeValueForRejection } from '../src/store/rejection.js';
 
 /**
  * Build a fetcher that returns the same synthetic content for every call.

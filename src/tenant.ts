@@ -1,6 +1,6 @@
 import { envTenant } from './env.js';
 import type { DatabaseSyncLike } from './db.js';
-import { validateApiKey } from './auth.js';
+import { validateApiKey } from './store/auth.js';
 import type { JsonValue } from './json.js';
 
 export interface ResolveOpts {

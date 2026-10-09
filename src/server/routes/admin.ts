@@ -1,5 +1,5 @@
 // Admin routes: API keys, quarantine and the audit log.
-import { AUDIT_OPS, type AuditOp } from '../../audit.js';
+import { AUDIT_OPS, type AuditOp } from '../../store/audit.js';
 import { auditList, authCreate, authListRows, authRevoke, quarantineApprove, quarantineList, quarantineReject } from '../../api.js';
 import { HttpError, readBody, sendJson } from '../../http-util.js';
 import { log } from '../../log.js';

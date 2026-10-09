@@ -1,6 +1,6 @@
 // A store worker's side of the executor: one job at a time, on one connection the thread holds for its life.
 import type { MessagePort } from 'node:worker_threads';
-import { auditWriteFailureCount } from '../../audit.js';
+import { auditWriteFailureCount } from '../audit.js';
 import { type DatabaseSyncLike, RequestStores } from '../../db.js';
 import { isScopedHandle } from '../../db/request-stores.js';
 import { requestScopes } from '../../util/request-scope.js';

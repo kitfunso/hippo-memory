@@ -6,17 +6,17 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { closeHippoDb, getMeta, openHippoDb, setMeta } from '../src/db.js';
 import { recordTokens } from '../src/api.js';
-import { appendAuditEvent, type AppendAuditOpts } from '../src/audit.js';
+import { appendAuditEvent, type AppendAuditOpts } from '../src/store/audit.js';
 import { _resetAblationCacheForTests } from '../src/ablation.js';
 import { embeddingIndexIdentity, loadStoredVectors } from '../src/embeddings.js';
 import { detectForwardClaim } from '../src/forward-claim-detector.js';
-import { boostByGoals, getActiveGoalsWithDb, loadGoalPolicies, localGoalRecallRows, pushGoal, writeGoalRecallLog } from '../src/goals.js';
+import { boostByGoals, getActiveGoalsWithDb, loadGoalPolicies, localGoalRecallRows, pushGoal, writeGoalRecallLog } from '../src/store/goals.js';
 import { __resetSessionRecallHistoryMcp } from '../src/mcp/server.js';
 import { lastRecalledIds } from '../src/mcp/session-state.js';
 import { loadPhysicsState, resetAllPhysicsState } from '../src/db/physics-state.js';
 import { resolveClassFromTokens } from '../src/store/planning-fallacy-evidence.js';
 import { computePredictionBaserate } from '../src/store/predictions.js';
-import { writeRecallTraceAtRoot } from '../src/recall-trace.js';
+import { writeRecallTraceAtRoot } from '../src/store/recall-trace.js';
 import {
   serve, sqliteStore, __resetSessionRecallHistoryHttp,
   type ActiveGoals, type ContinuityKey, type GoalRecallLogRow, type HippoStore, type MemoryEntry, type RecallSearchArgs, type RecallTraceInput, type RecallWrites,

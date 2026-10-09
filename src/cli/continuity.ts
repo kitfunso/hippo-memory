@@ -10,7 +10,7 @@ import {
 import { saveSessionHandoff, loadLatestHandoff, loadHandoffById, stampHandoffOutcome } from '../store/handoffs.js';
 import { isHandoffOutcome, formatHandoffEvidenceLine, type HandoffOutcome } from '../handoff.js';
 import { resolveTenantId } from '../tenant.js';
-import { wmPush, wmRead, wmClear, wmFlush } from '../working-memory.js';
+import { wmPush, wmRead, wmClear, wmFlush } from '../store/working-memory.js';
 import { collectHandoffEvidence } from '../handoff-evidence.js';
 import type { SessionEvent, TaskSnapshot } from '../store/rows.js';
 import { printError } from './output.js';

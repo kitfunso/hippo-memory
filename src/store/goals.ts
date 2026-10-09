@@ -1,8 +1,8 @@
-// src/goals.ts
+// src/store/goals.ts
 import { randomUUID } from 'node:crypto';
-import { openHippoDb, closeHippoDb, withWriteScope, type DatabaseSyncLike } from './db.js';
-import type { MemoryEntry } from './memory.js';
-import type { RerankStep } from './core/search-types.js';
+import { openHippoDb, closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../db.js';
+import type { MemoryEntry } from '../memory.js';
+import type { RerankStep } from '../core/search-types.js';
 
 export type GoalStatus = 'active' | 'suspended' | 'completed';
 export type PolicyType = 'schema-fit-biased' | 'error-prioritized' | 'recency-first' | 'hybrid';

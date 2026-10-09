@@ -8,7 +8,7 @@ import { retrieve as apiRetrieve, drillDown as apiDrillDown, assemble as apiAsse
 import { autoDetectContext } from '../context-auto.js';
 import { resolveProjectIdentity, type ProjectIdentity } from '../project-identity.js';
 import { isSharedStore } from '../config.js';
-import type { AppendAuditOpts } from '../audit.js';
+import type { AppendAuditOpts } from '../store/audit.js';
 import { detectAnchoring, hashQueryText, biasHintEnabled, snapshotRing, type RingBuffer } from '../recall-history.js';
 import { detectAvailabilityBias } from '../availability.js';
 import { estimateTokens } from '../token-ledger.js';

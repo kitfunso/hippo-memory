@@ -13,7 +13,7 @@ import { batchWriteAndDelete } from '../src/store/delete-and-batch.js';
 import { saveEmbeddingIndex } from '../src/embeddings.js';
 import { loadRecallSearchEntries, loadVectorCandidateEntries, recallScopeFilter } from '../src/store/search-rows.js';
 import { loadAmbientCandidates, loadContextCandidates, loadTextsHoldingWords } from '../src/store/candidates.js';
-import { loadAmbientTallies } from '../src/ambient-store.js';
+import { loadAmbientTallies } from '../src/store/ambient.js';
 import { countSessionRawMemories, loadAllEntries, loadContentsWithTag } from '../src/store/entry-reads.js';
 import { canReadScope, personalScopeOf, touchableScopeSql, type ScopeActor } from '../src/recall-scope.js';
 import { loadLatestHandoff, saveSessionHandoff } from '../src/store/handoffs.js';

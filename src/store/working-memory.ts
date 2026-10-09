@@ -6,11 +6,11 @@
  * exceeds WM_MAX_ENTRIES per scope.
  */
 
-import { closeHippoDb, withWriteScope } from './db.js';
-import { openStore } from './store/open.js';
-import type { JsonValue } from './json.js';
-import { warnDamagedColumn } from './util/stored-json.js';
-import { resolveTenantId } from './tenant.js';
+import { closeHippoDb, withWriteScope } from '../db.js';
+import { openStore } from './open.js';
+import type { JsonValue } from '../json.js';
+import { warnDamagedColumn } from '../util/stored-json.js';
+import { resolveTenantId } from '../tenant.js';
 
 export const WM_MAX_ENTRIES = 20;
 

@@ -2,7 +2,7 @@
 import { BadRequestError } from '../api-errors.js';
 import type { Context } from '../api/types.js';
 import { storeLesson } from '../capture-error.js';
-import { recordFailure, requestOutcome, settleFailureOutcome, type CaptureErrorOutcome, type FailureOutcome, type RoutineRule } from '../failure-log.js';
+import { recordFailure, requestOutcome, settleFailureOutcome, type CaptureErrorOutcome, type FailureOutcome, type RoutineRule } from '../store/failure-log.js';
 import { errorMessage, log } from '../log.js';
 import type { CallerProject } from '../prompt-hook.js';
 import { scrubForSharing } from '../share-scrub.js';

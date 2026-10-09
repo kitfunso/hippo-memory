@@ -2,7 +2,7 @@
  * Defensive filter: `kind='archived'` rows must NOT appear in recall.
  *
  * `kind='archived'` is a transient SAVEPOINT-internal sentinel inside
- * `archiveRawMemory` (src/raw-archive.ts:56): UPDATE kind='archived'
+ * `archiveRawMemory` (src/store/raw-archive.ts:56): UPDATE kind='archived'
  * immediately followed by DELETE, atomic. In normal operation no concurrent
  * reader sees the intermediate state.
  *

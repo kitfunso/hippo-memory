@@ -32,7 +32,7 @@ import { withWriteScope } from './db/busy.js';
 import { writeEntry } from './store/entry-writes.js';
 import { onHandle } from './store/open.js';
 import { assertTenantId } from './tenant.js';
-import { appendAuditEvent } from './audit.js';
+import { appendAuditEvent } from './store/audit.js';
 import type { KeysetPosition } from './keyset.js';
 import type { ObjectDescriptor } from './objects/descriptor.js';
 import { assertObjectStatus, closeObjectOn, loadObjectByIdOn, loadObjectsOn, objectMirrorMemory } from './objects/lifecycle.js';

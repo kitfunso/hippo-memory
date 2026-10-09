@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import type { JsonObject } from '../working-memory.js';
+import type { JsonObject } from '../store/working-memory.js';
 import { homeDir } from './shared.js';
 import { writeFileAtomic } from '../util/atomic-write.js';
 import { type JsonValue, isJsonString, isJsonObjectLiteral } from '../json.js';
