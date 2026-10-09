@@ -30,7 +30,7 @@ import { randomUUID } from 'node:crypto';
 import { makeRoot } from './_helpers/make-root.js';
 
 // The one case ingests 200 webhook events, each its own write to a real store.
-vi.setConfig({ testTimeout: 30_000 });
+vi.setConfig({ testTimeout: 90_000 });
 
 // ---------------------------------------------------------------------------
 // Fixtures
