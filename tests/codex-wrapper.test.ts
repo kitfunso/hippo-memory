@@ -76,6 +76,7 @@ describe.skipIf(process.platform !== 'win32')('Codex wrapper install', () => {
     expect(fs.existsSync(result.backupPath)).toBe(true);
     expect(fs.readFileSync(result.backupPath, 'utf8')).toContain('real codex');
     expect(fs.readFileSync(realCodex, 'utf8')).toContain('codex-run');
+    expect(fs.readFileSync(realCodex, 'utf8')).toContain(HIPPO_JS);
 
     const metadata = JSON.parse(fs.readFileSync(paths.metadataPath, 'utf8'));
     expect(metadata.originalCodexPath).toBe(realCodex);
@@ -97,6 +98,7 @@ describe.skipIf(process.platform !== 'win32')('Codex wrapper install', () => {
     expect(fs.existsSync(result.commandPath)).toBe(true);
     expect(fs.existsSync(realCodex)).toBe(false);
     expect(fs.readFileSync(result.commandPath, 'utf8')).toContain('codex-run');
+    expect(fs.readFileSync(result.commandPath, 'utf8')).toContain(HIPPO_JS);
   });
 
   it('restores the original launcher on uninstall', () => {

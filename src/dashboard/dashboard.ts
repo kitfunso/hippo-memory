@@ -26,6 +26,7 @@ import { runWithRequestId } from '../util/request-scope.js';
 import { installSignalHandlers } from '../util/crash-handlers.js';
 import { DEFAULT_SHUTDOWN_DRAIN_MS, drainAndClose, setKeepAliveTimeouts, shutdownBoundMs } from '../server/lifecycle.js';
 import { printError } from '../cli/output.js';
+import { PACKAGE_ROOT } from '../core/package-root.js';
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -397,7 +398,7 @@ export function serveDashboard(
   token: string = randomBytes(32).toString('base64url'),
   opts?: { now?: () => number; cacheClock?: () => number; handleSignals?: boolean },
 ): http.Server {
-  const distUiDir = path.resolve(import.meta.dirname, '..', 'dist-ui');
+  const distUiDir = path.join(PACKAGE_ROOT, 'dist-ui');
   const hasDistUi = fs.existsSync(path.join(distUiDir, 'index.html'));
   const now = opts?.now ?? ((): number => evalNow().getTime());
   const snapshots = createSnapshotService(hippoRoot, now, opts?.cacheClock);
