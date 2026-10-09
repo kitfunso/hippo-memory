@@ -1,4 +1,4 @@
-import { type DatabaseSyncLike, closeHippoDb, setMeta, isSqliteBusy, pruneConsolidationRuns, getMeta } from '../db.js';
+import { type DatabaseSyncLike, closeHippoDb, withWriteScope, setMeta, isSqliteBusy, pruneConsolidationRuns, getMeta } from '../db.js';
 import { RejectedValueError } from './rejection.js';
 import { log } from '../log.js';
 import type { HippoIndex, LegacyStats } from './rows.js';
@@ -37,15 +37,10 @@ export function loadLastRecall(hippoRoot: string): Pick<HippoIndex, 'last_retrie
 export function saveIndex(hippoRoot: string, index: Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'>): void {
   const db = openStore(hippoRoot);
   try {
-    db.exec('BEGIN IMMEDIATE');
-    try {
+    withWriteScope(db, 'save_index', () => {
       setMeta(db, 'last_retrieval_ids', JSON.stringify(index.last_retrieval_ids ?? []));
       setMeta(db, 'last_trace_id', index.last_trace_id ?? '');
-      db.exec('COMMIT');
-    } catch (error) {
-      try { db.exec('ROLLBACK'); } catch { /* already rolled back; keep the original error */ }
-      throw error;
-    }
+    });
   } finally {
     closeHippoDb(db);
   }
@@ -63,8 +58,7 @@ export function rebuildIndex(hippoRoot: string): HippoIndex {
     );
     const legacyEntries = loadLegacyEntriesFromMarkdown(hippoRoot).filter((entry) => !existingIds.has(entry.id));
     if (legacyEntries.length > 0) {
-      db.exec('BEGIN IMMEDIATE');
-      try {
+      withWriteScope(db, 'rebuild_index', () => {
         // Guard with per-row skip, like bootstrapLegacyStore: a stale markdown mirror could resurrect a
         // rejected value here. Refusal audit is written inline because nothing rolls back on a skip.
         let rejectedCount = 0;
@@ -85,11 +79,7 @@ export function rebuildIndex(hippoRoot: string): HippoIndex {
         if (rejectedCount > 0) {
           log.warn(`rebuildIndex: skipped ${rejectedCount} rejected value(s) found in legacy mirrors`);
         }
-        db.exec('COMMIT');
-      } catch (err) {
-        try { db.exec('ROLLBACK'); } catch { /* ignore if no active txn */ }
-        throw err;
-      }
+      });
     }
 
     syncMirrorFiles(hippoRoot, db);

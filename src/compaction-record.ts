@@ -6,7 +6,7 @@ import { isObjectLike, isStringValue } from './capture-contract.js';
 import { COMPACTION_ITEM_MAX_CHARS, compactSummaryBody, parseCompactionItems, selectItemRows } from './compaction-items.js';
 import { importSpool, spool, type SpoolImporter } from './compaction-spool.js';
 import { isSharedStore, loadConfig } from './config.js';
-import { closeHippoDb, isSqliteBusy, openHippoDb, type DatabaseSyncLike } from './db.js';
+import { closeHippoDb, isSqliteBusy, openHippoDb, withWriteScopeOr, type DatabaseSyncLike } from './db.js';
 import { gatedWrite } from './gated-write.js';
 import { COMPACTION_MEMORY_TAG, COMPACTION_SOURCE_PREFIX, Layer, createMemory, generateId, type MemoryEntry } from './memory.js';
 import { fallbackOrigin, isGlobalStoreRoot, originInSql, projectId, projectNames, resolveProjectIdentity, type ProjectRef } from './project-identity.js';
@@ -415,29 +415,28 @@ export function saveItems(db: DatabaseSyncLike, hippoRoot: string, ctx: ItemCont
   if (capped > 0) log(`capped: ${capped} more kept in the record only`);
 
   const baseHalfLifeDays = loadConfig(hippoRoot).defaultHalfLifeDays;
-  let writes: ItemWrites;
-  db.exec('BEGIN IMMEDIATE');
-  try {
+  let finishedItems = 0;
+  const writes = withWriteScopeOr<ItemWrites, null>(db, 'save_items', (rollback) => {
     if (ctx.recordId !== null) {
       // A replayer that read the record before another finished it must not write its items again.
       const current = db.prepare(`SELECT status, items_written FROM compactions WHERE tenant_id = ? AND id = ?`)
         .get<{ status: CompactionStatus; items_written: number } | undefined>(ctx.tenantId, ctx.recordId);
       if (current?.status !== 'summarised') {
-        db.exec('ROLLBACK');
-        log(`${ctx.recordId} was already finished by another process`);
-        return current?.items_written ?? 0;
+        finishedItems = current?.items_written ?? 0;
+        return rollback(null);
       }
     }
-    writes = writeItemRows(db, hippoRoot, ctx, rows, baseHalfLifeDays);
+    const written = writeItemRows(db, hippoRoot, ctx, rows, baseHalfLifeDays);
     // Said again by another session is the same signal as being recalled; the same session carrying it forward is not.
-    strengthenRetrievedOn(db, writes.restated, { tenantId: ctx.tenantId, recallBoostAblated: isRecallBoostAblated() });
+    strengthenRetrievedOn(db, written.restated, { tenantId: ctx.tenantId, recallBoostAblated: isRecallBoostAblated() });
     if (ctx.recordId !== null) {
-      db.prepare(`UPDATE compactions SET items_written = ?, status = 'done' WHERE tenant_id = ? AND id = ?`).run(writes.written.length, ctx.tenantId, ctx.recordId);
+      db.prepare(`UPDATE compactions SET items_written = ?, status = 'done' WHERE tenant_id = ? AND id = ?`).run(written.written.length, ctx.tenantId, ctx.recordId);
     }
-    db.exec('COMMIT');
-  } catch (err) {
-    try { db.exec('ROLLBACK'); } catch { /* already rolled back; keep the original error */ }
-    throw err;
+    return written;
+  });
+  if (writes === null) {
+    log(`${ctx.recordId} was already finished by another process`);
+    return finishedItems;
   }
   finishItemWrites(hippoRoot, writes, log);
   return writes.written.length;

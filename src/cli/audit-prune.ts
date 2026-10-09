@@ -24,7 +24,7 @@
  *     written AFTER the DELETE WHERE ts < cutoff, so ts > cutoff).
  */
 
-import type { DatabaseSyncLike } from '../db.js';
+import { withWriteScope, type DatabaseSyncLike } from '../db.js';
 import { appendAuditEvent } from '../store/audit.js';
 import { DAY_MS } from '../util/time.js';
 
@@ -92,8 +92,7 @@ export function pruneAuditLog(
       .get(opts.tenantId, cutoff) as { c: number | bigint };
     count = Number(row.c);
   } else {
-    db.exec('BEGIN IMMEDIATE');
-    try {
+    withWriteScope(db, 'audit_prune', () => {
       const result = db
         .prepare(`DELETE FROM audit_log WHERE tenant_id = ? AND ts < ?`)
         .run(opts.tenantId, cutoff);
@@ -106,11 +105,7 @@ export function pruneAuditLog(
         op: 'audit_prune',
         metadata: { cutoff, count, dryRun: false, olderThanDays: opts.olderThanDays },
       });
-      db.exec('COMMIT');
-    } catch (e) {
-      try { db.exec('ROLLBACK'); } catch { /* already rolled back; keep the original error */ }
-      throw e;
-    }
+    });
   }
 
   return { cutoff, count, dryRun };

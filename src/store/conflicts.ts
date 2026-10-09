@@ -1,4 +1,4 @@
-import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../db.js';
+import { closeHippoDb, openHippoDb, withWriteScope, type DatabaseSyncLike } from '../db.js';
 import type { MemoryEntry } from '../memory.js';
 import { rejectionDigest, insertRejectedValue, normalizeValueForRejection } from './rejection.js';
 import { archiveRawMemory } from './raw-archive.js';
@@ -197,17 +197,11 @@ export function writeConflictRefresh(
     reason: conflict.reason,
     score: conflict.score,
   }));
-  db.exec('BEGIN IMMEDIATE');
-  try {
+  return withWriteScope(db, 'replace_conflicts', () => {
     resolveStaleOpenConflicts(db, canonicalDetected, reads.sameTenant, detectedAt);
     upsertDetectedConflicts(db, canonicalDetected, reads.sameTenant, detectedAt);
-    const changedIds = rebuildConflictsWithJson(db, reads);
-    db.exec('COMMIT');
-    return changedIds;
-  } catch (error) {
-    if (db.isTransaction !== false) db.exec('ROLLBACK');
-    throw error;
-  }
+    return rebuildConflictsWithJson(db, reads);
+  });
 }
 
 function resolveStaleOpenConflicts(
@@ -393,28 +387,24 @@ export function resolveConflict(
     if (!resolvable) return null;
     const { conflict, loserId } = resolvable;
 
-    db.exec('BEGIN IMMEDIATE');
-
-    // Mark conflict as resolved
-    db.prepare(`UPDATE memory_conflicts SET status = 'resolved', updated_at = datetime('now') WHERE id = ?`)
-      .run(conflictId);
-
     const target: ResolveTarget = { conflictId, keepId, loserId, scope, opts };
-    const removeLoser = forgetLoser || opts?.rejectLoserValue === true;
-    const removal = removeLoser ? removeConflictLoser(db, target) : weakenConflictLoser(db, target);
+    const removal = withWriteScope(db, 'resolve_conflict', () => {
+      // Mark conflict as resolved
+      db.prepare(`UPDATE memory_conflicts SET status = 'resolved', updated_at = datetime('now') WHERE id = ?`)
+        .run(conflictId);
 
-    stripConflictRefs(db, target, removal.loserRemoved);
-    auditConflictResolve(db, target, removal, tenantId);
+      const removeLoser = forgetLoser || opts?.rejectLoserValue === true;
+      const out = removeLoser ? removeConflictLoser(db, target) : weakenConflictLoser(db, target);
 
-    db.exec('COMMIT');
+      stripConflictRefs(db, target, out.loserRemoved);
+      auditConflictResolve(db, target, out, tenantId);
+      return out;
+    });
     syncChangedMirrors(hippoRoot, db, [...selectEntriesByIds(db, [keepId, loserId]).values()]);
 
     if (removal.loserRemoved) purgeRemovedLoserMirrors(hippoRoot, db, loserId, removal);
 
     return { conflict: { ...conflict, status: 'resolved' }, loserId };
-  } catch (error) {
-    try { db.exec('ROLLBACK'); } catch { /* ignore */ }
-    throw error;
   } finally {
     closeHippoDb(db);
   }

@@ -1,6 +1,6 @@
 // Dormant memories: list, restore, forget and check.
 
-import { openHippoDb, closeHippoDb } from '../db.js';
+import { openHippoDb, closeHippoDb, withWriteScope } from '../db.js';
 import { ConflictError, NotFoundError } from '../api-errors.js';
 import { auditRejectionRefusal } from '../store/audit-event.js';
 import { stampOriginProject } from '../store/entry-row.js';
@@ -53,31 +53,9 @@ export function restoreDormant(ctx: Context, id: string): MemoryEntry {
   const db = openHippoDb(ctx.hippoRoot);
   try {
     let restored: MemoryEntry;
-    db.exec('BEGIN IMMEDIATE');
     try {
-      const dormant = restorableSnapshot(db, ctx, id);
-      const now = new Date();
-      // Dormant rows are long-lived, so a snapshot can predate a field added
-      // later: createMemory supplies a default for anything it lacks, then
-      // the snapshot overrides every field it does carry, content included.
-      // (The placeholder only satisfies createMemory's minimum length, so a
-      // legacy row shorter than 3 chars can still be restored.)
-      const revived: MemoryEntry = {
-        ...createMemory('dormant snapshot defaults', { baseHalfLifeDays: loadConfig(ctx.hippoRoot).defaultHalfLifeDays }),
-        ...dormant.entry,
-        last_retrieved: now.toISOString(),
-      };
-      if (dormant.reason === 'quality-repair') revived.confidence = 'verified';
-      restored = stampOriginProject(ctx.hippoRoot, { ...revived, strength: calculateStrength(revived, now) });
-      writeEntryDbOnly(db, restored, { actor: ctx.actor.subject });
-      deleteDormantRow(db, ctx.tenantId, id);
-      // A restore is a labelled "forgot it, then needed it" event: the
-      // signal a learned lifecycle trains on. Same transaction
-      // as the restore, so the label exists exactly when the restore does.
-      auditDormantRestore(db, ctx, id, dormant, now);
-      db.exec('COMMIT');
+      restored = withWriteScope(db, 'restore_dormant', () => restoreInScope(db, ctx, id));
     } catch (err) {
-      try { db.exec('ROLLBACK'); } catch { /* already rolled back */ }
       if (err instanceof RejectedValueError) {
         auditRejectionRefusal(db, err, ctx.actor.subject);
       }
@@ -88,6 +66,30 @@ export function restoreDormant(ctx: Context, id: string): MemoryEntry {
   } finally {
     closeHippoDb(db);
   }
+}
+
+function restoreInScope(db: StoreDb, ctx: Context, id: string): MemoryEntry {
+  const dormant = restorableSnapshot(db, ctx, id);
+  const now = new Date();
+  // Dormant rows are long-lived, so a snapshot can predate a field added
+  // later: createMemory supplies a default for anything it lacks, then
+  // the snapshot overrides every field it does carry, content included.
+  // (The placeholder only satisfies createMemory's minimum length, so a
+  // legacy row shorter than 3 chars can still be restored.)
+  const revived: MemoryEntry = {
+    ...createMemory('dormant snapshot defaults', { baseHalfLifeDays: loadConfig(ctx.hippoRoot).defaultHalfLifeDays }),
+    ...dormant.entry,
+    last_retrieved: now.toISOString(),
+  };
+  if (dormant.reason === 'quality-repair') revived.confidence = 'verified';
+  const restored = stampOriginProject(ctx.hippoRoot, { ...revived, strength: calculateStrength(revived, now) });
+  writeEntryDbOnly(db, restored, { actor: ctx.actor.subject });
+  deleteDormantRow(db, ctx.tenantId, id);
+  // A restore is a labelled "forgot it, then needed it" event: the
+  // signal a learned lifecycle trains on. Same transaction
+  // as the restore, so the label exists exactly when the restore does.
+  auditDormantRestore(db, ctx, id, dormant, now);
+  return restored;
 }
 
 type StoreDb = ReturnType<typeof openHippoDb>;
