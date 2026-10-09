@@ -476,23 +476,7 @@ export async function cmdQuarantine(
   const sub = args[0];
 
   if (sub === 'approve' || sub === 'reject') {
-    const id = (args[1] ?? '').trim();
-    if (!id) {
-      printError(`Usage: hippo quarantine ${sub} <id>`);
-      process.exit(1);
-    }
-    try {
-      if (sub === 'approve') {
-        await api.quarantineApprove(ctx, id);
-        console.log(`Approved ${id}: restored to its original scope.`);
-      } else {
-        await api.quarantineReject(ctx, id);
-        console.log(`Rejected ${id}: stays quarantined.`);
-      }
-    } catch (err) {
-      printError(`Could not ${sub} ${id}: ${errorMessage(err)}`);
-      process.exit(1);
-    }
+    await decideQuarantined(ctx, sub, (args[1] ?? '').trim());
     return;
   }
 
@@ -507,7 +491,29 @@ export async function cmdQuarantine(
     console.log(status === 'all' ? 'No quarantined memories.' : 'No pending quarantined memories.');
     return;
   }
+  printQuarantineRows(rows);
+}
 
+async function decideQuarantined(ctx: api.Context, sub: 'approve' | 'reject', id: string): Promise<void> {
+  if (!id) {
+    printError(`Usage: hippo quarantine ${sub} <id>`);
+    process.exit(1);
+  }
+  try {
+    if (sub === 'approve') {
+      await api.quarantineApprove(ctx, id);
+      console.log(`Approved ${id}: restored to its original scope.`);
+    } else {
+      await api.quarantineReject(ctx, id);
+      console.log(`Rejected ${id}: stays quarantined.`);
+    }
+  } catch (err) {
+    printError(`Could not ${sub} ${id}: ${errorMessage(err)}`);
+    process.exit(1);
+  }
+}
+
+function printQuarantineRows(rows: Awaited<ReturnType<typeof api.quarantineList>>): void {
   console.log(`${rows.length} quarantined memor${rows.length === 1 ? 'y' : 'ies'} (newest first):\n`);
   for (const row of rows) {
     console.log(`--- ${row.id} [${row.status}]`);

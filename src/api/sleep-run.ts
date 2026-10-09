@@ -1,9 +1,9 @@
 // The sleep pipeline behind `sleep`, with its phase dependencies injectable; kept out of the package root.
 
-import { openHippoDb, closeHippoDb } from '../db.js';
 import { loadAllEntries } from '../store/entry-reads.js';
 import { deleteEntry, memoriesBackingObjects } from '../store/delete-and-batch.js';
-import { appendAuditEvent, reportAuditWriteFailure, auditMemories } from '../store/audit.js';
+import { reportAuditWriteFailure, auditMemories } from '../store/audit.js';
+import { sqliteSyncStore } from '../store/sqlite/store.js';
 import { autoShare } from '../shared.js';
 import { consolidate } from '../consolidate/sleep.js';
 import { failedUnitOf } from '../store/delete-and-batch.js';
@@ -316,32 +316,27 @@ function emitSleepAudit(
   phaseError: Error | null,
 ): void {
   try {
-    const db = openHippoDb(ctx.hippoRoot);
-    try {
-      // Tagged '__host__' because sleep is host-wide; the actor still names the operator who ran it.
-      const sleepAuditMetadata: SleepAuditMetadata = {
-        consolidationCount: counts.consolidation,
-        dedupCount: counts.dedup,
-        auditDeletedCount: counts.auditDeleted,
-        ambientTotal: counts.ambient,
-        dryRun,
-        noShare: opts.noShare ?? false,
-        partial: phaseError !== null,
-        triggeredByTenant: ctx.tenantId, // preserve for audit forensics
-      };
-      if (phaseError) sleepAuditMetadata.errorMessage = phaseError.message;
-      // A flush stopped between chunks names the unit it would have committed next, so a unit that fails every night can be found.
-      const nextUnitIds = failedUnitOf(phaseError);
-      if (nextUnitIds) sleepAuditMetadata.nextUnitIds = nextUnitIds;
-      appendAuditEvent(db, {
-        tenantId: '__host__',
-        actor: ctx.actor.subject,
-        op: 'consolidate',
-        metadata: { ...sleepAuditMetadata },
-      });
-    } finally {
-      closeHippoDb(db);
-    }
+    // Tagged '__host__' because sleep is host-wide; the actor still names the operator who ran it.
+    const sleepAuditMetadata: SleepAuditMetadata = {
+      consolidationCount: counts.consolidation,
+      dedupCount: counts.dedup,
+      auditDeletedCount: counts.auditDeleted,
+      ambientTotal: counts.ambient,
+      dryRun,
+      noShare: opts.noShare ?? false,
+      partial: phaseError !== null,
+      triggeredByTenant: ctx.tenantId, // preserve for audit forensics
+    };
+    if (phaseError) sleepAuditMetadata.errorMessage = phaseError.message;
+    // A flush stopped between chunks names the unit it would have committed next, so a unit that fails every night can be found.
+    const nextUnitIds = failedUnitOf(phaseError);
+    if (nextUnitIds) sleepAuditMetadata.nextUnitIds = nextUnitIds;
+    sqliteSyncStore(ctx.hippoRoot).appendAuditEvents([{
+      tenantId: '__host__',
+      actor: ctx.actor.subject,
+      op: 'consolidate',
+      metadata: { ...sleepAuditMetadata },
+    }]);
   } catch (auditErr) {
     // Logged, never thrown: a second failure must not mask the original phaseError.
     reportAuditWriteFailure('consolidate', String(auditErr));

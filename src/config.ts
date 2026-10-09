@@ -430,55 +430,59 @@ function fileStamp(file: string): string | null {
 function parseConfigFile(configPath: string): HippoConfig {
   try {
     const raw: Partial<HippoConfig> = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    const basis = raw.decayBasis;
-    const validBasis = basis === 'clock' || basis === 'session' || basis === 'adaptive';
-    const memoryValue = memoryValueOverride(raw);
-    const dormant = dormantSettings(raw);
-    const churnEnabled = churnStalenessEnabled(raw);
-    const halfLifeDays = defaultHalfLifeDays(raw);
-    return {
-      defaultHalfLifeDays: halfLifeDays,
-      defaultBudget: raw.defaultBudget ?? DEFAULT_CONFIG.defaultBudget,
-      defaultContextBudget: raw.defaultContextBudget ?? DEFAULT_CONFIG.defaultContextBudget,
-      decayBasis: validBasis ? basis : DEFAULT_CONFIG.decayBasis,
-      autoLearnOnSleep: raw.autoLearnOnSleep ?? DEFAULT_CONFIG.autoLearnOnSleep,
-      autoShareOnSleep: raw.autoShareOnSleep ?? DEFAULT_CONFIG.autoShareOnSleep,
-      autoSleep: { ...DEFAULT_CONFIG.autoSleep, ...(raw.autoSleep ?? {}) },
-      embeddings: { ...DEFAULT_CONFIG.embeddings, ...(raw.embeddings ?? {}) },
-      global: { ...DEFAULT_CONFIG.global, ...(raw.global ?? {}) },
-      gitLearnPatterns: raw.gitLearnPatterns ?? DEFAULT_CONFIG.gitLearnPatterns,
-      physics: mergePhysicsConfig(raw.physics),
-      mmr: { ...DEFAULT_CONFIG.mmr, ...(raw.mmr ?? {}) },
-      search: { ...DEFAULT_CONFIG.search, ...(raw.search ?? {}) },
-      replay: { ...DEFAULT_CONFIG.replay, ...(raw.replay ?? {}) },
-      autoTraceCapture: raw.autoTraceCapture ?? DEFAULT_CONFIG.autoTraceCapture,
-      autoTraceWindowDays: raw.autoTraceWindowDays ?? DEFAULT_CONFIG.autoTraceWindowDays,
-      pinnedInject: { ...DEFAULT_CONFIG.pinnedInject, ...(raw.pinnedInject ?? {}) },
-      contextProjectIsolation: raw.contextProjectIsolation ?? DEFAULT_CONFIG.contextProjectIsolation,
-      extraction: { ...DEFAULT_CONFIG.extraction, ...(raw.extraction ?? {}) },
-      multihop: { ...DEFAULT_CONFIG.multihop, ...(raw.multihop ?? {}) },
-      salience: { ...DEFAULT_CONFIG.salience, ...(raw.salience ?? {}) },
-      ambient: { ...DEFAULT_CONFIG.ambient, ...(raw.ambient ?? {}) },
-      memoryValue: {
-        ...DEFAULT_CONFIG.memoryValue,
-        ...memoryValue,
-      },
-      dormant,
-      churnStaleness: {
-        enabled: churnEnabled,
-      },
-      agentMemories: { tools: agentMemoryTools(raw.agentMemories?.tools) },
-      deliveryLedger: { enabled: deliveryLedgerEnabled(raw.deliveryLedger) },
-      pilot: { holdoutRateBp: pilotHoldoutRate(raw.pilot) },
-      projectIdentity: { remote: projectIdentityRemote(raw.projectIdentity) },
-      sharedStore: sharedStoreFlag(raw),
-    };
+    return configOverDefaults(raw);
   } catch (err) {
     if (fs.existsSync(configPath)) {
       log.warn(`failed to parse ${configPath}: ${errorMessage(err)}`);
     }
     return { ...DEFAULT_CONFIG };
   }
+}
+
+function configOverDefaults(raw: Partial<HippoConfig>): HippoConfig {
+  const basis = raw.decayBasis;
+  const validBasis = basis === 'clock' || basis === 'session' || basis === 'adaptive';
+  const memoryValue = memoryValueOverride(raw);
+  const dormant = dormantSettings(raw);
+  const churnEnabled = churnStalenessEnabled(raw);
+  const halfLifeDays = defaultHalfLifeDays(raw);
+  return {
+    defaultHalfLifeDays: halfLifeDays,
+    defaultBudget: raw.defaultBudget ?? DEFAULT_CONFIG.defaultBudget,
+    defaultContextBudget: raw.defaultContextBudget ?? DEFAULT_CONFIG.defaultContextBudget,
+    decayBasis: validBasis ? basis : DEFAULT_CONFIG.decayBasis,
+    autoLearnOnSleep: raw.autoLearnOnSleep ?? DEFAULT_CONFIG.autoLearnOnSleep,
+    autoShareOnSleep: raw.autoShareOnSleep ?? DEFAULT_CONFIG.autoShareOnSleep,
+    autoSleep: { ...DEFAULT_CONFIG.autoSleep, ...(raw.autoSleep ?? {}) },
+    embeddings: { ...DEFAULT_CONFIG.embeddings, ...(raw.embeddings ?? {}) },
+    global: { ...DEFAULT_CONFIG.global, ...(raw.global ?? {}) },
+    gitLearnPatterns: raw.gitLearnPatterns ?? DEFAULT_CONFIG.gitLearnPatterns,
+    physics: mergePhysicsConfig(raw.physics),
+    mmr: { ...DEFAULT_CONFIG.mmr, ...(raw.mmr ?? {}) },
+    search: { ...DEFAULT_CONFIG.search, ...(raw.search ?? {}) },
+    replay: { ...DEFAULT_CONFIG.replay, ...(raw.replay ?? {}) },
+    autoTraceCapture: raw.autoTraceCapture ?? DEFAULT_CONFIG.autoTraceCapture,
+    autoTraceWindowDays: raw.autoTraceWindowDays ?? DEFAULT_CONFIG.autoTraceWindowDays,
+    pinnedInject: { ...DEFAULT_CONFIG.pinnedInject, ...(raw.pinnedInject ?? {}) },
+    contextProjectIsolation: raw.contextProjectIsolation ?? DEFAULT_CONFIG.contextProjectIsolation,
+    extraction: { ...DEFAULT_CONFIG.extraction, ...(raw.extraction ?? {}) },
+    multihop: { ...DEFAULT_CONFIG.multihop, ...(raw.multihop ?? {}) },
+    salience: { ...DEFAULT_CONFIG.salience, ...(raw.salience ?? {}) },
+    ambient: { ...DEFAULT_CONFIG.ambient, ...(raw.ambient ?? {}) },
+    memoryValue: {
+      ...DEFAULT_CONFIG.memoryValue,
+      ...memoryValue,
+    },
+    dormant,
+    churnStaleness: {
+      enabled: churnEnabled,
+    },
+    agentMemories: { tools: agentMemoryTools(raw.agentMemories?.tools) },
+    deliveryLedger: { enabled: deliveryLedgerEnabled(raw.deliveryLedger) },
+    pilot: { holdoutRateBp: pilotHoldoutRate(raw.pilot) },
+    projectIdentity: { remote: projectIdentityRemote(raw.projectIdentity) },
+    sharedStore: sharedStoreFlag(raw),
+  };
 }
 
 const sharedStoreRoots = new Set<string>();

@@ -3,7 +3,7 @@ import { closeHippoDb, openHippoDb, setMeta, withWriteScope, type DatabaseSyncLi
 import { embeddingIndexStateOn, replacesIndex } from '../embeddings.js';
 import type { MemoryEntry } from '../memory.js';
 import type { PhysicsParticle } from '../physics.js';
-import { float32ToBuffer, loadPhysicsState, resetAllPhysicsState } from '../db/physics-state.js';
+import { float32ToBuffer, loadPhysicsState, resetAllPhysicsState, savePhysicsState } from '../db/physics-state.js';
 import type { VectorBackfillQuery, VectorRowWrite, VectorWrite, VectorWriteResult } from './port.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../db/vector-store.js';
 import { chunked } from './entry-reads.js';
@@ -66,6 +66,16 @@ export function loadStoredParticles(hippoRoot: string): PhysicsParticle[] {
   const db = openHippoDb(hippoRoot);
   try {
     return Array.from(loadPhysicsState(db).values());
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/** Writes `particles` over their stored state under `hippoRoot`, as one batch. */
+export function saveStoredParticles(hippoRoot: string, particles: PhysicsParticle[]): void {
+  const db = openHippoDb(hippoRoot);
+  try {
+    savePhysicsState(db, particles);
   } finally {
     closeHippoDb(db);
   }
