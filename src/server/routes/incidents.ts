@@ -1,5 +1,5 @@
 // /v1/incidents routes.
-import { closeIncident, type Incident, type IncidentStatus, loadIncidentById, loadIncidents, resolveIncident, saveIncident, VALID_INCIDENT_STATES } from '../../incidents.js';
+import { INCIDENT, resolveIncident, saveIncident } from '../../incidents.js';
 import { HttpError, sendJson } from '../../http-util.js';
 import { NotFoundError } from '../../api-errors.js';
 import { buildContextWithAuth } from '../auth.js';
@@ -10,15 +10,7 @@ import { closeRoute, getRoute, listRoute, type ObjectRouteConfig, optionalString
 
 const MAX_LINKED_MEMORY_IDS = 256;
 
-const incidentRoutes: ObjectRouteConfig<Incident, IncidentStatus> = {
-  noun: 'incident',
-  field: 'incident',
-  listField: 'incidents',
-  statuses: VALID_INCIDENT_STATES,
-  list: loadIncidents,
-  get: loadIncidentById,
-  close: closeIncident,
-};
+const incidentRoutes: ObjectRouteConfig<'incident'> = { noun: 'incident', field: 'incident', listField: 'incidents', object: INCIDENT };
 
 function linkedMemoryIds(body: Record<string, JsonValue>): string[] | undefined {
   const raw = body['linkedMemoryIds'];
