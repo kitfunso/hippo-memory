@@ -14,7 +14,7 @@
  */
 
 import { MemoryEntry, Layer } from '../core/memory.js';
-import { writeEntry } from '../store/entry-writes.js';
+import { adminActor, REFINED_TAG, storeRefinement } from '../api/index.js';
 import { loadAllEntries, readEntry } from '../store/entry-reads.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';
 import { sendAnthropicMessage, type AnthropicMessageFailure } from '../util/anthropic-messages.js';
@@ -23,7 +23,6 @@ import { log } from '../util/log.js';
 const MAX_REFINE_SOURCES = 8;
 const REFINE_SOURCE_CHARS = 400;
 
-const REFINED_TAG = 'llm-refined';
 // Output budget for one refined memory, and the shortest reply kept as a refinement.
 const REFINE_MAX_TOKENS = 800;
 const REFINE_MIN_CHARS = 10;
@@ -198,12 +197,7 @@ async function refineOneEntry(
     return;
   }
 
-  const updated: MemoryEntry = {
-    ...entry,
-    content: refined,
-    tags: entry.tags.includes(REFINED_TAG) ? entry.tags : [...entry.tags, REFINED_TAG],
-  };
-  writeEntry(hippoRoot, updated);
+  storeRefinement({ hippoRoot, tenantId: entry.tenantId, actor: adminActor('cli') }, entry, refined);
   result.refined++;
   result.details.push({ id: entry.id, status: 'refined' });
 }

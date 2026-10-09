@@ -19,12 +19,13 @@
  * every budget in hippo uses. Rows hold counts, surfaces, session ids and
  * hashes, never memory content or query text.
  *
- * DB helpers take the caller's handle; {@link readApiCalls} streams one
+ * DB helpers take the caller's handle, {@link recordRereads} opens the store
+ * it is given, and {@link readApiCalls} streams one
  * transcript file. Writes are best-effort at the call sites; a ledger failure
  * must never break recall.
  */
 import { open } from 'node:fs/promises';
-import { withWriteScope, type DatabaseSyncLike } from '../db/index.js';
+import { closeHippoDb, openHippoDb, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import type { JsonObject } from './working-memory.js';
 import { type JsonValue, isJsonString, isJsonObjectLiteral } from '../util/json.js';
 import { DAY_MS } from '../util/time.js';
@@ -366,8 +367,18 @@ interface RereadDay {
   tokens: number;
 }
 
-/** Replace a session's `reread` rows in one transaction, one per {@link REREAD_SURFACES} surface and UTC day; returns the tokens booked. */
-export function recordRereads(db: DatabaseSyncLike, tenantId: string, sessionId: string, calls: readonly ApiCall[]): number {
+/** Replace a session's `reread` rows in `hippoRoot`'s store, one per {@link REREAD_SURFACES} surface and UTC day; returns the tokens booked. */
+export function recordRereads(hippoRoot: string, tenantId: string, sessionId: string, calls: readonly ApiCall[]): number {
+  const db = openHippoDb(hippoRoot);
+  try {
+    return replaceRereadRows(db, tenantId, sessionId, calls);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/** One transaction, so a refused row leaves the session's earlier re-read rows in place. */
+function replaceRereadRows(db: DatabaseSyncLike, tenantId: string, sessionId: string, calls: readonly ApiCall[]): number {
   return withWriteScope(db, 'record_rereads', () => {
     const rows = injectedBlocks(db, tenantId, sessionId, REREAD_SURFACES);
     const days = new Map<string, RereadDay>();

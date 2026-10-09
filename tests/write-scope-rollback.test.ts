@@ -85,12 +85,12 @@ describe('a write scope that fails in the middle rolls back', () => {
       const base = { tenantId: 'default', sessionId: 's1', items: 1, tokens: 10 };
       recordTokenUse(db, { ...base, surface: 'hook', event: 'inject' });
       recordTokenUse(db, { ...base, surface: 'hook', event: 'reread' });
-      db.exec(`CREATE TRIGGER refuse_reread BEFORE INSERT ON token_ledger WHEN NEW.event = 'reread' BEGIN SELECT RAISE(ABORT, 'refused'); END`);
-      expect(() => recordRereads(db, 'default', 's1', [])).toThrow('refused');
-      expect(db.prepare(`SELECT COUNT(*) AS n FROM token_ledger WHERE event = 'reread'`).get<{ n: number }>()?.n).toBe(1);
     } finally {
       closeHippoDb(db);
     }
+    refuse('token_ledger', "NEW.event = 'reread'");
+    expect(() => recordRereads(root, 'default', 's1', [])).toThrow('refused');
+    expect(count(`SELECT COUNT(*) AS n FROM token_ledger WHERE event = 'reread'`)).toBe(1);
   });
 
   it('writeRecallTrace stores no trace row when a result row is refused', () => {

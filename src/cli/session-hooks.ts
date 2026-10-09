@@ -16,7 +16,6 @@ import {
 } from '../store/sessions.js';
 import { writeSessionEndHandoff } from '../store/handoffs.js';
 import { readSessionScan, recordSessionDigest } from '../capture/session-digest.js';
-import { openHippoDb, closeHippoDb } from '../db/index.js';
 import { captureToolFailure } from '../capture/capture-error.js';
 import {
   readApiCalls,
@@ -429,12 +428,7 @@ async function bookSessionRereads(
   let tokens = 0;
   for (const root of roots) {
     try {
-      const db = openHippoDb(root);
-      try {
-        tokens += recordRereads(db, resolveTenantId({}), sessionId, read.calls);
-      } finally {
-        closeHippoDb(db);
-      }
+      tokens += recordRereads(root, resolveTenantId({}), sessionId, read.calls);
     } catch (err) {
       lines.push(`re-read count failed: ${errorMessage(err)}`);
     }

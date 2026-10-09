@@ -181,7 +181,7 @@ describe('recordRereads', () => {
     expect(before).toEqual({ hash: 'h1', skipsSince: 1 });
 
     for (let pass = 0; pass < 2; pass++) {
-      expect(withDb(root, (db) => recordRereads(db, 'default', SESSION, calls))).toBe(430);
+      expect(recordRereads(root, 'default', SESSION, calls)).toBe(430);
     }
     expect(ledgerRows(root, `event = 'reread'`)).toEqual([
       { tenant_id: 'default', session_id: SESSION, surface: 'compact_resume', items: 1, tokens: 50 },
@@ -206,7 +206,7 @@ describe('recordRereads', () => {
       book(db, 'hook', 'inject', minute(3.5), 70);
       book(db, 'hook_recall', 'inject', minute(4.5), 40);
     });
-    expect(withDb(root, (db) => recordRereads(db, 'default', SESSION, calls))).toBe(200);
+    expect(recordRereads(root, 'default', SESSION, calls)).toBe(200);
     expect(ledgerRows(root, `event = 'reread'`)).toEqual([
       { tenant_id: 'default', session_id: SESSION, surface: 'hook', items: 1, tokens: 100 },
       { tenant_id: 'default', session_id: SESSION, surface: 'hook', items: 1, tokens: 100 },
@@ -222,7 +222,7 @@ describe('recordRereads', () => {
       book(db, 'hook', 'inject', minute(0.5), 100);
       for (const surface of others) book(db, surface, 'inject', minute(0.5), 1000);
     });
-    expect(withDb(root, (db) => recordRereads(db, 'default', SESSION, calls))).toBe(100);
+    expect(recordRereads(root, 'default', SESSION, calls)).toBe(100);
     expect(ledgerRows(root, `event = 'reread'`)).toEqual([
       { tenant_id: 'default', session_id: SESSION, surface: 'hook', items: 1, tokens: 100 },
     ]);

@@ -1,7 +1,6 @@
 // First-class object verbs for predictions, decisions and incidents.
 
 import { MemoryEntry } from '../core/memory.js';
-import { writeEntry } from '../store/entry-writes.js';
 import { readEntry } from '../store/entry-reads.js';
 import { extractPathTags } from '../search/path-context.js';
 import * as predictionsModule from '../store/predictions.js';
@@ -279,16 +278,10 @@ function exitWithDecideUsage(): never {
 }
 
 function weakenSupersededMemory(hippoRoot: string, oldEntry: MemoryEntry, supersedesMemId: string | null): void {
-  // Legacy memory-weaken (best-effort, LAST): half-life halved, marked stale +
-  // 'superseded' tag. Preserves the exact pre-promotion behavior for the memory
-  // mirror; the canonical table supersession already committed above.
-  // Best-effort: saveDecision already committed. Failing here would make a retry find no active
+  // Best-effort and last: saveDecision already committed. Failing here would make a retry find no active
   // decision for the old memory and create a duplicate active successor, so warn instead.
   try {
-    oldEntry.half_life_days = Math.max(1, Math.floor(oldEntry.half_life_days / 2));
-    oldEntry.confidence = 'stale';
-    if (!oldEntry.tags.includes('superseded')) oldEntry.tags.push('superseded');
-    writeEntry(hippoRoot, oldEntry);
+    decisionsModule.weakenSupersededMemory(hippoRoot, oldEntry);
   } catch (e) {
     printError(`  warning: decision recorded and superseded, but failed to weaken the prior memory ${supersedesMemId}: ${errorMessage(e)}`);
   }

@@ -2,16 +2,13 @@
 
 import * as path from 'path';
 import * as fs from 'fs';
-import { calculateStrength, deriveHalfLife } from '../core/memory.js';
 import { isInitialized } from '../store/open.js';
-import { writeEntry } from '../store/entry-writes.js';
 import { readEntry, loadAllEntries } from '../store/entry-reads.js';
 import { schemaFitInStore } from '../store/candidates.js';
 import { updateStats } from '../store/index-and-stats.js';
 import { RejectedValueError } from '../store/rejection.js';
 import { embedAll, embedMemory } from '../store/embeddings/index.js';
 import { loadEmbeddingIndex } from '../store/vector-index.js';
-import { loadConfig } from '../core/config.js';
 import { captureError, runWatched } from '../learn/autolearn.js';
 import { currentMachine, importAtSessionEnd, importForStore } from '../agent-memories/sync.js';
 import { detailLines } from '../agent-memories/report.js';
@@ -63,16 +60,20 @@ async function cmdWatch(command: string, hippoRoot: string): Promise<void> {
     process.exit(exitCode);
   }
 
-  const entry = captureError(exitCode, stderr, command, resolveTenantId({}));
-  entry.schema_fit = schemaFitInStore(hippoRoot, entry.tenantId, entry.content, entry.tags);
-  entry.half_life_days = deriveHalfLife(loadConfig(hippoRoot).defaultHalfLifeDays, entry);
-  entry.strength = calculateStrength(entry);
+  const tenantId = resolveTenantId({});
+  const failure = captureError(exitCode, stderr, command, tenantId);
+  const schemaFit = schemaFitInStore(hippoRoot, tenantId, failure.content, failure.tags);
   // A rejection-guard refusal of a failed command's output must not crash the watcher:
   // skip with the message below and still exit with the wrapped command's real exit code.
   try {
-    writeEntry(hippoRoot, entry);
+    const { id } = api.remember({ hippoRoot, tenantId, actor: api.adminActor('cli') }, {
+      content: failure.content,
+      tags: failure.tags,
+      local: { layer: failure.layer, source: failure.source, confidence: failure.confidence, schemaFit },
+    });
     updateStats(hippoRoot, { remembered: 1 });
-    void embedMemory(hippoRoot, entry);
+    const stored = readEntry(hippoRoot, id, tenantId);
+    if (stored) void embedMemory(hippoRoot, stored);
 
     const preview = stderr.trim().slice(0, STDERR_PREVIEW_CHARS);
     printError(`\nHippo learned from failure: "${preview}"`);

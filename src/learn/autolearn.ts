@@ -14,7 +14,7 @@ import { errorMessage, log } from '../util/log.js';
 const AUTOLEARN_TEXT_CHARS = 500;
 const AUTOLEARN_TAG_CHARS = 30;
 
-/** A memory of a failed command, "Command '<cmd>' failed: <truncated stderr>"; no store is in reach, so `hippo watch` re-derives its half-life from the store's config. */
+/** A memory of a failed command, "Command '<cmd>' failed: <truncated stderr>"; `hippo watch` stores its text and tags through remember. */
 export function captureError(
   exitCode: number,
   stderr: string,

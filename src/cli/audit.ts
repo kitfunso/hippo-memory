@@ -1,7 +1,7 @@
 // `hippo audit`: list and prune the audit log.
 
 import { loadAllEntries } from '../store/entry-reads.js';
-import { deleteEntry, memoriesBackingObjects } from '../store/delete-and-batch.js';
+import { memoriesBackingObjects } from '../store/delete-and-batch.js';
 import { auditMemories, AUDIT_OPS, type AuditEvent, type AuditOp } from '../store/audit.js';
 import * as api from '../api/index.js';
 import { resolveTenantId } from '../store/tenant.js';
@@ -155,8 +155,8 @@ function fixAuditErrors(hippoRoot: string, result: ReturnType<typeof auditMemori
     console.log(`\nWould remove ${errors.length} error-severity memories (dry run, nothing deleted).`);
     console.log(`${result.issues.length - errors.length} warnings would remain (review manually).`);
   } else if (errors.length > 0) {
-    const removedCount = errors.filter((issue) =>
-      deleteEntry(hippoRoot, issue.memoryId, { reason: `audit --fix: ${issue.reason}`, automatic: true })).length;
+    const ctx: api.Context = { hippoRoot, tenantId: resolveTenantId({}), actor: api.adminActor('cli') };
+    const removedCount = api.removeAuditErrors(ctx, 'audit --fix', errors).length;
     console.log(`\nRemoved ${removedCount} error-severity memories.`);
     console.log(`${result.issues.length - errors.length} warnings remain (review manually).`);
   } else {
