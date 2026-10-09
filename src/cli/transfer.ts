@@ -91,10 +91,7 @@ async function cmdWatch(command: string, hippoRoot: string): Promise<void> {
 // Learn command
 // ---------------------------------------------------------------------------
 
-export function cmdLearn(
-  hippoRoot: string,
-  flags: CliFlags
-): void {
+export function handleLearn({ hippoRoot, flags }: CommandContext): void {
   requireInit(hippoRoot);
 
   if (!flags['git']) {
@@ -146,11 +143,7 @@ function warnRedacted(count: number | undefined): void {
   if (count) printError(`Warning: secret-shaped text was redacted from ${count} imported ${count === 1 ? 'entry' : 'entries'} before storing`);
 }
 
-export function cmdImport(
-  hippoRoot: string,
-  args: string[],
-  flags: CliFlags
-): void {
+export function handleImport({ hippoRoot, args, flags }: CommandContext): void {
   const useGlobal = boolFlag(flags, 'global');
   const dryRun = boolFlag(flags, 'dry-run');
   const extraTags: string[] = Array.isArray(flags['tag'])
@@ -377,7 +370,7 @@ function cmdPromote(hippoRoot: string, id: string): void {
 // Sync command
 // ---------------------------------------------------------------------------
 
-export function cmdSync(hippoRoot: string, flags: CliFlags = {}): void {
+export function handleSync({ hippoRoot, flags }: CommandContext): void {
   requireInit(hippoRoot);
 
   const globalRoot = getGlobalRoot();

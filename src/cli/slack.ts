@@ -14,7 +14,7 @@ import {
 } from '../connectors/slack/workspaces.js';
 import { printError } from './output.js';
 import { printSlackBackfillUsage, printSlackWorkspacesUsage } from './usage.js';
-import { type CliFlags, stringFlag } from './flag-values.js';
+import { type CliFlags, stringFlag, type CommandContext } from './flag-values.js';
 
 // ---------------------------------------------------------------------------
 // Slack subcommands (`hippo slack backfill` / `hippo slack dlq list`)
@@ -141,7 +141,7 @@ function cmdSlackWorkspacesRemove(
   console.log(`removed: ${teamId}`);
 }
 
-export async function cmdSlack(hippoRoot: string, args: string[], flags: CliFlags): Promise<void> {
+export async function handleSlack({ hippoRoot, args, flags }: CommandContext): Promise<void> {
   const sub = args[0];
   if (sub === 'backfill') {
     cmdSlackBackfill(hippoRoot, flags);

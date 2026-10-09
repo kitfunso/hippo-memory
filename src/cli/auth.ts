@@ -4,7 +4,7 @@ import { listApiKeys, type ApiKeyListItem } from '../store/auth.js';
 import * as api from '../api/index.js';
 import { resolveTenantId } from '../store/tenant.js';
 import { printError } from './output.js';
-import { type CliFlags, boolFlag, stringFlag } from './flag-values.js';
+import { type CliFlags, boolFlag, stringFlag, type CommandContext } from './flag-values.js';
 import { resolveAuthRoot } from './shared.js';
 import { errorMessage } from '../util/log.js';
 
@@ -138,7 +138,7 @@ function cmdAuthScopeGrant(hippoRoot: string, keyId: string, scope: string, gran
   console.log(grant ? `Granted ${keyId} read access to ${scope}` : `Removed ${keyId}'s grant on ${scope}`);
 }
 
-export function cmdAuth(hippoRoot: string, args: string[], flags: CliFlags): void {
+export function handleAuth({ hippoRoot, args, flags }: CommandContext): void {
   const sub = args[0];
   if (!sub) {
     printError('Usage: hippo auth <create|list|revoke|grant|ungrant> [options]');

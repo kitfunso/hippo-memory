@@ -3,7 +3,7 @@
  * (docs/plans/2026-08-02-lc1-recall-trace-persistence.md).
  *
  * Covers: recall -> outcome -> recall_trace_outcomes row (E2E, via the CLI's
- * cmdRecall + cmdOutcome last-retrieval flow); outcome with no prior trace
+ * cmdRecall + handleOutcome last-retrieval flow); outcome with no prior trace
  * -> no row, no error; the explicit `traceId` SDK opt on api.outcome; and
  * the storage-overhead smoke bound (success criterion 3).
  *

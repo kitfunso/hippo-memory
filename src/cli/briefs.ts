@@ -10,7 +10,7 @@ import { buildGraphModel, renderGraphHtml, renderGraphCanvas, DEFAULT_VIEW_LIMIT
 import { resolveTenantId } from '../store/tenant.js';
 import { errorMessage, log } from '../util/log.js';
 import { printError } from './output.js';
-import { nonEmptyStringFlag, type CliFlags, boolFlag, stringFlag } from './flag-values.js';
+import { nonEmptyStringFlag, type CliFlags, boolFlag, stringFlag, type CommandContext } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { closeObject, foundOrExit, idArgOrExit, listObjects, printLifecycleTail, type ObjectNames } from './object-verbs.js';
 
@@ -128,11 +128,7 @@ function briefCreate(hippoRoot: string, tenantId: string, args: string[], flags:
   }
 }
 
-export function cmdProjectBrief(
-  hippoRoot: string,
-  args: string[],
-  flags: CliFlags
-): void {
+export function handleProjectBrief({ hippoRoot, args, flags }: CommandContext): void {
   requireInit(hippoRoot);
   const tenantId = resolveTenantId({});
   const subcommand = args[0] ?? '';
@@ -235,11 +231,7 @@ function graphView(hippoRoot: string, tenantId: string, entity: string | undefin
   if (flags['open'] && format === 'html') openInBrowser(out);
 }
 
-export function cmdGraph(
-  hippoRoot: string,
-  args: string[],
-  flags: CliFlags
-): void {
+export function handleGraph({ hippoRoot, args, flags }: CommandContext): void {
   requireInit(hippoRoot);
   const tenantId = resolveTenantId({});
   const subcommand = args[0] ?? '';
@@ -306,11 +298,7 @@ function noteClose(hippoRoot: string, tenantId: string, args: string[]): void {
   closeObject(args, NOTE, (id) => customerNotesModule.closeCustomerNote(hippoRoot, tenantId, id));
 }
 
-export function cmdCustomerNote(
-  hippoRoot: string,
-  args: string[],
-  flags: CliFlags
-): void {
+export function handleCustomerNote({ hippoRoot, args, flags }: CommandContext): void {
   requireInit(hippoRoot);
   const tenantId = resolveTenantId({});
   const subcommand = args[0] ?? '';

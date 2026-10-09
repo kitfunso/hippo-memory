@@ -17,7 +17,7 @@ const DAG_HEAD_CHARS = 120;
 const DAG_SUMMARY_PREVIEW_CHARS = 200;
 const DAG_CHILD_PREVIEW_CHARS = 100;
 
-export function cmdDag(hippoRoot: string, flags: CliFlags): void {
+export function handleDag({ hippoRoot, flags }: CommandContext): void {
   requireInit(hippoRoot);
   const entries = loadAllEntries(hippoRoot);
   const isStats = flagIsTrue(flags, 'stats');

@@ -35,7 +35,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 ### src/api/context-types.ts
 - `getContext` (section banner): getContext (extracted from cmdContext — Task 5 of the api.ts refactor)
 - `ContextOpts`: Extracted from `cmdContext` in `cli.ts` in Episode A of the api.ts refactor.
-- `ContextOpts`: Scope narrow (T5 execute decision): rendering opts (`format`, `framing`, `rendered`) and host-side opts (`auto`) are NOT included here. The print helpers (`printContextMarkdown`, `printActiveTaskSnapshot`, `printHandoff`, `printSessionEvents`) are shared with `cmdRecall` / `cmdSnapshot` / `cmdHandoffShow` — moving them into api.ts would expand T5 to also rewire those commands. CLI handles rendering + auto-resolution. Episode B can add `api.renderContext` once a shared rendering need actually materializes.
+- `ContextOpts`: Scope narrow (T5 execute decision): rendering opts (`format`, `framing`, `rendered`) and host-side opts (`auto`) are NOT included here. The print helpers (`printContextMarkdown`, `printActiveTaskSnapshot`, `printHandoff`, `printSessionEvents`) are shared with `cmdRecall` / `handleSnapshot` / `cmdHandoffShow` — moving them into api.ts would expand T5 to also rewire those commands. CLI handles rendering + auto-resolution. Episode B can add `api.renderContext` once a shared rendering need actually materializes.
 - `ContextOpts.includeRecent`: quality floor (`isWorthSurfacing`, DF3): rows hippo wrote meet the automatic check, a person's rows the older floor.
 - `ContextOpts.currentSessionId`: DF1 (docs/plans/2026-08-23-df1-snapshot-lifecycle.md, T2): the calling session's id.
 - `ContextOpts.prompt`: Z1: raw hook-payload prompt; only the pinned-only branch reads it, gated on `pinnedInject.promptRecall`.
@@ -188,14 +188,14 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 
 ### src/cli/curate.ts
 - `cmdForget`: A3: raw memories (Slack / GitHub connector ingestion) are append-only — a BEFORE-DELETE trigger aborts any delete. archiveRaw is the sanctioned removal path; it records ctx.actor as the archiver for provenance.
-- `cmdResolve`: AT1: --reject-loser tombstones the loser's normalized digest so it cannot be re-asserted later, in addition to removing it (kind-aware). --reason defaults to a conflict-context string when omitted (resolve already has the conflict id + keepId; unlike `hippo reject`, a reason is not strictly required here).
+- `handleResolve`: AT1: --reject-loser tombstones the loser's normalized digest so it cannot be re-asserted later, in addition to removing it (kind-aware). --reason defaults to a conflict-context string when omitted (resolve already has the conflict id + keepId; unlike `hippo reject`, a reason is not strictly required here).
 - `reject banner`: AT1: reject / rejections / unreject docs/plans/2026-08-15-at1-rejected-value-tombstone.md §4
-- `cmdReject`: --reason is REQUIRED (plan §4, grill issue 4): the tombstone stores no content, so reason is its only human-readable identity.
-- `cmdQuarantine`: `hippo quarantine [list] [--all] [--json] [--global]`, `quarantine approve <id>`, `quarantine reject <id>` (CD5 poisoning defence).
+- `handleReject`: --reason is REQUIRED (plan §4, grill issue 4): the tombstone stores no content, so reason is its only human-readable identity.
+- `handleQuarantine`: `hippo quarantine [list] [--all] [--json] [--global]`, `quarantine approve <id>`, `quarantine reject <id>` (CD5 poisoning defence).
 
 ### src/cli/dag.ts
-- `cmdDag`: Tree view: v0.30 / E5 renders L3 entity profiles as roots (with L2 children indented), then orphan L2 summaries (no L3 parent) at top level. Pre-E5 behavior was L2-only roots; rendering now covers L3.
-- `cmdDag`: Orphan L2 summaries (no L3 parent) at top level — pre-E5 default shape.
+- `handleDag`: Tree view: v0.30 / E5 renders L3 entity profiles as roots (with L2 children indented), then orphan L2 summaries (no L3 parent) at top level. Pre-E5 behavior was L2-only roots; rendering now covers L3.
+- `handleDag`: Orphan L2 summaries (no L3 parent) at top level — pre-E5 default shape.
 - `cmdDrillDown`: v0.30 / E5: --depth N walks N levels down (default 1, hard cap 10). L4 fold: reject out-of-range explicitly (no silent clamp).
 
 ### src/cli/decisions.ts
@@ -216,20 +216,20 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `COMPACT_RESUME_EVENT_CONTENT_CAP`: X8: session-event content is capped at print time only — the shared printSessionEvents stays untouched for every other caller.
 - `restoreCompactSnapshot`: X5: concurrent sessions must not cross-restore. Only suppress when BOTH ids are present and differ — either side missing, or a manual invocation with no payload session_id, still prints.
 - `restoreCompactSnapshot`: X12: re-injected state is background reference, not instructions: the framing line the model actually sees at every compaction.
-- `cmdSessionEnd`: Bounded read (DF1 T3, docs/plans/2026-08-23-df1-snapshot-lifecycle.md): extracts transcript_path + session_id for the detached worker's argv.
+- `handleSessionEnd`: Bounded read (DF1 T3, docs/plans/2026-08-23-df1-snapshot-lifecycle.md): extracts transcript_path + session_id for the detached worker's argv.
 - `cmdSessionEndWorker`: DF1 T3: close the ending session's own active task snapshot AFTER sleep+capture complete — neither producer (runPreCompact, `hippo snapshot save`) runs inside session-end, so this can never destroy same-run work. Scoped to `--session-id`: a concurrent session's active snapshot is untouched (closeTaskSnapshotsForSession's own WHERE clause). Absent session id -> no-op plus one log line; session-end is not guaranteed to fire at all (crash, kill -9), so the freshness bound in loadFreshActiveTaskSnapshot is the backstop layer, not this close. Handoff write happens BEFORE the snapshot close below, while the snapshot writeSessionEndHandoff reads is still active.
 
 ### src/cli/slack.ts
 - `slack banner`: Slack subcommands (E1.3 — `hippo slack backfill` / `hippo slack dlq list`)
 
 ### src/cli/status.ts
-- `cmdTokens`: `hippo tokens [--days <n>] [--json] [--global]`: the token ledger (ROADMAP TE0). Tokens of memory text handed to agents per surface, blocks the per-prompt hook skipped as unchanged (TE2) and the tokens that saved,
-- `cmdFailures`: `hippo failures [--days <n>] [--json] [--global]`: failed tool calls by outcome, and repeats across sessions (CD13).
-- `cmdFailures`: Counts, not a rate: a share means little without a holdout arm to compare against (CD11).
+- `handleTokens`: `hippo tokens [--days <n>] [--json] [--global]`: the token ledger (ROADMAP TE0). Tokens of memory text handed to agents per surface, blocks the per-prompt hook skipped as unchanged (TE2) and the tokens that saved,
+- `handleFailures`: `hippo failures [--days <n>] [--json] [--global]`: failed tool calls by outcome, and repeats across sessions (CD13).
+- `handleFailures`: Counts, not a rate: a share means little without a holdout arm to compare against (CD11).
 
 ### src/cli/transfer.ts
 - `cmdWatch`: AT1 (plan §3 containment): mechanical content from a failed command — a rejection-guard refusal here must not crash the watcher. Skip silently (loud enough via the message below) and still exit with the wrapped command's real exit code.
-- `cmdImport`: K1 vault import: a FOLDER importer that mirrors the connector pattern (kind='raw' + tag provenance + archiveRaw deletions), so it dispatches separately from the single-file `importer` function-pointer slot below.
+- `handleImport`: K1 vault import: a FOLDER importer that mirrors the connector pattern (kind='raw' + tag provenance + archiveRaw deletions), so it dispatches separately from the single-file `importer` function-pointer slot below.
 - `handlePeers`: D4 v1.12.10: tenant-scoped by default. --all-tenants restores the pre-D4 host-wide view for the rare operator who genuinely wants cross-tenant peer discovery.
 
 ### src/core/compare.ts
@@ -658,7 +658,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `closePrediction`: J3 computes accuracy (clean vs regressed) from (estimateValue, actualValue) at query time.
 - `section header`: v0.31 / J3 — reference-class / planning-fallacy detector
 - `computePredictionBaserate`: Used by J3 reference-class / planning-fallacy detector.
-- `computePredictionBaserate.emitAudit`: v0.32 / J3.2 — when false, skip the predict_baserate audit emit. The J3.2 orchestrator (computePlanningFallacyOutput, below) calls this with emitAudit=false and emits its own `recall_autodebias_hint` audit row instead, so the predict_baserate channel stays scoped to deliberate CLI / HTTP / MCP predict-baserate calls and does NOT pollute on every recall containing a forward-claim phrase. Default true preserves the v1.13.0 J3 audit semantics for the 3 direct callers (cmdPredict baserate, /v1/predictions/stats route, hippo_predict_baserate MCP handler) — none of them pass this argument.
+- `computePredictionBaserate.emitAudit`: v0.32 / J3.2 — when false, skip the predict_baserate audit emit. The J3.2 orchestrator (computePlanningFallacyOutput, below) calls this with emitAudit=false and emits its own `recall_autodebias_hint` audit row instead, so the predict_baserate channel stays scoped to deliberate CLI / HTTP / MCP predict-baserate calls and does NOT pollute on every recall containing a forward-claim phrase. Default true preserves the v1.13.0 J3 audit semantics for the 3 direct callers (handlePredict baserate, /v1/predictions/stats route, hippo_predict_baserate MCP handler) — none of them pass this argument.
 - `computePredictionBaserate`: Skipped when emitAudit=false (J3.2 orchestrator path; its own recall_autodebias_hint audit fires only when nClosed > 0 anyway, so no signal is lost).
 
 ### src/objects/processes.ts

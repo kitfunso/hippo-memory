@@ -10,7 +10,7 @@ import { loadConfig } from '../core/config.js';
 import { resolveTenantId } from '../store/tenant.js';
 import { refineStore } from './refine-llm.js';
 import { printError } from './output.js';
-import { type CliFlags, boolFlag } from './flag-values.js';
+import { type CliFlags, boolFlag, type CommandContext } from './flag-values.js';
 import { requireInit, resolveAuthRoot } from './shared.js';
 import { errorMessage } from '../util/log.js';
 
@@ -18,10 +18,7 @@ const MAX_FAILED_SHOWN = 5;
 const MAX_PAIRS_SHOWN = 15;
 const PAIR_PREVIEW_CHARS = 90;
 
-export async function cmdRefine(
-  hippoRoot: string,
-  flags: CliFlags,
-): Promise<void> {
+export async function handleRefine({ hippoRoot, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
 
   const apiKey = envAnthropicApiKey();
@@ -62,10 +59,7 @@ export async function cmdRefine(
   }
 }
 
-export function cmdDedup(
-  hippoRoot: string,
-  flags: CliFlags
-): void {
+export function handleDedup({ hippoRoot, flags }: CommandContext): void {
   requireInit(hippoRoot);
 
   const dryRun = boolFlag(flags, 'dry-run');
@@ -177,6 +171,10 @@ export async function cmdEmbed(
     printError(`${unembedded} memories are still not embedded (the warnings above name them). Re-run \`hippo embed\` to retry.`);
     process.exitCode = 1;
   }
+}
+
+export function handleEmbed({ hippoRoot, flags }: CommandContext): Promise<void> {
+  return cmdEmbed(hippoRoot, flags);
 }
 
 function resetPhysics(root: string): void {

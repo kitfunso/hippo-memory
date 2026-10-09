@@ -108,6 +108,18 @@ describe('CLI help output is byte-identical and runs nothing', () => {
     expect(pinned(res)).toMatchSnapshot();
   });
 
+  it('every verb row calls a handle<Verb> entry and never a cmd<Name>', () => {
+    // Read from source: the spies above replaced each run function.
+    const source = readFileSync(resolve(__dirname, '..', 'src', 'cli.ts'), 'utf8');
+    const table = source.slice(source.indexOf('export const VERB_HANDLERS = {'), source.indexOf('} satisfies Record<VerbName'));
+    const runs = table.split('\n').filter((line) => /^\s+run:/.test(line));
+    expect(runs).toHaveLength(Object.keys(COMMANDS).length);
+    for (const run of runs) {
+      expect(run).toMatch(/\bhandle[A-Z]\w*\(/);
+      expect(run).not.toMatch(/\bcmd[A-Z]/);
+    }
+  });
+
   it('hippo init -h prints the init block and installs nothing', async () => {
     const res = await run(['init', '-h']);
     expect(pick(res)).toEqual({ status: 0, stdout: `${verbUsage('init')}\n`, stderr: '' });

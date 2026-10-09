@@ -26,7 +26,7 @@ import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, t
 import { CARD_TRANSITIONS, type CardStatus } from '../src/core/card.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 import { runInProcess } from './_helpers/run-in-process.js';
-import { cmdCard } from '../src/cli/card.js';
+import { handleCard } from '../src/cli/card.js';
 import { COMMANDS, parseArgs } from '../src/cli.js';
 import * as packageEntry from '../src/index.js';
 
@@ -518,7 +518,7 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
     try {
       initStore(join(home, '.hippo'));
       // parseArgs collects --depends-on into an array, so the in-process call passes one.
-      const create = await runInProcess(() => cmdCard(join(home, '.hippo'), ['create'], { title: 'x', 'depends-on': ['nope'] }));
+      const create = await runInProcess(() => handleCard({ hippoRoot: join(home, '.hippo'), args: ['create'], flags: { title: 'x', 'depends-on': ['nope'] } }));
       expect(create.status).toBe(1);
       expect(create.stderr).toContain('unknown parent card id: nope');
     } finally {

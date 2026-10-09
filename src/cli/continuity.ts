@@ -16,7 +16,7 @@ import type { SessionEvent, TaskSnapshot } from '../store/rows.js';
 import { printError } from './output.js';
 import { requireInit } from './shared.js';
 import { printActiveTaskSnapshot, printSessionEvents, printHandoff } from './print.js';
-import { type CliFlags, boolFlag } from './flag-values.js';
+import { type CliFlags, boolFlag, type CommandContext } from './flag-values.js';
 
 const ISO_DATETIME_CHARS = 19;
 
@@ -75,11 +75,7 @@ function snapshotShow(hippoRoot: string, flags: CliFlags): void {
   printActiveTaskSnapshot(snapshot);
 }
 
-export function cmdSnapshot(
-  hippoRoot: string,
-  args: string[],
-  flags: CliFlags
-): void {
+export function handleSnapshot({ hippoRoot, args, flags }: CommandContext): void {
   requireInit(hippoRoot);
 
   const subcommand = args[0] ?? 'show';
@@ -193,11 +189,7 @@ function sessionComplete(hippoRoot: string, s: SessionArgs, flags: CliFlags): vo
   }
 }
 
-export function cmdSession(
-  hippoRoot: string,
-  args: string[],
-  flags: CliFlags
-): void {
+export function handleSession({ hippoRoot, args, flags }: CommandContext): void {
   requireInit(hippoRoot);
 
   const subcommand = args[0] ?? 'show';
@@ -382,11 +374,7 @@ function handoffShow(hippoRoot: string, args: string[], flags: CliFlags): void {
   printHandoff(handoff);
 }
 
-export function cmdHandoff(
-  hippoRoot: string,
-  args: string[],
-  flags: CliFlags
-): void {
+export function handleHandoff({ hippoRoot, args, flags }: CommandContext): void {
   requireInit(hippoRoot);
 
   const subcommand = args[0] ?? 'latest';
@@ -454,11 +442,7 @@ function currentShow(hippoRoot: string, flags: CliFlags): void {
   printCurrentState(snapshot, events);
 }
 
-export function cmdCurrent(
-  hippoRoot: string,
-  args: string[],
-  flags: CliFlags
-): void {
+export function handleCurrent({ hippoRoot, args, flags }: CommandContext): void {
   requireInit(hippoRoot);
 
   const subcommand = args[0] ?? 'show';
@@ -473,11 +457,7 @@ export function cmdCurrent(
 // Working Memory
 // ---------------------------------------------------------------------------
 
-export function cmdWm(
-  hippoRoot: string,
-  args: string[],
-  flags: CliFlags,
-): void {
+export function handleWm({ hippoRoot, args, flags }: CommandContext): void {
   requireInit(hippoRoot);
 
   const subcommand = args[0] ?? '';

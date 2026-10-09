@@ -2,7 +2,7 @@
  * Implementation of `hippo github` CLI subcommands. Extracted from the main
  * cli.ts so unit tests can import these functions directly without triggering
  * the cli.ts main() side effects. The cli.ts dispatcher re-exports the
- * top-level cmdGithub.
+ * top-level handleGithub.
  *
  * Subcommands mirror the Slack connector shape (cli.ts §Slack subcommands):
  *   - hippo github backfill --repo <owner/name> [--since ISO] [--max <N>]
@@ -28,6 +28,7 @@ import {
   isGitHubPullRequestReviewCommentEvent,
 } from './types.js';
 import type { JsonValue } from '../../util/json.js';
+import type { CommandContext } from '../../cli/flag-values.js';
 
 type FlagValue = string | boolean | string[];
 type Flags = Record<string, FlagValue>;
@@ -235,11 +236,7 @@ export async function cmdGithubDlqReplay(
   );
 }
 
-export async function cmdGithub(
-  hippoRoot: string,
-  args: string[],
-  flags: Flags,
-): Promise<void> {
+export async function handleGithub({ hippoRoot, args, flags }: CommandContext): Promise<void> {
   const sub = args[0];
   if (sub === 'backfill') {
     await cmdGithubBackfill(hippoRoot, flags);

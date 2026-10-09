@@ -134,7 +134,7 @@ describe('global --scope value-less guard: exit-1 cases', () => {
     expect(res.stderr).toContain(USAGE_MSG);
   });
 
-  // Pins the GLOBAL semantics: `status` never reads flags['scope'] (cmdStatus
+  // Pins the GLOBAL semantics: `status` never reads flags['scope'] (handleStatus
   // takes only hippoRoot), yet a value-less --scope still exits 1 because the
   // guard runs before dispatch, uniformly, regardless of whether the target
   // command would have consumed the flag.

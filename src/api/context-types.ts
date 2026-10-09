@@ -20,7 +20,7 @@ import type { ProjectRef } from '../core/project-identity.js';
  * existing `getEntry` naming pattern in store.ts.
  *
  * Rendering opts (`format`, `framing`, `rendered`) and host-side opts (`auto`) stay in the CLI,
- * because its print helpers are shared with `cmdRecall` / `cmdSnapshot` / `cmdHandoffShow`.
+ * because its print helpers are shared with `cmdRecall` / `handleSnapshot` / `cmdHandoffShow`.
  */
 export interface ContextOpts {
   q?: string;

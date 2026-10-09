@@ -23,10 +23,7 @@ const REJECTED_DIGEST_LIST_CHARS = 16;
 const DORMANT_PREVIEW_CHARS = 100;
 const STRENGTH_DECIMALS = 3;
 
-export function cmdOutcome(
-  hippoRoot: string,
-  flags: CliFlags
-): void {
+export function handleOutcome({ hippoRoot, flags }: CommandContext): void {
   requireInit(hippoRoot);
 
   const good = boolFlag(flags, 'good');
@@ -149,10 +146,7 @@ function previewForget(hippoRoot: string, id: string, archive: boolean): void {
   console.log(`Would ${archive ? 'archive' : 'forget'} ${id} (dry run, nothing changed): "${snippet}"`);
 }
 
-export function cmdConflicts(
-  hippoRoot: string,
-  flags: CliFlags
-): void {
+export function handleConflicts({ hippoRoot, flags }: CommandContext): void {
   requireInit(hippoRoot);
 
   const conflicts = listMemoryConflicts(hippoRoot, String(flags['status'] ?? 'open'));
@@ -203,11 +197,7 @@ function showConflictForResolve(hippoRoot: string, conflictId: number, tenantId:
   console.log(`Resolve with: hippo resolve ${conflictId} --keep <memory_id> [--forget] [--reject-loser [--reason "<why>"]]`);
 }
 
-export function cmdResolve(
-  hippoRoot: string,
-  args: string[],
-  flags: CliFlags
-): void {
+export function handleResolve({ hippoRoot, args, flags }: CommandContext): void {
   requireInit(hippoRoot);
 
   const rawId = args[0] ?? '';
@@ -252,11 +242,7 @@ export function cmdResolve(
 // reject / rejections / unreject
 // ---------------------------------------------------------------------------
 
-export function cmdReject(
-  hippoRoot: string,
-  args: string[],
-  flags: CliFlags,
-): void {
+export function handleReject({ hippoRoot, args, flags }: CommandContext): void {
   // Store resolution mirrors `hippo remember`: --global writes to the
   // global store, otherwise the local store (requireInit'd via resolveAuthRoot).
   const root = resolveAuthRoot(hippoRoot, flags);
@@ -317,10 +303,7 @@ function printRejected(result: ReturnType<typeof rejectValue>, reason: string): 
   }
 }
 
-export function cmdRejections(
-  hippoRoot: string,
-  flags: CliFlags,
-): void {
+export function handleRejections({ hippoRoot, flags }: CommandContext): void {
   const root = resolveAuthRoot(hippoRoot, flags);
   const tenantId = resolveTenantId({});
   const rows = listRejectionsForTenant(root, tenantId);
@@ -347,11 +330,7 @@ export function cmdRejections(
   }
 }
 
-export function cmdUnreject(
-  hippoRoot: string,
-  args: string[],
-  flags: CliFlags,
-): void {
+export function handleUnreject({ hippoRoot, args, flags }: CommandContext): void {
   const root = resolveAuthRoot(hippoRoot, flags);
   const tenantId = resolveTenantId({});
   const digestOrPrefix = (args[0] ?? '').trim();
@@ -382,11 +361,7 @@ export function cmdUnreject(
  * Dormant memories are what sleep keeps instead of deleting (on by default;
  * `"dormant": { "enabled": false }` in .hippo/config.json deletes instead).
  */
-export function cmdDormant(
-  hippoRoot: string,
-  args: string[],
-  flags: CliFlags,
-): void {
+export function handleDormant({ hippoRoot, args, flags }: CommandContext): void {
   const root = resolveAuthRoot(hippoRoot, flags);
   const ctx: api.Context = {
     hippoRoot: root,
@@ -458,11 +433,7 @@ function printDormantRows(rows: ReturnType<typeof api.listDormant>, hasQuery: bo
 }
 
 /** `hippo quarantine [list] [--all] [--json] [--global]`, `quarantine approve <id>`, `quarantine reject <id>` (poisoning defence). */
-export async function cmdQuarantine(
-  hippoRoot: string,
-  args: string[],
-  flags: CliFlags,
-): Promise<void> {
+export async function handleQuarantine({ hippoRoot, args, flags }: CommandContext): Promise<void> {
   const root = resolveAuthRoot(hippoRoot, flags);
   const ctx: api.Context = {
     hippoRoot: root,
