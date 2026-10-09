@@ -12,11 +12,11 @@
 
 import { envGithubToken, envGithubWebhookSecret, envGithubWebhookSecretPrevious } from '../../env.js';
 import { type Context, adminActor } from '../../api.js';
-import { openHippoDb, closeHippoDb } from '../../db.js';
+import { seedCursors } from '../../store/connectors/github.js';
 import { resolveTenantId } from '../../tenant.js';
 import { backfillRepo } from './backfill.js';
 import { realGitHubFetcher, type GitHubFetcher } from './octokit-client.js';
-import { listDlq, replayDlqEntry } from './dlq.js';
+import { listDlqIn, replayDlqEntry } from './dlq.js';
 import { ingestEvent, type IngestEvent } from './ingest.js';
 import { handleCommentDeleted } from './deletion.js';
 import { computeDeletionKey } from './signature.js';
@@ -116,22 +116,7 @@ export async function cmdGithubBackfill(
   // COALESCE preserves any existing HWM (subsequent runs ignore --since for
   // streams that already drained at least once — same idempotency story as
   // Slack's slack_cursors).
-  if (sinceIso) {
-    const db = openHippoDb(hippoRoot);
-    try {
-      db.prepare(
-        `INSERT INTO github_cursors (tenant_id, repo_full_name, issues_hwm, issue_comments_hwm, pr_review_comments_hwm, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?)
-         ON CONFLICT(tenant_id, repo_full_name) DO UPDATE SET
-           issues_hwm = COALESCE(github_cursors.issues_hwm, excluded.issues_hwm),
-           issue_comments_hwm = COALESCE(github_cursors.issue_comments_hwm, excluded.issue_comments_hwm),
-           pr_review_comments_hwm = COALESCE(github_cursors.pr_review_comments_hwm, excluded.pr_review_comments_hwm),
-           updated_at = excluded.updated_at`,
-      ).run(tenantId, repo, sinceIso, sinceIso, sinceIso, new Date().toISOString());
-    } finally {
-      closeHippoDb(db);
-    }
-  }
+  if (sinceIso) seedCursors(hippoRoot, tenantId, repo, sinceIso);
 
   const ctx: Context = {
     hippoRoot,
@@ -156,21 +141,15 @@ export async function cmdGithubBackfill(
 }
 
 export function cmdGithubDlqList(hippoRoot: string, _flags: Flags): void {
-  const db = openHippoDb(hippoRoot);
-  try {
-    const tenantId = resolveTenantId({});
-    const items = listDlq(db, { tenantId });
-    if (items.length === 0) {
-      console.log('no entries');
-      return;
-    }
-    for (const it of items) {
-      console.log(
-        `${it.id}\t${it.bucket}\t${it.tenantId}\t${it.eventName ?? '-'}\t${it.receivedAt}\t${it.error}`,
-      );
-    }
-  } finally {
-    closeHippoDb(db);
+  const items = listDlqIn(hippoRoot, { tenantId: resolveTenantId({}) });
+  if (items.length === 0) {
+    console.log('no entries');
+    return;
+  }
+  for (const it of items) {
+    console.log(
+      `${it.id}\t${it.bucket}\t${it.tenantId}\t${it.eventName ?? '-'}\t${it.receivedAt}\t${it.error}`,
+    );
   }
 }
 

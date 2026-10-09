@@ -1,6 +1,17 @@
 import type { DatabaseSyncLike } from '../../db.js';
 import type { Context } from '../../api.js';
-import { openHippoDb, closeHippoDb } from '../../db.js';
+import {
+  bumpDlqRetry,
+  dlqEntry,
+  dlqEntryAt,
+  insertDlq,
+  insertDlqAt,
+  listDlqAt,
+  listDlqRows,
+  type DlqBucket,
+  type DlqItem,
+  type GithubDlqWrite,
+} from '../../store/connectors/github.js';
 import { verifyGitHubSignature } from './signature.js';
 import { isGitHubWebhookEnvelope } from './types.js';
 import { redactPayload, DLQ_REDACTED_NOTE } from '../../secret-detect.js';
@@ -18,23 +29,7 @@ import type { JsonValue } from '../../json.js';
  *   - signature_failed — HMAC did not verify against the active webhook secret
  *   - unhandled       — parsed but no handler matched the event
  */
-export type DlqBucket = 'parse_error' | 'unroutable' | 'signature_failed' | 'unhandled';
-
-export interface DlqItem {
-  id: number;
-  tenantId: string;
-  rawPayload: string;
-  error: string;
-  eventName: string | null;
-  deliveryId: string | null;
-  signature: string | null;
-  installationId: string | null;
-  repoFullName: string | null;
-  retryCount: number;
-  receivedAt: string;
-  retriedAt: string | null;
-  bucket: DlqBucket | string;
-}
+export type { DlqBucket, DlqItem } from '../../store/connectors/github.js';
 
 /**
  * `tenantId: null` means the connector could not resolve a tenant for the
@@ -54,116 +49,46 @@ export interface WriteDlqOpts {
   repoFullName?: string | null;
 }
 
-export function writeToDlq(db: DatabaseSyncLike, opts: WriteDlqOpts): number {
+/** The row as stored: secrets redacted, and the signature dropped once redaction changed the signed bytes. */
+function dlqWrite(opts: WriteDlqOpts): GithubDlqWrite {
   const rawPayload = redactPayload(opts.rawPayload);
   const redacted = rawPayload !== opts.rawPayload;
-  const result = db
-    .prepare(
-      `INSERT INTO github_dlq
-        (tenant_id, raw_payload, error, event_name, delivery_id, signature,
-         installation_id, repo_full_name, received_at, bucket)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .run(
-      opts.tenantId ?? '__unroutable__',
-      rawPayload,
-      redacted ? `${opts.error}; ${DLQ_REDACTED_NOTE}` : opts.error,
-      opts.eventName ?? null,
-      opts.deliveryId ?? null,
-      redacted ? null : opts.signature ?? null,
-      opts.installationId ?? null,
-      opts.repoFullName ?? null,
-      new Date().toISOString(),
-      opts.bucket ?? 'parse_error',
-    );
-  return Number(result.lastInsertRowid);
+  return {
+    tenantId: opts.tenantId ?? '__unroutable__',
+    rawPayload,
+    error: redacted ? `${opts.error}; ${DLQ_REDACTED_NOTE}` : opts.error,
+    eventName: opts.eventName ?? null,
+    deliveryId: opts.deliveryId ?? null,
+    signature: redacted ? null : opts.signature ?? null,
+    installationId: opts.installationId ?? null,
+    repoFullName: opts.repoFullName ?? null,
+    bucket: opts.bucket ?? 'parse_error',
+  };
 }
 
-const SELECT_COLUMNS = `id, tenant_id, raw_payload, error, event_name, delivery_id,
-            signature, installation_id, repo_full_name, retry_count,
-            received_at, retried_at, bucket`;
+export function writeToDlq(db: DatabaseSyncLike, opts: WriteDlqOpts): number {
+  return insertDlqAt(db, dlqWrite(opts));
+}
 
-// The sqlite driver returns each column as one of these JS types depending on
-// its stored affinity; rowToItem below coerces every field with String()/Number()
-// regardless, so a named union (not `unknown`) is enough of a contract here.
-type DlqRawRow = {
-  id: string | number | bigint;
-  tenant_id: string | number | bigint | null;
-  raw_payload: string | number | bigint | null;
-  error: string | number | bigint | null;
-  event_name: string | number | bigint | null;
-  delivery_id: string | number | bigint | null;
-  signature: string | number | bigint | null;
-  installation_id: string | number | bigint | null;
-  repo_full_name: string | number | bigint | null;
-  retry_count: string | number | bigint | null;
-  received_at: string | number | bigint | null;
-  retried_at: string | number | bigint | null;
-  bucket: string | number | bigint | null;
-};
+/** writeToDlq on a handle of its own. */
+export function parkInDlq(hippoRoot: string, opts: WriteDlqOpts): number {
+  return insertDlq(hippoRoot, dlqWrite(opts));
+}
 
 export function listDlq(
   db: DatabaseSyncLike,
   opts: { tenantId: string; limit?: number },
 ): DlqItem[] {
-  // SAFETY: rows come from the SELECT above (SELECT_COLUMNS), which projects
-  // exactly DlqRawRow's fields, in the same order github_dlq defines them.
-  const rows = db
-    .prepare(
-      `SELECT ${SELECT_COLUMNS}
-         FROM github_dlq
-        WHERE tenant_id = ?
-        ORDER BY received_at ASC
-        LIMIT ?`,
-    )
-    .all(opts.tenantId, opts.limit ?? 100) as DlqRawRow[];
-  return rows.map(rowToItem);
+  return listDlqAt(db, opts.tenantId, opts.limit ?? 100);
+}
+
+/** listDlq on a handle of its own. */
+export function listDlqIn(hippoRoot: string, opts: { tenantId: string; limit?: number }): DlqItem[] {
+  return listDlqRows(hippoRoot, opts.tenantId, opts.limit ?? 100);
 }
 
 export function getDlqEntry(db: DatabaseSyncLike, id: number): DlqItem | null {
-  // SAFETY: the row comes from the SELECT above (SELECT_COLUMNS), which
-  // projects exactly DlqRawRow's fields, in the same order github_dlq defines them.
-  const row = db
-    .prepare(
-      `SELECT ${SELECT_COLUMNS}
-         FROM github_dlq
-        WHERE id = ?`,
-    )
-    .get(id) as DlqRawRow | undefined;
-  if (!row) return null;
-  return rowToItem(row);
-}
-
-function rowToItem(r: DlqRawRow): DlqItem {
-  return {
-    id: Number(r.id),
-    tenantId: String(r.tenant_id),
-    rawPayload: String(r.raw_payload),
-    error: String(r.error),
-    eventName: r.event_name == null ? null : String(r.event_name),
-    deliveryId: r.delivery_id == null ? null : String(r.delivery_id),
-    signature: r.signature == null ? null : String(r.signature),
-    installationId: r.installation_id == null ? null : String(r.installation_id),
-    repoFullName: r.repo_full_name == null ? null : String(r.repo_full_name),
-    retryCount: Number(r.retry_count ?? 0),
-    receivedAt: String(r.received_at),
-    retriedAt: r.retried_at == null ? null : String(r.retried_at),
-    bucket: r.bucket == null ? 'parse_error' : String(r.bucket),
-  };
-}
-
-function bumpRetryCount(hippoRoot: string, id: number): void {
-  const db = openHippoDb(hippoRoot);
-  try {
-    db.prepare(
-      `UPDATE github_dlq
-          SET retry_count = retry_count + 1,
-              retried_at = ?
-        WHERE id = ?`,
-    ).run(new Date().toISOString(), id);
-  } finally {
-    closeHippoDb(db);
-  }
+  return dlqEntryAt(db, id);
 }
 
 export interface ReplayDlqOpts {
@@ -234,13 +159,7 @@ export async function replayDlqEntry(
   id: number,
   opts: ReplayDlqOpts & { ingestHook?: IngestHook } = {},
 ): Promise<ReplayResult> {
-  const db = openHippoDb(ctx.hippoRoot);
-  let row: DlqItem | null;
-  try {
-    row = getDlqEntry(db, id);
-  } finally {
-    closeHippoDb(db);
-  }
+  const row = dlqEntry(ctx.hippoRoot, id);
   if (!row) {
     return {
       ok: false,
@@ -262,7 +181,7 @@ export async function replayDlqEntry(
 
   // Without an ingest hook this is a dry-run validation. Bump and report.
   if (!opts.ingestHook) {
-    bumpRetryCount(ctx.hippoRoot, id);
+    bumpDlqRetry(ctx.hippoRoot, id);
     return {
       ok: true,
       status: 'replayed',
@@ -283,7 +202,7 @@ export async function replayDlqEntry(
     eventName,
     deliveryId,
   });
-  bumpRetryCount(ctx.hippoRoot, id);
+  bumpDlqRetry(ctx.hippoRoot, id);
   return {
     ok: true,
     status: 'replayed',
@@ -316,7 +235,7 @@ function checkReplaySignature(
     previousSecret,
   });
   if (!sigOk) {
-    bumpRetryCount(hippoRoot, id);
+    bumpDlqRetry(hippoRoot, id);
     return {
       ok: false,
       status: 'sig_fail',
@@ -335,7 +254,7 @@ function checkReplayEnvelope(hippoRoot: string, id: number, row: DlqItem): Repla
   try {
     parsed = JSON.parse(row.rawPayload);
   } catch (e) {
-    bumpRetryCount(hippoRoot, id);
+    bumpDlqRetry(hippoRoot, id);
     // SAFETY: this is a best-effort error message only; property access on
     // any JS value is safe (undefined if absent), preserving the existing
     // lenient formatting even when something non-Error was thrown.
@@ -349,7 +268,7 @@ function checkReplayEnvelope(hippoRoot: string, id: number, row: DlqItem): Repla
     };
   }
   if (!isGitHubWebhookEnvelope(parsed)) {
-    bumpRetryCount(hippoRoot, id);
+    bumpDlqRetry(hippoRoot, id);
     return {
       ok: false,
       status: 'unhandled',

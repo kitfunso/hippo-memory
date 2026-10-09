@@ -25,7 +25,7 @@
  */
 
 import type { Context } from '../../api.js';
-import { openHippoDb, closeHippoDb } from '../../db.js';
+import { readCursors, writeHwm, type HwmColumn } from '../../store/connectors/github.js';
 import { ingestEvent, type IngestEvent } from './ingest.js';
 import type { GitHubFetcher, GitHubBackfillPage } from './octokit-client.js';
 import type {
@@ -59,61 +59,6 @@ export interface BackfillStreamCounts {
 export interface BackfillResult {
   ingested: BackfillStreamCounts;
   pages: BackfillStreamCounts;
-}
-
-type HwmColumn = 'issues_hwm' | 'issue_comments_hwm' | 'pr_review_comments_hwm';
-
-interface StoredCursors {
-  issues: string | null;
-  issueComments: string | null;
-  prReviewComments: string | null;
-}
-
-function readCursor(root: string, tenantId: string, repo: string): StoredCursors {
-  const db = openHippoDb(root);
-  try {
-    // SAFETY: row's shape matches the three HWM columns named in the SELECT
-    // above; `better-sqlite3`'s `.get()` return type is untyped by the driver.
-    const row = db
-      .prepare(
-        `SELECT issues_hwm, issue_comments_hwm, pr_review_comments_hwm
-         FROM github_cursors WHERE tenant_id = ? AND repo_full_name = ?`,
-      )
-      .get(tenantId, repo) as
-      | {
-          issues_hwm?: string | null;
-          issue_comments_hwm?: string | null;
-          pr_review_comments_hwm?: string | null;
-        }
-      | undefined;
-    return {
-      issues: row?.issues_hwm ?? null,
-      issueComments: row?.issue_comments_hwm ?? null,
-      prReviewComments: row?.pr_review_comments_hwm ?? null,
-    };
-  } finally {
-    closeHippoDb(db);
-  }
-}
-
-function writeOneHwm(
-  root: string,
-  tenantId: string,
-  repo: string,
-  column: HwmColumn,
-  value: string,
-): void {
-  const db = openHippoDb(root);
-  try {
-    db.prepare(
-      `INSERT INTO github_cursors (tenant_id, repo_full_name, ${column}, updated_at)
-       VALUES (?, ?, ?, ?)
-       ON CONFLICT(tenant_id, repo_full_name)
-       DO UPDATE SET ${column} = excluded.${column}, updated_at = excluded.updated_at`,
-    ).run(tenantId, repo, value, new Date().toISOString());
-  } finally {
-    closeHippoDb(db);
-  }
 }
 
 /**
@@ -343,7 +288,7 @@ async function backfillStream(
   );
   // A capped run (--max) must leave the HWM at its previous value so the next run re-fetches the unprocessed tail.
   if (res.drained && res.maxUpdatedAt) {
-    writeOneHwm(ctx.hippoRoot, ctx.tenantId, opts.repoFullName, stream.column, res.maxUpdatedAt);
+    writeHwm(ctx.hippoRoot, ctx.tenantId, opts.repoFullName, stream.column, res.maxUpdatedAt);
   }
   return { ingested: res.ingested, pages: res.pages };
 }
@@ -354,7 +299,7 @@ export async function backfillRepo(
 ): Promise<BackfillResult> {
   const sleep =
     opts.sleepMs ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
-  const cursors = readCursor(ctx.hippoRoot, ctx.tenantId, opts.repoFullName);
+  const cursors = readCursors(ctx.hippoRoot, ctx.tenantId, opts.repoFullName);
   const repository = syntheticRepository(opts.repoFullName);
 
   const result: BackfillResult = {

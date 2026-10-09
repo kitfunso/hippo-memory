@@ -11,11 +11,10 @@ import {
 } from './types.js';
 import { ingestEvent as ingestGitHubEvent, type IngestEvent as GitHubIngestEvent } from './ingest.js';
 import { handleCommentDeleted as handleGitHubCommentDeleted } from './deletion.js';
-import { writeToDlq as writeToGitHubDlq, type DlqBucket } from './dlq.js';
+import { parkInDlq as parkInGitHubDlq, type DlqBucket } from './dlq.js';
 import { resolveTenantForGitHub } from './tenant-routing.js';
 import { computeDeletionKey as computeGitHubDeletionKey } from './signature.js';
 import { resolveTenantId } from '../../tenant.js';
-import { openHippoDb, closeHippoDb } from '../../db.js';
 import type { Context } from '../../api.js';
 import {
   HttpError,
@@ -111,22 +110,17 @@ function parkInDlq(
   d: SignedDelivery,
   park: DlqRouting & { tenantId: string | null; error: string; bucket: DlqBucket },
 ): void {
-  const db = openHippoDb(d.hippoRoot);
-  try {
-    writeToGitHubDlq(db, {
-      tenantId: park.tenantId,
-      rawPayload: d.rawBody,
-      error: park.error,
-      bucket: park.bucket,
-      eventName: d.eventName,
-      deliveryId: d.deliveryId,
-      signature: d.signature,
-      installationId: park.installationId,
-      repoFullName: park.repoFullName,
-    });
-  } finally {
-    closeHippoDb(db);
-  }
+  parkInGitHubDlq(d.hippoRoot, {
+    tenantId: park.tenantId,
+    rawPayload: d.rawBody,
+    error: park.error,
+    bucket: park.bucket,
+    eventName: d.eventName,
+    deliveryId: d.deliveryId,
+    signature: d.signature,
+    installationId: park.installationId,
+    repoFullName: park.repoFullName,
+  });
   sendJson(d.res, 200, { ok: true, status: 'dlq' });
 }
 
@@ -141,15 +135,7 @@ function routeSignedDelivery(d: SignedDelivery): void {
 
   // Tenant resolution. Fail closed on multi-tenant installs with unknown
   // routing - same policy as Slack.
-  let resolvedTenant: string | null;
-  {
-    const db = openHippoDb(d.hippoRoot);
-    try {
-      resolvedTenant = resolveTenantForGitHub(db, routing);
-    } finally {
-      closeHippoDb(db);
-    }
-  }
+  const resolvedTenant = resolveTenantForGitHub(d.hippoRoot, routing);
   if (resolvedTenant === null) {
     parkInDlq(d, {
       ...routing,

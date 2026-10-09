@@ -46,7 +46,7 @@ describe('resolveTenantForGitHub', () => {
     const db = openHippoDb(root);
     try {
       insertInstallation(db, '12345', 'tenant-alpha');
-      expect(resolveTenantForGitHub(db, { installationId: '12345' })).toBe('tenant-alpha');
+      expect(resolveTenantForGitHub(root, { installationId: '12345' })).toBe('tenant-alpha');
     } finally {
       closeHippoDb(db);
     }
@@ -58,7 +58,7 @@ describe('resolveTenantForGitHub', () => {
       insertInstallation(db, '12345', 'tenant-alpha');
       // Unknown installation id, table non-empty -> fail closed.
       expect(
-        resolveTenantForGitHub(db, { installationId: '99999', repoFullName: 'foo/bar' }),
+        resolveTenantForGitHub(root, { installationId: '99999', repoFullName: 'foo/bar' }),
       ).toBeNull();
     } finally {
       closeHippoDb(db);
@@ -69,8 +69,8 @@ describe('resolveTenantForGitHub', () => {
     const db = openHippoDb(root);
     try {
       process.env.HIPPO_TENANT = 'env-tenant';
-      expect(resolveTenantForGitHub(db, {})).toBe('env-tenant');
-      expect(resolveTenantForGitHub(db, { repoFullName: 'foo/bar' })).toBe('env-tenant');
+      expect(resolveTenantForGitHub(root, {})).toBe('env-tenant');
+      expect(resolveTenantForGitHub(root, { repoFullName: 'foo/bar' })).toBe('env-tenant');
     } finally {
       closeHippoDb(db);
     }
@@ -79,8 +79,8 @@ describe('resolveTenantForGitHub', () => {
   it("rule 3 default: no installation_id, both tables empty, no HIPPO_TENANT -> 'default'", () => {
     const db = openHippoDb(root);
     try {
-      expect(resolveTenantForGitHub(db, {})).toBe('default');
-      expect(resolveTenantForGitHub(db, { repoFullName: 'foo/bar' })).toBe('default');
+      expect(resolveTenantForGitHub(root, {})).toBe('default');
+      expect(resolveTenantForGitHub(root, { repoFullName: 'foo/bar' })).toBe('default');
     } finally {
       closeHippoDb(db);
     }
@@ -91,7 +91,7 @@ describe('resolveTenantForGitHub', () => {
     try {
       insertRepository(db, 'octo/widget', 'tenant-pat');
       expect(
-        resolveTenantForGitHub(db, { installationId: null, repoFullName: 'octo/widget' }),
+        resolveTenantForGitHub(root, { installationId: null, repoFullName: 'octo/widget' }),
       ).toBe('tenant-pat');
     } finally {
       closeHippoDb(db);
@@ -103,10 +103,10 @@ describe('resolveTenantForGitHub', () => {
     try {
       insertInstallation(db, '12345', 'tenant-alpha');
       expect(
-        resolveTenantForGitHub(db, { installationId: null, repoFullName: 'unknown/repo' }),
+        resolveTenantForGitHub(root, { installationId: null, repoFullName: 'unknown/repo' }),
       ).toBeNull();
       // Even with no repoFullName supplied — PAT-mode envelope from a foreign source.
-      expect(resolveTenantForGitHub(db, {})).toBeNull();
+      expect(resolveTenantForGitHub(root, {})).toBeNull();
     } finally {
       closeHippoDb(db);
     }
@@ -117,9 +117,9 @@ describe('resolveTenantForGitHub', () => {
     try {
       insertRepository(db, 'octo/widget', 'tenant-pat');
       expect(
-        resolveTenantForGitHub(db, { installationId: null, repoFullName: 'unknown/repo' }),
+        resolveTenantForGitHub(root, { installationId: null, repoFullName: 'unknown/repo' }),
       ).toBeNull();
-      expect(resolveTenantForGitHub(db, {})).toBeNull();
+      expect(resolveTenantForGitHub(root, {})).toBeNull();
     } finally {
       closeHippoDb(db);
     }
@@ -132,10 +132,10 @@ describe('resolveTenantForGitHub', () => {
       process.env.HIPPO_TENANT = 'rollback-tenant';
       // Case 2: installation_id present but unknown.
       insertInstallation(db, '12345', 'tenant-alpha');
-      expect(resolveTenantForGitHub(db, { installationId: '99999' })).toBe('rollback-tenant');
+      expect(resolveTenantForGitHub(root, { installationId: '99999' })).toBe('rollback-tenant');
       // Case 5: no installation_id, no repo match.
       expect(
-        resolveTenantForGitHub(db, { installationId: null, repoFullName: 'unknown/repo' }),
+        resolveTenantForGitHub(root, { installationId: null, repoFullName: 'unknown/repo' }),
       ).toBe('rollback-tenant');
     } finally {
       closeHippoDb(db);
@@ -153,13 +153,13 @@ describe('resolveTenantForGitHub', () => {
       // Post-fix: must fail closed.
       process.env.HIPPO_TENANT = 'env-tenant';
       expect(
-        resolveTenantForGitHub(db, {
+        resolveTenantForGitHub(root, {
           installationId: null,
           repoFullName: 'foreign/repo',
         }),
       ).toBeNull();
       // Even with no repoFullName at all (malformed PAT-mode envelope).
-      expect(resolveTenantForGitHub(db, { installationId: undefined })).toBeNull();
+      expect(resolveTenantForGitHub(root, { installationId: undefined })).toBeNull();
     } finally {
       closeHippoDb(db);
     }
@@ -174,7 +174,7 @@ describe('resolveTenantForGitHub', () => {
       insertRepository(db, 'shared/tool', 'tenant-bravo', '2026-01-01T00:00:00.000Z');
       // Earliest added_at wins; tie broken by tenant_id ascending -> 'tenant-alpha'.
       expect(
-        resolveTenantForGitHub(db, { installationId: null, repoFullName: 'shared/tool' }),
+        resolveTenantForGitHub(root, { installationId: null, repoFullName: 'shared/tool' }),
       ).toBe('tenant-alpha');
     } finally {
       closeHippoDb(db);
@@ -186,13 +186,13 @@ describe('resolveTenantForGitHub', () => {
     try {
       // Both tables empty -> single-tenant deployment, env fallback path.
       process.env.HIPPO_TENANT = 'custom-env';
-      expect(resolveTenantForGitHub(db, {})).toBe('custom-env');
+      expect(resolveTenantForGitHub(root, {})).toBe('custom-env');
       // Whitespace-only HIPPO_TENANT must fall back to 'default'.
       process.env.HIPPO_TENANT = '   ';
-      expect(resolveTenantForGitHub(db, {})).toBe('default');
+      expect(resolveTenantForGitHub(root, {})).toBe('default');
       // Cleared.
       delete process.env.HIPPO_TENANT;
-      expect(resolveTenantForGitHub(db, {})).toBe('default');
+      expect(resolveTenantForGitHub(root, {})).toBe('default');
     } finally {
       closeHippoDb(db);
     }
@@ -202,7 +202,7 @@ describe('resolveTenantForGitHub', () => {
     const db = openHippoDb(root);
     try {
       process.env.HIPPO_TENANT = 'env-tenant';
-      expect(resolveTenantForGitHub(db, { installationId: '12345' })).toBe('env-tenant');
+      expect(resolveTenantForGitHub(root, { installationId: '12345' })).toBe('env-tenant');
     } finally {
       closeHippoDb(db);
     }
