@@ -1,9 +1,9 @@
 // Conflict resolution never reaches another person's personal row, and a personal value never becomes a tenant-wide tombstone (F1).
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { listRejections, remember, type Actor, type HippoDbContext } from '../src/api.js';
+import { listRejections, remember, type Actor, type HippoDbContext } from '../src/api/index.js';
 import { resolveOpenConflict } from '../src/dashboard/dashboard-actions.js';
-import { mapApiError } from '../src/http-util.js';
+import { mapApiError } from '../src/util/http-util.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../src/mcp/server.js';
 import { listMemoryConflicts, replaceDetectedConflicts } from '../src/store/conflicts.js';
 import { readEntry } from '../src/store/entry-reads.js';

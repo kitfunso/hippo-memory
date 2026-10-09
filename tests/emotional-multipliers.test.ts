@@ -36,9 +36,9 @@ import {
   type MemoryEntry,
   _resetLossAversionRatioCacheForTests,
   DEFAULT_HALF_LIFE_DAYS,
-} from '../src/memory.js';
+} from '../src/core/memory.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { recall, type Context } from '../src/api.js';
+import { recall, type Context } from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 const ENV_KEY = 'HIPPO_LOSS_AVERSION_RATIO';

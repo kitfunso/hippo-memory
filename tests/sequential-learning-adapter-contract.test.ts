@@ -13,7 +13,7 @@ import { describe, it, expect } from 'vitest';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
-import type { DatabaseSyncLike } from '../src/db.js';
+import type { DatabaseSyncLike } from '../src/db/index.js';
 import { createAdapter } from '../benchmarks/sequential-learning/adapters/interface.mjs';
 import hippoAdapter from '../benchmarks/sequential-learning/adapters/hippo.mjs';
 import { storeDirOf } from './fixtures/sl-adapter/store-dir.js';
@@ -105,11 +105,11 @@ describe('hippo adapter goal-stack boost fires end-to-end', () => {
       expect(existsSync(dbToOpen)).toBeTruthy();
 
       // Vitest can't resolve `node:sqlite` via ESM import (vite intercepts it),
-      // so use createRequire — the same trick src/db.ts uses.
+      // so use createRequire — the same trick src/db/index.ts uses.
       const nodeRequire = createRequire(import.meta.url);
       // SAFETY: node:sqlite's DatabaseSync shape is fixed by the runtime
       // module; DatabaseSyncLike is db.ts's own typed contract for it (the
-      // same trick src/db.ts uses to require this module).
+      // same trick src/db/index.ts uses to require this module).
       const { DatabaseSync } = nodeRequire('node:sqlite') as {
         DatabaseSync: new (path: string) => DatabaseSyncLike;
       };

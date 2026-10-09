@@ -1,7 +1,7 @@
 // The graph extraction queue: the consolidated memories that wait for a graph rebuild, and the watermark the sleep drain marks them by.
-import { openHippoDb, closeHippoDb } from '../db.js';
-import { assertTenantId } from '../tenant.js';
-import { errorMessage, log } from '../log.js';
+import { openHippoDb, closeHippoDb } from '../db/index.js';
+import { assertTenantId } from './tenant.js';
+import { errorMessage, log } from '../util/log.js';
 import { type GraphQueueItem, type QueueRow, rowToQueueItem, QUEUE_COLS } from './graph-rows.js';
 import { resolveConsolidatedSource } from './graph-writes.js';
 

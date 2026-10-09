@@ -2,8 +2,10 @@ import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { createOutageWarning } from './outage-warning.js';
 import type { RerankerFn, RerankResult, RerankerOptions } from './types.js';
-import { compareScoresDesc } from '../compare.js';
-import { errorMessage, log } from '../log.js';
+import { compareScoresDesc } from '../core/compare.js';
+import { errorMessage, log } from '../util/log.js';
+
+const DEFAULT_CROSS_ENCODER_TOP_K = 50;
 
 const MODEL_NAME = 'Xenova/ms-marco-MiniLM-L-6-v2';
 
@@ -33,7 +35,7 @@ const _require = createRequire(import.meta.url);
 
 const TRANSFORMERS_PACKAGES = ['@huggingface/transformers', '@xenova/transformers'] as const;
 
-// Returns the ESM entry URL, the same build src/embeddings.ts imports. A
+// Returns the ESM entry URL, the same build src/store/embeddings/index.ts imports. A
 // require-style resolve picks the CommonJS build and puts a second copy of
 // the library, with its own ONNX sessions, in the process.
 function resolveTransformersPackage(): string | null {
@@ -120,7 +122,7 @@ export const crossEncoderReranker: RerankerFn = async (
   results,
   options?: RerankerOptions,
 ): Promise<RerankResult[]> => {
-  const topK = options?.topK ?? 50;
+  const topK = options?.topK ?? DEFAULT_CROSS_ENCODER_TOP_K;
   const head = results.slice(0, topK);
 
   const pipe = await loadPipeline();

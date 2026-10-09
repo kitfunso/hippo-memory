@@ -19,7 +19,7 @@ import { ingestMessage } from '../src/connectors/slack/ingest.js';
 import { buildProvenanceCoverage } from '../src/cli/provenance-coverage.js';
 import type { ChannelMeta } from '../src/connectors/slack/scope.js';
 import type { SlackMessageEvent } from '../src/connectors/slack/types.js';
-import type { Context } from '../src/api.js';
+import type { Context } from '../src/api/index.js';
 
 const PUBLIC_CHANNEL: ChannelMeta = { id: 'C01PUB', is_private: false };
 const TEAM_ID = 'T01TEAM';

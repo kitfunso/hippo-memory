@@ -1,6 +1,6 @@
 // hippo.db's half of the DagReads store group: the reads session assembly and summary drill-down run today.
-import type { DatabaseSyncLike } from '../../db.js';
-import type { MemoryEntry } from '../../memory.js';
+import type { DatabaseSyncLike } from '../../db/index.js';
+import type { MemoryEntry } from '../../core/memory.js';
 import { pagedDescendants } from '../descendant-page.js';
 import { countSessionRawMemories, loadSessionRawMemories, selectChildrenByParent, selectEntriesByIds } from '../entry-reads.js';
 import { onHandle, openStore } from '../open.js';

@@ -1,5 +1,5 @@
 // hippo.db's half of the ConnectorWrites store group: a connector's write or archive with its companion rows, in one transaction on one handle.
-import type { DatabaseSyncLike } from '../../db.js';
+import type { DatabaseSyncLike } from '../../db/index.js';
 import { eventMemoryAt, logEventAt } from '../connectors/github.js';
 import { markSlackEventSeenAt, slackEventMemoryAt } from '../connectors/slack.js';
 import { stampOriginProject } from '../entry-row.js';

@@ -8,7 +8,7 @@
  * for the wrong event type.
  */
 
-import { type JsonValue, isJsonString, isJsonNumber } from '../../json.js';
+import { type JsonValue, isJsonString, isJsonNumber } from '../../util/json.js';
 
 /**
  * `private` MUST be optional, not required. The Slack-style

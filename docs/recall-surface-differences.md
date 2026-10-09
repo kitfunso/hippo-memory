@@ -6,7 +6,7 @@ When a change closes a difference, update its entry and the goldens in the same 
 
 ## Ranking
 
-- **D1 Ranking core.** Each surface names its ranker to `retrieve`. CLI passes `cliCore`, which runs `rankRecall` (`src/recall-pipeline.ts`) from `src/api/recall-core.ts`, for the host admin only; `hippo explain` uses the same ranker read-only. MCP ranks under the `showRanked` callback (`retrieveFromStore` in `src/api/recall.ts`). HTTP names none and keeps the SQL BM25 load order plus a churn sort, unless `mode` asks for hybrid or physics. CLI and MCP default to physics search.
+- **D1 Ranking core.** Each surface names its ranker to `retrieve`. CLI passes `cliCore`, which runs `rankRecall` (`src/api/recall-pipeline.ts`) from `src/api/recall-core.ts`, for the host admin only; `hippo explain` uses the same ranker read-only. MCP ranks under the `showRanked` callback (`retrieveFromStore` in `src/api/recall.ts`). HTTP names none and keeps the SQL BM25 load order plus a churn sort, unless `mode` asks for hybrid or physics. CLI and MCP default to physics search.
 - **D2 Candidate window.** CLI loads 200 rows per store. MCP loads at least 1,000 rows; `scorer_window` only shapes the fresh-tail and summary appendix. HTTP loads `scorer_window` rows, 200 by default.
 - **D3 Global store.** Only CLI searches the global store (`HIPPO_HOME`), as `cliCore.sources.globalRoot`, and only that ranker writes a `recall` audit row there.
 - **D4 Scores.** HTTP scores are list positions, `1 - idx / limit`, in every mode; `mode=hybrid` and `mode=physics` only reorder. CLI and MCP scores come from the search engine. MCP prints no score; its trace stores the engine score.

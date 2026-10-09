@@ -6,10 +6,10 @@ import * as path from 'path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { batchWriteAndDelete, deleteEntry } from '../src/store/delete-and-batch.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { openHippoDb, closeHippoDb, getMeta, setMeta, getSchemaVersion, getCurrentSchemaVersion } from '../src/db.js';
-import { embedAll, embeddingInputText, loadEmbeddingIndex, saveEmbeddingIndex, saveStoredEmbeddingModel } from '../src/embeddings.js';
-import type { EmbeddingProvider } from '../src/embedding-provider.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { openHippoDb, closeHippoDb, getMeta, setMeta, getSchemaVersion, getCurrentSchemaVersion } from '../src/db/index.js';
+import { embedAll, embeddingInputText, loadEmbeddingIndex, saveEmbeddingIndex, saveStoredEmbeddingModel } from '../src/store/embeddings/index.js';
+import type { EmbeddingProvider } from '../src/store/embeddings/provider.js';
 import { decodeVector, deleteOrphanVectors, encodeVector, rankVectorRows, topVectorMatches, type VectorMatch, type VectorRow } from '../src/db/vector-store.js';
 
 // The scan case seeds 600 rows and their vectors, so that the scan runs long enough to yield part way.

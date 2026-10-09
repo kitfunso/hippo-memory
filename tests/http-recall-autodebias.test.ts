@@ -12,7 +12,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { serve, type ServerHandle } from '../src/server.js';
 import { savePrediction, closePrediction } from '../src/store/predictions.js';
-import type { RecallResult } from '../src/api.js';
+import type { RecallResult } from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 function seedBaserate(home: string): void {
@@ -43,7 +43,7 @@ afterEach(async () => {
 
 async function jsonAs<T>(res: Response): Promise<T> {
   // SAFETY: T is pinned by each call site to Partial<RecallResult> (the
-  // /v1/memories response envelope defined in src/api.ts); every call site
+  // /v1/memories response envelope defined in src/api/index.ts); every call site
   // asserts the specific fields it reads immediately after this call.
   return res.json() as Promise<T>;
 }

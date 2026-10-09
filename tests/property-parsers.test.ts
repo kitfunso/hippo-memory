@@ -3,8 +3,8 @@ import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { parseArgs } from '../src/cli.js';
 import { VERB_FLAGS, flagKind, type VerbFlags } from '../src/cli/flags.js';
 import { parsePositiveId, type CliFlags } from '../src/cli/shared.js';
-import { HttpError } from '../src/http-util.js';
-import type { KeysetPosition } from '../src/keyset.js';
+import { HttpError } from '../src/util/http-util.js';
+import type { KeysetPosition } from '../src/util/keyset.js';
 import { pageOf, parseCursor } from '../src/server/cursor.js';
 import { arr, both, forAll, int, just, map, oneOf, pick, str, type Gen } from './_helpers/property.js';
 

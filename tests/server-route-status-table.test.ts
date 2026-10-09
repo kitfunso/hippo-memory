@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory } from '../src/memory.js';
+import { createMemory } from '../src/core/memory.js';
 import { serve, type ServerHandle } from '../src/server.js';
 
 type Json = string | number | boolean | null | Json[] | JsonObject;

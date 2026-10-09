@@ -4,11 +4,11 @@ import { connect } from 'node:net';
 import type { IncomingMessage } from 'node:http';
 import { existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { createApiKey, validateApiKey, type CreateApiKeyResult } from '../src/store/auth.js';
 import { listAuditEventsAfter } from '../src/store/audit.js';
-import { adminActor, authCreate, authCreateSelf, authRevoke, type Actor, type AuthCreateSelfOpts, type AuthCreateSelfResult, type AuthRevokeResult } from '../src/api.js';
-import { ForbiddenError } from '../src/api-errors.js';
+import { adminActor, authCreate, authCreateSelf, authRevoke, type Actor, type AuthCreateSelfOpts, type AuthCreateSelfResult, type AuthRevokeResult } from '../src/api/index.js';
+import { ForbiddenError } from '../src/core/api-errors.js';
 import { serve, type AuthResolver, type ResolvedBearer, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
 

@@ -2,12 +2,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { openHippoDb, closeHippoDb, runWithRequestStores, type DatabaseSyncLike } from '../src/db.js';
-import { ConflictError } from '../src/api-errors.js';
-import type { Context } from '../src/api.js';
+import { openHippoDb, closeHippoDb, runWithRequestStores, type DatabaseSyncLike } from '../src/db/index.js';
+import { ConflictError } from '../src/core/api-errors.js';
+import type { Context } from '../src/api/index.js';
 import { bindSessionOwner } from '../src/server.js';
 import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
-import { TASK_OWNER_MIN_BINARY, compareSemver } from '../src/version.js';
+import { TASK_OWNER_MIN_BINARY, compareSemver } from '../src/util/version.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 interface StatementProto { readonly sourceSQL: string }

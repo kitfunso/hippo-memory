@@ -1,11 +1,11 @@
-import type { MemoryEntry } from '../memory.js';
-import { cosineOf, indexedModel, indexNeedsRebuild } from '../embeddings.js';
+import type { MemoryEntry } from '../core/memory.js';
+import { cosineOf, indexedModel, indexNeedsRebuild } from '../store/embeddings/index.js';
 import type { VectorCandidateSpec } from '../store/search-rows.js';
-import { resolveEmbeddingProvider } from '../embedding-provider.js';
-import { rethrowIfSqliteBlocked } from '../db.js';
-import { errorMessage, log } from '../log.js';
-import { requireGroup, sqliteStore, type HippoStore, type VectorReads } from '../store-port.js';
-import { redactSecretsStrict } from '../secret-detect.js';
+import { resolveEmbeddingProvider } from '../store/embeddings/provider.js';
+import { rethrowIfSqliteBlocked } from '../db/index.js';
+import { errorMessage, log } from '../util/log.js';
+import { requireGroup, sqliteStore, type HippoStore, type VectorReads } from '../store/index.js';
+import { redactSecretsStrict } from '../util/secret-detect.js';
 import { currentEntries, type CurrentnessOptions } from './as-of.js';
 
 /** hybridSearch's vector arm: which rows it may add, plus the caller's JS admission rules (exact private regex, entry filters). */

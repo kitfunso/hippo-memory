@@ -3,13 +3,13 @@
  *
  * Calibration: HIGH PRECISION, LOW RECALL. Patterns are intentionally
  * narrow; expect negative cases to outnumber positives. Documented in
- * src/forward-claim-detector.ts header.
+ * src/learn/forward-claim-detector.ts header.
  *
  * Plan: docs/plans/2026-05-26-j32-auto-injection.md (Task 1, Task 9).
  */
 
 import { describe, it, expect } from 'vitest';
-import { detectForwardClaim } from '../src/forward-claim-detector.js';
+import { detectForwardClaim } from '../src/learn/forward-claim-detector.js';
 
 describe('detectForwardClaim — positive matches', () => {
   it('matches "will take" verb phrase', () => {

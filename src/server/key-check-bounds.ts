@@ -1,6 +1,6 @@
 // Bounds on the scrypt work a bearer key check may start: how many derive at once, and how many one address starts for one key id.
-import { HttpError } from '../http-util.js';
-import { createRateLimiter } from '../rate-limit.js';
+import { HttpError } from '../util/http-util.js';
+import { createRateLimiter } from './rate-limit.js';
 
 // libuv runs scrypt on a pool of four threads by default, so two stay free for file and DNS work.
 const MAX_IN_FLIGHT = 2;

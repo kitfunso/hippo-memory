@@ -31,7 +31,7 @@ import { createHmac } from 'node:crypto';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { serve, type ServerHandle } from '../src/server.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 
 const SECRET = 'shhh-test-secret';
 

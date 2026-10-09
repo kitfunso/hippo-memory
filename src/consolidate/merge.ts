@@ -1,15 +1,15 @@
-import { MemoryEntry, Layer, calculateStrength, createMemory } from '../memory.js';
-import { tokenize } from '../tokenize.js';
-import { jaccardMinShared, overlapPartners } from '../overlap-index.js';
-import { compareEntryIdentity } from '../compare.js';
-import { duplicateKey, mergedText } from '../same-text.js';
-import { successorAfterRetirement } from '../merged-row.js';
-import { rejectionDigest, findRejectedValue } from '../store/rejection.js';
-import { appendAuditEvent, reportAuditWriteFailure } from '../store/audit.js';
-import { derivationScope, derivationPartitionKey } from '../recall-scope.js';
+import { MemoryEntry, Layer, calculateStrength, createMemory } from '../core/memory.js';
+import { tokenize } from '../util/tokenize.js';
+import { jaccardMinShared, overlapPartners } from './overlap-index.js';
+import { compareEntryIdentity } from '../core/compare.js';
+import { duplicateKey, mergedText } from '../util/same-text.js';
+import { successorAfterRetirement } from './merged-row.js';
+import { rejectionDigest } from '../store/rejection.js';
+import { reportAuditWriteFailure } from '../store/audit.js';
+import { derivationScope, derivationPartitionKey } from '../store/recall-scope.js';
 import { jaccardSets } from './conflicts.js';
 import { keptAsWritten, type SleepRun } from './run.js';
-import { isReusable } from '../memory-quality.js';
+import { isReusable } from '../core/memory-quality.js';
 
 const MERGE_OVERLAP_THRESHOLD = 0.35;  // Jaccard similarity for "related"
 const MERGE_MIN_CLUSTER = 2;            // minimum cluster size to merge
@@ -25,10 +25,8 @@ const MERGE_SOURCE_HALF_LIFE_FACTOR = 0.3;
 export function retireHeldTexts(run: SleepRun): void {
   const { survivors } = run;
   const byId = new Map(run.all.map((e) => [e.id, e]));
-  const rejectedIn = (tenantId: string) => (text: string): boolean => {
-    const db = run.getConsolidateDb();
-    return db !== null && findRejectedValue(db, tenantId, rejectionDigest(text)) !== null;
-  };
+  const rejectedIn = (tenantId: string) => (text: string): boolean =>
+    run.tombstones.find(tenantId, rejectionDigest(text)) !== null;
   for (let i = survivors.length - 1; i >= 0; i--) {
     const row = survivors[i];
     const successor = run.retirable(row) ? successorAfterRetirement(row, byId, rejectedIn(row.tenantId)) : undefined;
@@ -83,7 +81,7 @@ export function mergePass(run: SleepRun): number {
   const used = new Set<string>();
   const mergeCandidatesByTenant = partitionMergeCandidates(run.survivors);
 
-  // The rejection guard reuses the one consolidateDb handle opened lazily in consolidate(); a dry-run
+  // The rejection guard reuses the run's one lazily opened tombstone handle; a dry-run
   // never reaches batchWriteAndDelete's guard bypass, so it has nothing to protect there.
   let mergesSkippedRejected = 0;
   for (const [, tenantCandidates] of mergeCandidatesByTenant) {
@@ -194,12 +192,11 @@ function demoteMergedSources(run: SleepRun, cluster: MemoryEntry[]): void {
 // not demoted, not deleted — so a later sleep gets another chance if
 // the tombstone is lifted.
 function mergeRejected(run: SleepRun, semantic: MemoryEntry, cluster: MemoryEntry[], related: MemoryEntry[], used: Set<string>): boolean {
-  const consolidateDb = run.getConsolidateDb();
-  if (!consolidateDb) return false;
+  const { tombstones } = run;
   const newDigest = rejectionDigest(semantic.content);
   const oldDigest = rejectionDigest(legacyMergeContents(related)); // tombstones from older releases hold this format's digest
-  const newHit = findRejectedValue(consolidateDb, semantic.tenantId, newDigest);
-  const tombstone = newHit ?? findRejectedValue(consolidateDb, semantic.tenantId, oldDigest);
+  const newHit = tombstones.find(semantic.tenantId, newDigest);
+  const tombstone = newHit ?? tombstones.find(semantic.tenantId, oldDigest);
   const mergeDigest = newHit ? newDigest : oldDigest;
   if (!tombstone) return false;
   // Still mark used — these members are not re-tried against a
@@ -208,7 +205,7 @@ function mergeRejected(run: SleepRun, semantic: MemoryEntry, cluster: MemoryEntr
   const rejected = newHit ? cluster : related; // the old format digested the uncapped list, so rows past the cap were rejected too
   for (const e of rejected) used.add(e.id);
   try {
-    appendAuditEvent(consolidateDb, {
+    tombstones.audit({
       tenantId: semantic.tenantId,
       actor: 'sleep',
       op: 'reject_refusal',

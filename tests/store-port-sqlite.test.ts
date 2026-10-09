@@ -4,12 +4,12 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { closeHippoDb, getMeta, openHippoDb, setMeta } from '../src/db.js';
-import { recordTokens } from '../src/api.js';
+import { closeHippoDb, getMeta, openHippoDb, setMeta } from '../src/db/index.js';
+import { recordTokens } from '../src/api/index.js';
 import { appendAuditEvent, type AppendAuditOpts } from '../src/store/audit.js';
-import { _resetAblationCacheForTests } from '../src/ablation.js';
-import { embeddingIndexIdentity, loadStoredVectors } from '../src/embeddings.js';
-import { detectForwardClaim } from '../src/forward-claim-detector.js';
+import { _resetAblationCacheForTests } from '../src/core/ablation.js';
+import { embeddingIndexIdentity, loadStoredVectors } from '../src/store/embeddings/index.js';
+import { detectForwardClaim } from '../src/learn/forward-claim-detector.js';
 import { activeGoalsWithPolicies, boostByGoals, localGoalRecallRows, pushGoal, writeGoalRecallLog } from '../src/store/goals.js';
 import { __resetSessionRecallHistoryMcp } from '../src/mcp/server.js';
 import { lastRecalledIds } from '../src/mcp/session-state.js';

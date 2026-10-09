@@ -14,9 +14,9 @@ import {
   stampHandoffOutcome,
   writeSessionEndHandoff,
 } from '../src/store/handoffs.js';
-import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, type DatabaseSyncLike } from '../src/db.js';
-import { getContext, adminActor } from '../src/api.js';
-import { resetLogOnce } from '../src/log.js';
+import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, type DatabaseSyncLike } from '../src/db/index.js';
+import { getContext, adminActor } from '../src/api/index.js';
+import { resetLogOnce } from '../src/util/log.js';
 import { LATEST_SCHEMA_VERSION, LATEST_SCHEMA_VERSION_STR } from './_helpers/schema-version.js';
 
 interface ColumnInfo {

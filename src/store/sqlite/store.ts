@@ -3,12 +3,12 @@ import { loadAmbientTallies } from '../ambient.js';
 import { listApiKeyRows, readApiKeyRecord } from '../auth.js';
 import { existsSync } from 'node:fs';
 import { appendAuditEvent, listAuditEventsAfter, queryAuditEvents } from '../audit.js';
-import { getHippoDbPath, withWriteScope } from '../../db.js';
-import { loadStoredVectorViews } from '../../embeddings.js';
+import { getHippoDbPath, withWriteScope } from '../../db/index.js';
+import { loadStoredVectorViews } from '../embeddings/index.js';
 import { activeGoalsWithPolicies, localGoalRecallRows, writeGoalRecallLog } from '../goals.js';
 import { planningFallacyEvidenceAt } from '../planning-fallacy-evidence.js';
 import { writeRecallTrace } from '../recall-trace.js';
-import { recordTokenUse } from '../../token-ledger.js';
+import { recordTokenUse } from '../token-ledger.js';
 import { loadAmbientCandidates, loadContextCandidates } from '../candidates.js';
 import { loadEntriesByIds, loadFreshRawMemories } from '../entry-reads.js';
 import { strengthenRetrievedInOwnTx } from '../entry-writes.js';
@@ -27,7 +27,8 @@ import { auditHighIdAt, revokeKeyAt } from '../key-audit.js';
 import { createKeyAt, createSelfKeyAt } from '../key-writes.js';
 import { onHandle } from '../open.js';
 import type {
-  ContextReads, ContinuityBlock, HippoStore, KeyAudit, KeyWrites, RecallWrites, StoreGroups, Sync,
+  AuditLog, ContextReads, ContinuityBlock, HippoStore, KeyAudit, KeyWrites, Readiness, RecallWrites, StoreGroups, Sync, VectorViews,
+  VectorWrites,
 } from '../port.js';
 import { loadRecallSearchEntries } from '../search-rows.js';
 import { type ContinuityKey, listSessionEvents, loadActiveTaskSnapshot } from '../sessions.js';
@@ -48,6 +49,34 @@ export type SqliteSyncStore = Sync<Omit<HippoStore, AsyncOnly>>;
 export function sqliteSyncStore(hippoRoot: string): SqliteSyncStore & Sync<Omit<StoreGroups, AsyncOnly>> {
   return {
     kind: 'sqlite',
+    ...sqliteBaseReads(hippoRoot),
+    ...sqliteRecallWrites(hippoRoot),
+    keyAudit: sqliteKeyAudit(hippoRoot),
+    keyWrites: sqliteKeyWrites(hippoRoot),
+    vectorViews: sqliteVectorViews(hippoRoot),
+    vectorWrites: sqliteVectorWrites(hippoRoot),
+    entryWrites: sqliteEntryWrites(hippoRoot),
+    contextReads: sqliteContextReads(hippoRoot),
+    predictions: sqlitePredictions(hippoRoot),
+    dagReads: sqliteDagReads(hippoRoot),
+    auditLog: sqliteAuditLog(hippoRoot),
+    quarantine: sqliteQuarantine(hippoRoot),
+    graphReads: sqliteGraphReads(hippoRoot),
+    connectorWrites: sqliteConnectorWrites(hippoRoot),
+    connectorEvents: sqliteConnectorEvents(hippoRoot),
+    objects: sqliteObjects(hippoRoot),
+    readiness: sqliteReadiness(hippoRoot),
+    close() {},
+  };
+}
+
+type SqliteBaseReads = Pick<
+  SqliteSyncStore,
+  'findApiKey' | 'searchRecallEntries' | 'entriesByIds' | 'activeGoals' | 'freshRawEntries' | 'continuity' | 'planningFallacyEvidence'
+>;
+
+function sqliteBaseReads(hippoRoot: string): SqliteBaseReads {
+  return {
     findApiKey(keyId) {
       return onHandle(hippoRoot, (db) => readApiKeyRecord(db, keyId));
     },
@@ -71,6 +100,13 @@ export function sqliteSyncStore(hippoRoot: string): SqliteSyncStore & Sync<Omit<
     planningFallacyEvidence(tenantId, classQueryTokens) {
       return planningFallacyEvidenceAt(hippoRoot, tenantId, classQueryTokens);
     },
+  };
+}
+
+type SqliteRecallWrites = Pick<SqliteSyncStore, 'appendAuditEvents' | 'finishRecall' | 'bumpRecallStats' | 'recordTokens'>;
+
+function sqliteRecallWrites(hippoRoot: string): SqliteRecallWrites {
+  return {
     appendAuditEvents(events) {
       if (events.length === 0) return;
       onHandle(hippoRoot, (db) => withWriteScope(db, 'append_audit_events', () => {
@@ -86,50 +122,76 @@ export function sqliteSyncStore(hippoRoot: string): SqliteSyncStore & Sync<Omit<
     recordTokens(use) {
       onHandle(hippoRoot, (db) => recordTokenUse(db, use));
     },
-    keyAudit: sqliteKeyAudit(hippoRoot),
-    keyWrites: sqliteKeyWrites(hippoRoot),
-    vectorViews: {
-      storedVectorViews(ids) {
-        return loadStoredVectorViews(hippoRoot, ids);
-      },
-    },
-    vectorWrites: {
-      entriesWithoutVector(query) {
-        return onHandle(hippoRoot, (db) => entriesWithoutVectorAt(db, query));
-      },
-      writeVectors(write) {
-        return onHandle(hippoRoot, (db) => writeVectorsAt(db, write));
-      },
-    },
-    entryWrites: sqliteEntryWrites(hippoRoot),
-    contextReads: sqliteContextReads(hippoRoot),
-    predictions: sqlitePredictions(hippoRoot),
-    dagReads: sqliteDagReads(hippoRoot),
-    auditLog: {
-      listAuditEvents(query) {
-        return onHandle(hippoRoot, (db) => queryAuditEvents(db, query));
-      },
-    },
-    quarantine: sqliteQuarantine(hippoRoot),
-    graphReads: sqliteGraphReads(hippoRoot),
-    connectorWrites: sqliteConnectorWrites(hippoRoot),
-    connectorEvents: sqliteConnectorEvents(hippoRoot),
-    objects: sqliteObjects(hippoRoot),
-    readiness: {
-      ping() {
-        // A probe must not create the store; the first write does, so a root with none yet is ready.
-        if (!existsSync(getHippoDbPath(hippoRoot))) return;
-        onHandle(hippoRoot, (db) => { db.prepare('SELECT 1').get(); });
-      },
-    },
-    close() {},
   };
 }
+
+function sqliteVectorViews(hippoRoot: string): Sync<VectorViews> {
+  return {
+    storedVectorViews(ids) {
+      return loadStoredVectorViews(hippoRoot, ids);
+    },
+  };
+}
+
+function sqliteVectorWrites(hippoRoot: string): Sync<VectorWrites> {
+  return {
+    entriesWithoutVector(query) {
+      return onHandle(hippoRoot, (db) => entriesWithoutVectorAt(db, query));
+    },
+    writeVectors(write) {
+      return onHandle(hippoRoot, (db) => writeVectorsAt(db, write));
+    },
+  };
+}
+
+function sqliteAuditLog(hippoRoot: string): Sync<AuditLog> {
+  return {
+    listAuditEvents(query) {
+      return onHandle(hippoRoot, (db) => queryAuditEvents(db, query));
+    },
+  };
+}
+
+function sqliteReadiness(hippoRoot: string): Sync<Readiness> {
+  return {
+    ping() {
+      // A probe must not create the store; the first write does, so a root with none yet is ready.
+      if (!existsSync(getHippoDbPath(hippoRoot))) return;
+      onHandle(hippoRoot, (db) => { db.prepare('SELECT 1').get(); });
+    },
+  };
+}
+
+type SyncStoreGroups = ReturnType<typeof sqliteSyncStore>;
 
 /** `sqliteSyncStore` as a served store: each method runs at once and answers through a Promise, so a throw rejects as another store's would. */
 export function sqliteStore(hippoRoot: string): HippoStore & StoreGroups {
   const sync = sqliteSyncStore(hippoRoot);
-  const { keyAudit, keyWrites, vectorWrites, entryWrites, contextReads, dagReads, auditLog } = sync;
+  return {
+    ...servedBaseMethods(sync),
+    vectors: sqliteVectorReads(hippoRoot),
+    vectorViews: { storedVectorViews: async (ids) => sync.vectorViews.storedVectorViews(ids) },
+    ...servedKeyGroups(sync),
+    ...servedEntryGroups(sync),
+    predictions: servedPredictions(sync.predictions),
+    ...servedDagAndAudit(sync),
+    quarantine: servedQuarantine(sync.quarantine),
+    graphReads: servedGraphReads(sync.graphReads),
+    connectorWrites: servedConnectorWrites(sync.connectorWrites),
+    connectorEvents: servedConnectorEvents(sync.connectorEvents),
+    objects: servedObjects(sqliteObjects(hippoRoot)),
+    readiness: { ping: async () => sync.readiness.ping() },
+    close: async () => sync.close(),
+  };
+}
+
+type ServedBaseMethods = Pick<
+  HippoStore,
+  | 'kind' | 'findApiKey' | 'searchRecallEntries' | 'entriesByIds' | 'activeGoals' | 'freshRawEntries' | 'continuity'
+  | 'planningFallacyEvidence' | 'appendAuditEvents' | 'finishRecall' | 'bumpRecallStats' | 'recordTokens'
+>;
+
+function servedBaseMethods(sync: SyncStoreGroups): ServedBaseMethods {
   return {
     kind: sync.kind,
     findApiKey: async (keyId) => sync.findApiKey(keyId),
@@ -143,8 +205,12 @@ export function sqliteStore(hippoRoot: string): HippoStore & StoreGroups {
     finishRecall: async (writes) => sync.finishRecall(writes),
     bumpRecallStats: async (recalled) => sync.bumpRecallStats(recalled),
     recordTokens: async (use) => sync.recordTokens(use),
-    vectors: sqliteVectorReads(hippoRoot),
-    vectorViews: { storedVectorViews: async (ids) => sync.vectorViews.storedVectorViews(ids) },
+  };
+}
+
+function servedKeyGroups(sync: SyncStoreGroups): Pick<StoreGroups, 'keyAudit' | 'keyWrites'> {
+  const { keyAudit, keyWrites } = sync;
+  return {
     keyAudit: {
       revokeApiKey: async (revoke) => keyAudit.revokeApiKey(revoke),
       auditEventsAfter: async (opts) => keyAudit.auditEventsAfter(opts),
@@ -155,6 +221,12 @@ export function sqliteStore(hippoRoot: string): HippoStore & StoreGroups {
       createSelfApiKey: async (mint) => keyWrites.createSelfApiKey(mint),
       listApiKeys: async (query) => keyWrites.listApiKeys(query),
     },
+  };
+}
+
+function servedEntryGroups(sync: SyncStoreGroups): Pick<StoreGroups, 'vectorWrites' | 'entryWrites' | 'contextReads'> {
+  const { vectorWrites, entryWrites, contextReads } = sync;
+  return {
     vectorWrites: {
       entriesWithoutVector: async (query) => vectorWrites.entriesWithoutVector(query),
       writeVectors: async (write) => vectorWrites.writeVectors(write),
@@ -172,7 +244,12 @@ export function sqliteStore(hippoRoot: string): HippoStore & StoreGroups {
       contextCandidates: async (tenantId, filter) => contextReads.contextCandidates(tenantId, filter),
       ambientTallies: async (tenantId, filter) => contextReads.ambientTallies(tenantId, filter),
     },
-    predictions: servedPredictions(sync.predictions),
+  };
+}
+
+function servedDagAndAudit(sync: SyncStoreGroups): Pick<StoreGroups, 'dagReads' | 'auditLog'> {
+  const { dagReads, auditLog } = sync;
+  return {
     dagReads: {
       sessionRawEntries: async (query) => dagReads.sessionRawEntries(query),
       sessionRawCount: async (query) => dagReads.sessionRawCount(query),
@@ -181,13 +258,6 @@ export function sqliteStore(hippoRoot: string): HippoStore & StoreGroups {
     auditLog: {
       listAuditEvents: async (query) => auditLog.listAuditEvents(query),
     },
-    quarantine: servedQuarantine(sync.quarantine),
-    graphReads: servedGraphReads(sync.graphReads),
-    connectorWrites: servedConnectorWrites(sync.connectorWrites),
-    connectorEvents: servedConnectorEvents(sync.connectorEvents),
-    objects: servedObjects(sqliteObjects(hippoRoot)),
-    readiness: { ping: async () => sync.readiness.ping() },
-    close: async () => sync.close(),
   };
 }
 

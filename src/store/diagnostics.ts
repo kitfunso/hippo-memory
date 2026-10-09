@@ -1,7 +1,7 @@
 // What `hippo doctor` and `hippo support-bundle` read from a store: one read-only open each, plain data out.
-import { closeHippoDb, countTableRows, ftsRowCounts, getMeta, getSchemaVersion, openHippoDbReadOnly } from '../db.js';
+import { closeHippoDb, countTableRows, ftsRowCounts, getMeta, getSchemaVersion, openHippoDbReadOnly } from '../db/index.js';
 import { listTableNames } from '../db/tables.js';
-import { errorMessage } from '../log.js';
+import { errorMessage } from '../util/log.js';
 import { compactionCountsAt, tokenTallySince, type CompactionCounts, type TokenTally } from './doctor-reads.js';
 import { countFailuresSince } from './failure-log.js';
 import { lastConsolidationAt } from './index-and-stats.js';

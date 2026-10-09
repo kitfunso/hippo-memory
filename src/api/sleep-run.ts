@@ -4,17 +4,17 @@ import { loadAllEntries } from '../store/entry-reads.js';
 import { deleteEntry, memoriesBackingObjects } from '../store/delete-and-batch.js';
 import { reportAuditWriteFailure, auditMemories } from '../store/audit.js';
 import { sqliteSyncStore } from '../store/sqlite/store.js';
-import { autoShare } from '../shared.js';
+import { autoShare } from '../sharing/shared.js';
 import { consolidate } from '../consolidate/sleep.js';
 import { failedUnitOf } from '../store/delete-and-batch.js';
-import { loadConfig } from '../config.js';
-import { deduplicateStore } from '../dedupe.js';
-import { computeAmbientState } from '../ambient.js';
+import { loadConfig } from '../core/config.js';
+import { deduplicateStore } from '../consolidate/dedupe.js';
+import { computeAmbientState } from '../core/ambient.js';
 import { loadPendingExtractionTenants, markPendingProcessedUpTo } from '../store/graph-queue.js';
-import { extractGraphChunked, type ExtractResult } from '../graph-extract.js';
+import { extractGraphChunked, type ExtractResult } from '../graph/extract.js';
 import type { Context } from './types.js';
 import type { SleepOpts, SleepResult } from './sleep.js';
-import { errorMessage } from '../log.js';
+import { errorMessage } from '../util/log.js';
 
 /** Test-only seam: `runSleep` overrides force a phase to throw into emitSleepAudit's `partial: true` row; production never sets them. */
 export interface SleepPhases {

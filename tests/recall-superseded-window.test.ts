@@ -4,12 +4,12 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Layer, type MemoryEntry} from '../src/memory.js';
+import { Layer, type MemoryEntry} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { _forceLikePathForTests, loadRecallSearchEntries } from '../src/store/search-rows.js';
-import { assemble, recall, supersede, type Context } from '../src/api.js';
+import { assemble, recall, supersede, type Context } from '../src/api/index.js';
 
 const roots: string[] = [];
 

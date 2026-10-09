@@ -6,8 +6,8 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { listSessionEvents } from '../src/store/sessions.js';
-import { createMemory } from '../src/memory.js';
-import { renderTraceContent, parseSteps } from '../src/trace.js';
+import { createMemory } from '../src/core/memory.js';
+import { renderTraceContent, parseSteps } from '../src/consolidate/trace.js';
 import { hippoOut } from './_helpers/spawn-hippo.js';
 
 let tmpDir: string;

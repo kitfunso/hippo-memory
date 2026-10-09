@@ -1,8 +1,8 @@
 // `hippo slack`: backfill, dead-letter queue and workspace registry for the Slack connector.
 
-import { envSlackBotToken, envSlackSigningSecret, envSlackTeamId } from '../env.js';
-import * as api from '../api.js';
-import { resolveTenantId } from '../tenant.js';
+import { envSlackBotToken, envSlackSigningSecret, envSlackTeamId } from '../util/env.js';
+import * as api from '../api/index.js';
+import { resolveTenantId } from '../store/tenant.js';
 import { listDlq } from '../connectors/dlq.js';
 import { replayDlqEntry, slackDlq } from '../connectors/slack/dlq.js';
 import { backfillChannel } from '../connectors/slack/backfill.js';

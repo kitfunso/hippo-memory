@@ -1,7 +1,7 @@
-import { fetchWithRetry, isRetryableStatus } from '../../http-retry.js';
+import { fetchWithRetry, isRetryableStatus } from '../../util/http-retry.js';
 import type { SlackHistoryFetcher } from './backfill.js';
 import type { SlackMessageEvent } from './types.js';
-import { type JsonValue, isJsonString } from '../../json.js';
+import { type JsonValue, isJsonString } from '../../util/json.js';
 
 /**
  * Build a SlackHistoryFetcher that pages `conversations.history` over real

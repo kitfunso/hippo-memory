@@ -6,7 +6,7 @@ import { initStore } from '../src/store/open.js';
 import { parkInDlq, listDlq } from '../src/connectors/dlq.js';
 import { githubDlq, replayDlqEntry, type DlqBucket } from '../src/connectors/github/dlq.js';
 import { dlqEntry } from '../src/store/connectors/github.js';
-import type { Context } from '../src/api.js';
+import type { Context } from '../src/api/index.js';
 
 describe('github DLQ', () => {
   let root: string;

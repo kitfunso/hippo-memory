@@ -16,7 +16,7 @@ import { importProjectMemories } from '../src/agent-memories/sync.js';
 import { totalTally, type Tally } from '../src/agent-memories/report.js';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { detectSecret } from '../src/secret-detect.js';
+import { detectSecret } from '../src/util/secret-detect.js';
 
 // An import asks git for the project's layout in a child process, once for each agent tool it reads.
 vi.setConfig({ testTimeout: 30_000 });

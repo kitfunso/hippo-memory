@@ -2,13 +2,13 @@
 
 import * as fs from 'fs';
 import { spawn } from 'child_process';
-import { extractPathTags } from '../path-context.js';
-import * as briefsModule from '../project-briefs.js';
-import * as customerNotesModule from '../customer-notes.js';
-import { extractGraph } from '../graph-extract.js';
-import { buildGraphModel, renderGraphHtml, renderGraphCanvas, DEFAULT_VIEW_LIMIT } from '../graph-view.js';
-import { resolveTenantId } from '../tenant.js';
-import { errorMessage, log } from '../log.js';
+import { extractPathTags } from '../search/path-context.js';
+import * as briefsModule from '../objects/project-briefs.js';
+import * as customerNotesModule from '../objects/customer-notes.js';
+import { extractGraph } from '../graph/extract.js';
+import { buildGraphModel, renderGraphHtml, renderGraphCanvas, DEFAULT_VIEW_LIMIT } from '../graph/view.js';
+import { resolveTenantId } from '../store/tenant.js';
+import { errorMessage, log } from '../util/log.js';
 import { printError } from './output.js';
 import { nonEmptyStringFlag, requireInit, type CliFlags, boolFlag, stringFlag } from './shared.js';
 import { closeObject, foundOrExit, idArgOrExit, listObjects, printLifecycleTail, type ObjectNames } from './object-verbs.js';

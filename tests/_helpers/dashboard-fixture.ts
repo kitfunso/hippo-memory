@@ -8,9 +8,9 @@ import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { initStore } from '../../src/store/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
-import { closeHippoDb, openHippoDb } from '../../src/db.js';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { upsertVectors } from '../../src/db/vector-store.js';
-import type { MemoryEntry } from '../../src/memory.js';
+import type { MemoryEntry } from '../../src/core/memory.js';
 import { createMemory } from './default-half-life-memory.js';
 import { serveDashboard } from '../../src/dashboard/dashboard.js';
 

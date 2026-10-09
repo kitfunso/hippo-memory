@@ -7,7 +7,7 @@ import { WORKING_STATE_CAPS, transcriptWorkingState } from '../src/capture/worki
 import { initStore } from '../src/store/open.js';
 import { loadActiveTaskSnapshot, saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import { loadLatestHandoff, saveSessionHandoff, writeSessionEndHandoff } from '../src/store/handoffs.js';
-import { closeHippoDb, openHippoDb } from '../src/db.js';
+import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 
 // AWS's documented example key, a placeholder that is safe to embed.
 const FAKE_KEY = 'AKIAIOSFODNN7EXAMPLE';

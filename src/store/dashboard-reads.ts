@@ -1,11 +1,11 @@
 // The dashboard snapshot's read of one tenant: live rows with only the columns it shows, and SQL counts of the rows it leaves out.
 import * as fs from 'fs';
-import { closeHippoDb, getHippoDbPath, openHippoDbReadOnly, type DatabaseSyncLike } from '../db.js';
+import { closeHippoDb, getHippoDbPath, openHippoDbReadOnly, type DatabaseSyncLike } from '../db/index.js';
 import { withReadSnapshot } from '../db/busy.js';
 import { pragmaDataVersion } from '../db/meta.js';
 import { tableExists } from '../db/tables.js';
 import { storedVectorIds } from '../db/vector-store.js';
-import type { ConfidenceInputs, Layer, MemoryEntry, MemoryKind, StrengthInputs } from '../memory.js';
+import type { ConfidenceInputs, Layer, MemoryEntry, MemoryKind, StrengthInputs } from '../core/memory.js';
 import { openStore } from './open.js';
 import { QUARANTINE_SCOPE_PREFIX } from './quarantine.js';
 import { type MemoryRow, parseJsonArray } from './rows.js';

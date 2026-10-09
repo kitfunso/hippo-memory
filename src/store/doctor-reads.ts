@@ -1,5 +1,5 @@
 // The two counts `hippo doctor` reads from tables whose own store modules belong to other changes.
-import type { DatabaseSyncLike } from '../db.js';
+import type { DatabaseSyncLike } from '../db/index.js';
 
 export interface CompactionCounts {
   total: number;

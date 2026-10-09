@@ -1,6 +1,6 @@
 // The Codex apply_patch reader the session digest uses for its Changed line.
 import { describe, expect, it } from 'vitest';
-import { patchPaths, shellPatch } from '../src/codex-patch.js';
+import { patchPaths, shellPatch } from '../src/capture/codex-patch.js';
 
 const patch = (...lines: string[]): string => ['*** Begin Patch', ...lines, '*** End Patch'].join('\n');
 

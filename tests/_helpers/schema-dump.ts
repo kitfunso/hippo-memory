@@ -1,4 +1,4 @@
-import type { DatabaseSyncLike } from '../../src/db.js';
+import type { DatabaseSyncLike } from '../../src/db/index.js';
 
 export interface SchemaDump {
   readonly userVersion: number;

@@ -5,12 +5,12 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { closeHippoDb, openHippoDb } from '../src/db.js';
-import { adminActor, recordTokens } from '../src/api.js';
+import { closeHippoDb, openHippoDb } from '../src/db/index.js';
+import { adminActor, recordTokens } from '../src/api/index.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
-import { bookTokenUse } from '../src/ledger-db.js';
-import { promptHookContext } from '../src/prompt-hook.js';
-import { resetLogOnce } from '../src/log.js';
+import { bookTokenUse } from '../src/api/ledger-db.js';
+import { promptHookContext } from '../src/api/prompt-hook.js';
+import { resetLogOnce } from '../src/util/log.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 
 let root: string;

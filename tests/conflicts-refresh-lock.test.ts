@@ -8,7 +8,7 @@ import { createRequire } from 'node:module';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { replaceDetectedConflicts } from '../src/store/conflicts.js';
-import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../src/db.js';
+import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 
 interface StatementProto {

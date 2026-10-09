@@ -1,4 +1,4 @@
-// Error text for a caught value has one definition, errorMessage() in src/log.ts; an inline copy drifts from it.
+// Error text for a caught value has one definition, errorMessage() in src/util/log.ts; an inline copy drifts from it.
 import { describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -16,10 +16,10 @@ function sourceFiles(dir: string): string[] {
 }
 
 describe('error text helper', () => {
-  it('no file in src spells out the instanceof Error ternary outside src/log.ts', () => {
+  it('no file in src spells out the instanceof Error ternary outside src/util/log.ts', () => {
     const hits: string[] = [];
     for (const file of sourceFiles(SRC)) {
-      if (path.relative(SRC, file) === 'log.ts') continue;
+      if (path.relative(SRC, file).split(path.sep).join('/') === 'util/log.ts') continue;
       const source = fs.readFileSync(file, 'utf8');
       for (const match of source.matchAll(INLINE)) {
         const line = source.slice(0, match.index).split('\n').length;

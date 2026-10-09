@@ -13,10 +13,10 @@ import { loadIndex } from '../src/store/index-and-stats.js';
 import { appendSessionEvent, saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import { saveSessionHandoff } from '../src/store/handoffs.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { queryAuditEvents } from '../src/store/audit.js';
-import { adminActor, recall as apiRecall } from '../src/api.js';
-import { findHippoStoreDir } from '../src/project-identity.js';
+import { adminActor, recall as apiRecall } from '../src/api/index.js';
+import { findHippoStoreDir } from '../src/core/project-identity.js';
 import { findHippoRoot } from '../src/mcp/server.js';
 
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));

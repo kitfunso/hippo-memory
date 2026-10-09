@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import type { DatabaseSyncLike } from '../db.js';
-import { errorMessage, log } from '../log.js';
+import type { DatabaseSyncLike } from './index.js';
+import { errorMessage, log } from '../util/log.js';
 
 const LAYERS = ['episodic', 'buffer', 'semantic'] as const;
 const MAX_WARN_LOGS = 5;

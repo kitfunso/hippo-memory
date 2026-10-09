@@ -21,7 +21,7 @@ import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { ingestMessage } from '../../src/connectors/slack/ingest.js';
-import { recall, adminActor, type Context } from '../../src/api.js';
+import { recall, adminActor, type Context } from '../../src/api/index.js';
 
 interface TranscriptMessage {
   user: string;

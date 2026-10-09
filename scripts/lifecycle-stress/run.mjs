@@ -41,17 +41,17 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { createMemory } from '../../dist/memory.js';
+import { createMemory } from '../../dist/core/memory.js';
 import { initStore } from '../../dist/store/open.js';
 import { writeEntry } from '../../dist/store/entry-writes.js';
 import { loadAllEntries } from '../../dist/store/entry-reads.js';
-import { embedMemory, loadEmbeddingIndex } from '../../dist/embeddings.js';
-import { isEmbeddingAvailable } from '../../dist/local-embedding.js';
+import { embedMemory, loadEmbeddingIndex } from '../../dist/store/embeddings/index.js';
+import { isEmbeddingAvailable } from '../../dist/store/embeddings/local.js';
 import { physicsSearch } from '../../dist/search/physics-search.js';
 import { consolidate } from '../../dist/consolidate/sleep.js';
 import { resetAllPhysicsState } from '../../dist/db/physics-state.js';
-import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../../dist/db.js';
-import { DEFAULT_PHYSICS_CONFIG } from '../../dist/physics-config.js';
+import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../../dist/db/index.js';
+import { DEFAULT_PHYSICS_CONFIG } from '../../dist/core/physics-config.js';
 
 import { injectStream, writeLabelSidecar, mulberry32 } from './inject.mjs';
 

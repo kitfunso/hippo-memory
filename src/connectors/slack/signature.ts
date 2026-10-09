@@ -1,5 +1,7 @@
 import { createHmac, timingSafeEqual } from 'crypto';
 
+const DEFAULT_SKEW_SECONDS = 5 * 60;
+
 export interface VerifyOpts {
   rawBody: string;
   timestamp: string;
@@ -35,7 +37,7 @@ function verifyOne(
 export function verifySlackSignature(opts: VerifyOpts): boolean {
   const { rawBody, timestamp, signature, signingSecret, previousSecret } = opts;
   const now = opts.now ?? Math.floor(Date.now() / 1000);
-  const skew = opts.skewSeconds ?? 5 * 60;
+  const skew = opts.skewSeconds ?? DEFAULT_SKEW_SECONDS;
   const ts = Number(timestamp);
   if (!Number.isFinite(ts)) return false;
   if (Math.abs(now - ts) > skew) return false;

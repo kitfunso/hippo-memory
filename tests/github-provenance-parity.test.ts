@@ -19,7 +19,7 @@ import type {
   GitHubIssueEvent,
   GitHubIssueCommentEvent,
 } from '../src/connectors/github/types.js';
-import type { Context } from '../src/api.js';
+import type { Context } from '../src/api/index.js';
 
 const PUBLIC_REPO = {
   full_name: 'acme/public-repo',

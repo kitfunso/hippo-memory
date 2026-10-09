@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { sampleForReplay, replayPriority } from '../src/replay.js';
-import { Layer, type MemoryEntry} from '../src/memory.js';
+import { sampleForReplay, replayPriority } from '../src/consolidate/replay.js';
+import { Layer, type MemoryEntry} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 
 function fakeEntry(overrides: Partial<MemoryEntry>): MemoryEntry {

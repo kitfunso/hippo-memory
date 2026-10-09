@@ -4,10 +4,10 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import type { Context } from '../src/api.js';
+import type { Context } from '../src/api/index.js';
 import { ingestMessage } from '../src/connectors/slack/ingest.js';
 import { handleMessageDeleted } from '../src/connectors/slack/deletion.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 
 const ctx = (root: string): Context => ({ hippoRoot: root, tenantId: 'default', actor: { subject: 'connector:slack', role: 'admin' } });
 

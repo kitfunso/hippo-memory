@@ -1,15 +1,15 @@
-import { AUTO_DELETABLE_SQL, type MemoryEntry } from '../memory.js';
-import { openHippoDb, closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../db.js';
+import { AUTO_DELETABLE_SQL, type MemoryEntry } from '../core/memory.js';
+import { openHippoDb, closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import { checkRejectionGuard, RejectedValueError } from './rejection.js';
 import { markSummaryDirtyInTx } from './summary-dirty.js';
 import { type DormantMove, insertDormantRow } from './dormant.js';
-import { log } from '../log.js';
+import { log } from '../util/log.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry } from './rows.js';
 import { audit } from './audit-event.js';
 import { deleteFtsRow, replaceFtsRows, stampOriginProject, upsertMemoryRow } from './entry-row.js';
 import { purgeMirrorBestEffort, mirrorBestEffort, writeMarkdownMirror } from './mirrors.js';
 import { openStore } from './open.js';
-import { clock } from '../write-budget.js';
+import { clock, type WriteBudget } from '../util/write-budget.js';
 
 /** Tables whose rows keep a first-class object's backing memory in `memory_id` (ON DELETE SET NULL); tests/dormant-memories.test.ts pins it to the schema. */
 export const MEMORY_BACKED_TABLES = ['predictions', 'decisions', 'incidents', 'processes', 'policies', 'skills', 'project_briefs', 'customer_notes'] as const;
@@ -103,7 +103,7 @@ export function deleteEntry(
 }
 
 /** deleteEntry on the caller's open store, so a loop of deletes opens the store once; each delete still commits alone. */
-export function deleteEntryOn(
+function deleteEntryOn(
   db: DatabaseSyncLike,
   hippoRoot: string,
   id: string,
@@ -164,7 +164,7 @@ export interface FlushComponent {
 const failedUnits = new WeakMap<Error, string[]>();
 
 /** Tags a flush error with the ids of the component it stopped at, for the partial sleep audit row; the first tag wins. */
-export function noteFailedUnit(err: Error, component: FlushComponent | undefined): void {
+function noteFailedUnit(err: Error, component: FlushComponent | undefined): void {
   if (!component || failedUnits.has(err)) return;
   const ids = [...component.writes.map((e) => e.id), ...component.deletes, ...component.dormant.map((m) => m.entry.id)];
   failedUnits.set(err, [...new Set(ids)]);
@@ -177,7 +177,7 @@ export function failedUnitOf(err: Error | null): string[] | undefined {
 
 /** batchWriteAndDelete on the caller's open store from component `from`, each component whole, closing the transaction at the
  *  first component boundary after `holdMs`. Returns the next component's index and the ids that left `memories`. */
-export function batchWriteAndDeleteOn(
+function batchWriteAndDeleteOn(
   db: DatabaseSyncLike,
   hippoRoot: string,
   components: readonly FlushComponent[],
@@ -213,7 +213,7 @@ export function batchWriteAndDeleteOn(
 }
 
 /** Where the next transaction starts, and the ids this one removed from `memories`. */
-export interface FlushChunk {
+interface FlushChunk {
   next: number;
   removedIds: string[];
 }
@@ -370,4 +370,51 @@ function isRejectedBatchWrite(db: DatabaseSyncLike, row: MemoryEntry): boolean {
     throw err;
   }
   return false;
+}
+
+/** Deletes each target in its own transaction on one store handle; `true` where the row went. */
+export function deleteEntriesOneByOne(
+  hippoRoot: string,
+  targets: readonly { id: string; reason: string }[],
+  opts: { actor?: string; automatic?: boolean },
+): boolean[] {
+  if (targets.length === 0) return [];
+  const db = openStore(hippoRoot);
+  try {
+    return targets.map((target) => deleteEntryOn(db, hippoRoot, target.id, { ...opts, reason: target.reason }));
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/** Commits whole components in transactions of about `budget.holdMs` on one store handle, letting other writers in between; returns the ids that left `memories`.
+ *  The snapshot keeps what other writers changed after the caller loaded its rows. */
+export async function commitInChunks(
+  hippoRoot: string,
+  components: readonly FlushComponent[],
+  opts: { snapshot: ReadonlyMap<string, MemoryEntry>; budget: WriteBudget; busyWaitMs: number },
+): Promise<string[]> {
+  if (components.length === 0) return [];
+  const { snapshot, budget } = opts;
+  const removed: string[] = [];
+  // The wait is an option rather than a PRAGMA, so a shared hook handle keeps its own.
+  const db = openStore(hippoRoot, { busyWaitMs: opts.busyWaitMs });
+  let next = 0;
+  try {
+    let committedAt = 0;
+    while (next < components.length) {
+      if (next > 0) await budget.pause(committedAt);
+      const chunk = batchWriteAndDeleteOn(db, hippoRoot, components, next, { snapshot, holdMs: budget.holdMs, clock: budget.clock });
+      committedAt = budget.clock();
+      next = chunk.next;
+      for (const id of chunk.removedIds) removed.push(id);
+    }
+  } catch (err) {
+    // A unit that threw is already tagged; a throw outside one (a pause, BEGIN or COMMIT) names the chunk's first unit.
+    if (err instanceof Error) noteFailedUnit(err, components[next]);
+    throw err;
+  } finally {
+    closeHippoDb(db);
+  }
+  return removed;
 }

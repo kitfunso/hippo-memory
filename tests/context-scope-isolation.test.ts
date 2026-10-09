@@ -16,10 +16,10 @@ import * as os from 'os';
 import * as path from 'path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { getContext, type Context } from '../src/api.js';
-import { clearProjectIdentityCache } from '../src/project-identity.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { getContext, type Context } from '../src/api/index.js';
+import { clearProjectIdentityCache } from '../src/core/project-identity.js';
 
 let tmpRoot: string;
 let projA: string;

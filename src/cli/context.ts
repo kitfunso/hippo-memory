@@ -1,19 +1,16 @@
 // The `hippo context` verb, which the per-prompt hook also runs; main() loads it lazily from the command table.
 
-import * as path from 'path';
-import { createDeliveryRecorder, type DeliveryRecorder } from '../delivery-recorder.js';
-import { loadConfig } from '../config.js';
-import { isSubagentPayload } from '../token-ledger.js';
-import { blockHash, estimateTokens } from '../util/token-text.js';
-import { isGlobalStoreRoot } from '../project-identity.js';
-import { autoDetectContext } from '../context-auto.js';
-import { detectScope } from '../scope.js';
-import { bookLedgerTurn, ledgerRoot } from '../ledger-db.js';
-import { readHookStdin } from '../stdin.js';
-import * as api from '../api.js';
-import { resolveTenantId } from '../tenant.js';
-import { renderAmbientSummary } from '../ambient.js';
-import { contextBlockLines, contextCost, crossProjectLines, settleTokens } from '../context-render.js';
+import type { DeliveryRecorder } from '../store/delivery-recorder.js';
+import { isSubagentPayload } from '../store/token-ledger.js';
+import { estimateTokens } from '../util/token-text.js';
+import { autoDetectContext } from '../api/context-auto.js';
+import { detectScope } from '../sharing/scope.js';
+import { bookLedgerTurn } from '../api/ledger-db.js';
+import { readHookStdin } from './stdin.js';
+import * as api from '../api/index.js';
+import { resolveTenantId } from '../store/tenant.js';
+import { renderAmbientSummary } from '../core/ambient.js';
+import { contextBlockLines, contextCost, crossProjectLines, settleTokens } from '../api/context-render.js';
 import {
   additionalContextOutput,
   type ContextView,
@@ -21,8 +18,7 @@ import {
   hasContextData,
   sessionStartEnvelope,
   toRenderItems,
-} from '../prompt-hook.js';
-import { printError } from './output.js';
+} from '../api/prompt-hook.js';
 import {
   type CliFlags,
   parseLimitFlag,
@@ -40,9 +36,9 @@ import {
   payloadCwdRoot,
   runHookWithStores,
   inPilotHoldout,
+  startDeliveryRecorder,
   flagIsTrue,
 } from './shared.js';
-import { errorMessage } from '../log.js';
 
 export async function cmdContext(
   hippoRoot: string,
@@ -50,37 +46,10 @@ export async function cmdContext(
   flags: CliFlags,
   stdinText?: string
 ): Promise<void> {
-  const rec = startDeliveryRecorder(hippoRoot, flags, stdinText);
+  const rec = flagIsTrue(flags, 'pinned-only') ? startDeliveryRecorder(hippoRoot, stdinText, hookRuntime(flags)) : null;
   // No try/finally: a render throw keeps its own exit code and writes no event.
   await renderContext(hippoRoot, args, flags, stdinText, rec);
   flushDeliveryRecorder(rec);
-}
-
-/** A delivery recorder for a pinned-only call when its ledger store enables one, else null; never throws. */
-function startDeliveryRecorder(
-  hippoRoot: string,
-  flags: CliFlags,
-  stdinText: string | undefined,
-): DeliveryRecorder | null {
-  if (flags['pinned-only'] !== true) return null;
-  try {
-    // The same store withLedgerDb writes the token ledger to, so its config governs both.
-    const root = ledgerRoot(hippoRoot);
-    if (root === null || !loadConfig(root).deliveryLedger.enabled) return null;
-    return createDeliveryRecorder({
-      root,
-      storeHash: blockHash(path.resolve(root)),
-      writeStore: isGlobalStoreRoot(root) ? 'global' : 'local',
-      tenantId: resolveTenantId({}),
-      stdinText,
-      envSessionId: hostSessionId(),
-      runtime: hookRuntime(flags) === 'copilot' ? 'copilot' : undefined,
-    });
-  } catch (error) {
-    // The hook's one-line stderr contract pins this exact text, so it bypasses the leveled logger.
-    printError(`[hippo] delivery ledger skipped:${errorMessage(error)}`);
-    return null;
-  }
 }
 
 interface HookPayload {

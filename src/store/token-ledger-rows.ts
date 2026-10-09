@@ -1,6 +1,6 @@
 // SQL for the token_ledger table in the ledger database; callers keep the handle, the transaction and the arithmetic.
-import type { DatabaseSyncLike } from '../db.js';
-import type { TokenSurface } from '../token-ledger.js';
+import type { DatabaseSyncLike } from '../db/index.js';
+import type { TokenSurface } from './token-ledger.js';
 
 export interface TokenRowInput {
   ts: string;

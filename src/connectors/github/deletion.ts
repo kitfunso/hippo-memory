@@ -1,5 +1,5 @@
-import { type Context } from '../../api.js';
-import { requireGroup, storeFor } from '../../store-port.js';
+import { type Context } from '../../api/index.js';
+import { requireGroup, storeFor } from '../../store/index.js';
 
 export interface DeletionInput {
   /** artifact_ref of the comment, e.g.,

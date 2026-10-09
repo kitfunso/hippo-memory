@@ -1,14 +1,14 @@
 import { createHash } from 'node:crypto';
-import { canAutoDelete, type MemoryEntry } from '../memory.js';
-import { closeHippoDb, openHippoDb, withWriteScope, type DatabaseSyncLike } from '../db.js';
+import { canAutoDelete, type MemoryEntry } from '../core/memory.js';
+import { closeHippoDb, openHippoDb, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import type { JsonObject } from './working-memory.js';
-import { log } from '../log.js';
-import { keysetAfter, type KeysetPosition } from '../keyset.js';
-import type { JsonValue } from '../json.js';
+import { log } from '../util/log.js';
+import { keysetAfter, type KeysetPosition } from '../util/keyset.js';
+import type { JsonValue } from '../util/json.js';
 import { warnDamagedColumn } from '../util/stored-json.js';
 import {
   automaticDefect, hasNoSpecificity, isFragment, isReleaseCommitNoise, substantiveWordCount,
-} from '../memory-quality.js';
+} from '../core/memory-quality.js';
 
 export type AuditSeverity = 'warning' | 'error';
 
@@ -391,6 +391,30 @@ function safeJsonParse(raw: string, id: number): JsonObject {
     // Malformed metadata reads as empty so the audit row itself stays listable.
     warnDamagedColumn({ table: 'audit_log', id, column: 'metadata_json' }, 'not valid JSON');
     return {};
+  }
+}
+
+/** An audit row that did not land, with what its write threw. */
+export interface FailedAuditEvent {
+  event: AppendAuditOpts;
+  error: unknown;
+}
+
+/** Appends each event as its own write on one handle, so a row that fails drops only itself. Returns the rows that failed, for the caller to report. */
+export function recordAuditEventsRowByRow(hippoRoot: string, events: readonly AppendAuditOpts[]): FailedAuditEvent[] {
+  const db = openHippoDb(hippoRoot);
+  try {
+    const failed: FailedAuditEvent[] = [];
+    for (const event of events) {
+      try {
+        appendAuditEvent(db, event);
+      } catch (error) {
+        failed.push({ event, error });
+      }
+    }
+    return failed;
+  } finally {
+    closeHippoDb(db);
   }
 }
 

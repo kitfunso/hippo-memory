@@ -10,8 +10,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { recall, retrieve, type Context } from '../src/api.js';
+import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { recall, retrieve, type Context } from '../src/api/index.js';
 import { sqliteStore, type HippoStore } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
 

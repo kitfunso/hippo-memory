@@ -19,6 +19,8 @@
     "scripts/z1-replay.mjs:processFile": 346,
     "scripts/z1-replay.mjs:processFile > fireHookPrompt": 93,
     "scripts/z1c-eval.mjs:main": 116,
-    "scripts/z6-supersession-eval.mjs:runScenarioArm": 95
+    "scripts/z6-supersession-eval.mjs:runScenarioArm": 95,
+    "src/capture/compaction-record.ts:replayCompactions": 53,
+    "src/capture/compaction-record.ts:saveCompaction": 57
   }
 }

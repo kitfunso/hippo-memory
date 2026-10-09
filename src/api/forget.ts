@@ -1,12 +1,12 @@
 // Forget a memory, and reject or unreject a value so it cannot be stored again.
 
-import { BadRequestError, NotFoundError } from '../api-errors.js';
+import { BadRequestError, NotFoundError } from '../core/api-errors.js';
 import type { RejectedValueRow } from '../store/rejection.js';
-import { rejectValue, unrejectValue, listRejectionsForTenant } from '../reject-flow.js';
+import { rejectValue, unrejectValue, listRejectionsForTenant } from '../trust/reject-flow.js';
 import { andThen, notPorted, onStore } from './on-store.js';
 import type { Context, StoreReply } from './types.js';
 import { readEntry } from '../store/entry-reads.js';
-import { canTouchScope, personalScopeOf } from '../recall-scope.js';
+import { canTouchScope, personalScopeOf } from '../store/recall-scope.js';
 
 // ---------------------------------------------------------------------------
 // forget
@@ -33,7 +33,7 @@ export function forget<C extends Context>(ctx: C, id: string): StoreReply<C, For
 // itself already protects every write surface today — only this admin
 // surface is CLI/api-first, plan §4 non-goals). Shares the exact same
 // transaction flow as `hippo reject`/`rejections`/`unreject` via
-// src/reject-flow.ts — neither surface duplicates it.
+// src/trust/reject-flow.ts — neither surface duplicates it.
 // ---------------------------------------------------------------------------
 
 export interface RejectOpts {

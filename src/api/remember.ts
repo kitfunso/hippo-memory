@@ -2,14 +2,14 @@
 
 import { stampOriginProject } from '../store/entry-row.js';
 import type { ConnectorEvent, ConnectorWrite, ConnectorWriteOutcome } from '../store/port.js';
-import { detectInstruction } from '../instruction-detect.js';
-import { quarantineScopeFor } from '../quarantine.js';
-import { createMemory, type MemoryEntry, type MemoryKind } from '../memory.js';
-import { loadConfig } from '../config.js';
-import { vetSecrets } from '../secret-detect.js';
-import { assertCallerProject } from '../project-identity.js';
-import { BadRequestError } from '../api-errors.js';
-import { assertClientScope, personalScopeOf } from '../recall-scope.js';
+import { detectInstruction } from './instruction-detect.js';
+import { quarantineScopeFor } from '../trust/quarantine.js';
+import { createMemory, type MemoryEntry, type MemoryKind } from '../core/memory.js';
+import { loadConfig } from '../core/config.js';
+import { vetSecrets } from '../util/secret-detect.js';
+import { assertCallerProject } from '../core/project-identity.js';
+import { BadRequestError } from '../core/api-errors.js';
+import { assertClientScope, personalScopeOf } from '../store/recall-scope.js';
 import { andThen, notPorted, onStore } from './on-store.js';
 import type { Context, StoreReply } from './types.js';
 

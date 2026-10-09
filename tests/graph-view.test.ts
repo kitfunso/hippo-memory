@@ -8,17 +8,17 @@
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { saveDecision } from '../src/decisions.js';
-import { savePolicy } from '../src/policies.js';
-import { saveCustomerNote } from '../src/customer-notes.js';
-import { extractGraph } from '../src/graph-extract.js';
+import { saveDecision } from '../src/objects/decisions.js';
+import { savePolicy } from '../src/objects/policies.js';
+import { saveCustomerNote } from '../src/objects/customer-notes.js';
+import { extractGraph } from '../src/graph/extract.js';
 import {
   buildGraphModel,
   layoutGraph,
   renderGraphHtml,
   renderGraphCanvas,
   type GraphModel,
-} from '../src/graph-view.js';
+} from '../src/graph/view.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
 
@@ -188,7 +188,7 @@ describe('graph-view: layout + renderers (pure)', () => {
   });
 
   it('11. JSON Canvas export is valid and 1:1 with the model', () => {
-    // SAFETY: renderGraphCanvas (src/graph-view.ts) is the function under
+    // SAFETY: renderGraphCanvas (src/graph/view.ts) is the function under
     // test; its output is always this JSON Canvas node/edge shape.
     const canvas = JSON.parse(renderGraphCanvas(model)) as {
       nodes: { id: string; type: string; x: number; y: number; width: number; height: number; text: string }[];

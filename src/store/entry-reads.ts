@@ -1,10 +1,12 @@
-import type { MemoryEntry } from '../memory.js';
-import { closeHippoDb, type DatabaseSyncLike } from '../db.js';
+import type { MemoryEntry } from '../core/memory.js';
+import { closeHippoDb, type DatabaseSyncLike } from '../db/index.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
 import { openStore } from './open.js';
-import { escapeLike } from '../escape.js';
-import { originInSql } from '../project-identity.js';
-import { scopeAdmitSql } from '../recall-scope.js';
+import { escapeLike } from '../util/escape.js';
+import { originInSql } from '../core/project-identity.js';
+import { scopeAdmitSql } from './recall-scope.js';
+
+const MAX_IDS_PER_READ = 500;
 
 // The plus keeps SQLite on the primary key for an id list: with a bare tenant_id it walks every row of the tenant instead.
 export const TENANT_IS = '+tenant_id = ?';
@@ -126,7 +128,7 @@ export function loadEntriesByIds(
   tenantId?: string,
 ): MemoryEntry[] {
   if (ids.length === 0) return [];
-  const capped = ids.slice(0, 500);
+  const capped = ids.slice(0, MAX_IDS_PER_READ);
   const db = openStore(hippoRoot);
   try {
     const placeholders = capped.map(() => '?').join(',');

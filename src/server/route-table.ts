@@ -1,8 +1,8 @@
 import type { IncomingMessage } from 'node:http';
-import { withSqliteOffLoop } from '../db.js';
-import { hasGroup, type StoreGroup } from '../store-port.js';
+import { withSqliteOffLoop } from '../db/index.js';
+import { hasGroup, type StoreGroup } from '../store/index.js';
 import { runsOffLoop } from '../store/sqlite/worker-store.js';
-import { HttpError, JSON_HEADERS, sendJson, STORE_NOT_PORTED_MESSAGE } from '../http-util.js';
+import { HttpError, JSON_HEADERS, sendJson, STORE_NOT_PORTED_MESSAGE } from '../util/http-util.js';
 import { buildContextWithAuth, requireAuth } from './auth.js';
 import { matchPath, noteAccess } from './request.js';
 import { handleApproveQuarantine, handleCreateAuthKey, handleListAudit, handleListAuthKeys, handleListQuarantine, handleRejectQuarantine, handleRevokeAuthKey } from './routes/admin.js';
@@ -18,7 +18,7 @@ import { handleAssembleSession, handleDrillRecall, handleGetContext, handleRecal
 import { handleCloseSkill, handleCreateSkill, handleExportSkills, handleGetSkill, handleListSkills, handleSupersedeSkill } from './routes/skills.js';
 import { parseJsonBody } from './validation.js';
 import type { AddonRoute, ResolvedServeOpts, Route, RouteRequest } from './types.js';
-import type { JsonValue } from '../json.js';
+import type { JsonValue } from '../util/json.js';
 
 // Review patch #2: explicit allow-list for unauthenticated /v1/* routes.
 // New unauth routes MUST be added here AND get a corresponding entry in

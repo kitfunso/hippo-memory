@@ -1,6 +1,6 @@
 // Reading a Claude Code transcript or a Codex rollout for the digest: turns, closing message, edits that landed.
 import { describe, expect, it } from 'vitest';
-import { scanSessionTranscript } from '../src/session-digest.js';
+import { scanSessionTranscript } from '../src/capture/session-digest.js';
 
 const CWD = '/work/repo';
 const jsonl = <T,>(records: readonly T[]): string => records.map((r) => JSON.stringify(r)).join('\n') + '\n';

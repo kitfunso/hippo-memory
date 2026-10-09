@@ -4,7 +4,7 @@
 
 import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'node:fs';
-import { computeSchemaFit, deriveHalfLife, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/memory.js';
+import { computeSchemaFit, deriveHalfLife, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';
 import { schemaFitInStore } from '../src/store/candidates.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { writeEntry } from '../src/store/entry-writes.js';

@@ -1,13 +1,15 @@
 // DAG drill-down from a summary to its children.
 
-import { requireGroup, storeFor } from '../store-port.js';
+import { requireGroup, storeFor } from '../store/index.js';
 import type { DescendantOrigin, SummaryDescendants } from '../store/port.js';
 import { estimateTokens } from '../util/token-text.js';
-import type { MemoryEntry } from '../memory.js';
-import { passesScopeFilterForRecall, personalScopeOf } from '../recall-scope.js';
-import { classifyOriginProject } from '../project-identity.js';
-import type { CallerProject } from '../prompt-hook.js';
+import type { MemoryEntry } from '../core/memory.js';
+import { passesScopeFilterForRecall, personalScopeOf } from '../store/recall-scope.js';
+import { classifyOriginProject } from '../core/project-identity.js';
+import type { CallerProject } from './prompt-hook.js';
 import type { Context } from './types.js';
+
+const DEFAULT_DRILL_DOWN_LIMIT = 50;
 
 // ---------------------------------------------------------------------------
 // drillDown — DAG-aware recall Phase 1 Task 3
@@ -95,7 +97,7 @@ export async function drillDown(
   summaryId: string,
   opts: DrillDownOpts = {},
 ): Promise<DrillDownOutcome> {
-  const limit = opts.limit ?? 50;
+  const limit = opts.limit ?? DEFAULT_DRILL_DOWN_LIMIT;
   // v0.30 / E5: depth defaults 1 (backward compat); hard cap 10 levels
   // prevents pathological deep trees. CLI/HTTP/MCP reject invalid values.
   const depth = Math.max(1, Math.min(Math.trunc(opts.depth ?? 1), 10));

@@ -2,11 +2,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { insertEntity, insertRelation } from '../src/store/graph-writes.js';
-import { savePolicy } from '../src/policies.js';
-import { buildGraphModel } from '../src/graph-view.js';
-import { canReadScope } from '../src/recall-scope.js';
+import { savePolicy } from '../src/objects/policies.js';
+import { buildGraphModel } from '../src/graph/view.js';
+import { canReadScope } from '../src/store/recall-scope.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 const T = 'default';

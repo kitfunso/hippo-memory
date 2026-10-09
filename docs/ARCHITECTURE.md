@@ -21,7 +21,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 
 ### src/api/assemble.ts
 - `AssembleResult.truncated`: With v1.6.2's NEWEST-cap semantics, the items[] array represents the freshest tail of the session
-- `assemble`: F4 (v1.6.5): byte compare canonical UTC ISO timestamps. ~50× faster than localeCompare and chronological by virtue of the timestamp invariant documented in src/memory.ts above MemoryEntry.
+- `assemble`: F4 (v1.6.5): byte compare canonical UTC ISO timestamps. ~50× faster than localeCompare and chronological by virtue of the timestamp invariant documented in src/core/memory.ts above MemoryEntry.
 
 ### src/api/audit.ts
 - `auditList`: Read-only — no audit emit (matches A5: cmdAuditList does not record a 'recall'-style read event).
@@ -90,7 +90,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `RecallResult.anchoringHint`: v0.33 / J1 (v1.13.2) — recall-recurrence anchoring hint. Populated when api.recall's `opts.recallHistory` snapshot + the just-computed top-1 satisfy R1 (query_repeat) or R2 (memory_dominance).
 - `RecallResult.availabilityHint`: v1.13.x / J2 — availability/recency-bias hint.
 - `RecallSuppressionSummary`: v1.12.13 / C5 — WYSIATI cutoff transparency (Track C Pineal Gland, C5).
-- `RecallSuppressionSummary.suppressedByInterference`: v0.33 / J1 (v1.13.2): incremented by 1 PER PIPELINE when that pipeline's own R2 memory_dominance verdict fires (via the J1 anchoring detector — see `detectAnchoring()` in src/recall-history.ts).
+- `RecallSuppressionSummary.suppressedByInterference`: v0.33 / J1 (v1.13.2): incremented by 1 PER PIPELINE when that pipeline's own R2 memory_dominance verdict fires (via the J1 anchoring detector — see `detectAnchoring()` in src/api/recall-history.ts).
 - `RecallSuppressionSummary.suppressedByInterference`: Future B4-depth work may add additional sources (e.g. vlPFC inhibition scores). No `interference_suppression` table is built — the v1.12.13 doc that referenced one was speculative; J1 uses caller-side in-memory rings instead.
 
 ### src/api/recall.ts
@@ -139,14 +139,14 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `ApiKeyListItem.role`: v1.12.3: authorization role bound to the key. SELECT extended to read the `role` column (added in schema migration v26 by v1.12.0 sub-1).
 - `ApiKeyListItem.scopes`: EI2: restricted scopes this key may read.
 
-### src/autolearn.ts
+### src/learn/autolearn.ts
 - `deduplicateLesson`: L9: `tenantId` is opt-in.
 
-### src/availability.ts
+### src/api/availability.ts
 - (module header): J2 — Availability-bias detector (Track J: biases-over-memory-state)
 - (module header): Soft warning ONLY (ROADMAP-RESEARCH.md Track J discipline note): this never filters, reorders, or suppresses a result. It surfaces a hint the calling agent may choose to act on, exactly like J1 anchoringHint / J3 planningFallacyHint / C5 suppressionSummary.
 
-### src/capture-error.ts
+### src/capture/capture-error.ts
 - (module header): Every failure, stored or not, goes to the failure log (ROADMAP CD13).
 
 ### src/capture/command.ts
@@ -170,8 +170,8 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `extractFromPatterns`: PREFERENCE_PATTERNS[0] is the one pattern left out of T1/T2 (see comment at its definition) — its match[1] keeps its pre-DF2, unbounded shape rather than going through clause-bounding.
 - `extractFromPatterns`: T1 preserves the keyword only when it carries SEMANTIC SIGN — a negation or modality ("never", "must not", "do not ever", "always"). Dropping those inverts the meaning, which is the whole point of T1. ... (AT1's rejected-value digest hashes the bare content).
 
-### src/churn-git.ts
-- `module header`: Git subprocess helpers for FE2 churn-staleness (src/invalidation.ts).
+### src/learn/churn-git.ts
+- `module header`: Git subprocess helpers for FE2 churn-staleness (src/learn/invalidation.ts).
 
 ### src/cli/audit.ts
 - `audit subcommands banner`: Audit log subcommands (A5 stub auth — `hippo audit list`)
@@ -182,6 +182,10 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `cmdAuthCreate`: v1.12.3: --role flag surfaces the api_keys.role column added v1.12.0 sub-1. Accepts 'admin' | 'member' only; anything else exits 1 with a typed error so a typo doesn't silently default to admin.
 - `formatKeyRow`: v1.12.3: role column surfaced
 - `cmdAuthScopeGrant`: EI2: `hippo auth grant|ungrant <key_id> <scope>`, routed through api so the tenant, restricted-scope and audit checks live in one place.
+
+### src/cli/compact-resume-payload.ts
+- `readCompactResumePayload`: Without a payload session_id the X5 cross-restore guard below can never fire, so a timed-out empty read must not reach the print path.
+- `readCompactResumePayload`: A sub-agent's payload carries its parent's session id, so X5 would pass and restore the parent's snapshot into it.
 
 ### src/cli/curate.ts
 - `cmdForget`: A3: raw memories (Slack / GitHub connector ingestion) are append-only — a BEFORE-DELETE trigger aborts any delete. archiveRaw is the sanctioned removal path; it records ctx.actor as the archiver for provenance.
@@ -211,8 +215,6 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 
 ### src/cli/session-hooks.ts
 - `COMPACT_RESUME_EVENT_CONTENT_CAP`: X8: session-event content is capped at print time only — the shared printSessionEvents stays untouched for every other caller.
-- `cmdCompactResume`: Without a payload session_id the X5 cross-restore guard below can never fire, so a timed-out empty read must not reach the print path.
-- `cmdCompactResume`: A sub-agent's payload carries its parent's session id, so X5 would pass and restore the parent's snapshot into it.
 - `restoreCompactSnapshot`: X5: concurrent sessions must not cross-restore. Only suppress when BOTH ids are present and differ — either side missing, or a manual invocation with no payload session_id, still prints.
 - `restoreCompactSnapshot`: X12: re-injected state is background reference, not instructions: the framing line the model actually sees at every compaction.
 - `cmdSessionEnd`: Bounded read (DF1 T3, docs/plans/2026-08-23-df1-snapshot-lifecycle.md): extracts transcript_path + session_id for the detached worker's argv.
@@ -231,12 +233,12 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `cmdImport`: K1 vault import: a FOLDER importer that mirrors the connector pattern (kind='raw' + tag provenance + archiveRaw deletions), so it dispatches separately from the single-file `importer` function-pointer slot below.
 - `handlePeers`: D4 v1.12.10: tenant-scoped by default. --all-tenants restores the pre-D4 host-wide view for the rare operator who genuinely wants cross-tenant peer discovery.
 
-### src/compare.ts
+### src/core/compare.ts
 - `module header`: A true LEAF module ... a type-only import back to search.ts would still create the search.ts <-> physics.ts ESM import cycle this module exists to avoid (r2 critic HIGH, docs/plans/2026-07-09-recall-determinism.md T2).
 - `compareEntryIdentity`: The metadata keys are only computed on a content tie, which is rare post-T1 (path-tag embedding fix), so the per-compare Set/sort cost never lands on the hot path.
 - `comparePhysicsResultsBy`: `ScoredPhysicsResult` (physics.ts) carries `{ memoryId, baseScore, clusterAmplification, finalScore }` -- NO `entry`/`content` in scope at that layer, so `compareEntryIdentity` cannot apply directly (plan T2 shape (c)).
 
-### src/config.ts
+### src/core/config.ts
 - `pinnedInject.skipUnchanged`: Skip a block identical to the one already injected this session (ROADMAP TE2). Default true. Needs a session id from the hook payload.
 - `pinnedInject.promptRecall`: Z1: gate the hook's backfill on the prompt's own content instead of the five newest memories. Default true since 1.55.0: overlap tied but median tokens fell 847 to 533 (docs/evals/2026-09-26-z1-prompt-recall-result.md).
 - `pinnedInject.promptRecallMetric`: Z1: overlap metric for the prompt-recall gate. Default 'jaccard' (tuned, docs/evals/2026-09-26-z1-prompt-recall-result.md).
@@ -247,7 +249,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `contextProjectIsolation`: Memory scope isolation (v39): when true (default), ambient context ... See docs/plans/2026-07-01-memory-scope-isolation.md.
 - `sharedStore`: set `true` on a store that a team server serves. Its folder is no caller's project, so a write that names none stores NULL (no known project, hidden from every project's context) instead of the folder's project or `''` (user-global, shown everywhere). Callers name their project: `POST /v1/memories` takes `project: {name, aliases?}` and `GET /v1/context` takes `project` and repeated `alias`; a context read with none answers 400. MCP `hippo_context` and `hippo sync` refuse the store. Once a process reads the flag as true it stays true, so a broken edit cannot reopen reads.
 - `isSharedStore` cost: a false answer is not cached, so a store that is not shared pays one realpath and one `config.json` read on every write that names no project and on every context call (once per prompt from the local hook); a broken `config.json` warns on each.
-- `memoryValue`: LC2-E3: opt-in learned memory-value rescue veto on the sleep decay pass (docs/plans/2026-08-10-lc2-e3-mv-wiring.md). Default OFF — the frozen E2 weights (src/memory-value-weights.ts) only run when explicitly enabled; no other knobs in v1 (the rescue budget is a code constant tied to E2 evidence, not user-tunable).
+- `memoryValue`: LC2-E3: opt-in learned memory-value rescue veto on the sleep decay pass (docs/plans/2026-08-10-lc2-e3-mv-wiring.md). Default OFF — the frozen E2 weights (src/consolidate/memory-value-weights.ts) only run when explicitly enabled; no other knobs in v1 (the rescue budget is a code constant tied to E2 evidence, not user-tunable).
 - `churnStaleness`: FE2: tags a memory `churn-stale` when its named file/symbol/script changed since storage. Default OFF - FE3 measures before it flips.
 
 ### src/connectors/github/dlq.ts
@@ -296,14 +298,14 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `entityProfilePass`: E5 phase: aggregate per-entity L2 summaries (e.g. all the speaker:Alice
 
 ### src/consolidate/merge.ts
-- `mergePass`: AT1 consolidation-loop fix (docs/plans/2026-08-15-at1-rejected-value-tombstone.md): reuses the single consolidateDb handle opened lazily in consolidate() for the whole non-dry-run consolidate — see that declaration's comment. Only needed for real writes — a dry-run preview never reaches batchWriteAndDelete's guard bypass, so there is nothing here for it to protect against.
+- `mergePass`: AT1 consolidation-loop fix (docs/plans/2026-08-15-at1-rejected-value-tombstone.md): reuses the single tombstone-check handle (`lazyTombstoneChecks`, `src/store/tombstone-checks.ts`) opened lazily in consolidate() for the whole non-dry-run consolidate — see that declaration's comment. Only needed for real writes — a dry-run preview never reaches batchWriteAndDelete's guard bypass, so there is nothing here for it to protect against.
 - `mergeCluster`: Immediate ranking is deliberately unchanged: the 2026-06-10 DAG slice-1 eval measured that dropping children below a worse-retrieving summary regresses budget-bounded QA (docs/evals/). The stored
 
 ### src/consolidate/run.ts
 - `ConsolidationResult.tracesSkippedMixedScope`: T7: sessions skipped because their events span two derivation scopes.
 - `ConsolidationResult.summariesRebuilt`: v0.30 / E3 — rebuild phase observability. Failed and zero-child counts are first-class so downstream callers (CLI eval, HTTP /v1/sleep response) see structured data, not a parsed details string.
 - `ConsolidationResult.entityProfilesCreated`: v0.30 / E5 — L3 entity-profile build count
-- `lazyConsolidateDb`: AT1 rejection-guard db handle (docs/plans/2026-08-15-at1-rejected-value-tombstone.md): covers BOTH the auto-promote pass (1.4) and the merge pass (3) — both build deterministic content that batchWriteAndDelete writes through the guard's bypass, so both need a producer-side tombstone check before pushing to pendingWrites.
+- `lazyTombstoneChecks` (`src/store/tombstone-checks.ts`): AT1 rejection-guard db handle (docs/plans/2026-08-15-at1-rejected-value-tombstone.md): covers BOTH the auto-promote pass (1.4) and the merge pass (3) — both build deterministic content that batchWriteAndDelete writes through the guard's bypass, so both need a producer-side tombstone check before pushing to pendingWrites.
 
 ### src/consolidate/sleep.ts
 - `consolidate`: L9: host-wide by design. Consolidation runs across all tenants in one pass — per-tenant filtering would create N consolidation runs per host with no cross-tenant dedup. The api.sleep audit row tags this with the admin synthetic actor; see api.ts:2050 for the rationale.
@@ -314,12 +316,12 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `sessionTrace`: T7: a mixed-scope session would otherwise leak into one trace.
 - `traceRejected`: AT1 (same producer-side pattern as the merge pass below): traceExistsForSession only sees rows CURRENTLY in the store — once a rejected trace is removed, that idempotency check no longer blocks regeneration, and this write would otherwise reach batchWriteAndDelete's guard bypass unchecked, resurrecting it every sleep. Check under THE ENTRY'S OWN stamped tenantId (read off `trace` after createMemory — never guess the tenant) + the built content's digest. A hit skips the push entirely: not counted as promoted, not added to survivors.
 
-### src/customer-notes.ts
+### src/objects/customer-notes.ts
 - module header: E2 customer_note first-class object - the LAST E2 object (docs/plans/2026-06-01-e2-customer-note-object.md).
 - module header: Entity-scoping is a free-form `customer` column (the `entities` table is unbuilt - E3.1 planned - so an FK is deferred).
 - module header: It has NO assembler/renderer (the simplest E2 object): the contribution is purely the entity-scoping dimension.
 
-### src/dag.ts
+### src/consolidate/dag.ts
 - `DagBuildResult.rejected`: AT1: clusters skipped because the LLM-synthesized summary landed on a rejected value (plan §3 containment — per-cluster catch, not a whole- phase abort). Member re-parenting writes are unaffected by construction (same id + same content = guard-exempt), so this only ever counts summary-creation refusals.
 - `createClusterSummaryEntry`: Schema v25: cache descendant_count + earliest/latest_at on the summary row so DAG-aware recall (docs/plans/2026-05-05-dag-recall.md Task 2) can reason about scope without walking the children.
 - `summarizeCluster`: AT1 (plan §3 containment): a refused LLM-synthesized summary skips ONLY this cluster — the sleep cycle continues to the next one. The member re-parenting writes below never run for a skipped cluster (there is no summary id to parent them under). The tombstone check itself is tenant-scoped for free: writeEntry -> writeEntryDbOnly -> upsertEntryRow calls checkRejectionGuard(db, entry.tenantId ?? 'default', ...) (store/entry-writes.ts), reading tenantId off the entry being written. Now that summaryEntry carries home.tenantId instead of the implicit 'default', the guard consults that tenant's tombstones — no separate check needed here (unlike consolidate.ts's merge pass, which pre-checks via findRejectedValue because it writes through batchWriteAndDelete's bypassRejectionGuard path instead of writeEntry).
@@ -428,7 +430,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - migration v42: W1 handoff envelope (trajectories/01M2BQTM4AGFVMYY7G2XV5G7WY/plan.md). Five nullable columns so the envelope carries evidence and outcome and W2/W5 can filter on them without parsing JSON.
 
 ### src/db/migrations/v45.ts
-- migration v45: Token ledger (src/token-ledger.ts, ROADMAP TE0)
+- migration v45: Token ledger (src/store/token-ledger.ts, ROADMAP TE0)
 
 ### src/db/migrations/v46.ts
 - migration v46: CD13 failure log (src/store/failure-log.ts): hashes only, since failure text can carry paths and secrets.
@@ -437,38 +439,38 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - migration v47: Scope grants (src/store/auth.ts, ROADMAP EI2)
 
 ### src/db/migrations/v48.ts
-- migration v48: Quarantine (src/quarantine.ts, CD5)
+- migration v48: Quarantine (src/trust/quarantine.ts, CD5)
 
 ### src/db/migrations/v53.ts
 - migration v53: Self-service keys. `api_keys` gains `owner_subject` (the auth-resolver subject that minted the key for itself) and `expires_at`, plus a partial index on live keys per (tenant, owner) for the per-subject cap.
 - migration v53: Does not touch `min_compatible_binary`. A store with no expiring key is safe for an older binary, so it keeps its floor and every binary that shares it keeps working.
-- `authCreateSelf` (src/api/auth.ts): The first write of a non-null `expires_at` raises `min_compatible_binary` to `EXPIRING_KEYS_MIN_BINARY` (src/version.ts), in the same transaction as the key, and never lowers a higher floor. A binary older than that ignores `expires_at` and would keep honouring expired keys, so it must refuse the store from then on.
+- `authCreateSelf` (src/api/auth.ts): The first write of a non-null `expires_at` raises `min_compatible_binary` to `EXPIRING_KEYS_MIN_BINARY` (src/util/version.ts), in the same transaction as the key, and never lowers a higher floor. A binary older than that ignores `expires_at` and would keep honouring expired keys, so it must refuse the store from then on.
 - `EXPIRING_KEYS_MIN_BINARY`: Names the first release that ships schema v53, set by hand in that release. `scripts/check-expiring-keys-floor.mjs` runs on `npm version`, `prepublishOnly` and CI: it fails when the constant is above `package.json`'s version, when a tag `v<constant>` exists whose migration index lacks v53, or when no such tag exists and the constant is not `package.json`'s version (the release being cut). Until that release the constant equals the dev version, so a dev build never locks itself out.
 - Way back: to let an older binary open a store again, revoke every key that has an `expires_at` (`hippo auth list --all` shows the expires column; `hippo auth revoke <key_id>`), then lower the floor to what it was before, 1.24.0 on most stores (set by v39): `UPDATE meta SET value = '1.24.0' WHERE key = 'min_compatible_binary'`. A revoked key is safe because every binary honours `revoked_at`.
 
 ### src/db/migrations/v54.ts
 - migration v54: Owner task state. `task_snapshots`, `session_handoffs` and `failure_log` gain nullable `owner_subject` and `origin_project`. `compactions` and `failure_log` gain a nullable `request_id`, with a partial unique index on (tenant, request id), so a retried call finds the row it wrote the first time. New table `session_owners` holds (tenant, session id, owner).
 - migration v54: No backfill and no floor raise. Rows from before v54 keep NULL owners, so no owner read ever returns them. A store nobody writes owner rows to stays open to older binaries.
-- `session_owners` (src/session-owners.ts): The first owner to write for a session id holds it. `bindSessionOwner` reads the row first, so a session already bound takes no write lock. Another owner on the same session id gets `ConflictError`, and the message names no owner. Each new bind prunes bindings older than 90 days in every tenant. There is no owner erase path yet; when one lands it must delete the owner's rows here too.
-- `TASK_OWNER_MIN_BINARY` (src/version.ts): The floor a store takes on its first session bind or its first owner snapshot, raised in the same transaction and never lowered. An older binary supersedes snapshots across the whole tenant, so it would close other people's rows; it must refuse the store from then on. It names the first release that ships v54, set by hand in that release. `scripts/check-expiring-keys-floor.mjs` checks it beside `EXPIRING_KEYS_MIN_BINARY`, and fails on a checkout with no tags, where every tag check would pass by finding nothing.
+- `session_owners` (src/api/session-owners.ts): The first owner to write for a session id holds it. `bindSessionOwner` reads the row first, so a session already bound takes no write lock. Another owner on the same session id gets `ConflictError`, and the message names no owner. Each new bind prunes bindings older than 90 days in every tenant. There is no owner erase path yet; when one lands it must delete the owner's rows here too.
+- `TASK_OWNER_MIN_BINARY` (src/util/version.ts): The floor a store takes on its first session bind or its first owner snapshot, raised in the same transaction and never lowered. An older binary supersedes snapshots across the whole tenant, so it would close other people's rows; it must refuse the store from then on. It names the first release that ships v54, set by hand in that release. `scripts/check-expiring-keys-floor.mjs` checks it beside `EXPIRING_KEYS_MIN_BINARY`, and fails on a checkout with no tags, where every tag check would pass by finding nothing.
 - Owner keying: On a shared store, snapshot and handoff reads and writes take a `ContinuityKey`: the caller's owner (`ownerOrSubject`, the key's owner or else its id) and its project names. The session trail is read only for the session of the caller's own snapshot. `recordFailure` stamps the owner and project when it is given them. A keyed save supersedes only that owner's rows in that project and writes no mirror file. A key with no owner or no project matches nothing on a read and throws on a write, so it never falls back to the tenant's newest row. Recall's continuity block and `getContext`'s task state use the same key, so a developer's next session picks up their own handoff. A local store passes no key and keeps its SQL and mirror files as before.
 
-### src/decisions.ts
+### src/objects/decisions.ts
 - module header: E2 decision first-class object (docs/plans/2026-05-28-e2-decision-object.md).
 - module header: Mirrors the v0.31 predictions pattern (src/predictions.ts).
 
-### src/embedding-provider.ts
+### src/store/embeddings/provider.ts
 - module header: Design contract (see docs/plans/2026-06-08-b-pluggable-embedding-provider.md):
 - module header: Local provider `id` is the BARE model string. (Historical note: this originally guaranteed NO identity change on upgrade; since the embed-text-format versioning in embeddings.ts (`embeddingIndexIdentity`, `${id}#t2`, docs/plans/2026-07-09-recall-determinism.md T1), the STORED identity carries a `#t<N>` suffix and pre-#t2 stores get exactly one forced reindex on their next embed-touching operation — deliberate, because their vectors were computed over path-contaminated text.)
 
-### src/embeddings.ts
+### src/store/embeddings/index.ts
 - `embedMemory`: L9: host-wide rebuild. The embedding index is keyed by entry.id (which is tenant-scoped) but the index itself is one per hippoRoot.
 - `embedAll`: L9: host-wide by design. embedAll backfills vectors for all tenants' entries into the per-host embedding index.
 
 ### src/eval/eval-stats.ts
 - module header: Statistics and cost accounting for the token-efficiency evals (ROADMAP Part IX, TE3-TE5).
 
-### src/extract.ts
+### src/learn/extract.ts
 - `storeExtractedFacts`: AT1 containment: a refusal is per-VALUE — one rejected fact must not drop the rest of this batch.
 
 ### src/store/failure-log.ts
@@ -476,7 +478,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `failuresBySession`: Rated failures per session since `sinceIso`, the input for repeat-error rate per arm (CD11, CD12).
 - `FailureSummary`: Failure log totals over a window, for {@link summarizeFailures}. Counts only: a rate needs a holdout arm (CD11).
 
-### src/forward-claim-detector.ts
+### src/learn/forward-claim-detector.ts
 - module header: J3.2 forward-claim detector — pure-function regex set + token extraction.
 - module header: Iteration signal: the `recall_autodebias_hint_no_class_match` audit op (emitted by computePlanningFallacyOutput when a phrase matches but no class resolves) is the telemetry channel for deciding whether to add an embedding-based detector in J3.3.
 - module header: Plan: docs/plans/2026-05-26-j32-auto-injection.md (Task 1).
@@ -489,13 +491,13 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `applyGoalBoost`: T2 note: deliberately a PLAIN stable score sort, no compareEntryIdentity tail
 - `CompleteGoalOpts`: v1.7.4 — when true, skip the strength-multiplier propagation block.
 
-### src/graph-extract.ts
+### src/graph/extract.ts
 - module header: E3.1 deterministic entity extraction (first slice) (docs/plans/2026-06-01-e3-deterministic-extraction.md).
 - module header: Populates the E3 graph from the already-structured consolidated E2-object tables
 - module header: Pass 3 (E3 cross-object, docs/plans/2026-06-02-e3-cross-object-references.md) adds the first CROSS-OBJECT relations
 - module-wide: comments called the first-class object tables (decisions / policies / customer_notes / project_briefs) by their roadmap code E2: "E2 row", "E2 table id", "E2 id", "E2-derived", "E2 table", "E2 source-object ref", "E2 object", "E2 row shapes", "E2 source object", "consolidated E2 objects", "current E2 state", "authoritative E2 object", "E2 name fields", "E2 save APIs".
 
-### src/graph-recall.ts
+### src/graph/recall.ts
 - module header: E3.2 multi-hop graph recall (docs/plans/2026-06-02-e3.2-multihop-recall.md).
 - module header: READ-ONLY consumer of the E3 graph substrate (entities/relations built by E3.1, guarded by E3.3).
 - module header: the moment E3.1 emits cross-object edges (owns/depends-on/blocked-by/references) the SAME traversal lights up cross-entity multi-hop with zero rework here.
@@ -504,16 +506,16 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `graphExpandRecall`: compareEntryIdentity is only the TAIL for a same-hop, same-score tie (T2, deterministic tie keys).
 - `graphExpandRecall`: T2 note: PLAIN stable score sort on purpose -- both input lists are deterministically ordered by this point, stability inherits that, and a base-vs-graph-hit tie keeps the BASE result first (the concat order), preserving pre-T2 semantics.
 
-### src/graph-stream.ts
+### src/graph/stream.ts
 - `module header`: L1 — graph-retrieval ranked-list stream for RRF fusion (docs/plans/2026-06-02-l1-graph-rrf-stream.md).
 - `module header`: READ-ONLY consumer of the E3 graph substrate (entities/relations built by E3.1, guarded by E3.3).
 - `module header`: Reuses the E3.2 BFS traversal shape from graph-recall.ts ... Pure reads (SELECTs only via graph.ts helpers), so the E3.3 check-graph-writes lint permits this module living outside graph.ts.
 
-### src/graph-view.ts
+### src/graph/view.ts
 - `module header`: E3 graph observability + visualization — READ-ONLY over the entity/relation graph (docs/plans/2026-06-02-graph-observability.md).
 
 ### src/graph/read.ts
-- `multi-hop read helpers section`: E3.2 multi-hop recall read helpers (SELECT-only; the check-graph-writes lint permits these here and in the read-only consumer src/graph-recall.ts).
+- `multi-hop read helpers section`: E3.2 multi-hop recall read helpers (SELECT-only; the check-graph-writes lint permits these here and in the read-only consumer src/graph/recall.ts).
 - `loadEntitiesByMemoryId`: Map consolidated source memory ids -> their graph entities. The SEED step of E3.2 multi-hop recall (recall result memory ids -> entities to traverse from).
 - `loadNeighborRelations`: All relations touching ANY of `entityIds` in EITHER direction (from OR to) — the per-hop neighbour query for E3.2 multi-hop traversal.
 - `loadNeighborRelations`: `limit` is applied PER CHUNK; a frontier spanning >IN_LIST_CHUNK ids could return up to limit*chunks rows before the by-id dedup below. Harmless for E3.2 (the frontier is bounded by maxNeighbors <= 200 << IN_LIST_CHUNK, so a single chunk, and the BFS re-enforces the per-hop fanout cap)
@@ -539,17 +541,17 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `markGraphDirty`: NEVER throws into the caller — a graph-dirty signal failing must not abort a core E2 write. ... Called POST-COMMIT from the E2 graph-source save/close mutations of decision, policy, customer_note and project_brief. / swallowed so the already-committed E2 write is never rolled back.
 - `removeGraphEntitiesForObject`: Remove the graph rows sourced from one E2 object, by its (type, id). ... Fail-soft like `markGraphDirty` (never throws into the E2 close caller; graph staleness is recoverable).
 
-### src/half-life-migration.ts
+### src/consolidate/half-life-migration.ts
 - `module header`: without this migration a store would mix old-base and new-base memories, a state the decay evaluation never tested (docs/evals/2026-09-24-decay-default-prereg.md, Migration). The rule, declared there before any run:
 - `conflictLosers`: A resolved conflict with no audit row (before v1.31.0, or found stale) names no winner, so both sides count.
 
 ### src/hooks/json-hooks.ts
 - `hasLegacySplitSessionEnd`: Returns true when `hooks.SessionEnd` still contains either of the legacy v0.22.x split entries (bare `hippo sleep` / `hippo capture --last-session`) without the current consolidated `hippo session-end` entry.
 
-### src/incidents.ts
+### src/objects/incidents.ts
 - `module header`: E2 incident first-class object (docs/plans/2026-05-29-e2-incident-object.md).
 
-### src/instruction-detect.ts
+### src/api/instruction-detect.ts
 - `module header`: Prompt-injection detection for untrusted memory content (CD5).
 - `screeningForm`: the second text the patterns read, after the text as written. In order: character references decoded once, NFKC, zero-width, soft-hyphen and bidi format characters removed, a closed table of 36 Cyrillic and Greek look-alike letters folded, runs of spaces and tabs collapsed to one space. Line breaks stay a sentence bound: collapsing them too flagged 9 of the 76 rows of the benign corpus in `tests/instruction-detect.test.ts` (lists and chat lines that end with no full stop). On 100 kB of unflagged text the whole check takes 0.8 to 3.9 ms against 0.2 to 1.2 ms before it.
 
@@ -574,16 +576,16 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 ### src/mcp/session-state.ts
 - `sessionRecallHistoryMcp`: v0.33 / J1 — Module-level per-(tenant, session) recall-history ring map for the MCP pipeline. Separate from CLI/HTTP rings per plan v3 architecture (per-pipeline rings; no IPC).
 
-### src/memory-quality.ts
+### src/core/memory-quality.ts
 - `CJK_LETTERS` (moved from src/store/audit.ts): SCOPE ... other spaceless scripts - Thai, Khmer, Burmese, Lao - still hit the original one-word failure. Their behavior is byte-identical to before this change, so nothing regressed; widening the script set is a separate, deliberately-scoped follow-up rather than another mid-episode guess at this predicate.
 - `module header`: #493 moved the audit's text checks here and made them the one gate for automatic memories: capture, git learning, sleep merges, compaction memories, extracted facts and DAG summaries. A person's memory is never judged on its wording. The follow-up split the defects into certain ones (rejected, never reused by sleep or auto-share, set aside by `hippo audit repair`) and uncertain ones (`possible-fragment` is stored and listed for review). Provenance, not text, decides who is held to the gate: `isAutomaticEntry` reads source, tags, `extracted_from`, `dag_level` and confidence.
 
-### src/memory-value-weights.ts
+### src/consolidate/memory-value-weights.ts
 - `module header`: LC2-E2 frozen learned memory-value weight vector. GENERATED FROM the E2 frozen artifact
 - `module header`: CAVEAT (verbatim from the E2 result doc, carried by design decision D3 / binding constraint 4 in docs/plans/2026-08-10-lc2-e3-mv-wiring.md): usage-feature signs reflect E1's anti-oracle simulation, NOT real usage value. Never read this as production ranking advice — LC3 tests real usage value.
 - `MEMORY_VALUE_WEIGHTS`: The 8 live feature dims the E2 fitter optimized over (FIT_DIMS).
 
-### src/memory-value.ts
+### src/consolidate/memory-value.ts
 - `module header`: LC2-E3 — learned memory-value scorer, wired into the sleep decay pass as a rescue-only veto (design D1/D2, docs/plans/2026-08-10-lc2-e3-mv-wiring.md).
 - `module header`: computeMvFeatures mirrors benchmarks/memory-value/extract.mjs's computeFeatures for the 8 live dims the E2 fitter optimized over (FIT_DIMS)
 - `module header`: rescueSet implements D1's rescue-only semantics: a condemned entry is rescued iff its learned score ranks in the top 30% (RESCUE_BUDGET, the E2 keep-budget operating point) of its own tenant's non-pinned candidate set (D2).
@@ -595,7 +597,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `rescueSet`: D1 rescue decision: a condemned entry is rescued iff it ranks in the top 30% of its tenant's non-pinned candidate set by learned score.
 - `rescueSet`: validateWeights(weights, digest); // fail loud before any rescue computation (constraint 5)
 
-### src/memory.ts
+### src/core/memory.ts
 - `MemoryEntry`: semantic gain. F4 (v1.6.5) uses byte compare on `assemble`; if a future import path admits non-canonical timestamps, the F4 sort and any
 - `MemoryEntry`: Cached DAG metadata (schema v25). Populated for level-2+ summary rows so
 - `MemoryEntry`: DAG live-coupling (schema v28, E1 of 5-episode arc).
@@ -621,7 +623,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `calculateStrength`: Emotional multiplier. v1.13.5 / J5: apply HIPPO_LOSS_AVERSION_RATIO to the negative multiplier ONLY (positive/critical/neutral pass through unchanged). Lazy module-cache means this is a single Map lookup + one numeric multiply, not a per-call process.env read.
 - `DEFAULT_HALF_LIFE_DAYS`: write-time multipliers. 365 since 1.46.0: the pre-registered E1 decision (docs/evals/2026-09-24-decay-default-result.md and prereg-2) found 7 days lost the current fact far more often (29% vs 75% in the top five), and 730 days and decay off tied with 365. `hippo sleep` moves memories still
 
-### src/multihop.ts
+### src/search/multihop.ts
 - `multihopSearch`: T2 note: PLAIN stable score sort on purpose -- pass1/pass2 inputs are deterministically ordered (search() carries the content tail), stability inherits that, and ties keep pass-1 results ahead of pass-2 follow-ups.
 
 ### src/cli/owner-validation.ts
@@ -629,13 +631,13 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `module header`: with id ∈ `[A-Za-z0-9_-]+`. Pre-v1.12.6 any string was accepted, leaving the documented contract unenforced.
 - `module header`: to reject + exit. Strict mode will become the default once A5 v2 lands (see `TODOS.md` A3 follow-ups for the migration path).
 
-### src/physics.ts
+### src/core/physics.ts
 - `queryGravity`: F1: Query gravity (retrieval-time, virtual — does not update position).
 - `attractionForce`: F2: Inter-memory attraction force vector (consolidation-time).
 - `repulsionForce`: F3: Conflict repulsion force vector (consolidation-time).
 - `dragForce`: F4: Drag force vector (consolidation-time).
 
-### src/policies.ts
+### src/objects/policies.ts
 - `module header`: E2 policy first-class object (docs/plans/2026-05-30-e2-policy-object.md).
 - `loadActivePolicies`: Date-only `asOfDate` (e.g. "2026-05-30", no time component) resolves to the END
 
@@ -660,23 +662,23 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `computePredictionBaserate.emitAudit`: v0.32 / J3.2 — when false, skip the predict_baserate audit emit. The J3.2 orchestrator (computePlanningFallacyOutput, below) calls this with emitAudit=false and emits its own `recall_autodebias_hint` audit row instead, so the predict_baserate channel stays scoped to deliberate CLI / HTTP / MCP predict-baserate calls and does NOT pollute on every recall containing a forward-claim phrase. Default true preserves the v1.13.0 J3 audit semantics for the 3 direct callers (cmdPredict baserate, /v1/predictions/stats route, hippo_predict_baserate MCP handler) — none of them pass this argument.
 - `computePredictionBaserate`: Skipped when emitAudit=false (J3.2 orchestrator path; its own recall_autodebias_hint audit fires only when nClosed > 0 anyway, so no signal is lost).
 
-### src/processes.ts
+### src/objects/processes.ts
 - `module header`: E2 process first-class object (docs/plans/2026-05-29-e2-process-object.md).
 
-### src/project-briefs.ts
+### src/objects/project-briefs.ts
 - `module header`: E2 project_brief first-class object (docs/plans/2026-05-30-e2-project-brief-object.md).
 - `loadActiveBriefForRepo`: if an operator created more than one (the DB does not prevent it, consistent with every other E2 object), the MOST-RECENT active row wins.
 
-### src/project-identity.ts
+### src/core/project-identity.ts
 - `module header`: Project identity resolution for memory scope isolation (ROADMAP.md Part I [Committed] "Memory scope isolation"; plan docs/plans/2026-07-01-memory-scope-isolation.md S1).
 - `findHippoStoreDir`: Design notes: docs/plans/2026-09-05-*.md
 - `deriveOriginProject`: NULL means no known project: a legacy row with no evidence, or a write to a shared store that named none; ambient context treats it as deny (see plan docs/plans/2026-07-01-memory-scope-isolation.md "Origin model").
 - `fallbackOrigin`: the origin for a write that names none. A store whose `config.json` sets `"sharedStore": true` gets NULL, because its folder is no caller's project; any other store gets its folder's project.
 
-### src/prompt-recall.ts
+### src/core/prompt-recall.ts
 - `module header`: Z1: recall gated on the hook prompt, not the five newest memories (pure, no I/O). See docs/plans/2026-09-26-z1-prompt-recall.md.
 
-### src/rate-limit.ts
+### src/server/rate-limit.ts
 - `module header`: Bounds api-key-id enumeration (the v0.40 follow-up noted in auth.ts)
 
 ### src/store/raw-archive.ts
@@ -685,14 +687,14 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `archiveRawMemory`: v0.30 / E2 — DAG live-coupling: archive of a child under a level-2 summary marks parent dirty. Inside the SAVEPOINT so the dirty-mark commits atomically with the archive. row.dag_parent_id was fetched via SELECT * at L28 (schema v28 includes it).
 - `archiveRawMemory`: afterArchive hook (v0.39 commit 3): connector-level idempotency markers (e.g. slack_event_log) must commit atomically with the archive itself.
 
-### src/recall-history.ts
+### src/api/recall-history.ts
 - `module header`: J1 anchoring detector (recall-recurrence) — pure module. Implements two detection rules from ROADMAP-RESEARCH.md L546: R1 query_repeat ... R2 memory_dominance ...
 - `module header`: Per the plan v3 architectural decision: each pipeline (api.recall via HTTP, cmdRecall, MCP hippo_recall) owns its OWN ring buffer Map keyed by (tenant, session).
 - `module header`: Plan: docs/plans/2026-05-26-j1-anchoring-detector.md. Composes with J3.2: AnchoringHint + PlanningFallacyHint are independent signals; both can fire on the same recall.
 - `RecallHistoryEntry` / `DetectAnchoringOpts` / `detectAnchoring`: rule labels R1 (query_repeat) and R2 (memory_dominance) renamed to their reason strings in comments.
 - `hashQueryText`: Token sort + dedup means semantically-equivalent queries with reordered words collide intentionally (the roadmap's "semantically-distinct" v1 uses textual normalization; embedding-based distinctness is J1-v2).
 
-### src/recall-scope.ts
+### src/store/recall-scope.ts
 - `module header`: v1.25.0 — recall-side scope predicates, extracted from api.ts into a leaf module so shared.ts (which api.ts imports) can apply the same default-deny rule to searchBothHybrid's internal candidate loads without an import cycle. Mirrors the v39 `project-identity.ts` precedent.
 - `isPrivateScope`: v1.2.1: source-agnostic private-scope detector.
 - `passesScopeFilterForRecall`: @internal v1.7.2 — exported for test parity with `RECALL_DEFAULT_DENY_SCOPES` (single-source-of-truth verification).
@@ -704,12 +706,12 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `module header`: LC1 — retrieval-trace persistence (docs/plans/2026-08-02-lc1-recall-trace-persistence.md).
 - `writeRecallTraceAtRoot`: NOT used by api.recall, which must reuse the caller's open handle (v1.11.5 no-side-effects contract, tests/api-recall-no-side-effects.test.ts).
 
-### src/refine-llm.ts
+### src/cli/refine-llm.ts
 - `RefineOptions.tenantId`: L9: tenant scope.
 - `refineStore`: L9: when opts.tenantId is provided, scope the top-level scan to this tenant's consolidated entries.
 - `refineStore`: L9: parent lookup scoped by opts.tenantId when provided.
 
-### src/reject-flow.ts
+### src/trust/reject-flow.ts
 - `module header`: AT1 rejected-value tombstone — shared reject/unreject/list flow. docs/plans/2026-08-15-at1-rejected-value-tombstone.md (T2, plan §4).
 - `RejectFlowResult.content`: The rejected content, for the CLI's at-reject-time echo (plan §2: the tombstone itself stores no content — this is the only place it's seen again after this call returns).
 
@@ -730,11 +732,11 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 ### src/rerankers/types.ts
 - `RerankerFn`: Determinism is required for paired A/B and for the workload-validity gate in docs/evals/2026-05-10-f6-reranker-prereg.md.
 
-### src/rrf.ts
+### src/search/rrf.ts
 - `module header`: the value already in use across hippo's `hybridSearch` since v1.0.
 - `module header`: Generic over the candidate id type so this helper can be shared by `src/search.ts::hybridSearch` (T = number, idx into MemoryEntry[]) and the LongMemEval F9 hybrid retrieve benchmark (T = string, session_id).
 
-### src/secret-detect.ts
+### src/util/secret-detect.ts
 - `module header`: Secret detection for memory content (v39 memory scope isolation, S4; docs/plans/2026-07-01-memory-scope-isolation.md).
 - `module header`: This is deliberately a thin slice of the A4 lifecycle-compliance item (no PII detection).
 - `redactSecrets`: e.g. the CS1 pre-compact snapshot fields — can scrub it in place instead.
@@ -818,7 +820,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `parseListLimit`: Parse a `?limit=` query param for the E2 list routes. Defaults to 100; requires a positive INTEGER <= 1000. Number.isInteger rejects fractional values like "1.5" that Number.isFinite would pass but SQLite `LIMIT ?` rejects with a datatype mismatch (a 500).
 - `validateIdSegment`: v1.6.4: charset + length validation for `:id` route captures.
 
-### src/shared.ts
+### src/sharing/shared.ts
 - `promoteToGlobal`: CD5: same veto as shareMemory; a promoted copy would have no quarantine record to review.
 - `searchBoth`: T2 note: PLAIN stable score sort on purpose -- local/global inputs are each deterministically ordered (content tail applied in the underlying search), stability inherits that, and an exact post-bump tie keeps the LOCAL result ahead of the global one (the concat order), preserving the pre-T2 semantics.
 - `HybridSearchOptions.summaryDeboost`: v0.30 / E4 — propagated to underlying hybridSearch calls.
@@ -835,13 +837,13 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `shareCandidates`: AT1 containment (docs/plans/2026-08-15-at1-rejected-value-tombstone.md plan §3 — sync/promote/share copy paths must not let ONE rejected candidate kill the batch)
 - `shareCandidates`: writeEntry's own catch already writes the reject_refusal audit before rethrowing (plan §3) — do not double-audit here, just count and continue.
 - `autoShare`: L9: `options.tenantId` is opt-in.
-- `autoShare`: The only intentional unscoped internal caller as of v1.12.1 is `api.sleep` (`src/api.ts:2041`), which passes options without tenantId because `sleep` is host-wide by intent; see `src/api.ts:2073-2077` for the cross-tenant dedup rationale.
+- `autoShare`: The only intentional unscoped internal caller as of v1.12.1 is `api.sleep` (`src/api/index.ts:2041`), which passes options without tenantId because `sleep` is host-wide by intent; see `src/api/index.ts:2073-2077` for the cross-tenant dedup rationale.
 - `autoShare`: v1.25.0: `options.stats` is an opt-in out-param.
 - `autoShare`: AT1: `stats.rejectedSkipped` (optional) is incremented once per candidate refused by the GLOBAL store's rejection tombstone
 - `autoShare`: L9: host-wide read. The global store IS the union across all tenants; per-tenant filtering on the global root would defeat the purpose.
 - `syncGlobalToLocal`: L9: host-wide read. syncGlobalToLocal copies the global union into a tenant-scoped local store
 
-### src/skills.ts
+### src/objects/skills.ts
 - `skills.ts` (module header): E2 skill first-class object (docs/plans/2026-05-30-e2-skill-object.md).
 
 ### src/store/audit-event.ts
@@ -852,7 +854,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 
 ### src/store/delete-and-batch.ts
 - `deleteEntryCore`: AT1 (plan §4, round-2 fix, designed from source): db-scoped delete core. `deleteEntry` used to open+close its OWN connection, which meant it could never compose inside a caller's transaction (unlike writeEntry/ writeEntryDbOnly, which already split this way). Split identically: row- meta SELECT, `DELETE FROM memories`, FTS delete, `forget` audit, DAG dirty-mark. NO filesystem I/O — the caller's own transaction may still be rolled back, and mirror writes must only happen post-commit.
-- `deleteEntryCore`: `opts.suppressForgetAudit` (default false, off): two AT1 callers set this so a removed non-raw row does NOT ALSO emit a `forget` row, because each already writes its own aggregate audit trail — `src/reject-flow.ts`'s `rejectValue` (single `reject_value` row covering every same-digest row removed) and `resolveConflict` (`conflict_resolve` row per resolution). Default keeps `deleteEntry` byte-identical to its pre-split behavior.
+- `deleteEntryCore`: `opts.suppressForgetAudit` (default false, off): two AT1 callers set this so a removed non-raw row does NOT ALSO emit a `forget` row, because each already writes its own aggregate audit trail — `src/trust/reject-flow.ts`'s `rejectValue` (single `reject_value` row covering every same-digest row removed) and `resolveConflict` (`conflict_resolve` row per resolution). Default keeps `deleteEntry` byte-identical to its pre-split behavior.
 - `deleteEntryCore`: v0.30 / E2 — DAG live-coupling: forget of a child under a level-2 summary marks parent dirty. Non-atomic with the DELETE (no SAVEPOINT wrapper here, same as pre-split deleteEntry); markSummaryDirtyInTx is idempotent so any future child mutation re-marks parent if this fails. Acceptable degradation, mirrors the pre-split audit best-effort posture.
 - `batchWriteAndDelete`: v0.30 / E2 — DAG live-coupling: BEFORE deletes, snapshot dag_parent_id for every doomed row so we can mark parents dirty post-COMMIT. Done inside the same BEGIN so the SELECT sees pre-delete state.
 - `applyBatchWrites`: AT1 (plan §3, corrected): bypass the rejection guard here. Consolidation merges are DETERMINISTIC CONCATENATION (mergeContents, consolidate.ts:736-751) of already-guarded leaf facts, not an LLM paraphrase — refusing mid-batch would abort the whole consolidation transaction. The bypass is safe because consolidate.ts's merge pass now checks the merged content's rejection digest against the tenant's tombstones BEFORE ever pushing a merge into pendingWrites, skipping that merge entirely on a hit, AND because the point-probe immediately above closes the race window between that producer check and this COMMIT. The guard itself still belongs on leaf inserts, which write through writeEntry / writeEntryDbOnly and stay guarded (bypassRejectionGuard defaults false).
@@ -937,7 +939,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `clearSummaryDirtyAfterBuild`: v0.30 / E5: widened dag_level=2 -> IN (2, 3). RETURNING dag_level reads actual level so audit metadata stays accurate without an extra SELECT.
 - `clearSummaryDirtyAfterBuild`: v0.30 / E5: source param distinguishes buildDag-clean (L2) from buildEntityProfiles-clean (L3) and any future build path.
 
-### src/token-ledger.ts
+### src/store/token-ledger.ts
 - `token-ledger.ts` (module header): Token ledger (ROADMAP Part IX, TE0): what memory text hippo hands agents, and how many tokens it costs.
 - `token-ledger.ts` (module header): It also backs TE2, inject only on change: the per-prompt hook compares the hash of the block it is about to send with the last block it sent in the same session and records a `skip` instead of sending it again.
 - `TokenSurface`: `hook_recall`: the same hook's Z1 prompt-recall section (docs/plans/2026-09-26-z1-prompt-recall.md).

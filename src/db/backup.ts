@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { DatabaseSyncLike } from './sqlite.js';
-import { log } from '../log.js';
+import { log } from '../util/log.js';
 
 /** Copies the database before a repair writes, so the audit ids plus this file are the way back. */
 export function backupStore(db: DatabaseSyncLike, hippoRoot: string, label: string, now = new Date()): string {

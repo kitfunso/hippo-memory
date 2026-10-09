@@ -1,6 +1,6 @@
 // /v1/customer-notes routes.
-import { CUSTOMER_NOTE, MAX_CUSTOMER_LEN, type SaveCustomerNoteOpts } from '../../customer-notes.js';
-import { sendJson } from '../../http-util.js';
+import { CUSTOMER_NOTE, MAX_CUSTOMER_LEN, type SaveCustomerNoteOpts } from '../../objects/customer-notes.js';
+import { sendJson } from '../../util/http-util.js';
 import { buildContextWithAuth } from '../auth.js';
 import type { RouteRequest } from '../types.js';
 import { parseJsonBody } from '../validation.js';

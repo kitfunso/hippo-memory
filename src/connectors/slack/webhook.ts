@@ -1,4 +1,4 @@
-import { envSlackSigningSecret, envSlackSigningSecretPrevious } from '../../env.js';
+import { envSlackSigningSecret, envSlackSigningSecretPrevious } from '../../util/env.js';
 import type { ServerResponse } from 'node:http';
 import { verifySlackSignature } from './signature.js';
 import { isSlackEventEnvelope, isSlackMessageEvent, type SlackEventEnvelope } from './types.js';
@@ -7,11 +7,11 @@ import { handleMessageDeleted } from './deletion.js';
 import { parkInDlq } from '../dlq.js';
 import { slackDlq, type DlqBucket } from './dlq.js';
 import { resolveTenantForSlackTeam } from './tenant-routing.js';
-import { resolveTenantId } from '../../tenant.js';
-import type { Context } from '../../api.js';
-import type { HippoStore } from '../../store-port.js';
-import { HttpError, JSON_HEADERS, isHeaderString, closeIfBodyUnread, readWebhookBody, sendJson, type WebhookRequest } from '../../http-util.js';
-import { type JsonValue, isJsonObject } from '../../json.js';
+import { resolveTenantId } from '../../store/tenant.js';
+import type { Context } from '../../api/index.js';
+import type { HippoStore } from '../../store/index.js';
+import { HttpError, JSON_HEADERS, isHeaderString, closeIfBodyUnread, readWebhookBody, sendJson, type WebhookRequest } from '../../util/http-util.js';
+import { type JsonValue, isJsonObject } from '../../util/json.js';
 
 /**
  * Slack Events API webhook. Auth is signature-based (HMAC over the raw

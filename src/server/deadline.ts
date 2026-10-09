@@ -1,6 +1,6 @@
 // The deadline of a served request: past it the caller gets a 504, whatever the handler is still waiting on.
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { envRequestDeadlineMs } from '../env.js';
+import { envRequestDeadlineMs } from '../util/env.js';
 import { RequestDeadline } from '../util/request-scope.js';
 
 const DEFAULT_REQUEST_DEADLINE_MS = 120_000;

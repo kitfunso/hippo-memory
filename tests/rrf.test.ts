@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { rrfFuse, RRF_K } from '../src/rrf.js';
+import { rrfFuse, RRF_K } from '../src/search/rrf.js';
 
 describe('rrf', () => {
   describe('RRF_K constant (invariant — must match the canonical Cormack et al. 2009 value)', () => {

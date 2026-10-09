@@ -1,6 +1,6 @@
-import type { MemoryEntry } from '../memory.js';
+import type { MemoryEntry } from '../core/memory.js';
 import { estimateTokens } from '../util/token-text.js';
-import { compareScoredResults } from '../compare.js';
+import { compareScoredResults } from '../core/compare.js';
 import { churnStaleFactor } from './boosts.js';
 import type { ResultCost, SearchResult } from '../core/search-types.js';
 

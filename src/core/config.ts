@@ -1,0 +1,537 @@
+/**
+ * Config support for Hippo: reads .hippo/config.json with sane defaults.
+ */
+
+import * as fs from 'fs';
+import * as path from 'path';
+import { type PhysicsConfig, DEFAULT_PHYSICS_CONFIG, mergePhysicsConfig } from './physics-config.js';
+import { DEFAULT_HALF_LIFE_DAYS } from './memory.js';
+import type { PromptRecallMetric } from './prompt-recall.js';
+import { DEFAULT_LOCAL_BUMP, DEFAULT_RECALL_BUDGET } from './search-types.js';
+import { errorMessage, log } from '../util/log.js';
+import { isJsonObject } from '../util/json.js';
+
+export type DecayBasis = 'clock' | 'session' | 'adaptive';
+
+export interface HippoConfig {
+  defaultHalfLifeDays: number;
+  defaultBudget: number;
+  defaultContextBudget: number;
+  decayBasis: DecayBasis;
+  autoLearnOnSleep: boolean;
+  autoShareOnSleep: boolean;
+  autoSleep: {
+    enabled: boolean;
+    threshold: number;  // trigger sleep after this many new memories
+  };
+  embeddings: {
+    enabled: boolean | 'auto';  // 'auto' = use if dependency installed (local) / key present (api)
+    model: string;
+    hybridWeight: number;
+    /** Embedding backend. 'local' (default) = zero-dependency transformers.js.
+     *  'openai' | 'voyage' | 'cohere' = opt-in API embedder; needs the provider's
+     *  API key in env (OPENAI_API_KEY / VOYAGE_API_KEY / COHERE_API_KEY).
+     *  See src/store/embeddings/provider.ts. */
+    provider?: 'local' | 'openai' | 'voyage' | 'cohere';
+    /** Optional API base-URL override (self-host / proxy). HTTPS only (localhost
+     *  may use http). Ignored by the local provider. */
+    apiBaseUrl?: string;
+    /** Batch size for API embedding requests. Default 64. */
+    batchSize?: number;
+  };
+  global: {
+    enabled: boolean;
+  };
+  gitLearnPatterns: string[];
+  physics: PhysicsConfig;
+  /** MMR (Maximal Marginal Relevance) re-ranking settings. Applied only when
+   *  embeddings are available — needs doc-to-doc similarity. */
+  mmr: {
+    enabled: boolean;
+    /** 1.0 = pure relevance (current behavior). 0.0 = pure diversity. 0.7 is
+     *  a typical balance. */
+    lambda: number;
+  };
+  search: {
+    /** Multiplier applied to local-store scores when merged with global
+     *  results (searchBothHybrid). 1.0 = no bias, 1.2 = 20% local priority. */
+    localBump: number;
+  };
+  /** Replay settings — biologically-inspired rehearsal during consolidation. */
+  replay: {
+    /** How many surviving memories to rehearse per sleep cycle. 0 disables. */
+    count: number;
+  };
+  /** Auto-promote completed sessions into trace-layer memories on sleep. */
+  autoTraceCapture: boolean;
+  /** Only promote sessions whose session_complete event is within N days. */
+  autoTraceWindowDays: number;
+  /** Mid-session pinned-rule re-injection via the Claude Code UserPromptSubmit
+   *  hook. When enabled, pinned memories are re-injected each turn within the
+   *  given token budget. */
+  pinnedInject: {
+    enabled: boolean;
+    budget: number;
+    /** Skip a block identical to the one already injected this session
+     *  Default true. Needs a session id from the hook payload. */
+    skipUnchanged: boolean;
+    /** Resend an unchanged block after this many consecutive skips, so long
+     *  sessions still see pinned rules near the latest turn. Default 10; 0
+     *  never resends an unchanged block. */
+    refreshTurns: number;
+    /** Gate the hook's backfill on the prompt's own content instead of the five
+     *  newest memories. Default true: the same overlap for fewer tokens. */
+    promptRecall: boolean;
+    /** Overlap metric for the prompt-recall gate. Default 'jaccard' (tuned). */
+    promptRecallMetric: PromptRecallMetric;
+    /** Minimum overlap score to admit a candidate. Default 0.04 (tuned). */
+    promptRecallThreshold: number;
+    /** Minimum shared tokens to admit a candidate. Default 2. */
+    promptRecallMinShared: number;
+    /** Max prompt-recall entries injected per prompt. Default 5 (tuned). */
+    promptRecallMaxItems: number;
+    /** FTS candidate pool size per store before gating. Default 100. */
+    promptRecallCandidates: number;
+  };
+  /** Memory scope isolation: when true (default), ambient context
+   *  (`hippo context`, the UserPromptSubmit hook, /v1/context, MCP
+   *  hippo_context) excludes memories owned by OTHER projects; explicit
+   *  recall is unaffected. Set false to disable the ORIGIN PARTITION only -
+   *  the secret veto is unconditional for ambient surfaces and no config or
+   *  flag re-includes secret-flagged rows (explicit recall still returns
+   *  them). */
+  contextProjectIsolation: boolean;
+  extraction: {
+    enabled: boolean | 'auto';
+    model: string;
+  };
+  multihop: {
+    enabled: boolean;
+  };
+  salience: {
+    enabled: boolean;
+    recentWindow: number;
+    overlapThreshold: number;
+    minContentLength: number;
+    maxRepeatErrors: number;
+  };
+  ambient: {
+    enabled: boolean;
+  };
+  /** Opt-in learned memory-value rescue veto on the sleep decay pass. Default OFF: the frozen weights
+   *  (src/consolidate/memory-value-weights.ts) only run when enabled; the rescue budget is a code constant, not user-tunable. */
+  memoryValue: {
+    enabled: boolean;
+  };
+  /** Dormant memories (src/store/dormant.ts): when enabled (the default), the
+   *  sleep decay pass moves a memory that faded below the threshold into the
+   *  dormant store instead of deleting it. A dormant memory leaves recall and
+   *  context like a deleted one, but `hippo dormant restore <id>` brings it
+   *  back and `hippo dormant forget <id>` deletes it for good. A faded memory
+   *  the secret detector flags is always deleted, never kept dormant.
+   *  `{"enabled": false}` restores the old delete-on-fade behaviour. */
+  dormant: {
+    enabled: boolean;
+    /** Days a dormant memory is kept before sleep deletes it for good.
+     *  Default 180. 0 keeps dormant memories forever. */
+    retentionDays: number;
+  };
+  /** Tags a memory `churn-stale` when its named file/symbol/script
+   *  changed since storage. Default OFF until a measurement justifies the flip. */
+  churnStaleness: {
+    enabled: boolean;
+  };
+  /** Which agents' own memories init, sleep and session end import: tool ids, null for every tool, [] for none. */
+  agentMemories: {
+    tools: string[] | null;
+  };
+  /** Per-turn delivery ledger (src/store/recall-trace.ts): hashes, ids, counts and rejection reasons for each
+   *  pinned-only context call. Default off; read from the store the token ledger writes to. */
+  deliveryLedger: {
+    enabled: boolean;
+  };
+  /** Pilot holdout (src/api/pilot-arm.ts): share of sessions, in basis points 0-10000, that get no memories pushed.
+   *  Default 0 = off. Read from the store the token ledger writes to. */
+  pilot: {
+    holdoutRateBp: number;
+  };
+  /** How a folder's project is named. `remote: false` drops the origin-remote rule, leaving
+   *  `.hippo-project.json` then the folder name. Read from the global store's config only, so every store agrees. */
+  projectIdentity: {
+    remote: boolean;
+  };
+  /** The store serves many people, so a write that names no project is stamped NULL, never this folder's project,
+   *  and a context read must name the caller's project. Default false. Read it through isSharedStore. */
+  sharedStore: boolean;
+}
+
+const DEFAULT_CONFIG: HippoConfig = {
+  defaultHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+  defaultBudget: DEFAULT_RECALL_BUDGET,
+  defaultContextBudget: 3000,
+  decayBasis: 'adaptive',
+  autoLearnOnSleep: true,
+  autoShareOnSleep: true,
+  autoSleep: {
+    enabled: true,
+    threshold: 50,
+  },
+  embeddings: {
+    enabled: 'auto',
+    model: 'Xenova/all-MiniLM-L6-v2',
+    hybridWeight: 0.6,
+    provider: 'local',
+  },
+  global: {
+    enabled: true,
+  },
+  gitLearnPatterns: [
+    'fix', 'revert', 'bug', 'error', 'hotfix', 'bugfix',
+    'refactor', 'perf', 'chore', 'breaking', 'deprecate',
+  ],
+  physics: { ...DEFAULT_PHYSICS_CONFIG },
+  mmr: {
+    enabled: true,
+    lambda: 0.7,
+  },
+  search: {
+    localBump: DEFAULT_LOCAL_BUMP,
+  },
+  replay: {
+    count: 5,
+  },
+  autoTraceCapture: true,
+  autoTraceWindowDays: 7,
+  pinnedInject: {
+    enabled: true,
+    budget: 1500,
+    skipUnchanged: true,
+    refreshTurns: 10,
+    promptRecall: true,
+    promptRecallMetric: 'jaccard',
+    promptRecallThreshold: 0.04,
+    promptRecallMinShared: 2,
+    promptRecallMaxItems: 5,
+    promptRecallCandidates: 100,
+  },
+  contextProjectIsolation: true,
+  extraction: {
+    enabled: 'auto',
+    model: 'claude-sonnet-4-6',
+  },
+  multihop: {
+    enabled: false,
+  },
+  salience: {
+    enabled: false,
+    recentWindow: 20,
+    overlapThreshold: 0.6,
+    minContentLength: 5,
+    maxRepeatErrors: 4,
+  },
+  ambient: {
+    enabled: true,
+  },
+  memoryValue: {
+    enabled: false,
+  },
+  dormant: {
+    enabled: true,
+    retentionDays: 180,
+  },
+  churnStaleness: {
+    enabled: false,
+  },
+  agentMemories: {
+    tools: null,
+  },
+  deliveryLedger: {
+    enabled: false,
+  },
+  pilot: {
+    holdoutRateBp: 0,
+  },
+  projectIdentity: {
+    remote: true,
+  },
+  sharedStore: false,
+};
+
+// Only `{"enabled": true}` turns it on; anything malformed warns and stays off.
+function deliveryLedgerEnabled(value: HippoConfig['deliveryLedger'] | undefined): boolean {
+  if (value === undefined) return false;
+  const isObject = isJsonObject(value);
+  const enabled = isObject ? value.enabled : undefined;
+  if (enabled === true || enabled === false) return enabled;
+  if (isObject && enabled === undefined) return false;
+  log.warn(
+    `config.json's "deliveryLedger" must be an object like {"enabled": true} ` +
+    `(got ${JSON.stringify(value)}) - using false.`,
+  );
+  return false;
+}
+
+// Only an integer 0..10000 counts; anything else warns and turns the pilot off.
+function pilotHoldoutRate(value: HippoConfig['pilot'] | undefined): number {
+  if (value === undefined) return 0;
+  const rate = value?.holdoutRateBp;
+  if (rate === undefined && value !== null && value.constructor === Object) return 0;
+  if (Number.isInteger(rate) && rate >= 0 && rate <= 10000) return rate;
+  log.warn(
+    `config.json's "pilot" must be an object like {"holdoutRateBp": 2000}, an integer from 0 to 10000 ` +
+    `(got ${JSON.stringify(value)}) - using 0 (pilot off).`,
+  );
+  return 0;
+}
+
+// Only a real false turns the remote rule off; anything else malformed warns and keeps it on.
+function projectIdentityRemote(value: HippoConfig['projectIdentity'] | undefined): boolean {
+  const remote = value?.remote;
+  if (remote === true || remote === false) return remote;
+  if (value === undefined || (remote === undefined && value !== null && value.constructor === Object)) return true;
+  log.warn(
+    `config.json's "projectIdentity" must be an object like {"remote": false} ` +
+    `(got ${JSON.stringify(value)}) - using true (projects named by their origin remote).`,
+  );
+  return true;
+}
+
+function agentMemoryTools(value: string[] | null | undefined): string[] | null {
+  if (value === undefined || value === null) return null;
+  if (Array.isArray(value) && value.every((t) => String(t) === t)) return value;
+  log.warn(
+    `config.json's "agentMemories.tools" must be a list of tool ids like ["claude-code", "codex"] ` +
+    `(got ${JSON.stringify(value)}) - importing none.`,
+  );
+  return [];
+}
+
+function memoryValueOverride(raw: Partial<HippoConfig>): Partial<HippoConfig['memoryValue']> {
+  // Spreading a non-object raw.memoryValue (e.g. {"memoryValue": true}) silently leaves `enabled` false;
+  // this feature must never be silently off, so warn loudly and fall back to defaults instead.
+  const memoryValueRaw = raw.memoryValue;
+  const validMemoryValueConfig = memoryValueRaw === undefined || isJsonObject(memoryValueRaw);
+  if (!validMemoryValueConfig) {
+    log.warn(
+      `config.json's "memoryValue" must be an object like {"enabled": true} ` +
+      `(got ${JSON.stringify(memoryValueRaw)}) - using defaults.`,
+    );
+  }
+  return memoryValueRaw !== undefined && isJsonObject(memoryValueRaw) ? memoryValueRaw : {};
+}
+
+function dormantSettings(raw: Partial<HippoConfig>): HippoConfig['dormant'] {
+  // Same rule as memoryValue above: a malformed value never silently
+  // changes what sleep does. Anything but a real object / boolean / number
+  // warns and falls back to the default, which keeps faded memories.
+  const dormantRaw = raw.dormant;
+  if (dormantRaw !== undefined && !isJsonObject(dormantRaw)) {
+    log.warn(
+      `config.json's "dormant" must be an object like {"enabled": false} ` +
+      `(got ${JSON.stringify(dormantRaw)}) - using the default (faded memories kept dormant).`,
+    );
+  }
+  const dormantOverride: Partial<HippoConfig['dormant']> =
+    dormantRaw !== undefined && isJsonObject(dormantRaw) ? dormantRaw : {};
+  // Only a real boolean counts: {"enabled": "false"} is a truthy string.
+  let dormantEnabled = dormantOverride.enabled ?? DEFAULT_CONFIG.dormant.enabled;
+  if (dormantEnabled !== true && dormantEnabled !== false) {
+    log.warn(
+      `config.json's "dormant.enabled" must be true or false ` +
+      `(got ${JSON.stringify(dormantEnabled)}) - using the default (faded memories kept dormant).`,
+    );
+    dormantEnabled = DEFAULT_CONFIG.dormant.enabled;
+  }
+  let dormantRetentionDays = dormantOverride.retentionDays ?? DEFAULT_CONFIG.dormant.retentionDays;
+  if (!Number.isFinite(dormantRetentionDays) || dormantRetentionDays < 0) {
+    log.warn(
+      `config.json's "dormant.retentionDays" must be a number of days, 0 or more ` +
+      `(got ${JSON.stringify(dormantRetentionDays)}) - using ${DEFAULT_CONFIG.dormant.retentionDays}.`,
+    );
+    dormantRetentionDays = DEFAULT_CONFIG.dormant.retentionDays;
+  }
+  return { enabled: dormantEnabled, retentionDays: dormantRetentionDays };
+}
+
+function churnStalenessEnabled(raw: Partial<HippoConfig>): boolean {
+  // Same "never silently wrong" rule as memoryValue/dormant above.
+  const churnStalenessRaw = raw.churnStaleness;
+  const validChurnStalenessConfig = churnStalenessRaw === undefined || isJsonObject(churnStalenessRaw);
+  if (!validChurnStalenessConfig) {
+    log.warn(
+      `config.json's "churnStaleness" must be an object like {"enabled": true} ` +
+      `(got ${JSON.stringify(churnStalenessRaw)}) - using defaults.`,
+    );
+  }
+  const enabled =
+    churnStalenessRaw !== undefined && isJsonObject(churnStalenessRaw)
+      ? churnStalenessRaw.enabled
+      : DEFAULT_CONFIG.churnStaleness.enabled;
+  if (enabled !== true && enabled !== false) {
+    log.warn(
+      `config.json's "churnStaleness.enabled" must be true or false ` +
+      `(got ${JSON.stringify(enabled)}) - using false.`,
+    );
+    return false;
+  }
+  return enabled;
+}
+
+function defaultHalfLifeDays(raw: Partial<HippoConfig>): number {
+  // Every writer starts a memory on this, and a zero or negative half-life scores zero strength, so sleep would retire it.
+  const days = raw.defaultHalfLifeDays ?? DEFAULT_CONFIG.defaultHalfLifeDays;
+  if (!Number.isFinite(days) || days <= 0) {
+    log.warn(
+      `config.json's "defaultHalfLifeDays" must be a number of days above 0 ` +
+      `(got ${JSON.stringify(days)}) - using ${DEFAULT_CONFIG.defaultHalfLifeDays}.`,
+    );
+    return DEFAULT_CONFIG.defaultHalfLifeDays;
+  }
+  return days;
+}
+
+// Only a real true turns it on; anything else present warns and stays off.
+function sharedStoreFlag(raw: Partial<HippoConfig>): boolean {
+  const value = raw.sharedStore;
+  if (value === undefined || value === true || value === false) return value === true;
+  log.warn(`config.json's "sharedStore" must be true or false (got ${JSON.stringify(value)}) - using false.`);
+  return false;
+}
+
+export function loadConfig(hippoRoot: string): HippoConfig {
+  // A caller that names no folder, as an add-on serving another store does, gets the defaults, never the working folder's config.json.
+  if (hippoRoot === '') return { ...DEFAULT_CONFIG };
+  const configPath = path.join(hippoRoot, 'config.json');
+  const key = path.resolve(configPath);
+  const stamp = fileStamp(configPath);
+  const hit = parsedConfigs.get(key);
+  if (hit !== undefined && hit.stamp === stamp) return { ...hit.config };
+  const config = stamp === null ? DEFAULT_CONFIG : parseConfigFile(configPath);
+  if (parsedConfigs.size >= PARSED_CONFIGS_MAX) parsedConfigs.clear();
+  parsedConfigs.set(key, { stamp, config });
+  return { ...config };
+}
+
+const PARSED_CONFIGS_MAX = 64;
+// Each path's parsed config with the stamp of the file it came from, so an unchanged file costs one stat and no parse.
+const parsedConfigs = new Map<string, { stamp: string | null; config: HippoConfig }>();
+
+/** A file's mtime and size, which an edit changes; null when it is missing or cannot be reached, as existsSync answers false. */
+function fileStamp(file: string): string | null {
+  try {
+    const stat = fs.statSync(file, { throwIfNoEntry: false });
+    return stat === undefined ? null : `${stat.mtimeMs}:${stat.size}`;
+  } catch (err) {
+    log.debug(`config: ${file} could not be reached, read as missing: ${errorMessage(err)}`);
+    return null;
+  }
+}
+
+function parseConfigFile(configPath: string): HippoConfig {
+  try {
+    const raw: Partial<HippoConfig> = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    return configOverDefaults(raw);
+  } catch (err) {
+    if (fs.existsSync(configPath)) {
+      log.warn(`failed to parse ${configPath}: ${errorMessage(err)}`);
+    }
+    return { ...DEFAULT_CONFIG };
+  }
+}
+
+function configOverDefaults(raw: Partial<HippoConfig>): HippoConfig {
+  const basis = raw.decayBasis;
+  const validBasis = basis === 'clock' || basis === 'session' || basis === 'adaptive';
+  const memoryValue = memoryValueOverride(raw);
+  const dormant = dormantSettings(raw);
+  const churnEnabled = churnStalenessEnabled(raw);
+  const halfLifeDays = defaultHalfLifeDays(raw);
+  return {
+    defaultHalfLifeDays: halfLifeDays,
+    defaultBudget: raw.defaultBudget ?? DEFAULT_CONFIG.defaultBudget,
+    defaultContextBudget: raw.defaultContextBudget ?? DEFAULT_CONFIG.defaultContextBudget,
+    decayBasis: validBasis ? basis : DEFAULT_CONFIG.decayBasis,
+    autoLearnOnSleep: raw.autoLearnOnSleep ?? DEFAULT_CONFIG.autoLearnOnSleep,
+    autoShareOnSleep: raw.autoShareOnSleep ?? DEFAULT_CONFIG.autoShareOnSleep,
+    autoSleep: { ...DEFAULT_CONFIG.autoSleep, ...(raw.autoSleep ?? {}) },
+    embeddings: { ...DEFAULT_CONFIG.embeddings, ...(raw.embeddings ?? {}) },
+    global: { ...DEFAULT_CONFIG.global, ...(raw.global ?? {}) },
+    gitLearnPatterns: raw.gitLearnPatterns ?? DEFAULT_CONFIG.gitLearnPatterns,
+    physics: mergePhysicsConfig(raw.physics),
+    mmr: { ...DEFAULT_CONFIG.mmr, ...(raw.mmr ?? {}) },
+    search: { ...DEFAULT_CONFIG.search, ...(raw.search ?? {}) },
+    replay: { ...DEFAULT_CONFIG.replay, ...(raw.replay ?? {}) },
+    autoTraceCapture: raw.autoTraceCapture ?? DEFAULT_CONFIG.autoTraceCapture,
+    autoTraceWindowDays: raw.autoTraceWindowDays ?? DEFAULT_CONFIG.autoTraceWindowDays,
+    pinnedInject: { ...DEFAULT_CONFIG.pinnedInject, ...(raw.pinnedInject ?? {}) },
+    contextProjectIsolation: raw.contextProjectIsolation ?? DEFAULT_CONFIG.contextProjectIsolation,
+    extraction: { ...DEFAULT_CONFIG.extraction, ...(raw.extraction ?? {}) },
+    multihop: { ...DEFAULT_CONFIG.multihop, ...(raw.multihop ?? {}) },
+    salience: { ...DEFAULT_CONFIG.salience, ...(raw.salience ?? {}) },
+    ambient: { ...DEFAULT_CONFIG.ambient, ...(raw.ambient ?? {}) },
+    memoryValue: {
+      ...DEFAULT_CONFIG.memoryValue,
+      ...memoryValue,
+    },
+    dormant,
+    churnStaleness: {
+      enabled: churnEnabled,
+    },
+    agentMemories: { tools: agentMemoryTools(raw.agentMemories?.tools) },
+    deliveryLedger: { enabled: deliveryLedgerEnabled(raw.deliveryLedger) },
+    pilot: { holdoutRateBp: pilotHoldoutRate(raw.pilot) },
+    projectIdentity: { remote: projectIdentityRemote(raw.projectIdentity) },
+    sharedStore: sharedStoreFlag(raw),
+  };
+}
+
+const sharedStoreRoots = new Set<string>();
+// The stamp of each config.json last read as not shared: an unchanged file is not parsed again.
+const notSharedStamps = new Map<string, string>();
+
+/** The folder as isGlobalStoreRoot compares it (realpath, case-folded on Windows); its helper sits behind an import cycle. */
+function sharedStoreKey(hippoRoot: string): string {
+  let real: string;
+  try {
+    real = fs.realpathSync.native(hippoRoot);
+  } catch (err) {
+    log.debug(`sharedStore: realpath fell back to resolve for ${hippoRoot}: ${errorMessage(err)}`);
+    real = path.resolve(hippoRoot);
+  }
+  return process.platform === 'win32' ? real.toLowerCase() : real;
+}
+
+/** True when the store's config.json sets `"sharedStore": true`. Once true, a root stays true for this process,
+ *  so a broken edit while a server runs cannot turn it off. Reads only this key, so loadConfig's warnings stay loadConfig's. */
+export function isSharedStore(hippoRoot: string): boolean {
+  const key = sharedStoreKey(hippoRoot);
+  if (sharedStoreRoots.has(key)) return true;
+  const configPath = path.join(path.resolve(hippoRoot), 'config.json');
+  const stamp = fileStamp(configPath);
+  if (stamp === null || notSharedStamps.get(configPath) === stamp) return false;
+  let raw: Partial<HippoConfig> | null;
+  try {
+    raw = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  } catch (err) {
+    log.warn(`failed to read ${configPath}: ${errorMessage(err)} - sharedStore read as false.`);
+    return false;
+  }
+  if (raw?.sharedStore !== true) {
+    if (notSharedStamps.size >= PARSED_CONFIGS_MAX) notSharedStamps.clear();
+    notSharedStamps.set(configPath, stamp);
+    return false;
+  }
+  sharedStoreRoots.add(key);
+  return true;
+}
+
+/** Reads the root as shared for the rest of this process, whatever its config.json says. */
+export function markSharedStore(hippoRoot: string): void {
+  sharedStoreRoots.add(sharedStoreKey(hippoRoot));
+}
+
+/** Test seam: forget every root seen as shared. */
+export function _resetSharedStoreCacheForTests(): void {
+  sharedStoreRoots.clear();
+  notSharedStamps.clear();
+}

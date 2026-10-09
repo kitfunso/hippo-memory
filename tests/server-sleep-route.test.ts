@@ -19,10 +19,10 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import type { Context } from '../src/api.js';
-import { remember } from '../src/api.js';
+import type { Context } from '../src/api/index.js';
+import { remember } from '../src/api/index.js';
 import { serve, type ServerHandle } from '../src/server.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createApiKey } from '../src/store/auth.js';
 import { presentConnectionsAsRemote } from './_helpers/listen.js';
 import { makeRoot } from './_helpers/make-root.js';

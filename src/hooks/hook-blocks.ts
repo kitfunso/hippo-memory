@@ -1,6 +1,6 @@
 // The hippo block each agent's instruction file carries, and how init recognises one it wrote earlier.
 import { createHash } from 'node:crypto';
-import { escapeRegex } from '../escape.js';
+import { escapeRegex } from '../util/escape.js';
 
 export const HOOK_MARKERS = {
   start: '<!-- hippo:start -->',

@@ -1,17 +1,21 @@
 // Store upkeep verbs: `hippo refine`, `hippo dedup` and `hippo embed`.
 
-import { envAnthropicApiKey } from '../env.js';
+import { envAnthropicApiKey } from '../util/env.js';
 import { loadAllEntries } from '../store/entry-reads.js';
-import { deduplicateStore } from '../dedupe.js';
-import { embedAll, loadEmbeddingIndex } from '../embeddings.js';
-import { resolveEmbeddingProvider, type EmbeddingProvider } from '../embedding-provider.js';
+import { deduplicateStore } from '../consolidate/dedupe.js';
+import { embedAll, loadEmbeddingIndex } from '../store/embeddings/index.js';
+import { resolveEmbeddingProvider, type EmbeddingProvider } from '../store/embeddings/provider.js';
 import { resetStoredParticles } from '../store/vector-writes.js';
-import { loadConfig } from '../config.js';
-import { resolveTenantId } from '../tenant.js';
-import { refineStore } from '../refine-llm.js';
+import { loadConfig } from '../core/config.js';
+import { resolveTenantId } from '../store/tenant.js';
+import { refineStore } from './refine-llm.js';
 import { printError } from './output.js';
 import { type CliFlags, requireInit, resolveAuthRoot, boolFlag } from './shared.js';
-import { errorMessage } from '../log.js';
+import { errorMessage } from '../util/log.js';
+
+const MAX_FAILED_SHOWN = 5;
+const MAX_PAIRS_SHOWN = 15;
+const PAIR_PREVIEW_CHARS = 90;
 
 export async function cmdRefine(
   hippoRoot: string,
@@ -51,7 +55,7 @@ export async function cmdRefine(
   console.log(`Failed:   ${result.failed}`);
   if (result.failed > 0) {
     console.log('\nFailures:');
-    for (const d of result.details.filter((x) => x.status === 'failed').slice(0, 5)) {
+    for (const d of result.details.filter((x) => x.status === 'failed').slice(0, MAX_FAILED_SHOWN)) {
       console.log(`  ${d.id}: ${d.reason}`);
     }
   }
@@ -106,14 +110,14 @@ function printDedupGroups(result: DedupResult, dryRun: boolean): void {
 function printDedupPairs(result: DedupResult, dryRun: boolean): void {
   // Show detailed pairs
   console.log('');
-  const shown = result.pairs.slice(0, 15);
+  const shown = result.pairs.slice(0, MAX_PAIRS_SHOWN);
   for (const pair of shown) {
     const simPct = (pair.similarity * 100).toFixed(0);
     const action = dryRun ? 'Would remove' : 'Removed';
     console.log(`  ${simPct}% similar | kept [${pair.keptLayer}] strength=${pair.keptStrength.toFixed(2)}`);
-    console.log(`    ${pair.keptContent.slice(0, 90)}`);
+    console.log(`    ${pair.keptContent.slice(0, PAIR_PREVIEW_CHARS)}`);
     console.log(`  ${action} [${pair.removedLayer}] strength=${pair.removedStrength.toFixed(2)}`);
-    console.log(`    ${pair.removedContent.slice(0, 90)}`);
+    console.log(`    ${pair.removedContent.slice(0, PAIR_PREVIEW_CHARS)}`);
     console.log('');
   }
   if (result.pairs.length > 15) {

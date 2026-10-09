@@ -27,12 +27,12 @@
  *     onnx/
  *       model.onnx       (renamed from whichever ONNX file the tarball ships)
  *
- * Pair with the HIPPO_MODEL_CACHE env var (consumed by src/embeddings.ts):
+ * Pair with the HIPPO_MODEL_CACHE env var (consumed by src/store/embeddings/index.ts):
  *
  *   HIPPO_MODEL_CACHE=$(pwd)/benchmarks/longmemeval/data/model-cache \
  *     node bin/hippo.js embed
  *
- * src/embeddings.ts auto-detects whether the bundle is quantized (presence
+ * src/store/embeddings/index.ts auto-detects whether the bundle is quantized (presence
  * of `onnx/model_quantized.onnx`) or FP32/optimized (presence of
  * `onnx/model.onnx`) and passes the right flag to `pipeline()`. Both
  * Qdrant bundles end up with a single `model.onnx`, so the runtime picks

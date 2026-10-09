@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { detectScope, scopeMatch } from '../src/scope.js';
+import { detectScope, scopeMatch } from '../src/sharing/scope.js';
 
 function isString<T>(value: T): value is T & string {
   return typeof value === 'string';

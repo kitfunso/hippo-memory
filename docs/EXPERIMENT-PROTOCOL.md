@@ -5,10 +5,10 @@ experiment, not a campaign. Instantiated from `/quant-ml-protocol` Stage 0.
 
 ## 0. The decision this gates
 
-Whether to replace hippo's flat `schema_fit = 0.5` default (`src/memory.ts:520`)
+Whether to replace hippo's flat `schema_fit = 0.5` default (`src/core/memory.ts:520`)
 with TypeSafe Jev's calibrated durability probability at write time.
 
-`schema_fit` is not cosmetic: `deriveHalfLife` reads it, and `src/memory.ts:399-404`
+`schema_fit` is not cosmetic: `deriveHalfLife` reads it, and `src/core/memory.ts:399-404`
 extends half-life above 0.7 and shortens it below 0.3. Today 694 of 1941 stored
 memories sit on the constant 0.5, so that branch is dead code for a third of the
 store. The claim under test is that Jev can fill it with a number that carries
@@ -619,12 +619,12 @@ retrieval on queries that do NOT share wording with the target?
   further API spend; Lane 6 costs $0.
 - **Jev arm mutation**: top-K rows by `p(isError)` get `tags += 'error'`,
   `emotional_valence = 'negative'`, `half_life_days x 2`, which is exactly what
-  `deriveHalfLife` does at `src/memory.ts:394-396`. K = the store's own error
+  `deriveHalfLife` does at `src/core/memory.ts:394-396`. K = the store's own error
   base rate x n, declared in advance, never tuned.
 
 ### Defect found in the Lane 5 mutation, fixed here before the Lane 6 run
 
-`src/memory.ts:523` derives `half_life_days` at creation through
+`src/core/memory.ts:523` derives `half_life_days` at creation through
 `deriveHalfLife`, which already doubles it for an error-tagged row. The stored
 value therefore ALREADY carries the 2x. The Lane 5 mutation applied
 `half_life_days * 2` unconditionally to every row in the top-K, so any row that
@@ -762,7 +762,7 @@ is the verdict.**
 
 | Declared but not run | Why |
 |---|---|
-| Live user queries | None logged; `recall_traces` is starved by the `!pinnedOnly` guard at `src/api.ts:2777`. |
+| Live user queries | None logged; `recall_traces` is starved by the `!pinnedOnly` guard at `src/api/index.ts:2777`. |
 | Human-written paraphrases | No annotator budget. LLM paraphrase is the stated proxy. |
 | Per-family A/B powered separately | n per family after paraphrase yield is under the 300-anchor thin-window floor; goes to the accrual list. |
 | Re-scoring `shared` labels by hand | 1127 rows; the batch-tagged label is the confound, and fixing it is a different project. |
@@ -1198,9 +1198,9 @@ costing recall on every query?**
 
 ## The chain, read in source this turn, not recalled
 
-- `src/memory.ts:394-396` — `deriveHalfLife` doubles `hl` when tags include `error`
-- `src/memory.ts:523` — applied at WRITE time, stored in `half_life_days`
-- `src/memory.ts:332` — `effectiveHalfLife = entry.half_life_days * rewardFactor`
+- `src/core/memory.ts:394-396` — `deriveHalfLife` doubles `hl` when tags include `error`
+- `src/core/memory.ts:523` — applied at WRITE time, stored in `half_life_days`
+- `src/core/memory.ts:332` — `effectiveHalfLife = entry.half_life_days * rewardFactor`
 - `src/search.ts:572-574` — `strengthMultiplier = 0.5 + 0.5 * strength`, bounded [0.5, 1.0]
 - `src/search.ts:585` — `compositeScore = base * strengthMultiplier * recencyMultiplier`
 - `src/search.ts:410` — `const budget = options.budget ?? 4000`
@@ -1529,7 +1529,7 @@ classifier still loses that trade. DO NOT SHIP stands for retrieval.
 ## New finding, owed to hippo not to Jev
 
 835 `shared` rows carry an `error` tag that no text signal supports, and
-`src/memory.ts:394` doubles the half-life of every one of them. Lane 8 measured
+`src/core/memory.ts:394` doubles the half-life of every one of them. Lane 8 measured
 that physics as roughly free, so this is not urgent, but the tag is load
 bearing and in that family it is noise. Open as a hippo data-quality item.
 

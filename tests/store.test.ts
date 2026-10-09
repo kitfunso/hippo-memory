@@ -22,8 +22,8 @@ import {
   isFtsAvailable,
   getSchemaVersion,
   getCurrentSchemaVersion,
-} from '../src/db.js';
-import { Layer } from '../src/memory.js';
+} from '../src/db/index.js';
+import { Layer } from '../src/core/memory.js';
 import { consolidate } from '../src/consolidate/sleep.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 

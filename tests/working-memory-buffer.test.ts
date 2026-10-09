@@ -10,7 +10,7 @@ import {
   wmFlush,
   WM_MAX_ENTRIES,
 } from '../src/store/working-memory.js';
-import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion } from '../src/db.js';
+import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion } from '../src/db/index.js';
 
 let tmpDir: string;
 

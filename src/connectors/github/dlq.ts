@@ -1,4 +1,4 @@
-import type { Context } from '../../api.js';
+import type { Context } from '../../api/index.js';
 import {
   bumpDlqRetry,
   dlqEntry,
@@ -10,7 +10,7 @@ import {
 import { replayFailed, type ConnectorDlq, type ReplayResult } from '../dlq.js';
 import { verifyGitHubSignature } from './signature.js';
 import { isGitHubWebhookEnvelope } from './types.js';
-import type { JsonValue } from '../../json.js';
+import type { JsonValue } from '../../util/json.js';
 
 export type { DlqBucket, DlqItem };
 

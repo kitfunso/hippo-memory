@@ -12,8 +12,9 @@
  */
 
 import { createHash } from 'node:crypto';
-import type { DatabaseSyncLike } from '../db.js';
-import { BadRequestError } from '../api-errors.js';
+import type { DatabaseSyncLike } from '../db/index.js';
+import { BadRequestError } from '../core/api-errors.js';
+import { DIGEST_DISPLAY_CHARS } from '../util/token-text.js';
 
 /**
  * Normalize content for rejection-digest comparisons: Unicode NFC →
@@ -57,7 +58,7 @@ export class RejectedValueError extends BadRequestError {
     rejectedAt: string;
   }) {
     super(
-      `Memory value refused: matches a rejected value (digest ${opts.digest.slice(0, 12)}..., ` +
+      `Memory value refused: matches a rejected value (digest ${opts.digest.slice(0, DIGEST_DISPLAY_CHARS)}..., ` +
         `reason: ${opts.reason ?? 'none given'}). Run "hippo unreject" to allow it again.`,
     );
     this.name = 'RejectedValueError';

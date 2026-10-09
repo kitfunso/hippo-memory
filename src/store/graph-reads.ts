@@ -1,7 +1,10 @@
 // The graph reads a view and a traversal share. Each opens hippo.db itself unless the caller hands it the handle its snapshot runs on.
-import { openHippoDb, closeHippoDb, withReadSnapshot, type DatabaseSyncLike } from '../db.js';
-import { assertTenantId } from '../tenant.js';
+import { openHippoDb, closeHippoDb, withReadSnapshot, type DatabaseSyncLike } from '../db/index.js';
+import { assertTenantId } from './tenant.js';
 import { type EntityType, GRAPH_ENTITY_TYPES, type Entity, type Relation, type EntityRow, type RelationRow, type StoredEntity, type StoredGraph, type StoredRelation, rowToEntity, rowToRelation, ENTITY_COLS, RELATION_COLS } from './graph-rows.js';
+
+const DEFAULT_GRAPH_PAGE_SIZE = 100;
+const DEFAULT_GRAPH_SCAN_LIMIT = 1000;
 
 /** Entities with an exact `name` (read), bounded by `limit` in SQL with a
  *  deterministic order. Lets the graph-view focus query find the `--entity NAME`
@@ -15,7 +18,7 @@ export function loadEntitiesByName(
   txDb?: DatabaseSyncLike,
 ): Entity[] {
   assertTenantId('loadEntitiesByName', tenantId);
-  const limit = opts.limit ?? 100;
+  const limit = opts.limit ?? DEFAULT_GRAPH_PAGE_SIZE;
   if (!Number.isInteger(limit) || limit < 0) {
     throw new Error(`loadEntitiesByName: limit must be a non-negative integer; got ${limit}`);
   }
@@ -40,7 +43,7 @@ export function loadEntities(
   txDb?: DatabaseSyncLike,
 ): Entity[] {
   assertTenantId('loadEntities', tenantId);
-  const limit = opts.limit ?? 100;
+  const limit = opts.limit ?? DEFAULT_GRAPH_PAGE_SIZE;
   if (opts.entityType && !GRAPH_ENTITY_TYPES.has(opts.entityType)) {
     throw new Error(`loadEntities: entityType must be one of ${Array.from(GRAPH_ENTITY_TYPES).join('|')}; got ${opts.entityType}`);
   }
@@ -74,7 +77,7 @@ export function loadRelations(
   txDb?: DatabaseSyncLike,
 ): Relation[] {
   assertTenantId('loadRelations', tenantId);
-  const limit = opts.limit ?? 100;
+  const limit = opts.limit ?? DEFAULT_GRAPH_PAGE_SIZE;
   const ownDb = txDb ? null : openHippoDb(hippoRoot);
   const db = txDb ?? ownDb!;
   try {
@@ -150,7 +153,7 @@ export function loadNeighborRelations(
 ): Relation[] {
   assertTenantId('loadNeighborRelations', tenantId);
   if (entityIds.length === 0) return [];
-  const limit = opts.limit ?? 1000;
+  const limit = opts.limit ?? DEFAULT_GRAPH_SCAN_LIMIT;
   if (!Number.isInteger(limit) || limit < 0) {
     throw new Error(`loadNeighborRelations: limit must be a non-negative integer; got ${limit}`);
   }
@@ -197,7 +200,7 @@ export function loadRelationsAmong(
 ): Relation[] {
   assertTenantId('loadRelationsAmong', tenantId);
   if (entityIds.length === 0) return [];
-  const limit = opts.limit ?? 1000;
+  const limit = opts.limit ?? DEFAULT_GRAPH_SCAN_LIMIT;
   if (!Number.isInteger(limit) || limit < 0) {
     throw new Error(`loadRelationsAmong: limit must be a non-negative integer; got ${limit}`);
   }

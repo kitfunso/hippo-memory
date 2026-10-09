@@ -5,9 +5,9 @@ import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadContextCandidates, tallySources, loadTextsHoldingWords } from '../src/store/candidates.js';
-import { calculateStrength, type MemoryEntry } from '../src/memory.js';
+import { calculateStrength, type MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { withSharedStoreHandles } from '../src/db.js';
+import { withSharedStoreHandles } from '../src/db/index.js';
 
 const NOW = new Date('2026-06-01T00:00:00.000Z');
 const DAY = 86400000;

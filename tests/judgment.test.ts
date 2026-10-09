@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { judge, judgeAll } from '../src/eval/judgment.js';
-import { envTypesafeApiKey } from '../src/env.js';
+import { envTypesafeApiKey } from '../src/util/env.js';
 
 interface JevAnswerFixture { type?: string; noul?: number; choice?: string; confidence?: number }
 interface JevBodyFixture {

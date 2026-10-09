@@ -1,6 +1,6 @@
-import { type DatabaseSyncLike, closeHippoDb, withWriteScope, setMeta, isSqliteBusy, pruneConsolidationRuns, getMeta } from '../db.js';
+import { type DatabaseSyncLike, closeHippoDb, withWriteScope, setMeta, isSqliteBusy, pruneConsolidationRuns, getMeta } from '../db/index.js';
 import { RejectedValueError } from './rejection.js';
-import { log } from '../log.js';
+import { log } from '../util/log.js';
 import type { HippoIndex, LegacyStats } from './rows.js';
 import { audit } from './audit-event.js';
 import { stampOriginProjectForImport, upsertEntryRow } from './entry-row.js';

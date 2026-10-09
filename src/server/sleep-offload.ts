@@ -1,10 +1,10 @@
 // POST /v1/sleep runs its consolidation in a child process, so the server keeps answering and a stuck run can be stopped.
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { sleep, type Actor, type Context, type SleepOpts, type SleepResult } from '../api.js';
-import { StoreBusyError } from '../db.js';
-import { envSleepTimeoutMs } from '../env.js';
-import { HttpError } from '../http-util.js';
+import { sleep, type Actor, type Context, type SleepOpts, type SleepResult } from '../api/index.js';
+import { StoreBusyError } from '../db/index.js';
+import { envSleepTimeoutMs } from '../util/env.js';
+import { HttpError } from '../util/http-util.js';
 
 const DEFAULT_SLEEP_DEADLINE_MS = 600_000;
 

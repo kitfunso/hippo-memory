@@ -1,4 +1,4 @@
-import type { Context } from '../../api.js';
+import type { Context } from '../../api/index.js';
 import { saveSlackCursor, slackCursor } from '../../store/connectors/slack.js';
 import { ingestMessage } from './ingest.js';
 import type { SlackMessageEvent } from './types.js';

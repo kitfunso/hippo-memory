@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { execSync } from 'node:child_process';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry, loadAllEntries } from '../src/store/entry-reads.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 
 const CLI = join(process.cwd(), 'dist', 'cli.js');
 

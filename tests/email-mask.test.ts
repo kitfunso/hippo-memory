@@ -5,8 +5,8 @@ import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { cmdCapture } from '../src/capture/command.js';
 import { transcriptWorkingState } from '../src/capture/working-state.js';
-import { maskEmails } from '../src/secret-detect.js';
-import { writeSessionDigest } from '../src/session-digest.js';
+import { maskEmails } from '../src/util/secret-detect.js';
+import { writeSessionDigest } from '../src/capture/session-digest.js';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 

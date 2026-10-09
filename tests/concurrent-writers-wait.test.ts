@@ -5,8 +5,8 @@ import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { closeHippoDb, openHippoDb } from '../src/db.js';
-import { createMemory } from '../src/memory.js';
+import { closeHippoDb, openHippoDb } from '../src/db/index.js';
+import { createMemory } from '../src/core/memory.js';
 import { writeEntryDbOnly } from '../src/store/entry-writes.js';
 import { initStore } from '../src/store/open.js';
 import { distUrl, withDb } from './_helpers/agent-memories-world.js';
@@ -68,7 +68,7 @@ describe('two hippo processes writing to one store at once', () => {
     // Every worker waits for one shared start time after loading, so the writes overlap.
     const startAt = String(Date.now() + 2000);
     const done = await Promise.all(Array.from({ length: WORKERS }, (_, i) =>
-      runWorker([distUrl('memory.js'), distUrl('store/entry-writes.js'), root, String(i), String(ROWS), startAt])));
+      runWorker([distUrl('core/memory.js'), distUrl('store/entry-writes.js'), root, String(i), String(ROWS), startAt])));
 
     for (const d of done) expect(d.code, d.stderr).toBe(0);
     expect(storeCounts(root)).toEqual({ rows: WORKERS * ROWS, audits: WORKERS * ROWS, matched: WORKERS * ROWS });

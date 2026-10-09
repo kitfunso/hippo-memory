@@ -10,7 +10,7 @@ import { loadAllEntries } from '../src/store/entry-reads.js';
 import { DatabaseSync } from '../src/db/sqlite.js';
 import { getMeta } from '../src/db/meta.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { Layer, type MemoryEntry } from '../src/memory.js';
+import { Layer, type MemoryEntry } from '../src/core/memory.js';
 
 const HIPPO_JS = resolve(__dirname, '..', 'bin', 'hippo.js');
 const CUT = 'Found local migration files to be';

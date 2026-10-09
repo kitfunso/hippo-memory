@@ -3,17 +3,17 @@
  * Imports memories from ChatGPT, Claude, Cursor, generic files, and structured markdown.
  */
 
-import { createMemory, Layer, MemoryEntry } from '../memory.js';
+import { createMemory, Layer, MemoryEntry } from '../core/memory.js';
 import { writeEntry } from '../store/entry-writes.js';
 import { loadAllEntries } from '../store/entry-reads.js';
-import { duplicateKey, storedTextKeys } from '../same-text.js';
-import { getGlobalRoot, initGlobal } from '../shared.js';
+import { duplicateKey, storedTextKeys } from '../util/same-text.js';
+import { getGlobalRoot, initGlobal } from '../sharing/shared.js';
 import { withRequestStoresSync } from '../db/request-stores.js';
 import { RejectedValueError } from '../store/rejection.js';
 import { rejectionGuardRefuses } from '../store/rejected-values.js';
-import { loadConfig } from '../config.js';
-import { vetSecrets } from '../secret-detect.js';
-import { log } from '../log.js';
+import { loadConfig } from '../core/config.js';
+import { vetSecrets } from '../util/secret-detect.js';
+import { log } from '../util/log.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -61,7 +61,7 @@ export interface ImportOptions {
    * sharing a basename would collide and clobber each other). importVault throws
    * if it is missing or blank. Optional in this shared type only because the
    * other importers ignore it. Operator-supplied, so the loader query LIKE-escapes
-   * it (`escapeLike` in src/escape.ts).
+   * it (`escapeLike` in src/util/escape.ts).
    */
   name?: string;
   /**

@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { cmdRecall } from '../src/cli/recall.js';
 import { peekSessionRing, resetSessionRings } from '../src/api/recall-record.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { Layer } from '../src/memory.js';
+import { Layer } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { runInProcess } from './_helpers/run-in-process.js';

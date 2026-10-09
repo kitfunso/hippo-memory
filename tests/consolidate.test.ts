@@ -7,11 +7,11 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
 import { listMemoryConflicts } from '../src/store/conflicts.js';
-import { createMemory, Layer, calculateStrength, resolveConfidence, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { loadConfig } from '../src/config.js';
+import { createMemory, Layer, calculateStrength, resolveConfidence, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { loadConfig } from '../src/core/config.js';
 import { loadPhysicsState, savePhysicsState, refreshParticleProperties } from '../src/db/physics-state.js';
-import { simulate, type PhysicsParticle } from '../src/physics.js';
+import { simulate, type PhysicsParticle } from '../src/core/physics.js';
 
 // One merge case builds and consolidates five separate stores.
 vi.setConfig({ testTimeout: 30_000 });

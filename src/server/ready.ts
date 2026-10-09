@@ -1,6 +1,6 @@
-import { SERVER_DB_WAIT_MS, runWithRequestStores } from '../db.js';
-import { errorFields, errorMessage, log } from '../log.js';
-import type { HippoStore } from '../store-port.js';
+import { SERVER_DB_WAIT_MS, runWithRequestStores } from '../db/index.js';
+import { errorFields, errorMessage, log } from '../util/log.js';
+import type { HippoStore } from '../store/index.js';
 
 // A prober must never see a 429, so the store read is bounded by remembering its answer instead of rate-limiting the route.
 const READY_WINDOW_MS = 1000;

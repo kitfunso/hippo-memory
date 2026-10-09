@@ -1,8 +1,8 @@
-// hippo.db's vector index and particles: the VectorWrites store group's half, and the reads and writes embeddings.ts makes by store folder.
-import { closeHippoDb, getMeta, openHippoDb, setMeta, withWriteScope, type DatabaseSyncLike } from '../db.js';
-import { DEFAULT_EMBEDDING_MODEL } from '../local-embedding.js';
-import type { MemoryEntry } from '../memory.js';
-import type { PhysicsParticle } from '../physics.js';
+// hippo.db's vector index and particles: the VectorWrites store group's half, and the reads and writes the embeddings module makes by store folder.
+import { closeHippoDb, getMeta, openHippoDb, setMeta, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
+import { DEFAULT_EMBEDDING_MODEL } from './embeddings/local.js';
+import type { MemoryEntry } from '../core/memory.js';
+import type { PhysicsParticle } from '../core/physics.js';
 import { float32ToBuffer, initializeParticle, loadPhysicsState, resetAllPhysicsState, savePhysicsState } from '../db/physics-state.js';
 import type { VectorBackfillQuery, VectorRowWrite, VectorWrite, VectorWriteResult } from './port.js';
 import {

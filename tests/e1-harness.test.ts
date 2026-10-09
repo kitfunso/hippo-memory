@@ -12,7 +12,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { generateProtocol } from '../scripts/e1-lifecycle/generate.mjs';
 import { runArmSeed } from '../scripts/e1-lifecycle/run.mjs';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { _resetAblationCacheForTests } from '../src/ablation.js';
+import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 
 const ABLATION_ENV_VARS = [
   'HIPPO_ABLATE_DECAY',

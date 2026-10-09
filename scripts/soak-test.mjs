@@ -25,8 +25,8 @@ import {
   simulate,
   computeSystemEnergy,
   vecNormalize,
-} from '../dist/physics.js';
-import { mergePhysicsConfig } from '../dist/physics-config.js';
+} from '../dist/core/physics.js';
+import { mergePhysicsConfig } from '../dist/core/physics-config.js';
 
 // ---- flags ----
 

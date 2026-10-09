@@ -18,9 +18,9 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { authCreate, adminActor, type HippoDbContext } from '../src/api.js';
+import { authCreate, adminActor, type HippoDbContext } from '../src/api/index.js';
 import { listApiKeys } from '../src/store/auth.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 
 function newCtx(tenantId = 'default') {
   const tmpDir = mkdtempSync(join(tmpdir(), 'hippo-auth-role-cli-'));

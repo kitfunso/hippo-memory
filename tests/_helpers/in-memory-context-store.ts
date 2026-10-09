@@ -1,8 +1,8 @@
 // A store other than hippo.db for the ContextReads group: it copies the rows getContext reads out of hippo.db, then answers
 // each read from memory with the rules hippo-memory/server exports, so a test shows another store can match hippo.db's SQL.
 import { listAuditEventsAfter } from '../../src/store/audit.js';
-import { closeHippoDb, openHippoDb } from '../../src/db.js';
-import { rowToSessionHandoff, type SessionHandoffRow } from '../../src/handoff.js';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
+import { rowToSessionHandoff, type SessionHandoffRow } from '../../src/core/handoff.js';
 import {
   ftsTermParts, passesScopeFilterForRecall, rarestFtsQuery, SECRET_TAGS, tallyAmbientEntries, withSqliteAllowed,
   type AmbientCandidateRequest, type AmbientLoadResult, type AuditEvent, type ContextReads, type ContinuityKey, type HippoStore,
@@ -10,7 +10,7 @@ import {
 } from '../../src/server.js';
 import { HANDOFF_COLUMNS } from '../../src/store/handoffs.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from '../../src/store/rows.js';
-import { assertTenantId } from '../../src/tenant.js';
+import { assertTenantId } from '../../src/store/tenant.js';
 import { inMemoryVectorStore } from './in-memory-vector-store.js';
 import type { StoreSide } from './store-conformance.js';
 

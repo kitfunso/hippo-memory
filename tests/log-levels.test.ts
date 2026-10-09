@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { formatLogLine, isLevelEnabled, log, logThreshold, resetLogOnce } from '../src/log.js';
+import { formatLogLine, isLevelEnabled, log, logThreshold, resetLogOnce } from '../src/util/log.js';
 import { runWithRequestId } from '../src/util/request-scope.js';
 import { ownStderr } from './_helpers/own-stderr.js';
 

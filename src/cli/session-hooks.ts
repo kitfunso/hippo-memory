@@ -15,39 +15,41 @@ import {
   listSessionEvents,
 } from '../store/sessions.js';
 import { writeSessionEndHandoff } from '../store/handoffs.js';
-import { readSessionScan, recordSessionDigest } from '../session-digest.js';
-import { openHippoDb, closeHippoDb } from '../db.js';
-import { captureToolFailure } from '../capture-error.js';
+import { readSessionScan, recordSessionDigest } from '../capture/session-digest.js';
+import { openHippoDb, closeHippoDb } from '../db/index.js';
+import { captureToolFailure } from '../capture/capture-error.js';
 import {
-  isSubagentPayload,
   readApiCalls,
   recordRereads,
   type TranscriptCalls,
-} from '../token-ledger.js';
+} from '../store/token-ledger.js';
 import { estimateTokens } from '../util/token-text.js';
 import { currentMachine, importSessionFolder } from '../agent-memories/sync.js';
 import { summaryLine } from '../agent-memories/report.js';
-import { resolveProjectIdentity } from '../project-identity.js';
-import { getGlobalRoot } from '../shared.js';
+import { resolveProjectIdentity } from '../core/project-identity.js';
+import { getGlobalRoot } from '../sharing/shared.js';
 import { cmdCapture, CaptureOptions } from '../capture/command.js';
 import { cmdPreCompact, cmdPostCompact } from '../capture/compact.js';
 import { transcriptWorkingState } from '../capture/working-state.js';
-import { collectHandoffEvidence } from '../handoff-evidence.js';
+import { collectHandoffEvidence } from '../capture/handoff-evidence.js';
 import { type SessionTurn } from '../capture/transcript.js';
 import { copilotTranscriptFor, SESSION_ID_RE } from '../capture/copilot-transcript.js';
 import { loadTurnPosition, runSessionWorker, saveTurnPosition, turnsAfter, type WorkerMode } from '../capture/session-worker.js';
-import { isStringValue, readSessionEnd, readVscodeStop, type CaptureInput, type HookRuntime } from '../capture-contract.js';
-import { loadConfig } from '../config.js';
+import { isStringValue, readSessionEnd, readVscodeStop, type CaptureInput, type HookRuntime } from '../core/capture-contract.js';
+import { loadConfig } from '../core/config.js';
 import { autoSleepDue } from '../api/auto-sleep.js';
-import { truncateCodePointSafe } from '../transcript-tail.js';
-import { COMPACTION_DB_WAIT_MS } from '../compaction-record.js';
-import { COMPACT_RESUME_EVENT_CONTENT_CAP, COMPACT_RESUME_MAX_AGE_MS, compactResumeText } from '../context-render.js';
-import { normaliseHookPayload, readHookStdin, readStdinBounded, type BoundedStdin } from '../stdin.js';
-import { resolveTenantId } from '../tenant.js';
-import { errorMessage, log } from '../log.js';
-import { bookTokenUse } from '../ledger-db.js';
+import { truncateCodePointSafe } from '../util/transcript-tail.js';
+import { COMPACTION_DB_WAIT_MS } from '../capture/compaction-record.js';
+import { COMPACT_RESUME_EVENT_CONTENT_CAP, COMPACT_RESUME_MAX_AGE_MS, compactResumeText } from '../api/context-render.js';
+import { normaliseHookPayload, readHookStdin, readStdinBounded, type BoundedStdin } from './stdin.js';
+import { resolveTenantId } from '../store/tenant.js';
+import { errorMessage, log } from '../util/log.js';
+import { bookLedgerTurn } from '../api/ledger-db.js';
+import { flushDeliveryRecorder } from '../api/prompt-hook.js';
+import type { DeliveryRecorder } from '../store/delivery-recorder.js';
 import { printError } from './output.js';
 import { cmdLastSleep } from './last-sleep.js';
+import { readCompactResumePayload } from './compact-resume-payload.js';
 import {
   type CliFlags,
   type CommandContext,
@@ -59,11 +61,12 @@ import {
   payloadCwdRoot,
   runHookWithStores,
   inPilotHoldout,
+  startDeliveryRecorder,
   boolFlag,
   flagIsTrue,
   stringFlag,
 } from './shared.js';
-import type { JsonValue } from '../json.js';
+import type { JsonValue } from '../util/json.js';
 
 /**
  * SessionStart(compact) injector. Prints the active task snapshot + recent
@@ -78,6 +81,7 @@ import type { JsonValue } from '../json.js';
  * hook must not pollute session startup.
  */
 function cmdCompactResume(hippoRoot: string, stdinText: string | undefined, stdinTimedOut: boolean): void {
+  let rec: DeliveryRecorder | null = null;
   try {
     // Gate on the non-exiting isInitialized check first: the store reads below call initStore, which would
     // silently create a store in a project that never ran `hippo init`, and this hook fires globally.
@@ -89,60 +93,25 @@ function cmdCompactResume(hippoRoot: string, stdinText: string | undefined, stdi
     let suppressOutput = payloadState.suppressOutput;
     const payloadSessionId = payloadState.payloadSessionId;
 
+    if (payloadState.boundary) rec = startDeliveryRecorder(hippoRoot, stdinText, 'claude-code', 'compact-resume');
+
     // A compaction follows a prompt or SessionStart that booked the arm, so this only reads it.
     if (!suppressOutput && payloadSessionId !== null && inPilotHoldout(hippoRoot, resolveTenantId({}), payloadSessionId, false)) {
       suppressOutput = true;
+      rec?.disabled();
     }
 
-    if (!suppressOutput) restoreCompactSnapshot(hippoRoot, payloadSessionId);
+    if (!suppressOutput) restoreCompactSnapshot(hippoRoot, payloadSessionId, rec);
   } catch (err) {
     // Empty stdout on any store error, never a crashed SessionStart; the reason goes to stderr, which the model never sees.
     log.warn(`hippo compact-resume: skipped: ${errorMessage(err)}`);
   }
+  // A no-op when the token ledger's handle already wrote the row; exit would drop it otherwise.
+  flushDeliveryRecorder(rec);
   process.exit(0);
 }
 
-interface CompactResumePayload { suppressOutput: boolean; payloadSessionId: string | null }
-
-function readCompactResumePayload(stdinText: string | undefined, stdinTimedOut: boolean): CompactResumePayload {
-  // The matcher is an optimization, not a dependency: older Claude Code
-  // that ignores `matcher: 'compact'` would run this on every SessionStart,
-  // so we also gate on payload.source here. A payload that parses but
-  // carries a different source (e.g. 'startup') means the matcher-based
-  // gate failed to apply — stay silent rather than print stale state.
-  const nonEmptyStdin = !!stdinText && stdinText.trim() !== '';
-  // Without a payload session_id the cross-restore guard below can
-  // never fire, so a timed-out empty read must not reach the print path.
-  let suppressOutput = stdinTimedOut && !nonEmptyStdin;
-  let payloadSessionId: string | null = null;
-
-  if (nonEmptyStdin) {
-    let payload: Record<string, unknown> | null = null;
-    try {
-      payload = JSON.parse(stdinText!.trim()) as Record<string, unknown>;
-    } catch {
-      // Malformed JSON is handled as a null payload by the fail-closed check below.
-      payload = null;
-    }
-    if (!payload || typeof payload !== 'object') {
-      // Fail closed on malformed non-empty stdin; only a TTY/no-stdin manual run, which never reaches here, prints.
-      suppressOutput = true;
-    } else {
-      // Fail closed on structurally incomplete payloads too ({}, [], source missing/non-string): real
-      // SessionStart payloads always carry source, so a parsed one must say 'compact' to print.
-      // A sub-agent's payload carries its parent's session id, so the mismatch guard would pass and restore the parent's snapshot into it.
-      if (payload.source !== 'compact' || isSubagentPayload(stdinText)) {
-        suppressOutput = true;
-      }
-      if (typeof payload.session_id === 'string') {
-        payloadSessionId = payload.session_id;
-      }
-    }
-  }
-  return { suppressOutput, payloadSessionId };
-}
-
-function restoreCompactSnapshot(hippoRoot: string, payloadSessionId: string | null): void {
+function restoreCompactSnapshot(hippoRoot: string, payloadSessionId: string | null, rec: DeliveryRecorder | null): void {
   const tenantId = resolveTenantId({});
   const snapshot = loadFreshActiveTaskSnapshot(hippoRoot, tenantId, { maxAgeMs: COMPACT_RESUME_MAX_AGE_MS });
   // Concurrent sessions must not cross-restore. Only suppress when BOTH ids are present and differ;
@@ -169,8 +138,12 @@ function restoreCompactSnapshot(hippoRoot: string, payloadSessionId: string | nu
   // Printed in one write so the ledger books exactly the text the model is handed.
   const text = compactResumeText(snapshot, events);
   console.log(text);
-  bookTokenUse(hippoRoot, {
-    tenantId, sessionId: payloadSessionId, surface: 'compact_resume', event: 'inject', items: 1, tokens: estimateTokens(text),
+  rec?.delivered({ state: 'sent', emittedText: `${text}\n` });
+  bookLedgerTurn(hippoRoot, {
+    uses: [{
+      tenantId, sessionId: payloadSessionId, surface: 'compact_resume', event: 'inject', items: 1, tokens: estimateTokens(text),
+    }],
+    delivery: (write) => flushDeliveryRecorder(rec, write),
   });
 }
 
@@ -697,12 +670,18 @@ export async function handlePreCompact({ hippoRoot, flags }: CommandContext): Pr
   const runtime = hookRuntime(flags);
   const root = payloadCwdRoot(hippoRoot, stdinText, runtime);
   await runHookWithStores(async () => {
+    // Started before any store wait, so two fires of one hook carry timestamps close enough to match as duplicates.
+    const rec = startDeliveryRecorder(hookStoreRoot(root), stdinText, runtime, 'pre-compact');
     resetHookInjection(root, stdinText, null);
     await cmdPreCompact(hookStoreRoot(root), {
       stdinText,
       stdinTimedOut,
       logFile: stringFlag(flags, 'log-file'),
       runtime,
+      onBoundary: (printed) => {
+        rec?.delivered(printed === null ? { state: 'empty' } : { state: 'sent', emittedText: printed });
+        flushDeliveryRecorder(rec);
+      },
     });
   });
 }
