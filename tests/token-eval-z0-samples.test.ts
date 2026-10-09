@@ -5,11 +5,12 @@ import { dirname, join } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { agentGit } from '../scripts/token-eval/checks.mjs';
 import { readerDiff } from '../scripts/token-eval/grading.mjs';
+import { checkerIdentity } from '../scripts/token-eval/lessons.mjs';
 import { equalShares, fillStrata, kappa, parseLabels, seededOrder, wilson } from '../scripts/token-eval/g5-draw.mjs';
 import { pairDiff } from '../scripts/token-eval/reader-sample.mjs';
 import { listGrades } from '../scripts/token-eval/regrade.mjs';
 import { g5 } from '../scripts/token-eval/z0-gates.mjs';
-import { cleanup, tmp } from './fixtures/z0-harness.js';
+import { CHECKS, cleanup, tmp } from './fixtures/z0-harness.js';
 import { PHRASE, SEQ, bundledOut, cli, gradeDir, readJson, rowOf, runRoot, sealedKey, storedRecord, synthOut, writeRows, type Cell, type Verdict } from './fixtures/z0-g5.js';
 
 const win = process.platform === 'win32';
@@ -251,6 +252,21 @@ describe('reader sample labels and scoring', () => {
     const a0Wrong = r1.filter((p) => p.arm === 'A0' && wrong.has(p.file)).length;
     expect(gradingOf(s.out)).toMatchObject({ readerSample: { n: 6, disagreements: 0 }, g5: { readerRound: 2, readerEligible: 14, readerRound1Rescored: { n: 6, disagreements: a1Right + a0Wrong } } });
     expect(existsSync(join(s.out, 'g5', 'sealed', 'reader-r2.score.json'))).toBe(true);
+  });
+
+  it('an args-only checker fix lets round 2 draw; the unchanged invocation does not (27c, 166)', () => {
+    const lesson = (args: string[]) => ({ checkPath: join(CHECKS, 'toggle.mjs'), check: { script: 'toggle.mjs', args } });
+    const [before, after] = [checkerIdentity(lesson([])), checkerIdentity(lesson(['--strict']))];
+    expect(after).not.toBe(before);
+    const s = synthOut([...cells('A0', many('pass', 10)), ...cells('A1', many('fail', 10))]);
+    for (const e of listGrades(s.out)) writeFileSync(e.file, JSON.stringify({ ...e.grade, checkers: { 'f1-l1': before } }));
+    expect(draw(s.out, s.tasks, ['--n', '6'])).toMatchObject({ code: 0 });
+    expect(score(s.out, labelsFor(pairsOf(s.out), () => true))).toMatchObject({ code: 0 });
+    const postfix = (id: string) => writeRows(s.out, listGrades(s.out).map((e) => rowOf(e.grade, 'postfix', {}, id)), 'postfix');
+    postfix(before);
+    expect(draw(s.out, s.tasks, ['--round', '2', '--n', '6'])).toMatchObject({ code: 1, stderr: expect.stringContaining('no checker changed since reader round 1') });
+    postfix(after);
+    expect(draw(s.out, s.tasks, ['--round', '2', '--n', '6'])).toMatchObject({ code: 0 });
   });
 
   it('draws round K only after round K-1 failed and a checker changed since its draw; a scored round is final (27b, 166)', () => {

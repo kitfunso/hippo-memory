@@ -1,6 +1,7 @@
 // Z0 lesson families: tasks-file rules (prereg 32-46, 62-68, 111), the per-seed task order (117-119), roles and teach text.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { createHash } from 'node:crypto';
 
 export const KINDS = ['teach', 'apply', 'no-lesson'];
 const SOURCES = ['maintainer', 'template'];
@@ -30,6 +31,12 @@ function checkTaskRole(t, families, index) {
   if (t.kind === 'apply' && !t.keyPhraseAllowed && t.prompt.toLowerCase().includes(hit.lesson.keyPhrase.toLowerCase())) {
     throw new Error(`task ${t.id}: the apply prompt holds lesson ${t.lessonId}'s key phrase "${hit.lesson.keyPhrase}" (set keyPhraseAllowed to keep it)`);
   }
+}
+
+/** The one answer to "is this the same checker": the script's bytes plus its args, so an args-only fix is a fix. */
+export function checkerIdentity(lesson) {
+  const bytes = createHash('sha256').update(fs.readFileSync(lesson.checkPath)).digest('hex');
+  return createHash('sha256').update(JSON.stringify([bytes, lesson.check.args ?? []])).digest('hex');
 }
 
 function checkLesson(l, baseDir) {

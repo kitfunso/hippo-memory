@@ -6,7 +6,7 @@ import { git, sh } from './exec.mjs';
 import { armEnv, childEnv } from './arms.mjs';
 import { checkoutBase, writeHiddenTests } from './workspace.mjs';
 import { runCheck, stateCommit, agentGit, CheckerError, WorkspaceGitError } from './checks.mjs';
-import { lessonIndex } from './lessons.mjs';
+import { checkerIdentity, lessonIndex } from './lessons.mjs';
 import { cellKey, followedOf, isBool, resolvedOf, parseZ0Records } from './z0-records.mjs';
 
 export const ROW_SCHEMA = 'z0-regrade/1';
@@ -149,8 +149,8 @@ function fetchBundle(work, entry) {
 /** R26's gates, in order: checker identity, stub, bundle, setup, every tree. Only then may a checker run. */
 function gates(ctx, entry, dirs, env) {
   const g = entry.grade;
-  const shas = Object.fromEntries(Object.keys(g.checkers).sort().map((id) => [id, ctx.checkerSha(id)]));
-  const changed = Object.keys(shas).filter((id) => shas[id] !== g.checkers[id]);
+  const ids = Object.fromEntries(Object.keys(g.checkers).sort().map((id) => [id, ctx.checkerId(id)]));
+  const changed = Object.keys(ids).filter((id) => ids[id] !== g.checkers[id]);
   if (ctx.pass === 'repro' && changed.length) fault('checker-changed', `the checker for ${changed.join(', ')} changed since the run; a fixed checker is regraded with --post-fix`);
   let stub;
   try {
@@ -164,7 +164,7 @@ function gates(ctx, entry, dirs, env) {
   if (setup && setup.status !== 0) fault('setup', `setup exited ${setup.status}: ${setup.stderr.slice(-300)}`);
   const trees = [['first', g.first], ['finalCheck', g.finalChecked ? g.finalCheck : null], ['stale', g.stale], ['final', g.final]];
   for (const [which, sha] of trees) if (sha !== null) verifyTree(dirs.work, g.pre, sha, which);
-  return shas;
+  return ids;
 }
 
 /** One checker call on a saved tree with the shas and commands it saw in the run; a crash or timeout is the value 'error'. */
@@ -192,16 +192,16 @@ function flipReason(saved, v, unchanged) {
   return moved ? 'verdict' : null;
 }
 
-function checkEntry(lessonId, which, saved, v, checkerSha, unchanged) {
+function checkEntry(lessonId, which, saved, v, checkerId, unchanged) {
   const reason = flipReason(saved, v, unchanged);
-  return { lessonId, which, saved, ...v, flip: reason !== null, reason, checkerSha };
+  return { lessonId, which, saved, ...v, flip: reason !== null, reason, checkerSha: checkerId };
 }
 
 /** The main lesson's first and final checks, then the stale one after a reversal (as pass-ness, reading 6), each pushed to `acc` as it ends. */
-function lessonChecks(ctx, entry, dirs, env, shas, acc) {
+function lessonChecks(ctx, entry, dirs, env, ids, acc) {
   const g = entry.grade;
   if (g.verdicts.first === null) return;
-  const add = (id, which, v) => acc.push(checkEntry(id, which, which === 'stale' ? g.verdicts.staleFollow : g.verdicts[which], v, shas[id], shas[id] === g.checkers[id]));
+  const add = (id, which, v) => acc.push(checkEntry(id, which, which === 'stale' ? g.verdicts.staleFollow : g.verdicts[which], v, ids[id], ids[id] === g.checkers[id]));
   const lesson = ctx.lesson(g.lessonId);
   const first = verdicts(ctx, entry, dirs, env, { lesson, sha: g.first, commands: g.commandsFirst });
   add(g.lessonId, 'first', first);
@@ -324,7 +324,7 @@ function regradeContext(opts, entries) {
   };
   const passEnv = passEnvOf(records, baseEnv);
   const extraEnvKeys = envKeyCheck(records, entries, out, baseEnv, passEnv);
-  return { out, pass, baseEnv, passEnv, extraEnvKeys, lesson, checkerSha: (id) => sha256(fs.readFileSync(lesson(id).checkPath)), cachedFor: (seq) => path.join(out, 'repo-cache', seq) };
+  return { out, pass, baseEnv, passEnv, extraEnvKeys, lesson, checkerId: (id) => checkerIdentity(lesson(id)), cachedFor: (seq) => path.join(out, 'repo-cache', seq) };
 }
 
 /** A cell whose regrade wrote under the run root stops the whole regrade: the evidence is no longer the run's (R23). */
@@ -359,8 +359,7 @@ export function runRegrade(opts) {
   }
   const tally = { ran: 0, skipped: 0, errors: 0, regraded: null };
   for (const entry of entries) {
-    // The whole invocation, args included, since the same script with other args can give another verdict.
-    const checkers = Object.fromEntries(Object.keys(entry.grade.checkers).sort().map((id) => [id, [ctx.checkerSha(id), ctx.lesson(id).check]]));
+    const checkers = Object.fromEntries(Object.keys(entry.grade.checkers).sort().map((id) => [id, ctx.checkerId(id)]));
     const inputs = inputsHash(entry, entry.t, checkers, pass);
     const last = rows.get(entry.key);
     if (last?.status === 'done' && last.inputsHash === inputs) {

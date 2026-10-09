@@ -68,7 +68,8 @@ describe('z0-regrade resume, guards and post-fix', () => {
     taskOf(raw, 'a2').fixRef = `${taskOf(raw, 'a2').fixRef}^{commit}`;
     taskOf(raw, 'n1').testFiles = [...taskOf(raw, 'n1').testFiles, ...taskOf(raw, 'n1').testFiles];
     writeFileSync(c.tasks, JSON.stringify(raw));
-    expect(await regrade(c)).toMatchObject({ code: 0, stdout: 'repro: regraded 5 cells (0 with errors), skipped 3 done ones\n' });
+    // Changed args are a changed checker, so a repro pass refuses the three f1-l1 cells instead of regrading them.
+    expect(await regrade(c)).toMatchObject({ code: 0, stdout: 'repro: regraded 5 cells (3 with errors), skipped 3 done ones\n' });
 
     raw.families[0].lessons[0].check.script = join(dirname(raw.families[0].lessons[0].check.script), 'crash-on-toggle.mjs');
     writeFileSync(c.tasks, JSON.stringify(raw));

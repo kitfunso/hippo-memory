@@ -3,6 +3,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { readFileSync, realpathSync, renameSync, rmSync, writeFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
+import { checkerIdentity } from '../scripts/token-eval/lessons.mjs';
 import { CHECKS, cleanup } from './fixtures/z0-harness.js';
 import { cli, copyOut, dumpsIn, grading, keyOf, lessonOf, readGrading, regrade, rowFor, rowsOf, sharedRun, TOKEN, type Shared } from './fixtures/z0-regrade.js';
 
@@ -80,9 +81,23 @@ describe('z0-regrade regrade and grading', () => {
     });
     expect(await regrade(swapped, ['--post-fix', '--cell', keyOf('a1')], { Z0_TOGGLE: 'regrade' })).toMatchObject({ code: 0 });
     const row = rowFor(swapped.out, 'a1', 'postfix');
-    const sha = createHash('sha256').update(readFileSync(join(CHECKS, 'crash-on-toggle.mjs'))).digest('hex');
+    const sha = checkerIdentity({ checkPath: join(CHECKS, 'crash-on-toggle.mjs'), check: { script: 'crash-on-toggle.mjs', args: [] } });
     expect(row).toMatchObject({ status: 'done', pass: 'postfix' });
     expect(row.checks[0]).toMatchObject({ regraded: 'error', second: 'error', flip: true, reason: 'checker-error', checkerSha: sha });
+  }, 300_000);
+
+  it('a fix that changes only check.args is a fix: both post-fix runs agree, so no flip and the lesson stays (4b)', async () => {
+    const fixed = copyOut(shared, (s) => {
+      lessonOf(s, 'f1-l1').check = { script: join(CHECKS, 'toggle.mjs'), args: ['var=Z0_TOGGLE_TEST'] };
+    });
+    expect(await regrade(fixed, ['--post-fix', '--cell', keyOf('a1')], { Z0_TOGGLE_TEST: 'regrade' })).toMatchObject({ code: 0 });
+    const [check] = rowFor(fixed.out, 'a1', 'postfix').checks;
+    expect(check).toMatchObject({ saved: 'pass', regraded: 'fail', second: 'fail', flip: false, reason: null });
+    const sha = createHash('sha256').update(readFileSync(join(CHECKS, 'toggle.mjs'))).digest('hex');
+    expect(check.checkerSha).not.toBe(sha);
+    // A repro pass has no fix to allow, so the same args change is checker-changed there.
+    expect(await regrade(fixed, ['--cell', keyOf('a1')], { Z0_TOGGLE_TEST: 'regrade' })).toMatchObject({ code: 0 });
+    expect(rowFor(fixed.out, 'a1')).toMatchObject({ status: 'error', error: { stage: 'checker-changed' } });
   }, 300_000);
 
   it('a missing bundle is an error row; grading refuses until --flip-errors drops the cell\'s lessons (5, R6)', async () => {

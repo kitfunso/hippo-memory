@@ -1,15 +1,14 @@
 // G5 (prereg 166): each graded cell's trees, verdicts and reader diffs, saved before the next checkout rebuilds the workspace .git.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { createHash } from 'node:crypto';
 import { agentGit } from './checks.mjs';
+import { checkerIdentity } from './lessons.mjs';
 import { isReaderHidden } from './workspace.mjs';
 import { RESTORABLE } from './surfaces.mjs';
 import { surfaceBytes } from './leaks.mjs';
 
 const GRADE_REF = 'refs/z0/grade';
 const SURFACE_CAP = 64 * 1024;
-const sha256 = (data) => createHash('sha256').update(data).digest('hex');
 
 /** The memory surfaces' text at an apply's pre-session, for E3b's stored sample (179); binary files and store databases give way to the store entries. */
 export function surfaceText({ root, surfaces, stores }) {
@@ -56,7 +55,7 @@ export function saveGrading(ctx, run, step, stage, turns, record) {
     finalChecked, ...held,
     verdicts: { first: turns?.first ?? null, final: turns?.final ?? null, staleFollow: turns?.staleFollow ?? null },
     acceptancePassed: record.acceptancePassed, commandsFirst: turns?.commandsFirst ?? null, commandsFinal: turns?.commandsFinal ?? null, commandsStale: turns?.commandsStale ?? null,
-    checkers: Object.fromEntries(lessons.map((l) => [l.id, sha256(fs.readFileSync(l.checkPath))])),
+    checkers: Object.fromEntries(lessons.map((l) => [l.id, checkerIdentity(l)])),
   }, null, 2)}\n`);
   if (stage.surfaceText !== undefined) fs.writeFileSync(path.join(dir, `${t.id}.surfaces.txt`), stage.surfaceText);
 }
