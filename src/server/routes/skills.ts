@@ -1,22 +1,18 @@
 // /v1/skills routes.
-import { closeSkill, exportSkills, loadSkillById, loadSkills, MAX_SKILL_NAME_LEN, saveSkill, type SaveSkillOpts, type Skill, type SkillStatus, VALID_SKILL_STATES } from '../../skills.js';
+import { exportSkills, MAX_SKILL_NAME_LEN, type SaveSkillOpts, SKILL } from '../../skills.js';
 import { sendJson } from '../../http-util.js';
 import { buildContextWithAuth } from '../auth.js';
 import type { RouteRequest } from '../types.js';
 import { parseJsonBody } from '../validation.js';
-import { closeRoute, getRoute, listRoute, optionalString, type RequiredStringRule, requiredString, supersedeRoute, type VersionedRouteConfig } from './object-routes.js';
+import { closeRoute, getRoute, listRoute, optionalString, type RequiredStringRule, requiredString, saveFor, supersedeRoute, type VersionedRouteConfig } from './object-routes.js';
 
 const INSTRUCTIONS: RequiredStringRule = { max: 8192, plural: true };
 
-const skillRoutes: VersionedRouteConfig<Skill, SkillStatus, SaveSkillOpts> = {
+const skillRoutes: VersionedRouteConfig<'skill', SaveSkillOpts> = {
   noun: 'skill',
   field: 'skill',
   listField: 'skills',
-  statuses: VALID_SKILL_STATES,
-  list: loadSkills,
-  get: loadSkillById,
-  close: closeSkill,
-  save: saveSkill,
+  object: SKILL,
   revise: (body) => {
     const instructions = requiredString(body, 'instructions', INSTRUCTIONS);
     const trigger = optionalString(body, 'trigger', 1024);
@@ -37,16 +33,15 @@ const skillRoutes: VersionedRouteConfig<Skill, SkillStatus, SaveSkillOpts> = {
 // validates + throws; the boundary maps validation -> 400, not-found -> 404,
 // not-active -> 409. Mirrors /v1/processes; "executable" = exportable
 // instruction (no code exec).
-export async function handleCreateSkill({ req, res, opts }: RouteRequest): Promise<void> {
-  const ctx = await buildContextWithAuth(req, opts);
-  const body = await parseJsonBody(req, ctx);
-  const skill = saveSkill(opts.hippoRoot, ctx.tenantId, {
+export async function handleCreateSkill(rr: RouteRequest): Promise<void> {
+  const ctx = await buildContextWithAuth(rr.req, rr.opts);
+  const body = await parseJsonBody(rr.req, ctx);
+  const skill = await saveFor(rr, SKILL, ctx.tenantId, ctx.actor.subject, {
     skillName: requiredString(body, 'skillName', { max: MAX_SKILL_NAME_LEN }),
     instructions: requiredString(body, 'instructions', INSTRUCTIONS),
     trigger: optionalString(body, 'trigger', 1024),
-  }, ctx.actor.subject);
-  sendJson(res, 201, { skill });
-  return;
+  });
+  sendJson(rr.res, 201, { skill });
 }
 
 export function handleListSkills(rr: RouteRequest): Promise<void> {

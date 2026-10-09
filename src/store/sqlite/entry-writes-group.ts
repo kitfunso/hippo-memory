@@ -100,7 +100,7 @@ function assertIdInTenant(db: DatabaseSyncLike, entry: MemoryEntry): void {
 }
 
 /** The refusal row lands after `write` has rolled back, in a fresh implicit transaction the aborted one cannot undo. */
-function auditingRefusal<T>(db: DatabaseSyncLike, actor: string, write: () => T): T {
+export function auditingRefusal<T>(db: DatabaseSyncLike, actor: string, write: () => T): T {
   try {
     return write();
   } catch (err) {
