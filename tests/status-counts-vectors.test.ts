@@ -6,7 +6,10 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../src/core/memory.js';
+import { calculateStrength, confidenceFacets, createMemory, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../src/core/memory.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
+import { loadStatusCounts } from '../src/store/candidates.js';
+import { recordStatements } from './_helpers/count-statements.js';
 import { replaceDetectedConflicts, resolveConflict, listMemoryConflicts } from '../src/store/conflicts.js';
 import { appendConsolidationRun, updateStats } from '../src/store/index-and-stats.js';
 import { DAY_MS } from '../src/util/time.js';
@@ -192,5 +195,42 @@ describe('hippo status full text', () => {
       KEYLESS_LINE,
       '',
     ]);
+  });
+});
+
+describe('loadStatusCounts', () => {
+  it('equals a tally over every loaded entry, to the last bit of the average', () => {
+    seedEveryCase();
+    // Written weakest first and created strongest first: a sum over rows in any other order than loadAllEntries' ends on other last bits.
+    for (let i = 0; i < 40; i++) row(daysAgo(20), { created: daysAgo(900 - i), half_life_days: 0.5 * 1.18 ** i });
+    const now = new Date(NOW);
+    const entries = loadAllEntries(root);
+    const strengths = entries.map((e) => calculateStrength(e, now));
+    const counts = loadStatusCounts(root, now, 0.2);
+    expect(counts.total).toBe(52);
+    expect(counts.avgStrength).toBe(strengths.reduce((sum, x) => sum + x, 0) / entries.length);
+    expect(counts.atRisk).toBe(strengths.filter((x) => x < 0.2).length);
+    expect(counts.agedOut).toBe(entries.filter((e) => confidenceFacets(e, now).agedOut).length);
+    expect(counts.pinned).toBe(entries.filter((e) => e.pinned).length);
+    expect(counts.byLayer[Layer.Trace]).toBe(entries.filter((e) => e.layer === Layer.Trace).length);
+    expect(counts.openConflicts).toBe(listMemoryConflicts(root).length);
+    expect(counts.embedded).toBe(2);
+  });
+});
+
+describe('hippo status read bound', () => {
+  it('selects no memory text and no JSON column from the memories table', () => {
+    seedEveryCase();
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const { statements } = (() => {
+      try {
+        return recordStatements(() => handleStatus({ hippoRoot: root, args: [], flags: {} }));
+      } finally {
+        log.mockRestore();
+      }
+    })();
+    const rowReads = statements.filter((sql) => /^\s*SELECT\b[^;]*\bFROM memories\b/.test(sql));
+    expect(rowReads.length).toBeGreaterThan(0);
+    expect(rowReads.filter((sql) => /\b(content|\w+_json)\b/.test(sql))).toEqual([]);
   });
 });
