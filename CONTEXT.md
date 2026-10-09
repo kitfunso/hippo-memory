@@ -18,7 +18,7 @@ _Avoid_: archived memory (the raw archive keeps metadata only), deleted, cold
 **Automatic memory**:
 A memory hippo wrote without a person choosing the words: session capture, git learning,
 a sleep merge, a compaction memory, an extracted fact or a DAG summary, at confidence observed
-or inferred, and a promoted or shared copy of one. Only automatic memories are held to the quality check (`src/memory-quality.ts`);
+or inferred, and a promoted or shared copy of one. Only automatic memories are held to the quality check (`src/core/memory-quality.ts`);
 one with a certain defect is never reused by sleep or shared, and `hippo audit repair` can set
 it aside. A person's memory is never judged on its wording.
 _Avoid_: auto memory (Claude Code's own feature), generated memory, low-quality memory
@@ -54,7 +54,7 @@ _Avoid_: summary memory (the summary lives in the compaction record), snapshot (
 **Keep rule**:
 A tag and a source prefix that together keep a memory out of automatic deletion; today one pair
 per imported agent memory tool. Both must match, because a merge copies a source's tags onto
-a row whose source is `consolidation`. `canAutoDelete` and `AUTO_DELETABLE_SQL` in `src/memory.ts`
+a row whose source is `consolidation`. `canAutoDelete` and `AUTO_DELETABLE_SQL` in `src/core/memory.ts`
 apply it and change together. `hippo forget` and `hippo supersede` still work on a kept memory.
 _Avoid_: pin (a person sets that), retention policy, allowlist
 
