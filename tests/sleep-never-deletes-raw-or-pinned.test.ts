@@ -17,7 +17,7 @@ import { sleep, supersede, type Context } from '../src/api.js';
 import { runSleep } from '../src/api/sleep-run.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { queryAuditEvents } from '../src/store/audit.js';
-import { renderSleepResult } from '../src/cli/sleep.js';
+import { sleepResultLines } from '../src/cli/sleep-render.js';
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
 const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });
@@ -147,14 +147,11 @@ describe('the sleep audit and dedup respect raw and pinned rows', () => {
   });
 
   it('the dry-run render says "would" instead of "removed"', () => {
-    const lines: string[] = [];
-    vi.spyOn(console, 'log').mockImplementation((line: string) => { lines.push(line); });
-    renderSleepResult({
+    const out = sleepResultLines({
       active: 3, removed: 0, mergedEpisodic: 0, newSemantic: 0, dryRun: true, details: [],
       deduped: { removed: 1, semDups: 0, epiDups: 1, crossDups: 0 },
       audit: { errorsRemoved: 1, warningCount: 0 },
-    });
-    const out = lines.join('\n');
+    }).join('\n');
     expect(out).toContain('Would dedupe 1 duplicates');
     expect(out).toContain('Audit: would remove 1 junk memories');
     expect(out).not.toMatch(/Deduped|removed 1 junk/);
