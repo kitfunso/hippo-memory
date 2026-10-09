@@ -202,7 +202,6 @@ Bugs, regressions and review findings that shaped the code. Source comments keep
 - `sessionTrace`: T1 fix (2026-08-15 hardening pass): stamp the trace into the SAME tenant the traceExistsForSession idempotency check (above) runs under. Before this, createMemory omitted tenantId and the trace always landed 'default' (memory.ts:535) while the idempotency check ran under consolidationTenant — for any non-default tenant that check never hit, and the trace regenerated every sleep.
 
 ### src/customer-notes.ts
-- `preflightNoteSupersede`: Mirrors saveProjectBrief / saveSkill (codex P1 2026-05-28).
 - `saveCustomerNote`: The memory mirror carries a `customer:<lc>` tag (in addition to ['customer_note'] + caller extraTags) so scope-aware recall treats the note as entity-local - the project_brief codex-P2 recall-locality lesson applied to entity scoping.
 - `closeCustomerNote`: Closing removes the object from the graph. Remove its rows DIRECTLY (deterministic), not only via an enqueued rebuild whose queue item is lost if the mirror is later forgotten (the queue row cascade-deletes with the memory), which would leave the closed object stale and could block that forget (codex P1).
 
@@ -346,7 +345,6 @@ Bugs, regressions and review findings that shaped the code. Source comments keep
 
 ### src/policies.ts
 - `asOfInstant`: comparison is correct (plan-eng-critic round-1 CRIT fix: a date-only asOf vs a datetime valid_from otherwise made a same-day policy invisible).
-- `preflightPolicySupersede`: Mirrors saveProcess / saveDecision (codex P1 2026-05-28).
 - `savePolicy`: hide a superseded predecessor for that earlier time (codex review 2026-05-30 round 2). An explicit --from is honored as-is.
 - `closePolicy`: object stale and could block that forget (codex P1). Still enqueue when a mirror exists
 - `loadActivePolicies`: superseded in May is still the answer for `asof March`. (codex review 2026-05-30, P2 #2: filtering on status='active' alone dropped historically-valid superseded versions, conflating transaction-time with valid-time. The successor-aware filter mirrors the existing recall-history.ts asOf pattern.)
