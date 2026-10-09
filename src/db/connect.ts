@@ -54,27 +54,14 @@ function archiveTop(db: DatabaseSyncLike): number {
   return Number(row?.top ?? 0);
 }
 
-// Facts go stale with the next statement, so only the caller whose own open made the connection may read them.
-const lastConnect: Partial<OpenedDb> = {};
-
-interface OpenedDb {
-  db: DatabaseSyncLike;
-  facts: OpenFacts | null;
-}
-
-/** Runs `open` and returns its connection with the facts its probe read, or null facts when the connection was not made by this call. */
-export function openWithFacts(open: () => DatabaseSyncLike): OpenedDb {
-  lastConnect.db = undefined;
-  try {
-    const db = open();
-    return { db, facts: lastConnect.db === db ? lastConnect.facts ?? null : null };
-  } finally {
-    lastConnect.db = undefined;
-  }
+/** A connection with what its own open's probe read; facts go stale with the next statement, so a handle made by an earlier call carries null. */
+export interface OpenedDb {
+  readonly db: DatabaseSyncLike;
+  readonly facts: OpenFacts | null;
 }
 
 /** A new connection with the store's pragmas and migrations applied and the mirror cleanup run when it is due; the caller owns and closes it. */
-export function connectHippoDb(hippoRoot: string, busyWaitMs?: number): DatabaseSyncLike {
+export function connectWithFacts(hippoRoot: string, busyWaitMs?: number): OpenedDb {
   createStoreFilesOwnerOnly(hippoRoot);
   const db = new DatabaseSync(getHippoDbPath(hippoRoot));
   try {
@@ -90,9 +77,7 @@ export function connectHippoDb(hippoRoot: string, busyWaitMs?: number): Database
     } catch (cleanupErr) {
       log.error(`openHippoDb: cleanupArchivedMirrors failed (non-fatal): ${errorMessage(cleanupErr)}`);
     }
-    lastConnect.db = db;
-    lastConnect.facts = facts;
-    return db;
+    return { db, facts };
   } catch (error) {
     try {
       db.close();

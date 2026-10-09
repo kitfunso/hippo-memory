@@ -1,7 +1,7 @@
 // One store handle per store for each request (HTTP call, MCP tool call, scoped CLI command), opened lazily and closed with it.
 import * as path from 'node:path';
 import type { DatabaseSyncLike } from './sqlite.js';
-import { connectHippoDb, getHippoDbPath } from './connect.js';
+import { connectWithFacts, getHippoDbPath, type OpenedDb } from './connect.js';
 import { currentRequestId, requestScopes, type RequestScope } from '../util/request-scope.js';
 
 export interface RequestStoresOptions {
@@ -49,19 +49,24 @@ export class RequestStores implements RequestScope {
 
   /** The scope's handle on `hippoRoot`, opened on first use. `opts.busyWaitMs` overrides the scope's lock wait. */
   get(hippoRoot: string, opts?: { busyWaitMs?: number }): DatabaseSyncLike {
+    return this.getWithFacts(hippoRoot, opts).db;
+  }
+
+  /** `get`, with the facts of the open's probe when this call made the connection and null for a cached handle. */
+  getWithFacts(hippoRoot: string, opts?: { busyWaitMs?: number }): OpenedDb {
     const busyWaitMs = opts?.busyWaitMs ?? this.busyWaitMs;
     // A listener or timer that outlives its request still sees this scope, so it gets a connection of its own.
-    if (this.#closed) return connectHippoDb(hippoRoot, busyWaitMs);
+    if (this.#closed) return connectWithFacts(hippoRoot, busyWaitMs);
     const key = `${path.resolve(getHippoDbPath(hippoRoot))}\0${busyWaitMs ?? ''}`;
     const cached = this.#handles.get(key);
-    if (cached?.isOpen && !cached.isTransaction) return cached;
-    const db = connectHippoDb(hippoRoot, busyWaitMs);
+    if (cached?.isOpen && !cached.isTransaction) return { db: cached, facts: null };
+    const opened = connectWithFacts(hippoRoot, busyWaitMs);
     // An open nested inside a transaction gets its own connection, which its caller closes.
-    if (cached?.isOpen) return db;
-    this.#handles.set(key, db);
-    scopedHandles.add(db);
+    if (cached?.isOpen) return opened;
+    this.#handles.set(key, opened.db);
+    scopedHandles.add(opened.db);
     trackLive(this);
-    return db;
+    return opened;
   }
 
   /** A lock held past one full wait belongs to a long transaction, so a hook scope's later writes skip at once. */

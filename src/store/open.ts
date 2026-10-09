@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { DEFAULT_HALF_LIFE_DAYS, type MemoryEntry, Layer } from '../memory.js';
 import { closeHippoDb, type DatabaseSyncLike, openHippoDb, getMeta, setMeta, withWriteScope } from '../db.js';
-import { openWithFacts } from '../db/connect.js';
+import { openHippoDbWithFacts } from '../db/open.js';
 import { type ResolveProjectIdentityOpts, findHippoStoreDir } from '../project-identity.js';
 import { realpathOrResolve } from '../util/real-path.js';
 import { RejectedValueError } from './rejection.js';
@@ -34,7 +34,7 @@ export function initStore(hippoRoot: string): void {
 /** One open connection with init done on it, for callers who used to pay for `initStore` + a second `openHippoDb`. */
 export function openStore(hippoRoot: string, opts?: { busyWaitMs?: number }): DatabaseSyncLike {
   // Open first: a folder marked for another store must refuse before any mirror folder appears.
-  const { db, facts } = openWithFacts(() => openHippoDb(hippoRoot, opts));
+  const { db, facts } = openHippoDbWithFacts(hippoRoot, opts);
   try {
     ensureMirrorDirectories(hippoRoot);
     // Both steps act only on a store with no memory row, which the open's own probe has just ruled out.
