@@ -129,6 +129,14 @@ export function invalidateMatchingAmong(
   return result;
 }
 
+function referencesPattern(entry: MemoryEntry, fromTokens: string[], exactTag: string): boolean {
+  const contentTokens = invalidationTokenize(entry.content);
+  const tagTokens = entry.tags.map(t => t.toLowerCase());
+  const tokenMatch = matchScore(fromTokens, contentTokens);
+  const tagMatch = tagTokens.includes(exactTag);
+  return tokenMatch >= 0.5 || tagMatch;
+}
+
 /** The match pass: weakens each unpinned match in place and returns them, writing nothing. */
 function weakenMatches(entries: readonly MemoryEntry[], target: InvalidationTarget, options?: InvalidationOptions) {
   const fromTokens = invalidationTokenize(target.from);
@@ -146,16 +154,7 @@ function weakenMatches(entries: readonly MemoryEntry[], target: InvalidationTarg
   for (const entry of entries) {
     if (options?.onlyId !== undefined) {
       if (entry.id !== options.onlyId) continue;
-    } else {
-      const contentTokens = invalidationTokenize(entry.content);
-      const tagTokens = entry.tags.map(t => t.toLowerCase());
-
-      // Check if the memory references the old pattern
-      const tokenMatch = matchScore(fromTokens, contentTokens);
-      const tagMatch = tagTokens.includes(exactTag);
-
-      if (!(tokenMatch >= 0.5 || tagMatch)) continue;
-    }
+    } else if (!referencesPattern(entry, fromTokens, exactTag)) continue;
 
     // Pinned check runs AFTER matching so pinned would-be targets are
     // observable in skippedPinned (pattern mode and onlyId mode alike).
@@ -382,6 +381,38 @@ interface ChurnNeeds {
   scripts: boolean;
 }
 
+/** The per-commit lookups of a ChurnGitView; each asks git once per commit and remembers the answer. */
+function churnCommitLookups(repoRoot: string): Pick<ChurnGitView, 'resolveAnchorCommit' | 'symbolsPresentAt' | 'scriptsAt'> {
+  const anchorCommitCache = new Map<string, string | null>();
+  const resolveAnchorCommit = (anchorIso: string): string | null => {
+    if (!anchorCommitCache.has(anchorIso)) {
+      anchorCommitCache.set(anchorIso, resolveCommitBefore(repoRoot, anchorIso));
+    }
+    return anchorCommitCache.get(anchorIso) ?? null;
+  };
+
+  const symbolsAtCommit = new Map<string, Set<string>>();
+  const symbolsPresentAt = (hash: string, symbols: string[]): Set<string> => {
+    const known = symbolsAtCommit.get(hash) ?? new Set<string>();
+    const missing = symbols.filter((s) => !known.has(s));
+    if (missing.length > 0) {
+      for (const s of gitGrepPresence(repoRoot, missing, hash)) known.add(s);
+      symbolsAtCommit.set(hash, known);
+    }
+    return known;
+  };
+
+  const scriptsAtCommit = new Map<string, Record<string, string> | null>();
+  const scriptsAt = (hash: string): Record<string, string> | null | undefined => {
+    if (!scriptsAtCommit.has(hash)) {
+      scriptsAtCommit.set(hash, packageScriptsAt(repoRoot, hash));
+    }
+    return scriptsAtCommit.get(hash);
+  };
+
+  return { resolveAnchorCommit, symbolsPresentAt, scriptsAt };
+}
+
 function loadChurnGitView(
   repoRoot: string,
   projectName: string,
@@ -406,36 +437,9 @@ function loadChurnGitView(
   const presentAtHeadSymbols = needs.symbols
     ? gitGrepPresence(repoRoot, [...new Set(candidates.flatMap((c) => c.refs.symbols))], 'HEAD')
     : new Set<string>();
-
-  const anchorCommitCache = new Map<string, string | null>();
-  const resolveAnchorCommit = (anchorIso: string): string | null => {
-    if (!anchorCommitCache.has(anchorIso)) {
-      anchorCommitCache.set(anchorIso, resolveCommitBefore(repoRoot, anchorIso));
-    }
-    return anchorCommitCache.get(anchorIso) ?? null;
-  };
-
-  const symbolsAtCommit = new Map<string, Set<string>>();
-  const symbolsPresentAt = (hash: string, symbols: string[]): Set<string> => {
-    const known = symbolsAtCommit.get(hash) ?? new Set<string>();
-    const missing = symbols.filter((s) => !known.has(s));
-    if (missing.length > 0) {
-      for (const s of gitGrepPresence(repoRoot, missing, hash)) known.add(s);
-      symbolsAtCommit.set(hash, known);
-    }
-    return known;
-  };
-
   const headScripts = needs.scripts ? packageScriptsAt(repoRoot, 'HEAD') : null;
-  const scriptsAtCommit = new Map<string, Record<string, string> | null>();
-  const scriptsAt = (hash: string): Record<string, string> | null | undefined => {
-    if (!scriptsAtCommit.has(hash)) {
-      scriptsAtCommit.set(hash, packageScriptsAt(repoRoot, hash));
-    }
-    return scriptsAtCommit.get(hash);
-  };
 
-  return { repoRoot, projectName, windowLog, trackedIndex, headIndex, presentAtHeadSymbols, headScripts, resolveAnchorCommit, symbolsPresentAt, scriptsAt };
+  return { repoRoot, projectName, windowLog, trackedIndex, headIndex, presentAtHeadSymbols, headScripts, ...churnCommitLookups(repoRoot) };
 }
 
 function pathEvidence(git: ChurnGitView, paths: readonly string[], anchorTime: number): string | null {
@@ -497,6 +501,32 @@ function tagChurnStale(hippoRoot: string, tenantId: string, toTag: readonly Memo
   addTagToEntries(hippoRoot, tenantId, unconfirmed.map((stale) => stale.id), CHURN_STALE_TAG);
 }
 
+/** Counts every candidate's evidence into `result` and returns the rows still to tag, writing nothing. */
+function recordChurnEvidence(
+  git: ChurnGitView,
+  candidates: readonly ChurnCandidate[],
+  anchorOf: (entry: MemoryEntry) => string,
+  result: ChurnStaleResult,
+): MemoryEntry[] {
+  const toTag: MemoryEntry[] = [];
+  for (const { entry, refs } of candidates) {
+    result.checked++;
+    const evidence = churnEvidence(git, refs, anchorOf(entry));
+    if (!evidence) continue;
+
+    const headline = entry.content.replace(/\s+/g, ' ').slice(0, 60);
+    if (entry.tags.includes(CHURN_STALE_TAG)) {
+      result.alreadyMarked++;
+      result.preview.push({ id: entry.id, headline, evidence, already: true });
+      continue;
+    }
+    result.marked++;
+    result.preview.push({ id: entry.id, headline, evidence, already: false });
+    toTag.push(entry);
+  }
+  return toTag;
+}
+
 /** Flags memories whose named file/symbol/script changed or disappeared since storage (or last confirmation); only adds/removes CHURN_STALE_TAG, never confidence/half-life/strength. */
 export function detectChurnStale(
   hippoRoot: string,
@@ -534,22 +564,7 @@ export function detectChurnStale(
     // Collected here, written only after every candidate's evidence is
     // computed: a GitReadError thrown mid-loop must never leave an earlier
     // candidate tagged while a later one aborts the run untagged.
-    const toTag: MemoryEntry[] = [];
-    for (const { entry, refs } of candidates) {
-      result.checked++;
-      const evidence = churnEvidence(git, refs, anchorOf(entry));
-      if (!evidence) continue;
-
-      const headline = entry.content.replace(/\s+/g, ' ').slice(0, 60);
-      if (entry.tags.includes(CHURN_STALE_TAG)) {
-        result.alreadyMarked++;
-        result.preview.push({ id: entry.id, headline, evidence, already: true });
-        continue;
-      }
-      result.marked++;
-      result.preview.push({ id: entry.id, headline, evidence, already: false });
-      toTag.push(entry);
-    }
+    const toTag = recordChurnEvidence(git, candidates, anchorOf, result);
 
     if (!dryRun && toTag.length > 0) tagChurnStale(hippoRoot, opts.tenantId, toTag, confirmedAt);
   } catch (err) {
