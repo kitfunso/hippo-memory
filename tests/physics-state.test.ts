@@ -13,6 +13,7 @@ import {
   resetAllPhysicsState,
   refreshParticleProperties,
 } from '../src/db/physics-state.js';
+import { loadStoredParticles, resetStoredParticles } from '../src/store/vector-writes.js';
 import type { PhysicsParticle } from '../src/physics.js';
 import type { MemoryEntry } from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
@@ -689,5 +690,31 @@ describe('refreshParticleProperties', () => {
     // Same reference, mutated
     expect(particles[0]).toBe(originalRef);
     expect(particles[0]!.charge).toBeCloseTo(-1.0, 10);
+  });
+});
+
+describe('stored particles by store root', () => {
+  function seed(memoryIds: string[], withParticle: string[]): void {
+    const db = openHippoDb(tmpDir);
+    try {
+      for (const id of memoryIds) insertMemoryRow(db, id);
+      savePhysicsState(db, withParticle.map((id) => makeParticle(id)));
+    } finally {
+      closeHippoDb(db);
+    }
+  }
+
+  it('loadStoredParticles returns every saved particle', () => {
+    seed(['mem_s1', 'mem_s2'], ['mem_s1', 'mem_s2']);
+    expect(loadStoredParticles(tmpDir).map((p) => p.memoryId).sort()).toEqual(['mem_s1', 'mem_s2']);
+  });
+
+  it('resetStoredParticles drops stored state and keeps one particle per embedded entry', () => {
+    seed(['mem_t1', 'mem_t2'], ['mem_t2']);
+    const entries = [makeMemoryEntry('mem_t1'), makeMemoryEntry('mem_t2')];
+    expect(resetStoredParticles(tmpDir, entries, { mem_t1: [0.5, 0.5, 0.5] })).toBe(1);
+    const stored = loadStoredParticles(tmpDir);
+    expect(stored.map((p) => p.memoryId)).toEqual(['mem_t1']);
+    expect(stored[0]!.position[0]).toBeCloseTo(0.5, 5);
   });
 });

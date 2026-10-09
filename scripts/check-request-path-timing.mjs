@@ -32,6 +32,7 @@ const { initStore } = await load('store/open.js');
 const { writeEntryDbOnly } = await load('store/entry-writes.js');
 const { loadAmbientTallies } = await load('store/ambient.js');
 const { openHippoDb, closeHippoDb } = await load('db.js');
+const { createApiKey } = await load('store/auth.js');
 const { getContext, adminActor } = await load('api.js');
 const { handleMcpRequest } = await load('mcp/server.js');
 const { workerSqliteStore } = await load('store/sqlite/worker-store.js');
@@ -131,6 +132,20 @@ const withoutGlobal = (run) => async () => {
 // Answers from a store worker thread, as serve() does by default; the counts below are this thread's, so its ceilings are zero.
 const served = workerSqliteStore(localRoot);
 
+function mintKey(root) {
+  const db = openHippoDb(root);
+  try {
+    return createApiKey(db, { tenantId: 'default', label: 'timing' }).keyId;
+  } finally {
+    closeHippoDb(db);
+  }
+}
+const keyId = mintKey(localRoot);
+// Every authenticated request starts with this read.
+const keyLookup = async () => {
+  if ((await served.findApiKey(keyId)) === null) throw new Error('the served store did not find the key the script minted');
+};
+
 // The request benchmarks/a1/p99-recall.ts times, through a real server and socket.
 const server = await serve({ hippoRoot: localRoot, port: 0 });
 const httpRecall = (limit) => async () => {
@@ -153,6 +168,7 @@ const cases = [
   ['mcp hippo_status', tool('hippo_status'), [13, 7, 1]],
   ['mcp hippo_peers', tool('hippo_peers'), [10, 17, 1]],
   ['served predictions list', () => served.predictions.listPredictions('default', { limit: 20 }), [0, 0, 0]],
+  ['served key lookup', keyLookup, [0, 0, 0]],
   ['http recall, limit 10', httpRecall(10), [62, 287, 1]],
   // Fifty rows back, so one extra statement per returned row passes the ceiling, which ten rows would not.
   ['http recall, limit 50', httpRecall(50), [166, 335, 1]],

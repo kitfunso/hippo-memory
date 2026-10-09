@@ -37,12 +37,7 @@ function mintKey(home: string, role: 'admin' | 'member'): { plaintext: string; k
 }
 
 function keyCount(home: string): number {
-  const db = openHippoDb(home);
-  try {
-    return listApiKeys(db, { active: true }).length;
-  } finally {
-    closeHippoDb(db);
-  }
+  return listApiKeys(home, { active: true }).length;
 }
 
 function seedScopedMemories(home: string): void {
