@@ -42,6 +42,8 @@ import { recall, type Context } from '../src/api.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 const ENV_KEY = 'HIPPO_LOSS_AVERSION_RATIO';
+// One instant for every entry age and strength call: two real-clock reads a pause apart moved a ratio past its tolerance.
+const NOW = new Date();
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
@@ -54,7 +56,7 @@ function makeEntry(valence: EmotionalValence, opts: Partial<MemoryEntry> = {}): 
   // To probe the multiplier we use an AGED entry: last_retrieved 5 days ago + half-
   // life 3 days -> decay = 0.5^(5/3) ~= 0.315. Then strength = 0.315 * multiplier,
   // unclamped for multipliers up to ~3.17 (covers all our valences).
-  const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString();
+  const fiveDaysAgo = new Date(NOW.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString();
   const e = createMemory(`test memory with valence ${valence}`, {
     baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
     layer: Layer.Buffer,
@@ -79,10 +81,10 @@ describe('EMOTIONAL_MULTIPLIERS defaults (v1.13.5 / J5)', () => {
 
   it('1. new defaults: positive=1.0, negative=2.0, critical=2.0, neutral=1.0', () => {
     // Aged entries (decay ~= 0.315) so multiplier differences stay unclamped.
-    const posStrength = calculateStrength(makeEntry('positive'));
-    const negStrength = calculateStrength(makeEntry('negative'));
-    const critStrength = calculateStrength(makeEntry('critical'));
-    const neuStrength = calculateStrength(makeEntry('neutral'));
+    const posStrength = calculateStrength(makeEntry('positive'), NOW);
+    const negStrength = calculateStrength(makeEntry('negative'), NOW);
+    const critStrength = calculateStrength(makeEntry('critical'), NOW);
+    const neuStrength = calculateStrength(makeEntry('neutral'), NOW);
     // negative (2.0) is exactly 2x positive (1.0) in the new defaults.
     expect(negStrength / posStrength).toBeCloseTo(2.0, 6);
     // critical (2.0) equals negative (2.0) per literal roadmap reading.
@@ -95,10 +97,10 @@ describe('EMOTIONAL_MULTIPLIERS defaults (v1.13.5 / J5)', () => {
     const e = makeEntry('negative');
     process.env[ENV_KEY] = '0.5';
     _resetLossAversionRatioCacheForTests();
-    const scaled = calculateStrength(e);
+    const scaled = calculateStrength(e, NOW);
     delete process.env[ENV_KEY];
     _resetLossAversionRatioCacheForTests();
-    const baseline = calculateStrength(e);
+    const baseline = calculateStrength(e, NOW);
     // negative_multiplier baseline = 2.0; scaled (0.5x) = 1.0. Strength ratio = 0.5.
     // Aged entry keeps the result < 1.0 so the clamp doesn't hide the ratio.
     expect(scaled / baseline).toBeCloseTo(0.5, 6);
@@ -106,10 +108,10 @@ describe('EMOTIONAL_MULTIPLIERS defaults (v1.13.5 / J5)', () => {
 
   it('3. env var off (no env set): defaults to 1.0 ratio (negative multiplier intact)', () => {
     const e = makeEntry('negative');
-    const strength = calculateStrength(e);
+    const strength = calculateStrength(e, NOW);
     process.env[ENV_KEY] = '1.0';
     _resetLossAversionRatioCacheForTests();
-    const explicit = calculateStrength(e);
+    const explicit = calculateStrength(e, NOW);
     expect(strength).toBeCloseTo(explicit, 6);
   });
 
@@ -126,10 +128,10 @@ describe('EMOTIONAL_MULTIPLIERS defaults (v1.13.5 / J5)', () => {
     process.env[ENV_KEY] = '0';
     _resetLossAversionRatioCacheForTests();
     const e = makeEntry('negative');
-    const rejected = calculateStrength(e);
+    const rejected = calculateStrength(e, NOW);
     process.env[ENV_KEY] = '1.0';
     _resetLossAversionRatioCacheForTests();
-    const baseline = calculateStrength(e);
+    const baseline = calculateStrength(e, NOW);
     expect(rejected).toBeCloseTo(baseline, 6);
   });
 
@@ -146,11 +148,11 @@ describe('EMOTIONAL_MULTIPLIERS defaults (v1.13.5 / J5)', () => {
         process.env[ENV_KEY] = v;
         _resetLossAversionRatioCacheForTests();
         const e = makeEntry('negative', { strength: 0.3 });
-        const fallback = calculateStrength(e);
+        const fallback = calculateStrength(e, NOW);
         // Compare against explicit ratio=1.0.
         process.env[ENV_KEY] = '1.0';
         _resetLossAversionRatioCacheForTests();
-        const baseline = calculateStrength(e);
+        const baseline = calculateStrength(e, NOW);
         expect(fallback).toBeCloseTo(baseline, 6);
       });
     }
@@ -167,10 +169,10 @@ describe('EMOTIONAL_MULTIPLIERS defaults (v1.13.5 / J5)', () => {
       process.env[ENV_KEY] = ' 0.5 ';
       _resetLossAversionRatioCacheForTests();
       const e = makeEntry('negative');
-      const scaled = calculateStrength(e);
+      const scaled = calculateStrength(e, NOW);
       delete process.env[ENV_KEY];
       _resetLossAversionRatioCacheForTests();
-      const baseline = calculateStrength(e);
+      const baseline = calculateStrength(e, NOW);
       expect(scaled / baseline).toBeCloseTo(0.5, 6);
     });
     it('scientific notation tolerated: "1.5e0" parses as 1.5 (above 0.5 floor)', () => {
@@ -182,10 +184,10 @@ describe('EMOTIONAL_MULTIPLIERS defaults (v1.13.5 / J5)', () => {
       process.env[ENV_KEY] = '1.5e0';
       _resetLossAversionRatioCacheForTests();
       const e = makeEntry('negative');
-      const scaled = calculateStrength(e);
+      const scaled = calculateStrength(e, NOW);
       delete process.env[ENV_KEY];
       _resetLossAversionRatioCacheForTests();
-      const baseline = calculateStrength(e);
+      const baseline = calculateStrength(e, NOW);
       // scaled / baseline = 1.5 if neither clamps; with aged entry the
       // unclamped strength stays < 1.0 so the ratio is visible.
       expect(scaled / baseline).toBeGreaterThan(1.0);
@@ -200,10 +202,10 @@ describe('EMOTIONAL_MULTIPLIERS defaults (v1.13.5 / J5)', () => {
       process.env[ENV_KEY] = '0x10';
       _resetLossAversionRatioCacheForTests();
       const e = makeEntry('negative');
-      const scaled = calculateStrength(e);
+      const scaled = calculateStrength(e, NOW);
       delete process.env[ENV_KEY];
       _resetLossAversionRatioCacheForTests();
-      const baseline = calculateStrength(e);
+      const baseline = calculateStrength(e, NOW);
       // scaled >= baseline (32x multiplier saturates at clamp; baseline is unclamped at ~0.63).
       expect(scaled).toBeGreaterThanOrEqual(baseline);
     });
@@ -213,10 +215,10 @@ describe('EMOTIONAL_MULTIPLIERS defaults (v1.13.5 / J5)', () => {
     const e = makeEntry('positive');
     process.env[ENV_KEY] = '0.1';
     _resetLossAversionRatioCacheForTests();
-    const withEnv = calculateStrength(e);
+    const withEnv = calculateStrength(e, NOW);
     delete process.env[ENV_KEY];
     _resetLossAversionRatioCacheForTests();
-    const withoutEnv = calculateStrength(e);
+    const withoutEnv = calculateStrength(e, NOW);
     expect(withEnv).toBeCloseTo(withoutEnv, 6);
   });
 
@@ -224,10 +226,10 @@ describe('EMOTIONAL_MULTIPLIERS defaults (v1.13.5 / J5)', () => {
     const e = makeEntry('critical');
     process.env[ENV_KEY] = '0.1';
     _resetLossAversionRatioCacheForTests();
-    const withEnv = calculateStrength(e);
+    const withEnv = calculateStrength(e, NOW);
     delete process.env[ENV_KEY];
     _resetLossAversionRatioCacheForTests();
-    const withoutEnv = calculateStrength(e);
+    const withoutEnv = calculateStrength(e, NOW);
     expect(withEnv).toBeCloseTo(withoutEnv, 6);
   });
 
@@ -235,10 +237,10 @@ describe('EMOTIONAL_MULTIPLIERS defaults (v1.13.5 / J5)', () => {
     const e = makeEntry('neutral');
     process.env[ENV_KEY] = '0.1';
     _resetLossAversionRatioCacheForTests();
-    const withEnv = calculateStrength(e);
+    const withEnv = calculateStrength(e, NOW);
     delete process.env[ENV_KEY];
     _resetLossAversionRatioCacheForTests();
-    const withoutEnv = calculateStrength(e);
+    const withoutEnv = calculateStrength(e, NOW);
     expect(withEnv).toBeCloseTo(withoutEnv, 6);
   });
 });
@@ -280,9 +282,9 @@ describe('J5 behavioral: env=0 ranking effect (v1.13.5)', () => {
         tenantId: 'default',
         emotional_valence: valence,
       });
-      e.last_retrieved = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString();
+      e.last_retrieved = new Date(NOW.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString();
       e.half_life_days = 3;
-      e.strength = calculateStrength(e);
+      e.strength = calculateStrength(e, NOW);
       writeEntry(root, e);
     }
     const ctx: Context = {
@@ -324,13 +326,13 @@ describe('J5 behavioral: env=0 ranking effect (v1.13.5)', () => {
     });
     // Force an aged last_retrieved so the stored strength stays unclamped
     // and the env-driven multiplier difference is visible.
-    baselineEntry.last_retrieved = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString();
+    baselineEntry.last_retrieved = new Date(NOW.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString();
     baselineEntry.half_life_days = 3;
     // Recompute the stored strength after the age override so writeEntry
     // captures the aged value (the strength field was set at createMemory time
     // with last_retrieved=now; we re-run calculateStrength now that the entry
     // is aged so the stored value matches our test intent).
-    baselineEntry.strength = calculateStrength(baselineEntry);
+    baselineEntry.strength = calculateStrength(baselineEntry, NOW);
     writeEntry(root2, baselineEntry);
     const ctx2: Context = {
       hippoRoot: root2,
