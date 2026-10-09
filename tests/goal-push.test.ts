@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { pushGoal, getActiveGoals } from '../src/store/goals.js';
+import { openHippoDb, closeHippoDb } from '../src/db.js';
 
 describe('pushGoal + getActiveGoals', () => {
   let root: string;
@@ -46,5 +47,36 @@ describe('pushGoal + getActiveGoals', () => {
     });
     expect(g.retrievalPolicyId).toBeDefined();
     expect(getActiveGoals(root, { sessionId: 's1', tenantId: 'default' })[0].retrievalPolicyId).toBe(g.retrievalPolicyId);
+  });
+  function goalRowCount(): number {
+    const db = openHippoDb(root);
+    try {
+      return (db.prepare('SELECT COUNT(*) AS c FROM goal_stack').get() as { c: number }).c;
+    } finally {
+      closeHippoDb(db);
+    }
+  }
+
+  it('refuses a parent goal id that does not exist and writes no row', () => {
+    expect(() => pushGoal(root, {
+      sessionId: 's1', tenantId: 'default', goalName: 'child', parentGoalId: 'g_missing',
+    })).toThrow(new Error('parent goal not found: g_missing'));
+    expect(goalRowCount()).toBe(0);
+  });
+
+  it('refuses a parent goal owned by another tenant and writes no new row', () => {
+    const parent = pushGoal(root, { sessionId: 's1', tenantId: 't2', goalName: 'parent' });
+    expect(() => pushGoal(root, {
+      sessionId: 's1', tenantId: 'default', goalName: 'child', parentGoalId: parent.id,
+    })).toThrow(new Error(`parent goal ${parent.id} belongs to a different (tenant, session)`));
+    expect(goalRowCount()).toBe(1);
+  });
+
+  it('refuses a parent goal sitting in another session and writes no new row', () => {
+    const parent = pushGoal(root, { sessionId: 's2', tenantId: 'default', goalName: 'parent' });
+    expect(() => pushGoal(root, {
+      sessionId: 's1', tenantId: 'default', goalName: 'child', parentGoalId: parent.id,
+    })).toThrow(new Error(`parent goal ${parent.id} belongs to a different (tenant, session)`));
+    expect(goalRowCount()).toBe(1);
   });
 });
