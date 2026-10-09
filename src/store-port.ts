@@ -4,9 +4,11 @@ import { loadAmbientTallies, type AmbientStoreFilter } from './ambient-store.js'
 import { listApiKeyRows, readApiKeyRecord, type ApiKeyListRow, type ApiKeyRecord, type ListApiKeysOpts, type NewApiKey } from './auth.js';
 import { appendAuditEvent, listAuditEventsAfter, type AppendAuditOpts, type AuditEvent, type ListAuditAfterOpts } from './audit.js';
 import type { ContinuityBlock } from './api/recall-types.js';
+import type { CompactionRecord } from './compaction-record.js';
 import { withWriteScope } from './db.js';
 import { StoreNotPortedError } from './db/sqlite-blocked.js';
 import { embeddingIndexStateAt, loadStoredVectors, type EmbeddingIndexState } from './embeddings.js';
+import type { FailureEvent, LoggedFailure } from './failure-log.js';
 import {
   activeGoalsWithPolicies, localGoalRecallRows, writeGoalRecallLog,
   type ActiveGoals, type GetActiveGoalsOpts, type GoalRecallLogRow,
@@ -16,11 +18,12 @@ import type { JsonValue } from './json.js';
 import type { MemoryEntry } from './memory.js';
 import type { PhysicsParticle } from './physics.js';
 import { loadPhysicsState } from './physics-state.js';
+import type { PilotArm } from './pilot-arm.js';
 import { planningFallacyEvidenceAt, type PlanningFallacyEvidence } from './predictions/planning-fallacy.js';
 import { writeRecallTrace, type RecallTraceInput } from './recall-trace.js';
 import {
   loadAmbientCandidates, loadContextCandidates,
-  type AmbientLoadResult, type AmbientRecallRequest, type ContextCandidateFilter, type RecentOrigins,
+  type AmbientLoadResult, type AmbientRecallRequest, type ContextCandidateFilter, type HeldText, type RecentOrigins,
 } from './store/candidates.js';
 import { loadEntriesByIds, loadFreshRawMemories } from './store/entry-reads.js';
 import { auditHighIdAt, revokeKeyAt } from './store/key-audit.js';
@@ -28,12 +31,14 @@ import { createKeyAt, createSelfKeyAt } from './store/key-writes.js';
 import { strengthenRetrievedInOwnTx, type StrengthenOptions } from './store/entry-writes.js';
 import { sqliteEntryWrites } from './store/entry-writes-group.js';
 import { loadLatestHandoff } from './store/handoffs.js';
+import { sqliteHookStore } from './store/hooks-group.js';
 import { updateStats } from './store/index-and-stats.js';
 import { onHandle } from './store/open.js';
+import type { TaskSnapshot } from './store/rows.js';
 import { loadRecallSearchEntries, loadVectorCandidateEntries, type OriginFilter, type VectorCandidateSpec } from './store/search-rows.js';
-import { type ContinuityKey, listSessionEvents, loadActiveTaskSnapshot } from './store/sessions.js';
+import { type ContinuityKey, listSessionEvents, loadActiveTaskSnapshot, type TaskSnapshotInput } from './store/sessions.js';
 import { entriesWithoutVectorAt, writeVectorsAt } from './store/vector-writes.js';
-import { recordTokenUse, type TokenUse } from './token-ledger.js';
+import { recordTokenUse, type LastSent, type TokenSurface, type TokenUse } from './token-ledger.js';
 
 /** The arguments of `loadRecallSearchEntries` after the query, by name. */
 export interface RecallSearchArgs {
@@ -236,6 +241,151 @@ export interface KeyWrites {
   listApiKeys(query: KeyListQuery): Promise<ApiKeyListRow[]>;
 }
 
+export interface SessionBinding {
+  readonly tenantId: string;
+  readonly sessionId: string;
+  readonly owner: string;
+}
+
+export interface PilotArmBooking {
+  readonly arm: PilotArm;
+  readonly rateBp: number;
+}
+
+/** The team-visible rows (`scopeAdmitSql('')`), or every row the caller may touch (`touchableScopeSql('', ownScope)`). */
+export type HeldTextReach = { readonly kind: 'team' } | { readonly kind: 'touchable'; readonly ownScope: string | null };
+
+export interface HeldTextQuery {
+  readonly tenantId: string;
+  readonly words: readonly string[];
+  /** Only rows carrying one of these origin names, and user-global rows; unset reads every origin. */
+  readonly project?: readonly string[];
+  readonly reach: HeldTextReach;
+}
+
+export interface SessionEndState {
+  readonly activeSnapshot: TaskSnapshot | null;
+  readonly latestHandoff: SessionHandoff | null;
+  /** The content of the session's newest session_complete event, unchecked. */
+  readonly completedWith: string | null;
+}
+
+export interface SessionEnd {
+  readonly tenantId: string;
+  readonly sessionId: string;
+  readonly key: ContinuityKey;
+  /** Called once with the state read; null writes no handoff. */
+  readonly plan: (state: SessionEndState) => Omit<SessionHandoff, 'updatedAt'> | null;
+}
+
+export interface SessionEndWrite {
+  readonly handoff: SessionHandoff | null;
+  readonly snapshotsClosed: number;
+}
+
+/** cwd and transcript_path stay null, as a caller sends neither. */
+export interface CompactionOpen {
+  readonly tenantId: string;
+  readonly id: string;
+  readonly sessionId: string;
+  readonly originProject: string;
+  readonly trigger: string | null;
+  readonly startedAt: string;
+  readonly snapshotSaved: boolean;
+}
+
+export interface CompactionSummary {
+  readonly tenantId: string;
+  /** The id a new record takes when no started one is found. */
+  readonly id: string;
+  readonly sessionId: string;
+  readonly trigger: string | null;
+  readonly originProject: string;
+  readonly requestId: string;
+  readonly summary: string;
+  readonly items: readonly string[];
+  /** When the compaction ended; the started record searched for lies within REPLAY_AFTER_MS before it. */
+  readonly at: string;
+}
+
+export interface HeldItem {
+  readonly id: string;
+  readonly sessionId: string | null;
+  readonly content: string;
+}
+
+export interface RejectedValueMark {
+  readonly reason: string | null;
+  readonly rejectedAt: string;
+}
+
+/** An item a tombstone refused, which gets one reject_refusal row ({digest, reason}) under the write's tenant and actor. */
+export interface RefusedItem {
+  readonly entryId: string;
+  readonly digest: string;
+  readonly reason: string | null;
+}
+
+/** A row to write as writeEntry does, or a refused item's audit row in its place. */
+export type CompactionItemStep = { readonly write: MemoryEntry } | { readonly refuse: RefusedItem };
+
+export interface CompactionItemPlan {
+  readonly steps: readonly CompactionItemStep[];
+  readonly restated: readonly string[];
+}
+
+export interface CompactionItemsWrite {
+  readonly tenantId: string;
+  readonly recordId: string;
+  readonly actor: string;
+  readonly origins: readonly string[];
+  /** The `rejectionDigest`s whose tombstones the plan needs. */
+  readonly digests: readonly string[];
+  readonly strengthen: StrengthenOptions;
+  /** Called once inside the transaction, so no other writer lands between the read and the writes. */
+  readonly plan: (held: readonly HeldItem[], tombstones: ReadonlyMap<string, RejectedValueMark>) => CompactionItemPlan;
+}
+
+export interface CompactionItemsResult {
+  readonly written: number;
+  /** The record had left `summarised` before this call, so nothing was planned and `written` is its stored count. */
+  readonly alreadyDone: boolean;
+}
+
+export interface CallerFailureLog extends FailureEvent {
+  readonly requestId: string;
+}
+
+/** The reads and writes behind the hook routes. captureSessionTexts, captureFailureForCaller and hippo_learn need `entryWrites` too, and promptHookContext
+ *  `contextReads`; token rows go through the base `recordTokens`, task state reads through the base `continuity`. */
+export interface HookStore {
+  /** The session's stored owner, after binding `owner` when none is stored and pruning bindings past 90 days. No audit row. */
+  bindSession(binding: SessionBinding): Promise<string | null>;
+  /** The session's first pilot/arm token row in the tenant; with `book`, booked first when none exists, in one transaction. */
+  pilotArm(tenantId: string, sessionId: string, book: PilotArmBooking | null): Promise<PilotArm | null>;
+  /** As `lastSentState`. */
+  lastSent(tenantId: string, sessionId: string, surface: TokenSurface): Promise<LastSent | null>;
+  /** As `loadTextsHoldingWords`: rows `reach` admits whose content holds any of the words. */
+  textsHoldingWords(query: HeldTextQuery): Promise<HeldText[]>;
+  /** As `loadContentsWithTag`: team-visible rows whose tags hold `tag` exactly, superseded ones included. */
+  contentsWithTag(tenantId: string, tag: string, origins?: readonly string[]): Promise<string[]>;
+  /** Saves the handoff `plan` returns, stamped with the key, then marks the key's active snapshots of the session `session-ended`; a failed save closes nothing. */
+  endSession(end: SessionEnd): Promise<SessionEndWrite>;
+  /** As `saveActiveTaskSnapshot` with a key, which scrubs secrets from the text first. */
+  saveSnapshot(tenantId: string, snapshot: TaskSnapshotInput, key: ContinuityKey): Promise<TaskSnapshot>;
+  startCompaction(open: CompactionOpen): Promise<void>;
+  /** The tenant's record holding the request id, whatever its session. */
+  compactionByRequest(tenantId: string, requestId: string): Promise<CompactionRecord | null>;
+  /** As `recordSummary`: the session's newest started record in the window moves to summarised with the request id, else one is inserted under `id`. */
+  summariseCompaction(summary: CompactionSummary): Promise<CompactionRecord>;
+  /** One transaction: the plan's steps in order, the strengthen, then the record `done` with the writes counted; a tombstone a write meets rolls it all back.
+   *  After commit, each row's mirror and the remembered counter, best effort. */
+  writeCompactionItems(write: CompactionItemsWrite): Promise<CompactionItemsResult>;
+  failureOutcome(tenantId: string, requestId: string): Promise<LoggedFailure | null>;
+  /** As `recordFailure`; with `settle`, only rewrites the outcome of the tenant's row holding the request id. */
+  logFailure(event: CallerFailureLog, settle: boolean): Promise<void>;
+}
+
 /** The optional groups: a store sets each one whole or leaves it unset, and a route or MCP tool names the one it needs. */
 export interface StoreGroups {
   /** Unset on a store built before them, where hybrid and physics recall under an embedding provider answer 501. */
@@ -246,6 +396,7 @@ export interface StoreGroups {
   readonly vectorWrites: VectorWrites;
   readonly entryWrites: EntryWrites;
   readonly contextReads: ContextReads;
+  readonly hooks: HookStore;
 }
 
 export type StoreGroup = 'base' | keyof StoreGroups;
@@ -370,6 +521,7 @@ export function sqliteStore(hippoRoot: string): HippoStore & StoreGroups {
     },
     entryWrites: sqliteEntryWrites(hippoRoot),
     contextReads: sqliteContextReads(hippoRoot),
+    hooks: sqliteHookStore(hippoRoot),
     async close(): Promise<void> {},
   };
 }

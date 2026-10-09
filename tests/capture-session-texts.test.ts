@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import type { Context } from '../src/api.js';
+import type { HippoDbContext } from '../src/api.js';
 import { BadRequestError } from '../src/api-errors.js';
 import { queryAuditEvents } from '../src/audit.js';
 import { extractFromTexts } from '../src/capture/extract.js';
@@ -46,7 +46,7 @@ afterEach(() => {
   fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
-const ctxFor = (hippoRoot: string, tenantId = 'default'): Context => ({ hippoRoot, tenantId, actor: { subject: ACTOR, role: 'member' } });
+const ctxFor = (hippoRoot: string, tenantId = 'default'): HippoDbContext => ({ hippoRoot, tenantId, actor: { subject: ACTOR, role: 'member' } });
 const req = (texts: readonly string[], over: Partial<SessionCaptureRequest> = {}): SessionCaptureRequest =>
   ({ sessionId: 'sess-1', project: CALLER, texts, ...over });
 const contents = (hippoRoot: string, tenantId = 'default'): string[] => loadAllEntries(hippoRoot, tenantId).map((e) => e.content).sort();

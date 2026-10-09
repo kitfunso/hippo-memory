@@ -82,9 +82,9 @@ export async function runOutcomeTool({ args, ctx, hippoRoot, tenantId }: ToolCal
   return `Applied ${good ? 'positive' : 'negative'} outcome to ${applied} memories`;
 }
 
-export function runLearnTool({ args, ctx, hippoRoot, tenantId }: ToolCall): string {
+export async function runLearnTool({ args, ctx, hippoRoot, tenantId }: ToolCall): Promise<string> {
   const days = Number(args.days) || 7;
-  const result = apiLearn({ hippoRoot, tenantId, actor: mcpActor(ctx), store: ctx?.store }, { repoPath: process.cwd(), days, profile: MCP_LEARN });
+  const result = await apiLearn({ hippoRoot, tenantId, actor: mcpActor(ctx), store: ctx?.store }, { repoPath: process.cwd(), days, profile: MCP_LEARN });
   if (result.status === 'not-a-repo') return 'No git history found.';
   if (result.status === 'no-commits') return 'No fix/revert/bug commits found in the specified period.';
   const { added, skipped, rejected, lowInfo } = result;

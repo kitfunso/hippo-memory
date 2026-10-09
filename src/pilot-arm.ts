@@ -2,8 +2,10 @@
 // `items` holds the holdout rate in basis points; readers outside this repo depend on these rows, so their shape is fixed.
 import { createHash } from 'node:crypto';
 import { loadConfig } from './config.js';
-import { execWithBusyRetry, HOOK_DB_WAIT_MS, scopedBusyWait, type DatabaseSyncLike } from './db.js';
+import { execWithBusyRetry, HOOK_DB_WAIT_MS, rethrowIfSqliteBlocked, scopedBusyWait, type DatabaseSyncLike } from './db.js';
 import { ledgerRoot, withLedgerDb, type LedgerRootOpts } from './ledger-db.js';
+import { errorMessage, log } from './log.js';
+import type { HookStore } from './store-port.js';
 import { recordTokenUse } from './token-ledger.js';
 
 export type PilotArm = 'hippo' | 'holdout';
@@ -30,31 +32,55 @@ export function readPilotArm(db: DatabaseSyncLike, sessionId: string, tenantId?:
   return row?.block_hash === 'holdout' || row?.block_hash === 'hippo' ? row.block_hash : null;
 }
 
-/** The stored arm, else the hash arm written once; on any error the hash arm comes back unrecorded. */
+/** The stored arm, else `book.arm` written once with `book.rateBp` as its items; throws on any failure, rolled back. */
 // The wait is the caller's lock-wait scope (a hook's 1 s, a server request's 250 ms); it holds on a handle opened in that scope.
+export function bookPilotArm(
+  db: DatabaseSyncLike, tenantId: string, sessionId: string, book: { arm: PilotArm; rateBp: number }, opts: { ownTenantOnly?: boolean; now?: string } = {},
+): PilotArm {
+  const readTenant = opts.ownTenantOnly ? tenantId : undefined;
+  // A stored row is the common case after the first prompt, so it must not take the write lock.
+  const existing = readPilotArm(db, sessionId, readTenant);
+  if (existing !== null) return existing;
+  execWithBusyRetry(db, 'BEGIN IMMEDIATE', scopedBusyWait() ?? HOOK_DB_WAIT_MS);
+  try {
+    const stored = readPilotArm(db, sessionId, readTenant);
+    if (stored === null) {
+      recordTokenUse(db, { tenantId, sessionId, surface: 'pilot', event: 'arm', items: book.rateBp, tokens: 0, hash: book.arm, now: opts.now });
+    }
+    db.exec('COMMIT');
+    return stored ?? book.arm;
+  } catch (err) {
+    try { db.exec('ROLLBACK'); } catch { /* the first error is the one to report */ }
+    throw err;
+  }
+}
+
+/** The stored arm, else the hash arm written once; on any error the hash arm comes back unrecorded. */
 export function ensurePilotArm(
   db: DatabaseSyncLike, tenantId: string, sessionId: string, rateBp: number, opts: { ownTenantOnly?: boolean; now?: string } = {},
 ): PilotArm {
   const hashed = hashArm(sessionId, rateBp);
-  const readTenant = opts.ownTenantOnly ? tenantId : undefined;
-  let began = false;
   try {
-    // A stored row is the common case after the first prompt, so it must not take the write lock.
-    const existing = readPilotArm(db, sessionId, readTenant);
-    if (existing !== null) return existing;
-    execWithBusyRetry(db, 'BEGIN IMMEDIATE', scopedBusyWait() ?? HOOK_DB_WAIT_MS);
-    began = true;
-    const stored = readPilotArm(db, sessionId, readTenant);
-    if (stored === null) {
-      recordTokenUse(db, { tenantId, sessionId, surface: 'pilot', event: 'arm', items: rateBp, tokens: 0, hash: hashed, now: opts.now });
-    }
-    db.exec('COMMIT');
-    return stored ?? hashed;
+    return bookPilotArm(db, tenantId, sessionId, { arm: hashed, rateBp }, opts);
   } catch {
     // A prompt hook must not fail on pilot bookkeeping; concurrent callers still agree on the hash arm.
-    if (began) {
-      try { db.exec('ROLLBACK'); } catch { /* keep the hash arm */ }
-    }
+    return hashed;
+  }
+}
+
+/** sessionPilotArm on `ctx.store`: the rate is still this root's config, the row goes through the hooks group. */
+export async function storePilotArm(
+  hippoRoot: string, tenantId: string, hooks: HookStore, sessionId: string, write: boolean,
+): Promise<PilotArm | null> {
+  if (sessionId.trim() === '') return null;
+  const rate = loadConfig(hippoRoot).pilot.holdoutRateBp;
+  if (rate <= 0) return null;
+  const hashed = hashArm(sessionId, rate);
+  try {
+    return (await hooks.pilotArm(tenantId, sessionId, write ? { arm: hashed, rateBp: rate } : null)) ?? hashed;
+  } catch (err) {
+    rethrowIfSqliteBlocked(err);
+    log.warnThenDebug('pilot-arm', `pilot arm not recorded; the hash arm stands: ${errorMessage(err)}`);
     return hashed;
   }
 }

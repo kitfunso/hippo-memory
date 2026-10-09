@@ -62,6 +62,9 @@ export {
   type KeyAudit, type KeyListQuery, type KeyMint, type KeyRevoke, type KeyWrites, type OutcomeWrite, type RawArchive, type RecallSearchArgs,
   type RecallWrites, type SelfKeyMint, type StoreGroup, type StoreGroups, type SupersedeWrite, type VectorReads,
   type VectorBackfillQuery, type VectorRowWrite, type VectorWrite, type VectorWriteResult, type VectorWrites,
+  type CallerFailureLog, type CompactionItemPlan, type CompactionItemStep, type CompactionItemsResult, type CompactionItemsWrite, type CompactionOpen,
+  type CompactionSummary, type HeldItem, type HeldTextQuery, type HeldTextReach, type HookStore, type PilotArmBooking, type RefusedItem,
+  type RejectedValueMark, type SessionBinding, type SessionEnd, type SessionEndState, type SessionEndWrite,
 } from './store-port.js';
 // An add-on store's entry writes apply an outcome, guard tombstones and check reach exactly as hippo.db does.
 export { entryAfterOutcome } from './memory.js';
@@ -87,7 +90,17 @@ export type { SessionHandoff } from './handoff.js';
 export type { AmbientLoadResult, AmbientRecallRequest, ContextCandidateFilter, RecentOrigins } from './store/candidates.js';
 export type { AmbientStoreFilter } from './ambient-store.js';
 export type { AmbientTallies } from './ambient.js';
-export type { TokenUse } from './token-ledger.js';
+export type { LastSent, TokenSurface, TokenUse } from './token-ledger.js';
+export type { PilotArm } from './pilot-arm.js';
+export type { HeldText } from './store/candidates.js';
+export type { TaskSnapshotInput } from './store/sessions.js';
+export type { CompactionRecord, CompactionStatus } from './compaction-record.js';
+export type { FailureEvent, FailureOutcome, LoggedFailure } from './failure-log.js';
+// An add-on's HookStore prunes, windows and scrubs by hippo.db's own rules.
+export { BINDING_RETENTION_DAYS } from './session-owners.js';
+export { REPLAY_AFTER_MS } from './compaction-record.js';
+export { FAILURE_LOG_RETENTION_DAYS } from './failure-log.js';
+export { redactSecretsStrict } from './secret-detect.js';
 export type { EmbeddingIndexState } from './embeddings.js';
 export type { PhysicsParticle } from './physics.js';
 export { StoreBusyError } from './db.js';

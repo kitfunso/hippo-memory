@@ -51,7 +51,7 @@ function assertKeyedOnSharedStore(fn: string, hippoRoot: string, key: Continuity
   if (!key && isSharedStore(hippoRoot)) throw new Error(`${fn}: a shared store keeps one task snapshot per owner and project, so this write needs their continuity key`);
 }
 
-type SnapshotInput = {
+export type TaskSnapshotInput = {
   task: string;
   summary: string;
   next_step: string;
@@ -60,7 +60,7 @@ type SnapshotInput = {
   scope?: string | null;
 };
 
-function insertSnapshot(db: DatabaseSyncLike, tenantId: string, snapshot: SnapshotInput, now: string, stamp: ContinuityStamp | null): number {
+function insertSnapshot(db: DatabaseSyncLike, tenantId: string, snapshot: TaskSnapshotInput, now: string, stamp: ContinuityStamp | null): number {
   const result = db.prepare(`
     INSERT INTO task_snapshots(task, summary, next_step, status, source, session_id, scope, tenant_id, created_at, updated_at, owner_subject, origin_project)
     VALUES (?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?)
@@ -83,7 +83,7 @@ function insertSnapshot(db: DatabaseSyncLike, tenantId: string, snapshot: Snapsh
 export function saveActiveTaskSnapshot(
   hippoRoot: string,
   tenantId: string,
-  snapshot: SnapshotInput,
+  snapshot: TaskSnapshotInput,
   key?: ContinuityKey,
 ): TaskSnapshot {
   assertTenantId('saveActiveTaskSnapshot', tenantId);

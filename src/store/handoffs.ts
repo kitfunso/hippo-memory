@@ -232,11 +232,40 @@ export function writeSessionEndHandoff(
   if (key) continuityStamp(key); // a partial key is a caller bug, so fail loud rather than write nothing
   const active = loadActiveTaskSnapshot(hippoRoot, tenantId, key);
   const existing = loadLatestHandoff(hippoRoot, tenantId, sessionId, {}, key);
+  const outcome = (): HandoffOutcome | null => handoffOutcomeOf(sessionCompleteContent(hippoRoot, tenantId, sessionId));
+  const draft = sessionEndDraft({ active, existing, outcome }, sessionId, evidence, derived, options.inPlace === true);
+  if (draft === null) return null;
+  // A miss means a handoff landed since the read, and a new transcript row would hide it.
+  if (draft.fromTranscript && options.inPlace && existing) return replaceTranscriptHandoff(hippoRoot, tenantId, draft.handoff, key);
+  return saveSessionHandoff(hippoRoot, tenantId, draft.handoff, key);
+}
+
+/** The state a session end decides on; `outcome` is read only once a handoff is drafted. */
+export interface SessionEndReads {
+  readonly active: TaskSnapshot | null;
+  readonly existing: SessionHandoff | null;
+  readonly outcome: () => HandoffOutcome | null;
+}
+
+export interface SessionEndDraft {
+  readonly handoff: Omit<SessionHandoff, 'updatedAt'>;
+  readonly fromTranscript: boolean;
+}
+
+/** writeSessionEndHandoff's decision, for a store that read the state itself. */
+export function sessionEndDraft(
+  reads: SessionEndReads,
+  sessionId: string,
+  evidence: HandoffEvidence | null,
+  derived: Pick<TaskSnapshot, 'task' | 'summary' | 'next_step'> | null,
+  inPlace: boolean,
+): SessionEndDraft | null {
+  const { active, existing } = reads;
   let snapshot: Pick<TaskSnapshot, 'task' | 'summary' | 'next_step' | 'scope'>;
   let handoffEvidence = evidence;
   let fromTranscript = false;
   // After every reply the transcript is newer than the last compaction's snapshot, which the open chat keeps for the next one.
-  const snapshotGivesWay = options.inPlace === true && derived !== null && active?.source === 'pre-compact';
+  const snapshotGivesWay = inPlace && derived !== null && active?.source === 'pre-compact';
   if (active && active.session_id === sessionId && !snapshotGivesWay) {
     // Strict '>': a same-millisecond tie must not swallow the session's only write (test 6e).
     if (existing && existing.updatedAt > active.updated_at) return null;
@@ -250,7 +279,7 @@ export function writeSessionEndHandoff(
     handoffEvidence = { ...evidence, derivedFrom: 'transcript' };
     fromTranscript = true;
   }
-  const outcome = sessionOutcome(hippoRoot, tenantId, sessionId);
+  const outcome = reads.outcome();
 
   // A same-task refresh carries forward envelope fields nobody cleared; a scope
   // mismatch must not leak private metadata into an unscoped envelope.
@@ -272,12 +301,15 @@ export function writeSessionEndHandoff(
     targetRuntime: carryForward ? existing.targetRuntime : undefined,
     cardId: carryForward ? existing.cardId : undefined,
   };
-  // A miss means a handoff landed since the read, and a new transcript row would hide it.
-  if (fromTranscript && options.inPlace && existing) return replaceTranscriptHandoff(hippoRoot, tenantId, handoff, key);
-  return saveSessionHandoff(hippoRoot, tenantId, handoff, key);
+  return { handoff, fromTranscript };
 }
 
-function sessionOutcome(hippoRoot: string, tenantId: string, sessionId: string): HandoffOutcome | null {
+export function handoffOutcomeOf(content: string | null): HandoffOutcome | null {
+  return isHandoffOutcome(content) ? content : null;
+}
+
+/** The content of the session's newest session_complete event, or null. */
+export function sessionCompleteContent(hippoRoot: string, tenantId: string, sessionId: string): string | null {
   const db = openHippoDb(hippoRoot);
   try {
     // SAFETY: row's shape matches the single `content` column below.
@@ -286,7 +318,7 @@ function sessionOutcome(hippoRoot: string, tenantId: string, sessionId: string):
       WHERE tenant_id = ? AND session_id = ? AND event_type = 'session_complete'
       ORDER BY created_at DESC, id DESC LIMIT 1
     `).get(tenantId, sessionId) as { content?: string } | undefined)?.content;
-    return isHandoffOutcome(content) ? content : null;
+    return content ?? null;
   } finally {
     closeHippoDb(db);
   }

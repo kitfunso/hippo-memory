@@ -7,7 +7,8 @@ import { isInitialized, openStore } from '../store/open.js';
 import { writeEntryMirrors } from '../store/entry-writes.js';
 import { loadAllEntries } from '../store/entry-reads.js';
 import { updateStats } from '../store/index-and-stats.js';
-import { gatedWrite } from '../gated-write.js';
+import { gatedWrite, writeGateRefusal } from '../gated-write.js';
+import type { EntryWrites } from '../store-port.js';
 import { getGlobalRoot, initGlobal } from '../shared.js';
 import { embedMemory } from '../embeddings.js';
 import { maskEmails, redactSecretsStrict } from '../secret-detect.js';
@@ -287,7 +288,36 @@ export function captureExtractedItems(
   return tally;
 }
 
-function captureEntry(item: ExtractedItem, options: CaptureWriteOptions, baseHalfLifeDays: number): MemoryEntry {
+/** captureExtractedItems' lean write path through a store's entryWrites group; a store never dry-runs. */
+export async function captureItemsThroughStore(
+  entryWrites: EntryWrites,
+  targetRoot: string,
+  options: Pick<CaptureWriteOptions, 'tenantId' | 'originProject' | 'sessionId' | 'actor'>,
+  extracted: readonly ExtractedItem[],
+  keys: Set<string>,
+): Promise<CaptureTally> {
+  const tally: CaptureTally = { captured: 0, skipped: 0, rejected: 0 };
+  const baseHalfLifeDays = loadConfig(targetRoot).defaultHalfLifeDays;
+  for (const item of extracted) {
+    const entry = keys.has(duplicateKey(item.content)) ? null : stampOriginProject(targetRoot, captureEntry(item, options, baseHalfLifeDays));
+    if (entry === null || writeGateRefusal(entry) !== null) {
+      tally.skipped++;
+      continue;
+    }
+    try {
+      await entryWrites.writeEntry({ entry, actor: options.actor ?? 'cli' });
+    } catch (err) {
+      if (!(err instanceof RejectedValueError)) throw err;
+      tally.rejected++;
+      continue;
+    }
+    keys.add(duplicateKey(item.content));
+    tally.captured++;
+  }
+  return tally;
+}
+
+function captureEntry(item: ExtractedItem, options: Pick<CaptureWriteOptions, 'tenantId' | 'originProject' | 'sessionId'>, baseHalfLifeDays: number): MemoryEntry {
   // kind stays 'distilled': these are curated items, not raw transcript (see MEMORY_ENVELOPE.md).
   // The write tenant must match the dedup read's, or scoped dedup passes and the row lands in 'default'.
   const created = createMemory(item.content, {

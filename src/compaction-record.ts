@@ -12,6 +12,7 @@ import { COMPACTION_MEMORY_TAG, COMPACTION_SOURCE_PREFIX, Layer, createMemory, g
 import { fallbackOrigin, isGlobalStoreRoot, originInSql, projectId, projectNames, resolveProjectIdentity, type ProjectRef } from './project-identity.js';
 import { scopeAdmitSql } from './recall-scope.js';
 import { maskEmails, redactSecretsStrict } from './secret-detect.js';
+import type { HeldItem } from './store-port.js';
 import { strengthenRetrievedOn, writeEntryMirrors } from './store/entry-writes.js';
 import { isRecallBoostAblated } from './ablation.js';
 import { updateStats } from './store/index-and-stats.js';
@@ -154,8 +155,7 @@ export interface CompactionStart {
   transcriptPath: string | null;
 }
 
-export function startCompaction(db: DatabaseSyncLike, tenantId: string, start: CompactionStart, at: Date = new Date()): string {
-  const id = generateId('cmp');
+export function startCompaction(db: DatabaseSyncLike, tenantId: string, start: CompactionStart, at: Date = new Date(), id: string = generateId('cmp')): string {
   db.prepare(
     `INSERT INTO compactions(tenant_id, id, session_id, origin_project, compact_trigger, cwd, transcript_path, started_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -170,7 +170,15 @@ export function latestCompaction(db: DatabaseSyncLike, tenantId: string, session
 
 /** The record a caller's request made, whatever state it reached, so a retry neither writes its items twice nor starts a second record; another session's id is a ConflictError. */
 export function compactionByRequest(db: DatabaseSyncLike, tenantId: string, requestId: string, sessionId: string): CompactionRecord | null {
-  const record = selectRecords(db, 'tenant_id = ? AND request_id = ?', tenantId, requestId)[0] ?? null;
+  return ownRequestRecord(recordByRequest(db, tenantId, requestId), sessionId);
+}
+
+/** The tenant's record holding the request id, whatever its session. */
+export function recordByRequest(db: DatabaseSyncLike, tenantId: string, requestId: string): CompactionRecord | null {
+  return selectRecords(db, 'tenant_id = ? AND request_id = ?', tenantId, requestId)[0] ?? null;
+}
+
+export function ownRequestRecord(record: CompactionRecord | null, sessionId: string): CompactionRecord | null {
   // Sessions are owner-bound, so this also keeps one owner from reading or finishing another's record.
   if (record !== null && record.sessionId !== sessionId) throw new ConflictError('request id belongs to another session');
   return record;
@@ -235,10 +243,11 @@ export interface CompactionText {
   items: string[];
 }
 
-/** A caller's checked project, and the id its retries carry so a retry finds this record. */
+/** A caller's checked project, the id its retries carry so a retry finds this record, and the id a new record takes. */
 export interface SummaryCaller {
   originProject?: string;
   requestId?: string;
+  id?: string;
 }
 
 /** Puts the summary on the session's `started` record, or inserts a `summarised` one when pre-compact wrote none. One statement each. */
@@ -259,7 +268,7 @@ export function recordSummary(
     return { ...started, summary: text.summary, items: text.items, summarisedAt: now, status: 'summarised' };
   }
   const originProject = caller.originProject ?? compactionOrigin(hippoRoot, meta.cwd);
-  const id = generateId('cmp');
+  const id = caller.id ?? generateId('cmp');
   // Only a caller names the column, so a store from before it was added still takes local writes.
   const stamp = requestId === undefined ? [] : [requestId];
   const [col, mark] = stamp.length === 0 ? ['', ''] : [', request_id', ', ?'];
@@ -315,24 +324,24 @@ interface Held {
 }
 
 /** Live rows of one tenant and origin that default recall shows: a compaction often restates what an earlier one, or the user, already saved. */
-function heldRows(db: DatabaseSyncLike, tenantId: string, origins: readonly string[]): Held[] {
+export function selectHeldItems(db: DatabaseSyncLike, tenantId: string, origins: readonly string[]): HeldItem[] {
   const deny = scopeAdmitSql('');
   // SAFETY: the SELECT names the id, source_session_id and content columns.
   const rows = db.prepare(
     `SELECT id, source_session_id, content FROM memories WHERE tenant_id = ? AND ${originInSql(origins)} AND superseded_by IS NULL AND kind != 'raw'
        AND ${deny.sql}`,
   ).all(tenantId, ...origins, ...deny.params) as Array<{ id: string; source_session_id: string | null; content: string }>;
-  return rows.map((r) => ({ id: r.id, sessionId: r.source_session_id, words: words(r.content) }));
+  return rows.map((r) => ({ id: r.id, sessionId: r.source_session_id, content: r.content }));
 }
 
-interface ItemWrites {
+export interface ItemWrites {
   written: MemoryEntry[];
   repeats: number;
   refused: number;
   restated: string[];
 }
 
-function compactionEntry(text: string, ctx: ItemContext, origin: string | null, baseHalfLifeDays: number): MemoryEntry {
+export function compactionEntry(text: string, ctx: Pick<ItemContext, 'tenantId' | 'sessionId'>, origin: string | null, baseHalfLifeDays: number): MemoryEntry {
   return {
     ...createMemory(text, {
       layer: Layer.Episodic,
@@ -350,16 +359,29 @@ function compactionEntry(text: string, ctx: ItemContext, origin: string | null, 
 
 /** Runs inside saveItems' transaction: restatements of held rows are counted, the rest go through the write gate. */
 function writeItemRows(db: DatabaseSyncLike, hippoRoot: string, ctx: ItemContext, rows: readonly string[], baseHalfLifeDays: number): ItemWrites {
-  const out: ItemWrites = { written: [], repeats: 0, refused: 0, restated: [] };
-  const held = heldRows(db, ctx.tenantId, ctx.caller?.origins ?? heldOrigins(hippoRoot, ctx.cwd, ctx.originProject));
+  const held = selectHeldItems(db, ctx.tenantId, ctx.caller?.origins ?? heldOrigins(hippoRoot, ctx.cwd, ctx.originProject));
   const origin = ctx.caller === undefined ? itemOrigin(hippoRoot, ctx) : ctx.originProject;
+  const actor = ctx.caller?.actor ?? 'post-compact';
+  return planItemRows(
+    held, ctx.sessionId, rows,
+    (text) => compactionEntry(text, ctx, origin, baseHalfLifeDays),
+    (entry) => gatedWrite(db, hippoRoot, entry, { actor }) === 'written',
+  );
+}
+
+/** Restatements of `held` are counted and short items refused; `write` takes each other entry and says whether it was written. */
+export function planItemRows(
+  held: readonly HeldItem[], sessionId: string, rows: readonly string[], makeEntry: (text: string) => MemoryEntry, write: (entry: MemoryEntry) => boolean,
+): ItemWrites {
+  const out: ItemWrites = { written: [], repeats: 0, refused: 0, restated: [] };
+  const known: Held[] = held.map((h) => ({ id: h.id, sessionId: h.sessionId, words: words(h.content) }));
   const restated = new Set<string>();
   for (const text of rows) {
     const itemWords = words(text);
-    const match = held.find((h) => restates(itemWords, h.words));
+    const match = known.find((h) => restates(itemWords, h.words));
     if (match) {
       out.repeats++;
-      if (match.id !== null && match.sessionId !== ctx.sessionId) restated.add(match.id);
+      if (match.id !== null && match.sessionId !== sessionId) restated.add(match.id);
       continue;
     }
     // createMemory throws below 3 chars, which would sink the whole transaction.
@@ -367,10 +389,10 @@ function writeItemRows(db: DatabaseSyncLike, hippoRoot: string, ctx: ItemContext
       out.refused++;
       continue;
     }
-    const entry = compactionEntry(text, ctx, origin, baseHalfLifeDays);
-    if (gatedWrite(db, hippoRoot, entry, { actor: ctx.caller?.actor ?? 'post-compact' }) === 'written') {
+    const entry = makeEntry(text);
+    if (write(entry)) {
       out.written.push(entry);
-      held.push({ id: null, sessionId: ctx.sessionId, words: itemWords });
+      known.push({ id: null, sessionId, words: itemWords });
     } else {
       out.refused++;
     }
@@ -379,10 +401,14 @@ function writeItemRows(db: DatabaseSyncLike, hippoRoot: string, ctx: ItemContext
   return out;
 }
 
-/** After commit: report skips, mirror the new rows, bump the counter. */
-function finishItemWrites(hippoRoot: string, writes: ItemWrites, log: Log): void {
+export function logItemSkips(writes: Pick<ItemWrites, 'repeats' | 'refused'>, log: Log): void {
   if (writes.repeats > 0) log(`skipped ${writes.repeats} item(s) the store already holds`);
   if (writes.refused > 0) log(`skipped ${writes.refused} item(s) the write gate refused`);
+}
+
+/** After commit: report skips, mirror the new rows, bump the counter. */
+function finishItemWrites(hippoRoot: string, writes: ItemWrites, log: Log): void {
+  logItemSkips(writes, log);
   for (const entry of writes.written) writeEntryMirrors(hippoRoot, entry);
   if (writes.written.length > 0) {
     try {
@@ -394,34 +420,46 @@ function finishItemWrites(hippoRoot: string, writes: ItemWrites, log: Log): void
   }
 }
 
-/** Items that become rows, then the record `done`, in one transaction so two sessions cannot both insert one text. Mirrors after commit. */
-export function saveItems(db: DatabaseSyncLike, hippoRoot: string, ctx: ItemContext, log: Log): number {
-  const usable = ctx.items.filter((item) => !item.includes(REDACTED));
-  if (usable.length < ctx.items.length) log(`skipped ${ctx.items.length - usable.length} item(s) as secret`);
+/** The items that may become rows: none holding a redaction mark, within selectItemRows' caps; logs what it drops. */
+export function itemRowsToWrite(items: readonly string[], log: Log): string[] {
+  const usable = items.filter((item) => !item.includes(REDACTED));
+  if (usable.length < items.length) log(`skipped ${items.length - usable.length} item(s) as secret`);
   const { rows, tooLong, capped } = selectItemRows(usable);
   if (tooLong > 0) log(`item too long: ${tooLong} kept in the record only`);
   if (capped > 0) log(`capped: ${capped} more kept in the record only`);
+  return [...rows];
+}
 
+export function recordProgress(db: DatabaseSyncLike, tenantId: string, id: string): { status: CompactionStatus; itemsWritten: number } | null {
+  const row = db.prepare(`SELECT status, items_written FROM compactions WHERE tenant_id = ? AND id = ?`)
+    .get<{ status: CompactionStatus; items_written: number } | undefined>(tenantId, id);
+  return row === undefined ? null : { status: row.status, itemsWritten: row.items_written };
+}
+
+export function markItemsDone(db: DatabaseSyncLike, tenantId: string, id: string, written: number): void {
+  db.prepare(`UPDATE compactions SET items_written = ?, status = 'done' WHERE tenant_id = ? AND id = ?`).run(written, tenantId, id);
+}
+
+/** Items that become rows, then the record `done`, in one transaction so two sessions cannot both insert one text. Mirrors after commit. */
+export function saveItems(db: DatabaseSyncLike, hippoRoot: string, ctx: ItemContext, log: Log): number {
+  const rows = itemRowsToWrite(ctx.items, log);
   const baseHalfLifeDays = loadConfig(hippoRoot).defaultHalfLifeDays;
   let writes: ItemWrites;
   db.exec('BEGIN IMMEDIATE');
   try {
     if (ctx.recordId !== null) {
       // A replayer that read the record before another finished it must not write its items again.
-      const current = db.prepare(`SELECT status, items_written FROM compactions WHERE tenant_id = ? AND id = ?`)
-        .get<{ status: CompactionStatus; items_written: number } | undefined>(ctx.tenantId, ctx.recordId);
+      const current = recordProgress(db, ctx.tenantId, ctx.recordId);
       if (current?.status !== 'summarised') {
         db.exec('ROLLBACK');
         log(`${ctx.recordId} was already finished by another process`);
-        return current?.items_written ?? 0;
+        return current?.itemsWritten ?? 0;
       }
     }
     writes = writeItemRows(db, hippoRoot, ctx, rows, baseHalfLifeDays);
     // Said again by another session is the same signal as being recalled; the same session carrying it forward is not.
     strengthenRetrievedOn(db, writes.restated, { tenantId: ctx.tenantId, recallBoostAblated: isRecallBoostAblated() });
-    if (ctx.recordId !== null) {
-      db.prepare(`UPDATE compactions SET items_written = ?, status = 'done' WHERE tenant_id = ? AND id = ?`).run(writes.written.length, ctx.tenantId, ctx.recordId);
-    }
+    if (ctx.recordId !== null) markItemsDone(db, ctx.tenantId, ctx.recordId, writes.written.length);
     db.exec('COMMIT');
   } catch (err) {
     try { db.exec('ROLLBACK'); } catch { /* already rolled back; keep the original error */ }

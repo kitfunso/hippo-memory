@@ -30,7 +30,7 @@ import { type AuditOp, appendAuditEvent, reportAuditWriteFailure } from '../audi
 import * as client from '../client.js';
 import { type ServerInfo, detectServer, removePidfileIfOwned } from '../server-detect.js';
 import { resolveTenantId } from '../tenant.js';
-import { type Context, adminActor, learn, CLI_LEARN } from '../api.js';
+import { type HippoDbContext, adminActor, learn, CLI_LEARN } from '../api.js';
 import type { RecallSearchOpts } from '../recall-pipeline.js';
 import { snapshotText, sessionTrailText, handoffText } from '../context-render.js';
 import { errorMessage, log } from '../log.js';
@@ -497,7 +497,7 @@ export function learnFromRepo(
   label?: string
 ): { added: number; skipped: number; lowInfo: number } {
   const prefix = label ? `[${label}] ` : '';
-  const ctx: Context = { hippoRoot, tenantId: resolveTenantId({}), actor: adminActor('cli') };
+  const ctx: HippoDbContext = { hippoRoot, tenantId: resolveTenantId({}), actor: adminActor('cli') };
   const result = learn(ctx, { repoPath, days, profile: CLI_LEARN });
   if (result.status === 'not-a-repo') {
     console.log(`${prefix}No git history found (or not a git repository).`);

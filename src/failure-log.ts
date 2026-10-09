@@ -60,12 +60,26 @@ export function recordFailure(db: DatabaseSyncLike, event: FailureEvent): void {
 
 /** The outcome logged for a caller's request id, or null, so a retried send finds the first one; another session's id is a ConflictError. */
 export function requestOutcome(db: DatabaseSyncLike, tenantId: string, requestId: string, sessionId: string): FailureOutcome | null {
+  return ownRequestOutcome(loggedRequest(db, tenantId, requestId), sessionId);
+}
+
+export interface LoggedFailure {
+  readonly outcome: FailureOutcome;
+  readonly sessionId: string | null;
+}
+
+/** The tenant's row holding the request id, whatever its session. */
+export function loggedRequest(db: DatabaseSyncLike, tenantId: string, requestId: string): LoggedFailure | null {
   const row = db.prepare(`SELECT outcome, session_id FROM failure_log WHERE tenant_id = ? AND request_id = ?`)
     .get<{ outcome: FailureOutcome; session_id: string | null } | undefined>(tenantId, requestId);
-  if (row === undefined) return null;
+  return row === undefined ? null : { outcome: row.outcome, sessionId: row.session_id };
+}
+
+export function ownRequestOutcome(logged: LoggedFailure | null, sessionId: string): FailureOutcome | null {
+  if (logged === null) return null;
   // Sessions are owner-bound, so this also keeps one owner from reading or settling another's row; compared as stored.
-  if (row.session_id !== sessionId.slice(0, MAX_FIELD)) throw new ConflictError('request id belongs to another session');
-  return row.outcome;
+  if (logged.sessionId !== sessionId.slice(0, MAX_FIELD)) throw new ConflictError('request id belongs to another session');
+  return logged.outcome;
 }
 
 /** A retry that stored what the first try could not rewrites that row, since the request id allows one row per tenant. */

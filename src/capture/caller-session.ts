@@ -3,27 +3,45 @@ import { BadRequestError } from '../api-errors.js';
 import { ownerOrSubject, type Context } from '../api/types.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../db.js';
 import { MAX_ID_LEN } from '../http-util.js';
-import { sessionPilotArm } from '../pilot-arm.js';
+import { sessionPilotArm, storePilotArm } from '../pilot-arm.js';
 import { assertCallerIds, type CallerProject } from '../prompt-hook.js';
 import { assertCallerProject, projectNames } from '../project-identity.js';
 import { maskEmails, redactSecretsStrict } from '../secret-detect.js';
 import { bindSessionOwner } from '../session-owners.js';
+import type { HippoStore, HookStore } from '../store-port.js';
 import type { ContinuityKey } from '../store/sessions.js';
 import { fitWorkingState, WORKING_STATE_CAPS, type WorkingState } from './working-state.js';
 
+export type StoreContext = Context & { readonly store: HippoStore };
+
 /** Checks the ids, then binds the session to the caller's owner (a ConflictError when another owner holds it). Returns the key the call's rows go under. */
 export function bindCaller(ctx: Context, sessionId: string, project: CallerProject): ContinuityKey {
+  assertCallerSession(sessionId, project);
+  bindSessionOwner({ ...ctx, store: undefined }, sessionId);
+  return { owner: ownerOrSubject(ctx.actor), project: projectNames(project) };
+}
+
+/** bindCaller on `ctx.store`, through its hooks group. */
+export async function bindCallerThroughStore(ctx: StoreContext, sessionId: string, project: CallerProject): Promise<ContinuityKey> {
+  assertCallerSession(sessionId, project);
+  await bindSessionOwner(ctx, sessionId);
+  return { owner: ownerOrSubject(ctx.actor), project: projectNames(project) };
+}
+
+function assertCallerSession(sessionId: string, project: CallerProject): void {
   assertCallerIds(sessionId, project);
   if (sessionId.trim() === '') throw new BadRequestError('session id: required');
   // A '' project would stamp user-global rows; a rewritten one would split a project.
   assertCallerProject(project);
-  bindSessionOwner(ctx, sessionId);
-  return { owner: ownerOrSubject(ctx.actor), project: projectNames(project) };
 }
 
 /** Read only: the session's first prompt booked its arm, and a holdout session gets nothing from hippo. */
 export function callerInHoldout(ctx: Context, sessionId: string): boolean {
   return sessionPilotArm(ctx.hippoRoot, ctx.tenantId, sessionId, false, { sharedStore: true, ownTenantOnly: true }) === 'holdout';
+}
+
+export async function callerInHoldoutThroughStore(ctx: Context, hooks: HookStore, sessionId: string): Promise<boolean> {
+  return (await storePilotArm(ctx.hippoRoot, ctx.tenantId, hooks, sessionId, false)) === 'holdout';
 }
 
 /** Refuses a field past the cap a transcript read gives, naming it; scrubbed again, since the caller's scrub is not trusted, then cut back to the cap. */

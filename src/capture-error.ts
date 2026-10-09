@@ -1,7 +1,7 @@
 // `hippo capture-error`, run by the Claude Code PostToolUseFailure hook: routine failures and repeats are not
 // stored, because error memories decay slowly and would crowd out real lessons; what is stored stays `observed`
 // until outcome feedback confirms it. Every failure, stored or not, goes to the failure log.
-import { createMemory } from './memory.js';
+import { createMemory, type MemoryEntry } from './memory.js';
 import { writeEntry } from './store/entry-writes.js';
 import { loadContentsWithTag } from './store/entry-reads.js';
 import { loadConfig } from './config.js';
@@ -55,20 +55,26 @@ export interface LessonCaller {
 }
 
 export function storeLesson(hippoRoot: string, tenantId: string, text: string, caller?: LessonCaller): 'stored' | 'duplicate' {
+  const entry = lessonEntry(hippoRoot, tenantId, text, loadContentsWithTag(hippoRoot, tenantId, LESSON_TAG, caller?.origins));
+  if (entry === null) return 'duplicate';
+  // A caller's project is its checked one; the store's own folder would name the server.
+  if (caller === undefined) writeEntry(hippoRoot, entry);
+  else writeEntry(hippoRoot, { ...entry, origin_project: caller.originProject }, { actor: caller.actor });
+  return 'stored';
+}
+
+/** The tag a stored lesson carries and its repeat check reads. */
+export const LESSON_TAG = 'auto-captured';
+
+/** The lesson's row, or null when one of `held`, the contents tagged LESSON_TAG, carries its signature. */
+export function lessonEntry(hippoRoot: string, tenantId: string, text: string, held: readonly string[]): MemoryEntry | null {
   const sig = failureSignature(text);
-  const repeat = loadContentsWithTag(hippoRoot, tenantId, 'auto-captured', caller?.origins).some(
-    (content) => failureSignature(content) === sig,
-  );
-  if (repeat) return 'duplicate';
-  const entry = createMemory(text, {
-    tags: ['error', 'auto-captured'],
+  if (held.some((content) => failureSignature(content) === sig)) return null;
+  return createMemory(text, {
+    tags: ['error', LESSON_TAG],
     source: 'tool-failure',
     confidence: 'observed',
     tenantId,
     baseHalfLifeDays: loadConfig(hippoRoot).defaultHalfLifeDays,
   });
-  // A caller's project is its checked one; the store's own folder would name the server.
-  if (caller === undefined) writeEntry(hippoRoot, entry);
-  else writeEntry(hippoRoot, { ...entry, origin_project: caller.originProject }, { actor: caller.actor });
-  return 'stored';
 }

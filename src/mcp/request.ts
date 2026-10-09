@@ -79,7 +79,7 @@ const TOOL_HANDLERS: ReadonlyMap<string, ToolEntry> = new Map<string, ToolEntry>
   ['hippo_outcome', { handler: runOutcomeTool, storeReady: 'entryWrites' }],
   ['hippo_context', { handler: runContextTool, storeReady: 'contextReads' }],
   ['hippo_status', { handler: runStatusTool }],
-  ['hippo_learn', { handler: runLearnTool }],
+  ['hippo_learn', { handler: runLearnTool, storeReady: 'hooks' }],
   ['hippo_conflicts', { handler: runConflictsTool }],
   ['hippo_resolve', { handler: runResolveTool }],
   ['hippo_share', { handler: runShareTool }],

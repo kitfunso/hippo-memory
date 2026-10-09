@@ -8,7 +8,7 @@ import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../src/db.js';
 import { _resetSharedStoreCacheForTests } from '../src/config.js';
 import { clearProjectIdentityCache } from '../src/project-identity.js';
 import { PRE_COMPACT_INSTRUCTION } from '../src/compaction-record.js';
-import type { Context } from '../src/api/types.js';
+import type { HippoDbContext } from '../src/api/types.js';
 import {
   captureFailureForCaller,
   compactResumeForCaller,
@@ -79,7 +79,7 @@ function origins(db: DatabaseSyncLike, table: string): string[] {
 
 describe('caller calls under a foreign environment', () => {
   it("each of the five calls writes only to ctx.tenantId and the body's project", () => {
-    const ctx: Context = { hippoRoot: root, tenantId: TENANT, actor: { subject: 'api_key:hk_alice', role: 'member', owner: 'alice' } };
+    const ctx: HippoDbContext = { hippoRoot: root, tenantId: TENANT, actor: { subject: 'api_key:hk_alice', role: 'member', owner: 'alice' } };
     const base = { sessionId: SESSION, project: PROJECT };
 
     expect(preCompactForCaller(ctx, { ...base, trigger: 'auto', workingState: STATE })).toEqual({ stdout: PRE_COMPACT_INSTRUCTION });

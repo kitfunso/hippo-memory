@@ -19,7 +19,7 @@ import { COMPACTION_ITEM_MAX_CHARS } from '../src/compaction-items.js';
 import { compactResumeText } from '../src/context-render.js';
 import { loadActiveTaskSnapshot, saveActiveTaskSnapshot, type ContinuityKey } from '../src/store/sessions.js';
 import { BadRequestError, ConflictError } from '../src/api-errors.js';
-import type { Context } from '../src/api/types.js';
+import type { HippoDbContext } from '../src/api/types.js';
 import {
   bindSessionOwner,
   captureFailureForCaller,
@@ -103,7 +103,7 @@ function writtenRows(db: DatabaseSyncLike, source: string): WrittenRow[] {
   ).all(TENANT, source) as WrittenRow[];
 }
 
-function owned(owner: string): Context {
+function owned(owner: string): HippoDbContext {
   return { hippoRoot: root, tenantId: TENANT, actor: { subject: `api_key:hk_${owner}`, role: 'member', owner } };
 }
 
@@ -165,11 +165,11 @@ function failure(over: Partial<CallerFailureRequest> = {}): CallerFailureRequest
   return { sessionId: 'sA', project: PROJECT, tool: 'Bash', text: LESSON, skip: null, rule: null, detailHash: null, requestId: 'fail-1', ...over };
 }
 
-const preCompact = (ctx: Context, workingState: typeof STATE | null = STATE) =>
+const preCompact = (ctx: HippoDbContext, workingState: typeof STATE | null = STATE) =>
   preCompactForCaller(ctx, { sessionId: 'sA', project: PROJECT, trigger: 'auto', workingState });
-const postCompact = (ctx: Context, requestId = 'cmp-1') =>
+const postCompact = (ctx: HippoDbContext, requestId = 'cmp-1') =>
   saveCompactionItemsForCaller(ctx, { sessionId: 'sA', project: PROJECT, trigger: 'auto', items: ITEMS, requestId });
-const sessionEnd = (ctx: Context) =>
+const sessionEnd = (ctx: HippoDbContext) =>
   sessionEndHandoffForCaller(ctx, { sessionId: 'sA', project: PROJECT, workingState: null, evidence: { gitRef: 'a'.repeat(40), dirtyTree: false, testStatus: 'unknown' } });
 
 function thrown(fn: () => void): Error | null {
@@ -334,7 +334,7 @@ describe('preCompactForCaller', () => {
 });
 
 describe('compactResumeForCaller', () => {
-  const resume = (ctx: Context, source = 'compact') => compactResumeForCaller(ctx, { sessionId: 'sA', project: PROJECT, source });
+  const resume = (ctx: HippoDbContext, source = 'compact') => compactResumeForCaller(ctx, { sessionId: 'sA', project: PROJECT, source });
 
   it("source not compact gives ''", () => {
     saveActiveTaskSnapshot(root, TENANT, { ...STATE, session_id: 'sA' }, ALICE);
@@ -366,7 +366,7 @@ describe('compactResumeForCaller', () => {
 describe('saveCompactionItemsForCaller', () => {
   it('writes with ownerOrSubject as actor and the project as origin', () => {
     expect(postCompact(owned('alice'))).toEqual({ written: 2 });
-    const unowned: Context = { hippoRoot: root, tenantId: TENANT, actor: { subject: 'api_key:hk_carol', role: 'member' } };
+    const unowned: HippoDbContext = { hippoRoot: root, tenantId: TENANT, actor: { subject: 'api_key:hk_carol', role: 'member' } };
     saveCompactionItemsForCaller(unowned, { sessionId: 'sC', project: { name: 'acme/web', legacyName: 'web' }, trigger: 'auto', items: [ITEMS[0]], requestId: 'cmp-c' });
     withDb((db) => {
       expect(writtenRows(db, 'compaction:sA')).toEqual([
@@ -589,7 +589,7 @@ describe('sessionEndHandoffForCaller', () => {
 });
 
 describe('a second owner on the same session', () => {
-  const calls: Array<[string, (ctx: Context) => void]> = [
+  const calls: Array<[string, (ctx: HippoDbContext) => void]> = [
     ['pre-compact', (ctx) => preCompact(ctx)],
     ['compact-resume', (ctx) => compactResumeForCaller(ctx, { sessionId: 'sA', project: PROJECT, source: 'compact' })],
     ['post-compact', (ctx) => postCompact(ctx)],

@@ -10,6 +10,14 @@ import { writeEntryDbOnly } from './store/entry-writes.js';
 
 export type GatedWriteResult = 'written' | 'skipped:not-worth-storing' | 'skipped:secret' | 'skipped:rejected';
 
+/** The gate's refusal before any write, or null when the entry may be written. */
+export function writeGateRefusal(entry: MemoryEntry, opts?: { worthCheck?: boolean }): 'skipped:not-worth-storing' | 'skipped:secret' | null {
+  // Off for imported agent memories: a person wrote those notes, and a one-line preference fails the check.
+  if (opts?.worthCheck !== false && !isContentWorthStoring(entry.content)) return 'skipped:not-worth-storing';
+  if (detectSecret(entry).flagged) return 'skipped:secret';
+  return null;
+}
+
 /** Runs on the caller's handle so it nests in the caller's transaction (writeEntry would open a second handle and wait on that lock); the caller mirrors after commit with an entry it stamped itself. The rejection audit lands inside that transaction, which is safe because a batch that rolls back stays `summarised` and replay writes the audit again. */
 export function gatedWrite(
   db: DatabaseSyncLike,
@@ -17,9 +25,8 @@ export function gatedWrite(
   entry: MemoryEntry,
   opts?: { actor?: string; worthCheck?: boolean },
 ): GatedWriteResult {
-  // Off for imported agent memories: a person wrote those notes, and a one-line preference fails the check.
-  if (opts?.worthCheck !== false && !isContentWorthStoring(entry.content)) return 'skipped:not-worth-storing';
-  if (detectSecret(entry).flagged) return 'skipped:secret';
+  const refusal = writeGateRefusal(entry, opts);
+  if (refusal !== null) return refusal;
   try {
     writeEntryDbOnly(db, stampOriginProject(hippoRoot, entry), opts);
     return 'written';
