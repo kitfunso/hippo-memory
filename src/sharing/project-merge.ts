@@ -194,7 +194,8 @@ function strayImports(db: DatabaseSyncLike, hippoRoot: string, tenantId: string)
     // Its names before the id, and names folded into it, are the owner's too: the next sync moves those prefixes under the id.
     const [names] = ids.values();
     const own = new Set([...names, ...foldedInto(edges, names)]);
-    for (const origin of new Set([...origins, ...own])) (own.has(origin) ? right : wrong).add(containerPrefix('claude-code', containerId(dir, 'project', platform, origin)));
+    for (const origin of new Set([...origins, ...own]))
+      (own.has(origin) ? right : wrong).add(containerPrefix('claude-code', containerId(dir, 'project', platform, origin)));
   }
   const prefix = (e: MemoryEntry) => e.source.slice(0, e.source.indexOf('/', tool.length) + 1);
   const misfiled = live.filter((e) => wrong.has(prefix(e)));
@@ -231,7 +232,9 @@ function ownLegacyFold(db: DatabaseSyncLike, hippoRoot: string, tenantId: string
   if (isSharedStore(hippoRoot)) return [];
   const { name, legacyName } = resolveProjectIdentity(path.dirname(path.resolve(hippoRoot)));
   if (legacyName === '' || legacyName === name) return [];
-  const held = holdsOrigin(db, 'memories', tenantId, legacyName) || holdsOrigin(db, 'compactions', tenantId, legacyName) || listDormantSnapshots(db, tenantId).some((s) => s.entry.origin_project === legacyName);
+  const held = holdsOrigin(db, 'memories', tenantId, legacyName)
+    || holdsOrigin(db, 'compactions', tenantId, legacyName)
+    || listDormantSnapshots(db, tenantId).some((s) => s.entry.origin_project === legacyName);
   return held ? [{ from: legacyName, into: name }] : [];
 }
 
@@ -275,7 +278,11 @@ export function planProjectRepair(db: DatabaseSyncLike, hippoRoot: string, tenan
 }
 
 /** Parents read with `folds` already applied, so a plan matches what apply does after folding. */
-function planUserGlobalRepair(db: DatabaseSyncLike, tenantId: string, folds: readonly ProjectFold[]): Pick<RepairResult, 'toProject' | 'setAside' | 'untraced'> {
+function planUserGlobalRepair(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  folds: readonly ProjectFold[]
+): Pick<RepairResult, 'toProject' | 'setAside' | 'untraced'> {
   const all = selectAllEntries(db, tenantId);
   const renamed = new Map(folds.map((f) => [f.from, f.into]));
   const after = (origin: string | null | undefined) => (origin ? renamed.get(origin) ?? origin : origin ?? null);

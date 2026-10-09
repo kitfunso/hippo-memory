@@ -13,7 +13,8 @@ import { removeGraphEntitiesForObject } from '../graph-writes.js';
 import type { BriefReceipt, Incident, ObjectByKind, ObjectKind, Policy, SavableKind, Skill } from '../object-types.js';
 import { LEGACY_TYPED_HALF_LIFE, onHandle, openStore, TYPED_HALF_LIFE_META_KEY } from '../open.js';
 import {
-  isObjectRefusal, type IncidentOpen, type IncidentOpenRefusal, type IncidentResolve, type ObjectClose, type ObjectListQuery, type ObjectRefusal, type Objects, type ObjectSave,
+  isObjectRefusal, type IncidentOpen, type IncidentOpenRefusal, type IncidentResolve, type ObjectClose, type ObjectListQuery, type ObjectRefusal,
+  type Objects, type ObjectSave,
   type PoliciesInForceQuery,
 } from '../port.js';
 import { auditingRefusal } from './entry-writes-group.js';
@@ -65,7 +66,13 @@ export function servedObjects(sync: SyncObjects): Objects {
 }
 
 /** The newest object in `status` that a memory mirrors, for the CLI flags that name an object by its memory id. */
-export function objectIdByMemory<K extends ObjectKind>(hippoRoot: string, tenantId: string, kind: K, status: ObjectByKind[K]['status'], memoryId: string): number | null {
+export function objectIdByMemory<K extends ObjectKind>(
+  hippoRoot: string,
+  tenantId: string,
+  kind: K,
+  status: ObjectByKind[K]['status'],
+  memoryId: string
+): number | null {
   return onHandle(hippoRoot, (db) => {
     const row = db.prepare(
       `SELECT id FROM ${rowSpec(kind).table} WHERE memory_id = ? AND tenant_id = ? AND status = ? ORDER BY id DESC LIMIT 1`,
@@ -191,7 +198,13 @@ function supersedeRow<K extends SavableKind>(db: DatabaseSyncLike, row: NewRow<K
 }
 
 /** The object half of a save, inside the scope that holds the mirror memory: a refusal or a throw here leaves no row, memory or audit event. */
-function writeObjectRow<K extends SavableKind>(db: DatabaseSyncLike, tenantId: string, kind: K, memoryId: string, save: ObjectSave<K>): RowByKind[K] | ObjectRefusal {
+function writeObjectRow<K extends SavableKind>(
+  db: DatabaseSyncLike,
+  tenantId: string,
+  kind: K,
+  memoryId: string,
+  save: ObjectSave<K>
+): RowByKind[K] | ObjectRefusal {
   const replaced = save.supersedesId;
   const next = replaced === undefined ? { version: 1 } : successorVersion(db, tenantId, kind, replaced);
   if (isObjectRefusal(next)) return next;
@@ -234,7 +247,11 @@ function onStoreHalfLife(db: DatabaseSyncLike, mirror: MemoryEntry): MemoryEntry
 }
 
 /** One write scope on one handle holds the mirror, the row `writeRow` adds, the successor link and every audit row, the mirror's remember row last. */
-function withMirror<R extends object, F extends Refused>(hippoRoot: string, write: MirroredWrite, writeRow: (db: DatabaseSyncLike, memoryId: string) => R | F): R | F {
+function withMirror<R extends object, F extends Refused>(
+  hippoRoot: string,
+  write: MirroredWrite,
+  writeRow: (db: DatabaseSyncLike, memoryId: string) => R | F
+): R | F {
   return onHandle(hippoRoot, (db) => auditingRefusal(db, write.actor, () => {
     let mirror = stampOriginProject(hippoRoot, write.mirror);
     const written = withWriteScopeOr(db, 'write_entry', (rollback) => {

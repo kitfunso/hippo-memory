@@ -100,7 +100,9 @@ async function retrieveBand(ctx: Context, store: HippoStore, opts: RecallOpts, w
   }
   const plan = planRecall(ctx, opts, candidates, own);
   const { result, writes } = composeRecall(ctx, opts, { windowSize, all: candidates, plan, reads: await readRecall(store, ctx, opts, plan) });
-  await store.finishRecall({ ...writes, audit: [...(opts.leadingAudit ?? []), ...writes.audit], strengthen: strengthenOf(ctx, result.results.map((r) => r.id)) });
+  await store.finishRecall({
+    ...writes, audit: [...(opts.leadingAudit ?? []), ...writes.audit], strengthen: strengthenOf(ctx, result.results.map((r) => r.id))
+  });
   return result;
 }
 
@@ -163,7 +165,9 @@ async function retrieveFromStore(
   const window = ranked.slice(0, windowSize).map((r) => r.entry);
   const bandOpts = { ...opts, suppressRecallTrace: true };
   const plan = planRecall(ctx, bandOpts, window, own);
-  const { result, writes } = composeRecall(ctx, bandOpts, { windowSize, all: window, plan, reads: await readRecall(store, ctx, bandOpts, plan, goals), auditBand: false });
+  const { result, writes } = composeRecall(ctx, bandOpts, {
+    windowSize, all: window, plan, reads: await readRecall(store, ctx, bandOpts, plan, goals), auditBand: false
+  });
   // Rows the vector arm added count as candidates too.
   const inPool = new Set(pool.map((e) => e.id));
   const candidates = [...pool, ...ranked.map((r) => r.entry).filter((e) => !inPool.has(e.id))];

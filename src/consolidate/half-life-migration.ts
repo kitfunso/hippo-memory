@@ -87,7 +87,12 @@ export function migrateDefaultHalfLife(hippoRoot: string, to: number, opts: { dr
     const plan = [...basePlan, ...typedPlan];
     return {
       moves: [{ from: rows.from, to, entries: basePlan }, { from: LEGACY_TYPED_HALF_LIFE, to, entries: typedPlan }],
-      outcome: { rescaled: basePlan.length, typed: typedPlan.length, kept: rows.all.length - plan.length, halfLives: new Map(plan.map((e) => [e.id, e.half_life_days])) },
+      outcome: {
+        rescaled: basePlan.length,
+        typed: typedPlan.length,
+        kept: rows.all.length - plan.length,
+        halfLives: new Map(plan.map((e) => [e.id, e.half_life_days]))
+      },
     };
   });
   const moved = outcome ?? { rescaled: 0, typed: 0, kept: 0, halfLives: new Map<string, number>() };

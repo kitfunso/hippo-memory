@@ -6,7 +6,17 @@ import { sendJson } from '../../util/http-util.js';
 import { buildContextWithAuth } from '../auth.js';
 import type { RouteRequest } from '../types.js';
 import { parseJsonBody } from '../validation.js';
-import { closeRoute, getRoute, listRoute, objectsOf, optionalString, requiredString, saveFor, supersedeRoute, type VersionedRouteConfig } from './object-routes.js';
+import {
+  closeRoute,
+  getRoute,
+  listRoute,
+  objectsOf,
+  optionalString,
+  requiredString,
+  saveFor,
+  supersedeRoute,
+  type VersionedRouteConfig
+} from './object-routes.js';
 
 const briefRoutes: VersionedRouteConfig<'project_brief', SaveProjectBriefOpts> = {
   noun: 'project brief',

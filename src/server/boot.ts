@@ -2,7 +2,18 @@ import { envPort, envRequireAuth, envV1Rps } from '../util/env.js';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { existsSync } from 'node:fs';
 import { detectServer, removePidfileIfOwned, writePidfile } from './server-detect.js';
-import { closeHippoDb, type DatabaseSyncLike, getHippoDbPath, isStoreBusy, openHippoDb, outsideRequestStores, outsideSqliteOffLoop, runWithRequestStores, SERVER_DB_WAIT_MS, withSqliteBlocked } from '../db/index.js';
+import {
+  closeHippoDb,
+  type DatabaseSyncLike,
+  getHippoDbPath,
+  isStoreBusy,
+  openHippoDb,
+  outsideRequestStores,
+  outsideSqliteOffLoop,
+  runWithRequestStores,
+  SERVER_DB_WAIT_MS,
+  withSqliteBlocked
+} from '../db/index.js';
 import { startWalCheckpointer, type WalCheckpointer } from '../db/wal-checkpointer.js';
 import { requireGroup, type HippoStore } from '../store/index.js';
 import { workerSqliteStore } from '../store/sqlite/worker-store.js';
@@ -445,7 +456,9 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
 
 function frozenAddonRoutes(addonRoutes: ServeOpts['routes']): NonNullable<ServeOpts['routes']> {
   // A frozen copy, so a route the caller adds or renames after boot never skips the check below.
-  const routes = Object.freeze((addonRoutes ?? []).map(({ path, handler, storeReady }) => Object.freeze(storeReady === undefined ? { path, handler } : { path, handler, storeReady })));
+  const routes = Object.freeze((addonRoutes ?? []).map(({ path, handler, storeReady }) => Object.freeze(storeReady === undefined
+    ? { path, handler }
+    : { path, handler, storeReady })));
   assertAddonRoutes(routes);
   return routes;
 }

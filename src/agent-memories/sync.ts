@@ -80,7 +80,8 @@ export function importForStore(hippoRoot: string, opts: SyncOptions): ImportRepo
 export function importProjectMemories(hippoRoot: string, opts: SyncOptions): ImportReport {
   const ctx = context(opts.machine, { projectRoot: path.dirname(hippoRoot) });
   return runPass({
-    scope: 'project', target: hippoRoot, invoking: hippoRoot, list: (a) => a.list(ctx, 'project'), legacy: true, originProject: undefined, legacyOrigins: [], handover: true,
+    scope: 'project', target: hippoRoot, invoking: hippoRoot, list: (a) => a.list(ctx, 'project'), legacy: true, originProject: undefined,
+    legacyOrigins: [], handover: true,
   }, opts);
 }
 
@@ -88,7 +89,8 @@ export function importProjectMemories(hippoRoot: string, opts: SyncOptions): Imp
 export function importUserMemories(invokingRoot: string, opts: SyncOptions): ImportReport {
   const ctx = context(opts.machine, {});
   return runPass({
-    scope: 'user', target: resolveGlobalRootDir(), invoking: invokingRoot, list: (a) => a.list(ctx, 'user'), legacy: false, originProject: '', legacyOrigins: [], handover: false,
+    scope: 'user', target: resolveGlobalRootDir(), invoking: invokingRoot, list: (a) => a.list(ctx, 'user'), legacy: false, originProject: '',
+    legacyOrigins: [], handover: false,
   }, opts);
 }
 
@@ -97,7 +99,8 @@ export function importAtSessionEnd(cwd: string, transcriptPath: string | undefin
   const globalRoot = resolveGlobalRootDir();
   const ctx = context(opts.machine, { projectRoot: cwd });
   const report = runPass({
-    scope: 'project', target: globalRoot, invoking: globalRoot, list: (a) => a.list(ctx, 'project'), legacy: false, ...projectOrigins(resolveProjectIdentity(cwd)), handover: false,
+    scope: 'project', target: globalRoot, invoking: globalRoot, list: (a) => a.list(ctx, 'project'), legacy: false,
+    ...projectOrigins(resolveProjectIdentity(cwd)), handover: false,
   }, opts);
   if (transcriptPath !== undefined) mergeReports(report, importSessionFolder(globalRoot, transcriptPath, cwd, opts));
   mergeReports(report, importUserMemories(globalRoot, opts));

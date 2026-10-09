@@ -406,7 +406,15 @@ class SnapshotCacheService implements SnapshotService {
     highestIssuedId = Math.max(highestIssuedId, this.lastId);
     // After loadDashboardRows, whose writable open has run any pending migration and legacy embeddings.json import.
     this.lastEmbeddedIds = this.connection.embeddedIds();
-    return buildSnapshot({ id: this.lastId, tenantId, nowMs, entries: rows?.live ?? [], excluded: rows?.excluded, openConflicts, embeddedIds: this.lastEmbeddedIds });
+    return buildSnapshot({
+      id: this.lastId,
+      tenantId,
+      nowMs,
+      entries: rows?.live ?? [],
+      excluded: rows?.excluded,
+      openConflicts,
+      embeddedIds: this.lastEmbeddedIds
+    });
   }
 
   get(tenantId: string, fresh = false): Snapshot {

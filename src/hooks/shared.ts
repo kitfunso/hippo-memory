@@ -73,7 +73,8 @@ export function isCopilotPresent(home: string = os.homedir()): boolean {
 }
 
 /** Codex hashes each hook and skips new or changed ones until the user reviews them in `/hooks`, so the reminder says what they would trust. */
-export const CODEX_TRUST_LINE = "The per-prompt hook sends your pinned memories plus up to 5 that match the prompt. Codex runs hippo's hooks only after you trust them once in `/hooks`.";
+export const CODEX_TRUST_LINE =
+  "The per-prompt hook sends your pinned memories plus up to 5 that match the prompt. Codex runs hippo's hooks only after you trust them once in `/hooks`.";
 
 /**
  * Default log path consumed by `hippo last-sleep`. Shared fallback when
@@ -108,11 +109,29 @@ export function detectInstalledTools(): ToolDetection[] {
   const claudeDir = claudeConfigDir();
   return [
     { name: 'claude-code', configDir: claudeDir, detected: fs.existsSync(claudeDir), kind: 'json-hook' },
-    { name: 'opencode', configDir: '~/.config/opencode', detected: exists('.config', 'opencode'), kind: 'plugin', notes: 'installs a TS plugin at ~/.config/opencode/plugins/hippo.ts' },
+    {
+      name: 'opencode',
+      configDir: '~/.config/opencode',
+      detected: exists('.config', 'opencode'),
+      kind: 'plugin',
+      notes: 'installs a TS plugin at ~/.config/opencode/plugins/hippo.ts'
+    },
     { name: 'openclaw', configDir: '~/.openclaw', detected: exists('.openclaw'), kind: 'plugin', notes: 'install via `openclaw plugins install hippo-memory`' },
-    { name: 'codex', configDir: '~/.codex', detected: isCodexPresent(home), kind: 'wrapper', notes: 'memory hooks in hooks.json, and wraps the detected codex launcher for session-end consolidation' },
+    {
+      name: 'codex',
+      configDir: '~/.codex',
+      detected: isCodexPresent(home),
+      kind: 'wrapper',
+      notes: 'memory hooks in hooks.json, and wraps the detected codex launcher for session-end consolidation'
+    },
     { name: 'copilot', configDir: copilotHomeDir(), detected: isCopilotPresent(), kind: 'json-hook', notes: 'hooks in hooks/hippo.json, the MCP server in mcp-config.json and a block in copilot-instructions.md; for VS Code, the server in each User mcp.json and prompts/hippo.instructions.md' },
-    { name: 'cursor', configDir: '~/.cursor', detected: exists('.cursor'), kind: 'markdown-instruction', notes: 'no hook API - patches AGENTS.md in the project' },
+    {
+      name: 'cursor',
+      configDir: '~/.cursor',
+      detected: exists('.cursor'),
+      kind: 'markdown-instruction',
+      notes: 'no hook API - patches AGENTS.md in the project'
+    },
     { name: 'pi', configDir: '~/.pi', detected: exists('.pi'), kind: 'markdown-instruction', notes: 'no hook API - patches AGENTS.md in the project' },
   ];
 }

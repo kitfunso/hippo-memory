@@ -253,9 +253,15 @@ export function loadCardDeps(hippoRoot: string, tenantId: string, id: string) {
   const db = openStore(hippoRoot);
   try {
     // SAFETY: rows' shape matches the single `parent` column named in the SELECT below.
-    const parents = (db.prepare(`SELECT parent FROM card_deps WHERE tenant_id = ? AND child = ?`).all(tenantId, id) as Array<{ parent: string }>).map((r) => r.parent);
+    const parents = (db.prepare(`SELECT parent FROM card_deps WHERE tenant_id = ? AND child = ?`).all(
+      tenantId,
+      id
+    ) as Array<{ parent: string }>).map((r) => r.parent);
     // SAFETY: rows' shape matches the single `child` column named in the SELECT below.
-    const children = (db.prepare(`SELECT child FROM card_deps WHERE tenant_id = ? AND parent = ?`).all(tenantId, id) as Array<{ child: string }>).map((r) => r.child);
+    const children = (db.prepare(`SELECT child FROM card_deps WHERE tenant_id = ? AND parent = ?`).all(
+      tenantId,
+      id
+    ) as Array<{ child: string }>).map((r) => r.child);
     return { parents, children };
   } finally {
     closeHippoDb(db);
@@ -463,13 +469,19 @@ export function completeCard(
 function promoteUnblockedChildren(db: DatabaseSyncLike, tenantId: string, parentId: string): string[] {
   const promotedChildren: string[] = [];
   // SAFETY: rows' shape matches the single `child` column named in the SELECT below.
-  const children = (db.prepare(`SELECT child FROM card_deps WHERE tenant_id = ? AND parent = ?`).all(tenantId, parentId) as Array<{ child: string }>).map((r) => r.child);
+  const children = (db.prepare(`SELECT child FROM card_deps WHERE tenant_id = ? AND parent = ?`).all(
+    tenantId,
+    parentId
+  ) as Array<{ child: string }>).map((r) => r.child);
   for (const childId of children) {
     // SAFETY: row's shape matches the single `status` column named in the SELECT below.
     const child = db.prepare(`SELECT status FROM cards WHERE tenant_id = ? AND id = ?`).get(tenantId, childId) as { status: string } | undefined;
     if (!child || child.status !== 'backlog') continue;
     // SAFETY: rows' shape matches the single `parent` column named in the SELECT below.
-    const parents = (db.prepare(`SELECT parent FROM card_deps WHERE tenant_id = ? AND child = ?`).all(tenantId, childId) as Array<{ parent: string }>).map((r) => r.parent);
+    const parents = (db.prepare(`SELECT parent FROM card_deps WHERE tenant_id = ? AND child = ?`).all(
+      tenantId,
+      childId
+    ) as Array<{ parent: string }>).map((r) => r.parent);
     const placeholders = parents.map(() => '?').join(', ');
     // SAFETY: row's shape matches the single `c` column named in the SELECT below.
     const doneCount = (db.prepare(

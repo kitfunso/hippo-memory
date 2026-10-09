@@ -213,7 +213,9 @@ async function searchPool(ctx: RankRecallCtx, opts: RankRecallOpts, pool: Recall
   if (search.usePhysics && !globalRoot) {
     // Explain leaves minResults and includeSuperseded out to hold its output steady; asOf must reach physics or later rows leak.
     const temporal = explain ? { asOf } : { minResults, includeSuperseded, asOf };
-    return physicsSearch(query, pool.local, { budget, cost, hippoRoot: ctx.hippoRoot, physicsConfig: search.physicsConfig, scope, explain, vectorCandidates, ...temporal });
+    return physicsSearch(query, pool.local, {
+      budget, cost, hippoRoot: ctx.hippoRoot, physicsConfig: search.physicsConfig, scope, explain, vectorCandidates, ...temporal
+    });
   }
   if (globalRoot) {
     // searchBothHybrid reloads candidates itself, so the scope rule is passed in rather than inherited from the pool.
@@ -223,7 +225,9 @@ async function searchPool(ctx: RankRecallCtx, opts: RankRecallOpts, pool: Recall
       recallScope: opts.explicitScope ? { requested: opts.explicitScope, additive: true } : {},
     });
   }
-  return hybridSearch(query, pool.local, { budget, cost, hippoRoot: ctx.hippoRoot, explain, mmr, mmrLambda, minResults, scope, includeSuperseded, asOf, vectorCandidates });
+  return hybridSearch(query, pool.local, {
+    budget, cost, hippoRoot: ctx.hippoRoot, explain, mmr, mmrLambda, minResults, scope, includeSuperseded, asOf, vectorCandidates
+  });
 }
 
 /** Adds memories reached by walking the entity graph out from the lexical seeds. */
@@ -288,7 +292,8 @@ function applyPfcRerankers(opts: RankRecallOpts, state: RankState): void {
     // utility = score * (0.5 + 0.5 * strength) * (1 - min(0.3, tokens / 10000)); long evidence-rich rows pay for length.
     state.results = byScore(state.results.map((r) => {
       const strength = isJsonNumber(r.entry.strength) ? r.entry.strength : 1.0;
-      const utilityMult = (STRENGTH_RANK_FLOOR + STRENGTH_RANK_SPAN * strength) * (1 - Math.min(UTILITY_LENGTH_PENALTY_CAP, (r.tokens || 0) / UTILITY_LENGTH_TOKENS));
+      const utilityMult =
+        (STRENGTH_RANK_FLOOR + STRENGTH_RANK_SPAN * strength) * (1 - Math.min(UTILITY_LENGTH_PENALTY_CAP, (r.tokens || 0) / UTILITY_LENGTH_TOKENS));
       const utility = r.score * utilityMult;
       return traced(opts, r, { ...r, score: utility }, { stage: 'utility', multiplier: utilityMult, scoreBefore: r.score, scoreAfter: utility });
     }));
@@ -364,7 +369,9 @@ function applyGoalBoosts(ctx: RankRecallCtx, opts: RankRecallOpts, state: RankSt
     state.results = byScore(state.results.map((r) => {
       if (!r.entry.tags?.includes(goalTag)) return r;
       const boosted = { ...r, score: r.score * GOAL_TAG_BOOST };
-      return traced(opts, r, boosted, { stage: 'goal', multiplier: GOAL_TAG_BOOST, scoreBefore: r.score, scoreAfter: r.score * GOAL_TAG_BOOST, note: `--goal ${goalTag}` });
+      return traced(opts, r, boosted, {
+        stage: 'goal', multiplier: GOAL_TAG_BOOST, scoreBefore: r.score, scoreAfter: r.score * GOAL_TAG_BOOST, note: `--goal ${goalTag}`
+      });
     }));
     return;
   }

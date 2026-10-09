@@ -37,7 +37,24 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { JsonObject } from '../store/working-memory.js';
-import { type JsonHookTarget, HIPPO_SLEEP_MARKER, HIPPO_LAST_SLEEP_MARKER, HIPPO_CAPTURE_MARKER, HIPPO_SESSION_END_MARKER, HIPPO_PINNED_INJECT_MARKER, HIPPO_PINNED_INJECT_COMMAND, HIPPO_PRE_COMPACT_MARKER, HIPPO_COMPACT_RESUME_MARKER, HIPPO_CAPTURE_ERROR_MARKER, HIPPO_POST_COMPACT_MARKER, homeDir, claudeConfigDir, codexHomeDir, copilotHooksFile, defaultPreCompactLogPath } from './shared.js';
+import {
+  type JsonHookTarget,
+  HIPPO_SLEEP_MARKER,
+  HIPPO_LAST_SLEEP_MARKER,
+  HIPPO_CAPTURE_MARKER,
+  HIPPO_SESSION_END_MARKER,
+  HIPPO_PINNED_INJECT_MARKER,
+  HIPPO_PINNED_INJECT_COMMAND,
+  HIPPO_PRE_COMPACT_MARKER,
+  HIPPO_COMPACT_RESUME_MARKER,
+  HIPPO_CAPTURE_ERROR_MARKER,
+  HIPPO_POST_COMPACT_MARKER,
+  homeDir,
+  claudeConfigDir,
+  codexHomeDir,
+  copilotHooksFile,
+  defaultPreCompactLogPath
+} from './shared.js';
 import { type JsonValue, isJsonString, readJsonFile, isJsonObjectLiteral } from '../util/json.js';
 import { escapeRegex } from '../util/escape.js';
 import { writeFileAtomic } from '../util/atomic-write.js';

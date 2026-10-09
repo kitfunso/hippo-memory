@@ -67,7 +67,12 @@ function writeMove(db: DatabaseSyncLike, move: HalfLifeMove, old: ReadonlyMap<st
     record[e.id] = old.get(e.id)!;
   }
   for (const [tenantId, oldHalfLives] of byTenant) {
-    appendAuditEvent(db, { tenantId, actor, op: 'half_life_migrate', metadata: { from: move.from, to: move.to, ids: Object.keys(oldHalfLives), oldHalfLives } });
+    appendAuditEvent(db, {
+      tenantId,
+      actor,
+      op: 'half_life_migrate',
+      metadata: { from: move.from, to: move.to, ids: Object.keys(oldHalfLives), oldHalfLives }
+    });
   }
 }
 

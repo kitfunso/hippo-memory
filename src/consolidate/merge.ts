@@ -233,7 +233,9 @@ function mergeContents(entries: MemoryEntry[]): string {
   for (const e of sorted) {
     if (!texts.has(duplicateKey(e.content))) texts.set(duplicateKey(e.content), e.content);
   }
-  const header = entries.length === 2 ? '[Consolidated from 2 related memories, newest first]' : `[Consolidated pattern from ${entries.length} related memories, newest first]`;
+  const header = entries.length === 2
+    ? '[Consolidated from 2 related memories, newest first]'
+    : `[Consolidated pattern from ${entries.length} related memories, newest first]`;
   return mergedText(header, [...texts.values()]);
 }
 

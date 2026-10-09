@@ -168,7 +168,14 @@ export function readApiKeyRecord(db: DatabaseSyncLike, keyId: string): ApiKeyRec
   // row matches key_id.
   const row = db
     .prepare(`SELECT key_hash, tenant_id, revoked_at, role, expires_at, owner_subject FROM api_keys WHERE key_id = ?`)
-    .get(keyId) as { key_hash: string; tenant_id: string; revoked_at: string | null; role: string; expires_at: string | null; owner_subject: string | null } | undefined;
+    .get(keyId) as {
+      key_hash: string;
+      tenant_id: string;
+      revoked_at: string | null;
+      role: string;
+      expires_at: string | null;
+      owner_subject: string | null;
+    } | undefined;
   if (!row) return null;
   return {
     keyHash: row.key_hash, tenantId: row.tenant_id, revokedAt: row.revoked_at, role: row.role, scopes: listScopeGrants(db, keyId),

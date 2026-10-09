@@ -14,7 +14,8 @@ import { rethrowIfSqliteBlocked } from '../../db/index.js';
 import { EMBEDDING_MODEL_META_KEY } from '../../db/vector-store.js';
 import { initializeParticle } from '../../db/physics-state.js';
 import {
-  indexedModel, pruneStoredVectors, replacesIndex, resetStoredParticles, saveEmbeddingIndex, saveIndexIdentity, saveStoredVectors, seedStoredParticle, storedIndexState,
+  indexedModel, pruneStoredVectors, replacesIndex, resetStoredParticles, saveEmbeddingIndex, saveIndexIdentity, saveStoredVectors, seedStoredParticle,
+  storedIndexState,
 } from '../vector-index.js';
 import { loadConfig } from '../../core/config.js';
 import { resolveEmbeddingProvider, type EmbeddingProvider } from './provider.js';
@@ -349,7 +350,13 @@ function embedMemoryInStore(store: HippoStore, provider: EmbeddingProvider, entr
     const model = embeddingIndexIdentity(provider.id);
     try {
       const refused = replacesIndex(await reads.embeddingIndexState(), model)
-        || (await writeVectorPage(writes, { model, replaceIndex: false }, [entry], await provider.embed([embeddingInputText(entry)], 'passage'), true)).modelMismatch;
+        || (await writeVectorPage(
+          writes,
+          { model, replaceIndex: false },
+          [entry],
+          await provider.embed([embeddingInputText(entry)], 'passage'),
+          true
+        )).modelMismatch;
       if (refused) warnEmbedFailureOnce('index', OTHER_MODEL_INDEX);
     } catch (err) {
       warnEmbedFailureOnce(provider.kind, errorMessage(err));

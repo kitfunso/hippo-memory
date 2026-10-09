@@ -62,7 +62,13 @@ export function objectsOf({ opts }: RouteRequest): Objects {
 }
 
 /** Saves through the request's store as the authenticated caller. */
-export function saveFor<K extends SavableKind, W>(rr: RouteRequest, d: SavableDescriptor<K, W>, tenantId: string, actor: string, write: W): Promise<ObjectByKind[K]> {
+export function saveFor<K extends SavableKind, W>(
+  rr: RouteRequest,
+  d: SavableDescriptor<K, W>,
+  tenantId: string,
+  actor: string,
+  write: W
+): Promise<ObjectByKind[K]> {
   return saveObject(objectsOf(rr), d, { hippoRoot: rr.opts.hippoRoot, tenantId, actor }, write);
 }
 
