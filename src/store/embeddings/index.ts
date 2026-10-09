@@ -14,8 +14,7 @@ import { rethrowIfSqliteBlocked } from '../../db/index.js';
 import { EMBEDDING_MODEL_META_KEY } from '../../db/vector-store.js';
 import { initializeParticle } from '../../db/physics-state.js';
 import {
-  indexedModel, pruneStoredVectors, replacesIndex, resetStoredParticlesByIds, saveEmbeddingIndex, saveIndexIdentity, saveStoredVectors,
-  seedStoredParticle, storedIndexState,
+  indexedModel, pruneStoredVectors, replacesIndex, resetStoredParticles, saveEmbeddingIndex, saveIndexIdentity, saveStoredVectors, seedStoredParticle, storedIndexState,
 } from '../vector-index.js';
 import { loadConfig } from '../../core/config.js';
 import { resolveEmbeddingProvider, type EmbeddingProvider } from './provider.js';
@@ -163,7 +162,7 @@ function resetPhysicsFromIndex(
   index: Record<string, number[]>,
 ): void {
   try {
-    resetStoredParticlesByIds(hippoRoot, ids, index);
+    resetStoredParticles(hippoRoot, ids, index);
   } catch (err) {
     // Best effort: retrieval still falls back without physics state.
     log.warn(`physics reset after reindex failed: ${errorMessage(err)}`);

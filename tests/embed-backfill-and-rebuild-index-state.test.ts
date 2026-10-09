@@ -11,11 +11,12 @@ import { initializeParticle, loadPhysicsState, savePhysicsState } from '../src/d
 import { EMBEDDING_MODEL_META_KEY } from '../src/db/vector-store.js';
 import { embedAll, embeddingIndexIdentity, embeddingInputText, embedMemory } from '../src/store/embeddings/index.js';
 import type { EmbeddingProvider } from '../src/store/embeddings/provider.js';
-import { loadAllEntries } from '../src/store/entry-reads.js';
+import { loadAllEntries, loadAllEntryIds } from '../src/store/entry-reads.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { initStore } from '../src/store/open.js';
 import { MEMORY_SELECT_COLUMNS } from '../src/store/rows.js';
-import { recordStatementsAsync } from './_helpers/count-statements.js';
+import { loadEmbeddingIndex, resetStoredParticles } from '../src/store/vector-index.js';
+import { recordStatements, recordStatementsAsync } from './_helpers/count-statements.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from './_helpers/hashed-embedding-server.js';
 
 const SEEDED_AT = '2026-01-15T00:00:00.000Z';
@@ -231,6 +232,19 @@ describe('rows held while embedding hippo.db', () => {
     const log = await recordStatementsAsync(() => embedAll(root, undefined, fake(id, (texts) => calls.push(texts.length))));
     expect(log.result).toBe(embedded);
     expect(Math.max(...calls)).toBe(PAGE);
+    expect(peakFullRowsRead(log.statements)).toBe(PAGE);
+  }, SLOW);
+
+  it("resets particles from ids for both tenants' embedded rows, reading the rows at most 64 at a time", () => {
+    const root = copyOf(partly);
+    const ids = loadAllEntryIds(root);
+    const index = loadEmbeddingIndex(root);
+    const log = recordStatements(() => resetStoredParticles(root, ids, index));
+    const { particles } = indexOn(root);
+    const tenantOf = new Map(loadAllEntries(root).map((e) => [e.id, e.tenantId]));
+    expect([ids.length, log.result, particles.length]).toEqual([ROWS, 180, 180]);
+    expect(particles.map((p) => p.memoryId)).toEqual(Object.keys(index).sort());
+    expect(new Set(particles.map((p) => tenantOf.get(p.memoryId)))).toEqual(new Set(TENANTS));
     expect(peakFullRowsRead(log.statements)).toBe(PAGE);
   }, SLOW);
 });

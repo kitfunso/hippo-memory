@@ -205,16 +205,6 @@ export function saveStoredParticles(hippoRoot: string, particles: PhysicsParticl
   }
 }
 
-/** Replaces every particle under `hippoRoot` with a fresh one per entry that has an embedding; returns how many. */
-export function resetStoredParticles(hippoRoot: string, entries: MemoryEntry[], embeddingIndex: Record<string, number[]>): number {
-  const db = openHippoDb(hippoRoot);
-  try {
-    return resetAllPhysicsState(db, entries, embeddingIndex);
-  } finally {
-    closeHippoDb(db);
-  }
-}
-
 const PARTICLE_PAGE = 64;
 
 function* entriesInPages(db: DatabaseSyncLike, ids: readonly string[]): Generator<MemoryEntry> {
@@ -227,8 +217,8 @@ function* entriesInPages(db: DatabaseSyncLike, ids: readonly string[]): Generato
   }
 }
 
-/** resetStoredParticles for the memories `ids`, in that order: their rows are read a page at a time on the writing handle, so they are never all held. */
-export function resetStoredParticlesByIds(hippoRoot: string, ids: readonly string[], embeddingIndex: Record<string, number[]>): number {
+/** Replaces every particle under `hippoRoot` with a fresh one per memory in `ids` that has an embedding; returns how many. Rows are read a page at a time. */
+export function resetStoredParticles(hippoRoot: string, ids: readonly string[], embeddingIndex: Record<string, number[]>): number {
   const db = openHippoDb(hippoRoot);
   try {
     return resetAllPhysicsState(db, entriesInPages(db, ids), embeddingIndex);

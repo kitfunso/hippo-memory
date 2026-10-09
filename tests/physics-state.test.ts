@@ -709,10 +709,9 @@ describe('stored particles by store root', () => {
     expect(loadStoredParticles(tmpDir).map((p) => p.memoryId).sort()).toEqual(['mem_s1', 'mem_s2']);
   });
 
-  it('resetStoredParticles drops stored state and keeps one particle per embedded entry', () => {
+  it('resetStoredParticles drops stored state and keeps one particle per embedded id', () => {
     seed(['mem_t1', 'mem_t2'], ['mem_t2']);
-    const entries = [makeMemoryEntry('mem_t1'), makeMemoryEntry('mem_t2')];
-    expect(resetStoredParticles(tmpDir, entries, { mem_t1: [0.5, 0.5, 0.5] })).toBe(1);
+    expect(resetStoredParticles(tmpDir, ['mem_t1', 'mem_t2'], { mem_t1: [0.5, 0.5, 0.5] })).toBe(1);
     const stored = loadStoredParticles(tmpDir);
     expect(stored.map((p) => p.memoryId)).toEqual(['mem_t1']);
     expect(stored[0]!.position[0]).toBeCloseTo(0.5, 5);

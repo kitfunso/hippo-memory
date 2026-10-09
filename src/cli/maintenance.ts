@@ -1,7 +1,7 @@
 // Store upkeep verbs: `hippo refine`, `hippo dedup` and `hippo embed`.
 
 import { envAnthropicApiKey } from '../util/env.js';
-import { loadAllEntries } from '../store/entry-reads.js';
+import { loadAllEntries, loadAllEntryIds } from '../store/entry-reads.js';
 import { deduplicateStore } from '../consolidate/dedupe.js';
 import { embedAll } from '../store/embeddings/index.js';
 import { resolveEmbeddingProvider, type EmbeddingProvider } from '../store/embeddings/provider.js';
@@ -173,9 +173,8 @@ export async function handleEmbed(
 }
 
 function resetPhysics(root: string): void {
-  const entries = loadAllEntries(root);
   const embIndex = loadEmbeddingIndex(root);
-  const count = resetStoredParticles(root, entries, embIndex);
+  const count = resetStoredParticles(root, loadAllEntryIds(root), embIndex);
   console.log(`Reset physics state: ${count} particles re-initialized from embeddings.`);
 }
 
