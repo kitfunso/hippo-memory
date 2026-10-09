@@ -331,6 +331,27 @@ export function setupDailySchedule(globalRoot: string): void {
 
 export type CliFlags = Record<string, string | boolean | string[]>;
 
+// Whole-arg digits only: parseInt alone reads "1abc" as 1 and a mutating verb would hit the wrong row.
+export function parsePositiveId(idRaw: unknown, label: string): number {
+  const s = String(idRaw ?? '').trim();
+  const id = parseInt(s, 10);
+  if (!/^\d+$/.test(s) || id <= 0) {
+    printError(`Invalid ${label} id: "${idRaw}" (expected a positive integer).`);
+    process.exit(1);
+  }
+  return id;
+}
+
+export function parseListLimit(flags: CliFlags): number {
+  const limitRaw = flags['limit'];
+  const limit = limitRaw !== undefined ? parseInt(String(limitRaw), 10) : 100;
+  if (!Number.isFinite(limit) || limit <= 0) {
+    printError(`Invalid --limit: "${limitRaw}". Must be a positive integer.`);
+    process.exit(1);
+  }
+  return limit;
+}
+
 /** What the command table hands each verb's run(). */
 export interface CommandContext {
   readonly hippoRoot: string;

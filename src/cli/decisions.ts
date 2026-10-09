@@ -9,19 +9,8 @@ import * as decisionsModule from '../decisions.js';
 import * as incidentsModule from '../incidents.js';
 import { resolveTenantId } from '../tenant.js';
 import { printError } from './output.js';
-import { requireInit, type CliFlags } from './shared.js';
-
-function parseListLimit(flags: CliFlags): number {
-  const limitRaw = flags['limit'];
-  const limit = limitRaw !== undefined ? parseInt(String(limitRaw), 10) : 100;
-  if (!Number.isFinite(limit) || limit <= 0) {
-    printError(`Invalid --limit: "${limitRaw}". Must be a positive integer.`);
-    process.exit(1);
-  }
-  return limit;
-}
-
-/** parseInt-based id parse for predictions and decisions; incidents use the strict parse below. */
+import { parseListLimit, parsePositiveId, requireInit, type CliFlags } from './shared.js';
+// Lenient on purpose (parseInt reads "1abc" as 1) until the next major version; incidents use the strict parser.
 function parseObjectId(idRaw: string, noun: string): number {
   const id = parseInt(String(idRaw), 10);
   if (!Number.isFinite(id) || id <= 0) {
@@ -368,19 +357,6 @@ function decideCreate(hippoRoot: string, tenantId: string, decisionText: string,
   }
 }
 
-// Strict positive-integer parse for incident id args. parseInt() alone accepts
-// trailing junk ("1abc" -> 1), which would let a mutating subcommand (close/
-// resolve) silently hit the wrong row; require the whole arg to be digits.
-function parsePositiveIncidentId(idRaw: unknown): number {
-  const s = String(idRaw ?? '').trim();
-  const id = parseInt(s, 10);
-  if (!/^\d+$/.test(s) || id <= 0) {
-    printError(`Invalid incident id: "${idRaw}" (expected a positive integer).`);
-    process.exit(1);
-  }
-  return id;
-}
-
 function incidentList(hippoRoot: string, tenantId: string, flags: CliFlags): void {
   const statusRaw = flags['status'];
   const status = typeof statusRaw === 'string' ? statusRaw.trim() : 'all';
@@ -417,7 +393,7 @@ function incidentGet(hippoRoot: string, tenantId: string, args: string[]): void 
     printError('Usage: hippo incident get <id>');
     process.exit(1);
   }
-  const id = parsePositiveIncidentId(idRaw);
+  const id = parsePositiveId(idRaw, 'incident');
   const incident = incidentsModule.loadIncidentById(hippoRoot, tenantId, id);
   if (!incident) {
     printError(`Incident ${id} not found.`);
@@ -443,7 +419,7 @@ function incidentResolve(hippoRoot: string, tenantId: string, args: string[], fl
     printError('Usage: hippo incident resolve <id> --resolution "<text>"');
     process.exit(1);
   }
-  const id = parsePositiveIncidentId(idRaw);
+  const id = parsePositiveId(idRaw, 'incident');
   const resolutionRaw = flags['resolution'];
   if (typeof resolutionRaw !== 'string' || !resolutionRaw.trim()) {
     printError('--resolution requires a non-empty value, e.g. hippo incident resolve <id> --resolution "root cause fixed".');
@@ -459,7 +435,7 @@ function incidentClose(hippoRoot: string, tenantId: string, args: string[]): voi
     printError('Usage: hippo incident close <id>');
     process.exit(1);
   }
-  const id = parsePositiveIncidentId(idRaw);
+  const id = parsePositiveId(idRaw, 'incident');
   const closed = incidentsModule.closeIncident(hippoRoot, tenantId, id);
   console.log(`Incident #${closed.id} closed.`);
 }

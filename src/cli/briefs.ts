@@ -10,17 +10,7 @@ import { buildGraphModel, renderGraphHtml, renderGraphCanvas, DEFAULT_VIEW_LIMIT
 import { resolveTenantId } from '../tenant.js';
 import { errorMessage, log } from '../log.js';
 import { printError } from './output.js';
-import { requireInit, type CliFlags } from './shared.js';
-
-function parsePositiveBriefId(idRaw: unknown): number {
-  const s = String(idRaw ?? '').trim();
-  const id = parseInt(s, 10);
-  if (!/^\d+$/.test(s) || id <= 0) {
-    printError(`Invalid brief id: "${idRaw}" (expected a positive integer).`);
-    process.exit(1);
-  }
-  return id;
-}
+import { parseListLimit, parsePositiveId, requireInit, type CliFlags } from './shared.js';
 
 function printBriefRow(b: briefsModule.ProjectBrief): void {
   console.log(`#${b.id} [${b.status}] v${b.version} repo="${b.repo}" memory=${b.memoryId ?? '-'}`);
@@ -34,17 +24,6 @@ function briefUsage(): void {
   printError('       hippo brief supersede <id> --summary "<text>" [--change "<summary>"]');
   printError('       hippo brief close <id>');
   printError('       hippo brief refresh "<repo>" [--dry-run]   (auto-assemble the brief from the repo\'s receipts)');
-}
-
-
-function parseListLimit(flags: CliFlags): number {
-  const limitRaw = flags['limit'];
-  const limit = limitRaw !== undefined ? parseInt(String(limitRaw), 10) : 100;
-  if (!Number.isFinite(limit) || limit <= 0) {
-    printError(`Invalid --limit: "${limitRaw}". Must be a positive integer.`);
-    process.exit(1);
-  }
-  return limit;
 }
 
 function briefList(hippoRoot: string, tenantId: string, flags: CliFlags): void {
@@ -101,7 +80,7 @@ function briefGet(hippoRoot: string, tenantId: string, args: string[]): void {
     printError('Usage: hippo brief get <id>');
     process.exit(1);
   }
-  const id = parsePositiveBriefId(idRaw);
+  const id = parsePositiveId(idRaw, 'brief');
   const b = briefsModule.loadProjectBriefById(hippoRoot, tenantId, id);
   if (!b) {
     printError(`Project brief ${id} not found.`);
@@ -126,7 +105,7 @@ function briefSupersede(hippoRoot: string, tenantId: string, args: string[], fla
     printError('Usage: hippo brief supersede <id> --summary "<text>" [--change "<summary>"]');
     process.exit(1);
   }
-  const id = parsePositiveBriefId(idRaw);
+  const id = parsePositiveId(idRaw, 'brief');
   const summaryRaw = flags['summary'];
   if (typeof summaryRaw !== 'string' || !summaryRaw.trim()) {
     printError('hippo brief supersede requires --summary "<text>" for the new version.');
@@ -160,7 +139,7 @@ function briefClose(hippoRoot: string, tenantId: string, args: string[]): void {
     printError('Usage: hippo brief close <id>');
     process.exit(1);
   }
-  const id = parsePositiveBriefId(idRaw);
+  const id = parsePositiveId(idRaw, 'brief');
   const closed = briefsModule.closeProjectBrief(hippoRoot, tenantId, id);
   console.log(`Project brief #${closed.id} closed.`);
 }
@@ -203,16 +182,6 @@ export function cmdProjectBrief(
   if (subcommand === 'supersede') return briefSupersede(hippoRoot, tenantId, args, flags);
   if (subcommand === 'close') return briefClose(hippoRoot, tenantId, args);
   briefCreate(hippoRoot, tenantId, args, flags);
-}
-
-function parsePositiveNoteId(idRaw: unknown): number {
-  const s = String(idRaw ?? '').trim();
-  const id = parseInt(s, 10);
-  if (!/^\d+$/.test(s) || id <= 0) {
-    printError(`Invalid note id: "${idRaw}" (expected a positive integer).`);
-    process.exit(1);
-  }
-  return id;
 }
 
 function printNoteRow(n: customerNotesModule.CustomerNote): void {
@@ -357,7 +326,7 @@ function noteGet(hippoRoot: string, tenantId: string, args: string[]): void {
     printError('Usage: hippo note get <id>');
     process.exit(1);
   }
-  const id = parsePositiveNoteId(idRaw);
+  const id = parsePositiveId(idRaw, 'note');
   const n = customerNotesModule.loadCustomerNoteById(hippoRoot, tenantId, id);
   if (!n) {
     printError(`Customer note ${id} not found.`);
@@ -382,7 +351,7 @@ function noteSupersede(hippoRoot: string, tenantId: string, args: string[], flag
     printError('Usage: hippo note supersede <id> --text "<note>" [--change "<summary>"]');
     process.exit(1);
   }
-  const id = parsePositiveNoteId(idRaw);
+  const id = parsePositiveId(idRaw, 'note');
   const textRaw = flags['text'];
   if (typeof textRaw !== 'string' || !textRaw.trim()) {
     printError('hippo note supersede requires --text "<note>" for the new version.');
@@ -416,7 +385,7 @@ function noteClose(hippoRoot: string, tenantId: string, args: string[]): void {
     printError('Usage: hippo note close <id>');
     process.exit(1);
   }
-  const id = parsePositiveNoteId(idRaw);
+  const id = parsePositiveId(idRaw, 'note');
   const closed = customerNotesModule.closeCustomerNote(hippoRoot, tenantId, id);
   console.log(`Customer note #${closed.id} closed.`);
 }
