@@ -23,7 +23,6 @@
  * transcript file. Writes are best-effort at the call sites; a ledger failure
  * must never break recall.
  */
-import { createHash } from 'node:crypto';
 import { open } from 'node:fs/promises';
 import type { DatabaseSyncLike } from './db.js';
 import type { JsonObject } from './store/working-memory.js';
@@ -78,19 +77,6 @@ export type TokenEvent = 'inject' | 'skip' | 'reset' | 'reread' | 'arm';
 
 /** Rows older than this are pruned on write. */
 export const TOKEN_LEDGER_RETENTION_DAYS = 90;
-
-/**
- * Rough token estimate: characters / 4. The single estimate behind every
- * token budget and ledger count in hippo.
- */
-export function estimateTokens(text: string): number {
-  return Math.ceil(text.length / 4);
-}
-
-/** Stable 16-hex-char hash of a rendered block, for change detection. */
-export function blockHash(text: string): string {
-  return createHash('sha256').update(text).digest('hex').slice(0, 16);
-}
 
 /** One ledger write. */
 export interface TokenUse {

@@ -19,8 +19,8 @@ import {
   shouldSkipUnchanged,
   summarizeTokenUse,
   hookPayloadSessionId,
-  blockHash,
 } from '../src/token-ledger.js';
+import { blockHash } from '../src/util/token-text.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
 import { hippoOut } from './_helpers/spawn-hippo.js';

@@ -3,7 +3,8 @@
 import type { MemoryEntry } from './memory.js';
 import { evalNow } from './ablation.js';
 import { scoreOverlap, type PromptRecallGate } from './prompt-recall.js';
-import { blockHash, estimateTokens, hookPayloadSessionId, hookPayloadString, isSubagentPayload } from './token-ledger.js';
+import { hookPayloadSessionId, hookPayloadString, isSubagentPayload } from './token-ledger.js';
+import { blockHash, estimateTokens } from './util/token-text.js';
 import { errorMessage } from './log.js';
 export type DeliveryRuntime = 'claude-code' | 'codex' | 'copilot' | 'unknown';
 export type DeliveryEventType = 'prompt-submit' | 'pinned-manual';
