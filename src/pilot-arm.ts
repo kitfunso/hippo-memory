@@ -2,7 +2,7 @@
 // `items` holds the holdout rate in basis points; readers outside this repo depend on these rows, so their shape is fixed.
 import { createHash } from 'node:crypto';
 import { loadConfig } from './config.js';
-import { execWithBusyRetry, HOOK_DB_WAIT_MS, scopedBusyWait, type DatabaseSyncLike } from './db.js';
+import { HOOK_DB_WAIT_MS, scopedBusyWait, withWriteScope, type DatabaseSyncLike } from './db.js';
 import { ledgerRoot, withLedgerDb, type LedgerRootOpts } from './ledger-db.js';
 import { errorMessage, log } from './log.js';
 import { firstPilotArmHash } from './store/token-ledger-rows.js';
@@ -34,25 +34,20 @@ export function ensurePilotArm(
 ): PilotArm {
   const hashed = hashArm(sessionId, rateBp);
   const readTenant = opts.ownTenantOnly ? tenantId : undefined;
-  let began = false;
   try {
     // A stored row is the common case after the first prompt, so it must not take the write lock.
     const existing = readPilotArm(db, sessionId, readTenant);
     if (existing !== null) return existing;
-    execWithBusyRetry(db, 'BEGIN IMMEDIATE', scopedBusyWait() ?? HOOK_DB_WAIT_MS);
-    began = true;
-    const stored = readPilotArm(db, sessionId, readTenant);
-    if (stored === null) {
-      recordTokenUse(db, { tenantId, sessionId, surface: 'pilot', event: 'arm', items: rateBp, tokens: 0, hash: hashed, now: opts.now });
-    }
-    db.exec('COMMIT');
-    return stored ?? hashed;
+    return withWriteScope(db, 'pilot_arm', () => {
+      const stored = readPilotArm(db, sessionId, readTenant);
+      if (stored === null) {
+        recordTokenUse(db, { tenantId, sessionId, surface: 'pilot', event: 'arm', items: rateBp, tokens: 0, hash: hashed, now: opts.now });
+      }
+      return stored ?? hashed;
+    }, { busyWaitMs: scopedBusyWait() ?? HOOK_DB_WAIT_MS });
   } catch (err) {
     // A prompt hook must not fail on pilot bookkeeping; concurrent callers still agree on the hash arm.
     log.debug(`pilot arm not stored, using the hash arm: ${errorMessage(err)}`);
-    if (began) {
-      try { db.exec('ROLLBACK'); } catch { /* keep the hash arm */ }
-    }
     return hashed;
   }
 }
