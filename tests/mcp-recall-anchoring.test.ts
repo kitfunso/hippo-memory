@@ -56,7 +56,7 @@ function countAuditOps(root: string, op: string): number {
   }
 }
 
-describe('mcp hippo_recall anchoringHint (J1, v0.33)', () => {
+describe('mcp hippo_recall anchoringHint', () => {
   let home: string;
   let originalHome: string | undefined;
 

@@ -6,9 +6,10 @@
  * exceeds WM_MAX_ENTRIES per scope.
  */
 
-import { closeHippoDb } from './db.js';
+import { closeHippoDb, withWriteScope } from './db.js';
 import { openStore } from './store/open.js';
 import type { JsonValue } from './json.js';
+import { warnDamagedColumn } from './util/stored-json.js';
 
 export const WM_MAX_ENTRIES = 20;
 
@@ -46,7 +47,8 @@ function rowToItem(row: WorkingMemoryRow): WorkingMemoryItem {
     // plain JSON object; malformed content falls through to the catch below.
     metadata = JSON.parse(row.metadata_json) as JsonObject;
   } catch {
-    // malformed JSON — default to empty
+    // The item still lists with its content; only its metadata reads as empty.
+    warnDamagedColumn({ table: 'working_memory', id: row.id, column: 'metadata_json' }, 'not valid JSON');
   }
   return {
     id: row.id,
@@ -80,8 +82,7 @@ export function wmPush(hippoRoot: string, opts: {
     const now = new Date().toISOString();
     const importance = opts.importance ?? 0;
 
-    db.exec('BEGIN IMMEDIATE');
-    try {
+    return withWriteScope(db, 'wm_push', () => {
       const result = db.prepare(`
         INSERT INTO working_memory(scope, session_id, task_id, importance, content, metadata_json, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -120,12 +121,8 @@ export function wmPush(hippoRoot: string, opts: {
         `).run(opts.scope, excess);
       }
 
-      db.exec('COMMIT');
       return id;
-    } catch (error) {
-      try { db.exec('ROLLBACK'); } catch { /* ignore */ }
-      throw error;
-    }
+    });
   } finally {
     closeHippoDb(db);
   }

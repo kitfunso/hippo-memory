@@ -7,7 +7,7 @@ import {
   OWNER_RE,
   validateOwner,
   isStrictOwnerEnv,
-} from '../src/owner-validation.js';
+} from '../src/cli/owner-validation.js';
 
 describe('OWNER_RE', () => {
   it.each([

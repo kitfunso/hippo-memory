@@ -5,6 +5,7 @@ import { readTextFile } from './files.js';
 import { readFolderStore, type FolderRules } from './folder-store.js';
 import { gitLayout } from './git.js';
 import type { Adapter, AdapterContext, Container } from './types.js';
+import { errorMessage } from '../log.js';
 
 const PRODUCTS = ['Code', 'Code - Insiders'] as const;
 const MEMORY_TOOL = ['github.copilot-chat', 'memory-tool', 'memories'] as const;
@@ -48,7 +49,7 @@ function workspaceFolder(file: string, platform: NodeJS.Platform, warnings: stri
     if ('workspace' in json || !json.folder) return null;
     return fileUriToPath(json.folder, platform);
   } catch (err) {
-    warnings.push(`${file}: ${err instanceof Error ? err.message : String(err)}`);
+    warnings.push(`${file}: ${errorMessage(err)}`);
     return null;
   }
 }
@@ -86,7 +87,7 @@ function projectContainers(data: string, ctx: AdapterContext, matches: (f: strin
   try {
     ids = fs.readdirSync(storage, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort();
   } catch (err) {
-    warnings.push(`${storage}: ${err instanceof Error ? err.message : String(err)}`);
+    warnings.push(`${storage}: ${errorMessage(err)}`);
     return [];
   }
   const found: Container[] = [];

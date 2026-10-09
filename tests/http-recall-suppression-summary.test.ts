@@ -49,7 +49,7 @@ afterEach(async () => {
   rmSync(home, { recursive: true, force: true });
 });
 
-describe('HTTP /v1/memories suppressionSummary (C5 WYSIATI, v1.12.13)', () => {
+describe('HTTP /v1/memories suppressionSummary', () => {
   it('response body includes suppressionSummary with all 6 camelCase counters', async () => {
     const res = await fetch(`${handle.url}/v1/memories?q=omega&limit=5`);
     expect(res.status).toBe(200);

@@ -1,7 +1,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { closeHippoDb, openHippoDb } from '../src/db.js';
+import { COMPACTION_DB_WAIT_MS } from '../src/compaction-record.js';
+import { closeHippoDb, HOOK_DB_WAIT_MS, openHippoDb } from '../src/db.js';
 import { loadActiveTaskSnapshot } from '../src/store/sessions.js';
 import {
   compactionRows,
@@ -14,6 +15,7 @@ import {
   summaryWith,
   type Scratch,
 } from './_helpers/compaction-hooks.js';
+import { lockWaitAskedMs, tracingLockWaits } from './_helpers/lock-waits.js';
 
 // The instruction Claude Code hands the summariser; pinned word for word.
 const INSTRUCTION =
@@ -132,11 +134,13 @@ describe('hippo pre-compact leaves a record and asks for memories', () => {
     const db = openHippoDb(s.hippoRoot);
     try {
       db.exec('BEGIN IMMEDIATE');
-      const started = Date.now();
+      const waits = path.join(s.dir, 'lock-waits');
+      s.env = tracingLockWaits(s.env, waits);
       const result = preCompact('s1');
       expect(result.status).toBe(0);
       expect(result.stdout).toBe(`${INSTRUCTION}\n`);
-      expect(Date.now() - started).toBeLessThan(30_000);
+      // One wait for the token-ledger row and one for the record, then none: far inside the 30 s Claude Code gives PreCompact.
+      expect(lockWaitAskedMs(waits, result.pid)).toBe(HOOK_DB_WAIT_MS + COMPACTION_DB_WAIT_MS);
     } finally {
       db.exec('ROLLBACK');
       closeHippoDb(db);

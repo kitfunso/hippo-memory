@@ -9,7 +9,7 @@ import { loadAllEntries } from './store/entry-reads.js';
 import { textOverlap } from './tokenize.js';
 import { assessAutomaticMemory } from './memory-quality.js';
 import { redactSecretsStrict } from './secret-detect.js';
-import { log } from './log.js';
+import { errorMessage, log } from './log.js';
 
 /** A memory of a failed command, "Command '<cmd>' failed: <truncated stderr>"; no store is in reach, so `hippo watch` re-derives its half-life from the store's config. */
 export function captureError(
@@ -182,7 +182,7 @@ export function isGitRepo(cwd: string): boolean {
     });
     return raw.trim() === 'true';
   } catch (err) {
-    log.debug(`autolearn: not a git repo: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`autolearn: not a git repo: ${errorMessage(err)}`);
     return false;
   }
 }
@@ -198,7 +198,7 @@ export function fetchGitLog(cwd: string, days: number): string {
     ], { encoding: 'utf8', cwd, timeout: 10000, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
     return raw;
   } catch (err) {
-    log.debug(`autolearn: git log unavailable: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`autolearn: git log unavailable: ${errorMessage(err)}`);
     return '';
   }
 }

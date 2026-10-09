@@ -8,12 +8,12 @@ import { loadConfig } from '../config.js';
 import { closeHippoDb, isSqliteBusy, openHippoDb, outsideRequestStores, type DatabaseSyncLike } from '../db.js';
 import type { MemoryEntry } from '../memory.js';
 import { namesFoldedInto } from '../project-merge.js';
-import { isGlobalStoreRoot, originInSql, projectNames, resolveGlobalRootDir, resolveProjectIdentity, type ProjectIdentity } from '../project-identity.js';
+import { isGlobalStoreRoot, projectNames, resolveGlobalRootDir, resolveProjectIdentity, type ProjectIdentity } from '../project-identity.js';
 import { duplicateKey, heldTextKeys } from '../same-text.js';
 import { removeEntryMirrors } from '../store/mirrors.js';
 import { initStore, isInitialized } from '../store/open.js';
 import { writeEntryMirrors } from '../store/entry-writes.js';
-import { selectLiveEntriesBySourcePrefix } from '../store/entry-reads.js';
+import { selectLiveEntriesBySourcePrefix, selectRowsOutsideSourcePrefixAt } from '../store/entry-reads.js';
 import { updateStats } from '../store/index-and-stats.js';
 import { resolveTenantId } from '../tenant.js';
 import { setAsideRow, syncContainer, type ContainerOutcome, type ContainerWork, type StoreSession } from './apply.js';
@@ -247,14 +247,16 @@ function syncStore(pass: Pass, listings: readonly Listing[], store: OpenStore, o
         out.tally.unreadable++;
         continue;
       }
-      const work = containerWork(tool, container, opts.machine.platform, legacy, partition ?? '', earlier);
+      const work = containerWork(tool, container, { platform: opts.machine.platform, legacy, origin: partition ?? '', earlier });
       const outcome = syncOne(session, work, out, report);
       if (outcome === null) continue;
       synced.push(work);
       remembered += outcome.tally.imported + outcome.tally.replaced;
       if (!session.dryRun) afterCommit(store.root, outcome, report);
     }
-    if (session.dryRun) out.unlisted += unlistedRows(store.db, tenantId, tool, pass.scope, listing, opts.machine.platform, partition === null ? null : [partition, ...earlier]);
+    if (session.dryRun) out.unlisted += unlistedRows(store.db, tenantId, {
+      tool, scope: pass.scope, listing, platform: opts.machine.platform, partition: partition === null ? null : [partition, ...earlier],
+    });
   }
   if (remembered > 0 && !session.dryRun) bumpRemembered(store.root, remembered, report);
   return synced;
@@ -266,10 +268,15 @@ function earlierNames(db: DatabaseSyncLike, tenantId: string, id: string, legacy
   return [...legacyOrigins, ...namesFoldedInto(db, tenantId, names)].filter((n) => n !== '' && n !== id);
 }
 
-function containerWork(
-  tool: AgentMemoryTool, container: ContainerWork['container'], platform: NodeJS.Platform, legacy: LegacyWork | null, origin: string,
-  earlier: readonly string[],
-): ContainerWork {
+interface ContainerWorkOptions {
+  readonly platform: NodeJS.Platform;
+  readonly legacy: LegacyWork | null;
+  readonly origin: string;
+  readonly earlier: readonly string[];
+}
+
+function containerWork(tool: AgentMemoryTool, container: ContainerWork['container'], options: ContainerWorkOptions): ContainerWork {
+  const { platform, legacy, origin, earlier } = options;
   const none = new Map<string, readonly MemoryEntry[]>();
   const own = tool.id === 'claude-code' ? legacy?.byContainer.get(container.path) : undefined;
   const prefixOf = (name: string): string => containerPrefix(tool.id, containerId(container.path, container.scope, platform, name));
@@ -330,20 +337,21 @@ function duplicateCheck(store: OpenStore, tenantId: string, origins: readonly st
 }
 
 function otherPathKeys(store: OpenStore, tenantId: string, origins: readonly string[], adopted: ReadonlySet<string>): Set<string> {
-  const visible = store.global ? ` AND (origin_project = '' OR ${originInSql(origins)})` : '';
-  const params = store.global ? [tenantId, AGENT_MEMORY_SOURCE_PREFIX, ...origins] : [tenantId, AGENT_MEMORY_SOURCE_PREFIX];
-  // SAFETY: the SELECT names the three columns of the row type.
-  const rows = store.db.prepare(
-    `SELECT id, content, source FROM memories
-      WHERE tenant_id = ? AND superseded_by IS NULL AND substr(source, 1, ${AGENT_MEMORY_SOURCE_PREFIX.length}) != ?${visible}`,
-  ).all(...params) as Array<{ id: string; content: string; source: string }>;
+  const rows = selectRowsOutsideSourcePrefixAt(store.db, tenantId, AGENT_MEMORY_SOURCE_PREFIX, store.global ? origins : null);
   return new Set(rows.filter((r) => !adopted.has(r.id)).flatMap(heldTextKeys));
 }
 
 /** Dry run only: kept rows of this scope in containers this run did not list (a moved project's old folder); `partition` limits it to one project's names. */
-function unlistedRows(
-  db: DatabaseSyncLike, tenantId: string, tool: AgentMemoryTool, scope: Scope, listing: Listing, platform: NodeJS.Platform, partition: readonly string[] | null,
-): number {
+interface UnlistedRowsOptions {
+  readonly tool: AgentMemoryTool;
+  readonly scope: Scope;
+  readonly listing: Listing;
+  readonly platform: NodeJS.Platform;
+  readonly partition: readonly string[] | null;
+}
+
+function unlistedRows(db: DatabaseSyncLike, tenantId: string, options: UnlistedRowsOptions): number {
+  const { tool, scope, listing, platform, partition } = options;
   const listed = listing.containers.flatMap((c) => (partition ?? ['']).map((name) => containerPrefix(tool.id, containerId(c.path, c.scope, platform, name))));
   return selectLiveEntriesBySourcePrefix(db, tenantId, `${toolSourcePrefix(tool.id)}${scope === 'project' ? 'p' : 'u'}-`)
     .filter((row) => row.tags.includes(tool.tag) && !listed.some((p) => row.source.startsWith(p)))
@@ -362,7 +370,7 @@ function handOver(synced: readonly ContainerWork[], projectRoot: string, opts: S
     // Names folded into this project's in the global store were its rows too.
     const names = projectNames(resolveProjectIdentity(projectRoot));
     const origins = [...new Set([...names, ...namesFoldedInto(db, tenantId, names), ''])];
-    for (const work of synced) handOverContainer(db, globalRoot, tenantId, work, origins, opts.machine.platform, report);
+    for (const work of synced) handOverContainer(db, globalRoot, tenantId, work, { origins, platform: opts.machine.platform, report });
   } catch (err) {
     report.warnings.push(`global copies not handed over: ${isSqliteBusy(err) ? 'the global store was busy' : errorMessage(err)}`);
   } finally {
@@ -370,9 +378,14 @@ function handOver(synced: readonly ContainerWork[], projectRoot: string, opts: S
   }
 }
 
-function handOverContainer(
-  db: DatabaseSyncLike, root: string, tenantId: string, work: ContainerWork, origins: readonly string[], platform: NodeJS.Platform, report: ImportReport,
-): void {
+interface HandOverContainerOptions {
+  readonly origins: readonly string[];
+  readonly platform: NodeJS.Platform;
+  readonly report: ImportReport;
+}
+
+function handOverContainer(db: DatabaseSyncLike, root: string, tenantId: string, work: ContainerWork, options: HandOverContainerOptions): void {
+  const { origins, platform, report } = options;
   // A note the local pass could not read has no local row yet, so its global copy stays until it does.
   const unread = new Set(work.container.skipped);
   const mirror: MemoryEntry[] = [];

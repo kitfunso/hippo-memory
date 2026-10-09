@@ -4,10 +4,10 @@ import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb, setMeta } from '../src/db.js';
 import { embeddingIndexIdentity } from '../src/embeddings.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/memory.js';
-import { initializeParticle, savePhysicsState } from '../src/physics-state.js';
+import { initializeParticle, savePhysicsState } from '../src/db/physics-state.js';
 import type { EmbeddingIndexState, PhysicsParticle, VectorBackfillQuery, VectorRowWrite, VectorWriteResult } from '../src/server.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../src/vector-store.js';
+import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../src/db/vector-store.js';
 import { inMemoryVectorWritesStore } from './_helpers/in-memory-vector-writes-store.js';
 import {
   onBothStores, seedTwoTenants, TENANT_A, TENANT_B, type GroupCall, type SideResult, type TwoTenantFixture,

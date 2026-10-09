@@ -12,7 +12,7 @@ import { loadStats } from '../store/index-and-stats.js';
 import { listMemoryConflicts } from '../store/conflicts.js';
 import { loadEmbeddingIndex, embeddingModelRequiresReindex } from '../embeddings.js';
 import { resolveEmbeddingProvider } from '../embedding-provider.js';
-import { loadPhysicsState } from '../physics-state.js';
+import { loadPhysicsState } from '../db/physics-state.js';
 import { computeSystemEnergy, vecNorm } from '../physics.js';
 import { loadConfig } from '../config.js';
 import { openHippoDb, closeHippoDb } from '../db.js';
@@ -21,21 +21,24 @@ import { buildSupportBundle, TAIL_MAX_LINES } from '../support-bundle.js';
 import { PACKAGE_VERSION } from '../version.js';
 import { FAILURE_LOG_RETENTION_DAYS } from '../failure-log.js';
 import { getGlobalRoot } from '../shared.js';
-import { buildProvenanceCoverage } from '../provenance-coverage.js';
-import { buildCorrectionLatency } from '../correction-latency.js';
+import { buildProvenanceCoverage } from './provenance-coverage.js';
+import { buildCorrectionLatency } from './correction-latency.js';
 import * as api from '../api.js';
 import { resolveTenantId } from '../tenant.js';
 import { errorMessage, log } from '../log.js';
 import { printError } from './output.js';
 import {
+  type CliFlags,
   parseCountFlag,
   requireInit,
   fmt,
   type CommandContext,
-  cardStringFlag,
+  stringFlagOrExit,
   hookStoreRoot,
   resolveAuthRoot,
+  flagIsTrue,
 } from './shared.js';
+import { DAY_MS } from '../util/time.js';
 
 export function cmdStatus(hippoRoot: string): void {
   requireInit(hippoRoot);
@@ -198,8 +201,8 @@ function cmdInspect(hippoRoot: string, id: string): void {
   const currentStrength = calculateStrength(entry, now);
   const lastRetrieved = new Date(entry.last_retrieved);
   const created = new Date(entry.created);
-  const ageDays = (now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24);
-  const daysSince = (now.getTime() - lastRetrieved.getTime()) / (1000 * 60 * 60 * 24);
+  const ageDays = (now.getTime() - created.getTime()) / DAY_MS;
+  const daysSince = (now.getTime() - lastRetrieved.getTime()) / DAY_MS;
 
   const effectiveConfidence = resolveConfidence(entry, now);
 
@@ -241,7 +244,7 @@ function cmdInspect(hippoRoot: string, id: string): void {
  */
 export function cmdTokens(
   hippoRoot: string,
-  flags: Record<string, string | boolean | string[]>,
+  flags: CliFlags,
 ): void {
   const root = resolveAuthRoot(hippoRoot, flags);
   const ctx: api.Context = {
@@ -287,7 +290,7 @@ export function cmdTokens(
 /** `hippo failures [--days <n>] [--json] [--global]`: failed tool calls by outcome, and repeats across sessions. */
 export function cmdFailures(
   hippoRoot: string,
-  flags: Record<string, string | boolean | string[]>,
+  flags: CliFlags,
 ): void {
   // The store the capture-error hook writes to; a report never creates one.
   const root = flags['global'] ? getGlobalRoot() : hookStoreRoot(hippoRoot);
@@ -387,12 +390,12 @@ export function handleDoctor({ flags }: CommandContext): void {
 }
 
 export function handleSupportBundle({ flags }: CommandContext): void {
-  const outFlag = cardStringFlag(flags, 'out');
+  const outFlag = stringFlagOrExit(flags, 'out');
   if (outFlag === '') {
     printError('--out requires a file path.');
     process.exit(1);
   }
-  const includeLogs = flags['include-logs'] === true;
+  const includeLogs = flagIsTrue(flags, 'include-logs');
   const home = envHomeDir() || os.homedir();
   const now = new Date();
   const bundle = buildSupportBundle({ cwd: process.cwd(), home, version: PACKAGE_VERSION, includeLogs, now });
@@ -405,7 +408,7 @@ export function handleSupportBundle({ flags }: CommandContext): void {
     if (err instanceof Error && 'code' in err && err.code === 'EEXIST') {
       printError(`${file} already exists; pass --out to choose another file. Nothing was written.`);
     } else {
-      printError(err instanceof Error ? err.message : String(err));
+      printError(errorMessage(err));
     }
     process.exit(1);
   }

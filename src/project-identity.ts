@@ -5,8 +5,9 @@ import * as path from 'path';
 import { BadRequestError } from './api-errors.js';
 import { isSharedStore, loadConfig } from './config.js';
 import { MAX_ID_LEN } from './http-util.js';
-import { log } from './log.js';
+import { errorMessage, log } from './log.js';
 import { originRemoteId, projectFileId } from './project-remote.js';
+import { realpathOrResolve } from './util/real-path.js';
 
 /**
  * Project identity resolution for memory scope isolation.
@@ -80,19 +81,6 @@ function namesAt(root: string, legacyName: string): Pick<ProjectIdentity, 'name'
   return aliases.length > 0 ? { name, aliases } : { name };
 }
 
-/**
- * Canonicalize a path via realpath, falling back to path.resolve when the
- * path does not exist or realpath fails (mirrors importers.ts).
- */
-export function realpathOrResolve(p: string): string {
-  try {
-    return fs.realpathSync.native(p);
-  } catch (err) {
-    log.debug(`project identity: realpath fell back to resolve for ${p}: ${err instanceof Error ? err.message : String(err)}`);
-    return path.resolve(p);
-  }
-}
-
 /** Compare two canonical paths, case-insensitively on Windows. */
 function samePath(a: string, b: string): boolean {
   if (process.platform === 'win32') return a.toLowerCase() === b.toLowerCase();
@@ -117,7 +105,7 @@ function isDirectoryAt(p: string): boolean {
   try {
     return fs.statSync(p).isDirectory();
   } catch (err) {
-    log.debug(`project identity: no marker at ${p}: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`project identity: no marker at ${p}: ${errorMessage(err)}`);
     return false;
   }
 }

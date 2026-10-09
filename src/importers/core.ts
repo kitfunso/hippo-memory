@@ -14,7 +14,6 @@ import { RejectedValueError, checkRejectionGuard } from '../rejection.js';
 import { loadConfig } from '../config.js';
 import { vetSecrets } from '../secret-detect.js';
 import { log } from '../log.js';
-import type { JsonValue } from '../json.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -207,6 +206,3 @@ function writeOrProbeImport(
 // ChatGPT importer
 // ---------------------------------------------------------------------------
 
-export function isJsonPlainObject(x: JsonValue): x is { [key: string]: JsonValue } {
-  return x !== null && !Array.isArray(x) && typeof x === 'object';
-}

@@ -1,6 +1,6 @@
 # Token-efficiency evals (ROADMAP Part IX, Track TE)
 
-Three harnesses, from cheapest to most convincing. Build first with `npm run build`. Their tests (`tests/token-eval*`) run with `npm run test:eval`, not `npm test`; CI runs them in `token-eval.yml`.
+Three harnesses, from cheapest to most convincing. Build first with `npm run build`. Their tests (`tests/token-eval*`) run with `npm test`, except the four that build real git repositories per case (ab-run, make-tasks, z0-homes, z0-turns): those run with `npm run test:eval`, and CI runs them in `token-eval.yml`.
 
 | Harness | Roadmap | Needs | What it answers |
 |---|---|---|---|
@@ -8,7 +8,7 @@ Three harnesses, from cheapest to most convincing. Build first with `npm run bui
 | `scripts/token-eval/budget-curve.mjs` | TE3 | a LongMemEval-format JSON | How many tokens of memory does an agent need to see the evidence, with hippo against recency, full context and no memory? |
 | `scripts/token-eval/ab-analyze.mjs` | TE5 | run records from an agent A/B | Cost per resolved task, resolve rate and work avoided, with bootstrap CIs. Protocol: `docs/evals/2026-09-23-te5-token-ab-preregistration.md` |
 
-Shared statistics and four-bucket cost accounting are in `src/eval-stats.ts`.
+Shared statistics and four-bucket cost accounting are in `src/eval/eval-stats.ts`.
 
 ## What is and is not established
 

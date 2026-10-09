@@ -32,7 +32,7 @@ function makeRaw(text: string, opts: Partial<MemoryEntry> = {}): MemoryEntry {
   });
 }
 
-describe('RecallResult.suppressionSummary (C5 WYSIATI, v1.12.13)', () => {
+describe('RecallResult.suppressionSummary', () => {
   let root: string;
   beforeEach(() => { root = makeRoot('c5'); });
   afterEach(() => safeRmSync(root));
@@ -103,7 +103,7 @@ describe('RecallResult.suppressionSummary (C5 WYSIATI, v1.12.13)', () => {
   // so the counter now reads 0 when J1 is off OR no R2 fires, and non-zero
   // when R2 fires. This test asserts the no-history / no-snapshot case
   // (which keeps the counter at 0). The non-zero-on-R2 case is tested by
-  // tests/api-recall-suppressed-interference-j1.test.ts.
+  // tests/api-recall-suppressed-interference.test.ts.
   it('suppressedByInterference is 0 when J1 is off or no R2 detected (default no-history path)', () => {
     writeEntry(root, makeRaw('iota'));
     const result = recall(ctxFor(root), { query: 'iota' });
@@ -111,7 +111,7 @@ describe('RecallResult.suppressionSummary (C5 WYSIATI, v1.12.13)', () => {
   });
 });
 
-describe('buildSuppressionSummary helper (C5, v1.12.13)', () => {
+describe('buildSuppressionSummary helper', () => {
   it('passes camelCase input through to camelCase output unchanged', () => {
     const out = buildSuppressionSummary({
       totalCandidates: 10,

@@ -57,10 +57,14 @@ export interface HybridSearchOptions {
   store?: HippoStore;
 }
 
+// Share of the blended score that cosine takes, and the relevance side of the MMR relevance-versus-diversity trade.
+const DEFAULT_EMBEDDING_WEIGHT = 0.6;
+const DEFAULT_MMR_LAMBDA = 0.7;
+
 /** BM25 blended with cosine similarity when stored vectors and a provider are available, BM25 * strength * recency otherwise. */
 export async function hybridSearch(query: string, entries: MemoryEntry[], options: HybridSearchOptions = {}): Promise<SearchResult[]> {
   const now = options.now ?? evalNow(); // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
-  const embeddingWeight = options.embeddingWeight ?? 0.6;
+  const embeddingWeight = options.embeddingWeight ?? DEFAULT_EMBEDDING_WEIGHT;
   const pool = currentEntries(entries, options);
   if (pool.length === 0) return [];
   const queryTerms = tokenize(query);
@@ -103,7 +107,7 @@ function hybridBoostContext(query: string, pool: MemoryEntry[], now: Date, optio
 
 /** MMR when vectors are loaded, then the optional reranker. */
 async function orderHybrid(query: string, scored: SearchResult[], arm: VectorArm, options: HybridSearchOptions): Promise<SearchResult[]> {
-  const mmrLambda = options.mmrLambda ?? 0.7;
+  const mmrLambda = options.mmrLambda ?? DEFAULT_MMR_LAMBDA;
   const applyMmr = (options.mmr ?? true) && arm.useEmbeddings && scored.length > 1 && mmrLambda < 1;
   const ordered = applyMmr ? applyMmrWindow(scored, arm.embeddingIndex, mmrLambda, options.explain ?? false) : scored;
   return options.reranker ? applyReranker(query, ordered, options.reranker, options.rerankerOptions) : ordered;

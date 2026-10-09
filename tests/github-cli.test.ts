@@ -15,8 +15,8 @@ import { join, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { writeToDlq } from '../src/connectors/github/dlq.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { parkInDlq } from '../src/connectors/dlq.js';
+import { githubDlq } from '../src/connectors/github/dlq.js';
 import { cmdGithubBackfill } from '../src/connectors/github/cli-impl.js';
 import type {
   GitHubFetcher,
@@ -177,18 +177,13 @@ describe('hippo github CLI', () => {
   });
 
   it('dlq list with rows prints bucket and tenant', () => {
-    const db = openHippoDb(hippoRoot);
-    try {
-      writeToDlq(db, {
-        tenantId: 'default',
-        rawPayload: '{"x":1}',
-        error: 'bad envelope',
-        bucket: 'unhandled',
-        eventName: 'issues',
-      });
-    } finally {
-      closeHippoDb(db);
-    }
+    parkInDlq(githubDlq, hippoRoot, {
+      tenantId: 'default',
+      rawPayload: '{"x":1}',
+      error: 'bad envelope',
+      bucket: 'unhandled',
+      eventName: 'issues',
+    });
     const r = runCli(root, ['github', 'dlq', 'list']);
     expect(r.status).toBe(0);
     expect(r.stdout).toMatch(/unhandled/);

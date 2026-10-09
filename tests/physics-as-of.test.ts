@@ -7,7 +7,7 @@ import { createMemory, type MemoryEntry } from '../src/memory.js';
 import { saveEmbeddingIndex, saveStoredEmbeddingModel } from '../src/embeddings.js';
 import { resolveEmbeddingProvider } from '../src/embedding-provider.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { savePhysicsState } from '../src/physics-state.js';
+import { savePhysicsState } from '../src/db/physics-state.js';
 import { loadConfig } from '../src/config.js';
 import { hybridSearch } from '../src/search/hybrid.js';
 import { physicsSearch } from '../src/search/physics-search.js';

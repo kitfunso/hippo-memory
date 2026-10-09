@@ -100,7 +100,7 @@ CLI-spawning tests see the fresh `dist/`. Extra arguments pass through to vitest
 `node scripts/check-tests-pass.mjs tests/foo.test.ts` gates on one file; `--outputFile` and
 `--output-file` are the arguments it rejects, because vitest treats them as the same option and the
 gate reserves vitest's JSON report for itself.
-That run leaves out the token-eval harness tests (`tests/token-eval*`); `token-eval.yml` runs them on every push to master, so check it is green on the commit you tag.
+That run leaves out the four slow token-eval harness tests (`EVAL_TESTS` in `vitest.config.ts`); `npm-publish.yml` runs them through `token-eval.yml` on the tagged commit and stops if one fails.
 
 Any non-zero vitest exit refuses the publish, and the gate prints the JSON report's counts so the
 log says whether assertions failed or something outside them did. The report covers assertion
@@ -117,14 +117,14 @@ escape hatch either: it skips the manifest, em-dash and graph-write guards too.
 Tests that mutate `process.env.HIPPO_LOSS_AVERSION_RATIO` (or any other
 lazy-cached env var) must call the corresponding `_resetCacheForTests()`
 hook in BOTH `beforeEach` AND `afterEach`. The canonical pattern lives
-in `tests/emotional-multipliers-j5.test.ts`. Skipping the reset hook
+in `tests/emotional-multipliers.test.ts`. Skipping the reset hook
 makes test order significant (the cache holds a stale read from a
 previous test); skipping the `afterEach` reset leaks state into the
 NEXT test file that doesn't touch the env var.
 
 ## Publishing, provenance and the stable channel
 
-**Publishing.** Push a `v<x.y.z>` tag on the squash commit on master. `.github/workflows/npm-publish.yml` checks that the tag matches `package.json`, runs the `prepublishOnly` gate and publishes with `--provenance`. The workflow picks the npm dist-tag with `scripts/publish-dist-tag.mjs`, from the registry's current `latest`: a newer version goes to `latest`, an older one (a backport, see "Support window") to `maint-<x.y>`, and a prerelease to `next`. If the registry cannot be read, the publish stops. Do not publish from a laptop: a laptop publish has no provenance. The one-time npm setup is described at the top of the workflow.
+**Publishing.** Push a `v<x.y.z>` tag on the squash commit on master. `.github/workflows/npm-publish.yml` first runs the whole CI workflow on the tagged commit (every job in `.github/workflows/ci.yml`, with Windows, macOS, the Node floor and coverage) and stops if any job fails; the slow token-eval tests run beside it under the same rule. It then checks that the tag matches `package.json`, runs the `prepublishOnly` gate and publishes with `--provenance`. A tag whose CI failed publishes nothing; re-running the failed jobs in that run publishes it once they pass. The workflow picks the npm dist-tag with `scripts/publish-dist-tag.mjs`, from the registry's current `latest`: a newer version goes to `latest`, an older one (a backport, see "Support window") to `maint-<x.y>`, and a prerelease to `next`. If the registry cannot be read, the publish stops. Do not publish from a laptop: a laptop publish has no provenance. The one-time npm setup is described at the top of the workflow.
 
 **SBOM.** Publishing the GitHub release for a `v<x.y.z>` tag runs `.github/workflows/sbom.yml`. It builds `hippo-memory-<x.y.z>.cdx.json` from that tag's lockfiles with `scripts/sbom.mjs` and attaches it to the release: a CycloneDX list of the runtime packages the tarball ships, the dashboard's bundled ones included. Create the release with a personal token (the web page, `gh` or the API), because a release made with a workflow's `GITHUB_TOKEN` starts no other workflow. For a release that has no SBOM, run the workflow by hand with its `tag` input.
 

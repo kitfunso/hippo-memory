@@ -203,15 +203,15 @@ describe('authGrant / authUngrant validation (api layer)', () => {
     expect(() => api.authGrant(adminCtx, member.keyId, 'slack:public:general')).toThrow();
   });
 
-  it('writes auth_grant / auth_ungrant audit rows', () => {
+  it('writes auth_grant / auth_ungrant audit rows', async () => {
     const member = mintKey(home, 'member');
     const adminCtx: api.HippoDbContext = { hippoRoot: home, tenantId: 'default', actor: api.adminActor('cli') };
     api.authGrant(adminCtx, member.keyId, PRIVATE_SCOPE);
     api.authUngrant(adminCtx, member.keyId, PRIVATE_SCOPE);
 
-    const grants = api.auditList(adminCtx, { op: 'auth_grant' });
+    const grants = await api.auditList(adminCtx, { op: 'auth_grant' });
     expect(grants.some((e) => e.targetId === member.keyId)).toBe(true);
-    const ungrants = api.auditList(adminCtx, { op: 'auth_ungrant' });
+    const ungrants = await api.auditList(adminCtx, { op: 'auth_ungrant' });
     expect(ungrants.some((e) => e.targetId === member.keyId)).toBe(true);
   });
 
@@ -271,7 +271,7 @@ describe('supersede keeps the old row\'s scope', () => {
   });
 });
 
-describe('graph view carries no private receipt text (T4 withdrawn, T6 closes the transitive path)', () => {
+describe('graph view carries no private receipt text', () => {
   let home: string;
   let handle: ServerHandle;
 

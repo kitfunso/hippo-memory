@@ -20,7 +20,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { computePredictionBaserate, savePrediction, closePrediction } from '../src/predictions/store.js';
+import { computePredictionBaserate, savePrediction, closePrediction } from '../src/store/predictions.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 function safeRmSync(p: string): void {
@@ -38,7 +38,7 @@ function countPredictBaserateAudits(root: string): number {
   }
 }
 
-describe('computePredictionBaserate emitAudit flag (J3.2 v0.32)', () => {
+describe('computePredictionBaserate emitAudit flag', () => {
   let root: string;
   beforeEach(() => { root = makeRoot('emitaudit'); });
   afterEach(() => safeRmSync(root));

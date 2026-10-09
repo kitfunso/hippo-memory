@@ -52,7 +52,7 @@ function countRows(home: string, table: string): number {
   finally { closeHippoDb(db); }
 }
 
-describe('graph store (E3.3 graph-on-consolidated guard)', () => {
+describe('graph store (graph-on-consolidated guard)', () => {
   let home: string;
   beforeEach(() => { home = makeRoot('graph'); });
   afterEach(() => safeRmSync(home));

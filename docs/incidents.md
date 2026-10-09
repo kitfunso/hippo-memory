@@ -202,7 +202,6 @@ Bugs, regressions and review findings that shaped the code. Source comments keep
 - `sessionTrace`: T1 fix (2026-08-15 hardening pass): stamp the trace into the SAME tenant the traceExistsForSession idempotency check (above) runs under. Before this, createMemory omitted tenantId and the trace always landed 'default' (memory.ts:535) while the idempotency check ran under consolidationTenant — for any non-default tenant that check never hit, and the trace regenerated every sleep.
 
 ### src/customer-notes.ts
-- `preflightNoteSupersede`: Mirrors saveProjectBrief / saveSkill (codex P1 2026-05-28).
 - `saveCustomerNote`: The memory mirror carries a `customer:<lc>` tag (in addition to ['customer_note'] + caller extraTags) so scope-aware recall treats the note as entity-local - the project_brief codex-P2 recall-locality lesson applied to entity scoping.
 - `closeCustomerNote`: Closing removes the object from the graph. Remove its rows DIRECTLY (deterministic), not only via an enqueued rebuild whose queue item is lost if the mirror is later forgotten (the queue row cascade-deletes with the memory), which would leave the closed object stale and could block that forget (codex P1).
 
@@ -258,7 +257,6 @@ Bugs, regressions and review findings that shaped the code. Source comments keep
 - `autoCheckpointPages`: the inline limit of 100 pages came with the lock-hardening work, not from a durability decision. With a worker the power-loss window is about 1,100 WAL pages, close to SQLite's default of 1,000; `synchronous = NORMAL` is unchanged.
 
 ### src/decisions.ts
-- `preflightDecisionSupersede`: Validating first means the new row is never a candidate for its own supersede UPDATE. codex review 2026-05-28 (P1).
 - `saveDecision`: Post-commit hook: mark the tenant's graph dirty AFTER the DB row commits but BEFORE the markdown mirrors are written, so a mirror-write failure can never leave a committed save unflagged (codex).
 - `closeDecision`: Closing removes the object from the graph. Remove its rows DIRECTLY (deterministic), not only via an enqueued rebuild whose queue item is lost if the mirror is later forgotten (the queue row cascade-deletes with the memory), which would leave the closed object stale and could block that forget (codex P1).
 
@@ -339,12 +337,14 @@ Bugs, regressions and review findings that shaped the code. Source comments keep
 - `calculateStrength`: EVAL-ONLY ablation (see ablation.ts): with recall-strengthening ablated, anchor decay at CREATION, not last_retrieved. A never-strengthened memory decays from when it was made; using last_retrieved would let clock resets persisted by PRIOR unflagged runs leak strengthening into an ablated arm's rankings (codex P2). Identity on fresh stores (created == last_retrieved at write). Prior-run half_life increments are NOT reconstructed - see the ablation.ts caveat (fresh stores per arm).
 - `calculateStrength`: EVAL-ONLY ablation (see ablation.ts): the recall-boost flag neutralizes the READ side too, so a store with PRIOR retrieval history (counts > 0 written before the flag was set) does not leak strengthening into an ablated arm's rankings (codex P2).
 
+### src/objects/lifecycle.ts
+- `preflightSupersede`: Validating first means the new row is never a candidate for its own supersede UPDATE. codex review 2026-05-28 (P1). Written as `preflightDecisionSupersede` and `preflightBriefSupersede` before the typed objects shared one save.
+
 ### src/physics.ts
 - `computeMass`: EVAL-ONLY ablation (see ablation.ts): under the recall-boost flag, particle mass must not scale with retrieval history either - query gravity ranks by mass, so prior retrieval counts would leak strengthening into the ablated arm's physics-pool rankings (codex P2). Covers both the init and refresh callers in physics-state.ts.
 
 ### src/policies.ts
 - `asOfInstant`: comparison is correct (plan-eng-critic round-1 CRIT fix: a date-only asOf vs a datetime valid_from otherwise made a same-day policy invisible).
-- `preflightPolicySupersede`: Mirrors saveProcess / saveDecision (codex P1 2026-05-28).
 - `savePolicy`: hide a superseded predecessor for that earlier time (codex review 2026-05-30 round 2). An explicit --from is honored as-is.
 - `closePolicy`: object stale and could block that forget (codex P1). Still enqueue when a mirror exists
 - `loadActivePolicies`: superseded in May is still the answer for `asof March`. (codex review 2026-05-30, P2 #2: filtering on status='active' alone dropped historically-valid superseded versions, conflating transaction-time with valid-time. The successor-aware filter mirrors the existing recall-history.ts asOf pattern.)
@@ -365,7 +365,6 @@ Bugs, regressions and review findings that shaped the code. Source comments keep
 - `preflightProcessSupersede`: Mirrors saveDecision (codex P1 2026-05-28).
 
 ### src/project-briefs.ts
-- `preflightBriefSupersede`: Mirrors saveSkill / saveProcess (codex P1 2026-05-28).
 - `closeProjectBrief`: which would leave the closed object stale and could block that forget (codex P1).
 - `fitReceiptLines`: NOTE on ordering: the `id DESC` tiebreak is lexical on a random-ish memory id ... `created DESC` is the real recency ordering. (plan-eng-critic 2026-05-30, med.)
 - `fitReceiptLines`: Budget-aware assembly (codex-review-critic 2026-05-30, P2): the digest is the brief `summary`, which saveProjectBrief caps at MAX_BRIEF_SUMMARY_LEN. The receipt/headline caps (50 x ~200) could otherwise build an ~11KB body that the store then REJECTS, breaking refresh for inputs within the advertised caps.

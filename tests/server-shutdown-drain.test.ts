@@ -1,10 +1,11 @@
 // stop() stops accepting, lets an in-flight request finish within the drain window, and closes a stuck one when it ends.
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { spawn } from 'node:child_process';
 import { serve, type AuthResolver, type ServerHandle } from '../src/server.js';
+import { log } from '../src/log.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 const homes: string[] = [];
@@ -37,6 +38,7 @@ function slowRecall(handle: ServerHandle): Promise<Response> {
 }
 
 afterEach(() => {
+  vi.restoreAllMocks();
   for (const home of homes.splice(0)) rmSync(home, { recursive: true, force: true });
 });
 
@@ -65,9 +67,10 @@ describe('serve() graceful stop', () => {
     });
     const pending = slowRecall(handle).then(() => 'answered', () => 'reset');
     await asked;
-    const started = Date.now();
+    const warn = vi.spyOn(log, 'warn');
     await handle.stop();
-    expect(Date.now() - started).toBeLessThan(3000);
+    // The line names the window stop() waited, so the short one given above is the one it used.
+    expect(warn.mock.calls.map(([line]) => line)).toContain('shutdown: 1 request(s) still running after 200 ms; closing them');
     expect(await pending).toBe('reset');
   }, 15000);
 

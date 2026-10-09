@@ -4,8 +4,9 @@ import { openHippoDb, closeHippoDb, rethrowIfSqliteBlocked } from '../db.js';
 import { summarizeTokenUse, type TokenSummary, type TokenSurface } from '../token-ledger.js';
 import { storeFor } from '../store-port.js';
 import { summarizeFailures, type FailureSummary } from '../failure-log.js';
-import { log } from '../log.js';
+import { errorMessage, log } from '../log.js';
 import type { Context } from './types.js';
+import { DAY_MS } from '../util/time.js';
 
 /**
  * Record memory text handed to an agent in the token ledger.
@@ -28,7 +29,7 @@ export async function recordTokens(
     });
   } catch (err) {
     rethrowIfSqliteBlocked(err);
-    log.warnThenDebug('api-token-ledger', `token ledger write failed; the reply is unaffected: ${err instanceof Error ? err.message : String(err)}`);
+    log.warnThenDebug('api-token-ledger', `token ledger write failed; the reply is unaffected: ${errorMessage(err)}`);
   }
 }
 
@@ -58,5 +59,5 @@ export function failureSummary(ctx: Context, opts: { days?: number } = {}): Fail
 
 function reportWindowStart(days: number | undefined): string {
   const span = days !== undefined && Number.isFinite(days) && days > 0 ? days : 30;
-  return new Date(Date.now() - span * 86_400_000).toISOString();
+  return new Date(Date.now() - span * DAY_MS).toISOString();
 }

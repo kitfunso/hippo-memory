@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { listRejections, remember, type Actor, type HippoDbContext } from '../src/api.js';
-import { resolveOpenConflict } from '../src/dashboard-actions.js';
+import { resolveOpenConflict } from '../src/dashboard/dashboard-actions.js';
 import { mapApiError } from '../src/http-util.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../src/mcp/server.js';
 import { listMemoryConflicts, replaceDetectedConflicts } from '../src/store/conflicts.js';

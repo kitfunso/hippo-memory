@@ -25,6 +25,7 @@ import {
   type CommandContext,
   parseAsOfFlag,
   engineFlags,
+  boolFlag,
 } from './shared.js';
 
 /** The SQL predicate drops denied rows before the window, so an unscoped probe counts what the policy hides. */
@@ -52,8 +53,8 @@ export async function cmdExplain(
 
   const budget = parseBudgetFlag(flags['budget'], DEFAULT_RECALL_BUDGET);
   const limit = parseLimitFlag(flags['limit']);
-  const asJson = Boolean(flags['json']);
-  const includeSuperseded = Boolean(flags['include-superseded']);
+  const asJson = boolFlag(flags, 'json');
+  const includeSuperseded = boolFlag(flags, 'include-superseded');
   const asOf = parseAsOfFlag(flags);
   const globalRoot = getGlobalRoot();
   const tenantId = resolveTenantId({});
@@ -89,8 +90,12 @@ export async function cmdExplain(
   );
   const rank = slot.rank;
   if (!rank) throw new Error('explain ranked but inspected nothing');
+  printExplainResults(rank, engine.usePhysics, query, asJson);
+}
+
+function printExplainResults(rank: RankRecallResult, usePhysics: boolean, query: string, asJson: boolean): void {
   const hasGlobal = rank.globalEntries.length > 0;
-  const modeUsed: 'physics' | 'searchBothHybrid' | 'hybrid' = engine.usePhysics && !hasGlobal
+  const modeUsed: 'physics' | 'searchBothHybrid' | 'hybrid' = usePhysics && !hasGlobal
     ? 'physics'
     : hasGlobal ? 'searchBothHybrid' : 'hybrid';
   const results = dropHeldCopies(rank.results, (r) => r.entry);

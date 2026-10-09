@@ -3,9 +3,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { spawnSync } from 'node:child_process';
-
-const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
+import { hippoRun } from './_helpers/spawn-hippo.js';
 const START = '<!-- hippo:start -->';
 
 let home: string;
@@ -28,11 +26,7 @@ afterEach(() => fs.rmSync(home, { recursive: true, force: true }));
 
 // Without --no-schedule the run would register a real OS task, without --no-learn it would run git.
 function hippo(cwd: string, ...args: string[]): string {
-  const r = spawnSync(process.execPath, [HIPPO_JS, ...args, '--no-schedule', '--no-learn'], {
-    cwd,
-    env: { ...process.env, HOME: home, USERPROFILE: home, HIPPO_HOME: path.join(home, 'global') },
-    encoding: 'utf8',
-  });
+  const r = hippoRun([...args, '--no-schedule', '--no-learn'], { cwd, env: { ...process.env, HOME: home, USERPROFILE: home, HIPPO_HOME: path.join(home, 'global') } });
   expect(r.status, r.stderr).toBe(0);
   return r.stdout;
 }

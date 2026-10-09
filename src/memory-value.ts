@@ -22,6 +22,7 @@
 import { type MemoryEntry, calculateStrength } from './memory.js';
 import { compareEntryIdentity } from './compare.js';
 import { MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256 } from './memory-value-weights.js';
+import { DAY_MS } from './util/time.js';
 
 /** The 8 live feature dims (FIT_DIMS) — canonical order for iteration. */
 export const MV_FEATURE_NAMES: ReadonlyArray<keyof MvFeatureVector> = [
@@ -78,7 +79,7 @@ export interface MvFeatureVector {
  * FEATURE is clock-basis.
  */
 export function computeMvFeatures(entry: MemoryEntry, now: Date): MvFeatureVector {
-  const ageDays = (now.getTime() - Date.parse(entry.created)) / (1000 * 60 * 60 * 24);
+  const ageDays = (now.getTime() - Date.parse(entry.created)) / DAY_MS;
   const pos = entry.outcome_positive ?? 0;
   const neg = entry.outcome_negative ?? 0;
   return {
@@ -265,6 +266,12 @@ export function rankNonPinnedByTenant(
   return result;
 }
 
+export interface RescueSetOptions {
+  readonly weights?: Readonly<Record<string, number>>;
+  readonly digest?: string;
+  readonly precomputedRanks?: Map<string, MvRankInfo>;
+}
+
 /**
  * Rescue decision: a condemned entry is rescued iff it ranks in the top
  * 30% of its tenant's non-pinned candidate set by learned score. Returns the
@@ -287,10 +294,9 @@ export function rescueSet(
   entries: MemoryEntry[],
   condemnedIds: Set<string>,
   now: Date,
-  weights: Readonly<Record<string, number>> = MEMORY_VALUE_WEIGHTS,
-  digest: string = SOURCE_ARTIFACT_SHA256,
-  precomputedRanks?: Map<string, MvRankInfo>,
+  options: RescueSetOptions = {},
 ): Set<string> {
+  const { weights = MEMORY_VALUE_WEIGHTS, digest = SOURCE_ARTIFACT_SHA256, precomputedRanks } = options;
   validateWeights(weights, digest); // fail loud before any rescue computation
   const ranked = precomputedRanks ?? rankNonPinnedByTenant(entries, now, weights, digest);
   const rescued = new Set<string>();

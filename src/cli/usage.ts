@@ -670,7 +670,9 @@ export const VERB_USAGE = {
   serve: [`
   serve                    Start the HTTP API server for this store (Ctrl+C stops it)
     --port <n>             Port to serve on (default: $HIPPO_PORT or 6789)
-    --host <host>          Address to bind (default: 127.0.0.1)`],
+    --host <host>          Address to bind (default: 127.0.0.1)
+    --tls-cert <file>      PEM certificate; serve HTTPS only (or $HIPPO_TLS_CERT)
+    --tls-key <file>       PEM private key for it; give both (or $HIPPO_TLS_KEY)`],
   invalidate: [`
   invalidate "<pattern>"   Actively weaken memories matching an old pattern
                            (content overlap, or a tag EXACTLY equal to the

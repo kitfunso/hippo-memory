@@ -66,7 +66,7 @@ async function createSkill(body: CreateSkillBody, key: CreateApiKeyResult = apiK
   return fetch(`${handle.url}/v1/skills`, { method: 'POST', headers: authHeaders(key), body: JSON.stringify(body) });
 }
 
-describe('HTTP /v1/skills (E2 executable/exportable first-class object)', () => {
+describe('HTTP /v1/skills (executable/exportable first-class object)', () => {
   it('POST /v1/skills creates a skill (201 + Skill, version 1)', async () => {
     const res = await createSkill({ skillName: 'Run tests', instructions: 'npm test', trigger: 'before commit' });
     expect(res.status).toBe(201);

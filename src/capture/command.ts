@@ -83,28 +83,11 @@ export function cmdCapture(
  * the data.
  */
 function beginLogTee(logFile: string): () => void {
-  try {
-    fs.mkdirSync(path.dirname(logFile), { recursive: true });
-    fs.appendFileSync(
-      logFile,
-      `[hippo] ${new Date().toISOString()} capturing session...\n`,
-      'utf8'
-    );
-  } catch (err) {
-    log.warn(`could not open log file ${logFile}: ${errorMessage(err)}`);
-    return () => {};
-  }
+  if (!writeLogBanner(logFile)) return () => {};
 
   const origStdoutWrite = process.stdout.write.bind(process.stdout);
   const origStderrWrite = process.stderr.write.bind(process.stderr);
-  const tee = (chunk: string | Uint8Array): void => {
-    try {
-      const buf = isStringValue(chunk) ? chunk : Buffer.from(chunk).toString('utf8');
-      fs.appendFileSync(logFile, buf, 'utf8');
-    } catch {
-      // log failures are non-fatal
-    }
-  };
+  const tee = (chunk: string | Uint8Array): void => appendToLog(logFile, chunk);
   // Node's `write` is overloaded (`(chunk, cb?)` vs `(chunk, encoding, cb?)`);
   // this wraps whichever of the two shapes was actually called, forwarding
   // to the same real stream method so runtime behaviour is unchanged.
@@ -135,6 +118,31 @@ function beginLogTee(logFile: string): () => void {
     process.stdout.write = origStdoutWrite;
     process.stderr.write = origStderrWrite;
   };
+}
+
+/** Creates the log's folder and appends the banner line; false, after a warning, when the log cannot be written. */
+function writeLogBanner(logFile: string): boolean {
+  try {
+    fs.mkdirSync(path.dirname(logFile), { recursive: true });
+    fs.appendFileSync(
+      logFile,
+      `[hippo] ${new Date().toISOString()} capturing session...\n`,
+      'utf8'
+    );
+  } catch (err) {
+    log.warn(`could not open log file ${logFile}: ${errorMessage(err)}`);
+    return false;
+  }
+  return true;
+}
+
+function appendToLog(logFile: string, chunk: string | Uint8Array): void {
+  try {
+    const buf = isStringValue(chunk) ? chunk : Buffer.from(chunk).toString('utf8');
+    fs.appendFileSync(logFile, buf, 'utf8');
+  } catch {
+    // log failures are non-fatal
+  }
 }
 
 // Console lines here are the `hippo capture` command's printed result, so they stay off the logger.
@@ -170,27 +178,33 @@ function cmdCaptureCore(
     return;
   }
 
-  // Dedup only against rows this capture's reader sees: another tenant's rows, or another
-  // project's, are hidden from it, so they must not stop its own copy.
-  // Only a row holding an item's longest word can hold that item, so the store returns those rows and no others.
-  const stored = loadTextsHoldingWords(
-    targetRoot, useGlobal ? undefined : options.tenantId, extracted.map((item) => longestWord(item.content)), undefined, EVERY_SCOPE,
-  );
-  const origin = options.originProject;
-  const keys = storedTextKeys(origin === undefined
-    ? stored
-    : stored.filter((e) => classifyOriginProject(e.origin_project, origin) !== 'cross-project'));
+  const keys = storedKeysInView(targetRoot, options, extracted);
 
   const writeOpts: CaptureWriteOptions = {
     dryRun: options.dryRun,
     tenantId: useGlobal ? undefined : options.tenantId,
-    originProject: origin,
+    originProject: options.originProject,
     lean: false,
   };
-  const { captured, skipped, rejected } = captureExtractedItems(targetRoot, writeOpts, extracted, keys);
+  printCaptureTally(options, captureExtractedItems(targetRoot, writeOpts, extracted, keys));
+}
 
+// Dedup only against rows this capture's reader sees: another tenant's rows, or another
+// project's, are hidden from it, so they must not stop its own copy.
+// Only a row holding an item's longest word can hold that item, so the store returns those rows and no others.
+function storedKeysInView(targetRoot: string, options: CaptureOptions, extracted: readonly ExtractedItem[]): Set<string> {
+  const stored = loadTextsHoldingWords(
+    targetRoot, options.global ? undefined : options.tenantId, extracted.map((item) => longestWord(item.content)), undefined, EVERY_SCOPE,
+  );
+  const origin = options.originProject;
+  return storedTextKeys(origin === undefined
+    ? stored
+    : stored.filter((e) => classifyOriginProject(e.origin_project, origin) !== 'cross-project'));
+}
+
+function printCaptureTally(options: CaptureOptions, { captured, skipped, rejected }: CaptureTally): void {
   const prefix = options.dryRun ? '[dry-run] ' : '';
-  const globalPrefix = useGlobal ? '[global] ' : '';
+  const globalPrefix = options.global ? '[global] ' : '';
   console.log(
     `\n${prefix}${globalPrefix}Captured ${captured} items (${skipped} skipped as duplicates` +
       (rejected > 0 ? `, ${rejected} rejected` : '') +

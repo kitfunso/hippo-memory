@@ -59,7 +59,7 @@ function readableOnly<T extends { memoryId: string | null }>(db: GraphTxDb, tena
   for (let i = 0; i < ids.length; i += MEMORY_ID_CHUNK) {
     const slice = ids.slice(i, i + MEMORY_ID_CHUNK);
     // SAFETY: rows' shape matches the id and scope columns named in the SELECT.
-    const rows = db.prepare(`SELECT id, scope FROM memories WHERE tenant_id = ? AND id IN (${slice.map(() => '?').join(',')})`)
+    const rows = db.prepare(`SELECT id, scope FROM memories WHERE +tenant_id = ? AND id IN (${slice.map(() => '?').join(',')})`)
       .all(tenantId, ...slice) as Array<{ id: string; scope: string | null }>;
     for (const r of rows) if (canRead(r.scope)) readable.add(r.id);
   }

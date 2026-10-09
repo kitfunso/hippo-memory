@@ -41,7 +41,8 @@ delete process.env.HIPPO_AGENT_MEMORY_TOOLS;
 const PROVIDER_ENV_KEYS = ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'VOYAGE_API_KEY', 'COHERE_API_KEY', 'TYPESAFE_API_KEY', 'HIPPO_LLM_RERANKER_URL', 'HIPPO_LLM_RERANKER_KEY', 'CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_API_TOKEN', 'HIPPO_CLEF_ENDPOINT', 'HIPPO_CLEF_ENDPOINT_TOKEN'];
 for (const k of PROVIDER_ENV_KEYS) delete process.env[k];
 
-export const EVAL_TESTS = ['tests/token-eval*.test.ts'];
+// Each of these builds real git repositories and worktrees per case, too slow for every shard; token-eval.yml runs them.
+export const EVAL_TESTS = ['ab-run', 'make-tasks', 'z0-homes', 'z0-turns'].map((name) => `tests/token-eval-${name}.test.ts`);
 
 export default defineConfig({
   test: {

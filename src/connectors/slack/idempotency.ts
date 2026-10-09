@@ -1,4 +1,8 @@
-import type { DatabaseSyncLike } from '../../db.js';
+export {
+  slackEventSeenAt as hasSeenEvent,
+  markSlackEventSeenAt as markEventSeen,
+  slackEventMemoryAt as lookupMemoryByEvent,
+} from '../../store/connectors/slack.js';
 
 /**
  * Thrown by the ingest afterWrite hook when a concurrent worker has already
@@ -15,23 +19,4 @@ export class DuplicateEventError extends Error {
     this.name = 'DuplicateEventError';
     this.eventId = eventId;
   }
-}
-
-export function hasSeenEvent(db: DatabaseSyncLike, eventId: string): boolean {
-  const row = db.prepare(`SELECT 1 FROM slack_event_log WHERE event_id = ?`).get(eventId);
-  return !!row;
-}
-
-export function markEventSeen(db: DatabaseSyncLike, eventId: string, memoryId: string | null): void {
-  db.prepare(`INSERT OR IGNORE INTO slack_event_log (event_id, ingested_at, memory_id) VALUES (?, ?, ?)`)
-    .run(eventId, new Date().toISOString(), memoryId);
-}
-
-export function lookupMemoryByEvent(db: DatabaseSyncLike, eventId: string): string | null {
-  // SAFETY: query selects only `memory_id`, a nullable column, so a returned
-  // row has this shape; .get() returns undefined when no row matches.
-  const row = db.prepare(`SELECT memory_id FROM slack_event_log WHERE event_id = ?`).get(eventId) as
-    | { memory_id: string | null }
-    | undefined;
-  return row?.memory_id ?? null;
 }

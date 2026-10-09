@@ -1,6 +1,5 @@
 import { envStdinWaitMs } from './env.js';
-import { isJsonObject } from './hooks/shared.js';
-import { isJsonString, type JsonValue } from './json.js';
+import { isJsonString, type JsonValue, isJsonObjectLiteral } from './json.js';
 import type { JsonObject } from './working-memory.js';
 
 /** `timedOut` means the window closed with stdin still open, so absent
@@ -73,7 +72,7 @@ function snakeCaseFields(payload: JsonObject): JsonObject {
   if ('toolArgs' in payload && !('tool_input' in payload)) added.tool_input = parsedToolArgs(payload.toolArgs);
   const error = payload.error;
   // An error object gives its message, so readers that expect the documented string still get one.
-  if (isJsonObject(error) && isJsonString(error.message)) added.error = error.message;
+  if (isJsonObjectLiteral(error) && isJsonString(error.message)) added.error = error.message;
   return added;
 }
 
@@ -89,7 +88,7 @@ export function normaliseHookPayload(text: string | undefined): string | undefin
     // Not JSON: each reader already treats that as a malformed payload, so it passes through untouched.
     return text;
   }
-  if (!isJsonObject(payload)) return text;
+  if (!isJsonObjectLiteral(payload)) return text;
   const added = snakeCaseFields(payload);
   return Object.keys(added).length === 0 ? text : JSON.stringify({ ...payload, ...added });
 }

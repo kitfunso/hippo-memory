@@ -374,7 +374,7 @@ describe('GitHub connector — 200-event smoke test', () => {
       db.prepare(
         `INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?, ?, ?)`,
       ).run('99999', 'tenant-known', new Date().toISOString());
-      const resolved = resolveTenantForGitHub(db, { installationId: 'unknown-99' });
+      const resolved = resolveTenantForGitHub(root, { installationId: 'unknown-99' });
       expect(resolved).toBeNull();
     } finally {
       closeHippoDb(db);

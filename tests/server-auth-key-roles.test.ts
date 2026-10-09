@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { createApiKey, listApiKeys } from '../src/auth.js';
+import { log } from '../src/log.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
 
@@ -77,6 +78,23 @@ describe('/v1/auth/keys role rules', () => {
       expect(res.status).toBe(200);
       // SAFETY: the mint route returns AuthCreateResult as JSON.
       expect(((await res.json()) as { role: string }).role).toBe(role);
+    }
+  });
+
+  it('logs once that a mint with no role made an admin key with no expiry, naming the key id and never the key', async () => {
+    const warn = vi.spyOn(log, 'warn').mockImplementation(() => {});
+    try {
+      const admin = mint('admin');
+      // SAFETY: the mint route returns AuthCreateResult as JSON.
+      const made = (await (await post(admin.plaintext, {})).json()) as { keyId: string; plaintext: string; role: string };
+      expect((await post(admin.plaintext, { role: 'admin' })).status).toBe(200);
+      const notices = warn.mock.calls.map((call) => String(call[0])).filter((line) => line.includes('admin key, and it never expires'));
+      expect(made.role).toBe('admin');
+      expect(notices).toHaveLength(1);
+      expect(notices[0]).toContain(made.keyId);
+      expect(notices[0]).not.toContain(made.plaintext);
+    } finally {
+      warn.mockRestore();
     }
   });
 

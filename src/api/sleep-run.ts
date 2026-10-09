@@ -107,7 +107,7 @@ async function runSleepPhases(
   if (dedupResult.removed > 0) result.deduped = dedupSummary(dedupResult);
 
   // Phase 3: Quality audit (remove junk, report warnings; a dry run skips rows earlier phases would remove).
-  counts.auditDeleted = runQualityAudit(ctx, phases, dryRun, consolidateResult, dedupResult, result);
+  counts.auditDeleted = runQualityAudit(ctx, phases, { dryRun, consolidateResult, dedupResult, result });
 
   if (dryRun) return result;
 
@@ -177,14 +177,15 @@ function dedupSummary(dedupResult: DedupOutcome): NonNullable<SleepResult['dedup
 }
 
 /** Returns how many audit errors were deleted, or would be under dryRun. */
-function runQualityAudit(
-  ctx: Context,
-  phases: SleepPhases,
-  dryRun: boolean,
-  consolidateResult: ConsolidateOutcome,
-  dedupResult: DedupOutcome,
-  result: SleepResult,
-): number {
+interface QualityAuditOptions {
+  readonly dryRun: boolean;
+  readonly consolidateResult: ConsolidateOutcome;
+  readonly dedupResult: DedupOutcome;
+  readonly result: SleepResult;
+}
+
+function runQualityAudit(ctx: Context, phases: SleepPhases, options: QualityAuditOptions): number {
+  const { dryRun, consolidateResult, dedupResult, result } = options;
   const planned = new Set(dryRun ? [...(consolidateResult.removedIds ?? []), ...dedupResult.pairs.map((p) => p.removed)] : []);
   const allEntries = phases.loadAllEntries(ctx.hippoRoot).filter((e) => !planned.has(e.id));
   const auditOut = phases.auditMemories(allEntries, memoriesBackingObjects(ctx.hippoRoot));
@@ -245,39 +246,13 @@ async function drainGraphQueue(ctx: Context, phases: SleepPhases, snapshot: Dirt
         `graph: dirty-tenant snapshot failed (skipped graph refresh): ${snapshot.error}`,
       ];
     }
-    let gTenants = 0;
-    let gEntities = 0;
-    let gRelations = 0;
+    const rebuilt: GraphTotals = { tenants: 0, entities: 0, relations: 0 };
     // dirtyTenants was snapshotted before the memory-deleting phases above.
     for (const { tenantId, maxPendingId } of snapshot.dirtyTenants) {
-      try {
-        const ext = await phases.extractGraph(ctx.hippoRoot, tenantId);
-        // Count the rebuild as soon as it succeeds — it happened regardless of
-        // the drain-mark below.
-        gTenants += 1;
-        gEntities += ext.entities;
-        gRelations += ext.relations;
-        if (ext.skipped) {
-          result.details = [
-            ...(result.details ?? []),
-            `graph: ${ext.skipped} stale op(s) skipped for a tenant; the next sleep redoes them`,
-          ];
-        }
-        // Watermark drain: only items enqueued before this rebuild started are marked; later arrivals stay pending.
-        // Marked only after the last chunk, so a run stopped between chunks leaves the tenant for the next one.
-        markPendingProcessedUpTo(ctx.hippoRoot, tenantId, maxPendingId);
-      } catch (tenantErr) {
-        // SAFETY: this is a best-effort log message only; property access
-        // on any JS value is safe (undefined if absent), preserving the
-        // existing lenient formatting even when something non-Error was thrown.
-        result.details = [
-          ...(result.details ?? []),
-          `graph: extract failed for a dirty tenant (left pending): ${(tenantErr as Error).message}`,
-        ];
-      }
+      await rebuildDirtyTenant(ctx, phases, { tenantId, maxPendingId }, rebuilt, result);
     }
-    if (gTenants > 0) {
-      result.graph = { tenants: gTenants, entities: gEntities, relations: gRelations };
+    if (rebuilt.tenants > 0) {
+      result.graph = rebuilt;
     }
   } catch (graphErr) {
     // SAFETY: this is a best-effort log message only; property access on
@@ -288,6 +263,56 @@ async function drainGraphQueue(ctx: Context, phases: SleepPhases, snapshot: Dirt
       `graph: drain phase failed (skipped): ${(graphErr as Error).message}`,
     ];
   }
+}
+
+type GraphTotals = NonNullable<SleepResult['graph']>;
+
+/** Rebuilds one dirty tenant's graph into `rebuilt` and drains its queue; a failure is a detail line and the tenant stays pending. */
+async function rebuildDirtyTenant(
+  ctx: Context,
+  phases: SleepPhases,
+  dirty: DirtyTenantSnapshot['dirtyTenants'][number],
+  rebuilt: GraphTotals,
+  result: SleepResult,
+): Promise<void> {
+  try {
+    const ext = await phases.extractGraph(ctx.hippoRoot, dirty.tenantId);
+    // Count the rebuild as soon as it succeeds — it happened regardless of
+    // the drain-mark below.
+    rebuilt.tenants += 1;
+    rebuilt.entities += ext.entities;
+    rebuilt.relations += ext.relations;
+    if (ext.skipped) {
+      result.details = [
+        ...(result.details ?? []),
+        `graph: ${ext.skipped} stale op(s) skipped for a tenant; the next sleep redoes them`,
+      ];
+    }
+    // Watermark drain: only items enqueued before this rebuild started are marked; later arrivals stay pending.
+    // Marked only after the last chunk, so a run stopped between chunks leaves the tenant for the next one.
+    markPendingProcessedUpTo(ctx.hippoRoot, dirty.tenantId, dirty.maxPendingId);
+  } catch (tenantErr) {
+    // SAFETY: this is a best-effort log message only; property access
+    // on any JS value is safe (undefined if absent), preserving the
+    // existing lenient formatting even when something non-Error was thrown.
+    result.details = [
+      ...(result.details ?? []),
+      `graph: extract failed for a dirty tenant (left pending): ${(tenantErr as Error).message}`,
+    ];
+  }
+}
+
+interface SleepAuditMetadata {
+  consolidationCount: number;
+  dedupCount: number;
+  auditDeletedCount: number;
+  ambientTotal: number;
+  dryRun: boolean;
+  noShare: boolean;
+  partial: boolean;
+  triggeredByTenant: string;
+  errorMessage?: string;
+  nextUnitIds?: string[];
 }
 
 // One 'consolidate' row per sleep, emitted from finally so a partial failure still reports what got done.
@@ -303,18 +328,6 @@ function emitSleepAudit(
     const db = openHippoDb(ctx.hippoRoot);
     try {
       // Tagged '__host__' because sleep is host-wide; the actor still names the operator who ran it.
-      interface SleepAuditMetadata {
-        consolidationCount: number;
-        dedupCount: number;
-        auditDeletedCount: number;
-        ambientTotal: number;
-        dryRun: boolean;
-        noShare: boolean;
-        partial: boolean;
-        triggeredByTenant: string;
-        errorMessage?: string;
-        nextUnitIds?: string[];
-      }
       const sleepAuditMetadata: SleepAuditMetadata = {
         consolidationCount: counts.consolidation,
         dedupCount: counts.dedup,

@@ -1,9 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { JsonObject } from '../working-memory.js';
-import { isJsonObject, homeDir } from './shared.js';
+import { homeDir } from './shared.js';
 import { writeFileAtomic } from '../util/atomic-write.js';
-import { type JsonValue, isJsonString } from '../json.js';
+import { type JsonValue, isJsonString, isJsonObjectLiteral } from '../json.js';
 
 const HIPPO_OPENCODE_PLUGIN_MARKER = 'HIPPO_OPENCODE_PLUGIN_V1';
 
@@ -110,7 +110,7 @@ function resolveOpencodeConfigPath(): string {
 const HIPPO_OWNED_COMMAND_RE = /^\s*hippo\s+(session-end|last-sleep|sleep|capture|context)(?=\s|$)/;
 
 function hookIsHippoOwned(hook: JsonValue | undefined): boolean {
-  if (!isJsonObject(hook)) return false;
+  if (!isJsonObjectLiteral(hook)) return false;
   const cmd = hook.command;
   return isJsonString(cmd) && HIPPO_OWNED_COMMAND_RE.test(cmd);
 }
@@ -146,7 +146,7 @@ function migrateLegacyOpencodeHooksBlock() {
   const hooks = settings.hooks;
   // Non-object hooks values (string, array, null) are user content we don't
   // recognise — leave them alone, return migrated=false.
-  if (!isJsonObject(hooks)) {
+  if (!isJsonObjectLiteral(hooks)) {
     return { migrated: false, jsonRepairFailed: false };
   }
 
@@ -156,7 +156,7 @@ function migrateLegacyOpencodeHooksBlock() {
     if (!Array.isArray(hooksObj[key])) continue;
     const survivingEntries: JsonValue[] = [];
     for (const entry of hooksObj[key]) {
-      if (!isJsonObject(entry)) {
+      if (!isJsonObjectLiteral(entry)) {
         survivingEntries.push(entry);
         continue;
       }

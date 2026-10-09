@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
 import { appendAuditEvent, listAuditEventsAfter, queryAuditEvents } from '../src/audit.js';
-import { pruneAuditLog } from '../src/audit-prune.js';
+import { pruneAuditLog } from '../src/cli/audit-prune.js';
 
 const INSERT_SQL =
   'INSERT INTO audit_log (ts, tenant_id, actor, op, target_id, metadata_json) VALUES (?, ?, ?, ?, ?, ?)';

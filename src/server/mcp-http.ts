@@ -5,13 +5,14 @@ import { createHash } from 'node:crypto';
 import type { Context } from '../api.js';
 import { isSharedStore } from '../config.js';
 import { handleMcpRequest, mcpErrorResponse, type McpContext, type McpRequest } from '../mcp/server.js';
-import { HttpError, isJsonObjectRecord, readBody, sendJson } from '../http-util.js';
+import { HttpError, readBody, sendJson } from '../http-util.js';
 import { assertCallerProject } from '../project-identity.js';
 import type { CallerProject } from '../prompt-hook.js';
 import { buildContextWithAuth, heartbeatVerdict, readAuthHeader, requireAuth } from './auth.js';
-import { clientIpForRateLimit } from './client-ip.js';
+import { clientLimitKey, subscriberKey } from './client-ip.js';
+import { noteAccess } from './request.js';
 import type { ResolvedServeOpts } from './types.js';
-import { type JsonValue, isJsonString } from '../json.js';
+import { type JsonValue, isJsonString, isJsonObject } from '../json.js';
 
 /**
  * Build a per-client key for MCP state isolation under HTTP-MCP. Used by
@@ -29,7 +30,7 @@ function buildMcpClientKey(req: IncomingMessage): string {
   const tokenHash = auth.kind === 'bearer'
     ? createHash('sha256').update(auth.token).digest('hex').slice(0, 16)
     : 'noauth';
-  const addr = req.socket.remoteAddress ?? 'unknown';
+  const addr = subscriberKey(req.socket.remoteAddress ?? 'unknown');
   return `http:${tokenHash}:${addr}`;
 }
 
@@ -108,6 +109,7 @@ export async function handleMcpPost(req: IncomingMessage, res: ServerResponse, o
   // pull tenant from HIPPO_TENANT, dropping a valid Bearer for tenant B
   // back to whatever the env says.
   const ctx = await buildContextWithAuth(req, opts);
+  noteAccess(req, { tenant: ctx.tenantId });
   const project = callerProjectFromHeaders(req, ctx.hippoRoot);
   const raw = await readBody(req);
   let mcpReq: JsonValue;
@@ -116,7 +118,7 @@ export async function handleMcpPost(req: IncomingMessage, res: ServerResponse, o
   } catch {
     throw new HttpError(400, 'invalid JSON-RPC body');
   }
-  if (!isJsonObjectRecord(mcpReq) || !isJsonString(mcpReq.method)) {
+  if (!isJsonObject(mcpReq) || !isJsonString(mcpReq.method)) {
     throw new HttpError(400, 'JSON-RPC body must include a method string');
   }
   // SAFETY: validated above as a plain JSON object carrying a string method;
@@ -145,7 +147,7 @@ const DEFAULT_MAX_STREAMS_PER_CLIENT = 8;
 function streamSlotKey(req: IncomingMessage): string {
   const auth = readAuthHeader(req);
   if (auth.kind === 'bearer') return `key:${createHash('sha256').update(auth.token).digest('hex').slice(0, 16)}`;
-  return `ip:${clientIpForRateLimit(req)}`;
+  return `ip:${clientLimitKey(req)}`;
 }
 
 /** Takes a stream slot or throws 429; the slot is released once, when the response closes. */

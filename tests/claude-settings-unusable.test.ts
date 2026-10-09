@@ -1,11 +1,9 @@
 // init, hook install, hook uninstall and setup each warn once when Claude Code's settings.json is not JSON hippo can edit, and leave the file as it was.
-import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-
-const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
+import { hippoRun } from './_helpers/spawn-hippo.js';
 
 let root: string;
 let settings: string;
@@ -31,7 +29,7 @@ function hippo(...args: string[]): string {
     HIPPO_HOME: path.join(root, 'global'),
     PATH: path.join(root, 'empty-path'),
   });
-  const r = spawnSync(process.execPath, [HIPPO_JS, ...args, '--no-schedule', '--no-learn'], { cwd: path.join(root, 'repo'), env, encoding: 'utf8' });
+  const r = hippoRun([...args, '--no-schedule', '--no-learn'], { cwd: path.join(root, 'repo'), env });
   expect(r.status, r.stderr).toBe(0);
   return r.stdout;
 }

@@ -76,7 +76,7 @@ async function createProcess(
   });
 }
 
-describe('HTTP /v1/processes (E2 process first-class object)', () => {
+describe('HTTP /v1/processes (process first-class object)', () => {
   it('POST /v1/processes creates a process (201 + Process body, version 1)', async () => {
     const res = await createProcess('Release', { steps: ['test', 'bump', 'publish'], description: 'the ritual' });
     expect(res.status).toBe(201);

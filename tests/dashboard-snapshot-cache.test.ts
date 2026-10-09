@@ -5,12 +5,12 @@ import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Layer } from '../src/memory.js';
 import { quarantineScopeFor } from '../src/quarantine.js';
-import { COALESCE_MS, TTL_MS, createSnapshotService, type SnapshotService } from '../src/dashboard-snapshot.js';
-import { buildOverview } from '../src/dashboard-queries.js';
+import { COALESCE_MS, TTL_MS, createSnapshotService, type SnapshotService } from '../src/dashboard/dashboard-snapshot.js';
+import { buildOverview } from '../src/dashboard/dashboard-queries.js';
 import {
   NOW, call, embed, get, makeStore, parse, postJson, seed, startDashboard, type RunningDashboard, type TmpStore,
 } from './_helpers/dashboard-fixture.js';
-import type { MemoryDetail, Overview } from '../src/dashboard-types.js';
+import type { MemoryDetail, Overview } from '../src/dashboard/dashboard-types.js';
 
 let store: TmpStore;
 let clock: number;

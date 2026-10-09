@@ -11,7 +11,7 @@ import { openHippoDb, closeHippoDb, getCurrentSchemaVersion } from '../src/db.js
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 import { makeRoot } from './_helpers/make-root.js';
 
-describe('graph schema v37 (E3.3)', () => {
+describe('graph schema v37', () => {
   let home: string;
   beforeEach(() => { home = makeRoot('graph-schema'); });
   afterEach(() => { try { rmSync(home, { recursive: true, force: true }); } catch { /* ignore */ } });

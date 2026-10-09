@@ -6,7 +6,7 @@ import { closeHippoDb, openHippoDb } from '../src/db.js';
 import { listMemoryConflicts, replaceDetectedConflicts } from '../src/store/conflicts.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { quarantineScopeFor } from '../src/quarantine.js';
-import type { MemoryDetail, ResolveResult } from '../src/dashboard-types.js';
+import type { MemoryDetail, ResolveResult } from '../src/dashboard/dashboard-types.js';
 import {
   DASHBOARD_TOKEN, NOW, call, get, isoAgo, makeStore, parse, postJson, seed, startDashboard, type Json, type RunningDashboard, type TmpStore,
 } from './_helpers/dashboard-fixture.js';

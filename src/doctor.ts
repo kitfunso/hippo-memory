@@ -15,11 +15,12 @@ import { openHippoDbReadOnly, closeHippoDb, getSchemaVersion, getCurrentSchemaVe
 import { REPLAY_AFTER_MS, TRANSCRIPT_FILL_WINDOW_MS } from './compaction-record.js';
 import { SPOOL_DIR, spoolCounts, type SpoolCounts } from './compaction-spool.js';
 import { isEmbeddingAvailable } from './local-embedding.js';
-import { CODEX_TRUST_LINE, claudeConfigDir, codexHomeDir, isCodexPresent, isJsonObject } from './hooks/shared.js';
+import { CODEX_TRUST_LINE, claudeConfigDir, codexHomeDir, isCodexPresent } from './hooks/shared.js';
 import { planProjectRepair } from './project-merge.js';
 import { resolveTenantId } from './tenant.js';
 import { errorMessage, log } from './log.js';
-import { readJsonFile, type JsonValue } from './json.js';
+import { readJsonFile, type JsonValue, isJsonObjectLiteral } from './json.js';
+import { DAY_MS } from './util/time.js';
 
 /** Outcome of one check. `fail` makes `hippo doctor` exit 1. */
 export type DoctorStatus = 'pass' | 'warn' | 'fail' | 'info';
@@ -80,7 +81,7 @@ function codexCheck(home: string): DoctorCheck {
   const file = path.join(codexHomeDir(home), 'hooks.json');
   const parsed = readJson(file);
   // Codex drops every hook in a hooks.json it cannot parse, hippo's included.
-  if (fs.existsSync(file) && !isJsonObject(parsed)) {
+  if (fs.existsSync(file) && !isJsonObjectLiteral(parsed)) {
     return { id: 'codex', status: 'warn', detail: "Codex's hooks.json is not a JSON object, so Codex runs no hook from it", fix: 'repair hooks.json, then run: hippo hook install codex' };
   }
   const text = JSON.stringify(parsed ?? '');
@@ -108,7 +109,7 @@ function failuresCheck(db: DatabaseSyncLike, since: string, schemaVersion: numbe
     const row = db.prepare(`SELECT COUNT(*) AS n FROM failure_log WHERE ts >= ?`).get(since) as { n: number } | undefined;
     return { id: 'failures', status: 'info', detail: `${Number(row?.n ?? 0)} failed tool calls logged in 7 days (hippo failures for detail)` };
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = errorMessage(err);
     if (!message.includes('no such table')) {
       return { id: 'failures', status: 'warn', detail: `cannot read the failure log: ${message}` };
     }
@@ -127,12 +128,12 @@ function sleepCheck(db: DatabaseSyncLike, now: Date): DoctorCheck {
     if (Number.isNaN(when)) {
       return { id: 'sleep', status: 'warn', detail: 'hippo has never slept (consolidated) in this store', fix: 'hippo sleep   (the session-end hook runs it automatically)' };
     }
-    const days = Math.floor((now.getTime() - when) / 86_400_000);
+    const days = Math.floor((now.getTime() - when) / DAY_MS);
     return days > 7
       ? { id: 'sleep', status: 'warn', detail: `last sleep ${days} days ago`, fix: 'hippo sleep, and check the session-end hook is installed' }
       : { id: 'sleep', status: 'pass', detail: `last sleep ${days === 0 ? 'today' : `${days} day${days === 1 ? '' : 's'} ago`}` };
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = errorMessage(err);
     return { id: 'sleep', status: 'info', detail: `sleep history unavailable (${message})` };
   }
 }
@@ -148,7 +149,7 @@ function readSpool(store: string, now: Date): SpoolRead {
   try {
     return { counts: spoolCounts(store, now, REPLAY_AFTER_MS), unread: '' };
   } catch (err) {
-    return { counts: { waiting: 0, stale: 0, bad: 0 }, unread: `; spool not read: ${err instanceof Error ? err.message : String(err)}` };
+    return { counts: { waiting: 0, stale: 0, bad: 0 }, unread: `; spool not read: ${errorMessage(err)}` };
   }
 }
 
@@ -182,7 +183,7 @@ function compactionsCheck(db: DatabaseSyncLike, store: string, now: Date): Docto
     const note = spooled ? `; spool: ${spool.waiting} waiting, ${spool.stale} left by a replay that stopped, ${spool.bad} .bad` : '';
     return { id: 'compactions', status: 'warn', detail: `${unfinished}${note}${unread}`, fix: fix.join('; ') };
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = errorMessage(err);
     return message.includes('no such table')
       ? { id: 'compactions', status: 'info', detail: 'no compaction records yet (hippo creates them on the next write)' }
       : { id: 'compactions', status: 'warn', detail: `cannot read the compaction records: ${message}` };
@@ -205,7 +206,7 @@ function projectsCheck(globalRoot: string): DoctorCheck {
       ? { id: 'projects', status: 'pass', detail: 'no duplicate or out-of-date project tags in the global store' }
       : { id: 'projects', status: 'warn', detail: `global store: ${found.join('; ')}`, fix: 'hippo projects repair --global   (dry run; add --apply to write)' };
   } catch (err) {
-    return { id: 'projects', status: 'info', detail: `project tags not checked (${err instanceof Error ? err.message : String(err)})` };
+    return { id: 'projects', status: 'info', detail: `project tags not checked (${errorMessage(err)})` };
   } finally {
     if (db !== null) closeHippoDb(db);
   }
@@ -269,7 +270,7 @@ function ftsCheck(db: DatabaseSyncLike): DoctorCheck {
       fix: 'hippo sleep   (re-syncs the index)',
     };
   } catch (err) {
-    return { id: 'fts', status: 'warn', detail: `cannot read the full-text index: ${err instanceof Error ? err.message : String(err)}` };
+    return { id: 'fts', status: 'warn', detail: `cannot read the full-text index: ${errorMessage(err)}` };
   }
 }
 
@@ -303,7 +304,7 @@ function databaseChecks(store: string, now: Date): DoctorCheck[] {
     checks.push(schemaCheck(have, getCurrentSchemaVersion()));
     checks.push(memoriesCheck(db));
     checks.push(ftsCheck(db));
-    const since = new Date(now.getTime() - 7 * 86_400_000).toISOString();
+    const since = new Date(now.getTime() - 7 * DAY_MS).toISOString();
     checks.push(tokensCheck(db, since));
     checks.push(failuresCheck(db, since, have));
     checks.push(sleepCheck(db, now));
@@ -312,7 +313,7 @@ function databaseChecks(store: string, now: Date): DoctorCheck[] {
     checks.push({
       id: 'schema',
       status: 'fail',
-      detail: `cannot open the database: ${err instanceof Error ? err.message : String(err)}`,
+      detail: `cannot open the database: ${errorMessage(err)}`,
       fix: err instanceof IncompatibleBinaryError ? 'npm install -g hippo-memory@latest' : 'check file permissions on the .hippo folder',
     });
   } finally {

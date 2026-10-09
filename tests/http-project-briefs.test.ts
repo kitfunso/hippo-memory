@@ -21,7 +21,10 @@ import { serve, type ServerHandle } from '../src/server.js';
 import { createApiKey, type CreateApiKeyResult } from '../src/auth.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import type { ProjectBrief } from '../src/project-briefs.js';
+import type { JsonValue } from '../src/json.js';
 import { makeRoot } from './_helpers/make-root.js';
+
+type Body = { [key: string]: JsonValue };
 
 type BriefResponse = { brief: ProjectBrief };
 type BriefListResponse = { briefs: ProjectBrief[] };
@@ -60,7 +63,7 @@ async function createBrief(body: { repo: string; summary: string }, key: CreateA
   return fetch(`${handle.url}/v1/project-briefs`, { method: 'POST', headers: authHeaders(key), body: JSON.stringify(body) });
 }
 
-describe('HTTP /v1/project-briefs (E2 repo-scoped first-class object)', () => {
+describe('HTTP /v1/project-briefs (repo-scoped first-class object)', () => {
   it('POST /v1/project-briefs creates a brief (201 + brief, version 1)', async () => {
     const res = await createBrief({ repo: 'hippo', summary: 'agent-memory lib' });
     expect(res.status).toBe(201);
@@ -81,6 +84,8 @@ describe('HTTP /v1/project-briefs (E2 repo-scoped first-class object)', () => {
     expect(all.briefs.length).toBe(3);
     const repoR = await jsonAs<BriefListResponse>(await fetch(`${handle.url}/v1/project-briefs?repo=r`, { headers: authHeaders() }));
     expect(repoR.briefs.length).toBe(2);
+    const padded = await jsonAs<BriefListResponse>(await fetch(`${handle.url}/v1/project-briefs?repo=%20r%20`, { headers: authHeaders() }));
+    expect(padded.briefs.length).toBe(2); // the filter is trimmed before the lookup
     const active = await jsonAs<BriefListResponse>(await fetch(`${handle.url}/v1/project-briefs?repo=r&status=active`, { headers: authHeaders() }));
     expect(active.briefs.length).toBe(1);
     expect(active.briefs[0].version).toBe(2);
@@ -164,5 +169,34 @@ describe('HTTP /v1/project-briefs (E2 repo-scoped first-class object)', () => {
 
   it('DoS cap on summary (400)', async () => {
     expect((await createBrief({ repo: 'x', summary: 'y'.repeat(8193) })).status).toBe(400);
+  });
+
+  const over = (cap: number): string => 'x'.repeat(cap + 1);
+  const at = (cap: number): string => 'x'.repeat(cap);
+  const ROOT = '/v1/project-briefs';
+  const REFRESH = '/v1/project-briefs/refresh';
+  const MISSING = '/v1/project-briefs/99999/supersede';
+  // Each row also sends every later field invalid, and the supersede target does not exist,
+  // so a row pins which check answers first as well as the reply text.
+  const REPLIES: readonly (readonly [string, string, string, Body | undefined, number, string])[] = [
+    ['list: an unknown status', 'GET', `${ROOT}?status=retired`, undefined, 400, 'status must be one of: active | superseded | closed | all (got "retired")'],
+    ['create: blank repo', 'POST', ROOT, { repo: '  ', summary: 7 }, 400, 'repo is required (non-empty string)'],
+    ['create: repo over the cap', 'POST', ROOT, { repo: over(256), summary: 7 }, 400, 'repo exceeds 256-character cap'],
+    ['create: blank summary', 'POST', ROOT, { repo: 'r', summary: '  ' }, 400, 'summary is required (non-empty string)'],
+    ['create: summary over the cap', 'POST', ROOT, { repo: 'r', summary: over(8192) }, 400, 'summary exceeds 8192-character cap'],
+    ['refresh: blank repo', 'POST', REFRESH, { repo: '  ', dryRun: true }, 400, 'repo is required (non-empty string)'],
+    ['refresh: repo over the cap', 'POST', REFRESH, { repo: over(256), dryRun: true }, 400, 'repo exceeds 256-character cap'],
+    ['supersede: blank summary', 'POST', MISSING, { summary: '  ', changeSummary: 7 }, 400, 'summary is required (non-empty string)'],
+    ['supersede: summary over the cap', 'POST', MISSING, { summary: over(8192), changeSummary: 7 }, 400, 'summary exceeds 8192-character cap'],
+    ['supersede: changeSummary not a string', 'POST', MISSING, { summary: 's', changeSummary: 7 }, 400, 'changeSummary must be a string'],
+    ['supersede: changeSummary over the cap', 'POST', MISSING, { summary: 's', changeSummary: over(4096) }, 400, 'changeSummary exceeds 4096-character cap'],
+    ['supersede: every field at its cap reaches the lookup', 'POST', MISSING, { summary: at(8192), changeSummary: at(4096) }, 404, 'project brief 99999 not found'],
+    ['supersede: a null changeSummary reaches the lookup', 'POST', MISSING, { summary: 's', changeSummary: null }, 404, 'project brief 99999 not found'],
+  ];
+
+  it.each(REPLIES)('%s', async (_name, method, path, body, status, error) => {
+    const init = { method, headers: authHeaders(), body: body && JSON.stringify(body) };
+    const res = await fetch(`${handle.url}${path}`, init);
+    expect([res.status, await res.text()]).toEqual([status, JSON.stringify({ error })]);
   });
 });

@@ -11,6 +11,7 @@ import { ensurePilotArm, hashArm, readPilotArm } from '../src/pilot-arm.js';
 import { recordTokenUse, summarizeTokenUse, tokensBySession } from '../src/token-ledger.js';
 import { runDoctor } from '../src/doctor.js';
 import type { JsonValue } from '../src/json.js';
+import { countMatching, recordStatements } from './_helpers/count-statements.js';
 
 let tmp: string;
 let root: string;
@@ -35,6 +36,24 @@ const writeConfig = (pilot: JsonValue): void => fs.writeFileSync(path.join(root,
 // SAFETY: a single COUNT(*) aggregate aliased `n`.
 const armCount = (): number =>
   (db.prepare(`SELECT COUNT(*) AS n FROM token_ledger WHERE event = 'arm'`).get() as { n: number }).n;
+
+/** Runs `fn` with SQLite's own busy sleep off, as it overshoots on macOS, and the retry loop's clock moved 50 ms a try; returns the wait the loop saw. */
+function waitOnSteppedClock(reader: DatabaseSyncLike, fn: () => void): number {
+  reader.exec('PRAGMA busy_timeout = 0');
+  let clock = 0;
+  const exec = reader.exec.bind(reader);
+  vi.spyOn(reader, 'exec').mockImplementation((sql: string) => {
+    if (sql === 'BEGIN IMMEDIATE') clock += 50;
+    exec(sql);
+  });
+  const now = vi.spyOn(Date, 'now').mockImplementation(() => clock);
+  try {
+    fn();
+  } finally {
+    now.mockRestore();
+  }
+  return clock;
+}
 
 describe('pilot config', () => {
   it('defaults to 0 and reads a valid rate', () => {
@@ -100,16 +119,14 @@ describe('pilot arm helpers', () => {
     expect(ensurePilotArm(db, 'default', 's1', 0)).toBe('hippo');
   });
 
-  it('a held write lock yields the hash arm, no row, and a bounded wait', () => {
+  it('a held write lock yields the hash arm, no row, and a wait that ends at the hook bound', () => {
     const holder = openHippoDb(root);
     try {
       holder.exec('BEGIN IMMEDIATE');
       const reader = openHippoDb(root, { busyWaitMs: HOOK_DB_WAIT_MS });
       try {
-        const started = Date.now();
-        expect(ensurePilotArm(reader, 'default', 'locked', 10000)).toBe('holdout');
-        // Under the 5 s default wait; SQLite's busy sleeps overshoot on macOS, where a 1 s wait measured up to 1.7 s idle.
-        expect(Date.now() - started).toBeLessThan(3000);
+        const waited = waitOnSteppedClock(reader, () => expect(ensurePilotArm(reader, 'default', 'locked', 10000)).toBe('holdout'));
+        expect(waited).toBe(HOOK_DB_WAIT_MS);
       } finally {
         closeHippoDb(reader);
       }
@@ -127,22 +144,9 @@ describe('pilot arm helpers', () => {
       await runWithRequestStores(() => {
         const reader = openHippoDb(root);
         try {
-          // SQLite's own busy sleep overshoots on macOS, so it is off and the retry loop's clock moves 50 ms a try, not with real time.
-          reader.exec('PRAGMA busy_timeout = 0');
-          let clock = 0;
-          const exec = reader.exec.bind(reader);
-          vi.spyOn(reader, 'exec').mockImplementation((sql: string) => {
-            if (sql === 'BEGIN IMMEDIATE') clock += 50;
-            exec(sql);
-          });
-          const now = vi.spyOn(Date, 'now').mockImplementation(() => clock);
-          try {
-            expect(ensurePilotArm(reader, 'default', 'locked', 10000)).toBe('holdout');
-          } finally {
-            now.mockRestore();
-          }
-          expect(clock).toBeGreaterThanOrEqual(SERVER_DB_WAIT_MS);
-          expect(clock).toBeLessThan(HOOK_DB_WAIT_MS);
+          const waited = waitOnSteppedClock(reader, () => expect(ensurePilotArm(reader, 'default', 'locked', 10000)).toBe('holdout'));
+          expect(waited).toBeGreaterThanOrEqual(SERVER_DB_WAIT_MS);
+          expect(waited).toBeLessThan(HOOK_DB_WAIT_MS);
         } finally {
           closeHippoDb(reader);
         }
@@ -167,9 +171,9 @@ describe('pilot arm helpers', () => {
     const holder = openHippoDb(root);
     try {
       holder.exec('BEGIN IMMEDIATE');
-      const started = Date.now();
-      expect(ensurePilotArm(db, 'default', 'kept', 1)).toBe('holdout');
-      expect(Date.now() - started).toBeLessThan(500);
+      const { result, statements } = recordStatements(() => ensurePilotArm(db, 'default', 'kept', 1));
+      expect(result).toBe('holdout');
+      expect(countMatching(statements, 'BEGIN')).toBe(0);
     } finally {
       holder.exec('ROLLBACK');
       closeHippoDb(holder);

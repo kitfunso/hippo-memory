@@ -27,7 +27,8 @@ import { createHash } from 'node:crypto';
 import { open } from 'node:fs/promises';
 import type { DatabaseSyncLike } from './db.js';
 import type { JsonObject } from './working-memory.js';
-import { type JsonValue, isJsonString } from './json.js';
+import { type JsonValue, isJsonString, isJsonObjectLiteral } from './json.js';
+import { DAY_MS } from './util/time.js';
 
 /**
  * Where a block of memory text was sent.
@@ -122,7 +123,7 @@ export function recordTokenUse(db: DatabaseSyncLike, use: TokenUse): void {
     Math.max(0, Math.round(use.tokens)),
     use.hash ?? null,
   );
-  const cutoff = new Date(Date.parse(now) - TOKEN_LEDGER_RETENTION_DAYS * 86_400_000).toISOString();
+  const cutoff = new Date(Date.parse(now) - TOKEN_LEDGER_RETENTION_DAYS * DAY_MS).toISOString();
   db.prepare(`DELETE FROM token_ledger WHERE ts < ?`).run(cutoff);
 }
 
@@ -279,18 +280,13 @@ export function isSyntheticMessage(message: ModelTagged): boolean {
   return message.model === '<synthetic>';
 }
 
-/** JSON-value plain-object check (excludes arrays and null). */
-function isJsonObject(value: JsonValue | undefined): value is JsonObject {
-  return value !== undefined && value !== null && !Array.isArray(value) && value.constructor === Object;
-}
-
 /** A Claude Code hook payload on stdin as a JSON object; null when empty, malformed or not an object. */
 function parseHookPayload(stdinText: string | undefined): JsonObject | null {
   if (!stdinText || stdinText.trim() === '') return null;
   try {
     // SAFETY: JSON.parse returns a JSON value by definition.
     const payload = JSON.parse(stdinText.trim()) as JsonValue;
-    return isJsonObject(payload) ? payload : null;
+    return isJsonObjectLiteral(payload) ? payload : null;
   } catch {
     // Malformed is one of the null cases the docblock names.
     return null;
@@ -389,15 +385,15 @@ export async function readApiCalls(transcriptPath: string): Promise<TranscriptCa
         continue;
       }
       // Sidechain calls, sidechain compactions and `<synthetic>` messages never touch the main context.
-      if (!isJsonObject(entry) || entry.isSidechain === true) continue;
+      if (!isJsonObjectLiteral(entry) || entry.isSidechain === true) continue;
       if (entry.subtype === 'compact_boundary') {
         compactions += 1;
         continue;
       }
       // One call spans lines sharing a message id.
       const message = entry.message;
-      if (entry.type !== 'assistant' || !isJsonObject(message)) continue;
-      if (!isJsonObject(message.usage) || isSyntheticMessage(message) || !isJsonString(message.id)) continue;
+      if (entry.type !== 'assistant' || !isJsonObjectLiteral(message)) continue;
+      if (!isJsonObjectLiteral(message.usage) || isSyntheticMessage(message) || !isJsonString(message.id)) continue;
       if (seen.has(message.id)) continue;
       seen.add(message.id);
       const at = isJsonString(entry.timestamp) ? Date.parse(entry.timestamp) : Number.NaN;

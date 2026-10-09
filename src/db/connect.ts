@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { cleanupArchivedMirrors } from '../raw-archive-mirror-cleanup.js';
-import { log } from '../log.js';
+import { cleanupArchivedMirrors } from './raw-archive-mirror-cleanup.js';
+import { errorMessage, log } from '../log.js';
 import { DatabaseSync, type DatabaseSyncLike } from './sqlite.js';
 import { execWithBusyRetry } from './busy.js';
 import { runMigrations } from './migrate.js';
@@ -65,7 +65,7 @@ export function connectHippoDb(hippoRoot: string, busyWaitMs?: number): Database
     try {
       sweepArchivedMirrorsIfDue(hippoRoot, db);
     } catch (cleanupErr) {
-      log.error(`openHippoDb: cleanupArchivedMirrors failed (non-fatal): ${cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr)}`);
+      log.error(`openHippoDb: cleanupArchivedMirrors failed (non-fatal): ${errorMessage(cleanupErr)}`);
     }
     return db;
   } catch (error) {

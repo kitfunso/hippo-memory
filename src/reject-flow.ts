@@ -11,7 +11,7 @@
  * cli.ts and api.ts, so it introduces no cycle.
  */
 
-import { closeHippoDb, type DatabaseSyncLike } from './db.js';
+import { closeHippoDb, withWriteScope, type DatabaseSyncLike } from './db.js';
 import { BadRequestError } from './api-errors.js';
 import { appendAuditEvent, reportAuditWriteFailure } from './audit.js';
 import { isPersonalScope } from './recall-scope.js';
@@ -222,8 +222,7 @@ export function rejectValue(opts: RejectFlowOpts): RejectFlowResult {
     const now = new Date().toISOString();
     const removal: RejectRemoval = { removedIds: [], removedRawIds: [], successors: [], dormantSuccessorIds: [] };
 
-    db.exec('BEGIN IMMEDIATE');
-    try {
+    withWriteScope(db, 'reject_value', () => {
       insertRejectedValue(db, {
         tenantId: opts.tenantId,
         digest,
@@ -241,16 +240,7 @@ export function rejectValue(opts: RejectFlowOpts): RejectFlowResult {
       removeLiveRows(db, opts, holdsValue, removal);
       removeDormantCopies(db, opts, digest, holdsValue, removal);
       auditRejectValue(db, opts, digest, removal.removedIds);
-
-      db.exec('COMMIT');
-    } catch (err) {
-      try {
-        db.exec('ROLLBACK');
-      } catch {
-        // already rolled back
-      }
-      throw err;
-    }
+    });
 
     purgeRemovedMirrors(db, opts.hippoRoot, removal);
 

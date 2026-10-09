@@ -4,14 +4,12 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { spawnSync } from 'node:child_process';
 import { copilotHomeDir, detectInstalledTools } from '../src/hooks/shared.js';
 import { COPILOT_INSTRUCTIONS, VSCODE_INSTRUCTIONS, VSCODE_MCP, copilotMcpSnippet, copilotPaths, installCopilot, mergeMcpServer, uninstallCopilot } from '../src/hooks/copilot.js';
 import { HOOKS } from '../src/hooks/hook-blocks.js';
 import { withFakeHome, type FakeHomeHandle } from './_helpers/with-fake-home.js';
 import type { JsonValue } from '../src/json.js';
-
-const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
+import { hippoRun } from './_helpers/spawn-hippo.js';
 const START = '<!-- hippo:start -->';
 const END = '<!-- hippo:end -->';
 const BOM = String.fromCodePoint(0xfeff);
@@ -423,7 +421,7 @@ function hippo(m: Machine, ...args: string[]): string {
     COPILOT_HOME: m.copilot,
     PATH: path.join(m.root, 'empty-path'),
   });
-  const r = spawnSync(process.execPath, [HIPPO_JS, ...args], { cwd: m.root, env, encoding: 'utf8' });
+  const r = hippoRun(args, { cwd: m.root, env });
   expect(r.status, r.stderr).toBe(0);
   return r.stdout;
 }

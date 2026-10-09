@@ -27,7 +27,7 @@ function records(): string {
   return lines.join('\n');
 }
 
-describe('A/B analyzer (TE5)', () => {
+describe('A/B analyzer', () => {
   const prices = { inputPerMTok: 3, cacheWritePerMTok: 3.75, cacheReadPerMTok: 0.3, outputPerMTok: 15 };
 
   it('reports a cheaper cost per resolved task and less work for the hippo arm', () => {

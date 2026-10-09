@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSy
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { repairAutomaticMemories } from '../src/quality-repair.js';
+import { repairAutomaticMemories } from '../src/cli/quality-repair.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
@@ -14,7 +14,7 @@ import { readDormantSnapshot } from '../src/dormant.js';
 import { findRejectedValue, rejectionDigest } from '../src/rejection.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { Layer, type MemoryEntry } from '../src/memory.js';
-import { savePrediction } from '../src/predictions/store.js';
+import { savePrediction } from '../src/store/predictions.js';
 import { mergedText } from '../src/same-text.js';
 import { restoreDormant, type Context } from '../src/api.js';
 import { importForStore } from '../src/agent-memories/sync.js';

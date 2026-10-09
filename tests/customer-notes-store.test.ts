@@ -56,7 +56,7 @@ function memTags(home: string, memoryId: string): string[] {
   } finally { closeHippoDb(db); }
 }
 
-describe('customer_notes store (E2 entity-scoped first-class object)', () => {
+describe('customer_notes store (entity-scoped first-class object)', () => {
   let home: string;
   beforeEach(() => { home = makeRoot('customer-notes'); });
   afterEach(() => safeRmSync(home));

@@ -1,5 +1,5 @@
 // Runs each dual-mode api function on hippo.db directly and through sqliteStore, on two copies of one seeded store.
-// It carries the twin collapse: the change that removes the last twin deletes the path comparison and keeps only CONTRACT and the importVault test.
+// Each function has one body; the comparison holds its two ports, hippo.db answering at once and sqliteStore, to one reply and the same rows.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import crypto from 'node:crypto';
 import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -14,6 +14,7 @@ import { grantScope, insertApiKey, revokeApiKey } from '../src/auth.js';
 import { closeHippoDb, openHippoDb } from '../src/db.js';
 import type { ImportResult } from '../src/importers/core.js';
 import { importVault } from '../src/importers/vault.js';
+import { DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { writeRecallTraceAtRoot } from '../src/recall-trace.js';
 import { rejectionDigest } from '../src/rejection.js';
 import { sqliteStore, type HippoStore, type StoreGroup } from '../src/store-port.js';
@@ -36,52 +37,12 @@ interface Difference {
 }
 
 const KNOWN_DIFFERENCES = {
-  forgetLock: {
-    fn: 'forget',
-    differs: 'hippo.db checks reach on one handle and deletes on a second; the store checks inside the delete\'s write lock',
-    onHippoDb: 'src/api/forget.ts:44-63',
-    throughStore: 'src/store/entry-writes-group.ts:52-59',
-    winner: 'store: one write scope',
-    pinnedBy: 'here',
-  },
-  archiveLock: {
-    fn: 'archiveRaw',
-    differs: 'hippo.db checks reach before it takes the write lock; the store checks inside it',
-    onHippoDb: 'src/api/promote.ts:214-222',
-    throughStore: 'src/store/entry-writes-group.ts:40-51',
-    winner: 'store: the group',
-    pinnedBy: 'here',
-  },
-  idCollision: {
-    fn: 'remember',
-    differs: 'a new id another tenant already holds moves that row to the writer on hippo.db; the store rejects with ConflictError',
-    onHippoDb: 'src/api/remember.ts:136',
-    throughStore: 'src/store/entry-writes-group.ts:73-90',
-    winner: 'store: the group',
-    pinnedBy: 'here for hippo.db; tests/entry-writes-conformance.test.ts "refuses an id another tenant holds" for the store',
-  },
-  outcomeCommit: {
-    fn: 'outcome',
-    differs: 'hippo.db commits each row and then its audit row; the store commits every row and audit row together',
-    onHippoDb: 'src/api/outcome.ts:74-88',
-    throughStore: 'src/store/entry-writes-group.ts:93-108',
-    winner: 'store: one transaction',
-    pinnedBy: 'here',
-  },
-  outcomeRefusalAudit: {
-    fn: 'outcome',
-    differs: 'a row the rejection guard refuses leaves a reject_refusal audit row on hippo.db and none through the store',
-    onHippoDb: 'src/store/entry-writes.ts:38-40',
-    throughStore: 'src/store/entry-writes-group.ts:93-108',
-    winner: 'hippo.db: kept behaviour, the collapsed outcome still writes the refusal row',
-    pinnedBy: 'here',
-  },
   outcomeTraceLink: {
     fn: 'outcome',
     differs: 'hippo.db links the outcome to opts.traceId after the rows commit; the store refuses a traceId',
-    onHippoDb: 'src/api/outcome.ts:92-99',
-    throughStore: 'src/api/outcome.ts:64',
-    winner: 'hippo.db: kept behaviour, the link stays and stays after the commit',
+    onHippoDb: 'src/store/sqlite/entry-writes-group.ts:59-70',
+    throughStore: 'src/store/sqlite/local.ts:58-60',
+    winner: 'hippo.db: the link is written on the outcome\'s own handle after its commit, which no served store can hand out, so a store keeps refusing a traceId',
     pinnedBy: 'tests/recall-trace-outcome-linkage.test.ts for the link; tests/entry-writes-store.test.ts for the refusal',
   },
   grants: {
@@ -92,28 +53,36 @@ const KNOWN_DIFFERENCES = {
     winner: 'hippo.db: their published replies are synchronous and only the local CLI calls them, so they stay off the port; the change and its audit row commit together',
     pinnedBy: 'here',
   },
+  archiveHook: {
+    fn: 'archiveRaw',
+    differs: 'afterArchive runs on hippo.db, inside the archive\'s write scope, and is refused through a store',
+    onHippoDb: 'src/store/sqlite/entry-writes-group.ts:55-66',
+    throughStore: 'src/store/sqlite/local.ts:52-54',
+    winner: 'hippo.db: the hook writes on the archive\'s own handle inside its write scope, which no served store can hand out, so a store keeps refusing it',
+    pinnedBy: 'here',
+  },
   hippoDbOnlyOptions: {
-    fn: 'remember, archiveRaw',
-    differs: 'afterWrite, untrusted and afterArchive run on hippo.db and are refused through a store',
-    onHippoDb: 'src/api/remember.ts:124-136, src/api/promote.ts:218-222',
-    throughStore: 'src/api/remember.ts:112, src/api/promote.ts:200',
-    winner: 'open: porting them needs a store hook that runs inside the write; refusing keeps connectors on hippo.db',
-    pinnedBy: 'tests/entry-writes-store.test.ts',
+    fn: 'remember',
+    differs: 'afterWrite and untrusted run on hippo.db and are refused through a store',
+    onHippoDb: 'src/store/sqlite/entry-writes-group.ts:52-56',
+    throughStore: 'src/store/sqlite/local.ts:55-57',
+    winner: 'hippo.db: the hook and a flagged row\'s quarantine record write on the row\'s own handle inside its write scope, which no served store can hand out, so a store keeps refusing both',
+    pinnedBy: 'tests/api-remember-after-write.test.ts and tests/quarantine.test.ts for the write; tests/entry-writes-store.test.ts for the refusal',
   },
   lastRecall: {
     fn: 'outcomeForLastRecall',
     differs: 'no store path, so timing facts 2, 4 and 5 fail: a sqlite store runs the hippo.db code on ctx.hippoRoot, any other kind gets SqliteBlockedError',
-    onHippoDb: 'src/api/outcome.ts:147-156',
-    throughStore: 'src/api/outcome.ts:142-145',
-    winner: 'open: a port read of the last recall is new published surface; without one the function stays hippo.db-only',
+    onHippoDb: 'src/store/sqlite/local.ts:35-39',
+    throughStore: 'src/api/on-store.ts:25-34',
+    winner: 'hippo.db: the last recall and its trace are hippo.db meta that only the CLI and context write, so the function stays hippo.db-only and no port read is added',
     pinnedBy: 'here, in CONTRACT',
   },
   configFolder: {
     fn: 'remember, supersede',
-    differs: 'through a store the half-life still comes from config.json in ctx.hippoRoot, so timing fact 5 holds only as "an empty hippoRoot works"',
-    onHippoDb: 'src/api/remember.ts:86, src/api/promote.ts:118',
-    throughStore: 'src/api/remember.ts:86, src/api/promote.ts:105',
-    winner: 'open: reading it from the store needs a port method; leaving it ties a store-served write to the server\'s working folder',
+    differs: 'the half-life comes from config.json in ctx.hippoRoot on both paths, so through a store it is never the store\'s own; an empty hippoRoot gives the built-in default',
+    onHippoDb: 'src/api/remember.ts:85, src/api/promote.ts:94',
+    throughStore: 'src/config.ts:425-426',
+    winner: 'the folder the caller names: hippo.db\'s result is unchanged and a store-served write no longer reads the working folder; a half-life the store itself holds would need a port read, which is not added',
     pinnedBy: 'here',
   },
 } satisfies Record<string, Difference>;
@@ -582,48 +551,63 @@ describe('the store path and the hippo.db path agree', () => {
     expect(throughStore.reply).toEqual(onHippoDb.reply);
     expect(throughStore.state).toEqual(onHippoDb.state);
   });
-});
 
-describe('where the two paths differ today', () => {
   it.each([
-    [named('forgetLock'), (ctx: Context) => forget(ctx, 'mem_seed_plain'), 'reach check, then write lock on a second handle'],
-    [named('archiveLock'), (ctx: Context) => archiveRaw(ctx, 'mem_seed_raw', 'user asked'), 'reach check, then write lock'],
-  ])('%s', async (_name, call, onHippoDb) => {
+    ['forget', (ctx: Context) => forget(ctx, 'mem_seed_plain')],
+    ['archiveRaw', (ctx: Context) => archiveRaw(ctx, 'mem_seed_raw', 'user asked')],
+  ])('%s: reach is checked inside the write lock, on one handle', async (_fn, call) => {
     const dbRoot = copyOfTemplate('db');
     const storeRoot = copyOfTemplate('store');
     const base = { tenantId: ACME, actor: HOST };
-    expect(reachAndLock(recordStatements(() => call({ ...base, hippoRoot: dbRoot })).statements)).toBe(onHippoDb);
+    const onHippoDb = recordStatements(() => call({ ...base, hippoRoot: dbRoot }));
     const store = storeAt(storeRoot);
     const throughStore = await recordStatementsAsync(async () => call({ ...base, hippoRoot: storeRoot, store }));
+    expect(reachAndLock(onHippoDb.statements)).toBe('write lock, then reach check');
     expect(reachAndLock(throughStore.statements)).toBe('write lock, then reach check');
   });
 
-  it(named('idCollision'), () => {
+  it.each([false, true])('remember: a new id another tenant already holds is refused and that tenant keeps its row (store: %s)', async (withStore) => {
     const spy = vi.spyOn(crypto, 'randomUUID').mockReturnValue('5eed0000-0000-4000-8000-000000000000');
     syncBuiltinESMExports();
     try {
-      const root = copyOfTemplate('db');
-      const first = remember({ hippoRoot: root, tenantId: GLOBEX, actor: HOST }, { content: 'globex wrote this row first' });
-      remember({ hippoRoot: root, tenantId: ACME, actor: HOST }, { content: 'acme wrote over the same id' });
-      expect(rowsOf(root, `SELECT tenant_id, content FROM memories WHERE id = '${first.id}'`)).toEqual([{ tenant_id: ACME, content: 'acme wrote over the same id' }]);
+      const root = copyOfTemplate(withStore ? 'store' : 'db');
+      const store = withStore ? storeAt(root) : undefined;
+      const ctxFor = (tenantId: string): Context => ({ hippoRoot: root, tenantId, actor: HOST, store });
+      const first = await remember(ctxFor(GLOBEX), { content: 'globex wrote this row first' });
+      expect(await ending(() => remember(ctxFor(ACME), { content: 'acme wrote over the same id' }))).toContain('ConflictError:');
+      const hooked: string[] = [];
+      const fromConnector = await ending(() => remember({ hippoRoot: root, tenantId: ACME, actor: HOST }, { content: 'a connector wrote over the same id', afterWrite: (_db, id) => void hooked.push(id) }));
+      expect(fromConnector).toContain('threw ConflictError:');
+      expect(hooked).toEqual([]);
+      expect(rowsOf(root, `SELECT tenant_id, content FROM memories WHERE id = '${first.id}'`)).toEqual([{ tenant_id: GLOBEX, content: 'globex wrote this row first' }]);
     } finally {
       spy.mockRestore();
       syncBuiltinESMExports();
     }
   });
 
-  it(named('outcomeCommit'), async () => {
-    const onHippoDb = await outcomeRejectedMidway(false);
-    const throughStore = await outcomeRejectedMidway(true);
-    expect(onHippoDb.end).toContain('threw RejectedValueError:');
-    expect(onHippoDb.firstRow).toEqual([{ outcome_positive: 1 }]);
-    expect(throughStore.end).toContain('rejected RejectedValueError:');
-    expect(throughStore.firstRow).toEqual([{ outcome_positive: 0 }]);
+  it.each([false, true])('outcome: a row refused midway undoes every row of the call and leaves one reject_refusal audit row (store: %s)', async (withStore) => {
+    const interrupted = await outcomeRejectedMidway(withStore);
+    expect(interrupted.end).toContain(withStore ? 'rejected RejectedValueError:' : 'threw RejectedValueError:');
+    expect(interrupted.firstRow).toEqual([{ outcome_positive: 0 }]);
+    expect(interrupted.audit).toEqual([{ op: 'reject_refusal', target_id: 'mem_seed_second' }]);
   });
+});
 
-  it(named('outcomeRefusalAudit'), async () => {
-    expect((await outcomeRejectedMidway(false)).audit).toEqual([{ op: 'outcome', target_id: 'mem_seed_plain' }, { op: 'reject_refusal', target_id: 'mem_seed_second' }]);
-    expect((await outcomeRejectedMidway(true)).audit).toEqual([]);
+describe('where the two paths differ today', () => {
+  it(named('archiveHook'), async () => {
+    const archived: string[] = [];
+    const opts: Parameters<typeof archiveRaw>[3] = { afterArchive: (_db, id) => void archived.push(id) };
+    const dbRoot = copyOfTemplate('db');
+    const storeRoot = copyOfTemplate('store');
+    const base = { tenantId: ACME, actor: HOST };
+    const onHippoDb = recordStatements(() => archiveRaw({ ...base, hippoRoot: dbRoot }, 'mem_seed_raw', 'user asked', opts));
+    expect(reachAndLock(onHippoDb.statements)).toBe('write lock, then reach check');
+    expect(archived).toEqual(['mem_seed_raw']);
+    const end = await ending(() => archiveRaw({ ...base, hippoRoot: storeRoot, store: storeAt(storeRoot) }, 'mem_seed_raw', 'user asked', opts));
+    expect(end).toContain('rejected Error: afterArchive runs on hippo.db only');
+    expect(archived).toEqual(['mem_seed_raw']);
+    expect(rowsOf(storeRoot, `SELECT id FROM memories WHERE id = 'mem_seed_raw'`)).toEqual([{ id: 'mem_seed_raw' }]);
   });
 
   it(named('grants'), () => {
@@ -652,6 +636,14 @@ describe('where the two paths differ today', () => {
     const replaced = await supersede(ctx, 'mem_seed_second', 'the billing service freezes deploys on mondays');
     expect(rowsOf(root, `SELECT half_life_days FROM memories WHERE id IN ('${written.id}', '${replaced.newId}')`)).toEqual([{ half_life_days: 99 }, { half_life_days: 99 }]);
     expect(readdirSync(folder)).toEqual(['config.json']);
+    const workingFolder = process.cwd();
+    process.chdir(folder);
+    try {
+      const unnamed = await remember({ ...ctx, hippoRoot: '' }, { content: 'a note written with no folder named' });
+      expect(rowsOf(root, `SELECT half_life_days FROM memories WHERE id = '${unnamed.id}'`)).toEqual([{ half_life_days: DEFAULT_HALF_LIFE_DAYS }]);
+    } finally {
+      process.chdir(workingFolder);
+    }
   });
 });
 

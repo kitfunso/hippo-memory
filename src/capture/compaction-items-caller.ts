@@ -34,7 +34,9 @@ export function saveCompactionItemsForCaller(ctx: Context, req: CallerItemsReque
     if (earlier !== null && earlier.status !== 'summarised') return { written: earlier.itemsWritten };
     const meta = { sessionId: req.sessionId, trigger: req.trigger, cwd: null, transcriptPath: null };
     const text = { summary: '', items: scrubCompactionItems(req.items) };
-    const record = earlier ?? recordSummary(db, ctx.hippoRoot, ctx.tenantId, meta, text, new Date(), { originProject: req.project.name, requestId: req.requestId });
+    const record = earlier ?? recordSummary(db, ctx.hippoRoot, ctx.tenantId, {
+      meta, text, at: new Date(), caller: { originProject: req.project.name, requestId: req.requestId },
+    });
     const written = saveItems(db, ctx.hippoRoot, {
       tenantId: ctx.tenantId, recordId: record.id, sessionId: req.sessionId, originProject: record.originProject, cwd: null,
       items: record.items, caller: { actor: key.owner, origins: key.project },

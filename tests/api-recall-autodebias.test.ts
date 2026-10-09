@@ -16,7 +16,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { recall, type Context } from '../src/api.js';
-import { savePrediction, closePrediction } from '../src/predictions/store.js';
+import { savePrediction, closePrediction } from '../src/store/predictions.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 function safeRmSync(p: string): void {
@@ -63,7 +63,7 @@ function lastAuditActor(root: string, op: string): string | null {
   }
 }
 
-describe('api.recall planningFallacyHint (J3.2, v0.32)', () => {
+describe('api.recall planningFallacyHint', () => {
   let root: string;
   beforeEach(() => {
     root = makeRoot('j32');

@@ -10,7 +10,7 @@ import { writeEntryOn, strengthenRetrieved } from '../src/store/entry-writes.js'
 import { MEMORY_SELECT_COLUMNS } from '../src/store/rows.js';
 import { closeHippoDb } from '../src/db.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/memory.js';
-import { readEntry, loadAllEntries } from '../src/store/entry-reads.js';
+import { readEntry, loadAllEntries, heldIdLookup, loadEntriesByIds } from '../src/store/entry-reads.js';
 import { adminActor, type HippoDbContext } from '../src/api/types.js';
 import { learn, CLI_LEARN } from '../src/api/learn.js';
 import { cmdRemember } from '../src/cli/remember.js';
@@ -23,6 +23,10 @@ import { importEntries } from '../src/importers/core.js';
 import { invalidateMatching, detectChurnStale } from '../src/invalidation.js';
 import { replaceDetectedConflicts, resolveConflict, listMemoryConflicts } from '../src/store/conflicts.js';
 import { deduplicateStore } from '../src/dedupe.js';
+import { buildDag } from '../src/dag.js';
+import { buildMemoryDetail } from '../src/dashboard/dashboard-queries.js';
+import { handleMcpRequest } from '../src/mcp/server.js';
+import { writeSessionDigest } from '../src/session-digest.js';
 
 const SIZES = [10, 200] as const;
 const ROW_READ = MEMORY_SELECT_COLUMNS;
@@ -91,12 +95,12 @@ describe('outcome', () => {
 });
 
 describe('quarantineList', () => {
-  it('reads every listed memory in one query', () => {
+  it('reads every listed memory in one query', async () => {
     for (const n of SIZES) {
       const root = freshRoot('qc-quarantine');
       const entries = rows(n, 'held', { scope: quarantineScopeFor(null) });
       seed(root, entries, (db, e) => recordQuarantine(db, { tenantId: 'default', memoryId: e.id, originalScope: null, reason: 'test', actor: 'test' }));
-      const { result, statements } = recordStatements(() => quarantineList(ctxFor(root), { limit: 500 }));
+      const { result, statements } = await recordStatementsAsync(() => quarantineList(ctxFor(root), { limit: 500 }));
       expect(result).toHaveLength(n);
       expect(result.every((item) => item.contentPreview.includes('zephyrine'))).toBe(true);
       expect(countMatching(statements, STORE_OPEN)).toBe(1);
@@ -106,14 +110,14 @@ describe('quarantineList', () => {
 });
 
 describe('drillDown', () => {
-  it('reads one query per DAG level, not one per parent', () => {
+  it('reads one query per DAG level, not one per parent', async () => {
     for (const n of SIZES) {
       const root = freshRoot('qc-drill');
       const summary = memory('summary of the zephyrine cache work', { dag_level: 2, layer: Layer.Semantic });
       const mids = rows(n, 'mid', { dag_level: 1, dag_parent_id: summary.id });
       const leaves = mids.map((m, i) => memory(`leaf ${i} under the zephyrine cache`, { dag_level: 0, dag_parent_id: m.id }));
       seed(root, [summary, ...mids, ...leaves]);
-      const { result, statements } = recordStatements(() => drillDown(ctxFor(root), summary.id, { depth: 2, limit: 1000 }));
+      const { result, statements } = await recordStatementsAsync(() => drillDown(ctxFor(root), summary.id, { depth: 2, limit: 1000 }));
       expect('failure' in result ? result.failure : result.totalChildren).toBe(2 * n);
       expect(countMatching(statements, STORE_OPEN)).toBe(1);
       expect(countMatching(statements, ROW_READ)).toBe(3);
@@ -364,5 +368,129 @@ describe('outcome with a repeated id', () => {
     seed(root, [entry]);
     expect(outcome(ctxFor(root), [entry.id, entry.id], false).applied).toBe(2);
     expect(readEntry(root, entry.id)?.outcome_negative).toBe(2);
+  });
+});
+
+describe('buildDag', () => {
+  it('re-links a cluster in one transaction on one handle, each member keeping its audit row and mirror', async () => {
+    const work: number[][] = [];
+    for (const n of SIZES) {
+      const root = freshRoot('qc-dag-link');
+      const facts = rows(n, 'fact', { tags: ['extracted', 'speaker:alice'], dag_level: 1 });
+      seed(root, facts);
+      const mirrorsRewritten = ageMirrors(root);
+      const fetcher: typeof fetch = async () => new Response(JSON.stringify({ content: [{ text: 'alice keeps the zephyrine cache warm across every deploy' }] }), { status: 200 });
+      const { result, statements } = await recordStatementsAsync(() => buildDag(root, facts, { apiKey: 'test-key', fetcher }));
+      expect(result).toMatchObject({ summariesCreated: 1, factsLinked: n });
+      const stored = loadAllEntries(root);
+      const parentId = stored.find((e) => e.dag_level === 2)?.id;
+      expect(stored.filter((e) => e.dag_parent_id === parentId)).toHaveLength(n);
+      expect(mirrorsRewritten()).toBe(n);
+      const db = openStore(root);
+      try {
+        // SAFETY: one row with the single aliased count column.
+        const audited = db.prepare(`SELECT COUNT(*) AS n FROM audit_log WHERE op = 'remember' AND target_id IN (SELECT id FROM memories WHERE dag_parent_id = ?)`).get(String(parentId)) as { n: number };
+        expect(audited.n).toBe(2 * n);
+      } finally {
+        closeHippoDb(db);
+      }
+      work.push([countMatching(statements, STORE_OPEN), countMatching(statements, 'BEGIN IMMEDIATE')]);
+    }
+    expect(work[1]).toEqual(work[0]);
+  });
+});
+
+describe('buildMemoryDetail', () => {
+  it('reads the conflicts naming a memory and their other sides in a fixed number of queries', () => {
+    const work = SIZES.map((n) => {
+      const root = freshRoot('qc-detail');
+      const [subject, ...others] = rows(n + 1, 'detail');
+      seed(root, [subject, ...others]);
+      replaceDetectedConflicts(root, [
+        ...others.map((e) => ({ memory_a_id: subject.id, memory_b_id: e.id, reason: 'names the subject', score: 0.9 })),
+        { memory_a_id: others[0].id, memory_b_id: others[1].id, reason: 'between two others', score: 0.8 },
+      ]);
+      const { result, statements } = recordStatements(() => buildMemoryDetail(root, 'default', subject, { snapshotId: 1, nowMs: Date.now(), embedded: false }));
+      expect(result.conflicts.map((c) => c.other.id).sort()).toEqual(others.map((e) => e.id).sort());
+      expect(result.conflicts.every((c) => c.reason === 'names the subject')).toBe(true);
+      return [countMatching(statements, STORE_OPEN), countMatching(statements, ROW_READ)];
+    });
+    expect(work[1]).toEqual(work[0]);
+  });
+});
+
+describe('hippo_status', () => {
+  it('tallies in SQL, so rows read stay flat, and counts only its tenant\'s open conflicts', async () => {
+    const read: number[] = [];
+    for (const n of SIZES) {
+      const root = freshRoot('qc-status');
+      const own = [
+        ...rows(n - 3, 'status'),
+        memory('status row long faded', { last_retrieved: '2020-01-01T00:00:00.000Z', half_life_days: 1 }),
+        memory('status row pinned', { pinned: true, tags: ['errors-seen'] }),
+        memory('status row tagged as an error', { tags: ['deploy', 'error'] }),
+      ];
+      const elsewhere = rows(2, 'elsewhere', { tenantId: 'other' });
+      seed(root, [...own, ...elsewhere]);
+      replaceDetectedConflicts(root, [
+        { memory_a_id: own[0].id, memory_b_id: own[1].id, reason: 'own pair', score: 0.9 },
+        { memory_a_id: elsewhere[0].id, memory_b_id: elsewhere[1].id, reason: 'other tenant pair', score: 0.9 },
+      ]);
+      const { result, rowsRead } = await recordStatementsAsync(() => handleMcpRequest(
+        { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_status', arguments: {} } },
+        { hippoRoot: root, tenantId: 'default', actor: 'tester', clientKey: 'client-1' },
+      ));
+      const reply = JSON.stringify(result);
+      expect(reply).toContain(`Memories: ${n} (1 pinned, 1 errors)`);
+      expect(reply).toContain('At risk (<0.1): 1\\n');
+      expect(reply).toContain('Open conflicts: 1\\n');
+      read.push(rowsRead);
+    }
+    expect(read[1]).toBe(read[0]);
+  });
+});
+
+describe('writeSessionDigest', () => {
+  it('reads no full row to find the text hippo could have injected', () => {
+    for (const n of SIZES) {
+      const root = freshRoot('qc-digest');
+      seed(root, rows(n, 'digest'));
+      const scan = {
+        turns: [{ role: 'user' as const, text: 'the upload keeps failing overnight' }],
+        finalText: 'Retry `upload()` with backoff because the storage token expires mid-transfer.',
+        cwd: path.dirname(root),
+        edits: [],
+      };
+      const { result, statements } = recordStatements(() => writeSessionDigest(root, scan, { key: 's1', tenantId: 'default' }));
+      expect(result.written).toBe(true);
+      expect(countMatching(statements, TENANT_READ)).toBe(0);
+    }
+  });
+});
+
+describe('an id-list read of one tenant', () => {
+  it('seeks each id on the primary key, never walking every row of the tenant', () => {
+    const root = freshRoot('qc-id-plan');
+    const entries = rows(10, 'plan');
+    seed(root, entries);
+    const ids = entries.map((e) => e.id);
+    const { result, statements } = recordStatements(() => {
+      outcome(ctxFor(root), ids, true);
+      return { held: heldIdLookup(root, 'default', ids)(ids[0]), listed: loadEntriesByIds(root, ids, 'default').length };
+    });
+    expect(result).toEqual({ held: true, listed: 10 });
+
+    const idReads = [...new Set(statements.filter((sql) => sql.includes('FROM memories WHERE id IN (')))];
+    expect(idReads).toHaveLength(3);
+    const db = openStore(root);
+    try {
+      for (const sql of idReads) {
+        // SAFETY: EXPLAIN QUERY PLAN answers one row per step, its text in `detail`.
+        const plan = (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all() as Array<{ detail: string }>).map((step) => step.detail);
+        expect(plan[0], sql).toBe('SEARCH memories USING INDEX sqlite_autoindex_memories_1 (id=?)');
+      }
+    } finally {
+      closeHippoDb(db);
+    }
   });
 });

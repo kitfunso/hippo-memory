@@ -215,6 +215,52 @@ function replaceTranscriptHandoff(
   }
 }
 
+interface HandoffSource {
+  snapshot: Pick<TaskSnapshot, 'task' | 'summary' | 'next_step' | 'scope'>;
+  evidence: HandoffEvidence | null;
+}
+
+function transcriptHandoffSource(
+  existing: SessionHandoff | null,
+  derived: Pick<TaskSnapshot, 'task' | 'summary' | 'next_step'> | null,
+  evidence: HandoffEvidence | null,
+): HandoffSource | null {
+  // Only an earlier transcript read gives way; `hippo handoff create` and unmarked older handoffs keep winning.
+  if (!derived || (existing && existing.evidence?.derivedFrom !== 'transcript')) return null;
+  // A retried session end reads the same transcript, so it must not add a second revision.
+  if (existing && existing.taskId === derived.task && existing.summary === derived.summary && existing.nextAction === derived.next_step) return null;
+  return { snapshot: { ...derived, scope: null }, evidence: { ...evidence, derivedFrom: 'transcript' } };
+}
+
+function buildSessionEndHandoff(
+  sessionId: string,
+  snapshot: HandoffSource['snapshot'],
+  existing: SessionHandoff | null,
+  handoffEvidence: HandoffEvidence | null,
+  outcome: HandoffOutcome | null,
+): Omit<SessionHandoff, 'updatedAt'> {
+  // A same-task refresh carries forward envelope fields nobody cleared; a scope
+  // mismatch must not leak private metadata into an unscoped envelope.
+  const carryForward = existing != null && existing.taskId === snapshot.task
+    && (existing.scope ?? null) === (snapshot.scope ?? null);
+
+  return {
+    version: 1,
+    sessionId,
+    repoRoot: carryForward ? existing.repoRoot : undefined,
+    taskId: snapshot.task,
+    summary: snapshot.summary,
+    nextAction: snapshot.next_step,
+    artifacts: carryForward ? existing.artifacts : [],
+    scope: snapshot.scope,
+    evidence: handoffEvidence,
+    outcome,
+    constraints: carryForward ? existing.constraints : undefined,
+    targetRuntime: carryForward ? existing.targetRuntime : undefined,
+    cardId: carryForward ? existing.cardId : undefined,
+  };
+}
+
 /** Auto-write a handoff at session-end from the session's active snapshot, else from `derived`, its transcript state.
  * @param evidence best-effort git state; outcome comes from the newest session_complete event.
  * @param options.inPlace rewrite an earlier transcript read instead of adding a revision, for a close that runs after every reply.
@@ -242,36 +288,14 @@ export function writeSessionEndHandoff(
     if (existing && existing.updatedAt > active.updated_at) return null;
     snapshot = active;
   } else {
-    // Only an earlier transcript read gives way; `hippo handoff create` and unmarked older handoffs keep winning.
-    if (!derived || (existing && existing.evidence?.derivedFrom !== 'transcript')) return null;
-    // A retried session end reads the same transcript, so it must not add a second revision.
-    if (existing && existing.taskId === derived.task && existing.summary === derived.summary && existing.nextAction === derived.next_step) return null;
-    snapshot = { ...derived, scope: null };
-    handoffEvidence = { ...evidence, derivedFrom: 'transcript' };
+    const fromDerived = transcriptHandoffSource(existing, derived, evidence);
+    if (!fromDerived) return null;
+    snapshot = fromDerived.snapshot;
+    handoffEvidence = fromDerived.evidence;
     fromTranscript = true;
   }
   const outcome = sessionOutcome(hippoRoot, tenantId, sessionId);
-
-  // A same-task refresh carries forward envelope fields nobody cleared; a scope
-  // mismatch must not leak private metadata into an unscoped envelope.
-  const carryForward = existing != null && existing.taskId === snapshot.task
-    && (existing.scope ?? null) === (snapshot.scope ?? null);
-
-  const handoff: Omit<SessionHandoff, 'updatedAt'> = {
-    version: 1,
-    sessionId,
-    repoRoot: carryForward ? existing.repoRoot : undefined,
-    taskId: snapshot.task,
-    summary: snapshot.summary,
-    nextAction: snapshot.next_step,
-    artifacts: carryForward ? existing.artifacts : [],
-    scope: snapshot.scope,
-    evidence: handoffEvidence,
-    outcome,
-    constraints: carryForward ? existing.constraints : undefined,
-    targetRuntime: carryForward ? existing.targetRuntime : undefined,
-    cardId: carryForward ? existing.cardId : undefined,
-  };
+  const handoff = buildSessionEndHandoff(sessionId, snapshot, existing, handoffEvidence, outcome);
   // A miss means a handoff landed since the read, and a new transcript row would hide it.
   if (fromTranscript && options.inPlace && existing) return replaceTranscriptHandoff(hippoRoot, tenantId, handoff, key);
   return saveSessionHandoff(hippoRoot, tenantId, handoff, key);

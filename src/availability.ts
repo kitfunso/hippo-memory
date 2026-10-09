@@ -1,3 +1,4 @@
+import { DAY_MS } from './util/time.js';
 // ---------------------------------------------------------------------------
 // Availability-bias detector (biases over memory state)
 // ---------------------------------------------------------------------------
@@ -63,13 +64,12 @@ export interface DetectAvailabilityBiasOpts {
   minOlderPassedOver?: number;
 }
 
-export const DEFAULT_RECENCY_WINDOW_MS = 24 * 60 * 60 * 1000;
+export const DEFAULT_RECENCY_WINDOW_MS = DAY_MS;
 export const DEFAULT_RECENT_FRACTION_THRESHOLD = 0.7;
 export const DEFAULT_MIN_RETURNED = 3;
 export const DEFAULT_MIN_POOL = 10;
 export const DEFAULT_MIN_OLDER_PASSED_OVER = 3;
 
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const MS_PER_HOUR = 60 * 60 * 1000;
 
 function median(nums: readonly number[]): number {
@@ -116,13 +116,13 @@ export function detectAvailabilityBias(opts: DetectAvailabilityBiasOpts): Availa
   const recentFraction = recentCount / topK.length;
   if (recentFraction <= recentFractionThreshold) return null;
 
-  const topKMedianAgeDays = median(topK.map((e) => (now - e.ts) / MS_PER_DAY));
-  const poolMedianAgeDays = median(pool.map((e) => (now - e.ts) / MS_PER_DAY));
+  const topKMedianAgeDays = median(topK.map((e) => (now - e.ts) / DAY_MS));
+  const poolMedianAgeDays = median(pool.map((e) => (now - e.ts) / DAY_MS));
   if (poolMedianAgeDays <= topKMedianAgeDays) return null;
 
   const topKIds = new Set(topK.map((e) => e.id));
   const olderCandidatesPassedOver = pool.filter(
-    (e) => !topKIds.has(e.id) && (now - e.ts) / MS_PER_DAY > topKMedianAgeDays,
+    (e) => !topKIds.has(e.id) && (now - e.ts) / DAY_MS > topKMedianAgeDays,
   ).length;
   if (olderCandidatesPassedOver < minOlderPassedOver) return null;
 

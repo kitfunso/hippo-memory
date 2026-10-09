@@ -1,14 +1,16 @@
 // Claude Code's auto memory: frontmatter `.md` notes in a per-project folder, plus the `autoMemoryDirectory` user folder.
 import fs from 'node:fs';
 import path from 'node:path';
-import { realpathOrResolve, resolveProjectIdentity, type ProjectIdentity } from '../project-identity.js';
+import { resolveProjectIdentity, type ProjectIdentity } from '../project-identity.js';
+import { realpathOrResolve } from '../util/real-path.js';
 import { isStringValue } from '../capture-contract.js';
-import { claudeConfigDir, isJsonObject } from '../hooks/shared.js';
+import { claudeConfigDir } from '../hooks/shared.js';
 import { expandHome, frontmatterField, itemTime, readTextFile, splitFrontmatter } from './files.js';
 import { markdownNotes, readFolderStore, uniqueFolders, type FolderRules } from './folder-store.js';
 import { gitLayout } from './git.js';
 import type { Adapter, AdapterContext, Container, Listing, Scope } from './types.js';
-import type { JsonValue } from '../json.js';
+import { type JsonValue, isJsonObjectLiteral } from '../json.js';
+import { errorMessage } from '../log.js';
 
 // Keeps a pinned name from carrying a separator or `..` out of the projects folder.
 const PROJECT_DIR_NAME = /^[A-Za-z0-9_-]{1,64}$/;
@@ -129,10 +131,10 @@ function autoMemoryDirectory(settings: string, home: string, warnings: string[])
     // SAFETY: JSON.parse yields JSON; the object and string checks below decide what is used.
     json = JSON.parse(file.text) as JsonValue;
   } catch (err) {
-    warnings.push(`${settings}: ${err instanceof Error ? err.message : String(err)}`);
+    warnings.push(`${settings}: ${errorMessage(err)}`);
     return null;
   }
-  const value = isJsonObject(json) ? json.autoMemoryDirectory : undefined;
+  const value = isJsonObjectLiteral(json) ? json.autoMemoryDirectory : undefined;
   if (!isStringValue(value) || value === '') return null;
   const dir = expandHome(value, home);
   if (path.isAbsolute(dir)) return dir;

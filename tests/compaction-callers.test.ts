@@ -174,7 +174,7 @@ function thrown(fn: () => void): Error | null {
 describe('recordSummary for a caller', () => {
   it("takes the caller's project with no request id, on a store that may predate the column", () => {
     withDb((db) => {
-      const rec = recordSummary(db, root, TENANT, META, { summary: '', items: [] }, new Date(), { originProject: 'acme/app' });
+      const rec = recordSummary(db, root, TENANT, { meta: META, text: { summary: '', items: [] }, at: new Date(), caller: { originProject: 'acme/app' } });
       expect(rec.originProject).toBe('acme/app');
     });
   });

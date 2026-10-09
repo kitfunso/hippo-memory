@@ -1,11 +1,13 @@
 // A running server keeps one store connection open, so a request's own close is never SQLite's last-connection close.
-import { afterEach, describe, expect, it } from 'vitest';
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { spawn } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { closeHippoDb, openHippoDb } from '../src/db.js';
 import { initStore } from '../src/store/open.js';
 import { serve, type ServerHandle } from '../src/server.js';
+import { sqliteStore } from '../src/store-port.js';
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -85,5 +87,90 @@ describe('hippo serve store connection', () => {
     }
     expect(existsSync(`${db}-wal`)).toBe(false);
     expect(inlineCheckpointPages(root)).toBe(inlineLimit);
+  });
+
+  it('stops waiting for a locked store after the server lock wait, instead of stalling the event loop until the lock goes', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'hippo-srv-conn-locked-'));
+    dirs.push(root);
+    initStore(root);
+    // Another process holds an exclusive lock for 6 s; in rollback-journal mode that blocks the journal-mode switch every open makes.
+    const script = join(root, 'hold-lock.mjs');
+    writeFileSync(script, [
+      "import { DatabaseSync } from 'node:sqlite';",
+      'const db = new DatabaseSync(process.argv[2]);',
+      "db.exec('PRAGMA journal_mode = DELETE');",
+      "db.exec('BEGIN EXCLUSIVE');",
+      "console.log('locked');",
+      "setTimeout(() => { db.exec('COMMIT'); db.close(); }, 6000);",
+    ].join('\n'));
+    const holder = spawn(process.execPath, ['--no-warnings', script, join(root, 'hippo.db')], { stdio: ['ignore', 'pipe', 'inherit'] });
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    let handle: ServerHandle | undefined;
+    try {
+      await new Promise<void>((ok) => holder.stdout.once('data', () => ok()));
+      handle = await serve({ hippoRoot: root, port: 0 });
+      // The lock is still held, so only an open that gave up early can have logged this by now.
+      const gaveUp = stderrSpy.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('could not hold a store connection'));
+      expect(gaveUp).toHaveLength(1);
+      expect(holder.exitCode).toBeNull();
+    } finally {
+      stderrSpy.mockRestore();
+      const gone = new Promise((ok) => holder.once('exit', ok));
+      holder.kill();
+      await gone;
+      await handle?.stop();
+    }
+  }, 60_000);
+});
+
+describe('GET /ready', () => {
+  async function ready(handle: ServerHandle, method = 'GET'): Promise<{ status: number; body: string }> {
+    const res = await fetch(`${handle.url}/ready`, { method, headers: { connection: 'close' } });
+    return { status: res.status, body: await res.text() };
+  }
+
+  it('answers 200 once the served store answers a read, and never creates a store to find out', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'hippo-srv-ready-'));
+    dirs.push(root);
+    const handle = await serve({ hippoRoot: root, port: 0 });
+    try {
+      expect(await ready(handle)).toEqual({ status: 200, body: '{"ok":true}' });
+      expect(existsSync(join(root, 'hippo.db'))).toBe(false);
+      expect(await post(handle, 'the staging queue drains at midnight')).toBe(200);
+      expect(await ready(handle)).toEqual({ status: 200, body: '{"ok":true}' });
+      expect((await ready(handle, 'POST')).status).toBe(404);
+    } finally {
+      await handle.stop();
+    }
+  });
+
+  it('answers 200 with store "unchecked" for a served store that has no readiness group', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'hippo-srv-ready-unchecked-'));
+    dirs.push(root);
+    initStore(root);
+    const handle = await serve({ hippoRoot: root, port: 0, store: { ...sqliteStore(root), readiness: undefined } });
+    try {
+      expect(await ready(handle)).toEqual({ status: 200, body: '{"ok":true,"store":"unchecked"}' });
+    } finally {
+      await handle.stop();
+    }
+  });
+
+  it('answers 503 store_unavailable and warns with the error class when hippo.db is not a database, while /health stays 200', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'hippo-srv-ready-broken-'));
+    dirs.push(root);
+    writeFileSync(join(root, 'hippo.db'), 'this file is not a database. '.repeat(400));
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const handle = await serve({ hippoRoot: root, port: 0 });
+    try {
+      expect(await ready(handle)).toEqual({ status: 503, body: '{"ok":false,"error":"store_unavailable"}' });
+      const warned = stderrSpy.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('GET /ready'));
+      expect(warned).toHaveLength(1);
+      expect(warned[0]).toMatch(/^\[hippo\] warn: GET \/ready: the store did not answer: .* ts=\S+ requestId=\S+ errorClass=\w+ stack=\S/);
+      expect((await fetch(`${handle.url}/health`)).status).toBe(200);
+    } finally {
+      stderrSpy.mockRestore();
+      await handle.stop();
+    }
   });
 });

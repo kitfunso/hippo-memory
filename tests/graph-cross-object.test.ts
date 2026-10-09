@@ -26,7 +26,7 @@ function entByName(home: string, name: string) {
   return loadEntities(home, T, { limit: 1000 }).find((e) => e.name === name);
 }
 
-describe('E3.1 cross-object references (Pass 3 name-match)', () => {
+describe('cross-object references (Pass 3 name-match)', () => {
   let home: string;
   beforeEach(() => { home = makeRoot('graph-xobj'); });
   afterEach(() => { try { rmSync(home, { recursive: true, force: true }); } catch { /* ignore */ } });

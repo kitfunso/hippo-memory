@@ -18,7 +18,7 @@ import { writeEntry } from './store/entry-writes.js';
 import { loadAllEntries, readEntry } from './store/entry-reads.js';
 import { redactSecretsStrict } from './secret-detect.js';
 import { fetchWithRetry, llmTimeoutMs } from './http-retry.js';
-import { log } from './log.js';
+import { errorMessage, log } from './log.js';
 
 const REFINED_TAG = 'llm-refined';
 const CONSOLIDATED_MARKERS = [
@@ -102,7 +102,7 @@ ${sourceBlock}`;
       }),
     }, { timeoutMs: llmTimeoutMs(), fetchFn });
   } catch (err) {
-    log.warn(`refine: request failed: ${err instanceof Error ? err.message : String(err)}`);
+    log.warn(`refine: request failed: ${errorMessage(err)}`);
     return null;
   }
 
@@ -119,7 +119,7 @@ ${sourceBlock}`;
     const data = await res.json() as { content?: Array<{ text?: string }> };
     text = data.content?.[0]?.text?.trim() ?? '';
   } catch (err) {
-    log.warn(`refine: unreadable response: ${err instanceof Error ? err.message : String(err)}`);
+    log.warn(`refine: unreadable response: ${errorMessage(err)}`);
     return null;
   }
   if (text.length < 10) {

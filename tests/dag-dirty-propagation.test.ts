@@ -28,7 +28,7 @@ function defaultCtx(hippoRoot: string): Context {
   };
 }
 
-describe('v0.30 / E2 — child-write dirty-flag propagation', () => {
+describe('child-write dirty-flag propagation', () => {
   let hippoRoot: string;
   beforeEach(() => {
     hippoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-dag-e2-'));

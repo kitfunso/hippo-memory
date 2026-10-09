@@ -36,7 +36,7 @@ function newCtx(tenantId = 'default') {
   };
 }
 
-describe('v1.12.3 auth CLI role surfacing', () => {
+describe('auth CLI role surfacing', () => {
   it('authCreate({}) without role defaults to admin', () => {
     const t = newCtx();
     try {

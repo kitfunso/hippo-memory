@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { createRequire } from 'module';
 import { loadConfig } from './config.js';
-import { log } from './log.js';
+import { errorMessage, log } from './log.js';
 
 const _require = createRequire(import.meta.url);
 
@@ -189,7 +189,7 @@ export async function getEmbedding(
     return Array.from(output.data as Float32Array);
   } catch (err) {
     // The caller sees `[]` and names the memory; the reason only shows at debug.
-    log.debug(`local embedding failed: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`local embedding failed: ${errorMessage(err)}`);
     return [];
   }
 }

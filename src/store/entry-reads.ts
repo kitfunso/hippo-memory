@@ -6,6 +6,9 @@ import { escapeLike } from '../escape.js';
 import { originInSql } from '../project-identity.js';
 import { scopeAdmitSql } from '../recall-scope.js';
 
+// The plus keeps SQLite on the primary key for an id list: with a bare tenant_id it walks every row of the tenant instead.
+const TENANT_IS = '+tenant_id = ?';
+
 /**
  * Read a memory entry by ID.
  *
@@ -41,6 +44,31 @@ export function chunked<T>(items: readonly T[], size: number = ID_CHUNK): T[][] 
   return out;
 }
 
+/** Answers whether a tenant's rows in this store hold an id: `ids` are looked up now, one query per chunk, and any other id on its first ask. */
+export function heldIdLookup(hippoRoot: string, tenantId: string, ids: readonly string[]): (id: string) => boolean {
+  const held = new Map<string, boolean>();
+  const lookUp = (asked: readonly string[]): void => {
+    const db = openStore(hippoRoot);
+    try {
+      for (const chunk of chunked([...new Set(asked)])) {
+        for (const id of chunk) held.set(id, false);
+        // SAFETY: rows' shape matches the single `id` column selected.
+        const rows = db.prepare(
+          `SELECT id FROM memories WHERE id IN (${chunk.map(() => '?').join(',')}) AND ${TENANT_IS}`,
+        ).all(...chunk, tenantId) as Array<{ id: string }>;
+        for (const row of rows) held.set(row.id, true);
+      }
+    } finally {
+      closeHippoDb(db);
+    }
+  };
+  if (ids.length > 0) lookUp(ids);
+  return (id) => {
+    if (!held.has(id)) lookUp([id]);
+    return held.get(id) === true;
+  };
+}
+
 /** Rows by id on the caller's handle, one query per chunk; an id missing or in another tenant is absent from the map. */
 export function selectEntriesByIds(
   db: DatabaseSyncLike,
@@ -48,7 +76,7 @@ export function selectEntriesByIds(
   tenantId?: string,
 ): Map<string, MemoryEntry> {
   const byId = new Map<string, MemoryEntry>();
-  const tenantClause = tenantId !== undefined ? ' AND tenant_id = ?' : '';
+  const tenantClause = tenantId !== undefined ? ` AND ${TENANT_IS}` : '';
   const tenantArgs = tenantId !== undefined ? [tenantId] : [];
   for (const chunk of chunked([...new Set(ids)])) {
     const placeholders = chunk.map(() => '?').join(',');
@@ -107,7 +135,7 @@ export function loadEntriesByIds(
     // MemoryRow's field set.
     const rows = tenantId !== undefined
       ? db.prepare(
-          `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${placeholders}) AND tenant_id = ? ORDER BY created ASC, content ASC, id ASC`,
+          `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${placeholders}) AND ${TENANT_IS} ORDER BY created ASC, content ASC, id ASC`,
         ).all(...capped, tenantId) as MemoryRow[]
       : db.prepare(
           `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${placeholders}) ORDER BY created ASC, content ASC, id ASC`,
@@ -333,6 +361,96 @@ export function loadContentsWithTag(hippoRoot: string, tenantId: string, tag: st
       `SELECT content, tags_json FROM memories WHERE tenant_id = ? AND instr(tags_json, ?) > 0${inProject} AND ${admit.sql}`,
     ).all(tenantId, JSON.stringify(tag), ...(origins ?? []), ...admit.params) as Array<{ content: string; tags_json: string }>;
     return rows.filter((r) => parseJsonArray(r.tags_json).includes(tag)).map((r) => r.content);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+export interface VaultRawRow {
+  id: string;
+  artifact_ref: string;
+  tags_json: string;
+  scope: string | null;
+}
+
+/** Live raw rows whose artifact_ref matches a LIKE pattern, for one tenant. */
+export function selectVaultRawRows(db: DatabaseSyncLike, likeParam: string, tenantId: string): VaultRawRow[] {
+  // SAFETY: query selects exactly the columns of VaultRawRow, in the same
+  // names, from the memories table this module owns.
+  return db
+    .prepare(
+      `SELECT id, artifact_ref, tags_json, scope FROM memories
+           WHERE artifact_ref LIKE ? ESCAPE '\\' AND tenant_id = ? AND kind = 'raw'`,
+    )
+    .all(likeParam, tenantId) as VaultRawRow[];
+}
+
+export interface PreviewRow {
+  id: string;
+  content: string;
+  source: string | null;
+  confidence: MemoryEntry['confidence'] | null;
+  extracted_from: string | null;
+  dag_level: number | null;
+  tags_json: string | null;
+}
+
+/** Reads memories from a store whose schema may predate some columns; `columns` is the table's real column set. */
+export function selectPreviewRows(db: DatabaseSyncLike, columns: ReadonlySet<string>, tenantId: string): PreviewRow[] {
+  const tenant = columns.has('tenant_id') ? ' WHERE tenant_id = ?' : '';
+  const column = (name: string, fallback: string): string => (columns.has(name) ? name : `${fallback} AS ${name}`);
+  const statement = db.prepare(`SELECT id, content, ${column('source', "''")}, ${column('confidence', 'NULL')}, ${column('extracted_from', 'NULL')}, ${column('dag_level', '0')}, ${column('tags_json', "'[]'")} FROM memories${tenant}`);
+  // SAFETY: the SELECT names every PreviewRow field, each a literal fallback when its column is missing.
+  return (tenant ? statement.all(tenantId) : statement.all()) as PreviewRow[];
+}
+
+/** True when a memory row, of any tenant, already holds `id`. */
+export function entryIdTakenAt(db: DatabaseSyncLike, id: string): boolean {
+  return db.prepare(`SELECT 1 FROM memories WHERE id = ?`).get(id) !== undefined;
+}
+
+/** Live rows of a tenant whose source does not start with `sourcePrefix`; `origins` (global store only) limits them to user-global rows and those projects. */
+export function selectRowsOutsideSourcePrefixAt(
+  db: DatabaseSyncLike, tenantId: string, sourcePrefix: string, origins: readonly string[] | null,
+): Array<{ id: string; content: string; source: string }> {
+  const visible = origins !== null ? ` AND (origin_project = '' OR ${originInSql(origins)})` : '';
+  const params = origins !== null ? [tenantId, sourcePrefix, ...origins] : [tenantId, sourcePrefix];
+  // SAFETY: the SELECT names the three columns of the row type.
+  return db.prepare(
+    `SELECT id, content, source FROM memories
+      WHERE tenant_id = ? AND superseded_by IS NULL AND substr(source, 1, ${sourcePrefix.length}) != ?${visible}`,
+  ).all(...params) as Array<{ id: string; content: string; source: string }>;
+}
+
+/** Content of a tenant's live rows written by `source` and tagged `tag` that no extraction produced, in loadAllEntries' order and in every scope; `exceptSessionId` drops one session's own rows. */
+export function loadLiveContentsBySourceAndTag(hippoRoot: string, tenantId: string, source: string, tag: string, exceptSessionId: string): string[] {
+  const db = openStore(hippoRoot);
+  try {
+    /** SAFETY: rows' shape matches the two columns named in the SELECT below. */
+    const rows = db.prepare(
+      `SELECT content, tags_json FROM memories
+       WHERE tenant_id = ? AND source = ? AND instr(tags_json, ?) > 0
+         AND COALESCE(extracted_from, '') = '' AND COALESCE(superseded_by, '') = ''
+         AND (source_session_id IS NULL OR source_session_id != ?)
+       ORDER BY created ASC, id ASC`,
+    ).all(tenantId, source, JSON.stringify(tag), exceptSessionId) as Array<{ content: string; tags_json: string }>;
+    return rows.filter((r) => parseJsonArray(r.tags_json).includes(tag)).map((r) => r.content);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/** Every tenant's distilled rows nothing has superseded, in loadAllEntries' order: the rows that can be each other's duplicate. */
+export function loadCurrentDistilledEntries(hippoRoot: string): MemoryEntry[] {
+  const db = openStore(hippoRoot);
+  try {
+    // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
+    const rows = db.prepare(
+      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories
+       WHERE COALESCE(kind, 'distilled') = 'distilled' AND COALESCE(superseded_by, '') = ''
+       ORDER BY created ASC, id ASC`,
+    ).all() as MemoryRow[];
+    return rows.map(rowToEntry);
   } finally {
     closeHippoDb(db);
   }

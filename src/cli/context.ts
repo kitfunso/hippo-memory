@@ -24,6 +24,7 @@ import {
 } from '../prompt-hook.js';
 import { printError } from './output.js';
 import {
+  type CliFlags,
   parseLimitFlag,
   parseCountFlag,
   parseBudgetFlag,
@@ -39,12 +40,14 @@ import {
   payloadCwdRoot,
   runHookWithStores,
   inPilotHoldout,
+  flagIsTrue,
 } from './shared.js';
+import { errorMessage } from '../log.js';
 
 export async function cmdContext(
   hippoRoot: string,
   args: string[],
-  flags: Record<string, string | boolean | string[]>,
+  flags: CliFlags,
   stdinText?: string
 ): Promise<void> {
   const rec = startDeliveryRecorder(hippoRoot, flags, stdinText);
@@ -56,7 +59,7 @@ export async function cmdContext(
 /** A delivery recorder for a pinned-only call when its ledger store enables one, else null; never throws. */
 function startDeliveryRecorder(
   hippoRoot: string,
-  flags: Record<string, string | boolean | string[]>,
+  flags: CliFlags,
   stdinText: string | undefined,
 ): DeliveryRecorder | null {
   if (flags['pinned-only'] !== true) return null;
@@ -75,7 +78,7 @@ function startDeliveryRecorder(
     });
   } catch (error) {
     // The hook's one-line stderr contract pins this exact text, so it bypasses the leveled logger.
-    printError(`[hippo] delivery ledger skipped:${error instanceof Error ? error.message : String(error)}`);
+    printError(`[hippo] delivery ledger skipped:${errorMessage(error)}`);
     return null;
   }
 }
@@ -105,13 +108,13 @@ function readHookPayload(stdinText: string | undefined): HookPayload {
 async function renderContext(
   hippoRoot: string,
   args: string[],
-  flags: Record<string, string | boolean | string[]>,
+  flags: CliFlags,
   stdinText: string | undefined,
   rec: DeliveryRecorder | null,
 ): Promise<void> {
   // --pinned-only fires on every prompt, even where no local .hippo exists, so it skips requireInit
   // and api.getContext falls back to global-only.
-  const pinnedOnly = flags['pinned-only'] === true;
+  const pinnedOnly = flagIsTrue(flags, 'pinned-only');
   if (!pinnedOnly) {
     requireInit(hippoRoot);
   }
@@ -133,16 +136,9 @@ async function renderContext(
   }
 
   // --auto shells out to git, so it stays CLI-side; api.getContext stays host-agnostic and falls back to '*'.
-  let query = args.join(' ').trim();
-  if (!query && flags['auto']) {
-    query = autoDetectContext();
-  }
+  const query = contextQuery(args, flags);
 
-  const ctx: api.Context = {
-    hippoRoot,
-    tenantId: resolvedTenant,
-    actor: api.adminActor('cli'),
-  };
+  const ctx: api.Context = { hippoRoot, tenantId: resolvedTenant, actor: api.adminActor('cli') };
   const format = String(flags['format'] ?? 'markdown');
   const framing = String(flags['framing'] ?? 'observe');
   const opts = buildContextOpts(flags, { query, budget, pinnedOnly, format, framing, session, rec });
@@ -155,6 +151,15 @@ async function renderContext(
 
   const envelope = format === 'copilot' ? sessionStartEnvelope(stdinText) : undefined;
   const view: ContextView = { hippoRoot, tenantId: ctx.tenantId, ledgerSessionId, payloadSessionId, pinnedOnly, framing, rec, result, envelope };
+  renderContextView(view, format, query);
+}
+
+function contextQuery(args: string[], flags: CliFlags): string {
+  const query = args.join(' ').trim();
+  return !query && flags['auto'] ? autoDetectContext() : query;
+}
+
+function renderContextView(view: ContextView, format: string, query: string): void {
   if (format === 'json') {
     renderContextJson(view, query);
   } else if (format === 'additional-context' || format === 'copilot') {
@@ -195,12 +200,12 @@ interface ContextOptsInput {
   readonly rec: DeliveryRecorder | null;
 }
 
-function buildContextOpts(flags: Record<string, string | boolean | string[]>, input: ContextOptsInput): api.ContextOpts {
+function buildContextOpts(flags: CliFlags, input: ContextOptsInput): api.ContextOpts {
   // Scope detection uses cwd, so it is resolved here and passed in via opts.scope.
   const ctxExplicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
   const ctxActiveScope = ctxExplicitScope || detectScope();
   // --cross-project re-includes other-project memories, rendered under their own section.
-  const crossProject = flags['cross-project'] === true;
+  const crossProject = flagIsTrue(flags, 'cross-project');
   return {
     q: input.query,
     budget: input.budget,

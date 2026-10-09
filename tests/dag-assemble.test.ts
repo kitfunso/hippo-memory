@@ -87,31 +87,31 @@ describe('api.assemble', () => {
   beforeEach(() => { root = makeRoot('assemble'); });
   afterEach(() => safeRmSync(root));
 
-  it('1. empty session id returns clean empty result', () => {
-    const r = assemble(ctxFor(root), '');
+  it('1. empty session id returns clean empty result', async () => {
+    const r = await assemble(ctxFor(root), '');
     expect(r.items).toEqual([]);
     expect(r.totalRaw).toBe(0);
     expect(r.tokens).toBe(0);
   });
 
-  it('2. unknown session returns clean empty result', () => {
-    const r = assemble(ctxFor(root), 'sess-no-such-thing');
+  it('2. unknown session returns clean empty result', async () => {
+    const r = await assemble(ctxFor(root), 'sess-no-such-thing');
     expect(r.items).toEqual([]);
   });
 
-  it('3. all-tail case: rows fewer than freshTailCount stay verbatim', () => {
+  it('3. all-tail case: rows fewer than freshTailCount stay verbatim', async () => {
     for (let i = 0; i < 3; i++) {
       const e = makeRaw(`message ${i} content`, 'sess-t');
       e.created = `2026-01-0${i + 1}T00:00:00.000Z`;
       writeEntry(root, e);
     }
-    const r = assemble(ctxFor(root), 'sess-t', { freshTailCount: 10 });
+    const r = await assemble(ctxFor(root), 'sess-t', { freshTailCount: 10 });
     expect(r.items.length).toBe(3);
     expect(r.items.every((it) => it.isFreshTail)).toBe(true);
     expect(r.summarized).toBe(0);
   });
 
-  it('4. older raws under shared parent get substituted; tail kept raw', () => {
+  it('4. older raws under shared parent get substituted; tail kept raw', async () => {
     const summary = makeSummary('topic alpha rollup');
     summary.descendant_count = 4;
     summary.earliest_at = '2026-01-01T00:00:00.000Z';
@@ -133,7 +133,7 @@ describe('api.assemble', () => {
       e.created = `2026-01-1${i}T00:00:00.000Z`;
       writeEntry(root, e);
     }
-    const r = assemble(ctxFor(root), 'sess-s', { freshTailCount: 2, budget: 100000 });
+    const r = await assemble(ctxFor(root), 'sess-s', { freshTailCount: 2, budget: 100000 });
     const summaryItems = r.items.filter((it) => it.isSummary);
     const tailItems = r.items.filter((it) => it.isFreshTail);
     expect(summaryItems.length).toBe(1);
@@ -143,7 +143,7 @@ describe('api.assemble', () => {
     expect(r.totalRaw).toBe(6);
   });
 
-  it('5. budget-tight eviction picks lowest-strength non-fresh-tail item first', () => {
+  it('5. budget-tight eviction picks lowest-strength non-fresh-tail item first', async () => {
     // 1 strong older row + 1 weak older row + 1 tail row. Tight budget.
     const strongOld = makeRaw('strong older row content here', 'sess-b');
     strongOld.created = '2026-01-01T00:00:00.000Z';
@@ -163,7 +163,7 @@ describe('api.assemble', () => {
     const totalChars = strongOld.content.length + weakOld.content.length + tail.content.length;
     const budget = Math.ceil(totalChars / 4) - 5;
 
-    const r = assemble(ctxFor(root), 'sess-b', { freshTailCount: 1, budget });
+    const r = await assemble(ctxFor(root), 'sess-b', { freshTailCount: 1, budget });
     expect(r.evicted).toBeGreaterThanOrEqual(1);
     // The evicted one is the weak older row, NOT strong old or tail.
     const ids = r.items.map((it) => it.id);
@@ -172,22 +172,22 @@ describe('api.assemble', () => {
     expect(ids).not.toContain(weakOld.id);
   });
 
-  it('6. tenant isolation: rows from another tenant are not loaded', () => {
+  it('6. tenant isolation: rows from another tenant are not loaded', async () => {
     const e = makeRaw('cross tenant content', 'sess-x', { tenantId: 'other' });
     writeEntry(root, e);
-    const r = assemble(ctxFor(root, 'default'), 'sess-x');
+    const r = await assemble(ctxFor(root, 'default'), 'sess-x');
     expect(r.items).toEqual([]);
     expect(r.totalRaw).toBe(0);
   });
 
-  it('7. private-scoped raws are filtered out', () => {
+  it('7. private-scoped raws are filtered out', async () => {
     const pub = makeRaw('public chatter row', 'sess-p', { scope: 'slack:public:Cgen' });
     pub.created = '2026-01-01T00:00:00.000Z';
     const priv = makeRaw('private payroll row', 'sess-p', { scope: 'slack:private:Csec' });
     priv.created = '2026-01-02T00:00:00.000Z';
     writeEntry(root, pub);
     writeEntry(root, priv);
-    const r = assemble(ctxFor(root), 'sess-p');
+    const r = await assemble(ctxFor(root), 'sess-p');
     const ids = r.items.map((it) => it.id);
     expect(ids).toContain(pub.id);
     expect(ids).not.toContain(priv.id);
@@ -196,7 +196,7 @@ describe('api.assemble', () => {
     expect(r.totalRaw).toBe(1);
   });
 
-  it('8. summarizeOlder=false keeps every older raw as-is', () => {
+  it('8. summarizeOlder=false keeps every older raw as-is', async () => {
     const summary = makeSummary('would have been used');
     writeEntry(root, summary);
     for (let i = 0; i < 3; i++) {
@@ -207,7 +207,7 @@ describe('api.assemble', () => {
       e.created = `2026-01-0${i + 1}T00:00:00.000Z`;
       writeEntry(root, e);
     }
-    const r = assemble(ctxFor(root), 'sess-no-sub', {
+    const r = await assemble(ctxFor(root), 'sess-no-sub', {
       freshTailCount: 1,
       summarizeOlder: false,
       budget: 100000,

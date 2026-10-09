@@ -16,7 +16,6 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -27,8 +26,7 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { withSharedStoreHandles } from '../src/db.js';
 import { cmdExplain } from '../src/cli/explain.js';
 import { runInProcess } from './_helpers/run-in-process.js';
-
-const HIPPO_BIN = join(process.cwd(), 'bin', 'hippo.js');
+import { hippoOut } from './_helpers/spawn-hippo.js';
 
 const CLEAN = 'clean deploykey fact for everyone';
 const PRIV_SLACK = 'private slack deploykey fact';
@@ -41,14 +39,10 @@ interface RecallScopeEnv {
 }
 
 function hippo(cwd: string, env: RecallScopeEnv, ...args: string[]): string {
-  return execFileSync('node', [HIPPO_BIN, ...args], {
-    cwd,
-    env: { ...process.env, ...env },
-    encoding: 'utf-8',
-  });
+  return hippoOut(args, { cwd, env: { ...process.env, ...env }, exe: 'node' });
 }
 
-describe('cli recall scope default-deny (v1.25.0)', () => {
+describe('cli recall scope default-deny', () => {
   let home: string;
   let env: RecallScopeEnv;
 

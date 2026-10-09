@@ -22,14 +22,14 @@
  * closed (retired). Export renders ACTIVE skills only.
  */
 
-import { BadRequestError, ConflictError, NotFoundError } from './api-errors.js';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
-import { writeEntry } from './store/entry-writes.js';
+import { BadRequestError } from './api-errors.js';
+import { openHippoDb, closeHippoDb } from './db.js';
+import { onHandle } from './store/open.js';
 import { assertTenantId } from './tenant.js';
-import { createMemory, Layer } from './memory.js';
-import { appendAuditEvent } from './audit.js';
-import { objectHalfLifeDays } from './half-life-migration.js';
-import { keysetAfter, type KeysetPosition } from './keyset.js';
+import type { KeysetPosition } from './keyset.js';
+import type { SavableDescriptor } from './objects/descriptor.js';
+import { checkText, requireLine } from './objects/fields.js';
+import { assertObjectStatus, closeObjectOn, loadObjectByIdOn, loadObjectsOn, saveObject } from './objects/lifecycle.js';
 
 // ---------------------------------------------------------------------------
 // Domain types
@@ -97,50 +97,16 @@ export interface ListSkillsOpts {
 // Validation
 // ---------------------------------------------------------------------------
 
-/** Normalised return shape for validateSkillFields: named (not an inline object
- *  type) so the return keeps its literal-evidence narrowing at the call site. */
-interface ValidatedSkillFields {
-  name: string;
-  trigger: string | null;
-}
-
-/**
- * Validate + normalise skill fields. skill_name is trimmed and MUST be a single
- * line (no newlines) so it cannot break the H2 header in the export render.
- * instructions are kept verbatim (operator content) but capped.
- * Returns the normalised name + trigger (null when absent/empty).
- */
-function validateSkillFields(
-  skillName: string,
-  instructions: string,
-  trigger: string | undefined,
-): ValidatedSkillFields {
-  const name = (skillName ?? '').trim();
-  if (name.length === 0) throw new BadRequestError('saveSkill: skillName is required');
-  if (/[\r\n]/.test(name)) throw new BadRequestError('saveSkill: skillName must be a single line (no newlines)');
-  if (name.length > MAX_SKILL_NAME_LEN) {
-    throw new BadRequestError(`saveSkill: skillName exceeds the ${MAX_SKILL_NAME_LEN}-char cap`);
+/** The trigger as stored, or null for none. One line, because a newline would forge a heading inside the exported **When:** line. */
+function checkTrigger(trigger: string | undefined): string | null {
+  if (trigger === undefined || trigger === null || trigger.trim().length === 0) return null;
+  if (trigger.length > MAX_SKILL_TRIGGER_LEN) {
+    throw new BadRequestError(`saveSkill: trigger exceeds the ${MAX_SKILL_TRIGGER_LEN}-char cap`);
   }
-  if (!instructions || instructions.trim().length === 0) {
-    throw new BadRequestError('saveSkill: instructions are required');
+  if (/[\r\n]/.test(trigger)) {
+    throw new BadRequestError('saveSkill: trigger must be a single line (no newlines)');
   }
-  if (instructions.length > MAX_SKILL_INSTRUCTIONS_LEN) {
-    throw new BadRequestError(`saveSkill: instructions exceed the ${MAX_SKILL_INSTRUCTIONS_LEN}-char cap`);
-  }
-  let triggerVal: string | null = null;
-  if (trigger !== undefined && trigger !== null && trigger.trim().length > 0) {
-    if (trigger.length > MAX_SKILL_TRIGGER_LEN) {
-      throw new BadRequestError(`saveSkill: trigger exceeds the ${MAX_SKILL_TRIGGER_LEN}-char cap`);
-    }
-    // Single-line, like skill_name: a trigger is a short "when to apply" phrase,
-    // and a newline would let it forge a heading inside the export **When:** line.
-    // Reject rather than emit a multi-line trigger.
-    if (/[\r\n]/.test(trigger)) {
-      throw new BadRequestError('saveSkill: trigger must be a single line (no newlines)');
-    }
-    triggerVal = trigger;
-  }
-  return { name, trigger: triggerVal };
+  return trigger;
 }
 
 // ---------------------------------------------------------------------------
@@ -198,120 +164,37 @@ function buildSkillContent(skillName: string, instructions: string, trigger: str
   return content;
 }
 
+/** What one skill write stores, resolved before the write. */
+interface SkillFields {
+  readonly name: string;
+  readonly instructions: string;
+  readonly trigger: string | null;
+}
+
+// No graphType: the graph does not extract skills, so a save or close leaves it alone.
+const SKILL: SavableDescriptor<Skill, SkillRow, never, SkillFields> = {
+  table: 'skills',
+  cols: SKILL_COLS,
+  label: 'skill',
+  plural: 'skills',
+  fn: { get: 'loadSkillById', close: 'closeSkill', list: 'loadSkills', save: 'saveSkill' },
+  states: VALID_SKILL_STATES,
+  closableFrom: ['active'],
+  ops: { close: 'skill_close', create: 'skill_create', supersede: 'skill_supersede' },
+  idKey: 'skill_id',
+  listFilters: {},
+  rowTo: rowToSkill,
+  source: 'skill',
+  versioned: true,
+  columns: ['skill_name', 'instructions', 'trigger_text'],
+  values: (w) => [w.name, w.instructions, w.trigger],
+  // Ids and flags only, never the skill text.
+  createMeta: (w, version) => ({ version, has_trigger: w.trigger !== null }),
+};
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-
-/** Everything the afterWrite SAVEPOINT needs, resolved before the write opens. */
-interface SkillWrite {
-  tenantId: string;
-  actor: string;
-  name: string;
-  instructions: string;
-  trigger: string | null;
-  changeSummary: string | null;
-  supersedesId: number | undefined;
-  now: string;
-}
-
-// Preflight the supersede target BEFORE inserting the new row (so the new
-// autoincrement id can never be its own supersede target); read the
-// predecessor version in the same SELECT for server-derived versioning.
-// Mirrors saveProcess / savePolicy.
-function preflightSkillSupersede(db: DatabaseSyncLike, tenantId: string, supersedesId: number): number {
-  // SAFETY: row shape matches the `status, version` columns named in the SELECT below.
-  const pred = db.prepare(
-    `SELECT status, version FROM skills WHERE id = ? AND tenant_id = ?`,
-  ).get(supersedesId, tenantId) as
-    | { status: string; version: number }
-    | undefined;
-  if (!pred) {
-    throw new NotFoundError(
-      `saveSkill: skill ${supersedesId} to supersede not found for tenant ${tenantId}`,
-    );
-  }
-  if (pred.status !== 'active') {
-    throw new ConflictError(
-      `saveSkill: skill ${supersedesId} is not active (status='${pred.status}'); only active skills can be superseded.`,
-    );
-  }
-  return pred.version + 1;
-}
-
-function insertSkillRow(db: DatabaseSyncLike, memoryId: string, w: SkillWrite, version: number): number {
-  const result = db.prepare(`
-    INSERT INTO skills(
-      memory_id, tenant_id, skill_name, instructions, trigger_text, version,
-      status, superseded_by, superseded_at, change_summary, closed_at, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, 'active', NULL, NULL, ?, NULL, ?)
-  `).run(
-    memoryId,
-    w.tenantId,
-    w.name,
-    w.instructions,
-    w.trigger,
-    version,
-    w.changeSummary,
-    w.now,
-  );
-  return Number(result.lastInsertRowid ?? 0);
-}
-
-function supersedeSkillRow(
-  db: DatabaseSyncLike,
-  w: SkillWrite,
-  supersedesId: number,
-  skillId: number,
-  version: number,
-): void {
-  const sup = db.prepare(`
-    UPDATE skills
-    SET status = 'superseded', superseded_by = ?, superseded_at = ?
-    WHERE id = ? AND tenant_id = ? AND status = 'active' AND id != ?
-  `).run(skillId, w.now, supersedesId, w.tenantId, skillId);
-  if (sup.changes === 0) {
-    throw new ConflictError(
-      `saveSkill: skill ${supersedesId} could not be superseded (no longer active or self-reference).`,
-    );
-  }
-  appendAuditEvent(db, {
-    tenantId: w.tenantId,
-    actor: w.actor,
-    op: 'skill_supersede',
-    targetId: String(supersedesId),
-    metadata: {
-      skill_id: supersedesId,
-      superseded_by: skillId,
-      new_version: version,
-    },
-  });
-}
-
-/** The afterWrite body: preflight, INSERT, supersede, reload, create audit, all in one SAVEPOINT. */
-function writeSkillRow(db: DatabaseSyncLike, memoryId: string, w: SkillWrite): SkillRow {
-  const version = w.supersedesId !== undefined ? preflightSkillSupersede(db, w.tenantId, w.supersedesId) : 1;
-  const skillId = insertSkillRow(db, memoryId, w, version);
-  if (w.supersedesId !== undefined) supersedeSkillRow(db, w, w.supersedesId, skillId, version);
-
-  // SAFETY: row's shape matches the columns named in SKILL_COLS above.
-  const row = db.prepare(`SELECT ${SKILL_COLS} FROM skills WHERE id = ?`)
-    .get(skillId) as SkillRow | undefined;
-  if (!row) throw new Error('saveSkill: failed to reload saved skill row');
-
-  // GDPR-light metadata: ids + flags only, no skill text.
-  appendAuditEvent(db, {
-    tenantId: w.tenantId,
-    actor: w.actor,
-    op: 'skill_create',
-    targetId: String(skillId),
-    metadata: {
-      skill_id: skillId,
-      version,
-      has_trigger: w.trigger !== null,
-    },
-  });
-  return row;
-}
 
 /**
  * Create a skill (or a new version that supersedes an existing one). Writes the
@@ -326,51 +209,31 @@ export function saveSkill(
   opts: SaveSkillOpts,
   actor: string = 'cli',
 ): Skill {
-  assertTenantId('saveSkill', tenantId);
-  const { name, trigger } = validateSkillFields(opts.skillName, opts.instructions, opts.trigger);
-  const isSupersede = opts.supersedesSkillId !== undefined;
-  const changeSummary = isSupersede ? (opts.changeSummary ?? null) : null;
-
-  const now = new Date().toISOString();
-  const content = buildSkillContent(name, opts.instructions, trigger);
-  const tags = ['skill', ...(opts.extraTags ?? [])];
-  const mem = createMemory(content, {
-    tags,
-    layer: Layer.Semantic,
-    confidence: 'verified',
-    source: 'skill',
-    baseHalfLifeDays: objectHalfLifeDays(hippoRoot),
-    tenantId,
+  assertTenantId(SKILL.fn.save, tenantId);
+  // The name becomes an H2 header in the export, so it must be one line.
+  const name = requireLine(opts.skillName, MAX_SKILL_NAME_LEN, {
+    required: 'saveSkill: skillName is required',
+    singleLine: 'saveSkill: skillName must be a single line (no newlines)',
+    tooLong: `saveSkill: skillName exceeds the ${MAX_SKILL_NAME_LEN}-char cap`,
   });
-  const w: SkillWrite = {
-    tenantId,
+  checkText(opts.instructions, MAX_SKILL_INSTRUCTIONS_LEN, {
+    required: 'saveSkill: instructions are required',
+    tooLong: `saveSkill: instructions exceed the ${MAX_SKILL_INSTRUCTIONS_LEN}-char cap`,
+  });
+  const trigger = checkTrigger(opts.trigger);
+  return saveObject(hippoRoot, SKILL, tenantId, {
     actor,
-    name,
-    instructions: opts.instructions,
-    trigger,
-    changeSummary,
+    now: new Date().toISOString(),
+    fields: { name, instructions: opts.instructions, trigger },
+    content: buildSkillContent(name, opts.instructions, trigger),
+    tags: opts.extraTags ?? [],
     supersedesId: opts.supersedesSkillId,
-    now,
-  };
-
-  let savedRow: SkillRow | undefined;
-
-  writeEntry(hippoRoot, mem, {
-    actor,
-    afterWrite: (db, memoryId) => {
-      savedRow = writeSkillRow(db, memoryId, w);
-    },
+    changeSummary: opts.changeSummary,
   });
-
-  if (!savedRow) {
-    throw new Error('saveSkill: afterWrite did not populate the row');
-  }
-  return rowToSkill(savedRow);
 }
 
 /**
- * Close (retire) an active skill. CAS guard WHERE status='active'; 0 changes
- * distinguishes not-found from not-active. A superseded row is terminal.
+ * Close (retire) an active skill. A superseded row is terminal.
  */
 export function closeSkill(
   hippoRoot: string,
@@ -378,57 +241,9 @@ export function closeSkill(
   id: number,
   actor: string = 'cli',
 ): Skill {
-  assertTenantId('closeSkill', tenantId);
+  assertTenantId(SKILL.fn.close, tenantId);
   const now = new Date().toISOString();
-  const db = openHippoDb(hippoRoot);
-  try {
-    db.exec('BEGIN IMMEDIATE');
-    try {
-      const updateResult = db.prepare(`
-        UPDATE skills
-        SET status = 'closed', closed_at = ?
-        WHERE id = ? AND tenant_id = ? AND status = 'active'
-      `).run(now, id, tenantId);
-
-      if (updateResult.changes === 0) {
-        // SAFETY: row shape matches the single `status` column named in the SELECT above.
-        const existing = db.prepare(
-          `SELECT status FROM skills WHERE id = ? AND tenant_id = ?`,
-        ).get(id, tenantId) as { status: string } | undefined;
-        if (!existing) {
-          throw new NotFoundError(`closeSkill: skill ${id} not found for tenant ${tenantId}`);
-        }
-        throw new ConflictError(
-          `closeSkill: skill ${id} is not active (status='${existing.status}'); only active skills can be closed.`,
-        );
-      }
-
-      // SAFETY: row's shape matches the columns named in SKILL_COLS above.
-      const row = db.prepare(`SELECT ${SKILL_COLS} FROM skills WHERE id = ? AND tenant_id = ?`)
-        .get(id, tenantId) as SkillRow | undefined;
-      if (!row) throw new NotFoundError(`closeSkill: skill ${id} not found after UPDATE`);
-
-      appendAuditEvent(db, {
-        tenantId,
-        actor,
-        op: 'skill_close',
-        targetId: String(id),
-        metadata: { skill_id: id },
-      });
-
-      db.exec('COMMIT');
-      return rowToSkill(row);
-    } catch (e) {
-      try {
-        db.exec('ROLLBACK');
-      } catch {
-        // Ignore rollback failures — the throw below is what matters.
-      }
-      throw e;
-    }
-  } finally {
-    closeHippoDb(db);
-  }
+  return onHandle(hippoRoot, (db) => closeObjectOn(db, SKILL, tenantId, id, { actor, now }));
 }
 
 export function loadSkillById(
@@ -436,16 +251,8 @@ export function loadSkillById(
   tenantId: string,
   id: number,
 ): Skill | null {
-  assertTenantId('loadSkillById', tenantId);
-  const db = openHippoDb(hippoRoot);
-  try {
-    // SAFETY: row's shape matches the columns named in SKILL_COLS above.
-    const row = db.prepare(`SELECT ${SKILL_COLS} FROM skills WHERE id = ? AND tenant_id = ?`)
-      .get(id, tenantId) as SkillRow | undefined;
-    return row ? rowToSkill(row) : null;
-  } finally {
-    closeHippoDb(db);
-  }
+  assertTenantId(SKILL.fn.get, tenantId);
+  return onHandle(hippoRoot, (db) => loadObjectByIdOn(db, SKILL, tenantId, id));
 }
 
 export function loadSkills(
@@ -453,38 +260,9 @@ export function loadSkills(
   tenantId: string,
   opts: ListSkillsOpts = {},
 ): Skill[] {
-  assertTenantId('loadSkills', tenantId);
-  const limit = opts.limit ?? 100;
-  const after = keysetAfter('created_at', 'id', opts.after);
-  const db = openHippoDb(hippoRoot);
-  try {
-    let rows: SkillRow[];
-    if (opts.status) {
-      if (!VALID_SKILL_STATES.has(opts.status)) {
-        throw new BadRequestError(
-          `loadSkills: status must be one of ${Array.from(VALID_SKILL_STATES).join('|')}; got ${opts.status}`,
-        );
-      }
-      // SAFETY: rows' shape matches the columns named in SKILL_COLS above.
-      rows = db.prepare(`
-        SELECT ${SKILL_COLS} FROM skills
-        WHERE tenant_id = ? AND status = ?${after.sql}
-        ORDER BY created_at DESC, id DESC
-        LIMIT ?
-      `).all(tenantId, opts.status, ...after.params, limit) as SkillRow[];
-    } else {
-      // SAFETY: rows' shape matches the columns named in SKILL_COLS above.
-      rows = db.prepare(`
-        SELECT ${SKILL_COLS} FROM skills
-        WHERE tenant_id = ?${after.sql}
-        ORDER BY created_at DESC, id DESC
-        LIMIT ?
-      `).all(tenantId, ...after.params, limit) as SkillRow[];
-    }
-    return rows.map(rowToSkill);
-  } finally {
-    closeHippoDb(db);
-  }
+  assertTenantId(SKILL.fn.list, tenantId);
+  assertObjectStatus(SKILL, opts.status);
+  return onHandle(hippoRoot, (db) => loadObjectsOn(db, SKILL, tenantId, opts));
 }
 
 export function loadActiveSkills(

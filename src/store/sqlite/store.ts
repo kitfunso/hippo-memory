@@ -1,18 +1,22 @@
 // The built-in SQLite adapter behind the store port.
 import { loadAmbientTallies } from '../../ambient-store.js';
 import { listApiKeyRows, readApiKeyRecord } from '../../auth.js';
-import { appendAuditEvent, listAuditEventsAfter } from '../../audit.js';
-import { withWriteScope } from '../../db.js';
+import { existsSync } from 'node:fs';
+import { appendAuditEvent, listAuditEventsAfter, queryAuditEvents } from '../../audit.js';
+import { getHippoDbPath, withWriteScope } from '../../db.js';
 import { embeddingIndexStateAt, loadStoredVectors } from '../../embeddings.js';
 import { activeGoalsWithPolicies, localGoalRecallRows, writeGoalRecallLog } from '../../goals.js';
-import { loadPhysicsState } from '../../physics-state.js';
-import { planningFallacyEvidenceAt } from '../../predictions/planning-fallacy.js';
+import { loadPhysicsState } from '../../db/physics-state.js';
+import { planningFallacyEvidenceAt } from '../planning-fallacy-evidence.js';
 import { writeRecallTrace } from '../../recall-trace.js';
 import { recordTokenUse } from '../../token-ledger.js';
 import { loadAmbientCandidates, loadContextCandidates } from '../candidates.js';
 import { loadEntriesByIds, loadFreshRawMemories } from '../entry-reads.js';
 import { strengthenRetrievedInOwnTx } from '../entry-writes.js';
-import { sqliteEntryWrites } from '../entry-writes-group.js';
+import { sqliteDagReads } from './dag-reads-group.js';
+import { sqliteEntryWrites } from './entry-writes-group.js';
+import { servedPredictions, sqlitePredictions } from './predictions-group.js';
+import { servedQuarantine, sqliteQuarantine } from './quarantine-group.js';
 import { loadLatestHandoff } from '../handoffs.js';
 import { updateStats } from '../index-and-stats.js';
 import { auditHighIdAt, revokeKeyAt } from '../key-audit.js';
@@ -90,6 +94,21 @@ export function sqliteSyncStore(hippoRoot: string): SqliteSyncStore & Sync<Omit<
     },
     entryWrites: sqliteEntryWrites(hippoRoot),
     contextReads: sqliteContextReads(hippoRoot),
+    predictions: sqlitePredictions(hippoRoot),
+    dagReads: sqliteDagReads(hippoRoot),
+    auditLog: {
+      listAuditEvents(query) {
+        return onHandle(hippoRoot, (db) => queryAuditEvents(db, query));
+      },
+    },
+    quarantine: sqliteQuarantine(hippoRoot),
+    readiness: {
+      ping() {
+        // A probe must not create the store; the first write does, so a root with none yet is ready.
+        if (!existsSync(getHippoDbPath(hippoRoot))) return;
+        onHandle(hippoRoot, (db) => { db.prepare('SELECT 1').get(); });
+      },
+    },
     close() {},
   };
 }
@@ -97,7 +116,7 @@ export function sqliteSyncStore(hippoRoot: string): SqliteSyncStore & Sync<Omit<
 /** `sqliteSyncStore` as a served store: each method runs at once and answers through a Promise, so a throw rejects as another store's would. */
 export function sqliteStore(hippoRoot: string): HippoStore & StoreGroups {
   const sync = sqliteSyncStore(hippoRoot);
-  const { keyAudit, keyWrites, vectorWrites, entryWrites, contextReads } = sync;
+  const { keyAudit, keyWrites, vectorWrites, entryWrites, contextReads, dagReads, auditLog } = sync;
   return {
     kind: sync.kind,
     findApiKey: async (keyId) => sync.findApiKey(keyId),
@@ -139,6 +158,17 @@ export function sqliteStore(hippoRoot: string): HippoStore & StoreGroups {
       contextCandidates: async (tenantId, filter) => contextReads.contextCandidates(tenantId, filter),
       ambientTallies: async (tenantId, filter) => contextReads.ambientTallies(tenantId, filter),
     },
+    predictions: servedPredictions(sync.predictions),
+    dagReads: {
+      sessionRawEntries: async (query) => dagReads.sessionRawEntries(query),
+      sessionRawCount: async (query) => dagReads.sessionRawCount(query),
+      summaryWithDescendants: async (tenantId, id, walk) => dagReads.summaryWithDescendants(tenantId, id, walk),
+    },
+    auditLog: {
+      listAuditEvents: async (query) => auditLog.listAuditEvents(query),
+    },
+    quarantine: servedQuarantine(sync.quarantine),
+    readiness: { ping: async () => sync.readiness.ping() },
     close: async () => sync.close(),
   };
 }
@@ -217,15 +247,25 @@ export function continuityAt(hippoRoot: string, tenantId: string, eventLimit: nu
   };
 }
 
+/** What a finished recall wrote after its audit rows: the trace's id, null when none was asked or its write failed, and the ids strengthened. */
+interface RecallFinish {
+  readonly traceId: number | null;
+  readonly strengthened: ReadonlySet<string>;
+}
+
 /** sqliteStore's finishRecall, for the synchronous recall that cannot await the port. */
-export function finishRecallAt(hippoRoot: string, writes: RecallWrites): void {
-  onHandle(hippoRoot, (db) => {
-    withWriteScope(db, 'finish_recall', () => {
-      writeGoalRecallLog(db, localGoalRecallRows(db, writes.goalLog));
-      for (const event of writes.audit) appendAuditEvent(db, event);
-    });
+export function finishRecallAt(hippoRoot: string, writes: RecallWrites): RecallFinish {
+  return onHandle(hippoRoot, (db) => {
+    // With no row to write the scope would only take the write lock.
+    if (writes.goalLog.length > 0 || writes.audit.length > 0) {
+      withWriteScope(db, 'finish_recall', () => {
+        writeGoalRecallLog(db, localGoalRecallRows(db, writes.goalLog));
+        for (const event of writes.audit) appendAuditEvent(db, event);
+      });
+    }
     // Each opens its own transaction, so neither can share the scope above.
-    if (writes.trace) writeRecallTrace(db, writes.trace);
-    if (writes.strengthen) strengthenRetrievedInOwnTx(db, writes.strengthen.ids, writes.strengthen.opts);
+    const traceId = writes.trace ? writeRecallTrace(db, writes.trace) : null;
+    const strengthened = writes.strengthen ? strengthenRetrievedInOwnTx(db, writes.strengthen.ids, writes.strengthen.opts) : new Set<string>();
+    return { traceId, strengthened };
   });
 }

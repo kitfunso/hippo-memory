@@ -22,7 +22,7 @@
  */
 
 import { textOverlap } from './tokenize.js';
-import { loadAllEntries } from './store/entry-reads.js';
+import { loadCurrentDistilledEntries } from './store/entry-reads.js';
 import { deleteEntryOn, memoriesBackingObjects } from './store/delete-and-batch.js';
 import { openStore } from './store/open.js';
 import { closeHippoDb } from './db.js';
@@ -162,7 +162,7 @@ export function deduplicateStore(
   const dryRun = options.dryRun ?? false;
   // Only current distilled rows compete: raw rows are append-only (the delete
   // trigger would abort sleep mid-loop) and superseded rows are history, as in consolidate.ts.
-  const entries = loadAllEntries(hippoRoot).filter((e) => e.kind === 'distilled' && !e.superseded_by);
+  const entries = loadCurrentDistilledEntries(hippoRoot);
   const entriesByTenant = entriesByPartition(entries);
 
   // Shared across tenant groups: safe because memory ids are globally

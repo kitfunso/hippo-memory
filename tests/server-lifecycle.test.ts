@@ -38,10 +38,10 @@ interface UploadReply {
 }
 
 // Unpaced and never ended, as a large upload is, so only the server can close the connection.
-function uploadUnpaced(port: number, path: string): Promise<UploadReply> {
+function uploadUnpaced(port: number, path: string, headers: Record<string, string> = {}): Promise<UploadReply> {
   const chunk = Buffer.alloc(64 * 1024, 'x');
   return new Promise<UploadReply>((resolve, reject) => {
-    const req = httpRequest({ host: '127.0.0.1', port, path, method: 'POST', headers: { 'content-type': 'application/json' } });
+    const req = httpRequest({ host: '127.0.0.1', port, path, method: 'POST', headers: { 'content-type': 'application/json', ...headers } });
     let answered = false;
     req.on('response', (res) => {
       answered = true;
@@ -205,10 +205,12 @@ describe('server lifecycle', () => {
     const home = makeRoot();
     const handle = await serve({ hippoRoot: home, port: 0 });
     try {
-      // The cap lives in readBody, shared by every route — exercise the generic
-      // /v1 route and a webhook route, which both call it before any auth.
-      for (const path of ['/v1/memories', '/v1/connectors/slack/events']) {
-        const reply = await uploadUnpaced(handle.port, path);
+      // The cap lives in readBody, shared by every route: the generic /v1 route reads a body
+      // before any key check, and a webhook route reads one once a secret and a signature header are there.
+      process.env.SLACK_SIGNING_SECRET = 'test-only-webhook-signing-material';
+      const signed = { 'x-slack-signature': 'v0=00', 'x-slack-request-timestamp': '1' };
+      for (const [path, headers] of [['/v1/memories', {}], ['/v1/connectors/slack/events', signed]] as const) {
+        const reply = await uploadUnpaced(handle.port, path, headers);
         expect(reply.status).toBe(413);
         expect(JSON.parse(reply.body)).toEqual({ error: 'request body exceeds 1MB' });
         await reply.closed;
@@ -217,6 +219,7 @@ describe('server lifecycle', () => {
       const health = await fetch(`${handle.url}/health`);
       expect(health.status).toBe(200);
     } finally {
+      delete process.env.SLACK_SIGNING_SECRET;
       await handle.stop();
       rmSync(home, { recursive: true, force: true });
     }

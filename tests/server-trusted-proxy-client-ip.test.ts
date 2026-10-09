@@ -1,13 +1,14 @@
 // The rate-limit key trusts a forwarded header only in proxy mode, and then takes the
 // rightmost hop no trusted proxy added, so a client cannot mint a fresh bucket per request.
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { IncomingMessage } from 'node:http';
 import { Socket } from 'node:net';
 import { initStore } from '../src/store/open.js';
+import { log } from '../src/log.js';
 import { clientIpForRateLimit, serve, type ServerHandle } from '../src/server.js';
 
 const ENV_KEYS = ['HIPPO_CLIENT_IP_HEADER', 'HIPPO_TRUSTED_PROXIES', 'HIPPO_V1_RPS'] as const;
@@ -110,5 +111,21 @@ describe('rate limiting over real HTTP with rotating spoofed X-Forwarded-For', (
     process.env.HIPPO_CLIENT_IP_HEADER = 'x-forwarded-for';
     process.env.HIPPO_TRUSTED_PROXIES = '192.0.2.1';
     expect(await statusesWithRotatingXff()).toContain(429);
+  });
+
+  it('warns once at start that any caller can set the header when no trusted proxy is listed, and stays quiet with no header or with a list', async () => {
+    const warn = vi.spyOn(log, 'warn').mockImplementation(() => {});
+    try {
+      await (await serve({ hippoRoot: root, port: 0 })).stop();
+      process.env.HIPPO_CLIENT_IP_HEADER = 'x-forwarded-for';
+      await (await serve({ hippoRoot: root, port: 0 })).stop();
+      process.env.HIPPO_TRUSTED_PROXIES = '192.0.2.1';
+      await (await serve({ hippoRoot: root, port: 0 })).stop();
+      expect(warn.mock.calls.map((call) => String(call[0])).filter((line) => line.includes('HIPPO_CLIENT_IP_HEADER'))).toEqual([
+        expect.stringMatching(/HIPPO_CLIENT_IP_HEADER is x-forwarded-for and HIPPO_TRUSTED_PROXIES is unset.*any caller that reaches this port.*Set HIPPO_TRUSTED_PROXIES/),
+      ]);
+    } finally {
+      warn.mockRestore();
+    }
   });
 });

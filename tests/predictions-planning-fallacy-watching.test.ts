@@ -24,7 +24,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { Layer} from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { detectPlanningClaim } from '../src/predictions/planning-fallacy.js';
-import { savePrediction, closePrediction } from '../src/predictions/store.js';
+import { savePrediction, closePrediction } from '../src/store/predictions.js';
 import { recall, type Context } from '../src/api.js';
 import { makeRoot } from './_helpers/make-root.js';
 
@@ -52,7 +52,7 @@ function seedClosedPredictions(root: string, classTag: string, n: number): void 
   }
 }
 
-describe('PlanningFallacyWatching (v1.13.4 / J3.2 follow-up)', () => {
+describe('PlanningFallacyWatching', () => {
   let root: string;
   beforeEach(() => { root = makeRoot('j32-watch'); });
   afterEach(() => safeRmSync(root));

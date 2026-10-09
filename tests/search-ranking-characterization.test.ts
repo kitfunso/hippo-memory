@@ -10,7 +10,7 @@ import { saveEmbeddingIndex, saveStoredEmbeddingModel } from '../src/embeddings.
 import { resolveEmbeddingProvider } from '../src/embedding-provider.js';
 import { insertEntity, insertRelation } from '../src/graph/write.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { savePhysicsState } from '../src/physics-state.js';
+import { savePhysicsState } from '../src/db/physics-state.js';
 import { search } from '../src/search/bm25-search.js';
 import { hybridSearch } from '../src/search/hybrid.js';
 import { physicsSearch } from '../src/search/physics-search.js';

@@ -586,6 +586,8 @@ Commands:
   serve                    Start the HTTP API server for this store (Ctrl+C stops it)
     --port <n>             Port to serve on (default: $HIPPO_PORT or 6789)
     --host <host>          Address to bind (default: 127.0.0.1)
+    --tls-cert <file>      PEM certificate; serve HTTPS only (or $HIPPO_TLS_CERT)
+    --tls-key <file>       PEM private key for it; give both (or $HIPPO_TLS_KEY)
   goal <sub>               dlPFC goal stack (B3) — scoped per session
     goal push <name>       Push a new active goal; prints the new goal id
       --policy <type>      schema-fit-biased | error-prioritized |
@@ -1698,6 +1700,8 @@ exports[`CLI help output is byte-identical and runs nothing > hippo serve --help
   "stdout": "  serve                    Start the HTTP API server for this store (Ctrl+C stops it)
     --port <n>             Port to serve on (default: $HIPPO_PORT or 6789)
     --host <host>          Address to bind (default: 127.0.0.1)
+    --tls-cert <file>      PEM certificate; serve HTTPS only (or $HIPPO_TLS_CERT)
+    --tls-key <file>       PEM private key for it; give both (or $HIPPO_TLS_KEY)
 ",
 }
 `;

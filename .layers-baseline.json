@@ -1,27 +1,6 @@
 {
-  "runtime": 3,
-  "typeOnly": 1,
-  "rootFiles": 136,
-  "edges": [
-    {
-      "from": "api/context.ts",
-      "to": "session-digest.ts",
-      "kind": "runtime"
-    },
-    {
-      "from": "http-util.ts",
-      "to": "db/sqlite-blocked.ts",
-      "kind": "runtime"
-    },
-    {
-      "from": "store/port.ts",
-      "to": "predictions/planning-fallacy.ts",
-      "kind": "typeOnly"
-    },
-    {
-      "from": "store/sqlite/store.ts",
-      "to": "predictions/planning-fallacy.ts",
-      "kind": "runtime"
-    }
-  ]
+  "runtime": 0,
+  "typeOnly": 0,
+  "rootFiles": 117,
+  "edges": []
 }

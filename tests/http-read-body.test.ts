@@ -1,5 +1,5 @@
 // readBody's cap and deadline: a slow body fails with its own error class, and the deadline timer never outlives the read.
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import type { IncomingMessage } from 'node:http';
 import { Readable } from 'node:stream';
 import { BodyTimeoutError, BodyTooLargeError, readBody } from '../src/http-util.js';
@@ -25,12 +25,19 @@ function trickle(): Readable {
 const liveTimers = (): number => process.getActiveResourcesInfo().filter((r) => r === 'Timeout').length;
 
 describe('readBody deadline', () => {
-  it('fails a never-ending stream with BodyTimeoutError once the deadline passes', async () => {
+  it('fails a never-ending stream with BodyTimeoutError once the deadline passes, and not before', async () => {
+    vi.useFakeTimers();
     const body = trickle();
-    const started = Date.now();
-    await expect(readBody(asRequest(body), { deadlineMs: 50 })).rejects.toBeInstanceOf(BodyTimeoutError);
-    expect(Date.now() - started).toBeLessThan(2000);
-    body.destroy();
+    try {
+      const outcome = readBody(asRequest(body), { deadlineMs: 50 }).then(() => 'read', (err: Error) => err);
+      await vi.advanceTimersByTimeAsync(49);
+      expect(await Promise.race([outcome, 'still reading'])).toBe('still reading');
+      await vi.advanceTimersByTimeAsync(1);
+      expect(await outcome).toBeInstanceOf(BodyTimeoutError);
+    } finally {
+      body.destroy();
+      vi.useRealTimers();
+    }
   });
 
   it('returns a body that arrives in time and leaves no timer behind', async () => {

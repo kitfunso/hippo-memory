@@ -3,9 +3,9 @@ import { openHippoDb, isFtsAvailable, closeHippoDb, type DatabaseSyncLike } from
 import { tokenize } from '../tokenize.js';
 import { isPersonalScope, scopeAdmitSql, type SqlFragment } from '../recall-scope.js';
 import { ftsTermParts, RAREST_TERM_COUNT, rarestFtsQuery } from '../prompt-recall.js';
-import { log } from '../log.js';
+import { errorMessage, log } from '../log.js';
 import { originInSql } from '../project-identity.js';
-import { topVectorMatches } from '../vector-store.js';
+import { topVectorMatches } from '../db/vector-store.js';
 import {
   type MemoryRow,
   MEMORY_SELECT_COLUMNS,
@@ -84,15 +84,20 @@ export function _forceLikePathForTests(on: boolean): void {
   forceLikePath = on;
 }
 
+interface SearchRowsOptions {
+  readonly scopeFilter?: RecallScopeFilter;
+  readonly includeSuperseded?: boolean;
+  readonly originProjects?: OriginFilter;
+}
+
 function loadSearchRows(
   db: ReturnType<typeof openHippoDb>,
   query: string,
   limit: number,
   tenantId: string | undefined,
-  scopeFilter?: RecallScopeFilter,
-  includeSuperseded = true,
-  originProjects?: OriginFilter,
+  options: SearchRowsOptions = {},
 ): MemoryRow[] {
+  const { scopeFilter, includeSuperseded = true, originProjects } = options;
   const p = searchPredicates(tenantId, scopeFilter, includeSuperseded, originProjects);
 
   const terms = Array.from(new Set(tokenize(query)));
@@ -178,7 +183,7 @@ function selectFtsCandidates(db: DatabaseSyncLike, terms: string[], p: SearchPre
       `).all(ftsQuery, ...p.tenantParams, ...p.scopeParams, limit) as MemoryRow[];
   } catch (err) {
     // A query FTS5 cannot parse is expected input; anything else means the index itself is broken.
-    const message = err instanceof Error ? err.message : String(err);
+    const message = errorMessage(err);
     if (!FTS_QUERY_SYNTAX_RE.test(message)) log.once('fts-match-fallback', 'warn', `FTS search failed, using the slower LIKE match: ${message}`);
     return [];
   }
@@ -264,10 +269,20 @@ export function loadRecallSearchEntries(
 ): MemoryEntry[] {
   const db = openStore(hippoRoot);
   try {
-    return loadRecallSearchEntriesFromDb(db, query, limit, tenantId, requestedScope, explicitScopeMode, includeSuperseded, originProjects, ownScope);
+    return loadRecallSearchEntriesFromDb(db, query, { limit, tenantId, requestedScope, explicitScopeMode, includeSuperseded, originProjects, ownScope });
   } finally {
     closeHippoDb(db);
   }
+}
+
+export interface RecallSearchEntriesOptions {
+  readonly limit?: number;
+  readonly tenantId?: string;
+  readonly requestedScope?: string;
+  readonly explicitScopeMode?: 'exact' | 'additive';
+  readonly includeSuperseded?: boolean;
+  readonly originProjects?: OriginFilter;
+  readonly ownScope?: string;
 }
 
 // Split out so callers with an already-open db (the prompt-recall path) skip
@@ -275,15 +290,11 @@ export function loadRecallSearchEntries(
 export function loadRecallSearchEntriesFromDb(
   db: DatabaseSyncLike,
   query: string,
-  limit: number = DEFAULT_SEARCH_CANDIDATE_LIMIT,
-  tenantId?: string,
-  requestedScope?: string,
-  explicitScopeMode: 'exact' | 'additive' = 'exact',
-  includeSuperseded = true,
-  originProjects?: OriginFilter,
-  ownScope?: string,
+  options: RecallSearchEntriesOptions = {},
 ): MemoryEntry[] {
-  return loadSearchRows(db, query, limit, tenantId, recallScopeFilter(requestedScope, explicitScopeMode, ownScope), includeSuperseded, originProjects).map(rowToEntry);
+  const { limit = DEFAULT_SEARCH_CANDIDATE_LIMIT, tenantId, requestedScope, explicitScopeMode = 'exact', includeSuperseded = true, originProjects, ownScope } = options;
+  const scopeFilter = recallScopeFilter(requestedScope, explicitScopeMode, ownScope);
+  return loadSearchRows(db, query, limit, tenantId, { scopeFilter, includeSuperseded, originProjects }).map(rowToEntry);
 }
 
 /** Which rows the vector arm of hybrid search may add: the same tenant, scope and superseded rules as the lexical load. */

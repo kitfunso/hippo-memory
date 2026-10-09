@@ -1,15 +1,17 @@
 // Long-running verbs: `hippo dashboard`, `hippo mcp` and `hippo serve`.
 
 import { installCrashHandlers } from '../util/crash-handlers.js';
-import { envPort } from '../env.js';
+import { envPort, envRequireAuth, envTlsCert, envTlsKey } from '../env.js';
+import * as fs from 'fs';
 import * as path from 'path';
 import { printError } from './output.js';
-import { requireInit, type CommandContext } from './shared.js';
+import { stringFlagOrExit, requireInit, type CommandContext, stringFlag } from './shared.js';
+import { errorMessage } from '../log.js';
 
 export async function handleDashboard({ hippoRoot, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
   const port = parseInt(String(flags['port'] ?? '3333'), 10);
-  const { serveDashboard } = await import('../dashboard.js');
+  const { serveDashboard } = await import('../dashboard/dashboard.js');
   serveDashboard(hippoRoot, port);
   // A busy port or a later throw ends in one log line and exit 1, as it does for serve and mcp.
   installCrashHandlers('dashboard');
@@ -27,6 +29,24 @@ export async function handleMcp(): Promise<void> {
   await new Promise(() => {}); // hang forever
 }
 
+/** The certificate and key for HTTPS, from --tls-cert and --tls-key or HIPPO_TLS_CERT and HIPPO_TLS_KEY; undefined when neither is set. */
+function readTlsFiles(flags: CommandContext['flags']): { cert: Buffer; key: Buffer } | undefined {
+  // A flag with no value exits here; falling back to cleartext would hide the mistake.
+  const certPath = stringFlagOrExit(flags, 'tls-cert') ?? envTlsCert();
+  const keyPath = stringFlagOrExit(flags, 'tls-key') ?? envTlsKey();
+  if (certPath === undefined && keyPath === undefined) return undefined;
+  if (certPath === undefined || keyPath === undefined) {
+    printError('hippo serve: TLS needs both a certificate and a key: --tls-cert and --tls-key, or HIPPO_TLS_CERT and HIPPO_TLS_KEY.');
+    process.exit(1);
+  }
+  try {
+    return { cert: fs.readFileSync(certPath), key: fs.readFileSync(keyPath) };
+  } catch (err) {
+    printError(`hippo serve: cannot read the TLS files: ${errorMessage(err)}`);
+    process.exit(1);
+  }
+}
+
 export async function handleServe({ hippoRoot, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
   const portRaw = flags['port'] ?? envPort() ?? '6789';
@@ -35,10 +55,15 @@ export async function handleServe({ hippoRoot, flags }: CommandContext): Promise
     printError(`Invalid --port: ${String(portRaw)}`);
     process.exit(1);
   }
-  const host = typeof flags['host'] === 'string' ? (flags['host'] as string) : '127.0.0.1';
+  const host = stringFlag(flags, 'host') ?? '127.0.0.1';
+  const tls = readTlsFiles(flags);
   const { serve } = await import('../server.js');
-  const handle = await serve({ hippoRoot, port, host, handleSignals: true });
+  const handle = await serve({ hippoRoot, port, host, handleSignals: true, tls });
   console.log(`hippo serve listening on ${handle.url} (pid ${process.pid})`);
+  // Said at every start: the no-key local fallback is a default an operator should choose, not discover.
+  if (!envRequireAuth()) {
+    console.log('local requests need no API key and act as host admin; set HIPPO_REQUIRE_AUTH=1 to require a key on every request');
+  }
   console.log(`pidfile: ${path.join(hippoRoot, 'server.pid')}`);
   console.log('press Ctrl+C to stop');
   // The SIGINT/SIGTERM handlers stop the server and exit. Hang until then.

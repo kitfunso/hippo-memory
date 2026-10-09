@@ -108,7 +108,7 @@ function entityCount(home: string): number {
   finally { closeHippoDb(db); }
 }
 
-describe('graph extraction (E3.1 deterministic, from consolidated E2 objects)', () => {
+describe('graph extraction (deterministic, from consolidated first-class objects)', () => {
   let home: string;
   beforeEach(() => { home = makeRoot('graph-extract'); });
   afterEach(() => { try { rmSync(home, { recursive: true, force: true }); } catch { /* ignore */ } });

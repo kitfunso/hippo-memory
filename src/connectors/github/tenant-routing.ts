@@ -1,5 +1,5 @@
 import { envGithubAllowUnknownInstallationFallback, envTenant } from '../../env.js';
-import type { DatabaseSyncLike } from '../../db.js';
+import { githubRouting } from '../../store/connectors/github.js';
 
 export interface ResolveArgs {
   /** String form of `installation.id`. `null`/`undefined` means "no installation field" (PAT-mode webhook). */
@@ -33,52 +33,22 @@ export interface ResolveArgs {
  * replay, future MCP) gets identical protection.
  */
 export function resolveTenantForGitHub(
-  db: DatabaseSyncLike,
+  hippoRoot: string,
   args: ResolveArgs,
 ): string | null {
   const envFallback = (): string => envTenant();
   const escapeHatch = envGithubAllowUnknownInstallationFallback();
 
-  // SAFETY: the row comes from the SELECT above, which projects exactly one
-  // column, `c`, as a COUNT(*).
-  const instCount = (db
-    .prepare(`SELECT COUNT(*) AS c FROM github_installations`)
-    .get() as { c: number | bigint }).c;
-  // SAFETY: the row comes from the SELECT above, which projects exactly one
-  // column, `c`, as a COUNT(*).
-  const repoCount = (db
-    .prepare(`SELECT COUNT(*) AS c FROM github_repositories`)
-    .get() as { c: number | bigint }).c;
+  const routing = githubRouting(hippoRoot, args);
+  if (routing.tenant) return routing.tenant;
 
   if (args.installationId) {
-    // SAFETY: the row comes from the SELECT above, which projects exactly
-    // the tenant_id column of github_installations.
-    const row = db
-      .prepare(`SELECT tenant_id FROM github_installations WHERE installation_id = ?`)
-      .get(args.installationId) as { tenant_id?: string } | undefined;
-    if (row?.tenant_id) return row.tenant_id;
-    if (Number(instCount) === 0) {
-      // Single-tenant install (table empty); env fallback is safe.
-      return envFallback();
-    }
-    // Multi-tenant install with unknown installation_id — fail closed.
+    // An empty table is a single-tenant install, where the env fallback is safe; else fail closed.
+    if (routing.installations === 0) return envFallback();
     return escapeHatch ? envFallback() : null;
   }
 
-  // No installation.id (PAT-mode webhook).
-  if (Number(instCount) === 0 && Number(repoCount) === 0) {
-    // Single-tenant deployment with no routing tables populated.
-    return envFallback();
-  }
-  if (args.repoFullName) {
-    // SAFETY: the row comes from the SELECT above, which projects exactly
-    // the tenant_id column of github_repositories.
-    const row = db
-      .prepare(
-        `SELECT tenant_id FROM github_repositories WHERE repo_full_name = ? ORDER BY added_at, tenant_id LIMIT 1`,
-      )
-      .get(args.repoFullName) as { tenant_id?: string } | undefined;
-    if (row?.tenant_id) return row.tenant_id;
-  }
+  // No installation.id (PAT-mode webhook) and no routing rows at all: single-tenant deployment.
+  if (routing.installations === 0 && routing.repositories === 0) return envFallback();
   return escapeHatch ? envFallback() : null;
 }

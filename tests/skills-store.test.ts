@@ -64,7 +64,7 @@ function parseJson<T>(text: string): T {
   return JSON.parse(text) as T;
 }
 
-describe('skills store (E2 executable/exportable first-class object)', () => {
+describe('skills store (executable/exportable first-class object)', () => {
   let home: string;
   beforeEach(() => { home = makeRoot('skills'); });
   afterEach(() => safeRmSync(home));

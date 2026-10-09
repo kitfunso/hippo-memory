@@ -69,7 +69,7 @@ function hasRow(home: string, id: string): boolean {
   }
 }
 
-describe('cli forget — raw memory archive (A3)', () => {
+describe('cli forget: raw memory archive', () => {
   beforeAll(() => {
     if (!existsSync(CLI_PATH) || !statSync(CLI_PATH).isFile()) {
       throw new Error(`dist/cli.js not found at ${CLI_PATH}. Run \`npm run build\` first.`);

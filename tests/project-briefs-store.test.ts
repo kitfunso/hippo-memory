@@ -73,7 +73,7 @@ function setCreated(home: string, memoryId: string, isoCreated: string): void {
   finally { closeHippoDb(db); }
 }
 
-describe('project_briefs store (E2 repo-scoped / auto-refreshes first-class object)', () => {
+describe('project_briefs store (repo-scoped / auto-refreshes first-class object)', () => {
   let home: string;
   beforeEach(() => { home = makeRoot('project-briefs'); });
   afterEach(() => safeRmSync(home));

@@ -16,7 +16,7 @@ import {
   withSharedStoreHandles,
   withSqliteAllowed,
 } from '../src/db.js';
-import { repairAutomaticMemories } from '../src/quality-repair.js';
+import { repairAutomaticMemories } from '../src/cli/quality-repair.js';
 import * as serverEntry from '../src/server.js';
 import { initStore } from '../src/store/open.js';
 

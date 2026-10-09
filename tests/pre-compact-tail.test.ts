@@ -67,7 +67,7 @@ describe('readTranscriptTail boundary behavior (capBytes)', () => {
 /**
  * X2: truncateCodePointSafe must never split a surrogate pair at the cap.
  */
-describe('truncateCodePointSafe (X2)', () => {
+describe('truncateCodePointSafe', () => {
   it('backs off one unit when the cut point lands on a high surrogate', () => {
     const grinningFace = '😀'; // U+1F600, a surrogate pair
     const text = 'A'.repeat(9) + grinningFace; // length 11; index 9 is the high surrogate

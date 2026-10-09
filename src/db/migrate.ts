@@ -1,6 +1,6 @@
 import { PACKAGE_VERSION, compareSemver } from '../version.js';
-import { log } from '../log.js';
-import { importLegacyEmbeddingIndex } from '../vector-store.js';
+import { errorMessage, log } from '../log.js';
+import { importLegacyEmbeddingIndex } from './vector-store.js';
 import type { DatabaseSyncLike } from './sqlite.js';
 import { execWithBusyRetry } from './busy.js';
 import { tableExists } from './tables.js';
@@ -144,7 +144,7 @@ function importLegacyVectors(db: DatabaseSyncLike, hippoRoot: string): void {
   try {
     importLegacyEmbeddingIndex(db, hippoRoot);
   } catch (err) {
-    log.warn(`embeddings.json import failed; the next open retries it (${err instanceof Error ? err.message : String(err)})`, { hippoRoot });
+    log.warn(`embeddings.json import failed; the next open retries it (${errorMessage(err)})`, { hippoRoot });
   }
 }
 
@@ -174,7 +174,7 @@ function ensureOptionalFts(db: DatabaseSyncLike): void {
     repairFtsDrift(db);
     available = true;
   } catch (err) {
-    log.warn(`full-text index unavailable (${err instanceof Error ? err.message : String(err)}); search falls back to slower LIKE matching`);
+    log.warn(`full-text index unavailable (${errorMessage(err)}); search falls back to slower LIKE matching`);
   }
 
   // Read-first: only write when the flag actually changed, so a healthy

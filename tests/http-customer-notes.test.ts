@@ -51,7 +51,7 @@ async function createNote(body: { customer: string; note: string }, key: CreateA
   return fetch(`${handle.url}/v1/customer-notes`, { method: 'POST', headers: authHeaders(key), body: JSON.stringify(body) });
 }
 
-describe('HTTP /v1/customer-notes (E2 entity-scoped first-class object)', () => {
+describe('HTTP /v1/customer-notes (entity-scoped first-class object)', () => {
   it('POST /v1/customer-notes creates a note (201 + note, version 1)', async () => {
     const res = await createNote({ customer: 'Acme', note: 'renewal call' });
     expect(res.status).toBe(201);

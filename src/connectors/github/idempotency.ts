@@ -1,4 +1,4 @@
-import type { DatabaseSyncLike } from '../../db.js';
+export { eventSeenAt as hasSeenKey, eventMemoryAt as lookupMemoryByKey, logEventAt as markKeySeen } from '../../store/connectors/github.js';
 
 /**
  * Thrown by ingest's afterWrite hook when a concurrent worker has already
@@ -12,27 +12,4 @@ export class DuplicateIdempotencyError extends Error {
     this.name = 'DuplicateIdempotencyError';
     this.idempotencyKey = idempotencyKey;
   }
-}
-
-export function hasSeenKey(db: DatabaseSyncLike, idempotencyKey: string): boolean {
-  const row = db.prepare(`SELECT 1 FROM github_event_log WHERE idempotency_key = ?`).get(idempotencyKey);
-  return !!row;
-}
-
-export function markKeySeen(
-  db: DatabaseSyncLike,
-  args: { idempotencyKey: string; deliveryId: string; eventName: string; memoryId: string | null },
-): void {
-  db.prepare(
-    `INSERT OR IGNORE INTO github_event_log (idempotency_key, delivery_id, event_name, ingested_at, memory_id) VALUES (?, ?, ?, ?, ?)`,
-  ).run(args.idempotencyKey, args.deliveryId, args.eventName, new Date().toISOString(), args.memoryId);
-}
-
-export function lookupMemoryByKey(db: DatabaseSyncLike, idempotencyKey: string): string | null {
-  // SAFETY: the row comes from the SELECT above, which projects exactly the
-  // memory_id column of github_event_log.
-  const row = db.prepare(`SELECT memory_id FROM github_event_log WHERE idempotency_key = ?`).get(idempotencyKey) as
-    | { memory_id: string | null }
-    | undefined;
-  return row?.memory_id ?? null;
 }

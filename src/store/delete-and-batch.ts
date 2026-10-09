@@ -1,5 +1,5 @@
 import { AUTO_DELETABLE_SQL, type MemoryEntry } from '../memory.js';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../db.js';
+import { openHippoDb, closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../db.js';
 import { checkRejectionGuard, RejectedValueError } from '../rejection.js';
 import { markSummaryDirtyInTx } from '../summary-dirty.js';
 import { type DormantMove, insertDormantRow } from '../dormant.js';
@@ -68,7 +68,7 @@ export function deleteEntryCore(
   if (Number(db.prepare(`DELETE FROM memories WHERE id = ?${guard}`).run(id).changes ?? 0) === 0) return null;
   deleteFtsRow(db, id);
   if (!opts?.suppressForgetAudit) {
-    audit(db, 'forget', id, opts?.reason ? { reason: opts.reason } : undefined, opts?.actor ?? 'cli', row.tenant_id);
+    audit(db, 'forget', { targetId: id, metadata: opts?.reason ? { reason: opts.reason } : undefined, actor: opts?.actor ?? 'cli', tenantId: row.tenant_id });
   }
   // Forgetting a child of a summary marks the parent dirty. Not atomic with the DELETE, but
   // markSummaryDirtyInTx is idempotent, so the next child mutation re-marks the parent if this fails.
@@ -109,15 +109,7 @@ export function deleteEntryOn(
   id: string,
   opts?: { actor?: string; reason?: string; automatic?: boolean },
 ): boolean {
-  db.exec('BEGIN IMMEDIATE');
-  let result: ReturnType<typeof deleteEntryCore>;
-  try {
-    result = deleteEntryCore(db, id, opts);
-    db.exec('COMMIT');
-  } catch (err) {
-    if (db.isTransaction !== false) db.exec('ROLLBACK');
-    throw err;
-  }
+  const result = withWriteScope(db, 'delete_entry', () => deleteEntryCore(db, id, opts));
   if (!result) return false;
 
   purgeMirrorBestEffort(hippoRoot, id, false, 'deleteEntry');
@@ -193,13 +185,12 @@ export function batchWriteAndDeleteOn(
   opts: { snapshot?: ReadonlyMap<string, MemoryEntry>; holdMs: number; clock?: () => number },
 ): FlushChunk {
   const now = opts.clock ?? clock;
-  // IMMEDIATE: the tombstone probes below read before the first write, and under a deferred BEGIN a
-  // concurrent `hippo reject` would make the lock upgrade fail with SQLITE_BUSY and roll back the batch.
-  db.exec('BEGIN IMMEDIATE');
-  const begunAt = now();
   const out: ChunkLog = { written: [], removedIds: [], rejectedSkips: 0, fts: { rows: [], staleIds: [] }, dirty: { parents: new Set(), tenantById: new Map() } };
   let next = from;
-  try {
+  // IMMEDIATE: the tombstone probes below read before the first write, and under a deferred BEGIN a
+  // concurrent `hippo reject` would make the lock upgrade fail with SQLITE_BUSY and roll back the batch.
+  withWriteScope(db, 'flush_chunk', () => {
+    const begunAt = now();
     do {
       const at = next++;
       try {
@@ -216,13 +207,7 @@ export function batchWriteAndDeleteOn(
     for (const parentId of out.dirty.parents) {
       markSummaryDirtyInTx(db, parentId, out.dirty.tenantById.get(parentId) ?? 'default', 'batch');
     }
-    db.exec('COMMIT');
-  } catch (error) {
-    if (db.isTransaction !== false) {
-      try { db.exec('ROLLBACK'); } catch { /* preserve the original throw and its unit tag */ }
-    }
-    throw error;
-  }
+  });
   reportChunk(hippoRoot, out);
   return { next, removedIds: out.removedIds };
 }
@@ -379,14 +364,7 @@ function isRejectedBatchWrite(db: DatabaseSyncLike, row: MemoryEntry): boolean {
     checkRejectionGuard(db, entryTenantId, row.id, row.content);
   } catch (err) {
     if (err instanceof RejectedValueError) {
-      audit(
-        db,
-        'reject_refusal',
-        row.id,
-        { digest: err.digest, reason: err.reason },
-        'sleep-batch',
-        entryTenantId,
-      );
+      audit(db, 'reject_refusal', { targetId: row.id, metadata: { digest: err.digest, reason: err.reason }, actor: 'sleep-batch', tenantId: entryTenantId });
       return true;
     }
     throw err;

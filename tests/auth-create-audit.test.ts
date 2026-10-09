@@ -50,7 +50,7 @@ function getAuditRows(hippoRoot: string, tenantId: string, op: 'auth_create' | '
   }
 }
 
-describe('v1.12.4 auth_create audit emit', () => {
+describe('auth_create audit emit', () => {
   it('authCreate emits one auth_create audit row with label + role metadata', () => {
     const t = newCtx();
     try {

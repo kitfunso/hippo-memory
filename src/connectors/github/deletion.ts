@@ -1,7 +1,5 @@
 import { type Context } from '../../api.js';
-import { openHippoDb, closeHippoDb, withWriteScope } from '../../db.js';
-import { archiveRawMemory } from '../../raw-archive.js';
-import { hasSeenKey, markKeySeen } from './idempotency.js';
+import { archiveDeletedArtifact } from '../../store/connectors/github.js';
 
 export interface DeletionInput {
   /** artifact_ref of the comment, e.g.,
@@ -30,62 +28,25 @@ export interface DeletionResult {
  * GitHub edits keep the same artifact_ref, so multiple active raw rows can
  * match a single deletion event. Archive ALL of them.
  *
- * ONE shared DB handle wraps ALL archives + the idempotency mark in a single
- * outer write scope: a per-row failure rolls back the whole batch, idempotency
- * included, so a retry re-attempts cleanly instead of leaving searchable
- * survivors. archiveRawMemory's own inner SAVEPOINT nests safely inside it.
+ * The store runs ALL archives + the idempotency mark as one write: a per-row
+ * failure rolls back the whole batch, idempotency included, so a retry
+ * re-attempts cleanly instead of leaving searchable survivors.
  *
  * Tenant scope and kind='raw' filtering are load-bearing: without them a
  * deletion event from tenant A could archive tenant B's row sharing the same
  * artifact_ref, or accidentally target a distilled row.
  */
 export function handleCommentDeleted(ctx: Context, input: DeletionInput): DeletionResult {
-  const db = openHippoDb(ctx.hippoRoot);
-  try {
-    if (hasSeenKey(db, input.idempotencyKey)) {
-      return { status: 'duplicate', archivedCount: 0 };
-    }
-
-    // SAFETY: rows come from the SELECT above, which projects only the
-    // `id` column, so each row is exactly `{ id: string }`.
-    const rows = db
-      .prepare(
-        `SELECT id FROM memories WHERE artifact_ref = ? AND tenant_id = ? AND kind = 'raw'`,
-      )
-      .all(input.artifactRef, ctx.tenantId) as Array<{ id: string }>;
-    const memoryIds = rows.map((r) => r.id);
-
-    if (memoryIds.length === 0) {
-      // Nothing to archive — still mark idempotency so a retry returns 'duplicate'.
-      // Independent INSERT, no rollback needed.
-      markKeySeen(db, {
-        idempotencyKey: input.idempotencyKey,
-        deliveryId: input.deliveryId,
-        eventName: input.eventName,
-        memoryId: null,
-      });
-      return { status: 'archive_skipped_not_found', archivedCount: 0 };
-    }
-
-    // Outer write scope wrapping all archives + the idempotency mark. Any throw
-    // rolls back the whole batch so retry sees neither archive nor mark — and
-    // re-attempts the full set.
-    withWriteScope(db, 'github_delete_all', () => {
-      for (const id of memoryIds) {
-        archiveRawMemory(db, id, {
-          reason: `source_deleted:github:${input.eventName}:${input.deliveryId}`,
-          who: ctx.actor.subject,
-        });
-      }
-      markKeySeen(db, {
-        idempotencyKey: input.idempotencyKey,
-        deliveryId: input.deliveryId,
-        eventName: input.eventName,
-        memoryId: memoryIds[0]!,
-      });
-    });
-    return { status: 'archived', archivedCount: memoryIds.length };
-  } finally {
-    closeHippoDb(db);
-  }
+  const done = archiveDeletedArtifact(ctx.hippoRoot, {
+    tenantId: ctx.tenantId,
+    artifactRef: input.artifactRef,
+    idempotencyKey: input.idempotencyKey,
+    deliveryId: input.deliveryId,
+    eventName: input.eventName,
+    reason: `source_deleted:github:${input.eventName}:${input.deliveryId}`,
+    who: ctx.actor.subject,
+  });
+  if (done.duplicate) return { status: 'duplicate', archivedCount: 0 };
+  if (done.archived === 0) return { status: 'archive_skipped_not_found', archivedCount: 0 };
+  return { status: 'archived', archivedCount: done.archived };
 }

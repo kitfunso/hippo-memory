@@ -81,7 +81,7 @@ export async function handleAssembleSession({ req, res, opts, query }: RouteRequ
   if (freshTailCount !== undefined) assembleExtra.freshTailCount = freshTailCount;
   if (summarizeOlder !== undefined) assembleExtra.summarizeOlder = summarizeOlder;
   if (scope !== undefined) assembleExtra.scope = scope;
-  const result = assemble(ctx, assembleMatch.id!, { ...assembleExtra, cost: assembleCost(assembleMatch.id!) });
+  const result = await assemble(ctx, assembleMatch.id!, { ...assembleExtra, cost: assembleCost(assembleMatch.id!) });
   await recordTokens(ctx, 'http_assemble', { items: result.items.length, tokens: result.tokens, sessionId: assembleMatch.id! });
   sendJson(res, 200, result);
   return;
@@ -121,7 +121,7 @@ export async function handleDrillRecall({ req, res, opts, query }: RouteRequest,
   if (limit !== undefined) drillExtra.limit = limit;
   if (budget !== undefined) drillExtra.budget = budget;
   if (depth !== undefined) drillExtra.depth = depth;
-  const result = drillDown(ctx, drillMatch.id!, { ...drillExtra, cost: drillCost });
+  const result = await drillDown(ctx, drillMatch.id!, { ...drillExtra, cost: drillCost });
   if ('failure' in result) {
     // Leaf id maps to 422 (caller-actionable). Other cases stay
     // as 404 to avoid leaking cross-tenant existence or scope grants.

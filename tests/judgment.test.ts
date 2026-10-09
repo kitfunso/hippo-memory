@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { judge, judgeAll, judgmentApiKey } from '../src/judgment.js';
+import { judge, judgeAll, judgmentApiKey } from '../src/eval/judgment.js';
 
 interface JevAnswerFixture { type?: string; noul?: number; choice?: string; confidence?: number }
 interface JevBodyFixture {

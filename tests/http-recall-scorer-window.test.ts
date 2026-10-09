@@ -45,7 +45,7 @@ afterEach(async () => {
   rmSync(home, { recursive: true, force: true });
 });
 
-describe('HTTP /v1/memories scorer_window (v1.7.2 T4)', () => {
+describe('HTTP /v1/memories scorer_window', () => {
   it('scorer_window=5 narrows the candidate pool: response.windowSize=5', async () => {
     const res = await fetch(`${handle.url}/v1/memories?q=alpha&scorer_window=5`);
     expect(res.status).toBe(200);

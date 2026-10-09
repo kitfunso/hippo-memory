@@ -1,6 +1,6 @@
 import { Layer, type MemoryEntry, type ConfidenceLevel, type MemoryKind } from '../memory.js';
-import { log } from '../log.js';
-import type { JsonValue } from '../json.js';
+import { errorMessage, log } from '../log.js';
+import { type JsonValue, isJsonObject } from '../json.js';
 
 export interface IndexEntry {
   id: string;
@@ -162,12 +162,15 @@ export const MEMORY_SEARCH_COLUMNS = `m.id AS id, m.created AS created, m.last_r
  */
 export const DEFAULT_SEARCH_CANDIDATE_LIMIT = 200;
 
-export function rowToEntry(row: MemoryRow): MemoryEntry {
+type RetrievalFields = Pick<MemoryEntry, 'id' | 'created' | 'last_retrieved' | 'retrieval_count' | 'strength' | 'half_life_days' | 'layer' | 'tags' | 'emotional_valence' | 'schema_fit' | 'source' | 'outcome_score' | 'outcome_positive' | 'outcome_negative' | 'conflicts_with' | 'pinned' | 'confidence' | 'content' | 'parents' | 'starred' | 'trace_outcome'>;
+type PlacementFields = Pick<MemoryEntry, 'source_session_id' | 'valid_from' | 'superseded_by' | 'extracted_from' | 'dag_level' | 'dag_parent_id' | 'kind' | 'scope' | 'owner' | 'artifact_ref' | 'tenantId' | 'origin_project' | 'descendant_count' | 'earliest_at' | 'latest_at' | 'summary_dirty' | 'last_rebuilt_at' | 'rebuild_count' | 'dag_level_3_built_at'>;
+
+function rowToRetrievalFields(row: MemoryRow): RetrievalFields {
   // SAFETY: every `as X` below narrows a SQLite column value to an
   // enum/union member of MemoryEntry; `row` comes from MEMORY_SELECT_COLUMNS
   // / MEMORY_SEARCH_COLUMNS, which are the only queries producing MemoryRow,
   // and the DB layer only ever writes these columns from the same enums.
-  const entry: MemoryEntry = {
+  return {
     id: row.id,
     created: row.created,
     last_retrieved: row.last_retrieved,
@@ -189,6 +192,12 @@ export function rowToEntry(row: MemoryRow): MemoryEntry {
     parents: parseJsonArray(row.parents_json),
     starred: Boolean(row.starred),
     trace_outcome: (row.trace_outcome as MemoryEntry['trace_outcome']) ?? null,
+  };
+}
+
+function rowToPlacementFields(row: MemoryRow): PlacementFields {
+  // SAFETY: the `as MemoryKind` narrows a column the DB layer only writes from that enum.
+  return {
     source_session_id: row.source_session_id ?? null,
     valid_from: row.valid_from ?? row.created,
     superseded_by: row.superseded_by ?? null,
@@ -209,6 +218,10 @@ export function rowToEntry(row: MemoryRow): MemoryEntry {
     rebuild_count: Number(row.rebuild_count ?? 0),
     dag_level_3_built_at: row.dag_level_3_built_at ?? null,
   };
+}
+
+export function rowToEntry(row: MemoryRow): MemoryEntry {
+  const entry: MemoryEntry = { ...rowToRetrievalFields(row), ...rowToPlacementFields(row) };
   // Preserve bm25_score from the FTS path; `'bm25_score' in row` tells an absent column
   // (non-FTS path) from a present one.
   if ('bm25_score' in row && row.bm25_score !== undefined && row.bm25_score !== null) {
@@ -223,7 +236,7 @@ export function parseJsonArray(raw: string | null | undefined): string[] {
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed.map((item) => String(item)) : [];
   } catch (err) {
-    log.debug(`store: corrupt JSON array column read as empty: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`store: corrupt JSON array column read as empty: ${errorMessage(err)}`);
     return [];
   }
 }
@@ -245,20 +258,16 @@ export function parseLastTraceId(raw: string | null | undefined): string | null 
   return trimmed;
 }
 
-export function isPlainJsonObject(x: JsonValue): x is Record<string, JsonValue> {
-  return x !== null && typeof x === 'object' && !Array.isArray(x);
-}
-
 function parseJsonObject(raw: string | null | undefined): Record<string, JsonValue> {
   if (!raw) return {};
   try {
     const parsed: JsonValue = JSON.parse(raw);
-    if (isPlainJsonObject(parsed)) {
+    if (isJsonObject(parsed)) {
       return parsed;
     }
     return {};
   } catch (err) {
-    log.debug(`store: corrupt JSON object column read as empty: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`store: corrupt JSON object column read as empty: ${errorMessage(err)}`);
     return {};
   }
 }

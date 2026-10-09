@@ -263,7 +263,7 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
         body: JSON.stringify(spec.buildBody(this.model, chunk.map(redactSecretsStrict), role)),
       }, { timeoutMs: REQUEST_TIMEOUT_MS });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = errorMessage(err);
       throw new Error(redact(`embedding request to ${this.kind} failed: ${msg}`, key));
     }
 
@@ -283,7 +283,7 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
     try {
       json = await resp.json();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = errorMessage(err);
       throw new Error(redact(`${this.kind} embeddings returned invalid JSON: ${msg}`, key));
     }
 

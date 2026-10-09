@@ -1,6 +1,7 @@
 /** Failure log: every failed tool call the capture-error hook sees, stored or not. */
 import { ConflictError } from './api-errors.js';
 import type { DatabaseSyncLike } from './db.js';
+import { DAY_MS } from './util/time.js';
 
 /** Why a failure was not stored, or `stored`. */
 export type CaptureErrorOutcome = 'stored' | 'duplicate' | 'skipped-interrupt' | 'skipped-routine' | 'skipped-invalid';
@@ -59,7 +60,7 @@ export function recordFailure(db: DatabaseSyncLike, event: FailureEvent): void {
     event.originProject ?? null,
     event.requestId ?? null,
   );
-  const cutoff = new Date(Date.parse(now) - FAILURE_LOG_RETENTION_DAYS * 86_400_000).toISOString();
+  const cutoff = new Date(Date.parse(now) - FAILURE_LOG_RETENTION_DAYS * DAY_MS).toISOString();
   db.prepare(`DELETE FROM failure_log WHERE ts < ?`).run(cutoff);
 }
 

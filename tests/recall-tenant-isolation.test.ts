@@ -7,7 +7,7 @@ import { execSync } from 'node:child_process';
 const repoRoot = resolve(__dirname, '..');
 const cli = resolve(repoRoot, 'dist', 'cli.js');
 
-describe('cross-tenant recall isolation (A5 ROADMAP commitment)', () => {
+describe('cross-tenant recall isolation', () => {
   it('tenant A recall does not return tenant B memories', () => {
     if (!existsSync(cli)) {
       throw new Error(`dist/cli.js not found at ${cli} — run \`npm run build\` first`);

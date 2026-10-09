@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { log } from '../log.js';
+import { realpathOrResolve } from '../util/real-path.js';
 
 /** Minimal inline frontmatter split. Recognises a leading `---\n…\n---\n`
  *  block (no YAML dep). Returns the parsed key→value map plus the body with the
@@ -11,7 +11,7 @@ interface FrontmatterParseResult {
   body: string;
 }
 
-export function parseFrontmatter(raw: string): FrontmatterParseResult {
+export function splitMarkdownFrontmatter(raw: string): FrontmatterParseResult {
   // Must start with `---` on its own line. Accept CRLF or LF.
   const m = raw.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
   if (!m) return { fm: {}, body: raw };
@@ -114,21 +114,4 @@ export function collectMarkdownFiles(root: string, hippoRoot: string, match: Reg
   walk(root);
   out.sort();
   return out;
-}
-
-/** Canonicalize a path for the self-store comparison: dereference symlinks /
- *  junctions and normalize case (Windows) via the OS realpath, so a junction or
- *  a case-variant path to the store is still recognized as self-store (codex R9
- *  P2: path.resolve does neither, so an aliased store path slipped past the
- *  guard and triggered the mass-archive). Falls back to path.resolve when the
- *  path does not exist yet - an uninitialized store or a typo'd vault path
- *  cannot be a live self-store, and a non-existent vault folder fails later in
- *  the walk (readdirSync) before deletion-sync can archive anything. */
-export function realpathOrResolve(p: string): string {
-  try {
-    return fs.realpathSync.native(p);
-  } catch (err) {
-    log.debug(`import: realpath fell back to resolve for ${p}: ${err instanceof Error ? err.message : String(err)}`);
-    return path.resolve(p);
-  }
 }

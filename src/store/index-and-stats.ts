@@ -4,14 +4,25 @@ import { log } from '../log.js';
 import type { HippoIndex, LegacyStats } from './rows.js';
 import { audit } from './audit-event.js';
 import { stampOriginProjectForImport, upsertEntryRow } from './entry-row.js';
-import { buildIndexFromDb, syncMirrorFiles, writeIndexMirror, writeStatsMirror, buildStatsFromDb } from './mirrors.js';
+import { buildIndexFromDb, readLastRecall, syncMirrorFiles, writeIndexMirror, writeStatsMirror, buildStatsFromDb } from './mirrors.js';
 import { openStore, loadLegacyEntriesFromMarkdown } from './open.js';
+import { DAY_MS } from '../util/time.js';
 
 /** Load the derived index from SQLite. Read-only: index.json is only ever written by `rebuildIndex`. */
 export function loadIndex(hippoRoot: string): HippoIndex {
   const db = openStore(hippoRoot);
   try {
     return buildIndexFromDb(db);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/** The last recall's ids and its trace alone, for a caller that needs no index entry. */
+export function loadLastRecall(hippoRoot: string): Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'> {
+  const db = openStore(hippoRoot);
+  try {
+    return readLastRecall(db);
   } finally {
     closeHippoDb(db);
   }
@@ -65,7 +76,7 @@ export function rebuildIndex(hippoRoot: string): HippoIndex {
           } catch (err) {
             if (err instanceof RejectedValueError) {
               rejectedCount++;
-              audit(db, 'reject_refusal', err.entryId, { digest: err.digest, reason: err.reason }, 'cli', err.tenantId);
+              audit(db, 'reject_refusal', { targetId: err.entryId, metadata: { digest: err.digest, reason: err.reason }, actor: 'cli', tenantId: err.tenantId });
               continue;
             }
             throw err;
@@ -166,7 +177,7 @@ export function appendConsolidationRun(
 export function countCreatedSinceLastSleep(hippoRoot: string, tenantId: string, now: Date = new Date()): number {
   const db = openStore(hippoRoot);
   try {
-    const dayAgo = new Date(now.getTime() - 86_400_000).toISOString();
+    const dayAgo = new Date(now.getTime() - DAY_MS).toISOString();
     const row = db.prepare(
       `SELECT COUNT(*) AS n FROM memories WHERE tenant_id = ?
          AND created > MAX(?, COALESCE((SELECT MAX(timestamp) FROM consolidation_runs), ''))`,
@@ -213,7 +224,7 @@ export function loadSessionDecayContext(hippoRoot: string): SessionDecayContext 
       totalInterval += timestamps[i] - timestamps[i - 1];
     }
     const avgMs = totalInterval / (timestamps.length - 1);
-    const avgDays = avgMs / (1000 * 60 * 60 * 24);
+    const avgDays = avgMs / DAY_MS;
 
     return { sleepCount, avgSessionIntervalDays: Math.max(0, avgDays) };
   } finally {

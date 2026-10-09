@@ -9,7 +9,7 @@ import { readEntry, loadAllEntries } from '../store/entry-reads.js';
 import { schemaFitInStore } from '../store/candidates.js';
 import { updateStats } from '../store/index-and-stats.js';
 import { RejectedValueError } from '../rejection.js';
-import { embedAll, embedMemory } from '../embeddings.js';
+import { embedAll, embedMemory, loadEmbeddingIndex } from '../embeddings.js';
 import { loadConfig } from '../config.js';
 import { captureError, runWatched } from '../autolearn.js';
 import { currentMachine, importAtSessionEnd, importForStore } from '../agent-memories/sync.js';
@@ -31,12 +31,13 @@ import {
 } from '../importers/sources.js';
 import { importMarkdown } from '../importers/markdown.js';
 import { importVault } from '../importers/vault.js';
-import { ImportOptions } from '../importers/core.js';
+import { ImportOptions, type ImportResult } from '../importers/core.js';
 import * as api from '../api.js';
-import * as client from '../client.js';
+import * as client from './client.js';
 import { resolveTenantId } from '../tenant.js';
 import { printError } from './output.js';
-import { requireInit, runViaServerIfAvailable, fmt, type CliFlags, type CommandContext, learnFromRepo } from './shared.js';
+import { errorMessage, log } from '../log.js';
+import { requireInit, runViaServerIfAvailable, fmt, type CliFlags, type CommandContext, learnFromRepo, boolFlag, flagIsTrue } from './shared.js';
 
 // ---------------------------------------------------------------------------
 // Watch command
@@ -91,7 +92,7 @@ async function cmdWatch(command: string, hippoRoot: string): Promise<void> {
 
 export function cmdLearn(
   hippoRoot: string,
-  flags: Record<string, string | boolean | string[]>
+  flags: CliFlags
 ): void {
   requireInit(hippoRoot);
 
@@ -128,6 +129,18 @@ export function cmdLearn(
 // Import command
 // ---------------------------------------------------------------------------
 
+/** The rows are saved either way; a failed backfill only delays vectors, so it warns with how many wait and the command that finishes them. */
+function warnBackfillFailed<E>(root: string, embedCommand: string, err: E): void {
+  let waiting: string;
+  try {
+    const vectors = loadEmbeddingIndex(root);
+    waiting = String(loadAllEntries(root).filter((entry) => !Object.hasOwn(vectors, entry.id)).length);
+  } catch (countErr) {
+    waiting = `an unknown number of (count failed: ${errorMessage(countErr)})`;
+  }
+  log.warn(`import: embedding backfill failed (${errorMessage(err)}); ${waiting} rows have no vector; run '${embedCommand}' to backfill`);
+}
+
 function warnRedacted(count: number | undefined): void {
   if (count) printError(`Warning: secret-shaped text was redacted from ${count} imported ${count === 1 ? 'entry' : 'entries'} before storing`);
 }
@@ -135,10 +148,10 @@ function warnRedacted(count: number | undefined): void {
 export function cmdImport(
   hippoRoot: string,
   args: string[],
-  flags: Record<string, string | boolean | string[]>
+  flags: CliFlags
 ): void {
-  const useGlobal = Boolean(flags['global']);
-  const dryRun = Boolean(flags['dry-run']);
+  const useGlobal = boolFlag(flags, 'global');
+  const dryRun = boolFlag(flags, 'dry-run');
   const extraTags: string[] = Array.isArray(flags['tag'])
     ? (flags['tag'] as string[])
     : flags['tag']
@@ -169,7 +182,7 @@ export function cmdImport(
   // resolve the tenant and pass it through. --global is not supported for
   // vault import (the connector raw-archive path is tenant-local).
   if (flags['vault']) return importVaultFolder(hippoRoot, flags, importOptions, useGlobal, dryRun);
-  importFromFile(targetRoot, args, flags, importOptions, useGlobal, dryRun);
+  importFromFile(targetRoot, args, flags, { importOptions, useGlobal, dryRun });
 }
 
 type FileImporter = (fp: string, opts: ImportOptions) => ReturnType<typeof importChatGPT>;
@@ -192,14 +205,14 @@ function pickImporter(args: string[], flags: CliFlags): PickedImporter {
   return { filePath: undefined, importer: undefined, importerName: '' };
 }
 
-function importFromFile(
-  targetRoot: string,
-  args: string[],
-  flags: CliFlags,
-  importOptions: ImportOptions,
-  useGlobal: boolean,
-  dryRun: boolean,
-): void {
+interface ImportFromFileOptions {
+  readonly importOptions: ImportOptions;
+  readonly useGlobal: boolean;
+  readonly dryRun: boolean;
+}
+
+function importFromFile(targetRoot: string, args: string[], flags: CliFlags, options: ImportFromFileOptions): void {
+  const { importOptions, useGlobal, dryRun } = options;
   const { filePath, importer, importerName } = pickImporter(args, flags);
 
   if (!filePath || !importer) {
@@ -221,11 +234,20 @@ function importFromFile(
   // a local `hippo embed`) is the backstop if it does get interrupted. Do not
   // "fix" this by awaiting it, that would block the CLI on model load/backfill.
   if (!dryRun && result.imported >= 1) {
-    void embedAll(targetRoot).catch(() => {});
+    void embedAll(targetRoot).catch((err) => warnBackfillFailed(targetRoot, useGlobal ? 'hippo embed --global' : 'hippo embed', err));
   }
 
   const storeLabel = useGlobal ? `global (${getGlobalRoot()})` : targetRoot;
+  printFileImportSummary(result, importerName, filePath, storeLabel, dryRun);
+}
 
+function printFileImportSummary(
+  result: ImportResult,
+  importerName: string,
+  filePath: string,
+  storeLabel: string,
+  dryRun: boolean,
+): void {
   console.log(`\nImport ${importerName}: ${filePath}`);
   console.log(`  Source entries found:  ${result.total}`);
   console.log(`  Imported:              ${result.imported}`);
@@ -268,6 +290,19 @@ function importVaultFolder(
   dryRun: boolean,
 ): void {
   const folderPath = String(flags['vault']);
+  checkVaultArgs(folderPath, flags, useGlobal);
+  const tenantId = resolveTenantId({});
+  const vaultOptions: ImportOptions = {
+    ...importOptions,
+    tenantId,
+    name: flags['name'] ? String(flags['name']) : undefined,
+    scope: flags['scope'] ? String(flags['scope']) : undefined,
+  };
+  const vaultResult = importVault(folderPath, vaultOptions);
+  printVaultSummary(vaultResult, folderPath, hippoRoot, dryRun);
+}
+
+function checkVaultArgs(folderPath: string, flags: CliFlags, useGlobal: boolean): void {
   if (!fs.existsSync(folderPath) || !fs.statSync(folderPath).isDirectory()) {
     printError(`Vault folder not found (or not a directory): ${folderPath}`);
     process.exit(1);
@@ -289,14 +324,9 @@ function importVaultFolder(
     printError('hippo import --vault: --scope requires a value (e.g. --scope vault:private:notes).');
     process.exit(1);
   }
-  const tenantId = resolveTenantId({});
-  const vaultOptions: ImportOptions = {
-    ...importOptions,
-    tenantId,
-    name: flags['name'] ? String(flags['name']) : undefined,
-    scope: flags['scope'] ? String(flags['scope']) : undefined,
-  };
-  const vaultResult = importVault(folderPath, vaultOptions);
+}
+
+function printVaultSummary(vaultResult: ImportResult, folderPath: string, hippoRoot: string, dryRun: boolean): void {
   console.log(`\nImport Vault: ${folderPath}${dryRun ? ' (dry run - no writes)' : ''}`);
   console.log(`  Notes found:           ${vaultResult.total}`);
   console.log(`  ${dryRun ? 'Would import:         ' : 'Imported:             '}${vaultResult.imported}`);
@@ -311,7 +341,7 @@ function importVaultFolder(
   // write through api.remember (which never embeds), so backfill them here.
   // Floating promise is deliberate; see the comment at the single-file site.
   if (!dryRun && vaultResult.imported >= 1) {
-    void embedAll(hippoRoot).catch(() => {});
+    void embedAll(hippoRoot).catch((err) => warnBackfillFailed(hippoRoot, 'hippo embed', err));
   }
 }
 
@@ -346,7 +376,7 @@ function cmdPromote(hippoRoot: string, id: string): void {
 // Sync command
 // ---------------------------------------------------------------------------
 
-export function cmdSync(hippoRoot: string, flags: Record<string, string | boolean | string[]> = {}): void {
+export function cmdSync(hippoRoot: string, flags: CliFlags = {}): void {
   requireInit(hippoRoot);
 
   const globalRoot = getGlobalRoot();
@@ -356,7 +386,7 @@ export function cmdSync(hippoRoot: string, flags: Record<string, string | boolea
   }
 
   // v39: other-project rows are skipped by default; secrets always are.
-  const includeCrossProject = flags['cross-project'] === true;
+  const includeCrossProject = flagIsTrue(flags, 'cross-project');
   const count = syncGlobalToLocal(hippoRoot, globalRoot, { includeCrossProject });
   console.log(`Synced ${count} global memories into local project.${includeCrossProject ? '' : ' (other-project rows skipped; use --cross-project to include them)'}`);
 }
@@ -391,7 +421,7 @@ export function handleShare({ hippoRoot, args, flags }: CommandContext): void {
     // Auto-share mode
     requireInit(hippoRoot);
     const minScore = parseFloat(String(flags['min-score'] ?? '0.6'));
-    const dryRun = Boolean(flags['dry-run']);
+    const dryRun = boolFlag(flags, 'dry-run');
     const results = autoShare(hippoRoot, { minScore, dryRun, tenantId: resolveTenantId({}) });
     if (results.length === 0) {
       console.log('No memories meet the sharing threshold.');
@@ -409,7 +439,7 @@ export function handleShare({ hippoRoot, args, flags }: CommandContext): void {
     }
   } else if (shareId) {
     requireInit(hippoRoot);
-    const force = Boolean(flags['force']);
+    const force = boolFlag(flags, 'force');
     const tenantId = resolveTenantId({});
     const result = shareMemory(hippoRoot, shareId, { force, tenantId });
     if (result) {
@@ -434,7 +464,7 @@ export function handleShare({ hippoRoot, args, flags }: CommandContext): void {
 
 export function handlePeers({ flags }: CommandContext): void {
   // Tenant-scoped by default; --all-tenants gives the host-wide view for cross-tenant peer discovery.
-  const allTenants = flags['all-tenants'] === true;
+  const allTenants = flagIsTrue(flags, 'all-tenants');
   const tenantScope = allTenants ? undefined : resolveTenantId({});
   const peers = listPeers(undefined, tenantScope);
   if (peers.length === 0) {
@@ -450,7 +480,7 @@ export function handlePeers({ flags }: CommandContext): void {
 
 export function handleExport({ hippoRoot, args, flags }: CommandContext): void {
   requireInit(hippoRoot);
-  const format = (flags['format'] as string) || 'json';
+  const format = (flags['format'] || 'json') as string;
   const outputPath = args[0] || null;
   const entries = loadAllEntries(hippoRoot, resolveTenantId({}));
 

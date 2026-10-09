@@ -2,15 +2,18 @@
 import type { AmbientTallies } from '../ambient.js';
 import type { AmbientStoreFilter } from '../ambient-store.js';
 import type { ApiKeyListRow, ApiKeyRecord, ListApiKeysOpts, NewApiKey } from '../auth.js';
-import type { AppendAuditOpts, AuditEvent, ListAuditAfterOpts } from '../audit.js';
-import { StoreNotPortedError } from '../db/sqlite-blocked.js';
+import type { AppendAuditOpts, AuditEvent, ListAuditAfterOpts, QueryAuditOpts } from '../audit.js';
+import { StoreNotPortedError } from '../util/sqlite-blocked.js';
 import type { EmbeddingIndexState } from '../embeddings.js';
 import type { ActiveGoals, GetActiveGoalsOpts, GoalRecallLogRow } from '../goals.js';
 import type { SessionHandoff } from '../handoff.js';
 import type { JsonValue } from '../json.js';
+import type { KeysetPosition } from '../keyset.js';
 import type { MemoryEntry } from '../memory.js';
 import type { PhysicsParticle } from '../physics.js';
-import type { PlanningFallacyEvidence } from '../predictions/planning-fallacy.js';
+import type { PlanningFallacyEvidence } from './planning-fallacy-evidence.js';
+import type { ClosureState, Prediction, PredictionBaserate, SavePredictionOpts } from './predictions.js';
+import type { QuarantineRow, QuarantineStatus } from './quarantine.js';
 import type { RecallTraceInput } from '../recall-trace.js';
 import type { AmbientLoadResult, AmbientRecallRequest, ContextCandidateFilter, RecentOrigins } from './candidates.js';
 import type { StrengthenOptions } from './entry-writes.js';
@@ -220,6 +223,132 @@ export interface KeyWrites {
   listApiKeys(query: KeyListQuery): Promise<ApiKeyListRow[]>;
 }
 
+/** A claim to save and the memory row that mirrors it into recall: core builds it with `predictionMirror` in the tenant the save names, so every store keeps the same row. */
+export interface PredictionSave extends SavePredictionOpts {
+  readonly mirror: MemoryEntry;
+}
+
+export interface PredictionClose {
+  readonly closureState: Exclude<ClosureState, 'open'>;
+  readonly actualValue?: number;
+  readonly closureNote?: string;
+}
+
+/** Which of a tenant's predictions a list reads: every class when `classTag` is unset (it is never empty), every state when `closureState` is, and a closed state only inside a class. */
+export type PredictionFilter =
+  | { readonly classTag?: string; readonly closureState?: 'open' }
+  | { readonly classTag: string; readonly closureState: ClosureState };
+
+export type PredictionListQuery = PredictionFilter & { readonly limit: number; readonly after?: KeysetPosition };
+
+/** The reads and writes behind the predictions routes. createdAt and closedAt are the store's own clock at the write, as `toISOString` gives it, since the list orders createdAt as text. */
+export interface Predictions {
+  /** In one transaction: writes `mirror` as `EntryWrites.writeEntry` does, inserts the open row pointing at it under the next id, and appends one predict_create row
+   *  ({prediction_id, class_tag, has_estimate, target_date}, target the id) ahead of the mirror's remember row. Resolves to the row saved. */
+  savePrediction(tenantId: string, input: PredictionSave, actor: string): Promise<Prediction>;
+  /** Closes the tenant's open row and appends one predict_close row ({prediction_id, closure_state, has_actual}, target the id) in one transaction; the mirror stays as saved. A missing
+   *  id or another tenant's rejects with NotFoundError `closePrediction: prediction <id> not found for tenant <tenantId>`, a row already closed with BadRequestError, neither writing anything. */
+  closePrediction(tenantId: string, id: number, close: PredictionClose, actor: string): Promise<Prediction>;
+  /** The tenant's row; null for a missing id or another tenant's. No audit row. */
+  predictionById(tenantId: string, id: number): Promise<Prediction | null>;
+  /** At most `limit` rows, newest first: by createdAt compared as text in byte order, then by id, both descending, so the order is total.
+   *  `after` keeps only the rows below its (createdAt, id) pair in that order. No audit row. */
+  listPredictions(tenantId: string, query: PredictionListQuery): Promise<Prediction[]>;
+  /** `predictionBaserateOf` over the tenant's rows of the class that are closed (not closed-unknown) with an estimate and an actual, handed over in ascending id order
+   *  because its float sums depend on the order. Then appends one predict_baserate row ({class_tag, n_closed}, target the class), for a class with no such row too. */
+  predictionBaserate(tenantId: string, classTag: string, actor: string): Promise<PredictionBaserate>;
+}
+
+/** One session's unsuperseded raw rows inside a tenant; `origins` keeps those projects' rows and rows of no project, unset keeps every origin. */
+export interface SessionRawQuery {
+  readonly tenantId: string;
+  readonly sessionId: string;
+  readonly origins?: readonly string[];
+}
+
+export interface SessionRawWindow extends SessionRawQuery {
+  /** How many of the newest rows to read; zero or less reads them all. */
+  readonly cap: number;
+}
+
+export interface SessionRawCount extends SessionRawQuery {
+  /** Counts rows of exactly this scope; unset or empty counts the rows the default deny admits. */
+  readonly scope?: string;
+  /** The caller's personal scope, which the default deny admits. */
+  readonly ownScope?: string;
+}
+
+export interface DescendantWalk {
+  /** Levels to read under the summary. */
+  readonly depth: number;
+  /** Asked of the summary, then of each child read: a refused row is left out of the answer and nothing under it is read. */
+  readonly admit: (row: MemoryEntry) => boolean;
+}
+
+export interface SummaryDescendants {
+  readonly summary: MemoryEntry;
+  /** The admitted rows of each level, the summary's own children first; a level with none ends the list. */
+  readonly levels: MemoryEntry[][];
+}
+
+/** The reads behind session assembly and summary drill-down. None writes an audit row. */
+export interface DagReads {
+  /** The newest `cap` rows by created then id, returned oldest first (created, then id, ascending) as `loadSessionRawMemories` does; an empty session id reads nothing. */
+  sessionRawEntries(query: SessionRawWindow): Promise<MemoryEntry[]>;
+  /** How many rows the session holds with no cap, under the scope rule `passesScopeFilterForRecall` applies, so the count never tells of a row the caller could not read. */
+  sessionRawCount(query: SessionRawCount): Promise<number>;
+  /** The tenant's row `id` and up to `walk.depth` levels under it, read in one call so no write of this process lands between two levels; null when the tenant holds no such row.
+   *  A level lists the children of the level above it, parent by parent in that level's order and each parent's children by created then id ascending; a row is listed once, at the first level that reaches it. */
+  summaryWithDescendants(tenantId: string, id: string, walk: DescendantWalk): Promise<SummaryDescendants | null>;
+}
+
+/** The read behind the audit list. It writes no audit row. */
+export interface AuditLog {
+  /** One tenant's rows newest first, by ts then id descending, narrowed by `op` and by `since` (ts at or after it); `limit` is clamped to 1..10001 and
+   *  defaults to 100, and `after` resumes below the (ts, id) position a page ended on. */
+  listAuditEvents(query: QueryAuditOpts): Promise<AuditEvent[]>;
+}
+
+/** What GET /ready asks of a store. */
+export interface Readiness {
+  /** Resolves once one cheap read has answered; rejects with the store's own error when it cannot. */
+  ping(): Promise<void>;
+}
+
+/** Which of a tenant's quarantine records a list reads; `limit` is 100 when unset. */
+export interface QuarantineListQuery {
+  readonly status: QuarantineStatus | 'all';
+  readonly limit?: number;
+  readonly after?: KeysetPosition;
+}
+
+/** A quarantine record and the whole content of the memory it holds; null once the tenant has no such memory row. */
+export interface QuarantinedMemory extends QuarantineRow {
+  readonly content: string | null;
+}
+
+/** Why a decision wrote nothing: the tenant holds no record for the id (another tenant's id reads the same), or the record was decided before. */
+export type QuarantineRefusal =
+  | { readonly outcome: 'not_quarantined' }
+  | { readonly outcome: 'already_decided'; readonly status: Exclude<QuarantineStatus, 'pending'> };
+
+/** 'scope_moved': the memory row is gone from the tenant or no longer under the scope its quarantine gave it. */
+export type QuarantineApproval = { readonly outcome: 'approved' } | QuarantineRefusal | { readonly outcome: 'scope_moved' };
+export type QuarantineRejection = { readonly outcome: 'rejected' } | QuarantineRefusal;
+
+/** The review queue behind the quarantine routes. A refusal is a resolved value, never a rejection, and writes nothing. */
+export interface Quarantine {
+  /** At most `limit` of the tenant's records, newest first: by quarantinedAt compared as text in byte order, then by memoryId, both descending; `after` keeps only the records below its
+   *  (quarantinedAt, memoryId) pair in that order. 'pending' leaves out a record whose memory row is gone from the tenant; every other status keeps it, with null content. No audit row. */
+  listQuarantined(tenantId: string, query: QuarantineListQuery): Promise<QuarantinedMemory[]>;
+  /** In one transaction, all three or none: sets the memory's scope to the record's originalScope where the row is in the tenant and still under `quarantine:private:<originalScope, or 'unscoped' for null>`;
+   *  marks the record approved, decidedAt the store's own clock as `toISOString` gives it and decidedBy `actor`; appends one quarantine_approve row ({originalScope}, target the id). */
+  approveQuarantined(tenantId: string, id: string, actor: string): Promise<QuarantineApproval>;
+  /** In one transaction, both or neither: marks the record rejected, decidedAt and decidedBy as approve sets them, and appends one quarantine_reject row ({}, target the id).
+   *  The memory row is not read or written, so it stays under its quarantine scope and a record with no memory row can still be rejected. */
+  rejectQuarantined(tenantId: string, id: string, actor: string): Promise<QuarantineRejection>;
+}
+
 /** The optional groups: a store sets each one whole or leaves it unset, and a route or MCP tool names the one it needs. */
 export interface StoreGroups {
   /** Unset on a store built before them, where hybrid and physics recall under an embedding provider answer 501. */
@@ -230,6 +359,12 @@ export interface StoreGroups {
   readonly vectorWrites: VectorWrites;
   readonly entryWrites: EntryWrites;
   readonly contextReads: ContextReads;
+  readonly predictions: Predictions;
+  readonly dagReads: DagReads;
+  readonly auditLog: AuditLog;
+  readonly quarantine: Quarantine;
+  /** Unset on a store built before it, where GET /ready answers 200 with `store: "unchecked"`. */
+  readonly readiness: Readiness;
 }
 
 export type StoreGroup = 'base' | keyof StoreGroups;

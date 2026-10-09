@@ -42,7 +42,7 @@ function isoAgo(ms: number): string {
   return new Date(Date.now() - ms).toISOString();
 }
 
-describe('loadFreshActiveTaskSnapshot (DF1 T1)', () => {
+describe('loadFreshActiveTaskSnapshot', () => {
   it('1. RED-under-old incident pin: a 7d-old cross-session snapshot must not inject; the unchanged unbounded loadActiveTaskSnapshot still would', () => {
     initStore(tmpDir);
     const saved = saveActiveTaskSnapshot(tmpDir, TENANT, {
@@ -175,7 +175,7 @@ describe('loadFreshActiveTaskSnapshot (DF1 T1)', () => {
   });
 });
 
-describe('closeTaskSnapshotsForSession (DF1 T1)', () => {
+describe('closeTaskSnapshotsForSession', () => {
   it('5. scoped close: only the owning session can close the active row', () => {
     initStore(tmpDir);
     const saved = saveActiveTaskSnapshot(tmpDir, TENANT, {

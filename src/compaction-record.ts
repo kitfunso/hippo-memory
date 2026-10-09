@@ -189,7 +189,14 @@ function latestStarted(db: DatabaseSyncLike, tenantId: string, sessionId: string
 }
 
 /** Moves a `started` record to `summarised`; false when another process already moved it. The request id lands in the same statement, so no crash leaves the record unfindable by its retry. */
-function markSummarised(db: DatabaseSyncLike, tenantId: string, id: string, text: CompactionText, summarisedAt: string, requestId?: string): boolean {
+interface MarkSummarisedOptions {
+  readonly text: CompactionText;
+  readonly summarisedAt: string;
+  readonly requestId?: string;
+}
+
+function markSummarised(db: DatabaseSyncLike, tenantId: string, id: string, options: MarkSummarisedOptions): boolean {
+  const { text, summarisedAt, requestId } = options;
   // Only a caller names the column, so a store from before it was added still takes local writes.
   const stamp = requestId === undefined ? [] : [requestId];
   const result = db.prepare(
@@ -241,21 +248,26 @@ export interface SummaryCaller {
   requestId?: string;
 }
 
+export interface RecordSummaryOptions {
+  readonly meta: Omit<CompactionStart, 'originProject'>;
+  readonly text: CompactionText;
+  readonly at: Date;
+  readonly caller?: SummaryCaller;
+}
+
 /** Puts the summary on the session's `started` record, or inserts a `summarised` one when pre-compact wrote none. One statement each. */
 export function recordSummary(
   db: DatabaseSyncLike,
   hippoRoot: string,
   tenantId: string,
-  meta: Omit<CompactionStart, 'originProject'>,
-  text: CompactionText,
-  at: Date,
-  caller: SummaryCaller = {},
+  options: RecordSummaryOptions,
 ): CompactionRecord {
+  const { meta, text, at, caller = {} } = options;
   const now = new Date().toISOString();
   const itemsJson = JSON.stringify(text.items);
   const { requestId } = caller;
   const started = latestStarted(db, tenantId, meta.sessionId, at);
-  if (started && markSummarised(db, tenantId, started.id, text, now, requestId)) {
+  if (started && markSummarised(db, tenantId, started.id, { text, summarisedAt: now, requestId })) {
     return { ...started, summary: text.summary, items: text.items, summarisedAt: now, status: 'summarised' };
   }
   const originProject = caller.originProject ?? compactionOrigin(hippoRoot, meta.cwd);
@@ -483,7 +495,7 @@ export function saveCompaction(hippoRoot: string, payload: PostCompactPayload, l
     const tenantId = resolveTenantId({});
     let record: CompactionRecord | null = null;
     try {
-      record = recordSummary(db, hippoRoot, tenantId, payload, text, at);
+      record = recordSummary(db, hippoRoot, tenantId, { meta: payload, text, at });
       result.snapshotSaved = record.snapshotSaved;
     } catch (err) {
       if (isSqliteBusy(err)) throw err;
@@ -582,7 +594,7 @@ function nextStartedAt(db: DatabaseSyncLike, record: CompactionRecord): string |
 /** Records a spooled summary, then writes its items. */
 function spoolImporter(db: DatabaseSyncLike, hippoRoot: string, log: Log): SpoolImporter {
   return (spooled, recorded) => {
-    const record = recordSummary(db, hippoRoot, spooled.tenantId, spooled.payload, spooled.text, spooled.at);
+    const record = recordSummary(db, hippoRoot, spooled.tenantId, { meta: spooled.payload, text: spooled.text, at: spooled.at });
     // The record holds the items now, so the file is done even if the write below fails.
     recorded();
     saveItems(db, hippoRoot, { tenantId: spooled.tenantId, recordId: record.id, sessionId: record.sessionId, originProject: record.originProject, cwd: record.cwd, items: record.items }, log);
@@ -632,7 +644,7 @@ export function replayCompactions(db: DatabaseSyncLike, hippoRoot: string, log: 
       }
       const { found: listed, ...text } = readCompactionText(found);
       if (!listed) log(`no memories section in the transcript summary for ${record.id}`);
-      if (!markSummarised(db, tenantId, record.id, text, new Date().toISOString())) {
+      if (!markSummarised(db, tenantId, record.id, { text, summarisedAt: new Date().toISOString() })) {
         log(`${record.id} was filled by another process`);
         continue;
       }

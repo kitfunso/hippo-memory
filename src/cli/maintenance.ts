@@ -5,17 +5,18 @@ import { loadAllEntries } from '../store/entry-reads.js';
 import { deduplicateStore } from '../dedupe.js';
 import { embedAll, loadEmbeddingIndex } from '../embeddings.js';
 import { resolveEmbeddingProvider, type EmbeddingProvider } from '../embedding-provider.js';
-import { resetAllPhysicsState } from '../physics-state.js';
+import { resetAllPhysicsState } from '../db/physics-state.js';
 import { loadConfig } from '../config.js';
 import { openHippoDb, closeHippoDb } from '../db.js';
 import { resolveTenantId } from '../tenant.js';
 import { refineStore } from '../refine-llm.js';
 import { printError } from './output.js';
-import { requireInit, resolveAuthRoot } from './shared.js';
+import { type CliFlags, requireInit, resolveAuthRoot, boolFlag } from './shared.js';
+import { errorMessage } from '../log.js';
 
 export async function cmdRefine(
   hippoRoot: string,
-  flags: Record<string, string | boolean | string[]>,
+  flags: CliFlags,
 ): Promise<void> {
   requireInit(hippoRoot);
 
@@ -25,11 +26,11 @@ export async function cmdRefine(
     process.exit(1);
   }
 
-  const dryRun = Boolean(flags['dry-run']);
-  const all = Boolean(flags['all']);
+  const dryRun = boolFlag(flags, 'dry-run');
+  const all = boolFlag(flags, 'all');
   const limit = flags['limit'] !== undefined ? parseInt(String(flags['limit']), 10) : undefined;
   const model = flags['model'] ? String(flags['model']) : undefined;
-  const asJson = Boolean(flags['json']);
+  const asJson = boolFlag(flags, 'json');
 
   const result = await refineStore(hippoRoot, {
     apiKey,
@@ -59,11 +60,11 @@ export async function cmdRefine(
 
 export function cmdDedup(
   hippoRoot: string,
-  flags: Record<string, string | boolean | string[]>
+  flags: CliFlags
 ): void {
   requireInit(hippoRoot);
 
-  const dryRun = Boolean(flags['dry-run']);
+  const dryRun = boolFlag(flags, 'dry-run');
   if (flags['threshold'] !== undefined) {
     printError('hippo dedup: --threshold is ignored; a duplicate is the same text apart from spacing.');
   }
@@ -78,6 +79,13 @@ export function cmdDedup(
     return;
   }
 
+  printDedupGroups(result, dryRun);
+  printDedupPairs(result, dryRun);
+}
+
+type DedupResult = ReturnType<typeof deduplicateStore>;
+
+function printDedupGroups(result: DedupResult, dryRun: boolean): void {
   // Group by reason
   const sameLayerSem = result.pairs.filter(p => p.keptLayer === 'semantic' && p.removedLayer === 'semantic');
   const sameLayerEpi = result.pairs.filter(p => p.keptLayer === 'episodic' && p.removedLayer === 'episodic');
@@ -94,6 +102,9 @@ export function cmdDedup(
     console.log(`  ${crossLayer.length} cross-layer duplicates (episodic content already consolidated into semantic)`);
   }
 
+}
+
+function printDedupPairs(result: DedupResult, dryRun: boolean): void {
   // Show detailed pairs
   console.log('');
   const shown = result.pairs.slice(0, 15);
@@ -117,7 +128,7 @@ export function cmdDedup(
 
 export async function cmdEmbed(
   hippoRoot: string,
-  flags: Record<string, string | boolean | string[]>,
+  flags: CliFlags,
   given?: EmbeddingProvider,
 ): Promise<void> {
   // --global mirrors resolveAuthRoot (cli.ts:6900): initGlobal() + the global
@@ -146,7 +157,7 @@ export async function cmdEmbed(
   try {
     count = await embedAll(root, undefined, provider);
   } catch (err) {
-    printError(`Embedding failed: ${err instanceof Error ? err.message : String(err)}`);
+    printError(`Embedding failed: ${errorMessage(err)}`);
     const partial = loadEmbeddingIndex(root);
     printError(
       `Partial progress saved: ${Object.keys(partial).length} embeddings on disk. Re-run \`hippo embed\` to resume.`,
@@ -199,7 +210,7 @@ function readyEmbedProvider(root: string, given?: EmbeddingProvider): EmbeddingP
     try {
       return resolveEmbeddingProvider(root);
     } catch (err) {
-      printError(err instanceof Error ? err.message : String(err));
+      printError(errorMessage(err));
       return null;
     }
   })();

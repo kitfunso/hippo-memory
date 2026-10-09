@@ -30,6 +30,10 @@ export function computeTemporalRange(entries: MemoryEntry[]): TemporalRange {
   return { minTime, maxTime };
 }
 
+// A temporal cue scales rank linearly across the pool time range, from the floor to floor + span.
+const TEMPORAL_BOOST_FLOOR = 0.8;
+const TEMPORAL_BOOST_SPAN = 0.4;
+
 export function temporalBoost(entry: MemoryEntry, direction: TemporalDirection, range: TemporalRange): number {
   if (!direction) return 1.0;
 
@@ -40,9 +44,9 @@ export function temporalBoost(entry: MemoryEntry, direction: TemporalDirection, 
   const normalized = (entryTime - range.minTime) / span;
 
   if (direction === 'recent') {
-    return 0.8 + 0.4 * normalized;
+    return TEMPORAL_BOOST_FLOOR + TEMPORAL_BOOST_SPAN * normalized;
   } else {
-    return 0.8 + 0.4 * (1 - normalized);
+    return TEMPORAL_BOOST_FLOOR + TEMPORAL_BOOST_SPAN * (1 - normalized);
   }
 }
 

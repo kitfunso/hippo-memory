@@ -48,6 +48,8 @@ import {
   hostSessionId,
   captureConsole,
   hookStoreRoot,
+  boolFlag,
+  flagIsTrue,
 } from './shared.js';
 
 // Per-process rings: a single-shot `hippo recall` starts empty, so anchoring only accumulates in long-lived
@@ -239,9 +241,9 @@ export async function cmdRecall(
 function parseRecallOptions(hippoRoot: string, flags: CliFlags) {
   const budget = parseBudgetFlag(flags['budget'], DEFAULT_RECALL_BUDGET);
   const limit = parseLimitFlag(flags['limit']);
-  const asJson = Boolean(flags['json']);
-  const showWhy = Boolean(flags['why']);
-  const includeSuperseded = Boolean(flags['include-superseded']);
+  const asJson = boolFlag(flags, 'json');
+  const showWhy = boolFlag(flags, 'why');
+  const includeSuperseded = boolFlag(flags, 'include-superseded');
   const asOf = parseAsOfFlag(flags);
   const globalRoot = getGlobalRoot();
   const primaryIsGlobal = isGlobalStoreRoot(hippoRoot);
@@ -254,7 +256,7 @@ function parseRecallOptions(hippoRoot: string, flags: CliFlags) {
     ? parseInt(String(flags['min-results']), 10)
     : undefined;
   const activeScope = explicitScope || detectScope();
-  const graphStream = flags['graph-stream'] === true ? parseGraphStreamFlags(flags) : undefined;
+  const graphStream = flagIsTrue(flags, 'graph-stream') ? parseGraphStreamFlags(flags) : undefined;
   const late = parseRecallLateFlags(flags);
   const goalTag = flags['goal'] !== undefined ? String(flags['goal']).trim() : '';
   const sessionId = (
@@ -265,7 +267,7 @@ function parseRecallOptions(hippoRoot: string, flags: CliFlags) {
   return {
     budget, limit, asJson, showWhy, includeSuperseded, asOf, globalRoot, primaryIsGlobal, tenantId,
     explicitScope, config, minResults, activeScope, graphStream, late, goalTag, sessionId,
-    includeContinuity: Boolean(flags['continuity']),
+    includeContinuity: boolFlag(flags, 'continuity'),
   };
 }
 
@@ -290,12 +292,12 @@ function rankOptions(query: string, flags: CliFlags, o: RecallOptions, priced: P
   return {
     budget: entryBudget, cost: priced.printCost, limit: o.limit, why: o.showWhy, includeSuperseded: o.includeSuperseded, asOf: o.asOf,
     explicitScope: o.explicitScope, activeScope: o.activeScope,
-    search: { ...engineFlags(flags, o.config), multihop: flags['multihop'] === true || o.config.multihop.enabled, graphStream: o.graphStream, minResults: o.minResults, explain: false },
+    search: { ...engineFlags(flags, o.config), multihop: flagIsTrue(flags, 'multihop') || o.config.multihop.enabled, graphStream: o.graphStream, minResults: o.minResults, explain: false },
     graphHops: o.late.graphHops,
-    evcAdaptive: Boolean(flags['evc-adaptive']),
-    filterConflicts: Boolean(flags['filter-conflicts']),
-    valueAware: Boolean(flags['value-aware']),
-    rerankUtility: Boolean(flags['rerank-utility']),
+    evcAdaptive: boolFlag(flags, 'evc-adaptive'),
+    filterConflicts: boolFlag(flags, 'filter-conflicts'),
+    valueAware: boolFlag(flags, 'value-aware'),
+    rerankUtility: boolFlag(flags, 'rerank-utility'),
     reranker: o.late.reranker,
     salienceThreshold: o.late.salienceThreshold,
     outcome: o.late.outcome,

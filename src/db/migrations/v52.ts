@@ -1,4 +1,4 @@
-import { MEMORY_VECTORS_DDL } from '../../vector-store.js';
+import { MEMORY_VECTORS_DDL } from '../vector-store.js';
 import type { Migration } from './types.js';
 
 export const v52: Migration = {

@@ -1,14 +1,9 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { ApiError } from './api-errors.js';
-import { SqliteBlockedError } from './db/sqlite-blocked.js';
+import { SqliteBlockedError } from './util/sqlite-blocked.js';
 import { envBodyTimeoutMs } from './env.js';
-import type { JsonValue } from './json.js';
 
 // Leaf module shared by server.ts and the connector webhook receivers; it must not import either.
-
-export function isJsonObjectRecord(value: JsonValue | undefined): value is Record<string, JsonValue> {
-  return value !== undefined && value !== null && typeof value === 'object' && !Array.isArray(value);
-}
 
 // node:http header values are `string | string[] | undefined` (never a bare
 // unknown), so this gets its own predicate rather than reusing isJsonString.
@@ -18,7 +13,7 @@ export function isHeaderString(value: string | string[] | undefined): value is s
 
 // 1 MB body cap. The CLI never sends payloads near this; anything bigger is
 // almost certainly a misconfigured client or a deliberate memory-blowup attempt.
-const MAX_BODY_BYTES = 1024 * 1024;
+export const MAX_BODY_BYTES = 1024 * 1024;
 
 function sizeLabel(bytes: number): string {
   return bytes % (1024 * 1024) === 0 ? `${bytes / (1024 * 1024)}MB` : `${Math.ceil(bytes / 1024)}KB`;
@@ -152,5 +147,20 @@ export function isCrossSite(req: IncomingMessage): boolean {
 export interface WebhookRequest {
   req: IncomingMessage;
   res: ServerResponse;
-  opts: { hippoRoot: string };
+  opts: { hippoRoot: string; webhookBodyDeadlineMs?: number };
+}
+
+// A webhook route takes no key, so anyone holding a signature header could otherwise keep a socket open with a body that never ends.
+const WEBHOOK_BODY_DEADLINE_MS = 10_000;
+
+/** Call before refusing a webhook unread: a caller still sending its body loses the socket once the reply is out, as it does after a 413. */
+export function closeIfBodyUnread({ req, res }: WebhookRequest): void {
+  res.once('finish', () => {
+    if (!req.complete) closeAfterReply(req);
+  });
+}
+
+/** A webhook's raw body, exactly as sent, for the receiver's HMAC check; call it only once a secret is configured and the signature headers are present. */
+export function readWebhookBody({ req, opts }: WebhookRequest): Promise<string> {
+  return readBody(req, { deadlineMs: opts.webhookBodyDeadlineMs ?? WEBHOOK_BODY_DEADLINE_MS });
 }

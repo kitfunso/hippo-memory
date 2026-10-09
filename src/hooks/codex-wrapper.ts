@@ -233,14 +233,7 @@ export function installCodexWrapper(realCodexPath?: string): CodexWrapperInstall
   const existingMetadata = readCodexWrapperMetadata();
   if (isCodexWrapperMetadataValid(existingMetadata) && !realCodexPath) {
     cleanupLegacyCodexPathWrappers(resolveCodexWrapperPaths());
-    return {
-      installed: true,
-      metadataPath: resolveCodexWrapperPaths().metadataPath,
-      realCodexPath: existingMetadata.realCodexPath,
-      commandPath: existingMetadata.commandPath,
-      backupPath: existingMetadata.backupPath,
-      installMode: existingMetadata.installMode,
-    };
+    return installResult(resolveCodexWrapperPaths().metadataPath, existingMetadata);
   }
 
   const resolvedRealCodexPath = realCodexPath ?? detectRealCodexPath();
@@ -277,9 +270,13 @@ export function installCodexWrapper(realCodexPath?: string): CodexWrapperInstall
   };
   writeFileAtomic(paths.metadataPath, JSON.stringify(metadata, null, 2) + '\n');
 
+  return installResult(paths.metadataPath, metadata);
+}
+
+function installResult(metadataPath: string, metadata: CodexWrapperMetadata): CodexWrapperInstallResult {
   return {
     installed: true,
-    metadataPath: paths.metadataPath,
+    metadataPath,
     realCodexPath: metadata.realCodexPath,
     commandPath: metadata.commandPath,
     backupPath: metadata.backupPath,

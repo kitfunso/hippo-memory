@@ -23,7 +23,7 @@ function countRows(db: DatabaseSyncLike, sql: string, ...params: unknown[]): num
   return (row as { c: number }).c;
 }
 
-describe('api.recall + RecallOpts.sessionId goal-stack boost (v1.7.4)', () => {
+describe('api.recall + RecallOpts.sessionId goal-stack boost', () => {
   let hippoRoot: string;
   let ctx: HippoDbContext;
   const tenantId = 'default';

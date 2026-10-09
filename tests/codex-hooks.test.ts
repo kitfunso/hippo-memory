@@ -3,7 +3,6 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { spawnSync } from 'node:child_process';
 import { CODEX_TRUST_LINE } from '../src/hooks/shared.js';
 import { installJsonHooks, uninstallJsonHooks } from '../src/hooks/json-hooks.js';
 import { formatDoctor, runDoctor } from '../src/doctor.js';
@@ -13,8 +12,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { saveSessionHandoff } from '../src/store/handoffs.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import type { JsonValue } from '../src/json.js';
-
-const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
+import { hippoRun } from './_helpers/spawn-hippo.js';
 const START = '<!-- hippo:start -->';
 const END = '<!-- hippo:end -->';
 const EM_DASH = String.fromCodePoint(0x2014);
@@ -218,7 +216,7 @@ function cliEnv(m: Machine, extraEnv: Record<string, string>): NodeJS.ProcessEnv
   });
 }
 function hippo(m: Machine, extraEnv: Record<string, string>, cwd: string, ...args: string[]): string {
-  const r = spawnSync(process.execPath, [HIPPO_JS, ...args], { cwd, env: cliEnv(m, extraEnv), encoding: 'utf8' });
+  const r = hippoRun(args, { cwd, env: cliEnv(m, extraEnv) });
   expect(r.status, r.stderr).toBe(0);
   return r.stdout;
 }
@@ -354,7 +352,7 @@ interface CodexPayload {
 function runCodexHook(m: Machine, command: string, payload: CodexPayload): string {
   const [bin, ...args] = command.split(' ');
   expect(bin).toBe('hippo');
-  const r = spawnSync(process.execPath, [HIPPO_JS, ...args], { cwd: payload.cwd, env: cliEnv(m, {}), input: JSON.stringify(payload), encoding: 'utf8' });
+  const r = hippoRun(args, { cwd: payload.cwd, env: cliEnv(m, {}), input: JSON.stringify(payload) });
   expect(r.status, r.stderr).toBe(0);
   return r.stdout;
 }

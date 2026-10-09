@@ -11,7 +11,6 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { spawnSync } from 'node:child_process';
 import { extractFromText } from '../src/capture/extract.js';
 import { PRE_COMPACT_INSTRUCTION } from '../src/compaction-record.js';
 import { captureToolFailure } from '../src/capture-error.js';
@@ -21,8 +20,7 @@ import { loadAllEntries } from '../src/store/entry-reads.js';
 import { loadActiveTaskSnapshot } from '../src/store/sessions.js';
 import { installJsonHooks } from '../src/hooks/json-hooks.js';
 import { runDoctor } from '../src/doctor.js';
-
-const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
+import { hippoRun } from './_helpers/spawn-hippo.js';
 
 /** A scratch directory and a child environment rooted in it. */
 interface Scratch {
@@ -38,7 +36,7 @@ function scratch(): Scratch {
   return { dir, env };
 }
 function run(args: string[], cwd: string, env: NodeJS.ProcessEnv, input?: string) {
-  return spawnSync(process.execPath, [HIPPO_JS, ...args], { cwd, env, input, encoding: 'utf8' });
+  return hippoRun(args, { cwd, env, input });
 }
 
 describe('transcript mining', () => {

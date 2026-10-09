@@ -38,10 +38,11 @@ import { currentMachine, importUserMemories } from '../agent-memories/sync.js';
 import { getGlobalRoot } from '../shared.js';
 import { listRegisteredWorkspaces, runDailyMaintenance } from '../scheduler.js';
 import { replayCompactionsAt } from '../compaction-record.js';
-import { log } from '../log.js';
+import { errorMessage, log } from '../log.js';
+import { envDailyStepTimeoutMs } from '../env.js';
 import { writeFileAtomic } from '../util/atomic-write.js';
 import { printError } from './output.js';
-import { printAgentImport, installCodexMemoryHooks, setupDailySchedule, warnClaudeSettingsUnusable } from './shared.js';
+import { type CliFlags, printAgentImport, installCodexMemoryHooks, setupDailySchedule, warnClaudeSettingsUnusable, boolFlag } from './shared.js';
 import { repairQualityOnceAt } from './quality-repair-once.js';
 import { HOOK_MARKERS, HOOKS, hippoBlock, withoutHookBlock } from '../hooks/hook-blocks.js';
 import { escapeRegex } from '../escape.js';
@@ -349,18 +350,7 @@ function removeLegacyCursorRules(): void {
   }
 }
 
-// `hippo setup` -- one-shot configuration for every AI coding tool on the box.
-// Detection and install logic live in ./hooks.ts.
-
-export function cmdSetup(flags: Record<string, string | boolean | string[]>): void {
-  const dryRun = Boolean(flags['dry-run']);
-  const forceAll = Boolean(flags['all']);
-  const tools = detectInstalledTools();
-  const globalRoot = getGlobalRoot();
-
-  console.log('Hippo setup -- configuring SessionEnd + SessionStart hooks');
-  console.log('');
-
+function setupDetectedTools(tools: ReturnType<typeof detectInstalledTools>, forceAll: boolean, dryRun: boolean): void {
   const jsonTools = tools.filter((t) => t.kind === 'json-hook' && (t.detected || forceAll));
   const wrapperTools = tools.filter((t) => t.kind === 'wrapper' && (t.detected || forceAll));
   const skipped = tools.filter((t) => t.kind === 'json-hook' && !t.detected && !forceAll);
@@ -393,6 +383,21 @@ export function cmdSetup(flags: Record<string, string | boolean | string[]>): vo
       console.log(`  ${tool.name.padEnd(14)} ${tool.notes}`);
     }
   }
+}
+
+// `hippo setup` -- one-shot configuration for every AI coding tool on the box.
+// Detection and install logic live in ./hooks.ts.
+
+export function cmdSetup(flags: CliFlags): void {
+  const dryRun = boolFlag(flags, 'dry-run');
+  const forceAll = boolFlag(flags, 'all');
+  const tools = detectInstalledTools();
+  const globalRoot = getGlobalRoot();
+
+  console.log('Hippo setup -- configuring SessionEnd + SessionStart hooks');
+  console.log('');
+
+  setupDetectedTools(tools, forceAll, dryRun);
 
   if (!flags['no-schedule']) {
     console.log('');
@@ -491,6 +496,15 @@ function setupPluginTool(tool: ToolDetection, dryRun: boolean): void {
   }
 }
 
+// Three times the 10 minutes POST /v1/sleep allows a consolidation, so a slow real sleep fits and a hung child cannot stall every later workspace.
+const DAILY_STEP_TIMEOUT_MS = 30 * 60_000;
+
+/** Why a child step failed; a child killed at the deadline says so, since its own message is only the spawn error code. */
+function dailyStepFailure<E>(err: E, timeoutMs: number): string {
+  if (err instanceof Error && 'code' in err && err.code === 'ETIMEDOUT') return `timed out after ${timeoutMs} ms and was stopped`;
+  return errorMessage(err);
+}
+
 export function cmdDailyRunner(): void {
   const globalRoot = getGlobalRoot();
   // No workspace sleep ever opens the global store, yet hooks in folders without a store compact into it.
@@ -511,20 +525,24 @@ export function cmdDailyRunner(): void {
 
   let processed = 0;
   let failed = 0;
+  const timeout = envDailyStepTimeoutMs() ?? DAILY_STEP_TIMEOUT_MS;
   runDailyMaintenance(workspaces, (cwd, args) => {
     try {
       execFileSync(process.execPath, [process.argv[1], ...args], {
         cwd,
         stdio: 'inherit',
         windowsHide: true,
+        timeout,
       });
       if (args[0] === 'sleep') processed++;
     } catch (err) {
       failed++;
       const action = args.join(' ');
-      log.error(`daily-runner failed in ${cwd} during \`${action}\`: ${(err as Error).message}`);
+      log.error(`daily-runner failed in ${cwd} during \`${action}\`: ${dailyStepFailure(err, timeout)}`, { workspace: cwd });
     }
   });
 
   console.log(`Daily maintenance complete: ${processed} workspace${processed === 1 ? '' : 's'} processed, ${failed} command failure${failed === 1 ? '' : 's'}.`);
+  // The scheduler that runs this only sees the exit code, so a failed workspace must not read as a clean run.
+  if (failed > 0) process.exitCode = 1;
 }
