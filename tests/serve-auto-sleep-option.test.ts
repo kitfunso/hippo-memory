@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { createApiKey } from '../src/auth.js';
+import { createApiKey } from '../src/store/auth.js';
 import { serve, type ServerHandle, type ServeOpts } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { sleepRuns } from './_helpers/sleep-runs.js';

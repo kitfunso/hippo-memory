@@ -19,7 +19,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { remember, type HippoDbContext } from '../src/api.js';
-import { pushGoal, completeGoal } from '../src/goals.js';
+import { pushGoal, completeGoal } from '../src/store/goals.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 
 const tenantId = 'default';
@@ -99,7 +99,7 @@ describe('completeGoal noPropagate flag', () => {
   });
 
   it('second call with noPropagate is a true no-op after first call propagated (idempotency)', () => {
-    // Status check at src/goals.ts:253-257 short-circuits the second call BEFORE
+    // Status check at src/store/goals.ts:253-257 short-circuits the second call BEFORE
     // reading opts.noPropagate. So a second call with noPropagate after a propagating
     // first call leaves strength as the post-first-call value (propagation already
     // happened on call 1; call 2 is a no-op regardless of noPropagate).

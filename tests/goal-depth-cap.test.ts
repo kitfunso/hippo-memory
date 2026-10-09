@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
-import { pushGoal, getActiveGoals, MAX_ACTIVE_GOAL_DEPTH } from '../src/goals.js';
+import { pushGoal, getActiveGoals, MAX_ACTIVE_GOAL_DEPTH } from '../src/store/goals.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 
 describe('goal stack depth cap', () => {

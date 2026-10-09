@@ -1,7 +1,7 @@
 import { MemoryEntry, Layer, EmotionalValence, createMemory } from './memory.js';
 import { writeEntry } from './store/entry-writes.js';
 import { loadConfig } from './config.js';
-import { RejectedValueError } from './rejection.js';
+import { RejectedValueError } from './store/rejection.js';
 import { redactSecretsStrict } from './secret-detect.js';
 import { fetchWithRetry, llmTimeoutMs } from './http-retry.js';
 import { neverAutoShareTags } from './shared.js';

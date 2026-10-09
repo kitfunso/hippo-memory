@@ -11,7 +11,7 @@ import { gatedWrite } from '../gated-write.js';
 import { getGlobalRoot, initGlobal } from '../shared.js';
 import { embedMemory } from '../embeddings.js';
 import { maskEmails, redactSecretsStrict } from '../secret-detect.js';
-import { RejectedValueError, checkRejectionGuard } from '../rejection.js';
+import { RejectedValueError, checkRejectionGuard } from '../store/rejection.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../db.js';
 import { loadConfig } from '../config.js';
 import { classifyOriginProject, projectId, type ProjectRef } from '../project-identity.js';

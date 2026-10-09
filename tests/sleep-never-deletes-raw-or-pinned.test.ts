@@ -16,7 +16,7 @@ import { deduplicateStore } from '../src/dedupe.js';
 import { sleep, supersede, type Context } from '../src/api.js';
 import { runSleep } from '../src/api/sleep-run.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { queryAuditEvents } from '../src/audit.js';
+import { queryAuditEvents } from '../src/store/audit.js';
 import { renderSleepResult } from '../src/cli/sleep.js';
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */

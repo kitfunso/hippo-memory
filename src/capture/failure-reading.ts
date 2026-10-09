@@ -4,7 +4,7 @@ import { scrubForSharing } from '../share-scrub.js';
 import { blockHash } from '../token-ledger.js';
 import { truncateCodePointSafe } from '../transcript-tail.js';
 import { type JsonValue, isJsonObjectLiteral } from '../json.js';
-import type { CaptureErrorOutcome, RoutineRule } from '../failure-log.js';
+import type { CaptureErrorOutcome, RoutineRule } from '../store/failure-log.js';
 
 /** What {@link lessonFromFailure} read from a payload; `detail` is the finer failure-log key (untruncated, command head). */
 export type FailureReading =

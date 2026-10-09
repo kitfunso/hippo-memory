@@ -3,7 +3,7 @@
 import { openHippoDb, closeHippoDb, rethrowIfSqliteBlocked } from '../db.js';
 import { summarizeTokenUse, type TokenSummary, type TokenSurface } from '../token-ledger.js';
 import { storeFor } from '../store-port.js';
-import { summarizeFailures, type FailureSummary } from '../failure-log.js';
+import { summarizeFailures, type FailureSummary } from '../store/failure-log.js';
 import { errorMessage, log } from '../log.js';
 import type { Context } from './types.js';
 import { DAY_MS } from '../util/time.js';

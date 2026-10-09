@@ -15,7 +15,7 @@ import { resolveTenantForTeam } from '../src/connectors/slack/tenant-routing.js'
 import { ingestMessage, type IngestInput, type IngestResult } from '../src/connectors/slack/ingest.js';
 import { parkInDlq } from '../src/connectors/dlq.js';
 import { replayDlqEntry, slackDlq } from '../src/connectors/slack/dlq.js';
-import { archiveRawMemory } from '../src/raw-archive.js';
+import { archiveRawMemory } from '../src/store/raw-archive.js';
 import { verifySlackSignature } from '../src/connectors/slack/signature.js';
 import { slackHistoryFetcher } from '../src/connectors/slack/web-client.js';
 import { serve, type ServerHandle } from '../src/server.js';

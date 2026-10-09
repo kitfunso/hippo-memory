@@ -7,7 +7,7 @@ import { startWalCheckpointer, type WalCheckpointer } from '../db/wal-checkpoint
 import type { HippoStore } from '../store-port.js';
 import { workerSqliteStore } from '../store/sqlite/worker-store.js';
 import { markSharedStore } from '../config.js';
-import { auditWriteFailureCount } from '../audit.js';
+import { auditWriteFailureCount } from '../store/audit.js';
 import { PACKAGE_VERSION } from '../version.js';
 import { errorFields, errorMessage, log } from '../log.js';
 import { runWithRequestId } from '../util/request-scope.js';

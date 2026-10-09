@@ -12,7 +12,7 @@ import { noteLedgerRowSkipped, withLedgerDb } from './ledger-db.js';
 import type { MemoryEntry } from './memory.js';
 import { sessionPilotArm, type PilotArm } from './pilot-arm.js';
 import { assertCallerProject, MAX_PROJECT_ALIASES } from './project-identity.js';
-import { writeDeliveryEventAtRoot, writeDeliveryEventOnHandle } from './recall-trace.js';
+import { writeDeliveryEventAtRoot, writeDeliveryEventOnHandle } from './store/recall-trace.js';
 import {
   blockHash, estimateTokens, hookPayloadString, isSubagentPayload, lastSentState, recordTokenUse, shouldSkipUnchanged, type TokenSurface,
 } from './token-ledger.js';

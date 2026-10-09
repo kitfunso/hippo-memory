@@ -25,7 +25,7 @@
  */
 
 import type { DatabaseSyncLike } from '../db.js';
-import { appendAuditEvent } from '../audit.js';
+import { appendAuditEvent } from '../store/audit.js';
 import { DAY_MS } from '../util/time.js';
 
 export interface PruneAuditOpts {

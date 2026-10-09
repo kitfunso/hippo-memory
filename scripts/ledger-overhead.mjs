@@ -27,7 +27,7 @@ const { writeEntry } = await load('store/entry-writes.js');
 const api = await load('api.js');
 const { contextCost } = await load('context-render.js');
 const { createDeliveryRecorder } = await load('delivery-recorder.js');
-const { writeDeliveryEventOnHandle } = await load('recall-trace.js');
+const { writeDeliveryEventOnHandle } = await load('store/recall-trace.js');
 const { openHippoDb, closeHippoDb } = await load('db.js');
 const { blockHash, recordTokenUse } = await load('token-ledger.js');
 

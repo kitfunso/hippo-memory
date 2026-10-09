@@ -1,6 +1,6 @@
 // Splits sleep's queued writes, deletes and dormant moves into components that must each commit whole, so the flush can commit in short transactions.
 import type { MemoryEntry } from '../memory.js';
-import type { DormantMove } from '../dormant.js';
+import type { DormantMove } from '../store/dormant.js';
 import type { FlushComponent } from '../store/delete-and-batch.js';
 
 /** Components that share no id, ordered by each one's first op across writes, then deletes, then dormant moves. */

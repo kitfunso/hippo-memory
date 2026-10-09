@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { IncomingMessage } from 'node:http';
 import { Socket } from 'node:net';
 import { closeHippoDb, openHippoDb } from '../src/db.js';
-import { createApiKey } from '../src/auth.js';
+import { createApiKey } from '../src/store/auth.js';
 import { createRateLimiter } from '../src/rate-limit.js';
 import { heartbeatVerdict } from '../src/server/auth.js';
 import { sqliteStore } from '../src/store-port.js';

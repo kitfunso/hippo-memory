@@ -20,7 +20,7 @@ import {
   reviewCard,
   completeCard,
   heartbeatCard,
-} from '../src/store-cards.js';
+} from '../src/store/cards.js';
 import { serveDashboard } from '../src/dashboard/dashboard.js';
 import { resolveTenantId } from '../src/tenant.js';
 

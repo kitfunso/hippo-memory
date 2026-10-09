@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { queryAuditEvents } from '../src/audit.js';
+import { queryAuditEvents } from '../src/store/audit.js';
 import {
   remember,
   recall,
@@ -19,7 +19,7 @@ import {
   auditList,
   type Context,
 } from '../src/api.js';
-import { appendAuditEvent } from '../src/audit.js';
+import { appendAuditEvent } from '../src/store/audit.js';
 
 describe('api domain — recall/forget/promote/supersede', () => {
   let home: string;

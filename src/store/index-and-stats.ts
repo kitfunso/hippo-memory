@@ -1,5 +1,5 @@
 import { type DatabaseSyncLike, closeHippoDb, setMeta, isSqliteBusy, pruneConsolidationRuns, getMeta } from '../db.js';
-import { RejectedValueError } from '../rejection.js';
+import { RejectedValueError } from './rejection.js';
 import { log } from '../log.js';
 import type { HippoIndex, LegacyStats } from './rows.js';
 import { audit } from './audit-event.js';
