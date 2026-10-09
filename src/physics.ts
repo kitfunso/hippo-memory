@@ -11,11 +11,9 @@
  */
 
 import { isRecallBoostAblated } from './ablation.js';
-import type { EmotionalValence } from './memory.js';
+import { FALLBACK_HALF_LIFE_DAYS, type EmotionalValence } from './memory.js';
 import type { PhysicsConfig } from './physics-config.js';
 import { comparePhysicsResultsBy } from './compare.js';
-
-const FALLBACK_HALF_LIFE_DAYS = 7;
 
 // ---------------------------------------------------------------------------
 // Types
