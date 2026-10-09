@@ -19,7 +19,6 @@ import { getGlobalRoot } from '../sharing/global-store.js';
 import { sanitizeLogMessage } from '../capture/compact.js';
 import { resolveTenantId } from '../store/tenant.js';
 import { errorMessage, log } from '../util/log.js';
-import { printError } from './output.js';
 import type { CliFlags } from './flag-values.js';
 
 /**
@@ -122,8 +121,7 @@ export function startDeliveryRecorder(
       eventType,
     });
   } catch (error) {
-    // The hook's one-line stderr contract pins this exact text, so it bypasses the leveled logger.
-    printError(`[hippo] delivery ledger skipped:${errorMessage(error)}`);
+    log.warn(`delivery ledger skipped: ${errorMessage(error)}`);
     return null;
   }
 }
