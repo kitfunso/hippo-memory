@@ -17,9 +17,9 @@ import { explainMatch } from '../search/explain.js';
 import { isSharedStore, loadConfig, type HippoConfig } from '../config.js';
 import { createDeliveryRecorder, type DeliveryEventType, type DeliveryRecorder } from '../delivery-recorder.js';
 import { isSqliteBusy, noteStoreBusy, runWithRequestStores, HOOK_DB_WAIT_MS } from '../db.js';
-import { ledgerRoot, withLedgerDb } from '../ledger-db.js';
+import { bookTokenUse, ledgerRoot } from '../ledger-db.js';
 import { sessionPilotArm } from '../pilot-arm.js';
-import { hookPayloadSessionId, hookPayloadString, isSubagentPayload, recordTokenUse } from '../token-ledger.js';
+import { hookPayloadSessionId, hookPayloadString, isSubagentPayload } from '../token-ledger.js';
 import { blockHash } from '../util/token-text.js';
 import { importAtSessionEnd, currentMachine } from '../agent-memories/sync.js';
 import { type ImportReport, summaryLine } from '../agent-memories/report.js';
@@ -498,9 +498,9 @@ export function resetHookInjection(hippoRoot: string, stdinText: string | undefi
   const sessionId = hookPayloadSessionId(stdinText, requiredSource);
   // A sub-agent's compaction leaves its parent's context, and the blocks in it, as they were.
   if (sessionId === null || isSubagentPayload(stdinText)) return;
-  withLedgerDb(hippoRoot, (db) => recordTokenUse(db, {
+  bookTokenUse(hippoRoot, {
     tenantId: resolveTenantId({}), sessionId, surface: 'hook', event: 'reset', items: 0, tokens: 0,
-  }));
+  });
 }
 
 /**

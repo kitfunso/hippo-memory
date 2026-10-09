@@ -1,11 +1,11 @@
 // The `hippo context` verb, which the per-prompt hook also runs; main() loads it lazily from the command table.
 
 import type { DeliveryRecorder } from '../delivery-recorder.js';
-import { isSubagentPayload, recordTokenUse } from '../token-ledger.js';
+import { isSubagentPayload } from '../token-ledger.js';
 import { estimateTokens } from '../util/token-text.js';
 import { autoDetectContext } from '../context-auto.js';
 import { detectScope } from '../scope.js';
-import { withLedgerDb } from '../ledger-db.js';
+import { bookLedgerTurn } from '../ledger-db.js';
 import { readHookStdin } from '../stdin.js';
 import * as api from '../api.js';
 import { resolveTenantId } from '../tenant.js';
@@ -214,12 +214,12 @@ function renderContextJson(view: ContextView, query: string): void {
   });
   console.log(jsonText);
   rec?.delivered({ state: 'sent', emittedText: `${jsonText}\n` });
-  withLedgerDb(view.hippoRoot, (db) => {
-    recordTokenUse(db, {
+  bookLedgerTurn(view.hippoRoot, {
+    uses: [{
       tenantId: view.tenantId, sessionId: view.ledgerSessionId, surface: view.pinnedOnly ? 'hook' : 'context',
       event: 'inject', items: output.length, tokens: estimateTokens(jsonText),
-    });
-    flushDeliveryRecorder(rec, db);
+    }],
+    delivery: (write) => flushDeliveryRecorder(rec, write),
   });
 }
 
@@ -247,12 +247,12 @@ function renderContextMarkdown(view: ContextView): void {
   }));
   if (text.length > 0) console.log(text);
   rec?.delivered(text.length > 0 ? { state: 'sent', emittedText: `${text}\n` } : { state: 'empty' });
-  withLedgerDb(view.hippoRoot, (db) => {
-    recordTokenUse(db, {
+  bookLedgerTurn(view.hippoRoot, {
+    uses: [{
       tenantId: view.tenantId, sessionId: view.ledgerSessionId, surface: view.pinnedOnly ? 'hook' : 'context',
       event: 'inject', items: renderItems.length, tokens: estimateTokens(text),
-    });
-    flushDeliveryRecorder(rec, db);
+    }],
+    delivery: (write) => flushDeliveryRecorder(rec, write),
   });
 }
 

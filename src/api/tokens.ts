@@ -1,9 +1,10 @@
 // Token-use and failure reports.
 
-import { openHippoDb, closeHippoDb, rethrowIfSqliteBlocked } from '../db.js';
-import { summarizeTokenUse, type TokenSummary, type TokenSurface } from '../token-ledger.js';
+import { rethrowIfSqliteBlocked } from '../db.js';
+import type { TokenSummary, TokenSurface } from '../token-ledger.js';
 import { storeFor } from '../store-port.js';
-import { summarizeFailures, type FailureSummary } from '../store/failure-log.js';
+import type { FailureSummary } from '../store/failure-log.js';
+import { failureLogSummary, tokenUseSummary } from '../store/usage-reports.js';
 import { errorMessage, log } from '../log.js';
 import type { Context } from './types.js';
 import { DAY_MS } from '../util/time.js';
@@ -39,22 +40,12 @@ export async function recordTokens(
  * surface, with session counts and mean tokens per session.
  */
 export function tokenSummary(ctx: Context, opts: { days?: number } = {}): TokenSummary {
-  const db = openHippoDb(ctx.hippoRoot);
-  try {
-    return summarizeTokenUse(db, ctx.tenantId, reportWindowStart(opts.days));
-  } finally {
-    closeHippoDb(db);
-  }
+  return tokenUseSummary(ctx.hippoRoot, ctx.tenantId, reportWindowStart(opts.days));
 }
 
 /** Failed tool calls by outcome, and repeats across sessions, over the last `days` days (default 30). */
 export function failureSummary(ctx: Context, opts: { days?: number } = {}): FailureSummary {
-  const db = openHippoDb(ctx.hippoRoot);
-  try {
-    return summarizeFailures(db, ctx.tenantId, reportWindowStart(opts.days));
-  } finally {
-    closeHippoDb(db);
-  }
+  return failureLogSummary(ctx.hippoRoot, ctx.tenantId, reportWindowStart(opts.days));
 }
 
 function reportWindowStart(days: number | undefined): string {

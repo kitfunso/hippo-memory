@@ -21,7 +21,6 @@ import { captureToolFailure } from '../capture-error.js';
 import {
   readApiCalls,
   recordRereads,
-  recordTokenUse,
   type TranscriptCalls,
 } from '../token-ledger.js';
 import { estimateTokens } from '../util/token-text.js';
@@ -45,7 +44,7 @@ import { COMPACT_RESUME_EVENT_CONTENT_CAP, COMPACT_RESUME_MAX_AGE_MS, compactRes
 import { normaliseHookPayload, readHookStdin, readStdinBounded, type BoundedStdin } from '../stdin.js';
 import { resolveTenantId } from '../tenant.js';
 import { errorMessage, log } from '../log.js';
-import { withLedgerDb } from '../ledger-db.js';
+import { bookLedgerTurn } from '../ledger-db.js';
 import { flushDeliveryRecorder } from '../prompt-hook.js';
 import type { DeliveryRecorder } from '../delivery-recorder.js';
 import { printError } from './output.js';
@@ -140,11 +139,11 @@ function restoreCompactSnapshot(hippoRoot: string, payloadSessionId: string | nu
   const text = compactResumeText(snapshot, events);
   console.log(text);
   rec?.delivered({ state: 'sent', emittedText: `${text}\n` });
-  withLedgerDb(hippoRoot, (db) => {
-    recordTokenUse(db, {
+  bookLedgerTurn(hippoRoot, {
+    uses: [{
       tenantId, sessionId: payloadSessionId, surface: 'compact_resume', event: 'inject', items: 1, tokens: estimateTokens(text),
-    });
-    flushDeliveryRecorder(rec, db);
+    }],
+    delivery: (write) => flushDeliveryRecorder(rec, write),
   });
 }
 

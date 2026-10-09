@@ -71,6 +71,8 @@ export function onHandle<T>(hippoRoot: string, fn: (db: DatabaseSyncLike) => T, 
 export const HALF_LIFE_BASE_META_KEY = 'default_half_life_base';
 /** `meta` key set once no memory of a decision, incident or other object sits on the old flat 90 days. */
 export const TYPED_HALF_LIFE_META_KEY = 'typed_half_life_on_default';
+/** The flat half-life the decision, incident and other object writers gave their memories before they took the default. */
+export const LEGACY_TYPED_HALF_LIFE = 90;
 
 /**
  * A store with no memories starts on the current default half-life base, so

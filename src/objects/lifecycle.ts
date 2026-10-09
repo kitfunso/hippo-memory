@@ -3,7 +3,7 @@
 // The tenant, the fields and the list status are checked first, so a bad request fails before a store is asked.
 
 import { BadRequestError, ConflictError, NotFoundError } from '../api-errors.js';
-import { objectHalfLifeDays } from '../half-life-migration.js';
+import { loadConfig } from '../config.js';
 import { createMemory, Layer, type MemoryEntry } from '../memory.js';
 import type { ObjectByKind, ObjectKind, SavableKind } from '../store/object-types.js';
 import { isObjectRefusal, type ObjectClose, type ObjectListQuery, type ObjectRefusal, type Objects, type ObjectSave } from '../store/port.js';
@@ -65,14 +65,14 @@ export async function closeObject<K extends ObjectKind>(objects: Objects, d: Obj
   return closed(d, tenantId, id, await objects.closeObject(tenantId, d.kind, id, close));
 }
 
-/** The memory a typed object writes beside its row, so recall finds the object. `onDefault` is the store's `mirrorsOnDefaultHalfLife`. */
-export function objectMirror(hippoRoot: string, tenantId: string, source: ObjectKind, text: { readonly content: string; readonly tags: readonly string[] }, onDefault: boolean): MemoryEntry {
+/** The memory a typed object writes beside its row, so recall finds the object. */
+export function objectMirror(hippoRoot: string, tenantId: string, source: ObjectKind, text: { readonly content: string; readonly tags: readonly string[] }): MemoryEntry {
   return createMemory(text.content, {
     tags: [source, ...text.tags],
     layer: Layer.Semantic,
     confidence: 'verified',
     source,
-    baseHalfLifeDays: objectHalfLifeDays(hippoRoot, onDefault),
+    baseHalfLifeDays: loadConfig(hippoRoot).defaultHalfLifeDays,
     tenantId,
   });
 }
@@ -84,8 +84,8 @@ export interface ObjectSaveSite {
   readonly actor: string;
 }
 
-function objectSave<K extends SavableKind>(site: ObjectSaveSite, kind: K, draft: ObjectDraft<K>, onDefault: boolean): ObjectSave<K> {
-  const mirror = objectMirror(site.hippoRoot, site.tenantId, kind, draft, onDefault);
+function objectSave<K extends SavableKind>(site: ObjectSaveSite, kind: K, draft: ObjectDraft<K>): ObjectSave<K> {
+  const mirror = objectMirror(site.hippoRoot, site.tenantId, kind, draft);
   return { mirror, fields: draft.fields, supersedesId: draft.supersedesId, changeSummary: draft.changeSummary, actor: site.actor, at: draft.at };
 }
 
@@ -107,15 +107,11 @@ function saved<K extends SavableKind, W>(d: SavableDescriptor<K, W>, tenantId: s
 export function saveObjectAt<K extends SavableKind, W>(d: SavableDescriptor<K, W>, site: ObjectSaveSite, opts: W): ObjectByKind[K] {
   assertTenantId(d.fn.save, site.tenantId);
   const draft = d.draft(opts);
-  const objects = sqliteObjects(site.hippoRoot);
-  // SHORTCUT: the half-life is read outside the save's transaction, so a save racing the typed migration keeps 90; read it inside the group's save if that ever matters.
-  const save = objectSave(site, d.kind, draft, objects.mirrorsOnDefaultHalfLife());
-  return saved(d, site.tenantId, draft.supersedesId, objects.saveObject(site.tenantId, d.kind, save));
+  return saved(d, site.tenantId, draft.supersedesId, sqliteObjects(site.hippoRoot).saveObject(site.tenantId, d.kind, objectSave(site, d.kind, draft)));
 }
 
 export async function saveObject<K extends SavableKind, W>(objects: Objects, d: SavableDescriptor<K, W>, site: ObjectSaveSite, opts: W): Promise<ObjectByKind[K]> {
   assertTenantId(d.fn.save, site.tenantId);
   const draft = d.draft(opts);
-  const save = objectSave(site, d.kind, draft, await objects.mirrorsOnDefaultHalfLife());
-  return saved(d, site.tenantId, draft.supersedesId, await objects.saveObject(site.tenantId, d.kind, save));
+  return saved(d, site.tenantId, draft.supersedesId, await objects.saveObject(site.tenantId, d.kind, objectSave(site, d.kind, draft)));
 }

@@ -169,3 +169,19 @@ export interface ObjectFields {
 
 /** The kinds whose rows are active until a successor supersedes them; an incident is opened and resolved instead. */
 export type SavableKind = keyof ObjectFields;
+
+/** What opening an incident stores; core has checked the text, and the store checks each linked id. */
+export interface IncidentFields {
+  readonly incidentText: string;
+  readonly context: string | undefined;
+  /** The memories that are the incident's evidence, in the order the caller gave them. */
+  readonly linkedMemoryIds: readonly string[];
+}
+
+/** One memory a brief refresh cites. */
+export interface BriefReceipt {
+  id: string;
+  created: string;
+  source: string;
+  content: string;
+}

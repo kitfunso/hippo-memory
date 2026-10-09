@@ -4,31 +4,30 @@ import { getContext, type Context, type ContextResult, type ContextResultEntry }
 import { BadRequestError } from './api-errors.js';
 import { isSharedStore, loadConfig } from './config.js';
 import { contextBlockLines, contextCost, crossProjectLines, handoffText, sessionTrailText, settleTokens, snapshotText } from './context-render.js';
-import type { openHippoDb } from './db.js';
 import type { DeliveryRecorder } from './delivery-recorder.js';
 import { MAX_ID_LEN } from './http-util.js';
 import { isJsonString, type JsonValue } from './json.js';
-import { noteLedgerRowSkipped, withLedgerDb } from './ledger-db.js';
+import { bookLedgerTurn, ledgerLastSent, noteLedgerRowSkipped } from './ledger-db.js';
 import type { MemoryEntry } from './memory.js';
 import { sessionPilotArm, type PilotArm } from './pilot-arm.js';
 import { assertCallerProject, MAX_PROJECT_ALIASES } from './project-identity.js';
-import { writeDeliveryEventAtRoot, writeDeliveryEventOnHandle } from './store/recall-trace.js';
+import type { DeliveryWrite } from './store/ledger-turn.js';
+import { writeDeliveryEventAtRoot } from './store/recall-trace.js';
 import {
   hookPayloadString,
   isSubagentPayload,
-  lastSentState,
-  recordTokenUse,
   shouldSkipUnchanged,
   type TokenSurface,
+  type TokenUse,
 } from './token-ledger.js';
 import { blockHash, estimateTokens } from './util/token-text.js';
 import { errorMessage } from './log.js';
 
-/** With `db`, writes on the token ledger's handle (same store); without it, opens its own. A second flush is a no-op. */
-export function flushDeliveryRecorder(rec: DeliveryRecorder | null, db?: ReturnType<typeof openHippoDb>): void {
+/** With `write`, stores on the token ledger's connection (same store); without it, opens its own. A second flush is a no-op. */
+export function flushDeliveryRecorder(rec: DeliveryRecorder | null, write?: DeliveryWrite): void {
   if (rec === null) return;
   try {
-    rec.flush((input) => (db ? writeDeliveryEventOnHandle(db, input) : writeDeliveryEventAtRoot(rec.root, input)));
+    rec.flush(write ?? ((input) => writeDeliveryEventAtRoot(rec.root, input)));
   } catch (error) {
     // The hook's one-line stderr contract pins this exact text, so it bypasses the leveled logger.
     console.error(`[hippo] delivery ledger write failed:${errorMessage(error)}`);
@@ -162,45 +161,33 @@ function skipUnchangedStatic(view: ContextView, surface: TokenSurface, staticBlo
   const staticHash = blockHash(staticBlock);
   // Before the ledger read, so a caller that did not print this block books no skip row.
   if (view.printedHash !== undefined && view.printedHash !== staticHash) return false;
-  const last = withLedgerDb(hippoRoot, (db) =>
-    lastSentState(db, view.tenantId, payloadSessionId, surface), ledgerOpts);
+  const last = ledgerLastSent(hippoRoot, view.tenantId, payloadSessionId, surface, ledgerOpts);
   if (!shouldSkipUnchanged(last ?? null, staticHash, refreshTurns)) return false;
-  withLedgerDb(hippoRoot, (db) => {
-    recordTokenUse(db, {
+  bookLedgerTurn(hippoRoot, {
+    uses: [{
       tenantId: view.tenantId, sessionId: payloadSessionId, surface, event: 'skip',
       items: staticCount, tokens: estimateTokens(staticBlock), hash: staticHash,
-    });
-    if (recallBlock.trim()) return;
-    rec?.delivered({ state: 'reused', staticHash, staticReused: true });
-    flushDeliveryRecorder(rec, db);
+    }],
+    delivery: recallBlock.trim() ? undefined : (write) => {
+      rec?.delivered({ state: 'reused', staticHash, staticReused: true });
+      flushDeliveryRecorder(rec, write);
+    },
   }, ledgerOpts);
   return true;
 }
 
 interface InjectedBlock { readonly text: string; readonly items: number }
 
-/** One connection for both rows; each insert in its own try so one failing doesn't skip the other. */
+/** One connection for both rows; a failed row is logged and the other still lands, because a ledger failure must not break the hook. */
 function recordAdditionalContextRows(view: ContextView, surface: TokenSurface, staticPart: InjectedBlock, recallPart: InjectedBlock): void {
-  withLedgerDb(view.hippoRoot, (db) => {
-    if (staticPart.text) {
-      try {
-        recordTokenUse(db, {
-          tenantId: view.tenantId, sessionId: view.ledgerSessionId, surface, event: 'inject',
-          items: staticPart.items, tokens: estimateTokens(staticPart.text), hash: blockHash(staticPart.text),
-        });
-      // Best-effort row: a ledger failure is logged and must not break the hook.
-      } catch (error) { noteLedgerRowSkipped(error); }
-    }
-    if (recallPart.text) {
-      try {
-        recordTokenUse(db, {
-          tenantId: view.tenantId, sessionId: view.ledgerSessionId, surface: 'hook_recall', event: 'inject',
-          items: recallPart.items, tokens: estimateTokens(recallPart.text), hash: blockHash(recallPart.text),
-        });
-      // Same best-effort rule as the inject row above.
-      } catch (error) { noteLedgerRowSkipped(error); }
-    }
-    flushDeliveryRecorder(view.rec, db);
+  const row = (part: InjectedBlock, on: TokenSurface): TokenUse => ({
+    tenantId: view.tenantId, sessionId: view.ledgerSessionId, surface: on, event: 'inject',
+    items: part.items, tokens: estimateTokens(part.text), hash: blockHash(part.text),
+  });
+  bookLedgerTurn(view.hippoRoot, {
+    uses: [...(staticPart.text ? [row(staticPart, surface)] : []), ...(recallPart.text ? [row(recallPart, 'hook_recall')] : [])],
+    onRowError: noteLedgerRowSkipped,
+    delivery: (write) => flushDeliveryRecorder(view.rec, write),
   }, { sharedStore: view.sharedStore });
 }
 

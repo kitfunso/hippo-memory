@@ -1,5 +1,5 @@
 import { isSharedStore } from '../config.js';
-import { closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../db.js';
+import { closeHippoDb, HOOK_DB_WAIT_MS, scopedBusyWait, withWriteScope, type DatabaseSyncLike } from '../db.js';
 import { raiseMinBinary } from '../db/meta.js';
 import { originInSql } from '../project-identity.js';
 import { assertTenantId } from '../tenant.js';
@@ -14,7 +14,7 @@ import {
   rowToSessionEvent,
 } from './rows.js';
 import { writeActiveTaskMirror, removeActiveTaskMirror, writeRecentSessionMirror } from './mirrors.js';
-import { openStore } from './open.js';
+import { onHandle, openStore } from './open.js';
 
 /** A shared-store caller's task state bucket: its owner and every name its project's rows carry. */
 export interface ContinuityKey {
@@ -429,14 +429,14 @@ export function traceExistsForSession(hippoRoot: string, tenantId: string, sessi
 }
 
 /** The owner a session id is bound to, or null. */
-export function selectSessionOwnerAt(db: DatabaseSyncLike, tenantId: string, sessionId: string): string | null {
+function selectSessionOwnerAt(db: DatabaseSyncLike, tenantId: string, sessionId: string): string | null {
   // SAFETY: the SELECT names exactly this one TEXT column.
   const row = db.prepare(`SELECT owner_subject FROM session_owners WHERE tenant_id = ? AND session_id = ?`).get(tenantId, sessionId) as { owner_subject: string } | undefined;
   return row?.owner_subject ?? null;
 }
 
 /** Binds `sessionId` to `owner` unless a binding exists; the count is 1 when this call bound it. */
-export function insertSessionOwnerAt(db: DatabaseSyncLike, tenantId: string, sessionId: string, owner: string, createdAt: string): number {
+function insertSessionOwnerAt(db: DatabaseSyncLike, tenantId: string, sessionId: string, owner: string, createdAt: string): number {
   const result = db.prepare(`INSERT OR IGNORE INTO session_owners(tenant_id, session_id, owner_subject, created_at) VALUES (?, ?, ?, ?)`)
     .run(tenantId, sessionId, owner, createdAt);
   return Number(result.changes ?? 0);
@@ -444,6 +444,35 @@ export function insertSessionOwnerAt(db: DatabaseSyncLike, tenantId: string, ses
 
 // SHORTCUT: no created_at index, so each first bind scans the table; add one past a few hundred thousand rows.
 /** Drops bindings created before `cutoffIso`. */
-export function deleteSessionOwnersBeforeAt(db: DatabaseSyncLike, cutoffIso: string): void {
+function deleteSessionOwnersBeforeAt(db: DatabaseSyncLike, cutoffIso: string): void {
   db.prepare(`DELETE FROM session_owners WHERE created_at < ?`).run(cutoffIso);
+}
+
+/** One caller's claim on a session id. */
+export interface SessionOwnerBinding {
+  readonly tenantId: string;
+  readonly sessionId: string;
+  readonly owner: string;
+  /** Bindings older than this are pruned in the write that adds a new one. */
+  readonly retentionMs: number;
+}
+
+/** Binds under the write lock and returns the stored owner, which is not `owner` when a concurrent first bind won. */
+function insertSessionOwner(db: DatabaseSyncLike, binding: SessionOwnerBinding): string | null {
+  const { tenantId, sessionId, owner, retentionMs } = binding;
+  withWriteScope(db, 'bind_session_owner', () => {
+    const bound = insertSessionOwnerAt(db, tenantId, sessionId, owner, new Date().toISOString());
+    // An older binary supersedes across owners, so the first binding shuts it out in the same transaction.
+    if (bound === 1) raiseMinBinary(db, TASK_OWNER_MIN_BINARY);
+    // Pruned on write, as the failure log is; a pruned session id is a UUID no other caller knows.
+    deleteSessionOwnersBeforeAt(db, new Date(Date.now() - retentionMs).toISOString());
+  }, { busyWaitMs: scopedBusyWait() ?? HOOK_DB_WAIT_MS });
+  // Re-read, since a concurrent first bind may have won the INSERT OR IGNORE.
+  return selectSessionOwnerAt(db, tenantId, sessionId);
+}
+
+/** The owner stored for the session id, binding `binding.owner` first when none is stored. */
+export function sessionOwnerOrBind(hippoRoot: string, binding: SessionOwnerBinding): string | null {
+  // A bound session is the common case after the first prompt, so it must not take the write lock.
+  return onHandle(hippoRoot, (db) => selectSessionOwnerAt(db, binding.tenantId, binding.sessionId) ?? insertSessionOwner(db, binding));
 }

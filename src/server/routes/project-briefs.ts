@@ -1,10 +1,10 @@
 // /v1/project-briefs routes.
-import { assembleBriefFromReceipts, MAX_REPO_LEN, PROJECT_BRIEF, refreshBrief, type SaveProjectBriefOpts } from '../../project-briefs.js';
+import { briefFromReceipts, MAX_REPO_LEN, PROJECT_BRIEF, refreshedBrief, type SaveProjectBriefOpts } from '../../project-briefs.js';
 import { sendJson } from '../../http-util.js';
 import { buildContextWithAuth } from '../auth.js';
 import type { RouteRequest } from '../types.js';
 import { parseJsonBody } from '../validation.js';
-import { closeRoute, getRoute, listRoute, optionalString, requiredString, saveFor, supersedeRoute, type VersionedRouteConfig } from './object-routes.js';
+import { closeRoute, getRoute, listRoute, objectsOf, optionalString, requiredString, saveFor, supersedeRoute, type VersionedRouteConfig } from './object-routes.js';
 
 const briefRoutes: VersionedRouteConfig<'project_brief', SaveProjectBriefOpts> = {
   noun: 'project brief',
@@ -45,16 +45,17 @@ export function handleListProjectBriefs(rr: RouteRequest): Promise<void> {
 
 // The refresh op: must precede the /:id routes (literal 'refresh' is non-numeric
 // so the /(\d+)/ routes would not match it, but order it first).
-export async function handleRefreshProjectBrief({ req, res, opts }: RouteRequest): Promise<void> {
+export async function handleRefreshProjectBrief(rr: RouteRequest): Promise<void> {
+  const { req, res, opts } = rr;
   const ctx = await buildContextWithAuth(req, opts);
   const body = await parseJsonBody(req, ctx);
   const repo = requiredString(body, 'repo', { max: MAX_REPO_LEN });
   if (body['dryRun'] === true) {
-    const { markdown, receiptCount } = assembleBriefFromReceipts(opts.hippoRoot, ctx.tenantId, repo);
+    const { markdown, receiptCount } = await briefFromReceipts(objectsOf(rr), ctx.tenantId, repo);
     sendJson(res, 200, { markdown, receiptCount });
     return;
   }
-  const brief = refreshBrief(opts.hippoRoot, ctx.tenantId, repo, ctx.actor.subject);
+  const brief = await refreshedBrief(objectsOf(rr), { hippoRoot: opts.hippoRoot, tenantId: ctx.tenantId, actor: ctx.actor.subject }, repo);
   sendJson(res, 200, { brief });
 }
 
