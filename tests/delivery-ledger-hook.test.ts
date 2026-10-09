@@ -11,7 +11,7 @@ import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/m
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { readDeliveryEvents, type DeliveryEventRow } from '../src/store/recall-trace.js';
 import type { DeliveryFault } from '../src/delivery-recorder.js';
-import { blockHash, estimateTokens } from '../src/token-ledger.js';
+import { blockHash, estimateTokens } from '../src/util/token-text.js';
 import type { HippoConfig } from '../src/config.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');

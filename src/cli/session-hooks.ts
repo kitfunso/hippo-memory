@@ -19,13 +19,13 @@ import { readSessionScan, recordSessionDigest } from '../session-digest.js';
 import { openHippoDb, closeHippoDb } from '../db.js';
 import { captureToolFailure } from '../capture-error.js';
 import {
-  estimateTokens,
   isSubagentPayload,
   readApiCalls,
   recordRereads,
   recordTokenUse,
   type TranscriptCalls,
 } from '../token-ledger.js';
+import { estimateTokens } from '../util/token-text.js';
 import { currentMachine, importSessionFolder } from '../agent-memories/sync.js';
 import { summaryLine } from '../agent-memories/report.js';
 import { resolveProjectIdentity } from '../project-identity.js';

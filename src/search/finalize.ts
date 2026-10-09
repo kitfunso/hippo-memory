@@ -1,5 +1,5 @@
 import type { MemoryEntry } from '../memory.js';
-import { estimateTokens } from '../token-ledger.js';
+import { estimateTokens } from '../util/token-text.js';
 import { compareScoredResults } from '../compare.js';
 import { churnStaleFactor } from './boosts.js';
 import type { ResultCost, SearchResult } from '../core/search-types.js';

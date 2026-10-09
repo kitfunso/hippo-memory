@@ -14,7 +14,6 @@ import { Layer } from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import {
   carryingCalls,
-  estimateTokens,
   isSubagentPayload,
   lastSentState,
   readApiCalls,
@@ -26,6 +25,7 @@ import {
   type TokenSummary,
   type TokenSurface,
 } from '../src/token-ledger.js';
+import { estimateTokens } from '../src/util/token-text.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
 const SESSION = 'sess-reread';
 // Noon UTC yesterday: re-read rows are per UTC day, so a run near midnight must not split a test's calls.

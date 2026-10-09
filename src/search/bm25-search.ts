@@ -1,5 +1,5 @@
 import type { MemoryEntry } from '../memory.js';
-import { estimateTokens } from '../token-ledger.js';
+import { estimateTokens } from '../util/token-text.js';
 import { tokenize } from '../tokenize.js';
 import { evalNow } from '../ablation.js';
 import { extractPathTags } from '../path-context.js';

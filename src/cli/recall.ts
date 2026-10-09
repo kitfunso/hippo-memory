@@ -13,7 +13,7 @@ import { fitBudget } from '../search/finalize.js';
 import { explainMatch } from '../search/explain.js';
 import { DEFAULT_RECALL_BUDGET, type SearchResult } from '../core/search-types.js';
 import { loadConfig } from '../config.js';
-import { estimateTokens } from '../token-ledger.js';
+import { estimateTokens } from '../util/token-text.js';
 import { dropHeldCopies } from '../same-text.js';
 import { isGlobalStoreRoot } from '../project-identity.js';
 import { detectScope } from '../scope.js';

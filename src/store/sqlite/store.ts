@@ -4,7 +4,7 @@ import { listApiKeyRows, readApiKeyRecord } from '../auth.js';
 import { existsSync } from 'node:fs';
 import { appendAuditEvent, listAuditEventsAfter, queryAuditEvents } from '../audit.js';
 import { getHippoDbPath, withWriteScope } from '../../db.js';
-import { embeddingIndexStateAt, loadStoredVectors } from '../../embeddings.js';
+import { embeddingIndexStateAt, loadStoredVectors, loadStoredVectorViews } from '../../embeddings.js';
 import { activeGoalsWithPolicies, localGoalRecallRows, writeGoalRecallLog } from '../goals.js';
 import { loadPhysicsState } from '../../db/physics-state.js';
 import { planningFallacyEvidenceAt } from '../planning-fallacy-evidence.js';
@@ -86,6 +86,11 @@ export function sqliteSyncStore(hippoRoot: string): SqliteSyncStore & Sync<Omit<
     },
     keyAudit: sqliteKeyAudit(hippoRoot),
     keyWrites: sqliteKeyWrites(hippoRoot),
+    vectorViews: {
+      storedVectorViews(ids) {
+        return loadStoredVectorViews(hippoRoot, ids);
+      },
+    },
     vectorWrites: {
       entriesWithoutVector(query) {
         return onHandle(hippoRoot, (db) => entriesWithoutVectorAt(db, query));
@@ -135,6 +140,7 @@ export function sqliteStore(hippoRoot: string): HippoStore & StoreGroups {
     bumpRecallStats: async (recalled) => sync.bumpRecallStats(recalled),
     recordTokens: async (use) => sync.recordTokens(use),
     vectors: sqliteVectorReads(hippoRoot),
+    vectorViews: { storedVectorViews: async (ids) => sync.vectorViews.storedVectorViews(ids) },
     keyAudit: {
       revokeApiKey: async (revoke) => keyAudit.revokeApiKey(revoke),
       auditEventsAfter: async (opts) => keyAudit.auditEventsAfter(opts),

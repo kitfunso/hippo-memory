@@ -49,7 +49,9 @@ export const SCHEMA_PROBE_SQL = `SELECT
   (SELECT value FROM meta WHERE key = 'min_compatible_binary') AS min_binary,
   (SELECT value FROM meta WHERE key = 'fts5_available') AS fts5,
   (SELECT COUNT(*) FROM meta WHERE key IN (${sqlList(META_DEFAULTS.map(([key]) => key))})) AS meta_keys,
-  (SELECT COUNT(*) FROM sqlite_master WHERE type IN ('table', 'index') AND name IN (${sqlList(REQUIRED_SCHEMA_OBJECTS)})) AS objects`;
+  (SELECT COUNT(*) FROM sqlite_master WHERE type IN ('table', 'index') AND name IN (${sqlList(REQUIRED_SCHEMA_OBJECTS)})) AS objects,
+  (SELECT MAX(id) FROM raw_archive) AS archive_top,
+  (SELECT 1 FROM memories LIMIT 1) AS has_memories`;
 
 interface SchemaProbe {
   user_version: number;
@@ -58,31 +60,44 @@ interface SchemaProbe {
   fts5: string | null;
   meta_keys: number;
   objects: number;
+  archive_top: number | null;
+  has_memories: number | null;
 }
 
-/** True when the store is current and whole, so the open can skip every DDL statement. Runs the binary check either way. */
-function schemaIsCurrent(db: DatabaseSyncLike): boolean {
+/** What the probe of a current store read beyond the schema proof, so the same open need not read them again. */
+export interface OpenFacts {
+  /** The largest raw_archive id, 0 for an empty archive. */
+  readonly archiveTop: number;
+  readonly hasMemories: boolean;
+}
+
+/** The probe's facts when the store is current and whole, so the open can skip every DDL statement; else null. Runs the binary check either way. */
+function currentStoreFacts(db: DatabaseSyncLike): OpenFacts | null {
   let probe: SchemaProbe | undefined;
   try {
-    // SAFETY: the SELECT names exactly these six columns and always returns one row.
+    // SAFETY: the SELECT names exactly these eight columns and always returns one row.
     probe = db.prepare(SCHEMA_PROBE_SQL).get() as SchemaProbe | undefined;
   } catch (err) {
-    // A store with no meta table yet is the slow path's job; anything else is a real error.
-    if (err instanceof Error && /no such table: meta/.test(err.message)) return false;
+    // A store missing a table the probe reads is the slow path's job; anything else is a real error.
+    if (err instanceof Error && /no such table: (meta|raw_archive|memories)\b/.test(err.message)) return null;
     throw err;
   }
-  if (!probe) return false;
+  if (!probe) return null;
   assertMinBinary(probe.min_binary);
-  return Number(probe.user_version) === CURRENT_SCHEMA_VERSION
+  const current = Number(probe.user_version) === CURRENT_SCHEMA_VERSION
     && Number(probe.schema_version) === CURRENT_SCHEMA_VERSION
     && Number(probe.meta_keys) === META_DEFAULTS.length
     && Number(probe.objects) === REQUIRED_SCHEMA_OBJECTS.length
     && probe.fts5 === '1';
+  return current ? { archiveTop: Number(probe.archive_top ?? 0), hasMemories: probe.has_memories !== null } : null;
 }
 
-export function runMigrations(db: DatabaseSyncLike, hippoRoot?: string, busyWaitMs?: number): void {
-  if (!schemaIsCurrent(db)) migrateAndHeal(db, hippoRoot, busyWaitMs);
+/** Brings the store to the current schema; returns the probe's facts when it was current already, null after any repair. */
+export function runMigrations(db: DatabaseSyncLike, hippoRoot?: string, busyWaitMs?: number): OpenFacts | null {
+  const facts = currentStoreFacts(db);
+  if (!facts) migrateAndHeal(db, hippoRoot, busyWaitMs);
   if (hippoRoot) importLegacyVectors(db, hippoRoot);
+  return facts;
 }
 
 function migrateAndHeal(db: DatabaseSyncLike, hippoRoot: string | undefined, busyWaitMs: number | undefined): void {

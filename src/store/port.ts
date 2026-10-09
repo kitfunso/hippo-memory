@@ -500,10 +500,18 @@ export interface GraphReads {
   graphRows(tenantId: string, query: GraphViewQuery): Promise<GraphRows>;
 }
 
+/** `storedVectors` with no number[] copy, for a store that holds vectors as Float32 bytes. */
+export interface VectorViews {
+  /** The same ids and values as `VectorReads.storedVectors`, each value a Float32 view. */
+  storedVectorViews(ids: readonly string[]): Promise<Map<string, Float32Array>>;
+}
+
 /** The optional groups: a store sets each one whole or leaves it unset, and a route or MCP tool names the one it needs. */
 export interface StoreGroups {
   /** Unset on a store built before them, where hybrid and physics recall under an embedding provider answer 501. */
   readonly vectors: VectorReads;
+  /** Unset on a store without them, where recall scores the number[] copies `vectors` returns, to the same ranking. */
+  readonly vectorViews: VectorViews;
   readonly keyAudit: KeyAudit;
   readonly keyWrites: KeyWrites;
   /** embedMemory and embedAll with a store need it and `vectors`. */
