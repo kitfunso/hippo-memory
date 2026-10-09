@@ -1,5 +1,5 @@
 import { isSharedStore } from '../config.js';
-import { closeHippoDb, type DatabaseSyncLike } from '../db.js';
+import { closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../db.js';
 import { raiseMinBinary } from '../db/meta.js';
 import { originInSql } from '../project-identity.js';
 import { assertTenantId } from '../tenant.js';
@@ -94,13 +94,14 @@ export function saveActiveTaskSnapshot(
   const now = new Date().toISOString();
 
   try {
-    db.exec('BEGIN IMMEDIATE');
-    db.prepare(`UPDATE task_snapshots SET status = 'superseded', updated_at = ? WHERE status = 'active' AND tenant_id = ?${owned ? ` AND ${owned.sql}` : ''}`)
-      .run(now, tenantId, ...(owned?.params ?? []));
-    const id = insertSnapshot(db, tenantId, snapshot, now, stamp);
-    // An older binary's tenant-wide supersede would close other owners' rows, so the first owner row shuts it out.
-    if (stamp) raiseMinBinary(db, TASK_OWNER_MIN_BINARY);
-    db.exec('COMMIT');
+    const id = withWriteScope(db, 'save_active_task', () => {
+      db.prepare(`UPDATE task_snapshots SET status = 'superseded', updated_at = ? WHERE status = 'active' AND tenant_id = ?${owned ? ` AND ${owned.sql}` : ''}`)
+        .run(now, tenantId, ...(owned?.params ?? []));
+      const inserted = insertSnapshot(db, tenantId, snapshot, now, stamp);
+      // An older binary's tenant-wide supersede would close other owners' rows, so the first owner row shuts it out.
+      if (stamp) raiseMinBinary(db, TASK_OWNER_MIN_BINARY);
+      return inserted;
+    });
 
     // SAFETY: row's shape matches the ten columns named in the SELECT above.
     const row = db.prepare(`
@@ -117,13 +118,6 @@ export function saveActiveTaskSnapshot(
     // The mirror is one file per store, so only the local, unkeyed path writes it.
     if (!key) writeActiveTaskMirror(hippoRoot, tenantId, loaded);
     return loaded;
-  } catch (error) {
-    try {
-      db.exec('ROLLBACK');
-    } catch {
-      // Ignore nested rollback failures.
-    }
-    throw error;
   } finally {
     closeHippoDb(db);
   }

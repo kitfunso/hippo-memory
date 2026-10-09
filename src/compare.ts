@@ -104,8 +104,14 @@ export interface ScoredEntryLike {
  * the tiebreak can't silently drift between call sites.
  */
 export function compareScoredResults(a: ScoredEntryLike, b: ScoredEntryLike): number {
-  const d = b.score - a.score;
-  return d !== 0 ? d : compareEntryIdentity(a.entry, b.entry);
+  return compareScoresDesc(a.score, b.score) || compareEntryIdentity(a.entry, b.entry);
+}
+
+/** Larger first, NaN after every number, 0 for equal scores. Not a subtraction: two infinities, or any NaN, subtract to NaN, which a sort reads as a tie. */
+export function compareScoresDesc(a: number, b: number): number {
+  if (a > b) return -1;
+  if (a < b) return 1;
+  return Number(Number.isNaN(a)) - Number(Number.isNaN(b));
 }
 
 /**
@@ -129,7 +135,7 @@ export function comparePhysicsResultsBy<T extends { memoryId: string }>(
   tieKeyOf?: (r: T) => string,
 ): (a: T, b: T) => number {
   return (a: T, b: T): number => {
-    const d = scoreOf(b) - scoreOf(a);
+    const d = compareScoresDesc(scoreOf(a), scoreOf(b));
     if (d !== 0) return d;
     const ai = tieKeyOf ? tieKeyOf(a) : a.memoryId;
     const bi = tieKeyOf ? tieKeyOf(b) : b.memoryId;

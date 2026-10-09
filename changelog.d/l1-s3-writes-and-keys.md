@@ -1,0 +1,3 @@
+### Changed
+
+- **`hippo serve` now runs the SQLite work of nine more routes on worker threads, and reads the API key row for every request on a reader thread.** The routes are `POST /v1/memories`, the archive, supersede and delete routes under `/v1/memories/:id`, `GET /v1/sessions/:id/assemble`, the three `/v1/auth/keys` routes and `GET /v1/audit`. A write that waits for the write lock no longer stops the server answering other requests. Statuses, bodies, headers, audit rows and mirror files are the same for a request that finishes inside its deadline. These routes and the key read now come under the store queue bound (a 503 with `Retry-After`) and the request deadline (a 504) that the predictions routes already had. Internal otherwise.

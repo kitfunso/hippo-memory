@@ -4,6 +4,7 @@ import type { SearchResult } from '../core/search-types.js';
 import { redactSecretsStrict } from '../secret-detect.js';
 import { createOutageWarning } from './outage-warning.js';
 import { rerankerPost } from './remote.js';
+import { compareScoresDesc } from '../compare.js';
 import { errorMessage } from '../log.js';
 
 const ENDPOINT = 'https://api.typesafe.ai/v1/systemone';
@@ -120,7 +121,7 @@ export function rankByScores(head: readonly SearchResult[], scores: readonly num
     postRerankRank: 0,
   }));
   // Stable sort: ties fall back to the prior relevance order.
-  scored.sort((a, b) => b.rerankScore - a.rerankScore);
+  scored.sort((a, b) => compareScoresDesc(a.rerankScore, b.rerankScore));
   scored.forEach((r, i) => (r.postRerankRank = i + 1));
   return scored;
 }

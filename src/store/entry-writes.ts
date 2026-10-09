@@ -44,6 +44,32 @@ export function writeEntriesTogether(hippoRoot: string, entries: readonly Memory
   return stamped.length;
 }
 
+/** writeEntry for each of `entries` on one open store, so the open and its lock wait are paid once; each row commits alone, and none opens the store when the list is empty. */
+export function writeEntriesSeparately(hippoRoot: string, entries: readonly MemoryEntry[]): void {
+  if (entries.length === 0) return;
+  const db = openStore(hippoRoot);
+  try {
+    for (const entry of entries) writeEntryOn(db, hippoRoot, entry);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/** Adds `tag` to each of a tenant's rows that lacks it, in `ids` order, each read fresh on one open store and committed alone; an id the tenant does not hold is skipped. */
+export function addTagToEntries(hippoRoot: string, tenantId: string, ids: readonly string[], tag: string): void {
+  const db = openStore(hippoRoot);
+  try {
+    const live = selectEntriesByIds(db, ids, tenantId);
+    for (const id of new Set(ids)) {
+      const entry = live.get(id);
+      if (!entry || entry.tags.includes(tag)) continue;
+      writeEntryOn(db, hippoRoot, { ...entry, tags: [...entry.tags, tag] });
+    }
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
 /** writeEntry on the caller's open store, so a loop of writes opens the store once; each row still commits alone. */
 export function writeEntryOn(db: DatabaseSyncLike, hippoRoot: string, entry: MemoryEntry, opts?: WriteEntryOptions): void {
   try {

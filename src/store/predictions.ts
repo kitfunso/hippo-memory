@@ -24,7 +24,7 @@
  */
 
 import { BadRequestError, NotFoundError } from '../api-errors.js';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../db.js';
+import { openHippoDb, closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../db.js';
 import { writeEntryAt } from './sqlite/entry-writes-group.js';
 import { assertTenantId } from '../tenant.js';
 import { createMemory, Layer, type MemoryEntry, type MemoryKind } from '../memory.js';
@@ -279,19 +279,8 @@ export function closePrediction(
   const now = new Date().toISOString();
   const db = openHippoDb(hippoRoot);
   try {
-    db.exec('BEGIN IMMEDIATE');
-    try {
-      const row = closeOpenPredictionRow(db, tenantId, id, opts, { now, actor });
-      db.exec('COMMIT');
-      return rowToPrediction(row);
-    } catch (e) {
-      try {
-        db.exec('ROLLBACK');
-      } catch {
-        // Ignore rollback failures — the throw below is what matters.
-      }
-      throw e;
-    }
+    const row = withWriteScope(db, 'close_prediction', () => closeOpenPredictionRow(db, tenantId, id, opts, { now, actor }));
+    return rowToPrediction(row);
   } finally {
     closeHippoDb(db);
   }

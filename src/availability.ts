@@ -79,6 +79,12 @@ function median(nums: readonly number[]): number {
   return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
 }
 
+function parseTimestamps(refs: readonly AgeRef[]): { id: string; ts: number }[] {
+  return refs
+    .map((e) => ({ id: e.id, ts: Date.parse(e.created) }))
+    .filter((e) => Number.isFinite(e.ts));
+}
+
 /**
  * Detect availability/recency bias in a recall result.
  *
@@ -103,12 +109,8 @@ export function detectAvailabilityBias(opts: DetectAvailabilityBiasOpts): Availa
   const minPool = opts.minPool ?? DEFAULT_MIN_POOL;
   const minOlderPassedOver = opts.minOlderPassedOver ?? DEFAULT_MIN_OLDER_PASSED_OVER;
 
-  const topK = opts.topK
-    .map((e) => ({ id: e.id, ts: Date.parse(e.created) }))
-    .filter((e) => Number.isFinite(e.ts));
-  const pool = opts.pool
-    .map((e) => ({ id: e.id, ts: Date.parse(e.created) }))
-    .filter((e) => Number.isFinite(e.ts));
+  const topK = parseTimestamps(opts.topK);
+  const pool = parseTimestamps(opts.pool);
 
   if (topK.length < minReturned || pool.length < minPool) return null;
 

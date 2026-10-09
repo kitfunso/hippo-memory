@@ -16,7 +16,7 @@
  */
 
 import { createHash } from 'node:crypto';
-import { openHippoDb, closeHippoDb, rethrowIfSqliteBlocked, type DatabaseSyncLike } from '../db.js';
+import { openHippoDb, closeHippoDb, rethrowIfSqliteBlocked, withWriteScope, type DatabaseSyncLike } from '../db.js';
 import type { RerankStep } from '../core/search-types.js';
 import { DELIVERY_LEDGER_VERSION, isBoundaryEvent, type DeliveryEventInput } from '../delivery-recorder.js';
 import { errorMessage, log } from '../log.js';
@@ -80,8 +80,7 @@ export function writeRecallTrace(db: DatabaseSyncLike, input: RecallTraceInput):
   try {
     const queryHash = createHash('sha256').update(input.query).digest('hex').slice(0, 16);
     const ts = new Date().toISOString();
-    db.exec('BEGIN IMMEDIATE');
-    try {
+    return withWriteScope(db, 'write_recall_trace', () => {
       const insertTrace = db.prepare(`
         INSERT INTO recall_traces (ts, tenant_id, session_id, pipeline, query_hash, query_length, result_count, explain_mode)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -113,12 +112,8 @@ export function writeRecallTrace(db: DatabaseSyncLike, input: RecallTraceInput):
         );
       });
 
-      db.exec('COMMIT');
       return traceId;
-    } catch (error) {
-      try { db.exec('ROLLBACK'); } catch { /* already rolled back; keep the original error */ }
-      throw error;
-    }
+    });
   } catch (error) {
     log.error(`recall trace write failed: ${errorMessage(error)}`);
     return null;
@@ -351,8 +346,7 @@ function nextTurnSeq(db: DatabaseSyncLike, input: DeliveryEventInput): number {
 /** One event plus its candidates in one write transaction, then prune; fail-soft. The caller must not hold a transaction on `db`. */
 export function writeDeliveryEvent(db: DatabaseSyncLike, input: DeliveryEventInput): number | null {
   try {
-    db.exec('BEGIN IMMEDIATE');
-    try {
+    return withWriteScope(db, 'write_delivery_event', () => {
       // Missing-session and sub-agent events are not turns of a session, so they get no number and no duplicate check.
       const isTurn = input.sessionId !== null && (input.sessionState === 'payload' || input.sessionState === 'env');
       const duplicateOf = isTurn ? findDuplicateTurn(db, input) : null;
@@ -379,12 +373,8 @@ export function writeDeliveryEvent(db: DatabaseSyncLike, input: DeliveryEventInp
       const pruneFrom = Math.min(Date.parse(input.ts), Date.now());
       const cutoff = new Date(pruneFrom - DELIVERY_LEDGER_RETENTION_DAYS * DAY_MS).toISOString();
       db.prepare(`DELETE FROM delivery_events WHERE ts < ?`).run(cutoff);
-      db.exec('COMMIT');
       return eventId;
-    } catch (error) {
-      try { db.exec('ROLLBACK'); } catch { /* SQLite may already have rolled back (SQLITE_FULL, IOERR); keep the original error */ }
-      throw error;
-    }
+    });
   } catch (error) {
     // The prompt hook's stderr shows this exact `[hippo] delivery ledger` line, so it stays off the logger's format.
     console.error(`[hippo] delivery ledger write failed: ${errorMessage(error)}`);

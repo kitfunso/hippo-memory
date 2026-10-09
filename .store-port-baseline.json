@@ -4,10 +4,10 @@
   "storeBranches": 4,
   "routesWithoutStore": 5,
   "sqliteOnlyRoutes": 2,
-  "routesOnLoop": 64,
+  "routesOnLoop": 55,
   "twinFunctions": 0,
-  "sqlOutside": 11,
-  "txLiterals": 28,
+  "sqlOutside": 10,
+  "txLiterals": 12,
   "openersOutsideByFile": {
     "src/agent-memories/sync.ts": 3,
     "src/api/dormant.ts": 4,
@@ -43,15 +43,12 @@
     "src/incidents.ts": 6,
     "src/policies.ts": 1,
     "src/project-briefs.ts": 2,
-    "src/quarantine.ts": 1,
     "src/skills.ts": 1
   },
   "sqliteLocalMethods": [
     "applyOutcome",
     "applyOutcomeToLastRecall",
-    "archiveRaw",
-    "finishLastRecall",
-    "writeEntry"
+    "finishLastRecall"
   ],
   "sqliteOnlyRoutesList": [
     "POST /v1/memories/:id/promote",

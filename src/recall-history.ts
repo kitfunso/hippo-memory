@@ -161,17 +161,8 @@ export function detectAnchoring(
     }
   }
 
-  // memory_dominance check FIRST (wins on tie). Count distinct queryHashes in history
-  // where topMemoryId === currentTopMemoryId (excluding null tops).
-  const matchingQueryHashes = new Set<number>();
-  for (const entry of history) {
-    if (entry.topMemoryId === currentTopMemoryId) {
-      matchingQueryHashes.add(entry.queryHash);
-    }
-  }
-  // Include current query in the count.
-  matchingQueryHashes.add(currentQueryHash);
-  const queryCount = matchingQueryHashes.size;
+  // memory_dominance check FIRST (wins on tie).
+  const queryCount = countDistinctQueries(history, currentQueryHash, currentTopMemoryId);
   if (queryCount >= minDominance) {
     return {
       reason: 'memory_dominance',
@@ -182,21 +173,46 @@ export function detectAnchoring(
     };
   }
 
-  // query_repeat check: is currentQueryHash present in the last `recentRepeatWindow`
-  // entries AND was that entry's topMemoryId === currentTopMemoryId?
-  const r1Slice = history.slice(-recentRepeatWindow);
-  for (const entry of r1Slice) {
-    if (entry.queryHash === currentQueryHash && entry.topMemoryId === currentTopMemoryId) {
-      return {
-        reason: 'query_repeat',
-        memoryId: currentTopMemoryId,
-        summary: `Same query phrasing as a recent recall returned the same top result (${currentTopMemoryId}); you may be re-asking the same question.`,
-        source: 'j1-recurrence',
-      };
-    }
+  if (isRecentRepeat(history, recentRepeatWindow, currentQueryHash, currentTopMemoryId)) {
+    return {
+      reason: 'query_repeat',
+      memoryId: currentTopMemoryId,
+      summary: `Same query phrasing as a recent recall returned the same top result (${currentTopMemoryId}); you may be re-asking the same question.`,
+      source: 'j1-recurrence',
+    };
   }
 
   return null;
+}
+
+// Count distinct queryHashes in history where topMemoryId === the current top
+// (excluding null tops), plus the current query itself.
+function countDistinctQueries(
+  history: RecallHistorySnapshot,
+  currentQueryHash: number,
+  currentTopMemoryId: string,
+): number {
+  const matchingQueryHashes = new Set<number>();
+  for (const entry of history) {
+    if (entry.topMemoryId === currentTopMemoryId) {
+      matchingQueryHashes.add(entry.queryHash);
+    }
+  }
+  matchingQueryHashes.add(currentQueryHash);
+  return matchingQueryHashes.size;
+}
+
+// query_repeat check: is currentQueryHash present in the last `recentRepeatWindow`
+// entries AND was that entry's topMemoryId === currentTopMemoryId?
+function isRecentRepeat(
+  history: RecallHistorySnapshot,
+  recentRepeatWindow: number,
+  currentQueryHash: number,
+  currentTopMemoryId: string,
+): boolean {
+  return history
+    .slice(-recentRepeatWindow)
+    .some((entry) => entry.queryHash === currentQueryHash && entry.topMemoryId === currentTopMemoryId);
 }
 
 // ---------------------------------------------------------------------------

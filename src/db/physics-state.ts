@@ -6,6 +6,7 @@
 
 import { evalNow } from '../ablation.js';
 import type { DatabaseSyncLike } from '../db.js';
+import { withWriteScope } from './busy.js';
 import type { MemoryEntry } from '../memory.js';
 import type { PhysicsParticle } from '../physics.js';
 import { computeMass, computeCharge, computeTemperature, vecZero } from '../physics.js';
@@ -139,8 +140,7 @@ export function savePhysicsState(
       updated_at = datetime('now')
   `);
 
-  db.exec('BEGIN IMMEDIATE');
-  try {
+  withWriteScope(db, 'save_particles', () => {
     for (const p of particles) {
       stmt.run(
         p.memoryId,
@@ -152,11 +152,7 @@ export function savePhysicsState(
         p.lastSimulation,
       );
     }
-    db.exec('COMMIT');
-  } catch (error) {
-    try { db.exec('ROLLBACK'); } catch { /* already rolled back; keep the original error */ }
-    throw error;
-  }
+  });
 }
 
 /**
