@@ -102,7 +102,7 @@ describe('check-store-port.mjs', () => {
   it('counts store ternaries and kind checks in src/api, twins, and routes without storeReady', () => {
     const api = "export function fooThroughStore() {}\nexport const f = (ctx: any) => (ctx.store ? 1 : 2);\nexport const g = (store: any) => store.kind !== 'sqlite';\nexport const h = ({ store }: any) => (store ? 1 : 2);\n";
     const server = "const V1_ROUTES = [\n  { method: 'GET', path: '/a', handler: a },\n  { method: 'GET', path: '/b', storeReady: 'base', handler: b },\n];\n";
-    withFixture({ 'src/api/a.ts': api, 'src/server.ts': server }, null, ({ run }) => {
+    withFixture({ 'src/api/a.ts': api, 'src/server/route-table.ts': server }, null, ({ run }) => {
       expect(list(run)).toMatchObject({ storeBranches: '3', twinFunctions: '1', routesWithoutStore: '1' });
     });
   });
@@ -189,8 +189,8 @@ describe('check-store-port.mjs', () => {
     });
   });
 
-  it('exits 1 when src/server.ts has no V1_ROUTES', () => {
-    withFixture({ 'src/server.ts': 'export const ROUTES = [];\n' }, null, ({ run }) => {
+  it('exits 1 when src/server/route-table.ts has no V1_ROUTES', () => {
+    withFixture({ 'src/server/route-table.ts': 'export const ROUTES = [];\n' }, null, ({ run }) => {
       const r = run('--list');
       expect(r.status).toBe(1);
       expect(r.stderr).toContain('V1_ROUTES');

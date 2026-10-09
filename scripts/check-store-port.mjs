@@ -111,7 +111,7 @@ function countTwins(sf) {
 function countRoutesWithoutStore(text) {
   const start = text.indexOf('const V1_ROUTES');
   if (start < 0) {
-    console.error('check-store-port: `const V1_ROUTES` not found in src/server.ts; the route count would read 0. Update countRoutesWithoutStore to the new route table.');
+    console.error('check-store-port: `const V1_ROUTES` not found in src/server/route-table.ts; the route count would read 0. Update countRoutesWithoutStore to the new route table.');
     process.exit(1);
   }
   const end = text.indexOf('\n];', start);
@@ -148,7 +148,7 @@ function measure() {
     if (file !== TX_OWNER) out.txLiterals += countTxLiterals(sf);
     if (file.startsWith('src/api/')) out.storeBranches += countStoreBranches(sf);
     out.twinFunctions += countTwins(sf);
-    if (file === 'src/server.ts') out.routesWithoutStore = countRoutesWithoutStore(text);
+    if (file === 'src/server/route-table.ts') out.routesWithoutStore = countRoutesWithoutStore(text);
     if (file === 'src/store/sqlite/local.ts') sqliteLocalMethods = localMethods(sf);
   }
   return { ...out, openersOutsideByFile: byFile, sqlOutsideByFile: sqlByFile, sqliteLocalMethods };

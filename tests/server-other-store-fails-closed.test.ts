@@ -21,7 +21,7 @@ import { portOnlyStoreWithoutVectorReads } from './_helpers/port-only-store.js';
 import { seeded } from './_helpers/recall-golden-seed.js';
 
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
-const serverSource = readFileSync(join(repoRoot, 'src/server.ts'), 'utf8');
+const serverSource = readFileSync(join(repoRoot, 'src/server/route-table.ts'), 'utf8');
 
 /** 'METHOD /path' for every V1_ROUTES entry the stub store cannot run (no group named, or one besides 'base'), each :param and (\d+) slot filled with 1. */
 function unportedV1Routes(): string[] {
