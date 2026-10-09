@@ -7,7 +7,7 @@
 
 ## What was built
 
-The delivery ledger now writes one boundary row for each accepted call of `hippo pre-compact` and `hippo compact-resume`. No schema change: `event_type` has no CHECK constraint (`src/db/migrations/v50.ts:10`), and `DeliveryEventType` gains `pre-compact` and `compact-resume` (`src/delivery-recorder.ts:10`). `ledger_version` moves from 1 to 2 (`src/delivery-recorder.ts:24`). One duplicate rule covers both boundary types (`src/store/recall-trace.ts:307`, `:320`). The recorder starter is shared (`src/cli/shared.ts:545`). `pre-compact` records through an `onBoundary` callback (`src/capture/compact.ts:129-134`, `src/cli/session-hooks.ts:678-689`). `compact-resume` records in `cmdCompactResume` (`src/cli/session-hooks.ts:97`, `:111`, `:147`). A boundary row carries no prompt hash whatever the payload holds (`src/delivery-recorder.ts:293`). What each hook prints, saves and exits with is unchanged.
+The delivery ledger now writes one boundary row for each accepted call of `hippo pre-compact` and `hippo compact-resume`. No schema change: `event_type` has no CHECK constraint (`src/db/migrations/v50.ts:10`), and `DeliveryEventType` gains `pre-compact` and `compact-resume` (`src/delivery-recorder.ts:10`). `ledger_version` moves from 1 to 2 (`src/delivery-recorder.ts:24`). One duplicate rule covers both boundary types (`src/store/recall-trace.ts:302`, `:315`). The recorder starter is shared (`src/cli/shared.ts:545`). `pre-compact` records through an `onBoundary` callback (`src/capture/compact.ts:128-133`, `src/cli/session-hooks.ts:674-685`). `compact-resume` records in `cmdCompactResume` (`src/cli/session-hooks.ts:97`, `:111`, `:147`). A boundary row carries no prompt hash whatever the payload holds (`src/delivery-recorder.ts:293`). What each hook prints, saves and exits with is unchanged.
 
 ## What ran
 
@@ -25,6 +25,7 @@ npm --prefix C:/Users/skf_s/hippo-wt-z10b run test:delivery-ledger
 - Mutations, each caught: the duplicate rule limited to `pre-compact` (caught by the `compact-resume` W1 and W6 cases); the boundary callback moved ahead of the early returns in `runPreCompact` (8 tests failed); no try/catch around the callback (only U1 failed); no flush before `process.exit` in `cmdCompactResume` (4 tests failed).
 - Store-open count for `compact-resume`: `{local: 1}` with the delivery ledger on and with it off (`tests/hook-store-open-count.test.ts`).
 - Again at `018ce0ff`, after the merge of master `6bd104a5`, two vitest runs with `--maxWorkers=1`. `tests/delivery-ledger tests/recall-trace tests/elapsed-time-upper-bounds.test.ts`: 11 files, 168 pass; it covers every file `npm run test:delivery-ledger` selects. `tests/compaction-pre-compact.test.ts`, `tests/compaction-callers.test.ts`, `tests/pre-compact-e2e.test.ts`, `tests/compact-resume-text.test.ts`, `tests/hook-store-open-count.test.ts`, `tests/stdin-bounded.test.ts`, `tests/hooks.test.ts`: 7 files, 169 pass, 4 skipped. Not run again at that head: `tests/pilot-arm-hook.test.ts`, `tests/copilot-hooks-cli.test.ts`, `tests/prompt-hook-context.test.ts`.
+- Again at `1deacaa7`, after the merge of master `1b906a5c`, the same two vitest runs: 11 files, 168 pass; 7 files, 170 pass, 4 skipped. Master's #653 put `writeDeliveryEvent` inside `withWriteScope`, so this run covers the duplicate rule on the combined function. The hand-driven sequence gave the table below at that head too. The file and line references in this note are as of that head.
 
 The full suite was not run here. CI runs the full suite on the pull request. The hand-driven sequence below was run again at `018ce0ff`. The medians were taken at `3fe2473b` and were not run again.
 
@@ -56,7 +57,7 @@ Stdout, ledger on against off, same inputs:
 
 No run printed a delivery ledger stderr line. The raw `compact-resume` bytes differ only in ISO timestamps, which the mask removes, as test B9 does.
 
-The driver first sent the same prompt text twice, and that form depends on timing. Two calls with one prompt hash inside `DELIVERY_DUPLICATE_WINDOW_MS` (2000 ms, `src/store/recall-trace.ts:241`) are one turn under the slice 1 rule (`src/store/recall-trace.ts:330-339`), so the second row gets no turn number and the last prompt gets turn 2. One run at `018ce0ff` gave exactly that. The earlier runs gave the table above, so their two calls were more than 2000 ms apart. The driver now sends a different second prompt, as B7 does, and the run at `018ce0ff` with that driver gave the table above.
+The driver first sent the same prompt text twice, and that form depends on timing. Two calls with one prompt hash inside `DELIVERY_DUPLICATE_WINDOW_MS` (2000 ms, `src/store/recall-trace.ts:236`) are one turn under the slice 1 rule (`src/store/recall-trace.ts:325-334`), so the second row gets no turn number and the last prompt gets turn 2. One run at `018ce0ff` gave exactly that. The earlier runs gave the table above, so their two calls were more than 2000 ms apart. The driver now sends a different second prompt, as B7 does, and the run at `018ce0ff` with that driver gave the table above.
 
 ## On/off medians
 
