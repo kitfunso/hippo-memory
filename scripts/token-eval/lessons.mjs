@@ -1,7 +1,7 @@
 // Z0 lesson families: tasks-file rules (prereg 32-46, 62-68, 111), the per-seed task order (117-119), roles and teach text.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { createHash } from 'node:crypto';
+import { checkerFiles } from './checker-identity.mjs';
 
 export const KINDS = ['teach', 'apply', 'no-lesson'];
 const SOURCES = ['maintainer', 'template'];
@@ -31,42 +31,6 @@ function checkTaskRole(t, families, index) {
   if (t.kind === 'apply' && !t.keyPhraseAllowed && t.prompt.toLowerCase().includes(hit.lesson.keyPhrase.toLowerCase())) {
     throw new Error(`task ${t.id}: the apply prompt holds lesson ${t.lessonId}'s key phrase "${hit.lesson.keyPhrase}" (set keyPhraseAllowed to keep it)`);
   }
-}
-
-const STATIC_IMPORT = /^[ \t]*(?:import|export)\b[^'"`;]*?(['"])(\.\.?\/[^'"\n]+)\1/gm;
-const CALL_IMPORT = /\b(?:import|require)\s*\(\s*(['"])(\.\.?\/[^'"\n]+)\1/g;
-
-// Fails closed on an import that names no file, so a missing extension cannot hide a helper.
-function checkerFiles(entry) {
-  const entryDir = path.dirname(entry);
-  const seen = new Map();
-  const queue = [{ abs: entry }];
-  while (queue.length) {
-    const { abs, from, spec } = queue.pop();
-    if (seen.has(abs)) continue;
-    let bytes;
-    try {
-      bytes = fs.readFileSync(abs);
-    } catch (e) {
-      if (from && (e.code === 'ENOENT' || e.code === 'EISDIR')) {
-        throw new Error(`checker ${path.basename(from)} imports "${spec}", which is not a file at ${abs}; write the file name with its extension`);
-      }
-      throw e;
-    }
-    seen.set(abs, [abs === entry ? '' : path.relative(entryDir, abs).split(path.sep).join('/'), createHash('sha256').update(bytes).digest('hex')]);
-    const text = bytes.toString('utf8');
-    for (const re of [STATIC_IMPORT, CALL_IMPORT]) {
-      for (const m of text.matchAll(re)) {
-        queue.push({ abs: path.resolve(path.dirname(abs), m[2]), from: abs, spec: m[2] });
-      }
-    }
-  }
-  return [...seen.values()].sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
-}
-
-/** The checker's content (entry, its local imports, its args), so a moved results folder reads unchanged and a changed helper reads changed; computed specifiers, packages and run-time reads are outside it. */
-export function checkerIdentity(lesson) {
-  return createHash('sha256').update(JSON.stringify([checkerFiles(lesson.checkPath), lesson.check.args ?? []])).digest('hex');
 }
 
 function checkLesson(l, baseDir) {

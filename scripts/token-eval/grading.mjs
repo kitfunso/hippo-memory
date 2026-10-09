@@ -2,7 +2,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { agentGit } from './checks.mjs';
-import { checkerIdentity } from './lessons.mjs';
+import { checkerIdentity } from './checker-identity.mjs';
 import { isReaderHidden } from './workspace.mjs';
 import { RESTORABLE } from './surfaces.mjs';
 import { surfaceBytes } from './leaks.mjs';

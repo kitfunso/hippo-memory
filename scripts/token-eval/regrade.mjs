@@ -6,7 +6,8 @@ import { git, sh } from './exec.mjs';
 import { armEnv, childEnv } from './arms.mjs';
 import { checkoutBase, writeHiddenTests } from './workspace.mjs';
 import { runCheck, stateCommit, agentGit, CheckerError, WorkspaceGitError } from './checks.mjs';
-import { checkerIdentity, lessonIndex } from './lessons.mjs';
+import { checkerIdentity } from './checker-identity.mjs';
+import { lessonIndex } from './lessons.mjs';
 import { cellKey, followedOf, isBool, resolvedOf, parseZ0Records } from './z0-records.mjs';
 
 export const ROW_SCHEMA = 'z0-regrade/1';

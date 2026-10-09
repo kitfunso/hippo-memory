@@ -3,7 +3,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { readFileSync, realpathSync, renameSync, rmSync, writeFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
-import { checkerIdentity } from '../scripts/token-eval/lessons.mjs';
+import { checkerIdentity } from '../scripts/token-eval/checker-identity.mjs';
 import { CHECKS, cleanup } from './fixtures/z0-harness.js';
 import { cli, copyOut, dumpsIn, grading, keyOf, lessonOf, readGrading, regrade, rowFor, rowsOf, sharedRun, TOKEN, type Shared } from './fixtures/z0-regrade.js';
 
