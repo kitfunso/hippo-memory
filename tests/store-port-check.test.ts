@@ -287,6 +287,41 @@ describe('check-store-port.mjs', () => {
     });
   });
 
+  it('fails and names each surface file that records a recall itself, in a route or a CLI verb', () => {
+    const route = [
+      "import { noteRecall as n } from '../../api/recall-record.js';",
+      'export const f = (s: any, ctx: any) => {',
+      '  s.bumpRecallStats(1);',
+      "  recordTokens(ctx, 'http_recall', {});",
+      '};',
+    ].join('\n');
+    const verb ="export const g = (store: any) => store.recordTokens({ surface: 'recall', items: 1 });\n";
+    withFixture({ 'src/server/routes/recall.ts': route, 'src/cli/recall.ts': verb }, {}, ({ run }) => {
+      for (const args of [[], ['--list'], ['--update']]) {
+        const r = run(...args);
+        expect(r.status, args.join()).toBe(1);
+        expect(r.stderr).toContain('src/server/routes/recall.ts:1 noteRecall');
+        expect(r.stderr).toContain('src/server/routes/recall.ts:3 bumpRecallStats');
+        expect(r.stderr).toContain('src/server/routes/recall.ts:4 recordTokens with a recall label');
+        expect(r.stderr).toContain('src/cli/recall.ts:1 recordTokens with a recall label');
+        expect(r.stderr).toContain('recall-finish.ts');
+      }
+    });
+  });
+
+  it('lets src/api and src/mcp record a recall, and a route book another label or name a recorder in a comment or string', () => {
+    const records = ['export const f = (s: any, ring: any, ctx: any) => {', '  noteRecall(ring);', '  s.bumpRecallStats(1);', "  recordTokens(ctx, 'mcp_recall', {});", '};'].join('\n');
+    const route = [
+      '// noteRecall(ring) and bumpRecallStats(1)',
+      'export const s = "recordTokens(ctx, \'recall\')";',
+      "export const g = (ctx: any) => recordTokens(ctx, 'http_context', { note: 'recalled' });",
+    ].join('\n');
+    withFixture({ 'src/api/recall-finish.ts': records, 'src/mcp/recall-tools.ts': records, 'src/server/routes/recall.ts': route }, {}, ({ run }) => {
+      const r = run();
+      expect(r.status, r.stderr).toBe(0);
+    });
+  });
+
   it('passes on the real repo', () => {
     const r = spawnSync(process.execPath, [SCRIPT], { cwd: REPO, encoding: 'utf-8' });
     expect(r.status, r.stderr).toBe(0);

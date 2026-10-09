@@ -4,6 +4,7 @@
 // functions, SQL prepared outside the data layer, hand-written BEGIN literals) are counted and may fall but never rise above .store-port-baseline.json.
 // routesOnLoop counts the routes whose SQLite work still runs on the server thread: V1_ROUTES rows without `loop: 'off'`, plus the routes outside that table.
 // carrierFiles counts src files other than src/api/on-store.ts that name andThen or onStore, the sync-or-async reply carrier; the list is pinned so a new file fails even when another stops.
+// A file under src/server/routes or src/cli that feeds a recall ring, counts recall stats or books a recall token row fails outright.
 // Usage: check-store-port.mjs [--list] [--update]. --update lowers the baseline and refuses to raise any number.
 
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -18,6 +19,10 @@ const NUMBERS = ['openersOutside', 'openersInCli', 'storeBranches', 'routesWitho
 const OFF_TABLE_ROUTES = ['POST /mcp', 'GET /mcp/stream', 'POST /v1/connectors/slack/events', 'POST /v1/connectors/github/events', 'GET /health', 'GET /ready', 'POST add-on routes'];
 const TX_OWNER = 'src/db/busy.ts';
 const CARRIER_OWNER = 'src/api/on-store.ts';
+// What src/api/recall-finish.ts does for a surface that passes `recordAs`. No baseline: one hit fails. src/mcp is pending and not read.
+const RECALL_RECORDERS = new Set(['bumpRecallStats', 'noteRecall']);
+const RECALL_LEDGER_LABELS = new Set(['recall', 'http_recall', 'mcp_recall']);
+const recordsItsOwnRecall = (f) => f.startsWith('src/server/routes/') || f.startsWith('src/cli/');
 
 function tsFiles(dir, out = []) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
@@ -173,6 +178,31 @@ function usesCarrier(sf) {
   return found;
 }
 
+const namesRecallLabel = (node) => (ts.isStringLiteralLike(node) && RECALL_LEDGER_LABELS.has(node.text)) || ts.forEachChild(node, namesRecallLabel) === true;
+
+/** `file:line name` for each mention of a recall recorder, and each recordTokens call that names a recall label; comments and strings never match. */
+function recallRecordsIn(file, sf) {
+  const hits = [];
+  const at = (node, what) => hits.push(`${file}:${sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1} ${what}`);
+  const visit = (node) => {
+    if (ts.isIdentifier(node) && RECALL_RECORDERS.has(node.text)) at(node, node.text);
+    else if (ts.isCallExpression(node)) {
+      const callee = ts.isPropertyAccessExpression(node.expression) ? node.expression.name : node.expression;
+      if (ts.isIdentifier(callee) && callee.text === 'recordTokens' && node.arguments.some(namesRecallLabel)) at(node, 'recordTokens with a recall label');
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sf);
+  return hits;
+}
+
+/** Every surface file outside src/mcp that records a recall itself. */
+function strayRecallRecords() {
+  return (existsSync('src') ? tsFiles('src') : [])
+    .filter(recordsItsOwnRecall)
+    .flatMap((file) => recallRecordsIn(file, ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)));
+}
+
 /** Method names of `interface SqliteLocal`: each is a write only hippo.db can run, so the list grows only by a hand edit of the baseline. */
 function localMethods(sf) {
   const local = sf.statements.find((s) => ts.isInterfaceDeclaration(s) && s.name.text === 'SqliteLocal');
@@ -237,6 +267,14 @@ function rises(base, cur) {
   const onlyListed = base?.sqliteOnlyRoutesList ?? [];
   for (const r of cur.sqliteOnlyRoutesList) if (!onlyListed.includes(r)) rose.push([`sqliteOnly ${r}`, 'unlisted', 'declared']);
   return rose;
+}
+
+const strays = strayRecallRecords();
+if (strays.length > 0) {
+  console.error('A surface records a recall itself:');
+  for (const hit of strays) console.error(`  ${hit}`);
+  console.error('Pass `recordAs` to retrieve() instead: src/api/recall-finish.ts feeds the ring, counts the stats and books the token row.');
+  process.exit(1);
 }
 
 const current = measure();
