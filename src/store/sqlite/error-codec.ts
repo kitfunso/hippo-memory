@@ -2,9 +2,9 @@
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../../api-errors.js';
 import { IncompatibleBinaryError, StoreBusyError } from '../../db.js';
 import { BodyTimeoutError, BodyTooLargeError, HttpError } from '../../http-util.js';
-import { log } from '../../log.js';
+import { errorMessage, log } from '../../log.js';
 import { ScopeForbiddenError } from '../../recall-scope.js';
-import { RejectedValueError } from '../../rejection.js';
+import { RejectedValueError } from '../rejection.js';
 import { OtherStoreFolderError, SqliteBlockedError, StoreNotPortedError } from '../../util/sqlite-blocked.js';
 
 type FieldValue = string | number | boolean | null;
@@ -54,7 +54,7 @@ function ownFields(err: Error) {
 
 /** Worker side. A thrown value that is not an Error carries its text and no class. */
 export function encodeError<E>(err: E, depth = 0): WireError {
-  if (!(err instanceof Error)) return { classes: [], message: String(err), stack: undefined, fields: {}, cause: undefined };
+  if (!(err instanceof Error)) return { classes: [], message: errorMessage(err), stack: undefined, fields: {}, cause: undefined };
   const cause = err.cause === undefined || depth >= MAX_CAUSES ? undefined : encodeError(err.cause, depth + 1);
   return { classes: classNames(err), message: err.message, stack: err.stack, fields: ownFields(err), cause };
 }

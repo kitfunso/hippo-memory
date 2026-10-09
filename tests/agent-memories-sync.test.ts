@@ -8,7 +8,7 @@ import type { DatabaseSyncLike } from '../src/db.js';
 import { consolidate } from '../src/consolidate/sleep.js';
 import { importAtSessionEnd, importForStore, importProjectMemories, type Machine } from '../src/agent-memories/sync.js';
 import type { ImportReport } from '../src/agent-memories/report.js';
-import { insertDormantRow } from '../src/dormant.js';
+import { insertDormantRow } from '../src/store/dormant.js';
 import { Layer, type MemoryEntry } from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { deriveOriginProject } from '../src/project-identity.js';

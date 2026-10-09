@@ -59,14 +59,23 @@ function runInChild(job: SleepJob): Promise<SleepResult> {
 
 let turn: Promise<void> = Promise.resolve();
 
+// One running and one waiting: each further sleep would only hold a request open behind work the waiting one already covers.
+const MAX_SLEEPS_IN_LINE = 2;
+const SLEEP_RETRY_AFTER_SEC = 30;
+let inLine = 0;
+
 /** `sleep` for the HTTP route: same result and errors, run outside the serving process and stopped at the deadline (10 minutes, or HIPPO_SLEEP_TIMEOUT_MS). */
 export function sleepInChild(ctx: Context, opts: SleepOpts): Promise<SleepResult> {
   // The child reopens the store by path, which only SQLite has; any other store keeps sleep's own refusal.
   if (ctx.store && ctx.store.kind !== 'sqlite') return sleep(ctx, opts);
+  if (inLine >= MAX_SLEEPS_IN_LINE) {
+    return Promise.reject(new HttpError(503, 'a sleep is already running and another is waiting; retry when one has finished', SLEEP_RETRY_AFTER_SEC));
+  }
+  inLine += 1;
   const job: SleepJob = { hippoRoot: ctx.hippoRoot, tenantId: ctx.tenantId, actor: ctx.actor, opts };
   // One sleep at a time, as on the server's single thread: a second request waits its turn and does not fight the first for the write lock.
   const run = turn.then(() => runInChild(job));
   // A failed sleep reaches its own request through `run`; the queue only needs to know the turn is over.
-  turn = run.then(() => undefined, () => undefined);
+  turn = run.then(() => undefined, () => undefined).finally(() => { inLine -= 1; });
   return run;
 }

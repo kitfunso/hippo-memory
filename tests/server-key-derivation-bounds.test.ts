@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHook } from 'node:async_hooks';
 import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb } from '../src/db.js';
-import { apiKeyVerifyStats, createApiKey } from '../src/auth.js';
+import { apiKeyVerifyStats, createApiKey } from '../src/store/auth.js';
 import { serve, sqliteStore, type HippoStore, type ServeOpts } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
 

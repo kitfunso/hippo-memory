@@ -6,9 +6,9 @@ import {
   applyRebuildResult,
   clearSummaryDirtyAfterBuild,
 } from './store/summaries.js';
-import { RejectedValueError } from './rejection.js';
+import { RejectedValueError } from './store/rejection.js';
 import { redactSecretsStrict } from './secret-detect.js';
-import { fetchWithRetry, llmTimeoutMs } from './http-retry.js';
+import { describeMessageFailure, sendAnthropicMessage } from './util/anthropic-messages.js';
 import { derivationScope, derivationPartitionKey } from './recall-scope.js';
 import { loadConfig } from './config.js';
 import { neverAutoShareTags } from './shared.js';
@@ -76,57 +76,38 @@ Facts:
 
 Write a single concise paragraph (2-4 sentences) that captures all the key information from these facts. This summary will be used to quickly determine if this cluster is relevant to a future query, so include specific names, dates, numbers, and key details. Output ONLY the summary paragraph, no preamble.`;
 
+// Output budget for one summary paragraph, and the shortest reply kept as a summary.
+const SUMMARY_MAX_TOKENS = 400;
+const SUMMARY_MIN_CHARS = 20;
+
 export async function generateDagSummary(
   label: string,
   factContents: string[],
   opts: DagSummaryOptions,
 ): Promise<string | null> {
-  const model = opts.model ?? 'claude-sonnet-4-6';
-  const fetchFn = opts.fetcher ?? fetch;
-
   const factsBlock = factContents.map((f, i) => `${i + 1}. ${redactSecretsStrict(f)}`).join('\n');
   const prompt = DAG_SUMMARY_PROMPT
     .replace('{label}', redactSecretsStrict(label))
     .replace('{facts}', factsBlock);
 
-  let res: Response;
-  try {
-    res = await fetchWithRetry('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': opts.apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model,
-        max_tokens: 400,
-        messages: [{ role: 'user', content: prompt }],
-      }),
-    }, { timeoutMs: llmTimeoutMs(), fetchFn });
-  } catch (err) {
-    opts.onError?.(`request failed: ${errorMessage(err)}`);
+  const reply = await sendAnthropicMessage({
+    apiKey: opts.apiKey,
+    model: opts.model,
+    maxTokens: SUMMARY_MAX_TOKENS,
+    prompt,
+    fetcher: opts.fetcher,
+  });
+  if (!reply.ok) {
+    opts.onError?.(describeMessageFailure(reply.failure));
     return null;
   }
 
-  if (!res.ok) {
-    opts.onError?.(`HTTP ${res.status}`);
+  const defect = certainDefect(reply.text);
+  if (defect !== null) {
+    opts.onError?.(`summary quality refused: ${defect}`);
     return null;
   }
-
-  try {
-    const data: { content?: Array<{ text?: string }> } = await res.json();
-    const text = data.content?.[0]?.text?.trim() ?? '';
-    const defect = certainDefect(text);
-    if (defect !== null) {
-      opts.onError?.(`summary quality refused: ${defect}`);
-      return null;
-    }
-    return text.length >= 20 ? text : null;
-  } catch (err) {
-    opts.onError?.(`unparseable response: ${errorMessage(err)}`);
-    return null;
-  }
+  return reply.text.length >= SUMMARY_MIN_CHARS ? reply.text : null;
 }
 
 export interface DagBuildResult {

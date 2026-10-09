@@ -53,7 +53,7 @@ export async function cmdSleep(
         process.stderr.write = origStderrWrite;
       };
     } catch (err) {
-      log.warn(`could not open log file ${logFile}: ${(err as Error).message}`);
+      log.warn(`could not open log file ${logFile}: ${errorMessage(err)}`);
     }
   }
 
@@ -61,7 +61,7 @@ export async function cmdSleep(
     await cmdSleepCore(hippoRoot, flags);
     if (logFile) console.log('[hippo] sleep complete');
   } catch (err) {
-    if (logFile) console.log(`[hippo] sleep failed: ${(err as Error).message}`);
+    if (logFile) console.log(`[hippo] sleep failed: ${errorMessage(err)}`);
     throw err;
   } finally {
     if (restoreStdout) restoreStdout();

@@ -3,7 +3,7 @@
 import { loadAllEntries } from '../store/entry-reads.js';
 import { deleteEntry, memoriesBackingObjects } from '../store/delete-and-batch.js';
 import { openHippoDb, closeHippoDb } from '../db.js';
-import { auditMemories, AUDIT_OPS, type AuditEvent, type AuditOp } from '../audit.js';
+import { auditMemories, AUDIT_OPS, type AuditEvent, type AuditOp } from '../store/audit.js';
 import * as api from '../api.js';
 import { resolveTenantId } from '../tenant.js';
 import { pruneAuditLog, parseOlderThanFlag } from './audit-prune.js';
@@ -11,6 +11,7 @@ import { printError } from './output.js';
 import { type CliFlags, requireInit, type CommandContext, resolveAuthRoot, boolFlag, flagIsTrue, stringFlag } from './shared.js';
 import { repairAutomaticMemories } from './quality-repair.js';
 import { getGlobalRoot } from '../shared.js';
+import { errorMessage } from '../log.js';
 
 // ---------------------------------------------------------------------------
 // Audit log subcommands (`hippo audit list`)
@@ -97,7 +98,7 @@ function cmdAuditPrune(hippoRoot: string, flags: CliFlags): void {
   try {
     olderThanDays = parseOlderThanFlag(olderThanRaw);
   } catch (e) {
-    printError((e as Error).message);
+    printError(errorMessage(e));
     process.exit(1);
   }
   const tenantId = stringFlag(flags, 'tenant')?.trim() || resolveTenantId({});

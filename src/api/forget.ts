@@ -2,7 +2,7 @@
 
 import { openHippoDb, closeHippoDb } from '../db.js';
 import { BadRequestError, NotFoundError } from '../api-errors.js';
-import type { RejectedValueRow } from '../rejection.js';
+import type { RejectedValueRow } from '../store/rejection.js';
 import { rejectValue, unrejectValue, listRejectionsForTenant } from '../reject-flow.js';
 import { andThen, notPorted, onStore } from './on-store.js';
 import type { Context, StoreReply } from './types.js';

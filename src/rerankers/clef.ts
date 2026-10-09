@@ -5,6 +5,7 @@ import type { SearchResult } from '../core/search-types.js';
 import { createOutageWarning } from './outage-warning.js';
 import { rerankerPost } from './remote.js';
 import { type JsonValue, isJsonObject } from '../json.js';
+import { errorMessage } from '../log.js';
 
 /** The two pretrained CLEF decision models served by Cloudflare Workers AI. */
 export type ClefModel = 'clef-flash' | 'clef';
@@ -198,7 +199,7 @@ export function createClefReranker(model: ClefModel): RerankerFn {
       got = await requestScores(model, query, head, route);
       outage.answered();
     } catch (err) {
-      const reason = err instanceof Error ? err.message : 'unknown error';
+      const reason = errorMessage(err);
       outage.failed(reason);
       return nativeOrder(head, { backend: 'native', requestedModel: model, fallbackReason: reason });
     }

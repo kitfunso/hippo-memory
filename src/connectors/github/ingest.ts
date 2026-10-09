@@ -22,7 +22,7 @@
 import { remember, type Context, type RememberOpts } from '../../api.js';
 import type { DatabaseSyncLike } from '../../db.js';
 import { eventMemory, logEvent, logEventAt, seenEvent } from '../../store/connectors/github.js';
-import { RejectedValueError } from '../../rejection.js';
+import { RejectedValueError } from '../../store/rejection.js';
 import { DuplicateIdempotencyError } from './idempotency.js';
 import { computeIdempotencyKey } from './signature.js';
 import {

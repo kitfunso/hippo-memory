@@ -1,7 +1,7 @@
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../db.js';
 import type { MemoryEntry } from '../memory.js';
-import { rejectionDigest, insertRejectedValue, normalizeValueForRejection } from '../rejection.js';
-import { archiveRawMemory } from '../raw-archive.js';
+import { rejectionDigest, insertRejectedValue, normalizeValueForRejection } from './rejection.js';
+import { archiveRawMemory } from './raw-archive.js';
 import { type MemoryConflict, type MemoryConflictRow, rowToMemoryConflict } from './rows.js';
 import { audit } from './audit-event.js';
 import { syncChangedMirrors, purgeMirrorBestEffort } from './mirrors.js';

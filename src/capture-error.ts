@@ -6,7 +6,7 @@ import { writeEntry } from './store/entry-writes.js';
 import { loadContentsWithTag } from './store/entry-reads.js';
 import { loadConfig } from './config.js';
 import { closeHippoDb, openHippoDb } from './db.js';
-import { recordFailure, type CaptureErrorOutcome, type FailureOutcome } from './failure-log.js';
+import { recordFailure, type CaptureErrorOutcome, type FailureOutcome } from './store/failure-log.js';
 import {
   failureHash,
   failureSignature,

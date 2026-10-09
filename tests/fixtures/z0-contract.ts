@@ -3,6 +3,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export interface Z0Usage { inputTokens: number; cacheWriteTokens: number; cacheReadTokens: number; outputTokens: number }
 export interface Z0Lesson { lessonId: string; first: string; final: string; staleFollow: boolean | null }
+export interface Z0Chain { stored: boolean | null; shown: boolean | null; followed: boolean | null; captured: boolean | null }
 export interface Z0PlanCell {
   seed: number; position: number; arm: string; sequence: string; taskId: string; repo: string;
   kind: string; familyId: string | null; set: string;
@@ -13,7 +14,8 @@ export interface Z0Record extends Z0PlanCell {
   lessons: Z0Lesson[]; usage: { firstSession: Z0Usage; extra: Z0Usage } | null; costUsd: number | null;
   turns: number | null; toolCalls: number | null; fileReads: number | null; shellReads: number | null; repeatedErrors: number | null;
   wallMs: number | null; teachTurns: number | null; correctionTurns: number | null; teachForm: string | null;
-  acceptancePassed: boolean | null; timedOut: boolean; leak: boolean; resolved: boolean; invalid: string | null; void: null;
+  acceptancePassed: boolean | null; timedOut: boolean; leak: boolean; resolved: boolean; invalid: string | null; void: string | null;
+  surfaceRestored?: boolean; chain?: Z0Chain;
   limitRetries: number | null; carryUnionMerges: number | null; carryMerges?: number;
   baseCommit?: string | null; sessionId: string | null; resumeSessionId: string | null; transcriptFound: boolean; hippo: object | null; agentError: string | null;
 }
@@ -23,6 +25,7 @@ const TWO_SEED_ARMS = new Set(['A0', 'A4']);
 const KINDS = new Set(['teach', 'apply', 'no-lesson']);
 const CHECKS = new Set(['pass', 'fail', 'na']);
 const SOURCES = new Set(['maintainer', 'template']);
+const CHAIN_FIELDS: readonly (keyof Z0Chain)[] = ['stored', 'shown', 'followed', 'captured'];
 const USAGE_FIELDS: readonly (keyof Z0Usage)[] = ['inputTokens', 'cacheWriteTokens', 'cacheReadTokens', 'outputTokens'];
 const WORK_FIELDS: readonly (keyof Z0Record)[] = ['turns', 'toolCalls', 'fileReads', 'wallMs', 'teachTurns', 'correctionTurns'];
 
@@ -90,8 +93,13 @@ function checkOutcome(r: Z0Record, crashed: boolean) {
   check(isBool(r.timedOut) && isBool(r.leak) && isBool(r.resolved), 'timedOut, leak, resolved');
   check(r.resolved === resolvedOf(r), 'resolved must follow the literal formula');
   check(r.invalid === null || isName(r.invalid), 'invalid');
-  check(r.void === null, 'void is null until E3');
+  check(r.void === null || isName(r.void), 'void must be null or a reason');
   for (const f of ['limitRetries', 'carryUnionMerges'] as const) check(nullable(f) || isCount(r[f]), f);
+  check(r.surfaceRestored === undefined || isBool(r.surfaceRestored), 'surfaceRestored must be boolean when present');
+  if (r.chain === undefined) return;
+  check(isPlain(r.chain), 'chain must be an object when present');
+  for (const f of CHAIN_FIELDS) check(r.chain[f] === null || isBool(r.chain[f]), `chain.${f} must be boolean or null`);
+  check(r.chain.captured === null || r.arm === 'A2' || r.arm === 'X2', 'chain.captured is set only for A2 and X2');
 }
 
 /** Throws with the field name on the first breach of the per-record contract. */
@@ -102,6 +110,15 @@ export function validateRecord(r: Z0Record) {
   const crashed = !isNullish(r.invalid);
   checkLessons(r, crashed);
   checkOutcome(r, crashed);
+}
+
+const armRunKey = (r: Z0PlanCell) => `${r.sequence}#${r.seed}/${r.arm}`;
+
+/** Per (sequence, seed, arm), the planned cells after its last record: what a run that stops partway leaves (114). */
+export function abandonedTail(records: Z0PlanCell[], planCells: Z0PlanCell[]) {
+  const last = new Map<string, number>();
+  for (const r of records) last.set(armRunKey(r), Math.max(last.get(armRunKey(r)) ?? -1, r.position));
+  return planCells.filter((c) => c.position > (last.get(armRunKey(c)) ?? -1));
 }
 
 const cellKey = (r: Z0PlanCell, position = r.position) => `${r.sequence}#${r.seed}@${position}/${r.arm}`;

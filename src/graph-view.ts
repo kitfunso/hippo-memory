@@ -11,7 +11,7 @@
 import { withGraphReadSnapshot } from './store/graph-reads.js';
 import { graphViewRows } from './store/graph-view-rows.js';
 import type { GraphRows } from './store/port.js';
-import type { EntityType, RelationType } from './graph/types.js';
+import type { EntityType, RelationType } from './store/graph-rows.js';
 
 export interface GraphNode {
   id: number;

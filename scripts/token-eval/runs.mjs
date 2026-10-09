@@ -6,6 +6,7 @@ import { HIPPO_ARMS, armSettings, armEnv, childEnv, writeHippoShim, startupTools
 import { runDirs, freshRunDirs } from './homes.mjs';
 import { stubBaseCommit, assertNoInstructionLinks } from './workspace.mjs';
 import { lessonIndex } from './lessons.mjs';
+import { assertNoPhraseInStub } from './leaks.mjs';
 
 // Loading or validating a tasks file never needs dist/; only a real run does.
 let hippoLib = null;
@@ -39,9 +40,12 @@ function hippoHookSettings(tmpHome) {
   }
 }
 
+/** A hippo store's entries; none when it was never initialised. */
+export const storeEntries = (hippoRoot) => (hippoLib.isInitialized(hippoRoot) ? hippoLib.loadAllEntries(hippoRoot) : []);
+
 export function storeLeaks(hippoRoot, lines) {
-  if (!hippoLib.isInitialized(hippoRoot) || lines.length === 0) return false;
-  const text = hippoLib.loadAllEntries(hippoRoot).map((e) => e.content).join('\n');
+  if (lines.length === 0) return false;
+  const text = storeEntries(hippoRoot).map((e) => e.content).join('\n');
   return lines.some((l) => text.includes(l));
 }
 
@@ -60,7 +64,7 @@ export function hippoSentFor(hippoRoot, sessionIds) {
   }
 }
 
-/** Clone each sequence's repo into the cache, then refuse any task to be run (a screen's screen tasks too) whose stub tree checkoutBase would refuse. */
+/** Clone each sequence's repo into the cache, then refuse any task to be run (a screen's screen tasks too) whose stub tree checkoutBase would refuse or that holds a key phrase. */
 export function cacheTaskRepos(spec, cacheDir, { screen = false } = {}) {
   // Finding a symlinked instruction file here saves abandoning a lockstep run midway.
   for (const s of spec.sequences) {
@@ -70,7 +74,11 @@ export function cacheTaskRepos(spec, cacheDir, { screen = false } = {}) {
       git(['clone', '--quiet', s.repo, cached]);
     }
     const screens = screen ? (spec.families ?? []).filter((f) => f.sequence === s.id && f.screen).map((f) => f.screen) : [];
-    for (const t of [...s.tasks, ...screens]) assertNoInstructionLinks(cached, s.id, t, stubBaseCommit(cached, t.baseRef));
+    for (const t of [...s.tasks, ...screens]) {
+      const stub = stubBaseCommit(cached, t.baseRef);
+      assertNoInstructionLinks(cached, s.id, t, stub);
+      assertNoPhraseInStub(spec, cached, s.id, t, stub);
+    }
   }
 }
 
@@ -86,6 +94,7 @@ export async function openContext(opts) {
     model: opts.model ?? null, maxBudgetUsd: opts.maxBudgetUsd ?? null, settleMs: opts.settleMs ?? 5000, permissionMode: opts.permissionMode ?? 'bypassPermissions',
     limitWaitMs: opts.limitWaitMs ?? 15 * 60_000, sessionTimeoutMs: opts.sessionTimeoutMs ?? 60 * 60_000, limitMaxWaits: opts.limitMaxWaits ?? 96, log: opts.log ?? console.log,
     lessons: lessonIndex(spec.families ?? []), recordsFile: opts.recordsFile ?? 'runs.jsonl', progress: opts.progress ?? {},
+    ledgerFile: path.join(outDir, 'ledger.jsonl'), snapDir: path.join(outDir, 'snap'), canaries: opts.canaries ?? [], foreignDirs: [], leakedRuns: new Map(),
   };
   cacheTaskRepos(spec, ctx.cacheDir, { screen: opts.screen === true });
   const warmDir = path.join(outDir, 'warmup');
@@ -110,23 +119,30 @@ export function startRun(ctx, s, arm, seed, name = s.id) {
   fs.mkdirSync(path.dirname(settingsFile), { recursive: true });
   fs.writeFileSync(settingsFile, JSON.stringify(armSettings(arm, HIPPO_ARMS.has(arm) ? hippoHookSettings(ctx.hookHome) : null), null, 2));
   return {
-    s, arm, seed, dirs, env, settingsFile, cached: path.join(ctx.cacheDir, s.id), seenErrors: new Set(), changes: new Map(), taught: [],
-    rawDir: path.join(ctx.outDir, 'raw', name, arm, `seed${seed}`),
+    s, arm, seed, dirs, env, settingsFile, cached: path.join(ctx.cacheDir, s.id), seenErrors: new Set(), changes: new Map(), taught: [], teachSeen: new Set(), captured: new Map(),
+    rawDir: path.join(ctx.outDir, 'raw', name, arm, `seed${seed}`), runName: name,
   };
 }
 
-/** hippo init on the stub base (A2/A5, first task that runs), through the child env, with LLM extraction off. */
+/** hippo init on the stub base (A2/A5, first task that runs), through the child env, with LLM extraction off and prompt recall pinned on. */
 export function hippoInit(run, fakeHome) {
   const env = { ...childEnv(run.env), HOME: fakeHome, USERPROFILE: fakeHome };
   // --no-schedule: init would otherwise register a machine-wide Task Scheduler job.
   const r = sh(`"${process.execPath}" "${HIPPO_JS}" init --no-schedule`, run.dirs.work, env);
   if (r.status !== 0) throw new Error(`hippo init failed in ${run.dirs.work}: ${r.stderr.slice(-500)}`);
   const cfgPath = path.join(run.dirs.work, '.hippo', 'config.json');
-  const cfg = fs.existsSync(cfgPath) ? JSON.parse(fs.readFileSync(cfgPath, 'utf8')) : {};
-  fs.writeFileSync(cfgPath, JSON.stringify({ ...cfg, extraction: { enabled: false } }, null, 2));
+  let cfg = {};
+  try {
+    cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+  } catch (err) {
+    // init may write no config; an existence check first would race the read.
+    if (err.code !== 'ENOENT') throw err;
+  }
+  // Pinned, so a change to hippo's promptRecall default cannot move what the arms receive.
+  fs.writeFileSync(cfgPath, JSON.stringify({ ...cfg, extraction: { enabled: false }, pinnedInject: { ...cfg.pinnedInject, promptRecall: true } }, null, 2));
 }
 
-const SKIPPED = { setup: 'setup failed, skipped', leak: 'a gold line is already in the store, skipped', 'ancestor-instructions': 'an instruction file sits above work/, skipped' };
+const SKIPPED = { setup: 'setup failed, skipped', leak: 'a leak voids this sequence and seed, skipped', 'ancestor-instructions': 'an instruction file sits above work/, skipped' };
 
 export function writeRecord(ctx, record) {
   ctx.records.push(record);
@@ -138,9 +154,17 @@ export function writeRecord(ctx, record) {
 // Async, so a run inside a test worker never blocks the worker's RPC with its parent.
 export const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
 
+let afterSettle = () => {};
+
+/** Test seam standing in for a background hook that writes during the wait (the lint bans module mocks); null removes it. */
+export function __setSettleHook(fn) {
+  afterSettle = fn ?? (() => {});
+}
+
 /** Hippo arms only: SessionEnd runs capture and sleep in a background worker, so let it finish before the next turn reads the store. */
 export async function settle(ctx, run, cell, when) {
   if (!HIPPO_ARMS.has(run.arm)) return;
   await sleep(ctx.settleMs);
   fs.appendFileSync(path.join(run.dirs.root, 'settle.log'), `${cell} ${when}\n`);
+  afterSettle(run, cell, when);
 }

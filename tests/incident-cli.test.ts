@@ -80,6 +80,10 @@ describe('hippo incident CLI', () => {
     expect(closed).toContain('disk full on host-3');
   });
 
+  it('list rejects an unknown --status and names the allowed values', () => {
+    expect(() => run(env, ['incident', 'list', '--status', 'bogus'])).toThrow(/Invalid --status: "bogus"\. Must be one of: open \| resolved \| closed \| all\./);
+  });
+
   it('rejects a malformed id and does NOT mutate the wrong row (codex P2 regression)', () => {
     run(env, ['incident', 'open', 'still open incident']); // becomes #1
     // `close 1abc` must be REJECTED (non-zero exit) - parseInt("1abc")===1 would

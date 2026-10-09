@@ -21,7 +21,7 @@ import { loadAllEntries } from '../src/store/entry-reads.js';
 import { consolidate } from '../src/consolidate/sleep.js';
 import { Layer, type MemoryEntry } from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { auditMemory } from '../src/audit.js';
+import { auditMemory } from '../src/store/audit.js';
 import * as api from '../src/api.js';
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */

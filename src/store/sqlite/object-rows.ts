@@ -1,9 +1,9 @@
 // hippo.db's rows for the typed objects: each kind's table, columns, row mapping and, for a kind the shared save writes, its insert values and audit keys.
 // A status column carries a CHECK constraint, so a row declares it as the kind's status union.
-import type { AuditOp } from '../../audit.js';
+import type { AuditOp } from '../audit.js';
 import { isJsonString } from '../../json.js';
 import { warnDamagedColumn } from '../../util/stored-json.js';
-import type { JsonObject } from '../../working-memory.js';
+import type { JsonObject } from '../working-memory.js';
 import type { SourceObjectType } from '../graph-rows.js';
 import type {
   BriefStatus, CustomerNote, Decision, DecisionStatus, Incident, IncidentStatus, NoteStatus, ObjectByKind, ObjectFields, ObjectKind,

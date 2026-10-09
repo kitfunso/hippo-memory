@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { remember, type Actor, type HippoDbContext } from '../src/api.js';
 import { BadRequestError } from '../src/api-errors.js';
-import { createApiKey } from '../src/auth.js';
+import { createApiKey } from '../src/store/auth.js';
 import { cmdRemember } from '../src/cli/remember.js';
 import { closeHippoDb, openHippoDb } from '../src/db.js';
 import { mapApiError } from '../src/http-util.js';

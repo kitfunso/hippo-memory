@@ -17,7 +17,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
-import { writeRecallTrace, writeRecallTraceAtRoot, recordTraceOutcome } from '../src/recall-trace.js';
+import { writeRecallTrace, writeRecallTraceAtRoot, recordTraceOutcome } from '../src/store/recall-trace.js';
 
 // Row shapes mirror the recall_traces / recall_trace_results /
 // recall_trace_outcomes tables created in src/db.ts (openHippoDb migration).

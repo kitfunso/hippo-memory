@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { cpSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { listAuditEventsAfter, type AuditEvent, type AuditOp } from '../src/audit.js';
+import { listAuditEventsAfter, type AuditEvent, type AuditOp } from '../src/store/audit.js';
 import { closeHippoDb, openHippoDb } from '../src/db.js';
 import { closeIncident, resolveIncident, saveIncident } from '../src/incidents.js';
 import { objectMirror } from '../src/objects/lifecycle.js';

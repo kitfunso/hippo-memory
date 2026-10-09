@@ -8,7 +8,7 @@ import { writeEntry } from '../store/entry-writes.js';
 import { readEntry, loadAllEntries } from '../store/entry-reads.js';
 import { schemaFitInStore } from '../store/candidates.js';
 import { updateStats } from '../store/index-and-stats.js';
-import { RejectedValueError } from '../rejection.js';
+import { RejectedValueError } from '../store/rejection.js';
 import { embedAll, embedMemory, loadEmbeddingIndex } from '../embeddings.js';
 import { loadConfig } from '../config.js';
 import { captureError, runWatched } from '../autolearn.js';
@@ -37,7 +37,7 @@ import * as client from './client.js';
 import { resolveTenantId } from '../tenant.js';
 import { printError } from './output.js';
 import { errorMessage, log } from '../log.js';
-import { requireInit, runViaServerIfAvailable, fmt, type CliFlags, type CommandContext, learnFromRepo, boolFlag, flagIsTrue } from './shared.js';
+import { requireInit, runViaServerIfAvailable, fmt, type CliFlags, type CommandContext, learnFromRepo, boolFlag, flagIsTrue, nonEmptyStringFlag } from './shared.js';
 
 // ---------------------------------------------------------------------------
 // Watch command
@@ -105,8 +105,8 @@ export function cmdLearn(
 
   console.log(`Scanning git log for the last ${days} days...`);
 
-  const reposFlag = flags['repos'];
-  if (reposFlag && typeof reposFlag === 'string') {
+  const reposFlag = nonEmptyStringFlag(flags, 'repos');
+  if (reposFlag) {
     const repos = reposFlag.split(',').map((r) => r.trim()).filter(Boolean);
     let totalAdded = 0;
     let totalSkipped = 0;
@@ -367,7 +367,7 @@ function cmdPromote(hippoRoot: string, id: string): void {
     console.log(`Promoted ${id} to global store as ${result.globalId}`);
     console.log(`   Global store: ${getGlobalRoot()}`);
   } catch (err) {
-    printError(`Failed to promote: ${(err as Error).message}`);
+    printError(`Failed to promote: ${errorMessage(err)}`);
     process.exit(1);
   }
 }
@@ -407,7 +407,7 @@ export async function handlePromote({ hippoRoot, args }: CommandContext): Promis
       const result = await client.promote(info.url, apiKey, id);
       console.log(`Promoted ${id} to global store as ${result.globalId}`);
     } catch (err) {
-      printError(`Failed to promote: ${(err as Error).message}`);
+      printError(`Failed to promote: ${errorMessage(err)}`);
       process.exit(1);
     }
   });

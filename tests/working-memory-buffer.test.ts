@@ -9,7 +9,7 @@ import {
   wmClear,
   wmFlush,
   WM_MAX_ENTRIES,
-} from '../src/working-memory.js';
+} from '../src/store/working-memory.js';
 import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion } from '../src/db.js';
 
 let tmpDir: string;

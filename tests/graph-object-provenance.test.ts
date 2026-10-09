@@ -18,8 +18,8 @@ import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { saveDecision, closeDecision } from '../src/decisions.js';
 import { savePolicy } from '../src/policies.js';
 import { extractGraph } from '../src/graph-extract.js';
-import { insertEntity } from '../src/graph/write.js';
-import { loadEntities } from '../src/graph/read.js';
+import { insertEntity } from '../src/store/graph-writes.js';
+import { loadEntities } from '../src/store/graph-reads.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { makeRoot } from './_helpers/make-root.js';
 

@@ -66,6 +66,10 @@ describe('hippo note CLI', () => {
     expect(sup).toMatch(/v2/);
   });
 
+  it('list rejects an unknown --status and names the allowed values', () => {
+    expect(() => run(env, ['note', 'list', '--status', 'bogus'])).toThrow(/Invalid --status: "bogus"\. Must be one of: active \| superseded \| closed \| all\./);
+  });
+
   it('rejects a malformed id and does NOT mutate the wrong row (codex P2 regression)', () => {
     run(env, ['note', 'new', 'still-active', '--text', 'x']); // becomes #1
     expect(() => run(env, ['note', 'close', '1abc'])).toThrow();

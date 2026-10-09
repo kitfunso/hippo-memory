@@ -10,7 +10,7 @@ import { loadAllEntries } from '../store/entry-reads.js';
 import { duplicateKey, storedTextKeys } from '../same-text.js';
 import { getGlobalRoot, initGlobal } from '../shared.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../db.js';
-import { RejectedValueError, checkRejectionGuard } from '../rejection.js';
+import { RejectedValueError, checkRejectionGuard } from '../store/rejection.js';
 import { loadConfig } from '../config.js';
 import { vetSecrets } from '../secret-detect.js';
 import { log } from '../log.js';
@@ -85,17 +85,7 @@ export function importEntries(
   tags: string[],
   options: ImportOptions
 ): ImportResult {
-  const targetRoot = options.global ? getGlobalRoot() : options.hippoRoot;
-
-  // Ensure store is ready
-  if (options.global) {
-    initGlobal();
-  }
-
-  const keys = storedTextKeys(loadAllEntries(
-    targetRoot,
-    options.global ? undefined : options.tenantId,
-  ));
+  const { targetRoot, keys } = openImportTarget(options);
   const allTags = [...new Set([...tags, ...(options.extraTags ?? [])])];
   const baseHalfLifeDays = loadConfig(targetRoot).defaultHalfLifeDays;
 
@@ -112,16 +102,9 @@ export function importEntries(
     for (const raw of chunks) {
       const { chunk, wasRedacted } = prepareImportChunk(raw, allTags);
 
-      // Skip empty or too-short chunks
-      if (!chunk || chunk.length < 10) {
-        skipped++;
-        continue;
-      }
-
-      total++;
-
-      // Dedup check: skip only when the same text is already stored
-      if (keys.has(duplicateKey(chunk))) {
+      const skip = skipReason(chunk, keys);
+      if (skip !== 'too-short') total++;
+      if (skip !== null) {
         skipped++;
         continue;
       }
@@ -143,6 +126,30 @@ export function importEntries(
   } finally {
     closeHippoDb(db);
   }
+}
+
+/** The store the import writes to, made ready, with the text keys it already holds. */
+function openImportTarget(options: ImportOptions) {
+  const targetRoot = options.global ? getGlobalRoot() : options.hippoRoot;
+
+  // Ensure store is ready
+  if (options.global) {
+    initGlobal();
+  }
+
+  const keys = storedTextKeys(loadAllEntries(
+    targetRoot,
+    options.global ? undefined : options.tenantId,
+  ));
+  return { targetRoot, keys };
+}
+
+function skipReason(chunk: string, keys: ReturnType<typeof storedTextKeys>): 'too-short' | 'duplicate' | null {
+  // Skip empty or too-short chunks
+  if (!chunk || chunk.length < 10) return 'too-short';
+  // Dedup check: skip only when the same text is already stored
+  if (keys.has(duplicateKey(chunk))) return 'duplicate';
+  return null;
 }
 
 /** The secret-vetted chunk capped at 1000 chars, and whether vetting changed it. */

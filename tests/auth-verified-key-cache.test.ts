@@ -8,7 +8,7 @@ import {
   verifyApiKeyCached,
   VerifiedKeyCache,
   type VerifiedApiKey,
-} from '../src/auth.js';
+} from '../src/store/auth.js';
 import { authRevoke, authGrant, type Context } from '../src/api.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { sqliteStore } from '../src/store-port.js';

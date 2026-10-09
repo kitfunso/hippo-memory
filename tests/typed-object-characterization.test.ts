@@ -3,11 +3,11 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { createApiKey } from '../src/auth.js';
+import { createApiKey } from '../src/store/auth.js';
 import { runCli } from '../src/cli.js';
 import { closeHippoDb, openHippoDb } from '../src/db.js';
-import type { SourceObjectType } from '../src/graph/types.js';
-import { insertEntity } from '../src/graph/write.js';
+import { insertEntity } from '../src/store/graph-writes.js';
+import type { SourceObjectType } from '../src/store/graph-rows.js';
 import type { JsonValue } from '../src/json.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { deleteEntry } from '../src/store/delete-and-batch.js';

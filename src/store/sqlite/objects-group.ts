@@ -1,8 +1,8 @@
 // hippo.db's half of the Objects store group: every statement the typed objects run, each call on a handle of its own.
-import { appendAuditEvent } from '../../audit.js';
+import { appendAuditEvent } from '../audit.js';
 import { getMeta, withWriteScopeOr, type DatabaseSyncLike } from '../../db.js';
 import { keysetAfter } from '../../keyset.js';
-import type { JsonObject } from '../../working-memory.js';
+import type { JsonObject } from '../working-memory.js';
 import { stampOriginProject, upsertEntryRow } from '../entry-row.js';
 import { auditEntryWrite, writeEntryMirrors } from '../entry-writes.js';
 import { markGraphDirty } from '../graph-queue.js';

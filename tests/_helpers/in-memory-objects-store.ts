@@ -1,6 +1,6 @@
 // A store other than hippo.db for the Objects group: it copies the typed-object rows out of hippo.db once, then keeps them and
 // the mirrors it is handed in Maps, so a conformance test shows the port's own words are enough to build on.
-import type { AuditOp } from '../../src/audit.js';
+import type { AuditOp } from '../../src/store/audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db.js';
 import type { AppendAuditOpts, AuditEvent, HippoStore, MemoryEntry } from '../../src/server.js';
 import type { ObjectByKind, ObjectFields, ObjectKind, SavableKind } from '../../src/store/object-types.js';

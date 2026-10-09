@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import type { JsonObject } from '../working-memory.js';
+import type { JsonObject } from '../store/working-memory.js';
 import { homeDir } from './shared.js';
 import { writeFileAtomic } from '../util/atomic-write.js';
 import { type JsonValue, isJsonString, isJsonObjectLiteral } from '../json.js';
@@ -154,24 +154,8 @@ function migrateLegacyOpencodeHooksBlock() {
   let changed = false;
   for (const key of Object.keys(hooksObj)) {
     if (!Array.isArray(hooksObj[key])) continue;
-    const survivingEntries: JsonValue[] = [];
-    for (const entry of hooksObj[key]) {
-      if (!isJsonObjectLiteral(entry)) {
-        survivingEntries.push(entry);
-        continue;
-      }
-      const innerHooks = entry.hooks;
-      if (!Array.isArray(innerHooks)) {
-        survivingEntries.push(entry);
-        continue;
-      }
-      const beforeInner = innerHooks.length;
-      const survivingInner = innerHooks.filter((h) => !hookIsHippoOwned(h));
-      if (survivingInner.length !== beforeInner) changed = true;
-      if (survivingInner.length === 0) continue; // drop entry, nothing left
-      entry.hooks = survivingInner;
-      survivingEntries.push(entry);
-    }
+    const { survivingEntries, strippedAny } = stripHippoHooksFromEntries(hooksObj[key]);
+    if (strippedAny) changed = true;
     if (survivingEntries.length !== hooksObj[key].length) changed = true;
     hooksObj[key] = survivingEntries;
     if (hooksObj[key].length === 0) delete hooksObj[key];
@@ -182,6 +166,30 @@ function migrateLegacyOpencodeHooksBlock() {
   if (Object.keys(hooksObj).length === 0) delete settings.hooks;
   writeFileAtomic(configPath, JSON.stringify(settings, null, 2) + '\n');
   return { migrated: true, jsonRepairFailed: false };
+}
+
+/** One event's entries with every hippo-owned hook taken out, and whether any was. */
+function stripHippoHooksFromEntries(entries: JsonValue[]) {
+  const survivingEntries: JsonValue[] = [];
+  let strippedAny = false;
+  for (const entry of entries) {
+    if (!isJsonObjectLiteral(entry)) {
+      survivingEntries.push(entry);
+      continue;
+    }
+    const innerHooks = entry.hooks;
+    if (!Array.isArray(innerHooks)) {
+      survivingEntries.push(entry);
+      continue;
+    }
+    const beforeInner = innerHooks.length;
+    const survivingInner = innerHooks.filter((h) => !hookIsHippoOwned(h));
+    if (survivingInner.length !== beforeInner) strippedAny = true;
+    if (survivingInner.length === 0) continue; // drop entry, nothing left
+    entry.hooks = survivingInner;
+    survivingEntries.push(entry);
+  }
+  return { survivingEntries, strippedAny };
 }
 
 export function installOpencodePlugin(): OpencodePluginInstallResult {

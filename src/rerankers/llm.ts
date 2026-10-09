@@ -4,6 +4,7 @@ import type { SearchResult } from '../core/search-types.js';
 import { redactSecretsStrict } from '../secret-detect.js';
 import { createOutageWarning } from './outage-warning.js';
 import { rerankerPost } from './remote.js';
+import { errorMessage } from '../log.js';
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 
@@ -38,7 +39,7 @@ export function createLlmReranker(): RerankerFn {
       outage.answered();
     } catch (err) {
       // A read path never throws, and never hands back the unranked order without saying so.
-      outage.failed(err instanceof Error ? err.message : 'unknown error');
+      outage.failed(errorMessage(err));
     }
 
     const ordered = permutation ? permutation.map((idx) => head[idx]) : head;

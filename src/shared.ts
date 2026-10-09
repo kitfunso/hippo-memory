@@ -26,7 +26,7 @@ import { fallbackOrigin, classifyOriginProject, resolveGlobalRootDir, resolvePro
 import { isSharedStore } from './config.js';
 import { detectSecret } from './secret-detect.js';
 import { isQuarantineScope } from './quarantine.js';
-import { RejectedValueError } from './rejection.js';
+import { RejectedValueError } from './store/rejection.js';
 import { embedMemory, embedAll } from './embeddings.js';
 import { duplicateKey, storedTextKeys } from './same-text.js';
 import { isReusable } from './memory-quality.js';

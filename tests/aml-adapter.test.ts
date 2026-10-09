@@ -23,7 +23,7 @@ import { fileURLToPath } from 'node:url';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { createApiKey } from '../src/auth.js';
+import { createApiKey } from '../src/store/auth.js';
 import { serve, type ServerHandle } from '../src/server.js';
 
 const ADAPTER_PATH = fileURLToPath(new URL('../deploy/aml/adapter/adapter.mjs', import.meta.url));

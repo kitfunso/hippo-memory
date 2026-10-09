@@ -7,7 +7,7 @@ import { selectVaultRawRows, type VaultRawRow } from '../store/entry-reads.js';
 import { remember, archiveRaw, isPrivateScope, type HippoDbContext } from '../api.js';
 import { assertClientScope } from '../recall-scope.js';
 import { openHippoDb, closeHippoDb } from '../db.js';
-import { RejectedValueError, checkRejectionGuard } from '../rejection.js';
+import { RejectedValueError, checkRejectionGuard } from '../store/rejection.js';
 import { loadConfig } from '../config.js';
 import { vetSecrets } from '../secret-detect.js';
 import { errorMessage, log } from '../log.js';
@@ -42,10 +42,7 @@ type VaultRow = VaultRawRow;
  */
 export function importVault(folderPath: string, options: ImportOptions): ImportResult {
   const hippoRoot = options.hippoRoot;
-  const tenantId = options.tenantId ?? 'default';
-  const { vaultName, scope } = vaultIdentityOrThrow(options);
-  const extraTags = options.extraTags ?? [];
-  const dryRun = options.dryRun ?? false;
+  const identity = vaultIdentityOrThrow(options);
   if (options.global) {
     // The raw-archive path is tenant-local; global mode would put raw vault rows
     // in the wrong store. Reject for SDK callers too (the CLI also rejects
@@ -68,6 +65,14 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
   if (resolvedFolder === resolvedStore || resolvedFolder.startsWith(resolvedStore + path.sep)) {
     return { total: 0, imported: 0, skipped: 0, rejected: 0, archived: 0, entries: [] };
   }
+  return syncVaultFolder(folderPath, options, identity);
+}
+
+function syncVaultFolder(folderPath: string, options: ImportOptions, { vaultName, scope }: VaultIdentity): ImportResult {
+  const hippoRoot = options.hippoRoot;
+  const tenantId = options.tenantId ?? 'default';
+  const extraTags = options.extraTags ?? [];
+  const dryRun = options.dryRun ?? false;
 
   const ctx: HippoDbContext = {
     hippoRoot,
@@ -212,7 +217,7 @@ function loadVaultRows(hippoRoot: string, tenantId: string, vaultName: string): 
 }
 
 function importVaultNote(run: VaultImportRun, relpath: string): void {
-  const { ctx, tally } = run;
+  const { tally } = run;
   tally.total++;
   const artifactRef = `vault:${run.vaultName}:${relpath}`;
   run.seen.add(artifactRef);
@@ -246,13 +251,16 @@ function importVaultNote(run: VaultImportRun, relpath: string): void {
     return;
   }
 
-  const tags = vaultNoteTags(run, hashTag, fm, body);
-  if (vaultEnvelopeUnchanged(priors, tags, run.scope)) {
+  const tags = vaultNoteTags(run, hashTag, fm, body);  if (vaultEnvelopeUnchanged(priors, tags, run.scope)) {
     // Unchanged file + envelope → skip (idempotent re-import).
     tally.skipped++;
     return;
   }
+  writeChangedNote(run, artifactRef, priors, body, tags);
+}
 
+function writeChangedNote(run: VaultImportRun, artifactRef: string, priors: VaultRow[], body: string, tags: string[]): void {
+  const { ctx, tally } = run;
   // Changed file → archive EVERY old raw row for this ref (normally one; >1
   // only after a concurrent double-insert), then append the new one. NEVER
   // supersede (would yield kind='distilled'). archiveRaw commits + closes its

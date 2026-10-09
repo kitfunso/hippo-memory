@@ -1,8 +1,8 @@
 // A store other than hippo.db for the KeyAudit group: it copies api_keys and audit_log out of hippo.db once, then keeps
 // both in memory and answers with what hippo-memory/server exports, so a conformance test shows that is all another store needs.
 import { closeHippoDb, openHippoDb } from '../../src/db.js';
-import { listAuditEventsAfter } from '../../src/audit.js';
-import { readApiKeyRecord } from '../../src/auth.js';
+import { listAuditEventsAfter } from '../../src/store/audit.js';
+import { readApiKeyRecord } from '../../src/store/auth.js';
 import { auditHighIdAt } from '../../src/store/key-audit.js';
 import {
   NotFoundError,

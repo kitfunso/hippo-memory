@@ -6,7 +6,7 @@ import { DEFAULT_HALF_LIFE_DAYS, type MemoryEntry, Layer } from '../memory.js';
 import { closeHippoDb, type DatabaseSyncLike, openHippoDb, getMeta, setMeta, withWriteScope } from '../db.js';
 import { type ResolveProjectIdentityOpts, findHippoStoreDir } from '../project-identity.js';
 import { realpathOrResolve } from '../util/real-path.js';
-import { RejectedValueError } from '../rejection.js';
+import { RejectedValueError } from './rejection.js';
 import { errorMessage, log } from '../log.js';
 import { type HippoIndex, type LegacyStats } from './rows.js';
 import { audit } from './audit-event.js';

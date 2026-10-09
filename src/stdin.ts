@@ -1,6 +1,6 @@
 import { envStdinWaitMs } from './env.js';
 import { isJsonString, type JsonValue, isJsonObjectLiteral } from './json.js';
-import type { JsonObject } from './working-memory.js';
+import type { JsonObject } from './store/working-memory.js';
 
 /** `timedOut` means the window closed with stdin still open, so absent
  * `text` is "unknown", not "none", and present `text` may be truncated.
