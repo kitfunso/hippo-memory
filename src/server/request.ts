@@ -65,6 +65,11 @@ export function noteAccess(req: IncomingMessage, note: AccessNote): void {
   if (held) Object.assign(held, note);
 }
 
+/** The route name the request's access line carries, for a line about the same request logged after its reply. */
+export function accessRouteOf(req: IncomingMessage): string {
+  return accessNotes.get(req)?.route ?? UNMATCHED_ROUTE;
+}
+
 /** One info line per finished request. A path id and a query string can both hold caller data, so the line carries neither. */
 function logAccessWhenFinished(req: IncomingMessage, res: ServerResponse, requestId: string): void {
   const note: AccessNote = {};
