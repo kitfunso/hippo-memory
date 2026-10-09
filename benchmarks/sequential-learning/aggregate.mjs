@@ -2,6 +2,7 @@
 // v1.7.5 -- pure aggregation helpers for multi-seed runs. Zero npm deps; only
 // Node 22+ built-ins. Keep this file dependency-free so the benchmark runs on
 // a vanilla Node install with `node run.mjs`.
+import { mulberry32 } from '../../scripts/lib/prng.mjs';
 
 /**
  * Sample mean. Returns 0 for empty arrays.
@@ -50,24 +51,6 @@ export function ciHalfWidth95(xs) {
 }
 
 /**
- * mulberry32 -- deterministic PRNG, dep-free. Exported so traps.mjs can reuse
- * the same RNG implementation for seeded category-to-slot assignment.
- *
- * @param {number} seed integer seed (uint32 coerced)
- * @returns {() => number} function returning a uniform float in [0, 1)
- */
-export function mulberry32(seed) {
-  let s = seed >>> 0;
-  return function () {
-    s = (s + 0x6D2B79F5) >>> 0;
-    let t = s;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-/**
  * Paired permutation CI via recentred-percentile sign-flip Monte Carlo.
  *
  * Implementation: nResamples (default 10,000) sign-flip resamples of paired
@@ -106,7 +89,7 @@ export function pairedPermutationCI(xsA, xsB, alpha = 0.05, nResamples = 10_000)
   const observed = mean(diffs);
 
   const rng = mulberry32(0x9E3779B9);
-  const resampledMeans = new Array(nResamples);
+  const resampledMeans = Array(nResamples);
   for (let r = 0; r < nResamples; r++) {
     let s = 0;
     for (let i = 0; i < n; i++) {

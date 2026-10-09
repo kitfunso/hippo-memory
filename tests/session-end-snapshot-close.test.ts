@@ -1,21 +1,20 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { spawnSync, type SpawnSyncReturns } from 'child_process';
+import { type SpawnSyncReturns } from 'child_process';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 import { getHippoRoot } from '../src/store/open.js';
 import { loadActiveTaskSnapshot, saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import { loadLatestHandoff } from '../src/store/handoffs.js';
+import { hippoRun } from './_helpers/spawn-hippo.js';
 
 // DF1 (docs/plans/2026-08-23-df1-snapshot-lifecycle.md) T3 test 6:
-// session-end wiring. `cmdSessionEnd` extracts `payload.session_id` from the
+// session-end wiring. `handleSessionEnd` extracts `payload.session_id` from the
 // SessionEnd hook's stdin JSON and passes `--session-id` to the detached
 // `__session-end-worker`; the worker closes that session's own active
 // snapshot AFTER sleep+capture. Real built CLI, real detached child, no
 // mocks — same idiom as tests/pre-compact-e2e.test.ts.
-
-const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
 
 function withScratchEnv() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-session-end-e2e-'));
@@ -34,12 +33,7 @@ function runHippo(
   env: NodeJS.ProcessEnv,
   input?: string,
 ): SpawnSyncReturns<string> {
-  return spawnSync(process.execPath, [HIPPO_JS, ...args], {
-    cwd,
-    env,
-    input,
-    encoding: 'utf8',
-  });
+  return hippoRun(args, { cwd, env, input });
 }
 
 function initHippo(cwd: string, env: NodeJS.ProcessEnv): void {
@@ -49,7 +43,7 @@ function initHippo(cwd: string, env: NodeJS.ProcessEnv): void {
 
 // The detached session-end worker can still hold a brief Windows lock on the
 // SQLite WAL/shm files after our poll condition is satisfied (same class of
-// issue as tests/github-v1.3.1-hotfix.test.ts's safeRmSync). Best-effort.
+// issue as tests/github-rollback-guard-and-deletion-atomicity.test.ts's safeRmSync). Best-effort.
 function safeRmSync(p: string): void {
   try {
     fs.rmSync(p, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
@@ -97,8 +91,8 @@ async function loadSnapshotRetrying(
  * observable-signal.md). A throw from `check()` counts as "not yet"; only
  * running out of the clock fails the test.
  *
- * Default bound is generous (25s, under this project's 30s global
- * `testTimeout` in vitest.config.ts) because the detached worker is a real
+ * Default bound is generous (25s, under the 30s `testTimeout` of the
+ * process project in vitest.config.ts) because the detached worker is a real
  * separate OS process competing for CPU/IO with the rest of a full `npm
  * test` run — under full-suite parallel load this project's own heavier
  * tests (e.g. dag-rebuild-summaries.test.ts) observably take well over a
@@ -133,7 +127,7 @@ async function waitUntil(check: () => boolean, timeoutMs = 25_000, intervalMs = 
   );
 }
 
-describe('6. session-end wiring: --session-id argv + worker close (DF1 T3)', () => {
+describe('6. session-end wiring: --session-id argv + worker close', () => {
   let dir: string;
   let env: NodeJS.ProcessEnv;
 
@@ -167,6 +161,25 @@ describe('6. session-end wiring: --session-id argv + worker close (DF1 T3)', () 
     expect(fs.readFileSync(logFile, 'utf8')).toContain(
       'closed 1 active snapshot(s) for session sess-end-close-me',
     );
+    expect(await loadSnapshotRetrying(hippoRoot, 'default')).toBeNull();
+  });
+
+  it('a payload that starts with a byte-order mark still names its session to the worker', async () => {
+    const hippoRoot = getHippoRoot(dir);
+    saveActiveTaskSnapshot(hippoRoot, 'default', {
+      task: 'byte-order-mark task',
+      summary: 's',
+      next_step: 'n',
+      session_id: 'sess-bom',
+      source: 'pre-compact',
+    });
+
+    const logFile = path.join(dir, 'session-end-bom.log');
+    const payload = '\uFEFF' + JSON.stringify({ session_id: 'sess-bom', hook_event_name: 'SessionEnd' });
+    expect(runHippo(['session-end', '--log-file', logFile], dir, env, payload).status).toBe(0);
+
+    await waitUntil(() => closeStepLogged(logFile));
+    expect(fs.readFileSync(logFile, 'utf8')).toContain('closed 1 active snapshot(s) for session sess-bom');
     expect(await loadSnapshotRetrying(hippoRoot, 'default')).toBeNull();
   });
 

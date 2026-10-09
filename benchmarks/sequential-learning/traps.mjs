@@ -172,7 +172,7 @@ const CLEAN_DESCRIPTIONS = [
 // shuffle the assignment of categories to slot-tuples WITHIN each shape group.
 // Slot positions stay fixed; only WHICH category lands at each slot rotates.
 
-import { mulberry32 } from './aggregate.mjs';
+import { mulberry32 } from '../../scripts/lib/prng.mjs';
 
 /**
  * Classify a 1-indexed position into early/mid/late per the PRE-LOCKED

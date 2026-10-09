@@ -6,7 +6,7 @@
 // args[1] — codex caught it at the review stage; both Claude review gates missed it.
 // These tests lock the arg-shift so the documented `open` subcommand and the bare
 // form both record the correct text. Uses the real-CLI subprocess harness
-// (isolated cwd .hippo + HIPPO_HOME + HIPPO_SKIP_AUTO_INTEGRATIONS) like b3-goal-cli.
+// (isolated cwd .hippo + HIPPO_HOME + HIPPO_SKIP_AUTO_INTEGRATIONS) like goal-cli.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -78,6 +78,10 @@ describe('hippo incident CLI', () => {
     run(env, ['incident', 'close', id]);
     const closed = run(env, ['incident', 'list', '--status', 'closed']);
     expect(closed).toContain('disk full on host-3');
+  });
+
+  it('list rejects an unknown --status and names the allowed values', () => {
+    expect(() => run(env, ['incident', 'list', '--status', 'bogus'])).toThrow(/Invalid --status: "bogus"\. Must be one of: open \| resolved \| closed \| all\./);
   });
 
   it('rejects a malformed id and does NOT mutate the wrong row (codex P2 regression)', () => {

@@ -6,19 +6,20 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { validateTasks } from './ab-run.mjs';
 import { parseZ0Records } from './z0-records.mjs';
-import { listGrades, readRows, rowsFile, runRegrade } from './regrade.mjs';
+import { listGrades, runRegrade } from './regrade.mjs';
+import { flipsOf } from './g5-flips.mjs';
 import { drawReader, readerSummary, scoreReader } from './reader-sample.mjs';
 import { drawStored, scoreStored, storedSummary } from './stored-sample.mjs';
 
 const USAGE = [
   'usage: z0-regrade.mjs regrade --out DIR --tasks FILE [--runs FILE] [--post-fix] [--cell KEY]...',
-  '       z0-regrade.mjs reader --out DIR (--tasks FILE --seed N [--n N] [--round K] | [--round K] --labels FILE)',
+  '       z0-regrade.mjs reader --out DIR (--tasks FILE --seed N [--n N] [--round K] [--flip-errors] | [--round K] --labels FILE)',
   '       z0-regrade.mjs stored --out DIR (--tasks FILE --seed N [--n N] [--runs FILE] | --labels FILE)',
   '       z0-regrade.mjs grading --out DIR [--flip-errors]',
 ].join('\n');
 const MODES = {
   regrade: { values: ['--out', '--tasks', '--runs'], multi: ['--cell'], flags: ['--post-fix'], required: ['--out', '--tasks'] },
-  reader: { values: ['--out', '--tasks', '--seed', '--n', '--round', '--labels'], multi: [], flags: [], required: ['--out'] },
+  reader: { values: ['--out', '--tasks', '--seed', '--n', '--round', '--labels'], multi: [], flags: ['--flip-errors'], required: ['--out'] },
   stored: { values: ['--out', '--tasks', '--runs', '--seed', '--n', '--labels'], multi: [], flags: [], required: ['--out'] },
   grading: { values: ['--out'], multi: [], flags: ['--flip-errors'], required: ['--out'] },
 };
@@ -86,36 +87,6 @@ function regradeMode(args, out, cwd, log) {
   return `${pass}: regraded ${tally.ran} cells (${tally.errors} with errors), skipped ${tally.skipped} done ones${wrote}\n`;
 }
 
-/** Flips from the latest row of each cell in each pass run so far; error rows refuse unless --flip-errors drops their lessons. */
-function flipsOf(out, entries, flipErrors) {
-  const passes = fs.existsSync(rowsFile(out, 'postfix')) ? ['repro', 'postfix'] : ['repro'];
-  const flipped = new Set();
-  const accepted = new Set();
-  const unrepro = { cells: new Set(), lessons: new Set() };
-  const extra = new Set();
-  const errors = [];
-  for (const pass of passes) {
-    const rows = readRows(rowsFile(out, pass)).rows;
-    for (const e of entries) {
-      const row = rows.get(e.key);
-      if (!row) throw new Error(`cell ${e.key} has no ${pass} row; run regrade${pass === 'postfix' ? ' --post-fix' : ''} first`);
-      for (const k of row.extraEnvKeys ?? []) extra.add(k);
-      if (row.status === 'error') {
-        errors.push(`${e.key} (${pass}, ${row.error.stage})`);
-        unrepro.cells.add(e.key);
-        for (const id of [row.lessonId, row.staleLessonId].filter(Boolean)) unrepro.lessons.add(id);
-        continue;
-      }
-      for (const c of row.checks) if (c.flip) flipped.add(c.lessonId);
-      if (row.acceptance.flip) accepted.add(e.key);
-    }
-  }
-  if (errors.length && !flipErrors) throw new Error(`${errors.length} cells have error rows: ${errors.slice(0, 5).join(', ')}; re-run regrade, or pass --flip-errors to drop their lessons`);
-  for (const id of unrepro.lessons) flipped.add(id);
-  for (const k of unrepro.cells) accepted.add(k);
-  return { pass: passes.at(-1), flipped, accepted, unrepro, extra };
-}
-
 /** The grading file (166): E7's three fields, then `g5` with the regrade's own counts; no field holds an arm (R11). */
 export function buildGrading(out, { flipErrors = false } = {}) {
   const entries = listGrades(out);
@@ -152,13 +123,13 @@ function sampleArgs(args, cwd, drawFlags) {
 function readerMode(args, out, cwd) {
   const round = count(args.round, '--round', 1) ?? 1;
   const a = sampleArgs(args, cwd, ['--tasks', '--seed', '--n']);
-  return a.labels ? scoreReader(out, round, a.labels) : drawReader(out, { ...a, round });
+  return a.labels ? scoreReader(out, round, a.labels) : drawReader(out, { ...a, round, flipErrors: args.flipErrors === true, aliases: [args.given] });
 }
 
 function storedMode(args, out, cwd) {
   const a = sampleArgs(args, cwd, ['--tasks', '--seed', '--n', '--runs']);
   if (a.labels) return scoreStored(out, a.labels);
-  return drawStored(out, { ...a, runsFile: args.runs ? path.resolve(cwd, args.runs) : path.join(out, 'runs.jsonl') });
+  return drawStored(out, { ...a, aliases: [args.given], runsFile: args.runs ? path.resolve(cwd, args.runs) : path.join(out, 'runs.jsonl') });
 }
 
 function gradingMode(args, out) {
@@ -179,7 +150,8 @@ export function runCli(argv, cwd = process.cwd()) {
     if (!fs.existsSync(given)) throw new Error(`--out ${args.out}: no such folder`);
     // One realpath for every alias of the out dir (a junction, another case), so rows and the lock are shared (test 31).
     const out = fs.realpathSync.native(given);
-    const stdout = withLock(out, () => RUN[args.mode](args, out, cwd, (m) => notes.push(m)));
+    // The spelling given too, since the run wrote its paths in that one and a realpath may differ (macOS /var).
+    const stdout = withLock(out, () => RUN[args.mode]({ ...args, given }, out, cwd, (m) => notes.push(m)));
     return { code: 0, stdout, stderr: notes.map((n) => `${n}\n`).join('') };
   } catch (err) {
     return { code: 1, stdout: '', stderr: [...notes, err.message].map((n) => `${n}\n`).join('') };

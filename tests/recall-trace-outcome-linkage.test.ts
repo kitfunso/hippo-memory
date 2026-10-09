@@ -3,7 +3,7 @@
  * (docs/plans/2026-08-02-lc1-recall-trace-persistence.md).
  *
  * Covers: recall -> outcome -> recall_trace_outcomes row (E2E, via the CLI's
- * cmdRecall + cmdOutcome last-retrieval flow); outcome with no prior trace
+ * cmdRecall + handleOutcome last-retrieval flow); outcome with no prior trace
  * -> no row, no error; the explicit `traceId` SDK opt on api.outcome; and
  * the storage-overhead smoke bound (success criterion 3).
  *
@@ -19,8 +19,8 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
 import { loadIndex, saveIndex } from '../src/store/index-and-stats.js';
-import { openHippoDb, closeHippoDb, getHippoDbPath, withSharedStoreHandles, type DatabaseSyncLike } from '../src/db.js';
-import { remember, recall, outcome, outcomeForLastRecall, type Context } from '../src/api.js';
+import { openHippoDb, closeHippoDb, getHippoDbPath, withSharedStoreHandles, type DatabaseSyncLike } from '../src/db/index.js';
+import { remember, recall, outcome, outcomeForLastRecall, type HippoDbContext } from '../src/api/index.js';
 
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const hippoBin = join(repoRoot, 'bin', 'hippo.js');
@@ -49,11 +49,11 @@ describe('outcome linkage E2E (CLI recall -> outcome)', () => {
       const db = openHippoDb(localStore);
       try {
         // SAFETY: recall_traces.id is INTEGER PRIMARY KEY AUTOINCREMENT
-        // (src/db.ts schema), so every row carries a numeric id.
+        // (src/db/index.ts schema), so every row carries a numeric id.
         const traces = db.prepare(`SELECT * FROM recall_traces WHERE pipeline = 'cli'`).all() as RecallTraceRow[];
         expect(traces).toHaveLength(1);
         // SAFETY: recall_trace_outcomes.outcome and .memory_ids_json are
-        // NOT NULL text columns (src/db.ts schema), guaranteed on every row.
+        // NOT NULL text columns (src/db/index.ts schema), guaranteed on every row.
         const outcomes = db.prepare(`SELECT * FROM recall_trace_outcomes WHERE trace_id = ?`).all(traces[0]!.id) as RecallTraceOutcomeRow[];
         expect(outcomes).toHaveLength(1);
         expect(outcomes[0]!.outcome).toBe('positive');
@@ -72,7 +72,7 @@ describe('outcomeForLastRecall — no prior trace', () => {
   it('applies the outcome but writes NO recall_trace_outcomes row, and does not throw', () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+      const ctx: HippoDbContext = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
       const res = remember(ctx, { content: 'no-trace-outcome-target' });
       // Seed last_retrieval_ids directly WITHOUT ever calling recall()/getContext()
       // — last_trace_id stays unset (fresh store, pre-v40-flow shape).
@@ -105,7 +105,7 @@ describe('api.outcome explicit traceId opt (SDK linkage)', () => {
   it('links to the given trace when a caller supplies traceId explicitly', () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+      const ctx: HippoDbContext = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
       remember(ctx, { content: 'explicit-trace-opt-target' });
       const recallResult = recall(ctx, { query: 'explicit-trace-opt-target', limit: 5 });
       expect(recallResult.results.length).toBeGreaterThan(0);
@@ -127,7 +127,7 @@ describe('api.outcome explicit traceId opt (SDK linkage)', () => {
       const db2 = openHippoDb(home);
       try {
         // SAFETY: recall_trace_outcomes.outcome is a NOT NULL text column
-        // (src/db.ts schema), guaranteed on every row.
+        // (src/db/index.ts schema), guaranteed on every row.
         const rows = db2.prepare(`SELECT * FROM recall_trace_outcomes WHERE trace_id = ?`).all(traceId) as Array<{ outcome: string }>;
         expect(rows).toHaveLength(1);
         expect(rows[0]!.outcome).toBe('positive');
@@ -142,7 +142,7 @@ describe('api.outcome explicit traceId opt (SDK linkage)', () => {
   it('without traceId, no linkage row is written (existing behavior unchanged)', () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+      const ctx: HippoDbContext = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
       const res = remember(ctx, { content: 'no-opt-target' });
       outcome(ctx, [res.id], true);
 
@@ -165,7 +165,7 @@ describe('storage overhead smoke (success criterion 3)', () => {
   it('100 traced recalls of 10 results grow the DB by less than ~250KB', async () => {
     const { home, restore } = tmpHome();
     try {
-      const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+      const ctx: HippoDbContext = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
       for (let i = 0; i < 15; i++) {
         remember(ctx, { content: `storage-smoke-target memory number ${i} filler content` });
       }

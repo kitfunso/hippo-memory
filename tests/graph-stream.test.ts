@@ -10,13 +10,13 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { insertEntity, insertRelation } from '../src/graph/write.js';
+import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { insertEntity, insertRelation } from '../src/store/graph-writes.js';
 import {
   selectGraphSeeds,
   graphRankStream,
   type GraphSeed,
-} from '../src/graph-stream.js';
+} from '../src/graph/stream.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 function safeRmSync(p: string): void {
@@ -60,7 +60,7 @@ describe('selectGraphSeeds (pure)', () => {
   });
 });
 
-describe('L1 graphRankStream (real SQLite)', () => {
+describe('graphRankStream (real SQLite)', () => {
   let home: string;
   const T = 'default';
   beforeEach(() => { home = makeRoot('graphstream'); });

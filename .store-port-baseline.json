@@ -1,0 +1,42 @@
+{
+  "openersOutside": 17,
+  "openersInCli": 3,
+  "storeBranches": 4,
+  "routesWithoutStore": 0,
+  "sqliteOnlyRoutes": 2,
+  "routesOnLoop": 50,
+  "twinFunctions": 0,
+  "sqlOutside": 0,
+  "txLiterals": 0,
+  "openersOutsideByFile": {
+    "src/agent-memories/sync.ts": 3,
+    "src/api/ledger-db.ts": 1,
+    "src/api/promote.ts": 1,
+    "src/capture/caller-session.ts": 1,
+    "src/capture/capture-error.ts": 1,
+    "src/capture/command.ts": 2,
+    "src/capture/compaction-record.ts": 4,
+    "src/doctor.ts": 1,
+    "src/index.ts": 2,
+    "src/server/boot.ts": 1
+  },
+  "sqlOutsideByFile": {},
+  "sqliteLocalMethods": [
+    "applyOutcome",
+    "applyOutcomeToLastRecall",
+    "finishLastRecall"
+  ],
+  "sqliteOnlyRoutesList": [
+    "POST /v1/memories/:id/promote",
+    "POST /v1/sleep"
+  ],
+  "carrierFiles": 6,
+  "carrierFilesList": [
+    "src/api/auth.ts",
+    "src/api/context.ts",
+    "src/api/forget.ts",
+    "src/api/outcome.ts",
+    "src/api/promote.ts",
+    "src/api/remember.ts"
+  ]
+}

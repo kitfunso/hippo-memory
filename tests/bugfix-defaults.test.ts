@@ -10,14 +10,13 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { DEFAULT_PHYSICS_CONFIG } from '../src/physics-config.js';
-import { loadConfig } from '../src/config.js';
+import { DEFAULT_PHYSICS_CONFIG } from '../src/core/physics-config.js';
+import { loadConfig } from '../src/core/config.js';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-
-const HIPPO_JS = resolve(__dirname, '..', 'bin', 'hippo.js');
+import { hippoOut } from './_helpers/spawn-hippo.js';
 
 describe('physics scoring default', () => {
   it('is off unless a config opts in', () => {
@@ -55,7 +54,7 @@ describe('hippo learn --git honours config.gitLearnPatterns', () => {
 
   function learn(): void {
     const env = { ...process.env, HIPPO_HOME: join(repo, 'global') };
-    execFileSync(process.execPath, [HIPPO_JS, 'learn', '--git', '--days', '30'], { cwd: repo, env, encoding: 'utf8' });
+    hippoOut(['learn', '--git', '--days', '30'], { cwd: repo, env });
   }
   const learned = (): string[] => loadAllEntries(join(repo, '.hippo')).map((e) => e.content);
 

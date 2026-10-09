@@ -1,0 +1,8 @@
+{
+  "stdin": "",
+  "timedOut": false,
+  "expect": {
+    "status": "skipped",
+    "reason": "no payload: turn capture runs only from a VS Code Stop hook"
+  }
+}

@@ -23,8 +23,8 @@ import { importVault } from '../src/importers/vault.js';
 import { type ImportOptions } from '../src/importers/core.js';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { remember, type Context } from '../src/api.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { remember, type Context } from '../src/api/index.js';
 
 let tmpDir: string; // hippo root (the store)
 let vaultDir: string; // a scratch vault folder we mutate per-test
@@ -474,7 +474,7 @@ describe('importVault (q) — dryRun previews deletions without archiving', () =
   });
 });
 
-describe('importVault (r) — does not import the Hippo store mirror files (codex R5 P1)', () => {
+describe('importVault (r): does not import the Hippo store mirror files', () => {
   it('skips .hippo / dot-dirs when the vault contains the store', () => {
     writeNote('real-note.md', 'a genuine vault note, long enough to store');
     // markdown mirror file inside a .hippo store dir under the vault
@@ -492,7 +492,7 @@ describe('importVault (r) — does not import the Hippo store mirror files (code
   });
 });
 
-describe('importVault (s) — vault root IS the store imports nothing (codex R6 P2)', () => {
+describe('importVault (s): vault root IS the store imports nothing', () => {
   it('returns empty when folderPath resolves to hippoRoot', () => {
     fs.mkdirSync(path.join(tmpDir, 'episodic'), { recursive: true });
     fs.writeFileSync(path.join(tmpDir, 'episodic', 'mirror.md'), 'store mirror content here', 'utf8');

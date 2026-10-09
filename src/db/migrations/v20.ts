@@ -1,11 +1,12 @@
 import type { Migration } from './types.js';
+import { warnDamagedColumn } from '../../util/stored-json.js';
 
 export const v20: Migration = {
     version: 20,
     up: (db) => {
-      // v0.39 commit 4 (GDPR Path A backfill): redact every existing
+      // GDPR Path A backfill: redact every existing
       // raw_archive.payload_json so historical archives match the new
-      // metadata-only contract from src/raw-archive.ts. Read each row, parse
+      // metadata-only contract from src/store/raw-archive.ts. Read each row, parse
       // the existing JSON to extract tenant_id and kind (best effort), then
       // UPDATE with the redacted shape. Rows with unparseable legacy JSON get
       // redacted with tenant_id='unknown', kind='unknown'. The audit_log
@@ -34,7 +35,8 @@ export const v20: Migration = {
           tenant = parsed.tenant_id ?? 'unknown';
           kind = parsed.kind ?? 'unknown';
         } catch {
-          // Unparseable legacy payload — redact with unknowns.
+          // The row is still redacted, with unknowns; the line says which one lost its tenant and kind.
+          warnDamagedColumn({ table: 'raw_archive', id: row.id, column: 'payload_json' }, 'not valid JSON');
         }
         const redacted = JSON.stringify({
           redacted: true,

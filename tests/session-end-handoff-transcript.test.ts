@@ -3,10 +3,11 @@ import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { PRE_COMPACT_NEXT_STEP_CAP, PRE_COMPACT_SUMMARY_CAP, PRE_COMPACT_TASK_CAP, transcriptWorkingState } from '../src/capture/compact.js';
+import { WORKING_STATE_CAPS, transcriptWorkingState } from '../src/capture/working-state.js';
 import { initStore } from '../src/store/open.js';
 import { loadActiveTaskSnapshot, saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import { loadLatestHandoff, saveSessionHandoff, writeSessionEndHandoff } from '../src/store/handoffs.js';
+import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 
 // AWS's documented example key, a placeholder that is safe to embed.
 const FAKE_KEY = 'AKIAIOSFODNN7EXAMPLE';
@@ -36,6 +37,16 @@ function store(): string {
   const root = tmp();
   initStore(root);
   return root;
+}
+
+function handoffCount(root: string, sessionId: string): number {
+  const db = openHippoDb(root);
+  try {
+    // SAFETY: COUNT(*) returns exactly one row with the n column.
+    return (db.prepare(`SELECT COUNT(*) AS n FROM session_handoffs WHERE session_id = ?`).get(sessionId) as { n: number }).n;
+  } finally {
+    closeHippoDb(db);
+  }
 }
 
 describe('transcriptWorkingState', () => {
@@ -71,10 +82,10 @@ describe('transcriptWorkingState', () => {
     const file = transcript([user('u'.repeat(1000)), assistant('a'.repeat(3000)), user('v'.repeat(1000)), assistant('b'.repeat(3000))]);
 
     const derived = transcriptWorkingState(file, () => {});
-    expect(derived!.task).toBe('v'.repeat(PRE_COMPACT_TASK_CAP));
-    expect(derived!.next_step).toBe('b'.repeat(PRE_COMPACT_NEXT_STEP_CAP));
+    expect(derived!.task).toBe('v'.repeat(WORKING_STATE_CAPS.task));
+    expect(derived!.next_step).toBe('b'.repeat(WORKING_STATE_CAPS.next_step));
     expect(derived!.summary.startsWith(marker)).toBe(true);
-    expect(derived!.summary.length).toBeLessThanOrEqual(PRE_COMPACT_SUMMARY_CAP + marker.length);
+    expect(derived!.summary.length).toBeLessThanOrEqual(WORKING_STATE_CAPS.summary);
   });
 
   it('looks past a tail of tool output for the last request and reply', () => {
@@ -150,6 +161,59 @@ describe('writeSessionEndHandoff from transcript state', () => {
 
     expect(writeSessionEndHandoff(root, 'default', 'sess-new', null, later)?.nextAction).toBe(later.next_step);
     expect(loadLatestHandoff(root, 'default', 'sess-new')?.evidence?.derivedFrom).toBe('transcript');
+  });
+
+  it('rewrites its earlier transcript read in place when asked, as a close after every reply does', () => {
+    const root = store();
+    writeSessionEndHandoff(root, 'default', 'sess-new', null, state, undefined, { inPlace: true });
+    const later = { ...state, next_step: 'write the retry queue test' };
+
+    expect(writeSessionEndHandoff(root, 'default', 'sess-new', null, later, undefined, { inPlace: true })?.nextAction).toBe(later.next_step);
+    expect(handoffCount(root, 'sess-new')).toBe(1);
+    expect(loadLatestHandoff(root, 'default', 'sess-new')?.evidence?.derivedFrom).toBe('transcript');
+  });
+
+  it('in place still keeps a handoff written by hand', () => {
+    const root = store();
+    writeSessionEndHandoff(root, 'default', 'sess-new', null, state, undefined, { inPlace: true });
+    saveSessionHandoff(root, 'default', { version: 1, sessionId: 'sess-new', summary: 'written by hand', artifacts: [], evidence: { testStatus: 'pass' } });
+
+    expect(writeSessionEndHandoff(root, 'default', 'sess-new', null, { ...state, next_step: 'newer' }, undefined, { inPlace: true })).toBeNull();
+    expect(handoffCount(root, 'sess-new')).toBe(2);
+    expect(loadLatestHandoff(root, 'default', 'sess-new')?.summary).toBe('written by hand');
+  });
+
+  it('in place adds no row when a handoff written by hand lands between the read and the rewrite', () => {
+    const root = store();
+    writeSessionEndHandoff(root, 'default', 'sess-new', null, state, undefined, { inPlace: true });
+    const db = openHippoDb(root);
+    try {
+      // The rewrite finds the hand-written row newest and changes nothing, as when `hippo handoff create` wins the race.
+      db.exec(`CREATE TRIGGER hand_written_lands BEFORE UPDATE ON session_handoffs BEGIN
+        INSERT INTO session_handoffs(session_id, summary, artifacts_json, tenant_id, created_at)
+          VALUES (OLD.session_id, 'written by hand', '[]', OLD.tenant_id, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+        SELECT RAISE(IGNORE);
+      END`);
+    } finally {
+      closeHippoDb(db);
+    }
+
+    expect(writeSessionEndHandoff(root, 'default', 'sess-new', null, { ...state, next_step: 'newer' }, undefined, { inPlace: true })).toBeNull();
+    expect(handoffCount(root, 'sess-new')).toBe(2);
+    expect(loadLatestHandoff(root, 'default', 'sess-new')?.summary).toBe('written by hand');
+  });
+
+  it('in place, two replies after a compaction both refresh the handoff, as the open snapshot gives way to the transcript', () => {
+    const root = store();
+    writeSessionEndHandoff(root, 'default', 'sess-new', null, state, undefined, { inPlace: true });
+    saveActiveTaskSnapshot(root, 'default', { task: 'compacted', summary: 's', next_step: 'from the snapshot', session_id: 'sess-new', source: 'pre-compact' });
+
+    for (const next_step of ['first reply after compaction', 'second reply after compaction']) {
+      expect(writeSessionEndHandoff(root, 'default', 'sess-new', null, { ...state, next_step }, undefined, { inPlace: true })?.nextAction).toBe(next_step);
+      expect(loadLatestHandoff(root, 'default', 'sess-new')?.nextAction).toBe(next_step);
+    }
+    expect(handoffCount(root, 'sess-new')).toBe(1);
+    expect(loadActiveTaskSnapshot(root, 'default')?.session_id).toBe('sess-new');
   });
 
   it('keeps a handoff written with hippo handoff create over a later transcript read', () => {

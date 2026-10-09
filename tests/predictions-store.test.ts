@@ -21,9 +21,9 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { deleteEntry } from '../src/store/delete-and-batch.js';
-import { Layer} from '../src/memory.js';
+import { Layer} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import {
   savePrediction,
   closePrediction,
@@ -31,7 +31,7 @@ import {
   loadPredictionsByClass,
   loadOpenPredictions,
   VALID_CLOSURE_STATES,
-} from '../src/predictions/store.js';
+} from '../src/store/predictions.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 function safeRmSync(p: string): void {
@@ -45,7 +45,7 @@ function countRows(db: DatabaseSyncLike, table: 'memories' | 'predictions'): num
   return (row as { c: number }).c;
 }
 
-describe('predictions store (E2 first-class object, v0.31)', () => {
+describe('predictions store (first-class object)', () => {
   let home: string;
   beforeEach(() => { home = makeRoot('predictions'); });
   afterEach(() => safeRmSync(home));

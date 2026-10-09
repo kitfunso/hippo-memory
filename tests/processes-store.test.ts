@@ -22,13 +22,13 @@
  * 17. schema v32 produces processes table + 3 triggers + 2 indexes
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { deleteEntry } from '../src/store/delete-and-batch.js';
-import { Layer} from '../src/memory.js';
+import { Layer} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import {
   saveProcess,
   closeProcess,
@@ -39,8 +39,9 @@ import {
   VALID_PROCESS_STATES,
   MAX_PROCESS_STEPS,
   MAX_PROCESS_STEP_LEN,
-} from '../src/processes.js';
+} from '../src/objects/processes.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { resetLogOnce } from '../src/util/log.js';
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
@@ -54,7 +55,7 @@ function countRows(home: string, table: string): number {
   } finally { closeHippoDb(db); }
 }
 
-describe('processes store (E2 first-class object)', () => {
+describe('processes store (first-class object)', () => {
   let home: string;
   beforeEach(() => { home = makeRoot('processes'); });
   afterEach(() => safeRmSync(home));
@@ -93,12 +94,12 @@ describe('processes store (E2 first-class object)', () => {
       expect((JSON.parse(memRow!.tags_json) as string[])).toContain('process');
 
       // SAFETY: metadata_json for a process_create audit row is always a JSON
-      // object with these fields (see src/processes.ts saveProcess audit write).
+      // object with these fields (see src/objects/processes.ts saveProcess audit write).
       const rows = db.prepare(`SELECT metadata_json FROM audit_log WHERE op = 'process_create' AND target_id = ?`)
         .all(String(proc.id)) as Array<{ metadata_json: string }>;
       expect(rows.length).toBe(1);
       // SAFETY: metadata_json for a process_create audit row always includes
-      // these fields, written by saveProcess (see src/processes.ts).
+      // these fields, written by saveProcess (see src/objects/processes.ts).
       const meta = JSON.parse(rows[0].metadata_json) as { version: number; step_count: number; has_description: boolean };
       expect(meta.version).toBe(1);
       expect(meta.step_count).toBe(3);
@@ -161,7 +162,7 @@ describe('processes store (E2 first-class object)', () => {
     const db = openHippoDb(home);
     try {
       // SAFETY: metadata_json for a process_supersede audit row always
-      // includes these fields (see src/processes.ts saveProcess audit write).
+      // includes these fields (see src/objects/processes.ts saveProcess audit write).
       const rows = db.prepare(`SELECT metadata_json FROM audit_log WHERE op = 'process_supersede' AND target_id = ?`)
         .all(String(v1.id)) as Array<{ metadata_json: string }>;
       expect(rows.length).toBe(1);
@@ -214,7 +215,7 @@ describe('processes store (E2 first-class object)', () => {
     const db = openHippoDb(home);
     try {
       // SAFETY: metadata_json for a process_close audit row is always a JSON
-      // object (see src/processes.ts closeProcess audit write).
+      // object (see src/objects/processes.ts closeProcess audit write).
       const rows = db.prepare(`SELECT metadata_json FROM audit_log WHERE op = 'process_close' AND target_id = ?`)
         .all(String(proc.id)) as Array<{ metadata_json: string }>;
       expect(rows.length).toBe(1);
@@ -358,5 +359,29 @@ describe('processes store (E2 first-class object)', () => {
       expect(indexes).toContain('idx_processes_tenant_status');
       expect(indexes).toContain('idx_processes_memory');
     } finally { closeHippoDb(db); }
+  });
+
+  it('a damaged steps column reads as no steps and warns once per shape', () => {
+    const proc = saveProcess(home, 'default', { processName: 'Damaged', steps: ['a'] });
+    const other = saveProcess(home, 'default', { processName: 'WrongShape', steps: ['a'] });
+    const db = openHippoDb(home);
+    try {
+      db.prepare(`UPDATE processes SET steps = '[private-step' WHERE id = ?`).run(proc.id);
+      db.prepare(`UPDATE processes SET steps = '{"a":1}' WHERE id = ?`).run(other.id);
+    } finally { closeHippoDb(db); }
+
+    resetLogOnce();
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    let logged: string;
+    try {
+      expect(loadProcessById(home, 'default', proc.id)!.steps).toEqual([]);
+      expect(loadProcessById(home, 'default', other.id)!.steps).toEqual([]);
+      logged = stderr.mock.calls.map((c) => String(c[0])).join('');
+    } finally {
+      stderr.mockRestore();
+    }
+    expect(logged).toMatch(new RegExp(`processes\\.steps is not valid JSON.* id=${proc.id} column=steps`));
+    expect(logged).toMatch(new RegExp(`processes\\.steps is wrong shape.* id=${other.id} column=steps`));
+    expect(logged).not.toContain('private-');
   });
 });

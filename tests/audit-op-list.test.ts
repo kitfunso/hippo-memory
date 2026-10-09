@@ -4,11 +4,11 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { serve, type ServerHandle } from '../src/server.js';
+import { hippoRun } from './_helpers/spawn-hippo.js';
 
 const CLI = resolve(__dirname, '..', 'bin', 'hippo.js');
 
@@ -41,11 +41,7 @@ describe('audit op filter', () => {
 
   function runAuditList(op: string) {
     if (!existsSync(CLI)) throw new Error(`bin/hippo.js not found at ${CLI} - run \`npm run build\` first`);
-    const r = spawnSync('node', [CLI, 'audit', 'list', '--op', op, '--json'], {
-      cwd: home,
-      encoding: 'utf8',
-      env: { ...process.env, HIPPO_HOME: hippoRoot },
-    });
+    const r = hippoRun(['audit', 'list', '--op', op, '--json'], { cwd: home, env: { ...process.env, HIPPO_HOME: hippoRoot }, exe: 'node' });
     return { status: r.status, stdout: r.stdout, stderr: r.stderr };
   }
 

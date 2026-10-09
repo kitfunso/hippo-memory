@@ -12,13 +12,15 @@ import {
   completeCard,
   reclaimExpiredCards,
   addCardComment,
-} from '../store-cards.js';
-import { isHandoffOutcome } from '../handoff.js';
-import { type Card, isCardStatus } from '../card.js';
-import { loadCardDetail, type CardDetail } from '../card-detail.js';
-import { resolveTenantId } from '../tenant.js';
+} from '../store/cards.js';
+import { isHandoffOutcome } from '../core/handoff.js';
+import { type Card, isCardStatus } from '../core/card.js';
+import { loadCardDetail, type CardDetail } from '../store/card-detail.js';
+import { resolveTenantId } from '../store/tenant.js';
 import { printError } from './output.js';
-import { requireInit, cardStringFlag } from './shared.js';
+import { type CliFlags, stringFlagOrExit, type CommandContext } from './flag-values.js';
+import { requireInit } from './shared.js';
+import { errorMessage } from '../util/log.js';
 
 // Mirrors ARCHIVE_REASON_REQUIRED so the block message can't drift from its usage line.
 const CARD_BLOCK_REASON_REQUIRED = 'hippo card block <id> requires --reason "<why>" (recorded as a comment).';
@@ -62,8 +64,8 @@ function printCard(detail: CardDetail): void {
 }
 
 // A too-large --run would silently round to a different id (mirrors parsePositiveIncidentId).
-function cardRunFlag(flags: Record<string, string | boolean | string[]>): number | undefined {
-  const raw = cardStringFlag(flags, 'run');
+function cardRunFlag(flags: CliFlags): number | undefined {
+  const raw = stringFlagOrExit(flags, 'run');
   if (raw === undefined) return undefined;
   const n = Number(raw);
   if (!/^\d+$/.test(raw) || !Number.isSafeInteger(n) || n <= 0) {
@@ -80,7 +82,7 @@ function cardRefusal(hippoRoot: string, tenantId: string, id: string): string {
   return `status ${card?.status ?? 'unknown'}, live run ${liveRun?.id ?? 'none'}`;
 }
 
-// One entry per subcommand: the flags cmdCard actually reads for it, so a typo like
+// One entry per subcommand: the flags handleCard actually reads for it, so a typo like
 // --depend-on fails fast instead of silently doing nothing.
 type CardSubcommand = 'create' | 'show' | 'list' | 'claim' | 'heartbeat' | 'block' | 'review' | 'complete' | 'reclaim' | 'comment';
 
@@ -97,15 +99,10 @@ const CARD_SUBCOMMAND_FLAGS = {
   comment: ['body', 'author'],
 } satisfies Record<CardSubcommand, string[]>;
 
-type CardFlags = Record<string, string | boolean | string[]>;
-type CardHandler = (hippoRoot: string, tenantId: string, args: string[], flags: CardFlags) => void;
+type CardHandler = (hippoRoot: string, tenantId: string, args: string[], flags: CliFlags) => void;
 
 /** Runs `hippo card <subcommand>`: rejects flags the subcommand never reads, then hands off to its handler. */
-export function cmdCard(
-  hippoRoot: string,
-  args: string[],
-  flags: Record<string, string | boolean | string[]>
-): void {
+export function handleCard({ hippoRoot, args, flags }: CommandContext): void {
   requireInit(hippoRoot);
   const tenantId = resolveTenantId({});
   const subcommand = args[0] ?? '';
@@ -127,15 +124,15 @@ export function cmdCard(
   CARD_HANDLERS[known](hippoRoot, tenantId, args, flags);
 }
 
-function cardCreate(hippoRoot: string, tenantId: string, _args: string[], flags: CardFlags): void {
-  const title = cardStringFlag(flags, 'title') ?? '';
+function cardCreate(hippoRoot: string, tenantId: string, _args: string[], flags: CliFlags): void {
+  const title = stringFlagOrExit(flags, 'title') ?? '';
   if (!title) {
     printError('Usage: hippo card create --title "..." [--repo <name>] [--contract <text>] [--budget <n>] [--depends-on <id>...]');
     process.exit(1);
   }
-  const repo = cardStringFlag(flags, 'repo') || undefined;
-  const contract = cardStringFlag(flags, 'contract') || undefined;
-  const budgetRaw = cardStringFlag(flags, 'budget');
+  const repo = stringFlagOrExit(flags, 'repo') || undefined;
+  const contract = stringFlagOrExit(flags, 'contract') || undefined;
+  const budgetRaw = stringFlagOrExit(flags, 'budget');
   let budget: number | undefined;
   if (budgetRaw !== undefined) {
     if (!/^\d+$/.test(budgetRaw)) {
@@ -155,13 +152,13 @@ function cardCreate(hippoRoot: string, tenantId: string, _args: string[], flags:
   try {
     card = createCard(hippoRoot, tenantId, { title, repo, contract, budget, dependsOn });
   } catch (error) {
-    printError(error instanceof Error ? error.message : String(error));
+    printError(errorMessage(error));
     process.exit(1);
   }
   console.log(`Created card ${card.id} (status: ${card.status})`);
 }
 
-function cardShow(hippoRoot: string, tenantId: string, args: string[], flags: CardFlags): void {
+function cardShow(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): void {
   const id = args[1];
   if (!id) {
     printError('Usage: hippo card show <id> [--json]');
@@ -179,8 +176,8 @@ function cardShow(hippoRoot: string, tenantId: string, args: string[], flags: Ca
   printCard(detail);
 }
 
-function cardList(hippoRoot: string, tenantId: string, _args: string[], flags: CardFlags): void {
-  const status = cardStringFlag(flags, 'status');
+function cardList(hippoRoot: string, tenantId: string, _args: string[], flags: CliFlags): void {
+  const status = stringFlagOrExit(flags, 'status');
   if (status !== undefined && !isCardStatus(status)) {
     printError(`Invalid status: "${status}".`);
     process.exit(1);
@@ -199,19 +196,19 @@ function cardList(hippoRoot: string, tenantId: string, _args: string[], flags: C
   }
 }
 
-function cardClaim(hippoRoot: string, tenantId: string, args: string[], flags: CardFlags): void {
+function cardClaim(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): void {
   const id = args[1];
-  const runtime = cardStringFlag(flags, 'runtime') ?? '';
+  const runtime = stringFlagOrExit(flags, 'runtime') ?? '';
   if (!id || !runtime) {
     printError('Usage: hippo card claim <id> --runtime <name> [--session <id>]');
     process.exit(1);
   }
-  const sessionId = cardStringFlag(flags, 'session') || undefined;
+  const sessionId = stringFlagOrExit(flags, 'session') || undefined;
   let card: (Card & { runId: number }) | null;
   try {
     card = claimCard(hippoRoot, tenantId, id, runtime, sessionId);
   } catch (error) {
-    printError(error instanceof Error ? error.message : String(error));
+    printError(errorMessage(error));
     process.exit(1);
   }
   if (!card) {
@@ -221,7 +218,7 @@ function cardClaim(hippoRoot: string, tenantId: string, args: string[], flags: C
   console.log(`Claimed card ${card.id} for ${runtime} (run ${card.runId}, lease until ${card.leaseUntil})`);
 }
 
-function cardHeartbeat(hippoRoot: string, tenantId: string, args: string[], flags: CardFlags): void {
+function cardHeartbeat(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): void {
   const id = args[1];
   const runId = cardRunFlag(flags);
   if (!id || runId === undefined) {
@@ -232,7 +229,7 @@ function cardHeartbeat(hippoRoot: string, tenantId: string, args: string[], flag
   try {
     card = heartbeatCard(hippoRoot, tenantId, id, runId);
   } catch (error) {
-    printError(error instanceof Error ? error.message : String(error));
+    printError(errorMessage(error));
     process.exit(1);
   }
   if (!card) {
@@ -242,9 +239,9 @@ function cardHeartbeat(hippoRoot: string, tenantId: string, args: string[], flag
   console.log(`Heartbeat card ${card.id}: lease until ${card.leaseUntil}`);
 }
 
-function cardBlock(hippoRoot: string, tenantId: string, args: string[], flags: CardFlags): void {
+function cardBlock(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): void {
   const id = args[1];
-  const reason = cardStringFlag(flags, 'reason') ?? '';
+  const reason = stringFlagOrExit(flags, 'reason') ?? '';
   if (!id || !reason) {
     printError(CARD_BLOCK_REASON_REQUIRED);
     process.exit(1);
@@ -254,7 +251,7 @@ function cardBlock(hippoRoot: string, tenantId: string, args: string[], flags: C
   try {
     card = blockCard(hippoRoot, tenantId, id, reason, runId);
   } catch (error) {
-    printError(error instanceof Error ? error.message : String(error));
+    printError(errorMessage(error));
     process.exit(1);
   }
   if (!card) {
@@ -265,7 +262,7 @@ function cardBlock(hippoRoot: string, tenantId: string, args: string[], flags: C
   console.log(`Blocked card ${card.id}`);
 }
 
-function cardReview(hippoRoot: string, tenantId: string, args: string[], flags: CardFlags): void {
+function cardReview(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): void {
   const id = args[1];
   if (!id) {
     printError('Usage: hippo card review <id> [--run <n>]');
@@ -276,7 +273,7 @@ function cardReview(hippoRoot: string, tenantId: string, args: string[], flags: 
   try {
     card = reviewCard(hippoRoot, tenantId, id, runId);
   } catch (error) {
-    printError(error instanceof Error ? error.message : String(error));
+    printError(errorMessage(error));
     process.exit(1);
   }
   if (!card) {
@@ -287,7 +284,7 @@ function cardReview(hippoRoot: string, tenantId: string, args: string[], flags: 
   console.log(`Card ${card.id} moved to review`);
 }
 
-function cardComplete(hippoRoot: string, tenantId: string, args: string[], flags: CardFlags): void {
+function cardComplete(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): void {
   const id = args[1];
   const outcomeRaw = flags['outcome'];
   if (!id || !isHandoffOutcome(outcomeRaw)) {
@@ -299,7 +296,7 @@ function cardComplete(hippoRoot: string, tenantId: string, args: string[], flags
   try {
     result = completeCard(hippoRoot, tenantId, id, outcomeRaw, runId);
   } catch (error) {
-    printError(error instanceof Error ? error.message : String(error));
+    printError(errorMessage(error));
     process.exit(1);
   }
   if (!result) {
@@ -328,7 +325,7 @@ function cardReclaim(hippoRoot: string, tenantId: string, args: string[]): void 
   }
 }
 
-function cardComment(hippoRoot: string, tenantId: string, args: string[], flags: CardFlags): void {
+function cardComment(hippoRoot: string, tenantId: string, args: string[], flags: CliFlags): void {
   const id = args[1];
   if (!id) {
     printError('Usage: hippo card comment <id> --body "..." [--author <name>]');
@@ -340,12 +337,12 @@ function cardComment(hippoRoot: string, tenantId: string, args: string[], flags:
     printError(`No card found with id ${id}.`);
     process.exit(1);
   }
-  const body = cardStringFlag(flags, 'body') ?? '';
+  const body = stringFlagOrExit(flags, 'body') ?? '';
   if (!body) {
     printError('Usage: hippo card comment <id> --body "..." [--author <name>]');
     process.exit(1);
   }
-  const author = cardStringFlag(flags, 'author') || 'cli';
+  const author = stringFlagOrExit(flags, 'author') || 'cli';
   const comment = addCardComment(hippoRoot, tenantId, id, author, body);
   console.log(`Added comment ${comment.id} to card ${id}`);
 }

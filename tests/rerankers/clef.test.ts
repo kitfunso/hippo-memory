@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import type { SearchResult } from '../../src/search/types.js';
+import type { SearchResult } from '../../src/core/search-types.js';
 import { getReranker } from '../../src/rerankers/index.js';
-import { clefFlashReranker, clefReranker, createClefReranker, parseClefReply } from '../../src/rerankers/clef.js';
-import type { JsonValue } from '../../src/http-util.js';
+import { createClefReranker, parseClefReply } from '../../src/rerankers/clef.js';
+import type { JsonValue } from '../../src/util/json.js';
 
 const ACCOUNT = '0123456789abcdef0123456789abcdef';
 const FAKE_TOKEN = 'fake-cloudflare-token-for-tests';
@@ -117,9 +117,9 @@ describe('clef rerankers', () => {
 
   it('keeps the native order on a non-2xx status, a non-JSON body and a timeout', async () => {
     const rerank = createClefReranker('clef-flash');
-    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(json({}, 429));
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => json({}, 401));
     expect(contents(await rerank('q', inputs()))).toEqual(NATIVE);
-    expect(String(warnSpy.mock.calls[0][0])).toContain('HTTP 429');
+    expect(String(warnSpy.mock.calls[0][0])).toContain('HTTP 401');
 
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response('not json', { status: 200 }));
     expect(contents(await rerank('q', inputs()))).toEqual(NATIVE);
@@ -257,10 +257,13 @@ describe('clef rerankers', () => {
 
   it.each(['15s', '-1', '1.5', '999999999999'])('uses the default timeout for HIPPO_CLEF_TIMEOUT_MS=%s', async (value) => {
     process.env.HIPPO_CLEF_TIMEOUT_MS = value;
-    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(workersReply([0.1, 0.2, 0.3]));
-    await createClefReranker('clef-flash')('q', inputs());
-    expect(setTimeoutSpy.mock.calls.map((c) => c[1])).toContain(15_000);
+    // An answer 60 ms in beats the 15 s default; a misread value (15 ms, 1 ms, out of range) would lose to it and keep the native order.
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => new Promise((resolve, reject) => {
+      init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+      setTimeout(() => resolve(workersReply([0.1, 0.2, 0.3])), 60);
+    }));
+    const out = await createClefReranker('clef-flash')('q', inputs());
+    expect(contents(out)).toEqual(['gamma', 'beta', 'alpha']);
   });
 
   it('keeps the native order when a reply runs past the byte cap', async () => {
@@ -294,9 +297,12 @@ describe('clef rerankers', () => {
     expect(parseClefReply(bare, 1, 'clef-flash', true)).toBe('reply does not name its model');
   });
 
-  it('is registered as clef-flash and clef, with no reranker by default', () => {
-    expect(getReranker('clef-flash')).toBe(clefFlashReranker);
-    expect(getReranker('clef')).toBe(clefReranker);
+  it('is registered as clef-flash and clef, with no reranker by default', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => workersReply([0.1, 0.9, 0.5]));
+    for (const name of ['clef-flash', 'clef'] as const) {
+      const out = await getReranker(name)!('q', inputs());
+      expect(out[0].rerankProvenance?.requestedModel).toBe(name);
+    }
     expect(getReranker(undefined)).toBeNull();
   });
 });

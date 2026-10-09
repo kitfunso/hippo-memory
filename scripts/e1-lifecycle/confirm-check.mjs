@@ -5,6 +5,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { generateProtocol } from './generate.mjs';
+import { mulberry32 } from '../lib/prng.mjs';
 
 const USAGE = 'usage: confirm-check.mjs r4-seeds <from> <count> | params <dir> <arm,...> <seeds> <all|v1> <after-iso>'
   + ' | gates <dir> <seeds> | diff <dir>:<arm> <dir>:<arm> <seeds> | split <dir>:<arm> <dir>:<arm> <seeds>';
@@ -43,17 +44,8 @@ function afterV1Share(seed, lookalikeWindow) {
   return after.length / negs.length;
 }
 
-// compare.mjs's mulberry32 and one-group boot, copied because compare.mjs is a CLI with no exports.
+// compare.mjs's one-group boot, copied because compare.mjs is a CLI with no exports.
 // split's nonStaleR5 line must match compare.mjs's to the digit.
-function mulberry32(seed) {
-  let a = seed >>> 0;
-  return () => {
-    a |= 0; a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
 const quantile = (sorted, p) => sorted[Math.min(sorted.length - 1, Math.max(0, Math.round((sorted.length - 1) * p)))];
 const mean = (xs) => xs.reduce((s, x) => s + x, 0) / xs.length;
 function boot(bySeed, B = 10000) {

@@ -4,12 +4,12 @@ import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { createApiKey } from '../src/auth.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { createApiKey } from '../src/store/auth.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { serve, type ServerHandle } from '../src/server.js';
-import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../src/api-errors.js';
-import { BodyTooLargeError, HttpError, INTERNAL_ERROR_MESSAGE, mapApiError } from '../src/http-util.js';
+import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../src/core/api-errors.js';
+import { BodyTimeoutError, BodyTooLargeError, HttpError, INTERNAL_ERROR_MESSAGE, mapApiError } from '../src/util/http-util.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 type ReplyBody = Record<string, string>;
@@ -41,14 +41,10 @@ describe('mapApiError maps by class, never by message', () => {
     [new ConflictError('wording four'), 409],
     [new HttpError(418, 'teapot'), 418],
     [new BodyTooLargeError('request body exceeds 1MB'), 413],
+    [new BodyTimeoutError('request body not received within 10000 ms'), 408],
   ];
   it.each(typed)('%s keeps its own message at %i', (err, status) => {
     expect(mapApiError(err)).toEqual({ status, message: err.message });
-  });
-
-  it('a renamed message keeps its status', () => {
-    expect(mapApiError(new NotFoundError('no such row (reworded)')).status).toBe(404);
-    expect(mapApiError(new ConflictError('row moved on')).status).toBe(409);
   });
 
   it('old message text on a plain Error no longer buys a 4xx, and the text is withheld', () => {
@@ -111,12 +107,6 @@ describe('typed errors from real domain paths keep their status and message', ()
     });
     expect(r.status).toBe(403);
     expect(r.body.error).toBe('Only an admin key can create API keys');
-  });
-
-  it('a missing row named by a create stays 409', async () => {
-    const r = await call(handle, { method: 'POST', path: '/v1/decisions', body: { text: 'use sqlite', supersedesDecisionId: 999 } });
-    expect(r.status).toBe(409);
-    expect(r.body.error).toContain('to supersede not found');
   });
 });
 

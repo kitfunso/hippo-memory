@@ -6,6 +6,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { stripComments } from './lib/source-text.mjs';
 
 const QUOTED = `['"]([^'"\\n]+)['"]`;
 const IMPORT_CLAUSE = String.raw`(type\s+)?((?:[\w$]+\s*,\s*)?(?:\{[^}]*\}|\*\s*as\s+[\w$]+)|[\w$]+)`;
@@ -13,11 +14,6 @@ const EXPORT_CLAUSE = String.raw`(type\s+)?(\{[^}]*\}|\*(?:\s*as\s+[\w$]+)?)`;
 const IMPORT_RE = new RegExp(String.raw`^[ \t]*import\s+${IMPORT_CLAUSE}\s*from\s*${QUOTED}`, 'gm');
 const EXPORT_RE = new RegExp(String.raw`^[ \t]*export\s+${EXPORT_CLAUSE}\s*from\s*${QUOTED}`, 'gm');
 const SIDE_EFFECT_RE = new RegExp(String.raw`^[ \t]*import\s*${QUOTED}`, 'gm');
-
-/** Blanks comments so a commented-out import adds no edge. */
-function stripComments(text) {
-  return text.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' ')).replace(/(^|[^:\\])\/\/.*$/gm, '$1');
-}
 
 /** True when tsc erases the statement: every named specifier is `type X` and nothing else is bound. */
 function isTypeOnly(typeKeyword, clause) {

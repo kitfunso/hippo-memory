@@ -25,8 +25,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { deleteEntry } from '../src/store/delete-and-batch.js';
-import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import {
   saveDecision,
   closeDecision,
@@ -35,7 +35,9 @@ import {
   loadActiveDecisions,
   resolveActiveDecisionIdByMemory,
   VALID_DECISION_STATES,
-} from '../src/decisions.js';
+} from '../src/objects/decisions.js';
+import { ConflictError } from '../src/core/api-errors.js';
+import { mapApiError } from '../src/util/http-util.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 function safeRmSync(p: string): void {
@@ -72,7 +74,7 @@ function countRows(home: string, table: string): number {
   } finally { closeHippoDb(db); }
 }
 
-describe('decisions store (E2 first-class object)', () => {
+describe('decisions store (first-class object)', () => {
   let home: string;
   beforeEach(() => { home = makeRoot('decisions'); });
   afterEach(() => safeRmSync(home));
@@ -116,6 +118,22 @@ describe('decisions store (E2 first-class object)', () => {
     } finally {
       closeHippoDb(db);
     }
+  });
+
+  it('a supersede that loses its race after the preflight is a ConflictError (409), like the other five save paths', () => {
+    const prior = saveDecision(home, 'default', { decisionText: 'ship on fridays' });
+    const db = openHippoDb(home);
+    try {
+      // The trigger stands in for a concurrent writer: the preflight sees an active row, the UPDATE changes nothing.
+      db.exec(`CREATE TRIGGER lose_supersede_race BEFORE UPDATE OF status ON decisions BEGIN SELECT RAISE(IGNORE); END`);
+    } finally { closeHippoDb(db); }
+    let thrown: unknown;
+    try {
+      saveDecision(home, 'default', { decisionText: 'ship on tuesdays', supersedesDecisionId: prior.id });
+    } catch (err) { thrown = err; }
+    expect(thrown).toBeInstanceOf(ConflictError);
+    expect(mapApiError(thrown).status).toBe(409);
+    expect(countRows(home, 'decisions')).toBe(1);
   });
 
   it('saveDecision without context: bare memory content, has_context false', () => {

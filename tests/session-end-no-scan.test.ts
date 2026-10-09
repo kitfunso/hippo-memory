@@ -1,17 +1,16 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { spawnSync, type SpawnSyncReturns } from 'child_process';
+import { type SpawnSyncReturns } from 'child_process';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 import { getHippoRoot } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
+import { hippoRun } from './_helpers/spawn-hippo.js';
 
 // OpenCode's idle hook runs `hippo session-end` with no payload. An empty stdin
 // must not read as a manual run: session-end never scans ~/.claude/projects.
 // Real built CLI and real detached worker, same idiom as session-end-snapshot-close.test.ts.
-
-const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
 const MARKER = 'zebrafish-ledger';
 const WORKER_DONE = 'skip: no session_id in SessionEnd payload';
 
@@ -21,7 +20,7 @@ function runHippo(
   env: NodeJS.ProcessEnv,
   input?: string,
 ): SpawnSyncReturns<string> {
-  return spawnSync(process.execPath, [HIPPO_JS, ...args], { cwd, env, input, encoding: 'utf8' });
+  return hippoRun(args, { cwd, env, input });
 }
 
 function sleepMs(ms: number): Promise<void> {

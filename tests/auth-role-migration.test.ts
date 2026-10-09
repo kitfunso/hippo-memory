@@ -11,11 +11,11 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { openHippoDb, closeHippoDb, getCurrentSchemaVersion, getSchemaVersion } from '../src/db.js';
-import { createApiKey, validateApiKey } from '../src/auth.js';
+import { openHippoDb, closeHippoDb, getCurrentSchemaVersion, getSchemaVersion } from '../src/db/index.js';
+import { createApiKey, validateApiKey } from '../src/store/auth.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 
-describe('v1.12.0 migration v26: api_keys.role', () => {
+describe('migration v26: api_keys.role', () => {
   it('CURRENT_SCHEMA_VERSION is 26', () => {
     expect(getCurrentSchemaVersion()).toBe(LATEST_SCHEMA_VERSION);
   });

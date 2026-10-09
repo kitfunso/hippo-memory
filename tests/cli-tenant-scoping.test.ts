@@ -17,8 +17,8 @@ import { execFileSync } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 
 const REPO_ROOT = join(__dirname, '..');
 const CLI_PATH = join(REPO_ROOT, 'dist', 'cli.js');
@@ -55,7 +55,7 @@ function runCli(
   }
 }
 
-describe('CLI tenant-scoping (v1.11.0 residue)', () => {
+describe('CLI tenant-scoping', () => {
   let home: string;
   let hippoRoot: string;
   let globalRoot: string;

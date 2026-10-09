@@ -1,14 +1,16 @@
-import { isRecallBoostAblated } from '../ablation.js';
-import { MemoryEntry, Layer, createMemory, markRetrieved } from '../memory.js';
+import { isRecallBoostAblated } from '../core/ablation.js';
+import { MemoryEntry, Layer, createMemory, markRetrieved } from '../core/memory.js';
 import { findPromotableSessions, traceExistsForSession, listSessionEvents } from '../store/sessions.js';
-import { rejectionDigest, findRejectedValue } from '../rejection.js';
-import { sampleForReplay } from '../replay.js';
-import { renderTraceContent } from '../trace.js';
-import { resolveTenantId } from '../tenant.js';
-import { appendAuditEvent, reportAuditWriteFailure } from '../audit.js';
-import { commonDerivationScope } from '../recall-scope.js';
-import { log } from '../log.js';
-import { REPLAY_COUNT_DEFAULT, type JsonValue, isJsonString, type SleepRun } from './run.js';
+import { rejectionDigest } from '../store/rejection.js';
+import { sampleForReplay } from './replay.js';
+import { renderTraceContent } from './trace.js';
+import { resolveTenantId } from '../store/tenant.js';
+import { reportAuditWriteFailure } from '../store/audit.js';
+import { commonDerivationScope } from '../store/recall-scope.js';
+import { log } from '../util/log.js';
+import { REPLAY_COUNT_DEFAULT, type SleepRun } from './run.js';
+import { type JsonValue, isJsonString } from '../util/json.js';
+import { DAY_MS } from '../util/time.js';
 
 // -------------------------------------------------------------------------
 // 1.4. Auto-promote complete sessions to traces
@@ -23,11 +25,9 @@ export function promoteSessionTraces(run: SleepRun): void {
   if (run.dryRun || run.config.autoTraceCapture === false) return;
   let tracesSkippedRejected = 0;
   const windowDays = run.config.autoTraceWindowDays ?? 7;
-  const sinceMs = run.now.getTime() - windowDays * 24 * 60 * 60 * 1000;
-  // Auto-trace currently runs in a single-tenant context (the env-resolved
-  // tenant for this process). Multi-tenant deployments that want
-  // consolidation across all tenants need a per-tenant loop layered on top
-  // of this — tracked in docs/plans/2026-05-02-continuity-tables-tenant-scope.md.
+  const sinceMs = run.now.getTime() - windowDays * DAY_MS;
+  // Auto-trace runs single-tenant (the env-resolved tenant); consolidating
+  // every tenant needs a per-tenant loop layered on top of this.
   const consolidationTenant = resolveTenantId({});
   const promotable = findPromotableSessions(run.hippoRoot, consolidationTenant, sinceMs);
 
@@ -72,7 +72,7 @@ function sessionTrace(run: SleepRun, consolidationTenant: string, sessionId: str
     limit: 1000,
   });
 
-  // T7: a mixed-scope session would otherwise leak into one trace.
+  // A mixed-scope session would otherwise leak into one trace.
   const sessionScope = commonDerivationScope(events.map((e) => e.scope));
   if (!sessionScope.ok) {
     run.result.tracesSkippedMixedScope++;
@@ -80,25 +80,13 @@ function sessionTrace(run: SleepRun, consolidationTenant: string, sessionId: str
     return null;
   }
 
-  const completeEvent = events.find((e) => e.event_type === 'session_complete');
-  if (!completeEvent) return null; // defence-in-depth; findPromotableSessions filters already.
-
-  const outcomeRaw = completeEvent.content;
-  if (outcomeRaw !== 'success' && outcomeRaw !== 'failure' && outcomeRaw !== 'partial') {
-    // Malformed terminal event — skip rather than crash the whole sleep.
-    return null;
-  }
-  const outcome: TraceOutcome = outcomeRaw;
+  const ending = sessionEnding(events);
+  if (!ending) return null;
+  const { outcome, summary } = ending;
 
   const steps = events
     .filter((e) => e.event_type !== 'session_complete')
     .map((e) => ({ action: e.content, observation: '' }));
-
-  // SAFETY: session event metadata is a free-form Record<string, unknown>
-  // bag; summary is optional and is only trusted once isJsonString below
-  // confirms it is actually a string.
-  const summaryValue = completeEvent.metadata.summary as JsonValue;
-  const summary = isJsonString(summaryValue) ? summaryValue : '(untitled)';
 
   const trace = createMemory(
     renderTraceContent({ task: summary, steps, outcome }),
@@ -109,13 +97,8 @@ function sessionTrace(run: SleepRun, consolidationTenant: string, sessionId: str
       tags: ['auto-promoted'],
       source: 'auto-promote',
       scope: sessionScope.scope,
-      // T1 fix (2026-08-15 hardening pass): stamp the trace into the SAME
-      // tenant the traceExistsForSession idempotency check (above) runs
-      // under. Before
-      // this, createMemory omitted tenantId and the trace always landed
-      // 'default' (memory.ts:535) while the idempotency check ran under
-      // consolidationTenant — for any non-default tenant that check never
-      // hit, and the trace regenerated every sleep.
+      // Same tenant as the traceExistsForSession check above, or a
+      // non-default tenant's trace regenerates every sleep.
       tenantId: consolidationTenant,
       baseHalfLifeDays: run.config.defaultHalfLifeDays,
     },
@@ -123,22 +106,33 @@ function sessionTrace(run: SleepRun, consolidationTenant: string, sessionId: str
   return { trace, outcome };
 }
 
-// AT1 (same producer-side pattern as the merge pass below): traceExistsForSession
-// only sees rows CURRENTLY in the store — once a rejected trace is
-// removed, that idempotency check no longer blocks regeneration, and
-// this write would otherwise reach batchWriteAndDelete's guard bypass
-// unchecked, resurrecting it every sleep. Check under THE ENTRY'S OWN
-// stamped tenantId (read off `trace` after createMemory — never guess
-// the tenant) + the built content's digest. A hit skips the push
-// entirely: not counted as promoted, not added to survivors.
+/** The outcome and title a session's terminal event carries, or null when it has none or the event is malformed. */
+function sessionEnding(events: ReturnType<typeof listSessionEvents>): { outcome: TraceOutcome; summary: string } | null {
+  const completeEvent = events.find((e) => e.event_type === 'session_complete');
+  if (!completeEvent) return null; // defence-in-depth; findPromotableSessions filters already.
+
+  const outcomeRaw = completeEvent.content;
+  if (outcomeRaw !== 'success' && outcomeRaw !== 'failure' && outcomeRaw !== 'partial') {
+    // Malformed terminal event — skip rather than crash the whole sleep.
+    return null;
+  }
+
+  // SAFETY: session event metadata is a free-form Record<string, unknown>
+  // bag; summary is optional and is only trusted once isJsonString below
+  // confirms it is actually a string.
+  const summaryValue = completeEvent.metadata.summary as JsonValue;
+  const summary = isJsonString(summaryValue) ? summaryValue : '(untitled)';
+  return { outcome: outcomeRaw, summary };
+}
+
+// traceExistsForSession only sees live rows, so a removed rejected trace would regenerate every
+// sleep; check the tombstone under the entry's own stamped tenantId, never a guessed one.
 function traceRejected(run: SleepRun, trace: MemoryEntry, sessionId: string): boolean {
-  const consolidateDb = run.getConsolidateDb();
-  if (!consolidateDb) return false;
   const traceDigest = rejectionDigest(trace.content);
-  const tombstone = findRejectedValue(consolidateDb, trace.tenantId, traceDigest);
+  const tombstone = run.tombstones.find(trace.tenantId, traceDigest);
   if (!tombstone) return false;
   try {
-    appendAuditEvent(consolidateDb, {
+    run.tombstones.audit({
       tenantId: trace.tenantId,
       actor: 'sleep',
       op: 'reject_refusal',

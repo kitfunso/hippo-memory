@@ -22,8 +22,9 @@ import {
   isFtsAvailable,
   getSchemaVersion,
   getCurrentSchemaVersion,
-} from '../src/db.js';
-import { Layer } from '../src/memory.js';
+} from '../src/db/index.js';
+import { Layer } from '../src/core/memory.js';
+import { consolidate } from '../src/consolidate/sleep.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -213,6 +214,8 @@ describe('index management', () => {
 describe('stats tracking', () => {
   it('persists stat counters through the SQLite backbone', () => {
     initStore(tmpDir);
+    // Longer than any rewrite, so bytes left over from it would break the mirror's JSON.
+    fs.writeFileSync(path.join(tmpDir, 'stats.json'), 'x'.repeat(4096));
 
     updateStats(tmpDir, { remembered: 2, recalled: 1, forgotten: 1 });
 
@@ -227,6 +230,7 @@ describe('stats tracking', () => {
     expect(stats.total_remembered).toBe(2);
     expect(stats.total_recalled).toBe(1);
     expect(stats.total_forgotten).toBe(1);
+    expect(JSON.parse(fs.readFileSync(path.join(tmpDir, 'stats.json'), 'utf8'))).toEqual(stats);
   });
 });
 
@@ -249,7 +253,7 @@ describe('SQLite-backed search candidates', () => {
     expect(candidates.some((entry) => entry.id === unrelated.id)).toBe(false);
   });
 
-  it('rebuilds the FTS mirror if it goes missing', () => {
+  it('sleep rebuilds the FTS mirror if it goes missing', async () => {
     initStore(tmpDir);
 
     const entry = createMemory('cache refresh failure in gold pipeline', {
@@ -267,6 +271,7 @@ describe('SQLite-backed search candidates', () => {
     const candidates = loadSearchEntries(tmpDir, 'cache refresh');
     expect(candidates.some((candidate) => candidate.id === entry.id)).toBe(true);
 
+    await consolidate(tmpDir);
     const reopened = openHippoDb(tmpDir);
     try {
       if (hadFts) {

@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest';
-import { refineSemanticMemory, refineStore } from '../src/refine-llm.js';
-import { Layer} from '../src/memory.js';
+import { afterEach, beforeEach, describe, it, expect, vi, type MockInstance } from 'vitest';
+import { refineSemanticMemory, refineStore } from '../src/cli/refine-llm.js';
+import { Layer} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -36,16 +36,27 @@ describe('refineSemanticMemory', () => {
     expect(result).toBe('Prefer async over sync in production paths.');
   });
 
-  it('returns null on API error', async () => {
-    const fetcher = mockFetcher('ignored', false);
-    const result = await refineSemanticMemory('merged', [], { apiKey: 'test', fetcher });
-    expect(result).toBeNull();
-  });
+  describe('failure logging', () => {
+    const API_KEY = 'refine-test-key-0000';
+    let stderr: MockInstance<typeof process.stderr.write>;
+    const warnLines = (): string[] => stderr.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('refine'));
+    beforeEach(() => { stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true); });
+    afterEach(() => { stderr.mockRestore(); });
 
-  it('returns null on too-short response', async () => {
-    const fetcher = mockFetcher('ok');
-    const result = await refineSemanticMemory('merged', [], { apiKey: 'test', fetcher });
-    expect(result).toBeNull();
+    it.each([
+      ['the request throws', async (): Promise<Response> => { throw new Error('socket hang up'); }, /request failed: socket hang up/],
+      ['the API answers non-2xx', async (): Promise<Response> => new Response('{"error":"bad"}', { status: 400 }), /HTTP 400/],
+      ['the body is not JSON', async (): Promise<Response> => new Response('not json', { status: 200 }), /unreadable response/],
+      ['the reply is too short', async (): Promise<Response> => new Response(JSON.stringify({ content: [{ text: 'ok' }] }), { status: 200 }), /empty or too short/],
+    ])('returns null and logs one warning when %s', async (_label, fetcher, pattern) => {
+      const result = await refineSemanticMemory('merged', [], { apiKey: API_KEY, fetcher });
+      expect(result).toBeNull();
+      const lines = warnLines();
+      expect(lines).toHaveLength(1);
+      expect(lines[0]).toMatch(/^\[hippo\] warn: refine: /);
+      expect(lines[0]).toMatch(pattern);
+      expect(lines.join('')).not.toContain(API_KEY);
+    });
   });
 });
 

@@ -1,10 +1,10 @@
 // `hippo slack`: backfill, dead-letter queue and workspace registry for the Slack connector.
 
-import { envSlackBotToken, envSlackSigningSecret, envSlackTeamId } from '../env.js';
-import { openHippoDb, closeHippoDb } from '../db.js';
-import * as api from '../api.js';
-import { resolveTenantId } from '../tenant.js';
-import { listDlq, replayDlqEntry } from '../connectors/slack/dlq.js';
+import { envSlackBotToken, envSlackSigningSecret, envSlackTeamId } from '../util/env.js';
+import * as api from '../api/index.js';
+import { resolveTenantId } from '../store/tenant.js';
+import { listDlq } from '../connectors/dlq.js';
+import { replayDlqEntry, slackDlq } from '../connectors/slack/dlq.js';
 import { backfillChannel } from '../connectors/slack/backfill.js';
 import { slackHistoryFetcher } from '../connectors/slack/web-client.js';
 import {
@@ -14,13 +14,14 @@ import {
 } from '../connectors/slack/workspaces.js';
 import { printError } from './output.js';
 import { printSlackBackfillUsage, printSlackWorkspacesUsage } from './usage.js';
+import { type CliFlags, stringFlag, type CommandContext } from './flag-values.js';
 
 // ---------------------------------------------------------------------------
-// Slack subcommands (E1.3 — `hippo slack backfill` / `hippo slack dlq list`)
+// Slack subcommands (`hippo slack backfill` / `hippo slack dlq list`)
 // ---------------------------------------------------------------------------
 
-function cmdSlackBackfill(hippoRoot: string, flags: Record<string, string | boolean | string[]>): void {
-  const channel = typeof flags['channel'] === 'string' ? (flags['channel'] as string) : undefined;
+function cmdSlackBackfill(hippoRoot: string, flags: CliFlags): void {
+  const channel = stringFlag(flags, 'channel');
   if (!channel) {
     printSlackBackfillUsage();
     process.exit(1);
@@ -34,7 +35,7 @@ function cmdSlackBackfill(hippoRoot: string, flags: Record<string, string | bool
   // --since is advisory in V1: the slack_cursors row drives resume, so the
   // backfill loop always picks up where it last left off. Honoured-by-cursor
   // semantics keep idempotency clean.
-  const sinceIso = flags['since'] as string | undefined;
+  const sinceIso = stringFlag(flags, 'since');
   void sinceIso;
   const fetcher = slackHistoryFetcher(token);
   const ctx = {
@@ -56,24 +57,18 @@ function cmdSlackBackfill(hippoRoot: string, flags: Record<string, string | bool
     });
 }
 
-function cmdSlackDlqList(hippoRoot: string, _flags: Record<string, string | boolean | string[]>): void {
-  const db = openHippoDb(hippoRoot);
-  try {
-    const tenantId = resolveTenantId({});
-    const items = listDlq(db, { tenantId });
-    for (const it of items) {
-      console.log(`${it.id}\t${it.receivedAt}\t${it.error}`);
-    }
-  } finally {
-    closeHippoDb(db);
+function cmdSlackDlqList(hippoRoot: string, _flags: CliFlags): void {
+  const items = listDlq(slackDlq, hippoRoot, { tenantId: resolveTenantId({}) });
+  for (const it of items) {
+    console.log(`${it.id}\t${it.receivedAt}\t${it.error}`);
   }
 }
 
-function cmdSlackDlqReplay(
+async function cmdSlackDlqReplay(
   hippoRoot: string,
   args: string[],
-  flags: Record<string, string | boolean | string[]>,
-): void {
+  flags: CliFlags,
+): Promise<void> {
   const idArg = args[2];
   if (!idArg) {
     printError('Usage: hippo slack dlq replay <id> [--force]');
@@ -85,7 +80,7 @@ function cmdSlackDlqReplay(
     process.exit(1);
   }
   const force = flags.force === true;
-  const result = replayDlqEntry(
+  const result = await replayDlqEntry(
     { hippoRoot },
     id,
     {
@@ -106,62 +101,47 @@ function cmdSlackDlqReplay(
 
 function cmdSlackWorkspacesAdd(
   hippoRoot: string,
-  flags: Record<string, string | boolean | string[]>,
+  flags: CliFlags,
 ): void {
-  const teamId = typeof flags['team'] === 'string' ? (flags['team'] as string).trim() : '';
-  const tenantId = typeof flags['tenant'] === 'string' ? (flags['tenant'] as string).trim() : '';
+  const teamId = (stringFlag(flags, 'team') ?? '').trim();
+  const tenantId = (stringFlag(flags, 'tenant') ?? '').trim();
   if (!teamId || !tenantId) {
     printError('Usage: hippo slack workspaces add --team <T> --tenant <t>');
     process.exit(1);
   }
-  const db = openHippoDb(hippoRoot);
-  try {
-    const ws = addSlackWorkspace(db, { teamId, tenantId });
-    console.log(`added: ${ws.teamId} -> ${ws.tenantId} (${ws.addedAt})`);
-  } finally {
-    closeHippoDb(db);
-  }
+  const ws = addSlackWorkspace(hippoRoot, { teamId, tenantId });
+  console.log(`added: ${ws.teamId} -> ${ws.tenantId} (${ws.addedAt})`);
 }
 
 function cmdSlackWorkspacesList(hippoRoot: string): void {
-  const db = openHippoDb(hippoRoot);
-  try {
-    const items = listSlackWorkspaces(db);
-    if (items.length === 0) {
-      console.log('(no registered workspaces; routing via HIPPO_TENANT fallback)');
-      return;
-    }
-    for (const ws of items) {
-      console.log(`${ws.teamId}\t${ws.tenantId}\t${ws.addedAt}`);
-    }
-  } finally {
-    closeHippoDb(db);
+  const items = listSlackWorkspaces(hippoRoot);
+  if (items.length === 0) {
+    console.log('(no registered workspaces; routing via HIPPO_TENANT fallback)');
+    return;
+  }
+  for (const ws of items) {
+    console.log(`${ws.teamId}\t${ws.tenantId}\t${ws.addedAt}`);
   }
 }
 
 function cmdSlackWorkspacesRemove(
   hippoRoot: string,
-  flags: Record<string, string | boolean | string[]>,
+  flags: CliFlags,
 ): void {
-  const teamId = typeof flags['team'] === 'string' ? (flags['team'] as string).trim() : '';
+  const teamId = (stringFlag(flags, 'team') ?? '').trim();
   if (!teamId) {
     printError('Usage: hippo slack workspaces remove --team <T>');
     process.exit(1);
   }
-  const db = openHippoDb(hippoRoot);
-  try {
-    const removed = removeSlackWorkspace(db, teamId);
-    if (!removed) {
-      printError(`no workspace registered for team ${teamId}`);
-      process.exit(1);
-    }
-    console.log(`removed: ${teamId}`);
-  } finally {
-    closeHippoDb(db);
+  const removed = removeSlackWorkspace(hippoRoot, teamId);
+  if (!removed) {
+    printError(`no workspace registered for team ${teamId}`);
+    process.exit(1);
   }
+  console.log(`removed: ${teamId}`);
 }
 
-export function cmdSlack(hippoRoot: string, args: string[], flags: Record<string, string | boolean | string[]>): void {
+export async function handleSlack({ hippoRoot, args, flags }: CommandContext): Promise<void> {
   const sub = args[0];
   if (sub === 'backfill') {
     cmdSlackBackfill(hippoRoot, flags);
@@ -172,7 +152,7 @@ export function cmdSlack(hippoRoot: string, args: string[], flags: Record<string
     return;
   }
   if (sub === 'dlq' && args[1] === 'replay') {
-    cmdSlackDlqReplay(hippoRoot, args, flags);
+    await cmdSlackDlqReplay(hippoRoot, args, flags);
     return;
   }
   if (sub === 'workspaces') {

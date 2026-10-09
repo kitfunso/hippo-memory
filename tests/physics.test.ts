@@ -5,8 +5,8 @@ import {
   queryGravityMagnitude, velocityAlignmentBonus, attractionForce, repulsionForce, dragForce,
   physicsScore, simulate, computeSystemEnergy, applyOutcomeFeedback,
   type PhysicsParticle, type ForceContext,
-} from '../src/physics.js';
-import { DEFAULT_PHYSICS_CONFIG } from '../src/physics-config.js';
+} from '../src/core/physics.js';
+import { DEFAULT_PHYSICS_CONFIG } from '../src/core/physics-config.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -653,7 +653,6 @@ describe('Simulation', () => {
       // Run second batch
       const ctx2 = makeCtx({ config });
       simulate(particles, ctx2);
-      const energyAfterSecond = computeSystemEnergy(particles, config.G_memory).kinetic;
 
       // Run third batch
       const ctx3 = makeCtx({ config });

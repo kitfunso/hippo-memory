@@ -3,12 +3,19 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { sha256 } from './regrade.mjs';
+import { READER_HIDDEN } from './workspace.mjs';
+import { ALL_ARMS } from './z0-records.mjs';
 
 const win = process.platform === 'win32';
 const Z95 = 1.959963984540054;
+// The memory tool, its homes and every instruction or memory file the reader diff hides: a command naming one is dropped.
+const HIDDEN_WORDS = ['hippo', 'memory/', 'claude-config', 'codex-home', ...READER_HIDDEN];
 // Strings that name a memory tool, a home or a hidden marker: any of them left in a blinded file could show the arm.
-export const FORBIDDEN = ['hippo', '.hippo', 'CLAUDE.md', 'memory/', 'claude-config', 'codex-home', 'hippo-home', '[command hidden]', '[tool]'];
-export const HIDDEN_COMMAND = /hippo|CLAUDE\.md|memory\/|claude-config|codex-home/i;
+export const FORBIDDEN = [...HIDDEN_WORDS, '.hippo', 'hippo-home', '[command hidden]', '[tool]'];
+export const isHiddenCommand = (command) => leakScan(command, HIDDEN_WORDS).length > 0;
+// An arm or seed named as its own word shows the arm as plainly as a path; arms keep their case, so code like x1 survives.
+const ARM_WORD = new RegExp(`\\b(?:${ALL_ARMS.join('|')})\\b`, 'g');
+const SEED_WORD = /\bseed\d+\b/gi;
 
 /** Items in sha256(`${seed}:${salt}${id}`) order: a pure function of the seed and the set, never of the listing order. */
 export function seededOrder(seed, items, idOf = (x) => x, salt = '') {
@@ -116,6 +123,9 @@ export function leakScan(text, forbidden) {
   return forbidden.filter((f) => folded.includes(f.toLowerCase().replace(/\\/g, '/')));
 }
 
+/** The forbidden strings, then the standalone arm and seed words, a blinded text still holds. */
+export const blindLeaks = (text, forbidden) => [...leakScan(text, forbidden), ...(text.match(ARM_WORD) ?? []), ...(text.match(SEED_WORD) ?? [])];
+
 /** A label TSV (`id<TAB>label<TAB>note`): BOM, CRLF, `#` lines and blank lines accepted; any other fault names its line. */
 export function parseLabels(text, ids, allowed) {
   const want = new Set(ids);
@@ -141,7 +151,8 @@ export function wilson(k, n) {
   const d = 1 + (Z95 * Z95) / n;
   const c = (p + (Z95 * Z95) / (2 * n)) / d;
   const h = (Z95 * Math.sqrt((p * (1 - p)) / n + (Z95 * Z95) / (4 * n * n))) / d;
-  return [c - h, c + h];
+  // Rounding can push an endpoint a hair outside [0, 1], where the analyzer's bounds check rejects it.
+  return [Math.max(0, c - h), Math.min(1, c + h)];
 }
 
 /** Cohen's kappa on a 2x2 table (first word the judgement, second the label); null when chance agreement is 1. */

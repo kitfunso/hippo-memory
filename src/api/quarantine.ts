@@ -1,20 +1,10 @@
 // Quarantine review: list, approve and reject held memories.
 
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../db.js';
-import { ConflictError, ForbiddenError, NotFoundError } from '../api-errors.js';
-import { writeEntryMirrors } from '../store/entry-writes.js';
-import { readEntry } from '../store/entry-reads.js';
-import {
-  quarantineScopeFor,
-  getQuarantineRow,
-  listQuarantineRows,
-  approveQuarantineRow,
-  rejectQuarantineRow,
-  type QuarantineStatus,
-} from '../quarantine.js';
-import { log } from '../log.js';
-import type { KeysetPosition } from '../keyset.js';
-import { appendAuditEvent } from '../audit.js';
+import { ConflictError, ForbiddenError, NotFoundError } from '../core/api-errors.js';
+import { requireGroup, storeFor } from '../store/index.js';
+import type { QuarantineRefusal } from '../store/port.js';
+import type { QuarantineStatus } from '../store/quarantine.js';
+import type { KeysetPosition } from '../util/keyset.js';
 import type { Context } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -35,104 +25,45 @@ export interface QuarantineListItem {
 const QUARANTINE_PREVIEW_CHARS = 200;
 
 /** A tenant's quarantined memories, newest first. Default `status` is 'pending' (the review queue). */
-export function quarantineList(
+export async function quarantineList(
   ctx: Context,
   opts: { status?: QuarantineStatus | 'all'; limit?: number; after?: KeysetPosition } = {},
-): QuarantineListItem[] {
-  const db = openHippoDb(ctx.hippoRoot);
-  try {
-    const rows = listQuarantineRows(db, ctx.tenantId, opts.status ?? 'pending', opts.limit, opts.after);
-    return rows.map((row) => {
-      const entry = readEntry(ctx.hippoRoot, row.memoryId, ctx.tenantId);
-      return {
-        id: row.memoryId,
-        originalScope: row.originalScope,
-        reason: row.reason,
-        status: row.status,
-        quarantinedAt: row.quarantinedAt,
-        decidedAt: row.decidedAt,
-        decidedBy: row.decidedBy,
-        contentPreview: entry ? entry.content.slice(0, QUARANTINE_PREVIEW_CHARS) : '',
-      };
-    });
-  } finally {
-    closeHippoDb(db);
-  }
+): Promise<QuarantineListItem[]> {
+  const rows = await requireGroup(storeFor(ctx), 'quarantine')
+    .listQuarantined(ctx.tenantId, { status: opts.status ?? 'pending', limit: opts.limit, after: opts.after });
+  return rows.map((row) => ({
+    id: row.memoryId,
+    originalScope: row.originalScope,
+    reason: row.reason,
+    status: row.status,
+    quarantinedAt: row.quarantinedAt,
+    decidedAt: row.decidedAt,
+    decidedBy: row.decidedBy,
+    contentPreview: (row.content ?? '').slice(0, QUARANTINE_PREVIEW_CHARS),
+  }));
 }
 
-function loadPendingQuarantineRow(db: DatabaseSyncLike, tenantId: string, id: string) {
-  const row = getQuarantineRow(db, tenantId, id);
-  if (!row) throw new NotFoundError(`not quarantined: ${id}`);
-  if (row.status !== 'pending') throw new ConflictError(`${id} is already ${row.status}`);
-  return row;
+function refusalError(id: string, refusal: QuarantineRefusal): Error {
+  if (refusal.outcome === 'not_quarantined') return new NotFoundError(`not quarantined: ${id}`);
+  return new ConflictError(`${id} is already ${refusal.status}`);
 }
 
 /** Release a quarantined memory to its original scope. Admin only; the scope guard refuses a row moved since (mirrors restoreDormant). */
-export function quarantineApprove(ctx: Context, id: string): void {
+export async function quarantineApprove(ctx: Context, id: string): Promise<void> {
   if (ctx.actor.role !== 'admin') {
     throw new ForbiddenError('Only an admin key can approve a quarantined memory');
   }
-  const db = openHippoDb(ctx.hippoRoot);
-  try {
-    db.exec('BEGIN IMMEDIATE');
-    try {
-      const row = loadPendingQuarantineRow(db, ctx.tenantId, id);
-      const quarantineScope = quarantineScopeFor(row.originalScope);
-      const updated = db
-        .prepare(`UPDATE memories SET scope = ? WHERE id = ? AND tenant_id = ? AND scope = ?`)
-        .run(row.originalScope, id, ctx.tenantId, quarantineScope);
-      if (Number(updated.changes ?? 0) !== 1) {
-        throw new ConflictError(`memory ${id} scope changed since quarantine; refusing to approve`);
-      }
-      approveQuarantineRow(db, ctx.tenantId, id, ctx.actor.subject);
-      appendAuditEvent(db, {
-        tenantId: ctx.tenantId,
-        actor: ctx.actor.subject,
-        op: 'quarantine_approve',
-        targetId: id,
-        metadata: { originalScope: row.originalScope },
-      });
-      db.exec('COMMIT');
-    } catch (err) {
-      try { db.exec('ROLLBACK'); } catch { /* already rolled back */ }
-      throw err;
-    }
-  } finally {
-    closeHippoDb(db);
-  }
-  // Post-commit, best-effort: a failed rewrite leaves the mirror showing the quarantine scope (fail-closed).
-  try {
-    const restored = readEntry(ctx.hippoRoot, id, ctx.tenantId);
-    if (restored) writeEntryMirrors(ctx.hippoRoot, restored);
-  } catch (err) {
-    log.error(`quarantine: mirror rewrite failed for ${id}: ${err instanceof Error ? err.message : String(err)}`);
-  }
+  const result = await requireGroup(storeFor(ctx), 'quarantine').approveQuarantined(ctx.tenantId, id, ctx.actor.subject);
+  if (result.outcome === 'approved') return;
+  if (result.outcome === 'scope_moved') throw new ConflictError(`memory ${id} scope changed since quarantine; refusing to approve`);
+  throw refusalError(id, result);
 }
 
 /** Keep a quarantined memory hidden for good. Admin only; the raw row is untouched (append-only). */
-export function quarantineReject(ctx: Context, id: string): void {
+export async function quarantineReject(ctx: Context, id: string): Promise<void> {
   if (ctx.actor.role !== 'admin') {
     throw new ForbiddenError('Only an admin key can reject a quarantined memory');
   }
-  const db = openHippoDb(ctx.hippoRoot);
-  try {
-    db.exec('BEGIN IMMEDIATE');
-    try {
-      loadPendingQuarantineRow(db, ctx.tenantId, id);
-      rejectQuarantineRow(db, ctx.tenantId, id, ctx.actor.subject);
-      appendAuditEvent(db, {
-        tenantId: ctx.tenantId,
-        actor: ctx.actor.subject,
-        op: 'quarantine_reject',
-        targetId: id,
-        metadata: {},
-      });
-      db.exec('COMMIT');
-    } catch (err) {
-      try { db.exec('ROLLBACK'); } catch { /* already rolled back */ }
-      throw err;
-    }
-  } finally {
-    closeHippoDb(db);
-  }
+  const result = await requireGroup(storeFor(ctx), 'quarantine').rejectQuarantined(ctx.tenantId, id, ctx.actor.subject);
+  if (result.outcome !== 'rejected') throw refusalError(id, result);
 }

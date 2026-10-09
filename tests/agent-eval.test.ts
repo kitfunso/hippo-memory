@@ -21,15 +21,13 @@ import * as path from 'path';
 import * as os from 'os';
 import {
   createMemory,
-  applyOutcome,
-  type MemoryEntry,
   DEFAULT_HALF_LIFE_DAYS,
-} from '../src/memory.js';
+} from '../src/core/memory.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { search } from '../src/search/bm25-search.js';
-import { markRetrieved } from '../src/memory.js';
+import { markRetrieved } from '../src/core/memory.js';
 
 // ---------------------------------------------------------------------------
 // Trap categories — each has a lesson and 2-3 task instances
@@ -414,29 +412,3 @@ describe('Condition: hippo (learns from mistakes)', () => {
     expect(improvement).toBeGreaterThanOrEqual(0.30);
   });
 });
-
-describe('Comparative summary', () => {
-  it('prints full comparison table', () => {
-    const noMem = simulate(tasks, 'none');
-    const staticMem = simulate(tasks, 'static');
-    const hippoMem = simulate(tasks, 'hippo');
-
-    const noMemPhases = hitRateByPhase(noMem);
-    const staticPhases = hitRateByPhase(staticMem);
-    const hippoPhases = hitRateByPhase(hippoMem);
-
-    console.log('\n  ══ Agent Evaluation Benchmark ═══════════════════════════');
-    console.log('  50 tasks, 10 trap categories, 25+ trap encounters');
-    console.log('  ──────────────────────────────────────────────────────────');
-    console.log('  Condition     │ Overall │ Early │  Mid  │  Late │ Learns?');
-    console.log('  ──────────────┼─────────┼───────┼───────┼───────┼────────');
-    console.log(`  No memory     │  ${fmt(trapHitRate(noMem))}  │ ${fmt(noMemPhases.early)} │ ${fmt(noMemPhases.mid)} │ ${fmt(noMemPhases.late)} │   No`);
-    console.log(`  Static memory │  ${fmt(trapHitRate(staticMem))}  │ ${fmt(staticPhases.early)} │ ${fmt(staticPhases.mid)} │ ${fmt(staticPhases.late)} │   No`);
-    console.log(`  Hippo         │  ${fmt(trapHitRate(hippoMem))}  │ ${fmt(hippoPhases.early)} │ ${fmt(hippoPhases.mid)} │ ${fmt(hippoPhases.late)} │  Yes`);
-    console.log('  ══════════════════════════════════════════════════════════');
-  });
-});
-
-function fmt(rate: number): string {
-  return `${(rate * 100).toFixed(0).padStart(3)}%`;
-}

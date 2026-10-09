@@ -1,12 +1,14 @@
 import { createHmac, timingSafeEqual } from 'crypto';
 
+const DEFAULT_SKEW_SECONDS = 5 * 60;
+
 export interface VerifyOpts {
   rawBody: string;
   timestamp: string;
   signature: string;
   signingSecret: string;
   /**
-   * Previous signing secret during a rotation. v0.39 commit 3: deploy with
+   * Previous signing secret during a rotation. Deploy with
    * both `SLACK_SIGNING_SECRET` (new) and `SLACK_SIGNING_SECRET_PREVIOUS` (old)
    * set, verify both work, drop previous after rollover. The verifier tries
    * `signingSecret` first, then `previousSecret` if that fails.
@@ -35,7 +37,7 @@ function verifyOne(
 export function verifySlackSignature(opts: VerifyOpts): boolean {
   const { rawBody, timestamp, signature, signingSecret, previousSecret } = opts;
   const now = opts.now ?? Math.floor(Date.now() / 1000);
-  const skew = opts.skewSeconds ?? 5 * 60;
+  const skew = opts.skewSeconds ?? DEFAULT_SKEW_SECONDS;
   const ts = Number(timestamp);
   if (!Number.isFinite(ts)) return false;
   if (Math.abs(now - ts) > skew) return false;

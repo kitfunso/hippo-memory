@@ -4,18 +4,16 @@ import * as os from 'os';
 import * as path from 'path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import {
-  promoteToGlobal,
-  shareMemory,
-  autoShare,
-  syncGlobalToLocal,
-} from '../src/shared.js';
+import { promoteToGlobal } from '../src/sharing/global-store.js';
+import { shareMemory, autoShare } from '../src/sharing/share.js';
+import { syncGlobalToLocal } from '../src/sharing/global-sync.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { embedAll, loadEmbeddingIndex } from '../src/embeddings.js';
-import { isEmbeddingAvailable } from '../src/local-embedding.js';
-import { resolveEmbeddingProvider } from '../src/embedding-provider.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { embedAll } from '../src/store/embeddings/index.js';
+import { loadEmbeddingIndex } from '../src/store/vector-index.js';
+import { isEmbeddingAvailable } from '../src/store/embeddings/local.js';
+import { resolveEmbeddingProvider } from '../src/store/embeddings/provider.js';
 
 // docs/plans/2026-07-18-global-row-embeddings.md: rows written to the global
 // store by promote/share/autoShare/sync/import must enter that store's
@@ -356,7 +354,7 @@ describe('global-row-embeddings: promoteToGlobal producer wiring (subprocess)', 
       // Ensures the local vector exists (deterministic, not racing remember's
       // own fire-and-forget embed) and warms the on-disk model cache before
       // promote runs.
-      execFileSync('node', [HIPPO_BIN, 'embed'], { cwd, env, encoding: 'utf-8' });
+      if (isEmbeddingAvailable()) execFileSync('node', [HIPPO_BIN, 'embed'], { cwd, env, encoding: 'utf-8' });
 
       const promoteOut = execFileSync(
         'node',
@@ -374,7 +372,7 @@ describe('global-row-embeddings: promoteToGlobal producer wiring (subprocess)', 
         // subprocess has fully exited, and that process has no explicit
         // process.exit() call on the success path (cli.ts's main() returns
         // naturally), so Node's event loop keeps it alive until the floating
-        // embedMemory promise settles — same reasoning as cmdImport's batch
+        // embedMemory promise settles — same reasoning as handleImport's batch
         // embed comment (src/cli.ts:6086-6093). The poll is a safety margin,
         // not a requirement to wait out a race.
         await vi.waitFor(() => {

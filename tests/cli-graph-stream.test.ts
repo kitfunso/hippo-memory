@@ -8,12 +8,10 @@
  * wired (exits 0 on a real store) and that --graph-hops / --graph-seeds validation fires.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-
-const HIPPO_BIN = join(process.cwd(), 'bin', 'hippo.js');
+import { hippoOut } from './_helpers/spawn-hippo.js';
 
 interface CliEnv {
   HIPPO_HOME: string;
@@ -21,10 +19,10 @@ interface CliEnv {
 }
 
 function hippo(cwd: string, env: CliEnv, ...args: string[]): string {
-  return execFileSync('node', [HIPPO_BIN, ...args], { cwd, env: { ...process.env, ...env }, encoding: 'utf-8' });
+  return hippoOut(args, { cwd, env: { ...process.env, ...env }, exe: 'node' });
 }
 
-describe('recall --graph-stream (L1 CLI)', () => {
+describe('recall --graph-stream', () => {
   let home: string;
   let env: CliEnv;
 
@@ -39,7 +37,7 @@ describe('recall --graph-stream (L1 CLI)', () => {
     hippo(home, env, 'remember', 'cache invalidation decision for the deploy pipeline');
     // Exits 0 (execFileSync throws on non-zero). Output is the normal recall result.
     const out = hippo(home, env, 'recall', 'cache', '--graph-stream', '--limit', '5');
-    expect(out).toEqual(expect.any(String));
+    expect(out).toContain('cache invalidation decision for the deploy pipeline');
   });
 
   it('--graph-hops out of range is rejected', () => {

@@ -18,10 +18,13 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { serve, type ServerHandle } from '../src/server.js';
-import { createApiKey, type CreateApiKeyResult } from '../src/auth.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import type { Process } from '../src/processes.js';
+import { createApiKey, type CreateApiKeyResult } from '../src/store/auth.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import type { Process } from '../src/objects/processes.js';
+import type { JsonValue } from '../src/util/json.js';
 import { makeRoot } from './_helpers/make-root.js';
+
+type Body = { [key: string]: JsonValue };
 
 let home: string;
 let handle: ServerHandle;
@@ -73,7 +76,7 @@ async function createProcess(
   });
 }
 
-describe('HTTP /v1/processes (E2 process first-class object)', () => {
+describe('HTTP /v1/processes (process first-class object)', () => {
   it('POST /v1/processes creates a process (201 + Process body, version 1)', async () => {
     const res = await createProcess('Release', { steps: ['test', 'bump', 'publish'], description: 'the ritual' });
     expect(res.status).toBe(201);
@@ -189,5 +192,35 @@ describe('HTTP /v1/processes (E2 process first-class object)', () => {
   it('DoS cap: steps over 200 -> 400', async () => {
     const res = await createProcess('too many', { steps: Array(201).fill('x') });
     expect(res.status).toBe(400);
+  });
+
+  const over = (cap: number): string => 'x'.repeat(cap + 1);
+  const at = (cap: number): string => 'x'.repeat(cap);
+  const ROOT = '/v1/processes';
+  const MISSING = '/v1/processes/99999/supersede';
+  // Each row also sends every later field invalid, and the supersede target does not exist,
+  // so a row pins which check answers first as well as the reply text.
+  const REPLIES: readonly (readonly [string, string, string, Body | undefined, number, string])[] = [
+    ['list: an unknown status', 'GET', `${ROOT}?status=retired`, undefined, 400, 'status must be one of: active | superseded | closed | all (got "retired")'],
+    ['create: blank processName', 'POST', ROOT, { processName: '  ', steps: 7, description: 7 }, 400, 'processName is required (non-empty string)'],
+    ['create: processName over the cap', 'POST', ROOT, { processName: over(4096), steps: 7, description: 7 }, 400, 'processName exceeds 4096-character cap'],
+    ['create: steps not an array', 'POST', ROOT, { processName: 'p', steps: 7, description: 7 }, 400, 'steps must be an array of strings'],
+    ['create: too many steps', 'POST', ROOT, { processName: 'p', steps: Array.from({ length: 201 }, () => 7), description: 7 }, 400, 'steps exceeds 200-step cap'],
+    ['create: description not a string', 'POST', ROOT, { processName: 'p', steps: ['a'], description: 7 }, 400, 'description must be a string'],
+    ['create: description over the cap', 'POST', ROOT, { processName: 'p', steps: ['a'], description: over(4096) }, 400, 'description exceeds 4096-character cap'],
+    ['supersede: steps not an array', 'POST', MISSING, { steps: 7, changeSummary: 7, description: 7 }, 400, 'steps must be an array of strings'],
+    ['supersede: no steps', 'POST', MISSING, { steps: [], changeSummary: 7, description: 7 }, 400, 'steps is required (at least one step) for a supersession'],
+    ['supersede: changeSummary not a string', 'POST', MISSING, { steps: ['a'], changeSummary: 7, description: 7 }, 400, 'changeSummary must be a string'],
+    ['supersede: changeSummary over the cap', 'POST', MISSING, { steps: ['a'], changeSummary: over(4096), description: 7 }, 400, 'changeSummary exceeds 4096-character cap'],
+    ['supersede: description not a string', 'POST', MISSING, { steps: ['a'], description: 7 }, 400, 'description must be a string'],
+    ['supersede: description over the cap', 'POST', MISSING, { steps: ['a'], description: over(4096) }, 400, 'description exceeds 4096-character cap'],
+    ['supersede: every field at its cap reaches the lookup', 'POST', MISSING, { steps: ['a'], changeSummary: at(4096), description: at(4096) }, 404, 'process 99999 not found'],
+    ['supersede: null optional fields reach the lookup', 'POST', MISSING, { steps: ['a'], changeSummary: null, description: null }, 404, 'process 99999 not found'],
+  ];
+
+  it.each(REPLIES)('%s', async (_name, method, path, body, status, error) => {
+    const init = { method, headers: authHeaders(), body: body && JSON.stringify(body) };
+    const res = await fetch(`${handle.url}${path}`, init);
+    expect([res.status, await res.text()]).toEqual([status, JSON.stringify({ error })]);
   });
 });

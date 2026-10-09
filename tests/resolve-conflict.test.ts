@@ -11,7 +11,7 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { listMemoryConflicts, replaceDetectedConflicts, resolveConflict } from '../src/store/conflicts.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
 const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });
@@ -137,7 +137,7 @@ describe('resolveConflict', () => {
   });
 });
 
-describe('conflict tenant isolation (E2)', () => {
+describe('conflict tenant isolation', () => {
   function seedTenantConflict(tenant: string) {
     const a = createMemory7(`semicolons rule for ${tenant}`, { tenantId: tenant, tags: ['x'] });
     const b = createMemory7(`chaining rule for ${tenant}`, { tenantId: tenant, tags: ['x'] });

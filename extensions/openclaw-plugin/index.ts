@@ -294,12 +294,8 @@ export default function register(api: any) {
     async execute(_id: string, params: { query: string; budget?: number }) {
       const cfg = getConfig(api);
       const budget = params.budget ?? cfg.budget ?? 1500;
-      const framing = cfg.framing ?? 'observe';
       const hippoCwd = resolveHippoCwdFromContext(api, ctx, cfg.root);
-      const result = runHippo(
-        ['recall', params.query, '--budget', String(budget), '--framing', framing],
-        hippoCwd,
-      );
+      const result = runHippo(['recall', params.query, '--budget', String(budget)], hippoCwd);
       return { content: [{ type: 'text', text: result || 'No relevant memories found.' }] };
     },
   }));
@@ -356,7 +352,7 @@ export default function register(api: any) {
   api.registerTool((ctx: HippoRuntimeContext) => ({
     name: 'hippo_outcome',
     description:
-      'Report whether recalled memories were useful. Strengthens good memories (+5 days half-life) and weakens bad ones (-3 days). Call after completing work.',
+      "Report whether recalled memories were useful. Good outcomes slow a memory's decay and bad ones speed it up, in proportion to its record. Call after completing work.",
     parameters: {
       type: 'object',
       properties: {

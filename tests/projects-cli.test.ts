@@ -8,7 +8,7 @@ import { spawnSync } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { Layer, type MemoryEntry } from '../src/memory.js';
+import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 
 const CLI = join(process.cwd(), 'dist', 'cli.js');

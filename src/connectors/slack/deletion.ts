@@ -1,6 +1,6 @@
-import { archiveRaw, type Context } from '../../api.js';
-import { openHippoDb, closeHippoDb } from '../../db.js';
-import { markEventSeen, hasSeenEvent } from './idempotency.js';
+import { archiveRaw, type Context } from '../../api/index.js';
+import { requireGroup, storeFor } from '../../store/index.js';
+import type { ConnectorEvent } from '../../store/port.js';
 
 export interface DeletionInput {
   teamId: string;
@@ -16,58 +16,25 @@ export interface DeletionResult {
   memoryId: string | null;
 }
 
-/**
- * Handle Slack `message_deleted`. v0.39 commit 3 closes the prior race where
- * the archive committed but `markEventSeen` ran on a second db handle — a
- * crash between them left the deletion event un-acked, and the next retry
- * hit a now-archived row and returned `not_found` instead of `duplicate`.
- *
- * Fix: pass `afterArchive` to `archiveRaw`, which runs inside the same
- * SAVEPOINT as the archive itself. The slack_event_log row commits with the
- * archive or not at all.
- */
-export function handleMessageDeleted(ctx: Context, input: DeletionInput): DeletionResult {
-  const db = openHippoDb(ctx.hippoRoot);
-  let memoryId: string | null = null;
-  try {
-    if (hasSeenEvent(db, input.eventId)) {
-      return { status: 'duplicate', memoryId: null };
-    }
-    const ref = `slack://${input.teamId}/${input.channelId}/${input.deletedTs}`;
-    // Tenant scope is load-bearing: without `tenant_id = ?` a deletion event
-    // from tenant A could archive tenant B's raw row sharing the same
-    // artifact_ref. The `kind = 'raw'` filter prevents accidentally targeting
-    // distilled rows.
-    // SAFETY: row comes from the SELECT above, which projects only the
-    // `id` column; `.get` returns undefined when no row matches.
-    const row = db
-      .prepare(`SELECT id FROM memories WHERE artifact_ref = ? AND tenant_id = ? AND kind = 'raw'`)
-      .get(ref, ctx.tenantId) as { id?: string } | undefined;
-    memoryId = row?.id ?? null;
-  } finally {
-    closeHippoDb(db);
-  }
+/** Handles Slack `message_deleted`. The store logs the event in the archive's own transaction, so a crash cannot leave a retry
+ *  answering `not_found` where `duplicate` is due. */
+export async function handleMessageDeleted(ctx: Context, input: DeletionInput): Promise<DeletionResult> {
+  const events = requireGroup(storeFor(ctx), 'connectorEvents');
+  const event: ConnectorEvent = { connector: 'slack', eventId: input.eventId };
+  // The tenant in the lookup is load-bearing: without it a deletion event from
+  // tenant A could archive tenant B's raw row sharing the same artifact_ref.
+  const target = await events.deletionTarget({
+    event,
+    artifactRef: `slack://${input.teamId}/${input.channelId}/${input.deletedTs}`,
+    tenantId: ctx.tenantId,
+  });
+  if (target.seen) return { status: 'duplicate', memoryId: null };
+  const memoryId = target.memoryId;
   if (!memoryId) {
-    // No row to archive — still mark the deletion event seen so a retry returns
-    // 'duplicate'. There is nothing to roll back here, so the second-handle
-    // pattern is fine for this branch.
-    const db2 = openHippoDb(ctx.hippoRoot);
-    try { markEventSeen(db2, input.eventId, null); }
-    finally { closeHippoDb(db2); }
+    // No row to archive: the event is still marked seen, so a retry answers 'duplicate'.
+    await events.markEventSeen(event);
     return { status: 'not_found', memoryId: null };
   }
-  // Archive + event-log mark commit together via afterArchive. The hook
-  // receives the same db handle the archive is using, so the INSERT lives
-  // inside the SAVEPOINT.
-  archiveRaw(
-    ctx,
-    memoryId,
-    `source_deleted:slack:${input.teamId}:${input.channelId}:${input.deletedTs}`,
-    {
-      afterArchive: (sameDb, archivedId) => {
-        markEventSeen(sameDb, input.eventId, archivedId);
-      },
-    },
-  );
+  await archiveRaw(ctx, memoryId, `source_deleted:slack:${input.teamId}:${input.channelId}:${input.deletedTs}`, { event });
   return { status: 'archived', memoryId };
 }

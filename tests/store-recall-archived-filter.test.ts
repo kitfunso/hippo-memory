@@ -2,7 +2,7 @@
  * Defensive filter: `kind='archived'` rows must NOT appear in recall.
  *
  * `kind='archived'` is a transient SAVEPOINT-internal sentinel inside
- * `archiveRawMemory` (src/raw-archive.ts:56): UPDATE kind='archived'
+ * `archiveRawMemory` (src/store/raw-archive.ts:56): UPDATE kind='archived'
  * immediately followed by DELETE, atomic. In normal operation no concurrent
  * reader sees the intermediate state.
  *
@@ -22,9 +22,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { loadSearchEntries } from '../src/store/search-rows.js';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
-import { Layer, type MemoryEntry } from '../src/memory.js';
+import { _forceLikePathForTests, loadSearchEntries } from '../src/store/search-rows.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
+import { Layer, type MemoryEntry } from '../src/core/memory.js';
 
 function makeRawMemory(id: string, content: string, tenantId = 'default'): MemoryEntry {
   return {
@@ -98,21 +98,19 @@ describe('loadSearchEntries defensive kind!=archived filter', () => {
     expect(ids).not.toContain('mem_archived');
   });
 
-  it('LIKE-fallback path: archived row excluded with HIPPO_FORCE_LIKE_PATH', () => {
+  it('LIKE-fallback path: archived row excluded on the forced LIKE route', () => {
     writeEntry(hippoRoot, makeRawMemory('mem_visible', 'visible token bravo'));
     writeEntry(hippoRoot, makeRawMemory('mem_archived', 'archived token bravo'));
     poisonToArchived('mem_archived');
 
-    const prev = process.env.HIPPO_FORCE_LIKE_PATH;
-    process.env.HIPPO_FORCE_LIKE_PATH = '1';
+    _forceLikePathForTests(true);
     try {
       const results = loadSearchEntries(hippoRoot, 'bravo', 10, 'default');
       const ids = results.map((r) => r.id);
       expect(ids).toContain('mem_visible');
       expect(ids).not.toContain('mem_archived');
     } finally {
-      if (prev === undefined) delete process.env.HIPPO_FORCE_LIKE_PATH;
-      else process.env.HIPPO_FORCE_LIKE_PATH = prev;
+      _forceLikePathForTests(false);
     }
   });
 

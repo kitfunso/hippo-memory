@@ -4,6 +4,7 @@ name: Publish to npm
 # commit and workflow that built the package, shown on npmjs.com and checked
 # by `npm audit signatures`. Trigger: push a v*.*.* tag, cut from master for a
 # release or from release/<x.y> for a backport (docs/release-policy.md).
+# The whole CI workflow and the slow token-eval tests run on the tagged commit first; nothing is published unless both pass.
 # Python has its own tag scheme (python-v*.*.*) in pypi-publish.yml.
 #
 # One-time setup (npmjs.com, package settings > Trusted publishing): add a
@@ -19,7 +20,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write   # OIDC token for npm trusted publishing and provenance
 
 # One publish at a time: the dist-tag is picked before the long release gate, so two tags
 # pushed together would both read the old `latest`. `max` queues extra runs instead of cancelling them.
@@ -28,12 +28,31 @@ concurrency:
   queue: max
 
 jobs:
+  # Called here, not looked up by commit: a backport commit has no CI run of its own, and a tag can be pushed before one finishes.
+  ci:
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  # The harness tests the default run leaves out, so no test file sits outside the release.
+  token-eval:
+    uses: ./.github/workflows/token-eval.yml
+    permissions:
+      contents: read
+
   publish:
+    needs: [ci, token-eval]
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    permissions:
+      contents: read
+      id-token: write   # OIDC token for npm trusted publishing and provenance
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # check-expiring-keys-floor.mjs reads earlier release tags; a shallow clone holds only this one.
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'

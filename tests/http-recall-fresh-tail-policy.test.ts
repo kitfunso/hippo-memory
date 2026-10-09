@@ -15,7 +15,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
 
@@ -46,7 +46,7 @@ afterEach(async () => {
   rmSync(home, { recursive: true, force: true });
 });
 
-describe('GET /v1/memories fresh-tail policy F5 (v1.6.5)', () => {
+describe('GET /v1/memories fresh-tail policy', () => {
   it('env unset: fresh_tail_count > 0 without session_id → 200 (back-compat tenant-wide)', async () => {
     for (let i = 0; i < 3; i++) {
       writeEntry(home, createMemory(`event ${i}`, {

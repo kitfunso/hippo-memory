@@ -1,85 +1,24 @@
 #!/usr/bin/env node
-/**
- * Hippo CLI  - biologically-inspired memory system for AI agents.
- *
- * Commands:
- *   hippo init [--global]
- *   hippo remember <text> [--tag <t>] [--error] [--pin] [--global]
- *   hippo recall <query> [--budget <n>] [--json] [--why]
- *   hippo sleep [--dry-run]
- *   hippo status
- *   hippo outcome --good | --bad [--id <id>]
- *   hippo conflicts [--status <status>] [--json]
- *   hippo snapshot <save|show|clear>
- *   hippo session <log|show|latest|resume|complete>
- *   hippo handoff <create|latest|show>
- *   hippo card <create|show|list|claim|heartbeat|block|review|complete|reclaim|comment>
- *   hippo current <show>
- *   hippo forget <id> [--archive --reason "<why>"]
- *   hippo reject <id>|--value "<text>" --reason "<why>"
- *   hippo rejections
- *   hippo unreject <digest-prefix>
- *   hippo dormant [<query>] [--limit <n>] [--json] | restore <id> | forget <id>
- *   hippo projects [--json] | merge <from> <into> [--apply] | repair [--apply]
- *   hippo tokens [--days <n>] [--json] [--global]
- *   hippo doctor [--json]
- *   hippo inspect <id>
- *   hippo embed [--status]
- *   hippo watch "<command>"
- *   hippo learn --git [--days <n>] [--repos <paths>]
- *   hippo daily-runner
- *   hippo promote <id>
- *   hippo sync
- *   hippo decide "<decision>" [--context "<why>"] [--supersedes <id>]
- *   hippo wm <push|read|clear|flush>
- */
+// Hippo CLI entry point: parses argv and dispatches each verb through the table below.
+// `hippo help` prints the verb list from that table, so no list is kept here.
 
-import { envSkipAutoIntegrations } from './env.js';
+import { envSkipAutoIntegrations } from './util/env.js';
 import * as path from 'path';
 import * as fs from 'fs';
 import { fileURLToPath } from 'node:url';
 import { repairCodexWrapperIfInstalled } from './hooks/codex-wrapper.js';
 import { getHippoRoot } from './store/open.js';
-import { cmdGithub, printGithubBackfillUsage } from './connectors/github/cli-impl.js';
+import { handleGithub, printGithubBackfillUsage } from './connectors/github/cli-impl.js';
 import { printError } from './cli/output.js';
-import type { CommandContext } from './cli/shared.js';
+import { errorFields, errorMessage, isLevelEnabled, log } from './util/log.js';
+import { isStoreBusy, STORE_BUSY_MESSAGE } from './db/busy.js';
+import { type CliFlags, type CommandContext, boolFlag, flagIsTrue } from './cli/flag-values.js';
 import { VERB_USAGE, USAGE_HEADER, USAGE_EXAMPLES, printAuditPruneUsage, printSlackBackfillUsage, printSlackWorkspacesUsage } from './cli/usage.js';
+import { type FlagKind, type VerbFlags, VERB_FLAGS, flagKind, isKnownFlag, undeclaredFlags } from './cli/flags.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-// Every switch the CLI reads. A value on one reads as on under Boolean() (`--fix=false` would fix)
-// and as off under === true (`--pin=true` would not pin), so parseArgs and main() refuse one.
-// tests/cli-parse-flag-equals.test.ts fails when a switch read is missing from this set.
-export const BOOLEAN_FLAGS: ReadonlySet<string> = new Set([
-  'agents', 'all', 'all-tenants', 'apply', 'archive', 'auto', 'bad', 'bootstrap', 'classic', 'churn', 'continuity',
-  'cross-project', 'dry-run', 'equal-sources', 'error', 'evc-adaptive', 'extract',
-  'filter-conflicts', 'fix', 'force', 'forget', 'git', 'global', 'good', 'graph-stream',
-  'help', 'include-logs', 'include-superseded', 'inferred', 'json', 'last-session', 'multihop', 'no-hooks',
-  'no-learn', 'no-mmr', 'no-propagate', 'no-schedule', 'no-share', 'no-summarize-older',
-  'observed', 'open', 'physics', 'pin', 'pinned-only', 'reject-loser', 'rerank-utility',
-  'reset-physics', 'save-baseline', 'show-cases', 'stats', 'stdin',
-  'strict', 'suite', 'value-aware', 'verified', 'version', 'why',
-]);
-
-// Every flag some command reads. Anything else is a typo that no command would act on.
-export const KNOWN_FLAGS: ReadonlySet<string> = new Set([
-  ...BOOLEAN_FLAGS,
-  'actual', 'artifact', 'artifact-ref', 'as-of', 'author', 'baseline', 'body', 'budget', 'card-id',
-  'change', 'channel', 'chatgpt', 'class', 'claude', 'codex-home', 'compare', 'constraint', 'content',
-  'context', 'contract', 'cursor', 'customer', 'days', 'depends-on', 'depth', 'description',
-  'embedding-weight', 'entity', 'estimate', 'file', 'format', 'framing', 'fresh-tail', 'from', 'goal',
-  'graph-hops', 'graph-seeds', 'history-path', 'hops', 'host', 'id', 'importance', 'include-recent',
-  'instructions', 'keep', 'kind', 'label', 'layer', 'level', 'limit', 'link', 'local-bump', 'log-file',
-  'markdown', 'max', 'max-cases', 'max-neighbors', 'min-mrr', 'min-results', 'min-score', 'mmr-lambda',
-  'model', 'name', 'next', 'next-step', 'note', 'older-than', 'op', 'out', 'outcome', 'owner', 'parent',
-  'path', 'policy', 'port', 'reason', 'repo', 'repos', 'reranker', 'reranker-top-k', 'resolution',
-  'role', 'run', 'runtime', 'salience-threshold', 'scan', 'scope', 'session', 'session-id', 'since',
-  'source', 'start-offset', 'started-at', 'state', 'status', 'step', 'steps', 'success', 'summary',
-  'supersedes', 'tag', 'target', 'target-runtime', 'task', 'team', 'tenant', 'tenant-id', 'tests',
-  'text', 'threshold', 'title', 'to', 'transcript', 'trigger', 'type', 'unit', 'value', 'vault',
-]);
 
 // Commands that delete or hide memories: an unknown flag here stops the run instead of being ignored.
 const DESTRUCTIVE_COMMANDS: ReadonlySet<string> = new Set([
@@ -92,22 +31,17 @@ const DRY_RUN_COMMANDS: ReadonlySet<string> = new Set([
 ]);
 
 // share and brief honour --dry-run in one form only; their other forms write for real.
-function dryRunRefusal(command: string, args: string[], flags: Record<string, string | boolean | string[]>): string | null {
+function dryRunRefusal(command: string, args: string[], flags: CliFlags): string | null {
   const isBrief = command === 'brief' || command === 'project-brief';
   const onlyForm = command === 'share' ? 'share --auto' : isBrief ? `${command} refresh` : null;
-  const honoured = command === 'share' ? args[0] === '--auto' || Boolean(flags['auto'])
+  const honoured = command === 'share' ? args[0] === '--auto' || boolFlag(flags, 'auto')
     : isBrief ? args[0] === 'refresh' : DRY_RUN_COMMANDS.has(command);
   if (honoured) return null;
   const where = onlyForm ? ` outside \`hippo ${onlyForm}\`` : '';
   return `hippo ${command} has no --dry-run${where}, so it would run for real. Nothing was changed.`;
 }
 
-// Shared by both the separated and glued (`=`) forms so the list can't drift.
-function isRepeatableFlag(key: string): boolean {
-  return key === 'tag' || key === 'artifact' || key === 'link' || key === 'step' || key === 'constraint' || key === 'depends-on';
-}
-
-function pushRepeatableFlag(flags: Record<string, string | boolean | string[]>, key: string, value: string): void {
+function pushRepeatableFlag(flags: CliFlags, key: string, value: string): void {
   if (Array.isArray(flags[key])) {
     // SAFETY: Array.isArray just confirmed flags[key] is an array; the union has no other array member.
     (flags[key] as string[]).push(value);
@@ -116,10 +50,40 @@ function pushRepeatableFlag(flags: Record<string, string | boolean | string[]>, 
   }
 }
 
-export function parseArgs(argv: string[]): { command: string; args: string[]; flags: Record<string, string | boolean | string[]> } {
+function setGluedFlag(flags: CliFlags, key: string, value: string, kind: FlagKind): void {
+  // Glued form has no following token to swallow, so a switch gets its
+  // own branch here instead of the swallow-avoidance short-circuit in setSeparatedFlag.
+  if (kind === 'switch') {
+    flags[key] = value;
+  } else if (kind === 'list') {
+    if (value !== '') pushRepeatableFlag(flags, key, value);
+  } else {
+    flags[key] = value === '' ? true : value;
+  }
+}
+
+/** Returns how many tokens the flag consumed: its own, plus `next` when that is its value. */
+function setSeparatedFlag(flags: CliFlags, key: string, next: string | undefined, kind: FlagKind): number {
+  if (kind === 'switch' && (next === 'true' || next === 'false')) {
+    // Kept as a value so main() rejects it, instead of `--pin true` pinning the text "... true".
+    flags[key] = next;
+    return 2;
+  }
+  if (!next || next.startsWith('--') || kind === 'switch') {
+    // Boolean flag
+    flags[key] = true;
+    return 1;
+  }
+  if (kind === 'list') pushRepeatableFlag(flags, key, next);
+  else flags[key] = next;
+  return 2;
+}
+
+export function parseArgs(argv: string[]): { command: string; args: string[]; flags: CliFlags } {
   const [, , command = '', ...rest] = argv;
   const args: string[] = [];
-  const flags: Record<string, string | boolean | string[]> = {};
+  const flags: CliFlags = {};
+  const declared = COMMAND_INDEX.get(command)?.flags;
 
   let i = 0;
   while (i < rest.length) {
@@ -130,39 +94,12 @@ export function parseArgs(argv: string[]): { command: string; args: string[]; fl
     }
     if (part.startsWith('--')) {
       const eqIdx = part.indexOf('=');
+      const key = part.slice(2, eqIdx > 2 ? eqIdx : undefined);
       if (eqIdx > 2) {
-        // Glued form has no following token to swallow, so BOOLEAN_FLAGS gets its
-        // own branch here instead of the swallow-avoidance short-circuit below.
-        const key = part.slice(2, eqIdx);
-        const value = part.slice(eqIdx + 1);
-        if (BOOLEAN_FLAGS.has(key)) {
-          flags[key] = value;
-        } else if (isRepeatableFlag(key)) {
-          if (value !== '') pushRepeatableFlag(flags, key, value);
-        } else {
-          flags[key] = value === '' ? true : value;
-        }
+        setGluedFlag(flags, key, part.slice(eqIdx + 1), flagKind(declared, key));
         i++;
-        continue;
-      }
-
-      const key = part.slice(2);
-      const next = rest[i + 1];
-
-      if (BOOLEAN_FLAGS.has(key) && (next === 'true' || next === 'false')) {
-        // Kept as a value so main() rejects it, instead of `--pin true` pinning the text "... true".
-        flags[key] = next;
-        i += 2;
-      } else if (!next || next.startsWith('--') || BOOLEAN_FLAGS.has(key)) {
-        // Boolean flag
-        flags[key] = true;
-        i++;
-      } else if (isRepeatableFlag(key)) {
-        pushRepeatableFlag(flags, key, next);
-        i += 2;
       } else {
-        flags[key] = next;
-        i += 2;
+        i += setSeparatedFlag(flags, key, rest[i + 1], flagKind(declared, key));
       }
     } else if (part === '-h') {
       // Running a verb when help was asked costs more than losing a literal -h; `-- -h` still passes one.
@@ -177,12 +114,12 @@ export function parseArgs(argv: string[]): { command: string; args: string[]; fl
   return { command, args, flags };
 }
 
-export function shouldAutoRepairCodexWrapper(currentCommand: string, flags: Record<string, string | boolean | string[]>): boolean {
+export function shouldAutoRepairCodexWrapper(currentCommand: string, flags: CliFlags): boolean {
   if (envSkipAutoIntegrations()) return false;
   if (!['context', 'remember', 'recall', 'sleep', 'capture', 'outcome', 'status', 'init'].includes(currentCommand)) {
     return false;
   }
-  if (currentCommand === 'init' && flags['no-hooks'] === true) return false;
+  if (currentCommand === 'init' && flagIsTrue(flags, 'no-hooks')) return false;
   return true;
 }
 
@@ -190,340 +127,304 @@ export function shouldAutoRepairCodexWrapper(currentCommand: string, flags: Reco
 // hook install codex` (a Codex update can restore the real binary over our
 // shim). Never first-installs — silently swapping the codex binary on routine
 // commands is a consent violation and reads as binary hijacking to
-// supply-chain scanners (issue #133).
-function maybeRepairCodexWrapper(currentCommand: string, flags: Record<string, string | boolean | string[]>): void {
+// supply-chain scanners.
+function maybeRepairCodexWrapper(currentCommand: string, flags: CliFlags): void {
   if (!shouldAutoRepairCodexWrapper(currentCommand, flags)) return;
   try {
     repairCodexWrapperIfInstalled();
-  } catch {
-    // best-effort only
+  } catch (err) {
+    log.debug(`codex wrapper not repaired: ${errorMessage(err)}`);
   }
 }
 
-interface CommandSpec {
+/** What a verb's row states; its help blocks and flags are looked up by the row's key. */
+interface VerbHandler {
   readonly run: (ctx: CommandContext) => void | Promise<void>;
   readonly aliases?: readonly string[];
-  // Each block opens with a newline so the full listing is their concatenation.
-  readonly usage: readonly string[];
+  /** Runs in a request scope, opening each store once; set on api-backed verbs, as hook verbs open their own. */
+  readonly scoped?: true;
 }
 
-/** Every verb main() dispatches, keyed by name, with its handler, aliases and help blocks. */
-export const COMMANDS = {
+interface CommandSpec extends VerbHandler {
+  // Each block opens with a newline so the full listing is their concatenation.
+  readonly usage: readonly string[];
+  /** The flags this verb reads; any other flag still parses, and the verb says it ignores it. */
+  readonly flags: VerbFlags;
+}
+
+type VerbName = keyof typeof VERB_FLAGS;
+
+// A verb's entry is handle<Verb>(ctx); cmd<Name> is a typed function below an entry, never called from this table.
+/** Every verb main() dispatches, keyed by name; a verb without a VERB_FLAGS entry, or the reverse, fails to compile. */
+export const VERB_HANDLERS = {
   init: {
-    run: async ({ hippoRoot, flags }) => { (await import('./cli/init.js')).cmdInit(hippoRoot, flags); },
-    usage: VERB_USAGE.init,
+    run: async (c) => { (await import('./cli/init.js')).handleInit(c); },
   },
   remember: {
     run: async (c) => { await (await import('./cli/remember.js')).handleRemember(c); },
-    usage: VERB_USAGE.remember,
   },
   recall: {
     run: async (c) => { await (await import('./cli/recall.js')).handleRecall(c); },
-    usage: VERB_USAGE.recall,
+    scoped: true,
   },
   drill: {
     run: async (c) => { await (await import('./cli/dag.js')).handleDrill(c); },
-    usage: VERB_USAGE.drill,
+    scoped: true,
   },
   assemble: {
     run: async (c) => { await (await import('./cli/dag.js')).handleAssemble(c); },
-    usage: VERB_USAGE.assemble,
+    scoped: true,
   },
   supersede: {
     run: async (c) => { await (await import('./cli/remember.js')).handleSupersede(c); },
-    usage: VERB_USAGE.supersede,
   },
   explain: {
     run: async (c) => { await (await import('./cli/explain.js')).handleExplain(c); },
-    usage: VERB_USAGE.explain,
+    scoped: true,
   },
   eval: {
     run: async (c) => { await (await import('./cli/eval.js')).handleEval(c); },
-    usage: VERB_USAGE.eval,
   },
   trace: {
     run: async (c) => { await (await import('./cli/remember.js')).handleTrace(c); },
-    usage: VERB_USAGE.trace,
   },
   refine: {
-    run: async ({ hippoRoot, flags }) => { await (await import('./cli/maintenance.js')).cmdRefine(hippoRoot, flags); },
-    usage: VERB_USAGE.refine,
+    run: async (c) => { await (await import('./cli/maintenance.js')).handleRefine(c); },
   },
   sleep: {
-    run: async ({ hippoRoot, flags }) => { await (await import('./cli/sleep.js')).cmdSleep(hippoRoot, flags); },
-    usage: VERB_USAGE.sleep,
+    run: async (c) => { await (await import('./cli/sleep.js')).handleSleep(c); },
+    scoped: true,
   },
   'last-sleep': {
-    run: async ({ flags }) => { (await import('./cli/session-hooks.js')).cmdLastSleep(flags); },
-    usage: VERB_USAGE['last-sleep'],
+    run: async (c) => { (await import('./cli/last-sleep.js')).handleLastSleep(c); },
   },
   'session-end': {
-    run: async ({ hippoRoot, flags }) => { await (await import('./cli/session-hooks.js')).cmdSessionEnd(hippoRoot, flags); },
-    usage: VERB_USAGE['session-end'],
+    run: async (c) => { await (await import('./cli/session-hooks.js')).handleSessionEnd(c); },
   },
   '__session-end-worker': {
-    run: async ({ hippoRoot, flags }) => { await (await import('./cli/session-hooks.js')).cmdSessionEndWorker(hippoRoot, flags); },
-    usage: [],
+    run: async (c) => { await (await import('./cli/session-hooks.js')).handleSessionEndWorker(c); },
   },
   'pre-compact': {
     run: async (c) => { await (await import('./cli/session-hooks.js')).handlePreCompact(c); },
-    usage: VERB_USAGE['pre-compact'],
   },
   'post-compact': {
     run: async (c) => { await (await import('./cli/session-hooks.js')).handlePostCompact(c); },
-    usage: VERB_USAGE['post-compact'],
   },
   'capture-error': {
     run: async (c) => { await (await import('./cli/session-hooks.js')).handleCaptureError(c); },
-    usage: VERB_USAGE['capture-error'],
   },
   'compact-resume': {
     run: async (c) => { await (await import('./cli/session-hooks.js')).handleCompactResume(c); },
-    usage: VERB_USAGE['compact-resume'],
   },
   'codex-run': {
-    run: async ({ hippoRoot, args }) => { (await import('./cli/session-hooks.js')).cmdCodexRun(hippoRoot, args); },
-    usage: VERB_USAGE['codex-run'],
+    run: async (c) => { (await import('./cli/session-hooks.js')).handleCodexRun(c); },
   },
   '__codex-session-end-worker': {
-    run: async ({ hippoRoot, flags }) => { await (await import('./cli/session-hooks.js')).cmdCodexSessionEndWorker(hippoRoot, flags); },
-    usage: [],
+    run: async (c) => { await (await import('./cli/session-hooks.js')).handleCodexSessionEndWorker(c); },
   },
   dedup: {
-    run: async ({ hippoRoot, flags }) => { (await import('./cli/maintenance.js')).cmdDedup(hippoRoot, flags); },
-    usage: VERB_USAGE.dedup,
+    run: async (c) => { (await import('./cli/maintenance.js')).handleDedup(c); },
   },
   dag: {
-    run: async ({ hippoRoot, flags }) => { (await import('./cli/dag.js')).cmdDag(hippoRoot, flags); },
-    usage: VERB_USAGE.dag,
+    run: async (c) => { (await import('./cli/dag.js')).handleDag(c); },
   },
   auth: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/auth.js')).cmdAuth(hippoRoot, args, flags); },
-    usage: VERB_USAGE.auth,
+    run: async (c) => { (await import('./cli/auth.js')).handleAuth(c); },
+    scoped: true,
   },
   goal: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/goals.js')).cmdGoal(hippoRoot, args, flags); },
-    usage: VERB_USAGE.goal,
+    run: async (c) => { (await import('./cli/goals.js')).handleGoal(c); },
+    scoped: true,
   },
   slack: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/slack.js')).cmdSlack(hippoRoot, args, flags); },
-    usage: VERB_USAGE.slack,
+    run: async (c) => { await (await import('./cli/slack.js')).handleSlack(c); },
   },
   github: {
-    run: async ({ hippoRoot, args, flags }) => { await cmdGithub(hippoRoot, args, flags); },
-    usage: VERB_USAGE.github,
+    run: async (c) => { await handleGithub(c); },
   },
   audit: {
     run: async (c) => { await (await import('./cli/audit.js')).handleAudit(c); },
-    usage: VERB_USAGE.audit,
+    scoped: true,
   },
   'correction-latency': {
     run: async (c) => { await (await import('./cli/status.js')).handleCorrectionLatency(c); },
-    usage: VERB_USAGE['correction-latency'],
   },
   provenance: {
     run: async (c) => { await (await import('./cli/status.js')).handleProvenance(c); },
-    usage: VERB_USAGE.provenance,
   },
   status: {
-    run: async ({ hippoRoot }) => { (await import('./cli/status.js')).cmdStatus(hippoRoot); },
-    usage: VERB_USAGE.status,
+    run: async (c) => { (await import('./cli/status.js')).handleStatus(c); },
   },
   outcome: {
-    run: async ({ hippoRoot, flags }) => { (await import('./cli/curate.js')).cmdOutcome(hippoRoot, flags); },
-    usage: VERB_USAGE.outcome,
+    run: async (c) => { (await import('./cli/curate.js')).handleOutcome(c); },
+    scoped: true,
   },
   conflicts: {
-    run: async ({ hippoRoot, flags }) => { (await import('./cli/curate.js')).cmdConflicts(hippoRoot, flags); },
-    usage: VERB_USAGE.conflicts,
+    run: async (c) => { (await import('./cli/curate.js')).handleConflicts(c); },
   },
   resolve: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/curate.js')).cmdResolve(hippoRoot, args, flags); },
-    usage: VERB_USAGE.resolve,
+    run: async (c) => { (await import('./cli/curate.js')).handleResolve(c); },
   },
   reject: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/curate.js')).cmdReject(hippoRoot, args, flags); },
-    usage: VERB_USAGE.reject,
+    run: async (c) => { (await import('./cli/curate.js')).handleReject(c); },
   },
   rejections: {
-    run: async ({ hippoRoot, flags }) => { (await import('./cli/curate.js')).cmdRejections(hippoRoot, flags); },
-    usage: VERB_USAGE.rejections,
+    run: async (c) => { (await import('./cli/curate.js')).handleRejections(c); },
   },
   unreject: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/curate.js')).cmdUnreject(hippoRoot, args, flags); },
-    usage: VERB_USAGE.unreject,
+    run: async (c) => { (await import('./cli/curate.js')).handleUnreject(c); },
   },
   dormant: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/curate.js')).cmdDormant(hippoRoot, args, flags); },
-    usage: VERB_USAGE.dormant,
+    run: async (c) => { (await import('./cli/curate.js')).handleDormant(c); },
+    scoped: true,
   },
   projects: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/projects.js')).cmdProjects(hippoRoot, args, flags); },
-    usage: VERB_USAGE.projects,
+    run: async (c) => { (await import('./cli/projects.js')).handleProjects(c); },
   },
   quarantine: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/curate.js')).cmdQuarantine(hippoRoot, args, flags); },
-    usage: VERB_USAGE.quarantine,
+    run: async (c) => { await (await import('./cli/curate.js')).handleQuarantine(c); },
+    scoped: true,
   },
   tokens: {
-    run: async ({ hippoRoot, flags }) => { (await import('./cli/status.js')).cmdTokens(hippoRoot, flags); },
-    usage: VERB_USAGE.tokens,
+    run: async (c) => { (await import('./cli/status.js')).handleTokens(c); },
+    scoped: true,
   },
   failures: {
-    run: async ({ hippoRoot, flags }) => { (await import('./cli/status.js')).cmdFailures(hippoRoot, flags); },
-    usage: VERB_USAGE.failures,
+    run: async (c) => { (await import('./cli/status.js')).handleFailures(c); },
+    scoped: true,
   },
   doctor: {
     run: async (c) => { await (await import('./cli/status.js')).handleDoctor(c); },
-    usage: VERB_USAGE.doctor,
   },
   'support-bundle': {
     run: async (c) => { await (await import('./cli/status.js')).handleSupportBundle(c); },
-    usage: VERB_USAGE['support-bundle'],
   },
   snapshot: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/continuity.js')).cmdSnapshot(hippoRoot, args, flags); },
-    usage: VERB_USAGE.snapshot,
+    run: async (c) => { (await import('./cli/continuity.js')).handleSnapshot(c); },
   },
   session: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/continuity.js')).cmdSession(hippoRoot, args, flags); },
-    usage: VERB_USAGE.session,
+    run: async (c) => { (await import('./cli/continuity.js')).handleSession(c); },
   },
   handoff: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/continuity.js')).cmdHandoff(hippoRoot, args, flags); },
-    usage: VERB_USAGE.handoff,
+    run: async (c) => { (await import('./cli/continuity.js')).handleHandoff(c); },
   },
   card: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/card.js')).cmdCard(hippoRoot, args, flags); },
-    usage: VERB_USAGE.card,
+    run: async (c) => { (await import('./cli/card.js')).handleCard(c); },
   },
   predict: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/decisions.js')).cmdPredict(hippoRoot, args, flags); },
-    usage: VERB_USAGE.predict,
+    run: async (c) => { (await import('./cli/decisions.js')).handlePredict(c); },
   },
   current: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/continuity.js')).cmdCurrent(hippoRoot, args, flags); },
-    usage: VERB_USAGE.current,
+    run: async (c) => { (await import('./cli/continuity.js')).handleCurrent(c); },
   },
   forget: {
     run: async (c) => { await (await import('./cli/curate.js')).handleForget(c); },
-    usage: VERB_USAGE.forget,
+    scoped: true,
   },
   inspect: {
     run: async (c) => { await (await import('./cli/status.js')).handleInspect(c); },
-    usage: VERB_USAGE.inspect,
   },
   context: {
     run: async (c) => { await (await import('./cli/context.js')).handleContext(c); },
-    usage: VERB_USAGE.context,
   },
   hook: {
-    run: async ({ args, flags }) => { (await import('./cli/setup.js')).cmdHook(args, flags); },
-    usage: VERB_USAGE.hook,
+    run: async (c) => { (await import('./cli/setup.js')).handleHook(c); },
   },
   setup: {
-    run: async ({ flags }) => { (await import('./cli/setup.js')).cmdSetup(flags); },
-    usage: VERB_USAGE.setup,
+    run: async (c) => { (await import('./cli/setup.js')).handleSetup(c); },
   },
   'daily-runner': {
-    run: async () => { (await import('./cli/setup.js')).cmdDailyRunner(); },
-    usage: VERB_USAGE['daily-runner'],
+    run: async (c) => { (await import('./cli/setup.js')).handleDailyRunner(c); },
   },
   embed: {
-    run: async ({ hippoRoot, flags }) => { await (await import('./cli/maintenance.js')).cmdEmbed(hippoRoot, flags); },
-    usage: VERB_USAGE.embed,
+    run: async (c) => { await (await import('./cli/maintenance.js')).handleEmbed(c); },
   },
   watch: {
     run: async (c) => { await (await import('./cli/transfer.js')).handleWatch(c); },
-    usage: VERB_USAGE.watch,
   },
   learn: {
-    run: async ({ hippoRoot, flags }) => { (await import('./cli/transfer.js')).cmdLearn(hippoRoot, flags); },
-    usage: VERB_USAGE.learn,
+    run: async (c) => { (await import('./cli/transfer.js')).handleLearn(c); },
+    scoped: true,
   },
   promote: {
     run: async (c) => { await (await import('./cli/transfer.js')).handlePromote(c); },
-    usage: VERB_USAGE.promote,
+    scoped: true,
   },
   sync: {
-    run: async ({ hippoRoot, flags }) => { (await import('./cli/transfer.js')).cmdSync(hippoRoot, flags); },
-    usage: VERB_USAGE.sync,
+    run: async (c) => { (await import('./cli/transfer.js')).handleSync(c); },
   },
   share: {
     run: async (c) => { await (await import('./cli/transfer.js')).handleShare(c); },
-    usage: VERB_USAGE.share,
   },
   peers: {
     run: async (c) => { await (await import('./cli/transfer.js')).handlePeers(c); },
-    usage: VERB_USAGE.peers,
   },
   import: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/transfer.js')).cmdImport(hippoRoot, args, flags); },
-    usage: VERB_USAGE.import,
+    run: async (c) => { (await import('./cli/transfer.js')).handleImport(c); },
   },
   export: {
     run: async (c) => { await (await import('./cli/transfer.js')).handleExport(c); },
-    usage: VERB_USAGE.export,
   },
   capture: {
     run: async (c) => { await (await import('./cli/session-hooks.js')).handleCapture(c); },
-    usage: VERB_USAGE.capture,
   },
   dashboard: {
     run: async (c) => { await (await import('./cli/serve.js')).handleDashboard(c); },
-    usage: VERB_USAGE.dashboard,
   },
   wm: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/continuity.js')).cmdWm(hippoRoot, args, flags); },
-    usage: VERB_USAGE.wm,
+    run: async (c) => { (await import('./cli/continuity.js')).handleWm(c); },
   },
   mcp: {
     run: async () => { await (await import('./cli/serve.js')).handleMcp(); },
-    usage: VERB_USAGE.mcp,
   },
   serve: {
     run: async (c) => { await (await import('./cli/serve.js')).handleServe(c); },
-    usage: VERB_USAGE.serve,
   },
   invalidate: {
     run: async (c) => { await (await import('./cli/curate.js')).handleInvalidate(c); },
-    usage: VERB_USAGE.invalidate,
   },
   decide: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/decisions.js')).cmdDecide(hippoRoot, args, flags); },
-    usage: VERB_USAGE.decide,
+    run: async (c) => { (await import('./cli/decisions.js')).handleDecide(c); },
   },
   incident: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/decisions.js')).cmdIncident(hippoRoot, args, flags); },
-    usage: VERB_USAGE.incident,
+    run: async (c) => { (await import('./cli/decisions.js')).handleIncident(c); },
   },
   process: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/playbooks.js')).cmdProcess(hippoRoot, args, flags); },
-    usage: VERB_USAGE.process,
+    run: async (c) => { (await import('./cli/playbooks.js')).handleProcess(c); },
   },
   policy: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/playbooks.js')).cmdPolicy(hippoRoot, args, flags); },
-    usage: VERB_USAGE.policy,
+    run: async (c) => { (await import('./cli/playbooks.js')).handlePolicy(c); },
   },
   skill: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/playbooks.js')).cmdSkill(hippoRoot, args, flags); },
-    usage: VERB_USAGE.skill,
+    run: async (c) => { (await import('./cli/playbooks.js')).handleSkill(c); },
   },
   brief: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/briefs.js')).cmdProjectBrief(hippoRoot, args, flags); },
+    run: async (c) => { (await import('./cli/briefs.js')).handleProjectBrief(c); },
     aliases: ['project-brief'],
-    usage: VERB_USAGE.brief,
   },
   note: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/briefs.js')).cmdCustomerNote(hippoRoot, args, flags); },
+    run: async (c) => { (await import('./cli/briefs.js')).handleCustomerNote(c); },
     aliases: ['customer-note'],
-    usage: VERB_USAGE.note,
   },
   graph: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/briefs.js')).cmdGraph(hippoRoot, args, flags); },
-    usage: VERB_USAGE.graph,
+    run: async (c) => { (await import('./cli/briefs.js')).handleGraph(c); },
   },
-} satisfies Record<string, CommandSpec>;
+} satisfies Record<VerbName, VerbHandler>;
+
+const USAGE_BLOCKS: Readonly<Record<string, readonly string[]>> = VERB_USAGE;
+const FLAGS_BY_VERB: Readonly<Record<string, VerbFlags>> = VERB_FLAGS;
+
+function buildCommands(): Readonly<Record<VerbName, CommandSpec>> {
+  const specs = Object.entries<VerbHandler>(VERB_HANDLERS).map(([verb, handler]) => {
+    const spec: CommandSpec = { ...handler, usage: USAGE_BLOCKS[verb] ?? [], flags: FLAGS_BY_VERB[verb] };
+    return [verb, spec] as const;
+  });
+  // SAFETY: VERB_HANDLERS is checked above to have exactly the VerbName keys, so every key is present.
+  return Object.fromEntries(specs) as Record<VerbName, CommandSpec>;
+}
+
+/** Every verb's handler, aliases, help blocks and flags, keyed by name. */
+export const COMMANDS = buildCommands();
 
 const COMMAND_INDEX: ReadonlyMap<string, CommandSpec> = new Map(
   Object.entries<CommandSpec>(COMMANDS).flatMap(([verb, spec]) =>
@@ -581,20 +482,68 @@ function printHelp(command: string, args: string[]): void {
 // Entry point
 // ---------------------------------------------------------------------------
 
+function printVersion(): never {
+  const __filename_local = fileURLToPath(import.meta.url);
+  const __dirname_local = path.dirname(__filename_local);
+  const pkgJson = fs.readFileSync(path.join(__dirname_local, '..', 'package.json'), 'utf-8');
+  const { version } = JSON.parse(pkgJson) as { version: string };
+  console.log(version);
+  process.exit(0);
+}
+
+/** A value-less --scope parses as boolean true, which consumers coerced to the scope 'true' or dropped;
+ *  reject it once here so every command, thin-client relays included, sees only a non-empty string. */
+function rejectEmptyScope(flags: CliFlags): void {
+  if ('scope' in flags && (typeof flags['scope'] !== 'string' || !flags['scope'].trim())) {
+    printError('--scope requires a non-empty value (e.g. --scope slack:private:C1).');
+    process.exit(1);
+  }
+}
+
+// parseArgs stores a value-less flag as boolean true, and NaN then survives every
+// downstream guard because each comparison against it is false.
+function rejectNonNumericFlags(flags: CliFlags, declared: VerbFlags | undefined): void {
+  for (const [key, raw] of Object.entries(flags)) {
+    if (flagKind(declared, key) !== 'number') continue;
+    if (typeof raw !== 'string' || !raw.trim() || !Number.isFinite(Number(raw))) {
+      printError(`--${key} requires a numeric value.`);
+      process.exit(1);
+    }
+  }
+}
+
+// Reject rather than coerce: consumers read --dry-run both as Boolean() and === true,
+// so no single coercion of an inline value would be correct for every one of them.
+function rejectValuedSwitches(flags: CliFlags, declared: VerbFlags | undefined): void {
+  for (const [key, raw] of Object.entries(flags)) {
+    if (flagKind(declared, key) === 'switch' && typeof raw !== 'boolean') {
+      printError(`--${key} takes no value`);
+      process.exit(1);
+    }
+  }
+}
+
+function checkUnknownFlags(command: string, flags: CliFlags, declared: VerbFlags | undefined): void {
+  // card checks its flags per subcommand, with a stricter message.
+  if (command === 'card') return;
+  const flagNames = (keys: readonly string[]): string => keys.map((key) => `--${key}`).join(', ');
+  const unknown = Object.keys(flags).filter((key) => !isKnownFlag(key));
+  if (unknown.length > 0 && DESTRUCTIVE_COMMANDS.has(command)) {
+    printError(`Unknown flag ${flagNames(unknown)} for hippo ${command}. Nothing was changed.`);
+    process.exit(2);
+  }
+  // main() refuses --dry-run by name on a verb without one, so that flag is not also called ignored.
+  const ignored = declared ? undeclaredFlags(declared, Object.keys(flags)).filter((key) => key !== 'dry-run') : unknown;
+  if (ignored.length > 0) printError(`hippo: ignoring unknown flag ${flagNames(ignored)}. A later release will reject it.`);
+}
+
 async function main(
   command: string,
   args: string[],
-  flags: Record<string, string | boolean | string[]>,
+  flags: CliFlags,
   hippoRoot: string,
 ): Promise<void> {
-  if (command === '--version' || command === '-v' || flags['version']) {
-    const __filename_local = fileURLToPath(import.meta.url);
-    const __dirname_local = path.dirname(__filename_local);
-    const pkgJson = fs.readFileSync(path.join(__dirname_local, '..', 'package.json'), 'utf-8');
-    const { version } = JSON.parse(pkgJson) as { version: string };
-    console.log(version);
-    process.exit(0);
-  }
+  if (command === '--version' || command === '-v' || flags['version']) printVersion();
   if (command === '' || command === 'help' || command === '--help' || command === '-h') {
     printUsage();
     return;
@@ -604,62 +553,24 @@ async function main(
     printHelp(command, args);
     return;
   }
+  const spec = COMMAND_INDEX.get(command);
   maybeRepairCodexWrapper(command, flags);
-  /** Global --scope well-formedness guard (v1.26.2). parseArgs stores a value-less
-   *  flag as boolean true; downstream the 14 consumer sites either coerced that to
-   *  the literal scope string 'true' (recall filter/unlock input, wm session scope,
-   *  the remember scope-tag dual-write) or silently dropped the user's scoping
-   *  intent (the remember envelope WRITE). Reject it once here, mirroring the
-   *  --hops value-less guard, so every current and future command - including the
-   *  thin-client dispatch relays - sees --scope only as a non-empty string. */
-  if ('scope' in flags && (typeof flags['scope'] !== 'string' || !flags['scope'].trim())) {
-    printError('--scope requires a non-empty value (e.g. --scope slack:private:C1).');
-    process.exit(1);
-  }
-  // parseArgs stores a value-less flag as boolean true, and NaN then survives every
-  // downstream guard because each comparison against it is false.
-  const NUMERIC_FLAGS = [
-    'days', 'threshold', 'min-score', 'port', 'limit', 'mmr-lambda', 'local-bump',
-    'min-results', 'reranker-top-k', 'min-mrr', 'embedding-weight', 'max-cases',
-  ];
-  for (const key of NUMERIC_FLAGS) {
-    const raw = flags[key];
-    if (raw === undefined) continue;
-    if (typeof raw !== 'string' || !raw.trim() || !Number.isFinite(Number(raw))) {
-      printError(`--${key} requires a numeric value.`);
-      process.exit(1);
-    }
-  }
-  // Reject rather than coerce: consumers read --dry-run both as Boolean() and === true,
-  // so no single coercion of an inline value would be correct for every one of them.
-  for (const key of BOOLEAN_FLAGS) {
-    if (Object.hasOwn(flags, key) && typeof flags[key] !== 'boolean') {
-      printError(`--${key} takes no value`);
-      process.exit(1);
-    }
-  }
-  // card checks its flags per subcommand, with a stricter message.
-  const unknownFlags = command === 'card' ? [] : Object.keys(flags).filter((key) => !KNOWN_FLAGS.has(key));
-  if (unknownFlags.length > 0) {
-    const names = unknownFlags.map((key) => `--${key}`).join(', ');
-    if (DESTRUCTIVE_COMMANDS.has(command)) {
-      printError(`Unknown flag ${names} for hippo ${command}. Nothing was changed.`);
-      process.exit(2);
-    }
-    printError(`hippo: ignoring unknown flag ${names}. A later release will reject it.`);
-  }
+  rejectEmptyScope(flags);
+  rejectNonNumericFlags(flags, spec?.flags);
+  rejectValuedSwitches(flags, spec?.flags);
+  checkUnknownFlags(command, flags, spec?.flags);
   const refusal = Object.hasOwn(flags, 'dry-run') ? dryRunRefusal(command, args, flags) : null;
   if (refusal) {
     printError(refusal);
     process.exit(2);
   }
-  const spec = COMMAND_INDEX.get(command);
   if (!spec) {
     printError(`Unknown command: ${command}`);
     printUsage();
     process.exit(1);
   }
-  await spec.run({ hippoRoot, args, flags });
+  const run = (): void | Promise<void> => spec.run({ hippoRoot, args, flags });
+  await (spec.scoped ? (await import('./db/request-stores.js')).runWithRequestStores(run) : run());
 }
 
 export async function runCli(argv: string[] = process.argv): Promise<void> {
@@ -667,7 +578,12 @@ export async function runCli(argv: string[] = process.argv): Promise<void> {
   try {
     await main(command, args, flags, getHippoRoot(process.cwd()));
   } catch (err) {
-    printError('Error:', err instanceof Error ? err.message : err);
+    printError('Error:', isStoreBusy(err) ? STORE_BUSY_MESSAGE : err instanceof Error ? err.message : err);
+    // The message alone rarely says where it came from; debug is the level that asks for the rest.
+    if (isLevelEnabled('debug')) {
+      const { errorClass, stack } = errorFields(err);
+      printError(`  thrown as ${errorClass}${stack ? `\n${stack}` : ''}`);
+    }
     process.exit(1);
   }
 }

@@ -4,12 +4,11 @@ import type { Migration } from './types.js';
 export const v25: Migration = {
     version: 25,
     up: (db) => {
-      // v1.5.0 DAG-aware recall — cache summary metadata so the assembler can
+      // DAG-aware recall: cache summary metadata so the assembler can
       // reason about scope without re-walking the DAG. Three additive,
       // optional columns. No min_compatible_binary bump: these columns are
       // pure metadata; older binaries opening this DB will see them as NULL
-      // / 0 and behave as before. See docs/plans/2026-05-05-dag-recall.md
-      // Task 1.
+      // / 0 and behave as before.
       if (!tableHasColumn(db, 'memories', 'descendant_count')) {
         db.exec(`ALTER TABLE memories ADD COLUMN descendant_count INTEGER NOT NULL DEFAULT 0`);
       }

@@ -4,10 +4,10 @@ import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
-import { closeHippoDb, openHippoDb } from '../src/db.js';
+import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { mcpErrorResponse } from '../src/mcp/server.js';
-import { NotFoundError } from '../src/api-errors.js';
+import { NotFoundError } from '../src/core/api-errors.js';
 
 interface RpcReply {
   id: number;
@@ -66,6 +66,8 @@ describe('POST /mcp error replies', () => {
     expect(body.error?.message).toContain('req-redact-1');
     expect(body.error?.data?.requestId).toBe('req-redact-1');
     expect(stderrText()).toMatch(/\[hippo\] error: mcp request failed: .*memory_conflicts.* requestId=req-redact-1/);
+    // The class and stack say where it was thrown, as the HTTP failure line does.
+    expect(stderrText()).toMatch(/mcp request failed: .* errorClass=\w*Error stack=.*\s+at /);
   });
 
   it('a typed NotFoundError keeps its message', async () => {

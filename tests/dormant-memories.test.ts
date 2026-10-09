@@ -14,27 +14,29 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { getExistingEntryMirrorPaths } from '../src/store/mirrors.js';
+import { entryMirrorFiles } from './_helpers/entry-mirror-files.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { MEMORY_BACKED_TABLES } from '../src/store/delete-and-batch.js';
 import { loadStats } from '../src/store/index-and-stats.js';
-import { saveDecision } from '../src/decisions.js';
-import { saveIncident } from '../src/incidents.js';
-import { saveProcess } from '../src/processes.js';
-import { savePolicy } from '../src/policies.js';
-import { saveSkill } from '../src/skills.js';
-import { saveProjectBrief } from '../src/project-briefs.js';
-import { saveCustomerNote } from '../src/customer-notes.js';
-import { savePrediction } from '../src/predictions/store.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { saveDecision } from '../src/objects/decisions.js';
+import { saveIncident } from '../src/objects/incidents.js';
+import { saveProcess } from '../src/objects/processes.js';
+import { savePolicy } from '../src/objects/policies.js';
+import { saveSkill } from '../src/objects/skills.js';
+import { saveProjectBrief } from '../src/objects/project-briefs.js';
+import { saveCustomerNote } from '../src/objects/customer-notes.js';
+import { savePrediction } from '../src/store/predictions.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { queryAuditEvents, type AuditEvent, type AuditOp } from '../src/store/audit.js';
 import { consolidate } from '../src/consolidate/sleep.js';
-import { insertDormantRow } from '../src/dormant.js';
-import { loadConfig } from '../src/config.js';
-import { createMemory, Layer, calculateStrength, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/memory.js';
-import { RejectedValueError, rejectionDigest, insertRejectedValue } from '../src/rejection.js';
-import * as api from '../src/api.js';
+import { insertDormantRow } from '../src/store/dormant.js';
+import { loadConfig } from '../src/core/config.js';
+import { createMemory, Layer, calculateStrength, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';
+import { RejectedValueError, rejectionDigest, insertRejectedValue } from '../src/store/rejection.js';
+import * as api from '../src/api/index.js';
+import { WRITE_BUDGET } from '../src/util/write-budget.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DORMANT_ON = JSON.stringify({ replay: { count: 0 }, dormant: { enabled: true } });
@@ -55,6 +57,15 @@ function aged(entry: MemoryEntry, days: number): MemoryEntry {
 
 function ctxFor(home: string, tenantId = 'default'): api.Context {
   return { hippoRoot: home, tenantId, actor: { subject: 'test', role: 'admin' } };
+}
+
+function auditRows(home: string, op: AuditOp): AuditEvent[] {
+  const db = openHippoDb(home);
+  try {
+    return queryAuditEvents(db, { tenantId: 'default', op });
+  } finally {
+    closeHippoDb(db);
+  }
 }
 
 function countDormantRows(home: string): number {
@@ -156,6 +167,27 @@ describe('dormant memories are on by default, with an opt-out', () => {
   });
 });
 
+describe('a faded credential-tagged memory', () => {
+  it('is removed rather than made dormant, and the report says so', async () => {
+    const { home, restore } = tmpHome('hippo-dormant-credtag-', DORMANT_ON);
+    try {
+      const tagged = aged(createMemory('an old note about rotating the staging deploy key', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['credential'] }), 90);
+      writeEntry(home, tagged);
+
+      const result = await consolidate(home, { now: new Date() });
+
+      expect(result.removed).toBe(1);
+      expect(result.dormant).toBe(0);
+      expect(result.removedIds).toEqual([tagged.id]);
+      expect(result.details.some((l) => l.startsWith(`  🗑  removed ${tagged.id} (strength `))).toBe(true);
+      expect(api.listDormant(ctxFor(home))).toEqual([]);
+      expect(loadAllEntries(home)).toEqual([]);
+    } finally {
+      restore();
+    }
+  });
+});
+
 describe('dormant retention', () => {
   function storeWithOldDormant(prefix: string, config: string, daysAgo: number) {
     const { home, restore } = tmpHome(prefix, config);
@@ -203,6 +235,44 @@ describe('dormant retention', () => {
     }
   });
 
+  it('expires in short transactions, and keeps a row put back to sleep between them', async () => {
+    const { home, restore } = tmpHome('hippo-dormant-expire-chunks-', JSON.stringify({ dormant: { retentionDays: 30 } }));
+    const ids: string[] = [];
+    const db = openHippoDb(home);
+    try {
+      for (let i = 0; i < 5; i++) {
+        const entry = createMemory(`retired cron host number ${i} was called nightly-0${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+        insertDormantRow(db, { entry, strength: 0.01, reason: 'decay', dormantAt: new Date(Date.now() - 45 * DAY_MS).toISOString() });
+        ids.push(entry.id);
+      }
+    } finally {
+      closeHippoDb(db);
+    }
+    let pauses = 0;
+    let kept = '';
+    // A zero hold commits after every row; the first gap re-dates a row the run has not reached, as a restore and a new sleep would.
+    const pause = async (): Promise<void> => {
+      if (pauses++ > 0) return;
+      const other = openHippoDb(home);
+      try {
+        // SAFETY: the seeded table holds rows, and the SELECT returns the single id column.
+        kept = (other.prepare(`SELECT id FROM dormant_memories LIMIT 1`).get() as { id: string }).id;
+        other.prepare(`UPDATE dormant_memories SET dormant_at = ? WHERE id = ?`).run(new Date().toISOString(), kept);
+      } finally {
+        closeHippoDb(other);
+      }
+    };
+    try {
+      const result = await consolidate(home, { now: new Date(), budget: { ...WRITE_BUDGET, holdMs: 0, pause } });
+      expect(result.dormantExpired).toBe(4);
+      expect(pauses).toBe(4);
+      expect(ids).toContain(kept);
+      expect(api.listDormant(ctxFor(home)).map((m) => m.id)).toEqual([kept]);
+    } finally {
+      restore();
+    }
+  });
+
   it('still ages out old dormant memories after the feature is turned off', async () => {
     const { home, restore } = storeWithOldDormant('hippo-dormant-off-expire-', JSON.stringify({ dormant: { enabled: false } }), 400);
     try {
@@ -230,7 +300,7 @@ describe('with dormant memories enabled', () => {
       expect(loadAllEntries(home).map((e) => e.id)).toEqual([fresh.id]);
       // The markdown mirror goes too, so a bootstrap of an empty table
       // cannot re-import the row as active.
-      expect(getExistingEntryMirrorPaths(home, faded.id)).toEqual([]);
+      expect(entryMirrorFiles(home, faded.id)).toEqual([]);
 
       const dormant = api.listDormant(ctxFor(home));
       expect(dormant).toHaveLength(1);
@@ -303,6 +373,7 @@ describe('with dormant memories enabled', () => {
       const result = await consolidate(home, { now: new Date(), dryRun: true });
 
       expect(result.dormant).toBe(1);
+      expect(result.details.some((l) => l.startsWith(`  💤 dormant ${faded.id} (strength `))).toBe(true);
       expect(loadAllEntries(home).map((e) => e.id)).toEqual([faded.id]);
       expect(countDormantRows(home)).toBe(0);
     } finally {
@@ -369,6 +440,7 @@ describe('listing, restoring and forgetting dormant memories', () => {
       const restored = api.restoreDormant(ctxFor(home), ids[0]);
 
       expect(restored.id).toBe(ids[0]);
+      expect(entryMirrorFiles(home, ids[0])).toHaveLength(1);
       expect(Date.parse(restored.last_retrieved)).toBeGreaterThanOrEqual(before - 1000);
       expect(calculateStrength(restored, new Date())).toBeGreaterThan(0.9);
       expect(api.listDormant(ctxFor(home))).toEqual([]);
@@ -454,6 +526,33 @@ describe('listing, restoring and forgetting dormant memories', () => {
       expect(() => api.restoreDormant(ctxFor(home), ids[0])).toThrow(RejectedValueError);
       expect(api.listDormant(ctxFor(home)).map((m) => m.id)).toEqual([ids[0]]);
       expect(loadAllEntries(home).map((e) => e.id)).not.toContain(ids[0]);
+      expect(auditRows(home, 'reject_refusal').map((e) => [e.targetId, e.actor])).toEqual([[ids[0], 'test']]);
+    } finally {
+      restore();
+    }
+  });
+
+  it('another person\'s dormant personal row reads as missing to every call, and its owner keeps it', async () => {
+    const { home, restore } = tmpHome('hippo-dormant-personal-', DORMANT_ON);
+    try {
+      const mine = aged(createMemory('the quillfen alias is mine alone', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, scope: 'personal:private:oid-a' }), 90);
+      const team = aged(createMemory('the quillfen gateway serves the whole team', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), 90);
+      writeEntry(home, mine);
+      writeEntry(home, team);
+      await consolidate(home, { now: new Date() });
+      const as = (owner: string | undefined, role: 'admin' | 'member'): api.Context =>
+        ({ hippoRoot: home, tenantId: 'default', actor: owner === undefined ? { subject: 'adm', role } : { subject: owner, role, owner } });
+      for (const ctx of [as('oid-b', 'member'), as(undefined, 'admin'), as('oid-b', 'admin')]) {
+        expect(api.listDormant(ctx).map((m) => m.id)).toEqual([team.id]);
+        expect(api.isDormant(ctx, team.id)).toBe(true);
+        expect(api.isDormant(ctx, mine.id)).toBe(false);
+        expect(() => api.restoreDormant(ctx, mine.id)).toThrow(`dormant memory not found: ${mine.id}`);
+        expect(() => api.forgetDormant(ctx, mine.id)).toThrow(`dormant memory not found: ${mine.id}`);
+      }
+      const owner = as('oid-a', 'member');
+      expect(api.listDormant(owner).map((m) => m.id).sort()).toEqual([mine.id, team.id].sort());
+      expect(api.isDormant(owner, mine.id)).toBe(true);
+      expect(api.restoreDormant(owner, mine.id).scope).toBe('personal:private:oid-a');
     } finally {
       restore();
     }
@@ -468,6 +567,7 @@ describe('listing, restoring and forgetting dormant memories', () => {
       api.forgetDormant(ctxFor(home), ids[0]);
       expect(api.listDormant(ctxFor(home))).toEqual([]);
       expect(() => api.restoreDormant(ctxFor(home), ids[0])).toThrow(/dormant memory not found/);
+      expect(auditRows(home, 'forget').map((e) => [e.targetId, e.actor, e.metadata])).toEqual([[ids[0], 'test', { dormant: true }]]);
       // Counted like forget and archiveRaw (review finding on PR #227).
       expect(Number(loadStats(home).total_forgotten)).toBe(1);
     } finally {
@@ -545,7 +645,7 @@ describe('memories that back a first-class object', () => {
       // SAFETY: each row is the single aliased TEXT column in the SELECT.
       const rows = db.prepare(`SELECT m.name AS name FROM sqlite_master m JOIN pragma_foreign_key_list(m.name) f
         WHERE m.type = 'table' AND f."table" = 'memories' AND f.on_delete = 'SET NULL'`).all() as { name: string }[];
-      // Graph rows drop their memory pointer by design (src/db.ts, the entities and relations schema).
+      // Graph rows drop their memory pointer by design (src/db/index.ts, the entities and relations schema).
       const objectTables = rows.map((r) => r.name).filter((t) => t !== 'entities' && t !== 'relations');
       expect([...MEMORY_BACKED_TABLES].sort()).toEqual(objectTables.sort());
     } finally {
@@ -591,7 +691,7 @@ describe('hippo dormant CLI', () => {
 
       const search = runCli(workspace, 'dormant', 'zanzibar', '--json');
       expect(search.status).toBe(0);
-      // SAFETY: `hippo dormant --json` prints a JSON object with a `dormant` array (cmdDormant).
+      // SAFETY: `hippo dormant --json` prints a JSON object with a `dormant` array (handleDormant).
       const parsed = JSON.parse(search.out) as { dormant: Array<{ id: string }> };
       expect(parsed.dormant.map((m) => m.id)).toEqual([keep.id]);
 

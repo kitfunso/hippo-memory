@@ -4,18 +4,16 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { execFileSync } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadIndex } from '../src/store/index-and-stats.js';
-import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { estimateTokens } from '../src/token-ledger.js';
-import { assemble, drillDown, type Context } from '../src/api.js';
-import { assembleCost, drillCost } from '../src/context-render.js';
+import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { estimateTokens } from '../src/util/token-text.js';
+import { assemble, drillDown, type Context } from '../src/api/index.js';
+import { assembleCost, drillCost } from '../src/api/context-render.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
-
-const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
+import { hippoOut } from './_helpers/spawn-hippo.js';
 const TAGS = [
   'deployment-pipeline-infrastructure-alpha', 'database-migration-rollback-procedure',
   'observability-alerting-runbook-owner', 'incident-review-follow-up-action-item',
@@ -50,7 +48,7 @@ function hippo(args: string[], input?: string): string {
     ...process.env, HIPPO_HOME: path.join(root, 'global'), HOME: root, USERPROFILE: root,
   };
   for (const k of ['ANTHROPIC_API_KEY', 'HIPPO_SESSION_ID', 'CLAUDE_CODE_SESSION_ID']) delete env[k];
-  return execFileSync(process.execPath, [HIPPO_JS, ...args], { cwd: root, env, input, encoding: 'utf8' });
+  return hippoOut(args, { cwd: root, env, input });
 }
 
 // console.log's newline is the terminal's, not the block's.
@@ -268,9 +266,9 @@ describe('assemble and drill', () => {
     }
   });
 
-  it('never evicts the fresh tail, even when the tail alone exceeds the budget', () => {
+  it('never evicts the fresh tail, even when the tail alone exceeds the budget', async () => {
     const rows = seedSession(5);
-    const r = assemble({ ...ctx, hippoRoot: hippoDir }, sid, { budget: 20, freshTailCount: 2, cost: assembleCost(sid) });
+    const r = await assemble({ ...ctx, hippoRoot: hippoDir }, sid, { budget: 20, freshTailCount: 2, cost: assembleCost(sid) });
     expect(r.items.map((it) => it.id)).toEqual(rows.slice(3));
     expect(r.evicted).toBe(3);
   });
@@ -286,9 +284,9 @@ describe('assemble and drill', () => {
     }
   });
 
-  it('drill keeps the first child when it alone exceeds the budget', () => {
+  it('drill keeps the first child when it alone exceeds the budget', async () => {
     const id = seedSummary(3);
-    const r = drillDown({ ...ctx, hippoRoot: hippoDir }, id, { budget: 5, cost: drillCost });
+    const r = await drillDown({ ...ctx, hippoRoot: hippoDir }, id, { budget: 5, cost: drillCost });
     expect('children' in r && r.children.map((c) => c.content)).toEqual([line(0)]);
   });
 });

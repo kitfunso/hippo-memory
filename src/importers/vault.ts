@@ -1,16 +1,22 @@
+import { DEFAULT_TENANT_ID } from '../util/env.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { createHash } from 'node:crypto';
-import { createMemory, MemoryEntry } from '../memory.js';
-import { initStore } from '../store/open.js';
-import { remember, archiveRaw, isPrivateScope, type Context } from '../api.js';
-import { openHippoDb, closeHippoDb } from '../db.js';
-import { RejectedValueError, checkRejectionGuard } from '../rejection.js';
-import { loadConfig } from '../config.js';
-import { vetSecrets } from '../secret-detect.js';
-import { log } from '../log.js';
-import { type ImportResult, type ImportOptions, type JsonValue, isJsonString } from './core.js';
-import { parseFrontmatter, frontmatterList, parseWikilinks, collectMarkdownFiles, realpathOrResolve } from './markdown-parse.js';
+import { createMemory, MemoryEntry } from '../core/memory.js';
+import { loadVaultRawRows, type VaultRawRow } from '../store/entry-reads.js';
+import { remember, archiveRaw, isPrivateScope, type HippoDbContext } from '../api/index.js';
+import { assertClientScope } from '../store/recall-scope.js';
+import { RejectedValueError } from '../store/rejection.js';
+import { rejectionGuardRefuses } from '../store/rejected-values.js';
+import { withRequestStoresSync } from '../db/request-stores.js';
+import { loadConfig } from '../core/config.js';
+import { vetSecrets } from '../util/secret-detect.js';
+import { errorMessage, log } from '../util/log.js';
+import { type ImportResult, type ImportOptions } from './core.js';
+import { splitMarkdownFrontmatter, frontmatterList, parseWikilinks, collectMarkdownFiles } from './markdown-parse.js';
+import { realpathOrResolve } from '../util/real-path.js';
+import { type JsonValue, isJsonString } from '../util/json.js';
+import { escapeLike } from '../util/escape.js';
 
 // ---------------------------------------------------------------------------
 // K1 vault importer (markdown-vault FOLDER → kind='raw' memories)
@@ -25,20 +31,7 @@ import { parseFrontmatter, frontmatterList, parseWikilinks, collectMarkdownFiles
 // `archiveRaw` (the only trigger-legit raw delete).
 // ---------------------------------------------------------------------------
 
-/** Escape LIKE wildcards in operator-supplied text (mirror of
- *  src/project-briefs.ts:477 / src/store/search-rows.ts, kept local since neither is
- *  exported). Used so a `%`/`_`/`\` in the vault name cannot over-match the
- *  loader prefix and archive another vault's rows. */
-function escapeLike(term: string): string {
-  return term.replace(/[%_\\]/g, '\\$&');
-}
-
-interface VaultRow {
-  id: string;
-  artifact_ref: string;
-  tags_json: string;
-  scope: string | null;
-}
+type VaultRow = VaultRawRow;
 
 /**
  * Import a markdown vault FOLDER as `kind='raw'` memories.
@@ -50,10 +43,7 @@ interface VaultRow {
  */
 export function importVault(folderPath: string, options: ImportOptions): ImportResult {
   const hippoRoot = options.hippoRoot;
-  const tenantId = options.tenantId ?? 'default';
-  const { vaultName, scope } = vaultIdentityOrThrow(options);
-  const extraTags = options.extraTags ?? [];
-  const dryRun = options.dryRun ?? false;
+  const identity = vaultIdentityOrThrow(options);
   if (options.global) {
     // The raw-archive path is tenant-local; global mode would put raw vault rows
     // in the wrong store. Reject for SDK callers too (the CLI also rejects
@@ -76,8 +66,16 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
   if (resolvedFolder === resolvedStore || resolvedFolder.startsWith(resolvedStore + path.sep)) {
     return { total: 0, imported: 0, skipped: 0, rejected: 0, archived: 0, entries: [] };
   }
+  return syncVaultFolder(folderPath, options, identity);
+}
 
-  const ctx: Context = {
+function syncVaultFolder(folderPath: string, options: ImportOptions, { vaultName, scope }: VaultIdentity): ImportResult {
+  const hippoRoot = options.hippoRoot;
+  const tenantId = options.tenantId ?? DEFAULT_TENANT_ID;
+  const extraTags = options.extraTags ?? [];
+  const dryRun = options.dryRun ?? false;
+
+  const ctx: HippoDbContext = {
     hippoRoot,
     tenantId,
     // Process-local actor; the vault importer is a CLI/SDK ingestion path, not
@@ -91,19 +89,15 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
   const baseHalfLifeDays = loadConfig(hippoRoot).defaultHalfLifeDays;
   const seen = new Set<string>();
 
-  // AT1 P2 fix: dry-run never called remember(), so it never probed
-  // tombstones — every note that reached the write step counted as
-  // `imported` even when a real run would refuse it. Probe (read-only) via
-  // the same guard remember()/writeEntry uses, without ever writing.
-  const dryRunDb = dryRun ? openHippoDb(hippoRoot) : null;
-  try {
-    const run: VaultImportRun = {
-      ctx, folderPath, vaultName, scope, extraTags, dryRun, dryRunDb, existing, seen, baseHalfLifeDays, tally,
-    };
+  const run: VaultImportRun = {
+    ctx, folderPath, vaultName, scope, extraTags, dryRun, existing, seen, baseHalfLifeDays, tally,
+  };
+  const importNotes = (): void => {
     for (const relpath of relpaths) importVaultNote(run, relpath);
-  } finally {
-    if (dryRunDb) closeHippoDb(dryRunDb);
-  }
+  };
+  // A dry run probes the rejection guard once per changed note; one scope lets every probe share a handle.
+  if (dryRun) withRequestStoresSync(importNotes);
+  else importNotes();
 
   // Deletion-sync: any artifactRef present in the Map but NOT seen this run is a
   // note that vanished from the source folder → archive its raw row. Per-file
@@ -132,13 +126,12 @@ interface VaultTally {
 }
 
 interface VaultImportRun {
-  ctx: Context;
+  ctx: HippoDbContext;
   folderPath: string;
   vaultName: string;
   scope: string | null;
   extraTags: string[];
   dryRun: boolean;
-  dryRunDb: ReturnType<typeof openHippoDb> | null;
   existing: Map<string, VaultRow[]>;
   seen: Set<string>;
   baseHalfLifeDays: number;
@@ -179,6 +172,7 @@ function vaultIdentityOrThrow(options: ImportOptions): VaultIdentity {
   // isPrivateScope as the single source of truth: reject a scope that names a
   // `private` segment yet is NOT a valid `<source>:private:*` (catches `private`,
   // `private:x`, and `vault:private` with a missing trailing segment).
+  assertClientScope(scope);
   if (scope !== null && scope.split(':').includes('private') && !isPrivateScope(scope)) {
     throw new Error(
       `vault scope '${scope}' is not recognized as private by recall (only '<source>:private:*' scopes are default-denied). Use a source-prefixed scope such as 'vault:private:${vaultName}'.`,
@@ -188,45 +182,27 @@ function vaultIdentityOrThrow(options: ImportOptions): VaultIdentity {
 }
 
 function loadVaultRows(hippoRoot: string, tenantId: string, vaultName: string): Map<string, VaultRow[]> {
-  // Load ONCE: every existing raw row for this vault, tenant-scoped. The same
-  // Map serves both per-file idempotency AND the deletion diff (no second
-  // query). LIKE-escape the vault name so a `%`/`_` in it can't over-match.
-  initStore(hippoRoot);
-  // artifactRef -> ALL its live raw rows. >1 only after a concurrent double-insert
-  // (the importer is not re-entrant; see the JSDoc). The buckets matter: a later
-  // changed/deletion pass must archive EVERY matching row, not just the last one
-  // scanned, or older raw vault content lingers live + searchable (codex P2).
+  // One load serves both per-file idempotency and the deletion diff; the vault name is
+  // LIKE-escaped so a `%` or `_` in it cannot over-match.
+  const rows = loadVaultRawRows(hippoRoot, `vault:${escapeLike(vaultName)}:%`, tenantId);
+  // Every live row per artifactRef (more than one only after a concurrent double-insert), because a
+  // later changed or deletion pass must archive them all or older raw vault content stays searchable.
   const existing = new Map<string, VaultRow[]>();
-  const db = openHippoDb(hippoRoot);
-  try {
-    const likeParam = `vault:${escapeLike(vaultName)}:%`;
-    // SAFETY: query selects exactly the columns of VaultRow, in the same
-    // names, from the memories table this module owns.
-    const rows = db
-      .prepare(
-        `SELECT id, artifact_ref, tags_json, scope FROM memories
-           WHERE artifact_ref LIKE ? ESCAPE '\\' AND tenant_id = ? AND kind = 'raw'`,
-      )
-      .all(likeParam, tenantId) as VaultRow[];
-    // SQLite LIKE is case-insensitive for ASCII, so the query over-fetches
-    // (vault 'A' also matches 'vault:a:%'). Filter to the EXACT-case prefix in
-    // JS so deletion-sync never archives a different-cased vault's rows (codex P2).
-    const exactPrefix = `vault:${vaultName}:`;
-    for (const row of rows) {
-      if (row.artifact_ref && row.artifact_ref.startsWith(exactPrefix)) {
-        const bucket = existing.get(row.artifact_ref);
-        if (bucket) bucket.push(row);
-        else existing.set(row.artifact_ref, [row]);
-      }
+  // LIKE folds ASCII case (vault 'A' also matches 'vault:a:%'), so the exact-case prefix is checked
+  // here; without it deletion-sync would archive a different-cased vault's rows.
+  const exactPrefix = `vault:${vaultName}:`;
+  for (const row of rows) {
+    if (row.artifact_ref && row.artifact_ref.startsWith(exactPrefix)) {
+      const bucket = existing.get(row.artifact_ref);
+      if (bucket) bucket.push(row);
+      else existing.set(row.artifact_ref, [row]);
     }
-  } finally {
-    closeHippoDb(db);
   }
   return existing;
 }
 
 function importVaultNote(run: VaultImportRun, relpath: string): void {
-  const { ctx, tally } = run;
+  const { tally } = run;
   tally.total++;
   const artifactRef = `vault:${run.vaultName}:${relpath}`;
   run.seen.add(artifactRef);
@@ -244,7 +220,7 @@ function importVaultNote(run: VaultImportRun, relpath: string): void {
   // built, so it can compare the complete envelope rather than a subset.
   const priors = run.existing.get(artifactRef) ?? [];
 
-  const { fm, body } = parseFrontmatter(rawFileContent);
+  const { fm, body } = splitMarkdownFrontmatter(rawFileContent);
 
   // Empty / frontmatter-only note: nothing storable (createMemory enforces a
   // min content length). The note's CONTENT was deleted at source, so this is a
@@ -260,13 +236,16 @@ function importVaultNote(run: VaultImportRun, relpath: string): void {
     return;
   }
 
-  const tags = vaultNoteTags(run, hashTag, fm, body);
-  if (vaultEnvelopeUnchanged(priors, tags, run.scope)) {
+  const tags = vaultNoteTags(run, hashTag, fm, body);  if (vaultEnvelopeUnchanged(priors, tags, run.scope)) {
     // Unchanged file + envelope → skip (idempotent re-import).
     tally.skipped++;
     return;
   }
+  writeChangedNote(run, artifactRef, priors, body, tags);
+}
 
+function writeChangedNote(run: VaultImportRun, artifactRef: string, priors: VaultRow[], body: string, tags: string[]): void {
+  const { ctx, tally } = run;
   // Changed file → archive EVERY old raw row for this ref (normally one; >1
   // only after a concurrent double-insert), then append the new one. NEVER
   // supersede (would yield kind='distilled'). archiveRaw commits + closes its
@@ -299,10 +278,9 @@ function importVaultNote(run: VaultImportRun, relpath: string): void {
 function readVaultNote(run: VaultImportRun, relpath: string): string | null {
   try {
     return fs.readFileSync(path.join(run.folderPath, relpath), 'utf8');
-  } catch {
-    // File vanished between enumeration and read (TOCTOU), or a transient
-    // IO/permission error. Skip this one file rather than aborting the whole
-    // import (incl. the deletion-sync pass); an idempotent re-run picks it up.
+  } catch (err) {
+    // One unreadable note (gone since the listing, or a transient IO error) must not abort the import; a re-run picks it up.
+    log.debug(`vault note skipped: ${relpath}: ${errorMessage(err)}`);
     run.tally.skipped++;
     return null;
   }
@@ -359,29 +337,20 @@ function vaultEnvelopeUnchanged(priors: VaultRow[], tags: string[], scope: strin
 
 /** Returns false when the rejection guard refuses the note; any other error propagates. */
 function storeVaultNote(run: VaultImportRun, echo: MemoryEntry, content: string, tags: string[], artifactRef: string): boolean {
+  // A dry run writes nothing; it asks the guard remember() uses, so its `rejected` count matches what a real run would refuse.
+  if (run.dryRun) return !rejectionGuardRefuses(run.ctx.hippoRoot, run.ctx.tenantId, echo.id, echo.content);
   try {
-    // dryRun preview: count what WOULD import, but make no writes (codex P2).
-    if (!run.dryRun) {
-      // AT1 (plan §3 containment): a rejected note must not abort the rest
-      // of the vault scan (deletion-sync pass included). The priors above
-      // are already archived by this point — same self-heal story as any
-      // other crash between archiveRaw and remember() (comment above): a
-      // re-run with the file still rejected hits the same refusal again,
-      // loud each time via the rejected count.
-      const result = remember(run.ctx, {
-        content,
-        kind: 'raw',
-        artifactRef,
-        owner: 'agent:vault-import',
-        scope: run.scope ?? undefined,
-        tags,
-      });
-      echo.id = result.id;
-    } else if (run.dryRunDb) {
-      // AT1 P2 fix: probe the tombstone without writing so the preview's
-      // `rejected` count matches what a real run would refuse.
-      checkRejectionGuard(run.dryRunDb, run.ctx.tenantId, echo.id, echo.content);
-    }
+    // A rejected note must not stop the scan or the deletion sync. Its priors are archived by now, so a rerun meets
+    // the same refusal and counts it again.
+    const result = remember(run.ctx, {
+      content,
+      kind: 'raw',
+      artifactRef,
+      owner: 'agent:vault-import',
+      scope: run.scope ?? undefined,
+      tags,
+    });
+    echo.id = result.id;
     return true;
   } catch (err) {
     if (err instanceof RejectedValueError) return false;
@@ -398,7 +367,7 @@ function parseJsonArrayLoose(value: string | null | undefined): string[] {
     const parsed: JsonValue = JSON.parse(value);
     return Array.isArray(parsed) ? parsed.filter(isJsonString) : [];
   } catch (err) {
-    log.debug(`import: unreadable tags_json read as no tags: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`import: unreadable tags_json read as no tags: ${errorMessage(err)}`);
     return [];
   }
 }

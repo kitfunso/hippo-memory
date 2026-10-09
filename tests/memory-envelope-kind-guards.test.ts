@@ -2,8 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { openHippoDb, getCurrentSchemaVersion, getSchemaVersion, closeHippoDb } from '../src/db.js';
-import { Layer} from '../src/memory.js';
+import { openHippoDb, getCurrentSchemaVersion, getSchemaVersion, closeHippoDb } from '../src/db/index.js';
+import { v14 } from '../src/db/migrations/v14.js';
+import { Layer} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -101,7 +102,7 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
     const db = openHippoDb(home);
     // The v14→v15 NULL guard means we cannot null out kind in app code to simulate
     // pre-A3 state (the trigger aborts). Instead, drop the triggers, simulate, re-run
-    // the migration's backfill clause, then verify. This tests the SQL clause itself.
+    // the migration, which is safe to run twice, then verify.
     db.exec(`DROP TRIGGER IF EXISTS trg_memories_kind_check_insert`);
     db.exec(`DROP TRIGGER IF EXISTS trg_memories_kind_check_update`);
     db.prepare(
@@ -110,11 +111,9 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
     db.prepare(
       `INSERT INTO memories (id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, conflicts_with_json, pinned, confidence, content, kind) VALUES ('s2','2026-01-01','2026-01-01',0,1.0,7,'episodic','[]','neutral',0.5,'test','[]',0,'observed','new',NULL)`,
     ).run();
-    // Re-run the v14 backfill SQL (idempotent by design)
-    db.exec(`UPDATE memories SET kind = 'superseded' WHERE kind IS NULL AND superseded_by IS NOT NULL`);
-    db.exec(`UPDATE memories SET kind = 'distilled' WHERE kind IS NULL`);
+    v14.up(db);
     // SAFETY: literal SELECT of the kind column for rows this test just
-    // inserted; the backfill UPDATEs above guarantee kind is set.
+    // inserted; the migration's backfill above guarantees kind is set.
     const s1 = db.prepare(`SELECT kind FROM memories WHERE id='s1'`).get() as { kind: string };
     // SAFETY: see above.
     const s2 = db.prepare(`SELECT kind FROM memories WHERE id='s2'`).get() as { kind: string };

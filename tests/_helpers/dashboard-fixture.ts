@@ -8,11 +8,11 @@ import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { initStore } from '../../src/store/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
-import { closeHippoDb, openHippoDb } from '../../src/db.js';
-import { upsertVectors } from '../../src/vector-store.js';
-import type { MemoryEntry } from '../../src/memory.js';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
+import { upsertVectors } from '../../src/db/vector-store.js';
+import type { MemoryEntry } from '../../src/core/memory.js';
 import { createMemory } from './default-half-life-memory.js';
-import { serveDashboard } from '../../src/dashboard.js';
+import { serveDashboard } from '../../src/dashboard/dashboard.js';
 
 export const NOW = Date.parse('2026-10-01T12:00:00.000Z');
 export const DAY = 86_400_000;

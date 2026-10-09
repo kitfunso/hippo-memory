@@ -1,4 +1,4 @@
-import type { RememberOpts } from '../../api.js';
+import type { RememberOpts } from '../../api/index.js';
 import { scopeFromRepository } from './scope.js';
 import type {
   GitHubIssueEvent,
@@ -13,13 +13,13 @@ import type {
  * caller can mark the delivery seen for idempotency and skip the insert.
  *
  * Contract (mirrors src/connectors/slack/transform.ts):
- * - kind is the literal 'raw' (E1.x connector boundary, see src/importers.ts).
+ * - kind is the literal 'raw' (connector boundary, see src/importers.ts).
  * - artifact_ref formats are stable; deletion paths look up by these strings.
  *   - issue:               github://<owner/repo>/issue/<number>
  *   - issue_comment:       github://<owner/repo>/issue/<number>/comment/<id>
  *   - pull_request:        github://<owner/repo>/pull/<number>
  *   - pr_review_comment:   github://<owner/repo>/pull/<number>/review_comment/<id>
- * - owner is `user:github:<login>`. Required by the v0.40.0 provenance gate.
+ * - owner is `user:github:<login>`. Required by the provenance gate.
  * - scope is derived from repository.private via scopeFromRepository (default
  *   private when undetermined).
  */

@@ -5,11 +5,12 @@ import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { createApiKey } from '../src/auth.js';
-import { adminActor } from '../src/api.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { createApiKey } from '../src/store/auth.js';
+import { adminActor } from '../src/api/index.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
+import { autoSleepInFlight } from '../src/mcp/session-state.js';
 
 const CLI = join(process.cwd(), 'dist', 'cli.js');
 
@@ -156,7 +157,13 @@ describe('MCP auto-sleep stays with the host tenant', () => {
     writeFileSync(join(home, 'config.json'), JSON.stringify({ autoSleep: { enabled: true, threshold: 1 } }));
     const res = await mcpCall('hippo_remember', { text: 'acme deploys on tuesdays after the freeze' }, key('acme', 'member'));
     expect(res.error).toBeUndefined();
-    await new Promise((r) => setTimeout(r, 500));
+    // hippo_remember decides before it answers, so a run it started is in flight or has its row by now.
+    expect(autoSleepInFlight.size).toBe(0);
     expect(sleepRuns()).toBe(0);
+
+    // The host tenant's write on the same server does start one, so the zeros above come from the tenant gate.
+    await mcpCall('hippo_remember', { text: 'the host deploys on thursdays after the freeze' }, key('default', 'member'));
+    await vi.waitFor(() => expect(autoSleepInFlight.size).toBe(0), { timeout: 20_000 });
+    expect(sleepRuns()).toBe(1);
   });
 });

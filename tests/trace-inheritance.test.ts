@@ -11,16 +11,16 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { Layer, calculateStrength } from '../src/memory.js';
+import { Layer, calculateStrength } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { consolidate } from '../src/consolidate/sleep.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { hybridSearch } from '../src/search/hybrid.js';
-import { sampleForReplay } from '../src/replay.js';
-import { initializeParticle, savePhysicsState, loadPhysicsState } from '../src/physics-state.js';
+import { sampleForReplay } from '../src/consolidate/replay.js';
+import { initializeParticle, savePhysicsState, loadPhysicsState } from '../src/db/physics-state.js';
 
 /** These tests pin decay arithmetic to the pre-1.46 7-day base; the default itself is tested in half-life-migration and schema-fit. */
 const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });

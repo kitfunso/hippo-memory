@@ -12,8 +12,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { Layer} from '../src/memory.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { Layer} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { handleMcpRequest, __resetSessionRecallHistoryMcp, type McpContext, type McpResponse } from '../src/mcp/server.js';
 import { makeRoot } from './_helpers/make-root.js';
@@ -56,7 +56,7 @@ function countAuditOps(root: string, op: string): number {
   }
 }
 
-describe('mcp hippo_recall anchoringHint (J1, v0.33)', () => {
+describe('mcp hippo_recall anchoringHint', () => {
   let home: string;
   let originalHome: string | undefined;
 

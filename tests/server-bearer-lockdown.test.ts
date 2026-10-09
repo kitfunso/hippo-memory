@@ -80,9 +80,10 @@ function publicRoutesFromServerSource(text: string): Set<string> {
   return routes;
 }
 
-const serverSource = readFileSync(join(repoRoot, 'src/server.ts'), 'utf8');
+const serverSource = readFileSync(join(repoRoot, 'src/server/route-table.ts'), 'utf8');
 const routeTableSource = serverSource.slice(serverSource.indexOf('const V1_ROUTES'), serverSource.indexOf('async function dispatchV1Route'));
-const dispatchSource = routeTableSource + serverSource.slice(serverSource.indexOf('async function handleRequest'));
+const handlerSource = readFileSync(join(repoRoot, 'src/server/boot.ts'), 'utf8');
+const dispatchSource = routeTableSource + handlerSource.slice(handlerSource.indexOf('async function handleRequest'));
 
 // Every authed route with a request shape that clears pre-auth validation, so a
 // 401 (not 400) proves the Bearer check ran. :param segments become '1'.
@@ -203,11 +204,12 @@ describe('server Bearer lockdown', () => {
     ]);
   });
 
-  it('AUTHED_ROUTES covers exactly the derived routes minus public routes minus GET /health', () => {
+  it('AUTHED_ROUTES covers exactly the derived routes minus public routes minus the GET /health and GET /ready probes', () => {
     const derived = routesFromServerSource(dispatchSource);
     const publicRoutes = publicRoutesFromServerSource(serverSource);
     const expected = new Set(derived);
     expected.delete('GET /health');
+    expected.delete('GET /ready');
     for (const r of publicRoutes) expected.delete(r);
 
     const actual = new Set(AUTHED_ROUTES.map((r) => `${r.method} ${r.pattern}`));
@@ -215,6 +217,20 @@ describe('server Bearer lockdown', () => {
     const extra = [...actual].filter((r) => !expected.has(r));
     expect(missing, `AUTHED_ROUTES is missing: ${missing.join(', ')}`).toEqual([]);
     expect(extra, `AUTHED_ROUTES has extra rows not in server.ts: ${extra.join(', ')}`).toEqual([]);
+  });
+
+  it('a configured publicJson path needs no Bearer; the unconfigured GET routes beside it still do', async () => {
+    await handle.stop();
+    handle = await serve({ hippoRoot: root, host: '127.0.0.1', port: 0, publicJson: { '/v1/x-public': { ok: true } } });
+    const publicUrl = `http://127.0.0.1:${handle.port}/v1/x-public`;
+    for (const res of [await fetch(publicUrl), await fetch(publicUrl, { headers: { authorization: 'Bearer hk_invalid.deadbeef' } })]) {
+      expect({ status: res.status, body: await res.text() }).toEqual({ status: 200, body: '{"ok":true}' });
+    }
+    for (const r of AUTHED_ROUTES.filter((route) => route.method === 'GET')) {
+      const path = requestPath(r.pattern, r.query);
+      const res = await fetch(`http://127.0.0.1:${handle.port}${path}`);
+      expect(res.status, `GET ${path} -> ${res.status}: ${await res.text()}`).toBe(401);
+    }
   });
 
   it.each(AUTHED_ROUTES)(

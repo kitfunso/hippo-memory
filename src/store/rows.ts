@@ -1,8 +1,7 @@
-import { Layer, type MemoryEntry, type ConfidenceLevel, type MemoryKind } from '../memory.js';
-import { log } from '../log.js';
-
-/** A value that round-trips through JSON.stringify/JSON.parse unchanged. */
-export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+import { DEFAULT_TENANT_ID } from '../util/env.js';
+import { Layer, FALLBACK_HALF_LIFE_DAYS, DEFAULT_SCHEMA_FIT, type MemoryEntry, type ConfidenceLevel, type MemoryKind } from '../core/memory.js';
+import { errorMessage, log } from '../util/log.js';
+import { type JsonValue, isJsonObject } from '../util/json.js';
 
 export interface IndexEntry {
   id: string;
@@ -19,11 +18,8 @@ export interface HippoIndex {
   version: number;
   entries: Record<string, IndexEntry>;
   last_retrieval_ids: string[];
-  /** LC1 (docs/plans/2026-08-02-lc1-recall-trace-persistence.md): id of the
-   *  most recent recall_traces row written by getContext/cmdRecall, mirrored
-   *  from the `last_trace_id` meta key exactly like last_retrieval_ids. null
-   *  when no trace has been written yet (fresh store, pre-v40 flow, or
-   *  api.recall-only usage — api.recall never sets this). */
+  /** Id of the most recent recall_traces row written by getContext/cmdRecall, mirrored from the
+   *  `last_trace_id` meta key like last_retrieval_ids. null when none was written (api.recall never sets it). */
   last_trace_id: string | null;
 }
 
@@ -65,14 +61,13 @@ export interface MemoryRow {
   descendant_count: number | null;
   earliest_at: string | null;
   latest_at: string | null;
-  // v0.30 / E1 of DAG live-coupling (schema v28). Symmetric with v25 DAG
-  // cache: included in MEMORY_SELECT_COLUMNS so every read path populates
-  // these alongside descendant_count / earliest_at / latest_at.
+  // In MEMORY_SELECT_COLUMNS so every read path populates these alongside
+  // descendant_count / earliest_at / latest_at.
   summary_dirty: number | null;
   last_rebuilt_at: string | null;
   rebuild_count: number | null;
   dag_level_3_built_at: string | null;
-  // F1 (v1.7.0): present only on rows from MEMORY_SEARCH_COLUMNS (FTS path).
+  // Present only on rows from MEMORY_SEARCH_COLUMNS (FTS path).
   // Other paths SELECT MEMORY_SELECT_COLUMNS, which does not include this.
   bm25_score?: number;
 }
@@ -157,13 +152,21 @@ export interface SessionEvent {
 }
 
 export const INDEX_VERSION = 3;
-export const MEMORY_SELECT_COLUMNS = `id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, outcome_score, outcome_positive, outcome_negative, conflicts_with_json, pinned, confidence, content, parents_json, starred, trace_outcome, source_session_id, valid_from, superseded_by, extracted_from, dag_level, dag_parent_id, kind, scope, owner, artifact_ref, tenant_id, origin_project, descendant_count, earliest_at, latest_at, summary_dirty, last_rebuilt_at, rebuild_count, dag_level_3_built_at`;
-// F1 (v1.7.0): qualified-and-aliased columns for the FTS join in
-// loadSearchRows. Every column is `m.<col> AS <col>` so rowToEntry's
-// unqualified field reads keep working unchanged. The trailing
-// bm25(memories_fts) AS bm25_score adds the FTS rank as a result column.
-// Only used inside the FTS path; non-FTS paths keep MEMORY_SELECT_COLUMNS.
-export const MEMORY_SEARCH_COLUMNS = `m.id AS id, m.created AS created, m.last_retrieved AS last_retrieved, m.retrieval_count AS retrieval_count, m.strength AS strength, m.half_life_days AS half_life_days, m.layer AS layer, m.tags_json AS tags_json, m.emotional_valence AS emotional_valence, m.schema_fit AS schema_fit, m.source AS source, m.outcome_score AS outcome_score, m.outcome_positive AS outcome_positive, m.outcome_negative AS outcome_negative, m.conflicts_with_json AS conflicts_with_json, m.pinned AS pinned, m.confidence AS confidence, m.content AS content, m.parents_json AS parents_json, m.starred AS starred, m.trace_outcome AS trace_outcome, m.source_session_id AS source_session_id, m.valid_from AS valid_from, m.superseded_by AS superseded_by, m.extracted_from AS extracted_from, m.dag_level AS dag_level, m.dag_parent_id AS dag_parent_id, m.kind AS kind, m.scope AS scope, m.owner AS owner, m.artifact_ref AS artifact_ref, m.tenant_id AS tenant_id, m.origin_project AS origin_project, m.descendant_count AS descendant_count, m.earliest_at AS earliest_at, m.latest_at AS latest_at, m.summary_dirty AS summary_dirty, m.last_rebuilt_at AS last_rebuilt_at, m.rebuild_count AS rebuild_count, m.dag_level_3_built_at AS dag_level_3_built_at, bm25(memories_fts) AS bm25_score`;
+const MEMORY_COLUMN_NAMES = [
+  'id', 'created', 'last_retrieved', 'retrieval_count', 'strength', 'half_life_days', 'layer', 'tags_json',
+  'emotional_valence', 'schema_fit', 'source', 'outcome_score', 'outcome_positive', 'outcome_negative',
+  'conflicts_with_json', 'pinned', 'confidence', 'content', 'parents_json', 'starred', 'trace_outcome',
+  'source_session_id', 'valid_from', 'superseded_by', 'extracted_from', 'dag_level', 'dag_parent_id', 'kind', 'scope',
+  'owner', 'artifact_ref', 'tenant_id', 'origin_project', 'descendant_count', 'earliest_at', 'latest_at',
+  'summary_dirty', 'last_rebuilt_at', 'rebuild_count', 'dag_level_3_built_at',
+] as const;
+
+// FTS-join columns for loadSearchRows: `m.<col> AS <col>` keeps rowToEntry's unqualified reads working.
+export const MEMORY_SELECT_COLUMNS = MEMORY_COLUMN_NAMES.join(', ');
+export const MEMORY_SEARCH_COLUMNS = [
+  ...MEMORY_COLUMN_NAMES.map((c) => `m.${c} AS ${c}`),
+  'bm25(memories_fts) AS bm25_score',
+].join(', ');
 /**
  * Default candidate-pool size for `loadSearchEntries` when called with
  * `limit === undefined`. Single source of truth; `api.recall` imports
@@ -171,22 +174,35 @@ export const MEMORY_SEARCH_COLUMNS = `m.id AS id, m.created AS created, m.last_r
  */
 export const DEFAULT_SEARCH_CANDIDATE_LIMIT = 200;
 
-export function rowToEntry(row: MemoryRow): MemoryEntry {
+type RetrievalFields = Pick<
+  MemoryEntry,
+  'id' | 'created' | 'last_retrieved' | 'retrieval_count' | 'strength' | 'half_life_days' | 'layer' | 'tags' |
+  'emotional_valence' | 'schema_fit' | 'source' | 'outcome_score' | 'outcome_positive' | 'outcome_negative' |
+  'conflicts_with' | 'pinned' | 'confidence' | 'content' | 'parents' | 'starred' | 'trace_outcome'
+>;
+type PlacementFields = Pick<
+  MemoryEntry,
+  'source_session_id' | 'valid_from' | 'superseded_by' | 'extracted_from' | 'dag_level' | 'dag_parent_id' | 'kind' |
+  'scope' | 'owner' | 'artifact_ref' | 'tenantId' | 'origin_project' | 'descendant_count' | 'earliest_at' |
+  'latest_at' | 'summary_dirty' | 'last_rebuilt_at' | 'rebuild_count' | 'dag_level_3_built_at'
+>;
+
+function rowToRetrievalFields(row: MemoryRow): RetrievalFields {
   // SAFETY: every `as X` below narrows a SQLite column value to an
   // enum/union member of MemoryEntry; `row` comes from MEMORY_SELECT_COLUMNS
   // / MEMORY_SEARCH_COLUMNS, which are the only queries producing MemoryRow,
   // and the DB layer only ever writes these columns from the same enums.
-  const entry: MemoryEntry = {
+  return {
     id: row.id,
     created: row.created,
     last_retrieved: row.last_retrieved,
     retrieval_count: Number(row.retrieval_count ?? 0),
     strength: Number(row.strength ?? 1),
-    half_life_days: Number(row.half_life_days ?? 7),
+    half_life_days: Number(row.half_life_days ?? FALLBACK_HALF_LIFE_DAYS),
     layer: row.layer as Layer,
     tags: parseJsonArray(row.tags_json),
     emotional_valence: row.emotional_valence ?? 'neutral',
-    schema_fit: Number(row.schema_fit ?? 0.5),
+    schema_fit: Number(row.schema_fit ?? DEFAULT_SCHEMA_FIT),
     source: row.source ?? 'cli',
     outcome_score: row.outcome_score === null || row.outcome_score === undefined ? null : Number(row.outcome_score),
     outcome_positive: Number(row.outcome_positive ?? 0),
@@ -198,6 +214,12 @@ export function rowToEntry(row: MemoryRow): MemoryEntry {
     parents: parseJsonArray(row.parents_json),
     starred: Boolean(row.starred),
     trace_outcome: (row.trace_outcome as MemoryEntry['trace_outcome']) ?? null,
+  };
+}
+
+function rowToPlacementFields(row: MemoryRow): PlacementFields {
+  // SAFETY: the `as MemoryKind` narrows a column the DB layer only writes from that enum.
+  return {
     source_session_id: row.source_session_id ?? null,
     valid_from: row.valid_from ?? row.created,
     superseded_by: row.superseded_by ?? null,
@@ -208,20 +230,22 @@ export function rowToEntry(row: MemoryRow): MemoryEntry {
     scope: row.scope ?? null,
     owner: row.owner ?? null,
     artifact_ref: row.artifact_ref ?? null,
-    tenantId: row.tenant_id ?? 'default',
+    tenantId: row.tenant_id ?? DEFAULT_TENANT_ID,
     origin_project: row.origin_project ?? null,
     descendant_count: Number(row.descendant_count ?? 0),
     earliest_at: row.earliest_at ?? null,
     latest_at: row.latest_at ?? null,
-    // v0.30 / E1 of DAG live-coupling (schema v28). Symmetric with v25 cache.
     summary_dirty: (Number(row.summary_dirty ?? 0) === 1 ? 1 : 0) as 0 | 1,
     last_rebuilt_at: row.last_rebuilt_at ?? null,
     rebuild_count: Number(row.rebuild_count ?? 0),
     dag_level_3_built_at: row.dag_level_3_built_at ?? null,
   };
-  // F1 (v1.7.0): preserve bm25_score from the FTS path. `'bm25_score' in row`
-  // distinguishes "absent column" (non-FTS path) from "column present but
-  // value 0" — though FTS5 bm25() never returns 0, this is defensive.
+}
+
+export function rowToEntry(row: MemoryRow): MemoryEntry {
+  const entry: MemoryEntry = { ...rowToRetrievalFields(row), ...rowToPlacementFields(row) };
+  // Preserve bm25_score from the FTS path; `'bm25_score' in row` tells an absent column
+  // (non-FTS path) from a present one.
   if ('bm25_score' in row && row.bm25_score !== undefined && row.bm25_score !== null) {
     entry.bm25_score = Number(row.bm25_score);
   }
@@ -234,14 +258,14 @@ export function parseJsonArray(raw: string | null | undefined): string[] {
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed.map((item) => String(item)) : [];
   } catch (err) {
-    log.debug(`store: corrupt JSON array column read as empty: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`store: corrupt JSON array column read as empty: ${errorMessage(err)}`);
     return [];
   }
 }
 
 /**
- * Strict parse for the `last_trace_id` meta value (LC1 F1(d) structural
- * fix). A bare Number(raw) would turn '', whitespace, or garbage into a
+ * Strict parse for the `last_trace_id` meta value.
+ * A bare Number(raw) would turn '', whitespace, or garbage into a
  * usable-looking 0/NaN — a consumer INSERTing recall_trace_outcomes with
  * trace_id=0 would hit a masked FK violation (row id 0 never exists).
  * Require a clean positive integer string; anything else is treated as
@@ -256,20 +280,16 @@ export function parseLastTraceId(raw: string | null | undefined): string | null 
   return trimmed;
 }
 
-export function isPlainJsonObject(x: JsonValue): x is Record<string, JsonValue> {
-  return x !== null && typeof x === 'object' && !Array.isArray(x);
-}
-
 function parseJsonObject(raw: string | null | undefined): Record<string, JsonValue> {
   if (!raw) return {};
   try {
     const parsed: JsonValue = JSON.parse(raw);
-    if (isPlainJsonObject(parsed)) {
+    if (isJsonObject(parsed)) {
       return parsed;
     }
     return {};
   } catch (err) {
-    log.debug(`store: corrupt JSON object column read as empty: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`store: corrupt JSON object column read as empty: ${errorMessage(err)}`);
     return {};
   }
 }

@@ -10,8 +10,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { drillDown, type Context } from '../src/api.js';
+import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { drillDown, type Context } from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 function safeRmSync(p: string): void {
@@ -51,7 +51,7 @@ describe('drillDown', () => {
   beforeEach(() => { root = makeRoot('drill'); });
   afterEach(() => safeRmSync(root));
 
-  it('returns the summary plus its direct children', () => {
+  it('returns the summary plus its direct children', async () => {
     const s = makeSummary('topic alpha');
     s.descendant_count = 4;
     s.earliest_at = '2026-01-01T00:00:00.000Z';
@@ -63,7 +63,7 @@ describe('drillDown', () => {
       writeEntry(root, c);
       childIds.push(c.id);
     }
-    const r = drillDown(ctxFor(root), s.id);
+    const r = await drillDown(ctxFor(root), s.id);
     expect('failure' in r).toBe(false);
     if ('failure' in r) return;
     expect(r.summary.id).toBe(s.id);
@@ -75,7 +75,7 @@ describe('drillDown', () => {
     expect(r.truncated).toBe(false);
   });
 
-  it('returns failure=not_drillable on a leaf (v1.6.4)', () => {
+  it('returns failure=not_drillable on a leaf (v1.6.4)', async () => {
     const leaf = createMemory('leaf body', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Buffer,
@@ -83,35 +83,35 @@ describe('drillDown', () => {
       tenantId: 'default',
     });
     writeEntry(root, leaf);
-    const r = drillDown(ctxFor(root), leaf.id);
+    const r = await drillDown(ctxFor(root), leaf.id);
     expect('failure' in r).toBe(true);
     if ('failure' in r) expect(r.failure).toBe('not_drillable');
   });
 
-  it('returns failure=not_found when summary belongs to another tenant (v1.6.4 collapse)', () => {
+  it('returns failure=not_found when summary belongs to another tenant (v1.6.4 collapse)', async () => {
     // Cross-tenant intentionally collapses into not_found — distinguishing
     // would leak existence to unauthorised tenants.
     const s = makeSummary('other tenant topic', { tenantId: 'other' });
     writeEntry(root, s);
     writeEntry(root, makeChild('detail', s.id, { tenantId: 'other' }));
-    const r = drillDown(ctxFor(root, 'default'), s.id);
+    const r = await drillDown(ctxFor(root, 'default'), s.id);
     expect('failure' in r).toBe(true);
     if ('failure' in r) expect(r.failure).toBe('not_found');
   });
 
-  it('private-scoped summary returns failure=not_found (codex P1: collapse to prevent existence leak)', () => {
+  it('private-scoped summary returns failure=not_found (codex P1: collapse to prevent existence leak)', async () => {
     // Pre-codex-round-3 returned 'scope_blocked', which told a no-scope
     // caller "this row exists, just not for you." Same existence leak
     // the HTTP 404 collapse was already preventing. Now collapsed at API.
     const s = makeSummary('private topic', { scope: 'slack:private:CSEC' });
     writeEntry(root, s);
     writeEntry(root, makeChild('secret detail', s.id, { scope: 'slack:private:CSEC' }));
-    const r = drillDown(ctxFor(root), s.id);
+    const r = await drillDown(ctxFor(root), s.id);
     expect('failure' in r).toBe(true);
     if ('failure' in r) expect(r.failure).toBe('not_found');
   });
 
-  it('filters out children whose scope fails the default-deny check', () => {
+  it('filters out children whose scope fails the default-deny check', async () => {
     // Public summary, but one child accidentally tagged private. Should NOT
     // appear in the children list (defense in depth — even if the DAG is
     // misbuilt, drill cannot leak).
@@ -119,7 +119,7 @@ describe('drillDown', () => {
     writeEntry(root, s);
     writeEntry(root, makeChild('public child', s.id, { scope: 'slack:public:CGEN' }));
     writeEntry(root, makeChild('rogue private', s.id, { scope: 'slack:private:CSEC' }));
-    const r = drillDown(ctxFor(root, 'default'), s.id);
+    const r = await drillDown(ctxFor(root, 'default'), s.id);
     expect('failure' in r).toBe(false);
     if ('failure' in r) return;
     expect(r.children.length).toBe(1);
@@ -127,26 +127,26 @@ describe('drillDown', () => {
     expect(r.totalChildren).toBe(1);
   });
 
-  it('budget option truncates children list and sets truncated=true', () => {
+  it('budget option truncates children list and sets truncated=true', async () => {
     const s = makeSummary('topic budget');
     writeEntry(root, s);
     for (let i = 0; i < 10; i++) {
       writeEntry(root, makeChild(`detail ${i} `.repeat(20), s.id));
     }
-    const r = drillDown(ctxFor(root), s.id, { budget: 100 });
+    const r = await drillDown(ctxFor(root), s.id, { budget: 100 });
     expect('failure' in r).toBe(false);
     if ('failure' in r) return;
     expect(r.truncated).toBe(true);
     expect(r.children.length).toBeLessThan(10);
   });
 
-  it('limit option caps children list', () => {
+  it('limit option caps children list', async () => {
     const s = makeSummary('topic limit');
     writeEntry(root, s);
     for (let i = 0; i < 30; i++) {
       writeEntry(root, makeChild(`detail row ${i}`, s.id));
     }
-    const r = drillDown(ctxFor(root), s.id, { limit: 5 });
+    const r = await drillDown(ctxFor(root), s.id, { limit: 5 });
     expect('failure' in r).toBe(false);
     if ('failure' in r) return;
     expect(r.children.length).toBe(5);
@@ -154,8 +154,8 @@ describe('drillDown', () => {
     expect(r.totalChildren).toBe(30);
   });
 
-  it('returns failure=not_found for an unknown id (v1.6.4)', () => {
-    const r = drillDown(ctxFor(root), 'mem_does_not_exist');
+  it('returns failure=not_found for an unknown id (v1.6.4)', async () => {
+    const r = await drillDown(ctxFor(root), 'mem_does_not_exist');
     expect('failure' in r).toBe(true);
     if ('failure' in r) expect(r.failure).toBe('not_found');
   });

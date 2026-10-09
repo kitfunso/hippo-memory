@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { extractFacts } from '../src/extract.js';
+import { extractFacts } from '../src/learn/extract.js';
 
 function mockFetcher(body: string, ok = true): typeof fetch {
   // A real Response satisfies typeof fetch's return type directly, so no

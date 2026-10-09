@@ -1,6 +1,6 @@
 /**
  * v1.7.4 -- api.recall plumbs RecallOpts.sessionId through to the
- * applyGoalStackBoost helper on its primary BM25 band, BEFORE projection to
+ * boostByGoals helper on its primary BM25 band, BEFORE projection to
  * RecallResultItem and BEFORE fresh-tail / summary appendix rows are
  * appended. Pinned end-to-end through the api surface (not through CLI/MCP/
  * HTTP -- those have their own integration tests).
@@ -11,9 +11,9 @@ import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
 import { initStore } from '../src/store/open.js';
-import { remember, recall, type Context } from '../src/api.js';
-import { pushGoal } from '../src/goals.js';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
+import { remember, recall, type HippoDbContext } from '../src/api/index.js';
+import { pushGoal } from '../src/store/goals.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 
 function countRows(db: DatabaseSyncLike, sql: string, ...params: unknown[]): number {
   const row = db.prepare(sql).get(...params);
@@ -23,9 +23,9 @@ function countRows(db: DatabaseSyncLike, sql: string, ...params: unknown[]): num
   return (row as { c: number }).c;
 }
 
-describe('api.recall + RecallOpts.sessionId goal-stack boost (v1.7.4)', () => {
+describe('api.recall + RecallOpts.sessionId goal-stack boost', () => {
   let hippoRoot: string;
-  let ctx: Context;
+  let ctx: HippoDbContext;
   const tenantId = 'default';
   const sessionId = 'sess-api-1.7.4';
 

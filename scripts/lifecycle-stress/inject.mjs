@@ -28,23 +28,11 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { mulberry32 } from '../lib/prng.mjs';
 
 // ---------------------------------------------------------------------------
-// Seeded PRNG (mulberry32) — identical algorithm to benchmarks/.../aggregate.mjs.
-// Math.random is BANNED here: it would break stream determinism.
+// Seeded PRNG: mulberry32 from ../lib/prng.mjs. Math.random is BANNED here: it would break stream determinism.
 // ---------------------------------------------------------------------------
-
-/** @param {number} seed @returns {() => number} uniform [0,1) */
-export function mulberry32(seed) {
-  let s = seed >>> 0;
-  return function () {
-    s = (s + 0x6d2b79f5) >>> 0;
-    let t = s;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
 
 // Distinct per-fact vocabulary pools. Each fact draws ONE topic head + ONE
 // filler so cross-fact token overlap stays low. Pools are large enough that

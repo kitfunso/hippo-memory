@@ -3,7 +3,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import { execFileSync } from 'child_process';
-import { installJsonHooks, uninstallJsonHooks, resolveJsonHookPaths } from '../hooks/json-hooks.js';
+import { installJsonHooks, uninstallJsonHooks, checkUninstallable, copilotHookEvents, resolveJsonHookPaths } from '../hooks/json-hooks.js';
 import { detectInstalledTools, type JsonHookTarget, type ToolDetection } from '../hooks/shared.js';
 import {
   ensureCodexWrapperInstalled,
@@ -12,24 +12,48 @@ import {
   uninstallCodexWrapper,
 } from '../hooks/codex-wrapper.js';
 import { installOpencodePlugin, uninstallOpencodePlugin, resolveOpencodePluginPath } from '../hooks/opencode.js';
+import {
+  type CopilotInstallResult,
+  type CopilotUninstallResult,
+  type InstructionsInstallStatus,
+  type InstructionsRemoveStatus,
+  type McpFailure,
+  type McpHost,
+  type McpMergeStatus,
+  type McpRemoveStatus,
+  type VscodeInstallResult,
+  type VscodeInstructionsInstallStatus,
+  type VscodeInstructionsRemoveStatus,
+  COPILOT_CLI_MCP,
+  VSCODE_MCP,
+  copilotMcpSnippet,
+  copilotPaths,
+  installCopilot,
+  isCopilotCliPresent,
+  isMcpFailure,
+  uninstallCopilot,
+} from '../hooks/copilot.js';
 import { isInitialized } from '../store/open.js';
 import { currentMachine, importUserMemories } from '../agent-memories/sync.js';
-import { getGlobalRoot } from '../shared.js';
-import { listRegisteredWorkspaces, runDailyMaintenance } from '../scheduler.js';
-import { replayCompactionsAt } from '../compaction-record.js';
-import { log } from '../log.js';
+import { getGlobalRoot } from '../sharing/global-store.js';
+import { listRegisteredWorkspaces, runDailyMaintenance } from './scheduler.js';
+import { replayCompactionsAt } from '../capture/compaction-record.js';
+import { errorFields, errorMessage, log } from '../util/log.js';
+import { envDailyStepTimeoutMs } from '../util/env.js';
+import { writeFileAtomic } from '../util/atomic-write.js';
 import { printError } from './output.js';
-import { printAgentImport, installCodexMemoryHooks, setupDailySchedule } from './shared.js';
-import { HOOK_MARKERS, HOOKS, hippoBlock } from './hook-blocks.js';
+import { boolFlag, type CommandContext } from './flag-values.js';
+import { printAgentImport } from './print.js';
+import { installCodexMemoryHooks, setupDailySchedule, warnClaudeSettingsUnusable } from './install-steps.js';
+import { repairQualityOnceAt } from './quality-repair-once.js';
+import { HOOK_MARKERS, HOOKS, hippoBlock, withoutHookBlock } from '../hooks/hook-blocks.js';
+import { escapeRegex } from '../util/escape.js';
 
 // ---------------------------------------------------------------------------
 // Hook install/uninstall
 // ---------------------------------------------------------------------------
 
-export function cmdHook(
-  args: string[],
-  flags: Record<string, string | boolean | string[]>
-): void {
+export function handleHook({ args }: CommandContext): void {
   const subcommand = args[0];
   const target = args[1];
   if (subcommand === 'list') return hookList();
@@ -52,14 +76,17 @@ function hookList(): void {
   for (const [name, hook] of Object.entries(HOOKS)) {
     console.log(`  ${name.padEnd(15)} -> ${hook.file} (${hook.description})`);
   }
+  console.log(`  ${'copilot'.padEnd(15)} -> $COPILOT_HOME or ~/.copilot, and each VS Code User folder (GitHub Copilot: hooks, MCP server and instructions)`);
   console.log('\nUsage: hippo hook install <name>');
   console.log('       hippo hook uninstall <name>');
 }
 
 function hookInstall(target: string | undefined): void {
+  // Copilot's instructions live in its home folder, not in a project file, so it has no HOOKS entry.
+  if (target === 'copilot') return printCopilotInstall(installCopilot(), '');
   if (!target || !HOOKS[target]) {
     printError(`Unknown hook target: ${target ?? '(none)'}`);
-    printError(`   Available: ${Object.keys(HOOKS).join(', ')}`);
+    printError(`   Available: ${[...Object.keys(HOOKS), 'copilot'].join(', ')}`);
     process.exit(1);
   }
   const hook = HOOKS[target];
@@ -88,7 +115,6 @@ function patchAgentFile(hook: HookSpec, target: string): void {
   const filepath = path.resolve(process.cwd(), hook.file);
 
   const block = `${HOOK_MARKERS.start}\n${hook.content}\n${HOOK_MARKERS.end}`;
-  let agentFileTouched = false;
 
   if (fs.existsSync(filepath)) {
     const existing = fs.readFileSync(filepath, 'utf8');
@@ -101,14 +127,13 @@ function patchAgentFile(hook: HookSpec, target: string): void {
         'g',
       );
       const updated = existing.replace(re, block);
-      fs.writeFileSync(filepath, updated, 'utf8');
+      writeFileAtomic(filepath, updated);
       console.log(`Updated Hippo hook in ${hook.file}`);
     } else {
       const sep = existing.endsWith('\n') ? '\n' : '\n\n';
-      fs.writeFileSync(filepath, existing + sep + block + '\n', 'utf8');
+      writeFileAtomic(filepath, existing + sep + block + '\n');
       console.log(`Installed Hippo hook in ${hook.file} (appended)`);
     }
-    agentFileTouched = true;
   } else {
     // Do not create a new agent-instructions file (CLAUDE.md, AGENTS.md, etc.) in directories that don't already have one —
     // avoids polluting cwd with files the user didn't ask for. The settings.json hook below is still installed for
@@ -121,6 +146,7 @@ function patchAgentFile(hook: HookSpec, target: string): void {
 }
 
 function printClaudeHookInstall(result: ReturnType<typeof installJsonHooks>): void {
+  warnClaudeSettingsUnusable(result, '');
   if (result.installedSessionEnd) {
     console.log(`Installed hippo session-end SessionEnd hook in ${result.target} settings`);
   }
@@ -168,7 +194,101 @@ function installOpencodeHook(): void {
   }
 }
 
+const addByHand = (host: McpHost): string => `add this under "${host.key}" by hand: ${copilotMcpSnippet(host)}`;
+
+const MCP_MERGE_LINES = {
+  added: (file: string) => `Added the "hippo" MCP server -> ${file}`,
+  present: (file: string) => `The "hippo" MCP server is already in ${file}`,
+  'user-owned': (file: string) => `Left the "hippo" MCP server in ${file} as it is: hippo did not write it`,
+  unreadable: (file: string, host: McpHost) => `WARNING: ${file} has comments or is not a JSON object hippo can merge into, so it was left unchanged; ${addByHand(host)}`,
+} as const satisfies Record<McpMergeStatus, (file: string, host: McpHost) => string>;
+
+const mcpFailureLine = (file: string, failure: McpFailure, fix: string): string => `WARNING: hippo could not use ${file} (${failure.failed}), so it was left unchanged; ${fix}`;
+const unclosedLine = (file: string): string => `WARNING: ${file} has ${HOOK_MARKERS.start} with no ${HOOK_MARKERS.end}, so hippo left it unchanged; fix the markers by hand`;
+
+const INSTRUCTIONS_INSTALL_LINES = {
+  written: (file: string) => `Wrote the hippo block -> ${file}`,
+  present: (file: string) => `The hippo block is already in ${file}`,
+  kept: (file: string) => `Kept the hippo block in ${file} as it is: it is not the Copilot text hippo wrote, so it was edited or is another agent's`,
+  unclosed: unclosedLine,
+} as const satisfies Record<InstructionsInstallStatus, (file: string) => string>;
+
+const INSTRUCTIONS_REMOVE_LINES = {
+  removed: (file: string) => `Removed the hippo block from ${file}`,
+  absent: () => '',
+  kept: (file: string) => `Left the hippo block in ${file}: it is not the Copilot text hippo wrote. Delete it by hand if no agent needs it.`,
+  unclosed: unclosedLine,
+} as const satisfies Record<InstructionsRemoveStatus, (file: string) => string>;
+
+const VSCODE_INSTRUCTIONS_INSTALL_LINES = {
+  written: (file: string) => `Wrote the hippo instructions file -> ${file}`,
+  present: (file: string) => `The hippo instructions file is already at ${file}`,
+  kept: (file: string) => `Kept ${file} as it is: it is not the text hippo writes, so it was edited or is someone else's`,
+} as const satisfies Record<VscodeInstructionsInstallStatus, (file: string) => string>;
+
+const VSCODE_INSTRUCTIONS_REMOVE_LINES = {
+  removed: (file: string) => `Removed the hippo instructions file ${file}`,
+  absent: () => '',
+  kept: (file: string) => `Left ${file}: it is not the text hippo wrote. Delete it by hand if no agent needs it.`,
+} as const satisfies Record<VscodeInstructionsRemoveStatus, (file: string) => string>;
+
+const VSCODE_HOOKS_LINE = 'VS Code: hooks need VS Code 1.109.3 or later with chat.useHooks on (the default); older versions get the MCP server and the instructions file only.';
+
+function mcpInstallLine(file: string, mcp: McpMergeStatus | McpFailure, host: McpHost): string {
+  return isMcpFailure(mcp) ? mcpFailureLine(file, mcp, addByHand(host)) : MCP_MERGE_LINES[mcp](file, host);
+}
+
+function printVscodeInstall(result: VscodeInstallResult, indent: string): void {
+  const { paths } = result;
+  console.log(`${indent}${mcpInstallLine(paths.mcpConfig, result.mcp, VSCODE_MCP)}`);
+  console.log(`${indent}${VSCODE_INSTRUCTIONS_INSTALL_LINES[result.instructions](paths.instructions)}`);
+  if (paths.profiles.length > 0) {
+    const names = paths.profiles.map((dir) => path.basename(dir)).join(', ');
+    console.log(`${indent}Found VS Code profiles (${names}) under ${path.join(paths.userDir, 'profiles')}: hippo set up the default profile only; copy the "hippo" server and prompts/hippo.instructions.md into a profile to use hippo there.`);
+  }
+}
+
+function printCopilotInstall(result: CopilotInstallResult, indent: string): void {
+  const { paths } = result;
+  const hooks = result.hooks ? `Installed hippo's Copilot hooks (${copilotHookEvents().join(', ')}) ->` : "hippo's Copilot hooks are already in";
+  console.log(`${indent}${hooks} ${paths.hooks}`);
+  if (result.mcp === null || result.instructions === null) {
+    console.log(`${indent}No Copilot CLI files in ${path.dirname(paths.mcpConfig)}, so hippo skipped mcp-config.json and copilot-instructions.md, which only the Copilot CLI reads`);
+  } else {
+    console.log(`${indent}${mcpInstallLine(paths.mcpConfig, result.mcp, COPILOT_CLI_MCP)}`);
+    console.log(`${indent}${INSTRUCTIONS_INSTALL_LINES[result.instructions](paths.instructions)}`);
+  }
+  for (const vscode of result.vscode) printVscodeInstall(vscode, indent);
+  if (result.vscode.length > 0) console.log(`${indent}${VSCODE_HOOKS_LINE}`);
+  console.log(`${indent}VS Code Copilot runs new hooks in a new chat session.`);
+}
+
+/** The lines for one MCP config file; empty when hippo's server was not there. */
+function mcpRemoveLines(file: string, mcp: McpRemoveStatus | McpFailure): string[] {
+  if (isMcpFailure(mcp)) return [mcpFailureLine(file, mcp, 'remove the "hippo" server by hand if hippo added it')];
+  if (mcp === 'removed') return [`Removed the "hippo" MCP server from ${file}`];
+  if (mcp === 'user-owned') return [`Left the "hippo" MCP server in ${file}: hippo did not write it`];
+  if (mcp === 'unreadable') return [`WARNING: ${file} has comments or is not a JSON object hippo can edit, so it was left unchanged; remove the "hippo" server by hand if hippo added it`];
+  return [];
+}
+
+function printCopilotUninstall(result: CopilotUninstallResult): void {
+  const { paths, mcp } = result;
+  const lines: string[] = [];
+  if (result.hooks) lines.push(`Removed hippo's Copilot hooks file ${paths.hooks}`);
+  lines.push(...mcpRemoveLines(paths.mcpConfig, mcp));
+  lines.push(INSTRUCTIONS_REMOVE_LINES[result.instructions](paths.instructions));
+  for (const vscode of result.vscode) {
+    lines.push(...mcpRemoveLines(vscode.paths.mcpConfig, vscode.mcp));
+    lines.push(VSCODE_INSTRUCTIONS_REMOVE_LINES[vscode.instructions](vscode.paths.instructions));
+  }
+  const printed = lines.filter((line) => line !== '');
+  for (const line of printed) console.log(line);
+  if (printed.length === 0) console.log('No hippo Copilot hooks, MCP server or instructions found.');
+}
+
 function hookUninstall(target: string | undefined): void {
+  if (target === 'copilot') return printCopilotUninstall(uninstallCopilot());
   if (!target || !HOOKS[target]) {
     printError(`Unknown hook target: ${target ?? '(none)'}`);
     process.exit(1);
@@ -179,6 +299,8 @@ function hookUninstall(target: string | undefined): void {
   if (target === 'claude-code') {
     if (uninstallJsonHooks(target)) {
       console.log(`Removed hippo hooks from ${target} settings`);
+    } else {
+      warnClaudeSettingsUnusable(checkUninstallable(target), '', 'uninstall');
     }
   } else if (target === 'opencode') {
     // opencode uses a TS plugin; uninstall removes the plugin file AND
@@ -211,7 +333,7 @@ function unpatchAgentFile(hook: HookSpec, target: string): void {
     const whose = owner ? `hippo wrote it for ${owner}` : 'it has been edited, so hippo cannot tell whose it is';
     console.log(`Left the hippo block in ${hook.file}: ${whose}. Delete it by hand if no agent needs it.`);
   } else if (existing.includes(HOOK_MARKERS.start)) {
-    fs.writeFileSync(filepath, withoutHookBlock(existing) + '\n', 'utf8');
+    writeFileAtomic(filepath, withoutHookBlock(existing) + '\n');
     console.log(`Removed Hippo hook from ${hook.file}`);
   } else {
     console.log(`No Hippo hook found in ${hook.file}.`);
@@ -224,36 +346,13 @@ function removeLegacyCursorRules(): void {
   const old = fs.existsSync(legacy) ? fs.readFileSync(legacy, 'utf8') : '';
   if (old.includes(HOOK_MARKERS.start)) {
     const left = withoutHookBlock(old);
-    if (left) fs.writeFileSync(legacy, left + '\n', 'utf8');
+    if (left) writeFileAtomic(legacy, left + '\n');
     else fs.unlinkSync(legacy);
     console.log(left ? 'Removed the old Hippo hook from .cursorrules' : 'Deleted .cursorrules, which held only the old Hippo hook');
   }
 }
 
-function withoutHookBlock(text: string): string {
-  const re = new RegExp(
-    `\\n?${escapeRegex(HOOK_MARKERS.start)}[\\s\\S]*?${escapeRegex(HOOK_MARKERS.end)}\\n?`,
-    'g'
-  );
-  return text.replace(re, '\n').replace(/\n{3,}/g, '\n\n').trim();
-}
-
-function escapeRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-// `hippo setup` -- one-shot configuration for every AI coding tool on the box.
-// Detection and install logic live in ./hooks.ts.
-
-export function cmdSetup(flags: Record<string, string | boolean | string[]>): void {
-  const dryRun = Boolean(flags['dry-run']);
-  const forceAll = Boolean(flags['all']);
-  const tools = detectInstalledTools();
-  const globalRoot = getGlobalRoot();
-
-  console.log('Hippo setup -- configuring SessionEnd + SessionStart hooks');
-  console.log('');
-
+function setupDetectedTools(tools: ReturnType<typeof detectInstalledTools>, forceAll: boolean, dryRun: boolean): void {
   const jsonTools = tools.filter((t) => t.kind === 'json-hook' && (t.detected || forceAll));
   const wrapperTools = tools.filter((t) => t.kind === 'wrapper' && (t.detected || forceAll));
   const skipped = tools.filter((t) => t.kind === 'json-hook' && !t.detected && !forceAll);
@@ -261,7 +360,7 @@ export function cmdSetup(flags: Record<string, string | boolean | string[]>): vo
   const pluginTools = tools.filter((t) => t.kind === 'plugin' && t.detected);
 
   if (jsonTools.length === 0 && !forceAll) {
-    console.log('No JSON-hook-capable tools detected (checked: claude-code).');
+    console.log('No JSON-hook-capable tools detected (checked: claude-code, copilot).');
     console.log('Run with --all to install hooks anyway.');
   }
 
@@ -286,6 +385,21 @@ export function cmdSetup(flags: Record<string, string | boolean | string[]>): vo
       console.log(`  ${tool.name.padEnd(14)} ${tool.notes}`);
     }
   }
+}
+
+// `hippo setup` -- one-shot configuration for every AI coding tool on the box.
+// Detection and install logic live in ./hooks.ts.
+
+export function handleSetup({ flags }: CommandContext): void {
+  const dryRun = boolFlag(flags, 'dry-run');
+  const forceAll = boolFlag(flags, 'all');
+  const tools = detectInstalledTools();
+  const globalRoot = getGlobalRoot();
+
+  console.log('Hippo setup -- configuring SessionEnd + SessionStart hooks');
+  console.log('');
+
+  setupDetectedTools(tools, forceAll, dryRun);
 
   if (!flags['no-schedule']) {
     console.log('');
@@ -305,7 +419,17 @@ export function cmdSetup(flags: Record<string, string | boolean | string[]>): vo
   console.log('Done. Restart your AI tool to activate the hooks.');
 }
 
+function setupCopilot(dryRun: boolean): void {
+  const indent = `  ${'copilot'.padEnd(14)} `;
+  if (!dryRun) return printCopilotInstall(installCopilot(), indent);
+  const { hooks, mcpConfig, instructions, vscode } = copilotPaths();
+  const cliFiles = isCopilotCliPresent() ? `, the MCP server in ${mcpConfig} and the hippo block in ${instructions}` : '';
+  console.log(`[dry-run] would install hooks in ${hooks}${cliFiles}`);
+  for (const dir of vscode) console.log(`[dry-run] would add the MCP server to ${dir.mcpConfig} and write ${dir.instructions}`);
+}
+
 function setupJsonTool(tool: ToolDetection, dryRun: boolean): void {
+  if (tool.name === 'copilot') return setupCopilot(dryRun);
   if (dryRun) {
     // Resolve the real settings path so the filename is right for each tool
     // (claude-code -> settings.json, opencode -> opencode.json).
@@ -314,6 +438,7 @@ function setupJsonTool(tool: ToolDetection, dryRun: boolean): void {
     return;
   }
   const result = installJsonHooks(tool.name as JsonHookTarget);
+  if (warnClaudeSettingsUnusable(result, `  ${tool.name.padEnd(14)} `)) return;
   const bits: string[] = [];
   if (result.installedSessionEnd) bits.push('SessionEnd (session-end)');
   if (result.installedSessionStart) bits.push('SessionStart');
@@ -373,12 +498,22 @@ function setupPluginTool(tool: ToolDetection, dryRun: boolean): void {
   }
 }
 
-export function cmdDailyRunner(): void {
+// Three times the 10 minutes POST /v1/sleep allows a consolidation, so a slow real sleep fits and a hung child cannot stall every later workspace.
+const DAILY_STEP_TIMEOUT_MS = 30 * 60_000;
+
+/** Why a child step failed; a child killed at the deadline says so, since its own message is only the spawn error code. */
+function dailyStepFailure<E>(err: E, timeoutMs: number): string {
+  if (err instanceof Error && 'code' in err && err.code === 'ETIMEDOUT') return `timed out after ${timeoutMs} ms and was stopped`;
+  return errorMessage(err);
+}
+
+export function handleDailyRunner(_ctx: CommandContext): void {
   const globalRoot = getGlobalRoot();
   // No workspace sleep ever opens the global store, yet hooks in folders without a store compact into it.
   if (isInitialized(globalRoot)) {
     const finished = replayCompactionsAt(globalRoot, (message) => log.warn(`compaction replay: ${message}`));
     if (finished > 0) console.log(`Finished saving ${finished} compaction${finished === 1 ? '' : 's'} left over in the global store.`);
+    repairQualityOnceAt(globalRoot);
   }
   printAgentImport(importUserMemories(globalRoot, { machine: currentMachine() }), '');
   const workspaces = listRegisteredWorkspaces(globalRoot);
@@ -392,20 +527,24 @@ export function cmdDailyRunner(): void {
 
   let processed = 0;
   let failed = 0;
+  const timeout = envDailyStepTimeoutMs() ?? DAILY_STEP_TIMEOUT_MS;
   runDailyMaintenance(workspaces, (cwd, args) => {
     try {
       execFileSync(process.execPath, [process.argv[1], ...args], {
         cwd,
         stdio: 'inherit',
         windowsHide: true,
+        timeout,
       });
       if (args[0] === 'sleep') processed++;
     } catch (err) {
       failed++;
       const action = args.join(' ');
-      log.error(`daily-runner failed in ${cwd} during \`${action}\`: ${(err as Error).message}`);
+      log.error(`daily-runner failed in ${cwd} during \`${action}\`: ${dailyStepFailure(err, timeout)}`, { workspace: cwd, ...errorFields(err) });
     }
   });
 
   console.log(`Daily maintenance complete: ${processed} workspace${processed === 1 ? '' : 's'} processed, ${failed} command failure${failed === 1 ? '' : 's'}.`);
+  // The scheduler that runs this only sees the exit code, so a failed workspace must not read as a clean run.
+  if (failed > 0) process.exitCode = 1;
 }

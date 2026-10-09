@@ -1,8 +1,8 @@
 // Opaque cursors for the /v1 list routes: base64url JSON of the last returned row's sort key and id.
 import type { ServerResponse } from 'node:http';
-import { HttpError, type JsonValue } from '../http-util.js';
-import type { KeysetPosition } from '../keyset.js';
-import { isJsonNumber, isJsonString } from './validation.js';
+import { HttpError } from '../util/http-util.js';
+import type { KeysetPosition } from '../util/keyset.js';
+import { type JsonValue, isJsonString, isJsonNumber } from '../util/json.js';
 
 type CursorPart = 'string' | 'integer';
 

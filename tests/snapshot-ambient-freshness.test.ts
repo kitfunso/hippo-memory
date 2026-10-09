@@ -10,7 +10,7 @@ import {
   closeTaskSnapshotsForSession,
   SNAPSHOT_AMBIENT_MAX_AGE_MS,
 } from '../src/store/sessions.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 
 // DF1 (docs/plans/2026-08-23-df1-snapshot-lifecycle.md) T1 tests: the
 // never-expires fix for the active task snapshot ambient-injection surfaces.
@@ -42,7 +42,7 @@ function isoAgo(ms: number): string {
   return new Date(Date.now() - ms).toISOString();
 }
 
-describe('loadFreshActiveTaskSnapshot (DF1 T1)', () => {
+describe('loadFreshActiveTaskSnapshot', () => {
   it('1. RED-under-old incident pin: a 7d-old cross-session snapshot must not inject; the unchanged unbounded loadActiveTaskSnapshot still would', () => {
     initStore(tmpDir);
     const saved = saveActiveTaskSnapshot(tmpDir, TENANT, {
@@ -175,7 +175,7 @@ describe('loadFreshActiveTaskSnapshot (DF1 T1)', () => {
   });
 });
 
-describe('closeTaskSnapshotsForSession (DF1 T1)', () => {
+describe('closeTaskSnapshotsForSession', () => {
   it('5. scoped close: only the owning session can close the active row', () => {
     initStore(tmpDir);
     const saved = saveActiveTaskSnapshot(tmpDir, TENANT, {

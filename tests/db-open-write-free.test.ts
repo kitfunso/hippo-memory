@@ -7,8 +7,9 @@ import { join } from 'node:path';
 import { createRequire } from 'module';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { openHippoDb, closeHippoDb, getMeta } from '../src/db.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { openHippoDb, closeHippoDb, getMeta } from '../src/db/index.js';
+import { recordStatements } from './_helpers/count-statements.js';
 
 const require = createRequire(import.meta.url);
 // SAFETY: node:sqlite has no bundled types; this require + cast mirrors
@@ -20,13 +21,16 @@ const { DatabaseSync } = require('node:sqlite') as {
   };
 };
 
+// Statements that need the write lock; a caught one waits out the lock holder, which only a clock would show.
+const NEEDS_WRITE_LOCK = /\b(INSERT|UPDATE|DELETE|REPLACE|CREATE|ALTER|DROP|BEGIN|SAVEPOINT|VACUUM)\b|PRAGMA (user_version|schema_version) =/;
+
 let root: string;
 
 beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'hippo-open-write-free-')); });
 afterEach(() => { rmSync(root, { recursive: true, force: true }); });
 
 describe('openHippoDb on an already-current store is write-free', () => {
-  it('returns in under 1000ms even while a second connection holds BEGIN IMMEDIATE', () => {
+  it('runs no statement that needs the write lock, even while a second connection holds BEGIN IMMEDIATE', () => {
     // Fully migrate + stamp fts5_available first.
     closeHippoDb(openHippoDb(root));
 
@@ -37,14 +41,10 @@ describe('openHippoDb on an already-current store is write-free', () => {
     holder.exec(`INSERT INTO meta(key, value) VALUES('lockprobe', 'x') ON CONFLICT(key) DO UPDATE SET value=excluded.value`);
 
     try {
-      const started = Date.now();
-      const db = openHippoDb(root);
-      const elapsedMs = Date.now() - started;
-      try {
-        expect(elapsedMs).toBeLessThan(1000);
-      } finally {
-        closeHippoDb(db);
-      }
+      const { result: db, statements } = recordStatements(() => openHippoDb(root));
+      closeHippoDb(db);
+      expect(statements.length).toBeGreaterThan(0);
+      expect(statements.filter((sql) => NEEDS_WRITE_LOCK.test(sql))).toEqual([]);
     } finally {
       holder.exec('ROLLBACK');
       holder.close();
@@ -74,10 +74,12 @@ describe('openHippoDb on an already-current store is write-free', () => {
 
     const db2 = openHippoDb(root);
     try {
+      // SAFETY: the query selects only `name`, a TEXT column of sqlite_master.
       const tables = (db2
         .prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='memories_fts'`)
         .all() as Array<{ name: string }>);
       expect(tables.length).toBe(1);
+      // SAFETY: an aggregate SELECT returns exactly one row and COUNT(*) is an integer.
       const row = db2.prepare(`SELECT COUNT(*) AS c FROM memories_fts WHERE id = ?`).get(m.id) as
         | { c?: number }
         | undefined;

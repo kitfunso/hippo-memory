@@ -12,10 +12,10 @@ import {
   listSessionEvents,
 } from '../src/store/sessions.js';
 import { saveSessionHandoff, loadLatestHandoff } from '../src/store/handoffs.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/memory.js';
-import { buildProvenanceCoverage } from '../src/provenance-coverage.js';
-import { buildCorrectionLatency } from '../src/correction-latency.js';
-import { estimateTokens } from '../src/token-ledger.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';
+import { buildProvenanceCoverage } from '../src/cli/provenance-coverage.js';
+import { buildCorrectionLatency } from '../src/cli/correction-latency.js';
+import { estimateTokens } from '../src/util/token-text.js';
 
 let tmpDir: string;
 
@@ -150,7 +150,7 @@ describe('Company Brain continuity scorecard scaffold', () => {
   });
 
   it('recall(includeContinuity=true) hits the same scorecard signals via the public API', async () => {
-    const { recall } = await import('../src/api.js');
+    const { recall } = await import('../src/api/index.js');
     initStore(tmpDir);
     const sessionId = 'sess-recall-scorecard';
 

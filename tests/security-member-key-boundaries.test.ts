@@ -14,12 +14,12 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { createApiKey, listApiKeys } from '../src/auth.js';
-import { Layer } from '../src/memory.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { createApiKey, listApiKeys } from '../src/store/auth.js';
+import { Layer } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { serve, type ServerHandle } from '../src/server.js';
-import * as api from '../src/api.js';
+import * as api from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 const PRIVATE_SCOPE = 'slack:private:CSECRET1';
@@ -37,12 +37,7 @@ function mintKey(home: string, role: 'admin' | 'member'): { plaintext: string; k
 }
 
 function keyCount(home: string): number {
-  const db = openHippoDb(home);
-  try {
-    return listApiKeys(db, { active: true }).length;
-  } finally {
-    closeHippoDb(db);
-  }
+  return listApiKeys(home, { active: true }).length;
 }
 
 function seedScopedMemories(home: string): void {
@@ -179,7 +174,7 @@ describe('member-key boundaries in the api layer (every surface goes through it)
   });
 
   const memberCtx = (): api.Context => ({ hippoRoot: home, tenantId: 'default', actor: { subject: 'api_key:m', role: 'member' } });
-  const adminCtx = (): api.Context => ({ hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } });
+  const adminCtx = (): api.HippoDbContext => ({ hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } });
 
   it('key management refuses a member actor', () => {
     expect(() => api.authCreate(memberCtx(), { role: 'admin' })).toThrow(api.ForbiddenError);
@@ -187,10 +182,10 @@ describe('member-key boundaries in the api layer (every surface goes through it)
     expect(api.authCreate(adminCtx(), { role: 'member' }).role).toBe('member');
   });
 
-  it('recall and assemble refuse a restricted scope for a member, and allow it for an admin', () => {
+  it('recall and assemble refuse a restricted scope for a member, and allow it for an admin', async () => {
     expect(() => api.recall(memberCtx(), { query: 'zanzibar', scope: PRIVATE_SCOPE })).toThrow(api.ScopeForbiddenError);
     expect(() => api.recall(memberCtx(), { query: 'zanzibar', scope: 'unknown:legacy' })).toThrow(api.ScopeForbiddenError);
-    expect(() => api.assemble(memberCtx(), 'sess_1', { scope: PRIVATE_SCOPE })).toThrow(api.ScopeForbiddenError);
+    await expect(api.assemble(memberCtx(), 'sess_1', { scope: PRIVATE_SCOPE })).rejects.toThrow(api.ScopeForbiddenError);
 
     expect(api.recall(memberCtx(), { query: 'zanzibar', scope: PUBLIC_SCOPE }).results.length).toBeGreaterThan(0);
     const adminResults = api.recall(adminCtx(), { query: 'zanzibar', scope: PRIVATE_SCOPE }).results;

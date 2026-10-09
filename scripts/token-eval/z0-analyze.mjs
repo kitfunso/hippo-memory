@@ -90,7 +90,10 @@ function readJson(cwd, file) {
 const isNames = (v) => Array.isArray(v) && v.every(isString);
 const isCount = (v) => Number.isInteger(v) && v >= 0;
 const isRate = (v) => v === null || Number.isFinite(v);
-const isStoredSample = (s) => s !== null && isCount(s.n) && isCount(s.agree) && s.agree <= s.n && isRate(s.agreement) && isRate(s.kappa);
+const isUnit = (v) => Number.isFinite(v) && v >= 0 && v <= 1;
+const isCi = (v) => v === null || (Array.isArray(v) && v.length === 2 && v.every(isUnit) && v[0] <= v[1]);
+const isTable = (t, s) => ['yesYes', 'yesNo', 'noYes', 'noNo'].every((k) => isCount(t?.[k])) && t.yesYes + t.yesNo + t.noYes + t.noNo === s.n && t.yesYes + t.noNo === s.agree;
+const isStoredSample = (s) => s !== null && isCount(s.n) && isCount(s.agree) && s.agree <= s.n && isRate(s.agreement) && isRate(s.kappa) && isCi(s.ci95) && isTable(s.table, s);
 const isPrices = (p) => p !== undefined && p !== null && PRICE_FIELDS.every((f) => Number.isFinite(p[f]) && p[f] >= 0);
 
 /** Reads every input file and rejects a malformed one by name; records keep their file and line. */
@@ -115,7 +118,7 @@ export function loadInputs(args, cwd) {
     throw new Error(`${args.grading}: needs flippedLessons (strings), acceptanceFlips and readerSample { n, disagreements } (integers)`);
   }
   if (grading?.storedSample !== undefined && !isStoredSample(grading.storedSample)) {
-    throw new Error(`${args.grading}: storedSample needs n and agree (integers, agree <= n), agreement and kappa (numbers or null)`);
+    throw new Error(`${args.grading}: storedSample needs n and agree (integers, agree <= n), agreement and kappa (numbers or null), ci95 (two rates, low first, or null) and table (four counts that sum to n)`);
   }
   const dropList = args.dropList === null ? null : readJson(cwd, args.dropList);
   if (dropList !== null && !(isNames(dropList.droppedLessons) && isNames(dropList.droppedFamilies))) {

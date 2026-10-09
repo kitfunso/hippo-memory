@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -7,7 +7,14 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
 import { listMemoryConflicts } from '../src/store/conflicts.js';
-import { createMemory, Layer, calculateStrength, resolveConfidence, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { createMemory, Layer, calculateStrength, resolveConfidence, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { loadConfig } from '../src/core/config.js';
+import { loadPhysicsState, savePhysicsState, refreshParticleProperties } from '../src/db/physics-state.js';
+import { simulate, type PhysicsParticle } from '../src/core/physics.js';
+
+// One merge case builds and consolidates five separate stores.
+vi.setConfig({ testTimeout: 30_000 });
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
 const createMemory7 = (content: string, options: Partial<Parameters<typeof createMemory>[1]> = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });
@@ -48,11 +55,12 @@ describe('Decay pass', () => {
     const ancient = { ...entry, last_retrieved: veryOldDate, pinned: true };
     writeEntry(tmpDir, ancient);
 
-    const result = await consolidate(tmpDir, { now: new Date() });
+    await consolidate(tmpDir, { now: new Date() });
 
     const remaining = loadAllEntries(tmpDir);
     const found = remaining.find((e) => e.id === ancient.id);
-    expect(found).toBeDefined();
+    expect(found?.content).toBe('permanent rule');
+    expect(found?.pinned).toBe(true);
   });
 
   it('dry-run does not remove entries', async () => {
@@ -71,6 +79,29 @@ describe('Decay pass', () => {
     // Entry should still be on disk
     const remaining = loadAllEntries(tmpDir);
     expect(remaining.find((e) => e.id === ancient.id)).toBeDefined();
+  });
+
+  it('a dry run reports the same counts and detail lines the real run then produces', async () => {
+    initStore(tmpDir);
+    fs.writeFileSync(path.join(tmpDir, 'config.json'), JSON.stringify({ replay: { count: 0 } }), 'utf8');
+    const now = new Date('2026-06-01T00:00:00.000Z');
+    const at = new Date(now.getTime() - 400 * 24 * 60 * 60 * 1000).toISOString();
+    const faded = { half_life_days: 1, created: at, last_retrieved: at };
+    writeEntry(tmpDir, { ...createMemory7('an old note about a retired staging hostname nobody uses'), ...faded });
+    writeEntry(tmpDir, { ...createMemory7('an old note about rotating the staging deploy key', { tags: ['credential'] }), ...faded });
+    writeEntry(tmpDir, createMemory7('cache refresh failure data pipeline error', { layer: Layer.Episodic }));
+    writeEntry(tmpDir, createMemory7('cache refresh failure data pipeline problem', { layer: Layer.Episodic }));
+
+    const dry = await consolidate(tmpDir, { dryRun: true, now });
+    const real = await consolidate(tmpDir, { now });
+
+    expect(dry.dryRun).toBe(true);
+    expect([dry.decayed, dry.dormant, dry.removed, dry.merged]).toEqual([real.decayed, real.dormant, real.removed, real.merged]);
+    expect(real.dormant).toBe(1);
+    expect(real.removed).toBe(1);
+    expect(real.merged).toBe(2);
+    expect(dry.details).toEqual(real.details);
+    expect(real.details.filter((l) => l.includes('💤') || l.includes('🗑'))).toHaveLength(2);
   });
 
   it('keeps the stored confidence tier for old non-verified memories through sleep, while resolveConfidence reports stale', async () => {
@@ -168,6 +199,7 @@ describe('Replay pass (integration)', () => {
     const result = await consolidate(tmpDir, { now: new Date() });
 
     expect(result.replayed).toBe(2);
+    expect(result.details.some((l) => /^ {2}💭 replayed 2 memories: /.test(l))).toBe(true);
     const after = loadAllEntries(tmpDir);
     const touched = after.filter((e) => e.retrieval_count > 0);
     expect(touched).toHaveLength(2);
@@ -188,6 +220,7 @@ describe('Merge pass', () => {
 
     expect(result.merged).toBeGreaterThan(0);
     expect(result.semanticCreated).toBeGreaterThan(0);
+    expect(result.details.some((l) => l.startsWith('  🔀 merged 2 episodic entries into semantic: '))).toBe(true);
 
     const all = loadAllEntries(tmpDir);
     const semantics = all.filter((e) => e.layer === Layer.Semantic);
@@ -264,8 +297,9 @@ describe('Merge pass', () => {
     writeEntry(tmpDir, a);
     writeEntry(tmpDir, b);
 
-    await consolidate(tmpDir, { now: new Date() });
+    const result = await consolidate(tmpDir, { now: new Date() });
 
+    expect(result.details).toContain('  ⚠️ detected 1 memory conflict');
     const conflicts = listMemoryConflicts(tmpDir);
     expect(conflicts).toHaveLength(1);
     expect(conflicts[0].reason).toMatch(/enabled\/disabled mismatch|negation polarity mismatch/i);
@@ -427,5 +461,114 @@ describe('Merge pass', () => {
     expect(listMemoryConflicts(tmpDir)).toHaveLength(0);
     expect(readEntry(tmpDir, a.id)?.conflicts_with ?? []).toEqual([]);
     expect(readEntry(tmpDir, b.id)?.conflicts_with ?? []).toEqual([]);
+  });
+});
+
+describe('Physics pass', () => {
+  const STALE = { mass: 99, charge: 0.9, temperature: 0.123, lastSimulation: '2000-01-01T00:00:00.000Z' };
+
+  function storedParticles(): PhysicsParticle[] {
+    const db = openHippoDb(tmpDir);
+    try {
+      return Array.from(loadPhysicsState(db).values());
+    } finally {
+      closeHippoDb(db);
+    }
+  }
+
+  /** Three memories, two of them in conflict, each with a particle whose mass, charge and temperature are out of date. */
+  function seedConflictingParticles(physicsEnabled: boolean) {
+    initStore(tmpDir);
+    fs.writeFileSync(path.join(tmpDir, 'config.json'), JSON.stringify({ replay: { count: 0 }, physics: { enabled: physicsEnabled } }), 'utf8');
+    // A 30-day half-life, so a pass that lost the half-lives and fell back to the simulation's own default would show.
+    const a = createMemory('The deploy job runs on the staging cluster every night', { layer: Layer.Episodic, baseHalfLifeDays: 30 });
+    const b = createMemory('Invoices are sent by the billing worker on the first of the month', { layer: Layer.Episodic, baseHalfLifeDays: 30 });
+    const c = createMemory('The search index is rebuilt after each schema change', { layer: Layer.Episodic, baseHalfLifeDays: 30 });
+    writeEntry(tmpDir, { ...a, conflicts_with: [b.id] });
+    writeEntry(tmpDir, { ...b, conflicts_with: [a.id] });
+    writeEntry(tmpDir, c);
+    const db = openHippoDb(tmpDir);
+    try {
+      savePhysicsState(db, [
+        { ...STALE, memoryId: a.id, position: [1, 0, 0, 0], velocity: [0, 0.02, 0, 0] },
+        { ...STALE, memoryId: b.id, position: [0.6, 0.8, 0, 0], velocity: [0, 0, 0, 0] },
+        { ...STALE, memoryId: c.id, position: [0, 0.6, 0.8, 0], velocity: [0.01, 0, 0, 0] },
+      ]);
+    } finally {
+      closeHippoDb(db);
+    }
+    return { a: a.id, b: b.id, c: c.id };
+  }
+
+  const cosine = (x: number[], y: number[]) => x.reduce((sum, v, i) => sum + v * y[i], 0);
+
+  it('refreshes each stored particle from its memory, moves it under the survivors conflicts and half-lives, and stores the result', async () => {
+    const ids = seedConflictingParticles(true);
+    const now = new Date();
+    const seeded = storedParticles();
+    const entries = loadAllEntries(tmpDir);
+    expect(entries.find((e) => e.id === ids.a)?.conflicts_with).toEqual([ids.b]);
+    expect(entries.map((e) => e.half_life_days)).toEqual([30, 30, 30]);
+
+    // The same steps the pass must take, on the same particles in the same order.
+    const expected = seeded.map((p) => ({ ...p, position: [...p.position], velocity: [...p.velocity] }));
+    refreshParticleProperties(expected, new Map(entries.map((e) => [e.id, e])), now);
+    const stats = simulate(expected, {
+      conflictPairs: new Map(entries.filter((e) => e.conflicts_with.length > 0).map((e) => [e.id, new Set(e.conflicts_with)])),
+      halfLives: new Map(entries.map((e) => [e.id, e.half_life_days])),
+      config: loadConfig(tmpDir).physics,
+    });
+
+    const result = await consolidate(tmpDir, { now });
+
+    expect(result.physicsSimulated).toBe(3);
+    expect(result.details).toContain(
+      `  ⚛️  physics: 3 particles, avg vel ${stats.avgVelocityMagnitude.toFixed(4)}, energy ${stats.energy.total.toFixed(4)}`,
+    );
+    const stored = new Map(storedParticles().map((p) => [p.memoryId, p]));
+    for (const want of expected) {
+      const got = stored.get(want.memoryId)!;
+      expect(got.position).toEqual(want.position.map(Math.fround));
+      expect(got.velocity).toEqual(want.velocity.map(Math.fround));
+      expect({ mass: got.mass, charge: got.charge, temperature: got.temperature })
+        .toEqual({ mass: want.mass, charge: want.charge, temperature: want.temperature });
+      expect(got.lastSimulation).not.toBe(STALE.lastSimulation);
+    }
+
+    // The stale properties are gone, and the conflicting pair ends further apart than it started.
+    const [a, b] = [stored.get(ids.a)!, stored.get(ids.b)!];
+    expect(a.mass).toBeLessThan(2);
+    expect(a.charge).toBe(0);
+    expect(cosine(a.position, b.position)).toBeLessThan(0.6);
+  });
+
+  it('leaves the stored particles alone on a dry run', async () => {
+    seedConflictingParticles(true);
+    const seeded = storedParticles();
+
+    const result = await consolidate(tmpDir, { now: new Date(), dryRun: true });
+
+    expect(result.physicsSimulated).toBe(0);
+    expect(storedParticles()).toEqual(seeded);
+  });
+
+  it('leaves the stored particles alone when physics is off, and reports nothing when none is stored', async () => {
+    seedConflictingParticles(false);
+    const seeded = storedParticles();
+    const off = await consolidate(tmpDir, { now: new Date() });
+    expect(off.physicsSimulated).toBe(0);
+    expect(storedParticles()).toEqual(seeded);
+
+    const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-consolidate-nophysics-'));
+    try {
+      initStore(empty);
+      fs.writeFileSync(path.join(empty, 'config.json'), JSON.stringify({ physics: { enabled: true } }), 'utf8');
+      writeEntry(empty, createMemory7('A memory with no particle stored for it'));
+      const result = await consolidate(empty, { now: new Date() });
+      expect(result.physicsSimulated).toBe(0);
+      expect(result.details.filter((line) => line.includes('physics'))).toEqual([]);
+    } finally {
+      fs.rmSync(empty, { recursive: true, force: true });
+    }
   });
 });

@@ -1,8 +1,8 @@
 {
   "id": "hippo-memory",
   "name": "Hippo Memory",
-  "description": "Memory for AI agents that learns what is wrong and ranks it down. Injects context at session start and captures errors.",
-  "version": "1.62.0",
+  "description": "Make your agent's memory work like a brain. Hippo is long-term memory for coding agents.",
+  "version": "1.70.0",
 
   "configSchema": {
     "type": "object",

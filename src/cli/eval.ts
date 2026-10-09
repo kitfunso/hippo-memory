@@ -2,23 +2,33 @@
 
 import * as path from 'path';
 import * as fs from 'fs';
-import type { MemoryEntry } from '../memory.js';
+import type { MemoryEntry } from '../core/memory.js';
 import { loadAllEntries } from '../store/entry-reads.js';
-import { loadConfig } from '../config.js';
-import { getGlobalRoot } from '../shared.js';
-import { runEval, bootstrapCorpus, compareSummaries, type EvalCase, type EvalSummary } from '../eval.js';
-import { runFeatureEval, formatResult, resultToBaseline, detectRegressions, type EvalBaseline } from '../eval-suite.js';
-import { PACKAGE_VERSION } from '../version.js';
+import { loadConfig } from '../core/config.js';
+import { getGlobalRoot } from '../sharing/global-store.js';
+import { runEval, bootstrapCorpus, compareSummaries, type EvalCase, type EvalSummary } from '../eval/eval.js';
+import { runFeatureEval, formatResult, resultToBaseline, detectRegressions, type EvalBaseline } from '../eval/eval-suite.js';
+import { PACKAGE_VERSION } from '../util/version.js';
 import { printError } from './output.js';
-import { requireInit, fmt, type CliFlags, type CommandContext } from './shared.js';
+import { requireInit } from './shared.js';
+import { fmt } from './print.js';
+import { type CliFlags, type CommandContext, boolFlag } from './flag-values.js';
+import { errorMessage } from '../util/log.js';
+
+const HIT_TOP_K = 10;
+const MAX_FAILING_SHOWN = 10;
+const TOP_IDS_SHOWN = 3;
+const MAX_MISSED_SHOWN = 4;
+const QUERY_PREVIEW_CHARS = 60;
+const MAX_DELTAS_SHOWN = 5;
 
 /** Runs `hippo eval`: --bootstrap writes a corpus, --suite runs the built-in feature eval, else it scores a corpus file. */
-export async function cmdEval(
+async function cmdEval(
   hippoRoot: string,
   corpusPath: string | null,
-  flags: Record<string, string | boolean | string[]>
+  flags: CliFlags
 ): Promise<void> {
-  const asJson = Boolean(flags['json']);
+  const asJson = boolFlag(flags, 'json');
   const minMrr = flags['min-mrr'] !== undefined ? parseFloat(String(flags['min-mrr'])) : null;
   const comparePath = flags['compare'] ? String(flags['compare']) : null;
 
@@ -37,27 +47,12 @@ export async function cmdEval(
     return;
   }
 
-  const cases = readCorpus(corpusPath);
-  const globalRoot = getGlobalRoot();
-  const localBump = flags['equal-sources']
-    ? 1.0
-    : flags['local-bump'] !== undefined
-      ? parseFloat(String(flags['local-bump']))
-      : loadConfig(hippoRoot).search.localBump;
-
-  const summary = await runEval(cases, entries, {
-    hippoRoot,
-    globalRoot,
-    mmr: !flags['no-mmr'],
-    mmrLambda: flags['mmr-lambda'] !== undefined ? parseFloat(String(flags['mmr-lambda'])) : undefined,
-    embeddingWeight: flags['embedding-weight'] !== undefined ? parseFloat(String(flags['embedding-weight'])) : undefined,
-    localBump,
-  });
+  const summary = await runCorpusEval(hippoRoot, corpusPath, entries, flags);
 
   if (asJson) {
     console.log(JSON.stringify(summary, null, 2));
   } else {
-    printEvalSummary(summary, Boolean(flags['show-cases']));
+    printEvalSummary(summary, boolFlag(flags, 'show-cases'));
   }
 
   if (minMrr !== null && summary.meanMrr < minMrr) {
@@ -66,6 +61,30 @@ export async function cmdEval(
   }
 
   if (comparePath) printEvalCompare(summary, comparePath, asJson);
+}
+
+async function runCorpusEval(
+  hippoRoot: string,
+  corpusPath: string | null,
+  entries: MemoryEntry[],
+  flags: CliFlags,
+): Promise<EvalSummary> {
+  const cases = readCorpus(corpusPath);
+  const globalRoot = getGlobalRoot();
+  const localBump = flags['equal-sources']
+    ? 1.0
+    : flags['local-bump'] !== undefined
+      ? parseFloat(String(flags['local-bump']))
+      : loadConfig(hippoRoot).search.localBump;
+
+  return runEval(cases, entries, {
+    hippoRoot,
+    globalRoot,
+    mmr: !flags['no-mmr'],
+    mmrLambda: flags['mmr-lambda'] !== undefined ? parseFloat(String(flags['mmr-lambda'])) : undefined,
+    embeddingWeight: flags['embedding-weight'] !== undefined ? parseFloat(String(flags['embedding-weight'])) : undefined,
+    localBump,
+  });
 }
 
 /** Bootstrap mode: emit a synthetic corpus built from the store's own memories. */
@@ -87,8 +106,11 @@ function writeBootstrapCorpus(entries: MemoryEntry[], flags: CliFlags): void {
 async function runEvalSuite(hippoRoot: string, flags: CliFlags, asJson: boolean, minMrr: number | null): Promise<void> {
   const baselinePath = flags['baseline'] ? String(flags['baseline']) : path.join(hippoRoot, 'eval-baseline.json');
   let baseline: EvalBaseline | undefined;
-  if (fs.existsSync(baselinePath)) {
-    try { baseline = JSON.parse(fs.readFileSync(baselinePath, 'utf8')); } catch {
+  try {
+    baseline = JSON.parse(fs.readFileSync(baselinePath, 'utf8'));
+  } catch (err) {
+    // No baseline file is a first run and says nothing; a file that is there and cannot be used warns.
+    if (!(err instanceof Error && 'code' in err && err.code === 'ENOENT')) {
       printError(`Warning: eval baseline ${baselinePath} is unreadable; running without it.`);
     }
   }
@@ -134,7 +156,7 @@ function readCorpus(corpusPath: string | null): EvalCase[] {
     cases = Array.isArray(raw) ? raw : raw.cases;
     if (!Array.isArray(cases)) throw new Error('Corpus JSON must be an array or { cases: [...] }');
   } catch (err) {
-    printError(`Failed to read corpus: ${err instanceof Error ? err.message : err}`);
+    printError(`Failed to read corpus: ${errorMessage(err)}`);
     process.exit(1);
   }
   return cases;
@@ -154,14 +176,14 @@ function printEvalSummary(summary: EvalSummary, showCases: boolean): void {
     for (const c of summary.cases) {
       const exp = c.case.expectedIds.length;
       const expectedSet = new Set(c.case.expectedIds);
-      const hitTop10 = c.returnedIds.slice(0, 10).filter((id) => expectedSet.has(id));
-      const missed = c.case.expectedIds.filter((id) => !c.returnedIds.slice(0, 10).includes(id));
+      const hitTop10 = c.returnedIds.slice(0, HIT_TOP_K).filter((id) => expectedSet.has(id));
+      const missed = c.case.expectedIds.filter((id) => !c.returnedIds.slice(0, HIT_TOP_K).includes(id));
       console.log();
       console.log(`[${c.case.id}] R@10=${fmt(c.recallAt10, 2)}  MRR=${fmt(c.mrr, 2)}  expected=${exp}  hit=${hitTop10.length}`);
       console.log(`  query: ${c.case.query}`);
-      console.log(`  top 3: ${c.returnedIds.slice(0, 3).join(', ') || '(none)'}`);
+      console.log(`  top 3: ${c.returnedIds.slice(0, TOP_IDS_SHOWN).join(', ') || '(none)'}`);
       if (missed.length > 0) {
-        const shown = missed.slice(0, 4);
+        const shown = missed.slice(0, MAX_MISSED_SHOWN);
         const more = missed.length > shown.length ? ` +${missed.length - shown.length} more` : '';
         console.log(`  missed: ${shown.join(', ')}${more}`);
       }
@@ -172,8 +194,8 @@ function printEvalSummary(summary: EvalSummary, showCases: boolean): void {
   const failing = summary.cases.filter((c) => c.mrr === 0);
   if (failing.length > 0) {
     console.log(`${failing.length} case(s) returned zero relevant results:`);
-    for (const f of failing.slice(0, 10)) {
-      console.log(`  [${f.case.id}] "${f.case.query.slice(0, 60)}"`);
+    for (const f of failing.slice(0, MAX_FAILING_SHOWN)) {
+      console.log(`  [${f.case.id}] "${f.case.query.slice(0, QUERY_PREVIEW_CHARS)}"`);
     }
     if (failing.length > 10) console.log(`  ...and ${failing.length - 10} more`);
   }
@@ -188,7 +210,7 @@ function printEvalCompare(summary: EvalSummary, comparePath: string, asJson: boo
   try {
     baseline = JSON.parse(fs.readFileSync(comparePath, 'utf8'));
   } catch (err) {
-    printError(`Failed to parse baseline: ${err instanceof Error ? err.message : err}`);
+    printError(`Failed to parse baseline: ${errorMessage(err)}`);
     process.exit(1);
   }
   const cmp = compareSummaries(baseline, summary);
@@ -213,11 +235,11 @@ function printEvalCompare(summary: EvalSummary, comparePath: string, asJson: boo
 
   const showPerCase = cmp.improved.length + cmp.regressed.length > 0;
   if (showPerCase) {
-    for (const d of cmp.improved.slice(0, 5)) {
+    for (const d of cmp.improved.slice(0, MAX_DELTAS_SHOWN)) {
       const delta = d.ndcgAfter - d.ndcgBefore;
       console.log(`  + [${d.id}] NDCG ${fmt(d.ndcgBefore, 2)} -> ${fmt(d.ndcgAfter, 2)} (+${fmt(delta, 3)})`);
     }
-    for (const d of cmp.regressed.slice(0, 5)) {
+    for (const d of cmp.regressed.slice(0, MAX_DELTAS_SHOWN)) {
       const delta = d.ndcgAfter - d.ndcgBefore;
       console.log(`  - [${d.id}] NDCG ${fmt(d.ndcgBefore, 2)} -> ${fmt(d.ndcgAfter, 2)} (${fmt(delta, 3)})`);
     }

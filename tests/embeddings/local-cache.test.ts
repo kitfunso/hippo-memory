@@ -1,18 +1,5 @@
-/**
- * TDD test for HIPPO_MODEL_CACHE env var support.
- *
- * When HIPPO_MODEL_CACHE is set, src/embeddings.ts must configure
- * Transformers.js to load the model from the local directory
- * rather than downloading it from HuggingFace. This test runs offline.
- *
- * Expected: 384-dim vector produced by Xenova/all-MiniLM-L6-v2.
- *
- * Implementation note: Transformers.js is loaded via `new Function` in
- * src/embeddings.ts to bypass TypeScript's static module resolution. That
- * technique fails inside vitest's VM sandbox (ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING).
- * We therefore run the actual embedding call in a child Node.js process that
- * executes outside the VM, and assert on the JSON result.
- */
+// HIPPO_MODEL_CACHE makes the local embedding backend load its model from a folder, with no download.
+// The embedding runs in a child process: the backend loads Transformers.js by a dynamic import that vitest's VM cannot serve.
 import { describe, it, expect } from 'vitest';
 import { execFileSync } from 'child_process';
 import { existsSync } from 'fs';
@@ -21,27 +8,22 @@ import * as url from 'url';
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '../../');
-const MODEL_CACHE = path.join(REPO_ROOT, 'benchmarks/longmemeval/data/model-cache');
-
-// This is an integration test, not a pure unit test: it shells out to the
-// compiled dist/local-embedding.js and loads a vendored model from
-// HIPPO_MODEL_CACHE. Neither is available in a clean CI checkout — `npm test`
-// does not run `npm run build`, and the model cache under
-// benchmarks/longmemeval/data/model-cache/ is gitignored (vendored weights).
-// When those prerequisites are absent the test skips rather than failing, so
-// the default `npm test` stays reliably green; it runs in full for a developer
-// who has run `npm run build` and vendored the Xenova/all-MiniLM-L6-v2 weights.
-const DIST_EMBEDDINGS = path.join(REPO_ROOT, 'dist/local-embedding.js');
+// The CI job that has already fetched the weights points this at them; a developer vendors them under benchmarks/.
+const MODEL_CACHE = process.env.HIPPO_MODEL_CACHE || path.join(REPO_ROOT, 'benchmarks/longmemeval/data/model-cache');
+const DIST_EMBEDDINGS = path.join(REPO_ROOT, 'dist/store/embeddings/local.js');
 const MINILM_DIR = path.join(MODEL_CACHE, 'Xenova/all-MiniLM-L6-v2');
-const prereqsMet = existsSync(DIST_EMBEDDINGS) && existsSync(MINILM_DIR);
 
 describe('local-cache: HIPPO_MODEL_CACHE', () => {
-  it.skipIf(!prereqsMet)('produces a 384-dim embedding vector without network access', () => {
+  it('produces a 384-dim embedding vector without network access', (ctx) => {
+    // The weights are not in a clean checkout, so this skips there; the job that has them sets the flag, and there a missing folder fails.
+    if (!process.env.HIPPO_REQUIRE_MODEL_CACHE && !(existsSync(DIST_EMBEDDINGS) && existsSync(MINILM_DIR))) ctx.skip();
+    expect(existsSync(MINILM_DIR)).toBe(true);
+
     // Build a tiny Node.js script that exercises getEmbedding() directly.
-    // We use dist/local-embedding.js (compiled output) so the regular import()
+    // We use dist/store/embeddings/local.js (compiled output) so the regular import()
     // call works outside vitest's VM context.
     const script = `
-import { getEmbedding } from '${REPO_ROOT}/dist/local-embedding.js';
+import { getEmbedding } from '${url.pathToFileURL(DIST_EMBEDDINGS).href}';
 const vector = await getEmbedding('hello world');
 process.stdout.write(JSON.stringify({ length: vector.length, first3: vector.slice(0, 3) }));
 `;

@@ -2,14 +2,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, mkdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { restoreDormant } from '../src/api.js';
+import { createRequire } from 'node:module';
+import { restoreDormant, supersede } from '../src/api/index.js';
+import type { DatabaseSyncLike } from '../src/db/index.js';
 import { consolidate } from '../src/consolidate/sleep.js';
 import { importAtSessionEnd, importForStore, importProjectMemories, type Machine } from '../src/agent-memories/sync.js';
 import type { ImportReport } from '../src/agent-memories/report.js';
-import { insertDormantRow } from '../src/dormant.js';
-import { Layer, type MemoryEntry } from '../src/memory.js';
+import { insertDormantRow } from '../src/store/dormant.js';
+import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { deriveOriginProject } from '../src/project-identity.js';
+import { deriveOriginProject } from '../src/core/project-identity.js';
 import { removeEntryMirrors } from '../src/store/mirrors.js';
 import { isInitialized } from '../src/store/open.js';
 import { deleteEntryRowInTx, writeEntry } from '../src/store/entry-writes.js';
@@ -18,6 +20,9 @@ import {
   agentRows, auditCount, closeWorld, ctxFor, dormantRows, expectedContainer, liveRows, liveTexts, note, openWorld, projectNotes, sha,
   tally, toolTally, withDb, type World,
 } from './_helpers/agent-memories-world.js';
+
+// Every sync asks git for each folder's layout in a child process, and a case runs several syncs.
+vi.setConfig({ testTimeout: 30_000 });
 
 const DEPLOY = 'Run the schema check before this service deploys.';
 const STAGING = 'The staging database moved to the eu-central region.';
@@ -30,6 +35,9 @@ beforeEach(() => {
 });
 afterEach(() => closeWorld(w));
 
+// SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike.
+const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as { DatabaseSync: { prototype: DatabaseSyncLike } };
+
 const sync = (): ImportReport => importForStore(w.local, { machine: w.machine });
 const claude = (report: ImportReport) => toolTally(report, 'claude-code');
 
@@ -39,7 +47,7 @@ function legacyRow(content: string, file: string): MemoryEntry {
   return entry;
 }
 
-describe('agent memory sync: the PR 2 list', () => {
+describe('agent memory sync', () => {
   it('a new note is imported as one tagged, distilled row keyed by its folder, file and hash', () => {
     const dir = projectNotes(w);
     note(dir, 'deploy.md', DEPLOY);
@@ -148,6 +156,32 @@ describe('agent memory sync: the PR 2 list', () => {
     expect(readEntry(w.local, edited.id)?.superseded_by).toBe(staging?.id);
     expect(readEntry(w.local, foreign.id)).toMatchObject({ source: 'claude-memory:billing.md', superseded_by: null });
     expect(liveTexts(w.local)).toEqual([DEPLOY, STAGING].sort());
+  });
+
+  // The legacy match reads its rows before the container's transaction, so only the guarded UPDATE sees the other writer.
+  it('a legacy row another writer superseded after the import matched it keeps the successor that writer gave it', () => {
+    note(projectNotes(w), 'staging.md', STAGING);
+    const edited = legacyRow('The staging database lives in us-east.', 'staging.md');
+
+    const winners: string[] = [];
+    let raced = false;
+    const { exec } = DatabaseSync.prototype;
+    vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (this: DatabaseSyncLike, sql: string) {
+      // The import's first lock request: the other writer commits on its own connection, then the import goes on.
+      if (sql === 'BEGIN IMMEDIATE' && !raced) {
+        raced = true;
+        winners.push(supersede(ctxFor(w.local), edited.id, 'The staging database lives in ap-south.').newId);
+      }
+      exec.call(this, sql);
+    });
+    const report = sync();
+    vi.restoreAllMocks();
+
+    // replaced: the plan still held the row, so the import did reach its supersede step with a stale copy.
+    expect(claude(report)).toMatchObject({ replaced: 1, imported: 0 });
+    expect(winners).toHaveLength(1);
+    expect(readEntry(w.local, edited.id)?.superseded_by).toBe(winners[0]);
+    expect(auditCount(w.local, 'supersede')).toBe(1);
   });
 
   it('an old row with an email in clear matches its masked note, and a copy already imported collapses into one row', () => {

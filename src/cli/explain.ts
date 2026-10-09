@@ -1,31 +1,24 @@
 // The `hippo explain` verb; main() loads it lazily from the command table.
 
-import { confidenceFacets } from '../memory.js';
+import { confidenceFacets } from '../core/memory.js';
 import { isInitialized } from '../store/open.js';
 import { loadSearchEntries } from '../store/search-rows.js';
 import { loadIndex } from '../store/index-and-stats.js';
-import type { SearchResult } from '../search/types.js';
-import { loadConfig } from '../config.js';
-import { dropHeldCopies } from '../same-text.js';
-import { detectScope } from '../scope.js';
-import { getGlobalRoot } from '../shared.js';
-import * as api from '../api.js';
-import { resolveTenantId } from '../tenant.js';
-import { rankRecall } from '../recall-pipeline.js';
-import { printedTokens } from '../context-render.js';
+import { DEFAULT_RECALL_BUDGET, type SearchResult } from '../core/search-types.js';
+import { loadConfig } from '../core/config.js';
+import { dropHeldCopies } from '../util/same-text.js';
+import { detectScope } from '../sharing/scope.js';
+import { getGlobalRoot } from '../sharing/global-store.js';
+import * as api from '../api/index.js';
+import { resolveTenantId } from '../store/tenant.js';
+import type { RankRecallResult } from '../api/recall-pipeline.js';
+import { printedTokens } from '../api/context-render.js';
 import { printError } from './output.js';
-import {
-  parseLimitFlag,
-  parseBudgetFlag,
-  requireInit,
-  fmt,
-  recallEntryText,
-  recallHeading,
-  type CliFlags,
-  type CommandContext,
-  parseAsOfFlag,
-  engineFlags,
-} from './shared.js';
+import { parseLimitFlag, parseBudgetFlag, type CliFlags, type CommandContext, parseAsOfFlag, engineFlags, boolFlag } from './flag-values.js';
+import { requireInit } from './shared.js';
+import { fmt, recallEntryText, recallHeading } from './print.js';
+
+const EXPLAIN_PREVIEW_CHARS = 48;
 
 /** The SQL predicate drops denied rows before the window, so an unscoped probe counts what the policy hides. */
 function noteScopeHidden(hippoRoot: string, globalRoot: string | undefined, query: string, tenantId: string, requested: string | undefined): void {
@@ -40,6 +33,9 @@ function noteScopeHidden(hippoRoot: string, globalRoot: string | undefined, quer
   }
 }
 
+/** Where the read-only ranking lands; a `let` the callback assigned would read as never-assigned after the await. */
+interface InspectedSlot { rank?: RankRecallResult }
+
 export async function cmdExplain(
   hippoRoot: string,
   query: string,
@@ -47,10 +43,10 @@ export async function cmdExplain(
 ): Promise<void> {
   requireInit(hippoRoot);
 
-  const budget = parseBudgetFlag(flags['budget'], 4000);
+  const budget = parseBudgetFlag(flags['budget'], DEFAULT_RECALL_BUDGET);
   const limit = parseLimitFlag(flags['limit']);
-  const asJson = Boolean(flags['json']);
-  const includeSuperseded = Boolean(flags['include-superseded']);
+  const asJson = boolFlag(flags, 'json');
+  const includeSuperseded = boolFlag(flags, 'include-superseded');
   const asOf = parseAsOfFlag(flags);
   const globalRoot = getGlobalRoot();
   const tenantId = resolveTenantId({});
@@ -68,16 +64,30 @@ export async function cmdExplain(
     printedTokens(recallEntryText(r, query, false, explainGlobalOn && !explainIndex.entries[r.entry.id]));
   const entryBudget = Math.max(0, budget - printedTokens(recallHeading(budget, budget, query)));
 
-  const rank = await rankRecall(
-    { hippoRoot, globalRoot: explainGlobalOn ? globalRoot : undefined, tenantId },
+  const slot: InspectedSlot = {};
+  await api.retrieve(
+    { hippoRoot, tenantId, actor: api.adminActor('cli') },
     {
-      query, budget: entryBudget, cost, limit, includeSuperseded, asOf,
-      explicitScope, activeScope: explicitScope || detectScope(),
-      search: { ...engine, multihop: false, explain: true },
+      query,
+      cliCore: {
+        rank: {
+          budget: entryBudget, cost, limit, includeSuperseded, asOf,
+          explicitScope, activeScope: explicitScope || detectScope(),
+          search: { ...engine, multihop: false, explain: true },
+        },
+        sources: { globalRoot: explainGlobalOn ? globalRoot : undefined },
+        inspect: (ranking) => { slot.rank = ranking; },
+      },
     },
   );
+  const rank = slot.rank;
+  if (!rank) throw new Error('explain ranked but inspected nothing');
+  printExplainResults(rank, engine.usePhysics, query, asJson);
+}
+
+function printExplainResults(rank: RankRecallResult, usePhysics: boolean, query: string, asJson: boolean): void {
   const hasGlobal = rank.globalEntries.length > 0;
-  const modeUsed: 'physics' | 'searchBothHybrid' | 'hybrid' = engine.usePhysics && !hasGlobal
+  const modeUsed: 'physics' | 'searchBothHybrid' | 'hybrid' = usePhysics && !hasGlobal
     ? 'physics'
     : hasGlobal ? 'searchBothHybrid' : 'hybrid';
   const results = dropHeldCopies(rank.results, (r) => r.entry);
@@ -131,7 +141,7 @@ function printExplainTable(results: SearchResult[], query: string, modeUsed: str
   for (let i = 0; i < results.length; i++) {
     const r = results[i];
     const b = r.breakdown;
-    const preview = r.entry.content.replace(/\s+/g, ' ').slice(0, 48);
+    const preview = r.entry.content.replace(/\s+/g, ' ').slice(0, EXPLAIN_PREVIEW_CHARS);
     const ageStr = b ? `${b.ageDays}d` : '?';
     console.log(
       `${String(i + 1).padEnd(5)} ${fmt(r.score, 3).padEnd(7)} ${fmt(r.entry.strength).padEnd(9)} ${ageStr.padEnd(6)} ${r.entry.layer.padEnd(10)} ${r.entry.id.padEnd(17)} ${preview}`,

@@ -75,9 +75,9 @@ const TRG_DECISIONS_SUPERSEDE_TENANT_MATCH_UPDATE = `
 export const v30: Migration = {
     version: 30,
     up: (db) => {
-      // E2 decision first-class object (docs/plans/2026-05-28-e2-decision-object.md).
+      // Decision first-class object.
       // Promotes `hippo decide` from a tagged memory (which decayed on a 90-day
-      // half-life even while the decision was still in force) to a canonical
+      // half-life even while the decision was still in force) to a dedicated
       // decisions table that is the source of truth. The memory mirror is kept
       // for recall but is no longer authoritative; memory_id is NULLABLE with
       // ON DELETE SET NULL so forget/consolidate/archive does not lose a

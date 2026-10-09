@@ -1,11 +1,11 @@
 /**
- * EVAL-ONLY lifecycle ablation flags (src/ablation.ts).
+ * EVAL-ONLY lifecycle ablation flags (src/core/ablation.ts).
  *
  * Pre-registered design rev #10 requirement: each flag must neutralize ONLY
  * its intended mechanism. Every block therefore asserts BOTH the ablation
  * (target mechanism off) AND the isolation (the other mechanisms intact).
  *
- * Env isolation pattern (canonical: tests/emotional-multipliers-j5.test.ts):
+ * Env isolation pattern (see tests/emotional-multipliers.test.ts):
  * beforeEach AND afterEach clear all ablation env vars + reset the module
  * cache, so no test leaks flags into the next.
  */
@@ -21,11 +21,11 @@ import {
   applyOutcome,
   type MemoryEntry,
   DEFAULT_HALF_LIFE_DAYS,
-} from '../src/memory.js';
+} from '../src/core/memory.js';
 import { hybridSearch } from '../src/search/hybrid.js';
 import { outcomeMultiplier } from '../src/search/boosts.js';
-import { markRetrieved } from '../src/memory.js';
-import { evalNow, _resetAblationCacheForTests } from '../src/ablation.js';
+import { markRetrieved } from '../src/core/memory.js';
+import { evalNow, _resetAblationCacheForTests } from '../src/core/ablation.js';
 
 const ABLATION_ENV_VARS = [
   'HIPPO_ABLATE_DECAY',
@@ -215,7 +215,7 @@ describe('HIPPO_ABLATE_RECALL_BOOST', () => {
     // functions apply ablated semantics internally, so a heavily-recalled
     // entry and an untouched twin produce the SAME mass - no history leaks
     // through either the count multiplier or the frozen-strength component.
-    const { computeMass } = await import('../src/physics.js');
+    const { computeMass } = await import('../src/core/physics.js');
     const created = new Date(NOW.getTime() - 10 * 24 * 60 * 60 * 1000).toISOString();
     const hot = agedMemory(10);
     hot.created = created;
@@ -247,7 +247,7 @@ describe('HIPPO_ABLATE_RECALL_BOOST', () => {
     // Query gravity ranks the physics pool by particle mass, which scales with
     // retrieval_count; under the flag, mass must ignore retrieval history in
     // both the init and refresh paths (computeMass is the single shared site).
-    const { computeMass } = await import('../src/physics.js');
+    const { computeMass } = await import('../src/core/physics.js');
     expect(computeMass(0.8, 16)).toBe(computeMass(0.8, 0));
     // Sanity: WITHOUT the flag, history raises mass.
     clearAblationEnv();
@@ -320,7 +320,7 @@ describe('HIPPO_ABLATE_OUTCOME', () => {
     // outcome-positive memories and then strengthens them via markRetrieved -
     // an outcome-dependent lifecycle path that must also go quiet in the
     // outcome-off arm.
-    const { replayPriority } = await import('../src/replay.js');
+    const { replayPriority } = await import('../src/consolidate/replay.js');
     let rewarded = agedMemory(5, 'replay candidate');
     rewarded = applyOutcome(applyOutcome(rewarded, true), true);
     const plain = agedMemory(5, 'replay candidate');
@@ -412,8 +412,10 @@ describe('HIPPO_FAKE_NOW', () => {
   it('invalid value falls back to the real clock', () => {
     process.env.HIPPO_FAKE_NOW = 'not-a-date';
     _resetAblationCacheForTests();
-    const drift = Math.abs(evalNow().getTime() - Date.now());
-    expect(drift).toBeLessThan(5000);
+    const before = Date.now();
+    const now = evalNow().getTime();
+    expect(now).toBeGreaterThanOrEqual(before);
+    expect(now).toBeLessThanOrEqual(Date.now());
   });
 
   it('rejects non-canonical formats Date.parse would accept (codex P2)', () => {
@@ -432,8 +434,10 @@ describe('HIPPO_FAKE_NOW', () => {
     ]) {
       process.env.HIPPO_FAKE_NOW = junk;
       _resetAblationCacheForTests();
-      const drift = Math.abs(evalNow().getTime() - Date.now());
-      expect(drift, `format '${junk}' must fall back to real clock`).toBeLessThan(5000);
+      const before = Date.now();
+      const now = evalNow().getTime();
+      expect(now, `format '${junk}' must fall back to real clock`).toBeGreaterThanOrEqual(before);
+      expect(now, `format '${junk}' must fall back to real clock`).toBeLessThanOrEqual(Date.now());
     }
   });
 
@@ -443,7 +447,7 @@ describe('HIPPO_FAKE_NOW', () => {
     // itself must honor the fake clock.
     process.env.HIPPO_FAKE_NOW = '2030-01-01T00:00:00.000Z';
     _resetAblationCacheForTests();
-    const { searchBothHybrid } = await import('../src/shared.js');
+    const { searchBothHybrid } = await import('../src/sharing/search-both.js');
     const m = createMemory('wrapper clock consistency check', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     m.created = '2026-06-11T00:00:00.000Z'; // dated 2026, ancient against the 2030 clock
     m.last_retrieved = '2026-06-11T00:00:00.000Z';

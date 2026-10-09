@@ -9,6 +9,7 @@ import * as crypto from 'node:crypto';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { mulberry32 } from './lib/prng.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..');
@@ -21,22 +22,11 @@ const LEDGER_COMPARE = process.argv.includes('--ledger-compare');
 const CONTENTION = process.argv.includes('--contention');
 
 // Windows dynamic import() needs a file:// URL, not a raw drive path.
-const { createMemory } = await import(pathToFileURL(path.join(REPO, 'dist', 'memory.js')));
+const { createMemory } = await import(pathToFileURL(path.join(REPO, 'dist', 'core/memory.js')));
 const { initStore } = await import(pathToFileURL(path.join(REPO, 'dist', 'store', 'open.js')));
 const { writeEntry } = await import(pathToFileURL(path.join(REPO, 'dist', 'store', 'entry-writes.js')));
 
 // Same seed, vocabulary and prompts as scripts/z1-latency.mjs, so the context numbers compare.
-function mulberry32(seed) {
-  let s = seed >>> 0;
-  return function () {
-    s = (s + 0x6d2b79f5) >>> 0;
-    let t = s;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
 const WORDS = [
   'deploy', 'rollback', 'migration', 'postgres', 'timeout', 'kubernetes', 'cluster',
   'incident', 'latency', 'budget', 'token', 'schema', 'index', 'cache', 'retry',
@@ -116,7 +106,7 @@ const failure = (text) => JSON.stringify({
 
 const WARMUPS = 3;
 const LEDGER_ENV = Object.fromEntries(Object.entries(process.env).filter(([k]) =>
-  !['HIPPO_SESSION_ID', 'CLAUDE_CODE_SESSION_ID', 'HIPPO_TEST_DELIVERY_FAULT', 'HIPPO_FAKE_NOW'].includes(k)));
+  !['HIPPO_SESSION_ID', 'CLAUDE_CODE_SESSION_ID', 'HIPPO_FAKE_NOW'].includes(k)));
 // Holds the write lock 30 ms at a time, so a ledger write meets a busy store.
 const CONTENDER = `const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[1]);
@@ -234,7 +224,7 @@ function checkBounds(arms) {
 }
 
 async function ledgerCompare() {
-  const { estimateTokens } = await import(pathToFileURL(path.join(REPO, 'dist', 'token-ledger.js')));
+  const { estimateTokens } = await import(pathToFileURL(path.join(REPO, 'dist', 'util', 'token-text.js')));
   const stores = [];
   const arms = {};
   try {

@@ -1,11 +1,11 @@
-import { envForceLikePath } from '../env.js';
-import type { MemoryEntry } from '../memory.js';
-import { openHippoDb, isFtsAvailable, closeHippoDb, type DatabaseSyncLike } from '../db.js';
-import { tokenize } from '../tokenize.js';
-import { RECALL_DEFAULT_DENY_SCOPES } from '../recall-scope.js';
-import { RAREST_TERM_COUNT, rarestPromptTerms } from '../prompt-recall.js';
-import { log } from '../log.js';
-import { topVectorMatches } from '../vector-store.js';
+import type { MemoryEntry } from '../core/memory.js';
+import { openHippoDb, isFtsAvailable, closeHippoDb, type DatabaseSyncLike } from '../db/index.js';
+import { tokenize } from '../util/tokenize.js';
+import { isPersonalScope, scopeAdmitSql, type SqlFragment } from './recall-scope.js';
+import { ftsTermParts, RAREST_TERM_COUNT, rarestFtsQuery } from '../core/prompt-recall.js';
+import { errorMessage, log } from '../util/log.js';
+import { originInSql } from '../core/project-identity.js';
+import { topVectorMatches } from '../db/vector-store.js';
 import {
   type MemoryRow,
   MEMORY_SELECT_COLUMNS,
@@ -14,65 +14,51 @@ import {
   rowToEntry,
 } from './rows.js';
 import { openStore } from './open.js';
+import { escapeLike } from '../util/escape.js';
 
 /**
- * v1.7.2 — recall-mode scope filter shape, exported so callers
- * (`loadRecallSearchEntries`) and tests can refer to it symbolically without
- * `Parameters<typeof loadSearchRows>[N]` indirection.
- *
- * Three modes:
- *   - 'default-deny' — exclude scopes in `RECALL_DEFAULT_DENY_SCOPES` (T2).
- *   - 'exact' — exact match on `m.scope = value` (api.recall's explicit-scope
- *     request semantics).
- *   - 'default-deny-or-exact' (v1.25.0) — the default-admitted set PLUS rows
- *     whose scope equals `value`. This is the CLI `--scope` semantics: the
- *     flag predates the envelope column as a TAG-boost ranking hint
- *     (`scope:<v>` tags, HIPPO_SCOPE), so an explicit flag must UNLOCK the
- *     named envelope scope in addition to the normal set rather than narrow
- *     the result to it — narrowing would return zero rows for every
- *     tag-scoped workflow (envelope scope NULL). Strictly safer than the
- *     pre-v1.25.0 CLI behavior (no filter at all): other private scopes and
- *     quarantine buckets stay denied.
+ * Recall-mode scope filter shape, exported so callers and tests can name it. Three modes:
+ *   - 'default-deny': exclude scopes in `RECALL_DEFAULT_DENY_SCOPES`.
+ *   - 'exact': exact match on `m.scope = value` (api.recall's explicit-scope request semantics).
+ *   - 'default-deny-or-exact': the default-admitted set PLUS rows whose scope equals `value` (CLI `--scope`).
+ *     The flag began as a tag-boost hint, so narrowing would return zero rows for tag-scoped workflows.
  *
  * Background pipelines (`consolidate`, `embeddings`, `refine-llm`, ...) call
  * `loadSearchEntries` (no scopeFilter arg) and see all rows including
  * quarantine.
  */
-/** @internal v1.7.2 — internal SQL-builder shape; not on the public API
+/** @internal Internal SQL-builder shape; not on the public API
  *  surface (not re-exported from `src/index.ts`). Subject to change. */
 export type RecallScopeFilter =
-  | { mode: 'default-deny' }
+  | { mode: 'default-deny'; ownScope?: string }
   | { mode: 'exact'; value: string }
-  | { mode: 'default-deny-or-exact'; value: string };
-
-interface SqlFragment {
-  sql: string;
-  params: string[];
-}
+  | { mode: 'default-deny-or-exact'; value: string; ownScope?: string };
 
 /** The recall scope rule for a table column prefix (`m.` or none); `passesScopeFilterForRecall` in recall-scope.ts is its JS twin. */
 function recallScopeClause(col: 'm.' | '', scopeFilter: RecallScopeFilter | undefined): SqlFragment {
   if (scopeFilter === undefined) return { sql: '', params: [] };
   if (scopeFilter.mode === 'exact') return { sql: ` AND ${col}scope = ?`, params: [scopeFilter.value] };
-  // `IS NULL OR` admits NULL scopes, which NOT IN alone drops. NOT LIKE denies a superset of private scopes before the
-  // window cut so private rows cannot starve admitted ones; the anchored JS regex stays the exact post-filter.
-  const placeholders = RECALL_DEFAULT_DENY_SCOPES.map(() => '?').join(', ');
-  const admitted = `${col}scope IS NULL OR (${col}scope NOT IN (${placeholders}) AND ${col}scope NOT LIKE '%:private:%')`;
-  if (scopeFilter.mode === 'default-deny') return { sql: ` AND (${admitted})`, params: [...RECALL_DEFAULT_DENY_SCOPES] };
+  const admit = scopeAdmitSql(col, scopeFilter.ownScope);
+  if (scopeFilter.mode === 'default-deny') return { sql: ` AND ${admit.sql}`, params: admit.params };
   // The trailing arm keeps a deliberately requested scope loadable, private or quarantined included.
-  return { sql: ` AND (${admitted} OR ${col}scope = ?)`, params: [...RECALL_DEFAULT_DENY_SCOPES, scopeFilter.value] };
+  return { sql: ` AND (${admit.sql} OR ${col}scope = ?)`, params: [...admit.params, scopeFilter.value] };
 }
+
+/** One project name, or every name a project's rows carry. */
+export type OriginFilter = string | readonly string[];
 
 // In SQL, not after the window cut, so other projects' matches cannot crowd the project's own rows out of the LIMIT.
-function withProject(scope: SqlFragment, col: 'm.' | '', originProject: string | undefined): SqlFragment {
-  if (originProject === undefined) return scope;
-  return { sql: `${scope.sql} AND (${col}origin_project = '' OR ${col}origin_project = ?)`, params: [...scope.params, originProject] };
+function withProject(scope: SqlFragment, col: 'm.' | '', origin: OriginFilter | undefined): SqlFragment {
+  if (origin === undefined) return scope;
+  // A string is the shape published callers passed before a project could carry several names.
+  const originProjects = [origin].flat();
+  return { sql: `${scope.sql} AND (${col}origin_project = '' OR ${originInSql(originProjects, `${col}origin_project`)})`, params: [...scope.params, ...originProjects] };
 }
 
-/** Scope rule for recall: none requested is default-deny; 'exact' narrows to the request; 'additive' adds it to the default set. */
-export function recallScopeFilter(requestedScope: string | undefined, mode: 'exact' | 'additive'): RecallScopeFilter {
-  if (!requestedScope) return { mode: 'default-deny' };
-  return mode === 'additive' ? { mode: 'default-deny-or-exact', value: requestedScope } : { mode: 'exact', value: requestedScope };
+/** Scope rule for recall: none requested is default-deny; 'exact' narrows to the request; 'additive' adds it to the default set, unless it is personal, which only `ownScope` opens. */
+export function recallScopeFilter(requestedScope: string | undefined, mode: 'exact' | 'additive', ownScope?: string): RecallScopeFilter {
+  if (!requestedScope || (mode === 'additive' && isPersonalScope(requestedScope))) return { mode: 'default-deny', ownScope };
+  return mode === 'additive' ? { mode: 'default-deny-or-exact', value: requestedScope, ownScope } : { mode: 'exact', value: requestedScope };
 }
 
 const FTS_QUERY_SYNTAX_RE = /fts5: syntax error|unterminated string/i;
@@ -80,11 +66,9 @@ const FTS_QUERY_SYNTAX_RE = /fts5: syntax error|unterminated string/i;
 /** SQL predicate fragments every candidate path appends, built once per load. */
 interface SearchPredicates {
   tenantPredicate: string;
-  tenantPredicateNoAlias: string;
   tenantOnlyPredicate: string;
   tenantParams: string[];
   archivedClauseAlias: string;
-  archivedClauseNoAlias: string;
   archivedClauseTenantOnly: string;
   aliasScope: SqlFragment;
   plainScope: SqlFragment;
@@ -93,33 +77,36 @@ interface SearchPredicates {
   currentNoAlias: string;
 }
 
+let forceLikePath = false;
+
+/** Sends term queries down the LIKE path on a build that has FTS. Only tests call it. */
+export function _forceLikePathForTests(on: boolean): void {
+  forceLikePath = on;
+}
+
+interface SearchRowsOptions {
+  readonly scopeFilter?: RecallScopeFilter;
+  readonly includeSuperseded?: boolean;
+  readonly originProjects?: OriginFilter;
+}
+
 function loadSearchRows(
   db: ReturnType<typeof openHippoDb>,
   query: string,
   limit: number,
   tenantId: string | undefined,
-  scopeFilter?: RecallScopeFilter,
-  includeSuperseded = true,
-  originProject?: string,
+  options: SearchRowsOptions = {},
 ): MemoryRow[] {
-  const p = searchPredicates(tenantId, scopeFilter, includeSuperseded, originProject);
+  const { scopeFilter, includeSuperseded = true, originProjects } = options;
+  const p = searchPredicates(tenantId, scopeFilter, includeSuperseded, originProjects);
 
   const terms = Array.from(new Set(tokenize(query)));
   if (terms.length === 0) {
-    // F3 (v1.7.0) self-review: empty-query path is the second uncapped
-    // path (codex diff-pass caught the full-store fallback at the bottom;
-    // this no-terms path had the same shape). Apply LIMIT so all four
-    // candidate paths honour the caller's cap when set.
+    // LIMIT here too, so every candidate path honours the caller's cap.
     return selectAllCandidates(db, p, limit);
   }
 
-  // v1.7.1 — test/diagnostic hook: `HIPPO_FORCE_LIKE_PATH=1` forces the
-  // LIKE-fallback path here only. Gated at the read-call site so writes
-  // (`syncFtsRow`, `deleteFtsRow`, `raw-archive.ts::archiveRaw`) keep using
-  // `isFtsAvailable` honestly and never silently skip FTS index sync.
-  // Lets tests exercise the LIKE branch deterministically without
-  // poisoning the on-disk FTS state.
-  const forceLikePath = envForceLikePath();
+  // The test switch is read here, not in `isFtsAvailable`, so writes never skip FTS index sync.
   if (!forceLikePath && isFtsAvailable(db)) {
     const rows = selectFtsCandidates(db, terms, p, limit);
     if (rows.length > 0) return rows;
@@ -128,11 +115,8 @@ function loadSearchRows(
   const rows = selectLikeCandidates(db, terms, p, limit);
   if (rows.length > 0) return rows;
 
-  // F3 (v1.7.0) codex P1: pre-v1.7.0 the full-store fallback ignored
-  // `limit` and could return the whole tenant store. With scorerWindow
-  // now reported on RecallResult, an unbounded fallback would lie about
-  // candidate-pool size. Apply LIMIT here so all four paths honour the
-  // caller's cap.
+  // LIMIT the full-store fallback too: RecallResult reports the scorer window, so an
+  // unbounded fallback would misstate the candidate-pool size.
   return selectAllCandidates(db, p, limit);
 }
 
@@ -140,31 +124,18 @@ function searchPredicates(
   tenantId: string | undefined,
   scopeFilter: RecallScopeFilter | undefined,
   includeSuperseded: boolean,
-  originProject: string | undefined,
+  originProjects: OriginFilter | undefined,
 ): SearchPredicates {
   // tenantId undefined = no tenant filter (legacy callers / cross-deployment
   // helpers). tenantId set = strict tenant isolation, leveraging the composite
   // idx_memories_tenant_created (leading column tenant_id, O(log n) lookup).
   const tenantPredicate = tenantId !== undefined ? ` AND m.tenant_id = ?` : '';
-  const tenantPredicateNoAlias = tenantId !== undefined ? ` AND tenant_id = ?` : '';
   const tenantOnlyPredicate = tenantId !== undefined ? ` WHERE tenant_id = ?` : '';
   const tenantParams = tenantId !== undefined ? [tenantId] : [];
 
-  // v1.12.6 — belt-and-suspenders against `kind='archived'` leaking into recall.
-  // `kind='archived'` is a transient sentinel inside `archiveRawMemory`'s
-  // SAVEPOINT (src/raw-archive.ts:56): UPDATE kind = 'archived' immediately
-  // followed by DELETE, both inside one savepoint that commits or rolls back
-  // atomically. SQLite atomicity guarantees no concurrent reader sees the
-  // intermediate state. This filter is defensive-only against:
-  //   (a) future bugs that drop the SAVEPOINT,
-  //   (b) future bugs that introduce kind='archived' as a persisted state,
-  //   (c) external direct-SQL writes that bypass archiveRawMemory.
-  // tenantOnlyPredicate starts with " WHERE tenant_id = ?" when tenant is set;
-  // when unset, we have no WHERE yet, so the archived clause needs both AND
-  // and WHERE forms. The "tenant-only" path always has WHERE (from tenant or
-  // we synthesize one).
+  // Defensive: kind='archived' is a transient sentinel inside archiveRawMemory's SAVEPOINT, so this only
+  // guards against a dropped SAVEPOINT, a persisted 'archived' state, or direct-SQL writes.
   const archivedClauseAlias = ` AND m.kind != 'archived'`;
-  const archivedClauseNoAlias = ` AND kind != 'archived'`;
   // For the "tenant-only" path: if no tenant set, tenantOnlyPredicate is '',
   // so prepend WHERE; if tenant set, append AND. handled in each call site
   // by always joining `tenantOnlyPredicate + archivedClauseTenantOnly` where
@@ -172,15 +143,15 @@ function searchPredicates(
   const archivedClauseTenantOnly =
     tenantId !== undefined ? ` AND kind != 'archived'` : ` WHERE kind != 'archived'`;
 
-  const aliasScope = withProject(recallScopeClause('m.', scopeFilter), 'm.', originProject);
-  const plainScope = withProject(recallScopeClause('', scopeFilter), '', originProject);
+  const aliasScope = withProject(recallScopeClause('m.', scopeFilter), 'm.', originProjects);
+  const plainScope = withProject(recallScopeClause('', scopeFilter), '', originProjects);
   const scopeParams = aliasScope.params;
 
   const currentAlias = includeSuperseded ? '' : ' AND m.superseded_by IS NULL';
   const currentNoAlias = includeSuperseded ? '' : ' AND superseded_by IS NULL';
   return {
-    tenantPredicate, tenantPredicateNoAlias, tenantOnlyPredicate, tenantParams,
-    archivedClauseAlias, archivedClauseNoAlias, archivedClauseTenantOnly,
+    tenantPredicate, tenantOnlyPredicate, tenantParams,
+    archivedClauseAlias, archivedClauseTenantOnly,
     aliasScope, plainScope, scopeParams, currentAlias, currentNoAlias,
   };
 }
@@ -200,9 +171,6 @@ function selectFtsCandidates(db: DatabaseSyncLike, terms: string[], p: SearchPre
     // memories_fts virtual table has no tenant_id column; filter via the
     // joined memories row (cheap with idx_memories_tenant_created leading
     // on tenant_id).
-    // F1 (v1.7.0): MEMORY_SEARCH_COLUMNS adds bm25_score as the trailing
-    // result column. Every other column is m.<col> AS <col> so rowToEntry
-    // sees the same shape it always has.
     // SAFETY: MEMORY_SEARCH_COLUMNS aliases every column to the same name
     // MEMORY_SELECT_COLUMNS uses (plus bm25_score), matching MemoryRow.
     return db.prepare(`
@@ -215,29 +183,39 @@ function selectFtsCandidates(db: DatabaseSyncLike, terms: string[], p: SearchPre
       `).all(ftsQuery, ...p.tenantParams, ...p.scopeParams, limit) as MemoryRow[];
   } catch (err) {
     // A query FTS5 cannot parse is expected input; anything else means the index itself is broken.
-    const message = err instanceof Error ? err.message : String(err);
+    const message = errorMessage(err);
     if (!FTS_QUERY_SYNTAX_RE.test(message)) log.once('fts-match-fallback', 'warn', `FTS search failed, using the slower LIKE match: ${message}`);
     return [];
   }
 }
 
+/** Newest admitted rows the substring match tests, so a query matching nothing costs the same in a store of any size. */
+const LIKE_WINDOW_ROWS = 2000;
+
+/** Substring matches in content or tags among the newest admitted rows: the lexical path without FTS5, and the catch for a part-word that FTS5 tokens miss. */
 function selectLikeCandidates(db: DatabaseSyncLike, terms: string[], p: SearchPredicates, limit: number): MemoryRow[] {
-  const escapeLike = (term: string): string => term.replace(/[%_\\]/g, '\\$&');
   const where = terms.map(() => `(LOWER(content) LIKE ? ESCAPE '\\' OR LOWER(tags_json) LIKE ? ESCAPE '\\')`).join(' OR ');
   const params = terms.flatMap((term) => {
     const like = `%${escapeLike(term)}%`;
     return [like, like];
   });
+  // idx_memories_tenant_created serves a tenant's newest rows; with no tenant only the table's own order needs no sort.
+  const newestFirst = p.tenantParams.length > 0 ? 'created DESC' : 'rowid DESC';
 
-  // SAFETY: this query selects exactly MEMORY_SELECT_COLUMNS, matching
-  // MemoryRow's field set.
+  // SHORTCUT: no index serves a substring, so a match older than the window is missed; an FTS5 trigram index is the upgrade.
+  // SAFETY: the outer query selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
   return db.prepare(`
     SELECT ${MEMORY_SELECT_COLUMNS}
-    FROM memories
-    WHERE (${where})${p.tenantPredicateNoAlias}${p.archivedClauseNoAlias}${p.plainScope.sql}${p.currentNoAlias}
+    FROM (
+      SELECT ${MEMORY_SELECT_COLUMNS}, updated_at
+      FROM memories${p.tenantOnlyPredicate}${p.archivedClauseTenantOnly}${p.plainScope.sql}${p.currentNoAlias}
+      ORDER BY ${newestFirst}
+      LIMIT ?
+    )
+    WHERE (${where})
     ORDER BY updated_at DESC, created DESC, content ASC, id ASC
     LIMIT ?
-  `).all(...params, ...p.tenantParams, ...p.scopeParams, limit) as MemoryRow[];
+  `).all(...p.tenantParams, ...p.scopeParams, Math.max(limit, LIKE_WINDOW_ROWS), ...params, limit) as MemoryRow[];
 }
 
 /**
@@ -262,28 +240,21 @@ export function loadSearchEntries(
 }
 
 /**
- * v1.7.1 — recall-mode loader. Pushes the recall-side scope predicate into
- * SQL so `unknown:legacy` cannot leak via any consumer that hasn't remembered
- * to re-filter (root-cause-over-patches: codex flagged this on v1.6.5 review).
+ * Recall-mode loader. Pushes the recall-side scope predicate into SQL so
+ * `unknown:legacy` cannot leak via any consumer that hasn't remembered to re-filter.
  *
- * - `requestedScope` undefined / '': default-deny on `unknown:legacy`.
+ * - `requestedScope` undefined / '': default-deny on `unknown:legacy`, admitting `ownScope`, the caller's personal scope.
  * - `requestedScope` non-empty string: exact match on `m.scope = requestedScope`.
  *
- * Private-scope (`<source>:private:*`) exclusion: SQL applies a conservative
- * pre-window approximation (`NOT LIKE '%:private:%'`, v1.25.0 — codex P2:
- * post-window-only filtering let private rows starve admitted candidates out
- * of the LIMIT window); the exact anchored regex
- * (`passesScopeFilterForRecall`) remains the authoritative JS post-filter in
- * the recall consumers.
+ * Private scopes: SQL applies a conservative `NOT LIKE '%:private:%'` before the LIMIT window so private
+ * rows cannot starve admitted ones; `passesScopeFilterForRecall` stays the exact JS post-filter.
  *
- * Consumers: `api.recall` (v1.7.1+), `cmdRecall`/`cmdExplain` direct CLI paths
- * and `searchBothHybrid` recall mode (v1.25.0). Background pipelines
+ * Consumers: `api.recall`, `cmdRecall`/`cmdExplain` direct CLI paths
+ * and `searchBothHybrid` recall mode. Background pipelines
  * (`consolidate`, `embeddings`, `refine-llm`, ...) keep using
  * `loadSearchEntries` so they can see quarantined rows when needed.
  *
- * `tenantId` widened to optional in v1.25.0 for the searchBothHybrid recall
- * mode (its `tenantId` option is optional); `loadSearchRows` already treats
- * undefined as "no tenant filter" for legacy callers.
+ * `tenantId` is optional because searchBothHybrid's is; undefined means no tenant filter.
  */
 export function loadRecallSearchEntries(
   hippoRoot: string,
@@ -293,29 +264,37 @@ export function loadRecallSearchEntries(
   requestedScope?: string,
   explicitScopeMode: 'exact' | 'additive' = 'exact',
   includeSuperseded = true,
-  originProject?: string,
+  originProjects?: OriginFilter,
+  ownScope?: string,
 ): MemoryEntry[] {
   const db = openStore(hippoRoot);
   try {
-    return loadRecallSearchEntriesFromDb(db, query, limit, tenantId, requestedScope, explicitScopeMode, includeSuperseded, originProject);
+    return loadRecallSearchEntriesFromDb(db, query, { limit, tenantId, requestedScope, explicitScopeMode, includeSuperseded, originProjects, ownScope });
   } finally {
     closeHippoDb(db);
   }
 }
 
-// Split out so callers with an already-open db (Z1 prompt-recall path) skip
+export interface RecallSearchEntriesOptions {
+  readonly limit?: number;
+  readonly tenantId?: string;
+  readonly requestedScope?: string;
+  readonly explicitScopeMode?: 'exact' | 'additive';
+  readonly includeSuperseded?: boolean;
+  readonly originProjects?: OriginFilter;
+  readonly ownScope?: string;
+}
+
+// Split out so callers with an already-open db (the prompt-recall path) skip
 // the initStore+open/close cycle per store per call.
 export function loadRecallSearchEntriesFromDb(
   db: DatabaseSyncLike,
   query: string,
-  limit: number = DEFAULT_SEARCH_CANDIDATE_LIMIT,
-  tenantId?: string,
-  requestedScope?: string,
-  explicitScopeMode: 'exact' | 'additive' = 'exact',
-  includeSuperseded = true,
-  originProject?: string,
+  options: RecallSearchEntriesOptions = {},
 ): MemoryEntry[] {
-  return loadSearchRows(db, query, limit, tenantId, recallScopeFilter(requestedScope, explicitScopeMode), includeSuperseded, originProject).map(rowToEntry);
+  const { limit = DEFAULT_SEARCH_CANDIDATE_LIMIT, tenantId, requestedScope, explicitScopeMode = 'exact', includeSuperseded = true, originProjects, ownScope } = options;
+  const scopeFilter = recallScopeFilter(requestedScope, explicitScopeMode, ownScope);
+  return loadSearchRows(db, query, limit, tenantId, { scopeFilter, includeSuperseded, originProjects }).map(rowToEntry);
 }
 
 /** Which rows the vector arm of hybrid search may add: the same tenant, scope and superseded rules as the lexical load. */
@@ -325,17 +304,18 @@ export interface VectorCandidateSpec {
   includeSuperseded: boolean;
   /** How many nearest rows to add; default 50. */
   limit?: number;
+  origin?: OriginFilter;
 }
 
 /** The rows nearest `queryVector` that pass `spec`, nearest first. */
-export function loadVectorCandidateEntries(hippoRoot: string, queryVector: readonly number[], spec: VectorCandidateSpec): MemoryEntry[] {
-  const scope = recallScopeClause('m.', spec.scope);
+export async function loadVectorCandidateEntries(hippoRoot: string, queryVector: readonly number[], spec: VectorCandidateSpec): Promise<MemoryEntry[]> {
+  const scope = withProject(recallScopeClause('m.', spec.scope), 'm.', spec.origin);
   const tenant = spec.tenantId !== undefined ? ' AND m.tenant_id = ?' : '';
   const current = spec.includeSuperseded ? '' : ' AND m.superseded_by IS NULL';
   const params = [...(spec.tenantId !== undefined ? [spec.tenantId] : []), ...scope.params];
   const db = openStore(hippoRoot);
   try {
-    const matches = topVectorMatches(db, queryVector, spec.limit ?? 50, `${tenant} AND m.kind != 'archived'${scope.sql}${current}`, params);
+    const matches = await topVectorMatches(db, queryVector, spec.limit ?? 50, `${tenant} AND m.kind != 'archived'${scope.sql}${current}`, params);
     if (matches.length === 0) return [];
     // SAFETY: the SELECT names exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
     const rows = db.prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${matches.map(() => '?').join(', ')})`)
@@ -353,18 +333,12 @@ export function pickRarestFtsQuery(db: DatabaseSyncLike, terms: readonly string[
   // The LIKE path has no bm25 ranking to bound, so it keeps the pre-rarest 32-term query.
   if (!isFtsAvailable(db)) return terms.slice(0, 32).join(' ');
   db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS temp.z1_rarest_vocab USING fts5vocab(main, 'memories_fts', 'row')`);
-  // unicode61 splits `journal_mode` into two vocab terms; a term's count is its rarest part's (an upper bound).
-  const partsOf = (t: string): string[] => t.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
-  const vocab = Array.from(new Set(terms.flatMap(partsOf)));
+  const vocab = Array.from(new Set(terms.flatMap(ftsTermParts)));
   if (vocab.length === 0) return '';
   // SAFETY: rows' shape matches the two columns named in the SELECT.
   const rows = db
     .prepare(`SELECT term, doc FROM temp.z1_rarest_vocab WHERE term IN (${vocab.map(() => '?').join(', ')})`)
     .all(...vocab) as Array<{ term: string; doc: number }>;
   const counts = new Map(rows.map((r) => [r.term, r.doc]));
-  const docCount = (t: string): number => {
-    const parts = partsOf(t);
-    return parts.length === 0 ? 0 : Math.min(...parts.map((x) => counts.get(x) ?? 0));
-  };
-  return rarestPromptTerms(terms, docCount, maxTerms).join(' ');
+  return rarestFtsQuery(terms, (part) => counts.get(part) ?? 0, maxTerms);
 }

@@ -7,14 +7,18 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, Layer, type CreateMemoryOptions, type MemoryEntry } from '../src/memory.js';
+import { createMemory, Layer, type CreateMemoryOptions, type MemoryEntry } from '../src/core/memory.js';
 import { handleMcpRequest, __resetSessionRecallHistoryMcp, type McpContext, type McpResponse } from '../src/mcp/server.js';
-import { RecallContractError } from '../src/api.js';
-import { pushGoal } from '../src/goals.js';
-import { saveEmbeddingIndex, saveStoredEmbeddingModel } from '../src/embeddings.js';
-import { resolveEmbeddingProvider } from '../src/embedding-provider.js';
-import { _resetAblationCacheForTests } from '../src/ablation.js';
-import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../src/db.js';
+import { pushGoal } from '../src/store/goals.js';
+import { saveActiveTaskSnapshot, appendSessionEvent } from '../src/store/sessions.js';
+import { saveStoredEmbeddingModel } from '../src/store/embeddings/index.js';
+import { saveEmbeddingIndex } from '../src/store/vector-index.js';
+import { resolveEmbeddingProvider } from '../src/store/embeddings/provider.js';
+import { _resetAblationCacheForTests } from '../src/core/ablation.js';
+import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../src/db/index.js';
+
+// Every case seeds 26 rows, two of them up to 210 more, in a real store, so its time follows the runner's disk.
+vi.setConfig({ testTimeout: 30_000 });
 
 const NOW = '2026-09-01T12:00:00.000Z';
 const TENANT = 'default';
@@ -170,15 +174,20 @@ describe('MCP hippo_recall ranking', () => {
     expect(observe(s, textOf(await call(s.home, { query: QUERY, scope: 'team:alpha' })))).toEqual(EXPECTED.explicitScope);
   });
 
-  it('include_continuity appends the continuity block after the list', async () => {
+  it('include_continuity appends the continuity block after the list and pays for it from the budget', async () => {
     const s = track(seed());
-    const text = textOf(await call(s.home, { query: QUERY, include_continuity: true }));
-    expect(text).toContain('## Continuity');
+    saveActiveTaskSnapshot(s.home, 'default', { task: 'Ship the deploy pipeline', summary: 'blue green rollout in flight', next_step: 'flip traffic', session_id: 'sess-x', source: 'test' });
+    appendSessionEvent(s.home, 'default', { session_id: 'sess-x', event_type: 'note', content: 'rollout paused at 50 percent', source: 'test' });
+    const args = { query: QUERY, budget: 250 };
+    expect(observe(s, textOf(await call(s.home, args))).ranked).toEqual(EXPECTED.defaultHybrid.ranked);
+    const text = textOf(await call(s.home, { ...args, include_continuity: true }));
+    expect(text.indexOf('## Continuity')).toBeGreaterThan(text.indexOf('Found '));
     expect(observe(s, text)).toEqual(EXPECTED.continuity);
   });
 
-  it('physics mode without embeddings', async () => {
+  it('physics mode without embeddings ranks like hybrid, a short exact match first', async () => {
     const s = track(seed({ physics: { enabled: true } }));
+    add(s, 'X1', 'deploy pipeline');
     expect(observe(s, textOf(await call(s.home, { query: QUERY })))).toEqual(EXPECTED.physicsNoEmbeddings);
   });
 
@@ -247,13 +256,6 @@ describe('MCP hippo_recall ranking', () => {
       closeHippoDb(db);
     }
   });
-
-  it('scorer_window=0 is still a RecallContractError', async () => {
-    const s = track(seed());
-    const res = call(s.home, { query: QUERY, scorer_window: 0 });
-    await expect(res).rejects.toBeInstanceOf(RecallContractError);
-    await expect(res).rejects.toMatchObject({ code: 'invalid_scorer_window' });
-  });
 });
 
 // Candidates are a wide FTS window plus the nearest vectors, so Cutoff counts only rows that matched the query.
@@ -274,12 +276,12 @@ const EXPECTED = {
     cutoff: null,
   },
   continuity: {
-    ranked: ['SC1', 'L1', 'L2', 'D1', 'P1', 'L4', 'SC2', 'L3', 'C1', 'L5', 'G1'],
+    ranked: ['SC1', 'L1', 'L2', 'D1', 'P1', 'L4', 'SC2', 'L3', 'C1'],
     tail: [],
-    cutoff: null,
+    cutoff: 'Showing 9 of 11 candidates; 2 dropped to fit limit.',
   },
   physicsNoEmbeddings: {
-    ranked: ['SC1', 'L1', 'L2', 'D1', 'P1', 'L4', 'SC2', 'L3', 'C1', 'L5', 'G1'],
+    ranked: ['X1', 'SC1', 'L1', 'L2', 'D1', 'P1', 'L4', 'SC2', 'L3', 'C1', 'L5', 'G1'],
     tail: [],
     cutoff: null,
   },

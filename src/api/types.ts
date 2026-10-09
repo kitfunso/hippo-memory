@@ -1,33 +1,41 @@
 // Request context (caller identity and tenant) shared by every API module, plus the recall contract error.
 
-import { BadRequestError } from '../api-errors.js';
+import { BadRequestError } from '../core/api-errors.js';
+import type { HippoStore } from '../store/index.js';
 
 /**
- * Actor identity + authorization role for a Context. v1.12.0 A5 v2 sub-1.
+ * Actor identity + authorization role for a Context.
  *
- * Before v1.12.0, Context.actor was a bare string. v1.12.0 promotes it to an
- * object carrying both the audit-log subject (formerly the string itself) and
- * a role for /v1/sleep admin gating. Audit helpers continue accepting `string`
- * — callers pass `ctx.actor.subject`. Role checks happen at the request
+ * Carries the audit-log subject plus a role for /v1/sleep admin gating. Audit
+ * helpers take the bare `string`, so callers pass `ctx.actor.subject`. Role checks happen at the request
  * boundary (e.g. /v1/sleep), except in authCreate and authRevoke (ForbiddenError).
  */
 export interface Actor {
   /** 'cli' | 'localhost:cli' | 'api_key:<key_id>' | 'mcp' | 'connector:slack' | 'connector:github' */
   subject: string;
   role: 'admin' | 'member';
-  /** EI2: restricted scopes a member key may read (auth.ts grantScope). Unused for admin actors. */
+  /** Restricted scopes a member key may read (auth.ts grantScope). Unused for admin actors. */
   scopes?: readonly string[];
   /** An auth resolver vouched for this caller, so its admin role stops at its own tenant. */
   viaAuthResolver?: true;
   /** The host's operator (CLI, stdio MCP, keyless loopback, host-tenant admin key): may act beyond its tenant. */
   hostAdmin?: true;
+  owner?: string; // the person behind the key; task state keys on it
 }
 
 export interface Context {
   hippoRoot: string;
   tenantId: string;
   actor: Actor;
+  store?: HippoStore;
 }
+
+export type HippoDbContext = Context & { store?: undefined };
+
+// hippoRoot keeps the second test off TypeScript's weak-type rule, which would fail a ctx with no store key at all.
+export type StoreReply<C extends Context, R> = C extends { readonly store: HippoStore }
+  ? Promise<R>
+  : C extends { readonly hippoRoot: string; readonly store?: undefined } ? R : R | Promise<R>;
 
 /**
  * Helper for building process-local Actor values (admin and host admin),
@@ -38,6 +46,11 @@ export interface Context {
  */
 export function adminActor(subject: string): Actor {
   return { subject, role: 'admin', hostAdmin: true };
+}
+
+/** The per-person key: an unowned key gets its own bucket by key id rather than sharing one. */
+export function ownerOrSubject(actor: Actor): string {
+  return actor.owner ?? actor.subject;
 }
 
 /**
@@ -52,10 +65,8 @@ export function adminActor(subject: string): Actor {
  *     is opt-in so multi-session tenants can fail loud instead of silently
  *     surfacing cross-session rows tagged `isFreshTail=true`.
  *   - 'invalid_scorer_window' — `opts.scorerWindow` is set to a non-positive,
- *     non-integer, or non-finite value. Pre-v1.7.0 the value 0 routed
- *     through FTS/LIKE `LIMIT 0` and then fell through to an uncapped
- *     full-store fallback (codex v1.7.0 diff-pass P1). Validated upfront
- *     so the contract holds.
+ *     non-integer, or non-finite value. 0 would route through FTS/LIKE
+ *     `LIMIT 0` and then an uncapped full-store fallback, so it is validated upfront.
  */
 export class RecallContractError extends BadRequestError {
   public readonly code:

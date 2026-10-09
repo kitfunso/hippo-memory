@@ -1,18 +1,18 @@
 // Scratch homes, projects and stores for the agent memory sync tests; nothing here reads the real home.
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { adminActor, type Context } from '../../src/api.js';
+import { adminActor, type HippoDbContext } from '../../src/api/index.js';
 import { claudeFolderName } from '../../src/agent-memories/claude-code.js';
 import { emptyTally, totalTally, type ImportReport, type Tally } from '../../src/agent-memories/report.js';
 import type { Machine } from '../../src/agent-memories/sync.js';
-import type { ToolId } from '../../src/agent-memories/tools.js';
-import { queryAuditEvents, type AuditOp } from '../../src/audit.js';
-import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db.js';
-import { listDormantRows, type DormantMemory } from '../../src/dormant.js';
-import type { MemoryEntry } from '../../src/memory.js';
+import type { ToolId } from '../../src/core/agent-memory-tools.js';
+import { queryAuditEvents, type AuditOp } from '../../src/store/audit.js';
+import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
+import { loadDormantMemories, type DormantMemory } from '../../src/store/dormant.js';
+import type { MemoryEntry } from '../../src/core/memory.js';
 import { initStore, isInitialized } from '../../src/store/open.js';
 import { loadAllEntries } from '../../src/store/entry-reads.js';
 
@@ -94,7 +94,7 @@ export function withDb<T>(root: string, fn: (db: DatabaseSyncLike) => T): T {
 }
 
 export const dormantRows = (root: string): DormantMemory[] =>
-  isInitialized(root) ? withDb(root, (db) => listDormantRows(db, 'default', { limit: 1000 })) : [];
+  isInitialized(root) ? loadDormantMemories(root, 'default', { limit: 1000 }) : [];
 
 export const auditCount = (root: string, op: AuditOp): number =>
   withDb(root, (db) => queryAuditEvents(db, { tenantId: 'default', op, limit: 10000 }).length);
@@ -109,7 +109,7 @@ export const toolTally = (report: ImportReport, tool: ToolId): Tally => report.t
 
 export const tally = (report: ImportReport): Tally => totalTally(report);
 
-export const ctxFor = (root: string): Context => ({ hippoRoot: root, tenantId: 'default', actor: adminActor('test') });
+export const ctxFor = (root: string): HippoDbContext => ({ hippoRoot: root, tenantId: 'default', actor: adminActor('test') });
 
 export const sha = (text: string): string => createHash('sha256').update(text, 'utf8').digest('hex');
 
@@ -122,20 +122,3 @@ export function expectedContainer(dir: string, scope: 'p' | 'u'): string {
 const REPO = resolve(import.meta.dirname, '..', '..');
 
 export const distUrl = (rel: string): string => pathToFileURL(join(REPO, 'dist', rel)).href;
-
-/** Child processes import the build, so every module the entry reaches must be newer than its source. */
-export function assertFreshDist(entry: string): void {
-  const distRoot = join(REPO, 'dist');
-  const seen = new Set<string>();
-  const stale: string[] = [];
-  const stack = [join(distRoot, entry)];
-  for (let file = stack.pop(); file !== undefined; file = stack.pop()) {
-    if (seen.has(file)) continue;
-    seen.add(file);
-    if (!existsSync(file)) throw new Error(`${file} is missing. Run \`npm run build\` before this test.`);
-    const src = join(REPO, 'src', relative(distRoot, file)).replace(/\.js$/, '.ts');
-    if (existsSync(src) && statSync(src).mtimeMs > statSync(file).mtimeMs) stale.push(src);
-    for (const m of readFileSync(file, 'utf8').matchAll(/(?:from\s+|import\(\s*)['"](\.{1,2}\/[^'"]+)['"]/g)) stack.push(resolve(dirname(file), m[1]));
-  }
-  if (stale.length > 0) throw new Error(`dist is older than ${stale.join(', ')}. Run \`npm run build\`; the child processes import dist.`);
-}

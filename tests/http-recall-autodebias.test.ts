@@ -11,8 +11,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { serve, type ServerHandle } from '../src/server.js';
-import { savePrediction, closePrediction } from '../src/predictions/store.js';
-import type { RecallResult } from '../src/api.js';
+import { savePrediction, closePrediction } from '../src/store/predictions.js';
+import type { RecallResult } from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 function seedBaserate(home: string): void {
@@ -43,12 +43,12 @@ afterEach(async () => {
 
 async function jsonAs<T>(res: Response): Promise<T> {
   // SAFETY: T is pinned by each call site to Partial<RecallResult> (the
-  // /v1/memories response envelope defined in src/api.ts); every call site
+  // /v1/memories response envelope defined in src/api/index.ts); every call site
   // asserts the specific fields it reads immediately after this call.
   return res.json() as Promise<T>;
 }
 
-describe('HTTP /v1/memories planningFallacyHint (J3.2 v0.32)', () => {
+describe('HTTP /v1/memories planningFallacyHint', () => {
   it('response includes planningFallacyHint with camelCase shape when query matches', async () => {
     seedBaserate(home);
     const q = encodeURIComponent('migration effort will take 3 days');

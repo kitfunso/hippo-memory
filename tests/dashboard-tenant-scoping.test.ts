@@ -8,9 +8,9 @@ import { request as httpRequest } from 'node:http';
 import type { Server } from 'node:http';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { serveDashboard } from '../src/dashboard.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { serveDashboard } from '../src/dashboard/dashboard.js';
 import { DASHBOARD_TOKEN } from './_helpers/dashboard-fixture.js';
 import { boundPort } from './_helpers/listen.js';
 
@@ -36,7 +36,7 @@ function post(
   });
 }
 
-describe('dashboard tenant-scoping (v1.11.0 residue)', () => {
+describe('dashboard tenant-scoping', () => {
   let home: string;
   let hippoRoot: string;
   let server: Server | undefined;

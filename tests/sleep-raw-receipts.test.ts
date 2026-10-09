@@ -19,10 +19,10 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { consolidate } from '../src/consolidate/sleep.js';
-import { Layer, type MemoryEntry } from '../src/memory.js';
+import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { auditMemory } from '../src/audit.js';
-import * as api from '../src/api.js';
+import { auditMemory } from '../src/store/audit.js';
+import * as api from '../src/api/index.js';
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
 const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });

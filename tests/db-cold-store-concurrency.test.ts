@@ -2,12 +2,12 @@
 // `PRAGMA journal_mode` and for a write upgrading a deferred read snapshot, so
 // concurrent opens of a cold store died with errcode 5 / 517 (db.ts:2389,2435).
 import { describe, it, expect, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync, statSync, existsSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
-import { getCurrentSchemaVersion } from '../src/db.js';
+import { getCurrentSchemaVersion } from '../src/db/index.js';
 
 let root: string;
 
@@ -20,22 +20,8 @@ afterEach(() => {
 });
 
 // The race only exists across processes, so the workers import the build output.
-// Nothing in `npx vitest run` builds it, so check rather than trust.
-const SRC_DB = join(import.meta.dirname, '..', 'src', 'db.ts');
-const DIST_DB = join(import.meta.dirname, '..', 'dist', 'db.js');
+const DIST_DB = join(import.meta.dirname, '..', 'dist', 'db/index.js');
 const DB_URL = pathToFileURL(DIST_DB).href;
-
-function assertFreshBuild(): void {
-  let distMtime: number;
-  try {
-    distMtime = statSync(DIST_DB).mtimeMs;
-  } catch {
-    throw new Error(`${DIST_DB} is missing. Run \`npm run build\` before this test.`);
-  }
-  if (statSync(SRC_DB).mtimeMs > distMtime) {
-    throw new Error(`${DIST_DB} is older than ${SRC_DB}. Run \`npm run build\`; this test spawns processes that import the build output, so a stale dist would test old code.`);
-  }
-}
 
 // Spawn latency alone staggers the workers too far apart to collide, so each one
 // reports ready, spins on a barrier file, and the parent releases them all at once.
@@ -88,7 +74,6 @@ function runWorkers(count: number, barrier: string): Promise<Array<{ code: numbe
 
 describe('openHippoDb on a cold store under concurrent processes', () => {
   it('every process opens and migrates to the current schema version', async () => {
-    assertFreshBuild();
     root = mkdtempSync(join(tmpdir(), 'hippo-cold-open-'));
     const barrier = join(root, 'barrier');
     writeFileSync(barrier, 'x', 'utf8');

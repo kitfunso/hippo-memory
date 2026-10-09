@@ -7,8 +7,8 @@ import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { initStore } from '../src/store/open.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { pushGoalWithDb } from '../src/goals.js';
+import { openHippoDb, closeHippoDb, withWriteScopeOr, type DatabaseSyncLike } from '../src/db/index.js';
+import { pushGoalWithDb } from '../src/store/goals.js';
 
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 
@@ -95,6 +95,99 @@ describe('guarded rollback', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+/** Runs `run` on a store handle holding an empty scratch table, `scope_probe(v)`. */
+function withProbeDb(run: (db: DatabaseSyncLike) => void): void {
+  const root = mkdtempSync(join(tmpdir(), 'hippo-write-scope-'));
+  try {
+    initStore(root);
+    const db = openHippoDb(root);
+    try {
+      db.exec('CREATE TABLE scope_probe (v TEXT)');
+      run(db);
+    } finally {
+      closeHippoDb(db);
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
+const addProbe = (db: DatabaseSyncLike, v: string): void => {
+  db.prepare('INSERT INTO scope_probe (v) VALUES (?)').run(v);
+};
+
+// SAFETY: the SELECT names exactly the one column read.
+const probes = (db: DatabaseSyncLike): string[] =>
+  (db.prepare('SELECT v FROM scope_probe ORDER BY v').all() as Array<{ v: string }>).map((row) => row.v);
+
+describe('withWriteScopeOr', () => {
+  it('undoes its writes and returns the value when the callback rolls back on an idle handle', () => {
+    withProbeDb((db) => {
+      const out = withWriteScopeOr(db, 'probe', (rollback) => {
+        addProbe(db, 'refused');
+        return rollback('no');
+      });
+
+      expect(out).toBe('no');
+      expect(db.isTransaction).toBe(false);
+      expect(probes(db)).toEqual([]);
+    });
+  });
+
+  it('undoes only its own savepoint inside a caller transaction, which stays open and commits', () => {
+    withProbeDb((db) => {
+      db.exec('BEGIN IMMEDIATE');
+      addProbe(db, 'outer');
+      const out = withWriteScopeOr(db, 'probe', (rollback) => {
+        addProbe(db, 'inner');
+        return rollback(null);
+      });
+
+      expect(out).toBeNull();
+      expect(db.isTransaction).toBe(true);
+      db.exec('COMMIT');
+      expect(probes(db)).toEqual(['outer']);
+    });
+  });
+
+  it('rolls back and rethrows the same error when the callback throws', () => {
+    withProbeDb((db) => {
+      const boom = new Error('boom');
+      let thrown: unknown;
+      try {
+        withWriteScopeOr(db, 'probe', () => {
+          addProbe(db, 'lost');
+          throw boom;
+        });
+      } catch (err) {
+        thrown = err;
+      }
+
+      expect(thrown).toBe(boom);
+      expect(db.isTransaction).toBe(false);
+      expect(probes(db)).toEqual([]);
+    });
+  });
+
+  it('keeps the first error when its own rollback throws', () => {
+    withProbeDb((db) => {
+      const first = new Error('first');
+      let thrown: unknown;
+      try {
+        withWriteScopeOr(db, 'probe', () => {
+          // Ends the transaction early, so the scope's ROLLBACK has none to undo and throws.
+          db.exec('ROLLBACK');
+          throw first;
+        });
+      } catch (err) {
+        thrown = err;
+      }
+
+      expect(thrown).toBe(first);
+    });
   });
 });
 

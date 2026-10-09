@@ -1,15 +1,16 @@
 // Gemini CLI: the "Gemini Added Memories" section of GEMINI.md, and the auto-memory folder that projects.json names.
 import fs from 'node:fs';
 import path from 'node:path';
-import { isStringValue } from '../capture-contract.js';
-import { isJsonObject } from '../hooks/shared.js';
-import type { JsonObject, JsonValue } from '../working-memory.js';
+import { isStringValue } from '../core/capture-contract.js';
+import type { JsonObject } from '../store/working-memory.js';
 import { readTextFile, splitFrontmatter } from './files.js';
 import { markdownNotes, readFolderStore, type FolderRules } from './folder-store.js';
 import { gitLayout } from './git.js';
 import { textItemKeys } from './keys.js';
 import { splitMarkdownItems } from './markdown.js';
 import type { Adapter, AdapterContext, Container, Listing, Scope } from './types.js';
+import { type JsonValue, isJsonObjectLiteral } from '../util/json.js';
+import { errorMessage } from '../util/log.js';
 
 const SECTION = 'gemini added memories';
 
@@ -60,7 +61,7 @@ function projectSlug(ctx: AdapterContext, projectRoot: string, home: string, war
   try {
     projects = parseIndex(read.text);
   } catch (err) {
-    warnings.push(`${index}: ${err instanceof Error ? err.message : String(err)}`);
+    warnings.push(`${index}: ${errorMessage(err)}`);
     return null;
   }
   // The git top level is only asked for when the folder itself has no entry, since it spawns git.
@@ -75,8 +76,8 @@ function projectSlug(ctx: AdapterContext, projectRoot: string, home: string, war
 function parseIndex(text: string): JsonObject {
   // SAFETY: JSON.parse yields JSON; the object checks below decide what is used.
   const data = JSON.parse(text) as JsonValue;
-  const projects = isJsonObject(data) ? data.projects : undefined;
-  if (!isJsonObject(projects)) throw new Error('expected { "projects": { "<absolute path>": "<slug>" } }');
+  const projects = isJsonObjectLiteral(data) ? data.projects : undefined;
+  if (!isJsonObjectLiteral(projects)) throw new Error('expected { "projects": { "<absolute path>": "<slug>" } }');
   return projects;
 }
 

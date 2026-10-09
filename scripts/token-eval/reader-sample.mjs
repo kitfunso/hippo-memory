@@ -6,7 +6,8 @@ import { agentGit } from './checks.mjs';
 import { readerDiff } from './grading.mjs';
 import { lessonIndex } from './lessons.mjs';
 import { listGrades, readRows, rowsFile } from './regrade.mjs';
-import { FORBIDDEN, HIDDEN_COMMAND, equalShares, fenced, fillStrata, labelsTemplate, leakScan, parseLabels, proportional, redactor, seededOrder } from './g5-draw.mjs';
+import { flipsOf } from './g5-flips.mjs';
+import { FORBIDDEN, isHiddenCommand, blindLeaks, equalShares, fenced, fillStrata, labelsTemplate, parseLabels, proportional, redactor, seededOrder } from './g5-draw.mjs';
 
 const VERDICTS = ['pass', 'fail', 'na'];
 const sealed = (out, name) => path.join(out, 'g5', 'sealed', name);
@@ -37,22 +38,16 @@ export function taskText(tasksFile) {
   };
 }
 
-/** What a blinded file must never hold: memory names and markers, every run name, arm path and seed path in the out dir. */
+/** What a blinded file must never hold: memory names and markers, every run-name, arm and seed path segment in the out dir. */
 export function forbiddenFor(grades, extra = FORBIDDEN) {
   const names = new Set(extra);
-  for (const g of grades) for (const s of [g.runName, `/${g.arm}/seed`, `seed${g.seed}/work`]) names.add(s);
+  // Every arm shares the run name, so only its path form is forbidden; a bare one would reject pairs that name the repo.
+  for (const g of grades) for (const s of [`/${g.runName}/`, `/${g.arm}/seed`, `seed${g.seed}/work`]) names.add(s);
   return [...names];
 }
 
-/** Every spelling of the out dir and each run root becomes `<run>`; run roots first, so no arm path survives. */
-export const outRedactor = (out, grades) => redactor([...new Set(grades.map((g) => path.join(out, 'runs', g.runName, g.arm, `seed${g.seed}`))), out]);
-
-/** Lesson ids with any flip in either pass: they are dropped anyway, so they are never sampled. */
-export function flippedIn(out) {
-  const flipped = new Set();
-  for (const pass of ['repro', 'postfix']) for (const row of readRows(rowsFile(out, pass)).rows.values()) for (const c of row.checks) if (c.flip) flipped.add(c.lessonId);
-  return flipped;
-}
+/** Every spelling of each out dir name (the real one and the one given) and of each run root under it becomes `<run>`. */
+export const outRedactor = (outs, grades) => redactor([...new Set(outs.flatMap((out) => [out, ...grades.map((g) => path.join(out, 'runs', g.runName, g.arm, `seed${g.seed}`))]))]);
 
 export const readerRounds = (out) => (fs.existsSync(sealed(out, ''))
   ? fs.readdirSync(sealed(out, '')).map((f) => /^reader-r(\d+)\.key\.json$/.exec(f)?.[1]).filter(Boolean).map(Number).sort((a, b) => a - b) : []);
@@ -60,11 +55,12 @@ export const readerRounds = (out) => (fs.existsSync(sealed(out, ''))
 const diffFile = (e, which) => path.join(path.dirname(e.file), `${e.grade.taskId}.${which}.diff`);
 
 /** Each done teach or apply's main-lesson pairs with the round's verdict (saved in round 1, post-fix later); no diff and no bundle is ineligible. */
-export function readerPairs(out, round) {
+export function readerPairs(out, round, flipErrors = false) {
   const pass = round === 1 ? 'repro' : 'postfix';
   const rows = readRows(rowsFile(out, pass)).rows;
   if (rows.size === 0) throw new Error(`reader round ${round} needs ${pass} rows; run regrade${pass === 'postfix' ? ' --post-fix' : ''} first`);
-  const flipped = flippedIn(out);
+  // The lessons grading drops, by the same function, so the sample never judges a lesson G5 leaves out.
+  const flipped = flipsOf(out, listGrades(out), flipErrors).flipped;
   const eligible = [];
   let ineligible = 0;
   for (const e of listGrades(out)) {
@@ -98,7 +94,8 @@ export function pairDiff(out, e, which) {
 function renderPair(ctx, p) {
   const g = p.entry.grade;
   const commands = (p.which === 'first' ? g.commandsFirst : g.commandsFinal) ?? [];
-  const kept = commands.filter((c) => !HIDDEN_COMMAND.test(c));
+  // Tested after redaction, so a memory word in the out dir's own path does not hide a plain command.
+  const kept = commands.filter((c) => !isHiddenCommand(ctx.redact(c)));
   const text = [
     '## Task', ctx.text.prompt(g.sequence, g.taskId), '', '## Rule', ctx.text.lesson(g.lessonId).rule, '',
     '## Commands the agent ran', kept.length ? fenced(ctx.redact(kept.join('\n\n')), 'sh') : '(none)', '',
@@ -120,6 +117,26 @@ function readerGroups(seed, n, pool, arms) {
   });
 }
 
+/** The `lessonId:sha` of every checker a round's verdicts came from: the run's in round 1, the post-fix rows' after. */
+function verdictShas(out, round) {
+  const pairs = round === 1
+    ? listGrades(out).flatMap((e) => Object.entries(e.grade.checkers))
+    : [...readRows(rowsFile(out, 'postfix')).rows.values()].filter((r) => r.status === 'done').flatMap((r) => r.checks.map((c) => [c.lessonId, c.checkerSha]));
+  return [...new Set(pairs.map(([id, sha]) => `${id}:${sha}`))].sort();
+}
+
+/** Prereg 166: round K only once round K-1 was scored with more than 10% disagreeing and a checker changed since its draw. */
+function assertNewRound(out, round) {
+  const prev = round - 1;
+  if (!fs.existsSync(keyFile(out, prev))) throw new Error(`reader round ${prev} is not drawn; draw rounds in order`);
+  if (!fs.existsSync(scoreFile(out, prev))) throw new Error(`reader round ${prev} is not scored; score it before drawing round ${round}`);
+  const { n, disagreements } = readJson(scoreFile(out, prev));
+  // The same test as G5 in z0-gates.mjs, so a round the gate passes can never be redrawn.
+  if (!(disagreements * 10 > n)) throw new Error(`reader round ${prev} passed (${disagreements} of ${n} disagree); prereg 166 allows a new round only after more than 10% disagree`);
+  const seen = new Set(readJson(keyFile(out, prev)).checkers);
+  if (!verdictShas(out, round).some((s) => !seen.has(s))) throw new Error(`no checker changed since reader round ${prev}; fix the checker and run regrade --post-fix before round ${round}`);
+}
+
 function existingDraw(out, round, args) {
   const key = readJson(keyFile(out, round));
   if (key.seed !== args.seed || key.n !== args.n) throw new Error(`reader round ${round} was drawn with --seed ${key.seed} --n ${key.n}; draw a new round instead of redrawing this one`);
@@ -127,19 +144,19 @@ function existingDraw(out, round, args) {
 }
 
 /** Draw round K: pair files and labels.tsv for the reader, the key and per-stratum counts under sealed/ (R9). */
-export function drawReader(out, { tasksFile, seed, n = 30, round = 1 }) {
+export function drawReader(out, { tasksFile, seed, n = 30, round = 1, flipErrors = false, aliases = [] }) {
   if (fs.existsSync(keyFile(out, round))) return existingDraw(out, round, { seed, n });
-  if (round > 1 && !fs.existsSync(keyFile(out, round - 1))) throw new Error(`reader round ${round - 1} is not drawn; draw rounds in order`);
+  if (round > 1) assertNewRound(out, round);
   const earlier = new Set(readerRounds(out).flatMap((k) => readJson(keyFile(out, k)).pairs.map((p) => p.pairId)));
-  const { eligible, ineligible } = readerPairs(out, round);
+  const { eligible, ineligible } = readerPairs(out, round, flipErrors);
   const pool = eligible.filter((p) => !earlier.has(p.pairId));
   const grades = listGrades(out).map((e) => e.grade);
-  const ctx = { out, text: taskText(tasksFile), redact: outRedactor(out, grades) };
+  const ctx = { out, text: taskText(tasksFile), redact: outRedactor([out, ...aliases], grades) };
   const forbidden = forbiddenFor(grades);
   const bodies = new Map();
   const accept = (p) => {
     const r = renderPair(ctx, p);
-    if (leakScan(r.text, forbidden).length) return false;
+    if (blindLeaks(r.text, forbidden).length) return false;
     bodies.set(p.pairId, r);
     return true;
   };
@@ -154,7 +171,7 @@ export function drawReader(out, { tasksFile, seed, n = 30, round = 1 }) {
   const stratum = (p) => `${p.arm}/${p.verdict}`;
   const byStratum = (list) => list.reduce((m, p) => ({ ...m, [stratum(p)]: (m[stratum(p)] ?? 0) + 1 }), {});
   writeJson(keyFile(out, round), {
-    round, seed, n, eligible: pool.length, ineligible, unblindable: rejected.length, unblindableByStratum: byStratum(rejected),
+    round, seed, n, checkers: verdictShas(out, round), eligible: pool.length, ineligible, unblindable: rejected.length, unblindableByStratum: byStratum(rejected),
     pairs: ordered.map((p, i) => ({ file: ids[i], pairId: p.pairId, key: p.key, which: p.which, lessonId: p.lessonId, arm: p.arm, stratum: stratum(p), verdict: p.verdict, droppedCommands: bodies.get(p.pairId).dropped })),
   });
   return `reader round ${round}: drew ${ordered.length} of ${pool.length} eligible pairs (${ineligible} ineligible, ${rejected.length} unblindable) into ${dir}\n`;
@@ -165,6 +182,12 @@ export function scoreReader(out, round, labelsFile) {
   if (!fs.existsSync(keyFile(out, round))) throw new Error(`reader round ${round} is not drawn`);
   const key = readJson(keyFile(out, round));
   const labels = parseLabels(fs.readFileSync(labelsFile, 'utf8'), key.pairs.map((p) => p.file), VERDICTS);
+  if (fs.existsSync(scoreFile(out, round))) {
+    // A scored round is final: new labels after seeing the score would be a reroll of G5.
+    const old = readJson(scoreFile(out, round));
+    if (key.pairs.some((p) => old.labels[p.file] !== labels.get(p.file))) throw new Error(`reader round ${round} is already scored with other labels; a scored round is final`);
+    return `reader round ${round}: ${old.disagreements} of ${old.n} labels disagree\n`;
+  }
   const perStratum = {};
   let disagreements = 0;
   for (const p of key.pairs) {

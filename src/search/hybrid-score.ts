@@ -1,10 +1,10 @@
-import type { MemoryEntry } from '../memory.js';
-import { estimateTokens } from '../token-ledger.js';
+import type { MemoryEntry } from '../core/memory.js';
+import { estimateTokens } from '../util/token-text.js';
 import { matchedQueryTerms } from './bm25.js';
 import { applyRankBoosts, strengthRecencyMultipliers, type AppliedBoosts, type BoostContext } from './boosts.js';
 import { addDagFields, ageInDays } from './breakdown.js';
 import type { DenseScores } from './vector.js';
-import type { ScoreBreakdown, SearchResult } from './types.js';
+import type { ScoreBreakdown, SearchResult } from '../core/search-types.js';
 
 type HybridMode = 'hybrid' | 'hybrid-no-vec' | 'bm25-only';
 

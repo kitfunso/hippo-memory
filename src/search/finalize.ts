@@ -1,8 +1,8 @@
-import type { MemoryEntry } from '../memory.js';
-import { estimateTokens } from '../token-ledger.js';
-import { compareScoredResults } from '../compare.js';
+import type { MemoryEntry } from '../core/memory.js';
+import { estimateTokens } from '../util/token-text.js';
+import { compareScoredResults } from '../core/compare.js';
 import { churnStaleFactor } from './boosts.js';
-import type { ResultCost, SearchResult } from './types.js';
+import type { ResultCost, SearchResult } from '../core/search-types.js';
 
 /** When an extracted fact and its source both match, keep only the higher-scoring one (usually the fact). */
 export function dedupeExtracted(scored: SearchResult[]): SearchResult[] {
@@ -22,6 +22,8 @@ export function dedupeExtracted(scored: SearchResult[]): SearchResult[] {
   return deduped;
 }
 
+const DAG_CHILD_SCORE_FACTOR = 0.9;
+
 /** DAG drill-down: a matched summary pulls its children from `pool` in at 0.9x its score; sorts `results` in place. */
 export function withDagChildren(results: SearchResult[], pool: MemoryEntry[]): SearchResult[] {
   const summaryIds = results.filter((r) => r.entry.tags.includes('dag-summary')).map((r) => r.entry.id);
@@ -30,7 +32,7 @@ export function withDagChildren(results: SearchResult[], pool: MemoryEntry[]): S
   for (const child of children) {
     if (results.some((r) => r.entry.id === child.id)) continue;
     const parentResult = results.find((r) => r.entry.id === child.dag_parent_id);
-    const childScore = parentResult ? parentResult.score * 0.9 * churnStaleFactor(child) : 0;
+    const childScore = parentResult ? parentResult.score * DAG_CHILD_SCORE_FACTOR * churnStaleFactor(child) : 0;
     results.push({ entry: child, score: childScore, bm25: 0, cosine: 0, tokens: estimateTokens(child.content) });
   }
   results.sort(compareScoredResults);

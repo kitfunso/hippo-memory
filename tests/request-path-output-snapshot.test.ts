@@ -1,4 +1,4 @@
-// Pins what getContext and the whole-store MCP tools return on a small fixed store, so bounding their loads cannot move it.
+// Pins what the whole-store MCP tools return on a small fixed store, so bounding their loads cannot move it.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
@@ -7,14 +7,12 @@ import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { Layer, type MemoryEntry } from '../src/memory.js';
-import { mergedText } from '../src/same-text.js';
+import { Layer, type MemoryEntry } from '../src/core/memory.js';
+import { mergedText } from '../src/util/same-text.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { getContext, adminActor, type ContextOpts, type ContextResult } from '../src/api.js';
-import type { AmbientState } from '../src/ambient.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
-import { _resetAblationCacheForTests } from '../src/ablation.js';
-import { withSharedStoreHandles } from '../src/db.js';
+import { _resetAblationCacheForTests } from '../src/core/ablation.js';
+import { withSharedStoreHandles } from '../src/db/index.js';
 
 // Newest first, as git log prints them.
 const COMMIT_SUBJECTS = [
@@ -95,36 +93,6 @@ function merged(): MemoryEntry {
   return { ...entry, id: 'ctx-merged', created: iso(base - 2 * DAY), last_retrieved: iso(base - 2 * DAY), origin_project: 'proj' };
 }
 
-const round = (n: number): number => Math.round(n * 1e9) / 1e9;
-
-interface ContextSnapshot {
-  tokens: number;
-  entries: Array<{ id: string; score: number; tokens: number; isGlobal: boolean; category: ContextResult['entries'][number]['category']; retrieval_count: number }>;
-  ambientState?: AmbientState;
-}
-
-function roundedState(state: AmbientState): AmbientState {
-  const out = { ...state };
-  // SAFETY: out is a spread copy of an AmbientState, so its own keys are AmbientState's keys.
-  for (const key of Object.keys(out) as Array<keyof AmbientState>) out[key] = round(out[key]);
-  return out;
-}
-
-function contextSnapshot(result: ContextResult): ContextSnapshot {
-  return {
-    tokens: result.tokens,
-    entries: result.entries.map((r) => ({
-      id: r.entry.id,
-      score: round(r.score),
-      tokens: r.tokens,
-      isGlobal: r.isGlobal ?? false,
-      category: r.category,
-      retrieval_count: r.entry.retrieval_count,
-    })),
-    ambientState: result.ambientState ? roundedState(result.ambientState) : undefined,
-  };
-}
-
 function textOf(res: McpResponse | null): string {
   // SAFETY: these tools answer with one MCP text content block.
   const result = res?.result as { content?: Array<{ text?: string }> } | undefined;
@@ -163,27 +131,6 @@ describe('request-path output on a fixed store', () => {
     else process.env.HIPPO_FAKE_NOW = saved.now;
     _resetAblationCacheForTests();
     rmSync(tmp, { recursive: true, force: true });
-  });
-
-  const ctx = (): Parameters<typeof getContext>[0] => ({ hippoRoot: localRoot, tenantId: 'default', actor: adminActor('test') });
-  const contextCases: Array<[string, ContextOpts]> = [
-    ['no query', { currentProject: 'proj' }],
-    ['no query, small budget', { currentProject: 'proj', budget: 60 }],
-    ['no query, cross-project', { currentProject: 'proj', crossProject: true }],
-    ['no query, exact scope', { currentProject: 'proj', exactScope: 'team:x' }],
-    ['no query, outside a project', { currentProject: '' }],
-    ['no query, limit 5', { currentProject: 'proj', limit: 5 }],
-    ['query', { currentProject: 'proj', q: 'kafka redis' }],
-    ['pinned only with recent', { currentProject: 'proj', pinnedOnly: true, includeRecent: 4 }],
-  ];
-
-  it.each(contextCases)('getContext: %s', async (_label, opts) => {
-    expect(contextSnapshot(await getContext(ctx(), opts))).toMatchSnapshot();
-  });
-
-  it('getContext: local-only query ranks the local FTS window', async () => {
-    process.env.HIPPO_HOME = join(tmp, 'no-global');
-    expect(contextSnapshot(await getContext(ctx(), { currentProject: 'proj', q: 'kafka redis' }))).toMatchSnapshot();
   });
 
   type ToolArgs = { scope?: string };

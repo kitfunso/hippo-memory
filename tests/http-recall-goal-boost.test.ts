@@ -8,10 +8,10 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { remember } from '../src/api.js';
-import { pushGoal } from '../src/goals.js';
+import { remember } from '../src/api/index.js';
+import { pushGoal } from '../src/store/goals.js';
 import { serve, type ServerHandle } from '../src/server.js';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 function countGoalRecallLogRows(db: DatabaseSyncLike, sessionId: string): number {
@@ -41,7 +41,7 @@ afterEach(async () => {
   rmSync(home, { recursive: true, force: true });
 });
 
-describe('HTTP /v1/memories session_id (v1.7.4)', () => {
+describe('HTTP /v1/memories session_id', () => {
   it('session_id is accepted and applies the goal-stack boost (goal_recall_log row written)', async () => {
     const url = `${handle.url}/v1/memories?q=auth&session_id=${encodeURIComponent(sessionId)}`;
     const res = await fetch(url);

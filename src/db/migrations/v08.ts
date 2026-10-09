@@ -1,4 +1,4 @@
-import { createPhysicsTable } from '../../physics-state.js';
+import { createPhysicsTable } from '../physics-state.js';
 import type { Migration } from './types.js';
 
 export const v08: Migration = {

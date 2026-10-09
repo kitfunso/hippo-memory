@@ -3,7 +3,7 @@ import type { Migration } from './types.js';
 export const v45: Migration = {
     version: 45,
     up: (db) => {
-      // Token ledger (src/token-ledger.ts, ROADMAP TE0): one row per block of
+      // Token ledger (src/store/token-ledger.ts): one row per block of
       // memory text hippo hands an agent (hook, CLI, MCP, HTTP). `event` is 'inject'
       // (sent), 'skip' (unchanged since the session's last inject, not sent), 'reset'
       // (compaction dropped earlier injections, so the next one must be sent) or

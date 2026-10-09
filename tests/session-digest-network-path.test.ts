@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { __setDigestExistsProbe, buildSessionDigest, realFsPath, repoRelative, type DigestEdit } from '../src/session-digest.js';
+import { __setDigestExistsProbe, buildSessionDigest, realFsPath, repoRelative, type DigestEdit } from '../src/capture/session-digest.js';
 
 const HOST = /fileserver|example\.com|[\\/]opt[\\/]/i;
 const probes: string[] = [];

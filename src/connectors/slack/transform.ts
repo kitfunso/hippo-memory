@@ -1,4 +1,4 @@
-import type { RememberOpts } from '../../api.js';
+import type { RememberOpts } from '../../api/index.js';
 import { scopeFromChannel, type ChannelMeta } from './scope.js';
 import type { SlackMessageEvent } from './types.js';
 
@@ -14,18 +14,17 @@ export interface TransformInput {
  * without text). Caller treats null as "skip but mark idempotency seen".
  *
  * Contract:
- * - kind is the literal 'raw' (E1.x connector boundary, see src/importers.ts).
+ * - kind is the literal 'raw' (connector boundary, see src/importers.ts).
  * - artifact_ref format MUST be exactly `slack://${teamId}/${channelId}/${ts}`;
- *   the deletion path (Task 9) looks up by this string.
- * - owner is non-null whenever a row is written. Required by the v0.40.0
+ *   the deletion path looks up by this string.
+ * - owner is non-null whenever a row is written. Required by the
  *   provenance gate (`hippo provenance --strict`).
  *   - `user:<slack_user_id>` when the event carries a `user`.
  *   - `bot:<bot_id>` for the `bot_message` subtype (or any userless+text event
  *     that supplies bot_id).
  *   - `bot:unknown` only as a last-resort sentinel so the gate never sees null.
- *     Codex round 1 P1: skipping userless messages instead of stamping a bot
- *     owner would silently drop existing bot ingestion via the
- *     "skipped but seen" path at ingest.ts:54-65.
+ *     Skipping userless messages instead would silently drop bot ingestion
+ *     via the "skipped but seen" path in ingest.ts.
  */
 export function messageToRememberOpts(input: TransformInput): RememberOpts | null {
   const text = input.message.text?.trim();

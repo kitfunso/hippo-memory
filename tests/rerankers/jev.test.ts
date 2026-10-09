@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import type { SearchResult } from '../../src/search/types.js';
+import type { SearchResult } from '../../src/core/search-types.js';
 import { getReranker } from '../../src/rerankers/index.js';
-import { createJevReranker, jevReranker } from '../../src/rerankers/jev.js';
+import { createJevReranker } from '../../src/rerankers/jev.js';
 import type { RerankerFn } from '../../src/rerankers/types.js';
 
 // The stand-in fallback REVERSES its input, so a fallback is distinguishable
@@ -37,7 +37,7 @@ function jevResponse(nouls: Array<number | undefined>, status = 200): Response {
 
 const contents = (out: Array<{ entry: { content: string } }>) => out.map((r) => r.entry.content);
 
-describe('jevReranker', () => {
+describe('jev reranker', () => {
   let warnSpy: ReturnType<typeof vi.spyOn>;
   const inputs = () => [asResult('alpha', 1.0), asResult('beta', 0.9), asResult('gamma', 0.8)];
   const many = (n: number): SearchResult[] =>
@@ -148,8 +148,9 @@ describe('jevReranker', () => {
     expect(warnSpy).not.toHaveBeenCalled();
   });
 
-  it('is registered under the name jev, wired to the shipped reranker', () => {
-    expect(getReranker('jev')).toBe(jevReranker);
+  it('is registered under the name jev, wired to the shipped reranker', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(jevResponse([0.1, 0.9, 0.5]));
+    expect(contents(await getReranker('jev')!('q', inputs()))).toEqual(['beta', 'gamma', 'alpha']);
   });
 
   it("sends the default 40 candidates, or the caller's topK", async () => {
@@ -224,5 +225,29 @@ describe('jevReranker', () => {
     const out = await freshReranker()('q', inputs());
     expect(contents(out)).toEqual(['gamma', 'beta', 'alpha']);
     expect(warnSpy).toHaveBeenCalledOnce();
+  });
+});
+
+describe('jev reranker reply size cap', () => {
+  it('falls back, names the cap and stops pulling the body once it passes 1 MiB', async () => {
+    const warn = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    process.env.TYPESAFE_API_KEY = FAKE_KEY;
+    let pulled = 0;
+    let cancelled = false;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulled++;
+        controller.enqueue(new Uint8Array(64 * 1024).fill(0x20));
+      },
+      cancel() { cancelled = true; },
+    });
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(body, { status: 200 }));
+    const items = [asResult('alpha', 1.0), asResult('beta', 0.9), asResult('gamma', 0.8)];
+    const out = await createJevReranker(reversingFallback)('q', items);
+    delete process.env.TYPESAFE_API_KEY;
+    expect(contents(out)).toEqual(['gamma', 'beta', 'alpha']);
+    expect(warn.mock.calls.map((c) => String(c[0])).join('')).toContain('reply over 1048576 bytes');
+    expect(cancelled).toBe(true);
+    expect(pulled).toBeLessThan(100);
   });
 });

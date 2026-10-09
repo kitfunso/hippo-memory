@@ -1,13 +1,20 @@
 import { describe, it, expect, beforeAll, vi } from 'vitest';
-import {
-  crossEncoderReranker,
-  isCrossEncoderAvailable,
-} from '../../src/rerankers/cross-encoder.js';
+import { createRequire } from 'node:module';
+import { crossEncoderReranker } from '../../src/rerankers/cross-encoder.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import type { SearchResult } from '../../src/search/types.js';
+import type { SearchResult } from '../../src/core/search-types.js';
 
 function asResult(content: string, score: number): SearchResult {
   return { entry: createMemory(content), score, bm25: score, cosine: 0, tokens: 10 };
+}
+
+function transformersInstalled(): boolean {
+  try {
+    createRequire(import.meta.url).resolve('@huggingface/transformers');
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function isNumber<T>(value: T): value is T & number {
@@ -22,7 +29,7 @@ describe('crossEncoderReranker', () => {
     // Probe for DISCRIMINATION, not liveness: score a matching and a nonsense
     // candidate and require them to differ. Comparing one score against the
     // input score cannot tell a fallback from a constant-output model.
-    if (await isCrossEncoderAvailable()) {
+    if (transformersInstalled()) {
       try {
         const [hit, miss] = await Promise.all([
           crossEncoderReranker('how do I deploy', [asResult('production deployment runbook', 0.5)]),
@@ -86,9 +93,8 @@ describe('crossEncoderReranker', () => {
   });
 
   it('does not spam console.warn on repeated fallback calls', async () => {
-    // The warn fires at most once per process on first identity-fallback.
-    // beforeAll's probe call may have already consumed the warn on
-    // fallback-mode machines, so the upper bound holds in both modes.
+    // Calls inside the five-minute repeat window share one warning, and beforeAll's
+    // probe may already have used it, so the upper bound holds in both modes.
     const warnSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const inputs = [asResult('alpha', 1.0), asResult('beta', 0.5)];
     await crossEncoderReranker('q', inputs);

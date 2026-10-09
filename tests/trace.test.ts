@@ -2,15 +2,13 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
-import { execFileSync } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { listSessionEvents } from '../src/store/sessions.js';
-import { createMemory } from '../src/memory.js';
-import { renderTraceContent, parseSteps } from '../src/trace.js';
-
-const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
+import { createMemory } from '../src/core/memory.js';
+import { renderTraceContent, parseSteps } from '../src/consolidate/trace.js';
+import { hippoOut } from './_helpers/spawn-hippo.js';
 
 let tmpDir: string;
 let hippoDir: string;
@@ -26,11 +24,7 @@ afterEach(() => {
 
 function runHippo(args: string[]): string {
   const globalDir = path.join(tmpDir, 'global');
-  return execFileSync(process.execPath, [HIPPO_JS, ...args], {
-    env: { ...process.env, HIPPO_HOME: globalDir },
-    cwd: tmpDir,
-    encoding: 'utf8',
-  });
+  return hippoOut(args, { env: { ...process.env, HIPPO_HOME: globalDir }, cwd: tmpDir });
 }
 
 describe('hippo session complete', () => {

@@ -4,8 +4,9 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
+import { currentRequestStores, runWithRequestStores, type RequestStores } from '../src/db/index.js';
+import { sleepRuns } from './_helpers/sleep-runs.js';
 
 const roots: string[] = [];
 
@@ -20,15 +21,6 @@ function remember(hippoRoot: string, text: string) {
     { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_remember', arguments: { text } } },
     { hippoRoot, tenantId: 'default', actor: 'mcp' },
   );
-}
-
-function sleepRuns(hippoRoot: string): number {
-  const db = openHippoDb(hippoRoot);
-  try {
-    return db.prepare('SELECT COUNT(*) AS n FROM consolidation_runs').get<{ n: number }>().n;
-  } finally {
-    closeHippoDb(db);
-  }
 }
 
 describe('MCP auto-sleep', () => {
@@ -57,5 +49,33 @@ describe('MCP auto-sleep', () => {
 
     await remember(root, 'alice reviews every schema change');
     await vi.waitFor(() => expect(sleepRuns(root)).toBe(2));
+  });
+
+  it("runs in its own open scope, not the tool call's, with the caller's lock wait", async () => {
+    const root = mkdtempSync(join(tmpdir(), 'hippo-mcp-autosleep-scope-'));
+    roots.push(root);
+    initStore(root);
+    writeFileSync(join(root, 'config.json'), JSON.stringify({ autoSleep: { enabled: true, threshold: 1 } }));
+    const seen: { scope: RequestStores | undefined; open: boolean }[] = [];
+    vi.stubEnv('ANTHROPIC_API_KEY', 'test-not-a-key');
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      const scope = currentRequestStores();
+      seen.push({ scope, open: scope !== undefined && !scope.closed });
+      return new Response(JSON.stringify({ content: [{ text: '[]' }] }), { status: 200 });
+    }));
+
+    // HTTP POST /mcp wraps the call in a 250 ms scope; the tool call joins it.
+    let callScope: RequestStores | undefined;
+    await runWithRequestStores(async () => {
+      callScope = currentRequestStores();
+      await remember(root, 'the deploy moved to friday');
+    }, { busyWaitMs: 250 });
+    await vi.waitFor(() => expect(sleepRuns(root)).toBe(1));
+    expect(seen.length).toBeGreaterThan(0);
+    for (const s of seen) {
+      expect(s.open).toBe(true);
+      expect(s.scope).not.toBe(callScope);
+      expect(s.scope?.busyWaitMs).toBe(250);
+    }
   });
 });

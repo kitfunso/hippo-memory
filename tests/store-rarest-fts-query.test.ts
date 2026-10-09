@@ -12,7 +12,7 @@ import {
   pickRarestFtsQuery,
 } from '../src/store/search-rows.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { openHippoDb, closeHippoDb, setMeta } from '../src/db.js';
+import { openHippoDb, closeHippoDb, setMeta } from '../src/db/index.js';
 
 let tmpRoot: string;
 let root: string;
@@ -54,7 +54,7 @@ describe('pickRarestFtsQuery', () => {
     try {
       const query = pickRarestFtsQuery(db, ['journal_mode', 'busy_timeout', 'never_seen'], 8);
       expect(query.split(' ').sort()).toEqual(['busy_timeout', 'journal_mode']);
-      expect(loadRecallSearchEntriesFromDb(db, query, 10)).toHaveLength(1);
+      expect(loadRecallSearchEntriesFromDb(db, query, { limit: 10 })).toHaveLength(1);
     } finally {
       closeHippoDb(db);
     }
@@ -93,7 +93,7 @@ describe('loadRecallSearchEntriesFromDb', () => {
     const db = openHippoDb(root);
     let viaDb;
     try {
-      viaDb = loadRecallSearchEntriesFromDb(db, 'postgres migration rollback', 10, undefined, undefined, 'exact', true);
+      viaDb = loadRecallSearchEntriesFromDb(db, 'postgres migration rollback', { limit: 10, includeSuperseded: true });
     } finally {
       closeHippoDb(db);
     }

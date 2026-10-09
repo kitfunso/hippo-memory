@@ -26,7 +26,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
-import { remember, getContext, type Context } from '../src/api.js';
+import { remember, getContext, type Context } from '../src/api/index.js';
 
 function tmpHome() {
   const home = mkdtempSync(join(tmpdir(), 'hippo-api-ctx-'));
@@ -91,10 +91,29 @@ describe('api.getContext', () => {
       expect(result.entries.length).toBeLessThanOrEqual(5);
       expect(result.tokens).toBeGreaterThan(0);
       expect(result.tokens).toBeLessThanOrEqual(1500);
+      expect(result.tokens).toBe(result.entries.reduce((sum, e) => sum + e.tokens, 0));
       // Strongest first ordering
       for (let i = 1; i < result.entries.length; i++) {
         expect(result.entries[i - 1].score).toBeGreaterThanOrEqual(result.entries[i].score);
       }
+    } finally {
+      restore();
+    }
+  });
+
+  it('limit caps the number of entries returned', async () => {
+    const { home, restore } = tmpHome();
+    try {
+      const ctx: Context = {
+        hippoRoot: home,
+        tenantId: 'default',
+        actor: { subject: 'cli', role: 'admin' },
+      };
+      for (let i = 0; i < 4; i++) remember(ctx, { content: `getcontext-limit-${i}`, kind: 'distilled' });
+
+      const result = await getContext(ctx, { budget: 1500, limit: 2 });
+
+      expect(result.entries).toHaveLength(2);
     } finally {
       restore();
     }

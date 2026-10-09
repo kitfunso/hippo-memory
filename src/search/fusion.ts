@@ -1,7 +1,7 @@
-import type { MemoryEntry } from '../memory.js';
-import { rrfFuse } from '../rrf.js';
-import { graphRankStream, selectGraphSeeds, DEFAULT_GRAPH_SEED_COUNT } from '../graph-stream.js';
-import { compareEntryIdentity } from '../compare.js';
+import type { MemoryEntry } from '../core/memory.js';
+import { rrfFuse } from './rrf.js';
+import { graphRankStream, selectGraphSeeds, DEFAULT_GRAPH_SEED_COUNT } from '../graph/stream.js';
+import { compareEntryIdentity } from '../core/compare.js';
 import type { DenseScores } from './vector.js';
 
 /** Opt-in third RRF list ranking in-pool candidates by graph proximity to the strong lexical seeds. */

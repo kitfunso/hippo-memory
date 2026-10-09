@@ -1,5 +1,5 @@
 // The contract between a tool's adapter, which knows where its memory lives, and the sync, which knows no tool.
-import type { ToolId } from './tools.js';
+import type { ToolId } from '../core/agent-memory-tools.js';
 
 export type Scope = 'project' | 'user';
 

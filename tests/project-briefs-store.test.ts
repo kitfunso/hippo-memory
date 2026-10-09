@@ -25,9 +25,9 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { deleteEntry } from '../src/store/delete-and-batch.js';
-import { Layer} from '../src/memory.js';
+import { Layer} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../src/db.js';
+import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../src/db/index.js';
 import {
   saveProjectBrief,
   closeProjectBrief,
@@ -39,7 +39,7 @@ import {
   VALID_BRIEF_STATES,
   MAX_BRIEF_SUMMARY_LEN,
   MAX_RECEIPT_HEADLINE_LEN,
-} from '../src/project-briefs.js';
+} from '../src/objects/project-briefs.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 function safeRmSync(p: string): void {
@@ -73,7 +73,7 @@ function setCreated(home: string, memoryId: string, isoCreated: string): void {
   finally { closeHippoDb(db); }
 }
 
-describe('project_briefs store (E2 repo-scoped / auto-refreshes first-class object)', () => {
+describe('project_briefs store (repo-scoped / auto-refreshes first-class object)', () => {
   let home: string;
   beforeEach(() => { home = makeRoot('project-briefs'); });
   afterEach(() => safeRmSync(home));
@@ -347,6 +347,9 @@ describe('project_briefs store (E2 repo-scoped / auto-refreshes first-class obje
     expect(assembled.receiptCount).toBe(50);
     expect(assembled.markdown.length).toBeLessThanOrEqual(MAX_BRIEF_SUMMARY_LEN);
     expect(assembled.markdown).toContain('omitted (summary cap)');
+    const kept = assembled.markdown.split('\n').filter((l) => l.startsWith('- ')).length;
+    expect(assembled.markdown).toContain(`_Auto-assembled from ${kept} of 50 receipt(s)._`);
+    expect(assembled.markdown).toContain(`_... ${50 - kept} more receipt(s) omitted (summary cap)._`);
     // refresh must SUCCEED (not throw) and store a valid brief under the cap
     const b = refreshBrief(home, 'default', 'big');
     expect(b.version).toBe(1);

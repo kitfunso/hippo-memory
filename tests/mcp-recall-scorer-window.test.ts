@@ -13,10 +13,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { Layer} from '../src/memory.js';
+import { Layer} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
-import { RecallContractError } from '../src/api.js';
+import { RecallContractError } from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 function callTool(
@@ -44,7 +44,7 @@ function extractResultText(response: McpResponse | null): string {
   return result?.content?.[0]?.text ?? '';
 }
 
-describe('MCP hippo_recall scorer_window (v1.7.2 T4)', () => {
+describe('MCP hippo_recall scorer_window', () => {
   let home: string;
 
   beforeEach(() => {

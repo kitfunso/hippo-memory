@@ -57,7 +57,7 @@ describe('verifyGitHubSignature', () => {
   });
 });
 
-describe('computeIdempotencyKey (codex P0 #3 replay defense + v1.3.1 source-aware fix)', () => {
+describe('computeIdempotencyKey (replay defense, source-aware)', () => {
   it('different artifact_refs produce different keys', () => {
     const k1 = computeIdempotencyKey('github://acme/demo/issue/1', '2026-05-04T10:00:00Z');
     const k2 = computeIdempotencyKey('github://acme/demo/issue/2', '2026-05-04T10:00:00Z');

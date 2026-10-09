@@ -1,0 +1,45 @@
+{
+  "order": [
+    "base",
+    "db",
+    "store",
+    "domain",
+    "api",
+    "surface"
+  ],
+  "folders": {
+    "agent-memories": "domain",
+    "api": "api",
+    "capture": "surface",
+    "cli": "surface",
+    "connectors": "surface",
+    "core": "base",
+    "consolidate": "domain",
+    "dashboard": "surface",
+    "db": "db",
+    "entry": "surface",
+    "eval": "domain",
+    "graph": "domain",
+    "hooks": "domain",
+    "importers": "surface",
+    "mcp": "surface",
+    "objects": "domain",
+    "predictions": "domain",
+    "rerankers": "domain",
+    "search": "domain",
+    "server": "surface",
+    "store": "store",
+    "util": "base",
+    "learn": "domain",
+    "trust": "domain",
+    "sharing": "domain"
+  },
+  "rootFiles": {
+    "cli.ts": "surface",
+    "doctor.ts": "surface",
+    "index.ts": "surface",
+    "postinstall.ts": "surface",
+    "server.ts": "surface",
+    "support-bundle.ts": "surface"
+  }
+}

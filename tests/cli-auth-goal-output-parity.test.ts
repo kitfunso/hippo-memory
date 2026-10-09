@@ -2,11 +2,12 @@
 // in process on a real store, so routing these verbs through the api layer cannot change a byte or a row.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { cmdAuth } from '../src/cli/auth.js';
-import { cmdGoal } from '../src/cli/goals.js';
-import * as api from '../src/api.js';
-import { verifyApiKeyCached } from '../src/auth.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { handleAuth } from '../src/cli/auth.js';
+import { handleGoal } from '../src/cli/goals.js';
+import * as api from '../src/api/index.js';
+import { verifyApiKeyCached } from '../src/store/auth.js';
+import { sqliteStore } from '../src/store/index.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 
@@ -56,13 +57,13 @@ describe('hippo auth revoke, grant and ungrant (in process)', () => {
     const mask = masker(/hk_[a-z2-7]{24}/g, 'key');
     mask(home.keyId); mask(acme.keyId); mask(spare.keyId);
 
-    // Warm the verified-key cache so the revoke and the grant below must evict it.
-    expect(verifyApiKeyCached(root, acme.plaintext)?.scopes).toEqual([]);
-    expect(verifyApiKeyCached(root, spare.plaintext)?.scopes).toEqual([]);
+    // Prove both secrets first, so the revoke and the grant below must show on keys this process already trusts.
+    expect((await verifyApiKeyCached(acme.plaintext, sqliteStore(root)))?.scopes).toEqual([]);
+    expect((await verifyApiKeyCached(spare.plaintext, sqliteStore(root)))?.scopes).toEqual([]);
 
     const transcript: string[] = [];
     const step = async (label: string, args: string[], flags: Flags = {}): Promise<void> => {
-      const r = await runInProcess(() => cmdAuth(root, args, flags));
+      const r = await runInProcess(() => handleAuth({ hippoRoot: root, args, flags }));
       transcript.push(`$ auth ${label} -> ${r.status}\n--- stdout\n${mask(r.stdout)}--- stderr\n${mask(r.stderr)}`);
     };
 
@@ -72,12 +73,12 @@ describe('hippo auth revoke, grant and ungrant (in process)', () => {
     await step('grant (unknown)', ['grant', 'hk_aaaaaaaaaaaaaaaaaaaaaaaa', 'unknown:legacy']);
     await step('grant (open scope)', ['grant', spare.keyId, 'team:eng']);
     await step('grant', ['grant', spare.keyId, 'unknown:legacy']);
-    expect(verifyApiKeyCached(root, spare.plaintext)?.scopes).toEqual(['unknown:legacy']);
+    expect((await verifyApiKeyCached(spare.plaintext, sqliteStore(root)))?.scopes).toEqual(['unknown:legacy']);
     await step('grant --json (again)', ['grant', spare.keyId, 'unknown:legacy'], { json: true });
     await step('ungrant', ['ungrant', spare.keyId, 'unknown:legacy']);
     await step('ungrant --json (none held)', ['ungrant', spare.keyId, 'unknown:legacy'], { json: true });
     await step('revoke (other tenant)', ['revoke', acme.keyId]);
-    expect(verifyApiKeyCached(root, acme.plaintext)).toBeNull();
+    expect(await verifyApiKeyCached(acme.plaintext, sqliteStore(root))).toBeNull();
     await step('revoke --json (again)', ['revoke', acme.keyId], { json: true });
     await step('grant (revoked)', ['grant', acme.keyId, 'unknown:legacy']);
     await step('revoke (own tenant)', ['revoke', home.keyId], { json: true });
@@ -97,7 +98,7 @@ describe('hippo goal (in process)', () => {
     const mask = masker(/\b(?:g|rp)_[0-9a-f]{16}\b/g, 'id');
     const transcript: string[] = [];
     const step = async (label: string, args: string[], flags: Flags = {}): Promise<string> => {
-      const r = await runInProcess(() => cmdGoal(root, args, flags));
+      const r = await runInProcess(() => handleGoal({ hippoRoot: root, args, flags }));
       transcript.push(`$ goal ${label} -> ${r.status}\n--- stdout\n${mask(r.stdout)}--- stderr\n${mask(r.stderr)}`);
       return r.stdout.trim();
     };

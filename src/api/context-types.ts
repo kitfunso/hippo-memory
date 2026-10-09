@@ -1,31 +1,26 @@
 // Option and result shapes for getContext.
 
 import type { TaskSnapshot, SessionEvent } from '../store/rows.js';
-import type { SessionHandoff } from '../handoff.js';
-import type { MemoryEntry } from '../memory.js';
-import type { DeliveryObserver } from '../delivery-recorder.js';
-import type { AmbientState } from '../ambient.js';
+import type { SessionHandoff } from '../core/handoff.js';
+import type { MemoryEntry } from '../core/memory.js';
+import type { DeliveryObserver } from '../store/delivery-recorder.js';
+import type { AmbientState } from '../core/ambient.js';
+import type { ProjectRef } from '../core/project-identity.js';
 
 // ---------------------------------------------------------------------------
-// getContext (extracted from cmdContext — Task 5 of the api.ts refactor)
+// getContext
 // ---------------------------------------------------------------------------
 
 /**
  * Options for `getContext` — assemble a budget-bounded context bundle
  * (recalled memories + active task snapshot + handoff + recent events).
- * Extracted from `cmdContext` in `cli.ts` in Episode A of the api.ts refactor.
  *
  * Named `getContext` (not `context`) to avoid collision with the `Context`
  * interface above and the ubiquitous `ctx: Context` convention. Follows the
  * existing `getEntry` naming pattern in store.ts.
  *
- * Scope narrow (T5 execute decision): rendering opts (`format`, `framing`,
- * `rendered`) and host-side opts (`auto`) are NOT included here. The print
- * helpers (`printContextMarkdown`, `printActiveTaskSnapshot`, `printHandoff`,
- * `printSessionEvents`) are shared with `cmdRecall` / `cmdSnapshot` /
- * `cmdHandoffShow` — moving them into api.ts would expand T5 to also rewire
- * those commands. CLI handles rendering + auto-resolution. Episode B can add
- * `api.renderContext` once a shared rendering need actually materializes.
+ * Rendering opts (`format`, `framing`, `rendered`) and host-side opts (`auto`) stay in the CLI,
+ * because its print helpers are shared with `cmdRecall` / `handleSnapshot` / `cmdHandoffShow`.
  */
 export interface ContextOpts {
   q?: string;
@@ -37,7 +32,7 @@ export interface ContextOpts {
   /** Envelope scope to match exactly, as in `recall`: admits that scope even when private, after the actor's scope check. */
   exactScope?: string;
   /** With `pinnedOnly`, also inject the N most recent writes that pass the
-   *  quality floor (`isContentWorthStoring`, DF3). Filtering happens BEFORE
+   *  quality floor (`isWorthSurfacing`). Filtering happens BEFORE
    *  the take-N, so a caller asking for 5 gets 5 qualifying entries rather
    *  than 5-minus-junk; pinned entries bypass the floor. Entries are only
    *  skipped for this read, never mutated or deleted. Ignored when
@@ -47,12 +42,12 @@ export interface ContextOpts {
    *  origin partition excludes by default. They come back tagged
    *  `category: 'cross-project'` so renderers can demarcate them. */
   crossProject?: boolean;
-  /** The active project name for the origin partition ('' = not in a
-   *  project). Defaults to `resolveProjectIdentity(process.cwd()).name`;
-   *  surfaces whose process cwd is not the caller's project (HTTP server)
-   *  should pass it explicitly. */
-  currentProject?: string;
-  /** DF1 (docs/plans/2026-08-23-df1-snapshot-lifecycle.md, T2): the calling
+  /** The active project for the origin partition ('' = not in a project): a
+   *  name, or an identity whose rows may also carry its legacy folder name.
+   *  Defaults to `resolveProjectIdentity(process.cwd())`; surfaces whose
+   *  process cwd is not the caller's project (HTTP server) should pass it. */
+  currentProject?: ProjectRef;
+  /** The calling
    *  session's id. Stamped on this call's recall trace, and the owner-match input to
    *  `loadFreshActiveTaskSnapshot` — when it strictly equals the active
    *  snapshot's `session_id`, the read is unbounded (same-session
@@ -61,12 +56,13 @@ export interface ContextOpts {
    *  it just means every snapshot goes through the age check. Host-resolved
    *  (stdin payload, HIPPO_SESSION_ID, else the host's session var) so this stays host-agnostic. */
   currentSessionId?: string | null;
-  /** Z1: raw hook-payload prompt; only the pinned-only branch reads it, gated on `pinnedInject.promptRecall`. */
+  /** Raw hook-payload prompt; only the pinned-only branch reads it, gated on `pinnedInject.promptRecall`. */
   prompt?: string;
   /** What the budget pays for, from the caller that renders the block. Absent = the memory text alone. */
   cost?: ContextCost;
   /** @internal The CLI's delivery-ledger observer; it only reads, so selection is the same with or without it. */
   deliveryObserver?: DeliveryObserver;
+  sharedStore?: true;
 }
 
 /** Budget prices in the text a caller prints, so the budget bounds what reaches the model. */
@@ -88,7 +84,7 @@ export interface ContextResultEntry {
   tokens: number;
   isGlobal?: boolean;
   isFreshTail?: boolean;
-  /** Z1: admitted by the prompt-recall gate, not the recent-N backfill or a pin. */
+  /** Admitted by the prompt-recall gate, not the recent-N backfill or a pin. */
   promptRecall?: boolean;
   /** v39: the entry's owning project ('' = user-global, null = legacy row). */
   origin?: string | null;

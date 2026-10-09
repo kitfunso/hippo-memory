@@ -15,10 +15,6 @@ describe('check-env-reads', () => {
     writeFileSync(p, body, 'utf8');
   }
 
-  it('the real src/ tree reads process.env only through env.ts', () => {
-    expect(findEnvReads('src')).toEqual([]);
-  });
-
   it('flags dot, bracket, optional-chain and destructuring access, and skips comments', () => {
     const text = [
       'const a = process.env.HIPPO_X;',

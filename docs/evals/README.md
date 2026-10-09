@@ -29,6 +29,12 @@ claim is a shorter context, not a better answer.
 
 ## By campaign, newest first
 
+### Q3b, one recall ranker (2026-10)
+
+| Doc | What it settles |
+|---|---|
+| [2026-10-04-q3b-ranker-floor-prereg.md](2026-10-04-q3b-ranker-floor-prereg.md) | Pre-registration: which of the CLI, HTTP and MCP ranking cores the single recall entry point keeps, on the micro fixtures plus a 1,600-row window fixture; a retrieval-floor check, not a success measure |
+
 ### Track Z, zero-touch memory (2026-09)
 
 | Doc | What it settles |

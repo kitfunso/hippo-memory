@@ -2,16 +2,19 @@
 
 import { loadAllEntries } from '../store/entry-reads.js';
 import { deleteEntry, memoriesBackingObjects } from '../store/delete-and-batch.js';
-import { openHippoDb, closeHippoDb } from '../db.js';
-import { auditMemories, AUDIT_OPS, type AuditEvent, type AuditOp } from '../audit.js';
-import * as api from '../api.js';
-import { resolveTenantId } from '../tenant.js';
-import { pruneAuditLog, parseOlderThanFlag } from '../audit-prune.js';
+import { auditMemories, AUDIT_OPS, type AuditEvent, type AuditOp } from '../store/audit.js';
+import * as api from '../api/index.js';
+import { resolveTenantId } from '../store/tenant.js';
+import { pruneAuditLog, parseOlderThanFlag } from './audit-prune.js';
 import { printError } from './output.js';
-import { requireInit, type CommandContext, resolveAuthRoot } from './shared.js';
+import { type CliFlags, type CommandContext, boolFlag, flagIsTrue, stringFlag } from './flag-values.js';
+import { requireInit, resolveAuthRoot } from './shared.js';
+import { repairAutomaticMemories } from './quality-repair.js';
+import { getGlobalRoot } from '../sharing/global-store.js';
+import { errorMessage } from '../util/log.js';
 
 // ---------------------------------------------------------------------------
-// Audit log subcommands (A5 stub auth — `hippo audit list`)
+// Audit log subcommands (`hippo audit list`)
 // ---------------------------------------------------------------------------
 
 const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>(AUDIT_OPS);
@@ -22,27 +25,18 @@ function formatAuditRow(ev: AuditEvent): string {
   return `${ev.ts}  ${ev.actor}  ${ev.op}  ${target}  ${meta}`;
 }
 
-function cmdAuditList(hippoRoot: string, flags: Record<string, string | boolean | string[]>): void {
-  const root = resolveAuthRoot(hippoRoot, flags);
-  const asJson = Boolean(flags['json']);
-  const tenantId = resolveTenantId({});
-
-  const opFlag = typeof flags['op'] === 'string' ? (flags['op'] as string) : undefined;
+function readAuditOp(flags: CliFlags): AuditOp | undefined {
+  const opFlag = stringFlag(flags, 'op');
   if (opFlag && !VALID_AUDIT_OPS.has(opFlag as AuditOp)) {
-    // Regenerate from Set to prevent future drift (v1.11.5: pre-v1.11.5 message
-    // was hand-maintained and had drifted — missed 'auth_revoke' and 'outcome').
+    // Built from the Set so the message cannot drift from the valid ops.
     const expected = Array.from(VALID_AUDIT_OPS).join(' | ');
     printError(`Unknown --op value: ${opFlag}. Expected one of: ${expected}.`);
     process.exit(1);
   }
-  const op = opFlag as AuditOp | undefined;
+  return opFlag as AuditOp | undefined;
+}
 
-  const since = typeof flags['since'] === 'string' ? (flags['since'] as string) : undefined;
-  if (since !== undefined && !Number.isFinite(new Date(since).getTime())) {
-    printError(`Invalid --since: ${since} (expected an ISO timestamp like 2026-04-22 or 2026-04-22T12:00:00Z).`);
-    process.exit(1);
-  }
-
+function readAuditLimit(flags: CliFlags): number {
   const limitRaw = flags['limit'];
   let limit = 100;
   if (limitRaw !== undefined && typeof limitRaw !== 'boolean') {
@@ -57,9 +51,26 @@ function cmdAuditList(hippoRoot: string, flags: Record<string, string | boolean 
     printError(`--limit must be between 1 and 10000 (got ${limit}).`);
     process.exit(1);
   }
+  return limit;
+}
+
+async function cmdAuditList(hippoRoot: string, flags: CliFlags): Promise<void> {
+  const root = resolveAuthRoot(hippoRoot, flags);
+  const asJson = boolFlag(flags, 'json');
+  const tenantId = resolveTenantId({});
+
+  const op = readAuditOp(flags);
+
+  const since = stringFlag(flags, 'since');
+  if (since !== undefined && !Number.isFinite(new Date(since).getTime())) {
+    printError(`Invalid --since: ${since} (expected an ISO timestamp like 2026-04-22 or 2026-04-22T12:00:00Z).`);
+    process.exit(1);
+  }
+
+  const limit = readAuditLimit(flags);
 
   const ctx: api.Context = { hippoRoot: root, tenantId, actor: { subject: 'cli', role: 'admin' } };
-  const events = api.auditList(ctx, { op, since, limit });
+  const events = await api.auditList(ctx, { op, since, limit });
 
   if (asJson) {
     console.log(JSON.stringify(events));
@@ -77,8 +88,8 @@ function cmdAuditList(hippoRoot: string, flags: Record<string, string | boolean 
   }
 }
 
-function cmdAuditPrune(hippoRoot: string, flags: Record<string, string | boolean | string[]>): void {
-  const olderThanRaw = typeof flags['older-than'] === 'string' ? (flags['older-than'] as string) : '';
+function cmdAuditPrune(hippoRoot: string, flags: CliFlags): void {
+  const olderThanRaw = stringFlag(flags, 'older-than') ?? '';
   if (!olderThanRaw) {
     printError('Usage: hippo audit prune --older-than <Nd> [--dry-run] [--tenant <t>]');
     process.exit(1);
@@ -87,22 +98,14 @@ function cmdAuditPrune(hippoRoot: string, flags: Record<string, string | boolean
   try {
     olderThanDays = parseOlderThanFlag(olderThanRaw);
   } catch (e) {
-    printError((e as Error).message);
+    printError(errorMessage(e));
     process.exit(1);
   }
-  const tenantId = typeof flags['tenant'] === 'string'
-    ? (flags['tenant'] as string).trim() || resolveTenantId({})
-    : resolveTenantId({});
-  const dryRun = flags['dry-run'] === true;
-  const asJson = Boolean(flags['json']);
+  const tenantId = stringFlag(flags, 'tenant')?.trim() || resolveTenantId({});
+  const dryRun = flagIsTrue(flags, 'dry-run');
+  const asJson = boolFlag(flags, 'json');
 
-  const db = openHippoDb(hippoRoot);
-  let result;
-  try {
-    result = pruneAuditLog(db, { olderThanDays, tenantId, dryRun, actor: 'cli' });
-  } finally {
-    closeHippoDb(db);
-  }
+  const result = pruneAuditLog(hippoRoot, { olderThanDays, tenantId, dryRun, actor: 'cli' });
 
   if (asJson) {
     console.log(JSON.stringify(result));
@@ -115,10 +118,10 @@ function cmdAuditPrune(hippoRoot: string, flags: Record<string, string | boolean
   }
 }
 
-function cmdAuditLog(hippoRoot: string, args: string[], flags: Record<string, string | boolean | string[]>): void {
+async function cmdAuditLog(hippoRoot: string, args: string[], flags: CliFlags): Promise<void> {
   const sub = args[0];
   if (sub === 'list') {
-    cmdAuditList(hippoRoot, flags);
+    await cmdAuditList(hippoRoot, flags);
     return;
   }
   if (sub === 'prune') {
@@ -129,18 +132,54 @@ function cmdAuditLog(hippoRoot: string, args: string[], flags: Record<string, st
   process.exit(1);
 }
 
-export function handleAudit({ hippoRoot, args, flags }: CommandContext): void {
-  // `audit list` and `audit prune` -> A5 audit-log subcommands.
+function auditRepair(hippoRoot: string, flags: CliFlags): void {
+  const apply = flagIsTrue(flags, 'apply') && flags['dry-run'] !== true;
+  const result = repairAutomaticMemories(flags['global'] ? getGlobalRoot() : hippoRoot, { tenantId: resolveTenantId({}), apply });
+  if (flags['json']) {
+    console.log(JSON.stringify(result));
+    return;
+  }
+  console.log(`Quality repair ${apply ? 'apply' : 'preview'}: ${result.issues.length} issue(s) across ${result.total} memories.`);
+  for (const issue of result.issues) console.log(`  [${issue.disposition}] ${issue.id}: ${issue.reason}${issue.protection ? ` (${issue.protection})` : ''}`);
+  for (const blocker of result.blockers) console.log(`  Blocked: ${blocker}. Repair never upgrades a store; any other hippo command does, then run repair again.`);
+  const restore = `hippo dormant restore <id>${flags['global'] ? ' --global' : ''}`;
+  if (result.backup) console.log(`Backup: ${result.backup}\nMoved ${result.appliedIds.length} memories to dormant storage. Recovery: ${restore}.`);
+  else if (apply && result.supported) console.log('Nothing moved: no unprotected memory has a certain defect.');
+  for (const warning of result.warnings) console.log(`Warning: ${warning}`);
+  if (!apply) console.log('Preview only. Add --apply to move set-aside memories to dormant storage. Pin a review memory to keep it.');
+}
+
+function fixAuditErrors(hippoRoot: string, result: ReturnType<typeof auditMemories>, flags: CliFlags): void {
+  const errors = result.issues.filter(i => i.severity === 'error');
+  if (errors.length > 0 && flagIsTrue(flags, 'dry-run')) {
+    console.log(`\nWould remove ${errors.length} error-severity memories (dry run, nothing deleted).`);
+    console.log(`${result.issues.length - errors.length} warnings would remain (review manually).`);
+  } else if (errors.length > 0) {
+    const removedCount = errors.filter((issue) =>
+      deleteEntry(hippoRoot, issue.memoryId, { reason: `audit --fix: ${issue.reason}`, automatic: true })).length;
+    console.log(`\nRemoved ${removedCount} error-severity memories.`);
+    console.log(`${result.issues.length - errors.length} warnings remain (review manually).`);
+  } else {
+    console.log(`\nNo error-severity issues. Warnings require manual review.`);
+  }
+}
+
+export async function handleAudit({ hippoRoot, args, flags }: CommandContext): Promise<void> {
+  if (args[0] === 'repair') {
+    auditRepair(hippoRoot, flags);
+    return;
+  }
+  // `audit list` and `audit prune` -> audit-log subcommands.
   // Other forms (no sub, --fix) keep the existing memory-quality auditor
   // for backwards compatibility.
   if (args[0] === 'list' || args[0] === 'prune') {
-    cmdAuditLog(hippoRoot, args, flags);
+    await cmdAuditLog(hippoRoot, args, flags);
     return;
   }
   requireInit(hippoRoot);
   const entries = loadAllEntries(hippoRoot, resolveTenantId({}));
   const result = auditMemories(entries, memoriesBackingObjects(hippoRoot));
-  const shouldFix = Boolean(flags['fix']);
+  const shouldFix = boolFlag(flags, 'fix');
 
   if (result.issues.length === 0) {
     console.log(`All ${result.total} memories passed quality checks.`);
@@ -152,18 +191,7 @@ export function handleAudit({ hippoRoot, args, flags }: CommandContext): void {
       console.log(`         "${issue.content.slice(0, 80)}${issue.content.length > 80 ? '...' : ''}"`);
     }
     if (shouldFix) {
-      const errors = result.issues.filter(i => i.severity === 'error');
-      if (errors.length > 0 && flags['dry-run'] === true) {
-        console.log(`\nWould remove ${errors.length} error-severity memories (dry run, nothing deleted).`);
-        console.log(`${result.issues.length - errors.length} warnings would remain (review manually).`);
-      } else if (errors.length > 0) {
-        const removedCount = errors.filter((issue) =>
-          deleteEntry(hippoRoot, issue.memoryId, { reason: `audit --fix: ${issue.reason}`, automatic: true })).length;
-        console.log(`\nRemoved ${removedCount} error-severity memories.`);
-        console.log(`${result.issues.length - errors.length} warnings remain (review manually).`);
-      } else {
-        console.log(`\nNo error-severity issues. Warnings require manual review.`);
-      }
+      fixAuditErrors(hippoRoot, result, flags);
     } else {
       console.log(`\nRun with --fix to auto-remove error-severity issues.`);
     }

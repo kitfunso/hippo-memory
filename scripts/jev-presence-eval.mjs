@@ -11,6 +11,7 @@ import { hybridSearch } from '../dist/search/hybrid.js';
 import { buildCorpus } from '../dist/search/bm25.js';
 import { loadAllEntries } from '../dist/store/entry-reads.js';
 import { getReranker } from '../dist/rerankers/index.js';
+import { mulberry32 } from './lib/prng.mjs';
 
 const NOW = new Date('2026-09-18T14:31:52.073Z'); // same clock as Lane 15, see rerank-3arm-ab.mjs:15
 const CANDIDATE_TOPK = 40;
@@ -66,15 +67,6 @@ function redact(s) {
   return String(s).replace(/Bearer\s+\S+/gi, 'Bearer [redacted]').replace(/[A-Za-z0-9_-]{24,}/g, '[redacted]');
 }
 
-function mulberry32(seed) {
-  let a = seed >>> 0;
-  return () => {
-    a |= 0; a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
 const quantile = (sortedAsc, p) => sortedAsc[Math.min(sortedAsc.length - 1, Math.max(0, Math.floor(sortedAsc.length * p)))];
 
 // Mid-rank Mann-Whitney: mathematically equivalent to counting a tie as half a win.

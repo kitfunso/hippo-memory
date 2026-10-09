@@ -1,11 +1,16 @@
 // Tool definitions and input schemas served by tools/list.
 
 import type { ToolInputSchema } from './tool-args.js';
+import { DEFAULT_RECALL_BUDGET } from '../core/search-types.js';
+import { DEFAULT_ASSEMBLE_BUDGET } from '../api/assemble.js';
+import { MAX_ID_LEN } from '../util/http-util.js';
+import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../store/rows.js';
+import { DEFAULT_CONFIG } from '../core/config.js';
 
 // ── Tool definitions ──
 
-// HTTP sets no budget cap; 25x the 4000 recall default leaves room for large-context clients while bounding one call's work.
-const MAX_BUDGET_TOKENS = 100_000;
+// HTTP sets no budget cap; 25x the recall default leaves room for large-context clients while bounding one call's work.
+const MAX_BUDGET_TOKENS = 25 * DEFAULT_RECALL_BUDGET;
 // Same ceiling as the HTTP list routes' parseListLimit.
 const MAX_LIST_LIMIT = 1000;
 
@@ -28,7 +33,7 @@ export const TOOLS: readonly McpToolDefinition[] = [
           type: 'number',
           minimum: 0,
           maximum: MAX_BUDGET_TOKENS,
-          description: `Max tokens to return (default: config.defaultBudget, 4000; max ${MAX_BUDGET_TOKENS})`,
+          description: `Max tokens to return (default: config.defaultBudget, ${DEFAULT_RECALL_BUDGET}; max ${MAX_BUDGET_TOKENS})`,
         },
         include_continuity: {
           type: 'boolean',
@@ -52,12 +57,12 @@ export const TOOLS: readonly McpToolDefinition[] = [
         },
         scorer_window: {
           type: 'number',
-          description: 'How many of the top-ranked memories the fresh-tail and summarize-overflow appendix is worked out against. The main list ranks the whole tenant store, so scorer_window does not narrow it. Default 200. Rejected as RecallContractError code=invalid_scorer_window if 0/negative/non-finite/non-numeric.',
+          description: `How many of the top-ranked memories the fresh-tail and summarize-overflow appendix is worked out against. The main list ranks the whole tenant store, so scorer_window does not narrow it. Default ${DEFAULT_SEARCH_CANDIDATE_LIMIT}. Rejected as RecallContractError code=invalid_scorer_window if 0/negative/non-finite/non-numeric.`,
         },
         session_id: {
           type: 'string',
-          maxLength: 256,
-          description: 'Optional session id (v1.7.4). When set AND (tenant, session) has active goals, applies the dlPFC goal-stack boost to the ranked memories before formatting. Mirrors fresh_tail_session_id shape (256-char cap).',
+          maxLength: MAX_ID_LEN,
+          description: `Optional session id (v1.7.4). When set AND (tenant, session) has active goals, applies the dlPFC goal-stack boost to the ranked memories before formatting. Mirrors fresh_tail_session_id shape (${MAX_ID_LEN}-char cap).`,
         },
       },
       required: ['query'],
@@ -78,7 +83,7 @@ export const TOOLS: readonly McpToolDefinition[] = [
           type: 'number',
           minimum: 0,
           maximum: MAX_BUDGET_TOKENS,
-          description: `Token budget for the assembled context (default 4000; max ${MAX_BUDGET_TOKENS}). Eviction kicks in over budget.`,
+          description: `Token budget for the assembled context (default ${DEFAULT_ASSEMBLE_BUDGET}; max ${MAX_BUDGET_TOKENS}). Eviction kicks in over budget.`,
         },
         fresh_tail_count: {
           type: 'number',
@@ -143,6 +148,7 @@ export const TOOLS: readonly McpToolDefinition[] = [
         error: { type: 'boolean', description: 'Mark as error memory (doubles half-life)' },
         pin: { type: 'boolean', description: 'Pin memory (never decays)' },
         tag: { type: 'string', description: 'Optional tag for categorization' },
+        personal: { type: 'boolean', description: 'Store it as your own private memory: only you can recall it, in every project. Needs a key you minted or a sign-in.' },
       },
       required: ['text'],
     },
@@ -150,7 +156,7 @@ export const TOOLS: readonly McpToolDefinition[] = [
   {
     name: 'hippo_outcome',
     description:
-      'Report whether recalled memories were useful. Strengthens good memories (+5 days half-life) and weakens bad ones (-3 days). Call after completing work.',
+      "Report whether recalled memories were useful. Good outcomes slow a memory's decay and bad ones speed it up, in proportion to its record. Call after completing work.",
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -173,7 +179,7 @@ export const TOOLS: readonly McpToolDefinition[] = [
           type: 'number',
           minimum: 0,
           maximum: MAX_BUDGET_TOKENS,
-          description: `Max tokens (default: config.defaultContextBudget, 3000; max ${MAX_BUDGET_TOKENS})`,
+          description: `Max tokens (default: config.defaultContextBudget, ${DEFAULT_CONFIG.defaultContextBudget}; max ${MAX_BUDGET_TOKENS})`,
         },
         scope: {
           type: 'string',

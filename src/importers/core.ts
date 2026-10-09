@@ -3,16 +3,18 @@
  * Imports memories from ChatGPT, Claude, Cursor, generic files, and structured markdown.
  */
 
-import { createMemory, Layer, MemoryEntry } from '../memory.js';
+import { DEFAULT_TENANT_ID } from '../util/env.js';
+import { createMemory, Layer, MemoryEntry } from '../core/memory.js';
 import { writeEntry } from '../store/entry-writes.js';
 import { loadAllEntries } from '../store/entry-reads.js';
-import { duplicateKey, storedTextKeys } from '../same-text.js';
-import { getGlobalRoot, initGlobal } from '../shared.js';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../db.js';
-import { RejectedValueError, checkRejectionGuard } from '../rejection.js';
-import { loadConfig } from '../config.js';
-import { vetSecrets } from '../secret-detect.js';
-import { log } from '../log.js';
+import { duplicateKey, storedTextKeys } from '../util/same-text.js';
+import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
+import { withRequestStoresSync } from '../db/request-stores.js';
+import { RejectedValueError } from '../store/rejection.js';
+import { rejectionGuardRefuses } from '../store/rejected-values.js';
+import { loadConfig } from '../core/config.js';
+import { vetSecrets } from '../util/secret-detect.js';
+import { log } from '../util/log.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -60,7 +62,7 @@ export interface ImportOptions {
    * sharing a basename would collide and clobber each other). importVault throws
    * if it is missing or blank. Optional in this shared type only because the
    * other importers ignore it. Operator-supplied, so the loader query LIKE-escapes
-   * it (see `escapeLike` below).
+   * it (`escapeLike` in src/util/escape.ts).
    */
   name?: string;
   /**
@@ -84,17 +86,7 @@ export function importEntries(
   tags: string[],
   options: ImportOptions
 ): ImportResult {
-  const targetRoot = options.global ? getGlobalRoot() : options.hippoRoot;
-
-  // Ensure store is ready
-  if (options.global) {
-    initGlobal();
-  }
-
-  const keys = storedTextKeys(loadAllEntries(
-    targetRoot,
-    options.global ? undefined : options.tenantId,
-  ));
+  const { targetRoot, keys } = openImportTarget(options);
   const allTags = [...new Set([...tags, ...(options.extraTags ?? [])])];
   const baseHalfLifeDays = loadConfig(targetRoot).defaultHalfLifeDays;
 
@@ -105,32 +97,20 @@ export function importEntries(
   let redacted = 0;
   const entries: MemoryEntry[] = [];
 
-  // AT1 P2 fix: a dry-run preview never called writeEntry, so it never
-  // checked tombstones either — every non-duplicate chunk counted as
-  // `imported` even when a real run would refuse it, making the preview's
-  // `rejected` count silently 0. Probe (read-only) via the same guard
-  // writeEntry uses internally, without ever writing.
-  const dryRunDb = options.dryRun ? openHippoDb(targetRoot) : null;
-  try {
+  // One scope, so the store opens once however many chunks land: each write, or a dry run's guard probe, shares its handle.
+  return withRequestStoresSync(() => {
     for (const raw of chunks) {
       const { chunk, wasRedacted } = prepareImportChunk(raw, allTags);
 
-      // Skip empty or too-short chunks
-      if (!chunk || chunk.length < 10) {
-        skipped++;
-        continue;
-      }
-
-      total++;
-
-      // Dedup check: skip only when the same text is already stored
-      if (keys.has(duplicateKey(chunk))) {
+      const skip = skipReason(chunk, keys);
+      if (skip !== 'too-short') total++;
+      if (skip !== null) {
         skipped++;
         continue;
       }
 
       const entry = createImportEntry(chunk, source, allTags, options, baseHalfLifeDays);
-      if (!writeOrProbeImport(targetRoot, entry, options, dryRunDb)) {
+      if (!writeOrProbeImport(targetRoot, entry, options)) {
         rejected++;
         continue;
       }
@@ -143,9 +123,31 @@ export function importEntries(
     }
 
     return { total, imported, skipped, rejected, redacted, entries };
-  } finally {
-    if (dryRunDb) closeHippoDb(dryRunDb);
+  });
+}
+
+/** The store the import writes to, made ready, with the text keys it already holds. */
+function openImportTarget(options: ImportOptions) {
+  const targetRoot = options.global ? getGlobalRoot() : options.hippoRoot;
+
+  // Ensure store is ready
+  if (options.global) {
+    initGlobal();
   }
+
+  const keys = storedTextKeys(loadAllEntries(
+    targetRoot,
+    options.global ? undefined : options.tenantId,
+  ));
+  return { targetRoot, keys };
+}
+
+function skipReason(chunk: string, keys: ReturnType<typeof storedTextKeys>): 'too-short' | 'duplicate' | null {
+  // Skip empty or too-short chunks
+  if (!chunk || chunk.length < 10) return 'too-short';
+  // Dedup check: skip only when the same text is already stored
+  if (keys.has(duplicateKey(chunk))) return 'duplicate';
+  return null;
 }
 
 /** The secret-vetted chunk capped at 1000 chars, and whether vetting changed it. */
@@ -188,25 +190,9 @@ function createImportEntry(
 }
 
 /** Writes the entry, or on a dry run only probes the guard; false when a rejected value refuses it. */
-function writeOrProbeImport(
-  targetRoot: string,
-  entry: MemoryEntry,
-  options: ImportOptions,
-  dryRunDb: DatabaseSyncLike | null,
-): boolean {
-  if (options.dryRun) {
-    if (dryRunDb) {
-      try {
-        checkRejectionGuard(dryRunDb, entry.tenantId ?? 'default', entry.id, entry.content);
-      } catch (err) {
-        if (err instanceof RejectedValueError) return false;
-        throw err;
-      }
-    }
-    return true;
-  }
-  // AT1 (plan §3 containment): a rejection refuses one CHUNK, not the
-  // whole import batch. Caught per-item so siblings still land.
+function writeOrProbeImport(targetRoot: string, entry: MemoryEntry, options: ImportOptions): boolean {
+  if (options.dryRun) return !rejectionGuardRefuses(targetRoot, entry.tenantId ?? DEFAULT_TENANT_ID, entry.id, entry.content);
+  // A rejection refuses one chunk, not the whole import, so siblings still land.
   try {
     writeEntry(targetRoot, entry);
   } catch (err) {
@@ -220,16 +206,3 @@ function writeOrProbeImport(
 // ChatGPT importer
 // ---------------------------------------------------------------------------
 
-/** The full value space `JSON.parse` can produce. Boundary-guard functions in
- *  this file accept `JsonValue` (never `unknown`) so a value's origin as
- *  unparsed external JSON stays visible in its type, then narrow it via the
- *  `isJson*` predicates below. */
-export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
-
-export function isJsonString(x: JsonValue): x is string {
-  return typeof x === 'string';
-}
-
-export function isJsonPlainObject(x: JsonValue): x is { [key: string]: JsonValue } {
-  return x !== null && !Array.isArray(x) && typeof x === 'object';
-}

@@ -1,11 +1,12 @@
-import { closeHippoDb, setMeta, isSqliteBusy, pruneConsolidationRuns, getMeta } from '../db.js';
-import { RejectedValueError } from '../rejection.js';
-import { log } from '../log.js';
+import { type DatabaseSyncLike, closeHippoDb, withWriteScope, setMeta, isSqliteBusy, pruneConsolidationRuns, getMeta } from '../db/index.js';
+import { RejectedValueError } from './rejection.js';
+import { log } from '../util/log.js';
 import type { HippoIndex, LegacyStats } from './rows.js';
 import { audit } from './audit-event.js';
 import { stampOriginProjectForImport, upsertEntryRow } from './entry-row.js';
-import { buildIndexFromDb, syncMirrorFiles, writeIndexMirror, writeStatsMirror, buildStatsFromDb } from './mirrors.js';
+import { buildIndexFromDb, readLastRecall, syncMirrorFiles, writeIndexMirror, writeStatsMirror, buildStatsFromDb } from './mirrors.js';
 import { openStore, loadLegacyEntriesFromMarkdown } from './open.js';
+import { DAY_MS } from '../util/time.js';
 
 /** Load the derived index from SQLite. Read-only: index.json is only ever written by `rebuildIndex`. */
 export function loadIndex(hippoRoot: string): HippoIndex {
@@ -17,28 +18,29 @@ export function loadIndex(hippoRoot: string): HippoIndex {
   }
 }
 
+/** The last recall's ids and its trace alone, for a caller that needs no index entry. */
+export function loadLastRecall(hippoRoot: string): Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'> {
+  const db = openStore(hippoRoot);
+  try {
+    return readLastRecall(db);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
 /**
  * Persist mutable index metadata. Entry rows themselves are derived from SQLite.
  *
- * LC1 F1(c) structural fix: `last_retrieval_ids` and `last_trace_id` must
- * land atomically — callers (getContext, cmdRecall) fold a freshly-written
- * trace id into `index.last_trace_id` before calling this, relying on BOTH
- * meta keys committing together. Wrapped in BEGIN/COMMIT so a crash or a
- * mid-write failure can never advance one key without the other. index.json
- * is left untouched; only `rebuildIndex` writes it.
+ * `last_retrieval_ids` and `last_trace_id` commit in one transaction: callers fold a fresh trace id
+ * into the index and rely on both keys moving together. index.json is left to `rebuildIndex`.
  */
-export function saveIndex(hippoRoot: string, index: HippoIndex): void {
+export function saveIndex(hippoRoot: string, index: Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'>): void {
   const db = openStore(hippoRoot);
   try {
-    db.exec('BEGIN');
-    try {
+    withWriteScope(db, 'save_index', () => {
       setMeta(db, 'last_retrieval_ids', JSON.stringify(index.last_retrieval_ids ?? []));
       setMeta(db, 'last_trace_id', index.last_trace_id ?? '');
-      db.exec('COMMIT');
-    } catch (error) {
-      try { db.exec('ROLLBACK'); } catch { /* already rolled back; keep the original error */ }
-      throw error;
-    }
+    });
   } finally {
     closeHippoDb(db);
   }
@@ -56,12 +58,9 @@ export function rebuildIndex(hippoRoot: string): HippoIndex {
     );
     const legacyEntries = loadLegacyEntriesFromMarkdown(hippoRoot).filter((entry) => !existingIds.has(entry.id));
     if (legacyEntries.length > 0) {
-      db.exec('BEGIN');
-      try {
-        // AT1 (plan §3, round-3 redesign): same guard-with-per-row-skip as
-        // bootstrapLegacyStore — rebuildIndex is the other channel through
-        // which a stale markdown mirror could resurrect a rejected value.
-        // Refusal audit written INLINE (nothing rolls back on a skip).
+      withWriteScope(db, 'rebuild_index', () => {
+        // Guard with per-row skip, like bootstrapLegacyStore: a stale markdown mirror could resurrect a
+        // rejected value here. Refusal audit is written inline because nothing rolls back on a skip.
         let rejectedCount = 0;
         for (const entry of legacyEntries) {
           // v39: same store-derived origin stamp as bootstrapLegacyStore.
@@ -71,7 +70,7 @@ export function rebuildIndex(hippoRoot: string): HippoIndex {
           } catch (err) {
             if (err instanceof RejectedValueError) {
               rejectedCount++;
-              audit(db, 'reject_refusal', err.entryId, { digest: err.digest, reason: err.reason }, 'cli', err.tenantId);
+              audit(db, 'reject_refusal', { targetId: err.entryId, metadata: { digest: err.digest, reason: err.reason }, actor: 'cli', tenantId: err.tenantId });
               continue;
             }
             throw err;
@@ -80,11 +79,7 @@ export function rebuildIndex(hippoRoot: string): HippoIndex {
         if (rejectedCount > 0) {
           log.warn(`rebuildIndex: skipped ${rejectedCount} rejected value(s) found in legacy mirrors`);
         }
-        db.exec('COMMIT');
-      } catch (err) {
-        try { db.exec('ROLLBACK'); } catch { /* ignore if no active txn */ }
-        throw err;
-      }
+      });
     }
 
     syncMirrorFiles(hippoRoot, db);
@@ -102,28 +97,33 @@ export function updateStats(
 ): void {
   const db = openStore(hippoRoot);
   try {
-    // One atomic statement per counter, and only for counters the caller
-    // named: the read-modify-write this replaces both lost increments to a
-    // concurrent writer and stamped stale values over the untouched two.
-    const increments: ReadonlyArray<readonly [string, number]> = [
-      ['total_remembered', delta.remembered ?? 0],
-      ['total_recalled', delta.recalled ?? 0],
-      ['total_forgotten', delta.forgotten ?? 0],
-    ];
-    for (const [key, amount] of increments) {
-      if (amount === 0) continue;
-      // Both binds are the same string: node:sqlite binds a JS number as REAL,
-      // which would store "1.0" into this TEXT column instead of "1".
-      db.prepare(`
-        INSERT INTO meta(key, value) VALUES(?, ?)
-        ON CONFLICT(key) DO UPDATE SET value = CAST(meta.value AS INTEGER) + CAST(? AS INTEGER)
-      `).run(key, String(amount), String(amount));
-    }
-
-    writeStatsMirror(hippoRoot, buildStatsFromDb(db));
+    updateStatsOn(db, hippoRoot, delta);
   } finally {
     closeHippoDb(db);
   }
+}
+
+/** updateStats on the caller's open store, so a loop of writes opens the store once. */
+export function updateStatsOn(db: DatabaseSyncLike, hippoRoot: string, delta: Parameters<typeof updateStats>[1]): void {
+  // One atomic statement per counter, and only for counters the caller
+  // named: the read-modify-write this replaces both lost increments to a
+  // concurrent writer and stamped stale values over the untouched two.
+  const increments: ReadonlyArray<readonly [string, number]> = [
+    ['total_remembered', delta.remembered ?? 0],
+    ['total_recalled', delta.recalled ?? 0],
+    ['total_forgotten', delta.forgotten ?? 0],
+  ];
+  for (const [key, amount] of increments) {
+    if (amount === 0) continue;
+    // Both binds are the same string: node:sqlite binds a JS number as REAL,
+    // which would store "1.0" into this TEXT column instead of "1".
+    db.prepare(`
+      INSERT INTO meta(key, value) VALUES(?, ?)
+      ON CONFLICT(key) DO UPDATE SET value = CAST(meta.value AS INTEGER) + CAST(? AS INTEGER)
+    `).run(key, String(amount), String(amount));
+  }
+
+  writeStatsMirror(hippoRoot, buildStatsFromDb(db));
 }
 
 export function updateStatsUnlessBusy(hippoRoot: string, delta: Parameters<typeof updateStats>[1], committed: string): void {
@@ -167,7 +167,7 @@ export function appendConsolidationRun(
 export function countCreatedSinceLastSleep(hippoRoot: string, tenantId: string, now: Date = new Date()): number {
   const db = openStore(hippoRoot);
   try {
-    const dayAgo = new Date(now.getTime() - 86_400_000).toISOString();
+    const dayAgo = new Date(now.getTime() - DAY_MS).toISOString();
     const row = db.prepare(
       `SELECT COUNT(*) AS n FROM memories WHERE tenant_id = ?
          AND created > MAX(?, COALESCE((SELECT MAX(timestamp) FROM consolidation_runs), ''))`,
@@ -186,6 +186,13 @@ export interface SessionDecayContext {
   sleepCount: number;
   /** Average interval between recent sleep cycles, in days. 0 if < 2 cycles. */
   avgSessionIntervalDays: number;
+}
+
+/** Timestamp of the latest consolidation run, or undefined when there is none. */
+export function lastConsolidationAt(db: DatabaseSyncLike): string | undefined {
+  // SAFETY: row's shape matches the single `timestamp` column named in the SELECT.
+  const row = db.prepare(`SELECT timestamp FROM consolidation_runs ORDER BY timestamp DESC, id DESC LIMIT 1`).get() as { timestamp?: string } | undefined;
+  return row?.timestamp;
 }
 
 /**
@@ -214,7 +221,7 @@ export function loadSessionDecayContext(hippoRoot: string): SessionDecayContext 
       totalInterval += timestamps[i] - timestamps[i - 1];
     }
     const avgMs = totalInterval / (timestamps.length - 1);
-    const avgDays = avgMs / (1000 * 60 * 60 * 24);
+    const avgDays = avgMs / DAY_MS;
 
     return { sleepCount, avgSessionIntervalDays: Math.max(0, avgDays) };
   } finally {

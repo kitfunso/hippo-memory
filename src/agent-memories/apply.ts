@@ -1,20 +1,20 @@
 // One container's sync in one transaction on the caller's handle: lookup, plan, then every write (plan designs 6 to 8).
-import { appendAuditEvent } from '../audit.js';
-import type { DatabaseSyncLike } from '../db.js';
-import { deleteDormantRow, dormantSnapshotsBySourcePrefix, insertDormantRow, readDormantSnapshot } from '../dormant.js';
-import { gatedWrite } from '../gated-write.js';
-import { Layer, calculateStrength, createMemory, type MemoryEntry } from '../memory.js';
-import { findRejectedValue, rejectionDigest } from '../rejection.js';
-import { redactSecretsStrict } from '../secret-detect.js';
+import { appendAuditEvent } from '../store/audit.js';
+import { withTrialScope, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
+import { deleteDormantRow, dormantSnapshotsBySourcePrefix, insertDormantRow, readDormantSnapshot, replaceDormantEntry } from '../store/dormant.js';
+import { gatedWrite } from '../trust/gated-write.js';
+import { Layer, calculateStrength, createMemory, type MemoryEntry } from '../core/memory.js';
+import { findRejectedValue, rejectionDigest } from '../store/rejection.js';
+import { redactSecretsStrict } from '../util/secret-detect.js';
 import { stampOriginProject } from '../store/entry-row.js';
-import { deleteEntryRowInTx, setEntryTagsInTx } from '../store/entry-writes.js';
-import { selectLiveEntriesBySourcePrefix } from '../store/entry-reads.js';
-import { markSummaryDirtyInTx } from '../summary-dirty.js';
+import { deleteEntryRowInTx, renameEntrySourceAndOriginAt, renameEntrySourceAt, setEntryTagsInTx, supersedeEntryAt } from '../store/entry-writes.js';
+import { entryIdTakenAt, selectLiveEntriesBySourcePrefix } from '../store/entry-reads.js';
+import { markSummaryDirtyInTx } from '../store/summary-dirty.js';
 import { itemHash } from './keys.js';
 import { planContainer, type ContainerPlan, type DormantRow, type LiveRow, type PlannedWrite } from './plan.js';
 import { emptyTally, type Tally } from './report.js';
 import { MIN_ITEM_CHARS, itemSource, splitSource, storedText } from './source.js';
-import type { AgentMemoryTool } from './tools.js';
+import type { AgentMemoryTool } from '../core/agent-memory-tools.js';
 import type { Container, MemoryItem } from './types.js';
 
 export const SYNC_ACTOR = 'agent-memories';
@@ -40,6 +40,8 @@ export interface ContainerWork {
   readonly adopt: ReadonlyMap<string, readonly MemoryEntry[]>;
   /** Legacy rows a new row of the key supersedes, by key (second round). */
   readonly replace: ReadonlyMap<string, readonly MemoryEntry[]>;
+  /** This container's prefixes under the project's earlier names; their rows move here, so a new id imports nothing twice. */
+  readonly legacyPrefixes: readonly string[];
 }
 
 export interface ContainerOutcome {
@@ -52,16 +54,8 @@ export interface ContainerOutcome {
 
 /** Throws SQLITE_BUSY when another writer holds the store past its busy timeout; nothing is written then. */
 export function syncContainer(s: StoreSession, work: ContainerWork): ContainerOutcome {
-  // A dry run takes no lock up front and rolls every write back.
-  s.db.exec(s.dryRun ? 'BEGIN' : 'BEGIN IMMEDIATE');
-  try {
-    const out = new ContainerRun(s, work).run();
-    s.db.exec(s.dryRun ? 'ROLLBACK' : 'COMMIT');
-    return out;
-  } catch (err) {
-    try { s.db.exec('ROLLBACK'); } catch { /* already rolled back; keep the original error */ }
-    throw err;
-  }
+  const run = (): ContainerOutcome => new ContainerRun(s, work).run();
+  return s.dryRun ? withTrialScope(s.db, 'sync_container', run) : withWriteScope(s.db, 'sync_container', run);
 }
 
 export type SetAsideWhy = 'note-gone' | 'note-changed' | 'handover' | 'project-merge' | 'project-repair';
@@ -102,6 +96,7 @@ class ContainerRun {
 
   run(): ContainerOutcome {
     this.adoptLegacy();
+    for (const old of this.w.legacyPrefixes) this.adoptPrefix(old);
     const live = selectLiveEntriesBySourcePrefix(this.s.db, this.s.tenantId, this.w.prefix);
     for (const row of [...live, ...[...this.w.replace.values()].flat()]) this.rows.set(row.id, row);
     const refusals = this.refusals();
@@ -138,13 +133,28 @@ class ContainerRun {
       if (item === undefined) continue;
       const source = itemSource(this.w.prefix, key, item.text);
       for (const row of rows) {
-        const moved = this.s.db.prepare(
-          `UPDATE memories SET source = ? WHERE id = ? AND tenant_id = ? AND source = ? AND superseded_by IS NULL`,
-        ).run(source, row.id, row.tenantId, row.source);
-        if (Number(moved.changes ?? 0) === 0) continue;
+        if (renameEntrySourceAt(this.s.db, row.tenantId, row.id, row.source, source) === 0) continue;
         this.tally.adopted++;
         this.mirror.push({ ...row, source });
       }
+    }
+  }
+
+  /** Rows filed under an earlier project name keep their id and history; dormant ones move too, scanned only until this prefix holds live rows. */
+  private adoptPrefix(old: string): void {
+    const origin = this.s.originProject ?? null;
+    let moved = 0;
+    for (const row of selectLiveEntriesBySourcePrefix(this.s.db, this.s.tenantId, old)) {
+      const source = this.w.prefix + row.source.slice(old.length);
+      if (renameEntrySourceAndOriginAt(this.s.db, row.tenantId, row.id, { from: row.source, to: source, origin }) === 0) continue;
+      moved++;
+      this.mirror.push({ ...row, source, origin_project: origin ?? row.origin_project });
+    }
+    this.tally.renamed += moved;
+    if (moved === 0 && (this.w.container.items.length === 0 || selectLiveEntriesBySourcePrefix(this.s.db, this.s.tenantId, this.w.prefix).length > 0)) return;
+    for (const snap of dormantSnapshotsBySourcePrefix(this.s.db, this.s.tenantId, old)) {
+      const source = this.w.prefix + snap.entry.source.slice(old.length);
+      replaceDormantEntry(this.s.db, this.s.tenantId, snap.entry.id, { ...snap.entry, source, origin_project: origin ?? snap.entry.origin_project });
     }
   }
 
@@ -188,9 +198,7 @@ class ContainerRun {
 
   /** api.supersede's steps on this transaction; false when another writer superseded the row first. */
   private supersede(old: MemoryEntry, newId: string): boolean {
-    const result = this.s.db.prepare(`UPDATE memories SET superseded_by = ? WHERE id = ? AND tenant_id = ? AND superseded_by IS NULL`)
-      .run(newId, old.id, old.tenantId);
-    if (Number(result.changes ?? 0) === 0) return false;
+    if (!supersedeEntryAt(this.s.db, old.tenantId, old.id, newId)) return false;
     if (old.dag_parent_id) markSummaryDirtyInTx(this.s.db, old.dag_parent_id, old.tenantId, SYNC_ACTOR);
     appendAuditEvent(this.s.db, { tenantId: old.tenantId, actor: SYNC_ACTOR, op: 'supersede', targetId: old.id, metadata: { newId } });
     this.mirror.push({ ...old, superseded_by: newId });
@@ -235,7 +243,7 @@ class ContainerRun {
   /** A deleted note came back unchanged: its old row returns with its id and history, under the sync's own audit op. */
   private restore(key: string, dormantId: string): void {
     const snap = readDormantSnapshot(this.s.db, this.s.tenantId, dormantId);
-    const taken = this.s.db.prepare(`SELECT 1 FROM memories WHERE id = ?`).get(dormantId) !== undefined;
+    const taken = entryIdTakenAt(this.s.db, dormantId);
     if (snap === null || taken) {
       this.write({ key, hash: '', supersedes: [] });
       return;

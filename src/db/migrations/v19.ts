@@ -4,7 +4,7 @@ import type { Migration } from './types.js';
 export const v19: Migration = {
     version: 19,
     up: (db) => {
-      // v0.39 commit 3 (Slack hardening): widen slack_dlq with bucketing,
+      // Slack hardening: widen slack_dlq with bucketing,
       // retry tracking, and the signature/timestamp pair that lets `hippo
       // slack dlq replay` re-verify before re-running ingest. ALTER ADD
       // COLUMN with DEFAULT is non-destructive — legacy rows take the

@@ -1,13 +1,14 @@
 // `hippo goal`: the per-session goal stack that recall boosts.
 
-import { envHippoSessionId } from '../env.js';
-import type { PolicyType } from '../goals.js';
-import * as api from '../api.js';
-import { resolveTenantId } from '../tenant.js';
+import { DEFAULT_TENANT_ID, envHippoSessionId } from '../util/env.js';
+import type { PolicyType } from '../store/goals.js';
+import * as api from '../api/index.js';
+import { resolveTenantId } from '../store/tenant.js';
 import { printError } from './output.js';
+import { type CliFlags, boolFlag, flagIsTrue, stringFlag, type CommandContext } from './flag-values.js';
 
 // ---------------------------------------------------------------------------
-// `hippo goal <push|list|complete|suspend|resume>` — B3 dlPFC depth (Task 10)
+// `hippo goal <push|list|complete|suspend|resume>`
 // ---------------------------------------------------------------------------
 
 const GOAL_POLICY_TYPES: ReadonlyArray<PolicyType> = [
@@ -22,7 +23,7 @@ function sanitizeGoalName(s: string): string {
   return s.replace(/[\x00-\x1f\x7f]/g, '?');
 }
 
-function resolveGoalSession(flags: Record<string, string | boolean | string[]>): { sessionId: string; tenantId: string } {
+function resolveGoalSession(flags: CliFlags): { sessionId: string; tenantId: string } {
   const sessionId = (
     flags['session-id'] !== undefined
       ? String(flags['session-id'])
@@ -36,11 +37,40 @@ function resolveGoalSession(flags: Record<string, string | boolean | string[]>):
     flags['tenant-id'] !== undefined
       ? String(flags['tenant-id'])
       : resolveTenantId({})
-  ).trim() || 'default';
+  ).trim() || DEFAULT_TENANT_ID;
   return { sessionId, tenantId };
 }
 
-function cmdGoalPush(hippoRoot: string, args: string[], flags: Record<string, string | boolean | string[]>): void {
+function readGoalPolicy(flags: CliFlags): { policyType: PolicyType } | undefined {
+  const policyRaw = flags['policy'];
+  if (policyRaw === true) {
+    printError('--policy requires a value (e.g., --policy error-prioritized)');
+    process.exit(1);
+  }
+  if (typeof policyRaw !== 'string') return undefined;
+  if (!(GOAL_POLICY_TYPES as readonly string[]).includes(policyRaw)) {
+    printError(`Unknown --policy '${policyRaw}'. Expected one of: ${GOAL_POLICY_TYPES.join(' | ')}.`);
+    process.exit(1);
+  }
+  return { policyType: policyRaw as PolicyType };
+}
+
+function readGoalLevel(flags: CliFlags): number | undefined {
+  const levelRaw = flags['level'];
+  if (levelRaw === true) {
+    printError('--level requires a value (e.g., --level 1)');
+    process.exit(1);
+  }
+  if (levelRaw === undefined) return undefined;
+  const parsed = Number(levelRaw);
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 2 || !Number.isInteger(parsed)) {
+    printError('--level must be an integer in [0, 2]');
+    process.exit(1);
+  }
+  return parsed;
+}
+
+function cmdGoalPush(hippoRoot: string, args: string[], flags: CliFlags): void {
   const rawName = args.join(' ').trim();
   if (!rawName) {
     printError('Usage: hippo goal push <name> [--policy <type>] [--success "<condition>"] [--level N] [--parent <goalId>]');
@@ -53,48 +83,23 @@ function cmdGoalPush(hippoRoot: string, args: string[], flags: Record<string, st
   }
   const { sessionId, tenantId } = resolveGoalSession(flags);
 
-  let policy: { policyType: PolicyType } | undefined;
-  const policyRaw = flags['policy'];
-  if (policyRaw === true) {
-    printError('--policy requires a value (e.g., --policy error-prioritized)');
-    process.exit(1);
-  }
-  if (typeof policyRaw === 'string') {
-    if (!(GOAL_POLICY_TYPES as readonly string[]).includes(policyRaw)) {
-      printError(`Unknown --policy '${policyRaw}'. Expected one of: ${GOAL_POLICY_TYPES.join(' | ')}.`);
-      process.exit(1);
-    }
-    policy = { policyType: policyRaw as PolicyType };
-  }
+  const policy = readGoalPolicy(flags);
 
   const successRaw = flags['success'];
   if (successRaw === true) {
     printError('--success requires a value (e.g., --success "<condition>")');
     process.exit(1);
   }
-  const successCondition = typeof successRaw === 'string' ? successRaw : undefined;
+  const successCondition = stringFlag(flags, 'success');
 
-  const levelRaw = flags['level'];
-  let level: number | undefined;
-  if (levelRaw === true) {
-    printError('--level requires a value (e.g., --level 1)');
-    process.exit(1);
-  }
-  if (levelRaw !== undefined) {
-    const parsed = Number(levelRaw);
-    if (!Number.isFinite(parsed) || parsed < 0 || parsed > 2 || !Number.isInteger(parsed)) {
-      printError('--level must be an integer in [0, 2]');
-      process.exit(1);
-    }
-    level = parsed;
-  }
+  const level = readGoalLevel(flags);
 
   const parentRaw = flags['parent'];
   if (parentRaw === true) {
     printError('--parent requires a value (e.g., --parent <goalId>)');
     process.exit(1);
   }
-  const parentGoalId = typeof parentRaw === 'string' ? parentRaw : undefined;
+  const parentGoalId = stringFlag(flags, 'parent');
 
   const goal = api.goalPush(goalContext(hippoRoot, tenantId), {
     sessionId,
@@ -111,9 +116,9 @@ function goalContext(hippoRoot: string, tenantId: string = resolveTenantId({})):
   return { hippoRoot, tenantId, actor: api.adminActor('cli') };
 }
 
-function cmdGoalList(hippoRoot: string, flags: Record<string, string | boolean | string[]>): void {
+function cmdGoalList(hippoRoot: string, flags: CliFlags): void {
   const { sessionId, tenantId } = resolveGoalSession(flags);
-  const showAll = Boolean(flags['all']);
+  const showAll = boolFlag(flags, 'all');
   const goals = api.goalList(goalContext(hippoRoot, tenantId), { sessionId, all: showAll });
 
   if (goals.length === 0) {
@@ -144,7 +149,7 @@ function cmdGoalList(hippoRoot: string, flags: Record<string, string | boolean |
   }
 }
 
-function cmdGoalComplete(hippoRoot: string, args: string[], flags: Record<string, string | boolean | string[]>): void {
+function cmdGoalComplete(hippoRoot: string, args: string[], flags: CliFlags): void {
   const id = args[0];
   if (!id) {
     printError('Usage: hippo goal complete <id> [--outcome <0..1>] [--no-propagate]');
@@ -164,7 +169,7 @@ function cmdGoalComplete(hippoRoot: string, args: string[], flags: Record<string
     }
     outcomeScore = parsed;
   }
-  const noPropagate = flags['no-propagate'] === true;
+  const noPropagate = flagIsTrue(flags, 'no-propagate');
   api.goalComplete(goalContext(hippoRoot), id, { outcomeScore, noPropagate });
   console.log('ok');
 }
@@ -189,7 +194,7 @@ function cmdGoalResume(hippoRoot: string, args: string[]): void {
   console.log('ok');
 }
 
-export function cmdGoal(hippoRoot: string, args: string[], flags: Record<string, string | boolean | string[]>): void {
+export function handleGoal({ hippoRoot, args, flags }: CommandContext): void {
   const sub = args[0];
   if (!sub) {
     printError('Usage: hippo goal <push|list|complete|suspend|resume> [args]');

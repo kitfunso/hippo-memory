@@ -1,10 +1,12 @@
 // Client IP keying and the per-IP rate limit for /v1 and /mcp.
-import { envClientIpHeader, envTrustedProxies } from '../env.js';
+import { envClientIpHeader, envTrustedProxies } from '../util/env.js';
 import type { IncomingMessage } from 'node:http';
 import { BlockList, isIP } from 'node:net';
-import { log } from '../log.js';
-import type { RateLimiter } from '../rate-limit.js';
-import { HttpError } from '../http-util.js';
+import { log } from '../util/log.js';
+import type { RateLimiter } from './rate-limit.js';
+import { HttpError } from '../util/http-util.js';
+
+const IPV6_PREFIX_GROUPS = 4;
 
 /**
  * Rate-limit key for a request. Defaults to the socket's remote address.
@@ -66,6 +68,35 @@ function trustedProxyList(raw: string | undefined): BlockList | undefined {
   return list;
 }
 
+/** Said once at boot: with no proxy list, a caller that reaches the port without the proxy picks its own bucket by sending the header. */
+export function warnIfClientIpHeaderUnpinned(): void {
+  const header = envClientIpHeader();
+  if (!header || trustedProxyList(envTrustedProxies())) return;
+  log.warn(
+    `serve: HIPPO_CLIENT_IP_HEADER is ${header} and HIPPO_TRUSTED_PROXIES is unset, so any caller that reaches this port without passing the proxy can send that header and pick its own rate-limit bucket. ` +
+      "Set HIPPO_TRUSTED_PROXIES to the proxy's addresses or CIDRs, so the header is read from the proxy alone.",
+  );
+}
+
+/** The key for one subscriber: an IPv6 address's /64, since one host may hold the whole /64; any other key as is. */
+export function subscriberKey(ip: string): string {
+  const bare = ip.split('%')[0]!;
+  if (bare.toLowerCase().startsWith('::ffff:') && isIP(bare.slice(7)) === 4) return bare.slice(7);
+  if (isIP(bare) !== 6) return ip;
+  const [head = '', tail] = bare.toLowerCase().split('::');
+  const left = head ? head.split(':') : [];
+  const right = tail ? tail.split(':') : [];
+  // A trailing dotted quad holds two groups; isIP has already checked the shape.
+  const rightGroups = right.length + (right.at(-1)?.includes('.') ? 1 : 0);
+  const groups = tail === undefined ? left : [...left, ...Array<string>(8 - left.length - rightGroups).fill('0'), ...right];
+  return `${groups.slice(0, IPV6_PREFIX_GROUPS).map((g) => parseInt(g, 16).toString(16)).join(':')}::/64`;
+}
+
+/** The one key every per-address limit and slot count uses, so rotating inside a /64 never buys a fresh bucket. */
+export function clientLimitKey(req: IncomingMessage): string {
+  return subscriberKey(clientIpForRateLimit(req));
+}
+
 function isTrustedProxy(list: BlockList, ip: string): boolean {
   const bare = ip.startsWith('::ffff:') && isIP(ip.slice(7)) === 4 ? ip.slice(7) : ip;
   const family = isIP(bare);
@@ -73,7 +104,7 @@ function isTrustedProxy(list: BlockList, ip: string): boolean {
 }
 
 export function enforceRateLimit(req: IncomingMessage, path: string, limiter?: RateLimiter): void {
-  // E3: per-IP rate limit on /v1/* and /mcp* to bound api-key-id enumeration. /health
+  // Per-IP rate limit on /v1/* and /mcp* to bound api-key-id enumeration. /health
   // (a liveness probe) and other paths are never throttled. A 429 thrown
   // here lands in the createServer catch like any other HttpError.
   //
@@ -83,9 +114,8 @@ export function enforceRateLimit(req: IncomingMessage, path: string, limiter?: R
   // HIPPO_CLIENT_IP_HEADER there so each real client gets its own bucket
   // (see clientIpForRateLimit).
   if (limiter && (path.startsWith('/v1/') || path === '/mcp' || path === '/mcp/stream')) {
-    const ip = clientIpForRateLimit(req);
-    if (!limiter.check(ip)) {
-      throw new HttpError(429, 'rate limit exceeded');
+    if (!limiter.check(clientLimitKey(req))) {
+      throw new HttpError(429, 'rate limit exceeded', limiter.retryAfterSec);
     }
   }
 }

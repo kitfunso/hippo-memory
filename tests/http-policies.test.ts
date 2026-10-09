@@ -18,10 +18,13 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { serve, type ServerHandle } from '../src/server.js';
-import { createApiKey, type CreateApiKeyResult } from '../src/auth.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import type { Policy } from '../src/policies.js';
+import { createApiKey, type CreateApiKeyResult } from '../src/store/auth.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import type { Policy } from '../src/objects/policies.js';
+import type { JsonValue } from '../src/util/json.js';
 import { makeRoot } from './_helpers/make-root.js';
+
+type Body = { [key: string]: JsonValue };
 
 /** Parse a fetch Response body against a caller-declared shape. */
 async function jsonAs<T>(res: Response): Promise<T> {
@@ -64,7 +67,7 @@ async function createPolicy(body: CreatePolicyBody, key: CreateApiKeyResult = ap
   return fetch(`${handle.url}/v1/policies`, { method: 'POST', headers: authHeaders(key), body: JSON.stringify(body) });
 }
 
-describe('HTTP /v1/policies (E2 bi-temporal first-class object)', () => {
+describe('HTTP /v1/policies (bi-temporal first-class object)', () => {
   it('POST /v1/policies creates a policy (201 + Policy, version 1)', async () => {
     const res = await createPolicy({ policyName: 'Retention', policyText: 'delete after 90d', validFrom: '2026-01-01' });
     expect(res.status).toBe(201);
@@ -160,5 +163,39 @@ describe('HTTP /v1/policies (E2 bi-temporal first-class object)', () => {
   it('DoS cap on policyText (400); inverted valid_to (400)', async () => {
     expect((await createPolicy({ policyName: 'x', policyText: 'y'.repeat(4097) })).status).toBe(400);
     expect((await createPolicy({ policyName: 'x', policyText: 'y', validFrom: '2026-06-01', validTo: '2026-01-01' })).status).toBe(400);
+  });
+
+  const over = (cap: number): string => 'x'.repeat(cap + 1);
+  const at = (cap: number): string => 'x'.repeat(cap);
+  const ROOT = '/v1/policies';
+  const MISSING = '/v1/policies/99999/supersede';
+  // Each row also sends every later field invalid, and the supersede target does not exist,
+  // so a row pins which check answers first as well as the reply text.
+  const REPLIES: readonly (readonly [string, string, string, Body | undefined, number, string])[] = [
+    ['list: an unknown status', 'GET', `${ROOT}?status=retired`, undefined, 400, 'status must be one of: active | superseded | closed | all (got "retired")'],
+    ['create: blank policyName', 'POST', ROOT, { policyName: '  ', policyText: 7, validFrom: 7, validTo: 7 }, 400, 'policyName is required (non-empty string)'],
+    ['create: policyName over the cap', 'POST', ROOT, { policyName: over(4096), policyText: 7, validFrom: 7, validTo: 7 }, 400, 'policyName exceeds 4096-character cap'],
+    ['create: blank policyText', 'POST', ROOT, { policyName: 'p', policyText: '  ', validFrom: 7, validTo: 7 }, 400, 'policyText is required (non-empty string)'],
+    ['create: policyText over the cap', 'POST', ROOT, { policyName: 'p', policyText: over(4096), validFrom: 7, validTo: 7 }, 400, 'policyText exceeds 4096-character cap'],
+    ['create: validFrom not a string', 'POST', ROOT, { policyName: 'p', policyText: 't', validFrom: 7, validTo: 7 }, 400, 'validFrom must be a string'],
+    ['create: validFrom over the cap', 'POST', ROOT, { policyName: 'p', policyText: 't', validFrom: over(64), validTo: 7 }, 400, 'validFrom exceeds 64-character cap'],
+    ['create: validTo not a string', 'POST', ROOT, { policyName: 'p', policyText: 't', validTo: 7 }, 400, 'validTo must be a string'],
+    ['create: validTo over the cap', 'POST', ROOT, { policyName: 'p', policyText: 't', validTo: over(64) }, 400, 'validTo exceeds 64-character cap'],
+    ['supersede: blank policyText', 'POST', MISSING, { policyText: '  ', validFrom: 7, validTo: 7, changeSummary: 7 }, 400, 'policyText is required (non-empty string)'],
+    ['supersede: policyText over the cap', 'POST', MISSING, { policyText: over(4096), validFrom: 7, validTo: 7, changeSummary: 7 }, 400, 'policyText exceeds 4096-character cap'],
+    ['supersede: validFrom not a string', 'POST', MISSING, { policyText: 't', validFrom: 7, validTo: 7, changeSummary: 7 }, 400, 'validFrom must be a string'],
+    ['supersede: validFrom over the cap', 'POST', MISSING, { policyText: 't', validFrom: over(64), validTo: 7, changeSummary: 7 }, 400, 'validFrom exceeds 64-character cap'],
+    ['supersede: validTo not a string', 'POST', MISSING, { policyText: 't', validTo: 7, changeSummary: 7 }, 400, 'validTo must be a string'],
+    ['supersede: validTo over the cap', 'POST', MISSING, { policyText: 't', validTo: over(64), changeSummary: 7 }, 400, 'validTo exceeds 64-character cap'],
+    ['supersede: changeSummary not a string', 'POST', MISSING, { policyText: 't', changeSummary: 7 }, 400, 'changeSummary must be a string'],
+    ['supersede: changeSummary over the cap', 'POST', MISSING, { policyText: 't', changeSummary: over(4096) }, 400, 'changeSummary exceeds 4096-character cap'],
+    ['supersede: every field at its cap reaches the lookup', 'POST', MISSING, { policyText: at(4096), validFrom: at(64), validTo: at(64), changeSummary: at(4096) }, 404, 'policy 99999 not found'],
+    ['supersede: null optional fields reach the lookup', 'POST', MISSING, { policyText: 't', validFrom: null, validTo: null, changeSummary: null }, 404, 'policy 99999 not found'],
+  ];
+
+  it.each(REPLIES)('%s', async (_name, method, path, body, status, error) => {
+    const init = { method, headers: authHeaders(), body: body && JSON.stringify(body) };
+    const res = await fetch(`${handle.url}${path}`, init);
+    expect([res.status, await res.text()]).toEqual([status, JSON.stringify({ error })]);
   });
 });

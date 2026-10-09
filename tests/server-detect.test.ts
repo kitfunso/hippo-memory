@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { detectServer, writePidfile, removePidfile, removePidfileIfOwned } from '../src/server-detect.js';
+import { detectServer, writePidfile, removePidfile, removePidfileIfOwned } from '../src/server/server-detect.js';
 import { serve } from '../src/server.js';
 
 // hippoRoot is the directory the pidfile sits directly inside, matching the
@@ -48,6 +48,20 @@ describe('server-detect', () => {
       expect(detected).not.toBeNull();
       expect(detected?.url).toBe(handle.url);
       expect(detected?.pid).toBe(process.pid);
+    } finally {
+      await handle.stop();
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it('finds a live server bound to IPv6 loopback through its http://[::1]:port pidfile url', async () => {
+    const home = makeRoot();
+    const handle = await serve({ hippoRoot: home, port: 0, host: '::1' });
+    try {
+      expect(handle.url).toBe(`http://[::1]:${handle.port}`);
+      const detected = await detectServer(home);
+      expect(detected?.url).toBe(handle.url);
+      expect(existsSync(join(home, 'server.pid'))).toBe(true);
     } finally {
       await handle.stop();
       rmSync(home, { recursive: true, force: true });

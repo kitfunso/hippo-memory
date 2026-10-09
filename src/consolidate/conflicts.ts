@@ -1,6 +1,7 @@
-import { MemoryEntry, Layer, calculateStrength, type DecayOptions } from '../memory.js';
-import { jaccardMinShared, overlapPartners } from '../overlap-index.js';
-import { isQuarantineScope } from '../quarantine.js';
+import { MemoryEntry, Layer, calculateStrength, type DecayOptions } from '../core/memory.js';
+import { jaccardMinShared, overlapPartners } from './overlap-index.js';
+import { isQuarantineScope } from '../trust/quarantine.js';
+import { isPersonalScope } from '../store/recall-scope.js';
 import { DECAY_THRESHOLD } from './decay.js';
 
 // Contradictions should be gated by content overlap, not shared tags. Tags like
@@ -34,18 +35,14 @@ export function detectConflicts(
   entries: MemoryEntry[],
   now: Date,
   decayOpts: DecayOptions = {},
-  // LC2-E3 (opt-in, default off): ids rescued by this cycle's decay pass.
-  // detectConflicts recomputes its own strength>=DECAY_THRESHOLD survivor
-  // filter independently of the decay pass above; without this bypass,
-  // rescued entries would be silently re-excluded from conflict detection
-  // every cycle even though the decay pass just decided to keep them.
-  // Default empty set: flag-off behavior is unchanged.
+  // Ids this cycle's decay pass rescued: the survivor filter below is recomputed independently, so
+  // without this bypass rescued entries would be silently re-excluded from conflict detection.
   rescuedIds: Set<string> = new Set(),
 ): Array<{ memory_a_id: string; memory_b_id: string; reason: string; score: number }> {
   const survivors = entries.filter(
     (entry) =>
       entry.layer !== Layer.Semantic
-      // CD5: an unreviewed quarantined row must not taint a visible memory as conflicted.
+      // An unreviewed quarantined row must not taint a visible memory as conflicted.
       && !isQuarantineScope(entry.scope ?? null)
       && (rescuedIds.has(entry.id) || calculateStrength(entry, now, decayOpts) >= DECAY_THRESHOLD),
   );
@@ -81,6 +78,8 @@ export function detectConflicts(
 
 /** One project's ambient context can show both: same tenant, and the same project or a user-global row beside a project's. */
 function recalledTogether(a: MemoryEntry, b: MemoryEntry): boolean {
+  // A personal row pairs only inside its own scope; any other pair shows its id to someone else.
+  if ((isPersonalScope(a.scope) || isPersonalScope(b.scope)) && a.scope !== b.scope) return false;
   if (a.tenantId !== b.tenantId) return false;
   const [x, y] = [a.origin_project ?? null, b.origin_project ?? null];
   return x === y || (x === '' && y !== null) || (y === '' && x !== null);
@@ -193,14 +192,6 @@ function inferConflictPolarity(text: string): ConflictPolarity {
   if (containsAny(lowered, negativePatterns)) return 'negative';
   if (containsAny(lowered, positivePatterns)) return 'positive';
   return 'neutral';
-}
-
-function stripConflictPolarity(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/\b(?:not|never|no|don['’]?t|do\s+not|doesn['’]?t|does\s+not|can['’]?t|cannot|shouldn['’]?t|should\s+not|enabled|enable|disabled|disable|on|off|true|false|always|must|must\s+not|works?|working|missing|broken|failed|available|present)\b/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
 }
 
 function containsAny(text: string, needles: string[]): boolean {

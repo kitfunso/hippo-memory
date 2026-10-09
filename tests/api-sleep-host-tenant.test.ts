@@ -11,10 +11,10 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
-import { sleep, adminActor } from '../src/api.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { sleep, adminActor } from '../src/api/index.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 
-describe('api.sleep audit row tenant tag (D2 v1.12.10)', () => {
+describe('api.sleep audit row tenant tag', () => {
   let root: string;
 
   beforeEach(() => {

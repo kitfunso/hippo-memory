@@ -108,10 +108,8 @@ describe('a session that runs out of time (prereg 165)', () => {
   it('a timeout kills the agent and every process under it', async () => {
     const { out } = isolate('hang-tree');
     const r = makeRepo();
-    const started = Date.now();
+    // The 110 s limit on this test sits under the fake's 120 s hang, so a run that waited on the tree fails here.
     await run(spec(r, [], [task(r, 'n1', 'HANG'), plain(r, 'n2')]), ['A0'], out, TIMEOUT);
-    // Well under the fake's 120 s hang, which a run that waited on the tree would sit out; loose for a loaded box.
-    expect(Date.now() - started).toBeLessThan(90_000);
     const tick = join(out, 'tick.txt');
     expect(existsSync(tick)).toBe(true);
     const pid = Number(readFileSync(join(out, 'grandchild.pid'), 'utf8'));

@@ -7,7 +7,7 @@ import { execSync } from 'node:child_process';
 const repoRoot = resolve(__dirname, '..');
 const cli = resolve(repoRoot, 'dist', 'cli.js');
 
-describe('cross-tenant recall isolation (A5 ROADMAP commitment)', () => {
+describe('cross-tenant recall isolation', () => {
   it('tenant A recall does not return tenant B memories', () => {
     if (!existsSync(cli)) {
       throw new Error(`dist/cli.js not found at ${cli} — run \`npm run build\` first`);
@@ -21,8 +21,8 @@ describe('cross-tenant recall isolation (A5 ROADMAP commitment)', () => {
       execSync(`node "${cli}" remember "alpha-secret-xyz unique-tenant-marker" --global`, { env: envA, cwd: home });
       execSync(`node "${cli}" remember "beta-secret-xyz unique-tenant-marker" --global`, { env: envB, cwd: home });
 
-      const aOut = execSync(`node "${cli}" recall "secret-xyz" --global`, { env: envA, cwd: home }).toString();
-      const bOut = execSync(`node "${cli}" recall "secret-xyz" --global`, { env: envB, cwd: home }).toString();
+      const aOut = execSync(`node "${cli}" recall "secret-xyz"`, { env: envA, cwd: home }).toString();
+      const bOut = execSync(`node "${cli}" recall "secret-xyz"`, { env: envB, cwd: home }).toString();
 
       expect(aOut).toContain('alpha-secret-xyz');
       expect(aOut).not.toContain('beta-secret-xyz');

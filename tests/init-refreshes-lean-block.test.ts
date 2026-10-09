@@ -3,9 +3,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { spawnSync } from 'node:child_process';
-
-const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
+import { hippoRun } from './_helpers/spawn-hippo.js';
 const START = '<!-- hippo:start -->';
 const END = '<!-- hippo:end -->';
 // Old blocks used an em dash; spelling it as a code point keeps this source free of them.
@@ -220,11 +218,7 @@ beforeEach(() => {
 afterEach(() => fs.rmSync(home, { recursive: true, force: true }));
 
 function hippo(cwd: string, ...args: string[]): string {
-  const r = spawnSync(process.execPath, [HIPPO_JS, ...args], {
-    cwd,
-    env: { ...process.env, HOME: home, USERPROFILE: home, HIPPO_HOME: path.join(home, 'global') },
-    encoding: 'utf8',
-  });
+  const r = hippoRun(args, { cwd, env: { ...process.env, HOME: home, USERPROFILE: home, HIPPO_HOME: path.join(home, 'global') } });
   expect(r.status, r.stderr).toBe(0);
   return r.stdout;
 }

@@ -1,10 +1,11 @@
-import type { MemoryEntry } from '../memory.js';
+import type { MemoryEntry } from '../core/memory.js';
 import { isDagSummary } from './boosts.js';
-import type { ScoreBreakdown } from './types.js';
+import type { ScoreBreakdown } from '../core/search-types.js';
+import { DAY_MS } from '../util/time.js';
 
 /** Whole days since the entry was created, never negative. */
 export function ageInDays(entry: MemoryEntry, now: Date): number {
-  return Math.max(0, Math.floor((now.getTime() - new Date(entry.created).getTime()) / 86_400_000));
+  return Math.max(0, Math.floor((now.getTime() - new Date(entry.created).getTime()) / DAY_MS));
 }
 
 /** Copies the entry's DAG metadata, and for summaries the multipliers applied, onto an explain breakdown. */

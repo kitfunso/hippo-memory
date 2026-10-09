@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// CI size gate. No src/ file over 800 lines and no function over 80 is the goal; existing offenders sit in
+// CI size gate. No file over 800 lines and no function over 50 in src/ (80 in scripts/) is the goal; existing offenders sit in
 // .size-baseline.json and may shrink or go but never grow, and no new one may appear.
 // Usage: check-size-ratchet.mjs [--list] [--update]. --update rewrites the baseline; run it only after shrinking offenders.
 
@@ -9,13 +9,15 @@ import ts from 'typescript';
 
 const BASELINE = '.size-baseline.json';
 const FILE_LIMIT = 800;
-const FUNCTION_LIMIT = 80;
+const FUNCTION_LIMITS = { src: 50, scripts: 80 };
+const SCAN_DIRS = Object.keys(FUNCTION_LIMITS);
+const LIMITS_TEXT = `${FUNCTION_LIMITS.src} in src and ${FUNCTION_LIMITS.scripts} in scripts`;
 
 function tsFiles(dir, out = []) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     const p = join(dir, e.name);
     if (e.isDirectory()) tsFiles(p, out);
-    else if (/\.[cm]?ts$/.test(e.name) && !/\.d\.[cm]?ts$/.test(e.name)) out.push(p.replace(/\\/g, '/'));
+    else if (/\.([cm]?ts|mjs)$/.test(e.name) && !/\.d\.[cm]?ts$/.test(e.name)) out.push(p.replace(/\\/g, '/'));
   }
   return out.sort();
 }
@@ -96,15 +98,16 @@ function physicalLines(text) {
   return text.endsWith('\n') ? lines - 1 : lines;
 }
 
-/** Offenders under src/: { files: { path: lines }, functions: { 'path:name': lines } }, keys sorted. */
+/** Offenders under src/ and scripts/: { files: { path: lines }, functions: { 'path:name': lines } }, keys sorted. */
 function findOffenders() {
   const files = {};
   const functions = {};
-  for (const file of existsSync('src') ? tsFiles('src') : []) {
+  for (const file of SCAN_DIRS.filter((d) => existsSync(d)).flatMap((d) => tsFiles(d))) {
     const text = readFileSync(file, 'utf8');
     const lines = physicalLines(text);
     if (lines > FILE_LIMIT) files[file] = lines;
-    for (const [key, n] of functionLengths(file, text)) if (n > FUNCTION_LIMIT) functions[key] = n;
+    const limit = FUNCTION_LIMITS[file.split('/')[0]];
+    for (const [key, n] of functionLengths(file, text)) if (n > limit) functions[key] = n;
   }
   const sorted = (o) => Object.fromEntries(Object.entries(o).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
   return { files: sorted(files), functions: sorted(functions) };
@@ -112,7 +115,7 @@ function findOffenders() {
 
 const current = findOffenders();
 const args = process.argv.slice(2);
-const total = `${Object.keys(current.files).length} files over ${FILE_LIMIT} lines, ${Object.keys(current.functions).length} functions over ${FUNCTION_LIMIT}`;
+const total = `${Object.keys(current.files).length} files over ${FILE_LIMIT} lines, ${Object.keys(current.functions).length} functions over ${LIMITS_TEXT}`;
 
 if (args.includes('--update')) {
   writeFileSync(BASELINE, JSON.stringify(current, null, 2) + '\n');
@@ -137,7 +140,7 @@ for (const kind of ['files', 'functions']) {
 }
 
 if (rose.length > 0) {
-  console.error(`Files over ${FILE_LIMIT} lines or functions over ${FUNCTION_LIMIT} appeared or grew past the baseline:`);
+  console.error(`Files over ${FILE_LIMIT} lines or functions over ${LIMITS_TEXT} appeared or grew past the baseline:`);
   for (const [key, was, n] of rose) console.error(`  ${key}: ${was} -> ${n}`);
   console.error('Split the new code into a smaller function or module instead of growing an offender.');
   console.error('`node scripts/check-size-ratchet.mjs --list` shows every offender, longest first.');

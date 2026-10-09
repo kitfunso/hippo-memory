@@ -16,9 +16,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer } from '../src/memory.js';
-import { recall, type Context } from '../src/api.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer } from '../src/core/memory.js';
+import { recall, type Context } from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 function safeRmSync(p: string): void {
@@ -65,7 +65,7 @@ function seedFiringFixture(root: string): void {
   for (let i = 0; i < 6; i++) seedAged(root, `zephyr older weak ${i}`, 40);
 }
 
-describe('api.recall availabilityHint (J2 integration)', () => {
+describe('api.recall availabilityHint', () => {
   let root: string;
   beforeEach(() => { root = makeRoot('j2-api'); delete process.env.HIPPO_AVAILABILITY; });
   afterEach(() => { safeRmSync(root); delete process.env.HIPPO_AVAILABILITY; });

@@ -1,14 +1,16 @@
 // Git auto-learn: fix/revert/bug commit subjects become memories. `hippo learn`, init, sleep and MCP hippo_learn share it.
 
-import { ForbiddenError } from '../api-errors.js';
-import { fetchGitLog, extractLessons, partitionLessons, isGitRepo } from '../autolearn.js';
-import { type HippoConfig, loadConfig } from '../config.js';
-import { embedMemory } from '../embeddings.js';
-import { extractInvalidationTarget, invalidateMatching } from '../invalidation.js';
-import { computeSchemaFit, createMemory, Layer } from '../memory.js';
-import { extractPathTags } from '../path-context.js';
-import { RejectedValueError } from '../rejection.js';
-import { duplicateKey, longestWord, storedTextKeys } from '../same-text.js';
+import { ForbiddenError } from '../core/api-errors.js';
+import { fetchGitLog, extractLessons, partitionLessons, isGitRepo } from '../learn/autolearn.js';
+import { type HippoConfig, loadConfig } from '../core/config.js';
+import { withRequestStoresSync } from '../db/request-stores.js';
+import { embedMemory } from '../store/embeddings/index.js';
+import { extractInvalidationTarget, invalidateMatchingAmong } from '../learn/invalidation.js';
+import { computeSchemaFit, createMemory, Layer } from '../core/memory.js';
+import { extractPathTags } from '../search/path-context.js';
+import { canReadScope, personalScopeOf, touchableScopeSql } from '../store/recall-scope.js';
+import { RejectedValueError } from '../store/rejection.js';
+import { duplicateKey, longestWord, storedTextKeys } from '../util/same-text.js';
 import { loadTextsHoldingWords } from '../store/candidates.js';
 import { loadAllEntries } from '../store/entry-reads.js';
 import { writeEntry } from '../store/entry-writes.js';
@@ -65,39 +67,48 @@ export function learn(ctx: Context, opts: LearnOpts): LearnResult {
 function writeLessons(ctx: Context, lessons: readonly string[], opts: LearnOpts, config: HippoConfig): LessonCounts {
   const { hippoRoot, tenantId } = ctx;
   const { profile } = opts;
-  // Schema fit needs every row; without it, only rows holding a lesson's longest word can be its copy.
-  const existing = profile.full ? loadAllEntries(hippoRoot, tenantId) : undefined;
-  const keys = storedTextKeys(existing ?? loadTextsHoldingWords(hippoRoot, tenantId, lessons.map(longestWord)));
-  const pathTags = profile.full ? extractPathTags(opts.repoPath) : [];
-  const counts: LessonCounts = { added: 0, skipped: 0, rejected: 0, invalidations: [] };
-  for (const lesson of lessons) {
-    if (keys.has(duplicateKey(lesson))) { counts.skipped++; continue; }
-    const target = profile.full ? extractInvalidationTarget(lesson) : null;
-    if (target) {
-      const { invalidated } = invalidateMatching(hippoRoot, target, tenantId);
-      if (invalidated > 0) counts.invalidations.push({ from: target.from, count: invalidated });
+  // `hippo init` calls this outside any request, so the batch brings its own scope: every read and write below shares one handle.
+  return withRequestStoresSync(() => {
+    // One read serves the batch: invalidation matches against `live`, which follows every write below, as a reload per lesson did.
+    const live = profile.full ? loadAllEntries(hippoRoot, tenantId) : [];
+    // Schema fit needs every row; without it, only rows holding a lesson's longest word can be its copy. Learn is host-admin only, so both read what an admin can.
+    const existing = profile.full ? live.filter((e) => e.scope == null || canReadScope(ctx.actor, e.scope)) : undefined;
+    const readable = touchableScopeSql('', personalScopeOf(ctx.actor));
+    const keys = storedTextKeys(existing ?? loadTextsHoldingWords(hippoRoot, tenantId, lessons.map(longestWord), undefined, readable));
+    const pathTags = profile.full ? extractPathTags(opts.repoPath) : [];
+    const counts: LessonCounts = { added: 0, skipped: 0, rejected: 0, invalidations: [] };
+    for (const lesson of lessons) {
+      if (keys.has(duplicateKey(lesson))) { counts.skipped++; continue; }
+      const target = profile.full ? extractInvalidationTarget(lesson) : null;
+      if (target) {
+        const { invalidated } = invalidateMatchingAmong(hippoRoot, live, target, tenantId);
+        if (invalidated > 0) counts.invalidations.push({ from: target.from, count: invalidated });
+      }
+      const entry = createMemory(lesson, {
+        layer: Layer.Episodic,
+        tags: [...profile.tags],
+        source: profile.source,
+        confidence: 'observed',
+        schema_fit: existing && computeSchemaFit(lesson, [...profile.tags], existing),
+        tenantId,
+        baseHalfLifeDays: config.defaultHalfLifeDays,
+      });
+      for (const tag of pathTags) if (!entry.tags.includes(tag)) entry.tags.push(tag);
+      // A refused lesson must not abort the rest of the git-log scan.
+      try {
+        writeEntry(hippoRoot, entry, { actor: ctx.actor.subject });
+      } catch (err) {
+        if (err instanceof RejectedValueError) { counts.rejected++; continue; }
+        throw err;
+      }
+      if (profile.full) {
+        updateStats(hippoRoot, { remembered: 1 });
+        live.push(entry);
+      }
+      keys.add(duplicateKey(lesson));
+      if (profile.full) void embedMemory(hippoRoot, entry);
+      counts.added++;
     }
-    const entry = createMemory(lesson, {
-      layer: Layer.Episodic,
-      tags: [...profile.tags],
-      source: profile.source,
-      confidence: 'observed',
-      schema_fit: existing && computeSchemaFit(lesson, [...profile.tags], existing),
-      tenantId,
-      baseHalfLifeDays: config.defaultHalfLifeDays,
-    });
-    for (const tag of pathTags) if (!entry.tags.includes(tag)) entry.tags.push(tag);
-    // A refused lesson must not abort the rest of the git-log scan.
-    try {
-      writeEntry(hippoRoot, entry, { actor: ctx.actor.subject });
-    } catch (err) {
-      if (err instanceof RejectedValueError) { counts.rejected++; continue; }
-      throw err;
-    }
-    if (profile.full) updateStats(hippoRoot, { remembered: 1 });
-    keys.add(duplicateKey(lesson));
-    if (profile.full) void embedMemory(hippoRoot, entry);
-    counts.added++;
-  }
-  return counts;
+    return counts;
+  });
 }

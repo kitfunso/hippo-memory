@@ -4,17 +4,16 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { execFileSync } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import type { HippoConfig } from '../src/config.js';
-import { getContext, type Context } from '../src/api.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { _resetAblationCacheForTests } from '../src/ablation.js';
+import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import type { HippoConfig } from '../src/core/config.js';
+import { getContext, type Context } from '../src/api/index.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { _resetAblationCacheForTests } from '../src/core/ablation.js';
+import { hippoOut } from './_helpers/spawn-hippo.js';
 
 const PROJECT = 'proj-a';
-const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
 
 let tmpRoot: string;
 let local: string;
@@ -298,12 +297,7 @@ describe('hippo context --pinned-only --format additional-context prompt recall 
   }
 
   function runHippo(args: string[], stdin: string): string {
-    return execFileSync(process.execPath, [HIPPO_JS, ...args], {
-      env: { ...process.env, HIPPO_HOME: globalDir },
-      cwd: cliTmp,
-      input: stdin,
-      encoding: 'utf8',
-    });
+    return hippoOut(args, { env: { ...process.env, HIPPO_HOME: globalDir }, cwd: cliTmp, input: stdin });
   }
 
   it('emits a static section and a Prompt-Relevant Memory section, with a hook_recall ledger row', () => {

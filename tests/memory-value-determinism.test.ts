@@ -33,14 +33,14 @@ import { simulateQuestion } from '../benchmarks/memory-value/simulate.mjs';
 import { extractQuestion } from '../benchmarks/memory-value/extract.mjs';
 import { evaluateAll } from '../benchmarks/memory-value/evaluate.mjs';
 import { metaPathFor, featuresPathFor, readJson, readJsonl } from '../benchmarks/memory-value/common.mjs';
-import { _resetAblationCacheForTests } from '../dist/ablation.js';
+import { _resetAblationCacheForTests } from '../dist/core/ablation.js';
 
 import { clearAblationEnv, QUESTIONS } from './memory-value-fixtures.js';
 
 beforeEach(clearAblationEnv);
 afterEach(clearAblationEnv);
 
-describe('cross-ingest determinism (codex review P1 fix verification)', () => {
+describe('cross-ingest determinism', () => {
   it('two separate scratch-root ingests of the same fixture, FULL 30-round protocol, produce identical retention (every scorer x budget) and identical per-row features joined on provenance key', async () => {
     const rootA = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-mv-xingest-a-'));
     const rootB = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-mv-xingest-b-'));

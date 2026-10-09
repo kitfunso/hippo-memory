@@ -1,14 +1,14 @@
 // Design 4, 5, 8 and 11: tool switches, busy stores, dry runs, the summary line and the item's own time.
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { unlinkSync, utimesSync } from 'node:fs';
 import { join } from 'node:path';
-import { getContext } from '../src/api.js';
+import { getContext } from '../src/api/index.js';
 import { summaryLine } from '../src/agent-memories/report.js';
 import { importForStore, type Machine, type SyncOptions } from '../src/agent-memories/sync.js';
 import type { ImportReport } from '../src/agent-memories/report.js';
-import { closeHippoDb, openHippoDb } from '../src/db.js';
-import { createMemory } from '../src/memory.js';
-import { isContentWorthStoring } from '../src/audit.js';
+import { closeHippoDb, openHippoDb } from '../src/db/index.js';
+import { createMemory } from '../src/core/memory.js';
+import { isContentWorthStoring } from '../src/core/memory-quality.js';
 import { claudeFolderName } from '../src/agent-memories/claude-code.js';
 import { isInitialized } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -16,6 +16,9 @@ import {
   auditTotal, closeWorld, codexSummary, ctxFor, dormantRows, liveRows, liveTexts, note, openWorld, projectNotes, tally, toolTally, userNotes,
   writeConfig, type World,
 } from './_helpers/agent-memories-world.js';
+
+// Every sync asks git for each folder's layout in a child process, and a case runs several syncs.
+vi.setConfig({ testTimeout: 30_000 });
 
 const A = 'Run the schema check before this service deploys.';
 const B = 'The staging database moved to the eu-central region.';

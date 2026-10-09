@@ -7,11 +7,11 @@ import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { Layer, type MemoryEntry } from '../src/memory.js';
+import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
-import { listDormantSnapshots } from '../src/dormant.js';
-import { listProjects, mergeProjects, repairProjects } from '../src/project-merge.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
+import { listDormantSnapshots } from '../src/store/dormant.js';
+import { listProjects, mergeProjects, repairProjects } from '../src/sharing/project-merge.js';
 
 let home: string;
 let db: DatabaseSyncLike;
@@ -46,8 +46,10 @@ function mirror(id: string): string | null {
 }
 
 describe('hippo projects merge', () => {
-  it('sets imported copies aside, re-tags everything else, and a dry run writes nothing', () => {
+  it('sets aside only notes the target already holds, re-tags everything else, and a dry run writes nothing', () => {
+    const held = note('the deploy script needs node 22 or newer', 'repo');
     const copy = note('the deploy script needs node 22 or newer', 'repo-wt-a');
+    const kept = note('the release notes live in changelog.d', 'repo-wt-a');
     const pinned = note('never force-push the release branch', 'repo-wt-a', { pinned: true });
     const lesson = row('the flaky sync test needs a fresh temp dir', 'repo-wt-a');
     const other = row('an unrelated project memory', 'elsewhere');
@@ -62,8 +64,11 @@ describe('hippo projects merge', () => {
     const rows = byId();
     expect(rows.has(copy.id)).toBe(false);
     expect(listDormantSnapshots(db, T).find((s) => s.entry.id === copy.id)!.entry.origin_project).toBe('repo');
+    expect(rows.get(held.id)!.origin_project).toBe('repo');
+    // The next sync renames its container prefix, so the import keeps its id, source and tag.
+    expect(rows.get(kept.id)).toMatchObject({ origin_project: 'repo', source: kept.source, tags: ['claude-code-memory'] });
     expect(rows.get(pinned.id)!.origin_project).toBe('repo');
-    expect(rows.get(pinned.id)!.tags).not.toContain('claude-code-memory');
+    expect(rows.get(pinned.id)!.tags).toContain('claude-code-memory');
     expect(rows.get(lesson.id)!.origin_project).toBe('repo');
     expect(rows.get(other.id)!.origin_project).toBe('elsewhere');
     expect(mirror(lesson.id)).toContain('origin_project: repo');
@@ -72,7 +77,7 @@ describe('hippo projects merge', () => {
     // SAFETY: the SELECT names the one column of the row type.
     const audit = db.prepare(`SELECT metadata_json FROM audit_log WHERE op = 'project_merge'`).all() as Array<{ metadata_json: string }>;
     expect(audit).toHaveLength(1);
-    expect(JSON.parse(audit[0].metadata_json).restamped).toEqual(expect.arrayContaining([lesson.id, pinned.id]));
+    expect(JSON.parse(audit[0].metadata_json).restamped).toEqual(expect.arrayContaining([lesson.id, pinned.id, kept.id]));
   });
 
   it('refuses user-global and unknown as either side', () => {

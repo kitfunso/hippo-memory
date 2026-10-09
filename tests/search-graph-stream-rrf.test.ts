@@ -16,11 +16,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { Layer, type MemoryEntry } from '../src/memory.js';
+import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { insertEntity, insertRelation } from '../src/graph/write.js';
-import { rrfFuse } from '../src/rrf.js';
-import { selectGraphSeeds, graphRankStream } from '../src/graph-stream.js';
+import { insertEntity, insertRelation } from '../src/store/graph-writes.js';
+import { rrfFuse } from '../src/search/rrf.js';
+import { selectGraphSeeds, graphRankStream } from '../src/graph/stream.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 function safeRmSync(p: string): void {
@@ -50,7 +50,7 @@ function fusedOrder(
   return [...scores.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0]).map(([i]) => i);
 }
 
-describe('L1 graph stream x RRF fusion (real SQLite)', () => {
+describe('graph stream x RRF fusion (real SQLite)', () => {
   let home: string;
   const T = 'default';
   beforeEach(() => { home = makeRoot('gstream-rrf'); });

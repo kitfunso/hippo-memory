@@ -41,19 +41,21 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { createMemory } from '../../dist/memory.js';
+import { createMemory } from '../../dist/core/memory.js';
 import { initStore } from '../../dist/store/open.js';
 import { writeEntry } from '../../dist/store/entry-writes.js';
 import { loadAllEntries } from '../../dist/store/entry-reads.js';
-import { embedMemory, loadEmbeddingIndex } from '../../dist/embeddings.js';
-import { isEmbeddingAvailable } from '../../dist/local-embedding.js';
+import { embedMemory } from '../../dist/store/embeddings/index.js';
+import { loadEmbeddingIndex } from '../../dist/store/vector-index.js';
+import { isEmbeddingAvailable } from '../../dist/store/embeddings/local.js';
 import { physicsSearch } from '../../dist/search/physics-search.js';
 import { consolidate } from '../../dist/consolidate/sleep.js';
-import { resetAllPhysicsState } from '../../dist/physics-state.js';
-import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../../dist/db.js';
-import { DEFAULT_PHYSICS_CONFIG } from '../../dist/physics-config.js';
+import { resetAllPhysicsState } from '../../dist/db/physics-state.js';
+import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../../dist/db/index.js';
+import { DEFAULT_PHYSICS_CONFIG } from '../../dist/core/physics-config.js';
 
-import { injectStream, writeLabelSidecar, mulberry32 } from './inject.mjs';
+import { injectStream, writeLabelSidecar } from './inject.mjs';
+import { mulberry32 } from '../lib/prng.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..', '..');
@@ -103,7 +105,7 @@ function pairedBootstrapCI(diffs, iters = 10000, alpha = 0.05) {
   if (n === 0) return { meanDiff: 0, low: 0, high: 0 };
   const mean = diffs.reduce((a, b) => a + b, 0) / n;
   const rng = mulberry32(0x9e3779b9);
-  const boots = new Array(iters);
+  const boots = Array(iters);
   for (let b = 0; b < iters; b++) {
     let s = 0;
     for (let i = 0; i < n; i++) s += diffs[Math.floor(rng() * n)];

@@ -3,31 +3,33 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { delimiter, dirname, join, resolve } from 'node:path';
-import { Layer, type MemoryEntry } from '../src/memory.js';
+import { delimiter, dirname, join } from 'node:path';
+import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
 import { consolidate } from '../src/consolidate/sleep.js';
-import { deduplicateStore } from '../src/dedupe.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { queryAuditEvents } from '../src/audit.js';
-import { insertRejectedValue, normalizeValueForRejection, rejectionDigest } from '../src/rejection.js';
-import * as api from '../src/api.js';
+import { deduplicateStore } from '../src/consolidate/dedupe.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { queryAuditEvents } from '../src/store/audit.js';
+import { insertRejectedValue, normalizeValueForRejection, rejectionDigest } from '../src/store/rejection.js';
+import * as api from '../src/api/index.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
 import { importProjectMemories } from '../src/agent-memories/sync.js';
 import { totalTally } from '../src/agent-memories/report.js';
 import { importEntries } from '../src/importers/core.js';
-import { autoShare, getGlobalRoot, initGlobal, searchBoth, searchBothHybrid } from '../src/shared.js';
+import { autoShare } from '../src/sharing/share.js';
+import { getGlobalRoot, initGlobal } from '../src/sharing/global-store.js';
+import { searchBoth, searchBothHybrid } from '../src/sharing/search-both.js';
 import { cmdCapture } from '../src/capture/command.js';
 import { extractFromText } from '../src/capture/extract.js';
-import { computeSalience } from '../src/salience.js';
-import { heldTexts, mergedText } from '../src/same-text.js';
-import { insertDormantRow } from '../src/dormant.js';
+import { computeSalience } from '../src/core/salience.js';
+import { heldTexts, mergedText } from '../src/util/same-text.js';
+import { insertDormantRow } from '../src/store/dormant.js';
+import { hippoOut } from './_helpers/spawn-hippo.js';
 
 const DAY = 86_400_000;
-const HIPPO_BIN = resolve(__dirname, '..', 'bin', 'hippo.js');
 const dirs: string[] = [];
 
 function tmp(): string {
@@ -67,7 +69,7 @@ function hermeticEnv(): NodeJS.ProcessEnv {
 }
 
 function hippo(root: string, ...args: string[]): string {
-  return execFileSync(process.execPath, [HIPPO_BIN, ...args], { cwd: dirname(root), env: hermeticEnv(), encoding: 'utf8' });
+  return hippoOut(args, { cwd: dirname(root), env: hermeticEnv() });
 }
 
 const json = (out: string): { results: { id: string; content: string }[] } => JSON.parse(out.trim().split('\n').pop()!);

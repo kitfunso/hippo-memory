@@ -2,21 +2,21 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { openHippoDb, closeHippoDb, getSchemaVersion } from '../src/db.js';
+import { openHippoDb, closeHippoDb, getSchemaVersion } from '../src/db/index.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { deleteEntry, batchWriteAndDelete } from '../src/store/delete-and-batch.js';
 import { applyRebuildResult } from '../src/store/summaries.js';
-import { Layer} from '../src/memory.js';
+import { Layer} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { queryAuditEvents } from '../src/audit.js';
+import { queryAuditEvents } from '../src/store/audit.js';
 import {
   insertRejectedValue,
   rejectionDigest,
   normalizeValueForRejection,
   RejectedValueError,
-} from '../src/rejection.js';
+} from '../src/store/rejection.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 
 function tmpHome(): string {
@@ -41,7 +41,7 @@ function reject(home: string, text: string, reason: string): string {
   return digest;
 }
 
-describe('AT1 rejection guard', () => {
+describe('rejection guard', () => {
   it('fresh store migrates to schema_version 41', () => {
     const home = tmpHome();
     try {

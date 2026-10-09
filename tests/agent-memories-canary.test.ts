@@ -6,11 +6,11 @@ import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { claudeFolderName } from '../src/agent-memories/claude-code.js';
 import { sanitizeCwd } from '../src/agent-memories/qwen-code.js';
-import { AGENT_MEMORY_TOOLS } from '../src/agent-memories/tools.js';
+import { AGENT_MEMORY_TOOLS } from '../src/core/agent-memory-tools.js';
 import { initStore, isInitialized } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import {
-  assertFreshDist, closeWorld, codexSummary, distUrl, dormantRows, liveRows, liveTexts, note, openWorld, projectNotes, type World,
+  closeWorld, codexSummary, distUrl, dormantRows, liveRows, liveTexts, note, openWorld, projectNotes, type World,
 } from './_helpers/agent-memories-world.js';
 
 const WORKER = `
@@ -152,7 +152,6 @@ const everyText = (root: string): string[] =>
 
 beforeEach(() => {
   w = openWorld();
-  assertFreshDist('agent-memories/sync.js');
   writeFileSync(join(w.dir, 'worker.mjs'), WORKER, 'utf8');
   mkdirSync(join(w.project, '.git'));
   storeless = project('storeless');

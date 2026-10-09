@@ -17,10 +17,13 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { serve, type ServerHandle } from '../src/server.js';
-import { createApiKey, type CreateApiKeyResult } from '../src/auth.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import type { Decision } from '../src/decisions.js';
+import { createApiKey, type CreateApiKeyResult } from '../src/store/auth.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import type { Decision } from '../src/objects/decisions.js';
+import type { JsonValue } from '../src/util/json.js';
 import { makeRoot } from './_helpers/make-root.js';
+
+type Body = { [key: string]: JsonValue };
 
 async function jsonAs<T>(res: Response): Promise<T> {
   // SAFETY: every response in this suite comes from the /v1/decisions route
@@ -69,7 +72,7 @@ async function createDecision(
   });
 }
 
-describe('HTTP /v1/decisions (E2 decision first-class object)', () => {
+describe('HTTP /v1/decisions (decision first-class object)', () => {
   it('POST /v1/decisions creates a decision (201 + Decision body)', async () => {
     const res = await createDecision('use Postgres', { context: 'scale' });
     expect(res.status).toBe(201);
@@ -177,5 +180,39 @@ describe('HTTP /v1/decisions (E2 decision first-class object)', () => {
   it('DoS cap: text over 4096 chars -> 400', async () => {
     const res = await createDecision('x'.repeat(4097));
     expect(res.status).toBe(400);
+  });
+
+  const over = (cap: number): string => 'x'.repeat(cap + 1);
+  const at = (cap: number): string => 'x'.repeat(cap);
+  const ROOT = '/v1/decisions';
+  const MISSING = '/v1/decisions/99999/supersede';
+  const SHORT = 'Memory content too short (0 chars, minimum 3): ""';
+  const NO_TARGET = 'saveDecision: decision 99999 to supersede not found for tenant default';
+  // Each row also sends every later field invalid, and every superseded id is missing,
+  // so a row pins which check answers first as well as the reply text.
+  const REPLIES: readonly (readonly [string, string, string, Body | undefined, number, string])[] = [
+    ['list: an unknown status', 'GET', `${ROOT}?status=retired`, undefined, 400, 'status must be one of: active | superseded | closed | all (got "retired")'],
+    ['create: empty text', 'POST', ROOT, { text: '', context: 7, supersedesDecisionId: 0 }, 400, 'text is required (non-empty string)'],
+    ['create: text over the cap', 'POST', ROOT, { text: over(4096), context: 7, supersedesDecisionId: 0 }, 400, 'text exceeds 4096-character cap'],
+    ['create: context not a string', 'POST', ROOT, { text: 't', context: 7, supersedesDecisionId: 0 }, 400, 'context must be a string'],
+    ['create: context over the cap', 'POST', ROOT, { text: 't', context: over(4096), supersedesDecisionId: 0 }, 400, 'context exceeds 4096-character cap'],
+    ['create: supersedesDecisionId of zero', 'POST', ROOT, { text: 't', supersedesDecisionId: 0 }, 400, 'supersedesDecisionId must be a positive integer'],
+    ['create: a fractional supersedesDecisionId', 'POST', ROOT, { text: 't', supersedesDecisionId: 1.5 }, 400, 'supersedesDecisionId must be a positive integer'],
+    ['create: every field at its cap reaches the store', 'POST', ROOT, { text: at(4096), context: at(4096), supersedesDecisionId: 99999 }, 409, NO_TARGET],
+    ['create: a null context reaches the store', 'POST', ROOT, { text: 'ttt', context: null, supersedesDecisionId: 99999 }, 409, NO_TARGET],
+    ['create: spaces-only text passes the route check', 'POST', ROOT, { text: '  ' }, 400, SHORT],
+    ['supersede: empty text', 'POST', MISSING, { text: '', context: 7 }, 400, 'text is required (non-empty string)'],
+    ['supersede: text over the cap', 'POST', MISSING, { text: over(4096), context: 7 }, 400, 'text exceeds 4096-character cap'],
+    ['supersede: context not a string', 'POST', MISSING, { text: 't', context: 7 }, 400, 'context must be a string'],
+    ['supersede: context over the cap', 'POST', MISSING, { text: 't', context: over(4096) }, 400, 'context exceeds 4096-character cap'],
+    ['supersede: every field at its cap reaches the store', 'POST', MISSING, { text: at(4096), context: at(4096) }, 404, NO_TARGET],
+    ['supersede: a null context reaches the store', 'POST', MISSING, { text: 'ttt', context: null }, 404, NO_TARGET],
+    ['supersede: spaces-only text passes the route check', 'POST', MISSING, { text: '  ' }, 400, SHORT],
+  ];
+
+  it.each(REPLIES)('%s', async (_name, method, path, body, status, error) => {
+    const init = { method, headers: authHeaders(), body: body && JSON.stringify(body) };
+    const res = await fetch(`${handle.url}${path}`, init);
+    expect([res.status, await res.text()]).toEqual([status, JSON.stringify({ error })]);
   });
 });

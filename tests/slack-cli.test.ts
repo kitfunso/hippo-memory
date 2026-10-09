@@ -2,10 +2,10 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { execFileSync } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
-import { writeToDlq } from '../src/connectors/slack/dlq.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { parkInDlq } from '../src/connectors/dlq.js';
+import { slackDlq } from '../src/connectors/slack/dlq.js';
+import { hippoOut } from './_helpers/spawn-hippo.js';
 
 const CLI = resolve(__dirname, '..', 'bin', 'hippo.js');
 
@@ -13,11 +13,7 @@ function runCli(cwd: string, args: string[]): string {
   if (!existsSync(CLI)) {
     throw new Error(`bin/hippo.js not found at ${CLI} — run \`npm run build\` first`);
   }
-  return execFileSync('node', [CLI, ...args], {
-    cwd,
-    encoding: 'utf8',
-    env: { ...process.env, HIPPO_HOME: join(cwd, '.hippo') },
-  });
+  return hippoOut(args, { cwd, env: { ...process.env, HIPPO_HOME: join(cwd, '.hippo') }, exe: 'node' });
 }
 
 describe('hippo slack CLI', () => {
@@ -32,13 +28,8 @@ describe('hippo slack CLI', () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  it('hippo slack dlq list prints DLQ rows', () => {
-    const db = openHippoDb(join(root, '.hippo'));
-    try {
-      writeToDlq(db, { tenantId: 'default', rawPayload: '{"x":1}', error: 'bad event' });
-    } finally {
-      closeHippoDb(db);
-    }
+  it('hippo slack dlq list prints DLQ rows', async () => {
+    await parkInDlq(slackDlq, join(root, '.hippo'), { tenantId: 'default', rawPayload: '{"x":1}', error: 'bad event' });
     const out = runCli(root, ['slack', 'dlq', 'list']);
     expect(out).toContain('bad event');
   });

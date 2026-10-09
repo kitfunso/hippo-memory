@@ -6,11 +6,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { loadStats, updateStatsUnlessBusy } from '../src/store/index-and-stats.js';
-import { openHippoDb, closeHippoDb, getHippoDbPath, isSqliteBusy, withBusyWait, type DatabaseSyncLike } from '../src/db.js';
-import { promoteToGlobal } from '../src/shared.js';
-import { resetLogOnce } from '../src/log.js';
+import { openHippoDb, closeHippoDb, getHippoDbPath, isSqliteBusy, runWithRequestStores, type DatabaseSyncLike } from '../src/db/index.js';
+import { promoteToGlobal } from '../src/sharing/global-store.js';
+import { resetLogOnce } from '../src/util/log.js';
 import { serve } from '../src/server.js';
-import * as client from '../src/client.js';
+import * as client from '../src/cli/client.js';
 import { mcpErrorResponse } from '../src/mcp/server.js';
 
 // SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike.
@@ -129,7 +129,7 @@ describe('routed writes under a busy store', () => {
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     try {
       await withLockHeld(home, 60_000, async () => {
-        withBusyWait(50, () => updateStatsUnlessBusy(home, { forgotten: 1 }, 'removed m1'));
+        await runWithRequestStores(() => updateStatsUnlessBusy(home, { forgotten: 1 }, 'removed m1'), { busyWaitMs: 50 });
       });
       expect(stderr.mock.calls.map((c) => String(c[0])).join('')).toMatch(/warn: removed m1, but the store was busy/);
     } finally {

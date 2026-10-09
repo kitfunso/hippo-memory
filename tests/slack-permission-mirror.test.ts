@@ -3,9 +3,9 @@ import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { initStore } from '../src/store/open.js';
-import type { Context } from '../src/api.js';
+import type { Context } from '../src/api/index.js';
 import { ingestMessage } from '../src/connectors/slack/ingest.js';
-import { recall } from '../src/api.js';
+import { recall } from '../src/api/index.js';
 
 const ctx = (root: string): Context => ({
   hippoRoot: root,
@@ -21,14 +21,14 @@ describe('slack permission mirroring', () => {
   });
   afterEach(() => rmSync(root, { recursive: true, force: true }));
 
-  it('private-channel content does not leak when querying public scope', () => {
-    ingestMessage(ctx(root), {
+  it('private-channel content does not leak when querying public scope', async () => {
+    await ingestMessage(ctx(root), {
       teamId: 'T1',
       channel: { id: 'CPUB', is_private: false },
       message: { type: 'message', channel: 'CPUB', user: 'U1', text: 'public secret', ts: '1.1' },
       eventId: 'EvPub',
     });
-    ingestMessage(ctx(root), {
+    await ingestMessage(ctx(root), {
       teamId: 'T1',
       channel: { id: 'CPRIV', is_private: true },
       message: { type: 'message', channel: 'CPRIV', user: 'U1', text: 'private secret', ts: '2.2' },
@@ -43,14 +43,14 @@ describe('slack permission mirroring', () => {
   // Review patch #4: empty/undefined scope must default-deny private rows.
   // Without this guarantee, a frontend caller forgetting to pass `scope` exposes
   // every private channel to a public query.
-  it('no-scope query default-denies private rows', () => {
-    ingestMessage(ctx(root), {
+  it('no-scope query default-denies private rows', async () => {
+    await ingestMessage(ctx(root), {
       teamId: 'T1',
       channel: { id: 'CPUB', is_private: false },
       message: { type: 'message', channel: 'CPUB', user: 'U1', text: 'public alpha', ts: '1.1' },
       eventId: 'EvPubA',
     });
-    ingestMessage(ctx(root), {
+    await ingestMessage(ctx(root), {
       teamId: 'T1',
       channel: { id: 'CPRIV', is_private: true },
       message: { type: 'message', channel: 'CPRIV', user: 'U1', text: 'private alpha', ts: '2.2' },
@@ -62,8 +62,8 @@ describe('slack permission mirroring', () => {
   });
 
   // Review patch #4: mismatched scope (channel does not exist) returns zero.
-  it('mismatched scope returns zero results', () => {
-    ingestMessage(ctx(root), {
+  it('mismatched scope returns zero results', async () => {
+    await ingestMessage(ctx(root), {
       teamId: 'T1',
       channel: { id: 'CPUB', is_private: false },
       message: { type: 'message', channel: 'CPUB', user: 'U1', text: 'beta', ts: '1.1' },
@@ -76,10 +76,10 @@ describe('slack permission mirroring', () => {
   // Review patch #4: tenant-mismatched scope. Tenant B writes a private row
   // with scope='slack:private:CSHARED'. Tenant A queries the same scope string
   // and must get nothing — recall is tenant-scoped before scope-scoped.
-  it('tenant-mismatched scope does not leak across tenants', () => {
+  it('tenant-mismatched scope does not leak across tenants', async () => {
     const ctxA = (r: string): Context => ({ hippoRoot: r, tenantId: 'tenantA', actor: { subject: 'cli', role: 'admin' } });
     const ctxB = (r: string): Context => ({ hippoRoot: r, tenantId: 'tenantB', actor: { subject: 'cli', role: 'admin' } });
-    ingestMessage(ctxB(root), {
+    await ingestMessage(ctxB(root), {
       teamId: 'T1',
       channel: { id: 'CSHARED', is_private: true },
       message: { type: 'message', channel: 'CSHARED', user: 'U1', text: 'tenantB secret', ts: '3.3' },

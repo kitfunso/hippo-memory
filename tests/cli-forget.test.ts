@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { queryAuditEvents } from '../src/audit.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { queryAuditEvents } from '../src/store/audit.js';
 
 // A3: `hippo forget` on a raw (append-only) memory must not dead-end with a
 // misleading "Memory not found" — it reports the append-only nature and points
@@ -69,7 +69,7 @@ function hasRow(home: string, id: string): boolean {
   }
 }
 
-describe('cli forget — raw memory archive (A3)', () => {
+describe('cli forget: raw memory archive', () => {
   beforeAll(() => {
     if (!existsSync(CLI_PATH) || !statSync(CLI_PATH).isFile()) {
       throw new Error(`dist/cli.js not found at ${CLI_PATH}. Run \`npm run build\` first.`);

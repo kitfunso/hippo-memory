@@ -6,7 +6,7 @@ import { createHmac } from 'node:crypto';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { serve, type ServerHandle } from '../src/server.js';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 
 const SECRET = 'github-webhook-secret';
 
@@ -441,6 +441,74 @@ describe('POST /v1/connectors/github/events', () => {
         `SELECT bucket FROM github_dlq ORDER BY id DESC LIMIT 1`,
       );
       expect(row.bucket).toBe('unhandled');
+    } finally {
+      closeHippoDb(db);
+    }
+  });
+
+  it('16. issues.deleted → parked for manual review, the ingested issue stays', async () => {
+    const openBody = issueBody();
+    const openRes = await postWebhook(handle.port, openBody, defaultHeaders(openBody, 'issues', 'd-16a'));
+    expect(openRes.status).toBe(200);
+
+    const delBody = issueBody({ action: 'deleted' });
+    const delRes = await postWebhook(handle.port, delBody, defaultHeaders(delBody, 'issues', 'd-16b'));
+    expect(delRes.status).toBe(200);
+    expect(await jsonAs<{ ok: boolean; status: string }>(delRes)).toEqual({ ok: true, status: 'dlq' });
+
+    const db = openHippoDb(root);
+    try {
+      const row = queryOne<Record<string, string>>(
+        db,
+        `SELECT bucket, error, event_name, delivery_id, tenant_id, installation_id, repo_full_name, raw_payload
+           FROM github_dlq ORDER BY id DESC LIMIT 1`,
+      );
+      expect({ ...row }).toEqual({
+        bucket: 'unhandled',
+        error: 'issues.deleted requires manual review',
+        event_name: 'issues',
+        delivery_id: 'd-16b',
+        tenant_id: 'default',
+        installation_id: '99',
+        repo_full_name: 'acme/repo',
+        raw_payload: delBody,
+      });
+    } finally {
+      closeHippoDb(db);
+    }
+    const issueRows = loadAllEntries(root).filter(
+      (e) => e.kind === 'raw' && e.artifact_ref === 'github://acme/repo/issue/42',
+    );
+    expect(issueRows.length).toBe(1);
+  });
+
+  it('17. pull_request_review_comment.deleted → archives the previously-ingested review comment', async () => {
+    const artifactRef = 'github://acme/repo/pull/7/review_comment/12345';
+    const liveRaws = () => loadAllEntries(root).filter((e) => e.kind === 'raw' && e.artifact_ref === artifactRef);
+    const createBody = prReviewCommentBody('created');
+    const createRes = await postWebhook(
+      handle.port,
+      createBody,
+      defaultHeaders(createBody, 'pull_request_review_comment', 'd-17a'),
+    );
+    expect(createRes.status).toBe(200);
+    expect(liveRaws().length).toBe(1);
+
+    const delBody = prReviewCommentBody('deleted');
+    const delRes = await postWebhook(
+      handle.port,
+      delBody,
+      defaultHeaders(delBody, 'pull_request_review_comment', 'd-17b'),
+    );
+    expect(delRes.status).toBe(200);
+    expect(await jsonAs<{ ok: boolean; status: string; archivedCount: number }>(delRes))
+      .toEqual({ ok: true, status: 'archived', archivedCount: 1 });
+    expect(liveRaws().length).toBe(0);
+
+    // Nothing was parked: the delete was handled, not left for an operator.
+    const db = openHippoDb(root);
+    try {
+      expect(queryOne<{ n: number }>(db, `SELECT COUNT(*) AS n FROM github_dlq`).n).toBe(0);
     } finally {
       closeHippoDb(db);
     }

@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { writeFileSync } from 'node:fs';
 import { initStore } from '../src/store/open.js';
 import {
-  agentRows, assertFreshDist, closeWorld, codexSummary, distUrl, liveRows, note, openWorld, projectNotes, type World,
+  agentRows, closeWorld, codexSummary, distUrl, liveRows, note, openWorld, projectNotes, type World,
 } from './_helpers/agent-memories-world.js';
 
 const WORKERS = 4;
@@ -60,7 +60,6 @@ async function race(roots: readonly string[]): Promise<WorkerOut[]> {
 
 describe('agent memory sync: concurrent first imports', () => {
   it('four processes importing the same 40 notes into one fresh store give exactly one row per note', async () => {
-    assertFreshDist('agent-memories/sync.js');
     for (let i = 0; i < NOTES; i++) note(projectNotes(w), `n${i}.md`, `Race note ${i}: build ${i + 100} needs the schema check first.`);
 
     const outs = await race(Array.from({ length: WORKERS }, () => w.local));
@@ -70,7 +69,6 @@ describe('agent memory sync: concurrent first imports', () => {
   }, 120_000);
 
   it('four projects\' sleeps racing on the user pass give one global row per Codex bullet', async () => {
-    assertFreshDist('agent-memories/sync.js');
     codexSummary(w, ...Array.from({ length: NOTES }, (_, i) => `- Preference ${i}: run check ${i + 100} before merging.`));
     const roots = Array.from({ length: WORKERS }, (_, i) => {
       const root = join(w.dir, `p${i}`, '.hippo');

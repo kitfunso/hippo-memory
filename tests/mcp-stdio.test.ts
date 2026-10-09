@@ -57,7 +57,7 @@ describe('parseFrame', () => {
 
 // ─── Subprocess integration test (issue #13) ───
 
-describe('hippo mcp stdio (issue #13)', () => {
+describe('hippo mcp stdio', () => {
   let tmpHome: string;
   let tmpHippo: string;
   let prevHome: string | undefined;

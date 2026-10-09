@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { mkdtempSync, rmSync, mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { request as httpRequest } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { serve } from '../src/server.js';
@@ -28,6 +29,42 @@ async function healthBody(res: Response): Promise<HealthBody> {
   // SAFETY: see doc comment above — every call site asserts on HealthBody's
   // fields immediately after calling healthBody.
   return (await res.json()) as HealthBody;
+}
+
+interface UploadReply {
+  status: number;
+  body: string;
+  closed: Promise<void>;
+}
+
+// Unpaced and never ended, as a large upload is, so only the server can close the connection.
+function uploadUnpaced(port: number, path: string, headers: Record<string, string> = {}): Promise<UploadReply> {
+  const chunk = Buffer.alloc(64 * 1024, 'x');
+  return new Promise<UploadReply>((resolve, reject) => {
+    const req = httpRequest({ host: '127.0.0.1', port, path, method: 'POST', headers: { 'content-type': 'application/json', ...headers } });
+    let answered = false;
+    req.on('response', (res) => {
+      answered = true;
+      const socket = req.socket;
+      const closed = socket === null || socket.destroyed
+        ? Promise.resolve()
+        : new Promise<void>((done) => socket.once('close', () => done()));
+      const parts: Buffer[] = [];
+      res.on('data', (part: Buffer) => parts.push(part));
+      res.on('end', () => resolve({ status: res.statusCode ?? 0, body: Buffer.concat(parts).toString('utf8'), closed }));
+      res.on('error', reject);
+    });
+    // A reset before the reply is read is the bug this guards: the server closed with request bytes unread.
+    req.on('error', (err) => {
+      if (!answered) reject(err);
+    });
+    const send = async (): Promise<void> => {
+      for (let sent = 0; sent < 8 * 1024 * 1024 && !req.destroyed && !answered; sent += chunk.length) {
+        await new Promise<void>((done) => req.write(chunk, () => done()));
+      }
+    };
+    void send();
+  });
 }
 
 describe('server lifecycle', () => {
@@ -109,6 +146,22 @@ describe('server lifecycle', () => {
     rmSync(home, { recursive: true, force: true });
   });
 
+  it('logs a listener error raised after boot and keeps serving', async () => {
+    const home = makeRoot();
+    const handle = await serve({ hippoRoot: home, port: 0 });
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      // What Node emits when accept() fails, as it does when the process runs out of file descriptors.
+      handle.server?.emit('error', Object.assign(new Error('accept EMFILE'), { code: 'EMFILE' }));
+      expect(stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).toMatch(/^\[hippo\] error: serve: listener error: accept EMFILE /);
+      expect((await fetch(`${handle.url}/health`)).status).toBe(200);
+    } finally {
+      stderr.mockRestore();
+      await handle.stop();
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
   it('full lifecycle: start, health, stop, second start succeeds', async () => {
     const home = makeRoot();
 
@@ -148,33 +201,25 @@ describe('server lifecycle', () => {
     }
   });
 
-  it('rejects an over-1MB request body with 413 and destroys the socket (M3)', async () => {
+  it('answers an upload still streaming past 1 MB with its 413, then closes the connection (M3)', async () => {
     const home = makeRoot();
     const handle = await serve({ hippoRoot: home, port: 0 });
-    // Exactly one byte over readBody's 1 MB cap. The +1 matters: the server
-    // reads the whole body before `total > cap` trips, so the request is fully
-    // consumed and req.destroy() is a clean close (no RST) — the 413 reaches
-    // the client deterministically. A larger body leaves the client mid-upload
-    // when the socket dies, which fetch cannot resolve into a response.
-    const oversize = 'x'.repeat(1024 * 1024 + 1);
-    const postOversize = async (path: string): Promise<number> => {
-      const res = await fetch(`${handle.url}${path}`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: oversize,
-      });
-      await res.text().catch(() => { /* body stream may be cut by req.destroy */ });
-      return res.status;
-    };
     try {
-      // The cap lives in readBody, shared by every route — exercise the generic
-      // /v1 route and a webhook route, which both call it before any auth.
-      expect(await postOversize('/v1/memories')).toBe(413);
-      expect(await postOversize('/v1/connectors/slack/events')).toBe(413);
+      // The cap lives in readBody, shared by every route: the generic /v1 route reads a body
+      // before any key check, and a webhook route reads one once a secret and a signature header are there.
+      process.env.SLACK_SIGNING_SECRET = 'test-only-webhook-signing-material';
+      const signed = { 'x-slack-signature': 'v0=00', 'x-slack-request-timestamp': '1' };
+      for (const [path, headers] of [['/v1/memories', {}], ['/v1/connectors/slack/events', signed]] as const) {
+        const reply = await uploadUnpaced(handle.port, path, headers);
+        expect(reply.status).toBe(413);
+        expect(JSON.parse(reply.body)).toEqual({ error: 'request body exceeds 1MB' });
+        await reply.closed;
+      }
       // The server shed the oversized requests without wedging — still serving.
       const health = await fetch(`${handle.url}/health`);
       expect(health.status).toBe(200);
     } finally {
+      delete process.env.SLACK_SIGNING_SECRET;
       await handle.stop();
       rmSync(home, { recursive: true, force: true });
     }

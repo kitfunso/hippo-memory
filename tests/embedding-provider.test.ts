@@ -6,8 +6,9 @@ import {
   resolveEmbeddingProvider,
   resolveEmbeddingIdentity,
   isEmbeddingConfigured,
-} from '../src/embedding-provider.js';
-import { saveEmbeddingIndex, embeddingModelRequiresReindex, saveStoredEmbeddingModel } from '../src/embeddings.js';
+} from '../src/store/embeddings/provider.js';
+import { embeddingModelRequiresReindex, saveStoredEmbeddingModel } from '../src/store/embeddings/index.js';
+import { saveEmbeddingIndex } from '../src/store/vector-index.js';
 
 interface EmbeddingsConfig {
   provider?: string;
@@ -298,12 +299,12 @@ describe('EmbeddingProvider', () => {
 
     it('accepts an https base url', () => {
       const root = mkRoot({ provider: 'openai', model: 'm', apiBaseUrl: 'https://proxy.example.com/v1' });
-      expect(() => resolveEmbeddingProvider(root)).not.toThrow();
+      expect(resolveEmbeddingProvider(root).id).toBe('openai:m');
     });
 
     it('allows http for localhost', () => {
       const root = mkRoot({ provider: 'openai', model: 'm', apiBaseUrl: 'http://localhost:1234/v1' });
-      expect(() => resolveEmbeddingProvider(root)).not.toThrow();
+      expect(resolveEmbeddingProvider(root).id).toBe('openai:m');
     });
   });
 });

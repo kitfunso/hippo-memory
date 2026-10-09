@@ -1,13 +1,17 @@
 /** `--flag=value` (glued) form: the first describe unit-tests parseArgs, the second drives the built CLI. */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { BOOLEAN_FLAGS, KNOWN_FLAGS, parseArgs, shouldAutoRepairCodexWrapper } from '../src/cli.js';
+import { collectVerbReads } from '../scripts/cli-flag-reads.mjs';
+import { COMMANDS, parseArgs, shouldAutoRepairCodexWrapper } from '../src/cli.js';
+import { undeclaredFlags, type VerbFlags } from '../src/cli/flags.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
+import { ownStderr } from './_helpers/own-stderr.js';
+import { hippoRun } from './_helpers/spawn-hippo.js';
 
 const argv = (...rest: string[]) => ['node', 'hippo', ...rest];
 
@@ -96,43 +100,54 @@ describe('parseArgs: --flag=value (glued form)', () => {
     expect(parseArgs(argv('remember', 'x', '--pin', 'true')).flags['pin']).toBe('true');
     expect(parseArgs(argv('audit', '--fix', 'false')).flags['fix']).toBe('false');
   });
+
+  it('case 14g: a flag two verbs read differently parses by the verb typed, and as a value on a verb that reads neither', () => {
+    expect(parseArgs(argv('last-sleep', '--keep', 'x'))).toMatchObject({ flags: { keep: true }, args: ['x'] });
+    expect(parseArgs(argv('resolve', '7', '--keep', 'mem_1'))).toMatchObject({ flags: { keep: 'mem_1' }, args: ['7'] });
+    expect(parseArgs(argv('status', '--keep', 'x'))).toMatchObject({ flags: { keep: 'x' }, args: [] });
+  });
 });
 
-describe('BOOLEAN_FLAGS: every switch the CLI reads is registered', () => {
-  // SHORTCUT: idiom regexes, not a type check; a switch read only through a local variable slips past.
-  const ON_OFF = /Boolean\(\s*<>|<>\s*[!=]==\s*true|!\s*<>|if \(\s*<>\s*\)|<>\s*\?(?![?.])|&&\s*<>|<>\s*&&|\|\|\s*<>/;
-  const AS_VALUE = /String\(\s*<>|Number\(\s*<>|parse\w*\(\s*<>|<>\s*as string|typeof <>|<>\.\w|`[^`]*\$\{\s*<>/;
-  // Every module under src/cli/, so a verb moved out of cli.ts stays covered.
-  const CLI_SOURCES = [
-    'cli.ts',
-    ...readdirSync(resolve(__dirname, '..', 'src', 'cli')).filter((f) => f.endsWith('.ts')).map((f) => join('cli', f)),
-    join('connectors', 'github', 'cli-impl.ts'),
-  ];
+describe('per-verb flags: each row of COMMANDS declares what its verb reads', () => {
+  // The walker follows the flags object out of each row's handler and never looks at a declaration.
+  let found: ReturnType<typeof collectVerbReads>;
+  const rows: Record<string, { readonly flags: VerbFlags }> = COMMANDS;
+  const namesOf = (flags: VerbFlags): string[] =>
+    [...(flags.switches ?? []), ...(flags.values ?? []), ...(flags.numbers ?? []), ...(flags.lists ?? [])];
+  beforeAll(() => {
+    found = collectVerbReads(resolve(__dirname, '..'));
+  }, 120_000);
 
-  it('case 14d: a flag read only as on/off is in BOOLEAN_FLAGS, so no value can switch it on', () => {
-    const onOff = new Set<string>();
-    const asValue = new Set<string>();
-    for (const file of CLI_SOURCES) {
-      const src = readFileSync(resolve(__dirname, '..', 'src', file), 'utf8');
-      for (const m of src.matchAll(/flags\[['"]([a-z0-9-]+)['"]\]/g)) {
-        const at = m.index ?? 0;
-        const read = `${src.slice(Math.max(0, at - 40), at)}<>${src.slice(at + m[0].length, at + m[0].length + 30)}`;
-        if (AS_VALUE.test(read)) asValue.add(m[1]);
-        else if (ON_OFF.test(read)) onOff.add(m[1]);
+  it('case 14d: a flag a verb reads only as on/off is a switch on that verb, so no value can switch it on', () => {
+    expect(found.unclassed).toEqual([]);
+    const wrongKind: string[] = [];
+    for (const { verb, flags } of found.verbs) {
+      const switches = rows[verb]?.flags.switches ?? [];
+      for (const [name, read] of Object.entries(flags)) {
+        if (read === 'on-off' && !switches.includes(name)) wrongKind.push(`${verb} --${name} is read as on/off and is not a switch`);
+        if (read === 'value' && switches.includes(name)) wrongKind.push(`${verb} --${name} is a switch and its value is read`);
       }
     }
-    const unregistered = [...onOff].filter((key) => !asValue.has(key) && !BOOLEAN_FLAGS.has(key));
-    expect(unregistered).toEqual([]);
+    expect(wrongKind).toEqual([]);
   });
 
-  it('case 14e: KNOWN_FLAGS is exactly the set of flags the CLI reads, so no typo hides in it', () => {
-    const reads = new Set<string>();
-    const READ = /flags(?:\[['"]([a-z0-9-]+)['"]\]|\.([a-z][a-z0-9]*)\b)|(?:Flag|hasOwn)\(\s*flags,\s*['"]([a-z0-9-]+)['"]/g;
-    for (const file of CLI_SOURCES) {
-      const src = readFileSync(resolve(__dirname, '..', 'src', file), 'utf8');
-      for (const m of src.matchAll(READ)) reads.add(m[1] ?? m[2] ?? m[3]);
+  it('case 14e: each verb declares exactly the flags it reads, so no declared flag is dead and no read flag is missing', () => {
+    expect(found.unfollowed).toEqual([]);
+    const read = Object.fromEntries(found.verbs.map(({ verb, flags }) => [verb, Object.keys(flags).sort()]));
+    const declared = Object.fromEntries(Object.entries(rows).map(([verb, { flags }]) => [verb, namesOf(flags).sort()]));
+    expect(declared).toEqual(read);
+  });
+
+  it('case 14h: every verb is silent on each flag it declares and names one flag that only another verb declares', () => {
+    const everyFlag = [...new Set(Object.values(rows).flatMap(({ flags }) => namesOf(flags)))].sort();
+    const wrong: string[] = [];
+    for (const [verb, { flags }] of Object.entries(rows)) {
+      const own = namesOf(flags);
+      const foreign = everyFlag.find((name) => !own.includes(name)) ?? '';
+      const ignored = undeclaredFlags(flags, [...own, foreign]);
+      if (ignored.length !== 1 || ignored[0] !== foreign) wrong.push(`${verb} is told it ignores: ${ignored.join(', ')}`);
     }
-    expect([...reads].sort()).toEqual([...KNOWN_FLAGS].sort());
+    expect(wrong).toEqual([]);
   });
 });
 
@@ -149,7 +164,6 @@ describe('init --no-hooks', () => {
 });
 
 describe('built CLI: --flag=value end-to-end guards', () => {
-  const CLI = resolve(__dirname, '..', 'bin', 'hippo.js');
   let tmpDir: string;
   let env: NodeJS.ProcessEnv;
 
@@ -159,8 +173,8 @@ describe('built CLI: --flag=value end-to-end guards', () => {
     return result;
   }
 
-  function runCli(args: string[]): { stdout: string; stderr: string; status: number } {
-    const res = spawnSync('node', [CLI, ...args], { cwd: tmpDir, env, encoding: 'utf8' });
+  function runCli(args: string[]) {
+    const res = hippoRun(args, { cwd: tmpDir, env, exe: 'node' });
     return { stdout: res.stdout, stderr: res.stderr, status: res.status ?? 1 };
   }
 
@@ -269,6 +283,12 @@ describe('built CLI: --flag=value end-to-end guards', () => {
     expect(res.stderr).toContain('--pin takes no value');
   });
 
+  it('case 28b: last-sleep --keep=false is rejected, never read as the truthy string that keeps the log', () => {
+    const res = runCli(['last-sleep', '--keep=false']);
+    expect(res.status).toBe(1);
+    expect(res.stderr).toContain('--keep takes no value');
+  });
+
   it('case 29: forget X --dryrun (typo) stops with exit 2 instead of forgetting', () => {
     const res = runCli(['forget', 'X', '--dryrun']);
     expect(res.status).toBe(2);
@@ -279,6 +299,29 @@ describe('built CLI: --flag=value end-to-end guards', () => {
     const res = runCli(['recall', 'deploy steps', '--limt', '5', '--json']);
     expect(res.status).toBe(0);
     expect(res.stderr).toContain('ignoring unknown flag --limt');
+  });
+
+  it('case 30b: a flag another verb reads warns once on a verb that ignores it, and the verb runs as before', () => {
+    const plain = runCli(['recall', 'deploy steps', '--json']);
+    const res = runCli(['recall', 'deploy steps', '--json', '--archive']);
+    expect(plain.stderr).not.toContain('ignoring unknown flag');
+    expect(res.stderr.split('\n').filter((line) => line.includes('ignoring unknown flag'))).toEqual([
+      'hippo: ignoring unknown flag --archive. A later release will reject it.',
+    ]);
+    expect({ status: res.status, stdout: res.stdout }).toEqual({ status: 0, stdout: plain.stdout });
+  });
+
+  it('case 30c: a destructive verb is not refused over a flag another verb reads; it warns and runs', () => {
+    const plain = runCli(['forget', 'no-such-id']);
+    const res = runCli(['forget', 'no-such-id', '--json']);
+    const plainStderr = ownStderr(plain.stderr);
+    expect(ownStderr(res.stderr)).toBe(`hippo: ignoring unknown flag --json. A later release will reject it.\n${plainStderr}`);
+    expect({ status: res.status, stdout: res.stdout }).toEqual({ status: plain.status, stdout: plain.stdout });
+    expect(plainStderr).toContain('Memory not found: no-such-id');
+  });
+
+  it('case 30d: a --dry-run the verb lacks is refused by name only, never also called ignored', () => {
+    expect(runCli(['reject', 'X', '--dry-run']).stderr).not.toContain('ignoring unknown flag');
   });
 
   it('case 31: reject --dry-run stops with exit 2, because reject has no dry run', () => {

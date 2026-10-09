@@ -10,12 +10,12 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { estimateTokens } from '../src/token-ledger.js';
-import type { SearchResult } from '../src/search/types.js';
-import { insertEntity, insertRelation } from '../src/graph/write.js';
-import { loadNeighborRelations, loadEntitiesByMemoryId, loadEntitiesByIds } from '../src/graph/read.js';
-import { graphExpandRecall } from '../src/graph-recall.js';
+import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { estimateTokens } from '../src/util/token-text.js';
+import type { SearchResult } from '../src/core/search-types.js';
+import { insertEntity, insertRelation } from '../src/store/graph-writes.js';
+import { loadNeighborRelations, loadEntitiesByMemoryId, loadEntitiesByIds } from '../src/store/graph-reads.js';
+import { graphExpandRecall } from '../src/graph/recall.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 function safeRmSync(p: string): void {
@@ -37,7 +37,7 @@ function ent(home: string, tenant: string, m: MemoryEntry, name: string): number
   return insertEntity(home, tenant, { entityType: 'decision', name, memoryId: m.id }).id;
 }
 
-describe('E3.2 graph-recall engine', () => {
+describe('graph-recall engine', () => {
   let home: string;
   const T = 'default';
   beforeEach(() => { home = makeRoot('graphrecall'); });
@@ -253,7 +253,7 @@ describe('E3.2 graph-recall engine', () => {
   });
 });
 
-describe('E3.2 graph.ts read helpers', () => {
+describe('graph.ts read helpers', () => {
   let home: string;
   const T = 'default';
   beforeEach(() => { home = makeRoot('graphrecall'); });

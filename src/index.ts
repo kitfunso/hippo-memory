@@ -2,8 +2,8 @@
  * Hippo public API  - re-exports for programmatic use.
  */
 
-import { createMemory as createStoreMemory, DEFAULT_HALF_LIFE_DAYS, type CreateMemoryOptions, type MemoryEntry } from './memory.js';
-export { MemoryEntry, Layer, EmotionalValence, ConfidenceLevel, DecayOptions, calculateStrength, resolveConfidence, confidenceFacets, type ConfidenceFacets, applyOutcome, generateId, computeSchemaFit } from './memory.js';
+import { createMemory as createStoreMemory, DEFAULT_HALF_LIFE_DAYS, type CreateMemoryOptions, type MemoryEntry } from './core/memory.js';
+export { MemoryEntry, Layer, EmotionalValence, ConfidenceLevel, DecayOptions, calculateStrength, resolveConfidence, confidenceFacets, type ConfidenceFacets, applyOutcome, generateId, computeSchemaFit } from './core/memory.js';
 
 /** Published signature, so `baseHalfLifeDays` stays optional here; hippo's own writers use the strict one in memory.ts. */
 export function createMemory(content: string, options: Partial<CreateMemoryOptions> = {}): MemoryEntry {
@@ -14,12 +14,12 @@ export { hybridSearch } from './search/hybrid.js';
 export { physicsSearch } from './search/physics-search.js';
 export { explainMatch, MatchExplanation } from './search/explain.js';
 export { detectTemporalDirection, temporalBoost, computeTemporalRange } from './search/temporal.js';
-export { SearchResult } from './search/types.js';
-export { estimateTokens } from './token-ledger.js';
-export { tokenize, textOverlap } from './tokenize.js';
-export { markRetrieved } from './memory.js';
-export { multihopSearch } from './multihop.js';
-export { graphExpandRecall, MAX_HOPS, DEFAULT_MAX_NEIGHBORS, type GraphExpandOpts } from './graph-recall.js';
+export { SearchResult } from './core/search-types.js';
+export { estimateTokens } from './util/token-text.js';
+export { tokenize, textOverlap } from './util/tokenize.js';
+export { markRetrieved } from './core/memory.js';
+export { multihopSearch } from './search/multihop.js';
+export { graphExpandRecall, MAX_HOPS, DEFAULT_MAX_NEIGHBORS, type GraphExpandOpts } from './graph/recall.js';
 export { initStore } from './store/open.js';
 export { writeEntry } from './store/entry-writes.js';
 export { loadAllEntries, readEntry } from './store/entry-reads.js';
@@ -35,6 +35,7 @@ export {
   clearActiveTaskSnapshot,
   appendSessionEvent,
   listSessionEvents,
+  type ContinuityKey,
 } from './store/sessions.js';
 export { listMemoryConflicts, replaceDetectedConflicts, resolveConflict } from './store/conflicts.js';
 export {
@@ -59,26 +60,26 @@ export {
   reclaimExpiredCards,
   addCardComment,
   loadLatestHandoffForCard,
-} from './store-cards.js';
+} from './store/cards.js';
 
 // Feature 5: Session handoff
-export { SessionHandoff, HandoffOutcome, HandoffEvidence, isHandoffOutcome } from './handoff.js';
+export { SessionHandoff, HandoffOutcome, HandoffEvidence, isHandoffOutcome } from './core/handoff.js';
 // W2a: work-queue cards
-export { Card, CardStatus, CardRun, CardComment, CardTransitions, isCardStatus, CARD_TRANSITIONS, CARD_LEASE_MS } from './card.js';
+export { Card, CardStatus, CardRun, CardComment, CardTransitions, isCardStatus, CARD_TRANSITIONS, CARD_LEASE_MS } from './core/card.js';
 export { consolidate } from './consolidate/sleep.js';
 export { ConsolidationResult } from './consolidate/run.js';
+export { sleep, type SleepOpts, type SleepResult } from './api/sleep.js';
 // Announced public in CHANGELOG 1.26.3 but never re-exported; the rest of dedupe.js stays internal.
-export { strengthBucket } from './dedupe.js';
+export { strengthBucket } from './consolidate/dedupe.js';
 
 // Feature 1: Embedding search
-export { isEmbeddingAvailable, getEmbedding } from './local-embedding.js';
+export { isEmbeddingAvailable, getEmbedding } from './store/embeddings/local.js';
 export {
   cosineSimilarity,
-  loadEmbeddingIndex,
-  saveEmbeddingIndex,
   embedMemory,
   embedAll,
-} from './embeddings.js';
+} from './store/embeddings/index.js';
+export { loadEmbeddingIndex, saveEmbeddingIndex } from './store/vector-index.js';
 
 // Feature 2: Auto-learn from errors
 export {
@@ -88,22 +89,13 @@ export {
   deduplicateLesson,
   runWatched,
   fetchGitLog,
-} from './autolearn.js';
+} from './learn/autolearn.js';
 
 // Feature 3: Cross-agent shared memory
-export {
-  getGlobalRoot,
-  initGlobal,
-  promoteToGlobal,
-  searchBoth,
-  searchBothHybrid,
-  syncGlobalToLocal,
-  HybridSearchOptions,
-  transferScore,
-  shareMemory,
-  listPeers,
-  autoShare,
-} from './shared.js';
+export { getGlobalRoot, initGlobal, promoteToGlobal } from './sharing/global-store.js';
+export { searchBoth, searchBothHybrid, HybridSearchOptions } from './sharing/search-both.js';
+export { syncGlobalToLocal } from './sharing/global-sync.js';
+export { transferScore, shareMemory, listPeers, autoShare } from './sharing/share.js';
 
 // Feature 5: Working memory
 export {
@@ -113,7 +105,7 @@ export {
   wmFlush,
   WorkingMemoryItem,
   WM_MAX_ENTRIES,
-} from './working-memory.js';
+} from './store/working-memory.js';
 
 // Feature 4: Memory importers
 export {
@@ -133,7 +125,7 @@ export {
   resultToBaseline,
   detectRegressions,
   buildSyntheticCorpus,
-} from './eval-suite.js';
+} from './eval/eval-suite.js';
 
 // Pineal gland: salience gate
 export {
@@ -141,7 +133,7 @@ export {
   SalienceDecision,
   SalienceResult,
   SalienceOptions,
-} from './salience.js';
+} from './core/salience.js';
 
 // Pineal gland: ambient state vector
 export {
@@ -149,7 +141,7 @@ export {
   renderAmbientSummary,
   formatAmbientVector,
   AmbientState,
-} from './ambient.js';
+} from './core/ambient.js';
 export {
   appendAuditEvent,
   queryAuditEvents,
@@ -159,5 +151,5 @@ export {
   type AuditOp,
   type QueryAuditOpts,
   type ListAuditAfterOpts,
-} from './audit.js';
-export { openHippoDb, openHippoDbReadOnly, closeHippoDb, type DatabaseSyncLike } from './db.js';
+} from './store/audit.js';
+export { openHippoDb, openHippoDbReadOnly, closeHippoDb, type DatabaseSyncLike } from './db/index.js';

@@ -1,8 +1,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { replayCompactionsAt, saveCompaction, saveItems } from '../src/compaction-record.js';
-import { closeHippoDb, openHippoDb } from '../src/db.js';
+import { COMPACTION_DB_WAIT_MS, replayCompactionsAt, saveCompaction, saveItems } from '../src/capture/compaction-record.js';
+import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { initStore } from '../src/store/open.js';
 import {
   compactionMemories,
@@ -18,6 +18,7 @@ import {
   summaryWith,
   type Scratch,
 } from './_helpers/compaction-hooks.js';
+import { lockWaitAskedMs, tracingLockWaits } from './_helpers/lock-waits.js';
 
 const MINUTE = 60_000;
 const ITEMS = [
@@ -136,7 +137,7 @@ describe('replay of records a killed hook left', () => {
     );
     fs.writeFileSync(path.join(spool, 's2-1.json'), '{ not json');
     expect(replayCompactionsAt(s.hippoRoot, log)).toBe(1);
-    expect(fs.readdirSync(spool).sort()).toEqual(['s2-1.json.bad']);
+    expect(fs.readdirSync(spool).sort()).toEqual(['s2-1.unreadable.bad']);
     expect(compactionMemories(s.hippoRoot)).toHaveLength(2);
     expect(compactionRows(s.hippoRoot)).toMatchObject([{ session_id: 's1', status: 'done', items_written: 2, summary: 'the summary' }]);
   });
@@ -260,7 +261,7 @@ describe('two replayers working the same store', () => {
     seed(s.hippoRoot, { id: 'cmp-1', status: 'summarised', startedMinutesAgo: 30, summarisedMinutesAgo: 20, items: ITEMS });
     const db = openHippoDb(s.hippoRoot);
     try {
-      const ctx = { tenantId: 'default', recordId: 'cmp-1', sessionId: 's1', originProject: 'proj', items: ITEMS };
+      const ctx = { tenantId: 'default', recordId: 'cmp-1', sessionId: 's1', originProject: 'proj', cwd: null, items: ITEMS };
       expect(saveItems(db, s.hippoRoot, ctx, log)).toBe(2);
       run(s.hippoRoot, `DELETE FROM memories WHERE instr(tags_json, '"compaction-memory"') > 0`);
       expect(saveItems(db, s.hippoRoot, ctx, log)).toBe(2);
@@ -293,8 +294,8 @@ describe('two replayers working the same store', () => {
     writeSpool('s1-1.json');
     run(s.hippoRoot, `CREATE TRIGGER block_compaction_insert BEFORE INSERT ON compactions BEGIN SELECT RAISE(ABORT, 'blocked'); END`);
     expect(replayCompactionsAt(s.hippoRoot, log)).toBe(0);
-    expect(fs.readdirSync(spoolDir())).toEqual(['s1-1.json']);
-    expect(logs.join('\n')).toContain('spool file s1-1.json not imported');
+    expect(fs.readdirSync(spoolDir())).toEqual(['s1-1.a1.json']);
+    expect(logs.join('\n')).toContain('spool file s1-1.json failed to import (try 1 of 3)');
 
     run(s.hippoRoot, `DROP TRIGGER block_compaction_insert`);
     expect(replayCompactionsAt(s.hippoRoot, log)).toBe(1);
@@ -349,19 +350,18 @@ describe('hippo sleep finishes what the hook could not', () => {
   it('a locked store makes the hook spool inside its budget, and sleep imports the spool', () => {
     initProject(s);
     const db = openHippoDb(s.hippoRoot);
-    let elapsed = 0;
+    const waits = path.join(s.dir, 'lock-waits');
     try {
       db.exec('BEGIN IMMEDIATE');
-      const started = Date.now();
-      const hook = runHippo(['post-compact'], s.proj, s.env, postCompactPayload('s1', s.proj, summaryWith(ITEMS)));
-      elapsed = Date.now() - started;
+      const hook = runHippo(['post-compact'], s.proj, tracingLockWaits(s.env, waits), postCompactPayload('s1', s.proj, summaryWith(ITEMS)));
       expect(hook.status).toBe(0);
       expect(oneLine(hook.stdout)).toBe('Hippo will finish saving this compaction at the next sleep.');
+      // One wait, then the spool: a small part of the 10 s Claude Code gives PostCompact.
+      expect(lockWaitAskedMs(waits, hook.pid)).toBe(COMPACTION_DB_WAIT_MS);
     } finally {
       db.exec('ROLLBACK');
       closeHippoDb(db);
     }
-    expect(elapsed).toBeLessThan(9000);
 
     const spool = path.join(s.hippoRoot, 'compactions-spool');
     expect(fs.readdirSync(spool).filter((f) => f.endsWith('.json'))).toHaveLength(1);

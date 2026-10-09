@@ -49,15 +49,15 @@ import * as path from 'node:path';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
-import { createMemory, applyOutcome } from '../../dist/memory.js';
+import { createMemory, applyOutcome } from '../../dist/core/memory.js';
 import { initStore } from '../../dist/store/open.js';
 import { writeEntry } from '../../dist/store/entry-writes.js';
 import { loadAllEntries } from '../../dist/store/entry-reads.js';
-import { withSharedStoreHandles } from '../../dist/db.js';
+import { withSharedStoreHandles } from '../../dist/db/index.js';
 import { hybridSearch } from '../../dist/search/hybrid.js';
 import { outcomeMultiplier } from '../../dist/search/boosts.js';
-import { markRetrieved } from '../../dist/memory.js';
-import { isRecallBoostAblated, _resetAblationCacheForTests } from '../../dist/ablation.js';
+import { markRetrieved } from '../../dist/core/memory.js';
+import { isRecallBoostAblated, _resetAblationCacheForTests } from '../../dist/core/ablation.js';
 import { generateProtocol, GENERATOR_VERSION } from './generate.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -116,6 +116,19 @@ const BASELINE_RANKERS = {
   'bm25-newest': (a, b) => (b.bm25 - a.bm25) || (Date.parse(b.entry.created) - Date.parse(a.entry.created)) || byId(a, b),
 };
 
+/** The top-5 entries a probe sees under this arm's ranker. */
+async function probeTopEntries(probe, entries, arm, probeNow) {
+  if (arm === 'recency-window') {
+    return entries.slice().sort((a, b) => Date.parse(b.created) - Date.parse(a.created)).slice(0, PROBE_TOP_K);
+  }
+  const results = await hybridSearch(probe.query, entries, { budget: PROBE_BUDGET, now: probeNow, minResults: PROBE_TOP_K });
+  // Baseline tie-breaks MUST be independent of the composite order: a bare stable sort would let identical-BM25
+  // candidates (this protocol creates many) keep hybridSearch's lifecycle/recency-tinged ordering (codex P2).
+  // Entry id is deterministic (seed-derived) and content-blind.
+  const ranked = BASELINE_RANKERS[arm] ? results.slice().sort(BASELINE_RANKERS[arm]) : results;
+  return ranked.slice(0, PROBE_TOP_K).map((r) => r.entry);
+}
+
 async function probeEpoch(protocol, entries, epoch, epochDate, arm) {
   const probeNow = new Date(Date.parse(epochDate) + 60 * 60 * 1000); // +1h after session
   let active = 0, current5 = 0, staleEligible = 0, staleHit = 0;
@@ -130,18 +143,7 @@ async function probeEpoch(protocol, entries, epoch, epochDate, arm) {
     active++;
     if (probe.hot) hotActive++;
 
-    let top;
-    if (arm === 'recency-window') {
-      top = entries.slice().sort((a, b) => Date.parse(b.created) - Date.parse(a.created)).slice(0, PROBE_TOP_K);
-    } else {
-      const results = await hybridSearch(probe.query, entries, { budget: PROBE_BUDGET, now: probeNow, minResults: PROBE_TOP_K });
-      // Baseline tie-breaks MUST be independent of the composite order: a
-      // bare stable sort would let identical-BM25 candidates (this protocol
-      // creates many) keep hybridSearch's lifecycle/recency-tinged ordering
-      // (codex P2). Entry id is deterministic (seed-derived) and content-blind.
-      const ranked = BASELINE_RANKERS[arm] ? results.slice().sort(BASELINE_RANKERS[arm]) : results;
-      top = ranked.slice(0, PROBE_TOP_K).map((r) => r.entry);
-    }
+    const top = await probeTopEntries(probe, entries, arm, probeNow);
     const texts = top.map((e) => e.content);
     const curTok = probe.tokens[cur.version];
     const rank = texts.findIndex((t) => t.includes(curTok));
@@ -203,6 +205,51 @@ async function probeEpoch(protocol, entries, epoch, epochDate, arm) {
   };
 }
 
+function groupBySession(items) {
+  const bySession = new Map();
+  for (const item of items) {
+    if (!bySession.has(item.session)) bySession.set(item.session, []);
+    bySession.get(item.session).push(item);
+  }
+  return bySession;
+}
+
+// Entry ids are DERIVED from (seed, protocol id), not random UUIDs: the protocol creates score TIES and
+// same-timestamp rows order by id, so random ids would change top-5 metrics between identical runs (codex P1).
+function ingestMemories(hippoRoot, seed, memories, idMap) {
+  for (const m of memories) {
+    const entry = createMemory(m.content, { baseHalfLifeDays: SWEEP_HALF_LIFE });
+    entry.id = `mem_${createHash('sha256').update(`e1:${seed}:${m.id}`).digest('hex').slice(0, 12)}`;
+    writeEntry(hippoRoot, entry);
+    idMap.set(m.id, entry.id);
+  }
+}
+
+// hybridSearch -> markRetrieved -> persistence gated exactly like cli.ts cmdRecall.
+async function runScheduledRetrievals(hippoRoot, retrievals) {
+  const entriesNow = () => loadAllEntries(hippoRoot);
+  for (const r of retrievals) {
+    const entries = entriesNow();
+    const results = await hybridSearch(r.query, entries, { budget: PROBE_BUDGET, minResults: PROBE_TOP_K });
+    const topEntries = results.slice(0, PROBE_TOP_K).map((x) => x.entry);
+    const updated = markRetrieved(topEntries); // default now = evalNow() (fake)
+    if (!isRecallBoostAblated()) {
+      for (const u of updated) writeEntry(hippoRoot, u);
+    }
+  }
+}
+
+function applyScheduledOutcomes(hippoRoot, outcomes, idMap, sessionIndex) {
+  for (const o of outcomes) {
+    const hippoId = idMap.get(o.memoryRef);
+    if (!hippoId) throw new Error(`outcome before ingestion: ${o.memoryRef} at session ${sessionIndex}`);
+    const entry = loadAllEntries(hippoRoot).find((e) => e.id === hippoId);
+    if (!entry) throw new Error(`outcome target missing from store: ${hippoId}`);
+    const updated = applyOutcome(entry, o.good);
+    writeEntry(hippoRoot, updated);
+  }
+}
+
 /**
  * @param {string} arm
  * @param {number} seed
@@ -223,21 +270,9 @@ export async function runArmSeed(arm, seed, genOpts = {}, inspect = undefined) {
     initStore(hippoRoot);
 
     const idMap = new Map(); // protocol memory id -> hippo entry (latest object)
-    const bySession = new Map();
-    for (const m of protocol.memories) {
-      if (!bySession.has(m.session)) bySession.set(m.session, []);
-      bySession.get(m.session).push(m);
-    }
-    const retrievalsBySession = new Map();
-    for (const r of protocol.retrievalSchedule) {
-      if (!retrievalsBySession.has(r.session)) retrievalsBySession.set(r.session, []);
-      retrievalsBySession.get(r.session).push(r);
-    }
-    const outcomesBySession = new Map();
-    for (const o of protocol.outcomeSchedule) {
-      if (!outcomesBySession.has(o.session)) outcomesBySession.set(o.session, []);
-      outcomesBySession.get(o.session).push(o);
-    }
+    const bySession = groupBySession(protocol.memories);
+    const retrievalsBySession = groupBySession(protocol.retrievalSchedule);
+    const outcomesBySession = groupBySession(protocol.outcomeSchedule);
 
     // One connection for the whole arm: a close per write checkpoints the WAL, which is slow on Windows.
     await withSharedStoreHandles(async () => {
@@ -245,40 +280,11 @@ export async function runArmSeed(arm, seed, genOpts = {}, inspect = undefined) {
         setSimulatedNow(session.date); // mutators stamp simulated time
 
         // 1. Ingest this session's memories (created/last_retrieved = fake now).
-        //    Entry ids are DERIVED from (seed, protocol id), not random UUIDs:
-        //    the protocol intentionally creates score TIES (identical-form
-        //    negatives), and same-timestamp rows order by id - random ids would
-        //    make identical (arm, seed) runs produce different top-5 metrics
-        //    (codex P1). sha256 prefix keeps the mem_<12 hex> format.
-        for (const m of bySession.get(session.index) ?? []) {
-          const entry = createMemory(m.content, { baseHalfLifeDays: SWEEP_HALF_LIFE });
-          entry.id = `mem_${createHash('sha256').update(`e1:${seed}:${m.id}`).digest('hex').slice(0, 12)}`;
-          writeEntry(hippoRoot, entry);
-          idMap.set(m.id, entry.id);
-        }
-
-        // 2. Scheduled mutating retrievals - CLI-parity block: hybridSearch ->
-        //    markRetrieved -> persistence gated exactly like cli.ts cmdRecall.
-        const entriesNow = () => loadAllEntries(hippoRoot);
-        for (const r of retrievalsBySession.get(session.index) ?? []) {
-          const entries = entriesNow();
-          const results = await hybridSearch(r.query, entries, { budget: PROBE_BUDGET, minResults: PROBE_TOP_K });
-          const topEntries = results.slice(0, PROBE_TOP_K).map((x) => x.entry);
-          const updated = markRetrieved(topEntries); // default now = evalNow() (fake)
-          if (!isRecallBoostAblated()) {
-            for (const u of updated) writeEntry(hippoRoot, u);
-          }
-        }
-
+        ingestMemories(hippoRoot, seed, bySession.get(session.index) ?? [], idMap);
+        // 2. Scheduled mutating retrievals - CLI-parity block.
+        await runScheduledRetrievals(hippoRoot, retrievalsBySession.get(session.index) ?? []);
         // 3. Scheduled outcomes on EXPLICIT ids (never last_retrieval_ids).
-        for (const o of outcomesBySession.get(session.index) ?? []) {
-          const hippoId = idMap.get(o.memoryRef);
-          if (!hippoId) throw new Error(`outcome before ingestion: ${o.memoryRef} at session ${session.index}`);
-          const entry = loadAllEntries(hippoRoot).find((e) => e.id === hippoId);
-          if (!entry) throw new Error(`outcome target missing from store: ${hippoId}`);
-          const updated = applyOutcome(entry, o.good);
-          writeEntry(hippoRoot, updated);
-        }
+        applyScheduledOutcomes(hippoRoot, outcomesBySession.get(session.index) ?? [], idMap, session.index);
 
         // 4. READ-ONLY probes (explicit now; no markRetrieved; no writes).
         const entries = loadAllEntries(hippoRoot);

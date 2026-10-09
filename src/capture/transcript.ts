@@ -1,13 +1,18 @@
-import { envHomeDir } from '../env.js';
+import { envHomeDir, processEnv } from '../util/env.js';
+import { claudeConfigDir } from '../hooks/shared.js';
 import * as fs from 'fs';
 import * as path from 'path';
-import { isObjectLike, isStringValue } from '../capture-contract.js';
+import { isObjectLike, isStringValue, readSessionEnd } from '../core/capture-contract.js';
+import { copilotTurn } from './copilot-transcript.js';
+
+const RECENT_USER_TURNS = 20;
+const RECENT_ASSISTANT_TURNS = 10;
 
 /**
- * Build a compact text summary from a Claude Code / OpenCode JSONL transcript.
+ * Build a compact text summary from a Claude Code / OpenCode / Copilot JSONL transcript.
  * Keeps plain user messages and the final chunk of assistant text, drops
- * thinking blocks, tool_use, and tool_result noise. Output is fed to the
- * existing `extractFromText` pipeline.
+ * thinking blocks, tool_use, and tool_result noise. Capture reads the same
+ * turns through `sessionTail`, one text per turn.
  *
  * Exported for tests.
  */
@@ -79,84 +84,91 @@ export function collectSessionTurns(jsonl: string, visit?: (record: TranscriptRe
     if (!isObjectLike(entry) || !('type' in entry)) continue;
     visit?.(entry);
 
-    if (entry.type === 'user' || entry.type === 'assistant') {
-      const message = 'message' in entry && isObjectLike(entry.message) ? entry.message : undefined;
-      if (!message) continue;
-      const content = 'content' in message ? message.content : undefined;
-
-      if (entry.type === 'user') {
-        const text = humanUserText(entry, message);
-        if (text) turns.push({ role: 'user', text });
-      } else if (Array.isArray(content)) {
-        // Keep assistant text blocks; drop thinking + tool_use
-        const chunks: string[] = [];
-        for (const block of content) {
-          if (isObjectLike(block)) {
-            const blockText = 'type' in block && block.type === 'text' && 'text' in block ? block.text : undefined;
-            if (isStringValue(blockText) && blockText.trim()) {
-              chunks.push(blockText.trim());
-            }
-          }
-        }
-        if (chunks.length > 0) {
-          turns.push({ role: 'assistant', text: chunks.join('\n') });
-        }
-      }
-      continue;
-    }
-
-    // Codex rollout transcript shape: response_item -> payload.message
-    if (entry.type === 'response_item') {
-      const payload = 'payload' in entry && isObjectLike(entry.payload) ? entry.payload : undefined;
-      if (!payload || !('type' in payload) || payload.type !== 'message') continue;
-      const role = 'role' in payload ? payload.role : undefined;
-      const content = 'content' in payload ? payload.content : undefined;
-      if (!Array.isArray(content)) continue;
-
-      const chunks: string[] = [];
-      for (const block of content) {
-        if (!isObjectLike(block)) continue;
-        const blockType = 'type' in block ? block.type : undefined;
-        const blockText = 'text' in block ? block.text : undefined;
-        if (role === 'user' && blockType === 'input_text' && isStringValue(blockText) && blockText.trim()) {
-          chunks.push(blockText.trim());
-        }
-        if (role === 'assistant' && blockType === 'output_text' && isStringValue(blockText) && blockText.trim()) {
-          chunks.push(blockText.trim());
-        }
-      }
-
-      if (chunks.length === 0) continue;
-      if (role === 'user') turns.push({ role: 'user', text: chunks.join('\n') });
-      if (role === 'assistant') turns.push({ role: 'assistant', text: chunks.join('\n') });
-    }
+    const turn = copilotTurn(entry) ?? claudeCodeTurn(entry) ?? codexTurn(entry);
+    if (turn !== null) turns.push(turn);
   }
 
   return turns;
+}
+
+/** The turn a Claude Code `user` or `assistant` line carries; null for any other line or one with no human or reply text. */
+function claudeCodeTurn(entry: TranscriptRecord): SessionTurn | null {
+  if (entry.type !== 'user' && entry.type !== 'assistant') return null;
+  const message = 'message' in entry && isObjectLike(entry.message) ? entry.message : undefined;
+  if (!message) return null;
+  const content = 'content' in message ? message.content : undefined;
+
+  if (entry.type === 'user') {
+    const text = humanUserText(entry, message);
+    return text ? { role: 'user', text } : null;
+  }
+  if (!Array.isArray(content)) return null;
+  // Keep assistant text blocks; drop thinking + tool_use
+  const chunks: string[] = [];
+  for (const block of content) {
+    if (isObjectLike(block)) {
+      const blockText = 'type' in block && block.type === 'text' && 'text' in block ? block.text : undefined;
+      if (isStringValue(blockText) && blockText.trim()) {
+        chunks.push(blockText.trim());
+      }
+    }
+  }
+  return chunks.length > 0 ? { role: 'assistant', text: chunks.join('\n') } : null;
+}
+
+// Codex rollout transcript shape: response_item -> payload.message
+function codexTurn(entry: TranscriptRecord): SessionTurn | null {
+  if (entry.type !== 'response_item') return null;
+  const payload = 'payload' in entry && isObjectLike(entry.payload) ? entry.payload : undefined;
+  if (!payload || !('type' in payload) || payload.type !== 'message') return null;
+  const role = 'role' in payload ? payload.role : undefined;
+  const content = 'content' in payload ? payload.content : undefined;
+  if (!Array.isArray(content)) return null;
+
+  const chunks: string[] = [];
+  for (const block of content) {
+    if (!isObjectLike(block)) continue;
+    const blockType = 'type' in block ? block.type : undefined;
+    const blockText = 'text' in block ? block.text : undefined;
+    if (role === 'user' && blockType === 'input_text' && isStringValue(blockText) && blockText.trim()) {
+      chunks.push(blockText.trim());
+    }
+    if (role === 'assistant' && blockType === 'output_text' && isStringValue(blockText) && blockText.trim()) {
+      chunks.push(blockText.trim());
+    }
+  }
+
+  if (chunks.length === 0) return null;
+  if (role === 'user') return { role: 'user', text: chunks.join('\n') };
+  if (role === 'assistant') return { role: 'assistant', text: chunks.join('\n') };
+  return null;
 }
 
 export function summariseTranscript(jsonl: string): string {
   return summariseSessionTurns(collectSessionTurns(jsonl));
 }
 
-export function summariseSessionTurns(turns: readonly SessionTurn[]): string {
-  const userMessages = turns.filter((t) => t.role === 'user').map((t) => t.text);
-  const assistantTexts = turns.filter((t) => t.role === 'assistant').map((t) => t.text);
-  if (userMessages.length === 0 && assistantTexts.length === 0) return '';
+/** The last 20 user turns and last 10 replies: session-end is about what was decided near the end, not at the start. */
+export function sessionTail(turns: readonly SessionTurn[]) {
+  return {
+    users: turns.filter((t) => t.role === 'user').map((t) => t.text).slice(-RECENT_USER_TURNS),
+    assistants: turns.filter((t) => t.role === 'assistant').map((t) => t.text).slice(-RECENT_ASSISTANT_TURNS),
+  };
+}
 
-  // Keep the tail: last ~20 user turns and last ~10 assistant replies.
-  // Session-end is about what was decided near the end, not at the start.
-  const tailUsers = userMessages.slice(-20);
-  const tailAssistants = assistantTexts.slice(-10);
+export function summariseSessionTurns(turns: readonly SessionTurn[]): string {
+  const { users: tailUsers, assistants: tailAssistants } = sessionTail(turns);
+  if (tailUsers.length === 0 && tailAssistants.length === 0) return '';
 
   return [
     '# Session Summary',
     '',
     '## User Messages',
-    ...tailUsers.map((m) => `- ${m.replace(/\s+/g, ' ').slice(0, 500)}`),
+    ...tailUsers.map((m) => `- ${m}`),
     '',
     '## Assistant Responses',
-    ...tailAssistants.map((t) => t.slice(0, 2000)),
+    // A blank line between replies keeps capture from joining two of them; each user turn opens its own list item.
+    tailAssistants.join('\n\n'),
   ].join('\n');
 }
 
@@ -166,7 +178,7 @@ export function summariseSessionTurns(turns: readonly SessionTurn[]): string {
  * Priority, where the first source present is the only one tried:
  *   1. Explicit `transcriptPath` option (from `--transcript <path>`)
  *   2. Stdin JSON payload (Claude Code / OpenCode SessionEnd hook shape)
- *   3. Most recent `.jsonl` under `~/.claude/projects/<any>/`, only when the caller passes `mayScan` (only the caller knows it is not a hook) and there is no path and no stdin text, because this scan spans every project on the box
+ *   3. Most recent `.jsonl` under `<claude config dir>/projects/<any>/` (`~/.claude` unless CLAUDE_CONFIG_DIR is set), only when the caller passes `mayScan` (only the caller knows it is not a hook) and there is no path and no stdin text, because this scan spans every project on the box
  *
  * Returns null when nothing resolves, a named transcript or payload whose file is missing included. Never throws.
  */
@@ -178,23 +190,17 @@ export function resolveLastSessionTranscript(
   if (explicit) return fs.existsSync(explicit) ? explicit : null;
 
   if (stdinText && stdinText.trim() !== '') {
-    try {
-      const payload: unknown = JSON.parse(stdinText);
-      if (isObjectLike(payload) && 'transcript_path' in payload) {
-        const tp = payload.transcript_path;
-        if (isStringValue(tp) && fs.existsSync(tp)) return tp;
-      }
-    } catch {
-      // not JSON, but still a payload, so no scan
-    }
-    return null;
+    const receipt = readSessionEnd(stdinText, false);
+    // A refused payload is still a payload, so no scan.
+    const tp = receipt.status === 'received' ? receipt.input.transcriptPath : null;
+    return tp !== null && fs.existsSync(tp) ? tp : null;
   }
 
   if (!opts.mayScan) return null;
+  // With no home set, os.homedir() would send the scan into the real profile's transcripts.
+  if (!processEnv().CLAUDE_CONFIG_DIR && !envHomeDir()) return null;
 
-  const home = envHomeDir();
-  if (!home) return null;
-  const projectsDir = path.join(home, '.claude', 'projects');
+  const projectsDir = path.join(claudeConfigDir(), 'projects');
   if (!fs.existsSync(projectsDir)) return null;
 
   let newest: { path: string; mtime: number } | null = null;

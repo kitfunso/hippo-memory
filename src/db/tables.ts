@@ -1,10 +1,15 @@
 import type { DatabaseSyncLike } from './sqlite.js';
 
-export function tableHasColumn(db: DatabaseSyncLike, tableName: string, columnName: string): boolean {
+/** Column names of one table; empty when the table is missing. */
+export function tableColumns(db: DatabaseSyncLike, tableName: string): Set<string> {
   if (!/^[a-z_]+$/i.test(tableName)) throw new Error(`Invalid table name: ${tableName}`);
   // SAFETY: rows' shape matches PRAGMA table_info's documented `name` column.
   const rows = db.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name?: string }>;
-  return rows.some((row) => row.name === columnName);
+  return new Set(rows.flatMap((row) => (row.name === undefined ? [] : [row.name])));
+}
+
+export function tableHasColumn(db: DatabaseSyncLike, tableName: string, columnName: string): boolean {
+  return tableColumns(db, tableName).has(columnName);
 }
 
 export function tableExists(db: DatabaseSyncLike, tableName: string): boolean {
@@ -13,6 +18,15 @@ export function tableExists(db: DatabaseSyncLike, tableName: string): boolean {
   // SELECT above.
   const row = db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name = ?`).get(tableName) as { name?: string } | undefined;
   return !!row?.name;
+}
+
+/** Names of the real tables, without sqlite internals and FTS virtual tables. */
+export function listTableNames(db: DatabaseSyncLike): string[] {
+  // SAFETY: each row's shape matches the single `name` column named in the SELECT below.
+  const rows = db.prepare(
+    `SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND sql NOT LIKE 'CREATE VIRTUAL TABLE%' ORDER BY name`,
+  ).all() as { name: string }[];
+  return rows.map((r) => r.name);
 }
 
 /** Row count of one table; null when the table is missing or unreadable, which callers show as unknown. */

@@ -25,10 +25,10 @@ import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
-import type { Context } from '../src/api.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { queryAuditEvents } from '../src/audit.js';
-import { remember } from '../src/api.js';
+import type { Context } from '../src/api/index.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { queryAuditEvents } from '../src/store/audit.js';
+import { remember } from '../src/api/index.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
@@ -186,7 +186,7 @@ describe('GET /v1/context', () => {
     remember(ctx, { content: 'unpinned-2' });
     // Use store-level write for pinned to keep the test simple.
     const { writeEntry } = await import('../src/store/entry-writes.js');
-    const { Layer } = await import('../src/memory.js');
+    const { Layer } = await import('../src/core/memory.js');
     const pinnedEntry = createMemory('pinned-canary', {
       layer: Layer.Episodic,
       tags: ['ctx-route-test'],

@@ -1,22 +1,23 @@
 // Runs the adapters and routes each container to its store: the project pass, the user pass and their call sites (plan designs 2, 8, 11).
-import { processEnv } from '../env.js';
+import { processEnv } from '../util/env.js';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { errorMessage } from '../log.js';
-import { loadConfig } from '../config.js';
-import { closeHippoDb, isSqliteBusy, openHippoDb, type DatabaseSyncLike } from '../db.js';
-import type { MemoryEntry } from '../memory.js';
-import { deriveOriginProject, isGlobalStoreRoot, resolveGlobalRootDir } from '../project-identity.js';
-import { duplicateKey, heldTextKeys } from '../same-text.js';
+import { errorMessage } from '../util/log.js';
+import { loadConfig } from '../core/config.js';
+import { closeHippoDb, isSqliteBusy, openHippoDb, outsideRequestStores, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
+import type { MemoryEntry } from '../core/memory.js';
+import { namesFoldedInto } from '../sharing/project-merge.js';
+import { isGlobalStoreRoot, projectNames, resolveGlobalRootDir, resolveProjectIdentity, type ProjectIdentity } from '../core/project-identity.js';
+import { duplicateKey, heldTextKeys } from '../util/same-text.js';
 import { removeEntryMirrors } from '../store/mirrors.js';
 import { initStore, isInitialized } from '../store/open.js';
 import { writeEntryMirrors } from '../store/entry-writes.js';
-import { selectLiveEntriesBySourcePrefix } from '../store/entry-reads.js';
+import { selectLiveEntriesBySourcePrefix, selectRowsOutsideSourcePrefixAt } from '../store/entry-reads.js';
 import { updateStats } from '../store/index-and-stats.js';
-import { resolveTenantId } from '../tenant.js';
+import { resolveTenantId } from '../store/tenant.js';
 import { setAsideRow, syncContainer, type ContainerOutcome, type ContainerWork, type StoreSession } from './apply.js';
-import { claudeCodeAdapter, claudeTranscriptListing, transcriptNotesOrigin } from './claude-code.js';
+import { claudeCodeAdapter, claudeTranscriptListing, transcriptNotesProject } from './claude-code.js';
 import { codexAdapter } from './codex.js';
 import { copilotAdapter } from './copilot.js';
 import { geminiAdapter } from './gemini.js';
@@ -25,7 +26,7 @@ import { openclawAdapter } from './openclaw.js';
 import { qwenCodeAdapter } from './qwen-code.js';
 import { addTally, emptyReport, mergeReports, toolReport, type ImportReport, type ToolReport } from './report.js';
 import { containerId, containerPrefix, splitSource } from './source.js';
-import { AGENT_MEMORY_SOURCE_PREFIX, AGENT_MEMORY_TOOLS, isToolId, toolSourcePrefix, type AgentMemoryTool, type ToolId } from './tools.js';
+import { AGENT_MEMORY_SOURCE_PREFIX, AGENT_MEMORY_TOOLS, isToolId, toolSourcePrefix, type AgentMemoryTool, type ToolId } from '../core/agent-memory-tools.js';
 import type { Adapter, AdapterContext, Listing, Scope } from './types.js';
 
 export const ADAPTERS: readonly Adapter[] = [claudeCodeAdapter, codexAdapter, geminiAdapter, copilotAdapter, openclawAdapter, qwenCodeAdapter];
@@ -61,6 +62,8 @@ interface Pass {
   readonly list: (adapter: Adapter) => Listing | null;
   readonly legacy: boolean;
   readonly originProject: string | undefined;
+  /** The project's names before its id, whose global-store imports this pass moves under the id. */
+  readonly legacyOrigins: readonly string[];
   /** Set aside the global store's copies of each container this pass syncs into a local store. */
   readonly handover: boolean;
 }
@@ -77,7 +80,7 @@ export function importForStore(hippoRoot: string, opts: SyncOptions): ImportRepo
 export function importProjectMemories(hippoRoot: string, opts: SyncOptions): ImportReport {
   const ctx = context(opts.machine, { projectRoot: path.dirname(hippoRoot) });
   return runPass({
-    scope: 'project', target: hippoRoot, invoking: hippoRoot, list: (a) => a.list(ctx, 'project'), legacy: true, originProject: undefined, handover: true,
+    scope: 'project', target: hippoRoot, invoking: hippoRoot, list: (a) => a.list(ctx, 'project'), legacy: true, originProject: undefined, legacyOrigins: [], handover: true,
   }, opts);
 }
 
@@ -85,7 +88,7 @@ export function importProjectMemories(hippoRoot: string, opts: SyncOptions): Imp
 export function importUserMemories(invokingRoot: string, opts: SyncOptions): ImportReport {
   const ctx = context(opts.machine, {});
   return runPass({
-    scope: 'user', target: resolveGlobalRootDir(), invoking: invokingRoot, list: (a) => a.list(ctx, 'user'), legacy: false, originProject: '', handover: false,
+    scope: 'user', target: resolveGlobalRootDir(), invoking: invokingRoot, list: (a) => a.list(ctx, 'user'), legacy: false, originProject: '', legacyOrigins: [], handover: false,
   }, opts);
 }
 
@@ -94,7 +97,7 @@ export function importAtSessionEnd(cwd: string, transcriptPath: string | undefin
   const globalRoot = resolveGlobalRootDir();
   const ctx = context(opts.machine, { projectRoot: cwd });
   const report = runPass({
-    scope: 'project', target: globalRoot, invoking: globalRoot, list: (a) => a.list(ctx, 'project'), legacy: false, originProject: deriveOriginProject(cwd), handover: false,
+    scope: 'project', target: globalRoot, invoking: globalRoot, list: (a) => a.list(ctx, 'project'), legacy: false, ...projectOrigins(resolveProjectIdentity(cwd)), handover: false,
   }, opts);
   if (transcriptPath !== undefined) mergeReports(report, importSessionFolder(globalRoot, transcriptPath, cwd, opts));
   mergeReports(report, importUserMemories(globalRoot, opts));
@@ -103,16 +106,20 @@ export function importAtSessionEnd(cwd: string, transcriptPath: string | undefin
 
 /** The session folder's notes under the project Claude filed them for, never cwd's: a session begun at home keeps its home notes user-global wherever it ends. No git call, so post-compact can run it. */
 export function importSessionFolder(hippoRoot: string, transcriptPath: string, cwd: string | null, opts: SyncOptions): ImportReport {
-  const origin = transcriptNotesOrigin(transcriptPath, cwd, opts.machine);
-  if (origin === null) return emptyReport();
+  const project = transcriptNotesProject(transcriptPath, cwd, opts.machine);
+  if (project === null) return emptyReport();
   // A project store takes its own project's notes; another project's, or home's, go to the global store, which parts them by origin.
-  const own = isGlobalStoreRoot(hippoRoot) || origin === deriveOriginProject(path.dirname(hippoRoot));
+  const own = isGlobalStoreRoot(hippoRoot) || project.name === resolveProjectIdentity(path.dirname(hippoRoot)).name;
   const target = own ? hippoRoot : resolveGlobalRootDir();
   const ctx = context(opts.machine, {});
   return runPass({
-    scope: 'project', target, invoking: hippoRoot, legacy: false, originProject: origin, handover: false,
+    scope: 'project', target, invoking: hippoRoot, legacy: false, ...projectOrigins(project), handover: false,
     list: (a) => (a.tool === 'claude-code' ? claudeTranscriptListing(ctx, transcriptPath) : null),
   }, opts);
+}
+
+function projectOrigins(project: ProjectIdentity): Pick<Pass, 'originProject' | 'legacyOrigins'> {
+  return { originProject: project.name, legacyOrigins: projectNames(project).slice(1) };
 }
 
 function context(machine: Machine, extra: Pick<AdapterContext, 'projectRoot'>): AdapterContext {
@@ -204,7 +211,8 @@ function openTarget(target: string, hasItems: boolean, opts: SyncOptions): OpenS
 
 function emptyStandIn(global: boolean): OpenStore {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-agent-memories-'));
-  const db = openHippoDb(root);
+  // Its folder is deleted at close, so a request scope must not keep the file open past that.
+  const db = outsideRequestStores(() => openHippoDb(root));
   return {
     db, root, global,
     close: () => {
@@ -223,11 +231,12 @@ function syncStore(pass: Pass, listings: readonly Listing[], store: OpenStore, o
     tenantId,
     baseHalfLifeDays: loadConfig(store.root).defaultHalfLifeDays,
     originProject: pass.originProject,
-    isDuplicate: duplicateCheck(store, tenantId, pass.originProject, legacy?.adopted ?? new Set()),
+    isDuplicate: duplicateCheck(store, tenantId, [pass.originProject ?? '', ...pass.legacyOrigins], legacy?.adopted ?? new Set()),
     dryRun: opts.dryRun === true,
   };
   // A project's rows in the global store are parted by origin: a worktree and its main checkout share a Claude folder.
   const partition = store.global && pass.scope === 'project' ? pass.originProject ?? '' : null;
+  const earlier = partition === null || partition === '' ? [] : earlierNames(store.db, tenantId, partition, pass.legacyOrigins);
   const synced: ContainerWork[] = [];
   let remembered = 0;
   for (const listing of listings) {
@@ -238,30 +247,46 @@ function syncStore(pass: Pass, listings: readonly Listing[], store: OpenStore, o
         out.tally.unreadable++;
         continue;
       }
-      const work = containerWork(tool, container, opts.machine.platform, legacy, partition ?? '');
+      const work = containerWork(tool, container, { platform: opts.machine.platform, legacy, origin: partition ?? '', earlier });
       const outcome = syncOne(session, work, out, report);
       if (outcome === null) continue;
       synced.push(work);
       remembered += outcome.tally.imported + outcome.tally.replaced;
       if (!session.dryRun) afterCommit(store.root, outcome, report);
     }
-    if (session.dryRun) out.unlisted += unlistedRows(store.db, tenantId, tool, pass.scope, listing, opts.machine.platform, partition);
+    if (session.dryRun) out.unlisted += unlistedRows(store.db, tenantId, {
+      tool, scope: pass.scope, listing, platform: opts.machine.platform, partition: partition === null ? null : [partition, ...earlier],
+    });
   }
   if (remembered > 0 && !session.dryRun) bumpRemembered(store.root, remembered, report);
   return synced;
 }
 
-function containerWork(
-  tool: AgentMemoryTool, container: ContainerWork['container'], platform: NodeJS.Platform, legacy: LegacyWork | null, origin: string,
-): ContainerWork {
+/** The legacy names plus every name a merge or repair folded into the project; the audit read runs once per pass. */
+function earlierNames(db: DatabaseSyncLike, tenantId: string, id: string, legacyOrigins: readonly string[]): string[] {
+  const names = [id, ...legacyOrigins];
+  return [...legacyOrigins, ...namesFoldedInto(db, tenantId, names)].filter((n) => n !== '' && n !== id);
+}
+
+interface ContainerWorkOptions {
+  readonly platform: NodeJS.Platform;
+  readonly legacy: LegacyWork | null;
+  readonly origin: string;
+  readonly earlier: readonly string[];
+}
+
+function containerWork(tool: AgentMemoryTool, container: ContainerWork['container'], options: ContainerWorkOptions): ContainerWork {
+  const { platform, legacy, origin, earlier } = options;
   const none = new Map<string, readonly MemoryEntry[]>();
   const own = tool.id === 'claude-code' ? legacy?.byContainer.get(container.path) : undefined;
+  const prefixOf = (name: string): string => containerPrefix(tool.id, containerId(container.path, container.scope, platform, name));
   return {
     tool,
     container,
-    prefix: containerPrefix(tool.id, containerId(container.path, container.scope, platform, origin)),
+    prefix: prefixOf(origin),
     adopt: own?.adopt ?? none,
     replace: own?.replace ?? none,
+    legacyPrefixes: earlier.map(prefixOf),
   };
 }
 
@@ -303,33 +328,34 @@ function bumpRemembered(root: string, remembered: number, report: ImportReport):
 }
 
 /** Design 6: only text stored by another path counts, and in the global store only rows visible where the new row goes. */
-function duplicateCheck(store: OpenStore, tenantId: string, origin: string | undefined, adopted: ReadonlySet<string>): (text: string) => boolean {
+function duplicateCheck(store: OpenStore, tenantId: string, origins: readonly string[], adopted: ReadonlySet<string>): (text: string) => boolean {
   let keys: Set<string> | null = null;
   return (text) => {
-    keys ??= otherPathKeys(store, tenantId, origin ?? '', adopted);
+    keys ??= otherPathKeys(store, tenantId, origins, adopted);
     return keys.has(duplicateKey(text));
   };
 }
 
-function otherPathKeys(store: OpenStore, tenantId: string, origin: string, adopted: ReadonlySet<string>): Set<string> {
-  const visible = store.global ? ` AND (origin_project = '' OR origin_project = ?)` : '';
-  const params = store.global ? [tenantId, AGENT_MEMORY_SOURCE_PREFIX, origin] : [tenantId, AGENT_MEMORY_SOURCE_PREFIX];
-  // SAFETY: the SELECT names the three columns of the row type.
-  const rows = store.db.prepare(
-    `SELECT id, content, source FROM memories
-      WHERE tenant_id = ? AND superseded_by IS NULL AND substr(source, 1, ${AGENT_MEMORY_SOURCE_PREFIX.length}) != ?${visible}`,
-  ).all(...params) as Array<{ id: string; content: string; source: string }>;
+function otherPathKeys(store: OpenStore, tenantId: string, origins: readonly string[], adopted: ReadonlySet<string>): Set<string> {
+  const rows = selectRowsOutsideSourcePrefixAt(store.db, tenantId, AGENT_MEMORY_SOURCE_PREFIX, store.global ? origins : null);
   return new Set(rows.filter((r) => !adopted.has(r.id)).flatMap(heldTextKeys));
 }
 
-/** Dry run only: kept rows of this scope in containers this run did not list (a moved project's old folder); `partition` limits it to one origin. */
-function unlistedRows(
-  db: DatabaseSyncLike, tenantId: string, tool: AgentMemoryTool, scope: Scope, listing: Listing, platform: NodeJS.Platform, partition: string | null,
-): number {
-  const listed = listing.containers.map((c) => containerPrefix(tool.id, containerId(c.path, c.scope, platform, partition ?? '')));
+/** Dry run only: kept rows of this scope in containers this run did not list (a moved project's old folder); `partition` limits it to one project's names. */
+interface UnlistedRowsOptions {
+  readonly tool: AgentMemoryTool;
+  readonly scope: Scope;
+  readonly listing: Listing;
+  readonly platform: NodeJS.Platform;
+  readonly partition: readonly string[] | null;
+}
+
+function unlistedRows(db: DatabaseSyncLike, tenantId: string, options: UnlistedRowsOptions): number {
+  const { tool, scope, listing, platform, partition } = options;
+  const listed = listing.containers.flatMap((c) => (partition ?? ['']).map((name) => containerPrefix(tool.id, containerId(c.path, c.scope, platform, name))));
   return selectLiveEntriesBySourcePrefix(db, tenantId, `${toolSourcePrefix(tool.id)}${scope === 'project' ? 'p' : 'u'}-`)
     .filter((row) => row.tags.includes(tool.tag) && !listed.some((p) => row.source.startsWith(p)))
-    .filter((row) => partition === null || (row.origin_project ?? '') === partition).length;
+    .filter((row) => partition === null || partition.includes(row.origin_project ?? '')).length;
 }
 
 /** Design 2's handover: rows the store-less hook path left in the global store, under this project's origin, for containers its store now syncs. */
@@ -341,8 +367,10 @@ function handOver(synced: readonly ContainerWork[], projectRoot: string, opts: S
     db = openHippoDb(globalRoot, { busyWaitMs: opts.busyWaitMs });
     const tenantId = resolveTenantId({});
     // A folder with no git and no marker wrote as '' before its store existed, and as its own name after.
-    const origins = [...new Set([deriveOriginProject(projectRoot), ''])];
-    for (const work of synced) handOverContainer(db, globalRoot, tenantId, work, origins, opts.machine.platform, report);
+    // Names folded into this project's in the global store were its rows too.
+    const names = projectNames(resolveProjectIdentity(projectRoot));
+    const origins = [...new Set([...names, ...namesFoldedInto(db, tenantId, names), ''])];
+    for (const work of synced) handOverContainer(db, globalRoot, tenantId, work, { origins, platform: opts.machine.platform, report });
   } catch (err) {
     report.warnings.push(`global copies not handed over: ${isSqliteBusy(err) ? 'the global store was busy' : errorMessage(err)}`);
   } finally {
@@ -350,15 +378,19 @@ function handOver(synced: readonly ContainerWork[], projectRoot: string, opts: S
   }
 }
 
-function handOverContainer(
-  db: DatabaseSyncLike, root: string, tenantId: string, work: ContainerWork, origins: readonly string[], platform: NodeJS.Platform, report: ImportReport,
-): void {
+interface HandOverContainerOptions {
+  readonly origins: readonly string[];
+  readonly platform: NodeJS.Platform;
+  readonly report: ImportReport;
+}
+
+function handOverContainer(db: DatabaseSyncLike, root: string, tenantId: string, work: ContainerWork, options: HandOverContainerOptions): void {
+  const { origins, platform, report } = options;
   // A note the local pass could not read has no local row yet, so its global copy stays until it does.
   const unread = new Set(work.container.skipped);
   const mirror: MemoryEntry[] = [];
   const purge: string[] = [];
-  db.exec('BEGIN IMMEDIATE');
-  try {
+  withWriteScope(db, 'hand_over_container', () => {
     for (const origin of origins) {
       const prefix = containerPrefix(work.tool.id, containerId(work.container.path, work.container.scope, platform, origin));
       for (const row of selectLiveEntriesBySourcePrefix(db, tenantId, prefix)) {
@@ -368,11 +400,7 @@ function handOverContainer(
         else purge.push(result.id);
       }
     }
-    db.exec('COMMIT');
-  } catch (err) {
-    try { db.exec('ROLLBACK'); } catch { /* already rolled back; keep the original error */ }
-    throw err;
-  }
+  });
   toolReport(report, work.tool.id).tally.handedOver += mirror.length + purge.length;
   afterCommit(root, { mirror, purge }, report);
 }

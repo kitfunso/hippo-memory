@@ -164,7 +164,9 @@ describe('Z0 CLI and blind mode', () => {
     expect(JSON.parse(fs.readFileSync(path.join(dir, 'o.json'), 'utf8')).storedSample).toEqual(stored);
     fs.writeFileSync(path.join(dir, 'grading.json'), JSON.stringify({ ...GRADING, storedSample: { ...stored, kappa: null } }));
     expect(run().stdout).toContain('kappa n/a, n 30');
-    for (const bad of [{ ...stored, agree: 31 }, { ...stored, n: 1.5 }, { ...stored, agreement: 'high' }, null]) {
+    const badTables = [{ yesYes: 14 }, { ...stored.table, noNo: 1.5 }, { ...stored.table, noNo: 12 }];
+    const badCis = [[0.9], [0.9, 0.7], [-0.1, 0.5], 'wide'];
+    for (const bad of [{ ...stored, agree: 31 }, { ...stored, n: 1.5 }, { ...stored, agreement: 'high' }, null, ...badTables.map((table) => ({ ...stored, table })), ...badCis.map((ci95) => ({ ...stored, ci95 }))]) {
       fs.writeFileSync(path.join(dir, 'grading.json'), JSON.stringify({ ...GRADING, storedSample: bad }));
       expect(run()).toMatchObject({ code: 1, stderr: expect.stringContaining('storedSample needs n and agree') });
     }

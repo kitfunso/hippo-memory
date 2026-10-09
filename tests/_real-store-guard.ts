@@ -18,7 +18,7 @@ import { existsSync, readdirSync, realpathSync, rmSync, statSync } from 'node:fs
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 
-// Resolve the global store the way src/shared.ts getGlobalRoot() does:
+// Resolve the global store the way src/sharing/global-store.ts getGlobalRoot() does:
 // HIPPO_HOME, then XDG_DATA_HOME/hippo, then ~/.hippo.
 function globalStoreRoot(): string {
   const hippoHome = process.env.HIPPO_HOME?.trim();
@@ -40,7 +40,7 @@ function samePath(a: string, b: string): boolean {
   return process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b;
 }
 
-// Mirrors src/project-identity.ts's walkProjectMarkers: home/tmpdir stop before the marker check, root stops after.
+// Mirrors src/core/project-identity.ts's walkProjectMarkers: home/tmpdir stop before the marker check, root stops after.
 export function watchedStoreDirs(cwd: string, home: string): string[] {
   const homeReal = realpathOrResolve(home);
   const tmpReal = realpathOrResolve(tmpdir());
@@ -98,7 +98,7 @@ export function teardown(): void {
     .filter(([dir, snap]) => snapshot(dir) !== snap)
     .map(([dir]) => dir);
 
-  // (3) on a clean run, remove the per-run temp store vitest.config.ts created.
+  // (3) on a clean run, remove the per-run temp dirs vitest.config.ts created.
   // The removal is swallowed on failure: vitest turns a globalSetup teardown
   // throw into process.exitCode = 1, so a stray Windows EBUSY here would itself
   // fail the run — the exact intermittent failure this isolation prevents.
@@ -106,16 +106,14 @@ export function teardown(): void {
     // Defence-in-depth on a destructive op: only remove a directory that is
     // under the OS temp dir and carries vitest.config.ts's mkdtemp prefix, so
     // the rmSync is safe by construction, not merely by the variable's name.
-    for (const tmpHome of [process.env.HIPPO_TEST_TMP_HOME?.trim(), process.env.HIPPO_TEST_TMP_USERHOME?.trim()]) {
-      if (
-        tmpHome &&
-        tmpHome.startsWith(tmpdir()) &&
-        /[\\/]hippo-test-(user)?home-[^\\/]+$/.test(tmpHome)
-      ) {
+    const realTmp = process.env.HIPPO_TEST_REAL_TMP?.trim() || tmpdir();
+    const env = process.env;
+    for (const dir of [env.HIPPO_TEST_TMP_HOME?.trim(), env.HIPPO_TEST_TMP_USERHOME?.trim(), env.HIPPO_TEST_TMP_RUN?.trim()]) {
+      if (dir && dir.startsWith(realTmp) && /[\\/]hippo-test-(home|userhome|tmp)-[^\\/]+$/.test(dir)) {
         try {
-          rmSync(tmpHome, { recursive: true, force: true, maxRetries: 3 });
-        } catch {
-          /* best-effort; the OS temp sweep reclaims it */
+          rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
+        } catch (err) {
+          console.warn(`[real-store-guard] could not remove ${dir}: ${err instanceof Error ? err.message : String(err)}`);
         }
       }
     }

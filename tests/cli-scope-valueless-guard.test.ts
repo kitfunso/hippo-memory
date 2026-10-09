@@ -19,14 +19,15 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { execFileSync, spawnSync, spawn } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { serve, type ServerHandle } from '../src/server.js';
+import { hippoOut, hippoRun as spawnHippo } from './_helpers/spawn-hippo.js';
 
 const HIPPO_BIN = join(process.cwd(), 'bin', 'hippo.js');
 const USAGE_MSG = '--scope requires a non-empty value (e.g. --scope slack:private:C1).';
@@ -38,11 +39,7 @@ type ScopeGuardEnv = {
 };
 
 function hippo(cwd: string, env: Record<string, string>, ...args: string[]): string {
-  return execFileSync('node', [HIPPO_BIN, ...args], {
-    cwd,
-    env: { ...process.env, ...env },
-    encoding: 'utf-8',
-  });
+  return hippoOut(args, { cwd, env: { ...process.env, ...env }, exe: 'node' });
 }
 
 function hippoRun(
@@ -50,11 +47,7 @@ function hippoRun(
   env: Record<string, string>,
   ...args: string[]
 ) {
-  const res = spawnSync('node', [HIPPO_BIN, ...args], {
-    cwd,
-    env: { ...process.env, ...env },
-    encoding: 'utf-8',
-  });
+  const res = spawnHippo(args, { cwd, env: { ...process.env, ...env }, exe: 'node' });
   return { status: res.status, stdout: res.stdout, stderr: res.stderr };
 }
 
@@ -83,7 +76,7 @@ function hippoAsync(
   });
 }
 
-describe('global --scope value-less guard (v1.26.2 T1) — exit-1 cases', () => {
+describe('global --scope value-less guard: exit-1 cases', () => {
   let home: string;
   let env: ScopeGuardEnv;
 
@@ -141,7 +134,7 @@ describe('global --scope value-less guard (v1.26.2 T1) — exit-1 cases', () => 
     expect(res.stderr).toContain(USAGE_MSG);
   });
 
-  // Pins the GLOBAL semantics: `status` never reads flags['scope'] (cmdStatus
+  // Pins the GLOBAL semantics: `status` never reads flags['scope'] (handleStatus
   // takes only hippoRoot), yet a value-less --scope still exits 1 because the
   // guard runs before dispatch, uniformly, regardless of whether the target
   // command would have consumed the flag.
@@ -152,7 +145,7 @@ describe('global --scope value-less guard (v1.26.2 T1) — exit-1 cases', () => 
   });
 });
 
-describe('valued --scope regression coverage (v1.26.2 acceptance criterion 2)', () => {
+describe('valued --scope regression coverage', () => {
   let home: string;
   let env: ScopeGuardEnv;
 
@@ -174,7 +167,7 @@ describe('valued --scope regression coverage (v1.26.2 acceptance criterion 2)', 
 
     // Current contract (pinned, not asserted-as-desired): wmRead only adds a
     // `WHERE scope = ?` clause when a scope is explicitly passed; a bare
-    // `wm read` applies no scope filter at all (src/working-memory.ts
+    // `wm read` applies no scope filter at all (src/store/working-memory.ts
     // wmRead), so it is NOT isolated from scope-X items — they show up here
     // too. If wm read's default-scope behavior changes, update this pin.
     const unscoped = hippo(home, env, 'wm', 'read');

@@ -1,7 +1,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { closeHippoDb, openHippoDb } from '../src/db.js';
+import { COMPACTION_DB_WAIT_MS } from '../src/capture/compaction-record.js';
+import { closeHippoDb, HOOK_DB_WAIT_MS, openHippoDb } from '../src/db/index.js';
 import { loadActiveTaskSnapshot } from '../src/store/sessions.js';
 import {
   compactionRows,
@@ -14,6 +15,7 @@ import {
   summaryWith,
   type Scratch,
 } from './_helpers/compaction-hooks.js';
+import { lockWaitAskedMs, tracingLockWaits } from './_helpers/lock-waits.js';
 
 // The instruction Claude Code hands the summariser; pinned word for word.
 const INSTRUCTION =
@@ -132,14 +134,65 @@ describe('hippo pre-compact leaves a record and asks for memories', () => {
     const db = openHippoDb(s.hippoRoot);
     try {
       db.exec('BEGIN IMMEDIATE');
-      const started = Date.now();
+      const waits = path.join(s.dir, 'lock-waits');
+      s.env = tracingLockWaits(s.env, waits);
       const result = preCompact('s1');
       expect(result.status).toBe(0);
       expect(result.stdout).toBe(`${INSTRUCTION}\n`);
-      expect(Date.now() - started).toBeLessThan(30_000);
+      // One wait for the token-ledger row and one for the record, then none: far inside the 30 s Claude Code gives PreCompact.
+      expect(lockWaitAskedMs(waits, result.pid)).toBe(HOOK_DB_WAIT_MS + COMPACTION_DB_WAIT_MS);
     } finally {
       db.exec('ROLLBACK');
       closeHippoDb(db);
     }
   }, 60_000);
+});
+
+describe('the pre-compact diagnostic log', () => {
+  const SKIP_LINE = /^\[hippo\] \S+ skip: store not initialized$/;
+
+  const logLines = (): string[] => fs.readFileSync(logFile, 'utf8').split('\n');
+
+  it('adds its line after what a short log already holds', () => {
+    fs.mkdirSync(path.dirname(logFile), { recursive: true });
+    fs.writeFileSync(logFile, '[hippo] an earlier line\n');
+    expect(preCompact('s1').status).toBe(0);
+    const lines = logLines();
+    expect(lines[0]).toBe('[hippo] an earlier line');
+    expect(lines[1]).toMatch(SKIP_LINE);
+    expect(lines.at(-1)).toBe('');
+  });
+
+  it('starts the log again once it is past 256 KB, keeping only the new lines', () => {
+    fs.mkdirSync(path.dirname(logFile), { recursive: true });
+    fs.writeFileSync(logFile, `${'x'.repeat(256 * 1024 + 1)}\n`);
+    expect(preCompact('s1').status).toBe(0);
+    // Exactly the new line from byte 0: a write left at the old offset would sit behind a run of NUL bytes.
+    const lines = logLines();
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toMatch(SKIP_LINE);
+    expect(lines[1]).toBe('');
+  });
+
+  it('keeps every line whole when another append handle is writing the same log', () => {
+    fs.mkdirSync(path.dirname(logFile), { recursive: true });
+    const other = fs.openSync(logFile, 'a');
+    try {
+      fs.writeSync(other, '[hippo] a line from another hook\n');
+      expect(preCompact('s1').status).toBe(0);
+      fs.writeSync(other, '[hippo] its next line\n');
+    } finally {
+      fs.closeSync(other);
+    }
+    const lines = logLines();
+    expect(lines).toHaveLength(4);
+    expect(lines[0]).toBe('[hippo] a line from another hook');
+    expect(lines[1]).toMatch(SKIP_LINE);
+    expect(lines.slice(2)).toEqual(['[hippo] its next line', '']);
+  });
+
+  it('creates the log and its folder when neither is there', () => {
+    expect(preCompact('s1').status).toBe(0);
+    expect(logLines()[0]).toMatch(SKIP_LINE);
+  });
 });

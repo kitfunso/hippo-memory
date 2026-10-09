@@ -1,7 +1,8 @@
-import { envAnthropicApiKey, envDagRebuildCap } from '../env.js';
-import { Layer } from '../memory.js';
-import { log } from '../log.js';
+import { envAnthropicApiKey, envDagRebuildCap } from '../util/env.js';
+import { Layer } from '../core/memory.js';
+import { log } from '../util/log.js';
 import { keptAsWritten, type SleepRun } from './run.js';
+import { isReusable } from '../core/memory-quality.js';
 
 /** The key, model options and once-per-line error reporter every LLM phase shares. */
 function sleepLlm(run: SleepRun, fetcher: typeof fetch | undefined) {
@@ -30,21 +31,21 @@ export async function llmPasses(run: SleepRun, fetcher: typeof fetch | undefined
     run.survivors.filter((e) => e.extracted_from).map((e) => e.extracted_from!),
   );
   const extractionCandidates = run.survivors.filter(
-    (e) => e.layer === Layer.Episodic && !e.superseded_by && !extractedFromIds.has(e.id) && !keptAsWritten(e),
+    (e) => e.layer === Layer.Episodic && !e.superseded_by && !extractedFromIds.has(e.id) && !keptAsWritten(e)
+      && e.trace_outcome === null && e.source !== 'auto-promote' && isReusable(e),
   );
   run.result.extractionCandidates = extractionCandidates.length;
 
   const llm = sleepLlm(run, fetcher);
   if (llm.apiKey && extractionCandidates.length > 0 && !run.dryRun) {
-    const { extractFacts, storeExtractedFacts } = await import('../extract.js');
+    const { extractFacts, storeExtractedFacts } = await import('../learn/extract.js');
     const batchLimit = 20;
     let extractedCount = 0;
     for (const candidate of extractionCandidates.slice(0, batchLimit)) {
       try {
         const facts = await extractFacts(candidate.content, { ...llm.llmOpts, onError: llm.llmError('extraction') });
         if (facts.length > 0) {
-          storeExtractedFacts(run.hippoRoot, candidate, facts);
-          extractedCount += facts.length;
+          extractedCount += storeExtractedFacts(run.hippoRoot, candidate, facts).length;
         }
       } catch (err) {
         llm.llmError('extraction')(String(err));
@@ -65,11 +66,11 @@ export async function llmPasses(run: SleepRun, fetcher: typeof fetch | undefined
 // -------------------------------------------------------------------------
 async function dagBuildPass(run: SleepRun, { apiKey, llmError, llmOpts }: SleepLlm): Promise<void> {
   const extractedFacts = run.survivors.filter(
-    (e) => e.tags.includes('extracted') && e.dag_level === 1 && !e.superseded_by,
+    (e) => e.tags.includes('extracted') && e.dag_level === 1 && !e.superseded_by && isReusable(e),
   );
   if (!(apiKey && extractedFacts.length >= 3 && !run.dryRun)) return;
   try {
-    const { buildDag } = await import('../dag.js');
+    const { buildDag } = await import('./dag.js');
     const dagResult = await buildDag(run.hippoRoot, extractedFacts, { ...llmOpts, onError: llmError('dag') });
     run.result.dagCandidateClusters = dagResult.candidateClusters;
     run.result.dagSummariesCreated = dagResult.summariesCreated;
@@ -82,9 +83,9 @@ async function dagBuildPass(run: SleepRun, { apiKey, llmError, llmOpts }: SleepL
 }
 
 // -------------------------------------------------------------------------
-// 1.8. DAG summary rebuild — drain dirty queue from E2's child-write hooks
+// 1.8. DAG summary rebuild — drain dirty queue from the child-write hooks
 // -------------------------------------------------------------------------
-// Consumer of E2's summary_dirty flag. Walks dirty L2 summaries, regenerates
+// Consumer of the summary_dirty flag. Walks dirty L2 summaries, regenerates
 // each via generateDagSummary, atomically refreshes content + 6 metadata
 // columns + clears summary_dirty (with FTS sync). Same apiKey/dryRun gate
 // as buildDag above. Cap HIPPO_DAG_REBUILD_CAP (default 20, hard ceiling
@@ -92,10 +93,9 @@ async function dagBuildPass(run: SleepRun, { apiKey, llmError, llmOpts }: SleepL
 async function dagRebuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): Promise<void> {
   const { result } = run;
   try {
-    const { rebuildDirtySummaries } = await import('../dag.js');
+    const { rebuildDirtySummaries } = await import('./dag.js');
     const rawCap = envDagRebuildCap();
-    // R1 MED must-fix: hard ceiling so misconfigured env can't burn
-    // unbounded LLM cost.
+    // Hard ceiling so a misconfigured env can't burn unbounded LLM cost.
     const cap = rawCap !== undefined ? Math.min(rawCap, 1000) : 20;
     const rebuildResult = await rebuildDirtySummaries(run.hippoRoot, { ...llmOpts, onError: llmError('dag rebuild'), cap });
     result.summariesRebuilt = rebuildResult.rebuilt;
@@ -120,7 +120,7 @@ async function dagRebuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): P
 // -------------------------------------------------------------------------
 // 1.9. DAG entity profiles — cluster L2 topic summaries into L3 profiles
 // -------------------------------------------------------------------------
-// E5 phase: aggregate per-entity L2 summaries (e.g. all the speaker:Alice
+// Aggregate per-entity L2 summaries (e.g. all the speaker:Alice
 // topic summaries) into a single L3 entity profile. Runs even when phase
 // 1.7 buildDag was skipped (re-clusters existing L2s every sleep).
 //
@@ -128,7 +128,7 @@ async function dagRebuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): P
 // L2s directly via writeEntry without pushing back into survivors.
 async function entityProfilePass(run: SleepRun, { llmError, llmOpts }: SleepLlm): Promise<void> {
   try {
-    const { buildEntityProfiles } = await import('../dag.js');
+    const { buildEntityProfiles } = await import('./dag.js');
     const { loadAllL2Summaries } = await import('../store/summaries.js');
     const l2Summaries = loadAllL2Summaries(run.hippoRoot);
     if (l2Summaries.length >= 2) {

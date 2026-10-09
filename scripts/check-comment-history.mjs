@@ -21,6 +21,30 @@ const PATTERNS = [
 
 const PRECEDES_REGEX = '(,=:[!&|?{};+-*%<>~^';
 
+/** Index just past the string literal that opens at `start`, and how many escaped newlines it spans. */
+function skipQuoted(src, start, quote) {
+  let i = start + 1;
+  let newlines = 0;
+  while (i < src.length && src[i] !== quote && src[i] !== '\n') {
+    if (src[i] === '\\' && src[i + 1] === '\n') newlines++;
+    i += src[i] === '\\' ? 2 : 1;
+  }
+  return { next: i + 1, newlines };
+}
+
+/** Index just past the regex literal that opens at `start`. */
+function skipRegexLiteral(src, start) {
+  let inClass = false;
+  let i = start + 1;
+  while (i < src.length && src[i] !== '\n' && (src[i] !== '/' || inClass)) {
+    if (src[i] === '\\') i++;
+    else if (src[i] === '[') inClass = true;
+    else if (src[i] === ']') inClass = false;
+    i++;
+  }
+  return i + 1;
+}
+
 /** Returns [lineNumber, text] for every comment line: `//` tails and each line of a block comment. */
 function commentLines(src) {
   const out = [];
@@ -68,12 +92,9 @@ function commentLines(src) {
       continue;
     }
     if (c === '"' || c === "'") {
-      i++;
-      while (i < src.length && src[i] !== c && src[i] !== '\n') {
-        if (src[i] === '\\' && src[i + 1] === '\n') line++;
-        i += src[i] === '\\' ? 2 : 1;
-      }
-      i++;
+      const skipped = skipQuoted(src, i, c);
+      i = skipped.next;
+      line += skipped.newlines;
       prev = c;
       continue;
     }
@@ -83,15 +104,7 @@ function commentLines(src) {
       continue;
     }
     if (c === '/' && (prev === '' || PRECEDES_REGEX.includes(prev) || /(?:^|[^\w$])(?:return|typeof|case)\s*$/.test(src.slice(Math.max(0, i - 8), i)))) {
-      let inClass = false;
-      i++;
-      while (i < src.length && src[i] !== '\n' && (src[i] !== '/' || inClass)) {
-        if (src[i] === '\\') i++;
-        else if (src[i] === '[') inClass = true;
-        else if (src[i] === ']') inClass = false;
-        i++;
-      }
-      i++;
+      i = skipRegexLiteral(src, i);
       prev = ')';
       continue;
     }

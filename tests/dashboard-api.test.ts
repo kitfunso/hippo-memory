@@ -1,13 +1,13 @@
 // The read routes of the Health view: overview, project, memory page, detail and search, their validation, and the removed endpoints.
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { Layer, type MemoryEntry } from '../src/memory.js';
+import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { buildSnapshot } from '../src/dashboard-snapshot.js';
-import { buildOverview, buildProjectDetail } from '../src/dashboard-queries.js';
+import { buildSnapshot } from '../src/dashboard/dashboard-snapshot.js';
+import { buildOverview, buildProjectDetail } from '../src/dashboard/dashboard-queries.js';
 import type {
   MemoryDetail, MemoryPage, Overview, ProjectDetail, ScatterGrid, ScatterPoints, SearchResult,
-} from '../src/dashboard-types.js';
+} from '../src/dashboard/dashboard-types.js';
 import {
   NOW, call, get, isoAgo, makeStore, parse, postJson, seed, startDashboard, type RunningDashboard, type TmpStore,
 } from './_helpers/dashboard-fixture.js';

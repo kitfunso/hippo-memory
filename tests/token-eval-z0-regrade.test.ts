@@ -1,8 +1,9 @@
 // Z0 G5 (prereg 166): every saved check and acceptance test runs again on the saved commits; flips drop lessons, harness faults are error rows.
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { readFileSync, realpathSync, rmSync, writeFileSync, statSync } from 'node:fs';
+import { readFileSync, realpathSync, renameSync, rmSync, writeFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
+import { checkerIdentity } from '../scripts/token-eval/checker-identity.mjs';
 import { CHECKS, cleanup } from './fixtures/z0-harness.js';
 import { cli, copyOut, dumpsIn, grading, keyOf, lessonOf, readGrading, regrade, rowFor, rowsOf, sharedRun, TOKEN, type Shared } from './fixtures/z0-regrade.js';
 
@@ -80,9 +81,23 @@ describe('z0-regrade regrade and grading', () => {
     });
     expect(await regrade(swapped, ['--post-fix', '--cell', keyOf('a1')], { Z0_TOGGLE: 'regrade' })).toMatchObject({ code: 0 });
     const row = rowFor(swapped.out, 'a1', 'postfix');
-    const sha = createHash('sha256').update(readFileSync(join(CHECKS, 'crash-on-toggle.mjs'))).digest('hex');
+    const sha = checkerIdentity({ checkPath: join(CHECKS, 'crash-on-toggle.mjs'), check: { script: join(CHECKS, 'crash-on-toggle.mjs'), args: [] } });
     expect(row).toMatchObject({ status: 'done', pass: 'postfix' });
     expect(row.checks[0]).toMatchObject({ regraded: 'error', second: 'error', flip: true, reason: 'checker-error', checkerSha: sha });
+  }, 300_000);
+
+  it('a fix that changes only check.args is a fix: both post-fix runs agree, so no flip and the lesson stays (4b)', async () => {
+    const fixed = copyOut(shared, (s) => {
+      lessonOf(s, 'f1-l1').check = { script: join(CHECKS, 'toggle.mjs'), args: ['var=Z0_TOGGLE_TEST'] };
+    });
+    expect(await regrade(fixed, ['--post-fix', '--cell', keyOf('a1')], { Z0_TOGGLE_TEST: 'regrade' })).toMatchObject({ code: 0 });
+    const [check] = rowFor(fixed.out, 'a1', 'postfix').checks;
+    expect(check).toMatchObject({ saved: 'pass', regraded: 'fail', second: 'fail', flip: false, reason: null });
+    const sha = createHash('sha256').update(readFileSync(join(CHECKS, 'toggle.mjs'))).digest('hex');
+    expect(check.checkerSha).not.toBe(sha);
+    // A repro pass has no fix to allow, so the same args change is checker-changed there.
+    expect(await regrade(fixed, ['--cell', keyOf('a1')], { Z0_TOGGLE_TEST: 'regrade' })).toMatchObject({ code: 0 });
+    expect(rowFor(fixed.out, 'a1')).toMatchObject({ status: 'error', error: { stage: 'checker-changed' } });
   }, 300_000);
 
   it('a missing bundle is an error row; grading refuses until --flip-errors drops the cell\'s lessons (5, R6)', async () => {
@@ -136,6 +151,21 @@ describe('z0-regrade regrade and grading', () => {
     expect(lacking.code).toBe(1);
     expect(lacking.stderr).toContain('had CLAUDE_CODE_OAUTH_TOKEN');
     expect(rowsOf(c.out)).toEqual([]);
+  }, 300_000);
+
+  it('finds a cell\'s env record by sequence, not run name, and compares env keys case-blind on win32 (R27)', async () => {
+    const c = copyOut(shared);
+    renameSync(join(c.out, 'grading', 'seqF'), join(c.out, 'grading', 'seqF-r2'));
+    for (const id of ['t1', 't2', 'n1', 'a1', 't3', 'a2', 'a3', 'a4']) {
+      const file = join(c.out, 'grading', 'seqF-r2', 'A0', 'seed1', `${id}.grade.json`);
+      writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, 'utf8')), runName: 'seqF-r2' }));
+    }
+    expect(await regrade(c, ['--cell', keyOf('t1')])).toMatchObject({ code: 0, stderr: '' });
+    const runs = join(c.out, 'runs.jsonl');
+    const swap = (k: string) => (k.toUpperCase() === 'PATH' ? (k === 'PATH' ? 'Path' : 'PATH') : k);
+    const lines = readFileSync(runs, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
+    writeFileSync(runs, lines.map((r) => `${JSON.stringify(Array.isArray(r.envKeys) ? { ...r, envKeys: r.envKeys.map(swap) } : r)}\n`).join(''));
+    expect((await regrade(c, ['--cell', keyOf('t2')])).code).toBe(process.platform === 'win32' ? 0 : 1);
   }, 300_000);
 
   it('a test command that flips counts in acceptanceFlips and drops no lesson (11)', async () => {

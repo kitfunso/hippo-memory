@@ -5,13 +5,13 @@
  *   - /repos/{repo}/issues/comments      -> issue_comments_hwm
  *   - /repos/{repo}/pulls/comments       -> pr_review_comments_hwm
  *
- * Crash safety (codex P1 #3): each stream's HWM is persisted ONLY after
+ * Crash safety: each stream's HWM is persisted ONLY after
  * the stream fully drains. If stream 2 throws mid-flight, stream 1's HWM
  * is committed and stream 2's stays NULL (or its prior value). Rerun
  * picks up from stream 1's saved HWM and re-fetches stream 2 from its
  * last committed point.
  *
- * Codex P1 #2: the /issues endpoint returns BOTH issues and PRs (a PR is
+ * The /issues endpoint returns BOTH issues and PRs (a PR is
  * an issue with a `pull_request` field). We skip PRs here so they don't
  * get ingested under the issues schema. PRs are handled via webhook in
  * V1 (no /pulls backfill stream — review comments cover the discussion
@@ -24,11 +24,10 @@
  * downstream; the fail-safe default protects private orgs.
  */
 
-import type { Context } from '../../api.js';
-import { openHippoDb, closeHippoDb } from '../../db.js';
+import type { Context } from '../../api/index.js';
+import { readCursors, writeHwm, type HwmColumn } from '../../store/connectors/github.js';
 import { ingestEvent, type IngestEvent } from './ingest.js';
 import type { GitHubFetcher, GitHubBackfillPage } from './octokit-client.js';
-import type { JsonValue } from './types.js';
 import type {
   GitHubIssueEvent,
   GitHubIssueCommentEvent,
@@ -36,6 +35,7 @@ import type {
   GitHubRepository,
   GitHubSender,
 } from './types.js';
+import { type JsonValue, isJsonObject } from '../../util/json.js';
 
 const API = 'https://api.github.com';
 
@@ -59,61 +59,6 @@ export interface BackfillStreamCounts {
 export interface BackfillResult {
   ingested: BackfillStreamCounts;
   pages: BackfillStreamCounts;
-}
-
-type HwmColumn = 'issues_hwm' | 'issue_comments_hwm' | 'pr_review_comments_hwm';
-
-interface StoredCursors {
-  issues: string | null;
-  issueComments: string | null;
-  prReviewComments: string | null;
-}
-
-function readCursor(root: string, tenantId: string, repo: string): StoredCursors {
-  const db = openHippoDb(root);
-  try {
-    // SAFETY: row's shape matches the three HWM columns named in the SELECT
-    // above; `better-sqlite3`'s `.get()` return type is untyped by the driver.
-    const row = db
-      .prepare(
-        `SELECT issues_hwm, issue_comments_hwm, pr_review_comments_hwm
-         FROM github_cursors WHERE tenant_id = ? AND repo_full_name = ?`,
-      )
-      .get(tenantId, repo) as
-      | {
-          issues_hwm?: string | null;
-          issue_comments_hwm?: string | null;
-          pr_review_comments_hwm?: string | null;
-        }
-      | undefined;
-    return {
-      issues: row?.issues_hwm ?? null,
-      issueComments: row?.issue_comments_hwm ?? null,
-      prReviewComments: row?.pr_review_comments_hwm ?? null,
-    };
-  } finally {
-    closeHippoDb(db);
-  }
-}
-
-function writeOneHwm(
-  root: string,
-  tenantId: string,
-  repo: string,
-  column: HwmColumn,
-  value: string,
-): void {
-  const db = openHippoDb(root);
-  try {
-    db.prepare(
-      `INSERT INTO github_cursors (tenant_id, repo_full_name, ${column}, updated_at)
-       VALUES (?, ?, ?, ?)
-       ON CONFLICT(tenant_id, repo_full_name)
-       DO UPDATE SET ${column} = excluded.${column}, updated_at = excluded.updated_at`,
-    ).run(tenantId, repo, value, new Date().toISOString());
-  } finally {
-    closeHippoDb(db);
-  }
 }
 
 /**
@@ -170,77 +115,64 @@ interface PrReviewCommentItem {
   pull_request_url?: string;
 }
 
-function isPlainObject(x: JsonValue | undefined): x is Record<string, JsonValue> {
-  return x !== undefined && x !== null && typeof x === 'object' && !Array.isArray(x);
-}
-
 function isGitHubUser(x: JsonValue | undefined): x is Record<string, JsonValue> & GitHubSender {
-  return isPlainObject(x) && typeof x.login === 'string' && typeof x.id === 'number';
+  return isJsonObject(x) && typeof x.login === 'string' && typeof x.id === 'number';
 }
 
 function isIssuesItem(x: JsonValue): x is JsonValue & IssuesItem {
-  if (!isPlainObject(x)) return false;
+  if (!isJsonObject(x)) return false;
   if (typeof x.number !== 'number') return false;
   if (typeof x.title !== 'string') return false;
   return isGitHubUser(x.user);
 }
 
 function isCommentItem(x: JsonValue): x is JsonValue & (IssueCommentItem | PrReviewCommentItem) {
-  if (!isPlainObject(x)) return false;
+  if (!isJsonObject(x)) return false;
   if (typeof x.id !== 'number') return false;
   return isGitHubUser(x.user);
 }
 
 /**
  * Drain one stream end-to-end. Pauses and retries on rate-limit. Throws on
- * any other fetch error so the caller leaves the HWM unchanged (round 1
- * codex P1 #3 crash safety).
+ * any other fetch error so the caller leaves the HWM unchanged.
  *
- * v1.3.1 (round 2 codex P1s + claude P1):
  *   - Tracks max(updated_at) across ALL fetched items, including ones
  *     `toIngestEvent` rejects (e.g., PRs returned via `/issues`). Otherwise
  *     a page of pure PRs would never advance the HWM and the next run would
  *     re-fetch the same window forever.
  *   - Returns `drained: boolean` — true only when the stream actually ran
- *     to next=null. Callers MUST NOT advance the HWM when drained=false.
- *     Was a bug in v1.3.0: hitting maxPerStream cap returned the partial
- *     maxUpdatedAt and the caller persisted it, skipping the unfetched tail.
+ *     to next=null. Callers MUST NOT advance the HWM when drained=false,
+ *     or a capped run would persist a partial HWM and skip the unfetched tail.
  */
+interface DrainStreamOptions {
+  readonly toIngestEvent: (item: JsonValue) => IngestEvent | null;
+  readonly fetcher: GitHubFetcher;
+  readonly token: string;
+  readonly sleep: (ms: number) => Promise<void>;
+  readonly maxItems?: number;
+}
+
 async function drainStream(
   ctx: Context,
   url0: string,
-  toIngestEvent: (item: JsonValue) => IngestEvent | null,
-  fetcher: GitHubFetcher,
-  token: string,
-  sleep: (ms: number) => Promise<void>,
-  maxItems?: number,
+  options: DrainStreamOptions,
 ): Promise<{ ingested: number; pages: number; maxUpdatedAt: string | null; drained: boolean }> {
+  const { toIngestEvent, maxItems } = options;
   let url: string | null = url0;
   let ingested = 0;
   let pages = 0;
   let maxUpdatedAt: string | null = null;
 
   while (url) {
-    // Fetch with rate-limit retry loop.
-    let page: GitHubBackfillPage;
-    while (true) {
-      page = await fetcher({ url, token });
-      if (page.rateLimit.reason !== 'none') {
-        await sleep(page.rateLimit.sleepSeconds * 1000);
-        continue;
-      }
-      break;
-    }
+    const page = await fetchPagePastRateLimit(options, url);
     pages++;
 
     for (const item of page.items) {
-      // v1.3.1: track updated_at on EVERY item, before the toIngestEvent
-      // filter. Skipped PRs from /issues still contribute to the HWM so
-      // PR-only pages don't loop forever.
+      // Track updated_at on EVERY item, before the toIngestEvent filter, so PR-only pages don't loop forever.
       // SAFETY: updated_at is GitHub's ISO-timestamp field on every item
       // shape this stream returns; a non-string value would only fail the
       // string comparisons below, matching pre-migration passthrough.
-      const updatedAt = isPlainObject(item)
+      const updatedAt = isJsonObject(item)
         ? ((item.updated_at as string | undefined) ?? null)
         : null;
       if (updatedAt && (!maxUpdatedAt || updatedAt > maxUpdatedAt)) {
@@ -249,7 +181,7 @@ async function drainStream(
 
       const evt = toIngestEvent(item);
       if (!evt) continue;
-      const r = ingestEvent(ctx, {
+      const r = await ingestEvent(ctx, {
         event: evt,
         rawBody: JSON.stringify(item),
         deliveryId: `backfill:${ctx.tenantId}:${updatedAt ?? ''}`,
@@ -268,9 +200,19 @@ async function drainStream(
   return { ingested, pages, maxUpdatedAt, drained: true };
 }
 
+async function fetchPagePastRateLimit(options: DrainStreamOptions, url: string): Promise<GitHubBackfillPage> {
+  const { fetcher, token, sleep } = options;
+  // Fetch with rate-limit retry loop.
+  while (true) {
+    const page = await fetcher({ url, token });
+    if (page.rateLimit.reason === 'none') return page;
+    await sleep(page.rateLimit.sleepSeconds * 1000);
+  }
+}
+
 function issueItemToEvent(item: JsonValue, repository: GitHubRepository): IngestEvent | null {
   if (!isIssuesItem(item)) return null;
-  // Codex P1 #2: /issues returns PRs too — skip them.
+  // /issues returns PRs too; skip them.
   if (item.pull_request) return null;
   const payload: GitHubIssueEvent = {
     action: 'opened',
@@ -337,20 +279,16 @@ async function backfillStream(
   sleep: (ms: number) => Promise<void>,
   stream: { url: string; column: HwmColumn; toIngestEvent: (item: JsonValue) => IngestEvent | null },
 ): Promise<{ ingested: number; pages: number }> {
-  const res = await drainStream(
-    ctx,
-    stream.url,
-    stream.toIngestEvent,
-    opts.fetcher,
-    opts.token,
+  const res = await drainStream(ctx, stream.url, {
+    toIngestEvent: stream.toIngestEvent,
+    fetcher: opts.fetcher,
+    token: opts.token,
     sleep,
-    opts.maxPerStream,
-  );
-  // v1.3.1: only advance HWM when the stream actually drained. A capped run
-  // (--max) must leave the HWM at its previous value so the next invocation
-  // re-fetches the unprocessed tail.
+    maxItems: opts.maxPerStream,
+  });
+  // A capped run (--max) must leave the HWM at its previous value so the next run re-fetches the unprocessed tail.
   if (res.drained && res.maxUpdatedAt) {
-    writeOneHwm(ctx.hippoRoot, ctx.tenantId, opts.repoFullName, stream.column, res.maxUpdatedAt);
+    writeHwm(ctx.hippoRoot, ctx.tenantId, opts.repoFullName, stream.column, res.maxUpdatedAt);
   }
   return { ingested: res.ingested, pages: res.pages };
 }
@@ -361,7 +299,7 @@ export async function backfillRepo(
 ): Promise<BackfillResult> {
   const sleep =
     opts.sleepMs ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
-  const cursors = readCursor(ctx.hippoRoot, ctx.tenantId, opts.repoFullName);
+  const cursors = readCursors(ctx.hippoRoot, ctx.tenantId, opts.repoFullName);
   const repository = syntheticRepository(opts.repoFullName);
 
   const result: BackfillResult = {

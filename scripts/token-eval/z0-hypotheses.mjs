@@ -1,7 +1,7 @@
 /** Z0 analyzer, part 3 of 6: units, bootstraps, H1-H4, one Holm procedure per coding, attribution, reported estimates.
  * The repeat-mistake rate reads each lesson's `first` verdict only (prereg 151); H3 and H4 read Claude Code records only. */
 
-import { addUsage, combineCodings, harmGate, holmAdjust, priceUsage, twoLevelBootstrap, verdict } from '../../dist/eval-stats.js';
+import { addUsage, combineCodings, harmGate, holmAdjust, priceUsage, twoLevelBootstrap, verdict } from '../../dist/eval/eval-stats.js';
 import { pairTasks } from './z0-filters.mjs';
 import { TWO_SEED_ARMS, positionKey, runKey } from './z0-records.mjs';
 
@@ -9,7 +9,7 @@ export const CODINGS = ['violation', 'excluded'];
 export const HYPOTHESES = ['H1', 'H2', 'H3'];
 export const NOT_RUN = 'not run';
 export const NA = 'n/a';
-/** @typedef {import('../../src/eval-stats.js').VerdictSpec} VerdictSpec */
+/** @typedef {import('../../src/eval/eval-stats.js').VerdictSpec} VerdictSpec */
 /** @type {VerdictSpec} */
 const REPEAT_SPEC = { helpful: 'lower', tieBand: [-0.15, 0.15], minimumEffectAt: -0.15 };
 /** @type {Record<'H1' | 'H2' | 'H3', VerdictSpec>} */

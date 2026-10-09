@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { remember as apiRemember } from '../src/api.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { remember as apiRemember } from '../src/api/index.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
 
@@ -308,7 +308,7 @@ describe('server HTTP routes — auth + audit', () => {
     expect(firstBody.revokedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
 
     // Second DELETE on the same id: authRevoke returns ok:true with the
-    // existing revokedAt (idempotent), per src/api.ts authRevoke.
+    // existing revokedAt (idempotent), per src/api/index.ts authRevoke.
     const second = await fetch(`${handle.url}/v1/auth/keys/${minted.keyId}`, { method: 'DELETE' });
     expect(second.status).toBe(200);
     const secondBody = await jsonAs<{ ok: boolean; revokedAt: string }>(second);

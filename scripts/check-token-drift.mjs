@@ -63,7 +63,7 @@ const REPO_ROOT = resolve(import.meta.dirname, '..');
 const SCAN_PATHS = [
   'ui/index.html',
   'ui/src',
-  'src/dashboard.ts',
+  'src/dashboard/dashboard.ts',
 ];
 
 const EXEMPT_FILES = new Set([

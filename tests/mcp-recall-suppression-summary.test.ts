@@ -26,7 +26,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { Layer} from '../src/memory.js';
+import { Layer} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../src/mcp/server.js';
 import { makeRoot } from './_helpers/make-root.js';
@@ -55,7 +55,7 @@ function extractText(res: McpResponse | null): string {
   return result?.content?.[0]?.text ?? '';
 }
 
-describe('mcp hippo_recall Cutoff suppressionSummary (C5, v1.12.13 + v1.13.3)', () => {
+describe('mcp hippo_recall Cutoff suppressionSummary', () => {
   let home: string;
   let originalHome: string | undefined;
 

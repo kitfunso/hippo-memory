@@ -1,13 +1,13 @@
 /**
  * LC1 schema migration v40 (docs/plans/2026-08-02-lc1-recall-trace-persistence.md).
- * Mirrors tests/b3-goal-stack-migration.test.ts conventions.
+ * Mirrors tests/goal-stack-migration.test.ts conventions.
  */
 
 import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, type DatabaseSyncLike } from '../src/db.js';
+import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, type DatabaseSyncLike } from '../src/db/index.js';
 import { LATEST_SCHEMA_VERSION, LATEST_SCHEMA_VERSION_STR } from './_helpers/schema-version.js';
 
 function tableNames(db: DatabaseSyncLike): string[] {
@@ -30,7 +30,7 @@ function setMeta(db: DatabaseSyncLike, key: string, value: string): void {
   db.prepare(`INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)`).run(key, value);
 }
 
-describe('LC1 schema migration v40', () => {
+describe('schema migration v40', () => {
   it('a fresh store lands at v40 with all three tables', () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-lc1-mig-'));
     const db = openHippoDb(home);

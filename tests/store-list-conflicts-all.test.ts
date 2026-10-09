@@ -13,7 +13,7 @@ import * as os from 'os';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { listMemoryConflicts, replaceDetectedConflicts } from '../src/store/conflicts.js';
-import { Layer } from '../src/memory.js';
+import { Layer } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 
 let tmpDir: string;
@@ -26,7 +26,7 @@ afterEach(() => {
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
-describe("listMemoryConflicts '*' sentinel (v0.28)", () => {
+describe("listMemoryConflicts '*' sentinel", () => {
   it("returns only open conflicts when status='open' (legacy behaviour)", () => {
     initStore(tmpDir);
     const a = createMemory('alpha', { layer: Layer.Semantic });

@@ -1,13 +1,14 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { type ImportResult, type ImportOptions, importEntries, type JsonValue, isJsonString, isJsonPlainObject } from './core.js';
-import { parseFrontmatter, collectMarkdownFiles } from './markdown-parse.js';
+import { type ImportResult, type ImportOptions, importEntries } from './core.js';
+import { splitMarkdownFrontmatter, collectMarkdownFiles } from './markdown-parse.js';
+import { type JsonValue, isJsonString, isJsonObject } from '../util/json.js';
 
 /** Coerce one imported record (string, `{content|text: ...}` object, or
  *  anything else) into the plain-text memory chunk it represents. */
 function extractMemoryText(candidate: JsonValue): string {
   if (isJsonString(candidate)) return candidate;
-  if (isJsonPlainObject(candidate)) {
+  if (isJsonObject(candidate)) {
     return String(candidate['content'] ?? candidate['text'] ?? '');
   }
   return '';
@@ -30,7 +31,7 @@ function parseChatGPTFile(filePath: string): string[] {
       const parsed: JsonValue = JSON.parse(raw);
 
       // {"memories": [...]} - ChatGPT export format
-      if (isJsonPlainObject(parsed) && Array.isArray(parsed.memories)) {
+      if (isJsonObject(parsed) && Array.isArray(parsed.memories)) {
         return parsed.memories.map(extractMemoryText).filter(Boolean);
       }
 
@@ -77,55 +78,59 @@ function splitMarkdown(content: string): string[] {
   const lines = content.split('\n');
   let current = '';
 
-  for (const line of lines) {
-    const trimmed = line.trim();
-
-    // Heading: start a new chunk
-    if (/^#{1,6}\s+/.test(trimmed)) {
-      if (current.trim()) chunks.push(current.trim());
-      current = trimmed;
-      continue;
-    }
-
-    // Bullet point: each bullet is its own chunk (flush previous if not a bullet context)
-    if (/^[-*+]\s+/.test(trimmed)) {
-      if (current.trim() && !/^[-*+]\s+/.test(current.split('\n')[0])) {
-        chunks.push(current.trim());
-        current = '';
-      }
-      if (current.trim()) {
-        chunks.push(current.trim());
-        current = '';
-      }
-      current = trimmed.replace(/^[-*+]\s+/, '').trim();
-      continue;
-    }
-
-    // Numbered list item
-    if (/^\d+\.\s+/.test(trimmed)) {
-      if (current.trim()) {
-        chunks.push(current.trim());
-        current = '';
-      }
-      current = trimmed.replace(/^\d+\.\s+/, '').trim();
-      continue;
-    }
-
-    // Empty line
-    if (!trimmed) {
-      if (current.trim()) {
-        chunks.push(current.trim());
-        current = '';
-      }
-      continue;
-    }
-
-    // Regular line: append to current
-    current = current ? current + ' ' + trimmed : trimmed;
-  }
+  for (const line of lines) current = appendLine(chunks, current, line);
 
   if (current.trim()) chunks.push(current.trim());
   return chunks.filter(Boolean);
+}
+
+/** Takes one line into the chunk being built, pushing that chunk when the line ends it; returns the chunk still open. */
+function appendLine(chunks: string[], open: string, line: string): string {
+  let current = open;
+  const trimmed = line.trim();
+
+  // Heading: start a new chunk
+  if (/^#{1,6}\s+/.test(trimmed)) {
+    if (current.trim()) chunks.push(current.trim());
+    current = trimmed;
+    return current;
+  }
+
+  // Bullet point: each bullet is its own chunk (flush previous if not a bullet context)
+  if (/^[-*+]\s+/.test(trimmed)) {
+    if (current.trim() && !/^[-*+]\s+/.test(current.split('\n')[0])) {
+      chunks.push(current.trim());
+      current = '';
+    }
+    if (current.trim()) {
+      chunks.push(current.trim());
+      current = '';
+    }
+    current = trimmed.replace(/^[-*+]\s+/, '').trim();
+    return current;
+  }
+
+  // Numbered list item
+  if (/^\d+\.\s+/.test(trimmed)) {
+    if (current.trim()) {
+      chunks.push(current.trim());
+      current = '';
+    }
+    current = trimmed.replace(/^\d+\.\s+/, '').trim();
+    return current;
+  }
+
+  // Empty line
+  if (!trimmed) {
+    if (current.trim()) {
+      chunks.push(current.trim());
+      current = '';
+    }
+    return current;
+  }
+
+  // Regular line: append to current
+  return current ? current + ' ' + trimmed : trimmed;
 }
 
 /**
@@ -223,7 +228,7 @@ export function importCursor(sourcePath: string, options: ImportOptions): Import
     : [sourcePath];
   const chunks = files.flatMap((file) => {
     const raw = fs.readFileSync(file, 'utf8');
-    return parseCursorFile(CURSOR_RULE_FILE.test(file) ? parseFrontmatter(raw).body : raw);
+    return parseCursorFile(CURSOR_RULE_FILE.test(file) ? splitMarkdownFrontmatter(raw).body : raw);
   });
   return importEntries(chunks, 'import:cursor', ['imported', 'cursor'], options);
 }

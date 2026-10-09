@@ -2,21 +2,21 @@
 // a hand-run share or promote of one still does. Real stores and the real CLI.
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { sleep, adminActor } from '../src/api.js';
-import { loadConfig } from '../src/config.js';
-import { buildDag, buildEntityProfiles } from '../src/dag.js';
-import { storeExtractedFacts, type ExtractedFact } from '../src/extract.js';
-import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { autoShare, getGlobalRoot, promoteToGlobal, shareMemory, transferScore } from '../src/shared.js';
+import { sleep, adminActor } from '../src/api/index.js';
+import { loadConfig } from '../src/core/config.js';
+import { buildDag, buildEntityProfiles } from '../src/consolidate/dag.js';
+import { storeExtractedFacts, type ExtractedFact } from '../src/learn/extract.js';
+import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { autoShare, shareMemory, transferScore } from '../src/sharing/share.js';
+import { getGlobalRoot, promoteToGlobal } from '../src/sharing/global-store.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-
-const HIPPO_BIN = join(process.cwd(), 'bin', 'hippo.js');
+import { hippoRun } from './_helpers/spawn-hippo.js';
 const SEED = 'fix: retry the upload when the storage token expires mid-transfer';
 const ORDINARY = 'gotcha: powershell 5.1 has no pipeline chain operators, use if blocks';
 
@@ -138,7 +138,7 @@ describe('hippo share --auto --dry-run', () => {
     };
     for (const key of ['ANTHROPIC_API_KEY', 'TYPESAFE_API_KEY', 'HIPPO_TENANT']) delete env[key];
     const hippo = (...args: string[]): string => {
-      const res = spawnSync('node', [HIPPO_BIN, ...args], { cwd: proj, env, encoding: 'utf-8', timeout: 20_000 });
+      const res = hippoRun(args, { cwd: proj, env, timeout: 20_000, exe: 'node' });
       expect(res.status, res.stderr).toBe(0);
       return res.stdout;
     };

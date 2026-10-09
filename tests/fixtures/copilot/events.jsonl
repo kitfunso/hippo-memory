@@ -1,0 +1,12 @@
+{"type":"session.start","data":{"sessionId":"copilot-sess-1","version":1,"producer":"copilot-agent","copilotVersion":"0.40.0","vscodeVersion":"1.141.0","startTime":"2026-10-07T12:00:00.000Z","context":{"cwd":"c:\\proj"}},"id":"e1","timestamp":"2026-10-07T12:00:00.000Z","parentId":null}
+{"type":"user.message","data":{"content":"fix the flaky login test in auth.spec.ts","attachments":[]},"id":"e2","timestamp":"2026-10-07T12:00:01.000Z","parentId":"e1"}
+{"type":"assistant.turn_start","data":{"turnId":"0.0"},"id":"e3","timestamp":"2026-10-07T12:00:02.000Z","parentId":"e2"}
+{"type":"assistant.message","data":{"messageId":"m1","content":"Looking at the login client first.","toolRequests":[{"toolCallId":"call_1","name":"read_file","arguments":"{\"filePath\":\"auth.spec.ts\"}","type":"function"}],"reasoningText":"..."},"id":"e4","timestamp":"2026-10-07T12:00:03.000Z","parentId":"e3"}
+{"type":"tool.execution_start","data":{"toolCallId":"call_1","toolName":"read_file","arguments":{"filePath":"auth.spec.ts"}},"id":"e5","timestamp":"2026-10-07T12:00:03.100Z","parentId":"e4"}
+{"type":"tool.execution_complete","data":{"toolCallId":"call_1","success":true,"result":{"content":"file text"}},"id":"e6","timestamp":"2026-10-07T12:00:03.500Z","parentId":"e5"}
+{"type":"assistant.message","data":{"messageId":"m2","content":"We decided to keep the retry budget at three attempts for the login client. Next I will rerun the auth suite.","toolRequests":[]},"id":"e7","timestamp":"2026-10-07T12:00:04.000Z","parentId":"e6"}
+{"type":"user.message","data":{"content":"Read the attached design PDF with the pdf skill.","source":"skill-pdf"},"id":"e8","timestamp":"2026-10-07T12:00:05.000Z","parentId":"e7"}
+{"type":"user.message","data":{"content":"Continue with the task.","isAutopilotContinuation":true},"id":"e9","timestamp":"2026-10-07T12:00:06.000Z","parentId":"e8"}
+{"type":"assistant.message","data":{"messageId":"m3","content":"Sub-agent report: auth.spec.ts holds twelve tests.","toolRequests":[]},"agentId":"explore-1","id":"e10","timestamp":"2026-10-07T12:00:07.000Z","parentId":"e9"}
+{"type":"assistant.message","data":{"messageId":"m4","content":"Sub-agent report: no other callers of the retry helper.","toolRequests":[],"parentToolCallId":"call_2"},"id":"e11","timestamp":"2026-10-07T12:00:08.000Z","parentId":"e10"}
+{"type":"assistant.turn_end","data":{"turnId":"0.0"},"id":"e12","timestamp":"2026-10-07T12:00:09.000Z","parentId":"e11"}

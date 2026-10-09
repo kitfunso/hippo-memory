@@ -1,7 +1,7 @@
 // Z0 failure chain (prereg 179-182) and injected-row sources (93) with the fake Claude Code.
 import { describe, it, expect, afterEach } from 'vitest';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { contextLine } from '../src/context-render.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { contextBlockLines } from '../src/api/context-render.js';
 import { injectedRows } from '../scripts/token-eval/surfaces.mjs';
 import {
   cleanup, isolate, makeRepo, task, teach, apply, plain, lesson, family, spec, run, readRecords, readLedger, find,
@@ -74,11 +74,10 @@ describe('injected-row sources', () => {
   afterEach(cleanup);
 
   it('counts imported rows among the bullets hippo printed, global and truncated ones included', () => {
-    const now = new Date();
     const imported = createMemory('the build   needs node 22', { source: 'agent-memory:claude-code:p/n.md#ab12', baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     const cut = createMemory(`${'long imported note '.repeat(10)}[truncated]`, { source: 'agent-memory:codex:m/x.md#cd34', baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     const native = createMemory('run the tests with vitest', { source: 'cli', baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
-    const bullet = (entry: typeof native, isGlobal: boolean) => contextLine({ entry, isGlobal }, 'observe', true, now);
+    const bullet = (entry: typeof native, isGlobal: boolean) => contextBlockLines([{ entry, isGlobal }], 0, 'observe').slice(1).join('\n');
     const text = ['## Project Memory (3 entries, 40 tokens)\n', bullet(imported, true), bullet(cut, false), bullet(native, false)].join('\n');
     const got = injectedRows([text], [{ ...imported, global: true }, { ...cut, global: false }, { ...native, global: false }]);
     expect(got.counts).toMatchObject({ rows: 3, importedRows: 2, unmatched: 0, ambiguous: 0 });

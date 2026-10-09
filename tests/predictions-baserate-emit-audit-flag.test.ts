@@ -1,7 +1,7 @@
 /**
  * J3.2 — emitAudit flag on computePredictionBaserate.
  *
- * The flag was added so the J3.2 orchestrator (computePlanningFallacyOutput)
+ * The flag was added so the J3.2 orchestrator (planningFallacyEvidenceAt)
  * can call the baserate helper WITHOUT emitting a predict_baserate audit
  * row (the orchestrator emits its own recall_autodebias_hint row, with
  * n_closed + mean_ratio in metadata, so no telemetry is lost). This keeps
@@ -19,8 +19,8 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { computePredictionBaserate, savePrediction, closePrediction } from '../src/predictions/store.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { computePredictionBaserate, savePrediction, closePrediction } from '../src/store/predictions.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 function safeRmSync(p: string): void {
@@ -38,7 +38,7 @@ function countPredictBaserateAudits(root: string): number {
   }
 }
 
-describe('computePredictionBaserate emitAudit flag (J3.2 v0.32)', () => {
+describe('computePredictionBaserate emitAudit flag', () => {
   let root: string;
   beforeEach(() => { root = makeRoot('emitaudit'); });
   afterEach(() => safeRmSync(root));

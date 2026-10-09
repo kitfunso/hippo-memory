@@ -8,29 +8,31 @@
  * This isolates the physics scoring logic from embedding model quality.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import {
   type MemoryEntry
-} from '../src/memory.js';
+} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { hybridSearch } from '../src/search/hybrid.js';
 import { physicsSearch } from '../src/search/physics-search.js';
-import type { SearchResult } from '../src/search/types.js';
-import { saveEmbeddingIndex } from '../src/embeddings.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { saveEmbeddingIndex } from '../src/store/vector-index.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import {
   loadPhysicsState,
   resetAllPhysicsState,
   savePhysicsState,
-} from '../src/physics-state.js';
-import { simulate, type ForceContext } from '../src/physics.js';
-import { DEFAULT_PHYSICS_CONFIG } from '../src/physics-config.js';
+} from '../src/db/physics-state.js';
+import { simulate, type ForceContext } from '../src/core/physics.js';
+import { DEFAULT_PHYSICS_CONFIG } from '../src/core/physics-config.js';
+
+// A benchmark: 50 simulate-and-save cycles of a pairwise force loop, which coverage instrumentation slows far more than other code.
+vi.setConfig({ testTimeout: 60_000 });
 
 // ---------------------------------------------------------------------------
 // Synthetic embedding generator
@@ -40,7 +42,7 @@ const EMBED_DIM = 384;
 
 /** Generate a deterministic unit vector from a seed. Seeded hash -> direction. */
 function syntheticEmbedding(seed: number): number[] {
-  const vec = new Array<number>(EMBED_DIM);
+  const vec = Array.from({ length: EMBED_DIM }, () => 0);
   // Simple deterministic pseudo-random using seed
   let s = seed;
   for (let i = 0; i < EMBED_DIM; i++) {

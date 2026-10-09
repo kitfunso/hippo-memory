@@ -1,6 +1,8 @@
-import { tokenize } from '../tokenize.js';
+import { tokenize } from '../util/tokenize.js';
 import { matchedQueryTerms } from './bm25.js';
-import type { SearchResult } from './types.js';
+import type { SearchResult } from '../core/search-types.js';
+
+const COSINE_DECIMALS = 3;
 
 export interface MatchExplanation {
   /** Human-readable reason string */
@@ -32,7 +34,7 @@ export function explainMatch(query: string, result: SearchResult): MatchExplanat
 
   const parts: string[] = [];
   if (hasBm25) parts.push(`BM25: matched terms [${matchedTerms.join(', ')}]`);
-  if (hasEmbedding) parts.push(`embedding similarity: ${result.cosine.toFixed(3)}`);
+  if (hasEmbedding) parts.push(`embedding similarity: ${result.cosine.toFixed(COSINE_DECIMALS)}`);
   if (parts.length === 0) parts.push('no direct term or embedding match');
 
   return {

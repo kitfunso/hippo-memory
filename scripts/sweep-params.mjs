@@ -20,9 +20,9 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
-import { runEval } from '../dist/eval.js';
+import { runEval } from '../dist/eval/eval.js';
 import { isInitialized } from '../dist/store/open.js';
-import { loadConfig } from '../dist/config.js';
+import { loadConfig } from '../dist/core/config.js';
 
 const CORPUS_PATH = process.argv.find((a) => a.endsWith('.json') && !a.startsWith('--'))
   ?? path.join(process.cwd(), 'evals', 'real-corpus.json');

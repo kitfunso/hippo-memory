@@ -22,15 +22,15 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { appendSessionEvent } from '../src/store/sessions.js';
-import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { consolidate } from '../src/consolidate/sleep.js';
-import { storeExtractedFacts, type ExtractedFact } from '../src/extract.js';
+import { storeExtractedFacts, type ExtractedFact } from '../src/learn/extract.js';
 
 function tmpHome(prefix: string = 'hippo-consolidate-tenant-landing-'): string {
   return mkdtempSync(join(tmpdir(), prefix));
 }
 
-describe('T1 (a): merge pass partitions by tenant before clustering', () => {
+describe('merge pass partitions by tenant before clustering', () => {
   it('two tenants with byte-identical overlapping episodic content produce two separate merged rows, each in its own source tenant, never mixed into one', async () => {
     const home = tmpHome();
     try {
@@ -92,7 +92,7 @@ describe('T1 (a): merge pass partitions by tenant before clustering', () => {
   });
 });
 
-describe('T1 (c)+(d): trace pass lands in the resolved tenant and stays idempotent there', () => {
+describe('trace pass lands in the resolved tenant and stays idempotent there', () => {
   it('an auto-promoted trace lands in HIPPO_TENANT (not default), and a second sleep does not regenerate it', async () => {
     const home = tmpHome();
     const prevTenant = process.env.HIPPO_TENANT;
@@ -141,7 +141,7 @@ describe('T1 (c)+(d): trace pass lands in the resolved tenant and stays idempote
   });
 });
 
-describe('T1 executor check: extract.ts storeExtractedFacts has the same defect, folded in', () => {
+describe('extract.ts storeExtractedFacts has the same defect, folded in', () => {
   it('extracted facts inherit the source entry tenant instead of stamping default', () => {
     const home = tmpHome();
     try {

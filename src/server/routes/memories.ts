@@ -1,12 +1,15 @@
 // Memory write routes: create, graph, archive, supersede, promote, forget, outcome, sleep.
-import { archiveRaw, forget, outcome, outcomeForLastRecall, promote, remember, sleep, supersede } from '../../api.js';
-import type { MemoryKind } from '../../memory.js';
-import { buildGraphModel } from '../../graph-view.js';
-import { MAX_ENTITY_NAME_LEN } from '../../graph/types.js';
-import { HttpError, type JsonValue, sendJson } from '../../http-util.js';
+import { archiveRaw, forget, outcome, outcomeForLastRecall, promote, remember, supersede } from '../../api/index.js';
+import type { MemoryKind } from '../../core/memory.js';
+import { graphModelOf } from '../../graph/view.js';
+import { MAX_ENTITY_NAME_LEN } from '../../store/graph-rows.js';
+import { HttpError, sendJson } from '../../util/http-util.js';
+import { requireGroup } from '../../store/port.js';
 import { assertCrossTenantAdmin, buildContextWithAuth, isLoopback } from '../auth.js';
+import { sleepInChild } from '../sleep-offload.js';
 import type { RouteRequest } from '../types.js';
-import { getString, getStringArray, isJsonBoolean, isJsonString, isSetMember, parseJsonBody, parseListLimit, validateIdSegment } from '../validation.js';
+import { getCallerProject, getString, getStringArray, isSetMember, parseJsonBody, parseListLimit, validateIdSegment } from '../validation.js';
+import { type JsonValue, isJsonString, isJsonBoolean } from '../../util/json.js';
 
 const VALID_KINDS: ReadonlySet<MemoryKind> = new Set([
   'raw',
@@ -27,13 +30,19 @@ export async function handleCreateMemory({ req, res, opts }: RouteRequest): Prom
   if (kindRaw !== undefined && !isSetMember(VALID_KINDS, kindRaw)) {
     throw new HttpError(400, `invalid kind: ${kindRaw}`);
   }
-  const result = remember(ctx, {
+  const personalRaw = body['personal'];
+  if (personalRaw !== undefined && !isJsonBoolean(personalRaw)) {
+    throw new HttpError(400, 'personal must be a boolean');
+  }
+  const result = await remember(ctx, {
     content,
     kind: kindRaw,
     scope: getString(body, 'scope'),
     owner: getString(body, 'owner'),
     artifactRef: getString(body, 'artifactRef'),
     tags: getStringArray(body, 'tags'),
+    project: getCallerProject(body),
+    personal: personalRaw === true,
   });
   sendJson(res, 200, result);
   return;
@@ -43,17 +52,15 @@ export async function handleCreateMemory({ req, res, opts }: RouteRequest): Prom
 export async function handleGetGraph({ req, res, opts, query }: RouteRequest): Promise<void> {
   const entityRaw = query.get('entity');
   // Cap at the graph entity-name cap (512), not the id-shaped 256, so a valid
-  // long decision/policy name remains focusable over HTTP (codex P2).
+  // long decision/policy name remains focusable over HTTP.
   if (entityRaw !== null && entityRaw.length > MAX_ENTITY_NAME_LEN) {
     throw new HttpError(400, `entity exceeds the ${MAX_ENTITY_NAME_LEN}-character cap`);
   }
   const limit = parseListLimit(query.get('limit'));
   const ctx = await buildContextWithAuth(req, opts);
-  const model = buildGraphModel(ctx.hippoRoot, ctx.tenantId, {
-    entity: entityRaw ?? undefined,
-    limit,
-  });
-  sendJson(res, 200, model);
+  const { role, scopes, owner } = ctx.actor;
+  const rows = await requireGroup(opts.store, 'graphReads').graphRows(ctx.tenantId, { entity: entityRaw ?? undefined, limit, reader: { role, scopes, owner } });
+  sendJson(res, 200, graphModelOf(rows));
   return;
 }
 
@@ -66,7 +73,7 @@ export async function handleArchiveMemory({ req, res, opts }: RouteRequest, arch
   if (!reason) {
     throw new HttpError(400, 'reason is required');
   }
-  const result = archiveRaw(ctx, archiveMatch.id!, reason);
+  const result = await archiveRaw(ctx, archiveMatch.id!, reason);
   sendJson(res, 200, result);
   return;
 }
@@ -79,7 +86,7 @@ export async function handleSupersedeMemory({ req, res, opts }: RouteRequest, su
   if (!content) {
     throw new HttpError(400, 'content is required');
   }
-  const result = supersede(ctx, supersedeMatch.id!, content);
+  const result = await supersede(ctx, supersedeMatch.id!, content);
   sendJson(res, 200, result);
   return;
 }
@@ -95,7 +102,7 @@ export async function handlePromoteMemory({ req, res, opts }: RouteRequest, prom
 export async function handleForgetMemory({ req, res, opts }: RouteRequest, idMatch: Record<string, string>): Promise<void> {
   validateIdSegment(idMatch.id!, 'memory id');
   const ctx = await buildContextWithAuth(req, opts);
-  const result = forget(ctx, idMatch.id!);
+  const result = await forget(ctx, idMatch.id!);
   sendJson(res, 200, result);
   return;
 }
@@ -123,7 +130,7 @@ export async function handleApplyOutcome({ req, res, opts }: RouteRequest): Prom
     if (!idsRaw.every(isNonEmptyId)) {
       throw new HttpError(400, 'ids must be an array of non-empty strings');
     }
-    // v1.11.5: DoS cap on ids.length. Each id triggers ~3 DB ops (readEntry +
+    // DoS cap on ids.length. Each id triggers ~3 DB ops (readEntry +
     // writeEntry + appendAuditEvent). N=1000 keeps per-request work bounded
     // to sub-second wall time on SQLite hot path. Cap BEFORE buildContextWithAuth
     // so attack traffic doesn't pay the api-key lookup cost.
@@ -133,10 +140,12 @@ export async function handleApplyOutcome({ req, res, opts }: RouteRequest): Prom
     ids = idsRaw;
   }
   if (ids !== undefined) {
-    const { applied } = outcome(ctx, ids, good);
+    const { applied } = await outcome(ctx, ids, good);
     sendJson(res, 200, { applied });
   } else {
-    const result = outcomeForLastRecall(ctx, good);
+    // The last recall's ids live in hippo.db alone, so a client of another store must send the ids its recall returned.
+    if (ctx.store !== undefined && ctx.store.kind !== 'sqlite') throw new HttpError(501, 'this store keeps no last recall: send the ids your recall returned');
+    const result = await outcomeForLastRecall(ctx, good);
     sendJson(res, 200, result);
   }
   return;
@@ -151,8 +160,7 @@ export async function handleApplyOutcome({ req, res, opts }: RouteRequest): Prom
 // Tenant scope (Episode A follow-up tracked in TODOS.md): api.sleep operates
 // on the WHOLE hippoRoot (cross-tenant by design, matching CLI cmdSleep).
 // The loopback-only guard is the trust boundary today. Future non-loopback
-// serving must also zero the cross-tenant counters for other tenants
-// (D1 in docs/decisions/2026-05-24-blocked-items.md).
+// serving must also zero the cross-tenant counters for other tenants.
 export async function handleSleep({ req, res, opts }: RouteRequest): Promise<void> {
   // Defensive per-request loopback guard. Uses the canonical isLoopback()
   // helper above so any future extension (additional mapped/IPv6 forms,
@@ -161,7 +169,7 @@ export async function handleSleep({ req, res, opts }: RouteRequest): Promise<voi
   if (!isLoopback(req.socket.remoteAddress)) {
     throw new HttpError(403, '/v1/sleep is loopback-only (host-wide consolidation; see CHANGELOG v1.11.4)');
   }
-  // v1.12.0 A5 v2 sub-1: admin-role gate. Forward-defensive — exists today
+  // Admin-role gate. Forward-defensive: exists today
   // under loopback-only enforcement (loopback fallback is admin by default;
   // any Bearer-authed caller now carries an explicit role from the api_keys
   // row). When non-loopback serving lands, this gate is the actual auth
@@ -178,8 +186,8 @@ export async function handleSleep({ req, res, opts }: RouteRequest): Promise<voi
   if (noShareRaw !== undefined && !isJsonBoolean(noShareRaw)) {
     throw new HttpError(400, 'no_share must be a boolean');
   }
-  // v1.12.0: sleepCtx already built above for the admin-role gate; reuse.
-  const result = await sleep(sleepCtx, {
+  // sleepCtx already built above for the admin-role gate; reuse.
+  const result = await sleepInChild(sleepCtx, {
     dryRun: dryRunRaw === true,
     noShare: noShareRaw === true,
   });

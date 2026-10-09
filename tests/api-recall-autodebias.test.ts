@@ -1,7 +1,7 @@
 /**
  * J3.2 — api.recall integration with planningFallacyHint auto-injection.
  *
- * Asserts the orchestrator (computePlanningFallacyOutput) wires correctly
+ * Asserts the orchestrator (decidePlanningFallacy) wires correctly
  * through api.recall: hint populated only when ALL conditions met (env
  * != off, forward-claim match, class resolves uniquely, nClosed > 0).
  * Audit attribution flows from ctx.actor.subject -> inner
@@ -14,9 +14,9 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { recall, type Context } from '../src/api.js';
-import { savePrediction, closePrediction } from '../src/predictions/store.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { recall, type Context } from '../src/api/index.js';
+import { savePrediction, closePrediction } from '../src/store/predictions.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 function safeRmSync(p: string): void {
@@ -63,7 +63,7 @@ function lastAuditActor(root: string, op: string): string | null {
   }
 }
 
-describe('api.recall planningFallacyHint (J3.2, v0.32)', () => {
+describe('api.recall planningFallacyHint', () => {
   let root: string;
   beforeEach(() => {
     root = makeRoot('j32');

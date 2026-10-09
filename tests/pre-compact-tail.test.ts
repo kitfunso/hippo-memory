@@ -3,7 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { readTranscriptTail, truncateCodePointSafe } from '../src/transcript-tail.js';
+import { readTranscriptTail, truncateCodePointSafe } from '../src/util/transcript-tail.js';
 
 /**
  * Direct unit tests for readTranscriptTail's positional-read boundary
@@ -62,12 +62,21 @@ describe('readTranscriptTail boundary behavior (capBytes)', () => {
     const tail = readTranscriptTail(filePath, 30);
     expect(tail).toBe(lineA + lineB + lineC);
   });
+
+  it('an empty transcript reads as no text', () => {
+    fs.writeFileSync(filePath, '');
+    expect(readTranscriptTail(filePath, 15)).toBe('');
+  });
+
+  it('a missing transcript throws the system error, for the caller to log', () => {
+    expect(() => readTranscriptTail(path.join(dir, 'gone.jsonl'), 15)).toThrow(/ENOENT/);
+  });
 });
 
 /**
  * X2: truncateCodePointSafe must never split a surrogate pair at the cap.
  */
-describe('truncateCodePointSafe (X2)', () => {
+describe('truncateCodePointSafe', () => {
   it('backs off one unit when the cut point lands on a high surrogate', () => {
     const grinningFace = '😀'; // U+1F600, a surrogate pair
     const text = 'A'.repeat(9) + grinningFace; // length 11; index 9 is the high surrogate

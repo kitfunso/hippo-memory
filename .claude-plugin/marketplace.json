@@ -5,13 +5,13 @@
     "url": "https://github.com/kitfunso/hippo-memory"
   },
   "metadata": {
-    "description": "Hippo: a local-first memory layer for AI coding agents."
+    "description": "Make your agent's memory work like a brain. Hippo is long-term memory for coding agents."
   },
   "plugins": [
     {
       "name": "hippo-memory",
       "source": "./extensions/claude-code-plugin",
-      "description": "Memory that learns what is wrong and ranks it down. Session-start context, per-prompt pinned memories plus up to 5 that match the prompt, compaction snapshot and resume, error capture, session-end sleep.",
+      "description": "Make your agent's memory work like a brain. Hippo is long-term memory for coding agents.",
       "version": "0.6.1",
       "homepage": "https://github.com/kitfunso/hippo-memory",
       "license": "MIT"

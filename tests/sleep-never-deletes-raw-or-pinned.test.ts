@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Layer, type MemoryEntry } from '../src/memory.js';
+import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -12,11 +12,12 @@ import { readEntry, loadAllEntries } from '../src/store/entry-reads.js';
 import { deleteEntry, batchWriteAndDelete } from '../src/store/delete-and-batch.js';
 import { loadAllDirtySummaries } from '../src/store/summaries.js';
 import { consolidate } from '../src/consolidate/sleep.js';
-import { deduplicateStore } from '../src/dedupe.js';
-import { sleep, supersede, type Context } from '../src/api.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { queryAuditEvents } from '../src/audit.js';
-import { renderSleepResult } from '../src/cli/sleep.js';
+import { deduplicateStore } from '../src/consolidate/dedupe.js';
+import { sleep, supersede, type Context } from '../src/api/index.js';
+import { runSleep } from '../src/api/sleep-run.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { queryAuditEvents } from '../src/store/audit.js';
+import { sleepResultLines } from '../src/cli/sleep-render.js';
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
 const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });
@@ -52,7 +53,7 @@ afterEach(() => {
   for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true });
 });
 
-describe('C1: consolidate never deletes a raw row', () => {
+describe('consolidate never deletes a raw row', () => {
   it.each([false, true])('memoryValue.enabled=%s: the decayed raw row stays, the plain row goes', async (mv) => {
     const root = newRoot(JSON.stringify({ memoryValue: { enabled: mv } }));
     const raw = rawRow('slack message: the deploy moved to friday');
@@ -68,7 +69,7 @@ describe('C1: consolidate never deletes a raw row', () => {
   });
 });
 
-describe('H10: the sleep audit and dedup respect raw and pinned rows', () => {
+describe('the sleep audit and dedup respect raw and pinned rows', () => {
   it('audit deletes only the plain junk row and logs the caller and a reason', async () => {
     const root = newRoot();
     const raw = rawRow('yes!');
@@ -102,8 +103,8 @@ describe('H10: the sleep audit and dedup respect raw and pinned rows', () => {
 
     deduplicateStore(root);
 
-    expect(readEntry(root, keeper.id)).not.toBeNull();
-    expect(readEntry(root, pinnedCopy.id)).not.toBeNull();
+    expect(readEntry(root, keeper.id)?.content).toBe(CACHE_FACT);
+    expect(readEntry(root, pinnedCopy.id)).toMatchObject({ content: CACHE_FACT, pinned: true });
   });
 
   it('an automatic delete refuses a pinned or raw row; an explicit forget still deletes', () => {
@@ -124,9 +125,8 @@ describe('H10: the sleep audit and dedup respect raw and pinned rows', () => {
     writeEntry(root, pinned);
     const staleIssue = { memoryId: pinned.id, content: 'nope', severity: 'error' as const, reason: 'too short' };
 
-    const result = await sleep(ctxFor(root), {
-      noShare: true,
-      __phases: { auditMemories: () => ({ total: 1, clean: 0, issues: [staleIssue] }) },
+    const result = await runSleep(ctxFor(root), { noShare: true }, {
+      auditMemories: () => ({ total: 1, clean: 0, issues: [staleIssue] }),
     });
 
     expect(readEntry(root, pinned.id)).not.toBeNull();
@@ -147,21 +147,18 @@ describe('H10: the sleep audit and dedup respect raw and pinned rows', () => {
   });
 
   it('the dry-run render says "would" instead of "removed"', () => {
-    const lines: string[] = [];
-    vi.spyOn(console, 'log').mockImplementation((line: string) => { lines.push(line); });
-    renderSleepResult({
+    const out = sleepResultLines({
       active: 3, removed: 0, mergedEpisodic: 0, newSemantic: 0, dryRun: true, details: [],
       deduped: { removed: 1, semDups: 0, epiDups: 1, crossDups: 0 },
       audit: { errorsRemoved: 1, warningCount: 0 },
-    });
-    const out = lines.join('\n');
+    }).join('\n');
     expect(out).toContain('Would dedupe 1 duplicates');
     expect(out).toContain('Audit: would remove 1 junk memories');
     expect(out).not.toMatch(/Deduped|removed 1 junk/);
   });
 });
 
-describe('C1: a row changed while sleep awaits the LLM keeps the change', () => {
+describe('a row changed while sleep awaits the LLM keeps the change', () => {
   it('a mid-sleep pin, forget and supersede all survive the batch flush', async () => {
     const root = newRoot();
     const condemned = createMemory7('a fact that decays below the threshold by day sixty');

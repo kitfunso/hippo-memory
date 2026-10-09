@@ -171,7 +171,7 @@ function setupHippoStore(tmpDir, memories) {
   // stores.
   try {
     hippoCall(['init', '--no-hooks', '--no-schedule', '--no-learn'], { HIPPO_HOME: tmpDir }, undefined, tmpDir);
-  } catch (err) {
+  } catch {
     // Non-fatal: init may warn if already exists.
   }
   for (const m of memories) {
@@ -242,6 +242,20 @@ function aggregate(runs) {
     else cell.error++;
   }
   return byCell;
+}
+
+function summarizeCells(byCell) {
+  const summary = [];
+  for (const [key, cell] of byCell) {
+    const [model, profile, type] = key.split('|');
+    const n = cell.pass + cell.fail + cell.unclear + cell.error;
+    summary.push({
+      model, profile, type,
+      n, pass: cell.pass, fail: cell.fail, unclear: cell.unclear, error: cell.error,
+      passRate: n ? (cell.pass + 0.5 * cell.unclear) / n : 0,
+    });
+  }
+  return summary;
 }
 
 function printTable(byCell) {
@@ -321,16 +335,7 @@ async function main() {
   }
 
   const byCell = aggregate(runs);
-  const summary = [];
-  for (const [key, cell] of byCell) {
-    const [model, profile, type] = key.split('|');
-    const n = cell.pass + cell.fail + cell.unclear + cell.error;
-    summary.push({
-      model, profile, type,
-      n, pass: cell.pass, fail: cell.fail, unclear: cell.unclear, error: cell.error,
-      passRate: n ? (cell.pass + 0.5 * cell.unclear) / n : 0,
-    });
-  }
+  const summary = summarizeCells(byCell);
 
   const output = {
     corpus: CORPUS_PATH,

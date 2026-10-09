@@ -4,9 +4,9 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
-import { appendAuditEvent, listAuditEventsAfter, queryAuditEvents } from '../src/audit.js';
-import { pruneAuditLog } from '../src/audit-prune.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
+import { appendAuditEvent, listAuditEventsAfter, queryAuditEvents } from '../src/store/audit.js';
+import { pruneAuditLog } from '../src/cli/audit-prune.js';
 
 const INSERT_SQL =
   'INSERT INTO audit_log (ts, tenant_id, actor, op, target_id, metadata_json) VALUES (?, ?, ?, ?, ?, ?)';
@@ -115,7 +115,7 @@ describe('listAuditEventsAfter', () => {
     add('tenant-a', 4);
     const first = page(0, 3);
     const lastSeen = first[first.length - 1]!.id;
-    pruneAuditLog(db, { olderThanDays: 30, tenantId: 'tenant-a' });
+    pruneAuditLog(home, { olderThanDays: 30, tenantId: 'tenant-a' });
     const rest = listAuditEventsAfter(db, { afterId: lastSeen, limit: 100 });
     expect(rest.every((r) => r.id > lastSeen)).toBe(true);
     expect(new Set(rest.map((r) => r.id)).size).toBe(rest.length);

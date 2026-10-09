@@ -1,42 +1,38 @@
 // Read-only report verbs: status, inspect, tokens, failures, provenance, correction latency, doctor and support bundle.
 
-import { envHomeDir } from '../env.js';
-import { evalNow } from '../ablation.js';
+import { envHomeDir } from '../util/env.js';
+import { evalNow } from '../core/ablation.js';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import { fileURLToPath } from 'node:url';
-import { calculateStrength, calculateRewardFactor, resolveConfidence, confidenceFacets, Layer, type MemoryEntry } from '../memory.js';
+import { calculateStrength, calculateRewardFactor, resolveConfidence, confidenceFacets, Layer, type MemoryEntry } from '../core/memory.js';
 import { readEntry, loadAllEntries } from '../store/entry-reads.js';
 import { loadStats } from '../store/index-and-stats.js';
 import { listMemoryConflicts } from '../store/conflicts.js';
-import { loadEmbeddingIndex, embeddingModelRequiresReindex } from '../embeddings.js';
-import { resolveEmbeddingProvider } from '../embedding-provider.js';
-import { loadPhysicsState } from '../physics-state.js';
-import { computeSystemEnergy, vecNorm } from '../physics.js';
-import { loadConfig } from '../config.js';
-import { openHippoDb, closeHippoDb } from '../db.js';
+import { embeddingModelRequiresReindex } from '../store/embeddings/index.js';
+import { resolveEmbeddingProvider } from '../store/embeddings/provider.js';
+import { loadStoredParticles, storedVectorSummary } from '../store/vector-index.js';
+import { computeSystemEnergy, vecNorm } from '../core/physics.js';
+import { loadConfig } from '../core/config.js';
 import { runDoctor, formatDoctor } from '../doctor.js';
 import { buildSupportBundle, TAIL_MAX_LINES } from '../support-bundle.js';
-import { PACKAGE_VERSION } from '../version.js';
-import { FAILURE_LOG_RETENTION_DAYS } from '../failure-log.js';
-import { getGlobalRoot } from '../shared.js';
-import { buildProvenanceCoverage } from '../provenance-coverage.js';
-import { buildCorrectionLatency } from '../correction-latency.js';
-import * as api from '../api.js';
-import { resolveTenantId } from '../tenant.js';
+import { PACKAGE_VERSION } from '../util/version.js';
+import { FAILURE_LOG_RETENTION_DAYS } from '../store/failure-log.js';
+import { getGlobalRoot } from '../sharing/global-store.js';
+import { buildProvenanceCoverage } from './provenance-coverage.js';
+import { buildCorrectionLatency } from './correction-latency.js';
+import * as api from '../api/index.js';
+import { resolveTenantId } from '../store/tenant.js';
+import { errorMessage, log } from '../util/log.js';
 import { printError } from './output.js';
-import {
-  parseCountFlag,
-  requireInit,
-  fmt,
-  type CommandContext,
-  cardStringFlag,
-  hookStoreRoot,
-  resolveAuthRoot,
-} from './shared.js';
+import { parseCountFlag, type CommandContext, stringFlagOrExit, flagIsTrue } from './flag-values.js';
+import { requireInit, resolveAuthRoot } from './shared.js';
+import { fmt } from './print.js';
+import { hookStoreRoot } from './hook-runtime.js';
+import { DAY_MS } from '../util/time.js';
 
-export function cmdStatus(hippoRoot: string): void {
+export function handleStatus({ hippoRoot }: CommandContext): void {
   requireInit(hippoRoot);
 
   const entries = loadAllEntries(hippoRoot);
@@ -144,17 +140,17 @@ function printEmbeddingStatus(hippoRoot: string, entries: MemoryEntry[]): void {
   }
   // Show cached counts whenever vectors exist on disk (even when disabled or
   // the key was removed), so the user still sees what is already indexed.
-  const embIndex = loadEmbeddingIndex(hippoRoot);
-  if (!embAvail && Object.keys(embIndex).length === 0) return;
+  const { ids: embeddedIds, dims } = storedVectorSummary(hippoRoot);
+  if (!embAvail && embeddedIds.size === 0) return;
   const activeIds = new Set(entries.map((e) => e.id));
-  const activeEmbedded = Object.keys(embIndex).filter((id) => activeIds.has(id)).length;
-  const orphaned = Object.keys(embIndex).length - activeEmbedded;
-  const dims = Object.values(embIndex)[0]?.length;
+  const activeEmbedded = [...embeddedIds].filter((id) => activeIds.has(id)).length;
+  const orphaned = embeddedIds.size - activeEmbedded;
   let line = `Embedded:          ${activeEmbedded}/${entries.length} memories`;
   if (dims) line += ` (${dims}-dim)`;
   if (orphaned > 0) line += ` (${orphaned} orphaned, run \`hippo embed\` to prune)`;
   console.log(line);
-  if (embeddingModelRequiresReindex(hippoRoot, embedProvider.id, embIndex)) {
+  // No index argument: the check then asks SQLite whether any vector exists instead of loading them.
+  if (embeddingModelRequiresReindex(hippoRoot, embedProvider.id)) {
     console.log(`                   model changed, run \`hippo embed\` to reindex`);
   }
 }
@@ -162,29 +158,19 @@ function printEmbeddingStatus(hippoRoot: string, entries: MemoryEntry[]): void {
 // Physics status
 function printPhysicsStatus(hippoRoot: string): void {
   try {
-    const db = openHippoDb(hippoRoot);
-    try {
-      const physicsMap = loadPhysicsState(db);
-      if (physicsMap.size > 0) {
-        const particles = Array.from(physicsMap.values());
-        const physConfig = loadConfig(hippoRoot);
-        const energy = computeSystemEnergy(particles, physConfig.physics.G_memory);
-        let sumVelMag = 0;
-        let maxVelMag = 0;
-        for (const p of particles) {
-          const mag = vecNorm(p.velocity);
-          sumVelMag += mag;
-          if (mag > maxVelMag) maxVelMag = mag;
-        }
-        const avgVelMag = sumVelMag / particles.length;
-        console.log('');
-        console.log(`Physics: ${particles.length} particles, energy: ${fmt(energy.total, 4)} (KE: ${fmt(energy.kinetic, 4)}, PE: ${fmt(energy.potential, 4)}), avg vel: ${fmt(avgVelMag, 4)}`);
-      }
-    } finally {
-      closeHippoDb(db);
+    const particles = loadStoredParticles(hippoRoot);
+    if (particles.length > 0) {
+      const physConfig = loadConfig(hippoRoot);
+      const energy = computeSystemEnergy(particles, physConfig.physics.G_memory);
+      let sumVelMag = 0;
+      for (const p of particles) sumVelMag += vecNorm(p.velocity);
+      const avgVelMag = sumVelMag / particles.length;
+      console.log('');
+      console.log(`Physics: ${particles.length} particles, energy: ${fmt(energy.total, 4)} (KE: ${fmt(energy.kinetic, 4)}, PE: ${fmt(energy.potential, 4)}), avg vel: ${fmt(avgVelMag, 4)}`);
     }
-  } catch {
-    // Physics table may not exist yet — degrade gracefully
+  } catch (err) {
+    // The physics table may not exist yet, so status prints without that line.
+    log.debug(`physics status skipped: ${errorMessage(err)}`);
   }
 }
 
@@ -201,8 +187,8 @@ function cmdInspect(hippoRoot: string, id: string): void {
   const currentStrength = calculateStrength(entry, now);
   const lastRetrieved = new Date(entry.last_retrieved);
   const created = new Date(entry.created);
-  const ageDays = (now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24);
-  const daysSince = (now.getTime() - lastRetrieved.getTime()) / (1000 * 60 * 60 * 24);
+  const ageDays = (now.getTime() - created.getTime()) / DAY_MS;
+  const daysSince = (now.getTime() - lastRetrieved.getTime()) / DAY_MS;
 
   const effectiveConfidence = resolveConfidence(entry, now);
 
@@ -236,16 +222,13 @@ function cmdInspect(hippoRoot: string, id: string): void {
 }
 
 /**
- * `hippo tokens [--days <n>] [--json] [--global]`: the token ledger
- * (ROADMAP TE0). Tokens of memory text handed to agents per surface, blocks
- * the per-prompt hook skipped as unchanged (TE2) and the tokens that saved,
+ * `hippo tokens [--days <n>] [--json] [--global]`: the token ledger.
+ * Tokens of memory text handed to agents per surface, blocks
+ * the per-prompt hook skipped as unchanged and the tokens that saved,
  * and the hook blocks' tokens later model calls re-read, counted when each session ends.
  * Counts are estimates (characters / 4), the same estimate every budget uses.
  */
-export function cmdTokens(
-  hippoRoot: string,
-  flags: Record<string, string | boolean | string[]>,
-): void {
+export function handleTokens({ hippoRoot, flags }: CommandContext): void {
   const root = resolveAuthRoot(hippoRoot, flags);
   const ctx: api.Context = {
     hippoRoot: root,
@@ -287,11 +270,8 @@ export function cmdTokens(
   console.log("  Re-reads usually bill at the provider's cached-input rate, a fraction of the full input price.");
 }
 
-/** `hippo failures [--days <n>] [--json] [--global]`: failed tool calls by outcome, and repeats across sessions (CD13). */
-export function cmdFailures(
-  hippoRoot: string,
-  flags: Record<string, string | boolean | string[]>,
-): void {
+/** `hippo failures [--days <n>] [--json] [--global]`: failed tool calls by outcome, and repeats across sessions. */
+export function handleFailures({ hippoRoot, flags }: CommandContext): void {
   // The store the capture-error hook writes to; a report never creates one.
   const root = flags['global'] ? getGlobalRoot() : hookStoreRoot(hippoRoot);
   requireInit(root);
@@ -325,7 +305,7 @@ export function cmdFailures(
   for (const [label, count, note] of rows) {
     console.log(`  ${label.padEnd(13)}${String(count).padStart(6)}  ${note}`.trimEnd());
   }
-  // Counts, not a rate: a share means little without a holdout arm to compare against (CD11).
+  // Counts, not a rate: a share means little without a holdout arm to compare against.
   if (summary.rated > 0) {
     const noSession = errors - summary.rated;
     const unrated = noSession > 0 ? ` ${noSession} more had no session id.` : '';
@@ -390,12 +370,12 @@ export function handleDoctor({ flags }: CommandContext): void {
 }
 
 export function handleSupportBundle({ flags }: CommandContext): void {
-  const outFlag = cardStringFlag(flags, 'out');
+  const outFlag = stringFlagOrExit(flags, 'out');
   if (outFlag === '') {
     printError('--out requires a file path.');
     process.exit(1);
   }
-  const includeLogs = flags['include-logs'] === true;
+  const includeLogs = flagIsTrue(flags, 'include-logs');
   const home = envHomeDir() || os.homedir();
   const now = new Date();
   const bundle = buildSupportBundle({ cwd: process.cwd(), home, version: PACKAGE_VERSION, includeLogs, now });
@@ -408,7 +388,7 @@ export function handleSupportBundle({ flags }: CommandContext): void {
     if (err instanceof Error && 'code' in err && err.code === 'EEXIST') {
       printError(`${file} already exists; pass --out to choose another file. Nothing was written.`);
     } else {
-      printError(err instanceof Error ? err.message : String(err));
+      printError(errorMessage(err));
     }
     process.exit(1);
   }

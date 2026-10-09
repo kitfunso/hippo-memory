@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { mrr, recallAtK, ndcgAtK, runEval, bootstrapCorpus, compareSummaries } from '../src/eval.js';
-import type { EvalSummary } from '../src/eval.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { mrr, recallAtK, ndcgAtK, runEval, bootstrapCorpus, compareSummaries } from '../src/eval/eval.js';
+import type { EvalSummary } from '../src/eval/eval.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 
 // ---------------------------------------------------------------------------
 // Metric math — hand-computed expected values

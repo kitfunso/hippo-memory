@@ -1,0 +1,8 @@
+{
+  "stdin": "not json at all",
+  "timedOut": false,
+  "expect": {
+    "status": "skipped",
+    "reason": "not a VS Code Stop payload (no snake_case hook_event_name \"Stop\")"
+  }
+}

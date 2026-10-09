@@ -23,6 +23,10 @@
 >
 > **2026-10-04 the #1 answer:** Part XXIII, Track HG aims to make hippo the answer to "the most effective and performant memory architecture for agents (validated in production) that understands temporality and supports dreaming." It scores hippo on outcome benchmarks (DreamBench-SWE, MemoryArena, Evo-Memory, MemoryAgentBench conflict resolution), never on retrieval QA, and adds HG1 dreaming that improves outcomes, HG2 event time, HG3 the outcome-benchmark runs with cost per solved task, and HG4 a production evidence ledger. A claim gate page must exist before anyone names hippo in reply. Z0 priority and frozen defaults remain.
 >
+> **2026-10-08 lessons from graded work:** Part XXIV records a review of an outside 25-proposal document and of Harvey's reported wake-sleep experiment (figures unverified). It adds one research item, SI6: an opt-in sleep stage that compiles lessons only from work with an independent grade, tested on Z0's development families against shipping hippo, a plain memory of each failed check and a fixed checklist. The review's other themes map to existing items or are not adopted. Z0 priority, S4's hygiene default, frozen defaults and locked registrations remain.
+>
+> **2026-10-09 admin console:** Part XXV, Track AC plans a served, SSO-gated admin console in hippo-enterprise for the head of AI platform. It turns CD6's and CD12's report files into live pages served by a separate console process, which is a confidential OIDC client with server-side sessions. It starts read-only, adds actions behind a fresh sign-in, and changes no agent-facing API. It is planned for after the first partner's security review and does not block a pilot.
+>
 > `PLAN.md` remains the architecture and CLS-principles document. `RESEARCH.md` remains the research lineage and seven-mechanisms backgrounder.
 
 ## Current execution index
@@ -39,7 +43,7 @@
 | Next, 4 | EI2/EI10/EV1/EI11/EV6-EV9; required source adapters; EI15/CD11-CD14 | Deliver governed, low-touch memory and customer-defined value in an enterprise pilot | Scope one partner, required sources, identity provider and deployment. Close applicable access/derivation/revocation gates; configure one objective/metric contract and join permitted outcomes through Z10/Z2b. Include developer and administrator burden. Computer is not a prerequisite. | Keith; enterprise maintainer; customer administrator |
 | Next, 5; bounded development can accompany Now | CLF0/CLF1/CLF4/CLF12; CAE0-CAE4 | Improve a specific memory decision without unpredictable costs or recurring backend management | First compare one role at matched eligible candidates/input bounds against native and applicable Jev/local baselines, with quota controls and native fallback. Complete supported-surface conformance and independent task confirmation before adoption; extend all accepted CLEF roles one at a time. | Decision-layer/evaluation maintainer |
 | Alongside all priorities | MSG1-MSG6; canonical product facts; CAE6/CAE7; HG4 maintainer row; K8.6/CD10 registry submission (needs Keith's yes) | Give users consistent capability, setup, edition and evidence information | Correct current source copy, check roadmap IDs/references and affected tool contracts, then verify the tagged package, actual npm listing and deployed website through their release processes. A source commit is not publication evidence. | Product/release maintainer |
-| Later or separately gated research | Wider CLF rollout/private serving; CAE9; optional CW; S2/S8 where justified; HG3 outcome-benchmark runs after Z0 stage 0, then the HG claim gate; LC4/Track G and grant research | Retain optional capabilities only when they improve useful outcomes or total burden against simpler baselines | Keep required runtime coverage visible; register role-specific comparisons, data floors, deployment/permission checks and retain/reject decisions. No provider, learning system or agent dispatcher becomes required for ordinary memory. | Relevant track maintainer; Keith |
+| Later or separately gated research | Wider CLF rollout/private serving; CAE9; optional CW; S2/S8 where justified; HG3 outcome-benchmark runs after Z0 stage 0, then the HG claim gate; SI6 graded-work lessons after Z0 stage 2; LC4/Track G and grant research; AC0-AC3/AC8 admin console after the first partner security review | Retain optional capabilities only when they improve useful outcomes or total burden against simpler baselines | Keep required runtime coverage visible; register role-specific comparisons, data floors, deployment/permission checks and retain/reject decisions. No provider, learning system or agent dispatcher becomes required for ordinary memory. | Relevant track maintainer; Keith |
 
 **Operating rule.** Prefer one complete memory loop and a small number of bounded experiments over opening every track simultaneously. Engineering fixtures and development prototypes can proceed alongside Z0 prerequisites; task-benefit/default claims retain their independent gates. Measure repeat mistakes, quality, correction/supervision burden, total cost and latency. Simulated intervention counts are proxies; active human time needs its own registered pilot. Historical benchmark scores do not establish these outcomes.
 
@@ -285,9 +289,9 @@ API keys + audit log of every read/write/promote/supersede. Tenant scoping added
 **v2 sub-2 next (next minor):** L9 background pipelines tenant-scoping across 8 files (`consolidate.ts`, `embeddings.ts`, `invalidation.ts`, `refine-llm.ts`, `autolearn.ts`, `capture.ts`, `importers.ts`, `shared.ts`). Closes the unscoped `readEntry` / `loadSearchEntries` residue from v1.11.0; unblocked by sub-1's Actor shape.
 **v2 deferred to TODOS.md:** `hippo auth create-key --role` CLI flag (programmatic API works); `hippo auth list` role column display; `auth create`/`list` are unauthenticated locally (FS access is the trust boundary); audit-log retention/rotation; SSO/SCIM; OAuth scoped tokens; full multi-tenant org > team > project > scope hierarchy.
 
-### A6. Postgres backend [planned]
-For shared deployments only. SQLite stays the local default.
-**Effort:** 3-4w. **Success:** `--db postgres://...` boots; eval suites pass; concurrent-write smoke test green.
+### A6. Postgres backend [in progress: recall port shipped in 1.65.0]
+For shared deployments only. SQLite stays the local default. The Postgres store lives in hippo-enterprise and plugs into core's store port; recall reads and writes go through that port since 1.65.0 (#515).
+**Effort:** the parity program is 54 PRs, about 37,250 lines with tests; the pilot cut is 26 PRs, about 15,350 lines. **Success:** `--db postgres://...` boots; eval suites pass; concurrent-write smoke test green.
 
 ### A7. Observability [partial: audit + rate-limit shipped; dashboard pending]
 Per-query cost, retrieval traces, decay/strengthening rates, conflict counts, sleep-cycle metrics.
@@ -412,7 +416,7 @@ Do ACC + vmPFC + dlPFC + vlPFC + OFC compound or interfere when all on?
 RESEARCH §"AI Pineal Gland". Three components.
 
 ### C1. Salience gate v1 [shipped]
-Basic novelty + tag-class scoring (`src/salience.ts`). Commit ref `50528a5` no longer resolves in current history (pre-squash SHA; the CHANGELOG v0.2x entry cites the same dead pointer). v2 shipped as the `--salience-threshold` recall flag.
+Basic novelty + tag-class scoring (`src/core/salience.ts`). Commit ref `50528a5` no longer resolves in current history (pre-squash SHA; the CHANGELOG v0.2x entry cites the same dead pointer). v2 shipped as the `--salience-threshold` recall flag.
 
 ### C2. Salience gate v3 [next]
 Physics-energy ambient state injected as scalar; salience tied to ambient delta. **Salience decides promotion (raw → distilled), not receipt capture.** Raw layer remains append-only per RESEARCH §"Phase 1" — every receipt is captured; salience controls whether the receipt promotes to consolidated state during `hippo sleep`.
@@ -624,10 +628,10 @@ Five abilities mapped to hippo features:
 
 - **F8 hybrid tuning** (`docs/evals/2026-05-11-r5-track1-tuning-result.md`): 28-run staged sweep over `embeddingWeight`, `mmrLambda`, `budget`, `min-results`. Gate-A PASS (28/28 runs). Gate-B FAIL: best R@5 = 76.8 vs threshold 77.6 (baseline + 2pp). Descriptive only.
 - **F9 v2 sub-agent LLM rerank** (`docs/evals/2026-05-11-r5-track2-cross-encoder-result.md`, the cross-encoder substitute): 50 sub-agent dispatches reranking top-20 candidates per query. Gate-A PASS (500/500 differing orderings). Gate-B FAIL: R@5 = 78.0 vs threshold 80.6 (baseline + 5pp). R@1 moves from 50.0 to 59.4. Descriptive only; no retraction (cross-encoder code path unexercised).
-- **F11 embedding upgrade to BGE-base** (`docs/evals/2026-05-11-r5-track4-embedding-upgrade-result.md`): vendored `BAAI/bge-base-en-v1.5` from Qdrant fastembed GCS, added `poolingFor` per-model dispatch in `src/embeddings.ts`. Gate-A PASS (940 × 768 × L2-normalised). Gate-B FAIL: R@5 = 77.0 vs threshold 81.8 (F8 best + 5pp). MiniLM remains default; descriptive only.
+- **F11 embedding upgrade to BGE-base** (`docs/evals/2026-05-11-r5-track4-embedding-upgrade-result.md`): vendored `BAAI/bge-base-en-v1.5` from Qdrant fastembed GCS, added `poolingFor` per-model dispatch in `src/store/embeddings/index.ts`. Gate-A PASS (940 × 768 × L2-normalised). Gate-B FAIL: R@5 = 77.0 vs threshold 81.8 (F8 best + 5pp). MiniLM remains default; descriptive only.
 - **F10 richer ingest** (`docs/evals/2026-05-11-r5-track3-richer-ingest-result.md`): 19 Claude-sub-agent invocations populated entry-level signals for all 940 LongMemEval sessions. Gate-A PASS (100% any-field non-default; 3/5 fields ≥ 50% per-field coverage). Gate-B FAIL: features-enriched R@5 = 59.2 vs features-default R@5 = 75.8 (same bge-base embedding model), 21.6pp short of the +5pp threshold. **HARD RETRACTION triggered in v1.9.1:** `src/rerankers/features.ts` + test + micro-fixture + dispatcher case removed.
 - **F11 + F9 rerank stack** (exploratory follow-up appended to F11 result doc 2026-05-11): 50 sub-agent LLM rerank invocations against the bge-base top-20 candidate pool. Gate-A PASS (500/500 differing orderings). Gate-B FAIL @ 81.8 with R@5 = 78.2; new cross-track best with margin 0.2 over F9 v2 (78.0). The two strongest standalone mechanisms (sub-agent rerank, BGE-base) move R@5 in similar directions; cross-track best of 78.2 still falls 6.8pp short of the 85% roadmap target.
-- **F12 multilingual-e5-large + top-100 + F9** (`docs/evals/2026-05-11-r5-track5-e5-large-top100-result.md`): vendored `intfloat/multilingual-e5-large` from the Qdrant fastembed GCS, added `prefixFor` (e5 "query: " / "passage: " convention) and `preferredBackend` (@xenova/transformers v2.17 cannot load multilingual-e5-large's ONNX external-data format; @huggingface/transformers v4 fork can) dispatch helpers to `src/embeddings.ts`. Widened candidate pool to top-100. Gate-A PASS. Gate-B FAIL @ 83.2 with best variant (F12 + F9 stack) R@5 = 78.8 (margin 0.6 over F11+F9). **HARD RETRACTION executed:** the `hippo_store2/` embedding index reverted to BGE-base, dispatch helpers retained in `src/` per the prereg's dispatch-shape carve-out. The vendored e5-large weights remain on-disk under `benchmarks/longmemeval/data/model-cache/` (gitignored) for follow-up tracks.
+- **F12 multilingual-e5-large + top-100 + F9** (`docs/evals/2026-05-11-r5-track5-e5-large-top100-result.md`): vendored `intfloat/multilingual-e5-large` from the Qdrant fastembed GCS, added `prefixFor` (e5 "query: " / "passage: " convention) and `preferredBackend` (@xenova/transformers v2.17 cannot load multilingual-e5-large's ONNX external-data format; @huggingface/transformers v4 fork can) dispatch helpers to `src/store/embeddings/index.ts`. Widened candidate pool to top-100. Gate-A PASS. Gate-B FAIL @ 83.2 with best variant (F12 + F9 stack) R@5 = 78.8 (margin 0.6 over F11+F9). **HARD RETRACTION executed:** the `hippo_store2/` embedding index reverted to BGE-base, dispatch helpers retained in `src/` per the prereg's dispatch-shape carve-out. The vendored e5-large weights remain on-disk under `benchmarks/longmemeval/data/model-cache/` (gitignored) for follow-up tracks.
 - **F13 chunk-per-turn ingestion** (`docs/evals/2026-05-12-r5-track6-chunk-per-turn-result.md`): the structural lever the prior tracks all missed. Every prior track embedded each 14,292-char-median session as a single 512-token-truncated vector, throwing away 80–90% of the content (including the answer-bearing turn in ~84% of queries). F13 embeds each turn separately (10,866 turns over the 940 oracle sessions) and max-pools by `session_id` at retrieval time. Gate-A PASS (turn count in range, dim 768, all 940 sessions covered). **Gate-B PASS @ 83.2 with F13 + F9 sub-agent rerank stack R@5 = 86.8** (margin 3.6 over Gate-B). Per-K: R@1 = 70.8, R@3 = 84.2, R@5 = 86.8, R@10 = 90.2, R@20 = 93.4. The F9 reranker captured 7.8 / 14.4 = 54 % of the F13 baseline's top-20 headroom on focused 500-char turns, vs ~7–10 % capture on unfocused 14,000-char session-level inputs in F11+F9 / F12+F9. No `src/` changes; F13 is implemented as `benchmarks/longmemeval/chunk_per_turn_{embed,retrieve}.mjs` and reuses F11/F12's dispatch helpers.
 - **F14 chunk-per-turn pipeline on `_s` split** (`docs/evals/2026-05-12-r5-track7-s-split-result.md`): the first F-track measurement against gbrain v0.28.8's split rather than the easier `oracle` (~48 sessions per haystack, 19,195 unique sessions, 500 questions). Source data re-acquired via `Sanderhoff-alt/longmemeval-zh` GitHub mirror (SHA-256 d6f21ea9d..., 500/500 question_id match with oracle, no signed chain-of-custody to canonical HF release). Gate-A PASS (199,509 turns indexed across all 19,195 sessions, dim 768, L2-norms in [0.999999, 1.000000], session_id tag coverage 19,195/19,195). Gate-B FAIL @ 97.7 with F14 + F9 stack R@5 = 50.8 (F14 baseline alone = 42.0). Shortfall 46.9pp dominated by the embedder: gbrain's own ablation shows their pure-vector adapter (text-embedding-3-large alone) at R@5 = 97.40 vs their hybrid+RRF at 97.60 — a 0.2-point top-up over the embedder. F14's BGE-base baseline (42.0) sits between gbrain's BM25-only (19.80) and gbrain's vector-only (97.40), consistent with BGE-base being meaningfully better-than-keyword but qualitatively below text-embedding-3-large at this distractor density. **HARD RETRACTION executed:** `data/lme_s/` (265 MB) and `benchmarks/longmemeval/data/turn_index_bge_s.json.jsonl` (3.3 GiB) deleted; CHANGELOG/README/ROADMAP/RETRACTION canonical docs NOT updated; result doc retained as negative-result audit trail. Cleanest scaling measurement produced: F13 vs F14 (same pipeline, same embedder, oracle vs `_s`) shows R@5 collapses 86.8 → 50.8 under a 16x increase in distractors per haystack.
 - **F15 stronger sub-agent rerank on top-100** (`docs/evals/2026-05-12-r5-track8-subagent-rerank-result.md`): originally registered as a neural cross-encoder rerank (commits `e4525b6`/`8a88880`); the cross-encoder spike (Task 4 of the impl plan) discovered the sandbox egress allowlist denies all HF endpoints + all HF mirrors AND the Qdrant fastembed GCS bucket carries embedding models only (verified by reading `fastembed/rerank/cross_encoder/` source: every reranker has `sources={'hf':'...', 'url': None}`). Pivoted to a maximally-equipped LLM-as-reranker mechanism (commit `458f006`): Claude Opus 4.7 vs F9's Sonnet, top-100 pool vs F9's top-20, 1000-char context vs F9's 600, structured rubric (topical-match + evidence-specificity + recency-of-claim) vs F9's "rank these", 100 dispatches vs F9's 50. Gate-A PASS (500/500 permutation-invariant + tags-intact + dispatch-success; 64.6% top-1 changes vs F14 baseline). **Gate-B FAIL @ 97.7 with F15 R@5 = 63.6 (shortfall 34.1pp)**, pre-acknowledged as the expected outcome per the prereg's structural-ceiling clause (F14's R@100 = 86.2 is the absolute upper bound on any rerank over the F14 pool; 86.2 < 97.7 by design). Mechanism finding: F15 closes 21.6 of the 44.2-point within-pool ranking gap (48.9% closure) vs F9's 8.8 points (19.9% closure) — a maximally-equipped LLM-as-reranker closes ~2.5× as much of the within-pool gap as F9 on the same candidate pool. Per-type gains over F14+F9 stack concentrated in `single-session-user` (+20.0pp), `temporal-reasoning` (+18.8pp), `multi-session` (+12.0pp). **HARD RETRACTION executed:** `data/lme_s/` (265 MB), `results/f15_subagent_rerank/` (28 MB), `/tmp/rerank_f15_batches/` + `/tmp/rerank_f15_outputs/` (33 MB) deleted; CHANGELOG/README/ROADMAP/RETRACTION canonical docs NOT updated; result doc retained as negative-result audit trail (commit `2b2edd2`). Path to clearing Gate-B remains F15+F16 combined (rerank on top of a stronger bi-encoder lifting R@100 closer to 100); F16 attacks the structural bottleneck F15 demonstrated. Neural cross-encoder track still queued conditional on HF egress widening or a user-supplied model tarball.
@@ -662,7 +666,7 @@ RESEARCH §"Near-term 1". 50-task / 10-trap standardised sequence. Compares no-m
 
 ### F9. Hybrid-retrieval parity + competitive consolidation [shipped 2026-05-20, Gate-B FAIL on _s]
 
-**Status update 2026-05-23:** SHIPPED via PR #27 (`feat/f9-hybrid-retrieval-parity`, 7 commits ab6c5eb..bd921b1). Phase 1 oracle: best `turn_asym` R@5=82.0 (+3.0 over dense-only 79.0); all 4 hybrid cells lift. Phase 2 `_s`: Gate-B FAIL @ 97.7 with best `turn_sym` R@5=50.8 (vs F14 baseline 41.0, +9.8 lift; ties F14+F9-Sonnet stack at zero LLM/API cost). HARD RETRACTION executed on artifacts per prereg discipline (`data/lme_s/` deleted, BM25 corpora deleted); result doc `docs/evals/2026-05-20-f9-hybrid-rrf-result.md` retained as negative-result audit trail. `src/rrf.ts` extracted from `src/search.ts` (behaviour-preserving refactor, commit 43966c5). `benchmarks/longmemeval/chunk_per_turn_bm25_index.mjs` + `chunk_per_turn_hybrid_retrieve.mjs` shipped (commit c62df66). **Mechanism finding:** local hybrid fusion is the strongest locally-runnable lever measured — same R@5 as Sonnet rerank at zero inference cost. **Structural finding:** the locally-runnable BGE-base embedder is the `_s` ceiling, not the signal mix (corroborates F16). Path to clearing Gate-B on `_s` remains F17 (`text-embedding-3-large`, blocked on `api.openai.com` egress) or F9-on-top-of-richer-pool. Below is the original 2026-05-16 framing kept for historical context.
+**Status update 2026-05-23:** SHIPPED via PR #27 (`feat/f9-hybrid-retrieval-parity`, 7 commits ab6c5eb..bd921b1). Phase 1 oracle: best `turn_asym` R@5=82.0 (+3.0 over dense-only 79.0); all 4 hybrid cells lift. Phase 2 `_s`: Gate-B FAIL @ 97.7 with best `turn_sym` R@5=50.8 (vs F14 baseline 41.0, +9.8 lift; ties F14+F9-Sonnet stack at zero LLM/API cost). HARD RETRACTION executed on artifacts per prereg discipline (`data/lme_s/` deleted, BM25 corpora deleted); result doc `docs/evals/2026-05-20-f9-hybrid-rrf-result.md` retained as negative-result audit trail. `src/search/rrf.ts` extracted from `src/search.ts` (behaviour-preserving refactor, commit 43966c5). `benchmarks/longmemeval/chunk_per_turn_bm25_index.mjs` + `chunk_per_turn_hybrid_retrieve.mjs` shipped (commit c62df66). **Mechanism finding:** local hybrid fusion is the strongest locally-runnable lever measured — same R@5 as Sonnet rerank at zero inference cost. **Structural finding:** the locally-runnable BGE-base embedder is the `_s` ceiling, not the signal mix (corroborates F16). Path to clearing Gate-B on `_s` remains F17 (`text-embedding-3-large`, blocked on `api.openai.com` egress) or F9-on-top-of-richer-pool. Below is the original 2026-05-16 framing kept for historical context.
 
 Triggered by a 2026-05-16 review of `rohitg00/agentmemory` (GitHub), an open agent-memory project that overlaps hippo's concept space heavily: SQLite-local, MCP-first, sleep-tiered 4-stage consolidation (Working→Episodic→Semantic→Procedural), write-time secret-scrubbing. Its README claims **95.2 % R@5 on LongMemEval-S** via **triple-stream retrieval** — BM25 + dense vector + knowledge-graph traversal, fused with Reciprocal Rank Fusion (RRF, k=60) and session-level diversification. These are the project's own README claims, unverified by hippo — treat as directional, not established.
 
@@ -789,7 +793,7 @@ Track J ships *soft warnings* on `RecallResult`: C5 `suppressionSummary` (v1.13.
 
 ### J2. Availability-bias detector [shipped v1.14.0]
 Flag when top-K is dominated by recent entries (>70% in last 24h) on a query class whose historical answers have averaged older. Uses tag-class base rates from `audit_log`. **Effort:** 4d. **Success:** on the LongMemEval temporal-reasoning slice, fires on queries whose correct-answer `created` predates top-K median by >X days at >70% precision.
-**Shipped v1.14.0** as Framing B+: compares the returned top-K age distribution against the same query's MATCHED candidate pool (`src/availability.ts` `detectAvailabilityBias`), soft warning only on `RecallResult.availabilityHint`, per-pipeline. The `audit_log` tag-class historical-answer-age base rate is deferred to follow-up J2.2 (cold-start + complexity; mirrors J3.1 -> J3.2 incremental shipping).
+**Shipped v1.14.0** as Framing B+: compares the returned top-K age distribution against the same query's MATCHED candidate pool (`src/api/availability.ts` `detectAvailabilityBias`), soft warning only on `RecallResult.availabilityHint`, per-pipeline. The `audit_log` tag-class historical-answer-age base rate is deferred to follow-up J2.2 (cold-start + complexity; mirrors J3.1 -> J3.2 incremental shipping).
 
 ### J4. Substitution detector [research]
 Detect when an agent's recall query is a heuristic substitute for the harder question being asked. Concretely: query embedding is >cos 0.4 from any cluster centroid but a high-strength fast-path hit exists at a different abstraction -- flag that the agent may be answering an easier related question. **Pre-req:** C4 fast-path. **Effort:** TBD. **Success:** human-labeled accuracy on a 100-query substitution test set >65% precision.
@@ -828,7 +832,7 @@ Extend `src/importers.ts` (already imports ChatGPT/Claude/Cursor/generic-md) wit
 **Effort:** 6-8d. **Success:** a per-dialect fixture vault (Obsidian, Foam, Dendron) each imports with ≥95% notes as raw + full provenance and no parser crash on dialect-specific syntax; re-import idempotent (0 dups); deleting a note invalidates its memory; wikilinks surface as E3.1 relation candidates at the next sleep.
 
 ### K2. Consolidated-graph → markdown + JSON Canvas exporter [planned, blocked-on-E3.1]
-New read-only consumer of the E3 substrate (mirrors `src/graph-recall.ts`). Walks `entities`/`relations`, emits one `.md` per entity with `[[wikilinks]]` to neighbours + a `graph.canvas` for the visual graph. **Why blocked-on-E3.1, not [next]:** today the graph holds only `supersedes` edges (see `graph-recall.ts`), so a real knowledge-graph export needs E3.1's cross-object edges (owns/depends-on/blocked-by/references) first — the "knowledge-graph connection" is only as rich as E3.1's extraction. Split accordingly: **K2a thin supersession-export** (doable now, low value) vs **K2b full PKM graph export** (after E3.1, the actual deliverable).
+New read-only consumer of the E3 substrate (mirrors `src/graph/recall.ts`). Walks `entities`/`relations`, emits one `.md` per entity with `[[wikilinks]]` to neighbours + a `graph.canvas` for the visual graph. **Why blocked-on-E3.1, not [next]:** today the graph holds only `supersedes` edges (see `graph-recall.ts`), so a real knowledge-graph export needs E3.1's cross-object edges (owns/depends-on/blocked-by/references) first — the "knowledge-graph connection" is only as rich as E3.1's extraction. Split accordingly: **K2a thin supersession-export** (doable now, low value) vs **K2b full PKM graph export** (after E3.1, the actual deliverable).
 **Effort:** 5-7d (K2b). **Success:** the exported `graph.canvas` edge set exactly equals tenant X's consolidated `relations` rows (zero raw-source rows, E3.3 guard test); idempotent re-export; opens in Obsidian with the graph visible.
 
 ### K3. Obsidian Local REST API live adapter [planned]
@@ -858,7 +862,7 @@ A recurring question: should hippo adopt "latent memory" as a new layer, or as i
 
 **What "latent memory" means (verified).** A spectrum, not one thing: (1) **vector/embedding** memory — external store, lossy-encode but inspectable via the source text, rebuildable; (2) **KV-cache** memory — lives in GPU RAM, opaque, rebuildable by replay; (3) **parametric/test-time** memory written to weights/fast-weights — opaque, lossy, not cleanly rebuildable: **Titans** (Behrouz et al., Google, arXiv 2501.00663), **Memory Layers at Scale** (Meta FAIR, arXiv 2412.09764, ICLR'25); (4) **distilled-KV cartridges** — trained KV, opaque, rebuildable by re-distill: **Cartridges** (Stanford Hazy, arXiv 2506.06266); (5) **neural memory modules** — NTM lineage (arXiv 1410.5401), **Larimar** (IBM+Princeton, arXiv 2403.11901), **Memory³** (arXiv 2407.01178), **Memorizing Transformers** (arXiv 2203.08913), **RMT** (arXiv 2207.06881).
 
-**What hippo already has.** The *weak* form is shipped: recall is hybrid BM25 + BGE-base dense vectors fused with RRF (`src/rrf.ts`, F-track) — a **derived embedding index over the markdown of record**. So "add latent memory as a layer," in the vector sense, is done. The live question is the *strong* forms (KV/parametric/cartridge): substrate or layer?
+**What hippo already has.** The *weak* form is shipped: recall is hybrid BM25 + BGE-base dense vectors fused with RRF (`src/search/rrf.ts`, F-track) — a **derived embedding index over the markdown of record**. So "add latent memory as a layer," in the vector sense, is done. The live question is the *strong* forms (KV/parametric/cartridge): substrate or layer?
 
 ### The debate
 
@@ -876,7 +880,7 @@ A recurring question: should hippo adopt "latent memory" as a new layer, or as i
 - **Rule 3 — latent forms that cannot be made rebuildable-from-symbolic-state** (parametric memory written to weights) do not enter the product; they live in Track G research only.
 
 #### L1. Graph-retrieval stream into RRF [shipped v1.21.0]
-A **new** graph ranked-list *producer* that feeds `src/rrf.ts` as a third fusion input beside BM25 + dense — distinct from `src/graph-recall.ts`, which today does seed-adjacent injection with a per-hop score discount (not a ranked list, and not RRF-fused). Already filed (F-track "graph retrieval stream" + F4 HippoRAG). Pure win, no new substrate. Spec needed: the graph-score→rank function, the RRF weight/`k` for the graph stream, and tests. **Success:** a graph-stream-vs-no-graph-stream ablation under `rrf.ts` fusion lifts R@5 over the 2-stream (BM25+dense) baseline on the oracle split. Cross-ref F9.
+A **new** graph ranked-list *producer* that feeds `src/search/rrf.ts` as a third fusion input beside BM25 + dense — distinct from `src/graph/recall.ts`, which today does seed-adjacent injection with a per-hop score discount (not a ranked list, and not RRF-fused). Already filed (F-track "graph retrieval stream" + F4 HippoRAG). Pure win, no new substrate. Spec needed: the graph-score→rank function, the RRF weight/`k` for the graph stream, and tests. **Success:** a graph-stream-vs-no-graph-stream ablation under `rrf.ts` fusion lifts R@5 over the 2-stream (BM25+dense) baseline on the oracle split. Cross-ref F9.
 
 #### L2. Sleep-built KV "cartridge" over the consolidated semantic layer [research]
 The one strong-latent form that fits the Bets. At `hippo sleep`, optionally distil the *stable semantic store* into a reusable trained-KV cartridge (Cartridges, 2506.06266) for fast, cheap recall over a large stable corpus. Fits because it is (i) built offline during sleep (Bet #6), (ii) derived from consolidated symbolic state (Bet #5), (iii) rebuildable — delete it and the next sleep regenerates it (Rule 2), (iv) opt-in + GPU-gated (local core stays zero-dep). Candidate **5x-cost lever for the scale grant** (ROADMAP.md WP1: 1M+ items, sub-100ms, 5x cost reduction vs vector RAG).
@@ -933,7 +937,7 @@ Priority overlay: short post-ship tail first (close the Episode A/B/C critic-def
 - F8 Memory-Augmented Agent Eval
 - All Track G research lines
 
-**Cadence note:** Single-engineer sequence. With two engineers, parallelize Lane A (A3 → A5 → A1 → E1.3, all touch `src/db.ts`) against Lane B (F6 reranker, F7 LoCoMo, observability scaffolding). With grant funding, A8 + A9 split out under WP3 + WP1.
+**Cadence note:** Single-engineer sequence. With two engineers, parallelize Lane A (A3 → A5 → A1 → E1.3, all touch `src/db/index.ts`) against Lane B (F6 reranker, F7 LoCoMo, observability scaffolding). With grant funding, A8 + A9 split out under WP3 + WP1.
 
 **Why this sequence:** A3 is a prerequisite for everything in Track E (E1 ingestion needs envelope), Track B depth (new tables need provenance from day 1), and A5 (auth scopes ride on the envelope). Codex correctly flagged the original ordering as putting research items (B3, F6) ahead of enterprise prerequisites. Eng-review math showed even the original ordering was 3x over its 4-week window.
 
@@ -1094,7 +1098,7 @@ Added 2026-08-01 after a deep-research pass on learned components for agent memo
 
 ### Findings: hippo's own state (audited 2026-08-01, live store `~/.hippo/hippo.db`)
 
-- 1,550 memories; 439 (28%) carry outcome labels (`outcome_positive` / `outcome_negative` counters, `src/memory.ts`).
+- 1,550 memories; 439 (28%) carry outcome labels (`outcome_positive` / `outcome_negative` counters, `src/core/memory.ts`).
 - `audit_log` 8,868 rows: remember 5,702 / forget 2,688 / recall 288 / outcome 109 / consolidate 76.
 - **The blocking gap is instrumentation, not modeling.** Recall audit rows persist only `{query, results: <count>}` — the returned memory ids are never logged, and `outcome` rows are not linked to the recall that preceded them. The (query → candidates shown → outcome) triple that any learned reranker or saliency model would train on does not exist on disk. G8 names "outcome-labeled retrievals" as the corpus asset, but the producer never writes it. Root cause first: fix the producer, then train.
 
@@ -1159,14 +1163,14 @@ Hippo already owns the substrate a learned lifecycle needs (outcome counters, de
 
 Triggered by GitHub issue #137 (neoneye, author of the agent-memory-atlas, 2026-08-04): a Claude Opus 5 authored audit of hippo against 238 other agent-memory systems, at `neoneye.github.io/agent-memory-atlas/systems/hippo-memory/` and `/compare/`. Two verification passes went into this section: (1) the atlas's comparison-matrix membership claims were checked against the atlas page itself (curled and grepped); (2) every claim about hippo's own code behavior was checked against hippo source on 2026-08-09 - and that second pass found the atlas report **wrong or overstated on three of its findings** (noted per item below). An earlier draft of this section propagated those errors; this rewrite corrects them.
 
-**Atlas score: hippo carries 4 of 7 rubric marks** - trust state, bi-temporal validity, scope-enforced retrieval, append-only mutation audit. Marks withheld: rejected-value tombstone (12/238 systems carry it), human review surface (59/238), negative-retrieval eval (50/238). Four systems carry all 7: `memsem`, `perseus-vault`, `provem`, `verel`. Source-verification verdict per withheld mark: the tombstone gap is **real** (AT1); the other two are **partial** - hippo has `hippo conflicts` / `hippo resolve` (cli.ts) and committed cross-tenant negative tests (`tests/l9-tenant-scoping.test.ts`), so the genuine gaps are narrower than the atlas scored (AT4, AT5).
+**Atlas score: hippo carries 4 of 7 rubric marks** - trust state, bi-temporal validity, scope-enforced retrieval, append-only mutation audit. Marks withheld: rejected-value tombstone (12/238 systems carry it), human review surface (59/238), negative-retrieval eval (50/238). Four systems carry all 7: `memsem`, `perseus-vault`, `provem`, `verel`. Source-verification verdict per withheld mark: the tombstone gap is **real** (AT1); the other two are **partial** - hippo has `hippo conflicts` / `hippo resolve` (cli.ts) and committed cross-tenant negative tests (`tests/background-pipeline-tenant-scoping.test.ts`), so the genuine gaps are narrower than the atlas scored (AT4, AT5).
 
 ### AT1. Rejected-value tombstone [SHIPPED 2026-08-15, PR #142, v1.31.0]
 **Verified real.** `deleteEntry` is a hard `DELETE FROM memories` (src/store.ts:1654); no tombstone / rejected-value / suppression-by-value vocabulary exists anywhere in src (grep 2026-08-09). Supersession hides rows on read but keys nothing on the *value* - re-extraction can silently re-assert a fact a human already rejected. `perseus-vault` refuses on every remember-path write via a digest-keyed tombstone table (with an audited trusted-override escape hatch); `memsem` writes a durable value-keyed suppression on human rejection and refuses `memory_add` when the normalized value matches. This is also the same mechanism the Part III DAG consolidation item is blocked on ("do not ship summarization before the tombstone/invalidation story exists") and that E3.4 lists as `[research]`.
 **Effort:** 5-6d (new table, write-path check in `capture`/`remember`/auto-learn, migration, tests). **Success:** reject value X; re-run an extraction pass that would re-assert X; assert the write is refused and `audit_log` records the refusal; existing supersession behavior unchanged for non-rejected corrections.
 
 ### AT2. Stale tier masks the stored epistemic tier for non-verified memories [planned, small]
-**Atlas overstated; corrected against source.** `resolveConfidence` (src/memory.ts:447-455) exempts `verified` and `pinned` entries from staleness - a verified fact never degrades to `stale`, so the atlas's "verified facts marked outdated regardless of truthfulness" is wrong. The residual issue is real but smaller: for `observed`/`inferred` entries, 30+ days of disuse returns `stale` in place of the stored tier, so recall surfaces cannot distinguish a stale-observed from a stale-inferred memory. Disuse (a recency signal) overwrites the epistemic tier (an evidence signal) in one field.
+**Atlas overstated; corrected against source.** `resolveConfidence` (src/core/memory.ts:447-455) exempts `verified` and `pinned` entries from staleness - a verified fact never degrades to `stale`, so the atlas's "verified facts marked outdated regardless of truthfulness" is wrong. The residual issue is real but smaller: for `observed`/`inferred` entries, 30+ days of disuse returns `stale` in place of the stored tier, so recall surfaces cannot distinguish a stale-observed from a stale-inferred memory. Disuse (a recency signal) overwrites the epistemic tier (an evidence signal) in one field.
 **Effort:** 1-2d. **Success:** `recall --why` shows both the stored tier and the staleness flag as separate facets (e.g. `observed+stale`); no fire-rate regression on tier-1 micro-eval.
 
 ### AT3. Quarantine tier before sleep-audit hard-delete [partial: the quarantine tier shipped with CD5 (v48, admin approve/reject); sleep-junk routing into it not done]
@@ -1179,16 +1183,16 @@ Triggered by GitHub issue #137 (neoneye, author of the agent-memory-atlas, 2026-
 
 ### AT5. Negative-retrieval assertions in the eval suites [shipped 2026-09-05, micro-eval]
 **Status (2026-09-05):** `benchmarks/micro/fixtures/negative_retrieval.json` pins superseded (default filter, with an `--include-superseded` positive control), forgotten and rejected rows as must-not-appear, each against a live sibling row; the rejected paired case re-remembers the same text and requires the AT1 guard to refuse it (runner `reject` action). The `conflicts_with` 0.3x down-rank under `--filter-conflicts` is not asserted (it needs a sleep-detected conflict, no deterministic CLI setup). LongMemEval harness unchanged.
-**Atlas overstated; corrected against source.** Committed negative tests DO exist - `tests/l9-tenant-scoping.test.ts` et al. assert cross-tenant isolation (the README/site "proven by a negative test" claim is accurate). What the eval suites (tier-1 micro-eval fixtures, LongMemEval harness) lack is must-NOT-appear assertions: superseded values, suppressed memories, and (once AT1 ships) rejected values. The atlas's own reading of the split matters here: of the 50 systems with the mark, only five assert a *boundary*; the rest assert *content* exclusions - hippo has the boundary tests and lacks the content ones.
+**Atlas overstated; corrected against source.** Committed negative tests DO exist - `tests/background-pipeline-tenant-scoping.test.ts` et al. assert cross-tenant isolation (the README/site "proven by a negative test" claim is accurate). What the eval suites (tier-1 micro-eval fixtures, LongMemEval harness) lack is must-NOT-appear assertions: superseded values, suppressed memories, and (once AT1 ships) rejected values. The atlas's own reading of the split matters here: of the 50 systems with the mark, only five assert a *boundary*; the rest assert *content* exclusions - hippo has the boundary tests and lacks the content ones.
 **Effort:** 1-2d. **Success:** micro-eval fixtures gain must-not-appear cases for superseded + suppressed content; once AT1 ships, a paired case asserts a rejected value never resurfaces via recall.
 
 ### AT6. Document successor-derived expiry on `memories` [resolved 2026-08-10, doc-only]
-**Atlas wrong; corrected against source - and the first draft of this item was wrong too.** The atlas claimed memories' bi-temporal columns "carry no read-path filter" - false: `--as-of` recall filters on `valid_from` and derives expiry from the superseding row's `valid_from` (src/search.ts:417-435, both pipelines). The earlier draft here then asserted a dead `memories.valid_to` column; a second source pass (2026-08-10) found `memories` has **no `valid_to` column at all** - the bi-temporal migration adds only `valid_from` (src/db.ts:238-240). The only `valid_to` in src belongs to the `policies` table, where it IS read by the as-of query (src/policies.ts:533). Nothing to retire or wire up.
+**Atlas wrong; corrected against source - and the first draft of this item was wrong too.** The atlas claimed memories' bi-temporal columns "carry no read-path filter" - false: `--as-of` recall filters on `valid_from` and derives expiry from the superseding row's `valid_from` (src/search.ts:417-435, both pipelines). The earlier draft here then asserted a dead `memories.valid_to` column; a second source pass (2026-08-10) found `memories` has **no `valid_to` column at all** - the bi-temporal migration adds only `valid_from` (src/db/index.ts:238-240). The only `valid_to` in src belongs to the `policies` table, where it IS read by the as-of query (src/objects/policies.ts:533). Nothing to retire or wire up.
 **Effort:** 0 (code). Optional: one doc line in `MEMORY_ENVELOPE.md` stating memory expiry is successor-chain-derived with no explicit `valid_to` column.
 
 **Not adopted from the atlas scan:** `perseus-vault`'s AES-256-GCM at-rest encryption and hash-chained journal (out of scope - hippo's local-first zero-dep core is the explicit bet, non-goal #5); `provem`'s pluggable-backend governance layer (hippo's SQLite-first architecture is Bet #7, not a plugin host).
 
-**Discipline note:** the three atlas errors (AT2, AT5, AT6) were only caught by reading hippo's source; the atlas is an LLM-authored report and inherits LLM-report failure modes. Any future item sourced from an external audit of hippo's code gets a source-verification pass before it lands in this file. The pass must also cover this file's own drafts: the first draft of AT6 asserted a dead `memories.valid_to` column that does not exist (memories carries only `valid_from`, src/db.ts:238-240) - caught 2026-08-10 by a second read of the migrations.
+**Discipline note:** the three atlas errors (AT2, AT5, AT6) were only caught by reading hippo's source; the atlas is an LLM-authored report and inherits LLM-report failure modes. Any future item sourced from an external audit of hippo's code gets a source-verification pass before it lands in this file. The pass must also cover this file's own drafts: the first draft of AT6 asserted a dead `memories.valid_to` column that does not exist (memories carries only `valid_from`, src/db/index.ts:238-240) - caught 2026-08-10 by a second read of the migrations.
 
 ---
 
@@ -1198,7 +1202,7 @@ Triggered by a working-as-intended audit of the live store on Keith's machine (2
 
 ### DF1. Active task snapshot never expires; stale snapshots inject into every later session [SHIPPED 2026-08-23, PR #146, v1.34.0]
 **Incident (live store):** a snapshot written by `hippo pre-compact` on 2026-08-15 (session f235ebd3, task "/compact", status `active`) was still being injected into every prompt of every session seven days later - roughly 800 tokens of dead context per prompt, carrying a week-old summary as if current.
-**Root cause (source-verified):** `loadActiveTaskSnapshot` selects `WHERE status = 'active'` with no age bound and no session match (src/store.ts:2521-2530). The only paths that end a snapshot are supersession by the NEXT snapshot write (src/store.ts:2475) and the manual clear command (`clearActiveTaskSnapshot`, sole caller cli.ts:3927). `hippo session-end` never closes the ending session's snapshot, so a session that dies after a pre-compact leaves an immortal `active` row. Both injection surfaces load it unguarded: `apiContext` (src/api.ts:2401) and the `--continuity` recall block (src/api.ts:1021).
+**Root cause (source-verified):** `loadActiveTaskSnapshot` selects `WHERE status = 'active'` with no age bound and no session match (src/store.ts:2521-2530). The only paths that end a snapshot are supersession by the NEXT snapshot write (src/store.ts:2475) and the manual clear command (`clearActiveTaskSnapshot`, sole caller cli.ts:3927). `hippo session-end` never closes the ending session's snapshot, so a session that dies after a pre-compact leaves an immortal `active` row. Both injection surfaces load it unguarded: `apiContext` (src/api/index.ts:2401) and the `--continuity` recall block (src/api/index.ts:1021).
 **Fix shape:** (a) `hippo session-end` closes the ending session's active snapshot; (b) `loadActiveTaskSnapshot` gains a freshness bound (default ~48h) for callers that do not present the snapshot's own `session_id` - same-session reads stay unbounded so compact-resume is unaffected; (c) `apiContext` threads the current session id (HIPPO_SESSION_ID) so a live session's own snapshot always wins.
 **Effort:** 2-3d. **Success:** a red-under-old test pins the incident (snapshot from session A, aged past the bound, injects into session B's context - must NOT); compact-resume within the same session still restores; `session-end` leaves no `active` snapshot behind; the live Aug-15 row is closed by the migration or first `session-end`.
 
@@ -1209,7 +1213,7 @@ Triggered by a working-as-intended audit of the live store on Keith's machine (2
 **Effort:** 3-4d. **Success:** a fixture built from the real g_782a9ac59e12 source text goes red-under-old / green-under-new; capture yield on a clean transcript corpus does not drop more than ~10% (guard against over-filtering); no stored capture begins mid-clause across the micro-eval fixture set.
 
 ### DF3. `--include-recent` injects the last N writes with no quality floor [SHIPPED 2026-08-23, episode 01M0Q4BMEZZE2EX0YRHJ102RV6]
-**Root cause (source-verified):** the UserPromptSubmit hook runs `hippo context --pinned-only --include-recent 5`; the includeRecent branch (src/api.ts:2439-2458) takes the newest N rows as-is, with no quality predicate. Junk goes from "stored" to "read on every prompt" with no gate between.
+**Root cause (source-verified):** the UserPromptSubmit hook runs `hippo context --pinned-only --include-recent 5`; the includeRecent branch (src/api/index.ts:2439-2458) takes the newest N rows as-is, with no quality predicate. Junk goes from "stored" to "read on every prompt" with no gate between.
 
 **PREMISE CORRECTION (measured at plan time, 2026-08-23).** This item originally claimed the floor "is the amplifier that turned DF2's fragments into per-prompt noise". **That was wrong.** Running `isContentWorthStoring` against the actual live entries:
 
@@ -1252,7 +1256,7 @@ Fixed at the cause rather than the instance: a `(?=\p{L})` lookahead makes "lett
 **Rule earned:** a regression test is not evidence until you have watched it fail against the unfixed code. When the test turns on a numeric threshold, derive the threshold from measured values — a round number that *looks* tight is how a test ends up green in both worlds. This is the same failure as the prose-assertion rule above, wearing a test's clothing: the whole episode's defect class was *claims never executed*, and an unverified test is just another claim.
 
 ### DF4. Git auto-learn seeds no-information commit subjects as memories [SHIPPED 2026-08-23, PR #153, v1.37.0]
-**Incident (live store):** `hippo audit` flags 44 entries, dominated by bare commit subjects ("fixed signals", "globe view on by default", "corrected entry prices") seeded by auto-learn (src/autolearn.ts) - the audit heuristic calls them "no specific details (names, paths, numbers, code)".
+**Incident (live store):** `hippo audit` flags 44 entries, dominated by bare commit subjects ("fixed signals", "globe view on by default", "corrected entry prices") seeded by auto-learn (src/learn/autolearn.ts) - the audit heuristic calls them "no specific details (names, paths, numbers, code)".
 **Root cause:** the quality verifier exists only downstream (audit) while the producer ingests unconditionally - the same shape as DF2/DF3. A subject line without a path, number, or code token carries no recall value on its own.
 **Fix shape (as shipped):** gate auto-learn ingestion on the audit heuristic at the producer. The "merge subject+body" alternative was MEASURED and dropped: across 4 repos and 1053 commits the body rescues ZERO subjects the gate rejects, and fetchGitLog pulls subjects only so merging would mean changing the fetch format. One-time cleanup of the existing 44 via the audit flow - route through AT3's quarantine once it ships rather than hard-delete, per the "never delete when weakening preserves recoverability" rule.
 **Effort:** 1-2d (actual: 1 episode). **Success (met):** re-running auto-learn on a repo with junk subjects stores none of them, verified end to end through the built CLI; detail-carrying subjects still store; the drop count is reported per repo and rolled up. **NOT met, and not attempted:** "audit issue count drops to single digits after cleanup" - cleanup is blocked on AT3 quarantine [planned], and hard-delete is barred by the never-delete rule. The 36 existing rows remain. **Measured scope:** 24 of 413 real auto-learn rows (6%) would be gated.
@@ -1273,8 +1277,8 @@ Triggered by a community request on X (Sep 2026, attributed to @sophiamyang; the
 
 | Existing | Where | What it becomes |
 |---|---|---|
-| `hippo handoff create --summary --next --session --task --artifact`, `hippo session resume` | `src/cli.ts:4271`, `src/store.ts:3339`, table `session_handoffs` (`src/db.ts:2515`: session_id, repo_root, task_id, summary, next_action, artifacts_json) | the migration envelope, once it carries constraints, evidence and outcome (W1) |
-| `hippo session complete --outcome success/failure/partial`, `session_events`, `task_snapshots` | `src/cli.ts:4183`, `src/db.ts:2486-2513` | card progress and audit trail (W2) |
+| `hippo handoff create --summary --next --session --task --artifact`, `hippo session resume` | `src/cli.ts:4271`, `src/store.ts:3339`, table `session_handoffs` (`src/db/index.ts:2515`: session_id, repo_root, task_id, summary, next_action, artifacts_json) | the migration envelope, once it carries constraints, evidence and outcome (W1) |
+| `hippo session complete --outcome success/failure/partial`, `session_events`, `task_snapshots` | `src/cli.ts:4183`, `src/db/index.ts:2486-2513` | card progress and audit trail (W2) |
 | `hippo wm push/read/flush` working memory | README "Working memory" | per-card scratchpad, cleared on handoff |
 | `hippo outcome --good/--bad`, `--error` 2x half-life | README "errors stick" | limit and failure signal per runtime (W3) |
 | `hippo share` / `hippo peers`, `owner` in the envelope | `src/cli.ts:9268-9330`, `MEMORY_ENVELOPE.md` | multi-agent attribution |
@@ -1362,7 +1366,7 @@ W0 and W1 first: small, close the last E2 item, no non-goal tension. W2 next. W3
 
 Triggered by a founder question: companies keep code in private hosts that are often not github.com, so how does hippo plug into their DevOps, and how does one memory layer tailor itself to each company? Research record: `docs/plans/2026-09-23-enterprise-integration-research.md` (market and platform landscape, literature review, source audit of v1.44.0). **Reviewed 2026-09-24** by an independent pass after merging 1.45.0: factual corrections and item merges below are marked "(review 2026-09-24)".
 
-**Answer (source-verified where it cites hippo):** most companies still use Git, hosted on GitHub Enterprise (Cloud, `*.ghe.com` residency, or self-hosted Server), GitLab (about two thirds of GitLab revenue is self-managed), Bitbucket Data Center or Azure DevOps. Hippo's git learning already works on all of them because it reads the local clone (`src/autolearn.ts:189`). What it cannot reach is the metadata around code (reviews, tickets, incidents, CI failures, chat decisions), and an enterprise will not adopt any memory layer without four things: deployment where its code lives, SSO/SCIM and machine identity, **permission-aware recall**, and an audit trail. Hippo has the audit trail and tenant isolation; the rest is this track.
+**Answer (source-verified where it cites hippo):** most companies still use Git, hosted on GitHub Enterprise (Cloud, `*.ghe.com` residency, or self-hosted Server), GitLab (about two thirds of GitLab revenue is self-managed), Bitbucket Data Center or Azure DevOps. Hippo's git learning already works on all of them because it reads the local clone (`src/learn/autolearn.ts:189`). What it cannot reach is the metadata around code (reviews, tickets, incidents, CI failures, chat decisions), and an enterprise will not adopt any memory layer without four things: deployment where its code lives, SSO/SCIM and machine identity, **permission-aware recall**, and an audit trail. Hippo has the audit trail and tenant isolation; the rest is this track.
 
 **Shape:** one core, many source adapters, one company profile, every agent over MCP. The core and the memory envelope do not change; adapters normalize each source into the envelope plus an ACL, the profile holds what differs per company, and deployment matches the company's security posture.
 
@@ -1370,10 +1374,10 @@ Triggered by a founder question: companies keep code in private hosts that are o
 
 | Existing | Where | What it becomes |
 |---|---|---|
-| Host-agnostic git learning (`git log` on local clones), migration-commit invalidation | `src/autolearn.ts`, `src/invalidation.ts` | Git learning v2 (EI1) |
+| Host-agnostic git learning (`git log` on local clones), migration-commit invalidation | `src/learn/autolearn.ts`, `src/learn/invalidation.ts` | Git learning v2 (EI1) |
 | Slack and GitHub webhook connectors: HMAC, idempotency, DLQ, backfill, deletion, tenant routing | `src/connectors/` | The pattern the connector kit (EI0) generalizes |
 | Tenants, API keys, roles, audit log, non-loopback gate | `src/server.ts`, `src/auth.ts`, `src/audit.ts` | Base for identity (EI11) and permissions (EI2) |
-| `<source>:private:` default-deny scopes | `src/recall-scope.ts:26` | Starting point for real ACLs (EI2) |
+| `<source>:private:` default-deny scopes | `src/store/recall-scope.ts:26` | Starting point for real ACLs (EI2) |
 | Dormant memories on by default, restore labels (`dormant_restore`) | `src/dormant.ts`, PR #227 | Per-tenant learned lifecycle input (EI9) |
 | MCP server (13 tools); a real JSON hook for Claude Code, plugins for OpenCode and OpenClaw, a wrapper for Codex, instruction-file patches for Cursor and Pi | `src/mcp/server.ts`, `src/hooks.ts:1074` | Unchanged delivery surface; registry listing (EI11, CD10) |
 
@@ -1481,7 +1485,7 @@ Superseded by the single queue at the end of Part X (review 2026-09-24): each Pa
 
 Triggered by a founder question: can hippo save organisations tokens and make answers smarter, and how would we prove it? Research record: `docs/plans/2026-09-23-token-savings-eval-research.md` (source audit of v1.44.0 plus PR #227, literature and benchmark review).
 
-**Answer (source-verified where it cites hippo):** not provable today, because hippo records nothing about the tokens it spends. It estimated tokens as `chars / 4` (now defined once in `src/token-ledger.ts`, re-exported from `src/search.ts`), printed the count and stored none of it. It also adds tokens of its own: the Claude Code `UserPromptSubmit` hook re-injects the pinned block (cap 1,500 tokens) on every prompt, whether or not it changed, and the rendered lines carry a live strength percentage and dates, so repeated copies are rarely byte-identical for a prompt cache. The literature supports the claim in a narrower form: memory systems report 85-99% fewer context tokens than full-history baselines at similar accuracy (Mem0, Zep, LightMem), focused context beats long context (Lost in the Middle, Context Rot, NoLiMa), and experience reuse cuts steps on later coding tasks (ReasoningBank, SWE-ContextBench). For coding agents most spend is input and most input is file reads, so the saving that matters is work the agent no longer does, measured per task in dollars with cache accounting.
+**Answer (source-verified where it cites hippo):** not provable today, because hippo records nothing about the tokens it spends. It estimated tokens as `chars / 4` (now defined once in `src/store/token-ledger.ts`, re-exported from `src/search.ts`), printed the count and stored none of it. It also adds tokens of its own: the Claude Code `UserPromptSubmit` hook re-injects the pinned block (cap 1,500 tokens) on every prompt, whether or not it changed, and the rendered lines carry a live strength percentage and dates, so repeated copies are rarely byte-identical for a prompt cache. The literature supports the claim in a narrower form: memory systems report 85-99% fewer context tokens than full-history baselines at similar accuracy (Mem0, Zep, LightMem), focused context beats long context (Lost in the Middle, Context Rot, NoLiMa), and experience reuse cuts steps on later coding tasks (ReasoningBank, SWE-ContextBench). For coding agents most spend is input and most input is file reads, so the saving that matters is work the agent no longer does, measured per task in dollars with cache accounting.
 
 **Rules for this track:**
 1. The headline metric is **dollars per resolved task**, priced over four buckets (uncached input, cache write, cache read, output), paired against a no-memory arm with bootstrap CIs. Raw token counts are supporting data, never the claim.
@@ -1492,10 +1496,10 @@ Triggered by a founder question: can hippo save organisations tokens and make an
 
 | Existing | Where | Status |
 |---|---|---|
-| Token budgets on every surface (recall 4000, context 1500, MCP recall 4000, MCP context 3000, pinned inject 1500) | `src/cli.ts`, `src/api.ts`, `src/config.ts` | Works; the MCP descriptions advertised 1500 for both until PR #227 |
+| Token budgets on every surface (recall 4000, context 1500, MCP recall 4000, MCP context 3000, pinned inject 1500) | `src/cli.ts`, `src/api/index.ts`, `src/core/config.ts` | Works; the MCP descriptions advertised 1500 for both until PR #227 |
 | Greedy score-ordered packing, dedup, MMR, `minResults` | `src/search.ts:694-785` | Fills the budget; never stops early on weak results |
 | Lifecycle stress eval with a per-condition `tokens` field | `scripts/lifecycle-stress/run.mjs` | The only token-reporting harness; headline NULL (Part III) |
-| Structured handoff and snapshot caps instead of transcripts | `src/handoff.ts`, `src/capture.ts:1026` | Bounded by design (non-goal 12) |
+| Structured handoff and snapshot caps instead of transcripts | `src/core/handoff.ts`, `src/capture.ts:1026` | Bounded by design (non-goal 12) |
 
 ### Track TE - Token efficiency
 
@@ -1559,7 +1563,7 @@ DolphinBench (arXiv 2609.24971, Mem0, September 2026; site dolphinbench.ai; harn
 - **Arms:** the paper ran Claude Code with Sonnet on Built-In, Mem0 and Honcho. hippo runs on that harness and model through its Claude Code hooks, beside a Built-In arm we run ourselves, a BM25-only arm over the same captured memories, and a decay-off arm as a sensitivity check.
 - **Verify before reading hippo:** our Built-In arm must reproduce the paper's Built-In row within its noise. Until it does, a hippo delta may only be a setup difference.
 - **Read-only tests:** tests run with memory writes and deletion blocked, capture included, and the harness's `verify_checkpoint` rejects a store that changed after `freeze`. hippo's recall writes retrieval counts back (`markRetrieved`, `src/search.ts:1257`), so the test arm needs a recall path that writes nothing, with the capture hooks off.
-- **Dated clock:** decay runs from `last_retrieved` against `evalNow()` (`src/memory.ts:340-376`). Ingestion takes hours, so unless `HIPPO_FAKE_NOW` follows each message's date, five years of history look a day old and decay never acts. With it, a plain memory stated three years before a test and never recalled keeps about one eighth of its strength at the 365-day default. Whether that buries the rule is FE3's question on a public benchmark; the decay-off arm answers it.
+- **Dated clock:** decay runs from `last_retrieved` against `evalNow()` (`src/core/memory.ts:340-376`). Ingestion takes hours, so unless `HIPPO_FAKE_NOW` follows each message's date, five years of history look a day old and decay never acts. With it, a plain memory stated three years before a test and never recalled keeps about one eighth of its strength at the 365-day default. Whether that buries the rule is FE3's question on a public benchmark; the decay-off arm answers it.
 - **Cost gate:** ingestion is one paid agent session per history message (up to 5,128 per persona), run on the founder's machine. One persona, Built-In and hippo, prices the full run first.
 - **Scope of any claim:** tests block writes and send no feedback, so outcome marks, hippo's clearest measured win, never act. A result speaks to capture and recall for action, at the cost and latency measured.
 - **Published whatever the result:** the runner's `package` output (`ingestion.json`, `tests.json`) goes to the leaderboard, where it shows as self-submitted and unverified. The site does not say how a run becomes verified; ask Mem0 once the Built-In row reproduces.
@@ -1625,14 +1629,18 @@ Lessons move from repository to team to company only with approval. A review que
 
 #### CD5. Memory poisoning defence [shipped first slice (connector ingest), schema v48; rest open]
 Anyone who can write a PR comment, an issue or a chat message can try to plant instructions that become a "lesson" for every agent. Treat ingested text as untrusted: provenance-weighted admission, instruction-like content detection, quarantine for lessons from outside contributors, and approval (CD4) before org-wide reach. Enterprise security reviews will ask about this first.
-**Shipped (first slice):** GitHub and Slack connector text is marked untrusted and screened by `src/instruction-detect.ts`; a flagged row is stored under the restricted scope `quarantine:private:<original>` (so every existing default-deny site hides it) with a pending row in `memory_quarantine` (v48) and a `quarantine` audit event. An admin releases it with `hippo quarantine approve <id>` or `POST /v1/quarantine/:id/approve` (scope restored), or keeps it hidden with `reject`. Quarantined rows cannot be shared and take no part in conflict detection. Local single-user writes are untouched. **Open:** HTTP/MCP member `remember` is not screened; no provenance-weighted admission (author association); derived rows built from a quarantined row keep its scope and are never released; no re-screen of rows stored before v48; rejected content is not tombstoned (AT1); no CD4 approval UI; the detector is regex-only, so a polite paraphrase gets through. Plan: `docs/plans/2026-09-26-cd5-poisoning-defence.md`.
+**Shipped (first slice):** GitHub and Slack connector text is marked untrusted and screened by `src/api/instruction-detect.ts`; a flagged row is stored under the restricted scope `quarantine:private:<original>` (so every existing default-deny site hides it) with a pending row in `memory_quarantine` (v48) and a `quarantine` audit event. An admin releases it with `hippo quarantine approve <id>` or `POST /v1/quarantine/:id/approve` (scope restored), or keeps it hidden with `reject`. Quarantined rows cannot be shared and take no part in conflict detection. Local single-user writes are untouched. **Open:** HTTP/MCP member `remember` is not screened; no provenance-weighted admission (author association); derived rows built from a quarantined row keep its scope and are never released; no re-screen of rows stored before v48; rejected content is not tombstoned (AT1); no CD4 approval UI; the detector is regex-only, so a polite paraphrase gets through. Plan: `docs/plans/2026-09-26-cd5-poisoning-defence.md`.
 
 **Workflow adoption [planned].** CAE5 uses `build-eval` to review independently labelled poisoning/legitimate-content cases and hard-policy regression fixtures. An optional detector/instruction `hillclimb` is a separate surface; it cannot edit ACLs, quarantine access, labels or release rules to improve an aggregate score.
+
+**Derived rows [planned; added 2026-10-08].** A row built from other rows (an S4 merge, an HG1 profile, an SI6 lesson) takes the lowest trust level and the narrowest scope among its sources. Summarising is not sanitising. The CAE5 poisoning cases gain a class where planted connector text reaches a derived row as a paraphrase.
 
 #### CD6. Admin dashboard [first view shipped 2026-10-03, hippo-enterprise #6; part of A7 observability] [commercial repo]
 One place for the buyer: what is stored per team and repository, who used what, audit log search, dormant and banned memories, and token cost from the TE0 ledger.
 
 **Status (2026-10-03):** `hippo-enterprise admin report` writes one HTML or JSON page with all five sections. It groups by tenant, repository and scope; per-team grouping waits for EV6.
+
+**Served console [planned, 2026-10-09].** Part XXV, Track AC (AC0-AC9) serves these pages live behind the company's SSO.
 
 **Native skill follow-up [planned].** CAE9 reuses this commercial admin surface for evidence-backed promotion exceptions, version/status, managed rollout and rollback. Keep routine developer use automatic after the admin's policy setup and include administrator effort in the pilot result.
 
@@ -1857,6 +1865,8 @@ This is the evidence AGENTS.md requires before a lesson graduates.
 
 **Procedural follow-up [planned].** CAE9 applies this trust gate to workflow/skill promotion: repetition, confidence scores and absence of correction are not independent evidence of usefulness. A lesson-derived executable artifact has its own validation, scope and invalidation record.
 
+**Graded-work follow-up [research; added 2026-10-08].** SI6 (Part XXIV) tests lessons that sleep compiles from work with an independent grade. They enter as `observed` and pass this gate like any other lesson.
+
 #### SI4. Write contract for agent-written memories [planned, eval first; added 2026-09-26]
 Clean a memory when it is written instead of ranking junk out later. Each agent-written memory must be:
 - one self-contained subject, readable without its thread;
@@ -2036,7 +2046,7 @@ What stays open:
 - **Retention:** deletion and dormancy are decided by value (never recalled, never confirmed, low outcomes), not by age alone.
 
 #### FE2. Staleness from code churn [built, opt-in: `churnStaleness.enabled`, default off]
-A lesson that names a file, symbol or command is marked stale when that file changes or is deleted after the lesson was stored. It builds on `src/invalidation.ts`. Staleness lowers the lesson's rank and flags it for confirmation; it never deletes it.
+A lesson that names a file, symbol or command is marked stale when that file changes or is deleted after the lesson was stored. It builds on `src/learn/invalidation.ts`. Staleness lowers the lesson's rank and flags it for confirmation; it never deletes it.
 Measured on a copy of the founder's store: 73 of 1,106 lessons flagged, 44 of them still true (60% false stale, 75% counting misattributions). File-level churn is too blunt to default on; FE3 must beat this. See `docs/evals/2026-09-26-fe2-churn-false-stale.md`.
 
 #### FE3. Registered test of the new forgetting [planned, before FE1 or FE2 ship as defaults]
@@ -2095,7 +2105,7 @@ The mechanism audit found recency hurts current-fact recall but guards against s
 #### K8.1. Make the container honest [planned, first]
 The code audit found gaps that break any pod today, some of which break `deploy/aml` already:
 - **The image has no local embeddings.** `@huggingface/transformers` is only in `peerDependenciesMeta` (`package.json:86-93`), so `npm ci` in `deploy/aml/Dockerfile` never installs it, despite the header comment. Install it pinned in the image and bake the model in with `scripts/fetch_embedding_model.mjs` at the `HIPPO_MODEL_CACHE` path.
-- **A missing model fails silently.** `src/embeddings.ts:219-227` returns null on a load failure, so a pod runs with embeddings quietly off. Log it and fail `/ready` instead.
+- **A missing model fails silently.** `src/store/embeddings/index.ts:219-227` returns null on a load failure, so a pod runs with embeddings quietly off. Log it and fail `/ready` instead.
 - **No readiness check.** `/health` never touches the database (`src/server.ts:754-770`). Add `GET /ready` with a cheap DB round-trip; `/health` stays the liveness check.
 - **The image runs as root** and drops privileges with `setpriv` (`deploy/aml/entrypoint.sh:18-21`), which the `restricted` Pod Security profile rejects. Add a `USER` directive and use `fsGroup` on the volume.
 - **Shutdown kills in-flight writes.** `closeAllConnections()` runs before `server.close()` settles (`src/server.ts:3466-3499`). Stop accepting new requests, let in-flight writes finish, then force-close SSE streams only.
@@ -2163,7 +2173,7 @@ Write-time checks are required before any shared fleet. MINJA (2503.03704) poiso
 
 #### K8.8. Size from measurement, then scale via A6 [planned, last]
 Resource requests come from profiling hippo's own write, recall and sleep phases (the harness shape in arXiv 2606.06448), not from guesses. Total Recall at What Cost (2608.11879) found serving cost could not be predicted from conversation length. Two limits apply:
-- the rate limiter is an in-memory map per process (`src/rate-limit.ts:40-42`), so N replicas would allow N times the configured rate;
+- the rate limiter is an in-memory map per process (`src/server/rate-limit.ts:40-42`), so N replicas would allow N times the configured rate;
 - more than one replica waits for A6 and EI10, with Postgres and shared rate-limit state.
 
 **Order:** K8.1, then K8.2 and K8.3 together, then K8.4, K8.5 and K8.6, then K8.7 and K8.8. K8.1 is worth doing even if no chart ever ships, because `deploy/aml` has the same gaps.
@@ -2372,7 +2382,9 @@ The mutation audit's recall entry is not the whole trace system. [`src/recall-tr
 
 **Exit.** Known fixture events are reconstructable end to end, existing recall decisions are unchanged, and overhead is measured against H4's budget before broad default installation. No task-benefit claim from instrumentation alone. Draft: [Z10 ledger](docs/evals/2026-09-30-z10-ledger-prereg.md).
 
-Slice 1 [built, off by default]: schema v50 `delivery_events` and `delivery_candidates` record each per-prompt hook turn's candidates, rejection stage and reason, and block state behind `deliveryLedger.enabled`; compaction, resume, session-end, tool-failure and the other context surfaces remain open.
+Slice 1 [built, off by default]: schema v50 `delivery_events` and `delivery_candidates` record each per-prompt hook turn's candidates, rejection stage and reason, and block state behind `deliveryLedger.enabled`; session-end, tool-failure and the other context surfaces remain open.
+
+Slice 2a [built, off by default]: `hippo pre-compact` and `hippo compact-resume` each write one boundary row to `delivery_events` (no schema change, `ledger_version` 2) behind `deliveryLedger.enabled`; result in [the slice 2a result](docs/evals/2026-10-08-z10-ledger-slice2a-result.md).
 
 ### Z1d. Trigger-then-gate [experiment; after Z10]
 
@@ -2498,6 +2510,8 @@ Pass the recall floor and evidence/temporal integrity checks. Deduplication alon
 
 **Workflow adoption [planned].** CAE5's consolidation `build-eval` covers equivalence, exceptions, provenance and replay/reversal. `hillclimb` may tune an already permitted optional merge/summary prompt, with independent store rebuilds and evidence/recall/task checks; protected rows and reversible writes remain fixed.
 
+**Compiled lessons (added 2026-10-08).** SI6 (Part XXIV) is a separate, opt-in sleep stage that drafts lessons only from work with an independent grade. It does not change this item: default sleep stays hygiene, and ungraded episodes are still never joined into a lesson.
+
 **CLEF integration [planned; CLF7].** Use scoped typed decisions to screen equivalence, contradictions and merge candidates, retaining the current extraction opt-in and reversible hygiene contract. A model score cannot authorise unsupported compression, mixed-scope derivation or protected-row deletion.
 
 ### S5. Scoped experiences
@@ -2595,7 +2609,7 @@ The [capability and packaging plan](docs/plans/2026-09-30-cross-platform-memory-
 
 **Goal.** After one-time installation, store/scope selection and required platform trust, Hippo automatically preserves supported lessons, decisions, corrections and working state before the host loses context. Users should not have to remember to run a save command, maintain a handoff file, watch a token threshold or approve each ordinary memory. Cover every available agent surface Hippo supports, not just ChatGPT and Cursor, through Hippo-owned adapters; record each exact runtime/mode/version separately. The complete named integration and MCP-client inventory below is required scope, with an extensible registration path for other compatible agents under AZ6. Preserve today's working Claude Code capture while extending coverage.
 
-**Current baseline, checked 2026-10-02.** Package installation alone is not integration setup: [postinstall](src/postinstall.ts) prints setup hints and repairs only an already opted-in Codex wrapper. [Claude Code's installed hooks](src/hooks.ts) call pre-compact to record the compaction and save a derivable task snapshot, then post-compact to save the summary's memory items; they are separate phases. The [compactions table and item path](src/compaction-record.ts) are distinct from recallable memory. [Cursor](integrations/cursor.md) currently uses an instruction block; [Codex](integrations/codex.md) currently installs per-prompt and compact-resume hooks, with no Hippo PreCompact capture and a separately opted-in session-end wrapper. An instruction, installed hook entry or available MCP tool does not by itself prove automatic capture.
+**Current baseline, checked 2026-10-02.** Package installation alone is not integration setup: [postinstall](src/postinstall.ts) prints setup hints and repairs only an already opted-in Codex wrapper. [Claude Code's installed hooks](src/hooks.ts) call pre-compact to record the compaction and save a derivable task snapshot, then post-compact to save the summary's memory items; they are separate phases. The [compactions table and item path](src/capture/compaction-record.ts) are distinct from recallable memory. [Cursor](integrations/cursor.md) currently uses an instruction block; [Codex](integrations/codex.md) currently installs per-prompt and compact-resume hooks, with no Hippo PreCompact capture and a separately opted-in session-end wrapper. An instruction, installed hook entry or available MCP tool does not by itself prove automatic capture.
 
 **Required coverage inventory [AZ6; checked 2026-10-02].** The [README framework table](README.md#framework-integrations), [hook detection/installation code](src/hooks.ts), native [OpenClaw plugin](extensions/openclaw-plugin/index.ts), [Pi extension](extensions/pi-extension/index.ts), [integration recipes](integrations/generic.md) and [MCP client recipe](extensions/mcp/README.md) establish the inventory. Named integrations are Claude Code, Codex, Cursor, OpenClaw, OpenCode and Pi; the MCP recipe additionally names Windsurf, Cline, Claude Desktop and VS Code. Include those now, together with ChatGPT and the already planned AZ clients. Native integration, generic tool connectivity, planned adapter and verified automatic preservation are distinct statuses. Do not drop a currently supported agent from the preservation backlog because it lacks a ready-made PreCompact hook.
 
@@ -2615,7 +2629,7 @@ All available modes of these products remain in the coverage register. Missing c
 | Pi coding agent: interactive / RPC / JSON / print modes | Extend the [existing Pi extension](extensions/pi-extension/index.ts) using current [session_before_compact, session_compact and session_compact_failed declarations](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/src/core/extensions/types.ts). Use permitted active-branch preparation/entries for pre-loss writes, handle manual/threshold/overflow reasons and abort/retry without cancelling the host's compaction. Test forks/tree navigation so abandoned branches do not become current facts. Install/update the extension through AZ5 rather than require routine manual copying; remove advice that delegates each save to the user. Revalidate the extension's existing event/tool API against supported versions and each non-interactive mode. |
 | Windsurf / Cascade, including the current Devin Desktop surface | This is explicitly named in Hippo's MCP recipe. The [current Cascade hook docs](https://docs.devin.ai/desktop/cascade/hooks) expose prompt/response events and post_cascade_response_with_transcript; the old Windsurf docs now redirect here. Build permitted incremental capture and bounded transcript processing with trajectory identity/cursors, accounting for asynchronous completion and host file pruning. Verify the exact product/version and supported install route. No documented pre-compaction barrier is established by these response hooks, so test races/context loss and report the achievable checkpoint delay instead of claiming a synchronous flush. |
 | Cline VS Code extension / CLI / SDK | Hippo names Cline as an MCP client. Current [extension hook guidance](https://github.com/cline/cline/blob/main/.clinerules/hooks/README.md) still labels PreCompact coming soon, and [SDK/file-hook examples](https://github.com/cline/cline/blob/main/sdk/examples/hooks/README.md) say that event is not wired for file hooks. Build automatic incremental capture from the validated prompt/tool/run sources; investigate supported before-model/compaction interfaces independently for each mode. Do not treat an enum entry as a working hook. Test OS support, task identity/resume, cancellation and context truncation; revisit the native event when upstream actually ships it. |
-| VS Code agent chat / Copilot Local / remote extension hosts | Already named in Hippo's MCP recipe and CD1. The [current VS Code Local harness docs](https://code.visualstudio.com/docs/agent-customization/hooks) include PreCompact; wire a native package with verified payload/source/output mappings, workspace trust and bounded writes. Remote Development executes on the extension host, whose OS/store may differ from the UI machine. Imported Claude/Copilot configuration formats do not preserve every matcher/schema behaviour. Test alternate harnesses separately; basic capture must not wait for CD3's optional visual extension. |
+| VS Code agent chat / Copilot Local / remote extension hosts | Already named in Hippo's MCP recipe and CD1. The [current VS Code Local harness docs](https://code.visualstudio.com/docs/agent-customization/hooks) include PreCompact; wire a native package with verified payload/source/output mappings, workspace trust and bounded writes. Remote Development executes on the extension host, whose OS/store may differ from the UI machine. Imported Claude/Copilot configuration formats do not preserve every matcher/schema behaviour. Test alternate harnesses separately; basic capture must not wait for CD3's optional visual extension. Checked 2026-10-07 in VS Code's source (`hookTypes.ts`, `hookCompatibility.ts`): a Copilot hooks file's names map through a table that has `agentStop` (VS Code's per-turn Stop) but no `preCompact`, so hippo's Copilot hooks file gives the Local agent session-start context only. The Local agent also runs `~/.claude/settings.json` hooks and reads `~/.copilot/instructions`. Next: per-turn capture on agentStop, a PreCompact entry it reads, a hippo instructions file there and hippo in VS Code's user `mcp.json`, without double runs beside the Claude Code hooks. |
 | Copilot CLI / GitHub Copilot cloud coding agent | Extend CD1 with the [documented preCompact / PreCompact contract](https://docs.github.com/en/copilot/reference/hooks-reference), normalizing camelCase versus compatible snake_case fields and supported transcript format. Verify hook installation and actual execution for CLI/cloud/SDK modes separately; provision scripts, authorised durable store access and any required cloud network policy. Ephemeral workspace loss and non-interactive operation need recovery tests; a VS Code Local result is not cloud evidence. |
 | Gemini CLI: terminal / headless / approved cloud execution | Add a native AZ adapter for [PreCompress](https://geminicli.com/docs/hooks/reference/) plus permitted model/agent/tool inputs and the supported transcript parser. PreCompress is advisory and asynchronous, with flow-control fields ignored: maintain durable incremental checkpoints and test the race rather than assume the host waits for a save. Keep JSON output and event/matcher names native to Gemini, then test automatic/manual compression, headless execution, trust, quotas and store availability. Gemini consumer chat is a separate client registration if pursued. |
 | Devin CLI | Reuse AZ1's [PostCompaction contract](https://docs.devin.ai/cli/extensibility/hooks/lifecycle-hooks), which supplies a nullable summary after compaction. Add permitted incremental prompt/tool capture before loss and verify any further source/flush route; the summary alone cannot prove pre-compaction preservation. Test inherited Claude configuration and duplicate handlers independently from Cascade/Devin Desktop. |
@@ -2649,7 +2663,7 @@ All available modes of these products remain in the coverage register. Missing c
 
 **Foundation milestone [next in the current execution index].** Publish the initial versioned inventory, named owners/next actions, shared S6/AZ4 input/receipt/checkpoint/progress contract and reusable conformance fixtures before new adapter/setup work. Derive it from existing integration source and claims; it does not wait for AZ1-AZ5 to be complete or for every CAE6/CAE7 release probe. AZ4 and AZ5 depend on this foundation slice, not AZ6's final all-agent completion. This milestone is still implementation work, not a claim the registry or automation ships from this wording amendment.
 
-*Status 2026-10-03: foundation slice merged (#386).* The inventory is `docs/integrations/agent-inventory.json` (21 entries, per-mode checkpoint and lesson status, rules in `docs/integrations/agent-inventory.md`), checked in CI by `scripts/check-agent-inventory.mjs` against the README framework table, the MCP recipe and the npm keywords. The shared contract is `src/capture-contract.ts`, with the Claude Code PreCompact reader moved onto it and conformance fixtures under `tests/fixtures/capture/`. No mode is verified yet; Claude Code local saves a checkpoint before compaction, while lessons still land only after it. Website claims, store-level fixtures and the other payload readers remain open.
+*Status 2026-10-03: foundation slice merged (#386).* The inventory is `docs/integrations/agent-inventory.json` (21 entries, per-mode checkpoint and lesson status, rules in `docs/integrations/agent-inventory.md`), checked in CI by `scripts/check-agent-inventory.mjs` against the README framework table, the MCP recipe and the npm keywords. The shared contract is `src/core/capture-contract.ts`, with the Claude Code PreCompact reader moved onto it and conformance fixtures under `tests/fixtures/capture/`. No mode is verified yet; Claude Code local saves a checkpoint before compaction, while lessons still land only after it. Website claims, store-level fixtures and the other payload readers remain open.
 
 - **One registry, no omitted integrations.** Maintain a versioned product/runtime/mode inventory derived from hook detection, plugin/extension packages, integration recipes, public SDK examples and current README/website/npm claims. For each entry record current integration type, owner, primary interface/version, actual input coverage, native pre/post-compaction versus incremental checkpoint route, before-trim/reset coverage, setup/trust/deployment, canonical store/scope, budgets/delay, tested save/restore evidence, status and next action. Separate shipped integration, planned automation, verified automation and blocked/unsupported modes; unknown is not pass.
 - **Common adapters and fixtures.** Normalize native payloads into the S6/AZ4 receipt/candidate/checkpoint/progress contract while preserving source identity and permission semantics. Reuse one conformance family for early lessons/corrections, automatic/manual repeated compaction, rolling truncation, crash/retry, missing input, offline/busy store, concurrency/forks, wrong tenant/project and resume/cross-agent retrieval. A shared model/provider is not a shared host lifecycle: test the harness that actually owns context.
@@ -3219,6 +3233,8 @@ For reusable procedures, derive declarative workflows or referenced scripts with
 
 Exit: independent held-out recurrence tests show fewer repeated errors or lower total burden at preserved quality; supported source reversal/revocation invalidates affected lessons and procedural versions. No RL claim without a learner/environment/reward contract and actual training evidence.
 
+**Core counterpart (added 2026-10-08).** SI6 (Part XXIV) tests the same loop inside hippo's own sleep, on Z0's development families and with no Computer dependency. Its result says whether this item is worth building.
+
 ### CW7. Optional CLEF-assisted context and execution advice [research; CW0-CW5, CLF0/CLF1/CLF4/CLF5/CLF12]
 
 Through the shared CLF contract, evaluate bounded advice such as recall-only versus scoped evidence scan versus abstention; selection among already permitted processing plans; or applicable procedural artifact versus no-match. Keep each decision a separate component study. The external host executes any accepted plan.
@@ -3343,3 +3359,223 @@ The reply may claim only what the page shows. Posting it is Keith's decision.
 ### Sequence and stop rules
 
 HG3's adapters build on Z0 stage 0's isolated-arm runner, so they follow it and share its fixes. HG4's maintainer row can start now. HG1's S4 arm and HG2 enter active work through the execution index's "one diagnosed component" slot when Z10 or HG3 evidence names stale facts, changed facts or missing synthesis as the bottleneck. If the claim gate shows hippo behind on every test, the honest answer to the post is "not yet", and the gate page says so.
+
+---
+
+## Part XXIV - 2026-10-08 update: lessons compiled from graded work (SI6)
+
+### What was reviewed
+
+On 2026-10-08 an outside research review of this roadmap (25 proposals) was read against master. Most of its proposals restate work this file already owns; "Themes other items already own" below maps them. One piece of evidence in it is new: a wake-sleep experiment reported by Harvey ([thread](https://x.com/nikogrupen/status/2108226990792900876)). An agent works graded legal tasks. An offline pass then writes checklists and practice notes from the graded traces, merges and prunes them, and drops lessons tied to one client. Later runs retrieve the lessons that apply.
+
+Reported, over 10 cycles on 196 tasks (110 training, 86 validation):
+- strict all-pass, where every rubric line must pass, rose from 2.9% to 15.7% against an agent with no memory;
+- rubric-level pass rose by over 10% on familiar matters and nearly 5% on novel ones (the copy does not say whether these are points or relative);
+- the first sleep wrote 122 lessons, later revised and pruned;
+- tool use for code, validation and edits rose about 2.5 times;
+- retrieving only the relevant lessons cost about half as much per task as loading the whole lesson bank, at similar quality.
+
+**These figures are unverified.** The thread returned HTTP 402 on 2026-10-08, so they are quoted from a supplied copy. Harvey's [Legal Agent Benchmark](https://www.harvey.ai/blog/introducing-harveys-legal-agent-benchmark) post documents the rubric and all-pass grading method, not this experiment. Re-read the thread before quoting any figure outside this file.
+
+### What does not carry over
+
+- **The loop runs on grades.** Every task in the experiment has a rubric verdict. An ordinary hippo session has none: outcomes are marked by hand or by the agent (Part XI, "The gap"), and SI0's automatic signals sit behind a flag. A lesson compiled from ungraded work is a guess, which S4 already bars: "Do not concatenate episodes to manufacture a lesson."
+- **The comparator had no memory.** Hippo's question is the gain over built-in memory plus shipping hippo (Z0). The experiment does not address it.
+- **The gain may be more checking.** A 2.5 times rise in tool use fits lessons that mostly say "verify your work". A fixed checklist could do that with no sleep model.
+- **Hippo's own record here is poor.** The A1 replay recovered 1 of 18 lessons by extraction (Part XXIII, rejected ideas), and generic durability scoring failed in the Jev campaign (CLF9).
+
+So the idea enters as one research item with a test that can kill it. Nothing else changes.
+
+### SI6. Lessons compiled from graded work [research; hard: Z0 stage 2 development families and checkers, SI2 trust gate; conditional: CLF6 drafting arm; optional producer: SI0, Z3b, CW6; rollout gate: S1, S4, Z0; added 2026-10-08]
+
+**Question.** When something other than the agent grades the work, does a sleep pass that turns the graded traces into lessons improve later work? The bar is shipping hippo, a plain memory of each failed check, and a fixed checklist.
+
+**Precondition: a grade the agent did not write.** Accepted grades are a frozen check or acceptance test run by the host (CW6's rule: agent-written tests, altered check commands and cached output do not count), an SI0 signal that passed its validity rules, and a user correction recorded through Z3b. Anything else is `unknown` and is never a positive or a negative example. A store with no grades compiles nothing.
+
+**Mechanism.** An opt-in stage of `hippo sleep`, off by default and never on the hook path.
+- From a bounded batch of graded traces it proposes two kinds of candidate: a checklist line (a property the finished work must have) and a practice note (a way of working). Each keeps its source trace ids, the checks behind it, its scope and its parent version.
+- A deterministic gate runs first: source permissions and scope (EI2), quarantine and untrusted marks (CD5), and secrets. A candidate takes the narrowest scope and the lowest trust level among its sources. No model score overrides a denial.
+- A generality gate runs second. A candidate that only restates one task stays a scoped memory. Rules go first; a Jev or CLEF classifier is the opt-in second arm (CLF6, CLF8).
+- Merging, revising and retiring follow S4: reversible, provenance kept, conflicts kept for a decision.
+- A candidate stays `observed` until it passes SI2's trust gate. Delivery is ordinary recall, with nothing shown when no lesson applies.
+- Drafting needs a model, so it runs only where `extraction.enabled` and a provider opt-in allow it, free-first. Without that the stage does nothing and sleep stays zero-LLM. No weights change, and this is not RL.
+
+**Test.** Its own registration, never an amendment to Z0. It reuses Z0's isolated-arm runner and its development lesson families, whose checkers need no model judge. The grade replaces the teacher: no arm gets a teach or correction turn. After each training task the runner writes a grade file with each check's name, verdict and output, as a CI log would show them. Half the families train on their teach task. Scoring covers three sets: the apply tasks of trained families, every task of families never graded, and the no-lesson tasks.
+
+Arms, with the same agent and model and built-in memory on in all:
+1. shipping hippo (Z0's A2), the baseline;
+2. the baseline plus one error memory per failed check, stored word for word with no model;
+3. the baseline plus compiled lessons;
+4. the baseline plus one "verify before you finish" checklist, written before the run and never changed;
+5. Z0's perfect-memory arm (each rule written into `CLAUDE.md` by the runner), as the ceiling.
+
+A whole-bank arm (every lesson in context) and a sham arm (another repository's lessons) join at registration if the free inference quota covers them.
+
+Measures: Z0's resolve rate (the acceptance tests and every lesson check pass); the lesson-check pass rate on apply tasks; cost per resolved task, counting sleep inference and tool calls by kind; and the lesson bank's size, duplicates, lessons never retrieved and lessons shown but broken.
+
+**Decision rules, fixed before the run.** A win is a resolve-rate gain over the baseline larger than the paired noise bar, inside the registered cost bound, with no loss on any set.
+- Trained families test project rules. Compiled lessons must also beat arm 2 there. On a tie, ship "a failed check becomes a memory" through SI0 with no model, and drop the compiler.
+- Never-graded families and no-lesson tasks test general practice. Compiled lessons must also beat arm 4 there. On a tie, ship the checklist as a pinned line or a Z4 guard, and drop the compiler. Z0's screen keeps only rules that cannot be worked out from the checkout, so this is a weak test of transfer to new work.
+- A win only on trained families keeps lessons project-scoped, with no general-learning claim.
+- A null result is published. A development result decides whether to run a confirmation and is never a claim. Confirmation needs fresh families from Z0's blind author process and waits for Z0's scored result.
+
+**Edition.** The compiler, its gates and its test are MIT core. Cross-team lesson publishing and customer rubric registries are enterprise work that waits for a scoped partner and a win here.
+
+### Themes other items already own
+
+The review's other themes need no new item:
+- task benefit, supervision and growth studies: Z0, Z12, HG3;
+- capture and recovery across hosts: S6, AZ4 to AZ6;
+- delivery evidence, failure attribution and failures kept as regression cases: Z10, Z2b, CD13, TE4, CAE5;
+- temporality and abstention: HG2, S3, FE5, Z3b;
+- total-cost and cache-aware delivery: Track TE, S9, Z1d;
+- lesson-to-skill promotion: CAE8, CAE9;
+- learned decision models: Track CLF;
+- governed shared memory and customer value reports: EI2, EI10, EI11, EV6 to EV8, CD11 to CD14, EI15;
+- edition and claim wording: MSG1 to MSG6;
+- the trust boundary between memory and agent: CD5, AT3, EI2, CAE6, and CW6's rule that a retrieved memory cannot authorise execution. This review adds one rule to CD5: a derived row takes the lowest trust level and the narrowest scope among its sources.
+
+### Not adopted
+
+Each line names what would reopen it.
+- An OpenTelemetry exporter in core, and vendor profiles for observability or SIEM products: a design partner whose stack needs one. CD12 already joins Claude Code's OpenTelemetry files inside the customer's network.
+- Framework adapters added because another framework shipped a memory gateway: a user asking for that host. AZ6 owns the host list.
+- Observational memory in the Mastra style (a compressed log kept always in context) as a comparison arm: HG3's registration may add it when it locks, if a matched-model adapter exists.
+- A connector registry and organisation policy plane, customer rubric registries and cross-team lesson publishing: a scoped enterprise partner (execution index, Next 4), and for the last two a win on SI6.
+- A professional-work benchmark outside coding: a partner in that field who brings graded tasks. Coding agents stay hippo's home surface.
+- A per-release hash of hippo's MCP tool descriptions and schemas, so a client can pin them: fold it into CAE6 once its inventory exists and a client asks.
+- The review's 14 experiments and six milestones as a schedule: the execution index is the schedule.
+
+### Order and stop rules
+
+SI6 cannot start before Z0 stage 2, because it reuses the development families that stage authors and screens. Until then its only work is the registration draft. It sits in the execution index's research row, and moves to the "one diagnosed component" slot only if Z10 evidence names lessons missed from graded outcomes as the bottleneck. It changes no default: S4 stays hygiene, and Z0's registration and the frozen defaults stand. A win is a second dream ablation for Part XXIII's test (e), beside HG1. A loss is published the same way.
+
+## Part XXV - 2026-10-09 update: a served admin console for the enterprise buyer (Track AC)
+
+### Why
+
+The buyer is the head of AI platform or AI enablement. Today that person sees hippo only through files and commands. `hippo-enterprise admin report` and `report pilot` write static HTML that an operator runs with `docker compose exec` on the VM. Users and access live in the company's identity provider through SSO and SCIM. Keys are revoked over the API, and the audit log goes to the SIEM. Nothing is live, and nothing opens in a browser behind the company's sign-in.
+
+The core dashboard (`hippo dashboard`) cannot fill the gap. It listens on 127.0.0.1 only, serves one tenant, and has no SSO. In the enterprise deployment the laptops hold no memories, so there is nothing for it to show there.
+
+The enterprise server cannot serve pages either. Core's add-on routes are POST-only JSON under `/v1/` (`src/server/route-table.ts`, `assertAddonRoutes` and `dispatchAddonRoute`). The OIDC resolver record (hippo-enterprise `docs/decisions/2026-10-03-oidc-sso-resolver.md`) says the server "never runs a login flow, holds a client secret or stores a session". The server-reports record deferred served reports: "Later, if partners ask for it."
+
+Track AC plans that later, for when a partner asks. It turns CD6's report into a served console. Planned, not started.
+
+### What comparable products give this buyer (research 2026-10-09)
+
+Sources were read on 2026-10-09, some only as search excerpts. Re-check before quoting outside this file.
+
+- **GitHub Copilot.** It has a 28-day usage dashboard, a usage breakdown by user and agent, an impact view of adoption cohorts against PR output, and an NDJSON export. Data lags by up to two days. A custom role gives read-only metrics access. Team metrics need at least 5 licensed users. Seat records carry a last-activity date ([metrics](https://docs.github.com/en/copilot/concepts/copilot-usage-metrics/copilot-metrics), [team metrics](https://docs.github.com/en/copilot/reference/copilot-usage-metrics/team-level-metrics), [seats](https://docs.github.com/en/rest/copilot/copilot-user-management)).
+- **Claude Code for Enterprise.** It shows lines accepted, daily active users and sessions. It compares PRs made with Claude Code against PRs made without it, and exports a per-user CSV. It refreshes daily, has an analytics API, and admins and owners can view it ([analytics](https://code.claude.com/docs/en/analytics), [roles](https://support.claude.com/en/articles/9267276-roles-and-permissions)).
+- **Cursor.** It covers members and roles, spend limits, a model allowlist and API keys. Its audit log has 80+ event types and filters on date, event, actor and app. It exports the filtered set to CSV and streams to a SIEM. Prompts and code are never logged ([dashboard](https://cursor.com/docs/account/teams/dashboard), [compliance](https://cursor.com/docs/enterprise/compliance-and-monitoring)).
+- **Self-hosted products.** Tabnine's private install ships an admin-only web console with usage pages, CSV and emailed reports ([reporting](https://docs.tabnine.com/main/administering-tabnine/private-installation/managing-your-team/reporting)). Langfuse and LangSmith self-host the same app as their cloud, with role-gated, filterable, exportable audit logs ([Langfuse audit logs](https://langfuse.com/docs/administration/audit-logs), [LangSmith audit logs](https://docs.langchain.com/langsmith/audit-logs)). Sourcegraph moved analytics to a separate hosted portal ([analytics](https://sourcegraph.com/docs/analytics)).
+
+What this buyer expects, distilled:
+- Adoption: active users and sessions over time.
+- Licence use and dormant users.
+- Impact: work done with the tool against work done without it.
+- Spend per user, team and model.
+- A per-user table with CSV export.
+- Team and date filters, with a minimum cohort size.
+- Members and roles as SSO and SCIM state.
+- Keys with revoke.
+- A filterable audit log with CSV and SIEM export.
+- An API behind the views.
+- A visible promise that content stays out of admin views.
+
+CD6's report already covers adoption, dormant memories, usage per actor, token cost and the audit log. CD12's pilot report covers impact. What is missing is the served, signed-in, live layer, plus team filters (EV6) and actions.
+
+### Security design (research 2026-10-09)
+
+- **The console is the backend-for-frontend.** RFC 10017 (BCP 212, OAuth 2.0 for browser-based applications) says the BFF "MUST act as a confidential client". The browser never holds a token ([RFC 10017](https://datatracker.ietf.org/doc/rfc10017/)).
+- **Sign-in.** Authorization code with PKCE, `state` and `nonce`, `response_mode=query`, and a client secret read from `.env`. The ID token gets its own check (audience is the console client id, plus `nonce` and `azp`) and shares the resolver's key cache. The resolver's own check cannot be reused: it wants the API audience and refuses a token that carries `nonce` without `typ: Bearer` (hippo-enterprise `src/sso/resolver.ts`). Sign-in also asks for an access token with the API audience, which AC5's actions use. Agents keep bearer tokens and keys, unchanged.
+- **Tenants.** `sso.json` maps each provider to one tenant. The login page picks the provider, and the console stores that choice with `state` on the server. The callback checks `iss` against it, so one provider's response cannot be replayed into another (RFC 9207, [mix-up defence](https://datatracker.ietf.org/doc/rfc9207/)). The session's tenant comes from its provider, never from a query, and every report call passes it, because an undefined tenant means all tenants.
+- **The session cookie.** One cookie, `__Host-hippo-console`, with `HttpOnly`, `Secure`, `SameSite=Strict` and `Path=/` (so it also reaches `/v1` and `/scim`, which ignore it). It holds a random id, and the server stores only that id's hash, so a backup of the session file holds no live session. The short-lived login cookie that carries `state` must be `SameSite=Lax`, because the identity provider's redirect back is a cross-site navigation. A Strict cookie set on that redirect is often not sent on the next hop, so the callback answers 200 with a same-site link instead of a redirect. A new session id is issued at sign-in and at step-up ([OWASP session management](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html)).
+- **Timeouts.** 30 minutes idle and 8 hours absolute, both stated in the security overview. Both sit inside OWASP's ranges and NIST SP 800-63B-4's AAL2 limits ([800-63B-4](https://pages.nist.gov/800-63-4/sp800-63b.html), [ASVS 5.0 V7](https://asvs.dev/v5.0.0/V7-Session-Management/)).
+- **Roles and drift.** Roles come from the groups claim at sign-in, because SCIM groups are not supported. A group removal therefore takes effect at the next sign-in, at most 8 hours later. SCIM deactivation is checked on every request and ends the session at once.
+- **Re-authentication for actions.** An action sends the identity provider `prompt=login` and `max_age=0`, with its own `state` and `nonce`. The returned `auth_time` must be later than the moment the step-up began. Some providers ignore `max_age` or leave out `auth_time`; with no `auth_time` the action is refused. AC0 records how each supported provider behaves ([OIDC Core](https://openid.net/specs/openid-connect-core-1_0.html)).
+- **Ending sessions.** RP-initiated logout as a CSRF-checked POST, an admin "end sessions" control, SCIM deactivation and the idle timeout. Back-channel logout comes later (AC9), because not every supported provider offers it and a cloud provider often cannot reach a private VM ([RP-initiated logout](https://openid.net/specs/openid-connect-rpinitiated-1_0.html), [back-channel logout](https://openid.net/specs/openid-connect-backchannel-1_0.html)).
+- **Forged requests.** A synchronizer token on every POST, and a request with `Sec-Fetch-Site: cross-site` is refused. No GET changes state. The back-channel logout endpoint is the one exemption, and it validates its logout token instead ([OWASP CSRF](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html)).
+- **Abuse and the proxy.** Per-address rate limits on login and callback. Client addresses come from the forwarded header only through the `HIPPO_CLIENT_IP_HEADER` and `HIPPO_TRUSTED_PROXIES` pair the API already uses. Every redirect URI and absolute link comes from config, never from `Host` or `X-Forwarded-Host`.
+- **Headers.** Sent as real headers, not a meta tag: `default-src 'self'; script-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'`, plus `nosniff` and a Referrer-Policy. HSTS of at least a year is set in Caddy ([OWASP CSP](https://cheatsheetseries.owasp.org/cheatsheets/Content_Security_Policy_Cheat_Sheet.html), [ASVS 5.0 V3](https://asvs.dev/v5.0.0/V3-Web-Frontend-Security/)).
+- **Logging.** Sign-ins, failed sign-ins, denied requests and every console action go to the audit log, so they also reach the SIEM export (ASVS 5.0 V16).
+
+### Build shape
+
+The console is server-rendered HTML with plain forms. It has no framework, no build step and no CDN, so it works in an air-gapped install and under `script-src 'self'`. Sidekiq's web UI and Gitea's server-rendered pages are the precedent. The pages reuse CD6's and CD12's builders (`buildAdminReport`, `buildPilotReport`), which already escape every cell and degrade per section. `renderAdminHtml` emits a whole page with a meta CSP, an inline style and a hash-pinned inline script, which `default-src 'self'` blocks, so AC2 exports its section renderers and moves the CSS and filter script to static files. The core React dashboard is not reused. It only talks to its own `/api`, and it would add a toolchain to the enterprise image.
+
+It runs as its own process, `hippo-enterprise console`, not as a listener inside `serve` (SCIM's listener lives inside `serve`). `buildAdminReport` holds one synchronous `node:sqlite` read transaction for seconds, which inside `serve` would stall prompt hooks and token checks. A separate process also keeps the client secret out of the API process, so the resolver record stays true for the API. It runs as uid 10001 on the store volume, because a read-only WAL open still writes the `-shm` file, and a root-owned file breaks the server (server-reports record). Each (tenant, window) report is built once and cached for 60 s, one build at a time. Caddy sends `handle /admin*` to it, ahead of the catch-all. Core does not change: the add-on route contract stays POST-only JSON, and no HTML or cookie handling enters the MIT core.
+
+### What it will not do
+
+- Manage users or groups. The identity provider owns them through SCIM.
+- Edit or write memories.
+- Show memory text by default. Item AC5 adds an audited reveal, if a partner asks.
+- Run as a hosted service. A10 owns hosting.
+- Change anything for agents, keys, hooks or the API.
+
+### Track AC - Admin console [planned; commercial repo; added 2026-10-09]
+
+#### AC0. Design record and threat model [planned; hard: CD6, EI11; added 2026-10-09] [commercial repo]
+A hippo-enterprise decision record does four things. It amends the OIDC resolver record so the console process, not the API, may hold a client secret and sessions. It fixes the process, the session store and the cookie, timeout and step-up rules above. It records how each supported identity provider handles `max_age`, `prompt=login` and `auth_time`. It also lists the threats and their controls: session theft, forged requests, cross-tenant reads, provider mix-up, privilege drift after a group removal (up to 8 hours) or SCIM removal (immediate), open redirect on login, host-header redirect poisoning and clickjacking. Reviewed before AC1 starts.
+
+#### AC1. Sign-in, sessions and the shell [planned; hard: AC0; added 2026-10-09] [commercial repo]
+- Covers the `console` process, the Caddy route and a per-provider `sso.json` console block (client id, redirect URI, the secret's environment variable name). The config parser rejects unknown keys today, so the block is added to it.
+- Sign-in uses code, PKCE, `state`, `nonce`, `response_mode=query` and the `iss` check. Sessions live in the console's own SQLite file on the volume, stored as id hashes, with idle and absolute expiry.
+- Adds RP-initiated logout, per-address rate limits on login and callback, and the SCIM check on every request. Every response carries the headers above. The landing page shows who is signed in and for which tenant.
+- Gated by the `admin_view` licence feature. Roles: `adminGroups` gives admin; everyone else is refused.
+- **Done when** a test identity provider (the existing `startIdp` helper) signs an admin in and out. The negative tests must pass for: no session, an expired session, a wrong tenant, a mixed-up provider, a cross-site POST, a missing CSRF token, a redirect URI outside config, a forged `Host` header, and a SCIM-removed user.
+
+#### AC2. Live overview pages [planned; hard: AC1, CD6; added 2026-10-09] [commercial repo]
+- One page per CD6 section, built from `buildAdminReport` with the session's tenant and a date window, and served from the 60 s cache: what is stored, who used what, held and dormant memories, and token cost.
+- Exports CD6's section renderers and moves the CSS and filter script to static files.
+- A per-actor table exports to CSV. The store is opened read-only, so the console never writes it.
+- **Done when** each page renders from a seeded store, and a member and a wrong-tenant admin both get 403. On the CD6 scale fixture (1,000,000 audit rows and 100,000 memories): the first build is under 3 s, a cached view is under 200 ms, and the API's prompt-hook p95 does not move during a build. The CD6 record measured 2.7 s for the whole report, before the People section was added.
+
+#### AC3. Audit log browser [planned; hard: AC1; added 2026-10-09] [commercial repo]
+- This is new SQL, so it gets an index on (tenant, ts, id). The existing index cannot serve the `IS NULL OR` tenant filter (admin-report record).
+- Keyset pagination on time and id, with a 30-day default window.
+- Filters for actor, event and repository, inside the session's tenant. CSV export covers exactly the filtered set.
+- Metadata and targets pass through `redactMetadata` and `redactTarget`, as CD6 does.
+- The console's own sign-ins and actions appear here too.
+- **Done when** paging over the scale fixture neither skips nor repeats a row, each page is under 500 ms, and the export matches the filter.
+
+#### AC4. Pilot page [planned; hard: AC1, CD12; added 2026-10-09] [commercial repo]
+- Shows CD12's with-hippo against holdout report for a chosen window, gated by `pilot_report`.
+- It shows "not measured" where CD12 does, and no saving figure before CD11 has measured one.
+- The report builds in the background and is cached, because a large telemetry set takes seconds.
+
+#### AC5. Actions with fresh sign-in [planned; hard: AC2, AC3; added 2026-10-09] [commercial repo]
+- Actions: revoke a key, approve or reject a quarantined memory, and end a user's console sessions.
+- Key and quarantine actions call the core API on the internal network with the signed-in admin's own access token, renewed by the step-up. Core then does the role, tenant and audit checks and records the right actor, so the console adds no SQL and needs no core export.
+- Each one needs a fresh step-up, a CSRF token and an admin role, and each one writes an audit event.
+- An optional audited "show memory text" for one row, off by default.
+- AC8's checklist is re-run for actions before a partner gets them.
+- **Done when** each action's audited event appears in AC3 under the admin's name. A step-up with a missing or stale `auth_time` and a member must each be refused.
+
+#### AC6. Postgres stores [planned; hard: AC2; conditional: a partner on Postgres; added 2026-10-09] [commercial repo]
+CD6's and CD12's readers open SQLite directly, and on a Postgres store the reports do not run. This slice adds store-port readers (or Postgres SQL) for the tables the pages read, so the console works with `serve --db`. It is required before any partner on Postgres gets the console. It is the same gap as hippo-enterprise E12 (server-reports record), and whichever lands first closes both.
+
+#### AC7. Team views [planned; hard: AC2, EV6; rollout gate: EV8; added 2026-10-09] [commercial repo]
+- Adds team filters and per-team rollups once EV6 makes teams first-class.
+- No team metric is shown for a team under 5 people.
+- EV8's roles (team admin, viewer) scope what each viewer sees.
+
+#### AC8. Security acceptance [planned; hard: AC1, AC2, AC3; added 2026-10-09] [commercial repo]
+- An OWASP ASVS 5.0 Level 2 self-check of the read-only console, recorded item by item.
+- The console goes into the security overview, the install runbook and the scope of the planned outside penetration test.
+- No partner gets the console before this passes. AC5 re-runs it for actions.
+
+#### AC9. Auditor role and back-channel logout [planned; hard: AC8; added 2026-10-09] [commercial repo]
+- A new `auditorGroups` gives a read-only role that sees the audit log and takes no action.
+- Back-channel logout, for providers that offer it and can reach the VM. The endpoint is exempt from the CSRF token and validates the logout token instead: `iss`, `aud`, `iat`, `jti` replay, the `events` claim, no `nonce`, and `sid` or `sub`.
+- **Done when** an auditor can read AC3 and is refused every action, and a valid logout token ends the session while a replayed one is refused.
+
+### Order, size and gates
+
+- **Order.** AC0, then AC1 to AC3, then AC8 for the read-only console. AC4, AC5 and AC9 follow. AC6 waits for a partner on Postgres, and AC7 waits for EV6.
+- **Size.** AC0 to AC3 plus AC8 are about 2 to 3 weeks for one maintainer, because AC1 is a full OIDC relying party with sessions and AC8 is a Level 2 check. AC4, AC5 and AC9 add about 1 to 2 weeks. Re-estimate when AC0 is reviewed.
+- **When.** After the first partner's security review, or sooner if a buyer asks to see it. It does not block a pilot: the report files, SSO, SCIM and SIEM export cover a pilot today.
+- **Edition.** All commercial, under `admin_view` and `pilot_report`. The core dashboard stays as it is.
+- **Measure.** Count administrator time against the report-file workflow, in the low-touch spirit of EV9. A console that adds admin work has failed.

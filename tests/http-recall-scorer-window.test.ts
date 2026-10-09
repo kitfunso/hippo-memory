@@ -13,7 +13,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
 
@@ -45,7 +45,7 @@ afterEach(async () => {
   rmSync(home, { recursive: true, force: true });
 });
 
-describe('HTTP /v1/memories scorer_window (v1.7.2 T4)', () => {
+describe('HTTP /v1/memories scorer_window', () => {
   it('scorer_window=5 narrows the candidate pool: response.windowSize=5', async () => {
     const res = await fetch(`${handle.url}/v1/memories?q=alpha&scorer_window=5`);
     expect(res.status).toBe(200);

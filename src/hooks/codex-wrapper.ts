@@ -1,8 +1,11 @@
-import { envPath } from '../env.js';
+import { envPath } from '../util/env.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
-import { isJsonString, HIPPO_CODEX_WRAPPER_MARKER, homeDir, codexHomeDir, ensureDir } from './shared.js';
+import { errorMessage, log } from '../util/log.js';
+import { HIPPO_CODEX_WRAPPER_MARKER, homeDir, codexHomeDir, ensureDir } from './shared.js';
+import { isJsonString } from '../util/json.js';
+import { writeFileAtomic } from '../util/atomic-write.js';
 
 export interface CodexWrapperPaths {
   wrapperDir: string;
@@ -217,11 +220,12 @@ export function detectRealCodexPath(): string | null {
 }
 
 function writeExecutableFile(filePath: string, content: string): void {
-  fs.writeFileSync(filePath, content, 'utf8');
+  writeFileAtomic(filePath, content);
   try {
     fs.chmodSync(filePath, 0o755);
-  } catch {
-    // chmod is best-effort on Windows
+  } catch (err) {
+    // The mode bit means nothing on Windows; elsewhere a wrapper that is not executable breaks `codex`, so say so.
+    log.warn(`could not mark ${filePath} executable: ${errorMessage(err)}`);
   }
 }
 
@@ -229,14 +233,7 @@ export function installCodexWrapper(realCodexPath?: string): CodexWrapperInstall
   const existingMetadata = readCodexWrapperMetadata();
   if (isCodexWrapperMetadataValid(existingMetadata) && !realCodexPath) {
     cleanupLegacyCodexPathWrappers(resolveCodexWrapperPaths());
-    return {
-      installed: true,
-      metadataPath: resolveCodexWrapperPaths().metadataPath,
-      realCodexPath: existingMetadata.realCodexPath,
-      commandPath: existingMetadata.commandPath,
-      backupPath: existingMetadata.backupPath,
-      installMode: existingMetadata.installMode,
-    };
+    return installResult(resolveCodexWrapperPaths().metadataPath, existingMetadata);
   }
 
   const resolvedRealCodexPath = realCodexPath ?? detectRealCodexPath();
@@ -271,11 +268,15 @@ export function installCodexWrapper(realCodexPath?: string): CodexWrapperInstall
     logFile: paths.logFile,
     installedAt: new Date().toISOString(),
   };
-  fs.writeFileSync(paths.metadataPath, JSON.stringify(metadata, null, 2) + '\n', 'utf8');
+  writeFileAtomic(paths.metadataPath, JSON.stringify(metadata, null, 2) + '\n');
 
+  return installResult(paths.metadataPath, metadata);
+}
+
+function installResult(metadataPath: string, metadata: CodexWrapperMetadata): CodexWrapperInstallResult {
   return {
     installed: true,
-    metadataPath: paths.metadataPath,
+    metadataPath,
     realCodexPath: metadata.realCodexPath,
     commandPath: metadata.commandPath,
     backupPath: metadata.backupPath,
@@ -355,7 +356,7 @@ export function isCodexWrapperInstalled(): boolean {
  * opt-in record. Never performs a first install. Replacing another vendor's
  * binary must stay behind the explicit `hippo hook install codex` command;
  * doing it from postinstall or routine commands is a consent violation and
- * reads as binary hijacking to security scanners (issue #133).
+ * reads as binary hijacking to security scanners.
  */
 export function repairCodexWrapperIfInstalled(hippoCliPath: string = resolveHippoCliPath()): EnsureCodexWrapperResult {
   if (readCodexWrapperMetadata() === null) {

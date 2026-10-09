@@ -3,25 +3,24 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
+import { type SpawnSyncReturns } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { Layer, type MemoryEntry} from '../src/memory.js';
+import { Layer, type MemoryEntry} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { estimateTokens } from '../src/token-ledger.js';
-import type { SearchResult } from '../src/search/types.js';
-import { insertEntity, insertRelation } from '../src/graph/write.js';
-import { graphExpandRecall } from '../src/graph-recall.js';
-
-const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
+import { estimateTokens } from '../src/util/token-text.js';
+import type { SearchResult } from '../src/core/search-types.js';
+import { insertEntity, insertRelation } from '../src/store/graph-writes.js';
+import { graphExpandRecall } from '../src/graph/recall.js';
+import { hippoRun } from './_helpers/spawn-hippo.js';
 
 let home: string;
 let project: string;
 let env: NodeJS.ProcessEnv;
 
 function hippo(args: string[], input?: string): SpawnSyncReturns<string> {
-  const r = spawnSync(process.execPath, [HIPPO_JS, ...args], { cwd: project, env, input, encoding: 'utf8' });
+  const r = hippoRun(args, { cwd: project, env, input });
   expect(r.status, r.stderr).toBe(0);
   return r;
 }
@@ -101,6 +100,28 @@ describe('SessionStart hooks', () => {
     const stderr = runs.map((r) => r.stderr).join('');
 
     expect(stdout).not.toContain('Previous session hippo consolidation');
+    for (const line of lines) expect(stdout).not.toContain(line);
+    for (const line of lines) expect(stderr).toContain(line);
+    expect(stdout).toBe('');
+    expect(fs.existsSync(logFile)).toBe(false);
+  });
+
+  it('show the user one problems line and still keep the log out of the context', () => {
+    const commands = installedCommands('SessionStart');
+    const logFile = /--path "([^"]+)"/.exec(commands.find((c) => c.startsWith('hippo last-sleep')) ?? '')?.[1] ?? '';
+    remember('the release script needs the staging flag or it publishes to production');
+    hippo(['sleep', '--log-file', logFile]);
+    const lines = fs.readFileSync(logFile, 'utf8').split('\n').map((l) => l.trim()).filter(Boolean);
+    fs.mkdirSync(path.join(project, '.hippo', 'compactions-spool'), { recursive: true });
+    fs.writeFileSync(path.join(project, '.hippo', 'compactions-spool', 'x.unreadable.bad'), '{');
+
+    const runs = commands.map((c) => runHook(c, { session_id: 'lean-session', hook_event_name: 'SessionStart', source: 'startup' }));
+    const stdout = runs.map((r) => r.stdout).join('');
+    const stderr = runs.map((r) => r.stderr).join('');
+
+    expect(stdout.endsWith('\n')).toBe(true);
+    expect(stdout.slice(0, -1)).not.toContain('\n');
+    expect(JSON.parse(stdout)).toEqual({ systemMessage: 'Hippo: 1 compaction summary set aside as .bad. Run hippo doctor for details.' });
     for (const line of lines) expect(stdout).not.toContain(line);
     for (const line of lines) expect(stderr).toContain(line);
     expect(fs.existsSync(logFile)).toBe(false);

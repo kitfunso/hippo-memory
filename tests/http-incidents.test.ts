@@ -17,10 +17,13 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { serve, type ServerHandle } from '../src/server.js';
-import { createApiKey, type CreateApiKeyResult } from '../src/auth.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import type { Incident } from '../src/incidents.js';
+import { createApiKey, type CreateApiKeyResult } from '../src/store/auth.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import type { Incident } from '../src/objects/incidents.js';
+import type { JsonValue } from '../src/util/json.js';
 import { makeRoot } from './_helpers/make-root.js';
+
+type Body = { [key: string]: JsonValue };
 
 /** Parse a fetch Response body against a caller-declared shape. */
 async function jsonAs<T>(res: Response): Promise<T> {
@@ -68,7 +71,7 @@ async function createIncident(
   });
 }
 
-describe('HTTP /v1/incidents (E2 incident first-class object)', () => {
+describe('HTTP /v1/incidents (incident first-class object)', () => {
   it('POST /v1/incidents creates an incident (201 + Incident body)', async () => {
     const res = await createIncident('DB pool exhausted', { context: 'spike at 14:00' });
     expect(res.status).toBe(201);
@@ -181,5 +184,36 @@ describe('HTTP /v1/incidents (E2 incident first-class object)', () => {
   it('DoS cap: text over 4096 chars -> 400', async () => {
     const res = await createIncident('x'.repeat(4097));
     expect(res.status).toBe(400);
+  });
+
+  const over = (cap: number): string => 'x'.repeat(cap + 1);
+  const at = (cap: number): string => 'x'.repeat(cap);
+  const ROOT = '/v1/incidents';
+  const MISSING = '/v1/incidents/99999/resolve';
+  const SHORT = 'Memory content too short (0 chars, minimum 3): ""';
+  const NO_MEMORY = 'saveIncident: linked memory mem_missing not found for tenant default';
+  // Each row also sends every later field invalid, and every linked memory or resolved id is missing,
+  // so a row pins which check answers first as well as the reply text.
+  const REPLIES: readonly (readonly [string, string, string, Body | undefined, number, string])[] = [
+    ['list: an unknown status', 'GET', `${ROOT}?status=retired`, undefined, 400, 'status must be one of: open | resolved | closed | all (got "retired")'],
+    ['create: empty text', 'POST', ROOT, { text: '', context: 7, linkedMemoryIds: 7 }, 400, 'text is required (non-empty string)'],
+    ['create: text over the cap', 'POST', ROOT, { text: over(4096), context: 7, linkedMemoryIds: 7 }, 400, 'text exceeds 4096-character cap'],
+    ['create: context not a string', 'POST', ROOT, { text: 't', context: 7, linkedMemoryIds: 7 }, 400, 'context must be a string'],
+    ['create: context over the cap', 'POST', ROOT, { text: 't', context: over(4096), linkedMemoryIds: 7 }, 400, 'context exceeds 4096-character cap'],
+    ['create: linkedMemoryIds not an array', 'POST', ROOT, { text: 't', linkedMemoryIds: 7 }, 400, 'linkedMemoryIds must be an array of memory ids'],
+    ['create: too many linkedMemoryIds', 'POST', ROOT, { text: 't', linkedMemoryIds: Array.from({ length: 257 }, () => '') }, 400, 'linkedMemoryIds exceeds 256-item cap'],
+    ['create: an empty linkedMemoryIds entry', 'POST', ROOT, { text: 't', linkedMemoryIds: [''] }, 400, 'each linkedMemoryIds entry must be a non-empty string <= 4096 chars'],
+    ['create: every field at its cap reaches the store', 'POST', ROOT, { text: at(4096), context: at(4096), linkedMemoryIds: ['mem_missing'] }, 409, NO_MEMORY],
+    ['create: a null context reaches the store', 'POST', ROOT, { text: 'ttt', context: null, linkedMemoryIds: ['mem_missing'] }, 409, NO_MEMORY],
+    ['create: spaces-only text passes the route check', 'POST', ROOT, { text: '  ' }, 400, SHORT],
+    ['resolve: blank resolutionText', 'POST', MISSING, { resolutionText: '  ' }, 400, 'resolutionText is required (non-empty string)'],
+    ['resolve: resolutionText over the cap', 'POST', MISSING, { resolutionText: over(4096) }, 400, 'resolutionText exceeds 4096-character cap'],
+    ['resolve: resolutionText at its cap reaches the store', 'POST', MISSING, { resolutionText: at(4096) }, 404, 'resolveIncident: incident 99999 not found for tenant default'],
+  ];
+
+  it.each(REPLIES)('%s', async (_name, method, path, body, status, error) => {
+    const init = { method, headers: authHeaders(), body: body && JSON.stringify(body) };
+    const res = await fetch(`${handle.url}${path}`, init);
+    expect([res.status, await res.text()]).toEqual([status, JSON.stringify({ error })]);
   });
 });

@@ -3,7 +3,7 @@ import type { Migration } from './types.js';
 export const v46: Migration = {
     version: 46,
     up: (db) => {
-      // CD13 failure log (src/failure-log.ts): hashes only, since failure text can carry paths and secrets.
+      // Failure log (src/store/failure-log.ts): hashes only, since failure text can carry paths and secrets.
       // Additive only: no min_compatible_binary bump.
       db.exec(`
         CREATE TABLE IF NOT EXISTS failure_log (

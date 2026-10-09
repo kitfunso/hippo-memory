@@ -10,8 +10,8 @@
  * `entries.some((e) => (idx[e.id]?.length ?? 0) > 0)` gate keeps
  * `useEmbeddings` false regardless of whether @xenova/transformers happens
  * to be installed in the test environment — every assertion here exercises
- * the BM25-only path and, specifically, src/compare.ts's tiebreak. The
- * embedding-text-contamination fix (T1, src/embeddings.ts) is unit-tested
+ * the BM25-only path and, specifically, src/core/compare.ts's tiebreak. The
+ * embedding-text-contamination fix (T1, src/store/embeddings/index.ts) is unit-tested
  * separately; LoCoMo smoke is the cross-fix integration evidence (plan
  * verify-stage item 4).
  *
@@ -25,10 +25,10 @@ import * as path from 'path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { Layer, type MemoryEntry} from '../src/memory.js';
+import { Layer, type MemoryEntry} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { hybridSearch } from '../src/search/hybrid.js';
-import { searchBothHybrid } from '../src/shared.js';
+import { searchBothHybrid } from '../src/sharing/search-both.js';
 
 // Fixed clock: pins calculateStrength/recencyBoost so two stores produce
 // byte-identical composite scores for byte-identical content — otherwise
@@ -94,7 +94,7 @@ function ingestFixture(root: string, pathTag: string): void {
   });
 }
 
-describe('recall cross-store determinism (T2/T3 acceptance)', () => {
+describe('recall cross-store determinism', () => {
   let storeA: string;
   let storeB: string;
 

@@ -15,17 +15,17 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import {
   loadAllDirtySummaries,
-  loadChildrenOfSummary,
   applyRebuildResult,
-  clearSummaryDirtyAfterBuild,
 } from '../src/store/summaries.js';
-import { openHippoDb, type DatabaseSyncLike } from '../src/db.js';
-import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { rebuildDirtySummaries, buildDag, generateDagSummary } from '../src/dag.js';
-import * as dagModule from '../src/dag.js';
+import { openHippoDb, withSharedStoreHandles, type DatabaseSyncLike } from '../src/db/index.js';
+import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { rebuildDirtySummaries, buildDag } from '../src/consolidate/dag.js';
+import * as dagModule from '../src/consolidate/dag.js';
 import { consolidate } from '../src/consolidate/sleep.js';
-import { archiveRawMemory } from '../src/raw-archive.js';
-import { insertRejectedValue, rejectionDigest, normalizeValueForRejection } from '../src/rejection.js';
+import { insertRejectedValue, rejectionDigest, normalizeValueForRejection } from '../src/store/rejection.js';
+
+// The cap cases seed up to 75 rows and marks in a real store, so their time follows the runner's disk.
+vi.setConfig({ testTimeout: 30_000 });
 
 /**
  * Build a fetcher that returns the same synthetic content for every call.
@@ -39,16 +39,6 @@ function makeOkFetcher(content: string = 'synthetic-summary-from-fetcher-X'): ty
     JSON.stringify({ content: [{ text: content }] }),
     { status: 200, headers: { 'content-type': 'application/json' } },
   ));
-}
-
-function makeThrowingFetcher(): typeof fetch {
-  return vi.fn<typeof fetch>(async () => {
-    throw new Error('network down');
-  });
-}
-
-function makeNonOkFetcher(status: number = 500): typeof fetch {
-  return vi.fn<typeof fetch>(async () => new Response('error', { status }));
 }
 
 /**
@@ -130,7 +120,7 @@ function makeChild(
   return c;
 }
 
-describe('v0.30 / E3 — sleep-cycle rebuildDirtySummaries', () => {
+describe('sleep-cycle rebuildDirtySummaries', () => {
   let hippoRoot: string;
 
   beforeEach(() => {
@@ -201,9 +191,6 @@ describe('v0.30 / E3 — sleep-cycle rebuildDirtySummaries', () => {
       expect(meta.descendant_count).toBe(3);
 
       // FTS row synced — query content column for the rebuilt token
-      const ftsRow = getRow<{ id: string; content: string }>(db, `
-        SELECT id, content FROM memories_fts WHERE memories_fts MATCH ?
-      `, 'newgensummarycontent');
       // We don't expect the dashed string to tokenize cleanly; just verify
       // FTS row was rewritten by reading its content directly.
       const ftsAll = getRow<{ content: string }>(db, `SELECT content FROM memories_fts WHERE id = ?`, summary.id);
@@ -287,13 +274,16 @@ describe('v0.30 / E3 — sleep-cycle rebuildDirtySummaries', () => {
   });
 
   it('test #4: cap enforcement — 25 dirty summaries with cap=20 → attempted=20, capped=true', async () => {
-    for (let i = 0; i < 25; i++) {
-      const sum = makeSummary(`sum-${i}`);
-      writeEntry(hippoRoot, sum);
-      const child = makeChild(sum.id, `fact-${i}`);
-      writeEntry(hippoRoot, child);
-      forceMarkDirty(hippoRoot, sum.id);
-    }
+    // One connection for the seed loop: a close per write checkpoints the WAL, which is slow on Windows.
+    await withSharedStoreHandles(() => {
+      for (let i = 0; i < 25; i++) {
+        const sum = makeSummary(`sum-${i}`);
+        writeEntry(hippoRoot, sum);
+        const child = makeChild(sum.id, `fact-${i}`);
+        writeEntry(hippoRoot, child);
+        forceMarkDirty(hippoRoot, sum.id);
+      }
+    });
 
     const fetcher = makeOkFetcher();
     const result = await rebuildDirtySummaries(hippoRoot, {

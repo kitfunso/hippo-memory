@@ -16,7 +16,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { remember, sleep, outcome, type Context } from '../src/api.js';
+import { remember, sleep, outcome, type HippoDbContext } from '../src/api/index.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
 
@@ -47,7 +47,7 @@ describe('GET /v1/audit?op=<op> — consolidate + outcome wiring', () => {
 
   it('round-trips a consolidate row written by api.sleep', async () => {
     // Seed: write one row by invoking api.sleep, then query via HTTP.
-    const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+    const ctx: HippoDbContext = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
     remember(ctx, { content: 'seed-for-consolidate' });
     await sleep(ctx, { dryRun: true });
 
@@ -58,14 +58,14 @@ describe('GET /v1/audit?op=<op> — consolidate + outcome wiring', () => {
     expect(res.status).toBe(200);
     // auditList returns AuditEvent[] directly (not {events: [...]}).
     // SAFETY: GET /v1/audit's response body is the serialized AuditEvent[]
-    // from src/audit.ts, checked immediately by the assertions below.
+    // from src/store/audit.ts, checked immediately by the assertions below.
     const body = await res.json() as Array<{ op: string; actor: string }>;
     expect(body.length).toBeGreaterThanOrEqual(1);
     expect(body.every((e) => e.op === 'consolidate')).toBe(true);
   });
 
   it('round-trips an outcome row (pre-existing drift the v1.11.5 Set update closes)', async () => {
-    const ctx: Context = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+    const ctx: HippoDbContext = { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
     const m1 = remember(ctx, { content: 'outcome-target' });
     outcome(ctx, [m1.id], true);
 
@@ -74,7 +74,7 @@ describe('GET /v1/audit?op=<op> — consolidate + outcome wiring', () => {
     // Post-v1.11.5 it returns 200 with the rows.
     expect(res.status).toBe(200);
     // SAFETY: GET /v1/audit's response body is the serialized AuditEvent[]
-    // from src/audit.ts, checked immediately by the assertion below.
+    // from src/store/audit.ts, checked immediately by the assertion below.
     const body = await res.json() as Array<{ op: string }>;
     expect(body.length).toBeGreaterThanOrEqual(1);
     expect(body.every((e) => e.op === 'outcome')).toBe(true);

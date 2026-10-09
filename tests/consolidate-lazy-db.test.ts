@@ -22,16 +22,16 @@ import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { consolidate } from '../src/consolidate/sleep.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { insertRejectedValue, normalizeValueForRejection, rejectionDigest } from '../src/rejection.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { insertRejectedValue, normalizeValueForRejection, rejectionDigest } from '../src/store/rejection.js';
 
 function tmpHome(prefix: string = 'hippo-consolidate-lazy-db-'): string {
   return mkdtempSync(join(tmpdir(), prefix));
 }
 
-describe('T3: consolidateDb lazy open', () => {
+describe('consolidateDb lazy open', () => {
   it('a no-op sleep (no entries, no promotable sessions, no merge clusters) completes clean', async () => {
     const home = tmpHome();
     try {
@@ -104,8 +104,8 @@ describe('T3: consolidateDb lazy open', () => {
       writeEntry(home, e2);
 
       const result = await consolidate(home, { dryRun: true });
-      // Dry-run previews the merge without writing (getConsolidateDb short
-      // circuits to null before it ever calls openHippoDb).
+      // Dry-run previews the merge without writing (lazyTombstoneChecks
+      // answers null under a dry run before it ever calls openHippoDb).
       expect(result.dryRun).toBe(true);
       expect(loadAllEntries(home)).toHaveLength(2);
     } finally {

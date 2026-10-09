@@ -1,7 +1,11 @@
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
+import { createOutageWarning } from './outage-warning.js';
 import type { RerankerFn, RerankResult, RerankerOptions } from './types.js';
-import { log } from '../log.js';
+import { compareScoresDesc } from '../core/compare.js';
+import { errorMessage, log } from '../util/log.js';
+
+const DEFAULT_CROSS_ENCODER_TOP_K = 50;
 
 const MODEL_NAME = 'Xenova/ms-marco-MiniLM-L-6-v2';
 
@@ -31,7 +35,7 @@ const _require = createRequire(import.meta.url);
 
 const TRANSFORMERS_PACKAGES = ['@huggingface/transformers', '@xenova/transformers'] as const;
 
-// Returns the ESM entry URL, the same build src/embeddings.ts imports. A
+// Returns the ESM entry URL, the same build src/store/embeddings/index.ts imports. A
 // require-style resolve picks the CommonJS build and puts a second copy of
 // the library, with its own ONNX sessions, in the process.
 function resolveTransformersPackage(): string | null {
@@ -63,24 +67,14 @@ async function loadTransformersModule(): Promise<Required<TransformersExports> |
       mod.AutoModelForSequenceClassification ?? mod.default?.AutoModelForSequenceClassification;
     return tok && seq ? { AutoTokenizer: tok, AutoModelForSequenceClassification: seq } : null;
   } catch (err) {
-    log.debug(`cross-encoder: transformers import failed: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`cross-encoder: transformers import failed: ${errorMessage(err)}`);
     return null;
   }
 }
 
 type CrossEncoderFn = (query: string, candidate: string) => Promise<number>;
 let pipelineLoading: Promise<CrossEncoderFn | null> | null = null;
-let warnedOnFallback = false;
-
-/**
- * True if a Transformers.js backend is importable. Note: this does NOT confirm
- * that the model is downloadable from Hugging Face CDN — in sandboxed
- * environments the package may import but the model fetch may be blocked.
- * The reranker silently falls back to identity ordering in that case.
- */
-export async function isCrossEncoderAvailable(): Promise<boolean> {
-  return (await loadTransformersModule()) !== null;
-}
+const outage = createOutageWarning('cross-encoder', 'falling back to identity ordering');
 
 // NOT the text-classification pipeline: this model is a num_labels=1
 // regression head, and that pipeline softmaxes a length-1 logit vector, which
@@ -107,7 +101,7 @@ async function buildPipeline(): Promise<CrossEncoderFn | null> {
       return score;
     };
   } catch (err) {
-    log.debug(`cross-encoder: model load failed: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`cross-encoder: model load failed: ${errorMessage(err)}`);
     return null;
   }
 }
@@ -128,19 +122,13 @@ export const crossEncoderReranker: RerankerFn = async (
   results,
   options?: RerankerOptions,
 ): Promise<RerankResult[]> => {
-  const topK = options?.topK ?? 50;
+  const topK = options?.topK ?? DEFAULT_CROSS_ENCODER_TOP_K;
   const head = results.slice(0, topK);
 
   const pipe = await loadPipeline();
   if (!pipe) {
-    // Warn once per process: a silent identity fallback otherwise reads as a
-    // working reranker.
-    if (!warnedOnFallback) {
-      warnedOnFallback = true;
-      log.warn(
-        'cross-encoder reranker unavailable (no Transformers.js backend, or model fetch blocked); falling back to identity ordering. Subsequent calls will not repeat this warning.',
-      );
-    }
+    // A silent identity fallback otherwise reads as a working reranker.
+    outage.failed('no Transformers.js backend, or model fetch blocked');
     return head.map((r, i) => ({
       ...r,
       rerankScore: r.score,
@@ -148,14 +136,16 @@ export const crossEncoderReranker: RerankerFn = async (
       postRerankRank: i + 1,
     }));
   }
+  outage.answered();
 
   const scored = await Promise.all(
     head.map(async (r, i) => {
       let ceScore: number;
       try {
         ceScore = await pipe(query, r.entry.content);
-      } catch {
+      } catch (err) {
         // One bad inference must not sink the whole pass.
+        log.debug(`cross-encoder inference failed, keeping the base score: ${errorMessage(err)}`);
         ceScore = r.score;
       }
       return {
@@ -169,7 +159,7 @@ export const crossEncoderReranker: RerankerFn = async (
 
   // Plain stable sort on purpose: tied scores MUST fall back to the prior
   // relevance order, never an arbitrary content order.
-  scored.sort((a, b) => b.rerankScore - a.rerankScore);
+  scored.sort((a, b) => compareScoresDesc(a.rerankScore, b.rerankScore));
   scored.forEach((r, i) => (r.postRerankRank = i + 1));
   return scored;
 };

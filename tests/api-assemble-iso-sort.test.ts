@@ -4,9 +4,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { assemble, type Context } from '../src/api.js';
-import { seededRandom } from '../src/eval-stats.js';
+import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { assemble, type Context } from '../src/api/index.js';
+import { seededRandom } from '../src/eval/eval-stats.js';
 
 /**
  * F4 — byte compare canonical UTC ISO timestamps instead of localeCompare.
@@ -23,7 +23,7 @@ import { seededRandom } from '../src/eval-stats.js';
  *      raw rows inserted in shuffled creation order; assert items come back
  *      sorted ascending by createdAt under the byte-cmp swap.
  */
-describe('assemble ISO sort (F4) — byte compare equivalence', () => {
+describe('assemble ISO sort: byte compare equivalence', () => {
   it('byte compare matches localeCompare for canonical UTC ISO timestamps', () => {
     const isoSamples = [
       '2026-05-06T00:00:00.000Z',
@@ -70,7 +70,7 @@ describe('assemble ISO sort (F4) — byte compare equivalence', () => {
  * calls api.assemble, asserts the returned items are chronologically
  * ascending by `createdAt`.
  */
-describe('assemble ISO sort (F4) — integration', () => {
+describe('assemble ISO sort: integration', () => {
   let root: string;
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'hippo-f4-int-'));
@@ -81,7 +81,7 @@ describe('assemble ISO sort (F4) — integration', () => {
     try { rmSync(root, { recursive: true, force: true }); } catch { /* best-effort */ }
   });
 
-  it('returns items chronologically ordered by createdAt after byte-cmp sort', () => {
+  it('returns items chronologically ordered by createdAt after byte-cmp sort', async () => {
     const sess = 'sess-F4';
     // Insert in shuffled order so any sort failure is caught (insertion
     // order is NOT chronological; fixture timestamps are).
@@ -107,7 +107,7 @@ describe('assemble ISO sort (F4) — integration', () => {
     }
 
     const ctx: Context = { hippoRoot: root, tenantId: 'default', actor: { subject: 'test:f4-int', role: 'admin' } };
-    const result = assemble(ctx, sess, { budget: 10_000 });
+    const result = await assemble(ctx, sess, { budget: 10_000 });
 
     // Strip down to the createdAt strings on returned items, in returned order.
     const got = result.items.map((it) => it.createdAt);

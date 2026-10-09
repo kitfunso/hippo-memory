@@ -16,14 +16,14 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { recall, type Context } from '../src/api.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { recall, type Context } from '../src/api/index.js';
 import {
   hashQueryText,
   type RecallHistorySnapshot,
   type RecallHistoryEntry,
-} from '../src/recall-history.js';
+} from '../src/api/recall-history.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 function safeRmSync(p: string): void {
@@ -63,7 +63,7 @@ function countAuditOps(root: string, op: string): number {
   }
 }
 
-describe('api.recall anchoringHint (J1, v0.33)', () => {
+describe('api.recall anchoringHint', () => {
   let root: string;
   beforeEach(() => {
     root = makeRoot('j1-api');

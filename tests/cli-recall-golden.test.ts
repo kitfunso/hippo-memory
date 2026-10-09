@@ -8,9 +8,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../src/memory.js';
-import { pushGoal } from '../src/goals.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../src/core/memory.js';
+import { pushGoal } from '../src/store/goals.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { ownStderr } from './_helpers/own-stderr.js';
 
 const CLI = join(process.cwd(), 'dist', 'cli.js');
 const FAKE_NOW = '2026-02-01T00:00:00.000Z';
@@ -92,12 +93,8 @@ const CASES: Case[] = [
   { name: 'explain no match', args: ['explain', 'zzqqxx'] },
 ];
 
-// Whether Node prints the SQLite warning depends on its version, so it stays out of the snapshot.
-const SQLITE_WARNING = /\(node:\d+\) ExperimentalWarning: SQLite is an experimental feature[^\n]*\r?\n\(Use `node --trace-warnings[^\n]*(?:\r?\n)?/g;
-
 function normalise(text: string, home: string): string {
-  return text
-    .replace(SQLITE_WARNING, '')
+  return ownStderr(text)
     .split(home).join('<home>')
     .split(home.replace(/\\/g, '/')).join('<home>')
     .split(goalId).join('<goal>')

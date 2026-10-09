@@ -5,8 +5,8 @@ import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { createApiKey } from '../src/auth.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { createApiKey } from '../src/store/auth.js';
 import { serve, type ServerHandle } from '../src/server.js';
 
 const PROXY_HEADERS: ReadonlyArray<readonly [string, string]> = [
@@ -17,6 +17,7 @@ const PROXY_HEADERS: ReadonlyArray<readonly [string, string]> = [
   ['X-Real-IP', '203.0.113.7'],
   ['Cf-Connecting-Ip', '203.0.113.7'],
   ['True-Client-Ip', '203.0.113.7'],
+  ['Fly-Client-Ip', '203.0.113.7'],
 ];
 
 let home: string;

@@ -1,14 +1,14 @@
 import * as os from 'os';
 import * as path from 'path';
-import { compareSemver } from '../../version.js';
-import { deriveOriginProject, originFromSource, isGlobalStoreRoot } from '../../project-identity.js';
+import { deriveOriginProject, originFromSource, isGlobalStoreRoot } from '../../core/project-identity.js';
+import { raiseMinBinary } from '../meta.js';
 import { tableHasColumn } from '../tables.js';
 import type { Migration } from './types.js';
 
 export const v39: Migration = {
     version: 39,
     up: (db, ctx) => {
-      // Memory scope isolation (docs/plans/2026-07-01-memory-scope-isolation.md).
+      // Memory scope isolation.
       // origin_project: '<name>' = owned by that project, '' = user-global,
       // NULL = legacy/unknown (ambient context treats NULL as deny).
       if (!tableHasColumn(db, 'memories', 'origin_project')) {
@@ -51,11 +51,6 @@ export const v39: Migration = {
       // this DB would ignore origin_project and the secret veto and resume
       // injecting cross-project rows. 1.24.0 is the first version with the
       // isolation behavior. Forward-only - never lower an existing minimum.
-      // SAFETY: this get() result's shape matches the single `value` column
-      // named in the SELECT above.
-      const existingMin = (db.prepare(`SELECT value FROM meta WHERE key = 'min_compatible_binary'`).get() as { value?: string } | undefined)?.value;
-      if (!existingMin || compareSemver('1.24.0', existingMin) > 0) {
-        db.prepare(`INSERT INTO meta(key, value) VALUES('min_compatible_binary', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`).run('1.24.0');
-      }
+      raiseMinBinary(db, '1.24.0');
     },
 };

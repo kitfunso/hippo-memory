@@ -7,13 +7,13 @@ import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { Layer, type MemoryEntry } from '../src/memory.js';
+import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { consolidate } from '../src/consolidate/sleep.js';
 import { detectConflicts } from '../src/consolidate/conflicts.js';
-import { deduplicateStore } from '../src/dedupe.js';
-import { buildDag, buildEntityProfiles } from '../src/dag.js';
-import { storeExtractedFacts } from '../src/extract.js';
+import { deduplicateStore } from '../src/consolidate/dedupe.js';
+import { buildDag, buildEntityProfiles } from '../src/consolidate/dag.js';
+import { storeExtractedFacts } from '../src/learn/extract.js';
 
 let home: string;
 beforeEach(() => {
@@ -102,5 +102,32 @@ describe('sleep partitions by origin project', () => {
 
     expect((await buildEntityProfiles(home, [...l2s, ...more], { apiKey: 'k', fetcher: fetcher('alice is the typed-python API owner') })).profilesCreated).toBe(2);
     expect(live().filter((e) => e.dag_level === 3).map((e) => e.origin_project).sort()).toEqual(['proj-b', 'proj-c']);
+  });
+});
+
+describe('conflicts never pair across a personal scope', () => {
+  const now = new Date();
+  const rule = (text: string, id: string, scope: string | null): MemoryEntry => ({
+    ...createMemory(text, { scope }), id, origin_project: 'proj', created: now.toISOString(), last_retrieved: now.toISOString(),
+  });
+  const ALICE = 'personal:private:alice';
+
+  it('a personal row against a team row gives no pair, while two team rows do', () => {
+    const always = rule('always alpha beta gamma', 'a', null);
+    const never = rule('never alpha beta gamma zeta', 'b', null);
+    expect(detectConflicts([always, never], now)).toHaveLength(1);
+    expect(detectConflicts([{ ...always, scope: ALICE }, never], now)).toEqual([]);
+    expect(detectConflicts([always, { ...never, scope: ALICE }], now)).toEqual([]);
+  });
+
+  it('two rows in one personal scope still pair', () => {
+    const pair = detectConflicts([rule('always alpha beta gamma', 'a', ALICE), rule('never alpha beta gamma zeta', 'b', ALICE)], now);
+    expect(pair.map((p) => [p.memory_a_id, p.memory_b_id])).toEqual([['a', 'b']]);
+  });
+
+  it('two owners, or a case variant of one owner, never pair', () => {
+    const mine = rule('always alpha beta gamma', 'a', ALICE);
+    expect(detectConflicts([mine, rule('never alpha beta gamma zeta', 'b', 'personal:private:bob')], now)).toEqual([]);
+    expect(detectConflicts([mine, rule('never alpha beta gamma zeta', 'b', 'Personal:private:alice')], now)).toEqual([]);
   });
 });

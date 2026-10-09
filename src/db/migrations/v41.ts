@@ -3,7 +3,7 @@ import type { Migration } from './types.js';
 export const v41: Migration = {
     version: 41,
     up: (db) => {
-      // AT1 rejected-value tombstone (docs/plans/2026-08-15-at1-rejected-value-tombstone.md).
+      // Rejected-value tombstone.
       // Additive table, template = v40 above. A human who rejects a fact gets
       // a durable say: the write-path guard in upsertEntryRow refuses any
       // write that would re-introduce a value whose normalized digest
@@ -19,11 +19,10 @@ export const v41: Migration = {
       // No FK on source_memory_id (v40 precedent above: tombstone outlives
       // the row it was sourced from) — provenance only.
       //
-      // Reserved-word check on column names (skill-episode lesson, rule 10):
+      // Reserved-word check on column names:
       // tenant/digest/reason/rejected/source/normalized/chars are non-reserved.
       //
-      // No min_compatible_binary bump — a deliberate tradeoff (plan §2,
-      // flagged to the ship gate). An old binary sharing a synced store
+      // No min_compatible_binary bump, a deliberate tradeoff: an old binary sharing a synced store
       // writes WITHOUT the guard until upgraded; documented in
       // MEMORY_ENVELOPE.md rather than hard-locking every old binary out of
       // the store, which is disproportionate for the dominant single-user

@@ -1,7 +1,7 @@
 /** serve({ authResolver }) vouches for external bearer tokens; the core sanitises what it returns. */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtempSync, rmSync, existsSync, realpathSync } from 'node:fs';
+import { mkdtempSync, rmSync, existsSync, realpathSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,15 +9,15 @@ import { spawnSync } from 'node:child_process';
 import { ServerResponse } from 'node:http';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { Layer } from '../src/memory.js';
+import { Layer } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import {
   serve, authRevoke, ForbiddenError, isReservedActor,
   type ServerHandle, type AuthResolver, type ResolvedBearer, type ServeOpts, type Context,
 } from '../src/server.js';
-import { createApiKey, type CreateApiKeyResult } from '../src/auth.js';
-import { openHippoDb, closeHippoDb, getHippoDbPath } from '../src/db.js';
-import { listAuditEventsAfter } from '../src/audit.js';
+import { createApiKey, type CreateApiKeyResult } from '../src/store/auth.js';
+import { openHippoDb, closeHippoDb, getHippoDbPath } from '../src/db/index.js';
+import { listAuditEventsAfter } from '../src/store/audit.js';
 
 const EXT = 'ext.good';
 const GOOD: ResolvedBearer = { tenantId: 'ext-tenant', subject: 'user-1', role: 'member', scopes: [] };
@@ -72,6 +72,33 @@ async function waitFor(check: () => boolean, ms: number): Promise<void> {
   while (!check() && Date.now() < deadline) await new Promise((ok) => setTimeout(ok, 20));
 }
 
+const HEARTBEAT_MS = 50;
+
+/** Fakes only the heartbeat's interval, so a test fires each tick by hand and counts live intervals; fetch and the polls keep real time. */
+function holdHeartbeat(): void {
+  process.env.MCP_SSE_HEARTBEAT_MS = String(HEARTBEAT_MS);
+  vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+}
+
+const tick = (count = 1): void => { vi.advanceTimersByTime(HEARTBEAT_MS * count); };
+
+/** Counts its calls and holds the answer to call number `held` until the test releases it. */
+function heldResolver(held: number) {
+  let calls = 0;
+  let release!: () => void;
+  const answer = new Promise<ResolvedBearer>((ok) => { release = () => ok(GOOD); });
+  const resolver: AuthResolver = (t) => (t !== EXT ? null : ++calls === held ? answer : GOOD);
+  return { resolver, calls: () => calls, release };
+}
+
+/** Settles once the server sees the next request's socket close; arm it before that request is sent. */
+function nextRequestClosed(): Promise<void> {
+  return new Promise((ok) => handle!.server!.once('request', (_req, res: ServerResponse) => res.once('close', () => ok())));
+}
+
+// Nothing between a resolver answer and the handler's next move waits on I/O or a timer, so one macrotask turn sees it done.
+const settle = (): Promise<void> => new Promise((ok) => setImmediate(ok));
+
 type Loose = Partial<Record<keyof ResolvedBearer, string | Array<string | number | null>>>;
 // SAFETY: tests pass deliberately malformed fields to prove the core rejects or downgrades them.
 const tokenResolver = (over: Loose = {}): AuthResolver =>
@@ -105,6 +132,7 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
+  vi.useRealTimers();
   await handle?.stop();
   handle = undefined;
   vi.restoreAllMocks();
@@ -413,9 +441,9 @@ describe('exported authRevoke for add-ons', () => {
     }
   }
 
-  it('revokes a member key and audits it under the add-on actor', () => {
+  it('revokes a member key and audits it under the add-on actor', async () => {
     const member = mint('ext-tenant', 'member');
-    expect(authRevoke(ctx('ext-tenant'), member.keyId).ok).toBe(true);
+    expect((await authRevoke(ctx('ext-tenant'), member.keyId)).ok).toBe(true);
     const row = auditRows('ext-tenant').find((r) => r.op === 'auth_revoke');
     expect(row).toMatchObject({ actor: 'system:addon:u1', targetId: member.keyId });
   });
@@ -525,59 +553,57 @@ describe('auth resolver stream', () => {
   );
 
   it('skips a heartbeat tick while a check is still in flight', async () => {
-    process.env.MCP_SSE_HEARTBEAT_MS = '50';
-    let calls = 0;
-    await start(async (t) => {
-      if (t !== EXT) return null;
-      calls++;
-      await new Promise((ok) => setTimeout(ok, 400));
-      return GOOD;
-    });
+    const auth = heldResolver(2);
+    await start(auth.resolver);
+    holdHeartbeat();
     const ac = new AbortController();
-    const res = await fetch(`${handle!.url}/mcp/stream`, {
-      headers: { accept: 'text/event-stream', authorization: `Bearer ${EXT}` },
-      signal: ac.signal,
-    });
+    const res = await openStream(EXT, ac.signal);
     expect(res.status).toBe(200);
-    const afterOpen = calls;
-    await new Promise((ok) => setTimeout(ok, 500));
+    const text = collect(res);
+    const pings = (): number => text().split(': ping\n\n').length - 1;
+
+    tick();
+    await waitFor(() => auth.calls() === 2, 3000);
+    expect(auth.calls()).toBe(2);
+    tick(5);
+    await settle();
+    expect(auth.calls()).toBe(2);
+
+    // The answer lands, so the next tick checks again.
+    auth.release();
+    await waitFor(() => pings() === 2, 3000);
+    expect(pings()).toBe(2);
+    tick();
+    await waitFor(() => auth.calls() === 3, 3000);
     ac.abort();
-    expect(calls - afterOpen).toBeLessThanOrEqual(2);
-  }, 10_000);
+    expect(auth.calls()).toBe(3);
+  });
 
   it('starts no heartbeat when the client leaves while the resolver is still answering', async () => {
-    process.env.MCP_SSE_HEARTBEAT_MS = '50';
-    let calls = 0;
-    await start(async (t) => {
-      if (t !== EXT) return null;
-      calls++;
-      await new Promise((ok) => setTimeout(ok, 300));
-      return GOOD;
-    });
+    const auth = heldResolver(1);
+    await start(auth.resolver);
+    holdHeartbeat();
+    const closed = nextRequestClosed();
     const ac = new AbortController();
-    const opened = fetch(`${handle!.url}/mcp/stream`, {
-      headers: { accept: 'text/event-stream', authorization: `Bearer ${EXT}` },
-      signal: ac.signal,
-    }).catch(() => undefined);
-    await new Promise((ok) => setTimeout(ok, 100));
+    const opened = openStream(EXT, ac.signal).catch(() => undefined);
+    await waitFor(() => auth.calls() === 1, 3000);
+    expect(auth.calls()).toBe(1);
+
     ac.abort();
     await opened;
-    await new Promise((ok) => setTimeout(ok, 500));
-    const settled = calls;
-    await new Promise((ok) => setTimeout(ok, 700));
-    expect(settled).toBe(1);
-    expect(calls).toBe(settled);
-  }, 10_000);
+    await closed;
+    auth.release();
+    await settle();
+
+    expect(vi.getTimerCount()).toBe(0);
+    tick(5);
+    await settle();
+    expect(auth.calls()).toBe(1);
+  });
 
   it('writes nothing after close when a heartbeat check was already in flight', async () => {
-    process.env.MCP_SSE_HEARTBEAT_MS = '50';
-    let calls = 0;
-    await start(async (t) => {
-      if (t !== EXT) return null;
-      calls++;
-      if (calls > 1) await new Promise((ok) => setTimeout(ok, 300));
-      return GOOD;
-    });
+    const auth = heldResolver(2);
+    await start(auth.resolver);
     const pings: string[] = [];
     const realWrite = ServerResponse.prototype.write;
     // SAFETY: the spy forwards every argument unchanged; it only records ping writes.
@@ -585,20 +611,24 @@ describe('auth resolver stream', () => {
       if (String(args[0]) === ': ping\n\n') pings.push('ping');
       return realWrite.apply(this, args);
     });
+    holdHeartbeat();
+    const closed = nextRequestClosed();
     const ac = new AbortController();
-    const res = await fetch(`${handle!.url}/mcp/stream`, {
-      headers: { accept: 'text/event-stream', authorization: `Bearer ${EXT}` },
-      signal: ac.signal,
-    });
+    const res = await openStream(EXT, ac.signal);
     expect(res.status).toBe(200);
-    await new Promise((ok) => setTimeout(ok, 120));
-    expect(calls).toBeGreaterThanOrEqual(2);
+
+    tick();
+    await waitFor(() => auth.calls() === 2, 3000);
+    expect(auth.calls()).toBe(2);
     ac.abort();
-    await new Promise((ok) => setTimeout(ok, 80));
-    const atClose = pings.length;
-    await new Promise((ok) => setTimeout(ok, 600));
-    expect(pings.length).toBe(atClose);
-  }, 10_000);
+    await closed;
+    expect(pings).toEqual(['ping']);
+    auth.release();
+    await settle();
+
+    expect(pings).toEqual(['ping']);
+    expect(vi.getTimerCount()).toBe(0);
+  });
 });
 
 describe('package surface', () => {
@@ -610,7 +640,7 @@ describe('package surface', () => {
       "const srv = await import('hippo-memory/server');",
       "const idx = await import('hippo-memory');",
       "const names = ['appendAuditEvent','queryAuditEvents','listAuditEventsAfter','AUDIT_OPS','openHippoDb','closeHippoDb'];",
-      'console.log(JSON.stringify({ url, serve: typeof srv.serve, authRevoke: typeof srv.authRevoke, isReservedActor: typeof srv.isReservedActor, forbidden: typeof srv.ForbiddenError, missing: names.filter((n) => idx[n] === undefined), indexServe: "serve" in idx }));',
+      'console.log(JSON.stringify({ url, serve: typeof srv.serve, authRevoke: typeof srv.authRevoke, authCreateSelf: typeof srv.authCreateSelf, isReservedActor: typeof srv.isReservedActor, forbidden: typeof srv.ForbiddenError, missing: names.filter((n) => idx[n] === undefined), indexServe: "serve" in idx }));',
     ].join('\n');
     // cwd is the checkout because self-reference resolves from the nearest package.json.
     const child = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
@@ -622,14 +652,20 @@ describe('package surface', () => {
     const lines = child.stdout.trim().split('\n');
     // SAFETY: the child script above is the only writer of the last stdout line and always emits these keys.
     const out = JSON.parse(lines[lines.length - 1]!) as {
-      url: string; serve: string; authRevoke: string; isReservedActor: string; forbidden: string; missing: string[]; indexServe: boolean;
+      url: string; serve: string; authRevoke: string; authCreateSelf: string; isReservedActor: string; forbidden: string; missing: string[]; indexServe: boolean;
     };
     expect(out.authRevoke).toBe('function');
+    expect(out.authCreateSelf).toBe('function');
     expect(out.isReservedActor).toBe('function');
     expect(out.forbidden).toBe('function');
     expect(realpathSync(fileURLToPath(out.url))).toBe(realpathSync(join(root, 'dist', 'server.js')));
     expect(out.serve).toBe('function');
     expect(out.missing).toEqual([]);
     expect(out.indexServe).toBe(false);
+  });
+
+  it.each(['authCreateSelf', 'AuthCreateSelfOpts', 'AuthCreateSelfResult'])('exports %s on the built server entry', (name) => {
+    const dts = readFileSync(join(root, 'dist', 'server.d.ts'), 'utf-8');
+    expect(dts).toMatch(new RegExp(`^export \\{[^}]*\\b${name}\\b`, 'm'));
   });
 });

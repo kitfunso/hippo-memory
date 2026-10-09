@@ -12,11 +12,11 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { queryAuditEvents } from '../src/audit.js';
-import { adminActor, remember, type Actor, type Context } from '../src/api.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { queryAuditEvents } from '../src/store/audit.js';
+import { adminActor, remember, type Actor, type Context } from '../src/api/index.js';
 
-describe('Context.actor shape (v1.12.0)', () => {
+describe('Context.actor shape', () => {
   it('Actor is {subject, role}', () => {
     const a: Actor = { subject: 'cli', role: 'admin' };
     expect(a.subject).toBe('cli');

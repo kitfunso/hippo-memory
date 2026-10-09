@@ -15,12 +15,12 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { createApiKey } from '../src/auth.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { createApiKey } from '../src/store/auth.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
 
-describe('POST /v1/sleep admin-role gate (v1.12.0)', () => {
+describe('POST /v1/sleep admin-role gate', () => {
   let home: string;
   let globalHome: string;
   let origHippoHome: string | undefined;

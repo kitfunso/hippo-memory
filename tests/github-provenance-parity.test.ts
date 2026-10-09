@@ -14,12 +14,12 @@ import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { ingestEvent, type IngestEvent } from '../src/connectors/github/ingest.js';
-import { buildProvenanceCoverage } from '../src/provenance-coverage.js';
+import { buildProvenanceCoverage } from '../src/cli/provenance-coverage.js';
 import type {
   GitHubIssueEvent,
   GitHubIssueCommentEvent,
 } from '../src/connectors/github/types.js';
-import type { Context } from '../src/api.js';
+import type { Context } from '../src/api/index.js';
 
 const PUBLIC_REPO = {
   full_name: 'acme/public-repo',
@@ -69,12 +69,12 @@ describe('GitHub connector — provenance coverage parity', () => {
   });
   afterEach(() => rmSync(root, { recursive: true, force: true }));
 
-  it('every ingested GitHub raw row carries owner + artifact_ref (coverage = 1.0)', () => {
+  it('every ingested GitHub raw row carries owner + artifact_ref (coverage = 1.0)', async () => {
     const ctx = ctxFor(root);
     // 25 issues + 25 comments = 50 raw rows, all distinct artifact_refs.
     for (let i = 0; i < 25; i++) {
       const ev = makeIssue(i);
-      ingestEvent(ctx, {
+      await ingestEvent(ctx, {
         event: ev,
         rawBody: JSON.stringify(ev.payload),
         deliveryId: `iss-${i}`,
@@ -82,7 +82,7 @@ describe('GitHub connector — provenance coverage parity', () => {
     }
     for (let i = 0; i < 25; i++) {
       const ev = makeIssueComment(i);
-      ingestEvent(ctx, {
+      await ingestEvent(ctx, {
         event: ev,
         rawBody: JSON.stringify(ev.payload),
         deliveryId: `com-${i}`,

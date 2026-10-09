@@ -98,6 +98,14 @@ describe('validateFamilies', () => {
     });
   }
 
+  it('rejects a checker that imports a missing file at load, naming the lesson and the specifier', () => {
+    const dir = checkDir();
+    writeFileSync(join(dir, 'checks', 'imports-gone.mjs'), "import './gone.mjs';\n");
+    const s: Spec = spec();
+    s.families[0].lessons[0].check = { script: 'checks/imports-gone.mjs' };
+    expect(() => validateFamilies(s, dir)).toThrow(/^lesson f1-l1: .*\.\/gone\.mjs/);
+  });
+
   it('keeps the plain word memory legal, allows a flagged key phrase, and accepts screenSkipped in a dev file', () => {
     const s: Spec = spec();
     s.families[0].lessons[0].rule = 'Free memory with the arena allocator';

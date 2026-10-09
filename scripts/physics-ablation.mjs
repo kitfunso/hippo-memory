@@ -23,18 +23,17 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // hippo internals — use dist so we call production code paths
-import { createMemory } from '../dist/memory.js';
+import { createMemory } from '../dist/core/memory.js';
 import { initStore } from '../dist/store/open.js';
 import { writeEntry } from '../dist/store/entry-writes.js';
 import { loadAllEntries } from '../dist/store/entry-reads.js';
-import { embedMemory, loadEmbeddingIndex } from '../dist/embeddings.js';
-import { isEmbeddingAvailable, resolveEmbeddingModel } from '../dist/local-embedding.js';
-import { resetAllPhysicsState, loadPhysicsState } from '../dist/physics-state.js';
-import { openHippoDb, closeHippoDb } from '../dist/db.js';
+import { embedMemory } from '../dist/store/embeddings/index.js';
+import { isEmbeddingAvailable, resolveEmbeddingModel } from '../dist/store/embeddings/local.js';
+import { openHippoDb, closeHippoDb } from '../dist/db/index.js';
 import { hybridSearch } from '../dist/search/hybrid.js';
 import { physicsSearch } from '../dist/search/physics-search.js';
 import { buildCorpus } from '../dist/search/bm25.js';
-import { DEFAULT_PHYSICS_CONFIG } from '../dist/physics-config.js';
+import { DEFAULT_PHYSICS_CONFIG } from '../dist/core/physics-config.js';
 
 // ---------------------------------------------------------------------------
 // Flags
@@ -57,7 +56,7 @@ const DATA_PATH = path.join(REPO, 'benchmarks', 'longmemeval', 'data', 'longmeme
 fs.mkdirSync(OUT_DIR, { recursive: true });
 
 // ---------------------------------------------------------------------------
-// Metrics (matching src/eval.ts)
+// Metrics (matching src/eval/eval.ts)
 // ---------------------------------------------------------------------------
 
 function mrr(returned, expectedSet) {
@@ -189,12 +188,8 @@ async function embedStoreAndInitPhysics() {
 // Run evals
 // ---------------------------------------------------------------------------
 
-async function runAblation(cases, entries) {
-  // Pre-build BM25 corpus once (same for both passes — it's a function of
-  // entries, not of toggle).
-  const corpus = buildCorpus(entries.map((e) => `${e.content} ${e.tags.join(' ')}`));
-
-  const passes = [
+function buildPasses(entries, corpus) {
+  return [
     {
       name: 'classic',
       label: 'hybrid BM25+cosine+MMR (physics OFF)',
@@ -216,6 +211,63 @@ async function runAblation(cases, entries) {
       }),
     },
   ];
+}
+
+/** Runs every case through one pass and returns its summary row. */
+async function runPass(p, cases) {
+  console.error(`\n=== Running pass: ${p.label} ===`);
+  const perCase = [];
+  const start = Date.now();
+  for (let i = 0; i < cases.length; i++) {
+    const c = cases[i];
+    const qStart = Date.now();
+    let results;
+    try {
+      results = await p.run(c.query);
+    } catch (err) {
+      console.error(`  [${i}] ${c.id} FAILED: ${err.message}`);
+      results = [];
+    }
+    const elapsed = Date.now() - qStart;
+    const returnedIds = results.map((r) => r.entry.id);
+    const expectedSet = new Set(c.expectedIds);
+    perCase.push({
+      id: c.id,
+      query: c.query,
+      questionType: c.questionType,
+      returnedIds,
+      expectedIds: c.expectedIds,
+      mrr: mrr(returnedIds, expectedSet),
+      recallAt5: recallAtK(returnedIds, expectedSet, 5),
+      ndcgAt5: ndcgAtK(returnedIds, expectedSet, 5),
+      ndcgAt10: ndcgAtK(returnedIds, expectedSet, 10),
+      latencyMs: elapsed,
+    });
+    if ((i + 1) % 10 === 0) {
+      const rate = (i + 1) / ((Date.now() - start) / 1000);
+      console.error(`  ${i + 1}/${cases.length}  ${rate.toFixed(1)}/s`);
+    }
+  }
+  const n = Math.max(1, perCase.length);
+  return {
+    label: p.label,
+    n: perCase.length,
+    meanMrr: perCase.reduce((s, r) => s + r.mrr, 0) / n,
+    meanRecallAt5: perCase.reduce((s, r) => s + r.recallAt5, 0) / n,
+    meanNdcgAt5: perCase.reduce((s, r) => s + r.ndcgAt5, 0) / n,
+    meanNdcgAt10: perCase.reduce((s, r) => s + r.ndcgAt10, 0) / n,
+    meanLatencyMs: perCase.reduce((s, r) => s + r.latencyMs, 0) / n,
+    totalMs: Date.now() - start,
+    cases: perCase,
+  };
+}
+
+async function runAblation(cases, entries) {
+  // Pre-build BM25 corpus once (same for both passes — it's a function of
+  // entries, not of toggle).
+  const corpus = buildCorpus(entries.map((e) => `${e.content} ${e.tags.join(' ')}`));
+
+  const passes = buildPasses(entries, corpus);
 
   // Warmup: run each pass once on the first query to prime caches, disk,
   // and embedding-model JIT. Prevents the first pass from eating the I/O
@@ -228,53 +280,7 @@ async function runAblation(cases, entries) {
   }
 
   const summary = {};
-  for (const p of passes) {
-    console.error(`\n=== Running pass: ${p.label} ===`);
-    const perCase = [];
-    const start = Date.now();
-    for (let i = 0; i < cases.length; i++) {
-      const c = cases[i];
-      const qStart = Date.now();
-      let results;
-      try {
-        results = await p.run(c.query);
-      } catch (err) {
-        console.error(`  [${i}] ${c.id} FAILED: ${err.message}`);
-        results = [];
-      }
-      const elapsed = Date.now() - qStart;
-      const returnedIds = results.map((r) => r.entry.id);
-      const expectedSet = new Set(c.expectedIds);
-      perCase.push({
-        id: c.id,
-        query: c.query,
-        questionType: c.questionType,
-        returnedIds,
-        expectedIds: c.expectedIds,
-        mrr: mrr(returnedIds, expectedSet),
-        recallAt5: recallAtK(returnedIds, expectedSet, 5),
-        ndcgAt5: ndcgAtK(returnedIds, expectedSet, 5),
-        ndcgAt10: ndcgAtK(returnedIds, expectedSet, 10),
-        latencyMs: elapsed,
-      });
-      if ((i + 1) % 10 === 0) {
-        const rate = (i + 1) / ((Date.now() - start) / 1000);
-        console.error(`  ${i + 1}/${cases.length}  ${rate.toFixed(1)}/s`);
-      }
-    }
-    const n = Math.max(1, perCase.length);
-    summary[p.name] = {
-      label: p.label,
-      n: perCase.length,
-      meanMrr: perCase.reduce((s, r) => s + r.mrr, 0) / n,
-      meanRecallAt5: perCase.reduce((s, r) => s + r.recallAt5, 0) / n,
-      meanNdcgAt5: perCase.reduce((s, r) => s + r.ndcgAt5, 0) / n,
-      meanNdcgAt10: perCase.reduce((s, r) => s + r.ndcgAt10, 0) / n,
-      meanLatencyMs: perCase.reduce((s, r) => s + r.latencyMs, 0) / n,
-      totalMs: Date.now() - start,
-      cases: perCase,
-    };
-  }
+  for (const p of passes) summary[p.name] = await runPass(p, cases);
 
   return summary;
 }
@@ -283,10 +289,8 @@ function fmtPct(x) { return (100 * x).toFixed(2) + '%'; }
 function fmtMs(x) { return x.toFixed(1) + 'ms'; }
 function sign(x) { return x >= 0 ? '+' : ''; }
 
-function writeReport(summary, metadata) {
-  const cl = summary.classic;
-  const ph = summary.physics;
-
+/** Paired per-case diffs, the per-type table and the four bootstrap CIs (mrr, recall, ndcg, latency in that draw order). */
+function comparePasses(cl, ph) {
   // Per-case paired diffs
   const byId = new Map(cl.cases.map((c) => [c.id, c]));
   const diffsMrr = [], diffsR5 = [], diffsNdcg5 = [], diffsLat = [];
@@ -319,10 +323,11 @@ function writeReport(summary, metadata) {
   const ciR5 = pairedBootstrapCI(diffsR5);
   const ciNdcg5 = pairedBootstrapCI(diffsNdcg5);
   const ciLat = pairedBootstrapCI(diffsLat);
+  return { typeRows, ciMrr, ciR5, ciNdcg5, ciLat };
+}
 
-  // Verdict
+function decideVerdict(cl, ph, typeRows, ciNdcg5, latRatio) {
   const ndcgDelta = ph.meanNdcgAt5 - cl.meanNdcgAt5;
-  const latRatio = ph.meanLatencyMs / Math.max(cl.meanLatencyMs, 1e-9);
   const ciCrossesZero = ciNdcg5.low < 0 && ciNdcg5.high > 0;
 
   // Check per-type signals — is there any type where physics wins by >2pp?
@@ -351,8 +356,12 @@ function writeReport(summary, metadata) {
     verdict = 'CONDITIONAL';
     verdictReason = `Signal is mixed (delta ${sign(ndcgDelta)}${(ndcgDelta * 100).toFixed(2)} pp, CI ${(ciNdcg5.low * 100).toFixed(2)}..${(ciNdcg5.high * 100).toFixed(2)}). Review per-case regressions.`;
   }
+  return { verdict, verdictReason };
+}
 
-  const results = {
+function buildResults(report) {
+  const { cl, ph, metadata, ciMrr, ciR5, ciNdcg5, ciLat, typeRows, verdict, verdictReason } = report;
+  return {
     metadata: {
       ...metadata,
       hippoVersion: '0.31.0',
@@ -395,10 +404,11 @@ function writeReport(summary, metadata) {
       physics: ph.cases,
     },
   };
+}
 
-  fs.writeFileSync(path.join(OUT_DIR, 'results.json'), JSON.stringify(results, null, 2));
-
-  const md = `# Physics Search Ablation
+function renderReadme(report, results) {
+  const { cl, ph, metadata, ciMrr, ciR5, ciNdcg5, ciLat, latRatio, typeRows, verdict, verdictReason } = report;
+  return `# Physics Search Ablation
 
 **Hippo version:** 0.31.0
 **Generated:** ${results.metadata.generatedAt}
@@ -443,6 +453,20 @@ ${verdictReason}
 - **No real-user queries.** All queries are from a benchmark designed for chatbot LLM memory, not for IDE/agent recall patterns that production hippo serves.
 - **Bootstrap CI** assumes paired per-case differences are exchangeable — reasonable here since each question is independent.
 `;
+}
+
+function writeReport(summary, metadata) {
+  const cl = summary.classic;
+  const ph = summary.physics;
+  const { typeRows, ciMrr, ciR5, ciNdcg5, ciLat } = comparePasses(cl, ph);
+  const latRatio = ph.meanLatencyMs / Math.max(cl.meanLatencyMs, 1e-9);
+  const { verdict, verdictReason } = decideVerdict(cl, ph, typeRows, ciNdcg5, latRatio);
+  const report = { cl, ph, metadata, ciMrr, ciR5, ciNdcg5, ciLat, latRatio, typeRows, verdict, verdictReason };
+
+  const results = buildResults(report);
+
+  fs.writeFileSync(path.join(OUT_DIR, 'results.json'), JSON.stringify(results, null, 2));
+  const md = renderReadme(report, results);
   fs.writeFileSync(path.join(OUT_DIR, 'README.md'), md);
 
   // Stdout table
@@ -454,10 +478,8 @@ ${verdictReason}
 // Main
 // ---------------------------------------------------------------------------
 
-async function main() {
-  console.error(`Physics Ablation — hippo-memory 0.31.0`);
-  console.error(`Output: ${OUT_DIR}`);
-
+/** Loads LongMemEval and takes a stratified, deterministic sample of NUM_QUESTIONS. */
+function loadStratifiedQuestions() {
   // Load LongMemEval
   console.error(`Loading LongMemEval from ${DATA_PATH}...`);
   const raw = JSON.parse(fs.readFileSync(DATA_PATH, 'utf8'));
@@ -488,8 +510,11 @@ async function main() {
   const typeCounts = {};
   for (const q of questions) typeCounts[q.question_type] = (typeCounts[q.question_type] || 0) + 1;
   console.error(`  type mix: ${JSON.stringify(typeCounts)}`);
+  return questions;
+}
 
-  // Build store or reuse
+/** Recovers the session -> memory map from the store, or builds and embeds the store first. */
+async function openOrBuildStore(questions) {
   let sessionToMemId;
   const existingStore = fs.existsSync(path.join(HIPPO_ROOT, 'hippo.db'));
   if (existingStore && !REBUILD) {
@@ -506,8 +531,11 @@ async function main() {
     sessionToMemId = await buildStore(questions);
     await embedStoreAndInitPhysics();
   }
+  return sessionToMemId;
+}
 
-  // Build eval cases. Expected = set of memory IDs for this question's answer sessions.
+/** Eval cases: expected = the set of memory IDs for each question's answer sessions. */
+function buildEvalCases(questions, sessionToMemId) {
   const cases = [];
   let dropped = 0;
   for (const q of questions) {
@@ -530,6 +558,15 @@ async function main() {
   if (cases.length < 50) {
     console.error(`WARNING: only ${cases.length} cases — below the N>=50 target. Consider --num-questions 75.`);
   }
+  return cases;
+}
+
+async function main() {
+  console.error(`Physics Ablation — hippo-memory 0.31.0`);
+  console.error(`Output: ${OUT_DIR}`);
+  const questions = loadStratifiedQuestions();
+  const sessionToMemId = await openOrBuildStore(questions);
+  const cases = buildEvalCases(questions, sessionToMemId);
 
   // Load entries once for in-process searches
   const entries = loadAllEntries(HIPPO_ROOT);

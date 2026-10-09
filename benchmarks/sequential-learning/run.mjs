@@ -431,7 +431,7 @@ function printTable(conditions) {
   console.log('Condition      \u2502 Overall \u2502 Early \u2502  Mid  \u2502  Late \u2502 Learns?');
   console.log('\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500');
 
-  for (const [key, cond] of entries) {
+  for (const [, cond] of entries) {
     const label = cond.name.padEnd(14);
     const learnsStr = cond.learns ? '  Yes' : '   No';
     console.log(

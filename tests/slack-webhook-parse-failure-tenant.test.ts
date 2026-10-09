@@ -19,8 +19,9 @@ import { join } from 'node:path';
 import { createHmac } from 'node:crypto';
 import { initStore } from '../src/store/open.js';
 import { serve, type ServerHandle } from '../src/server.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { listDlq } from '../src/connectors/slack/dlq.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { listDlq } from '../src/connectors/dlq.js';
+import { slackDlq } from '../src/connectors/slack/dlq.js';
 
 const SECRET = 'shhh';
 
@@ -28,7 +29,7 @@ function sign(ts: string, body: string): string {
   return `v0=${createHmac('sha256', SECRET).update(`v0:${ts}:${body}`).digest('hex')}`;
 }
 
-describe('POST /v1/connectors/slack/events parse-failure tenant attribution (B4 v1.12.6)', () => {
+describe('POST /v1/connectors/slack/events parse-failure tenant attribution', () => {
   let root: string;
   let handle: ServerHandle;
 
@@ -47,12 +48,7 @@ describe('POST /v1/connectors/slack/events parse-failure tenant attribution (B4 
   });
 
   function rowsByTenant(tenant: string) {
-    const db = openHippoDb(root);
-    try {
-      return listDlq(db, { tenantId: tenant });
-    } finally {
-      closeHippoDb(db);
-    }
+    return listDlq(slackDlq, root, { tenantId: tenant });
   }
 
   it('parse failure with known team_id routes DLQ to the mapped tenant (not HIPPO_TENANT)', async () => {

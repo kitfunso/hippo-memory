@@ -5,10 +5,11 @@ import { join } from 'node:path';
 import { createServer, type Server } from 'node:http';
 import { spawn } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { remember } from '../src/api.js';
-import { classifyTransportFailure, HttpResponseError } from '../src/client.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { remember } from '../src/api/index.js';
+import { classifyTransportFailure, HttpResponseError } from '../src/cli/client.js';
 import { boundPort } from './_helpers/listen.js';
+import { ROUTED_CLI_ENV } from './_helpers/routed-cli-env.js';
 
 // A server that commits the row then drops the socket looks identical to a
 // refused connection through `isConnectionRefused`, so the CLI used to self-heal
@@ -19,7 +20,7 @@ const CLI_PATH = join(REPO_ROOT, 'dist', 'cli.js');
 
 function assertFreshBuild(): void {
   const dist = statSync(CLI_PATH).mtimeMs;
-  for (const name of ['cli.ts', 'client.ts']) {
+  for (const name of ['cli.ts', 'cli/client.ts', 'server/server-detect.ts']) {
     const src = statSync(join(REPO_ROOT, 'src', name)).mtimeMs;
     if (src > dist) {
       throw new Error(`dist/cli.js is older than src/${name}. Run \`npm run build\`; this test spawns the CLI from dist, so a stale build would test old code.`);
@@ -28,7 +29,8 @@ function assertFreshBuild(): void {
 }
 
 /** Answers /health so detectServer accepts the pidfile, then commits POST /v1/memories and drops the socket unanswered. */
-async function startResettingServer(hippoRoot: string, startedAt: string): Promise<{ server: Server; port: number }> {
+async function startResettingServer(hippoRoot: string, startedAt: string): Promise<{ server: Server; port: number; posts: { count: number } }> {
+  const posts = { count: 0 };
   const server = createServer((req, res) => {
     if (req.method === 'GET' && req.url === '/health') {
       res.writeHead(200, { 'content-type': 'application/json' });
@@ -36,6 +38,7 @@ async function startResettingServer(hippoRoot: string, startedAt: string): Promi
       return;
     }
     if (req.method === 'POST' && req.url === '/v1/memories') {
+      posts.count++;
       const chunks: Buffer[] = [];
       req.on('data', (c: Buffer) => chunks.push(c));
       req.on('end', () => {
@@ -51,12 +54,13 @@ async function startResettingServer(hippoRoot: string, startedAt: string): Promi
     res.writeHead(404).end();
   });
   server.listen(0, '127.0.0.1');
-  return { server, port: await boundPort(server) };
+  return { server, port: await boundPort(server), posts };
 }
 
 function runCli(cwd: string, args: string[]): Promise<{ status: number; stdout: string; stderr: string }> {
   return new Promise((resolve) => {
-    const child = spawn(process.execPath, [CLI_PATH, ...args], { cwd, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+    const env = { ...process.env, ...ROUTED_CLI_ENV };
+    const child = spawn(process.execPath, [CLI_PATH, ...args], { cwd, env, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', (c: Buffer) => { stdout += c.toString('utf8'); });
@@ -68,6 +72,7 @@ function runCli(cwd: string, args: string[]): Promise<{ status: number; stdout: 
 function countMemories(hippoRoot: string, content: string): number {
   const db = openHippoDb(hippoRoot);
   try {
+    // SAFETY: an aggregate SELECT returns exactly one row and COUNT(*) is an integer.
     const row = db.prepare('SELECT COUNT(*) AS n FROM memories WHERE content = ?').get(content) as { n: number };
     return row.n;
   } finally {
@@ -77,7 +82,7 @@ function countMemories(hippoRoot: string, content: string): number {
 
 function fetchError(code?: string, message = 'fetch failed'): Error {
   const err = new TypeError(message);
-  if (code !== undefined) (err as Error & { cause: unknown }).cause = { code };
+  if (code !== undefined) err.cause = { code };
   return err;
 }
 
@@ -115,7 +120,7 @@ describe('remember over HTTP when the socket resets after the commit', () => {
     initStore(hippoRoot);
 
     const startedAt = new Date().toISOString();
-    const { server, port } = await startResettingServer(hippoRoot, startedAt);
+    const { server, port, posts } = await startResettingServer(hippoRoot, startedAt);
     writeFileSync(
       join(hippoRoot, 'server.pid'),
       JSON.stringify({ schema: 1, pid: process.pid, port, url: `http://127.0.0.1:${port}`, started_at: startedAt }),
@@ -127,6 +132,7 @@ describe('remember over HTTP when the socket resets after the commit', () => {
     const { status, stderr } = await runCli(home, ['remember', content]);
 
     try {
+      expect(posts.count, `the CLI never routed to the stub server; stderr: ${stderr}`).toBe(1);
       expect(countMemories(hippoRoot, content)).toBe(1);
       expect(status).not.toBe(0);
       expect(stderr).toContain('may already have been applied');

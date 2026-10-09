@@ -9,6 +9,7 @@
 ```bash
 npm run build
 npm test
+npm run test:eval   # the four slow token-eval harness tests, which npm test skips
 npm run build:ui
 npm run build:all
 npm run smoke:pack
@@ -20,6 +21,9 @@ npm run smoke:openclaw-install
 - Document public APIs with JSDoc.
 - Prefer focused tests in `tests/` or nearby integration/eval harnesses before changing memory behavior.
 - Name a new test file after the behaviour it pins, not the ticket (`store-stats-concurrency.test.ts`, not `a7-t3.test.ts`). Seed test stores through `initStore`, `createMemory` and `writeEntry`; write raw SQL only when the test is about SQL.
+- A new test file needs a contract with no owner file: find the owner and add a row first.
+- One owner per contract at the strongest boundary, with one wire-up row per other transport; a test written to carry a refactor is deleted by the PR that lands it.
+- No production export for a test; seed helpers live in `tests/_helpers`.
 - Do not commit generated `dist/` or UI build output unless the repo expects it for a release.
 - A PR's changelog entry goes in its own `changelog.d/<branch-with-dashes>.md`, never in `CHANGELOG.md`; the release commit folds them in (`changelog.d/README.md`).
 - CI fails when any oxlint rule's hit count rises above `.oxlint-baseline.json`. Fix new hits in the files you touch; after clearing old ones, `node scripts/check-lint-ratchet.mjs --update` and commit the lower baseline.
@@ -27,7 +31,7 @@ npm run smoke:openclaw-install
 - No `src/` file over 800 lines and no function over 80. CI fails when a new one appears or one in `.size-baseline.json` grows; after shrinking old ones, `node scripts/check-size-ratchet.mjs --update` and commit the lower baseline.
 - An eval that reads host transcripts (`~/.claude/projects/*.jsonl`) copies its corpus outside the repo at registration and names the copy in the prereg: Claude Code deletes sessions after 30 days by default, so a live-path corpus cannot be re-run.
 - Use Hippo memory commands when useful, but do not store secrets.
-- The `compactions` table is one record per Claude Code compaction, not a memory row: recall, FTS, context and sleep's memory passes never read it. Memories saved from a compaction carry the `compaction-memory` tag and a `compaction:` source and fade like any other memory; a restated item is skipped, and another session's restatement strengthens the row it repeats. The keep rule (`KEEP_PAIRS` in `src/memory.ts`) covers imported agent memories only and needs tag and source both; `canAutoDelete` and `AUTO_DELETABLE_SQL` must change together. No automatic pass (sleep, dedupe, audit) deletes a memory that backs an object: `AUTOMATIC_DELETE_SQL` in `src/store/delete-and-batch.ts` checks every table in `MEMORY_BACKED_TABLES`.
+- The `compactions` table is one record per Claude Code compaction, not a memory row: recall, FTS, context and sleep's memory passes never read it. Memories saved from a compaction carry the `compaction-memory` tag and a `compaction:` source and fade like any other memory; a restated item is skipped, and another session's restatement strengthens the row it repeats. The keep rule (`KEEP_PAIRS` in `src/core/memory.ts`) covers imported agent memories only and needs tag and source both; `canAutoDelete` and `AUTO_DELETABLE_SQL` (`src/store/rule-sql.ts`) must change together. No automatic pass (sleep, dedupe, audit) deletes a memory that backs an object: `AUTOMATIC_DELETE_SQL` in `src/store/delete-and-batch.ts` checks every table in `MEMORY_BACKED_TABLES`.
 
 ## Never Do
 - Never store secrets, API keys, tokens, raw private emails, or sensitive personal data in Hippo memories.

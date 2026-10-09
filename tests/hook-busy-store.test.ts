@@ -1,4 +1,4 @@
-// A prompt hook has a 5 s budget, so a store held by `hippo sleep` must degrade the hook, never stall it.
+// A prompt hook has a 5 s budget, so a store held by `hippo sleep` must degrade the hook after one short wait, never stall it.
 // Drives the built CLI while a child process holds the write lock.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
@@ -7,11 +7,11 @@ import * as path from 'node:path';
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory } from '../src/memory.js';
-import { closeHippoDb, getHippoDbPath, openHippoDb, withSharedStoreHandles, HOOK_DB_WAIT_MS } from '../src/db.js';
+import { createMemory } from '../src/core/memory.js';
+import { closeHippoDb, getHippoDbPath, openHippoDb, withSharedStoreHandles, HOOK_DB_WAIT_MS } from '../src/db/index.js';
+import { lockWaitAskedMs, tracingLockWaits } from './_helpers/lock-waits.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
-const PROMPT_HOOK_BUDGET_MS = 5000;
 
 const LOCK_HOLDER_SRC = `
 const { DatabaseSync } = require('node:sqlite');
@@ -38,15 +38,15 @@ function holdWriteLock(dbPath: string): Promise<ChildProcess> {
 }
 
 function runHook(args: string[], input: string) {
-  const started = Date.now();
+  const traceDir = path.join(tmp, 'lock-waits');
   const res = spawnSync(process.execPath, ['--no-warnings', HIPPO_JS, ...args], {
-    env: { ...process.env, HOME: tmp, USERPROFILE: tmp, HIPPO_HOME: path.join(tmp, 'global'), HIPPO_LOG: 'warn' },
+    env: tracingLockWaits({ ...process.env, HOME: tmp, USERPROFILE: tmp, HIPPO_HOME: path.join(tmp, 'global'), HIPPO_LOG: 'warn' }, traceDir),
     cwd: projectDir,
     input,
     encoding: 'utf8',
     timeout: 60000,
   });
-  return { status: res.status, stdout: res.stdout, stderr: res.stderr, elapsedMs: Date.now() - started };
+  return { status: res.status, stdout: res.stdout, stderr: res.stderr, lockWaitAskedMs: lockWaitAskedMs(traceDir, res.pid) };
 }
 
 beforeEach(() => {
@@ -70,14 +70,14 @@ afterEach(async () => {
 });
 
 describe('context hook while another process holds the store write lock', () => {
-  it('returns inside the prompt hook budget with exit 0 and one warning', async () => {
+  it('waits for the lock once, for the hook wait, then exits 0 with one warning', async () => {
     holder = await holdWriteLock(getHippoDbPath(localRoot));
     const payload = JSON.stringify({ session_id: 'sess-busy-1', prompt: 'postgres migration rollback plan' });
 
     const run = runHook(['context', '--pinned-only', '--include-recent', '5', '--format', 'additional-context'], payload);
 
     expect(run.status).toBe(0);
-    expect(run.elapsedMs).toBeLessThan(PROMPT_HOOK_BUDGET_MS);
+    expect(run.lockWaitAskedMs).toBe(HOOK_DB_WAIT_MS);
     const warnings = run.stderr.split('\n').filter((line) => line.includes('store busy'));
     expect(warnings).toHaveLength(1);
     // WAL readers never wait on the writer, so the memories still go out; only the ledger rows are skipped.
@@ -90,6 +90,7 @@ describe('context hook while another process holds the store write lock', () => 
     expect(run.status).toBe(0);
     expect(run.stdout).toContain('rollback plan');
     expect(run.stderr).not.toContain('store busy');
+    expect(run.lockWaitAskedMs).toBe(0);
   }, 60000);
 });
 

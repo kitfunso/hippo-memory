@@ -100,6 +100,26 @@ describe('MCP-over-HTTP transport', () => {
     expect(recallText).toContain(sentinel);
   });
 
+  it('POST /mcp answers a missing method, a notification, an unknown method and a bad bearer', async () => {
+    const post = async (body: string, headers: Record<string, string> = {}) => {
+      const res = await fetch(`${handle.url}/mcp`, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body });
+      return { status: res.status, body: await res.text() };
+    };
+    const noMethod = { status: 400, body: '{"error":"JSON-RPC body must include a method string"}' };
+    expect(await post('{"jsonrpc":"2.0","id":1}')).toEqual(noMethod);
+    expect(await post('[1,2]')).toEqual(noMethod);
+    expect(await post('{"jsonrpc":"2.0","method":"notifications/initialized"}')).toEqual({ status: 202, body: '' });
+    expect(await post('{"jsonrpc":"2.0","id":7,"method":"no/such"}')).toEqual({
+      status: 200,
+      body: '{"jsonrpc":"2.0","id":7,"error":{"code":-32601,"message":"Method not found: no/such"}}',
+    });
+    const bad = { authorization: 'Bearer hk_not_a_real_key' };
+    const denied = { status: 401, body: '{"error":"invalid api key"}' };
+    expect(await post('{"jsonrpc":"2.0","id":9,"method":"tools/list"}', bad)).toEqual(denied);
+    const stream = await fetch(`${handle.url}/mcp/stream`, { headers: bad });
+    expect({ status: stream.status, body: await stream.text() }).toEqual(denied);
+  });
+
   it('GET /mcp/stream opens an SSE stream and emits a keepalive', async () => {
     const ac = new AbortController();
     try {
