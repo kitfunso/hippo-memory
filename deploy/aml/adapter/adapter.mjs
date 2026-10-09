@@ -37,22 +37,8 @@ function sendJson(res, status, body) {
   res.end(payload);
 }
 
-// No typeof: JSON never yields a value whose constructor is String or Number except a primitive of that type.
-function isString(value) {
-  return value?.constructor === String;
-}
-
-function isNumber(value) {
-  return value?.constructor === Number;
-}
-
-// JSON.parse objects and arrays are Object instances; primitives and null are not.
-function isObject(value) {
-  return value instanceof Object;
-}
-
 function isNonEmptyString(value) {
-  return isString(value) && value.length > 0;
+  return typeof value === 'string' && value.length > 0;
 }
 
 // Reads the request body up to maxBytes. Throws an error carrying
@@ -159,7 +145,7 @@ async function callHippo(method, path, { credential, jsonBody, clientIp } = {}) 
 }
 
 function hippoErrorBody(hippoBody) {
-  if (isObject(hippoBody) && isNonEmptyString(hippoBody.error)) {
+  if (hippoBody && typeof hippoBody === 'object' && isNonEmptyString(hippoBody.error)) {
     return { error: hippoBody.error };
   }
   return { error: 'hippo request failed' };
@@ -186,14 +172,15 @@ async function handleHealth(_req, res) {
 // ---- /add ----------------------------------------------------------------
 
 function validateAddBody(body) {
-  if (!isObject(body)) return 'request body must be a JSON object';
+  if (!body || typeof body !== 'object') return 'request body must be a JSON object';
   if (!isNonEmptyString(body.request_id)) return 'request_id is required';
   if (!Array.isArray(body.messages) || body.messages.length === 0) {
     return 'messages must be a non-empty array';
   }
   for (const message of body.messages) {
     if (
-      !isObject(message) ||
+      !message ||
+      typeof message !== 'object' ||
       !isNonEmptyString(message.role) ||
       !isNonEmptyString(message.content)
     ) {
@@ -249,10 +236,10 @@ async function handleAdd(req, res) {
 // ---- /search ---------------------------------------------------------
 
 function validateSearchBody(body) {
-  if (!isObject(body)) return 'request body must be a JSON object';
+  if (!body || typeof body !== 'object') return 'request body must be a JSON object';
   if (!isNonEmptyString(body.query)) return 'query is required';
   if (!isNonEmptyString(body.user_id)) return 'user_id is required';
-  if (!isNumber(body.top_k) || !Number.isFinite(body.top_k) || body.top_k <= 0) {
+  if (typeof body.top_k !== 'number' || !Number.isFinite(body.top_k) || body.top_k <= 0) {
     return 'top_k must be a positive number';
   }
   return undefined;
@@ -288,7 +275,7 @@ async function handleSearch(req, res) {
   const results = Array.isArray(hippoBody.results) ? hippoBody.results : [];
   const data = results.slice(0, topK).map((row) => {
     const item = { id: row.id, content: row.content };
-    if (isNumber(row.score)) item.score = row.score;
+    if (typeof row.score === 'number') item.score = row.score;
     if (isNonEmptyString(row.created_at)) item.created_at = row.created_at;
     return item;
   });
@@ -327,8 +314,8 @@ const server = createServer((req, res) => {
     })
     .catch((err) => {
       if (res.headersSent) return;
-      const status = isNumber(err.statusCode) ? err.statusCode : 502;
-      const message = isNumber(err.statusCode) ? err.message : 'adapter error';
+      const status = typeof err.statusCode === 'number' ? err.statusCode : 502;
+      const message = typeof err.statusCode === 'number' ? err.message : 'adapter error';
       sendJson(res, status, { error: message });
     });
 });
@@ -342,6 +329,6 @@ server.listen(ADAPTER_PORT, () => {
   // server.address().port is the actual bound port. Matters when
   // ADAPTER_PORT=0 asks the OS for an ephemeral port (tests do this).
   const address = server.address();
-  const boundPort = isObject(address) ? address.port : ADAPTER_PORT;
+  const boundPort = address && typeof address === 'object' ? address.port : ADAPTER_PORT;
   console.log(`aml adapter listening on :${boundPort}, upstream hippo ${HIPPO_URL}`);
 });

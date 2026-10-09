@@ -1,8 +1,11 @@
 import type { DatabaseSyncLike } from './sqlite.js';
 
-export function isSqliteBusy<E>(error: E): boolean {
-  // Object() wraps a primitive, so a string or number reads as no errcode, as `?.` did.
-  const code = error === null || error === undefined ? undefined : Object(error).errcode;
+function carriesErrcode(cause: unknown): cause is { errcode: unknown } {
+  return typeof cause === 'object' && cause !== null && 'errcode' in cause;
+}
+
+export function isSqliteBusy(cause: unknown): boolean {
+  const code = carriesErrcode(cause) ? cause.errcode : undefined;
   return code === 5 || code === 6 || code === 517;
 }
 
