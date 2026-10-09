@@ -1,14 +1,19 @@
 // Completing a card promotes exactly its backlog children whose parents are all done, in card_deps order, and touches no other child.
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Card } from '../src/core/card.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { claimCard, completeCard, createCard, loadCard, loadCardDeps, reviewCard, transitionCard } from '../src/store/cards.js';
 import { initStore } from '../src/store/open.js';
+import { countMatching, recordStatements } from './_helpers/count-statements.js';
 
 const TENANT = 'default';
+interface Preparer { prepare(sql: string): object }
+// SAFETY: node:sqlite has no bundled types; prepare takes SQL text and returns a statement object.
+const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as { DatabaseSync: { prototype: Preparer } };
 let root: string;
 
 beforeEach(() => {
@@ -95,7 +100,9 @@ describe('completeCard child promotion', () => {
     const family = seedFamily(3);
     const db = openHippoDb(root);
     try {
-      db.prepare(`INSERT INTO cards (id, title, status, created_at, updated_at, tenant_id) VALUES ('card_other', 'other', 'backlog', 'x', 'x', 'tenant-b')`).run();
+      db.prepare(`
+        INSERT INTO cards (id, title, status, created_at, updated_at, tenant_id) VALUES ('card_other', 'other', 'backlog', 'x', 'x', 'tenant-b')
+      `).run();
       db.prepare(`INSERT INTO card_deps (parent, child, tenant_id, created_at) VALUES (?, 'card_other', 'tenant-b', 'x')`).run(family.parent);
     } finally {
       closeHippoDb(db);
@@ -104,4 +111,45 @@ describe('completeCard child promotion', () => {
     expect(result?.promotedChildren).toHaveLength(family.promotable.size);
     expect(loadCard(root, 'tenant-b', 'card_other')?.status).toBe('backlog');
   }, 60_000);
+});
+
+/** Runs `fn` and returns the SQL of every statement it prepared, through a wrapper that calls the real prepare. */
+function recordPrepares<T>(fn: () => T) {
+  const prepared: string[] = [];
+  const prepare = DatabaseSync.prototype.prepare;
+  const spy = vi.spyOn(DatabaseSync.prototype, 'prepare').mockImplementation(function (this: Preparer, sql: string) {
+    prepared.push(sql);
+    return prepare.call(this, sql);
+  });
+  try {
+    return { result: fn(), prepared };
+  } finally {
+    spy.mockRestore();
+  }
+}
+
+describe('statements one completion prepares and runs', () => {
+  it('do not grow with the child count: one read of the children and one update for all it promotes', () => {
+    const runs = [1, 10, 100].map((children) => {
+      const family = seedFamily(children);
+      const log = recordStatements(() => recordPrepares(() => completeCard(root, TENANT, family.parent, 'success')));
+      expect(log.result.result?.promotedChildren).toHaveLength(family.promotable.size);
+      return { prepared: log.result.prepared, run: log.statements };
+    });
+    expect(runs.map((r) => [r.prepared.length, r.run.length])).toEqual(runs.map(() => [runs[0].prepared.length, runs[0].run.length]));
+    for (const { prepared, run } of runs) {
+      expect(countMatching(prepared, 'FROM card_deps')).toBe(1);
+      expect(countMatching(run, 'FROM card_deps')).toBe(1);
+      expect(countMatching(run, 'UPDATE cards SET status')).toBe(2);
+    }
+  }, 60_000);
+
+  it('prepares the dependency insert of a new card once for 20 parents', () => {
+    const parents = Array.from({ length: 20 }, (_, i) => createCard(root, TENANT, { title: `parent ${i}` }).id);
+    const log = recordStatements(() => recordPrepares(() => createCard(root, TENANT, { title: 'child', dependsOn: parents })));
+    expect(countMatching(log.result.prepared, 'INSERT INTO card_deps')).toBe(1);
+    expect(countMatching(log.statements, 'INSERT INTO card_deps')).toBe(20);
+    expect(log.result.result.status).toBe('backlog');
+    expect(loadCardDeps(root, TENANT, log.result.result.id).parents.sort()).toEqual([...parents].sort());
+  });
 });

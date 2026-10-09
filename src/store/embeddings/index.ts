@@ -9,12 +9,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { MemoryEntry } from '../../core/memory.js';
-import { loadAllEntries } from '../entry-reads.js';
+import { chunked, loadAllEntryIds, loadEntriesByIds } from '../entry-reads.js';
 import { rethrowIfSqliteBlocked } from '../../db/index.js';
 import { EMBEDDING_MODEL_META_KEY } from '../../db/vector-store.js';
 import { initializeParticle } from '../../db/physics-state.js';
 import {
-  indexedModel, pruneStoredVectors, replacesIndex, resetStoredParticles, saveEmbeddingIndex, saveIndexIdentity, saveStoredVectors, seedStoredParticle, storedIndexState,
+  indexedModel, pruneStoredVectors, replacesIndex, resetStoredParticlesByIds, saveEmbeddingIndex, saveIndexIdentity, saveStoredVectors,
+  seedStoredParticle, storedIndexState,
 } from '../vector-index.js';
 import { loadConfig } from '../../core/config.js';
 import { resolveEmbeddingProvider, type EmbeddingProvider } from './provider.js';
@@ -122,24 +123,34 @@ export function embeddingModelRequiresReindex(
   return indexNeedsRebuild(resolveIndexedEmbeddingModel(hippoRoot, index), model);
 }
 
+const STORE_PAGE = 64;
+
+/** The rows for `ids`, a page at a time and in that order; an id deleted since it was listed is skipped. */
+function* entryPages(hippoRoot: string, ids: readonly string[]): Generator<MemoryEntry[]> {
+  for (const page of chunked(ids, STORE_PAGE)) {
+    const byId = new Map(loadEntriesByIds(hippoRoot, page).map((e) => [e.id, e]));
+    const entries = page.flatMap((id) => byId.get(id) ?? []);
+    if (entries.length > 0) yield entries;
+  }
+}
+
 async function rebuildEmbeddingIndex(
-  entries: MemoryEntry[],
+  hippoRoot: string,
+  ids: readonly string[],
   provider: EmbeddingProvider,
 ): Promise<Record<string, number[]>> {
   const rebuilt: Record<string, number[]> = {};
-  if (entries.length === 0) return rebuilt;
-
-  const texts = entries.map((e) => embeddingInputText(e));
-  // provider.embed batches internally; on a hard transport/auth failure it
-  // throws, so the caller aborts WITHOUT saving a partial index (atomic
-  // reindex: the old index + stored identity are preserved).
-  const vectors = await provider.embed(texts, 'passage');
-  for (let i = 0; i < entries.length; i++) {
-    const vec = vectors[i];
-    if (vec && vec.length > 0) {
-      rebuilt[entries[i].id] = vec;
-    } else {
-      noteSkippedEmbedding(entries[i].id);
+  for (const entries of entryPages(hippoRoot, ids)) {
+    // On a hard transport/auth failure provider.embed throws, so the caller aborts WITHOUT saving
+    // a partial index (atomic reindex: the old index + stored identity are preserved).
+    const vectors = await provider.embed(entries.map((e) => embeddingInputText(e)), 'passage');
+    for (let i = 0; i < entries.length; i++) {
+      const vec = vectors[i];
+      if (vec && vec.length > 0) {
+        rebuilt[entries[i].id] = vec;
+      } else {
+        noteSkippedEmbedding(entries[i].id);
+      }
     }
   }
 
@@ -148,11 +159,11 @@ async function rebuildEmbeddingIndex(
 
 function resetPhysicsFromIndex(
   hippoRoot: string,
-  entries: MemoryEntry[],
+  ids: readonly string[],
   index: Record<string, number[]>,
 ): void {
   try {
-    resetStoredParticles(hippoRoot, entries, index);
+    resetStoredParticlesByIds(hippoRoot, ids, index);
   } catch (err) {
     // Best effort: retrieval still falls back without physics state.
     log.warn(`physics reset after reindex failed: ${errorMessage(err)}`);
@@ -315,7 +326,6 @@ async function writeVectorPage(
   return { written, modelMismatch: false };
 }
 
-const STORE_PAGE = 64;
 const OTHER_MODEL_INDEX = "the vector index was built by another embedding model; run 'hippo embed' to rebuild it";
 
 /** Embeds every memory with no vector under `model`, page by page, so a provider failure keeps the pages written; a rebuild reseeds the particles it drops. */
@@ -408,17 +418,20 @@ export async function embedMemory(
   });
 }
 
-async function rebuildIndexForProvider(hippoRoot: string, provider: EmbeddingProvider): Promise<void> {
+// Every page is embedded before one transaction replaces the index, and the identity is saved only after that: a provider failure or a crash
+// at any earlier point leaves the old identity, so embeddingModelRequiresReindex has the next run rebuild from the start.
+async function rebuildIndexForProvider(hippoRoot: string, provider: EmbeddingProvider): Promise<number> {
   const identity = provider.id;
   // Host-wide rebuild. The embedding index is keyed by entry.id
   // (which is tenant-scoped) but the index itself is one per hippoRoot.
   // Cross-tenant content equivalence is visible at the vector level.
   // Per-tenant indices would be a larger architecture change.
-  const entries = loadAllEntries(hippoRoot);
-  const rebuiltIndex = await rebuildEmbeddingIndex(entries, provider);
+  const ids = loadAllEntryIds(hippoRoot);
+  const rebuiltIndex = await rebuildEmbeddingIndex(hippoRoot, ids, provider);
   saveEmbeddingIndex(hippoRoot, rebuiltIndex, embeddingIndexIdentity(identity));
   saveStoredEmbeddingModel(hippoRoot, identity);
-  resetPhysicsFromIndex(hippoRoot, entries, rebuiltIndex);
+  resetPhysicsFromIndex(hippoRoot, ids, rebuiltIndex);
+  return Object.keys(rebuiltIndex).length;
 }
 
 function initializePhysicsIfMissing(hippoRoot: string, entry: MemoryEntry, vector: number[]): void {
@@ -458,7 +471,7 @@ function throwIfProviderKeyMissing(hippoRoot: string, provider: EmbeddingProvide
 async function backfillPending(
   hippoRoot: string,
   provider: EmbeddingProvider,
-  pending: readonly MemoryEntry[],
+  pending: readonly string[],
   model: string,
 ): Promise<{ count: number; backfillError: unknown }> {
   let count = 0;
@@ -466,9 +479,7 @@ async function backfillPending(
   // it stays a plain `unknown` binding for the arbitrary caught value below;
   // falsy either way, so `if (backfillError)` behaves identically.
   let backfillError: unknown = undefined;
-  const SAVE_CHUNK = 64;
-  for (let i = 0; i < pending.length; i += SAVE_CHUNK) {
-    const chunk = pending.slice(i, i + SAVE_CHUNK);
+  for (const chunk of entryPages(hippoRoot, pending)) {
     let vectors: number[][];
     try {
       vectors = await provider.embed(
@@ -508,23 +519,14 @@ export async function embedAll(
 
   return withEmbedLock(hippoRoot, async () => {
     const identity = provider.id;
+    if (embeddingModelRequiresReindex(hippoRoot, identity)) return rebuildIndexForProvider(hippoRoot, provider);
+
     // Host-wide by design. embedAll backfills vectors for all tenants'
     // entries into the per-host embedding index. Per-tenant filtering would
     // produce partial indices and break recall.
-    const entries = loadAllEntries(hippoRoot);
-    const model = embeddingIndexIdentity(identity);
-
-    if (embeddingModelRequiresReindex(hippoRoot, identity)) {
-      const rebuiltIndex = await rebuildEmbeddingIndex(entries, provider);
-      saveEmbeddingIndex(hippoRoot, rebuiltIndex, model);
-      saveStoredEmbeddingModel(hippoRoot, identity);
-      resetPhysicsFromIndex(hippoRoot, entries, rebuiltIndex);
-      return Object.keys(rebuiltIndex).length;
-    }
-
     const embedded = pruneStoredVectors(hippoRoot);
-    const pending = entries.filter((e) => !embedded.has(e.id));
-    const { count, backfillError } = await backfillPending(hippoRoot, provider, pending, model);
+    const pending = loadAllEntryIds(hippoRoot).filter((id) => !embedded.has(id));
+    const { count, backfillError } = await backfillPending(hippoRoot, provider, pending, embeddingIndexIdentity(identity));
 
     saveStoredEmbeddingModel(hippoRoot, identity);
 

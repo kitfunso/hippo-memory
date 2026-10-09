@@ -14,6 +14,8 @@ import type { EmbeddingProvider } from '../src/store/embeddings/provider.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { initStore } from '../src/store/open.js';
+import { MEMORY_SELECT_COLUMNS } from '../src/store/rows.js';
+import { recordStatementsAsync } from './_helpers/count-statements.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from './_helpers/hashed-embedding-server.js';
 
 const SEEDED_AT = '2026-01-15T00:00:00.000Z';
@@ -22,6 +24,7 @@ const TENANTS = ['tenant-a', 'tenant-b'];
 const ROWS = 300;
 const HASHED_ID = 'openai:hashed-16';
 const SLOW = 120_000;
+const PAGE = 64;
 
 let home: string;
 let embeddings: HashedEmbeddings;
@@ -205,5 +208,29 @@ describe('a model identity change on hippo.db', () => {
     await expect(embedAll(root, undefined, failing)).rejects.toThrow('provider down');
     expect(indexOn(root)).toEqual(before);
     expect(before.model).toBe(embeddingIndexIdentity('fake-old'));
+  }, SLOW);
+});
+
+/** The most full memory rows one statement of a run can hand back: the length of its id list, or the whole store when it has none. */
+function peakFullRowsRead(statements: readonly string[]): number {
+  const reads = statements.filter((sql) => sql.includes(MEMORY_SELECT_COLUMNS));
+  expect(reads.length).toBeGreaterThan(0);
+  return Math.max(...reads.map((sql) => {
+    const idList = /\bid IN \(([?,\s]+)\)/.exec(sql);
+    return idList ? idList[1].split('?').length - 1 : ROWS;
+  }));
+}
+
+describe('rows held while embedding hippo.db', () => {
+  it.each([
+    { name: 'a backfill of 120 rows', template: (): string => partly, id: 'fake-old', embedded: 120 },
+    { name: 'a rebuild of 300 rows', template: (): string => indexedOld, id: 'fake-new', embedded: ROWS },
+  ])('reads full rows and embeds them at most 64 at a time on $name', async ({ template, id, embedded }) => {
+    const root = copyOf(template());
+    const calls: number[] = [];
+    const log = await recordStatementsAsync(() => embedAll(root, undefined, fake(id, (texts) => calls.push(texts.length))));
+    expect(log.result).toBe(embedded);
+    expect(Math.max(...calls)).toBe(PAGE);
+    expect(peakFullRowsRead(log.statements)).toBe(PAGE);
   }, SLOW);
 });

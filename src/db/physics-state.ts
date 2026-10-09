@@ -178,30 +178,34 @@ export function initializeParticle(
   };
 }
 
-/**
- * Reset all physics states from original embeddings.
- * Drops existing physics data and re-initializes from the embedding index.
- */
+const RESET_BATCH = 64;
+
+/** Drops every particle, then seeds one per entry that has an embedding; `entries` may be read lazily, as each batch is written before the next is read. */
 export function resetAllPhysicsState(
   db: DatabaseSyncLike,
-  entries: MemoryEntry[],
+  entries: Iterable<MemoryEntry>,
   embeddingIndex: Record<string, number[]>,
   now: Date = evalNow(),
 ): number {
   db.exec('DELETE FROM memory_physics');
 
-  const particles: PhysicsParticle[] = [];
-  for (const entry of entries) {
-    const embedding = embeddingIndex[entry.id];
-    if (!embedding || embedding.length === 0) continue;
-    particles.push(initializeParticle(entry, embedding, now));
-  }
-
-  if (particles.length > 0) {
-    savePhysicsState(db, particles);
-  }
-
-  return particles.length;
+  // One transaction for every batch, so a failure part way leaves no particles rather than some.
+  return withWriteScope(db, 'reset_particles', () => {
+    let count = 0;
+    let batch: PhysicsParticle[] = [];
+    const flush = (): void => {
+      savePhysicsState(db, batch);
+      count += batch.length;
+      batch = [];
+    };
+    for (const entry of entries) {
+      const embedding = embeddingIndex[entry.id];
+      if (!embedding || embedding.length === 0) continue;
+      if (batch.push(initializeParticle(entry, embedding, now)) === RESET_BATCH) flush();
+    }
+    flush();
+    return count;
+  });
 }
 
 /**

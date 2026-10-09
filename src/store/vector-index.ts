@@ -8,7 +8,7 @@ import type { VectorBackfillQuery, VectorRowWrite, VectorWrite, VectorWriteResul
 import {
   EMBEDDING_MODEL_META_KEY, deleteOrphanVectors, hasStoredVectors, loadVectors, loadVectorViews, replaceAllVectors, storedVectorDims, storedVectorIds, upsertVectors,
 } from '../db/vector-store.js';
-import { chunked } from './entry-reads.js';
+import { chunked, selectEntriesByIds } from './entry-reads.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from './rows.js';
 
 const MAX_BACKFILL_PAGE = 500;
@@ -210,6 +210,28 @@ export function resetStoredParticles(hippoRoot: string, entries: MemoryEntry[], 
   const db = openHippoDb(hippoRoot);
   try {
     return resetAllPhysicsState(db, entries, embeddingIndex);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+const PARTICLE_PAGE = 64;
+
+function* entriesInPages(db: DatabaseSyncLike, ids: readonly string[]): Generator<MemoryEntry> {
+  for (const page of chunked(ids, PARTICLE_PAGE)) {
+    const rows = selectEntriesByIds(db, page);
+    for (const id of page) {
+      const entry = rows.get(id);
+      if (entry) yield entry;
+    }
+  }
+}
+
+/** resetStoredParticles for the memories `ids`, in that order: their rows are read a page at a time on the writing handle, so they are never all held. */
+export function resetStoredParticlesByIds(hippoRoot: string, ids: readonly string[], embeddingIndex: Record<string, number[]>): number {
+  const db = openHippoDb(hippoRoot);
+  try {
+    return resetAllPhysicsState(db, entriesInPages(db, ids), embeddingIndex);
   } finally {
     closeHippoDb(db);
   }
