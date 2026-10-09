@@ -234,7 +234,7 @@ function checkBounds(arms) {
 }
 
 async function ledgerCompare() {
-  const { estimateTokens } = await import(pathToFileURL(path.join(REPO, 'dist', 'token-ledger.js')));
+  const { estimateTokens } = await import(pathToFileURL(path.join(REPO, 'dist', 'util', 'token-text.js')));
   const stores = [];
   const arms = {};
   try {

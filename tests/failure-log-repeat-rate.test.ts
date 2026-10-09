@@ -10,7 +10,7 @@ import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { recordFailure, summarizeFailures, failuresBySession, type FailureOutcome } from '../src/store/failure-log.js';
 import { captureToolFailure } from '../src/capture-error.js';
 import { failureSignature, lessonFromFailure } from '../src/capture/failure-reading.js';
-import { blockHash } from '../src/token-ledger.js';
+import { blockHash } from '../src/util/token-text.js';
 import { insertRejectedValue, normalizeValueForRejection, rejectionDigest, RejectedValueError } from '../src/store/rejection.js';
 import type { JsonValue } from '../src/json.js';
 
