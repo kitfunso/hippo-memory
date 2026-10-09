@@ -256,33 +256,12 @@ async function rebuildOneSummary(
   const children = loadChildrenOfSummary(hippoRoot, summary.id, summary.tenantId);
 
   if (children.length === 0) {
-    // Zero-child case: clear dirty + zero counts, no LLM call, no rebuild_count bump.
-    const { changed } = applyRebuildResult(hippoRoot, summary, {
-      content: summary.content,
-      descendant_count: 0,
-      earliest_at: null,
-      latest_at: null,
-      bumpRebuildCount: false,
-      zeroChildren: true,
-      actor: 'sleep',
-    });
-    if (changed) result.zeroChildSkipped++;
-    // changed=false → race lost / row vanished; silently skip. `refused`
-    // is always false here — applyRebuildResult only checks the
-    // tombstone when bumpRebuildCount is true (store/summaries.ts).
+    clearZeroChildSummary(hippoRoot, summary, result);
     return;
   }
 
-  // Derive label from summary's existing entity tags (mirrors clusterFacts)
-  const entityTags = summary.tags.filter(
-    (t) => t.startsWith('speaker:') || t.startsWith('topic:'),
-  );
-  const label = entityTags.length > 0
-    ? entityTags.map((t) => t.split(':')[1]).join(': ')
-    : summary.content.slice(0, 40);
-
   const newContent = await generateDagSummary(
-    label,
+    summaryLabel(summary),
     children.map((c) => c.content),
     opts,
   );
@@ -310,6 +289,33 @@ async function rebuildOneSummary(
   }
   // changed=false (refused also false) → race lost; not failure, not
   // success, silently skip
+}
+
+/** Zero-child case: clear dirty + zero counts, no LLM call, no rebuild_count bump. */
+function clearZeroChildSummary(hippoRoot: string, summary: MemoryEntry, result: DagRebuildResult): void {
+  const { changed } = applyRebuildResult(hippoRoot, summary, {
+    content: summary.content,
+    descendant_count: 0,
+    earliest_at: null,
+    latest_at: null,
+    bumpRebuildCount: false,
+    zeroChildren: true,
+    actor: 'sleep',
+  });
+  if (changed) result.zeroChildSkipped++;
+  // changed=false → race lost / row vanished; silently skip. `refused`
+  // is always false here — applyRebuildResult only checks the
+  // tombstone when bumpRebuildCount is true (store/summaries.ts).
+}
+
+// Derive label from summary's existing entity tags (mirrors clusterFacts)
+function summaryLabel(summary: MemoryEntry): string {
+  const entityTags = summary.tags.filter(
+    (t) => t.startsWith('speaker:') || t.startsWith('topic:'),
+  );
+  return entityTags.length > 0
+    ? entityTags.map((t) => t.split(':')[1]).join(': ')
+    : summary.content.slice(0, 40);
 }
 
 /**

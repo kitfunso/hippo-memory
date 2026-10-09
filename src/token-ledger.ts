@@ -24,7 +24,7 @@
  * must never break recall.
  */
 import { open } from 'node:fs/promises';
-import type { DatabaseSyncLike } from './db.js';
+import { withWriteScope, type DatabaseSyncLike } from './db.js';
 import type { JsonObject } from './store/working-memory.js';
 import { type JsonValue, isJsonString, isJsonObjectLiteral } from './json.js';
 import { DAY_MS } from './util/time.js';
@@ -367,9 +367,7 @@ interface RereadDay {
 
 /** Replace a session's `reread` rows in one transaction, one per {@link REREAD_SURFACES} surface and UTC day; returns the tokens booked. */
 export function recordRereads(db: DatabaseSyncLike, tenantId: string, sessionId: string, calls: readonly ApiCall[]): number {
-  db.exec('BEGIN IMMEDIATE');
-  let committed = false;
-  try {
+  return withWriteScope(db, 'record_rereads', () => {
     const rows = injectedBlocks(db, tenantId, sessionId, REREAD_SURFACES);
     const days = new Map<string, RereadDay>();
     const add = (surface: TokenSurface, at: number, rereads: number, tokens: number): void => {
@@ -390,12 +388,6 @@ export function recordRereads(db: DatabaseSyncLike, tenantId: string, sessionId:
         tenantId, sessionId, surface: day.surface, event: 'reread', items: day.rereads, tokens: day.tokens, now: new Date(day.at).toISOString(),
       });
     }
-    db.exec('COMMIT');
-    committed = true;
     return [...days.values()].reduce((sum, day) => sum + day.tokens, 0);
-  } finally {
-    if (!committed) {
-      try { db.exec('ROLLBACK'); } catch { /* preserve the original throw */ }
-    }
-  }
+  });
 }

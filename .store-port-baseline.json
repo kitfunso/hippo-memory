@@ -1,13 +1,13 @@
 {
-  "openersOutside": 49,
+  "openersOutside": 43,
   "openersInCli": 11,
   "storeBranches": 4,
   "routesWithoutStore": 0,
   "sqliteOnlyRoutes": 2,
-  "routesOnLoop": 64,
+  "routesOnLoop": 55,
   "twinFunctions": 0,
-  "sqlOutside": 1,
-  "txLiterals": 28,
+  "sqlOutside": 0,
+  "txLiterals": 12,
   "openersOutsideByFile": {
     "src/agent-memories/sync.ts": 3,
     "src/api/dormant.ts": 4,
@@ -27,23 +27,17 @@
     "src/importers/core.ts": 2,
     "src/importers/vault.ts": 1,
     "src/index.ts": 2,
-    "src/invalidation.ts": 3,
     "src/ledger-db.ts": 1,
     "src/recall-pipeline.ts": 1,
-    "src/reject-flow.ts": 3,
     "src/server/boot.ts": 1,
     "src/session-owners.ts": 1,
     "src/support-bundle.ts": 1
   },
-  "sqlOutsideByFile": {
-    "src/quarantine.ts": 1
-  },
+  "sqlOutsideByFile": {},
   "sqliteLocalMethods": [
     "applyOutcome",
     "applyOutcomeToLastRecall",
-    "archiveRaw",
-    "finishLastRecall",
-    "writeEntry"
+    "finishLastRecall"
   ],
   "sqliteOnlyRoutesList": [
     "POST /v1/memories/:id/promote",

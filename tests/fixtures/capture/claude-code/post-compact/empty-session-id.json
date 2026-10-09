@@ -1,0 +1,8 @@
+{
+  "stdin": "{\"session_id\":\"\",\"transcript_path\":\"/home/u/.claude/projects/p/sess-1.jsonl\",\"cwd\":\"/work/repo\",\"hook_event_name\":\"PostCompact\",\"trigger\":\"auto\"}",
+  "timedOut": false,
+  "expect": {
+    "status": "skipped",
+    "reason": "no PostCompact payload naming a session"
+  }
+}

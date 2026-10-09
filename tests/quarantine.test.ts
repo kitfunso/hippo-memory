@@ -213,17 +213,23 @@ describe('recall visibility and the approve/reject lifecycle', () => {
   });
 });
 
-describe('atomicity: a connector afterWrite that throws leaves no memory and no quarantine row', () => {
+describe('atomicity: a connector event log write that throws leaves no memory and no quarantine row', () => {
   it('the SAVEPOINT rolls back both rows together', () => {
     const home = makeRoot('quarantine', ISOLATION_OFF);
     try {
       const ctx = adminCtx(home);
+      const setup = openHippoDb(home);
+      try {
+        setup.exec(`CREATE TRIGGER event_log_broken BEFORE INSERT ON github_event_log BEGIN SELECT RAISE(ABORT, 'boom'); END`);
+      } finally {
+        closeHippoDb(setup);
+      }
       expect(() =>
         api.remember(ctx, {
           content: INJECTION,
           untrusted: true,
           scope: 'github:public:acme/demo',
-          afterWrite: () => { throw new Error('boom'); },
+          event: { connector: 'github', idempotencyKey: 'key-doomed', deliveryId: 'd-doomed', eventName: 'issue_comment' },
         }),
       ).toThrow('boom');
 

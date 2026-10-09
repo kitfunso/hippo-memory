@@ -500,6 +500,37 @@ export interface GraphReads {
   graphRows(tenantId: string, query: GraphViewQuery): Promise<GraphRows>;
 }
 
+/** The source event a connector's write answers, by the source's own key. The store logs each key once per connector, across every tenant. */
+export type ConnectorEvent =
+  | { readonly connector: 'slack'; readonly eventId: string }
+  | { readonly connector: 'github'; readonly idempotencyKey: string; readonly deliveryId: string; readonly eventName: string };
+
+/** An entry a connector brings in. `quarantine` is the review record of flagged content, whose entry already carries its quarantine scope. */
+export interface ConnectorWrite extends EntryWrite {
+  readonly event?: ConnectorEvent;
+  readonly quarantine?: { readonly originalScope: string | null; readonly reason: string };
+}
+
+/** 'duplicate': the event's key was logged before; `memoryId` is the id its log row holds, null for an event logged with no memory. */
+export type ConnectorWriteOutcome =
+  | { readonly outcome: 'written' }
+  | { readonly outcome: 'duplicate'; readonly memoryId: string | null };
+
+export interface ConnectorArchive extends RawArchive {
+  readonly event: ConnectorEvent;
+}
+
+/** A connector's writes with the rows that must commit with them: the event log row that turns a redelivery into a no-op, and the quarantine record of flagged content. */
+export interface ConnectorWrites {
+  /** entryWrites.writeEntry and, in its transaction: with `quarantine`, one pending record for the entry's tenant and id and one quarantine row ({reason, originalScope}), ahead of the
+   *  remember row; with `event`, one log row naming the entry's id. All commit or none. A key logged before, by an earlier write or by the winner of a race, resolves 'duplicate' and
+   *  stores nothing of this write: no memory, no record, no audit row. A duplicate is a resolved value, never a rejection; every other refusal is writeEntry's own and is decided first, so a refused entry rejects under a logged key too. */
+  writeConnectorEntry(write: ConnectorWrite): Promise<ConnectorWriteOutcome>;
+  /** entryWrites.archiveRaw and, in its transaction, one log row for `event` naming the archived id, so a redelivery finds the event logged; a log write that fails undoes the archive.
+   *  A key logged before keeps its row and does not stop the archive. Reach and every rejection are archiveRaw's own. */
+  archiveConnectorEntry(archive: ConnectorArchive): Promise<string>;
+}
+
 /** `storedVectors` with no number[] copy, for a store that holds vectors as Float32 bytes. */
 export interface VectorViews {
   /** The same ids and values as `VectorReads.storedVectors`, each value a Float32 view. */
@@ -523,6 +554,8 @@ export interface StoreGroups {
   readonly auditLog: AuditLog;
   readonly quarantine: Quarantine;
   readonly graphReads: GraphReads;
+  /** Unset on a store built before it, where a write that carries a connector event or untrusted content answers 501. */
+  readonly connectorWrites: ConnectorWrites;
   readonly objects: Objects;
   /** Unset on a store built before it, where GET /ready answers 200 with `store: "unchecked"`. */
   readonly readiness: Readiness;

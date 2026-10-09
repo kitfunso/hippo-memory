@@ -2,11 +2,11 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { ConflictError } from './api-errors.js';
-import { isObjectLike, isStringValue } from './capture-contract.js';
+import { isStringValue } from './capture-contract.js';
 import { COMPACTION_ITEM_MAX_CHARS, compactSummaryBody, parseCompactionItems, selectItemRows } from './compaction-items.js';
 import { importSpool, spool, type SpoolImporter } from './compaction-spool.js';
 import { isSharedStore, loadConfig } from './config.js';
-import { closeHippoDb, isSqliteBusy, openHippoDb, type DatabaseSyncLike } from './db.js';
+import { closeHippoDb, isSqliteBusy, openHippoDb, withWriteScopeOr, type DatabaseSyncLike } from './db.js';
 import { gatedWrite } from './gated-write.js';
 import { COMPACTION_MEMORY_TAG, COMPACTION_SOURCE_PREFIX, Layer, createMemory, generateId, type MemoryEntry } from './memory.js';
 import { fallbackOrigin, isGlobalStoreRoot, projectId, projectNames, resolveProjectIdentity, type ProjectRef } from './project-identity.js';
@@ -366,28 +366,27 @@ export function saveItems(db: DatabaseSyncLike, hippoRoot: string, ctx: ItemCont
   if (capped > 0) log(`capped: ${capped} more kept in the record only`);
 
   const baseHalfLifeDays = loadConfig(hippoRoot).defaultHalfLifeDays;
-  let writes: ItemWrites;
-  db.exec('BEGIN IMMEDIATE');
-  try {
+  let finishedItems = 0;
+  const writes = withWriteScopeOr<ItemWrites, null>(db, 'save_items', (rollback) => {
     if (ctx.recordId !== null) {
       // A replayer that read the record before another finished it must not write its items again.
       const current = compactionProgress(db, ctx.tenantId, ctx.recordId);
       if (current?.status !== 'summarised') {
-        db.exec('ROLLBACK');
-        log(`${ctx.recordId} was already finished by another process`);
-        return current?.items_written ?? 0;
+        finishedItems = current?.items_written ?? 0;
+        return rollback(null);
       }
     }
-    writes = writeItemRows(db, hippoRoot, ctx, rows, baseHalfLifeDays);
+    const written = writeItemRows(db, hippoRoot, ctx, rows, baseHalfLifeDays);
     // Said again by another session is the same signal as being recalled; the same session carrying it forward is not.
-    strengthenRetrievedOn(db, writes.restated, { tenantId: ctx.tenantId, recallBoostAblated: isRecallBoostAblated() });
+    strengthenRetrievedOn(db, written.restated, { tenantId: ctx.tenantId, recallBoostAblated: isRecallBoostAblated() });
     if (ctx.recordId !== null) {
-      markCompactionDone(db, ctx.tenantId, ctx.recordId, writes.written.length);
+      markCompactionDone(db, ctx.tenantId, ctx.recordId, written.written.length);
     }
-    db.exec('COMMIT');
-  } catch (err) {
-    try { db.exec('ROLLBACK'); } catch { /* already rolled back; keep the original error */ }
-    throw err;
+    return written;
+  });
+  if (writes === null) {
+    log(`${ctx.recordId} was already finished by another process`);
+    return finishedItems;
   }
   finishItemWrites(hippoRoot, writes, log);
   return writes.written.length;
@@ -400,24 +399,6 @@ export interface PostCompactPayload {
   transcriptPath: string | null;
   /** null when Claude Code sent none; the transcript fills the record later. */
   compactSummary: string | null;
-}
-
-/** null when the text is not a PostCompact payload naming a session. */
-export function parsePostCompactPayload(stdinText: string | undefined): PostCompactPayload | null {
-  let raw: unknown;
-  try {
-    raw = JSON.parse((stdinText ?? '').trim());
-  } catch {
-    return null; // non-JSON stdin is not a PostCompact payload; the caller skips it
-  }
-  if (!isObjectLike(raw) || !('session_id' in raw) || !isStringValue(raw.session_id) || raw.session_id === '') return null;
-  return {
-    sessionId: raw.session_id,
-    trigger: 'trigger' in raw && isStringValue(raw.trigger) ? raw.trigger : null,
-    cwd: 'cwd' in raw && isStringValue(raw.cwd) ? raw.cwd : null,
-    transcriptPath: 'transcript_path' in raw && isStringValue(raw.transcript_path) ? raw.transcript_path : null,
-    compactSummary: 'compact_summary' in raw && isStringValue(raw.compact_summary) ? raw.compact_summary : null,
-  };
 }
 
 export interface CompactionSaveResult {

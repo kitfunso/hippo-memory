@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { appendAuditEvent } from '../store/audit.js';
 import { withBackup } from '../db/backup.js';
+import { withWriteScope } from '../db/busy.js';
 import { assertSqliteAllowed } from '../db/open.js';
 import { DatabaseSync, type DatabaseSyncLike } from '../db/sqlite.js';
 import { getMeta, pragmaUserVersion, setMeta } from '../db/meta.js';
@@ -152,8 +153,7 @@ function setAsideIssue(db: DatabaseSyncLike, entry: MemoryEntry, reason: string,
 }
 
 function applyPlan(db: DatabaseSyncLike, root: string, tenantId: string, backup: string, doneKey?: string): QualityRepairResult {
-  db.exec('BEGIN IMMEDIATE');
-  try {
+  return withWriteScope(db, 'quality_repair_apply', () => {
     const result = initialResult(db, root, tenantId);
     if (!result.supported) throw new Error(`Quality repair capability changed: ${result.blockers.join('; ')}`);
     const entries = new Map(selectAllEntries(db, tenantId).map((entry) => [entry.id, entry]));
@@ -166,12 +166,8 @@ function applyPlan(db: DatabaseSyncLike, root: string, tenantId: string, backup:
       else warnings.push(`Kept ${issue.id}: the store's delete guard protects it.`);
     }
     if (doneKey) setMeta(db, doneKey, '1');
-    db.exec('COMMIT');
     return { ...result, appliedIds, backup, warnings };
-  } catch (error) {
-    try { db.exec('ROLLBACK'); } catch { /* preserve the mutation error */ }
-    throw error;
-  }
+  });
 }
 
 function repairOn(db: DatabaseSyncLike, root: string, opts: { tenantId: string; apply?: boolean; doneKey?: string }): QualityRepairResult {

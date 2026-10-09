@@ -79,23 +79,35 @@ export function computeSalience(
       }
       return { decision: 'store', reason: 'error_despite_overlap', score: ERROR_DESPITE_OVERLAP_SCORE };
     }
-    // A near-duplicate may be a changed value (port 8080 then 8081), so only the same text is skipped.
-    const key = duplicateKey(trimmed);
-    const same = window.find((m) => heldTextKeys(m).includes(key));
-    if (!same) {
-      return {
-        decision: 'store',
-        reason: `near_duplicate (${(duplicateMatch.overlap * 100).toFixed(0)}% overlap with ${duplicateMatch.matchId})`,
-        score: NEAR_DUPLICATE_SCORE,
-      };
-    }
-    return { decision: 'skip', reason: `duplicate (same text as ${same.id})`, score: DUPLICATE_SCORE };
+    return judgeOverlappingNonError(trimmed, window, duplicateMatch);
   }
 
   if (isError) {
     return { decision: 'store', reason: 'error_novel', score: NOVEL_ERROR_SCORE };
   }
 
+  return scoreNovel(trimmed, tags);
+}
+
+function judgeOverlappingNonError(
+  trimmed: string,
+  window: MemoryEntry[],
+  duplicateMatch: ReturnType<typeof findBestOverlap>,
+): SalienceResult {
+  // A near-duplicate may be a changed value (port 8080 then 8081), so only the same text is skipped.
+  const key = duplicateKey(trimmed);
+  const same = window.find((m) => heldTextKeys(m).includes(key));
+  if (!same) {
+    return {
+      decision: 'store',
+      reason: `near_duplicate (${(duplicateMatch.overlap * 100).toFixed(0)}% overlap with ${duplicateMatch.matchId})`,
+      score: NEAR_DUPLICATE_SCORE,
+    };
+  }
+  return { decision: 'skip', reason: `duplicate (same text as ${same.id})`, score: DUPLICATE_SCORE };
+}
+
+function scoreNovel(trimmed: string, tags: string[]): SalienceResult {
   const hasStructuredTags = tags.some(t =>
     t.startsWith('speaker:') || t.startsWith('topic:') || t.startsWith('scope:')
   );
