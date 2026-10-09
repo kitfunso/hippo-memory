@@ -5,11 +5,11 @@ import { join } from 'node:path';
 import { createHmac } from 'node:crypto';
 import { initStore } from '../src/store/open.js';
 import { serve, type ServerHandle } from '../src/server.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { createApiKey, revokeApiKey } from '../src/store/auth.js';
-import { remember as apiRemember } from '../src/api.js';
+import { remember as apiRemember } from '../src/api/index.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
-import { log } from '../src/log.js';
+import { log } from '../src/util/log.js';
 
 // v0.39 commit 5 — Server hardening regressions:
 //   - Fix 5.3: /mcp/stream heartbeat re-validates bearer; MCP_SSE_MAX_AGE_SEC

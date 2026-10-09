@@ -1,7 +1,7 @@
 // The `compactions` table: one row per Claude Code compaction, and the reads project merge makes over it.
-import type { DatabaseSyncLike } from '../db.js';
-import { originInSql } from '../project-identity.js';
-import { scopeAdmitSql } from '../recall-scope.js';
+import type { DatabaseSyncLike } from '../db/index.js';
+import { originInSql } from '../core/project-identity.js';
+import { scopeAdmitSql } from './recall-scope.js';
 
 export type CompactionStatus = 'started' | 'summarised' | 'done' | 'no-summary';
 

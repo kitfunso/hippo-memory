@@ -1,6 +1,6 @@
 // /v1/project-briefs routes.
-import { briefFromReceipts, MAX_REPO_LEN, PROJECT_BRIEF, refreshedBrief, type SaveProjectBriefOpts } from '../../project-briefs.js';
-import { sendJson } from '../../http-util.js';
+import { briefFromReceipts, MAX_REPO_LEN, PROJECT_BRIEF, refreshedBrief, type SaveProjectBriefOpts } from '../../objects/project-briefs.js';
+import { sendJson } from '../../util/http-util.js';
 import { buildContextWithAuth } from '../auth.js';
 import type { RouteRequest } from '../types.js';
 import { parseJsonBody } from '../validation.js';

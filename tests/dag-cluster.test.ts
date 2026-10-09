@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { clusterFacts } from '../src/dag.js';
-import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { clusterFacts } from '../src/consolidate/dag.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 
 describe('clusterFacts', () => {
   it('groups facts by entity/topic overlap', () => {

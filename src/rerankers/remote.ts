@@ -1,5 +1,5 @@
 // The one bounded, retried POST every remote reranker sends.
-import { fetchWithRetry } from '../http-retry.js';
+import { fetchWithRetry } from '../util/http-retry.js';
 
 // A Retry-After longer than this would outlast most budgets, so the answer is handed back and the reranker falls back.
 const RETRY_WAIT_CAP_MS = 2_000;

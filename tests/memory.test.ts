@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { calculateStrength, calculateRewardFactor, applyOutcome, strengthSql, Layer, type MemoryEntry, type TraceOutcome} from '../src/memory.js';
+import { calculateStrength, calculateRewardFactor, applyOutcome, strengthSql, Layer, type MemoryEntry, type TraceOutcome} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { rmSync } from 'node:fs';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 
 /** These tests pin decay arithmetic to the pre-1.46 7-day base; the default itself is tested in half-life-migration and schema-fit. */

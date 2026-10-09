@@ -10,13 +10,13 @@ import { pathToFileURL } from 'node:url';
 
 const DIST = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/(\w:)/, '$1')), '..', 'dist');
 const distImport = (f) => import(pathToFileURL(path.join(DIST, f)).href);
-const { textOverlap } = await distImport('tokenize.js');
-const [{ estimateTokens, blockHash }, { shouldSkipUnchanged }] = await Promise.all([distImport('util/token-text.js'), distImport('token-ledger.js')]);
-const { isWorthSurfacing } = await distImport('memory-quality.js');
-const { ambientSecretAdmit } = await distImport('api.js');
-const { resolveProjectIdentity, classifyOriginProject } = await distImport('project-identity.js');
-const { passesScopeFilterForRecall } = await distImport('recall-scope.js');
-const { contentTokens, promptTokens, gatePromptRecall, scoreOverlap } = await distImport('prompt-recall.js');
+const { textOverlap } = await distImport('util/tokenize.js');
+const [{ estimateTokens, blockHash }, { shouldSkipUnchanged }] = await Promise.all([distImport('util/token-text.js'), distImport('store/token-ledger.js')]);
+const { isWorthSurfacing } = await distImport('core/memory-quality.js');
+const { ambientSecretAdmit } = await distImport('api/index.js');
+const { resolveProjectIdentity, classifyOriginProject } = await distImport('core/project-identity.js');
+const { passesScopeFilterForRecall } = await distImport('store/recall-scope.js');
+const { contentTokens, promptTokens, gatePromptRecall, scoreOverlap } = await distImport('core/prompt-recall.js');
 
 const PIN_BUDGET = 1500;
 const REFRESH_TURNS = 10;

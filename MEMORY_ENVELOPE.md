@@ -36,7 +36,7 @@ Every row in `memories` carries the canonical envelope as of schema v14 (A3) + v
 
 - `hippo recall --why` prints envelope lines under each result.
 - `hippo remember` accepts `--kind`, `--scope`, `--owner`, `--artifact-ref` flags.
-- The TypeScript type `MemoryEntry` (in `src/memory.ts`) carries the envelope; `createMemory` defaults missing fields to `kind='distilled'` + nulls.
+- The TypeScript type `MemoryEntry` (in `src/core/memory.ts`) carries the envelope; `createMemory` defaults missing fields to `kind='distilled'` + nulls.
 
 ## What this enables
 

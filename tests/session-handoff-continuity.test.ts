@@ -15,8 +15,8 @@ import {
   closeHippoDb,
   getSchemaVersion,
   getCurrentSchemaVersion,
-} from '../src/db.js';
-import { rowToSessionHandoff } from '../src/handoff.js';
+} from '../src/db/index.js';
+import { rowToSessionHandoff } from '../src/core/handoff.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 
 let tmpDir: string;

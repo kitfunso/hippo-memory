@@ -11,7 +11,7 @@ import {
   RAREST_TERM_COUNT,
   PROMPT_RECALL_MAX_CHARS,
   type PromptRecallGate,
-} from '../src/prompt-recall.js';
+} from '../src/core/prompt-recall.js';
 
 function cand(id: string, tokens: string[]) {
   return { id, tokens: new Set(tokens) };

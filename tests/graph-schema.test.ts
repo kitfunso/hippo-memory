@@ -7,7 +7,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { openHippoDb, closeHippoDb, getCurrentSchemaVersion } from '../src/db.js';
+import { openHippoDb, closeHippoDb, getCurrentSchemaVersion } from '../src/db/index.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 import { makeRoot } from './_helpers/make-root.js';
 

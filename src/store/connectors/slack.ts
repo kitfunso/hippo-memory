@@ -1,7 +1,7 @@
 // Every statement the Slack connector runs on hippo.db: backfill cursors, the event log, the dead-letter queue and workspace routing.
 // `xAt(db, ...)` runs on the caller's handle; the same name without `At` opens hippo.db for that one call.
 
-import type { DatabaseSyncLike } from '../../db.js';
+import type { DatabaseSyncLike } from '../../db/index.js';
 import { onHandle } from '../open.js';
 
 // Backfill cursors

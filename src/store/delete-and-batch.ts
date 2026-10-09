@@ -1,15 +1,15 @@
-import { AUTO_DELETABLE_SQL, type MemoryEntry } from '../memory.js';
-import { openHippoDb, closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../db.js';
+import { AUTO_DELETABLE_SQL, type MemoryEntry } from '../core/memory.js';
+import { openHippoDb, closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import { checkRejectionGuard, RejectedValueError } from './rejection.js';
 import { markSummaryDirtyInTx } from './summary-dirty.js';
 import { type DormantMove, insertDormantRow } from './dormant.js';
-import { log } from '../log.js';
+import { log } from '../util/log.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry } from './rows.js';
 import { audit } from './audit-event.js';
 import { deleteFtsRow, replaceFtsRows, stampOriginProject, upsertMemoryRow } from './entry-row.js';
 import { purgeMirrorBestEffort, mirrorBestEffort, writeMarkdownMirror } from './mirrors.js';
 import { openStore } from './open.js';
-import { clock, type WriteBudget } from '../write-budget.js';
+import { clock, type WriteBudget } from '../util/write-budget.js';
 
 /** Tables whose rows keep a first-class object's backing memory in `memory_id` (ON DELETE SET NULL); tests/dormant-memories.test.ts pins it to the schema. */
 export const MEMORY_BACKED_TABLES = ['predictions', 'decisions', 'incidents', 'processes', 'policies', 'skills', 'project_briefs', 'customer_notes'] as const;

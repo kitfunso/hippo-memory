@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { detectConflicts } from '../src/consolidate/conflicts.js';
 import { mergePartners } from '../src/consolidate/merge.js';
-import { Layer, type MemoryEntry } from '../src/memory.js';
+import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { tokenize } from '../src/tokenize.js';
+import { tokenize } from '../src/util/tokenize.js';
 import { pairwiseDetectConflicts, pairwiseMergePartners } from './_helpers/pairwise-sleep-oracle.js';
 
 const NOW = new Date('2026-10-01T00:00:00.000Z');

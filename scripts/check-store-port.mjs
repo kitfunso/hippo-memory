@@ -29,7 +29,7 @@ function tsFiles(dir, out = []) {
 }
 
 const isCli = (f) => f.startsWith('src/cli/') || f === 'src/cli.ts';
-const isDataLayer = (f) => f.startsWith('src/db/') || f.startsWith('src/store/') || f === 'src/db.ts';
+const isDataLayer = (f) => f.startsWith('src/db/') || f.startsWith('src/store/') || f === 'src/db/index.ts';
 
 /** Names that open a database in this file: the opener names plus every local alias bound to one. */
 function openerNames(sf) {

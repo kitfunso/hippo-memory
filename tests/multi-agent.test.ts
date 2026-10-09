@@ -6,7 +6,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { type MemoryEntry} from '../src/memory.js';
+import { type MemoryEntry} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -14,7 +14,7 @@ import { loadAllEntries } from '../src/store/entry-reads.js';
 import {
   transferScore,
   listPeers,
-} from '../src/shared.js';
+} from '../src/sharing/shared.js';
 
 let localDir: string;
 let globalDir: string;

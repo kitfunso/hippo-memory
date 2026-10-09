@@ -1,11 +1,11 @@
 // Stdio transport: newline-delimited JSON-RPC frames in on stdin, replies out on stdout.
 
 import { exitAfterFlush, installCrashHandlers } from '../util/crash-handlers.js';
-import { errorMessage, log } from '../log.js';
+import { errorMessage, log } from '../util/log.js';
 import { parseFrame, type FrameRemainder } from './framing.js';
 import { mcpErrorResponse, type McpRequest, type McpResponse } from './protocol.js';
 import { handleMcpRequest } from './request.js';
-import { type JsonValue, isJsonNumber, isJsonString, isJsonObject } from '../json.js';
+import { type JsonValue, isJsonNumber, isJsonString, isJsonObject } from '../util/json.js';
 import { randomUUID } from 'node:crypto';
 import { runWithRequestId } from '../util/request-scope.js';
 

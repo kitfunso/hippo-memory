@@ -1,6 +1,6 @@
 // Graceful shutdown for the HTTP server.
 import type { Server, ServerResponse } from 'node:http';
-import { log } from '../log.js';
+import { log } from '../util/log.js';
 
 /**
  * Stop accepting, end streams at once (they never finish on their own), give other in-flight

@@ -5,7 +5,7 @@
 import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 
-const VERSION_TS = 'src/version.ts';
+const VERSION_TS = 'src/util/version.ts';
 const MIGRATIONS_INDEX = 'src/db/migrations/index.ts';
 const FLOORS = [
   ['EXPIRING_KEYS_MIN_BINARY', 53],
@@ -15,7 +15,7 @@ const FLOORS = [
 function fail(message) {
   console.error('');
   console.error(`BINARY FLOOR: ${message}`);
-  console.error('Fix: in the release that first ships a floor\'s schema, set that constant in src/version.ts to that release.');
+  console.error('Fix: in the release that first ships a floor\'s schema, set that constant in src/util/version.ts to that release.');
   console.error('');
   process.exit(1);
 }

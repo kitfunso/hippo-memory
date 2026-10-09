@@ -3,12 +3,12 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { execSync, execFileSync } from 'child_process';
-import { captureError, extractLessons, partitionLessons, deduplicateLesson, fetchGitLog, isGitRepo } from '../src/autolearn.js';
+import { captureError, extractLessons, partitionLessons, deduplicateLesson, fetchGitLog, isGitRepo } from '../src/learn/autolearn.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry, loadAllEntries } from '../src/store/entry-reads.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { extractInvalidationTarget, invalidateMatching } from '../src/invalidation.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { extractInvalidationTarget, invalidateMatching } from '../src/learn/invalidation.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
 
 // ---------------------------------------------------------------------------
@@ -154,7 +154,7 @@ describe('partitionLessons', () => {
   // storing as a memory.
   const detailedSubjects = [
     'fix CI flake in session-end-snapshot-close.test.ts',
-    'bump pool timeout to 30s in src/db.ts',
+    'bump pool timeout to 30s in src/db/index.ts',
     'add --include-recent flag to hippo context',
   ];
 
@@ -250,7 +250,7 @@ describe('write-path gate: CLI `hippo learn --git`', () => {
       'fixed signals',
       'corrected entry prices',
       'fix CI flake in session-end-snapshot-close.test.ts',
-      'hotfix: pool timeout bumped to 30s in src/db.ts',
+      'hotfix: pool timeout bumped to 30s in src/db/index.ts',
     ]);
     globalRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-df4-global-'));
     env = { ...process.env, HIPPO_HOME: globalRoot, HIPPO_SKIP_AUTO_INTEGRATIONS: '1' };
@@ -279,7 +279,7 @@ describe('write-path gate: CLI `hippo learn --git`', () => {
     expect(contents.some((c) => c.includes('fixed signals'))).toBe(false);
     expect(contents.some((c) => c.includes('corrected entry prices'))).toBe(false);
     expect(contents.some((c) => c.includes('session-end-snapshot-close.test.ts'))).toBe(true);
-    expect(contents.some((c) => c.includes('src/db.ts'))).toBe(true);
+    expect(contents.some((c) => c.includes('src/db/index.ts'))).toBe(true);
   });
 });
 

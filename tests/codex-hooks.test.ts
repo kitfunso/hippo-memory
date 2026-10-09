@@ -10,8 +10,8 @@ import { withFakeHome, type FakeHomeHandle } from './_helpers/with-fake-home.js'
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { saveSessionHandoff } from '../src/store/handoffs.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import type { JsonValue } from '../src/json.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import type { JsonValue } from '../src/util/json.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
 const START = '<!-- hippo:start -->';
 const END = '<!-- hippo:end -->';

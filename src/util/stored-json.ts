@@ -1,5 +1,5 @@
 // One log line for a stored JSON column that will not read, so a reader that degrades to an empty value still leaves a trace.
-import { log } from '../log.js';
+import { log } from './log.js';
 
 /** Where the value lives. The value itself is never logged: it is caller-written text. */
 export interface StoredJsonSite {

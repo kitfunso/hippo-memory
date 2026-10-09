@@ -1,6 +1,6 @@
 // Field checks the typed objects share. The module passes each error text in full, because the wording differs per type.
 
-import { BadRequestError } from '../api-errors.js';
+import { BadRequestError } from '../core/api-errors.js';
 
 export interface LineMessages {
   readonly required: string;

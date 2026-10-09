@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { readEntry } from '../src/store/entry-reads.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { queryAuditEvents } from '../src/store/audit.js';
 import {
   remember,
@@ -18,7 +18,7 @@ import {
   authRevoke,
   auditList,
   type Context,
-} from '../src/api.js';
+} from '../src/api/index.js';
 import { appendAuditEvent } from '../src/store/audit.js';
 
 describe('api domain — recall/forget/promote/supersede', () => {

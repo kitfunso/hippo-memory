@@ -31,9 +31,9 @@ import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { insertEntity, insertRelation } from '../src/store/graph-writes.js';
-import { remember, type Context } from '../src/api.js';
+import { remember, type Context } from '../src/api/index.js';
 
 const CLI = join(process.cwd(), 'dist', 'cli.js');
 

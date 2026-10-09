@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { queryAuditEvents } from '../src/store/audit.js';
-import { remember as apiRemember } from '../src/api.js';
+import { remember as apiRemember } from '../src/api/index.js';
 import { handleMcpRequest, type McpResponse, type McpContext } from '../src/mcp/server.js';
 import { lastRecalledIds } from '../src/mcp/session-state.js';
 import { makeRoot } from './_helpers/make-root.js';
@@ -12,7 +12,7 @@ import { makeRoot } from './_helpers/make-root.js';
 //  - lastRecalledIds keyed per-client so two HTTP-MCP clients on the same
 //    tenant cannot poison each other's outcome feedback (Fix 2.1)
 //  - clientKey built from hash(bearer + remoteAddr) by src/server.ts (Fix 2.2)
-//  - hippo_recall / hippo_remember route through src/api.ts so audit_log
+//  - hippo_recall / hippo_remember route through src/api/index.ts so audit_log
 //    captures actor='mcp' uniformly with CLI/REST (Fix 2.3)
 //  - hippo_share passes ctx.tenantId so a Bearer for tenant A cannot share
 //    tenant B's memory to the global store (Fix 2.4)
@@ -130,7 +130,7 @@ describe('mcp tenant + client-key isolation', () => {
       // GDPR Path A: recall audit stores query_hash (sha256/16) instead of
       // truncated query text. Assert hash shape + length, not the original text.
       // SAFETY: the 'recall' op's audit metadata is always written by
-      // src/api.ts (see query_length comment there) with exactly these fields.
+      // src/api/index.ts (see query_length comment there) with exactly these fields.
       const meta = mcpRecall!.metadata as {
         query?: string;
         query_hash?: string;

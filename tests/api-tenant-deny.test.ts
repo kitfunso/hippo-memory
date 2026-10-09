@@ -3,12 +3,12 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
-import { remember, forget, archiveRaw } from '../src/api.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
+import { remember, forget, archiveRaw } from '../src/api/index.js';
 
 function selectRow<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T | undefined {
   // SAFETY: T is pinned by each call site to the exact column list of the
-  // SQL SELECT text passed in; the driver's .get() (src/db.ts
+  // SQL SELECT text passed in; the driver's .get() (src/db/index.ts
   // DatabaseSyncLike, backed by node:sqlite) returns `unknown` and
   // `undefined` when no row matches, so this is the single place that
   // establishes the row contract for every caller in this file.

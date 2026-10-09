@@ -10,8 +10,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { Layer } from '../src/memory.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { Layer } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import {
   recordTokenUse,
@@ -19,7 +19,7 @@ import {
   shouldSkipUnchanged,
   summarizeTokenUse,
   hookPayloadSessionId,
-} from '../src/token-ledger.js';
+} from '../src/store/token-ledger.js';
 import { blockHash } from '../src/util/token-text.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { handleMcpRequest } from '../src/mcp/server.js';

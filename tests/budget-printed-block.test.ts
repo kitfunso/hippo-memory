@@ -7,11 +7,11 @@ import * as path from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadIndex } from '../src/store/index-and-stats.js';
-import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { estimateTokens } from '../src/util/token-text.js';
-import { assemble, drillDown, type Context } from '../src/api.js';
-import { assembleCost, drillCost } from '../src/context-render.js';
+import { assemble, drillDown, type Context } from '../src/api/index.js';
+import { assembleCost, drillCost } from '../src/api/context-render.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
 import { hippoOut } from './_helpers/spawn-hippo.js';
 const TAGS = [

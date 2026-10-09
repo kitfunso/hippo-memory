@@ -1,13 +1,13 @@
 // SessionStart after a compaction, for a caller on another machine: the owner's fresh snapshot for this session, as the local hook prints it.
 import type { Context } from '../api/types.js';
-import { COMPACT_RESUME_EVENT_CONTENT_CAP, COMPACT_RESUME_MAX_AGE_MS, compactResumeText } from '../context-render.js';
-import { bookTokenUse } from '../ledger-db.js';
-import { errorMessage, log } from '../log.js';
-import type { CallerProject } from '../prompt-hook.js';
+import { COMPACT_RESUME_EVENT_CONTENT_CAP, COMPACT_RESUME_MAX_AGE_MS, compactResumeText } from '../api/context-render.js';
+import { bookTokenUse } from '../api/ledger-db.js';
+import { errorMessage, log } from '../util/log.js';
+import type { CallerProject } from '../api/prompt-hook.js';
 import type { SessionEvent } from '../store/rows.js';
 import { listSessionEvents, loadFreshActiveTaskSnapshot } from '../store/sessions.js';
 import { estimateTokens } from '../util/token-text.js';
-import { truncateCodePointSafe } from '../transcript-tail.js';
+import { truncateCodePointSafe } from '../util/transcript-tail.js';
 import { bindCaller, callerInHoldout } from './caller-session.js';
 import type { CallerHookOutput } from './pre-compact-caller.js';
 

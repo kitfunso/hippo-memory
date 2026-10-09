@@ -9,7 +9,7 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { saveActiveTaskSnapshot, appendSessionEvent } from '../src/store/sessions.js';
 import { saveSessionHandoff } from '../src/store/handoffs.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 
 let tmpDir: string;
 let hippoDir: string;

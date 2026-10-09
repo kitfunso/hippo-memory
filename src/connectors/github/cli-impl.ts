@@ -10,10 +10,10 @@
  *   - hippo github dlq replay <id> [--force]
  */
 
-import { envGithubToken, envGithubWebhookSecret, envGithubWebhookSecretPrevious } from '../../env.js';
-import { type Context, adminActor } from '../../api.js';
+import { envGithubToken, envGithubWebhookSecret, envGithubWebhookSecretPrevious } from '../../util/env.js';
+import { type Context, adminActor } from '../../api/index.js';
 import { seedCursors } from '../../store/connectors/github.js';
-import { resolveTenantId } from '../../tenant.js';
+import { resolveTenantId } from '../../store/tenant.js';
 import { backfillRepo } from './backfill.js';
 import { realGitHubFetcher, type GitHubFetcher } from './octokit-client.js';
 import { listDlq } from '../dlq.js';
@@ -27,7 +27,7 @@ import {
   isGitHubPullRequestEvent,
   isGitHubPullRequestReviewCommentEvent,
 } from './types.js';
-import type { JsonValue } from '../../json.js';
+import type { JsonValue } from '../../util/json.js';
 
 type FlagValue = string | boolean | string[];
 type Flags = Record<string, FlagValue>;

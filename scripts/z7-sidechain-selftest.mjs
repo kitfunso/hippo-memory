@@ -43,7 +43,7 @@ function selftestSub(t) {
     U('task'),
     AS([TU('Bash', { command: 'hippo remember "bash lesson"' })]), AS([TU('PowerShell', { command: 'hippo remember "ps lesson"' })]),
     AS([TU('Write', { file_path: 'C:\\Users\\x\\.claude\\projects\\p\\memory\\note.md', content: 'memory write' })]),
-    AS([TU('Write', { file_path: 'C:\\repo\\src\\memory.ts', content: 'code' })]),
+    AS([TU('Write', { file_path: 'C:\\repo\\src\\core\\memory.ts', content: 'code' })]),
     AS([TU('Edit', { file_path: '/r/CLAUDE.md', new_string: 'claude edit' })]),
   ]), {});
   t('own saves found, source file not', saves.saves.length === 4 && !saves.saves.includes('code'));

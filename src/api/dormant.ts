@@ -1,6 +1,6 @@
 // Dormant memories: list, restore, forget and check.
 
-import { ConflictError, NotFoundError } from '../api-errors.js';
+import { ConflictError, NotFoundError } from '../core/api-errors.js';
 import { stampOriginProject } from '../store/entry-row.js';
 import { updateStatsUnlessBusy } from '../store/index-and-stats.js';
 import {
@@ -12,9 +12,9 @@ import {
   type DormantSnapshot,
   type ListDormantOpts,
 } from '../store/dormant.js';
-import { createMemory, calculateStrength, type MemoryEntry } from '../memory.js';
-import { loadConfig } from '../config.js';
-import { canTouchScope, personalScopeOf, touchableScopeSql, type SqlFragment } from '../recall-scope.js';
+import { createMemory, calculateStrength, type MemoryEntry } from '../core/memory.js';
+import { loadConfig } from '../core/config.js';
+import { canTouchScope, personalScopeOf, touchableScopeSql, type SqlFragment } from '../store/recall-scope.js';
 import type { Context } from './types.js';
 
 const touchable = (ctx: Context): SqlFragment => touchableScopeSql('', personalScopeOf(ctx.actor));

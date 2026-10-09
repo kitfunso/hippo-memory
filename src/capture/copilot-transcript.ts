@@ -3,7 +3,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { copilotHomeDir } from '../hooks/shared.js';
-import { isObjectLike, isStringValue } from '../capture-contract.js';
+import { isObjectLike, isStringValue } from '../core/capture-contract.js';
 
 /** The envelope fields a Copilot event-log line is read by; any may be absent. */
 export interface CopilotEventLine {

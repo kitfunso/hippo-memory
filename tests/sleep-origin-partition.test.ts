@@ -7,13 +7,13 @@ import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { Layer, type MemoryEntry } from '../src/memory.js';
+import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { consolidate } from '../src/consolidate/sleep.js';
 import { detectConflicts } from '../src/consolidate/conflicts.js';
-import { deduplicateStore } from '../src/dedupe.js';
-import { buildDag, buildEntityProfiles } from '../src/dag.js';
-import { storeExtractedFacts } from '../src/extract.js';
+import { deduplicateStore } from '../src/consolidate/dedupe.js';
+import { buildDag, buildEntityProfiles } from '../src/consolidate/dag.js';
+import { storeExtractedFacts } from '../src/learn/extract.js';
 
 let home: string;
 beforeEach(() => {

@@ -4,10 +4,10 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { cpSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../src/db.js';
-import type { MemoryEntry } from '../src/memory.js';
+import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../src/db/index.js';
+import type { MemoryEntry } from '../src/core/memory.js';
 import type { AuditEvent } from '../src/server.js';
-import { requireGroup } from '../src/store-port.js';
+import { requireGroup } from '../src/store/index.js';
 import { logEvent, type GithubRouting } from '../src/store/connectors/github.js';
 import { markSlackEventSeen, upsertSlackWorkspace, type SlackTeamRoute } from '../src/store/connectors/slack.js';
 import { writeEntry } from '../src/store/entry-writes.js';

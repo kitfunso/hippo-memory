@@ -5,11 +5,11 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { IncomingMessage } from 'node:http';
 import { Socket } from 'node:net';
-import { closeHippoDb, openHippoDb } from '../src/db.js';
+import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { createApiKey } from '../src/store/auth.js';
-import { createRateLimiter } from '../src/rate-limit.js';
+import { createRateLimiter } from '../src/server/rate-limit.js';
 import { heartbeatVerdict } from '../src/server/auth.js';
-import { sqliteStore } from '../src/store-port.js';
+import { sqliteStore } from '../src/store/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));

@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { installJsonHooks, uninstallJsonHooks, resolveJsonHookPaths } from '../src/hooks/json-hooks.js';
 import { detectInstalledTools, defaultSleepLogPath, defaultPreCompactLogPath } from '../src/hooks/shared.js';
 import { withFakeHome as withFakeHomeShared } from './_helpers/with-fake-home.js';
-import type { JsonValue } from '../src/json.js';
+import type { JsonValue } from '../src/util/json.js';
 
 /**
  * Each test gets its own fake $HOME so we never touch the real

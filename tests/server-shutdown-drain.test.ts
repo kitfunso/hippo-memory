@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { spawn } from 'node:child_process';
 import { serve, type AuthResolver, type ServerHandle } from '../src/server.js';
-import { log } from '../src/log.js';
+import { log } from '../src/util/log.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 const homes: string[] = [];

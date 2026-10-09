@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { autoDetectContext } from '../src/context-auto.js';
+import { autoDetectContext } from '../src/api/context-auto.js';
 
 let repo: string;
 let prevCwd: string;

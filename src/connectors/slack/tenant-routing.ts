@@ -1,6 +1,6 @@
-import { envSlackAllowUnknownTeamFallback, envTenant } from '../../env.js';
-import type { DatabaseSyncLike } from '../../db.js';
-import { requireGroup, storeFor, type HippoStore } from '../../store-port.js';
+import { envSlackAllowUnknownTeamFallback, envTenant } from '../../util/env.js';
+import type { DatabaseSyncLike } from '../../db/index.js';
+import { requireGroup, storeFor, type HippoStore } from '../../store/index.js';
 import { slackTeamRouteAt, type SlackTeamRoute } from '../../store/connectors/slack.js';
 
 /**

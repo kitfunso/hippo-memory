@@ -9,8 +9,8 @@
  */
 
 import { parseRateLimit, type RateLimitInfo } from './ratelimit.js';
-import { fetchWithRetry } from '../../http-retry.js';
-import type { JsonValue } from '../../json.js';
+import { fetchWithRetry } from '../../util/http-retry.js';
+import type { JsonValue } from '../../util/json.js';
 
 export class GitHubFetchError extends Error {
   constructor(

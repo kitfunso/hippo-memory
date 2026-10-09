@@ -1,6 +1,6 @@
 // List, get, close and supersede handlers shared by the typed-object routes; each route file passes one config.
-import { HttpError, sendJson } from '../../http-util.js';
-import { type JsonValue, isJsonString } from '../../json.js';
+import { HttpError, sendJson } from '../../util/http-util.js';
+import { type JsonValue, isJsonString } from '../../util/json.js';
 import type { ObjectDescriptor, ObjectListOpts, SavableDescriptor } from '../../objects/descriptor.js';
 import { closeObject, listObjects, objectById, saveObject } from '../../objects/lifecycle.js';
 import type { ObjectByKind, ObjectKind, SavableKind } from '../../store/object-types.js';

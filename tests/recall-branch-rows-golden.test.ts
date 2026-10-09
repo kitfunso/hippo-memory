@@ -2,12 +2,12 @@
 // mirror. The snapshot came from the code before recall moved behind the store port, so any drift here is a regression.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { closeHippoDb, openHippoDb } from '../src/db.js';
+import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { serve, __resetSessionRecallHistoryHttp } from '../src/server.js';
 import { __resetSessionRecallHistoryMcp } from '../src/mcp/server.js';
 import { lastRecalledIds } from '../src/mcp/session-state.js';
-import { _resetAblationCacheForTests } from '../src/ablation.js';
-import type { RecallResult } from '../src/api.js';
+import { _resetAblationCacheForTests } from '../src/core/ablation.js';
+import type { RecallResult } from '../src/api/index.js';
 import {
   CLEARED_ENV, FAKE_NOW, freshStore, normalise, RECALL_BRANCHES, rowsOf, seedPortBranches, seedTemplates, statsMirror, type Templates,
 } from './_helpers/recall-golden-seed.js';

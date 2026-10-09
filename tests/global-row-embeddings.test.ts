@@ -9,13 +9,13 @@ import {
   shareMemory,
   autoShare,
   syncGlobalToLocal,
-} from '../src/shared.js';
+} from '../src/sharing/shared.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { embedAll, loadEmbeddingIndex } from '../src/embeddings.js';
-import { isEmbeddingAvailable } from '../src/local-embedding.js';
-import { resolveEmbeddingProvider } from '../src/embedding-provider.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { embedAll, loadEmbeddingIndex } from '../src/store/embeddings/index.js';
+import { isEmbeddingAvailable } from '../src/store/embeddings/local.js';
+import { resolveEmbeddingProvider } from '../src/store/embeddings/provider.js';
 
 // docs/plans/2026-07-18-global-row-embeddings.md: rows written to the global
 // store by promote/share/autoShare/sync/import must enter that store's

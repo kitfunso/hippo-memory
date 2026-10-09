@@ -17,8 +17,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry, writeEntryDbOnly } from '../src/store/entry-writes.js';
 import { _forceLikePathForTests, loadRecallSearchEntriesFromDb, loadSearchEntries } from '../src/store/search-rows.js';
-import { closeHippoDb, openHippoDb, withSharedStoreHandles } from '../src/db.js';
-import { Layer, type MemoryEntry } from '../src/memory.js';
+import { closeHippoDb, openHippoDb, withSharedStoreHandles } from '../src/db/index.js';
+import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { makeRoot } from './_helpers/make-root.js';
 

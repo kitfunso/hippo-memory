@@ -5,13 +5,13 @@ import * as path from 'path';
 import * as fs from 'fs';
 import type { AddressInfo } from 'net';
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'crypto';
-import { evalNow } from '../ablation.js';
+import { evalNow } from '../core/ablation.js';
 import { readEntry } from '../store/entry-reads.js';
 import { listCards } from '../store/cards.js';
-import { resolveTenantId } from '../tenant.js';
-import { loadCardDetail } from '../card-detail.js';
-import { bodyDeadlineMs, BodyTimeoutError, closeAfterReply, isCrossSite, LOOPBACK_HOST_HEADER } from '../http-util.js';
-import { errorMessage, log } from '../log.js';
+import { resolveTenantId } from '../store/tenant.js';
+import { loadCardDetail } from '../store/card-detail.js';
+import { bodyDeadlineMs, BodyTimeoutError, closeAfterReply, isCrossSite, LOOPBACK_HOST_HEADER } from '../util/http-util.js';
+import { errorMessage, log } from '../util/log.js';
 import { createSnapshotService, isLiveMemory, type SnapshotService } from './dashboard-snapshot.js';
 import {
   buildMemoryDetail, buildMemoryPage, buildOverview, buildProjectDetail, buildSearch,

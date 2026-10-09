@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { createRequire } from 'module';
-import { openHippoDb } from '../src/db.js';
+import { openHippoDb } from '../src/db/index.js';
 
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
 

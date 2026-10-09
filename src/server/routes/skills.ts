@@ -1,6 +1,6 @@
 // /v1/skills routes.
-import { MAX_SKILL_NAME_LEN, type SaveSkillOpts, SKILL, skillsMarkdown } from '../../skills.js';
-import { sendJson } from '../../http-util.js';
+import { MAX_SKILL_NAME_LEN, type SaveSkillOpts, SKILL, skillsMarkdown } from '../../objects/skills.js';
+import { sendJson } from '../../util/http-util.js';
 import { buildContextWithAuth } from '../auth.js';
 import type { RouteRequest } from '../types.js';
 import { parseJsonBody } from '../validation.js';

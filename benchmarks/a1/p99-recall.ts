@@ -12,7 +12,7 @@
  *   - Store: 10k synthetic memories with realistic distribution
  *   - Success: p99 < 50ms
  *
- * Note on "Hybrid embeddings ON" from the ROADMAP: src/api.ts:recall is
+ * Note on "Hybrid embeddings ON" from the ROADMAP: src/api/index.ts:recall is
  * BM25-only today (the `mode` param is forward-compat). The HTTP recall
  * surface measured here is the actual implementation. When hybrid lands
  * (post-A1), re-run with the same harness.
@@ -43,7 +43,7 @@ import { fileURLToPath } from 'node:url';
 // Imports resolve against the compiled dist/ output. Run `npm run build` first,
 // then `node --experimental-strip-types benchmarks/a1/p99-recall.ts`.
 import { initStore } from '../../dist/store/open.js';
-import { remember as apiRemember } from '../../dist/api.js';
+import { remember as apiRemember } from '../../dist/api/index.js';
 import { serve, type ServerHandle } from '../../dist/server.js';
 
 interface CliArgs {
@@ -302,7 +302,7 @@ async function main(): Promise<void> {
 
   const notes: string[] = [];
   if (errorCount > 0) notes.push(`${errorCount} fetch errors (excluded from stats)`);
-  notes.push('BM25 only — src/api.ts:recall does not yet wire hybrid embeddings');
+  notes.push('BM25 only — src/api/index.ts:recall does not yet wire hybrid embeddings');
   notes.push('Single SQLite connection (server default)');
   notes.push(args.warmup > 0 ? `Warm: ${args.warmup} untimed queries first` : 'Cold cache: no warmup query');
   if (args.rounds > 1) notes.push(`Gate on the fastest p99 of ${args.rounds} rounds`);

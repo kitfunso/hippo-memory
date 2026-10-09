@@ -1,11 +1,11 @@
 // Option and result shapes for getContext.
 
 import type { TaskSnapshot, SessionEvent } from '../store/rows.js';
-import type { SessionHandoff } from '../handoff.js';
-import type { MemoryEntry } from '../memory.js';
-import type { DeliveryObserver } from '../delivery-recorder.js';
-import type { AmbientState } from '../ambient.js';
-import type { ProjectRef } from '../project-identity.js';
+import type { SessionHandoff } from '../core/handoff.js';
+import type { MemoryEntry } from '../core/memory.js';
+import type { DeliveryObserver } from '../store/delivery-recorder.js';
+import type { AmbientState } from '../core/ambient.js';
+import type { ProjectRef } from '../core/project-identity.js';
 
 // ---------------------------------------------------------------------------
 // getContext

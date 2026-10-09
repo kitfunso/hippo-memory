@@ -1,10 +1,10 @@
 // A store other than hippo.db for the GraphReads group: it copies entities, relations and each memory's scope out of hippo.db once, then
 // walks them in memory from the port's doc comments alone, so a conformance test shows those words are enough to build on.
 import { vi } from 'vitest';
-import { closeHippoDb, openHippoDb } from '../../src/db.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/memory.js';
-import { savePolicy } from '../../src/policies.js';
-import { canReadScope } from '../../src/recall-scope.js';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
+import { savePolicy } from '../../src/objects/policies.js';
+import { canReadScope } from '../../src/store/recall-scope.js';
 import { withSqliteAllowed, type HippoStore } from '../../src/server.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
 import { ENTITY_COLS, RELATION_COLS, rowToEntity, rowToRelation, type Entity, type EntityRow, type EntityType, type Relation, type RelationRow } from '../../src/store/graph-rows.js';

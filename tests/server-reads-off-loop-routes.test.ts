@@ -2,12 +2,12 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { _resetAblationCacheForTests } from '../src/ablation.js';
-import { log } from '../src/log.js';
+import { _resetAblationCacheForTests } from '../src/core/ablation.js';
+import { log } from '../src/util/log.js';
 import { __resetSessionRecallHistoryMcp } from '../src/mcp/server.js';
 import { lastRecalledIds } from '../src/mcp/session-state.js';
 import { __resetSessionRecallHistoryHttp, serve, type ServerHandle } from '../src/server.js';
-import type { HippoStore, StoreGroups } from '../src/store-port.js';
+import type { HippoStore, StoreGroups } from '../src/store/index.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../src/store/sqlite/worker-store.js';
 import { startHashedEmbeddings, type HashedEmbeddings } from './_helpers/hashed-embedding-server.js';

@@ -6,7 +6,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 import { initStore, getHippoRoot } from '../src/store/open.js';
 import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
 

@@ -1,7 +1,7 @@
 // The memory_quarantine table: the review queue's rows, and the approve and reject writes with their audit rows.
 import { appendAuditEvent } from './audit.js';
-import { withWriteScopeOr, type DatabaseSyncLike } from '../db.js';
-import { keysetAfter, type KeysetPosition } from '../keyset.js';
+import { withWriteScopeOr, type DatabaseSyncLike } from '../db/index.js';
+import { keysetAfter, type KeysetPosition } from '../util/keyset.js';
 import { selectEntriesByIds } from './entry-reads.js';
 import type { QuarantineApproval, QuarantineListQuery, QuarantineRefusal, QuarantineRejection, QuarantinedMemory } from './port.js';
 

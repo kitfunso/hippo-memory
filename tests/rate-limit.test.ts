@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createRateLimiter } from '../src/rate-limit.js';
+import { createRateLimiter } from '../src/server/rate-limit.js';
 
 // ratePerSec 10, burst 5: a fresh client may spend 5 at once, then 10/sec.
 const OPTS = { ratePerSec: 10, burst: 5, idleEvictMs: 60000, maxKeys: 1000 };

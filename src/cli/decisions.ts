@@ -1,17 +1,19 @@
 // First-class object verbs for predictions, decisions and incidents.
 
-import { MemoryEntry } from '../memory.js';
+import { MemoryEntry } from '../core/memory.js';
 import { writeEntry } from '../store/entry-writes.js';
 import { readEntry } from '../store/entry-reads.js';
-import { extractPathTags } from '../path-context.js';
+import { extractPathTags } from '../search/path-context.js';
 import * as predictionsModule from '../store/predictions.js';
-import * as decisionsModule from '../decisions.js';
-import * as incidentsModule from '../incidents.js';
-import { resolveTenantId } from '../tenant.js';
+import * as decisionsModule from '../objects/decisions.js';
+import * as incidentsModule from '../objects/incidents.js';
+import { resolveTenantId } from '../store/tenant.js';
 import { printError } from './output.js';
 import { nonEmptyStringFlag, parseListLimit, requireInit, type CliFlags, flagIsTrue, stringFlag } from './shared.js';
 import { closeObject, foundOrExit, idArgOrExit, listObjects, printLifecycleTail, requireStatus, type ObjectNames } from './object-verbs.js';
-import { errorMessage } from '../log.js';
+import { errorMessage } from '../util/log.js';
+
+const BASERATE_DECIMALS = 3;
 const DECISION: ObjectNames = { cmd: 'decide', noun: 'Decision', idLabel: 'decision' };
 const INCIDENT: ObjectNames = { cmd: 'incident', noun: 'Incident', idLabel: 'incident' };
 const PREDICTION_NOUN = 'Prediction';
@@ -131,11 +133,11 @@ function predictBaserate(hippoRoot: string, tenantId: string, flags: CliFlags): 
   console.log(baserate.summary);
   console.log(`  n_closed:         ${baserate.nClosed}`);
   console.log(`  n_ratio_eligible: ${baserate.nRatioEligible}`);
-  if (baserate.meanEstimate !== null) console.log(`  mean_estimate:    ${baserate.meanEstimate.toFixed(3)}`);
-  if (baserate.meanActual !== null)   console.log(`  mean_actual:      ${baserate.meanActual.toFixed(3)}`);
-  if (baserate.meanRatio !== null)    console.log(`  mean_ratio:       ${baserate.meanRatio.toFixed(3)}x`);
-  if (baserate.p50Ratio !== null)     console.log(`  p50_ratio:        ${baserate.p50Ratio.toFixed(3)}x`);
-  if (baserate.mae !== null)          console.log(`  mae:              ${baserate.mae.toFixed(3)}`);
+  if (baserate.meanEstimate !== null) console.log(`  mean_estimate:    ${baserate.meanEstimate.toFixed(BASERATE_DECIMALS)}`);
+  if (baserate.meanActual !== null)   console.log(`  mean_actual:      ${baserate.meanActual.toFixed(BASERATE_DECIMALS)}`);
+  if (baserate.meanRatio !== null)    console.log(`  mean_ratio:       ${baserate.meanRatio.toFixed(BASERATE_DECIMALS)}x`);
+  if (baserate.p50Ratio !== null)     console.log(`  p50_ratio:        ${baserate.p50Ratio.toFixed(BASERATE_DECIMALS)}x`);
+  if (baserate.mae !== null)          console.log(`  mae:              ${baserate.mae.toFixed(BASERATE_DECIMALS)}`);
 }
 
 export function cmdPredict(
@@ -233,13 +235,7 @@ export function cmdDecide(
 }
 
 function decideCreate(hippoRoot: string, tenantId: string, decisionText: string, flags: CliFlags): void {
-  if (!decisionText) {
-    printError('Usage: hippo decide "<decision>" [--context "<why>"] [--supersedes <memory-id>]');
-    printError('       hippo decide list [--status active|superseded|closed|all] [--limit N]');
-    printError('       hippo decide get <id>');
-    printError('       hippo decide close <id>');
-    process.exit(1);
-  }
+  if (!decisionText) exitWithDecideUsage();
   const context = nonEmptyStringFlag(flags, 'context');
   // A value-less `--supersedes` asks to supersede but gives no memory id: reject it rather
   // than silently creating a non-superseding decision.
@@ -274,31 +270,43 @@ function decideCreate(hippoRoot: string, tenantId: string, decisionText: string,
     extraTags: decisionPathTags,
   });
 
-  // Legacy memory-weaken (best-effort, LAST): half-life halved, marked stale +
-  // 'superseded' tag. Preserves the exact pre-promotion behavior for the memory
-  // mirror; the canonical table supersession already committed above.
-  if (oldEntry) {
-    // Best-effort: saveDecision already committed. Failing here would make a retry find no active
-    // decision for the old memory and create a duplicate active successor, so warn instead.
-    try {
-      oldEntry.half_life_days = Math.max(1, Math.floor(oldEntry.half_life_days / 2));
-      oldEntry.confidence = 'stale';
-      if (!oldEntry.tags.includes('superseded')) oldEntry.tags.push('superseded');
-      writeEntry(hippoRoot, oldEntry);
-    } catch (e) {
-      printError(`  warning: decision recorded and superseded, but failed to weaken the prior memory ${supersedesMemId}: ${errorMessage(e)}`);
-    }
-  }
+  if (oldEntry) weakenSupersededMemory(hippoRoot, oldEntry, supersedesMemId);
 
   console.log(`Decision recorded: #${created.id}`);
   if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
-  if (supersedesMemId) {
-    const tail =
-      supersedesDecisionId !== undefined
-        ? ` (decision #${supersedesDecisionId} superseded)`
-        : ' (no active decision row; memory weakened only)';
-    console.log(`  supersedes memory: ${supersedesMemId}${tail}`);
+  if (supersedesMemId) printSupersedes(supersedesMemId, supersedesDecisionId);
+}
+
+function exitWithDecideUsage(): never {
+  printError('Usage: hippo decide "<decision>" [--context "<why>"] [--supersedes <memory-id>]');
+  printError('       hippo decide list [--status active|superseded|closed|all] [--limit N]');
+  printError('       hippo decide get <id>');
+  printError('       hippo decide close <id>');
+  process.exit(1);
+}
+
+function weakenSupersededMemory(hippoRoot: string, oldEntry: MemoryEntry, supersedesMemId: string | null): void {
+  // Legacy memory-weaken (best-effort, LAST): half-life halved, marked stale +
+  // 'superseded' tag. Preserves the exact pre-promotion behavior for the memory
+  // mirror; the canonical table supersession already committed above.
+  // Best-effort: saveDecision already committed. Failing here would make a retry find no active
+  // decision for the old memory and create a duplicate active successor, so warn instead.
+  try {
+    oldEntry.half_life_days = Math.max(1, Math.floor(oldEntry.half_life_days / 2));
+    oldEntry.confidence = 'stale';
+    if (!oldEntry.tags.includes('superseded')) oldEntry.tags.push('superseded');
+    writeEntry(hippoRoot, oldEntry);
+  } catch (e) {
+    printError(`  warning: decision recorded and superseded, but failed to weaken the prior memory ${supersedesMemId}: ${errorMessage(e)}`);
   }
+}
+
+function printSupersedes(supersedesMemId: string, supersedesDecisionId: number | undefined): void {
+  const tail =
+    supersedesDecisionId !== undefined
+      ? ` (decision #${supersedesDecisionId} superseded)`
+      : ' (no active decision row; memory weakened only)';
+  console.log(`  supersedes memory: ${supersedesMemId}${tail}`);
 }
 
 function printIncidentRow(inc: incidentsModule.Incident): void {

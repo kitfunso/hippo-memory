@@ -1,5 +1,5 @@
-import { closeHippoDb, openHippoDb, withWriteScope, type DatabaseSyncLike } from '../db.js';
-import type { MemoryEntry } from '../memory.js';
+import { closeHippoDb, openHippoDb, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
+import type { MemoryEntry } from '../core/memory.js';
 import { rejectionDigest, insertRejectedValue, normalizeValueForRejection } from './rejection.js';
 import { archiveRawMemory } from './raw-archive.js';
 import { type MemoryConflict, type MemoryConflictRow, rowToMemoryConflict } from './rows.js';
@@ -8,8 +8,8 @@ import { syncChangedMirrors, purgeMirrorBestEffort } from './mirrors.js';
 import { selectEntriesByIds } from './entry-reads.js';
 import { openStore } from './open.js';
 import { deleteEntryCore } from './delete-and-batch.js';
-import { BadRequestError } from '../api-errors.js';
-import { canTouchScope, isPersonalScope } from '../recall-scope.js';
+import { BadRequestError } from '../core/api-errors.js';
+import { canTouchScope, isPersonalScope } from './recall-scope.js';
 import { selectMemoryReach } from './tenant-lookup.js';
 
 function canonicalConflictPair(aId: string, bId: string): { memory_a_id: string; memory_b_id: string } {
@@ -650,7 +650,7 @@ function purgeRemovedLoserMirrors(
   // eventually, since archiveRawMemory's own raw_archive insert leaves
   // mirror_cleaned_at NULL) and a plain non-raw --forget left its mirror
   // orphaned FOREVER (no reaper exists for non-raw rows). Same post-commit
-  // purge+reaper pattern as the reject verb (src/reject-flow.ts) and
+  // purge+reaper pattern as the reject verb (src/trust/reject-flow.ts) and
   // api.archiveRaw — reusing removeEntryMirrors + raw_archive bookkeeping.
   // AT1 P1 fix: loop over loserId AND every same-tenant duplicate the
   // rejectLoserValue sweep above removed (extraRemovedIds) — previously

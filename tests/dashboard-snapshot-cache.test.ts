@@ -3,8 +3,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { Layer } from '../src/memory.js';
-import { quarantineScopeFor } from '../src/quarantine.js';
+import { Layer } from '../src/core/memory.js';
+import { quarantineScopeFor } from '../src/trust/quarantine.js';
 import { createSnapshotService, type SnapshotService } from '../src/dashboard/dashboard-snapshot.js';
 import { buildOverview } from '../src/dashboard/dashboard-queries.js';
 import {

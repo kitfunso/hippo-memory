@@ -1,21 +1,21 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { createHash } from 'node:crypto';
-import { createMemory, MemoryEntry } from '../memory.js';
+import { createMemory, MemoryEntry } from '../core/memory.js';
 import { loadVaultRawRows, type VaultRawRow } from '../store/entry-reads.js';
-import { remember, archiveRaw, isPrivateScope, type HippoDbContext } from '../api.js';
-import { assertClientScope } from '../recall-scope.js';
+import { remember, archiveRaw, isPrivateScope, type HippoDbContext } from '../api/index.js';
+import { assertClientScope } from '../store/recall-scope.js';
 import { RejectedValueError } from '../store/rejection.js';
 import { rejectionGuardRefuses } from '../store/rejected-values.js';
 import { withRequestStoresSync } from '../db/request-stores.js';
-import { loadConfig } from '../config.js';
-import { vetSecrets } from '../secret-detect.js';
-import { errorMessage, log } from '../log.js';
+import { loadConfig } from '../core/config.js';
+import { vetSecrets } from '../util/secret-detect.js';
+import { errorMessage, log } from '../util/log.js';
 import { type ImportResult, type ImportOptions } from './core.js';
 import { splitMarkdownFrontmatter, frontmatterList, parseWikilinks, collectMarkdownFiles } from './markdown-parse.js';
 import { realpathOrResolve } from '../util/real-path.js';
-import { type JsonValue, isJsonString } from '../json.js';
-import { escapeLike } from '../escape.js';
+import { type JsonValue, isJsonString } from '../util/json.js';
+import { escapeLike } from '../util/escape.js';
 
 // ---------------------------------------------------------------------------
 // K1 vault importer (markdown-vault FOLDER → kind='raw' memories)

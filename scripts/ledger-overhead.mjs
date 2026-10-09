@@ -21,16 +21,16 @@ const P50_BOUND_MS = 15;
 const P95_BOUND_MS = 30;
 
 const load = (file) => import(pathToFileURL(path.join(REPO, 'dist', file)));
-const { createMemory } = await load('memory.js');
+const { createMemory } = await load('core/memory.js');
 const { initStore } = await load('store/open.js');
 const { writeEntry } = await load('store/entry-writes.js');
-const api = await load('api.js');
-const { contextCost } = await load('context-render.js');
-const { createDeliveryRecorder } = await load('delivery-recorder.js');
+const api = await load('api/index.js');
+const { contextCost } = await load('api/context-render.js');
+const { createDeliveryRecorder } = await load('store/delivery-recorder.js');
 const { writeDeliveryEventOnHandle } = await load('store/recall-trace.js');
-const { openHippoDb, closeHippoDb } = await load('db.js');
+const { openHippoDb, closeHippoDb } = await load('db/index.js');
 const { blockHash } = await load('util/token-text.js');
-const { recordTokenUse } = await load('token-ledger.js');
+const { recordTokenUse } = await load('store/token-ledger.js');
 
 // Same seed, vocabulary and prompt as scripts/hook-latency.mjs, so the stores match.
 function mulberry32(seed) {

@@ -1,9 +1,9 @@
 // Reject, unreject and list rejected values, each on one handle of its own.
 // A file apart from rejection.ts: store/open.ts imports that one, so an open there would be an import cycle.
 
-import { closeHippoDb, openHippoDb, withWriteScope, type DatabaseSyncLike } from '../db.js';
-import type { MemoryEntry } from '../memory.js';
-import { heldTexts } from '../same-text.js';
+import { closeHippoDb, openHippoDb, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
+import type { MemoryEntry } from '../core/memory.js';
+import { heldTexts } from '../util/same-text.js';
 import { audit } from './audit-event.js';
 import { deleteEntryCore } from './delete-and-batch.js';
 import { deleteDormantRow, listDormantSnapshots, purgeDormantByDigest, replaceDormantEntry } from './dormant.js';

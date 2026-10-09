@@ -7,7 +7,7 @@ import { mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { initStore } from '../src/store/open.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { hippoOut } from './_helpers/spawn-hippo.js';
 
 const CLI = resolve(__dirname, '..', 'bin', 'hippo.js');

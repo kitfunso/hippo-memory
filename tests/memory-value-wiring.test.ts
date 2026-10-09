@@ -21,10 +21,10 @@ import { loadAllEntries } from '../src/store/entry-reads.js';
 import { batchWriteAndDelete } from '../src/store/delete-and-batch.js';
 import { loadSessionDecayContext } from '../src/store/index-and-stats.js';
 import { listMemoryConflicts } from '../src/store/conflicts.js';
-import { Layer, calculateStrength, resolveConfidence, type MemoryEntry, type DecayOptions} from '../src/memory.js';
+import { Layer, calculateStrength, resolveConfidence, type MemoryEntry, type DecayOptions} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { loadConfig, type HippoConfig } from '../src/config.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { loadConfig, type HippoConfig } from '../src/core/config.js';
+import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../src/db/index.js';
 import { queryAuditEvents, type AuditEvent } from '../src/store/audit.js';
 import {
   computeMvFeatures,
@@ -33,10 +33,13 @@ import {
   rescueSet,
   validateWeights,
   type MvFeatureVector,
-} from '../src/memory-value.js';
-import { MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256 } from '../src/memory-value-weights.js';
+} from '../src/consolidate/memory-value.js';
+import { MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256 } from '../src/consolidate/memory-value-weights.js';
 
 import { computeFeatures } from '../benchmarks/memory-value/extract.mjs';
+
+// Each case seeds a real store and runs a full sleep on it, so its time follows the runner's disk.
+vi.setConfig({ testTimeout: 30_000 });
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
 const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });
@@ -345,7 +348,10 @@ describe('(d) flag-off byte-identical', () => {
     }
     expect(built.length).toBeGreaterThanOrEqual(40); // 3 tenants * (10 + 3 + 1) = 42
 
-    for (const e of built) writeEntry(dir, e);
+    // One connection for the seed loop: a close per write checkpoints the WAL, which is slow on Windows.
+    await withSharedStoreHandles(() => {
+      for (const e of built) writeEntry(dir, e);
+    });
 
     // Predicate expectation, computed from the SAME order consolidate()
     // will load (loadAllEntries's `ORDER BY created ASC, id ASC`) -- NOT

@@ -4,13 +4,13 @@
  * in SQLite using BLOB columns for 384-dim vectors.
  */
 
-import { evalNow } from '../ablation.js';
-import type { DatabaseSyncLike } from '../db.js';
+import { evalNow } from '../core/ablation.js';
+import type { DatabaseSyncLike } from './index.js';
 import { withWriteScope } from './busy.js';
-import type { MemoryEntry } from '../memory.js';
-import type { PhysicsParticle } from '../physics.js';
-import { computeMass, computeCharge, computeTemperature, vecZero } from '../physics.js';
-import { calculateStrength } from '../memory.js';
+import type { MemoryEntry } from '../core/memory.js';
+import type { PhysicsParticle } from '../core/physics.js';
+import { computeMass, computeCharge, computeTemperature, vecZero } from '../core/physics.js';
+import { calculateStrength } from '../core/memory.js';
 import { DAY_MS } from '../util/time.js';
 
 // ---------------------------------------------------------------------------

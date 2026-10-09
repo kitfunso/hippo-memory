@@ -1,18 +1,22 @@
 // MCP over HTTP: POST /mcp and the GET /mcp/stream SSE keepalive.
-import { envMcpSseHeartbeatMs, envMcpSseMaxAgeSec, envMcpSseMaxStreams } from '../env.js';
+import { envMcpSseHeartbeatMs, envMcpSseMaxAgeSec, envMcpSseMaxStreams } from '../util/env.js';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createHash } from 'node:crypto';
-import type { Context } from '../api.js';
-import { isSharedStore } from '../config.js';
+import type { Context } from '../api/index.js';
+import { isSharedStore } from '../core/config.js';
 import { handleMcpRequest, mcpErrorResponse, type McpContext, type McpRequest } from '../mcp/server.js';
-import { HttpError, readBody, sendJson } from '../http-util.js';
-import { assertCallerProject } from '../project-identity.js';
-import type { CallerProject } from '../prompt-hook.js';
+import { HttpError, readBody, sendJson } from '../util/http-util.js';
+import { assertCallerProject } from '../core/project-identity.js';
+import type { CallerProject } from '../api/prompt-hook.js';
 import { buildContextWithAuth, heartbeatVerdict, readAuthHeader, requireAuth } from './auth.js';
 import { clientLimitKey, subscriberKey } from './client-ip.js';
 import { noteAccess } from './request.js';
 import type { ResolvedServeOpts } from './types.js';
-import { type JsonValue, isJsonString, isJsonObject } from '../json.js';
+import { type JsonValue, isJsonString, isJsonObject } from '../util/json.js';
+import { FINGERPRINT_HEX_CHARS } from '../util/token-text.js';
+
+const DEFAULT_SSE_HEARTBEAT_MS = 60000;
+const DEFAULT_SSE_MAX_AGE_SEC = 3600;
 
 /**
  * Build a per-client key for MCP state isolation under HTTP-MCP. Used by
@@ -28,7 +32,7 @@ import { type JsonValue, isJsonString, isJsonObject } from '../json.js';
 function buildMcpClientKey(req: IncomingMessage): string {
   const auth = readAuthHeader(req);
   const tokenHash = auth.kind === 'bearer'
-    ? createHash('sha256').update(auth.token).digest('hex').slice(0, 16)
+    ? createHash('sha256').update(auth.token).digest('hex').slice(0, FINGERPRINT_HEX_CHARS)
     : 'noauth';
   const addr = subscriberKey(req.socket.remoteAddress ?? 'unknown');
   return `http:${tokenHash}:${addr}`;
@@ -146,7 +150,7 @@ const DEFAULT_MAX_STREAMS_PER_CLIENT = 8;
 /** The bucket a stream counts against: a hash of the bearer token, else the client IP. */
 function streamSlotKey(req: IncomingMessage): string {
   const auth = readAuthHeader(req);
-  if (auth.kind === 'bearer') return `key:${createHash('sha256').update(auth.token).digest('hex').slice(0, 16)}`;
+  if (auth.kind === 'bearer') return `key:${createHash('sha256').update(auth.token).digest('hex').slice(0, FINGERPRINT_HEX_CHARS)}`;
   return `ip:${clientLimitKey(req)}`;
 }
 
@@ -195,9 +199,9 @@ export async function handleMcpStream(
 
 function keepStreamAlive(req: IncomingMessage, res: ServerResponse, opts: ResolvedServeOpts): void {
   const heartbeatMs =
-    envMcpSseHeartbeatMs() ?? 60000;
+    envMcpSseHeartbeatMs() ?? DEFAULT_SSE_HEARTBEAT_MS;
   const maxAgeMs =
-    (envMcpSseMaxAgeSec() ?? 3600) * 1000;
+    (envMcpSseMaxAgeSec() ?? DEFAULT_SSE_MAX_AGE_SEC) * 1000;
   const startedAt = Date.now();
   let closed = false;
   let checking = false;

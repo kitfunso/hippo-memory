@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createRequire } from 'node:module';
 import { rmSync } from 'node:fs';
 import { readEntry } from '../src/store/entry-reads.js';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { createApiKey } from '../src/store/auth.js';
 import { queryAuditEvents } from '../src/store/audit.js';
 import {
@@ -10,7 +10,7 @@ import {
   promote,
   supersede,
   type HippoDbContext,
-} from '../src/api.js';
+} from '../src/api/index.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
 
@@ -263,7 +263,7 @@ describe('authCreate HTTP body.tenantId ignored', () => {
     });
     expect(res.status).toBe(200);
     // SAFETY: POST /v1/auth/keys returns AuthCreateResult {keyId, plaintext,
-    // tenantId, role} verbatim via sendJson (src/api.ts authCreate + the
+    // tenantId, role} verbatim via sendJson (src/api/index.ts authCreate + the
     // /v1/auth/keys route in src/server.ts).
     const body = await res.json() as { keyId: string; plaintext: string; tenantId: string };
     expect(body.tenantId).toBe('alpha');

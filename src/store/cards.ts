@@ -1,8 +1,8 @@
-import { generateId } from '../memory.js';
-import { closeHippoDb, withWriteScope, withWriteScopeOr, type DatabaseSyncLike } from '../db.js';
-import { SessionHandoff, SessionHandoffRow, rowToSessionHandoff, isHandoffOutcome, HandoffOutcome } from '../handoff.js';
-import { Card, CardStatus, CardRun, CardComment, CARD_TRANSITIONS, CARD_LEASE_MS } from '../card.js';
-import { assertTenantId } from '../tenant.js';
+import { generateId } from '../core/memory.js';
+import { closeHippoDb, withWriteScope, withWriteScopeOr, type DatabaseSyncLike } from '../db/index.js';
+import { SessionHandoff, SessionHandoffRow, rowToSessionHandoff, isHandoffOutcome, HandoffOutcome } from '../core/handoff.js';
+import { Card, CardStatus, CardRun, CardComment, CARD_TRANSITIONS, CARD_LEASE_MS } from '../core/card.js';
+import { assertTenantId } from './tenant.js';
 import { openStore } from './open.js';
 import { HANDOFF_COLUMNS } from './handoffs.js';
 

@@ -1,5 +1,5 @@
 // hippo.db's half of the Quarantine store group: each method is one call on its own handle.
-import { errorMessage, log } from '../../log.js';
+import { errorMessage, log } from '../../util/log.js';
 import { readEntry } from '../entry-reads.js';
 import { writeEntryMirrors } from '../entry-writes.js';
 import { onHandle } from '../open.js';

@@ -1,8 +1,8 @@
 // PreCompact for a caller on another machine: the record and the owner's snapshot go under its tenant and project; only a refused bind or the holdout arm withholds the instruction.
 import type { Context } from '../api/types.js';
-import { markSnapshotSaved, PRE_COMPACT_INSTRUCTION, startCompaction } from '../compaction-record.js';
-import { errorMessage, log } from '../log.js';
-import type { CallerProject } from '../prompt-hook.js';
+import { markSnapshotSaved, PRE_COMPACT_INSTRUCTION, startCompaction } from './compaction-record.js';
+import { errorMessage, log } from '../util/log.js';
+import type { CallerProject } from '../api/prompt-hook.js';
 import { loadActiveTaskSnapshot, saveActiveTaskSnapshot, type ContinuityKey } from '../store/sessions.js';
 import { assertTrigger, bindCaller, callerInHoldout, checkedWorkingState, withCallerDb } from './caller-session.js';
 import { mergeWorkingState, type WorkingState } from './working-state.js';

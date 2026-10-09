@@ -1,7 +1,7 @@
 // The text `hippo sleep` prints for an api.sleep result, kept pure so tests read the lines directly.
 
-import type * as api from '../api.js';
-import { renderAmbientSummary } from '../ambient.js';
+import type * as api from '../api/index.js';
+import { renderAmbientSummary } from '../core/ambient.js';
 
 /** The lines `hippo sleep` prints for an api.sleep result; pure, so the snapshot tests read them without a console spy. */
 export function sleepResultLines(result: api.SleepResult): string[] {

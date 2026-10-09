@@ -1,7 +1,7 @@
 /** CD5: instruction-injection detection for untrusted content; pure function, no DB (mirrors secret-detect.ts). */
 
 import { describe, it, expect } from 'vitest';
-import { detectInstruction } from '../src/instruction-detect.js';
+import { detectInstruction } from '../src/api/instruction-detect.js';
 
 function reason(content: string): string | null {
   return detectInstruction(content).reason;

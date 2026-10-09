@@ -1,7 +1,7 @@
 /** The one Anthropic Messages client: sends one user prompt and returns the reply text or a typed failure the caller reacts to. */
 
-import { fetchWithRetry, llmTimeoutMs } from '../http-retry.js';
-import { errorMessage } from '../log.js';
+import { fetchWithRetry, llmTimeoutMs } from './http-retry.js';
+import { errorMessage } from './log.js';
 
 const MESSAGES_URL = 'https://api.anthropic.com/v1/messages';
 const API_VERSION = '2023-06-01';

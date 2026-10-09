@@ -2,10 +2,10 @@
  * v1.7.1 (codex finding from v1.6.5 review) — unknown:legacy rows must NOT
  * surface in `recall()` baseRanked when caller passes no scope.
  *
- * `passesScopeFilterForRecall` (src/api.ts:120) documents the contract:
+ * `passesScopeFilterForRecall` (src/api/index.ts:120) documents the contract:
  * default-deny on private:* AND on 'unknown:legacy' (the quarantine bucket).
  * Continuity, drillDown, assemble already honour it. The BM25 base path at
- * src/api.ts:393 only filtered isPrivateScope, missing 'unknown:legacy'.
+ * src/api/index.ts:393 only filtered isPrivateScope, missing 'unknown:legacy'.
  *
  * v1.7.1 fixes this at the producer: SQL predicate in loadSearchRows via
  * a new loadRecallSearchEntries helper. Test fires red on master, green
@@ -15,8 +15,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { recall, type Context } from '../src/api.js';
+import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { recall, type Context } from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 function safeRmSync(p: string): void {

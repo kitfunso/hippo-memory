@@ -1,11 +1,11 @@
 // One container's sync in one transaction on the caller's handle: lookup, plan, then every write (plan designs 6 to 8).
 import { appendAuditEvent } from '../store/audit.js';
-import { withTrialScope, withWriteScope, type DatabaseSyncLike } from '../db.js';
+import { withTrialScope, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import { deleteDormantRow, dormantSnapshotsBySourcePrefix, insertDormantRow, readDormantSnapshot, replaceDormantEntry } from '../store/dormant.js';
-import { gatedWrite } from '../gated-write.js';
-import { Layer, calculateStrength, createMemory, type MemoryEntry } from '../memory.js';
+import { gatedWrite } from '../trust/gated-write.js';
+import { Layer, calculateStrength, createMemory, type MemoryEntry } from '../core/memory.js';
 import { findRejectedValue, rejectionDigest } from '../store/rejection.js';
-import { redactSecretsStrict } from '../secret-detect.js';
+import { redactSecretsStrict } from '../util/secret-detect.js';
 import { stampOriginProject } from '../store/entry-row.js';
 import { deleteEntryRowInTx, renameEntrySourceAndOriginAt, renameEntrySourceAt, setEntryTagsInTx, supersedeEntryAt } from '../store/entry-writes.js';
 import { entryIdTakenAt, selectLiveEntriesBySourcePrefix } from '../store/entry-reads.js';

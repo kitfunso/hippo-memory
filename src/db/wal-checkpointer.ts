@@ -1,7 +1,7 @@
 // A served store's WAL is checkpointed on a worker thread: the fsync calls of a checkpoint would otherwise stall every request on the event loop.
 import * as path from 'node:path';
 import { Worker } from 'node:worker_threads';
-import { errorMessage, log } from '../log.js';
+import { errorMessage, log } from '../util/log.js';
 
 // WAL pages at which a connection checkpoints inside its own commit.
 const INLINE_CHECKPOINT_PAGES = 100;

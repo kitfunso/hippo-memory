@@ -1,6 +1,6 @@
-import { BadRequestError, NotFoundError } from '../api-errors.js';
-import type { DatabaseSyncLike } from '../db.js';
-import { isFtsAvailable, withWriteScope } from '../db.js';
+import { BadRequestError, NotFoundError } from '../core/api-errors.js';
+import type { DatabaseSyncLike } from '../db/index.js';
+import { isFtsAvailable, withWriteScope } from '../db/index.js';
 import { appendAuditEvent, reportAuditWriteFailure } from './audit.js';
 import { markSummaryDirtyInTx } from './summary-dirty.js';
 

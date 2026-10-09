@@ -1,10 +1,10 @@
 // hippo.db's half of the Objects store group: every statement the typed objects run, each call on a handle of its own.
 import { appendAuditEvent } from '../audit.js';
-import { getMeta, withWriteScopeOr, type DatabaseSyncLike } from '../../db.js';
-import { escapeLike } from '../../escape.js';
-import { keysetAfter } from '../../keyset.js';
-import { calculateStrength, deriveHalfLife, type MemoryEntry } from '../../memory.js';
-import { scopeAdmitSql } from '../../recall-scope.js';
+import { getMeta, withWriteScopeOr, type DatabaseSyncLike } from '../../db/index.js';
+import { escapeLike } from '../../util/escape.js';
+import { keysetAfter } from '../../util/keyset.js';
+import { calculateStrength, deriveHalfLife, type MemoryEntry } from '../../core/memory.js';
+import { scopeAdmitSql } from '../recall-scope.js';
 import type { JsonObject } from '../working-memory.js';
 import { stampOriginProject, upsertEntryRow } from '../entry-row.js';
 import { auditEntryWrite, writeEntryMirrors } from '../entry-writes.js';

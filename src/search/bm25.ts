@@ -1,5 +1,5 @@
-import type { MemoryEntry } from '../memory.js';
-import { tokenize } from '../tokenize.js';
+import type { MemoryEntry } from '../core/memory.js';
+import { tokenize } from '../util/tokenize.js';
 
 /** Tokenized BM25 corpus; build it once with `buildCorpus` and reuse it across queries on the same entry set. */
 export interface BM25Corpus {

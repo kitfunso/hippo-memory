@@ -1,35 +1,37 @@
 // Read path: recall (sync) and retrieve (async, adds the vector arm).
 
-import { envRequireSessionScopedFreshTail } from '../env.js';
+import { envRequireSessionScopedFreshTail } from '../util/env.js';
 import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../store/rows.js';
 import { loadEntriesByIds, loadFreshRawMemories } from '../store/entry-reads.js';
 import { loadRecallSearchEntries, recallScopeFilter } from '../store/search-rows.js';
 import type { ContinuityKey } from '../store/sessions.js';
 import { estimateTokens } from '../util/token-text.js';
-import { formatHandoffEvidenceLine } from '../handoff.js';
-import type { MemoryEntry } from '../memory.js';
+import { formatHandoffEvidenceLine } from '../core/handoff.js';
+import type { MemoryEntry } from '../core/memory.js';
 import type { RecallTraceInput } from '../store/recall-trace.js';
 import { activeGoalsWithPolicies, boostByGoals, type ActiveGoals, type GoalRecallLogRow, type GoalStackBoostOpts } from '../store/goals.js';
-import type { ForwardClaimMatch } from '../forward-claim-detector.js';
-import { continuityAt, finishRecallAt, storeFor, type HippoStore, type RecallSearchArgs, type RecallWrites } from '../store-port.js';
+import type { ForwardClaimMatch } from '../learn/forward-claim-detector.js';
+import { continuityAt, finishRecallAt, storeFor, type HippoStore, type RecallSearchArgs, type RecallWrites } from '../store/index.js';
 import { hybridSearch } from '../search/hybrid.js';
 import { physicsSearch } from '../search/physics-search.js';
 import { churnStaleFactor } from '../search/boosts.js';
 import type { HybridVectorCandidates } from '../search/vector.js';
 import type { RerankStep } from '../core/search-types.js';
-import { compareEntryIdentity } from '../compare.js';
-import { dropHeldCopies, duplicateKey, storedTextKeys } from '../same-text.js';
-import { isSharedStore, loadConfig } from '../config.js';
-import { classifyOriginProject, projectNames } from '../project-identity.js';
+import { compareEntryIdentity } from '../core/compare.js';
+import { dropHeldCopies, duplicateKey, storedTextKeys } from '../util/same-text.js';
+import { isSharedStore, loadConfig } from '../core/config.js';
+import { classifyOriginProject, projectNames } from '../core/project-identity.js';
 import { decidePlanningFallacy, detectPlanningClaim } from '../predictions/planning-fallacy.js';
 import { planningFallacyEvidenceAt, type PlanningFallacyEvidence } from '../store/planning-fallacy-evidence.js';
-import { detectAnchoring, hashQueryText, biasHintEnabled, type AnchoringHint } from '../recall-history.js';
-import { detectAvailabilityBias, type AvailabilityHint } from '../availability.js';
-import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../recall-scope.js';
+import { detectAnchoring, hashQueryText, biasHintEnabled, type AnchoringHint } from './recall-history.js';
+import { detectAvailabilityBias, type AvailabilityHint } from './availability.js';
+import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../store/recall-scope.js';
 import type { RecallSuppressionSummary, RecallOpts, RecallResult, RecallResultItem, ContinuityBlock } from './recall-types.js';
 import { type Context, ownerOrSubject, RecallContractError } from './types.js';
 import { anchoringRows, availabilityRows, callerOf, recallAuditMetadata, recallAuditRow, strengthenOf } from './recall-record.js';
 import { retrieveWithCliCore } from './recall-core.js';
+
+const DEFAULT_RECALL_LIMIT = 10;
 
 /**
  * Shared construction helper for `RecallSuppressionSummary`. Used by
@@ -282,7 +284,7 @@ type SummaryDecoration = { entry: MemoryEntry; childIds: string[] };
 const CONTINUITY_EVENT_LIMIT = 5;
 
 function planRecall(ctx: Context, opts: RecallOpts, all: MemoryEntry[], own: string | undefined): RecallPlan {
-  const limit = opts.limit ?? 10;
+  const limit = opts.limit ?? DEFAULT_RECALL_LIMIT;
   const window = admitCandidates(opts, all, limit, own);
   return {
     limit,

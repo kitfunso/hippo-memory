@@ -9,14 +9,14 @@ import { spawnSync } from 'node:child_process';
 import { ServerResponse } from 'node:http';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { Layer } from '../src/memory.js';
+import { Layer } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import {
   serve, authRevoke, ForbiddenError, isReservedActor,
   type ServerHandle, type AuthResolver, type ResolvedBearer, type ServeOpts, type Context,
 } from '../src/server.js';
 import { createApiKey, type CreateApiKeyResult } from '../src/store/auth.js';
-import { openHippoDb, closeHippoDb, getHippoDbPath } from '../src/db.js';
+import { openHippoDb, closeHippoDb, getHippoDbPath } from '../src/db/index.js';
 import { listAuditEventsAfter } from '../src/store/audit.js';
 
 const EXT = 'ext.good';

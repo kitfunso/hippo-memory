@@ -1,5 +1,5 @@
 // Tells the server thread when a write job may have committed, so a job stopped before that point is known to have saved nothing.
-import type { DatabaseSyncLike } from '../../db.js';
+import type { DatabaseSyncLike } from '../../db/index.js';
 
 const ROLLS_BACK_PART = /^\s*ROLLBACK\s+TO\b/i;
 // After any of these the connection may be in autocommit, where a statement prepared earlier commits on its own.

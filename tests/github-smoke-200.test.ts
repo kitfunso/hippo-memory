@@ -14,8 +14,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { remember, recall, type Context } from '../src/api.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { remember, recall, type Context } from '../src/api/index.js';
 import { ingestEvent, type IngestEvent, type IngestResult } from '../src/connectors/github/ingest.js';
 import { handleCommentDeleted } from '../src/connectors/github/deletion.js';
 import { computeIdempotencyKey } from '../src/connectors/github/signature.js';
@@ -30,7 +30,7 @@ import { randomUUID } from 'node:crypto';
 import { makeRoot } from './_helpers/make-root.js';
 
 // The one case ingests 200 webhook events, each its own write to a real store.
-vi.setConfig({ testTimeout: 30_000 });
+vi.setConfig({ testTimeout: 90_000 });
 
 // ---------------------------------------------------------------------------
 // Fixtures

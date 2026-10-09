@@ -22,11 +22,11 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { embedMemory } from '../src/embeddings.js';
-import { isEmbeddingAvailable } from '../src/local-embedding.js';
+import { embedMemory } from '../src/store/embeddings/index.js';
+import { isEmbeddingAvailable } from '../src/store/embeddings/local.js';
 import { physicsSearch } from '../src/search/physics-search.js';
 import { consolidate } from '../src/consolidate/sleep.js';
-import { DEFAULT_PHYSICS_CONFIG } from '../src/physics-config.js';
+import { DEFAULT_PHYSICS_CONFIG } from '../src/core/physics-config.js';
 
 import { injectStream } from '../scripts/lifecycle-stress/inject.mjs';
 

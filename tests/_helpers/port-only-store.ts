@@ -1,7 +1,7 @@
 // A store that answers only through the port: serve() blocks hippo.db for any other kind, so a recall
 // path that still opens hippo.db directly throws, while the port's own methods reach the same rows.
-import { withSqliteAllowed } from '../../src/db.js';
-import { sqliteStore, type HippoStore, type VectorReads } from '../../src/store-port.js';
+import { withSqliteAllowed } from '../../src/db/index.js';
+import { sqliteStore, type HippoStore, type VectorReads } from '../../src/store/index.js';
 
 function allowed<A extends unknown[], R>(fn: (...args: A) => R): (...args: A) => R {
   return (...args) => withSqliteAllowed(() => fn(...args));

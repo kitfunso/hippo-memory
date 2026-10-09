@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { createMemory, MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { hippoOut } from './_helpers/spawn-hippo.js';
 
 let tmpDir: string;

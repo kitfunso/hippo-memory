@@ -59,7 +59,7 @@ Eight sites carry the release version:
 - `extensions/openclaw-plugin/package.json`
 - `extensions/openclaw-plugin/openclaw.plugin.json`
 - `server.json` (the MCP registry entry)
-- `src/version.ts` (`PACKAGE_VERSION`)
+- `src/util/version.ts` (`PACKAGE_VERSION`)
 
 Bump them with one command in the release PR:
 

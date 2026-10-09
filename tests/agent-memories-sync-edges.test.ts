@@ -2,11 +2,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { chmodSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { forget, reject, restoreDormant, supersede } from '../src/api.js';
+import { forget, reject, restoreDormant, supersede } from '../src/api/index.js';
 import { importForStore } from '../src/agent-memories/sync.js';
 import type { ImportReport } from '../src/agent-memories/report.js';
 import { insertDormantRow } from '../src/store/dormant.js';
-import { createMemory, type MemoryEntry } from '../src/memory.js';
+import { createMemory, type MemoryEntry } from '../src/core/memory.js';
 import { removeEntryMirrors } from '../src/store/mirrors.js';
 import { deleteEntryRowInTx, writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';

@@ -2,19 +2,19 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { DEFAULT_HALF_LIFE_DAYS, type MemoryEntry, Layer } from '../memory.js';
-import { closeHippoDb, currentRequestStores, type DatabaseSyncLike, openHippoDb, getMeta, setMeta, withWriteScope } from '../db.js';
+import { DEFAULT_HALF_LIFE_DAYS, type MemoryEntry, Layer } from '../core/memory.js';
+import { closeHippoDb, currentRequestStores, type DatabaseSyncLike, openHippoDb, getMeta, setMeta, withWriteScope } from '../db/index.js';
 import { openHippoDbWithFacts } from '../db/open.js';
-import { type ResolveProjectIdentityOpts, findHippoStoreDir } from '../project-identity.js';
+import { type ResolveProjectIdentityOpts, findHippoStoreDir } from '../core/project-identity.js';
 import { realpathOrResolve } from '../util/real-path.js';
 import { RejectedValueError } from './rejection.js';
-import { errorMessage, log } from '../log.js';
+import { errorMessage, log } from '../util/log.js';
 import { type HippoIndex, type LegacyStats } from './rows.js';
 import { audit } from './audit-event.js';
 import { deserializeEntry } from './markdown.js';
 import { stampOriginProjectForImport, upsertEntryRow } from './entry-row.js';
 import { ensureMirrorDirectories, syncMirrorFiles, layerDir } from './mirrors.js';
-import { isJsonObject } from '../json.js';
+import { isJsonObject } from '../util/json.js';
 
 /** Nearest ancestor store like git; the strict join is the fallback so `hippo init` still creates `<cwd>/.hippo`. */
 export function getHippoRoot(cwd: string = process.cwd(), opts?: ResolveProjectIdentityOpts): string {
@@ -67,7 +67,7 @@ export function onHandle<T>(hippoRoot: string, fn: (db: DatabaseSyncLike) => T, 
   }
 }
 
-/** `meta` key holding the default half-life base a store's memories are on (src/half-life-migration.ts). */
+/** `meta` key holding the default half-life base a store's memories are on (src/consolidate/half-life-migration.ts). */
 export const HALF_LIFE_BASE_META_KEY = 'default_half_life_base';
 /** `meta` key set once no memory of a decision, incident or other object sits on the old flat 90 days. */
 export const TYPED_HALF_LIFE_META_KEY = 'typed_half_life_on_default';

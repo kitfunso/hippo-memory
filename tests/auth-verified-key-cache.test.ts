@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import {
   apiKeyVerifyStats,
   createApiKey,
@@ -9,9 +9,9 @@ import {
   VerifiedKeyCache,
   type VerifiedApiKey,
 } from '../src/store/auth.js';
-import { authRevoke, authGrant, type Context } from '../src/api.js';
+import { authRevoke, authGrant, type Context } from '../src/api/index.js';
 import { serve, type ServerHandle } from '../src/server.js';
-import { sqliteStore } from '../src/store-port.js';
+import { sqliteStore } from '../src/store/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 /** Scrypt runs and store lookups made by `fn` alone. */

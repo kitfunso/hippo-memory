@@ -1,14 +1,14 @@
 // First-class object verbs for processes, policies and skills.
 
-import { extractPathTags } from '../path-context.js';
-import * as processesModule from '../processes.js';
-import * as policiesModule from '../policies.js';
-import * as skillsModule from '../skills.js';
-import { resolveTenantId } from '../tenant.js';
+import { extractPathTags } from '../search/path-context.js';
+import * as processesModule from '../objects/processes.js';
+import * as policiesModule from '../objects/policies.js';
+import * as skillsModule from '../objects/skills.js';
+import { resolveTenantId } from '../store/tenant.js';
 import { printError } from './output.js';
 import { nonEmptyStringFlag, requireInit, stringFlag, type CliFlags } from './shared.js';
 import { closeObject, foundOrExit, idArgOrExit, listObjects, printLifecycleTail, type ObjectNames } from './object-verbs.js';
-import { errorMessage } from '../log.js';
+import { errorMessage } from '../util/log.js';
 
 const PROCESS: ObjectNames = { cmd: 'process', noun: 'Process', idLabel: 'process' };
 const POLICY: ObjectNames = { cmd: 'policy', noun: 'Policy', idLabel: 'policy' };

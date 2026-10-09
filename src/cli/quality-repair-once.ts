@@ -1,10 +1,10 @@
 // Sleep and the daily runner clean a store's old automatic memories once, so an upgrade needs no command.
 
 import * as path from 'path';
-import { errorMessage, log } from '../log.js';
+import { errorMessage, log } from '../util/log.js';
 import { repairQualityOnce } from './quality-repair.js';
-import { getGlobalRoot } from '../shared.js';
-import { resolveTenantId } from '../tenant.js';
+import { getGlobalRoot } from '../sharing/shared.js';
+import { resolveTenantId } from '../store/tenant.js';
 
 /** Fault-isolated like the project tag repair: a failure warns, leaves the store unmarked and runs again next time. */
 export function repairQualityOnceAt(root: string): void {

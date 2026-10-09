@@ -3,14 +3,14 @@
 import { loadAllEntries } from '../store/entry-reads.js';
 import { deleteEntry, memoriesBackingObjects } from '../store/delete-and-batch.js';
 import { auditMemories, AUDIT_OPS, type AuditEvent, type AuditOp } from '../store/audit.js';
-import * as api from '../api.js';
-import { resolveTenantId } from '../tenant.js';
+import * as api from '../api/index.js';
+import { resolveTenantId } from '../store/tenant.js';
 import { pruneAuditLog, parseOlderThanFlag } from './audit-prune.js';
 import { printError } from './output.js';
 import { type CliFlags, requireInit, type CommandContext, resolveAuthRoot, boolFlag, flagIsTrue, stringFlag } from './shared.js';
 import { repairAutomaticMemories } from './quality-repair.js';
-import { getGlobalRoot } from '../shared.js';
-import { errorMessage } from '../log.js';
+import { getGlobalRoot } from '../sharing/shared.js';
+import { errorMessage } from '../util/log.js';
 
 // ---------------------------------------------------------------------------
 // Audit log subcommands (`hippo audit list`)

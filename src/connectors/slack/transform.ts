@@ -1,4 +1,4 @@
-import type { RememberOpts } from '../../api.js';
+import type { RememberOpts } from '../../api/index.js';
 import { scopeFromChannel, type ChannelMeta } from './scope.js';
 import type { SlackMessageEvent } from './types.js';
 
