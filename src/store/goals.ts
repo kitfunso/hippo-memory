@@ -1,6 +1,7 @@
 // src/store/goals.ts
 import { randomUUID } from 'node:crypto';
 import { openHippoDb, closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../db.js';
+import { compareScoresDesc } from '../compare.js';
 import type { MemoryEntry } from '../memory.js';
 import type { RerankStep } from '../core/search-types.js';
 
@@ -141,21 +142,7 @@ export function pushGoalWithDb(db: DatabaseSyncLike, opts: PushGoalOpts): Goal {
     // Depth cap: count active for (tenant, session); suspend oldest if at cap.
     enforceDepthCapWithinTx(db, opts.tenantId, opts.sessionId);
 
-    if (opts.parentGoalId) {
-      // SAFETY: the row comes from the SELECT above, which projects exactly
-      // the tenant_id and session_id columns of goal_stack.
-      const parent = db.prepare(
-        `SELECT tenant_id, session_id FROM goal_stack WHERE id = ?`,
-      ).get(opts.parentGoalId) as { tenant_id: string; session_id: string } | undefined;
-      if (!parent) {
-        throw new Error(`parent goal not found: ${opts.parentGoalId}`);
-      }
-      if (parent.tenant_id !== opts.tenantId || parent.session_id !== opts.sessionId) {
-        throw new Error(
-          `parent goal ${opts.parentGoalId} belongs to a different (tenant, session)`,
-        );
-      }
-    }
+    assertParentInSession(db, opts);
 
     // Parent goal_stack row first (FK target).
     db.prepare(`
@@ -171,19 +158,7 @@ export function pushGoalWithDb(db: DatabaseSyncLike, opts: PushGoalOpts): Goal {
 
     // Optional policy row, then point goal_stack.retrieval_policy_id at it.
     if (opts.policy) {
-      policyId = `rp_${randomUUID().replace(/-/g, '').slice(0, 16)}`;
-      db.prepare(`
-        INSERT INTO retrieval_policy
-          (id, goal_id, policy_type, weight_schema_fit, weight_recency, weight_outcome, error_priority)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        policyId, id, opts.policy.policyType,
-        opts.policy.weightSchemaFit ?? 1.0,
-        opts.policy.weightRecency ?? 1.0,
-        opts.policy.weightOutcome ?? 1.0,
-        opts.policy.errorPriority ?? 1.0,
-      );
-      db.prepare(`UPDATE goal_stack SET retrieval_policy_id = ? WHERE id = ?`).run(policyId, id);
+      policyId = insertRetrievalPolicy(db, id, opts.policy);
     }
   });
 
@@ -199,6 +174,45 @@ export function pushGoalWithDb(db: DatabaseSyncLike, opts: PushGoalOpts): Goal {
     retrievalPolicyId: policyId ?? undefined,
     createdAt,
   };
+}
+
+function assertParentInSession(db: DatabaseSyncLike, opts: PushGoalOpts): void {
+  if (!opts.parentGoalId) return;
+  // SAFETY: the row comes from the SELECT above, which projects exactly
+  // the tenant_id and session_id columns of goal_stack.
+  const parent = db.prepare(
+    `SELECT tenant_id, session_id FROM goal_stack WHERE id = ?`,
+  ).get(opts.parentGoalId) as { tenant_id: string; session_id: string } | undefined;
+  if (!parent) {
+    throw new Error(`parent goal not found: ${opts.parentGoalId}`);
+  }
+  if (parent.tenant_id !== opts.tenantId || parent.session_id !== opts.sessionId) {
+    throw new Error(
+      `parent goal ${opts.parentGoalId} belongs to a different (tenant, session)`,
+    );
+  }
+}
+
+/** Insert the policy row, then point goal_stack.retrieval_policy_id at it; returns the new policy id. */
+function insertRetrievalPolicy(
+  db: DatabaseSyncLike,
+  goalId: string,
+  policy: NonNullable<PushGoalOpts['policy']>,
+): string {
+  const policyId = `rp_${randomUUID().replace(/-/g, '').slice(0, 16)}`;
+  db.prepare(`
+    INSERT INTO retrieval_policy
+      (id, goal_id, policy_type, weight_schema_fit, weight_recency, weight_outcome, error_priority)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    policyId, goalId, policy.policyType,
+    policy.weightSchemaFit ?? 1.0,
+    policy.weightRecency ?? 1.0,
+    policy.weightOutcome ?? 1.0,
+    policy.errorPriority ?? 1.0,
+  );
+  db.prepare(`UPDATE goal_stack SET retrieval_policy_id = ? WHERE id = ?`).run(policyId, goalId);
+  return policyId;
 }
 
 export interface GetActiveGoalsOpts {
@@ -474,7 +488,7 @@ export function boostByGoals<R extends { entry: MemoryEntry; score: number }>(
     // tail -- a re-sort of an already deterministically-ordered ranking
     // inherits its determinism via sort stability, and ties preserve the
     // prior (meaningful) rank instead of reordering by content.
-    .sort((a, b) => b.score - a.score);
+    .sort((a, b) => compareScoresDesc(a.score, b.score));
 
   return { results: boosted, log: buildGoalRecallLog(boosted, matchesByEntryId, goalsByTag, opts) };
 }

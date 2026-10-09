@@ -4,7 +4,7 @@ import { closeHippoDb, openHippoDb } from '../../src/db.js';
 import { selectAllEntries } from '../../src/store/entry-reads.js';
 import {
   BadRequestError, ConflictError, entryAfterOutcome, NotFoundError, ownScopeTouches, rejectionDigest, RejectedValueError,
-  type AppendAuditOpts, type EntryTarget, type EntryWrites, type HippoStore, type MemoryEntry,
+  type AppendAuditOpts, type EntryTarget, type EntryWrite, type EntryWrites, type HippoStore, type MemoryEntry, type RawArchive,
 } from '../../src/server.js';
 import { inMemoryKeyAuditStore } from './in-memory-key-audit-store.js';
 import type { StoreSide } from './store-conformance.js';
@@ -25,10 +25,14 @@ export interface InMemoryEntryWritesStore extends StoreSide {
   readonly store: HippoStore & { readonly entryWrites: EntryWrites };
   readonly archived: () => readonly ArchivedRow[];
   readonly forgotten: () => number;
+  /** writeEntry with `companion` run on the staged write before it commits; `rememberAt` is where the entry's audit rows start. A throw drops the write. */
+  readonly writeWith: (write: EntryWrite, companion: (tx: Tx, rememberAt: number) => void) => Promise<void>;
+  /** archiveRaw with `companion` run as the archive commits. */
+  readonly archiveWith: (archive: RawArchive, companion: () => void) => Promise<string>;
 }
 
 /** One write's rows and audit rows, staged so a throw drops both, as a rolled-back transaction would. */
-interface Tx {
+export interface Tx {
   readonly rows: Map<string, MemoryEntry>;
   readonly audit: AppendAuditOpts[];
 }
@@ -114,10 +118,32 @@ export function inMemoryEntryWritesStore(hippoRoot: string): InMemoryEntryWrites
     return result;
   };
 
+  const writeWith: InMemoryEntryWritesStore['writeWith'] = async ({ entry, actor }, companion) => {
+    await inTx(actor, (tx) => {
+      const rememberAt = tx.audit.length;
+      put(tx, entry, actor);
+      companion(tx, rememberAt);
+    });
+  };
+
+  const archiveWith: InMemoryEntryWritesStore['archiveWith'] = async (archive, companion) => {
+    const archivedAt = await inTx(archive.actor, (tx) => {
+      const row = inReach(tx, archive, archive.id);
+      if (row.kind !== 'raw') throw new BadRequestError(`memory ${archive.id} is not raw (kind=${row.kind})`);
+      const at = new Date().toISOString();
+      tx.rows.delete(archive.id);
+      tx.audit.push({ tenantId: row.tenantId, actor: archive.actor, op: 'archive_raw', targetId: archive.id, metadata: { reason: archive.reason } });
+      if (row.dag_parent_id) markParentDirty(tx, row.dag_parent_id, row.tenantId, archive.actor);
+      companion();
+      return at;
+    });
+    archived.push({ memoryId: archive.id, archivedAt, reason: archive.reason, archivedBy: archive.actor });
+    forgotten += 1;
+    return archivedAt;
+  };
+
   const entryWrites: EntryWrites = {
-    async writeEntry({ entry, actor }) {
-      await inTx(actor, (tx) => put(tx, entry, actor));
-    },
+    writeEntry: (write) => writeWith(write, () => undefined),
     async applyOutcome({ tenantId, actor, ownScope, ids, good }) {
       return inTx(actor, (tx) => {
         const applied: string[] = [];
@@ -142,20 +168,7 @@ export function inMemoryEntryWritesStore(hippoRoot: string): InMemoryEntryWrites
         tx.audit.push({ tenantId, actor, op: 'supersede', targetId: oldId, metadata: { newId: successor.id } });
       });
     },
-    async archiveRaw(archive) {
-      const archivedAt = await inTx(archive.actor, (tx) => {
-        const row = inReach(tx, archive, archive.id);
-        if (row.kind !== 'raw') throw new BadRequestError(`memory ${archive.id} is not raw (kind=${row.kind})`);
-        const at = new Date().toISOString();
-        tx.rows.delete(archive.id);
-        tx.audit.push({ tenantId: row.tenantId, actor: archive.actor, op: 'archive_raw', targetId: archive.id, metadata: { reason: archive.reason } });
-        if (row.dag_parent_id) markParentDirty(tx, row.dag_parent_id, row.tenantId, archive.actor);
-        return at;
-      });
-      archived.push({ memoryId: archive.id, archivedAt, reason: archive.reason, archivedBy: archive.actor });
-      forgotten += 1;
-      return archivedAt;
-    },
+    archiveRaw: (archive) => archiveWith(archive, () => undefined),
     async forget(removal) {
       await inTx(removal.actor, (tx) => {
         const row = inReach(tx, removal, removal.id);
@@ -179,5 +192,5 @@ export function inMemoryEntryWritesStore(hippoRoot: string): InMemoryEntryWrites
     },
     entryWrites,
   };
-  return { store, auditRows: base.auditRows, archived: () => structuredClone(archived), forgotten: () => forgotten };
+  return { store, auditRows: base.auditRows, archived: () => structuredClone(archived), forgotten: () => forgotten, writeWith, archiveWith };
 }
