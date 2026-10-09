@@ -11,7 +11,7 @@ import { isSharedStore } from '../config.js';
 import type { AppendAuditOpts } from '../store/audit.js';
 import { detectAnchoring, hashQueryText, biasHintEnabled, snapshotRing, type RingBuffer } from '../recall-history.js';
 import { detectAvailabilityBias } from '../availability.js';
-import { estimateTokens } from '../token-ledger.js';
+import { estimateTokens } from '../util/token-text.js';
 import { assembleCost, assembleText, drillCost, drillText } from '../context-render.js';
 import { mcpActor, type ToolCall } from './protocol.js';
 import { lastRecalledIds, resolveClientKey } from './session-state.js';

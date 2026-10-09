@@ -19,7 +19,8 @@ import { createDeliveryRecorder, type DeliveryEventType, type DeliveryRecorder }
 import { openHippoDb, closeHippoDb, isSqliteBusy, noteStoreBusy, runWithRequestStores, HOOK_DB_WAIT_MS } from '../db.js';
 import { ledgerRoot, withLedgerDb } from '../ledger-db.js';
 import { sessionPilotArm } from '../pilot-arm.js';
-import { blockHash, hookPayloadSessionId, hookPayloadString, isSubagentPayload, recordTokenUse } from '../token-ledger.js';
+import { hookPayloadSessionId, hookPayloadString, isSubagentPayload, recordTokenUse } from '../token-ledger.js';
+import { blockHash } from '../util/token-text.js';
 import { importAtSessionEnd, currentMachine } from '../agent-memories/sync.js';
 import { type ImportReport, summaryLine } from '../agent-memories/report.js';
 import { type ChurnStaleResult, detectChurnStale } from '../invalidation.js';

@@ -46,7 +46,7 @@ import { writeEntry } from '../../dist/store/entry-writes.js';
 import { loadAllEntries } from '../../dist/store/entry-reads.js';
 import { hybridSearch } from '../../dist/search/hybrid.js';
 import { isEmbeddingAvailable } from '../../dist/local-embedding.js';
-import { estimateTokens } from '../../dist/token-ledger.js';
+import { estimateTokens } from '../../dist/util/token-text.js';
 import { pairedBootstrap } from '../../dist/eval/eval-stats.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));

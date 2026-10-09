@@ -2,7 +2,8 @@
 
 import { MemoryEntry } from '../memory.js';
 import type { DeliveryRecorder } from '../delivery-recorder.js';
-import { estimateTokens, isSubagentPayload, recordTokenUse } from '../token-ledger.js';
+import { isSubagentPayload, recordTokenUse } from '../token-ledger.js';
+import { estimateTokens } from '../util/token-text.js';
 import { autoDetectContext } from '../context-auto.js';
 import { detectScope } from '../scope.js';
 import { withLedgerDb } from '../ledger-db.js';
