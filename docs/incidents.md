@@ -69,6 +69,10 @@ Bugs, regressions and review findings that shaped the code. Source comments keep
 ### src/cli/audit.ts
 - `cmdAuditList`: Regenerate from Set to prevent future drift (v1.11.5: pre-v1.11.5 message was hand-maintained and had drifted — missed 'auth_revoke' and 'outcome').
 
+### src/cli/compact-resume-payload.ts
+- `readCompactResumePayload`: X13: fail closed on malformed non-empty stdin. The earlier "print on malformed" behavior survives only for TTY/no-stdin manual invocation (nonEmptyStdin is false there, this branch never runs).
+- `readCompactResumePayload`: Fail closed on structurally incomplete payloads too ({}, [], source missing/non-string): any parsed non-empty payload must say source === 'compact' to print. Real SessionStart payloads always carry source; only the TTY/no-stdin manual path prints without one (codex round 3).
+
 ### src/cli/curate.ts
 - `cmdOutcome`: Behavior fix (v1.11.3): cmdOutcome used to bypass api.outcome and do its own readEntry/writeEntry inline, which silently skipped the audit_log emission that the MCP outcome path already has via api.outcome. T6 rewires through api.outcome so every successful CLI 'outcome' call now writes one audit_log row per affected id, matching MCP parity.
 - `cmdReject`: Ambiguous ask: silently preferring one form would ignore the other without feedback (code-review round-1 low).
@@ -96,8 +100,6 @@ Bugs, regressions and review findings that shaped the code. Source comments keep
 ### src/cli/session-hooks.ts
 - `cmdCompactResume`: Same exit-0/crash-safety contract as `hippo pre-compact` (critic round 2): every path exits 0.
 - `cmdCompactResume`: X3: gate on the non-exiting isInitialized check before any store-opening call (loadActiveTaskSnapshot/listSessionEvents both call initStore internally, which would silently create a store in a project that never ran `hippo init` — this hook fires globally).
-- `readCompactResumePayload` (src/cli/compact-resume-payload.ts): X13: fail closed on malformed non-empty stdin. The earlier "print on malformed" behavior survives only for TTY/no-stdin manual invocation (nonEmptyStdin is false there, this branch never runs).
-- `readCompactResumePayload` (src/cli/compact-resume-payload.ts): Fail closed on structurally incomplete payloads too ({}, [], source missing/non-string): any parsed non-empty payload must say source === 'compact' to print. Real SessionStart payloads always carry source; only the TTY/no-stdin manual path prints without one (codex round 3).
 
 ### src/cli/transfer.ts
 - `importVaultFolder`: --name is the vault identity key for the destructive source-deletion sync; inferring it from the folder basename let same-basename vaults collide and clobber each other (codex R10 P2). A valueless `--name` parses as boolean true, and String(true) === "true" would silently import under vault:true:* - reject a non-string so it fails fast instead (codex R11 P2).

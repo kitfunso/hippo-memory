@@ -7,24 +7,25 @@
 
 ## What was built
 
-The delivery ledger now writes one boundary row for each accepted call of `hippo pre-compact` and `hippo compact-resume`. No schema change: `event_type` has no CHECK constraint (`src/db/migrations/v50.ts:7`), and `DeliveryEventType` gains `pre-compact` and `compact-resume` (`src/delivery-recorder.ts:8`). `ledger_version` moves from 1 to 2 (`src/delivery-recorder.ts:20`). One duplicate rule covers both boundary types (`src/recall-trace.ts:307`, `:320`). The recorder starter is shared (`src/cli/shared.ts:482`). `pre-compact` records through an `onBoundary` callback (`src/capture/compact.ts:129-134`, `src/cli/session-hooks.ts:678-689`). `compact-resume` records in `cmdCompactResume` (`src/cli/session-hooks.ts:127-141`, `:172-177`). What each hook prints, saves and exits with is unchanged.
+The delivery ledger now writes one boundary row for each accepted call of `hippo pre-compact` and `hippo compact-resume`. No schema change: `event_type` has no CHECK constraint (`src/db/migrations/v50.ts:10`), and `DeliveryEventType` gains `pre-compact` and `compact-resume` (`src/delivery-recorder.ts:9`). `ledger_version` moves from 1 to 2 (`src/delivery-recorder.ts:23`). One duplicate rule covers both boundary types (`src/store/recall-trace.ts:307`, `:320`). The recorder starter is shared (`src/cli/shared.ts:544`). `pre-compact` records through an `onBoundary` callback (`src/capture/compact.ts:129-134`, `src/cli/session-hooks.ts:678-689`). `compact-resume` records in `cmdCompactResume` (`src/cli/session-hooks.ts:97`, `:111`, `:147`). A boundary row carries no prompt hash whatever the payload holds (`src/delivery-recorder.ts:292`). What each hook prints, saves and exits with is unchanged.
 
 ## What ran
 
-Run at `3fe2473b`, on node v24.13.0.
+Run at `03acb61d`, after the merge of master `47ab85fd`, on node v24.13.0.
 
 ```
 npm --prefix C:/Users/skf_s/hippo-wt-z10b run build
 npm --prefix C:/Users/skf_s/hippo-wt-z10b run test:delivery-ledger
 ```
 
-- `npm run test:delivery-ledger`: 7 files, 120 tests, all pass.
-- Regression vitest run of 9 files with `--maxWorkers=1`: `tests/compaction-pre-compact.test.ts`, `tests/compaction-callers.test.ts`, `tests/pre-compact-e2e.test.ts`, `tests/compact-resume-text.test.ts`, `tests/pilot-arm-hook.test.ts`, `tests/copilot-hooks-cli.test.ts`, `tests/prompt-hook-context.test.ts`, `tests/hook-store-open-count.test.ts`, `tests/stdin-bounded.test.ts`. Result: 226 pass, 0 fail.
+- `npm run test:delivery-ledger`: 6 files, 112 tests, all pass. Master removed `tests/delivery-ledger-config.test.ts` in #566.
+- Regression vitest run of 9 files with `--maxWorkers=1`: `tests/compaction-pre-compact.test.ts`, `tests/compaction-callers.test.ts`, `tests/pre-compact-e2e.test.ts`, `tests/compact-resume-text.test.ts`, `tests/pilot-arm-hook.test.ts`, `tests/copilot-hooks-cli.test.ts`, `tests/prompt-hook-context.test.ts`, `tests/hook-store-open-count.test.ts`, `tests/stdin-bounded.test.ts`. Result: 9 files, 222 pass, 0 fail.
+- Boundary rows carry no prompt facts: written red first in `tests/delivery-ledger-recorder.test.ts`. The two cases `R3 a pre-compact row keeps no prompt hash or length although the payload carries a prompt` and `R3 a compact-resume row keeps no prompt hash or length although the payload carries a prompt` failed before the fix; the control `R4 a prompt-submit row still carries the prompt hash and length` passed throughout.
 - Red first: tests B3 and B7 failed on the old code (B3 found 0 rows; B7 found 3 of 5). W1 and W6 failed for both boundary types before the duplicate rule existed.
 - Mutations, each caught: the duplicate rule limited to `pre-compact` (caught by the `compact-resume` W1 and W6 cases); the boundary callback moved ahead of the early returns in `runPreCompact` (8 tests failed); no try/catch around the callback (only U1 failed); no flush before `process.exit` in `cmdCompactResume` (4 tests failed).
 - Store-open count for `compact-resume`: `{local: 1}` with the delivery ledger on and with it off (`tests/hook-store-open-count.test.ts`).
 
-The full suite was not run here. CI runs the full suite on the pull request.
+The full suite was not run here. CI runs the full suite on the pull request. The hand-driven sequence and the medians below were taken at `3fe2473b` and were not run again.
 
 ## Hand-driven sequence
 

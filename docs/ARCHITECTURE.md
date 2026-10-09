@@ -183,6 +183,10 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `formatKeyRow`: v1.12.3: role column surfaced
 - `cmdAuthScopeGrant`: EI2: `hippo auth grant|ungrant <key_id> <scope>`, routed through api so the tenant, restricted-scope and audit checks live in one place.
 
+### src/cli/compact-resume-payload.ts
+- `readCompactResumePayload`: Without a payload session_id the X5 cross-restore guard below can never fire, so a timed-out empty read must not reach the print path.
+- `readCompactResumePayload`: A sub-agent's payload carries its parent's session id, so X5 would pass and restore the parent's snapshot into it.
+
 ### src/cli/curate.ts
 - `cmdForget`: A3: raw memories (Slack / GitHub connector ingestion) are append-only — a BEFORE-DELETE trigger aborts any delete. archiveRaw is the sanctioned removal path; it records ctx.actor as the archiver for provenance.
 - `cmdResolve`: AT1: --reject-loser tombstones the loser's normalized digest so it cannot be re-asserted later, in addition to removing it (kind-aware). --reason defaults to a conflict-context string when omitted (resolve already has the conflict id + keepId; unlike `hippo reject`, a reason is not strictly required here).
@@ -211,8 +215,6 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 
 ### src/cli/session-hooks.ts
 - `COMPACT_RESUME_EVENT_CONTENT_CAP`: X8: session-event content is capped at print time only — the shared printSessionEvents stays untouched for every other caller.
-- `readCompactResumePayload` (src/cli/compact-resume-payload.ts): Without a payload session_id the X5 cross-restore guard below can never fire, so a timed-out empty read must not reach the print path.
-- `readCompactResumePayload` (src/cli/compact-resume-payload.ts): A sub-agent's payload carries its parent's session id, so X5 would pass and restore the parent's snapshot into it.
 - `restoreCompactSnapshot`: X5: concurrent sessions must not cross-restore. Only suppress when BOTH ids are present and differ — either side missing, or a manual invocation with no payload session_id, still prints.
 - `restoreCompactSnapshot`: X12: re-injected state is background reference, not instructions: the framing line the model actually sees at every compaction.
 - `cmdSessionEnd`: Bounded read (DF1 T3, docs/plans/2026-08-23-df1-snapshot-lifecycle.md): extracts transcript_path + session_id for the detached worker's argv.
