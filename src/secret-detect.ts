@@ -34,9 +34,10 @@ const SECRET_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }> = [
   { name: 'aws-access-key', re: /\bAKIA[0-9A-Z]{16}\b/ },
   { name: 'github-token', re: /\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{36}\b/ },
   { name: 'github-fine-grained-pat', re: /\bgithub_pat_[A-Za-z0-9_]{22,}\b/ },
-  { name: 'slack-token', re: /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/ },
+  // A token may end in a hyphen, where `\b` holds only before a word character: a class that holds `-` runs to its end, and a fixed length may also close on a hyphen.
+  { name: 'slack-token', re: /\bxox[baprs]-[A-Za-z0-9-]{10,}/ },
   { name: 'stripe-key', re: /\b[sr]k_(?:live|test)_[A-Za-z0-9]{16,}\b/ },
-  { name: 'google-api-key', re: /\bAIza[0-9A-Za-z_-]{35}\b/ },
+  { name: 'google-api-key', re: /\bAIza[0-9A-Za-z_-]{35}(?:\b|(?<=-))/ },
   // hk_ is hippo's own API key (src/store/auth.ts); npm, Hugging Face, GitLab and Slack webhook shapes follow gitleaks' rules.
   { name: 'hippo-api-key', re: /\bhk_[a-z2-7]{24}\.[a-z2-7]{32}\b/ },
   { name: 'npm-token', re: /\bnpm_[A-Za-z0-9]{36}\b/ },
@@ -50,7 +51,7 @@ const SECRET_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }> = [
   // like "the sk- prefix identifies API keys" without an actual long token
   // does not flag, but a stored key ("prod API key sk_live_...")
   // does.
-  { name: 'sk-style-key', re: /\bsk-[A-Za-z0-9_-]{20,}\b/ },
+  { name: 'sk-style-key', re: /\bsk-[A-Za-z0-9_-]{20,}/ },
   { name: 'sk-underscore-key', re: /\bsk_[A-Za-z0-9]+_[A-Za-z0-9_]{6,}\b/ },
   // The value needs 12+ token-safe chars and a digit, or `token = estimateTokens(...)` and doc templates like user:password@ would hide code lessons from ambient context.
   // Secret names end in the keyword (dbPassword, PGPASSWORD) and token_url does not, so the match opens there and scans no prefix; pwd and pass need a _ as OLDPWD and bypass are not secrets.

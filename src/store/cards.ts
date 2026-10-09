@@ -175,22 +175,7 @@ export function createCard(
     withWriteScope(db, 'create_card', () => {
       // Probe runs inside the transaction (mirrors batchWriteAndDelete): a parent
       // completing between an outside-the-lock read and the INSERT would strand the child.
-      let allParentsDone = true;
-      if (dependsOn.length > 0) {
-        const placeholders = dependsOn.map(() => '?').join(', ');
-        // SAFETY: rows' shape matches the two columns named in the SELECT below.
-        const rows = db.prepare(
-          `SELECT id, status FROM cards WHERE tenant_id = ? AND id IN (${placeholders})`,
-        ).all(tenantId, ...dependsOn) as Array<{ id: string; status: string }>;
-        const found = new Map(rows.map((r) => [r.id, r.status]));
-        // Pre-check before any write: a typo'd --depends-on can never commit a card row.
-        for (const parentId of dependsOn) {
-          if (!found.has(parentId)) {
-            throw new Error(`unknown parent card id: ${parentId}`);
-          }
-        }
-        allParentsDone = dependsOn.every((pid) => found.get(pid) === 'done');
-      }
+      const allParentsDone = everyParentDone(db, tenantId, dependsOn);
 
       id = generateId('card');
       const now = new Date().toISOString();
@@ -210,6 +195,24 @@ export function createCard(
   } finally {
     closeHippoDb(db);
   }
+}
+
+/** Whether every dependsOn card is done, true for none; throws on an id that is no card of the tenant. Call inside the write scope. */
+function everyParentDone(db: DatabaseSyncLike, tenantId: string, dependsOn: readonly string[]): boolean {
+  if (dependsOn.length === 0) return true;
+  const placeholders = dependsOn.map(() => '?').join(', ');
+  // SAFETY: rows' shape matches the two columns named in the SELECT below.
+  const rows = db.prepare(
+    `SELECT id, status FROM cards WHERE tenant_id = ? AND id IN (${placeholders})`,
+  ).all(tenantId, ...dependsOn) as Array<{ id: string; status: string }>;
+  const found = new Map(rows.map((r) => [r.id, r.status]));
+  // Pre-check before any write: a typo'd --depends-on can never commit a card row.
+  for (const parentId of dependsOn) {
+    if (!found.has(parentId)) {
+      throw new Error(`unknown parent card id: ${parentId}`);
+    }
+  }
+  return dependsOn.every((pid) => found.get(pid) === 'done');
 }
 
 /** Returns the card row for id, or null if it does not exist under this tenant. */
@@ -434,7 +437,6 @@ export function completeCard(
   const db = openStore(hippoRoot);
   try {
     const promoted = withWriteScopeOr(db, 'complete_card', (rollback) => {
-      const promotedChildren: string[] = [];
       const target: CardStatus = outcome === 'success' ? 'done' : 'shelved';
       const allowed = runId === undefined || isLiveRun(db, tenantId, id, runId);
       const changes = allowed ? transitionCard(db, tenantId, id, { from: ['review'], to: target }) : 0;
@@ -449,32 +451,36 @@ export function completeCard(
 
       // Not best-effort (rule 12): promotion runs in this same transaction, so a
       // card can never be `done` with an un-evaluated child.
-      if (target === 'done') {
-        // SAFETY: rows' shape matches the single `child` column named in the SELECT below.
-        const children = (db.prepare(`SELECT child FROM card_deps WHERE tenant_id = ? AND parent = ?`).all(tenantId, id) as Array<{ child: string }>).map((r) => r.child);
-        for (const childId of children) {
-          // SAFETY: row's shape matches the single `status` column named in the SELECT below.
-          const child = db.prepare(`SELECT status FROM cards WHERE tenant_id = ? AND id = ?`).get(tenantId, childId) as { status: string } | undefined;
-          if (!child || child.status !== 'backlog') continue;
-          // SAFETY: rows' shape matches the single `parent` column named in the SELECT below.
-          const parents = (db.prepare(`SELECT parent FROM card_deps WHERE tenant_id = ? AND child = ?`).all(tenantId, childId) as Array<{ parent: string }>).map((r) => r.parent);
-          const placeholders = parents.map(() => '?').join(', ');
-          // SAFETY: row's shape matches the single `c` column named in the SELECT below.
-          const doneCount = (db.prepare(
-            `SELECT COUNT(*) as c FROM cards WHERE tenant_id = ? AND id IN (${placeholders}) AND status = 'done'`,
-          ).get(tenantId, ...parents) as { c: number }).c;
-          if (doneCount === parents.length) {
-            transitionCard(db, tenantId, childId, { from: ['backlog'], to: 'ready' });
-            promotedChildren.push(childId);
-          }
-        }
-      }
-      return promotedChildren;
+      return target === 'done' ? promoteUnblockedChildren(db, tenantId, id) : [];
     });
     return promoted === null ? null : { card: loadCardRow(db, tenantId, id)!, promotedChildren: promoted };
   } finally {
     closeHippoDb(db);
   }
+}
+
+/** Moves to ready each backlog child of `parentId` whose parents are all done, and returns their ids. Call inside the write scope. */
+function promoteUnblockedChildren(db: DatabaseSyncLike, tenantId: string, parentId: string): string[] {
+  const promotedChildren: string[] = [];
+  // SAFETY: rows' shape matches the single `child` column named in the SELECT below.
+  const children = (db.prepare(`SELECT child FROM card_deps WHERE tenant_id = ? AND parent = ?`).all(tenantId, parentId) as Array<{ child: string }>).map((r) => r.child);
+  for (const childId of children) {
+    // SAFETY: row's shape matches the single `status` column named in the SELECT below.
+    const child = db.prepare(`SELECT status FROM cards WHERE tenant_id = ? AND id = ?`).get(tenantId, childId) as { status: string } | undefined;
+    if (!child || child.status !== 'backlog') continue;
+    // SAFETY: rows' shape matches the single `parent` column named in the SELECT below.
+    const parents = (db.prepare(`SELECT parent FROM card_deps WHERE tenant_id = ? AND child = ?`).all(tenantId, childId) as Array<{ parent: string }>).map((r) => r.parent);
+    const placeholders = parents.map(() => '?').join(', ');
+    // SAFETY: row's shape matches the single `c` column named in the SELECT below.
+    const doneCount = (db.prepare(
+      `SELECT COUNT(*) as c FROM cards WHERE tenant_id = ? AND id IN (${placeholders}) AND status = 'done'`,
+    ).get(tenantId, ...parents) as { c: number }).c;
+    if (doneCount === parents.length) {
+      transitionCard(db, tenantId, childId, { from: ['backlog'], to: 'ready' });
+      promotedChildren.push(childId);
+    }
+  }
+  return promotedChildren;
 }
 
 /** Returns to ready every running card of the tenant whose lease has expired or is missing: clears its assignee, closes its live run as 'reclaimed' and leaves its handoffs alone, all in one write transaction. Returns the reclaimed card ids in id order. */

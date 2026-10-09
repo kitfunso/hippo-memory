@@ -346,11 +346,11 @@ export function setupDailySchedule(globalRoot: string): void {
 
 export type CliFlags = Record<string, string | boolean | string[]>;
 
-// Whole-arg digits only: parseInt alone reads "1abc" as 1 and a mutating verb would hit the wrong row.
+// Whole-arg digits only: parseInt alone reads "1abc" as 1 and a mutating verb would hit the wrong row. Digits past 2^53 round to a neighbouring id, so they are refused too.
 export function parsePositiveId(idRaw: unknown, label: string): number {
   const s = String(idRaw ?? '').trim();
   const id = parseInt(s, 10);
-  if (!/^\d+$/.test(s) || id <= 0) {
+  if (!/^\d+$/.test(s) || id <= 0 || !Number.isSafeInteger(id)) {
     printError(`Invalid ${label} id: "${idRaw}" (expected a positive integer).`);
     process.exit(1);
   }

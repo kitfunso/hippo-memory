@@ -14,7 +14,7 @@ import { batchWriteAndDeleteOn, type FlushComponent, memoriesBackingObjects, not
 import { openStore } from '../store/open.js';
 import { appendConsolidationRun, loadSessionDecayContext, incrementSleepCount } from '../store/index-and-stats.js';
 import { replaceDetectedConflicts } from '../store/conflicts.js';
-import { openHippoDb, closeHippoDb, SLEEP_DB_WAIT_MS, type DatabaseSyncLike } from '../db.js';
+import { openHippoDb, closeHippoDb, SLEEP_DB_WAIT_MS, withWriteScope, type DatabaseSyncLike } from '../db.js';
 import { deleteExpiredDormantRow, type DormantKey, expiredDormantKeys } from '../store/dormant.js';
 import { loadConfig } from '../config.js';
 import { appendAuditEvent, reportAuditWriteFailure } from '../store/audit.js';
@@ -176,18 +176,11 @@ async function expireInChunks(db: DatabaseSyncLike, keys: readonly DormantKey[],
   let committedAt = 0;
   while (next < keys.length) {
     if (next > 0) await budget.pause(committedAt);
-    db.exec('BEGIN IMMEDIATE');
-    const begunAt = budget.clock();
-    try {
+    withWriteScope(db, 'expire_dormant_chunk', () => {
+      const begunAt = budget.clock();
       do gone += deleteExpiredDormantRow(db, keys[next++], cutoff);
       while (next < keys.length && budget.clock() - begunAt < budget.holdMs);
-      db.exec('COMMIT');
-    } catch (err) {
-      if (db.isTransaction !== false) {
-        try { db.exec('ROLLBACK'); } catch { /* preserve the original throw */ }
-      }
-      throw err;
-    }
+    });
     committedAt = budget.clock();
   }
   return gone;

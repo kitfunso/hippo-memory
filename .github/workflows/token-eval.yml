@@ -24,6 +24,11 @@ on:
 permissions:
   contents: read
 
+# A new push to a PR cancels the run for the commit it replaced. On master a started run finishes and only the newest waiting run is kept.
+concurrency:
+  group: token-eval-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   token-eval:
     name: token-eval (${{ matrix.os }})

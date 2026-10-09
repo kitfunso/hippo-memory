@@ -6,6 +6,7 @@
  */
 
 import { BadRequestError, NotFoundError } from './api-errors.js';
+import { compareScoresDesc } from './compare.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { MemoryEntry, generateId, COMPACTION_MEMORY_TAG } from './memory.js';
@@ -180,7 +181,7 @@ export function searchBoth(
 
   // PLAIN stable score sort on purpose: both inputs are deterministically ordered,
   // and an exact tie keeps the LOCAL result ahead of the global one (concat order).
-  deduped.sort((a, b) => b.score - a.score);
+  deduped.sort((a, b) => compareScoresDesc(a.score, b.score));
 
   // Apply combined token budget (guarantee at least minResults items)
   const results: typeof deduped = [];
@@ -333,7 +334,7 @@ export async function rankBothStores(
 
   // PLAIN stable score sort on purpose -- see searchBoth above;
   // same rationale (deterministic inputs + stability; local-first on ties).
-  deduped.sort((a, b) => b.score - a.score);
+  deduped.sort((a, b) => compareScoresDesc(a.score, b.score));
 
   return fitBudget(deduped, budget, minResults ?? 1, cost);
 }
