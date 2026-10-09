@@ -10,6 +10,7 @@ import * as path from 'node:path';
 import { findHippoStoreDir } from './project-identity.js';
 import { getGlobalRoot } from './shared.js';
 import { isInitialized } from './store/open.js';
+import { tokenTallySince } from './store/token-ledger-rows.js';
 import { loadConfig } from './config.js';
 import { openHippoDbReadOnly, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, countTableRows, ftsRowCounts, IncompatibleBinaryError, type DatabaseSyncLike } from './db.js';
 import { REPLAY_AFTER_MS, TRANSCRIPT_FILL_WINDOW_MS } from './compaction-record.js';
@@ -276,13 +277,7 @@ function ftsCheck(db: DatabaseSyncLike): DoctorCheck {
 
 function tokensCheck(db: DatabaseSyncLike, since: string): DoctorCheck {
   try {
-    // SAFETY: COUNT/SUM aggregate row.
-    const row = db.prepare(
-      `SELECT COUNT(CASE WHEN event = 'inject' THEN 1 END) AS n,
-              COALESCE(SUM(CASE WHEN event = 'inject' THEN tokens END), 0) AS t,
-              COALESCE(SUM(CASE WHEN event = 'reread' THEN tokens END), 0) AS r
-       FROM token_ledger WHERE ts >= ?`,
-    ).get(since) as { n: number; t: number; r: number } | undefined;
+    const row = tokenTallySince(db, since);
     return {
       id: 'tokens',
       status: 'info',

@@ -1,6 +1,7 @@
 // hippo.db's rows for the typed objects: each kind's table, columns, row mapping and, for a kind the shared save writes, its insert values and audit keys.
 // A status column carries a CHECK constraint, so a row declares it as the kind's status union.
 import type { AuditOp } from '../audit.js';
+import type { DatabaseSyncLike } from '../../db.js';
 import { isJsonString } from '../../json.js';
 import { warnDamagedColumn } from '../../util/stored-json.js';
 import type { JsonObject } from '../working-memory.js';
@@ -352,4 +353,16 @@ export function rowSpec<K extends ObjectKind>(kind: K): RowSpec<K> {
 export function insertSpec<K extends SavableKind>(kind: K): InsertSpec<K> {
   const rows: InsertSpecs = OBJECT_ROWS;
   return rows[kind].insert;
+}
+
+export interface ObjectMemoryRow {
+  memory_id: string;
+  status: string;
+}
+
+/** The mirror memory and the status of every typed-object row that has a mirror, over every kind and tenant. */
+export function objectMemoryRowsAt(db: DatabaseSyncLike): ObjectMemoryRow[] {
+  const specs: RowSpecs = OBJECT_ROWS;
+  // SAFETY: SELECT of two TEXT columns, filtered to a non-null memory_id.
+  return Object.values(specs).flatMap((spec) => db.prepare(`SELECT memory_id, status FROM ${spec.table} WHERE memory_id IS NOT NULL`).all() as ObjectMemoryRow[]);
 }

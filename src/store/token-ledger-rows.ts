@@ -151,3 +151,20 @@ export function firstPilotArmHash(
      AND surface = 'pilot' AND event = 'arm' ORDER BY id LIMIT 1`,
   ).get(...params) as { block_hash: string | null } | undefined;
 }
+
+export interface TokenTally {
+  n: number;
+  t: number;
+  r: number;
+}
+
+/** Blocks injected, tokens injected and tokens re-read since an instant, over every tenant. */
+export function tokenTallySince(db: DatabaseSyncLike, sinceIso: string): TokenTally | undefined {
+  // SAFETY: COUNT/SUM aggregate row.
+  return db.prepare(
+    `SELECT COUNT(CASE WHEN event = 'inject' THEN 1 END) AS n,
+            COALESCE(SUM(CASE WHEN event = 'inject' THEN tokens END), 0) AS t,
+            COALESCE(SUM(CASE WHEN event = 'reread' THEN tokens END), 0) AS r
+     FROM token_ledger WHERE ts >= ?`,
+  ).get(sinceIso) as TokenTally | undefined;
+}

@@ -6,7 +6,7 @@
   "sqliteOnlyRoutes": 2,
   "routesOnLoop": 64,
   "twinFunctions": 0,
-  "sqlOutside": 12,
+  "sqlOutside": 10,
   "txLiterals": 28,
   "openersOutsideByFile": {
     "src/agent-memories/sync.ts": 3,
@@ -43,8 +43,7 @@
   "sqlOutsideByFile": {
     "src/api/dormant.ts": 1,
     "src/cli/audit-prune.ts": 2,
-    "src/doctor.ts": 4,
-    "src/half-life-migration.ts": 1,
+    "src/doctor.ts": 3,
     "src/invalidation.ts": 1,
     "src/quarantine.ts": 1,
     "src/reject-flow.ts": 2
