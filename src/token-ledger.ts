@@ -29,6 +29,10 @@ import type { DatabaseSyncLike } from './db.js';
 import type { JsonObject } from './store/working-memory.js';
 import { type JsonValue, isJsonString, isJsonObjectLiteral } from './json.js';
 import { DAY_MS } from './util/time.js';
+import {
+  countSkipsAfter, deleteRereadRows, injectedBlocks, insertTokenRow, latestInjectOrReset,
+  pruneTokenRowsBefore, sessionTokenRows, sessionTotals, surfaceTotals,
+} from './store/token-ledger-rows.js';
 
 /**
  * Where a block of memory text was sent.
@@ -110,21 +114,18 @@ export interface TokenUse {
  */
 export function recordTokenUse(db: DatabaseSyncLike, use: TokenUse): void {
   const now = use.now ?? new Date().toISOString();
-  db.prepare(
-    `INSERT INTO token_ledger (ts, tenant_id, session_id, surface, event, items, tokens, block_hash)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(
-    now,
-    use.tenantId,
-    use.sessionId ?? null,
-    use.surface,
-    use.event,
-    Math.max(0, Math.round(use.items)),
-    Math.max(0, Math.round(use.tokens)),
-    use.hash ?? null,
-  );
+  insertTokenRow(db, {
+    ts: now,
+    tenantId: use.tenantId,
+    sessionId: use.sessionId ?? null,
+    surface: use.surface,
+    event: use.event,
+    items: Math.max(0, Math.round(use.items)),
+    tokens: Math.max(0, Math.round(use.tokens)),
+    blockHash: use.hash ?? null,
+  });
   const cutoff = new Date(Date.parse(now) - TOKEN_LEDGER_RETENTION_DAYS * DAY_MS).toISOString();
-  db.prepare(`DELETE FROM token_ledger WHERE ts < ?`).run(cutoff);
+  pruneTokenRowsBefore(db, cutoff);
 }
 
 /** What a session last sent on a surface, for {@link lastSentState}. */
@@ -147,18 +148,9 @@ export function lastSentState(
   surface: TokenSurface,
 ): LastSent | null {
   if (!sessionId) return null;
-  // SAFETY: the SELECT names exactly these three columns.
-  const anchor = db.prepare(
-    `SELECT id, event, block_hash FROM token_ledger
-     WHERE tenant_id = ? AND session_id = ? AND surface = ? AND event IN ('inject', 'reset')
-     ORDER BY id DESC LIMIT 1`,
-  ).get(tenantId, sessionId, surface) as { id: number; event: string; block_hash: string | null } | undefined;
+  const anchor = latestInjectOrReset(db, tenantId, sessionId, surface);
   if (!anchor || anchor.event === 'reset' || !anchor.block_hash) return null;
-  // SAFETY: the SELECT names exactly this one aggregate column.
-  const skips = db.prepare(
-    `SELECT COUNT(*) AS n FROM token_ledger
-     WHERE tenant_id = ? AND session_id = ? AND surface = ? AND event = 'skip' AND id > ?`,
-  ).get(tenantId, sessionId, surface, anchor.id) as { n: number } | undefined;
+  const skips = countSkipsAfter(db, tenantId, sessionId, surface, anchor.id);
   return { hash: anchor.block_hash, skipsSince: Number(skips?.n ?? 0) };
 }
 
@@ -214,21 +206,7 @@ export interface TokenSummary {
  * omitted.
  */
 export function summarizeTokenUse(db: DatabaseSyncLike, tenantId: string, sinceIso: string): TokenSummary {
-  // SAFETY: the SELECT names exactly these columns, all aggregates or TEXT.
-  const rows = db.prepare(
-    `SELECT surface,
-            SUM(CASE WHEN event = 'inject' THEN 1 ELSE 0 END) AS injected,
-            SUM(CASE WHEN event = 'inject' THEN tokens ELSE 0 END) AS tokens,
-            SUM(CASE WHEN event = 'skip' THEN 1 ELSE 0 END) AS skipped,
-            SUM(CASE WHEN event = 'skip' THEN tokens ELSE 0 END) AS avoided,
-            SUM(CASE WHEN event = 'reread' THEN tokens ELSE 0 END) AS reread,
-            COUNT(DISTINCT session_id) AS sessions
-     FROM token_ledger
-     WHERE tenant_id = ? AND ts >= ?
-     GROUP BY surface`,
-  ).all(tenantId, sinceIso) as Array<{
-    surface: string; injected: number; tokens: number; skipped: number; avoided: number; reread: number; sessions: number;
-  }>;
+  const rows = surfaceTotals(db, tenantId, sinceIso);
   const bySurface = new Map(rows.map((r) => [r.surface, r]));
   const surfaces: TokenSurfaceSummary[] = [];
   for (const surface of TOKEN_SURFACES) {
@@ -244,17 +222,7 @@ export function summarizeTokenUse(db: DatabaseSyncLike, tenantId: string, sinceI
       sessions: Number(r.sessions),
     });
   }
-  // SAFETY: the SELECT names exactly these four aggregate columns.
-  const perSession = db.prepare(
-    `SELECT COUNT(DISTINCT session_id) AS sessions,
-            COUNT(DISTINCT CASE WHEN event <> 'reset' AND surface IN (${REREAD_SURFACES.map(() => '?').join(', ')}) THEN session_id END) AS hook_sessions,
-            COUNT(DISTINCT CASE WHEN event = 'reread' THEN session_id END) AS reread_sessions,
-            SUM(CASE WHEN event = 'inject' THEN tokens ELSE 0 END) AS tokens
-     FROM token_ledger
-     WHERE tenant_id = ? AND ts >= ? AND session_id IS NOT NULL AND event <> 'arm'`,
-  ).get(...REREAD_SURFACES, tenantId, sinceIso) as {
-    sessions: number; hook_sessions: number; reread_sessions: number; tokens: number | null;
-  } | undefined;
+  const perSession = sessionTotals(db, tenantId, sinceIso, REREAD_SURFACES);
   const sessionCount = Number(perSession?.sessions ?? 0);
   const sessionTokens = Number(perSession?.tokens ?? 0);
   return {
@@ -332,17 +300,7 @@ export interface SessionTokens {
  * transcript file name, so these join to the host's own usage records.
  */
 export function tokensBySession(db: DatabaseSyncLike, tenantId: string, sinceIso: string): SessionTokens[] {
-  // SAFETY: the SELECT names exactly these columns, all aggregates or TEXT.
-  const rows = db.prepare(
-    `SELECT session_id,
-            SUM(CASE WHEN event = 'inject' THEN tokens ELSE 0 END) AS sent,
-            SUM(CASE WHEN event = 'skip' THEN tokens ELSE 0 END) AS skipped,
-            SUM(CASE WHEN event = 'inject' THEN 1 ELSE 0 END) AS injections
-     FROM token_ledger
-     WHERE tenant_id = ? AND ts >= ? AND session_id IS NOT NULL AND event <> 'arm'
-     GROUP BY session_id`,
-  ).all(tenantId, sinceIso) as Array<{ session_id: string; sent: number; skipped: number; injections: number }>;
-  return rows.map((r) => ({
+  return sessionTokenRows(db, tenantId, sinceIso).map((r) => ({
     sessionId: r.session_id,
     sent: Number(r.sent),
     skipped: Number(r.skipped),
@@ -426,11 +384,7 @@ export function recordRereads(db: DatabaseSyncLike, tenantId: string, sessionId:
   db.exec('BEGIN IMMEDIATE');
   let committed = false;
   try {
-    // SAFETY: the SELECT names exactly these three columns.
-    const rows = db.prepare(
-      `SELECT ts, surface, tokens FROM token_ledger
-       WHERE tenant_id = ? AND session_id = ? AND event = 'inject' AND surface IN (${REREAD_SURFACES.map(() => '?').join(', ')})`,
-    ).all(tenantId, sessionId, ...REREAD_SURFACES) as Array<{ ts: string; surface: TokenSurface; tokens: number }>;
+    const rows = injectedBlocks(db, tenantId, sessionId, REREAD_SURFACES);
     const days = new Map<string, RereadDay>();
     const add = (surface: TokenSurface, at: number, rereads: number, tokens: number): void => {
       const key = `${surface} ${new Date(at).toISOString().slice(0, 10)}`;
@@ -444,7 +398,7 @@ export function recordRereads(db: DatabaseSyncLike, tenantId: string, sessionId:
       // The first carrying call is the send itself; every later one is a re-read.
       for (const call of carryingCalls(calls, sentAt).slice(1)) add(row.surface, call.at, 1, Number(row.tokens));
     }
-    db.prepare(`DELETE FROM token_ledger WHERE tenant_id = ? AND session_id = ? AND event = 'reread'`).run(tenantId, sessionId);
+    deleteRereadRows(db, tenantId, sessionId);
     for (const day of days.values()) {
       recordTokenUse(db, {
         tenantId, sessionId, surface: day.surface, event: 'reread', items: day.rereads, tokens: day.tokens, now: new Date(day.at).toISOString(),

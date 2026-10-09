@@ -6,7 +6,7 @@
   "sqliteOnlyRoutes": 2,
   "routesOnLoop": 64,
   "twinFunctions": 0,
-  "sqlOutside": 54,
+  "sqlOutside": 44,
   "txLiterals": 28,
   "openersOutsideByFile": {
     "src/agent-memories/sync.ts": 3,
@@ -57,14 +57,12 @@
     "src/incidents.ts": 6,
     "src/invalidation.ts": 1,
     "src/objects/lifecycle.ts": 7,
-    "src/pilot-arm.ts": 1,
     "src/policies.ts": 1,
     "src/project-briefs.ts": 2,
     "src/project-merge.ts": 4,
     "src/quarantine.ts": 1,
     "src/reject-flow.ts": 2,
-    "src/skills.ts": 1,
-    "src/token-ledger.ts": 9
+    "src/skills.ts": 1
   },
   "sqliteLocalMethods": [
     "applyOutcome",
