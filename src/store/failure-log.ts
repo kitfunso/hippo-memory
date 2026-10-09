@@ -122,6 +122,13 @@ export interface FailureSummary {
   sessions: number;
 }
 
+/** Failed tool calls logged since `sinceIso`, in every tenant; throws when the table is missing. */
+export function countFailuresSince(db: DatabaseSyncLike, sinceIso: string): number {
+  // SAFETY: COUNT aggregate row.
+  const row = db.prepare(`SELECT COUNT(*) AS n FROM failure_log WHERE ts >= ?`).get(sinceIso) as { n: number } | undefined;
+  return Number(row?.n ?? 0);
+}
+
 /** Sum the failure log for one tenant since `sinceIso`. */
 export function summarizeFailures(db: DatabaseSyncLike, tenantId: string, sinceIso: string): FailureSummary {
   // SAFETY: the SELECT names exactly these two columns, TEXT and an aggregate.

@@ -308,6 +308,36 @@ export function listAuditEventsAfter(db: DatabaseSyncLike, opts: ListAuditAfterO
   return rows.map(rowToAuditEvent);
 }
 
+/** How many of a tenant's audit rows are older than `cutoff`. */
+export function countAuditBefore(db: DatabaseSyncLike, tenantId: string, cutoff: string): number {
+  // SAFETY: row comes from `SELECT COUNT(*) AS c`; COUNT(*) always yields exactly one row with a
+  // numeric `c` column (number or bigint depending on the node:sqlite driver's integer handling).
+  const row = db
+    .prepare(`SELECT COUNT(*) AS c FROM audit_log WHERE tenant_id = ? AND ts < ?`)
+    .get(tenantId, cutoff) as { c: number | bigint };
+  return Number(row.c);
+}
+
+/** Deletes a tenant's audit rows older than `cutoff`; returns how many went. */
+export function deleteAuditBefore(db: DatabaseSyncLike, tenantId: string, cutoff: string): number {
+  const result = db
+    .prepare(`DELETE FROM audit_log WHERE tenant_id = ? AND ts < ?`)
+    .run(tenantId, cutoff);
+  return Number(result.changes ?? 0);
+}
+
+/** Latest time each target got a good outcome, from the audit rows; unlike queryAuditEvents it has no row cap. */
+export function confirmedOutcomeTimes(db: DatabaseSyncLike, tenantId: string): Map<string, string> {
+  // SAFETY: the SELECT list is exactly target_id and ts; no other shape reaches this cast.
+  const rows = db.prepare(
+    `SELECT target_id, MAX(ts) AS ts FROM audit_log
+       WHERE tenant_id = ? AND op = 'outcome' AND target_id IS NOT NULL
+         AND json_extract(metadata_json, '$.good') = 1
+       GROUP BY target_id`,
+  ).all(tenantId) as { target_id: string; ts: string }[];
+  return new Map(rows.map((r) => [r.target_id, r.ts]));
+}
+
 const AUDIT_COLUMNS = 'id, ts, tenant_id, actor, op, target_id, metadata_json';
 
 interface AuditRow {
