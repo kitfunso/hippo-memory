@@ -7,7 +7,6 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { closeHippoDb, openHippoDb, rethrowIfSqliteBlocked, SqliteBlockedError, STORE_BUSY_MESSAGE } from '../src/db.js';
 import { StoreNotPortedError } from '../src/util/sqlite-blocked.js';
-import { VERIFIED_KEY_TTL_MS } from '../src/auth.js';
 import { mapApiError, STORE_NOT_PORTED_MESSAGE } from '../src/http-util.js';
 import { mcpErrorResponse, type McpRequest } from '../src/mcp/server.js';
 import { initStore } from '../src/store/open.js';
@@ -115,10 +114,6 @@ describe('serve() under a store that is not hippo.db', () => {
         { path: '/v1/x-addon-keyaudit', storeReady: 'keyAudit', handler: async () => { addonRuns += 1; return {}; } },
       ],
     });
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
   });
 
   afterAll(async () => {
@@ -239,20 +234,14 @@ describe('serve() under a store that is not hippo.db', () => {
     }
   });
 
-  it('caches a verified key until the TTL runs out, then asks the store again', async () => {
+  it("asks the store for a key's row on every request, so a revoke written to that store is a 401 on the next one", async () => {
     const key = newKey();
     records.set(key.keyId, key.record);
-    vi.useFakeTimers({ toFake: ['Date'] });
-    vi.setSystemTime(new Date('2026-10-05T12:00:00Z'));
     const statusOf = async (): Promise<number> => (await fetch(`${handle.url}/v1/audit`, { headers: bearer(key) })).status;
     expect([await statusOf(), await statusOf()]).toEqual([501, 501]);
-    expect(lookups.get(key.keyId)).toBe(1);
-    vi.setSystemTime(Date.now() + VERIFIED_KEY_TTL_MS - 1);
-    expect(await statusOf()).toBe(501);
-    expect(lookups.get(key.keyId)).toBe(1);
-    vi.setSystemTime(Date.now() + 1);
-    expect(await statusOf()).toBe(501);
     expect(lookups.get(key.keyId)).toBe(2);
+    records.set(key.keyId, { ...key.record, revokedAt: new Date().toISOString() });
+    expect(await statusOf()).toBe(401);
   });
 
   it('leaves nothing under the served root but the pidfile: no hippo.db, no .hippo folder', () => {

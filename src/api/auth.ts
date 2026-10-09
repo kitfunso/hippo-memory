@@ -2,7 +2,7 @@
 
 import { ForbiddenError, NotFoundError } from '../api-errors.js';
 import {
-  forgetVerifiedKey, mintApiKey,
+  mintApiKey,
   type ApiKeyListItem, type ApiKeyListRow, type ApiKeyRecord, type ListApiKeysOpts, type NewApiKey,
 } from '../auth.js';
 import type { KeysetPosition } from '../keyset.js';
@@ -131,11 +131,7 @@ export function authCreateSelf<C extends Context>(ctx: C, opts: AuthCreateSelfOp
   return onStore(ctx, (port) => {
     const keyWrites = port.keyWrites ?? notPorted(port, 'keyWrites');
     const { plaintext, mint } = selfKeyMint(ctx, opts);
-    return andThen(keyWrites.createSelfApiKey(mint), (replaced) => {
-      // A store revokes the replaced keys without this process's verified-key cache, so they leave it once the mint commits.
-      for (const keyId of replaced) forgetVerifiedKey(keyId);
-      return selfResult(mint, plaintext);
-    });
+    return andThen(keyWrites.createSelfApiKey(mint), () => selfResult(mint, plaintext));
   });
 }
 
@@ -233,11 +229,7 @@ export function authRevoke<C extends Context>(ctx: C, keyId: string): AuthRevoke
     return andThen(port.findApiKey(keyId), (record) => {
       assertMayRevoke(ctx, keyId, keyOwnerOf(record));
       const revoke = { tenantId: ctx.tenantId, keyId, actor: ctx.actor.subject, at: new Date().toISOString() };
-      return andThen(keyAudit.revokeApiKey(revoke), (revokedAt): AuthRevokeResult => {
-        // A store keeps no handle on this process's verified-key cache, so the key leaves it once the revoke commits.
-        forgetVerifiedKey(keyId);
-        return { ok: true, revokedAt };
-      });
+      return andThen(keyAudit.revokeApiKey(revoke), (revokedAt): AuthRevokeResult => ({ ok: true, revokedAt }));
     });
   });
 }

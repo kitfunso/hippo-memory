@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 
 import { openHippoDb, closeHippoDb } from '../src/db.js';
@@ -7,8 +7,6 @@ import {
   createApiKey,
   verifyApiKeyCached,
   VerifiedKeyCache,
-  VERIFIED_KEY_TTL_MS,
-  type CheckedApiKey,
   type VerifiedApiKey,
 } from '../src/auth.js';
 import { authRevoke, authGrant, type Context } from '../src/api.js';
@@ -24,19 +22,23 @@ async function counted<T>(fn: () => Promise<T>) {
   return { value, scrypt: after.scryptRuns - before.scryptRuns, dbOpen: after.storeLookups - before.storeLookups };
 }
 
+/** Runs `work` on the store's file directly, as the CLI in another process would: nothing in this process hears of it. */
+function onDb<T>(root: string, work: (db: ReturnType<typeof openHippoDb>) => T): T {
+  const db = openHippoDb(root);
+  try {
+    return work(db);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
 describe('verified API key cache', () => {
   let home: string;
   const verify = (plaintext: string, root: string = home): Promise<VerifiedApiKey | null> =>
-    verifyApiKeyCached(root, plaintext, sqliteStore(root));
+    verifyApiKeyCached(plaintext, sqliteStore(root));
 
-  function mint(role: 'admin' | 'member' = 'member'): { keyId: string; plaintext: string } {
-    const db = openHippoDb(home);
-    try {
-      return createApiKey(db, { tenantId: 'default', label: 'cache-test', role });
-    } finally {
-      closeHippoDb(db);
-    }
-  }
+  const mint = (role: 'admin' | 'member' = 'member'): { keyId: string; plaintext: string } =>
+    onDb(home, (db) => createApiKey(db, { tenantId: 'default', label: 'cache-test', role }));
 
   const adminCtx = (): Context => ({ hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } });
 
@@ -45,11 +47,10 @@ describe('verified API key cache', () => {
   });
 
   afterEach(() => {
-    vi.useRealTimers();
     rmSync(home, { recursive: true, force: true });
   });
 
-  it('verifies a valid key once, then answers from the cache without scrypt or a DB open', async () => {
+  it('runs scrypt for a valid key once, then reads only the key row on a repeat', async () => {
     const key = mint();
     const first = await counted(() => verify(key.plaintext));
     expect(first.value).toEqual({ tenantId: 'default', keyId: key.keyId, role: 'member', scopes: [] });
@@ -59,7 +60,7 @@ describe('verified API key cache', () => {
     const second = await counted(() => verify(key.plaintext));
     expect(second.value).toEqual(first.value);
     expect(second.scrypt).toBe(0);
-    expect(second.dbOpen).toBe(0);
+    expect(second.dbOpen).toBe(1);
   });
 
   it('a hit never shares its scopes array with the caller', async () => {
@@ -85,68 +86,67 @@ describe('verified API key cache', () => {
     expect((await verify(key.plaintext))!.scopes).toEqual(['slack:private:C123']);
   });
 
-  it('re-reads the store once the TTL has passed, without scrypt for the secret it already proved', async () => {
-    vi.useFakeTimers({ toFake: ['Date'] });
-    vi.setSystemTime(new Date('2026-10-04T12:00:00Z'));
-    const key = mint();
-    expect((await counted(() => verify(key.plaintext))).scrypt).toBe(1);
-    vi.setSystemTime(Date.now() + VERIFIED_KEY_TTL_MS - 1);
-    expect(await counted(() => verify(key.plaintext))).toMatchObject({ scrypt: 0, dbOpen: 0 });
-    vi.setSystemTime(Date.now() + 2);
-    const lapsed = await counted(() => verify(key.plaintext));
-    expect(lapsed.value).toEqual({ tenantId: 'default', keyId: key.keyId, role: 'member', scopes: [] });
-    expect(lapsed).toMatchObject({ scrypt: 0, dbOpen: 1 });
-    expect(await counted(() => verify(key.plaintext))).toMatchObject({ scrypt: 0, dbOpen: 0 });
-  });
-
-  it('a lapsed entry never vouches for another secret, and a change made by another process lands on the re-read', async () => {
-    vi.useFakeTimers({ toFake: ['Date'] });
-    vi.setSystemTime(new Date('2026-10-04T12:00:00Z'));
+  it('a grant, a role change and a revoke written by another process land on the next verify, with no scrypt', async () => {
     const key = mint();
     const other = mint();
     await verify(key.plaintext);
     await verify(other.plaintext);
-    // Straight SQL, as the CLI in another process would write it: the cache hears nothing.
-    const db = openHippoDb(home);
-    try {
+    onDb(home, (db) => {
       db.prepare(`INSERT INTO api_key_scope_grants (key_id, scope, granted_at) VALUES (?, ?, ?)`).run(key.keyId, 'slack:private:C9', new Date().toISOString());
+      db.prepare(`UPDATE api_keys SET role = 'admin' WHERE key_id = ?`).run(key.keyId);
       db.prepare(`UPDATE api_keys SET revoked_at = ? WHERE key_id = ?`).run(new Date().toISOString(), other.keyId);
-    } finally {
-      closeHippoDb(db);
-    }
-    expect((await verify(key.plaintext))!.scopes).toEqual([]);
-    expect(await verify(other.plaintext)).not.toBeNull();
-    vi.setSystemTime(Date.now() + VERIFIED_KEY_TTL_MS);
-    expect(await counted(() => verify(`${key.keyId}.${'a'.repeat(32)}`))).toMatchObject({ value: null, scrypt: 1 });
-    expect(await counted(() => verify(key.plaintext))).toMatchObject({ value: { scopes: ['slack:private:C9'] }, scrypt: 0 });
+    });
+    expect(await counted(() => verify(key.plaintext))).toMatchObject({ value: { role: 'admin', scopes: ['slack:private:C9'] }, scrypt: 0 });
     expect(await counted(() => verify(other.plaintext))).toMatchObject({ value: null, scrypt: 0 });
   });
 
-  it('calls the scrypt gate only when scrypt is about to run', async () => {
-    vi.useFakeTimers({ toFake: ['Date'] });
-    vi.setSystemTime(new Date('2026-10-04T12:00:00Z'));
+  it('a proved token is checked again once its key row holds another hash', async () => {
+    const key = mint();
+    const other = mint();
+    expect(await verify(key.plaintext)).not.toBeNull();
+    onDb(home, (db) => {
+      db.prepare(`UPDATE api_keys SET key_hash = (SELECT key_hash FROM api_keys WHERE key_id = ?) WHERE key_id = ?`).run(other.keyId, key.keyId);
+    });
+    expect(await counted(() => verify(key.plaintext))).toMatchObject({ value: null, scrypt: 1 });
+  });
+
+  it('three checks of one unproved key at once share one derivation and one call to the bound', async () => {
+    const key = mint();
+    const bounded: string[] = [];
+    const check = (): Promise<VerifiedApiKey | null> =>
+      verifyApiKeyCached(key.plaintext, sqliteStore(home), (keyId, derive) => {
+        bounded.push(keyId);
+        return derive();
+      });
+    const burst = await counted(() => Promise.all([check(), check(), check()]));
+    expect(burst.value.map((found) => found?.keyId)).toEqual([key.keyId, key.keyId, key.keyId]);
+    expect({ scrypt: burst.scrypt, bounded }).toEqual({ scrypt: 1, bounded: [key.keyId] });
+  });
+
+  it('calls the bound, with the key id, only when scrypt is about to run', async () => {
     const key = mint();
     const revoked = mint();
     authRevoke(adminCtx(), revoked.keyId);
-    let gated = 0;
-    const gate = (token: string): Promise<VerifiedApiKey | null> => verifyApiKeyCached(home, token, sqliteStore(home), () => { gated++; });
-    const gatedBy = async (token: string): Promise<number> => {
-      const before = gated;
-      await gate(token);
-      return gated - before;
+    const bounded: string[] = [];
+    const boundedBy = async (token: string): Promise<string[]> => {
+      const before = bounded.length;
+      await verifyApiKeyCached(token, sqliteStore(home), (keyId, derive) => {
+        bounded.push(keyId);
+        return derive();
+      });
+      return bounded.slice(before);
     };
-    expect(await gatedBy(key.plaintext)).toBe(1);
-    expect(await gatedBy(key.plaintext)).toBe(0);
-    vi.setSystemTime(Date.now() + VERIFIED_KEY_TTL_MS);
-    expect(await gatedBy(key.plaintext)).toBe(0);
-    expect(await gatedBy(`${key.keyId}.${'a'.repeat(32)}`)).toBe(1);
-    for (const token of ['hk_junk', revoked.plaintext, `hk_${'a'.repeat(24)}.${'b'.repeat(32)}`]) expect(await gatedBy(token), token).toBe(0);
+    expect(await boundedBy(key.plaintext)).toEqual([key.keyId]);
+    expect(await boundedBy(key.plaintext)).toEqual([]);
+    expect(await boundedBy(`${key.keyId}.${'a'.repeat(32)}`)).toEqual([key.keyId]);
+    for (const token of ['hk_junk', revoked.plaintext, `hk_${'a'.repeat(24)}.${'b'.repeat(32)}`]) expect(await boundedBy(token), token).toEqual([]);
   });
 
-  it('a throw from the scrypt gate refuses before scrypt runs', async () => {
+  it('a throw from the bound refuses before scrypt runs, and the next check derives as if it never happened', async () => {
     const key = mint();
     const before = apiKeyVerifyStats().scryptRuns;
-    await expect(verifyApiKeyCached(home, key.plaintext, sqliteStore(home), () => { throw new Error('gate shut'); })).rejects.toThrow('gate shut');
+    await expect(verifyApiKeyCached(key.plaintext, sqliteStore(home), () => { throw new Error('gate shut'); })).rejects.toThrow('gate shut');
+    await expect(verifyApiKeyCached(key.plaintext, sqliteStore(home), async () => { throw new Error('queue full'); })).rejects.toThrow('queue full');
     expect(apiKeyVerifyStats().scryptRuns).toBe(before);
     expect(await counted(() => verify(key.plaintext))).toMatchObject({ scrypt: 1 });
   });
@@ -191,7 +191,7 @@ describe('verified API key cache', () => {
     }
   });
 
-  it('a lookup that straddles a revoke is not cached, so the next verify reads the store again', async () => {
+  it('a check whose row was read before a revoke passes that once, and the next verify reads the revoke', async () => {
     const key = mint();
     const inner = sqliteStore(home);
     const racing = { ...inner, findApiKey: async (keyId: string) => {
@@ -199,43 +199,28 @@ describe('verified API key cache', () => {
       authRevoke(adminCtx(), keyId);
       return record;
     } };
-    expect(await verifyApiKeyCached(home, key.plaintext, racing)).not.toBeNull();
+    expect(await verifyApiKeyCached(key.plaintext, racing)).not.toBeNull();
     expect(await verify(key.plaintext)).toBeNull();
   });
 });
 
 describe('VerifiedKeyCache', () => {
-  const key = (id: string): CheckedApiKey => ({ key: { tenantId: 'default', keyId: id, role: 'member', scopes: [] }, expiresAtMs: Infinity, keyHash: `hash-${id}` });
-
-  it('holds at most its capacity, evicting the least recently used key', () => {
-    const cache = new VerifiedKeyCache(2, 60_000);
-    cache.set('/root', 'hk_a', 'hk_a.s', key('hk_a'), 0);
-    cache.set('/root', 'hk_b', 'hk_b.s', key('hk_b'), 0);
-    // Touching hk_a makes hk_b the least recent, so hk_c evicts hk_b.
-    expect(cache.get('/root', 'hk_a', 'hk_a.s', 1)).not.toBeUndefined();
-    cache.set('/root', 'hk_c', 'hk_c.s', key('hk_c'), 1);
+  it('holds at most its capacity, evicting the least recently used hash', () => {
+    const cache = new VerifiedKeyCache(2);
+    cache.add('hash-a', 'hk_a.s');
+    cache.add('hash-b', 'hk_b.s');
+    // Touching hash-a makes hash-b the least recent, so hash-c evicts hash-b.
+    expect(cache.has('hash-a', 'hk_a.s')).toBe(true);
+    cache.add('hash-c', 'hk_c.s');
     expect(cache.size).toBe(2);
-    expect(cache.get('/root', 'hk_b', 'hk_b.s', 1)).toBeUndefined();
-    expect(cache.get('/root', 'hk_a', 'hk_a.s', 1)).not.toBeUndefined();
-    expect(cache.get('/root', 'hk_c', 'hk_c.s', 1)).not.toBeUndefined();
+    expect([cache.has('hash-b', 'hk_b.s'), cache.has('hash-a', 'hk_a.s'), cache.has('hash-c', 'hk_c.s')]).toEqual([false, true, true]);
   });
 
-  it('a wrong secret misses without evicting the verified entry', () => {
-    const cache = new VerifiedKeyCache(2, 60_000);
-    cache.set('/root', 'hk_a', 'hk_a.s', key('hk_a'), 0);
-    expect(cache.get('/root', 'hk_a', 'hk_a.wrong', 1)).toBeUndefined();
-    expect(cache.get('/root', 'hk_a', 'hk_a.s', 1)).not.toBeUndefined();
-  });
-
-  it('past its TTL an entry misses but still names the hash its exact secret proved, on its own store only', () => {
-    const cache = new VerifiedKeyCache(2, 60_000);
-    cache.set('/root', 'hk_a', 'hk_a.s', key('hk_a'), 0);
-    expect(cache.get('/root', 'hk_a', 'hk_a.s', 60_000)).toBeUndefined();
-    expect(cache.verifiedHash('/root', 'hk_a', 'hk_a.s')).toBe('hash-hk_a');
-    expect(cache.verifiedHash('/root', 'hk_a', 'hk_a.wrong')).toBeUndefined();
-    expect(cache.verifiedHash('/other', 'hk_a', 'hk_a.s')).toBeUndefined();
-    cache.delete('hk_a');
-    expect(cache.verifiedHash('/root', 'hk_a', 'hk_a.s')).toBeUndefined();
+  it('a wrong secret misses without evicting the proved one', () => {
+    const cache = new VerifiedKeyCache(2);
+    cache.add('hash-a', 'hk_a.s');
+    expect(cache.has('hash-a', 'hk_a.wrong')).toBe(false);
+    expect(cache.has('hash-a', 'hk_a.s')).toBe(true);
   });
 });
 
@@ -261,27 +246,52 @@ describe('bearer requests through the server', () => {
     rmSync(globalHome, { recursive: true, force: true });
   });
 
-  it('a repeat request skips scrypt, and a revoke through the API is a 401 on the very next request', async () => {
-    const db = openHippoDb(home);
-    let key: { keyId: string; plaintext: string };
-    try {
-      key = createApiKey(db, { tenantId: 'default', label: 'server-cache', role: 'member' });
-    } finally {
-      closeHippoDb(db);
-    }
-    const get = (): Promise<Response> =>
-      fetch(`${handle.url}/v1/memories?q=x`, { headers: { authorization: `Bearer ${key.plaintext}` } });
+  const mint = (role: 'admin' | 'member'): { keyId: string; plaintext: string } =>
+    onDb(home, (db) => createApiKey(db, { tenantId: 'default', label: 'server-cache', role }));
 
-    expect((await get()).status).toBe(200);
-    const before = apiKeyVerifyStats();
-    expect((await get()).status).toBe(200);
-    expect(apiKeyVerifyStats()).toEqual(before);
+  async function get(path: string, key: { plaintext: string }): Promise<{ status: number; body: unknown }> {
+    const res = await fetch(`${handle.url}${path}`, { headers: { authorization: `Bearer ${key.plaintext}` } });
+    return { status: res.status, body: await res.json() };
+  }
+
+  it('a repeat request skips scrypt, and a revoke through the API is a 401 on the very next request', async () => {
+    const key = mint('member');
+    expect((await get('/v1/memories?q=x', key)).status).toBe(200);
+    const before = apiKeyVerifyStats().scryptRuns;
+    expect((await get('/v1/memories?q=x', key)).status).toBe(200);
+    expect(apiKeyVerifyStats().scryptRuns).toBe(before);
 
     const revoked = await fetch(`${handle.url}/v1/auth/keys/${key.keyId}`, {
       method: 'DELETE',
       headers: { authorization: `Bearer ${key.plaintext}` },
     });
     expect(revoked.status).toBe(200);
-    expect((await get()).status).toBe(401);
+    expect((await get('/v1/memories?q=x', key)).status).toBe(401);
+  });
+
+  it('a revoke written by another process is a 401 on the very next request', async () => {
+    const key = mint('member');
+    expect((await get('/v1/memories?q=x', key)).status).toBe(200);
+    onDb(home, (db) => db.prepare(`UPDATE api_keys SET revoked_at = ? WHERE key_id = ?`).run(new Date().toISOString(), key.keyId));
+    expect(await get('/v1/memories?q=x', key)).toEqual({ status: 401, body: { error: 'invalid api key' } });
+  });
+
+  it('a role change written by another process decides the very next request, either way', async () => {
+    const key = mint('admin');
+    const setRole = (role: 'admin' | 'member'): void => {
+      onDb(home, (db) => db.prepare(`UPDATE api_keys SET role = ? WHERE key_id = ?`).run(role, key.keyId));
+    };
+    expect((await get('/v1/quarantine', key)).status).toBe(200);
+    setRole('member');
+    expect(await get('/v1/quarantine', key)).toEqual({ status: 403, body: { error: '/v1/quarantine requires admin role' } });
+    setRole('admin');
+    expect((await get('/v1/quarantine', key)).status).toBe(200);
+  });
+
+  it('an expiry written by another process is a 401 on the very next request', async () => {
+    const key = mint('member');
+    expect((await get('/v1/memories?q=x', key)).status).toBe(200);
+    onDb(home, (db) => db.prepare(`UPDATE api_keys SET expires_at = ? WHERE key_id = ?`).run('2020-01-01T00:00:00.000Z', key.keyId));
+    expect((await get('/v1/memories?q=x', key)).status).toBe(401);
   });
 });

@@ -89,7 +89,7 @@ describe('authCreate and authCreateSelf with ctx.store', () => {
     const minted = await authCreate(ctx, { label: 'ci', role: 'member' });
     expect(minted).toMatchObject({ tenantId: TENANT_A, role: 'member' });
     expect(readdirSync(hippoRoot)).toEqual([OTHER_STORE_MARKER]);
-    expect(await verifyApiKeyCached(hippoRoot, minted.plaintext, memory.store)).toMatchObject({ keyId: minted.keyId, tenantId: TENANT_A, role: 'member' });
+    expect(await verifyApiKeyCached(minted.plaintext, memory.store)).toMatchObject({ keyId: minted.keyId, tenantId: TENANT_A, role: 'member' });
     expect(memory.auditRows().at(-1)).toMatchObject({ tenantId: TENANT_A, actor: 'cli', op: 'auth_create', targetId: minted.keyId, metadata: { label: 'ci', role: 'member' } });
     const secret = minted.plaintext.slice(minted.keyId.length + 1);
     const stored = JSON.stringify([await memory.store.findApiKey(minted.keyId), await authList(ctx, { active: false }), memory.auditRows()]);
@@ -103,10 +103,10 @@ describe('authCreate and authCreateSelf with ctx.store', () => {
     const ctx = { hippoRoot, tenantId: TENANT_A, actor: resolverMember, store: memory.store };
     const first = await authCreateSelf(ctx, { label: 'laptop', ttlDays: 30, perSubject: 3 });
     expect(first).toMatchObject({ tenantId: TENANT_A, role: 'member', expiresAt: expect.any(String) });
-    expect(await verifyApiKeyCached(hippoRoot, first.plaintext, memory.store)).toMatchObject({ keyId: first.keyId, ownerSubject: OWNER });
+    expect(await verifyApiKeyCached(first.plaintext, memory.store)).toMatchObject({ keyId: first.keyId, ownerSubject: OWNER });
     const second = await authCreateSelf(ctx, { label: 'desk', ttlDays: 30, perSubject: 1 });
-    expect(await verifyApiKeyCached(hippoRoot, first.plaintext, memory.store)).toBeNull();
-    expect(await verifyApiKeyCached(hippoRoot, second.plaintext, memory.store)).toMatchObject({ keyId: second.keyId });
+    expect(await verifyApiKeyCached(first.plaintext, memory.store)).toBeNull();
+    expect(await verifyApiKeyCached(second.plaintext, memory.store)).toMatchObject({ keyId: second.keyId });
     const revokes = memory.auditRows().filter((e) => e.op === 'auth_revoke').map((e) => [e.targetId, e.metadata]);
     expect(revokes).toEqual(expect.arrayContaining([[first.keyId, { replacedBy: second.keyId }], [owned.liveOld, { replacedBy: second.keyId }]]));
     expect(readdirSync(hippoRoot)).toEqual([OTHER_STORE_MARKER]);

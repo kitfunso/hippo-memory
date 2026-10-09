@@ -7,6 +7,7 @@ import { API_KEY_PREFIX, verifyApiKeyCached } from '../auth.js';
 import { type Actor, type Context, ownerOrSubject } from '../api.js';
 import { HttpError, isCrossSite, isHeaderString, LOOPBACK_HOST_HEADER, MAX_ID_LEN } from '../http-util.js';
 import { clientLimitKey } from './client-ip.js';
+import { keyCheckBounds } from './key-check-bounds.js';
 import type { AuthResolver, ResolvedBearer, ResolvedServeOpts } from './types.js';
 import { isJsonString } from '../json.js';
 
@@ -175,7 +176,12 @@ async function resolveBearer(req: IncomingMessage, token: string, opts: AuthOpts
     const clean = await askResolver(opts.authResolver, token, deadlineMs);
     return { ...clean, viaAuthResolver: true, owner: clean.subject }; // a resolver vouches for a person, never names one
   }
-  const key = await verifyApiKeyCached(opts.hippoRoot, token, opts.store, () => chargeScryptRun(req, opts));
+  const key = await verifyApiKeyCached(token, opts.store, (keyId, derive) => {
+    // The key's own bucket first, so a flood on one key id ends at its five tries and leaves the address's budget to the callers who share it.
+    keyChecks.admit(keyId, clientLimitKey(req));
+    chargeScryptRun(req, opts);
+    return keyChecks.run(derive);
+  });
   if (!key) throw new HttpError(401, 'invalid api key');
   const id: BearerIdentity = { tenantId: key.tenantId, subject: `api_key:${key.keyId}`, role: key.role, scopes: key.scopes };
   if (key.ownerSubject) id.owner = key.ownerSubject;
@@ -208,6 +214,8 @@ function bearerActor(id: BearerIdentity): Actor {
 
 /** Key cap for every serve() bucket, shared by the warn map so it never tracks more callers than the buckets do. */
 export const LIMITER_MAX_KEYS = 10_000;
+// One for the process, as the thread pool its derivations run on is.
+const keyChecks = keyCheckBounds(LIMITER_MAX_KEYS);
 const CALLER_WARN_EVERY_MS = 60_000;
 const callerWarnedAt = new Map<string, number>();
 

@@ -133,8 +133,8 @@ describe('API key expiry', () => {
       expect(validateApiKey(db, expired.plaintext)).toEqual({ valid: false });
       expect(validateApiKey(db, live.plaintext).valid).toBe(true);
     });
-    expect(await verifyApiKeyCached(home, expired.plaintext, sqliteStore(home))).toBeNull();
-    expect(await verifyApiKeyCached(home, live.plaintext, sqliteStore(home))).not.toBeNull();
+    expect(await verifyApiKeyCached(expired.plaintext, sqliteStore(home))).toBeNull();
+    expect(await verifyApiKeyCached(live.plaintext, sqliteStore(home))).not.toBeNull();
   });
 
   it('treats an unparseable expiry as expired', () => {
@@ -151,21 +151,21 @@ describe('API key expiry', () => {
     // SAFETY: a store written against the port before expiresAt existed returns exactly this shape.
     const record = rest as ApiKeyRecord;
     const store: HippoStore = { ...sqliteStore(home), kind: 'test', findApiKey: async () => record };
-    expect(await verifyApiKeyCached(home, key.plaintext, store)).toBeNull();
+    expect(await verifyApiKeyCached(key.plaintext, store)).toBeNull();
   });
 
-  it('a cached key stops at its expiry, not a cache TTL later', async () => {
+  it('a proved key skips scrypt up to its expiry and stops at it', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-10-05T12:00:00Z'));
     const store = sqliteStore(home);
     const key = mint(new Date(Date.now() + 10_000).toISOString());
-    expect(await verifyApiKeyCached(home, key.plaintext, store)).not.toBeNull();
+    expect(await verifyApiKeyCached(key.plaintext, store)).not.toBeNull();
     vi.setSystemTime(Date.now() + 9_999);
-    const before = apiKeyVerifyStats();
-    expect(await verifyApiKeyCached(home, key.plaintext, store)).not.toBeNull();
-    expect(apiKeyVerifyStats().storeLookups).toBe(before.storeLookups);
+    const before = apiKeyVerifyStats().scryptRuns;
+    expect(await verifyApiKeyCached(key.plaintext, store)).not.toBeNull();
+    expect(apiKeyVerifyStats().scryptRuns).toBe(before);
     vi.setSystemTime(Date.now() + 1);
-    expect(await verifyApiKeyCached(home, key.plaintext, store)).toBeNull();
+    expect(await verifyApiKeyCached(key.plaintext, store)).toBeNull();
   });
 });
 
