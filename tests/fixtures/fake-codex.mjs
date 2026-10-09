@@ -4,7 +4,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 
 const KNOWN = new Set(['--json', '--dangerously-bypass-approvals-and-sandbox', '--strict-config', '--dangerously-bypass-hook-trust']);
 const argv = process.argv.slice(2);
@@ -166,6 +166,21 @@ function work() {
   return lines;
 }
 
+/** The UserPromptSubmit hooks in hooks.json, run as Codex runs them: only under the trust flag, or trust text in config.toml naming this file. */
+function hookLines() {
+  const file = path.join(HOME, 'hooks.json');
+  const trusted = opts.flags.includes('--dangerously-bypass-hook-trust') || (read(path.join(HOME, 'config.toml')) ?? '').includes(`[hooks.state.'${file}:`);
+  if (!trusted || !fs.existsSync(file)) return [];
+  const payload = JSON.stringify({ session_id: threadId, hook_event_name: 'UserPromptSubmit', cwd: process.cwd(), prompt });
+  const hooks = (JSON.parse(read(file)).hooks?.UserPromptSubmit ?? []).flatMap((group) => group.hooks ?? []);
+  return hooks.flatMap((h) => {
+    const r = spawnSync((process.platform === 'win32' && h.commandWindows) || h.command, { shell: true, input: payload, encoding: 'utf8' });
+    // A hook with nothing to add prints nothing; any other output must parse, so a broken hook fails the session.
+    const said = r.stdout.trim() ? JSON.parse(r.stdout).hookSpecificOutput?.additionalContext : null;
+    return said ? [line('response_item', { type: 'message', role: 'developer', z0_fake_hook: true, content: [{ type: 'input_text', text: said }] })] : [];
+  });
+}
+
 /** MEMWRITE:<ms>: a detached child writes the v1 memory summary after the session has ended. */
 function memWrite() {
   const ms = /MEMWRITE:(\d+)/.exec(prompt)?.[1];
@@ -187,7 +202,7 @@ if (has('AUTH_FAIL')) {
   emit({ type: 'turn.failed', error: { message: '401 Unauthorized' } });
   process.exit(1);
 }
-const body = work();
+const body = [...hookLines(), ...work()];
 writeRollout(rolloutPath(threadId), [...head, tokenCount(1000, 600, 50), ...body, tokenCount(2000, 1500, 120)]);
 if (has('HOOKROW')) hookRow(threadId);
 // WRAPLOG and WRAPLOG_OTHER stand in for the installed wrapper's capture line, naming this thread or another one.

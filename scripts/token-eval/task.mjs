@@ -18,6 +18,7 @@ import { cellName, snapshotSurfaces, restoreSurfaces, recordInjected } from './s
 import { deliveryHits, sessionVoid, byPrecedence, foldPath, under } from './readcheck.mjs';
 import { followedOf } from './z0-records.mjs';
 import { CODEX_DRIVER, driverOf, codexSession, codexPricing, codexVoid, codexFields, shownAtStartCodex, writeX4Block, sweepCell } from './codex-task.mjs';
+import { installHippoCodex } from './codex-install.mjs';
 
 // The arms whose teach cells record what hippo captured (prereg 182).
 const CAPTURE_ARMS = new Set(['A2', 'X2']);
@@ -90,6 +91,8 @@ function stageTask(ctx, run, step) {
   // Init waits for the first step whose setup passed, so a skipped first task cannot leave A2/A5 without hippo.
   if (HIPPO_ARMS.has(run.arm) && !run.initDone) {
     hippoInit(run, ctx.fakeHome);
+    // X2 only: hippo's Codex hooks and wrapper go onto the run's own launcher, once (E6 plan D7).
+    if (run.arm === 'X2') installHippoCodex(ctx, run);
     run.initDone = true;
   }
   const carry = CARRY_ARMS.has(run.arm) ? applyInstructions(work, run.changes, baseline, path.join(ctx.outDir, 'tmp')) : NO_CARRY;

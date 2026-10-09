@@ -13,6 +13,7 @@ import { runSteps } from './task.mjs';
 import { planScreen, screenLines, runScreen } from './screen.mjs';
 import { parseHookTrust } from './codex.mjs';
 import { finishCodex } from './codex-task.mjs';
+import { checkInstaller } from './codex-install.mjs';
 
 export { cacheTaskRepos } from './runs.mjs';
 export { usageFromResult, isUsageLimit, transcriptWork } from './records.mjs';
@@ -223,7 +224,7 @@ async function main() {
   if (mode === 'dry') return dryRun(args, steps);
   const dirName = (st) => st.runName ?? st.sequence.id;
   const runs = [...new Map(steps.map((st) => [`${dirName(st)}|${st.arm}|${st.seed}`, { seq: dirName(st), arm: st.arm, seed: st.seed }])).values()];
-  checkHomes({ outDir: out, runs, passEnv });
+  checkHomes({ outDir: out, runs, passEnv, install: arms.includes('X2') ? checkInstaller(codexOpts.codexBin) : null });
   console.log(`Homes check passed for ${runs.length} runs.`);
   if (mode === 'check') return;
   const progress = { last: 'none' };
