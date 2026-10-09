@@ -4,6 +4,7 @@
   "storeBranches": 4,
   "routesWithoutStore": 42,
   "sqliteOnlyRoutes": 2,
+  "routesOnLoop": 64,
   "twinFunctions": 0,
   "sqlOutside": 193,
   "txLiterals": 28,

@@ -35,6 +35,7 @@ const { loadAmbientTallies } = await load('ambient-store.js');
 const { openHippoDb, closeHippoDb } = await load('db.js');
 const { getContext, adminActor } = await load('api.js');
 const { handleMcpRequest } = await load('mcp/server.js');
+const { workerSqliteStore } = await load('store/sqlite/worker-store.js');
 
 const { DatabaseSync, StatementSync } = createRequire(import.meta.url)('node:sqlite');
 
@@ -123,6 +124,9 @@ const withoutGlobal = (run) => async () => {
   }
 };
 
+// Answers from a store worker thread, as serve() does by default; the counts below are this thread's, so its ceilings are zero.
+const served = workerSqliteStore(localRoot);
+
 // Each case: label, request, and its ceilings on statements run and rows read.
 const cases = [
   ['getContext, no query', () => getContext(ctx, { currentProject: 'proj' }), [360, 5400]],
@@ -136,6 +140,7 @@ const cases = [
   ['mcp hippo_recall', tool('hippo_recall', { query: 'kafka redis' }), [415, 1500]],
   ['mcp hippo_status', tool('hippo_status'), [17, 11]],
   ['mcp hippo_peers', tool('hippo_peers'), [14, 22]],
+  ['served predictions list', () => served.predictions.listPredictions('default', { limit: 20 }), [0, 0]],
 ];
 
 let failed = false;
@@ -158,6 +163,8 @@ try {
     console.log(`${label.padEnd(26)} ${median.toFixed(1).padStart(8)} ms${over ? '  OVER BOUND' : ''}  ${String(work.statements).padStart(4)} of ${maxStatements} statements, ${String(work.rows).padStart(6)} of ${maxRows} rows${overWork ? '  OVER CEILING' : ''}`);
   }
 } finally {
+  // The threads hold the store's files until they exit, and Windows cannot remove a folder with an open file.
+  await served.close();
   process.chdir(os.tmpdir());
   fs.rmSync(tmp, { recursive: true, force: true });
 }

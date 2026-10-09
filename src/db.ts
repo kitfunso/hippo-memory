@@ -14,6 +14,8 @@ export {
   scopedBusyWait,
   withSqliteBlocked,
   withSqliteAllowed,
+  withSqliteOffLoop,
+  outsideSqliteOffLoop,
   rethrowIfSqliteBlocked,
   OTHER_STORE_MARKER,
   openHippoDb,

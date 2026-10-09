@@ -94,8 +94,9 @@ export interface RouteRequest {
 /** A route's store status: a `storeReady` group, a `sqliteOnly` reason, or neither while it waits for a group; never both. */
 type StoreStatus = { storeReady?: StoreGroup; sqliteOnly?: never } | { sqliteOnly: string; storeReady?: never };
 
-/** One /v1 route: an exact path, a matchPath pattern, or a regex, each paired with the handler for one method. Under another store it runs only when that store has its `storeReady` group; a `sqliteOnly` route never does. */
-export type Route = { method: string } & StoreStatus & (
+/** One /v1 route: an exact path, a matchPath pattern, or a regex, each paired with the handler for one method. Under another store it runs only when that store has its `storeReady` group; a `sqliteOnly` route never does.
+ *  `loop: 'off'` declares that the route's SQLite work runs on a worker thread, so its handler opens no hippo.db on the server thread. */
+export type Route = { method: string; loop?: 'off' } & StoreStatus & (
   | { path: string; handler: (r: RouteRequest) => Promise<void> }
   | { pattern: string; handler: (r: RouteRequest, params: Record<string, string>) => Promise<void> }
   | { regex: RegExp; handler: (r: RouteRequest, match: RegExpMatchArray) => Promise<void> }

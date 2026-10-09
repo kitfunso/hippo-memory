@@ -1,5 +1,7 @@
 import type { IncomingMessage } from 'node:http';
+import { withSqliteOffLoop } from '../db.js';
 import { hasGroup, type StoreGroup } from '../store-port.js';
+import { runsOffLoop } from '../store/sqlite/worker-store.js';
 import { HttpError, JSON_HEADERS, sendJson, STORE_NOT_PORTED_MESSAGE } from '../http-util.js';
 import { buildContextWithAuth, requireAuth } from './auth.js';
 import { matchPath, noteAccess } from './request.js';
@@ -58,11 +60,11 @@ const V1_ROUTES: readonly Route[] = [
   { method: 'POST', pattern: '/v1/quarantine/:id/approve', handler: handleApproveQuarantine },
   { method: 'POST', pattern: '/v1/quarantine/:id/reject', handler: handleRejectQuarantine },
   { method: 'GET', path: '/v1/audit', storeReady: 'auditLog', handler: handleListAudit },
-  { method: 'POST', path: '/v1/predictions', storeReady: 'predictions', handler: handleCreatePrediction },
-  { method: 'GET', path: '/v1/predictions', storeReady: 'predictions', handler: handleListPredictions },
-  { method: 'GET', path: '/v1/predictions/stats', storeReady: 'predictions', handler: handlePredictionStats },
-  { method: 'GET', regex: /^\/v1\/predictions\/(\d+)$/, storeReady: 'predictions', handler: handleGetPrediction },
-  { method: 'POST', regex: /^\/v1\/predictions\/(\d+)\/close$/, storeReady: 'predictions', handler: handleClosePrediction },
+  { method: 'POST', path: '/v1/predictions', storeReady: 'predictions', loop: 'off', handler: handleCreatePrediction },
+  { method: 'GET', path: '/v1/predictions', storeReady: 'predictions', loop: 'off', handler: handleListPredictions },
+  { method: 'GET', path: '/v1/predictions/stats', storeReady: 'predictions', loop: 'off', handler: handlePredictionStats },
+  { method: 'GET', regex: /^\/v1\/predictions\/(\d+)$/, storeReady: 'predictions', loop: 'off', handler: handleGetPrediction },
+  { method: 'POST', regex: /^\/v1\/predictions\/(\d+)\/close$/, storeReady: 'predictions', loop: 'off', handler: handleClosePrediction },
   { method: 'POST', path: '/v1/decisions', handler: handleCreateDecision },
   { method: 'GET', path: '/v1/decisions', handler: handleListDecisions },
   { method: 'POST', regex: /^\/v1\/decisions\/(\d+)\/supersede$/, handler: handleSupersedeDecision },
@@ -129,7 +131,8 @@ export async function dispatchV1Route(r: RouteRequest, method: string, path: str
     if (run === null) continue;
     noteAccess(r.req, { route: routeLabel(route) });
     await refuseUnportedRoute(r.req, r.opts, route.storeReady);
-    await run(r);
+    // Only a store with worker threads has moved the route's SQLite work; under any other the handler still opens hippo.db itself.
+    await (route.loop === 'off' && runsOffLoop(r.opts.store) ? withSqliteOffLoop(() => run(r)) : run(r));
     return true;
   }
   return false;

@@ -2,9 +2,10 @@ import { envPort, envRequireAuth, envV1Rps } from '../env.js';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { existsSync } from 'node:fs';
 import { detectServer, removePidfileIfOwned, writePidfile } from '../server-detect.js';
-import { closeHippoDb, type DatabaseSyncLike, getHippoDbPath, isStoreBusy, openHippoDb, outsideRequestStores, runWithRequestStores, SERVER_DB_WAIT_MS, withSqliteBlocked } from '../db.js';
+import { closeHippoDb, type DatabaseSyncLike, getHippoDbPath, isStoreBusy, openHippoDb, outsideRequestStores, outsideSqliteOffLoop, runWithRequestStores, SERVER_DB_WAIT_MS, withSqliteBlocked } from '../db.js';
 import { startWalCheckpointer, type WalCheckpointer } from '../db/wal-checkpointer.js';
-import { sqliteStore, type HippoStore } from '../store-port.js';
+import type { HippoStore } from '../store-port.js';
+import { workerSqliteStore } from '../store/sqlite/worker-store.js';
 import { markSharedStore } from '../config.js';
 import { auditWriteFailureCount } from '../audit.js';
 import { PACKAGE_VERSION } from '../version.js';
@@ -24,7 +25,7 @@ import { MCP_PROJECT_SCOPED_HEADER } from '../project-identity.js';
 import { logRequestFailure, noteAccess, openRequest, parseRequest, rejectEncodedSlash, replyFor, sendError } from './request.js';
 import { createListener, warnIfCleartext } from './tls.js';
 import { assertAddonRoutes, assertPublicJson, assertSqliteStore, dispatchAddonRoute, dispatchPublicJson, dispatchV1Route, isPublicRoute } from './route-table.js';
-import type { RateLimitSpec, ResolvedServeOpts, RouteRequest, ServeOpts, ServerHandle } from './types.js';
+import type { AuthResolver, RateLimitSpec, ResolvedServeOpts, RouteRequest, ServeOpts, ServerHandle } from './types.js';
 
 // server.address() returns AddressInfo once a TCP socket is bound; null before
 // listening, a string only for pipe/unix-socket listeners (never used here).
@@ -248,9 +249,10 @@ function createStoreHolder(hippoRoot: string, store: HippoStore): StoreHolder {
   const hold = (): void => {
     if (heldDb || stopHolding || !existsSync(getHippoDbPath(hippoRoot))) return;
     try {
-      // The 'finish' listener can fire inside a request scope, which would close this connection with the request.
+      // The 'finish' listener can fire inside a request scope, which would close this connection with the request,
+      // and inside the block of a `loop: 'off'` route, which would refuse the open.
       // The server's lock wait: this open runs on the event loop, where SQLite's 5 s default and the 30 s journal-mode retry would stall every request.
-      heldDb = outsideRequestStores(() => openHippoDb(hippoRoot, { busyWaitMs: SERVER_DB_WAIT_MS }));
+      heldDb = outsideSqliteOffLoop(() => outsideRequestStores(() => openHippoDb(hippoRoot, { busyWaitMs: SERVER_DB_WAIT_MS })));
       checkpointer = startWalCheckpointer(getHippoDbPath(hippoRoot));
     } catch (err) {
       stopHolding = true;
@@ -269,6 +271,11 @@ function createStoreHolder(hippoRoot: string, store: HippoStore): StoreHolder {
     heldDb = undefined;
   };
   return { hold, afterResponse, release };
+}
+
+// A plugin's resolver may read hippo.db through this package's synchronous functions, so it runs outside the block of a `loop: 'off'` route.
+function outsideRouteBlock(resolver: AuthResolver | undefined): AuthResolver | undefined {
+  return resolver && ((token) => outsideSqliteOffLoop(() => resolver(token)));
 }
 
 function replyWithFailure<E>(req: IncomingMessage, res: ServerResponse, err: E, requestId: string): void {
@@ -395,7 +402,8 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   const streamSlots = new Map<string, number>();
 
   const served: ResolvedServeOpts = {
-    ...opts, routes, publicJsonBodies, store: opts.store ?? sqliteStore(opts.hippoRoot), callerLimiter, failedAuthLimiter,
+    ...opts, routes, publicJsonBodies, store: opts.store ?? workerSqliteStore(opts.hippoRoot), callerLimiter, failedAuthLimiter,
+    authResolver: outsideRouteBlock(opts.authResolver),
   };
   const { kind } = served.store;
   // A store other than hippo.db is a team's central server, so its folder's config.json must not decide shared-ness.
@@ -440,8 +448,9 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
     // unconditional unlink here would orphan it.
     removePidfileIfOwned(opts.hippoRoot, { pid: process.pid, startedAt });
     await drainAndClose(server, inflight, opts.shutdownDrainMs ?? 5000);
-    await holder.release();
+    // The store's worker threads close their connections first, so the held one is still SQLite's last.
     if (!opts.store) await served.store.close();
+    await holder.release();
   };
 
   if (opts.handleSignals) {

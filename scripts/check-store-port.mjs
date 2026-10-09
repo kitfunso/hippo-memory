@@ -2,6 +2,7 @@
 // CI store-port gate. Every server route should reach the database through the store port, so the leftovers
 // (database openers outside the data layer, store branches in the API, routes not yet store-ready (a sqliteOnly route is counted apart, and its list is pinned), twin
 // functions, SQL prepared outside the data layer, hand-written BEGIN literals) are counted and may fall but never rise above .store-port-baseline.json.
+// routesOnLoop counts the routes whose SQLite work still runs on the server thread: V1_ROUTES rows without `loop: 'off'`, plus the routes outside that table.
 // carrierFiles counts src files other than src/api/on-store.ts that name andThen or onStore, the sync-or-async reply carrier; the list is pinned so a new file fails even when another stops.
 // Usage: check-store-port.mjs [--list] [--update]. --update lowers the baseline and refuses to raise any number.
 
@@ -12,7 +13,9 @@ import ts from 'typescript';
 const BASELINE = '.store-port-baseline.json';
 const OPENERS = new Set(['openHippoDb', 'openHippoDbReadOnly', 'openStore', 'onHandle']);
 const TWIN_SUFFIX = /(ThroughStore|OnHippoDb|UnderStore|OnStore)$/;
-const NUMBERS = ['openersOutside', 'openersInCli', 'storeBranches', 'routesWithoutStore', 'sqliteOnlyRoutes', 'twinFunctions', 'sqlOutside', 'txLiterals'];
+const NUMBERS = ['openersOutside', 'openersInCli', 'storeBranches', 'routesWithoutStore', 'sqliteOnlyRoutes', 'routesOnLoop', 'twinFunctions', 'sqlOutside', 'txLiterals'];
+// Routes dispatched outside V1_ROUTES. Named here so the count cannot read 0 while they answer on the server thread; a name leaves when its route does.
+const OFF_TABLE_ROUTES = ['POST /mcp', 'GET /mcp/stream', 'POST /v1/connectors/slack/events', 'POST /v1/connectors/github/events', 'GET /health', 'GET /ready', 'POST add-on routes'];
 const TX_OWNER = 'src/db/busy.ts';
 const CARRIER_OWNER = 'src/api/on-store.ts';
 
@@ -122,7 +125,10 @@ const rowLabel = (row, sf) => {
   return `${text(m).replace(/'/g, '')} ${text(where).replace(/'/g, '')}`;
 };
 
-/** Reads the V1_ROUTES array literal: rows with neither a string-literal storeReady nor a non-empty string-literal sqliteOnly, and the sorted `METHOD path` of the sqliteOnly rows. */
+const isOffLoop = (p) => ts.isPropertyAssignment(p) && ts.isIdentifier(p.name) && p.name.text === 'loop' && ts.isStringLiteralLike(p.initializer) && p.initializer.text === 'off';
+
+/** Reads the V1_ROUTES array literal: rows with neither a string-literal storeReady nor a non-empty string-literal sqliteOnly, the sorted `METHOD path` of the sqliteOnly rows,
+ *  and the rows that do not declare `loop: 'off'` plus every route outside the table. */
 function readRoutes(sf) {
   let array;
   const visit = (n) => {
@@ -136,10 +142,12 @@ function readRoutes(sf) {
   visit(sf);
   if (!array) return routeFail('is not declared as an array literal');
   let without = 0;
+  let onLoop = OFF_TABLE_ROUTES.length;
   const sqliteOnly = [];
   for (const row of array.elements) {
     const at = `row at line ${sf.getLineAndCharacterOfPosition(row.getStart(sf)).line + 1}`;
     if (!ts.isObjectLiteralExpression(row)) return routeFail(`has a spread or non-object element (${at})`);
+    if (!row.properties.some(isOffLoop)) onLoop++;
     const label = rowLabel(row, sf);
     const store = propNamed(row, 'storeReady');
     const only = propNamed(row, 'sqliteOnly');
@@ -150,7 +158,7 @@ function readRoutes(sf) {
       sqliteOnly.push(label);
     } else if (!store) without++;
   }
-  return { without, sqliteOnly: sqliteOnly.sort() };
+  return { without, sqliteOnly: sqliteOnly.sort(), onLoop };
 }
 
 /** True when the file names the reply carrier (`andThen` or `onStore`) as an identifier; comments and strings never match. */
@@ -173,7 +181,7 @@ function localMethods(sf) {
 
 /** All numbers plus the per-file opener and prepare counts for src/, keys sorted, and the SqliteLocal method names. */
 function measure() {
-  const out = { openersOutside: 0, openersInCli: 0, storeBranches: 0, routesWithoutStore: 0, sqliteOnlyRoutes: 0, twinFunctions: 0, sqlOutside: 0, txLiterals: 0 };
+  const out = { openersOutside: 0, openersInCli: 0, storeBranches: 0, routesWithoutStore: 0, sqliteOnlyRoutes: 0, routesOnLoop: 0, twinFunctions: 0, sqlOutside: 0, txLiterals: 0 };
   const byFile = {};
   const sqlByFile = {};
   let sqliteLocalMethods = [];
@@ -202,6 +210,7 @@ function measure() {
       out.routesWithoutStore = routes.without;
       out.sqliteOnlyRoutes = routes.sqliteOnly.length;
       sqliteOnlyRoutesList = routes.sqliteOnly;
+      out.routesOnLoop = routes.onLoop;
     }
     if (file === 'src/store/sqlite/local.ts') sqliteLocalMethods = localMethods(sf);
   }
