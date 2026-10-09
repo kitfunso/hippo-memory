@@ -24,7 +24,7 @@ import { openStore, HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY } from './
 import { objectMemoryRowsAt, selectAllEntries } from './store/entry-reads.js';
 import { conflictResolveAuditsAt, resolvedConflictsAt } from './store/conflicts.js';
 import { setHalfLivesAt } from './store/entry-writes.js';
-import { openHippoDb, closeHippoDb, getMeta, setMeta, type DatabaseSyncLike } from './db.js';
+import { openHippoDb, closeHippoDb, getMeta, setMeta, withWriteScope, type DatabaseSyncLike } from './db.js';
 import { appendAuditEvent } from './store/audit.js';
 import { loadConfig } from './config.js';
 
@@ -111,12 +111,10 @@ export function migrateDefaultHalfLife(hippoRoot: string, to: number, opts: { dr
   const db = openStore(hippoRoot);
   try {
     // Plan, write, audit and record the base under one write lock, so a concurrent write or sleep cannot interleave.
-    if (!dryRun) db.exec('BEGIN IMMEDIATE');
-    try {
+    const run = (): HalfLifeMigrationResult => {
       const from = readBase(db);
       const typedPending = getMeta(db, TYPED_HALF_LIFE_META_KEY, '') === '';
       if (!(Number.isFinite(to) && to > 0) || (from === to && !typedPending)) {
-        if (!dryRun) db.exec('COMMIT');
         return noop(from);
       }
       const all = selectAllEntries(db);
@@ -139,12 +137,9 @@ export function migrateDefaultHalfLife(hippoRoot: string, to: number, opts: { dr
       writePlan(db, typedPlan, old, { from: LEGACY_TYPED_HALF_LIFE, to, actor });
       setMeta(db, HALF_LIFE_BASE_META_KEY, String(to));
       setMeta(db, TYPED_HALF_LIFE_META_KEY, '1');
-      db.exec('COMMIT');
       return result;
-    } catch (err) {
-      if (!dryRun) db.exec('ROLLBACK');
-      throw err;
-    }
+    };
+    return dryRun ? run() : withWriteScope(db, 'migrate_half_life', run);
   } finally {
     closeHippoDb(db);
   }

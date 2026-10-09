@@ -1,5 +1,5 @@
 import { type MemoryEntry, schemaFitFrom, strengthSql } from '../memory.js';
-import { closeHippoDb } from '../db.js';
+import { closeHippoDb, withReadSnapshot } from '../db.js';
 import { scopeAdmitSql, type SqlFragment } from '../recall-scope.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
 import { openStore } from './open.js';
@@ -225,8 +225,7 @@ export function schemaFitInStore(hippoRoot: string, tenantId: string, content: s
   const db = openStore(hippoRoot);
   try {
     // One read transaction, so the row count and the texts come from the same snapshot.
-    db.exec('BEGIN');
-    try {
+    return withReadSnapshot(db, () => {
       // SAFETY: rows' shape matches the two columns named in the SELECT.
       const groups = db.prepare(
         'SELECT tags_json, COUNT(*) AS n FROM memories WHERE tenant_id = ? GROUP BY tags_json',
@@ -241,9 +240,7 @@ export function schemaFitInStore(hippoRoot: string, tenantId: string, content: s
       // SAFETY: the SELECT names exactly the one column read.
       const texts = db.prepare('SELECT content FROM memories WHERE tenant_id = ?').iterate(tenantId) as Iterable<{ content: string }>;
       return schemaFitFrom(content, tags, { rows, tagCounts, contents: contentsOf(texts) });
-    } finally {
-      db.exec('COMMIT');
-    }
+    });
   } finally {
     closeHippoDb(db);
   }
