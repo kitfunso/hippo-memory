@@ -28,7 +28,7 @@ import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../db.js';
 import { writeEntryAt } from './sqlite/entry-writes-group.js';
 import { assertTenantId } from '../tenant.js';
 import { createMemory, Layer, type MemoryEntry, type MemoryKind } from '../memory.js';
-import { appendAuditEvent } from '../audit.js';
+import { appendAuditEvent } from './audit.js';
 import { loadConfig } from '../config.js';
 import { keysetAfter, type KeysetPosition } from '../keyset.js';
 import type { PredictionSave } from './port.js';

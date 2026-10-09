@@ -12,7 +12,7 @@ import {
   completeCard,
   reclaimExpiredCards,
   addCardComment,
-} from '../store-cards.js';
+} from '../store/cards.js';
 import { isHandoffOutcome } from '../handoff.js';
 import { type Card, isCardStatus } from '../card.js';
 import { loadCardDetail, type CardDetail } from '../card-detail.js';

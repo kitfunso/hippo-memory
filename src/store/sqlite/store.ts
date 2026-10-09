@@ -1,14 +1,14 @@
 // The built-in SQLite adapter behind the store port.
-import { loadAmbientTallies } from '../../ambient-store.js';
-import { listApiKeyRows, readApiKeyRecord } from '../../auth.js';
+import { loadAmbientTallies } from '../ambient.js';
+import { listApiKeyRows, readApiKeyRecord } from '../auth.js';
 import { existsSync } from 'node:fs';
-import { appendAuditEvent, listAuditEventsAfter, queryAuditEvents } from '../../audit.js';
+import { appendAuditEvent, listAuditEventsAfter, queryAuditEvents } from '../audit.js';
 import { getHippoDbPath, withWriteScope } from '../../db.js';
 import { embeddingIndexStateAt, loadStoredVectors } from '../../embeddings.js';
-import { activeGoalsWithPolicies, localGoalRecallRows, writeGoalRecallLog } from '../../goals.js';
+import { activeGoalsWithPolicies, localGoalRecallRows, writeGoalRecallLog } from '../goals.js';
 import { loadPhysicsState } from '../../db/physics-state.js';
 import { planningFallacyEvidenceAt } from '../planning-fallacy-evidence.js';
-import { writeRecallTrace } from '../../recall-trace.js';
+import { writeRecallTrace } from '../recall-trace.js';
 import { recordTokenUse } from '../../token-ledger.js';
 import { loadAmbientCandidates, loadContextCandidates } from '../candidates.js';
 import { loadEntriesByIds, loadFreshRawMemories } from '../entry-reads.js';

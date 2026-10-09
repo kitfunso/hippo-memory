@@ -31,7 +31,7 @@ import { escapeLike } from './escape.js';
 import type { SavableDescriptor } from './objects/descriptor.js';
 import { checkText, requireLine } from './objects/fields.js';
 import { assertObjectStatus, closeObjectOn, dropClosedObjectFromGraph, loadObjectByIdOn, loadObjectsOn, saveObject } from './objects/lifecycle.js';
-import type { JsonObject } from './working-memory.js';
+import type { JsonObject } from './store/working-memory.js';
 
 // ---------------------------------------------------------------------------
 // Domain types

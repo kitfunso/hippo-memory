@@ -27,7 +27,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import type { Context } from '../src/api.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { queryAuditEvents } from '../src/audit.js';
+import { queryAuditEvents } from '../src/store/audit.js';
 import { remember } from '../src/api.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { serve, type ServerHandle } from '../src/server.js';

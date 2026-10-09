@@ -1,7 +1,7 @@
 import type { MemoryEntry } from '../memory.js';
 import { openHippoDb, isFtsAvailable } from '../db.js';
 import { fallbackOrigin, originFromSource } from '../project-identity.js';
-import { checkRejectionGuard } from '../rejection.js';
+import { checkRejectionGuard } from './rejection.js';
 import { errorMessage, log } from '../log.js';
 
 export function upsertEntryRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry): void {

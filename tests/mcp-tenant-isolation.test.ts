@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { queryAuditEvents } from '../src/audit.js';
+import { queryAuditEvents } from '../src/store/audit.js';
 import { remember as apiRemember } from '../src/api.js';
 import { handleMcpRequest, type McpResponse, type McpContext } from '../src/mcp/server.js';
 import { lastRecalledIds, MAX_RECALL_CLIENTS } from '../src/mcp/session-state.js';

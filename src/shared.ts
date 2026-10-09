@@ -26,13 +26,13 @@ import { fallbackOrigin, classifyOriginProject, resolveGlobalRootDir, resolvePro
 import { isSharedStore } from './config.js';
 import { detectSecret } from './secret-detect.js';
 import { isQuarantineScope } from './quarantine.js';
-import { RejectedValueError } from './rejection.js';
+import { RejectedValueError } from './store/rejection.js';
 import { embedMemory, embedAll } from './embeddings.js';
 import { duplicateKey, storedTextKeys } from './same-text.js';
 import { isReusable } from './memory-quality.js';
 import { errorMessage, log } from './log.js';
 import type { DatabaseSyncLike } from './db.js';
-import { appendAuditEvent } from './audit.js';
+import { appendAuditEvent } from './store/audit.js';
 
 // The rows are already copied; a failed background embed only delays vectors, so it warns instead of throwing.
 function logEmbedAllFailure<E>(caller: string, err: E): void {

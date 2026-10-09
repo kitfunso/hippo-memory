@@ -125,10 +125,10 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - (module header): Closes TODOS A5 v2 M6: "Audit log unbounded growth. Add a daily `audit prune` cron + `hippo audit prune --older-than 90d` CLI in v2. Mind regulatory retention floors (HIPAA, SOX, GDPR) — the prune should be opt-in per tenant and emit its own audit trail event."
 - `PruneAuditOpts.tenantId`: Tenant scope. Required — prune is always tenant-scoped per the A5 v2 design.
 
-### src/audit.ts
+### src/store/audit.ts
 - `audit log primitives` (section banner): A5 audit log primitives (append-only mutation trail)
 
-### src/auth.ts
+### src/store/auth.ts
 - `CreateApiKeyOpts.role`: v1.12.0 A5 v2 sub-1: 'admin' | 'member'. Defaults to 'admin' (backward-compat for callers that don't specify).
 - `createApiKey`: v1.12.0: 6-column INSERT including role. Boot-order guarantee: openHippoDb runs runMigrations synchronously before returning the db handle, so migration v26 (adds role column) is in place before this INSERT runs.
 - `ValidateResult.role`: v1.12.0 A5 v2 sub-1: 'admin' | 'member'. Present only when valid=true.
@@ -431,10 +431,10 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - migration v45: Token ledger (src/token-ledger.ts, ROADMAP TE0)
 
 ### src/db/migrations/v46.ts
-- migration v46: CD13 failure log (src/failure-log.ts): hashes only, since failure text can carry paths and secrets.
+- migration v46: CD13 failure log (src/store/failure-log.ts): hashes only, since failure text can carry paths and secrets.
 
 ### src/db/migrations/v47.ts
-- migration v47: Scope grants (src/auth.ts, ROADMAP EI2)
+- migration v47: Scope grants (src/store/auth.ts, ROADMAP EI2)
 
 ### src/db/migrations/v48.ts
 - migration v48: Quarantine (src/quarantine.ts, CD5)
@@ -471,7 +471,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 ### src/extract.ts
 - `storeExtractedFacts`: AT1 containment: a refusal is per-VALUE — one rejected fact must not drop the rest of this batch.
 
-### src/failure-log.ts
+### src/store/failure-log.ts
 - module header: Failure log (ROADMAP CD13): every failed tool call the capture-error hook sees, stored or not.
 - `failuresBySession`: Rated failures per session since `sinceIso`, the input for repeat-error rate per arm (CD11, CD12).
 - `FailureSummary`: Failure log totals over a window, for {@link summarizeFailures}. Counts only: a rate needs a holdout arm (CD11).
@@ -482,7 +482,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - module header: Plan: docs/plans/2026-05-26-j32-auto-injection.md (Task 1).
 - `FORWARD_CLAIM_PATTERNS`: Patterns ship-locked at v1.13.x.
 
-### src/goals.ts
+### src/store/goals.ts
 - `enforceDepthCapWithinTx`: v1.7.4 — depth-cap enforcer extracted from pushGoalWithDb and resumeGoal.
 - `enforceDepthCapWithinTx`: @internal v1.7.4 -- internal goal-stack invariant. Subject to change.
 - `applyGoalBoost`: A7 recall-trace side-channel: record the goal-boost step BEFORE the score is mutated, keyed by entry id. Pure read of r.score here; the mutation below is byte-identical to pre-A7.
@@ -575,7 +575,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `sessionRecallHistoryMcp`: v0.33 / J1 — Module-level per-(tenant, session) recall-history ring map for the MCP pipeline. Separate from CLI/HTTP rings per plan v3 architecture (per-pipeline rings; no IPC).
 
 ### src/memory-quality.ts
-- `CJK_LETTERS` (moved from src/audit.ts): SCOPE ... other spaceless scripts - Thai, Khmer, Burmese, Lao - still hit the original one-word failure. Their behavior is byte-identical to before this change, so nothing regressed; widening the script set is a separate, deliberately-scoped follow-up rather than another mid-episode guess at this predicate.
+- `CJK_LETTERS` (moved from src/store/audit.ts): SCOPE ... other spaceless scripts - Thai, Khmer, Burmese, Lao - still hit the original one-word failure. Their behavior is byte-identical to before this change, so nothing regressed; widening the script set is a separate, deliberately-scoped follow-up rather than another mid-episode guess at this predicate.
 - `module header`: #493 moved the audit's text checks here and made them the one gate for automatic memories: capture, git learning, sleep merges, compaction memories, extracted facts and DAG summaries. A person's memory is never judged on its wording. The follow-up split the defects into certain ones (rejected, never reused by sleep or auto-share, set aside by `hippo audit repair`) and uncertain ones (`possible-fragment` is stored and listed for review). Provenance, not text, decides who is held to the gate: `isAutomaticEntry` reads source, tags, `extracted_from`, `dag_level` and confidence.
 
 ### src/memory-value-weights.ts
@@ -679,7 +679,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 ### src/rate-limit.ts
 - `module header`: Bounds api-key-id enumeration (the v0.40 follow-up noted in auth.ts)
 
-### src/raw-archive.ts
+### src/store/raw-archive.ts
 - `moveRowToArchive`: GDPR Path A (v0.39): raw_archive stores ONLY metadata, not the original memory content.
 - `auditArchive`: A5 audit: emit archive_raw event inside the SAVEPOINT so the audit row is committed atomically with the row deletion.
 - `archiveRawMemory`: v0.30 / E2 — DAG live-coupling: archive of a child under a level-2 summary marks parent dirty. Inside the SAVEPOINT so the dirty-mark commits atomically with the archive. row.dag_parent_id was fetched via SELECT * at L28 (schema v28 includes it).
@@ -700,7 +700,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `assertScopeRequestAllowed`: Authorize an explicitly requested scope before any read honours it (ROADMAP Part VIII EI2: member scope grants).
 - `PERSONAL_SCOPE_PREFIX`: E10 (2026-10-06), personal memories. A personal row has the scope `personal:private:<owner>`, and the server stamps it when a write sends `personal: true`. The owner comes only from `actor.owner`, the person behind a sign-in or a key they minted, never from the subject, because subjects such as `localhost:cli` or `api_key:<id>` are not people. A caller with no owner can neither write nor read personal rows, and a client-sent `personal:` scope is a 400. `canReadScope` decides a personal scope before role and grants, so an admin key cannot read another person's personal rows, and a grant or a sign-in provider's scope list naming one opens nothing. A by-id write on someone else's personal row answers 404, as a missing id does. Reject and conflict-resolve sweeps skip other people's personal rows, and rejecting a personal row by id is a 400, so no tenant-wide tombstone is made from personal text. Reject by value still writes a tenant-wide tombstone, since tombstones are tenant policy. Rate limits sit beside this: each person gets a bucket keyed on the tenant and `ownerOrSubject`, each client address keeps its own bucket plus a scrypt bucket that only a key check about to run scrypt draws from (an IPv6 address shares its /64's), so junk and a key whose secret this process has already proved never drain it, and every 429 carries `Retry-After`. Two more bounds sit on that scrypt work (`src/server/key-check-bounds.ts`): one address starts five derivations for one key id and then one more every 12 seconds, and two derivations run at once on the thread pool with eight waiting, past which a key check answers 429 without deriving. A key's row is read from the store on every request, so a revoke, expiry, role or scope change by any process applies on the next one; only "this secret matched this stored hash" is remembered. The buckets live in memory and reset on restart.
 
-### src/recall-trace.ts
+### src/store/recall-trace.ts
 - `module header`: LC1 — retrieval-trace persistence (docs/plans/2026-08-02-lc1-recall-trace-persistence.md).
 - `writeRecallTraceAtRoot`: NOT used by api.recall, which must reuse the caller's open handle (v1.11.5 no-side-effects contract, tests/api-recall-no-side-effects.test.ts).
 
@@ -713,7 +713,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `module header`: AT1 rejected-value tombstone — shared reject/unreject/list flow. docs/plans/2026-08-15-at1-rejected-value-tombstone.md (T2, plan §4).
 - `RejectFlowResult.content`: The rejected content, for the CLI's at-reject-time echo (plan §2: the tombstone itself stores no content — this is the only place it's seen again after this call returns).
 
-### src/rejection.ts
+### src/store/rejection.ts
 - `module header`: AT1 rejected-value tombstone — core invariant. docs/plans/2026-08-15-at1-rejected-value-tombstone.md
 - `insertRejectedValue`: used by the T2 `reject` verb and `resolveConflict`'s `rejectLoserValue` path.
 - `deleteRejectedValue`: Delete a tombstone by tenant + exact digest — the T2 `unreject` verb, the only v1 escape hatch (plan §4).
@@ -903,7 +903,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `RecallScopeFilter`: 'default-deny-or-exact' (v1.25.0) — the default-admitted set PLUS rows whose scope equals `value`. This is the CLI `--scope` semantics: the flag predates the envelope column as a TAG-boost ranking hint (`scope:<v>` tags, HIPPO_SCOPE), so an explicit flag must UNLOCK the named envelope scope in addition to the normal set rather than narrow the result to it — narrowing would return zero rows for every tag-scoped workflow (envelope scope NULL). Strictly safer than the pre-v1.25.0 CLI behavior (no filter at all): other private scopes and quarantine buckets stay denied.
 - `RecallScopeFilter`: @internal v1.7.2 — internal SQL-builder shape; not on the public API surface (not re-exported from `src/index.ts`). Subject to change.
 - `loadSearchRows`: `_forceLikePathForTests(true)` forces the LIKE-fallback path here only; nothing in the environment can switch it. Read at the read-call site so writes (`syncFtsRow`, `deleteFtsRow`, `raw-archive.ts::archiveRaw`) keep using `isFtsAvailable` and never skip FTS index sync. Lets tests exercise the LIKE branch without poisoning the on-disk FTS state.
-- `searchPredicates`: v1.12.6 — belt-and-suspenders against `kind='archived'` leaking into recall. `kind='archived'` is a transient sentinel inside `archiveRawMemory`'s SAVEPOINT (src/raw-archive.ts:56): UPDATE kind = 'archived' immediately followed by DELETE, both inside one savepoint that commits or rolls back atomically. SQLite atomicity guarantees no concurrent reader sees the intermediate state. This filter is defensive-only against: (a) future bugs that drop the SAVEPOINT, (b) future bugs that introduce kind='archived' as a persisted state, (c) external direct-SQL writes that bypass archiveRawMemory. tenantOnlyPredicate starts with " WHERE tenant_id = ?" when tenant is set; when unset, we have no WHERE yet, so the archived clause needs both AND and WHERE forms. The "tenant-only" path always has WHERE (from tenant or we synthesize one).
+- `searchPredicates`: v1.12.6 — belt-and-suspenders against `kind='archived'` leaking into recall. `kind='archived'` is a transient sentinel inside `archiveRawMemory`'s SAVEPOINT (src/store/raw-archive.ts:56): UPDATE kind = 'archived' immediately followed by DELETE, both inside one savepoint that commits or rolls back atomically. SQLite atomicity guarantees no concurrent reader sees the intermediate state. This filter is defensive-only against: (a) future bugs that drop the SAVEPOINT, (b) future bugs that introduce kind='archived' as a persisted state, (c) external direct-SQL writes that bypass archiveRawMemory. tenantOnlyPredicate starts with " WHERE tenant_id = ?" when tenant is set; when unset, we have no WHERE yet, so the archived clause needs both AND and WHERE forms. The "tenant-only" path always has WHERE (from tenant or we synthesize one).
 - `selectLikeCandidates`: tests the newest `LIKE_WINDOW_ROWS` (2,000) admitted rows, never the whole store. The window is read newest first by `created` through `idx_memories_tenant_created` when a tenant is given and by rowid when none is, with tenant, archived, scope and superseded filters inside it so another tenant's rows cannot fill it. A store at or under the window returns exactly what the unbounded statement did. Measured at 10,000 rows, two terms, no match: 8.6 ms and every tenant row tested before, 1.5 ms and 2,000 rows after; an FTS5 hit on a common term costs 14 ms on the same store. A part-word match older than the window is missed; an FTS5 trigram index would cover the whole store and is a schema change.
 - `loadVectorCandidateEntries`: async so the scan in `topVectorMatches` (src/db/vector-store.ts) can hand the event loop back every 256 rows. One cursor stays open across those pauses: under WAL a reader blocks no writer, and the scan ranks one snapshot. A keyset read per chunk was measured and rejected, because the plan drives from `memories` and each chunk then sorts the whole tenant (10x slower at 250-row chunks). Measured at 10,000 vectors: longest block 35 ms before and 2 ms after at 384 dims, 90 ms and 4 ms at 1,536 dims, total time unchanged. Each row's bytes are copied into one reused Float32Array instead of a view per row.
 - `selectFtsCandidates`: F1 (v1.7.0): MEMORY_SEARCH_COLUMNS adds bm25_score as the trailing result column. Every other column is m.<col> AS <col> so rowToEntry sees the same shape it always has.

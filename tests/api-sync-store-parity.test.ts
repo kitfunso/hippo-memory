@@ -10,13 +10,13 @@ import {
   archiveRaw, authCreate, authCreateSelf, authGrant, authList, authListRows, authRevoke, authUngrant, forget, outcome, outcomeForLastRecall, reject,
   remember, supersede, type Actor, type Context,
 } from '../src/api.js';
-import { grantScope, insertApiKey, revokeApiKey } from '../src/auth.js';
+import { grantScope, insertApiKey, revokeApiKey } from '../src/store/auth.js';
 import { closeHippoDb, openHippoDb } from '../src/db.js';
 import type { ImportResult } from '../src/importers/core.js';
 import { importVault } from '../src/importers/vault.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { writeRecallTraceAtRoot } from '../src/recall-trace.js';
-import { rejectionDigest } from '../src/rejection.js';
+import { writeRecallTraceAtRoot } from '../src/store/recall-trace.js';
+import { rejectionDigest } from '../src/store/rejection.js';
 import { sqliteStore, type HippoStore, type StoreGroup } from '../src/store-port.js';
 import type { ConnectorEvent } from '../src/store/port.js';
 import { writeEntry } from '../src/store/entry-writes.js';

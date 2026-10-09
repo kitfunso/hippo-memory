@@ -1,6 +1,6 @@
 import { remember, type Context, type RememberOpts } from '../../api.js';
 import { markSlackEventSeen, slackEventRecord } from '../../store/connectors/slack.js';
-import { RejectedValueError } from '../../rejection.js';
+import { RejectedValueError } from '../../store/rejection.js';
 import { messageToRememberOpts } from './transform.js';
 import type { ChannelMeta } from './scope.js';
 import type { SlackMessageEvent } from './types.js';

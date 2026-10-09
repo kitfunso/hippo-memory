@@ -4,7 +4,7 @@
 
 import { remember, type Context, type RememberOpts } from '../../api.js';
 import { logEvent, seenEvent } from '../../store/connectors/github.js';
-import { RejectedValueError } from '../../rejection.js';
+import { RejectedValueError } from '../../store/rejection.js';
 import { computeIdempotencyKey } from './signature.js';
 import {
   issueEventToRememberOpts,

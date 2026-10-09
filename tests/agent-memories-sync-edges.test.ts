@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import { forget, reject, restoreDormant, supersede } from '../src/api.js';
 import { importForStore } from '../src/agent-memories/sync.js';
 import type { ImportReport } from '../src/agent-memories/report.js';
-import { insertDormantRow } from '../src/dormant.js';
+import { insertDormantRow } from '../src/store/dormant.js';
 import { createMemory, type MemoryEntry } from '../src/memory.js';
 import { removeEntryMirrors } from '../src/store/mirrors.js';
 import { deleteEntryRowInTx, writeEntry } from '../src/store/entry-writes.js';

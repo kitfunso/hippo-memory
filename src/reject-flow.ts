@@ -13,10 +13,10 @@
 
 import { closeHippoDb, withWriteScope, type DatabaseSyncLike } from './db.js';
 import { BadRequestError } from './api-errors.js';
-import { appendAuditEvent, reportAuditWriteFailure } from './audit.js';
+import { appendAuditEvent, reportAuditWriteFailure } from './store/audit.js';
 import { isPersonalScope } from './recall-scope.js';
-import { archiveRawMemory } from './raw-archive.js';
-import { deleteDormantRow, listDormantSnapshots, purgeDormantByDigest, replaceDormantEntry } from './dormant.js';
+import { archiveRawMemory } from './store/raw-archive.js';
+import { deleteDormantRow, listDormantSnapshots, purgeDormantByDigest, replaceDormantEntry } from './store/dormant.js';
 import { stampOriginProject } from './store/entry-row.js';
 import { purgeMirrorBestEffort } from './store/mirrors.js';
 import { openStore } from './store/open.js';
@@ -33,7 +33,7 @@ import {
   deleteRejectedValue,
   listRejectedValues,
   type RejectedValueRow,
-} from './rejection.js';
+} from './store/rejection.js';
 
 export interface RejectFlowOpts {
   hippoRoot: string;
@@ -146,7 +146,7 @@ function removeLiveRows(db: DatabaseSyncLike, opts: RejectFlowOpts, holdsValue: 
   }
 }
 
-// Dormant copies (src/dormant.ts), whole or inside a merged row, go too, in the same transaction: a
+// Dormant copies (src/store/dormant.ts), whole or inside a merged row, go too, in the same transaction: a
 // rejected value may not linger where `hippo dormant restore` could
 // bring it back. They have no markdown mirror, so the post-commit
 // mirror purge below is a no-op for them; they join removedIds for the

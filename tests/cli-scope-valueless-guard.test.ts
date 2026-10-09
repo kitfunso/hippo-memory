@@ -167,7 +167,7 @@ describe('valued --scope regression coverage', () => {
 
     // Current contract (pinned, not asserted-as-desired): wmRead only adds a
     // `WHERE scope = ?` clause when a scope is explicitly passed; a bare
-    // `wm read` applies no scope filter at all (src/working-memory.ts
+    // `wm read` applies no scope filter at all (src/store/working-memory.ts
     // wmRead), so it is NOT isolated from scope-X items — they show up here
     // too. If wm read's default-scope behavior changes, update this pin.
     const unscoped = hippo(home, env, 'wm', 'read');

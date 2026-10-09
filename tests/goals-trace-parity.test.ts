@@ -14,7 +14,7 @@ import fs from 'node:fs';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { computeGoalStackBoost, pushGoal } from '../src/goals.js';
+import { computeGoalStackBoost, pushGoal } from '../src/store/goals.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import type { MemoryEntry } from '../src/memory.js';
 import type { RerankStep } from '../src/core/search-types.js';

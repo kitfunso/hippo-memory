@@ -11,7 +11,7 @@ import { listMemoryConflicts } from '../src/store/conflicts.js';
 import { createMemory, Layer } from '../src/memory.js';
 import { consolidate } from '../src/consolidate/sleep.js';
 import { openHippoDb, closeHippoDb, getCurrentSchemaVersion } from '../src/db.js';
-import { createApiKey } from '../src/auth.js';
+import { createApiKey } from '../src/store/auth.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { ingestEvent, type IngestEvent } from '../src/connectors/github/ingest.js';
 import { ingestMessage } from '../src/connectors/slack/ingest.js';

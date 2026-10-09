@@ -1,6 +1,6 @@
 // A store other than hippo.db for the ConnectorWrites group, built on the in-memory entry-writes store: it copies the event logs and
 // the quarantine records out of hippo.db once, then keeps both in memory and lands them exactly when the staged entry does.
-import { listAuditEventsAfter } from '../../src/audit.js';
+import { listAuditEventsAfter } from '../../src/store/audit.js';
 import { closeHippoDb, openHippoDb } from '../../src/db.js';
 import type { EntryWrites, HippoStore } from '../../src/server.js';
 import { sqliteStore } from '../../src/store-port.js';

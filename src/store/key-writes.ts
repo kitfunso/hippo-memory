@@ -1,7 +1,7 @@
 // hippo.db's half of the KeyWrites store group.
 import { BadRequestError, ConflictError, NotFoundError } from '../api-errors.js';
-import { appendAuditEvent, type AppendAuditOpts } from '../audit.js';
-import { grantScope, insertApiKey, listLiveOwnedKeyIds, revokeApiKey, ungrantScope } from '../auth.js';
+import { appendAuditEvent, type AppendAuditOpts } from './audit.js';
+import { grantScope, insertApiKey, listLiveOwnedKeyIds, revokeApiKey, ungrantScope } from './auth.js';
 import { withWriteScope, type DatabaseSyncLike } from '../db.js';
 import { isRestrictedScope } from '../recall-scope.js';
 import type { KeyMint, SelfKeyMint } from './port.js';

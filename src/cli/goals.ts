@@ -1,11 +1,11 @@
 // `hippo goal`: the per-session goal stack that recall boosts.
 
 import { envHippoSessionId } from '../env.js';
-import type { PolicyType } from '../goals.js';
+import type { PolicyType } from '../store/goals.js';
 import * as api from '../api.js';
 import { resolveTenantId } from '../tenant.js';
 import { printError } from './output.js';
-import { type CliFlags, boolFlag, flagIsTrue } from './shared.js';
+import { type CliFlags, boolFlag, flagIsTrue, stringFlag } from './shared.js';
 
 // ---------------------------------------------------------------------------
 // `hippo goal <push|list|complete|suspend|resume>`
@@ -90,7 +90,7 @@ function cmdGoalPush(hippoRoot: string, args: string[], flags: CliFlags): void {
     printError('--success requires a value (e.g., --success "<condition>")');
     process.exit(1);
   }
-  const successCondition = typeof successRaw === 'string' ? successRaw : undefined;
+  const successCondition = stringFlag(flags, 'success');
 
   const level = readGoalLevel(flags);
 
@@ -99,7 +99,7 @@ function cmdGoalPush(hippoRoot: string, args: string[], flags: CliFlags): void {
     printError('--parent requires a value (e.g., --parent <goalId>)');
     process.exit(1);
   }
-  const parentGoalId = typeof parentRaw === 'string' ? parentRaw : undefined;
+  const parentGoalId = stringFlag(flags, 'parent');
 
   const goal = api.goalPush(goalContext(hippoRoot, tenantId), {
     sessionId,

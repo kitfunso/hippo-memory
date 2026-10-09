@@ -33,27 +33,27 @@ export {
 } from './store-port.js';
 // An add-on store's entry writes apply an outcome, guard tombstones and check reach exactly as hippo.db does.
 export { entryAfterOutcome } from './memory.js';
-export { rejectionDigest, RejectedValueError } from './rejection.js';
+export { rejectionDigest, RejectedValueError } from './store/rejection.js';
 export { ownScopeTouches } from './recall-scope.js';
 export { BadRequestError, ConflictError } from './api-errors.js';
 export type { HippoDbContext, StoreReply } from './api/types.js';
-export type { ApiKeyListItem, ApiKeyListRow, ApiKeyRecord, ListApiKeysOpts, NewApiKey } from './auth.js';
+export type { ApiKeyListItem, ApiKeyListRow, ApiKeyRecord, ListApiKeysOpts, NewApiKey } from './store/auth.js';
 export type { KeysetPosition } from './keyset.js';
 // The types HippoStore's methods take and return, so an add-on store can implement them from this subpath.
-export type { AppendAuditOpts, AuditEvent, ListAuditAfterOpts } from './audit.js';
+export type { AppendAuditOpts, AuditEvent, ListAuditAfterOpts } from './store/audit.js';
 export type { ContinuityBlock } from './api/recall-types.js';
-export type { ActiveGoals, GetActiveGoalsOpts, Goal, GoalRecallLogRow, RetrievalPolicy } from './goals.js';
+export type { ActiveGoals, GetActiveGoalsOpts, Goal, GoalRecallLogRow, RetrievalPolicy } from './store/goals.js';
 export type { MemoryEntry } from './memory.js';
 export type { ClassResolution, PlanningFallacyEvidence } from './store/planning-fallacy-evidence.js';
 export type { PredictionBaserate } from './store/predictions.js';
-export type { RecallTraceInput } from './recall-trace.js';
+export type { RecallTraceInput } from './store/recall-trace.js';
 export type { StrengthenOptions } from './store/entry-writes.js';
 export type { OriginFilter, RecallScopeFilter, VectorCandidateSpec } from './store/search-rows.js';
 export type { ContinuityKey } from './store/sessions.js';
 export type { SessionEvent, TaskSnapshot } from './store/rows.js';
 export type { SessionHandoff } from './handoff.js';
 export type { AmbientLoadResult, AmbientRecallRequest, ContextCandidateFilter, RecentOrigins } from './store/candidates.js';
-export type { AmbientStoreFilter } from './ambient-store.js';
+export type { AmbientStoreFilter } from './store/ambient.js';
 export type { AmbientTallies } from './ambient.js';
 export type { TokenUse } from './token-ledger.js';
 export type { EmbeddingIndexState } from './embeddings.js';

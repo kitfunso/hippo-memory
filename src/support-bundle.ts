@@ -13,7 +13,7 @@ import { listTableNames } from './db/tables.js';
 import { runDoctor, type DoctorOpts } from './doctor.js';
 import { loadConfig } from './config.js';
 import { redactSecretsStrict } from './secret-detect.js';
-import type { JsonObject } from './working-memory.js';
+import type { JsonObject } from './store/working-memory.js';
 import { type JsonValue, isJsonString, isJsonObject } from './json.js';
 import { escapeRegex } from './escape.js';
 import { errorMessage } from './log.js';

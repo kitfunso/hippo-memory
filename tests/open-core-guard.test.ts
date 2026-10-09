@@ -33,7 +33,7 @@ describe('check-open-core', () => {
   it('fails on a commercial path, a commercial identifier and the marker; passes core and docs', () => {
     commit('src/auth/saml.ts', 'export {};\n', 'feat: saml');
     expect(run()).toBe(1);
-    commit('src/auth.ts', 'export function ssoLogin() {}\n', 'feat: login');
+    commit('src/store/auth.ts', 'export function ssoLogin() {}\n', 'feat: login');
     expect(run()).toBe(1);
     commit('ui/app.ts', '// commercial\nexport {};\n', 'feat: ui');
     expect(run()).toBe(1);

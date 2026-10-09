@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import * as api from '../src/api.js';
-import { createApiKey, grantScope, listScopeGrants } from '../src/auth.js';
+import { createApiKey, grantScope, listScopeGrants } from '../src/store/auth.js';
 import { closeHippoDb, openHippoDb } from '../src/db.js';
 import { mapApiError } from '../src/http-util.js';
 import { canReadScope } from '../src/recall-scope.js';

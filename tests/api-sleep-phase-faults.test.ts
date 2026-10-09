@@ -23,7 +23,7 @@ import { sqliteStore } from '../src/store-port.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { createMemory, Layer } from '../src/memory.js';
-import { queryAuditEvents, type AuditEvent } from '../src/audit.js';
+import { queryAuditEvents, type AuditEvent } from '../src/store/audit.js';
 import { loadConfig as realLoadConfig } from '../src/config.js';
 
 function newCtx() {
