@@ -39,7 +39,7 @@ import { copilotTranscriptFor, SESSION_ID_RE } from '../capture/copilot-transcri
 import { loadTurnPosition, runSessionWorker, saveTurnPosition, turnsAfter, type WorkerMode } from '../capture/session-worker.js';
 import { isStringValue, readVscodeStop } from '../capture-contract.js';
 import { loadConfig } from '../config.js';
-import { countCreatedSinceLastSleep } from '../store/index-and-stats.js';
+import { autoSleepDue } from '../api/auto-sleep.js';
 import { truncateCodePointSafe } from '../transcript-tail.js';
 import { COMPACTION_DB_WAIT_MS } from '../compaction-record.js';
 import { COMPACT_RESUME_EVENT_CONTENT_CAP, COMPACT_RESUME_MAX_AGE_MS, compactResumeText } from '../context-render.js';
@@ -331,9 +331,8 @@ async function sleepIfDue(
   if (!isInitialized(hippoRoot)) return sleepProjectStore(hippoRoot, flags, closeLogFile, transcriptPath);
   const prefix = `turn close, session ${sessionId}`;
   try {
-    const { enabled, threshold } = loadConfig(hippoRoot).autoSleep;
-    const count = enabled ? countCreatedSinceLastSleep(hippoRoot, resolveTenantId({})) : 0;
-    if (!enabled || count < threshold) {
+    const { enabled, count, threshold, due } = autoSleepDue(hippoRoot, resolveTenantId({}), loadConfig(hippoRoot).autoSleep);
+    if (!due) {
       const why = enabled ? `${count} new memories, threshold ${threshold}` : 'auto-sleep is off';
       appendSessionEndCloseLog(closeLogFile, `${prefix}: skip sleep, ${why}`, { startFresh: true });
       return;

@@ -30,7 +30,7 @@ class RecentRecalls extends Map<string, string[]> {
 }
 
 export const lastRecalledIds: Map<string, string[]> = new RecentRecalls();
-export const autoSleepInFlight = new Set<string>();
+export { autoSleepInFlight } from '../api/auto-sleep.js';
 
 export function resolveClientKey(ctx: { clientKey?: string; tenantId: string; project?: { name: string } } | undefined): string {
   const base = ctx?.clientKey ? ctx.clientKey : `stdio-${process.pid}:${ctx?.tenantId || 'default'}`;
