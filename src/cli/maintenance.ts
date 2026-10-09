@@ -3,9 +3,9 @@
 import { envAnthropicApiKey } from '../util/env.js';
 import { loadAllEntries } from '../store/entry-reads.js';
 import { deduplicateStore } from '../consolidate/dedupe.js';
-import { embedAll, loadEmbeddingIndex } from '../store/embeddings/index.js';
+import { embedAll } from '../store/embeddings/index.js';
 import { resolveEmbeddingProvider, type EmbeddingProvider } from '../store/embeddings/provider.js';
-import { resetStoredParticles } from '../store/vector-writes.js';
+import { loadEmbeddingIndex, resetStoredParticles } from '../store/vector-index.js';
 import { loadConfig } from '../core/config.js';
 import { resolveTenantId } from '../store/tenant.js';
 import { refineStore } from './refine-llm.js';

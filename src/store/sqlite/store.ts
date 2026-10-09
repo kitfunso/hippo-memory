@@ -4,7 +4,6 @@ import { listApiKeyRows, readApiKeyRecord } from '../auth.js';
 import { existsSync } from 'node:fs';
 import { appendAuditEvent, listAuditEventsAfter, queryAuditEvents } from '../audit.js';
 import { getHippoDbPath, withWriteScope } from '../../db/index.js';
-import { loadStoredVectorViews } from '../embeddings/index.js';
 import { activeGoalsWithPolicies, localGoalRecallRows, writeGoalRecallLog } from '../goals.js';
 import { planningFallacyEvidenceAt } from '../planning-fallacy-evidence.js';
 import { writeRecallTrace } from '../recall-trace.js';
@@ -32,7 +31,7 @@ import type {
 } from '../port.js';
 import { loadRecallSearchEntries } from '../search-rows.js';
 import { type ContinuityKey, listSessionEvents, loadActiveTaskSnapshot } from '../sessions.js';
-import { entriesWithoutVectorAt, writeVectorsAt } from '../vector-writes.js';
+import { entriesWithoutVectorAt, loadStoredVectorViews, writeVectorsAt } from '../vector-index.js';
 
 /** The store a request runs on: the served one, else hippo.db under its root, as the CLI and SDK callers have it. */
 export function storeFor(ctx: { readonly hippoRoot: string; readonly store?: HippoStore }): HippoStore {

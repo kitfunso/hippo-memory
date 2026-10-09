@@ -13,7 +13,7 @@ import {
   resetAllPhysicsState,
   refreshParticleProperties,
 } from '../src/db/physics-state.js';
-import { loadStoredParticles, resetStoredParticles, seedStoredParticle } from '../src/store/vector-writes.js';
+import { loadStoredParticles, resetStoredParticles, seedStoredParticle } from '../src/store/vector-index.js';
 import type { PhysicsParticle } from '../src/core/physics.js';
 import type { MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';

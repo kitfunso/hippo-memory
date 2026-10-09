@@ -14,9 +14,8 @@ import { rethrowIfSqliteBlocked } from '../../db/index.js';
 import { EMBEDDING_MODEL_META_KEY } from '../../db/vector-store.js';
 import { initializeParticle } from '../../db/physics-state.js';
 import {
-  indexedModel, loadEmbeddingIndex, loadStoredVectors, loadStoredVectorViews, pruneStoredVectors, replacesIndex, resetStoredParticles, saveEmbeddingIndex,
-  saveIndexIdentity, saveStoredVectors, seedStoredParticle, storedIndexState, type EmbeddingIndexState,
-} from '../vector-writes.js';
+  indexedModel, pruneStoredVectors, replacesIndex, resetStoredParticles, saveEmbeddingIndex, saveIndexIdentity, saveStoredVectors, seedStoredParticle, storedIndexState,
+} from '../vector-index.js';
 import { loadConfig } from '../../core/config.js';
 import { resolveEmbeddingProvider, type EmbeddingProvider } from './provider.js';
 import { redactSecretsStrict } from '../../util/secret-detect.js';
@@ -25,9 +24,6 @@ import { StoreNotPortedError } from '../../util/sqlite-blocked.js';
 import type { HippoStore, VectorReads, VectorRowWrite, VectorWrite, VectorWriteResult, VectorWrites } from '../index.js';
 
 export { EMBEDDING_MODEL_META_KEY };
-// The store owns these: it opens hippo.db for the reads and writes, and applies the two index rules inside its own write.
-export { indexedModel, loadEmbeddingIndex, loadStoredVectors, loadStoredVectorViews, replacesIndex, saveEmbeddingIndex, storedIndexState as embeddingIndexStateAt };
-export type { EmbeddingIndexState };
 
 /**
  * Bump whenever `embeddingInputText`'s composition changes in a way that

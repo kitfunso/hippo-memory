@@ -6,7 +6,7 @@ import * as path from 'path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { loadEmbeddingIndex } from '../src/store/embeddings/index.js';
+import { loadEmbeddingIndex } from '../src/store/vector-index.js';
 import { resolveEmbeddingProvider, type EmbeddingProvider } from '../src/store/embeddings/provider.js';
 import { requireLocalPipeline } from '../src/store/embeddings/local.js';
 import { cmdEmbed } from '../src/cli/maintenance.js';

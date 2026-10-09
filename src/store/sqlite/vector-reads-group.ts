@@ -1,14 +1,14 @@
 // hippo.db's vector reads. Async only: the nearest-row scan yields between chunks, so a store worker awaits these where it runs every other method to its end.
 import { loadPhysicsState } from '../../db/physics-state.js';
-import { embeddingIndexStateAt, loadStoredVectors } from '../embeddings/index.js';
 import { onHandle } from '../open.js';
 import type { VectorReads } from '../port.js';
 import { loadVectorCandidateEntries } from '../search-rows.js';
+import { loadStoredVectors, storedIndexState } from '../vector-index.js';
 
 export function sqliteVectorReads(hippoRoot: string): VectorReads {
   return {
     async embeddingIndexState() {
-      return embeddingIndexStateAt(hippoRoot);
+      return storedIndexState(hippoRoot);
     },
     async storedVectors(ids) {
       return loadStoredVectors(hippoRoot, ids);

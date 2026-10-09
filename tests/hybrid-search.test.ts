@@ -13,7 +13,7 @@ import { cosineSimilarity } from '../src/store/embeddings/index.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { saveEmbeddingIndex } from '../src/store/embeddings/index.js';
+import { saveEmbeddingIndex } from '../src/store/vector-index.js';
 
 // ---------------------------------------------------------------------------
 // Helpers

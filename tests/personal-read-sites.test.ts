@@ -10,7 +10,7 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS, type CreateMemoryOptions, type Me
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { batchWriteAndDelete } from '../src/store/delete-and-batch.js';
-import { saveEmbeddingIndex } from '../src/store/embeddings/index.js';
+import { saveEmbeddingIndex } from '../src/store/vector-index.js';
 import { loadRecallSearchEntries, loadVectorCandidateEntries, recallScopeFilter } from '../src/store/search-rows.js';
 import { loadAmbientCandidates, loadContextCandidates, loadTextsHoldingWords } from '../src/store/candidates.js';
 import { loadAmbientTallies } from '../src/store/ambient.js';

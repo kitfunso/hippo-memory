@@ -4,7 +4,7 @@ import type { AmbientStoreFilter } from './ambient.js';
 import type { ApiKeyListRow, ApiKeyRecord, ListApiKeysOpts, NewApiKey } from './auth.js';
 import type { AppendAuditOpts, AuditEvent, ListAuditAfterOpts, QueryAuditOpts } from './audit.js';
 import { StoreNotPortedError } from '../util/sqlite-blocked.js';
-import type { EmbeddingIndexState } from './embeddings/index.js';
+import type { EmbeddingIndexState } from './vector-index.js';
 import type { Entity, Relation } from './graph-rows.js';
 import type { ActiveGoals, GetActiveGoalsOpts, GoalRecallLogRow } from './goals.js';
 import type { SessionHandoff } from '../core/handoff.js';

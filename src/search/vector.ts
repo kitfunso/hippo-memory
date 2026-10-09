@@ -1,5 +1,6 @@
 import type { MemoryEntry } from '../core/memory.js';
-import { cosineOf, indexedModel, indexNeedsRebuild } from '../store/embeddings/index.js';
+import { cosineOf, indexNeedsRebuild } from '../store/embeddings/index.js';
+import { indexedModel } from '../store/vector-index.js';
 import type { VectorCandidateSpec } from '../store/search-rows.js';
 import { resolveEmbeddingProvider } from '../store/embeddings/provider.js';
 import { rethrowIfSqliteBlocked } from '../db/index.js';

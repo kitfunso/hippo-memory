@@ -3,7 +3,7 @@ import type { MessagePort } from 'node:worker_threads';
 import { auditWriteFailureCount } from '../audit.js';
 import { type DatabaseSyncLike, RequestStores } from '../../db/index.js';
 import type { OpenedDb } from '../../db/connect.js';
-import { loadStoredVectorViews } from '../embeddings/index.js';
+import { loadStoredVectorViews } from '../vector-index.js';
 import { requestScopes } from '../../util/request-scope.js';
 import { initStore } from '../open.js';
 import { watchCommits } from './commit-watch.js';

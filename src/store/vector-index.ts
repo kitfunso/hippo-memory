@@ -1,4 +1,4 @@
-// hippo.db's vector index and particles: the VectorWrites store group's half, and the reads and writes the embeddings module makes by store folder.
+// Owns hippo.db's stored vectors, the identity of the model that built them, and the particle rows: every read and write of the three.
 import { closeHippoDb, getMeta, openHippoDb, setMeta, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import { DEFAULT_EMBEDDING_MODEL } from './embeddings/local.js';
 import type { MemoryEntry } from '../core/memory.js';

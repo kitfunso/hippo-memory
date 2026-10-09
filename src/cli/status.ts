@@ -10,9 +10,9 @@ import { calculateStrength, calculateRewardFactor, resolveConfidence, confidence
 import { readEntry, loadAllEntries } from '../store/entry-reads.js';
 import { loadStats } from '../store/index-and-stats.js';
 import { listMemoryConflicts } from '../store/conflicts.js';
-import { loadEmbeddingIndex, embeddingModelRequiresReindex } from '../store/embeddings/index.js';
+import { embeddingModelRequiresReindex } from '../store/embeddings/index.js';
 import { resolveEmbeddingProvider } from '../store/embeddings/provider.js';
-import { loadStoredParticles } from '../store/vector-writes.js';
+import { loadEmbeddingIndex, loadStoredParticles } from '../store/vector-index.js';
 import { computeSystemEnergy, vecNorm } from '../core/physics.js';
 import { loadConfig } from '../core/config.js';
 import { runDoctor, formatDoctor } from '../doctor.js';

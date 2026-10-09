@@ -7,7 +7,7 @@ import { initStore } from '../src/store/open.js';
 import { batchWriteAndDelete } from '../src/store/delete-and-batch.js';
 import { loadVectorCandidateEntries, recallScopeFilter } from '../src/store/search-rows.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry, type CreateMemoryOptions } from '../src/core/memory.js';
-import { saveEmbeddingIndex } from '../src/store/embeddings/index.js';
+import { saveEmbeddingIndex } from '../src/store/vector-index.js';
 
 const QUERY = [1, 0, 0];
 let root: string;
