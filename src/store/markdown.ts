@@ -1,5 +1,6 @@
-import { type MemoryEntry, Layer, type ConfidenceLevel, type MemoryKind } from '../memory.js';
-import { dumpFrontmatter, parseFrontmatter } from '../yaml.js';
+import { DEFAULT_TENANT_ID } from '../util/env.js';
+import { type MemoryEntry, Layer, FALLBACK_HALF_LIFE_DAYS, DEFAULT_SCHEMA_FIT, type ConfidenceLevel, type MemoryKind } from '../core/memory.js';
+import { dumpFrontmatter, parseFrontmatter } from './yaml.js';
 
 type FrontmatterValue = string | number | boolean | null | string[] | number[];
 
@@ -69,8 +70,8 @@ export function serializeEntry(entry: MemoryEntry): string {
   };
   // Emit tenant_id only when not 'default' to keep diffs clean for the dominant
   // single-tenant case (mirrors the plan's task 7 guidance).
-  const tenantId = entry.tenantId ?? 'default';
-  if (tenantId !== 'default') {
+  const tenantId = entry.tenantId ?? DEFAULT_TENANT_ID;
+  if (tenantId !== DEFAULT_TENANT_ID) {
     frontmatter['tenant_id'] = tenantId;
   }
   // v39: '' (user-global) and null (unknown, hidden by default) must both round-trip;
@@ -105,11 +106,11 @@ export function deserializeEntry(raw: string): MemoryEntry | null {
     last_retrieved: String(data['last_retrieved'] ?? new Date().toISOString()),
     retrieval_count: Number(data['retrieval_count'] ?? 0),
     strength: Number(data['strength'] ?? 1.0),
-    half_life_days: Number(data['half_life_days'] ?? 7),
+    half_life_days: Number(data['half_life_days'] ?? FALLBACK_HALF_LIFE_DAYS),
     layer: data['layer'] as Layer,
     tags: normalizeStringArray(data['tags']),
     emotional_valence: (data['emotional_valence'] as MemoryEntry['emotional_valence']) ?? 'neutral',
-    schema_fit: Number(data['schema_fit'] ?? 0.5),
+    schema_fit: Number(data['schema_fit'] ?? DEFAULT_SCHEMA_FIT),
     source: String(data['source'] ?? 'cli'),
     outcome_score: data['outcome_score'] === null || data['outcome_score'] === undefined ? null : Number(data['outcome_score']),
     outcome_positive: Number(data['outcome_positive'] ?? 0),
@@ -135,7 +136,7 @@ export function deserializeEntry(raw: string): MemoryEntry | null {
     scope: data['scope'] === null || data['scope'] === undefined ? null : String(data['scope']),
     owner: data['owner'] === null || data['owner'] === undefined ? null : String(data['owner']),
     artifact_ref: data['artifact_ref'] === null || data['artifact_ref'] === undefined ? null : String(data['artifact_ref']),
-    tenantId: data['tenant_id'] === null || data['tenant_id'] === undefined ? 'default' : String(data['tenant_id']),
+    tenantId: data['tenant_id'] === null || data['tenant_id'] === undefined ? DEFAULT_TENANT_ID : String(data['tenant_id']),
     origin_project: !('origin_project' in data) ? undefined : data['origin_project'] === null ? null : String(data['origin_project']),
   };
 }

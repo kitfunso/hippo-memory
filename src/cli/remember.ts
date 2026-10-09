@@ -1,7 +1,7 @@
 // The write verbs: `hippo remember`, `hippo supersede` and `hippo trace`.
 
-import { envAnthropicApiKey } from '../env.js';
-import { evalNow } from '../ablation.js';
+import { envAnthropicApiKey } from '../util/env.js';
+import { evalNow } from '../core/ablation.js';
 import * as fs from 'fs';
 import {
   createMemory,
@@ -13,30 +13,35 @@ import {
   Layer,
   ConfidenceLevel,
   type MemoryEntry,
-} from '../memory.js';
+} from '../core/memory.js';
 import { isInitialized } from '../store/open.js';
 import { writeEntry } from '../store/entry-writes.js';
 import { readEntry, loadAllEntries } from '../store/entry-reads.js';
 import { loadNewestEntries, schemaFitInStore } from '../store/candidates.js';
 import { updateStats } from '../store/index-and-stats.js';
 import { listMemoryConflicts } from '../store/conflicts.js';
-import { RejectedValueError } from '../rejection.js';
-import { renderTraceContent, parseSteps } from '../trace.js';
-import { embedMemory } from '../embeddings.js';
-import { loadConfig, type HippoConfig } from '../config.js';
-import { extractPathTags } from '../path-context.js';
-import { detectScope } from '../scope.js';
-import { assertClientScope } from '../recall-scope.js';
-import { getGlobalRoot, initGlobal } from '../shared.js';
-import { vetSecrets } from '../secret-detect.js';
+import { RejectedValueError } from '../store/rejection.js';
+import { renderTraceContent, parseSteps } from '../consolidate/trace.js';
+import { embedMemory } from '../store/embeddings/index.js';
+import { loadConfig, type HippoConfig } from '../core/config.js';
+import { extractPathTags } from '../search/path-context.js';
+import { detectScope } from '../sharing/scope.js';
+import { assertClientScope } from '../store/recall-scope.js';
+import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
+import { vetSecrets } from '../util/secret-detect.js';
 import * as client from './client.js';
-import { resolveTenantId } from '../tenant.js';
-import { computeSalience } from '../salience.js';
+import { resolveTenantId } from '../store/tenant.js';
+import { computeSalience } from '../core/salience.js';
 import { validateOwner, isStrictOwnerEnv } from './owner-validation.js';
 import { printError } from './output.js';
-import { emitCliAudit, requireInit, runViaServerIfAvailable, fmt, type CliFlags, type CommandContext, boolFlag, flagIsTrue, stringFlag } from './shared.js';
+import { emitCliAudit, requireInit, runViaServerIfAvailable } from './shared.js';
+import { fmt } from './print.js';
+import { type CliFlags, type CommandContext, boolFlag, flagIsTrue, stringFlag } from './flag-values.js';
 import { DAY_MS } from '../util/time.js';
-import { errorMessage } from '../log.js';
+import { errorMessage } from '../util/log.js';
+
+const PARENT_PREVIEW_CHARS = 70;
+const DETAIL_CONTENT_CHARS = 160;
 
 // `requested` is what the caller typed; `all` adds path and scope tags from this process's cwd and env.
 interface RememberTags {
@@ -113,8 +118,7 @@ function parseRememberEnvelope(flags: CliFlags): RememberEnvelope {
   return { kind, owner, artifactRef, scope };
 }
 
-/** @internal Exported so tests/remember-origin-parity.test.ts runs the real direct write; not a stable public API. */
-export async function cmdRemember(
+async function cmdRemember(
   hippoRoot: string,
   text: string,
   flags: CliFlags
@@ -212,7 +216,7 @@ async function extractRememberFacts(targetRoot: string, entry: MemoryEntry, flag
 
   if (shouldExtract && apiKey) {
     try {
-      const { extractFacts, storeExtractedFacts } = await import('../extract.js');
+      const { extractFacts, storeExtractedFacts } = await import('../learn/extract.js');
       const facts = await extractFacts(entry.content, {
         apiKey,
         model: config.extraction.model,
@@ -420,7 +424,7 @@ function traceLineage(hippoRoot: string, globalRoot: string, entry: MemoryEntry,
   const parents = Array.isArray(entry.parents) ? entry.parents : [];
   const parentPreviews = parents.map((pid) => {
     const p = readEntry(hippoRoot, pid, tenantId) ?? (isInitialized(globalRoot) ? readEntry(globalRoot, pid, tenantId) : null);
-    return { id: pid, content: p ? p.content.replace(/\s+/g, ' ').slice(0, 70) : '(not found)' };
+    return { id: pid, content: p ? p.content.replace(/\s+/g, ' ').slice(0, PARENT_PREVIEW_CHARS) : '(not found)' };
   });
 
   // Open conflicts involving this memory.
@@ -467,7 +471,7 @@ function printTraceText(t: TraceView): void {
   const { parentPreviews, myConflicts } = t;
   console.log(`Memory: ${entry.id}  [${sourceLabel}]`);
   console.log('='.repeat(50));
-  console.log(`Content:   ${entry.content.replace(/\s+/g, ' ').slice(0, 160)}${entry.content.length > 160 ? '...' : ''}`);
+  console.log(`Content:   ${entry.content.replace(/\s+/g, ' ').slice(0, DETAIL_CONTENT_CHARS)}${entry.content.length > DETAIL_CONTENT_CHARS ? '...' : ''}`);
   console.log(`Layer:     ${entry.layer.padEnd(10)} Confidence: ${conf.padEnd(14)} Pinned: ${entry.pinned ? 'yes' : 'no'}${entry.starred ? '  Starred: yes' : ''}`);
   console.log(`Tags:      ${entry.tags.join(', ') || '(none)'}`);
   console.log(`Created:   ${entry.created}  (${fmt(ageDays, 1)} days ago)`);

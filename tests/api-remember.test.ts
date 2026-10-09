@@ -4,10 +4,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
-import { remember, type HippoDbContext } from '../src/api.js';
-import { BadRequestError } from '../src/api-errors.js';
-import { _resetSharedStoreCacheForTests } from '../src/config.js';
-import { clearProjectIdentityCache } from '../src/project-identity.js';
+import { remember, type HippoDbContext } from '../src/api/index.js';
+import { BadRequestError } from '../src/core/api-errors.js';
+import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
+import { clearProjectIdentityCache } from '../src/core/project-identity.js';
 
 describe('api.remember', () => {
   it('persists a memory and returns its envelope', () => {
@@ -37,8 +37,8 @@ describe('api.remember', () => {
       { hippoRoot: home, tenantId: 'default', actor: { subject: 'api_key:hk_test', role: 'admin' } },
       { content: 'audit-trail-canary' },
     );
-    const { openHippoDb, closeHippoDb } = await import('../src/db.js');
-    const { queryAuditEvents } = await import('../src/audit.js');
+    const { openHippoDb, closeHippoDb } = await import('../src/db/index.js');
+    const { queryAuditEvents } = await import('../src/store/audit.js');
     const db = openHippoDb(home);
     const events = queryAuditEvents(db, { tenantId: 'default', op: 'remember' });
     // Task 4 dedupe: exactly one audit row, with the supplied actor.

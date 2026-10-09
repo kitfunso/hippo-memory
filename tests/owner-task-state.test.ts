@@ -2,9 +2,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
-import { recordFailure } from '../src/failure-log.js';
-import type { SessionHandoff } from '../src/handoff.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
+import { recordFailure } from '../src/store/failure-log.js';
+import type { SessionHandoff } from '../src/core/handoff.js';
 import {
   clearActiveTaskSnapshot,
   closeTaskSnapshotsForSession,

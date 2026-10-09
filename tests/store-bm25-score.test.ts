@@ -13,14 +13,17 @@
  * (codex P2-2: don't rely on a "miss" to fall through).
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry, writeEntryDbOnly } from '../src/store/entry-writes.js';
 import { _forceLikePathForTests, loadRecallSearchEntriesFromDb, loadSearchEntries } from '../src/store/search-rows.js';
-import { closeHippoDb, openHippoDb, withSharedStoreHandles } from '../src/db.js';
-import { Layer, type MemoryEntry } from '../src/memory.js';
+import { closeHippoDb, openHippoDb, withSharedStoreHandles } from '../src/db/index.js';
+import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { makeRoot } from './_helpers/make-root.js';
+
+// The LIKE case seeds 6,000 rows, in two transactions, since store size is the thing it varies.
+vi.setConfig({ testTimeout: 30_000 });
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }

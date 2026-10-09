@@ -1,9 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as http from 'node:http';
 import { boundPort } from '../_helpers/listen.js';
-import { createLlmReranker, llmReranker } from '../../src/rerankers/llm.js';
+import { createLlmReranker } from '../../src/rerankers/llm.js';
+import { getReranker } from '../../src/rerankers/index.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import type { SearchResult } from '../../src/core/search-types.js';
+
+// The instance the registry serves, whose outage state lasts the process.
+const llmReranker = getReranker('llm')!;
 
 function asResult(content: string, score: number): SearchResult {
   return { entry: createMemory(content), score, bm25: score, cosine: 0, tokens: 10 };
@@ -206,5 +210,49 @@ describe('llmReranker against a local endpoint', () => {
     await rerank('q', inputs());
     // A new outage is reported at once, not held back by the old one's five minutes.
     expect(lines(stderr).filter((line) => line.includes('llm reranker unavailable'))).toHaveLength(3);
+  });
+});
+
+describe('llmReranker reply size cap', () => {
+  let server: http.Server;
+  let sent = 0;
+  let closedEarly = false;
+
+  beforeEach(async () => {
+    vi.restoreAllMocks();
+    sent = 0;
+    closedEarly = false;
+    server = http.createServer((req, res) => {
+      req.resume();
+      res.writeHead(200, { 'content-type': 'application/json' });
+      const chunk = Buffer.alloc(64 * 1024, 0x20);
+      res.on('close', () => { closedEarly = true; });
+      // Streams up to 200 MiB, so a reader with no cap would sit here buffering until the end.
+      const pump = (): void => {
+        while (sent < 200 * 1024 * 1024 && !closedEarly) {
+          sent += chunk.length;
+          if (!res.write(chunk)) { res.once('drain', pump); return; }
+        }
+        res.end();
+      };
+      pump();
+    });
+    server.listen(0, '127.0.0.1');
+    process.env.HIPPO_LLM_RERANKER_URL = `http://127.0.0.1:${await boundPort(server)}`;
+  });
+
+  afterEach(async () => {
+    server.closeAllConnections();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    delete process.env.HIPPO_LLM_RERANKER_URL;
+  });
+
+  it('keeps the input order, names the cap in its warning and stops reading early', async () => {
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const out = await createLlmReranker()('q', [asResult('alpha', 1.0), asResult('beta', 0.5)]);
+    expect(out.map((r) => r.entry.content)).toEqual(['alpha', 'beta']);
+    expect(stderr.mock.calls.map((c) => String(c[0])).join('')).toContain('reply over 1048576 bytes');
+    await vi.waitFor(() => expect(closedEarly).toBe(true));
+    expect(sent).toBeLessThan(100 * 1024 * 1024);
   });
 });

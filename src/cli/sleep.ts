@@ -2,17 +2,19 @@
 
 import * as path from 'path';
 import * as fs from 'fs';
-import { loadConfig } from '../config.js';
-import { isGitRepo } from '../autolearn.js';
+import { loadConfig } from '../core/config.js';
+import { isGitRepo } from '../learn/autolearn.js';
 import { importForStore, currentMachine } from '../agent-memories/sync.js';
-import { replayCompactionsAt } from '../compaction-record.js';
-import * as api from '../api.js';
-import { resolveTenantId } from '../tenant.js';
-import { renderAmbientSummary } from '../ambient.js';
-import { errorMessage, log } from '../log.js';
-import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../db.js';
-import { repairOnceOnSleep } from '../project-merge.js';
-import { type CliFlags, requireInit, learnFromRepo, runChurnStaleForRepo, printAgentImport, skipLearnOnSharedStore, boolFlag, stringFlag } from './shared.js';
+import { replayCompactionsAt } from '../capture/compaction-record.js';
+import * as api from '../api/index.js';
+import { resolveTenantId } from '../store/tenant.js';
+import { sleepResultLines } from './sleep-render.js';
+import { errorMessage, log } from '../util/log.js';
+import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../db/index.js';
+import { repairOnceOnSleep } from '../sharing/project-merge.js';
+import { type CliFlags, boolFlag, stringFlag } from './flag-values.js';
+import { requireInit, learnFromRepo, runChurnStaleForRepo, skipLearnOnSharedStore } from './shared.js';
+import { printAgentImport } from './print.js';
 import { repairQualityOnceAt } from './quality-repair-once.js';
 import { printError } from './output.js';
 
@@ -68,86 +70,8 @@ export async function cmdSleep(
   }
 }
 
-/**
- * Render an api.sleep result as console output, byte-identical to the
- * pre-extraction inline implementation in cmdSleepCore.
- */
-/** @internal — exported for snapshot tests (tests/cli-context-render-snapshot.test.ts). NOT a stable public API. */
-export function renderSleepResult(result: api.SleepResult): void {
-  renderSleepCounts(result);
-
-  if (result.dryRun) console.log('\n(dry run  - nothing written)');
-  renderSleepDedupeAndAudit(result);
-  renderSleepShareAndGraph(result);
-}
-
-function renderSleepCounts(result: api.SleepResult): void {
-  console.log(`Running consolidation${result.dryRun ? ' (dry run)' : ''}...`);
-
-  console.log(`\nResults:`);
-  console.log(`   Active memories:  ${result.active}`);
-  console.log(`   Removed (decayed): ${result.removed}`);
-  // Only when dormant.enabled moved something, so every other render stays
-  // byte-identical (tests/cli-context-render-snapshot.test.ts).
-  if (result.dormant !== undefined && result.dormant > 0) {
-    console.log(`   Kept dormant:      ${result.dormant}  (hippo dormant to list)`);
-  }
-  if (result.dormantExpired !== undefined && result.dormantExpired > 0) {
-    console.log(`   Expired dormant:   ${result.dormantExpired}  (past dormant.retentionDays)`);
-  }
-  console.log(`   Merged episodic:   ${result.mergedEpisodic}`);
-  console.log(`   New semantic:      ${result.newSemantic}`);
-
-  if (result.details && result.details.length > 0) {
-    console.log('\nDetails:');
-    for (const d of result.details) {
-      console.log(d);
-    }
-  }
-
-}
-
-function renderSleepDedupeAndAudit(result: api.SleepResult): void {
-  if (result.deduped && result.deduped.removed > 0) {
-    const { removed, semDups, epiDups, crossDups } = result.deduped;
-    const parts: string[] = [];
-    if (semDups > 0) parts.push(`${semDups} redundant semantic patterns`);
-    if (epiDups > 0) parts.push(`${epiDups} duplicate episodic lessons`);
-    if (crossDups > 0) parts.push(`${crossDups} cross-layer duplicates`);
-    console.log(`\n${result.dryRun ? 'Would dedupe' : 'Deduped'} ${removed} duplicates (${parts.join(', ')}). ${result.dryRun ? 'Would keep' : 'Kept'} stronger copies.`);
-  }
-
-  if (result.audit) {
-    if (result.audit.errorsRemoved > 0) {
-      console.log(`\nAudit: ${result.dryRun ? 'would remove' : 'removed'} ${result.audit.errorsRemoved} junk memories (too short/empty).`);
-    }
-    if (result.audit.warningCount > 0) {
-      console.log(`Audit: ${result.audit.warningCount} low-quality memories detected (run \`hippo audit\` for details).`);
-    }
-  }
-
-}
-
-function renderSleepShareAndGraph(result: api.SleepResult): void {
-  if (result.shared !== undefined && result.shared > 0) {
-    console.log(`\nAuto-shared ${result.shared} high-value memories to global store.`);
-  }
-
-  if (result.secretSkipped !== undefined && result.secretSkipped > 0) {
-    // The secret veto is never silent.
-    console.log(`\nAuto-share: withheld ${result.secretSkipped} secret-flagged ${result.secretSkipped === 1 ? 'memory' : 'memories'} (secret veto).`);
-  }
-
-  if (result.ambient) {
-    console.log(`\n${renderAmbientSummary(result.ambient)}`);
-  }
-
-  if (result.graph && result.graph.tenants > 0) {
-    const { tenants, entities, relations } = result.graph;
-    console.log(
-      `\nGraph: rebuilt ${tenants} tenant${tenants === 1 ? '' : 's'} (${entities} entities, ${relations} relations).`,
-    );
-  }
+function renderSleepResult(result: api.SleepResult): void {
+  for (const line of sleepResultLines(result)) console.log(line);
 }
 
 /** Fault-isolated: a failed repair warns and runs again next sleep, and never stops the sleep. */

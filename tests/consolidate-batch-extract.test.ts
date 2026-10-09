@@ -5,7 +5,7 @@ import * as os from 'os';
 import { consolidate } from '../src/consolidate/sleep.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 
 let tmpDir: string;
 

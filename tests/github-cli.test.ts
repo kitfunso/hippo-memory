@@ -177,8 +177,8 @@ describe('hippo github CLI', () => {
     expect(r.stdout).toMatch(/no entries/);
   });
 
-  it('dlq list with rows prints bucket and tenant', () => {
-    parkInDlq(githubDlq, hippoRoot, {
+  it('dlq list with rows prints bucket and tenant', async () => {
+    await parkInDlq(githubDlq, hippoRoot, {
       tenantId: 'default',
       rawPayload: '{"x":1}',
       error: 'bad envelope',
@@ -224,7 +224,7 @@ describe('hippo github CLI', () => {
   }
 
   /** Parks one signed delivery with every column the webhook route writes, and returns the row id. */
-  function parkDelivery(eventName: string, body: string, secret: string = SECRET): number {
+  function parkDelivery(eventName: string, body: string, secret: string = SECRET): Promise<number> {
     return parkInDlq(githubDlq, hippoRoot, {
       tenantId: 'default',
       rawPayload: body,
@@ -248,8 +248,8 @@ describe('hippo github CLI', () => {
   const retryCountOf = (id: number) =>
     listDlq(githubDlq, hippoRoot, { tenantId: 'default' }).find((row) => row.id === id)?.retryCount;
 
-  it('dlq replay re-ingests a parked delivery and counts the retry', () => {
-    const id = parkDelivery('issues', issueOpenedBody);
+  it('dlq replay re-ingests a parked delivery and counts the retry', async () => {
+    const id = await parkDelivery('issues', issueOpenedBody);
 
     const r = replay(id);
 
@@ -262,9 +262,9 @@ describe('hippo github CLI', () => {
 
   it.each(COMMENT_EVENTS)(
     'dlq replay of a parked %s deletion archives the comment instead of storing it again',
-    (eventName, parent, artifactRef) => {
-      const created = parkDelivery(eventName, commentBody(parent, 'created'));
-      const deleted = parkDelivery(eventName, commentBody(parent, 'deleted'));
+    async (eventName, parent, artifactRef) => {
+      const created = await parkDelivery(eventName, commentBody(parent, 'created'));
+      const deleted = await parkDelivery(eventName, commentBody(parent, 'deleted'));
       expect(replay(created).status).toBe(0);
       expect(liveRaws(artifactRef)).toHaveLength(1);
 
@@ -282,8 +282,8 @@ describe('hippo github CLI', () => {
     },
   );
 
-  it('dlq replay stores nothing when the parked body does not match its event header', () => {
-    const id = parkDelivery('issues', commentBody(COMMENT_EVENTS[0][1], 'created'));
+  it('dlq replay stores nothing when the parked body does not match its event header', async () => {
+    const id = await parkDelivery('issues', commentBody(COMMENT_EVENTS[0][1], 'created'));
 
     const r = replay(id);
 
@@ -293,8 +293,8 @@ describe('hippo github CLI', () => {
     expect(retryCountOf(id)).toBe(1);
   });
 
-  it('dlq replay refuses a row signed with another secret, and --force or the previous secret lets it through', () => {
-    const id = parkDelivery('issues', issueOpenedBody, 'the-secret-before-rotation');
+  it('dlq replay refuses a row signed with another secret, and --force or the previous secret lets it through', async () => {
+    const id = await parkDelivery('issues', issueOpenedBody, 'the-secret-before-rotation');
 
     const refused = replay(id);
     expect(refused.status).toBe(1);

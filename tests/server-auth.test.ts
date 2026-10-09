@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { createApiKey, revokeApiKey } from '../src/auth.js';
-import { queryAuditEvents } from '../src/audit.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { createApiKey, revokeApiKey } from '../src/store/auth.js';
+import { queryAuditEvents } from '../src/store/audit.js';
 import { serve, type ServerHandle, isLoopback } from '../src/server.js';
-import type { RememberResult } from '../src/api.js';
+import type { RememberResult } from '../src/api/index.js';
 import { presentConnectionsAsRemote } from './_helpers/listen.js';
 import { makeRoot } from './_helpers/make-root.js';
 

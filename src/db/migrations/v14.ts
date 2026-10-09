@@ -65,7 +65,7 @@ export const v14: Migration = {
       db.exec(CREATE_TABLE_RAW_ARCHIVE_SQL);
       db.exec(`CREATE INDEX IF NOT EXISTS idx_raw_archive_memory_id ON raw_archive(memory_id)`);
       // Append-only invariant: kind='raw' rows cannot be deleted directly.
-      // Use raw_archive flow: archive-then-update-then-delete (see src/raw-archive.ts).
+      // Use raw_archive flow: archive-then-update-then-delete (see src/store/raw-archive.ts).
       db.exec(CREATE_TRIGGER_TRG_MEMORIES_RAW_APPEND_ONLY_SQL);
       // CHECK substitute: ALTER TABLE cannot add CHECK, so enforce kind allowed-set
       // via INSERT/UPDATE triggers.

@@ -1,8 +1,8 @@
 import type { IncomingMessage } from 'node:http';
-import { withSqliteOffLoop } from '../db.js';
-import { hasGroup, type StoreGroup } from '../store-port.js';
+import { withSqliteOffLoop } from '../db/index.js';
+import { hasGroup, type StoreGroup } from '../store/index.js';
 import { runsOffLoop } from '../store/sqlite/worker-store.js';
-import { HttpError, JSON_HEADERS, sendJson, STORE_NOT_PORTED_MESSAGE } from '../http-util.js';
+import { HttpError, JSON_HEADERS, sendJson, STORE_NOT_PORTED_MESSAGE } from '../util/http-util.js';
 import { buildContextWithAuth, requireAuth } from './auth.js';
 import { matchPath, noteAccess } from './request.js';
 import { handleApproveQuarantine, handleCreateAuthKey, handleListAudit, handleListAuthKeys, handleListQuarantine, handleRejectQuarantine, handleRevokeAuthKey } from './routes/admin.js';
@@ -18,7 +18,7 @@ import { handleAssembleSession, handleDrillRecall, handleGetContext, handleRecal
 import { handleCloseSkill, handleCreateSkill, handleExportSkills, handleGetSkill, handleListSkills, handleSupersedeSkill } from './routes/skills.js';
 import { parseJsonBody } from './validation.js';
 import type { AddonRoute, ResolvedServeOpts, Route, RouteRequest } from './types.js';
-import type { JsonValue } from '../json.js';
+import type { JsonValue } from '../util/json.js';
 
 // Review patch #2: explicit allow-list for unauthenticated /v1/* routes.
 // New unauth routes MUST be added here AND get a corresponding entry in
@@ -41,68 +41,68 @@ export function isPublicRoute(method: string, path: string): boolean {
 
 /** The /v1 routes in dispatch order; the first entry whose method and path match handles the request. */
 const V1_ROUTES: readonly Route[] = [
-  { method: 'POST', path: '/v1/memories', storeReady: 'entryWrites', handler: handleCreateMemory },
-  { method: 'GET', path: '/v1/graph', storeReady: 'graphReads', handler: handleGetGraph },
-  { method: 'GET', path: '/v1/memories', storeReady: 'base', handler: handleRecallMemories },
-  { method: 'GET', pattern: '/v1/sessions/:id/assemble', storeReady: 'dagReads', handler: handleAssembleSession },
+  { method: 'POST', path: '/v1/memories', storeReady: 'entryWrites', loop: 'off', handler: handleCreateMemory },
+  { method: 'GET', path: '/v1/graph', storeReady: 'graphReads', loop: 'off', handler: handleGetGraph },
+  { method: 'GET', path: '/v1/memories', storeReady: 'base', loop: 'off', handler: handleRecallMemories },
+  { method: 'GET', pattern: '/v1/sessions/:id/assemble', storeReady: 'dagReads', loop: 'off', handler: handleAssembleSession },
   { method: 'GET', pattern: '/v1/recall/drill/:id', storeReady: 'dagReads', handler: handleDrillRecall },
-  { method: 'POST', pattern: '/v1/memories/:id/archive', storeReady: 'entryWrites', handler: handleArchiveMemory },
-  { method: 'POST', pattern: '/v1/memories/:id/supersede', storeReady: 'entryWrites', handler: handleSupersedeMemory },
+  { method: 'POST', pattern: '/v1/memories/:id/archive', storeReady: 'entryWrites', loop: 'off', handler: handleArchiveMemory },
+  { method: 'POST', pattern: '/v1/memories/:id/supersede', storeReady: 'entryWrites', loop: 'off', handler: handleSupersedeMemory },
   { method: 'POST', pattern: '/v1/memories/:id/promote', sqliteOnly: 'copies a memory between the two local hippo.db files', handler: handlePromoteMemory },
-  { method: 'DELETE', pattern: '/v1/memories/:id', storeReady: 'entryWrites', handler: handleForgetMemory },
+  { method: 'DELETE', pattern: '/v1/memories/:id', storeReady: 'entryWrites', loop: 'off', handler: handleForgetMemory },
   { method: 'POST', path: '/v1/outcome', storeReady: 'entryWrites', handler: handleApplyOutcome },
   { method: 'GET', path: '/v1/context', storeReady: 'contextReads', handler: handleGetContext },
   { method: 'POST', path: '/v1/sleep', sqliteOnly: 'consolidates every tenant under the local hippo root in this process', handler: handleSleep },
-  { method: 'POST', path: '/v1/auth/keys', storeReady: 'keyWrites', handler: handleCreateAuthKey },
-  { method: 'GET', path: '/v1/auth/keys', storeReady: 'keyWrites', handler: handleListAuthKeys },
-  { method: 'DELETE', pattern: '/v1/auth/keys/:keyId', storeReady: 'keyAudit', handler: handleRevokeAuthKey },
-  { method: 'GET', path: '/v1/quarantine', storeReady: 'quarantine', handler: handleListQuarantine },
-  { method: 'POST', pattern: '/v1/quarantine/:id/approve', storeReady: 'quarantine', handler: handleApproveQuarantine },
-  { method: 'POST', pattern: '/v1/quarantine/:id/reject', storeReady: 'quarantine', handler: handleRejectQuarantine },
-  { method: 'GET', path: '/v1/audit', storeReady: 'auditLog', handler: handleListAudit },
+  { method: 'POST', path: '/v1/auth/keys', storeReady: 'keyWrites', loop: 'off', handler: handleCreateAuthKey },
+  { method: 'GET', path: '/v1/auth/keys', storeReady: 'keyWrites', loop: 'off', handler: handleListAuthKeys },
+  { method: 'DELETE', pattern: '/v1/auth/keys/:keyId', storeReady: 'keyAudit', loop: 'off', handler: handleRevokeAuthKey },
+  { method: 'GET', path: '/v1/quarantine', storeReady: 'quarantine', loop: 'off', handler: handleListQuarantine },
+  { method: 'POST', pattern: '/v1/quarantine/:id/approve', storeReady: 'quarantine', loop: 'off', handler: handleApproveQuarantine },
+  { method: 'POST', pattern: '/v1/quarantine/:id/reject', storeReady: 'quarantine', loop: 'off', handler: handleRejectQuarantine },
+  { method: 'GET', path: '/v1/audit', storeReady: 'auditLog', loop: 'off', handler: handleListAudit },
   { method: 'POST', path: '/v1/predictions', storeReady: 'predictions', loop: 'off', handler: handleCreatePrediction },
   { method: 'GET', path: '/v1/predictions', storeReady: 'predictions', loop: 'off', handler: handleListPredictions },
   { method: 'GET', path: '/v1/predictions/stats', storeReady: 'predictions', loop: 'off', handler: handlePredictionStats },
   { method: 'GET', regex: /^\/v1\/predictions\/(\d+)$/, storeReady: 'predictions', loop: 'off', handler: handleGetPrediction },
   { method: 'POST', regex: /^\/v1\/predictions\/(\d+)\/close$/, storeReady: 'predictions', loop: 'off', handler: handleClosePrediction },
-  { method: 'POST', path: '/v1/decisions', handler: handleCreateDecision },
-  { method: 'GET', path: '/v1/decisions', handler: handleListDecisions },
-  { method: 'POST', regex: /^\/v1\/decisions\/(\d+)\/supersede$/, handler: handleSupersedeDecision },
-  { method: 'POST', regex: /^\/v1\/decisions\/(\d+)\/close$/, handler: handleCloseDecision },
-  { method: 'GET', regex: /^\/v1\/decisions\/(\d+)$/, handler: handleGetDecision },
-  { method: 'POST', path: '/v1/incidents', handler: handleCreateIncident },
-  { method: 'GET', path: '/v1/incidents', handler: handleListIncidents },
-  { method: 'POST', regex: /^\/v1\/incidents\/(\d+)\/resolve$/, handler: handleResolveIncident },
-  { method: 'POST', regex: /^\/v1\/incidents\/(\d+)\/close$/, handler: handleCloseIncident },
-  { method: 'GET', regex: /^\/v1\/incidents\/(\d+)$/, handler: handleGetIncident },
-  { method: 'POST', path: '/v1/processes', handler: handleCreateProcess },
-  { method: 'GET', path: '/v1/processes', handler: handleListProcesses },
-  { method: 'POST', regex: /^\/v1\/processes\/(\d+)\/supersede$/, handler: handleSupersedeProcess },
-  { method: 'POST', regex: /^\/v1\/processes\/(\d+)\/close$/, handler: handleCloseProcess },
-  { method: 'GET', regex: /^\/v1\/processes\/(\d+)$/, handler: handleGetProcess },
-  { method: 'POST', path: '/v1/policies', handler: handleCreatePolicy },
-  { method: 'GET', path: '/v1/policies', handler: handleListPolicies },
-  { method: 'GET', path: '/v1/policies/asof', handler: handlePoliciesAsOf },
-  { method: 'POST', regex: /^\/v1\/policies\/(\d+)\/supersede$/, handler: handleSupersedePolicy },
-  { method: 'POST', regex: /^\/v1\/policies\/(\d+)\/close$/, handler: handleClosePolicy },
-  { method: 'GET', regex: /^\/v1\/policies\/(\d+)$/, handler: handleGetPolicy },
-  { method: 'POST', path: '/v1/skills', handler: handleCreateSkill },
-  { method: 'GET', path: '/v1/skills', handler: handleListSkills },
-  { method: 'GET', path: '/v1/skills/export', handler: handleExportSkills },
-  { method: 'POST', regex: /^\/v1\/skills\/(\d+)\/supersede$/, handler: handleSupersedeSkill },
-  { method: 'POST', regex: /^\/v1\/skills\/(\d+)\/close$/, handler: handleCloseSkill },
-  { method: 'GET', regex: /^\/v1\/skills\/(\d+)$/, handler: handleGetSkill },
-  { method: 'POST', path: '/v1/project-briefs', handler: handleCreateProjectBrief },
-  { method: 'GET', path: '/v1/project-briefs', handler: handleListProjectBriefs },
-  { method: 'POST', path: '/v1/project-briefs/refresh', handler: handleRefreshProjectBrief },
-  { method: 'POST', regex: /^\/v1\/project-briefs\/(\d+)\/supersede$/, handler: handleSupersedeProjectBrief },
-  { method: 'POST', regex: /^\/v1\/project-briefs\/(\d+)\/close$/, handler: handleCloseProjectBrief },
-  { method: 'GET', regex: /^\/v1\/project-briefs\/(\d+)$/, handler: handleGetProjectBrief },
-  { method: 'POST', path: '/v1/customer-notes', handler: handleCreateCustomerNote },
-  { method: 'GET', path: '/v1/customer-notes', handler: handleListCustomerNotes },
-  { method: 'POST', regex: /^\/v1\/customer-notes\/(\d+)\/supersede$/, handler: handleSupersedeCustomerNote },
-  { method: 'POST', regex: /^\/v1\/customer-notes\/(\d+)\/close$/, handler: handleCloseCustomerNote },
-  { method: 'GET', regex: /^\/v1\/customer-notes\/(\d+)$/, handler: handleGetCustomerNote },
+  { method: 'POST', path: '/v1/decisions', storeReady: 'objects', loop: 'off', handler: handleCreateDecision },
+  { method: 'GET', path: '/v1/decisions', storeReady: 'objects', loop: 'off', handler: handleListDecisions },
+  { method: 'POST', regex: /^\/v1\/decisions\/(\d+)\/supersede$/, storeReady: 'objects', loop: 'off', handler: handleSupersedeDecision },
+  { method: 'POST', regex: /^\/v1\/decisions\/(\d+)\/close$/, storeReady: 'objects', loop: 'off', handler: handleCloseDecision },
+  { method: 'GET', regex: /^\/v1\/decisions\/(\d+)$/, storeReady: 'objects', loop: 'off', handler: handleGetDecision },
+  { method: 'POST', path: '/v1/incidents', storeReady: 'objects', loop: 'off', handler: handleCreateIncident },
+  { method: 'GET', path: '/v1/incidents', storeReady: 'objects', loop: 'off', handler: handleListIncidents },
+  { method: 'POST', regex: /^\/v1\/incidents\/(\d+)\/resolve$/, storeReady: 'objects', loop: 'off', handler: handleResolveIncident },
+  { method: 'POST', regex: /^\/v1\/incidents\/(\d+)\/close$/, storeReady: 'objects', loop: 'off', handler: handleCloseIncident },
+  { method: 'GET', regex: /^\/v1\/incidents\/(\d+)$/, storeReady: 'objects', loop: 'off', handler: handleGetIncident },
+  { method: 'POST', path: '/v1/processes', storeReady: 'objects', loop: 'off', handler: handleCreateProcess },
+  { method: 'GET', path: '/v1/processes', storeReady: 'objects', loop: 'off', handler: handleListProcesses },
+  { method: 'POST', regex: /^\/v1\/processes\/(\d+)\/supersede$/, storeReady: 'objects', loop: 'off', handler: handleSupersedeProcess },
+  { method: 'POST', regex: /^\/v1\/processes\/(\d+)\/close$/, storeReady: 'objects', loop: 'off', handler: handleCloseProcess },
+  { method: 'GET', regex: /^\/v1\/processes\/(\d+)$/, storeReady: 'objects', loop: 'off', handler: handleGetProcess },
+  { method: 'POST', path: '/v1/policies', storeReady: 'objects', loop: 'off', handler: handleCreatePolicy },
+  { method: 'GET', path: '/v1/policies', storeReady: 'objects', loop: 'off', handler: handleListPolicies },
+  { method: 'GET', path: '/v1/policies/asof', storeReady: 'objects', loop: 'off', handler: handlePoliciesAsOf },
+  { method: 'POST', regex: /^\/v1\/policies\/(\d+)\/supersede$/, storeReady: 'objects', loop: 'off', handler: handleSupersedePolicy },
+  { method: 'POST', regex: /^\/v1\/policies\/(\d+)\/close$/, storeReady: 'objects', loop: 'off', handler: handleClosePolicy },
+  { method: 'GET', regex: /^\/v1\/policies\/(\d+)$/, storeReady: 'objects', loop: 'off', handler: handleGetPolicy },
+  { method: 'POST', path: '/v1/skills', storeReady: 'objects', loop: 'off', handler: handleCreateSkill },
+  { method: 'GET', path: '/v1/skills', storeReady: 'objects', loop: 'off', handler: handleListSkills },
+  { method: 'GET', path: '/v1/skills/export', storeReady: 'objects', loop: 'off', handler: handleExportSkills },
+  { method: 'POST', regex: /^\/v1\/skills\/(\d+)\/supersede$/, storeReady: 'objects', loop: 'off', handler: handleSupersedeSkill },
+  { method: 'POST', regex: /^\/v1\/skills\/(\d+)\/close$/, storeReady: 'objects', loop: 'off', handler: handleCloseSkill },
+  { method: 'GET', regex: /^\/v1\/skills\/(\d+)$/, storeReady: 'objects', loop: 'off', handler: handleGetSkill },
+  { method: 'POST', path: '/v1/project-briefs', storeReady: 'objects', loop: 'off', handler: handleCreateProjectBrief },
+  { method: 'GET', path: '/v1/project-briefs', storeReady: 'objects', loop: 'off', handler: handleListProjectBriefs },
+  { method: 'POST', path: '/v1/project-briefs/refresh', storeReady: 'objects', loop: 'off', handler: handleRefreshProjectBrief },
+  { method: 'POST', regex: /^\/v1\/project-briefs\/(\d+)\/supersede$/, storeReady: 'objects', loop: 'off', handler: handleSupersedeProjectBrief },
+  { method: 'POST', regex: /^\/v1\/project-briefs\/(\d+)\/close$/, storeReady: 'objects', loop: 'off', handler: handleCloseProjectBrief },
+  { method: 'GET', regex: /^\/v1\/project-briefs\/(\d+)$/, storeReady: 'objects', loop: 'off', handler: handleGetProjectBrief },
+  { method: 'POST', path: '/v1/customer-notes', storeReady: 'objects', loop: 'off', handler: handleCreateCustomerNote },
+  { method: 'GET', path: '/v1/customer-notes', storeReady: 'objects', loop: 'off', handler: handleListCustomerNotes },
+  { method: 'POST', regex: /^\/v1\/customer-notes\/(\d+)\/supersede$/, storeReady: 'objects', loop: 'off', handler: handleSupersedeCustomerNote },
+  { method: 'POST', regex: /^\/v1\/customer-notes\/(\d+)\/close$/, storeReady: 'objects', loop: 'off', handler: handleCloseCustomerNote },
+  { method: 'GET', regex: /^\/v1\/customer-notes\/(\d+)$/, storeReady: 'objects', loop: 'off', handler: handleGetCustomerNote },
 ];
 
 /** The route's handler bound to this request's path params, or null when method or path differ. The matcher runs before the

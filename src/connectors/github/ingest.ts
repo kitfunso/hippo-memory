@@ -1,29 +1,11 @@
-/**
- * GitHub event ingest with afterWrite race-safe idempotency.
- *
- * Mirrors src/connectors/slack/ingest.ts. The dedupe key is sha256(eventName +
- * ':' + rawBody), derived from the signed body, not from the
- * unsigned X-GitHub-Delivery header, so a replay attacker cannot bypass
- * idempotency by rotating the delivery UUID.
- *
- * Race semantics:
- *   - Fast path: hasSeenKey pre-check returns 'duplicate' for the common case.
- *   - Slow path: hasSeenKey passes (no row yet). Two workers may race into
- *     remember() concurrently. Inside the writeEntry SAVEPOINT, INSERT OR
- *     IGNORE on github_event_log either inserts (changes=1, commit) or
- *     collides (changes=0, throw DuplicateIdempotencyError -> SAVEPOINT
- *     rolls back this worker's memory row). Exactly one memory exists per
- *     idempotency_key.
- *
- * The `__testInjectBeforeLog` hook below lets tests pre-populate github_event_log
- * inside the SAVEPOINT to exercise the changes=0 -> rollback path, not just the fast path.
- */
+// GitHub event ingest, once per idempotency key. The key comes from the event's own content, never from the unsigned
+// X-GitHub-Delivery header, so a replay cannot get past it by rotating the delivery id. The pre-check is only the fast path:
+// the store logs the key in the memory's own transaction, which is what holds when two workers race.
 
-import { remember, type Context, type RememberOpts } from '../../api.js';
-import type { DatabaseSyncLike } from '../../db.js';
-import { eventMemory, logEvent, logEventAt, seenEvent } from '../../store/connectors/github.js';
-import { RejectedValueError } from '../../rejection.js';
-import { DuplicateIdempotencyError } from './idempotency.js';
+import { remember, type Context, type RememberOpts } from '../../api/index.js';
+import { requireGroup, storeFor } from '../../store/index.js';
+import type { ConnectorEvent } from '../../store/port.js';
+import { RejectedValueError } from '../../store/rejection.js';
 import { computeIdempotencyKey } from './signature.js';
 import {
   issueEventToRememberOpts,
@@ -64,14 +46,6 @@ export interface IngestInput {
   rawBody: string;
   /** X-GitHub-Delivery header value, audit metadata only. */
   deliveryId: string;
-  /**
-   * Test-only hook fired inside the SAVEPOINT, AFTER the memory row is
-   * inserted but BEFORE the github_event_log INSERT OR IGNORE. Tests pass
-   * a function that pre-inserts the github_event_log row using the
-   * provided db handle to simulate a concurrent worker winning the race.
-   * Production callers leave this undefined.
-   */
-  __testInjectBeforeLog?: (db: DatabaseSyncLike, idempotencyKey: string) => void;
 }
 
 function transformEvent(event: IngestEvent): RememberOpts | null {
@@ -120,16 +94,18 @@ function eventUpdatedAt(event: IngestEvent): string | null {
   }
 }
 
-export function ingestEvent(ctx: Context, input: IngestInput): IngestResult {
+export async function ingestEvent(ctx: Context, input: IngestInput): Promise<IngestResult> {
+  const events = requireGroup(storeFor(ctx), 'connectorEvents');
   const idempotencyKey = computeIdempotencyKey(
     eventArtifactRef(input.event),
     eventUpdatedAt(input.event),
   );
+  const event: ConnectorEvent = { connector: 'github', idempotencyKey, deliveryId: input.deliveryId, eventName: input.event.eventName };
 
   // Fast path: pre-check. Avoids running the transform / opening a write tx
   // for the common already-seen case (GitHub auto-retries with the same body).
-  const seen = seenEvent(ctx.hippoRoot, idempotencyKey);
-  if (seen) return { status: 'duplicate', memoryId: seen.memoryId };
+  const seen = await events.eventRecord(event);
+  if (seen.seen) return { status: 'duplicate', memoryId: seen.memoryId };
 
   const opts = transformEvent(input.event);
 
@@ -137,60 +113,27 @@ export function ingestEvent(ctx: Context, input: IngestInput): IngestResult {
     // Empty body: no memory to write, but mark seen so a retry of the same
     // empty event returns 'duplicate' (not 'skipped' again — that would
     // re-run the transform on every retry).
-    markKeySeenWithoutMemory(ctx.hippoRoot, idempotencyKey, input);
+    await events.markEventSeen(event);
     return { status: 'skipped', memoryId: null };
   }
 
-  // Atomic write via afterWrite. Inside writeEntry's SAVEPOINT:
-  //   1. memories row INSERT lands.
-  //   2. (test-only) __testInjectBeforeLog can race-inject a colliding key.
-  //   3. INSERT OR IGNORE on github_event_log; if a concurrent worker (or
-  //      the test injection) beat us, changes=0 -> throw -> SAVEPOINT rolls
-  //      back our memory row. Other worker's commit stands.
   try {
-    return rememberWithEventLog(ctx, input, idempotencyKey, opts);
+    return await rememberWithEventLog(ctx, event, opts);
   } catch (e) {
-    if (e instanceof DuplicateIdempotencyError) {
-      // Other worker's row is committed. Return its memory_id so callers
-      // behave identically to the fast-path 'duplicate' branch.
-      return { status: 'skipped_duplicate', memoryId: eventMemory(ctx.hippoRoot, idempotencyKey) };
-    }
     if (e instanceof RejectedValueError) {
       // A tombstone hit is a PERMANENT skip, never DLQ-retried: mark the key seen like the empty-body
       // branch above so a GitHub retry of the same delivery acks as done, not error.
-      markKeySeenWithoutMemory(ctx.hippoRoot, idempotencyKey, input);
+      await events.markEventSeen(event);
       return { status: 'skipped', memoryId: null };
     }
     throw e;
   }
 }
 
-function markKeySeenWithoutMemory(hippoRoot: string, idempotencyKey: string, input: IngestInput): void {
-  logEvent(hippoRoot, { idempotencyKey, deliveryId: input.deliveryId, eventName: input.event.eventName, memoryId: null });
-}
-
-function rememberWithEventLog(
-  ctx: Context,
-  input: IngestInput,
-  idempotencyKey: string,
-  opts: RememberOpts,
-): IngestResult {
+async function rememberWithEventLog(ctx: Context, event: ConnectorEvent, opts: RememberOpts): Promise<IngestResult> {
   // No `|| 'connector:github'` fallback (see rememberWithEventLog in slack/ingest.ts for rationale).
-  const result = remember(
-    { ...ctx, store: undefined }, // the event log row commits with the memory on hippo.db's own handle, never through a store
-    {
-      ...opts,
-      untrusted: true,
-      afterWrite: (innerDb, memoryId) => {
-        if (input.__testInjectBeforeLog) {
-          input.__testInjectBeforeLog(innerDb, idempotencyKey);
-        }
-        const entry = { idempotencyKey, deliveryId: input.deliveryId, eventName: input.event.eventName, memoryId };
-        if (!logEventAt(innerDb, entry)) {
-          throw new DuplicateIdempotencyError(idempotencyKey);
-        }
-      },
-    },
-  );
+  const result = await remember(ctx, { ...opts, untrusted: true, event });
+  // Another worker logged this key between the pre-check and the write: its memory stands and ours was not stored.
+  if (result.duplicate) return { status: 'skipped_duplicate', memoryId: result.duplicate.memoryId };
   return { status: 'ingested', memoryId: result.id };
 }

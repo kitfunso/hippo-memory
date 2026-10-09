@@ -33,10 +33,10 @@ import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-import { createMemory, Layer } from '../../dist/memory.js';
+import { createMemory, Layer } from '../../dist/core/memory.js';
 import { initStore } from '../../dist/store/open.js';
 import { writeEntry } from '../../dist/store/entry-writes.js';
-import { estimateTokens } from '../../dist/token-ledger.js';
+import { estimateTokens } from '../../dist/util/token-text.js';
 import { uncachedEquivalentInput, DEFAULT_CACHE_RATIOS } from '../../dist/eval/eval-stats.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));

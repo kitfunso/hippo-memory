@@ -71,6 +71,10 @@ describe('hippo policy CLI', () => {
     expect(atEnd).toContain('No active policies in force');
   });
 
+  it('list rejects an unknown --status and names the allowed values', () => {
+    expect(() => run(env, ['policy', 'list', '--status', 'bogus'])).toThrow(/Invalid --status: "bogus"\. Must be one of: active \| superseded \| closed \| all\./);
+  });
+
   it('rejects a malformed id and does NOT mutate the wrong row (codex P2 regression)', () => {
     run(env, ['policy', 'new', 'still active', '--text', 'x']); // becomes #1
     expect(() => run(env, ['policy', 'close', '1abc'])).toThrow();

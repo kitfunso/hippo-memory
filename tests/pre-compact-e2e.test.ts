@@ -9,8 +9,8 @@ import { loadAllEntries } from '../src/store/entry-reads.js';
 import { loadActiveTaskSnapshot, saveActiveTaskSnapshot, appendSessionEvent } from '../src/store/sessions.js';
 import { writeSessionEndHandoff } from '../src/store/handoffs.js';
 import { defaultSleepLogPath } from '../src/hooks/shared.js';
-import { PRE_COMPACT_TASK_CAP, PRE_COMPACT_SUMMARY_CAP, PRE_COMPACT_NEXT_STEP_CAP } from '../src/capture/working-state.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { WORKING_STATE_CAPS } from '../src/capture/working-state.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
 
 // Always run against the local built CLI so we're testing our source, not a
@@ -318,7 +318,7 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
     const longTask = 'X'.repeat(400);
     const longAssistantText = 'Y'.repeat(1000);
     // Big filler chunks so the RAW summary (before the producer's own cap)
-    // exceeds PRE_COMPACT_SUMMARY_CAP — otherwise the cap assertion would
+    // exceeds the summary cap — otherwise the cap assertion would
     // pass trivially without proving truncation actually happened.
     const bigChunks = Array.from({ length: 5 }, (_, i) => `Chunk ${i}: ${'Z'.repeat(500)}`);
 
@@ -345,16 +345,16 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
     const hippoRoot = getHippoRoot(dir);
     const snapshot = loadActiveTaskSnapshot(hippoRoot, 'default');
     expect(snapshot).not.toBeNull();
-    expect(snapshot!.task.length).toBeLessThanOrEqual(PRE_COMPACT_TASK_CAP);
-    expect(snapshot!.task.length).toBe(PRE_COMPACT_TASK_CAP); // proves truncation, not coincidence
+    expect(snapshot!.task.length).toBeLessThanOrEqual(WORKING_STATE_CAPS.task);
+    expect(snapshot!.task.length).toBe(WORKING_STATE_CAPS.task); // proves truncation, not coincidence
     // Summary caps from the RECENT end and carries a fixed trim marker
-    // (CX9), so its budget is cap + marker length, and truncation is proven
-    // by the marker rather than an exact length.
+    // (CX9), so its budget already counts the marker, and truncation is
+    // proven by the marker rather than an exact length.
     const TRIM_MARKER = '[...earlier turns trimmed]\n';
-    expect(snapshot!.summary.length).toBeLessThanOrEqual(PRE_COMPACT_SUMMARY_CAP + TRIM_MARKER.length);
+    expect(snapshot!.summary.length).toBeLessThanOrEqual(WORKING_STATE_CAPS.summary);
     expect(snapshot!.summary.startsWith(TRIM_MARKER)).toBe(true);
-    expect(snapshot!.next_step.length).toBeLessThanOrEqual(PRE_COMPACT_NEXT_STEP_CAP);
-    expect(snapshot!.next_step.length).toBe(PRE_COMPACT_NEXT_STEP_CAP);
+    expect(snapshot!.next_step.length).toBeLessThanOrEqual(WORKING_STATE_CAPS.next_step);
+    expect(snapshot!.next_step.length).toBe(WORKING_STATE_CAPS.next_step);
 
     // The shared `saveActiveTaskSnapshot` / `hippo snapshot save` CLI path is
     // untouched — caps are enforced in the pre-compact producer ONLY.

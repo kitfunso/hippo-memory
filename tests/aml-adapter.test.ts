@@ -22,8 +22,8 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { createApiKey } from '../src/auth.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { createApiKey } from '../src/store/auth.js';
 import { serve, type ServerHandle } from '../src/server.js';
 
 const ADAPTER_PATH = fileURLToPath(new URL('../deploy/aml/adapter/adapter.mjs', import.meta.url));
@@ -261,7 +261,7 @@ describe('AML protocol adapter (deploy/aml/adapter/adapter.mjs)', () => {
 
     // OBSERVED (verified by running this suite, not inferred): hippo's
     // GET /v1/memories?scope=X applies an EXACT-match filter once a
-    // non-empty scope is passed (src/api.ts recall(), line ~758:
+    // non-empty scope is passed (src/api/index.ts recall(), line ~758:
     // `entries = all.filter((e) => e.scope === opts.scope)`), and a
     // directly-written row with no `scope` field has scope=null, which
     // fails that exact match against 'aml/user-a-iso'. So the unscoped row

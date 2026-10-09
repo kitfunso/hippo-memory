@@ -1,8 +1,8 @@
-import { type MemoryEntry, markRetrieved } from '../memory.js';
-import { type DatabaseSyncLike, closeHippoDb, openHippoDb, rethrowIfSqliteBlocked, withWriteScope } from '../db.js';
-import { RejectedValueError } from '../rejection.js';
-import { markSummaryDirtyInTx } from '../summary-dirty.js';
-import { errorMessage, log } from '../log.js';
+import { type MemoryEntry, markRetrieved } from '../core/memory.js';
+import { type DatabaseSyncLike, closeHippoDb, openHippoDb, rethrowIfSqliteBlocked, withWriteScope } from '../db/index.js';
+import { RejectedValueError } from './rejection.js';
+import { markSummaryDirtyInTx } from './summary-dirty.js';
+import { errorMessage, log } from '../util/log.js';
 import { auditRejectionRefusal, audit } from './audit-event.js';
 import { selectEntriesByIds } from './entry-reads.js';
 import { stampOriginProject, upsertEntryRow, syncFtsRow, deleteFtsRow } from './entry-row.js';
@@ -44,8 +44,34 @@ export function writeEntriesTogether(hippoRoot: string, entries: readonly Memory
   return stamped.length;
 }
 
+/** writeEntry for each of `entries` on one open store, so the open and its lock wait are paid once; each row commits alone, and none opens the store when the list is empty. */
+export function writeEntriesSeparately(hippoRoot: string, entries: readonly MemoryEntry[]): void {
+  if (entries.length === 0) return;
+  const db = openStore(hippoRoot);
+  try {
+    for (const entry of entries) writeEntryOn(db, hippoRoot, entry);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/** Adds `tag` to each of a tenant's rows that lacks it, in `ids` order, each read fresh on one open store and committed alone; an id the tenant does not hold is skipped. */
+export function addTagToEntries(hippoRoot: string, tenantId: string, ids: readonly string[], tag: string): void {
+  const db = openStore(hippoRoot);
+  try {
+    const live = selectEntriesByIds(db, ids, tenantId);
+    for (const id of new Set(ids)) {
+      const entry = live.get(id);
+      if (!entry || entry.tags.includes(tag)) continue;
+      writeEntryOn(db, hippoRoot, { ...entry, tags: [...entry.tags, tag] });
+    }
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
 /** writeEntry on the caller's open store, so a loop of writes opens the store once; each row still commits alone. */
-export function writeEntryOn(db: DatabaseSyncLike, hippoRoot: string, entry: MemoryEntry, opts?: WriteEntryOptions): void {
+function writeEntryOn(db: DatabaseSyncLike, hippoRoot: string, entry: MemoryEntry, opts?: WriteEntryOptions): void {
   try {
     const stamped = stampOriginProject(hippoRoot, entry);
     writeEntryDbOnly(db, stamped, opts);
@@ -89,16 +115,21 @@ export function writeEntryDbOnly(
     if (opts?.afterWrite) {
       opts.afterWrite(db, entry.id);
     }
-    audit(db, 'remember', { targetId: entry.id, metadata: {
-        kind: entry.kind ?? 'distilled',
-        scope: entry.scope ?? null,
-      }, actor: opts?.actor ?? 'cli', tenantId: entry.tenantId });
-    // A child write marks its summary parent dirty for the sleep-cycle rebuild; most writes
-    // have no parent, so the hot path pays one null check.
-    if (entry.dag_parent_id) {
-      markSummaryDirtyInTx(db, entry.dag_parent_id, entry.tenantId, opts?.actor ?? 'cli');
-    }
+    auditEntryWrite(db, entry, opts?.actor ?? 'cli');
   });
+}
+
+/** What follows a row's upsert inside its write scope: the remember row, last of the write's audit rows, then the summary parent's dirty mark. */
+export function auditEntryWrite(db: DatabaseSyncLike, entry: MemoryEntry, actor: string): void {
+  audit(db, 'remember', { targetId: entry.id, metadata: {
+      kind: entry.kind ?? 'distilled',
+      scope: entry.scope ?? null,
+    }, actor, tenantId: entry.tenantId });
+  // A child write marks its summary parent dirty for the sleep-cycle rebuild; most writes
+  // have no parent, so the hot path pays one null check.
+  if (entry.dag_parent_id) {
+    markSummaryDirtyInTx(db, entry.dag_parent_id, entry.tenantId, actor);
+  }
 }
 
 /** Markdown mirror path, invoked AFTER commit (a rolled-back tx must leave no orphan markdown). */

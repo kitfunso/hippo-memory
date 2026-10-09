@@ -1,8 +1,8 @@
-import { envSummaryDeboost } from '../env.js';
-import { calculateStrength, CHURN_STALE_TAG, type MemoryEntry } from '../memory.js';
-import { isOutcomeFastAblated, isRecencyAblated, evalRecencyScaleDays } from '../ablation.js';
-import { pathBoostMultiplier } from '../path-context.js';
-import { scopeMatch } from '../scope.js';
+import { envSummaryDeboost } from '../util/env.js';
+import { calculateStrength, CHURN_STALE_TAG, type MemoryEntry } from '../core/memory.js';
+import { isOutcomeFastAblated, isRecencyAblated, evalRecencyScaleDays } from '../core/ablation.js';
+import { pathBoostMultiplier } from './path-context.js';
+import { scopeMatch } from '../sharing/scope.js';
 import { temporalBoost, type TemporalDirection, type TemporalRange } from './temporal.js';
 import { DAY_MS } from '../util/time.js';
 

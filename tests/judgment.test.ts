@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { judge, judgeAll, judgmentApiKey } from '../src/eval/judgment.js';
+import { judge, judgeAll } from '../src/eval/judgment.js';
+import { envTypesafeApiKey } from '../src/util/env.js';
 
 interface JevAnswerFixture { type?: string; noul?: number; choice?: string; confidence?: number }
 interface JevBodyFixture {
@@ -148,16 +149,16 @@ describe('judgeAll', () => {
   });
 });
 
-describe('judgmentApiKey', () => {
+describe('envTypesafeApiKey', () => {
   it('treats a missing or blank key as opt-out', () => {
     const original = process.env.TYPESAFE_API_KEY;
     try {
       delete process.env.TYPESAFE_API_KEY;
-      expect(judgmentApiKey()).toBeUndefined();
+      expect(envTypesafeApiKey()).toBeUndefined();
       process.env.TYPESAFE_API_KEY = '   ';
-      expect(judgmentApiKey()).toBeUndefined();
+      expect(envTypesafeApiKey()).toBeUndefined();
       process.env.TYPESAFE_API_KEY = ' sk-live ';
-      expect(judgmentApiKey()).toBe('sk-live');
+      expect(envTypesafeApiKey()).toBe('sk-live');
     } finally {
       if (original === undefined) delete process.env.TYPESAFE_API_KEY;
       else process.env.TYPESAFE_API_KEY = original;

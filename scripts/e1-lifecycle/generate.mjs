@@ -31,7 +31,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { mulberry32 } from '../lifecycle-stress/inject.mjs';
+import { mulberry32 } from '../lib/prng.mjs';
 
 export const GENERATOR_VERSION = '1.0.0';
 

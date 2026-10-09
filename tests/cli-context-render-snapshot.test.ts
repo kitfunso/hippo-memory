@@ -20,10 +20,10 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from 'vitest';
-import { printContextMarkdown } from '../src/cli/context.js';
-import { renderSleepResult } from '../src/cli/sleep.js';
-import { Layer, type MemoryEntry } from '../src/memory.js';
-import type { SleepResult } from '../src/api.js';
+import { contextBlockLines } from '../src/api/context-render.js';
+import { sleepResultLines } from '../src/cli/sleep-render.js';
+import { Layer, type MemoryEntry } from '../src/core/memory.js';
+import type { SleepResult } from '../src/api/index.js';
 
 function makeMemory(overrides: Partial<MemoryEntry> & { id: string; content: string }): MemoryEntry {
   return {
@@ -64,6 +64,15 @@ function makeMemory(overrides: Partial<MemoryEntry> & { id: string; content: str
 
 function isString<T>(value: T): value is T & string {
   return typeof value === 'string';
+}
+
+// The same bytes the old console.log loop produced: one log per line, joined by a newline.
+function printContextMarkdown(items: Array<{ entry: MemoryEntry; score: number; tokens: number; isGlobal: boolean }>, total: number, framing: string): void {
+  for (const line of contextBlockLines(items, total, framing)) console.log(line);
+}
+
+function renderSleepResult(result: SleepResult): void {
+  for (const line of sleepResultLines(result)) console.log(line);
 }
 
 function captureStdout(fn: () => void): string {

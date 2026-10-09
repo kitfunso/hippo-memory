@@ -5,7 +5,7 @@ import { readTextFile } from './files.js';
 import { readFolderStore, type FolderRules } from './folder-store.js';
 import { gitLayout } from './git.js';
 import type { Adapter, AdapterContext, Container } from './types.js';
-import { errorMessage } from '../log.js';
+import { errorMessage } from '../util/log.js';
 
 const PRODUCTS = ['Code', 'Code - Insiders'] as const;
 const MEMORY_TOOL = ['github.copilot-chat', 'memory-tool', 'memories'] as const;

@@ -1,8 +1,8 @@
 // SessionEnd for a caller on another machine: the owner's handoff, then the owner's snapshot for the session closed, both under its tenant and project.
-import { BadRequestError } from '../api-errors.js';
+import { BadRequestError } from '../core/api-errors.js';
 import type { Context } from '../api/types.js';
-import type { HandoffEvidence } from '../handoff.js';
-import type { CallerProject } from '../prompt-hook.js';
+import type { HandoffEvidence } from '../core/handoff.js';
+import type { CallerProject } from '../api/prompt-hook.js';
 import { writeSessionEndHandoff } from '../store/handoffs.js';
 import { closeTaskSnapshotsForSession } from '../store/sessions.js';
 import { bindCaller, checkedWorkingState } from './caller-session.js';

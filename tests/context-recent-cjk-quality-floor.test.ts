@@ -1,9 +1,9 @@
 /**
- * DF3 follow-up (codex review) — `substantiveWordCount` (src/audit.ts) is not
+ * DF3 follow-up (codex review) — `substantiveWordCount` (src/store/audit.ts) is not
  * locale-aware: it splits on `/\s+/`, so a whitespace-free CJK sentence reads
  * as a single "word" and fails the `< 2` substantive-word-count check inside
  * `isContentWorthStoring`. That heuristic gates both the `includeRecent`
- * quality floor (src/api.ts:2484) and capture's write path
+ * quality floor (src/api/index.ts:2484) and capture's write path
  * (src/capture.ts:174), so the bug silently dropped real CJK memories at
  * write time, not just at read time.
  *
@@ -16,11 +16,11 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { isContentWorthStoring } from '../src/memory-quality.js';
+import { isContentWorthStoring } from '../src/core/memory-quality.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { getContext, type Context } from '../src/api.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { getContext, type Context } from '../src/api/index.js';
 
 function tmpHome() {
   const home = mkdtempSync(join(tmpdir(), 'hippo-df3-cjk-'));
@@ -51,7 +51,7 @@ function seed(home: string, content: string, opts: { created?: string } = {}) {
 
 const CJK_SENTENCE = 'データベース接続がタイムアウトしたときは再試行の間隔を二倍にする';
 
-describe('CJK-aware substantiveWordCount (src/audit.ts)', () => {
+describe('CJK-aware substantiveWordCount (src/store/audit.ts)', () => {
   it('(a) a substantive CJK sentence passes isContentWorthStoring', () => {
     expect(isContentWorthStoring(CJK_SENTENCE)).toBe(true);
   });

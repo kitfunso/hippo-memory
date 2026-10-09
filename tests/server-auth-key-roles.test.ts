@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { createApiKey, listApiKeys } from '../src/auth.js';
-import { log } from '../src/log.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { createApiKey, listApiKeys } from '../src/store/auth.js';
+import { log } from '../src/util/log.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
 
@@ -22,12 +22,7 @@ describe('/v1/auth/keys role rules', () => {
   }
 
   function isActive(keyId: string): boolean {
-    const db = openHippoDb(home);
-    try {
-      return listApiKeys(db, { active: true }).some((k) => k.keyId === keyId);
-    } finally {
-      closeHippoDb(db);
-    }
+    return listApiKeys(home, { active: true }).some((k) => k.keyId === keyId);
   }
 
   function post(bearer: string, body: { role?: string }): Promise<Response> {

@@ -12,7 +12,7 @@
  *   - Store: 10k synthetic memories with realistic distribution
  *   - Success: p99 < 50ms
  *
- * Note on "Hybrid embeddings ON" from the ROADMAP: src/api.ts:recall is
+ * Note on "Hybrid embeddings ON" from the ROADMAP: src/api/index.ts:recall is
  * BM25-only today (the `mode` param is forward-compat). The HTTP recall
  * surface measured here is the actual implementation. When hybrid lands
  * (post-A1), re-run with the same harness.
@@ -25,16 +25,17 @@
  *
  * Run:
  *   node --experimental-strip-types benchmarks/a1/p99-recall.ts \
- *     --store-size 10000 --queries 1000 [--gate-ms 50] [--warmup N] [--rounds R]
+ *     --store-size 10000 --queries 1000 [--gate-ms 50] [--report-only] [--warmup N] [--rounds R]
  *
  * --warmup sends N untimed queries first; --rounds repeats the timed pass and
  * gates on the fastest round's p99. Defaults (0, 1) keep the cold single pass.
  *
  * Output JSON lands in benchmarks/a1/results/p99-<timestamp>.json.
- * Exit code 0 if the gated p99 < --gate-ms, else 1 (CI gate).
+ * Exit code 0 if no request failed and the gated p99 < --gate-ms, else 1.
+ * --report-only drops the latency gate: CI passes it, since runner speed moves p99 with no code change, and reads the percentiles from the job summary.
  */
 
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readdirSync, readFileSync } from 'node:fs';
+import { appendFileSync, mkdtempSync, rmSync, mkdirSync, writeFileSync, readdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -42,14 +43,14 @@ import { fileURLToPath } from 'node:url';
 // Imports resolve against the compiled dist/ output. Run `npm run build` first,
 // then `node --experimental-strip-types benchmarks/a1/p99-recall.ts`.
 import { initStore } from '../../dist/store/open.js';
-import { remember as apiRemember } from '../../dist/api.js';
+import { remember as apiRemember } from '../../dist/api/index.js';
 import { serve, type ServerHandle } from '../../dist/server.js';
 
 interface CliArgs {
   storeSize: number;
   queries: number;
   port: number;
-  gateMs: number;
+  gateMs: number | null;
   warmup: number;
   rounds: number;
 }
@@ -75,7 +76,7 @@ interface Result {
   round_p99_ms: number[];
   gated_p99_ms: number;
   gate_pass: boolean;
-  gate_threshold_ms: number;
+  gate_threshold_ms: number | null;
   notes: string[];
   generated_at: string;
 }
@@ -88,6 +89,7 @@ function parseArgs(argv: string[]): CliArgs {
     else if (a === '--queries') args.queries = Number(argv[++i]);
     else if (a === '--port') args.port = Number(argv[++i]);
     else if (a === '--gate-ms') args.gateMs = Number(argv[++i]);
+    else if (a === '--report-only') args.gateMs = null;
     else if (a === '--warmup') args.warmup = Number(argv[++i]);
     else if (a === '--rounds') args.rounds = Math.max(1, Number(argv[++i]));
   }
@@ -296,11 +298,11 @@ async function main(): Promise<void> {
   // A slower recall slows every round; runner contention rarely hits all of them.
   const gatedP99 = Math.min(...roundP99);
   const gateThreshold = args.gateMs;
-  const gatePass = errorCount === 0 && gatedP99 < gateThreshold;
+  const gatePass = errorCount === 0 && (gateThreshold === null || gatedP99 < gateThreshold);
 
   const notes: string[] = [];
   if (errorCount > 0) notes.push(`${errorCount} fetch errors (excluded from stats)`);
-  notes.push('BM25 only — src/api.ts:recall does not yet wire hybrid embeddings');
+  notes.push('BM25 only — src/api/index.ts:recall does not yet wire hybrid embeddings');
   notes.push('Single SQLite connection (server default)');
   notes.push(args.warmup > 0 ? `Warm: ${args.warmup} untimed queries first` : 'Cold cache: no warmup query');
   if (args.rounds > 1) notes.push(`Gate on the fastest p99 of ${args.rounds} rounds`);
@@ -336,10 +338,25 @@ async function main(): Promise<void> {
   console.log(`  p99 / p999:     ${stats.p99.toFixed(2)} / ${stats.p999.toFixed(2)}ms`);
   console.log(`  max / stddev:   ${stats.max.toFixed(2)} / ${stats.stddev.toFixed(2)}ms`);
   console.log(`  round p99s:     ${roundP99.map((v) => v.toFixed(2)).join(' / ')}ms`);
-  console.log(`  gated p99:      ${gatedP99.toFixed(2)}ms (fastest round)`);
-  console.log(`  gate (<${gateThreshold}ms): ${gatePass ? 'PASS' : 'FAIL'}`);
+  console.log(`  fastest p99:    ${gatedP99.toFixed(2)}ms (fastest round)`);
+  console.log(`  gate:           ${gateThreshold === null ? 'none, latency is reported only' : `<${gateThreshold}ms ${gatePass ? 'PASS' : 'FAIL'}`}`);
+  console.log(`  failed queries: ${errorCount}`);
   console.log(`  output:         ${outPath}`);
   console.log('');
+
+  const summaryPath = process.env.GITHUB_STEP_SUMMARY;
+  if (summaryPath) {
+    const ms = (v: number): string => v.toFixed(1);
+    appendFileSync(summaryPath, [
+      `### Recall latency at ${args.storeSize} memories (reported, not gated)`,
+      '',
+      '| queries | p50 ms | p95 ms | p99 ms | fastest round p99 ms | failed |',
+      '| ---: | ---: | ---: | ---: | ---: | ---: |',
+      `| ${samples.length} | ${ms(stats.p50)} | ${ms(stats.p95)} | ${ms(stats.p99)} | ${ms(gatedP99)} | ${errorCount} |`,
+      '',
+      '',
+    ].join('\n'));
+  }
 
   rmSync(home, { recursive: true, force: true });
   process.exit(gatePass ? 0 : 1);

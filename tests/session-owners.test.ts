@@ -1,14 +1,19 @@
 // A session id belongs to the first owner that binds it; a second owner gets 409 so its client sets the record aside.
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { openHippoDb, closeHippoDb, runWithRequestStores, type DatabaseSyncLike } from '../src/db.js';
-import { ConflictError } from '../src/api-errors.js';
-import type { Context } from '../src/api.js';
+import { createRequire } from 'node:module';
+import { openHippoDb, closeHippoDb, runWithRequestStores, type DatabaseSyncLike } from '../src/db/index.js';
+import { ConflictError } from '../src/core/api-errors.js';
+import type { Context } from '../src/api/index.js';
 import { bindSessionOwner } from '../src/server.js';
-import { insertBinding } from '../src/session-owners.js';
 import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
-import { TASK_OWNER_MIN_BINARY, compareSemver } from '../src/version.js';
+import { TASK_OWNER_MIN_BINARY, compareSemver } from '../src/util/version.js';
 import { makeRoot } from './_helpers/make-root.js';
+
+interface StatementProto { readonly sourceSQL: string }
+type StatementGet = (this: StatementProto, ...params: string[]) => object | undefined;
+// SAFETY: node:sqlite has no bundled types; `get` takes SQL params and returns one row or undefined.
+const { StatementSync } = createRequire(import.meta.url)('node:sqlite') as { StatementSync: { prototype: { get: StatementGet } } };
 
 let home: string;
 
@@ -103,9 +108,22 @@ describe('bindSessionOwner', () => {
   });
 
   it('a bind that lost the race to another owner returns the stored owner, not its own', () => {
-    bindSessionOwner(ctx('alice'), 's1');
-    // Bob's read ran before Alice committed, so he reaches the insert with her row already there.
-    expect(withDb((db) => insertBinding(db, 'default', 's1', 'bob'))).toBe('alice');
+    const get = StatementSync.prototype.get;
+    let raced = false;
+    // Alice commits right after Bob's read finds no owner, so he reaches the insert with her row already there.
+    const read = vi.spyOn(StatementSync.prototype, 'get').mockImplementation(function (this: StatementProto, ...params: string[]) {
+      const row = get.apply(this, params);
+      if (raced || !this.sourceSQL.includes('FROM session_owners')) return row;
+      raced = true;
+      bindSessionOwner(ctx('alice'), 's1');
+      return row;
+    });
+    try {
+      expect(() => bindSessionOwner(ctx('bob'), 's1')).toThrow(ConflictError);
+    } finally {
+      read.mockRestore();
+    }
+    expect(raced).toBe(true);
     expect(bindings().map((b) => b.owner_subject)).toEqual(['alice']);
   });
 

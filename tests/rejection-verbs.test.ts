@@ -1,5 +1,5 @@
 /**
- * AT1 T2 smoke tests: reject/unreject/rejections (api.ts + src/reject-flow.ts)
+ * AT1 T2 smoke tests: reject/unreject/rejections (api.ts + src/trust/reject-flow.ts)
  * and resolveConflict's rejectLoserValue + audit wiring.
  * docs/plans/2026-08-15-at1-rejected-value-tombstone.md
  */
@@ -8,16 +8,16 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { Layer} from '../src/memory.js';
+import { Layer} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { listMemoryConflicts, replaceDetectedConflicts, resolveConflict } from '../src/store/conflicts.js';
-import { queryAuditEvents } from '../src/audit.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import * as api from '../src/api.js';
-import { RejectedValueError } from '../src/rejection.js';
+import { queryAuditEvents } from '../src/store/audit.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import * as api from '../src/api/index.js';
+import { RejectedValueError } from '../src/store/rejection.js';
 
 let tmpDir: string;
 

@@ -5,12 +5,12 @@ import { join } from 'node:path';
 import { cmdCapture } from '../src/capture/command.js';
 import { extractFromText, extractFromTexts } from '../src/capture/extract.js';
 import { sessionTail, summariseSessionTurns, type SessionTurn } from '../src/capture/transcript.js';
-import { extractLessons, partitionLessons } from '../src/autolearn.js';
-import { getContext, type Context } from '../src/api.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer } from '../src/memory.js';
+import { extractLessons, partitionLessons } from '../src/learn/autolearn.js';
+import { getContext, type Context } from '../src/api/index.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer } from '../src/core/memory.js';
 import { initStore, openStore } from '../src/store/open.js';
-import { closeHippoDb } from '../src/db.js';
-import { gatedWrite } from '../src/gated-write.js';
+import { closeHippoDb } from '../src/db/index.js';
+import { gatedWrite } from '../src/trust/gated-write.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 

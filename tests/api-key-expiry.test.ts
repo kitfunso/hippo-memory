@@ -1,14 +1,14 @@
 // Schema v53 gives API keys an owner and an expiry; an expired key fails everywhere, cached or not, and the first expiring key raises the binary floor.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { openHippoDb, closeHippoDb, getSchemaVersion, type DatabaseSyncLike } from '../src/db.js';
+import { openHippoDb, closeHippoDb, getSchemaVersion, type DatabaseSyncLike } from '../src/db/index.js';
 import { raiseMinBinary } from '../src/db/meta.js';
-import { createApiKey, readApiKeyRecord, validateApiKey, verifyApiKeyCached, apiKeyVerifyStats, type ApiKeyRecord } from '../src/auth.js';
-import { adminActor, authCreateSelf, authList, authListRows, type Actor, type AuthCreateSelfResult } from '../src/api.js';
+import { createApiKey, readApiKeyRecord, validateApiKey, verifyApiKeyCached, apiKeyVerifyStats, type ApiKeyRecord } from '../src/store/auth.js';
+import { adminActor, authCreateSelf, authListRows, type Actor, type AuthCreateSelfResult } from '../src/api/index.js';
 import { cmdAuth } from '../src/cli/auth.js';
 import { serve, type ServerHandle } from '../src/server.js';
-import { sqliteStore, type HippoStore } from '../src/store-port.js';
-import { EXPIRING_KEYS_MIN_BINARY } from '../src/version.js';
+import { sqliteStore, type HippoStore } from '../src/store/index.js';
+import { EXPIRING_KEYS_MIN_BINARY } from '../src/util/version.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
@@ -189,11 +189,11 @@ describe('key lists', () => {
   it('an active list leaves out expired keys, page sizes included, and shows owner and expiry', () => {
     const keys = threeKeys();
     const ctx = { hippoRoot: home, tenantId: 'default', actor: adminActor('cli') };
-    expect(authList(ctx, { active: true }).map((k) => k.keyId)).toEqual([keys.plain, keys.live]);
-    expect(authList(ctx, { active: false }).map((k) => k.keyId)).toEqual([keys.expired, keys.plain, keys.live]);
+    expect(authListRows(ctx, { active: true }).map((r) => r.key.keyId)).toEqual([keys.plain, keys.live]);
+    expect(authListRows(ctx, { active: false }).map((r) => r.key.keyId)).toEqual([keys.expired, keys.plain, keys.live]);
     const [first] = authListRows(ctx, { active: true, limit: 1 });
     expect(first?.key.keyId).toBe(keys.plain);
-    const byId = new Map(authList(ctx, { active: true }).map((k) => [k.keyId, k]));
+    const byId = new Map(authListRows(ctx, { active: true }).map((r) => [r.key.keyId, r.key]));
     expect(byId.get(keys.live)).toMatchObject({ ownerSubject: 'alice', expiresAt: keys.liveExpiry });
     expect(byId.get(keys.plain)).toMatchObject({ ownerSubject: null, expiresAt: null });
   });

@@ -1,146 +1,32 @@
 // The predictions routes run their SQLite work on worker threads: the server answers through a held write lock, and a client sees what the in-process store gave.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createRequire } from 'node:module';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createApiKey } from '../src/auth.js';
-import { closeHippoDb, getHippoDbPath, openHippoDb, type DatabaseSyncLike } from '../src/db.js';
-import type { JsonValue } from '../src/json.js';
-import { log } from '../src/log.js';
+import { closeHippoDb, getHippoDbPath, openHippoDb } from '../src/db/index.js';
+import { log } from '../src/util/log.js';
 import { serve, type ServerHandle } from '../src/server.js';
-import type { HippoStore } from '../src/store-port.js';
+import type { HippoStore } from '../src/store/index.js';
 import { predictionMirror } from '../src/store/predictions.js';
-import { type CallOptions, createSqliteExecutor, type SqliteExecutor } from '../src/store/sqlite/executor.js';
+import { createSqliteExecutor } from '../src/store/sqlite/executor.js';
 import { servedPredictions, sqlitePredictions } from '../src/store/sqlite/predictions-group.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { workerSqliteStore } from '../src/store/sqlite/worker-store.js';
-import { makeRoot } from './_helpers/make-root.js';
-
-// SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike.
-const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as { DatabaseSync: new (path: string) => DatabaseSyncLike };
+import {
+  auditFailures, auditRows, cleanups, execOn, get, holdWriteLock, keyFor, newRoot, onDb, patientStore, post, postText, removeLater, seen, start, undoAll,
+} from './_helpers/store-worker-server.js';
 
 const SAVE = 'predictions.savePrediction';
-// Far past any test's own timeout, so a write behind a held lock can only end when the test releases the lock or stops the thread.
-const LONG_WAIT_MS = 60_000;
 
-type Cleanup = () => Promise<void> | void;
-const cleanups: Cleanup[] = [];
-
-afterEach(async () => {
-  vi.restoreAllMocks();
-  vi.unstubAllEnvs();
-  for (const undo of cleanups.splice(0).reverse()) await undo();
-});
-
-function newRoot(): string {
-  const root = makeRoot('sqlite-executor');
-  cleanups.push(() => rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
-  return root;
-}
-
-/** A server on `root`: on the default store when `store` is absent, which is the worker-backed one. */
-async function start(root: string, store?: HippoStore): Promise<ServerHandle> {
-  vi.stubEnv('HIPPO_V1_RPS', '0');
-  const server = await serve(store ? { hippoRoot: root, port: 0, store } : { hippoRoot: root, port: 0 });
-  cleanups.push(async () => {
-    await server.stop();
-    await store?.close();
-  });
-  return server;
-}
-
-/** A second connection, as another process would hold, with the write lock taken until `release`. */
-function holdWriteLock(root: string) {
-  const other = new DatabaseSync(getHippoDbPath(root));
-  cleanups.push(() => {
-    if (other.isOpen !== false) other.close();
-  });
-  other.exec('BEGIN IMMEDIATE');
-  return { release: () => other.exec('COMMIT') };
-}
-
-function execOn(root: string, sql: string): void {
-  const db = openHippoDb(root);
-  try {
-    db.exec(sql);
-  } finally {
-    closeHippoDb(db);
-  }
-}
+afterEach(undoAll);
 
 function claims(root: string): string[] {
-  const db = openHippoDb(root);
-  try {
-    // SAFETY: the SELECT names one column, which the schema declares TEXT NOT NULL.
-    const rows = db.prepare('SELECT claim_text FROM predictions ORDER BY id').all() as Array<{ claim_text: string }>;
-    return rows.map((row) => row.claim_text);
-  } finally {
-    closeHippoDb(db);
-  }
-}
-
-function keyFor(root: string, tenantId: string): { keyId: string; plaintext: string } {
-  const db = openHippoDb(root);
-  try {
-    return createApiKey(db, { tenantId, label: `executor-${tenantId}`, role: 'admin' });
-  } finally {
-    closeHippoDb(db);
-  }
-}
-
-const jsonHeaders = (token?: string): Record<string, string> =>
-  token === undefined ? { 'content-type': 'application/json' } : { 'content-type': 'application/json', authorization: `Bearer ${token}` };
-
-function postText(server: ServerHandle, path: string, body: string, token?: string): Promise<Response> {
-  return fetch(`${server.url}${path}`, { method: 'POST', headers: jsonHeaders(token), body });
-}
-
-const post = (server: ServerHandle, path: string, body: JsonValue, token?: string): Promise<Response> => postText(server, path, JSON.stringify(body), token);
-
-function get(server: ServerHandle, path: string, token?: string): Promise<Response> {
-  return fetch(`${server.url}${path}`, { headers: jsonHeaders(token) });
+  // SAFETY: the SELECT names one column, which the schema declares TEXT NOT NULL.
+  const rows = onDb(root, (db) => db.prepare('SELECT claim_text FROM predictions ORDER BY id').all()) as Array<{ claim_text: string }>;
+  return rows.map((row) => row.claim_text);
 }
 
 const claim = (text: string) => ({ claim: text, classTag: 'release', estimate: 3, unit: 'days' });
-
-async function auditFailures(server: ServerHandle): Promise<number> {
-  // SAFETY: the loopback /health body carries the count as a number; the assertions on it would fail on anything else.
-  const body = (await (await get(server, '/health')).json()) as { audit_write_failures: number };
-  return body.audit_write_failures;
-}
-
-/** The real executor, plus a promise that settles once an op has been handed to it a given number of times. */
-function watched(inner: SqliteExecutor) {
-  const seen: string[] = [];
-  const checks: Array<() => void> = [];
-  const executor: SqliteExecutor = {
-    call: <T>(op: string, args: readonly unknown[], opts: CallOptions) => {
-      const result = inner.call<T>(op, args, opts);
-      seen.push(op);
-      for (const check of checks) check();
-      return result;
-    },
-    close: () => inner.close(),
-    liveThreads: () => inner.liveThreads(),
-    terminateWriter: () => inner.terminateWriter(),
-  };
-  const sent = (op: string, times: number): Promise<void> =>
-    new Promise((resolve) => {
-      const check = (): void => {
-        if (seen.filter((name) => name === op).length >= times) resolve();
-      };
-      checks.push(check);
-      check();
-    });
-  return { executor, sent };
-}
-
-/** A worker-backed store whose threads wait on the write lock for as long as the test holds it. */
-function patientStore(root: string) {
-  const { executor, sent } = watched(createSqliteExecutor(root, { busyWaitMs: LONG_WAIT_MS }));
-  return { executor, sent, store: workerSqliteStore(root, executor) };
-}
 
 describe('the event loop while a predictions write waits', () => {
   it('answers /health and a predictions read while a predictions write waits for the write lock, then lands the write', async () => {
@@ -207,32 +93,6 @@ const STEPS: readonly Step[] = [
   ['stats without a class', (s, k) => get(s, '/v1/predictions/stats', k.main)],
   ['stats with an unknown key', (s) => get(s, '/v1/predictions/stats?class=release', 'hk_unknown')],
 ];
-
-/** What differs between two stores by construction: generated ids, key ids, clock readings and the page cursor built from them. */
-function scrub(text: string, keyIds: readonly string[]): string {
-  const withoutKeys = keyIds.reduce((soFar, keyId, index) => soFar.replaceAll(keyId, `<key ${index}>`), text);
-  return withoutKeys
-    .replace(/sem_[0-9a-f]+/g, '<memory>')
-    .replace(/\d{4}-\d\d-\d\dT[\d:.]+Z/g, '<time>')
-    .replace(/"next_cursor":"[^"]+"/g, '"next_cursor":"<cursor>"');
-}
-
-const PER_REQUEST_HEADERS = new Set(['date', 'x-request-id', 'content-length']);
-
-async function seen(label: string, res: Response, keyIds: readonly string[] = []) {
-  const headers = [...res.headers].filter(([name]) => !PER_REQUEST_HEADERS.has(name)).sort();
-  return { label, status: res.status, headers, body: scrub(await res.text(), keyIds) };
-}
-
-function auditRows(root: string, keyIds: readonly string[]): string[] {
-  const db = openHippoDb(root);
-  try {
-    const rows = db.prepare('SELECT tenant_id, actor, op, target_id, metadata_json FROM audit_log ORDER BY id').all();
-    return rows.map((row) => scrub(JSON.stringify(row), keyIds));
-  } finally {
-    closeHippoDb(db);
-  }
-}
 
 /** Every step against a fresh store, plus the audit rows the steps left. */
 async function runSteps(root: string, store?: HippoStore) {
@@ -365,8 +225,7 @@ describe("the server-thread block of a `loop: 'off'` route", () => {
   });
 
   it('still holds the store connection when the first response of a new store is a worker-backed route', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'hippo-sqlite-executor-bare-'));
-    cleanups.push(() => rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
+    const root = removeLater(mkdtempSync(join(tmpdir(), 'hippo-sqlite-executor-bare-')));
     const warn = vi.spyOn(log, 'warn');
     const server = await start(root);
     expect(existsSync(getHippoDbPath(root))).toBe(false);

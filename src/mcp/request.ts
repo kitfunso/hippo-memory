@@ -1,14 +1,15 @@
 // Transport-agnostic request handling: tool dispatch table, tool execution and the JSON-RPC method switch.
 
-import { errorMessage, log } from '../log.js';
-import { STORE_NOT_PORTED_MESSAGE } from '../http-util.js';
-import { getGlobalRoot, initGlobal } from '../shared.js';
-import { loadConfig } from '../config.js';
-import { resolveTenantId } from '../tenant.js';
-import { rethrowIfSqliteBlocked, runWithRequestStores } from '../db.js';
-import { hasGroup, storeFor, type HippoStore, type StoreGroup } from '../store-port.js';
-import { estimateTokens, type TokenSurface } from '../token-ledger.js';
-import { PACKAGE_VERSION } from '../version.js';
+import { errorMessage, log } from '../util/log.js';
+import { STORE_NOT_PORTED_MESSAGE } from '../util/http-util.js';
+import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
+import { loadConfig } from '../core/config.js';
+import { resolveTenantId } from '../store/tenant.js';
+import { rethrowIfSqliteBlocked, runWithRequestStores } from '../db/index.js';
+import { hasGroup, storeFor, type HippoStore, type StoreGroup } from '../store/index.js';
+import { type TokenSurface } from '../store/token-ledger.js';
+import { estimateTokens } from '../util/token-text.js';
+import { PACKAGE_VERSION } from '../util/version.js';
 import { validateToolArgs } from './tool-args.js';
 import { RecallRequestError } from '../api/recall-request.js';
 import { findHippoRoot, type McpContext, type McpRequest, type McpResponse, type ToolHandler } from './protocol.js';
@@ -17,7 +18,7 @@ import { runRecallTool, runAssembleTool, runDrillTool, runContextTool } from './
 import { runRememberTool, runOutcomeTool, runLearnTool } from './memory-tools.js';
 import { runPredictBaserateTool, runStatusTool, runConflictsTool, runResolveTool, runShareTool, runPeersTool } from './admin-tools.js';
 import { sharedStoreRefusal } from './shared-gate.js';
-import { type JsonValue, isJsonString, isJsonObject } from '../json.js';
+import { type JsonValue, isJsonString, isJsonObject } from '../util/json.js';
 
 /**
  * Zero-install first run (`npx -y hippo-memory mcp` with no store anywhere):

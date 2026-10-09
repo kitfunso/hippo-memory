@@ -18,7 +18,7 @@ import { existsSync, readdirSync, realpathSync, rmSync, statSync } from 'node:fs
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 
-// Resolve the global store the way src/shared.ts getGlobalRoot() does:
+// Resolve the global store the way src/sharing/global-store.ts getGlobalRoot() does:
 // HIPPO_HOME, then XDG_DATA_HOME/hippo, then ~/.hippo.
 function globalStoreRoot(): string {
   const hippoHome = process.env.HIPPO_HOME?.trim();
@@ -40,7 +40,7 @@ function samePath(a: string, b: string): boolean {
   return process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b;
 }
 
-// Mirrors src/project-identity.ts's walkProjectMarkers: home/tmpdir stop before the marker check, root stops after.
+// Mirrors src/core/project-identity.ts's walkProjectMarkers: home/tmpdir stop before the marker check, root stops after.
 export function watchedStoreDirs(cwd: string, home: string): string[] {
   const homeReal = realpathOrResolve(home);
   const tmpReal = realpathOrResolve(tmpdir());

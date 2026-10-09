@@ -12,9 +12,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { listPeers } from '../src/shared.js';
-import { Layer } from '../src/memory.js';
-import type { MemoryEntry } from '../src/memory.js';
+import { listPeers } from '../src/sharing/share.js';
+import { Layer } from '../src/core/memory.js';
+import type { MemoryEntry } from '../src/core/memory.js';
 
 function makeSharedEntry(opts: { id: string; project: string; tenantId: string }): MemoryEntry {
   return {

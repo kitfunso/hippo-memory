@@ -6,13 +6,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../../src/store/open.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../../src/memory.js';
-import { pushGoal } from '../../src/goals.js';
-import { openHippoDb, closeHippoDb } from '../../src/db.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS, Layer, type MemoryEntry } from '../../src/core/memory.js';
+import { pushGoal } from '../../src/store/goals.js';
+import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { appendSessionEvent, saveActiveTaskSnapshot } from '../../src/store/sessions.js';
 import { saveSessionHandoff } from '../../src/store/handoffs.js';
 import { closePrediction, savePrediction } from '../../src/store/predictions.js';
-import type { RecallResult } from '../../src/api.js';
+import type { RecallResult } from '../../src/api/index.js';
 
 export const FAKE_NOW = '2026-02-01T00:00:00.000Z';
 export const SESSION = 'golden-session';

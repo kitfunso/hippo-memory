@@ -19,27 +19,29 @@ import { describe, it, expect, vi } from 'vitest';
 import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { openHippoDb, closeHippoDb, getSchemaVersion } from '../src/db.js';
+import { openHippoDb, closeHippoDb, getSchemaVersion } from '../src/db/index.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry, loadAllEntries } from '../src/store/entry-reads.js';
 import { rebuildIndex } from '../src/store/index-and-stats.js';
 import { appendSessionEvent } from '../src/store/sessions.js';
-import { Layer} from '../src/memory.js';
+import { Layer} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { queryAuditEvents } from '../src/audit.js';
+import { queryAuditEvents } from '../src/store/audit.js';
 import {
   RejectedValueError,
   rejectionDigest,
   normalizeValueForRejection,
   insertRejectedValue,
   findRejectedValue,
-} from '../src/rejection.js';
+} from '../src/store/rejection.js';
 import { cmdCapture } from '../src/capture/command.js';
-import { syncGlobalToLocal, autoShare } from '../src/shared.js';
-import * as api from '../src/api.js';
+import { syncGlobalToLocal } from '../src/sharing/global-sync.js';
+import { autoShare } from '../src/sharing/share.js';
+import * as api from '../src/api/index.js';
 import { consolidate } from '../src/consolidate/sleep.js';
 import { importEntries } from '../src/importers/core.js';
+import { importVault } from '../src/importers/vault.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 
 function tmpHome(prefix: string = 'hippo-rejection-acceptance-'): string {
@@ -486,6 +488,34 @@ describe('import dry-run tombstone accuracy', () => {
       expect(contents).toContain(otherChunk);
     } finally {
       rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it('importVault dry-run counts a tombstoned note as rejected (not imported), writes nothing, and agrees with a real run', () => {
+    const home = tmpHome('hippo-rejection-acceptance-vault-dryrun-');
+    const vault = tmpHome('hippo-rejection-acceptance-vault-notes-');
+    try {
+      initStore(home);
+      const rejectedNote = 'never re-import this specific vault note body again please';
+      const otherNote = 'a completely different unrelated vault note body here';
+      writeFileSync(join(vault, 'rejected.md'), rejectedNote);
+      writeFileSync(join(vault, 'other.md'), otherNote);
+      api.reject(ctx(home), { value: rejectedNote, reason: 'pre-emptive dry-run vault tombstone' });
+
+      const dryResult = importVault(vault, { hippoRoot: home, tenantId: 'default', name: 'notes', dryRun: true });
+      expect(dryResult.rejected).toBe(1);
+      expect(dryResult.imported).toBe(1);
+      expect(loadAllEntries(home).length).toBe(0); // dry-run writes nothing
+
+      const realResult = importVault(vault, { hippoRoot: home, tenantId: 'default', name: 'notes', dryRun: false });
+      expect(realResult.rejected).toBe(1);
+      expect(realResult.imported).toBe(1);
+      const contents = loadAllEntries(home).map((e) => e.content);
+      expect(contents).not.toContain(rejectedNote);
+      expect(contents).toContain(otherNote);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+      rmSync(vault, { recursive: true, force: true });
     }
   });
 });

@@ -1,21 +1,17 @@
 // /v1/customer-notes routes.
-import { closeCustomerNote, type CustomerNote, loadCustomerNoteById, loadCustomerNotes, MAX_CUSTOMER_LEN, type NoteStatus, saveCustomerNote, type SaveCustomerNoteOpts, VALID_NOTE_STATES } from '../../customer-notes.js';
-import { sendJson } from '../../http-util.js';
+import { CUSTOMER_NOTE, MAX_CUSTOMER_LEN, type SaveCustomerNoteOpts } from '../../objects/customer-notes.js';
+import { sendJson } from '../../util/http-util.js';
 import { buildContextWithAuth } from '../auth.js';
 import type { RouteRequest } from '../types.js';
 import { parseJsonBody } from '../validation.js';
-import { closeRoute, getRoute, listRoute, optionalString, requiredString, supersedeRoute, type VersionedRouteConfig } from './object-routes.js';
+import { closeRoute, getRoute, listRoute, optionalString, requiredString, saveFor, supersedeRoute, type VersionedRouteConfig } from './object-routes.js';
 
-const noteRoutes: VersionedRouteConfig<CustomerNote, NoteStatus, SaveCustomerNoteOpts> = {
+const noteRoutes: VersionedRouteConfig<'customer_note', SaveCustomerNoteOpts> = {
   noun: 'customer note',
   field: 'note',
   listField: 'notes',
-  statuses: VALID_NOTE_STATES,
+  object: CUSTOMER_NOTE,
   filterParam: 'customer',
-  list: (hippoRoot, tenantId, { status, filter, limit, after }) => loadCustomerNotes(hippoRoot, tenantId, { status, customer: filter, limit, after }),
-  get: loadCustomerNoteById,
-  close: closeCustomerNote,
-  save: saveCustomerNote,
   revise: (body) => {
     const note = requiredString(body, 'note', { max: 8192 });
     const changeSummary = optionalString(body, 'changeSummary', 4096);
@@ -31,15 +27,14 @@ const noteRoutes: VersionedRouteConfig<CustomerNote, NoteStatus, SaveCustomerNot
 // POST /v1/customer-notes/:id/close. DoS caps: customer 256, note 8192,
 // changeSummary 4096. The store validates + throws; the boundary maps validation ->
 // 400, not-found -> 404, not-active -> 409. Mirrors /v1/project-briefs.
-export async function handleCreateCustomerNote({ req, res, opts }: RouteRequest): Promise<void> {
-  const ctx = await buildContextWithAuth(req, opts);
-  const body = await parseJsonBody(req, ctx);
-  const customerNote = saveCustomerNote(opts.hippoRoot, ctx.tenantId, {
+export async function handleCreateCustomerNote(rr: RouteRequest): Promise<void> {
+  const ctx = await buildContextWithAuth(rr.req, rr.opts);
+  const body = await parseJsonBody(rr.req, ctx);
+  const customerNote = await saveFor(rr, CUSTOMER_NOTE, ctx.tenantId, ctx.actor.subject, {
     customer: requiredString(body, 'customer', { max: MAX_CUSTOMER_LEN }),
     note: requiredString(body, 'note', { max: 8192 }),
-  }, ctx.actor.subject);
-  sendJson(res, 201, { note: customerNote });
-  return;
+  });
+  sendJson(rr.res, 201, { note: customerNote });
 }
 
 export function handleListCustomerNotes(rr: RouteRequest): Promise<void> {

@@ -1,10 +1,13 @@
 // The snapshot groups live memories by origin project and counts bands, layers, conflicts and embeddings over that one population.
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { Layer } from '../src/memory.js';
+import { Layer } from '../src/core/memory.js';
 import { listMemoryConflicts, replaceDetectedConflicts, resolveConflict } from '../src/store/conflicts.js';
-import { quarantineScopeFor } from '../src/quarantine.js';
-import { createSnapshotService } from '../src/dashboard/dashboard-snapshot.js';
+import { quarantineScopeFor } from '../src/trust/quarantine.js';
+import { buildSnapshot, createSnapshotService } from '../src/dashboard/dashboard-snapshot.js';
+import { closeHippoDb, openHippoDb } from '../src/db/index.js';
+import { storedVectorIds } from '../src/db/vector-store.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
 import { buildOverview } from '../src/dashboard/dashboard-queries.js';
 import { embed, isoAgo, makeStore, NOW, seed, type TmpStore } from './_helpers/dashboard-fixture.js';
 
@@ -115,5 +118,42 @@ describe('dashboard snapshot', () => {
 
     expect(snap.byKey.get('p:alpha')?.summary.embedded).toBe(2);
     expect(snap.embeddingCoverage).toBe(0.5);
+  });
+
+  it('builds the same snapshot from its narrow read as from every whole row of the tenant', () => {
+    const root = store.hippoRoot;
+    const pinned = seed(root, 'pinned with tags', { pinned: true, tags: ['Deploy', 'error'], confidence: 'verified' });
+    const wrong = seed(root, 'marked wrong twice', { outcome_negative: 2, emotional_valence: 'negative', retrieval_count: 7 });
+    seed(root, 'raw global row', { kind: 'raw', origin_project: '', layer: Layer.Buffer, ...AT_RISK });
+    seed(root, 'unassigned and long unused', { origin_project: null, ...FADING });
+    // The prefix test is exact, so a scope that differs only in case stays live.
+    seed(root, 'scope that only looks quarantined', { scope: 'Quarantine:private:team', origin_project: 'beta' });
+    seed(root, 'x'.repeat(300), { origin_project: 'beta', layer: Layer.Semantic });
+    seed(root, 'replaced by the pinned one', { superseded_by: pinned.id });
+    seed(root, 'superseded by kind alone', { kind: 'superseded' });
+    seed(root, 'archived and replaced', { kind: 'archived', superseded_by: wrong.id });
+    seed(root, 'archived', { kind: 'archived' });
+    seed(root, 'quarantined', { scope: quarantineScopeFor('team:eng') });
+    seed(root, 'quarantined and archived', { scope: quarantineScopeFor(null), kind: 'archived' });
+    seed(root, 'another tenant', { tenantId: 'other' });
+    replaceDetectedConflicts(root, [{ memory_a_id: pinned.id, memory_b_id: wrong.id, reason: 'inside alpha', score: 0.9 }]);
+    embed(root, [pinned.id, wrong.id]);
+
+    const snap = snapshot();
+    const db = openHippoDb(root);
+    let embeddedIds: Set<string>;
+    try {
+      embeddedIds = storedVectorIds(db);
+    } finally {
+      closeHippoDb(db);
+    }
+    const fromWholeRows = buildSnapshot({
+      id: snap.id, tenantId: 'default', nowMs: NOW, entries: loadAllEntries(root, 'default'), openConflicts: listMemoryConflicts(root, 'open', 'default'), embeddedIds,
+    });
+
+    expect(snap.excluded).toEqual({ superseded: 3, archived: 1, quarantined: 2 });
+    expect(snap.facts).toHaveLength(6);
+    expect(JSON.stringify({ ...snap, memo: null, byKey: [...snap.byKey] })).toBe(JSON.stringify({ ...fromWholeRows, memo: null, byKey: [...fromWholeRows.byKey] }));
+    expect(JSON.stringify(buildOverview(snap))).toBe(JSON.stringify(buildOverview(fromWholeRows)));
   });
 });

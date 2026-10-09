@@ -1,11 +1,11 @@
 // `hippo goal`: the per-session goal stack that recall boosts.
 
-import { envHippoSessionId } from '../env.js';
-import type { PolicyType } from '../goals.js';
-import * as api from '../api.js';
-import { resolveTenantId } from '../tenant.js';
+import { DEFAULT_TENANT_ID, envHippoSessionId } from '../util/env.js';
+import type { PolicyType } from '../store/goals.js';
+import * as api from '../api/index.js';
+import { resolveTenantId } from '../store/tenant.js';
 import { printError } from './output.js';
-import { type CliFlags, boolFlag, flagIsTrue } from './shared.js';
+import { type CliFlags, boolFlag, flagIsTrue, stringFlag } from './flag-values.js';
 
 // ---------------------------------------------------------------------------
 // `hippo goal <push|list|complete|suspend|resume>`
@@ -37,7 +37,7 @@ function resolveGoalSession(flags: CliFlags): { sessionId: string; tenantId: str
     flags['tenant-id'] !== undefined
       ? String(flags['tenant-id'])
       : resolveTenantId({})
-  ).trim() || 'default';
+  ).trim() || DEFAULT_TENANT_ID;
   return { sessionId, tenantId };
 }
 
@@ -90,7 +90,7 @@ function cmdGoalPush(hippoRoot: string, args: string[], flags: CliFlags): void {
     printError('--success requires a value (e.g., --success "<condition>")');
     process.exit(1);
   }
-  const successCondition = typeof successRaw === 'string' ? successRaw : undefined;
+  const successCondition = stringFlag(flags, 'success');
 
   const level = readGoalLevel(flags);
 
@@ -99,7 +99,7 @@ function cmdGoalPush(hippoRoot: string, args: string[], flags: CliFlags): void {
     printError('--parent requires a value (e.g., --parent <goalId>)');
     process.exit(1);
   }
-  const parentGoalId = typeof parentRaw === 'string' ? parentRaw : undefined;
+  const parentGoalId = stringFlag(flags, 'parent');
 
   const goal = api.goalPush(goalContext(hippoRoot, tenantId), {
     sessionId,

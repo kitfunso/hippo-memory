@@ -22,9 +22,9 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { appendSessionEvent } from '../src/store/sessions.js';
-import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { consolidate } from '../src/consolidate/sleep.js';
-import { storeExtractedFacts, type ExtractedFact } from '../src/extract.js';
+import { storeExtractedFacts, type ExtractedFact } from '../src/learn/extract.js';
 
 function tmpHome(prefix: string = 'hippo-consolidate-tenant-landing-'): string {
   return mkdtempSync(join(tmpdir(), prefix));

@@ -7,10 +7,10 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { consolidate } from '../src/consolidate/sleep.js';
-import { storeExtractedFacts } from '../src/extract.js';
-import { generateDagSummary } from '../src/dag.js';
-import { Layer } from '../src/memory.js';
-import { assessAutomaticMemory } from '../src/memory-quality.js';
+import { storeExtractedFacts } from '../src/learn/extract.js';
+import { generateDagSummary } from '../src/consolidate/dag.js';
+import { Layer } from '../src/core/memory.js';
+import { assessAutomaticMemory } from '../src/core/memory-quality.js';
 
 const captured = { layer: Layer.Episodic, source: 'capture', confidence: 'observed' } as const;
 let root: string;

@@ -3,8 +3,8 @@ import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { initStore } from '../src/store/open.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { hasSeenEvent, markEventSeen, lookupMemoryByEvent } from '../src/connectors/slack/idempotency.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { slackEventSeenAt as hasSeenEvent, markSlackEventSeenAt as markEventSeen, slackEventMemoryAt as lookupMemoryByEvent } from '../src/store/connectors/slack.js';
 
 describe('slack idempotency', () => {
   let root: string;

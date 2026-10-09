@@ -1,25 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { detectConflicts } from '../src/consolidate/conflicts.js';
 import { mergePartners } from '../src/consolidate/merge.js';
-import { Layer, type MemoryEntry } from '../src/memory.js';
+import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { tokenize } from '../src/tokenize.js';
+import { tokenize } from '../src/util/tokenize.js';
 import { pairwiseDetectConflicts, pairwiseMergePartners } from './_helpers/pairwise-sleep-oracle.js';
+import { mulberry32 } from './_helpers/property.js';
 
 const NOW = new Date('2026-10-01T00:00:00.000Z');
 const DAY = 24 * 60 * 60 * 1000;
 const SIZES = [0, 1, 2, 3, 8, 30, 120, 300];
 const SEEDS_PER_SIZE = 4;
-
-function mulberry32(seed: number): () => number {
-  let a = seed;
-  return () => {
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
 
 // A small shared vocabulary so random texts collide often, plus the polarity words, stopwords and punctuation the rules key on.
 const TOPIC = ['deploy', 'cache', 'Redis', 'auth', 'token', 'retry', 'queue', 'schema', 'index', 'build', 'lint', 'port', 'api', 'db', 'x', 'v2', 'café', 'rate_limit', 'flag', 'cron'];

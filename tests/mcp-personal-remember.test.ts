@@ -1,8 +1,8 @@
 // hippo_remember with personal: true over real HTTP MCP and real keys, so a transport that drops the key's owner fails here.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { createApiKey } from '../src/auth.js';
-import { closeHippoDb, openHippoDb } from '../src/db.js';
+import { createApiKey } from '../src/store/auth.js';
+import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { makeRoot } from './_helpers/make-root.js';

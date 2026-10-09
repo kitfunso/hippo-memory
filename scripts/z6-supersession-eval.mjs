@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { mulberry32 } from './lib/prng.mjs';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const BIN = path.join(REPO, 'bin', 'hippo.js');
@@ -63,16 +64,6 @@ const TUNE = {
   'control-lookalike/personal': 1, 'control-lookalike/coding': 1,
 };
 const SPLIT_SEED = 20260928;
-function mulberry32(seed) {
-  let s = seed >>> 0;
-  return () => {
-    s = (s + 0x6d2b79f5) >>> 0;
-    let t = s;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
 // The fixture's split, recomputed from its content ids: per cell, ids sorted, shuffled, first TUNE[cell] are tune.
 function assignSplit(scenarios) {
   const split = new Map();
@@ -182,7 +173,7 @@ const rootDirs = (rootBase) => {
 function rootBaseOk(rel) {
   return rel !== '' && !path.isAbsolute(rel) && !rel.startsWith('..');
 }
-// Outside the temp dir hippo's store walk (src/project-identity.ts:161-170) can reach the user's real ~/.hippo.
+// Outside the temp dir hippo's store walk (src/core/project-identity.ts:161-170) can reach the user's real ~/.hippo.
 function checkRootBase(base) {
   fs.mkdirSync(base, { recursive: true });
   const rel = path.relative(fs.realpathSync(os.tmpdir()), fs.realpathSync(base));
@@ -633,7 +624,7 @@ function labelChange(rows, finalIds, statements, contextText, rankedIds, blocks,
   const sShownRec = presentS.some(showsRec), cShownRec = presentC.some(showsRec);
   const sShownAuto = presentS.some(showsAuto), cShownAuto = presentC.some(showsAuto);
   const sShownAny = sShownCtx || sShownRec || sShownAuto, cShownAny = cShownCtx || cShownRec || cShownAuto;
-  // Only superseded_by hides a row (src/api.ts:2591, 863); a stale or tagged S still shows, and this counts it.
+  // Only superseded_by hides a row (src/api/index.ts:2591, 863); a stale or tagged S still shows, and this counts it.
   const retiredS = presentS.filter(isRetired);
   const shown = { sRetired: retiredS.length, sRetiredShown: retiredS.filter((r) => showsCtx(r) || showsRec(r) || showsAuto(r)).length };
 
@@ -959,7 +950,7 @@ function selftestFixtureContract(fx, check) {
 }
 
 async function selftestQuestionReach(fx, check) {
-  const search = await import(pathToFileURL(path.join(REPO, 'dist', 'tokenize.js')).href);
+  const search = await import(pathToFileURL(path.join(REPO, 'dist', 'util/tokenize.js')).href);
   const tokenize = search.tokenize;
   const content = (t) => new Set(tokenize(t).filter((w) => !STOP.has(w)));
   const shares = (a, b) => { const B = content(b); return [...content(a)].some((w) => B.has(w)); };

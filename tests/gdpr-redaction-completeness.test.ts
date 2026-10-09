@@ -7,10 +7,10 @@ import {
   openHippoDb,
   closeHippoDb,
   type DatabaseSyncLike,
-} from '../src/db.js';
-import type { HippoDbContext } from '../src/api.js';
-import { remember, archiveRaw, recall } from '../src/api.js';
-import { queryAuditEvents } from '../src/audit.js';
+} from '../src/db/index.js';
+import type { HippoDbContext } from '../src/api/index.js';
+import { remember, archiveRaw, recall } from '../src/api/index.js';
+import { queryAuditEvents } from '../src/store/audit.js';
 import { recordStatements, countMatching } from './_helpers/count-statements.js';
 
 /** Query a single row from the hippo SQLite handle. */

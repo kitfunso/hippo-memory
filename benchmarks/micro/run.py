@@ -39,7 +39,7 @@ cwd_subdir (optional, object-form `remembers` items, `queries` items, and
 present, the item's hippo subprocess is run with that directory (resolved as
 `hippo_home / cwd_subdir`, created via `mkdir(parents=True, exist_ok=True)`)
 as its cwd instead of `hippo_home` itself -- this lets a fixture exercise
-hippo's cwd-derived path tags (see src/path-context.ts) by writing/querying
+hippo's cwd-derived path tags (see src/search/path-context.ts) by writing/querying
 memories from different simulated project directories within one fixture's
 temp HIPPO_HOME. Rejected (raises ValueError naming the fixture): absolute
 paths, paths with a drive letter, and any path containing a '..' segment.
@@ -106,7 +106,7 @@ Action types:
   memories that live in different stores (e.g. promoted globals vs.
   untouched locals), keep each competitor's content under 200 chars and
   make them diverge in their first 200 chars — cross-store dedup keys on
-  `content.slice(0, 200)` (src/shared.ts:287), so two competitors sharing
+  `content.slice(0, 200)` (src/sharing/search-both.ts:228), so two competitors sharing
   a >=200-char-identical prefix would collapse into one row.
 
 Usage:

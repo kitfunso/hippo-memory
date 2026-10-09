@@ -1,16 +1,15 @@
 // Promote to the global store, supersede with a successor, and archive raw memories.
 
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../db.js';
-import { ConflictError, NotFoundError } from '../api-errors.js';
+import { ConflictError, NotFoundError } from '../core/api-errors.js';
 import { stampOriginProject } from '../store/entry-row.js';
-import { createSuccessor, type MemoryEntry } from '../memory.js';
-import { appendAuditEvent } from '../audit.js';
-import { promoteToGlobal } from '../shared.js';
-import { loadConfig } from '../config.js';
+import type { ConnectorEvent } from '../store/port.js';
+import { createSuccessor, type MemoryEntry } from '../core/memory.js';
+import { promoteToGlobal } from '../sharing/global-store.js';
+import { loadConfig } from '../core/config.js';
 import { andThen, notPorted, onStore } from './on-store.js';
 import type { Context, StoreReply } from './types.js';
-import { selectMemoryReach } from '../store/tenant-lookup.js';
-import { canTouchScope, personalScopeOf } from '../recall-scope.js';
+import { memoryReach } from '../store/tenant-lookup.js';
+import { canTouchScope, personalScopeOf } from '../store/recall-scope.js';
 
 // ---------------------------------------------------------------------------
 // promote
@@ -41,27 +40,16 @@ export function promote(
   // row's tenant_id and deny cross-tenant access with the same not-found
   // wording archiveRaw uses (no info leak about whether the id exists in
   // another tenant).
-  const ownerDb = openHippoDb(ctx.hippoRoot);
-  try {
-    const reach = selectMemoryReach(ownerDb, id);
-    if (reach?.tenantId !== ctx.tenantId || !canTouchScope(ctx.actor, reach.scope)) {
-      throw new NotFoundError(`memory not found: ${id}`);
-    }
-  } finally {
-    closeHippoDb(ownerDb);
+  const reach = memoryReach(ctx.hippoRoot, id);
+  if (reach?.tenantId !== ctx.tenantId || !canTouchScope(ctx.actor, reach.scope)) {
+    throw new NotFoundError(`memory not found: ${id}`);
   }
 
   // The 'promote' row commits with the global copy, so no write follows the commit and a busy store fails the whole promote.
   const globalEntry = promoteToGlobal(ctx.hippoRoot, id, {
     actor: ctx.actor.subject,
     tenantId: ctx.tenantId,
-    afterWrite: (db, globalId) => appendAuditEvent(db, {
-      tenantId: ctx.tenantId,
-      actor: ctx.actor.subject,
-      op: 'promote',
-      targetId: globalId,
-      metadata: { sourceId: id },
-    }),
+    auditAs: { tenantId: ctx.tenantId, actor: ctx.actor.subject },
   });
 
   return { ok: true, sourceId: id, globalId: globalEntry.id };
@@ -121,8 +109,8 @@ function assertSupersedable(ctx: Context, oldId: string, old: MemoryEntry | null
 
 /** Archive a kind='raw' memory: its metadata moves to raw_archive and the row is deleted. The store writes the one archive_raw audit row, under the caller's subject. */
 export interface ArchiveRawOpts {
-  /** A connector's idempotency hook. It runs inside the archive's write scope on hippo.db's own handle, so a throw undoes the archive; a served store refuses it. */
-  afterArchive?: (db: DatabaseSyncLike, archivedMemoryId: string) => void;
+  /** The connector event this archive answers. The store logs it in the archive's own transaction, so a redelivery finds it logged. */
+  event?: ConnectorEvent;
 }
 
 export interface ArchiveRawResult {
@@ -135,11 +123,13 @@ export function archiveRaw<C extends Context>(
   reason: string,
   opts: ArchiveRawOpts = {},
 ): StoreReply<C, ArchiveRawResult> {
-  return onStore(ctx, (port, local) => {
+  return onStore(ctx, (port) => {
     const entryWrites = port.entryWrites ?? notPorted(port, 'entryWrites');
     const archive = { tenantId: ctx.tenantId, actor: ctx.actor.subject, ownScope: personalScopeOf(ctx.actor), id, reason };
-    const { afterArchive } = opts;
-    const archived = afterArchive ? local.archiveRaw(archive, afterArchive) : entryWrites.archiveRaw(archive);
+    const { event } = opts;
+    const archived = event
+      ? (port.connectorWrites ?? notPorted(port, 'connectorWrites')).archiveConnectorEntry({ ...archive, event })
+      : entryWrites.archiveRaw(archive);
     return andThen(archived, (archivedAt): ArchiveRawResult => ({ ok: true, archivedAt }));
   });
 }

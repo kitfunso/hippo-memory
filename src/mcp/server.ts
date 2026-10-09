@@ -12,7 +12,7 @@ export { __resetSessionRecallHistoryMcp } from './session-state.js';
 export { findHippoRoot, mcpErrorResponse, type McpRequest, type McpResponse, type McpContext } from './protocol.js';
 export { handleMcpRequest } from './request.js';
 export { startStdioLoop } from './stdio.js';
-import { envMcpStdio } from '../env.js';
+import { envMcpStdio } from '../util/env.js';
 import { startStdioLoop } from './stdio.js';
 
 // Auto-start when invoked as the main module (node dist/mcp/server.js or via

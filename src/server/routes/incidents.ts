@@ -1,24 +1,16 @@
 // /v1/incidents routes.
-import { closeIncident, type Incident, type IncidentStatus, loadIncidentById, loadIncidents, resolveIncident, saveIncident, VALID_INCIDENT_STATES } from '../../incidents.js';
-import { HttpError, sendJson } from '../../http-util.js';
-import { NotFoundError } from '../../api-errors.js';
+import { INCIDENT, openIncident, resolveOpenIncident } from '../../objects/incidents.js';
+import { HttpError, sendJson } from '../../util/http-util.js';
+import { NotFoundError } from '../../core/api-errors.js';
 import { buildContextWithAuth } from '../auth.js';
 import type { RouteRequest } from '../types.js';
 import { parseJsonBody } from '../validation.js';
-import { type JsonValue, isJsonString } from '../../json.js';
-import { closeRoute, getRoute, listRoute, type ObjectRouteConfig, optionalString, requiredString } from './object-routes.js';
+import { type JsonValue, isJsonString } from '../../util/json.js';
+import { closeRoute, getRoute, listRoute, type ObjectRouteConfig, objectsOf, optionalString, requiredString } from './object-routes.js';
 
 const MAX_LINKED_MEMORY_IDS = 256;
 
-const incidentRoutes: ObjectRouteConfig<Incident, IncidentStatus> = {
-  noun: 'incident',
-  field: 'incident',
-  listField: 'incidents',
-  statuses: VALID_INCIDENT_STATES,
-  list: loadIncidents,
-  get: loadIncidentById,
-  close: closeIncident,
-};
+const incidentRoutes: ObjectRouteConfig<'incident'> = { noun: 'incident', field: 'incident', listField: 'incidents', object: INCIDENT };
 
 function linkedMemoryIds(body: Record<string, JsonValue>): string[] | undefined {
   const raw = body['linkedMemoryIds'];
@@ -48,7 +40,8 @@ function linkedMemoryIds(body: Record<string, JsonValue>): string[] | undefined 
 // 4096. Mirrors /v1/decisions; lifecycle is
 // open->resolved->closed (no supersede), so linkedMemoryIds replaces
 // supersedesDecisionId on create.
-export async function handleCreateIncident({ req, res, opts }: RouteRequest): Promise<void> {
+export async function handleCreateIncident(rr: RouteRequest): Promise<void> {
+  const { req, res, opts } = rr;
   const ctx = await buildContextWithAuth(req, opts);
   const body = await parseJsonBody(req, ctx);
   const write = {
@@ -57,7 +50,7 @@ export async function handleCreateIncident({ req, res, opts }: RouteRequest): Pr
     linkedMemoryIds: linkedMemoryIds(body),
   };
   try {
-    const incident = saveIncident(opts.hippoRoot, ctx.tenantId, write, ctx.actor.subject);
+    const incident = await openIncident(objectsOf(rr), opts.hippoRoot, ctx.tenantId, write, ctx.actor.subject);
     sendJson(res, 201, { incident });
   } catch (e) {
     // A missing referenced row is a conflict with the create, not a missing target.
@@ -70,11 +63,12 @@ export function handleListIncidents(rr: RouteRequest): Promise<void> {
   return listRoute(incidentRoutes, rr);
 }
 
-export async function handleResolveIncident({ req, res, opts }: RouteRequest, match: RegExpMatchArray): Promise<void> {
+export async function handleResolveIncident(rr: RouteRequest, match: RegExpMatchArray): Promise<void> {
+  const { req, res, opts } = rr;
   const id = parseInt(match[1], 10);
   const ctx = await buildContextWithAuth(req, opts);
   const resolutionText = requiredString(await parseJsonBody(req, ctx), 'resolutionText', { max: 4096 });
-  const incident = resolveIncident(opts.hippoRoot, ctx.tenantId, id, resolutionText, ctx.actor.subject);
+  const incident = await resolveOpenIncident(objectsOf(rr), ctx.tenantId, id, resolutionText, ctx.actor.subject);
   sendJson(res, 200, { incident });
 }
 

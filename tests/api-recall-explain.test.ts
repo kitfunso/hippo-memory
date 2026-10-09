@@ -11,8 +11,8 @@ import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
 import { initStore } from '../src/store/open.js';
-import { remember, recall, type HippoDbContext } from '../src/api.js';
-import { pushGoal } from '../src/goals.js';
+import { remember, recall, type HippoDbContext } from '../src/api/index.js';
+import { pushGoal } from '../src/store/goals.js';
 
 describe('api.recall explain', () => {
   let hippoRoot: string;

@@ -8,10 +8,10 @@ import { createRequire } from 'module';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadSearchEntries } from '../src/store/search-rows.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { repairFtsDrift } from '../src/db/migrate.js';
-import { fastestRatio } from './_helpers/fastest-ratio.js';
+import { recordStatements } from './_helpers/count-statements.js';
 
 const require = createRequire(import.meta.url);
 // SAFETY: node:sqlite has no bundled types; mirrors tests/db-open-write-free.test.ts.
@@ -20,7 +20,19 @@ const { DatabaseSync } = require('node:sqlite') as {
 };
 
 const FTS_COUNT = /COUNT\(\*\)[\s\S]*FROM memories_fts(?!_)/i;
-const MAX_ID_READS = 60;
+
+interface PlanStep { id: number; parent: number; detail: string }
+
+/** Plan steps that scan the full-text table once per row of an outer loop: a correlated subquery, or the inner side of a join. */
+function indexScansPerRow(db: DatabaseSyncLike, sql: string): string[] {
+  // SAFETY: EXPLAIN QUERY PLAN answers one row per step: its id, its parent's id and its text.
+  const plan = db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all() as PlanStep[];
+  const correlated = (step: PlanStep | undefined): boolean =>
+    step !== undefined && (step.detail.startsWith('CORRELATED') || correlated(plan.find((p) => p.id === step.parent)));
+  const innerLoop = (step: PlanStep): boolean =>
+    plan.some((other) => other.parent === step.parent && other.id < step.id && /^(SCAN|SEARCH) /.test(other.detail));
+  return plan.filter((step) => step.detail.includes('VIRTUAL TABLE') && (correlated(step) || innerLoop(step))).map((step) => step.detail);
+}
 
 let root: string;
 
@@ -68,7 +80,7 @@ describe('FTS sync check does not count the virtual table itself', () => {
 
 describe('FTS drift repair', () => {
   // `id` is UNINDEXED in memories_fts, so a per-row lookup scans the whole index and the repair grows with the square of the store.
-  it('heals one missing row in a 10,000-row store for the cost of a few reads of the id column', () => {
+  it('heals one missing row in a 10,000-row store with no scan of the index per memory', () => {
     const db = openHippoDb(root);
     try {
       // SAFETY: pragma_table_info yields one row per column with its name.
@@ -79,22 +91,17 @@ describe('FTS drift repair', () => {
         DELETE FROM memories_fts;
         INSERT INTO memories_fts(id, content, tags) SELECT id, content, tags_json FROM memories;
       `);
-      const readIds = db.prepare(`SELECT id FROM memories_fts`);
-      const healed: boolean[] = [];
+      db.exec(`DELETE FROM memories_fts WHERE id = 'mem_bulk_5000'`);
 
-      // Timed against one read of the id column on the same store, so a slow or stalled runner weighs on both sides.
-      const reads = fastestRatio(
-        { setup: () => db.exec(`DELETE FROM memories_fts WHERE id = 'mem_bulk_5000'`), run: () => { healed.push(repairFtsDrift(db)); } },
-        { setup: () => undefined, run: () => { readIds.all(); } },
-        3,
-      );
+      const { result: healed, statements } = recordStatements(() => repairFtsDrift(db));
 
-      expect(healed).toEqual([true, true, true]);
+      expect(healed).toBe(true);
       // SAFETY: the SELECT returns one COUNT(*) AS c row.
       const missing = db.prepare(`SELECT COUNT(*) AS c FROM memories WHERE id NOT IN (SELECT id FROM memories_fts)`).get() as { c: number };
       expect(Number(missing.c)).toBe(0);
-      // The repair costs a handful of reads; a lookup per memory costs about one read for every two rows.
-      expect(reads).toBeLessThan(MAX_ID_READS);
+      // The work sits inside each statement, where no statement or row count sees it; the plan names the loop.
+      expect(statements.filter((sql) => /memories_fts(?!_)/.test(sql)).length).toBeGreaterThan(0);
+      expect(statements.flatMap((sql) => indexScansPerRow(db, sql))).toEqual([]);
     } finally {
       closeHippoDb(db);
     }

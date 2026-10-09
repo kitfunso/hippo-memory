@@ -1,4 +1,4 @@
-import { closeHippoDb, openHippoDb } from '../db.js';
+import { closeHippoDb, openHippoDb } from '../db/index.js';
 import { computePredictionBaserate, type PredictionBaserate } from './predictions.js';
 
 export interface ClassResolution {

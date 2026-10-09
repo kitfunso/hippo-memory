@@ -5,18 +5,17 @@ import { isInitialized } from '../store/open.js';
 import { saveActiveTaskSnapshot, loadActiveTaskSnapshot } from '../store/sessions.js';
 import {
   PRE_COMPACT_INSTRUCTION,
-  parsePostCompactPayload,
   postCompactLine,
   recordCompactionStart,
   recordSnapshotSaved,
   saveCompaction,
   replayCompactionsAt,
   COMPACTION_DB_WAIT_MS,
-} from '../compaction-record.js';
-import { resolveTenantId } from '../tenant.js';
+} from './compaction-record.js';
+import { resolveTenantId } from '../store/tenant.js';
 import { defaultPreCompactLogPath, vscodeUserHooksFile } from '../hooks/shared.js';
-import { readClaudeCodePreCompact, type HookRuntime } from '../capture-contract.js';
-import { errorMessage, log as logger } from '../log.js';
+import { readClaudeCodePostCompact, readClaudeCodePreCompact, type CaptureInput, type HookRuntime } from '../core/capture-contract.js';
+import { errorMessage, log as logger } from '../util/log.js';
 import { resolveLastSessionTranscript } from './transcript.js';
 import { isVscodeTranscript } from './copilot-transcript.js';
 import { mergeWorkingState, transcriptWorkingState, type WorkingState } from './working-state.js';
@@ -44,11 +43,16 @@ export function sanitizeLogMessage(message: string): string {
 function appendPreCompactLog(logFile: string, message: string): void {
   try {
     fs.mkdirSync(path.dirname(logFile), { recursive: true });
-    const stat = fs.existsSync(logFile) ? fs.statSync(logFile) : null;
-    if (stat && stat.size > PRE_COMPACT_LOG_MAX_BYTES) {
-      fs.writeFileSync(logFile, '', 'utf8'); // start fresh — dumb cap, no rotation
+    // One handle, so the cap acts on the file it measured; two hooks writing in the same instant can overwrite one diagnostic line, which this log accepts.
+    const fd = fs.openSync(logFile, fs.constants.O_RDWR | fs.constants.O_CREAT);
+    try {
+      const size = fs.fstatSync(fd).size;
+      const startFresh = size > PRE_COMPACT_LOG_MAX_BYTES; // a dumb cap, no rotation
+      if (startFresh) fs.ftruncateSync(fd, 0);
+      fs.writeSync(fd, `[hippo] ${new Date().toISOString()} ${sanitizeLogMessage(message)}\n`, startFresh ? 0 : size, 'utf8');
+    } finally {
+      fs.closeSync(fd);
     }
-    fs.appendFileSync(logFile, `[hippo] ${new Date().toISOString()} ${sanitizeLogMessage(message)}\n`, 'utf8');
   } catch (err) {
     // Diagnostic-only; a log write failure must never affect the exit-0 contract.
     logger.debug(`pre-compact log not written: ${errorMessage(err)}`);
@@ -66,11 +70,14 @@ function isReadableFile(filePath: string): boolean {
 }
 
 /** PreCompact stdout is the summariser's instructions; sent before the snapshot work because a locked store can run the hook past its 30 s limit, and via writeSync because process.exit drops buffered pipe output. */
-function printPreCompactInstruction(logFile: string): void {
+function printPreCompactInstruction(logFile: string): string | null {
+  const text = `${PRE_COMPACT_INSTRUCTION}\n`;
   try {
-    fs.writeSync(1, `${PRE_COMPACT_INSTRUCTION}\n`);
+    fs.writeSync(1, text);
+    return text;
   } catch (err) {
     appendPreCompactLog(logFile, `instruction not printed: ${errorMessage(err)}`);
+    return null;
   }
 }
 
@@ -99,7 +106,7 @@ function runPreCompact(hippoRoot: string, options: PreCompactOptions, logFile: s
     appendPreCompactLog(logFile, `skip: ${receipt.reason}`);
     return;
   }
-  const { sessionId, transcriptPath: payloadTranscriptPath, cwd: payloadCwd, trigger: payloadTrigger } = receipt.input;
+  const { sessionId, transcriptPath: payloadTranscriptPath } = receipt.input;
   // With chat.useClaudeHooks on, VS Code runs Claude Code's hooks too; it never sends PostCompact to close a record, nor reads the summariser text.
   const vscode = runtime === 'claude-code' && isVscodeTranscript(payloadTranscriptPath);
   if (vscode && fs.existsSync(vscodeUserHooksFile())) {
@@ -111,17 +118,7 @@ function runPreCompact(hippoRoot: string, options: PreCompactOptions, logFile: s
     return;
   }
 
-  // The record is the "something saved before every compaction", so it lands even when no snapshot is derivable below.
-  // Copilot has no PostCompact hook to close a record, so its compactions get the snapshot alone.
-  let recordId: string | null = null;
-  if (runtime === 'claude-code' && !vscode && sessionId !== null && sessionId !== '') {
-    recordId = recordCompactionStart(
-      hippoRoot,
-      { sessionId, trigger: payloadTrigger, cwd: payloadCwd, transcriptPath: payloadTranscriptPath },
-      (message) => appendPreCompactLog(logFile, message),
-    );
-    printPreCompactInstruction(logFile);
-  }
+  const recordId = markCompactionBoundary(hippoRoot, options, logFile, receipt.input, runtime === 'claude-code' && !vscode);
 
   const transcriptPath = resolvePreCompactTranscript(payloadTranscriptPath, stdinText, logFile, runtime);
   if (!transcriptPath) return;
@@ -131,6 +128,30 @@ function runPreCompact(hippoRoot: string, options: PreCompactOptions, logFile: s
   if (!derived) return;
 
   saveDerivedSnapshot(hippoRoot, logFile, sessionId, recordId, derived);
+}
+
+/** Starts the compaction record when the host will close one (`closable`), then tells `onBoundary` what was printed; the record id, or null without a record. */
+function markCompactionBoundary(hippoRoot: string, options: PreCompactOptions, logFile: string, input: CaptureInput, closable: boolean): string | null {
+  const { sessionId } = input;
+  // The record is the "something saved before every compaction", so it lands even when no snapshot is derivable later.
+  // Copilot has no PostCompact hook to close a record, so its compactions get the snapshot alone.
+  let recordId: string | null = null;
+  let printed: string | null = null;
+  if (closable && sessionId !== null && sessionId !== '') {
+    recordId = recordCompactionStart(
+      hippoRoot,
+      { sessionId, trigger: input.trigger, cwd: input.cwd, transcriptPath: input.transcriptPath },
+      (message) => appendPreCompactLog(logFile, message),
+    );
+    printed = printPreCompactInstruction(logFile);
+  }
+  // Its own guard, so a throwing callback can never skip the snapshot work that follows.
+  try {
+    options.onBoundary?.(printed);
+  } catch (err) {
+    appendPreCompactLog(logFile, `boundary callback failed: ${errorMessage(err)}`);
+  }
+  return recordId;
 }
 
 /** The transcript to snapshot, or null after logging why there is none. */
@@ -200,6 +221,8 @@ export interface PreCompactOptions {
   stdinTimedOut?: boolean;
   logFile?: string;
   runtime?: HookRuntime;
+  /** Called once when the hook accepts a compaction, with the text it printed or null when it printed none. */
+  onBoundary?: (printed: string | null) => void;
 }
 
 /**
@@ -222,6 +245,7 @@ export async function cmdPreCompact(hippoRoot: string, options: PreCompactOption
 
 export interface PostCompactOptions {
   stdinText?: string;
+  stdinTimedOut?: boolean;
   logFile?: string;
   afterSave?: (transcriptPath: string, cwd: string | null, log: (message: string) => void) => void;
 }
@@ -239,18 +263,18 @@ export function cmdPostCompact(hippoRoot: string, options: PostCompactOptions): 
       log('skip: no hippo store');
       return null;
     }
-    const payload = parsePostCompactPayload(options.stdinText);
+    const receipt = readClaudeCodePostCompact(options.stdinText, options.stdinTimedOut ?? false);
     let line: string | null = null;
     let storeBusy = false;
-    if (payload === null) {
-      log('skip: no PostCompact payload naming a session');
+    if (receipt.status !== 'received') {
+      log(`skip: ${receipt.reason}`);
     } else {
-      const saved = saveCompaction(hippoRoot, payload, log);
+      const saved = saveCompaction(hippoRoot, receipt.input, log);
       line = postCompactLine(saved);
       storeBusy = saved.deferred;
-      if (!storeBusy && payload.transcriptPath !== null && options.afterSave) {
+      if (!storeBusy && receipt.input.transcriptPath !== null && options.afterSave) {
         try {
-          options.afterSave(payload.transcriptPath, payload.cwd, log);
+          options.afterSave(receipt.input.transcriptPath, receipt.input.cwd, log);
         } catch (err) {
           log(`agent memory import failed: ${errorMessage(err)}`);
         }

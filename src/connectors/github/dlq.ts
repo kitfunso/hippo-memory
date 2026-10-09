@@ -1,8 +1,7 @@
-import type { Context } from '../../api.js';
+import type { Context } from '../../api/index.js';
 import {
   bumpDlqRetry,
   dlqEntry,
-  insertDlq,
   listDlqRows,
   type DlqBucket,
   type DlqItem,
@@ -11,7 +10,7 @@ import {
 import { replayFailed, type ConnectorDlq, type ReplayResult } from '../dlq.js';
 import { verifyGitHubSignature } from './signature.js';
 import { isGitHubWebhookEnvelope } from './types.js';
-import type { JsonValue } from '../../json.js';
+import type { JsonValue } from '../../util/json.js';
 
 export type { DlqBucket, DlqItem };
 
@@ -19,7 +18,7 @@ type GithubOwnColumns = Pick<GithubDlqWrite, 'eventName' | 'deliveryId' | 'insta
 
 /** GitHub's dead-letter table; the event, delivery, installation and repo columns let an operator triage a row without re-reading the payload. */
 export const githubDlq: ConnectorDlq<GithubOwnColumns, DlqBucket, DlqItem> = {
-  insert: insertDlq,
+  letter: (row) => ({ connector: 'github', ...row }),
   list: listDlqRows,
 };
 

@@ -2,10 +2,9 @@
  *  Regex picks WHAT is a candidate; it cannot say what is worth keeping, so
  *  every captured memory currently lands on a flat schema_fit of 0.5. */
 
-import { envTypesafeApiKey } from '../env.js';
-import { ConfidenceLevel, EmotionalValence } from '../memory.js';
-import { fetchWithRetry } from '../http-retry.js';
-import { errorMessage, log } from '../log.js';
+import { ConfidenceLevel, EmotionalValence } from '../core/memory.js';
+import { fetchWithRetry } from '../util/http-retry.js';
+import { errorMessage, log } from '../util/log.js';
 
 const ENDPOINT = 'https://api.typesafe.ai/v1/systemone';
 const DEFAULT_MODEL = 'jev-1.13.0';
@@ -73,11 +72,6 @@ const QUESTIONS = {
 
 const KINDS: readonly JudgedKind[] = ['error', 'decision', 'convention', 'preference', 'trivia'];
 const VALENCES: readonly EmotionalValence[] = ['critical', 'negative', 'positive', 'neutral'];
-
-/** Absent key means hippo keeps its pre-Jev behaviour and makes no HTTP call. */
-export function judgmentApiKey(): string | undefined {
-  return envTypesafeApiKey();
-}
 
 function oneOf<T extends string>(value: string | undefined, allowed: readonly T[]): T | null {
   return allowed.find((option) => option === value) ?? null;

@@ -1,8 +1,8 @@
 // Request-body and path-segment validators shared by the /v1 route handlers.
 import type { IncomingMessage } from 'node:http';
-import type { Context, RememberOpts } from '../api.js';
-import { HttpError, MAX_ID_LEN, readBody } from '../http-util.js';
-import { type JsonValue, isJsonString, isJsonObject } from '../json.js';
+import type { Context, RememberOpts } from '../api/index.js';
+import { HttpError, MAX_ID_LEN, readBody } from '../util/http-util.js';
+import { type JsonValue, isJsonString, isJsonObject } from '../util/json.js';
 
 // Runtime membership check for a `ReadonlySet<T>` of string-literal union
 // members, used at every `body` field validated against a VALID_* set below.
@@ -20,7 +20,9 @@ export function isSetMember<T extends string>(set: ReadonlySet<T>, value: string
 
 // Number.isInteger, not isFinite: SQLite `LIMIT ?` rejects "1.5" with a 500.
 // Shared by every first-class-object list route so the guard cannot drift.
-export function parseListLimit(limitRaw: string | null, defaultLimit = 100, maxLimit = 1000): number {
+export const MAX_LIST_LIMIT = 1000;
+
+export function parseListLimit(limitRaw: string | null, defaultLimit = 100, maxLimit = MAX_LIST_LIMIT): number {
   if (limitRaw === null) return defaultLimit;
   const limit = Number(limitRaw);
   if (!Number.isInteger(limit) || limit <= 0 || limit > maxLimit) {

@@ -6,11 +6,11 @@ import fs from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { escapeRegex } from '../src/escape.js';
+import { escapeRegex } from '../src/util/escape.js';
 import { installCopilot } from '../src/hooks/copilot.js';
 import { installJsonHooks, resolveJsonHookPaths } from '../src/hooks/json-hooks.js';
 import { installOpencodePlugin } from '../src/hooks/opencode.js';
-import { registerWorkspace, workspaceRegistryPath } from '../src/scheduler.js';
+import { registerWorkspace, workspaceRegistryPath } from '../src/cli/scheduler.js';
 import { withFakeHome, type FakeHomeHandle } from './_helpers/with-fake-home.js';
 
 const WINDOWS = process.platform === 'win32';
@@ -37,6 +37,20 @@ async function holdOpen(file: string, ms: number) {
   return child;
 }
 
+// How long hippo retries a refused rename before it writes in place.
+const RETRY_BUDGET_MS = 1_000;
+
+/** Puts the retry on a clock the test owns: each pause moves that clock on and returns at once. Answers the total paused, in ms. */
+function skipPauses(): () => number {
+  let now = Date.now();
+  vi.spyOn(Date, 'now').mockImplementation(() => now);
+  const pauses = vi.spyOn(Atomics, 'wait').mockImplementation((_cells, _index, _value, ms = 0) => {
+    now += ms;
+    return 'timed-out';
+  });
+  return () => pauses.mock.calls.reduce((total, [, , , ms]) => total + (ms ?? 0), 0);
+}
+
 describe.skipIf(!WINDOWS)('a settings.json another program has open (Windows refuses a rename onto it)', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -57,7 +71,7 @@ describe.skipIf(!WINDOWS)('a settings.json another program has open (Windows ref
   it('after the retry, writes in place when the program only has the file open for reading', async () => {
     const file = seed();
     const holder = await holdOpen(file, 10_000);
-    const started = Date.now();
+    const pausedMs = skipPauses();
 
     try {
       expect(installJsonHooks('claude-code').installedSessionEnd).toBe(true);
@@ -66,7 +80,7 @@ describe.skipIf(!WINDOWS)('a settings.json another program has open (Windows ref
       await once(holder, 'exit');
     }
 
-    expect(Date.now() - started).toBeGreaterThanOrEqual(900);
+    expect(pausedMs()).toBe(RETRY_BUDGET_MS);
     expect(JSON.parse(fs.readFileSync(file, 'utf8')).hooks.SessionEnd).toHaveLength(1);
     expect(fs.readdirSync(path.dirname(file))).toEqual(['settings.json']);
   });
@@ -82,7 +96,7 @@ describe.skipIf(!WINDOWS)('a settings.json another program has open (Windows ref
       write(dest, data, options);
     });
     syncBuiltinESMExports();
-    const started = Date.now();
+    const pausedMs = skipPauses();
 
     try {
       expect(() => installJsonHooks('claude-code')).toThrow(new RegExp(`${escapeRegex(target)}.*in use`));
@@ -91,7 +105,7 @@ describe.skipIf(!WINDOWS)('a settings.json another program has open (Windows ref
       await once(holder, 'exit');
     }
 
-    expect(Date.now() - started).toBeGreaterThanOrEqual(900);
+    expect(pausedMs()).toBe(RETRY_BUDGET_MS);
     expect(fs.readFileSync(file, 'utf8')).toBe('{"theme":"dark"}');
     expect(fs.readdirSync(path.dirname(file))).toEqual(['settings.json']);
   });

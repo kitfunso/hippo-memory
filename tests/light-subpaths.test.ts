@@ -35,8 +35,8 @@ describe('light subpath import closures', () => {
     const closure = importClosure('entry/session-text.ts');
     // The walk follows re-exports, so every module the entry names is in it.
     expect(closure).toEqual(expect.arrayContaining([
-      'capture/transcript.ts', 'share-scrub.ts', 'home-path.ts', 'secret-detect.ts',
-      'capture/working-state.ts', 'capture/failure-reading.ts', 'handoff-evidence.ts', 'compaction-items.ts',
+      'capture/transcript.ts', 'capture/share-scrub.ts', 'util/home-path.ts', 'util/secret-detect.ts',
+      'capture/working-state.ts', 'capture/failure-reading.ts', 'capture/handoff-evidence.ts', 'capture/compaction-items.ts',
     ]));
     expect(closure.filter((f) => HEAVY.test(f))).toEqual([]);
   });

@@ -19,12 +19,12 @@ import {
   calculateStrength,
   applyOutcome,
   type MemoryEntry,
-} from '../src/memory.js';
+} from '../src/core/memory.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { search } from '../src/search/bm25-search.js';
-import { markRetrieved } from '../src/memory.js';
+import { markRetrieved } from '../src/core/memory.js';
 
 /** These tests pin decay arithmetic to the pre-1.46 7-day base; the default itself is tested in half-life-migration and schema-fit. */
 const createMemory7 = (content: string, options: Partial<Parameters<typeof createMemory>[1]> = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });

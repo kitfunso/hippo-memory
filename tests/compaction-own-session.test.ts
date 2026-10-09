@@ -11,11 +11,11 @@ import {
   createMemory,
   DEFAULT_HALF_LIFE_DAYS,
   type MemoryEntry,
-} from '../src/memory.js';
+} from '../src/core/memory.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { getContext, recall, type Context } from '../src/api.js';
-import { _resetAblationCacheForTests } from '../src/ablation.js';
+import { getContext, recall, type Context } from '../src/api/index.js';
+import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 
 const PROJECT = 'proj-a';
 const OWN = 'sess-own';

@@ -4,10 +4,10 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { initStore } from '../src/store/open.js';
-import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../src/db.js';
-import { _resetSharedStoreCacheForTests } from '../src/config.js';
-import { clearProjectIdentityCache } from '../src/project-identity.js';
-import { PRE_COMPACT_INSTRUCTION } from '../src/compaction-record.js';
+import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
+import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
+import { clearProjectIdentityCache } from '../src/core/project-identity.js';
+import { PRE_COMPACT_INSTRUCTION } from '../src/capture/compaction-record.js';
 import type { Context } from '../src/api/types.js';
 import {
   captureFailureForCaller,

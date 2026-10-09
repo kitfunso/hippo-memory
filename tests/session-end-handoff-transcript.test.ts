@@ -3,11 +3,11 @@ import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { PRE_COMPACT_NEXT_STEP_CAP, PRE_COMPACT_SUMMARY_CAP, PRE_COMPACT_TASK_CAP, transcriptWorkingState } from '../src/capture/working-state.js';
+import { WORKING_STATE_CAPS, transcriptWorkingState } from '../src/capture/working-state.js';
 import { initStore } from '../src/store/open.js';
 import { loadActiveTaskSnapshot, saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import { loadLatestHandoff, saveSessionHandoff, writeSessionEndHandoff } from '../src/store/handoffs.js';
-import { closeHippoDb, openHippoDb } from '../src/db.js';
+import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 
 // AWS's documented example key, a placeholder that is safe to embed.
 const FAKE_KEY = 'AKIAIOSFODNN7EXAMPLE';
@@ -82,10 +82,10 @@ describe('transcriptWorkingState', () => {
     const file = transcript([user('u'.repeat(1000)), assistant('a'.repeat(3000)), user('v'.repeat(1000)), assistant('b'.repeat(3000))]);
 
     const derived = transcriptWorkingState(file, () => {});
-    expect(derived!.task).toBe('v'.repeat(PRE_COMPACT_TASK_CAP));
-    expect(derived!.next_step).toBe('b'.repeat(PRE_COMPACT_NEXT_STEP_CAP));
+    expect(derived!.task).toBe('v'.repeat(WORKING_STATE_CAPS.task));
+    expect(derived!.next_step).toBe('b'.repeat(WORKING_STATE_CAPS.next_step));
     expect(derived!.summary.startsWith(marker)).toBe(true);
-    expect(derived!.summary.length).toBeLessThanOrEqual(PRE_COMPACT_SUMMARY_CAP + marker.length);
+    expect(derived!.summary.length).toBeLessThanOrEqual(WORKING_STATE_CAPS.summary);
   });
 
   it('looks past a tail of tool output for the last request and reply', () => {

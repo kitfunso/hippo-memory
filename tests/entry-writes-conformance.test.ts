@@ -2,8 +2,8 @@
 // and the same audit rows, over two tenants with personal, raw, summary and tombstoned rows.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { reject, type HippoDbContext } from '../src/api.js';
-import { CHURN_STALE_TAG, type MemoryEntry } from '../src/memory.js';
+import { reject, type HippoDbContext } from '../src/api/index.js';
+import { CHURN_STALE_TAG, type MemoryEntry } from '../src/core/memory.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import type { AuditEvent } from '../src/server.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';

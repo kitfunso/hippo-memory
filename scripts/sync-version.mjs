@@ -21,7 +21,7 @@ for (const path of JSON_MANIFESTS) {
   writeFileSync(path, next);
 }
 
-const VERSION_TS = 'src/version.ts';
+const VERSION_TS = 'src/util/version.ts';
 const PATTERN = /export const PACKAGE_VERSION = '[^']+'/;
 const ts = readFileSync(VERSION_TS, 'utf8');
 if (!PATTERN.test(ts)) throw new Error(`${VERSION_TS}: PACKAGE_VERSION not found`);

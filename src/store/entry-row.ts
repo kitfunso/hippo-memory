@@ -1,11 +1,12 @@
-import type { MemoryEntry } from '../memory.js';
-import { openHippoDb, isFtsAvailable } from '../db.js';
-import { fallbackOrigin, originFromSource } from '../project-identity.js';
-import { checkRejectionGuard } from '../rejection.js';
-import { errorMessage, log } from '../log.js';
+import { DEFAULT_TENANT_ID } from '../util/env.js';
+import type { MemoryEntry } from '../core/memory.js';
+import { closeHippoDb, ftsRowCounts, openHippoDb, isFtsAvailable, repairFtsDrift } from '../db/index.js';
+import { fallbackOrigin, originFromSource } from '../core/project-identity.js';
+import { checkRejectionGuard } from './rejection.js';
+import { errorMessage, log } from '../util/log.js';
 
 export function upsertEntryRow(db: ReturnType<typeof openHippoDb>, entry: MemoryEntry): void {
-  checkRejectionGuard(db, entry.tenantId ?? 'default', entry.id, entry.content);
+  checkRejectionGuard(db, entry.tenantId ?? DEFAULT_TENANT_ID, entry.id, entry.content);
   syncFtsRow(db, entry, upsertMemoryRow(db, entry));
 }
 
@@ -107,7 +108,7 @@ function memoryRowValues(entry: MemoryEntry): Array<string | number | null> {
     entry.scope ?? null,
     entry.owner ?? null,
     entry.artifact_ref ?? null,
-    entry.tenantId ?? 'default',
+    entry.tenantId ?? DEFAULT_TENANT_ID,
     entry.origin_project ?? null,
     entry.descendant_count ?? 0,
     entry.earliest_at ?? null,
@@ -166,6 +167,20 @@ export function replaceFtsRows(db: ReturnType<typeof openHippoDb>, rows: readonl
     } catch (err) {
       log.warnThenDebug('fts-sync', `FTS index update failed for ${row.id}; keyword recall may miss it: ${errorMessage(err)}`);
     }
+  }
+}
+
+/** Row counts of a full-text index that has drifted from `memories`, re-synced after the count when `repair`; null when the two agree or there is no index. */
+export function ftsDrift(hippoRoot: string, repair: boolean): { memories: number; fts: number } | null {
+  const db = openHippoDb(hippoRoot);
+  try {
+    if (!isFtsAvailable(db)) return null;
+    const counts = ftsRowCounts(db);
+    if (counts === null || counts.memories === counts.fts) return null;
+    if (repair) repairFtsDrift(db);
+    return counts;
+  } finally {
+    closeHippoDb(db);
   }
 }
 

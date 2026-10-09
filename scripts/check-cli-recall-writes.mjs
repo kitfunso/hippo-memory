@@ -5,6 +5,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { stripComments } from './lib/source-text.mjs';
 
 /** The ranking core and the writers only a recall uses. No CLI file may name one. */
 export const RECALL_ONLY = [
@@ -28,6 +29,8 @@ export const SHARED_WRITERS = [
   'recordTokenUse',
   'recordTokens',
   'withLedgerDb',
+  'bookTokenUse',
+  'bookLedgerTurn',
   'updateStats',
   'updateStatsUnlessBusy',
   'openHippoDb',
@@ -35,11 +38,6 @@ export const SHARED_WRITERS = [
 
 /** The files that implement the recall verbs, relative to the source root. */
 export const RECALL_VERB_FILES = ['cli/recall.ts', 'cli/explain.ts'];
-
-/** Blanks comments, keeping line numbers, so prose that names a writer is not a call. */
-function stripComments(text) {
-  return text.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' ')).replace(/(^|[^:\\])\/\/.*$/gm, '$1');
-}
 
 /**
  * Returns each line of a source text that names one of `names` as an identifier, imports included.

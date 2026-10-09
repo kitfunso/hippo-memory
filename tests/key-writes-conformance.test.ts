@@ -1,8 +1,8 @@
 // KeyWrites answers alike on hippo.db and on a store held in memory: the same values, the same errors and the same audit rows.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { mintApiKey } from '../src/auth.js';
-import { closeHippoDb, openHippoDb } from '../src/db.js';
+import { mintApiKey } from '../src/store/auth.js';
+import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { auditHighIdAt } from '../src/store/key-audit.js';
 import type { ApiKeyListRow, ApiKeyRecord, AuditEvent, KeyListQuery, NewApiKey } from '../src/server.js';
 import { inMemoryKeyWritesStore, OWNED_SCOPE, OWNER, seedOwnedKeys, type OwnedKeys } from './_helpers/in-memory-key-writes-store.js';

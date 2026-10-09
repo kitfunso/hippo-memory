@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { readEntry } from '../src/store/entry-reads.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { queryAuditEvents } from '../src/audit.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { queryAuditEvents } from '../src/store/audit.js';
 import {
   remember,
   recall,
@@ -14,12 +14,12 @@ import {
   supersede,
   archiveRaw,
   authCreate,
-  authList,
+  authListRows,
   authRevoke,
   auditList,
   type Context,
-} from '../src/api.js';
-import { appendAuditEvent } from '../src/audit.js';
+} from '../src/api/index.js';
+import { appendAuditEvent } from '../src/store/audit.js';
 
 describe('api domain — recall/forget/promote/supersede', () => {
   let home: string;
@@ -256,8 +256,8 @@ describe('api domain — archive_raw / auth / audit', () => {
     const kOther = await authCreate(ctxB, { label: 'other-tenant' });
 
     // List active for tenant-a sees k1 + k2 only (not kOther).
-    const activeA = await authList(ctxA, { active: true });
-    const activeIds = activeA.map((k) => k.keyId).sort();
+    const activeA = await authListRows(ctxA, { active: true });
+    const activeIds = activeA.map((r) => r.key.keyId).sort();
     expect(activeIds).toEqual([k1.keyId, k2.keyId].sort());
 
     // Revoke k2 as tenant-a.
@@ -266,18 +266,18 @@ describe('api domain — archive_raw / auth / audit', () => {
     expect(revoked.revokedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
 
     // After revoke: active = [k1], all = [k1, k2].
-    const activeAfter = await authList(ctxA, { active: true });
-    expect(activeAfter.map((k) => k.keyId)).toEqual([k1.keyId]);
-    const allAfter = await authList(ctxA, { active: false });
-    expect(allAfter.map((k) => k.keyId).sort()).toEqual([k1.keyId, k2.keyId].sort());
+    const activeAfter = await authListRows(ctxA, { active: true });
+    expect(activeAfter.map((r) => r.key.keyId)).toEqual([k1.keyId]);
+    const allAfter = await authListRows(ctxA, { active: false });
+    expect(allAfter.map((r) => r.key.keyId).sort()).toEqual([k1.keyId, k2.keyId].sort());
 
     // Cross-tenant revoke must be rejected with the same "not found" message
     // as a missing key, so caller cannot probe other tenants' key_ids.
     expect(() => authRevoke(ctxA, kOther.keyId)).toThrow(/Unknown key_id/);
 
     // kOther must still be active on tenant-b.
-    const activeB = await authList(ctxB, { active: true });
-    expect(activeB.map((k) => k.keyId)).toEqual([kOther.keyId]);
+    const activeB = await authListRows(ctxB, { active: true });
+    expect(activeB.map((r) => r.key.keyId)).toEqual([kOther.keyId]);
 
     // Audit: the auth_revoke event uses the KEY's tenant, not ctx.tenantId.
     // Here ctx.tenantId === key.tenant_id (both tenant-a) so the check is

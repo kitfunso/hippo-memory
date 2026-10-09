@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { assessAutomaticMemory, certainDefect, isAutomaticEntry, isContentWorthStoring, isReusable, isWorthSurfacing } from '../src/memory-quality.js';
-import { auditMemory } from '../src/audit.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS, type CreateMemoryOptions } from '../src/memory.js';
-import { mergedText } from '../src/same-text.js';
+import { assessAutomaticMemory, certainDefect, isAutomaticEntry, isContentWorthStoring, isReusable, isWorthSurfacing } from '../src/core/memory-quality.js';
+import { auditMemory } from '../src/store/audit.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS, type CreateMemoryOptions } from '../src/core/memory.js';
+import { mergedText } from '../src/util/same-text.js';
 
 const make = (content: string, options: Partial<CreateMemoryOptions> = {}) => createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, ...options });
 const captured = (content: string) => make(content, { source: 'capture', confidence: 'observed' });
@@ -57,7 +57,7 @@ describe('automatic assertion quality', () => {
     'The API succeeds when inserts or updates complete',
     'If the API fails, retry after the Retry-After delay',
     'The migration failed because test setup was placed in production migrations; move setup to the test directory',
-    'bump pool timeout to 30s in src/db.ts',
+    'bump pool timeout to 30s in src/db/index.ts',
     'TestFlight deployment requires a build number greater than the previous upload',
     'Always bump the iOS build number before uploading through TestFlight',
     'Never use `--no-verify` because it skips the commit checks',

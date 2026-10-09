@@ -8,20 +8,17 @@ import {
   listSessionEvents,
 } from '../store/sessions.js';
 import { saveSessionHandoff, loadLatestHandoff, loadHandoffById, stampHandoffOutcome } from '../store/handoffs.js';
-import { isHandoffOutcome, formatHandoffEvidenceLine, type HandoffOutcome } from '../handoff.js';
-import { resolveTenantId } from '../tenant.js';
-import { wmPush, wmRead, wmClear, wmFlush } from '../working-memory.js';
-import { collectHandoffEvidence } from '../handoff-evidence.js';
+import { isHandoffOutcome, formatHandoffEvidenceLine, type HandoffOutcome } from '../core/handoff.js';
+import { resolveTenantId } from '../store/tenant.js';
+import { wmPush, wmRead, wmClear, wmFlush } from '../store/working-memory.js';
+import { collectHandoffEvidence } from '../capture/handoff-evidence.js';
 import type { SessionEvent, TaskSnapshot } from '../store/rows.js';
 import { printError } from './output.js';
-import {
-  requireInit,
-  printActiveTaskSnapshot,
-  printSessionEvents,
-  printHandoff,
-  type CliFlags,
-  boolFlag,
-} from './shared.js';
+import { requireInit } from './shared.js';
+import { printActiveTaskSnapshot, printSessionEvents, printHandoff } from './print.js';
+import { type CliFlags, boolFlag } from './flag-values.js';
+
+const ISO_DATETIME_CHARS = 19;
 
 function snapshotSave(hippoRoot: string, flags: CliFlags): void {
   const task = String(flags['task'] ?? '').trim();
@@ -420,7 +417,7 @@ function printCurrentState(snapshot: TaskSnapshot | null, events: SessionEvent[]
     console.log('');
     console.log('Recent events:');
     for (const ev of events) {
-      const ts = ev.created_at.slice(0, 19).replace('T', ' ');
+      const ts = ev.created_at.slice(0, ISO_DATETIME_CHARS).replace('T', ' ');
       console.log(`  [${ts}] (${ev.event_type}) ${ev.content}`);
     }
   }

@@ -1,12 +1,21 @@
 // DAG summary verbs: `hippo dag`, `hippo assemble` and `hippo drill`.
 
 import { loadAllEntries } from '../store/entry-reads.js';
-import type { MemoryEntry } from '../memory.js';
-import * as api from '../api.js';
-import { resolveTenantId } from '../tenant.js';
-import { assembleCost, assembleHeading, drillCost, settleTokens } from '../context-render.js';
+import type { MemoryEntry } from '../core/memory.js';
+import * as api from '../api/index.js';
+import { resolveTenantId } from '../store/tenant.js';
+import { assembleCost, assembleHeading, drillCost, settleTokens } from '../api/context-render.js';
 import { printError } from './output.js';
-import { type CliFlags, parseBudgetFlag, requireInit, type CommandContext, captureConsole, flagIsTrue, stringFlag, numberFlag } from './shared.js';
+import { type CliFlags, parseBudgetFlag, type CommandContext, flagIsTrue, stringFlag, numberFlag } from './flag-values.js';
+import { requireInit } from './shared.js';
+import { captureConsole } from './print.js';
+import { CONTENT_PREVIEW_CHARS } from '../util/token-text.js';
+
+const TREE_CHILD_PREVIEW_CHARS = 70;
+const TREE_LEAF_PREVIEW_CHARS = 60;
+const DAG_HEAD_CHARS = 120;
+const DAG_SUMMARY_PREVIEW_CHARS = 200;
+const DAG_CHILD_PREVIEW_CHARS = 100;
 
 export function cmdDag(hippoRoot: string, flags: CliFlags): void {
   requireInit(hippoRoot);
@@ -60,16 +69,16 @@ function printDagTree(entries: readonly MemoryEntry[]): void {
   // L3 entity profiles as tree roots with their L2 children.
   for (const profile of profiles) {
     const profileTags = profile.tags.filter((t) => t !== 'dag-entity-profile').join(', ');
-    console.log(`\n🌲 ${profile.content.slice(0, 80)}`);
+    console.log(`\n🌲 ${profile.content.slice(0, CONTENT_PREVIEW_CHARS)}`);
     if (profileTags) console.log(`   [${profileTags}]`);
     const l2Children = childL2ByProfile.get(profile.id) ?? [];
     for (const l2 of l2Children) {
       const l2Tags = l2.tags.filter((t) => t !== 'dag-summary').join(', ');
-      console.log(`   └─ 📌 ${l2.content.slice(0, 70)}`);
+      console.log(`   └─ 📌 ${l2.content.slice(0, TREE_CHILD_PREVIEW_CHARS)}`);
       if (l2Tags) console.log(`      [${l2Tags}]`);
       const facts = entries.filter((e) => e.dag_parent_id === l2.id);
       for (const f of facts) {
-        console.log(`      └─ ${f.content.slice(0, 60)}`);
+        console.log(`      └─ ${f.content.slice(0, TREE_LEAF_PREVIEW_CHARS)}`);
       }
     }
   }
@@ -77,11 +86,11 @@ function printDagTree(entries: readonly MemoryEntry[]): void {
   // Orphan L2 summaries (no L3 parent) at top level.
   for (const summary of orphanL2) {
     const summaryTags = summary.tags.filter((t) => t !== 'dag-summary').join(', ');
-    console.log(`\n📌 ${summary.content.slice(0, 80)}`);
+    console.log(`\n📌 ${summary.content.slice(0, CONTENT_PREVIEW_CHARS)}`);
     if (summaryTags) console.log(`   [${summaryTags}]`);
     const children = entries.filter((e) => e.dag_parent_id === summary.id);
     for (const child of children) {
-      console.log(`   └─ ${child.content.slice(0, 70)}`);
+      console.log(`   └─ ${child.content.slice(0, TREE_CHILD_PREVIEW_CHARS)}`);
     }
   }
 }
@@ -113,7 +122,7 @@ async function cmdAssemble(hippoRoot: string, sessionId: string, flags: CliFlags
     console.log(assembleHeading({ ...r, items: r.items.length, tokens: t }));
     for (const it of r.items) {
       const prefix = it.isSummary ? '[summary]' : it.isFreshTail ? '[tail]' : '[older]';
-      const head = it.content.slice(0, 120);
+      const head = it.content.slice(0, DAG_HEAD_CHARS);
       console.log(`  ${prefix} ${it.createdAt} ${it.id} \u2014 ${head}${it.content.length > 120 ? '…' : ''}`);
     }
   })));
@@ -160,10 +169,10 @@ async function cmdDrillDown(hippoRoot: string, summaryId: string, flags: CliFlag
     return;
   }
   console.log(`Summary ${r.summary.id} — ${r.summary.descendantCount} descendants${r.summary.earliestAt ? ` (${r.summary.earliestAt} → ${r.summary.latestAt})` : ''}`);
-  console.log(`  ${r.summary.content.slice(0, 200)}${r.summary.content.length > 200 ? '…' : ''}`);
+  console.log(`  ${r.summary.content.slice(0, DAG_SUMMARY_PREVIEW_CHARS)}${r.summary.content.length > DAG_SUMMARY_PREVIEW_CHARS ? '…' : ''}`);
   console.log(`\nChildren (${r.children.length}/${r.totalChildren}${r.truncated ? ', truncated' : ''}):`);
   for (const c of r.children) {
-    console.log(`  [L${c.dagLevel}] ${c.id} — ${c.content.slice(0, 100)}${c.content.length > 100 ? '…' : ''}`);
+    console.log(`  [L${c.dagLevel}] ${c.id} — ${c.content.slice(0, DAG_CHILD_PREVIEW_CHARS)}${c.content.length > DAG_CHILD_PREVIEW_CHARS ? '…' : ''}`);
   }
 }
 

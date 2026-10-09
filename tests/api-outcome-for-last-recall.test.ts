@@ -16,7 +16,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { loadIndex, saveIndex } from '../src/store/index-and-stats.js';
-import { remember, outcomeForLastRecall, type HippoDbContext } from '../src/api.js';
+import { remember, outcomeForLastRecall, type HippoDbContext } from '../src/api/index.js';
 import { recordStatements, countMatching } from './_helpers/count-statements.js';
 
 function tmpHome(): string {
@@ -126,8 +126,8 @@ describe('api.outcomeForLastRecall', () => {
       const result = outcomeForLastRecall(ctx, false);
       expect(result.applied).toBe(2);
 
-      const { openHippoDb, closeHippoDb } = await import('../src/db.js');
-      const { queryAuditEvents } = await import('../src/audit.js');
+      const { openHippoDb, closeHippoDb } = await import('../src/db/index.js');
+      const { queryAuditEvents } = await import('../src/store/audit.js');
       const db = openHippoDb(home);
       try {
         const events = queryAuditEvents(db, {

@@ -20,9 +20,9 @@ import {
   reviewCard,
   completeCard,
   heartbeatCard,
-} from '../src/store-cards.js';
+} from '../src/store/cards.js';
 import { serveDashboard } from '../src/dashboard/dashboard.js';
-import { resolveTenantId } from '../src/tenant.js';
+import { resolveTenantId } from '../src/store/tenant.js';
 
 const DASHBOARD_TOKEN = 'test-dashboard-token';
 
@@ -177,6 +177,7 @@ describe('dashboard entry', () => {
     expect(broken.status).toBe(500);
     expect(broken.body).toBe('{"error":"Internal error"}');
     expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('dashboard request failed'));
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringMatching(/dashboard request failed.* stack=\S*Error.* at /));
 
     const after = await dashboardRequest(port, '/api/overview', `127.0.0.1:${port}`);
     expect(after.status).toBe(200);

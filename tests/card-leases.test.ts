@@ -18,9 +18,9 @@ import {
   completeCard,
   reclaimExpiredCards,
   loadLatestHandoffForCard,
-} from '../src/store-cards.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { CARD_LEASE_MS } from '../src/card.js';
+} from '../src/store/cards.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { CARD_LEASE_MS } from '../src/core/card.js';
 
 let root: string;
 
@@ -374,20 +374,25 @@ function holdLockThenRun(dbPath: string, sql: string, params: unknown[], holdMs:
     db.exec('BEGIN IMMEDIATE');
     db.prepare(workerData.sql).run(...workerData.params);
     parentPort.postMessage('locked');
-    setTimeout(() => {
+    parentPort.once('message', () => setTimeout(() => {
+      Atomics.store(workerData.holdEnded, 0, 1);
       db.exec('COMMIT');
       db.close();
       parentPort.postMessage('released');
-    }, workerData.holdMs);
+    }, workerData.holdMs));
   `;
-  const worker = new Worker(workerCode, { eval: true, workerData: { dbPath, sql, params, holdMs } });
+  // Set before COMMIT: the commit frees the lock, and the waiting call can return before this thread runs its next line.
+  const holdEnded = new Int32Array(new SharedArrayBuffer(4));
+  const worker = new Worker(workerCode, { eval: true, workerData: { dbPath, sql, params, holdMs, holdEnded } });
   const locked = new Promise<void>((resolve) => {
     worker.once('message', (msg) => { if (msg === 'locked') resolve(); });
   });
   const released = new Promise<void>((resolve) => {
     worker.on('message', (msg) => { if (msg === 'released') { worker.terminate(); resolve(); } });
   });
-  return { locked, released };
+  // The hold is counted from this call, made right before the blocking one, so a stalled test thread cannot let the lock go early.
+  const startHold = (): void => worker.postMessage('hold');
+  return { locked, released, startHold, holdHadEnded: () => Atomics.load(holdEnded, 0) === 1 };
 }
 
 describe('reclaim under a real second connection', () => {
@@ -404,7 +409,7 @@ describe('reclaim under a real second connection', () => {
     }
 
     const dbPath = join(root, 'hippo.db');
-    const { locked, released } = holdLockThenRun(
+    const { locked, released, startHold, holdHadEnded } = holdLockThenRun(
       dbPath,
       `UPDATE cards SET title = ? WHERE id = ?`,
       ['retitled', otherReady.id],
@@ -412,12 +417,13 @@ describe('reclaim under a real second connection', () => {
     );
     await locked;
 
-    const started = Date.now();
+    startHold();
     const reclaimed = reclaimExpiredCards(root, 'default');
-    const elapsedMs = Date.now() - started;
+    const endedByReturn = holdHadEnded();
 
     expect(reclaimed).toEqual([expiredCard.id]);
-    expect(elapsedMs).toBeGreaterThan(300);
+    // A sweep that did not wait returns while the lock is still held, before the hold ends.
+    expect(endedByReturn).toBe(true);
     await released;
   });
 });
@@ -435,7 +441,7 @@ describe('a heartbeat that commits while the sweep waits wins', () => {
 
     const dbPath = join(root, 'hippo.db');
     const futureLease = new Date(Date.now() + CARD_LEASE_MS).toISOString();
-    const { locked, released } = holdLockThenRun(
+    const { locked, released, startHold } = holdLockThenRun(
       dbPath,
       `UPDATE cards SET lease_until = ? WHERE id = ?`,
       [futureLease, card.id],
@@ -443,6 +449,7 @@ describe('a heartbeat that commits while the sweep waits wins', () => {
     );
     await locked;
 
+    startHold();
     const reclaimed = reclaimExpiredCards(root, 'default');
     expect(reclaimed).toEqual([]);
     await released;

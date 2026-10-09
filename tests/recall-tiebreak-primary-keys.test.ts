@@ -2,7 +2,7 @@
  * T3 primary-key-preservation tests (docs/plans/2026-07-09-recall-determinism.md).
  *
  * The T2 rule for non-score-primary sort sites is: the site's true primary
- * key must keep winning; compareEntryIdentity (src/compare.ts) is ONLY a
+ * key must keep winning; compareEntryIdentity (src/core/compare.ts) is ONLY a
  * tail for when the primary key ties. Each site below gets a "primary
  * wins" case (real pipeline where practical) plus a "tail decides" tie
  * case (comparator-level where invoking the full pipeline to engineer an
@@ -17,14 +17,14 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { Layer, type MemoryEntry} from '../src/memory.js';
+import { Layer, type MemoryEntry} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { recall, type Context } from '../src/api.js';
-import { estimateTokens } from '../src/token-ledger.js';
+import { recall, type Context } from '../src/api/index.js';
+import { estimateTokens } from '../src/util/token-text.js';
 import type { SearchResult } from '../src/core/search-types.js';
-import { insertEntity, insertRelation } from '../src/graph/write.js';
-import { graphExpandRecall } from '../src/graph-recall.js';
-import { compareEntryIdentity, type EntryIdentity } from '../src/compare.js';
+import { insertEntity, insertRelation } from '../src/store/graph-writes.js';
+import { graphExpandRecall } from '../src/graph/recall.js';
+import { compareEntryIdentity, type EntryIdentity } from '../src/core/compare.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 function safeRmSync(p: string): void {

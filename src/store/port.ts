@@ -1,28 +1,31 @@
 // The async store interface and its groups; type-only apart from requireGroup's error, so an add-on can build a store on it alone.
-import type { AmbientTallies } from '../ambient.js';
-import type { AmbientStoreFilter } from '../ambient-store.js';
-import type { ApiKeyListRow, ApiKeyRecord, ListApiKeysOpts, NewApiKey } from '../auth.js';
-import type { AppendAuditOpts, AuditEvent, ListAuditAfterOpts, QueryAuditOpts } from '../audit.js';
+import type { AmbientTallies } from '../core/ambient.js';
+import type { AmbientStoreFilter } from './ambient.js';
+import type { ApiKeyListRow, ApiKeyRecord, ListApiKeysOpts, NewApiKey } from './auth.js';
+import type { AppendAuditOpts, AuditEvent, ListAuditAfterOpts, QueryAuditOpts } from './audit.js';
 import { StoreNotPortedError } from '../util/sqlite-blocked.js';
-import type { EmbeddingIndexState } from '../embeddings.js';
+import type { EmbeddingIndexState } from './vector-index.js';
 import type { Entity, Relation } from './graph-rows.js';
-import type { ActiveGoals, GetActiveGoalsOpts, GoalRecallLogRow } from '../goals.js';
-import type { SessionHandoff } from '../handoff.js';
-import type { JsonValue } from '../json.js';
-import type { KeysetPosition } from '../keyset.js';
-import type { MemoryEntry } from '../memory.js';
-import type { PhysicsParticle } from '../physics.js';
+import type { ActiveGoals, GetActiveGoalsOpts, GoalRecallLogRow } from './goals.js';
+import type { SessionHandoff } from '../core/handoff.js';
+import type { JsonValue } from '../util/json.js';
+import type { KeysetPosition } from '../util/keyset.js';
+import type { MemoryEntry } from '../core/memory.js';
+import type { PhysicsParticle } from '../core/physics.js';
+import type { BriefReceipt, Incident, IncidentFields, ObjectByKind, ObjectFields, ObjectKind, Policy, SavableKind, Skill } from './object-types.js';
 import type { PlanningFallacyEvidence } from './planning-fallacy-evidence.js';
 import type { ClosureState, Prediction, PredictionBaserate, SavePredictionOpts } from './predictions.js';
 import type { QuarantineRow, QuarantineStatus } from './quarantine.js';
-import type { ScopeActor } from '../recall-scope.js';
-import type { RecallTraceInput } from '../recall-trace.js';
+import type { ScopeActor } from './recall-scope.js';
+import type { RecallTraceInput } from './recall-trace.js';
 import type { AmbientLoadResult, AmbientRecallRequest, ContextCandidateFilter, RecentOrigins } from './candidates.js';
+import type { GithubDlqWrite, GithubRouting } from './connectors/github.js';
+import type { SlackDlqInsert, SlackTeamRoute } from './connectors/slack.js';
 import type { StrengthenOptions } from './entry-writes.js';
 import type { SessionEvent, TaskSnapshot } from './rows.js';
 import type { OriginFilter, VectorCandidateSpec } from './search-rows.js';
 import type { ContinuityKey } from './sessions.js';
-import type { TokenUse } from '../token-ledger.js';
+import type { TokenUse } from './token-ledger.js';
 
 /** The arguments of `loadRecallSearchEntries` after the query, by name. */
 export interface RecallSearchArgs {
@@ -261,6 +264,114 @@ export interface Predictions {
   predictionBaserate(tenantId: string, classTag: string, actor: string): Promise<PredictionBaserate>;
 }
 
+/** Which of a tenant's rows of one kind a list reads: every status when `status` is unset, and every value of the kind's one filter column (a customer note's customer,
+ *  a project brief's repo) when `filter` is. Neither is ever empty, and a kind with no filter column ignores `filter`. */
+export interface ObjectListQuery<K extends ObjectKind = ObjectKind> {
+  readonly status?: ObjectByKind[K]['status'];
+  readonly filter?: string;
+  readonly limit: number;
+  readonly after?: KeysetPosition;
+}
+
+export interface ObjectClose<K extends ObjectKind = ObjectKind> {
+  /** The statuses a close may start from; core owns the rule and its refusal text. */
+  readonly from: readonly ObjectByKind[K]['status'][];
+  readonly actor: string;
+  /** The row's closedAt: core's clock, as `toISOString` gives it. */
+  readonly at: string;
+}
+
+/** One row to save and the memory that mirrors it into recall: core builds the mirror in the tenant the save names with the kind as its `source`, so every store keeps the same row. */
+export interface ObjectSave<K extends SavableKind = SavableKind> {
+  readonly mirror: MemoryEntry;
+  readonly fields: ObjectFields[K];
+  /** The tenant's active row this one replaces. */
+  readonly supersedesId?: number;
+  /** Stored on a successor of a versioned kind only; a first version and a decision keep none. */
+  readonly changeSummary?: string;
+  readonly actor: string;
+  /** The new row's createdAt and the replaced row's supersededAt: core's clock, as `toISOString` gives it, since the list orders createdAt as text. */
+  readonly at: string;
+}
+
+/** Why a save or close wrote nothing: the tenant holds no such row (`missing`), the row's `status` is not one the write may start from, another writer moved it
+ *  between the check and the write (`raced`), or the written row could not be read back (`vanished`). Core turns each into its own error text. */
+export type ObjectRefusal =
+  | { readonly refused: 'missing' }
+  | { readonly refused: 'status'; readonly status: string }
+  | { readonly refused: 'raced' }
+  | { readonly refused: 'vanished' };
+
+/** Tells a refusal from the row a write answered; no row carries a `refused` key. */
+export function isObjectRefusal<T extends object>(written: T | ObjectRefusal): written is ObjectRefusal {
+  return 'refused' in written;
+}
+
+/** An incident to open and the memory that mirrors it into recall, built as `ObjectSave` has it. */
+export interface IncidentOpen {
+  readonly mirror: MemoryEntry;
+  readonly fields: IncidentFields;
+  readonly actor: string;
+  /** The row's createdAt: core's clock, as `toISOString` gives it. */
+  readonly at: string;
+}
+
+/** Why an incident was not opened: `memoryId` is the first linked id, in the order given, that is no memory of the tenant; or the written row could not be read back. */
+export type IncidentOpenRefusal =
+  | { readonly refused: 'unlinked'; readonly memoryId: string }
+  | { readonly refused: 'vanished' };
+
+export interface IncidentResolve {
+  /** The row's resolutionText; core has checked it is not blank. */
+  readonly text: string;
+  readonly actor: string;
+  /** The row's resolvedAt: core's clock, as `toISOString` gives it. */
+  readonly at: string;
+}
+
+/** `asOf` is an instant as `toISOString` gives it, so it compares as text against validFrom and validTo; `name` keeps one policyName, and may be empty. */
+export interface PoliciesInForceQuery {
+  readonly asOf: string;
+  readonly name?: string;
+  readonly limit: number;
+}
+
+/** The reads and writes behind the typed-object routes. An audit row names the object under the kind's id key: decision_id, incident_id, process_id, policy_id, skill_id, brief_id, note_id.
+ *  A row belongs to one tenant: another tenant's id reads as missing in every method. */
+export interface Objects {
+  /** At most `limit` rows of the kind, newest first: by createdAt compared as text in byte order, then by id, both descending, so the order is total.
+   *  `after` keeps only the rows below its (createdAt, id) pair in that order. No audit row. */
+  listObjects<K extends ObjectKind>(tenantId: string, kind: K, query: ObjectListQuery<K>): Promise<ObjectByKind[K][]>;
+  /** The tenant's row; null for a missing id or another tenant's. No audit row. */
+  objectById<K extends ObjectKind>(tenantId: string, kind: K, id: number): Promise<ObjectByKind[K] | null>;
+  /** In one transaction: moves the tenant's row from a status in `close.from` to closed with closedAt `close.at`, then appends one <kind>_close row ({<kind's id key>: id}, target the id).
+   *  A refusal (`missing`, or `status` with the status held) writes nothing. After the commit a kind the graph reads has its graph rows dropped and its mirror queued for a rebuild; a failure there is logged, never thrown. */
+  closeObject<K extends ObjectKind>(tenantId: string, kind: K, id: number, close: ObjectClose<K>): Promise<ObjectByKind[K] | ObjectRefusal>;
+  /** In one transaction, in this order: writes `mirror` as `EntryWrites.writeEntry` does; inserts the row as active under the next id, version 1 or the replaced row's plus one;
+   *  with `supersedesId`, moves that row from active to superseded (supersededBy the new id, supersededAt `at`) and appends a <kind>_supersede row ({<id key>: replaced, superseded_by,
+   *  new_version on a versioned kind, then a brief's refresh keys}, target the replaced id); appends the <kind>_create row ({<id key>: id, then the kind's own keys}, target the id); then the
+   *  mirror's remember row. The kind's own keys: decision has_context; process version, step_count, has_description; policy version, open_ended; skill version, has_trigger; project_brief
+   *  repo, version, refreshed, and receipt_count when refreshed; customer_note customer, version. A refusal (`missing` or `status` for the replaced row, `raced`, `vanished`) leaves no
+   *  mirror, row or audit row. After the commit a kind the graph reads has its mirror queued for a rebuild, which is logged on failure and never thrown. */
+  saveObject<K extends SavableKind>(tenantId: string, kind: K, save: ObjectSave<K>): Promise<ObjectByKind[K] | ObjectRefusal>;
+  /** In one transaction, in this order: writes `mirror` as `EntryWrites.writeEntry` does; checks, in the order given, that each linked id is a memory of the tenant; inserts the row as open
+   *  under the next id, holding the linked ids as given; appends the incident_open row ({incident_id, has_context, linked_memory_count}, target the id; has_context is true for a context
+   *  that is not empty); then the mirror's remember row. A refusal leaves no mirror, row or audit row. */
+  openIncident(tenantId: string, open: IncidentOpen): Promise<Incident | IncidentOpenRefusal>;
+  /** In one transaction: moves the tenant's incident from open to resolved with resolutionText `resolve.text` and resolvedAt `resolve.at`, then appends one incident_resolve row
+   *  ({incident_id}, target the id). A refusal (`missing`, `status` with the status held, or `vanished`) writes nothing. */
+  resolveIncident(tenantId: string, id: number, resolve: IncidentResolve): Promise<Incident | ObjectRefusal>;
+  /** At most `limit` of the tenant's policies in force at `asOf`: a row that is not closed, whose validFrom is at or before `asOf` and whose validTo is unset or after it, and that is
+   *  active, or is superseded by a row whose validFrom is after `asOf`. Newest validFrom first, compared as text in byte order, then the larger id. No audit row. */
+  policiesInForce(tenantId: string, query: PoliciesInForceQuery): Promise<Policy[]>;
+  /** At most `limit` of the tenant's active skills, by skillName ascending compared as text in byte order, then by id ascending. No audit row. */
+  activeSkillsByName(tenantId: string, limit: number): Promise<Skill[]>;
+  /** At most `limit` of the tenant's memories that carry `tag`, whose source is not project_brief and whose scope recall admits when no scope is asked for, newest first: by created
+   *  compared as text in byte order, then by id, both descending. A memory carries the tag when its tag list, written as JSON, holds the tag between double quotes, the tag as
+   *  given and not escaped, once the ASCII letters of both are folded. No audit row. */
+  briefReceipts(tenantId: string, tag: string, limit: number): Promise<BriefReceipt[]>;
+}
+
 /** One session's unsuperseded raw rows inside a tenant; `origins` keeps those projects' rows and rows of no project, unset keeps every origin. */
 export interface SessionRawQuery {
   readonly tenantId: string;
@@ -280,17 +391,31 @@ export interface SessionRawCount extends SessionRawQuery {
   readonly ownScope?: string;
 }
 
+/** The two fields a paged walk judges a row under the summary by. */
+export type DescendantOrigin = Pick<MemoryEntry, 'scope' | 'origin_project'>;
+
+export interface DescendantPage {
+  /** How many rows the caller reads whole, counted from the first row of the first level. */
+  readonly rows: number;
+  /** `DescendantWalk.admit` for a row under the summary, judged on these two fields alone; the two must agree on every such row. */
+  readonly admit: (row: DescendantOrigin) => boolean;
+}
+
 export interface DescendantWalk {
   /** Levels to read under the summary. */
   readonly depth: number;
   /** Asked of the summary, then of each child read: a refused row is left out of the answer and nothing under it is read. */
   readonly admit: (row: MemoryEntry) => boolean;
+  /** Set by a caller that shows only the first rows. A store may ignore it; one that honours it returns just those rows and counts every level in `sizes`. */
+  readonly page?: DescendantPage;
 }
 
 export interface SummaryDescendants {
   readonly summary: MemoryEntry;
   /** The admitted rows of each level, the summary's own children first; a level with none ends the list. */
   readonly levels: MemoryEntry[][];
+  /** Set only by a store that honoured `walk.page`: how many rows each level admits, while `levels` holds just the page, in the same order. */
+  readonly sizes?: readonly number[];
 }
 
 /** The reads behind session assembly and summary drill-down. None writes an audit row. */
@@ -377,10 +502,91 @@ export interface GraphReads {
   graphRows(tenantId: string, query: GraphViewQuery): Promise<GraphRows>;
 }
 
+/** The source event a connector's write answers, by the source's own key. The store logs each key once per connector, across every tenant. */
+export type ConnectorEvent =
+  | { readonly connector: 'slack'; readonly eventId: string }
+  | { readonly connector: 'github'; readonly idempotencyKey: string; readonly deliveryId: string; readonly eventName: string };
+
+/** An entry a connector brings in. `quarantine` is the review record of flagged content, whose entry already carries its quarantine scope. */
+export interface ConnectorWrite extends EntryWrite {
+  readonly event?: ConnectorEvent;
+  readonly quarantine?: { readonly originalScope: string | null; readonly reason: string };
+}
+
+/** 'duplicate': the event's key was logged before; `memoryId` is the id its log row holds, null for an event logged with no memory. */
+export type ConnectorWriteOutcome =
+  | { readonly outcome: 'written' }
+  | { readonly outcome: 'duplicate'; readonly memoryId: string | null };
+
+export interface ConnectorArchive extends RawArchive {
+  readonly event: ConnectorEvent;
+}
+
+/** A connector's writes with the rows that must commit with them: the event log row that turns a redelivery into a no-op, and the quarantine record of flagged content. */
+export interface ConnectorWrites {
+  /** entryWrites.writeEntry and, in its transaction: with `quarantine`, one pending record for the entry's tenant and id and one quarantine row ({reason, originalScope}), ahead of the
+   *  remember row; with `event`, one log row naming the entry's id. All commit or none. A key logged before, by an earlier write or by the winner of a race, resolves 'duplicate' and
+   *  stores nothing of this write: no memory, no record, no audit row. A duplicate is a resolved value, never a rejection; every other refusal is writeEntry's own and is decided first, so a refused entry rejects under a logged key too. */
+  writeConnectorEntry(write: ConnectorWrite): Promise<ConnectorWriteOutcome>;
+  /** entryWrites.archiveRaw and, in its transaction, one log row for `event` naming the archived id, so a redelivery finds the event logged; a log write that fails undoes the archive.
+   *  A key logged before keeps its row and does not stop the archive. Reach and every rejection are archiveRaw's own. */
+  archiveConnectorEntry(archive: ConnectorArchive): Promise<string>;
+}
+
+/** What the event log holds for one event's key; `memoryId` is null for an event logged with no memory. */
+export type ConnectorEventRecord = { readonly seen: false } | { readonly seen: true; readonly memoryId: string | null };
+
+export interface DeletionLookup {
+  readonly event: ConnectorEvent;
+  readonly artifactRef: string;
+  readonly tenantId: string;
+}
+
+/** `memoryId` is null when the tenant holds no raw row for the artifact. */
+export type DeletionTarget = { readonly seen: true } | { readonly seen: false; readonly memoryId: string | null };
+
+export interface ArtifactArchive {
+  readonly tenantId: string;
+  readonly actor: string;
+  readonly artifactRef: string;
+  readonly reason: string;
+  readonly event: Extract<ConnectorEvent, { readonly connector: 'github' }>;
+}
+
+/** One payload a webhook could not use, already redacted, for the dead-letter queue of its connector. */
+export type ConnectorDeadLetter = ({ readonly connector: 'slack' } & SlackDlqInsert) | ({ readonly connector: 'github' } & GithubDlqWrite);
+
+/** What a connector delivery reads and writes beside connectorWrites: the event log, tenant routing, the dead-letter queue and the archive of a deleted artifact. */
+export interface ConnectorEvents {
+  /** The log row of the event's key, in its connector's own key space. */
+  eventRecord(event: ConnectorEvent): Promise<ConnectorEventRecord>;
+  /** Logs an event that stored no memory, so its redelivery finds it. A key logged before keeps its row, the memory id it names included. */
+  markEventSeen(event: ConnectorEvent): Promise<void>;
+  /** Both reads on one snapshot: an event logged before answers `seen`, else the raw row the tenant holds for the artifact. Another tenant's row under the same ref is never returned. */
+  deletionTarget(lookup: DeletionLookup): Promise<DeletionTarget>;
+  /** An event logged before answers `duplicate` and changes nothing. Else, in one transaction, every raw row the tenant holds for the artifact is archived with one archive_raw row
+   *  ({reason}) under `actor`, and the event is logged naming the first of them, or no memory when there was none. One failed archive undoes them all and the log row. No reach check. */
+  archiveDeletedArtifact(archive: ArtifactArchive): Promise<{ readonly duplicate: boolean; readonly archived: number }>;
+  /** The tenant a Slack team is registered to, or how many workspaces are registered when it is not. */
+  slackTeamRoute(teamId: string): Promise<SlackTeamRoute>;
+  /** The tenant of the installation, or of the repository when no installation is named, with the size of both routing tables. */
+  githubRouting(query: { readonly installationId?: string | null; readonly repoFullName?: string | null }): Promise<GithubRouting>;
+  /** Appends the row and answers its id. */
+  parkDeadLetter(letter: ConnectorDeadLetter): Promise<number>;
+}
+
+/** `storedVectors` with no number[] copy, for a store that holds vectors as Float32 bytes. */
+export interface VectorViews {
+  /** The same ids and values as `VectorReads.storedVectors`, each value a Float32 view. */
+  storedVectorViews(ids: readonly string[]): Promise<Map<string, Float32Array>>;
+}
+
 /** The optional groups: a store sets each one whole or leaves it unset, and a route or MCP tool names the one it needs. */
 export interface StoreGroups {
   /** Unset on a store built before them, where hybrid and physics recall under an embedding provider answer 501. */
   readonly vectors: VectorReads;
+  /** Unset on a store without them, where recall scores the number[] copies `vectors` returns, to the same ranking. */
+  readonly vectorViews: VectorViews;
   readonly keyAudit: KeyAudit;
   readonly keyWrites: KeyWrites;
   /** embedMemory and embedAll with a store need it and `vectors`. */
@@ -392,6 +598,11 @@ export interface StoreGroups {
   readonly auditLog: AuditLog;
   readonly quarantine: Quarantine;
   readonly graphReads: GraphReads;
+  /** Unset on a store built before it, where a write that carries a connector event or untrusted content answers 501. */
+  readonly connectorWrites: ConnectorWrites;
+  /** Unset on a store built before it, where both connector webhooks answer 501. */
+  readonly connectorEvents: ConnectorEvents;
+  readonly objects: Objects;
   /** Unset on a store built before it, where GET /ready answers 200 with `store: "unchecked"`. */
   readonly readiness: Readiness;
 }

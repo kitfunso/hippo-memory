@@ -1,7 +1,6 @@
-import { type Context, adminActor } from '../../api.js';
+import { type Context, adminActor } from '../../api/index.js';
 import {
   bumpSlackDlqRetryCount,
-  insertSlackDlq,
   listSlackDlq,
   markSlackDlqRetried,
   slackDlqEntry,
@@ -11,18 +10,18 @@ import {
 } from '../../store/connectors/slack.js';
 import { replayFailed, type ConnectorDlq, type ReplayResult, type ReplayStatus } from '../dlq.js';
 import { ingestMessage } from './ingest.js';
-import { resolveTenantForTeamOnRoot } from './tenant-routing.js';
+import { resolveTenantForSlackTeam } from './tenant-routing.js';
 import { verifySlackSignature } from './signature.js';
 import { isSlackEventEnvelope, isSlackMessageEvent, type SlackEventEnvelope } from './types.js';
 import { handleMessageDeleted } from './deletion.js';
-import type { JsonValue } from '../../json.js';
-import { errorMessage } from '../../log.js';
+import type { JsonValue } from '../../util/json.js';
+import { errorMessage } from '../../util/log.js';
 
 export type { DlqBucket, DlqItem };
 
 /** Slack's dead-letter table; `teamId` and `slackTimestamp` are the columns only it has. */
 export const slackDlq: ConnectorDlq<Pick<SlackDlqInsert, 'teamId' | 'slackTimestamp'>, DlqBucket, DlqItem> = {
-  insert: insertSlackDlq,
+  letter: (row) => ({ connector: 'slack', ...row }),
   list: listSlackDlq,
 };
 
@@ -56,11 +55,11 @@ export interface ReplayDlqOpts {
  * envelope was DLQed. That is intentional: the DLQ exists to be drained after
  * the operator fixed the routing.
  */
-export function replayDlqEntry(
+export async function replayDlqEntry(
   ctx: Pick<Context, 'hippoRoot'>,
   id: number,
   opts: ReplayDlqOpts = {},
-): ReplayResult {
+): Promise<ReplayResult> {
   const row = slackDlqEntry(ctx.hippoRoot, id);
   if (!row) return replayFailed('not_found', 0, `dlq id ${id} not found`);
 
@@ -82,7 +81,7 @@ export function replayDlqEntry(
   }
 
   // Resolve tenant against current state. If still unroutable, bail.
-  const tenant = resolveTenantForTeamOnRoot(ctx.hippoRoot, parsed.team_id);
+  const tenant = await resolveTenantForSlackTeam(ctx.hippoRoot, parsed.team_id);
   if (!tenant) {
     return failAndBump(ctx.hippoRoot, row, 'unroutable', `team_id ${parsed.team_id} still unroutable`);
   }
@@ -130,11 +129,11 @@ function failAndBump(hippoRoot: string, row: DlqItem, status: ReplayStatus, reas
   return replayFailed(status, row.retryCount + 1, reason);
 }
 
-function dispatchReplay(
+async function dispatchReplay(
   replayCtx: Context,
   row: DlqItem,
   parsed: JsonValue & SlackEventEnvelope,
-): ReplayResult {
+): Promise<ReplayResult> {
   const { hippoRoot } = replayCtx;
   const id = row.id;
   const inner = parsed.event;
@@ -143,7 +142,7 @@ function dispatchReplay(
   }
 
   if (inner.subtype === 'message_deleted' && inner.deleted_ts) {
-    const r = handleMessageDeleted(replayCtx, {
+    const r = await handleMessageDeleted(replayCtx, {
       teamId: parsed.team_id,
       channelId: inner.channel,
       deletedTs: inner.deleted_ts,
@@ -153,7 +152,7 @@ function dispatchReplay(
     return { ok: true, status: r.status, memoryId: r.memoryId, retryCount: row.retryCount + 1 };
   }
 
-  const result = ingestMessage(replayCtx, {
+  const result = await ingestMessage(replayCtx, {
     teamId: parsed.team_id,
     channel: {
       id: inner.channel,

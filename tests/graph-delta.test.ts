@@ -3,15 +3,15 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { deleteEntry } from '../src/store/delete-and-batch.js';
-import { saveDecision } from '../src/decisions.js';
-import { savePolicy } from '../src/policies.js';
-import { saveCustomerNote } from '../src/customer-notes.js';
-import { saveProjectBrief } from '../src/project-briefs.js';
-import { extractGraph, deriveGraph, loadGraphSources, MAX_REFERENCES_PER_OBJECT } from '../src/graph-extract.js';
+import { saveDecision } from '../src/objects/decisions.js';
+import { savePolicy } from '../src/objects/policies.js';
+import { saveCustomerNote } from '../src/objects/customer-notes.js';
+import { saveProjectBrief } from '../src/objects/project-briefs.js';
+import { extractGraph, deriveGraph, loadGraphSources, MAX_REFERENCES_PER_OBJECT } from '../src/graph/extract.js';
 import { graphDelta, entityKey, type GraphOp } from '../src/graph/delta.js';
-import { insertEntity } from '../src/graph/write.js';
-import type { EntityType, SourceObjectType } from '../src/graph/types.js';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
+import { insertEntity } from '../src/store/graph-writes.js';
+import type { EntityType, SourceObjectType } from '../src/store/graph-rows.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 const T = 'default';

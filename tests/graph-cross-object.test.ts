@@ -9,12 +9,13 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { deleteEntry } from '../src/store/delete-and-batch.js';
-import { saveDecision } from '../src/decisions.js';
-import { savePolicy } from '../src/policies.js';
-import { saveCustomerNote } from '../src/customer-notes.js';
-import { saveProjectBrief } from '../src/project-briefs.js';
-import { loadEntities, loadRelations } from '../src/graph/read.js';
-import { extractGraph, MAX_REFERENCES_PER_OBJECT } from '../src/graph-extract.js';
+import { saveDecision } from '../src/objects/decisions.js';
+import { savePolicy } from '../src/objects/policies.js';
+import { saveCustomerNote } from '../src/objects/customer-notes.js';
+import { saveProjectBrief } from '../src/objects/project-briefs.js';
+import { loadEntities, loadRelations } from '../src/store/graph-reads.js';
+import { extractGraph, MAX_REFERENCES_PER_OBJECT } from '../src/graph/extract.js';
+import { withSharedStoreHandles } from '../src/db/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 const T = 'default';
@@ -86,13 +87,12 @@ describe('cross-object references (Pass 3 name-match)', () => {
     expect(refs(home)).toHaveLength(0); // 'shared' maps to 2 entities -> dropped from index
   });
 
-  it('per-source cap: a decision naming many policies is capped at MAX_REFERENCES_PER_OBJECT', () => {
-    const names: string[] = [];
-    for (let i = 0; i < MAX_REFERENCES_PER_OBJECT + 5; i++) {
-      const n = `PolicyNum${String(i).padStart(3, '0')}`;
-      names.push(n);
-      savePolicy(home, T, { policyName: n, policyText: 'x' });
-    }
+  it('per-source cap: a decision naming many policies is capped at MAX_REFERENCES_PER_OBJECT', async () => {
+    const names = Array.from({ length: MAX_REFERENCES_PER_OBJECT + 5 }, (_, i) => `PolicyNum${String(i).padStart(3, '0')}`);
+    // One connection for the seed loop: a close per write checkpoints the WAL, which is slow on Windows.
+    await withSharedStoreHandles(() => {
+      for (const n of names) savePolicy(home, T, { policyName: n, policyText: 'x' });
+    });
     saveDecision(home, T, { decisionText: `a decision that mentions ${names.join(' and ')}` });
     extractGraph(home, T);
     expect(refs(home).length).toBe(MAX_REFERENCES_PER_OBJECT);

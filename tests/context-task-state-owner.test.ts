@@ -1,12 +1,12 @@
 // On a shared store getContext's task state keys on owner and project, so each developer gets their own, across sessions.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { createApiKey } from '../src/auth.js';
-import { getContext, type Context } from '../src/api.js';
-import { BadRequestError } from '../src/api-errors.js';
-import { _resetSharedStoreCacheForTests } from '../src/config.js';
-import { promptHookContext } from '../src/prompt-hook.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { createApiKey } from '../src/store/auth.js';
+import { getContext, type Context } from '../src/api/index.js';
+import { BadRequestError } from '../src/core/api-errors.js';
+import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
+import { promptHookContext } from '../src/api/prompt-hook.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { closeTaskSnapshotsForSession, saveActiveTaskSnapshot, type ContinuityKey } from '../src/store/sessions.js';
 import { saveSessionHandoff } from '../src/store/handoffs.js';

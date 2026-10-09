@@ -1,13 +1,15 @@
 // DAG drill-down from a summary to its children.
 
-import { requireGroup, storeFor } from '../store-port.js';
-import type { SummaryDescendants } from '../store/port.js';
-import { estimateTokens } from '../token-ledger.js';
-import type { MemoryEntry } from '../memory.js';
-import { passesScopeFilterForRecall, personalScopeOf } from '../recall-scope.js';
-import { classifyOriginProject } from '../project-identity.js';
-import type { CallerProject } from '../prompt-hook.js';
+import { requireGroup, storeFor } from '../store/index.js';
+import type { DescendantOrigin, SummaryDescendants } from '../store/port.js';
+import { estimateTokens } from '../util/token-text.js';
+import type { MemoryEntry } from '../core/memory.js';
+import { passesScopeFilterForRecall, personalScopeOf } from '../store/recall-scope.js';
+import { classifyOriginProject } from '../core/project-identity.js';
+import type { CallerProject } from './prompt-hook.js';
 import type { Context } from './types.js';
+
+const DEFAULT_DRILL_DOWN_LIMIT = 50;
 
 // ---------------------------------------------------------------------------
 // drillDown — DAG-aware recall Phase 1 Task 3
@@ -95,18 +97,20 @@ export async function drillDown(
   summaryId: string,
   opts: DrillDownOpts = {},
 ): Promise<DrillDownOutcome> {
-  const limit = opts.limit ?? 50;
+  const limit = opts.limit ?? DEFAULT_DRILL_DOWN_LIMIT;
   // v0.30 / E5: depth defaults 1 (backward compat); hard cap 10 levels
   // prevents pathological deep trees. CLI/HTTP/MCP reject invalid values.
   const depth = Math.max(1, Math.min(Math.trunc(opts.depth ?? 1), 10));
   const own = personalScopeOf(ctx.actor) ?? undefined;
-  const readable = (row: MemoryEntry): boolean =>
+  const readable = (row: DescendantOrigin): boolean =>
     passesScopeFilterForRecall(row.scope ?? null, undefined, own)
     && (!opts.project || classifyOriginProject(row.origin_project, opts.project) !== 'cross-project');
+  const pastLimit = Math.floor(limit) + 1;
   const walked = await requireGroup(storeFor(ctx), 'dagReads').summaryWithDescendants(ctx.tenantId, summaryId, {
     depth,
     // A leaf answers not_drillable, so nothing under it is read.
     admit: (row) => readable(row) && (row.id !== summaryId || isDrillable(row)),
+    page: limit >= 0 && Number.isSafeInteger(pastLimit) ? { rows: pastLimit, admit: readable } : undefined,
   });
   // No unscoped cross-tenant probe here: the tenant-scoped read's miss covers
   // both "doesn't exist" and "exists in another tenant" by design.
@@ -124,14 +128,16 @@ function isDrillable(row: MemoryEntry): boolean {
   return (row.dag_level ?? 0) >= 2;
 }
 
-function drillResult({ summary, levels }: SummaryDescendants, opts: DrillDownOpts, limit: number): DrillDownResult {
+function drillResult({ summary, levels, sizes: counted }: SummaryDescendants, opts: DrillDownOpts, limit: number): DrillDownResult {
   const collected = levels.flat();
+  const sizes = counted ?? levels.map((level) => level.length);
+  const total = sizes.reduce((sum, n) => sum + n, 0);
   const summaryOut: DrillDownSummary = {
     id: summary.id,
     content: summary.content,
     // v0.30 / E5: the STORED direct-child count; the legacy fallback counts
     // level-0 children, never the BFS-depth-N total (independent-review MED #4).
-    descendantCount: summary.descendant_count ?? (levels[0]?.length ?? 0),
+    descendantCount: summary.descendant_count ?? (sizes[0] ?? 0),
     earliestAt: summary.earliest_at ?? null,
     latestAt: summary.latest_at ?? null,
   };
@@ -143,7 +149,8 @@ function drillResult({ summary, levels }: SummaryDescendants, opts: DrillDownOpt
     created: c.created,
   }));
 
-  const { children, truncated } = capChildren(all, summaryOut, opts, limit);
+  const fixed = opts.budget !== undefined ? opts.cost?.fixed(summaryOut, total) ?? 0 : 0;
+  const { children, truncated } = capChildren(all, fixed, opts, limit);
 
   return {
     summary: summaryOut,
@@ -151,7 +158,7 @@ function drillResult({ summary, levels }: SummaryDescendants, opts: DrillDownOpt
     // v0.30 / E5: totalChildren = BFS-collected count (depth-aware). For
     // depth=1 this equals the eligible direct-children count (backward
     // compat). For depth>1 it is the cumulative count across levels.
-    totalChildren: collected.length,
+    totalChildren: total,
     truncated,
   };
 }
@@ -164,7 +171,7 @@ interface CappedChildren {
 /** Global cumulative token budget first, then the `limit` cap. */
 function capChildren(
   all: DrillDownChild[],
-  summaryOut: DrillDownSummary,
+  fixed: number,
   opts: DrillDownOpts,
   limit: number,
 ): CappedChildren {
@@ -173,7 +180,7 @@ function capChildren(
   if (opts.budget !== undefined) {
     const out: DrillDownChild[] = [];
     let used = 0;
-    const room = opts.budget - (opts.cost?.fixed(summaryOut, all.length) ?? 0);
+    const room = opts.budget - fixed;
     for (const c of all) {
       const t = opts.cost ? opts.cost.child(c) : estimateTokens(c.content);
       if (out.length > 0 && used + t > room) {

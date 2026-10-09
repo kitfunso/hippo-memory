@@ -35,17 +35,19 @@ import {
 } from '../hooks/copilot.js';
 import { isInitialized } from '../store/open.js';
 import { currentMachine, importUserMemories } from '../agent-memories/sync.js';
-import { getGlobalRoot } from '../shared.js';
-import { listRegisteredWorkspaces, runDailyMaintenance } from '../scheduler.js';
-import { replayCompactionsAt } from '../compaction-record.js';
-import { errorMessage, log } from '../log.js';
-import { envDailyStepTimeoutMs } from '../env.js';
+import { getGlobalRoot } from '../sharing/global-store.js';
+import { listRegisteredWorkspaces, runDailyMaintenance } from './scheduler.js';
+import { replayCompactionsAt } from '../capture/compaction-record.js';
+import { errorFields, errorMessage, log } from '../util/log.js';
+import { envDailyStepTimeoutMs } from '../util/env.js';
 import { writeFileAtomic } from '../util/atomic-write.js';
 import { printError } from './output.js';
-import { type CliFlags, printAgentImport, installCodexMemoryHooks, setupDailySchedule, warnClaudeSettingsUnusable, boolFlag } from './shared.js';
+import { type CliFlags, boolFlag } from './flag-values.js';
+import { printAgentImport } from './print.js';
+import { installCodexMemoryHooks, setupDailySchedule, warnClaudeSettingsUnusable } from './install-steps.js';
 import { repairQualityOnceAt } from './quality-repair-once.js';
 import { HOOK_MARKERS, HOOKS, hippoBlock, withoutHookBlock } from '../hooks/hook-blocks.js';
-import { escapeRegex } from '../escape.js';
+import { escapeRegex } from '../util/escape.js';
 
 // ---------------------------------------------------------------------------
 // Hook install/uninstall
@@ -538,7 +540,7 @@ export function cmdDailyRunner(): void {
     } catch (err) {
       failed++;
       const action = args.join(' ');
-      log.error(`daily-runner failed in ${cwd} during \`${action}\`: ${dailyStepFailure(err, timeout)}`, { workspace: cwd });
+      log.error(`daily-runner failed in ${cwd} during \`${action}\`: ${dailyStepFailure(err, timeout)}`, { workspace: cwd, ...errorFields(err) });
     }
   });
 

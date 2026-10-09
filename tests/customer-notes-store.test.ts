@@ -20,8 +20,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { deleteEntry } from '../src/store/delete-and-batch.js';
-import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import {
   saveCustomerNote,
   closeCustomerNote,
@@ -30,7 +30,7 @@ import {
   loadActiveNotesForCustomer,
   VALID_NOTE_STATES,
   MAX_NOTE_LEN,
-} from '../src/customer-notes.js';
+} from '../src/objects/customer-notes.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 function safeRmSync(p: string): void {
@@ -80,7 +80,7 @@ describe('customer_notes store (entity-scoped first-class object)', () => {
       expect(memRow.content).toContain('renewal call notes');
       expect(memRow.source).toBe('customer_note');
       // SAFETY: metadata_json is always a JSON object with a customer_note_create
-      // audit's fields (see src/customer-notes.ts saveCustomerNote audit write).
+      // audit's fields (see src/objects/customer-notes.ts saveCustomerNote audit write).
       const rows = db.prepare(`SELECT metadata_json FROM audit_log WHERE op='customer_note_create' AND target_id=?`)
         .all(String(n.id)) as Array<{ metadata_json: string }>;
       expect(rows.length).toBe(1);

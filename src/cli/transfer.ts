@@ -2,27 +2,22 @@
 
 import * as path from 'path';
 import * as fs from 'fs';
-import { calculateStrength, deriveHalfLife } from '../memory.js';
+import { calculateStrength, deriveHalfLife } from '../core/memory.js';
 import { isInitialized } from '../store/open.js';
 import { writeEntry } from '../store/entry-writes.js';
 import { readEntry, loadAllEntries } from '../store/entry-reads.js';
 import { schemaFitInStore } from '../store/candidates.js';
 import { updateStats } from '../store/index-and-stats.js';
-import { RejectedValueError } from '../rejection.js';
-import { embedAll, embedMemory, loadEmbeddingIndex } from '../embeddings.js';
-import { loadConfig } from '../config.js';
-import { captureError, runWatched } from '../autolearn.js';
+import { RejectedValueError } from '../store/rejection.js';
+import { embedAll, embedMemory } from '../store/embeddings/index.js';
+import { loadEmbeddingIndex } from '../store/vector-index.js';
+import { loadConfig } from '../core/config.js';
+import { captureError, runWatched } from '../learn/autolearn.js';
 import { currentMachine, importAtSessionEnd, importForStore } from '../agent-memories/sync.js';
 import { detailLines } from '../agent-memories/report.js';
-import {
-  getGlobalRoot,
-  initGlobal,
-  shareMemory,
-  listPeers,
-  autoShare,
-  transferScore,
-  syncGlobalToLocal,
-} from '../shared.js';
+import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
+import { shareMemory, listPeers, autoShare, transferScore } from '../sharing/share.js';
+import { syncGlobalToLocal } from '../sharing/global-sync.js';
 import {
   importChatGPT,
   importClaude,
@@ -32,12 +27,18 @@ import {
 import { importMarkdown } from '../importers/markdown.js';
 import { importVault } from '../importers/vault.js';
 import { ImportOptions, type ImportResult } from '../importers/core.js';
-import * as api from '../api.js';
+import * as api from '../api/index.js';
 import * as client from './client.js';
-import { resolveTenantId } from '../tenant.js';
+import { resolveTenantId } from '../store/tenant.js';
 import { printError } from './output.js';
-import { errorMessage, log } from '../log.js';
-import { requireInit, runViaServerIfAvailable, fmt, type CliFlags, type CommandContext, learnFromRepo, boolFlag, flagIsTrue } from './shared.js';
+import { errorMessage, log } from '../util/log.js';
+import { requireInit, runViaServerIfAvailable, learnFromRepo } from './shared.js';
+import { fmt } from './print.js';
+import { type CliFlags, type CommandContext, boolFlag, flagIsTrue, nonEmptyStringFlag } from './flag-values.js';
+import { CONTENT_PREVIEW_CHARS, DATE_PREFIX_CHARS } from '../util/token-text.js';
+
+const STDERR_PREVIEW_CHARS = 80;
+const MAX_ENTRIES_SHOWN = 10;
 
 // ---------------------------------------------------------------------------
 // Watch command
@@ -73,7 +74,7 @@ async function cmdWatch(command: string, hippoRoot: string): Promise<void> {
     updateStats(hippoRoot, { remembered: 1 });
     void embedMemory(hippoRoot, entry);
 
-    const preview = stderr.trim().slice(0, 80);
+    const preview = stderr.trim().slice(0, STDERR_PREVIEW_CHARS);
     printError(`\nHippo learned from failure: "${preview}"`);
   } catch (err) {
     if (err instanceof RejectedValueError) {
@@ -105,8 +106,8 @@ export function cmdLearn(
 
   console.log(`Scanning git log for the last ${days} days...`);
 
-  const reposFlag = flags['repos'];
-  if (reposFlag && typeof reposFlag === 'string') {
+  const reposFlag = nonEmptyStringFlag(flags, 'repos');
+  if (reposFlag) {
     const repos = reposFlag.split(',').map((r) => r.trim()).filter(Boolean);
     let totalAdded = 0;
     let totalSkipped = 0;
@@ -260,8 +261,8 @@ function printFileImportSummary(
     console.log('\n  (dry run - nothing written)');
     if (result.entries.length > 0) {
       console.log('\n  Would import:');
-      for (const e of result.entries.slice(0, 10)) {
-        console.log(`    - ${e.content.slice(0, 80)}`);
+      for (const e of result.entries.slice(0, MAX_ENTRIES_SHOWN)) {
+        console.log(`    - ${e.content.slice(0, CONTENT_PREVIEW_CHARS)}`);
       }
       if (result.entries.length > 10) {
         console.log(`    ... and ${result.entries.length - 10} more`);
@@ -429,7 +430,7 @@ export function handleShare({ hippoRoot, args, flags }: CommandContext): void {
       console.log(`Would share ${results.length} memories:\n`);
       for (const e of results) {
         const score = transferScore(e);
-        console.log(`  ${e.id} (transfer=${fmt(score)}) ${e.content.slice(0, 80)}...`);
+        console.log(`  ${e.id} (transfer=${fmt(score)}) ${e.content.slice(0, CONTENT_PREVIEW_CHARS)}...`);
       }
     } else {
       console.log(`Shared ${results.length} memories to global store.`);
@@ -473,7 +474,7 @@ export function handlePeers({ flags }: CommandContext): void {
     const scopeLabel = allTenants ? 'global store (all tenants)' : `global store (tenant "${tenantScope}")`;
     console.log(`${peers.length} project${peers.length === 1 ? '' : 's'} contributing to ${scopeLabel}:\n`);
     for (const p of peers) {
-      console.log(`  ${p.project.padEnd(25)} ${String(p.count).padStart(4)} memories  (latest: ${p.latest.slice(0, 10)})`);
+      console.log(`  ${p.project.padEnd(25)} ${String(p.count).padStart(4)} memories  (latest: ${p.latest.slice(0, DATE_PREFIX_CHARS)})`);
     }
   }
 }

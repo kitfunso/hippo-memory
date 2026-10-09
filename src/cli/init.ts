@@ -1,6 +1,6 @@
 // `hippo init`: create a store and wire the detected agents' instruction files, hooks and daily runner.
 
-import { envSkipAutoIntegrations } from '../env.js';
+import { envSkipAutoIntegrations } from '../util/env.js';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -11,12 +11,15 @@ import { isCodexWrapperInstalled } from '../hooks/codex-wrapper.js';
 import { installOpencodePlugin } from '../hooks/opencode.js';
 import { isInitialized, initStore } from '../store/open.js';
 import { loadAllEntries } from '../store/entry-reads.js';
-import { isGitRepo } from '../autolearn.js';
+import { isGitRepo } from '../learn/autolearn.js';
 import { currentMachine, importForStore, importProjectMemories, importUserMemories } from '../agent-memories/sync.js';
 import { emptyReport, mergeReports } from '../agent-memories/report.js';
-import { getGlobalRoot, initGlobal } from '../shared.js';
-import { registerWorkspace } from '../scheduler.js';
-import { type CliFlags, printAgentImport, installCodexMemoryHooks, setupDailySchedule, learnFromRepo, skipLearnOnSharedStore, warnClaudeSettingsUnusable, stringFlag } from './shared.js';
+import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
+import { registerWorkspace } from './scheduler.js';
+import { type CliFlags, stringFlag } from './flag-values.js';
+import { printAgentImport } from './print.js';
+import { installCodexMemoryHooks, setupDailySchedule, warnClaudeSettingsUnusable } from './install-steps.js';
+import { learnFromRepo, skipLearnOnSharedStore } from './shared.js';
 import { HOOK_MARKERS, HOOKS, hippoBlock } from '../hooks/hook-blocks.js';
 
 function scanForGitRepos(rootDir: string, maxDepth = 2): string[] {

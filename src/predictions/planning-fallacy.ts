@@ -1,7 +1,9 @@
-import { envAutodebiasOff } from '../env.js';
-import type { AppendAuditOpts } from '../audit.js';
-import { detectForwardClaim, type ForwardClaimMatch } from '../forward-claim-detector.js';
+import { envAutodebiasOff } from '../util/env.js';
+import type { AppendAuditOpts } from '../store/audit.js';
+import { detectForwardClaim, type ForwardClaimMatch } from '../learn/forward-claim-detector.js';
 import type { PlanningFallacyEvidence } from '../store/planning-fallacy-evidence.js';
+
+const TARGET_ID_CHARS = 100;
 
 // ---------------------------------------------------------------------------
 // Auto-injection of reference-class baserate on recall
@@ -159,7 +161,7 @@ function watchingWithAudit(
       tenantId,
       actor,
       op: reason === 'tiebreak' ? 'recall_autodebias_hint_tiebreak' : 'recall_autodebias_hint_no_class_match',
-      targetId: match.phrase.slice(0, 100),
+      targetId: match.phrase.slice(0, TARGET_ID_CHARS),
       metadata: { detected_phrase: match.phrase, token_count: match.classQueryTokens.length },
     },
   };

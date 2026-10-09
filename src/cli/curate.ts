@@ -3,29 +3,25 @@
 import * as path from 'path';
 import { readEntry } from '../store/entry-reads.js';
 import { listMemoryConflicts, resolveConflict } from '../store/conflicts.js';
-import { rejectValue, unrejectValue, listRejectionsForTenant } from '../reject-flow.js';
-import { RejectedValueError } from '../rejection.js';
-import { loadConfig } from '../config.js';
-import { isGitRepo } from '../autolearn.js';
-import { invalidateMatching, InvalidationTarget } from '../invalidation.js';
-import * as api from '../api.js';
+import { rejectValue, unrejectValue, listRejectionsForTenant } from '../trust/reject-flow.js';
+import { RejectedValueError } from '../store/rejection.js';
+import { loadConfig } from '../core/config.js';
+import { isGitRepo } from '../learn/autolearn.js';
+import { invalidateMatching, InvalidationTarget } from '../learn/invalidation.js';
+import * as api from '../api/index.js';
 import * as client from './client.js';
-import { resolveTenantId } from '../tenant.js';
+import { resolveTenantId } from '../store/tenant.js';
 import { printError } from './output.js';
-import {
-  type CliFlags,
-  parseCountFlag,
-  requireInit,
-  runChurnStaleForRepo,
-  runViaServerIfAvailable,
-  fmt,
-  type CommandContext,
-  resolveAuthRoot,
-  boolFlag,
-  flagIsTrue,
-  stringFlag,
-} from './shared.js';
-import { errorMessage } from '../log.js';
+import { type CliFlags, parseCountFlag, type CommandContext, boolFlag, flagIsTrue, stringFlag } from './flag-values.js';
+import { requireInit, runChurnStaleForRepo, runViaServerIfAvailable, resolveAuthRoot } from './shared.js';
+import { fmt } from './print.js';
+import { errorMessage } from '../util/log.js';
+import { DIGEST_DISPLAY_CHARS, CONTENT_PREVIEW_CHARS, DATE_PREFIX_CHARS } from '../util/token-text.js';
+
+const CONFLICT_PREVIEW_CHARS = 120;
+const REJECTED_DIGEST_LIST_CHARS = 16;
+const DORMANT_PREVIEW_CHARS = 100;
+const STRENGTH_DECIMALS = 3;
 
 export function cmdOutcome(
   hippoRoot: string,
@@ -149,7 +145,7 @@ function previewForget(hippoRoot: string, id: string, archive: boolean): void {
     printError(`Could not archive ${id}: memory ${id} is not raw (kind=${entry.kind})`);
     process.exit(1);
   }
-  const snippet = entry.content.length > 80 ? `${entry.content.slice(0, 80)}...` : entry.content;
+  const snippet = entry.content.length > CONTENT_PREVIEW_CHARS ? `${entry.content.slice(0, CONTENT_PREVIEW_CHARS)}...` : entry.content;
   console.log(`Would ${archive ? 'archive' : 'forget'} ${id} (dry run, nothing changed): "${snippet}"`);
 }
 
@@ -197,11 +193,11 @@ function showConflictForResolve(hippoRoot: string, conflictId: number, tenantId:
   const entryB = readEntry(hippoRoot, conflict.memory_b_id, tenantId);
   if (entryA) {
     console.log(`  [A] ${conflict.memory_a_id}:`);
-    console.log(`      ${entryA.content.slice(0, 120)}${entryA.content.length > 120 ? '...' : ''}`);
+    console.log(`      ${entryA.content.slice(0, CONFLICT_PREVIEW_CHARS)}${entryA.content.length > CONFLICT_PREVIEW_CHARS ? '...' : ''}`);
   }
   if (entryB) {
     console.log(`  [B] ${conflict.memory_b_id}:`);
-    console.log(`      ${entryB.content.slice(0, 120)}${entryB.content.length > 120 ? '...' : ''}`);
+    console.log(`      ${entryB.content.slice(0, CONFLICT_PREVIEW_CHARS)}${entryB.content.length > CONFLICT_PREVIEW_CHARS ? '...' : ''}`);
   }
   console.log('');
   console.log(`Resolve with: hippo resolve ${conflictId} --keep <memory_id> [--forget] [--reject-loser [--reason "<why>"]]`);
@@ -304,8 +300,8 @@ export function cmdReject(
 }
 
 function printRejected(result: ReturnType<typeof rejectValue>, reason: string): void {
-  const digestPrefix = result.digest.slice(0, 12);
-  const preview = result.content.length > 80 ? `${result.content.slice(0, 80)}...` : result.content;
+  const digestPrefix = result.digest.slice(0, DIGEST_DISPLAY_CHARS);
+  const preview = result.content.length > CONTENT_PREVIEW_CHARS ? `${result.content.slice(0, CONTENT_PREVIEW_CHARS)}...` : result.content;
   console.log(`Rejected [${digestPrefix}...]: "${preview}"`);
   console.log(`  Reason: ${reason}`);
   if (result.removedIds.length > 0) {
@@ -341,7 +337,7 @@ export function cmdRejections(
 
   console.log(`${rows.length} rejected value(s):\n`);
   for (const row of rows) {
-    console.log(`--- ${row.digest.slice(0, 12)}...`);
+    console.log(`--- ${row.digest.slice(0, DIGEST_DISPLAY_CHARS)}...`);
     console.log(`    Reason:       ${row.reason ?? 'none given'}`);
     console.log(`    Rejected by:  ${row.rejectedBy ?? 'unknown'}`);
     console.log(`    Rejected at:  ${row.rejectedAt}`);
@@ -372,12 +368,12 @@ export function cmdUnreject(
   if (outcome.status === 'ambiguous') {
     printError(`"${digestOrPrefix}" matches ${outcome.candidates.length} tombstones. Use a longer prefix:`);
     for (const c of outcome.candidates) {
-      printError(`  ${c.digest.slice(0, 16)}...  ${c.reason ?? 'none given'}`);
+      printError(`  ${c.digest.slice(0, REJECTED_DIGEST_LIST_CHARS)}...  ${c.reason ?? 'none given'}`);
     }
     process.exit(1);
   }
 
-  console.log(`Unrejected [${outcome.digest.slice(0, 12)}...] (was: ${outcome.reason ?? 'none given'})`);
+  console.log(`Unrejected [${outcome.digest.slice(0, DIGEST_DISPLAY_CHARS)}...] (was: ${outcome.reason ?? 'none given'})`);
 }
 
 /**
@@ -452,10 +448,10 @@ function printDormantRows(rows: ReturnType<typeof api.listDormant>, hasQuery: bo
 
   console.log(`${rows.length} dormant memor${rows.length === 1 ? 'y' : 'ies'}${hasQuery ? ' matching' : ''} (newest first):\n`);
   for (const row of rows) {
-    const preview = row.content.length > 100 ? `${row.content.slice(0, 100)}...` : row.content;
+    const preview = row.content.length > DORMANT_PREVIEW_CHARS ? `${row.content.slice(0, DORMANT_PREVIEW_CHARS)}...` : row.content;
     console.log(`--- ${row.id}`);
     console.log(`    ${preview}`);
-    console.log(`    Dormant since ${row.dormantAt.slice(0, 10)} (${row.reason}, strength ${row.strength.toFixed(3)})${row.tags.length > 0 ? `  tags: ${row.tags.join(', ')}` : ''}`);
+    console.log(`    Dormant since ${row.dormantAt.slice(0, DATE_PREFIX_CHARS)} (${row.reason}, strength ${row.strength.toFixed(STRENGTH_DECIMALS)})${row.tags.length > 0 ? `  tags: ${row.tags.join(', ')}` : ''}`);
     console.log('');
   }
   console.log('Bring one back: hippo dormant restore <id>   Delete for good: hippo dormant forget <id>');
@@ -476,23 +472,7 @@ export async function cmdQuarantine(
   const sub = args[0];
 
   if (sub === 'approve' || sub === 'reject') {
-    const id = (args[1] ?? '').trim();
-    if (!id) {
-      printError(`Usage: hippo quarantine ${sub} <id>`);
-      process.exit(1);
-    }
-    try {
-      if (sub === 'approve') {
-        await api.quarantineApprove(ctx, id);
-        console.log(`Approved ${id}: restored to its original scope.`);
-      } else {
-        await api.quarantineReject(ctx, id);
-        console.log(`Rejected ${id}: stays quarantined.`);
-      }
-    } catch (err) {
-      printError(`Could not ${sub} ${id}: ${errorMessage(err)}`);
-      process.exit(1);
-    }
+    await decideQuarantined(ctx, sub, (args[1] ?? '').trim());
     return;
   }
 
@@ -507,12 +487,34 @@ export async function cmdQuarantine(
     console.log(status === 'all' ? 'No quarantined memories.' : 'No pending quarantined memories.');
     return;
   }
+  printQuarantineRows(rows);
+}
 
+async function decideQuarantined(ctx: api.Context, sub: 'approve' | 'reject', id: string): Promise<void> {
+  if (!id) {
+    printError(`Usage: hippo quarantine ${sub} <id>`);
+    process.exit(1);
+  }
+  try {
+    if (sub === 'approve') {
+      await api.quarantineApprove(ctx, id);
+      console.log(`Approved ${id}: restored to its original scope.`);
+    } else {
+      await api.quarantineReject(ctx, id);
+      console.log(`Rejected ${id}: stays quarantined.`);
+    }
+  } catch (err) {
+    printError(`Could not ${sub} ${id}: ${errorMessage(err)}`);
+    process.exit(1);
+  }
+}
+
+function printQuarantineRows(rows: Awaited<ReturnType<typeof api.quarantineList>>): void {
   console.log(`${rows.length} quarantined memor${rows.length === 1 ? 'y' : 'ies'} (newest first):\n`);
   for (const row of rows) {
     console.log(`--- ${row.id} [${row.status}]`);
     console.log(`    ${row.contentPreview}`);
-    console.log(`    ${row.reason}, original scope ${row.originalScope ?? '(none)'}, quarantined ${row.quarantinedAt.slice(0, 10)}`);
+    console.log(`    ${row.reason}, original scope ${row.originalScope ?? '(none)'}, quarantined ${row.quarantinedAt.slice(0, DATE_PREFIX_CHARS)}`);
     console.log('');
   }
   console.log('Approve: hippo quarantine approve <id>   Reject: hippo quarantine reject <id>');

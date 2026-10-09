@@ -11,7 +11,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { countCreatedSinceLastSleep } from '../src/store/index-and-stats.js';
 import { consolidate } from '../src/consolidate/sleep.js';
-import { remember, type HippoDbContext } from '../src/api.js';
+import { remember, type HippoDbContext } from '../src/api/index.js';
 
 const DAY = 86_400_000;
 const roots: string[] = [];

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { extractInvalidationTarget, invalidateMatching } from '../src/invalidation.js';
+import { extractInvalidationTarget, invalidateMatching } from '../src/learn/invalidation.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';

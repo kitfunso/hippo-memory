@@ -1,9 +1,9 @@
 // Public option and handle types for serve(), plus the /v1 route shape.
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { Context } from '../api.js';
-import type { JsonValue } from '../json.js';
-import type { RateLimiter } from '../rate-limit.js';
-import type { HippoStore, StoreGroup } from '../store-port.js';
+import type { Context } from '../api/index.js';
+import type { JsonValue } from '../util/json.js';
+import type { RateLimiter } from './rate-limit.js';
+import type { HippoStore, StoreGroup } from '../store/index.js';
 
 export interface ServerHandle {
   port: number;
@@ -51,7 +51,7 @@ export interface ServeOpts {
   authResolverTimeoutMs?: number;
   port?: number;
   host?: string;
-  /** Stop and exit on SIGINT/SIGTERM, and drain then exit 1 on an uncaught exception or unhandled rejection. Only `hippo serve` owns the process, so only it sets this. */
+  /** Stop and exit on SIGINT/SIGTERM, and drain then exit 1 on an uncaught exception or unhandled rejection. A stop still running 10 s past `shutdownDrainMs` ends the process with a failure exit. Only `hippo serve` owns the process, so only it sets this. */
   handleSignals?: boolean;
   /** How long stop() lets in-flight requests finish before closing their sockets; defaults to 5000 ms. */
   shutdownDrainMs?: number;

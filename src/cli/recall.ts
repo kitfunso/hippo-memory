@@ -1,63 +1,41 @@
 // The `hippo recall` verb; main() loads it lazily from the command table.
 
-import { envHippoSessionId } from '../env.js';
-import { confidenceFacets, Layer } from '../memory.js';
+import { envHippoSessionId } from '../util/env.js';
+import { confidenceFacets, Layer } from '../core/memory.js';
 import { TaskSnapshot, SessionEvent } from '../store/rows.js';
 import { isInitialized } from '../store/open.js';
 import { loadIndex } from '../store/index-and-stats.js';
 import { loadActiveTaskSnapshot, listSessionEvents } from '../store/sessions.js';
 import { loadLatestHandoff } from '../store/handoffs.js';
-import type { SessionHandoff } from '../handoff.js';
-import { passesScopeFilterForRecall } from '../recall-scope.js';
+import type { SessionHandoff } from '../core/handoff.js';
+import { passesScopeFilterForRecall } from '../store/recall-scope.js';
 import { fitBudget } from '../search/finalize.js';
 import { explainMatch } from '../search/explain.js';
 import { DEFAULT_RECALL_BUDGET, type SearchResult } from '../core/search-types.js';
-import { loadConfig } from '../config.js';
-import { estimateTokens } from '../token-ledger.js';
-import { dropHeldCopies } from '../same-text.js';
-import { isGlobalStoreRoot } from '../project-identity.js';
-import { detectScope } from '../scope.js';
-import { getGlobalRoot } from '../shared.js';
-import * as api from '../api.js';
+import { loadConfig } from '../core/config.js';
+import { estimateTokens } from '../util/token-text.js';
+import { dropHeldCopies } from '../util/same-text.js';
+import { isGlobalStoreRoot } from '../core/project-identity.js';
+import { detectScope } from '../sharing/scope.js';
+import { getGlobalRoot } from '../sharing/global-store.js';
+import * as api from '../api/index.js';
 import type { PlanningFallacyOutput } from '../predictions/planning-fallacy.js';
-import { detectAnchoring, hashQueryText, biasHintEnabled, snapshotRing } from '../recall-history.js';
-import { noteRecall, resetSessionRings, sessionRing, shownRecallRows } from '../api/recall-record.js';
-import { detectAvailabilityBias } from '../availability.js';
-import { resolveTenantId } from '../tenant.js';
-import { MAX_HOPS, DEFAULT_MAX_NEIGHBORS } from '../graph-recall.js';
+import { detectAnchoring, hashQueryText, biasHintEnabled, snapshotRing } from '../api/recall-history.js';
+import { noteRecall, sessionRing, shownRecallRows } from '../api/recall-record.js';
+import { detectAvailabilityBias } from '../api/availability.js';
+import { resolveTenantId } from '../store/tenant.js';
+import { MAX_HOPS, DEFAULT_MAX_NEIGHBORS } from '../graph/recall.js';
 import { getReranker } from '../rerankers/index.js';
 import type { RerankerFn } from '../rerankers/types.js';
-import type { RankRecallResult, RankStage, RecallGraphHops, RecallGraphStream, RecallReranker } from '../recall-pipeline.js';
+import type { RankRecallResult, RankStage, RecallGraphHops, RecallGraphStream, RecallReranker } from '../api/recall-pipeline.js';
 import { JEV_DEFAULT_TOP_K } from '../rerankers/jev.js';
 import { isClefModel } from '../rerankers/clef.js';
-import { handoffText, printedTokens, sessionTrailText, settleTokens, snapshotText } from '../context-render.js';
+import { handoffText, printedTokens, sessionTrailText, settleTokens, snapshotText } from '../api/context-render.js';
 import { printError } from './output.js';
-import {
-  parseLimitFlag,
-  parseBudgetFlag,
-  requireInit,
-  recallEntryText,
-  recallHeading,
-  type CliFlags,
-  type CommandContext,
-  parseAsOfFlag,
-  engineFlags,
-  printActiveTaskSnapshot,
-  printSessionEvents,
-  printHandoff,
-  hostSessionId,
-  captureConsole,
-  hookStoreRoot,
-  boolFlag,
-  flagIsTrue,
-} from './shared.js';
-
-// Per-process rings: a single-shot `hippo recall` starts empty, so anchoring only accumulates in long-lived
-// hosts (in-process loops, `hippo serve`, the MCP server).
-/** Test-only: reset the CLI recall rings. Call from beforeEach. */
-export function __resetSessionRecallHistoryCli(): void {
-  resetSessionRings('cli');
-}
+import { parseLimitFlag, parseBudgetFlag, type CliFlags, type CommandContext, parseAsOfFlag, engineFlags, boolFlag, flagIsTrue } from './flag-values.js';
+import { requireInit } from './shared.js';
+import { recallEntryText, recallHeading, printActiveTaskSnapshot, printSessionEvents, printHandoff, captureConsole } from './print.js';
+import { hostSessionId, hookStoreRoot } from './hook-runtime.js';
 
 // JSON.stringify keeps quotes or parens in the matched phrase from blurring the line.
 function planningLine(p: PlanningFallacyOutput): string | null {
@@ -353,7 +331,7 @@ function recallHinter(query: string, o: RecallOptions, rank: RankedRecall['rank'
     const availability = availabilityPool
       ? detectAvailabilityBias({ topK: list.map((r) => ({ id: r.entry.id, created: r.entry.created })), pool: availabilityPool })
       : null;
-    const summary = api.buildSuppressionSummary({
+    const summary: api.RecallSuppressionSummary = {
       // The published total includes graph-surfaced rows, so total == preRank + byBudget + returned holds for callers.
       totalCandidates: rank.totalCandidates + rank.graphAdded,
       droppedPreRank: rank.droppedPreRank + held,
@@ -361,7 +339,7 @@ function recallHinter(query: string, o: RecallOptions, rank: RankedRecall['rank'
       summarySubstitutionsAdded: 0,
       freshTailAdded: 0,
       suppressedByInterference: anchoring?.reason === 'memory_dominance' ? 1 : 0, // a query_repeat is a re-ask, not competition
-    });
+    };
     return { anchoring, availability, summary };
   };
   return { anchorRing, hintsFor };

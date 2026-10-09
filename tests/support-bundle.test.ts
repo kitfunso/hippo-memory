@@ -10,9 +10,9 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { buildSupportBundle } from '../src/support-bundle.js';
-import { openHippoDb, openHippoDbReadOnly, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, setMeta } from '../src/db.js';
-import type { JsonObject } from '../src/working-memory.js';
-import type { JsonValue } from '../src/json.js';
+import { openHippoDb, openHippoDbReadOnly, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, setMeta } from '../src/db/index.js';
+import type { JsonObject } from '../src/store/working-memory.js';
+import type { JsonValue } from '../src/util/json.js';
 
 const HIPPO_JS = resolve(__dirname, '..', 'bin', 'hippo.js');
 const dirs: string[] = [];
@@ -350,6 +350,19 @@ describe('buildSupportBundle', () => {
     ));
     expect(bare.stores).toHaveLength(1);
     expect(bare.stores[0].error).toMatch(/no hippo\.db here/);
+  });
+
+  it('a hippo.db that is not a database is one error entry with the open error', () => {
+    const home = tmp('hippo-bundle-notdb-home-');
+    const cwd = join(home, 'proj');
+    mkdirSync(join(cwd, '.hippo'), { recursive: true });
+    writeFileSync(join(cwd, '.hippo', 'hippo.db'), 'this file is not a database. '.repeat(400));
+    process.env.HIPPO_HOME = join(home, 'unused-global');
+
+    const parsed = JSON.parse(JSON.stringify(
+      buildSupportBundle({ cwd, home, version: 'test', includeLogs: false, now: new Date() }),
+    ));
+    expect(parsed.stores).toEqual([{ kind: 'project', path: expect.stringMatching(/\.hippo$/), error: 'file is not a database' }]);
   });
 });
 

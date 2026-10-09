@@ -11,10 +11,10 @@
   "src/consolidate/sleep.ts": 1,
   "src/consolidate/traces.ts": 1,
   "src/db/backup.ts": 1,
-  "src/local-embedding.ts": 2,
-  "src/raw-archive.ts": 1,
-  "src/reject-flow.ts": 2,
+  "src/store/embeddings/local.ts": 2,
+  "src/store/raw-archive.ts": 1,
+  "src/trust/reject-flow.ts": 2,
   "src/server/auth.ts": 2,
   "src/store/audit-event.ts": 1,
-  "src/summary-dirty.ts": 1
+  "src/store/summary-dirty.ts": 1
 }

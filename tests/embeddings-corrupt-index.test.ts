@@ -5,8 +5,9 @@ import * as os from 'os';
 import * as path from 'path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { embedMemory, embedAll, loadEmbeddingIndex } from '../src/embeddings.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { embedMemory, embedAll } from '../src/store/embeddings/index.js';
+import { loadEmbeddingIndex } from '../src/store/vector-index.js';
 
 const KEY_ENV = 'OPENAI_API_KEY';
 let root: string;

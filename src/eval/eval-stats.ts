@@ -12,6 +12,10 @@
  * result can be reproduced exactly.
  */
 
+const DEFAULT_ITERATIONS = 5000;
+const DEFAULT_TWO_LEVEL_ITERATIONS = 10_000;
+const DEFAULT_ALPHA = 0.05;
+
 /** Token usage for one model call or one whole task, split by how it is billed. */
 export interface Usage {
   /** Input tokens billed at the base input price (not read from or written to a cache). */
@@ -134,8 +138,8 @@ function mean(xs: number[]): number {
  * calling a difference real.
  */
 export function pairedBootstrap(diffs: number[], opts: BootstrapOpts = {}): Estimate {
-  const iterations = opts.iterations ?? 5000;
-  const alpha = opts.alpha ?? 0.05;
+  const iterations = opts.iterations ?? DEFAULT_ITERATIONS;
+  const alpha = opts.alpha ?? DEFAULT_ALPHA;
   if (diffs.length === 0) return { estimate: 0, low: 0, high: 0, iterations: 0 };
   const rand = seededRandom(opts.seed ?? 1);
   const n = diffs.length;
@@ -157,8 +161,8 @@ export function clusteredPairedBootstrap(
   diffsByCluster: ReadonlyMap<string, number[]>,
   opts: BootstrapOpts = {},
 ): Estimate {
-  const iterations = opts.iterations ?? 5000;
-  const alpha = opts.alpha ?? 0.05;
+  const iterations = opts.iterations ?? DEFAULT_ITERATIONS;
+  const alpha = opts.alpha ?? DEFAULT_ALPHA;
   const clusters = [...diffsByCluster.values()].filter((c) => c.length > 0);
   const all = clusters.flat();
   if (all.length === 0) return { estimate: 0, low: 0, high: 0, iterations: 0 };
@@ -217,8 +221,8 @@ export function costPerResolvedDelta(
   if (control.length !== treatment.length) {
     throw new Error('control and treatment must list the same tasks in the same order');
   }
-  const iterations = opts.iterations ?? 5000;
-  const alpha = opts.alpha ?? 0.05;
+  const iterations = opts.iterations ?? DEFAULT_ITERATIONS;
+  const alpha = opts.alpha ?? DEFAULT_ALPHA;
   const c = costPerResolved(control);
   const t = costPerResolved(treatment);
   const rand = seededRandom(opts.seed ?? 1);
@@ -335,7 +339,7 @@ export function twoLevelBootstrap<T>(
   statistic: (units: readonly T[]) => number,
   opts: TwoLevelOpts = {},
 ): TestedEstimate {
-  const requested = opts.iterations ?? 10_000;
+  const requested = opts.iterations ?? DEFAULT_TWO_LEVEL_ITERATIONS;
   if (!Number.isInteger(requested) || requested <= 0) {
     throw new RangeError(`iterations must be a positive integer, got ${requested}`);
   }
@@ -352,7 +356,7 @@ export function twoLevelBootstrap<T>(
   if (samples.length === 0) return notANumber(nullValue, dropped);
   const estimate = statistic(kept.flatMap((r) => r.flat()));
   const p = kept.length < 2 ? Number.NaN : twoSidedP(samples, nullValue);
-  const interval = percentileInterval(samples, opts.alpha ?? 0.05);
+  const interval = percentileInterval(samples, opts.alpha ?? DEFAULT_ALPHA);
   return { estimate, ...interval, p, iterations: samples.length, dropped, nullValue };
 }
 
@@ -402,7 +406,7 @@ export function verdict(e: TestedEstimate, adjustedP: number, spec: VerdictSpec)
   if ([adjustedP, e.estimate, e.low, e.high].some(Number.isNaN)) return inconclusive;
   const nullValue = e.nullValue;
   const lowerIsHelpful = spec.helpful === 'lower';
-  if (adjustedP < (spec.alpha ?? 0.05)) {
+  if (adjustedP < (spec.alpha ?? DEFAULT_ALPHA)) {
     const helpfulSide = lowerIsHelpful ? e.estimate < nullValue : e.estimate > nullValue;
     const harmfulSide = lowerIsHelpful ? e.estimate > nullValue : e.estimate < nullValue;
     if (harmfulSide) return { verdict: 'loss', reachesMinimum: false };

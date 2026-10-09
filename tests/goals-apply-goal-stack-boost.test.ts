@@ -14,21 +14,23 @@ import type { RerankStep } from '../src/core/search-types.js';
 import { createMemory as createDefaultMemory } from './_helpers/default-half-life-memory.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { initStore } from '../src/store/open.js';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
-import { computeGoalStackBoost, pushGoal, writeGoalRecallLog, type GoalStackBoostOpts } from '../src/goals.js';
-import { remember } from '../src/api.js';
-import { Layer, type MemoryEntry } from '../src/memory.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
+import { pushGoal, writeGoalRecallLog } from '../src/store/goals.js';
+import type { GoalStackBoostOpts } from '../src/search/goal-boost.js';
+import { sessionGoalBoost } from './_helpers/session-goal-boost.js';
+import { remember } from '../src/api/index.js';
+import { Layer, type MemoryEntry } from '../src/core/memory.js';
 
 interface ScoredRow { entry: MemoryEntry; score: number; }
 
 /** Boosts, then writes the log rows the boost earned on the same handle. */
-function boostAndLog(db: DatabaseSyncLike, rows: ScoredRow[], opts: GoalStackBoostOpts): ScoredRow[] {
-  const boost = computeGoalStackBoost(db, rows, opts);
+function boostAndLog(root: string, db: DatabaseSyncLike, rows: ScoredRow[], opts: GoalStackBoostOpts): ScoredRow[] {
+  const boost = sessionGoalBoost(root, db, rows, opts);
   writeGoalRecallLog(db, boost.log);
   return boost.results;
 }
 
-describe('computeGoalStackBoost plus writeGoalRecallLog', () => {
+describe('the session goal boost plus writeGoalRecallLog', () => {
   let hippoRoot: string;
   const tenantId = 'default';
   const sessionId = 'sess-1.7.4';
@@ -89,7 +91,7 @@ describe('computeGoalStackBoost plus writeGoalRecallLog', () => {
     const rows = [makeRow('m1', ['fix-auth'], 0.5), makeRow('m2', ['ui'], 0.6)];
     const db = openHippoDb(hippoRoot);
     try {
-      const out = boostAndLog(db, rows, { sessionId, tenantId, limit: 10 });
+      const out = boostAndLog(hippoRoot, db, rows, { sessionId, tenantId, limit: 10 });
       // Boosted (m1: 0.5 * 2.0x = 1.0) ranks above unboosted (m2: 0.6).
       expect(out[0]?.entry.id).toBe('m1');
     } finally {
@@ -107,8 +109,8 @@ describe('computeGoalStackBoost plus writeGoalRecallLog', () => {
     const rows = [makeRow(m.id, ['fix-auth'], 0.5)];
     const db = openHippoDb(hippoRoot);
     try {
-      boostAndLog(db, rows, { sessionId, tenantId, limit: 10 });
-      boostAndLog(db, rows, { sessionId, tenantId, limit: 10 });
+      boostAndLog(hippoRoot, db, rows, { sessionId, tenantId, limit: 10 });
+      boostAndLog(hippoRoot, db, rows, { sessionId, tenantId, limit: 10 });
       // SAFETY: `SELECT COUNT(*) AS c` always returns exactly one row shaped { c: number }.
       const count = (db.prepare(
         `SELECT COUNT(*) AS c FROM goal_recall_log WHERE goal_id = ? AND memory_id = ?`,
@@ -125,7 +127,7 @@ describe('computeGoalStackBoost plus writeGoalRecallLog', () => {
     const rows = [makeRow('m-global', ['fix-auth'], 0.5)];
     const db = openHippoDb(hippoRoot);
     try {
-      boostAndLog(db, rows, { sessionId, tenantId, limit: 10 });
+      boostAndLog(hippoRoot, db, rows, { sessionId, tenantId, limit: 10 });
       // SAFETY: `SELECT COUNT(*) AS c` always returns exactly one row shaped { c: number }.
       const count = (db.prepare(
         `SELECT COUNT(*) AS c FROM goal_recall_log WHERE memory_id = 'm-global'`,
@@ -142,11 +144,11 @@ describe('computeGoalStackBoost plus writeGoalRecallLog', () => {
     const rows = [makeRow('m2', ['ui'], 0.6), makeRow('m1', ['fix-auth'], 0.5)];
     const db = openHippoDb(hippoRoot);
     try {
-      const out = boostAndLog(db, rows, { sessionId, tenantId: 'B', limit: 10 });
+      const out = boostAndLog(hippoRoot, db, rows, { sessionId, tenantId: 'B', limit: 10 });
       // No active goals in tenant B -> no boost, no reorder -> m2 stays first.
       expect(out[0]?.entry.id).toBe('m2');
       // Sanity: m1 would have ranked first under tenant A (0.5 * 2.0x = 1.0 > 0.6).
-      const outA = boostAndLog(db, rows, { sessionId, tenantId: 'A', limit: 10 });
+      const outA = boostAndLog(hippoRoot, db, rows, { sessionId, tenantId: 'A', limit: 10 });
       expect(outA[0]?.entry.id).toBe('m1');
     } finally {
       closeHippoDb(db);
@@ -154,7 +156,7 @@ describe('computeGoalStackBoost plus writeGoalRecallLog', () => {
   });
 });
 
-describe('computeGoalStackBoost policy branches', () => {
+describe('the session goal boost policy branches', () => {
   let root: string;
   beforeEach(() => { root = makeRoot('goal-policy-branches'); });
   afterEach(() => { fs.rmSync(root, { recursive: true, force: true }); });
@@ -186,7 +188,7 @@ describe('computeGoalStackBoost policy branches', () => {
     const trace = new Map<string, RerankStep>();
     const db = openHippoDb(root);
     try {
-      const a = computeGoalStackBoost(db, rows, { sessionId, tenantId, limit: 4, trace });
+      const a = sessionGoalBoost(root, db, rows, { sessionId, tenantId, limit: 4, trace });
       expect(a.results.map((r) => [r.entry.content, Number(r.score.toFixed(6))])).toMatchInlineSnapshot(`
         [
           [
@@ -272,11 +274,11 @@ describe('computeGoalStackBoost policy branches', () => {
         ]
       `);
 
-      const b = computeGoalStackBoost(db, [{ entry: stored('hyb row', ['g-hyb']), score: 1 }], { sessionId: 's-b', tenantId, limit: 5 });
+      const b = sessionGoalBoost(root, db, [{ entry: stored('hyb row', ['g-hyb']), score: 1 }], { sessionId: 's-b', tenantId, limit: 5 });
       expect(b.results[0]!.score).toBeCloseTo(2.6, 10);
       expect(b.log).toHaveLength(1);
 
-      const none = computeGoalStackBoost(db, rows, { sessionId: 's-none', tenantId, limit: 5 });
+      const none = sessionGoalBoost(root, db, rows, { sessionId: 's-none', tenantId, limit: 5 });
       expect(none.results).toBe(rows);
       expect(none.log).toEqual([]);
     } finally {

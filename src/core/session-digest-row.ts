@@ -1,4 +1,4 @@
-import type { MemoryEntry } from '../memory.js';
+import type { MemoryEntry } from './memory.js';
 
 export const SESSION_DIGEST_TAG = 'session-digest';
 

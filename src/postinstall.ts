@@ -1,10 +1,10 @@
-import { envSkipPostinstall } from './env.js';
+import { envSkipPostinstall } from './util/env.js';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { detectRealCodexPath, isCodexWrapperInstalled, repairCodexWrapperIfInstalled } from './hooks/codex-wrapper.js';
 import { claudeConfigDir } from './hooks/shared.js';
-import { errorMessage, log } from './log.js';
+import { errorMessage, log } from './util/log.js';
 
 function main(): void {
   if (envSkipPostinstall()) return;

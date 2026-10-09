@@ -1,7 +1,7 @@
 // The GitHub connector's tables: event log, dead-letter queue, tenant routing and backfill cursors.
 
-import { withWriteScope, type DatabaseSyncLike } from '../../db.js';
-import { archiveRawMemory } from '../../raw-archive.js';
+import { withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
+import { archiveRawMemory } from '../raw-archive.js';
 import { onHandle } from '../open.js';
 
 /** One github_event_log row to write; `memoryId` is null for an event that produced no memory. */
@@ -37,10 +37,6 @@ export function logEventAt(db: DatabaseSyncLike, entry: GithubEventLogEntry): bo
 export function seenEvent(hippoRoot: string, idempotencyKey: string): { memoryId: string | null } | null {
   return onHandle(hippoRoot, (db) =>
     eventSeenAt(db, idempotencyKey) ? { memoryId: eventMemoryAt(db, idempotencyKey) } : null);
-}
-
-export function eventMemory(hippoRoot: string, idempotencyKey: string): string | null {
-  return onHandle(hippoRoot, (db) => eventMemoryAt(db, idempotencyKey));
 }
 
 export function logEvent(hippoRoot: string, entry: GithubEventLogEntry): void {

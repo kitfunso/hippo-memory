@@ -14,28 +14,29 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { getExistingEntryMirrorPaths } from '../src/store/mirrors.js';
+import { entryMirrorFiles } from './_helpers/entry-mirror-files.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { MEMORY_BACKED_TABLES } from '../src/store/delete-and-batch.js';
 import { loadStats } from '../src/store/index-and-stats.js';
-import { saveDecision } from '../src/decisions.js';
-import { saveIncident } from '../src/incidents.js';
-import { saveProcess } from '../src/processes.js';
-import { savePolicy } from '../src/policies.js';
-import { saveSkill } from '../src/skills.js';
-import { saveProjectBrief } from '../src/project-briefs.js';
-import { saveCustomerNote } from '../src/customer-notes.js';
+import { saveDecision } from '../src/objects/decisions.js';
+import { saveIncident } from '../src/objects/incidents.js';
+import { saveProcess } from '../src/objects/processes.js';
+import { savePolicy } from '../src/objects/policies.js';
+import { saveSkill } from '../src/objects/skills.js';
+import { saveProjectBrief } from '../src/objects/project-briefs.js';
+import { saveCustomerNote } from '../src/objects/customer-notes.js';
 import { savePrediction } from '../src/store/predictions.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { queryAuditEvents, type AuditEvent, type AuditOp } from '../src/store/audit.js';
 import { consolidate } from '../src/consolidate/sleep.js';
-import { insertDormantRow } from '../src/dormant.js';
-import { loadConfig } from '../src/config.js';
-import { createMemory, Layer, calculateStrength, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/memory.js';
-import { RejectedValueError, rejectionDigest, insertRejectedValue } from '../src/rejection.js';
-import * as api from '../src/api.js';
-import { WRITE_BUDGET } from '../src/write-budget.js';
+import { insertDormantRow } from '../src/store/dormant.js';
+import { loadConfig } from '../src/core/config.js';
+import { createMemory, Layer, calculateStrength, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';
+import { RejectedValueError, rejectionDigest, insertRejectedValue } from '../src/store/rejection.js';
+import * as api from '../src/api/index.js';
+import { WRITE_BUDGET } from '../src/util/write-budget.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DORMANT_ON = JSON.stringify({ replay: { count: 0 }, dormant: { enabled: true } });
@@ -56,6 +57,15 @@ function aged(entry: MemoryEntry, days: number): MemoryEntry {
 
 function ctxFor(home: string, tenantId = 'default'): api.Context {
   return { hippoRoot: home, tenantId, actor: { subject: 'test', role: 'admin' } };
+}
+
+function auditRows(home: string, op: AuditOp): AuditEvent[] {
+  const db = openHippoDb(home);
+  try {
+    return queryAuditEvents(db, { tenantId: 'default', op });
+  } finally {
+    closeHippoDb(db);
+  }
 }
 
 function countDormantRows(home: string): number {
@@ -290,7 +300,7 @@ describe('with dormant memories enabled', () => {
       expect(loadAllEntries(home).map((e) => e.id)).toEqual([fresh.id]);
       // The markdown mirror goes too, so a bootstrap of an empty table
       // cannot re-import the row as active.
-      expect(getExistingEntryMirrorPaths(home, faded.id)).toEqual([]);
+      expect(entryMirrorFiles(home, faded.id)).toEqual([]);
 
       const dormant = api.listDormant(ctxFor(home));
       expect(dormant).toHaveLength(1);
@@ -430,6 +440,7 @@ describe('listing, restoring and forgetting dormant memories', () => {
       const restored = api.restoreDormant(ctxFor(home), ids[0]);
 
       expect(restored.id).toBe(ids[0]);
+      expect(entryMirrorFiles(home, ids[0])).toHaveLength(1);
       expect(Date.parse(restored.last_retrieved)).toBeGreaterThanOrEqual(before - 1000);
       expect(calculateStrength(restored, new Date())).toBeGreaterThan(0.9);
       expect(api.listDormant(ctxFor(home))).toEqual([]);
@@ -515,6 +526,7 @@ describe('listing, restoring and forgetting dormant memories', () => {
       expect(() => api.restoreDormant(ctxFor(home), ids[0])).toThrow(RejectedValueError);
       expect(api.listDormant(ctxFor(home)).map((m) => m.id)).toEqual([ids[0]]);
       expect(loadAllEntries(home).map((e) => e.id)).not.toContain(ids[0]);
+      expect(auditRows(home, 'reject_refusal').map((e) => [e.targetId, e.actor])).toEqual([[ids[0], 'test']]);
     } finally {
       restore();
     }
@@ -555,6 +567,7 @@ describe('listing, restoring and forgetting dormant memories', () => {
       api.forgetDormant(ctxFor(home), ids[0]);
       expect(api.listDormant(ctxFor(home))).toEqual([]);
       expect(() => api.restoreDormant(ctxFor(home), ids[0])).toThrow(/dormant memory not found/);
+      expect(auditRows(home, 'forget').map((e) => [e.targetId, e.actor, e.metadata])).toEqual([[ids[0], 'test', { dormant: true }]]);
       // Counted like forget and archiveRaw (review finding on PR #227).
       expect(Number(loadStats(home).total_forgotten)).toBe(1);
     } finally {
@@ -632,7 +645,7 @@ describe('memories that back a first-class object', () => {
       // SAFETY: each row is the single aliased TEXT column in the SELECT.
       const rows = db.prepare(`SELECT m.name AS name FROM sqlite_master m JOIN pragma_foreign_key_list(m.name) f
         WHERE m.type = 'table' AND f."table" = 'memories' AND f.on_delete = 'SET NULL'`).all() as { name: string }[];
-      // Graph rows drop their memory pointer by design (src/db.ts, the entities and relations schema).
+      // Graph rows drop their memory pointer by design (src/db/index.ts, the entities and relations schema).
       const objectTables = rows.map((r) => r.name).filter((t) => t !== 'entities' && t !== 'relations');
       expect([...MEMORY_BACKED_TABLES].sort()).toEqual(objectTables.sort());
     } finally {

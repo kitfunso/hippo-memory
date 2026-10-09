@@ -116,7 +116,7 @@ describe('session_handoffs tenant isolation', () => {
       artifacts: [],
     });
 
-    const { openHippoDb, closeHippoDb } = await import('../src/db.js');
+    const { openHippoDb, closeHippoDb } = await import('../src/db/index.js');
     const db = openHippoDb(tmpDir);
     let id: number;
     try {

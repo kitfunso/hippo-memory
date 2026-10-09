@@ -2,12 +2,12 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { describe, it, expect } from 'vitest';
-import { normaliseHookPayload } from '../src/stdin.js';
-import { hookPayloadSessionId } from '../src/token-ledger.js';
-import { createDeliveryRecorder, type DeliveryEventInput, type DeliveryRuntime } from '../src/delivery-recorder.js';
-import { readClaudeCodePreCompact } from '../src/capture-contract.js';
+import { normaliseHookPayload } from '../src/cli/stdin.js';
+import { hookPayloadSessionId } from '../src/store/token-ledger.js';
+import { createDeliveryRecorder, type DeliveryEventInput, type DeliveryRuntime } from '../src/store/delivery-recorder.js';
+import { readClaudeCodePreCompact } from '../src/core/capture-contract.js';
 import { lessonFromFailure, payloadString } from '../src/capture/failure-reading.js';
-import type { JsonValue } from '../src/json.js';
+import type { JsonValue } from '../src/util/json.js';
 import { claudeCodePayload, copilotPayload } from './_helpers/copilot-hooks.js';
 
 const CWD = 'C:\\Users\\user\\proj';

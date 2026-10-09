@@ -1,8 +1,8 @@
 // A store other than hippo.db for the KeyWrites group: it copies api_keys and audit_log out of hippo.db once, then keeps
 // both in memory and answers with what hippo-memory/server exports, so a conformance test shows that is all another store needs.
-import { closeHippoDb, openHippoDb } from '../../src/db.js';
-import { listAuditEventsAfter } from '../../src/audit.js';
-import { createApiKey, grantScope, listScopeGrants, revokeApiKey } from '../../src/auth.js';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
+import { listAuditEventsAfter } from '../../src/store/audit.js';
+import { createApiKey, grantScope, readApiKeyRecord, revokeApiKey } from '../../src/store/auth.js';
 import { auditHighIdAt } from '../../src/store/key-audit.js';
 import type {
   ApiKeyListRow, ApiKeyRecord, AppendAuditOpts, AuditEvent, HippoStore, KeyListQuery, KeyMint, KeyWrites, NewApiKey,
@@ -41,7 +41,7 @@ function copyRows(hippoRoot: string): CopiedRows {
     const rows = db.prepare(sql).all() as SqlKeyRow[];
     const keys = new Map(rows.map((r): [string, KeyRow] => [r.key_id, {
       id: r.id, keyId: r.key_id, keyHash: r.key_hash, tenantId: r.tenant_id, label: r.label, createdAt: r.created_at, revokedAt: r.revoked_at,
-      role: r.role, expiresAt: r.expires_at, ownerSubject: r.owner_subject, scopes: listScopeGrants(db, r.key_id),
+      role: r.role, expiresAt: r.expires_at, ownerSubject: r.owner_subject, scopes: (readApiKeyRecord(db, r.key_id)?.scopes ?? []),
     }]));
     return { keys, audit: listAuditEventsAfter(db, { afterId: 0, limit: 10_000 }), highId: auditHighIdAt(db) };
   } finally {

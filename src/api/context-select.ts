@@ -1,32 +1,31 @@
 // getContext's selection stages: the pinned-only branch, the strongest-first branch and the search branch.
 
-import { openHippoDb, closeHippoDb } from '../db.js';
 import { recallScopeFilter } from '../store/search-rows.js';
 import type { AmbientLoadResult } from '../store/candidates.js';
 import { heldIdLookup } from '../store/entry-reads.js';
-import { calculateStrength, type MemoryEntry } from '../memory.js';
-import { appendAuditEvent, auditQueryFields, type AppendAuditOpts } from '../audit.js';
-import type { ContextReads, HippoStore } from '../store-port.js';
-import { isWorthSurfacing } from '../memory-quality.js';
-import { rankBothStores } from '../shared.js';
-import { evalNow } from '../ablation.js';
+import { calculateStrength, type MemoryEntry } from '../core/memory.js';
+import { auditQueryFields, recordAuditEvent, type AppendAuditOpts } from '../store/audit.js';
+import type { ContextReads, HippoStore } from '../store/index.js';
+import { isWorthSurfacing } from '../core/memory-quality.js';
+import { rankBothStores } from '../sharing/search-both.js';
+import { evalNow } from '../core/ablation.js';
 import { hybridSearch } from '../search/hybrid.js';
 import { physicsSearch } from '../search/physics-search.js';
 import type { HybridVectorCandidates } from '../search/vector.js';
 import { DEFAULT_LOCAL_BUMP, type SearchResult } from '../core/search-types.js';
-import { compareScoredResults } from '../compare.js';
-import { scopeMatch } from '../scope.js';
+import { compareScoredResults } from '../core/compare.js';
+import { scopeMatch } from '../sharing/scope.js';
 import { scopeBoostFor } from '../search/boosts.js';
-import { type HippoConfig } from '../config.js';
-import type { ProjectRef } from '../project-identity.js';
+import { type HippoConfig } from '../core/config.js';
+import type { ProjectRef } from '../core/project-identity.js';
 import {
   promptTokens,
   contentTokens,
   gatePromptRecall,
   type PromptRecallMetric,
   type PromptRecallGate,
-} from '../prompt-recall.js';
-import type { DeliveryObserver } from '../delivery-recorder.js';
+} from '../core/prompt-recall.js';
+import type { DeliveryObserver } from '../store/delivery-recorder.js';
 import type { ContextCost, ContextOpts, ContextResultEntry } from './context-types.js';
 import type { Context } from './types.js';
 
@@ -474,20 +473,6 @@ async function auditContextRecall(ctx: Context, plan: ContextPlan, resultCount: 
     await plan.other.appendAuditEvents([row]);
     return;
   }
-  if (plan.hasLocal) {
-    const localDb = openHippoDb(ctx.hippoRoot);
-    try {
-      appendAuditEvent(localDb, row);
-    } finally {
-      closeHippoDb(localDb);
-    }
-  }
-  if (plan.hasGlobal && !plan.primaryIsGlobal) {
-    const globalDb = openHippoDb(plan.globalRoot);
-    try {
-      appendAuditEvent(globalDb, row);
-    } finally {
-      closeHippoDb(globalDb);
-    }
-  }
+  if (plan.hasLocal) recordAuditEvent(ctx.hippoRoot, row);
+  if (plan.hasGlobal && !plan.primaryIsGlobal) recordAuditEvent(plan.globalRoot, row);
 }

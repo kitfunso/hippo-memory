@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import { selectBStar } from '../benchmarks/sequential-learning/calibrate.mjs';
 
-import { mulberry32 } from '../benchmarks/sequential-learning/aggregate.mjs';
+import { mulberry32 } from '../scripts/lib/prng.mjs';
 
 describe('calibration B* selection', () => {
   it('picks the LARGEST budget where C2 late mean ∈ [0.04, 0.24] AND lower-CI > 0', () => {

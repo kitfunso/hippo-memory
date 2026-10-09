@@ -140,8 +140,12 @@ describe('the access line', () => {
     try {
       await send('/health');
       await send('/v1/memories?q=x');
-      await new Promise((ok) => setTimeout(ok, 100));
-      expect(accessLines(stderrSpy)).toEqual([]);
+      // Positive control: a warn that IS written at this level, through the same logger and stream, marks the point the access lines would have been captured by.
+      writeFileSync(join(home, 'config.json'), JSON.stringify({ pilot: { holdoutRateBp: -1 } }));
+      await send('/v1/context?q=anything', { 'x-request-id': 'req-marker-1' });
+      await vi.waitFor(() => expect(stderrSpy.mock.calls.some((c) => String(c[0]).includes('requestId=req-marker-1'))).toBe(true), { timeout: 5000 });
+      const markerAt = stderrSpy.mock.calls.findIndex((c) => String(c[0]).includes('requestId=req-marker-1'));
+      expect(accessLines({ mock: { calls: stderrSpy.mock.calls.slice(0, markerAt) } })).toEqual([]);
     } finally {
       stderrSpy.mockRestore();
     }
@@ -153,7 +157,7 @@ describe('a request still unanswered past the slow threshold', () => {
     let asked!: () => void;
     let release!: () => void;
     const held = new Promise<void>((ok) => { asked = ok; });
-    const gate = new Promise<void>((ok) => { release = ok; });
+    let gate = new Promise<void>((ok) => { release = ok; });
     const resolver: AuthResolver = async () => { asked(); await gate; return { tenantId: 'default', subject: 'slow-test', role: 'admin' }; };
     const slowHome = mkdtempSync(join(tmpdir(), 'hippo-request-slow-'));
     mkdirSync(join(slowHome, '.hippo'), { recursive: true });
@@ -173,10 +177,15 @@ describe('a request still unanswered past the slow threshold', () => {
       expect(res.headers.get('x-request-id')).toBe('req-slow-1');
 
       // A request answered inside the threshold never logs: its timer went with the reply.
-      const quick = await fetch(`${slow.url}/health`);
+      const quick = await fetch(`${slow.url}/health`, { headers: { 'x-request-id': 'req-quick-1' } });
       expect(quick.status).toBe(200);
-      await new Promise((ok) => setTimeout(ok, 120));
-      expect(warned()).toHaveLength(1);
+      // Positive control: a second held request warns later than the quick one's timer would have, so its warn proves the quick one stayed silent.
+      gate = new Promise<void>((ok) => { release = ok; });
+      const second = fetch(`${slow.url}/v1/memories?q=x`, { headers: { authorization: 'Bearer slow-idp-token', 'x-request-id': 'req-slow-2' } });
+      await vi.waitFor(() => expect(warned()).toHaveLength(2), { timeout: 5000 });
+      release();
+      expect((await second).status).toBe(200);
+      expect(warned().map((l) => /requestId=(\S+)/.exec(l)?.[1])).toEqual(['req-slow-1', 'req-slow-2']);
     } finally {
       stderrSpy.mockRestore();
       await slow.stop();

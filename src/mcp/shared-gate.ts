@@ -1,5 +1,5 @@
 // Which MCP tools run on a shared store, and which need the caller's project first.
-import { isSharedStore } from '../config.js';
+import { isSharedStore } from '../core/config.js';
 import type { McpContext } from './protocol.js';
 
 // A shared store holds many repos' rows, so a memory tool needs the caller's project and four tools never run.

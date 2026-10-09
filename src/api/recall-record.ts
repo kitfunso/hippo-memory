@@ -1,7 +1,7 @@
 // The recall session rings and the recall audit rows, in one place for the CLI, MCP and HTTP surfaces.
-import { isRecallBoostAblated } from '../ablation.js';
-import { auditQueryFields, type AppendAuditOpts, type AuditOp } from '../audit.js';
-import type { AvailabilityHint } from '../availability.js';
+import { isRecallBoostAblated } from '../core/ablation.js';
+import { auditQueryFields, type AppendAuditOpts, type AuditOp } from '../store/audit.js';
+import type { AvailabilityHint } from './availability.js';
 import {
   appendRecall,
   biasHintEnabled,
@@ -12,8 +12,8 @@ import {
   snapshotRing,
   type AnchoringHint,
   type RecallHistorySnapshot,
-} from '../recall-history.js';
-import type { RecallWrites } from '../store-port.js';
+} from './recall-history.js';
+import type { RecallWrites } from '../store/index.js';
 import type { Context } from './types.js';
 
 export type RecallSurface = 'cli' | 'mcp' | 'http';

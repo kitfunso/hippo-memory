@@ -1,10 +1,12 @@
 // What a PostToolUseFailure payload says, read with no store, so a hook with no store sends the same reading the local log keeps.
-import { redactSecretsStrict } from '../secret-detect.js';
-import { scrubForSharing } from '../share-scrub.js';
-import { blockHash } from '../token-ledger.js';
-import { truncateCodePointSafe } from '../transcript-tail.js';
-import { type JsonValue, isJsonObjectLiteral } from '../json.js';
-import type { CaptureErrorOutcome, RoutineRule } from '../failure-log.js';
+import { redactSecretsStrict } from '../util/secret-detect.js';
+import { scrubForSharing } from './share-scrub.js';
+import { blockHash } from '../util/token-text.js';
+import { truncateCodePointSafe } from '../util/transcript-tail.js';
+import { type JsonValue, isJsonObjectLiteral } from '../util/json.js';
+import type { CaptureErrorOutcome, RoutineRule } from '../store/failure-log.js';
+
+const COMMAND_HEAD_WORDS = 2;
 
 /** What {@link lessonFromFailure} read from a payload; `detail` is the finer failure-log key (untruncated, command head). */
 export type FailureReading =
@@ -74,7 +76,7 @@ export function lessonFromFailure(payload: JsonValue, scrub: (text: string) => s
   const error = redactSecretsStrict(p.error.replace(/\s+/g, ' ').trim());
   const text = truncateCodePointSafe(scrub(`${tool}: ${error}`), FAILURE_TEXT_MAX_CHARS);
   const command = isJsonObjectLiteral(p.tool_input) && isString(p.tool_input['command']) ? p.tool_input['command'].replace(LEADING_CD, '') : '';
-  const head = command.trim().split(/\s+/).slice(0, 2).join(' ');
+  const head = command.trim().split(/\s+/).slice(0, COMMAND_HEAD_WORDS).join(' ');
   const detail = `${tool}${head ? ` ${head}` : ''}: ${error}`;
   const routine = (rule: RoutineRule): FailureReading => ({ skip: 'skipped-routine', rule, text, detail });
   if (DECLINED.test(error)) return routine('declined');

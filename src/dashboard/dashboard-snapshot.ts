@@ -1,16 +1,11 @@
 // The dashboard's read model: one in-memory snapshot of a tenant's live memories, grouped by origin project.
 // Pure build functions plus one cache; the queries over it live in dashboard-queries.ts.
 
-import * as fs from 'fs';
-import { calculateStrength, confidenceFacets, netWrong, Layer as MemoryLayer, type MemoryEntry } from '../memory.js';
-import { isQuarantineScope } from '../quarantine.js';
+import { calculateStrength, facetsOf, netWrong, Layer as MemoryLayer, type ConfidenceInputs, type MemoryEntry, type StrengthInputs } from '../core/memory.js';
+import { isQuarantineScope } from '../trust/quarantine.js';
 import { listMemoryConflicts } from '../store/conflicts.js';
-import { loadAllEntries } from '../store/entry-reads.js';
+import { DashboardConnection, loadDashboardRows, type DashboardRow, type DashboardRows, type ExcludedCounts } from '../store/dashboard-reads.js';
 import type { MemoryConflict } from '../store/rows.js';
-import { closeHippoDb, getHippoDbPath, openHippoDbReadOnly, type DatabaseSyncLike } from '../db.js';
-import { storedVectorIds } from '../db/vector-store.js';
-import { pragmaDataVersion } from '../db/meta.js';
-import { tableExists } from '../db/tables.js';
 import type { Band, ChipCounts, Layer, Overview, ProjectKind, ProjectSummary, ScatterGrid, ScatterPoints } from './dashboard-types.js';
 import { DAY_MS } from '../util/time.js';
 
@@ -26,9 +21,9 @@ const CONFIDENCE_ORDER = ['verified', 'observed', 'inferred', 'stale'];
 const HEAD_CHARS = 240;
 
 /** An outside commit rebuilds the snapshot at most this often. */
-export const COALESCE_MS = 10_000;
+const COALESCE_MS = 10_000;
 /** Projected strengths track the clock, so the snapshot is rebuilt at least this often. */
-export const TTL_MS = 5 * 60_000;
+const TTL_MS = 5 * 60_000;
 
 /** The one predicate for "shown on the dashboard": not superseded, not archived, not quarantined. */
 export function isLiveMemory(entry: Pick<MemoryEntry, 'superseded_by' | 'kind' | 'scope'>): boolean {
@@ -79,12 +74,12 @@ function daysBetween(thenIso: string, nowMs: number): number {
 }
 
 /** Strength now and at +7d and +30d, band, age and the confidence split for one entry at `nowMs`. */
-export function memoryFacts(entry: MemoryEntry, nowMs: number): MemoryFacts {
+export function memoryFacts(entry: StrengthInputs & ConfidenceInputs & Pick<MemoryEntry, 'layer'>, nowMs: number): MemoryFacts {
   const now = new Date(nowMs);
   const strength = calculateStrength(entry, now);
   const strength7d = calculateStrength(entry, new Date(nowMs + 7 * DAY_MS));
   const strength30d = calculateStrength(entry, new Date(nowMs + 30 * DAY_MS));
-  const facets = confidenceFacets(entry, now);
+  const facets = facetsOf(entry, now);
   const band = entry.pinned ? BAND_PINNED : strength30d < 0.2 ? BAND_AT_RISK : strength >= 0.5 ? BAND_STRONG : BAND_FADING;
   return {
     strength,
@@ -194,7 +189,9 @@ export interface SnapshotInput {
   id: number;
   tenantId: string;
   nowMs: number;
-  entries: readonly MemoryEntry[];
+  entries: readonly DashboardRow[];
+  /** Rows counted out before `entries` was read; any entry here that is not live adds to them. */
+  excluded?: ExcludedCounts;
   openConflicts: readonly Pick<MemoryConflict, 'memory_a_id' | 'memory_b_id'>[];
   embeddedIds: ReadonlySet<string> | null;
 }
@@ -236,7 +233,7 @@ function newDraft(identity: { key: string; name: string; kind: ProjectKind }): P
   };
 }
 
-function toFact(entry: MemoryEntry, f: ReturnType<typeof memoryFacts>, project: number, embedded: boolean, createdMs: number): Fact {
+function toFact(entry: DashboardRow, f: ReturnType<typeof memoryFacts>, project: number, embedded: boolean, createdMs: number): Fact {
   const { head, truncated } = cutHead(entry.content);
   const tier = CONFIDENCE_ORDER.indexOf(f.confidence);
   return {
@@ -265,7 +262,7 @@ function toFact(entry: MemoryEntry, f: ReturnType<typeof memoryFacts>, project: 
   };
 }
 
-function tallyExcluded(entry: MemoryEntry, excluded: { superseded: number; archived: number; quarantined: number }): void {
+function tallyExcluded(entry: Pick<MemoryEntry, 'superseded_by' | 'kind' | 'scope'>, excluded: ExcludedCounts): void {
   if (isQuarantineScope(entry.scope)) excluded.quarantined++;
   else if (entry.superseded_by || entry.kind === 'superseded') excluded.superseded++;
   else if (entry.kind === 'archived') excluded.archived++;
@@ -291,7 +288,7 @@ function finishProject(d: ProjectDraft): ProjectAgg {
 /** Builds the snapshot from already-loaded rows; it touches no store, so tests can feed it directly. */
 export function buildSnapshot(input: SnapshotInput): Snapshot {
   const { entries, embeddedIds, nowMs } = input;
-  const excluded = { superseded: 0, archived: 0, quarantined: 0 };
+  const excluded: ExcludedCounts = { superseded: 0, archived: 0, quarantined: 0, ...input.excluded };
   const facts: Fact[] = [];
   const projectIndex = new Map<string, number>();
   const drafts: ProjectDraft[] = [];
@@ -364,12 +361,6 @@ interface CachedSnapshot {
   builtAtMs: number;
 }
 
-// No database means no vectors; a store not yet on schema v52 has no table to count, so coverage is unknown.
-function readEmbeddedIds(db: DatabaseSyncLike | null): ReadonlySet<string> | null {
-  if (db === null) return new Set();
-  return tableExists(db, 'memory_vectors') ? storedVectorIds(db) : null;
-}
-
 function cacheStillServes(hit: CachedSnapshot, want: { tenantId: string; dataVersion: number | null }, wallMs: number): boolean {
   const age = wallMs - hit.builtAtMs;
   return hit.snapshot.tenantId === want.tenantId
@@ -394,7 +385,7 @@ export interface SnapshotService {
 let highestIssuedId = 0;
 
 class SnapshotCacheService implements SnapshotService {
-  private db: DatabaseSyncLike | null = null;
+  private readonly connection: DashboardConnection;
   private cached: CachedSnapshot | null = null;
   // Wall clock, not `now`, so ids keep rising across server restarts and a client holding an old tab never sees a lower one.
   private lastId = Math.max(Date.now(), highestIssuedId);
@@ -404,24 +395,18 @@ class SnapshotCacheService implements SnapshotService {
     private readonly hippoRoot: string,
     private readonly now: () => number,
     private readonly cacheClock: () => number,
-  ) {}
-
-  private dataVersion(): number | null {
-    if (this.db === null) {
-      if (!fs.existsSync(getHippoDbPath(this.hippoRoot))) return null;
-      this.db = openHippoDbReadOnly(this.hippoRoot);
-    }
-    return pragmaDataVersion(this.db);
+  ) {
+    this.connection = new DashboardConnection(hippoRoot);
   }
 
   private build(tenantId: string, dv: number | null, nowMs: number): Snapshot {
-    const entries = dv === null ? [] : loadAllEntries(this.hippoRoot, tenantId);
+    const rows: DashboardRows | null = dv === null ? null : loadDashboardRows(this.hippoRoot, tenantId);
     const openConflicts = dv === null ? [] : listMemoryConflicts(this.hippoRoot, 'open', tenantId);
     this.lastId += 1;
     highestIssuedId = Math.max(highestIssuedId, this.lastId);
-    // After loadAllEntries, whose writable open has run any pending migration and legacy embeddings.json import.
-    this.lastEmbeddedIds = readEmbeddedIds(this.db);
-    return buildSnapshot({ id: this.lastId, tenantId, nowMs, entries, openConflicts, embeddedIds: this.lastEmbeddedIds });
+    // After loadDashboardRows, whose writable open has run any pending migration and legacy embeddings.json import.
+    this.lastEmbeddedIds = this.connection.embeddedIds();
+    return buildSnapshot({ id: this.lastId, tenantId, nowMs, entries: rows?.live ?? [], excluded: rows?.excluded, openConflicts, embeddedIds: this.lastEmbeddedIds });
   }
 
   get(tenantId: string, fresh = false): Snapshot {
@@ -429,7 +414,7 @@ class SnapshotCacheService implements SnapshotService {
     // A frozen eval clock (HIPPO_FAKE_NOW) would never age the cache, so reuse is timed on its own clock.
     const wallMs = this.cacheClock();
     // Read before the build, so a commit that lands during it shows on the next read.
-    const dv = this.dataVersion();
+    const dv = this.connection.dataVersion();
     const hit = this.cached;
     if (hit !== null && !fresh) {
       if (cacheStillServes(hit, { tenantId, dataVersion: dv }, wallMs)) return hit.snapshot;
@@ -449,13 +434,12 @@ class SnapshotCacheService implements SnapshotService {
 
   embeddedIds(): ReadonlySet<string> | null {
     if (this.lastEmbeddedIds !== undefined) return this.lastEmbeddedIds;
-    this.dataVersion();
-    return readEmbeddedIds(this.db);
+    this.connection.dataVersion();
+    return this.connection.embeddedIds();
   }
 
   close(): void {
-    if (this.db !== null) closeHippoDb(this.db);
-    this.db = null;
+    this.connection.close();
     this.cached = null;
     this.lastEmbeddedIds = undefined;
   }

@@ -7,16 +7,17 @@ import readline from 'node:readline';
 import { createHash } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { pathToFileURL } from 'node:url';
+import { mulberry32 } from './lib/prng.mjs';
 
 const DIST = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/(\w:)/, '$1')), '..', 'dist');
 const distImport = (f) => import(pathToFileURL(path.join(DIST, f)).href);
-const { textOverlap } = await distImport('tokenize.js');
-const { estimateTokens, blockHash, shouldSkipUnchanged } = await distImport('token-ledger.js');
-const { isWorthSurfacing } = await distImport('memory-quality.js');
-const { ambientSecretAdmit } = await distImport('api.js');
-const { resolveProjectIdentity, classifyOriginProject } = await distImport('project-identity.js');
-const { passesScopeFilterForRecall } = await distImport('recall-scope.js');
-const { contentTokens, promptTokens, gatePromptRecall, scoreOverlap } = await distImport('prompt-recall.js');
+const { textOverlap } = await distImport('util/tokenize.js');
+const [{ estimateTokens, blockHash }, { shouldSkipUnchanged }] = await Promise.all([distImport('util/token-text.js'), distImport('store/token-ledger.js')]);
+const { isWorthSurfacing } = await distImport('core/memory-quality.js');
+const { ambientSecretAdmit } = await distImport('api/index.js');
+const { resolveProjectIdentity, classifyOriginProject } = await distImport('core/project-identity.js');
+const { passesScopeFilterForRecall } = await distImport('store/recall-scope.js');
+const { contentTokens, promptTokens, gatePromptRecall, scoreOverlap } = await distImport('core/prompt-recall.js');
 
 const PIN_BUDGET = 1500;
 const REFRESH_TURNS = 10;
@@ -454,18 +455,6 @@ function setDiff(a, b) {
   const out = new Set();
   for (const x of a) if (!b.has(x)) out.add(x);
   return out;
-}
-
-// Same PRNG as scripts/z1-latency.mjs / scripts/lifecycle-stress/inject.mjs: Math.random is banned for reproducibility.
-function mulberry32(seed) {
-  let s = seed >>> 0;
-  return function () {
-    s = (s + 0x6d2b79f5) >>> 0;
-    let t = s;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
 }
 
 function seededShuffle(arr, seed) {

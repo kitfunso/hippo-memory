@@ -6,27 +6,31 @@ import { execFileSync } from 'node:child_process';
 import { makeRoot } from './_helpers/make-root.js';
 import { recordStatements, recordStatementsAsync, countMatching, STORE_OPEN } from './_helpers/count-statements.js';
 import { openStore } from '../src/store/open.js';
-import { writeEntryOn, strengthenRetrieved } from '../src/store/entry-writes.js';
+import { writeEntry, strengthenRetrieved } from '../src/store/entry-writes.js';
 import { MEMORY_SELECT_COLUMNS } from '../src/store/rows.js';
-import { closeHippoDb } from '../src/db.js';
-import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/memory.js';
+import { closeHippoDb } from '../src/db/index.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';
 import { readEntry, loadAllEntries, heldIdLookup, loadEntriesByIds } from '../src/store/entry-reads.js';
 import { adminActor, type HippoDbContext } from '../src/api/types.js';
 import { learn, CLI_LEARN } from '../src/api/learn.js';
-import { cmdRemember } from '../src/cli/remember.js';
+import { handleRemember } from '../src/cli/remember.js';
 import { cmdCapture } from '../src/capture/command.js';
 import { outcome } from '../src/api/outcome.js';
 import { quarantineList } from '../src/api/quarantine.js';
 import { drillDown } from '../src/api/drill-down.js';
-import { recordQuarantine, quarantineScopeFor } from '../src/quarantine.js';
+import { quarantineScopeFor } from '../src/trust/quarantine.js';
+import { recordQuarantine } from '../src/store/quarantine.js';
 import { importEntries } from '../src/importers/core.js';
-import { invalidateMatching, detectChurnStale } from '../src/invalidation.js';
+import { importVault } from '../src/importers/vault.js';
+import { withRequestStoresSync } from '../src/db/request-stores.js';
+import { invalidateMatching, detectChurnStale } from '../src/learn/invalidation.js';
 import { replaceDetectedConflicts, resolveConflict, listMemoryConflicts } from '../src/store/conflicts.js';
-import { deduplicateStore } from '../src/dedupe.js';
-import { buildDag } from '../src/dag.js';
+import { deduplicateStore } from '../src/consolidate/dedupe.js';
+import { buildDag } from '../src/consolidate/dag.js';
 import { buildMemoryDetail } from '../src/dashboard/dashboard-queries.js';
+import { createSnapshotService } from '../src/dashboard/dashboard-snapshot.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
-import { writeSessionDigest } from '../src/session-digest.js';
+import { writeSessionDigest } from '../src/capture/session-digest.js';
 
 const SIZES = [10, 200] as const;
 const ROW_READ = MEMORY_SELECT_COLUMNS;
@@ -52,17 +56,15 @@ function memory(content: string, extra: Partial<MemoryEntry> = {}): MemoryEntry 
   return { ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), ...extra };
 }
 
-/** Seeds on one handle so a 200-row fixture stays fast. */
+/** Seeds in one store scope, which opens the store once, so a 200-row fixture stays fast. */
 function seed(root: string, entries: readonly MemoryEntry[], after?: (db: ReturnType<typeof openStore>, e: MemoryEntry) => void): void {
-  const db = openStore(root);
-  try {
+  withRequestStoresSync(() => {
+    const db = openStore(root);
     for (const e of entries) {
-      writeEntryOn(db, root, e);
+      writeEntry(root, e);
       after?.(db, e);
     }
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }
 
 function rows(n: number, label: string, extra: Partial<MemoryEntry> = {}): MemoryEntry[] {
@@ -123,6 +125,48 @@ describe('drillDown', () => {
       expect(countMatching(statements, ROW_READ)).toBe(3);
     }
   });
+
+  it('reads whole rows for the page only, however many children the summary has', async () => {
+    const read: number[] = [];
+    for (const n of SIZES) {
+      const root = freshRoot('qc-drill-page');
+      const summary = memory('summary of the zephyrine cache work', { dag_level: 2, layer: Layer.Semantic });
+      // Newest first on disk, so the page is the oldest five only if the read sorts by created.
+      const children = Array.from({ length: n }, (_, i) => memory(`child ${i} of the zephyrine cache`, {
+        dag_level: 1, dag_parent_id: summary.id, created: new Date(Date.UTC(2026, 0, 1, 0, 0, n - i)).toISOString(),
+      }));
+      seed(root, [summary, ...children]);
+      const { result, rowsRead } = await recordStatementsAsync(() => drillDown(ctxFor(root), summary.id, { limit: 5 }));
+      if ('failure' in result) throw new Error(result.failure);
+      expect(result.children.map((c) => c.id)).toEqual(children.slice(-5).reverse().map((c) => c.id));
+      expect({ total: result.totalChildren, truncated: result.truncated }).toEqual({ total: n, truncated: true });
+      read.push(rowsRead);
+    }
+    expect(read[1]).toBe(read[0]);
+  });
+
+  it('finds children through the parent index, with a page and without one', async () => {
+    const root = freshRoot('qc-drill-plan');
+    const summary = memory('summary of the zephyrine cache work', { dag_level: 2, layer: Layer.Semantic });
+    const mids = rows(3, 'mid', { dag_level: 1, dag_parent_id: summary.id });
+    seed(root, [summary, ...mids, ...mids.map((m, i) => memory(`leaf ${i}`, { dag_level: 0, dag_parent_id: m.id }))]);
+    const { statements } = await recordStatementsAsync(async () => {
+      await drillDown(ctxFor(root), summary.id, { depth: 2, limit: 4 });
+      await drillDown(ctxFor(root), summary.id, { depth: 2, limit: Number.POSITIVE_INFINITY });
+    });
+    const childReads = [...new Set(statements.filter((sql) => sql.includes('WHERE dag_parent_id IN (')))];
+    expect(childReads.length).toBeGreaterThanOrEqual(5);
+    const db = openStore(root);
+    try {
+      for (const sql of childReads) {
+        // SAFETY: EXPLAIN QUERY PLAN answers one row per step, its text in `detail`.
+        const plan = (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all() as Array<{ detail: string }>).map((step) => step.detail);
+        expect(plan[0], sql).toBe('SEARCH memories USING INDEX idx_memories_dag_parent (dag_parent_id=?)');
+      }
+    } finally {
+      closeHippoDb(db);
+    }
+  });
 });
 
 describe('importEntries', () => {
@@ -131,6 +175,32 @@ describe('importEntries', () => {
       const root = freshRoot('qc-import');
       const chunks = Array.from({ length: n }, (_, i) => `imported chunk ${i} about the zephyrine cache`);
       const { result, statements } = recordStatements(() => importEntries(chunks, 'import:test', ['imported'], { hippoRoot: root, tenantId: 'default' }));
+      expect(result.imported).toBe(n);
+      return countMatching(statements, STORE_OPEN);
+    });
+    expect(opens[1]).toBe(opens[0]);
+  });
+
+  it('probes a dry run on a fixed number of opens too', () => {
+    const opens = SIZES.map((n) => {
+      const root = freshRoot('qc-import-dry');
+      const chunks = Array.from({ length: n }, (_, i) => `previewed chunk ${i} about the zephyrine cache`);
+      const { result, statements } = recordStatements(() => importEntries(chunks, 'import:test', ['imported'], { hippoRoot: root, tenantId: 'default', dryRun: true }));
+      expect(result.imported).toBe(n);
+      return countMatching(statements, STORE_OPEN);
+    });
+    expect(opens[1]).toBe(opens[0]);
+  });
+});
+
+describe('importVault', () => {
+  it('probes a dry run on a fixed number of opens however many notes changed', () => {
+    const opens = SIZES.map((n) => {
+      const root = freshRoot('qc-vault-dry');
+      const vault = path.join(freshRoot('qc-vault-notes'), 'notes');
+      fs.mkdirSync(vault);
+      for (let i = 0; i < n; i++) fs.writeFileSync(path.join(vault, `note-${i}.md`), `vault note ${i} about the zephyrine cache`);
+      const { result, statements } = recordStatements(() => importVault(vault, { hippoRoot: root, tenantId: 'default', name: 'notes', dryRun: true }));
       expect(result.imported).toBe(n);
       return countMatching(statements, STORE_OPEN);
     });
@@ -303,7 +373,7 @@ describe('cmdRemember', () => {
   async function remember(root: string, text: string) {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     try {
-      const { statements } = await recordStatementsAsync(() => cmdRemember(root, text, { tag: ['topic:cache'] }));
+      const { statements } = await recordStatementsAsync(() => handleRemember({ hippoRoot: root, args: [text], flags: { tag: ['topic:cache'] } }));
       return { statements, printed: log.mock.calls.map((call) => String(call[0])) };
     } finally {
       log.mockRestore();
@@ -416,6 +486,27 @@ describe('buildMemoryDetail', () => {
       return [countMatching(statements, STORE_OPEN), countMatching(statements, ROW_READ)];
     });
     expect(work[1]).toEqual(work[0]);
+  });
+});
+
+describe('the dashboard snapshot build', () => {
+  it('reads no whole row, and no row at all for a memory it leaves out', () => {
+    const read: number[] = [];
+    for (const n of SIZES) {
+      const root = freshRoot('qc-dash-build');
+      seed(root, [...rows(4, 'live'), ...rows(n, 'archived', { kind: 'archived' }), ...rows(n, 'replaced', { kind: 'superseded' })]);
+      const service = createSnapshotService(root, () => Date.now());
+      try {
+        const { result, statements, rowsRead } = recordStatements(() => service.get('default'));
+        expect(result.facts).toHaveLength(4);
+        expect(result.excluded).toEqual({ superseded: n, archived: n, quarantined: 0 });
+        expect(countMatching(statements, ROW_READ)).toBe(0);
+        read.push(rowsRead);
+      } finally {
+        service.close();
+      }
+    }
+    expect(read[1]).toBe(read[0]);
   });
 });
 

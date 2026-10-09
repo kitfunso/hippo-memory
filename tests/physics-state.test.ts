@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { initStore } from '../src/store/open.js';
 import {
   float32ToBuffer,
@@ -13,8 +13,9 @@ import {
   resetAllPhysicsState,
   refreshParticleProperties,
 } from '../src/db/physics-state.js';
-import type { PhysicsParticle } from '../src/physics.js';
-import type { MemoryEntry } from '../src/memory.js';
+import { loadStoredParticles, resetStoredParticles, seedStoredParticle } from '../src/store/vector-index.js';
+import type { PhysicsParticle } from '../src/core/physics.js';
+import type { MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 
 // ---------------------------------------------------------------------------
@@ -689,5 +690,41 @@ describe('refreshParticleProperties', () => {
     // Same reference, mutated
     expect(particles[0]).toBe(originalRef);
     expect(particles[0]!.charge).toBeCloseTo(-1.0, 10);
+  });
+});
+
+describe('stored particles by store root', () => {
+  function seed(memoryIds: string[], withParticle: string[]): void {
+    const db = openHippoDb(tmpDir);
+    try {
+      for (const id of memoryIds) insertMemoryRow(db, id);
+      savePhysicsState(db, withParticle.map((id) => makeParticle(id)));
+    } finally {
+      closeHippoDb(db);
+    }
+  }
+
+  it('loadStoredParticles returns every saved particle', () => {
+    seed(['mem_s1', 'mem_s2'], ['mem_s1', 'mem_s2']);
+    expect(loadStoredParticles(tmpDir).map((p) => p.memoryId).sort()).toEqual(['mem_s1', 'mem_s2']);
+  });
+
+  it('resetStoredParticles drops stored state and keeps one particle per embedded entry', () => {
+    seed(['mem_t1', 'mem_t2'], ['mem_t2']);
+    const entries = [makeMemoryEntry('mem_t1'), makeMemoryEntry('mem_t2')];
+    expect(resetStoredParticles(tmpDir, entries, { mem_t1: [0.5, 0.5, 0.5] })).toBe(1);
+    const stored = loadStoredParticles(tmpDir);
+    expect(stored.map((p) => p.memoryId)).toEqual(['mem_t1']);
+    expect(stored[0]!.position[0]).toBeCloseTo(0.5, 5);
+  });
+
+  it('seedStoredParticle stores a first particle at the vector and leaves a stored one as it is', () => {
+    seed(['mem_u1', 'mem_u2'], ['mem_u2']);
+    const kept = loadStoredParticles(tmpDir)[0]!.position;
+    seedStoredParticle(tmpDir, makeMemoryEntry('mem_u1'), [0.5, 0.5, 0.5]);
+    seedStoredParticle(tmpDir, makeMemoryEntry('mem_u2'), [0.5, 0.5, 0.5]);
+    const positions = new Map(loadStoredParticles(tmpDir).map((p) => [p.memoryId, p.position]));
+    expect(positions.get('mem_u1')![0]).toBeCloseTo(0.5, 5);
+    expect(positions.get('mem_u2')).toEqual(kept);
   });
 });

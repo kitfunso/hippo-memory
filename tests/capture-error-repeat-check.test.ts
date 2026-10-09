@@ -8,9 +8,9 @@ import { createRequire } from 'module';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadContentsWithTag } from '../src/store/entry-reads.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { captureToolFailure } from '../src/capture-error.js';
-import type { DatabaseSyncLike } from '../src/db.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { captureToolFailure } from '../src/capture/capture-error.js';
+import type { DatabaseSyncLike } from '../src/db/index.js';
 
 const require = createRequire(import.meta.url);
 // SAFETY: node:sqlite has no bundled types; mirrors tests/db-open-write-free.test.ts.

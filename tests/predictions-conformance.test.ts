@@ -1,8 +1,8 @@
 // Predictions answers alike on hippo.db and on a store held in memory: the same rows, the same order, the same errors and the same audit rows.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import type { AuditEvent } from '../src/audit.js';
-import { closeHippoDb, openHippoDb } from '../src/db.js';
+import type { AuditEvent } from '../src/store/audit.js';
+import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { auditHighIdAt } from '../src/store/key-audit.js';
 import type { PredictionClose, PredictionListQuery, PredictionSave } from '../src/store/port.js';
 import { predictionMirror, type Prediction, type PredictionBaserate, type SavePredictionOpts } from '../src/store/predictions.js';

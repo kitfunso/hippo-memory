@@ -18,10 +18,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { serve, type ServerHandle } from '../src/server.js';
-import { createApiKey, type CreateApiKeyResult } from '../src/auth.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import type { Skill } from '../src/skills.js';
-import type { JsonValue } from '../src/json.js';
+import { createApiKey, type CreateApiKeyResult } from '../src/store/auth.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import type { Skill } from '../src/objects/skills.js';
+import type { JsonValue } from '../src/util/json.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 type Body = { [key: string]: JsonValue };

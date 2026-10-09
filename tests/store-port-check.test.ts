@@ -84,10 +84,10 @@ describe('check-store-port.mjs', () => {
     });
   });
 
-  it('does not count calls under src/db, src/store, src/cli or src/db.ts in number 1', () => {
+  it('does not count calls under src/db, src/store, src/cli or src/db/index.ts in number 1', () => {
     const call = "export const f = () => openStore('r');\n";
     withFixture(
-      { 'src/db/a.ts': call, 'src/store/b.ts': call, 'src/cli/c.ts': call, 'src/cli.ts': call, 'src/db.ts': call },
+      { 'src/db/a.ts': call, 'src/store/b.ts': call, 'src/cli/c.ts': call, 'src/cli.ts': call, 'src/db/index.ts': call },
       null,
       ({ run }) => {
         expect(list(run)).toMatchObject({ openersOutside: '0', openersInCli: '2' });

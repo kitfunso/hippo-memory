@@ -1,15 +1,15 @@
 // One container's sync in one transaction on the caller's handle: lookup, plan, then every write (plan designs 6 to 8).
-import { appendAuditEvent } from '../audit.js';
-import type { DatabaseSyncLike } from '../db.js';
-import { deleteDormantRow, dormantSnapshotsBySourcePrefix, insertDormantRow, readDormantSnapshot, replaceDormantEntry } from '../dormant.js';
-import { gatedWrite } from '../gated-write.js';
-import { Layer, calculateStrength, createMemory, type MemoryEntry } from '../memory.js';
-import { findRejectedValue, rejectionDigest } from '../rejection.js';
-import { redactSecretsStrict } from '../secret-detect.js';
+import { appendAuditEvent } from '../store/audit.js';
+import { withTrialScope, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
+import { deleteDormantRow, dormantSnapshotsBySourcePrefix, insertDormantRow, readDormantSnapshot, replaceDormantEntry } from '../store/dormant.js';
+import { gatedWrite } from '../trust/gated-write.js';
+import { Layer, calculateStrength, createMemory, type MemoryEntry } from '../core/memory.js';
+import { findRejectedValue, rejectionDigest } from '../store/rejection.js';
+import { redactSecretsStrict } from '../util/secret-detect.js';
 import { stampOriginProject } from '../store/entry-row.js';
 import { deleteEntryRowInTx, renameEntrySourceAndOriginAt, renameEntrySourceAt, setEntryTagsInTx, supersedeEntryAt } from '../store/entry-writes.js';
 import { entryIdTakenAt, selectLiveEntriesBySourcePrefix } from '../store/entry-reads.js';
-import { markSummaryDirtyInTx } from '../summary-dirty.js';
+import { markSummaryDirtyInTx } from '../store/summary-dirty.js';
 import { itemHash } from './keys.js';
 import { planContainer, type ContainerPlan, type DormantRow, type LiveRow, type PlannedWrite } from './plan.js';
 import { emptyTally, type Tally } from './report.js';
@@ -54,16 +54,8 @@ export interface ContainerOutcome {
 
 /** Throws SQLITE_BUSY when another writer holds the store past its busy timeout; nothing is written then. */
 export function syncContainer(s: StoreSession, work: ContainerWork): ContainerOutcome {
-  // A dry run takes no lock up front and rolls every write back.
-  s.db.exec(s.dryRun ? 'BEGIN' : 'BEGIN IMMEDIATE');
-  try {
-    const out = new ContainerRun(s, work).run();
-    s.db.exec(s.dryRun ? 'ROLLBACK' : 'COMMIT');
-    return out;
-  } catch (err) {
-    try { s.db.exec('ROLLBACK'); } catch { /* already rolled back; keep the original error */ }
-    throw err;
-  }
+  const run = (): ContainerOutcome => new ContainerRun(s, work).run();
+  return s.dryRun ? withTrialScope(s.db, 'sync_container', run) : withWriteScope(s.db, 'sync_container', run);
 }
 
 export type SetAsideWhy = 'note-gone' | 'note-changed' | 'handover' | 'project-merge' | 'project-repair';

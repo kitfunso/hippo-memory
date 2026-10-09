@@ -4,19 +4,21 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { closeHippoDb, getMeta, openHippoDb, setMeta } from '../src/db.js';
-import { recordTokens } from '../src/api.js';
-import { appendAuditEvent, type AppendAuditOpts } from '../src/audit.js';
-import { _resetAblationCacheForTests } from '../src/ablation.js';
-import { embeddingIndexIdentity, loadStoredVectors } from '../src/embeddings.js';
-import { detectForwardClaim } from '../src/forward-claim-detector.js';
-import { boostByGoals, getActiveGoalsWithDb, loadGoalPolicies, localGoalRecallRows, pushGoal, writeGoalRecallLog } from '../src/goals.js';
+import { closeHippoDb, getMeta, openHippoDb, setMeta } from '../src/db/index.js';
+import { recordTokens } from '../src/api/index.js';
+import { appendAuditEvent, type AppendAuditOpts } from '../src/store/audit.js';
+import { _resetAblationCacheForTests } from '../src/core/ablation.js';
+import { embeddingIndexIdentity } from '../src/store/embeddings/index.js';
+import { loadStoredVectors } from '../src/store/vector-index.js';
+import { detectForwardClaim } from '../src/learn/forward-claim-detector.js';
+import { activeGoalsWithPolicies, localGoalRecallRows, pushGoal, writeGoalRecallLog } from '../src/store/goals.js';
+import { boostByGoals } from '../src/search/goal-boost.js';
 import { __resetSessionRecallHistoryMcp } from '../src/mcp/server.js';
 import { lastRecalledIds } from '../src/mcp/session-state.js';
 import { loadPhysicsState, resetAllPhysicsState } from '../src/db/physics-state.js';
 import { resolveClassFromTokens } from '../src/store/planning-fallacy-evidence.js';
 import { computePredictionBaserate } from '../src/store/predictions.js';
-import { writeRecallTraceAtRoot } from '../src/recall-trace.js';
+import { writeRecallTraceAtRoot } from '../src/store/recall-trace.js';
 import {
   serve, sqliteStore, __resetSessionRecallHistoryHttp,
   type ActiveGoals, type ContinuityKey, type GoalRecallLogRow, type HippoStore, type MemoryEntry, type RecallSearchArgs, type RecallTraceInput, type RecallWrites,
@@ -201,15 +203,7 @@ describe('sqliteStore reads equal the hippo.db functions they wrap and open no m
     async (_name, sessionId, goals, policies) => {
       const opts = { sessionId, tenantId: TENANT };
       const plain = (g: ActiveGoals) => ({ goals: g.goals, policies: [...g.policies] });
-      const { direct, port } = await parity((s) => {
-        const db = openHippoDb(s.root);
-        try {
-          const active = getActiveGoalsWithDb(db, opts);
-          return plain({ goals: active, policies: loadGoalPolicies(db, active) });
-        } finally {
-          closeHippoDb(db);
-        }
-      }, async (store) => plain(await store.activeGoals(opts)));
+      const { direct, port } = await parity((s) => plain(activeGoalsWithPolicies(s.root, opts)), async (store) => plain(await store.activeGoals(opts)));
       expect([direct.value.goals.length, direct.value.policies.length]).toEqual([goals, policies]);
       expect(port.opens).toBe(direct.opens);
     },
@@ -385,12 +379,12 @@ describe('sqliteStore writes leave the rows the hippo.db functions leave, each o
     const globalRow = seeded('deploy notes from the global store about rollbacks', 'mem_p_global', '2026-01-12T00:00:00.000Z', {}, { tags: ['goal-alpha'] });
     const { direct, port } = await parity((s) => {
       const [goalRow] = loadEntriesByIds(s.root, ['mem_p_goal']);
+      const active = activeGoalsWithPolicies(s.root, { sessionId: SESSION, tenantId: TENANT });
       const db = openHippoDb(s.root);
       try {
-        const goals = getActiveGoalsWithDb(db, { sessionId: SESSION, tenantId: TENANT });
         const boost = boostByGoals(
           [{ entry: goalRow!, score: 0.8 }, { entry: globalRow, score: 0.7 }],
-          { goals, policies: loadGoalPolicies(db, goals) },
+          active,
           { sessionId: SESSION, tenantId: TENANT, limit: 10 },
         );
         writeGoalRecallLog(db, localGoalRecallRows(db, boost.log));
@@ -478,7 +472,7 @@ async function recallOver(url: string, call: Recall): Promise<void> {
   expect(await res.json()).not.toHaveProperty('error');
 }
 
-describe('hippo.db opens per recall over serve()', () => {
+describe('hippo.db opens per recall over serve() on the in-process store', () => {
   // Exact, so a second open fails here: the request scope hands every port call the one handle.
   const OPENS: readonly [string, number, Recall, boolean?][] = [
     ['http, no session', 1, { via: 'http', params: { q: 'deploy' } }],
@@ -514,7 +508,7 @@ describe('hippo.db opens per recall over serve()', () => {
         writeFileSync(join(s.root, 'config.json'), JSON.stringify({ embeddings: embeddingsConfig, physics: { enabled: true } }));
       }
       const before = embeddings.requests();
-      const handle = await serve({ hippoRoot: s.root, port: 0 });
+      const handle = await serve({ hippoRoot: s.root, port: 0, store: sqliteStore(s.root) });
       try {
         const { statements } = await recordStatementsAsync(() => recallOver(handle.url, call));
         expect(countMatching(statements, STORE_OPEN)).toBe(opens);

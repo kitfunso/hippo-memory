@@ -3,15 +3,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, mkdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { createRequire } from 'node:module';
-import { restoreDormant, supersede } from '../src/api.js';
-import type { DatabaseSyncLike } from '../src/db.js';
+import { restoreDormant, supersede } from '../src/api/index.js';
+import type { DatabaseSyncLike } from '../src/db/index.js';
 import { consolidate } from '../src/consolidate/sleep.js';
 import { importAtSessionEnd, importForStore, importProjectMemories, type Machine } from '../src/agent-memories/sync.js';
 import type { ImportReport } from '../src/agent-memories/report.js';
-import { insertDormantRow } from '../src/dormant.js';
-import { Layer, type MemoryEntry } from '../src/memory.js';
+import { insertDormantRow } from '../src/store/dormant.js';
+import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { deriveOriginProject } from '../src/project-identity.js';
+import { deriveOriginProject } from '../src/core/project-identity.js';
 import { removeEntryMirrors } from '../src/store/mirrors.js';
 import { isInitialized } from '../src/store/open.js';
 import { deleteEntryRowInTx, writeEntry } from '../src/store/entry-writes.js';
@@ -20,6 +20,9 @@ import {
   agentRows, auditCount, closeWorld, ctxFor, dormantRows, expectedContainer, liveRows, liveTexts, note, openWorld, projectNotes, sha,
   tally, toolTally, withDb, type World,
 } from './_helpers/agent-memories-world.js';
+
+// Every sync asks git for each folder's layout in a child process, and a case runs several syncs.
+vi.setConfig({ testTimeout: 30_000 });
 
 const DEPLOY = 'Run the schema check before this service deploys.';
 const STAGING = 'The staging database moved to the eu-central region.';

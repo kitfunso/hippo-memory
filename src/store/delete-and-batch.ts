@@ -1,15 +1,17 @@
-import { AUTO_DELETABLE_SQL, type MemoryEntry } from '../memory.js';
-import { openHippoDb, closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../db.js';
-import { checkRejectionGuard, RejectedValueError } from '../rejection.js';
-import { markSummaryDirtyInTx } from '../summary-dirty.js';
-import { type DormantMove, insertDormantRow } from '../dormant.js';
-import { log } from '../log.js';
+import { DEFAULT_TENANT_ID } from '../util/env.js';
+import { type MemoryEntry } from '../core/memory.js';
+import { AUTO_DELETABLE_SQL } from './rule-sql.js';
+import { openHippoDb, closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
+import { checkRejectionGuard, RejectedValueError } from './rejection.js';
+import { markSummaryDirtyInTx } from './summary-dirty.js';
+import { type DormantMove, insertDormantRow } from './dormant.js';
+import { log } from '../util/log.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry } from './rows.js';
 import { audit } from './audit-event.js';
 import { deleteFtsRow, replaceFtsRows, stampOriginProject, upsertMemoryRow } from './entry-row.js';
 import { purgeMirrorBestEffort, mirrorBestEffort, writeMarkdownMirror } from './mirrors.js';
 import { openStore } from './open.js';
-import { clock } from '../write-budget.js';
+import { clock, type WriteBudget } from '../util/write-budget.js';
 
 /** Tables whose rows keep a first-class object's backing memory in `memory_id` (ON DELETE SET NULL); tests/dormant-memories.test.ts pins it to the schema. */
 export const MEMORY_BACKED_TABLES = ['predictions', 'decisions', 'incidents', 'processes', 'policies', 'skills', 'project_briefs', 'customer_notes'] as const;
@@ -73,9 +75,9 @@ export function deleteEntryCore(
   // Forgetting a child of a summary marks the parent dirty. Not atomic with the DELETE, but
   // markSummaryDirtyInTx is idempotent, so the next child mutation re-marks the parent if this fails.
   if (row.dag_parent_id) {
-    markSummaryDirtyInTx(db, row.dag_parent_id, row.tenant_id ?? 'default', opts?.actor ?? 'cli');
+    markSummaryDirtyInTx(db, row.dag_parent_id, row.tenant_id ?? DEFAULT_TENANT_ID, opts?.actor ?? 'cli');
   }
-  return { tenantId: row.tenant_id ?? 'default', dagParentId: row.dag_parent_id ?? null };
+  return { tenantId: row.tenant_id ?? DEFAULT_TENANT_ID, dagParentId: row.dag_parent_id ?? null };
 }
 
 /**
@@ -103,7 +105,7 @@ export function deleteEntry(
 }
 
 /** deleteEntry on the caller's open store, so a loop of deletes opens the store once; each delete still commits alone. */
-export function deleteEntryOn(
+function deleteEntryOn(
   db: DatabaseSyncLike,
   hippoRoot: string,
   id: string,
@@ -115,6 +117,9 @@ export function deleteEntryOn(
   purgeMirrorBestEffort(hippoRoot, id, false, 'deleteEntry');
   return true;
 }
+
+/** Each row as the caller loaded it, by id; a `ReadonlyMap` fits. */
+export type LoadedRows = Pick<ReadonlyMap<string, MemoryEntry>, 'get'>;
 
 // The child fields a level-2/3 summary is built from (loadChildrenOfSummary, generateDagSummary).
 const SUMMARY_INPUTS = ['content', 'created', 'dag_parent_id', 'kind'] as const;
@@ -131,7 +136,7 @@ function mergeOwnChanges(base: MemoryEntry, ours: MemoryEntry, live: MemoryEntry
 /** Writes, deletes and dormant moves in one transaction. With `snapshot` (rows as the caller loaded them), a write keeps only
  *  the fields the caller changed, takes the rest from the live row, and never resurrects a row that is gone.
  *
- *  `dormant` (src/dormant.ts): each move's snapshot is inserted into `dormant_memories` and its `memories` row
+ *  `dormant` (src/store/dormant.ts): each move's snapshot is inserted into `dormant_memories` and its `memories` row
  *  leaves exactly like a delete (FTS row, DAG parent dirty-mark, mirrors), in the same transaction, so a memory
  *  is never in both places or in neither. Deletes and moves both skip rows that are no longer auto-deletable
  *  (pinned, raw, kept for good or backing an object since the caller decided). Returns the ids that left `memories`, deleted or moved. */
@@ -164,7 +169,7 @@ export interface FlushComponent {
 const failedUnits = new WeakMap<Error, string[]>();
 
 /** Tags a flush error with the ids of the component it stopped at, for the partial sleep audit row; the first tag wins. */
-export function noteFailedUnit(err: Error, component: FlushComponent | undefined): void {
+function noteFailedUnit(err: Error, component: FlushComponent | undefined): void {
   if (!component || failedUnits.has(err)) return;
   const ids = [...component.writes.map((e) => e.id), ...component.deletes, ...component.dormant.map((m) => m.entry.id)];
   failedUnits.set(err, [...new Set(ids)]);
@@ -177,12 +182,12 @@ export function failedUnitOf(err: Error | null): string[] | undefined {
 
 /** batchWriteAndDelete on the caller's open store from component `from`, each component whole, closing the transaction at the
  *  first component boundary after `holdMs`. Returns the next component's index and the ids that left `memories`. */
-export function batchWriteAndDeleteOn(
+function batchWriteAndDeleteOn(
   db: DatabaseSyncLike,
   hippoRoot: string,
   components: readonly FlushComponent[],
   from: number,
-  opts: { snapshot?: ReadonlyMap<string, MemoryEntry>; holdMs: number; clock?: () => number },
+  opts: { snapshot?: LoadedRows; holdMs: number; clock?: () => number },
 ): FlushChunk {
   const now = opts.clock ?? clock;
   const out: ChunkLog = { written: [], removedIds: [], rejectedSkips: 0, fts: { rows: [], staleIds: [] }, dirty: { parents: new Set(), tenantById: new Map() } };
@@ -205,7 +210,7 @@ export function batchWriteAndDeleteOn(
     // Fire dirty-mark for every collected parent INSIDE the BEGIN, so the
     // dirty flag commits atomically with the writes + deletes.
     for (const parentId of out.dirty.parents) {
-      markSummaryDirtyInTx(db, parentId, out.dirty.tenantById.get(parentId) ?? 'default', 'batch');
+      markSummaryDirtyInTx(db, parentId, out.dirty.tenantById.get(parentId) ?? DEFAULT_TENANT_ID, 'batch');
     }
   });
   reportChunk(hippoRoot, out);
@@ -213,7 +218,7 @@ export function batchWriteAndDeleteOn(
 }
 
 /** Where the next transaction starts, and the ids this one removed from `memories`. */
-export interface FlushChunk {
+interface FlushChunk {
   next: number;
   removedIds: string[];
 }
@@ -232,7 +237,7 @@ function applyComponent(
   db: DatabaseSyncLike,
   hippoRoot: string,
   component: FlushComponent,
-  snapshot: ReadonlyMap<string, MemoryEntry> | undefined,
+  snapshot: LoadedRows | undefined,
   out: ChunkLog,
 ): void {
   // Snapshot every doomed row's dag_parent_id before the deletes: consolidation flushes through here
@@ -305,7 +310,7 @@ function selectAutoDeletableRows(
   for (const row of rows) {
     if (row.dag_parent_id) {
       dirty.parents.add(row.dag_parent_id);
-      dirty.tenantById.set(row.dag_parent_id, row.tenant_id ?? 'default');
+      dirty.tenantById.set(row.dag_parent_id, row.tenant_id ?? DEFAULT_TENANT_ID);
     }
   }
   return rows;
@@ -314,7 +319,7 @@ function selectAutoDeletableRows(
 function applyBatchWrites(
   db: DatabaseSyncLike,
   stampedWrites: MemoryEntry[],
-  snapshot: ReadonlyMap<string, MemoryEntry> | undefined,
+  snapshot: LoadedRows | undefined,
   out: ChunkLog,
 ): void {
   // Probe tombstones per entry on THIS connection inside the transaction: the producer's check ran earlier
@@ -357,7 +362,7 @@ interface FtsChanges {
 
 /** True, after auditing the refusal, when the write would introduce a rejected value. */
 function isRejectedBatchWrite(db: DatabaseSyncLike, row: MemoryEntry): boolean {
-  const entryTenantId = row.tenantId ?? 'default';
+  const entryTenantId = row.tenantId ?? DEFAULT_TENANT_ID;
   // checkRejectionGuard, not a bare tombstone probe: a tombstone can coexist with a live same-content row,
   // and skipping every re-persist would starve it of decay/replay updates; only new or changed content is refused.
   try {
@@ -370,4 +375,51 @@ function isRejectedBatchWrite(db: DatabaseSyncLike, row: MemoryEntry): boolean {
     throw err;
   }
   return false;
+}
+
+/** Deletes each target in its own transaction on one store handle; `true` where the row went. */
+export function deleteEntriesOneByOne(
+  hippoRoot: string,
+  targets: readonly { id: string; reason: string }[],
+  opts: { actor?: string; automatic?: boolean },
+): boolean[] {
+  if (targets.length === 0) return [];
+  const db = openStore(hippoRoot);
+  try {
+    return targets.map((target) => deleteEntryOn(db, hippoRoot, target.id, { ...opts, reason: target.reason }));
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/** Commits whole components in transactions of about `budget.holdMs` on one store handle, letting other writers in between; returns the ids that left `memories`.
+ *  The snapshot keeps what other writers changed after the caller loaded its rows. */
+export async function commitInChunks(
+  hippoRoot: string,
+  components: readonly FlushComponent[],
+  opts: { snapshot: LoadedRows; budget: WriteBudget; busyWaitMs: number },
+): Promise<string[]> {
+  if (components.length === 0) return [];
+  const { snapshot, budget } = opts;
+  const removed: string[] = [];
+  // The wait is an option rather than a PRAGMA, so a shared hook handle keeps its own.
+  const db = openStore(hippoRoot, { busyWaitMs: opts.busyWaitMs });
+  let next = 0;
+  try {
+    let committedAt = 0;
+    while (next < components.length) {
+      if (next > 0) await budget.pause(committedAt);
+      const chunk = batchWriteAndDeleteOn(db, hippoRoot, components, next, { snapshot, holdMs: budget.holdMs, clock: budget.clock });
+      committedAt = budget.clock();
+      next = chunk.next;
+      for (const id of chunk.removedIds) removed.push(id);
+    }
+  } catch (err) {
+    // A unit that threw is already tagged; a throw outside one (a pause, BEGIN or COMMIT) names the chunk's first unit.
+    if (err instanceof Error) noteFailedUnit(err, components[next]);
+    throw err;
+  } finally {
+    closeHippoDb(db);
+  }
+  return removed;
 }

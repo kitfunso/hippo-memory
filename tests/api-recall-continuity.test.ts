@@ -6,8 +6,8 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { saveActiveTaskSnapshot, appendSessionEvent } from '../src/store/sessions.js';
 import { saveSessionHandoff } from '../src/store/handoffs.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { recall } from '../src/api.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { recall } from '../src/api/index.js';
 
 let tmpDir: string;
 beforeEach(() => {
@@ -45,7 +45,7 @@ describe('api.recall continuity flag', () => {
       sessionId: 'sess-1',
       summary: 'Mid-implementation handoff.',
       nextAction: 'Pick up at Task 3.',
-      artifacts: ['src/api.ts'],
+      artifacts: ['src/api/index.ts'],
     });
     appendSessionEvent(tmpDir, 'default', {
       session_id: 'sess-1',

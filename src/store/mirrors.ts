@@ -1,10 +1,11 @@
+import { DEFAULT_TENANT_ID } from '../util/env.js';
 import * as fs from 'fs';
 import * as path from 'path';
-import { Layer, type MemoryEntry } from '../memory.js';
-import { dumpFrontmatter } from '../yaml.js';
-import { openHippoDb, getMeta } from '../db.js';
+import { Layer, type MemoryEntry } from '../core/memory.js';
+import { dumpFrontmatter } from './yaml.js';
+import { openHippoDb, getMeta } from '../db/index.js';
 import { oncePerStore } from '../db/connect.js';
-import { errorMessage, log } from '../log.js';
+import { errorFields, errorMessage, log } from '../util/log.js';
 import {
   type TaskSnapshot,
   type SessionEvent,
@@ -23,6 +24,8 @@ import {
   rowToMemoryConflict,
 } from './rows.js';
 import { serializeEntry } from './markdown.js';
+
+const SCORE_DECIMALS = 3;
 
 export function layerDir(root: string, layer: Layer): string {
   return path.join(root, layer);
@@ -45,12 +48,12 @@ export function ensureMirrorDirectories(hippoRoot: string): void {
 // on-disk back-compat; multi-tenant deployments get a `.<tenantId>` suffix
 // so tenant B saving cannot overwrite tenant A's mirror file.
 function activeTaskMirrorPath(hippoRoot: string, tenantId: string): string {
-  const file = tenantId === 'default' ? 'active-task.md' : `active-task.${tenantId}.md`;
+  const file = tenantId === DEFAULT_TENANT_ID ? 'active-task.md' : `active-task.${tenantId}.md`;
   return path.join(hippoRoot, 'buffer', file);
 }
 
 function recentSessionMirrorPath(hippoRoot: string, tenantId: string): string {
-  const file = tenantId === 'default' ? 'recent-session.md' : `recent-session.${tenantId}.md`;
+  const file = tenantId === DEFAULT_TENANT_ID ? 'recent-session.md' : `recent-session.${tenantId}.md`;
   return path.join(hippoRoot, 'buffer', file);
 }
 
@@ -160,7 +163,7 @@ function writeConflictMirrors(hippoRoot: string, conflicts: MemoryConflict[]): v
       `- Memory A: ${conflict.memory_a_id}`,
       `- Memory B: ${conflict.memory_b_id}`,
       `- Reason: ${conflict.reason}`,
-      `- Score: ${conflict.score.toFixed(3)}`,
+      `- Score: ${conflict.score.toFixed(SCORE_DECIMALS)}`,
       `- Status: ${conflict.status}`,
       '',
     ].join('\n');
@@ -198,7 +201,7 @@ export function removeEntryMirrors(hippoRoot: string, id: string): void {
  * Mirror paths for `id` still on disk, walked like `removeEntryMirrors`, so a failed purge
  * with no reaper to retry it can name the stuck file.
  */
-export function getExistingEntryMirrorPaths(hippoRoot: string, id: string): string[] {
+function getExistingEntryMirrorPaths(hippoRoot: string, id: string): string[] {
   // Layer list kept in lockstep with removeEntryMirrors.
   return [Layer.Buffer, Layer.Episodic, Layer.Semantic, Layer.Trace]
     .map((layer) => path.join(layerDir(hippoRoot, layer), `${id}.md`))
@@ -229,6 +232,7 @@ export function purgeMirrorBestEffort(
       if (isRaw) {
         log.error(
           `${logPrefix}: mirror cleanup failed for ${id} (will retry via reaper on next open): ${msg}`,
+          errorFields(secondErr),
         );
       } else {
         const leftover = getExistingEntryMirrorPaths(hippoRoot, id);
@@ -236,6 +240,7 @@ export function purgeMirrorBestEffort(
         log.error(
           `${logPrefix}: mirror cleanup failed for ${id} - no automatic retry exists for this file, ` +
           `delete it manually: ${pathsNote} (${msg})`,
+          errorFields(secondErr),
         );
       }
       return false;

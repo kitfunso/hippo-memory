@@ -1,5 +1,5 @@
 // One way for a reranker to report that it stopped working, without a line per recall.
-import { log } from '../log.js';
+import { log } from '../util/log.js';
 
 const REPEAT_MS = 5 * 60_000;
 

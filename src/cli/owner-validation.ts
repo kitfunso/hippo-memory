@@ -10,9 +10,9 @@
  * the stub (see `TODOS.md` for the migration path).
  */
 
-import { processEnv } from '../env.js';
+import { processEnv } from '../util/env.js';
 
-export const OWNER_RE = /^(user|agent):[A-Za-z0-9_-]+$/;
+const OWNER_RE = /^(user|agent):[A-Za-z0-9_-]+$/;
 export const OWNER_CONTRACT_HINT =
   'Must match ^(user|agent):[A-Za-z0-9_-]+$ (e.g. user:alice, agent:capture-bot).';
 

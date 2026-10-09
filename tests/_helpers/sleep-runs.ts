@@ -1,5 +1,5 @@
 // Counts the consolidation runs a store has logged, one row per finished sleep.
-import { openHippoDb, closeHippoDb } from '../../src/db.js';
+import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 
 export function sleepRuns(hippoRoot: string): number {
   const db = openHippoDb(hippoRoot);

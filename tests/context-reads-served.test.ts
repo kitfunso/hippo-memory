@@ -4,11 +4,11 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { cpSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { _resetAblationCacheForTests } from '../src/ablation.js';
-import { _resetSharedStoreCacheForTests, markSharedStore } from '../src/config.js';
-import { STORE_NOT_PORTED_MESSAGE } from '../src/http-util.js';
+import { _resetAblationCacheForTests } from '../src/core/ablation.js';
+import { _resetSharedStoreCacheForTests, markSharedStore } from '../src/core/config.js';
+import { STORE_NOT_PORTED_MESSAGE } from '../src/util/http-util.js';
 import { lastRecalledIds } from '../src/mcp/session-state.js';
-import { serve, type HippoStore } from '../src/server.js';
+import { serve, sqliteStore, type HippoStore } from '../src/server.js';
 import { CONTEXT_NOW, contextRowsOf, PROJECT, rounded, seedContextRows } from './_helpers/context-fixture.js';
 import { inMemoryContextStore } from './_helpers/in-memory-context-store.js';
 import { portOnlyStore } from './_helpers/port-only-store.js';
@@ -99,6 +99,10 @@ describe('context over serve()', () => {
     const inMemory = await runServed((root) => inMemoryContextStore(root).store);
     expect(inMemory.replies).toEqual(onHippoDb.replies);
     expect(inMemory.rows).toEqual(onHippoDb.rows);
+    // The default store answers the data-only context reads from worker threads; the same store in process must agree with it.
+    const inProcess = await runServed(sqliteStore);
+    expect(onHippoDb.replies).toEqual(inProcess.replies);
+    expect(onHippoDb.rows).toEqual(inProcess.rows);
   }, 120_000);
 
   it('a store without contextReads answers store_not_ported on the route and the tool', async () => {

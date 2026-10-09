@@ -1,7 +1,10 @@
 // The graph reads a view and a traversal share. Each opens hippo.db itself unless the caller hands it the handle its snapshot runs on.
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../db.js';
-import { assertTenantId } from '../tenant.js';
-import { type EntityType, GRAPH_ENTITY_TYPES, type Entity, type Relation, type EntityRow, type RelationRow, rowToEntity, rowToRelation, ENTITY_COLS, RELATION_COLS } from './graph-rows.js';
+import { openHippoDb, closeHippoDb, withReadSnapshot, type DatabaseSyncLike } from '../db/index.js';
+import { assertTenantId } from './tenant.js';
+import { type EntityType, GRAPH_ENTITY_TYPES, type Entity, type Relation, type EntityRow, type RelationRow, type StoredEntity, type StoredGraph, type StoredRelation, rowToEntity, rowToRelation, ENTITY_COLS, RELATION_COLS } from './graph-rows.js';
+
+const DEFAULT_GRAPH_PAGE_SIZE = 100;
+const DEFAULT_GRAPH_SCAN_LIMIT = 1000;
 
 /** Entities with an exact `name` (read), bounded by `limit` in SQL with a
  *  deterministic order. Lets the graph-view focus query find the `--entity NAME`
@@ -15,7 +18,7 @@ export function loadEntitiesByName(
   txDb?: DatabaseSyncLike,
 ): Entity[] {
   assertTenantId('loadEntitiesByName', tenantId);
-  const limit = opts.limit ?? 100;
+  const limit = opts.limit ?? DEFAULT_GRAPH_PAGE_SIZE;
   if (!Number.isInteger(limit) || limit < 0) {
     throw new Error(`loadEntitiesByName: limit must be a non-negative integer; got ${limit}`);
   }
@@ -40,7 +43,7 @@ export function loadEntities(
   txDb?: DatabaseSyncLike,
 ): Entity[] {
   assertTenantId('loadEntities', tenantId);
-  const limit = opts.limit ?? 100;
+  const limit = opts.limit ?? DEFAULT_GRAPH_PAGE_SIZE;
   if (opts.entityType && !GRAPH_ENTITY_TYPES.has(opts.entityType)) {
     throw new Error(`loadEntities: entityType must be one of ${Array.from(GRAPH_ENTITY_TYPES).join('|')}; got ${opts.entityType}`);
   }
@@ -74,7 +77,7 @@ export function loadRelations(
   txDb?: DatabaseSyncLike,
 ): Relation[] {
   assertTenantId('loadRelations', tenantId);
-  const limit = opts.limit ?? 100;
+  const limit = opts.limit ?? DEFAULT_GRAPH_PAGE_SIZE;
   const ownDb = txDb ? null : openHippoDb(hippoRoot);
   const db = txDb ?? ownDb!;
   try {
@@ -150,7 +153,7 @@ export function loadNeighborRelations(
 ): Relation[] {
   assertTenantId('loadNeighborRelations', tenantId);
   if (entityIds.length === 0) return [];
-  const limit = opts.limit ?? 1000;
+  const limit = opts.limit ?? DEFAULT_GRAPH_SCAN_LIMIT;
   if (!Number.isInteger(limit) || limit < 0) {
     throw new Error(`loadNeighborRelations: limit must be a non-negative integer; got ${limit}`);
   }
@@ -197,7 +200,7 @@ export function loadRelationsAmong(
 ): Relation[] {
   assertTenantId('loadRelationsAmong', tenantId);
   if (entityIds.length === 0) return [];
-  const limit = opts.limit ?? 1000;
+  const limit = opts.limit ?? DEFAULT_GRAPH_SCAN_LIMIT;
   if (!Number.isInteger(limit) || limit < 0) {
     throw new Error(`loadRelationsAmong: limit must be a non-negative integer; got ${limit}`);
   }
@@ -219,6 +222,71 @@ export function loadRelationsAmong(
 }
 
 /**
+ * Map consolidated source memory ids -> their graph entities. The SEED step of
+ * multi-hop recall (recall result memory ids -> entities to traverse from). Tenant-
+ * scoped, read-only; chunks the IN-list under the SQLite variable cap.
+ */
+export function loadEntitiesByMemoryId(
+  hippoRoot: string,
+  tenantId: string,
+  memoryIds: string[],
+): Entity[] {
+  assertTenantId('loadEntitiesByMemoryId', tenantId);
+  if (memoryIds.length === 0) return [];
+  const db = openHippoDb(hippoRoot);
+  try {
+    const out: Entity[] = [];
+    for (let i = 0; i < memoryIds.length; i += IN_LIST_CHUNK) {
+      const slice = memoryIds.slice(i, i + IN_LIST_CHUNK);
+      const ph = slice.map(() => '?').join(',');
+      // id ASC so chunk-local scan order never decides ties (id is an autoincrement PK).
+      // SAFETY: rows' shape matches the columns named in ENTITY_COLS above.
+      const rows = db.prepare(`
+        SELECT ${ENTITY_COLS} FROM entities
+        WHERE tenant_id = ? AND memory_id IN (${ph})
+        ORDER BY id ASC
+      `).all(tenantId, ...slice) as EntityRow[];
+      out.push(...rows.map(rowToEntity));
+    }
+    return out;
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/** The stored rows a rebuild diffs against, read on the caller's handle so the diff and the apply can share one write lock. */
+export function storedGraphOn(db: DatabaseSyncLike, tenantId: string, memoryIds: readonly string[]): StoredGraph {
+  const kinds = memoryKindsOn(db, memoryIds);
+  // SAFETY: the SELECT names exactly the columns of StoredEntity.
+  const entities = db.prepare(
+    `SELECT id, entity_type, name, memory_id, source_kind, source_object_type, source_object_id FROM entities WHERE tenant_id = ? ORDER BY id`,
+  ).all(tenantId) as StoredEntity[];
+  // SAFETY: the SELECT names exactly the columns of StoredRelation.
+  const relations = db.prepare(
+    `SELECT id, from_entity_id, to_entity_id, rel_type, memory_id, source_kind, source_object_type, source_object_id FROM relations WHERE tenant_id = ? ORDER BY id`,
+  ).all(tenantId) as StoredRelation[];
+  return { kinds, entities, relations };
+}
+
+function memoryKindsOn(db: DatabaseSyncLike, memoryIds: readonly string[]): ReadonlyMap<string, string> {
+  if (memoryIds.length === 0) return new Map();
+  // SAFETY: the SELECT names exactly the two columns of the row type.
+  const rows = db.prepare(`SELECT id, kind FROM memories WHERE id IN (SELECT value FROM json_each(?))`)
+    .all(JSON.stringify(memoryIds)) as Array<{ id: string; kind: string }>;
+  return new Map(rows.map((row) => [row.id, row.kind]));
+}
+
+/** storedGraphOn on its own connection, outside any write lock. */
+export function loadStoredGraph(hippoRoot: string, tenantId: string, memoryIds: readonly string[]): StoredGraph {
+  const db = openHippoDb(hippoRoot);
+  try {
+    return storedGraphOn(db, tenantId, memoryIds);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/**
  * Run `fn` inside ONE read transaction (a single WAL snapshot) so every graph read
  * it performs (pass the supplied `txDb` to the `load*` functions) sees a consistent
  * view, even if a `graph extract` / sleep-drain rebuild commits concurrently between
@@ -232,15 +300,7 @@ export function withGraphReadSnapshot<T>(
 ): T {
   const db = openHippoDb(hippoRoot);
   try {
-    db.exec('BEGIN');
-    try {
-      const out = fn(db);
-      db.exec('COMMIT');
-      return out;
-    } catch (e) {
-      try { db.exec('ROLLBACK'); } catch { /* ignore */ }
-      throw e;
-    }
+    return withReadSnapshot(db, () => fn(db));
   } finally {
     closeHippoDb(db);
   }

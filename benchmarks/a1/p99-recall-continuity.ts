@@ -39,7 +39,7 @@ import { fileURLToPath } from 'node:url';
 import { initStore } from '../../dist/store/open.js';
 import { saveActiveTaskSnapshot, appendSessionEvent } from '../../dist/store/sessions.js';
 import { saveSessionHandoff } from '../../dist/store/handoffs.js';
-import { remember as apiRemember, recall as apiRecall } from '../../dist/api.js';
+import { remember as apiRemember, recall as apiRecall } from '../../dist/api/index.js';
 
 interface CliArgs {
   storeSize: number;

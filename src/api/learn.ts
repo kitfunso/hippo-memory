@@ -1,16 +1,16 @@
 // Git auto-learn: fix/revert/bug commit subjects become memories. `hippo learn`, init, sleep and MCP hippo_learn share it.
 
-import { ForbiddenError } from '../api-errors.js';
-import { fetchGitLog, extractLessons, partitionLessons, isGitRepo } from '../autolearn.js';
-import { type HippoConfig, loadConfig } from '../config.js';
+import { ForbiddenError } from '../core/api-errors.js';
+import { fetchGitLog, extractLessons, partitionLessons, isGitRepo } from '../learn/autolearn.js';
+import { type HippoConfig, loadConfig } from '../core/config.js';
 import { withRequestStoresSync } from '../db/request-stores.js';
-import { embedMemory } from '../embeddings.js';
-import { extractInvalidationTarget, invalidateMatchingAmong } from '../invalidation.js';
-import { computeSchemaFit, createMemory, Layer } from '../memory.js';
-import { extractPathTags } from '../path-context.js';
-import { canReadScope, personalScopeOf, touchableScopeSql } from '../recall-scope.js';
-import { RejectedValueError } from '../rejection.js';
-import { duplicateKey, longestWord, storedTextKeys } from '../same-text.js';
+import { embedMemory } from '../store/embeddings/index.js';
+import { extractInvalidationTarget, invalidateMatchingAmong } from '../learn/invalidation.js';
+import { computeSchemaFit, createMemory, Layer } from '../core/memory.js';
+import { extractPathTags } from '../search/path-context.js';
+import { canReadScope, personalScopeOf, touchableScopeSql } from '../store/recall-scope.js';
+import { RejectedValueError } from '../store/rejection.js';
+import { duplicateKey, longestWord, storedTextKeys } from '../util/same-text.js';
 import { loadTextsHoldingWords } from '../store/candidates.js';
 import { loadAllEntries } from '../store/entry-reads.js';
 import { writeEntry } from '../store/entry-writes.js';

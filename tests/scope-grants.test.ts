@@ -7,14 +7,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { createApiKey, listScopeGrants } from '../src/auth.js';
-import { Layer } from '../src/memory.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { createApiKey, readApiKeyRecord } from '../src/store/auth.js';
+import { Layer } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { serve, type ServerHandle } from '../src/server.js';
-import { refreshBrief } from '../src/project-briefs.js';
-import { extractGraph } from '../src/graph-extract.js';
-import * as api from '../src/api.js';
+import { refreshBrief } from '../src/objects/project-briefs.js';
+import { extractGraph } from '../src/graph/extract.js';
+import * as api from '../src/api/index.js';
 import { consolidate } from '../src/consolidate/sleep.js';
 import { makeRoot } from './_helpers/make-root.js';
 
@@ -191,7 +191,7 @@ describe('authGrant / authUngrant validation (api layer)', () => {
     });
     const db = openHippoDb(home);
     try {
-      expect(listScopeGrants(db, other.keyId)).toEqual([PRIVATE_SCOPE]);
+      expect((readApiKeyRecord(db, other.keyId)?.scopes ?? [])).toEqual([PRIVATE_SCOPE]);
     } finally {
       closeHippoDb(db);
     }
@@ -215,14 +215,14 @@ describe('authGrant / authUngrant validation (api layer)', () => {
     expect(ungrants.some((e) => e.targetId === member.keyId)).toBe(true);
   });
 
-  it('grantScope is idempotent and listScopeGrants reflects it', () => {
+  it('grantScope is idempotent and the key record reflects it', () => {
     const member = mintKey(home, 'member');
     const adminCtx: api.HippoDbContext = { hippoRoot: home, tenantId: 'default', actor: api.adminActor('cli') };
     api.authGrant(adminCtx, member.keyId, PRIVATE_SCOPE);
     api.authGrant(adminCtx, member.keyId, PRIVATE_SCOPE);
     const db = openHippoDb(home);
     try {
-      expect(listScopeGrants(db, member.keyId)).toEqual([PRIVATE_SCOPE]);
+      expect((readApiKeyRecord(db, member.keyId)?.scopes ?? [])).toEqual([PRIVATE_SCOPE]);
     } finally {
       closeHippoDb(db);
     }

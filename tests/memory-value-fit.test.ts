@@ -15,11 +15,12 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { describe, it, expect, beforeEach, afterEach, afterAll } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from 'vitest';
 
 import { CONFIG } from '../benchmarks/memory-value/config.mjs';
 import { evaluateAll, buildScorers, evaluateStore } from '../benchmarks/memory-value/evaluate.mjs';
-import { mulberry32, featuresPathFor, readJsonl, writeJsonl } from '../benchmarks/memory-value/common.mjs';
+import { featuresPathFor, readJsonl, writeJsonl } from '../benchmarks/memory-value/common.mjs';
+import { mulberry32 } from '../scripts/lib/prng.mjs';
 import {
   FIT_DIMS,
   runES,
@@ -37,6 +38,9 @@ import {
 } from '../benchmarks/memory-value/fit.mjs';
 
 import { clearAblationEnv, QUESTIONS, cleanupScratch, runPipeline } from './memory-value-fixtures.js';
+
+// Each case ingests, simulates and extracts a question against real stores on disk.
+vi.setConfig({ testTimeout: 30_000 });
 
 type GateOpts = { splitRegistered?: object; registeredResults?: object; expectedFitDims?: readonly string[]; needTrainRows?: boolean };
 // SAFETY: fit.mjs destructures all four options, but its inferred parameter type omits splitRegistered and registeredResults.

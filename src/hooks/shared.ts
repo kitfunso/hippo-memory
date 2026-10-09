@@ -1,4 +1,4 @@
-import { envHomeDir, processEnv } from '../env.js';
+import { envHomeDir, processEnv } from '../util/env.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';

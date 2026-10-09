@@ -1,6 +1,7 @@
 // hippo.db's half of the DagReads store group: the reads session assembly and summary drill-down run today.
-import type { DatabaseSyncLike } from '../../db.js';
-import type { MemoryEntry } from '../../memory.js';
+import type { DatabaseSyncLike } from '../../db/index.js';
+import type { MemoryEntry } from '../../core/memory.js';
+import { pagedDescendants } from '../descendant-page.js';
 import { countSessionRawMemories, loadSessionRawMemories, selectChildrenByParent, selectEntriesByIds } from '../entry-reads.js';
 import { onHandle, openStore } from '../open.js';
 import type { DagReads, DescendantWalk, SummaryDescendants, Sync } from '../port.js';
@@ -20,9 +21,10 @@ export function sqliteDagReads(hippoRoot: string): Sync<DagReads> {
 }
 
 // dag_parent_id is not unique to a tree, so `seen` keeps a mislinked row from being listed twice or walked in a loop.
-function summaryWithDescendantsAt(db: DatabaseSyncLike, tenantId: string, id: string, { depth, admit }: DescendantWalk): SummaryDescendants | null {
+function summaryWithDescendantsAt(db: DatabaseSyncLike, tenantId: string, id: string, { depth, admit, page }: DescendantWalk): SummaryDescendants | null {
   const summary = selectEntriesByIds(db, [id], tenantId).get(id);
   if (!summary) return null;
+  if (page) return pagedDescendants(db, { tenantId, summary, depth, page }, admit(summary));
   const levels: MemoryEntry[][] = [];
   const seen = new Set<string>([id]);
   let parents = admit(summary) ? [id] : [];

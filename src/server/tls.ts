@@ -1,16 +1,17 @@
 // The serve() listener: node:https when a certificate is given, else node:http and a boot warning off loopback.
 import { createServer as createHttpServer, type RequestListener, type Server } from 'node:http';
 import { createServer as createHttpsServer } from 'node:https';
-import { errorMessage, log } from '../log.js';
+import { errorMessage, log } from '../util/log.js';
 import type { ServeOpts } from './types.js';
 
 export function createListener(tls: ServeOpts['tls'], onRequest: RequestListener): Server {
   if (!tls) return createHttpServer(onRequest);
   try {
-    return createHttpsServer({ cert: tls.cert, key: tls.key }, onRequest);
+    // Explicit so the floor does not move with the runtime's default.
+    return createHttpsServer({ cert: tls.cert, key: tls.key, minVersion: 'TLSv1.2' }, onRequest);
   } catch (err) {
     // OpenSSL's own text names no file, so the operator would not know which input was refused.
-    throw new Error(`hippo serve: the TLS certificate or key was refused: ${errorMessage(err)}`);
+    throw new Error(`hippo serve: the TLS certificate or key was refused: ${errorMessage(err)}`, { cause: err });
   }
 }
 

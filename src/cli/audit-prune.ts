@@ -24,8 +24,7 @@
  *     written AFTER the DELETE WHERE ts < cutoff, so ts > cutoff).
  */
 
-import type { DatabaseSyncLike } from '../db.js';
-import { appendAuditEvent } from '../audit.js';
+import { pruneAuditRows } from '../store/audit.js';
 import { DAY_MS } from '../util/time.js';
 
 export interface PruneAuditOpts {
@@ -68,7 +67,7 @@ function isTenantIdString(value: string): value is string {
  * Throws on invalid inputs (non-positive days, missing tenantId).
  */
 export function pruneAuditLog(
-  db: DatabaseSyncLike,
+  hippoRoot: string,
   opts: PruneAuditOpts,
 ): PruneAuditResult {
   if (!Number.isFinite(opts.olderThanDays) || opts.olderThanDays <= 0) {
@@ -81,38 +80,7 @@ export function pruneAuditLog(
   const actor = opts.actor ?? 'cli';
   const cutoff = computeCutoff(opts.olderThanDays);
 
-  let count = 0;
-  if (dryRun) {
-    // Dry-run: just count, no DELETE.
-    // SAFETY: row comes from `SELECT COUNT(*) AS c` above; COUNT(*) always
-    // yields exactly one row with a numeric `c` column (number or bigint
-    // depending on the node:sqlite driver's integer handling).
-    const row = db
-      .prepare(`SELECT COUNT(*) AS c FROM audit_log WHERE tenant_id = ? AND ts < ?`)
-      .get(opts.tenantId, cutoff) as { c: number | bigint };
-    count = Number(row.c);
-  } else {
-    db.exec('BEGIN IMMEDIATE');
-    try {
-      const result = db
-        .prepare(`DELETE FROM audit_log WHERE tenant_id = ? AND ts < ?`)
-        .run(opts.tenantId, cutoff);
-      count = Number(result.changes ?? 0);
-      // Record the prune itself in the audit trail. This row has ts = now,
-      // so it's not eligible for the cutoff that was just applied.
-      appendAuditEvent(db, {
-        tenantId: opts.tenantId,
-        actor,
-        op: 'audit_prune',
-        metadata: { cutoff, count, dryRun: false, olderThanDays: opts.olderThanDays },
-      });
-      db.exec('COMMIT');
-    } catch (e) {
-      try { db.exec('ROLLBACK'); } catch { /* already rolled back; keep the original error */ }
-      throw e;
-    }
-  }
-
+  const count = pruneAuditRows(hippoRoot, { tenantId: opts.tenantId, cutoff, actor, olderThanDays: opts.olderThanDays, dryRun });
   return { cutoff, count, dryRun };
 }
 

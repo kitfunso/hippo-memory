@@ -1,43 +1,35 @@
 // Read-only report verbs: status, inspect, tokens, failures, provenance, correction latency, doctor and support bundle.
 
-import { envHomeDir } from '../env.js';
-import { evalNow } from '../ablation.js';
+import { envHomeDir } from '../util/env.js';
+import { evalNow } from '../core/ablation.js';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import { fileURLToPath } from 'node:url';
-import { calculateStrength, calculateRewardFactor, resolveConfidence, confidenceFacets, Layer, type MemoryEntry } from '../memory.js';
+import { calculateStrength, calculateRewardFactor, resolveConfidence, confidenceFacets, Layer, type MemoryEntry } from '../core/memory.js';
 import { readEntry, loadAllEntries } from '../store/entry-reads.js';
 import { loadStats } from '../store/index-and-stats.js';
 import { listMemoryConflicts } from '../store/conflicts.js';
-import { loadEmbeddingIndex, embeddingModelRequiresReindex } from '../embeddings.js';
-import { resolveEmbeddingProvider } from '../embedding-provider.js';
-import { loadPhysicsState } from '../db/physics-state.js';
-import { computeSystemEnergy, vecNorm } from '../physics.js';
-import { loadConfig } from '../config.js';
-import { openHippoDb, closeHippoDb } from '../db.js';
+import { embeddingModelRequiresReindex } from '../store/embeddings/index.js';
+import { resolveEmbeddingProvider } from '../store/embeddings/provider.js';
+import { loadStoredParticles, storedVectorSummary } from '../store/vector-index.js';
+import { computeSystemEnergy, vecNorm } from '../core/physics.js';
+import { loadConfig } from '../core/config.js';
 import { runDoctor, formatDoctor } from '../doctor.js';
 import { buildSupportBundle, TAIL_MAX_LINES } from '../support-bundle.js';
-import { PACKAGE_VERSION } from '../version.js';
-import { FAILURE_LOG_RETENTION_DAYS } from '../failure-log.js';
-import { getGlobalRoot } from '../shared.js';
+import { PACKAGE_VERSION } from '../util/version.js';
+import { FAILURE_LOG_RETENTION_DAYS } from '../store/failure-log.js';
+import { getGlobalRoot } from '../sharing/global-store.js';
 import { buildProvenanceCoverage } from './provenance-coverage.js';
 import { buildCorrectionLatency } from './correction-latency.js';
-import * as api from '../api.js';
-import { resolveTenantId } from '../tenant.js';
-import { errorMessage, log } from '../log.js';
+import * as api from '../api/index.js';
+import { resolveTenantId } from '../store/tenant.js';
+import { errorMessage, log } from '../util/log.js';
 import { printError } from './output.js';
-import {
-  type CliFlags,
-  parseCountFlag,
-  requireInit,
-  fmt,
-  type CommandContext,
-  stringFlagOrExit,
-  hookStoreRoot,
-  resolveAuthRoot,
-  flagIsTrue,
-} from './shared.js';
+import { type CliFlags, parseCountFlag, type CommandContext, stringFlagOrExit, flagIsTrue } from './flag-values.js';
+import { requireInit, resolveAuthRoot } from './shared.js';
+import { fmt } from './print.js';
+import { hookStoreRoot } from './hook-runtime.js';
 import { DAY_MS } from '../util/time.js';
 
 export function cmdStatus(hippoRoot: string): void {
@@ -148,17 +140,17 @@ function printEmbeddingStatus(hippoRoot: string, entries: MemoryEntry[]): void {
   }
   // Show cached counts whenever vectors exist on disk (even when disabled or
   // the key was removed), so the user still sees what is already indexed.
-  const embIndex = loadEmbeddingIndex(hippoRoot);
-  if (!embAvail && Object.keys(embIndex).length === 0) return;
+  const { ids: embeddedIds, dims } = storedVectorSummary(hippoRoot);
+  if (!embAvail && embeddedIds.size === 0) return;
   const activeIds = new Set(entries.map((e) => e.id));
-  const activeEmbedded = Object.keys(embIndex).filter((id) => activeIds.has(id)).length;
-  const orphaned = Object.keys(embIndex).length - activeEmbedded;
-  const dims = Object.values(embIndex)[0]?.length;
+  const activeEmbedded = [...embeddedIds].filter((id) => activeIds.has(id)).length;
+  const orphaned = embeddedIds.size - activeEmbedded;
   let line = `Embedded:          ${activeEmbedded}/${entries.length} memories`;
   if (dims) line += ` (${dims}-dim)`;
   if (orphaned > 0) line += ` (${orphaned} orphaned, run \`hippo embed\` to prune)`;
   console.log(line);
-  if (embeddingModelRequiresReindex(hippoRoot, embedProvider.id, embIndex)) {
+  // No index argument: the check then asks SQLite whether any vector exists instead of loading them.
+  if (embeddingModelRequiresReindex(hippoRoot, embedProvider.id)) {
     console.log(`                   model changed, run \`hippo embed\` to reindex`);
   }
 }
@@ -166,21 +158,15 @@ function printEmbeddingStatus(hippoRoot: string, entries: MemoryEntry[]): void {
 // Physics status
 function printPhysicsStatus(hippoRoot: string): void {
   try {
-    const db = openHippoDb(hippoRoot);
-    try {
-      const physicsMap = loadPhysicsState(db);
-      if (physicsMap.size > 0) {
-        const particles = Array.from(physicsMap.values());
-        const physConfig = loadConfig(hippoRoot);
-        const energy = computeSystemEnergy(particles, physConfig.physics.G_memory);
-        let sumVelMag = 0;
-        for (const p of particles) sumVelMag += vecNorm(p.velocity);
-        const avgVelMag = sumVelMag / particles.length;
-        console.log('');
-        console.log(`Physics: ${particles.length} particles, energy: ${fmt(energy.total, 4)} (KE: ${fmt(energy.kinetic, 4)}, PE: ${fmt(energy.potential, 4)}), avg vel: ${fmt(avgVelMag, 4)}`);
-      }
-    } finally {
-      closeHippoDb(db);
+    const particles = loadStoredParticles(hippoRoot);
+    if (particles.length > 0) {
+      const physConfig = loadConfig(hippoRoot);
+      const energy = computeSystemEnergy(particles, physConfig.physics.G_memory);
+      let sumVelMag = 0;
+      for (const p of particles) sumVelMag += vecNorm(p.velocity);
+      const avgVelMag = sumVelMag / particles.length;
+      console.log('');
+      console.log(`Physics: ${particles.length} particles, energy: ${fmt(energy.total, 4)} (KE: ${fmt(energy.kinetic, 4)}, PE: ${fmt(energy.potential, 4)}), avg vel: ${fmt(avgVelMag, 4)}`);
     }
   } catch (err) {
     // The physics table may not exist yet, so status prints without that line.

@@ -11,12 +11,12 @@ import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { runDoctor, formatDoctor } from '../src/doctor.js';
-import { startCompaction } from '../src/compaction-record.js';
-import { __setSpoolFs } from '../src/compaction-spool.js';
-import { repairProjects } from '../src/project-merge.js';
-import { openHippoDb, openHippoDbReadOnly, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, setMeta } from '../src/db.js';
+import { startCompaction } from '../src/capture/compaction-record.js';
+import { __setSpoolFs } from '../src/capture/compaction-spool.js';
+import { repairProjects } from '../src/sharing/project-merge.js';
+import { openHippoDb, openHippoDbReadOnly, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, setMeta } from '../src/db/index.js';
 
 function sha256(file: string): string {
   return createHash('sha256').update(readFileSync(file)).digest('hex');
@@ -306,6 +306,19 @@ describe('hippo doctor', () => {
 
     const r = runDoctor({ cwd, home: cwd, version: 'test' });
     expect(r.checks.find((c) => c.id === 'schema')).toMatchObject({ status: 'fail', fix: 'npm install -g hippo-memory@latest' });
+  });
+
+  it('a hippo.db that is not a database is one failed schema check and no other database check', () => {
+    const cwd = tmp('doctor-notdb-');
+    process.env.HIPPO_HOME = join(cwd, 'global');
+    mkdirSync(join(cwd, '.hippo'));
+    writeFileSync(join(cwd, '.hippo', 'hippo.db'), 'this file is not a database. '.repeat(400));
+
+    const r = runDoctor({ cwd, home: cwd, version: 'test' });
+    expect(r.ok).toBe(false);
+    expect(r.checks.filter((c) => !['node', 'store', 'claude-code', 'embeddings'].includes(c.id))).toEqual([
+      { id: 'schema', status: 'fail', detail: 'cannot open the database: file is not a database', fix: 'check file permissions on the .hippo folder' },
+    ]);
   });
 
   it('warns about merged rows the global store tagged user-global by mistake, and passes once repaired', () => {

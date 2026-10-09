@@ -4,10 +4,10 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../dist/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../dist/core/memory.js';
 import { initStore } from '../dist/store/open.js';
 import { upsertEntryRow } from '../dist/store/entry-row.js';
-import { openHippoDb, closeHippoDb } from '../dist/db.js';
+import { openHippoDb, closeHippoDb } from '../dist/db/index.js';
 import { consolidate } from '../dist/consolidate/sleep.js';
 
 const LIMIT_MS = 150;

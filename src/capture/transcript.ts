@@ -1,9 +1,12 @@
-import { envHomeDir, processEnv } from '../env.js';
+import { envHomeDir, processEnv } from '../util/env.js';
 import { claudeConfigDir } from '../hooks/shared.js';
 import * as fs from 'fs';
 import * as path from 'path';
-import { isObjectLike, isStringValue } from '../capture-contract.js';
+import { isObjectLike, isStringValue, readSessionEnd } from '../core/capture-contract.js';
 import { copilotTurn } from './copilot-transcript.js';
+
+const RECENT_USER_TURNS = 20;
+const RECENT_ASSISTANT_TURNS = 10;
 
 /**
  * Build a compact text summary from a Claude Code / OpenCode / Copilot JSONL transcript.
@@ -148,8 +151,8 @@ export function summariseTranscript(jsonl: string): string {
 /** The last 20 user turns and last 10 replies: session-end is about what was decided near the end, not at the start. */
 export function sessionTail(turns: readonly SessionTurn[]) {
   return {
-    users: turns.filter((t) => t.role === 'user').map((t) => t.text).slice(-20),
-    assistants: turns.filter((t) => t.role === 'assistant').map((t) => t.text).slice(-10),
+    users: turns.filter((t) => t.role === 'user').map((t) => t.text).slice(-RECENT_USER_TURNS),
+    assistants: turns.filter((t) => t.role === 'assistant').map((t) => t.text).slice(-RECENT_ASSISTANT_TURNS),
   };
 }
 
@@ -187,16 +190,10 @@ export function resolveLastSessionTranscript(
   if (explicit) return fs.existsSync(explicit) ? explicit : null;
 
   if (stdinText && stdinText.trim() !== '') {
-    try {
-      const payload: unknown = JSON.parse(stdinText);
-      if (isObjectLike(payload) && 'transcript_path' in payload) {
-        const tp = payload.transcript_path;
-        if (isStringValue(tp) && fs.existsSync(tp)) return tp;
-      }
-    } catch {
-      // not JSON, but still a payload, so no scan
-    }
-    return null;
+    const receipt = readSessionEnd(stdinText, false);
+    // A refused payload is still a payload, so no scan.
+    const tp = receipt.status === 'received' ? receipt.input.transcriptPath : null;
+    return tp !== null && fs.existsSync(tp) ? tp : null;
   }
 
   if (!opts.mayScan) return null;

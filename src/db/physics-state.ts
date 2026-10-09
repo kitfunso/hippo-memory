@@ -4,12 +4,13 @@
  * in SQLite using BLOB columns for 384-dim vectors.
  */
 
-import { evalNow } from '../ablation.js';
-import type { DatabaseSyncLike } from '../db.js';
-import type { MemoryEntry } from '../memory.js';
-import type { PhysicsParticle } from '../physics.js';
-import { computeMass, computeCharge, computeTemperature, vecZero } from '../physics.js';
-import { calculateStrength } from '../memory.js';
+import { evalNow } from '../core/ablation.js';
+import type { DatabaseSyncLike } from './index.js';
+import { withWriteScope } from './busy.js';
+import type { MemoryEntry } from '../core/memory.js';
+import type { PhysicsParticle } from '../core/physics.js';
+import { computeMass, computeCharge, computeTemperature, vecZero } from '../core/physics.js';
+import { calculateStrength } from '../core/memory.js';
 import { DAY_MS } from '../util/time.js';
 
 // ---------------------------------------------------------------------------
@@ -139,8 +140,7 @@ export function savePhysicsState(
       updated_at = datetime('now')
   `);
 
-  db.exec('BEGIN IMMEDIATE');
-  try {
+  withWriteScope(db, 'save_particles', () => {
     for (const p of particles) {
       stmt.run(
         p.memoryId,
@@ -152,11 +152,7 @@ export function savePhysicsState(
         p.lastSimulation,
       );
     }
-    db.exec('COMMIT');
-  } catch (error) {
-    try { db.exec('ROLLBACK'); } catch { /* already rolled back; keep the original error */ }
-    throw error;
-  }
+  });
 }
 
 /**

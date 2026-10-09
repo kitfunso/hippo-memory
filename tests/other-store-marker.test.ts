@@ -15,7 +15,7 @@ import {
   SqliteBlockedError,
   withSharedStoreHandles,
   withSqliteAllowed,
-} from '../src/db.js';
+} from '../src/db/index.js';
 import { repairAutomaticMemories } from '../src/cli/quality-repair.js';
 import * as serverEntry from '../src/server.js';
 import { initStore } from '../src/store/open.js';

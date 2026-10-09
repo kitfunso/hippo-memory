@@ -4,9 +4,9 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
-import { remember, type HippoDbContext } from '../src/api.js';
-import { pushGoal, completeGoal } from '../src/goals.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { remember, type HippoDbContext } from '../src/api/index.js';
+import { pushGoal, completeGoal } from '../src/store/goals.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 
 const ctx = (root: string): HippoDbContext => ({ hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } });
 

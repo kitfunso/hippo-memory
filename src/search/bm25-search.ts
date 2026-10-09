@@ -1,10 +1,10 @@
-import type { MemoryEntry } from '../memory.js';
-import { estimateTokens } from '../token-ledger.js';
-import { tokenize } from '../tokenize.js';
-import { evalNow } from '../ablation.js';
-import { extractPathTags } from '../path-context.js';
-import { detectScope } from '../scope.js';
-import { compareScoredResults } from '../compare.js';
+import type { MemoryEntry } from '../core/memory.js';
+import { estimateTokens } from '../util/token-text.js';
+import { tokenize } from '../util/tokenize.js';
+import { evalNow } from '../core/ablation.js';
+import { extractPathTags } from './path-context.js';
+import { detectScope } from '../sharing/scope.js';
+import { compareScoredResults } from '../core/compare.js';
 import { bm25Score, buildCorpus, entryText } from './bm25.js';
 import { currentEntries } from './as-of.js';
 import { applyRankBoosts, strengthRecencyMultipliers, NO_SUMMARY_SCORING, type BoostContext } from './boosts.js';

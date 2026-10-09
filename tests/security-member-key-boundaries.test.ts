@@ -14,12 +14,12 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { createApiKey, listApiKeys } from '../src/auth.js';
-import { Layer } from '../src/memory.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { createApiKey, listApiKeys } from '../src/store/auth.js';
+import { Layer } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { serve, type ServerHandle } from '../src/server.js';
-import * as api from '../src/api.js';
+import * as api from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 const PRIVATE_SCOPE = 'slack:private:CSECRET1';
@@ -37,12 +37,7 @@ function mintKey(home: string, role: 'admin' | 'member'): { plaintext: string; k
 }
 
 function keyCount(home: string): number {
-  const db = openHippoDb(home);
-  try {
-    return listApiKeys(db, { active: true }).length;
-  } finally {
-    closeHippoDb(db);
-  }
+  return listApiKeys(home, { active: true }).length;
 }
 
 function seedScopedMemories(home: string): void {

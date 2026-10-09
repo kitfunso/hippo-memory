@@ -1,10 +1,10 @@
 // PostCompact for a caller on another machine: the items it parsed become rows under its owner and project, and a retried request id writes nothing twice.
-import { BadRequestError } from '../api-errors.js';
+import { BadRequestError } from '../core/api-errors.js';
 import type { Context } from '../api/types.js';
-import { COMPACTION_ITEM_MAX_CHARS } from '../compaction-items.js';
-import { compactionByRequest, recordSummary, saveItems, scrubCompactionItems } from '../compaction-record.js';
-import { log } from '../log.js';
-import type { CallerProject } from '../prompt-hook.js';
+import { COMPACTION_ITEM_MAX_CHARS } from './compaction-items.js';
+import { compactionByRequest, recordSummary, saveItems, scrubCompactionItems } from './compaction-record.js';
+import { log } from '../util/log.js';
+import type { CallerProject } from '../api/prompt-hook.js';
 import { assertRequestId, assertTrigger, bindCaller, callerInHoldout, withCallerDb } from './caller-session.js';
 
 export interface CallerItemsRequest {

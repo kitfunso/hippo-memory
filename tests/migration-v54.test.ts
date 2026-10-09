@@ -1,11 +1,11 @@
 // Schema v54 adds nullable owner and project columns, the session binding table and retry ids, and never raises the floor.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { openHippoDb, openHippoDbReadOnly, closeHippoDb, getSchemaVersion, type DatabaseSyncLike } from '../src/db.js';
+import { openHippoDb, openHippoDbReadOnly, closeHippoDb, getSchemaVersion, type DatabaseSyncLike } from '../src/db/index.js';
 import { REQUIRED_SCHEMA_OBJECTS } from '../src/db/continuity.js';
 import { v54 } from '../src/db/migrations/v54.js';
 import { tableColumns, tableExists } from '../src/db/tables.js';
-import { recordFailure } from '../src/failure-log.js';
+import { recordFailure } from '../src/store/failure-log.js';
 import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import { saveSessionHandoff } from '../src/store/handoffs.js';
 import { makeRoot } from './_helpers/make-root.js';

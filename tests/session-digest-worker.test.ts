@@ -5,7 +5,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { sessionDigestId } from '../src/session-digest.js';
+import { sessionDigestId } from '../src/capture/session-digest.js';
 import { isSessionDigestRow } from '../src/core/session-digest-row.js';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';

@@ -1,16 +1,16 @@
 // A session's working state read from its transcript tail, with no store in the imports, so a hook with no store can derive it.
 import * as fs from 'fs';
 import type { TaskSnapshot } from '../store/rows.js';
-import { maskEmails, redactSecretsStrict } from '../secret-detect.js';
-import { isObjectLike, isStringValue } from '../capture-contract.js';
-import { errorMessage } from '../log.js';
-import { PRE_COMPACT_TAIL_BYTES, readTranscriptTail, truncateCodePointSafe } from '../transcript-tail.js';
+import { maskEmails, redactSecretsStrict } from '../util/secret-detect.js';
+import { isObjectLike, isStringValue } from '../core/capture-contract.js';
+import { errorMessage } from '../util/log.js';
+import { PRE_COMPACT_TAIL_BYTES, readTranscriptTail, truncateCodePointSafe } from '../util/transcript-tail.js';
 import { humanUserText, summariseTranscript } from './transcript.js';
 import { copilotTurn } from './copilot-transcript.js';
 
-export const PRE_COMPACT_TASK_CAP = 200;
-export const PRE_COMPACT_SUMMARY_CAP = 2000;
-export const PRE_COMPACT_NEXT_STEP_CAP = 500;
+const PRE_COMPACT_TASK_CAP = 200;
+const PRE_COMPACT_SUMMARY_CAP = 2000;
+const PRE_COMPACT_NEXT_STEP_CAP = 500;
 const TRIM_MARKER = '[...earlier turns trimmed]\n';
 
 /** The longest each field of {@link transcriptWorkingState} can be, so a check of a sent working state imports these instead of copying them. */

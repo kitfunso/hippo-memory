@@ -1,14 +1,14 @@
 // The CLI ranking core as a ranker of retrieve(): rank, let the caller pick the list it shows, then record that list once.
 
-import { ForbiddenError } from '../api-errors.js';
-import { reportAuditWriteFailure, type AppendAuditOpts } from '../audit.js';
+import { ForbiddenError } from '../core/api-errors.js';
+import { reportAuditWriteFailure, type AppendAuditOpts } from '../store/audit.js';
 import { decidePlanningFallacy, detectPlanningClaim, type PlanningFallacyDecision } from '../predictions/planning-fallacy.js';
-import { rankRecall, type RankRecallResult } from '../recall-pipeline.js';
-import { writeRecallTraceAtRoot } from '../recall-trace.js';
+import { rankRecall, type RankRecallResult } from './recall-pipeline.js';
+import { writeRecallTraceAtRoot } from '../store/recall-trace.js';
 import type { SearchResult } from '../core/search-types.js';
 import { saveIndex } from '../store/index-and-stats.js';
-import { sqliteStore, type HippoStore, type RecallWrites } from '../store-port.js';
-import { estimateTokens } from '../token-ledger.js';
+import { sqliteStore, type HippoStore, type RecallWrites } from '../store/index.js';
+import { estimateTokens } from '../util/token-text.js';
 import { callerOf, recallAuditMetadata, recallAuditRow, strengthenOf } from './recall-record.js';
 import type { CliCoreRanker, CliCoreRecall, RecallOpts, RecallResult, ShownCliCore } from './recall-types.js';
 import { recordTokens } from './tokens.js';

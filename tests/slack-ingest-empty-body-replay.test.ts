@@ -18,7 +18,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { ingestMessage } from '../src/connectors/slack/ingest.js';
-import { adminActor } from '../src/api.js';
+import { adminActor } from '../src/api/index.js';
 import type { ChannelMeta } from '../src/connectors/slack/scope.js';
 
 function ctx(hippoRoot: string) {
@@ -43,9 +43,9 @@ describe('ingestMessage empty-body replay status consistency', () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  it('first ingest of empty body returns skipped + memory_id=null', () => {
+  it('first ingest of empty body returns skipped + memory_id=null', async () => {
     const hippoRoot = join(root, '.hippo');
-    const result = ingestMessage(ctx(hippoRoot), {
+    const result = await ingestMessage(ctx(hippoRoot), {
       teamId: 'T01',
       channel,
       // Use a message shape that messageToRememberOpts rejects (empty text + no thread_ts).
@@ -56,7 +56,7 @@ describe('ingestMessage empty-body replay status consistency', () => {
     expect(result.memoryId).toBeNull();
   });
 
-  it('replay of empty body returns skipped (not duplicate) — B3 fix', () => {
+  it('replay of empty body returns skipped (not duplicate) — B3 fix', async () => {
     const hippoRoot = join(root, '.hippo');
     const opts = {
       teamId: 'T01',
@@ -64,17 +64,17 @@ describe('ingestMessage empty-body replay status consistency', () => {
       message: { type: 'message' as const, channel: channel.id, user: 'U01', ts: '1716553200.000200', text: '' },
       eventId: 'Ev_empty_002',
     };
-    const first = ingestMessage(ctx(hippoRoot), opts);
+    const first = await ingestMessage(ctx(hippoRoot), opts);
     expect(first.status).toBe('skipped');
     expect(first.memoryId).toBeNull();
 
-    const replay = ingestMessage(ctx(hippoRoot), opts);
+    const replay = await ingestMessage(ctx(hippoRoot), opts);
     // Pre-fix: 'duplicate' (the asymmetry). Post-fix: 'skipped' (consistent).
     expect(replay.status).toBe('skipped');
     expect(replay.memoryId).toBeNull();
   });
 
-  it('replay of real-content event still returns duplicate (memory_id non-null)', () => {
+  it('replay of real-content event still returns duplicate (memory_id non-null)', async () => {
     const hippoRoot = join(root, '.hippo');
     const opts = {
       teamId: 'T01',
@@ -88,11 +88,11 @@ describe('ingestMessage empty-body replay status consistency', () => {
       },
       eventId: 'Ev_real_001',
     };
-    const first = ingestMessage(ctx(hippoRoot), opts);
+    const first = await ingestMessage(ctx(hippoRoot), opts);
     expect(first.status).toBe('ingested');
     expect(first.memoryId).not.toBeNull();
 
-    const replay = ingestMessage(ctx(hippoRoot), opts);
+    const replay = await ingestMessage(ctx(hippoRoot), opts);
     // Non-null cached memory_id → 'duplicate' (correct, not affected by B3 fix).
     expect(replay.status).toBe('duplicate');
     expect(replay.memoryId).toBe(first.memoryId);

@@ -10,10 +10,10 @@
  *   - hippo github dlq replay <id> [--force]
  */
 
-import { envGithubToken, envGithubWebhookSecret, envGithubWebhookSecretPrevious } from '../../env.js';
-import { type Context, adminActor } from '../../api.js';
+import { envGithubToken, envGithubWebhookSecret, envGithubWebhookSecretPrevious } from '../../util/env.js';
+import { type Context, adminActor } from '../../api/index.js';
 import { seedCursors } from '../../store/connectors/github.js';
-import { resolveTenantId } from '../../tenant.js';
+import { resolveTenantId } from '../../store/tenant.js';
 import { backfillRepo } from './backfill.js';
 import { realGitHubFetcher, type GitHubFetcher } from './octokit-client.js';
 import { listDlq } from '../dlq.js';
@@ -27,7 +27,7 @@ import {
   isGitHubPullRequestEvent,
   isGitHubPullRequestReviewCommentEvent,
 } from './types.js';
-import type { JsonValue } from '../../json.js';
+import type { JsonValue } from '../../util/json.js';
 
 type FlagValue = string | boolean | string[];
 type Flags = Record<string, FlagValue>;
@@ -175,7 +175,7 @@ const reingestParkedDelivery: IngestHook = async (innerCtx, args) => {
       ? `github://${repo}/issue/${event.payload.issue.number}/comment/${event.payload.comment.id}`
       : `github://${repo}/pull/${event.payload.pull_request.number}/review_comment/${event.payload.comment.id}`;
     const idempotencyKey = computeDeletionKey(artifactRef, event.payload.comment.updated_at ?? null);
-    const r = handleCommentDeleted(innerCtx, {
+    const r = await handleCommentDeleted(innerCtx, {
       artifactRef,
       idempotencyKey,
       deliveryId: args.deliveryId,
@@ -186,7 +186,7 @@ const reingestParkedDelivery: IngestHook = async (innerCtx, args) => {
     // trail is in github_dlq.retry_count + retried_at.
     return { memoryId: r.archivedCount > 0 ? 'archived' : null };
   }
-  const r = ingestEvent(innerCtx, {
+  const r = await ingestEvent(innerCtx, {
     event,
     rawBody: args.rawPayload,
     deliveryId: args.deliveryId,

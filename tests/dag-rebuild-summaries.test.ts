@@ -17,12 +17,15 @@ import {
   loadAllDirtySummaries,
   applyRebuildResult,
 } from '../src/store/summaries.js';
-import { openHippoDb, type DatabaseSyncLike } from '../src/db.js';
-import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { rebuildDirtySummaries, buildDag } from '../src/dag.js';
-import * as dagModule from '../src/dag.js';
+import { openHippoDb, withSharedStoreHandles, type DatabaseSyncLike } from '../src/db/index.js';
+import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { rebuildDirtySummaries, buildDag } from '../src/consolidate/dag.js';
+import * as dagModule from '../src/consolidate/dag.js';
 import { consolidate } from '../src/consolidate/sleep.js';
-import { insertRejectedValue, rejectionDigest, normalizeValueForRejection } from '../src/rejection.js';
+import { insertRejectedValue, rejectionDigest, normalizeValueForRejection } from '../src/store/rejection.js';
+
+// The cap cases seed up to 75 rows and marks in a real store, so their time follows the runner's disk.
+vi.setConfig({ testTimeout: 30_000 });
 
 /**
  * Build a fetcher that returns the same synthetic content for every call.
@@ -271,13 +274,16 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
   });
 
   it('test #4: cap enforcement — 25 dirty summaries with cap=20 → attempted=20, capped=true', async () => {
-    for (let i = 0; i < 25; i++) {
-      const sum = makeSummary(`sum-${i}`);
-      writeEntry(hippoRoot, sum);
-      const child = makeChild(sum.id, `fact-${i}`);
-      writeEntry(hippoRoot, child);
-      forceMarkDirty(hippoRoot, sum.id);
-    }
+    // One connection for the seed loop: a close per write checkpoints the WAL, which is slow on Windows.
+    await withSharedStoreHandles(() => {
+      for (let i = 0; i < 25; i++) {
+        const sum = makeSummary(`sum-${i}`);
+        writeEntry(hippoRoot, sum);
+        const child = makeChild(sum.id, `fact-${i}`);
+        writeEntry(hippoRoot, child);
+        forceMarkDirty(hippoRoot, sum.id);
+      }
+    });
 
     const fetcher = makeOkFetcher();
     const result = await rebuildDirtySummaries(hippoRoot, {

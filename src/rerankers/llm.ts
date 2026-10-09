@@ -1,10 +1,14 @@
-import { envLlmRerankerKey, envLlmRerankerModel, envLlmRerankerTimeoutMs, envLlmRerankerUrl } from '../env.js';
+import { envLlmRerankerKey, envLlmRerankerModel, envLlmRerankerTimeoutMs, envLlmRerankerUrl } from '../util/env.js';
 import type { RerankerFn, RerankResult, RerankerOptions } from './types.js';
 import type { SearchResult } from '../core/search-types.js';
-import { redactSecretsStrict } from '../secret-detect.js';
+import { redactSecretsStrict } from '../util/secret-detect.js';
 import { createOutageWarning } from './outage-warning.js';
-import { rerankerPost } from './remote.js';
-import { errorMessage } from '../log.js';
+import { rerankerPost, RERANKER_MAX_REPLY_BYTES } from './remote.js';
+import { readCappedJson } from '../util/capped-json.js';
+import { type JsonValue, isJsonObject, isJsonString } from '../util/json.js';
+import { errorMessage } from '../util/log.js';
+
+const DEFAULT_LLM_RERANK_TOP_K = 20;
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 
@@ -31,7 +35,7 @@ export function createLlmReranker(): RerankerFn {
     if (!url) {
       throw new Error('HIPPO_LLM_RERANKER_URL not set; refusing to run LLM reranker.');
     }
-    const head = results.slice(0, options?.topK ?? 20);
+    const head = results.slice(0, options?.topK ?? DEFAULT_LLM_RERANK_TOP_K);
 
     let permutation: number[] | null = null;
     try {
@@ -52,8 +56,14 @@ export function createLlmReranker(): RerankerFn {
   };
 }
 
-/** The instance the reranker registry serves; its outage state lasts the process. */
-export const llmReranker: RerankerFn = createLlmReranker();
+/** The first choice's message text, or '' when the reply has none. */
+function replyText(body: JsonValue): string {
+  const choices = isJsonObject(body) ? body.choices : undefined;
+  const choice = Array.isArray(choices) ? choices[0] : undefined;
+  const message = isJsonObject(choice) ? choice.message : undefined;
+  const content = isJsonObject(message) ? message.content : undefined;
+  return isJsonString(content) ? content : '';
+}
 
 /** One chat-completions call; rejects with the reason when the reply holds no usable permutation. */
 async function requestPermutation(url: string, query: string, head: readonly SearchResult[]): Promise<number[]> {
@@ -84,8 +94,7 @@ async function requestPermutation(url: string, query: string, head: readonly Sea
     await resp.body?.cancel();
     throw new Error(`HTTP ${resp.status}`);
   }
-  const j: { choices?: Array<{ message?: { content?: string } }> } = await resp.json();
-  const txt = j.choices?.[0]?.message?.content ?? '';
+  const txt = replyText(await readCappedJson(resp, RERANKER_MAX_REPLY_BYTES));
   const m = txt.match(/\[\s*(\d+(?:\s*,\s*\d+)*)\s*\]/);
   const parsed = m ? m[1].split(',').map((s) => parseInt(s.trim(), 10)) : [];
   const isPermutation =

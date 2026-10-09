@@ -7,8 +7,8 @@ import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { initStore } from '../src/store/open.js';
-import { openHippoDb, closeHippoDb, withWriteScopeOr, type DatabaseSyncLike } from '../src/db.js';
-import { pushGoalWithDb } from '../src/goals.js';
+import { openHippoDb, closeHippoDb, withWriteScopeOr, type DatabaseSyncLike } from '../src/db/index.js';
+import { pushGoalWithDb } from '../src/store/goals.js';
 
 const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 

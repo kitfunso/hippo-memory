@@ -5,8 +5,8 @@ import { join } from 'node:path';
 import type { Readable } from 'node:stream';
 import { spawn, execFileSync, type ChildProcessByStdio } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
-import { openHippoDb, closeHippoDb, getMeta } from '../src/db.js';
-import { queryAuditEvents } from '../src/audit.js';
+import { openHippoDb, closeHippoDb, getMeta } from '../src/db/index.js';
+import { queryAuditEvents } from '../src/store/audit.js';
 import { boundPort } from './_helpers/listen.js';
 import { ROUTED_CLI_ENV } from './_helpers/routed-cli-env.js';
 
@@ -30,7 +30,7 @@ function makeWorkspace(): string {
 
 // writePidfile renames a finished temp file into place, so an existing pidfile is always whole JSON.
 function pidfilePort(pidfilePath: string): number {
-  // SAFETY: serve() writes the pidfile as JSON with the numeric port it bound (src/server-detect.ts writePidfile).
+  // SAFETY: serve() writes the pidfile as JSON with the numeric port it bound (src/server/server-detect.ts writePidfile).
   return (JSON.parse(readFileSync(pidfilePath, 'utf8')) as { port: number }).port;
 }
 

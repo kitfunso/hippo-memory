@@ -31,7 +31,7 @@
  * retention is exact and reproducible regardless of which random ids win a
  * tie.
  */
-import { describe, it, expect, beforeEach, afterEach, afterAll } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -43,11 +43,14 @@ import { simulateQuestion } from '../benchmarks/memory-value/simulate.mjs';
 import { extractQuestion } from '../benchmarks/memory-value/extract.mjs';
 import { evaluateAll, computeDatasetVariance, evaluateVarianceGate } from '../benchmarks/memory-value/evaluate.mjs';
 import { questionDir, metaPathFor, featuresPathFor, goldPathFor, readJsonl, readJson, computeGold, scratchRootDir, sanitizeQuestionId, safeRemoveScratchDir } from '../benchmarks/memory-value/common.mjs';
-import { computeSchemaFit } from '../dist/memory.js';
+import { computeSchemaFit } from '../dist/core/memory.js';
 
-import type { MemoryEntry } from '../src/memory.js';
+import type { MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { clearAblationEnv, QUESTIONS, QUESTION_C, cleanupScratch, runPipeline, TEST_SIM_ROUNDS } from './memory-value-fixtures.js';
+
+// Each case ingests, simulates and extracts a question against real stores on disk.
+vi.setConfig({ testTimeout: 30_000 });
 
 // mkdtemp per process (two worktrees at once must not share a root); re-set in a LATER beforeEach because clearAblationEnv deletes it.
 const HARNESS_SCRATCH_ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-mv-harness-test-scratch-'));
@@ -140,9 +143,9 @@ describe('memory-value harness (real stores)', () => {
   it('schema_fit is wired to the REAL computeSchemaFit(text, [], entriesSoFar) path — verified by independent replay', async () => {
     // Coordinator's fix-round ask was "assert schema_fit varies". Measured
     // reality: computeSchemaFit returns the neutral 0.5 before ever reaching
-    // the content-overlap branch — via the empty-store guard (src/memory.ts:558)
+    // the content-overlap branch — via the empty-store guard (src/core/memory.ts:558)
     // for each store's FIRST entry, and via the tag-overlap guard
-    // (src/memory.ts:568, `tags.length === 0 && tagFreq.size === 0`) for every
+    // (src/core/memory.ts:568, `tags.length === 0 && tagFreq.size === 0`) for every
     // entry after it, since ingest.mjs always passes `tags: []` (no invented
     // tags, per the leakage-rule design) so tagFreq stays empty for every
     // store. One of the two guards fires unconditionally and schema_fit is

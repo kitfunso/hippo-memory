@@ -21,9 +21,9 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { createApiKey } from '../src/auth.js';
-import { log } from '../src/log.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { createApiKey } from '../src/store/auth.js';
+import { log } from '../src/util/log.js';
 import { serve, type ServerHandle } from '../src/server.js';
 
 describe('serve() non-loopback host guard', () => {

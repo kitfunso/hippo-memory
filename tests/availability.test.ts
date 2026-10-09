@@ -23,7 +23,7 @@ import {
   detectAvailabilityBias,
   type AgeRef,
   DEFAULT_RECENCY_WINDOW_MS,
-} from '../src/availability.js';
+} from '../src/api/availability.js';
 
 // Fixed reference "now" so every fixture age is deterministic.
 const NOW = Date.parse('2026-05-28T00:00:00.000Z');

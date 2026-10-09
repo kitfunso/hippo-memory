@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { archiveRawMemory } from '../src/raw-archive.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { archiveRawMemory } from '../src/store/raw-archive.js';
 
 interface ArchivedRawPayload {
   redacted?: boolean;
@@ -36,7 +36,7 @@ describe('archiveRawMemory', () => {
     // v0.39 Path A: payload_json is metadata-only — original content is NOT
     // stored. The audit_log row carries the compliance trail; raw_archive
     // tracks only that an archive happened, for what tenant/kind, and why.
-    // SAFETY: payload_json is written by archiveRawMemory (src/raw-archive.ts)
+    // SAFETY: payload_json is written by archiveRawMemory (src/store/raw-archive.ts)
     // with exactly this metadata-only shape.
     const payload = JSON.parse(archived.payload_json) as ArchivedRawPayload;
     expect(payload.redacted).toBe(true);

@@ -5,15 +5,15 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { SqliteBlockedError, withSqliteBlocked } from '../src/db.js';
-import { recordTokens } from '../src/api.js';
+import { SqliteBlockedError, withSqliteBlocked } from '../src/db/index.js';
+import { recordTokens } from '../src/api/index.js';
 import { recordMcpTokens } from '../src/mcp/request.js';
 import { strengthenRetrieved } from '../src/store/entry-writes.js';
-import { writeRecallTraceAtRoot } from '../src/recall-trace.js';
-import { resolveIndexedEmbeddingModel } from '../src/embeddings.js';
+import { writeRecallTraceAtRoot } from '../src/store/recall-trace.js';
+import { resolveIndexedEmbeddingModel } from '../src/store/embeddings/index.js';
 import { resolveVectorArm } from '../src/search/vector.js';
 import { physicsSearch } from '../src/search/physics-search.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 
 const entry = createMemory('deploy pipeline notes for the api', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
 

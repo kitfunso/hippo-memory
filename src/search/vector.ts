@@ -1,11 +1,12 @@
-import type { MemoryEntry } from '../memory.js';
-import { cosineSimilarity, indexedModel, indexNeedsRebuild } from '../embeddings.js';
+import type { MemoryEntry } from '../core/memory.js';
+import { cosineOf, indexNeedsRebuild } from '../store/embeddings/index.js';
+import { indexedModel } from '../store/vector-index.js';
 import type { VectorCandidateSpec } from '../store/search-rows.js';
-import { resolveEmbeddingProvider } from '../embedding-provider.js';
-import { rethrowIfSqliteBlocked } from '../db.js';
-import { errorMessage, log } from '../log.js';
-import { requireGroup, sqliteStore, type HippoStore, type VectorReads } from '../store-port.js';
-import { redactSecretsStrict } from '../secret-detect.js';
+import { resolveEmbeddingProvider } from '../store/embeddings/provider.js';
+import { rethrowIfSqliteBlocked } from '../db/index.js';
+import { errorMessage, log } from '../util/log.js';
+import { requireGroup, sqliteStore, type HippoStore, type VectorReads } from '../store/index.js';
+import { redactSecretsStrict } from '../util/secret-detect.js';
 import { currentEntries, type CurrentnessOptions } from './as-of.js';
 
 /** hybridSearch's vector arm: which rows it may add, plus the caller's JS admission rules (exact private regex, entry filters). */
@@ -16,7 +17,7 @@ export interface VectorArm {
   entries: MemoryEntry[];
   addedRows: boolean;
   useEmbeddings: boolean;
-  embeddingIndex: Record<string, number[]>;
+  embeddingIndex: Record<string, ArrayLike<number>>;
   queryVector: number[];
 }
 
@@ -50,7 +51,9 @@ export async function vectorCandidatesOutside(
   reads: VectorReads, entries: readonly MemoryEntry[], queryVector: readonly number[], spec: HybridVectorCandidates,
 ): Promise<MemoryEntry[]> {
   const inPool = new Set(entries.map((e) => e.id));
-  return (await reads.nearestEntries(queryVector, spec)).filter((e) => !inPool.has(e.id) && (spec.admit?.(e) ?? true));
+  // The port takes data alone: `admit` is this side's rule, and a function cannot be sent to a store on another thread.
+  const { admit, ...stored } = spec;
+  return (await reads.nearestEntries(queryVector, stored)).filter((e) => !inPool.has(e.id) && (admit?.(e) ?? true));
 }
 
 /** Embeds the query and loads stored vectors; any failure leaves BM25 to rank alone. */
@@ -66,6 +69,11 @@ export async function resolveVectorArm(query: string, entries: MemoryEntry[], op
   return arm;
 }
 
+// Views when the store has them, so a search copies no vector; the number[] copies score the same.
+async function storedVectorsOf(store: HippoStore, reads: VectorReads, ids: readonly string[]): Promise<Map<string, ArrayLike<number>>> {
+  return store.vectorViews ? store.vectorViews.storedVectorViews(ids) : reads.storedVectors(ids);
+}
+
 async function fillVectorArm(arm: VectorArm, query: string, root: string, options: VectorArmOptions): Promise<void> {
   const provider = resolveEmbeddingProvider(root);
   if (!provider.isAvailable()) return;
@@ -77,7 +85,7 @@ async function fillVectorArm(arm: VectorArm, query: string, root: string, option
     return;
   }
   const spec = options.vectorCandidates;
-  const vectors = await reads.storedVectors(arm.entries.map((e) => e.id));
+  const vectors = await storedVectorsOf(store, reads, arm.entries.map((e) => e.id));
   // Only spend a (possibly paid, off-box) query embedding when there is a stored vector this search can use.
   if (vectors.size === 0 && !(spec !== undefined && index.hasVectors)) return;
   const [vec] = await provider.embed([query], 'query');
@@ -90,7 +98,7 @@ async function fillVectorArm(arm: VectorArm, query: string, root: string, option
   if (added.length > 0) {
     arm.addedRows = true;
     arm.entries = currentEntries([...arm.entries, ...added], options);
-    for (const [id, v] of await reads.storedVectors(added.map((e) => e.id))) vectors.set(id, v);
+    for (const [id, v] of await storedVectorsOf(store, reads, added.map((e) => e.id))) vectors.set(id, v);
   }
   arm.embeddingIndex = Object.fromEntries(vectors);
   arm.useEmbeddings = true;
@@ -110,7 +118,7 @@ export function denseScores(arm: VectorArm): DenseScores {
   for (let i = 0; i < n; i++) {
     const cached = arm.embeddingIndex[arm.entries[i].id];
     hadVec[i] = Boolean(cached && arm.queryVector.length > 0);
-    cosine[i] = hadVec[i] ? Math.max(0, cosineSimilarity(arm.queryVector, cached)) : 0;
+    cosine[i] = hadVec[i] ? Math.max(0, cosineOf(arm.queryVector, cached)) : 0;
   }
   return { cosine, hadVec };
 }

@@ -4,10 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { cmdAuth } from '../src/cli/auth.js';
 import { cmdGoal } from '../src/cli/goals.js';
-import * as api from '../src/api.js';
-import { verifyApiKeyCached } from '../src/auth.js';
-import { sqliteStore } from '../src/store-port.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import * as api from '../src/api/index.js';
+import { verifyApiKeyCached } from '../src/store/auth.js';
+import { sqliteStore } from '../src/store/index.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 

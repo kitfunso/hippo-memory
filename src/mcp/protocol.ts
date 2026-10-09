@@ -2,17 +2,17 @@
 
 import * as fs from 'fs';
 import { randomUUID } from 'node:crypto';
-import { INTERNAL_ERROR_MESSAGE, mapApiError } from '../http-util.js';
-import { errorFields, errorMessage, log } from '../log.js';
+import { INTERNAL_ERROR_MESSAGE, mapApiError } from '../util/http-util.js';
+import { errorFields, errorMessage, log } from '../util/log.js';
 import { currentRequestId } from '../util/request-scope.js';
-import { getGlobalRoot } from '../shared.js';
-import { loadConfig } from '../config.js';
-import type { Actor as ApiActor } from '../api.js';
-import { findHippoStoreDir, type ResolveProjectIdentityOpts } from '../project-identity.js';
-import { isStoreBusy, STORE_BUSY_MESSAGE } from '../db.js';
-import { type JsonValue } from '../json.js';
-import type { CallerProject } from '../prompt-hook.js';
-import type { HippoStore } from '../store-port.js';
+import { getGlobalRoot } from '../sharing/global-store.js';
+import { loadConfig } from '../core/config.js';
+import type { Actor as ApiActor } from '../api/index.js';
+import { findHippoStoreDir, type ResolveProjectIdentityOpts } from '../core/project-identity.js';
+import { isStoreBusy, STORE_BUSY_MESSAGE } from '../db/index.js';
+import { type JsonValue } from '../util/json.js';
+import type { CallerProject } from '../api/prompt-hook.js';
+import type { HippoStore } from '../store/index.js';
 
 // ── Find hippo root ──
 

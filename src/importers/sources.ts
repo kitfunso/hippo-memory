@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { type ImportResult, type ImportOptions, importEntries } from './core.js';
 import { splitMarkdownFrontmatter, collectMarkdownFiles } from './markdown-parse.js';
-import { type JsonValue, isJsonString, isJsonObject } from '../json.js';
+import { type JsonValue, isJsonString, isJsonObject } from '../util/json.js';
 
 /** Coerce one imported record (string, `{content|text: ...}` object, or
  *  anything else) into the plain-text memory chunk it represents. */

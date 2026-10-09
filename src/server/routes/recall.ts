@@ -1,17 +1,17 @@
 // Recall routes: /v1/memories search, assemble, drill and /v1/context.
 import { dirname, resolve } from 'node:path';
-import { assertCallerProject, resolveProjectIdentity, type ProjectRef } from '../../project-identity.js';
-import { isSharedStore } from '../../config.js';
-import { assembleCost, contextCost, drillCost } from '../../context-render.js';
-import { storeFor } from '../../store-port.js';
-import { biasHintEnabled, type RecallHistorySnapshot } from '../../recall-history.js';
-import { assemble, type AssembleOpts, type Context, drillDown, type DrillDownOpts, getContext, recordTokens, retrieve } from '../../api.js';
+import { assertCallerProject, resolveProjectIdentity, type ProjectRef } from '../../core/project-identity.js';
+import { isSharedStore } from '../../core/config.js';
+import { assembleCost, contextCost, drillCost } from '../../api/context-render.js';
+import { storeFor } from '../../store/index.js';
+import { biasHintEnabled, type RecallHistorySnapshot } from '../../api/recall-history.js';
+import { assemble, type AssembleOpts, type Context, drillDown, type DrillDownOpts, getContext, recordTokens, retrieve } from '../../api/index.js';
 import { httpParams, parseContextRequest, parseRecallRequest } from '../../api/recall-request.js';
 import { anchorSkippedRows, noteRecall, peekSessionRing, resetSessionRings, sessionRing } from '../../api/recall-record.js';
-import { HttpError, sendJson } from '../../http-util.js';
+import { HttpError, sendJson } from '../../util/http-util.js';
 import { buildContextWithAuth } from '../auth.js';
 import type { RouteRequest } from '../types.js';
-import { validateIdSegment } from '../validation.js';
+import { MAX_LIST_LIMIT, parseListLimit, validateIdSegment } from '../validation.js';
 
 /** Test-only: reset the HTTP recall rings. Call from beforeEach. */
 export function __resetSessionRecallHistoryHttp(): void {
@@ -100,6 +100,8 @@ export async function handleDrillRecall({ req, res, opts, query }: RouteRequest,
   if (limit !== undefined && (!Number.isFinite(limit) || limit <= 0)) {
     throw new HttpError(400, 'limit must be a positive number');
   }
+  // Past the list ceiling the shared parser refuses, so the reply is the one every other list route gives.
+  if (limit !== undefined && limit > MAX_LIST_LIMIT) parseListLimit(limitRaw);
   const budgetRaw = query.get('budget');
   const budget = budgetRaw === null ? undefined : Number(budgetRaw);
   if (budget !== undefined && (!Number.isFinite(budget) || budget <= 0)) {

@@ -1,21 +1,24 @@
 // Project ids in real stores: two `api` repos sharing a global store, the upgrade re-sync, folds the sync follows, and the repairs.
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { getContext } from '../src/api.js';
+import { getContext } from '../src/api/index.js';
 import { containerId, containerPrefix } from '../src/agent-memories/source.js';
 import { importAtSessionEnd } from '../src/agent-memories/sync.js';
-import { saveItems } from '../src/compaction-record.js';
-import { listDormantSnapshots } from '../src/dormant.js';
+import { saveItems } from '../src/capture/compaction-record.js';
+import { listDormantSnapshots } from '../src/store/dormant.js';
 import { runDoctor } from '../src/doctor.js';
-import { createMemory, type MemoryEntry } from '../src/memory.js';
-import { mergeProjects, planProjectRepair, repairOnceOnSleep, repairProjects } from '../src/project-merge.js';
-import { clearProjectIdentityCache, resolveProjectIdentity } from '../src/project-identity.js';
+import { createMemory, type MemoryEntry } from '../src/core/memory.js';
+import { mergeProjects, planProjectRepair, repairOnceOnSleep, repairProjects } from '../src/sharing/project-merge.js';
+import { clearProjectIdentityCache, resolveProjectIdentity } from '../src/core/project-identity.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { loadRecallSearchEntries } from '../src/store/search-rows.js';
 import { initStore } from '../src/store/open.js';
 import { closeWorld, ctxFor, liveRows, note, openWorld, projectNotes, toolTally, withDb, type World } from './_helpers/agent-memories-world.js';
+
+// Every sync asks git for each folder's layout in a child process, and a case runs several syncs.
+vi.setConfig({ testTimeout: 30_000 });
 
 const T = 'default';
 let w: World;

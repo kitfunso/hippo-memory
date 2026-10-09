@@ -3,10 +3,10 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { cpSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { AuditEvent } from '../src/audit.js';
-import { closeHippoDb, openHippoDb } from '../src/db.js';
-import type { KeysetPosition } from '../src/keyset.js';
-import { sqliteStore } from '../src/store-port.js';
+import type { AuditEvent } from '../src/store/audit.js';
+import { closeHippoDb, openHippoDb } from '../src/db/index.js';
+import type { KeysetPosition } from '../src/util/keyset.js';
+import { sqliteStore } from '../src/store/index.js';
 import { auditHighIdAt } from '../src/store/key-audit.js';
 import type { QuarantineApproval, QuarantineListQuery, QuarantineRejection, QuarantinedMemory } from '../src/store/port.js';
 import {

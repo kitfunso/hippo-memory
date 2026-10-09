@@ -91,8 +91,8 @@ async function loadSnapshotRetrying(
  * observable-signal.md). A throw from `check()` counts as "not yet"; only
  * running out of the clock fails the test.
  *
- * Default bound is generous (25s, under this project's 30s global
- * `testTimeout` in vitest.config.ts) because the detached worker is a real
+ * Default bound is generous (25s, under the 30s `testTimeout` of the
+ * process project in vitest.config.ts) because the detached worker is a real
  * separate OS process competing for CPU/IO with the rest of a full `npm
  * test` run — under full-suite parallel load this project's own heavier
  * tests (e.g. dag-rebuild-summaries.test.ts) observably take well over a
@@ -161,6 +161,25 @@ describe('6. session-end wiring: --session-id argv + worker close', () => {
     expect(fs.readFileSync(logFile, 'utf8')).toContain(
       'closed 1 active snapshot(s) for session sess-end-close-me',
     );
+    expect(await loadSnapshotRetrying(hippoRoot, 'default')).toBeNull();
+  });
+
+  it('a payload that starts with a byte-order mark still names its session to the worker', async () => {
+    const hippoRoot = getHippoRoot(dir);
+    saveActiveTaskSnapshot(hippoRoot, 'default', {
+      task: 'byte-order-mark task',
+      summary: 's',
+      next_step: 'n',
+      session_id: 'sess-bom',
+      source: 'pre-compact',
+    });
+
+    const logFile = path.join(dir, 'session-end-bom.log');
+    const payload = '\uFEFF' + JSON.stringify({ session_id: 'sess-bom', hook_event_name: 'SessionEnd' });
+    expect(runHippo(['session-end', '--log-file', logFile], dir, env, payload).status).toBe(0);
+
+    await waitUntil(() => closeStepLogged(logFile));
+    expect(fs.readFileSync(logFile, 'utf8')).toContain('closed 1 active snapshot(s) for session sess-bom');
     expect(await loadSnapshotRetrying(hippoRoot, 'default')).toBeNull();
   });
 

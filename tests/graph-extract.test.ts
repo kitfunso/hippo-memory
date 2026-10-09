@@ -12,15 +12,15 @@ import { once } from 'node:events';
 import { createRequire } from 'node:module';
 import { Worker } from 'node:worker_threads';
 import { deleteEntry } from '../src/store/delete-and-batch.js';
-import { saveDecision, closeDecision } from '../src/decisions.js';
-import { savePolicy } from '../src/policies.js';
-import { saveCustomerNote } from '../src/customer-notes.js';
-import { saveProjectBrief } from '../src/project-briefs.js';
-import { loadEntities, loadRelations, loadNeighborRelations, loadRelationsAmong } from '../src/graph/read.js';
-import type { Entity } from '../src/graph/types.js';
-import { extractGraph, extractGraphChunked } from '../src/graph-extract.js';
-import { openHippoDb, closeHippoDb, getHippoDbPath, runWithRequestStores, type DatabaseSyncLike } from '../src/db.js';
-import { WRITE_BUDGET, type WriteBudget } from '../src/write-budget.js';
+import { saveDecision, closeDecision } from '../src/objects/decisions.js';
+import { savePolicy } from '../src/objects/policies.js';
+import { saveCustomerNote } from '../src/objects/customer-notes.js';
+import { saveProjectBrief } from '../src/objects/project-briefs.js';
+import { loadEntities, loadRelations, loadNeighborRelations, loadRelationsAmong } from '../src/store/graph-reads.js';
+import type { Entity } from '../src/store/graph-rows.js';
+import { extractGraph, extractGraphChunked } from '../src/graph/extract.js';
+import { openHippoDb, closeHippoDb, getHippoDbPath, runWithRequestStores, type DatabaseSyncLike } from '../src/db/index.js';
+import { WRITE_BUDGET, type WriteBudget } from '../src/util/write-budget.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 // SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike.

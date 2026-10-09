@@ -16,8 +16,8 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { pushGoal } from '../src/goals.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { pushGoal } from '../src/store/goals.js';
 import { hippoOut } from './_helpers/spawn-hippo.js';
 
 function hippo(cwd: string, env: Record<string, string>, ...args: string[]): string {

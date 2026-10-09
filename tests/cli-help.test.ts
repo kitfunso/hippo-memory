@@ -7,17 +7,18 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { COMMANDS, parseArgs, runCli, usageText, verbUsage } from '../src/cli.js';
+import { VERB_FLAGS, type VerbFlags } from '../src/cli/flags.js';
+import { VERB_USAGE } from '../src/cli/usage.js';
+import { ownStderr } from './_helpers/own-stderr.js';
 import { runInProcess, type InProcessResult } from './_helpers/run-in-process.js';
 
 // Read from the dispatch table so a verb added later is covered without editing this file.
-const VERBS = Object.entries(COMMANDS).flatMap(([verb, spec]) => [verb, ...('aliases' in spec ? spec.aliases : [])]);
+const VERBS = Object.entries(COMMANDS).flatMap(([verb, spec]) => [verb, ...(spec.aliases ?? [])]);
 const SUBCOMMANDS = [['audit', 'prune'], ['slack', 'backfill'], ['slack', 'workspaces'], ['github', 'backfill']];
 const OWN_FLAG = new Map([
   ['audit prune', '--older-than'], ['slack backfill', '--channel'], ['slack workspaces', '--tenant'], ['github backfill', '--repo'],
 ]);
 const CLI = resolve(__dirname, '..', 'bin', 'hippo.js');
-// Whether Node prints the SQLite warning depends on its version, so it stays out of the comparison.
-const SQLITE_WARNING = /\(node:\d+\) ExperimentalWarning: SQLite is an experimental feature[^\n]*\r?\n\(Use `node --trace-warnings[^\n]*(?:\r?\n)?/g;
 // No PATH, so a spawned verb that ignored --help could not reach schtasks, crontab or codex.
 const ENV = Object.fromEntries(Object.entries(process.env).filter(([key]) => key.toUpperCase() !== 'PATH'));
 const ISOLATED_KEYS = ['HOME', 'USERPROFILE', 'HIPPO_HOME', 'HIPPO_SKIP_AUTO_INTEGRATIONS'];
@@ -26,6 +27,7 @@ const ISOLATED_KEYS = ['HOME', 'USERPROFILE', 'HIPPO_HOME', 'HIPPO_SKIP_AUTO_INT
 const handlers = Object.entries<{ run: (...args: never[]) => void | Promise<void> }>(COMMANDS)
   .map(([verb, spec]) => [verb, vi.spyOn(spec, 'run').mockImplementation(() => undefined)] as const);
 
+interface CommandRow { readonly usage: readonly string[]; readonly flags: VerbFlags }
 interface HelpDirs { readonly cwd: string; readonly home: string; readonly store: string }
 let dirs: HelpDirs;
 let full: InProcessResult;
@@ -75,6 +77,14 @@ describe('CLI help output is byte-identical and runs nothing', () => {
 
   it('the dispatch table holds the pinned verbs, so a dropped verb fails here', () => {
     expect([...VERBS].sort()).toMatchSnapshot();
+  });
+
+  it.for(Object.entries<CommandRow>(COMMANDS))('%s takes its help blocks and flags from its own key', ([verb, spec]) => {
+    const usage: Readonly<Record<string, readonly string[]>> = VERB_USAGE;
+    const flags: Readonly<Record<string, VerbFlags>> = VERB_FLAGS;
+    expect(spec.usage).toEqual(usage[verb] ?? []);
+    if (usage[verb]) expect(spec.usage).toBe(usage[verb]);
+    expect(spec.flags).toBe(flags[verb]);
   });
 
   it.for([{ args: [] }, { args: ['-h'] }, { args: ['help'] }, { args: ['--help'] }])('hippo $args prints the same full usage', async ({ args }) => {
@@ -138,7 +148,7 @@ describe('built CLI', () => {
       encoding: 'utf8',
       timeout: 10_000,
     });
-    expect({ status: res.status, stdout: res.stdout, stderr: res.stderr.replace(SQLITE_WARNING, '') }).toEqual(full);
+    expect({ status: res.status, stdout: res.stdout, stderr: ownStderr(res.stderr) }).toEqual(full);
     expect(written()).toEqual([]);
   });
 });

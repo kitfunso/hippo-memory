@@ -5,13 +5,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import type { SearchResult } from '../src/core/search-types.js';
-import { refineSemanticMemory } from '../src/refine-llm.js';
-import { generateDagSummary } from '../src/dag.js';
-import { extractFacts } from '../src/extract.js';
-import { llmReranker } from '../src/rerankers/llm.js';
+import { refineSemanticMemory } from '../src/cli/refine-llm.js';
+import { generateDagSummary } from '../src/consolidate/dag.js';
+import { extractFacts } from '../src/learn/extract.js';
+import { getReranker } from '../src/rerankers/index.js';
 import { createJevReranker } from '../src/rerankers/jev.js';
-import { resolveEmbeddingProvider } from '../src/embedding-provider.js';
-import type { JsonValue } from '../src/json.js';
+import { resolveEmbeddingProvider } from '../src/store/embeddings/provider.js';
+import type { JsonValue } from '../src/util/json.js';
 
 const SECRET = 'AKIA' + 'Q7'.repeat(8);
 // Bearer and JWT shapes only the strict redaction catches; a path on the store redaction would leak them.
@@ -81,7 +81,7 @@ describe('secret redaction before memory text leaves the box', () => {
   it('the hosted rerankers scrub the query and every candidate', async () => {
     process.env.HIPPO_LLM_RERANKER_URL = 'http://127.0.0.1:9';
     vi.stubGlobal('fetch', capture({ choices: [{ message: { content: '[0]' } }] }));
-    await llmReranker(TEXT, [hit(TEXT)]);
+    await getReranker('llm')!(TEXT, [hit(TEXT)]);
     process.env.TYPESAFE_API_KEY = 'test-' + 'k'.repeat(8);
     vi.stubGlobal('fetch', capture({ answers: { c1: { noul: 0.5 } } }));
     await createJevReranker(async () => [])(TEXT, [hit(TEXT)]);

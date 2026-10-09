@@ -7,18 +7,19 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { cmdRecall, __resetSessionRecallHistoryCli } from '../src/cli/recall.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { cmdRecall } from '../src/cli/recall.js';
+import { resetSessionRings } from '../src/api/recall-record.js';
 import { handleMcpRequest, __resetSessionRecallHistoryMcp, type McpResponse } from '../src/mcp/server.js';
 import { serve, __resetSessionRecallHistoryHttp, type ServerHandle } from '../src/server.js';
-import { retrieve, RecallContractError, type RecallResult } from '../src/api.js';
-import { _resetAblationCacheForTests } from '../src/ablation.js';
-import { _resetSharedStoreCacheForTests } from '../src/config.js';
+import { retrieve, RecallContractError, type RecallResult } from '../src/api/index.js';
+import { _resetAblationCacheForTests } from '../src/core/ablation.js';
+import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
 import { runInProcess, type InProcessResult } from './_helpers/run-in-process.js';
 import {
   CLEARED_ENV, FAKE_NOW, freshStore, normalise, RECALL_INPUTS, rowsOf, seeded, SESSION, seedTemplates, TENANT, type Store, type Templates,
 } from './_helpers/recall-golden-seed.js';
-import type { CliFlags } from '../src/cli/shared.js';
+import type { CliFlags } from '../src/cli/flag-values.js';
 
 type Surface = 'cli' | 'mcp' | 'http';
 const SURFACES: readonly Surface[] = ['cli', 'mcp', 'http'];
@@ -132,7 +133,7 @@ describe('recall surface parity goldens', () => {
     vi.stubEnv('HIPPO_FAKE_NOW', FAKE_NOW);
     vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
     _resetAblationCacheForTests();
-    __resetSessionRecallHistoryCli();
+    resetSessionRings('cli');
     __resetSessionRecallHistoryMcp();
     __resetSessionRecallHistoryHttp();
   });

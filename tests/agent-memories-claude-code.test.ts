@@ -3,9 +3,9 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import { execFileSync } from 'node:child_process';
-import { claudeCodeAdapter, claudeFolderName, claudeMemoryFolderNames, claudeTranscriptListing, transcriptNotesProject } from '../src/agent-memories/claude-code.js';
+import { claudeCodeAdapter, claudeFolderName, claudeTranscriptListing, transcriptNotesProject } from '../src/agent-memories/claude-code.js';
 import type { AdapterContext, Container } from '../src/agent-memories/types.js';
-import type { JsonObject } from '../src/working-memory.js';
+import type { JsonObject } from '../src/store/working-memory.js';
 
 const made: string[] = [];
 const tmp = () => {
@@ -181,9 +181,16 @@ describe('claudeCodeAdapter project layouts', () => {
 
   it('lowercases folder names on win32 only', () => {
     const project = tmp();
+    const home = tmp();
     const plain = claudeFolder(project);
-    expect(claudeMemoryFolderNames(project, 'win32')).toContain(plain.toLowerCase());
-    expect(claudeMemoryFolderNames(project, 'linux')).toContain(plain);
+    const config = configOf(home);
+    // Both spellings exist so a case-sensitive disk lists each platform's choice.
+    writeIn(path.join(config, 'projects', plain, 'memory'), 'a.md', note('The folder name keeps its case off win32 only.'));
+    writeIn(path.join(config, 'projects', plain.toLowerCase(), 'memory'), 'a.md', note('The folder name keeps its case off win32 only.'));
+    const folderOn = (platform: NodeJS.Platform) =>
+      claudeCodeAdapter.list(ctxOf(home, { projectRoot: project, platform }), 'project').containers.map((c) => path.basename(path.dirname(c.path)));
+    expect(folderOn('win32')).toEqual([plain.toLowerCase()]);
+    expect(folderOn('linux')).toEqual([plain]);
   });
 });
 

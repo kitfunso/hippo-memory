@@ -3,12 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { adminActor, reject } from '../src/api.js';
+import { adminActor, reject } from '../src/api/index.js';
 import { consolidate } from '../src/consolidate/sleep.js';
-import { storeExtractedFacts } from '../src/extract.js';
-import { Layer, type MemoryEntry } from '../src/memory.js';
+import { storeExtractedFacts } from '../src/learn/extract.js';
+import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { autoShare, getGlobalRoot, neverAutoShareTags } from '../src/shared.js';
+import { autoShare, neverAutoShareTags } from '../src/sharing/share.js';
+import { getGlobalRoot } from '../src/sharing/global-store.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
@@ -18,7 +19,7 @@ import {
   sessionDigestId,
   writeSessionDigest,
   type SessionScan,
-} from '../src/session-digest.js';
+} from '../src/capture/session-digest.js';
 import { SESSION_DIGEST_TAG, isSessionDigestRow } from '../src/core/session-digest-row.js';
 
 const REPLY = 'Retry `upload()` with backoff because the storage token expires mid-transfer.';

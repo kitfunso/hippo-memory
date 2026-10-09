@@ -1,13 +1,13 @@
 // A store other than hippo.db for the Quarantine group: it copies memories and memory_quarantine out of hippo.db once, then keeps
 // both in memory and decides from the port's doc comments alone, so a conformance test shows those words are enough to build on.
 import { vi } from 'vitest';
-import { createApiKey } from '../../src/auth.js';
-import { closeHippoDb, openHippoDb } from '../../src/db.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/memory.js';
-import { recordQuarantine } from '../../src/quarantine.js';
+import { createApiKey } from '../../src/store/auth.js';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
+import { recordQuarantine } from '../../src/store/quarantine.js';
 import { withSqliteAllowed, type HippoStore, type KeysetPosition, type MemoryEntry } from '../../src/server.js';
 import { selectEntriesByIds } from '../../src/store/entry-reads.js';
-import { writeEntryOn } from '../../src/store/entry-writes.js';
+import { writeEntry } from '../../src/store/entry-writes.js';
 import { openStore } from '../../src/store/open.js';
 import type { Quarantine, QuarantineRefusal, QuarantinedMemory } from '../../src/store/port.js';
 import type { QuarantineRow } from '../../src/store/quarantine.js';
@@ -156,7 +156,7 @@ export function seedQuarantineRecords(dir: string): string {
       vi.setSystemTime(new Date(heldAt(r.second)));
       if (r.memoryScope !== undefined) {
         const entry = createMemory(heldContent(r.memoryId), { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId: r.tenantId, scope: r.memoryScope });
-        writeEntryOn(db, dir, { ...entry, id: r.memoryId });
+        writeEntry(dir, { ...entry, id: r.memoryId });
       }
       recordQuarantine(db, { tenantId: r.tenantId, memoryId: r.memoryId, originalScope: r.originalScope, reason: 'test', actor: 'seed' });
     }

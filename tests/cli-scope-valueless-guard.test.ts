@@ -24,8 +24,8 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { hippoOut, hippoRun as spawnHippo } from './_helpers/spawn-hippo.js';
 
@@ -167,7 +167,7 @@ describe('valued --scope regression coverage', () => {
 
     // Current contract (pinned, not asserted-as-desired): wmRead only adds a
     // `WHERE scope = ?` clause when a scope is explicitly passed; a bare
-    // `wm read` applies no scope filter at all (src/working-memory.ts
+    // `wm read` applies no scope filter at all (src/store/working-memory.ts
     // wmRead), so it is NOT isolated from scope-X items — they show up here
     // too. If wm read's default-scope behavior changes, update this pin.
     const unscoped = hippo(home, env, 'wm', 'read');

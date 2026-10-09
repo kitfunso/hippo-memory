@@ -1,4 +1,4 @@
-import { MemoryEntry } from '../memory.js';
+import { MemoryEntry } from '../core/memory.js';
 
 export interface CorrectionPair {
   oldId: string;

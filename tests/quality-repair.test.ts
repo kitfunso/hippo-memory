@@ -7,16 +7,16 @@ import { repairAutomaticMemories } from '../src/cli/quality-repair.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { getExistingEntryMirrorPaths } from '../src/store/mirrors.js';
+import { entryMirrorFiles } from './_helpers/entry-mirror-files.js';
 import { DatabaseSync } from '../src/db/sqlite.js';
 import { STORE_BUSY_MESSAGE } from '../src/db/busy.js';
-import { readDormantSnapshot } from '../src/dormant.js';
-import { findRejectedValue, rejectionDigest } from '../src/rejection.js';
+import { readDormantSnapshot } from '../src/store/dormant.js';
+import { findRejectedValue, rejectionDigest } from '../src/store/rejection.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { Layer, type MemoryEntry } from '../src/memory.js';
+import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { savePrediction } from '../src/store/predictions.js';
-import { mergedText } from '../src/same-text.js';
-import { restoreDormant, type Context } from '../src/api.js';
+import { mergedText } from '../src/util/same-text.js';
+import { restoreDormant, type Context } from '../src/api/index.js';
 import { importForStore } from '../src/agent-memories/sync.js';
 import { closeWorld, note, openWorld, projectNotes } from './_helpers/agent-memories-world.js';
 
@@ -56,12 +56,12 @@ describe('recoverable automatic memory quality repair', () => {
     expect(run()).toMatchObject({ supported: true, appliedIds: [], backup: null });
     expect(readFileSync(join(root, 'hippo.db'))).toEqual(before);
     expect(existsSync(join(root, 'backups'))).toBe(false);
-    expect(getExistingEntryMirrorPaths(root, bad.id)).not.toEqual([]);
+    expect(entryMirrorFiles(root, bad.id)).not.toEqual([]);
 
     const applied = run(true);
     expect(applied.appliedIds).toEqual([bad.id]);
     expect(existsSync(applied.backup!)).toBe(true);
-    expect(getExistingEntryMirrorPaths(root, bad.id)).toEqual([]);
+    expect(entryMirrorFiles(root, bad.id)).toEqual([]);
     expect(loadAllEntries(root).map((entry) => entry.id)).toEqual([good.id]);
     const snapshot = withDb((db) => readDormantSnapshot(db, 'default', bad.id));
     expect(snapshot?.entry).toMatchObject({ content: bad.content, retrieval_count: 7, tags: bad.tags, source: bad.source });

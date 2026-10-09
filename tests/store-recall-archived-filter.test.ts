@@ -2,7 +2,7 @@
  * Defensive filter: `kind='archived'` rows must NOT appear in recall.
  *
  * `kind='archived'` is a transient SAVEPOINT-internal sentinel inside
- * `archiveRawMemory` (src/raw-archive.ts:56): UPDATE kind='archived'
+ * `archiveRawMemory` (src/store/raw-archive.ts:56): UPDATE kind='archived'
  * immediately followed by DELETE, atomic. In normal operation no concurrent
  * reader sees the intermediate state.
  *
@@ -23,8 +23,8 @@ import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { _forceLikePathForTests, loadSearchEntries } from '../src/store/search-rows.js';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
-import { Layer, type MemoryEntry } from '../src/memory.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
+import { Layer, type MemoryEntry } from '../src/core/memory.js';
 
 function makeRawMemory(id: string, content: string, tenantId = 'default'): MemoryEntry {
   return {

@@ -1,4 +1,4 @@
-import { closeHippoDb, openHippoDb } from '../db.js';
+import { closeHippoDb, openHippoDb } from '../db/index.js';
 import {
   type SessionHandoff,
   type SessionHandoffRow,
@@ -6,9 +6,9 @@ import {
   type HandoffOutcome,
   type HandoffEvidence,
   isHandoffOutcome,
-} from '../handoff.js';
-import { scopeAdmitSql } from '../recall-scope.js';
-import { assertTenantId } from '../tenant.js';
+} from '../core/handoff.js';
+import { scopeAdmitSql } from './recall-scope.js';
+import { assertTenantId } from './tenant.js';
 import type { TaskSnapshot } from './rows.js';
 import { openStore } from './open.js';
 import { type ContinuityKey, continuityStamp, continuityWhere, loadActiveTaskSnapshot } from './sessions.js';
