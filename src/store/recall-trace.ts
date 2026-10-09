@@ -21,7 +21,6 @@ import type { RerankStep } from '../core/search-types.js';
 import { DELIVERY_LEDGER_VERSION, isBoundaryEvent, type DeliveryEventInput } from '../delivery-recorder.js';
 import { errorMessage, log } from '../log.js';
 import { DAY_MS } from '../util/time.js';
-import { numberedEventTimes } from './delivery-event-reads.js';
 
 /** One ranked result to persist alongside its trace row. */
 export interface RecallTraceResultInput {
@@ -306,7 +305,12 @@ export interface DeliveryEventRow {
 }
 
 function findDuplicateBoundary(db: DatabaseSyncLike, input: DeliveryEventInput): number | null {
-  const rows = numberedEventTimes(db, input.tenantId, input.sessionId, input.eventType);
+  // SAFETY: rows carry exactly the `id` and `ts` columns selected.
+  const rows = db.prepare(`
+    SELECT id, ts FROM delivery_events
+    WHERE tenant_id = ? AND session_id = ? AND event_type = ? AND turn_seq IS NOT NULL
+    ORDER BY id
+  `).all(input.tenantId, input.sessionId, input.eventType) as Array<{ id: number; ts: string }>;
   const at = Date.parse(input.ts);
   return rows.find((r) => Math.abs(Date.parse(r.ts) - at) <= DELIVERY_DUPLICATE_WINDOW_MS)?.id ?? null;
 }
