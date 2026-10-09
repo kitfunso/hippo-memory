@@ -16,6 +16,7 @@ import { strengthenRetrievedInOwnTx } from '../entry-writes.js';
 import { sqliteDagReads } from './dag-reads-group.js';
 import { sqliteEntryWrites } from './entry-writes-group.js';
 import { servedPredictions, sqlitePredictions } from './predictions-group.js';
+import { servedQuarantine, sqliteQuarantine } from './quarantine-group.js';
 import { loadLatestHandoff } from '../handoffs.js';
 import { updateStats } from '../index-and-stats.js';
 import { auditHighIdAt, revokeKeyAt } from '../key-audit.js';
@@ -100,6 +101,7 @@ export function sqliteSyncStore(hippoRoot: string): SqliteSyncStore & Sync<Omit<
         return onHandle(hippoRoot, (db) => queryAuditEvents(db, query));
       },
     },
+    quarantine: sqliteQuarantine(hippoRoot),
     readiness: {
       ping() {
         // A probe must not create the store; the first write does, so a root with none yet is ready.
@@ -165,6 +167,7 @@ export function sqliteStore(hippoRoot: string): HippoStore & StoreGroups {
     auditLog: {
       listAuditEvents: async (query) => auditLog.listAuditEvents(query),
     },
+    quarantine: servedQuarantine(sync.quarantine),
     readiness: { ping: async () => sync.readiness.ping() },
     close: async () => sync.close(),
   };

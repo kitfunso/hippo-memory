@@ -110,7 +110,7 @@ export async function handleListQuarantine({ req, res, opts, query }: RouteReque
   }
   const limit = parseListLimit(query.get('limit'));
   const after = parseCursor(query.get('cursor'), 'string', 'string');
-  const page = pageOf(quarantineList(ctx, { status, limit: limit + 1, after }), limit, (q) => ({ key: q.quarantinedAt, id: q.id }));
+  const page = pageOf(await quarantineList(ctx, { status, limit: limit + 1, after }), limit, (q) => ({ key: q.quarantinedAt, id: q.id }));
   sendJson(res, 200, { quarantine: page.items, next_cursor: page.nextCursor });
   return;
 }
@@ -119,7 +119,7 @@ export async function handleListQuarantine({ req, res, opts, query }: RouteReque
 export async function handleApproveQuarantine({ req, res, opts }: RouteRequest, quarantineApproveMatch: Record<string, string>): Promise<void> {
   validateIdSegment(quarantineApproveMatch.id!, 'memory id');
   const ctx = await buildContextWithAuth(req, opts);
-  quarantineApprove(ctx, quarantineApproveMatch.id!);
+  await quarantineApprove(ctx, quarantineApproveMatch.id!);
   sendJson(res, 200, { approved: quarantineApproveMatch.id });
   return;
 }
@@ -128,7 +128,7 @@ export async function handleApproveQuarantine({ req, res, opts }: RouteRequest, 
 export async function handleRejectQuarantine({ req, res, opts }: RouteRequest, quarantineRejectMatch: Record<string, string>): Promise<void> {
   validateIdSegment(quarantineRejectMatch.id!, 'memory id');
   const ctx = await buildContextWithAuth(req, opts);
-  quarantineReject(ctx, quarantineRejectMatch.id!);
+  await quarantineReject(ctx, quarantineRejectMatch.id!);
   sendJson(res, 200, { rejected: quarantineRejectMatch.id });
   return;
 }

@@ -95,12 +95,12 @@ describe('outcome', () => {
 });
 
 describe('quarantineList', () => {
-  it('reads every listed memory in one query', () => {
+  it('reads every listed memory in one query', async () => {
     for (const n of SIZES) {
       const root = freshRoot('qc-quarantine');
       const entries = rows(n, 'held', { scope: quarantineScopeFor(null) });
       seed(root, entries, (db, e) => recordQuarantine(db, { tenantId: 'default', memoryId: e.id, originalScope: null, reason: 'test', actor: 'test' }));
-      const { result, statements } = recordStatements(() => quarantineList(ctxFor(root), { limit: 500 }));
+      const { result, statements } = await recordStatementsAsync(() => quarantineList(ctxFor(root), { limit: 500 }));
       expect(result).toHaveLength(n);
       expect(result.every((item) => item.contentPreview.includes('zephyrine'))).toBe(true);
       expect(countMatching(statements, STORE_OPEN)).toBe(1);

@@ -17,6 +17,7 @@ import { loadEntriesByIds } from '../src/store/entry-reads.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from './_helpers/hashed-embedding-server.js';
 import { inMemoryPredictionsStore, type InMemoryPredictionsStore } from './_helpers/in-memory-predictions-store.js';
+import { HELD, heldAt, heldContent, inMemoryQuarantineStore, seedQuarantineRecords, type InMemoryQuarantineStore } from './_helpers/in-memory-quarantine-store.js';
 import { portOnlyStoreWithoutVectorReads } from './_helpers/port-only-store.js';
 import { seeded } from './_helpers/recall-golden-seed.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from './_helpers/store-conformance.js';
@@ -302,6 +303,78 @@ describe('serve() under a store that has the predictions group', () => {
     const actor = `api_key:${fixture.keys.memberA}`;
     expect(memory.auditRows().slice(-4).map((e) => [e.op, e.actor, e.tenantId])).toEqual([
       ['predict_create', actor, TENANT_A], ['remember', actor, TENANT_A], ['predict_close', actor, TENANT_A], ['predict_baserate', actor, TENANT_A],
+    ]);
+    expect(hippoDbRows()).toEqual(before);
+  });
+});
+
+describe('serve() under a store that has the quarantine group', () => {
+  let fixture: TwoTenantFixture;
+  let memory: InMemoryQuarantineStore;
+  let handle: ServerHandle;
+  let adminB: string;
+
+  const hippoDbRows = () => {
+    const db = openHippoDb(fixture.dir);
+    try {
+      // SAFETY: each SELECT names exactly the columns of the type it is read as.
+      const records = db.prepare('SELECT tenant_id, memory_id, status, decided_at FROM memory_quarantine ORDER BY tenant_id, memory_id').all() as object[];
+      // SAFETY: as above.
+      const scopes = db.prepare('SELECT id, scope FROM memories ORDER BY id').all() as object[];
+      // SAFETY: the SELECT names the one column n.
+      return { records, scopes, audit: (db.prepare('SELECT COUNT(*) AS n FROM audit_log').get() as { n: number }).n };
+    } finally {
+      closeHippoDb(db);
+    }
+  };
+
+  beforeAll(async () => {
+    vi.stubEnv('HIPPO_V1_RPS', '0');
+    fixture = seedTwoTenants();
+    adminB = seedQuarantineRecords(fixture.dir);
+    memory = inMemoryQuarantineStore(fixture.dir);
+    handle = await serve({ hippoRoot: fixture.dir, port: 0, store: memory.store });
+  });
+
+  afterAll(async () => {
+    await handle.stop();
+    vi.unstubAllEnvs();
+    rmSync(fixture.dir, { recursive: true, force: true });
+  });
+
+  it("runs the three quarantine routes on that store, inside the caller's tenant, and writes nothing to hippo.db", async () => {
+    const before = hippoDbRows();
+    const call = async (token: string, method: string, path: string): Promise<{ status: number; body: unknown }> => {
+      const res = await fetch(`${handle.url}${path}`, { method, headers: { authorization: `Bearer ${token}` } });
+      return { status: res.status, body: await res.json() };
+    };
+    const { adminA, memberA } = fixture.tokens;
+    const item = (id: string, originalScope: string | null, second: number) => ({
+      id, originalScope, reason: 'test', status: 'pending', quarantinedAt: heldAt(second), decidedAt: null, decidedBy: null, contentPreview: heldContent(id),
+    });
+    expect(await call(adminA, 'GET', '/v1/quarantine')).toEqual({
+      status: 200,
+      body: { quarantine: [item(HELD.moved, 'team:alpha', 4), item(HELD.a3, 'team:alpha', 2), item(HELD.a2, null, 2), item(HELD.a1, 'team:alpha', 1)], next_cursor: null },
+    });
+    expect((await call(memberA, 'GET', '/v1/quarantine')).status).toBe(403);
+    expect(await call(adminA, 'POST', `/v1/quarantine/${HELD.a1}/approve`)).toEqual({ status: 200, body: { approved: HELD.a1 } });
+    expect(await call(adminA, 'POST', `/v1/quarantine/${HELD.a1}/approve`)).toEqual({ status: 409, body: { error: `${HELD.a1} is already approved` } });
+    expect(await call(adminA, 'POST', `/v1/quarantine/${HELD.moved}/approve`)).toEqual({
+      status: 409, body: { error: `memory ${HELD.moved} scope changed since quarantine; refusing to approve` },
+    });
+    expect(await call(adminA, 'POST', `/v1/quarantine/${HELD.a2}/reject`)).toEqual({ status: 200, body: { rejected: HELD.a2 } });
+    expect(await call(adminA, 'POST', `/v1/quarantine/${HELD.a2}/reject`)).toEqual({ status: 409, body: { error: `${HELD.a2} is already rejected` } });
+    expect(await call(adminB, 'POST', `/v1/quarantine/${HELD.a3}/approve`)).toEqual({ status: 404, body: { error: `not quarantined: ${HELD.a3}` } });
+    expect(await call(adminB, 'POST', `/v1/quarantine/${HELD.a3}/reject`)).toEqual({ status: 404, body: { error: `not quarantined: ${HELD.a3}` } });
+    expect(await call(adminA, 'GET', '/v1/quarantine?status=all&limit=2')).toMatchObject({
+      status: 200, body: { quarantine: [{ id: HELD.moved, status: 'pending' }, { id: HELD.gone, contentPreview: '' }], next_cursor: expect.any(String) },
+    });
+    expect(await call(adminA, 'GET', '/v1/quarantine?status=approved')).toMatchObject({
+      status: 200, body: { quarantine: [{ id: HELD.a1, status: 'approved', decidedBy: `api_key:${fixture.keys.adminA}` }], next_cursor: null },
+    });
+    const actor = `api_key:${fixture.keys.adminA}`;
+    expect(memory.auditRows().slice(-2).map((e) => [e.op, e.actor, e.tenantId, e.targetId])).toEqual([
+      ['quarantine_approve', actor, TENANT_A, HELD.a1], ['quarantine_reject', actor, TENANT_A, HELD.a2],
     ]);
     expect(hippoDbRows()).toEqual(before);
   });

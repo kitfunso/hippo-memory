@@ -13,6 +13,7 @@ import type { MemoryEntry } from '../memory.js';
 import type { PhysicsParticle } from '../physics.js';
 import type { PlanningFallacyEvidence } from './planning-fallacy-evidence.js';
 import type { ClosureState, Prediction, PredictionBaserate, SavePredictionOpts } from './predictions.js';
+import type { QuarantineRow, QuarantineStatus } from './quarantine.js';
 import type { RecallTraceInput } from '../recall-trace.js';
 import type { AmbientLoadResult, AmbientRecallRequest, ContextCandidateFilter, RecentOrigins } from './candidates.js';
 import type { StrengthenOptions } from './entry-writes.js';
@@ -314,6 +315,40 @@ export interface Readiness {
   ping(): Promise<void>;
 }
 
+/** Which of a tenant's quarantine records a list reads; `limit` is 100 when unset. */
+export interface QuarantineListQuery {
+  readonly status: QuarantineStatus | 'all';
+  readonly limit?: number;
+  readonly after?: KeysetPosition;
+}
+
+/** A quarantine record and the whole content of the memory it holds; null once the tenant has no such memory row. */
+export interface QuarantinedMemory extends QuarantineRow {
+  readonly content: string | null;
+}
+
+/** Why a decision wrote nothing: the tenant holds no record for the id (another tenant's id reads the same), or the record was decided before. */
+export type QuarantineRefusal =
+  | { readonly outcome: 'not_quarantined' }
+  | { readonly outcome: 'already_decided'; readonly status: Exclude<QuarantineStatus, 'pending'> };
+
+/** 'scope_moved': the memory row is gone from the tenant or no longer under the scope its quarantine gave it. */
+export type QuarantineApproval = { readonly outcome: 'approved' } | QuarantineRefusal | { readonly outcome: 'scope_moved' };
+export type QuarantineRejection = { readonly outcome: 'rejected' } | QuarantineRefusal;
+
+/** The review queue behind the quarantine routes. A refusal is a resolved value, never a rejection, and writes nothing. */
+export interface Quarantine {
+  /** At most `limit` of the tenant's records, newest first: by quarantinedAt compared as text in byte order, then by memoryId, both descending; `after` keeps only the records below its
+   *  (quarantinedAt, memoryId) pair in that order. 'pending' leaves out a record whose memory row is gone from the tenant; every other status keeps it, with null content. No audit row. */
+  listQuarantined(tenantId: string, query: QuarantineListQuery): Promise<QuarantinedMemory[]>;
+  /** In one transaction, all three or none: sets the memory's scope to the record's originalScope where the row is in the tenant and still under `quarantine:private:<originalScope, or 'unscoped' for null>`;
+   *  marks the record approved, decidedAt the store's own clock as `toISOString` gives it and decidedBy `actor`; appends one quarantine_approve row ({originalScope}, target the id). */
+  approveQuarantined(tenantId: string, id: string, actor: string): Promise<QuarantineApproval>;
+  /** In one transaction, both or neither: marks the record rejected, decidedAt and decidedBy as approve sets them, and appends one quarantine_reject row ({}, target the id).
+   *  The memory row is not read or written, so it stays under its quarantine scope and a record with no memory row can still be rejected. */
+  rejectQuarantined(tenantId: string, id: string, actor: string): Promise<QuarantineRejection>;
+}
+
 /** The optional groups: a store sets each one whole or leaves it unset, and a route or MCP tool names the one it needs. */
 export interface StoreGroups {
   /** Unset on a store built before them, where hybrid and physics recall under an embedding provider answer 501. */
@@ -327,6 +362,7 @@ export interface StoreGroups {
   readonly predictions: Predictions;
   readonly dagReads: DagReads;
   readonly auditLog: AuditLog;
+  readonly quarantine: Quarantine;
   /** Unset on a store built before it, where GET /ready answers 200 with `store: "unchecked"`. */
   readonly readiness: Readiness;
 }

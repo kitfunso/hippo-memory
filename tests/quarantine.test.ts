@@ -112,7 +112,7 @@ describe('recall visibility and the approve/reject lifecycle', () => {
     const ctx = adminCtx(home);
     expect(api.recall(ctx, { query: 'wipe.sh' }).results.some((r) => r.id === id)).toBe(false);
 
-    api.quarantineApprove(ctx, id);
+    await api.quarantineApprove(ctx, id);
     expect(readEntry(home, id, 'default')?.scope).toBe('github:public:acme/demo');
     const audit = await api.auditList(ctx, { op: 'quarantine_approve' });
     expect(audit.some((e) => e.targetId === id)).toBe(true);
@@ -121,7 +121,7 @@ describe('recall visibility and the approve/reject lifecycle', () => {
 
   it('reject keeps it hidden and marks the row rejected', async () => {
     const ctx = adminCtx(home);
-    api.quarantineReject(ctx, id);
+    await api.quarantineReject(ctx, id);
     expect(readEntry(home, id, 'default')?.scope).toBe('quarantine:private:github:public:acme/demo');
     expect(quarantineRow(home, id)?.status).toBe('rejected');
     expect(api.recall(ctx, { query: 'wipe.sh' }).results.some((r) => r.id === id)).toBe(false);
@@ -129,40 +129,40 @@ describe('recall visibility and the approve/reject lifecycle', () => {
     expect(audit.some((e) => e.targetId === id)).toBe(true);
   });
 
-  it('double approve, approve-after-reject and unknown ids all error', () => {
+  it('double approve, approve-after-reject and unknown ids all error', async () => {
     const ctx = adminCtx(home);
-    api.quarantineApprove(ctx, id);
-    expect(() => api.quarantineApprove(ctx, id)).toThrow(/already approved/);
+    await api.quarantineApprove(ctx, id);
+    await expect(api.quarantineApprove(ctx, id)).rejects.toThrow(/already approved/);
 
     const other = ingestEvent(ctx, { event: githubCommentEvent(INJECTION, false, 502), rawBody: 'z', deliveryId: 'd3' }).memoryId!;
-    api.quarantineReject(ctx, other);
-    expect(() => api.quarantineApprove(ctx, other)).toThrow(/already rejected/);
+    await api.quarantineReject(ctx, other);
+    await expect(api.quarantineApprove(ctx, other)).rejects.toThrow(/already rejected/);
 
-    expect(() => api.quarantineApprove(ctx, 'nope')).toThrow(/not quarantined/);
+    await expect(api.quarantineApprove(ctx, 'nope')).rejects.toThrow(/not quarantined/);
   });
 
-  it('another tenant cannot see, approve or reject the row', () => {
+  it('another tenant cannot see, approve or reject the row', async () => {
     const other: api.HippoDbContext = { hippoRoot: home, tenantId: 'other', actor: api.adminActor('test') };
-    expect(api.quarantineList(other, { status: 'all' })).toHaveLength(0);
-    expect(() => api.quarantineApprove(other, id)).toThrow(/not quarantined/);
-    expect(() => api.quarantineReject(other, id)).toThrow(/not quarantined/);
+    expect(await api.quarantineList(other, { status: 'all' })).toHaveLength(0);
+    await expect(api.quarantineApprove(other, id)).rejects.toThrow(/not quarantined/);
+    await expect(api.quarantineReject(other, id)).rejects.toThrow(/not quarantined/);
     expect(quarantineRow(home, id)?.status).toBe('pending');
   });
 
-  it('a member actor cannot approve or reject', () => {
+  it('a member actor cannot approve or reject', async () => {
     const ctx = memberCtx(home);
-    expect(() => api.quarantineApprove(ctx, id)).toThrow(api.ForbiddenError);
-    expect(() => api.quarantineReject(ctx, id)).toThrow(api.ForbiddenError);
+    await expect(api.quarantineApprove(ctx, id)).rejects.toThrow(api.ForbiddenError);
+    await expect(api.quarantineReject(ctx, id)).rejects.toThrow(api.ForbiddenError);
   });
 
-  it('an unscoped untrusted remember quarantines under quarantine:private:unscoped and approve restores scope null', () => {
+  it('an unscoped untrusted remember quarantines under quarantine:private:unscoped and approve restores scope null', async () => {
     const ctx = adminCtx(home);
     const result = api.remember(ctx, { content: INJECTION, untrusted: true });
     const entry = readEntry(home, result.id, 'default');
     expect(entry?.scope).toBe('quarantine:private:unscoped');
     expect(quarantineRow(home, result.id)?.original_scope ?? null).toBeNull();
 
-    api.quarantineApprove(ctx, result.id);
+    await api.quarantineApprove(ctx, result.id);
     expect(readEntry(home, result.id, 'default')?.scope).toBeNull();
   });
 
@@ -174,11 +174,11 @@ describe('recall visibility and the approve/reject lifecycle', () => {
     expect(() => promoteToGlobal(home, id)).toThrow(/quarantined/);
   });
 
-  it('a deleted quarantined memory drops out of the pending queue but keeps its history', () => {
+  it('a deleted quarantined memory drops out of the pending queue but keeps its history', async () => {
     const ctx = adminCtx(home);
-    expect(api.quarantineList(ctx, { status: 'pending' }).map((r) => r.id)).toContain(id);
+    expect((await api.quarantineList(ctx, { status: 'pending' })).map((r) => r.id)).toContain(id);
     api.archiveRaw(ctx, id, 'slack message_deleted');
-    expect(api.quarantineList(ctx, { status: 'pending' }).map((r) => r.id)).not.toContain(id);
+    expect((await api.quarantineList(ctx, { status: 'pending' })).map((r) => r.id)).not.toContain(id);
     expect(quarantineRow(home, id)?.status).toBe('pending');
   });
 

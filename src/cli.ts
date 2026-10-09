@@ -376,7 +376,7 @@ export const COMMANDS = {
     usage: VERB_USAGE.projects,
   },
   quarantine: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/curate.js')).cmdQuarantine(hippoRoot, args, flags); },
+    run: async ({ hippoRoot, args, flags }) => { await (await import('./cli/curate.js')).cmdQuarantine(hippoRoot, args, flags); },
     scoped: true,
     usage: VERB_USAGE.quarantine,
   },

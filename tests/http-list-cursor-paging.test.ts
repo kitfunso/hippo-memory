@@ -154,8 +154,8 @@ describe('no paging params: the body a small store got before cursors existed', 
   const json = <T>(value: T): JsonValue => JSON.parse(JSON.stringify(value));
 
   // Each reference is the store call the route made before paging, with the same arguments.
-  const before = new Map<string, () => JsonValue>([
-    ['/v1/quarantine', () => json(api.quarantineList(ctx(), { status: 'pending' }))],
+  const before = new Map<string, () => JsonValue | Promise<JsonValue>>([
+    ['/v1/quarantine', async () => json(await api.quarantineList(ctx(), { status: 'pending' }))],
     ['/v1/predictions', () => json(loadAllPredictions(home, 'default', { limit: 100 }))],
     ['/v1/decisions', () => json(loadDecisions(home, 'default', { limit: 100 }))],
     ['/v1/incidents', () => json(loadIncidents(home, 'default', { limit: 100 }))],
@@ -171,7 +171,7 @@ describe('no paging params: the body a small store got before cursors existed', 
     expect(page.status).toBe(200);
     expect(Object.keys(page.body ?? {})).toEqual([route.key, 'next_cursor']);
     expect(page.next).toBeNull();
-    expect(page.items).toEqual(before.get(route.path)!());
+    expect(page.items).toEqual(await before.get(route.path)!());
   });
 
   it('/v1/auth/keys returns the same bare array, with no next-page header', async () => {
