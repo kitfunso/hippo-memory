@@ -19,11 +19,7 @@ import { repairQualityOnceAt } from './quality-repair-once.js';
 import { printError } from './output.js';
 
 /** Runs `hippo sleep`; with `--log-file` it also tees its output to that file. */
-export async function cmdSleep(
-  hippoRoot: string,
-  tenantId: string,
-  flags: CliFlags
-): Promise<void> {
+export async function cmdSleep(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
   // Tee stdout/stderr to a log file when --log-file is set. The SessionEnd
   // hook uses this so the output is captured somewhere the SessionStart hook
   // can re-display it next time the agent UI starts.
