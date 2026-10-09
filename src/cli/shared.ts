@@ -12,7 +12,7 @@ import { TaskSnapshot, SessionEvent } from '../store/rows.js';
 import { getHippoRoot, isInitialized } from '../store/open.js';
 import type { HookRuntime } from '../capture-contract.js';
 import type { SessionHandoff } from '../handoff.js';
-import type { SearchResult } from '../search/types.js';
+import type { SearchResult } from '../core/search-types.js';
 import { explainMatch } from '../search/explain.js';
 import { isSharedStore, loadConfig, type HippoConfig } from '../config.js';
 import { createDeliveryRecorder, type DeliveryEventType, type DeliveryRecorder } from '../delivery-recorder.js';
@@ -28,7 +28,7 @@ import { getGlobalRoot, initGlobal } from '../shared.js';
 import { DAILY_TASK_NAME, buildDailyRunnerCommand, buildSchtasksCreateArgs, buildWindowsTaskRun } from '../scheduler.js';
 import { sanitizeLogMessage } from '../capture/compact.js';
 import { type AuditOp, appendAuditEvent, reportAuditWriteFailure } from '../audit.js';
-import * as client from '../client.js';
+import * as client from './client.js';
 import { type ServerInfo, detectServer, removePidfileIfOwned } from '../server-detect.js';
 import { resolveTenantId } from '../tenant.js';
 import { type Context, adminActor, learn, CLI_LEARN } from '../api.js';
@@ -114,7 +114,7 @@ export function runChurnStaleForRepo(hippoRoot: string, dryRun: boolean): { root
     try {
       return { root, result: detectChurnStale(root, repoRoot, { tenantId, projectName, legacyName, dryRun }) };
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = errorMessage(err);
       return { root, result: { checked: 0, marked: 0, alreadyMarked: 0, skippedPinned: [], dryRun, preview: [], error: message } };
     }
   });
@@ -276,6 +276,18 @@ export function warnClaudeSettingsUnusable(result: Pick<InstallResult, 'settings
  * Windows: creates a scheduled task.
  * Skips if already installed.
  */
+/** Bound on each schtasks and crontab call, so a scheduler that never answers cannot hang `hippo init` or `hippo setup`. */
+const SCHEDULER_CALL_TIMEOUT_MS = 30_000;
+
+/** Node kills a child at its timeout and reports ETIMEDOUT; every other failure here means the scheduler refused or is missing. */
+function schedulerTimedOut<E>(err: E): boolean {
+  return err instanceof Error && 'code' in err && err.code === 'ETIMEDOUT';
+}
+
+function warnSchedulerTimedOut(command: string): void {
+  console.log(`   ${command} did not answer within ${SCHEDULER_CALL_TIMEOUT_MS / 1000} s and was stopped, so the daily runner is not scheduled.`);
+}
+
 export function setupDailySchedule(globalRoot: string): void {
   const runnerDir = path.resolve(globalRoot);
   // Reject paths with characters that could break shell/crontab quoting
@@ -292,18 +304,20 @@ export function setupDailySchedule(globalRoot: string): void {
   if (isWindows) {
     // Check if task already exists
     try {
-      const existing = execSync(`schtasks /query /tn "${taskName}" 2>nul`, { encoding: 'utf-8', windowsHide: true });
+      const existing = execSync(`schtasks /query /tn "${taskName}" 2>nul`, { encoding: 'utf-8', windowsHide: true, timeout: SCHEDULER_CALL_TIMEOUT_MS });
       if (existing.includes(taskName)) {
         return; // already scheduled
       }
-    } catch {
-      // Task doesn't exist, create it
+    } catch (err) {
+      // A non-zero exit means the task does not exist yet, so it is created below.
+      if (schedulerTimedOut(err)) warnSchedulerTimedOut('schtasks /query');
     }
 
     try {
-      execFileSync('schtasks', buildSchtasksCreateArgs(taskName, cmd), { stdio: 'pipe', windowsHide: true });
+      execFileSync('schtasks', buildSchtasksCreateArgs(taskName, cmd), { stdio: 'pipe', windowsHide: true, timeout: SCHEDULER_CALL_TIMEOUT_MS });
       console.log(`   Scheduled machine-level daily runner (6:15am) via Task Scheduler: ${taskName}`);
-    } catch {
+    } catch (err) {
+      if (schedulerTimedOut(err)) warnSchedulerTimedOut('schtasks /create');
       // No admin rights or schtasks unavailable, fall back to printing instructions
       console.log(`   To schedule the machine-level daily runner, run:`);
       console.log(`   schtasks /create /tn "${taskName}" /tr "${buildWindowsTaskRun(cmd).replace(/"/g, '\\"')}" /sc daily /st 06:15`);
@@ -312,16 +326,17 @@ export function setupDailySchedule(globalRoot: string): void {
     // Unix: check crontab for existing entry
     const marker = `# hippo:${taskName}`;
     try {
-      const existing = execSync('crontab -l 2>/dev/null', { encoding: 'utf-8', windowsHide: true });
+      const existing = execSync('crontab -l 2>/dev/null', { encoding: 'utf-8', windowsHide: true, timeout: SCHEDULER_CALL_TIMEOUT_MS });
       if (existing.includes(marker)) {
         return; // already scheduled
       }
 
       const cronLine = `15 6 * * * ${cmd} ${marker}`;
       const newCrontab = existing.trimEnd() + '\n' + cronLine + '\n';
-      execSync('crontab -', { input: newCrontab, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+      execSync('crontab -', { input: newCrontab, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true, timeout: SCHEDULER_CALL_TIMEOUT_MS });
       console.log(`   Scheduled machine-level daily runner (6:15am) via crontab`);
-    } catch {
+    } catch (err) {
+      if (schedulerTimedOut(err)) warnSchedulerTimedOut('crontab');
       // No crontab or no permission: print the line for the user to add by hand.
       const cronLine = `15 6 * * * ${cmd}`;
       console.log(`   To schedule the machine-level daily runner, add to crontab (crontab -e):`);
@@ -331,6 +346,48 @@ export function setupDailySchedule(globalRoot: string): void {
 }
 
 export type CliFlags = Record<string, string | boolean | string[]>;
+
+// Whole-arg digits only: parseInt alone reads "1abc" as 1 and a mutating verb would hit the wrong row.
+export function parsePositiveId(idRaw: unknown, label: string): number {
+  const s = String(idRaw ?? '').trim();
+  const id = parseInt(s, 10);
+  if (!/^\d+$/.test(s) || id <= 0) {
+    printError(`Invalid ${label} id: "${idRaw}" (expected a positive integer).`);
+    process.exit(1);
+  }
+  return id;
+}
+
+export function parseListLimit(flags: CliFlags): number {
+  const limitRaw = flags['limit'];
+  const limit = limitRaw !== undefined ? parseInt(String(limitRaw), 10) : 100;
+  if (!Number.isFinite(limit) || limit <= 0) {
+    printError(`Invalid --limit: "${limitRaw}". Must be a positive integer.`);
+    process.exit(1);
+  }
+  return limit;
+}
+
+// A value-less flag is `true` and a repeated one is a string[]; only a string counts here.
+export function stringFlag(flags: CliFlags, name: string): string | undefined {
+  const v = flags[name];
+  return typeof v === 'string' ? v : undefined;
+}
+
+export function numberFlag(flags: CliFlags, name: string): number | undefined {
+  const v = flags[name];
+  return typeof v === 'string' ? Number(v) : undefined;
+}
+
+// Any truthy value counts, so a string value is true too.
+export function boolFlag(flags: CliFlags, name: string): boolean {
+  return Boolean(flags[name]);
+}
+
+// Only a bare switch counts; `--x value` is false.
+export function flagIsTrue(flags: CliFlags, name: string): boolean {
+  return flags[name] === true;
+}
 
 /** What the command table hands each verb's run(). */
 export interface CommandContext {
@@ -342,7 +399,7 @@ export interface CommandContext {
 export type EngineFlags = Pick<RecallSearchOpts, 'usePhysics' | 'physicsConfig' | 'mmr' | 'mmrLambda' | 'localBump'>;
 
 export function parseAsOfFlag(flags: CliFlags): string | undefined {
-  const asOf = typeof flags['as-of'] === 'string' ? flags['as-of'] : undefined;
+  const asOf = stringFlag(flags, 'as-of');
   if (asOf !== undefined && Number.isNaN(new Date(asOf).getTime())) {
     printError(`Error: --as-of value "${asOf}" is not a valid ISO date (e.g. 2026-04-22 or 2026-04-22T12:00:00Z).`);
     process.exit(1);
@@ -353,7 +410,7 @@ export function parseAsOfFlag(flags: CliFlags): string | undefined {
 /** --physics forces physics, --classic forces BM25+cosine, else physics unless the config turns it off. */
 export function engineFlags(flags: CliFlags, config: HippoConfig): EngineFlags {
   return {
-    usePhysics: Boolean(flags['physics']) || (!flags['classic'] && config.physics.enabled !== false),
+    usePhysics: boolFlag(flags, 'physics') || (!flags['classic'] && config.physics.enabled !== false),
     physicsConfig: config.physics,
     mmr: !flags['no-mmr'] && config.mmr.enabled,
     mmrLambda: flags['mmr-lambda'] !== undefined ? parseFloat(String(flags['mmr-lambda'])) : config.mmr.lambda,
@@ -376,7 +433,7 @@ export function logSessionEndImport(logFile: string | null, transcriptPath: stri
     if (line !== null) appendSessionEndCloseLog(logFile, line);
     for (const warning of report.warnings) appendSessionEndCloseLog(logFile, `agent memories: ${warning}`);
   } catch (err) {
-    appendSessionEndCloseLog(logFile, `agent memory import failed: ${err instanceof Error ? err.message : String(err)}`);
+    appendSessionEndCloseLog(logFile, `agent memory import failed: ${errorMessage(err)}`);
   }
 }
 
@@ -416,7 +473,7 @@ export function printHandoff(handoff: SessionHandoff): void {
 
 // parseArgs turns a value-less flag into `true`; refuse rather than silently
 // stringifying it (String(true) === 'true'), mirroring cmdHandoff's guard.
-export function cardStringFlag(flags: Record<string, string | boolean | string[]>, key: string): string | undefined {
+export function stringFlagOrExit(flags: CliFlags, key: string): string | undefined {
   const v = flags[key];
   if (v === undefined) return undefined;
   if (v === true || v === false || Array.isArray(v)) { printError(`--${key} requires a value`); process.exit(1); }
@@ -501,7 +558,7 @@ export function startDeliveryRecorder(
     });
   } catch (error) {
     // The hook's one-line stderr contract pins this exact text, so it bypasses the leveled logger.
-    printError(`[hippo] delivery ledger skipped:${error instanceof Error ? error.message : String(error)}`);
+    printError(`[hippo] delivery ledger skipped:${errorMessage(error)}`);
     return null;
   }
 }
@@ -550,7 +607,7 @@ export function learnFromRepo(
   return { added, skipped, lowInfo };
 }
 
-export function resolveAuthRoot(hippoRoot: string, flags: Record<string, string | boolean | string[]>): string {
+export function resolveAuthRoot(hippoRoot: string, flags: CliFlags): string {
   if (flags['global']) {
     initGlobal();
     return getGlobalRoot();

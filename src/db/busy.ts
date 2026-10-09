@@ -37,6 +37,15 @@ export function execWithBusyRetry(db: DatabaseSyncLike, sql: string, timeoutMs =
   }
 }
 
+function undoScope(db: DatabaseSyncLike, top: boolean, name: string): void {
+  if (top) {
+    db.exec('ROLLBACK');
+  } else {
+    db.exec(`ROLLBACK TO SAVEPOINT ${name}`);
+    db.exec(`RELEASE SAVEPOINT ${name}`);
+  }
+}
+
 /** Runs `fn` as one write: BEGIN IMMEDIATE on an idle handle, else SAVEPOINT `name` inside the caller's transaction.
  *  A deferred scope that reads first cannot wait out another writer, while BEGIN IMMEDIATE waits the open's busy_timeout. */
 export function withWriteScope<T>(db: DatabaseSyncLike, name: string, fn: () => T): T {
@@ -47,14 +56,38 @@ export function withWriteScope<T>(db: DatabaseSyncLike, name: string, fn: () => 
     db.exec(top ? 'COMMIT' : `RELEASE SAVEPOINT ${name}`);
     return result;
   } catch (error) {
-    try {
-      if (top) {
-        db.exec('ROLLBACK');
-      } else {
-        db.exec(`ROLLBACK TO SAVEPOINT ${name}`);
-        db.exec(`RELEASE SAVEPOINT ${name}`);
-      }
-    } catch { /* already rolled back; keep the original error */ }
+    try { undoScope(db, top, name); } catch { /* already rolled back; keep the original error */ }
+    throw error;
+  }
+}
+
+/** What `withWriteScopeOr` hands its callback's `rollback(value)`; a class so no stored value can pass for one. */
+class RolledBack<V> {
+  readonly value: V;
+  constructor(value: V) {
+    this.value = value;
+  }
+}
+
+/** `withWriteScope` for a write that can refuse: a callback that returns `rollback(value)` gets the scope's writes undone
+ *  and `value` back, with no throw. Any other return commits. */
+export function withWriteScopeOr<T, R>(
+  db: DatabaseSyncLike,
+  name: string,
+  fn: (rollback: <V>(value: V) => RolledBack<V>) => T | RolledBack<R>,
+): T | R {
+  const top = db.isTransaction === false;
+  db.exec(top ? 'BEGIN IMMEDIATE' : `SAVEPOINT ${name}`);
+  try {
+    const result = fn((value) => new RolledBack(value));
+    if (result instanceof RolledBack) {
+      undoScope(db, top, name);
+      return result.value;
+    }
+    db.exec(top ? 'COMMIT' : `RELEASE SAVEPOINT ${name}`);
+    return result;
+  } catch (error) {
+    try { undoScope(db, top, name); } catch { /* already rolled back; keep the original error */ }
     throw error;
   }
 }

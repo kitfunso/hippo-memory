@@ -43,7 +43,7 @@
     "test:eval": "vitest run --config vitest.eval.config.ts",
     "lint": "oxlint",
     "sbom": "node scripts/sbom.mjs",
-    "audit:security": "npm audit --audit-level=high && npm --prefix ui audit --audit-level=high",
+    "audit:security": "npm audit --audit-level=moderate && npm --prefix ui audit --audit-level=moderate",
     "postinstall": "node scripts/postinstall.cjs",
     "smoke:pack": "node scripts/smoke-pack.mjs",
     "smoke:openclaw-install": "node scripts/smoke-openclaw-install.mjs",

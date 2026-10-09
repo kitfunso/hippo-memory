@@ -22,7 +22,7 @@ function refusal(fn: () => void): BadRequestError {
   throw new Error('expected a BadRequestError, got no throw');
 }
 
-describe('share and promote refuse personal rows (E10 lane A)', () => {
+describe('share and promote refuse personal rows', () => {
   let tmp: string;
   let hippoRoot: string;
   let mine: MemoryEntry;

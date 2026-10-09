@@ -4,11 +4,11 @@ import { getContext, type Context, type ContextResult, type ContextResultEntry }
 import { BadRequestError } from './api-errors.js';
 import { isSharedStore, loadConfig } from './config.js';
 import { contextBlockLines, contextCost, crossProjectLines, handoffText, sessionTrailText, settleTokens, snapshotText } from './context-render.js';
-import { isSqliteBusy, noteStoreBusy, type openHippoDb } from './db.js';
+import type { openHippoDb } from './db.js';
 import type { DeliveryRecorder } from './delivery-recorder.js';
 import { MAX_ID_LEN } from './http-util.js';
 import { isJsonString, type JsonValue } from './json.js';
-import { withLedgerDb } from './ledger-db.js';
+import { noteLedgerRowSkipped, withLedgerDb } from './ledger-db.js';
 import type { MemoryEntry } from './memory.js';
 import { sessionPilotArm, type PilotArm } from './pilot-arm.js';
 import { assertCallerProject, MAX_PROJECT_ALIASES } from './project-identity.js';
@@ -16,6 +16,7 @@ import { writeDeliveryEventAtRoot, writeDeliveryEventOnHandle } from './recall-t
 import {
   blockHash, estimateTokens, hookPayloadString, isSubagentPayload, lastSentState, recordTokenUse, shouldSkipUnchanged, type TokenSurface,
 } from './token-ledger.js';
+import { errorMessage } from './log.js';
 
 /** With `db`, writes on the token ledger's handle (same store); without it, opens its own. A second flush is a no-op. */
 export function flushDeliveryRecorder(rec: DeliveryRecorder | null, db?: ReturnType<typeof openHippoDb>): void {
@@ -24,7 +25,7 @@ export function flushDeliveryRecorder(rec: DeliveryRecorder | null, db?: ReturnT
     rec.flush((input) => (db ? writeDeliveryEventOnHandle(db, input) : writeDeliveryEventAtRoot(rec.root, input)));
   } catch (error) {
     // The hook's one-line stderr contract pins this exact text, so it bypasses the leveled logger.
-    console.error(`[hippo] delivery ledger write failed:${error instanceof Error ? error.message : String(error)}`);
+    console.error(`[hippo] delivery ledger write failed:${errorMessage(error)}`);
   }
 }
 
@@ -181,8 +182,8 @@ function recordAdditionalContextRows(view: ContextView, surface: TokenSurface, s
           tenantId: view.tenantId, sessionId: view.ledgerSessionId, surface, event: 'inject',
           items: staticPart.items, tokens: estimateTokens(staticPart.text), hash: blockHash(staticPart.text),
         });
-      // Best-effort row: only a busy store is actionable, and a ledger failure must not break the hook.
-      } catch (error) { if (isSqliteBusy(error)) noteStoreBusy('token ledger row skipped'); }
+      // Best-effort row: a ledger failure is logged and must not break the hook.
+      } catch (error) { noteLedgerRowSkipped(error); }
     }
     if (recallPart.text) {
       try {
@@ -191,7 +192,7 @@ function recordAdditionalContextRows(view: ContextView, surface: TokenSurface, s
           items: recallPart.items, tokens: estimateTokens(recallPart.text), hash: blockHash(recallPart.text),
         });
       // Same best-effort rule as the inject row above.
-      } catch (error) { if (isSqliteBusy(error)) noteStoreBusy('token ledger row skipped'); }
+      } catch (error) { noteLedgerRowSkipped(error); }
     }
     flushDeliveryRecorder(view.rec, db);
   }, { sharedStore: view.sharedStore });

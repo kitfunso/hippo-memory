@@ -3,17 +3,11 @@
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../db.js';
 import { ConflictError, NotFoundError } from '../api-errors.js';
 import { stampOriginProject } from '../store/entry-row.js';
-import { writeEntryMirrors } from '../store/entry-writes.js';
-import { cleanArchivedMirrors, commitSupersede } from '../store/entry-writes-group.js';
-import { readEntry } from '../store/entry-reads.js';
-import { updateStatsUnlessBusy } from '../store/index-and-stats.js';
-import { requireGroup, type HippoStore } from '../store-port.js';
-import { log } from '../log.js';
 import { createSuccessor, type MemoryEntry } from '../memory.js';
 import { appendAuditEvent } from '../audit.js';
 import { promoteToGlobal } from '../shared.js';
-import { archiveRawMemory } from '../raw-archive.js';
 import { loadConfig } from '../config.js';
+import { andThen, notPorted, onStore } from './on-store.js';
 import type { Context, StoreReply } from './types.js';
 import { selectMemoryReach } from '../store/tenant-lookup.js';
 import { canTouchScope, personalScopeOf } from '../recall-scope.js';
@@ -92,56 +86,19 @@ export function supersede<C extends Context>(
   oldId: string,
   newContent: string,
 ): StoreReply<C, SupersedeResult> {
-  const reply = ctx.store ? supersedeThroughStore(ctx, ctx.store, oldId, newContent) : supersedeOnHippoDb(ctx, oldId, newContent);
-  // SAFETY: a C typed with a store gets the promise its path returns; a wide C is typed as the union, which a caller has to await anyway.
-  return reply as StoreReply<C, SupersedeResult>;
-}
-
-async function supersedeThroughStore(ctx: Context, store: HippoStore, oldId: string, newContent: string): Promise<SupersedeResult> {
-  const entryWrites = requireGroup(store, 'entryWrites');
-  const [old] = await store.entriesByIds([oldId], ctx.tenantId);
-  const newEntry = createSuccessor(assertSupersedable(ctx, oldId, old ?? null), newContent, {
-    tenantId: ctx.tenantId,
-    baseHalfLifeDays: loadConfig(ctx.hippoRoot).defaultHalfLifeDays,
+  return onStore(ctx, (port) => {
+    const entryWrites = port.entryWrites ?? notPorted(port, 'entryWrites');
+    return andThen(port.entriesByIds([oldId], ctx.tenantId), ([old]) => {
+      const newEntry = createSuccessor(assertSupersedable(ctx, oldId, old ?? null), newContent, {
+        tenantId: ctx.tenantId,
+        baseHalfLifeDays: loadConfig(ctx.hippoRoot).defaultHalfLifeDays,
+      });
+      // A store writes origin_project as given, so the served folder's fallback is stamped here.
+      const successor = stampOriginProject(ctx.hippoRoot, newEntry);
+      const write = { tenantId: ctx.tenantId, actor: ctx.actor.subject, ownScope: personalScopeOf(ctx.actor), oldId, successor };
+      return andThen(entryWrites.supersede(write), (): SupersedeResult => ({ ok: true, oldId, newId: successor.id }));
+    });
   });
-  // The store writes origin_project as given, so the served folder's fallback is stamped here.
-  const successor = stampOriginProject(ctx.hippoRoot, newEntry);
-  await entryWrites.supersede({ tenantId: ctx.tenantId, actor: ctx.actor.subject, ownScope: personalScopeOf(ctx.actor), oldId, successor });
-  return { ok: true, oldId, newId: successor.id };
-}
-
-function supersedeOnHippoDb(ctx: Context, oldId: string, newContent: string): SupersedeResult {
-  const old = assertSupersedable(ctx, oldId, readEntry(ctx.hippoRoot, oldId, ctx.tenantId));
-
-  const successor = stampOriginProject(ctx.hippoRoot, createSuccessor(old, newContent, {
-    tenantId: ctx.tenantId,
-    baseHalfLifeDays: loadConfig(ctx.hippoRoot).defaultHalfLifeDays,
-  }));
-
-  // Race-safe transition: open a fresh db handle, BEGIN IMMEDIATE, run all
-  // three steps (CAS on old + writeEntryDbOnly(new) + supersede audit row)
-  // inside the same transaction. Two concurrent supersedes: exactly one CAS
-  // wins (changes=1), the other gets changes=0 and throws CONFLICT. No
-  // dangling-pointer window: the new memory's row commits atomically with
-  // the old.superseded_by pointer.
-  const db = openHippoDb(ctx.hippoRoot);
-  try {
-    commitSupersede(db, { tenantId: ctx.tenantId, actor: ctx.actor.subject, ownScope: personalScopeOf(ctx.actor), oldId, successor });
-    // Mirrors after COMMIT, while the db handle is still open. Same
-    // invariant as the original writeEntry: a mirror failure leaves disk
-    // MISSING the markdown for the new memory (rebuildIndex rewrites every
-    // markdown mirror from the DB) but DOES NOT desync the DB or
-    // roll back the supersede. Logged + swallowed, non-fatal.
-    try {
-      writeEntryMirrors(ctx.hippoRoot, successor);
-    } catch (mirrorErr) {
-      log.error(`supersede: mirror write failed (non-fatal, will self-heal): ${mirrorErr instanceof Error ? mirrorErr.message : String(mirrorErr)}`);
-    }
-  } finally {
-    closeHippoDb(db);
-  }
-
-  return { ok: true, oldId, newId: successor.id };
 }
 
 /** The tenant-scoped row to supersede; another tenant's id, or someone else's personal row, reads as not found. */
@@ -162,20 +119,9 @@ function assertSupersedable(ctx: Context, oldId: string, old: MemoryEntry | null
 // archive_raw
 // ---------------------------------------------------------------------------
 
-/**
- * Archive a kind='raw' memory: snapshot into raw_archive, mark archived, delete.
- *
- * `archiveRawMemory` audits the operation internally (op='archive_raw') using the
- * row's own tenant_id. We DO NOT emit a second audit event here to avoid double-
- * emitting the archive_raw op. Instead we pass `ctx.actor.subject` through as `who`,
- * and raw-archive.ts uses that for the audit row.
- */
+/** Archive a kind='raw' memory: its metadata moves to raw_archive and the row is deleted. The store writes the one archive_raw audit row, under the caller's subject. */
 export interface ArchiveRawOpts {
-  /**
-   * Connector idempotency hook. Runs inside the same
-   * SAVEPOINT as the archive — throwing rolls the archive back. Used by the
-   * Slack deletion connector to mark the deletion event seen atomically.
-   */
+  /** A connector's idempotency hook. It runs inside the archive's write scope on hippo.db's own handle, so a throw undoes the archive; a served store refuses it. */
   afterArchive?: (db: DatabaseSyncLike, archivedMemoryId: string) => void;
 }
 
@@ -189,43 +135,11 @@ export function archiveRaw<C extends Context>(
   reason: string,
   opts: ArchiveRawOpts = {},
 ): StoreReply<C, ArchiveRawResult> {
-  const reply = ctx.store ? archiveRawThroughStore(ctx, ctx.store, id, reason, opts) : archiveRawOnHippoDb(ctx, id, reason, opts);
-  // SAFETY: a C typed with a store gets the promise its path returns; a wide C is typed as the union, which a caller has to await anyway.
-  return reply as StoreReply<C, ArchiveRawResult>;
-}
-
-/** afterArchive writes on hippo.db's own handle, and only connectors send it, so a store refuses it. */
-async function archiveRawThroughStore(ctx: Context, store: HippoStore, id: string, reason: string, opts: ArchiveRawOpts): Promise<ArchiveRawResult> {
-  const entryWrites = requireGroup(store, 'entryWrites');
-  if (opts.afterArchive) throw new Error('afterArchive runs on hippo.db only, never through a store');
-  const archivedAt = await entryWrites.archiveRaw({ tenantId: ctx.tenantId, actor: ctx.actor.subject, ownScope: personalScopeOf(ctx.actor), id, reason });
-  return { ok: true, archivedAt };
-}
-
-function archiveRawOnHippoDb(ctx: Context, id: string, reason: string, opts: ArchiveRawOpts): ArchiveRawResult {
-  const db = openHippoDb(ctx.hippoRoot);
-  let archivedAt: string;
-  try {
-    // Tenant scope: archiveRawMemory looks up the row by id alone, so a
-    // Bearer for tenant A could archive tenant B's raw row without this
-    // pre-check. Deny cross-tenant access with the same not-found message
-    // archiveRawMemory itself would throw on a missing row, so we don't
-    // leak whether the id exists in another tenant.
-    const reach = selectMemoryReach(db, id);
-    if (reach?.tenantId !== ctx.tenantId || !canTouchScope(ctx.actor, reach.scope)) {
-      throw new NotFoundError(`memory not found: ${id}`);
-    }
-    archivedAt = archiveRawMemory(db, id, {
-      reason,
-      who: ctx.actor.subject,
-      afterArchive: opts.afterArchive,
-    });
-    cleanArchivedMirrors(db, ctx.hippoRoot, id);
-  } finally {
-    closeHippoDb(db);
-  }
-  // Counted here rather than in the CLI: the HTTP archive route calls this too,
-  // so a routed archive would otherwise never reach the forgotten counter.
-  updateStatsUnlessBusy(ctx.hippoRoot, { forgotten: 1 }, `removed ${id}`);
-  return { ok: true, archivedAt };
+  return onStore(ctx, (port, local) => {
+    const entryWrites = port.entryWrites ?? notPorted(port, 'entryWrites');
+    const archive = { tenantId: ctx.tenantId, actor: ctx.actor.subject, ownScope: personalScopeOf(ctx.actor), id, reason };
+    const { afterArchive } = opts;
+    const archived = afterArchive ? local.archiveRaw(archive, afterArchive) : entryWrites.archiveRaw(archive);
+    return andThen(archived, (archivedAt): ArchiveRawResult => ({ ok: true, archivedAt }));
+  });
 }

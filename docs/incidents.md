@@ -202,7 +202,6 @@ Bugs, regressions and review findings that shaped the code. Source comments keep
 - `sessionTrace`: T1 fix (2026-08-15 hardening pass): stamp the trace into the SAME tenant the traceExistsForSession idempotency check (above) runs under. Before this, createMemory omitted tenantId and the trace always landed 'default' (memory.ts:535) while the idempotency check ran under consolidationTenant — for any non-default tenant that check never hit, and the trace regenerated every sleep.
 
 ### src/customer-notes.ts
-- `preflightNoteSupersede`: Mirrors saveProjectBrief / saveSkill (codex P1 2026-05-28).
 - `saveCustomerNote`: The memory mirror carries a `customer:<lc>` tag (in addition to ['customer_note'] + caller extraTags) so scope-aware recall treats the note as entity-local - the project_brief codex-P2 recall-locality lesson applied to entity scoping.
 - `closeCustomerNote`: Closing removes the object from the graph. Remove its rows DIRECTLY (deterministic), not only via an enqueued rebuild whose queue item is lost if the mirror is later forgotten (the queue row cascade-deletes with the memory), which would leave the closed object stale and could block that forget (codex P1).
 
@@ -250,8 +249,14 @@ Bugs, regressions and review findings that shaped the code. Source comments keep
 ### src/db/migrations/v42.ts
 - migration v42: codex P2: backfill from session_complete so pre-existing handoffs don't all read as unfinished and get injected by the new 72h ambient fallback.
 
+### src/db/wal-checkpointer.ts
+- `startWalCheckpointer`: the "p99 recall at 1k memories" CI step failed on some hosted runners with single requests of 100 to 340 ms. Every connection ran `wal_autocheckpoint = 100` and one recall writes about 35 WAL pages in 4 commits, so about one request in three ran a checkpoint inside its commit: four `fsync` calls on the event loop (about 1,430 per 1,000 recalls under strace). On a runner with a slow disk each of those requests stalled. Measured 2026-10-08 on 12 hosted runners, three runs of each build per runner: the parent failed the 60 ms gate in 5 of 36 runs, this module alone in 2 of 36, this module with the in-place `stats.json` write in 0 of 36.
+- `startWalCheckpointer`: the worker takes PASSIVE passes only. A FULL or RESTART pass holds the write lock through a disk flush, and a request waits at most 250 ms for that lock before it fails with SQLITE_BUSY.
+- `startWalCheckpointer`: what stays on the request thread. The first write after a complete checkpoint restarts the WAL and flushes its header (about 64 flushes per 1,000 recalls on CI); SQLite does that inside the writer's own commit. On a disk whose flush is slower than the gap between commits the worker never copies the whole WAL, so the WAL grows to the 4,000-page limit and a request runs the old four flushes, about once per 115 recalls.
+- `startWalCheckpointer`: open item. On some runners a plain buffered write on the request thread (a WAL commit, `PRAGMA journal_mode = WAL`, the `stats.json` write) blocked 50 to 140 ms while a worker flush of 180 to 340 ms was in flight. The cause was not measured; the filesystem journal commit is the suspect.
+- `autoCheckpointPages`: the inline limit of 100 pages came with the lock-hardening work, not from a durability decision. With a worker the power-loss window is about 1,100 WAL pages, close to SQLite's default of 1,000; `synchronous = NORMAL` is unchanged.
+
 ### src/decisions.ts
-- `preflightDecisionSupersede`: Validating first means the new row is never a candidate for its own supersede UPDATE. codex review 2026-05-28 (P1).
 - `saveDecision`: Post-commit hook: mark the tenant's graph dirty AFTER the DB row commits but BEFORE the markdown mirrors are written, so a mirror-write failure can never leave a committed save unflagged (codex).
 - `closeDecision`: Closing removes the object from the graph. Remove its rows DIRECTLY (deterministic), not only via an enqueued rebuild whose queue item is lost if the mirror is later forgotten (the queue row cascade-deletes with the memory), which would leave the closed object stale and could block that forget (codex P1).
 
@@ -332,12 +337,14 @@ Bugs, regressions and review findings that shaped the code. Source comments keep
 - `calculateStrength`: EVAL-ONLY ablation (see ablation.ts): with recall-strengthening ablated, anchor decay at CREATION, not last_retrieved. A never-strengthened memory decays from when it was made; using last_retrieved would let clock resets persisted by PRIOR unflagged runs leak strengthening into an ablated arm's rankings (codex P2). Identity on fresh stores (created == last_retrieved at write). Prior-run half_life increments are NOT reconstructed - see the ablation.ts caveat (fresh stores per arm).
 - `calculateStrength`: EVAL-ONLY ablation (see ablation.ts): the recall-boost flag neutralizes the READ side too, so a store with PRIOR retrieval history (counts > 0 written before the flag was set) does not leak strengthening into an ablated arm's rankings (codex P2).
 
+### src/objects/lifecycle.ts
+- `preflightSupersede`: Validating first means the new row is never a candidate for its own supersede UPDATE. codex review 2026-05-28 (P1). Written as `preflightDecisionSupersede` and `preflightBriefSupersede` before the typed objects shared one save.
+
 ### src/physics.ts
 - `computeMass`: EVAL-ONLY ablation (see ablation.ts): under the recall-boost flag, particle mass must not scale with retrieval history either - query gravity ranks by mass, so prior retrieval counts would leak strengthening into the ablated arm's physics-pool rankings (codex P2). Covers both the init and refresh callers in physics-state.ts.
 
 ### src/policies.ts
 - `asOfInstant`: comparison is correct (plan-eng-critic round-1 CRIT fix: a date-only asOf vs a datetime valid_from otherwise made a same-day policy invisible).
-- `preflightPolicySupersede`: Mirrors saveProcess / saveDecision (codex P1 2026-05-28).
 - `savePolicy`: hide a superseded predecessor for that earlier time (codex review 2026-05-30 round 2). An explicit --from is honored as-is.
 - `closePolicy`: object stale and could block that forget (codex P1). Still enqueue when a mirror exists
 - `loadActivePolicies`: superseded in May is still the answer for `asof March`. (codex review 2026-05-30, P2 #2: filtering on status='active' alone dropped historically-valid superseded versions, conflating transaction-time with valid-time. The successor-aware filter mirrors the existing recall-history.ts asOf pattern.)
@@ -358,7 +365,6 @@ Bugs, regressions and review findings that shaped the code. Source comments keep
 - `preflightProcessSupersede`: Mirrors saveDecision (codex P1 2026-05-28).
 
 ### src/project-briefs.ts
-- `preflightBriefSupersede`: Mirrors saveSkill / saveProcess (codex P1 2026-05-28).
 - `closeProjectBrief`: which would leave the closed object stale and could block that forget (codex P1).
 - `fitReceiptLines`: NOTE on ordering: the `id DESC` tiebreak is lexical on a random-ish memory id ... `created DESC` is the real recency ordering. (plan-eng-critic 2026-05-30, med.)
 - `fitReceiptLines`: Budget-aware assembly (codex-review-critic 2026-05-30, P2): the digest is the brief `summary`, which saveProjectBrief caps at MAX_BRIEF_SUMMARY_LEN. The receipt/headline caps (50 x ~200) could otherwise build an ~11KB body that the store then REJECTS, breaking refresh for inputs within the advertised caps.
@@ -449,6 +455,7 @@ Bugs, regressions and review findings that shaped the code. Source comments keep
 - `getExistingEntryMirrorPaths`: AT1 P1 fix (codex): same missing Layer.Trace as removeEntryMirrors above — kept in lockstep with it since this function's whole purpose is walking the mirror paths "the same way removeEntryMirrors walks them" (see its own doc comment).
 - `purgeMirrorBestEffort`: AT1 fix: best-effort markdown-mirror purge shared by `reject-flow.ts`'s `rejectValue` and `resolveConflict`'s post-commit purge. Both used to log "will retry via reaper on next open" for EVERY failure, but the reaper (`cleanupArchivedMirrors`, raw-archive-mirror-cleanup.ts) only scans `raw_archive` — that message was false for a non-raw id, which has no reaper at all. Retries the unlink once synchronously (the common real-world failure is a transient lock/AV-scanner false positive, not a permanent one). On a second failure: raw ids still get the honest reaper message (true); non-raw ids get the EXPLICIT leftover file path(s) and a manual-delete instruction, since nothing will ever retry them automatically.
 - `buildIndexFromDb`: LC1 codex round-2 med: the two lockstep keys must be read in ONE statement. Two autocommit SELECTs leave a window where a concurrent saveIndex (which commits both keys in one transaction) lands between them, handing the reader mismatched last_retrieval_ids / last_trace_id and re-opening the mislinkage hole saveIndex's BEGIN/COMMIT closed on the write side. One SELECT = one SQLite read snapshot.
+- `writeStatsMirror`: a recall rewrote `stats.json` with a truncating open. On a slow disk the truncate waited for the previous write of the file to reach the disk, 50 to 250 ms on the event loop, once any thread flushed. A temp file plus rename stalled the same way (217 of 226 slow requests sat in `renameSync` on a delayed-write test disk, 2026-10-08). Writing from offset 0 and then cutting the file to the new length did not stall: the five round p99 values were 24.9 to 30.2 ms where the truncating open gave 61.3 to 255.8 ms.
 
 ### src/store/open.ts
 - `isInitialized`: A bare .hippo directory is not enough — autoInstallHooks / setupDailySchedule can create it without ever calling initStore, leaving a partial directory (integrations/, logs/, runs/) with no hippo.db. Returning true in that state caused `hippo init` to skip initStore and `hippo recall` to silently fall back to an empty store (incident 2026-04-26: ingest_direct.py against a bare .hippo). Treat the store as initialized only if hippo.db actually exists.

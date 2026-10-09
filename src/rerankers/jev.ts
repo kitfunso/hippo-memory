@@ -1,10 +1,11 @@
 import { envJevModel, envJevTimeoutMs, envTypesafeApiKey } from '../env.js';
 import { crossEncoderReranker } from './cross-encoder.js';
 import type { RerankerFn, RerankResult, RerankerOptions } from './types.js';
-import type { SearchResult } from '../search/types.js';
+import type { SearchResult } from '../core/search-types.js';
 import { redactSecretsStrict } from '../secret-detect.js';
 import { createOutageWarning } from './outage-warning.js';
 import { rerankerPost } from './remote.js';
+import { errorMessage } from '../log.js';
 
 const ENDPOINT = 'https://api.typesafe.ai/v1/systemone';
 const DEFAULT_TIMEOUT_MS = 5_000;
@@ -103,7 +104,7 @@ export function createJevReranker(localFallback: RerankerFn): RerankerFn {
     } catch (err) {
       // A read path never throws, and never hands back the unranked order
       // without saying so: warn, then use the free local reranker.
-      outage.failed(err instanceof Error ? err.message : 'unknown error');
+      outage.failed(errorMessage(err));
       return localFallback(query, head, options);
     }
 

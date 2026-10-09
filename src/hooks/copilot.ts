@@ -4,9 +4,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { isDeepStrictEqual } from 'node:util';
 import type { JsonObject } from '../working-memory.js';
-import { type JsonValue, readJsonFile } from '../json.js';
-import { HOOK_MARKERS, hippoBlock } from '../cli/hook-blocks.js';
-import { copilotHomeDir, isJsonObject, vscodeUserDirs } from './shared.js';
+import { type JsonValue, readJsonFile, isJsonObjectLiteral } from '../json.js';
+import { HOOK_MARKERS, hippoBlock } from './hook-blocks.js';
+import { copilotHomeDir, vscodeUserDirs } from './shared.js';
+import { writeFileAtomic } from '../util/atomic-write.js';
 import { installJsonHooks, resolveJsonHookPaths, uninstallJsonHooks, writeSettingsFile } from './json-hooks.js';
 
 const MCP_KEY = 'hippo';
@@ -113,7 +114,7 @@ export const VSCODE_MCP: McpHost = { key: 'servers', server: () => ({ type: 'std
 
 /** Only a server hippo wrote counts as hippo's: another command, other args, or any key or value setup does not write (an env you added) makes it the user's. */
 function isHipposServer(entry: JsonValue | undefined, host: McpHost): boolean {
-  if (!isJsonObject(entry) || !('command' in entry) || !('args' in entry)) return false;
+  if (!isJsonObjectLiteral(entry) || !('command' in entry) || !('args' in entry)) return false;
   const ours = host.server();
   return Object.entries(entry).every(([key, value]) => (key === 'command' ? value === 'hippo' || value === 'hippo.cmd' : isDeepStrictEqual(value, ours[key])));
 }
@@ -141,10 +142,10 @@ function readMcpConfig(file: string, host: McpHost): McpConfig | null {
       if (fs.readFileSync(file, 'utf8').trim() !== '') return null;
     }
   }
-  if (!isJsonObject(config)) return null;
+  if (!isJsonObjectLiteral(config)) return null;
   if (config[host.key] === undefined) config[host.key] = {};
   const servers = config[host.key];
-  return isJsonObject(servers) ? { config, servers } : null;
+  return isJsonObjectLiteral(servers) ? { config, servers } : null;
 }
 
 export type McpMergeStatus = 'added' | 'present' | 'user-owned' | 'unreadable';
@@ -220,15 +221,14 @@ function withCopilotBlock(text: string, found: FoundBlock | null): string {
 export type InstructionsInstallStatus = 'written' | 'present' | 'kept' | 'unclosed';
 
 /** Creates the file when missing; any block but hippo's own Copilot one, and a start marker with no end, leave the file as it is. */
-export function ensureInstructionsBlock(file: string): InstructionsInstallStatus {
+function ensureInstructionsBlock(file: string): InstructionsInstallStatus {
   const old = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
   const found = hippoBlock(old);
   if (found === null && old.includes(HOOK_MARKERS.start)) return 'unclosed';
   if (found !== null && !isCopilotBlock(found.inner)) return 'kept';
   const next = withCopilotBlock(old, found);
   if (next === old) return 'present';
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, next, 'utf8');
+  writeFileAtomic(file, next);
   return 'written';
 }
 
@@ -252,7 +252,7 @@ export function removeInstructionsBlock(file: string): InstructionsRemoveStatus 
   if (!isCopilotBlock(found.inner)) return 'kept';
   const left = withoutCopilotBlock(old, found);
   if (left.trim() === '') fs.rmSync(file);
-  else fs.writeFileSync(file, left, 'utf8');
+  else writeFileAtomic(file, left);
   return 'removed';
 }
 
@@ -266,8 +266,7 @@ export function ensureVscodeInstructions(file: string): VscodeInstructionsInstal
     if (old === VSCODE_INSTRUCTIONS) return 'present';
     if (!isHipposVscodeInstructions(old)) return 'kept';
   }
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, VSCODE_INSTRUCTIONS, 'utf8');
+  writeFileAtomic(file, VSCODE_INSTRUCTIONS);
   return 'written';
 }
 

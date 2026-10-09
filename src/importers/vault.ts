@@ -3,6 +3,7 @@ import * as path from 'path';
 import { createHash } from 'node:crypto';
 import { createMemory, MemoryEntry } from '../memory.js';
 import { initStore } from '../store/open.js';
+import { selectVaultRawRows, type VaultRawRow } from '../store/entry-reads.js';
 import { remember, archiveRaw, isPrivateScope, type HippoDbContext } from '../api.js';
 import { assertClientScope } from '../recall-scope.js';
 import { openHippoDb, closeHippoDb } from '../db.js';
@@ -11,7 +12,8 @@ import { loadConfig } from '../config.js';
 import { vetSecrets } from '../secret-detect.js';
 import { errorMessage, log } from '../log.js';
 import { type ImportResult, type ImportOptions } from './core.js';
-import { parseFrontmatter, frontmatterList, parseWikilinks, collectMarkdownFiles, realpathOrResolve } from './markdown-parse.js';
+import { splitMarkdownFrontmatter, frontmatterList, parseWikilinks, collectMarkdownFiles } from './markdown-parse.js';
+import { realpathOrResolve } from '../util/real-path.js';
 import { type JsonValue, isJsonString } from '../json.js';
 import { escapeLike } from '../escape.js';
 
@@ -28,12 +30,7 @@ import { escapeLike } from '../escape.js';
 // `archiveRaw` (the only trigger-legit raw delete).
 // ---------------------------------------------------------------------------
 
-interface VaultRow {
-  id: string;
-  artifact_ref: string;
-  tags_json: string;
-  scope: string | null;
-}
+type VaultRow = VaultRawRow;
 
 /**
  * Import a markdown vault FOLDER as `kind='raw'` memories.
@@ -45,10 +42,7 @@ interface VaultRow {
  */
 export function importVault(folderPath: string, options: ImportOptions): ImportResult {
   const hippoRoot = options.hippoRoot;
-  const tenantId = options.tenantId ?? 'default';
-  const { vaultName, scope } = vaultIdentityOrThrow(options);
-  const extraTags = options.extraTags ?? [];
-  const dryRun = options.dryRun ?? false;
+  const identity = vaultIdentityOrThrow(options);
   if (options.global) {
     // The raw-archive path is tenant-local; global mode would put raw vault rows
     // in the wrong store. Reject for SDK callers too (the CLI also rejects
@@ -71,6 +65,14 @@ export function importVault(folderPath: string, options: ImportOptions): ImportR
   if (resolvedFolder === resolvedStore || resolvedFolder.startsWith(resolvedStore + path.sep)) {
     return { total: 0, imported: 0, skipped: 0, rejected: 0, archived: 0, entries: [] };
   }
+  return syncVaultFolder(folderPath, options, identity);
+}
+
+function syncVaultFolder(folderPath: string, options: ImportOptions, { vaultName, scope }: VaultIdentity): ImportResult {
+  const hippoRoot = options.hippoRoot;
+  const tenantId = options.tenantId ?? 'default';
+  const extraTags = options.extraTags ?? [];
+  const dryRun = options.dryRun ?? false;
 
   const ctx: HippoDbContext = {
     hippoRoot,
@@ -196,14 +198,7 @@ function loadVaultRows(hippoRoot: string, tenantId: string, vaultName: string): 
   const db = openHippoDb(hippoRoot);
   try {
     const likeParam = `vault:${escapeLike(vaultName)}:%`;
-    // SAFETY: query selects exactly the columns of VaultRow, in the same
-    // names, from the memories table this module owns.
-    const rows = db
-      .prepare(
-        `SELECT id, artifact_ref, tags_json, scope FROM memories
-           WHERE artifact_ref LIKE ? ESCAPE '\\' AND tenant_id = ? AND kind = 'raw'`,
-      )
-      .all(likeParam, tenantId) as VaultRow[];
+    const rows = selectVaultRawRows(db, likeParam, tenantId);
     // SQLite LIKE is case-insensitive for ASCII, so the query over-fetches
     // (vault 'A' also matches 'vault:a:%'). Filter to the EXACT-case prefix in
     // JS so deletion-sync never archives a different-cased vault's rows (codex P2).
@@ -222,7 +217,7 @@ function loadVaultRows(hippoRoot: string, tenantId: string, vaultName: string): 
 }
 
 function importVaultNote(run: VaultImportRun, relpath: string): void {
-  const { ctx, tally } = run;
+  const { tally } = run;
   tally.total++;
   const artifactRef = `vault:${run.vaultName}:${relpath}`;
   run.seen.add(artifactRef);
@@ -240,7 +235,7 @@ function importVaultNote(run: VaultImportRun, relpath: string): void {
   // built, so it can compare the complete envelope rather than a subset.
   const priors = run.existing.get(artifactRef) ?? [];
 
-  const { fm, body } = parseFrontmatter(rawFileContent);
+  const { fm, body } = splitMarkdownFrontmatter(rawFileContent);
 
   // Empty / frontmatter-only note: nothing storable (createMemory enforces a
   // min content length). The note's CONTENT was deleted at source, so this is a
@@ -256,13 +251,16 @@ function importVaultNote(run: VaultImportRun, relpath: string): void {
     return;
   }
 
-  const tags = vaultNoteTags(run, hashTag, fm, body);
-  if (vaultEnvelopeUnchanged(priors, tags, run.scope)) {
+  const tags = vaultNoteTags(run, hashTag, fm, body);  if (vaultEnvelopeUnchanged(priors, tags, run.scope)) {
     // Unchanged file + envelope → skip (idempotent re-import).
     tally.skipped++;
     return;
   }
+  writeChangedNote(run, artifactRef, priors, body, tags);
+}
 
+function writeChangedNote(run: VaultImportRun, artifactRef: string, priors: VaultRow[], body: string, tags: string[]): void {
+  const { ctx, tally } = run;
   // Changed file → archive EVERY old raw row for this ref (normally one; >1
   // only after a concurrent double-insert), then append the new one. NEVER
   // supersede (would yield kind='distilled'). archiveRaw commits + closes its
@@ -393,7 +391,7 @@ function parseJsonArrayLoose(value: string | null | undefined): string[] {
     const parsed: JsonValue = JSON.parse(value);
     return Array.isArray(parsed) ? parsed.filter(isJsonString) : [];
   } catch (err) {
-    log.debug(`import: unreadable tags_json read as no tags: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`import: unreadable tags_json read as no tags: ${errorMessage(err)}`);
     return [];
   }
 }

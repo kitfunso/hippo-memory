@@ -13,7 +13,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../src/mcp/server.js';
-import { savePrediction, closePrediction } from '../src/predictions/store.js';
+import { savePrediction, closePrediction } from '../src/store/predictions.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 type HippoRecallToolArgs = {
@@ -57,7 +57,7 @@ function seedBaserate(home: string): void {
   }
 }
 
-describe('mcp hippo_recall planningFallacyHint text block (J3.2 v0.32)', () => {
+describe('mcp hippo_recall planningFallacyHint text block', () => {
   let home: string;
   let originalHome: string | undefined;
 

@@ -20,9 +20,10 @@
  */
 
 import { remember, type Context, type RememberOpts } from '../../api.js';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../db.js';
+import type { DatabaseSyncLike } from '../../db.js';
+import { eventMemory, logEvent, logEventAt, seenEvent } from '../../store/connectors/github.js';
 import { RejectedValueError } from '../../rejection.js';
-import { hasSeenKey, lookupMemoryByKey, DuplicateIdempotencyError } from './idempotency.js';
+import { DuplicateIdempotencyError } from './idempotency.js';
 import { computeIdempotencyKey } from './signature.js';
 import {
   issueEventToRememberOpts,
@@ -119,8 +120,6 @@ function eventUpdatedAt(event: IngestEvent): string | null {
   }
 }
 
-const INSERT_EVENT_LOG_SQL = `INSERT OR IGNORE INTO github_event_log (idempotency_key, delivery_id, event_name, ingested_at, memory_id) VALUES (?, ?, ?, ?, ?)`;
-
 export function ingestEvent(ctx: Context, input: IngestInput): IngestResult {
   const idempotencyKey = computeIdempotencyKey(
     eventArtifactRef(input.event),
@@ -129,14 +128,8 @@ export function ingestEvent(ctx: Context, input: IngestInput): IngestResult {
 
   // Fast path: pre-check. Avoids running the transform / opening a write tx
   // for the common already-seen case (GitHub auto-retries with the same body).
-  const db = openHippoDb(ctx.hippoRoot);
-  try {
-    if (hasSeenKey(db, idempotencyKey)) {
-      return { status: 'duplicate', memoryId: lookupMemoryByKey(db, idempotencyKey) };
-    }
-  } finally {
-    closeHippoDb(db);
-  }
+  const seen = seenEvent(ctx.hippoRoot, idempotencyKey);
+  if (seen) return { status: 'duplicate', memoryId: seen.memoryId };
 
   const opts = transformEvent(input.event);
 
@@ -160,12 +153,7 @@ export function ingestEvent(ctx: Context, input: IngestInput): IngestResult {
     if (e instanceof DuplicateIdempotencyError) {
       // Other worker's row is committed. Return its memory_id so callers
       // behave identically to the fast-path 'duplicate' branch.
-      const db3 = openHippoDb(ctx.hippoRoot);
-      try {
-        return { status: 'skipped_duplicate', memoryId: lookupMemoryByKey(db3, idempotencyKey) };
-      } finally {
-        closeHippoDb(db3);
-      }
+      return { status: 'skipped_duplicate', memoryId: eventMemory(ctx.hippoRoot, idempotencyKey) };
     }
     if (e instanceof RejectedValueError) {
       // A tombstone hit is a PERMANENT skip, never DLQ-retried: mark the key seen like the empty-body
@@ -178,14 +166,7 @@ export function ingestEvent(ctx: Context, input: IngestInput): IngestResult {
 }
 
 function markKeySeenWithoutMemory(hippoRoot: string, idempotencyKey: string, input: IngestInput): void {
-  const db = openHippoDb(hippoRoot);
-  try {
-    db
-      .prepare(INSERT_EVENT_LOG_SQL)
-      .run(idempotencyKey, input.deliveryId, input.event.eventName, new Date().toISOString(), null);
-  } finally {
-    closeHippoDb(db);
-  }
+  logEvent(hippoRoot, { idempotencyKey, deliveryId: input.deliveryId, eventName: input.event.eventName, memoryId: null });
 }
 
 function rememberWithEventLog(
@@ -204,16 +185,8 @@ function rememberWithEventLog(
         if (input.__testInjectBeforeLog) {
           input.__testInjectBeforeLog(innerDb, idempotencyKey);
         }
-        const inserted = innerDb
-          .prepare(INSERT_EVENT_LOG_SQL)
-          .run(
-            idempotencyKey,
-            input.deliveryId,
-            input.event.eventName,
-            new Date().toISOString(),
-            memoryId,
-          );
-        if (Number(inserted.changes ?? 0) === 0) {
+        const entry = { idempotencyKey, deliveryId: input.deliveryId, eventName: input.event.eventName, memoryId };
+        if (!logEventAt(innerDb, entry)) {
           throw new DuplicateIdempotencyError(idempotencyKey);
         }
       },

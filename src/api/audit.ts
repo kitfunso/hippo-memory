@@ -1,7 +1,7 @@
 // Audit log queries.
 
-import { openHippoDb, closeHippoDb } from '../db.js';
-import { queryAuditEvents, type AuditEvent, type AuditOp } from '../audit.js';
+import type { AuditEvent, AuditOp } from '../audit.js';
+import { requireGroup, storeFor } from '../store-port.js';
 import type { KeysetPosition } from '../keyset.js';
 import type { Context } from './types.js';
 
@@ -18,21 +18,9 @@ export interface AuditListOpts {
   after?: KeysetPosition;
 }
 
-/**
- * Read audit events scoped to `ctx.tenantId`. Read-only, no audit emit (matches
- * cmdAuditList, which does not record a 'recall'-style read event).
- */
-export function auditList(ctx: Context, opts: AuditListOpts): AuditEvent[] {
-  const db = openHippoDb(ctx.hippoRoot);
-  try {
-    return queryAuditEvents(db, {
-      tenantId: ctx.tenantId,
-      op: opts.op,
-      since: opts.since,
-      limit: opts.limit,
-      after: opts.after,
-    });
-  } finally {
-    closeHippoDb(db);
-  }
+/** Read audit events scoped to `ctx.tenantId` on the store the request runs on. Read-only, no audit emit. */
+export async function auditList(ctx: Context, opts: AuditListOpts): Promise<AuditEvent[]> {
+  return requireGroup(storeFor(ctx), 'auditLog').listAuditEvents({
+    tenantId: ctx.tenantId, op: opts.op, since: opts.since, limit: opts.limit, after: opts.after,
+  });
 }

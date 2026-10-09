@@ -20,6 +20,7 @@ import {
   toRenderItems,
 } from '../prompt-hook.js';
 import {
+  type CliFlags,
   parseLimitFlag,
   parseCountFlag,
   parseBudgetFlag,
@@ -36,15 +37,16 @@ import {
   runHookWithStores,
   inPilotHoldout,
   startDeliveryRecorder,
+  flagIsTrue,
 } from './shared.js';
 
 export async function cmdContext(
   hippoRoot: string,
   args: string[],
-  flags: Record<string, string | boolean | string[]>,
+  flags: CliFlags,
   stdinText?: string
 ): Promise<void> {
-  const rec = flags['pinned-only'] === true ? startDeliveryRecorder(hippoRoot, stdinText, hookRuntime(flags)) : null;
+  const rec = flagIsTrue(flags, 'pinned-only') ? startDeliveryRecorder(hippoRoot, stdinText, hookRuntime(flags)) : null;
   // No try/finally: a render throw keeps its own exit code and writes no event.
   await renderContext(hippoRoot, args, flags, stdinText, rec);
   flushDeliveryRecorder(rec);
@@ -75,13 +77,13 @@ function readHookPayload(stdinText: string | undefined): HookPayload {
 async function renderContext(
   hippoRoot: string,
   args: string[],
-  flags: Record<string, string | boolean | string[]>,
+  flags: CliFlags,
   stdinText: string | undefined,
   rec: DeliveryRecorder | null,
 ): Promise<void> {
   // --pinned-only fires on every prompt, even where no local .hippo exists, so it skips requireInit
   // and api.getContext falls back to global-only.
-  const pinnedOnly = flags['pinned-only'] === true;
+  const pinnedOnly = flagIsTrue(flags, 'pinned-only');
   if (!pinnedOnly) {
     requireInit(hippoRoot);
   }
@@ -103,16 +105,9 @@ async function renderContext(
   }
 
   // --auto shells out to git, so it stays CLI-side; api.getContext stays host-agnostic and falls back to '*'.
-  let query = args.join(' ').trim();
-  if (!query && flags['auto']) {
-    query = autoDetectContext();
-  }
+  const query = contextQuery(args, flags);
 
-  const ctx: api.Context = {
-    hippoRoot,
-    tenantId: resolvedTenant,
-    actor: api.adminActor('cli'),
-  };
+  const ctx: api.Context = { hippoRoot, tenantId: resolvedTenant, actor: api.adminActor('cli') };
   const format = String(flags['format'] ?? 'markdown');
   const framing = String(flags['framing'] ?? 'observe');
   const opts = buildContextOpts(flags, { query, budget, pinnedOnly, format, framing, session, rec });
@@ -125,6 +120,15 @@ async function renderContext(
 
   const envelope = format === 'copilot' ? sessionStartEnvelope(stdinText) : undefined;
   const view: ContextView = { hippoRoot, tenantId: ctx.tenantId, ledgerSessionId, payloadSessionId, pinnedOnly, framing, rec, result, envelope };
+  renderContextView(view, format, query);
+}
+
+function contextQuery(args: string[], flags: CliFlags): string {
+  const query = args.join(' ').trim();
+  return !query && flags['auto'] ? autoDetectContext() : query;
+}
+
+function renderContextView(view: ContextView, format: string, query: string): void {
   if (format === 'json') {
     renderContextJson(view, query);
   } else if (format === 'additional-context' || format === 'copilot') {
@@ -165,12 +169,12 @@ interface ContextOptsInput {
   readonly rec: DeliveryRecorder | null;
 }
 
-function buildContextOpts(flags: Record<string, string | boolean | string[]>, input: ContextOptsInput): api.ContextOpts {
+function buildContextOpts(flags: CliFlags, input: ContextOptsInput): api.ContextOpts {
   // Scope detection uses cwd, so it is resolved here and passed in via opts.scope.
   const ctxExplicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
   const ctxActiveScope = ctxExplicitScope || detectScope();
   // --cross-project re-includes other-project memories, rendered under their own section.
-  const crossProject = flags['cross-project'] === true;
+  const crossProject = flagIsTrue(flags, 'cross-project');
   return {
     q: input.query,
     budget: input.budget,

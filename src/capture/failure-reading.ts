@@ -3,13 +3,8 @@ import { redactSecretsStrict } from '../secret-detect.js';
 import { scrubForSharing } from '../share-scrub.js';
 import { blockHash } from '../token-ledger.js';
 import { truncateCodePointSafe } from '../transcript-tail.js';
-import type { JsonValue } from '../json.js';
-
-/** Why a failure was not stored, or `stored`. */
-export type CaptureErrorOutcome = 'stored' | 'duplicate' | 'skipped-interrupt' | 'skipped-routine' | 'skipped-invalid';
-
-/** Which routine check skipped a failure; the log keeps it so declines can be told apart from empty searches. */
-export type RoutineRule = 'declined' | 'os-permission' | 'no-match' | 'search-tool' | 'quiet-exit';
+import { type JsonValue, isJsonObjectLiteral } from '../json.js';
+import type { CaptureErrorOutcome, RoutineRule } from '../failure-log.js';
 
 /** What {@link lessonFromFailure} read from a payload; `detail` is the finer failure-log key (untruncated, command head). */
 export type FailureReading =
@@ -51,13 +46,9 @@ function isString(v: JsonValue | undefined): v is string {
   return v !== undefined && v !== null && v.constructor === String;
 }
 
-function isObject(v: JsonValue | undefined): v is { [key: string]: JsonValue } {
-  return v !== undefined && v !== null && !Array.isArray(v) && v.constructor === Object;
-}
-
 /** A non-blank string field of the payload, or null. */
 export function payloadString(payload: JsonValue, key: 'session_id' | 'tool_name'): string | null {
-  if (!isObject(payload)) return null;
+  if (!isJsonObjectLiteral(payload)) return null;
   const value = payload[key];
   return isString(value) && value.trim() !== '' ? value : null;
 }
@@ -74,15 +65,15 @@ export function failureHash(text: string): string {
 
 /** The memory text for a failure payload, or why it is not stored; a routine skip keeps its text for the log. `scrub` runs before the cap, as a mask can be longer than what it hides. Pure. */
 export function lessonFromFailure(payload: JsonValue, scrub: (text: string) => string = (text) => text): FailureReading {
-  if (!isObject(payload)) return { skip: 'skipped-invalid', text: null, detail: null };
-  // SAFETY: isObject narrowed payload to a plain JSON object; the fields read are all optional.
+  if (!isJsonObjectLiteral(payload)) return { skip: 'skipped-invalid', text: null, detail: null };
+  // SAFETY: isJsonObjectLiteral narrowed payload to a plain JSON object; the fields read are all optional.
   const p = payload as ToolFailurePayload;
   if (p.is_interrupt === true) return { skip: 'skipped-interrupt', text: null, detail: null };
   if (!isString(p.error) || p.error.trim().length < 12) return { skip: 'skipped-invalid', text: null, detail: null };
   const tool = isString(p.tool_name) ? p.tool_name : 'tool';
   const error = redactSecretsStrict(p.error.replace(/\s+/g, ' ').trim());
   const text = truncateCodePointSafe(scrub(`${tool}: ${error}`), FAILURE_TEXT_MAX_CHARS);
-  const command = isObject(p.tool_input) && isString(p.tool_input['command']) ? p.tool_input['command'].replace(LEADING_CD, '') : '';
+  const command = isJsonObjectLiteral(p.tool_input) && isString(p.tool_input['command']) ? p.tool_input['command'].replace(LEADING_CD, '') : '';
   const head = command.trim().split(/\s+/).slice(0, 2).join(' ');
   const detail = `${tool}${head ? ` ${head}` : ''}: ${error}`;
   const routine = (rule: RoutineRule): FailureReading => ({ skip: 'skipped-routine', rule, text, detail });

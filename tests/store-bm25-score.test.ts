@@ -15,9 +15,9 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { writeEntry } from '../src/store/entry-writes.js';
-import { _forceLikePathForTests, loadSearchEntries } from '../src/store/search-rows.js';
-import { withSharedStoreHandles } from '../src/db.js';
+import { writeEntry, writeEntryDbOnly } from '../src/store/entry-writes.js';
+import { _forceLikePathForTests, loadRecallSearchEntriesFromDb, loadSearchEntries } from '../src/store/search-rows.js';
+import { closeHippoDb, openHippoDb, withSharedStoreHandles } from '../src/db.js';
 import { Layer, type MemoryEntry } from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { makeRoot } from './_helpers/make-root.js';
@@ -34,7 +34,7 @@ function makeRaw(text: string): MemoryEntry {
   });
 }
 
-describe('loadSearchEntries bm25_score (F1, v1.7.0)', () => {
+describe('loadSearchEntries bm25_score', () => {
   let root: string;
   beforeEach(() => { root = makeRoot('f1'); });
   afterEach(() => safeRmSync(root));
@@ -171,6 +171,31 @@ describe('loadSearchEntries bm25_score (F1, v1.7.0)', () => {
     } finally {
       if (prev === undefined) delete process.env.HIPPO_FORCE_LIKE_PATH;
       else process.env.HIPPO_FORCE_LIKE_PATH = prev;
+    }
+  });
+
+  it('LIKE fallback path: a query matching nothing tests the same number of rows however large the store', () => {
+    const db = openHippoDb(root);
+    try {
+      let lowered = 0;
+      // SAFETY: node:sqlite's DatabaseSync has `function` at runtime; DatabaseSyncLike omits it because src registers none.
+      (db as typeof db & { function(name: string, fn: (text: string) => string): void }).function('lower', (text) => {
+        lowered++;
+        return text.toLowerCase();
+      });
+      const rowsTested = [3000, 6000].map((size, step) => {
+        db.exec('BEGIN');
+        for (let i = step * 3000; i < size; i++) writeEntryDbOnly(db, makeRaw(`deploy note ${i}`));
+        db.exec('COMMIT');
+        lowered = 0;
+        expect(loadRecallSearchEntriesFromDb(db, 'zzzznonexistenttokenxxxxxx', { limit: 200, tenantId: 'default' })).toHaveLength(200);
+        // The LIKE predicate lowers content and tags once per term for each row it tests.
+        return lowered / 2;
+      });
+      expect(rowsTested[0]).toBeGreaterThan(0);
+      expect(rowsTested[1]).toBe(rowsTested[0]);
+    } finally {
+      closeHippoDb(db);
     }
   });
 

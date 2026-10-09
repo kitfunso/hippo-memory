@@ -11,7 +11,7 @@
  *
  * Existing coverage map (what we already had):
  *   - tests/slack-tenant-routing.test.ts: resolveTenantForTeam helper unit only
- *   - tests/v039-slack-hardening.test.ts: unroutable foreign team → __unroutable__ DLQ
+ *   - tests/slack-hardening.test.ts: unroutable foreign team → __unroutable__ DLQ
  *   - tests/slack-webhook-parse-failure-tenant.test.ts (v1.12.6 B4): parse-failure paths
  *   - tests/slack-workspaces-cli.test.ts (v1.12.5): CLI add/list/remove unit
  *
@@ -97,7 +97,7 @@ function makeMessageEvent(opts: {
   });
 }
 
-describe('POST /v1/connectors/slack/events multi-workspace tenant routing (v1.12.8)', () => {
+describe('POST /v1/connectors/slack/events multi-workspace tenant routing', () => {
   let root: string;
   let handle: ServerHandle;
 

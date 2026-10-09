@@ -4,13 +4,11 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { spawnSync } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { loadActiveTaskSnapshot, saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import { loadLatestHandoff } from '../src/store/handoffs.js';
-
-const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
+import { hippoRun } from './_helpers/spawn-hippo.js';
 const RULE = 'Never run npm install in the billing service';
 const USER_TEXT = `We decided to use pnpm for the billing service. ${RULE}; the lockfile is pnpm-lock.yaml.`;
 
@@ -38,7 +36,7 @@ afterEach(() => {
 });
 
 function worker(args: string[]) {
-  return spawnSync(process.execPath, [HIPPO_JS, ...args], { cwd, env, encoding: 'utf8' });
+  return hippoRun(args, { cwd, env });
 }
 
 function writeClaudeTranscript(): string {

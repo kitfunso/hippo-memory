@@ -4,6 +4,7 @@ import type { MemoryEntry } from './memory.js';
 import { evalNow } from './ablation.js';
 import { scoreOverlap, type PromptRecallGate } from './prompt-recall.js';
 import { blockHash, estimateTokens, hookPayloadSessionId, hookPayloadString, isSubagentPayload } from './token-ledger.js';
+import { errorMessage } from './log.js';
 export type DeliveryRuntime = 'claude-code' | 'codex' | 'copilot' | 'unknown';
 export type DeliveryEventType = 'prompt-submit' | 'pinned-manual' | 'pre-compact' | 'compact-resume';
 export type DeliverySurface = 'hook' | 'context';
@@ -215,9 +216,15 @@ function readPayload(init: DeliveryRecorderInit): PayloadFacts {
   return { payloadSession, envSession, prompt, hostTurnId, hookEvent, sessionState };
 }
 
-function rejectId(
-  state: RecorderState, id: string, stage: DeliveryStage, reason: DeliveryRejectReason, score: number | null, tokens: number | null,
-): void {
+interface Rejection {
+  readonly stage: DeliveryStage;
+  readonly reason: DeliveryRejectReason;
+  readonly score: number | null;
+  readonly tokens: number | null;
+}
+
+function rejectId(state: RecorderState, id: string, rejection: Rejection): void {
+  const { stage, reason, score, tokens } = rejection;
   const held = state.candidates.get(id);
   // First rejection wins; an id never offered is not a candidate of this call.
   if (!held || held.reason !== null) return;
@@ -327,7 +334,7 @@ function candidateMethods(state: RecorderState, guard: Guard): CandidateMethods 
           id: e.id, sourceStore: storeOf(isGlobal), pool: 'recent', stage: null, reason: null, score: null, tokens: null,
         });
       }
-      rejectId(state, e.id, 'load', 'quality', null, null);
+      rejectId(state, e.id, { stage: 'load', reason: 'quality', score: null, tokens: null });
     }),
     offer: (entries, isGlobal, pool) => guard(() => {
       for (const e of entries) {
@@ -341,10 +348,10 @@ function candidateMethods(state: RecorderState, guard: Guard): CandidateMethods 
         });
       }
     }),
-    reject: (e, stage, reason, score, tokens) => guard(() => rejectId(state, e.id, stage, reason, score ?? null, tokens ?? null)),
+    reject: (e, stage, reason, score, tokens) => guard(() => rejectId(state, e.id, { stage, reason, score: score ?? null, tokens: tokens ?? null })),
     dropMissing: (before, after, stage, reason) => guard(() => {
       const kept = new Set(after.map((e) => e.id));
-      for (const e of before) if (!kept.has(e.id)) rejectId(state, e.id, stage, reason, null, null);
+      for (const e of before) if (!kept.has(e.id)) rejectId(state, e.id, { stage, reason, score: null, tokens: null });
     }),
     gated: (prompt, items, gate, kept) => guard(() => {
       const keptIds = new Set(kept.map((g) => g.item.id));
@@ -352,7 +359,7 @@ function candidateMethods(state: RecorderState, guard: Guard): CandidateMethods 
         if (keptIds.has(c.id)) continue;
         const { score, shared } = scoreOverlap(prompt, c.tokens, gate.metric);
         const cleared = score >= gate.threshold && shared >= gate.minShared;
-        rejectId(state, c.id, 'gate', cleared ? 'gate-max-items' : 'gate-below-threshold', score, null);
+        rejectId(state, c.id, { stage: 'gate', reason: cleared ? 'gate-max-items' : 'gate-below-threshold', score, tokens: null });
       }
     }),
     selected: (items) => guard(() => {
@@ -393,7 +400,7 @@ export function createDeliveryRecorder(init: DeliveryRecorderInit): DeliveryReco
       if (fault === 'observe') throw new Error('injected observe fault');
       fn();
     } catch (error) {
-      state.broken = error instanceof Error ? error.message : String(error);
+      state.broken = errorMessage(error);
     }
   };
   const { qualityDropped, offer, reject, dropMissing, gated, selected } = candidateMethods(state, guard);

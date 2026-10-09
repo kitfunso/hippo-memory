@@ -68,6 +68,7 @@ describe('conflict refresh', () => {
   it('touches only the conflicting rows under the write lock, however large the store', () => {
     const root = bulkStore(STORE_ROWS);
     let locked = false;
+    let lockSeen = false;
     let commits = 0;
     // Statements run plus rows read while the lock is held: a count, so no runner is too slow for it.
     let touchedUnderLock = 0;
@@ -75,7 +76,7 @@ describe('conflict refresh', () => {
     const { run, get, all, iterate } = StatementSync.prototype;
     vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (this: DatabaseSyncLike, sql: string) {
       exec.call(this, sql);
-      if (sql === 'BEGIN IMMEDIATE') locked = true;
+      if (sql === 'BEGIN IMMEDIATE') { locked = true; lockSeen = true; }
       if (sql === 'COMMIT') { locked = false; commits++; }
     });
     vi.spyOn(StatementSync.prototype, 'run').mockImplementation(function (this: StatementProto, ...params: unknown[]) {
@@ -102,6 +103,7 @@ describe('conflict refresh', () => {
     vi.restoreAllMocks();
 
     expect(commits).toBe(1);
+    expect(lockSeen).toBe(true);
     // Ten pairs need a few dozen; a pass over the memories table inside the lock adds every one of its rows.
     expect(touchedUnderLock).toBeLessThan(STORE_ROWS / 10);
     expect(refsOf(root, 'mem_bulk_1')).toBe('["mem_bulk_2"]');

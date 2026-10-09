@@ -784,6 +784,8 @@ hippo watch "npm run build"
 | `hippo dashboard` | Open web dashboard at localhost:3333 (memory health by project, and the card board); open the printed URL, which carries a per-start access token |
 | `hippo dashboard --port <n>` | Use custom port |
 | `hippo mcp` | Start MCP server (stdio transport) |
+| `hippo serve` | Start the HTTP API server for this store on `127.0.0.1:6789` (`--port <n>` or `HIPPO_PORT`; `--host <host>`, which off loopback needs `HIPPO_REQUIRE_AUTH=1`) |
+| `hippo serve --tls-cert <file> --tls-key <file>` | Serve HTTPS with that PEM certificate and key (or set `HIPPO_TLS_CERT` and `HIPPO_TLS_KEY`). Without them a network bind still starts, and warns once that API keys and memory text travel in cleartext unless a TLS-terminating proxy sits in front |
 
 On `heartbeat`, `block`, `review` and `complete`, a given `--run` is checked against the card's live run and the command is refused, unchanged, if the two do not match.
 

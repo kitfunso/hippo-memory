@@ -1,4 +1,4 @@
-import type { SearchResult } from '../search/types.js';
+import type { SearchResult } from '../core/search-types.js';
 
 /**
  * A reranker reorders (and optionally rescales) the candidate set produced

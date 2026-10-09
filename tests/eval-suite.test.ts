@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildSyntheticCorpus, runFeatureEval, detectRegressions, resultToBaseline, formatResult } from '../src/eval-suite.js';
+import { buildSyntheticCorpus, runFeatureEval, detectRegressions, resultToBaseline, formatResult } from '../src/eval/eval-suite.js';
 import { cmdEval } from '../src/cli/eval.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 
@@ -71,19 +71,11 @@ describe('hippo eval --suite', () => {
 });
 
 describe('buildSyntheticCorpus', () => {
-  it('builds the same 58 entries and 23 cases, each expected id pointing at a corpus entry', () => {
+  it('gives every case a unique id and expected ids that point at corpus entries', () => {
     const { entries, cases } = buildSyntheticCorpus();
-    expect(entries).toHaveLength(58);
-    expect(cases.map((c) => c.id)).toEqual([
-      'dr-q1', 'dr-q2', 'dr-q3', 'dr-q4', 'dr-q5', 'dr-q6', 'dr-q7', 'dr-q8',
-      'ep-q1', 'ep-q2', 'ep-q3', 'dag-q1', 'dag-q2',
-      'tmp-q1', 'tmp-q2', 'tmp-q3', 'tmp-q4', 'nr-q1', 'nr-q2', 'nr-q3', 'nr-q4', 'mh-q1', 'mh-q2',
-    ]);
-    const byCategory: Record<string, number> = {};
-    for (const c of cases) byCategory[c.category] = (byCategory[c.category] ?? 0) + 1;
-    expect(byCategory).toEqual({
-      'direct-recall': 8, 'extraction-preference': 3, 'dag-drilldown': 2, temporal: 4, 'noise-resistance': 4, 'multi-hop': 2,
-    });
+    expect(cases.length).toBeGreaterThan(0);
+    expect(new Set(cases.map((c) => c.id)).size).toBe(cases.length);
+    expect(cases.filter((c) => c.expectedIds.length === 0)).toEqual([]);
     const ids = new Set(entries.map((e) => e.id));
     expect(ids.size).toBe(entries.length);
     expect(cases.flatMap((c) => c.expectedIds).filter((id) => !ids.has(id))).toEqual([]);

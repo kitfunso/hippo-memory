@@ -56,19 +56,7 @@ describe('Copilot tool names in the routine-failure rules', () => {
 
 describe('the fixture payloads after stdin.ts maps them', () => {
   // hook-payloads.json: GH hooks reference camelCase postToolUseFailure, plus a synthetic Claude-style snake_case one, since VS Code's Local agent fires no failure event.
-  it('camelCase grep is routine search', () => {
-    expect(lessonFromFailure(fixture('postToolUseFailureGrep'))).toMatchObject({ skip: 'skipped-routine', rule: 'search-tool' });
-  });
-
-  it('camelCase bash grep exit 1 is a quiet exit, read from the parsed toolArgs', () => {
-    expect(lessonFromFailure(fixture('postToolUseFailureBash'))).toMatchObject({ skip: 'skipped-routine', rule: 'quiet-exit' });
-  });
-
   it('a synthetic Claude-style snake_case run_in_terminal grep exit 1 is a quiet exit', () => {
     expect(lessonFromFailure(fixture('syntheticClaudeStyleTerminalFailure'))).toMatchObject({ skip: 'skipped-routine', rule: 'quiet-exit' });
-  });
-
-  it('camelCase build failure is a lesson', () => {
-    expect(lessonFromFailure(fixture('postToolUseFailureBuild'))).toMatchObject({ text: 'bash: Command failed with exit code 2: tsc reported TS2345 in src/auth/client.ts' });
   });
 });

@@ -49,26 +49,17 @@ describe('ambient pinned query plan', () => {
     }
   });
 
-  it('scans memories without the indexes (the pre-v51 plan)', () => {
-    const { root, home } = seedStore();
-    const db = openHippoDb(root);
-    try {
-      db.exec('DROP INDEX idx_memories_pinned; DROP INDEX idx_memories_created_drift;');
-      expect(plan(db, PINNED_SQL)).not.toContain('idx_memories_pinned');
-      expect(plan(db, AMBIENT_DRIFT_SQL)).not.toContain('idx_memories_created_drift');
-    } finally {
-      closeHippoDb(db);
-      rmSync(home, { recursive: true, force: true });
-    }
-  });
-
   it('still reports drift and returns pins in created order through the indexes', () => {
     const { root, home } = seedStore();
     try {
-      const pins = loadAmbientCandidates(root, 'default', 0, () => true).entries;
-      expect(pins.map((e) => e.pinned)).toEqual([true, true, true]);
       const db = openHippoDb(root);
       try {
+        // SAFETY: one `id` TEXT column.
+        const seeded = (db.prepare(`SELECT id FROM memories WHERE pinned = 1 ORDER BY id`).all() as Array<{ id: string }>).map((r) => r.id);
+        const created = ['2021-03-01T00:00:00.000Z', '2021-01-01T00:00:00.000Z', '2021-02-01T00:00:00.000Z'];
+        seeded.forEach((id, i) => db.prepare(`UPDATE memories SET created = ? WHERE id = ?`).run(created[i], id));
+        const pins = loadAmbientCandidates(root, 'default', 0, () => true).entries;
+        expect(pins.map((e) => e.id)).toEqual([seeded[1], seeded[2], seeded[0]]);
         expect(db.prepare(AMBIENT_DRIFT_SQL).get('default')).toBeUndefined();
         db.prepare(`UPDATE memories SET created = '2020-01-01' WHERE id = ?`).run(pins[0].id);
         expect(db.prepare(AMBIENT_DRIFT_SQL).get('default')).toBeDefined();

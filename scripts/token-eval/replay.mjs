@@ -37,7 +37,7 @@ import { createMemory, Layer } from '../../dist/memory.js';
 import { initStore } from '../../dist/store/open.js';
 import { writeEntry } from '../../dist/store/entry-writes.js';
 import { estimateTokens } from '../../dist/token-ledger.js';
-import { uncachedEquivalentInput, DEFAULT_CACHE_RATIOS } from '../../dist/eval-stats.js';
+import { uncachedEquivalentInput, DEFAULT_CACHE_RATIOS } from '../../dist/eval/eval-stats.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..', '..');

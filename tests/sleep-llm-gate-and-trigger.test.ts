@@ -39,7 +39,7 @@ afterEach(() => {
   for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true });
 });
 
-describe('H3: the sleep LLM gate', () => {
+describe('the sleep LLM gate', () => {
   it('extraction.enabled=false makes no LLM call even with a key set', async () => {
     const root = newRoot(JSON.stringify({ extraction: { enabled: false } }));
     writeEntry(root, createMemory('the release train leaves every second thursday'));
@@ -82,7 +82,7 @@ describe('H3: the sleep LLM gate', () => {
   });
 });
 
-describe('H11: the auto-sleep trigger', () => {
+describe('the auto-sleep trigger', () => {
   it('counts only memories created since the last sleep', async () => {
     const root = newRoot();
     writeEntry(root, createMemory('first memory about the release train schedule'));
@@ -104,7 +104,7 @@ describe('H11: the auto-sleep trigger', () => {
   });
 });
 
-describe('L2: the configured base half-life', () => {
+describe('the configured base half-life', () => {
   it('api.remember uses defaultHalfLifeDays from config.json', () => {
     const root = newRoot(JSON.stringify({ defaultHalfLifeDays: 14 }));
     const ctx: HippoDbContext = { hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };

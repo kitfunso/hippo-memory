@@ -2,14 +2,7 @@ import { envHomeDir, processEnv } from '../env.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import type { JsonObject } from '../working-memory.js';
-import type { JsonValue } from '../json.js';
 import { vscodeDataFolders } from '../agent-memories/copilot.js';
-
-/** JSON-value plain-object check (excludes arrays and null); `constructor` avoids the `typeof` tag banned by anti-slop/no-runtime-typeof. */
-export function isJsonObject(value: JsonValue | undefined): value is JsonObject {
-  return value !== undefined && value !== null && !Array.isArray(value) && value.constructor === Object;
-}
 
 export type JsonHookTarget = 'claude-code' | 'codex' | 'copilot';
 

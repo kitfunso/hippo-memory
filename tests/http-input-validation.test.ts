@@ -173,6 +173,7 @@ describe('HTTP input validation', () => {
   it('a create that points at a missing row is a 409, not a 404', async () => {
     const decision = await call('POST', '/v1/decisions', { text: 'replace it', supersedesDecisionId: 99999 });
     expect(decision.status).toBe(409);
+    expect(String(decision.json.error)).toContain('to supersede not found');
     const incident = await call('POST', '/v1/incidents', { text: 'outage', linkedMemoryIds: ['mem_does_not_exist'] });
     expect(incident.status).toBe(409);
   });

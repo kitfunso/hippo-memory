@@ -61,7 +61,7 @@ function makeResponse(
   };
 }
 
-describe('realGitHubFetcher (Codex P1 #4: non-200 must throw)', () => {
+describe('realGitHubFetcher: non-200 must throw', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });

@@ -81,7 +81,7 @@ export function markSummaryDirty(
     if (result) {
       // audit() wraps appendAuditEvent in try/catch (v27 heal scenario).
       // metadata.source tells this dirty-mark apart from the other wiring layers' marks.
-      audit(db, 'summary_marked_dirty', summaryId, { dag_level: result.dag_level, source: 'E1' }, actor, tenantId);
+      audit(db, 'summary_marked_dirty', { targetId: summaryId, metadata: { dag_level: result.dag_level, source: 'E1' }, actor, tenantId });
     }
   } finally {
     closeHippoDb(db);
@@ -316,14 +316,7 @@ function auditRefusedRebuild(
   // post-rollback auditRejectionRefusal helper (writeEntry/supersede's
   // tool) is the wrong one here; a direct audit() call is correct and
   // commits with the rest of this savepoint.
-  audit(
-    db,
-    'reject_refusal',
-    summary.id,
-    { digest: tombstone.digest, reason: tombstone.reason },
-    patch.actor,
-    summary.tenantId,
-  );
+  audit(db, 'reject_refusal', { targetId: summary.id, metadata: { digest: tombstone.digest, reason: tombstone.reason }, actor: patch.actor, tenantId: summary.tenantId });
   log.warn(
     `applyRebuildResult: refused rebuild content for ${summary.id} — matches a rejected value ` +
       `(digest ${tombstone.digest.slice(0, 12)}...); metadata updated, content unchanged`,
@@ -353,20 +346,13 @@ function syncRebuiltSummary(
   };
   syncFtsRow(db, patchedEntry);
 
-  audit(
-    db,
-    'summary_rebuilt',
-    summary.id,
-    {
+  audit(db, 'summary_rebuilt', { targetId: summary.id, metadata: {
       // Actual level from the summary in scope, never hardcoded: L2 -> 2, L3 -> 3.
       dag_level: summary.dag_level,
       source: 'E3-rebuild',
       zero_children: patch.zeroChildren,
       descendant_count: patch.descendant_count,
-    },
-    patch.actor,
-    summary.tenantId,
-  );
+    }, actor: patch.actor, tenantId: summary.tenantId });
 }
 
 /**
@@ -401,7 +387,7 @@ export function clearSummaryDirtyAfterBuild(
     `).get(summaryId, tenantId) as { dag_level: number } | undefined;
     if (result) {
       // source tells buildDag-clean (L2) from buildEntityProfiles-clean (L3) and any future build path.
-      audit(db, 'summary_marked_clean', summaryId, { dag_level: result.dag_level, source }, actor, tenantId);
+      audit(db, 'summary_marked_clean', { targetId: summaryId, metadata: { dag_level: result.dag_level, source }, actor, tenantId });
     }
   } finally {
     closeHippoDb(db);

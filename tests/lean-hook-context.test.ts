@@ -3,25 +3,24 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
+import { type SpawnSyncReturns } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { Layer, type MemoryEntry} from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { estimateTokens } from '../src/token-ledger.js';
-import type { SearchResult } from '../src/search/types.js';
+import type { SearchResult } from '../src/core/search-types.js';
 import { insertEntity, insertRelation } from '../src/graph/write.js';
 import { graphExpandRecall } from '../src/graph-recall.js';
-
-const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
+import { hippoRun } from './_helpers/spawn-hippo.js';
 
 let home: string;
 let project: string;
 let env: NodeJS.ProcessEnv;
 
 function hippo(args: string[], input?: string): SpawnSyncReturns<string> {
-  const r = spawnSync(process.execPath, [HIPPO_JS, ...args], { cwd: project, env, input, encoding: 'utf8' });
+  const r = hippoRun(args, { cwd: project, env, input });
   expect(r.status, r.stderr).toBe(0);
   return r;
 }

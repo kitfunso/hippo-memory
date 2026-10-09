@@ -10,7 +10,7 @@
 import { describe, it, expect } from 'vitest';
 import type { RecallScopeFilter } from '../src/store/search-rows.js';
 
-describe('RecallScopeFilter discriminated union (v1.7.2 T1)', () => {
+describe('RecallScopeFilter discriminated union', () => {
   it('default-deny construction is type-safe', () => {
     const f: RecallScopeFilter = { mode: 'default-deny' };
     expect(f.mode).toBe('default-deny');

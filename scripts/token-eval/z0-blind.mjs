@@ -12,7 +12,7 @@ import { ALL_ARMS } from './z0-records.mjs';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..', '..');
 export const MODULES = ['records', 'filters', 'hypotheses', 'gates', 'blind', 'analyze'].map((m) => `scripts/token-eval/z0-${m}.mjs`)
-  .concat(['src/eval-stats.ts', 'dist/eval-stats.js']);
+  .concat(['src/eval/eval-stats.ts', 'dist/eval/eval-stats.js']);
 export const SEALED = 'hypotheses sealed until unblinded';
 const ARM_WORD = new RegExp(`\\b(${ALL_ARMS.join('|')})\\b`, 'g');
 

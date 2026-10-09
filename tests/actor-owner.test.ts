@@ -83,10 +83,10 @@ describe('Actor.owner', () => {
   it('cache hit keeps owner', async () => {
     const key = mint('alice@corp.example');
     const store = sqliteStore(home);
-    expect((await verifyApiKeyCached(home, key.plaintext, store))?.ownerSubject).toBe('alice@corp.example');
-    const before = apiKeyVerifyStats();
-    expect((await verifyApiKeyCached(home, key.plaintext, store))?.ownerSubject).toBe('alice@corp.example');
-    expect(apiKeyVerifyStats()).toEqual(before);
+    expect((await verifyApiKeyCached(key.plaintext, store))?.ownerSubject).toBe('alice@corp.example');
+    const before = apiKeyVerifyStats().scryptRuns;
+    expect((await verifyApiKeyCached(key.plaintext, store))?.ownerSubject).toBe('alice@corp.example');
+    expect(apiKeyVerifyStats().scryptRuns).toBe(before);
   });
 
   it('store record with no ownerSubject reads as no owner', async () => {

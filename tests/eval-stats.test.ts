@@ -19,7 +19,7 @@ import {
   type TestedEstimate,
   type VerdictResult,
   type VerdictSpec,
-} from '../src/eval-stats.js';
+} from '../src/eval/eval-stats.js';
 
 describe('four-bucket cost accounting', () => {
   const usage = { inputTokens: 1_000_000, cacheWriteTokens: 2_000_000, cacheReadTokens: 10_000_000, outputTokens: 500_000 };

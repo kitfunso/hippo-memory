@@ -1,14 +1,15 @@
 // Memory write routes: create, graph, archive, supersede, promote, forget, outcome, sleep.
-import { archiveRaw, forget, outcome, outcomeForLastRecall, promote, remember, sleep, supersede } from '../../api.js';
+import { archiveRaw, forget, outcome, outcomeForLastRecall, promote, remember, supersede } from '../../api.js';
 import type { MemoryKind } from '../../memory.js';
 import { buildGraphModel } from '../../graph-view.js';
 import { MAX_ENTITY_NAME_LEN } from '../../graph/types.js';
 import { HttpError, sendJson } from '../../http-util.js';
 import { canReadScope } from '../../recall-scope.js';
 import { assertCrossTenantAdmin, buildContextWithAuth, isLoopback } from '../auth.js';
+import { sleepInChild } from '../sleep-offload.js';
 import type { RouteRequest } from '../types.js';
-import { getCallerProject, getString, getStringArray, isJsonBoolean, isSetMember, parseJsonBody, parseListLimit, validateIdSegment } from '../validation.js';
-import { type JsonValue, isJsonString } from '../../json.js';
+import { getCallerProject, getString, getStringArray, isSetMember, parseJsonBody, parseListLimit, validateIdSegment } from '../validation.js';
+import { type JsonValue, isJsonString, isJsonBoolean } from '../../json.js';
 
 const VALID_KINDS: ReadonlySet<MemoryKind> = new Set([
   'raw',
@@ -189,7 +190,7 @@ export async function handleSleep({ req, res, opts }: RouteRequest): Promise<voi
     throw new HttpError(400, 'no_share must be a boolean');
   }
   // sleepCtx already built above for the admin-role gate; reuse.
-  const result = await sleep(sleepCtx, {
+  const result = await sleepInChild(sleepCtx, {
     dryRun: dryRunRaw === true,
     noShare: noShareRaw === true,
   });

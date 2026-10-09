@@ -93,6 +93,8 @@ export function envRequireServer(): boolean { return isOneOrTrue('HIPPO_REQUIRE_
 export function envRequireSessionScopedFreshTail(): boolean { return isOne('HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL'); }
 export function envStdinWaitMs(): number | undefined { return positiveInt('HIPPO_STDIN_WAIT_MS'); }
 export function envLogLevel(): string { return raw('HIPPO_LOG')?.trim().toLowerCase() ?? ''; }
+/** `HIPPO_LOG_FORMAT=json` writes each log line as one JSON object; anything else keeps the text line. */
+export function envLogJson(): boolean { return raw('HIPPO_LOG_FORMAT')?.trim().toLowerCase() === 'json'; }
 
 // Server.
 export function envPort(): string | undefined { return raw('HIPPO_PORT'); }
@@ -102,9 +104,16 @@ export function envRequireAuth(): boolean { return isOne('HIPPO_REQUIRE_AUTH'); 
 export function envV1Rps(): string | undefined { return raw('HIPPO_V1_RPS'); }
 /** How long a request body may take to arrive; http-util.ts holds the default. */
 export function envBodyTimeoutMs(): number | undefined { return positiveInt('HIPPO_BODY_TIMEOUT_MS'); }
+/** How long POST /v1/sleep lets its consolidation run; server/sleep-offload.ts holds the default. */
+export function envSleepTimeoutMs(): number | undefined { return positiveInt('HIPPO_SLEEP_TIMEOUT_MS'); }
+/** How long the daily runner lets one child `hippo` step run; cli/setup.ts holds the default. */
+export function envDailyStepTimeoutMs(): number | undefined { return positiveInt('HIPPO_DAILY_STEP_TIMEOUT_MS'); }
 export function envApiKey(): string | undefined { return raw('HIPPO_API_KEY'); }
 export function envClientIpHeader(): string | undefined { return raw('HIPPO_CLIENT_IP_HEADER')?.trim().toLowerCase(); }
 export function envTrustedProxies(): string | undefined { return raw('HIPPO_TRUSTED_PROXIES'); }
+/** Paths to the PEM certificate and key `hippo serve` answers HTTPS with; the --tls-cert and --tls-key flags win. */
+export function envTlsCert(): string | undefined { return trimmed('HIPPO_TLS_CERT'); }
+export function envTlsKey(): string | undefined { return trimmed('HIPPO_TLS_KEY'); }
 export function envMcpSseMaxStreams(): number | undefined { return positiveInt('MCP_SSE_MAX_STREAMS'); }
 export function envMcpSseHeartbeatMs(): number | undefined { return positiveInt('MCP_SSE_HEARTBEAT_MS'); }
 export function envMcpSseMaxAgeSec(): number | undefined { return positiveInt('MCP_SSE_MAX_AGE_SEC'); }

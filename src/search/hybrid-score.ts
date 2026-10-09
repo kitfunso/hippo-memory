@@ -4,7 +4,7 @@ import { matchedQueryTerms } from './bm25.js';
 import { applyRankBoosts, strengthRecencyMultipliers, type AppliedBoosts, type BoostContext } from './boosts.js';
 import { addDagFields, ageInDays } from './breakdown.js';
 import type { DenseScores } from './vector.js';
-import type { ScoreBreakdown, SearchResult } from './types.js';
+import type { ScoreBreakdown, SearchResult } from '../core/search-types.js';
 
 type HybridMode = 'hybrid' | 'hybrid-no-vec' | 'bm25-only';
 

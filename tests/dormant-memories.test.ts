@@ -27,7 +27,7 @@ import { savePolicy } from '../src/policies.js';
 import { saveSkill } from '../src/skills.js';
 import { saveProjectBrief } from '../src/project-briefs.js';
 import { saveCustomerNote } from '../src/customer-notes.js';
-import { savePrediction } from '../src/predictions/store.js';
+import { savePrediction } from '../src/store/predictions.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { consolidate } from '../src/consolidate/sleep.js';
 import { insertDormantRow } from '../src/dormant.js';
@@ -150,6 +150,27 @@ describe('dormant memories are on by default, with an opt-out', () => {
       expect(result.removed).toBe(1);
       expect(result.dormant).toBe(1);
       expect(api.listDormant(ctxFor(home)).map((m) => m.id)).toEqual([plain.id]);
+      expect(loadAllEntries(home)).toEqual([]);
+    } finally {
+      restore();
+    }
+  });
+});
+
+describe('a faded credential-tagged memory', () => {
+  it('is removed rather than made dormant, and the report says so', async () => {
+    const { home, restore } = tmpHome('hippo-dormant-credtag-', DORMANT_ON);
+    try {
+      const tagged = aged(createMemory('an old note about rotating the staging deploy key', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['credential'] }), 90);
+      writeEntry(home, tagged);
+
+      const result = await consolidate(home, { now: new Date() });
+
+      expect(result.removed).toBe(1);
+      expect(result.dormant).toBe(0);
+      expect(result.removedIds).toEqual([tagged.id]);
+      expect(result.details.some((l) => l.startsWith(`  🗑  removed ${tagged.id} (strength `))).toBe(true);
+      expect(api.listDormant(ctxFor(home))).toEqual([]);
       expect(loadAllEntries(home)).toEqual([]);
     } finally {
       restore();
@@ -342,6 +363,7 @@ describe('with dormant memories enabled', () => {
       const result = await consolidate(home, { now: new Date(), dryRun: true });
 
       expect(result.dormant).toBe(1);
+      expect(result.details.some((l) => l.startsWith(`  💤 dormant ${faded.id} (strength `))).toBe(true);
       expect(loadAllEntries(home).map((e) => e.id)).toEqual([faded.id]);
       expect(countDormantRows(home)).toBe(0);
     } finally {

@@ -20,10 +20,10 @@ import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '.
 import { hybridSearch } from '../src/search/hybrid.js';
 import { physicsSearch } from '../src/search/physics-search.js';
 import { isDagSummary } from '../src/search/boosts.js';
-import type { SearchResult } from '../src/search/types.js';
+import type { SearchResult } from '../src/core/search-types.js';
 import type { RerankerOptions, RerankResult } from '../src/rerankers/types.js';
 import { searchBothHybrid } from '../src/shared.js';
-import { savePhysicsState } from '../src/physics-state.js';
+import { savePhysicsState } from '../src/db/physics-state.js';
 import type { PhysicsParticle } from '../src/physics.js';
 
 function makeL2Summary(
@@ -57,7 +57,7 @@ function findResult(results: SearchResult[], id: string): SearchResult | undefin
   return results.find((r) => r.entry.id === id);
 }
 
-describe('v0.30 / E4 — first-class DAG recall (scoring layer)', () => {
+describe('first-class DAG recall (scoring layer)', () => {
   let hippoRoot: string;
   let savedDeboost: string | undefined;
 

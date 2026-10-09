@@ -44,7 +44,7 @@ function extractResultText(response: McpResponse | null): string {
   return result?.content?.[0]?.text ?? '';
 }
 
-describe('MCP hippo_recall scorer_window (v1.7.2 T4)', () => {
+describe('MCP hippo_recall scorer_window', () => {
   let home: string;
 
   beforeEach(() => {

@@ -1,11 +1,11 @@
 import { envClefEndpoint, envClefEndpointToken, envClefTimeoutMs, envCloudflareAccountId, envCloudflareApiToken } from '../env.js';
 import { buildRelevanceRequest, JEV_DEFAULT_TOP_K, rankByScores } from './jev.js';
 import type { RerankerFn, RerankResult, RerankerOptions, RerankProvenance } from './types.js';
-import type { SearchResult } from '../search/types.js';
-import { isJsonObjectRecord } from '../http-util.js';
+import type { SearchResult } from '../core/search-types.js';
 import { createOutageWarning } from './outage-warning.js';
 import { rerankerPost } from './remote.js';
-import type { JsonValue } from '../json.js';
+import { type JsonValue, isJsonObject } from '../json.js';
+import { errorMessage } from '../log.js';
 
 /** The two pretrained CLEF decision models served by Cloudflare Workers AI. */
 export type ClefModel = 'clef-flash' | 'clef';
@@ -97,28 +97,28 @@ export function resolveClefRoute(model: ClefModel): ClefRoute {
 
 /** Unwraps a Workers AI `{ result }` envelope or a bare System One reply and checks model and `c1..cN`; a string is the rejection reason. */
 export function parseClefReply(body: JsonValue, n: number, model: ClefModel, requireModel: boolean): ClefScores | string {
-  if (!isJsonObjectRecord(body)) return 'reply is not a JSON object';
+  if (!isJsonObject(body)) return 'reply is not a JSON object';
   if (body.success === false) return 'provider reported failure';
   const reply = body.result === undefined ? body : body.result;
-  if (!isJsonObjectRecord(reply)) return 'reply has no result object';
+  if (!isJsonObject(reply)) return 'reply has no result object';
 
   const actual = reply.model;
   if (actual !== undefined && (!isString(actual) || actual.trim() !== model)) return 'reply names a different model';
   if (actual === undefined && requireModel) return 'reply does not name its model';
 
   const answers = reply.answers;
-  if (!isJsonObjectRecord(answers)) return 'reply has no answers';
+  if (!isJsonObject(answers)) return 'reply has no answers';
   if (Object.keys(answers).length !== n) return 'incomplete or out-of-range answers';
   const scores: number[] = [];
   for (let i = 1; i <= n; i++) {
     const a = answers[`c${i}`];
-    if (!isJsonObjectRecord(a) || (a.type !== undefined && a.type !== 'noul')) return 'incomplete or out-of-range answers';
+    if (!isJsonObject(a) || (a.type !== undefined && a.type !== 'noul')) return 'incomplete or out-of-range answers';
     const v = a.noul;
     if (!isNumber(v) || v < 0 || v > 1) return 'incomplete or out-of-range answers';
     scores.push(v);
   }
 
-  const usage = isJsonObjectRecord(reply.usage) ? reply.usage : {};
+  const usage = isJsonObject(reply.usage) ? reply.usage : {};
   return {
     scores,
     actualModel: isString(actual) ? actual.trim() : undefined,
@@ -199,7 +199,7 @@ export function createClefReranker(model: ClefModel): RerankerFn {
       got = await requestScores(model, query, head, route);
       outage.answered();
     } catch (err) {
-      const reason = err instanceof Error ? err.message : 'unknown error';
+      const reason = errorMessage(err);
       outage.failed(reason);
       return nativeOrder(head, { backend: 'native', requestedModel: model, fallbackReason: reason });
     }

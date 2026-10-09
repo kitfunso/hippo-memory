@@ -80,6 +80,27 @@ function reportNonFiniteScores(result: ConsolidationResult, rankById: Map<string
   }
 }
 
+// --- Phase 1: classify (zero commits) ---
+function classifyByStrength(run: SleepRun) {
+  const condemned: MemoryEntry[] = [];
+  const strengthById = new Map<string, number>();
+  for (const entry of run.all) {
+    const strength = calculateStrength(entry, run.now, run.decayOpts);
+    strengthById.set(entry.id, strength);
+    if (run.retirable(entry) && strength < DECAY_THRESHOLD) {
+      condemned.push(entry);
+    }
+  }
+  return { strengthById, condemnedIds: new Set(condemned.map((e) => e.id)) };
+}
+
+function reportRescue(result: ConsolidationResult, entry: MemoryEntry, strength: number, rank: MvRankInfo | undefined): void {
+  const rankNote = rank
+    ? ` - rescued (rank ${rank.rank}/${rank.totalNonPinned} in tenant ${rank.tenantId}, top ${rank.keepN})`
+    : ' - rescued';
+  result.details.push(`  🛟 ${entry.id} (strength ${strength.toFixed(4)} < ${DECAY_THRESHOLD})${rankNote}`);
+}
+
 function decayWithMemoryValue(run: SleepRun): DecayOutcome {
   const { all, now, result } = run;
   // Carried forward to logRun, where the mv_rescue audit rows are written: writing them here, before
@@ -88,29 +109,20 @@ function decayWithMemoryValue(run: SleepRun): DecayOutcome {
   let rescuedIds: Set<string> = new Set();
   let rankById: Map<string, MvRankInfo> = new Map();
 
-  // --- Phase 1: classify (zero commits) ---
-  const condemned: MemoryEntry[] = [];
-  const strengthById = new Map<string, number>();
-  for (const entry of all) {
-    const strength = calculateStrength(entry, now, run.decayOpts);
-    strengthById.set(entry.id, strength);
-    if (run.retirable(entry) && strength < DECAY_THRESHOLD) {
-      condemned.push(entry);
-    }
-  }
+  const { strengthById, condemnedIds } = classifyByStrength(run);
 
   // --- Phase 2a: rescue decision (pure compute) ---
   // Runs under --dry-run too (only the pendingDeletes flush and the audit write in
   // logRun stay !dryRun-gated), so the preview matches what a
   // real run would decide.
-  const condemnedIds = new Set(condemned.map((e) => e.id));
+
   // Fail-loud must not depend on condemnation traffic: validate the frozen weights even when nothing is condemned.
   validateWeights();
   if (condemnedIds.size > 0) {
     // Rank per tenant ONCE: rankById feeds both rescueSet (via precomputedRanks) and the detail/audit
     // context below, so the whole-store ranking runs once per sleep and only when something is condemned.
     rankById = rankNonPinnedByTenant(all, now);
-    rescuedIds = rescueSet(all, condemnedIds, now, MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256, rankById);
+    rescuedIds = rescueSet(all, condemnedIds, now, { weights: MEMORY_VALUE_WEIGHTS, digest: SOURCE_ARTIFACT_SHA256, precomputedRanks: rankById });
     reportNonFiniteScores(result, rankById);
   }
 
@@ -124,11 +136,7 @@ function decayWithMemoryValue(run: SleepRun): DecayOutcome {
         // Confidence is left alone here: it is an epistemic tier, not a
         // cached computation, so resolveConfidence derives it on read.
         rescuedEntries.push(keepSurvivor(run, entry, strength));
-        const rank = rankById.get(entry.id);
-        const rankNote = rank
-          ? ` - rescued (rank ${rank.rank}/${rank.totalNonPinned} in tenant ${rank.tenantId}, top ${rank.keepN})`
-          : ' - rescued';
-        result.details.push(`  🛟 ${entry.id} (strength ${strength.toFixed(4)} < ${DECAY_THRESHOLD})${rankNote}`);
+        reportRescue(result, entry, strength, rankById.get(entry.id));
       } else {
         retireFaded(run, entry, strength);
       }

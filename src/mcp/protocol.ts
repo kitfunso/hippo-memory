@@ -3,13 +3,14 @@
 import * as fs from 'fs';
 import { randomUUID } from 'node:crypto';
 import { INTERNAL_ERROR_MESSAGE, mapApiError } from '../http-util.js';
-import { log } from '../log.js';
+import { errorFields, errorMessage, log } from '../log.js';
+import { currentRequestId } from '../util/request-scope.js';
 import { getGlobalRoot } from '../shared.js';
 import { loadConfig } from '../config.js';
 import type { Actor as ApiActor } from '../api.js';
 import { findHippoStoreDir, type ResolveProjectIdentityOpts } from '../project-identity.js';
 import { isStoreBusy, STORE_BUSY_MESSAGE } from '../db.js';
-import type { JsonValue } from '../json.js';
+import { type JsonValue } from '../json.js';
 import type { CallerProject } from '../prompt-hook.js';
 import type { HippoStore } from '../store-port.js';
 
@@ -46,11 +47,11 @@ interface McpResponse {
 }
 
 /** JSON-RPC reply for a request that threw: typed API errors keep their text; anything else is logged and answered generically. */
-export function mcpErrorResponse<E>(id: McpResponse['id'], err: E, requestId: string = randomUUID()): McpResponse {
+export function mcpErrorResponse<E>(id: McpResponse['id'], err: E, requestId: string = currentRequestId() ?? randomUUID()): McpResponse {
   if (isStoreBusy(err)) return { jsonrpc: '2.0', id, error: { code: -32603, message: STORE_BUSY_MESSAGE } };
   const { status, message } = mapApiError(err);
   if (status !== 500) return { jsonrpc: '2.0', id, error: { code: -32603, message } };
-  log.error(`mcp request failed: ${err instanceof Error ? err.message : String(err)}`, { requestId });
+  log.error(`mcp request failed: ${errorMessage(err)}`, { requestId, ...errorFields(err) });
   return {
     jsonrpc: '2.0',
     id,
@@ -112,14 +113,6 @@ export function mcpActor(ctx: McpContext | undefined): ApiActor {
 }
 
 // ── JSON-ish domain type for untrusted MCP tool-call arguments ──
-
-export function isJsonBoolean(v: JsonValue | undefined): v is boolean {
-  return typeof v === 'boolean';
-}
-
-export function isJsonObjectRecord(v: JsonValue | undefined): v is { [key: string]: JsonValue } {
-  return v !== undefined && v !== null && typeof v === 'object' && !Array.isArray(v);
-}
 
 /** One tool call after the store, config and tenant are resolved; every handler reads the same four. */
 export interface ToolCall {

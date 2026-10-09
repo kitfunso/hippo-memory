@@ -69,7 +69,7 @@ function countRows(home: string, table: string): number {
   finally { closeHippoDb(db); }
 }
 
-describe('policies store (E2 bi-temporal first-class object)', () => {
+describe('policies store (bi-temporal first-class object)', () => {
   let home: string;
   beforeEach(() => { home = makeRoot('policies'); });
   afterEach(() => safeRmSync(home));

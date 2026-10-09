@@ -2,7 +2,7 @@
 // writes and no direct output. Callers own flag parsing, printing, budget fitting and persistence.
 
 import { evalNow } from './ablation.js';
-import { oneCopyPerMemory } from './api.js';
+import { oneCopyPerMemory } from './api/context-select.js';
 import { compareEntryIdentity } from './compare.js';
 import { closeHippoDb, openHippoDb } from './db.js';
 import { isEmbeddingAvailable } from './local-embedding.js';
@@ -15,9 +15,10 @@ import type { PhysicsConfig } from './physics-config.js';
 import { passesCliRecallScopeFilter } from './recall-scope.js';
 import type { RerankerFn } from './rerankers/types.js';
 import { currentEntries } from './search/as-of.js';
+import { STRENGTH_RANK_FLOOR, STRENGTH_RANK_SPAN } from './search/boosts.js';
 import { hybridSearch } from './search/hybrid.js';
 import { physicsSearch } from './search/physics-search.js';
-import type { RerankStep, ResultCost, SearchResult } from './search/types.js';
+import type { RerankStep, ResultCost, SearchResult } from './core/search-types.js';
 import { searchBothHybrid } from './shared.js';
 import { loadRecallSearchEntries, recallScopeFilter } from './store/search-rows.js';
 import { textOverlap, tokenize as tokenizeQuery } from './tokenize.js';
@@ -267,8 +268,8 @@ function applyPfcRerankers(opts: RankRecallOpts, state: RankState): void {
     state.results = byScore(state.results.map((r) => {
       const hasPeerInResults = (r.entry.conflicts_with || []).some((peerId) => presentIds.has(peerId));
       if (!hasPeerInResults) return r;
-      const next = { ...r, score: r.score * 0.3 };
-      return traced(opts, r, next, { stage: 'interference', multiplier: 0.3, scoreBefore: r.score, scoreAfter: next.score });
+      const next = { ...r, score: r.score * CONFLICT_PEER_MULTIPLIER };
+      return traced(opts, r, next, { stage: 'interference', multiplier: CONFLICT_PEER_MULTIPLIER, scoreBefore: r.score, scoreAfter: next.score });
     }));
   }
   if (opts.valueAware && state.results.length >= 1) {
@@ -277,7 +278,7 @@ function applyPfcRerankers(opts: RankRecallOpts, state: RankState): void {
       const pos = r.entry.outcome_positive ?? 0;
       const neg = r.entry.outcome_negative ?? 0;
       if (pos === 0 && neg === 0) return r;
-      const valueMult = Math.max(0.7, Math.min(1.3, 1 + 0.3 * Math.tanh(pos - neg)));
+      const valueMult = Math.max(VALUE_MULT_MIN, Math.min(VALUE_MULT_MAX, 1 + VALUE_MULT_SLOPE * Math.tanh(pos - neg)));
       const next = { ...r, score: r.score * valueMult };
       return traced(opts, r, next, { stage: 'value', multiplier: valueMult, scoreBefore: r.score, scoreAfter: next.score });
     }));
@@ -286,12 +287,27 @@ function applyPfcRerankers(opts: RankRecallOpts, state: RankState): void {
     // utility = score * (0.5 + 0.5 * strength) * (1 - min(0.3, tokens / 10000)); long evidence-rich rows pay for length.
     state.results = byScore(state.results.map((r) => {
       const strength = typeof r.entry.strength === 'number' ? r.entry.strength : 1.0;
-      const utilityMult = (0.5 + 0.5 * strength) * (1 - Math.min(0.3, (r.tokens || 0) / 10000));
+      const utilityMult = (STRENGTH_RANK_FLOOR + STRENGTH_RANK_SPAN * strength) * (1 - Math.min(UTILITY_LENGTH_PENALTY_CAP, (r.tokens || 0) / UTILITY_LENGTH_TOKENS));
       const utility = r.score * utilityMult;
       return traced(opts, r, { ...r, score: utility }, { stage: 'utility', multiplier: utilityMult, scoreBefore: r.score, scoreAfter: utility });
     }));
   }
 }
+
+// A recorded conflict peer in the same result list is cut to this share of its score.
+const CONFLICT_PEER_MULTIPLIER = 0.3;
+// The value-aware clamp is wider than the always-on outcome nudge, so outcome history can decide the order.
+const VALUE_MULT_SLOPE = 0.3;
+const VALUE_MULT_MIN = 0.7;
+const VALUE_MULT_MAX = 1.3;
+const UTILITY_LENGTH_PENALTY_CAP = 0.3;
+const UTILITY_LENGTH_TOKENS = 10000;
+// evcAdaptive acts when the top hits overlap this much; it keeps rows near the best score or covering the query.
+const NEAR_DUPLICATE_OVERLAP_MIN = 0.4;
+const SCORE_FLOOR_FRACTION = 0.5;
+const QUERY_COVERAGE_MIN = 0.6;
+const GOAL_TAG_BOOST = 1.5;
+const SALIENCE_MIN_MULTIPLIER = 0.5;
 
 /** When the top hits are near-duplicates (same topic, different facts), surface the newest on-topic row first. */
 function evcAdaptive(query: string, results: SearchResult[]): SearchResult[] {
@@ -304,10 +320,10 @@ function evcAdaptive(query: string, results: SearchResult[]): SearchResult[] {
       pairs++;
     }
   }
-  if ((pairs > 0 ? overlapSum / pairs : 0) < 0.4) return results;
+  if ((pairs > 0 ? overlapSum / pairs : 0) < NEAR_DUPLICATE_OVERLAP_MIN) return results;
   const poolSize = Math.min(results.length, Math.max(slice.length * 3, 9));
   const pool = results.slice(0, poolSize);
-  const scoreFloor = pool.reduce((m, r) => Math.max(m, r.score), 0) * 0.5;
+  const scoreFloor = pool.reduce((m, r) => Math.max(m, r.score), 0) * SCORE_FLOOR_FRACTION;
   // Query coverage catches the differently phrased update a score floor alone would miss.
   const queryTokens = new Set(tokenizeQuery(query));
   const onTopic: SearchResult[] = [];
@@ -319,7 +335,7 @@ function evcAdaptive(query: string, results: SearchResult[]): SearchResult[] {
       for (const t of queryTokens) if (candTokens.has(t)) hits++;
     }
     const queryCoverage = queryTokens.size > 0 ? hits / queryTokens.size : 0;
-    (r.score >= scoreFloor || queryCoverage >= 0.6 ? onTopic : offTopic).push(r);
+    (r.score >= scoreFloor || queryCoverage >= QUERY_COVERAGE_MIN ? onTopic : offTopic).push(r);
   }
   // Recency is the primary key; identity only breaks exact-timestamp ties.
   onTopic.sort((a, b) => {
@@ -346,8 +362,8 @@ function applyGoalBoosts(ctx: RankRecallCtx, opts: RankRecallOpts, state: RankSt
     // Its own trace stage: `goal` is the explicit flag, `goal-boost` the session stack it replaces.
     state.results = byScore(state.results.map((r) => {
       if (!r.entry.tags?.includes(goalTag)) return r;
-      const boosted = { ...r, score: r.score * 1.5 };
-      return traced(opts, r, boosted, { stage: 'goal', multiplier: 1.5, scoreBefore: r.score, scoreAfter: r.score * 1.5, note: `--goal ${goalTag}` });
+      const boosted = { ...r, score: r.score * GOAL_TAG_BOOST };
+      return traced(opts, r, boosted, { stage: 'goal', multiplier: GOAL_TAG_BOOST, scoreBefore: r.score, scoreAfter: r.score * GOAL_TAG_BOOST, note: `--goal ${goalTag}` });
     }));
     return;
   }
@@ -380,7 +396,7 @@ function applySalience(opts: RankRecallOpts, threshold: number, results: SearchR
   return byScore(results.map((r) => {
     const count = r.entry.retrieval_count ?? 0;
     if (count >= threshold) return r;
-    const mult = Math.max(0.5, count / threshold);
+    const mult = Math.max(SALIENCE_MIN_MULTIPLIER, count / threshold);
     const next = { ...r, score: r.score * mult };
     return traced(opts, r, next, { stage: 'retrieval-count-downweight', multiplier: mult, scoreBefore: r.score, scoreAfter: next.score });
   }));

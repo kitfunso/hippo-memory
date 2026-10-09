@@ -3,7 +3,7 @@
  * Spec: https://api.slack.com/events-api
  */
 
-import { type JsonValue, isJsonString } from '../../json.js';
+import { type JsonValue, isJsonString, isJsonObject, isJsonNumber } from '../../json.js';
 
 export interface SlackUrlVerification {
   type: 'url_verification';
@@ -38,28 +38,15 @@ export interface SlackEventEnvelope {
   event: SlackMessageEvent | { type: string; [k: string]: JsonValue };
 }
 
-function isJsonNumber(value: JsonValue | undefined): value is number {
-  return typeof value === 'number';
-}
-
-function isJsonRecord(value: JsonValue | undefined): value is { [key: string]: JsonValue } {
-  return (
-    value !== null &&
-    value !== undefined &&
-    !Array.isArray(value) &&
-    typeof value === 'object'
-  );
-}
-
 export function isSlackEventEnvelope(x: JsonValue): x is JsonValue & SlackEventEnvelope {
-  if (!isJsonRecord(x)) return false;
+  if (!isJsonObject(x)) return false;
   const o = x;
   if (o.type !== 'event_callback') return false;
   if (!isJsonString(o.team_id) || !isJsonString(o.event_id) || !isJsonNumber(o.event_time)) {
     return false;
   }
   const event = o.event;
-  return isJsonRecord(event) && isJsonString(event.type);
+  return isJsonObject(event) && isJsonString(event.type);
 }
 
 export function isSlackMessageEvent(

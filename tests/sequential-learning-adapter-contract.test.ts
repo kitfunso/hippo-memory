@@ -18,7 +18,7 @@ import { createAdapter } from '../benchmarks/sequential-learning/adapters/interf
 import hippoAdapter from '../benchmarks/sequential-learning/adapters/hippo.mjs';
 import { storeDirOf } from './fixtures/sl-adapter/store-dir.js';
 
-describe('sequential-learning adapter contract (v1.7.5)', () => {
+describe('sequential-learning adapter contract', () => {
   const baseAdapter = {
     name: 'test',
     init: async () => {},

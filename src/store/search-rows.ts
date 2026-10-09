@@ -3,9 +3,9 @@ import { openHippoDb, isFtsAvailable, closeHippoDb, type DatabaseSyncLike } from
 import { tokenize } from '../tokenize.js';
 import { isPersonalScope, scopeAdmitSql, type SqlFragment } from '../recall-scope.js';
 import { ftsTermParts, RAREST_TERM_COUNT, rarestFtsQuery } from '../prompt-recall.js';
-import { log } from '../log.js';
+import { errorMessage, log } from '../log.js';
 import { originInSql } from '../project-identity.js';
-import { topVectorMatches } from '../vector-store.js';
+import { topVectorMatches } from '../db/vector-store.js';
 import {
   type MemoryRow,
   MEMORY_SELECT_COLUMNS,
@@ -66,11 +66,9 @@ const FTS_QUERY_SYNTAX_RE = /fts5: syntax error|unterminated string/i;
 /** SQL predicate fragments every candidate path appends, built once per load. */
 interface SearchPredicates {
   tenantPredicate: string;
-  tenantPredicateNoAlias: string;
   tenantOnlyPredicate: string;
   tenantParams: string[];
   archivedClauseAlias: string;
-  archivedClauseNoAlias: string;
   archivedClauseTenantOnly: string;
   aliasScope: SqlFragment;
   plainScope: SqlFragment;
@@ -86,15 +84,20 @@ export function _forceLikePathForTests(on: boolean): void {
   forceLikePath = on;
 }
 
+interface SearchRowsOptions {
+  readonly scopeFilter?: RecallScopeFilter;
+  readonly includeSuperseded?: boolean;
+  readonly originProjects?: OriginFilter;
+}
+
 function loadSearchRows(
   db: ReturnType<typeof openHippoDb>,
   query: string,
   limit: number,
   tenantId: string | undefined,
-  scopeFilter?: RecallScopeFilter,
-  includeSuperseded = true,
-  originProjects?: OriginFilter,
+  options: SearchRowsOptions = {},
 ): MemoryRow[] {
+  const { scopeFilter, includeSuperseded = true, originProjects } = options;
   const p = searchPredicates(tenantId, scopeFilter, includeSuperseded, originProjects);
 
   const terms = Array.from(new Set(tokenize(query)));
@@ -127,14 +130,12 @@ function searchPredicates(
   // helpers). tenantId set = strict tenant isolation, leveraging the composite
   // idx_memories_tenant_created (leading column tenant_id, O(log n) lookup).
   const tenantPredicate = tenantId !== undefined ? ` AND m.tenant_id = ?` : '';
-  const tenantPredicateNoAlias = tenantId !== undefined ? ` AND tenant_id = ?` : '';
   const tenantOnlyPredicate = tenantId !== undefined ? ` WHERE tenant_id = ?` : '';
   const tenantParams = tenantId !== undefined ? [tenantId] : [];
 
   // Defensive: kind='archived' is a transient sentinel inside archiveRawMemory's SAVEPOINT, so this only
   // guards against a dropped SAVEPOINT, a persisted 'archived' state, or direct-SQL writes.
   const archivedClauseAlias = ` AND m.kind != 'archived'`;
-  const archivedClauseNoAlias = ` AND kind != 'archived'`;
   // For the "tenant-only" path: if no tenant set, tenantOnlyPredicate is '',
   // so prepend WHERE; if tenant set, append AND. handled in each call site
   // by always joining `tenantOnlyPredicate + archivedClauseTenantOnly` where
@@ -149,8 +150,8 @@ function searchPredicates(
   const currentAlias = includeSuperseded ? '' : ' AND m.superseded_by IS NULL';
   const currentNoAlias = includeSuperseded ? '' : ' AND superseded_by IS NULL';
   return {
-    tenantPredicate, tenantPredicateNoAlias, tenantOnlyPredicate, tenantParams,
-    archivedClauseAlias, archivedClauseNoAlias, archivedClauseTenantOnly,
+    tenantPredicate, tenantOnlyPredicate, tenantParams,
+    archivedClauseAlias, archivedClauseTenantOnly,
     aliasScope, plainScope, scopeParams, currentAlias, currentNoAlias,
   };
 }
@@ -182,28 +183,39 @@ function selectFtsCandidates(db: DatabaseSyncLike, terms: string[], p: SearchPre
       `).all(ftsQuery, ...p.tenantParams, ...p.scopeParams, limit) as MemoryRow[];
   } catch (err) {
     // A query FTS5 cannot parse is expected input; anything else means the index itself is broken.
-    const message = err instanceof Error ? err.message : String(err);
+    const message = errorMessage(err);
     if (!FTS_QUERY_SYNTAX_RE.test(message)) log.once('fts-match-fallback', 'warn', `FTS search failed, using the slower LIKE match: ${message}`);
     return [];
   }
 }
 
+/** Newest admitted rows the substring match tests, so a query matching nothing costs the same in a store of any size. */
+const LIKE_WINDOW_ROWS = 2000;
+
+/** Substring matches in content or tags among the newest admitted rows: the lexical path without FTS5, and the catch for a part-word that FTS5 tokens miss. */
 function selectLikeCandidates(db: DatabaseSyncLike, terms: string[], p: SearchPredicates, limit: number): MemoryRow[] {
   const where = terms.map(() => `(LOWER(content) LIKE ? ESCAPE '\\' OR LOWER(tags_json) LIKE ? ESCAPE '\\')`).join(' OR ');
   const params = terms.flatMap((term) => {
     const like = `%${escapeLike(term)}%`;
     return [like, like];
   });
+  // idx_memories_tenant_created serves a tenant's newest rows; with no tenant only the table's own order needs no sort.
+  const newestFirst = p.tenantParams.length > 0 ? 'created DESC' : 'rowid DESC';
 
-  // SAFETY: this query selects exactly MEMORY_SELECT_COLUMNS, matching
-  // MemoryRow's field set.
+  // SHORTCUT: no index serves a substring, so a match older than the window is missed; an FTS5 trigram index is the upgrade.
+  // SAFETY: the outer query selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
   return db.prepare(`
     SELECT ${MEMORY_SELECT_COLUMNS}
-    FROM memories
-    WHERE (${where})${p.tenantPredicateNoAlias}${p.archivedClauseNoAlias}${p.plainScope.sql}${p.currentNoAlias}
+    FROM (
+      SELECT ${MEMORY_SELECT_COLUMNS}, updated_at
+      FROM memories${p.tenantOnlyPredicate}${p.archivedClauseTenantOnly}${p.plainScope.sql}${p.currentNoAlias}
+      ORDER BY ${newestFirst}
+      LIMIT ?
+    )
+    WHERE (${where})
     ORDER BY updated_at DESC, created DESC, content ASC, id ASC
     LIMIT ?
-  `).all(...params, ...p.tenantParams, ...p.scopeParams, limit) as MemoryRow[];
+  `).all(...p.tenantParams, ...p.scopeParams, Math.max(limit, LIKE_WINDOW_ROWS), ...params, limit) as MemoryRow[];
 }
 
 /**
@@ -257,10 +269,20 @@ export function loadRecallSearchEntries(
 ): MemoryEntry[] {
   const db = openStore(hippoRoot);
   try {
-    return loadRecallSearchEntriesFromDb(db, query, limit, tenantId, requestedScope, explicitScopeMode, includeSuperseded, originProjects, ownScope);
+    return loadRecallSearchEntriesFromDb(db, query, { limit, tenantId, requestedScope, explicitScopeMode, includeSuperseded, originProjects, ownScope });
   } finally {
     closeHippoDb(db);
   }
+}
+
+export interface RecallSearchEntriesOptions {
+  readonly limit?: number;
+  readonly tenantId?: string;
+  readonly requestedScope?: string;
+  readonly explicitScopeMode?: 'exact' | 'additive';
+  readonly includeSuperseded?: boolean;
+  readonly originProjects?: OriginFilter;
+  readonly ownScope?: string;
 }
 
 // Split out so callers with an already-open db (the prompt-recall path) skip
@@ -268,15 +290,11 @@ export function loadRecallSearchEntries(
 export function loadRecallSearchEntriesFromDb(
   db: DatabaseSyncLike,
   query: string,
-  limit: number = DEFAULT_SEARCH_CANDIDATE_LIMIT,
-  tenantId?: string,
-  requestedScope?: string,
-  explicitScopeMode: 'exact' | 'additive' = 'exact',
-  includeSuperseded = true,
-  originProjects?: OriginFilter,
-  ownScope?: string,
+  options: RecallSearchEntriesOptions = {},
 ): MemoryEntry[] {
-  return loadSearchRows(db, query, limit, tenantId, recallScopeFilter(requestedScope, explicitScopeMode, ownScope), includeSuperseded, originProjects).map(rowToEntry);
+  const { limit = DEFAULT_SEARCH_CANDIDATE_LIMIT, tenantId, requestedScope, explicitScopeMode = 'exact', includeSuperseded = true, originProjects, ownScope } = options;
+  const scopeFilter = recallScopeFilter(requestedScope, explicitScopeMode, ownScope);
+  return loadSearchRows(db, query, limit, tenantId, { scopeFilter, includeSuperseded, originProjects }).map(rowToEntry);
 }
 
 /** Which rows the vector arm of hybrid search may add: the same tenant, scope and superseded rules as the lexical load. */
@@ -290,14 +308,14 @@ export interface VectorCandidateSpec {
 }
 
 /** The rows nearest `queryVector` that pass `spec`, nearest first. */
-export function loadVectorCandidateEntries(hippoRoot: string, queryVector: readonly number[], spec: VectorCandidateSpec): MemoryEntry[] {
+export async function loadVectorCandidateEntries(hippoRoot: string, queryVector: readonly number[], spec: VectorCandidateSpec): Promise<MemoryEntry[]> {
   const scope = withProject(recallScopeClause('m.', spec.scope), 'm.', spec.origin);
   const tenant = spec.tenantId !== undefined ? ' AND m.tenant_id = ?' : '';
   const current = spec.includeSuperseded ? '' : ' AND m.superseded_by IS NULL';
   const params = [...(spec.tenantId !== undefined ? [spec.tenantId] : []), ...scope.params];
   const db = openStore(hippoRoot);
   try {
-    const matches = topVectorMatches(db, queryVector, spec.limit ?? 50, `${tenant} AND m.kind != 'archived'${scope.sql}${current}`, params);
+    const matches = await topVectorMatches(db, queryVector, spec.limit ?? 50, `${tenant} AND m.kind != 'archived'${scope.sql}${current}`, params);
     if (matches.length === 0) return [];
     // SAFETY: the SELECT names exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
     const rows = db.prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${matches.map(() => '?').join(', ')})`)

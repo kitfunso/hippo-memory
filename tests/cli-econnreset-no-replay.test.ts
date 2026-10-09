@@ -7,7 +7,7 @@ import { spawn } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { remember } from '../src/api.js';
-import { classifyTransportFailure, HttpResponseError } from '../src/client.js';
+import { classifyTransportFailure, HttpResponseError } from '../src/cli/client.js';
 import { boundPort } from './_helpers/listen.js';
 import { ROUTED_CLI_ENV } from './_helpers/routed-cli-env.js';
 
@@ -20,7 +20,7 @@ const CLI_PATH = join(REPO_ROOT, 'dist', 'cli.js');
 
 function assertFreshBuild(): void {
   const dist = statSync(CLI_PATH).mtimeMs;
-  for (const name of ['cli.ts', 'client.ts', 'server-detect.ts']) {
+  for (const name of ['cli.ts', 'cli/client.ts', 'server-detect.ts']) {
     const src = statSync(join(REPO_ROOT, 'src', name)).mtimeMs;
     if (src > dist) {
       throw new Error(`dist/cli.js is older than src/${name}. Run \`npm run build\`; this test spawns the CLI from dist, so a stale build would test old code.`);

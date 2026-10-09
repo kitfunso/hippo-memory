@@ -35,7 +35,7 @@ afterEach(async () => {
   rmSync(home, { recursive: true, force: true });
 });
 
-describe('HTTP /v1/memories windowSize serialization (v1.7.1 INFO #6)', () => {
+describe('HTTP /v1/memories windowSize serialization', () => {
   it('default GET /v1/memories?q=alpha returns body.windowSize === 200', async () => {
     const res = await fetch(`${handle.url}/v1/memories?q=alpha`);
     expect(res.status).toBe(200);

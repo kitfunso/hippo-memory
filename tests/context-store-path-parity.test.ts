@@ -1,19 +1,21 @@
-// getContext on hippo.db answers and writes what the code before the store path did, with or without sqliteStore, as goldens
-// taken from that code pin; on a store held in memory it answers the same through the store with hippo.db blocked.
+// getContext on hippo.db returns and records what each case lists; on a store held in memory it answers the same through
+// the store, with hippo.db blocked.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, relative } from 'node:path';
+import { join } from 'node:path';
 import { _resetAblationCacheForTests } from '../src/ablation.js';
 import { getContext, type Actor, type ContextOpts, type ContextResult } from '../src/api.js';
 import { _resetSharedStoreCacheForTests, markSharedStore } from '../src/config.js';
 import { closeHippoDb, openHippoDb, setMeta, withSqliteBlocked } from '../src/db.js';
-import { StoreNotPortedError } from '../src/db/sqlite-blocked.js';
+import { StoreNotPortedError } from '../src/util/sqlite-blocked.js';
 import { embeddingIndexIdentity } from '../src/embeddings.js';
-import { resetAllPhysicsState } from '../src/physics-state.js';
-import { sqliteStore, type HippoStore } from '../src/store-port.js';
+import { resetAllPhysicsState } from '../src/db/physics-state.js';
+import type { HippoStore } from '../src/store-port.js';
+import { loadEntriesByIds } from '../src/store/entry-reads.js';
+import { writeEntry } from '../src/store/entry-writes.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from '../src/store/rows.js';
-import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../src/vector-store.js';
+import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../src/db/vector-store.js';
 import {
   CONTEXT_NOW, contextRowsOf, OWNER, PROJECT, rounded, SESSION, seedContextGlobal, seedContextRows,
 } from './_helpers/context-fixture.js';
@@ -23,14 +25,31 @@ import { portOnlyStore } from './_helpers/port-only-store.js';
 import { CLEARED_ENV, statsMirror } from './_helpers/recall-golden-seed.js';
 import { seedTwoTenants, TENANT_A, TENANT_B } from './_helpers/store-conformance.js';
 
+type Block = Exclude<keyof ContextResult, 'entries' | 'tokens'>;
+
+/** What the hippo.db pass that reads the global store too returns and records. */
+interface Expected {
+  /** Entry ids in rank order. */
+  readonly ids: readonly string[];
+  readonly tokens: number;
+  readonly blocks: readonly Block[];
+  /** The result count on the one trace row the call writes; absent when it writes none. */
+  readonly traced?: number;
+  /** total_recalled in stats.json after the call; absent when the call writes no stats.json. */
+  readonly recalled?: number;
+  /** Global-store ids the call counts as retrieved there, in id order; absent when it counts none. */
+  readonly globalRetrieved?: readonly string[];
+}
+
 interface Case {
   readonly name: string;
   readonly opts: ContextOpts;
+  readonly expected: Expected;
   readonly actor?: Actor;
   readonly tenantId?: string;
   readonly shared?: true;
   readonly physicsOff?: true;
-  /** Physics on in the embedded passes only: with no provider it ranks as hybrid, so the golden pass keeps the config it was written with. */
+  /** Physics on in the embedded passes only: with no provider it ranks as hybrid. */
   readonly physicsOn?: true;
   /** Shows the case reached the branch it names, on the hippo.db pass that reads the global store too. */
   readonly reaches?: (pass: Pass) => void;
@@ -39,11 +58,24 @@ interface Case {
 }
 
 const ALICE: Actor = { subject: 'api_key:k1', role: 'member', owner: OWNER };
+const OWN_STEPS = ['mem_a_own_0', 'mem_a_own_1', 'mem_a_own_2', 'mem_a_own_3', 'mem_a_own_4', 'mem_a_own_5'] as const;
+const ALL_BLOCKS: readonly Block[] = ['activeSnapshot', 'sessionHandoff', 'recentEvents', 'ambientState'];
 
 const CASES: readonly Case[] = [
   {
     name: 'no query, with the active session',
     opts: { currentSessionId: SESSION },
+    expected: {
+      ids: [
+        'mem_a_error', 'mem_a_pin', 'mem_a_liked', ...OWN_STEPS, 'mem_a_global_0', 'mem_a_global_1', 'mem_a_global_2', 'mem_a_team',
+        'mem_a_new', 'mem_a_blank', 'mem_a_archived', 'mem_a_secret_own', 'mem_g_pin', 'mem_g_note', 'mem_a_decayed', 'mem_a_flat',
+      ],
+      tokens: 253,
+      blocks: ALL_BLOCKS,
+      traced: 21,
+      recalled: 21,
+      globalRetrieved: ['mem_g_note', 'mem_g_pin'],
+    },
     reaches: (p) => {
       expect(p.result.activeSnapshot?.task).toBe('unkeyed task for session a');
       expect(p.result.recentEvents?.length).toBeGreaterThan(0);
@@ -55,6 +87,14 @@ const CASES: readonly Case[] = [
   {
     name: 'query',
     opts: { q: 'rollout queue' },
+    expected: {
+      ids: [...OWN_STEPS, 'mem_g_note', 'mem_g_pin', 'mem_a_liked', 'mem_a_new', 'mem_a_team', 'mem_a_flat', 'mem_a_decayed'],
+      tokens: 151,
+      blocks: ALL_BLOCKS,
+      traced: 13,
+      recalled: 13,
+      globalRetrieved: ['mem_g_note', 'mem_g_pin'],
+    },
     physicsOn: true,
     reaches: (p) => expect(p.result.entries.length).toBeGreaterThan(0),
     storeReads: ['searchRecallEntries', 'physicsParticles'],
@@ -62,6 +102,14 @@ const CASES: readonly Case[] = [
   {
     name: 'query without physics',
     opts: { q: 'rollout' },
+    expected: {
+      ids: ['mem_g_note', 'mem_g_pin', 'mem_a_liked', 'mem_a_new', ...OWN_STEPS, 'mem_a_team', 'mem_a_flat', 'mem_a_decayed'],
+      tokens: 151,
+      blocks: ALL_BLOCKS,
+      traced: 13,
+      recalled: 13,
+      globalRetrieved: ['mem_g_note', 'mem_g_pin'],
+    },
     physicsOff: true,
     reaches: (p) => expect(p.result.entries.length).toBeGreaterThan(0),
     storeReads: ['searchRecallEntries', 'nearestEntries'],
@@ -69,6 +117,7 @@ const CASES: readonly Case[] = [
   {
     name: 'query cut to nothing, which still writes a trace',
     opts: { q: 'rollout', exactScope: 'team:eng', limit: 0 },
+    expected: { ids: [], tokens: 0, blocks: [], traced: 0 },
     reaches: (p) => {
       expect(p.result).toEqual({ entries: [], tokens: 0 });
       expect(p.rows.local.traces).toEqual([expect.objectContaining({ result_count: 0, pipeline: 'context' })]);
@@ -77,12 +126,23 @@ const CASES: readonly Case[] = [
   {
     name: 'pinned only, with recent rows and prompt recall',
     opts: { pinnedOnly: true, includeRecent: 5, prompt: 'what is the rule for billing deploys on fridays' },
+    expected: { ids: ['mem_a_pin', 'mem_g_pin'], tokens: 29, blocks: ['activeSnapshot', 'sessionHandoff', 'recentEvents'] },
     reaches: (p) => expect(p.result.entries.some((e) => e.entry.pinned)).toBe(true),
     storeReads: ['ambientCandidates'],
   },
   {
     name: 'shared store, member keyed by owner',
     opts: {},
+    expected: {
+      ids: [
+        'mem_a_error', 'mem_a_pin', 'mem_a_liked', ...OWN_STEPS, 'mem_a_global_0', 'mem_a_global_1', 'mem_a_global_2', 'mem_a_team',
+        'mem_a_alice', 'mem_a_new', 'mem_a_blank', 'mem_a_archived', 'mem_a_secret_own', 'mem_a_decayed', 'mem_a_flat',
+      ],
+      tokens: 241,
+      blocks: ALL_BLOCKS,
+      traced: 20,
+      recalled: 20,
+    },
     actor: ALICE,
     shared: true,
     reaches: (p) => {
@@ -90,10 +150,23 @@ const CASES: readonly Case[] = [
       expect(p.result.sessionHandoff?.summary).toBe('alice handoff');
     },
   },
-  { name: 'shared store, member across projects', opts: { crossProject: true, q: 'rollout' }, actor: ALICE, shared: true },
+  {
+    name: 'shared store, member across projects',
+    opts: { crossProject: true, q: 'rollout' },
+    expected: {
+      ids: ['mem_a_liked', 'mem_a_alice', 'mem_a_new', ...OWN_STEPS, 'mem_a_team', 'mem_a_no_origin', 'mem_a_flat', 'mem_a_decayed'],
+      tokens: 152,
+      blocks: ALL_BLOCKS,
+      traced: 13,
+      recalled: 13,
+    },
+    actor: ALICE,
+    shared: true,
+  },
   {
     name: 'second tenant, pinned only, whose stale snapshot leaves an unfinished handoff',
     opts: { pinnedOnly: true, includeRecent: 3 },
+    expected: { ids: ['mem_b_0', 'mem_b_1', 'mem_b_2', 'mem_b_pin'], tokens: 38, blocks: ['sessionHandoff'] },
     tenantId: TENANT_B,
     reaches: (p) => {
       expect(p.result.activeSnapshot).toBeUndefined();
@@ -111,7 +184,6 @@ interface Pass {
   readonly rows: { readonly local: ContextRows; readonly global: ContextRows | null };
   readonly lastRecall: unknown[];
   readonly stats: string | null;
-  readonly files: readonly (readonly [string, string])[];
 }
 
 type ContextRows = ReturnType<typeof contextRowsOf>;
@@ -123,23 +195,6 @@ function lastRecallMeta(root: string): unknown[] {
   } finally {
     closeHippoDb(db);
   }
-}
-
-/** Every file beside hippo.db, such as the task mirrors and stats.json, with its text. */
-function filesOf(root: string): [string, string][] {
-  return readdirSync(root, { recursive: true, withFileTypes: true })
-    .filter((d) => d.isFile() && !d.name.startsWith('hippo.db'))
-    .map((d): [string, string] => {
-      const file = join(d.parentPath, d.name);
-      return [relative(root, file).replace(/\\/g, '/'), readFileSync(file, 'utf8')];
-    })
-    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-}
-
-/** The files a run added or changed beside hippo.db; the seeded memory mirrors would only bloat the golden. */
-function writtenFiles(root: string, template: string): [string, string][] {
-  const seeded = new Map(filesOf(template));
-  return filesOf(root).filter(([name, text]) => seeded.get(name) !== text);
 }
 
 /** Every memory row's hashed vector and its particle, so the search's vector arm and physics have rows to read. */
@@ -208,6 +263,8 @@ interface PassOpts {
   readonly withGlobal: boolean;
   /** The store carries vectors and the local hashed-embedding server is its provider. */
   readonly embedded: boolean;
+  /** Runs on the pass's own copies of the two stores, before the call. */
+  readonly prepare?: (root: string, globalRoot: string) => void;
 }
 
 /** The config.json a pass writes, when it sets anything. */
@@ -217,15 +274,14 @@ interface PassConfig {
 }
 
 /** One getContext on a fresh copy of the fixture. */
-async function runPass(c: Case, { withGlobal, embedded }: PassOpts, makeStore?: (root: string) => HippoStore): Promise<Pass> {
+async function runPass(c: Omit<Case, 'name' | 'expected'>, { withGlobal, embedded, prepare }: PassOpts, makeStore?: (root: string) => HippoStore): Promise<Pass> {
   _resetSharedStoreCacheForTests();
   _resetAblationCacheForTests();
   const home = mkdtempSync(join(tmpdir(), 'hippo-context-parity-'));
   try {
     const root = join(home, 'store');
     const globalRoot = join(home, 'global');
-    const template = embedded ? templates.vectors : templates.local;
-    cpSync(template, root, { recursive: true });
+    cpSync(embedded ? templates.vectors : templates.local, root, { recursive: true });
     if (withGlobal) cpSync(templates.global, globalRoot, { recursive: true });
     vi.stubEnv('HIPPO_HOME', globalRoot);
     const config: PassConfig = {};
@@ -234,6 +290,7 @@ async function runPass(c: Case, { withGlobal, embedded }: PassOpts, makeStore?: 
     else if (c.physicsOn && embedded) config.physics = { enabled: true };
     if (Object.keys(config).length > 0) writeFileSync(join(root, 'config.json'), JSON.stringify(config));
     if (c.shared) markSharedStore(root);
+    prepare?.(root, globalRoot);
     const store = makeStore?.(root);
     const ctx = { hippoRoot: root, tenantId: c.tenantId ?? TENANT_A, actor: c.actor ?? ADMIN, store };
     const opts: ContextOpts = { currentProject: PROJECT, ...c.opts };
@@ -246,25 +303,67 @@ async function runPass(c: Case, { withGlobal, embedded }: PassOpts, makeStore?: 
       rows: { local: contextRowsOf(root), global: withGlobal ? contextRowsOf(globalRoot) : null },
       lastRecall: lastRecallMeta(root),
       stats: statsMirror(root),
-      files: writtenFiles(root, template),
     };
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
 }
 
-const goldenFile = (c: Case): string => `./fixtures/context-store-path/${c.name.replace(/[^a-z0-9]+/gi, '-')}.json`;
-const asJson = (pass: Pass): string => `${JSON.stringify(pass, null, 2)}\n`;
-
-// The goldens were written by this describe on the code before getContext read through the store; `vitest -u` rewrites them.
-describe('getContext on hippo.db matches the golden, with and without the sqliteStore store path', () => {
+describe('getContext on hippo.db returns and records what each case lists', () => {
   it.each(CASES.map((c) => [c.name, c] as const))('%s', async (_name, c) => {
-    const direct = await runPass(c, { withGlobal: true, embedded: false });
-    c.reaches?.(direct);
-    // SQLite's bm25() calls the platform's log(), whose last bit differs on macOS, so the golden holds rounded numbers.
-    await expect(asJson(rounded(direct))).toMatchFileSnapshot(goldenFile(c));
-    const viaStore = await runPass(c, { withGlobal: true, embedded: false }, sqliteStore);
-    expect(asJson(viaStore)).toBe(asJson(direct));
+    const pass = await runPass(c, { withGlobal: true, embedded: false });
+    const { result } = pass;
+    const { ids, tokens, blocks, traced, recalled, globalRetrieved = [] } = c.expected;
+    c.reaches?.(pass);
+    expect(result.entries.map((e) => e.entry.id)).toEqual(ids);
+    expect(result.tokens).toBe(tokens);
+    expect(ALL_BLOCKS.filter((block) => result[block] !== undefined)).toEqual(blocks);
+    expect(pass.rows.local.traces).toEqual(traced === undefined ? [] : [expect.objectContaining({ pipeline: 'context', result_count: traced })]);
+    expect(pass.rows.local.traceResults).toHaveLength(traced ?? 0);
+    expect(pass.stats).toEqual(recalled === undefined ? null : expect.stringContaining(`"total_recalled": ${recalled},`));
+    expect(pass.rows.global?.retrieved).toEqual(globalRetrieved.map((id) => expect.objectContaining({ id, retrieval_count: 1 })));
+  }, 120_000);
+});
+
+describe('the recall getContext records on hippo.db', () => {
+  const idsOf = (pass: Pass): string[] => pass.result.entries.map((e) => e.entry.id);
+
+  it('strengthens a row both stores hold in the local store only', async () => {
+    const mirror = (root: string, globalRoot: string): void => {
+      for (const entry of loadEntriesByIds(root, ['mem_a_own_0'], TENANT_A)) writeEntry(globalRoot, entry);
+    };
+    const pass = await runPass({ opts: {} }, { withGlobal: true, embedded: false, prepare: mirror });
+    expect(idsOf(pass)).toContain('mem_a_own_0');
+    expect(pass.rows.local.strengthened).toContainEqual(expect.objectContaining({ id: 'mem_a_own_0', retrieval_count: 1 }));
+    expect(pass.rows.global?.strengthened).toContainEqual(expect.objectContaining({ id: 'mem_a_own_0', retrieval_count: 0 }));
+  }, 120_000);
+
+  it('strengthens the row in the global store when the local store holds its id for another tenant', async () => {
+    const copyToOtherTenant = (root: string, globalRoot: string): void => {
+      for (const entry of loadEntriesByIds(globalRoot, ['mem_g_note'], TENANT_A)) writeEntry(root, { ...entry, tenantId: TENANT_B });
+    };
+    const pass = await runPass({ opts: {} }, { withGlobal: true, embedded: false, prepare: copyToOtherTenant });
+    expect(idsOf(pass)).toContain('mem_g_note');
+    expect(pass.rows.local.strengthened).toContainEqual(expect.objectContaining({ id: 'mem_g_note', retrieval_count: 0 }));
+    expect(pass.rows.global?.strengthened).toContainEqual(expect.objectContaining({ id: 'mem_g_note', retrieval_count: 1 }));
+  }, 120_000);
+
+  it('saves the ids with no trace id, never the previous one, when the trace write fails', async () => {
+    const refuseTraces = (root: string): void => {
+      const db = openHippoDb(root);
+      try {
+        setMeta(db, 'last_trace_id', '41');
+        db.exec("CREATE TRIGGER refuse_trace BEFORE INSERT ON recall_traces BEGIN SELECT RAISE(ABORT, 'trace refused'); END");
+      } finally {
+        closeHippoDb(db);
+      }
+    };
+    const pass = await runPass({ opts: {} }, { withGlobal: true, embedded: false, prepare: refuseTraces });
+    expect(pass.rows.local.traces).toEqual([]);
+    expect(pass.lastRecall).toEqual([
+      { key: 'last_retrieval_ids', value: JSON.stringify(idsOf(pass)) },
+      { key: 'last_trace_id', value: '' },
+    ]);
   }, 120_000);
 });
 

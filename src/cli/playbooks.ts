@@ -6,19 +6,8 @@ import * as policiesModule from '../policies.js';
 import * as skillsModule from '../skills.js';
 import { resolveTenantId } from '../tenant.js';
 import { printError } from './output.js';
-import { requireInit, type CliFlags } from './shared.js';
-
-// parseInt alone accepts trailing junk ('1abc' -> 1), which would let `process close 1abc`
-// silently hit the wrong row; require the whole arg to be digits.
-function parsePositiveProcessId(idRaw: unknown): number {
-  const s = String(idRaw ?? '').trim();
-  const id = parseInt(s, 10);
-  if (!/^\d+$/.test(s) || id <= 0) {
-    printError(`Invalid process id: "${idRaw}" (expected a positive integer).`);
-    process.exit(1);
-  }
-  return id;
-}
+import { parseListLimit, parsePositiveId, requireInit, type CliFlags } from './shared.js';
+import { errorMessage } from '../log.js';
 
 // --step is a repeatable flag (collected into an array by parseArgs). A single
 // --step yields a string; normalize both to string[]. A value-less --step errors.
@@ -30,17 +19,6 @@ function collectProcessSteps(stepRaw: string | boolean | string[] | undefined): 
     process.exit(1);
   }
   return [];
-}
-
-
-function parseListLimit(flags: CliFlags): number {
-  const limitRaw = flags['limit'];
-  const limit = limitRaw !== undefined ? parseInt(String(limitRaw), 10) : 100;
-  if (!Number.isFinite(limit) || limit <= 0) {
-    printError(`Invalid --limit: "${limitRaw}". Must be a positive integer.`);
-    process.exit(1);
-  }
-  return limit;
 }
 
 function processList(hippoRoot: string, tenantId: string, flags: CliFlags): void {
@@ -78,7 +56,7 @@ function processGet(hippoRoot: string, tenantId: string, args: string[]): void {
     printError('Usage: hippo process get <id>');
     process.exit(1);
   }
-  const id = parsePositiveProcessId(idRaw);
+  const id = parsePositiveId(idRaw, 'process');
   const proc = processesModule.loadProcessById(hippoRoot, tenantId, id);
   if (!proc) {
     printError(`Process ${id} not found.`);
@@ -107,7 +85,7 @@ function processSupersede(hippoRoot: string, tenantId: string, args: string[], f
     printError('Usage: hippo process supersede <id> --step "<text>" [--step ...] [--change "<summary>"] [--description "<text>"]');
     process.exit(1);
   }
-  const id = parsePositiveProcessId(idRaw);
+  const id = parsePositiveId(idRaw, 'process');
   const steps = collectProcessSteps(flags['step']);
   if (steps.length === 0) {
     printError('hippo process supersede requires at least one --step "<text>" for the new version.');
@@ -144,7 +122,7 @@ function processClose(hippoRoot: string, tenantId: string, args: string[]): void
     printError('Usage: hippo process close <id>');
     process.exit(1);
   }
-  const id = parsePositiveProcessId(idRaw);
+  const id = parsePositiveId(idRaw, 'process');
   const closed = processesModule.closeProcess(hippoRoot, tenantId, id);
   console.log(`Process #${closed.id} closed.`);
 }
@@ -152,7 +130,7 @@ function processClose(hippoRoot: string, tenantId: string, args: string[]): void
 export function cmdProcess(
   hippoRoot: string,
   args: string[],
-  flags: Record<string, string | boolean | string[]>
+  flags: CliFlags
 ): void {
   requireInit(hippoRoot);
   const tenantId = resolveTenantId({});
@@ -189,17 +167,6 @@ function processCreate(hippoRoot: string, tenantId: string, processName: string,
   });
   console.log(`Process recorded: #${created.id} (v${created.version}, ${created.steps.length} steps)`);
   if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
-}
-
-// Strict positive-integer id parse for the mutating policy subcommands: parseInt alone accepts '1abc' -> 1.
-function parsePositivePolicyId(idRaw: unknown): number {
-  const s = String(idRaw ?? '').trim();
-  const id = parseInt(s, 10);
-  if (!/^\d+$/.test(s) || id <= 0) {
-    printError(`Invalid policy id: "${idRaw}" (expected a positive integer).`);
-    process.exit(1);
-  }
-  return id;
 }
 
 function printPolicyRow(p: policiesModule.Policy): void {
@@ -246,7 +213,7 @@ function policyAsOf(hippoRoot: string, tenantId: string, args: string[], flags: 
   try {
     results = policiesModule.loadPoliciesAsOf(hippoRoot, tenantId, dateRaw, { name });
   } catch (e) {
-    printError((e as Error).message);
+    printError(errorMessage(e));
     process.exit(1);
   }
   if (results.length === 0) {
@@ -263,7 +230,7 @@ function policyGet(hippoRoot: string, tenantId: string, args: string[]): void {
     printError('Usage: hippo policy get <id>');
     process.exit(1);
   }
-  const id = parsePositivePolicyId(idRaw);
+  const id = parsePositiveId(idRaw, 'policy');
   const p = policiesModule.loadPolicyById(hippoRoot, tenantId, id);
   if (!p) {
     printError(`Policy ${id} not found.`);
@@ -290,7 +257,7 @@ function policySupersede(hippoRoot: string, tenantId: string, args: string[], fl
     printError('Usage: hippo policy supersede <id> --text "<rule>" [--from <iso>] [--to <iso>] [--change "<summary>"]');
     process.exit(1);
   }
-  const id = parsePositivePolicyId(idRaw);
+  const id = parsePositiveId(idRaw, 'policy');
   const textRaw = flags['text'];
   if (typeof textRaw !== 'string' || !textRaw.trim()) {
     printError('hippo policy supersede requires --text "<rule>" for the new version.');
@@ -317,7 +284,7 @@ function policySupersede(hippoRoot: string, tenantId: string, args: string[], fl
     console.log(`Policy #${created.id} recorded (v${created.version}), superseding #${id}.`);
     if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
   } catch (e) {
-    printError((e as Error).message);
+    printError(errorMessage(e));
     process.exit(1);
   }
 }
@@ -328,7 +295,7 @@ function policyClose(hippoRoot: string, tenantId: string, args: string[]): void 
     printError('Usage: hippo policy close <id>');
     process.exit(1);
   }
-  const id = parsePositivePolicyId(idRaw);
+  const id = parsePositiveId(idRaw, 'policy');
   const closed = policiesModule.closePolicy(hippoRoot, tenantId, id);
   console.log(`Policy #${closed.id} closed.`);
 }
@@ -336,7 +303,7 @@ function policyClose(hippoRoot: string, tenantId: string, args: string[]): void 
 export function cmdPolicy(
   hippoRoot: string,
   args: string[],
-  flags: Record<string, string | boolean | string[]>
+  flags: CliFlags
 ): void {
   requireInit(hippoRoot);
   const tenantId = resolveTenantId({});
@@ -378,20 +345,9 @@ function policyCreate(hippoRoot: string, tenantId: string, args: string[], flags
     console.log(`Policy recorded: #${created.id} (v${created.version}, effective ${range})`);
     if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
   } catch (e) {
-    printError((e as Error).message);
+    printError(errorMessage(e));
     process.exit(1);
   }
-}
-
-// Strict positive-integer id parse for the mutating skill subcommands: parseInt accepts '1abc' -> 1.
-function parsePositiveSkillId(idRaw: unknown): number {
-  const s = String(idRaw ?? '').trim();
-  const id = parseInt(s, 10);
-  if (!/^\d+$/.test(s) || id <= 0) {
-    printError(`Invalid skill id: "${idRaw}" (expected a positive integer).`);
-    process.exit(1);
-  }
-  return id;
 }
 
 function printSkillRow(s: skillsModule.Skill): void {
@@ -441,7 +397,7 @@ function skillGet(hippoRoot: string, tenantId: string, args: string[]): void {
     printError('Usage: hippo skill get <id>');
     process.exit(1);
   }
-  const id = parsePositiveSkillId(idRaw);
+  const id = parsePositiveId(idRaw, 'skill');
   const s = skillsModule.loadSkillById(hippoRoot, tenantId, id);
   if (!s) {
     printError(`Skill ${id} not found.`);
@@ -467,7 +423,7 @@ function skillSupersede(hippoRoot: string, tenantId: string, args: string[], fla
     printError('Usage: hippo skill supersede <id> --instructions "<text>" [--trigger "<when>"] [--change "<summary>"]');
     process.exit(1);
   }
-  const id = parsePositiveSkillId(idRaw);
+  const id = parsePositiveId(idRaw, 'skill');
   const instrRaw = flags['instructions'];
   if (typeof instrRaw !== 'string' || !instrRaw.trim()) {
     printError('hippo skill supersede requires --instructions "<text>" for the new version.');
@@ -492,7 +448,7 @@ function skillSupersede(hippoRoot: string, tenantId: string, args: string[], fla
     console.log(`Skill #${created.id} recorded (v${created.version}), superseding #${id}.`);
     if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
   } catch (e) {
-    printError((e as Error).message);
+    printError(errorMessage(e));
     process.exit(1);
   }
 }
@@ -503,7 +459,7 @@ function skillClose(hippoRoot: string, tenantId: string, args: string[]): void {
     printError('Usage: hippo skill close <id>');
     process.exit(1);
   }
-  const id = parsePositiveSkillId(idRaw);
+  const id = parsePositiveId(idRaw, 'skill');
   const closed = skillsModule.closeSkill(hippoRoot, tenantId, id);
   console.log(`Skill #${closed.id} closed.`);
 }
@@ -511,7 +467,7 @@ function skillClose(hippoRoot: string, tenantId: string, args: string[]): void {
 export function cmdSkill(
   hippoRoot: string,
   args: string[],
-  flags: Record<string, string | boolean | string[]>
+  flags: CliFlags
 ): void {
   requireInit(hippoRoot);
   const tenantId = resolveTenantId({});
@@ -550,7 +506,7 @@ function skillCreate(hippoRoot: string, tenantId: string, args: string[], flags:
     console.log(`Skill recorded: #${created.id} (v${created.version})`);
     if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
   } catch (e) {
-    printError((e as Error).message);
+    printError(errorMessage(e));
     process.exit(1);
   }
 }

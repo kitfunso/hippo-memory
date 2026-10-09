@@ -6,7 +6,7 @@ function buildTrapResults(hitPattern: boolean[]): Array<{trapCategory: string|nu
   return hitPattern.map((hit, i) => ({ trapCategory: 'cat_' + i, trapHit: hit }));
 }
 
-describe('v1.7.7 hitRateByPhase with restrictLateTo', () => {
+describe('hitRateByPhase with restrictLateTo', () => {
   it('default (no restrictLateTo) preserves chronological-third behavior', () => {
     // 25 traps: third=9, early=slice(0,9), mid=slice(9,18), late=slice(18) = last 7
     const results = buildTrapResults(Array(25).fill(true));

@@ -94,7 +94,7 @@ function ingestFixture(root: string, pathTag: string): void {
   });
 }
 
-describe('recall cross-store determinism (T2/T3 acceptance)', () => {
+describe('recall cross-store determinism', () => {
   let storeA: string;
   let storeB: string;
 

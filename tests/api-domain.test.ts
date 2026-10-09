@@ -296,7 +296,7 @@ describe('api domain — archive_raw / auth / audit', () => {
     }
   });
 
-  it('auditList scopes to ctx.tenantId and filters by op', () => {
+  it('auditList scopes to ctx.tenantId and filters by op', async () => {
     // Seed events directly so the test is independent of remember/recall.
     const db = openHippoDb(home);
     try {
@@ -307,21 +307,21 @@ describe('api domain — archive_raw / auth / audit', () => {
       closeHippoDb(db);
     }
 
-    const aAll = auditList(
+    const aAll = await auditList(
       { hippoRoot: home, tenantId: 'tenant-a', actor: { subject: 'cli', role: 'admin' } },
       {},
     );
     expect(aAll.length).toBe(2);
     expect(aAll.every((e) => e.tenantId === 'tenant-a')).toBe(true);
 
-    const aRemember = auditList(
+    const aRemember = await auditList(
       { hippoRoot: home, tenantId: 'tenant-a', actor: { subject: 'cli', role: 'admin' } },
       { op: 'remember' },
     );
     expect(aRemember.length).toBe(1);
     expect(aRemember[0]!.targetId).toBe('a1');
 
-    const bAll = auditList(
+    const bAll = await auditList(
       { hippoRoot: home, tenantId: 'tenant-b', actor: { subject: 'cli', role: 'admin' } },
       {},
     );

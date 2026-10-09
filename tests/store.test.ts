@@ -214,6 +214,8 @@ describe('index management', () => {
 describe('stats tracking', () => {
   it('persists stat counters through the SQLite backbone', () => {
     initStore(tmpDir);
+    // Longer than any rewrite, so bytes left over from it would break the mirror's JSON.
+    fs.writeFileSync(path.join(tmpDir, 'stats.json'), 'x'.repeat(4096));
 
     updateStats(tmpDir, { remembered: 2, recalled: 1, forgotten: 1 });
 
@@ -228,6 +230,7 @@ describe('stats tracking', () => {
     expect(stats.total_remembered).toBe(2);
     expect(stats.total_recalled).toBe(1);
     expect(stats.total_forgotten).toBe(1);
+    expect(JSON.parse(fs.readFileSync(path.join(tmpDir, 'stats.json'), 'utf8'))).toEqual(stats);
   });
 });
 

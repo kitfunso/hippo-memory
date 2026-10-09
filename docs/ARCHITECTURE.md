@@ -5,6 +5,16 @@
 Six layers, lowest first: base (pure helpers and core types), db (SQLite connection and schema), store (persistence and embeddings), domain (recall, graph, consolidation, hooks), api (operations over the store), surface (CLI, server, MCP, importers, dashboard).
 A file imports only from its own layer or a lower one. `layers.json` is the map and `scripts/check-layers.mjs` enforces it against `.layers-baseline.json`.
 
+## Store port
+
+### Sync core, async port
+
+node:sqlite is synchronous, and the store port is async so another store can do I/O. `authCreate`, `authCreateSelf` and `authRevoke` from `./server` return a value when the context has no store and a Promise when it has one. `importVault` from `.` is synchronous and calls `remember` and `archiveRaw` with no store. `Reply<T>` and `andThen` in `src/api/on-store.ts` carry that for exactly these functions and what they call. Every other operation is async and goes through `storeFor(ctx)`. Removing the carrier means making those published functions async, which is a breaking change. `scripts/check-store-port.mjs` counts the files that use the carrier so the list cannot grow.
+
+## Test-only exports
+
+A production export that no other `src/` file names but a test does is a seam added for the test. `scripts/check-test-only-exports.mjs` finds them and fails CI on any not listed in `.test-only-exports-baseline.json`; exports in a package entry file (derived from `package.json` `exports` and `bin`) are exempt. The list can only shrink: move the helper to `tests/_helpers` or give it a production caller, then run the script with `--update` to lock the lower count in.
+
 Design provenance for src/: which roadmap item or release added a behaviour, schema history, measurements and alternatives tried. Source comments keep the one-line reason; this file keeps the record, quoted from the comment it came from.
 
 ## History moved out of src/ comments, by module
@@ -110,7 +120,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `Actor`: Actor identity + authorization role for a Context. v1.12.0 A5 v2 sub-1. Before v1.12.0, Context.actor was a bare string. v1.12.0 promotes it to an object carrying both the audit-log subject (formerly the string itself) and a role for /v1/sleep admin gating. Audit helpers continue accepting `string` — callers pass `ctx.actor.subject`.
 - `Actor.scopes`: EI2: restricted scopes a member key may read (auth.ts grantScope). Unused for admin actors.
 
-### src/audit-prune.ts
+### src/cli/audit-prune.ts
 - (module header): Audit log retention pruning (v1.12.9).
 - (module header): Closes TODOS A5 v2 M6: "Audit log unbounded growth. Add a daily `audit prune` cron + `hippo audit prune --older-than 90d` CLI in v2. Mind regulatory retention floors (HIPAA, SOX, GDPR) — the prune should be opt-in per tenant and emit its own audit trail event."
 - `PruneAuditOpts.tenantId`: Tenant scope. Required — prune is always tenant-scoped per the A5 v2 design.
@@ -455,7 +465,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `embedMemory`: L9: host-wide rebuild. The embedding index is keyed by entry.id (which is tenant-scoped) but the index itself is one per hippoRoot.
 - `embedAll`: L9: host-wide by design. embedAll backfills vectors for all tenants' entries into the per-host embedding index.
 
-### src/eval-stats.ts
+### src/eval/eval-stats.ts
 - module header: Statistics and cost accounting for the token-efficiency evals (ROADMAP Part IX, TE3-TE5).
 
 ### src/extract.ts
@@ -541,6 +551,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 
 ### src/instruction-detect.ts
 - `module header`: Prompt-injection detection for untrusted memory content (CD5).
+- `screeningForm`: the second text the patterns read, after the text as written. In order: character references decoded once, NFKC, zero-width, soft-hyphen and bidi format characters removed, a closed table of 36 Cyrillic and Greek look-alike letters folded, runs of spaces and tabs collapsed to one space. Line breaks stay a sentence bound: collapsing them too flagged 9 of the 76 rows of the benign corpus in `tests/instruction-detect.test.ts` (lists and chat lines that end with no full stop). On 100 kB of unflagged text the whole check takes 0.8 to 3.9 ms against 0.2 to 1.2 ms before it.
 
 ### src/mcp/admin-tools.ts
 - `runPredictBaserateTool`: J3 reference-class / planning-fallacy detector. Reads from the E2 predictions table; returns text-only response matching the existing MCP tool convention (no structured JSON over the wire). Direct call to computePredictionBaserate; helper opens its own db + emits audit (single source of truth, no caller-site drift).
@@ -613,7 +624,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 ### src/multihop.ts
 - `multihopSearch`: T2 note: PLAIN stable score sort on purpose -- pass1/pass2 inputs are deterministically ordered (search() carries the content tail), stability inherits that, and ties keep pass-1 results ahead of pass-2 follow-ups.
 
-### src/owner-validation.ts
+### src/cli/owner-validation.ts
 - `module header`: --owner format validation (B2 v1.12.6).
 - `module header`: with id ∈ `[A-Za-z0-9_-]+`. Pre-v1.12.6 any string was accepted, leaving the documented contract unenforced.
 - `module header`: to reject + exit. Strict mode will become the default once A5 v2 lands (see `TODOS.md` A3 follow-ups for the migration path).
@@ -639,7 +650,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `computePlanningFallacyOutput`: Telemetry: forward-claim detected, ≥2 classes tied at best overlap. v1.13.4: now ALSO returns a watching variant so the caller surface can render a "watching but no baserate (tiebreak)" line. Audit emission unchanged (the audit channel is the telemetry-grade source of truth).
 - `computePlanningFallacyOutput`: Telemetry: forward-claim detected, no class scored ≥ 1. This is the channel that drives the embedding-fallback decision for J3.3 — high volume here = regex+token-overlap is missing legitimate forward-claims that have NO obvious class signal. v1.13.4: now ALSO returns a watching variant so the caller surface can render a "watching but no baserate (no class match)" line.
 
-### src/predictions/store.ts
+### src/store/predictions.ts
 - `module header`: E2 prediction first-class object (v0.31 / docs/plans/2026-05-26-e2-prediction-object.md).
 - `module header`: J3 (reference-class / planning-fallacy detector) reads from `loadPredictionsByClass` to compute per-class base rates from (estimate_value, actual_value) at query time. J3 is a follow-up episode; this module ships the data layer.
 - `savePrediction`: the predictions table is the canonical structured store used by J3.
@@ -687,7 +698,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `passesScopeFilterForRecall`: @internal v1.7.2 — exported for test parity with `RECALL_DEFAULT_DENY_SCOPES` (single-source-of-truth verification).
 - `passesCliRecallScopeFilter`: v1.25.0 — the CLI `--scope` variant of the recall filter (JS half of the SQL 'default-deny-or-exact' mode in loadSearchRows).
 - `assertScopeRequestAllowed`: Authorize an explicitly requested scope before any read honours it (ROADMAP Part VIII EI2: member scope grants).
-- `PERSONAL_SCOPE_PREFIX`: E10 (2026-10-06), personal memories. A personal row has the scope `personal:private:<owner>`, and the server stamps it when a write sends `personal: true`. The owner comes only from `actor.owner`, the person behind a sign-in or a key they minted, never from the subject, because subjects such as `localhost:cli` or `api_key:<id>` are not people. A caller with no owner can neither write nor read personal rows, and a client-sent `personal:` scope is a 400. `canReadScope` decides a personal scope before role and grants, so an admin key cannot read another person's personal rows, and a grant or a sign-in provider's scope list naming one opens nothing. A by-id write on someone else's personal row answers 404, as a missing id does. Reject and conflict-resolve sweeps skip other people's personal rows, and rejecting a personal row by id is a 400, so no tenant-wide tombstone is made from personal text. Reject by value still writes a tenant-wide tombstone, since tombstones are tenant policy. Rate limits sit beside this: each person gets a bucket keyed on the tenant and `ownerOrSubject`, each client address keeps its own bucket plus a scrypt bucket that only a key check about to run scrypt draws from (an IPv6 address shares its /64's), so junk and a proved key's re-check after its cache entry lapses never drain it, and every 429 carries `Retry-After`. The buckets live in memory and reset on restart.
+- `PERSONAL_SCOPE_PREFIX`: E10 (2026-10-06), personal memories. A personal row has the scope `personal:private:<owner>`, and the server stamps it when a write sends `personal: true`. The owner comes only from `actor.owner`, the person behind a sign-in or a key they minted, never from the subject, because subjects such as `localhost:cli` or `api_key:<id>` are not people. A caller with no owner can neither write nor read personal rows, and a client-sent `personal:` scope is a 400. `canReadScope` decides a personal scope before role and grants, so an admin key cannot read another person's personal rows, and a grant or a sign-in provider's scope list naming one opens nothing. A by-id write on someone else's personal row answers 404, as a missing id does. Reject and conflict-resolve sweeps skip other people's personal rows, and rejecting a personal row by id is a 400, so no tenant-wide tombstone is made from personal text. Reject by value still writes a tenant-wide tombstone, since tombstones are tenant policy. Rate limits sit beside this: each person gets a bucket keyed on the tenant and `ownerOrSubject`, each client address keeps its own bucket plus a scrypt bucket that only a key check about to run scrypt draws from (an IPv6 address shares its /64's), so junk and a key whose secret this process has already proved never drain it, and every 429 carries `Retry-After`. Two more bounds sit on that scrypt work (`src/server/key-check-bounds.ts`): one address starts five derivations for one key id and then one more every 12 seconds, and two derivations run at once on the thread pool with eight waiting, past which a key check answers 429 without deriving. A key's row is read from the store on every request, so a revoke, expiry, role or scope change by any process applies on the next one; only "this secret matched this stored hash" is remembered. The buckets live in memory and reset on restart.
 
 ### src/recall-trace.ts
 - `module header`: LC1 — retrieval-trace persistence (docs/plans/2026-08-02-lc1-recall-trace-persistence.md).
@@ -728,17 +739,16 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `module header`: This is deliberately a thin slice of the A4 lifecycle-compliance item (no PII detection).
 - `redactSecrets`: e.g. the CS1 pre-compact snapshot fields — can scrub it in place instead.
 
-### src/server.ts
+### src/server/auth.ts
+- `buildContextWithAuth`: v1.12.0: loopback fallback is process-local, treat as admin.
+
+### src/server/boot.ts
 - `handleRequest`: v1.6.4: pre-decode raw-URL slash check.
 - `assertNoLiveServer`: H3: refuse to start if a live hippo server already serves this hippoRoot.
 - `bootRateLimiter`: E3: per-IP rate limiter for /v1/* and /mcp*.
-- `dispatchPublicJson`: E4 (2026-10-06): the `publicJson` seam sits beside the add-on route seam (`dispatchAddonRoute`) so hippo-enterprise can serve its connect info with no key; it is a dispatcher, not an inline `if (method === ...)` line, so the bearer-lockdown parser still counts every route, and it has no add-on collision check because add-ons are POST only (E4 plan review r1, finding 5).
 - `replyWithFailure`: M3: readBody hit the 1 MB cap mid-stream, so drop the socket rather than drain unbounded bytes.
 - `serve`: Refuses non-loopback hosts at boot (Footgun #3 from the A1 plan) unless HIPPO_REQUIRE_AUTH=1 is set. The A5 v2 auth middleware (buildContextWithAuth / requireAuth) has shipped and every route checks it
 - `serve.stop`: an unconditional unlink here would orphan it. (v0.37.0 server-hardening.)
-
-### src/server/auth.ts
-- `buildContextWithAuth`: v1.12.0: loopback fallback is process-local, treat as admin.
 
 ### src/server/client-ip.ts
 - `enforceRateLimit`: E3: per-IP rate limit on /v1/* and /mcp* to bound api-key-id enumeration.
@@ -747,6 +757,9 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `section header`: ── MCP-over-HTTP/SSE transport (Task 11) ──
 - `handleMcpPost`: v1.12.0: McpContext.actor stays string; extract subject at the boundary.
 - `handleMcpStream`: v0.39 SSE hardening:
+
+### src/server/route-table.ts
+- `dispatchPublicJson`: E4 (2026-10-06): the `publicJson` seam sits beside the add-on route seam (`dispatchAddonRoute`) so hippo-enterprise can serve its connect info with no key; it is a dispatcher, not an inline `if (method === ...)` line, so the bearer-lockdown parser still counts every route, and it has no add-on collision check because add-ons are POST only (E4 plan review r1, finding 5).
 
 ### src/server/routes/admin.ts
 - `handleCreateAuthKey`: POST /v1/auth/keys — mint a new API key. Plaintext lands in the response body (Task 8)
@@ -891,6 +904,8 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `RecallScopeFilter`: @internal v1.7.2 — internal SQL-builder shape; not on the public API surface (not re-exported from `src/index.ts`). Subject to change.
 - `loadSearchRows`: `_forceLikePathForTests(true)` forces the LIKE-fallback path here only; nothing in the environment can switch it. Read at the read-call site so writes (`syncFtsRow`, `deleteFtsRow`, `raw-archive.ts::archiveRaw`) keep using `isFtsAvailable` and never skip FTS index sync. Lets tests exercise the LIKE branch without poisoning the on-disk FTS state.
 - `searchPredicates`: v1.12.6 — belt-and-suspenders against `kind='archived'` leaking into recall. `kind='archived'` is a transient sentinel inside `archiveRawMemory`'s SAVEPOINT (src/raw-archive.ts:56): UPDATE kind = 'archived' immediately followed by DELETE, both inside one savepoint that commits or rolls back atomically. SQLite atomicity guarantees no concurrent reader sees the intermediate state. This filter is defensive-only against: (a) future bugs that drop the SAVEPOINT, (b) future bugs that introduce kind='archived' as a persisted state, (c) external direct-SQL writes that bypass archiveRawMemory. tenantOnlyPredicate starts with " WHERE tenant_id = ?" when tenant is set; when unset, we have no WHERE yet, so the archived clause needs both AND and WHERE forms. The "tenant-only" path always has WHERE (from tenant or we synthesize one).
+- `selectLikeCandidates`: tests the newest `LIKE_WINDOW_ROWS` (2,000) admitted rows, never the whole store. The window is read newest first by `created` through `idx_memories_tenant_created` when a tenant is given and by rowid when none is, with tenant, archived, scope and superseded filters inside it so another tenant's rows cannot fill it. A store at or under the window returns exactly what the unbounded statement did. Measured at 10,000 rows, two terms, no match: 8.6 ms and every tenant row tested before, 1.5 ms and 2,000 rows after; an FTS5 hit on a common term costs 14 ms on the same store. A part-word match older than the window is missed; an FTS5 trigram index would cover the whole store and is a schema change.
+- `loadVectorCandidateEntries`: async so the scan in `topVectorMatches` (src/db/vector-store.ts) can hand the event loop back every 256 rows. One cursor stays open across those pauses: under WAL a reader blocks no writer, and the scan ranks one snapshot. A keyset read per chunk was measured and rejected, because the plan drives from `memories` and each chunk then sorts the whole tenant (10x slower at 250-row chunks). Measured at 10,000 vectors: longest block 35 ms before and 2 ms after at 384 dims, 90 ms and 4 ms at 1,536 dims, total time unchanged. Each row's bytes are copied into one reused Float32Array instead of a view per row.
 - `selectFtsCandidates`: F1 (v1.7.0): MEMORY_SEARCH_COLUMNS adds bm25_score as the trailing result column. Every other column is m.<col> AS <col> so rowToEntry sees the same shape it always has.
 - `loadRecallSearchEntries`: Consumers: `api.recall` (v1.7.1+), `cmdRecall`/`cmdExplain` direct CLI paths and `searchBothHybrid` recall mode (v1.25.0).
 - `loadRecallSearchEntries`: `tenantId` widened to optional in v1.25.0 for the searchBothHybrid recall mode (its `tenantId` option is optional); `loadSearchRows` already treats undefined as "no tenant filter" for legacy callers.

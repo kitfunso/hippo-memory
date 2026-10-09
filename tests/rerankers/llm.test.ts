@@ -3,7 +3,7 @@ import * as http from 'node:http';
 import { boundPort } from '../_helpers/listen.js';
 import { createLlmReranker, llmReranker } from '../../src/rerankers/llm.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import type { SearchResult } from '../../src/search/types.js';
+import type { SearchResult } from '../../src/core/search-types.js';
 
 function asResult(content: string, score: number): SearchResult {
   return { entry: createMemory(content), score, bm25: score, cosine: 0, tokens: 10 };

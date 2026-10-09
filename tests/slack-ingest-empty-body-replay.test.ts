@@ -31,7 +31,7 @@ function ctx(hippoRoot: string) {
 
 const channel: ChannelMeta = { id: 'C01', is_private: false };
 
-describe('ingestMessage empty-body replay status consistency (B3 v1.12.6)', () => {
+describe('ingestMessage empty-body replay status consistency', () => {
   let root: string;
 
   beforeEach(() => {

@@ -11,7 +11,7 @@ import { pushGoal } from '../../src/goals.js';
 import { openHippoDb, closeHippoDb } from '../../src/db.js';
 import { appendSessionEvent, saveActiveTaskSnapshot } from '../../src/store/sessions.js';
 import { saveSessionHandoff } from '../../src/store/handoffs.js';
-import { closePrediction, savePrediction } from '../../src/predictions/store.js';
+import { closePrediction, savePrediction } from '../../src/store/predictions.js';
 import type { RecallResult } from '../../src/api.js';
 
 export const FAKE_NOW = '2026-02-01T00:00:00.000Z';
@@ -185,4 +185,18 @@ export function rowsOf(root: string) {
 export function statsMirror(root: string): string | null {
   const file = join(root, 'stats.json');
   return existsSync(file) ? readFileSync(file, 'utf8') : null;
+}
+
+/** One recall over HTTP (GET /v1/memories) or MCP (hippo_recall) against a running server; MCP names `project` in a header. */
+export async function sendRecall(url: string, via: 'http' | 'mcp', args: Readonly<Record<string, string | number | boolean>>, project: string): Promise<{ status: number; body: unknown }> {
+  if (via === 'http') {
+    const params = new URLSearchParams();
+    for (const [k, v] of Object.entries(args)) params.set(k === 'query' ? 'q' : k, String(v));
+    const res = await fetch(`${url}/v1/memories?${params.toString()}`);
+    return { status: res.status, body: await res.json() };
+  }
+  const rpc = { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: args } };
+  const headers = { 'content-type': 'application/json', 'x-hippo-project': project };
+  const res = await fetch(`${url}/mcp`, { method: 'POST', headers, body: JSON.stringify(rpc) });
+  return { status: res.status, body: await res.json() };
 }

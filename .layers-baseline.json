@@ -1,62 +1,6 @@
 {
-  "runtime": 7,
-  "typeOnly": 4,
-  "rootFiles": 136,
-  "edges": [
-    {
-      "from": "api/auth.ts",
-      "to": "dashboard-snapshot.ts",
-      "kind": "runtime"
-    },
-    {
-      "from": "api/context.ts",
-      "to": "session-digest.ts",
-      "kind": "runtime"
-    },
-    {
-      "from": "config.ts",
-      "to": "search/types.ts",
-      "kind": "runtime"
-    },
-    {
-      "from": "failure-log.ts",
-      "to": "capture/failure-reading.ts",
-      "kind": "typeOnly"
-    },
-    {
-      "from": "goals.ts",
-      "to": "search/types.ts",
-      "kind": "typeOnly"
-    },
-    {
-      "from": "hooks/copilot.ts",
-      "to": "cli/hook-blocks.ts",
-      "kind": "runtime"
-    },
-    {
-      "from": "http-util.ts",
-      "to": "db/sqlite-blocked.ts",
-      "kind": "runtime"
-    },
-    {
-      "from": "memory.ts",
-      "to": "agent-memories/tools.ts",
-      "kind": "runtime"
-    },
-    {
-      "from": "recall-trace.ts",
-      "to": "search/types.ts",
-      "kind": "typeOnly"
-    },
-    {
-      "from": "store/port.ts",
-      "to": "predictions/planning-fallacy.ts",
-      "kind": "typeOnly"
-    },
-    {
-      "from": "store/sqlite/store.ts",
-      "to": "predictions/planning-fallacy.ts",
-      "kind": "runtime"
-    }
-  ]
+  "runtime": 0,
+  "typeOnly": 0,
+  "rootFiles": 117,
+  "edges": []
 }

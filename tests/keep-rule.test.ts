@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { AGENT_MEMORY_TOOLS, toolSourcePrefix } from '../src/agent-memories/tools.js';
+import { AGENT_MEMORY_TOOLS, toolSourcePrefix } from '../src/core/agent-memory-tools.js';
 import {
   AUTO_DELETABLE_SQL, COMPACTION_MEMORY_TAG, COMPACTION_SOURCE_PREFIX, KEEP_PAIRS, canAutoDelete, type MemoryEntry
 } from '../src/memory.js';

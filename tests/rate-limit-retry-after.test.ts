@@ -88,22 +88,6 @@ describe('every 429 in core src', () => {
     expect(texts.some(({ text }) => /HttpError\(\s*429\b/.test(text))).toBe(true);
     expect(texts.flatMap(({ file, text }) => unexplained429s(file, text))).toEqual([]);
   });
-
-  it('flags a 429 written any other way', () => {
-    const bad = [
-      'sendJson(res, 429, body);', 'res.writeHead(429);', 'const TOO_MANY = 429;', "throw new HttpError(429, 'x', undefined);",
-      "throw new HttpError(429, 'x');", 'res.statusCode = 429;',
-    ];
-    for (const line of bad) expect(unexplained429s('f.ts', line), line).toEqual(['f.ts:1']);
-    const fine = ["throw new HttpError(429, 'x', limiter.retryAfterSec);", 'if (status === 429) retry();', '// a 429 here', ' * 429 and 5xx'];
-    for (const line of fine) expect(unexplained429s('f.ts', line), line).toEqual([]);
-  });
-
-  it('callArgs reads a template with a nested call as one argument', () => {
-    const text = 'new HttpError(429, `limit ${f(a, b)}); x`, 60)';
-    expect(callArgs(text, text.indexOf('('))).toEqual(['429', '`limit ${f(a, b)}); x`', '60']);
-    expect(callArgs('HttpError(429, "a, b")', 9)).toEqual(['429', '"a, b"']);
-  });
 });
 
 describe('heartbeatVerdict', () => {

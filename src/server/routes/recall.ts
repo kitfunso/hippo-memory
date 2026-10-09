@@ -38,8 +38,7 @@ export async function handleRecallMemories({ req, res, opts, query }: RouteReque
   const ring = sessionRing('http', ctx.tenantId, sessionId);
   if (ring) noteRecall(ring, q, result.results[0]?.id ?? null, result.anchoringHint?.memoryId);
 
-  // Each recall surface counts its own hits; api.recall is no chokepoint,
-  // since the CLI never calls it and MCP shows the user a different band.
+  // HTTP counts the rows it returns here; `retrieve` cannot count for every ranker, since MCP shows a different band and counts none.
   await storeFor(ctx).bumpRecallStats(result.results.length);
 
   // Continuity payloads should never be cached. The caller is asking for
@@ -82,7 +81,7 @@ export async function handleAssembleSession({ req, res, opts, query }: RouteRequ
   if (freshTailCount !== undefined) assembleExtra.freshTailCount = freshTailCount;
   if (summarizeOlder !== undefined) assembleExtra.summarizeOlder = summarizeOlder;
   if (scope !== undefined) assembleExtra.scope = scope;
-  const result = assemble(ctx, assembleMatch.id!, { ...assembleExtra, cost: assembleCost(assembleMatch.id!) });
+  const result = await assemble(ctx, assembleMatch.id!, { ...assembleExtra, cost: assembleCost(assembleMatch.id!) });
   await recordTokens(ctx, 'http_assemble', { items: result.items.length, tokens: result.tokens, sessionId: assembleMatch.id! });
   sendJson(res, 200, result);
   return;
@@ -122,7 +121,7 @@ export async function handleDrillRecall({ req, res, opts, query }: RouteRequest,
   if (limit !== undefined) drillExtra.limit = limit;
   if (budget !== undefined) drillExtra.budget = budget;
   if (depth !== undefined) drillExtra.depth = depth;
-  const result = drillDown(ctx, drillMatch.id!, { ...drillExtra, cost: drillCost });
+  const result = await drillDown(ctx, drillMatch.id!, { ...drillExtra, cost: drillCost });
   if ('failure' in result) {
     // Leaf id maps to 422 (caller-actionable). Other cases stay
     // as 404 to avoid leaking cross-tenant existence or scope grants.

@@ -81,66 +81,64 @@ export function collectSessionTurns(jsonl: string, visit?: (record: TranscriptRe
     if (!isObjectLike(entry) || !('type' in entry)) continue;
     visit?.(entry);
 
-    const copilot = copilotTurn(entry);
-    if (copilot !== null) {
-      turns.push(copilot);
-      continue;
-    }
-
-    if (entry.type === 'user' || entry.type === 'assistant') {
-      const message = 'message' in entry && isObjectLike(entry.message) ? entry.message : undefined;
-      if (!message) continue;
-      const content = 'content' in message ? message.content : undefined;
-
-      if (entry.type === 'user') {
-        const text = humanUserText(entry, message);
-        if (text) turns.push({ role: 'user', text });
-      } else if (Array.isArray(content)) {
-        // Keep assistant text blocks; drop thinking + tool_use
-        const chunks: string[] = [];
-        for (const block of content) {
-          if (isObjectLike(block)) {
-            const blockText = 'type' in block && block.type === 'text' && 'text' in block ? block.text : undefined;
-            if (isStringValue(blockText) && blockText.trim()) {
-              chunks.push(blockText.trim());
-            }
-          }
-        }
-        if (chunks.length > 0) {
-          turns.push({ role: 'assistant', text: chunks.join('\n') });
-        }
-      }
-      continue;
-    }
-
-    // Codex rollout transcript shape: response_item -> payload.message
-    if (entry.type === 'response_item') {
-      const payload = 'payload' in entry && isObjectLike(entry.payload) ? entry.payload : undefined;
-      if (!payload || !('type' in payload) || payload.type !== 'message') continue;
-      const role = 'role' in payload ? payload.role : undefined;
-      const content = 'content' in payload ? payload.content : undefined;
-      if (!Array.isArray(content)) continue;
-
-      const chunks: string[] = [];
-      for (const block of content) {
-        if (!isObjectLike(block)) continue;
-        const blockType = 'type' in block ? block.type : undefined;
-        const blockText = 'text' in block ? block.text : undefined;
-        if (role === 'user' && blockType === 'input_text' && isStringValue(blockText) && blockText.trim()) {
-          chunks.push(blockText.trim());
-        }
-        if (role === 'assistant' && blockType === 'output_text' && isStringValue(blockText) && blockText.trim()) {
-          chunks.push(blockText.trim());
-        }
-      }
-
-      if (chunks.length === 0) continue;
-      if (role === 'user') turns.push({ role: 'user', text: chunks.join('\n') });
-      if (role === 'assistant') turns.push({ role: 'assistant', text: chunks.join('\n') });
-    }
+    const turn = copilotTurn(entry) ?? claudeCodeTurn(entry) ?? codexTurn(entry);
+    if (turn !== null) turns.push(turn);
   }
 
   return turns;
+}
+
+/** The turn a Claude Code `user` or `assistant` line carries; null for any other line or one with no human or reply text. */
+function claudeCodeTurn(entry: TranscriptRecord): SessionTurn | null {
+  if (entry.type !== 'user' && entry.type !== 'assistant') return null;
+  const message = 'message' in entry && isObjectLike(entry.message) ? entry.message : undefined;
+  if (!message) return null;
+  const content = 'content' in message ? message.content : undefined;
+
+  if (entry.type === 'user') {
+    const text = humanUserText(entry, message);
+    return text ? { role: 'user', text } : null;
+  }
+  if (!Array.isArray(content)) return null;
+  // Keep assistant text blocks; drop thinking + tool_use
+  const chunks: string[] = [];
+  for (const block of content) {
+    if (isObjectLike(block)) {
+      const blockText = 'type' in block && block.type === 'text' && 'text' in block ? block.text : undefined;
+      if (isStringValue(blockText) && blockText.trim()) {
+        chunks.push(blockText.trim());
+      }
+    }
+  }
+  return chunks.length > 0 ? { role: 'assistant', text: chunks.join('\n') } : null;
+}
+
+// Codex rollout transcript shape: response_item -> payload.message
+function codexTurn(entry: TranscriptRecord): SessionTurn | null {
+  if (entry.type !== 'response_item') return null;
+  const payload = 'payload' in entry && isObjectLike(entry.payload) ? entry.payload : undefined;
+  if (!payload || !('type' in payload) || payload.type !== 'message') return null;
+  const role = 'role' in payload ? payload.role : undefined;
+  const content = 'content' in payload ? payload.content : undefined;
+  if (!Array.isArray(content)) return null;
+
+  const chunks: string[] = [];
+  for (const block of content) {
+    if (!isObjectLike(block)) continue;
+    const blockType = 'type' in block ? block.type : undefined;
+    const blockText = 'text' in block ? block.text : undefined;
+    if (role === 'user' && blockType === 'input_text' && isStringValue(blockText) && blockText.trim()) {
+      chunks.push(blockText.trim());
+    }
+    if (role === 'assistant' && blockType === 'output_text' && isStringValue(blockText) && blockText.trim()) {
+      chunks.push(blockText.trim());
+    }
+  }
+
+  if (chunks.length === 0) return null;
+  if (role === 'user') return { role: 'user', text: chunks.join('\n') };
+  if (role === 'assistant') return { role: 'assistant', text: chunks.join('\n') };
+  return null;
 }
 
 export function summariseTranscript(jsonl: string): string {

@@ -7,8 +7,9 @@ import * as path from 'path';
 import { type PhysicsConfig, DEFAULT_PHYSICS_CONFIG, mergePhysicsConfig } from './physics-config.js';
 import { DEFAULT_HALF_LIFE_DAYS } from './memory.js';
 import type { PromptRecallMetric } from './prompt-recall.js';
-import { DEFAULT_LOCAL_BUMP, DEFAULT_RECALL_BUDGET } from './search/types.js';
-import { log } from './log.js';
+import { DEFAULT_LOCAL_BUMP, DEFAULT_RECALL_BUDGET } from './core/search-types.js';
+import { errorMessage, log } from './log.js';
+import { isJsonObject } from './json.js';
 
 export type DecayBasis = 'clock' | 'session' | 'adaptive';
 
@@ -256,34 +257,10 @@ const DEFAULT_CONFIG: HippoConfig = {
   sharedStore: false,
 };
 
-function isMemoryValueConfig(
-  value: HippoConfig['memoryValue'] | undefined,
-): value is HippoConfig['memoryValue'] {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function isDormantConfig(
-  value: HippoConfig['dormant'] | undefined,
-): value is HippoConfig['dormant'] {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function isChurnStalenessConfig(
-  value: HippoConfig['churnStaleness'] | undefined,
-): value is HippoConfig['churnStaleness'] {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function isDeliveryLedgerConfig(
-  value: HippoConfig['deliveryLedger'] | undefined,
-): value is HippoConfig['deliveryLedger'] {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
 // Only `{"enabled": true}` turns it on; anything malformed warns and stays off.
 function deliveryLedgerEnabled(value: HippoConfig['deliveryLedger'] | undefined): boolean {
   if (value === undefined) return false;
-  const isObject = isDeliveryLedgerConfig(value);
+  const isObject = isJsonObject(value);
   const enabled = isObject ? value.enabled : undefined;
   if (enabled === true || enabled === false) return enabled;
   if (isObject && enabled === undefined) return false;
@@ -333,14 +310,14 @@ function memoryValueOverride(raw: Partial<HippoConfig>): Partial<HippoConfig['me
   // Spreading a non-object raw.memoryValue (e.g. {"memoryValue": true}) silently leaves `enabled` false;
   // this feature must never be silently off, so warn loudly and fall back to defaults instead.
   const memoryValueRaw = raw.memoryValue;
-  const validMemoryValueConfig = memoryValueRaw === undefined || isMemoryValueConfig(memoryValueRaw);
+  const validMemoryValueConfig = memoryValueRaw === undefined || isJsonObject(memoryValueRaw);
   if (!validMemoryValueConfig) {
     log.warn(
       `config.json's "memoryValue" must be an object like {"enabled": true} ` +
       `(got ${JSON.stringify(memoryValueRaw)}) - using defaults.`,
     );
   }
-  return memoryValueRaw !== undefined && isMemoryValueConfig(memoryValueRaw) ? memoryValueRaw : {};
+  return memoryValueRaw !== undefined && isJsonObject(memoryValueRaw) ? memoryValueRaw : {};
 }
 
 function dormantSettings(raw: Partial<HippoConfig>): HippoConfig['dormant'] {
@@ -348,14 +325,14 @@ function dormantSettings(raw: Partial<HippoConfig>): HippoConfig['dormant'] {
   // changes what sleep does. Anything but a real object / boolean / number
   // warns and falls back to the default, which keeps faded memories.
   const dormantRaw = raw.dormant;
-  if (dormantRaw !== undefined && !isDormantConfig(dormantRaw)) {
+  if (dormantRaw !== undefined && !isJsonObject(dormantRaw)) {
     log.warn(
       `config.json's "dormant" must be an object like {"enabled": false} ` +
       `(got ${JSON.stringify(dormantRaw)}) - using the default (faded memories kept dormant).`,
     );
   }
   const dormantOverride: Partial<HippoConfig['dormant']> =
-    dormantRaw !== undefined && isDormantConfig(dormantRaw) ? dormantRaw : {};
+    dormantRaw !== undefined && isJsonObject(dormantRaw) ? dormantRaw : {};
   // Only a real boolean counts: {"enabled": "false"} is a truthy string.
   let dormantEnabled = dormantOverride.enabled ?? DEFAULT_CONFIG.dormant.enabled;
   if (dormantEnabled !== true && dormantEnabled !== false) {
@@ -379,7 +356,7 @@ function dormantSettings(raw: Partial<HippoConfig>): HippoConfig['dormant'] {
 function churnStalenessEnabled(raw: Partial<HippoConfig>): boolean {
   // Same "never silently wrong" rule as memoryValue/dormant above.
   const churnStalenessRaw = raw.churnStaleness;
-  const validChurnStalenessConfig = churnStalenessRaw === undefined || isChurnStalenessConfig(churnStalenessRaw);
+  const validChurnStalenessConfig = churnStalenessRaw === undefined || isJsonObject(churnStalenessRaw);
   if (!validChurnStalenessConfig) {
     log.warn(
       `config.json's "churnStaleness" must be an object like {"enabled": true} ` +
@@ -387,7 +364,7 @@ function churnStalenessEnabled(raw: Partial<HippoConfig>): boolean {
     );
   }
   const enabled =
-    churnStalenessRaw !== undefined && isChurnStalenessConfig(churnStalenessRaw)
+    churnStalenessRaw !== undefined && isJsonObject(churnStalenessRaw)
       ? churnStalenessRaw.enabled
       : DEFAULT_CONFIG.churnStaleness.enabled;
   if (enabled !== true && enabled !== false) {
@@ -422,8 +399,35 @@ function sharedStoreFlag(raw: Partial<HippoConfig>): boolean {
 }
 
 export function loadConfig(hippoRoot: string): HippoConfig {
+  // A caller that names no folder, as an add-on serving another store does, gets the defaults, never the working folder's config.json.
+  if (hippoRoot === '') return { ...DEFAULT_CONFIG };
   const configPath = path.join(hippoRoot, 'config.json');
-  if (!fs.existsSync(configPath)) return { ...DEFAULT_CONFIG };
+  const key = path.resolve(configPath);
+  const stamp = fileStamp(configPath);
+  const hit = parsedConfigs.get(key);
+  if (hit !== undefined && hit.stamp === stamp) return { ...hit.config };
+  const config = stamp === null ? DEFAULT_CONFIG : parseConfigFile(configPath);
+  if (parsedConfigs.size >= PARSED_CONFIGS_MAX) parsedConfigs.clear();
+  parsedConfigs.set(key, { stamp, config });
+  return { ...config };
+}
+
+const PARSED_CONFIGS_MAX = 64;
+// Each path's parsed config with the stamp of the file it came from, so an unchanged file costs one stat and no parse.
+const parsedConfigs = new Map<string, { stamp: string | null; config: HippoConfig }>();
+
+/** A file's mtime and size, which an edit changes; null when it is missing or cannot be reached, as existsSync answers false. */
+function fileStamp(file: string): string | null {
+  try {
+    const stat = fs.statSync(file, { throwIfNoEntry: false });
+    return stat === undefined ? null : `${stat.mtimeMs}:${stat.size}`;
+  } catch (err) {
+    log.debug(`config: ${file} could not be reached, read as missing: ${errorMessage(err)}`);
+    return null;
+  }
+}
+
+function parseConfigFile(configPath: string): HippoConfig {
   try {
     const raw: Partial<HippoConfig> = JSON.parse(fs.readFileSync(configPath, 'utf8'));
     const basis = raw.decayBasis;
@@ -471,13 +475,15 @@ export function loadConfig(hippoRoot: string): HippoConfig {
     };
   } catch (err) {
     if (fs.existsSync(configPath)) {
-      log.warn(`failed to parse ${configPath}: ${err instanceof Error ? err.message : err}`);
+      log.warn(`failed to parse ${configPath}: ${errorMessage(err)}`);
     }
     return { ...DEFAULT_CONFIG };
   }
 }
 
 const sharedStoreRoots = new Set<string>();
+// The stamp of each config.json last read as not shared: an unchanged file is not parsed again.
+const notSharedStamps = new Map<string, string>();
 
 /** The folder as isGlobalStoreRoot compares it (realpath, case-folded on Windows); its helper sits behind an import cycle. */
 function sharedStoreKey(hippoRoot: string): string {
@@ -485,27 +491,32 @@ function sharedStoreKey(hippoRoot: string): string {
   try {
     real = fs.realpathSync.native(hippoRoot);
   } catch (err) {
-    log.debug(`sharedStore: realpath fell back to resolve for ${hippoRoot}: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`sharedStore: realpath fell back to resolve for ${hippoRoot}: ${errorMessage(err)}`);
     real = path.resolve(hippoRoot);
   }
   return process.platform === 'win32' ? real.toLowerCase() : real;
 }
 
 /** True when the store's config.json sets `"sharedStore": true`. Once true, a root stays true for this process,
- *  so a broken edit while a server runs cannot turn it off. Reads only this key: loadConfig has no cache. */
+ *  so a broken edit while a server runs cannot turn it off. Reads only this key, so loadConfig's warnings stay loadConfig's. */
 export function isSharedStore(hippoRoot: string): boolean {
   const key = sharedStoreKey(hippoRoot);
   if (sharedStoreRoots.has(key)) return true;
   const configPath = path.join(path.resolve(hippoRoot), 'config.json');
-  if (!fs.existsSync(configPath)) return false;
+  const stamp = fileStamp(configPath);
+  if (stamp === null || notSharedStamps.get(configPath) === stamp) return false;
   let raw: Partial<HippoConfig> | null;
   try {
     raw = JSON.parse(fs.readFileSync(configPath, 'utf8'));
   } catch (err) {
-    log.warn(`failed to read ${configPath}: ${err instanceof Error ? err.message : err} - sharedStore read as false.`);
+    log.warn(`failed to read ${configPath}: ${errorMessage(err)} - sharedStore read as false.`);
     return false;
   }
-  if (raw?.sharedStore !== true) return false;
+  if (raw?.sharedStore !== true) {
+    if (notSharedStamps.size >= PARSED_CONFIGS_MAX) notSharedStamps.clear();
+    notSharedStamps.set(configPath, stamp);
+    return false;
+  }
   sharedStoreRoots.add(key);
   return true;
 }
@@ -518,4 +529,5 @@ export function markSharedStore(hippoRoot: string): void {
 /** Test seam: forget every root seen as shared. */
 export function _resetSharedStoreCacheForTests(): void {
   sharedStoreRoots.clear();
+  notSharedStamps.clear();
 }

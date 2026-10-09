@@ -8,15 +8,16 @@
  * free so it can be imported in-process.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { createHmac } from 'node:crypto';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { writeToDlq } from '../src/connectors/github/dlq.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { parkInDlq, listDlq } from '../src/connectors/dlq.js';
+import { githubDlq } from '../src/connectors/github/dlq.js';
 import { cmdGithubBackfill } from '../src/connectors/github/cli-impl.js';
 import type {
   GitHubFetcher,
@@ -177,18 +178,13 @@ describe('hippo github CLI', () => {
   });
 
   it('dlq list with rows prints bucket and tenant', () => {
-    const db = openHippoDb(hippoRoot);
-    try {
-      writeToDlq(db, {
-        tenantId: 'default',
-        rawPayload: '{"x":1}',
-        error: 'bad envelope',
-        bucket: 'unhandled',
-        eventName: 'issues',
-      });
-    } finally {
-      closeHippoDb(db);
-    }
+    parkInDlq(githubDlq, hippoRoot, {
+      tenantId: 'default',
+      rawPayload: '{"x":1}',
+      error: 'bad envelope',
+      bucket: 'unhandled',
+      eventName: 'issues',
+    });
     const r = runCli(root, ['github', 'dlq', 'list']);
     expect(r.status).toBe(0);
     expect(r.stdout).toMatch(/unhandled/);
@@ -200,5 +196,160 @@ describe('hippo github CLI', () => {
     const r = runCli(root, ['github', 'dlq', 'replay', '99999']);
     expect(r.status).toBe(1);
     expect(r.stderr).toMatch(/not[_ ]found|not found/i);
+  });
+
+  const SECRET = 'github-webhook-secret';
+  const REPOSITORY = { full_name: 'acme/repo', private: false, owner: { login: 'acme' }, name: 'repo' };
+  const issueOpenedBody = JSON.stringify({
+    action: 'opened',
+    issue: { number: 42, title: 'Bug', body: 'broken', user: { login: 'alice', id: 1 } },
+    repository: REPOSITORY,
+    sender: { login: 'alice', id: 1 },
+    installation: { id: 99 },
+  });
+  const COMMENT_EVENTS = [
+    ['issue_comment', { issue: { number: 42 } }, 'github://acme/repo/issue/42/comment/999'],
+    ['pull_request_review_comment', { pull_request: { number: 7 } }, 'github://acme/repo/pull/7/review_comment/999'],
+  ] as const;
+
+  function commentBody(parent: (typeof COMMENT_EVENTS)[number][1], action: 'created' | 'deleted'): string {
+    return JSON.stringify({
+      action,
+      ...parent,
+      comment: { id: 999, body: 'I can repro', user: { login: 'bob', id: 2 } },
+      repository: REPOSITORY,
+      sender: { login: 'bob', id: 2 },
+      installation: { id: 99 },
+    });
+  }
+
+  /** Parks one signed delivery with every column the webhook route writes, and returns the row id. */
+  function parkDelivery(eventName: string, body: string, secret: string = SECRET): number {
+    return parkInDlq(githubDlq, hippoRoot, {
+      tenantId: 'default',
+      rawPayload: body,
+      error: 'unroutable: installation_id=99 repo=acme/repo',
+      bucket: 'unroutable',
+      eventName,
+      deliveryId: `delivery-${eventName}`,
+      signature: `sha256=${createHmac('sha256', secret).update(body).digest('hex')}`,
+      installationId: '99',
+      repoFullName: 'acme/repo',
+    });
+  }
+
+  const replay = (id: number, ...flags: string[]) =>
+    runCli(root, ['github', 'dlq', 'replay', String(id), ...flags], {
+      GITHUB_WEBHOOK_SECRET: SECRET,
+      GITHUB_WEBHOOK_SECRET_PREVIOUS: '',
+    });
+  const liveRaws = (artifactRef: string) =>
+    loadAllEntries(hippoRoot).filter((e) => e.kind === 'raw' && e.artifact_ref === artifactRef);
+  const retryCountOf = (id: number) =>
+    listDlq(githubDlq, hippoRoot, { tenantId: 'default' }).find((row) => row.id === id)?.retryCount;
+
+  it('dlq replay re-ingests a parked delivery and counts the retry', () => {
+    const id = parkDelivery('issues', issueOpenedBody);
+
+    const r = replay(id);
+
+    expect(r.status).toBe(0);
+    const raws = liveRaws('github://acme/repo/issue/42');
+    expect(raws).toHaveLength(1);
+    expect(r.stdout).toContain(`replay ok: status=replayed memory_id=${raws[0].id} retry_count=1`);
+    expect(retryCountOf(id)).toBe(1);
+  });
+
+  it.each(COMMENT_EVENTS)(
+    'dlq replay of a parked %s deletion archives the comment instead of storing it again',
+    (eventName, parent, artifactRef) => {
+      const created = parkDelivery(eventName, commentBody(parent, 'created'));
+      const deleted = parkDelivery(eventName, commentBody(parent, 'deleted'));
+      expect(replay(created).status).toBe(0);
+      expect(liveRaws(artifactRef)).toHaveLength(1);
+
+      const archived = replay(deleted);
+      expect(archived.status).toBe(0);
+      expect(archived.stdout).toContain('replay ok: status=replayed memory_id=archived retry_count=1');
+      expect(liveRaws(artifactRef)).toHaveLength(0);
+      expect(loadAllEntries(hippoRoot)).toHaveLength(0);
+
+      // A second replay has nothing left to archive and still stores nothing.
+      const again = replay(deleted);
+      expect(again.status).toBe(0);
+      expect(again.stdout).toContain('replay ok: status=replayed memory_id=(none) retry_count=2');
+      expect(loadAllEntries(hippoRoot)).toHaveLength(0);
+    },
+  );
+
+  it('dlq replay stores nothing when the parked body does not match its event header', () => {
+    const id = parkDelivery('issues', commentBody(COMMENT_EVENTS[0][1], 'created'));
+
+    const r = replay(id);
+
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain('replay ok: status=replayed memory_id=(none) retry_count=1');
+    expect(loadAllEntries(hippoRoot)).toHaveLength(0);
+    expect(retryCountOf(id)).toBe(1);
+  });
+
+  it('dlq replay refuses a row signed with another secret, and --force or the previous secret lets it through', () => {
+    const id = parkDelivery('issues', issueOpenedBody, 'the-secret-before-rotation');
+
+    const refused = replay(id);
+    expect(refused.status).toBe(1);
+    expect(refused.stderr).toContain('replay failed: status=sig_fail retry_count=1 reason=signature did not verify');
+    expect(loadAllEntries(hippoRoot)).toHaveLength(0);
+
+    const rotated = runCli(root, ['github', 'dlq', 'replay', String(id)], {
+      GITHUB_WEBHOOK_SECRET: SECRET,
+      GITHUB_WEBHOOK_SECRET_PREVIOUS: 'the-secret-before-rotation',
+    });
+    expect(rotated.status).toBe(0);
+    expect(rotated.stdout).toContain('retry_count=2');
+    expect(liveRaws('github://acme/repo/issue/42')).toHaveLength(1);
+
+    const forced = replay(id, '--force');
+    expect(forced.status).toBe(0);
+    expect(forced.stdout).toContain('retry_count=3');
+    expect(retryCountOf(id)).toBe(3);
+  });
+
+  /** Backfills one page of three issues in-process and returns how many the command reports ingested. */
+  async function ingestedOfThreeIssues(repo: string, max: string | boolean): Promise<number> {
+    const page: GitHubBackfillPage = {
+      items: [1, 2, 3].map((number) => ({
+        number,
+        title: `issue ${number}`,
+        body: 'body text',
+        user: { login: 'alice', id: 1 },
+        updated_at: `2026-01-0${number}T00:00:00Z`,
+      })),
+      next: null,
+      rateLimit: NO_RATE,
+    };
+    const fetcher: GitHubFetcher = async ({ url }) => (url.includes('/issues?') ? page : emptyPage());
+    const printed = vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.stubEnv('GITHUB_TOKEN', 'fake-token');
+    try {
+      await cmdGithubBackfill(hippoRoot, { repo, max }, fetcher);
+      return JSON.parse(String(printed.mock.calls[0][0])).ingested.issues;
+    } finally {
+      vi.unstubAllEnvs();
+      printed.mockRestore();
+    }
+  }
+
+  it.each([
+    ['2', 2],
+    ['2.9', 2],
+    ['0', 3],
+    ['-1', 3],
+    ['many', 3],
+    [true, 3],
+  ] as const)('backfill --max %s ingests %i of three issues', async (max, expected) => {
+    expect(await ingestedOfThreeIssues('acme/widgets', max)).toBe(expected);
+    const stored = loadAllEntries(hippoRoot).filter((e) => e.artifact_ref?.startsWith('github://acme/widgets/issue/'));
+    expect(stored).toHaveLength(expected);
   });
 });

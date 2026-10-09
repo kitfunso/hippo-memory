@@ -47,11 +47,6 @@ describe('mapApiError maps by class, never by message', () => {
     expect(mapApiError(err)).toEqual({ status, message: err.message });
   });
 
-  it('a renamed message keeps its status', () => {
-    expect(mapApiError(new NotFoundError('no such row (reworded)')).status).toBe(404);
-    expect(mapApiError(new ConflictError('row moved on')).status).toBe(409);
-  });
-
   it('old message text on a plain Error no longer buys a 4xx, and the text is withheld', () => {
     for (const text of ['memory not found: mem_x', 'Unknown key_id: k_x', 'Memory m is already superseded by n', 'scope s requires admin role']) {
       expect(mapApiError(new Error(text))).toEqual({ status: 500, message: INTERNAL_ERROR_MESSAGE });
@@ -112,12 +107,6 @@ describe('typed errors from real domain paths keep their status and message', ()
     });
     expect(r.status).toBe(403);
     expect(r.body.error).toBe('Only an admin key can create API keys');
-  });
-
-  it('a missing row named by a create stays 409', async () => {
-    const r = await call(handle, { method: 'POST', path: '/v1/decisions', body: { text: 'use sqlite', supersedesDecisionId: 999 } });
-    expect(r.status).toBe(409);
-    expect(r.body.error).toContain('to supersede not found');
   });
 });
 

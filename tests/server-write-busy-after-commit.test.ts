@@ -10,7 +10,7 @@ import { openHippoDb, closeHippoDb, getHippoDbPath, isSqliteBusy, runWithRequest
 import { promoteToGlobal } from '../src/shared.js';
 import { resetLogOnce } from '../src/log.js';
 import { serve } from '../src/server.js';
-import * as client from '../src/client.js';
+import * as client from '../src/cli/client.js';
 import { mcpErrorResponse } from '../src/mcp/server.js';
 
 // SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike.

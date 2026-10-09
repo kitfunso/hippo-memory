@@ -5,7 +5,7 @@ import { RejectedValueError } from './rejection.js';
 import { redactSecretsStrict } from './secret-detect.js';
 import { fetchWithRetry, llmTimeoutMs } from './http-retry.js';
 import { neverAutoShareTags } from './shared.js';
-import { log } from './log.js';
+import { errorMessage, log } from './log.js';
 import { isJsonString } from './json.js';
 import { certainDefect } from './memory-quality.js';
 
@@ -59,7 +59,7 @@ export async function extractFacts(
       }),
     }, { timeoutMs: llmTimeoutMs(), fetchFn });
   } catch (err) {
-    opts.onError?.(`request failed: ${err instanceof Error ? err.message : String(err)}`);
+    opts.onError?.(`request failed: ${errorMessage(err)}`);
     return [];
   }
 
@@ -102,7 +102,7 @@ export async function extractFacts(
 
     return facts;
   } catch (err) {
-    opts.onError?.(`unparseable response: ${err instanceof Error ? err.message : String(err)}`);
+    opts.onError?.(`unparseable response: ${errorMessage(err)}`);
     return [];
   }
 }

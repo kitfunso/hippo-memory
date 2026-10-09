@@ -9,7 +9,7 @@
 ```bash
 npm run build
 npm test
-npm run test:eval   # the token-eval harness tests, which npm test skips
+npm run test:eval   # the four slow token-eval harness tests, which npm test skips
 npm run build:ui
 npm run build:all
 npm run smoke:pack
@@ -21,6 +21,9 @@ npm run smoke:openclaw-install
 - Document public APIs with JSDoc.
 - Prefer focused tests in `tests/` or nearby integration/eval harnesses before changing memory behavior.
 - Name a new test file after the behaviour it pins, not the ticket (`store-stats-concurrency.test.ts`, not `a7-t3.test.ts`). Seed test stores through `initStore`, `createMemory` and `writeEntry`; write raw SQL only when the test is about SQL.
+- A new test file needs a contract with no owner file: find the owner and add a row first.
+- One owner per contract at the strongest boundary, with one wire-up row per other transport; a test written to carry a refactor is deleted by the PR that lands it.
+- No production export for a test; seed helpers live in `tests/_helpers`.
 - Do not commit generated `dist/` or UI build output unless the repo expects it for a release.
 - A PR's changelog entry goes in its own `changelog.d/<branch-with-dashes>.md`, never in `CHANGELOG.md`; the release commit folds them in (`changelog.d/README.md`).
 - CI fails when any oxlint rule's hit count rises above `.oxlint-baseline.json`. Fix new hits in the files you touch; after clearing old ones, `node scripts/check-lint-ratchet.mjs --update` and commit the lower baseline.

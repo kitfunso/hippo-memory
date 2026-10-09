@@ -9,18 +9,17 @@ import { BadRequestError, NotFoundError } from './api-errors.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { MemoryEntry, generateId, COMPACTION_MEMORY_TAG } from './memory.js';
-import { AGENT_MEMORY_SOURCE_PREFIX, AGENT_MEMORY_TAGS } from './agent-memories/tools.js';
+import { AGENT_MEMORY_SOURCE_PREFIX, AGENT_MEMORY_TAGS } from './core/agent-memory-tools.js';
 import { initStore } from './store/open.js';
 import { writeEntry } from './store/entry-writes.js';
 import { loadAllEntries, readEntry } from './store/entry-reads.js';
 import { loadSearchEntries, loadRecallSearchEntries, recallScopeFilter } from './store/search-rows.js';
 import { tallySources } from './store/candidates.js';
-import { loadIndex } from './store/index-and-stats.js';
 import { isPersonalScope, passesScopeFilterForRecall, passesCliRecallScopeFilter } from './recall-scope.js';
 import { search } from './search/bm25-search.js';
 import { hybridSearch } from './search/hybrid.js';
 import { fitBudget } from './search/finalize.js';
-import { DEFAULT_LOCAL_BUMP, DEFAULT_RECALL_BUDGET, type SearchResult, type ResultCost } from './search/types.js';
+import { DEFAULT_LOCAL_BUMP, DEFAULT_RECALL_BUDGET, type SearchResult, type ResultCost } from './core/search-types.js';
 import type { HybridVectorCandidates } from './search/vector.js';
 import { evalNow } from './ablation.js';
 import { fallbackOrigin, classifyOriginProject, resolveGlobalRootDir, resolveProjectIdentity } from './project-identity.js';
@@ -31,12 +30,12 @@ import { RejectedValueError } from './rejection.js';
 import { embedMemory, embedAll } from './embeddings.js';
 import { duplicateKey, storedTextKeys } from './same-text.js';
 import { isReusable } from './memory-quality.js';
-import { log } from './log.js';
+import { errorMessage, log } from './log.js';
 import type { DatabaseSyncLike } from './db.js';
 
 // The rows are already copied; a failed background embed only delays vectors, so it warns instead of throwing.
 function logEmbedAllFailure<E>(caller: string, err: E): void {
-  log.warn(`${caller}: background embed failed (${err instanceof Error ? err.message : String(err)}); run 'hippo embed' to backfill`);
+  log.warn(`${caller}: background embed failed (${errorMessage(err)}); run 'hippo embed' to backfill`);
 }
 
 /**
@@ -648,9 +647,10 @@ export function syncGlobalToLocal(
   // tenant-scoped local store; writeEntry on each row carries the tenant if
   // the local-root context provides one.
   const globalEntries = loadAllEntries(globalRoot);
-  const localIndex = loadIndex(localRoot);
   const textKey = (e: MemoryEntry): string => `${e.tenantId}\n${e.content}`;
-  const localText = new Set(loadAllEntries(localRoot).map(textKey));
+  const localEntries = loadAllEntries(localRoot);
+  const localIds = new Set(localEntries.map((e) => e.id));
+  const localText = new Set(localEntries.map(textKey));
 
   // Syncing down must not re-import what ambient context
   // excludes - other-project rows are skipped by default and secret rows
@@ -663,7 +663,7 @@ export function syncGlobalToLocal(
 
   for (const entry of globalEntries) {
     // Skip if already present by ID
-    if (localIndex.entries[entry.id]) continue;
+    if (localIds.has(entry.id)) continue;
     // Only the global store's user pass sets an imported note's row aside, so a copy would outlive the note.
     if (entry.source.startsWith(AGENT_MEMORY_SOURCE_PREFIX)) continue;
     if (localText.has(textKey(entry))) continue;

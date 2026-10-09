@@ -51,15 +51,21 @@ export interface ServeOpts {
   authResolverTimeoutMs?: number;
   port?: number;
   host?: string;
-  /** Stop and exit on SIGINT/SIGTERM. Only `hippo serve` owns the process, so only it sets this. */
+  /** Stop and exit on SIGINT/SIGTERM, and drain then exit 1 on an uncaught exception or unhandled rejection. Only `hippo serve` owns the process, so only it sets this. */
   handleSignals?: boolean;
   /** How long stop() lets in-flight requests finish before closing their sockets; defaults to 5000 ms. */
   shutdownDrainMs?: number;
+  /** How long a request may stay unanswered before one warn names it; the request itself is left alone. Defaults to 60000 ms. */
+  slowRequestWarnMs?: number;
   /** Defaults to hippo.db under `hippoRoot`. A store of another kind runs only the routes ported to it; its caller closes it. */
   store?: HippoStore;
   autoSleep?: false;
   routes?: readonly AddonRoute[];
   mintBodyDeadlineMs?: number;
+  /** Tests only: shortens the wait for a signed webhook's body, which defaults to 10 s. */
+  webhookBodyDeadlineMs?: number;
+  /** PEM certificate and key: serve() then answers HTTPS only. Unset means cleartext HTTP, which needs a TLS-terminating proxy in front on any non-loopback bind. */
+  tls?: { cert: string | Buffer; key: string | Buffer };
   /** Static JSON served to anyone at GET <path>; built once at boot and never authenticated, so it must hold nothing secret. */
   publicJson?: Readonly<Record<string, JsonValue>>;
   /** Request limits: perCaller after auth; perAddress replaces HIPPO_V1_RPS when set, 'off' disables it; failedAuthPerAddress guards scrypt. */
@@ -85,8 +91,12 @@ export interface RouteRequest {
   query: URLSearchParams;
 }
 
-/** One /v1 route: an exact path, a matchPath pattern, or a regex, each paired with the handler for one method. Under another store it runs only when that store has its `storeReady` group. */
-export type Route = { method: string; storeReady?: StoreGroup } & (
+/** A route's store status: a `storeReady` group, a `sqliteOnly` reason, or neither while it waits for a group; never both. */
+type StoreStatus = { storeReady?: StoreGroup; sqliteOnly?: never } | { sqliteOnly: string; storeReady?: never };
+
+/** One /v1 route: an exact path, a matchPath pattern, or a regex, each paired with the handler for one method. Under another store it runs only when that store has its `storeReady` group; a `sqliteOnly` route never does.
+ *  `loop: 'off'` declares that the route's SQLite work runs on a worker thread, so its handler opens no hippo.db on the server thread. */
+export type Route = { method: string; loop?: 'off' } & StoreStatus & (
   | { path: string; handler: (r: RouteRequest) => Promise<void> }
   | { pattern: string; handler: (r: RouteRequest, params: Record<string, string>) => Promise<void> }
   | { regex: RegExp; handler: (r: RouteRequest, match: RegExpMatchArray) => Promise<void> }

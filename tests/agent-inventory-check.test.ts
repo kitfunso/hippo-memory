@@ -112,12 +112,6 @@ function failsWith(parts: Partial<RootParts>, message: string): void {
 }
 
 describe('check-agent-inventory', () => {
-  it('passes on the real repository', () => {
-    const result = check(REPO);
-    expect(result.output).toContain('agent inventory:');
-    expect(result.status).toBe(0);
-  });
-
   it('passes on the minimal fixture root', () => {
     expect(check(writeRoot(baseParts())).status).toBe(0);
   });

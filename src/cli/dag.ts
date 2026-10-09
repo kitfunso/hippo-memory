@@ -1,16 +1,17 @@
 // DAG summary verbs: `hippo dag`, `hippo assemble` and `hippo drill`.
 
 import { loadAllEntries } from '../store/entry-reads.js';
+import type { MemoryEntry } from '../memory.js';
 import * as api from '../api.js';
 import { resolveTenantId } from '../tenant.js';
 import { assembleCost, assembleHeading, drillCost, settleTokens } from '../context-render.js';
 import { printError } from './output.js';
-import { parseBudgetFlag, requireInit, type CommandContext, captureConsole } from './shared.js';
+import { type CliFlags, parseBudgetFlag, requireInit, type CommandContext, captureConsole, flagIsTrue, stringFlag, numberFlag } from './shared.js';
 
-export function cmdDag(hippoRoot: string, flags: Record<string, string | boolean | string[]>): void {
+export function cmdDag(hippoRoot: string, flags: CliFlags): void {
   requireInit(hippoRoot);
   const entries = loadAllEntries(hippoRoot);
-  const isStats = flags['stats'] === true;
+  const isStats = flagIsTrue(flags, 'stats');
 
   const byLevel = new Map<number, number>();
   let unlinked = 0;
@@ -22,15 +23,23 @@ export function cmdDag(hippoRoot: string, flags: Record<string, string | boolean
   }
 
   if (isStats) {
-    console.log('DAG Structure:');
-    console.log(`  Level 3 (entity profiles):  ${byLevel.get(3) ?? 0}`);
-    console.log(`  Level 2 (topic summaries):  ${byLevel.get(2) ?? 0}`);
-    console.log(`  Level 1 (extracted facts):  ${byLevel.get(1) ?? 0}`);
-    console.log(`  Level 0 (raw memories):     ${byLevel.get(0) ?? 0}`);
-    console.log(`  Unlinked facts: ${unlinked}`);
+    printDagStats(byLevel, unlinked);
     return;
   }
 
+  printDagTree(entries);
+}
+
+function printDagStats(byLevel: ReadonlyMap<number, number>, unlinked: number): void {
+  console.log('DAG Structure:');
+  console.log(`  Level 3 (entity profiles):  ${byLevel.get(3) ?? 0}`);
+  console.log(`  Level 2 (topic summaries):  ${byLevel.get(2) ?? 0}`);
+  console.log(`  Level 1 (extracted facts):  ${byLevel.get(1) ?? 0}`);
+  console.log(`  Level 0 (raw memories):     ${byLevel.get(0) ?? 0}`);
+  console.log(`  Unlinked facts: ${unlinked}`);
+}
+
+function printDagTree(entries: readonly MemoryEntry[]): void {
   // Tree view: L3 entity profiles as roots with L2 children indented, then orphan L2 summaries at top level.
   const profiles = entries.filter((e) => e.dag_level === 3);
   const l2List = entries.filter((e) => e.dag_level === 2);
@@ -77,21 +86,19 @@ export function cmdDag(hippoRoot: string, flags: Record<string, string | boolean
   }
 }
 
-function cmdAssemble(hippoRoot: string, sessionId: string, flags: Record<string, string | boolean | string[]>): void {
+async function cmdAssemble(hippoRoot: string, sessionId: string, flags: CliFlags): Promise<void> {
   requireInit(hippoRoot);
   // Absent stays undefined so the api default applies; the 0 fallback is unreachable.
   const budget = flags['budget'] === undefined ? undefined : parseBudgetFlag(flags['budget'], 0);
-  const freshTailCount = typeof flags['fresh-tail'] === 'string' ? Number(flags['fresh-tail']) : undefined;
+  const freshTailCount = numberFlag(flags, 'fresh-tail');
   const summarizeOlder = flags['no-summarize-older'] !== true;
-  const scope = typeof flags['scope'] === 'string' && (flags['scope'] as string).length > 0
-    ? (flags['scope'] as string)
-    : undefined;
+  const scope = stringFlag(flags, 'scope') || undefined;
   const ctx: api.Context = {
     hippoRoot,
     tenantId: resolveTenantId({}),
     actor: api.adminActor('cli:assemble'),
   };
-  const r = api.assemble(ctx, sessionId, {
+  const r = await api.assemble(ctx, sessionId, {
     ...(Number.isFinite(budget) && budget! > 0 ? { budget } : {}),
     ...(Number.isFinite(freshTailCount) && freshTailCount! >= 0 ? { freshTailCount } : {}),
     summarizeOlder,
@@ -112,13 +119,13 @@ function cmdAssemble(hippoRoot: string, sessionId: string, flags: Record<string,
   })));
 }
 
-function cmdDrillDown(hippoRoot: string, summaryId: string, flags: Record<string, string | boolean | string[]>): void {
+async function cmdDrillDown(hippoRoot: string, summaryId: string, flags: CliFlags): Promise<void> {
   requireInit(hippoRoot);
-  const limit = typeof flags['limit'] === 'string' ? Number(flags['limit']) : undefined;
+  const limit = numberFlag(flags, 'limit');
   // Absent stays undefined so the api default applies; the 0 fallback is unreachable.
   const budget = flags['budget'] === undefined ? undefined : parseBudgetFlag(flags['budget'], 0);
   // --depth N walks N levels down (default 1, hard cap 10); out-of-range is rejected, never silently clamped.
-  const rawDepth = typeof flags['depth'] === 'string' ? Number(flags['depth']) : undefined;
+  const rawDepth = numberFlag(flags, 'depth');
   let depth: number | undefined;
   if (rawDepth !== undefined) {
     if (!Number.isInteger(rawDepth) || rawDepth < 1 || rawDepth > 10) {
@@ -132,7 +139,7 @@ function cmdDrillDown(hippoRoot: string, summaryId: string, flags: Record<string
     tenantId: resolveTenantId({}),
     actor: api.adminActor('cli:drill'),
   };
-  const r = api.drillDown(ctx, summaryId, {
+  const r = await api.drillDown(ctx, summaryId, {
     ...(Number.isFinite(limit) && limit! > 0 ? { limit } : {}),
     ...(Number.isFinite(budget) && budget! > 0 ? { budget } : {}),
     ...(depth !== undefined ? { depth } : {}),
@@ -160,20 +167,20 @@ function cmdDrillDown(hippoRoot: string, summaryId: string, flags: Record<string
   }
 }
 
-export function handleDrill({ hippoRoot, args, flags }: CommandContext): void {
+export async function handleDrill({ hippoRoot, args, flags }: CommandContext): Promise<void> {
   const summaryId = args[0];
   if (!summaryId) {
     printError('Usage: hippo drill <summary-id> [--limit N] [--budget N]');
     process.exit(1);
   }
-  cmdDrillDown(hippoRoot, summaryId, flags);
+  await cmdDrillDown(hippoRoot, summaryId, flags);
 }
 
-export function handleAssemble({ hippoRoot, args, flags }: CommandContext): void {
-  const sessionId = typeof flags['session'] === 'string' ? (flags['session'] as string) : args[0];
+export async function handleAssemble({ hippoRoot, args, flags }: CommandContext): Promise<void> {
+  const sessionId = stringFlag(flags, 'session') ?? args[0];
   if (!sessionId) {
     printError('Usage: hippo assemble --session <id> [--budget N] [--fresh-tail N] [--no-summarize-older] [--json]');
     process.exit(1);
   }
-  cmdAssemble(hippoRoot, sessionId, flags);
+  await cmdAssemble(hippoRoot, sessionId, flags);
 }

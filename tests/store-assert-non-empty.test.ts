@@ -10,7 +10,7 @@
 import { describe, it, expect } from 'vitest';
 import { assertNonEmpty } from '../src/recall-scope.js';
 
-describe('assertNonEmpty (v1.7.3 review-tail)', () => {
+describe('assertNonEmpty', () => {
   it('throws when array is empty', () => {
     expect(() => assertNonEmpty([], 'TEST_CONST')).toThrow(
       /TEST_CONST cannot be empty/,

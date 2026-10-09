@@ -17,9 +17,10 @@
 
 import { createHash } from 'node:crypto';
 import { openHippoDb, closeHippoDb, rethrowIfSqliteBlocked, type DatabaseSyncLike } from './db.js';
-import type { RerankStep } from './search/types.js';
+import type { RerankStep } from './core/search-types.js';
 import { DELIVERY_LEDGER_VERSION, type DeliveryEventInput } from './delivery-recorder.js';
-import { log } from './log.js';
+import { errorMessage, log } from './log.js';
+import { DAY_MS } from './util/time.js';
 
 /** One ranked result to persist alongside its trace row. */
 export interface RecallTraceResultInput {
@@ -70,10 +71,10 @@ function sanitizeRerankSteps(
  * transaction, on the connection handed in. Fail-soft: never throws —
  * logs to stderr and returns null on any failure.
  *
- * Connection policy (per the plan): api.recall calls this directly on its
- * own already-open handle. api.getContext and CLI cmdRecall go through
- * `writeRecallTraceAtRoot` instead, since their audit handles are already
- * closed by the time tracing runs.
+ * Connection policy: api.recall and api.getContext reach this through
+ * `finishRecallAt`, on the handle that recall's other writes use. CLI
+ * cmdRecall goes through `writeRecallTraceAtRoot` instead, since its audit
+ * handle is already closed by the time tracing runs.
  */
 export function writeRecallTrace(db: DatabaseSyncLike, input: RecallTraceInput): number | null {
   try {
@@ -119,7 +120,7 @@ export function writeRecallTrace(db: DatabaseSyncLike, input: RecallTraceInput):
       throw error;
     }
   } catch (error) {
-    log.error(`recall trace write failed: ${error instanceof Error ? error.message : String(error)}`);
+    log.error(`recall trace write failed: ${errorMessage(error)}`);
     return null;
   }
 }
@@ -129,11 +130,10 @@ export function writeRecallTrace(db: DatabaseSyncLike, input: RecallTraceInput):
  * writes the trace, and closes. Returns the new trace id, or null on any
  * failure (fail-soft).
  *
- * Used at api.getContext and CLI cmdRecall — sites where the block's own
- * convention is per-call handles (writeEntry, saveIndex) and the earlier
- * audit handles are already closed. NOT used by api.recall, which must
- * reuse the caller's open handle (no-side-effects contract,
- * tests/api-recall-no-side-effects.test.ts).
+ * Used at CLI cmdRecall, where the block's own convention is per-call
+ * handles (writeEntry, saveIndex) and the earlier audit handle is already
+ * closed. NOT used by api.recall, which must reuse the caller's open handle
+ * (no-side-effects contract, tests/api-recall-no-side-effects.test.ts).
  *
  * This function does NOT touch the `last_trace_id` meta key: its own connection
  * would commit apart from `saveIndex`, so a crash could advance one key alone. LOCKSTEP
@@ -142,8 +142,8 @@ export function writeRecallTrace(db: DatabaseSyncLike, input: RecallTraceInput):
  * `localIndex.last_trace_id` from the returned id, THEN call `saveIndex`
  * once — `saveIndex` persists both meta keys in one transaction
  * (store.ts). Call sites that trace WITHOUT advancing `last_retrieval_ids`
- * (CLI cmdRecall's zero-result path, getContext's empty-result path) simply
- * never touch `localIndex` at all — they can't desync by construction.
+ * (CLI cmdRecall's zero-result path) simply never touch `localIndex` at
+ * all, so they can't desync by construction.
  *
  * Fail-soft: never throws, including on connection failure.
  */
@@ -153,7 +153,7 @@ export function writeRecallTraceAtRoot(root: string, input: RecallTraceInput): n
     db = openHippoDb(root);
   } catch (error) {
     rethrowIfSqliteBlocked(error);
-    log.error(`recall trace connection failed: ${error instanceof Error ? error.message : String(error)}`);
+    log.error(`recall trace connection failed: ${errorMessage(error)}`);
     return null;
   }
   try {
@@ -229,7 +229,7 @@ export function recordTraceOutcome(db: DatabaseSyncLike, input: RecordTraceOutco
       VALUES (?, ?, ?, ?, ?)
     `).run(input.traceId, new Date().toISOString(), input.tenantId, input.outcome, JSON.stringify(credited));
   } catch (error) {
-    log.error(`recall trace outcome write failed: ${error instanceof Error ? error.message : String(error)}`);
+    log.error(`recall trace outcome write failed: ${errorMessage(error)}`);
   }
 }
 
@@ -377,7 +377,7 @@ export function writeDeliveryEvent(db: DatabaseSyncLike, input: DeliveryEventInp
         insertCandidate.run(eventId, input.tenantId, c.memoryId, c.sourceStore, c.pool, c.stage, c.outcome, c.reason, c.rank, c.score, c.tokens);
       }
       const pruneFrom = Math.min(Date.parse(input.ts), Date.now());
-      const cutoff = new Date(pruneFrom - DELIVERY_LEDGER_RETENTION_DAYS * 86_400_000).toISOString();
+      const cutoff = new Date(pruneFrom - DELIVERY_LEDGER_RETENTION_DAYS * DAY_MS).toISOString();
       db.prepare(`DELETE FROM delivery_events WHERE ts < ?`).run(cutoff);
       db.exec('COMMIT');
       return eventId;
@@ -387,7 +387,7 @@ export function writeDeliveryEvent(db: DatabaseSyncLike, input: DeliveryEventInp
     }
   } catch (error) {
     // The prompt hook's stderr shows this exact `[hippo] delivery ledger` line, so it stays off the logger's format.
-    console.error(`[hippo] delivery ledger write failed: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(`[hippo] delivery ledger write failed: ${errorMessage(error)}`);
     return null;
   }
 }
@@ -399,7 +399,7 @@ export function writeDeliveryEventAtRoot(root: string, input: DeliveryEventInput
     db = openHippoDb(root);
   } catch (error) {
     // Same hook stderr line as writeDeliveryEvent above.
-    console.error(`[hippo] delivery ledger write failed: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(`[hippo] delivery ledger write failed: ${errorMessage(error)}`);
     return null;
   }
   try {

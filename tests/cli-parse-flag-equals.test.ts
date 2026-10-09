@@ -8,6 +8,7 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { BOOLEAN_FLAGS, KNOWN_FLAGS, parseArgs, shouldAutoRepairCodexWrapper } from '../src/cli.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
+import { hippoRun } from './_helpers/spawn-hippo.js';
 
 const argv = (...rest: string[]) => ['node', 'hippo', ...rest];
 
@@ -120,6 +121,9 @@ describe('BOOLEAN_FLAGS: every switch the CLI reads is registered', () => {
         if (AS_VALUE.test(read)) asValue.add(m[1]);
         else if (ON_OFF.test(read)) onOff.add(m[1]);
       }
+      for (const m of src.matchAll(/\b(boolFlag|flagIsTrue|stringFlag\w*|numberFlag)\(\s*flags,\s*['"]([a-z0-9-]+)['"]/g)) {
+        (m[1] === 'boolFlag' || m[1] === 'flagIsTrue' ? onOff : asValue).add(m[2]);
+      }
     }
     const unregistered = [...onOff].filter((key) => !asValue.has(key) && !BOOLEAN_FLAGS.has(key));
     expect(unregistered).toEqual([]);
@@ -127,7 +131,7 @@ describe('BOOLEAN_FLAGS: every switch the CLI reads is registered', () => {
 
   it('case 14e: KNOWN_FLAGS is exactly the set of flags the CLI reads, so no typo hides in it', () => {
     const reads = new Set<string>();
-    const READ = /flags(?:\[['"]([a-z0-9-]+)['"]\]|\.([a-z][a-z0-9]*)\b)|(?:Flag|hasOwn)\(\s*flags,\s*['"]([a-z0-9-]+)['"]/g;
+    const READ = /flags(?:\[['"]([a-z0-9-]+)['"]\]|\.([a-z][a-z0-9]*)\b)|(?:Flag|FlagOrExit|IsTrue|hasOwn)\(\s*flags,\s*['"]([a-z0-9-]+)['"]/g;
     for (const file of CLI_SOURCES) {
       const src = readFileSync(resolve(__dirname, '..', 'src', file), 'utf8');
       for (const m of src.matchAll(READ)) reads.add(m[1] ?? m[2] ?? m[3]);
@@ -149,7 +153,6 @@ describe('init --no-hooks', () => {
 });
 
 describe('built CLI: --flag=value end-to-end guards', () => {
-  const CLI = resolve(__dirname, '..', 'bin', 'hippo.js');
   let tmpDir: string;
   let env: NodeJS.ProcessEnv;
 
@@ -160,7 +163,7 @@ describe('built CLI: --flag=value end-to-end guards', () => {
   }
 
   function runCli(args: string[]): { stdout: string; stderr: string; status: number } {
-    const res = spawnSync('node', [CLI, ...args], { cwd: tmpDir, env, encoding: 'utf8' });
+    const res = hippoRun(args, { cwd: tmpDir, env, exe: 'node' });
     return { stdout: res.stdout, stderr: res.stderr, status: res.status ?? 1 };
   }
 

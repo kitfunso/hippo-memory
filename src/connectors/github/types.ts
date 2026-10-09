@@ -8,7 +8,7 @@
  * for the wrong event type.
  */
 
-import { type JsonValue, isJsonString } from '../../json.js';
+import { type JsonValue, isJsonString, isJsonNumber } from '../../json.js';
 
 /**
  * `private` MUST be optional, not required. The Slack-style
@@ -90,23 +90,19 @@ export interface GitHubPullRequestReviewCommentEvent extends GitHubWebhookEnvelo
   };
 }
 
-function isJsonObject(x: JsonValue): x is Record<string, JsonValue> {
+function isObjectOrArray(x: JsonValue): x is Record<string, JsonValue> {
   return x !== null && typeof x === 'object';
 }
 
-function isJsonNumber(x: JsonValue): x is number {
-  return typeof x === 'number';
-}
-
 function isGitHubSender(x: JsonValue): x is JsonValue & GitHubSender {
-  if (!isJsonObject(x)) return false;
+  if (!isObjectOrArray(x)) return false;
   return isJsonString(x.login) && isJsonNumber(x.id);
 }
 
 export function isGitHubWebhookEnvelope(x: JsonValue): x is JsonValue & GitHubWebhookEnvelope {
-  if (!isJsonObject(x)) return false;
+  if (!isObjectOrArray(x)) return false;
   // Duck-type: an envelope must at least carry an action OR a repository field.
-  return isJsonString(x.action) || isJsonObject(x.repository);
+  return isJsonString(x.action) || isObjectOrArray(x.repository);
 }
 
 export function isGitHubIssueEvent(
@@ -114,10 +110,10 @@ export function isGitHubIssueEvent(
   evtHeader: string,
 ): x is JsonValue & GitHubIssueEvent {
   if (evtHeader !== 'issues') return false;
-  if (!isJsonObject(x)) return false;
+  if (!isObjectOrArray(x)) return false;
   if (!isJsonString(x.action)) return false;
   const issue = x.issue;
-  if (!isJsonObject(issue)) return false;
+  if (!isObjectOrArray(issue)) return false;
   if (!isJsonNumber(issue.number)) return false;
   if (!isGitHubSender(issue.user)) return false;
   return true;
@@ -128,12 +124,12 @@ export function isGitHubIssueCommentEvent(
   evtHeader: string,
 ): x is JsonValue & GitHubIssueCommentEvent {
   if (evtHeader !== 'issue_comment') return false;
-  if (!isJsonObject(x)) return false;
+  if (!isObjectOrArray(x)) return false;
   if (!isJsonString(x.action)) return false;
   const issue = x.issue;
-  if (!isJsonObject(issue) || !isJsonNumber(issue.number)) return false;
+  if (!isObjectOrArray(issue) || !isJsonNumber(issue.number)) return false;
   const comment = x.comment;
-  if (!isJsonObject(comment)) return false;
+  if (!isObjectOrArray(comment)) return false;
   if (!isJsonNumber(comment.id)) return false;
   if (!isGitHubSender(comment.user)) return false;
   return true;
@@ -144,10 +140,10 @@ export function isGitHubPullRequestEvent(
   evtHeader: string,
 ): x is JsonValue & GitHubPullRequestEvent {
   if (evtHeader !== 'pull_request') return false;
-  if (!isJsonObject(x)) return false;
+  if (!isObjectOrArray(x)) return false;
   if (!isJsonString(x.action)) return false;
   const pr = x.pull_request;
-  if (!isJsonObject(pr)) return false;
+  if (!isObjectOrArray(pr)) return false;
   if (!isJsonNumber(pr.number)) return false;
   if (!isGitHubSender(pr.user)) return false;
   return true;
@@ -158,12 +154,12 @@ export function isGitHubPullRequestReviewCommentEvent(
   evtHeader: string,
 ): x is JsonValue & GitHubPullRequestReviewCommentEvent {
   if (evtHeader !== 'pull_request_review_comment') return false;
-  if (!isJsonObject(x)) return false;
+  if (!isObjectOrArray(x)) return false;
   if (!isJsonString(x.action)) return false;
   const pr = x.pull_request;
-  if (!isJsonObject(pr) || !isJsonNumber(pr.number)) return false;
+  if (!isObjectOrArray(pr) || !isJsonNumber(pr.number)) return false;
   const comment = x.comment;
-  if (!isJsonObject(comment)) return false;
+  if (!isObjectOrArray(comment)) return false;
   if (!isJsonNumber(comment.id)) return false;
   if (!isGitHubSender(comment.user)) return false;
   return true;

@@ -2,8 +2,7 @@
 import type { ServerResponse } from 'node:http';
 import { HttpError } from '../http-util.js';
 import type { KeysetPosition } from '../keyset.js';
-import { isJsonNumber } from './validation.js';
-import { type JsonValue, isJsonString } from '../json.js';
+import { type JsonValue, isJsonString, isJsonNumber } from '../json.js';
 
 type CursorPart = 'string' | 'integer';
 

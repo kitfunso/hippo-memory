@@ -1,14 +1,13 @@
-// Personal scopes answer to their owner alone, the SQL and JS admit rules agree on them, and an HttpError can carry Retry-After.
+// Personal scopes answer to their owner alone, and an HttpError can carry Retry-After.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BadRequestError } from '../src/api-errors.js';
-import { DatabaseSync, type DatabaseSyncLike } from '../src/db/sqlite.js';
 import { HttpError, MAX_ID_LEN } from '../src/http-util.js';
 import {
   assertClientScope, assertScopeRequestAllowed, canReadScope, canTouchScope, isPersonalScope, passesCliRecallScopeFilter,
-  passesScopeFilterForRecall, PERSONAL_OWNER_MAX, personalScopeOf, scopeAdmitSql, ScopeForbiddenError, type ScopeActor,
+  passesScopeFilterForRecall, PERSONAL_OWNER_MAX, personalScopeOf, ScopeForbiddenError, type ScopeActor,
 } from '../src/recall-scope.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { initStore } from '../src/store/open.js';
@@ -98,48 +97,6 @@ describe('recall filters', () => {
     expect(passesCliRecallScopeFilter(A_SCOPE, A_SCOPE)).toBe(false);
     expect(passesCliRecallScopeFilter('PERSONAL:private:a', 'PERSONAL:private:a')).toBe(false);
     expect(passesCliRecallScopeFilter(SLACK, SLACK)).toBe(true);
-  });
-});
-
-describe('scopeAdmitSql agrees with passesScopeFilterForRecall', () => {
-  const rows: ReadonlyArray<[string, string | null]> = [['n', null], ['t', 'team'], ['s', SLACK], ['a', A_SCOPE], ['b', B_SCOPE]];
-  let db: DatabaseSyncLike;
-
-  beforeAll(() => {
-    db = new DatabaseSync(':memory:');
-    db.exec('CREATE TABLE memories (id TEXT PRIMARY KEY, scope TEXT)');
-    const insert = db.prepare('INSERT INTO memories (id, scope) VALUES (?, ?)');
-    for (const [id, scope] of rows) insert.run(id, scope);
-  });
-
-  afterAll(() => db.close());
-
-  function admittedBySql(col: '' | 'm.', ownScope?: string): string[] {
-    const { sql, params } = scopeAdmitSql(col, ownScope);
-    // SAFETY: the SELECT names only the id column.
-    const found = db.prepare(`SELECT id FROM memories m WHERE 1 = 1 AND ${sql} ORDER BY id`).all(...params) as Array<{ id: string }>;
-    return found.map((r) => r.id);
-  }
-
-  it.each([
-    ['', undefined], ['m.', undefined], ['', A_SCOPE], ['m.', A_SCOPE],
-  ] as const)('col %j, ownScope %s', (col, ownScope) => {
-    const expected = rows.filter(([, scope]) => passesScopeFilterForRecall(scope, undefined, ownScope)).map(([id]) => id).sort();
-    expect(admittedBySql(col, ownScope)).toEqual(expected);
-  });
-
-  it('binds the owner, so LIKE wildcards in it match nothing extra', () => {
-    const { sql, params } = scopeAdmitSql('', 'personal:private:%');
-    expect(sql).not.toContain('personal:private:%');
-    expect(params[params.length - 1]).toBe('personal:private:%');
-    expect(admittedBySql('', 'personal:private:%')).toEqual(['n', 't']);
-  });
-
-  it('keeps the own arm inside its parentheses, so a preceding AND still binds it', () => {
-    const { sql, params } = scopeAdmitSql('m.', A_SCOPE);
-    // SAFETY: the SELECT names only the id column.
-    const found = db.prepare(`SELECT id FROM memories m WHERE m.id != 'a' AND ${sql} ORDER BY id`).all(...params) as Array<{ id: string }>;
-    expect(found.map((r) => r.id)).toEqual(['n', 't']);
   });
 });
 

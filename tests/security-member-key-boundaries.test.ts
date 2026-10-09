@@ -187,10 +187,10 @@ describe('member-key boundaries in the api layer (every surface goes through it)
     expect(api.authCreate(adminCtx(), { role: 'member' }).role).toBe('member');
   });
 
-  it('recall and assemble refuse a restricted scope for a member, and allow it for an admin', () => {
+  it('recall and assemble refuse a restricted scope for a member, and allow it for an admin', async () => {
     expect(() => api.recall(memberCtx(), { query: 'zanzibar', scope: PRIVATE_SCOPE })).toThrow(api.ScopeForbiddenError);
     expect(() => api.recall(memberCtx(), { query: 'zanzibar', scope: 'unknown:legacy' })).toThrow(api.ScopeForbiddenError);
-    expect(() => api.assemble(memberCtx(), 'sess_1', { scope: PRIVATE_SCOPE })).toThrow(api.ScopeForbiddenError);
+    await expect(api.assemble(memberCtx(), 'sess_1', { scope: PRIVATE_SCOPE })).rejects.toThrow(api.ScopeForbiddenError);
 
     expect(api.recall(memberCtx(), { query: 'zanzibar', scope: PUBLIC_SCOPE }).results.length).toBeGreaterThan(0);
     const adminResults = api.recall(adminCtx(), { query: 'zanzibar', scope: PRIVATE_SCOPE }).results;

@@ -21,17 +21,17 @@
  * closed (retired).
  */
 
-import { BadRequestError, ConflictError, NotFoundError } from './api-errors.js';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
-import { writeEntry } from './store/entry-writes.js';
+import { BadRequestError } from './api-errors.js';
+import { openHippoDb, closeHippoDb } from './db.js';
+import { onHandle } from './store/open.js';
 import { assertTenantId } from './tenant.js';
 import { scopeAdmitSql } from './recall-scope.js';
-import { markGraphDirty, removeGraphEntitiesForObject } from './graph/write.js';
-import { createMemory, Layer } from './memory.js';
-import { appendAuditEvent } from './audit.js';
-import { objectHalfLifeDays } from './half-life-migration.js';
-import { keysetAfter, type KeysetPosition } from './keyset.js';
+import type { KeysetPosition } from './keyset.js';
 import { escapeLike } from './escape.js';
+import type { SavableDescriptor } from './objects/descriptor.js';
+import { checkText, requireLine } from './objects/fields.js';
+import { assertObjectStatus, closeObjectOn, dropClosedObjectFromGraph, loadObjectByIdOn, loadObjectsOn, saveObject } from './objects/lifecycle.js';
+import type { JsonObject } from './working-memory.js';
 
 // ---------------------------------------------------------------------------
 // Domain types
@@ -109,47 +109,12 @@ interface ReceiptRow {
   content: string;
 }
 
-/** Audit-metadata fields set only when a write came from refreshBrief's
- *  auto-refresh path, so the supersede/create audit events carry receipt_count
- *  exactly when isRefresh is true (named owner contract instead of a
- *  conditional `{}` spread). */
-interface RefreshAuditMetadata {
-  receipt_count?: number;
-}
-
-// ---------------------------------------------------------------------------
-// Validation
-// ---------------------------------------------------------------------------
-
-/**
- * Validate + normalise brief fields. `repo` is trimmed and MUST be a single line
- * (no newlines): it becomes a path tag on the refresh match AND an H1 heading in
- * the assembled digest. `summary` is kept verbatim (operator content) but capped.
- * Returns the normalised repo.
- */
-function validateBriefFields(
-  repo: string,
-  summary: string,
-  changeSummary: string | undefined,
-) {
-  const normalizedRepo = (repo ?? '').trim();
-  if (normalizedRepo.length === 0) throw new BadRequestError('saveProjectBrief: repo is required');
-  if (/[\r\n]/.test(normalizedRepo)) {
-    throw new BadRequestError('saveProjectBrief: repo must be a single line (no newlines)');
-  }
-  if (normalizedRepo.length > MAX_REPO_LEN) {
-    throw new BadRequestError(`saveProjectBrief: repo exceeds the ${MAX_REPO_LEN}-char cap`);
-  }
-  if (!summary || summary.trim().length === 0) {
-    throw new BadRequestError('saveProjectBrief: summary is required');
-  }
-  if (summary.length > MAX_BRIEF_SUMMARY_LEN) {
-    throw new BadRequestError(`saveProjectBrief: summary exceeds the ${MAX_BRIEF_SUMMARY_LEN}-char cap`);
-  }
-  if (changeSummary !== undefined && changeSummary.length > MAX_CHANGE_SUMMARY_LEN) {
-    throw new BadRequestError(`saveProjectBrief: changeSummary exceeds the ${MAX_CHANGE_SUMMARY_LEN}-char cap`);
-  }
-  return { repo: normalizedRepo };
+/** What one brief write stores, resolved before the write. */
+interface BriefFields {
+  readonly repo: string;
+  readonly summary: string;
+  /** Set only when refreshBrief wrote this version. */
+  readonly receiptCount: number | undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -195,6 +160,33 @@ const BRIEF_COLS = `
   superseded_by, superseded_at, change_summary, closed_at, created_at
 `;
 
+/** Tells an auto-refresh from a manual write in the audit log without a fourth audit op. */
+function refreshMeta(w: BriefFields): JsonObject {
+  return w.receiptCount === undefined ? { refreshed: false } : { refreshed: true, receipt_count: w.receiptCount };
+}
+
+const BRIEF: SavableDescriptor<ProjectBrief, ProjectBriefRow, 'repo', BriefFields> = {
+  table: 'project_briefs',
+  cols: BRIEF_COLS,
+  label: 'brief',
+  plural: 'briefs',
+  fn: { get: 'loadProjectBriefById', close: 'closeProjectBrief', list: 'loadProjectBriefs', save: 'saveProjectBrief' },
+  states: VALID_BRIEF_STATES,
+  closableFrom: ['active'],
+  ops: { close: 'project_brief_close', create: 'project_brief_create', supersede: 'project_brief_supersede' },
+  idKey: 'brief_id',
+  graphType: 'project',
+  listFilters: { repo: 'repo' },
+  rowTo: rowToProjectBrief,
+  source: 'project_brief',
+  versioned: true,
+  columns: ['repo', 'summary'],
+  values: (w) => [w.repo, w.summary],
+  // Ids and flags only, never the brief text.
+  createMeta: (w, version) => ({ repo: w.repo, version, ...refreshMeta(w) }),
+  supersedeMeta: refreshMeta,
+};
+
 /** Recall-surface content for the memory mirror: repo + summary. Named (mirrors
  *  buildSkillContent) so the recall surface is deterministic + unit-testable. */
 function buildBriefContent(repo: string, summary: string): string {
@@ -204,116 +196,6 @@ function buildBriefContent(repo: string, summary: string): string {
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-
-/** Everything the afterWrite SAVEPOINT needs, resolved before the write opens. */
-interface BriefWrite {
-  tenantId: string;
-  actor: string;
-  repo: string;
-  summary: string;
-  changeSummary: string | null;
-  supersedesId: number | undefined;
-  isRefresh: boolean;
-  refreshAuditExtra: RefreshAuditMetadata;
-  now: string;
-}
-
-// Preflight the supersede target BEFORE inserting the new row (so the new
-// autoincrement id can never be its own supersede target); read the
-// predecessor version in the same SELECT for server-derived versioning.
-// Mirrors saveSkill / saveProcess.
-function preflightBriefSupersede(db: DatabaseSyncLike, tenantId: string, supersedesId: number): number {
-  // SAFETY: SELECT projects exactly status, version; .get() returns that
-  // shape for the matching row, or undefined when no brief/tenant pair matches.
-  const pred = db.prepare(
-    `SELECT status, version FROM project_briefs WHERE id = ? AND tenant_id = ?`,
-  ).get(supersedesId, tenantId) as
-    | { status: string; version: number }
-    | undefined;
-  if (!pred) {
-    throw new NotFoundError(
-      `saveProjectBrief: brief ${supersedesId} to supersede not found for tenant ${tenantId}`,
-    );
-  }
-  if (pred.status !== 'active') {
-    throw new ConflictError(
-      `saveProjectBrief: brief ${supersedesId} is not active (status='${pred.status}'); only active briefs can be superseded.`,
-    );
-  }
-  return pred.version + 1;
-}
-
-function insertBriefRow(db: DatabaseSyncLike, memoryId: string, w: BriefWrite, version: number): number {
-  const result = db.prepare(`
-    INSERT INTO project_briefs(
-      memory_id, tenant_id, repo, summary, version,
-      status, superseded_by, superseded_at, change_summary, closed_at, created_at
-    ) VALUES (?, ?, ?, ?, ?, 'active', NULL, NULL, ?, NULL, ?)
-  `).run(memoryId, w.tenantId, w.repo, w.summary, version, w.changeSummary, w.now);
-  return Number(result.lastInsertRowid ?? 0);
-}
-
-function supersedeBriefRow(
-  db: DatabaseSyncLike,
-  w: BriefWrite,
-  supersedesId: number,
-  briefId: number,
-  version: number,
-): void {
-  const sup = db.prepare(`
-    UPDATE project_briefs
-    SET status = 'superseded', superseded_by = ?, superseded_at = ?
-    WHERE id = ? AND tenant_id = ? AND status = 'active' AND id != ?
-  `).run(briefId, w.now, supersedesId, w.tenantId, briefId);
-  if (sup.changes === 0) {
-    throw new ConflictError(
-      `saveProjectBrief: brief ${supersedesId} could not be superseded (no longer active or self-reference).`,
-    );
-  }
-  appendAuditEvent(db, {
-    tenantId: w.tenantId,
-    actor: w.actor,
-    op: 'project_brief_supersede',
-    targetId: String(supersedesId),
-    metadata: {
-      brief_id: supersedesId,
-      superseded_by: briefId,
-      new_version: version,
-      refreshed: w.isRefresh,
-      ...w.refreshAuditExtra,
-    },
-  });
-}
-
-/** The afterWrite body: preflight, INSERT, supersede, reload, create audit, all in one SAVEPOINT. */
-function writeBriefRow(db: DatabaseSyncLike, memoryId: string, w: BriefWrite): ProjectBriefRow {
-  const version = w.supersedesId !== undefined ? preflightBriefSupersede(db, w.tenantId, w.supersedesId) : 1;
-  const briefId = insertBriefRow(db, memoryId, w, version);
-  if (w.supersedesId !== undefined) supersedeBriefRow(db, w, w.supersedesId, briefId, version);
-
-  // SAFETY: SELECT ${BRIEF_COLS} projects exactly the ProjectBriefRow
-  // columns; .get() returns that row, or undefined only if the
-  // just-inserted id can't be found.
-  const row = db.prepare(`SELECT ${BRIEF_COLS} FROM project_briefs WHERE id = ?`)
-    .get(briefId) as ProjectBriefRow | undefined;
-  if (!row) throw new Error('saveProjectBrief: failed to reload saved brief row');
-
-  // GDPR-light metadata: ids + flags only, no brief text.
-  appendAuditEvent(db, {
-    tenantId: w.tenantId,
-    actor: w.actor,
-    op: 'project_brief_create',
-    targetId: String(briefId),
-    metadata: {
-      brief_id: briefId,
-      repo: w.repo,
-      version,
-      refreshed: w.isRefresh,
-      ...w.refreshAuditExtra,
-    },
-  });
-  return row;
-}
 
 /**
  * Create a project_brief (or a new version that supersedes an existing one). Writes
@@ -328,57 +210,33 @@ export function saveProjectBrief(
   opts: SaveProjectBriefOpts,
   actor: string = 'cli',
 ): ProjectBrief {
-  assertTenantId('saveProjectBrief', tenantId);
-  const { repo } = validateBriefFields(opts.repo, opts.summary, opts.changeSummary);
-  const isSupersede = opts.supersedesBriefId !== undefined;
-  const changeSummary = isSupersede ? (opts.changeSummary ?? null) : null;
-  const isRefresh = opts.refreshReceiptCount !== undefined;
-  const refreshAuditExtra: RefreshAuditMetadata = {};
-  if (isRefresh) refreshAuditExtra.receipt_count = opts.refreshReceiptCount;
-
-  const now = new Date().toISOString();
-  const content = buildBriefContent(repo, opts.summary);
-  const tags = ['project_brief', ...(opts.extraTags ?? [])];
-  const mem = createMemory(content, {
-    tags,
-    layer: Layer.Semantic,
-    confidence: 'verified',
-    source: 'project_brief',
-    baseHalfLifeDays: objectHalfLifeDays(hippoRoot),
-    tenantId,
+  assertTenantId(BRIEF.fn.save, tenantId);
+  // The repo becomes a path tag on the refresh match and a heading in the digest, so it must be one line.
+  const repo = requireLine(opts.repo, MAX_REPO_LEN, {
+    required: 'saveProjectBrief: repo is required',
+    singleLine: 'saveProjectBrief: repo must be a single line (no newlines)',
+    tooLong: `saveProjectBrief: repo exceeds the ${MAX_REPO_LEN}-char cap`,
   });
-  const w: BriefWrite = {
-    tenantId,
+  checkText(opts.summary, MAX_BRIEF_SUMMARY_LEN, {
+    required: 'saveProjectBrief: summary is required',
+    tooLong: `saveProjectBrief: summary exceeds the ${MAX_BRIEF_SUMMARY_LEN}-char cap`,
+  });
+  checkText(opts.changeSummary, MAX_CHANGE_SUMMARY_LEN, {
+    tooLong: `saveProjectBrief: changeSummary exceeds the ${MAX_CHANGE_SUMMARY_LEN}-char cap`,
+  });
+  return saveObject(hippoRoot, BRIEF, tenantId, {
     actor,
-    repo,
-    summary: opts.summary,
-    changeSummary,
+    now: new Date().toISOString(),
+    fields: { repo, summary: opts.summary, receiptCount: opts.refreshReceiptCount },
+    content: buildBriefContent(repo, opts.summary),
+    tags: opts.extraTags ?? [],
     supersedesId: opts.supersedesBriefId,
-    isRefresh,
-    refreshAuditExtra,
-    now,
-  };
-
-  let savedRow: ProjectBriefRow | undefined;
-
-  writeEntry(hippoRoot, mem, {
-    actor,
-    afterWrite: (db, memoryId) => {
-      savedRow = writeBriefRow(db, memoryId, w);
-    },
-    // afterCommit covers refreshBrief (delegates here) + brief new/supersede.
-    afterCommit: () => markGraphDirty(hippoRoot, tenantId, mem.id),
+    changeSummary: opts.changeSummary,
   });
-
-  if (!savedRow) {
-    throw new Error('saveProjectBrief: afterWrite did not populate the row');
-  }
-  return rowToProjectBrief(savedRow);
 }
 
 /**
- * Close (retire) an active brief. CAS guard WHERE status='active'; 0 changes
- * distinguishes not-found from not-active. A superseded row is terminal.
+ * Close (retire) an active brief. A superseded row is terminal.
  */
 export function closeProjectBrief(
   hippoRoot: string,
@@ -386,70 +244,13 @@ export function closeProjectBrief(
   id: number,
   actor: string = 'cli',
 ): ProjectBrief {
-  assertTenantId('closeProjectBrief', tenantId);
+  assertTenantId(BRIEF.fn.close, tenantId);
   const now = new Date().toISOString();
-  const db = openHippoDb(hippoRoot);
-  try {
-    db.exec('BEGIN IMMEDIATE');
-    try {
-      const updateResult = db.prepare(`
-        UPDATE project_briefs
-        SET status = 'closed', closed_at = ?
-        WHERE id = ? AND tenant_id = ? AND status = 'active'
-      `).run(now, id, tenantId);
-
-      if (updateResult.changes === 0) {
-        // SAFETY: SELECT projects exactly the status column; .get() returns that
-        // shape, or undefined when the id/tenant pair doesn't exist.
-        const existing = db.prepare(
-          `SELECT status FROM project_briefs WHERE id = ? AND tenant_id = ?`,
-        ).get(id, tenantId) as { status: string } | undefined;
-        if (!existing) {
-          throw new NotFoundError(`closeProjectBrief: brief ${id} not found for tenant ${tenantId}`);
-        }
-        throw new ConflictError(
-          `closeProjectBrief: brief ${id} is not active (status='${existing.status}'); only active briefs can be closed.`,
-        );
-      }
-
-      // SAFETY: SELECT ${BRIEF_COLS} projects exactly the ProjectBriefRow
-      // columns; .get() returns that row for the just-updated id, or undefined
-      // only in an impossible race since the UPDATE above already matched it.
-      const row = db.prepare(`SELECT ${BRIEF_COLS} FROM project_briefs WHERE id = ? AND tenant_id = ?`)
-        .get(id, tenantId) as ProjectBriefRow | undefined;
-      if (!row) throw new NotFoundError(`closeProjectBrief: brief ${id} not found after UPDATE`);
-
-      appendAuditEvent(db, {
-        tenantId,
-        actor,
-        op: 'project_brief_close',
-        targetId: String(id),
-        metadata: { brief_id: id },
-      });
-
-      db.exec('COMMIT');
-      const closed = rowToProjectBrief(row);
-      // Closing removes the object from the graph. Remove its rows DIRECTLY (deterministic),
-      // not only via an enqueued rebuild whose queue item is lost if the mirror is later
-      // forgotten (the queue row cascade-deletes with the memory), which would leave the closed
-      // object stale and could block that forget. Still enqueue when a mirror exists
-      // so a concurrent rebuild re-derives consistently (harmless if it also runs).
-      removeGraphEntitiesForObject(hippoRoot, tenantId, 'project', closed.id);
-      if (closed.memoryId) {
-        markGraphDirty(hippoRoot, tenantId, closed.memoryId);
-      }
-      return closed;
-    } catch (e) {
-      try {
-        db.exec('ROLLBACK');
-      } catch {
-        // Ignore rollback failures — the throw below is what matters.
-      }
-      throw e;
-    }
-  } finally {
-    closeHippoDb(db);
-  }
+  return onHandle(hippoRoot, (db) => {
+    const closed = closeObjectOn(db, BRIEF, tenantId, id, { actor, now });
+    dropClosedObjectFromGraph(hippoRoot, BRIEF, tenantId, closed);
+    return closed;
+  });
 }
 
 export function loadProjectBriefById(
@@ -457,18 +258,8 @@ export function loadProjectBriefById(
   tenantId: string,
   id: number,
 ): ProjectBrief | null {
-  assertTenantId('loadProjectBriefById', tenantId);
-  const db = openHippoDb(hippoRoot);
-  try {
-    // SAFETY: SELECT ${BRIEF_COLS} projects exactly the ProjectBriefRow
-    // columns; .get() returns that row, or undefined when the id/tenant pair
-    // doesn't exist.
-    const row = db.prepare(`SELECT ${BRIEF_COLS} FROM project_briefs WHERE id = ? AND tenant_id = ?`)
-      .get(id, tenantId) as ProjectBriefRow | undefined;
-    return row ? rowToProjectBrief(row) : null;
-  } finally {
-    closeHippoDb(db);
-  }
+  assertTenantId(BRIEF.fn.get, tenantId);
+  return onHandle(hippoRoot, (db) => loadObjectByIdOn(db, BRIEF, tenantId, id));
 }
 
 export function loadProjectBriefs(
@@ -476,40 +267,9 @@ export function loadProjectBriefs(
   tenantId: string,
   opts: ListProjectBriefsOpts = {},
 ): ProjectBrief[] {
-  assertTenantId('loadProjectBriefs', tenantId);
-  const limit = opts.limit ?? 100;
-  const after = keysetAfter('created_at', 'id', opts.after);
-  if (opts.status && !VALID_BRIEF_STATES.has(opts.status)) {
-    throw new BadRequestError(
-      `loadProjectBriefs: status must be one of ${Array.from(VALID_BRIEF_STATES).join('|')}; got ${opts.status}`,
-    );
-  }
-  const db = openHippoDb(hippoRoot);
-  try {
-    const clauses = ['tenant_id = ?'];
-    const params: unknown[] = [tenantId];
-    if (opts.status) {
-      clauses.push('status = ?');
-      params.push(opts.status);
-    }
-    if (opts.repo) {
-      clauses.push('repo = ?');
-      params.push(opts.repo);
-    }
-    params.push(...after.params, limit);
-    // SAFETY: SELECT ${BRIEF_COLS} projects exactly the ProjectBriefRow columns
-    // regardless of the dynamic WHERE clause built above; .all() returns rows
-    // in that shape.
-    const rows = db.prepare(`
-      SELECT ${BRIEF_COLS} FROM project_briefs
-      WHERE ${clauses.join(' AND ')}${after.sql}
-      ORDER BY created_at DESC, id DESC
-      LIMIT ?
-    `).all(...params) as ProjectBriefRow[];
-    return rows.map(rowToProjectBrief);
-  } finally {
-    closeHippoDb(db);
-  }
+  assertTenantId(BRIEF.fn.list, tenantId);
+  assertObjectStatus(BRIEF, opts.status);
+  return onHandle(hippoRoot, (db) => loadObjectsOn(db, BRIEF, tenantId, opts));
 }
 
 /**

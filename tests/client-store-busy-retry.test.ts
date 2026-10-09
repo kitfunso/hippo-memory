@@ -1,8 +1,8 @@
 // The thin client rides out a busy-store 503 on its routed writes, then surfaces it once the ~5 s budget is spent.
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createServer, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { forget, remember, HttpResponseError } from '../src/client.js';
+import { forget, remember, HttpResponseError } from '../src/cli/client.js';
 
 let server: Server | undefined;
 
@@ -30,6 +30,7 @@ async function startFake(busyCount: number): Promise<{ url: string; hits: () => 
 }
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await new Promise<void>((resolve) => (server ? server.close(() => resolve()) : resolve()));
   server = undefined;
 });
@@ -44,6 +45,7 @@ describe('thin client under a busy store', () => {
 
   it('remember gives up with the 503 inside the ~5 s budget when the lock never clears', async () => {
     const fake = await startFake(Number.POSITIVE_INFINITY);
+    const timers = vi.spyOn(globalThis, 'setTimeout');
     const started = Date.now();
     const err = await remember(fake.url, undefined, { content: 'lock never clears' }).catch((e: Error) => e);
     const elapsed = Date.now() - started;
@@ -51,7 +53,8 @@ describe('thin client under a busy store', () => {
     expect(err).toMatchObject({ status: 503, message: expect.stringMatching(/store busy/) });
     expect(fake.hits()).toBe(5);
     expect(elapsed).toBeGreaterThanOrEqual(3_500);
-    expect(elapsed).toBeLessThan(7_000);
+    // Four pauses, each the one second the server named, and none after the last try: that sum is the budget.
+    expect(timers.mock.calls.filter(([, ms]) => ms === 1_000)).toHaveLength(4);
   }, 15_000);
 
   it('forget retries a busy 503 too, since a routed write commits nothing before it answers busy', async () => {

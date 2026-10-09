@@ -41,7 +41,7 @@ function reject(home: string, text: string, reason: string): string {
   return digest;
 }
 
-describe('AT1 rejection guard', () => {
+describe('rejection guard', () => {
   it('fresh store migrates to schema_version 41', () => {
     const home = tmpHome();
     try {

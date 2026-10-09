@@ -27,7 +27,7 @@ import {
   loadPhysicsState,
   resetAllPhysicsState,
   savePhysicsState,
-} from '../src/physics-state.js';
+} from '../src/db/physics-state.js';
 import { simulate, type ForceContext } from '../src/physics.js';
 import { DEFAULT_PHYSICS_CONFIG } from '../src/physics-config.js';
 

@@ -13,14 +13,14 @@ import { loadAllEntries } from './store/entry-reads.js';
 import { openHippoDb, closeHippoDb, getMeta, rethrowIfSqliteBlocked, setMeta, type DatabaseSyncLike } from './db.js';
 import {
   EMBEDDING_MODEL_META_KEY, deleteOrphanVectors, hasStoredVectors, loadVectors, replaceAllVectors, storedVectorIds, upsertVectors,
-} from './vector-store.js';
-import { initializeParticle, savePhysicsState, loadPhysicsState, resetAllPhysicsState } from './physics-state.js';
+} from './db/vector-store.js';
+import { initializeParticle, savePhysicsState, loadPhysicsState, resetAllPhysicsState } from './db/physics-state.js';
 import { loadConfig } from './config.js';
 import { resolveEmbeddingProvider, type EmbeddingProvider } from './embedding-provider.js';
 import { DEFAULT_EMBEDDING_MODEL } from './local-embedding.js';
 import { redactSecretsStrict } from './secret-detect.js';
 import { errorMessage, log } from './log.js';
-import { StoreNotPortedError } from './db/sqlite-blocked.js';
+import { StoreNotPortedError } from './util/sqlite-blocked.js';
 import type { HippoStore, VectorReads, VectorRowWrite, VectorWrite, VectorWriteResult, VectorWrites } from './store-port.js';
 
 export { EMBEDDING_MODEL_META_KEY };
@@ -91,7 +91,7 @@ function loadStoredEmbeddingModel(hippoRoot: string): string | null {
     }
   } catch (err) {
     rethrowIfSqliteBlocked(err);
-    log.debug(`stored embedding model unreadable: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`stored embedding model unreadable: ${errorMessage(err)}`);
     return null;
   }
 }
@@ -200,7 +200,7 @@ function resetPhysicsFromIndex(
     }
   } catch (err) {
     // Best effort: retrieval still falls back without physics state.
-    log.warn(`physics reset after reindex failed: ${err instanceof Error ? err.message : String(err)}`);
+    log.warn(`physics reset after reindex failed: ${errorMessage(err)}`);
   }
 }
 
@@ -416,10 +416,10 @@ function embedMemoryInStore(store: HippoStore, provider: EmbeddingProvider, entr
         || (await writeVectorPage(writes, { model, replaceIndex: false }, [entry], await provider.embed([embeddingInputText(entry)], 'passage'), true)).modelMismatch;
       if (refused) warnEmbedFailureOnce('index', OTHER_MODEL_INDEX);
     } catch (err) {
-      warnEmbedFailureOnce(provider.kind, err instanceof Error ? err.message : String(err));
+      warnEmbedFailureOnce(provider.kind, errorMessage(err));
     }
   }).catch((err) => {
-    log.warn(`skipped embedding ${entry.id} (${err instanceof Error ? err.message : String(err)})`);
+    log.warn(`skipped embedding ${entry.id} (${errorMessage(err)})`);
   });
 }
 
@@ -435,7 +435,7 @@ export async function embedMemory(
     provider = resolveEmbeddingProvider(hippoRoot, { model });
   } catch (err) {
     // Callers fire and forget, so this must resolve: a bad config warns once instead of rejecting.
-    warnEmbedFailureOnce('config', err instanceof Error ? err.message : String(err));
+    warnEmbedFailureOnce('config', errorMessage(err));
     return;
   }
   if (!provider.isAvailable()) return;
@@ -487,10 +487,10 @@ export async function embedMemory(
       }
     } catch (err) {
       // Provider failure (API down / bad key). Best-effort: leave the index as-is, but say so once.
-      warnEmbedFailureOnce(provider.kind, err instanceof Error ? err.message : String(err));
+      warnEmbedFailureOnce(provider.kind, errorMessage(err));
     }
   }).catch((err) => {
-    log.warn(`skipped embedding ${entry.id} (${err instanceof Error ? err.message : String(err)}); run 'hippo embed' to backfill`);
+    log.warn(`skipped embedding ${entry.id} (${errorMessage(err)}); run 'hippo embed' to backfill`);
   });
 }
 

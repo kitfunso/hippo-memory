@@ -7,14 +7,14 @@ import { Layer, calculateStrength, createMemory, type MemoryEntry } from '../mem
 import { findRejectedValue, rejectionDigest } from '../rejection.js';
 import { redactSecretsStrict } from '../secret-detect.js';
 import { stampOriginProject } from '../store/entry-row.js';
-import { deleteEntryRowInTx, setEntryTagsInTx } from '../store/entry-writes.js';
-import { selectLiveEntriesBySourcePrefix } from '../store/entry-reads.js';
+import { deleteEntryRowInTx, renameEntrySourceAndOriginAt, renameEntrySourceAt, setEntryTagsInTx, supersedeEntryAt } from '../store/entry-writes.js';
+import { entryIdTakenAt, selectLiveEntriesBySourcePrefix } from '../store/entry-reads.js';
 import { markSummaryDirtyInTx } from '../summary-dirty.js';
 import { itemHash } from './keys.js';
 import { planContainer, type ContainerPlan, type DormantRow, type LiveRow, type PlannedWrite } from './plan.js';
 import { emptyTally, type Tally } from './report.js';
 import { MIN_ITEM_CHARS, itemSource, splitSource, storedText } from './source.js';
-import type { AgentMemoryTool } from './tools.js';
+import type { AgentMemoryTool } from '../core/agent-memory-tools.js';
 import type { Container, MemoryItem } from './types.js';
 
 export const SYNC_ACTOR = 'agent-memories';
@@ -141,10 +141,7 @@ class ContainerRun {
       if (item === undefined) continue;
       const source = itemSource(this.w.prefix, key, item.text);
       for (const row of rows) {
-        const moved = this.s.db.prepare(
-          `UPDATE memories SET source = ? WHERE id = ? AND tenant_id = ? AND source = ? AND superseded_by IS NULL`,
-        ).run(source, row.id, row.tenantId, row.source);
-        if (Number(moved.changes ?? 0) === 0) continue;
+        if (renameEntrySourceAt(this.s.db, row.tenantId, row.id, row.source, source) === 0) continue;
         this.tally.adopted++;
         this.mirror.push({ ...row, source });
       }
@@ -157,10 +154,7 @@ class ContainerRun {
     let moved = 0;
     for (const row of selectLiveEntriesBySourcePrefix(this.s.db, this.s.tenantId, old)) {
       const source = this.w.prefix + row.source.slice(old.length);
-      const done = this.s.db.prepare(
-        `UPDATE memories SET source = ?, origin_project = COALESCE(?, origin_project) WHERE id = ? AND tenant_id = ? AND source = ?`,
-      ).run(source, origin, row.id, row.tenantId, row.source);
-      if (Number(done.changes ?? 0) === 0) continue;
+      if (renameEntrySourceAndOriginAt(this.s.db, row.tenantId, row.id, { from: row.source, to: source, origin }) === 0) continue;
       moved++;
       this.mirror.push({ ...row, source, origin_project: origin ?? row.origin_project });
     }
@@ -212,9 +206,7 @@ class ContainerRun {
 
   /** api.supersede's steps on this transaction; false when another writer superseded the row first. */
   private supersede(old: MemoryEntry, newId: string): boolean {
-    const result = this.s.db.prepare(`UPDATE memories SET superseded_by = ? WHERE id = ? AND tenant_id = ? AND superseded_by IS NULL`)
-      .run(newId, old.id, old.tenantId);
-    if (Number(result.changes ?? 0) === 0) return false;
+    if (!supersedeEntryAt(this.s.db, old.tenantId, old.id, newId)) return false;
     if (old.dag_parent_id) markSummaryDirtyInTx(this.s.db, old.dag_parent_id, old.tenantId, SYNC_ACTOR);
     appendAuditEvent(this.s.db, { tenantId: old.tenantId, actor: SYNC_ACTOR, op: 'supersede', targetId: old.id, metadata: { newId } });
     this.mirror.push({ ...old, superseded_by: newId });
@@ -259,7 +251,7 @@ class ContainerRun {
   /** A deleted note came back unchanged: its old row returns with its id and history, under the sync's own audit op. */
   private restore(key: string, dormantId: string): void {
     const snap = readDormantSnapshot(this.s.db, this.s.tenantId, dormantId);
-    const taken = this.s.db.prepare(`SELECT 1 FROM memories WHERE id = ?`).get(dormantId) !== undefined;
+    const taken = entryIdTakenAt(this.s.db, dormantId);
     if (snap === null || taken) {
       this.write({ key, hash: '', supersedes: [] });
       return;

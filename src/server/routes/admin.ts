@@ -2,6 +2,7 @@
 import { AUDIT_OPS, type AuditOp } from '../../audit.js';
 import { auditList, authCreate, authListRows, authRevoke, quarantineApprove, quarantineList, quarantineReject } from '../../api.js';
 import { HttpError, readBody, sendJson } from '../../http-util.js';
+import { log } from '../../log.js';
 import { assertCrossTenantAdmin, buildContextWithAuth } from '../auth.js';
 import { pageOf, parseCursor, setNextCursorHeader } from '../cursor.js';
 import type { RouteRequest } from '../types.js';
@@ -54,6 +55,10 @@ export async function handleCreateAuthKey({ req, res, opts }: RouteRequest): Pro
     label: labelRaw,
     role,
   });
+  // The reply cannot change shape, so the server log is where a defaulted admin key gets noticed.
+  if (role === undefined && result.role === 'admin') {
+    log.warn(`auth key ${result.keyId} was minted with no role in the body, so it is an admin key, and it never expires; send "role": "member" for a narrower one`);
+  }
   sendJson(res, 200, result);
   return;
 }
@@ -105,7 +110,7 @@ export async function handleListQuarantine({ req, res, opts, query }: RouteReque
   }
   const limit = parseListLimit(query.get('limit'));
   const after = parseCursor(query.get('cursor'), 'string', 'string');
-  const page = pageOf(quarantineList(ctx, { status, limit: limit + 1, after }), limit, (q) => ({ key: q.quarantinedAt, id: q.id }));
+  const page = pageOf(await quarantineList(ctx, { status, limit: limit + 1, after }), limit, (q) => ({ key: q.quarantinedAt, id: q.id }));
   sendJson(res, 200, { quarantine: page.items, next_cursor: page.nextCursor });
   return;
 }
@@ -114,7 +119,7 @@ export async function handleListQuarantine({ req, res, opts, query }: RouteReque
 export async function handleApproveQuarantine({ req, res, opts }: RouteRequest, quarantineApproveMatch: Record<string, string>): Promise<void> {
   validateIdSegment(quarantineApproveMatch.id!, 'memory id');
   const ctx = await buildContextWithAuth(req, opts);
-  quarantineApprove(ctx, quarantineApproveMatch.id!);
+  await quarantineApprove(ctx, quarantineApproveMatch.id!);
   sendJson(res, 200, { approved: quarantineApproveMatch.id });
   return;
 }
@@ -123,7 +128,7 @@ export async function handleApproveQuarantine({ req, res, opts }: RouteRequest, 
 export async function handleRejectQuarantine({ req, res, opts }: RouteRequest, quarantineRejectMatch: Record<string, string>): Promise<void> {
   validateIdSegment(quarantineRejectMatch.id!, 'memory id');
   const ctx = await buildContextWithAuth(req, opts);
-  quarantineReject(ctx, quarantineRejectMatch.id!);
+  await quarantineReject(ctx, quarantineRejectMatch.id!);
   sendJson(res, 200, { rejected: quarantineRejectMatch.id });
   return;
 }
@@ -165,7 +170,7 @@ export async function handleListAudit({ req, res, opts, query }: RouteRequest): 
   const crossTenant = tenantOverride !== null && tenantOverride !== '' && tenantOverride !== ctx.tenantId;
   if (crossTenant) assertCrossTenantAdmin(ctx, '/v1/audit?tenant= for another tenant');
   const effectiveCtx = crossTenant ? { ...ctx, tenantId: tenantOverride } : ctx;
-  const page = pageOf(auditList(effectiveCtx, { op, since, limit: limit + 1, after }), limit, (e) => ({ key: e.ts, id: e.id }));
+  const page = pageOf(await auditList(effectiveCtx, { op, since, limit: limit + 1, after }), limit, (e) => ({ key: e.ts, id: e.id }));
   setNextCursorHeader(res, page.nextCursor);
   sendJson(res, 200, page.items);
   return;

@@ -5,7 +5,7 @@ import { cpSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } fr
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { closeHippoDb, openHippoDb } from '../src/db.js';
-import { StoreNotPortedError } from '../src/db/sqlite-blocked.js';
+import { StoreNotPortedError } from '../src/util/sqlite-blocked.js';
 import { STORE_NOT_PORTED_MESSAGE } from '../src/http-util.js';
 import {
   authRevoke, ForbiddenError, NotFoundError, OTHER_STORE_MARKER, serve, type Actor, type AuthRevokeResult, type Context, type HippoStore, type ServerHandle,

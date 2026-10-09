@@ -3,7 +3,7 @@
 import { openHippoDb, closeHippoDb } from '../db.js';
 import { recallScopeFilter } from '../store/search-rows.js';
 import type { AmbientLoadResult } from '../store/candidates.js';
-import { loadIndex } from '../store/index-and-stats.js';
+import { heldIdLookup } from '../store/entry-reads.js';
 import { calculateStrength, type MemoryEntry } from '../memory.js';
 import { appendAuditEvent, auditQueryFields, type AppendAuditOpts } from '../audit.js';
 import type { ContextReads, HippoStore } from '../store-port.js';
@@ -13,9 +13,10 @@ import { evalNow } from '../ablation.js';
 import { hybridSearch } from '../search/hybrid.js';
 import { physicsSearch } from '../search/physics-search.js';
 import type { HybridVectorCandidates } from '../search/vector.js';
-import { DEFAULT_LOCAL_BUMP, type SearchResult } from '../search/types.js';
+import { DEFAULT_LOCAL_BUMP, type SearchResult } from '../core/search-types.js';
 import { compareScoredResults } from '../compare.js';
 import { scopeMatch } from '../scope.js';
+import { scopeBoostFor } from '../search/boosts.js';
 import { type HippoConfig } from '../config.js';
 import type { ProjectRef } from '../project-identity.js';
 import {
@@ -153,9 +154,9 @@ export function selectPinned(
   // Prompt recall gates the backfill on the prompt instead of recency.
   if (plan.promptRecallPending) {
     const candidates = (): PromptCandidate[] => promptRecallCandidates(plan, pools, admission.admit, rankedPinned, nowP);
-    backfillFromPrompt(opts, plan, pinnedCfg, candidates, picked, recentBudget);
+    backfillFromPrompt(opts, plan, { pinnedCfg, candidates, picked, recentBudget });
   } else if (plan.includeRecent > 0) {
-    backfillRecent(plan, localPool, globalPool, picked, recentBudget, nowP);
+    backfillRecent(plan, { localPool, globalPool, picked, recentBudget, nowP });
   }
 
   admitWithinBudget(rankedPinned, picked, effBudget, obs);
@@ -173,11 +174,10 @@ function rankPinned(
     ...pinnedGlobal.map((e) => ({ entry: e, isGlobal: true })),
   ]
     .map(({ entry, isGlobal }) => {
-      const scopeSig = scopeMatch(entry.tags, plan.activeScope);
-      const sBst = scopeSig === 1 ? 1.5 : scopeSig === -1 ? 0.5 : 1.0;
+      const scopeBoost = scopeBoostFor(scopeMatch(entry.tags, plan.activeScope));
       return {
         entry,
-        score: calculateStrength(entry, nowP) * (isGlobal ? GLOBAL_DISCOUNT : 1) * sBst,
+        score: calculateStrength(entry, nowP) * (isGlobal ? GLOBAL_DISCOUNT : 1) * scopeBoost,
         tokens: plan.price(entry, isGlobal),
         isGlobal,
       };
@@ -219,19 +219,23 @@ function admitWithinBudget(
   }
 }
 
-function backfillFromPrompt(
-  opts: ContextOpts,
-  plan: ContextPlan,
-  pinnedCfg: HippoConfig,
-  candidates: () => PromptCandidate[],
-  picked: Picked,
-  recentBudget: number,
-): void {
+interface BackfillFromPromptOptions {
+  readonly pinnedCfg: HippoConfig;
+  readonly candidates: () => PromptCandidate[];
+  readonly picked: Picked;
+  readonly recentBudget: number;
+}
+
+// Overlap a candidate needs with the prompt when the config sets none.
+const DEFAULT_PROMPT_RECALL_THRESHOLD = 0.04;
+
+function backfillFromPrompt(opts: ContextOpts, plan: ContextPlan, options: BackfillFromPromptOptions): void {
+  const { pinnedCfg, candidates, picked, recentBudget } = options;
   const rawMetric = pinnedCfg.pinnedInject.promptRecallMetric;
   const metric: PromptRecallMetric = rawMetric === 'cosine' ? 'cosine' : 'jaccard';
   const gate: PromptRecallGate = {
     metric,
-    threshold: finiteOr(pinnedCfg.pinnedInject.promptRecallThreshold, 0.04, 0),
+    threshold: finiteOr(pinnedCfg.pinnedInject.promptRecallThreshold, DEFAULT_PROMPT_RECALL_THRESHOLD, 0),
     minShared: finiteOr(pinnedCfg.pinnedInject.promptRecallMinShared, 2, 0),
     maxItems: finiteOr(pinnedCfg.pinnedInject.promptRecallMaxItems, 5, 1),
   };
@@ -297,14 +301,16 @@ function promptRecallCandidates(
   return candidateItems;
 }
 
-function backfillRecent(
-  plan: ContextPlan,
-  localPool: MemoryEntry[],
-  globalPool: MemoryEntry[],
-  picked: Picked,
-  recentBudget: number,
-  nowP: Date,
-): void {
+interface BackfillRecentOptions {
+  readonly localPool: MemoryEntry[];
+  readonly globalPool: MemoryEntry[];
+  readonly picked: Picked;
+  readonly recentBudget: number;
+  readonly nowP: Date;
+}
+
+function backfillRecent(plan: ContextPlan, options: BackfillRecentOptions): void {
+  const { localPool, globalPool, picked, recentBudget, nowP } = options;
   const recent = [
     ...localPool.map((entry) => ({ entry, isGlobal: plan.primaryIsGlobal })),
     ...globalPool.map((entry) => ({ entry, isGlobal: true })),
@@ -371,25 +377,29 @@ export async function selectBySearch(
 ): Promise<ContextResultEntry[]> {
   const minResults = plan.cost ? 0 : undefined; // a priced block skips an oversize top hit too, so the budget bounds it
   const results = plan.hasGlobal && !plan.primaryIsGlobal
-    ? await searchBothStores(ctx, plan, left, minResults, pools, admission.bothStoresAdmit)
-    : await searchLocalRows(ctx, plan, left, minResults, pools.local.entries, admission.admit);
+    ? await searchBothStores(ctx, plan, { left, minResults, pools, admit: admission.bothStoresAdmit })
+    : await searchLocalRows(ctx, plan, { left, minResults, localEntries: pools.local.entries, admit: admission.admit });
   await auditContextRecall(ctx, plan, results.length);
   return results;
 }
 
 // The pools were admitted at load, before ranking, dedupe and budget: a post-filter would let an excluded row fill the
 // budget or shadow its admitted duplicate.
-async function searchBothStores(
-  ctx: Context,
-  plan: ContextPlan,
-  left: number,
-  minResults: number | undefined,
-  pools: ContextPools,
-  admit: (e: MemoryEntry) => boolean,
-): Promise<ContextResultEntry[]> {
+interface SearchBothStoresOptions {
+  readonly left: number;
+  readonly minResults: number | undefined;
+  readonly pools: ContextPools;
+  readonly admit: (e: MemoryEntry) => boolean;
+}
+
+async function searchBothStores(ctx: Context, plan: ContextPlan, options: SearchBothStoresOptions): Promise<ContextResultEntry[]> {
+  const { left, minResults, pools, admit } = options;
   const { cost, price } = plan;
-  const localIndex = loadIndex(ctx.hippoRoot);
-  const isGlobalHit = (e: MemoryEntry): boolean => !localIndex.entries[e.id];
+  // A local pool row is local by construction; sync keeps a global row's id on its local copy, so the global pool is looked up.
+  const poolIds = (pool: AmbientLoadResult): string[] => [...pool.entries, ...(pool.recall ?? [])].map((e) => e.id);
+  const localIds = new Set(poolIds(pools.local));
+  const alsoLocal = heldIdLookup(ctx.hippoRoot, ctx.tenantId, poolIds(pools.global).filter((id) => !localIds.has(id)));
+  const isGlobalHit = (e: MemoryEntry): boolean => !localIds.has(e.id) && !alsoLocal(e.id);
   const roots = { local: ctx.hippoRoot, global: plan.globalRoot };
   const merged = await rankBothStores(plan.query, roots, { local: pools.local.entries, global: pools.global.entries }, contextVectorSpec(ctx, plan, admit), {
     budget: left,
@@ -410,14 +420,15 @@ function contextVectorSpec(ctx: Context, plan: ContextPlan, admit: (e: MemoryEnt
   return { tenantId: ctx.tenantId, scope: recallScopeFilter(plan.exactScope, 'exact', plan.ownScope), includeSuperseded: false, admit };
 }
 
-async function searchLocalRows(
-  ctx: Context,
-  plan: ContextPlan,
-  left: number,
-  minResults: number | undefined,
-  localEntries: MemoryEntry[],
-  admit: (e: MemoryEntry) => boolean,
-): Promise<ContextResultEntry[]> {
+interface SearchLocalRowsOptions {
+  readonly left: number;
+  readonly minResults: number | undefined;
+  readonly localEntries: MemoryEntry[];
+  readonly admit: (e: MemoryEntry) => boolean;
+}
+
+async function searchLocalRows(ctx: Context, plan: ContextPlan, options: SearchLocalRowsOptions): Promise<ContextResultEntry[]> {
+  const { left, minResults, localEntries, admit } = options;
   const { cost, price, primaryIsGlobal, query, config: ctxConfig } = plan;
   const usePhysicsCtx = ctxConfig.physics?.enabled !== false;
   const localCost = cost && ((r: SearchResult) => price(r.entry, primaryIsGlobal));

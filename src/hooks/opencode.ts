@@ -1,8 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { JsonObject } from '../working-memory.js';
-import { isJsonObject, homeDir } from './shared.js';
-import { type JsonValue, isJsonString } from '../json.js';
+import { homeDir } from './shared.js';
+import { writeFileAtomic } from '../util/atomic-write.js';
+import { type JsonValue, isJsonString, isJsonObjectLiteral } from '../json.js';
 
 const HIPPO_OPENCODE_PLUGIN_MARKER = 'HIPPO_OPENCODE_PLUGIN_V1';
 
@@ -109,7 +110,7 @@ function resolveOpencodeConfigPath(): string {
 const HIPPO_OWNED_COMMAND_RE = /^\s*hippo\s+(session-end|last-sleep|sleep|capture|context)(?=\s|$)/;
 
 function hookIsHippoOwned(hook: JsonValue | undefined): boolean {
-  if (!isJsonObject(hook)) return false;
+  if (!isJsonObjectLiteral(hook)) return false;
   const cmd = hook.command;
   return isJsonString(cmd) && HIPPO_OWNED_COMMAND_RE.test(cmd);
 }
@@ -145,7 +146,7 @@ function migrateLegacyOpencodeHooksBlock() {
   const hooks = settings.hooks;
   // Non-object hooks values (string, array, null) are user content we don't
   // recognise — leave them alone, return migrated=false.
-  if (!isJsonObject(hooks)) {
+  if (!isJsonObjectLiteral(hooks)) {
     return { migrated: false, jsonRepairFailed: false };
   }
 
@@ -153,24 +154,8 @@ function migrateLegacyOpencodeHooksBlock() {
   let changed = false;
   for (const key of Object.keys(hooksObj)) {
     if (!Array.isArray(hooksObj[key])) continue;
-    const survivingEntries: JsonValue[] = [];
-    for (const entry of hooksObj[key]) {
-      if (!isJsonObject(entry)) {
-        survivingEntries.push(entry);
-        continue;
-      }
-      const innerHooks = entry.hooks;
-      if (!Array.isArray(innerHooks)) {
-        survivingEntries.push(entry);
-        continue;
-      }
-      const beforeInner = innerHooks.length;
-      const survivingInner = innerHooks.filter((h) => !hookIsHippoOwned(h));
-      if (survivingInner.length !== beforeInner) changed = true;
-      if (survivingInner.length === 0) continue; // drop entry, nothing left
-      entry.hooks = survivingInner;
-      survivingEntries.push(entry);
-    }
+    const { survivingEntries, strippedAny } = stripHippoHooksFromEntries(hooksObj[key]);
+    if (strippedAny) changed = true;
     if (survivingEntries.length !== hooksObj[key].length) changed = true;
     hooksObj[key] = survivingEntries;
     if (hooksObj[key].length === 0) delete hooksObj[key];
@@ -179,8 +164,32 @@ function migrateLegacyOpencodeHooksBlock() {
   if (!changed) return { migrated: false, jsonRepairFailed: false };
 
   if (Object.keys(hooksObj).length === 0) delete settings.hooks;
-  fs.writeFileSync(configPath, JSON.stringify(settings, null, 2) + '\n', 'utf8');
+  writeFileAtomic(configPath, JSON.stringify(settings, null, 2) + '\n');
   return { migrated: true, jsonRepairFailed: false };
+}
+
+/** One event's entries with every hippo-owned hook taken out, and whether any was. */
+function stripHippoHooksFromEntries(entries: JsonValue[]) {
+  const survivingEntries: JsonValue[] = [];
+  let strippedAny = false;
+  for (const entry of entries) {
+    if (!isJsonObjectLiteral(entry)) {
+      survivingEntries.push(entry);
+      continue;
+    }
+    const innerHooks = entry.hooks;
+    if (!Array.isArray(innerHooks)) {
+      survivingEntries.push(entry);
+      continue;
+    }
+    const beforeInner = innerHooks.length;
+    const survivingInner = innerHooks.filter((h) => !hookIsHippoOwned(h));
+    if (survivingInner.length !== beforeInner) strippedAny = true;
+    if (survivingInner.length === 0) continue; // drop entry, nothing left
+    entry.hooks = survivingInner;
+    survivingEntries.push(entry);
+  }
+  return { survivingEntries, strippedAny };
 }
 
 export function installOpencodePlugin(): OpencodePluginInstallResult {
@@ -197,8 +206,7 @@ export function installOpencodePlugin(): OpencodePluginInstallResult {
       return { installed: false, pluginPath, migratedLegacyHooks: migrated, jsonRepairFailed };
     }
   }
-  fs.mkdirSync(path.dirname(pluginPath), { recursive: true });
-  fs.writeFileSync(pluginPath, OPENCODE_PLUGIN_SOURCE, 'utf8');
+  writeFileAtomic(pluginPath, OPENCODE_PLUGIN_SOURCE);
   return { installed: true, pluginPath, migratedLegacyHooks: migrated, jsonRepairFailed };
 }
 

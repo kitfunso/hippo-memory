@@ -20,14 +20,16 @@ beforeEach(() => {
 });
 afterEach(() => rmSync(cwd, { recursive: true, force: true }));
 
-function hippo(...args: string[]) {
+function hippoWith(extraEnv: Record<string, string>, ...args: string[]) {
   const r = spawnSync(process.execPath, [CLI, 'import', ...args], {
     cwd,
-    env: { ...process.env, HIPPO_HOME: join(cwd, 'global-hippo'), HIPPO_TENANT: 'default', HIPPO_SKIP_AUTO_INTEGRATIONS: '1' },
+    env: { ...process.env, HIPPO_HOME: join(cwd, 'global-hippo'), HIPPO_TENANT: 'default', HIPPO_SKIP_AUTO_INTEGRATIONS: '1', ...extraEnv },
     encoding: 'utf8',
   });
   return { status: r.status, stdout: r.stdout, stderr: r.stderr };
 }
+
+const hippo = (...args: string[]) => hippoWith({}, ...args);
 
 const contents = (): string[] => loadAllEntries(hippoRoot).map((e) => e.content).sort();
 
@@ -48,6 +50,20 @@ describe('hippo import --markdown', () => {
     expect(again.stdout).toMatch(/Imported: +0/);
     expect(again.stdout).toMatch(/Skipped \(dedup\/noise\): 2/);
     expect(contents()).toHaveLength(2);
+  });
+});
+
+describe('hippo import embedding backfill', () => {
+  it('a backfill that fails still imports, and warns with the rows left without a vector and the command that finishes them', () => {
+    // An API provider with no key makes the backfill reject after the rows are saved.
+    writeFileSync(join(hippoRoot, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai', model: 'm' } }));
+    writeFileSync(join(cwd, 'notes.md'), '# Build notes\n\n- the release build needs node 22 or newer\n- run the migration before the deploy step\n');
+
+    const r = hippoWith({ OPENAI_API_KEY: '' }, '--markdown', 'notes.md');
+    expect(r.status).toBe(0);
+    expect(r.stdout).toMatch(/Imported: +2/);
+    expect(contents()).toHaveLength(2);
+    expect(r.stderr).toMatch(/warn: import: embedding backfill failed \(.*OPENAI_API_KEY is not set.*\); 2 rows have no vector; run 'hippo embed' to backfill/);
   });
 });
 

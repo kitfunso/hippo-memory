@@ -13,7 +13,7 @@ import { rmSync } from 'node:fs';
 import { serve, type ServerHandle } from '../src/server.js';
 import { createApiKey, type CreateApiKeyResult } from '../src/auth.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { savePrediction, closePrediction, type PredictionBaserate } from '../src/predictions/store.js';
+import { savePrediction, closePrediction, type PredictionBaserate } from '../src/store/predictions.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 let home: string;
@@ -47,7 +47,7 @@ async function jsonAs<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-describe('HTTP /v1/predictions/stats (J3, v0.31)', () => {
+describe('HTTP /v1/predictions/stats', () => {
   it('returns baserate JSON for a class with closed predictions', async () => {
     // Seed: 2 closed predictions in class "http-test"
     for (const [est, act] of [[3, 5], [4, 6]]) {

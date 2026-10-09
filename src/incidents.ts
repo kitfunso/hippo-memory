@@ -28,12 +28,15 @@
 
 import { BadRequestError, ConflictError, NotFoundError } from './api-errors.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
+import { withWriteScope } from './db/busy.js';
 import { writeEntry } from './store/entry-writes.js';
+import { onHandle } from './store/open.js';
 import { assertTenantId } from './tenant.js';
-import { createMemory, Layer } from './memory.js';
 import { appendAuditEvent } from './audit.js';
-import { objectHalfLifeDays } from './half-life-migration.js';
-import { keysetAfter, type KeysetPosition } from './keyset.js';
+import type { KeysetPosition } from './keyset.js';
+import type { ObjectDescriptor } from './objects/descriptor.js';
+import { assertObjectStatus, closeObjectOn, loadObjectByIdOn, loadObjectsOn, objectMirrorMemory } from './objects/lifecycle.js';
+import { warnDamagedColumn } from './util/stored-json.js';
 
 // ---------------------------------------------------------------------------
 // Domain types
@@ -101,7 +104,7 @@ interface IncidentRow {
   created_at: string;
 }
 
-function parseLinkedMemoryIds(raw: string): string[] {
+function parseLinkedMemoryIds(raw: string, id: number): string[] {
   try {
     // SAFETY: JSON.parse output is arbitrary; narrowed by Array.isArray plus
     // the per-element string check below before use as string[].
@@ -112,6 +115,7 @@ function parseLinkedMemoryIds(raw: string): string[] {
     return [];
   } catch {
     // A malformed list column reads as empty instead of failing the incident read.
+    warnDamagedColumn({ table: 'incidents', id, column: 'linked_memory_ids' }, 'not valid JSON');
     return [];
   }
 }
@@ -129,7 +133,7 @@ function rowToIncident(row: IncidentRow): Incident {
     resolutionText: row.resolution_text,
     resolvedAt: row.resolved_at,
     closedAt: row.closed_at,
-    linkedMemoryIds: parseLinkedMemoryIds(row.linked_memory_ids),
+    linkedMemoryIds: parseLinkedMemoryIds(row.linked_memory_ids, row.id),
     createdAt: row.created_at,
   };
 }
@@ -138,6 +142,22 @@ const INCIDENT_COLS = `
   id, memory_id, tenant_id, incident_text, context, status,
   resolution_text, resolved_at, closed_at, linked_memory_ids, created_at
 `;
+
+// No save entry: an incident checks its linked memories inside the write, so it keeps its own save.
+const INCIDENT: ObjectDescriptor<Incident, IncidentRow> = {
+  table: 'incidents',
+  cols: INCIDENT_COLS,
+  label: 'incident',
+  plural: 'incidents',
+  fn: { get: 'loadIncidentById', close: 'closeIncident', list: 'loadIncidents' },
+  states: VALID_INCIDENT_STATES,
+  closableFrom: ['open', 'resolved'],
+  closeRefusal: 'already closed',
+  ops: { close: 'incident_close' },
+  idKey: 'incident_id',
+  listFilters: {},
+  rowTo: rowToIncident,
+};
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -234,15 +254,7 @@ export function saveIncident(
   const content = opts.context
     ? `${opts.incidentText}\n\nContext: ${opts.context}`
     : opts.incidentText;
-  const tags = ['incident', ...(opts.extraTags ?? [])];
-  const mem = createMemory(content, {
-    tags,
-    layer: Layer.Semantic,
-    confidence: 'verified',
-    source: 'incident',
-    baseHalfLifeDays: objectHalfLifeDays(hippoRoot),
-    tenantId,
-  });
+  const mem = objectMirrorMemory(hippoRoot, tenantId, 'incident', content, opts.extraTags ?? []);
 
   // Populated inside afterWrite so the linked-id validation, the INSERT, and the
   // memory write all share one SAVEPOINT.
@@ -280,62 +292,41 @@ export function resolveIncident(
     throw new BadRequestError('resolveIncident: resolutionText is required (non-empty)');
   }
   const now = new Date().toISOString();
-  const db = openHippoDb(hippoRoot);
-  try {
-    db.exec('BEGIN IMMEDIATE');
-    try {
-      const updateResult = db.prepare(`
-        UPDATE incidents
-        SET status = 'resolved', resolution_text = ?, resolved_at = ?
-        WHERE id = ? AND tenant_id = ? AND status = 'open'
-      `).run(resolutionText, now, id, tenantId);
+  return onHandle(hippoRoot, (db) => withWriteScope(db, 'resolve_incident', () => {
+    const updateResult = db.prepare(`
+      UPDATE incidents
+      SET status = 'resolved', resolution_text = ?, resolved_at = ?
+      WHERE id = ? AND tenant_id = ? AND status = 'open'
+    `).run(resolutionText, now, id, tenantId);
 
-      if (updateResult.changes === 0) {
-        // SAFETY: row shape matches the single `status` column named in the SELECT above.
-        const existing = db.prepare(
-          `SELECT status FROM incidents WHERE id = ? AND tenant_id = ?`,
-        ).get(id, tenantId) as { status: string } | undefined;
-        if (!existing) {
-          throw new NotFoundError(`resolveIncident: incident ${id} not found for tenant ${tenantId}`);
-        }
-        throw new ConflictError(
-          `resolveIncident: incident ${id} is not open (status='${existing.status}'); only open incidents can be resolved.`,
-        );
+    if (updateResult.changes === 0) {
+      const existing = db.prepare(`SELECT status FROM incidents WHERE id = ? AND tenant_id = ?`)
+        .get<{ status: string } | undefined>(id, tenantId);
+      if (!existing) {
+        throw new NotFoundError(`resolveIncident: incident ${id} not found for tenant ${tenantId}`);
       }
-
-      // SAFETY: row's shape matches the columns named in INCIDENT_COLS above.
-      const row = db.prepare(`SELECT ${INCIDENT_COLS} FROM incidents WHERE id = ? AND tenant_id = ?`)
-        .get(id, tenantId) as IncidentRow | undefined;
-      if (!row) throw new NotFoundError(`resolveIncident: incident ${id} not found after UPDATE`);
-
-      appendAuditEvent(db, {
-        tenantId,
-        actor,
-        op: 'incident_resolve',
-        targetId: String(id),
-        metadata: { incident_id: id },
-      });
-
-      db.exec('COMMIT');
-      return rowToIncident(row);
-    } catch (e) {
-      try {
-        db.exec('ROLLBACK');
-      } catch {
-        // Ignore rollback failures — the throw below is what matters.
-      }
-      throw e;
+      throw new ConflictError(
+        `resolveIncident: incident ${id} is not open (status='${existing.status}'); only open incidents can be resolved.`,
+      );
     }
-  } finally {
-    closeHippoDb(db);
-  }
+
+    const resolved = loadObjectByIdOn(db, INCIDENT, tenantId, id);
+    if (!resolved) throw new NotFoundError(`resolveIncident: incident ${id} not found after UPDATE`);
+
+    appendAuditEvent(db, {
+      tenantId,
+      actor,
+      op: 'incident_resolve',
+      targetId: String(id),
+      metadata: { incident_id: id },
+    });
+    return resolved;
+  }));
 }
 
 /**
  * Close (retire) an incident from open or resolved (open|resolved -> closed).
- * Updates closed_at only; the memory mirror is not mutated. CAS guard: WHERE
- * status IN ('open','resolved'); 0 changes distinguishes not-found from
- * wrong-state. Emits incident_close.
+ * Updates closed_at only; the memory mirror is not mutated.
  */
 export function closeIncident(
   hippoRoot: string,
@@ -343,57 +334,9 @@ export function closeIncident(
   id: number,
   actor: string = 'cli',
 ): Incident {
-  assertTenantId('closeIncident', tenantId);
+  assertTenantId(INCIDENT.fn.close, tenantId);
   const now = new Date().toISOString();
-  const db = openHippoDb(hippoRoot);
-  try {
-    db.exec('BEGIN IMMEDIATE');
-    try {
-      const updateResult = db.prepare(`
-        UPDATE incidents
-        SET status = 'closed', closed_at = ?
-        WHERE id = ? AND tenant_id = ? AND status IN ('open', 'resolved')
-      `).run(now, id, tenantId);
-
-      if (updateResult.changes === 0) {
-        // SAFETY: row shape matches the single `status` column named in the SELECT above.
-        const existing = db.prepare(
-          `SELECT status FROM incidents WHERE id = ? AND tenant_id = ?`,
-        ).get(id, tenantId) as { status: string } | undefined;
-        if (!existing) {
-          throw new NotFoundError(`closeIncident: incident ${id} not found for tenant ${tenantId}`);
-        }
-        throw new ConflictError(
-          `closeIncident: incident ${id} is already closed (status='${existing.status}'); only open or resolved incidents can be closed.`,
-        );
-      }
-
-      // SAFETY: row's shape matches the columns named in INCIDENT_COLS above.
-      const row = db.prepare(`SELECT ${INCIDENT_COLS} FROM incidents WHERE id = ? AND tenant_id = ?`)
-        .get(id, tenantId) as IncidentRow | undefined;
-      if (!row) throw new NotFoundError(`closeIncident: incident ${id} not found after UPDATE`);
-
-      appendAuditEvent(db, {
-        tenantId,
-        actor,
-        op: 'incident_close',
-        targetId: String(id),
-        metadata: { incident_id: id },
-      });
-
-      db.exec('COMMIT');
-      return rowToIncident(row);
-    } catch (e) {
-      try {
-        db.exec('ROLLBACK');
-      } catch {
-        // Ignore rollback failures — the throw below is what matters.
-      }
-      throw e;
-    }
-  } finally {
-    closeHippoDb(db);
-  }
+  return onHandle(hippoRoot, (db) => closeObjectOn(db, INCIDENT, tenantId, id, { actor, now }));
 }
 
 export function loadIncidentById(
@@ -401,16 +344,8 @@ export function loadIncidentById(
   tenantId: string,
   id: number,
 ): Incident | null {
-  assertTenantId('loadIncidentById', tenantId);
-  const db = openHippoDb(hippoRoot);
-  try {
-    // SAFETY: row's shape matches the columns named in INCIDENT_COLS above.
-    const row = db.prepare(`SELECT ${INCIDENT_COLS} FROM incidents WHERE id = ? AND tenant_id = ?`)
-      .get(id, tenantId) as IncidentRow | undefined;
-    return row ? rowToIncident(row) : null;
-  } finally {
-    closeHippoDb(db);
-  }
+  assertTenantId(INCIDENT.fn.get, tenantId);
+  return onHandle(hippoRoot, (db) => loadObjectByIdOn(db, INCIDENT, tenantId, id));
 }
 
 export function loadIncidents(
@@ -418,38 +353,9 @@ export function loadIncidents(
   tenantId: string,
   opts: ListIncidentsOpts = {},
 ): Incident[] {
-  assertTenantId('loadIncidents', tenantId);
-  const limit = opts.limit ?? 100;
-  const after = keysetAfter('created_at', 'id', opts.after);
-  const db = openHippoDb(hippoRoot);
-  try {
-    let rows: IncidentRow[];
-    if (opts.status) {
-      if (!VALID_INCIDENT_STATES.has(opts.status)) {
-        throw new BadRequestError(
-          `loadIncidents: status must be one of ${Array.from(VALID_INCIDENT_STATES).join('|')}; got ${opts.status}`,
-        );
-      }
-      // SAFETY: rows' shape matches the columns named in INCIDENT_COLS above.
-      rows = db.prepare(`
-        SELECT ${INCIDENT_COLS} FROM incidents
-        WHERE tenant_id = ? AND status = ?${after.sql}
-        ORDER BY created_at DESC, id DESC
-        LIMIT ?
-      `).all(tenantId, opts.status, ...after.params, limit) as IncidentRow[];
-    } else {
-      // SAFETY: rows' shape matches the columns named in INCIDENT_COLS above.
-      rows = db.prepare(`
-        SELECT ${INCIDENT_COLS} FROM incidents
-        WHERE tenant_id = ?${after.sql}
-        ORDER BY created_at DESC, id DESC
-        LIMIT ?
-      `).all(tenantId, ...after.params, limit) as IncidentRow[];
-    }
-    return rows.map(rowToIncident);
-  } finally {
-    closeHippoDb(db);
-  }
+  assertTenantId(INCIDENT.fn.list, tenantId);
+  assertObjectStatus(INCIDENT, opts.status);
+  return onHandle(hippoRoot, (db) => loadObjectsOn(db, INCIDENT, tenantId, opts));
 }
 
 export function loadOpenIncidents(

@@ -2,24 +2,18 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { execFileSync } from 'child_process';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { Layer } from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-
-const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
+import { hippoOut } from './_helpers/spawn-hippo.js';
 
 let tmpDir: string;
 let hippoDir: string;
 
 function runHippo(args: string[], env?: Record<string, string>): string {
   const globalDir = path.join(tmpDir, 'global');
-  return execFileSync(process.execPath, [HIPPO_JS, ...args], {
-    env: { ...process.env, HIPPO_HOME: globalDir, HIPPO_SCOPE: '', GSTACK_SKILL: '', OPENCLAW_SKILL: '', ...env },
-    cwd: tmpDir,
-    encoding: 'utf8',
-  });
+  return hippoOut(args, { env: { ...process.env, HIPPO_HOME: globalDir, HIPPO_SCOPE: '', GSTACK_SKILL: '', OPENCLAW_SKILL: '', ...env }, cwd: tmpDir });
 }
 
 beforeEach(() => {

@@ -98,7 +98,7 @@ describe('bindSessionOwner', () => {
   it('the first bind lifts the floor above the last release before v54, which the open then refuses', () => {
     setFloor('0.0.1');
     bindSessionOwner(ctx('alice'), 's1');
-    // The open refuses any binary below the floor (github-v1.3.1-hotfix.test.ts), so a floor above the release shuts it out.
+    // The open refuses any binary below the floor (github-rollback-guard-and-deletion-atomicity.test.ts), so a floor above the release shuts it out.
     expect(compareSemver(floor() ?? '', PREVIOUS_RELEASE)).toBeGreaterThan(0);
   });
 

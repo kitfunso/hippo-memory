@@ -7,8 +7,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
@@ -24,8 +23,7 @@ import {
 } from '../src/token-ledger.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
-
-const HIPPO_JS = resolve(__dirname, '..', 'bin', 'hippo.js');
+import { hippoOut } from './_helpers/spawn-hippo.js';
 
 function withDb<T>(root: string, fn: (db: ReturnType<typeof openHippoDb>) => T): T {
   const db = openHippoDb(root);
@@ -122,7 +120,7 @@ describe('per-prompt hook: stable rendering and inject only on change', () => {
     const env: NodeJS.ProcessEnv = { ...process.env, HIPPO_HOME: join(tmpDir, 'global') };
     delete env.HIPPO_SESSION_ID;
     delete env.CLAUDE_CODE_SESSION_ID;
-    return execFileSync(process.execPath, [HIPPO_JS, ...args], { env, cwd: tmpDir, encoding: 'utf8', input: stdin });
+    return hippoOut(args, { env, cwd: tmpDir, input: stdin });
   }
   const HOOK = ['context', '--pinned-only', '--include-recent', '5', '--format', 'additional-context'];
   const payload = (sessionId: string): string => JSON.stringify({ session_id: sessionId, prompt: 'hi' });

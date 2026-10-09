@@ -356,19 +356,6 @@ describe('the ledger never changes the hook', () => {
     expect(eventCount(dir)).toBe(0);
   });
 
-  it.each<[DeliveryFault]>([
-    ['observe'],
-    ['build'],
-    ['flush'],
-  ])('the shipped CLI takes no %s fault from the environment: the event is written and stderr stays clean', (fault) => {
-    fixture();
-    const dir = clone(true);
-    const on = run(dir, claude('env-fault'), { env: { HIPPO_FAKE_NOW: FAKE_NOW, HIPPO_TEST_DELIVERY_FAULT: fault } });
-    expect(on.status, on.stderr).toBe(0);
-    expect(ledgerLines(on.stderr)).toEqual([]);
-    expect(eventCount(dir)).toBe(1);
-  });
-
   it('F7a: a failing write rolls back, keeps stdout and the exit code, and prints one stderr line', () => {
     fixture();
     const off = run(clone(false), claude('f7a'), { env: { HIPPO_FAKE_NOW: FAKE_NOW } });

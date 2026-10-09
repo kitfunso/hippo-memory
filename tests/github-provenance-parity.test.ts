@@ -14,7 +14,7 @@ import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { ingestEvent, type IngestEvent } from '../src/connectors/github/ingest.js';
-import { buildProvenanceCoverage } from '../src/provenance-coverage.js';
+import { buildProvenanceCoverage } from '../src/cli/provenance-coverage.js';
 import type {
   GitHubIssueEvent,
   GitHubIssueCommentEvent,

@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import { errorMessage, log } from '../log.js';
 import { HIPPO_CODEX_WRAPPER_MARKER, homeDir, codexHomeDir, ensureDir } from './shared.js';
 import { isJsonString } from '../json.js';
+import { writeFileAtomic } from '../util/atomic-write.js';
 
 export interface CodexWrapperPaths {
   wrapperDir: string;
@@ -219,7 +220,7 @@ export function detectRealCodexPath(): string | null {
 }
 
 function writeExecutableFile(filePath: string, content: string): void {
-  fs.writeFileSync(filePath, content, 'utf8');
+  writeFileAtomic(filePath, content);
   try {
     fs.chmodSync(filePath, 0o755);
   } catch (err) {
@@ -232,14 +233,7 @@ export function installCodexWrapper(realCodexPath?: string): CodexWrapperInstall
   const existingMetadata = readCodexWrapperMetadata();
   if (isCodexWrapperMetadataValid(existingMetadata) && !realCodexPath) {
     cleanupLegacyCodexPathWrappers(resolveCodexWrapperPaths());
-    return {
-      installed: true,
-      metadataPath: resolveCodexWrapperPaths().metadataPath,
-      realCodexPath: existingMetadata.realCodexPath,
-      commandPath: existingMetadata.commandPath,
-      backupPath: existingMetadata.backupPath,
-      installMode: existingMetadata.installMode,
-    };
+    return installResult(resolveCodexWrapperPaths().metadataPath, existingMetadata);
   }
 
   const resolvedRealCodexPath = realCodexPath ?? detectRealCodexPath();
@@ -274,11 +268,15 @@ export function installCodexWrapper(realCodexPath?: string): CodexWrapperInstall
     logFile: paths.logFile,
     installedAt: new Date().toISOString(),
   };
-  fs.writeFileSync(paths.metadataPath, JSON.stringify(metadata, null, 2) + '\n', 'utf8');
+  writeFileAtomic(paths.metadataPath, JSON.stringify(metadata, null, 2) + '\n');
 
+  return installResult(paths.metadataPath, metadata);
+}
+
+function installResult(metadataPath: string, metadata: CodexWrapperMetadata): CodexWrapperInstallResult {
   return {
     installed: true,
-    metadataPath: paths.metadataPath,
+    metadataPath,
     realCodexPath: metadata.realCodexPath,
     commandPath: metadata.commandPath,
     backupPath: metadata.backupPath,

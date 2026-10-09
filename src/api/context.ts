@@ -1,7 +1,6 @@
 // Ambient context injection: the admission policy and getContext.
 
 import { isInitialized } from '../store/open.js';
-import { strengthenRetrieved } from '../store/entry-writes.js';
 import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../store/rows.js';
 import {
   type ContextCandidateFilter,
@@ -9,7 +8,6 @@ import {
   type AmbientLoadResult,
   type RecentOrigins,
 } from '../store/candidates.js';
-import { loadIndex, saveIndex, updateStats } from '../store/index-and-stats.js';
 import { type ContinuityKey, freshActiveSnapshot, SNAPSHOT_AMBIENT_MAX_AGE_MS } from '../store/sessions.js';
 import type { SessionEvent, TaskSnapshot } from '../store/rows.js';
 import type { SessionHandoff } from '../handoff.js';
@@ -17,16 +15,17 @@ import { estimateTokens } from '../token-ledger.js';
 import { markRetrieved, type MemoryEntry, COMPACTION_MEMORY_TAG } from '../memory.js';
 import { isWorthSurfacing } from '../memory-quality.js';
 import { getGlobalRoot } from '../shared.js';
-import { writeRecallTraceAtRoot, type RecallTraceInput } from '../recall-trace.js';
-import { evalNow, isRecallBoostAblated } from '../ablation.js';
+import type { RecallTraceInput } from '../recall-trace.js';
+import { evalNow } from '../ablation.js';
 import { dropHeldCopies } from '../same-text.js';
 import { BadRequestError } from '../api-errors.js';
 import { isSharedStore, loadConfig } from '../config.js';
-import { log } from '../log.js';
+import { rethrowIfSqliteBlocked } from '../db.js';
+import { errorMessage, log } from '../log.js';
 import { resolveProjectIdentity, classifyOriginProject, isGlobalStoreRoot, projectId, projectNames, type ProjectRef } from '../project-identity.js';
 import { promptTokens } from '../prompt-recall.js';
 import { detectSecret } from '../secret-detect.js';
-import { isSessionDigestRow } from '../session-digest.js';
+import { isSessionDigestRow } from '../core/session-digest-row.js';
 import { addAmbientTallies, ambientStateFromTallies, type AmbientState, type AmbientTallies } from '../ambient.js';
 import { requireGroup, sqliteStore, storeFor, type HippoStore } from '../store-port.js';
 import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../recall-scope.js';
@@ -41,6 +40,8 @@ import {
   type ContextSource,
 } from './context-select.js';
 import type { ContextOpts, ContextResult, ContextResultEntry } from './context-types.js';
+import { andThen, onStore } from './on-store.js';
+import { strengthenOf } from './recall-record.js';
 import { type Context, ownerOrSubject } from './types.js';
 
 export { oneCopyPerMemory } from './context-select.js';
@@ -105,19 +106,21 @@ function sourceOf(store: HippoStore): ContextSource {
   return { store, reads: requireGroup(store, 'contextReads') };
 }
 
-// The pinned-only branch needs pins and recent-N candidates, not the corpus; `recent` and `recall` apply there only.
-// `recheck` is `admit` without the delivery observer, so a row checked twice is not refused twice in the ledger.
-async function loadAmbientEntries(
-  source: ContextSource,
-  tenantId: string,
-  pinnedOnly: boolean,
-  recent: RecentRequest,
-  admit: (e: MemoryEntry) => boolean,
-  recheck: (e: MemoryEntry) => boolean,
-  window: ContextCandidateFilter | ContextQueryWindow,
-  recall?: AmbientRecallRequest,
-  onQualityDrop?: (e: MemoryEntry) => void,
-): Promise<AmbientLoadResult> {
+/** What one store's ambient read is asked for. `recent`, `recall` and `onQualityDrop` apply to the pinned-only branch alone. */
+interface LoadAmbientEntriesOptions {
+  readonly pinnedOnly: boolean;
+  readonly recent: RecentRequest;
+  readonly admit: (e: MemoryEntry) => boolean;
+  /** `admit` without the delivery observer, so a row checked twice is not refused twice in the ledger. */
+  readonly recheck: (e: MemoryEntry) => boolean;
+  readonly window: ContextCandidateFilter | ContextQueryWindow;
+  readonly recall?: AmbientRecallRequest;
+  readonly onQualityDrop?: (e: MemoryEntry) => void;
+}
+
+// The pinned-only branch needs pins and recent-N candidates, not the corpus.
+async function loadAmbientEntries(source: ContextSource, tenantId: string, options: LoadAmbientEntriesOptions): Promise<AmbientLoadResult> {
+  const { pinnedOnly, recent, admit, recheck, window, recall, onQualityDrop } = options;
   const ownTenant = (e: MemoryEntry): boolean => e.tenantId === tenantId;
   if (!pinnedOnly) {
     const rows = 'query' in window
@@ -233,18 +236,31 @@ function warnIsolationIgnored(hippoRoot: string): void {
   log.warn(`${hippoRoot}: "contextProjectIsolation": false is ignored on a shared store; a read opts in with cross_project.`);
 }
 
-function planContext(ctx: Context, opts: ContextOpts, local: ContextSource): ContextPlan {
-  const pinnedOnly = opts.pinnedOnly === true;
+/** Which stores this read can draw on, and what kind the primary one is. */
+function storesInReach(ctx: Context, opts: ContextOpts, local: ContextSource) {
   const other = local.store.kind !== 'sqlite' ? local.store : undefined;
   // Global memories do not establish a project boundary for task state.
   const hasLocal = other !== undefined || isInitialized(ctx.hippoRoot);
-  const query = (opts.q ?? '').trim() || '*';
   const globalRoot = getGlobalRoot();
   // The store's own flag counts too, so no surface can read a shared store as its owner.
   const sharedStore = opts.sharedStore === true || isSharedStore(ctx.hippoRoot);
   // A store serving many people is not its operator's, so the operator's own global store stays out.
   const hasGlobal = !sharedStore && other === undefined && isInitialized(globalRoot);
   const primaryIsGlobal = isGlobalStoreRoot(ctx.hippoRoot);
+  return { other, hasLocal, globalRoot, sharedStore, hasGlobal, primaryIsGlobal };
+}
+
+/** Prices one entry against the budget: the caller's cost model when it gave one, else a token estimate. */
+function entryPricer(cost: ContextOpts['cost'], currentProject: ContextPlan['currentProject']): ContextPlan['price'] {
+  return (entry: MemoryEntry, isGlobal: boolean, promptRecall?: boolean): number => cost
+    ? cost.entry({ entry, isGlobal, promptRecall, origin: entry.origin_project ?? null, category: classifyOriginProject(entry.origin_project, currentProject) })
+    : estimateTokens(entry.content);
+}
+
+function planContext(ctx: Context, opts: ContextOpts, local: ContextSource): ContextPlan {
+  const pinnedOnly = opts.pinnedOnly === true;
+  const { other, hasLocal, globalRoot, sharedStore, hasGlobal, primaryIsGlobal } = storesInReach(ctx, opts, local);
+  const query = (opts.q ?? '').trim() || '*';
 
   // opts.scope is only the tag boost, opts.exactScope the envelope request; other-project memories are
   // excluded unless the caller asks for them (crossProject) or isolation is disabled.
@@ -261,9 +277,7 @@ function planContext(ctx: Context, opts: ContextOpts, local: ContextSource): Con
   const promptRecallPending = pinnedOnly && Boolean(opts.prompt?.trim()) && config.pinnedInject.promptRecall === true;
 
   const cost = opts.cost;
-  const price = (entry: MemoryEntry, isGlobal: boolean, promptRecall?: boolean): number => cost
-    ? cost.entry({ entry, isGlobal, promptRecall, origin: entry.origin_project ?? null, category: classifyOriginProject(entry.origin_project, currentProject) })
-    : estimateTokens(entry.content);
+  const price = entryPricer(cost, currentProject);
   return {
     local,
     other,
@@ -415,11 +429,12 @@ async function loadPools(
         now: evalNow(),
       };
   // Tenant-scoped loads: never resolveTenantId({}) here.
+  const read = { pinnedOnly, recent, admit: loadAdmit, recheck: poolAdmit, window, recall: recallRequest };
   const local: AmbientLoadResult = plan.hasLocal
-    ? await loadAmbientEntries(plan.local, ctx.tenantId, pinnedOnly, recent, loadAdmit, poolAdmit, window, recallRequest, qualityDrop(primaryIsGlobal))
+    ? await loadAmbientEntries(plan.local, ctx.tenantId, { ...read, onQualityDrop: qualityDrop(primaryIsGlobal) })
     : { entries: [] };
   const global: AmbientLoadResult = hasGlobal && !primaryIsGlobal
-    ? await loadAmbientEntries(sourceOf(sqliteStore(plan.globalRoot)), ctx.tenantId, pinnedOnly, recent, loadAdmit, poolAdmit, window, recallRequest, qualityDrop(true))
+    ? await loadAmbientEntries(sourceOf(sqliteStore(plan.globalRoot)), ctx.tenantId, { ...read, onQualityDrop: qualityDrop(true) })
     : { entries: [] };
   return { local, global };
 }
@@ -464,15 +479,12 @@ async function traceEmptyContext(ctx: Context, opts: ContextOpts, plan: ContextP
     explainMode: false,
     results: [],
   };
-  if (!plan.other) {
-    writeRecallTraceAtRoot(ctx.hippoRoot, trace);
-    return;
-  }
-  // The empty reply is already decided, so a lost trace logs as the hippo.db write does rather than failing the call.
+  // The empty reply is already decided, so a lost trace is logged and the call still answers.
   try {
-    await plan.other.finishRecall({ goalLog: [], audit: [], trace });
+    await onStore(ctx, (port) => port.finishRecall({ goalLog: [], audit: [], trace }));
   } catch (error) {
-    log.error(`recall trace write failed: ${error instanceof Error ? error.message : String(error)}`);
+    rethrowIfSqliteBlocked(error);
+    log.error(`recall trace write failed: ${errorMessage(error)}`);
   }
 }
 
@@ -503,8 +515,12 @@ async function recordRetrieval(
       score: s.score,
     })),
   };
-  if (plan.other) await recordOnStore(ctx, plan.other, retrievedIds, trace, selected.length);
-  else recordOnHippoDb(ctx, plan, retrievedIds, trace, selected.length);
+  const writes = { goalLog: [], audit: [], trace, strengthen: strengthenOf(ctx, retrievedIds) };
+  // hippo.db keeps the ids as its last recall, which feeds only outcomeForLastRecall, and it alone reads a second root.
+  await onStore(ctx, (port, local) => andThen(
+    local.finishLastRecall(writes, plan.hasGlobal ? plan.globalRoot : undefined),
+    () => port.bumpRecallStats(selected.length),
+  ));
 
   // Replace selectedItems entries with markRetrieved-updated copies so
   // the returned ContextResult reflects post-recall state.
@@ -515,29 +531,6 @@ async function recordRetrieval(
 
   // Read after strengthenRetrieved commits, so the rows just retrieved count at their new strength.
   return { items, ambientState: plan.config.ambient.enabled ? await readAmbientState(ctx, plan) : undefined };
-}
-
-function recordOnHippoDb(ctx: Context, plan: ContextPlan, retrievedIds: string[], trace: RecallTraceInput, recalled: number): void {
-  const localIndex = loadIndex(ctx.hippoRoot);
-  const strengthenedHere = strengthenRetrieved(ctx.hippoRoot, retrievedIds, { recallBoostAblated: isRecallBoostAblated() });
-  if (plan.hasGlobal) strengthenRetrieved(plan.globalRoot, retrievedIds.filter((id) => !strengthenedHere.has(id)), { recallBoostAblated: isRecallBoostAblated() });
-
-  localIndex.last_retrieval_ids = retrievedIds;
-
-  // Trace first on its own short-lived connection, then fold its id into localIndex so one saveIndex moves
-  // last_retrieval_ids and last_trace_id in lockstep; a failed trace write stores null, never a stale id.
-  const traceId = writeRecallTraceAtRoot(ctx.hippoRoot, trace);
-  localIndex.last_trace_id = traceId !== null ? String(traceId) : null;
-  saveIndex(ctx.hippoRoot, localIndex);
-
-  updateStats(ctx.hippoRoot, { recalled });
-}
-
-// The index's last-recall ids feed only outcomeForLastRecall, which no other store serves, so they are not written here.
-async function recordOnStore(ctx: Context, store: HippoStore, retrievedIds: string[], trace: RecallTraceInput, recalled: number): Promise<void> {
-  const strengthen = { ids: retrievedIds, opts: { tenantId: ctx.tenantId, recallBoostAblated: isRecallBoostAblated() } };
-  await store.finishRecall({ goalLog: [], audit: [], trace, strengthen });
-  await store.bumpRecallStats(recalled);
 }
 
 async function readAmbientState(ctx: Context, plan: ContextPlan): Promise<AmbientState | undefined> {

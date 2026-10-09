@@ -1,0 +1,3 @@
+### Tests
+
+- **The 11 api functions that run both on hippo.db and through a store are now compared path against path, ahead of the change that merges each pair.** `tests/api-sync-store-parity.test.ts` runs 64 calls on two copies of one seeded store and compares the reply and everything the store then holds; a `KNOWN_DIFFERENCES` table names the 12 places the two paths differ today, both source sites and the side the merge keeps. The same file pins five timing facts an add-on relies on for each function, and that `importVault` stays synchronous. `tests/public-entry-exports.test.ts` now lists every runtime name each package entry exports, read from the built package. No source file changes.

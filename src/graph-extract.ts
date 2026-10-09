@@ -329,7 +329,7 @@ export function extractGraph(hippoRoot: string, tenantId: string): ExtractResult
   const derived = deriveGraph(loadGraphSources(hippoRoot, tenantId));
   // Diffed and applied under one lock, so two concurrent rebuilds serialize instead of both inserting a missing row.
   const skipped = runGraphRebuildTransaction(hippoRoot, tenantId, (txDb) =>
-    applyGraphOps(txDb, hippoRoot, tenantId, graphDelta(txDb, tenantId, derived), 0, { holdMs: Infinity }).skipped,
+    applyGraphOps(txDb, hippoRoot, tenantId, graphDelta(txDb, tenantId, derived), { from: 0, holdMs: Infinity }).skipped,
   );
   return resultOf(derived, skipped);
 }
@@ -348,7 +348,7 @@ export async function extractGraphChunked(hippoRoot: string, tenantId: string, b
     const from = next;
     // Sleep's wait, not a server request's 250 ms: each chunk is a fresh BEGIN IMMEDIATE a hook's write could otherwise fail.
     const chunk = runGraphRebuildTransaction(hippoRoot, tenantId, (txDb) =>
-      applyGraphOps(txDb, hippoRoot, tenantId, ops, from, { holdMs: budget.holdMs, clock: budget.clock }),
+      applyGraphOps(txDb, hippoRoot, tenantId, ops, { from, holdMs: budget.holdMs, clock: budget.clock }),
     { busyWaitMs: SLEEP_DB_WAIT_MS });
     committedAt = budget.clock();
     next = chunk.next;

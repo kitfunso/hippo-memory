@@ -14,7 +14,7 @@ import { initStore } from '../src/store/open.js';
 import { sleep, adminActor } from '../src/api.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 
-describe('api.sleep audit row tenant tag (D2 v1.12.10)', () => {
+describe('api.sleep audit row tenant tag', () => {
   let root: string;
 
   beforeEach(() => {

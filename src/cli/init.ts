@@ -5,6 +5,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import { installJsonHooks } from '../hooks/json-hooks.js';
+import { writeFileAtomic } from '../util/atomic-write.js';
 import { isCodexPresent } from '../hooks/shared.js';
 import { isCodexWrapperInstalled } from '../hooks/codex-wrapper.js';
 import { installOpencodePlugin } from '../hooks/opencode.js';
@@ -15,8 +16,8 @@ import { currentMachine, importForStore, importProjectMemories, importUserMemori
 import { emptyReport, mergeReports } from '../agent-memories/report.js';
 import { getGlobalRoot, initGlobal } from '../shared.js';
 import { registerWorkspace } from '../scheduler.js';
-import { printAgentImport, installCodexMemoryHooks, setupDailySchedule, learnFromRepo, skipLearnOnSharedStore, warnClaudeSettingsUnusable } from './shared.js';
-import { HOOK_MARKERS, HOOKS, hippoBlock } from './hook-blocks.js';
+import { type CliFlags, printAgentImport, installCodexMemoryHooks, setupDailySchedule, learnFromRepo, skipLearnOnSharedStore, warnClaudeSettingsUnusable, stringFlag } from './shared.js';
+import { HOOK_MARKERS, HOOKS, hippoBlock } from '../hooks/hook-blocks.js';
 
 function scanForGitRepos(rootDir: string, maxDepth = 2): string[] {
   const repos: string[] = [];
@@ -41,7 +42,62 @@ function scanForGitRepos(rootDir: string, maxDepth = 2): string[] {
   return repos;
 }
 
-function cmdInitScan(scanDir: string, flags: Record<string, string | boolean | string[]>): void {
+/** Creates the repo's store when absent and registers it; returns whether it already existed. */
+function initScannedRepo(repo: string, globalRoot: string): boolean {
+  const repoHippo = path.join(repo, '.hippo');
+  const alreadyExists = isInitialized(repoHippo);
+  if (!alreadyExists) {
+    initStore(repoHippo);
+  }
+  registerWorkspace(globalRoot, repo);
+  return alreadyExists;
+}
+
+/** Seeds one scanned repo from git history and its agents' notes, unless --no-learn. */
+function learnScannedRepo(
+  repo: string,
+  seedDays: number,
+  learn: boolean,
+  machine: ReturnType<typeof currentMachine>,
+  agentImport: ReturnType<typeof emptyReport>,
+): Pick<ReturnType<typeof learnFromRepo>, 'added' | 'lowInfo'> {
+  const repoHippo = path.join(repo, '.hippo');
+  let added = 0;
+  let lowInfo = 0;
+  if (learn && isGitRepo(repo)) {
+    const result = learnFromRepo(repoHippo, repo, seedDays, path.basename(repo));
+    added = result.added;
+    lowInfo = result.lowInfo;
+  }
+  if (learn) mergeReports(agentImport, importProjectMemories(repoHippo, { machine }));
+  return { added, lowInfo };
+}
+
+function installScanHooks(repos: readonly string[]): void {
+  // User-level hooks only: a hippo block in each repo's CLAUDE.md or AGENTS.md would leave a diff in every repo.
+  const agents = detectAgentHooks(repos);
+  if (agents.length === 0) {
+    console.log('   No agent config found in these repositories. Run `hippo setup` to add hooks for the agents on this machine.');
+  }
+  installUserLevelHooks(agents, true);
+}
+
+function initGlobalFirst(): string {
+  const globalRoot = getGlobalRoot();
+  if (!isInitialized(globalRoot)) {
+    initGlobal();
+    console.log(`Initialized global store at ${globalRoot}\n`);
+  }
+  return globalRoot;
+}
+
+function printScanSummary(repoCount: number, totalLessons: number, totalLowInfo: number): void {
+  console.log(`\n${repoCount} repositories, ${totalLessons} new lessons learned` +
+    (totalLowInfo > 0 ? `, ${totalLowInfo} low-information subject(s) dropped` : '') +
+    '.');
+}
+
+function cmdInitScan(scanDir: string, flags: CliFlags): void {
   const resolved = path.resolve(scanDir);
   console.log(`Scanning ${resolved} for git repositories...\n`);
 
@@ -53,12 +109,7 @@ function cmdInitScan(scanDir: string, flags: Record<string, string | boolean | s
 
   console.log(`Found ${repos.length} repositories:\n`);
 
-  // Init global store first
-  const globalRoot = getGlobalRoot();
-  if (!isInitialized(globalRoot)) {
-    initGlobal();
-    console.log(`Initialized global store at ${globalRoot}\n`);
-  }
+  const globalRoot = initGlobalFirst();
 
   let totalLessons = 0;
   // Rolled up so the cross-repo summary reports the gate too. Each repo
@@ -69,72 +120,65 @@ function cmdInitScan(scanDir: string, flags: Record<string, string | boolean | s
   const seedDays = parseInt(String(flags['days'] ?? '365'), 10);
   const machine = currentMachine();
   const agentImport = emptyReport();
+  const learn = !flags['no-learn'];
 
   for (const repo of repos) {
-    const name = path.basename(repo);
-    const repoHippo = path.join(repo, '.hippo');
-    const alreadyExists = isInitialized(repoHippo);
-
-    if (!alreadyExists) {
-      initStore(repoHippo);
-    }
-
-    registerWorkspace(globalRoot, repo);
-
-    // Learn from git history
-    let added = 0;
-    if (!flags['no-learn'] && isGitRepo(repo)) {
-      const result = learnFromRepo(repoHippo, repo, seedDays, name);
-      added = result.added;
-      totalLessons += added;
-      totalLowInfo += result.lowInfo;
-    }
-    if (!flags['no-learn']) mergeReports(agentImport, importProjectMemories(repoHippo, { machine }));
+    const alreadyExists = initScannedRepo(repo, globalRoot);
+    const { added, lowInfo } = learnScannedRepo(repo, seedDays, learn, machine, agentImport);
+    totalLessons += added;
+    totalLowInfo += lowInfo;
 
     const status = alreadyExists ? 'existing' : 'new';
-    const entries = loadAllEntries(repoHippo);
-    console.log(`  ${name.padEnd(25)} ${status.padEnd(10)} ${entries.length} memories${added > 0 ? ` (+${added} from git)` : ''}`);
+    const entries = loadAllEntries(path.join(repo, '.hippo'));
+    console.log(`  ${path.basename(repo).padEnd(25)} ${status.padEnd(10)} ${entries.length} memories${added > 0 ? ` (+${added} from git)` : ''}`);
   }
 
-  console.log(`\n${repos.length} repositories, ${totalLessons} new lessons learned` +
-    (totalLowInfo > 0 ? `, ${totalLowInfo} low-information subject(s) dropped` : '') +
-    '.');
-  if (!flags['no-learn']) {
+  printScanSummary(repos.length, totalLessons, totalLowInfo);
+  if (learn) {
     mergeReports(agentImport, importUserMemories(globalRoot, { machine }));
     printAgentImport(agentImport, '');
   }
   console.log(`Global store: ${globalRoot}`);
-  if (initInstallsIntegrations(flags)) {
-    // User-level hooks only: a hippo block in each repo's CLAUDE.md or AGENTS.md would leave a diff in every repo.
-    const agents = detectAgentHooks(repos);
-    if (agents.length === 0) {
-      console.log('   No agent config found in these repositories. Run `hippo setup` to add hooks for the agents on this machine.');
-    }
-    installUserLevelHooks(agents, true);
-  }
+  if (initInstallsIntegrations(flags)) installScanHooks(repos);
   if (!flags['no-schedule']) {
     setupDailySchedule(globalRoot);
   }
   console.log(`\nRun \`hippo sleep\` in any project to consolidate and auto-share to global.`);
 }
 
-export function cmdInit(hippoRoot: string, flags: Record<string, string | boolean | string[]>): void {
+function initGlobalOnly(flags: CliFlags): void {
+  const globalRoot = getGlobalRoot();
+  if (isInitialized(globalRoot)) {
+    console.log('Already initialized global store at', globalRoot);
+  } else {
+    initGlobal();
+    console.log('Initialized global Hippo store at', globalRoot);
+  }
+  if (!flags['no-learn']) printAgentImport(importUserMemories(globalRoot, { machine: currentMachine() }));
+}
+
+function seedFromGitHistory(hippoRoot: string): void {
+  if (!isGitRepo(process.cwd())) return;
+  const seedDays = 30;
+  console.log(`\n   Seeding memories from last ${seedDays} days of git history...`);
+  const { added, skipped } = learnFromRepo(hippoRoot, process.cwd(), seedDays);
+  if (added > 0) {
+    console.log(`   Learned ${added} lessons from git (${skipped} duplicates skipped).`);
+  } else {
+    console.log(`   No matching commits found in git history.`);
+  }
+}
+
+export function cmdInit(hippoRoot: string, flags: CliFlags): void {
   // Handle --scan mode
   if (flags['scan']) {
-    const scanDir = typeof flags['scan'] === 'string' ? flags['scan'] : os.homedir();
+    const scanDir = stringFlag(flags, 'scan') ?? os.homedir();
     cmdInitScan(scanDir, flags);
     return;
   }
 
   if (flags['global']) {
-    const globalRoot = getGlobalRoot();
-    if (isInitialized(globalRoot)) {
-      console.log('Already initialized global store at', globalRoot);
-    } else {
-      initGlobal();
-      console.log('Initialized global Hippo store at', globalRoot);
-    }
-    if (!flags['no-learn']) printAgentImport(importUserMemories(globalRoot, { machine: currentMachine() }));
+    initGlobalOnly(flags);
     return;
   }
 
@@ -162,25 +206,14 @@ export function cmdInit(hippoRoot: string, flags: Record<string, string | boolea
 
   const learn = !flags['no-learn'] && !skipLearnOnSharedStore(hippoRoot);
   // Seed with git history on first init (unless --no-learn)
-  if (!alreadyExists && learn && !flags['global']) {
-    if (isGitRepo(process.cwd())) {
-      const seedDays = 30;
-      console.log(`\n   Seeding memories from last ${seedDays} days of git history...`);
-      const { added, skipped } = learnFromRepo(hippoRoot, process.cwd(), seedDays);
-      if (added > 0) {
-        console.log(`   Learned ${added} lessons from git (${skipped} duplicates skipped).`);
-      } else {
-        console.log(`   No matching commits found in git history.`);
-      }
-    }
-  }
+  if (!alreadyExists && learn && !flags['global']) seedFromGitHistory(hippoRoot);
 
   // Every run, not only the first: an agent's notes change between inits.
   if (learn) printAgentImport(importForStore(hippoRoot, { machine: currentMachine() }));
 }
 
 /** Every write init makes into agent config (instruction blocks, hooks, plugins) is an automatic integration, so one switch skips them all. */
-function initInstallsIntegrations(flags: Record<string, string | boolean | string[]>): boolean {
+function initInstallsIntegrations(flags: CliFlags): boolean {
   if (flags['no-hooks']) return false;
   if (!envSkipAutoIntegrations()) return true;
   console.log('   HIPPO_SKIP_AUTO_INTEGRATIONS=1, so init left agent instruction files and hooks alone.');
@@ -233,7 +266,7 @@ function patchInstructionFiles(dir: string, agents: readonly string[]): void {
     }
     const block = `${HOOK_MARKERS.start}\n${hookDef.content}\n${HOOK_MARKERS.end}`;
     const sep = existing.endsWith('\n') ? '\n' : '\n\n';
-    fs.writeFileSync(targetPath, existing + sep + block + '\n', 'utf8');
+    writeFileAtomic(targetPath, existing + sep + block + '\n');
     console.log(`   Auto-installed ${hook} hook in ${hookDef.file}`);
   }
 }
@@ -248,8 +281,58 @@ function refreshShippedBlock(filePath: string, text: string, hook: string): void
     console.log(`   Left the edited hippo block in ${name} as is; \`hippo hook install ${hook}\` replaces it.`);
     return;
   }
-  fs.writeFileSync(filePath, `${text.slice(0, start)}${eol}${HOOKS[owner].content.replace(/\n/g, eol)}${eol}${text.slice(end)}`, 'utf8');
+  writeFileAtomic(filePath, `${text.slice(0, start)}${eol}${HOOKS[owner].content.replace(/\n/g, eol)}${eol}${text.slice(end)}`);
   console.log(`   Refreshed the ${owner} hippo block in ${name}`);
+}
+
+function installClaudeCodeSettingsHooks(hook: 'claude-code'): void {
+  const result = installJsonHooks(hook);
+  warnClaudeSettingsUnusable(result, '   ');
+  if (result.installedSessionEnd) {
+    console.log(`   Auto-installed hippo session-end SessionEnd hook in ${hook} settings`);
+  }
+  if (result.installedSessionStart) {
+    console.log(`   Auto-installed hippo last-sleep SessionStart hook in ${hook} settings`);
+  }
+  if (result.installedUserPromptSubmit) {
+    console.log(`   Auto-installed hippo pinned-inject UserPromptSubmit hook in ${hook} settings`);
+  }
+  if (result.installedPreCompact) {
+    console.log(`   Auto-installed hippo pre-compact PreCompact hook in ${hook} settings`);
+  }
+  if (result.installedCompactResume) {
+    console.log(`   Auto-installed hippo compact-resume SessionStart(compact) hook in ${hook} settings`);
+  }
+  if (result.installedPostCompact) {
+    console.log(`   Auto-installed hippo post-compact PostCompact hook in ${hook} settings`);
+  }
+  if (result.installedCaptureError) {
+    console.log(`   Auto-installed hippo capture-error PostToolUseFailure hook in ${hook} settings`);
+  }
+  if (result.migratedFromStop) {
+    console.log(`   Migrated legacy Stop hook → SessionEnd (no longer runs every turn)`);
+  }
+  if (result.migratedSplitSessionEnd) {
+    console.log(`   Migrated split sleep+capture SessionEnd entries → single detached hippo session-end`);
+  } else if (result.migratedLegacySessionEnd) {
+    console.log(`   Migrated legacy SessionEnd entry to the new detached form`);
+  }
+}
+
+function installOpencodeUserPlugin(): void {
+  // opencode uses a TS plugin, not Claude Code's JSON-hook schema.
+  // See OPENCODE_PLUGIN_SOURCE in src/hooks.ts for the plugin file
+  // content + design rationale.
+  const result = installOpencodePlugin();
+  if (result.installed) {
+    console.log(`   Auto-installed hippo opencode plugin -> ${result.pluginPath}`);
+  }
+  if (result.migratedLegacyHooks) {
+    console.log(`   Removed legacy Claude Code-style hooks block from opencode.json — opencode can now launch`);
+  }
+  if (result.jsonRepairFailed) {
+    console.log(`   WARNING: opencode.json is unparseable; legacy hooks block could not be auto-removed. Fix the file manually.`);
+  }
 }
 
 /** Claude Code settings hooks, Codex's hooks.json and the OpenCode plugin, under the home directory; idempotent, so re-running init adds newer hooks. */
@@ -265,52 +348,7 @@ function installUserLevelHooks(agents: readonly string[], codexHint: boolean): v
     // For Claude Code, also install SessionEnd+SessionStart entries in its
     // settings.json. Keeps `hippo init` in lockstep with `hippo hook install
     // claude-code` and `hippo setup`.
-    if (hook === 'claude-code') {
-      const result = installJsonHooks(hook);
-      warnClaudeSettingsUnusable(result, '   ');
-      if (result.installedSessionEnd) {
-        console.log(`   Auto-installed hippo session-end SessionEnd hook in ${hook} settings`);
-      }
-      if (result.installedSessionStart) {
-        console.log(`   Auto-installed hippo last-sleep SessionStart hook in ${hook} settings`);
-      }
-      if (result.installedUserPromptSubmit) {
-        console.log(`   Auto-installed hippo pinned-inject UserPromptSubmit hook in ${hook} settings`);
-      }
-      if (result.installedPreCompact) {
-        console.log(`   Auto-installed hippo pre-compact PreCompact hook in ${hook} settings`);
-      }
-      if (result.installedCompactResume) {
-        console.log(`   Auto-installed hippo compact-resume SessionStart(compact) hook in ${hook} settings`);
-      }
-      if (result.installedPostCompact) {
-        console.log(`   Auto-installed hippo post-compact PostCompact hook in ${hook} settings`);
-      }
-      if (result.installedCaptureError) {
-        console.log(`   Auto-installed hippo capture-error PostToolUseFailure hook in ${hook} settings`);
-      }
-      if (result.migratedFromStop) {
-        console.log(`   Migrated legacy Stop hook → SessionEnd (no longer runs every turn)`);
-      }
-      if (result.migratedSplitSessionEnd) {
-        console.log(`   Migrated split sleep+capture SessionEnd entries → single detached hippo session-end`);
-      } else if (result.migratedLegacySessionEnd) {
-        console.log(`   Migrated legacy SessionEnd entry to the new detached form`);
-      }
-    } else if (hook === 'opencode') {
-      // opencode uses a TS plugin, not Claude Code's JSON-hook schema.
-      // See OPENCODE_PLUGIN_SOURCE in src/hooks.ts for the plugin file
-      // content + design rationale.
-      const result = installOpencodePlugin();
-      if (result.installed) {
-        console.log(`   Auto-installed hippo opencode plugin -> ${result.pluginPath}`);
-      }
-      if (result.migratedLegacyHooks) {
-        console.log(`   Removed legacy Claude Code-style hooks block from opencode.json — opencode can now launch`);
-      }
-      if (result.jsonRepairFailed) {
-        console.log(`   WARNING: opencode.json is unparseable; legacy hooks block could not be auto-removed. Fix the file manually.`);
-      }
-    }
+    if (hook === 'claude-code') installClaudeCodeSettingsHooks(hook);
+    else if (hook === 'opencode') installOpencodeUserPlugin();
   }
 }

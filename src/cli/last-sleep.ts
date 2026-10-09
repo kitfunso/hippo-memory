@@ -7,7 +7,7 @@ import { defaultSleepLogPath } from '../hooks/shared.js';
 import { errorMessage, log } from '../log.js';
 import { truncateCodePointSafe } from '../transcript-tail.js';
 import { printError } from './output.js';
-import { hookStoreRoot } from './shared.js';
+import { type CliFlags, hookStoreRoot } from './shared.js';
 
 const SLEEP_FAILED = '[hippo] sleep failed: ';
 const FAILURE_CHARS = 120;
@@ -38,7 +38,7 @@ function badSpoolFiles(hippoRoot: string): number {
  *  because Claude Code shows that to the user and adds any other SessionStart stdout to the model's context. */
 export function cmdLastSleep(
   hippoRoot: string,
-  flags: Record<string, string | boolean | string[]>,
+  flags: CliFlags,
   out: 'hook' | 'terminal' = process.stdout.isTTY ? 'terminal' : 'hook',
 ): void {
   const pathFlag = flags['path'];

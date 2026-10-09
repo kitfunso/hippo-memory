@@ -1,6 +1,6 @@
 // Transport-agnostic request handling: tool dispatch table, tool execution and the JSON-RPC method switch.
 
-import { log } from '../log.js';
+import { errorMessage, log } from '../log.js';
 import { STORE_NOT_PORTED_MESSAGE } from '../http-util.js';
 import { getGlobalRoot, initGlobal } from '../shared.js';
 import { loadConfig } from '../config.js';
@@ -11,13 +11,13 @@ import { estimateTokens, type TokenSurface } from '../token-ledger.js';
 import { PACKAGE_VERSION } from '../version.js';
 import { validateToolArgs } from './tool-args.js';
 import { RecallRequestError } from '../api/recall-request.js';
-import { findHippoRoot, isJsonObjectRecord, type McpContext, type McpRequest, type McpResponse, type ToolHandler } from './protocol.js';
+import { findHippoRoot, type McpContext, type McpRequest, type McpResponse, type ToolHandler } from './protocol.js';
 import { TOOLS, TOOLS_BY_NAME, ARGS_CHECKED_BY_API } from './tools.js';
 import { runRecallTool, runAssembleTool, runDrillTool, runContextTool } from './recall-tools.js';
 import { runRememberTool, runOutcomeTool, runLearnTool } from './memory-tools.js';
 import { runPredictBaserateTool, runStatusTool, runConflictsTool, runResolveTool, runShareTool, runPeersTool } from './admin-tools.js';
 import { sharedStoreRefusal } from './shared-gate.js';
-import { type JsonValue, isJsonString } from '../json.js';
+import { type JsonValue, isJsonString, isJsonObject } from '../json.js';
 
 /**
  * Zero-install first run (`npx -y hippo-memory mcp` with no store anywhere):
@@ -58,7 +58,7 @@ export async function recordMcpTokens(toolName: string, output: string, ctx?: Mc
     });
   } catch (err) {
     rethrowIfSqliteBlocked(err);
-    log.warnThenDebug('mcp-token-ledger', `token ledger write failed; the tool reply is unaffected: ${err instanceof Error ? err.message : String(err)}`);
+    log.warnThenDebug('mcp-token-ledger', `token ledger write failed; the tool reply is unaffected: ${errorMessage(err)}`);
   }
 }
 
@@ -72,9 +72,9 @@ interface ToolEntry {
 
 const TOOL_HANDLERS: ReadonlyMap<string, ToolEntry> = new Map<string, ToolEntry>([
   ['hippo_recall', { handler: runRecallTool, storeReady: 'base' }],
-  ['hippo_assemble', { handler: runAssembleTool }],
-  ['hippo_drill', { handler: runDrillTool }],
-  ['hippo_predict_baserate', { handler: runPredictBaserateTool }],
+  ['hippo_assemble', { handler: runAssembleTool, storeReady: 'dagReads' }],
+  ['hippo_drill', { handler: runDrillTool, storeReady: 'dagReads' }],
+  ['hippo_predict_baserate', { handler: runPredictBaserateTool, storeReady: 'predictions' }],
   ['hippo_remember', { handler: runRememberTool, storeReady: 'entryWrites' }],
   ['hippo_outcome', { handler: runOutcomeTool, storeReady: 'entryWrites' }],
   ['hippo_context', { handler: runContextTool, storeReady: 'contextReads' }],
@@ -132,6 +132,48 @@ function invalidArgs(id: McpResponse['id'], toolName: string, problems: readonly
   };
 }
 
+async function callTool(id: McpRequest['id'], params: McpRequest['params'], ctx?: McpContext): Promise<McpResponse> {
+  const nameValue = params?.name;
+  const toolName = isJsonString(nameValue) ? nameValue : '';
+  const tool = TOOLS_BY_NAME.get(toolName);
+  if (!tool) {
+    return { jsonrpc: '2.0', id, error: { code: -32602, message: `Unknown tool: ${toolName.slice(0, 128)}` } };
+  }
+  // The same refusal a ported tool gives when it reaches hippo.db, so a client handles one shape.
+  const other = otherStore(ctx);
+  if (other && !runsOn(other, toolName)) {
+    return { jsonrpc: '2.0', id, error: { code: -32603, message: STORE_NOT_PORTED_MESSAGE } };
+  }
+  const refusal = sharedStoreRefusal(toolName, ctx);
+  if (refusal !== undefined) return { jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: refusal }], isError: true } };
+  const argumentsValue = params?.arguments;
+  if (argumentsValue !== undefined && argumentsValue !== null && !isJsonObject(argumentsValue)) {
+    return { jsonrpc: '2.0', id, error: { code: -32602, message: `${toolName}: arguments must be an object` } };
+  }
+  const toolArgs = isJsonObject(argumentsValue) ? argumentsValue : {};
+  const problems = validateToolArgs(tool.inputSchema, toolArgs, ARGS_CHECKED_BY_API.get(toolName));
+  if (problems.length > 0) return invalidArgs(id, toolName, problems);
+  let output: string;
+  try {
+    // One handle per store for the tool and its ledger row; stdio interleaves calls, so each gets its own scope.
+    output = await runWithRequestStores(async () => {
+      const text = await executeTool(toolName, toolArgs, ctx);
+      await recordMcpTokens(toolName, text, ctx);
+      return text;
+    });
+  } catch (err) {
+    if (!(err instanceof RecallRequestError)) throw err;
+    return invalidArgs(id, toolName, [err.message]);
+  }
+  return {
+    jsonrpc: '2.0',
+    id,
+    result: {
+      content: [{ type: 'text', text: output || 'Done.' }],
+    },
+  };
+}
+
 /**
  * Transport-agnostic MCP dispatcher. Both the stdio loop (below) and the
  * HTTP/SSE transport in src/server.ts route every incoming JSON-RPC message
@@ -165,47 +207,8 @@ export async function handleMcpRequest(
       return { jsonrpc: '2.0', id, result: { tools: other ? TOOLS.filter((t) => runsOn(other, t.name)) : TOOLS } };
     }
 
-    case 'tools/call': {
-      const nameValue = params?.name;
-      const toolName = isJsonString(nameValue) ? nameValue : '';
-      const tool = TOOLS_BY_NAME.get(toolName);
-      if (!tool) {
-        return { jsonrpc: '2.0', id, error: { code: -32602, message: `Unknown tool: ${toolName.slice(0, 128)}` } };
-      }
-      // The same refusal a ported tool gives when it reaches hippo.db, so a client handles one shape.
-      const other = otherStore(ctx);
-      if (other && !runsOn(other, toolName)) {
-        return { jsonrpc: '2.0', id, error: { code: -32603, message: STORE_NOT_PORTED_MESSAGE } };
-      }
-      const refusal = sharedStoreRefusal(toolName, ctx);
-      if (refusal !== undefined) return { jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: refusal }], isError: true } };
-      const argumentsValue = params?.arguments;
-      if (argumentsValue !== undefined && argumentsValue !== null && !isJsonObjectRecord(argumentsValue)) {
-        return { jsonrpc: '2.0', id, error: { code: -32602, message: `${toolName}: arguments must be an object` } };
-      }
-      const toolArgs = isJsonObjectRecord(argumentsValue) ? argumentsValue : {};
-      const problems = validateToolArgs(tool.inputSchema, toolArgs, ARGS_CHECKED_BY_API.get(toolName));
-      if (problems.length > 0) return invalidArgs(id, toolName, problems);
-      let output: string;
-      try {
-        // One handle per store for the tool and its ledger row; stdio interleaves calls, so each gets its own scope.
-        output = await runWithRequestStores(async () => {
-          const text = await executeTool(toolName, toolArgs, ctx);
-          await recordMcpTokens(toolName, text, ctx);
-          return text;
-        });
-      } catch (err) {
-        if (!(err instanceof RecallRequestError)) throw err;
-        return invalidArgs(id, toolName, [err.message]);
-      }
-      return {
-        jsonrpc: '2.0',
-        id,
-        result: {
-          content: [{ type: 'text', text: output || 'Done.' }],
-        },
-      };
-    }
+    case 'tools/call':
+      return callTool(id, params, ctx);
 
     default:
       // Notifications (no id) must not receive a response

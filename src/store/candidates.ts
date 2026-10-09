@@ -1,4 +1,4 @@
-import type { MemoryEntry, StrengthInputs } from '../memory.js';
+import { type MemoryEntry, schemaFitFrom, strengthSql } from '../memory.js';
 import { closeHippoDb } from '../db.js';
 import { scopeAdmitSql, type SqlFragment } from '../recall-scope.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
@@ -37,9 +37,16 @@ function inOrigins(e: MemoryEntry, origins: RecentOrigins): boolean {
   return origin === '' ? origins.userGlobal : origin !== null && origins.names.includes(origin);
 }
 
+interface RecentRowsOptions {
+  readonly needed: number;
+  readonly admit: (e: MemoryEntry) => boolean;
+  readonly origins?: RecentOrigins;
+}
+
 // The newest rows `admit` keeps, newest first. The first window stays unfiltered so admit still sees, and the
 // delivery ledger still counts, the other-project rows it refuses; past it, the reads narrow to the caller's origins.
-function loadRecentRows(run: RunSql, drifted: boolean, tenantId: string, needed: number, admit: (e: MemoryEntry) => boolean, origins?: RecentOrigins): MemoryEntry[] {
+function loadRecentRows(run: RunSql, drifted: boolean, tenantId: string, options: RecentRowsOptions): MemoryEntry[] {
+  const { needed, admit, origins } = options;
   const keep = origins ? (e: MemoryEntry): boolean => admit(e) && inOrigins(e, origins) : admit;
   // `id DESC` mirrors getContext's comparator, not loadFreshRawMemories'
   // cross-ingest-stable order: that would change what the hook injects.
@@ -90,7 +97,7 @@ export function loadAmbientCandidates(
 
     if (needed > 0) {
       const drifted = db.prepare(AMBIENT_DRIFT_SQL).get(tenantId) !== undefined;
-      for (const e of loadRecentRows(run, drifted, tenantId, needed, admit, origins)) byId.set(e.id, e);
+      for (const e of loadRecentRows(run, drifted, tenantId, { needed, admit, origins })) byId.set(e.id, e);
     }
 
     // loadAllEntries' order: rankedPinned's comparator can tie and Array.sort
@@ -102,7 +109,7 @@ export function loadAmbientCandidates(
     if (!recall) return { entries };
     const ftsQuery = pickRarestFtsQuery(db, recall.terms);
     const recallEntries = ftsQuery
-      ? loadRecallSearchEntriesFromDb(db, ftsQuery, recall.limit, tenantId, undefined, 'exact', false, undefined, recall.ownScope)
+      ? loadRecallSearchEntriesFromDb(db, ftsQuery, { limit: recall.limit, tenantId, includeSuperseded: false, ownScope: recall.ownScope })
       : [];
     return { entries, recall: recallEntries };
   } finally {
@@ -160,46 +167,23 @@ export function loadContextCandidates(hippoRoot: string, tenantId: string, filte
   }
 }
 
-/** A row's strength inputs and tags, without its text or the JSON lists a full row parses. */
-export type StrengthRow = StrengthInputs & Pick<MemoryEntry, 'tags'>;
-
-/** Every tenant row as a StrengthRow, for whole-store health numbers; defaults match rowToEntry's. */
-export function loadStrengthRows(hippoRoot: string, tenantId: string): StrengthRow[] {
-  const db = openStore(hippoRoot);
-  try {
-    // SAFETY: rows' shape matches the columns named in the SELECT below.
-    const rows = db.prepare(
-      `SELECT pinned, created, last_retrieved, half_life_days, retrieval_count, emotional_valence, outcome_positive, outcome_negative, tags_json
-       FROM memories WHERE tenant_id = ?`,
-    ).all(tenantId) as Array<Pick<MemoryRow, 'pinned' | 'created' | 'last_retrieved' | 'half_life_days' | 'retrieval_count' | 'emotional_valence' | 'outcome_positive' | 'outcome_negative' | 'tags_json'>>;
-    return rows.map((row) => ({
-      pinned: Boolean(row.pinned),
-      created: row.created,
-      last_retrieved: row.last_retrieved,
-      half_life_days: Number(row.half_life_days ?? 7),
-      retrieval_count: Number(row.retrieval_count ?? 0),
-      emotional_valence: row.emotional_valence ?? 'neutral',
-      outcome_positive: Number(row.outcome_positive ?? 0),
-      outcome_negative: Number(row.outcome_negative ?? 0),
-      tags: parseJsonArray(row.tags_json),
-    }));
-  } finally {
-    closeHippoDb(db);
-  }
-}
-
 export type HeldText = Pick<MemoryEntry, 'content' | 'source' | 'origin_project'>;
 
 // No owner: for session capture, a personal or connector-private row must never stop a team copy being written.
 const TEAM_VISIBLE = scopeAdmitSql('');
 
+/** Admits every scope, for a reader that sees the whole store, such as the CLI on its own machine. */
+export const EVERY_SCOPE: SqlFragment = Object.freeze({ sql: '1', params: [] });
+
 /** Text, source and origin of tenant rows holding any of `words` that `admit` passes, by default the team-visible ones; a row equal to a text apart from spacing holds its every word.
- *  With `project`, only rows carrying one of those names and user-global rows, as loadContextCandidates' filter. */
+ *  With `project`, only rows carrying one of those names and user-global rows, as loadContextCandidates' filter. No `tenantId` reads every tenant. */
 export function loadTextsHoldingWords(
-  hippoRoot: string, tenantId: string, words: readonly string[], project?: readonly string[], admit: SqlFragment = TEAM_VISIBLE,
+  hippoRoot: string, tenantId: string | undefined, words: readonly string[], project?: readonly string[], admit: SqlFragment = TEAM_VISIBLE,
 ): HeldText[] {
   const unique = [...new Set(words)];
   const out: HeldText[] = [];
+  const tenantWhere = tenantId === undefined ? '1' : 'tenant_id = ?';
+  const tenantParams = tenantId === undefined ? [] : [tenantId];
   const originWhere = project === undefined ? '' : ` AND (origin_project = '' OR ${originInSql(project)})`;
   const db = openStore(hippoRoot);
   try {
@@ -208,11 +192,58 @@ export function loadTextsHoldingWords(
       const chunk = unique.slice(i, i + 200);
       // SAFETY: rows' shape matches the three columns named in the SELECT below.
       const rows = db.prepare(
-        `SELECT content, source, origin_project FROM memories WHERE tenant_id = ?${originWhere} AND ${admit.sql} AND (${chunk.map(() => 'instr(content, ?) > 0').join(' OR ')})`,
-      ).all(tenantId, ...(project ?? []), ...admit.params, ...chunk) as Array<{ content: string; source: string | null; origin_project: string | null }>;
+        `SELECT content, source, origin_project FROM memories WHERE ${tenantWhere}${originWhere} AND ${admit.sql} AND (${chunk.map(() => 'instr(content, ?) > 0').join(' OR ')})`,
+      ).all(...tenantParams, ...(project ?? []), ...admit.params, ...chunk) as Array<{ content: string; source: string | null; origin_project: string | null }>;
       for (const row of rows) out.push({ content: row.content, source: row.source ?? 'cli', origin_project: row.origin_project });
     }
     return out;
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/** A tenant's `limit` newest rows, oldest first: the tail of loadAllEntries' order, without reading the rows before it. */
+export function loadNewestEntries(hippoRoot: string, tenantId: string, limit: number): MemoryEntry[] {
+  const db = openStore(hippoRoot);
+  try {
+    // SAFETY: the SELECT names exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
+    const rows = db.prepare(
+      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE tenant_id = ? ORDER BY created DESC, id DESC LIMIT ?`,
+    ).all(tenantId, limit) as MemoryRow[];
+    return rows.reverse().map(rowToEntry);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+function* contentsOf(rows: Iterable<{ content: string }>): Generator<string> {
+  for (const row of rows) yield row.content;
+}
+
+/** computeSchemaFit against every row of a tenant: tag counts come from one aggregate and texts stream one column, so no row is loaded. */
+export function schemaFitInStore(hippoRoot: string, tenantId: string, content: string, tags: readonly string[]): number {
+  const db = openStore(hippoRoot);
+  try {
+    // One read transaction, so the row count and the texts come from the same snapshot.
+    db.exec('BEGIN');
+    try {
+      // SAFETY: rows' shape matches the two columns named in the SELECT.
+      const groups = db.prepare(
+        'SELECT tags_json, COUNT(*) AS n FROM memories WHERE tenant_id = ? GROUP BY tags_json',
+      ).all(tenantId) as Array<{ tags_json: string | null; n: number }>;
+      let rows = 0;
+      const tagCounts = new Map<string, number>();
+      for (const group of groups) {
+        rows += group.n;
+        for (const tag of parseJsonArray(group.tags_json)) tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + group.n);
+      }
+      // SHORTCUT: the text walk visits rows until a tenth of the tenant matches; a stored token count per tenant is the upgrade.
+      // SAFETY: the SELECT names exactly the one column read.
+      const texts = db.prepare('SELECT content FROM memories WHERE tenant_id = ?').iterate(tenantId) as Iterable<{ content: string }>;
+      return schemaFitFrom(content, tags, { rows, tagCounts, contents: contentsOf(texts) });
+    } finally {
+      db.exec('COMMIT');
+    }
   } finally {
     closeHippoDb(db);
   }
@@ -236,6 +267,48 @@ export function tallySources(hippoRoot: string, tenantId?: string): SourceTally[
       `SELECT COALESCE(source, 'cli') AS source, COUNT(*) AS count, MAX(created) AS latest, MIN(created || char(31) || id) AS first
        FROM memories ${where} GROUP BY COALESCE(source, 'cli')`,
     ).all(...(tenantId !== undefined ? [tenantId] : [])) as SourceTally[];
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+// A malformed or non-array JSON list reads as empty, as parseJsonArray does, instead of failing json_each.
+export const jsonList = (column: string): string =>
+  `(CASE WHEN json_valid(${column}) AND json_type(${column}) = 'array' THEN ${column} ELSE '[]' END)`;
+
+/** Whole-tenant health numbers: every row counts, superseded and archived ones too. */
+export interface StrengthTallies {
+  total: number;
+  pinned: number;
+  /** Rows tagged exactly `error`. */
+  errors: number;
+  strengthSum: number;
+  /** Unpinned rows whose strength is under `atRiskBelow`. */
+  atRisk: number;
+}
+
+/** calculateStrength over every row of a tenant in one aggregate pass, no row loaded. */
+export function loadStrengthTallies(hippoRoot: string, tenantId: string, now: Date, atRiskBelow: number): StrengthTallies {
+  // An unparseable date scores NULL in SQL and 0 in calculateStrength.
+  const strength = `COALESCE(${strengthSql(now)}, 0)`;
+  const db = openStore(hippoRoot);
+  try {
+    // SAFETY: one aggregate row whose columns are the aliases named below.
+    const row = db.prepare(`SELECT
+      COUNT(*) AS total,
+      COALESCE(SUM(pinned != 0), 0) AS pinned,
+      COALESCE(SUM(EXISTS (SELECT 1 FROM json_each(${jsonList('tags_json')}) WHERE value = 'error')), 0) AS errors,
+      COALESCE(SUM(${strength}), 0) AS strengthSum,
+      COALESCE(SUM(COALESCE(pinned, 0) = 0 AND ${strength} < ?), 0) AS atRisk
+      FROM memories WHERE tenant_id = ?`,
+    ).get(atRiskBelow, tenantId) as Record<keyof StrengthTallies, number | bigint>;
+    return {
+      total: Number(row.total),
+      pinned: Number(row.pinned),
+      errors: Number(row.errors),
+      strengthSum: Number(row.strengthSum),
+      atRisk: Number(row.atRisk),
+    };
   } finally {
     closeHippoDb(db);
   }

@@ -24,15 +24,13 @@
  * step rolls all of them back. Pattern matches savePrediction (predictions.ts).
  */
 
-import { BadRequestError, ConflictError, NotFoundError } from './api-errors.js';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
-import { writeEntry } from './store/entry-writes.js';
+import { BadRequestError } from './api-errors.js';
+import { openHippoDb, closeHippoDb } from './db.js';
+import { onHandle } from './store/open.js';
 import { assertTenantId } from './tenant.js';
-import { markGraphDirty, removeGraphEntitiesForObject } from './graph/write.js';
-import { createMemory, Layer } from './memory.js';
-import { appendAuditEvent } from './audit.js';
-import { objectHalfLifeDays } from './half-life-migration.js';
-import { keysetAfter, type KeysetPosition } from './keyset.js';
+import type { KeysetPosition } from './keyset.js';
+import type { SavableDescriptor } from './objects/descriptor.js';
+import { assertObjectStatus, closeObjectOn, dropClosedObjectFromGraph, loadObjectByIdOn, loadObjectsOn, saveObject } from './objects/lifecycle.js';
 
 // ---------------------------------------------------------------------------
 // Domain types
@@ -120,134 +118,36 @@ const DECISION_COLS = `
   superseded_by, superseded_at, closed_at, created_at
 `;
 
+/** What one decision write stores. */
+interface DecisionFields {
+  readonly decisionText: string;
+  readonly context: string | undefined;
+}
+
+const DECISION: SavableDescriptor<Decision, DecisionRow, never, DecisionFields> = {
+  table: 'decisions',
+  cols: DECISION_COLS,
+  label: 'decision',
+  plural: 'decisions',
+  fn: { get: 'loadDecisionById', close: 'closeDecision', list: 'loadDecisions', save: 'saveDecision' },
+  states: VALID_DECISION_STATES,
+  closableFrom: ['active'],
+  ops: { close: 'decision_close', create: 'decision_create', supersede: 'decision_supersede' },
+  idKey: 'decision_id',
+  graphType: 'decision',
+  listFilters: {},
+  rowTo: rowToDecision,
+  source: 'decision',
+  versioned: false,
+  columns: ['decision_text', 'context'],
+  values: (w) => [w.decisionText, w.context ?? null],
+  // An id and a flag only, never the decision text.
+  createMeta: (w) => ({ has_context: w.context !== undefined && w.context !== null && w.context !== '' }),
+};
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
-
-/** The legacy `hippo decide` memory mirror for a decision. */
-function buildDecisionMemory(hippoRoot: string, tenantId: string, opts: SaveDecisionOpts) {
-  const content = opts.context
-    ? `${opts.decisionText}\n\nContext: ${opts.context}`
-    : opts.decisionText;
-  const tags = ['decision', ...(opts.extraTags ?? [])];
-  return createMemory(content, {
-    tags,
-    layer: Layer.Semantic,
-    confidence: 'verified',
-    source: 'decision',
-    baseHalfLifeDays: objectHalfLifeDays(hippoRoot),
-    tenantId,
-  });
-}
-
-// Preflight the supersede target BEFORE inserting the new row. The new
-// row's autoincrement id could otherwise collide with a non-existent
-// supersedesDecisionId (e.g. superseding id 1 on an empty store, where the
-// INSERT below would itself become id 1), making the row supersede itself.
-// Validating first means the new row is never a candidate for its own
-// supersede UPDATE.
-function preflightDecisionSupersede(db: DatabaseSyncLike, tenantId: string, supersedesId: number): void {
-  // SAFETY: row shape matches the single `status` column named in the SELECT below.
-  const pred = db.prepare(
-    `SELECT status FROM decisions WHERE id = ? AND tenant_id = ?`,
-  ).get(supersedesId, tenantId) as { status: string } | undefined;
-  if (!pred) {
-    throw new NotFoundError(
-      `saveDecision: decision ${supersedesId} to supersede not found for tenant ${tenantId}`,
-    );
-  }
-  if (pred.status !== 'active') {
-    throw new ConflictError(
-      `saveDecision: decision ${supersedesId} is not active (status='${pred.status}'); only active decisions can be superseded.`,
-    );
-  }
-}
-
-function insertDecisionRow(
-  db: DatabaseSyncLike,
-  memoryId: string,
-  tenantId: string,
-  opts: SaveDecisionOpts,
-  now: string,
-): number {
-  const result = db.prepare(`
-    INSERT INTO decisions(
-      memory_id, tenant_id, decision_text, context,
-      status, superseded_by, superseded_at, closed_at, created_at
-    ) VALUES (?, ?, ?, ?, 'active', NULL, NULL, NULL, ?)
-  `).run(memoryId, tenantId, opts.decisionText, opts.context ?? null, now);
-  return Number(result.lastInsertRowid ?? 0);
-}
-
-// Supersede the (preflight-validated) prior active decision in the SAME
-// SAVEPOINT, atomic with the new row. The `id != decisionId` exclusion is
-// defense-in-depth against the self-match described above; combined with
-// the preflight, a 0-change here is unreachable in the single-writer txn.
-function supersedeDecisionRow(
-  db: DatabaseSyncLike,
-  tenantId: string,
-  actor: string,
-  supersedesId: number,
-  decisionId: number,
-  now: string,
-): void {
-  const sup = db.prepare(`
-    UPDATE decisions
-    SET status = 'superseded', superseded_by = ?, superseded_at = ?
-    WHERE id = ? AND tenant_id = ? AND status = 'active' AND id != ?
-  `).run(decisionId, now, supersedesId, tenantId, decisionId);
-  if (sup.changes === 0) {
-    throw new ConflictError(
-      `saveDecision: decision ${supersedesId} could not be superseded (no longer active or self-reference).`,
-    );
-  }
-  appendAuditEvent(db, {
-    tenantId,
-    actor,
-    op: 'decision_supersede',
-    targetId: String(supersedesId),
-    metadata: {
-      decision_id: supersedesId,
-      superseded_by: decisionId,
-    },
-  });
-}
-
-/** The afterWrite body: preflight, INSERT, supersede, reload, create audit, all in one SAVEPOINT. */
-function writeDecisionRow(
-  db: DatabaseSyncLike,
-  memoryId: string,
-  tenantId: string,
-  opts: SaveDecisionOpts,
-  actor: string,
-  now: string,
-): DecisionRow {
-  if (opts.supersedesDecisionId !== undefined) {
-    preflightDecisionSupersede(db, tenantId, opts.supersedesDecisionId);
-  }
-  const decisionId = insertDecisionRow(db, memoryId, tenantId, opts, now);
-  if (opts.supersedesDecisionId !== undefined) {
-    supersedeDecisionRow(db, tenantId, actor, opts.supersedesDecisionId, decisionId, now);
-  }
-
-  // SAFETY: row's shape matches the columns named in DECISION_COLS above.
-  const row = db.prepare(`SELECT ${DECISION_COLS} FROM decisions WHERE id = ?`)
-    .get(decisionId) as DecisionRow | undefined;
-  if (!row) throw new Error('saveDecision: failed to reload saved decision row');
-
-  // GDPR-light metadata: id + flag only, no decision_text.
-  appendAuditEvent(db, {
-    tenantId,
-    actor,
-    op: 'decision_create',
-    targetId: String(decisionId),
-    metadata: {
-      decision_id: decisionId,
-      has_context: opts.context !== undefined && opts.context !== null && opts.context !== '',
-    },
-  });
-  return row;
-}
 
 /**
  * Create a decision. Writes the memory mirror + the decisions row atomically
@@ -267,39 +167,21 @@ export function saveDecision(
   opts: SaveDecisionOpts,
   actor: string = 'cli',
 ): Decision {
-  assertTenantId('saveDecision', tenantId);
+  assertTenantId(DECISION.fn.save, tenantId);
   if (!opts.decisionText) throw new BadRequestError('saveDecision: decisionText is required');
-
-  const now = new Date().toISOString();
-  const mem = buildDecisionMemory(hippoRoot, tenantId, opts);
-
-  // Populated inside afterWrite so the INSERT, the supersede UPDATE, and the
-  // memory write all share one SAVEPOINT.
-  let savedRow: DecisionRow | undefined;
-
-  writeEntry(hippoRoot, mem, {
+  return saveObject(hippoRoot, DECISION, tenantId, {
     actor,
-    afterWrite: (db, memoryId) => {
-      savedRow = writeDecisionRow(db, memoryId, tenantId, opts, actor, now);
-    },
-    // Post-commit hook: mark the tenant's graph dirty AFTER the DB row commits
-    // but BEFORE the markdown mirrors are written, so a mirror-write failure can
-    // never leave a committed save unflagged. markGraphDirty is fail-soft.
-    afterCommit: () => markGraphDirty(hippoRoot, tenantId, mem.id),
+    now: new Date().toISOString(),
+    fields: { decisionText: opts.decisionText, context: opts.context },
+    content: opts.context ? `${opts.decisionText}\n\nContext: ${opts.context}` : opts.decisionText,
+    tags: opts.extraTags ?? [],
+    supersedesId: opts.supersedesDecisionId,
   });
-
-  if (!savedRow) {
-    // Unreachable unless afterWrite threw first; defensive.
-    throw new Error('saveDecision: afterWrite did not populate the row');
-  }
-  return rowToDecision(savedRow);
 }
 
 /**
  * Close (retire) an active decision with no successor. Updates the decisions
- * row only; the memory mirror is not mutated. CAS guard mirrors closePrediction
- * (predictions.ts): WHERE status='active'; 0 changes distinguishes not-found
- * from not-active so callers surface the right error.
+ * row only; the memory mirror is not mutated.
  */
 export function closeDecision(
   hippoRoot: string,
@@ -307,68 +189,13 @@ export function closeDecision(
   id: number,
   actor: string = 'cli',
 ): Decision {
-  assertTenantId('closeDecision', tenantId);
+  assertTenantId(DECISION.fn.close, tenantId);
   const now = new Date().toISOString();
-  const db = openHippoDb(hippoRoot);
-  try {
-    db.exec('BEGIN IMMEDIATE');
-    try {
-      const updateResult = db.prepare(`
-        UPDATE decisions
-        SET status = 'closed', closed_at = ?
-        WHERE id = ? AND tenant_id = ? AND status = 'active'
-      `).run(now, id, tenantId);
-
-      if (updateResult.changes === 0) {
-        // SAFETY: row shape matches the single `status` column named in the SELECT above.
-        const existing = db.prepare(
-          `SELECT status FROM decisions WHERE id = ? AND tenant_id = ?`,
-        ).get(id, tenantId) as { status: string } | undefined;
-        if (!existing) {
-          throw new NotFoundError(`closeDecision: decision ${id} not found for tenant ${tenantId}`);
-        }
-        throw new ConflictError(
-          `closeDecision: decision ${id} is not active (status='${existing.status}'); only active decisions can be closed.`,
-        );
-      }
-
-      // SAFETY: row's shape matches the columns named in DECISION_COLS above.
-      const row = db.prepare(`SELECT ${DECISION_COLS} FROM decisions WHERE id = ? AND tenant_id = ?`)
-        .get(id, tenantId) as DecisionRow | undefined;
-      if (!row) throw new NotFoundError(`closeDecision: decision ${id} not found after UPDATE`);
-
-      appendAuditEvent(db, {
-        tenantId,
-        actor,
-        op: 'decision_close',
-        targetId: String(id),
-        metadata: { decision_id: id },
-      });
-
-      db.exec('COMMIT');
-      const closed = rowToDecision(row);
-      // After COMMIT (write lock released), before the finally closes `db`.
-      // Closing removes the object from the graph. Remove its rows DIRECTLY (deterministic),
-      // not only via an enqueued rebuild whose queue item is lost if the mirror is later
-      // forgotten (the queue row cascade-deletes with the memory), which would leave the closed
-      // object stale and could block that forget. Still enqueue when a mirror exists
-      // so a concurrent rebuild re-derives consistently (harmless if it also runs).
-      removeGraphEntitiesForObject(hippoRoot, tenantId, 'decision', closed.id);
-      if (closed.memoryId) {
-        markGraphDirty(hippoRoot, tenantId, closed.memoryId);
-      }
-      return closed;
-    } catch (e) {
-      try {
-        db.exec('ROLLBACK');
-      } catch {
-        // Ignore rollback failures — the throw below is what matters.
-      }
-      throw e;
-    }
-  } finally {
-    closeHippoDb(db);
-  }
+  return onHandle(hippoRoot, (db) => {
+    const closed = closeObjectOn(db, DECISION, tenantId, id, { actor, now });
+    dropClosedObjectFromGraph(hippoRoot, DECISION, tenantId, closed);
+    return closed;
+  });
 }
 
 export function loadDecisionById(
@@ -376,16 +203,8 @@ export function loadDecisionById(
   tenantId: string,
   id: number,
 ): Decision | null {
-  assertTenantId('loadDecisionById', tenantId);
-  const db = openHippoDb(hippoRoot);
-  try {
-    // SAFETY: row's shape matches the columns named in DECISION_COLS above.
-    const row = db.prepare(`SELECT ${DECISION_COLS} FROM decisions WHERE id = ? AND tenant_id = ?`)
-      .get(id, tenantId) as DecisionRow | undefined;
-    return row ? rowToDecision(row) : null;
-  } finally {
-    closeHippoDb(db);
-  }
+  assertTenantId(DECISION.fn.get, tenantId);
+  return onHandle(hippoRoot, (db) => loadObjectByIdOn(db, DECISION, tenantId, id));
 }
 
 export function loadDecisions(
@@ -393,38 +212,9 @@ export function loadDecisions(
   tenantId: string,
   opts: ListDecisionsOpts = {},
 ): Decision[] {
-  assertTenantId('loadDecisions', tenantId);
-  const limit = opts.limit ?? 100;
-  const after = keysetAfter('created_at', 'id', opts.after);
-  const db = openHippoDb(hippoRoot);
-  try {
-    let rows: DecisionRow[];
-    if (opts.status) {
-      if (!VALID_DECISION_STATES.has(opts.status)) {
-        throw new BadRequestError(
-          `loadDecisions: status must be one of ${Array.from(VALID_DECISION_STATES).join('|')}; got ${opts.status}`,
-        );
-      }
-      // SAFETY: rows' shape matches the columns named in DECISION_COLS above.
-      rows = db.prepare(`
-        SELECT ${DECISION_COLS} FROM decisions
-        WHERE tenant_id = ? AND status = ?${after.sql}
-        ORDER BY created_at DESC, id DESC
-        LIMIT ?
-      `).all(tenantId, opts.status, ...after.params, limit) as DecisionRow[];
-    } else {
-      // SAFETY: rows' shape matches the columns named in DECISION_COLS above.
-      rows = db.prepare(`
-        SELECT ${DECISION_COLS} FROM decisions
-        WHERE tenant_id = ?${after.sql}
-        ORDER BY created_at DESC, id DESC
-        LIMIT ?
-      `).all(tenantId, ...after.params, limit) as DecisionRow[];
-    }
-    return rows.map(rowToDecision);
-  } finally {
-    closeHippoDb(db);
-  }
+  assertTenantId(DECISION.fn.list, tenantId);
+  assertObjectStatus(DECISION, opts.status);
+  return onHandle(hippoRoot, (db) => loadObjectsOn(db, DECISION, tenantId, opts));
 }
 
 export function loadActiveDecisions(

@@ -70,7 +70,7 @@ function processed(hippoRoot: string, tenant: string = T) {
   return loadExtractionQueue(hippoRoot, tenant, { status: 'processed', limit: 1000 });
 }
 
-describe('E3 sleep enqueue-hook', () => {
+describe('sleep enqueue-hook', () => {
   let tc: TestCtx;
   beforeEach(() => { tc = newCtx(); });
   afterEach(() => { tc.restore(); });

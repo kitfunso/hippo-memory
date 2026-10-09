@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// CI size gate. No src/ file over 800 lines and no function over 80 is the goal; existing offenders sit in
+// CI size gate. No src/ or scripts/ file over 800 lines and no function over 80 is the goal; existing offenders sit in
 // .size-baseline.json and may shrink or go but never grow, and no new one may appear.
 // Usage: check-size-ratchet.mjs [--list] [--update]. --update rewrites the baseline; run it only after shrinking offenders.
 
@@ -10,12 +10,13 @@ import ts from 'typescript';
 const BASELINE = '.size-baseline.json';
 const FILE_LIMIT = 800;
 const FUNCTION_LIMIT = 80;
+const SCAN_DIRS = ['src', 'scripts'];
 
 function tsFiles(dir, out = []) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     const p = join(dir, e.name);
     if (e.isDirectory()) tsFiles(p, out);
-    else if (/\.[cm]?ts$/.test(e.name) && !/\.d\.[cm]?ts$/.test(e.name)) out.push(p.replace(/\\/g, '/'));
+    else if (/\.([cm]?ts|mjs)$/.test(e.name) && !/\.d\.[cm]?ts$/.test(e.name)) out.push(p.replace(/\\/g, '/'));
   }
   return out.sort();
 }
@@ -96,11 +97,11 @@ function physicalLines(text) {
   return text.endsWith('\n') ? lines - 1 : lines;
 }
 
-/** Offenders under src/: { files: { path: lines }, functions: { 'path:name': lines } }, keys sorted. */
+/** Offenders under src/ and scripts/: { files: { path: lines }, functions: { 'path:name': lines } }, keys sorted. */
 function findOffenders() {
   const files = {};
   const functions = {};
-  for (const file of existsSync('src') ? tsFiles('src') : []) {
+  for (const file of SCAN_DIRS.filter((d) => existsSync(d)).flatMap((d) => tsFiles(d))) {
     const text = readFileSync(file, 'utf8');
     const lines = physicalLines(text);
     if (lines > FILE_LIMIT) files[file] = lines;

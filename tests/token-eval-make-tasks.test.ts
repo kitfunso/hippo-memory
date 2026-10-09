@@ -111,7 +111,7 @@ function repoWithScopeGateCandidates(): string {
   return repo;
 }
 
-describe('make-tasks (TE5)', () => {
+describe('make-tasks', () => {
   it('picks commits that change code and tests, and verify keeps only real fixes', () => {
     const repo = repoWithHistory();
     const candidates = findCandidates(repo);

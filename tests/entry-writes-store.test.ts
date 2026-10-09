@@ -9,7 +9,7 @@ import {
   type HippoDbContext, type OutcomeResult, type RememberResult, type SupersedeResult,
 } from '../src/api.js';
 import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../src/db.js';
-import { SqliteBlockedError, StoreNotPortedError } from '../src/db/sqlite-blocked.js';
+import { SqliteBlockedError, StoreNotPortedError } from '../src/util/sqlite-blocked.js';
 import { STORE_NOT_PORTED_MESSAGE } from '../src/http-util.js';
 import { handleMcpRequest, type McpContext } from '../src/mcp/server.js';
 import { lastRecalledIds, resolveClientKey } from '../src/mcp/session-state.js';

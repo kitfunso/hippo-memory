@@ -41,7 +41,7 @@ import {
   clusteredPairedBootstrap,
   passAtK,
   passHatK,
-} from '../../dist/eval-stats.js';
+} from '../../dist/eval/eval-stats.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..', '..');
@@ -84,7 +84,7 @@ export function parseRuns(text) {
 
 /** Cost of one record: dollars with prices, else uncached-equivalent tokens.
  * @param {any} r
- * @param {import('../../src/eval-stats.js').Prices | null} prices
+ * @param {import('../../src/eval/eval-stats.js').Prices | null} prices
  * @param {number} [outputRatio] */
 export function recordCost(r, prices, outputRatio = 5) {
   if (prices) return priceUsage(r.usage, prices);
@@ -99,7 +99,7 @@ const mean = (xs) => (xs.length === 0 ? 0 : xs.reduce((s, x) => s + x, 0) / xs.l
  * majority of its seeds resolved it (ties count as unresolved). Only tasks
  * present in both arms are compared; the rest are listed as unpaired.
  * @param {any[]} allRecords
- * @param {{prices?: import('../../src/eval-stats.js').Prices | null, control?: string, k?: number, outputRatio?: number, seed?: number}} [options]
+ * @param {{prices?: import('../../src/eval/eval-stats.js').Prices | null, control?: string, k?: number, outputRatio?: number, seed?: number}} [options]
  */
 export function analyze(allRecords, { prices = null, control = 'no-memory', k = 3, outputRatio = 5, seed = 1 } = {}) {
   const records = allRecords.filter((r) => r.scored !== false && !r.invalid);

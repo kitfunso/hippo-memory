@@ -11,7 +11,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../src/mcp/server.js';
-import { savePrediction, closePrediction } from '../src/predictions/store.js';
+import { savePrediction, closePrediction } from '../src/store/predictions.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 type ToolArgs = {
@@ -43,7 +43,7 @@ function extractText(res: McpResponse | null): string {
   return result?.content?.[0]?.text ?? '';
 }
 
-describe('mcp hippo_predict_baserate (J3, v0.31)', () => {
+describe('mcp hippo_predict_baserate', () => {
   let home: string;
   let originalHome: string | undefined;
 

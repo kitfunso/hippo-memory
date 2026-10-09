@@ -12,7 +12,8 @@ import {
   isRecallBoostAblated,
   evalNow,
 } from './ablation.js';
-import { AGENT_MEMORY_TOOLS, toolSourcePrefix } from './agent-memories/tools.js';
+import { AGENT_MEMORY_TOOLS, toolSourcePrefix } from './core/agent-memory-tools.js';
+import { DAY_MS } from './util/time.js';
 
 export enum Layer {
   Buffer = 'buffer',
@@ -221,7 +222,7 @@ function getLossAversionRatio(): number {
  *     the env var for this test.
  *   - afterEach: clear the cache so the next test (which may not set the env
  *     var) reads the clean default instead of this test's value.
- * See `tests/emotional-multipliers-j5.test.ts` for the canonical pattern.
+ * See `tests/emotional-multipliers.test.ts` for the pattern.
  */
 export function _resetLossAversionRatioCacheForTests(): void {
   _lossAversionRatioCache = undefined;
@@ -258,11 +259,18 @@ export function calculateRewardFactor(entry: Pick<MemoryEntry, 'outcome_positive
   const neg = entry.outcome_negative ?? 0;
   if (pos === 0 && neg === 0) return 1.0;
   const ratio = (pos - neg) / (pos + neg + 1);
-  return 1 + 0.5 * ratio;
+  return 1 + REWARD_SLOPE * ratio;
 }
 
 /** Bad marks alone never push a memory under sleep's 0.05 retire line; supersede is the hard correction. */
 const MAX_WRONG_HALVINGS = 3;
+
+// Shared by calculateStrength and strengthSql so the two cannot drift.
+const DECAY_BASE = 0.5;
+const REWARD_SLOPE = 0.5;
+const RETRIEVAL_BOOST_SLOPE = 0.1;
+const SQL_DEFAULT_HALF_LIFE_DAYS = 7;
+const UNIX_EPOCH_JULIAN_DAY = 2440587.5;
 
 /**
  * Net wrongness: bad outcome marks past good ones, never below zero.
@@ -313,7 +321,7 @@ export function calculateStrength(
   options: DecayOptions = {},
 ): number {
   // Being marked wrong outranks every shield: pinning, error tags, heavy recall.
-  const wrongPenalty = Math.pow(0.5, Math.min(netWrong(entry), MAX_WRONG_HALVINGS));
+  const wrongPenalty = Math.pow(DECAY_BASE, Math.min(netWrong(entry), MAX_WRONG_HALVINGS));
   if (entry.pinned) return wrongPenalty;
 
   // EVAL-ONLY ablation (see ablation.ts): anchor decay at CREATION, so clock resets persisted by PRIOR
@@ -322,7 +330,7 @@ export function calculateStrength(
   const lastRetrieved = new Date(
     isRecallBoostAblated() ? entry.created : entry.last_retrieved,
   );
-  const daysSince = (now.getTime() - lastRetrieved.getTime()) / (1000 * 60 * 60 * 24);
+  const daysSince = (now.getTime() - lastRetrieved.getTime()) / DAY_MS;
 
   // Reward-proportional half-life modulation
   const rewardFactor = calculateRewardFactor(entry);
@@ -355,13 +363,13 @@ export function calculateStrength(
   // EVAL-ONLY ablation (see ablation.ts): decay term := 1. NOTE the [0,1]
   // clamp below then caps retrievalBoost at baseline - see ablation.ts
   // formula note.
-  const decay = isDecayAblated() ? 1.0 : Math.pow(0.5, decayExponent);
+  const decay = isDecayAblated() ? 1.0 : Math.pow(DECAY_BASE, decayExponent);
 
   // Retrieval boost: 1 + 0.1 * log2(retrieval_count + 1). EVAL-ONLY ablation (see ablation.ts) neutralizes
   // the READ side too, so counts written before the flag cannot leak strengthening into an ablated arm.
   const retrievalBoost = isRecallBoostAblated() || netWrong(entry) > 0
     ? 1.0
-    : 1 + 0.1 * Math.log2(entry.retrieval_count + 1);
+    : 1 + RETRIEVAL_BOOST_SLOPE * Math.log2(entry.retrieval_count + 1);
 
   // Emotional multiplier. HIPPO_LOSS_AVERSION_RATIO scales the negative one ONLY; the lazy
   // module cache makes this one lookup + one multiply, not a per-call process.env read.
@@ -384,19 +392,19 @@ export function strengthSql(now: Date): string {
   const wrong = isOutcomeSlowAblated() || isDecayAblated() ? '0' : `MAX(0, ${neg} - ${pos})`;
   const reward = isOutcomeSlowAblated()
     ? '1.0'
-    : `(CASE WHEN ${pos} = 0 AND ${neg} = 0 THEN 1.0 ELSE 1.0 + 0.5 * (${pos} - ${neg}) / (${pos} + ${neg} + 1.0) END)`;
-  const halfLife = `(COALESCE(half_life_days, 7) * ${reward})`;
+    : `(CASE WHEN ${pos} = 0 AND ${neg} = 0 THEN 1.0 ELSE 1.0 + ${REWARD_SLOPE} * (${pos} - ${neg}) / (${pos} + ${neg} + 1.0) END)`;
+  const halfLife = `(COALESCE(half_life_days, ${SQL_DEFAULT_HALF_LIFE_DAYS}) * ${reward})`;
   const anchor = isRecallBoostAblated() ? 'created' : 'last_retrieved';
-  const nowJulian = num(now.getTime() / 86400000 + 2440587.5);
-  const decay = isDecayAblated() ? '1.0' : `pow(0.5, (${nowJulian} - julianday(${anchor})) / ${halfLife})`;
+  const nowJulian = num(now.getTime() / DAY_MS + UNIX_EPOCH_JULIAN_DAY);
+  const decay = isDecayAblated() ? '1.0' : `pow(${DECAY_BASE}, (${nowJulian} - julianday(${anchor})) / ${halfLife})`;
   const boost = isRecallBoostAblated()
     ? '1.0'
-    : `(CASE WHEN ${wrong} > 0 THEN 1.0 ELSE 1.0 + 0.1 * log2(COALESCE(retrieval_count, 0) + 1) END)`;
+    : `(CASE WHEN ${wrong} > 0 THEN 1.0 ELSE 1.0 + ${RETRIEVAL_BOOST_SLOPE} * log2(COALESCE(retrieval_count, 0) + 1) END)`;
   const valences = /* SAFETY: a Record keyed by EmotionalValence */ Object.keys(EMOTIONAL_MULTIPLIERS) as EmotionalValence[];
   const emotion = `(CASE COALESCE(emotional_valence, 'neutral') ${valences
     .map((v) => `WHEN '${v}' THEN ${num(applyLossAversionRatio(v, EMOTIONAL_MULTIPLIERS[v]))}`)
     .join(' ')} ELSE 1.0 END)`;
-  const penalty = `pow(0.5, MIN(${wrong}, ${MAX_WRONG_HALVINGS}))`;
+  const penalty = `pow(${DECAY_BASE}, MIN(${wrong}, ${MAX_WRONG_HALVINGS}))`;
   return `(CASE WHEN pinned THEN ${penalty} WHEN ${halfLife} <= 0 THEN 0.0
     ELSE MIN(1.0, MAX(0.0, ${decay} * ${boost} * ${emotion})) * ${penalty} END)`;
 }
@@ -404,6 +412,16 @@ export function strengthSql(now: Date): string {
 /**
  * Derive half-life based on signals, as per PLAN.md table.
  */
+const HIGH_SCHEMA_FIT = 0.7;
+const HIGH_FIT_HALF_LIFE_FACTOR = 1.5;
+const LOW_SCHEMA_FIT = 0.3;
+const LOW_FIT_HALF_LIFE_FACTOR = 0.5;
+// Schema fit blends tag coverage and content similarity; a content match needs this share of shared tokens.
+const TAG_FIT_WEIGHT = 0.6;
+const CONTENT_FIT_WEIGHT = 0.4;
+const CONTENT_TOKEN_SHARE_MIN = 0.2;
+const CONTENT_ENOUGH_FRACTION = 0.1;
+
 export function deriveHalfLife(base: number, entry: Partial<MemoryEntry>): number {
   let hl = base;
 
@@ -413,13 +431,13 @@ export function deriveHalfLife(base: number, entry: Partial<MemoryEntry>): numbe
   }
 
   // High schema fit: consolidates faster (1.5x)
-  if (entry.schema_fit !== undefined && entry.schema_fit > 0.7) {
-    hl *= 1.5;
+  if (entry.schema_fit !== undefined && entry.schema_fit > HIGH_SCHEMA_FIT) {
+    hl *= HIGH_FIT_HALF_LIFE_FACTOR;
   }
 
   // Low schema fit: decay faster (0.5x)
-  if (entry.schema_fit !== undefined && entry.schema_fit < 0.3) {
-    hl *= 0.5;
+  if (entry.schema_fit !== undefined && entry.schema_fit < LOW_SCHEMA_FIT) {
+    hl *= LOW_FIT_HALF_LIFE_FACTOR;
   }
 
   return hl;
@@ -468,7 +486,7 @@ export function generateId(prefix: string = 'mem'): string {
 function isAgedOut(entry: MemoryEntry, now: Date): boolean {
   if (entry.pinned || entry.confidence === 'verified') return false;
   const lastRetrieved = new Date(entry.last_retrieved);
-  return (now.getTime() - lastRetrieved.getTime()) / (1000 * 60 * 60 * 24) > 30;
+  return (now.getTime() - lastRetrieved.getTime()) / DAY_MS > 30;
 }
 
 export interface ConfidenceFacets {
@@ -656,63 +674,64 @@ export function computeSchemaFit(
   tags: string[],
   existingEntries: MemoryEntry[]
 ): number {
-  if (existingEntries.length === 0) return 0.5; // no schema yet, neutral
-
-  // Build tag frequency map across all existing entries
-  const tagFreq = new Map<string, number>();
+  const tagCounts = new Map<string, number>();
   for (const entry of existingEntries) {
     for (const tag of entry.tags) {
-      tagFreq.set(tag, (tagFreq.get(tag) ?? 0) + 1);
+      tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
     }
   }
+  return schemaFitFrom(content, tags, { rows: existingEntries.length, tagCounts, contents: existingEntries.map((e) => e.content) });
+}
 
+/** What schema fit reads from a set of memories, so a store can answer without loading its rows. */
+export interface SchemaFitSource {
+  readonly rows: number;
+  /** How many times each tag appears across the set. */
+  readonly tagCounts: ReadonlyMap<string, number>;
+  /** Each memory's text; the walk stops once more matches cannot move the score. */
+  readonly contents: Iterable<string>;
+}
+
+function significantTokens(text: string): Set<string> {
+  return new Set(text.toLowerCase().replace(/[^\w\s]/g, ' ').split(/\s+/).filter((t) => t.length > 3));
+}
+
+/** computeSchemaFit against `source`, for a caller that holds counts and texts but no rows. */
+export function schemaFitFrom(content: string, tags: readonly string[], source: SchemaFitSource): number {
+  const N = source.rows;
+  if (N === 0) return 0.5; // no schema yet, neutral
+  const tagFreq = source.tagCounts;
   if (tags.length === 0 && tagFreq.size === 0) return 0.5;
 
-  // Tag overlap: IDF-weighted Jaccard
-  // Shared rare tags matter more than shared common tags
+  // Tag overlap, weighted so a shared rare tag counts for more than a shared common one.
   let weightedOverlap = 0;
   let totalWeight = 0;
-  const N = existingEntries.length;
-
+  const maxIdf = Math.log(N + 1) + 1;
   for (const tag of tags) {
     const freq = tagFreq.get(tag) ?? 0;
-    // IDF-weighted: rare shared tags score higher
-    const maxIdf = Math.log(N + 1) + 1;
-
-    if (freq > 0) {
-      const idf = Math.log(N / freq) + 1;
-      weightedOverlap += idf;
-    }
+    if (freq > 0) weightedOverlap += Math.log(N / freq) + 1;
     totalWeight += maxIdf;
   }
-
-  // Scale so that matching half the tags at average IDF gives ~0.5
+  // Scaled so that matching half the tags at average weight gives about 0.5.
   const tagScore = totalWeight > 0 ? Math.min(1, (weightedOverlap / totalWeight) * 2) : 0;
 
-  // Content overlap: check how many existing entries share significant tokens
-  const newTokens = new Set(
-    content.toLowerCase().replace(/[^\w\s]/g, ' ').split(/\s+/).filter((t) => t.length > 3)
-  );
-
+  const newTokens = significantTokens(content);
   if (newTokens.size === 0) return Math.min(1, Math.max(0, tagScore));
 
+  // The content score is capped at 1, which this many matching memories reach.
+  const enough = Math.max(5, N * CONTENT_ENOUGH_FRACTION);
   let contentMatches = 0;
-  for (const entry of existingEntries) {
-    const entryTokens = new Set(
-      entry.content.toLowerCase().replace(/[^\w\s]/g, ' ').split(/\s+/).filter((t) => t.length > 3)
-    );
+  for (const text of source.contents) {
+    const entryTokens = significantTokens(text);
     let shared = 0;
     for (const token of newTokens) {
       if (entryTokens.has(token)) shared++;
     }
-    const overlap = shared / Math.max(newTokens.size, 1);
-    if (overlap > 0.2) contentMatches++;
+    if (shared / newTokens.size > CONTENT_TOKEN_SHARE_MIN && ++contentMatches >= enough) break;
   }
+  const contentScore = Math.min(1, contentMatches / enough);
 
-  const contentScore = Math.min(1, contentMatches / Math.max(5, N * 0.1));
-
-  // Blend: 60% tag overlap, 40% content overlap
-  const fit = 0.6 * tagScore + 0.4 * contentScore;
+  const fit = TAG_FIT_WEIGHT * tagScore + CONTENT_FIT_WEIGHT * contentScore;
   return Math.min(1, Math.max(0, fit));
 }
 

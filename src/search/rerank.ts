@@ -1,6 +1,6 @@
 import { cosineSimilarity } from '../embeddings.js';
 import type { RerankerFn, RerankerOptions } from '../rerankers/types.js';
-import type { SearchResult } from './types.js';
+import type { SearchResult } from '../core/search-types.js';
 
 // MMR is O(K^2) cosine ops; candidates below this window never survive budget filtering anyway.
 const MMR_CANDIDATE_CAP = 100;

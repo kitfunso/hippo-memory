@@ -60,7 +60,7 @@ describe('selectGraphSeeds (pure)', () => {
   });
 });
 
-describe('L1 graphRankStream (real SQLite)', () => {
+describe('graphRankStream (real SQLite)', () => {
   let home: string;
   const T = 'default';
   beforeEach(() => { home = makeRoot('graphstream'); });

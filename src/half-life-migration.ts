@@ -22,6 +22,8 @@
 import { deriveHalfLife, type MemoryEntry } from './memory.js';
 import { openStore, HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY } from './store/open.js';
 import { selectAllEntries } from './store/entry-reads.js';
+import { conflictResolveAuditsAt, resolvedConflictsAt } from './store/conflicts.js';
+import { setHalfLivesAt } from './store/entry-writes.js';
 import { openHippoDb, closeHippoDb, getMeta, setMeta, type DatabaseSyncLike } from './db.js';
 import { appendAuditEvent } from './audit.js';
 import { loadConfig } from './config.js';
@@ -172,22 +174,18 @@ function objectMemoryIds(db: DatabaseSyncLike) {
 
 /** Memories that lost a conflict, which resolveConflict halved untagged. A resolved conflict with no audit row (resolved before resolves were audited, or found stale) names no winner, so both sides count. */
 function conflictLosers(db: DatabaseSyncLike): Set<string> {
-  // SAFETY: SELECT of two fields every conflict_resolve audit row carries (ConflictResolveMeta in store.ts).
-  const audited = db.prepare(`SELECT json_extract(metadata_json, '$.conflictId') AS conflictId, json_extract(metadata_json, '$.loserId') AS loserId FROM audit_log WHERE op = 'conflict_resolve'`).all() as { conflictId: number; loserId: string }[];
+  const audited = conflictResolveAuditsAt(db);
   const losers = new Set(audited.map((a) => a.loserId));
   const named = new Set(audited.map((a) => a.conflictId));
-  // SAFETY: SELECT of three columns of resolved conflicts.
-  const resolved = db.prepare(`SELECT id, memory_a_id, memory_b_id FROM memory_conflicts WHERE status = 'resolved'`).all() as { id: number; memory_a_id: string; memory_b_id: string }[];
-  for (const c of resolved) if (!named.has(c.id)) losers.add(c.memory_a_id).add(c.memory_b_id);
+  for (const c of resolvedConflictsAt(db)) if (!named.has(c.id)) losers.add(c.memory_a_id).add(c.memory_b_id);
   return losers;
 }
 
 /** Writes `plan`, then one audit event per tenant with each id's old half-life, so the move can be undone. */
 function writePlan(db: DatabaseSyncLike, plan: readonly MemoryEntry[], old: ReadonlyMap<string, number>, move: { from: number; to: number; actor: string }): void {
-  const update = db.prepare('UPDATE memories SET half_life_days = ? WHERE id = ?');
+  setHalfLivesAt(db, plan.map((e) => ({ id: e.id, halfLifeDays: e.half_life_days })));
   const byTenant = new Map<string, Record<string, number>>();
   for (const e of plan) {
-    update.run(e.half_life_days, e.id);
     // One record per tenant, filled in place: copying it per row made the write grow with the square of the store.
     let record = byTenant.get(e.tenantId);
     if (!record) byTenant.set(e.tenantId, (record = {}));

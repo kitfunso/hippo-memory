@@ -4,24 +4,14 @@ import { MemoryEntry } from '../memory.js';
 import { writeEntry } from '../store/entry-writes.js';
 import { readEntry } from '../store/entry-reads.js';
 import { extractPathTags } from '../path-context.js';
-import * as predictionsModule from '../predictions/store.js';
+import * as predictionsModule from '../store/predictions.js';
 import * as decisionsModule from '../decisions.js';
 import * as incidentsModule from '../incidents.js';
 import { resolveTenantId } from '../tenant.js';
 import { printError } from './output.js';
-import { requireInit, type CliFlags } from './shared.js';
-
-function parseListLimit(flags: CliFlags): number {
-  const limitRaw = flags['limit'];
-  const limit = limitRaw !== undefined ? parseInt(String(limitRaw), 10) : 100;
-  if (!Number.isFinite(limit) || limit <= 0) {
-    printError(`Invalid --limit: "${limitRaw}". Must be a positive integer.`);
-    process.exit(1);
-  }
-  return limit;
-}
-
-/** parseInt-based id parse for predictions and decisions; incidents use the strict parse below. */
+import { parseListLimit, parsePositiveId, requireInit, type CliFlags, flagIsTrue, stringFlag } from './shared.js';
+import { errorMessage } from '../log.js';
+// Lenient on purpose (parseInt reads "1abc" as 1) until the next major version; incidents use the strict parser.
 function parseObjectId(idRaw: string, noun: string): number {
   const id = parseInt(String(idRaw), 10);
   if (!Number.isFinite(id) || id <= 0) {
@@ -42,7 +32,7 @@ function predictClose(hippoRoot: string, tenantId: string, args: string[], flags
     process.exit(1);
   }
   const id = parseObjectId(idRaw, 'prediction');
-  const stateRaw = typeof flags['state'] === 'string' ? flags['state'].trim() : '';
+  const stateRaw = (stringFlag(flags, 'state') ?? '').trim();
   if (!predictionsModule.VALID_CLOSURE_STATES.has(stateRaw as predictionsModule.ClosureState) || stateRaw === 'open') {
     printError(`Invalid --state: "${stateRaw}". Must be one of: closed | closed-unknown.`);
     process.exit(1);
@@ -170,7 +160,7 @@ function predictBaserate(hippoRoot: string, tenantId: string, flags: CliFlags): 
 export function cmdPredict(
   hippoRoot: string,
   args: string[],
-  flags: Record<string, string | boolean | string[]>
+  flags: CliFlags
 ): void {
   requireInit(hippoRoot);
   const tenantId = resolveTenantId({});
@@ -286,7 +276,7 @@ function decideClose(hippoRoot: string, tenantId: string, args: string[]): void 
 export function cmdDecide(
   hippoRoot: string,
   args: string[],
-  flags: Record<string, string | boolean | string[]>
+  flags: CliFlags
 ): void {
   requireInit(hippoRoot);
   const tenantId = resolveTenantId({});
@@ -310,11 +300,11 @@ function decideCreate(hippoRoot: string, tenantId: string, decisionText: string,
   const context = typeof contextRaw === 'string' && contextRaw ? contextRaw : undefined;
   // A value-less `--supersedes` asks to supersede but gives no memory id: reject it rather
   // than silently creating a non-superseding decision.
-  if (flags['supersedes'] === true) {
+  if (flagIsTrue(flags, 'supersedes')) {
     printError('--supersedes requires a memory id, e.g. hippo decide "<text>" --supersedes mem_abc123.');
     process.exit(1);
   }
-  const supersedesMemId = typeof flags['supersedes'] === 'string' ? flags['supersedes'] : null;
+  const supersedesMemId = stringFlag(flags, 'supersedes') ?? null;
 
   // Backward-compat: --supersedes takes a MEMORY id. Validate it exists and
   // resolve it to the active decision row (if any). Commit the
@@ -353,7 +343,7 @@ function decideCreate(hippoRoot: string, tenantId: string, decisionText: string,
       if (!oldEntry.tags.includes('superseded')) oldEntry.tags.push('superseded');
       writeEntry(hippoRoot, oldEntry);
     } catch (e) {
-      printError(`  warning: decision recorded and superseded, but failed to weaken the prior memory ${supersedesMemId}: ${(e as Error).message}`);
+      printError(`  warning: decision recorded and superseded, but failed to weaken the prior memory ${supersedesMemId}: ${errorMessage(e)}`);
     }
   }
 
@@ -366,19 +356,6 @@ function decideCreate(hippoRoot: string, tenantId: string, decisionText: string,
         : ' (no active decision row; memory weakened only)';
     console.log(`  supersedes memory: ${supersedesMemId}${tail}`);
   }
-}
-
-// Strict positive-integer parse for incident id args. parseInt() alone accepts
-// trailing junk ("1abc" -> 1), which would let a mutating subcommand (close/
-// resolve) silently hit the wrong row; require the whole arg to be digits.
-function parsePositiveIncidentId(idRaw: unknown): number {
-  const s = String(idRaw ?? '').trim();
-  const id = parseInt(s, 10);
-  if (!/^\d+$/.test(s) || id <= 0) {
-    printError(`Invalid incident id: "${idRaw}" (expected a positive integer).`);
-    process.exit(1);
-  }
-  return id;
 }
 
 function incidentList(hippoRoot: string, tenantId: string, flags: CliFlags): void {
@@ -417,7 +394,7 @@ function incidentGet(hippoRoot: string, tenantId: string, args: string[]): void 
     printError('Usage: hippo incident get <id>');
     process.exit(1);
   }
-  const id = parsePositiveIncidentId(idRaw);
+  const id = parsePositiveId(idRaw, 'incident');
   const incident = incidentsModule.loadIncidentById(hippoRoot, tenantId, id);
   if (!incident) {
     printError(`Incident ${id} not found.`);
@@ -443,7 +420,7 @@ function incidentResolve(hippoRoot: string, tenantId: string, args: string[], fl
     printError('Usage: hippo incident resolve <id> --resolution "<text>"');
     process.exit(1);
   }
-  const id = parsePositiveIncidentId(idRaw);
+  const id = parsePositiveId(idRaw, 'incident');
   const resolutionRaw = flags['resolution'];
   if (typeof resolutionRaw !== 'string' || !resolutionRaw.trim()) {
     printError('--resolution requires a non-empty value, e.g. hippo incident resolve <id> --resolution "root cause fixed".');
@@ -459,7 +436,7 @@ function incidentClose(hippoRoot: string, tenantId: string, args: string[]): voi
     printError('Usage: hippo incident close <id>');
     process.exit(1);
   }
-  const id = parsePositiveIncidentId(idRaw);
+  const id = parsePositiveId(idRaw, 'incident');
   const closed = incidentsModule.closeIncident(hippoRoot, tenantId, id);
   console.log(`Incident #${closed.id} closed.`);
 }
@@ -467,7 +444,7 @@ function incidentClose(hippoRoot: string, tenantId: string, args: string[]): voi
 export function cmdIncident(
   hippoRoot: string,
   args: string[],
-  flags: Record<string, string | boolean | string[]>
+  flags: CliFlags
 ): void {
   requireInit(hippoRoot);
   const tenantId = resolveTenantId({});

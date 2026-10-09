@@ -36,7 +36,7 @@ function makeWithScope(text: string, scope: string | null): MemoryEntry {
   });
 }
 
-describe('recall: default-deny on unknown:legacy (v1.7.1)', () => {
+describe('recall: default-deny on unknown:legacy', () => {
   let root: string;
   beforeEach(() => { root = makeRoot('unknown-legacy'); });
   afterEach(() => safeRmSync(root));

@@ -19,7 +19,7 @@ import { openHippoDb } from '../src/db.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { queryAuditEvents } from '../src/audit.js';
 
-describe('v28 schema migration + dirty-flag plumbing (E1)', () => {
+describe('v28 schema migration + dirty-flag plumbing', () => {
   let hippoRoot: string;
   beforeEach(() => {
     hippoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-dag-e1-'));

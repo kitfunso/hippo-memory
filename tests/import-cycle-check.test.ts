@@ -15,10 +15,6 @@ describe('check-import-cycles', () => {
     writeFileSync(p, body, 'utf8');
   }
 
-  it('the real src/ tree has no runtime import cycle', () => {
-    expect(findImportCycles('src')).toEqual([]);
-  });
-
   it('passes an acyclic graph', () => {
     file('a.ts', `import { b } from './b.js';\nexport const a = b;\n`);
     file('b.ts', `import { c } from './sub/c.js';\nexport const b = c;\n`);

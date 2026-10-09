@@ -1,8 +1,8 @@
 // src/goals.ts
 import { randomUUID } from 'node:crypto';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
+import { openHippoDb, closeHippoDb, withWriteScope, type DatabaseSyncLike } from './db.js';
 import type { MemoryEntry } from './memory.js';
-import type { RerankStep } from './search/types.js';
+import type { RerankStep } from './core/search-types.js';
 
 export type GoalStatus = 'active' | 'suspended' | 'completed';
 export type PolicyType = 'schema-fit-biased' | 'error-prioritized' | 'recency-first' | 'hybrid';
@@ -137,8 +137,7 @@ export function pushGoalWithDb(db: DatabaseSyncLike, opts: PushGoalOpts): Goal {
   const createdAt = new Date().toISOString();
   let policyId: string | null = null;
 
-  db.exec('BEGIN IMMEDIATE');
-  try {
+  withWriteScope(db, 'push_goal', () => {
     // Depth cap: count active for (tenant, session); suspend oldest if at cap.
     enforceDepthCapWithinTx(db, opts.tenantId, opts.sessionId);
 
@@ -186,12 +185,7 @@ export function pushGoalWithDb(db: DatabaseSyncLike, opts: PushGoalOpts): Goal {
       );
       db.prepare(`UPDATE goal_stack SET retrieval_policy_id = ? WHERE id = ?`).run(policyId, id);
     }
-
-    db.exec('COMMIT');
-  } catch (err) {
-    try { db.exec('ROLLBACK'); } catch { /* already rolled back; keep the original error */ }
-    throw err;
-  }
+  });
 
   return {
     id,
@@ -528,20 +522,15 @@ export function completeGoal(hippoRoot: string, goalId: string, opts: CompleteGo
     const completedAt = new Date().toISOString();
     const score = opts.outcomeScore ?? null;
 
-    db.exec('BEGIN IMMEDIATE');
-    try {
+    withWriteScope(db, 'complete_goal', () => {
       // SAFETY: the row comes from the SELECT above, which projects exactly
       // the created_at and status columns of goal_stack.
       const goalRow = db.prepare(
         `SELECT created_at, status FROM goal_stack WHERE id = ?`,
       ).get(goalId) as { created_at: string; status: string } | undefined;
-      if (!goalRow) {
-        db.exec('COMMIT');
-        return;
-      }
+      if (!goalRow) return;
       if (goalRow.status === 'completed') {
         // Already completed -- second call is a no-op for idempotency.
-        db.exec('COMMIT');
         return;
       }
 
@@ -572,12 +561,7 @@ export function completeGoal(hippoRoot: string, goalId: string, opts: CompleteGo
           `).run(multiplier, goalId, goalRow.created_at, completedAt);
         }
       }
-
-      db.exec('COMMIT');
-    } catch (err) {
-      try { db.exec('ROLLBACK'); } catch { /* already rolled back; keep the original error */ }
-      throw err;
-    }
+    });
   } finally {
     closeHippoDb(db);
   }
@@ -595,26 +579,18 @@ export function suspendGoal(hippoRoot: string, goalId: string): void {
 export function resumeGoal(hippoRoot: string, goalId: string): void {
   const db = openHippoDb(hippoRoot);
   try {
-    db.exec('BEGIN IMMEDIATE');
-    try {
+    withWriteScope(db, 'resume_goal', () => {
       // SAFETY: the row comes from the SELECT above, which projects exactly
       // the session_id, tenant_id, and status columns of goal_stack.
       const row = db.prepare(
         `SELECT session_id, tenant_id, status FROM goal_stack WHERE id = ?`,
       ).get(goalId) as { session_id: string; tenant_id: string; status: string } | undefined;
-      if (!row || row.status !== 'suspended') {
-        db.exec('COMMIT');
-        return;
-      }
+      if (!row || row.status !== 'suspended') return;
 
       enforceDepthCapWithinTx(db, row.tenant_id, row.session_id);
 
       db.prepare(`UPDATE goal_stack SET status = 'active' WHERE id = ?`).run(goalId);
-      db.exec('COMMIT');
-    } catch (err) {
-      try { db.exec('ROLLBACK'); } catch { /* already rolled back; keep the original error */ }
-      throw err;
-    }
+    });
   } finally {
     closeHippoDb(db);
   }

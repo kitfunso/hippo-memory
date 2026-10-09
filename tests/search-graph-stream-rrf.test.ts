@@ -50,7 +50,7 @@ function fusedOrder(
   return [...scores.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0]).map(([i]) => i);
 }
 
-describe('L1 graph stream x RRF fusion (real SQLite)', () => {
+describe('graph stream x RRF fusion (real SQLite)', () => {
   let home: string;
   const T = 'default';
   beforeEach(() => { home = makeRoot('gstream-rrf'); });

@@ -20,12 +20,10 @@
  */
 
 import type { DatabaseSyncLike } from '../../db.js';
+import { upsertSlackWorkspaceAt, type SlackWorkspace } from '../../store/connectors/slack.js';
 
-export interface SlackWorkspace {
-  teamId: string;
-  tenantId: string;
-  addedAt: string; // ISO timestamp
-}
+export type { SlackWorkspace };
+export { listSlackWorkspacesAt as listWorkspaces, removeSlackWorkspaceAt as removeWorkspace } from '../../store/connectors/slack.js';
 
 export interface AddWorkspaceOpts {
   teamId: string;
@@ -40,46 +38,5 @@ export function addWorkspace(
   db: DatabaseSyncLike,
   opts: AddWorkspaceOpts,
 ): SlackWorkspace {
-  const addedAt = new Date().toISOString();
-  db.prepare(
-    `INSERT INTO slack_workspaces (team_id, tenant_id, added_at)
-     VALUES (?, ?, ?)
-     ON CONFLICT(team_id) DO UPDATE SET
-       tenant_id = excluded.tenant_id,
-       added_at = excluded.added_at`,
-  ).run(opts.teamId, opts.tenantId, addedAt);
-  return { teamId: opts.teamId, tenantId: opts.tenantId, addedAt };
-}
-
-/**
- * List all registered workspaces, sorted by team_id for stable output.
- */
-export function listWorkspaces(db: DatabaseSyncLike): SlackWorkspace[] {
-  // SAFETY: query selects exactly team_id, tenant_id, added_at, all NOT NULL
-  // text columns in the slack_workspaces schema, so each row has this shape.
-  const rows = db
-    .prepare(
-      `SELECT team_id, tenant_id, added_at FROM slack_workspaces ORDER BY team_id`,
-    )
-    .all() as Array<{ team_id: string; tenant_id: string; added_at: string }>;
-  return rows.map((r) => ({
-    teamId: r.team_id,
-    tenantId: r.tenant_id,
-    addedAt: r.added_at,
-  }));
-}
-
-/**
- * Remove a workspace registration by team_id. Returns true if a row was
- * deleted, false if no row matched (so the CLI can report not-found
- * without a separate lookup).
- */
-export function removeWorkspace(
-  db: DatabaseSyncLike,
-  teamId: string,
-): boolean {
-  const result = db
-    .prepare(`DELETE FROM slack_workspaces WHERE team_id = ?`)
-    .run(teamId);
-  return Number(result.changes) > 0;
+  return upsertSlackWorkspaceAt(db, opts.teamId, opts.tenantId);
 }

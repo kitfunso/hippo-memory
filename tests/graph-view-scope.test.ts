@@ -28,7 +28,7 @@ function readerFor(owner: string): (scope: string | null) => boolean {
 
 const names = (m: { nodes: { name: string }[] }): string[] => m.nodes.map((n) => n.name).sort();
 
-describe('graph-view personal scope (E10 lane A)', () => {
+describe('graph-view personal scope', () => {
   let home: string;
   const alice = readerFor('alice');
   const bob = readerFor('bob');
@@ -46,7 +46,7 @@ describe('graph-view personal scope (E10 lane A)', () => {
   });
   afterEach(() => { try { rmSync(home, { recursive: true, force: true }); } catch { /* best-effort */ } });
 
-  it('A sees its own entity and the edge to it; B sees neither', () => {
+  it('A sees its own entity and the edge to it; B sees neither; a NULL-memory entity stays for both', () => {
     const a = buildGraphModel(home, T, { canRead: alice });
     expect(names(a)).toEqual(['ANCHORED', 'PRIV-A', 'TEAM']);
     expect(a.edges).toHaveLength(1);
@@ -54,11 +54,6 @@ describe('graph-view personal scope (E10 lane A)', () => {
     const b = buildGraphModel(home, T, { canRead: bob });
     expect(names(b)).toEqual(['ANCHORED', 'TEAM']);
     expect(b.edges).toHaveLength(0);
-  });
-
-  it('a NULL-memory entity has no scope to hide and stays for both', () => {
-    expect(names(buildGraphModel(home, T, { canRead: alice }))).toContain('ANCHORED');
-    expect(names(buildGraphModel(home, T, { canRead: bob }))).toContain('ANCHORED');
   });
 
   it('focus on a hidden name is empty for B, and B focusing a neighbour does not reach it', () => {

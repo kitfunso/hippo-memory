@@ -2,10 +2,10 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { execFileSync } from 'child_process';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
+import { hippoOut } from './_helpers/spawn-hippo.js';
 
 let tmpDir: string;
 let hippoDir: string;
@@ -19,8 +19,6 @@ afterEach(() => {
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
-const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
-
 interface RunResult {
   stdout: string;
   stderr: string;
@@ -30,11 +28,7 @@ interface RunResult {
 function runHippo(args: string[]): RunResult {
   const globalDir = path.join(tmpDir, 'global');
   try {
-    const stdout = execFileSync(process.execPath, [HIPPO_JS, ...args], {
-      env: { ...process.env, HIPPO_HOME: globalDir },
-      cwd: tmpDir,
-      encoding: 'utf8',
-    });
+    const stdout = hippoOut(args, { env: { ...process.env, HIPPO_HOME: globalDir }, cwd: tmpDir });
     return { stdout, stderr: '', status: 0 };
   } catch (err) {
     // SAFETY: execFileSync throws a Node child_process error augmented with

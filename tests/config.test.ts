@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import fsDefault from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import { loadConfig, isSharedStore, _resetSharedStoreCacheForTests, type HippoConfig } from '../src/config.js';
 import * as server from '../src/server.js';
 import { log } from '../src/log.js';
@@ -132,6 +134,17 @@ describe('loadConfig characterization', () => {
     });
   });
 
+  it('keeps deliveryLedger off unless a real boolean sits inside an object', () => {
+    expect(load(null).cfg.deliveryLedger).toEqual({ enabled: false });
+    expect(load(JSON.stringify({ pinnedInject: { promptRecall: false } })).cfg.deliveryLedger).toEqual({ enabled: false });
+    for (const body of [{ deliveryLedger: true }, { deliveryLedger: { enabled: 'true' } }, { deliveryLedger: [true] }]) {
+      const { cfg, warnings } = load(JSON.stringify(body));
+      expect(cfg.deliveryLedger, JSON.stringify(body)).toEqual({ enabled: false });
+      expect(warnings, JSON.stringify(body)).toHaveLength(1);
+      expect(warnings[0]).toContain('deliveryLedger');
+    }
+  });
+
   it('falls back to the defaults with one warning on unparsable or null JSON', () => {
     const defaults = load(null).cfg;
     for (const json of ['{not json', 'null']) {
@@ -223,11 +236,97 @@ describe('config.sharedStore', () => {
     try {
       expect(stickyThrough(link, tmp)).toBe(true);
     } finally {
-      fs.rmSync(link, { force: true });
+      // unlink removes the link alone on every platform; rmSync without recursive rejects a junction on some Node 24 builds.
+      fs.unlinkSync(link);
     }
   });
 
   it('is exported from hippo-memory/server', () => {
     expect(server.isSharedStore).toBe(isSharedStore);
+  });
+});
+
+describe('config.json is parsed once per file version', () => {
+  let tmp: string;
+  let file: string;
+  beforeEach(() => {
+    _resetSharedStoreCacheForTests();
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-cfg-cache-'));
+    file = path.join(tmp, 'config.json');
+    return () => {
+      vi.restoreAllMocks();
+      fs.rmSync(tmp, { recursive: true, force: true });
+    };
+  });
+
+  /** Reads of this folder's config.json while `run` runs. */
+  function configReads(run: () => void): number {
+    const read = vi.spyOn(fsDefault, 'readFileSync');
+    // config.ts imports fs as a namespace, which sees the spy only after this sync.
+    syncBuiltinESMExports();
+    try {
+      run();
+      return read.mock.calls.filter(([target]) => String(target) === file).length;
+    } finally {
+      read.mockRestore();
+      syncBuiltinESMExports();
+    }
+  }
+
+  it('loadConfig reads an unchanged file once, however often it is asked', () => {
+    fs.writeFileSync(file, JSON.stringify({ pinnedInject: { budget: 200 } }));
+    const budgets: number[] = [];
+    const reads = configReads(() => {
+      for (let i = 0; i < 5; i++) budgets.push(loadConfig(tmp).pinnedInject.budget);
+    });
+    expect(budgets).toEqual([200, 200, 200, 200, 200]);
+    expect(reads).toBe(1);
+  });
+
+  it('loadConfig shows an edit on the next call, even one of the same length', () => {
+    fs.writeFileSync(file, JSON.stringify({ pinnedInject: { budget: 200 } }));
+    expect(loadConfig(tmp).pinnedInject.budget).toBe(200);
+    fs.writeFileSync(file, JSON.stringify({ pinnedInject: { budget: 4321 } }));
+    expect(loadConfig(tmp).pinnedInject.budget).toBe(4321);
+    fs.writeFileSync(file, JSON.stringify({ pinnedInject: { budget: 300 } }));
+    fs.utimesSync(file, new Date('2020-01-01T00:00:00Z'), new Date('2020-01-01T00:00:00Z'));
+    expect(loadConfig(tmp).pinnedInject.budget).toBe(300);
+    fs.writeFileSync(file, JSON.stringify({ pinnedInject: { budget: 301 } }));
+    fs.utimesSync(file, new Date('2020-01-01T00:00:05Z'), new Date('2020-01-01T00:00:05Z'));
+    expect(loadConfig(tmp).pinnedInject.budget).toBe(301);
+  });
+
+  it('loadConfig reads no file while it is missing, then picks it up once created, and drops it once removed', () => {
+    const reads = configReads(() => {
+      expect(loadConfig(tmp).pinnedInject.budget).toBe(1500);
+      expect(loadConfig(tmp).pinnedInject.budget).toBe(1500);
+    });
+    expect(reads).toBe(0);
+    fs.writeFileSync(file, JSON.stringify({ pinnedInject: { budget: 77 } }));
+    expect(loadConfig(tmp).pinnedInject.budget).toBe(77);
+    fs.rmSync(file);
+    expect(loadConfig(tmp).pinnedInject.budget).toBe(1500);
+  });
+
+  it('loadConfig hands each caller its own object, so a caller that sets a field changes no later answer', () => {
+    fs.writeFileSync(file, JSON.stringify({ sharedStore: true }));
+    const first = loadConfig(tmp);
+    first.sharedStore = false;
+    expect(loadConfig(tmp).sharedStore).toBe(true);
+    const defaults = loadConfig(path.join(tmp, 'absent'));
+    defaults.sharedStore = true;
+    expect(loadConfig(path.join(tmp, 'absent')).sharedStore).toBe(false);
+  });
+
+  it('isSharedStore reads an unchanged not-shared file once, and sees the edit that shares it', () => {
+    fs.writeFileSync(file, '{}');
+    const answers: boolean[] = [];
+    const reads = configReads(() => {
+      for (let i = 0; i < 5; i++) answers.push(isSharedStore(tmp));
+    });
+    expect(answers).toEqual([false, false, false, false, false]);
+    expect(reads).toBe(1);
+    fs.writeFileSync(file, JSON.stringify({ sharedStore: true }));
+    expect(isSharedStore(tmp)).toBe(true);
   });
 });
