@@ -5,7 +5,7 @@
   "routesWithoutStore": 52,
   "twinFunctions": 0,
   "sqlOutside": 206,
-  "txLiterals": 48,
+  "txLiterals": 28,
   "openersOutsideByFile": {
     "src/agent-memories/sync.ts": 3,
     "src/ambient-store.ts": 1,
