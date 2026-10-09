@@ -89,16 +89,21 @@ export function writeEntryDbOnly(
     if (opts?.afterWrite) {
       opts.afterWrite(db, entry.id);
     }
-    audit(db, 'remember', { targetId: entry.id, metadata: {
-        kind: entry.kind ?? 'distilled',
-        scope: entry.scope ?? null,
-      }, actor: opts?.actor ?? 'cli', tenantId: entry.tenantId });
-    // A child write marks its summary parent dirty for the sleep-cycle rebuild; most writes
-    // have no parent, so the hot path pays one null check.
-    if (entry.dag_parent_id) {
-      markSummaryDirtyInTx(db, entry.dag_parent_id, entry.tenantId, opts?.actor ?? 'cli');
-    }
+    auditEntryWrite(db, entry, opts?.actor ?? 'cli');
   });
+}
+
+/** What follows a row's upsert inside its write scope: the remember row, last of the write's audit rows, then the summary parent's dirty mark. */
+export function auditEntryWrite(db: DatabaseSyncLike, entry: MemoryEntry, actor: string): void {
+  audit(db, 'remember', { targetId: entry.id, metadata: {
+      kind: entry.kind ?? 'distilled',
+      scope: entry.scope ?? null,
+    }, actor, tenantId: entry.tenantId });
+  // A child write marks its summary parent dirty for the sleep-cycle rebuild; most writes
+  // have no parent, so the hot path pays one null check.
+  if (entry.dag_parent_id) {
+    markSummaryDirtyInTx(db, entry.dag_parent_id, entry.tenantId, actor);
+  }
 }
 
 /** Markdown mirror path, invoked AFTER commit (a rolled-back tx must leave no orphan markdown). */

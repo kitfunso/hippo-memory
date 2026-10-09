@@ -24,18 +24,19 @@
 
 import { BadRequestError } from './api-errors.js';
 import { openHippoDb, closeHippoDb } from './db.js';
-import { onHandle } from './store/open.js';
 import { assertTenantId } from './tenant.js';
 import type { KeysetPosition } from './keyset.js';
 import type { SavableDescriptor } from './objects/descriptor.js';
 import { checkText, requireLine } from './objects/fields.js';
-import { assertObjectStatus, closeObjectOn, loadObjectByIdOn, loadObjectsOn, saveObject } from './objects/lifecycle.js';
+import { closeObjectAt, listObjectsAt, objectByIdAt, saveObjectAt } from './objects/lifecycle.js';
+import type { Skill, SkillStatus } from './store/object-types.js';
+import { rowSpec, type RowByKind } from './store/sqlite/object-rows.js';
+
+export type { Skill, SkillStatus } from './store/object-types.js';
 
 // ---------------------------------------------------------------------------
 // Domain types
 // ---------------------------------------------------------------------------
-
-export type SkillStatus = 'active' | 'superseded' | 'closed';
 
 export const VALID_SKILL_STATES: ReadonlySet<SkillStatus> = new Set<SkillStatus>([
   'active',
@@ -51,27 +52,6 @@ export const MAX_SKILL_TRIGGER_LEN = 1024;
 /** Aggregate bound on a single export render so the export body is never unbounded.
  *  Realistic active-skill counts are tens; 1000 is a generous bound. */
 export const MAX_EXPORT_SKILLS = 1000;
-
-export interface Skill {
-  id: number;
-  /** Nullable: ON DELETE SET NULL lets memory deletion proceed without breaking
-   *  the skill row. */
-  memoryId: string | null;
-  tenantId: string;
-  skillName: string;
-  instructions: string;
-  /** Optional "when to apply"; stored in the trigger_text column. */
-  trigger: string | null;
-  /** Server-derived: 1 on a fresh create, predecessor.version + 1 on supersede. */
-  version: number;
-  status: SkillStatus;
-  supersededBy: number | null;
-  supersededAt: string | null;
-  /** The per-version delta note; set on a successor row only (NULL on a v1). */
-  changeSummary: string | null;
-  closedAt: string | null;
-  createdAt: string;
-}
 
 export interface SaveSkillOpts {
   skillName: string;
@@ -109,51 +89,6 @@ function checkTrigger(trigger: string | undefined): string | null {
   return trigger;
 }
 
-// ---------------------------------------------------------------------------
-// Row <-> domain mapping
-// ---------------------------------------------------------------------------
-
-interface SkillRow {
-  id: number;
-  memory_id: string | null;
-  tenant_id: string;
-  skill_name: string;
-  instructions: string;
-  trigger_text: string | null;
-  version: number;
-  status: string;
-  superseded_by: number | null;
-  superseded_at: string | null;
-  change_summary: string | null;
-  closed_at: string | null;
-  created_at: string;
-}
-
-function rowToSkill(row: SkillRow): Skill {
-  return {
-    id: row.id,
-    memoryId: row.memory_id,
-    tenantId: row.tenant_id,
-    skillName: row.skill_name,
-    instructions: row.instructions,
-    trigger: row.trigger_text,
-    version: row.version,
-    // SAFETY: status is DB-constrained to VALID_SKILL_STATES; this module
-    // is the only writer and always inserts one of those literal strings.
-    status: row.status as SkillStatus,
-    supersededBy: row.superseded_by,
-    supersededAt: row.superseded_at,
-    changeSummary: row.change_summary,
-    closedAt: row.closed_at,
-    createdAt: row.created_at,
-  };
-}
-
-const SKILL_COLS = `
-  id, memory_id, tenant_id, skill_name, instructions, trigger_text, version, status,
-  superseded_by, superseded_at, change_summary, closed_at, created_at
-`;
-
 /** Recall-surface content for the memory mirror: name + optional trigger +
  *  instructions. Named (mirrors buildProcessContent) so the recall surface is
  *  deterministic + unit-testable. */
@@ -164,32 +99,34 @@ function buildSkillContent(skillName: string, instructions: string, trigger: str
   return content;
 }
 
-/** What one skill write stores, resolved before the write. */
-interface SkillFields {
-  readonly name: string;
-  readonly instructions: string;
-  readonly trigger: string | null;
-}
-
-// No graphType: the graph does not extract skills, so a save or close leaves it alone.
-const SKILL: SavableDescriptor<Skill, SkillRow, never, SkillFields> = {
-  table: 'skills',
-  cols: SKILL_COLS,
+export const SKILL: SavableDescriptor<'skill', SaveSkillOpts> = {
+  kind: 'skill',
   label: 'skill',
   plural: 'skills',
   fn: { get: 'loadSkillById', close: 'closeSkill', list: 'loadSkills', save: 'saveSkill' },
   states: VALID_SKILL_STATES,
   closableFrom: ['active'],
-  ops: { close: 'skill_close', create: 'skill_create', supersede: 'skill_supersede' },
-  idKey: 'skill_id',
-  listFilters: {},
-  rowTo: rowToSkill,
-  source: 'skill',
-  versioned: true,
-  columns: ['skill_name', 'instructions', 'trigger_text'],
-  values: (w) => [w.name, w.instructions, w.trigger],
-  // Ids and flags only, never the skill text.
-  createMeta: (w, version) => ({ version, has_trigger: w.trigger !== null }),
+  draft(opts) {
+    // The name becomes an H2 header in the export, so it must be one line.
+    const name = requireLine(opts.skillName, MAX_SKILL_NAME_LEN, {
+      required: 'saveSkill: skillName is required',
+      singleLine: 'saveSkill: skillName must be a single line (no newlines)',
+      tooLong: `saveSkill: skillName exceeds the ${MAX_SKILL_NAME_LEN}-char cap`,
+    });
+    checkText(opts.instructions, MAX_SKILL_INSTRUCTIONS_LEN, {
+      required: 'saveSkill: instructions are required',
+      tooLong: `saveSkill: instructions exceed the ${MAX_SKILL_INSTRUCTIONS_LEN}-char cap`,
+    });
+    const trigger = checkTrigger(opts.trigger);
+    return {
+      fields: { name, instructions: opts.instructions, trigger },
+      content: buildSkillContent(name, opts.instructions, trigger),
+      tags: opts.extraTags ?? [],
+      supersedesId: opts.supersedesSkillId,
+      changeSummary: opts.changeSummary,
+      at: new Date().toISOString(),
+    };
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -198,9 +135,9 @@ const SKILL: SavableDescriptor<Skill, SkillRow, never, SkillFields> = {
 
 /**
  * Create a skill (or a new version that supersedes an existing one). Writes the
- * memory mirror + the skills row atomically inside writeEntry's SAVEPOINT. When
+ * memory mirror + the skills row in the `objects` store group's one transaction. When
  * supersedesSkillId is given, the referenced ACTIVE row is preflighted (status +
- * version) BEFORE the INSERT, then CAS-UPDATEd -> superseded in the same SAVEPOINT;
+ * version) BEFORE the INSERT, then CAS-UPDATEd -> superseded in the same transaction;
  * the new version = predecessor.version + 1 (server-derived).
  */
 export function saveSkill(
@@ -209,27 +146,7 @@ export function saveSkill(
   opts: SaveSkillOpts,
   actor: string = 'cli',
 ): Skill {
-  assertTenantId(SKILL.fn.save, tenantId);
-  // The name becomes an H2 header in the export, so it must be one line.
-  const name = requireLine(opts.skillName, MAX_SKILL_NAME_LEN, {
-    required: 'saveSkill: skillName is required',
-    singleLine: 'saveSkill: skillName must be a single line (no newlines)',
-    tooLong: `saveSkill: skillName exceeds the ${MAX_SKILL_NAME_LEN}-char cap`,
-  });
-  checkText(opts.instructions, MAX_SKILL_INSTRUCTIONS_LEN, {
-    required: 'saveSkill: instructions are required',
-    tooLong: `saveSkill: instructions exceed the ${MAX_SKILL_INSTRUCTIONS_LEN}-char cap`,
-  });
-  const trigger = checkTrigger(opts.trigger);
-  return saveObject(hippoRoot, SKILL, tenantId, {
-    actor,
-    now: new Date().toISOString(),
-    fields: { name, instructions: opts.instructions, trigger },
-    content: buildSkillContent(name, opts.instructions, trigger),
-    tags: opts.extraTags ?? [],
-    supersedesId: opts.supersedesSkillId,
-    changeSummary: opts.changeSummary,
-  });
+  return saveObjectAt(SKILL, { hippoRoot, tenantId, actor }, opts);
 }
 
 /**
@@ -241,9 +158,7 @@ export function closeSkill(
   id: number,
   actor: string = 'cli',
 ): Skill {
-  assertTenantId(SKILL.fn.close, tenantId);
-  const now = new Date().toISOString();
-  return onHandle(hippoRoot, (db) => closeObjectOn(db, SKILL, tenantId, id, { actor, now }));
+  return closeObjectAt(hippoRoot, SKILL, tenantId, id, actor);
 }
 
 export function loadSkillById(
@@ -251,8 +166,7 @@ export function loadSkillById(
   tenantId: string,
   id: number,
 ): Skill | null {
-  assertTenantId(SKILL.fn.get, tenantId);
-  return onHandle(hippoRoot, (db) => loadObjectByIdOn(db, SKILL, tenantId, id));
+  return objectByIdAt(hippoRoot, SKILL, tenantId, id);
 }
 
 export function loadSkills(
@@ -260,9 +174,7 @@ export function loadSkills(
   tenantId: string,
   opts: ListSkillsOpts = {},
 ): Skill[] {
-  assertTenantId(SKILL.fn.list, tenantId);
-  assertObjectStatus(SKILL, opts.status);
-  return onHandle(hippoRoot, (db) => loadObjectsOn(db, SKILL, tenantId, opts));
+  return listObjectsAt(hippoRoot, SKILL, tenantId, opts);
 }
 
 export function loadActiveSkills(
@@ -286,15 +198,15 @@ export function exportSkills(hippoRoot: string, tenantId: string): string {
   assertTenantId('exportSkills', tenantId);
   const db = openHippoDb(hippoRoot);
   try {
-    // SAFETY: rows' shape matches the columns named in SKILL_COLS above.
+    // SAFETY: the SELECT names the skill row's own column list.
     const rows = db.prepare(`
-      SELECT ${SKILL_COLS} FROM skills
+      SELECT ${rowSpec('skill').cols} FROM skills
       WHERE tenant_id = ? AND status = 'active'
       ORDER BY skill_name ASC, id ASC
       LIMIT ?
-    `).all(tenantId, MAX_EXPORT_SKILLS) as SkillRow[];
+    `).all(tenantId, MAX_EXPORT_SKILLS) as RowByKind['skill'][];
     return rows
-      .map(rowToSkill)
+      .map(rowSpec('skill').rowTo)
       .map((s) => {
         let block = `## ${s.skillName}`;
         if (s.trigger) block += `\n\n**When:** ${s.trigger}`;

@@ -12,6 +12,7 @@ import type { JsonValue } from '../json.js';
 import type { KeysetPosition } from '../keyset.js';
 import type { MemoryEntry } from '../memory.js';
 import type { PhysicsParticle } from '../physics.js';
+import type { ObjectByKind, ObjectFields, ObjectKind, SavableKind } from './object-types.js';
 import type { PlanningFallacyEvidence } from './planning-fallacy-evidence.js';
 import type { ClosureState, Prediction, PredictionBaserate, SavePredictionOpts } from './predictions.js';
 import type { QuarantineRow, QuarantineStatus } from './quarantine.js';
@@ -261,6 +262,71 @@ export interface Predictions {
   predictionBaserate(tenantId: string, classTag: string, actor: string): Promise<PredictionBaserate>;
 }
 
+/** Which of a tenant's rows of one kind a list reads: every status when `status` is unset, and every value of the kind's one filter column (a customer note's customer,
+ *  a project brief's repo) when `filter` is. Neither is ever empty, and a kind with no filter column ignores `filter`. */
+export interface ObjectListQuery<K extends ObjectKind = ObjectKind> {
+  readonly status?: ObjectByKind[K]['status'];
+  readonly filter?: string;
+  readonly limit: number;
+  readonly after?: KeysetPosition;
+}
+
+export interface ObjectClose<K extends ObjectKind = ObjectKind> {
+  /** The statuses a close may start from; core owns the rule and its refusal text. */
+  readonly from: readonly ObjectByKind[K]['status'][];
+  readonly actor: string;
+  /** The row's closedAt: core's clock, as `toISOString` gives it. */
+  readonly at: string;
+}
+
+/** One row to save and the memory that mirrors it into recall: core builds the mirror in the tenant the save names with the kind as its `source`, so every store keeps the same row. */
+export interface ObjectSave<K extends SavableKind = SavableKind> {
+  readonly mirror: MemoryEntry;
+  readonly fields: ObjectFields[K];
+  /** The tenant's active row this one replaces. */
+  readonly supersedesId?: number;
+  /** Stored on a successor of a versioned kind only; a first version and a decision keep none. */
+  readonly changeSummary?: string;
+  readonly actor: string;
+  /** The new row's createdAt and the replaced row's supersededAt: core's clock, as `toISOString` gives it, since the list orders createdAt as text. */
+  readonly at: string;
+}
+
+/** Why a save or close wrote nothing: the tenant holds no such row (`missing`), the row's `status` is not one the write may start from, another writer moved it
+ *  between the check and the write (`raced`), or the written row could not be read back (`vanished`). Core turns each into its own error text. */
+export type ObjectRefusal =
+  | { readonly refused: 'missing' }
+  | { readonly refused: 'status'; readonly status: string }
+  | { readonly refused: 'raced' }
+  | { readonly refused: 'vanished' };
+
+/** Tells a refusal from the row a write answered; no row carries a `refused` key. */
+export function isObjectRefusal<T extends object>(written: T | ObjectRefusal): written is ObjectRefusal {
+  return 'refused' in written;
+}
+
+/** The reads and writes behind the typed-object routes. An audit row names the object under the kind's id key: decision_id, incident_id, process_id, policy_id, skill_id, brief_id, note_id.
+ *  A row belongs to one tenant: another tenant's id reads as missing in every method. */
+export interface Objects {
+  /** At most `limit` rows of the kind, newest first: by createdAt compared as text in byte order, then by id, both descending, so the order is total.
+   *  `after` keeps only the rows below its (createdAt, id) pair in that order. No audit row. */
+  listObjects<K extends ObjectKind>(tenantId: string, kind: K, query: ObjectListQuery<K>): Promise<ObjectByKind[K][]>;
+  /** The tenant's row; null for a missing id or another tenant's. No audit row. */
+  objectById<K extends ObjectKind>(tenantId: string, kind: K, id: number): Promise<ObjectByKind[K] | null>;
+  /** In one transaction: moves the tenant's row from a status in `close.from` to closed with closedAt `close.at`, then appends one <kind>_close row ({<kind's id key>: id}, target the id).
+   *  A refusal (`missing`, or `status` with the status held) writes nothing. After the commit a kind the graph reads has its graph rows dropped and its mirror queued for a rebuild; a failure there is logged, never thrown. */
+  closeObject<K extends ObjectKind>(tenantId: string, kind: K, id: number, close: ObjectClose<K>): Promise<ObjectByKind[K] | ObjectRefusal>;
+  /** In one transaction, in this order: writes `mirror` as `EntryWrites.writeEntry` does; inserts the row as active under the next id, version 1 or the replaced row's plus one;
+   *  with `supersedesId`, moves that row from active to superseded (supersededBy the new id, supersededAt `at`) and appends a <kind>_supersede row ({<id key>: replaced, superseded_by,
+   *  new_version on a versioned kind, then a brief's refresh keys}, target the replaced id); appends the <kind>_create row ({<id key>: id, then the kind's own keys}, target the id); then the
+   *  mirror's remember row. The kind's own keys: decision has_context; process version, step_count, has_description; policy version, open_ended; skill version, has_trigger; project_brief
+   *  repo, version, refreshed, and receipt_count when refreshed; customer_note customer, version. A refusal (`missing` or `status` for the replaced row, `raced`, `vanished`) leaves no
+   *  mirror, row or audit row. After the commit a kind the graph reads has its mirror queued for a rebuild, which is logged on failure and never thrown. */
+  saveObject<K extends SavableKind>(tenantId: string, kind: K, save: ObjectSave<K>): Promise<ObjectByKind[K] | ObjectRefusal>;
+  /** Whether a new mirror takes the configured default half-life: false only while a store still holds mirrors on the flat 90 days that came before it, which a second store never does. */
+  mirrorsOnDefaultHalfLife(): Promise<boolean>;
+}
+
 /** One session's unsuperseded raw rows inside a tenant; `origins` keeps those projects' rows and rows of no project, unset keeps every origin. */
 export interface SessionRawQuery {
   readonly tenantId: string;
@@ -392,6 +458,7 @@ export interface StoreGroups {
   readonly auditLog: AuditLog;
   readonly quarantine: Quarantine;
   readonly graphReads: GraphReads;
+  readonly objects: Objects;
   /** Unset on a store built before it, where GET /ready answers 200 with `store: "unchecked"`. */
   readonly readiness: Readiness;
 }

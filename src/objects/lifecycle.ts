@@ -1,263 +1,121 @@
-// Save, close, load-by-id and list for every typed object. Close and the reads run on a handle the caller opened;
-// save opens through `writeEntry`, so the mirror memory and the object row commit as one write.
-// Callers check the tenant, the fields and the list status first, so a bad request fails before a database opens.
+// Save, close, load-by-id and list for every typed object: the checks, the mirror memory and the error text, over the `objects` store group.
+// Each flow is written twice over the same steps: `...At` answers at once on hippo.db for the CLI, and the other awaits a served store's group for the routes.
+// The tenant, the fields and the list status are checked first, so a bad request fails before a store is asked.
 
 import { BadRequestError, ConflictError, NotFoundError } from '../api-errors.js';
-import { appendAuditEvent } from '../audit.js';
-import { withWriteScope } from '../db/busy.js';
-import type { DatabaseSyncLike } from '../db.js';
-import { markGraphDirty, removeGraphEntitiesForObject } from '../graph/write.js';
 import { objectHalfLifeDays } from '../half-life-migration.js';
-import { keysetAfter } from '../keyset.js';
 import { createMemory, Layer, type MemoryEntry } from '../memory.js';
-import { writeEntry } from '../store/entry-writes.js';
-import type { JsonObject } from '../working-memory.js';
-import type { BaseObject, ColumnValue, ObjectDescriptor, ObjectListOpts, ObjectSave, ObjectWrite, SavableDescriptor } from './descriptor.js';
+import type { ObjectByKind, ObjectKind, SavableKind } from '../store/object-types.js';
+import { isObjectRefusal, type ObjectClose, type ObjectListQuery, type ObjectRefusal, type Objects, type ObjectSave } from '../store/port.js';
+import { sqliteObjects } from '../store/sqlite/objects-group.js';
+import { assertTenantId } from '../tenant.js';
+import type { ObjectDescriptor, ObjectDraft, ObjectListOpts, SavableDescriptor } from './descriptor.js';
 
-function selectRow<O extends BaseObject, R, F extends string>(
-  db: DatabaseSyncLike,
-  d: ObjectDescriptor<O, R, F>,
-  tenantId: string,
-  id: number,
-): R | undefined {
-  return db.prepare(`SELECT ${d.cols} FROM ${d.table} WHERE id = ? AND tenant_id = ?`).get<R | undefined>(id, tenantId);
-}
-
-export function loadObjectByIdOn<O extends BaseObject, R, F extends string>(
-  db: DatabaseSyncLike,
-  d: ObjectDescriptor<O, R, F>,
-  tenantId: string,
-  id: number,
-): O | null {
-  const row = selectRow(db, d, tenantId, id);
-  return row ? d.rowTo(row) : null;
-}
-
-/** Retires one object. The status guard sits in the UPDATE, so zero rows changed means missing or not closable; the reread tells which. */
-export function closeObjectOn<O extends BaseObject, R, F extends string>(
-  db: DatabaseSyncLike,
-  d: ObjectDescriptor<O, R, F>,
-  tenantId: string,
-  id: number,
-  w: ObjectWrite,
-): O {
-  return withWriteScope(db, 'close_object', () => {
-    const marks = d.closableFrom.map(() => '?').join(', ');
-    const updated = db.prepare(
-      `UPDATE ${d.table} SET status = 'closed', closed_at = ? WHERE id = ? AND tenant_id = ? AND status IN (${marks})`,
-    ).run(w.now, id, tenantId, ...d.closableFrom);
-    if (updated.changes === 0) {
-      const existing = db.prepare(`SELECT status FROM ${d.table} WHERE id = ? AND tenant_id = ?`)
-        .get<{ status: string } | undefined>(id, tenantId);
-      if (!existing) throw new NotFoundError(`${d.fn.close}: ${d.label} ${id} not found for tenant ${tenantId}`);
-      const closable = d.closableFrom.join(' or ');
-      throw new ConflictError(
-        `${d.fn.close}: ${d.label} ${id} is ${d.closeRefusal ?? `not ${closable}`} (status='${existing.status}'); only ${closable} ${d.plural} can be closed.`,
-      );
-    }
-    const row = selectRow(db, d, tenantId, id);
-    if (!row) throw new NotFoundError(`${d.fn.close}: ${d.label} ${id} not found after UPDATE`);
-    appendAuditEvent(db, {
-      tenantId,
-      actor: w.actor,
-      op: d.ops.close,
-      targetId: String(id),
-      metadata: { [d.idKey]: id },
-    });
-    return d.rowTo(row);
-  });
-}
-
-/** Run after the close commits: the graph write takes its own write lock. The rows go at once because the rebuild queue is keyed by a mirror memory that may be gone. */
-export function dropClosedObjectFromGraph<O extends BaseObject, R, F extends string>(
-  hippoRoot: string,
-  d: ObjectDescriptor<O, R, F>,
-  tenantId: string,
-  closed: O,
-): void {
-  if (!d.graphType) return;
-  removeGraphEntitiesForObject(hippoRoot, tenantId, d.graphType, closed.id);
-  markGraphDirty(hippoRoot, tenantId, closed.memoryId);
-}
-
-export function assertObjectStatus<O extends BaseObject, R, F extends string>(
-  d: ObjectDescriptor<O, R, F>,
-  status: O['status'] | undefined,
-): void {
-  if (status && !d.states.has(status)) {
-    throw new BadRequestError(`${d.fn.list}: status must be one of ${Array.from(d.states).join('|')}; got ${status}`);
+/** An empty status or filter lists every row, as an absent one does. */
+function listQuery<K extends ObjectKind>(d: ObjectDescriptor<K>, tenantId: string, opts: ObjectListOpts<K>): ObjectListQuery<K> {
+  assertTenantId(d.fn.list, tenantId);
+  if (opts.status && !d.states.has(opts.status)) {
+    throw new BadRequestError(`${d.fn.list}: status must be one of ${Array.from(d.states).join('|')}; got ${opts.status}`);
   }
+  return { status: opts.status || undefined, filter: opts.filter || undefined, limit: opts.limit ?? 100, after: opts.after };
 }
 
-/** Newest first. An empty status or filter lists every row, as an absent one does. */
-export function loadObjectsOn<O extends BaseObject, R, F extends string>(
-  db: DatabaseSyncLike,
-  d: ObjectDescriptor<O, R, F>,
-  tenantId: string,
-  opts: ObjectListOpts<O, NoInfer<F>>,
-): O[] {
-  const clauses = ['tenant_id = ?'];
-  const params: Array<string | number> = [tenantId];
-  if (opts.status) {
-    clauses.push('status = ?');
-    params.push(opts.status);
-  }
-  for (const key in d.listFilters) {
-    const value = opts[key];
-    if (value) {
-      clauses.push(`${d.listFilters[key]} = ?`);
-      params.push(value);
-    }
-  }
-  const after = keysetAfter('created_at', 'id', opts.after);
-  // SAFETY: the SELECT names d.cols, the columns R declares, whatever the WHERE clause holds.
-  const rows = db.prepare(`
-    SELECT ${d.cols} FROM ${d.table}
-    WHERE ${clauses.join(' AND ')}${after.sql}
-    ORDER BY created_at DESC, id DESC
-    LIMIT ?
-  `).all(...params, ...after.params, opts.limit ?? 100) as R[];
-  return rows.map((row) => d.rowTo(row));
+/** Newest first. */
+export function listObjectsAt<K extends ObjectKind>(hippoRoot: string, d: ObjectDescriptor<K>, tenantId: string, opts: ObjectListOpts<K>): ObjectByKind[K][] {
+  return sqliteObjects(hippoRoot).listObjects(tenantId, d.kind, listQuery(d, tenantId, opts));
 }
 
-/** The memory a typed object writes beside its row, so recall finds the object. */
-export function objectMirrorMemory(
-  hippoRoot: string,
-  tenantId: string,
-  source: string,
-  content: string,
-  tags: readonly string[],
-): MemoryEntry {
-  return createMemory(content, {
-    tags: [source, ...tags],
+export async function listObjects<K extends ObjectKind>(objects: Objects, d: ObjectDescriptor<K>, tenantId: string, opts: ObjectListOpts<K>): Promise<ObjectByKind[K][]> {
+  return objects.listObjects(tenantId, d.kind, listQuery(d, tenantId, opts));
+}
+
+export function objectByIdAt<K extends ObjectKind>(hippoRoot: string, d: ObjectDescriptor<K>, tenantId: string, id: number): ObjectByKind[K] | null {
+  assertTenantId(d.fn.get, tenantId);
+  return sqliteObjects(hippoRoot).objectById(tenantId, d.kind, id);
+}
+
+export async function objectById<K extends ObjectKind>(objects: Objects, d: ObjectDescriptor<K>, tenantId: string, id: number): Promise<ObjectByKind[K] | null> {
+  assertTenantId(d.fn.get, tenantId);
+  return objects.objectById(tenantId, d.kind, id);
+}
+
+function closing<K extends ObjectKind>(d: ObjectDescriptor<K>, tenantId: string, actor: string): ObjectClose<K> {
+  assertTenantId(d.fn.close, tenantId);
+  return { from: d.closableFrom, actor, at: new Date().toISOString() };
+}
+
+function closed<K extends ObjectKind>(d: ObjectDescriptor<K>, tenantId: string, id: number, written: ObjectByKind[K] | ObjectRefusal): ObjectByKind[K] {
+  if (!isObjectRefusal(written)) return written;
+  if (written.refused === 'missing') throw new NotFoundError(`${d.fn.close}: ${d.label} ${id} not found for tenant ${tenantId}`);
+  if (written.refused !== 'status') throw new NotFoundError(`${d.fn.close}: ${d.label} ${id} not found after UPDATE`);
+  const closable = d.closableFrom.join(' or ');
+  throw new ConflictError(
+    `${d.fn.close}: ${d.label} ${id} is ${d.closeRefusal ?? `not ${closable}`} (status='${written.status}'); only ${closable} ${d.plural} can be closed.`,
+  );
+}
+
+/** Retires one object; its mirror memory stays as saved. */
+export function closeObjectAt<K extends ObjectKind>(hippoRoot: string, d: ObjectDescriptor<K>, tenantId: string, id: number, actor: string): ObjectByKind[K] {
+  const close = closing(d, tenantId, actor);
+  return closed(d, tenantId, id, sqliteObjects(hippoRoot).closeObject(tenantId, d.kind, id, close));
+}
+
+export async function closeObject<K extends ObjectKind>(objects: Objects, d: ObjectDescriptor<K>, tenantId: string, id: number, actor: string): Promise<ObjectByKind[K]> {
+  const close = closing(d, tenantId, actor);
+  return closed(d, tenantId, id, await objects.closeObject(tenantId, d.kind, id, close));
+}
+
+/** The memory a typed object writes beside its row, so recall finds the object. `onDefault` is the store's `mirrorsOnDefaultHalfLife`. */
+export function objectMirror(hippoRoot: string, tenantId: string, source: ObjectKind, text: { readonly content: string; readonly tags: readonly string[] }, onDefault: boolean): MemoryEntry {
+  return createMemory(text.content, {
+    tags: [source, ...text.tags],
     layer: Layer.Semantic,
     confidence: 'verified',
     source,
-    baseHalfLifeDays: objectHalfLifeDays(hippoRoot),
+    baseHalfLifeDays: objectHalfLifeDays(hippoRoot, onDefault),
     tenantId,
   });
 }
 
-interface NewRow<W> {
+/** Where a save lands and who makes it; `hippoRoot` is read only for the configured half-life. */
+export interface ObjectSaveSite {
+  readonly hippoRoot: string;
   readonly tenantId: string;
-  readonly memoryId: string;
-  readonly save: ObjectSave<W>;
-  readonly version: number;
+  readonly actor: string;
 }
 
-/** Runs before the INSERT, so the new row's id can never be the id it replaces. Returns the successor's version. */
-function preflightSupersede<O extends BaseObject, R, F extends string, W>(
-  db: DatabaseSyncLike,
-  d: SavableDescriptor<O, R, F, W>,
-  tenantId: string,
-  replaced: number,
-): number {
-  const pred = db.prepare(
-    `SELECT status, ${d.versioned ? 'version' : '0 AS version'} FROM ${d.table} WHERE id = ? AND tenant_id = ?`,
-  ).get<{ status: string; version: number } | undefined>(replaced, tenantId);
-  if (!pred) {
-    throw new NotFoundError(`${d.fn.save}: ${d.label} ${replaced} to supersede not found for tenant ${tenantId}`);
+function objectSave<K extends SavableKind>(site: ObjectSaveSite, kind: K, draft: ObjectDraft<K>, onDefault: boolean): ObjectSave<K> {
+  const mirror = objectMirror(site.hippoRoot, site.tenantId, kind, draft, onDefault);
+  return { mirror, fields: draft.fields, supersedesId: draft.supersedesId, changeSummary: draft.changeSummary, actor: site.actor, at: draft.at };
+}
+
+function saved<K extends SavableKind, W>(d: SavableDescriptor<K, W>, tenantId: string, replaced: number | undefined, written: ObjectByKind[K] | ObjectRefusal): ObjectByKind[K] {
+  if (!isObjectRefusal(written)) return written;
+  switch (written.refused) {
+    case 'missing':
+      throw new NotFoundError(`${d.fn.save}: ${d.label} ${replaced} to supersede not found for tenant ${tenantId}`);
+    case 'status':
+      throw new ConflictError(`${d.fn.save}: ${d.label} ${replaced} is not active (status='${written.status}'); only active ${d.plural} can be superseded.`);
+    case 'raced':
+      throw new ConflictError(`${d.fn.save}: ${d.label} ${replaced} could not be superseded (no longer active or self-reference).`);
+    case 'vanished':
+      throw new Error(`${d.fn.save}: failed to reload saved ${d.label} row`);
   }
-  if (pred.status !== 'active') {
-    throw new ConflictError(
-      `${d.fn.save}: ${d.label} ${replaced} is not active (status='${pred.status}'); only active ${d.plural} can be superseded.`,
-    );
-  }
-  return pred.version + 1;
 }
 
-function insertRow<O extends BaseObject, R, F extends string, W>(
-  db: DatabaseSyncLike,
-  d: SavableDescriptor<O, R, F, W>,
-  row: NewRow<W>,
-): number {
-  const cols = ['memory_id', 'tenant_id', ...d.columns];
-  const values: ColumnValue[] = [row.memoryId, row.tenantId, ...d.values(row.save.fields)];
-  if (d.versioned) {
-    cols.push('version', 'change_summary');
-    values.push(row.version, row.save.supersedesId === undefined ? null : row.save.changeSummary ?? null);
-  }
-  const result = db.prepare(`
-    INSERT INTO ${d.table}(${cols.join(', ')}, status, superseded_by, superseded_at, closed_at, created_at)
-    VALUES (${cols.map(() => '?').join(', ')}, 'active', NULL, NULL, NULL, ?)
-  `).run(...values, row.save.now);
-  return Number(result.lastInsertRowid ?? 0);
+/** Creates an object, or the version that replaces the one its options name, with its mirror memory in one write. */
+export function saveObjectAt<K extends SavableKind, W>(d: SavableDescriptor<K, W>, site: ObjectSaveSite, opts: W): ObjectByKind[K] {
+  assertTenantId(d.fn.save, site.tenantId);
+  const draft = d.draft(opts);
+  const objects = sqliteObjects(site.hippoRoot);
+  // SHORTCUT: the half-life is read outside the save's transaction, so a save racing the typed migration keeps 90; read it inside the group's save if that ever matters.
+  const save = objectSave(site, d.kind, draft, objects.mirrorsOnDefaultHalfLife());
+  return saved(d, site.tenantId, draft.supersedesId, objects.saveObject(site.tenantId, d.kind, save));
 }
 
-/** The status guard sits in the UPDATE, so a row another writer retired since the preflight fails the whole save. */
-function supersedeRow<O extends BaseObject, R, F extends string, W>(
-  db: DatabaseSyncLike,
-  d: SavableDescriptor<O, R, F, W>,
-  row: NewRow<W>,
-  replaced: number,
-  id: number,
-): void {
-  const updated = db.prepare(`
-    UPDATE ${d.table}
-    SET status = 'superseded', superseded_by = ?, superseded_at = ?
-    WHERE id = ? AND tenant_id = ? AND status = 'active' AND id != ?
-  `).run(id, row.save.now, replaced, row.tenantId, id);
-  if (updated.changes === 0) {
-    throw new ConflictError(
-      `${d.fn.save}: ${d.label} ${replaced} could not be superseded (no longer active or self-reference).`,
-    );
-  }
-  const own: JsonObject = d.versioned
-    ? { [d.idKey]: replaced, superseded_by: id, new_version: row.version }
-    : { [d.idKey]: replaced, superseded_by: id };
-  appendAuditEvent(db, {
-    tenantId: row.tenantId,
-    actor: row.save.actor,
-    op: d.ops.supersede,
-    targetId: String(replaced),
-    metadata: { ...own, ...d.supersedeMeta?.(row.save.fields) },
-  });
-}
-
-/** The object half of a save, inside the write that holds the mirror memory: a throw here leaves no row, memory or audit event. */
-function writeObjectRow<O extends BaseObject, R, F extends string, W>(
-  db: DatabaseSyncLike,
-  d: SavableDescriptor<O, R, F, W>,
-  tenantId: string,
-  memoryId: string,
-  s: ObjectSave<W>,
-): R {
-  const replaced = s.supersedesId;
-  const version = replaced === undefined ? 1 : preflightSupersede(db, d, tenantId, replaced);
-  const row: NewRow<W> = { tenantId, memoryId, save: s, version };
-  const id = insertRow(db, d, row);
-  if (replaced !== undefined) supersedeRow(db, d, row, replaced, id);
-  const saved = selectRow(db, d, tenantId, id);
-  if (!saved) throw new Error(`${d.fn.save}: failed to reload saved ${d.label} row`);
-  appendAuditEvent(db, {
-    tenantId,
-    actor: s.actor,
-    op: d.ops.create,
-    targetId: String(id),
-    metadata: { [d.idKey]: id, ...d.createMeta(s.fields, version) },
-  });
-  return saved;
-}
-
-/** Creates an object, or the version that replaces `s.supersedesId`, with its mirror memory in one write. */
-export function saveObject<O extends BaseObject, R, F extends string, W>(
-  hippoRoot: string,
-  d: SavableDescriptor<O, R, F, W>,
-  tenantId: string,
-  s: ObjectSave<W>,
-): O {
-  const mem = objectMirrorMemory(hippoRoot, tenantId, d.source, s.content, s.tags);
-  let saved: R | undefined;
-  writeEntry(hippoRoot, mem, {
-    actor: s.actor,
-    afterWrite: (db, memoryId) => {
-      saved = writeObjectRow(db, d, tenantId, memoryId, s);
-    },
-    // The graph mark takes its own write lock, so it waits for the commit.
-    afterCommit: () => {
-      if (d.graphType) markGraphDirty(hippoRoot, tenantId, mem.id);
-    },
-  });
-  if (saved === undefined) throw new Error(`${d.fn.save}: afterWrite did not populate the row`);
-  return d.rowTo(saved);
+export async function saveObject<K extends SavableKind, W>(objects: Objects, d: SavableDescriptor<K, W>, site: ObjectSaveSite, opts: W): Promise<ObjectByKind[K]> {
+  assertTenantId(d.fn.save, site.tenantId);
+  const draft = d.draft(opts);
+  const save = objectSave(site, d.kind, draft, await objects.mirrorsOnDefaultHalfLife());
+  return saved(d, site.tenantId, draft.supersedesId, await objects.saveObject(site.tenantId, d.kind, save));
 }
