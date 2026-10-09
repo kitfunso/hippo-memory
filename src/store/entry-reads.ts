@@ -374,6 +374,7 @@ export function selectPreviewRows(db: DatabaseSyncLike, columns: ReadonlySet<str
   const statement = db.prepare(`SELECT id, content, ${column('source', "''")}, ${column('confidence', 'NULL')}, ${column('extracted_from', 'NULL')}, ${column('dag_level', '0')}, ${column('tags_json', "'[]'")} FROM memories${tenant}`);
   // SAFETY: the SELECT names every PreviewRow field, each a literal fallback when its column is missing.
   return (tenant ? statement.all(tenantId) : statement.all()) as PreviewRow[];
+}
 
 /** True when a memory row, of any tenant, already holds `id`. */
 export function entryIdTakenAt(db: DatabaseSyncLike, id: string): boolean {
