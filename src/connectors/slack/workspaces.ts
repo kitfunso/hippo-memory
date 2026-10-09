@@ -19,11 +19,10 @@
  *     from "not found" without an extra SELECT.
  */
 
-import type { DatabaseSyncLike } from '../../db.js';
-import { upsertSlackWorkspaceAt, type SlackWorkspace } from '../../store/connectors/slack.js';
+import { upsertSlackWorkspace, type SlackWorkspace } from '../../store/connectors/slack.js';
 
 export type { SlackWorkspace };
-export { listSlackWorkspacesAt as listWorkspaces, removeSlackWorkspaceAt as removeWorkspace } from '../../store/connectors/slack.js';
+export { listSlackWorkspaces as listWorkspaces, removeSlackWorkspace as removeWorkspace } from '../../store/connectors/slack.js';
 
 export interface AddWorkspaceOpts {
   teamId: string;
@@ -35,8 +34,8 @@ export interface AddWorkspaceOpts {
  * team_id conflict (operators move workspaces between tenants).
  */
 export function addWorkspace(
-  db: DatabaseSyncLike,
+  hippoRoot: string,
   opts: AddWorkspaceOpts,
 ): SlackWorkspace {
-  return upsertSlackWorkspaceAt(db, opts.teamId, opts.tenantId);
+  return upsertSlackWorkspace(hippoRoot, opts.teamId, opts.tenantId);
 }

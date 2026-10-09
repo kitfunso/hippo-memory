@@ -1,6 +1,5 @@
 // `hippo auth`: create, list, revoke and scope API keys.
 
-import { openHippoDb, closeHippoDb } from '../db.js';
 import { listApiKeys, type ApiKeyListItem } from '../store/auth.js';
 import * as api from '../api.js';
 import { resolveTenantId } from '../tenant.js';
@@ -76,13 +75,7 @@ function cmdAuthList(hippoRoot: string, flags: CliFlags): void {
   const includeRevoked = boolFlag(flags, 'all');
   const asJson = boolFlag(flags, 'json');
 
-  const db = openHippoDb(root);
-  let items: ApiKeyListItem[];
-  try {
-    items = listApiKeys(db, { active: !includeRevoked });
-  } finally {
-    closeHippoDb(db);
-  }
+  const items = listApiKeys(root, { active: !includeRevoked });
 
   if (asJson) {
     console.log(JSON.stringify(items));

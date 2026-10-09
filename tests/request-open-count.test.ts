@@ -96,8 +96,8 @@ afterAll(async () => {
 });
 
 describe('store opens per request', () => {
-  it('POST /v1/memories opens the store once', async () => {
-    expect(await opensDuring(() => call('POST', '/v1/memories', { content: 'canary rollouts start at five percent of traffic' }))).toEqual({ local: 1 });
+  it("POST /v1/memories opens no connection on the server thread, its write running on the store's writer thread", async () => {
+    expect(await opensDuring(() => call('POST', '/v1/memories', { content: 'canary rollouts start at five percent of traffic' }))).toEqual({});
   });
 
   it('GET /v1/memories (recall) opens the store once', async () => {
@@ -112,14 +112,14 @@ describe('store opens per request', () => {
     expect(await opensDuring(() => call('POST', '/v1/test/remember-then-recall', {}))).toEqual({ local: 1 });
   });
 
-  it('concurrent requests each open their own handle', async () => {
+  it('concurrent reads each open their own handle, and a write among them opens none', async () => {
     const requests = async () => void await Promise.all([
       call('GET', '/v1/memories?q=rollback'),
       call('GET', '/v1/memories?q=deploy'),
       call('POST', '/mcp', recallOverMcp),
       call('POST', '/v1/memories', { content: 'the staging database is rebuilt every Sunday night' }),
     ]);
-    expect(await opensDuring(requests)).toEqual({ local: 4 });
+    expect(await opensDuring(requests)).toEqual({ local: 3 });
   });
 });
 

@@ -4,10 +4,14 @@ import { createRequire } from 'node:module';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { MessageChannel } from 'node:worker_threads';
 import { initStore } from '../src/store/open.js';
-import { getHippoDbPath, SERVER_DB_WAIT_MS, type DatabaseSyncLike } from '../src/db.js';
+import { getHippoDbPath, type DatabaseSyncLike } from '../src/db.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { log } from '../src/log.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { serveJobs } from '../src/store/sqlite/worker-jobs.js';
+import type { Job, Reply } from '../src/store/sqlite/worker-ops.js';
 import { countMatching, recordStatementsAsync, STORE_OPEN } from './_helpers/count-statements.js';
 
 // SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike.
@@ -48,9 +52,8 @@ describe('server under a held write lock', () => {
     expect(busy.status).toBe(503);
     expect(busy.headers.get('retry-after')).toBe('1');
     expect(await busy.json()).toEqual({ error: expect.stringMatching(/store busy/) });
-    // Every connection the request opened asked for the short server wait, and the write was tried once: that is what keeps the 503 quick.
-    expect(new Set(statements.filter((sql) => STORE_OPEN.test(sql)))).toEqual(new Set([`PRAGMA busy_timeout = ${SERVER_DB_WAIT_MS}`]));
-    expect(countMatching(statements, 'BEGIN IMMEDIATE')).toBe(1);
+    // The write waits on the store's writer thread, so the request opened no connection on this one.
+    expect(countMatching(statements, STORE_OPEN)).toBe(0);
     const failureLine = (call: unknown[]): boolean => String(call[0]).startsWith('POST /v1/memories failed');
     expect(warn.mock.calls.filter(failureLine)).toHaveLength(1);
     expect(error.mock.calls.filter(failureLine)).toHaveLength(0);
@@ -62,4 +65,26 @@ describe('server under a held write lock', () => {
     });
     expect(ok.status).toBe(200);
   }, 20000);
+
+  it("opens a store worker's connection with the wait its executor passed and tries a write behind the lock once", async () => {
+    const { port1, port2 } = new MessageChannel();
+    const replied = new Promise<Reply>((resolve) => port2.once('message', resolve));
+    const entry = createMemory('sent to the job loop while another process holds the lock', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId: 'default' });
+    const job: Job = { id: 1, op: 'entryWrites.writeEntry', args: [{ entry, actor: 'test' }], requestId: undefined, walPages: 100 };
+    holder.exec('BEGIN IMMEDIATE');
+    // The worker's own job loop, run on this thread so its statements can be read; 7 is a wait no default has.
+    const { result: reply, statements } = await recordStatementsAsync(() => {
+      serveJobs(port1, { hippoRoot: home, mode: 'write', busyWaitMs: 7 });
+      port2.postMessage(job);
+      return replied;
+    });
+    holder.exec('ROLLBACK');
+    const closed = new Promise((resolve) => port2.once('close', resolve));
+    port2.postMessage('stop');
+    await closed;
+
+    expect(reply).toMatchObject({ id: 1, ok: false, error: { message: 'database is locked', fields: { errcode: 5 } } });
+    expect(new Set(statements.filter((sql) => STORE_OPEN.test(sql)))).toEqual(new Set(['PRAGMA busy_timeout = 7']));
+    expect(countMatching(statements, 'BEGIN IMMEDIATE')).toBe(1);
+  });
 });
