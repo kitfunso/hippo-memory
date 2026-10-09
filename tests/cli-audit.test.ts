@@ -15,7 +15,7 @@ describe('hippo audit list', () => {
       execSync(`node "${cli}" init`, { env, cwd: home });
       execSync(`node "${cli}" init --global`, { env, cwd: home });
       execSync(`node "${cli}" remember "audit-list-canary distinguishing token" --global`, { env, cwd: home });
-      execSync(`node "${cli}" recall "audit-list-canary" --global`, { env, cwd: home });
+      execSync(`node "${cli}" recall "audit-list-canary"`, { env, cwd: home });
 
       const out = execSync(`node "${cli}" audit list --json --global`, { env, cwd: home }).toString();
       const events = JSON.parse(out);
