@@ -103,32 +103,36 @@ export function wmPush(hippoRoot: string, opts: {
 
       const id = Number(result.lastInsertRowid ?? 0);
 
-      // Evict if over capacity for this scope
-      // SAFETY: `COUNT(*) AS cnt` on a scoped query always returns exactly
-      // one row shaped { cnt }; .get() returns undefined only if the driver
-      // yields no row, which COUNT(*) never does.
-      const countRow = db.prepare(`
-        SELECT COUNT(*) AS cnt FROM working_memory WHERE scope = ? AND tenant_id = ?
-      `).get(opts.scope, tenantId) as { cnt: number } | undefined;
-
-      const count = Number(countRow?.cnt ?? 0);
-      if (count > WM_MAX_ENTRIES) {
-        const excess = count - WM_MAX_ENTRIES;
-        db.prepare(`
-          DELETE FROM working_memory
-          WHERE id IN (
-            SELECT id FROM working_memory
-            WHERE scope = ? AND tenant_id = ?
-            ORDER BY importance ASC, created_at ASC
-            LIMIT ?
-          )
-        `).run(opts.scope, tenantId, excess);
-      }
+      evictOverCapacity(db, opts.scope, tenantId);
 
       return id;
     });
   } finally {
     closeHippoDb(db);
+  }
+}
+
+function evictOverCapacity(db: ReturnType<typeof openStore>, scope: string, tenantId: string): void {
+  // Evict if over capacity for this scope
+  // SAFETY: `COUNT(*) AS cnt` on a scoped query always returns exactly
+  // one row shaped { cnt }; .get() returns undefined only if the driver
+  // yields no row, which COUNT(*) never does.
+  const countRow = db.prepare(`
+    SELECT COUNT(*) AS cnt FROM working_memory WHERE scope = ? AND tenant_id = ?
+  `).get(scope, tenantId) as { cnt: number } | undefined;
+
+  const count = Number(countRow?.cnt ?? 0);
+  if (count > WM_MAX_ENTRIES) {
+    const excess = count - WM_MAX_ENTRIES;
+    db.prepare(`
+      DELETE FROM working_memory
+      WHERE id IN (
+        SELECT id FROM working_memory
+        WHERE scope = ? AND tenant_id = ?
+        ORDER BY importance ASC, created_at ASC
+        LIMIT ?
+      )
+    `).run(scope, tenantId, excess);
   }
 }
 

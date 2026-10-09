@@ -296,47 +296,52 @@ export function setupDailySchedule(globalRoot: string): void {
   const taskName = DAILY_TASK_NAME;
   const cmd = buildDailyRunnerCommand(runnerDir);
 
-  if (isWindows) {
-    // Check if task already exists
-    try {
-      const existing = execSync(`schtasks /query /tn "${taskName}" 2>nul`, { encoding: 'utf-8', windowsHide: true, timeout: SCHEDULER_CALL_TIMEOUT_MS });
-      if (existing.includes(taskName)) {
-        return; // already scheduled
-      }
-    } catch (err) {
-      // A non-zero exit means the task does not exist yet, so it is created below.
-      if (schedulerTimedOut(err)) warnSchedulerTimedOut('schtasks /query');
+  if (isWindows) scheduleOnWindows(taskName, cmd);
+  else scheduleOnCrontab(taskName, cmd);
+}
+
+function scheduleOnWindows(taskName: string, cmd: string): void {
+  // Check if task already exists
+  try {
+    const existing = execSync(`schtasks /query /tn "${taskName}" 2>nul`, { encoding: 'utf-8', windowsHide: true, timeout: SCHEDULER_CALL_TIMEOUT_MS });
+    if (existing.includes(taskName)) {
+      return; // already scheduled
+    }
+  } catch (err) {
+    // A non-zero exit means the task does not exist yet, so it is created below.
+    if (schedulerTimedOut(err)) warnSchedulerTimedOut('schtasks /query');
+  }
+
+  try {
+    execFileSync('schtasks', buildSchtasksCreateArgs(taskName, cmd), { stdio: 'pipe', windowsHide: true, timeout: SCHEDULER_CALL_TIMEOUT_MS });
+    console.log(`   Scheduled machine-level daily runner (6:15am) via Task Scheduler: ${taskName}`);
+  } catch (err) {
+    if (schedulerTimedOut(err)) warnSchedulerTimedOut('schtasks /create');
+    // No admin rights or schtasks unavailable, fall back to printing instructions
+    console.log(`   To schedule the machine-level daily runner, run:`);
+    console.log(`   schtasks /create /tn "${taskName}" /tr "${buildWindowsTaskRun(cmd).replace(/"/g, '\\"')}" /sc daily /st 06:15`);
+  }
+}
+
+function scheduleOnCrontab(taskName: string, cmd: string): void {
+  // Unix: check crontab for existing entry
+  const marker = `# hippo:${taskName}`;
+  try {
+    const existing = execSync('crontab -l 2>/dev/null', { encoding: 'utf-8', windowsHide: true, timeout: SCHEDULER_CALL_TIMEOUT_MS });
+    if (existing.includes(marker)) {
+      return; // already scheduled
     }
 
-    try {
-      execFileSync('schtasks', buildSchtasksCreateArgs(taskName, cmd), { stdio: 'pipe', windowsHide: true, timeout: SCHEDULER_CALL_TIMEOUT_MS });
-      console.log(`   Scheduled machine-level daily runner (6:15am) via Task Scheduler: ${taskName}`);
-    } catch (err) {
-      if (schedulerTimedOut(err)) warnSchedulerTimedOut('schtasks /create');
-      // No admin rights or schtasks unavailable, fall back to printing instructions
-      console.log(`   To schedule the machine-level daily runner, run:`);
-      console.log(`   schtasks /create /tn "${taskName}" /tr "${buildWindowsTaskRun(cmd).replace(/"/g, '\\"')}" /sc daily /st 06:15`);
-    }
-  } else {
-    // Unix: check crontab for existing entry
-    const marker = `# hippo:${taskName}`;
-    try {
-      const existing = execSync('crontab -l 2>/dev/null', { encoding: 'utf-8', windowsHide: true, timeout: SCHEDULER_CALL_TIMEOUT_MS });
-      if (existing.includes(marker)) {
-        return; // already scheduled
-      }
-
-      const cronLine = `15 6 * * * ${cmd} ${marker}`;
-      const newCrontab = existing.trimEnd() + '\n' + cronLine + '\n';
-      execSync('crontab -', { input: newCrontab, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true, timeout: SCHEDULER_CALL_TIMEOUT_MS });
-      console.log(`   Scheduled machine-level daily runner (6:15am) via crontab`);
-    } catch (err) {
-      if (schedulerTimedOut(err)) warnSchedulerTimedOut('crontab');
-      // No crontab or no permission: print the line for the user to add by hand.
-      const cronLine = `15 6 * * * ${cmd}`;
-      console.log(`   To schedule the machine-level daily runner, add to crontab (crontab -e):`);
-      console.log(`   ${cronLine}`);
-    }
+    const cronLine = `15 6 * * * ${cmd} ${marker}`;
+    const newCrontab = existing.trimEnd() + '\n' + cronLine + '\n';
+    execSync('crontab -', { input: newCrontab, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true, timeout: SCHEDULER_CALL_TIMEOUT_MS });
+    console.log(`   Scheduled machine-level daily runner (6:15am) via crontab`);
+  } catch (err) {
+    if (schedulerTimedOut(err)) warnSchedulerTimedOut('crontab');
+    // No crontab or no permission: print the line for the user to add by hand.
+    const cronLine = `15 6 * * * ${cmd}`;
+    console.log(`   To schedule the machine-level daily runner, add to crontab (crontab -e):`);
+    console.log(`   ${cronLine}`);
   }
 }
 

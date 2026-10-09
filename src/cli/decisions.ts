@@ -233,13 +233,7 @@ export function cmdDecide(
 }
 
 function decideCreate(hippoRoot: string, tenantId: string, decisionText: string, flags: CliFlags): void {
-  if (!decisionText) {
-    printError('Usage: hippo decide "<decision>" [--context "<why>"] [--supersedes <memory-id>]');
-    printError('       hippo decide list [--status active|superseded|closed|all] [--limit N]');
-    printError('       hippo decide get <id>');
-    printError('       hippo decide close <id>');
-    process.exit(1);
-  }
+  if (!decisionText) exitWithDecideUsage();
   const context = nonEmptyStringFlag(flags, 'context');
   // A value-less `--supersedes` asks to supersede but gives no memory id: reject it rather
   // than silently creating a non-superseding decision.
@@ -274,31 +268,43 @@ function decideCreate(hippoRoot: string, tenantId: string, decisionText: string,
     extraTags: decisionPathTags,
   });
 
-  // Legacy memory-weaken (best-effort, LAST): half-life halved, marked stale +
-  // 'superseded' tag. Preserves the exact pre-promotion behavior for the memory
-  // mirror; the canonical table supersession already committed above.
-  if (oldEntry) {
-    // Best-effort: saveDecision already committed. Failing here would make a retry find no active
-    // decision for the old memory and create a duplicate active successor, so warn instead.
-    try {
-      oldEntry.half_life_days = Math.max(1, Math.floor(oldEntry.half_life_days / 2));
-      oldEntry.confidence = 'stale';
-      if (!oldEntry.tags.includes('superseded')) oldEntry.tags.push('superseded');
-      writeEntry(hippoRoot, oldEntry);
-    } catch (e) {
-      printError(`  warning: decision recorded and superseded, but failed to weaken the prior memory ${supersedesMemId}: ${errorMessage(e)}`);
-    }
-  }
+  if (oldEntry) weakenSupersededMemory(hippoRoot, oldEntry, supersedesMemId);
 
   console.log(`Decision recorded: #${created.id}`);
   if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
-  if (supersedesMemId) {
-    const tail =
-      supersedesDecisionId !== undefined
-        ? ` (decision #${supersedesDecisionId} superseded)`
-        : ' (no active decision row; memory weakened only)';
-    console.log(`  supersedes memory: ${supersedesMemId}${tail}`);
+  if (supersedesMemId) printSupersedes(supersedesMemId, supersedesDecisionId);
+}
+
+function exitWithDecideUsage(): never {
+  printError('Usage: hippo decide "<decision>" [--context "<why>"] [--supersedes <memory-id>]');
+  printError('       hippo decide list [--status active|superseded|closed|all] [--limit N]');
+  printError('       hippo decide get <id>');
+  printError('       hippo decide close <id>');
+  process.exit(1);
+}
+
+function weakenSupersededMemory(hippoRoot: string, oldEntry: MemoryEntry, supersedesMemId: string | null): void {
+  // Legacy memory-weaken (best-effort, LAST): half-life halved, marked stale +
+  // 'superseded' tag. Preserves the exact pre-promotion behavior for the memory
+  // mirror; the canonical table supersession already committed above.
+  // Best-effort: saveDecision already committed. Failing here would make a retry find no active
+  // decision for the old memory and create a duplicate active successor, so warn instead.
+  try {
+    oldEntry.half_life_days = Math.max(1, Math.floor(oldEntry.half_life_days / 2));
+    oldEntry.confidence = 'stale';
+    if (!oldEntry.tags.includes('superseded')) oldEntry.tags.push('superseded');
+    writeEntry(hippoRoot, oldEntry);
+  } catch (e) {
+    printError(`  warning: decision recorded and superseded, but failed to weaken the prior memory ${supersedesMemId}: ${errorMessage(e)}`);
   }
+}
+
+function printSupersedes(supersedesMemId: string, supersedesDecisionId: number | undefined): void {
+  const tail =
+    supersedesDecisionId !== undefined
+      ? ` (decision #${supersedesDecisionId} superseded)`
+      : ' (no active decision row; memory weakened only)';
+  console.log(`  supersedes memory: ${supersedesMemId}${tail}`);
 }
 
 function printIncidentRow(inc: incidentsModule.Incident): void {

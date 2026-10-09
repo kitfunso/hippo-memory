@@ -157,27 +157,7 @@ export function searchBoth(
   const localResults = search(query, localEntries, { budget, now, minResults });
   const globalResults = search(query, globalEntries, { budget, now, minResults });
 
-  // Tag global results. Local memories get a configurable priority bump.
-  const tagged: Array<SearchResult & { isGlobal: boolean }> = [
-    ...localResults.map((r) => ({
-      ...r,
-      isGlobal: false,
-      score: r.score * DEFAULT_LOCAL_BUMP,
-      breakdown: r.breakdown
-        ? { ...r.breakdown, sourceBump: DEFAULT_LOCAL_BUMP, final: r.breakdown.final * DEFAULT_LOCAL_BUMP }
-        : undefined,
-    })),
-    ...globalResults.map((r) => ({ ...r, isGlobal: true })),
-  ];
-
-  // Remove duplicates by content (local/global IDs differ after promote/share)
-  const seen = new Set<string>();
-  const deduped = tagged.filter((r) => {
-    const key = duplicateKey(r.entry.content);
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  const deduped = dedupeByContent(tagLocalAndGlobal(localResults, globalResults));
 
   // PLAIN stable score sort on purpose: both inputs are deterministically ordered,
   // and an exact tie keeps the LOCAL result ahead of the global one (concat order).
@@ -194,6 +174,32 @@ export function searchBoth(
   }
 
   return results;
+}
+
+function tagLocalAndGlobal(localResults: SearchResult[], globalResults: SearchResult[]): Array<SearchResult & { isGlobal: boolean }> {
+  // Tag global results. Local memories get a configurable priority bump.
+  return [
+    ...localResults.map((r) => ({
+      ...r,
+      isGlobal: false,
+      score: r.score * DEFAULT_LOCAL_BUMP,
+      breakdown: r.breakdown
+        ? { ...r.breakdown, sourceBump: DEFAULT_LOCAL_BUMP, final: r.breakdown.final * DEFAULT_LOCAL_BUMP }
+        : undefined,
+    })),
+    ...globalResults.map((r) => ({ ...r, isGlobal: true })),
+  ];
+}
+
+function dedupeByContent<T extends SearchResult>(tagged: T[]): T[] {
+  // Remove duplicates by content (local/global IDs differ after promote/share)
+  const seen = new Set<string>();
+  return tagged.filter((r) => {
+    const key = duplicateKey(r.entry.content);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 export interface HybridSearchOptions extends SearchOptions {
@@ -420,26 +426,7 @@ export function shareMemory(
   const entry = readEntry(localRoot, id, options.tenantId);
   if (!entry) throw new NotFoundError(`Memory not found: ${id}`);
 
-  // Secret producer veto: secrets never go to the global store, not even
-  // with --force. Explicit and loud - a silent null would read as "low
-  // transfer score" and invite retries.
-  const secret = detectSecret(entry);
-  if (secret.flagged) {
-    throw new BadRequestError(
-      `Refusing to share ${id} to the global store: content matches secret material (${secret.reason}). ` +
-      `Secrets stay in their owning project's store.`,
-    );
-  }
-
-  // A quarantined row is unreviewed input, not a lesson; sharing it would spread poison globally.
-  if (isQuarantineScope(entry.scope)) {
-    throw new BadRequestError(
-      `Refusing to share ${id}: it is quarantined pending review. Approve it first via 'hippo quarantine approve ${id}'.`,
-    );
-  }
-  if (isPersonalScope(entry.scope ?? null)) {
-    throw new BadRequestError(`Refusing to share ${id}: it is a personal memory and stays with its owner on this server.`);
-  }
+  assertShareable(entry, id);
 
   const score = transferScore(entry);
   if (score < 0.3 && !options.force) return null;
@@ -469,6 +456,29 @@ export function shareMemory(
   }
 
   return globalEntry;
+}
+
+function assertShareable(entry: MemoryEntry, id: string): void {
+  // Secret producer veto: secrets never go to the global store, not even
+  // with --force. Explicit and loud - a silent null would read as "low
+  // transfer score" and invite retries.
+  const secret = detectSecret(entry);
+  if (secret.flagged) {
+    throw new BadRequestError(
+      `Refusing to share ${id} to the global store: content matches secret material (${secret.reason}). ` +
+      `Secrets stay in their owning project's store.`,
+    );
+  }
+
+  // A quarantined row is unreviewed input, not a lesson; sharing it would spread poison globally.
+  if (isQuarantineScope(entry.scope)) {
+    throw new BadRequestError(
+      `Refusing to share ${id}: it is quarantined pending review. Approve it first via 'hippo quarantine approve ${id}'.`,
+    );
+  }
+  if (isPersonalScope(entry.scope ?? null)) {
+    throw new BadRequestError(`Refusing to share ${id}: it is a personal memory and stays with its owner on this server.`);
+  }
 }
 
 /**
@@ -683,24 +693,33 @@ export function syncGlobalToLocal(
     if (entry.source.startsWith(AGENT_MEMORY_SOURCE_PREFIX)) continue;
     if (localText.has(textKey(entry))) continue;
     if (detectSecret(entry).flagged) continue;
-    if (
-      !opts.includeCrossProject &&
-      classifyOriginProject(entry.origin_project, currentProject) === 'cross-project'
-    ) continue;
+    if (!opts.includeCrossProject && classifyOriginProject(entry.origin_project, currentProject) === 'cross-project') continue;
 
-    try {
-      writeEntry(localRoot, entry);
-    } catch (err) {
-      if (err instanceof RejectedValueError) {
-        rejected++;
-        continue;
-      }
-      throw err;
+    if (!writeUnlessRejected(localRoot, entry)) {
+      rejected++;
+      continue;
     }
     localText.add(textKey(entry));
     count++;
   }
 
+  finishSyncDown(localRoot, count, rejected);
+
+  return count;
+}
+
+/** False when the local store rejects the value; any other failure still throws. */
+function writeUnlessRejected(localRoot: string, entry: MemoryEntry): boolean {
+  try {
+    writeEntry(localRoot, entry);
+    return true;
+  } catch (err) {
+    if (err instanceof RejectedValueError) return false;
+    throw err;
+  }
+}
+
+function finishSyncDown(localRoot: string, count: number, rejected: number): void {
   if (rejected > 0) {
     log.warn(`syncGlobalToLocal: skipped ${rejected} rejected value(s) (run \`hippo unreject\` on the local store to allow).`);
   }
@@ -710,6 +729,4 @@ export function syncGlobalToLocal(
   if (count > 0) {
     void embedAll(localRoot).catch((err) => logEmbedAllFailure('syncGlobalToLocal', err));
   }
-
-  return count;
 }

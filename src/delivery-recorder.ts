@@ -393,15 +393,7 @@ export function createDeliveryRecorder(init: DeliveryRecorderInit): DeliveryReco
     disabledSeen: false, outcome: { state: 'empty' }, broken: null, flushed: false,
   };
 
-  const guard: Guard = (fn) => {
-    if (state.broken !== null) return;
-    try {
-      if (fault === 'observe') throw new Error('injected observe fault');
-      fn();
-    } catch (error) {
-      state.broken = errorMessage(error);
-    }
-  };
+  const guard = guardFor(state, fault);
   const { qualityDropped, offer, reject, dropMissing, gated, selected } = candidateMethods(state, guard);
 
   return {
@@ -434,5 +426,17 @@ export function createDeliveryRecorder(init: DeliveryRecorderInit): DeliveryReco
       if (fault === 'flush') throw new Error('injected flush fault');
       write(input);
     },
+  };
+}
+
+function guardFor(state: RecorderState, fault: DeliveryFault | null): Guard {
+  return (fn) => {
+    if (state.broken !== null) return;
+    try {
+      if (fault === 'observe') throw new Error('injected observe fault');
+      fn();
+    } catch (error) {
+      state.broken = errorMessage(error);
+    }
   };
 }

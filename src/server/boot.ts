@@ -421,11 +421,9 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   const host = opts.host ?? '127.0.0.1';
   const requestedPort = opts.port ?? Number(envPort() ?? 6789);
 
-  // A frozen copy, so a route the caller adds or renames after boot never skips the check below.
-  const routes = Object.freeze((opts.routes ?? []).map(({ path, handler, storeReady }) => Object.freeze(storeReady === undefined ? { path, handler } : { path, handler, storeReady })));
-  assertAddonRoutes(routes);
+  const routes = frozenAddonRoutes(opts.routes);
   const publicJsonBodies = assertPublicJson(opts.publicJson ?? {});
-  const { perAddress: limiter, callerLimiter, failedAuthLimiter } = bootLimiters(opts.rateLimits);
+  const limiters = bootLimiters(opts.rateLimits);
   assertBindable(host);
   await assertNoLiveServer(opts.hippoRoot);
 
@@ -437,37 +435,17 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   // Open /mcp/stream count per client key, so the cap is per server rather than per process.
   const streamSlots = new Map<string, number>();
 
-  const served: ResolvedServeOpts = {
-    ...opts, routes, publicJsonBodies, store: opts.store ?? workerSqliteStore(opts.hippoRoot), callerLimiter, failedAuthLimiter,
-    authResolver: outsideRouteBlock(opts.authResolver),
-  };
-  const { kind } = served.store;
+  const served = servedOptsFor(opts, routes, publicJsonBodies, limiters);
   // A store other than hippo.db is a team's central server, so its folder's config.json must not decide shared-ness.
-  if (kind !== 'sqlite') markSharedStore(opts.hippoRoot);
+  if (served.store.kind !== 'sqlite') markSharedStore(opts.hippoRoot);
   const holder = createStoreHolder(opts.hippoRoot, served.store);
 
   const inflight = new Set<ServerResponse>();
-  const server: Server = createListener(opts.tls, (req, res) => {
-    res.once('finish', holder.afterResponse);
-    inflight.add(res);
-    res.once('close', () => inflight.delete(res));
-    const run = (): Promise<void> => handleRequest(req, res, served, { startedAt, streamSlots, limiter });
-    // A missed port under another store would otherwise create and write a hippo.db that store never reads.
-    answerRequest(req, res, () => (kind === 'sqlite' ? run() : withSqliteBlocked(kind, run)), opts.slowRequestWarnMs);
-  });
+  const server = acceptingServer(served, holder, inflight, { startedAt, streamSlots, limiter: limiters.perAddress });
 
   setKeepAliveTimeouts(server);
 
-  await listenOn(server, requestedPort, host);
-
-  const address = server.address();
-  if (!isAddressInfo(address)) {
-    throw new Error('server.address() returned unexpected shape');
-  }
-  const addressInfo = address;
-  const actualPort = addressInfo.port;
-  const url = `${opts.tls ? 'https' : 'http'}://${host.includes(':') ? `[${host}]` : host}:${actualPort}`;
-  warnIfCleartext(host, opts.tls, LOOPBACK_HOSTS);
+  const { port: actualPort, url } = await listenAndDescribe(server, requestedPort, host, opts.tls);
 
   writePidfile(opts.hippoRoot, { port: actualPort, url, startedAt });
   holder.hold();
@@ -476,11 +454,7 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   const stop = async (): Promise<void> => {
     if (stopping) return;
     stopping = true;
-    // Remove the pidfile only if it still names this server. A newer server
-    // may have started on this hippoRoot and rewritten the pidfile; an
-    // unconditional unlink here would orphan it.
-    removePidfileIfOwned(opts.hippoRoot, { pid: process.pid, startedAt });
-    await drainAndClose(server, inflight, opts.shutdownDrainMs ?? 5000);
+    await stopListening(opts, server, inflight, startedAt);
     // The store's worker threads close their connections first, so the held one is still SQLite's last.
     if (!opts.store) await served.store.close();
     await holder.release();
@@ -492,4 +466,57 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   }
 
   return { port: actualPort, url, stop, server };
+}
+
+function frozenAddonRoutes(addonRoutes: ServeOpts['routes']): NonNullable<ServeOpts['routes']> {
+  // A frozen copy, so a route the caller adds or renames after boot never skips the check below.
+  const routes = Object.freeze((addonRoutes ?? []).map(({ path, handler, storeReady }) => Object.freeze(storeReady === undefined ? { path, handler } : { path, handler, storeReady })));
+  assertAddonRoutes(routes);
+  return routes;
+}
+
+function servedOptsFor(
+  opts: ServeOpts,
+  routes: NonNullable<ServeOpts['routes']>,
+  publicJsonBodies: ReadonlyMap<string, string>,
+  { callerLimiter, failedAuthLimiter }: BootedLimiters,
+): ResolvedServeOpts {
+  return {
+    ...opts, routes, publicJsonBodies, store: opts.store ?? workerSqliteStore(opts.hippoRoot), callerLimiter, failedAuthLimiter,
+    authResolver: outsideRouteBlock(opts.authResolver),
+  };
+}
+
+function acceptingServer(served: ResolvedServeOpts, holder: StoreHolder, inflight: Set<ServerResponse>, options: HandleRequestOptions): Server {
+  const { kind } = served.store;
+  return createListener(served.tls, (req, res) => {
+    res.once('finish', holder.afterResponse);
+    inflight.add(res);
+    res.once('close', () => inflight.delete(res));
+    const run = (): Promise<void> => handleRequest(req, res, served, options);
+    // A missed port under another store would otherwise create and write a hippo.db that store never reads.
+    answerRequest(req, res, () => (kind === 'sqlite' ? run() : withSqliteBlocked(kind, run)), served.slowRequestWarnMs);
+  });
+}
+
+async function listenAndDescribe(server: Server, port: number, host: string, tls: ServeOpts['tls']): Promise<{ port: number; url: string }> {
+  await listenOn(server, port, host);
+
+  const address = server.address();
+  if (!isAddressInfo(address)) {
+    throw new Error('server.address() returned unexpected shape');
+  }
+  const addressInfo = address;
+  const actualPort = addressInfo.port;
+  const url = `${tls ? 'https' : 'http'}://${host.includes(':') ? `[${host}]` : host}:${actualPort}`;
+  warnIfCleartext(host, tls, LOOPBACK_HOSTS);
+  return { port: actualPort, url };
+}
+
+async function stopListening(opts: ServeOpts, server: Server, inflight: Set<ServerResponse>, startedAt: string): Promise<void> {
+  // Remove the pidfile only if it still names this server. A newer server
+  // may have started on this hippoRoot and rewritten the pidfile; an
+  // unconditional unlink here would orphan it.
+  removePidfileIfOwned(opts.hippoRoot, { pid: process.pid, startedAt });
+  await drainAndClose(server, inflight, opts.shutdownDrainMs ?? 5000);
 }

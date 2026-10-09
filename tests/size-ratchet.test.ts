@@ -38,18 +38,18 @@ const fn = (name: string, lines: number) => `export function ${name}() {\n${'  v
 
 describe('check-size-ratchet.mjs', () => {
   it('passes a small file with an empty baseline', () => {
-    withFixture({ 'src/a.ts': fn('small', 80) }, {}, ({ run }) => {
+    withFixture({ 'src/a.ts': fn('small', 50), 'scripts/job.mjs': fn('mid', 80) }, {}, ({ run }) => {
       const r = run();
       expect(r.status).toBe(0);
-      expect(r.stdout).toContain('0 files over 800 lines, 0 functions over 80');
+      expect(r.stdout).toContain('0 files over 800 lines, 0 functions over 50 in src and 80 in scripts');
     });
   });
 
-  it('fails on a new 81-line function, naming it', () => {
-    withFixture({ 'src/a.ts': fn('small', 80) + fn('big', 81) }, {}, ({ run }) => {
+  it('fails on a new 51-line function in src, naming it', () => {
+    withFixture({ 'src/a.ts': fn('small', 50) + fn('big', 51) }, {}, ({ run }) => {
       const r = run();
       expect(r.status).toBe(1);
-      expect(r.stderr).toContain('src/a.ts:big: new -> 81');
+      expect(r.stderr).toContain('src/a.ts:big: new -> 51');
     });
   });
 
