@@ -2,7 +2,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { cmdRecall, __resetSessionRecallHistoryCli } from '../src/cli/recall.js';
+import { cmdRecall } from '../src/cli/recall.js';
+import { resetSessionRings } from '../src/api/recall-record.js';
 import { peekSessionRing } from '../src/api/recall-record.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { Layer } from '../src/memory.js';
@@ -41,7 +42,7 @@ describe('hippo recall anchoring hint', () => {
     // A global store that does not exist keeps the recall on the local store alone.
     vi.stubEnv('HIPPO_HOME', join(root, 'no-global'));
     for (const name of ['HIPPO_TENANT', 'HIPPO_SESSION_ID', 'HIPPO_ANCHORING']) vi.stubEnv(name, '');
-    __resetSessionRecallHistoryCli();
+    resetSessionRings('cli');
     memoryId = seed('default');
   });
 
