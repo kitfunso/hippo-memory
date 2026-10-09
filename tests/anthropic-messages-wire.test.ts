@@ -1,10 +1,8 @@
 import http from 'node:http';
 import crypto from 'node:crypto';
-import fs from 'node:fs';
-import path from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
-import { extractFacts } from '../src/extract.js';
+import { extractFacts, type ExtractedFact } from '../src/extract.js';
 import { generateDagSummary } from '../src/dag.js';
 import { refineSemanticMemory } from '../src/refine-llm.js';
 
@@ -73,8 +71,10 @@ async function startWire(mode: Mode, okText: string): Promise<Wire> {
   return { requests, calledUrls, fetcher, close };
 }
 
+type CallerResult = ExtractedFact[] | string | null;
+
 interface Expected {
-  result: unknown;
+  result: CallerResult;
   messages: Array<string | RegExp>;
   requests: number;
 }
@@ -85,13 +85,13 @@ interface CallerSpec {
   maxTokens: number;
   bodySha256: string;
   contentLength: string;
-  run: (fetcher: typeof fetch, messages: string[]) => Promise<unknown>;
+  run: (fetcher: typeof fetch, messages: string[]) => Promise<CallerResult>;
   expected: Record<Mode, Expected>;
 }
 
 const TIMEOUT_MESSAGE = /aborted due to timeout/;
 const NOT_JSON = /Unexpected token/;
-const FACT = { content: 'Alice likes tea', tags: ['speaker:Alice'], valence: 'positive' };
+const FACT: ExtractedFact = { content: 'Alice likes tea', tags: ['speaker:Alice'], valence: 'positive' };
 const DAG_TEXT = 'Alice likes tea and drinks it every morning before work.';
 const REFINE_TEXT = 'People prefer tea in the morning.';
 
@@ -151,7 +151,6 @@ const callers: CallerSpec[] = [
 ];
 
 const MODES: Mode[] = ['ok', 'http400', 'http500', 'badjson', 'empty', 'hang', 'refused'];
-const recordings: Record<string, unknown> = {};
 let stderr: MockInstance<typeof process.stderr.write>;
 let savedTimeout: string | undefined;
 
@@ -162,7 +161,6 @@ beforeAll(() => {
 afterAll(() => {
   if (savedTimeout === undefined) delete process.env.HIPPO_LLM_TIMEOUT_MS;
   else process.env.HIPPO_LLM_TIMEOUT_MS = savedTimeout;
-  if (process.env.CQB_RECORD_DIR) fs.writeFileSync(path.join(process.env.CQB_RECORD_DIR, 'recording.json'), JSON.stringify(recordings, null, 2));
 });
 beforeEach(() => { stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true); });
 afterEach(() => { stderr.mockRestore(); });
@@ -175,18 +173,17 @@ describe.each(callers)('$name over a real local server', (spec) => {
   it.each(MODES)('case %s: request bytes and caller-visible result are unchanged', async (mode) => {
     const wire = await startWire(mode, spec.okText);
     const messages: string[] = [];
-    let result: unknown;
+    let result: CallerResult;
     try {
       result = await spec.run(wire.fetcher, messages);
     } finally {
       await wire.close();
     }
     const seen = [...messages, ...warnLines()];
-    recordings[`${spec.name}/${mode}`] = { requests: wire.requests, calledUrls: wire.calledUrls, result, messages: seen };
 
     const want = spec.expected[mode];
     expect(result).toEqual(want.result);
-    expect(seen).toEqual(want.messages.map((m) => (typeof m === 'string' ? m : expect.stringMatching(m))));
+    expect(seen).toEqual(want.messages.map((m) => (m instanceof RegExp ? expect.stringMatching(m) : m)));
     expect(wire.requests).toHaveLength(want.requests);
     expect(wire.calledUrls).toHaveLength(Math.max(want.requests, 1));
     for (const url of wire.calledUrls) expect(url).toBe(ANTHROPIC_URL);
