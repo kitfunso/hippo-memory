@@ -14,7 +14,7 @@ import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../src/db.js';
 import { STORE_NOT_PORTED_MESSAGE } from '../src/http-util.js';
 import type { JsonValue } from '../src/json.js';
 import { OTHER_STORE_MARKER, serve, type HippoStore, type ServerHandle } from '../src/server.js';
-import { upsertSlackWorkspaceAt } from '../src/store/connectors/slack.js';
+import { upsertSlackWorkspace } from '../src/store/connectors/slack.js';
 import { inMemoryConnectorEventsStore, type InMemoryConnectorEventsStore } from './_helpers/in-memory-connector-events-store.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from './_helpers/store-conformance.js';
 
@@ -45,9 +45,9 @@ function markedFolder(): string {
 /** A copy that routes Slack team T_ACME and GitHub installation 101 to acme, so any other sender is unroutable. */
 function copyWithRoutes(): string {
   const root = copyOf();
+  upsertSlackWorkspace(root, 'T_ACME', TENANT_A);
   const db = openHippoDb(root);
   try {
-    upsertSlackWorkspaceAt(db, 'T_ACME', TENANT_A);
     db.prepare('INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?, ?, ?)').run('101', TENANT_A, NOW);
   } finally {
     closeHippoDb(db);

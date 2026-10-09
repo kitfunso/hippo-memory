@@ -5,9 +5,8 @@ import { loadAllEntries } from '../store/entry-reads.js';
 import { deduplicateStore } from '../dedupe.js';
 import { embedAll, loadEmbeddingIndex } from '../embeddings.js';
 import { resolveEmbeddingProvider, type EmbeddingProvider } from '../embedding-provider.js';
-import { resetAllPhysicsState } from '../db/physics-state.js';
+import { resetStoredParticles } from '../store/vector-writes.js';
 import { loadConfig } from '../config.js';
-import { openHippoDb, closeHippoDb } from '../db.js';
 import { resolveTenantId } from '../tenant.js';
 import { refineStore } from '../refine-llm.js';
 import { printError } from './output.js';
@@ -178,13 +177,8 @@ export async function cmdEmbed(
 function resetPhysics(root: string): void {
   const entries = loadAllEntries(root);
   const embIndex = loadEmbeddingIndex(root);
-  const db = openHippoDb(root);
-  try {
-    const count = resetAllPhysicsState(db, entries, embIndex);
-    console.log(`Reset physics state: ${count} particles re-initialized from embeddings.`);
-  } finally {
-    closeHippoDb(db);
-  }
+  const count = resetStoredParticles(root, entries, embIndex);
+  console.log(`Reset physics state: ${count} particles re-initialized from embeddings.`);
 }
 
 function printEmbedStatus(root: string): void {

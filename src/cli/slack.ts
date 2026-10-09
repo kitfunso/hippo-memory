@@ -1,7 +1,6 @@
 // `hippo slack`: backfill, dead-letter queue and workspace registry for the Slack connector.
 
 import { envSlackBotToken, envSlackSigningSecret, envSlackTeamId } from '../env.js';
-import { openHippoDb, closeHippoDb } from '../db.js';
 import * as api from '../api.js';
 import { resolveTenantId } from '../tenant.js';
 import { listDlq } from '../connectors/dlq.js';
@@ -110,28 +109,18 @@ function cmdSlackWorkspacesAdd(
     printError('Usage: hippo slack workspaces add --team <T> --tenant <t>');
     process.exit(1);
   }
-  const db = openHippoDb(hippoRoot);
-  try {
-    const ws = addSlackWorkspace(db, { teamId, tenantId });
-    console.log(`added: ${ws.teamId} -> ${ws.tenantId} (${ws.addedAt})`);
-  } finally {
-    closeHippoDb(db);
-  }
+  const ws = addSlackWorkspace(hippoRoot, { teamId, tenantId });
+  console.log(`added: ${ws.teamId} -> ${ws.tenantId} (${ws.addedAt})`);
 }
 
 function cmdSlackWorkspacesList(hippoRoot: string): void {
-  const db = openHippoDb(hippoRoot);
-  try {
-    const items = listSlackWorkspaces(db);
-    if (items.length === 0) {
-      console.log('(no registered workspaces; routing via HIPPO_TENANT fallback)');
-      return;
-    }
-    for (const ws of items) {
-      console.log(`${ws.teamId}\t${ws.tenantId}\t${ws.addedAt}`);
-    }
-  } finally {
-    closeHippoDb(db);
+  const items = listSlackWorkspaces(hippoRoot);
+  if (items.length === 0) {
+    console.log('(no registered workspaces; routing via HIPPO_TENANT fallback)');
+    return;
+  }
+  for (const ws of items) {
+    console.log(`${ws.teamId}\t${ws.tenantId}\t${ws.addedAt}`);
   }
 }
 
@@ -144,17 +133,12 @@ function cmdSlackWorkspacesRemove(
     printError('Usage: hippo slack workspaces remove --team <T>');
     process.exit(1);
   }
-  const db = openHippoDb(hippoRoot);
-  try {
-    const removed = removeSlackWorkspace(db, teamId);
-    if (!removed) {
-      printError(`no workspace registered for team ${teamId}`);
-      process.exit(1);
-    }
-    console.log(`removed: ${teamId}`);
-  } finally {
-    closeHippoDb(db);
+  const removed = removeSlackWorkspace(hippoRoot, teamId);
+  if (!removed) {
+    printError(`no workspace registered for team ${teamId}`);
+    process.exit(1);
   }
+  console.log(`removed: ${teamId}`);
 }
 
 export async function cmdSlack(hippoRoot: string, args: string[], flags: CliFlags): Promise<void> {

@@ -3,7 +3,7 @@ import { closeHippoDb, openHippoDb, setMeta, withWriteScope, type DatabaseSyncLi
 import { embeddingIndexStateOn, replacesIndex } from '../embeddings.js';
 import type { MemoryEntry } from '../memory.js';
 import type { PhysicsParticle } from '../physics.js';
-import { float32ToBuffer, loadPhysicsState, savePhysicsState } from '../db/physics-state.js';
+import { float32ToBuffer, loadPhysicsState, resetAllPhysicsState, savePhysicsState } from '../db/physics-state.js';
 import type { VectorBackfillQuery, VectorRowWrite, VectorWrite, VectorWriteResult } from './port.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../db/vector-store.js';
 import { chunked } from './entry-reads.js';
@@ -76,6 +76,16 @@ export function saveStoredParticles(hippoRoot: string, particles: PhysicsParticl
   const db = openHippoDb(hippoRoot);
   try {
     savePhysicsState(db, particles);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/** Replaces every particle under `hippoRoot` with a fresh one per entry that has an embedding; returns how many. */
+export function resetStoredParticles(hippoRoot: string, entries: MemoryEntry[], embeddingIndex: Record<string, number[]>): number {
+  const db = openHippoDb(hippoRoot);
+  try {
+    return resetAllPhysicsState(db, entries, embeddingIndex);
   } finally {
     closeHippoDb(db);
   }

@@ -22,12 +22,7 @@ describe('/v1/auth/keys role rules', () => {
   }
 
   function isActive(keyId: string): boolean {
-    const db = openHippoDb(home);
-    try {
-      return listApiKeys(db, { active: true }).some((k) => k.keyId === keyId);
-    } finally {
-      closeHippoDb(db);
-    }
+    return listApiKeys(home, { active: true }).some((k) => k.keyId === keyId);
   }
 
   function post(bearer: string, body: { role?: string }): Promise<Response> {

@@ -9,7 +9,7 @@ import type { MemoryEntry } from '../src/memory.js';
 import type { AuditEvent } from '../src/server.js';
 import { requireGroup } from '../src/store-port.js';
 import { logEvent, type GithubRouting } from '../src/store/connectors/github.js';
-import { markSlackEventSeen, upsertSlackWorkspaceAt, type SlackTeamRoute } from '../src/store/connectors/slack.js';
+import { markSlackEventSeen, upsertSlackWorkspace, type SlackTeamRoute } from '../src/store/connectors/slack.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import type { ConnectorDeadLetter, ConnectorEvent, ConnectorEventRecord, ConnectorWriteOutcome, DeletionTarget } from '../src/store/port.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
@@ -70,9 +70,9 @@ function seed(dir: string): Seeded {
 
 /** One workspace, one installation, and a repository two tenants registered, acme first. */
 function registerRoutes(root: string): void {
+  upsertSlackWorkspace(root, 'T_ACME', TENANT_A);
   const db = openHippoDb(root);
   try {
-    upsertSlackWorkspaceAt(db, 'T_ACME', TENANT_A);
     db.prepare('INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?, ?, ?)').run('101', TENANT_A, '2026-01-01T00:00:00.000Z');
     const repo = db.prepare('INSERT INTO github_repositories (repo_full_name, tenant_id, added_at) VALUES (?, ?, ?)');
     repo.run('acme/shared', TENANT_B, '2026-01-02T00:00:00.000Z');
