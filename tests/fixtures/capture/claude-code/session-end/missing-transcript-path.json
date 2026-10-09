@@ -1,0 +1,16 @@
+{
+  "stdin": "{\"session_id\":\"sess-1\",\"cwd\":\"/work/repo\",\"hook_event_name\":\"SessionEnd\",\"reason\":\"exit\"}",
+  "timedOut": false,
+  "expect": {
+    "status": "received",
+    "input": {
+      "runtime": "claude-code",
+      "event": "session-end",
+      "manual": false,
+      "sessionId": "sess-1",
+      "cwd": "/work/repo",
+      "transcriptPath": null,
+      "trigger": null
+    }
+  }
+}

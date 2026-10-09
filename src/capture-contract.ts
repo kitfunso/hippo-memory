@@ -18,9 +18,17 @@ export interface CaptureInput {
 }
 
 /** The outcome of reading a payload: usable input, a payload hippo refuses, or no payload at all. */
-export type CaptureReceipt =
-  | { readonly status: 'received'; readonly input: CaptureInput }
+export type CaptureReceipt<I extends CaptureInput = CaptureInput> =
+  | { readonly status: 'received'; readonly input: I }
   | { readonly status: 'skipped' | 'unavailable'; readonly reason: string };
+
+/** What a PostCompact payload adds: it always names a session, and carries the summary Claude Code wrote. */
+export interface PostCompactInput extends CaptureInput {
+  readonly event: 'post-compact';
+  readonly sessionId: string;
+  /** null when Claude Code sent none; the transcript fills the record later. */
+  readonly compactSummary: string | null;
+}
 
 /** Working state saved before the host drops context, so the session can resume; it is not a lesson. */
 export interface Checkpoint {
@@ -129,6 +137,72 @@ export function readVscodeStop(stdinText: string | undefined, timedOut: boolean)
       cwd: 'cwd' in payload && isStringValue(payload.cwd) ? payload.cwd : null,
       transcriptPath: payload.transcript_path,
       trigger: null,
+    },
+  };
+}
+
+/** Reads a Claude Code PostCompact payload; it must name a session, but needs no transcript_path. */
+export function readClaudeCodePostCompact(stdinText: string | undefined, timedOut: boolean): CaptureReceipt<PostCompactInput> {
+  const empty = !stdinText || stdinText.trim() === '';
+  if (timedOut && empty) {
+    return { status: 'unavailable', reason: 'no PostCompact payload arrived before the stdin wait window closed' };
+  }
+  let payload: unknown;
+  try {
+    payload = empty ? undefined : JSON.parse(stdinText.trim());
+  } catch {
+    // Non-JSON stdin leaves payload undefined, which the shape check rejects.
+  }
+  if (!isObjectLike(payload) || !('session_id' in payload) || !isStringValue(payload.session_id) || payload.session_id === '') {
+    return { status: 'skipped', reason: 'no PostCompact payload naming a session' };
+  }
+  return {
+    status: 'received',
+    input: {
+      runtime: 'claude-code',
+      event: 'post-compact',
+      manual: false,
+      sessionId: payload.session_id,
+      cwd: 'cwd' in payload && isStringValue(payload.cwd) ? payload.cwd : null,
+      transcriptPath: 'transcript_path' in payload && isStringValue(payload.transcript_path) ? payload.transcript_path : null,
+      trigger: 'trigger' in payload && isStringValue(payload.trigger) ? payload.trigger : null,
+      compactSummary: 'compact_summary' in payload && isStringValue(payload.compact_summary) ? payload.compact_summary : null,
+    },
+  };
+}
+
+/** Reads a Claude Code SessionEnd payload, or a Copilot one after stdin.ts mapped it to the same snake_case keys; only an empty stdin counts as a manual run. */
+export function readSessionEnd(
+  stdinText: string | undefined,
+  timedOut: boolean,
+  runtime: HookRuntime = 'claude-code',
+): CaptureReceipt {
+  const empty = !stdinText || stdinText.trim() === '';
+  if (timedOut && empty) {
+    return { status: 'unavailable', reason: 'no SessionEnd payload arrived before the stdin wait window closed' };
+  }
+  const base = { runtime, event: 'session-end' as const, trigger: null };
+  if (empty) {
+    return { status: 'received', input: { ...base, manual: true, sessionId: null, cwd: null, transcriptPath: null } };
+  }
+  let payload: unknown;
+  try {
+    payload = JSON.parse(stdinText.trim());
+  } catch {
+    // Non-JSON stdin leaves payload undefined, which the shape check rejects.
+  }
+  // Explicit array check: this reader has no required key to reject an array for it.
+  if (!isObjectLike(payload) || Array.isArray(payload)) {
+    return { status: 'skipped', reason: 'malformed SessionEnd payload (not a JSON object)' };
+  }
+  return {
+    status: 'received',
+    input: {
+      ...base,
+      manual: false,
+      sessionId: 'session_id' in payload && isStringValue(payload.session_id) && payload.session_id !== '' ? payload.session_id : null,
+      cwd: 'cwd' in payload && isStringValue(payload.cwd) ? payload.cwd : null,
+      transcriptPath: 'transcript_path' in payload && isStringValue(payload.transcript_path) && payload.transcript_path !== '' ? payload.transcript_path : null,
     },
   };
 }

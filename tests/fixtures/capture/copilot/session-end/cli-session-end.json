@@ -1,0 +1,16 @@
+{
+  "stdin": "{\"sessionId\":\"copilot-sess-1\",\"timestamp\":1791374600000,\"cwd\":\"/work/repo\",\"reason\":\"user_exit\"}",
+  "timedOut": false,
+  "expect": {
+    "status": "received",
+    "input": {
+      "runtime": "copilot",
+      "event": "session-end",
+      "manual": false,
+      "sessionId": "copilot-sess-1",
+      "cwd": "/work/repo",
+      "transcriptPath": null,
+      "trigger": null
+    }
+  }
+}

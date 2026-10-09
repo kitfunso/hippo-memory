@@ -201,6 +201,13 @@ describe('resolveLastSessionTranscript', () => {
     expect(resolveLastSessionTranscript(undefined, payload, { mayScan: true })).toBe(file);
   });
 
+  it('reads a payload that starts with a byte-order mark', () => {
+    const file = path.join(tmp.dir, 'from-bom-stdin.jsonl');
+    fs.writeFileSync(file, '{}');
+    const payload = '\uFEFF' + JSON.stringify({ session_id: 'abc', transcript_path: file, cwd: tmp.dir });
+    expect(resolveLastSessionTranscript(undefined, payload, { mayScan: false })).toBe(file);
+  });
+
   it('auto-discovers the newest transcript under ~/.claude/projects/', () => {
     const projects = path.join(tmp.dir, '.claude', 'projects', 'proj-a');
     fs.mkdirSync(projects, { recursive: true });
