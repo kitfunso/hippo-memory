@@ -12,7 +12,7 @@ import { loadStats } from '../store/index-and-stats.js';
 import { listMemoryConflicts } from '../store/conflicts.js';
 import { embeddingModelRequiresReindex } from '../store/embeddings/index.js';
 import { resolveEmbeddingProvider } from '../store/embeddings/provider.js';
-import { loadEmbeddingIndex, loadStoredParticles } from '../store/vector-index.js';
+import { loadStoredParticles, storedVectorSummary } from '../store/vector-index.js';
 import { computeSystemEnergy, vecNorm } from '../core/physics.js';
 import { loadConfig } from '../core/config.js';
 import { runDoctor, formatDoctor } from '../doctor.js';
@@ -140,17 +140,17 @@ function printEmbeddingStatus(hippoRoot: string, entries: MemoryEntry[]): void {
   }
   // Show cached counts whenever vectors exist on disk (even when disabled or
   // the key was removed), so the user still sees what is already indexed.
-  const embIndex = loadEmbeddingIndex(hippoRoot);
-  if (!embAvail && Object.keys(embIndex).length === 0) return;
+  const { ids: embeddedIds, dims } = storedVectorSummary(hippoRoot);
+  if (!embAvail && embeddedIds.size === 0) return;
   const activeIds = new Set(entries.map((e) => e.id));
-  const activeEmbedded = Object.keys(embIndex).filter((id) => activeIds.has(id)).length;
-  const orphaned = Object.keys(embIndex).length - activeEmbedded;
-  const dims = Object.values(embIndex)[0]?.length;
+  const activeEmbedded = [...embeddedIds].filter((id) => activeIds.has(id)).length;
+  const orphaned = embeddedIds.size - activeEmbedded;
   let line = `Embedded:          ${activeEmbedded}/${entries.length} memories`;
   if (dims) line += ` (${dims}-dim)`;
   if (orphaned > 0) line += ` (${orphaned} orphaned, run \`hippo embed\` to prune)`;
   console.log(line);
-  if (embeddingModelRequiresReindex(hippoRoot, embedProvider.id, embIndex)) {
+  // No index argument: the check then asks SQLite whether any vector exists instead of loading them.
+  if (embeddingModelRequiresReindex(hippoRoot, embedProvider.id)) {
     console.log(`                   model changed, run \`hippo embed\` to reindex`);
   }
 }

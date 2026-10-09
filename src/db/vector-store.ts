@@ -98,6 +98,13 @@ export function storedVectorIds(db: DatabaseSyncLike): Set<string> {
   return new Set((db.prepare('SELECT memory_id FROM memory_vectors').all() as Array<{ memory_id: string }>).map((r) => r.memory_id));
 }
 
+/** Float count of the first stored row, from its blob length; the vector is never read. */
+export function storedVectorDims(db: DatabaseSyncLike): number | undefined {
+  // SAFETY: the SELECT names exactly the one column read.
+  const row = db.prepare('SELECT length(vector) AS bytes FROM memory_vectors LIMIT 1').get() as { bytes: number } | undefined;
+  return row === undefined ? undefined : Math.floor(row.bytes / 4);
+}
+
 export function hasStoredVectors(db: DatabaseSyncLike): boolean {
   return db.prepare('SELECT 1 FROM memory_vectors LIMIT 1').get() !== undefined;
 }

@@ -6,7 +6,7 @@ import type { PhysicsParticle } from '../core/physics.js';
 import { float32ToBuffer, initializeParticle, loadPhysicsState, resetAllPhysicsState, savePhysicsState } from '../db/physics-state.js';
 import type { VectorBackfillQuery, VectorRowWrite, VectorWrite, VectorWriteResult } from './port.js';
 import {
-  EMBEDDING_MODEL_META_KEY, deleteOrphanVectors, hasStoredVectors, loadVectors, loadVectorViews, replaceAllVectors, storedVectorIds, upsertVectors,
+  EMBEDDING_MODEL_META_KEY, deleteOrphanVectors, hasStoredVectors, loadVectors, loadVectorViews, replaceAllVectors, storedVectorDims, storedVectorIds, upsertVectors,
 } from '../db/vector-store.js';
 import { chunked } from './entry-reads.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from './rows.js';
@@ -62,6 +62,21 @@ export function loadEmbeddingIndex(hippoRoot: string): Record<string, number[]> 
   const db = openHippoDb(hippoRoot);
   try {
     return Object.fromEntries(loadVectors(db));
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+export interface StoredVectorSummary {
+  readonly ids: Set<string>;
+  readonly dims: number | undefined;
+}
+
+/** Every stored vector id and the float count of the first row, with no vector decoded. */
+export function storedVectorSummary(hippoRoot: string): StoredVectorSummary {
+  const db = openHippoDb(hippoRoot);
+  try {
+    return { ids: storedVectorIds(db), dims: storedVectorDims(db) };
   } finally {
     closeHippoDb(db);
   }
