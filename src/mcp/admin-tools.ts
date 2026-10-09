@@ -1,9 +1,8 @@
 // Store health and admin tool handlers: base rates, status, conflicts, resolve, share and peers.
 
-import { calculateStrength } from '../memory.js';
 import { evalNow } from '../ablation.js';
-import { loadStrengthRows } from '../store/candidates.js';
-import { listMemoryConflicts, listTouchableConflicts, resolveConflict } from '../store/conflicts.js';
+import { loadStrengthTallies } from '../store/candidates.js';
+import { countOpenConflicts, listTouchableConflicts, resolveConflict } from '../store/conflicts.js';
 import { shareMemory, listPeers } from '../shared.js';
 import { computePredictionBaserate } from '../store/predictions.js';
 import { closeHippoDb, openHippoDb } from '../db.js';
@@ -50,24 +49,14 @@ export function runPredictBaserateTool({ args, ctx, hippoRoot, tenantId }: ToolC
 }
 
 export function runStatusTool({ hippoRoot, config, tenantId }: ToolCall): string {
-  // Every row counts toward the averages, so this scans the store, but without its text.
-  const entries = loadStrengthRows(hippoRoot, tenantId);
-  const now = evalNow(); // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
-  let atRisk = 0;
-  let totalStrength = 0;
-  for (const e of entries) {
-    const s = calculateStrength(e, now);
-    totalStrength += s;
-    if (s < 0.1 && !e.pinned) atRisk++;
-  }
-  const avgStrength = entries.length > 0 ? (totalStrength / entries.length).toFixed(2) : '0';
-  const pinned = entries.filter((e) => e.pinned).length;
-  const errors = entries.filter((e) => e.tags.includes('error')).length;
-  const conflicts = listMemoryConflicts(hippoRoot, 'open', tenantId).length;
+  // honors HIPPO_FAKE_NOW (eval-only; see ablation.ts)
+  const tallies = loadStrengthTallies(hippoRoot, tenantId, evalNow(), 0.1);
+  const avgStrength = tallies.total > 0 ? (tallies.strengthSum / tallies.total).toFixed(2) : '0';
+  const conflicts = countOpenConflicts(hippoRoot, tenantId);
   return [
-    `Memories: ${entries.length} (${pinned} pinned, ${errors} errors)`,
+    `Memories: ${tallies.total} (${tallies.pinned} pinned, ${tallies.errors} errors)`,
     `Avg strength: ${avgStrength}`,
-    `At risk (<0.1): ${atRisk}`,
+    `At risk (<0.1): ${tallies.atRisk}`,
     `Open conflicts: ${conflicts}`,
     `Half-life default: ${config.defaultHalfLifeDays}d`,
   ].join('\n');

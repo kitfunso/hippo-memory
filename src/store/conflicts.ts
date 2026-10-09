@@ -1,4 +1,5 @@
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../db.js';
+import type { MemoryEntry } from '../memory.js';
 import { rejectionDigest, insertRejectedValue, normalizeValueForRejection } from '../rejection.js';
 import { archiveRawMemory } from '../raw-archive.js';
 import { type MemoryConflict, type MemoryConflictRow, rowToMemoryConflict } from './rows.js';
@@ -73,6 +74,54 @@ export function listMemoryConflicts(
           `).all(status) as MemoryConflictRow[];
     }
     return rows.map(rowToMemoryConflict);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+// listMemoryConflicts' tenanted open set: both members in the tenant.
+const OPEN_IN_TENANT = `FROM memory_conflicts mc
+  JOIN memories ma ON ma.id = mc.memory_a_id
+  JOIN memories mb ON mb.id = mc.memory_b_id
+  WHERE mc.status = 'open' AND ma.tenant_id = ? AND mb.tenant_id = ?`;
+
+/** How many open conflicts listMemoryConflicts returns for a tenant, without loading one. */
+export function countOpenConflicts(hippoRoot: string, tenantId: string): number {
+  const db = openStore(hippoRoot);
+  try {
+    // SAFETY: one row with the single aliased count column.
+    const row = db.prepare(`SELECT COUNT(*) AS n ${OPEN_IN_TENANT}`).get(tenantId, tenantId) as { n: number | bigint };
+    return Number(row.n);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/** One open conflict of a memory, with the row on its other side. */
+export interface OpenConflictOf {
+  conflict: MemoryConflict;
+  other: MemoryEntry;
+}
+
+/** A tenant's open conflicts naming `memoryId`, in listMemoryConflicts' order, each with its other member read in one batch. */
+export function loadOpenConflictsOf(hippoRoot: string, tenantId: string, memoryId: string): OpenConflictOf[] {
+  const db = openStore(hippoRoot);
+  try {
+    // SAFETY: selects the eight mc.* columns of MemoryConflictRow.
+    const rows = db.prepare(
+      `SELECT mc.id, mc.memory_a_id, mc.memory_b_id, mc.reason, mc.score, mc.status, mc.detected_at, mc.updated_at
+       ${OPEN_IN_TENANT} AND (mc.memory_a_id = ? OR mc.memory_b_id = ?)
+       ORDER BY mc.updated_at DESC, mc.id DESC`,
+    ).all(tenantId, tenantId, memoryId, memoryId) as MemoryConflictRow[];
+    const conflicts = rows.map(rowToMemoryConflict);
+    const otherId = (c: MemoryConflict): string => (c.memory_a_id === memoryId ? c.memory_b_id : c.memory_a_id);
+    const others = selectEntriesByIds(db, conflicts.map(otherId), tenantId);
+    const out: OpenConflictOf[] = [];
+    for (const conflict of conflicts) {
+      const other = others.get(otherId(conflict));
+      if (other) out.push({ conflict, other });
+    }
+    return out;
   } finally {
     closeHippoDb(db);
   }

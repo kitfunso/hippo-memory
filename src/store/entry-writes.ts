@@ -25,6 +25,25 @@ export function writeEntry(hippoRoot: string, entry: MemoryEntry, opts?: WriteEn
   }
 }
 
+/** writeEntry for each of `entries` in one transaction, so all land or none; each keeps its audit row, and mirrors follow the commit. Returns how many were written. */
+export function writeEntriesTogether(hippoRoot: string, entries: readonly MemoryEntry[]): number {
+  const stamped = entries.map((entry) => stampOriginProject(hippoRoot, entry));
+  const db = openStore(hippoRoot);
+  try {
+    withWriteScope(db, 'write_entries_together', () => {
+      for (const entry of stamped) writeEntryDbOnly(db, entry);
+    });
+    for (const entry of stamped) writeEntryMirrors(hippoRoot, entry);
+  } catch (error) {
+    // The scope has unwound, so the refusal row outlives the rollback, as writeEntryOn's does.
+    if (error instanceof RejectedValueError) auditRejectionRefusal(db, error, 'cli');
+    throw error;
+  } finally {
+    closeHippoDb(db);
+  }
+  return stamped.length;
+}
+
 /** writeEntry on the caller's open store, so a loop of writes opens the store once; each row still commits alone. */
 export function writeEntryOn(db: DatabaseSyncLike, hippoRoot: string, entry: MemoryEntry, opts?: WriteEntryOptions): void {
   try {

@@ -3,6 +3,7 @@ import { strengthSql } from './memory.js';
 import { scopeAdmitSql } from './recall-scope.js';
 import { SECRET_TAGS } from './secret-detect.js';
 import { openStore } from './store/open.js';
+import { jsonList } from './store/candidates.js';
 import { originInSql } from './project-identity.js';
 import { isErrorTagged, type AmbientTallies } from './ambient.js';
 import { DAY_MS } from './util/time.js';
@@ -18,10 +19,6 @@ export interface AmbientStoreFilter {
   currentProject: readonly string[];
   now: Date;
 }
-
-// A malformed or non-array JSON list reads as empty, as parseJsonArray does, instead of failing json_each.
-const jsonList = (column: string): string =>
-  `(CASE WHEN json_valid(${column}) AND json_type(${column}) = 'array' THEN ${column} ELSE '[]' END)`;
 
 // SHORTCUT: mirrors loadContextCandidates' WHERE (request-path snapshots pin the match); share it once store.ts is split.
 function contextRowsWhere(tenantId: string, filter: AmbientStoreFilter) {

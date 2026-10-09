@@ -1,4 +1,5 @@
-import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, scrypt, scryptSync, timingSafeEqual } from 'node:crypto';
+import { promisify } from 'node:util';
 import type { DatabaseSyncLike } from './db.js';
 import { raiseMinBinary } from './db/meta.js';
 import { keysetAfter, type KeysetPosition } from './keyset.js';
@@ -40,14 +41,30 @@ export function apiKeyVerifyStats(): ApiKeyVerifyStats {
   return { ...verifyStats };
 }
 
-function verifyKey(plaintext: string, stored: string): boolean {
+/** The salt and expected hash of a stored `scrypt$<saltHex>$<hashHex>` value, null when it has another shape. */
+function storedScrypt(stored: string): { salt: Buffer; expected: Buffer } | null {
   const parts = stored.split('$');
-  if (parts.length !== 3 || parts[0] !== 'scrypt') return false;
-  const salt = Buffer.from(parts[1]!, 'hex');
-  const expected = Buffer.from(parts[2]!, 'hex');
+  if (parts.length !== 3 || parts[0] !== 'scrypt') return null;
+  return { salt: Buffer.from(parts[1]!, 'hex'), expected: Buffer.from(parts[2]!, 'hex') };
+}
+
+function verifyKey(plaintext: string, stored: string): boolean {
+  const parsed = storedScrypt(stored);
+  if (!parsed) return false;
   verifyStats.scryptRuns++;
-  const actual = scryptSync(plaintext, salt, expected.length);
-  return expected.length === actual.length && timingSafeEqual(expected, actual);
+  const actual = scryptSync(plaintext, parsed.salt, parsed.expected.length);
+  return parsed.expected.length === actual.length && timingSafeEqual(parsed.expected, actual);
+}
+
+const scryptOffLoop: (password: string, salt: Buffer, keylen: number) => Promise<Buffer> = promisify(scrypt);
+
+/** verifyKey on the thread pool, so a server's cache miss does not hold the event loop for the hash. */
+async function verifyKeyOffLoop(plaintext: string, stored: string): Promise<boolean> {
+  const parsed = storedScrypt(stored);
+  if (!parsed) return false;
+  verifyStats.scryptRuns++;
+  const actual = await scryptOffLoop(plaintext, parsed.salt, parsed.expected.length);
+  return parsed.expected.length === actual.length && timingSafeEqual(parsed.expected, actual);
 }
 
 export interface CreateApiKeyOpts {
@@ -177,14 +194,16 @@ function mintedKeyId(plaintext: string): string | null {
   return MINTED_KEY_PATTERN.test(plaintext) ? plaintext.slice(0, API_KEY_PREFIX.length + ID_LEN) : null;
 }
 
-/** Revocation, expiry, then the secret, against a stored record. Null for any failure. */
-function checkApiKey(
-  keyId: string, record: ApiKeyRecord | null, now: number, secretMatches: (keyHash: string) => boolean,
-): CheckedApiKey | null {
+/** When a record that is present, unrevoked and unexpired stops working; null otherwise, before any secret check. */
+function usableUntil(record: ApiKeyRecord | null, now: number): number | null {
   // Ids are 120 random bits and not secret, so padding the miss path with scrypt hid nothing and let junk tokens burn CPU.
   if (!record) return null;
   const expiresAtMs = keyExpiryMs(record.expiresAt);
-  if (record.revokedAt || now >= expiresAtMs || !secretMatches(record.keyHash)) return null;
+  return record.revokedAt || now >= expiresAtMs ? null : expiresAtMs;
+}
+
+/** The verified key a usable record whose secret matched carries. */
+function checkedApiKey(keyId: string, record: ApiKeyRecord, expiresAtMs: number): CheckedApiKey {
   // Fail-safe to least privilege: any role value but 'admin' reads as 'member'.
   const role: 'admin' | 'member' = record.role === 'admin' ? 'admin' : 'member';
   const key: VerifiedApiKey = { tenantId: record.tenantId, keyId, role, scopes: [...record.scopes] };
@@ -196,7 +215,10 @@ function checkApiKey(
 /** One full check against the store: shape, row, revocation, expiry, then scrypt. Null for any failure. */
 function lookupApiKey(db: DatabaseSyncLike, plaintext: string, now: number): CheckedApiKey | null {
   const keyId = mintedKeyId(plaintext);
-  return keyId === null ? null : checkApiKey(keyId, readApiKeyRecord(db, keyId), now, (hash) => verifyKey(plaintext, hash));
+  if (keyId === null) return null;
+  const record = readApiKeyRecord(db, keyId);
+  const expiresAtMs = usableUntil(record, now);
+  return record && expiresAtMs !== null && verifyKey(plaintext, record.keyHash) ? checkedApiKey(keyId, record, expiresAtMs) : null;
 }
 
 export function validateApiKey(db: DatabaseSyncLike, plaintext: string): ValidateResult {
@@ -288,11 +310,14 @@ export async function verifyApiKeyCached(hippoRoot: string, plaintext: string, s
   const provenHash = verifiedKeys.verifiedHash(hippoRoot, keyId, plaintext);
   verifyStats.storeLookups++;
   const epoch = verifiedKeys.epoch;
-  const found = checkApiKey(keyId, await store.findApiKey(keyId), Date.now(), (hash) => {
-    if (hash === provenHash) return true;
-    beforeScrypt?.();
-    return verifyKey(plaintext, hash);
-  });
+  const record = await store.findApiKey(keyId);
+  const expiresAtMs = usableUntil(record, Date.now());
+  let found: CheckedApiKey | null = null;
+  if (record && expiresAtMs !== null) {
+    if (record.keyHash !== provenHash) beforeScrypt?.();
+    const matches = record.keyHash === provenHash || await verifyKeyOffLoop(plaintext, record.keyHash);
+    if (matches) found = checkedApiKey(keyId, record, expiresAtMs);
+  }
   // Only successes are cached: caching misses would let junk tokens fill the cache and evict real keys.
   if (found && verifiedKeys.epoch === epoch) verifiedKeys.set(hippoRoot, keyId, plaintext, found, Date.now());
   return found?.key ?? null;

@@ -393,3 +393,37 @@ export function selectRowsOutsideSourcePrefixAt(
       WHERE tenant_id = ? AND superseded_by IS NULL AND substr(source, 1, ${sourcePrefix.length}) != ?${visible}`,
   ).all(...params) as Array<{ id: string; content: string; source: string }>;
 }
+
+/** Content of a tenant's live rows written by `source` and tagged `tag` that no extraction produced, in loadAllEntries' order and in every scope; `exceptSessionId` drops one session's own rows. */
+export function loadLiveContentsBySourceAndTag(hippoRoot: string, tenantId: string, source: string, tag: string, exceptSessionId: string): string[] {
+  const db = openStore(hippoRoot);
+  try {
+    /** SAFETY: rows' shape matches the two columns named in the SELECT below. */
+    const rows = db.prepare(
+      `SELECT content, tags_json FROM memories
+       WHERE tenant_id = ? AND source = ? AND instr(tags_json, ?) > 0
+         AND COALESCE(extracted_from, '') = '' AND COALESCE(superseded_by, '') = ''
+         AND (source_session_id IS NULL OR source_session_id != ?)
+       ORDER BY created ASC, id ASC`,
+    ).all(tenantId, source, JSON.stringify(tag), exceptSessionId) as Array<{ content: string; tags_json: string }>;
+    return rows.filter((r) => parseJsonArray(r.tags_json).includes(tag)).map((r) => r.content);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/** Every tenant's distilled rows nothing has superseded, in loadAllEntries' order: the rows that can be each other's duplicate. */
+export function loadCurrentDistilledEntries(hippoRoot: string): MemoryEntry[] {
+  const db = openStore(hippoRoot);
+  try {
+    // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
+    const rows = db.prepare(
+      `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories
+       WHERE COALESCE(kind, 'distilled') = 'distilled' AND COALESCE(superseded_by, '') = ''
+       ORDER BY created ASC, id ASC`,
+    ).all() as MemoryRow[];
+    return rows.map(rowToEntry);
+  } finally {
+    closeHippoDb(db);
+  }
+}

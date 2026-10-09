@@ -1,5 +1,5 @@
 import { createMemory, Layer, type MemoryEntry } from './memory.js';
-import { writeEntry } from './store/entry-writes.js';
+import { writeEntry, writeEntriesTogether } from './store/entry-writes.js';
 import {
   loadAllDirtySummaries,
   loadChildrenOfSummary,
@@ -215,11 +215,7 @@ async function summarizeCluster(
   }
   result.summariesCreated++;
 
-  for (const member of cluster.members) {
-    const updated: MemoryEntry = { ...member, dag_parent_id: summaryEntry.id };
-    writeEntry(hippoRoot, updated);
-    result.factsLinked++;
-  }
+  result.factsLinked += writeEntriesTogether(hippoRoot, cluster.members.map((member) => ({ ...member, dag_parent_id: summaryEntry.id })));
   // Member writes just marked this fresh summary dirty; clear it, or the same sleep cycle's
   // rebuild pass would re-rebuild every new summary at twice the LLM cost.
   clearSummaryDirtyAfterBuild(hippoRoot, summaryEntry.id, summaryEntry.tenantId, 'buildDag');
@@ -461,11 +457,7 @@ async function profileCluster(
   }
   result.profilesCreated++;
 
-  for (const member of cluster.members) {
-    const updated: MemoryEntry = { ...member, dag_parent_id: profileEntry.id };
-    writeEntry(hippoRoot, updated);
-    result.l2sLinked++;
-  }
+  result.l2sLinked += writeEntriesTogether(hippoRoot, cluster.members.map((member) => ({ ...member, dag_parent_id: profileEntry.id })));
   // Re-linking just marked the fresh L3 dirty; clear it so this cycle's rebuild skips it.
   // The distinct source tags the audit row.
   clearSummaryDirtyAfterBuild(

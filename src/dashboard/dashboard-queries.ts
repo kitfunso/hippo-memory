@@ -1,8 +1,7 @@
 // Read models over a snapshot: overview, project, memory page, search, and the fresh single-memory detail.
 
 import { calculateStrength, type MemoryEntry } from '../memory.js';
-import { listMemoryConflicts } from '../store/conflicts.js';
-import { readEntry } from '../store/entry-reads.js';
+import { loadOpenConflictsOf } from '../store/conflicts.js';
 import {
   BANDS, DAY_MS, LAYERS, isLiveMemory, memoryFacts, projectIdentity,
   type Chip, type Fact, type FilteredSet, type ProjectAgg, type Snapshot,
@@ -307,11 +306,8 @@ export function buildSearch(snap: Snapshot, text: string): SearchResult {
 
 function openConflictsOf(hippoRoot: string, tenantId: string, entry: MemoryEntry, nowMs: number): MemoryConflictDetail[] {
   const out: MemoryConflictDetail[] = [];
-  for (const c of listMemoryConflicts(hippoRoot, 'open', tenantId)) {
-    if (c.memory_a_id !== entry.id && c.memory_b_id !== entry.id) continue;
-    const otherId = c.memory_a_id === entry.id ? c.memory_b_id : c.memory_a_id;
-    const other = readEntry(hippoRoot, otherId, tenantId);
-    if (!other || !isLiveMemory(other)) continue;
+  for (const { conflict: c, other } of loadOpenConflictsOf(hippoRoot, tenantId, entry.id)) {
+    if (!isLiveMemory(other)) continue;
     out.push({
       id: c.id,
       reason: c.reason,

@@ -134,6 +134,13 @@ describe('text hippo injected is not stored again', () => {
     }
   });
 
+  it('keeps a sentence restating a digest that has been superseded, since no read injects that row', () => {
+    write('s1', scan(REPLY, { edits: [] }));
+    const [old] = digests();
+    writeEntry(hippoRoot, { ...old, superseded_by: 'mem_successor' });
+    expect(write('s2', scan(`As before, ${REPLY}`, { edits: [] })).written).toBe(true);
+  });
+
   it('drops a sentence restating the ambient handoff of another session, but not its own', () => {
     saveSessionHandoff(hippoRoot, 'default', {
       version: 1, sessionId: 'other', summary: 'Moved the lock into the pool so two writers stop racing on the index.',

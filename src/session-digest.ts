@@ -8,13 +8,13 @@ import { PATCH_SUCCESS_LINE, patchPaths, shellPatch } from './codex-patch.js';
 import { loadConfig } from './config.js';
 import { USER_SEGMENT } from './home-path.js';
 import { errorMessage } from './log.js';
-import { SESSION_DIGEST_TAG, isSessionDigestRow } from './core/session-digest-row.js';
+import { SESSION_DIGEST_TAG } from './core/session-digest-row.js';
 import { createMemory, Layer, type MemoryEntry } from './memory.js';
 import { RejectedValueError } from './rejection.js';
 import { maskEmails, redactSecretsStrict } from './secret-detect.js';
 import { isInitialized } from './store/open.js';
 import { writeEntry } from './store/entry-writes.js';
-import { loadAllEntries } from './store/entry-reads.js';
+import { loadLiveContentsBySourceAndTag } from './store/entry-reads.js';
 import { SNAPSHOT_AMBIENT_MAX_AGE_MS } from './store/sessions.js';
 import { loadLatestHandoff } from './store/handoffs.js';
 import { isSyntheticMessage } from './token-ledger.js';
@@ -519,9 +519,7 @@ export interface DigestOutcome {
 
 /** What hippo could have injected into the session: any live digest (prompt recall reaches old ones) and the ambient handoff, never this session's own. */
 function injectedTexts(hippoRoot: string, opts: SessionDigestOptions): string[] {
-  const digests = loadAllEntries(hippoRoot, opts.tenantId)
-    .filter((e) => isSessionDigestRow(e) && !e.superseded_by && e.source_session_id !== opts.key)
-    .map((e) => e.content);
+  const digests = loadLiveContentsBySourceAndTag(hippoRoot, opts.tenantId, SESSION_DIGEST_TAG, SESSION_DIGEST_TAG, opts.key);
   const handoff = loadLatestHandoff(hippoRoot, opts.tenantId, undefined, {
     unfinishedOnly: true,
     maxAgeMs: SNAPSHOT_AMBIENT_MAX_AGE_MS,

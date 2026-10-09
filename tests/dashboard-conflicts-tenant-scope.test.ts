@@ -61,9 +61,9 @@ describe('dashboard conflicts are tenant-scoped', () => {
     expect(load).toHaveBeenCalled();
     expect(load.mock.calls.every(([, , tenantId]) => tenantId === 'tenant_a')).toBe(true);
 
-    load.mockClear();
+    const loadOwn = vi.spyOn(conflicts, 'loadOpenConflictsOf');
     await get(dash.port, `/api/memory/${a1.id}`);
-    expect(load).toHaveBeenCalled();
-    expect(load.mock.calls.every(([, , tenantId]) => tenantId === 'tenant_a')).toBe(true);
+    expect(loadOwn).toHaveBeenCalled();
+    expect(loadOwn.mock.calls.every(([, tenantId]) => tenantId === 'tenant_a')).toBe(true);
   }, 15_000);
 });

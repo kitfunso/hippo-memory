@@ -134,7 +134,7 @@ const cases = [
   }, [26, 14]],
   ['mcp hippo_context', tool('hippo_context'), [360, 18400]],
   ['mcp hippo_recall', tool('hippo_recall', { query: 'kafka redis' }), [415, 1500]],
-  ['mcp hippo_status', tool('hippo_status'), [17, 13100]],
+  ['mcp hippo_status', tool('hippo_status'), [17, 11]],
   ['mcp hippo_peers', tool('hippo_peers'), [14, 22]],
 ];
 
