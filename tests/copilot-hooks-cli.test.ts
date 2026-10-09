@@ -1,7 +1,7 @@
 // The Copilot hook commands through the built CLI, run from the home folder as VS Code runs user-level hooks, so the store must come from the payload's cwd.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { spawn, type ChildProcess } from 'node:child_process';
+import type { ChildProcess } from 'node:child_process';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { openHippoDb, closeHippoDb, getHippoDbPath, HOOK_DB_WAIT_MS } from '../src/db/index.js';
 import { readDeliveryEvents, type DeliveryEventRow } from '../src/store/recall-trace.js';
@@ -9,7 +9,6 @@ import { loadAllEntries } from '../src/store/entry-reads.js';
 import { loadActiveTaskSnapshot, saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import type { JsonValue } from '../src/util/json.js';
 import { compactionRows, initGlobal, initProject, runHippo } from './_helpers/compaction-hooks.js';
-import { HIPPO_BIN } from './_helpers/spawn-hippo.js';
 import { lockWaitAskedMs, tracingLockWaits } from './_helpers/lock-waits.js';
 import { holdStoreWriteLock, releaseStoreWriteLock } from './_helpers/store-write-lock.js';
 import {
@@ -326,13 +325,6 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     return waitForLog(logFile(), TURN_DONE, run.waitMs);
   }
 
-  /** A Stop hook run that does not block the test, for two hooks that end at once. */
-  function stopExit(log: string, payload: string, env = s.env): Promise<number | null> {
-    const child = spawn(process.execPath, [HIPPO_BIN, ...stopArgs(log)], { cwd: s.dir, env, stdio: ['pipe', 'ignore', 'inherit'] });
-    child.stdin.end(payload);
-    return new Promise((resolve) => child.once('exit', resolve));
-  }
-
   /** Env that stops the detached worker at the progress cursor save; `mark` gains the worker's pid line there. */
   function cursorSaveFault(mode: 'kill' | 'hold') {
     const mark = path.join(s.dir, 'cursor-save.mark');
@@ -493,17 +485,17 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     expect(fs.existsSync(sessionFile('.cursor.json'))).toBe(true);
   }, 90_000);
 
-  it('keeps each lesson when two chats end a reply at the same moment', async () => {
+  it('keeps each lesson when a second chat ends a reply while the first chat\'s worker still runs', async () => {
     const second = 'vscode-sess-2';
     const secondLog = path.join(s.dir, 'turn-2.log');
     const fault = cursorSaveFault('hold');
-    const payloads = [
-      stopPayload(writeVscodeTranscript(copilotEventsJsonl())),
-      stopPayload(writeVscodeTranscript(SECOND_TURN, second), { sessionId: second }),
-    ];
-    expect(await Promise.all([stopExit(logFile(), payloads[0], fault.env), stopExit(secondLog, payloads[1])])).toEqual([0, 0]);
-    // The first chat's worker waits at its cursor save, so the second chat provably saves while that worker is alive.
+    const firstStop = runHippo(stopArgs(logFile()), s.dir, fault.env, stopPayload(writeVscodeTranscript(copilotEventsJsonl())));
+    expect(firstStop.status, firstStop.stderr).toBe(0);
+    // The first chat's worker is held at its cursor save before the second chat starts, so the whole second save falls inside that worker's life.
     const pid = await fault.reached();
+    const secondPayload = stopPayload(writeVscodeTranscript(SECOND_TURN, second), { sessionId: second });
+    const secondStop = runHippo(stopArgs(secondLog), s.dir, s.env, secondPayload);
+    expect(secondStop.status, secondStop.stderr).toBe(0);
     await waitForLog(secondLog, TURN_DONE, 50_000);
     expect(pidAlive(pid)).toBe(true);
     expect(memoriesWith(FIRST_LESSON)).toBe(1);
