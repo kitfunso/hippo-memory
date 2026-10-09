@@ -9,7 +9,7 @@ import { normaliseHookPayload } from '../src/stdin.js';
 import type { DeliveryFault } from '../src/delivery-recorder.js';
 import { copilotEventsJsonl, copilotPayload, writeCopilotSessionLog } from './_helpers/copilot-hooks.js';
 import {
-  SNAPSHOT_TASK, dispose, eventCount, events, hippo, hippoAsync, ledgerLines, preCompactPayload, project, resumePayload,
+  SNAPSHOT_TASK, dispose, eventCount, events, eventsN, hippo, hippoAsync, ledgerLines, preCompactPayload, project, resumePayload,
   tableRows, withDb, writeTranscript, type Project,
 } from './_helpers/delivery-boundary.js';
 
@@ -35,7 +35,7 @@ describe('B8: a hook registered twice does not number a compaction twice', () =>
     for (const now of [T0, T0, T0_PLUS_3S]) {
       expect(hippo(p, [hook], { input, env: { HIPPO_FAKE_NOW: now } }).status).toBe(0);
     }
-    const [first, twin, later] = events(p, 'b8');
+    const [first, twin, later] = eventsN(p, 'b8', 3);
     expect([first.turn_seq, twin.turn_seq, twin.duplicate_of, later.turn_seq, later.duplicate_of]).toEqual([1, null, first.id, 2, null]);
   });
 
