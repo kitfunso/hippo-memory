@@ -37,6 +37,7 @@ import {
 import { MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256 } from '../src/consolidate/memory-value-weights.js';
 
 import { computeFeatures } from '../benchmarks/memory-value/extract.mjs';
+import { mulberry32 } from './_helpers/property.js';
 
 // Each case seeds a real store and runs a full sleep on it, so its time follows the runner's disk.
 vi.setConfig({ testTimeout: 30_000 });
@@ -689,17 +690,6 @@ describe('(g) fail-loud on a malformed weights constant', () => {
 // ---------------------------------------------------------------------------
 describe('(h) scale characterization', () => {
   it('deterministic, deletes-subset, per-tenant isolation at ~2,000 entries / 3 tenants; reports rescue rate', async () => {
-    // mulberry32 — deterministic PRNG so the fixture itself is reproducible.
-    function mulberry32(seed: number): () => number {
-      let s = seed >>> 0;
-      return () => {
-        s = (s + 0x6d2b79f5) >>> 0;
-        let t = s;
-        t = Math.imul(t ^ (t >>> 15), t | 1);
-        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-      };
-    }
     const rand = mulberry32(20260810);
     const wordBank = [
       'alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta', 'eta', 'theta', 'iota', 'kappa',

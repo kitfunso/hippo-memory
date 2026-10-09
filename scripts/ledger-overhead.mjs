@@ -7,6 +7,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { mulberry32 } from './lib/prng.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..');
@@ -33,16 +34,6 @@ const { blockHash } = await load('util/token-text.js');
 const { recordTokenUse } = await load('store/token-ledger.js');
 
 // Same seed, vocabulary and prompt as scripts/hook-latency.mjs, so the stores match.
-function mulberry32(seed) {
-  let s = seed >>> 0;
-  return function () {
-    s = (s + 0x6d2b79f5) >>> 0;
-    let t = s;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
 const WORDS = [
   'deploy', 'rollback', 'migration', 'postgres', 'timeout', 'kubernetes', 'cluster',
   'incident', 'latency', 'budget', 'token', 'schema', 'index', 'cache', 'retry',

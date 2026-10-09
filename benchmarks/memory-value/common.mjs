@@ -18,8 +18,7 @@ import { fileURLToPath } from 'node:url';
 // Reuse the repo's existing seeded PRNG rather than hand-rolling a second
 // copy (coding-standards: prefer established code over a fresh
 // implementation when one already exists in-repo).
-export { mulberry32 } from '../../scripts/lifecycle-stress/inject.mjs';
-import { mulberry32 } from '../../scripts/lifecycle-stress/inject.mjs';
+import { mulberry32 } from '../../scripts/lib/prng.mjs';
 import { _resetAblationCacheForTests } from '../../dist/core/ablation.js';
 
 export const HERE = path.dirname(fileURLToPath(import.meta.url));

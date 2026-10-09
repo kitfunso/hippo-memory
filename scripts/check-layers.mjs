@@ -5,6 +5,7 @@
 
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
+import { stripComments } from './lib/source-text.mjs';
 
 const BASELINE = '.layers-baseline.json';
 const MAP = 'layers.json';
@@ -17,11 +18,6 @@ const STATIC_RES = [
 ];
 const SIDE_EFFECT_RE = new RegExp(String.raw`^[ \t]*import\s*${QUOTED}`, 'gm');
 const DYNAMIC_RE = /\bimport\s*\(\s*['"]([^'"\n]+)['"]\s*\)/g;
-
-/** Blanks comments but keeps every newline, so offsets still map to the original line numbers. */
-function stripComments(text) {
-  return text.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' ')).replace(/(^|[^:\\])\/\/.*$/gm, '$1');
-}
 
 /** True when tsc erases the statement: `import type`, or a brace list whose every specifier is `type X`. */
 function isTypeOnly(typeKeyword, clause) {

@@ -53,7 +53,8 @@ import { resetAllPhysicsState } from '../../dist/db/physics-state.js';
 import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../../dist/db/index.js';
 import { DEFAULT_PHYSICS_CONFIG } from '../../dist/core/physics-config.js';
 
-import { injectStream, writeLabelSidecar, mulberry32 } from './inject.mjs';
+import { injectStream, writeLabelSidecar } from './inject.mjs';
+import { mulberry32 } from '../lib/prng.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..', '..');

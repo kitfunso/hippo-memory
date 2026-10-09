@@ -5,6 +5,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { stripComments } from './lib/source-text.mjs';
 
 /** Files allowed to touch process.env, each with its reason. Writes and child-process env passing belong here. */
 export const ALLOWED = {
@@ -16,11 +17,6 @@ const PATTERNS = [
   /\bprocess\s*\[\s*['"`]env['"`]\s*\]/,
   /\{[^}]*\benv\b[^}]*\}\s*=\s*(?:globalThis\s*\.\s*)?process\b/,
 ];
-
-/** Blanks comments, keeping line numbers, so prose about process.env is not a read. */
-function stripComments(text) {
-  return text.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' ')).replace(/(^|[^:\\])\/\/.*$/gm, '$1');
-}
 
 /**
  * Returns the 1-based line numbers in a source text that touch process.env.

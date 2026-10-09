@@ -9,6 +9,7 @@ import * as crypto from 'node:crypto';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { mulberry32 } from './lib/prng.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..');
@@ -26,17 +27,6 @@ const { initStore } = await import(pathToFileURL(path.join(REPO, 'dist', 'store'
 const { writeEntry } = await import(pathToFileURL(path.join(REPO, 'dist', 'store', 'entry-writes.js')));
 
 // Same seed, vocabulary and prompts as scripts/z1-latency.mjs, so the context numbers compare.
-function mulberry32(seed) {
-  let s = seed >>> 0;
-  return function () {
-    s = (s + 0x6d2b79f5) >>> 0;
-    let t = s;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
 const WORDS = [
   'deploy', 'rollback', 'migration', 'postgres', 'timeout', 'kubernetes', 'cluster',
   'incident', 'latency', 'budget', 'token', 'schema', 'index', 'cache', 'retry',

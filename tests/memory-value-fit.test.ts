@@ -19,7 +19,8 @@ import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from 'vites
 
 import { CONFIG } from '../benchmarks/memory-value/config.mjs';
 import { evaluateAll, buildScorers, evaluateStore } from '../benchmarks/memory-value/evaluate.mjs';
-import { mulberry32, featuresPathFor, readJsonl, writeJsonl } from '../benchmarks/memory-value/common.mjs';
+import { featuresPathFor, readJsonl, writeJsonl } from '../benchmarks/memory-value/common.mjs';
+import { mulberry32 } from '../scripts/lib/prng.mjs';
 import {
   FIT_DIMS,
   runES,

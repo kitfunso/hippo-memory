@@ -1,5 +1,6 @@
 // Pure helpers for the Z7 sub-agent lesson eval (prereg docs/evals/2026-10-03-z7-sidechain-gap-prereg.md). No fs, no child_process.
 import crypto from 'node:crypto';
+import { mulberry32 } from './lib/prng.mjs';
 
 export const SEED_STRING = 'z7-2026-10-03';
 export const DEV_SESSIONS = 12;
@@ -23,16 +24,6 @@ const isObj = (v) => v !== null && v instanceof Object;
 const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 export const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
 
-export function mulberry32(seed) {
-  let s = seed >>> 0;
-  return () => {
-    s = (s + 0x6d2b79f5) >>> 0;
-    let t = s;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
 export const rngFromString = (str) => mulberry32(parseInt(sha256(str).slice(0, 8), 16));
 
 // Fisher-Yates from the top; the prereg fixes the seed and the stream, so this is the one shuffle.

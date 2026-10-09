@@ -7,6 +7,7 @@ import readline from 'node:readline';
 import { createHash } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { pathToFileURL } from 'node:url';
+import { mulberry32 } from './lib/prng.mjs';
 
 const DIST = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/(\w:)/, '$1')), '..', 'dist');
 const distImport = (f) => import(pathToFileURL(path.join(DIST, f)).href);
@@ -454,18 +455,6 @@ function setDiff(a, b) {
   const out = new Set();
   for (const x of a) if (!b.has(x)) out.add(x);
   return out;
-}
-
-// Same PRNG as scripts/z1-latency.mjs / scripts/lifecycle-stress/inject.mjs: Math.random is banned for reproducibility.
-function mulberry32(seed) {
-  let s = seed >>> 0;
-  return function () {
-    s = (s + 0x6d2b79f5) >>> 0;
-    let t = s;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
 }
 
 function seededShuffle(arr, seed) {

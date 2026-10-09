@@ -7,6 +7,7 @@ import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { mulberry32 } from './lib/prng.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..');
@@ -16,18 +17,6 @@ const HIPPO_JS = path.join(REPO, 'bin', 'hippo.js');
 const { createMemory } = await import(pathToFileURL(path.join(REPO, 'dist', 'core/memory.js')));
 const { initStore } = await import(pathToFileURL(path.join(REPO, 'dist', 'store', 'open.js')));
 const { writeEntry } = await import(pathToFileURL(path.join(REPO, 'dist', 'store', 'entry-writes.js')));
-
-// Same PRNG as scripts/lifecycle-stress/inject.mjs; Math.random is banned so the corpus is reproducible.
-function mulberry32(seed) {
-  let s = seed >>> 0;
-  return function () {
-    s = (s + 0x6d2b79f5) >>> 0;
-    let t = s;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
 
 const WORDS = [
   'deploy', 'rollback', 'migration', 'postgres', 'timeout', 'kubernetes', 'cluster',

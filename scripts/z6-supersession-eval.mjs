@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { mulberry32 } from './lib/prng.mjs';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const BIN = path.join(REPO, 'bin', 'hippo.js');
@@ -63,16 +64,6 @@ const TUNE = {
   'control-lookalike/personal': 1, 'control-lookalike/coding': 1,
 };
 const SPLIT_SEED = 20260928;
-function mulberry32(seed) {
-  let s = seed >>> 0;
-  return () => {
-    s = (s + 0x6d2b79f5) >>> 0;
-    let t = s;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
 // The fixture's split, recomputed from its content ids: per cell, ids sorted, shuffled, first TUNE[cell] are tune.
 function assignSplit(scenarios) {
   const split = new Map();
