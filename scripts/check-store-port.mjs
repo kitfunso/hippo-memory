@@ -54,12 +54,11 @@ function countOpeners(sf) {
   return n;
 }
 
-const endsInStore = (e) => ts.isPropertyAccessExpression(e) && e.name.text === 'store';
-const isKindOfStore = (e) =>
-  ts.isPropertyAccessExpression(e) && e.name.text === 'kind' &&
-  ((ts.isIdentifier(e.expression) && e.expression.text === 'store') || endsInStore(e.expression));
+/** `<x>.store`, or a local named `store`, which is how the carrier in src/api/on-store.ts holds it. */
+const endsInStore = (e) => (ts.isPropertyAccessExpression(e) ? e.name : e).text === 'store';
+const isKindOfStore = (e) => ts.isPropertyAccessExpression(e) && e.name.text === 'kind' && endsInStore(e.expression);
 
-/** Ternaries on `<x>.store` and `store.kind` comparisons against a string: the per-backend branches in src/api. */
+/** Ternaries on `<x>.store` or a local `store`, and `store.kind` comparisons against a string: the per-backend branches in src/api. */
 function countStoreBranches(sf) {
   let n = 0;
   const visit = (node) => {

@@ -1,23 +1,23 @@
 // hippo.db's half of the EntryWrites store group: the queries remember, outcome, supersede, archive and forget run today.
-import { ConflictError, NotFoundError } from '../api-errors.js';
-import { appendAuditEvent } from '../audit.js';
-import { isSqliteBusy, withWriteScope, type DatabaseSyncLike } from '../db.js';
-import { log } from '../log.js';
-import { entryAfterOutcome, type MemoryEntry } from '../memory.js';
-import { archiveRawMemory } from '../raw-archive.js';
-import { ownScopeTouches } from '../recall-scope.js';
-import { RejectedValueError } from '../rejection.js';
-import type { EntryTarget, EntryWrites, OutcomeWrite, SupersedeWrite, Sync } from './port.js';
-import { markSummaryDirtyInTx } from '../summary-dirty.js';
-import { auditRejectionRefusal } from './audit-event.js';
-import { deleteEntryCore } from './delete-and-batch.js';
-import { selectEntriesByIds } from './entry-reads.js';
-import { stampOriginProject } from './entry-row.js';
-import { writeEntryDbOnly, writeEntryMirrors } from './entry-writes.js';
-import { updateStatsUnlessBusy } from './index-and-stats.js';
-import { purgeMirrorBestEffort, removeEntryMirrors } from './mirrors.js';
-import { onHandle, openStore } from './open.js';
-import { selectMemoryReach } from './tenant-lookup.js';
+import { ConflictError, NotFoundError } from '../../api-errors.js';
+import { appendAuditEvent } from '../../audit.js';
+import { isSqliteBusy, withWriteScope, type DatabaseSyncLike } from '../../db.js';
+import { log } from '../../log.js';
+import { entryAfterOutcome, type MemoryEntry } from '../../memory.js';
+import { archiveRawMemory, type ArchiveOpts } from '../../raw-archive.js';
+import { ownScopeTouches } from '../../recall-scope.js';
+import { RejectedValueError } from '../../rejection.js';
+import type { EntryTarget, EntryWrites, OutcomeWrite, RawArchive, SupersedeWrite, Sync } from '../port.js';
+import { markSummaryDirtyInTx } from '../../summary-dirty.js';
+import { auditRejectionRefusal } from '../audit-event.js';
+import { deleteEntryCore } from '../delete-and-batch.js';
+import { selectEntriesByIds } from '../entry-reads.js';
+import { stampOriginProject } from '../entry-row.js';
+import { writeEntryDbOnly, writeEntryMirrors } from '../entry-writes.js';
+import { updateStatsUnlessBusy } from '../index-and-stats.js';
+import { purgeMirrorBestEffort, removeEntryMirrors } from '../mirrors.js';
+import { onHandle, openStore } from '../open.js';
+import { selectMemoryReach } from '../tenant-lookup.js';
 
 /** Each call on its own handle; mirrors and the forgotten counter follow the commit, so a rolled-back write leaves neither. */
 export function sqliteEntryWrites(hippoRoot: string): Sync<EntryWrites> {
@@ -38,16 +38,7 @@ export function sqliteEntryWrites(hippoRoot: string): Sync<EntryWrites> {
       writeEntryMirrors(hippoRoot, successor);
     },
     archiveRaw(archive) {
-      const archivedAt = onHandle(hippoRoot, (db) => {
-        const at = withWriteScope(db, 'archive_raw_in_reach', () => {
-          assertInReach(db, archive, archive.id);
-          return archiveRawMemory(db, archive.id, { reason: archive.reason, who: archive.actor });
-        });
-        cleanArchivedMirrors(db, hippoRoot, archive.id);
-        return at;
-      });
-      updateStatsUnlessBusy(hippoRoot, { forgotten: 1 }, `removed ${archive.id}`);
-      return archivedAt;
+      return archiveRawAt(hippoRoot, archive);
     },
     forget(removal) {
       onHandle(hippoRoot, (db) => withWriteScope(db, 'forget_in_reach', () => {
@@ -58,6 +49,20 @@ export function sqliteEntryWrites(hippoRoot: string): Sync<EntryWrites> {
       updateStatsUnlessBusy(hippoRoot, { forgotten: 1 }, `removed ${removal.id}`);
     },
   };
+}
+
+/** Reach is checked inside the archive's write scope. A connector's hook writes on the same handle inside that scope, so its throw undoes the archive. */
+export function archiveRawAt(hippoRoot: string, archive: RawArchive, afterArchive?: ArchiveOpts['afterArchive']): string {
+  const archivedAt = onHandle(hippoRoot, (db) => {
+    const at = withWriteScope(db, 'archive_raw_in_reach', () => {
+      assertInReach(db, archive, archive.id);
+      return archiveRawMemory(db, archive.id, { reason: archive.reason, who: archive.actor, afterArchive });
+    });
+    cleanArchivedMirrors(db, hippoRoot, archive.id);
+    return at;
+  });
+  updateStatsUnlessBusy(hippoRoot, { forgotten: 1 }, `removed ${archive.id}`);
+  return archivedAt;
 }
 
 function notFound(id: string): NotFoundError {
@@ -108,7 +113,7 @@ function applyOutcomeOn(db: DatabaseSyncLike, outcome: OutcomeWrite): MemoryEntr
 }
 
 /** Reach, the CAS on the old row, the successor's insert and the supersede row in one BEGIN IMMEDIATE transaction. Two racing supersedes: one CAS wins. */
-export function commitSupersede(db: DatabaseSyncLike, write: SupersedeWrite): void {
+function commitSupersede(db: DatabaseSyncLike, write: SupersedeWrite): void {
   const { tenantId, actor, oldId, successor } = write;
   db.exec('BEGIN IMMEDIATE');
   try {
@@ -132,7 +137,7 @@ export function commitSupersede(db: DatabaseSyncLike, write: SupersedeWrite): vo
 }
 
 /** A mirror left on disk would bring the archived row back on the next import; on failure the reaper retries, as mirror_cleaned_at stays NULL. */
-export function cleanArchivedMirrors(db: DatabaseSyncLike, hippoRoot: string, id: string): void {
+function cleanArchivedMirrors(db: DatabaseSyncLike, hippoRoot: string, id: string): void {
   try {
     removeEntryMirrors(hippoRoot, id);
   } catch (mirrorErr) {

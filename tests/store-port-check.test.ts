@@ -92,10 +92,10 @@ describe('check-store-port.mjs', () => {
   });
 
   it('counts store ternaries and kind checks in src/api, twins, and routes without storeReady', () => {
-    const api = "export function fooThroughStore() {}\nexport const f = (ctx: any) => (ctx.store ? 1 : 2);\nexport const g = (store: any) => store.kind !== 'sqlite';\n";
+    const api = "export function fooThroughStore() {}\nexport const f = (ctx: any) => (ctx.store ? 1 : 2);\nexport const g = (store: any) => store.kind !== 'sqlite';\nexport const h = ({ store }: any) => (store ? 1 : 2);\n";
     const server = "const V1_ROUTES = [\n  { method: 'GET', path: '/a', handler: a },\n  { method: 'GET', path: '/b', storeReady: 'base', handler: b },\n];\n";
     withFixture({ 'src/api/a.ts': api, 'src/server.ts': server }, null, ({ run }) => {
-      expect(list(run)).toMatchObject({ storeBranches: '2', twinFunctions: '1', routesWithoutStore: '1' });
+      expect(list(run)).toMatchObject({ storeBranches: '3', twinFunctions: '1', routesWithoutStore: '1' });
     });
   });
 

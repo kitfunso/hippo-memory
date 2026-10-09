@@ -36,27 +36,11 @@ interface Difference {
 }
 
 const KNOWN_DIFFERENCES = {
-  forgetLock: {
-    fn: 'forget',
-    differs: 'hippo.db checks reach on one handle and deletes on a second; the store checks inside the delete\'s write lock',
-    onHippoDb: 'src/api/forget.ts:44-63',
-    throughStore: 'src/store/entry-writes-group.ts:52-59',
-    winner: 'store: one write scope',
-    pinnedBy: 'here',
-  },
-  archiveLock: {
-    fn: 'archiveRaw',
-    differs: 'hippo.db checks reach before it takes the write lock; the store checks inside it',
-    onHippoDb: 'src/api/promote.ts:214-222',
-    throughStore: 'src/store/entry-writes-group.ts:40-51',
-    winner: 'store: the group',
-    pinnedBy: 'here',
-  },
   idCollision: {
     fn: 'remember',
     differs: 'a new id another tenant already holds moves that row to the writer on hippo.db; the store rejects with ConflictError',
     onHippoDb: 'src/api/remember.ts:136',
-    throughStore: 'src/store/entry-writes-group.ts:73-90',
+    throughStore: 'src/store/sqlite/entry-writes-group.ts:78-95',
     winner: 'store: the group',
     pinnedBy: 'here for hippo.db; tests/entry-writes-conformance.test.ts "refuses an id another tenant holds" for the store',
   },
@@ -64,7 +48,7 @@ const KNOWN_DIFFERENCES = {
     fn: 'outcome',
     differs: 'hippo.db commits each row and then its audit row; the store commits every row and audit row together',
     onHippoDb: 'src/api/outcome.ts:74-88',
-    throughStore: 'src/store/entry-writes-group.ts:93-108',
+    throughStore: 'src/store/sqlite/entry-writes-group.ts:98-113',
     winner: 'store: one transaction',
     pinnedBy: 'here',
   },
@@ -72,7 +56,7 @@ const KNOWN_DIFFERENCES = {
     fn: 'outcome',
     differs: 'a row the rejection guard refuses leaves a reject_refusal audit row on hippo.db and none through the store',
     onHippoDb: 'src/store/entry-writes.ts:38-40',
-    throughStore: 'src/store/entry-writes-group.ts:93-108',
+    throughStore: 'src/store/sqlite/entry-writes-group.ts:98-113',
     winner: 'hippo.db: kept behaviour, the collapsed outcome still writes the refusal row',
     pinnedBy: 'here',
   },
@@ -92,11 +76,19 @@ const KNOWN_DIFFERENCES = {
     winner: 'hippo.db: their published replies are synchronous and only the local CLI calls them, so they stay off the port; the change and its audit row commit together',
     pinnedBy: 'here',
   },
+  archiveHook: {
+    fn: 'archiveRaw',
+    differs: 'afterArchive runs on hippo.db, inside the archive\'s write scope, and is refused through a store',
+    onHippoDb: 'src/store/sqlite/entry-writes-group.ts:55-66',
+    throughStore: 'src/store/sqlite/local.ts:21-25',
+    winner: 'hippo.db: the hook writes on the archive\'s own handle inside its write scope, which no served store can hand out, so a store keeps refusing it',
+    pinnedBy: 'here',
+  },
   hippoDbOnlyOptions: {
-    fn: 'remember, archiveRaw',
-    differs: 'afterWrite, untrusted and afterArchive run on hippo.db and are refused through a store',
-    onHippoDb: 'src/api/remember.ts:124-136, src/api/promote.ts:218-222',
-    throughStore: 'src/api/remember.ts:112, src/api/promote.ts:200',
+    fn: 'remember',
+    differs: 'afterWrite and untrusted run on hippo.db and are refused through a store',
+    onHippoDb: 'src/api/remember.ts:124-136',
+    throughStore: 'src/api/remember.ts:112',
     winner: 'open: porting them needs a store hook that runs inside the write; refusing keeps connectors on hippo.db',
     pinnedBy: 'tests/entry-writes-store.test.ts',
   },
@@ -582,20 +574,36 @@ describe('the store path and the hippo.db path agree', () => {
     expect(throughStore.reply).toEqual(onHippoDb.reply);
     expect(throughStore.state).toEqual(onHippoDb.state);
   });
-});
 
-describe('where the two paths differ today', () => {
   it.each([
-    [named('forgetLock'), (ctx: Context) => forget(ctx, 'mem_seed_plain'), 'reach check, then write lock on a second handle'],
-    [named('archiveLock'), (ctx: Context) => archiveRaw(ctx, 'mem_seed_raw', 'user asked'), 'reach check, then write lock'],
-  ])('%s', async (_name, call, onHippoDb) => {
+    ['forget', (ctx: Context) => forget(ctx, 'mem_seed_plain')],
+    ['archiveRaw', (ctx: Context) => archiveRaw(ctx, 'mem_seed_raw', 'user asked')],
+  ])('%s: reach is checked inside the write lock, on one handle', async (_fn, call) => {
     const dbRoot = copyOfTemplate('db');
     const storeRoot = copyOfTemplate('store');
     const base = { tenantId: ACME, actor: HOST };
-    expect(reachAndLock(recordStatements(() => call({ ...base, hippoRoot: dbRoot })).statements)).toBe(onHippoDb);
+    const onHippoDb = recordStatements(() => call({ ...base, hippoRoot: dbRoot }));
     const store = storeAt(storeRoot);
     const throughStore = await recordStatementsAsync(async () => call({ ...base, hippoRoot: storeRoot, store }));
+    expect(reachAndLock(onHippoDb.statements)).toBe('write lock, then reach check');
     expect(reachAndLock(throughStore.statements)).toBe('write lock, then reach check');
+  });
+});
+
+describe('where the two paths differ today', () => {
+  it(named('archiveHook'), async () => {
+    const archived: string[] = [];
+    const opts: Parameters<typeof archiveRaw>[3] = { afterArchive: (_db, id) => void archived.push(id) };
+    const dbRoot = copyOfTemplate('db');
+    const storeRoot = copyOfTemplate('store');
+    const base = { tenantId: ACME, actor: HOST };
+    const onHippoDb = recordStatements(() => archiveRaw({ ...base, hippoRoot: dbRoot }, 'mem_seed_raw', 'user asked', opts));
+    expect(reachAndLock(onHippoDb.statements)).toBe('write lock, then reach check');
+    expect(archived).toEqual(['mem_seed_raw']);
+    const end = await ending(() => archiveRaw({ ...base, hippoRoot: storeRoot, store: storeAt(storeRoot) }, 'mem_seed_raw', 'user asked', opts));
+    expect(end).toContain('rejected Error: afterArchive runs on hippo.db only');
+    expect(archived).toEqual(['mem_seed_raw']);
+    expect(rowsOf(storeRoot, `SELECT id FROM memories WHERE id = 'mem_seed_raw'`)).toEqual([{ id: 'mem_seed_raw' }]);
   });
 
   it(named('idCollision'), () => {

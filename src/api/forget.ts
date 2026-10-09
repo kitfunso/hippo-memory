@@ -2,12 +2,10 @@
 
 import { openHippoDb, closeHippoDb } from '../db.js';
 import { BadRequestError, NotFoundError } from '../api-errors.js';
-import { deleteEntry } from '../store/delete-and-batch.js';
-import { updateStatsUnlessBusy } from '../store/index-and-stats.js';
 import type { RejectedValueRow } from '../rejection.js';
 import { rejectValue, unrejectValue, listRejectionsForTenant } from '../reject-flow.js';
+import { andThen, notPorted, onStore } from './on-store.js';
 import type { Context, StoreReply } from './types.js';
-import { requireGroup, type HippoStore } from '../store-port.js';
 import { selectMemoryReach } from '../store/tenant-lookup.js';
 import { canTouchScope, personalScopeOf } from '../recall-scope.js';
 
@@ -15,51 +13,17 @@ import { canTouchScope, personalScopeOf } from '../recall-scope.js';
 // forget
 // ---------------------------------------------------------------------------
 
-/**
- * Delete a memory by id. `deleteEntry` threads ctx.actor.subject into its internal
- * audit hook, so exactly one 'forget' event lands with the supplied actor.
- *
- * Tenant scope: deleteEntry looks up the row by id alone, so without an
- * explicit tenant guard a Bearer for tenant A could delete tenant B's row
- * by guessing or leaking the id. Pre-check the row's tenant_id and deny
- * cross-tenant access with a not-found error (no info leak about whether
- * the id exists in another tenant).
- */
+/** Delete a memory by id. Reach is checked inside the delete's write scope, and a row out of reach answers as not found, so a caller learns nothing about it. */
 export interface ForgetResult {
   ok: true;
   id: string;
 }
 export function forget<C extends Context>(ctx: C, id: string): StoreReply<C, ForgetResult> {
-  const reply = ctx.store ? forgetThroughStore(ctx, ctx.store, id) : forgetOnHippoDb(ctx, id);
-  // SAFETY: a C typed with a store gets the promise its path returns; a wide C is typed as the union, which a caller has to await anyway.
-  return reply as StoreReply<C, ForgetResult>;
-}
-
-async function forgetThroughStore(ctx: Context, store: HippoStore, id: string): Promise<ForgetResult> {
-  const entryWrites = requireGroup(store, 'entryWrites');
-  await entryWrites.forget({ tenantId: ctx.tenantId, actor: ctx.actor.subject, ownScope: personalScopeOf(ctx.actor), id });
-  return { ok: true, id };
-}
-
-function forgetOnHippoDb(ctx: Context, id: string): ForgetResult {
-  const db = openHippoDb(ctx.hippoRoot);
-  try {
-    const reach = selectMemoryReach(db, id);
-    if (reach?.tenantId !== ctx.tenantId || !canTouchScope(ctx.actor, reach.scope)) {
-      throw new NotFoundError(`memory not found: ${id}`);
-    }
-  } finally {
-    closeHippoDb(db);
-  }
-  const removed = deleteEntry(ctx.hippoRoot, id, { actor: ctx.actor.subject });
-  if (!removed) {
-    throw new NotFoundError(`memory not found: ${id}`);
-  }
-  // Counted here, not in the CLI: both callers of this function (cmdForget and
-  // the HTTP route) are the two paths of one user command, so neither can miss
-  // it. api.remember cannot take the same move; see the server route.
-  updateStatsUnlessBusy(ctx.hippoRoot, { forgotten: 1 }, `removed ${id}`);
-  return { ok: true, id };
+  return onStore(ctx, (port) => {
+    const entryWrites = port.entryWrites ?? notPorted(port, 'entryWrites');
+    const removal = { tenantId: ctx.tenantId, actor: ctx.actor.subject, ownScope: personalScopeOf(ctx.actor), id };
+    return andThen(entryWrites.forget(removal), (): ForgetResult => ({ ok: true, id }));
+  });
 }
 
 // ---------------------------------------------------------------------------
