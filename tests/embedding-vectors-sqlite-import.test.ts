@@ -8,7 +8,8 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { batchWriteAndDelete, deleteEntry } from '../src/store/delete-and-batch.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { openHippoDb, closeHippoDb, getMeta, setMeta, getSchemaVersion, getCurrentSchemaVersion } from '../src/db.js';
-import { loadEmbeddingIndex, saveEmbeddingIndex } from '../src/embeddings.js';
+import { embedAll, embeddingInputText, loadEmbeddingIndex, saveEmbeddingIndex, saveStoredEmbeddingModel } from '../src/embeddings.js';
+import type { EmbeddingProvider } from '../src/embedding-provider.js';
 import { decodeVector, deleteOrphanVectors, encodeVector, rankVectorRows, topVectorMatches, type VectorMatch, type VectorRow } from '../src/db/vector-store.js';
 
 // The scan case seeds 600 rows and their vectors, so that the scan runs long enough to yield part way.
@@ -111,6 +112,28 @@ describe('memory_vectors upkeep', () => {
 
     expect(withDb(deleteOrphanVectors)).toBe(1);
     expect(Object.keys(loadEmbeddingIndex(root))).toEqual([a.id]);
+  });
+
+  it('embedAll drops the vector of a memory that is gone and embeds only the memories with none', async () => {
+    const a = createMemory('alpha note', { tenantId: 'default', baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    const b = createMemory('beta note', { tenantId: 'default', baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    writeEntry(root, a);
+    writeEntry(root, b);
+    saveStoredEmbeddingModel(root, 'upkeep-test-model');
+    saveEmbeddingIndex(root, { [a.id]: [1, 0], mem_gone: [0, 1] });
+    const embedded: string[] = [];
+    const provider: EmbeddingProvider = {
+      kind: 'local',
+      model: 'upkeep-test-model',
+      id: 'upkeep-test-model',
+      isAvailable: () => true,
+      embed: async (texts: string[]) => texts.map((t) => (embedded.push(t), [0, 1])),
+    };
+
+    expect(await embedAll(root, undefined, provider)).toBe(1);
+
+    expect(embedded).toEqual([embeddingInputText(b)]);
+    expect(Object.keys(loadEmbeddingIndex(root)).sort()).toEqual([a.id, b.id].sort());
   });
 
   it('decodes a BLOB that does not start on a 4-byte boundary', () => {

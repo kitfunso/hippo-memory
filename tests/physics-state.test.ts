@@ -13,7 +13,7 @@ import {
   resetAllPhysicsState,
   refreshParticleProperties,
 } from '../src/db/physics-state.js';
-import { loadStoredParticles, resetStoredParticles } from '../src/store/vector-writes.js';
+import { loadStoredParticles, resetStoredParticles, seedStoredParticle } from '../src/store/vector-writes.js';
 import type { PhysicsParticle } from '../src/physics.js';
 import type { MemoryEntry } from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
@@ -716,5 +716,15 @@ describe('stored particles by store root', () => {
     const stored = loadStoredParticles(tmpDir);
     expect(stored.map((p) => p.memoryId)).toEqual(['mem_t1']);
     expect(stored[0]!.position[0]).toBeCloseTo(0.5, 5);
+  });
+
+  it('seedStoredParticle stores a first particle at the vector and leaves a stored one as it is', () => {
+    seed(['mem_u1', 'mem_u2'], ['mem_u2']);
+    const kept = loadStoredParticles(tmpDir)[0]!.position;
+    seedStoredParticle(tmpDir, makeMemoryEntry('mem_u1'), [0.5, 0.5, 0.5]);
+    seedStoredParticle(tmpDir, makeMemoryEntry('mem_u2'), [0.5, 0.5, 0.5]);
+    const positions = new Map(loadStoredParticles(tmpDir).map((p) => [p.memoryId, p.position]));
+    expect(positions.get('mem_u1')![0]).toBeCloseTo(0.5, 5);
+    expect(positions.get('mem_u2')).toEqual(kept);
   });
 });

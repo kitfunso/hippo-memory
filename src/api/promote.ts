@@ -1,6 +1,5 @@
 // Promote to the global store, supersede with a successor, and archive raw memories.
 
-import { openHippoDb, closeHippoDb } from '../db.js';
 import { ConflictError, NotFoundError } from '../api-errors.js';
 import { stampOriginProject } from '../store/entry-row.js';
 import type { ConnectorEvent } from '../store/port.js';
@@ -9,7 +8,7 @@ import { promoteToGlobal } from '../shared.js';
 import { loadConfig } from '../config.js';
 import { andThen, notPorted, onStore } from './on-store.js';
 import type { Context, StoreReply } from './types.js';
-import { selectMemoryReach } from '../store/tenant-lookup.js';
+import { memoryReach } from '../store/tenant-lookup.js';
 import { canTouchScope, personalScopeOf } from '../recall-scope.js';
 
 // ---------------------------------------------------------------------------
@@ -41,14 +40,9 @@ export function promote(
   // row's tenant_id and deny cross-tenant access with the same not-found
   // wording archiveRaw uses (no info leak about whether the id exists in
   // another tenant).
-  const ownerDb = openHippoDb(ctx.hippoRoot);
-  try {
-    const reach = selectMemoryReach(ownerDb, id);
-    if (reach?.tenantId !== ctx.tenantId || !canTouchScope(ctx.actor, reach.scope)) {
-      throw new NotFoundError(`memory not found: ${id}`);
-    }
-  } finally {
-    closeHippoDb(ownerDb);
+  const reach = memoryReach(ctx.hippoRoot, id);
+  if (reach?.tenantId !== ctx.tenantId || !canTouchScope(ctx.actor, reach.scope)) {
+    throw new NotFoundError(`memory not found: ${id}`);
   }
 
   // The 'promote' row commits with the global copy, so no write follows the commit and a busy store fails the whole promote.
