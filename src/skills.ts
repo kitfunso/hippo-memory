@@ -23,14 +23,14 @@
  */
 
 import { BadRequestError } from './api-errors.js';
-import { openHippoDb, closeHippoDb } from './db.js';
 import { assertTenantId } from './tenant.js';
 import type { KeysetPosition } from './keyset.js';
 import type { SavableDescriptor } from './objects/descriptor.js';
 import { checkText, requireLine } from './objects/fields.js';
 import { closeObjectAt, listObjectsAt, objectByIdAt, saveObjectAt } from './objects/lifecycle.js';
 import type { Skill, SkillStatus } from './store/object-types.js';
-import { rowSpec, type RowByKind } from './store/sqlite/object-rows.js';
+import type { Objects } from './store/port.js';
+import { sqliteObjects } from './store/sqlite/objects-group.js';
 
 export type { Skill, SkillStatus } from './store/object-types.js';
 
@@ -196,25 +196,22 @@ export function loadActiveSkills(
  */
 export function exportSkills(hippoRoot: string, tenantId: string): string {
   assertTenantId('exportSkills', tenantId);
-  const db = openHippoDb(hippoRoot);
-  try {
-    // SAFETY: the SELECT names the skill row's own column list.
-    const rows = db.prepare(`
-      SELECT ${rowSpec('skill').cols} FROM skills
-      WHERE tenant_id = ? AND status = 'active'
-      ORDER BY skill_name ASC, id ASC
-      LIMIT ?
-    `).all(tenantId, MAX_EXPORT_SKILLS) as RowByKind['skill'][];
-    return rows
-      .map(rowSpec('skill').rowTo)
-      .map((s) => {
-        let block = `## ${s.skillName}`;
-        if (s.trigger) block += `\n\n**When:** ${s.trigger}`;
-        block += `\n\n${s.instructions}`;
-        return block;
-      })
-      .join('\n\n');
-  } finally {
-    closeHippoDb(db);
-  }
+  return skillsBlock(sqliteObjects(hippoRoot).activeSkillsByName(tenantId, MAX_EXPORT_SKILLS));
+}
+
+/** `exportSkills` over a served store's group. */
+export async function skillsMarkdown(objects: Objects, tenantId: string): Promise<string> {
+  assertTenantId('exportSkills', tenantId);
+  return skillsBlock(await objects.activeSkillsByName(tenantId, MAX_EXPORT_SKILLS));
+}
+
+function skillsBlock(skills: readonly Skill[]): string {
+  return skills
+    .map((s) => {
+      let block = `## ${s.skillName}`;
+      if (s.trigger) block += `\n\n**When:** ${s.trigger}`;
+      block += `\n\n${s.instructions}`;
+      return block;
+    })
+    .join('\n\n');
 }

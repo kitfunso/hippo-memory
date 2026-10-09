@@ -12,7 +12,7 @@ import type { JsonValue } from '../json.js';
 import type { KeysetPosition } from '../keyset.js';
 import type { MemoryEntry } from '../memory.js';
 import type { PhysicsParticle } from '../physics.js';
-import type { ObjectByKind, ObjectFields, ObjectKind, SavableKind } from './object-types.js';
+import type { BriefReceipt, Incident, IncidentFields, ObjectByKind, ObjectFields, ObjectKind, Policy, SavableKind, Skill } from './object-types.js';
 import type { PlanningFallacyEvidence } from './planning-fallacy-evidence.js';
 import type { ClosureState, Prediction, PredictionBaserate, SavePredictionOpts } from './predictions.js';
 import type { QuarantineRow, QuarantineStatus } from './quarantine.js';
@@ -305,6 +305,35 @@ export function isObjectRefusal<T extends object>(written: T | ObjectRefusal): w
   return 'refused' in written;
 }
 
+/** An incident to open and the memory that mirrors it into recall, built as `ObjectSave` has it. */
+export interface IncidentOpen {
+  readonly mirror: MemoryEntry;
+  readonly fields: IncidentFields;
+  readonly actor: string;
+  /** The row's createdAt: core's clock, as `toISOString` gives it. */
+  readonly at: string;
+}
+
+/** Why an incident was not opened: `memoryId` is the first linked id, in the order given, that is no memory of the tenant; or the written row could not be read back. */
+export type IncidentOpenRefusal =
+  | { readonly refused: 'unlinked'; readonly memoryId: string }
+  | { readonly refused: 'vanished' };
+
+export interface IncidentResolve {
+  /** The row's resolutionText; core has checked it is not blank. */
+  readonly text: string;
+  readonly actor: string;
+  /** The row's resolvedAt: core's clock, as `toISOString` gives it. */
+  readonly at: string;
+}
+
+/** `asOf` is an instant as `toISOString` gives it, so it compares as text against validFrom and validTo; `name` keeps one policyName, and may be empty. */
+export interface PoliciesInForceQuery {
+  readonly asOf: string;
+  readonly name?: string;
+  readonly limit: number;
+}
+
 /** The reads and writes behind the typed-object routes. An audit row names the object under the kind's id key: decision_id, incident_id, process_id, policy_id, skill_id, brief_id, note_id.
  *  A row belongs to one tenant: another tenant's id reads as missing in every method. */
 export interface Objects {
@@ -323,8 +352,22 @@ export interface Objects {
    *  repo, version, refreshed, and receipt_count when refreshed; customer_note customer, version. A refusal (`missing` or `status` for the replaced row, `raced`, `vanished`) leaves no
    *  mirror, row or audit row. After the commit a kind the graph reads has its mirror queued for a rebuild, which is logged on failure and never thrown. */
   saveObject<K extends SavableKind>(tenantId: string, kind: K, save: ObjectSave<K>): Promise<ObjectByKind[K] | ObjectRefusal>;
-  /** Whether a new mirror takes the configured default half-life: false only while a store still holds mirrors on the flat 90 days that came before it, which a second store never does. */
-  mirrorsOnDefaultHalfLife(): Promise<boolean>;
+  /** In one transaction, in this order: writes `mirror` as `EntryWrites.writeEntry` does; checks, in the order given, that each linked id is a memory of the tenant; inserts the row as open
+   *  under the next id, holding the linked ids as given; appends the incident_open row ({incident_id, has_context, linked_memory_count}, target the id; has_context is true for a context
+   *  that is not empty); then the mirror's remember row. A refusal leaves no mirror, row or audit row. */
+  openIncident(tenantId: string, open: IncidentOpen): Promise<Incident | IncidentOpenRefusal>;
+  /** In one transaction: moves the tenant's incident from open to resolved with resolutionText `resolve.text` and resolvedAt `resolve.at`, then appends one incident_resolve row
+   *  ({incident_id}, target the id). A refusal (`missing`, `status` with the status held, or `vanished`) writes nothing. */
+  resolveIncident(tenantId: string, id: number, resolve: IncidentResolve): Promise<Incident | ObjectRefusal>;
+  /** At most `limit` of the tenant's policies in force at `asOf`: a row that is not closed, whose validFrom is at or before `asOf` and whose validTo is unset or after it, and that is
+   *  active, or is superseded by a row whose validFrom is after `asOf`. Newest validFrom first, compared as text in byte order, then the larger id. No audit row. */
+  policiesInForce(tenantId: string, query: PoliciesInForceQuery): Promise<Policy[]>;
+  /** At most `limit` of the tenant's active skills, by skillName ascending compared as text in byte order, then by id ascending. No audit row. */
+  activeSkillsByName(tenantId: string, limit: number): Promise<Skill[]>;
+  /** At most `limit` of the tenant's memories that carry `tag`, whose source is not project_brief and whose scope recall admits when no scope is asked for, newest first: by created
+   *  compared as text in byte order, then by id, both descending. A memory carries the tag when its tag list, written as JSON, holds the tag between double quotes, the tag as
+   *  given and not escaped, once the ASCII letters of both are folded. No audit row. */
+  briefReceipts(tenantId: string, tag: string, limit: number): Promise<BriefReceipt[]>;
 }
 
 /** One session's unsuperseded raw rows inside a tenant; `origins` keeps those projects' rows and rows of no project, unset keeps every origin. */

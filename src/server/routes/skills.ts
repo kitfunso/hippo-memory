@@ -1,10 +1,10 @@
 // /v1/skills routes.
-import { exportSkills, MAX_SKILL_NAME_LEN, type SaveSkillOpts, SKILL } from '../../skills.js';
+import { MAX_SKILL_NAME_LEN, type SaveSkillOpts, SKILL, skillsMarkdown } from '../../skills.js';
 import { sendJson } from '../../http-util.js';
 import { buildContextWithAuth } from '../auth.js';
 import type { RouteRequest } from '../types.js';
 import { parseJsonBody } from '../validation.js';
-import { closeRoute, getRoute, listRoute, optionalString, type RequiredStringRule, requiredString, saveFor, supersedeRoute, type VersionedRouteConfig } from './object-routes.js';
+import { closeRoute, getRoute, listRoute, objectsOf, optionalString, type RequiredStringRule, requiredString, saveFor, supersedeRoute, type VersionedRouteConfig } from './object-routes.js';
 
 const INSTRUCTIONS: RequiredStringRule = { max: 8192, plural: true };
 
@@ -50,9 +50,10 @@ export function handleListSkills(rr: RouteRequest): Promise<void> {
 
 // The export renderer: must precede the /:id GET (literal 'export' is
 // non-numeric so the /(\d+)/ route would not match it, but order it first).
-export async function handleExportSkills({ req, res, opts }: RouteRequest): Promise<void> {
+export async function handleExportSkills(rr: RouteRequest): Promise<void> {
+  const { req, res, opts } = rr;
   const ctx = await buildContextWithAuth(req, opts);
-  const markdown = exportSkills(opts.hippoRoot, ctx.tenantId);
+  const markdown = await skillsMarkdown(objectsOf(rr), ctx.tenantId);
   sendJson(res, 200, { markdown });
   return;
 }

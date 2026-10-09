@@ -17,9 +17,9 @@
  * enforce incidents.tenant_id == the referenced memory's tenant_id. Mirrors the
  * v30 decisions pattern (src/decisions.ts).
  *
- * Dual-write atomicity: `saveIncident` writes the memory + incidents row inside
- * writeEntry's SAVEPOINT 'write_entry' (store.ts) via the afterWrite hook, so a
- * failure in any step rolls all of them back. Pattern matches saveDecision.
+ * Dual-write atomicity: `saveIncident` writes the memory + incidents row in the
+ * `objects` store group's one transaction, so a failure in any step rolls all of
+ * them back.
  *
  * linked_memory_ids ("linked receipts"): a JSON-encoded array of memory ids on
  * the row, default `[]`. On save, every id must exist in the SAME tenant; a
@@ -27,17 +27,12 @@
  */
 
 import { BadRequestError, ConflictError, NotFoundError } from './api-errors.js';
-import type { DatabaseSyncLike } from './db.js';
-import { withWriteScope } from './db/busy.js';
-import { writeEntry } from './store/entry-writes.js';
-import { onHandle } from './store/open.js';
 import { assertTenantId } from './tenant.js';
-import { appendAuditEvent } from './audit.js';
 import type { KeysetPosition } from './keyset.js';
 import type { ObjectDescriptor } from './objects/descriptor.js';
 import { closeObjectAt, listObjectsAt, objectByIdAt, objectMirror } from './objects/lifecycle.js';
 import type { Incident, IncidentStatus } from './store/object-types.js';
-import { rowSpec, type RowByKind } from './store/sqlite/object-rows.js';
+import { isObjectRefusal, type IncidentOpen, type IncidentOpenRefusal, type IncidentResolve, type ObjectRefusal, type Objects } from './store/port.js';
 import { objectIdByMemory, sqliteObjects } from './store/sqlite/objects-group.js';
 
 export type { Incident, IncidentStatus } from './store/object-types.js';
@@ -70,7 +65,7 @@ export interface ListIncidentsOpts {
   after?: KeysetPosition;
 }
 
-// No draft: an incident checks its linked memories inside the write, so it keeps its own save.
+// No draft: an incident is opened with linked memories and is never superseded, so it keeps its own save.
 export const INCIDENT: ObjectDescriptor<'incident'> = {
   kind: 'incident',
   label: 'incident',
@@ -81,129 +76,59 @@ export const INCIDENT: ObjectDescriptor<'incident'> = {
   closeRefusal: 'already closed',
 };
 
-const INCIDENT_ROWS = rowSpec('incident');
-
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
-
-// Validate every linked receipt BEFORE inserting the row. Each must be a
-// memory in the SAME tenant; a cross-tenant or nonexistent id rejects the
-// whole write rather than recording an unverifiable receipt.
-function validateLinkedMemoryIds(db: DatabaseSyncLike, tenantId: string, linkInput: string[]): string[] {
-  const validated: string[] = [];
-  for (const linkId of linkInput) {
-    // SAFETY: row shape matches the single `id` column named in the SELECT above.
-    const exists = db.prepare(
-      `SELECT id FROM memories WHERE id = ? AND tenant_id = ?`,
-    ).get(linkId, tenantId) as { id: string } | undefined;
-    if (!exists) {
-      throw new NotFoundError(
-        `saveIncident: linked memory ${linkId} not found for tenant ${tenantId}`,
-      );
-    }
-    validated.push(linkId);
-  }
-  return validated;
+/** One open, checked before a store is asked; `hippoRoot` is read only for the configured half-life. */
+function incidentOpen(hippoRoot: string, tenantId: string, opts: SaveIncidentOpts, actor: string): IncidentOpen {
+  assertTenantId('saveIncident', tenantId);
+  if (!opts.incidentText) throw new BadRequestError('saveIncident: incidentText is required');
+  const at = new Date().toISOString();
+  const content = opts.context
+    ? `${opts.incidentText}\n\nContext: ${opts.context}`
+    : opts.incidentText;
+  const mirror = objectMirror(hippoRoot, tenantId, 'incident', { content, tags: opts.extraTags ?? [] });
+  const fields = { incidentText: opts.incidentText, context: opts.context ?? undefined, linkedMemoryIds: opts.linkedMemoryIds ?? [] };
+  return { mirror, fields, actor, at };
 }
 
-/** The afterWrite body: link validation, INSERT, reload, open audit, all in one SAVEPOINT. */
-function writeIncidentRow(
-  db: DatabaseSyncLike,
-  memoryId: string,
-  tenantId: string,
-  opts: SaveIncidentOpts,
-  actor: string,
-  now: string,
-): RowByKind['incident'] {
-  const validated = validateLinkedMemoryIds(db, tenantId, opts.linkedMemoryIds ?? []);
-
-  const result = db.prepare(`
-    INSERT INTO incidents(
-      memory_id, tenant_id, incident_text, context,
-      status, resolution_text, resolved_at, closed_at, linked_memory_ids, created_at
-    ) VALUES (?, ?, ?, ?, 'open', NULL, NULL, NULL, ?, ?)
-  `).run(
-    memoryId,
-    tenantId,
-    opts.incidentText,
-    opts.context ?? null,
-    JSON.stringify(validated),
-    now,
-  );
-  const incidentId = Number(result.lastInsertRowid ?? 0);
-
-  const row = db.prepare(`SELECT ${INCIDENT_ROWS.cols} FROM incidents WHERE id = ?`)
-    .get<RowByKind['incident'] | undefined>(incidentId);
-  if (!row) throw new Error('saveIncident: failed to reload saved incident row');
-
-  // GDPR-light metadata: id + flag only, no incident_text.
-  appendAuditEvent(db, {
-    tenantId,
-    actor,
-    op: 'incident_open',
-    targetId: String(incidentId),
-    metadata: {
-      incident_id: incidentId,
-      has_context: opts.context !== undefined && opts.context !== null && opts.context !== '',
-      linked_memory_count: validated.length,
-    },
-  });
-  return row;
+function opened(tenantId: string, written: Incident | IncidentOpenRefusal): Incident {
+  if (!('refused' in written)) return written;
+  // A linked id of another tenant reads as missing, so an unverifiable receipt is never recorded.
+  if (written.refused === 'unlinked') throw new NotFoundError(`saveIncident: linked memory ${written.memoryId} not found for tenant ${tenantId}`);
+  throw new Error('saveIncident: failed to reload saved incident row');
 }
 
-/**
- * Create an incident. Writes the memory mirror + the incidents row atomically
- * inside writeEntry's SAVEPOINT 'write_entry'.
- *
- * The memory mirror: tags ['incident', ...extraTags], source 'incident',
- * confidence 'verified', the half-life objectHalfLifeDays picks, content =
- * "<text>\n\nContext: <context>" when context is given.
- *
- * linked_memory_ids are validated BEFORE insert: each must exist in the SAME
- * tenant. A cross-tenant or nonexistent id throws and rolls back the whole
- * write. The validated ids are stored as JSON.stringify(validated).
- */
+/** Opens an incident with its mirror memory (content "<text>\n\nContext: <context>" when context is given) in one write; a linked memory outside the tenant refuses the whole write. */
 export function saveIncident(
   hippoRoot: string,
   tenantId: string,
   opts: SaveIncidentOpts,
   actor: string = 'cli',
 ): Incident {
-  assertTenantId('saveIncident', tenantId);
-  if (!opts.incidentText) throw new BadRequestError('saveIncident: incidentText is required');
-
-  const now = new Date().toISOString();
-  const content = opts.context
-    ? `${opts.incidentText}\n\nContext: ${opts.context}`
-    : opts.incidentText;
-  const onDefault = sqliteObjects(hippoRoot).mirrorsOnDefaultHalfLife();
-  const mem = objectMirror(hippoRoot, tenantId, 'incident', { content, tags: opts.extraTags ?? [] }, onDefault);
-
-  // Populated inside afterWrite so the linked-id validation, the INSERT, and the
-  // memory write all share one SAVEPOINT.
-  let savedRow: RowByKind['incident'] | undefined;
-
-  writeEntry(hippoRoot, mem, {
-    actor,
-    afterWrite: (db, memoryId) => {
-      savedRow = writeIncidentRow(db, memoryId, tenantId, opts, actor, now);
-    },
-  });
-
-  if (!savedRow) {
-    // Unreachable unless afterWrite threw first; defensive.
-    throw new Error('saveIncident: afterWrite did not populate the row');
-  }
-  return INCIDENT_ROWS.rowTo(savedRow);
+  return opened(tenantId, sqliteObjects(hippoRoot).openIncident(tenantId, incidentOpen(hippoRoot, tenantId, opts, actor)));
 }
 
-/**
- * Resolve an open incident (open -> resolved). Records resolution_text +
- * resolved_at; the incident stays on record. CAS guard: WHERE status='open';
- * 0 changes distinguishes not-found from not-open so callers surface the right
- * error. Emits incident_resolve.
- */
+/** `saveIncident` over a served store's group. */
+export async function openIncident(objects: Objects, hippoRoot: string, tenantId: string, opts: SaveIncidentOpts, actor: string): Promise<Incident> {
+  return opened(tenantId, await objects.openIncident(tenantId, incidentOpen(hippoRoot, tenantId, opts, actor)));
+}
+
+function resolving(tenantId: string, resolutionText: string, actor: string): IncidentResolve {
+  assertTenantId('resolveIncident', tenantId);
+  if (!resolutionText || !resolutionText.trim()) {
+    throw new BadRequestError('resolveIncident: resolutionText is required (non-empty)');
+  }
+  return { text: resolutionText, actor, at: new Date().toISOString() };
+}
+
+function resolved(tenantId: string, id: number, written: Incident | ObjectRefusal): Incident {
+  if (!isObjectRefusal(written)) return written;
+  if (written.refused === 'missing') throw new NotFoundError(`resolveIncident: incident ${id} not found for tenant ${tenantId}`);
+  if (written.refused !== 'status') throw new NotFoundError(`resolveIncident: incident ${id} not found after UPDATE`);
+  throw new ConflictError(
+    `resolveIncident: incident ${id} is not open (status='${written.status}'); only open incidents can be resolved.`,
+  );
+}
+
+/** Moves an open incident to resolved and keeps it on record; a missing incident and one that is not open are told apart. */
 export function resolveIncident(
   hippoRoot: string,
   tenantId: string,
@@ -211,42 +136,12 @@ export function resolveIncident(
   resolutionText: string,
   actor: string = 'cli',
 ): Incident {
-  assertTenantId('resolveIncident', tenantId);
-  if (!resolutionText || !resolutionText.trim()) {
-    throw new BadRequestError('resolveIncident: resolutionText is required (non-empty)');
-  }
-  const now = new Date().toISOString();
-  return onHandle(hippoRoot, (db) => withWriteScope(db, 'resolve_incident', () => {
-    const updateResult = db.prepare(`
-      UPDATE incidents
-      SET status = 'resolved', resolution_text = ?, resolved_at = ?
-      WHERE id = ? AND tenant_id = ? AND status = 'open'
-    `).run(resolutionText, now, id, tenantId);
+  return resolved(tenantId, id, sqliteObjects(hippoRoot).resolveIncident(tenantId, id, resolving(tenantId, resolutionText, actor)));
+}
 
-    if (updateResult.changes === 0) {
-      const existing = db.prepare(`SELECT status FROM incidents WHERE id = ? AND tenant_id = ?`)
-        .get<{ status: string } | undefined>(id, tenantId);
-      if (!existing) {
-        throw new NotFoundError(`resolveIncident: incident ${id} not found for tenant ${tenantId}`);
-      }
-      throw new ConflictError(
-        `resolveIncident: incident ${id} is not open (status='${existing.status}'); only open incidents can be resolved.`,
-      );
-    }
-
-    const row = db.prepare(`SELECT ${INCIDENT_ROWS.cols} FROM incidents WHERE id = ? AND tenant_id = ?`)
-      .get<RowByKind['incident'] | undefined>(id, tenantId);
-    if (!row) throw new NotFoundError(`resolveIncident: incident ${id} not found after UPDATE`);
-
-    appendAuditEvent(db, {
-      tenantId,
-      actor,
-      op: 'incident_resolve',
-      targetId: String(id),
-      metadata: { incident_id: id },
-    });
-    return INCIDENT_ROWS.rowTo(row);
-  }));
+/** `resolveIncident` over a served store's group. */
+export async function resolveOpenIncident(objects: Objects, tenantId: string, id: number, resolutionText: string, actor: string): Promise<Incident> {
+  return resolved(tenantId, id, await objects.resolveIncident(tenantId, id, resolving(tenantId, resolutionText, actor)));
 }
 
 /**
