@@ -1,5 +1,5 @@
 // Every outbound call goes through fetchWithRetry, so a stalled peer or a rate limit must end bounded and predictable.
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { fetchWithRetry, isRetryableStatus, llmTimeoutMs, parseRetryAfterMs } from '../src/http-retry.js';
@@ -45,6 +45,7 @@ afterEach(async () => {
   }
   server = null;
   delete process.env.HIPPO_LLM_TIMEOUT_MS;
+  vi.restoreAllMocks();
 });
 
 const noSleep = { sleep: async () => undefined };
@@ -52,10 +53,11 @@ const noSleep = { sleep: async () => undefined };
 describe('fetchWithRetry against a local server', () => {
   it('ends a stalled write with a TimeoutError instead of hanging, and never sends it twice', async () => {
     const { url, hits } = await startServer([null]);
-    const started = Date.now();
+    const deadlines = vi.spyOn(AbortSignal, 'timeout');
     const err = await fetchWithRetry(url, { method: 'POST', body: '{}' }, { timeoutMs: 200 }).then(() => null, (e: Error) => e);
     expect(err?.name).toBe('TimeoutError');
-    expect(Date.now() - started).toBeLessThan(5000);
+    // The one attempt ran under the caller's limit, so the wait is that limit and no more.
+    expect(deadlines.mock.calls).toEqual([[200]]);
     expect(hits()).toBe(1);
     // A timed-out write to `hippo serve` may have landed, so the CLI must not replay it locally.
     expect(classifyTransportFailure(err)).toBe('delivery-unknown');

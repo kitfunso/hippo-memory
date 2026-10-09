@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { replayCompactionsAt, saveCompaction, saveItems } from '../src/compaction-record.js';
+import { COMPACTION_DB_WAIT_MS, replayCompactionsAt, saveCompaction, saveItems } from '../src/compaction-record.js';
 import { closeHippoDb, openHippoDb } from '../src/db.js';
 import { initStore } from '../src/store/open.js';
 import {
@@ -18,6 +18,7 @@ import {
   summaryWith,
   type Scratch,
 } from './_helpers/compaction-hooks.js';
+import { lockWaitAskedMs, tracingLockWaits } from './_helpers/lock-waits.js';
 
 const MINUTE = 60_000;
 const ITEMS = [
@@ -349,19 +350,18 @@ describe('hippo sleep finishes what the hook could not', () => {
   it('a locked store makes the hook spool inside its budget, and sleep imports the spool', () => {
     initProject(s);
     const db = openHippoDb(s.hippoRoot);
-    let elapsed = 0;
+    const waits = path.join(s.dir, 'lock-waits');
     try {
       db.exec('BEGIN IMMEDIATE');
-      const started = Date.now();
-      const hook = runHippo(['post-compact'], s.proj, s.env, postCompactPayload('s1', s.proj, summaryWith(ITEMS)));
-      elapsed = Date.now() - started;
+      const hook = runHippo(['post-compact'], s.proj, tracingLockWaits(s.env, waits), postCompactPayload('s1', s.proj, summaryWith(ITEMS)));
       expect(hook.status).toBe(0);
       expect(oneLine(hook.stdout)).toBe('Hippo will finish saving this compaction at the next sleep.');
+      // One wait, then the spool: a small part of the 10 s Claude Code gives PostCompact.
+      expect(lockWaitAskedMs(waits, hook.pid)).toBe(COMPACTION_DB_WAIT_MS);
     } finally {
       db.exec('ROLLBACK');
       closeHippoDb(db);
     }
-    expect(elapsed).toBeLessThan(9000);
 
     const spool = path.join(s.hippoRoot, 'compactions-spool');
     expect(fs.readdirSync(spool).filter((f) => f.endsWith('.json'))).toHaveLength(1);

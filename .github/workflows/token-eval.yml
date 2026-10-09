@@ -1,5 +1,6 @@
-# The token-eval harness tests, kept out of ci.yml's shards because they take a quarter of its Windows time.
+# The slow token-eval harness tests (EVAL_TESTS in vitest.config.ts), kept out of ci.yml's shards because they take a quarter of its Windows time.
 # A PR that touches src or the harness runs them here, beside ci.yml, so a src change that breaks the harness shows before merge.
+# npm-publish.yml calls this workflow on the tagged commit and publishes only when it passes.
 name: Token eval
 
 on:
@@ -18,6 +19,7 @@ on:
       - 'vitest.eval.config.ts'
       - '.github/workflows/token-eval.yml'
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read

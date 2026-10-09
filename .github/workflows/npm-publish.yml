@@ -4,7 +4,7 @@ name: Publish to npm
 # commit and workflow that built the package, shown on npmjs.com and checked
 # by `npm audit signatures`. Trigger: push a v*.*.* tag, cut from master for a
 # release or from release/<x.y> for a backport (docs/release-policy.md).
-# The whole CI workflow runs on the tagged commit first; nothing is published unless it passes.
+# The whole CI workflow and the slow token-eval tests run on the tagged commit first; nothing is published unless both pass.
 # Python has its own tag scheme (python-v*.*.*) in pypi-publish.yml.
 #
 # One-time setup (npmjs.com, package settings > Trusted publishing): add a
@@ -34,8 +34,14 @@ jobs:
     permissions:
       contents: read
 
+  # The harness tests the default run leaves out, so no test file sits outside the release.
+  token-eval:
+    uses: ./.github/workflows/token-eval.yml
+    permissions:
+      contents: read
+
   publish:
-    needs: ci
+    needs: [ci, token-eval]
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:

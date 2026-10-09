@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
+import { v22 } from '../src/db/migrations/v22.js';
 
 function rowsAs<T>(db: DatabaseSyncLike, sql: string): T[] {
   // SAFETY: T is pinned by each call site to the exact column list of the
@@ -91,27 +92,8 @@ describe('schema migration v22: tenant_id + scope on continuity tables', () => {
         INSERT INTO session_handoffs(session_id, summary, artifacts_json, tenant_id, created_at)
         VALUES ('sess-mapped', 'h', '[]', 'default', ?)
       `).run(now);
-      // Run the backfill SQL the migration uses (idempotent)
-      db.exec(`
-        UPDATE session_events
-           SET tenant_id = (
-             SELECT MAX(t.tenant_id) FROM task_snapshots t
-              WHERE t.session_id = session_events.session_id
-           )
-         WHERE tenant_id = 'default'
-           AND (SELECT COUNT(DISTINCT t.tenant_id) FROM task_snapshots t
-                 WHERE t.session_id = session_events.session_id) = 1
-      `);
-      db.exec(`
-        UPDATE session_handoffs
-           SET tenant_id = (
-             SELECT MAX(t.tenant_id) FROM task_snapshots t
-              WHERE t.session_id = session_handoffs.session_id
-           )
-         WHERE tenant_id = 'default'
-           AND (SELECT COUNT(DISTINCT t.tenant_id) FROM task_snapshots t
-                 WHERE t.session_id = session_handoffs.session_id) = 1
-      `);
+      // The migration itself: on a current store its other steps change nothing, so this runs its backfill.
+      v22.up(db);
 
       const evt = rowAs<{ tenant_id: string }>(
         db, `SELECT tenant_id FROM session_events WHERE session_id='sess-mapped'`,
@@ -146,16 +128,7 @@ describe('schema migration v22: tenant_id + scope on continuity tables', () => {
         VALUES ('sess-shared', 'note', 'e', 'test', '{}', 'default', ?)
       `).run(now);
 
-      db.exec(`
-        UPDATE session_events
-           SET tenant_id = (
-             SELECT MAX(t.tenant_id) FROM task_snapshots t
-              WHERE t.session_id = session_events.session_id
-           )
-         WHERE tenant_id = 'default'
-           AND (SELECT COUNT(DISTINCT t.tenant_id) FROM task_snapshots t
-                 WHERE t.session_id = session_events.session_id) = 1
-      `);
+      v22.up(db);
 
       const evt = rowAs<{ tenant_id: string }>(
         db, `SELECT tenant_id FROM session_events WHERE session_id='sess-shared'`,

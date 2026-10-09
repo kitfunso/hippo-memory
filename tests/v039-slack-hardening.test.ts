@@ -3,15 +3,16 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHmac } from 'node:crypto';
+import { createRequire } from 'node:module';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import type { Context } from '../src/api.js';
 import { Layer } from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { openHippoDb, closeHippoDb, getCurrentSchemaVersion, getSchemaVersion } from '../src/db.js';
+import { openHippoDb, closeHippoDb, getCurrentSchemaVersion, getSchemaVersion, type DatabaseSyncLike } from '../src/db.js';
 import { resolveTenantForTeam } from '../src/connectors/slack/tenant-routing.js';
-import { ingestMessage } from '../src/connectors/slack/ingest.js';
+import { ingestMessage, type IngestInput, type IngestResult } from '../src/connectors/slack/ingest.js';
 import { parkInDlq } from '../src/connectors/dlq.js';
 import { replayDlqEntry, slackDlq } from '../src/connectors/slack/dlq.js';
 import { archiveRawMemory } from '../src/raw-archive.js';
@@ -19,6 +20,9 @@ import { verifySlackSignature } from '../src/connectors/slack/signature.js';
 import { slackHistoryFetcher } from '../src/connectors/slack/web-client.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
+
+// SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike.
+const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as { DatabaseSync: { prototype: DatabaseSyncLike } };
 
 const SECRET = 'shhh-current';
 const PREVIOUS_SECRET = 'shhh-old';
@@ -188,22 +192,8 @@ describe('v0.39 commit 3 — Slack hardening + migration v19', () => {
     }
   });
 
-  // 6. Ingest race: simultaneous ingest with same eventId. Since single-
-  //    process serialization makes a true race hard to reproduce, we exercise
-  //    the afterWrite race-detection branch directly: we use the documented
-  //    `remember()` afterWrite hook to insert a slack_event_log row for an
-  //    event_id mid-SAVEPOINT, then have the same hook run the production
-  //    INSERT-OR-IGNORE-with-changes-check logic. This is a real DB test (no
-  //    mocks) that validates the exact contract: pre-existing event_log row
-  //    causes INSERT OR IGNORE to return changes=0 → throw → SAVEPOINT
-  //    rollback → no orphan memory row.
-  //
-  //    For the public ingestMessage path under the same-eventId fast-path
-  //    pre-check, we also assert the second call returns 'duplicate' (the
-  //    short-circuit branch) and a single memory row exists.
-  it('ingest race: duplicate event_id yields exactly one memory + skipped_duplicate via afterWrite throw', async () => {
-    const { remember } = await import('../src/api.js');
-    const { DuplicateEventError } = await import('../src/connectors/slack/idempotency.js');
+  // The fast pre-check answers a replay; a second worker whose pre-check ran too early is caught by the event-log insert inside its own write.
+  it('ingest race: duplicate event_id yields exactly one memory + skipped_duplicate via afterWrite throw', () => {
     const ctx: Context = { hippoRoot: root, tenantId: 'default', actor: { subject: 'connector:slack', role: 'admin' } };
 
     // First call: ordinary ingest succeeds and writes to slack_event_log.
@@ -228,55 +218,33 @@ describe('v0.39 commit 3 — Slack hardening + migration v19', () => {
     expect(r2.status).toBe('duplicate');
     expect(r2.memoryId).toBe(r1.memoryId);
 
-    // Now exercise the afterWrite throw directly. A different event_id whose
-    // slack_event_log row has been pre-seeded simulates the two-worker race
-    // where worker B's pre-check missed worker A's commit.
-    const racedEventId = 'EvRaceB';
-    {
-      const db = openHippoDb(root);
-      try {
-        db.prepare(
-          `INSERT INTO slack_event_log (event_id, ingested_at, memory_id) VALUES (?, ?, ?)`,
-        ).run(racedEventId, new Date().toISOString(), r1.memoryId);
-      } finally {
-        closeHippoDb(db);
-      }
-    }
-
-    // Build a fresh memory entry that would otherwise be valid, and let the
-    // afterWrite hook run the real production logic. The race-loser commit
-    // must throw DuplicateEventError → SAVEPOINT rollback → no new row.
+    // The loser's pre-check runs before the winner commits, so it finds nothing and goes on to write.
+    const raced: IngestInput = {
+      teamId: 'T1',
+      channel: { id: 'C1', is_private: false },
+      message: { type: 'message', channel: 'C1', user: 'U1', text: 'second race-msg', ts: '1700.000100' },
+      eventId: 'EvRaceB',
+    };
+    const racedEventId = raced.eventId;
     const memBefore = loadAllEntries(root).length;
-    const seedMem = createMemory('would-be-second-write', {
-      layer: Layer.Buffer,
-      tenantId: 'default',
-      kind: 'raw',
+    const winners: IngestResult[] = [];
+    let winnerRan = false;
+    const { exec } = DatabaseSync.prototype;
+    const spy = vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (this: DatabaseSyncLike, sql: string) {
+      // The loser's first lock request: the winner ingests the same event on its own connection, then the loser goes on.
+      if (sql === 'BEGIN IMMEDIATE' && !winnerRan) {
+        winnerRan = true;
+        winners.push(ingestMessage(ctx, raced));
+      }
+      exec.call(this, sql);
     });
+    const loser = ingestMessage(ctx, raced);
+    spy.mockRestore();
 
-    // Re-implement the production afterWrite logic exactly so this is a
-    // real-DB integration test of the pattern without going through ingest.ts
-    // (which would short-circuit at hasSeenEvent).
-    expect(() =>
-      remember(ctx, {
-        content: seedMem.content,
-        tags: seedMem.tags,
-        kind: 'raw',
-        afterWrite: (innerDb, memoryId) => {
-          const ins = innerDb
-            .prepare(
-              `INSERT OR IGNORE INTO slack_event_log (event_id, ingested_at, memory_id) VALUES (?, ?, ?)`,
-            )
-            .run(racedEventId, new Date().toISOString(), memoryId);
-          if (Number(ins.changes ?? 0) === 0) {
-            throw new DuplicateEventError(racedEventId);
-          }
-        },
-      }),
-    ).toThrow(DuplicateEventError);
-
-    // No new memory row: the SAVEPOINT rolled back the would-be-second-write.
-    const memAfter = loadAllEntries(root).length;
-    expect(memAfter).toBe(memBefore);
+    expect(winners.map((w) => w.status)).toEqual(['ingested']);
+    expect(loser).toEqual({ status: 'skipped_duplicate', memoryId: winners[0].memoryId });
+    // One new memory row, the winner's: the loser's write rolled back.
+    expect(loadAllEntries(root).length).toBe(memBefore + 1);
 
     // slack_event_log still has exactly one row for the raced event_id.
     {
@@ -287,8 +255,7 @@ describe('v0.39 commit 3 — Slack hardening + migration v19', () => {
           .prepare(`SELECT memory_id FROM slack_event_log WHERE event_id = ?`)
           .all(racedEventId) as Array<{ memory_id: string }>;
         expect(rows).toHaveLength(1);
-        // The pre-seeded memory_id (r1.memoryId), not the rolled-back one.
-        expect(rows[0].memory_id).toBe(r1.memoryId);
+        expect(rows[0].memory_id).toBe(winners[0].memoryId);
       } finally {
         closeHippoDb(db);
       }

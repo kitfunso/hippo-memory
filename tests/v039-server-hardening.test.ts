@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -9,6 +9,7 @@ import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { createApiKey, revokeApiKey } from '../src/auth.js';
 import { remember as apiRemember } from '../src/api.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
+import { log } from '../src/log.js';
 
 // v0.39 commit 5 — Server hardening regressions:
 //   - Fix 5.3: /mcp/stream heartbeat re-validates bearer; MCP_SSE_MAX_AGE_SEC
@@ -191,12 +192,11 @@ describe('v039 server hardening', () => {
     const res = await streamPromise;
     expect(res?.status).toBe(200);
 
-    const stopStarted = Date.now();
+    const warn = vi.spyOn(log, 'warn');
     await handle.stop();
-    const stopElapsed = Date.now() - stopStarted;
-    // stop() must resolve within a few seconds — pre-fix this hung
-    // until the SSE keepalive timer fired (30s).
-    expect(stopElapsed).toBeLessThan(5000);
+    // stop() ends the stream itself, so the close never has to wait out the drain window and force the socket shut.
+    expect(warn.mock.calls.filter(([line]) => String(line).startsWith('shutdown:'))).toEqual([]);
+    warn.mockRestore();
     // Re-running stop is safe (idempotent).
     await handle.stop();
     ac.abort();

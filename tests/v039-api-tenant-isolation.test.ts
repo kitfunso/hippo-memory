@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { createRequire } from 'node:module';
 import { rmSync } from 'node:fs';
 import { readEntry } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
@@ -8,9 +9,13 @@ import {
   remember,
   promote,
   supersede,
+  type HippoDbContext,
 } from '../src/api.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
+
+// SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike.
+const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as { DatabaseSync: { prototype: DatabaseSyncLike } };
 
 /**
  * Typed wrapper around a single-row SQL lookup. Every call site below
@@ -24,7 +29,7 @@ function queryRow<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T
 // v0.39 commit 1 regressions:
 //  - promote: tenant pre-check matches archiveRaw (CRITICAL #1)
 //  - authCreate: HTTP body.tenantId ignored, key bound to caller (CRITICAL #2)
-//  - supersede: BEGIN IMMEDIATE CAS — direct SQL race + clean path + tenant scope
+//  - supersede: BEGIN IMMEDIATE CAS: two-connection race + clean path + tenant scope
 //    (CRITICAL #4)
 
 describe('v039 api tenant isolation', () => {
@@ -40,6 +45,7 @@ describe('v039 api tenant isolation', () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     if (originalHippoHome === undefined) {
       delete process.env.HIPPO_HOME;
     } else {
@@ -84,70 +90,38 @@ describe('v039 api tenant isolation', () => {
     }
   });
 
-  // ---- Test 5: supersede CAS — direct SQL race -------------------------------
-  // The CAS UPDATE in supersede() is:
-  //   UPDATE memories SET superseded_by = ?
-  //    WHERE id = ? AND tenant_id = ? AND superseded_by IS NULL
-  // The WHERE-clause `superseded_by IS NULL` is the race guard. Two assertions:
-  //   (a) The user-visible contract: pre-setting superseded_by causes
-  //       supersede() to throw with the "already superseded" wording. The
-  //       readEntry early guard wins in the single-process case, which is
-  //       fine — it surfaces the same observable contract (a concurrent
-  //       writer prevents this supersede from succeeding) and uses the
-  //       same canonical error wording.
-  //   (b) The CAS WHERE-clause itself: run the exact UPDATE statement that
-  //       supersede() runs against a row whose `superseded_by` is already
-  //       non-NULL, and assert `changes=0`. This locks the SQL contract
-  //       independently of supersede()'s control flow, so a future refactor
-  //       that drops the `IS NULL` guard would fail this test even if the
-  //       early-readEntry guard still fires.
-  it('supersede CAS: pre-superseded row throws + WHERE clause returns changes=0', () => {
-    const created = remember(
-      { hippoRoot: home, tenantId: 'alpha', actor: { subject: 'cli', role: 'admin' } },
-      { content: 'alpha-row supersede CAS race canary' },
-    );
+  // The loser read the row before the winner committed, so its early check passed: only the guarded UPDATE can refuse it.
+  it('supersede refuses the writer that read the row before another connection superseded it', () => {
+    const alpha = (): HippoDbContext => ({ hippoRoot: home, tenantId: 'alpha', actor: { subject: 'cli', role: 'admin' } });
+    const created = remember(alpha(), { content: 'alpha-row supersede CAS race canary' });
 
-    // Pre-set superseded_by to simulate a concurrent writer that won.
+    const winners: string[] = [];
+    let raced = false;
+    const { exec } = DatabaseSync.prototype;
+    vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (this: DatabaseSyncLike, sql: string) {
+      // The loser's first lock request: the winner runs to its commit on its own connection, then the loser goes on.
+      if (sql === 'BEGIN IMMEDIATE' && !raced) {
+        raced = true;
+        winners.push(supersede(alpha(), created.id, 'the winner').newId);
+      }
+      exec.call(this, sql);
+    });
+    expect(() => supersede(alpha(), created.id, 'the loser')).toThrow(`Memory ${created.id} already superseded by another writer`);
+    vi.restoreAllMocks();
+
+    expect(winners).toHaveLength(1);
     const db = openHippoDb(home);
     try {
-      db.prepare(`UPDATE memories SET superseded_by = ? WHERE id = ?`).run(
-        'mem_preexisting_racer',
-        created.id,
-      );
+      const old = queryRow<{ superseded_by: string | null }>(db, `SELECT superseded_by FROM memories WHERE id = ?`, created.id);
+      expect(old?.superseded_by).toBe(winners[0]);
+      // The loser's transaction rolled back whole: no successor row and no supersede row of its own.
+      const rows = queryRow<{ c: number }>(db, `SELECT COUNT(*) AS c FROM memories WHERE tenant_id = 'alpha'`);
+      expect(Number(rows?.c)).toBe(2);
+      expect(queryAuditEvents(db, { tenantId: 'alpha', op: 'supersede' }).map((e) => e.targetId)).toEqual([created.id]);
     } finally {
       closeHippoDb(db);
     }
-
-    // (a) supersede() throws with the canonical wording.
-    expect(() =>
-      supersede(
-        { hippoRoot: home, tenantId: 'alpha', actor: { subject: 'cli', role: 'admin' } },
-        created.id,
-        'replacement content',
-      ),
-    ).toThrow(/already superseded/i);
-
-    // (b) Direct SQL: the CAS WHERE clause returns changes=0 against a row
-    //     whose `superseded_by` is already non-NULL.
-    const db2 = openHippoDb(home);
-    try {
-      const result = db2.prepare(`
-        UPDATE memories
-        SET superseded_by = ?
-        WHERE id = ? AND tenant_id = ? AND superseded_by IS NULL
-      `).run('mem_would_be_new', created.id, 'alpha');
-      expect(Number(result.changes ?? 0)).toBe(0);
-
-      // And the pre-existing supersede pointer is untouched.
-      const row = queryRow<{ superseded_by: string | null }>(
-        db2,
-        `SELECT superseded_by FROM memories WHERE id = ?`,
-        created.id,
-      );
-      expect(row?.superseded_by).toBe('mem_preexisting_racer');
-    } finally {
-      closeHippoDb(db2);
-    }
+    expect(() => supersede(alpha(), created.id, 'a later writer')).toThrow(`is already superseded by ${winners[0]}`);
   });
 
   // ---- Test 6: supersede CAS — clean path -----------------------------------
