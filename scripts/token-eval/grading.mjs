@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createHash } from 'node:crypto';
 import { agentGit } from './checks.mjs';
-import { isInstructionPath } from './workspace.mjs';
+import { isInstructionPath, stubRefOf } from './workspace.mjs';
 import { RESTORABLE } from './surfaces.mjs';
 import { surfaceBytes } from './leaks.mjs';
 
@@ -11,10 +11,10 @@ const GRADE_REF = 'refs/z0/grade';
 const SURFACE_CAP = 64 * 1024;
 const sha256 = (data) => createHash('sha256').update(data).digest('hex');
 
-/** The memory surfaces' text at an apply's pre-session, for E3b's stored sample (179); binary files and store databases give way to the store entries. */
+/** The memory surfaces' text at an apply's pre-session, for E3b's stored sample (179); instructions first, so the cap never cuts AGENTS.md (E6 plan R10). */
 export function surfaceText({ root, surfaces, stores }) {
   const parts = [];
-  for (const { e, bytes } of surfaceBytes(root, surfaces, [...RESTORABLE, 'instructions'])) if (!bytes.includes(0)) parts.push(`=== ${e.path}\n${bytes.toString('utf8')}`);
+  for (const { e, bytes } of surfaceBytes(root, surfaces, ['instructions', ...RESTORABLE])) if (!bytes.includes(0)) parts.push(`=== ${e.path}\n${bytes.toString('utf8')}`);
   for (const s of stores) for (const e of s.entries) parts.push(`=== ${s.path}#${e.id}\n${e.content}`);
   const text = `${parts.join('\n')}\n`;
   return text.length > SURFACE_CAP ? `${text.slice(0, SURFACE_CAP)}\n[cut at ${SURFACE_CAP} chars]\n` : text;
@@ -52,7 +52,7 @@ export function saveGrading(ctx, run, step, stage, turns, record) {
   const lessons = [turns?.lesson, turns?.staleLesson].filter(Boolean);
   fs.writeFileSync(path.join(dir, `${t.id}.grade.json`), `${JSON.stringify({
     sequence: run.s.id, runName: run.runName, arm: run.arm, seed: run.seed, position: step.position, order: step.order, taskId: t.id,
-    kind: role.kind, lessonId: role.lessonId ?? null, staleLessonId: turns?.staleLesson?.id ?? null, stubRef: `refs/eval/${run.s.id}/${t.id}`, stub: stage.commit, ...commits,
+    kind: role.kind, lessonId: role.lessonId ?? null, staleLessonId: turns?.staleLesson?.id ?? null, stubRef: stubRefOf(run.s.id, t, run.arm), stub: stage.commit, ...commits,
     finalChecked, ...held,
     verdicts: { first: turns?.first ?? null, final: turns?.final ?? null, staleFollow: turns?.staleFollow ?? null },
     acceptancePassed: record.acceptancePassed, commandsFirst: turns?.commandsFirst ?? null, commandsFinal: turns?.commandsFinal ?? null, commandsStale: turns?.commandsStale ?? null,

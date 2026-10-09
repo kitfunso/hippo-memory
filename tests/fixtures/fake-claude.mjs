@@ -188,6 +188,11 @@ function firstSession() {
     write('.claude/agents/x.md', 'not an instruction file\n');
   }
   if (prompt.includes('DELETE')) fs.rmSync('AGENTS.md', { force: true });
+  // APPEND:<file>:<text>, both filled after the match, since a filled Windows path holds a colon.
+  for (const m of prompt.matchAll(/^APPEND:([^:\n]+):(.+)$/gm)) {
+    fs.mkdirSync(path.dirname(path.resolve(fill(m[1]))), { recursive: true });
+    fs.appendFileSync(fill(m[1]), `${fill(m[2])}\n`);
+  }
   const state = lessonState();
   if (state) fs.writeFileSync('lesson.txt', `${state}\n`);
   for (const m of prompt.matchAll(/NEW_FILE (\S+)/g)) write(m[1], 'new file from the agent\n');

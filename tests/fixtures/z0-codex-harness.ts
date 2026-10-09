@@ -1,13 +1,16 @@
 // Set-up for the Z0 Codex tests: a temp operator with a fake real codex and a login, and a Codex ctx and run built on them.
 import { mkdirSync, writeFileSync, readFileSync, renameSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { codexContext, writeCodexHome } from '../../scripts/token-eval/codex.mjs';
 import { runDirs, freshRunDirs } from '../../scripts/token-eval/homes.mjs';
 import { armEnv } from '../../scripts/token-eval/arms.mjs';
 import { pathKey } from '../../scripts/token-eval/exec.mjs';
-import { tmp } from './z0-harness.js';
+import { runAll, validateTasks } from '../../scripts/token-eval/ab-run.mjs';
+import { tmp, isolate, readRecords, CHECKS, CLAUDE, family, lesson, teach, apply } from './z0-harness.js';
+import type { FixtureRepo, FamilyDef, TaskDef, RunExtra, RunRecord } from './z0-harness.js';
 
 export const FAKE_CODEX = resolve(__dirname, 'fake-codex.mjs');
 const WIN = process.platform === 'win32';
@@ -70,8 +73,70 @@ export function codexRun(ctx: CodexCtx, out: string, arm = 'X1', seed = 1) {
 
 export const xTask = (prompt: string, id = 'a1') => ({ id, prompt });
 
+/** A set X tasks file on sequence seqF, so the z0-harness readers (runRoot, rawResult) find its runs. */
+export const xSpec = (r: FixtureRepo, families: FamilyDef[], tasks: TaskDef[]) =>
+  validateTasks({ families, sequences: [{ id: 'seqF', cluster: 'c', repo: r.repo, fixedOrder: true, set: 'X', tasks }] }, CHECKS);
+
+/** isolate() plus an operator and the fake-codex log and limit-state files, each in its own temp dir. */
+export function xIsolate(name: string) {
+  const { out, log, home } = isolate(name);
+  const op = operator(name);
+  const codexLog = join(tmp('z0-xlog-'), 'codex.log');
+  process.env.FAKE_CODEX_LOG = codexLog;
+  process.env.FAKE_CODEX_STATE = join(tmp('z0-xstate-'), 'limit');
+  return { out, log, home, op, codexLog };
+}
+
+export const X_IDS = ['xa', 'xb', 'xc'];
+const xFamily = (id: string) => family(id, [lesson(`${id}-l1`, `Rule ${id} holds`)]);
+
+/** The smallest set X order the draw accepts (two tasks between a teach and its first apply, no no-lesson filler): t-x*, a-x*, b-x*. */
+export function xTrio(r: FixtureRepo, prompts: Record<string, string> = {}) {
+  const at = (id: string) => prompts[id] ?? 'look';
+  const tasks = [
+    ...X_IDS.map((id) => teach(r, `t-${id}`, `${id}-l1`, at(`t-${id}`))),
+    ...X_IDS.map((id) => apply(r, `a-${id}`, `${id}-l1`, at(`a-${id}`))),
+    ...X_IDS.map((id) => apply(r, `b-${id}`, `${id}-l1`, at(`b-${id}`))),
+  ];
+  return xSpec(r, X_IDS.map(xFamily), tasks);
+}
+
+/** runAll over fake-claude teaches and fake-codex applies, with the operator's launcher and login and no memory wait. */
+export async function xRun(s: ReturnType<typeof xSpec>, arms: string[], out: string, op: Operator, extra: RunExtra & CodexOpts = {}) {
+  return runAll({
+    spec: s, arms, seeds: 1, outDir: out, model: null, claudeBin: CLAUDE, settleMs: 0, warmup: false, log: () => {},
+    codexBin: op.launcher, codexAuth: op.authFile, codexModel: 'gpt-fake', codexMemoryWait: 'none', ...extra,
+  });
+}
+
 export interface FakeSeen { argv: string[]; cwd: string; envKeys: string[]; home: string; appdata: string; codexHome: string; config: string | null; agents: string | null; authSha: string | null }
 export const fakeSeen = (log: string): FakeSeen[] => (existsSync(log) ? readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []);
+
+/** A set X record with the Codex fields the runner adds. */
+export type XRecord = RunRecord & {
+  codexVersion?: string; codexMemories?: boolean; codexHookTrust?: string; codexAuth?: string; codexMemoryWait?: { ms: number; timedOut: boolean };
+  codexHooksFired?: { sent: number; injections: number } | null; codexInternalHooksFired?: { sent: number; injections: number } | null; codexWrapperCaptured?: boolean;
+  codexStrayRollouts?: number; codexInternalUsage?: { usage: Record<string, number> } | null; x4Block?: string; wallMs?: number;
+  chain?: { stored: boolean | null; shown: boolean | null; captured: boolean | null; capturedAny: boolean | null };
+};
+
+export function xRecords(out: string): XRecord[] {
+  // SAFETY: a set X run writes RunRecord lines that also hold the Codex fields XRecord adds.
+  return readRecords(out) as XRecord[];
+}
+
+/** Vault dirs in the temp dir that still hold any of `tokens`; other test files open vaults too, so a dir may vanish mid-read. */
+export function vaultsHolding(tokens: string[]): string[] {
+  const hits: string[] = [];
+  for (const name of readdirSync(tmpdir()).filter((n) => n.startsWith('z0-codex-auth-'))) {
+    try {
+      if (tokens.some((t) => readFileSync(join(tmpdir(), name, 'auth.json')).includes(t))) hits.push(name);
+    } catch (err) {
+      if (!(err instanceof Error && 'code' in err && err.code === 'ENOENT')) throw err;
+    }
+  }
+  return hits;
+}
 
 /** Every file under `dir` whose bytes hold any of `needles`, as paths relative to `dir`. */
 export function filesHolding(dir: string, needles: string[]): string[] {

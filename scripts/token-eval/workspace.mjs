@@ -6,6 +6,8 @@ import { git, gitSpawn } from './exec.mjs';
 import { HIPPO_ARMS } from './arms.mjs';
 
 export const STUB_CLAUDE_MD = '# Instructions for coding agents working in this repository.\n';
+// X3's stub is committed, never appended, so the carry cannot copy it twice (E6 plan D8).
+export const X3_STUB = `${STUB_CLAUDE_MD}@AGENTS.md\nWhen you receive a correction, add it to AGENTS.md.\n`;
 const STUB_IDENT = {
   GIT_AUTHOR_NAME: 'z0-eval', GIT_AUTHOR_EMAIL: 'z0-eval@localhost', GIT_AUTHOR_DATE: '2000-01-01T00:00:00Z',
   GIT_COMMITTER_NAME: 'z0-eval', GIT_COMMITTER_EMAIL: 'z0-eval@localhost', GIT_COMMITTER_DATE: '2000-01-01T00:00:00Z',
@@ -15,10 +17,10 @@ const SKIP_DIRS = new Set(['.git', '.hippo', 'node_modules']);
 const win = process.platform === 'win32';
 
 /** The base plus a root CLAUDE.md holding only the stub; fixed identity and dates give every arm the same sha. */
-export function stubBaseCommit(cacheDir, baseRef) {
+export function stubBaseCommit(cacheDir, baseRef, text = STUB_CLAUDE_MD) {
   const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'z0-stub-'));
   try {
-    fs.writeFileSync(path.join(scratch, 'stub'), STUB_CLAUDE_MD);
+    fs.writeFileSync(path.join(scratch, 'stub'), text);
     const blob = git(['hash-object', '-w', '--no-filters', path.join(scratch, 'stub')], cacheDir).trim();
     const env = { ...STUB_IDENT, GIT_INDEX_FILE: path.join(scratch, 'index') };
     const parent = git(['rev-parse', `${baseRef}^{commit}`], cacheDir).trim();
@@ -173,9 +175,14 @@ function emptyWorkspace(workDir, arm) {
   }
 }
 
+export const stubTextOf = (arm) => (arm === 'X3' ? X3_STUB : STUB_CLAUDE_MD);
+
+/** X3's stub ref sits beside the plain one, since git refuses a ref that is also a ref dir (E6 plan R12, R22). */
+export const stubRefOf = (sequenceId, t, arm) => `refs/${arm === 'X3' ? 'eval-x3' : 'eval'}/${sequenceId}/${t.id}`;
+
 /** Move the workspace to a task's stub base without its future, in a new .git that fetches only that commit's history. */
 export function checkoutBase(cacheDir, workDir, sequenceId, t, arm) {
-  const stub = stubBaseCommit(cacheDir, t.baseRef);
+  const stub = stubBaseCommit(cacheDir, t.baseRef, stubTextOf(arm));
   assertNoInstructionLinks(cacheDir, sequenceId, t, stub);
   // Sequence order comes from the seed, so an earlier base can hold a later task's fix.
   emptyWorkspace(workDir, arm);
@@ -183,7 +190,7 @@ export function checkoutBase(cacheDir, workDir, sequenceId, t, arm) {
   for (const [k, v] of WORK_CONFIG) git(['config', k, v], workDir);
   // Keeps a hippo arm's store out of `git status`.
   fs.appendFileSync(path.join(workDir, '.git', 'info', 'exclude'), '\n.hippo/\n');
-  const ref = `refs/eval/${sequenceId}/${t.id}`;
+  const ref = stubRefOf(sequenceId, t, arm);
   git(['update-ref', ref, stub], cacheDir);
   git(['fetch', '--quiet', '--no-tags', cacheDir, `+${ref}:refs/remotes/eval/base`], workDir);
   git(['checkout', '--quiet', '-f', '--detach', 'refs/remotes/eval/base'], workDir);

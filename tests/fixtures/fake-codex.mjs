@@ -38,6 +38,17 @@ const write = (f, text) => {
   fs.mkdirSync(path.dirname(f), { recursive: true });
   fs.writeFileSync(f, text);
 };
+// HOOKROW, HOOKROW_CHILD and HOOKROW_MEMGEN book one hippo hook injection in the cell's store under that thread's id.
+const ledger = /\bHOOKROW/.test(prompt)
+  ? { db: await import(new URL('../../dist/db.js', import.meta.url)), tokens: await import(new URL('../../dist/token-ledger.js', import.meta.url)) } : null;
+function hookRow(sessionId) {
+  const db = ledger.db.openHippoDb(path.resolve('.hippo'));
+  try {
+    ledger.tokens.recordTokenUse(db, { tenantId: 'default', sessionId, surface: 'hook', event: 'inject', items: 1, tokens: 10 });
+  } finally {
+    ledger.db.closeHippoDb(db);
+  }
+}
 const read = (f) => (fs.existsSync(f) ? fs.readFileSync(f, 'utf8') : null);
 const fill = (s) => s.replaceAll('{OUT}', OUT).replaceAll('{CODEX_HOME}', HOME).replaceAll('{RUN}', path.dirname(HOME));
 
@@ -98,6 +109,7 @@ function sideRollout(kind) {
   if (canary) lines.push(...readCall(fill(canary)));
   lines.push(tokenCount(300, 100, 30));
   writeRollout(rolloutPath(id), lines);
+  if (has(`HOOKROW_${kind.toUpperCase()}`)) hookRow(id);
 }
 
 /** LIMIT once per $FAKE_CODEX_STATE: a cut-off rollout and memory write, then the limit error. */
@@ -133,7 +145,9 @@ function work() {
   const lesson = has('LESSON_OK') ? 'ok' : has('LESSON_BAD') ? 'bad' : null;
   if (lesson) fs.writeFileSync('lesson.txt', `${lesson}\n`);
   for (const m of prompt.matchAll(/^READ:(.+)$/gm)) lines.push(...readCall(fill(m[1].trim())));
-  for (const m of prompt.matchAll(/^HOOKCTX:(.+)$/gm)) lines.push(line('response_item', { type: 'message', role: 'developer', z0_fake_hook: true, content: [{ type: 'input_text', text: m[1] }] }));
+  // {B64:...} lets a hook context hold a key phrase the apply prompt may not spell out.
+  const unb64 = (text) => text.replace(/\{B64:([^}]+)\}/g, (_, b64) => Buffer.from(b64, 'base64').toString('utf8'));
+  for (const m of prompt.matchAll(/^HOOKCTX:(.+)$/gm)) lines.push(line('response_item', { type: 'message', role: 'developer', z0_fake_hook: true, content: [{ type: 'input_text', text: unb64(m[1]) }] }));
   if (has('MCP_TOOL')) lines.push(line('response_item', { type: 'function_call', name: 'mcp__codex_app__list_threads', call_id: 'mcp-1', arguments: '{}' }));
   if (has('PRINT_AUTH')) {
     const auth = read(AUTH) ?? '';
@@ -147,6 +161,8 @@ function work() {
     fs.writeFileSync(AUTH, JSON.stringify(auth, null, 2));
   }
   if (has('LOG_AUTH')) write(path.join(HOME, 'logs_2.sqlite'), `SQLite format 3\0${read(AUTH)}`);
+  // Outside every per-cell sweep root, so only runAll's final sweep can find it.
+  if (has('LEAK_OUT')) write(path.join(OUT, 'leak-out.txt'), read(AUTH) ?? '');
   return lines;
 }
 
@@ -173,6 +189,14 @@ if (has('AUTH_FAIL')) {
 }
 const body = work();
 writeRollout(rolloutPath(threadId), [...head, tokenCount(1000, 600, 50), ...body, tokenCount(2000, 1500, 120)]);
+if (has('HOOKROW')) hookRow(threadId);
+// WRAPLOG and WRAPLOG_OTHER stand in for the installed wrapper's capture line, naming this thread or another one.
+for (const [m, id] of [['WRAPLOG', threadId], ['WRAPLOG_OTHER', randomUUID()]]) {
+  if (!has(m)) continue;
+  const log = path.join(path.dirname(HOME), 'home', '.hippo', 'logs', 'codex-sleep.log');
+  fs.mkdirSync(path.dirname(log), { recursive: true });
+  fs.appendFileSync(log, `[hippo] ${new Date().toISOString()} capture: transcript ${rolloutPath(id)}\n`);
+}
 if (has('CHILD')) sideRollout('child');
 if (has('MEMGEN')) sideRollout('memgen');
 if (has('STRAY')) sideRollout('stray');

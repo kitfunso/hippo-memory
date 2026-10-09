@@ -12,6 +12,7 @@ import { assertNoPhraseLeaks } from './leaks.mjs';
 import { runSteps } from './task.mjs';
 import { planScreen, screenLines, runScreen } from './screen.mjs';
 import { parseHookTrust } from './codex.mjs';
+import { finishCodex } from './codex-task.mjs';
 
 export { cacheTaskRepos } from './runs.mjs';
 export { usageFromResult, isUsageLimit, transcriptWork } from './records.mjs';
@@ -114,9 +115,20 @@ export function codexPreflight(arms, mode, { codexModel = null, codexHookTrust =
 export async function runAll(opts) {
   const { spec, arms, seeds = null, outDir } = opts;
   const ctx = await openContext(opts);
-  const steps = planRuns(spec, arms, seedCap(seeds));
-  writePlan(outDir, steps);
-  return runSteps(ctx, steps);
+  let records;
+  try {
+    const steps = planRuns(spec, arms, seedCap(seeds));
+    writePlan(outDir, steps);
+    records = await runSteps(ctx, steps);
+  } catch (err) {
+    const hits = finishCodex(ctx);
+    // The run's own error stands; the sweep's hits are added to it, never put in its place (E6 plan R24).
+    if (hits.length) err.message += `; the final sweep also deleted login tokens in ${hits.join(', ')}`;
+    throw err;
+  }
+  const hits = finishCodex(ctx);
+  if (hits.length) throw new Error(`a Codex login token was left in ${hits.join(', ')}; those files are deleted and the run is void`);
+  return records;
 }
 
 /** Per sequence and seed, the drawn order; per sequence, the tasksSinceTeach spread, so a bunched draw shows before any session. */

@@ -69,7 +69,7 @@ export function sessionRollouts(codexHome, before, threadId, internalSources = C
   const rest = fresh.filter((r) => !agent.includes(r));
   return {
     agent: agent.map((r) => r.file), threadIds: [...ids].filter(Boolean), ambiguous: roots.length > 1,
-    internal: rest.filter(internal).map((r) => r.file), stray: rest.filter((r) => !internal(r)).map((r) => r.file),
+    internal: rest.filter(internal).map((r) => r.file), internalIds: rest.filter(internal).map((r) => r.meta.id).filter(Boolean), stray: rest.filter((r) => !internal(r)).map((r) => r.file),
   };
 }
 

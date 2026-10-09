@@ -88,8 +88,23 @@ export function* surfaceBytes(root, surfaces, keys) {
   }
 }
 
+const CODEX_DB = /^codex-home\/(memories_[^/]*\.sqlite)(?:-wal|-shm)?$/i;
+const CODEX_G3_ONLY = /^codex-home\/(?:config\.toml|hooks\.json)$/i;
+
+/** The codexState files G3 reads (plan R10, R25): each memories database with its -wal and -shm as one text, and in G3 the config and hooks. */
+function codexStateTexts(root, surfaces, g3) {
+  const texts = new Map();
+  for (const { e, bytes } of surfaceBytes(root, surfaces, ['codexState'])) {
+    const db = CODEX_DB.exec(e.path);
+    const at = db ? `codex-home/${db[1]}` : e.path;
+    if (db || (g3 && CODEX_G3_ONLY.test(e.path))) texts.set(at, `${texts.get(at) ?? ''}
+${fold(bytes)}`);
+  }
+  return texts;
+}
+
 /** Each lesson's key phrase in the memory surface files and the hippo store entries; an archive hit names no lesson. */
-function surfaceLeaks(lessons, { root, surfaces, stores }) {
+function surfaceLeaks(lessons, { root, surfaces, stores }, g3 = false) {
   const phrases = lessons.map((l) => ({ id: l.id, folded: fold(l.keyPhrase) }));
   const hits = [];
   const scan = (text, surface, at) => {
@@ -100,6 +115,7 @@ function surfaceLeaks(lessons, { root, surfaces, stores }) {
     if (text === null) hits.push({ lessonId: null, surface: `${key}-archive`, path: e.path });
     else scan(text, key, e.path);
   }
+  for (const [at, text] of codexStateTexts(root, surfaces, g3)) scan(text, 'codexState', at);
   for (const s of stores) for (const e of s.entries) scan(fold(e.content), s.surface, `${s.path}#${e.id}`);
   return hits;
 }
@@ -107,7 +123,7 @@ function surfaceLeaks(lessons, { root, surfaces, stores }) {
 /** Every place an open lesson's key phrase sits before the session, as `{lessonId, surface, path}`; an archive hit names no lesson. */
 export function findLeaks(open, { t, root, work, pre, surfaces, stores }) {
   if (!open.length) return [];
-  const hits = surfaceLeaks(open, { root, surfaces, stores });
+  const hits = surfaceLeaks(open, { root, surfaces, stores }, true);
   for (const l of open) for (const rel of workspaceFiles(work, pre, l.keyPhrase)) hits.push({ lessonId: l.id, surface: 'workspace', path: `work/${rel}` });
   for (const l of open) if (!ownsPhrase(t, l) && holds(t.prompt, l.keyPhrase)) hits.push({ lessonId: l.id, surface: 'prompt', path: null });
   return hits;
