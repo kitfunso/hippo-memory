@@ -4,7 +4,7 @@ import { log } from '../log.js';
 import type { HippoIndex, LegacyStats } from './rows.js';
 import { audit } from './audit-event.js';
 import { stampOriginProjectForImport, upsertEntryRow } from './entry-row.js';
-import { buildIndexFromDb, syncMirrorFiles, writeIndexMirror, writeStatsMirror, buildStatsFromDb } from './mirrors.js';
+import { buildIndexFromDb, readLastRecall, syncMirrorFiles, writeIndexMirror, writeStatsMirror, buildStatsFromDb } from './mirrors.js';
 import { openStore, loadLegacyEntriesFromMarkdown } from './open.js';
 import { DAY_MS } from '../util/time.js';
 
@@ -13,6 +13,16 @@ export function loadIndex(hippoRoot: string): HippoIndex {
   const db = openStore(hippoRoot);
   try {
     return buildIndexFromDb(db);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/** The last recall's ids and its trace alone, for a caller that needs no index entry. */
+export function loadLastRecall(hippoRoot: string): Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'> {
+  const db = openStore(hippoRoot);
+  try {
+    return readLastRecall(db);
   } finally {
     closeHippoDb(db);
   }

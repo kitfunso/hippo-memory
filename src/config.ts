@@ -8,7 +8,7 @@ import { type PhysicsConfig, DEFAULT_PHYSICS_CONFIG, mergePhysicsConfig } from '
 import { DEFAULT_HALF_LIFE_DAYS } from './memory.js';
 import type { PromptRecallMetric } from './prompt-recall.js';
 import { DEFAULT_LOCAL_BUMP, DEFAULT_RECALL_BUDGET } from './core/search-types.js';
-import { log } from './log.js';
+import { errorMessage, log } from './log.js';
 
 export type DecayBasis = 'clock' | 'session' | 'adaptive';
 
@@ -425,7 +425,32 @@ export function loadConfig(hippoRoot: string): HippoConfig {
   // A caller that names no folder, as an add-on serving another store does, gets the defaults, never the working folder's config.json.
   if (hippoRoot === '') return { ...DEFAULT_CONFIG };
   const configPath = path.join(hippoRoot, 'config.json');
-  if (!fs.existsSync(configPath)) return { ...DEFAULT_CONFIG };
+  const key = path.resolve(configPath);
+  const stamp = fileStamp(configPath);
+  const hit = parsedConfigs.get(key);
+  if (hit !== undefined && hit.stamp === stamp) return { ...hit.config };
+  const config = stamp === null ? DEFAULT_CONFIG : parseConfigFile(configPath);
+  if (parsedConfigs.size >= PARSED_CONFIGS_MAX) parsedConfigs.clear();
+  parsedConfigs.set(key, { stamp, config });
+  return { ...config };
+}
+
+const PARSED_CONFIGS_MAX = 64;
+// Each path's parsed config with the stamp of the file it came from, so an unchanged file costs one stat and no parse.
+const parsedConfigs = new Map<string, { stamp: string | null; config: HippoConfig }>();
+
+/** A file's mtime and size, which an edit changes; null when it is missing or cannot be reached, as existsSync answers false. */
+function fileStamp(file: string): string | null {
+  try {
+    const stat = fs.statSync(file, { throwIfNoEntry: false });
+    return stat === undefined ? null : `${stat.mtimeMs}:${stat.size}`;
+  } catch (err) {
+    log.debug(`config: ${file} could not be reached, read as missing: ${errorMessage(err)}`);
+    return null;
+  }
+}
+
+function parseConfigFile(configPath: string): HippoConfig {
   try {
     const raw: Partial<HippoConfig> = JSON.parse(fs.readFileSync(configPath, 'utf8'));
     const basis = raw.decayBasis;
@@ -480,6 +505,8 @@ export function loadConfig(hippoRoot: string): HippoConfig {
 }
 
 const sharedStoreRoots = new Set<string>();
+// The stamp of each config.json last read as not shared: an unchanged file is not parsed again.
+const notSharedStamps = new Map<string, string>();
 
 /** The folder as isGlobalStoreRoot compares it (realpath, case-folded on Windows); its helper sits behind an import cycle. */
 function sharedStoreKey(hippoRoot: string): string {
@@ -494,12 +521,13 @@ function sharedStoreKey(hippoRoot: string): string {
 }
 
 /** True when the store's config.json sets `"sharedStore": true`. Once true, a root stays true for this process,
- *  so a broken edit while a server runs cannot turn it off. Reads only this key: loadConfig has no cache. */
+ *  so a broken edit while a server runs cannot turn it off. Reads only this key, so loadConfig's warnings stay loadConfig's. */
 export function isSharedStore(hippoRoot: string): boolean {
   const key = sharedStoreKey(hippoRoot);
   if (sharedStoreRoots.has(key)) return true;
   const configPath = path.join(path.resolve(hippoRoot), 'config.json');
-  if (!fs.existsSync(configPath)) return false;
+  const stamp = fileStamp(configPath);
+  if (stamp === null || notSharedStamps.get(configPath) === stamp) return false;
   let raw: Partial<HippoConfig> | null;
   try {
     raw = JSON.parse(fs.readFileSync(configPath, 'utf8'));
@@ -507,7 +535,11 @@ export function isSharedStore(hippoRoot: string): boolean {
     log.warn(`failed to read ${configPath}: ${err instanceof Error ? err.message : err} - sharedStore read as false.`);
     return false;
   }
-  if (raw?.sharedStore !== true) return false;
+  if (raw?.sharedStore !== true) {
+    if (notSharedStamps.size >= PARSED_CONFIGS_MAX) notSharedStamps.clear();
+    notSharedStamps.set(configPath, stamp);
+    return false;
+  }
   sharedStoreRoots.add(key);
   return true;
 }
@@ -520,4 +552,5 @@ export function markSharedStore(hippoRoot: string): void {
 /** Test seam: forget every root seen as shared. */
 export function _resetSharedStoreCacheForTests(): void {
   sharedStoreRoots.clear();
+  notSharedStamps.clear();
 }

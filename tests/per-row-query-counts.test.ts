@@ -10,7 +10,7 @@ import { writeEntryOn, strengthenRetrieved } from '../src/store/entry-writes.js'
 import { MEMORY_SELECT_COLUMNS } from '../src/store/rows.js';
 import { closeHippoDb } from '../src/db.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/memory.js';
-import { readEntry, loadAllEntries } from '../src/store/entry-reads.js';
+import { readEntry, loadAllEntries, heldIdLookup, loadEntriesByIds } from '../src/store/entry-reads.js';
 import { adminActor, type HippoDbContext } from '../src/api/types.js';
 import { learn, CLI_LEARN } from '../src/api/learn.js';
 import { cmdRemember } from '../src/cli/remember.js';
@@ -464,6 +464,33 @@ describe('writeSessionDigest', () => {
       const { result, statements } = recordStatements(() => writeSessionDigest(root, scan, { key: 's1', tenantId: 'default' }));
       expect(result.written).toBe(true);
       expect(countMatching(statements, TENANT_READ)).toBe(0);
+    }
+  });
+});
+
+describe('an id-list read of one tenant', () => {
+  it('seeks each id on the primary key, never walking every row of the tenant', () => {
+    const root = freshRoot('qc-id-plan');
+    const entries = rows(10, 'plan');
+    seed(root, entries);
+    const ids = entries.map((e) => e.id);
+    const { result, statements } = recordStatements(() => {
+      outcome(ctxFor(root), ids, true);
+      return { held: heldIdLookup(root, 'default', ids)(ids[0]), listed: loadEntriesByIds(root, ids, 'default').length };
+    });
+    expect(result).toEqual({ held: true, listed: 10 });
+
+    const idReads = [...new Set(statements.filter((sql) => sql.includes('FROM memories WHERE id IN (')))];
+    expect(idReads).toHaveLength(3);
+    const db = openStore(root);
+    try {
+      for (const sql of idReads) {
+        // SAFETY: EXPLAIN QUERY PLAN answers one row per step, its text in `detail`.
+        const plan = (db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all() as Array<{ detail: string }>).map((step) => step.detail);
+        expect(plan[0], sql).toBe('SEARCH memories USING INDEX sqlite_autoindex_memories_1 (id=?)');
+      }
+    } finally {
+      closeHippoDb(db);
     }
   });
 });

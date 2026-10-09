@@ -3,7 +3,7 @@
 import { openHippoDb, closeHippoDb } from '../db.js';
 import { recallScopeFilter } from '../store/search-rows.js';
 import type { AmbientLoadResult } from '../store/candidates.js';
-import { loadIndex } from '../store/index-and-stats.js';
+import { heldIdLookup } from '../store/entry-reads.js';
 import { calculateStrength, type MemoryEntry } from '../memory.js';
 import { appendAuditEvent, auditQueryFields, type AppendAuditOpts } from '../audit.js';
 import type { ContextReads, HippoStore } from '../store-port.js';
@@ -395,8 +395,11 @@ interface SearchBothStoresOptions {
 async function searchBothStores(ctx: Context, plan: ContextPlan, options: SearchBothStoresOptions): Promise<ContextResultEntry[]> {
   const { left, minResults, pools, admit } = options;
   const { cost, price } = plan;
-  const localIndex = loadIndex(ctx.hippoRoot);
-  const isGlobalHit = (e: MemoryEntry): boolean => !localIndex.entries[e.id];
+  // A local pool row is local by construction; sync keeps a global row's id on its local copy, so the global pool is looked up.
+  const poolIds = (pool: AmbientLoadResult): string[] => [...pool.entries, ...(pool.recall ?? [])].map((e) => e.id);
+  const localIds = new Set(poolIds(pools.local));
+  const alsoLocal = heldIdLookup(ctx.hippoRoot, ctx.tenantId, poolIds(pools.global).filter((id) => !localIds.has(id)));
+  const isGlobalHit = (e: MemoryEntry): boolean => !localIds.has(e.id) && !alsoLocal(e.id);
   const roots = { local: ctx.hippoRoot, global: plan.globalRoot };
   const merged = await rankBothStores(plan.query, roots, { local: pools.local.entries, global: pools.global.entries }, contextVectorSpec(ctx, plan, admit), {
     budget: left,

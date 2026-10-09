@@ -28,7 +28,7 @@ function ownedIds(db: DatabaseSyncLike, ids: readonly string[], tenantId: string
   const owned = new Set<string>();
   for (const chunk of chunked([...new Set(ids)])) {
     // SAFETY: the SELECT names one column, id.
-    const rows = db.prepare(`SELECT id FROM memories WHERE tenant_id = ? AND id IN (${chunk.map(() => '?').join(', ')})`).all(tenantId, ...chunk) as { id: string }[];
+    const rows = db.prepare(`SELECT id FROM memories WHERE +tenant_id = ? AND id IN (${chunk.map(() => '?').join(', ')})`).all(tenantId, ...chunk) as { id: string }[];
     for (const row of rows) owned.add(row.id);
   }
   return owned;

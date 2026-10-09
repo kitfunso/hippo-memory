@@ -6,6 +6,9 @@ import { escapeLike } from '../escape.js';
 import { originInSql } from '../project-identity.js';
 import { scopeAdmitSql } from '../recall-scope.js';
 
+// The plus keeps SQLite on the primary key for an id list: with a bare tenant_id it walks every row of the tenant instead.
+const TENANT_IS = '+tenant_id = ?';
+
 /**
  * Read a memory entry by ID.
  *
@@ -41,6 +44,31 @@ export function chunked<T>(items: readonly T[], size: number = ID_CHUNK): T[][] 
   return out;
 }
 
+/** Answers whether a tenant's rows in this store hold an id: `ids` are looked up now, one query per chunk, and any other id on its first ask. */
+export function heldIdLookup(hippoRoot: string, tenantId: string, ids: readonly string[]): (id: string) => boolean {
+  const held = new Map<string, boolean>();
+  const lookUp = (asked: readonly string[]): void => {
+    const db = openStore(hippoRoot);
+    try {
+      for (const chunk of chunked([...new Set(asked)])) {
+        for (const id of chunk) held.set(id, false);
+        // SAFETY: rows' shape matches the single `id` column selected.
+        const rows = db.prepare(
+          `SELECT id FROM memories WHERE id IN (${chunk.map(() => '?').join(',')}) AND ${TENANT_IS}`,
+        ).all(...chunk, tenantId) as Array<{ id: string }>;
+        for (const row of rows) held.set(row.id, true);
+      }
+    } finally {
+      closeHippoDb(db);
+    }
+  };
+  if (ids.length > 0) lookUp(ids);
+  return (id) => {
+    if (!held.has(id)) lookUp([id]);
+    return held.get(id) === true;
+  };
+}
+
 /** Rows by id on the caller's handle, one query per chunk; an id missing or in another tenant is absent from the map. */
 export function selectEntriesByIds(
   db: DatabaseSyncLike,
@@ -48,7 +76,7 @@ export function selectEntriesByIds(
   tenantId?: string,
 ): Map<string, MemoryEntry> {
   const byId = new Map<string, MemoryEntry>();
-  const tenantClause = tenantId !== undefined ? ' AND tenant_id = ?' : '';
+  const tenantClause = tenantId !== undefined ? ` AND ${TENANT_IS}` : '';
   const tenantArgs = tenantId !== undefined ? [tenantId] : [];
   for (const chunk of chunked([...new Set(ids)])) {
     const placeholders = chunk.map(() => '?').join(',');
@@ -107,7 +135,7 @@ export function loadEntriesByIds(
     // MemoryRow's field set.
     const rows = tenantId !== undefined
       ? db.prepare(
-          `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${placeholders}) AND tenant_id = ? ORDER BY created ASC, content ASC, id ASC`,
+          `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${placeholders}) AND ${TENANT_IS} ORDER BY created ASC, content ASC, id ASC`,
         ).all(...capped, tenantId) as MemoryRow[]
       : db.prepare(
           `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${placeholders}) ORDER BY created ASC, content ASC, id ASC`,

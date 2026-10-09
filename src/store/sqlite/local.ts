@@ -1,7 +1,7 @@
 // What only hippo.db does: operations no port method covers, so they never run on another store.
 import type { ArchiveOpts } from '../../raw-archive.js';
 import { strengthenRetrieved, type WriteEntryOptions } from '../entry-writes.js';
-import { loadIndex, saveIndex } from '../index-and-stats.js';
+import { loadLastRecall, saveIndex } from '../index-and-stats.js';
 import { changeScopeGrantAt, type ScopeGrantChange } from '../key-writes.js';
 import { onHandle } from '../open.js';
 import type { EntryTarget, EntryWrite, OutcomeWrite, RawArchive, RecallWrites } from '../port.js';
@@ -31,9 +31,9 @@ export function sqliteLocal(hippoRoot: string): SqliteLocal {
     archiveRaw: (archive, afterArchive) => archiveRawAt(hippoRoot, archive, afterArchive),
     writeEntry: (write, afterWrite) => writeEntryAt(hippoRoot, write, afterWrite),
     applyOutcome: (outcome, traceId) => applyOutcomeAt(hippoRoot, outcome, traceId),
-    // The ids and the trace come from one read of the index, so the outcome is linked to the recall that returned those ids.
+    // The ids and the trace come from one statement, so the outcome is linked to the recall that returned those ids.
     applyOutcomeToLastRecall(target, good) {
-      const { last_retrieval_ids: ids, last_trace_id: trace } = loadIndex(hippoRoot);
+      const { last_retrieval_ids: ids, last_trace_id: trace } = loadLastRecall(hippoRoot);
       if (ids.length === 0) return [];
       return applyOutcomeAt(hippoRoot, { ...target, ids, good }, trace === null ? undefined : Number(trace));
     },

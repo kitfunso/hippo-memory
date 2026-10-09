@@ -274,6 +274,11 @@ export function buildIndexFromDb(db: ReturnType<typeof openHippoDb>): HippoIndex
     };
   }
 
+  return { version: INDEX_VERSION, entries, ...readLastRecall(db) };
+}
+
+/** The last recall's ids and its trace, the two meta keys saveIndex writes together. */
+export function readLastRecall(db: ReturnType<typeof openHippoDb>): Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'> {
   // Read both lockstep keys in ONE statement: two autocommit SELECTs could straddle a concurrent
   // saveIndex and hand back a mismatched last_retrieval_ids / last_trace_id pair.
   // SAFETY: lockstepRows' shape matches the key/value columns named above.
@@ -281,10 +286,7 @@ export function buildIndexFromDb(db: ReturnType<typeof openHippoDb>): HippoIndex
     `SELECT key, value FROM meta WHERE key IN ('last_retrieval_ids', 'last_trace_id')`,
   ).all() as Array<{ key: string; value: string }>;
   const lockstep = new Map(lockstepRows.map((r) => [r.key, r.value]));
-
   return {
-    version: INDEX_VERSION,
-    entries,
     last_retrieval_ids: parseJsonArray(lockstep.get('last_retrieval_ids') ?? '[]'),
     last_trace_id: parseLastTraceId(lockstep.get('last_trace_id') ?? ''),
   };
