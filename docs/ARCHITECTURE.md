@@ -211,8 +211,8 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 
 ### src/cli/session-hooks.ts
 - `COMPACT_RESUME_EVENT_CONTENT_CAP`: X8: session-event content is capped at print time only — the shared printSessionEvents stays untouched for every other caller.
-- `cmdCompactResume`: Without a payload session_id the X5 cross-restore guard below can never fire, so a timed-out empty read must not reach the print path.
-- `cmdCompactResume`: A sub-agent's payload carries its parent's session id, so X5 would pass and restore the parent's snapshot into it.
+- `readCompactResumePayload` (src/cli/compact-resume-payload.ts): Without a payload session_id the X5 cross-restore guard below can never fire, so a timed-out empty read must not reach the print path.
+- `readCompactResumePayload` (src/cli/compact-resume-payload.ts): A sub-agent's payload carries its parent's session id, so X5 would pass and restore the parent's snapshot into it.
 - `restoreCompactSnapshot`: X5: concurrent sessions must not cross-restore. Only suppress when BOTH ids are present and differ — either side missing, or a manual invocation with no payload session_id, still prints.
 - `restoreCompactSnapshot`: X12: re-injected state is background reference, not instructions: the framing line the model actually sees at every compaction.
 - `cmdSessionEnd`: Bounded read (DF1 T3, docs/plans/2026-08-23-df1-snapshot-lifecycle.md): extracts transcript_path + session_id for the detached worker's argv.
