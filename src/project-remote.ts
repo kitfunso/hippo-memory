@@ -8,8 +8,9 @@ import { errorMessage, log } from './log.js';
 export function gitConfigPath(gitRoot: string): string | null {
   const marker = path.join(gitRoot, '.git');
   try {
-    if (fs.statSync(marker).isDirectory()) return path.join(marker, 'config');
-    const gitDir = /^gitdir:\s*(.+)$/m.exec(fs.readFileSync(marker, 'utf8'))?.[1]?.trim();
+    const pointer = gitFilePointer(marker);
+    if (pointer === null) return path.join(marker, 'config');
+    const gitDir = /^gitdir:\s*(.+)$/m.exec(pointer)?.[1]?.trim();
     if (!gitDir) return null;
     const linkDir = path.resolve(gitRoot, gitDir);
     const commondir = path.join(linkDir, 'commondir');
@@ -18,6 +19,16 @@ export function gitConfigPath(gitRoot: string): string | null {
   } catch (err) {
     log.debug(`project remote: no git config for ${gitRoot}: ${errorMessage(err)}`);
     return null;
+  }
+}
+
+/** The text of a `.git` file, or null when `.git` is a folder; one descriptor answers both, so the path cannot change in between. */
+function gitFilePointer(marker: string): string | null {
+  const fd = fs.openSync(marker, 'r');
+  try {
+    return fs.fstatSync(fd).isDirectory() ? null : fs.readFileSync(fd, 'utf8');
+  } finally {
+    fs.closeSync(fd);
   }
 }
 

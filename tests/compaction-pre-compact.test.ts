@@ -147,3 +147,34 @@ describe('hippo pre-compact leaves a record and asks for memories', () => {
     }
   }, 60_000);
 });
+
+describe('the pre-compact diagnostic log', () => {
+  const SKIP_LINE = /^\[hippo\] \S+ skip: store not initialized$/;
+
+  const logLines = (): string[] => fs.readFileSync(logFile, 'utf8').split('\n');
+
+  it('adds its line after what a short log already holds', () => {
+    fs.mkdirSync(path.dirname(logFile), { recursive: true });
+    fs.writeFileSync(logFile, '[hippo] an earlier line\n');
+    expect(preCompact('s1').status).toBe(0);
+    const lines = logLines();
+    expect(lines[0]).toBe('[hippo] an earlier line');
+    expect(lines[1]).toMatch(SKIP_LINE);
+    expect(lines.at(-1)).toBe('');
+  });
+
+  it('starts the log again once it is past 256 KB, keeping only the new lines', () => {
+    fs.mkdirSync(path.dirname(logFile), { recursive: true });
+    fs.writeFileSync(logFile, `${'x'.repeat(256 * 1024 + 1)}\n`);
+    expect(preCompact('s1').status).toBe(0);
+    const lines = logLines();
+    expect(lines[0]).toMatch(SKIP_LINE);
+    expect(lines.join('\n')).not.toContain('xx');
+    expect(lines.at(-1)).toBe('');
+  });
+
+  it('creates the log and its folder when neither is there', () => {
+    expect(preCompact('s1').status).toBe(0);
+    expect(logLines()[0]).toMatch(SKIP_LINE);
+  });
+});

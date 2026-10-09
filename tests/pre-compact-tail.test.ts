@@ -62,6 +62,15 @@ describe('readTranscriptTail boundary behavior (capBytes)', () => {
     const tail = readTranscriptTail(filePath, 30);
     expect(tail).toBe(lineA + lineB + lineC);
   });
+
+  it('an empty transcript reads as no text', () => {
+    fs.writeFileSync(filePath, '');
+    expect(readTranscriptTail(filePath, 15)).toBe('');
+  });
+
+  it('a missing transcript throws the system error, for the caller to log', () => {
+    expect(() => readTranscriptTail(path.join(dir, 'gone.jsonl'), 15)).toThrow(/ENOENT/);
+  });
 });
 
 /**

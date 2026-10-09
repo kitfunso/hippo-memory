@@ -1,6 +1,9 @@
 // Reading a Claude Code transcript or a Codex rollout for the digest: turns, closing message, edits that landed.
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { scanSessionTranscript } from '../src/session-digest.js';
+import { readSessionScan, scanSessionTranscript } from '../src/session-digest.js';
 
 const CWD = '/work/repo';
 const jsonl = <T,>(records: readonly T[]): string => records.map((r) => JSON.stringify(r)).join('\n') + '\n';
@@ -133,5 +136,24 @@ describe('Codex rollouts', () => {
       ['lib.ts', `${CWD}/sub/tools`],
       ['lib.ts', '/other'],
     ]);
+  });
+});
+
+describe('the transcript on disk', () => {
+  it('is read and scanned, and a missing one gives null with the reason logged', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-digest-scan-'));
+    try {
+      const file = path.join(dir, 't.jsonl');
+      fs.writeFileSync(file, jsonl([userSays('fix the upload retry'), assistantSays([text('Fixed the retry.')])]));
+      const logged: string[] = [];
+      expect(readSessionScan(file, (m) => logged.push(m))?.finalText).toBe('Fixed the retry.');
+      expect(logged).toEqual([]);
+
+      expect(readSessionScan(path.join(dir, 'gone.jsonl'), (m) => logged.push(m))).toBeNull();
+      expect(logged).toHaveLength(1);
+      expect(logged[0]).toMatch(/^digest: could not read the transcript: ENOENT/);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

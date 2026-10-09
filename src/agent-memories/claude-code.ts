@@ -82,8 +82,14 @@ const START_SCAN_BYTES = 64 * 1024;
 
 /** The cwd on the transcript's first line that has one: the folder Claude named the session folder for, which a folder name alone cannot give back. */
 function transcriptStartCwd(transcriptPath: string): string | null {
-  if (!fs.existsSync(transcriptPath)) return null;
-  const fd = fs.openSync(transcriptPath, 'r');
+  let fd: number;
+  try {
+    fd = fs.openSync(transcriptPath, 'r');
+  } catch (err) {
+    // A transcript that is not there names no start folder; any other failure is the caller's to see.
+    if (err instanceof Error && 'code' in err && (err.code === 'ENOENT' || err.code === 'ENOTDIR')) return null;
+    throw err;
+  }
   try {
     const buf = Buffer.alloc(START_SCAN_BYTES);
     const lines = buf.subarray(0, fs.readSync(fd, buf, 0, buf.length, 0)).toString('utf8').split('\n');

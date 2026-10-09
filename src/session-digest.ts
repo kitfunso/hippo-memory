@@ -18,7 +18,7 @@ import { loadLiveContentsBySourceAndTag } from './store/entry-reads.js';
 import { SNAPSHOT_AMBIENT_MAX_AGE_MS } from './store/sessions.js';
 import { loadLatestHandoff } from './store/handoffs.js';
 import { isSyntheticMessage } from './token-ledger.js';
-import { readTranscriptTail } from './transcript-tail.js';
+import { readOpenTranscriptTail } from './transcript-tail.js';
 
 /** Five-word runs are stock phrases; six in a row is a copied clause. */
 export const ECHO_WINDOW = 6;
@@ -271,10 +271,15 @@ export function scanSessionTranscript(jsonl: string): SessionScan {
 }
 
 export function readSessionTranscript(transcriptPath: string, log: (message: string) => void): string {
-  const size = fs.statSync(transcriptPath).size;
-  if (size <= READ_CAP_BYTES) return fs.readFileSync(transcriptPath, 'utf8');
-  log(`digest: transcript is ${size} bytes, reading its last ${READ_CAP_BYTES}`);
-  return readTranscriptTail(transcriptPath, READ_CAP_BYTES);
+  const fd = fs.openSync(transcriptPath, 'r');
+  try {
+    const size = fs.fstatSync(fd).size;
+    if (size <= READ_CAP_BYTES) return fs.readFileSync(fd, 'utf8');
+    log(`digest: transcript is ${size} bytes, reading its last ${READ_CAP_BYTES}`);
+    return readOpenTranscriptTail(fd, size, READ_CAP_BYTES);
+  } finally {
+    fs.closeSync(fd);
+  }
 }
 
 /** The transcript, read once and scanned, or null with the reason logged. */

@@ -26,10 +26,9 @@ import { resetAllPhysicsState, loadPhysicsState } from '../../dist/db/physics-st
 import { openHippoDb, closeHippoDb } from '../../dist/db.js';
 import { DEFAULT_PHYSICS_CONFIG } from '../../dist/physics-config.js';
 
-const base = path.join(os.tmpdir(), `hippo-lse-probe-${process.pid}`);
+// mkdtemp gives a private folder under a name no other user of the temp folder can guess or pre-create.
+const base = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-lse-probe-'));
 const root = path.join(base, '.hippo');
-fs.rmSync(base, { recursive: true, force: true });
-fs.mkdirSync(base, { recursive: true });
 initStore(root);
 // Hermetic + deterministic: disable the wall-clock-seeded replay pass (same as the harness).
 fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ replay: { count: 0 } }));

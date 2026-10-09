@@ -97,8 +97,11 @@ function writeBootstrapCorpus(entries: MemoryEntry[], flags: CliFlags): void {
 async function runEvalSuite(hippoRoot: string, flags: CliFlags, asJson: boolean, minMrr: number | null): Promise<void> {
   const baselinePath = flags['baseline'] ? String(flags['baseline']) : path.join(hippoRoot, 'eval-baseline.json');
   let baseline: EvalBaseline | undefined;
-  if (fs.existsSync(baselinePath)) {
-    try { baseline = JSON.parse(fs.readFileSync(baselinePath, 'utf8')); } catch {
+  try {
+    baseline = JSON.parse(fs.readFileSync(baselinePath, 'utf8'));
+  } catch (err) {
+    // No baseline file is a first run and says nothing; a file that is there and cannot be used warns.
+    if (!(err instanceof Error && 'code' in err && err.code === 'ENOENT')) {
       printError(`Warning: eval baseline ${baselinePath} is unreadable; running without it.`);
     }
   }

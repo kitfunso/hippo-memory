@@ -13,17 +13,28 @@ export type TextFile =
 /** A file's text, or why it was skipped: empty, too big, holds a NUL byte (not text), or unreadable. */
 export function readTextFile(file: string): TextFile {
   try {
-    const stat = fs.statSync(file);
-    if (!stat.isFile()) return { ok: false, reason: `${file}: not a file` };
-    // A tool rewriting a file truncates it first; read as holding no notes, every row would be set aside.
-    if (stat.size === 0) return { ok: false, reason: `${file}: empty` };
-    if (stat.size > MAX_ITEM_BYTES) return { ok: false, reason: `${file}: over ${MAX_ITEM_BYTES} bytes` };
-    const buf = fs.readFileSync(file);
-    if (buf.includes(0)) return { ok: false, reason: `${file}: not text` };
-    return { ok: true, text: buf.toString('utf8'), mtimeMs: stat.mtimeMs };
+    // O_NONBLOCK opens a FIFO at once, for the file check to turn away; Windows has no such flag and the OR adds nothing.
+    const fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NONBLOCK);
+    try {
+      return readOpenTextFile(file, fd);
+    } finally {
+      fs.closeSync(fd);
+    }
   } catch (err) {
     return { ok: false, reason: `${file}: ${errorMessage(err)}` };
   }
+}
+
+/** The checks and the read on one descriptor, so the file measured is the file read. */
+function readOpenTextFile(file: string, fd: number): TextFile {
+  const stat = fs.fstatSync(fd);
+  if (!stat.isFile()) return { ok: false, reason: `${file}: not a file` };
+  // A tool rewriting a file truncates it first; read as holding no notes, every row would be set aside.
+  if (stat.size === 0) return { ok: false, reason: `${file}: empty` };
+  if (stat.size > MAX_ITEM_BYTES) return { ok: false, reason: `${file}: over ${MAX_ITEM_BYTES} bytes` };
+  const buf = fs.readFileSync(fd);
+  if (buf.includes(0)) return { ok: false, reason: `${file}: not text` };
+  return { ok: true, text: buf.toString('utf8'), mtimeMs: stat.mtimeMs };
 }
 
 export type DirListing =

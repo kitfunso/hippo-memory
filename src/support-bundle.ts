@@ -135,12 +135,13 @@ function listLogFileNames(dir: string): string[] {
 }
 
 function tailLogFile(file: string): string[] {
-  const size = fs.statSync(file).size;
-  const readSize = Math.min(size, TAIL_MAX_BYTES);
-  const startedMidFile = size > TAIL_MAX_BYTES;
   const fd = fs.openSync(file, 'r');
   let text: string;
+  let startedMidFile: boolean;
   try {
+    const size = fs.fstatSync(fd).size;
+    const readSize = Math.min(size, TAIL_MAX_BYTES);
+    startedMidFile = size > TAIL_MAX_BYTES;
     const buf = Buffer.alloc(readSize);
     fs.readSync(fd, buf, 0, readSize, size - readSize);
     text = buf.toString('utf8');

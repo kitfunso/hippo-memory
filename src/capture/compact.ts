@@ -43,11 +43,16 @@ export function sanitizeLogMessage(message: string): string {
 function appendPreCompactLog(logFile: string, message: string): void {
   try {
     fs.mkdirSync(path.dirname(logFile), { recursive: true });
-    const stat = fs.existsSync(logFile) ? fs.statSync(logFile) : null;
-    if (stat && stat.size > PRE_COMPACT_LOG_MAX_BYTES) {
-      fs.writeFileSync(logFile, '', 'utf8'); // start fresh — dumb cap, no rotation
+    // SHORTCUT: no append flag, as Windows cannot truncate an append handle; two hooks logging at once can overwrite a line, a lock file if that matters.
+    const fd = fs.openSync(logFile, fs.constants.O_WRONLY | fs.constants.O_CREAT);
+    try {
+      const size = fs.fstatSync(fd).size;
+      const end = size > PRE_COMPACT_LOG_MAX_BYTES ? 0 : size; // start fresh: a dumb cap, no rotation
+      if (end < size) fs.ftruncateSync(fd, 0);
+      fs.writeSync(fd, `[hippo] ${new Date().toISOString()} ${sanitizeLogMessage(message)}\n`, end, 'utf8');
+    } finally {
+      fs.closeSync(fd);
     }
-    fs.appendFileSync(logFile, `[hippo] ${new Date().toISOString()} ${sanitizeLogMessage(message)}\n`, 'utf8');
   } catch (err) {
     // Diagnostic-only; a log write failure must never affect the exit-0 contract.
     logger.debug(`pre-compact log not written: ${errorMessage(err)}`);
