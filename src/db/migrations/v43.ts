@@ -1,10 +1,6 @@
 import type { Migration } from './types.js';
 
-export const v43: Migration = {
-    version: 43,
-    up: (db) => {
-      // W2a work-queue cards (trajectories/01M2D5VSYJFK4YXQ0RG2NGCPYJ/plan.md). Additive only, v41 precedent.
-      db.exec(`
+const CARDS_SCHEMA_SQL = `
         CREATE TABLE IF NOT EXISTS cards (
           id TEXT PRIMARY KEY,
           title TEXT NOT NULL,
@@ -63,6 +59,12 @@ export const v43: Migration = {
 
         CREATE INDEX IF NOT EXISTS idx_session_handoffs_tenant_card
           ON session_handoffs(tenant_id, card_id, created_at DESC);
-      `);
+      `;
+
+export const v43: Migration = {
+    version: 43,
+    up: (db) => {
+      // W2a work-queue cards (trajectories/01M2D5VSYJFK4YXQ0RG2NGCPYJ/plan.md). Additive only, v41 precedent.
+      db.exec(CARDS_SCHEMA_SQL);
     },
 };

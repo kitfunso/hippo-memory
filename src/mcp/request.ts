@@ -132,6 +132,48 @@ function invalidArgs(id: McpResponse['id'], toolName: string, problems: readonly
   };
 }
 
+async function callTool(id: McpRequest['id'], params: McpRequest['params'], ctx?: McpContext): Promise<McpResponse> {
+  const nameValue = params?.name;
+  const toolName = isJsonString(nameValue) ? nameValue : '';
+  const tool = TOOLS_BY_NAME.get(toolName);
+  if (!tool) {
+    return { jsonrpc: '2.0', id, error: { code: -32602, message: `Unknown tool: ${toolName.slice(0, 128)}` } };
+  }
+  // The same refusal a ported tool gives when it reaches hippo.db, so a client handles one shape.
+  const other = otherStore(ctx);
+  if (other && !runsOn(other, toolName)) {
+    return { jsonrpc: '2.0', id, error: { code: -32603, message: STORE_NOT_PORTED_MESSAGE } };
+  }
+  const refusal = sharedStoreRefusal(toolName, ctx);
+  if (refusal !== undefined) return { jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: refusal }], isError: true } };
+  const argumentsValue = params?.arguments;
+  if (argumentsValue !== undefined && argumentsValue !== null && !isJsonObject(argumentsValue)) {
+    return { jsonrpc: '2.0', id, error: { code: -32602, message: `${toolName}: arguments must be an object` } };
+  }
+  const toolArgs = isJsonObject(argumentsValue) ? argumentsValue : {};
+  const problems = validateToolArgs(tool.inputSchema, toolArgs, ARGS_CHECKED_BY_API.get(toolName));
+  if (problems.length > 0) return invalidArgs(id, toolName, problems);
+  let output: string;
+  try {
+    // One handle per store for the tool and its ledger row; stdio interleaves calls, so each gets its own scope.
+    output = await runWithRequestStores(async () => {
+      const text = await executeTool(toolName, toolArgs, ctx);
+      await recordMcpTokens(toolName, text, ctx);
+      return text;
+    });
+  } catch (err) {
+    if (!(err instanceof RecallRequestError)) throw err;
+    return invalidArgs(id, toolName, [err.message]);
+  }
+  return {
+    jsonrpc: '2.0',
+    id,
+    result: {
+      content: [{ type: 'text', text: output || 'Done.' }],
+    },
+  };
+}
+
 /**
  * Transport-agnostic MCP dispatcher. Both the stdio loop (below) and the
  * HTTP/SSE transport in src/server.ts route every incoming JSON-RPC message
@@ -165,47 +207,8 @@ export async function handleMcpRequest(
       return { jsonrpc: '2.0', id, result: { tools: other ? TOOLS.filter((t) => runsOn(other, t.name)) : TOOLS } };
     }
 
-    case 'tools/call': {
-      const nameValue = params?.name;
-      const toolName = isJsonString(nameValue) ? nameValue : '';
-      const tool = TOOLS_BY_NAME.get(toolName);
-      if (!tool) {
-        return { jsonrpc: '2.0', id, error: { code: -32602, message: `Unknown tool: ${toolName.slice(0, 128)}` } };
-      }
-      // The same refusal a ported tool gives when it reaches hippo.db, so a client handles one shape.
-      const other = otherStore(ctx);
-      if (other && !runsOn(other, toolName)) {
-        return { jsonrpc: '2.0', id, error: { code: -32603, message: STORE_NOT_PORTED_MESSAGE } };
-      }
-      const refusal = sharedStoreRefusal(toolName, ctx);
-      if (refusal !== undefined) return { jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: refusal }], isError: true } };
-      const argumentsValue = params?.arguments;
-      if (argumentsValue !== undefined && argumentsValue !== null && !isJsonObject(argumentsValue)) {
-        return { jsonrpc: '2.0', id, error: { code: -32602, message: `${toolName}: arguments must be an object` } };
-      }
-      const toolArgs = isJsonObject(argumentsValue) ? argumentsValue : {};
-      const problems = validateToolArgs(tool.inputSchema, toolArgs, ARGS_CHECKED_BY_API.get(toolName));
-      if (problems.length > 0) return invalidArgs(id, toolName, problems);
-      let output: string;
-      try {
-        // One handle per store for the tool and its ledger row; stdio interleaves calls, so each gets its own scope.
-        output = await runWithRequestStores(async () => {
-          const text = await executeTool(toolName, toolArgs, ctx);
-          await recordMcpTokens(toolName, text, ctx);
-          return text;
-        });
-      } catch (err) {
-        if (!(err instanceof RecallRequestError)) throw err;
-        return invalidArgs(id, toolName, [err.message]);
-      }
-      return {
-        jsonrpc: '2.0',
-        id,
-        result: {
-          content: [{ type: 'text', text: output || 'Done.' }],
-        },
-      };
-    }
+    case 'tools/call':
+      return callTool(id, params, ctx);
 
     default:
       // Notifications (no id) must not receive a response

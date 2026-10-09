@@ -1,9 +1,6 @@
 import type { Migration } from './types.js';
 
-export const v18: Migration = {
-    version: 18,
-    up: (db) => {
-      db.exec(`
+const GOAL_STACK_SCHEMA_SQL = `
         CREATE TABLE IF NOT EXISTS goal_stack (
           id TEXT PRIMARY KEY,
           session_id TEXT NOT NULL,
@@ -56,6 +53,11 @@ export const v18: Migration = {
           ON goal_recall_log(goal_id);
         CREATE UNIQUE INDEX IF NOT EXISTS uniq_goal_recall_log_memory_goal
           ON goal_recall_log(memory_id, goal_id);
-      `);
+      `;
+
+export const v18: Migration = {
+    version: 18,
+    up: (db) => {
+      db.exec(GOAL_STACK_SCHEMA_SQL);
     },
 };

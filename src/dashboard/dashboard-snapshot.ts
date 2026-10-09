@@ -265,6 +265,29 @@ function toFact(entry: MemoryEntry, f: ReturnType<typeof memoryFacts>, project: 
   };
 }
 
+function tallyExcluded(entry: MemoryEntry, excluded: { superseded: number; archived: number; quarantined: number }): void {
+  if (isQuarantineScope(entry.scope)) excluded.quarantined++;
+  else if (entry.superseded_by || entry.kind === 'superseded') excluded.superseded++;
+  else if (entry.kind === 'archived') excluded.archived++;
+}
+
+function draftIndexFor(identity: ReturnType<typeof projectIdentity>, projectIndex: Map<string, number>, drafts: ProjectDraft[]): number {
+  let p = projectIndex.get(identity.key);
+  if (p === undefined) {
+    p = drafts.length;
+    projectIndex.set(identity.key, p);
+    drafts.push(newDraft(identity));
+  }
+  return p;
+}
+
+function finishProject(d: ProjectDraft): ProjectAgg {
+  d.summary.atRisk = d.summary.bands.atRisk;
+  d.summary.share = d.summary.live > 0 ? d.summary.atRisk / d.summary.live : 0;
+  d.summary.lastRetrievedDays = d.summary.live > 0 ? round1(d.lastDays) : null;
+  return { summary: d.summary, members: Int32Array.from(d.members), firstCreatedMs: d.firstCreatedMs };
+}
+
 /** Builds the snapshot from already-loaded rows; it touches no store, so tests can feed it directly. */
 export function buildSnapshot(input: SnapshotInput): Snapshot {
   const { entries, embeddedIds, nowMs } = input;
@@ -275,18 +298,10 @@ export function buildSnapshot(input: SnapshotInput): Snapshot {
 
   for (const entry of entries) {
     if (!isLiveMemory(entry)) {
-      if (isQuarantineScope(entry.scope)) excluded.quarantined++;
-      else if (entry.superseded_by || entry.kind === 'superseded') excluded.superseded++;
-      else if (entry.kind === 'archived') excluded.archived++;
+      tallyExcluded(entry, excluded);
       continue;
     }
-    const identity = projectIdentity(entry.origin_project);
-    let p = projectIndex.get(identity.key);
-    if (p === undefined) {
-      p = drafts.length;
-      projectIndex.set(identity.key, p);
-      drafts.push(newDraft(identity));
-    }
+    const p = draftIndexFor(projectIdentity(entry.origin_project), projectIndex, drafts);
     const f = memoryFacts(entry, nowMs);
     const embedded = embeddedIds !== null && embeddedIds.has(entry.id);
     const parsedCreated = Date.parse(entry.created);
@@ -304,12 +319,7 @@ export function buildSnapshot(input: SnapshotInput): Snapshot {
 
   const openConflicts = countOpenConflicts(facts, drafts.map((d) => d.summary), input.openConflicts);
 
-  const projects: ProjectAgg[] = drafts.map((d) => {
-    d.summary.atRisk = d.summary.bands.atRisk;
-    d.summary.share = d.summary.live > 0 ? d.summary.atRisk / d.summary.live : 0;
-    d.summary.lastRetrievedDays = d.summary.live > 0 ? round1(d.lastDays) : null;
-    return { summary: d.summary, members: Int32Array.from(d.members), firstCreatedMs: d.firstCreatedMs };
-  });
+  const projects: ProjectAgg[] = drafts.map(finishProject);
   const embeddedTotal = projects.reduce((sum, p) => sum + p.summary.embedded, 0);
 
   return {
@@ -354,6 +364,20 @@ interface CachedSnapshot {
   builtAtMs: number;
 }
 
+// No database means no vectors; a store not yet on schema v52 has no table to count, so coverage is unknown.
+function readEmbeddedIds(db: DatabaseSyncLike | null): ReadonlySet<string> | null {
+  if (db === null) return new Set();
+  return tableExists(db, 'memory_vectors') ? storedVectorIds(db) : null;
+}
+
+function cacheStillServes(hit: CachedSnapshot, want: { tenantId: string; dataVersion: number | null }, wallMs: number): boolean {
+  const age = wallMs - hit.builtAtMs;
+  return hit.snapshot.tenantId === want.tenantId
+    && (hit.dataVersion !== null || want.dataVersion === null)
+    && age < TTL_MS
+    && (hit.dataVersion === want.dataVersion || age < COALESCE_MS);
+}
+
 export interface SnapshotService {
   /** The cached snapshot, or a new build when the cache key changed, the coalescing window allows it, or `fresh` is set. */
   get(tenantId: string, fresh?: boolean): Snapshot;
@@ -369,74 +393,75 @@ export interface SnapshotService {
 // Keeps ids rising between two services created in the same millisecond of one process.
 let highestIssuedId = 0;
 
+class SnapshotCacheService implements SnapshotService {
+  private db: DatabaseSyncLike | null = null;
+  private cached: CachedSnapshot | null = null;
+  // Wall clock, not `now`, so ids keep rising across server restarts and a client holding an old tab never sees a lower one.
+  private lastId = Math.max(Date.now(), highestIssuedId);
+  private lastEmbeddedIds: ReadonlySet<string> | null | undefined;
+
+  constructor(
+    private readonly hippoRoot: string,
+    private readonly now: () => number,
+    private readonly cacheClock: () => number,
+  ) {}
+
+  private dataVersion(): number | null {
+    if (this.db === null) {
+      if (!fs.existsSync(getHippoDbPath(this.hippoRoot))) return null;
+      this.db = openHippoDbReadOnly(this.hippoRoot);
+    }
+    return pragmaDataVersion(this.db);
+  }
+
+  private build(tenantId: string, dv: number | null, nowMs: number): Snapshot {
+    const entries = dv === null ? [] : loadAllEntries(this.hippoRoot, tenantId);
+    const openConflicts = dv === null ? [] : listMemoryConflicts(this.hippoRoot, 'open', tenantId);
+    this.lastId += 1;
+    highestIssuedId = Math.max(highestIssuedId, this.lastId);
+    // After loadAllEntries, whose writable open has run any pending migration and legacy embeddings.json import.
+    this.lastEmbeddedIds = readEmbeddedIds(this.db);
+    return buildSnapshot({ id: this.lastId, tenantId, nowMs, entries, openConflicts, embeddedIds: this.lastEmbeddedIds });
+  }
+
+  get(tenantId: string, fresh = false): Snapshot {
+    const nowMs = this.now();
+    // A frozen eval clock (HIPPO_FAKE_NOW) would never age the cache, so reuse is timed on its own clock.
+    const wallMs = this.cacheClock();
+    // Read before the build, so a commit that lands during it shows on the next read.
+    const dv = this.dataVersion();
+    const hit = this.cached;
+    if (hit !== null && !fresh) {
+      if (cacheStillServes(hit, { tenantId, dataVersion: dv }, wallMs)) return hit.snapshot;
+    }
+    const snapshot = this.build(tenantId, dv, nowMs);
+    this.cached = { snapshot, dataVersion: dv, builtAtMs: wallMs };
+    return snapshot;
+  }
+
+  invalidate(): void {
+    this.cached = null;
+  }
+
+  currentId(): number {
+    return this.lastId;
+  }
+
+  embeddedIds(): ReadonlySet<string> | null {
+    if (this.lastEmbeddedIds !== undefined) return this.lastEmbeddedIds;
+    this.dataVersion();
+    return readEmbeddedIds(this.db);
+  }
+
+  close(): void {
+    if (this.db !== null) closeHippoDb(this.db);
+    this.db = null;
+    this.cached = null;
+    this.lastEmbeddedIds = undefined;
+  }
+}
+
 /** Holds one read-only connection for its commit signal (`PRAGMA data_version`) and the snapshot cache; `now` dates the strength projections, `cacheClock` ages the cache. */
 export function createSnapshotService(hippoRoot: string, now: () => number, cacheClock: () => number = Date.now): SnapshotService {
-  let db: DatabaseSyncLike | null = null;
-  let cached: CachedSnapshot | null = null;
-  // Wall clock, not `now`, so ids keep rising across server restarts and a client holding an old tab never sees a lower one.
-  let lastId = Math.max(Date.now(), highestIssuedId);
-  let lastEmbeddedIds: ReadonlySet<string> | null | undefined;
-
-  const dataVersion = (): number | null => {
-    if (db === null) {
-      if (!fs.existsSync(getHippoDbPath(hippoRoot))) return null;
-      db = openHippoDbReadOnly(hippoRoot);
-    }
-    return pragmaDataVersion(db);
-  };
-
-  // No database means no vectors; a store not yet on schema v52 has no table to count, so coverage is unknown.
-  const readEmbeddedIds = (): ReadonlySet<string> | null => {
-    if (db === null) return new Set();
-    return tableExists(db, 'memory_vectors') ? storedVectorIds(db) : null;
-  };
-
-  const build = (tenantId: string, dv: number | null, nowMs: number): Snapshot => {
-    const entries = dv === null ? [] : loadAllEntries(hippoRoot, tenantId);
-    const openConflicts = dv === null ? [] : listMemoryConflicts(hippoRoot, 'open', tenantId);
-    lastId += 1;
-    highestIssuedId = Math.max(highestIssuedId, lastId);
-    // After loadAllEntries, whose writable open has run any pending migration and legacy embeddings.json import.
-    lastEmbeddedIds = readEmbeddedIds();
-    return buildSnapshot({ id: lastId, tenantId, nowMs, entries, openConflicts, embeddedIds: lastEmbeddedIds });
-  };
-
-  return {
-    get(tenantId, fresh = false) {
-      const nowMs = now();
-      // A frozen eval clock (HIPPO_FAKE_NOW) would never age the cache, so reuse is timed on its own clock.
-      const wallMs = cacheClock();
-      // Read before the build, so a commit that lands during it shows on the next read.
-      const dv = dataVersion();
-      const hit = cached;
-      if (hit !== null && !fresh) {
-        const age = wallMs - hit.builtAtMs;
-        const reusable = hit.snapshot.tenantId === tenantId
-          && (hit.dataVersion !== null || dv === null)
-          && age < TTL_MS
-          && (hit.dataVersion === dv || age < COALESCE_MS);
-        if (reusable) return hit.snapshot;
-      }
-      const snapshot = build(tenantId, dv, nowMs);
-      cached = { snapshot, dataVersion: dv, builtAtMs: wallMs };
-      return snapshot;
-    },
-    invalidate() {
-      cached = null;
-    },
-    currentId() {
-      return lastId;
-    },
-    embeddedIds() {
-      if (lastEmbeddedIds !== undefined) return lastEmbeddedIds;
-      dataVersion();
-      return readEmbeddedIds();
-    },
-    close() {
-      if (db !== null) closeHippoDb(db);
-      db = null;
-      cached = null;
-      lastEmbeddedIds = undefined;
-    },
-  };
+  return new SnapshotCacheService(hippoRoot, now, cacheClock);
 }

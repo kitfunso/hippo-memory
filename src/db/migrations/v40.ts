@@ -1,18 +1,6 @@
 import type { Migration } from './types.js';
 
-export const v40: Migration = {
-    version: 40,
-    up: (db) => {
-      // Retrieval-trace persistence.
-      // Follows the v18 goal_recall_log style: one parent trace row per
-      // recall, a WITHOUT ROWID child table for the ranked results, and a
-      // separate append-only outcomes table so audit_log pruning can never
-      // erase training data.
-      //
-      // No min_compatible_binary bump, on purpose: an old binary ignores these tables and
-      // recordTraceOutcome re-validates trace ids, so its stale writes are skipped; a bump
-      // would lock old binaries out of the whole store for an observability feature.
-      db.exec(`
+const RECALL_TRACES_SCHEMA_SQL = `
         CREATE TABLE IF NOT EXISTS recall_traces (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           ts TEXT NOT NULL,
@@ -58,6 +46,20 @@ export const v40: Migration = {
           memory_ids_json TEXT NOT NULL      -- ids actually credited by this outcome event
         );
         CREATE INDEX IF NOT EXISTS idx_recall_trace_outcomes_trace ON recall_trace_outcomes(trace_id);
-      `);
+      `;
+
+export const v40: Migration = {
+    version: 40,
+    up: (db) => {
+      // Retrieval-trace persistence.
+      // Follows the v18 goal_recall_log style: one parent trace row per
+      // recall, a WITHOUT ROWID child table for the ranked results, and a
+      // separate append-only outcomes table so audit_log pruning can never
+      // erase training data.
+      //
+      // No min_compatible_binary bump, on purpose: an old binary ignores these tables and
+      // recordTraceOutcome re-validates trace ids, so its stale writes are skipped; a bump
+      // would lock old binaries out of the whole store for an observability feature.
+      db.exec(RECALL_TRACES_SCHEMA_SQL);
     },
 };

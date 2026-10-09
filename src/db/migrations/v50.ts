@@ -1,11 +1,6 @@
 import type { Migration } from './types.js';
 
-export const v50: Migration = {
-    version: 50,
-    up: (db) => {
-      // Per-turn delivery events (src/recall-trace.ts). Additive only: no min_compatible_binary bump; rollback drops both tables
-      // and sets schema_version back to 49. No CHECK on enum columns since SQLite cannot alter one; delivery-recorder.ts unions are the allowlist.
-      db.exec(`
+const DELIVERY_EVENTS_SCHEMA_SQL = `
         CREATE TABLE IF NOT EXISTS delivery_events (
           id                INTEGER PRIMARY KEY AUTOINCREMENT,
           ts                TEXT NOT NULL,
@@ -63,6 +58,13 @@ export const v50: Migration = {
           tokens       INTEGER,
           PRIMARY KEY (event_id, memory_id)
         ) WITHOUT ROWID;
-      `);
+      `;
+
+export const v50: Migration = {
+    version: 50,
+    up: (db) => {
+      // Per-turn delivery events (src/recall-trace.ts). Additive only: no min_compatible_binary bump; rollback drops both tables
+      // and sets schema_version back to 49. No CHECK on enum columns since SQLite cannot alter one; delivery-recorder.ts unions are the allowlist.
+      db.exec(DELIVERY_EVENTS_SCHEMA_SQL);
     },
 };

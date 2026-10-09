@@ -276,18 +276,64 @@ export function closeTaskSnapshotsForSession(
   }
 }
 
+interface SessionEventInput {
+  session_id: string;
+  event_type: string;
+  content: string;
+  task?: string | null;
+  source?: string;
+  scope?: string | null;
+  metadata?: Record<string, unknown>;
+}
+
+function insertSessionEventRow(db: DatabaseSyncLike, tenantId: string, event: SessionEventInput, now: string): number {
+  const result = db.prepare(`
+      INSERT INTO session_events(session_id, task, event_type, content, source, scope, metadata_json, tenant_id, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+    event.session_id,
+    event.task ?? null,
+    event.event_type,
+    event.content,
+    event.source ?? 'cli',
+    event.scope ?? null,
+    JSON.stringify(event.metadata ?? {}),
+    tenantId,
+    now,
+  );
+  return Number(result.lastInsertRowid ?? 0);
+}
+
+function reloadSessionEvent(db: DatabaseSyncLike, id: number): SessionEvent {
+  // SAFETY: row's shape matches the nine columns named in the SELECT below.
+  const row = db.prepare(`
+      SELECT id, session_id, task, event_type, content, source, scope, metadata_json, created_at
+      FROM session_events
+      WHERE id = ?
+    `).get(id) as SessionEventRow | undefined;
+
+  if (!row) {
+    throw new Error('Failed to reload saved session event');
+  }
+  return rowToSessionEvent(row);
+}
+
+function recentSessionEventsOldestFirst(db: DatabaseSyncLike, tenantId: string, sessionId: string, limit: number): SessionEvent[] {
+  // SAFETY: recentRows' shape matches the nine columns named in the SELECT below.
+  const recentRows = db.prepare(`
+      SELECT id, session_id, task, event_type, content, source, scope, metadata_json, created_at
+      FROM session_events
+      WHERE session_id = ? AND tenant_id = ?
+      ORDER BY created_at DESC, id DESC
+      LIMIT ?
+    `).all(sessionId, tenantId, limit) as SessionEventRow[];
+  return recentRows.map(rowToSessionEvent).reverse();
+}
+
 export function appendSessionEvent(
   hippoRoot: string,
   tenantId: string,
-  event: {
-    session_id: string;
-    event_type: string;
-    content: string;
-    task?: string | null;
-    source?: string;
-    scope?: string | null;
-    metadata?: Record<string, unknown>;
-  }
+  event: SessionEventInput,
 ): SessionEvent {
   assertTenantId('appendSessionEvent', tenantId);
   const db = openStore(hippoRoot);
@@ -296,45 +342,8 @@ export function appendSessionEvent(
   // Scope is stored as given; default-deny in api.recall + cmdRecall
   // continuity reads applies to slack:private:* and 'unknown:legacy' rows.
   try {
-    const result = db.prepare(`
-      INSERT INTO session_events(session_id, task, event_type, content, source, scope, metadata_json, tenant_id, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      event.session_id,
-      event.task ?? null,
-      event.event_type,
-      event.content,
-      event.source ?? 'cli',
-      event.scope ?? null,
-      JSON.stringify(event.metadata ?? {}),
-      tenantId,
-      now,
-    );
-
-    const id = Number(result.lastInsertRowid ?? 0);
-    // SAFETY: row's shape matches the nine columns named in the SELECT
-    // above.
-    const row = db.prepare(`
-      SELECT id, session_id, task, event_type, content, source, scope, metadata_json, created_at
-      FROM session_events
-      WHERE id = ?
-    `).get(id) as SessionEventRow | undefined;
-
-    if (!row) {
-      throw new Error('Failed to reload saved session event');
-    }
-
-    const loaded = rowToSessionEvent(row);
-    // SAFETY: recentRows' shape matches the nine columns named in the
-    // SELECT above.
-    const recentRows = db.prepare(`
-      SELECT id, session_id, task, event_type, content, source, scope, metadata_json, created_at
-      FROM session_events
-      WHERE session_id = ? AND tenant_id = ?
-      ORDER BY created_at DESC, id DESC
-      LIMIT ?
-    `).all(loaded.session_id, tenantId, 20) as SessionEventRow[];
-    const recent = recentRows.map(rowToSessionEvent).reverse();
+    const loaded = reloadSessionEvent(db, insertSessionEventRow(db, tenantId, event, now));
+    const recent = recentSessionEventsOldestFirst(db, tenantId, loaded.session_id, 20);
     writeRecentSessionMirror(hippoRoot, tenantId, recent);
     return loaded;
   } finally {

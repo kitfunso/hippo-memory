@@ -57,6 +57,28 @@ function resolveConsolidatedSource(
   sourceObject: SourceObjectRef | null,
   label: string,
 ): ResolvedGraphSource {
+  const { memKind, effectiveMemoryId } = checkSourceMemory(db, tenantId, memoryId, sourceObject, label);
+  assertSourceObjectUsable(db, tenantId, sourceObject, label);
+
+  // source_kind is the memory's kind when a memory is present, else 'distilled' for an
+  // object-only row (objects are consolidated by construction). All-null is rejected.
+  if (memKind != null) return { sourceKind: memKind, memoryId: effectiveMemoryId };
+  if (sourceObject != null) return { sourceKind: 'distilled', memoryId: null };
+  throw new Error(`${label}: graph row needs a memory or a source object`);
+}
+
+interface CheckedSourceMemory {
+  memKind: SourceKind | null;
+  effectiveMemoryId: string | null;
+}
+
+function checkSourceMemory(
+  db: DbLike,
+  tenantId: string,
+  memoryId: string | null,
+  sourceObject: SourceObjectRef | null,
+  label: string,
+): CheckedSourceMemory {
   let memKind: SourceKind | null = null;
   let effectiveMemoryId: string | null = memoryId;
   if (memoryId != null) {
@@ -84,7 +106,10 @@ function resolveConsolidatedSource(
       memKind = row.kind;
     }
   }
+  return { memKind, effectiveMemoryId };
+}
 
+function assertSourceObjectUsable(db: DbLike, tenantId: string, sourceObject: SourceObjectRef | null, label: string): void {
   // Validate the object pointer WHENEVER it is provided, not only when memory is null:
   // a dual-set row whose object is wrong/closed/cross-tenant would become
   // the active provenance after ON DELETE SET NULL and could then block the memory delete.
@@ -107,12 +132,6 @@ function resolveConsolidatedSource(
       throw new Error(`${label}: source ${sourceObject.type} ${sourceObject.id} has status '${row.status}' (must be active|superseded)`);
     }
   }
-
-  // source_kind is the memory's kind when a memory is present, else 'distilled' for an
-  // object-only row (objects are consolidated by construction). All-null is rejected.
-  if (memKind != null) return { sourceKind: memKind, memoryId: effectiveMemoryId };
-  if (sourceObject != null) return { sourceKind: 'distilled', memoryId: null };
-  throw new Error(`${label}: graph row needs a memory or a source object`);
 }
 
 // ---------------------------------------------------------------------------

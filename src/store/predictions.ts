@@ -232,21 +232,29 @@ function insertPredictionRow(
     throw new Error('Failed to reload saved prediction row');
   }
 
+  auditPredictionCreate(db, { tenantId, actor, predictionId }, opts);
+  return row;
+}
+
+function auditPredictionCreate(
+  db: DatabaseSyncLike,
+  who: { tenantId: string; actor: string; predictionId: number },
+  opts: SavePredictionOpts,
+): void {
   // GDPR-light audit metadata: prediction_id + class_tag + flags only.
   // No claim_text in metadata; the predictions table holds it canonically.
   appendAuditEvent(db, {
-    tenantId,
-    actor,
+    tenantId: who.tenantId,
+    actor: who.actor,
     op: 'predict_create',
-    targetId: String(predictionId),
+    targetId: String(who.predictionId),
     metadata: {
-      prediction_id: predictionId,
+      prediction_id: who.predictionId,
       class_tag: opts.classTag,
       has_estimate: opts.estimateValue !== undefined && opts.estimateValue !== null,
       target_date: opts.targetDate ?? null,
     },
   });
-  return row;
 }
 
 /**

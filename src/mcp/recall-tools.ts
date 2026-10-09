@@ -59,6 +59,56 @@ interface RecallPresenterOptions {
   readonly hintRows: (rendered: RenderedRecall) => AppendAuditOpts[];
 }
 
+type ShownPool = Parameters<NonNullable<RecallOpts['showRanked']>>[0]['pool'];
+
+function detectBiasHints(
+  list: SearchResult[],
+  pool: ShownPool,
+  anchorRing: RingBuffer | null,
+  queryHash: number,
+): Pick<RenderedRecall, 'anchoring' | 'availability'> {
+  const anchoring = anchorRing ? detectAnchoring(snapshotRing(anchorRing), queryHash, list[0]?.entry.id ?? null) : null;
+  const availability = biasHintEnabled('availability')
+    ? detectAvailabilityBias({
+        topK: list.map((r) => ({ id: r.entry.id, created: r.entry.created })),
+        pool: pool.map((e) => ({ id: e.id, created: e.created })),
+      })
+    : null;
+  return { anchoring, availability };
+}
+
+function biasHintSections(anchoring: RenderedRecall['anchoring'], availability: RenderedRecall['availability']): string {
+  let text = anchoring ? `## Anchoring hint\n${anchoring.summary}\n[anchored_on: ${anchoring.memoryId}]\n\n---\n\n` : '';
+  if (availability) text += `## Availability bias\n${availability.summary}\n\n---\n\n`;
+  return text;
+}
+
+function cutoffSection(s: ReturnType<typeof buildSuppressionSummary>, shown: number): string {
+  const cutoffClauses: string[] = [];
+  if (s.droppedByBudget > 0) cutoffClauses.push(`${s.droppedByBudget} dropped to fit limit`);
+  if (s.droppedPreRank > 0) cutoffClauses.push(`${s.droppedPreRank} filtered pre-rank`);
+  if (s.summarySubstitutionsAdded > 0) cutoffClauses.push(`${s.summarySubstitutionsAdded} summary substitutions added`);
+  if (s.freshTailAdded > 0) cutoffClauses.push(`${s.freshTailAdded} fresh-tail added`);
+  if (s.suppressedByInterference > 0) cutoffClauses.push(`${s.suppressedByInterference} suppressed by interference`);
+  if (cutoffClauses.length === 0) return '';
+  return `## Cutoff\nShowing ${shown} of ${s.totalCandidates} candidates; ${cutoffClauses.join('; ')}.\n\n---\n\n`;
+}
+
+function renderWithinBudget(
+  ranked: SearchResult[],
+  limits: { room: number; budget: number },
+  render: (cut: SearchResult[]) => RenderedRecall,
+): RenderedRecall {
+  let results = fitBudget(ranked, Math.max(0, limits.room), 1, memoryCost);
+  let rendered = render(results);
+  // The hints, Cutoff block and heading vary with the list, so the lowest-ranked entry goes until the whole response fits.
+  while (results.length > 1 && estimateTokens(rendered.text) > limits.budget) {
+    results = results.slice(0, -1);
+    rendered = render(results);
+  }
+  return rendered;
+}
+
 function recallPresenter(budget: number, options: RecallPresenterOptions): NonNullable<RecallOpts['showRanked']> {
   const { includeContinuity, anchorRing, queryHash, out, hintRows } = options;
   return ({ ranked, pool, droppedByScope }, apiResult) => {
@@ -80,13 +130,7 @@ function recallPresenter(budget: number, options: RecallPresenterOptions): NonNu
     // The hints and Cutoff block describe the list MCP shows, not the window band in apiResult.
     const render = (cut: SearchResult[]): RenderedRecall => {
       const list = dropHeldCopies(cut, (r) => r.entry); // after every cut, so a merged row cut here never hides its sources
-      const anchoring = anchorRing ? detectAnchoring(snapshotRing(anchorRing), queryHash, list[0]?.entry.id ?? null) : null;
-      const availability = biasHintEnabled('availability')
-        ? detectAvailabilityBias({
-            topK: list.map((r) => ({ id: r.entry.id, created: r.entry.created })),
-            pool: pool.map((e) => ({ id: e.id, created: e.created })),
-          })
-        : null;
+      const { anchoring, availability } = detectBiasHints(list, pool, anchorRing, queryHash);
       const shownIds = new Set(list.map((r) => r.entry.id));
       const shownKeys = storedTextKeys(list.map((r) => r.entry));
       const tail = showTail
@@ -101,29 +145,14 @@ function recallPresenter(budget: number, options: RecallPresenterOptions): NonNu
         suppressedByInterference: anchoring?.reason === 'memory_dominance' ? 1 : 0,
       });
       // Anchoring is the stronger pull, so it prints first; the Cutoff block sits above the list, where the agent reads it.
-      let text = anchoring ? `## Anchoring hint\n${anchoring.summary}\n[anchored_on: ${anchoring.memoryId}]\n\n---\n\n` : '';
-      if (availability) text += `## Availability bias\n${availability.summary}\n\n---\n\n`;
+      let text = biasHintSections(anchoring, availability);
       if (showPlan) text += planPiece;
-      const cutoffClauses: string[] = [];
-      if (s.droppedByBudget > 0) cutoffClauses.push(`${s.droppedByBudget} dropped to fit limit`);
-      if (s.droppedPreRank > 0) cutoffClauses.push(`${s.droppedPreRank} filtered pre-rank`);
-      if (s.summarySubstitutionsAdded > 0) cutoffClauses.push(`${s.summarySubstitutionsAdded} summary substitutions added`);
-      if (s.freshTailAdded > 0) cutoffClauses.push(`${s.freshTailAdded} fresh-tail added`);
-      if (s.suppressedByInterference > 0) cutoffClauses.push(`${s.suppressedByInterference} suppressed by interference`);
-      if (cutoffClauses.length > 0) {
-        text += `## Cutoff\nShowing ${list.length} of ${s.totalCandidates} candidates; ${cutoffClauses.join('; ')}.\n\n---\n\n`;
-      }
+      text += cutoffSection(s, list.length);
       // The window band's fresh-tail and summary rows follow the ranked list, or the MCP fields go unanswered.
       text += formatMemories(list) + tailSection(tail) + (showContinuity ? continuityPiece : '');
       return { anchoring, availability, text, list };
     };
-    let results = fitBudget(ranked, Math.max(0, left), 1, memoryCost);
-    let rendered = render(results);
-    // The hints, Cutoff block and heading vary with the list, so the lowest-ranked entry goes until the whole response fits.
-    while (results.length > 1 && estimateTokens(rendered.text) > budget) {
-      results = results.slice(0, -1);
-      rendered = render(results);
-    }
+    const rendered = renderWithinBudget(ranked, { room: left, budget }, render);
     out.rendered = rendered;
     return { ids: rendered.list.map((r) => r.entry.id), audit: hintRows(rendered) };
   };

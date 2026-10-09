@@ -297,6 +297,55 @@ function leaveTokenUrl(req: http.IncomingMessage, res: http.ServerResponse, url:
   return true;
 }
 
+/** True when the request may proceed; false when this already answered it (redirect off the token URL, or 401). */
+function admitDashboardRequest(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  url: URL,
+  access: { token: string; port: number },
+): boolean {
+  const { token, port } = access;
+  // Cookies ignore the port, so the name carries it: two dashboards on one host keep separate tokens.
+  const cookieName = `hippo_dashboard_${req.socket.localPort ?? port}`;
+  if (sameToken(url.searchParams.get('token') ?? undefined, token)) {
+    res.setHeader('Set-Cookie', `${cookieName}=${token}; HttpOnly; SameSite=Strict; Path=/`);
+    if (leaveTokenUrl(req, res, url)) return false;
+  } else if (!sameToken(cookieValue(req.headers.cookie, cookieName), token)) {
+    res.writeHead(401, { 'Content-Type': 'text/plain' });
+    res.end('Unauthorized: open the dashboard with the URL `hippo dashboard` printed; it carries the access token.');
+    return false;
+  }
+  return true;
+}
+
+function answerDashboardFailure(req: http.IncomingMessage, res: http.ServerResponse, err: Error): void {
+  const clientFault = err instanceof ParamError || err instanceof URIError || err instanceof BodyTimeoutError;
+  // A cut-short response is logged even for a client fault; a bare 400 is not.
+  if (res.headersSent || !clientFault) {
+    log.error('dashboard request failed', { error: errorMessage(err), path: req.url });
+  }
+  if (res.headersSent) {
+    res.end();
+    return;
+  }
+  if (err instanceof BodyDrainExceeded || err instanceof BodyTimeoutError) {
+    // No `Connection: close` header: Node then destroys the socket as soon as the reply is written.
+    res.writeHead(err instanceof BodyTimeoutError ? 408 : 400, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ error: err.message }), () => closeAfterReply(req));
+    return;
+  }
+  if (err instanceof ParamError) return jsonResponse(res, { error: err.message }, 400);
+  if (err instanceof URIError) return jsonResponse(res, { error: 'Malformed URL path' }, 400);
+  jsonResponse(res, { error: 'Internal error' }, 500);
+}
+
+function printDashboardBanner(boundPort: number, token: string, distUiDir: string | null): void {
+  // The banner is the `hippo dashboard` command's printed result, so it stays on stdout.
+  console.log(`Hippo Dashboard running at http://localhost:${boundPort}/?token=${token}`);
+  if (distUiDir !== null) console.log(`Serving React UI from ${distUiDir}`);
+  console.log('Press Ctrl+C to stop.');
+}
+
 /** Serves the dashboard on 127.0.0.1 behind a per-start `token` (tests pass one), since loopback alone lets any local process read every memory; `opts` sets the projection and cache clocks. */
 export function serveDashboard(
   hippoRoot: string,
@@ -314,16 +363,7 @@ export function serveDashboard(
     if (host !== undefined && !LOOPBACK_HOST_HEADER.test(host)) return forbidden(res);
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
 
-    // Cookies ignore the port, so the name carries it: two dashboards on one host keep separate tokens.
-    const cookieName = `hippo_dashboard_${req.socket.localPort ?? port}`;
-    if (sameToken(url.searchParams.get('token') ?? undefined, token)) {
-      res.setHeader('Set-Cookie', `${cookieName}=${token}; HttpOnly; SameSite=Strict; Path=/`);
-      if (leaveTokenUrl(req, res, url)) return;
-    } else if (!sameToken(cookieValue(req.headers.cookie, cookieName), token)) {
-      res.writeHead(401, { 'Content-Type': 'text/plain' });
-      res.end('Unauthorized: open the dashboard with the URL `hippo dashboard` printed; it carries the access token.');
-      return;
-    }
+    if (!admitDashboardRequest(req, res, url, { token, port })) return;
 
     if (url.pathname.startsWith('/api/')) {
       // A malformed % sequence throws URIError here; the caller answers 400.
@@ -342,26 +382,7 @@ export function serveDashboard(
 
   const onRequest = (req: http.IncomingMessage, res: http.ServerResponse): void => {
     for (const [name, value] of Object.entries(SECURITY_HEADERS)) res.setHeader(name, value);
-    handleRequest(req, res).catch((err) => {
-      const clientFault = err instanceof ParamError || err instanceof URIError || err instanceof BodyTimeoutError;
-      // A cut-short response is logged even for a client fault; a bare 400 is not.
-      if (res.headersSent || !clientFault) {
-        log.error('dashboard request failed', { error: errorMessage(err), path: req.url });
-      }
-      if (res.headersSent) {
-        res.end();
-        return;
-      }
-      if (err instanceof BodyDrainExceeded || err instanceof BodyTimeoutError) {
-        // No `Connection: close` header: Node then destroys the socket as soon as the reply is written.
-        res.writeHead(err instanceof BodyTimeoutError ? 408 : 400, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ error: err.message }), () => closeAfterReply(req));
-        return;
-      }
-      if (err instanceof ParamError) return jsonResponse(res, { error: err.message }, 400);
-      if (err instanceof URIError) return jsonResponse(res, { error: 'Malformed URL path' }, 400);
-      jsonResponse(res, { error: 'Internal error' }, 500);
-    });
+    handleRequest(req, res).catch((err) => answerDashboardFailure(req, res, err));
   };
   // One id per request, so the lines it logs can be told apart from a concurrent request's.
   const server = http.createServer((req, res) => runWithRequestId(randomUUID(), () => onRequest(req, res)));
@@ -370,10 +391,7 @@ export function serveDashboard(
   server.listen(port, '127.0.0.1', () => {
     // SAFETY: listen() was given a TCP port, so address() is AddressInfo, never a pipe name.
     const boundPort = (server.address() as AddressInfo).port;
-    // The banner is the `hippo dashboard` command's printed result, so it stays on stdout.
-    console.log(`Hippo Dashboard running at http://localhost:${boundPort}/?token=${token}`);
-    if (hasDistUi) console.log(`Serving React UI from ${distUiDir}`);
-    console.log('Press Ctrl+C to stop.');
+    printDashboardBanner(boundPort, token, hasDistUi ? distUiDir : null);
   });
 
   return server;
