@@ -37,7 +37,7 @@ describe('recall --graph-stream', () => {
     hippo(home, env, 'remember', 'cache invalidation decision for the deploy pipeline');
     // Exits 0 (execFileSync throws on non-zero). Output is the normal recall result.
     const out = hippo(home, env, 'recall', 'cache', '--graph-stream', '--limit', '5');
-    expect(out).toEqual(expect.any(String));
+    expect(out).toContain('cache invalidation decision for the deploy pipeline');
   });
 
   it('--graph-hops out of range is rejected', () => {

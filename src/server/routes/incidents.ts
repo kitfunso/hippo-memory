@@ -4,7 +4,7 @@ import { HttpError, sendJson } from '../../util/http-util.js';
 import { NotFoundError } from '../../core/api-errors.js';
 import { buildContextWithAuth } from '../auth.js';
 import type { RouteRequest } from '../types.js';
-import { parseJsonBody } from '../validation.js';
+import { MAX_SHORT_FIELD_LEN, parseJsonBody } from '../validation.js';
 import { type JsonValue, isJsonString } from '../../util/json.js';
 import { closeRoute, getRoute, listRoute, type ObjectRouteConfig, objectsOf, optionalString, requiredString } from './object-routes.js';
 
@@ -22,9 +22,9 @@ function linkedMemoryIds(body: Record<string, JsonValue>): string[] | undefined 
     throw new HttpError(400, `linkedMemoryIds exceeds ${MAX_LINKED_MEMORY_IDS}-item cap`);
   }
   const isValidMemoryId = (item: JsonValue): item is string =>
-    isJsonString(item) && item.length > 0 && item.length <= 4096;
+    isJsonString(item) && item.length > 0 && item.length <= MAX_SHORT_FIELD_LEN;
   if (!raw.every(isValidMemoryId)) {
-    throw new HttpError(400, 'each linkedMemoryIds entry must be a non-empty string <= 4096 chars');
+    throw new HttpError(400, `each linkedMemoryIds entry must be a non-empty string <= ${MAX_SHORT_FIELD_LEN} chars`);
   }
   return raw;
 }
@@ -36,8 +36,8 @@ function linkedMemoryIds(body: Record<string, JsonValue>): string[] | undefined 
 // POST /v1/incidents/:id/resolve (open -> resolved; body resolutionText),
 // POST /v1/incidents/:id/close (open|resolved -> closed). Bearer-authed +
 // tenant-scoped via buildContextWithAuth. status validated against
-// VALID_INCIDENT_STATES. DoS caps: text 4096, context 4096, resolutionText
-// 4096. Mirrors /v1/decisions; lifecycle is
+// VALID_INCIDENT_STATES. DoS caps: text, context and resolutionText
+// MAX_SHORT_FIELD_LEN. Mirrors /v1/decisions; lifecycle is
 // open->resolved->closed (no supersede), so linkedMemoryIds replaces
 // supersedesDecisionId on create.
 export async function handleCreateIncident(rr: RouteRequest): Promise<void> {
@@ -45,8 +45,8 @@ export async function handleCreateIncident(rr: RouteRequest): Promise<void> {
   const ctx = await buildContextWithAuth(req, opts);
   const body = await parseJsonBody(req, ctx);
   const write = {
-    incidentText: requiredString(body, 'text', { max: 4096, untrimmed: true }),
-    context: optionalString(body, 'context', 4096),
+    incidentText: requiredString(body, 'text', { max: MAX_SHORT_FIELD_LEN, untrimmed: true }),
+    context: optionalString(body, 'context', MAX_SHORT_FIELD_LEN),
     linkedMemoryIds: linkedMemoryIds(body),
   };
   try {
@@ -67,7 +67,7 @@ export async function handleResolveIncident(rr: RouteRequest, match: RegExpMatch
   const { req, res, opts } = rr;
   const id = parseInt(match[1], 10);
   const ctx = await buildContextWithAuth(req, opts);
-  const resolutionText = requiredString(await parseJsonBody(req, ctx), 'resolutionText', { max: 4096 });
+  const resolutionText = requiredString(await parseJsonBody(req, ctx), 'resolutionText', { max: MAX_SHORT_FIELD_LEN });
   const incident = await resolveOpenIncident(objectsOf(rr), ctx.tenantId, id, resolutionText, ctx.actor.subject);
   sendJson(res, 200, { incident });
 }

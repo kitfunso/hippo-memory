@@ -299,12 +299,12 @@ describe('EmbeddingProvider', () => {
 
     it('accepts an https base url', () => {
       const root = mkRoot({ provider: 'openai', model: 'm', apiBaseUrl: 'https://proxy.example.com/v1' });
-      expect(() => resolveEmbeddingProvider(root)).not.toThrow();
+      expect(resolveEmbeddingProvider(root).id).toBe('openai:m');
     });
 
     it('allows http for localhost', () => {
       const root = mkRoot({ provider: 'openai', model: 'm', apiBaseUrl: 'http://localhost:1234/v1' });
-      expect(() => resolveEmbeddingProvider(root)).not.toThrow();
+      expect(resolveEmbeddingProvider(root).id).toBe('openai:m');
     });
   });
 });

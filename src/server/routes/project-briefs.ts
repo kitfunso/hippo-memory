@@ -1,5 +1,7 @@
 // /v1/project-briefs routes.
-import { briefFromReceipts, MAX_REPO_LEN, PROJECT_BRIEF, refreshedBrief, type SaveProjectBriefOpts } from '../../objects/project-briefs.js';
+import {
+  briefFromReceipts, MAX_CHANGE_SUMMARY_LEN, MAX_REPO_LEN, PROJECT_BRIEF, refreshedBrief, type SaveProjectBriefOpts,
+} from '../../objects/project-briefs.js';
 import { sendJson } from '../../util/http-util.js';
 import { buildContextWithAuth } from '../auth.js';
 import type { RouteRequest } from '../types.js';
@@ -14,7 +16,7 @@ const briefRoutes: VersionedRouteConfig<'project_brief', SaveProjectBriefOpts> =
   filterParam: 'repo',
   revise: (body) => {
     const summary = requiredString(body, 'summary', { max: 8192 });
-    const changeSummary = optionalString(body, 'changeSummary', 4096);
+    const changeSummary = optionalString(body, 'changeSummary', MAX_CHANGE_SUMMARY_LEN);
     return (existing, id) => ({ repo: existing.repo, summary, changeSummary, supersedesBriefId: id });
   },
 };
@@ -27,7 +29,7 @@ const briefRoutes: VersionedRouteConfig<'project_brief', SaveProjectBriefOpts> =
 // from the repo's receipts; dryRun returns {markdown} without writing; ordered
 // before /:id), GET /v1/project-briefs/:id, POST /v1/project-briefs/:id/supersede,
 // POST /v1/project-briefs/:id/close. DoS caps: repo 256, summary 8192,
-// changeSummary 4096. The store validates + throws; the boundary maps validation
+// changeSummary MAX_CHANGE_SUMMARY_LEN. The store validates + throws; the boundary maps validation
 // -> 400, not-found -> 404, not-active -> 409. Mirrors /v1/skills.
 export async function handleCreateProjectBrief(rr: RouteRequest): Promise<void> {
   const ctx = await buildContextWithAuth(rr.req, rr.opts);

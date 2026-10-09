@@ -43,7 +43,7 @@ export function isReleaseCommitNoise(text: string): boolean {
 /** Short preferences and rules carry a useful relationship even without a path or number. */
 export function hasNoSpecificity(text: string): boolean {
   const domainAcronyms = (text.match(/\b[A-Z]{2,6}\b/g) ?? []).filter(a => !CHAT_ACRONYMS.test(a));
-  if (/\d|[A-Z][a-z]{2,}|[/\\.]|[`_{}()\[\]]/.test(text)) return false;
+  if (/\d|[A-Z][a-z]{2,}|[/\\.]|[`_{}()[\]]/.test(text)) return false;
   if (domainAcronyms.length > 0 && /[a-z]/.test(text)) return false;
   if (/^(?:prefer|use|avoid|never use|don't use)\s+(?!(?:the|that|this|it|them|those|these|one|other|something)\b)\S+/i.test(text)) return false;
   if (/\b(?:never|always|must)\s+(?!(?:the|that|this|it|them|those|these|one|other|something)\b)\S+/i.test(text)) return false;

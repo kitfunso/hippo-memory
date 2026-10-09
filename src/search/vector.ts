@@ -112,8 +112,8 @@ export interface DenseScores {
 
 export function denseScores(arm: VectorArm): DenseScores {
   const n = arm.entries.length;
-  const cosine: number[] = new Array(n).fill(0);
-  const hadVec: boolean[] = new Array(n).fill(false);
+  const cosine: number[] = Array<number>(n).fill(0);
+  const hadVec: boolean[] = Array<boolean>(n).fill(false);
   if (!arm.useEmbeddings) return { cosine, hadVec };
   for (let i = 0; i < n; i++) {
     const cached = arm.embeddingIndex[arm.entries[i].id];

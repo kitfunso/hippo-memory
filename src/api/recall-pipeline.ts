@@ -21,6 +21,7 @@ import { physicsSearch } from '../search/physics-search.js';
 import type { RerankStep, ResultCost, SearchResult } from '../core/search-types.js';
 import { searchBothHybrid } from '../sharing/search-both.js';
 import { loadRecallSearchEntries, recallScopeFilter } from '../store/search-rows.js';
+import { isJsonNumber } from '../util/json.js';
 import { textOverlap, tokenize as tokenizeQuery } from '../util/tokenize.js';
 
 /** Stores rankRecall reads and where it sends operator notes. */
@@ -286,7 +287,7 @@ function applyPfcRerankers(opts: RankRecallOpts, state: RankState): void {
   if (opts.rerankUtility) {
     // utility = score * (0.5 + 0.5 * strength) * (1 - min(0.3, tokens / 10000)); long evidence-rich rows pay for length.
     state.results = byScore(state.results.map((r) => {
-      const strength = typeof r.entry.strength === 'number' ? r.entry.strength : 1.0;
+      const strength = isJsonNumber(r.entry.strength) ? r.entry.strength : 1.0;
       const utilityMult = (STRENGTH_RANK_FLOOR + STRENGTH_RANK_SPAN * strength) * (1 - Math.min(UTILITY_LENGTH_PENALTY_CAP, (r.tokens || 0) / UTILITY_LENGTH_TOKENS));
       const utility = r.score * utilityMult;
       return traced(opts, r, { ...r, score: utility }, { stage: 'utility', multiplier: utilityMult, scoreBefore: r.score, scoreAfter: utility });

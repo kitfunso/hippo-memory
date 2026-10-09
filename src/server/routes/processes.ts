@@ -1,22 +1,22 @@
 // /v1/processes routes.
-import { PROCESS, type SaveProcessOpts } from '../../objects/processes.js';
+import { MAX_PROCESS_STEP_LEN, MAX_PROCESS_STEPS, PROCESS, type SaveProcessOpts } from '../../objects/processes.js';
 import { HttpError, sendJson } from '../../util/http-util.js';
 import { buildContextWithAuth } from '../auth.js';
 import type { RouteRequest } from '../types.js';
-import { parseJsonBody } from '../validation.js';
+import { MAX_SHORT_FIELD_LEN, parseJsonBody } from '../validation.js';
 import { type JsonValue, isJsonString } from '../../util/json.js';
 import { closeRoute, getRoute, listRoute, optionalString, requiredString, saveFor, supersedeRoute, type VersionedRouteConfig } from './object-routes.js';
 
 // HTTP-boundary validation for a process `steps` body (untrusted). Returns the
 // step strings (saveProcess re-validates + trims, this is the fail-fast 400
-// gate). Caps mirror src/objects/processes.ts MAX_PROCESS_STEPS / MAX_PROCESS_STEP_LEN.
+// gate).
 function validateProcessStepsBody(raw: JsonValue | undefined): string[] {
   if (raw === undefined || raw === null) return [];
   if (!Array.isArray(raw)) {
     throw new HttpError(400, 'steps must be an array of strings');
   }
-  if (raw.length > 200) {
-    throw new HttpError(400, 'steps exceeds 200-step cap');
+  if (raw.length > MAX_PROCESS_STEPS) {
+    throw new HttpError(400, `steps exceeds ${MAX_PROCESS_STEPS}-step cap`);
   }
   for (const item of raw) {
     if (!isJsonString(item)) {
@@ -25,8 +25,8 @@ function validateProcessStepsBody(raw: JsonValue | undefined): string[] {
     if (item.trim().length === 0) {
       throw new HttpError(400, 'a step is empty');
     }
-    if (item.length > 2000) {
-      throw new HttpError(400, 'a step exceeds the 2000-character cap');
+    if (item.length > MAX_PROCESS_STEP_LEN) {
+      throw new HttpError(400, `a step exceeds the ${MAX_PROCESS_STEP_LEN}-character cap`);
     }
   }
   // SAFETY: every item in raw was confirmed to be a string in the loop above.
@@ -43,8 +43,8 @@ const processRoutes: VersionedRouteConfig<'process', SaveProcessOpts> = {
     if (steps.length === 0) {
       throw new HttpError(400, 'steps is required (at least one step) for a supersession');
     }
-    const changeSummary = optionalString(body, 'changeSummary', 4096);
-    const description = optionalString(body, 'description', 4096);
+    const changeSummary = optionalString(body, 'changeSummary', MAX_SHORT_FIELD_LEN);
+    const description = optionalString(body, 'description', MAX_SHORT_FIELD_LEN);
     return (existing, id) => ({ processName: existing.processName, steps, description, changeSummary, supersedesProcessId: id });
   },
 };
@@ -57,16 +57,16 @@ const processRoutes: VersionedRouteConfig<'process', SaveProcessOpts> = {
 // steps[] + changeSummary + description; reuses the predecessor's name),
 // POST /v1/processes/:id/close (active -> closed). Bearer-authed + tenant-scoped
 // via buildContextWithAuth. status validated against VALID_PROCESS_STATES. DoS
-// caps: processName/description/changeSummary 4096, steps 200x2000
+// caps: processName/description/changeSummary MAX_SHORT_FIELD_LEN, steps MAX_PROCESS_STEPS x MAX_PROCESS_STEP_LEN
 // (validateProcessStepsBody). Mirrors /v1/decisions; the delta lifecycle is the
 // decision supersede path.
 export async function handleCreateProcess(rr: RouteRequest): Promise<void> {
   const ctx = await buildContextWithAuth(rr.req, rr.opts);
   const body = await parseJsonBody(rr.req, ctx);
   const process = await saveFor(rr, PROCESS, ctx.tenantId, ctx.actor.subject, {
-    processName: requiredString(body, 'processName', { max: 4096 }),
+    processName: requiredString(body, 'processName', { max: MAX_SHORT_FIELD_LEN }),
     steps: validateProcessStepsBody(body['steps']),
-    description: optionalString(body, 'description', 4096),
+    description: optionalString(body, 'description', MAX_SHORT_FIELD_LEN),
   });
   sendJson(rr.res, 201, { process });
 }

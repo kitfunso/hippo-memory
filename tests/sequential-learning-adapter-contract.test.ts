@@ -29,17 +29,12 @@ describe('sequential-learning adapter contract', () => {
   };
 
   it('accepts an adapter without pushGoal/completeGoal (back-compat)', () => {
-    expect(() => createAdapter(baseAdapter)).not.toThrow();
+    expect(createAdapter(baseAdapter)).toBe(baseAdapter);
   });
 
   it('accepts an adapter with both pushGoal and completeGoal', () => {
-    expect(() =>
-      createAdapter({
-        ...baseAdapter,
-        pushGoal: async () => 'g_1234567890abcdef',
-        completeGoal: async () => {},
-      }),
-    ).not.toThrow();
+    const paired = { ...baseAdapter, pushGoal: async () => 'g_1234567890abcdef', completeGoal: async () => {} };
+    expect(createAdapter(paired)).toBe(paired);
   });
 
   it('rejects adapters that supply only pushGoal without completeGoal', () => {

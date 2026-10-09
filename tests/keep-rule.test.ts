@@ -237,7 +237,7 @@ describe('sleep with decay forced', () => {
     await consolidate(root, { now: sixtyDaysOn() });
     await consolidate(root, { now: new Date(Date.now() + 400 * DAY) });
 
-    expect(readEntry(root, kept.id)).not.toBeNull();
+    expect(readEntry(root, kept.id)?.content).toBe(kept.content);
   });
 });
 

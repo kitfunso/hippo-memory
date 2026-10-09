@@ -1,7 +1,11 @@
 import type { DatabaseSyncLike } from './sqlite.js';
 
-export function isSqliteBusy(error: unknown): boolean {
-  const code = (error as { errcode?: number } | null)?.errcode;
+function carriesErrcode(cause: unknown): cause is { errcode: unknown } {
+  return typeof cause === 'object' && cause !== null && 'errcode' in cause;
+}
+
+export function isSqliteBusy(cause: unknown): boolean {
+  const code = carriesErrcode(cause) ? cause.errcode : undefined;
   return code === 5 || code === 6 || code === 517;
 }
 

@@ -40,5 +40,8 @@
     "anti-slop/no-unsafe-dictionary-type": "error",
     "anti-slop/no-widen-then-assert": "error",
     "anti-slop/require-safety-comment-for-type-assertion": "error"
-  }
+  },
+  "overrides": [
+    { "files": ["deploy/**/*.mjs"], "rules": { "anti-slop/no-runtime-typeof": "off" } }
+  ]
 }

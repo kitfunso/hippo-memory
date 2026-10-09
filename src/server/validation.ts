@@ -18,6 +18,9 @@ export function isSetMember<T extends string>(set: ReadonlySet<T>, value: string
   return set.has(value as T);
 }
 
+// Cap for short free-text HTTP fields (names, text, context, change summaries) on the object routes.
+export const MAX_SHORT_FIELD_LEN = 4096;
+
 // Number.isInteger, not isFinite: SQLite `LIMIT ?` rejects "1.5" with a 500.
 // Shared by every first-class-object list route so the guard cannot drift.
 export const MAX_LIST_LIMIT = 1000;
@@ -87,7 +90,7 @@ export function getCallerProject(body: Record<string, JsonValue>): RememberOpts[
  * Hippo never emits ids with slashes, and `rejectEncodedSlash` already
  * stops `%2F`-smuggled ones at the front door.
  */
-const ID_SEGMENT_RE = /^[A-Za-z0-9_:.\-]+$/;
+const ID_SEGMENT_RE = /^[A-Za-z0-9_:.-]+$/;
 export function validateIdSegment(id: string, fieldName: string): void {
   if (id.length === 0) throw new HttpError(400, `${fieldName} is required`);
   if (id.length > MAX_ID_LEN) throw new HttpError(400, `${fieldName} exceeds ${MAX_ID_LEN}-character cap`);

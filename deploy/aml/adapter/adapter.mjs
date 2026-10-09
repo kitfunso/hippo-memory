@@ -126,12 +126,9 @@ async function callHippo(method, path, { credential, jsonBody, clientIp } = {}) 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), HIPPO_TIMEOUT_MS);
   try {
-    const upstream = await fetch(`${HIPPO_URL}${path}`, {
-      method,
-      headers,
-      body: jsonBody === undefined ? undefined : JSON.stringify(jsonBody),
-      signal: controller.signal,
-    });
+    const init = { method, headers, signal: controller.signal };
+    if (jsonBody !== undefined) init.body = JSON.stringify(jsonBody);
+    const upstream = await fetch(`${HIPPO_URL}${path}`, init);
     const text = await upstream.text();
     let body = {};
     if (text) {

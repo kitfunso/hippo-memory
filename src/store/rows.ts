@@ -152,10 +152,21 @@ export interface SessionEvent {
 }
 
 export const INDEX_VERSION = 3;
-export const MEMORY_SELECT_COLUMNS = `id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, outcome_score, outcome_positive, outcome_negative, conflicts_with_json, pinned, confidence, content, parents_json, starred, trace_outcome, source_session_id, valid_from, superseded_by, extracted_from, dag_level, dag_parent_id, kind, scope, owner, artifact_ref, tenant_id, origin_project, descendant_count, earliest_at, latest_at, summary_dirty, last_rebuilt_at, rebuild_count, dag_level_3_built_at`;
-// FTS-join columns for loadSearchRows: each is `m.<col> AS <col>` so rowToEntry's unqualified
-// reads still work, and the trailing bm25(memories_fts) AS bm25_score carries the FTS rank.
-export const MEMORY_SEARCH_COLUMNS = `m.id AS id, m.created AS created, m.last_retrieved AS last_retrieved, m.retrieval_count AS retrieval_count, m.strength AS strength, m.half_life_days AS half_life_days, m.layer AS layer, m.tags_json AS tags_json, m.emotional_valence AS emotional_valence, m.schema_fit AS schema_fit, m.source AS source, m.outcome_score AS outcome_score, m.outcome_positive AS outcome_positive, m.outcome_negative AS outcome_negative, m.conflicts_with_json AS conflicts_with_json, m.pinned AS pinned, m.confidence AS confidence, m.content AS content, m.parents_json AS parents_json, m.starred AS starred, m.trace_outcome AS trace_outcome, m.source_session_id AS source_session_id, m.valid_from AS valid_from, m.superseded_by AS superseded_by, m.extracted_from AS extracted_from, m.dag_level AS dag_level, m.dag_parent_id AS dag_parent_id, m.kind AS kind, m.scope AS scope, m.owner AS owner, m.artifact_ref AS artifact_ref, m.tenant_id AS tenant_id, m.origin_project AS origin_project, m.descendant_count AS descendant_count, m.earliest_at AS earliest_at, m.latest_at AS latest_at, m.summary_dirty AS summary_dirty, m.last_rebuilt_at AS last_rebuilt_at, m.rebuild_count AS rebuild_count, m.dag_level_3_built_at AS dag_level_3_built_at, bm25(memories_fts) AS bm25_score`;
+const MEMORY_COLUMN_NAMES = [
+  'id', 'created', 'last_retrieved', 'retrieval_count', 'strength', 'half_life_days', 'layer', 'tags_json',
+  'emotional_valence', 'schema_fit', 'source', 'outcome_score', 'outcome_positive', 'outcome_negative',
+  'conflicts_with_json', 'pinned', 'confidence', 'content', 'parents_json', 'starred', 'trace_outcome',
+  'source_session_id', 'valid_from', 'superseded_by', 'extracted_from', 'dag_level', 'dag_parent_id', 'kind', 'scope',
+  'owner', 'artifact_ref', 'tenant_id', 'origin_project', 'descendant_count', 'earliest_at', 'latest_at',
+  'summary_dirty', 'last_rebuilt_at', 'rebuild_count', 'dag_level_3_built_at',
+] as const;
+
+// FTS-join columns for loadSearchRows: `m.<col> AS <col>` keeps rowToEntry's unqualified reads working.
+export const MEMORY_SELECT_COLUMNS = MEMORY_COLUMN_NAMES.join(', ');
+export const MEMORY_SEARCH_COLUMNS = [
+  ...MEMORY_COLUMN_NAMES.map((c) => `m.${c} AS ${c}`),
+  'bm25(memories_fts) AS bm25_score',
+].join(', ');
 /**
  * Default candidate-pool size for `loadSearchEntries` when called with
  * `limit === undefined`. Single source of truth; `api.recall` imports
@@ -163,8 +174,18 @@ export const MEMORY_SEARCH_COLUMNS = `m.id AS id, m.created AS created, m.last_r
  */
 export const DEFAULT_SEARCH_CANDIDATE_LIMIT = 200;
 
-type RetrievalFields = Pick<MemoryEntry, 'id' | 'created' | 'last_retrieved' | 'retrieval_count' | 'strength' | 'half_life_days' | 'layer' | 'tags' | 'emotional_valence' | 'schema_fit' | 'source' | 'outcome_score' | 'outcome_positive' | 'outcome_negative' | 'conflicts_with' | 'pinned' | 'confidence' | 'content' | 'parents' | 'starred' | 'trace_outcome'>;
-type PlacementFields = Pick<MemoryEntry, 'source_session_id' | 'valid_from' | 'superseded_by' | 'extracted_from' | 'dag_level' | 'dag_parent_id' | 'kind' | 'scope' | 'owner' | 'artifact_ref' | 'tenantId' | 'origin_project' | 'descendant_count' | 'earliest_at' | 'latest_at' | 'summary_dirty' | 'last_rebuilt_at' | 'rebuild_count' | 'dag_level_3_built_at'>;
+type RetrievalFields = Pick<
+  MemoryEntry,
+  'id' | 'created' | 'last_retrieved' | 'retrieval_count' | 'strength' | 'half_life_days' | 'layer' | 'tags' |
+  'emotional_valence' | 'schema_fit' | 'source' | 'outcome_score' | 'outcome_positive' | 'outcome_negative' |
+  'conflicts_with' | 'pinned' | 'confidence' | 'content' | 'parents' | 'starred' | 'trace_outcome'
+>;
+type PlacementFields = Pick<
+  MemoryEntry,
+  'source_session_id' | 'valid_from' | 'superseded_by' | 'extracted_from' | 'dag_level' | 'dag_parent_id' | 'kind' |
+  'scope' | 'owner' | 'artifact_ref' | 'tenantId' | 'origin_project' | 'descendant_count' | 'earliest_at' |
+  'latest_at' | 'summary_dirty' | 'last_rebuilt_at' | 'rebuild_count' | 'dag_level_3_built_at'
+>;
 
 function rowToRetrievalFields(row: MemoryRow): RetrievalFields {
   // SAFETY: every `as X` below narrows a SQLite column value to an

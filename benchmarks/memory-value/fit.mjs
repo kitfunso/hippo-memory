@@ -145,7 +145,7 @@ export function runES({
     let bestOffspringObjective = -Infinity;
 
     for (let k = 0; k < lambda; k++) {
-      const candidate = new Array(D);
+      const candidate = Array(D);
       for (let i = 0; i < D; i++) candidate[i] = clipTo(box, parent[i] + sigma * gaussianFromRng(rng));
       if (l2norm(candidate) < 1e-9) continue; // reject; skip this offspring, no resample
       const candObjective = objective(candidate);
@@ -201,7 +201,7 @@ export function recencyVector(dims = FIT_DIMS) {
       '[fit] FAILED recencyVector: dims is missing "age_days" — the recency init/cross-check contract requires it',
     );
   }
-  const v = new Array(dims.length).fill(0);
+  const v = Array(dims.length).fill(0);
   v[ageIdx] = -1;
   return v;
 }
@@ -643,7 +643,7 @@ export function bootstrapCI(deltas, resamples, rng) {
   const n = deltas.length;
   if (n === 0) return { point: null, ci95: [null, null] };
   const point = mean(deltas);
-  const means = new Array(resamples);
+  const means = Array(resamples);
   for (let i = 0; i < resamples; i++) {
     let sum = 0;
     for (let j = 0; j < n; j++) sum += deltas[Math.floor(rng() * n)];
