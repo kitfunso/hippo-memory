@@ -296,14 +296,14 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `entityProfilePass`: E5 phase: aggregate per-entity L2 summaries (e.g. all the speaker:Alice
 
 ### src/consolidate/merge.ts
-- `mergePass`: AT1 consolidation-loop fix (docs/plans/2026-08-15-at1-rejected-value-tombstone.md): reuses the single consolidateDb handle opened lazily in consolidate() for the whole non-dry-run consolidate — see that declaration's comment. Only needed for real writes — a dry-run preview never reaches batchWriteAndDelete's guard bypass, so there is nothing here for it to protect against.
+- `mergePass`: AT1 consolidation-loop fix (docs/plans/2026-08-15-at1-rejected-value-tombstone.md): reuses the single tombstone-check handle (`lazyTombstoneChecks`, `src/store/tombstone-checks.ts`) opened lazily in consolidate() for the whole non-dry-run consolidate — see that declaration's comment. Only needed for real writes — a dry-run preview never reaches batchWriteAndDelete's guard bypass, so there is nothing here for it to protect against.
 - `mergeCluster`: Immediate ranking is deliberately unchanged: the 2026-06-10 DAG slice-1 eval measured that dropping children below a worse-retrieving summary regresses budget-bounded QA (docs/evals/). The stored
 
 ### src/consolidate/run.ts
 - `ConsolidationResult.tracesSkippedMixedScope`: T7: sessions skipped because their events span two derivation scopes.
 - `ConsolidationResult.summariesRebuilt`: v0.30 / E3 — rebuild phase observability. Failed and zero-child counts are first-class so downstream callers (CLI eval, HTTP /v1/sleep response) see structured data, not a parsed details string.
 - `ConsolidationResult.entityProfilesCreated`: v0.30 / E5 — L3 entity-profile build count
-- `lazyConsolidateDb`: AT1 rejection-guard db handle (docs/plans/2026-08-15-at1-rejected-value-tombstone.md): covers BOTH the auto-promote pass (1.4) and the merge pass (3) — both build deterministic content that batchWriteAndDelete writes through the guard's bypass, so both need a producer-side tombstone check before pushing to pendingWrites.
+- `lazyTombstoneChecks` (`src/store/tombstone-checks.ts`): AT1 rejection-guard db handle (docs/plans/2026-08-15-at1-rejected-value-tombstone.md): covers BOTH the auto-promote pass (1.4) and the merge pass (3) — both build deterministic content that batchWriteAndDelete writes through the guard's bypass, so both need a producer-side tombstone check before pushing to pendingWrites.
 
 ### src/consolidate/sleep.ts
 - `consolidate`: L9: host-wide by design. Consolidation runs across all tenants in one pass — per-tenant filtering would create N consolidation runs per host with no cross-tenant dedup. The api.sleep audit row tags this with the admin synthetic actor; see api.ts:2050 for the rationale.
