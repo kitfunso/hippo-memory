@@ -44,7 +44,7 @@ import { cmdGithub, printGithubBackfillUsage } from './connectors/github/cli-imp
 import { printError } from './cli/output.js';
 import { errorMessage, log } from './log.js';
 import { isStoreBusy, STORE_BUSY_MESSAGE } from './db/busy.js';
-import type { CommandContext } from './cli/shared.js';
+import type { CliFlags, CommandContext } from './cli/shared.js';
 import { VERB_USAGE, USAGE_HEADER, USAGE_EXAMPLES, printAuditPruneUsage, printSlackBackfillUsage, printSlackWorkspacesUsage } from './cli/usage.js';
 
 // ---------------------------------------------------------------------------
@@ -94,7 +94,7 @@ const DRY_RUN_COMMANDS: ReadonlySet<string> = new Set([
 ]);
 
 // share and brief honour --dry-run in one form only; their other forms write for real.
-function dryRunRefusal(command: string, args: string[], flags: Record<string, string | boolean | string[]>): string | null {
+function dryRunRefusal(command: string, args: string[], flags: CliFlags): string | null {
   const isBrief = command === 'brief' || command === 'project-brief';
   const onlyForm = command === 'share' ? 'share --auto' : isBrief ? `${command} refresh` : null;
   const honoured = command === 'share' ? args[0] === '--auto' || Boolean(flags['auto'])
@@ -109,7 +109,7 @@ function isRepeatableFlag(key: string): boolean {
   return key === 'tag' || key === 'artifact' || key === 'link' || key === 'step' || key === 'constraint' || key === 'depends-on';
 }
 
-function pushRepeatableFlag(flags: Record<string, string | boolean | string[]>, key: string, value: string): void {
+function pushRepeatableFlag(flags: CliFlags, key: string, value: string): void {
   if (Array.isArray(flags[key])) {
     // SAFETY: Array.isArray just confirmed flags[key] is an array; the union has no other array member.
     (flags[key] as string[]).push(value);
@@ -118,10 +118,10 @@ function pushRepeatableFlag(flags: Record<string, string | boolean | string[]>, 
   }
 }
 
-export function parseArgs(argv: string[]): { command: string; args: string[]; flags: Record<string, string | boolean | string[]> } {
+export function parseArgs(argv: string[]): { command: string; args: string[]; flags: CliFlags } {
   const [, , command = '', ...rest] = argv;
   const args: string[] = [];
-  const flags: Record<string, string | boolean | string[]> = {};
+  const flags: CliFlags = {};
 
   let i = 0;
   while (i < rest.length) {
@@ -179,7 +179,7 @@ export function parseArgs(argv: string[]): { command: string; args: string[]; fl
   return { command, args, flags };
 }
 
-export function shouldAutoRepairCodexWrapper(currentCommand: string, flags: Record<string, string | boolean | string[]>): boolean {
+export function shouldAutoRepairCodexWrapper(currentCommand: string, flags: CliFlags): boolean {
   if (envSkipAutoIntegrations()) return false;
   if (!['context', 'remember', 'recall', 'sleep', 'capture', 'outcome', 'status', 'init'].includes(currentCommand)) {
     return false;
@@ -193,7 +193,7 @@ export function shouldAutoRepairCodexWrapper(currentCommand: string, flags: Reco
 // shim). Never first-installs — silently swapping the codex binary on routine
 // commands is a consent violation and reads as binary hijacking to
 // supply-chain scanners.
-function maybeRepairCodexWrapper(currentCommand: string, flags: Record<string, string | boolean | string[]>): void {
+function maybeRepairCodexWrapper(currentCommand: string, flags: CliFlags): void {
   if (!shouldAutoRepairCodexWrapper(currentCommand, flags)) return;
   try {
     repairCodexWrapperIfInstalled();
@@ -604,7 +604,7 @@ function printHelp(command: string, args: string[]): void {
 async function main(
   command: string,
   args: string[],
-  flags: Record<string, string | boolean | string[]>,
+  flags: CliFlags,
   hippoRoot: string,
 ): Promise<void> {
   if (command === '--version' || command === '-v' || flags['version']) {

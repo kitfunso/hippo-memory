@@ -27,7 +27,7 @@ import * as api from '../api.js';
 import { resolveTenantId } from '../tenant.js';
 import { errorMessage, log } from '../log.js';
 import { printError } from './output.js';
-import {
+import { type CliFlags,
   parseCountFlag,
   requireInit,
   fmt,
@@ -241,7 +241,7 @@ function cmdInspect(hippoRoot: string, id: string): void {
  */
 export function cmdTokens(
   hippoRoot: string,
-  flags: Record<string, string | boolean | string[]>,
+  flags: CliFlags,
 ): void {
   const root = resolveAuthRoot(hippoRoot, flags);
   const ctx: api.Context = {
@@ -287,7 +287,7 @@ export function cmdTokens(
 /** `hippo failures [--days <n>] [--json] [--global]`: failed tool calls by outcome, and repeats across sessions. */
 export function cmdFailures(
   hippoRoot: string,
-  flags: Record<string, string | boolean | string[]>,
+  flags: CliFlags,
 ): void {
   // The store the capture-error hook writes to; a report never creates one.
   const root = flags['global'] ? getGlobalRoot() : hookStoreRoot(hippoRoot);

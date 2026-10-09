@@ -129,7 +129,7 @@ function processClose(hippoRoot: string, tenantId: string, args: string[]): void
 export function cmdProcess(
   hippoRoot: string,
   args: string[],
-  flags: Record<string, string | boolean | string[]>
+  flags: CliFlags
 ): void {
   requireInit(hippoRoot);
   const tenantId = resolveTenantId({});
@@ -302,7 +302,7 @@ function policyClose(hippoRoot: string, tenantId: string, args: string[]): void 
 export function cmdPolicy(
   hippoRoot: string,
   args: string[],
-  flags: Record<string, string | boolean | string[]>
+  flags: CliFlags
 ): void {
   requireInit(hippoRoot);
   const tenantId = resolveTenantId({});
@@ -466,7 +466,7 @@ function skillClose(hippoRoot: string, tenantId: string, args: string[]): void {
 export function cmdSkill(
   hippoRoot: string,
   args: string[],
-  flags: Record<string, string | boolean | string[]>
+  flags: CliFlags
 ): void {
   requireInit(hippoRoot);
   const tenantId = resolveTenantId({});

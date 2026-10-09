@@ -159,7 +159,7 @@ function predictBaserate(hippoRoot: string, tenantId: string, flags: CliFlags): 
 export function cmdPredict(
   hippoRoot: string,
   args: string[],
-  flags: Record<string, string | boolean | string[]>
+  flags: CliFlags
 ): void {
   requireInit(hippoRoot);
   const tenantId = resolveTenantId({});
@@ -275,7 +275,7 @@ function decideClose(hippoRoot: string, tenantId: string, args: string[]): void 
 export function cmdDecide(
   hippoRoot: string,
   args: string[],
-  flags: Record<string, string | boolean | string[]>
+  flags: CliFlags
 ): void {
   requireInit(hippoRoot);
   const tenantId = resolveTenantId({});
@@ -443,7 +443,7 @@ function incidentClose(hippoRoot: string, tenantId: string, args: string[]): voi
 export function cmdIncident(
   hippoRoot: string,
   args: string[],
-  flags: Record<string, string | boolean | string[]>
+  flags: CliFlags
 ): void {
   requireInit(hippoRoot);
   const tenantId = resolveTenantId({});

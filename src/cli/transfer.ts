@@ -91,7 +91,7 @@ async function cmdWatch(command: string, hippoRoot: string): Promise<void> {
 
 export function cmdLearn(
   hippoRoot: string,
-  flags: Record<string, string | boolean | string[]>
+  flags: CliFlags
 ): void {
   requireInit(hippoRoot);
 
@@ -135,7 +135,7 @@ function warnRedacted(count: number | undefined): void {
 export function cmdImport(
   hippoRoot: string,
   args: string[],
-  flags: Record<string, string | boolean | string[]>
+  flags: CliFlags
 ): void {
   const useGlobal = Boolean(flags['global']);
   const dryRun = Boolean(flags['dry-run']);
@@ -346,7 +346,7 @@ function cmdPromote(hippoRoot: string, id: string): void {
 // Sync command
 // ---------------------------------------------------------------------------
 
-export function cmdSync(hippoRoot: string, flags: Record<string, string | boolean | string[]> = {}): void {
+export function cmdSync(hippoRoot: string, flags: CliFlags = {}): void {
   requireInit(hippoRoot);
 
   const globalRoot = getGlobalRoot();

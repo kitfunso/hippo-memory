@@ -49,7 +49,7 @@ import { errorMessage, log } from '../log.js';
 import { withLedgerDb } from '../ledger-db.js';
 import { printError } from './output.js';
 import { cmdLastSleep } from './last-sleep.js';
-import {
+import { type CliFlags,
   type CommandContext,
   logSessionEndImport,
   appendSessionEndCloseLog,
@@ -175,7 +175,7 @@ function restoreCompactSnapshot(hippoRoot: string, payloadSessionId: string | nu
  */
 export async function cmdSessionEnd(
   hippoRoot: string,
-  flags: Record<string, string | boolean | string[]>
+  flags: CliFlags
 ): Promise<void> {
   const runtime = hookRuntime(flags);
   const turn = flags['turn'] === true;
@@ -239,7 +239,7 @@ function isVscodeStopPayload(raw: BoundedStdin): boolean {
 
 export async function cmdSessionEndWorker(
   hippoRoot: string,
-  flags: Record<string, string | boolean | string[]>
+  flags: CliFlags
 ): Promise<void> {
   const sessionId = flags['session-id'];
   await runSessionWorker(isStringValue(sessionId) ? sessionId : null, flags['turn'] === true ? 'turn' : 'full', (mode) => sessionEndWork(hippoRoot, flags, mode));
@@ -247,7 +247,7 @@ export async function cmdSessionEndWorker(
 
 async function sessionEndWork(
   hippoRoot: string,
-  flags: Record<string, string | boolean | string[]>,
+  flags: CliFlags,
   mode: WorkerMode,
 ): Promise<void> {
   const transcriptPath = typeof flags['transcript'] === 'string' ? (flags['transcript'] as string) : undefined;
@@ -302,7 +302,7 @@ async function sessionEndWork(
 
 async function sleepProjectStore(
   hippoRoot: string,
-  flags: Record<string, string | boolean | string[]>,
+  flags: CliFlags,
   closeLogFile: string | null,
   transcriptPath: string | undefined,
 ): Promise<void> {
@@ -323,7 +323,7 @@ async function sleepProjectStore(
 /** A close after every reply sleeps only at the MCP server's auto-sleep threshold; each line starts the log afresh, as a sleep does. */
 async function sleepIfDue(
   hippoRoot: string,
-  flags: Record<string, string | boolean | string[]>,
+  flags: CliFlags,
   closeLogFile: string | null,
   transcriptPath: string | undefined,
   sessionId: string,
@@ -369,7 +369,7 @@ function captureNewTurns(
 function captureEndedSession(
   hippoRoot: string,
   store: string,
-  flags: Record<string, string | boolean | string[]>,
+  flags: CliFlags,
   transcriptPath: string | undefined,
   turns: readonly SessionTurn[] | undefined,
 ): boolean {
@@ -585,7 +585,7 @@ export function cmdCodexRun(
 
 export async function cmdCodexSessionEndWorker(
   hippoRoot: string,
-  flags: Record<string, string | boolean | string[]>,
+  flags: CliFlags,
 ): Promise<void> {
   const logFile = typeof flags['log-file'] === 'string' ? (flags['log-file'] as string) : undefined;
   // Like the other hooks: project store, else global; a folder with neither must not get one made.

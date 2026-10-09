@@ -5,9 +5,9 @@ import * as api from '../api.js';
 import { resolveTenantId } from '../tenant.js';
 import { assembleCost, assembleHeading, drillCost, settleTokens } from '../context-render.js';
 import { printError } from './output.js';
-import { parseBudgetFlag, requireInit, type CommandContext, captureConsole } from './shared.js';
+import { type CliFlags, parseBudgetFlag, requireInit, type CommandContext, captureConsole } from './shared.js';
 
-export function cmdDag(hippoRoot: string, flags: Record<string, string | boolean | string[]>): void {
+export function cmdDag(hippoRoot: string, flags: CliFlags): void {
   requireInit(hippoRoot);
   const entries = loadAllEntries(hippoRoot);
   const isStats = flags['stats'] === true;
@@ -77,7 +77,7 @@ export function cmdDag(hippoRoot: string, flags: Record<string, string | boolean
   }
 }
 
-function cmdAssemble(hippoRoot: string, sessionId: string, flags: Record<string, string | boolean | string[]>): void {
+function cmdAssemble(hippoRoot: string, sessionId: string, flags: CliFlags): void {
   requireInit(hippoRoot);
   // Absent stays undefined so the api default applies; the 0 fallback is unreachable.
   const budget = flags['budget'] === undefined ? undefined : parseBudgetFlag(flags['budget'], 0);
@@ -112,7 +112,7 @@ function cmdAssemble(hippoRoot: string, sessionId: string, flags: Record<string,
   })));
 }
 
-function cmdDrillDown(hippoRoot: string, summaryId: string, flags: Record<string, string | boolean | string[]>): void {
+function cmdDrillDown(hippoRoot: string, summaryId: string, flags: CliFlags): void {
   requireInit(hippoRoot);
   const limit = typeof flags['limit'] === 'string' ? Number(flags['limit']) : undefined;
   // Absent stays undefined so the api default applies; the 0 fallback is unreachable.

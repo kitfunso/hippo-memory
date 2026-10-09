@@ -23,7 +23,7 @@ import {
   toRenderItems,
 } from '../prompt-hook.js';
 import { printError } from './output.js';
-import {
+import { type CliFlags,
   parseLimitFlag,
   parseCountFlag,
   parseBudgetFlag,
@@ -44,7 +44,7 @@ import {
 export async function cmdContext(
   hippoRoot: string,
   args: string[],
-  flags: Record<string, string | boolean | string[]>,
+  flags: CliFlags,
   stdinText?: string
 ): Promise<void> {
   const rec = startDeliveryRecorder(hippoRoot, flags, stdinText);
@@ -56,7 +56,7 @@ export async function cmdContext(
 /** A delivery recorder for a pinned-only call when its ledger store enables one, else null; never throws. */
 function startDeliveryRecorder(
   hippoRoot: string,
-  flags: Record<string, string | boolean | string[]>,
+  flags: CliFlags,
   stdinText: string | undefined,
 ): DeliveryRecorder | null {
   if (flags['pinned-only'] !== true) return null;
@@ -105,7 +105,7 @@ function readHookPayload(stdinText: string | undefined): HookPayload {
 async function renderContext(
   hippoRoot: string,
   args: string[],
-  flags: Record<string, string | boolean | string[]>,
+  flags: CliFlags,
   stdinText: string | undefined,
   rec: DeliveryRecorder | null,
 ): Promise<void> {
@@ -195,7 +195,7 @@ interface ContextOptsInput {
   readonly rec: DeliveryRecorder | null;
 }
 
-function buildContextOpts(flags: Record<string, string | boolean | string[]>, input: ContextOptsInput): api.ContextOpts {
+function buildContextOpts(flags: CliFlags, input: ContextOptsInput): api.ContextOpts {
   // Scope detection uses cwd, so it is resolved here and passed in via opts.scope.
   const ctxExplicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
   const ctxActiveScope = ctxExplicitScope || detectScope();

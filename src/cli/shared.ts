@@ -436,7 +436,7 @@ export function printHandoff(handoff: SessionHandoff): void {
 
 // parseArgs turns a value-less flag into `true`; refuse rather than silently
 // stringifying it (String(true) === 'true'), mirroring cmdHandoff's guard.
-export function cardStringFlag(flags: Record<string, string | boolean | string[]>, key: string): string | undefined {
+export function cardStringFlag(flags: CliFlags, key: string): string | undefined {
   const v = flags[key];
   if (v === undefined) return undefined;
   if (v === true || v === false || Array.isArray(v)) { printError(`--${key} requires a value`); process.exit(1); }
@@ -542,7 +542,7 @@ export function learnFromRepo(
   return { added, skipped, lowInfo };
 }
 
-export function resolveAuthRoot(hippoRoot: string, flags: Record<string, string | boolean | string[]>): string {
+export function resolveAuthRoot(hippoRoot: string, flags: CliFlags): string {
   if (flags['global']) {
     initGlobal();
     return getGlobalRoot();

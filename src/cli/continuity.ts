@@ -24,7 +24,7 @@ import {
 export function cmdSnapshot(
   hippoRoot: string,
   args: string[],
-  flags: Record<string, string | boolean | string[]>
+  flags: CliFlags
 ): void {
   requireInit(hippoRoot);
 
@@ -196,7 +196,7 @@ function sessionComplete(hippoRoot: string, s: SessionArgs, flags: CliFlags): vo
 export function cmdSession(
   hippoRoot: string,
   args: string[],
-  flags: Record<string, string | boolean | string[]>
+  flags: CliFlags
 ): void {
   requireInit(hippoRoot);
 
@@ -385,7 +385,7 @@ function handoffShow(hippoRoot: string, args: string[], flags: CliFlags): void {
 export function cmdHandoff(
   hippoRoot: string,
   args: string[],
-  flags: Record<string, string | boolean | string[]>
+  flags: CliFlags
 ): void {
   requireInit(hippoRoot);
 
@@ -401,7 +401,7 @@ export function cmdHandoff(
 export function cmdCurrent(
   hippoRoot: string,
   args: string[],
-  flags: Record<string, string | boolean | string[]>
+  flags: CliFlags
 ): void {
   requireInit(hippoRoot);
 
@@ -472,7 +472,7 @@ export function cmdCurrent(
 export function cmdWm(
   hippoRoot: string,
   args: string[],
-  flags: Record<string, string | boolean | string[]>,
+  flags: CliFlags,
 ): void {
   requireInit(hippoRoot);
 

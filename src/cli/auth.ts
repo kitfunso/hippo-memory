@@ -5,13 +5,13 @@ import { listApiKeys, type ApiKeyListItem } from '../auth.js';
 import * as api from '../api.js';
 import { resolveTenantId } from '../tenant.js';
 import { printError } from './output.js';
-import { resolveAuthRoot } from './shared.js';
+import { type CliFlags, resolveAuthRoot } from './shared.js';
 
 // ---------------------------------------------------------------------------
 // Auth subcommands
 // ---------------------------------------------------------------------------
 
-function cmdAuthCreate(hippoRoot: string, flags: Record<string, string | boolean | string[]>): void {
+function cmdAuthCreate(hippoRoot: string, flags: CliFlags): void {
   const root = resolveAuthRoot(hippoRoot, flags);
   const tenantFlag = typeof flags['tenant'] === 'string' ? (flags['tenant'] as string) : undefined;
   const labelFlag = typeof flags['label'] === 'string' ? (flags['label'] as string) : undefined;
@@ -70,7 +70,7 @@ function formatKeyRow(item: ApiKeyListItem): string {
   return `${item.keyId}  ${item.tenantId}  ${item.role}  ${label}  ${created}  ${expires}  ${revoked}`;
 }
 
-function cmdAuthList(hippoRoot: string, flags: Record<string, string | boolean | string[]>): void {
+function cmdAuthList(hippoRoot: string, flags: CliFlags): void {
   const root = resolveAuthRoot(hippoRoot, flags);
   const includeRevoked = Boolean(flags['all']);
   const asJson = Boolean(flags['json']);
@@ -110,7 +110,7 @@ function keyContext(root: string, keyId: string): api.HippoDbContext {
   return { ...hostCtx, tenantId: keyTenant };
 }
 
-function cmdAuthRevoke(hippoRoot: string, keyId: string, flags: Record<string, string | boolean | string[]>): void {
+function cmdAuthRevoke(hippoRoot: string, keyId: string, flags: CliFlags): void {
   const ctx = keyContext(resolveAuthRoot(hippoRoot, flags), keyId);
   let revokedAt: string;
   try {
@@ -127,7 +127,7 @@ function cmdAuthRevoke(hippoRoot: string, keyId: string, flags: Record<string, s
 }
 
 /** `hippo auth grant|ungrant <key_id> <scope>`, routed through api so the tenant, restricted-scope and audit checks live in one place. */
-function cmdAuthScopeGrant(hippoRoot: string, keyId: string, scope: string, grant: boolean, flags: Record<string, string | boolean | string[]>): void {
+function cmdAuthScopeGrant(hippoRoot: string, keyId: string, scope: string, grant: boolean, flags: CliFlags): void {
   const ctx = keyContext(resolveAuthRoot(hippoRoot, flags), keyId);
   try {
     if (grant) api.authGrant(ctx, keyId, scope);
@@ -143,7 +143,7 @@ function cmdAuthScopeGrant(hippoRoot: string, keyId: string, scope: string, gran
   console.log(grant ? `Granted ${keyId} read access to ${scope}` : `Removed ${keyId}'s grant on ${scope}`);
 }
 
-export function cmdAuth(hippoRoot: string, args: string[], flags: Record<string, string | boolean | string[]>): void {
+export function cmdAuth(hippoRoot: string, args: string[], flags: CliFlags): void {
   const sub = args[0];
   if (!sub) {
     printError('Usage: hippo auth <create|list|revoke|grant|ungrant> [options]');

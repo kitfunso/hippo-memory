@@ -14,12 +14,13 @@ import {
 } from '../connectors/slack/workspaces.js';
 import { printError } from './output.js';
 import { printSlackBackfillUsage, printSlackWorkspacesUsage } from './usage.js';
+import type { CliFlags } from './shared.js';
 
 // ---------------------------------------------------------------------------
 // Slack subcommands (`hippo slack backfill` / `hippo slack dlq list`)
 // ---------------------------------------------------------------------------
 
-function cmdSlackBackfill(hippoRoot: string, flags: Record<string, string | boolean | string[]>): void {
+function cmdSlackBackfill(hippoRoot: string, flags: CliFlags): void {
   const channel = typeof flags['channel'] === 'string' ? (flags['channel'] as string) : undefined;
   if (!channel) {
     printSlackBackfillUsage();
@@ -56,7 +57,7 @@ function cmdSlackBackfill(hippoRoot: string, flags: Record<string, string | bool
     });
 }
 
-function cmdSlackDlqList(hippoRoot: string, _flags: Record<string, string | boolean | string[]>): void {
+function cmdSlackDlqList(hippoRoot: string, _flags: CliFlags): void {
   const db = openHippoDb(hippoRoot);
   try {
     const tenantId = resolveTenantId({});
@@ -72,7 +73,7 @@ function cmdSlackDlqList(hippoRoot: string, _flags: Record<string, string | bool
 function cmdSlackDlqReplay(
   hippoRoot: string,
   args: string[],
-  flags: Record<string, string | boolean | string[]>,
+  flags: CliFlags,
 ): void {
   const idArg = args[2];
   if (!idArg) {
@@ -106,7 +107,7 @@ function cmdSlackDlqReplay(
 
 function cmdSlackWorkspacesAdd(
   hippoRoot: string,
-  flags: Record<string, string | boolean | string[]>,
+  flags: CliFlags,
 ): void {
   const teamId = typeof flags['team'] === 'string' ? (flags['team'] as string).trim() : '';
   const tenantId = typeof flags['tenant'] === 'string' ? (flags['tenant'] as string).trim() : '';
@@ -141,7 +142,7 @@ function cmdSlackWorkspacesList(hippoRoot: string): void {
 
 function cmdSlackWorkspacesRemove(
   hippoRoot: string,
-  flags: Record<string, string | boolean | string[]>,
+  flags: CliFlags,
 ): void {
   const teamId = typeof flags['team'] === 'string' ? (flags['team'] as string).trim() : '';
   if (!teamId) {
@@ -161,7 +162,7 @@ function cmdSlackWorkspacesRemove(
   }
 }
 
-export function cmdSlack(hippoRoot: string, args: string[], flags: Record<string, string | boolean | string[]>): void {
+export function cmdSlack(hippoRoot: string, args: string[], flags: CliFlags): void {
   const sub = args[0];
   if (sub === 'backfill') {
     cmdSlackBackfill(hippoRoot, flags);

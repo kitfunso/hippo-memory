@@ -41,7 +41,7 @@ import { replayCompactionsAt } from '../compaction-record.js';
 import { log } from '../log.js';
 import { writeFileAtomic } from '../util/atomic-write.js';
 import { printError } from './output.js';
-import { printAgentImport, installCodexMemoryHooks, setupDailySchedule, warnClaudeSettingsUnusable } from './shared.js';
+import { type CliFlags, printAgentImport, installCodexMemoryHooks, setupDailySchedule, warnClaudeSettingsUnusable } from './shared.js';
 import { repairQualityOnceAt } from './quality-repair-once.js';
 import { HOOK_MARKERS, HOOKS, hippoBlock, withoutHookBlock } from '../hooks/hook-blocks.js';
 import { escapeRegex } from '../escape.js';
@@ -352,7 +352,7 @@ function removeLegacyCursorRules(): void {
 // `hippo setup` -- one-shot configuration for every AI coding tool on the box.
 // Detection and install logic live in ./hooks.ts.
 
-export function cmdSetup(flags: Record<string, string | boolean | string[]>): void {
+export function cmdSetup(flags: CliFlags): void {
   const dryRun = Boolean(flags['dry-run']);
   const forceAll = Boolean(flags['all']);
   const tools = detectInstalledTools();

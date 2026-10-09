@@ -44,7 +44,7 @@ interface RememberTags {
 
 // Shared by the direct write and the routed request so both store the same tags.
 function rememberTags(
-  flags: Record<string, string | boolean | string[]>,
+  flags: CliFlags,
   cwd: string,
 ): RememberTags {
   const requested: string[] = Array.isArray(flags['tag']) ? [...(flags['tag'] as string[])] : [];
@@ -115,7 +115,7 @@ function parseRememberEnvelope(flags: CliFlags): RememberEnvelope {
 export async function cmdRemember(
   hippoRoot: string,
   text: string,
-  flags: Record<string, string | boolean | string[]>
+  flags: CliFlags
 ): Promise<void> {
   const useGlobal = Boolean(flags['global']);
   const targetRoot = useGlobal ? getGlobalRoot() : hippoRoot;
@@ -233,7 +233,7 @@ function cmdSupersede(
   hippoRoot: string,
   oldId: string,
   newContent: string,
-  flags: Record<string, string | boolean | string[]>,
+  flags: CliFlags,
 ): void {
   requireInit(hippoRoot);
 
@@ -284,7 +284,7 @@ function cmdSupersede(
 
 function cmdTraceRecord(
   hippoRoot: string,
-  flags: Record<string, string | boolean | string[]>,
+  flags: CliFlags,
 ): void {
   requireInit(hippoRoot);
 
@@ -342,7 +342,7 @@ function cmdTraceRecord(
 function cmdTrace(
   hippoRoot: string,
   id: string,
-  flags: Record<string, string | boolean | string[]>,
+  flags: CliFlags,
 ): void {
   requireInit(hippoRoot);
   const asJson = Boolean(flags['json']);

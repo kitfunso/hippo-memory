@@ -8,7 +8,7 @@ import * as api from '../api.js';
 import { resolveTenantId } from '../tenant.js';
 import { pruneAuditLog, parseOlderThanFlag } from '../audit-prune.js';
 import { printError } from './output.js';
-import { requireInit, type CommandContext, resolveAuthRoot } from './shared.js';
+import { type CliFlags, requireInit, type CommandContext, resolveAuthRoot } from './shared.js';
 import { repairAutomaticMemories } from '../quality-repair.js';
 import { getGlobalRoot } from '../shared.js';
 
@@ -24,7 +24,7 @@ function formatAuditRow(ev: AuditEvent): string {
   return `${ev.ts}  ${ev.actor}  ${ev.op}  ${target}  ${meta}`;
 }
 
-function cmdAuditList(hippoRoot: string, flags: Record<string, string | boolean | string[]>): void {
+function cmdAuditList(hippoRoot: string, flags: CliFlags): void {
   const root = resolveAuthRoot(hippoRoot, flags);
   const asJson = Boolean(flags['json']);
   const tenantId = resolveTenantId({});
@@ -78,7 +78,7 @@ function cmdAuditList(hippoRoot: string, flags: Record<string, string | boolean 
   }
 }
 
-function cmdAuditPrune(hippoRoot: string, flags: Record<string, string | boolean | string[]>): void {
+function cmdAuditPrune(hippoRoot: string, flags: CliFlags): void {
   const olderThanRaw = typeof flags['older-than'] === 'string' ? (flags['older-than'] as string) : '';
   if (!olderThanRaw) {
     printError('Usage: hippo audit prune --older-than <Nd> [--dry-run] [--tenant <t>]');
@@ -116,7 +116,7 @@ function cmdAuditPrune(hippoRoot: string, flags: Record<string, string | boolean
   }
 }
 
-function cmdAuditLog(hippoRoot: string, args: string[], flags: Record<string, string | boolean | string[]>): void {
+function cmdAuditLog(hippoRoot: string, args: string[], flags: CliFlags): void {
   const sub = args[0];
   if (sub === 'list') {
     cmdAuditList(hippoRoot, flags);

@@ -16,7 +16,7 @@ import { requireInit, fmt, type CliFlags, type CommandContext } from './shared.j
 export async function cmdEval(
   hippoRoot: string,
   corpusPath: string | null,
-  flags: Record<string, string | boolean | string[]>
+  flags: CliFlags
 ): Promise<void> {
   const asJson = Boolean(flags['json']);
   const minMrr = flags['min-mrr'] !== undefined ? parseFloat(String(flags['min-mrr'])) : null;

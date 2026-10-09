@@ -16,7 +16,7 @@ import { currentMachine, importForStore, importProjectMemories, importUserMemori
 import { emptyReport, mergeReports } from '../agent-memories/report.js';
 import { getGlobalRoot, initGlobal } from '../shared.js';
 import { registerWorkspace } from '../scheduler.js';
-import { printAgentImport, installCodexMemoryHooks, setupDailySchedule, learnFromRepo, skipLearnOnSharedStore, warnClaudeSettingsUnusable } from './shared.js';
+import { type CliFlags, printAgentImport, installCodexMemoryHooks, setupDailySchedule, learnFromRepo, skipLearnOnSharedStore, warnClaudeSettingsUnusable } from './shared.js';
 import { HOOK_MARKERS, HOOKS, hippoBlock } from '../hooks/hook-blocks.js';
 
 function scanForGitRepos(rootDir: string, maxDepth = 2): string[] {
@@ -42,7 +42,7 @@ function scanForGitRepos(rootDir: string, maxDepth = 2): string[] {
   return repos;
 }
 
-function cmdInitScan(scanDir: string, flags: Record<string, string | boolean | string[]>): void {
+function cmdInitScan(scanDir: string, flags: CliFlags): void {
   const resolved = path.resolve(scanDir);
   console.log(`Scanning ${resolved} for git repositories...\n`);
 
@@ -119,7 +119,7 @@ function cmdInitScan(scanDir: string, flags: Record<string, string | boolean | s
   console.log(`\nRun \`hippo sleep\` in any project to consolidate and auto-share to global.`);
 }
 
-export function cmdInit(hippoRoot: string, flags: Record<string, string | boolean | string[]>): void {
+export function cmdInit(hippoRoot: string, flags: CliFlags): void {
   // Handle --scan mode
   if (flags['scan']) {
     const scanDir = typeof flags['scan'] === 'string' ? flags['scan'] : os.homedir();
@@ -181,7 +181,7 @@ export function cmdInit(hippoRoot: string, flags: Record<string, string | boolea
 }
 
 /** Every write init makes into agent config (instruction blocks, hooks, plugins) is an automatic integration, so one switch skips them all. */
-function initInstallsIntegrations(flags: Record<string, string | boolean | string[]>): boolean {
+function initInstallsIntegrations(flags: CliFlags): boolean {
   if (flags['no-hooks']) return false;
   if (!envSkipAutoIntegrations()) return true;
   console.log('   HIPPO_SKIP_AUTO_INTEGRATIONS=1, so init left agent instruction files and hooks alone.');

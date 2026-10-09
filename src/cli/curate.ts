@@ -12,7 +12,7 @@ import * as api from '../api.js';
 import * as client from '../client.js';
 import { resolveTenantId } from '../tenant.js';
 import { printError } from './output.js';
-import {
+import { type CliFlags,
   parseCountFlag,
   requireInit,
   runChurnStaleForRepo,
@@ -24,7 +24,7 @@ import {
 
 export function cmdOutcome(
   hippoRoot: string,
-  flags: Record<string, string | boolean | string[]>
+  flags: CliFlags
 ): void {
   requireInit(hippoRoot);
 
@@ -66,7 +66,7 @@ const ARCHIVE_REASON_REQUIRED =
 function cmdForget(
   hippoRoot: string,
   id: string,
-  flags: Record<string, string | boolean | string[]>,
+  flags: CliFlags,
 ): void {
   requireInit(hippoRoot);
 
@@ -144,7 +144,7 @@ function previewForget(hippoRoot: string, id: string, archive: boolean): void {
 
 export function cmdConflicts(
   hippoRoot: string,
-  flags: Record<string, string | boolean | string[]>
+  flags: CliFlags
 ): void {
   requireInit(hippoRoot);
 
@@ -171,7 +171,7 @@ export function cmdConflicts(
 export function cmdResolve(
   hippoRoot: string,
   args: string[],
-  flags: Record<string, string | boolean | string[]>
+  flags: CliFlags
 ): void {
   requireInit(hippoRoot);
 
@@ -244,7 +244,7 @@ export function cmdResolve(
 export function cmdReject(
   hippoRoot: string,
   args: string[],
-  flags: Record<string, string | boolean | string[]>,
+  flags: CliFlags,
 ): void {
   // Store resolution mirrors `hippo remember`: --global writes to the
   // global store, otherwise the local store (requireInit'd via resolveAuthRoot).
@@ -304,7 +304,7 @@ export function cmdReject(
 
 export function cmdRejections(
   hippoRoot: string,
-  flags: Record<string, string | boolean | string[]>,
+  flags: CliFlags,
 ): void {
   const root = resolveAuthRoot(hippoRoot, flags);
   const tenantId = resolveTenantId({});
@@ -335,7 +335,7 @@ export function cmdRejections(
 export function cmdUnreject(
   hippoRoot: string,
   args: string[],
-  flags: Record<string, string | boolean | string[]>,
+  flags: CliFlags,
 ): void {
   const root = resolveAuthRoot(hippoRoot, flags);
   const tenantId = resolveTenantId({});
@@ -370,7 +370,7 @@ export function cmdUnreject(
 export function cmdDormant(
   hippoRoot: string,
   args: string[],
-  flags: Record<string, string | boolean | string[]>,
+  flags: CliFlags,
 ): void {
   const root = resolveAuthRoot(hippoRoot, flags);
   const ctx: api.Context = {
@@ -439,7 +439,7 @@ export function cmdDormant(
 export function cmdQuarantine(
   hippoRoot: string,
   args: string[],
-  flags: Record<string, string | boolean | string[]>,
+  flags: CliFlags,
 ): void {
   const root = resolveAuthRoot(hippoRoot, flags);
   const ctx: api.Context = {

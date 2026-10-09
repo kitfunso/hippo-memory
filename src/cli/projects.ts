@@ -5,10 +5,9 @@ import { execFileSync } from 'child_process';
 import { closeHippoDb, openHippoDb } from '../db.js';
 import { listProjects, mergeProjects, repairProjects, type ProjectSummary } from '../project-merge.js';
 import { resolveTenantId } from '../tenant.js';
-import { resolveAuthRoot } from './shared.js';
+import { type CliFlags, resolveAuthRoot } from './shared.js';
 import { printError } from './output.js';
 
-type Flags = Record<string, string | boolean | string[]>;
 
 /** Old per-worktree project names of the repo at cwd, mapped to the repo's main checkout name; empty outside git. */
 function worktreeNames(): Map<string, string> {
@@ -36,7 +35,7 @@ function count(n: number, one: string, many = `${one}s`): string {
   return `${n} ${n === 1 ? one : many}`;
 }
 
-export function cmdProjects(hippoRoot: string, args: string[], flags: Flags): void {
+export function cmdProjects(hippoRoot: string, args: string[], flags: CliFlags): void {
   const root = resolveAuthRoot(hippoRoot, flags);
   const tenantId = resolveTenantId({});
   const apply = flags['apply'] === true;

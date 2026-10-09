@@ -11,11 +11,11 @@ import { openHippoDb, closeHippoDb } from '../db.js';
 import { resolveTenantId } from '../tenant.js';
 import { refineStore } from '../refine-llm.js';
 import { printError } from './output.js';
-import { requireInit, resolveAuthRoot } from './shared.js';
+import { type CliFlags, requireInit, resolveAuthRoot } from './shared.js';
 
 export async function cmdRefine(
   hippoRoot: string,
-  flags: Record<string, string | boolean | string[]>,
+  flags: CliFlags,
 ): Promise<void> {
   requireInit(hippoRoot);
 
@@ -59,7 +59,7 @@ export async function cmdRefine(
 
 export function cmdDedup(
   hippoRoot: string,
-  flags: Record<string, string | boolean | string[]>
+  flags: CliFlags
 ): void {
   requireInit(hippoRoot);
 
@@ -117,7 +117,7 @@ export function cmdDedup(
 
 export async function cmdEmbed(
   hippoRoot: string,
-  flags: Record<string, string | boolean | string[]>,
+  flags: CliFlags,
   given?: EmbeddingProvider,
 ): Promise<void> {
   // --global mirrors resolveAuthRoot (cli.ts:6900): initGlobal() + the global

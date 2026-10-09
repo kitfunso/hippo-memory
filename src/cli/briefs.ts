@@ -171,7 +171,7 @@ function briefCreate(hippoRoot: string, tenantId: string, args: string[], flags:
 export function cmdProjectBrief(
   hippoRoot: string,
   args: string[],
-  flags: Record<string, string | boolean | string[]>
+  flags: CliFlags
 ): void {
   requireInit(hippoRoot);
   const tenantId = resolveTenantId({});
@@ -278,7 +278,7 @@ function graphView(hippoRoot: string, tenantId: string, entity: string | undefin
 export function cmdGraph(
   hippoRoot: string,
   args: string[],
-  flags: Record<string, string | boolean | string[]>
+  flags: CliFlags
 ): void {
   requireInit(hippoRoot);
   const tenantId = resolveTenantId({});
@@ -393,7 +393,7 @@ function noteClose(hippoRoot: string, tenantId: string, args: string[]): void {
 export function cmdCustomerNote(
   hippoRoot: string,
   args: string[],
-  flags: Record<string, string | boolean | string[]>
+  flags: CliFlags
 ): void {
   requireInit(hippoRoot);
   const tenantId = resolveTenantId({});

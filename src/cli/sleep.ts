@@ -12,14 +12,14 @@ import { renderAmbientSummary } from '../ambient.js';
 import { errorMessage, log } from '../log.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../db.js';
 import { repairOnceOnSleep } from '../project-merge.js';
-import { requireInit, learnFromRepo, runChurnStaleForRepo, printAgentImport, skipLearnOnSharedStore } from './shared.js';
+import { type CliFlags, requireInit, learnFromRepo, runChurnStaleForRepo, printAgentImport, skipLearnOnSharedStore } from './shared.js';
 import { repairQualityOnceAt } from './quality-repair-once.js';
 import { printError } from './output.js';
 
 /** Runs `hippo sleep`; with `--log-file` it also tees its output to that file. */
 export async function cmdSleep(
   hippoRoot: string,
-  flags: Record<string, string | boolean | string[]>
+  flags: CliFlags
 ): Promise<void> {
   // Tee stdout/stderr to a log file when --log-file is set. The SessionEnd
   // hook uses this so the output is captured somewhere the SessionStart hook
@@ -160,7 +160,7 @@ function repairProjectTagsOnce(hippoRoot: string): void {
 
 async function cmdSleepCore(
   hippoRoot: string,
-  flags: Record<string, string | boolean | string[]>
+  flags: CliFlags
 ): Promise<void> {
   requireInit(hippoRoot);
 

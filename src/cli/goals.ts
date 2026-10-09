@@ -5,6 +5,7 @@ import type { PolicyType } from '../goals.js';
 import * as api from '../api.js';
 import { resolveTenantId } from '../tenant.js';
 import { printError } from './output.js';
+import type { CliFlags } from './shared.js';
 
 // ---------------------------------------------------------------------------
 // `hippo goal <push|list|complete|suspend|resume>`
@@ -22,7 +23,7 @@ function sanitizeGoalName(s: string): string {
   return s.replace(/[\x00-\x1f\x7f]/g, '?');
 }
 
-function resolveGoalSession(flags: Record<string, string | boolean | string[]>): { sessionId: string; tenantId: string } {
+function resolveGoalSession(flags: CliFlags): { sessionId: string; tenantId: string } {
   const sessionId = (
     flags['session-id'] !== undefined
       ? String(flags['session-id'])
@@ -40,7 +41,7 @@ function resolveGoalSession(flags: Record<string, string | boolean | string[]>):
   return { sessionId, tenantId };
 }
 
-function cmdGoalPush(hippoRoot: string, args: string[], flags: Record<string, string | boolean | string[]>): void {
+function cmdGoalPush(hippoRoot: string, args: string[], flags: CliFlags): void {
   const rawName = args.join(' ').trim();
   if (!rawName) {
     printError('Usage: hippo goal push <name> [--policy <type>] [--success "<condition>"] [--level N] [--parent <goalId>]');
@@ -111,7 +112,7 @@ function goalContext(hippoRoot: string, tenantId: string = resolveTenantId({})):
   return { hippoRoot, tenantId, actor: api.adminActor('cli') };
 }
 
-function cmdGoalList(hippoRoot: string, flags: Record<string, string | boolean | string[]>): void {
+function cmdGoalList(hippoRoot: string, flags: CliFlags): void {
   const { sessionId, tenantId } = resolveGoalSession(flags);
   const showAll = Boolean(flags['all']);
   const goals = api.goalList(goalContext(hippoRoot, tenantId), { sessionId, all: showAll });
@@ -144,7 +145,7 @@ function cmdGoalList(hippoRoot: string, flags: Record<string, string | boolean |
   }
 }
 
-function cmdGoalComplete(hippoRoot: string, args: string[], flags: Record<string, string | boolean | string[]>): void {
+function cmdGoalComplete(hippoRoot: string, args: string[], flags: CliFlags): void {
   const id = args[0];
   if (!id) {
     printError('Usage: hippo goal complete <id> [--outcome <0..1>] [--no-propagate]');
@@ -189,7 +190,7 @@ function cmdGoalResume(hippoRoot: string, args: string[]): void {
   console.log('ok');
 }
 
-export function cmdGoal(hippoRoot: string, args: string[], flags: Record<string, string | boolean | string[]>): void {
+export function cmdGoal(hippoRoot: string, args: string[], flags: CliFlags): void {
   const sub = args[0];
   if (!sub) {
     printError('Usage: hippo goal <push|list|complete|suspend|resume> [args]');
