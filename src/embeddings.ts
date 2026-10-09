@@ -20,7 +20,7 @@ import { resolveEmbeddingProvider, type EmbeddingProvider } from './embedding-pr
 import { DEFAULT_EMBEDDING_MODEL } from './local-embedding.js';
 import { redactSecretsStrict } from './secret-detect.js';
 import { errorMessage, log } from './log.js';
-import { StoreNotPortedError } from './db/sqlite-blocked.js';
+import { StoreNotPortedError } from './util/sqlite-blocked.js';
 import type { HippoStore, VectorReads, VectorRowWrite, VectorWrite, VectorWriteResult, VectorWrites } from './store-port.js';
 
 export { EMBEDDING_MODEL_META_KEY };

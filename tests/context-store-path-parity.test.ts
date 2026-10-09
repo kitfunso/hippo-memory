@@ -8,7 +8,7 @@ import { _resetAblationCacheForTests } from '../src/ablation.js';
 import { getContext, type Actor, type ContextOpts, type ContextResult } from '../src/api.js';
 import { _resetSharedStoreCacheForTests, markSharedStore } from '../src/config.js';
 import { closeHippoDb, openHippoDb, setMeta, withSqliteBlocked } from '../src/db.js';
-import { StoreNotPortedError } from '../src/db/sqlite-blocked.js';
+import { StoreNotPortedError } from '../src/util/sqlite-blocked.js';
 import { embeddingIndexIdentity } from '../src/embeddings.js';
 import { resetAllPhysicsState } from '../src/physics-state.js';
 import type { HippoStore } from '../src/store-port.js';

@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { closeHippoDb, openHippoDb, rethrowIfSqliteBlocked, SqliteBlockedError, STORE_BUSY_MESSAGE } from '../src/db.js';
-import { StoreNotPortedError } from '../src/db/sqlite-blocked.js';
+import { StoreNotPortedError } from '../src/util/sqlite-blocked.js';
 import { VERIFIED_KEY_TTL_MS } from '../src/auth.js';
 import { mapApiError, STORE_NOT_PORTED_MESSAGE } from '../src/http-util.js';
 import { mcpErrorResponse, type McpRequest } from '../src/mcp/server.js';

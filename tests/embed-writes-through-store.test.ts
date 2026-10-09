@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { _resetAblationCacheForTests } from '../src/ablation.js';
 import { closeHippoDb, getMeta, openHippoDb, withSqliteBlocked } from '../src/db.js';
-import { StoreNotPortedError } from '../src/db/sqlite-blocked.js';
+import { StoreNotPortedError } from '../src/util/sqlite-blocked.js';
 import type { EmbeddingProvider } from '../src/embedding-provider.js';
 import { embedAll, embeddingIndexIdentity, embeddingInputText, embedMemory } from '../src/embeddings.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/memory.js';

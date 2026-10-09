@@ -9,7 +9,7 @@ import { entryAfterOutcome } from '../memory.js';
 import { appendAuditEvent } from '../audit.js';
 import { recordTraceOutcome } from '../recall-trace.js';
 import { canTouchScope, personalScopeOf } from '../recall-scope.js';
-import { SqliteBlockedError } from '../db/sqlite-blocked.js';
+import { SqliteBlockedError } from '../util/sqlite-blocked.js';
 import { requireGroup, type HippoStore } from '../store-port.js';
 import type { Context, HippoDbContext, StoreReply } from './types.js';
 

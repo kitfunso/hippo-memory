@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { ApiError } from './api-errors.js';
-import { SqliteBlockedError } from './db/sqlite-blocked.js';
+import { SqliteBlockedError } from './util/sqlite-blocked.js';
 import { envBodyTimeoutMs } from './env.js';
 import type { JsonValue } from './json.js';
 

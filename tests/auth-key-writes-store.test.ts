@@ -10,7 +10,7 @@ import {
 } from '../src/api.js';
 import { verifyApiKeyCached, type ApiKeyListItem, type ApiKeyListRow } from '../src/auth.js';
 import { closeHippoDb, openHippoDb } from '../src/db.js';
-import { StoreNotPortedError } from '../src/db/sqlite-blocked.js';
+import { StoreNotPortedError } from '../src/util/sqlite-blocked.js';
 import { STORE_NOT_PORTED_MESSAGE } from '../src/http-util.js';
 import { OTHER_STORE_MARKER, serve, sqliteStore, type Actor, type Context, type HippoDbContext, type HippoStore, type ServerHandle } from '../src/server.js';
 import { inMemoryKeyWritesStore, OWNER, seedOwnedKeys, type OwnedKeys } from './_helpers/in-memory-key-writes-store.js';

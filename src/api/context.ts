@@ -26,7 +26,7 @@ import { log } from '../log.js';
 import { resolveProjectIdentity, classifyOriginProject, isGlobalStoreRoot, projectId, projectNames, type ProjectRef } from '../project-identity.js';
 import { promptTokens } from '../prompt-recall.js';
 import { detectSecret } from '../secret-detect.js';
-import { isSessionDigestRow } from '../session-digest.js';
+import { isSessionDigestRow } from '../core/session-digest-row.js';
 import { addAmbientTallies, ambientStateFromTallies, type AmbientState, type AmbientTallies } from '../ambient.js';
 import { requireGroup, sqliteStore, storeFor, type HippoStore } from '../store-port.js';
 import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../recall-scope.js';

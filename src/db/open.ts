@@ -7,7 +7,7 @@ import { tableExists } from './tables.js';
 import { assertBinaryCompatible } from './migrate.js';
 import { connectHippoDb, getHippoDbPath } from './connect.js';
 import { currentRequestStores, isScopedHandle, runWithRequestStores } from './request-stores.js';
-import { OtherStoreFolderError, SqliteBlockedError } from './sqlite-blocked.js';
+import { OtherStoreFolderError, SqliteBlockedError } from '../util/sqlite-blocked.js';
 
 export { getHippoDbPath };
 

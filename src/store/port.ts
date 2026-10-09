@@ -3,7 +3,7 @@ import type { AmbientTallies } from '../ambient.js';
 import type { AmbientStoreFilter } from '../ambient-store.js';
 import type { ApiKeyListRow, ApiKeyRecord, ListApiKeysOpts, NewApiKey } from '../auth.js';
 import type { AppendAuditOpts, AuditEvent, ListAuditAfterOpts } from '../audit.js';
-import { StoreNotPortedError } from '../db/sqlite-blocked.js';
+import { StoreNotPortedError } from '../util/sqlite-blocked.js';
 import type { EmbeddingIndexState } from '../embeddings.js';
 import type { ActiveGoals, GetActiveGoalsOpts, GoalRecallLogRow } from '../goals.js';
 import type { SessionHandoff } from '../handoff.js';

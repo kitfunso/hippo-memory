@@ -8,6 +8,7 @@ import { PATCH_SUCCESS_LINE, patchPaths, shellPatch } from './codex-patch.js';
 import { loadConfig } from './config.js';
 import { USER_SEGMENT } from './home-path.js';
 import { errorMessage } from './log.js';
+import { SESSION_DIGEST_TAG, isSessionDigestRow } from './core/session-digest-row.js';
 import { createMemory, Layer, type MemoryEntry } from './memory.js';
 import { RejectedValueError } from './rejection.js';
 import { maskEmails, redactSecretsStrict } from './secret-detect.js';
@@ -18,8 +19,6 @@ import { SNAPSHOT_AMBIENT_MAX_AGE_MS } from './store/sessions.js';
 import { loadLatestHandoff } from './store/handoffs.js';
 import { isSyntheticMessage } from './token-ledger.js';
 import { readTranscriptTail } from './transcript-tail.js';
-
-export const SESSION_DIGEST_TAG = 'session-digest';
 
 /** Five-word runs are stock phrases; six in a row is a copied clause. */
 export const ECHO_WINDOW = 6;
@@ -498,11 +497,6 @@ export function buildSessionDigest(sources: DigestSources): DigestDraft | null {
     if (content.length > MAX_DIGEST_CHARS && kept.length > 0) continue;
     return content ? { content, sentences: kept.length, files: files.length } : null;
   }
-}
-
-/** Facts extracted from a digest and DAG summaries over one inherit its tag, but they are not the digest itself. */
-export function isSessionDigestRow(entry: Pick<MemoryEntry, 'source' | 'tags' | 'extracted_from'>): boolean {
-  return entry.source === SESSION_DIGEST_TAG && entry.tags.includes(SESSION_DIGEST_TAG) && !entry.extracted_from;
 }
 
 /** Same session, same row: a second worker for one session updates the digest instead of adding one. */

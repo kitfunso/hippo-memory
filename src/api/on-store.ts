@@ -1,5 +1,5 @@
 // The one place an api function picks between a served store and hippo.db, so each operation has one body.
-import { StoreNotPortedError } from '../db/sqlite-blocked.js';
+import { StoreNotPortedError } from '../util/sqlite-blocked.js';
 import type { HippoStore, StoreGroups } from '../store/port.js';
 import { NO_LOCAL, sqliteLocal, type SqliteLocal } from '../store/sqlite/local.js';
 import { sqliteSyncStore, type SqliteSyncStore } from '../store/sqlite/store.js';
