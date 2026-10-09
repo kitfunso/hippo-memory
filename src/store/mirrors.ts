@@ -198,7 +198,7 @@ export function removeEntryMirrors(hippoRoot: string, id: string): void {
  * Mirror paths for `id` still on disk, walked like `removeEntryMirrors`, so a failed purge
  * with no reaper to retry it can name the stuck file.
  */
-export function getExistingEntryMirrorPaths(hippoRoot: string, id: string): string[] {
+function getExistingEntryMirrorPaths(hippoRoot: string, id: string): string[] {
   // Layer list kept in lockstep with removeEntryMirrors.
   return [Layer.Buffer, Layer.Episodic, Layer.Semantic, Layer.Trace]
     .map((layer) => path.join(layerDir(hippoRoot, layer), `${id}.md`))

@@ -167,7 +167,7 @@ export interface ConflictRefreshReads {
 }
 
 /** The refresh's read of the whole memories table, kept out of the write lock because it grows with the store. */
-export function readConflictRefresh(db: DatabaseSyncLike): ConflictRefreshReads {
+function readConflictRefresh(db: DatabaseSyncLike): ConflictRefreshReads {
   // Tenant guard (E2): a conflict is meaningful only within one tenant, so cross-tenant pairs are
   // skipped on insert and on rebuild, and a stale cross-tenant row can neither persist nor leak a foreign id.
   const tenantById = new Map<string, string>();
@@ -186,7 +186,7 @@ export function readConflictRefresh(db: DatabaseSyncLike): ConflictRefreshReads 
 }
 
 /** Under the write lock: the memory_conflicts rows, then each memory whose refs change; returns the ids it rewrote. */
-export function writeConflictRefresh(
+function writeConflictRefresh(
   db: DatabaseSyncLike,
   reads: ConflictRefreshReads,
   detected: readonly DetectedConflict[],
