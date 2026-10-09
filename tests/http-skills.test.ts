@@ -21,7 +21,10 @@ import { serve, type ServerHandle } from '../src/server.js';
 import { createApiKey, type CreateApiKeyResult } from '../src/auth.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import type { Skill } from '../src/skills.js';
+import type { JsonValue } from '../src/json.js';
 import { makeRoot } from './_helpers/make-root.js';
+
+type Body = { [key: string]: JsonValue };
 
 /** Parse a fetch Response body against a caller-declared shape. */
 async function jsonAs<T>(res: Response): Promise<T> {
@@ -155,5 +158,35 @@ describe('HTTP /v1/skills (E2 executable/exportable first-class object)', () => 
 
   it('DoS cap on instructions (400)', async () => {
     expect((await createSkill({ skillName: 'x', instructions: 'y'.repeat(8193) })).status).toBe(400);
+  });
+
+  const over = (cap: number): string => 'x'.repeat(cap + 1);
+  const at = (cap: number): string => 'x'.repeat(cap);
+  const ROOT = '/v1/skills';
+  const MISSING = '/v1/skills/99999/supersede';
+  // Each row also sends every later field invalid, and the supersede target does not exist,
+  // so a row pins which check answers first as well as the reply text.
+  const REPLIES: readonly (readonly [string, string, string, Body | undefined, number, string])[] = [
+    ['list: an unknown status', 'GET', `${ROOT}?status=retired`, undefined, 400, 'status must be one of: active | superseded | closed | all (got "retired")'],
+    ['create: blank skillName', 'POST', ROOT, { skillName: '  ', instructions: 7, trigger: 7 }, 400, 'skillName is required (non-empty string)'],
+    ['create: skillName over the cap', 'POST', ROOT, { skillName: over(256), instructions: 7, trigger: 7 }, 400, 'skillName exceeds 256-character cap'],
+    ['create: blank instructions', 'POST', ROOT, { skillName: 's', instructions: '  ', trigger: 7 }, 400, 'instructions are required (non-empty string)'],
+    ['create: instructions over the cap', 'POST', ROOT, { skillName: 's', instructions: over(8192), trigger: 7 }, 400, 'instructions exceed 8192-character cap'],
+    ['create: trigger not a string', 'POST', ROOT, { skillName: 's', instructions: 'i', trigger: 7 }, 400, 'trigger must be a string'],
+    ['create: trigger over the cap', 'POST', ROOT, { skillName: 's', instructions: 'i', trigger: over(1024) }, 400, 'trigger exceeds 1024-character cap'],
+    ['supersede: blank instructions', 'POST', MISSING, { instructions: '  ', trigger: 7, changeSummary: 7 }, 400, 'instructions are required (non-empty string)'],
+    ['supersede: instructions over the cap', 'POST', MISSING, { instructions: over(8192), trigger: 7, changeSummary: 7 }, 400, 'instructions exceed 8192-character cap'],
+    ['supersede: trigger not a string', 'POST', MISSING, { instructions: 'i', trigger: 7, changeSummary: 7 }, 400, 'trigger must be a string'],
+    ['supersede: trigger over the cap', 'POST', MISSING, { instructions: 'i', trigger: over(1024), changeSummary: 7 }, 400, 'trigger exceeds 1024-character cap'],
+    ['supersede: changeSummary not a string', 'POST', MISSING, { instructions: 'i', changeSummary: 7 }, 400, 'changeSummary must be a string'],
+    ['supersede: changeSummary over the cap', 'POST', MISSING, { instructions: 'i', changeSummary: over(4096) }, 400, 'changeSummary exceeds 4096-character cap'],
+    ['supersede: every field at its cap reaches the lookup', 'POST', MISSING, { instructions: at(8192), trigger: at(1024), changeSummary: at(4096) }, 404, 'skill 99999 not found'],
+    ['supersede: null optional fields reach the lookup', 'POST', MISSING, { instructions: 'i', trigger: null, changeSummary: null }, 404, 'skill 99999 not found'],
+  ];
+
+  it.each(REPLIES)('%s', async (_name, method, path, body, status, error) => {
+    const init = { method, headers: authHeaders(), body: body && JSON.stringify(body) };
+    const res = await fetch(`${handle.url}${path}`, init);
+    expect([res.status, await res.text()]).toEqual([status, JSON.stringify({ error })]);
   });
 });
