@@ -6,6 +6,7 @@ import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { formatLogLine, isLevelEnabled, log, logThreshold, resetLogOnce } from '../src/log.js';
 import { runWithRequestId } from '../src/util/request-scope.js';
+import { ownStderr } from './_helpers/own-stderr.js';
 
 const AT = '2026-01-02T03:04:05.678Z';
 
@@ -104,8 +105,6 @@ describe('a command that fails at the top level', () => {
         encoding: 'utf8',
       });
 
-      // Node below 24 prints its own SQLite notice on stderr; it is the runtime's line, not hippo's, so it is taken out before the exact match.
-      const ownStderr = (text: string): string => text.replace(/\(node:\d+\) ExperimentalWarning: SQLite is an experimental feature[^\n]*\r?\n\(Use `node --trace-warnings[^\n]*\r?\n/g, '');
       const plain = run('warn');
       expect([plain.status, ownStderr(plain.stderr)]).toEqual([1, 'Error: file is not a database\n']);
 

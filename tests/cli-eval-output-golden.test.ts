@@ -8,7 +8,7 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/memory.js';
 import { PACKAGE_VERSION } from '../src/version.js';
-import { cmdEval } from '../src/cli/eval.js';
+import { handleEval } from '../src/cli/eval.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 
 let root = '';
@@ -50,7 +50,7 @@ describe('hippo eval output (in process)', () => {
   it('prints the same bytes and exit codes in every mode', async () => {
     const transcript: string[] = [];
     const step = async (label: string, corpus: string | null, flags: Flags = {}): Promise<void> => {
-      const r = await runInProcess(() => cmdEval(store, corpus, flags));
+      const r = await runInProcess(() => handleEval({ hippoRoot: store, args: corpus === null ? [] : [corpus], flags }));
       transcript.push(`$ eval ${label} -> ${r.status}\n--- stdout\n${mask(r.stdout)}--- stderr\n${mask(r.stderr)}`);
     };
     const corpus = join(root, 'corpus.json');
@@ -64,7 +64,7 @@ describe('hippo eval output (in process)', () => {
     const badCorpus = join(root, 'bad.json');
     writeFileSync(badCorpus, '{"cases": 3}');
     const baseline = join(root, 'baseline.json');
-    const baselineRun = await runInProcess(() => cmdEval(store, corpus, { json: true }));
+    const baselineRun = await runInProcess(() => handleEval({ hippoRoot: store, args: [corpus], flags: { json: true } }));
     // SAFETY: `eval --json` prints the EvalSummary, whose cases each carry a numeric ndcgAt10.
     const prior = JSON.parse(baselineRun.stdout) as { cases: Array<{ ndcgAt10: number }> };
     prior.cases[0].ndcgAt10 = 0.5;

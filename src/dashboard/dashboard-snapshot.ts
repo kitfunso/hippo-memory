@@ -26,9 +26,9 @@ const CONFIDENCE_ORDER = ['verified', 'observed', 'inferred', 'stale'];
 const HEAD_CHARS = 240;
 
 /** An outside commit rebuilds the snapshot at most this often. */
-export const COALESCE_MS = 10_000;
+const COALESCE_MS = 10_000;
 /** Projected strengths track the clock, so the snapshot is rebuilt at least this often. */
-export const TTL_MS = 5 * 60_000;
+const TTL_MS = 5 * 60_000;
 
 /** The one predicate for "shown on the dashboard": not superseded, not archived, not quarantined. */
 export function isLiveMemory(entry: Pick<MemoryEntry, 'superseded_by' | 'kind' | 'scope'>): boolean {
