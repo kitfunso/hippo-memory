@@ -19,7 +19,7 @@ import { handleGitHubEventsWebhook } from './connectors/github/webhook.js';
 import { BodyTimeoutError, BodyTooLargeError, closeAfterReply, HttpError, JSON_HEADERS, sendJson, STORE_NOT_PORTED_MESSAGE } from './http-util.js';
 import { ForbiddenError, NotFoundError } from './api-errors.js';
 import { buildContextWithAuth, isLoopback, LIMITER_MAX_KEYS, requireAuth } from './server/auth.js';
-import { enforceRateLimit } from './server/client-ip.js';
+import { enforceRateLimit, warnIfClientIpHeaderUnpinned } from './server/client-ip.js';
 import { drainAndClose } from './server/lifecycle.js';
 import { installCrashHandlers } from './util/crash-handlers.js';
 import { handleMcpPost, handleMcpStream } from './server/mcp-http.js';
@@ -466,6 +466,7 @@ function bootLimiters(rateLimits: ServeOpts['rateLimits']): BootedLimiters {
   if (perCaller !== undefined) assertRateLimitSpec('perCaller', perCaller);
   if (perAddress !== undefined && perAddress !== 'off') assertRateLimitSpec('perAddress', perAddress);
   assertRateLimitSpec('failedAuthPerAddress', failedAuthPerAddress);
+  warnIfClientIpHeaderUnpinned();
   return {
     perAddress: bootRateLimiter(perAddress),
     callerLimiter: perCaller === undefined ? undefined : limiterFor(perCaller),
