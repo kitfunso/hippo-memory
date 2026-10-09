@@ -3,7 +3,7 @@
   "openersInCli": 12,
   "storeBranches": 4,
   "routesWithoutStore": 52,
-  "twinFunctions": 2,
+  "twinFunctions": 0,
   "sqlOutside": 206,
   "txLiterals": 48,
   "openersOutsideByFile": {
@@ -99,6 +99,7 @@
     "applyOutcome",
     "applyOutcomeToLastRecall",
     "archiveRaw",
+    "finishLastRecall",
     "writeEntry"
   ]
 }
