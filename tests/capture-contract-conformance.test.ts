@@ -2,7 +2,14 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { describe, expect, it } from 'vitest';
-import { readClaudeCodePreCompact, readVscodeStop, type CaptureReceipt } from '../src/capture-contract.js';
+import {
+  readClaudeCodePostCompact,
+  readClaudeCodePreCompact,
+  readSessionEnd,
+  readVscodeStop,
+  type CaptureReceipt,
+} from '../src/capture-contract.js';
+import { normaliseHookPayload } from '../src/stdin.js';
 
 interface Fixture {
   readonly stdin: string | null;
@@ -14,6 +21,10 @@ interface Fixture {
 const READERS = new Map<string, (fixture: Fixture) => CaptureReceipt>([
   ['claude-code/pre-compact', (f) => readClaudeCodePreCompact(f.stdin ?? undefined, f.timedOut)],
   ['vscode/stop', (f) => readVscodeStop(f.stdin ?? undefined, f.timedOut)],
+  ['claude-code/post-compact', (f) => readClaudeCodePostCompact(f.stdin ?? undefined, f.timedOut)],
+  ['claude-code/session-end', (f) => readSessionEnd(f.stdin ?? undefined, f.timedOut)],
+  // Normalised first, as the hook command does, so the fixture holds what the host sends.
+  ['copilot/session-end', (f) => readSessionEnd(normaliseHookPayload(f.stdin ?? undefined), f.timedOut, 'copilot')],
 ]);
 
 const ROOT = path.join(fileURLToPath(new URL('.', import.meta.url)), 'fixtures', 'capture');

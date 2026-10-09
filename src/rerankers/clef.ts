@@ -214,9 +214,3 @@ export function createClefReranker(model: ClefModel): RerankerFn {
     return rankByScores(head, got.scores).map((r) => ({ ...r, rerankProvenance: { ...rerankProvenance } }));
   };
 }
-
-/** Opt-in CLEF-flash reranker (Cloudflare Workers AI or HIPPO_CLEF_ENDPOINT); off unless named, so defaults stay native. */
-export const clefFlashReranker: RerankerFn = createClefReranker('clef-flash');
-
-/** Opt-in CLEF reranker, the larger model. Same transport and fallback as clef-flash. */
-export const clefReranker: RerankerFn = createClefReranker('clef');

@@ -164,6 +164,25 @@ describe('6. session-end wiring: --session-id argv + worker close', () => {
     expect(await loadSnapshotRetrying(hippoRoot, 'default')).toBeNull();
   });
 
+  it('a payload that starts with a byte-order mark still names its session to the worker', async () => {
+    const hippoRoot = getHippoRoot(dir);
+    saveActiveTaskSnapshot(hippoRoot, 'default', {
+      task: 'byte-order-mark task',
+      summary: 's',
+      next_step: 'n',
+      session_id: 'sess-bom',
+      source: 'pre-compact',
+    });
+
+    const logFile = path.join(dir, 'session-end-bom.log');
+    const payload = '\uFEFF' + JSON.stringify({ session_id: 'sess-bom', hook_event_name: 'SessionEnd' });
+    expect(runHippo(['session-end', '--log-file', logFile], dir, env, payload).status).toBe(0);
+
+    await waitUntil(() => closeStepLogged(logFile));
+    expect(fs.readFileSync(logFile, 'utf8')).toContain('closed 1 active snapshot(s) for session sess-bom');
+    expect(await loadSnapshotRetrying(hippoRoot, 'default')).toBeNull();
+  });
+
   it('a DIFFERENT session\'s snapshot survives: session-end for session B never closes session A\'s active row', async () => {
     const hippoRoot = getHippoRoot(dir);
     saveActiveTaskSnapshot(hippoRoot, 'default', {

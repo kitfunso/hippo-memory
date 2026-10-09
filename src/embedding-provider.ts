@@ -258,41 +258,8 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
 
   private async embedChunk(chunk: string[], key: string, role?: EmbeddingRole): Promise<number[][]> {
     const spec = API_PROVIDER_SPECS[this.kind];
-    const url = `${this.baseUrl.replace(/\/$/, '')}/${spec.path}`;
-    let resp: Response;
-    try {
-      resp = await fetchWithRetry(url, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          authorization: `Bearer ${key}`,
-        },
-        body: JSON.stringify(spec.buildBody(this.model, chunk.map(redactSecretsStrict), role)),
-      }, { timeoutMs: REQUEST_TIMEOUT_MS });
-    } catch (err) {
-      const msg = errorMessage(err);
-      throw new Error(redact(`embedding request to ${this.kind} failed: ${msg}`, key), { cause: redactedCause(err, key) });
-    }
-
-    if (!resp.ok) {
-      let detail = '';
-      try {
-        detail = await resp.text();
-      } catch {
-        /* ignore body read error */
-      }
-      throw new Error(
-        redact(`${this.kind} embeddings HTTP ${resp.status}: ${detail.slice(0, 300)}`, key),
-      );
-    }
-
-    let json: JsonValue;
-    try {
-      json = await resp.json();
-    } catch (err) {
-      const msg = errorMessage(err);
-      throw new Error(redact(`${this.kind} embeddings returned invalid JSON: ${msg}`, key), { cause: redactedCause(err, key) });
-    }
+    const resp = await this.postChunk(chunk, key, role);
+    const json = await this.responseJson(resp, key);
 
     const vectors = spec.extractVectors(json);
     // A 200 response with the wrong number of vectors (or any empty/malformed
@@ -310,6 +277,46 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
       }
     }
     return vectors;
+  }
+
+  private async postChunk(chunk: string[], key: string, role?: EmbeddingRole): Promise<Response> {
+    const spec = API_PROVIDER_SPECS[this.kind];
+    const url = `${this.baseUrl.replace(/\/$/, '')}/${spec.path}`;
+    try {
+      return await fetchWithRetry(url, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${key}`,
+        },
+        body: JSON.stringify(spec.buildBody(this.model, chunk.map(redactSecretsStrict), role)),
+      }, { timeoutMs: REQUEST_TIMEOUT_MS });
+    } catch (err) {
+      const msg = errorMessage(err);
+      throw new Error(redact(`embedding request to ${this.kind} failed: ${msg}`, key), { cause: redactedCause(err, key) });
+    }
+  }
+
+  /** The body of an OK reply; any other status, or a body that is not JSON, throws with the key cut out. */
+  private async responseJson(resp: Response, key: string): Promise<JsonValue> {
+    if (!resp.ok) {
+      let detail = '';
+      try {
+        detail = await resp.text();
+      } catch {
+        /* ignore body read error */
+      }
+      throw new Error(
+        redact(`${this.kind} embeddings HTTP ${resp.status}: ${detail.slice(0, 300)}`, key),
+      );
+    }
+
+    try {
+      return await resp.json();
+    } catch (err) {
+      const msg = errorMessage(err);
+      throw new Error(redact(`${this.kind} embeddings returned invalid JSON: ${msg}`, key), { cause: redactedCause(err, key) });
+    }
   }
 }
 

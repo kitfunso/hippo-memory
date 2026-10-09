@@ -31,7 +31,7 @@ describe('audit log captures every mutation', () => {
       execSync(`node "${cli}" init`, { env, cwd: home });
       execSync(`node "${cli}" init --global`, { env, cwd: home });
       execSync(`node "${cli}" remember "audit-canary-99 distinguishing token" --global`, { env, cwd: home });
-      execSync(`node "${cli}" recall "audit-canary-99" --global`, { env, cwd: home });
+      execSync(`node "${cli}" recall "audit-canary-99"`, { env, cwd: home });
 
       const db = openHippoDb(home);
       try {

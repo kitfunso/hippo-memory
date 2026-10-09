@@ -2,6 +2,7 @@ import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { createOutageWarning } from './outage-warning.js';
 import type { RerankerFn, RerankResult, RerankerOptions } from './types.js';
+import { compareScoresDesc } from '../compare.js';
 import { errorMessage, log } from '../log.js';
 
 const MODEL_NAME = 'Xenova/ms-marco-MiniLM-L-6-v2';
@@ -72,16 +73,6 @@ async function loadTransformersModule(): Promise<Required<TransformersExports> |
 type CrossEncoderFn = (query: string, candidate: string) => Promise<number>;
 let pipelineLoading: Promise<CrossEncoderFn | null> | null = null;
 const outage = createOutageWarning('cross-encoder', 'falling back to identity ordering');
-
-/**
- * True if a Transformers.js backend is importable. Note: this does NOT confirm
- * that the model is downloadable from Hugging Face CDN — in sandboxed
- * environments the package may import but the model fetch may be blocked.
- * The reranker silently falls back to identity ordering in that case.
- */
-export async function isCrossEncoderAvailable(): Promise<boolean> {
-  return (await loadTransformersModule()) !== null;
-}
 
 // NOT the text-classification pipeline: this model is a num_labels=1
 // regression head, and that pipeline softmaxes a length-1 logit vector, which
@@ -166,7 +157,7 @@ export const crossEncoderReranker: RerankerFn = async (
 
   // Plain stable sort on purpose: tied scores MUST fall back to the prior
   // relevance order, never an arbitrary content order.
-  scored.sort((a, b) => b.rerankScore - a.rerankScore);
+  scored.sort((a, b) => compareScoresDesc(a.rerankScore, b.rerankScore));
   scored.forEach((r, i) => (r.postRerankRank = i + 1));
   return scored;
 };

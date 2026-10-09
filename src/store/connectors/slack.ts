@@ -64,10 +64,6 @@ export function markSlackEventSeen(hippoRoot: string, eventId: string, memoryId:
   onHandle(hippoRoot, (db) => markSlackEventSeenAt(db, eventId, memoryId));
 }
 
-export function slackEventMemory(hippoRoot: string, eventId: string): string | null {
-  return onHandle(hippoRoot, (db) => slackEventMemoryAt(db, eventId));
-}
-
 // Deletion lookup
 
 /** The raw memory a Slack message became. The tenant filter keeps one tenant's deletion from reaching another's row with the same ref. */

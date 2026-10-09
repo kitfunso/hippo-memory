@@ -3,7 +3,7 @@
 
 import { evalNow } from './ablation.js';
 import { oneCopyPerMemory } from './api/context-select.js';
-import { compareEntryIdentity } from './compare.js';
+import { compareEntryIdentity, compareScoresDesc } from './compare.js';
 import { closeHippoDb, openHippoDb } from './db.js';
 import { isEmbeddingAvailable } from './local-embedding.js';
 import { computeGoalStackBoost, type GoalRecallLogRow } from './store/goals.js';
@@ -256,7 +256,7 @@ function traced<R extends SearchResult>(opts: RankRecallOpts, prev: SearchResult
 
 /** Re-sort after a score change. Plain and stable on purpose: ties keep the prior rank, not a content order. */
 function byScore(results: SearchResult[]): SearchResult[] {
-  return results.sort((a, b) => b.score - a.score);
+  return results.sort((a, b) => compareScoresDesc(a.score, b.score));
 }
 
 function applyPfcRerankers(opts: RankRecallOpts, state: RankState): void {
