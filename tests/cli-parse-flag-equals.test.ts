@@ -10,6 +10,7 @@ import { collectVerbReads } from '../scripts/cli-flag-reads.mjs';
 import { COMMANDS, parseArgs, shouldAutoRepairCodexWrapper } from '../src/cli.js';
 import { undeclaredFlags, type VerbFlags } from '../src/cli/flags.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
+import { ownStderr } from './_helpers/own-stderr.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
 
 const argv = (...rest: string[]) => ['node', 'hippo', ...rest];
@@ -313,9 +314,10 @@ describe('built CLI: --flag=value end-to-end guards', () => {
   it('case 30c: a destructive verb is not refused over a flag another verb reads; it warns and runs', () => {
     const plain = runCli(['forget', 'no-such-id']);
     const res = runCli(['forget', 'no-such-id', '--json']);
-    expect(res.stderr).toBe(`hippo: ignoring unknown flag --json. A later release will reject it.\n${plain.stderr}`);
+    const plainStderr = ownStderr(plain.stderr);
+    expect(ownStderr(res.stderr)).toBe(`hippo: ignoring unknown flag --json. A later release will reject it.\n${plainStderr}`);
     expect({ status: res.status, stdout: res.stdout }).toEqual({ status: plain.status, stdout: plain.stdout });
-    expect(plain.stderr).toContain('Memory not found: no-such-id');
+    expect(plainStderr).toContain('Memory not found: no-such-id');
   });
 
   it('case 30d: a --dry-run the verb lacks is refused by name only, never also called ignored', () => {
