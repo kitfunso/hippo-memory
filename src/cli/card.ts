@@ -18,7 +18,7 @@ import { type Card, isCardStatus } from '../core/card.js';
 import { loadCardDetail, type CardDetail } from '../store/card-detail.js';
 import { resolveTenantId } from '../store/tenant.js';
 import { printError } from './output.js';
-import { type CliFlags, stringFlagOrExit } from './flag-values.js';
+import { type CliFlags, stringFlagOrExit, type CommandContext } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { errorMessage } from '../util/log.js';
 
@@ -82,7 +82,7 @@ function cardRefusal(hippoRoot: string, tenantId: string, id: string): string {
   return `status ${card?.status ?? 'unknown'}, live run ${liveRun?.id ?? 'none'}`;
 }
 
-// One entry per subcommand: the flags cmdCard actually reads for it, so a typo like
+// One entry per subcommand: the flags handleCard actually reads for it, so a typo like
 // --depend-on fails fast instead of silently doing nothing.
 type CardSubcommand = 'create' | 'show' | 'list' | 'claim' | 'heartbeat' | 'block' | 'review' | 'complete' | 'reclaim' | 'comment';
 
@@ -102,11 +102,7 @@ const CARD_SUBCOMMAND_FLAGS = {
 type CardHandler = (hippoRoot: string, tenantId: string, args: string[], flags: CliFlags) => void;
 
 /** Runs `hippo card <subcommand>`: rejects flags the subcommand never reads, then hands off to its handler. */
-export function cmdCard(
-  hippoRoot: string,
-  args: string[],
-  flags: CliFlags
-): void {
+export function handleCard({ hippoRoot, args, flags }: CommandContext): void {
   requireInit(hippoRoot);
   const tenantId = resolveTenantId({});
   const subcommand = args[0] ?? '';

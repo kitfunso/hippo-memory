@@ -204,7 +204,7 @@ function getRowForContent(workspace: string, contentNeedle: string): StoredRow |
       | undefined;
     if (!row) return null;
     return {
-      tags: JSON.parse(row.tags_json) as string[],
+      tags: JSON.parse(row.tags_json),
       halfLifeDays: row.half_life_days,
       valence: row.emotional_valence,
     };

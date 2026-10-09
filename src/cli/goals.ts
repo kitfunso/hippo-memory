@@ -5,7 +5,7 @@ import type { PolicyType } from '../store/goals.js';
 import * as api from '../api/index.js';
 import { resolveTenantId } from '../store/tenant.js';
 import { printError } from './output.js';
-import { type CliFlags, boolFlag, flagIsTrue, stringFlag } from './flag-values.js';
+import { type CliFlags, boolFlag, flagIsTrue, stringFlag, type CommandContext } from './flag-values.js';
 
 // ---------------------------------------------------------------------------
 // `hippo goal <push|list|complete|suspend|resume>`
@@ -194,7 +194,7 @@ function cmdGoalResume(hippoRoot: string, args: string[]): void {
   console.log('ok');
 }
 
-export function cmdGoal(hippoRoot: string, args: string[], flags: CliFlags): void {
+export function handleGoal({ hippoRoot, args, flags }: CommandContext): void {
   const sub = args[0];
   if (!sub) {
     printError('Usage: hippo goal <push|list|complete|suspend|resume> [args]');

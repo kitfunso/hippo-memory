@@ -9,7 +9,7 @@ import * as decisionsModule from '../objects/decisions.js';
 import * as incidentsModule from '../objects/incidents.js';
 import { resolveTenantId } from '../store/tenant.js';
 import { printError } from './output.js';
-import { nonEmptyStringFlag, parseListLimit, type CliFlags, flagIsTrue, stringFlag } from './flag-values.js';
+import { nonEmptyStringFlag, parseListLimit, type CliFlags, flagIsTrue, stringFlag, type CommandContext } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { closeObject, foundOrExit, idArgOrExit, listObjects, printLifecycleTail, requireStatus, type ObjectNames } from './object-verbs.js';
 import { errorMessage } from '../util/log.js';
@@ -141,11 +141,7 @@ function predictBaserate(hippoRoot: string, tenantId: string, flags: CliFlags): 
   if (baserate.mae !== null)          console.log(`  mae:              ${baserate.mae.toFixed(BASERATE_DECIMALS)}`);
 }
 
-export function cmdPredict(
-  hippoRoot: string,
-  args: string[],
-  flags: CliFlags
-): void {
+export function handlePredict({ hippoRoot, args, flags }: CommandContext): void {
   requireInit(hippoRoot);
   const tenantId = resolveTenantId({});
   const subcommand = args[0] ?? '';
@@ -220,11 +216,7 @@ function decideClose(hippoRoot: string, tenantId: string, args: string[]): void 
   closeObject(args, DECISION, (id) => decisionsModule.closeDecision(hippoRoot, tenantId, id), parseObjectId);
 }
 
-export function cmdDecide(
-  hippoRoot: string,
-  args: string[],
-  flags: CliFlags
-): void {
+export function handleDecide({ hippoRoot, args, flags }: CommandContext): void {
   requireInit(hippoRoot);
   const tenantId = resolveTenantId({});
   const subcommand = args[0] ?? '';
@@ -358,11 +350,7 @@ function incidentClose(hippoRoot: string, tenantId: string, args: string[]): voi
   closeObject(args, INCIDENT, (id) => incidentsModule.closeIncident(hippoRoot, tenantId, id));
 }
 
-export function cmdIncident(
-  hippoRoot: string,
-  args: string[],
-  flags: CliFlags
-): void {
+export function handleIncident({ hippoRoot, args, flags }: CommandContext): void {
   requireInit(hippoRoot);
   const tenantId = resolveTenantId({});
   const subcommand = args[0] ?? '';

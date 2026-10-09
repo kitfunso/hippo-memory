@@ -148,7 +148,7 @@ export function loadActiveDecisions(
  * of the ACTIVE decision backed by that memory, or null when the memory has no
  * active decision row (a legacy pre-episode decision-tagged memory). Extracted
  * so the CLI's backward-compat path is unit-testable at the store layer without
- * exporting cmdDecide.
+ * exporting handleDecide.
  */
 export function resolveActiveDecisionIdByMemory(
   hippoRoot: string,

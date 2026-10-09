@@ -3,7 +3,7 @@
 import { ConflictError, NotFoundError } from '../core/api-errors.js';
 import { stampOriginProject } from '../store/entry-row.js';
 import type { ConnectorEvent } from '../store/port.js';
-import { createSuccessor, type MemoryEntry } from '../core/memory.js';
+import { createSuccessor, type Layer, type MemoryEntry } from '../core/memory.js';
 import { promoteToGlobal } from '../sharing/global-store.js';
 import { loadConfig } from '../core/config.js';
 import { andThen, notPorted, onStore } from './on-store.js';
@@ -59,20 +59,23 @@ export function promote(
 // supersede
 // ---------------------------------------------------------------------------
 
-/**
- * Replace an old memory with new content, chaining old.superseded_by = new.id.
- * Mirrors `cmdSupersede` in cli.ts minus the flag-driven layer/tag/pin
- * overrides: the CLI handler resolves those so the API stays minimal.
- */
+/** Replace an old memory with new content, chaining old.superseded_by = new.id; the store commits both rows and the audit row together. */
 export interface SupersedeResult {
   ok: true;
   oldId: string;
   newId: string;
 }
+/** What the successor takes instead of the old row's value. Never set from a request body: the CLI fills it from its flags. */
+export interface SupersedeOverrides {
+  layer?: Layer;
+  tags?: string[];
+  pinned?: boolean;
+}
 export function supersede<C extends Context>(
   ctx: C,
   oldId: string,
   newContent: string,
+  overrides: SupersedeOverrides = {},
 ): StoreReply<C, SupersedeResult> {
   return onStore(ctx, (port) => {
     const entryWrites = port.entryWrites ?? notPorted(port, 'entryWrites');
@@ -80,6 +83,9 @@ export function supersede<C extends Context>(
       const newEntry = createSuccessor(assertSupersedable(ctx, oldId, old ?? null), newContent, {
         tenantId: ctx.tenantId,
         baseHalfLifeDays: loadConfig(ctx.hippoRoot).defaultHalfLifeDays,
+        layer: overrides.layer,
+        tags: overrides.tags,
+        pinned: overrides.pinned,
       });
       // A store writes origin_project as given, so the served folder's fallback is stamped here.
       const successor = stampOriginProject(ctx.hippoRoot, newEntry);

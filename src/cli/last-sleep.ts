@@ -7,7 +7,7 @@ import { defaultSleepLogPath } from '../hooks/shared.js';
 import { errorMessage, log } from '../util/log.js';
 import { truncateCodePointSafe } from '../util/transcript-tail.js';
 import { printError } from './output.js';
-import { type CliFlags } from './flag-values.js';
+import { type CliFlags, type CommandContext } from './flag-values.js';
 import { hookStoreRoot } from './hook-runtime.js';
 
 const SLEEP_FAILED = '[hippo] sleep failed: ';
@@ -69,4 +69,8 @@ export function cmdLastSleep(
   if (!flags['keep']) {
     try { fs.unlinkSync(logPath); } catch (err) { log.debug(`last-sleep log not removed, it shows again next session: ${errorMessage(err)}`); }
   }
+}
+
+export function handleLastSleep({ hippoRoot, flags }: CommandContext): void {
+  return cmdLastSleep(hippoRoot, flags);
 }

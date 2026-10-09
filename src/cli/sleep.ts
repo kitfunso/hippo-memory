@@ -12,7 +12,7 @@ import { sleepResultLines } from './sleep-render.js';
 import { errorMessage, log } from '../util/log.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../db/index.js';
 import { repairOnceOnSleep } from '../sharing/project-merge.js';
-import { type CliFlags, boolFlag, stringFlag } from './flag-values.js';
+import { type CliFlags, boolFlag, stringFlag, type CommandContext } from './flag-values.js';
 import { requireInit, learnFromRepo, runChurnStaleForRepo, skipLearnOnSharedStore } from './shared.js';
 import { printAgentImport } from './print.js';
 import { repairQualityOnceAt } from './quality-repair-once.js';
@@ -68,6 +68,10 @@ export async function cmdSleep(
   } finally {
     if (restoreStdout) restoreStdout();
   }
+}
+
+export function handleSleep({ hippoRoot, flags }: CommandContext): Promise<void> {
+  return cmdSleep(hippoRoot, flags);
 }
 
 function renderSleepResult(result: api.SleepResult): void {

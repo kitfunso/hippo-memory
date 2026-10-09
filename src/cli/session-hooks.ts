@@ -144,10 +144,7 @@ function restoreCompactSnapshot(hippoRoot: string, payloadSessionId: string | nu
  * immediately. The child writes to the log file and survives TUI teardown;
  * the next SessionStart reads the log via `hippo last-sleep`.
  */
-export async function cmdSessionEnd(
-  hippoRoot: string,
-  flags: CliFlags
-): Promise<void> {
+export async function handleSessionEnd({ hippoRoot, flags }: CommandContext): Promise<void> {
   const runtime = hookRuntime(flags);
   const turn = flagIsTrue(flags, 'turn');
   // Copilot's hook command carries no path, since one quoted into it would need escaping for each shell; the log goes where the hook table used to point.
@@ -222,6 +219,10 @@ export async function cmdSessionEndWorker(
 ): Promise<void> {
   const sessionId = flags['session-id'];
   await runSessionWorker(isStringValue(sessionId) ? sessionId : null, flagIsTrue(flags, 'turn') ? 'turn' : 'full', (mode) => sessionEndWork(hippoRoot, flags, mode));
+}
+
+export function handleSessionEndWorker({ hippoRoot, flags }: CommandContext): Promise<void> {
+  return cmdSessionEndWorker(hippoRoot, flags);
 }
 
 async function sessionEndWork(
@@ -491,10 +492,7 @@ function spawnRealCodex(
   return spawn(realCodexPath, forwardArgs, { cwd, stdio: 'inherit', windowsHide: false });
 }
 
-export function cmdCodexRun(
-  hippoRoot: string,
-  args: string[],
-): void {
+export function handleCodexRun({ hippoRoot, args }: CommandContext): void {
   const metadata = loadCodexWrapperMetadata();
   const startedAtMs = Date.now();
   // Codex reads CODEX_HOME at each launch, so resolve it now, not from the install-time metadata.
@@ -592,6 +590,10 @@ export async function cmdCodexSessionEndWorker(
 
   await sleepCodexProjectStore(hippoRoot, logFile);
   captureCodexTranscript(hippoRoot, store, flags, logFile);
+}
+
+export function handleCodexSessionEndWorker({ hippoRoot, flags }: CommandContext): Promise<void> {
+  return cmdCodexSessionEndWorker(hippoRoot, flags);
 }
 
 async function sleepCodexProjectStore(hippoRoot: string, logFile: string | undefined): Promise<void> {

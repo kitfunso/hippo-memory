@@ -691,7 +691,7 @@ describe('hippo dormant CLI', () => {
 
       const search = runCli(workspace, 'dormant', 'zanzibar', '--json');
       expect(search.status).toBe(0);
-      // SAFETY: `hippo dormant --json` prints a JSON object with a `dormant` array (cmdDormant).
+      // SAFETY: `hippo dormant --json` prints a JSON object with a `dormant` array (handleDormant).
       const parsed = JSON.parse(search.out) as { dormant: Array<{ id: string }> };
       expect(parsed.dormant.map((m) => m.id)).toEqual([keep.id]);
 

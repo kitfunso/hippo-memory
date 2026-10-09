@@ -5,7 +5,7 @@
  *
  * Extracted from cli.ts in Episode A (v1.11.3) so `api.sleep` can dedupe
  * during the consolidation pipeline without violating the cli -> api
- * dependency direction. `cmdDedup` in cli.ts continues to import and use
+ * dependency direction. `handleDedup` in cli.ts continues to import and use
  * this function unchanged.
  *
  * Survivor selection is a total order as of v1.26.3

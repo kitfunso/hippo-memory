@@ -244,6 +244,20 @@ function aggregate(runs) {
   return byCell;
 }
 
+function summarizeCells(byCell) {
+  const summary = [];
+  for (const [key, cell] of byCell) {
+    const [model, profile, type] = key.split('|');
+    const n = cell.pass + cell.fail + cell.unclear + cell.error;
+    summary.push({
+      model, profile, type,
+      n, pass: cell.pass, fail: cell.fail, unclear: cell.unclear, error: cell.error,
+      passRate: n ? (cell.pass + 0.5 * cell.unclear) / n : 0,
+    });
+  }
+  return summary;
+}
+
 function printTable(byCell) {
   console.log('\n=== Aggregate (pass-rate, N=count) ===\n');
   const cells = [...byCell.entries()].map(([k, v]) => {
@@ -321,16 +335,7 @@ async function main() {
   }
 
   const byCell = aggregate(runs);
-  const summary = [];
-  for (const [key, cell] of byCell) {
-    const [model, profile, type] = key.split('|');
-    const n = cell.pass + cell.fail + cell.unclear + cell.error;
-    summary.push({
-      model, profile, type,
-      n, pass: cell.pass, fail: cell.fail, unclear: cell.unclear, error: cell.error,
-      passRate: n ? (cell.pass + 0.5 * cell.unclear) / n : 0,
-    });
-  }
+  const summary = summarizeCells(byCell);
 
   const output = {
     corpus: CORPUS_PATH,

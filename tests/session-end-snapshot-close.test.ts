@@ -10,7 +10,7 @@ import { loadLatestHandoff } from '../src/store/handoffs.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
 
 // DF1 (docs/plans/2026-08-23-df1-snapshot-lifecycle.md) T3 test 6:
-// session-end wiring. `cmdSessionEnd` extracts `payload.session_id` from the
+// session-end wiring. `handleSessionEnd` extracts `payload.session_id` from the
 // SessionEnd hook's stdin JSON and passes `--session-id` to the detached
 // `__session-end-worker`; the worker closes that session's own active
 // snapshot AFTER sleep+capture. Real built CLI, real detached child, no

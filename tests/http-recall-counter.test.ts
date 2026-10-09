@@ -53,7 +53,7 @@ describe('GET /v1/memories counts toward total_recalled', () => {
 
     const res = await httpRecall('q=alpha&limit=10');
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { results: unknown[] };
+    const body: { results: unknown[] } = await res.json();
     expect(body.results.length).toBe(3);
 
     expect(totalRecalled()).toBe(3);
@@ -61,7 +61,7 @@ describe('GET /v1/memories counts toward total_recalled', () => {
 
   it('counts the capped result set, not the number of matches', async () => {
     const res = await httpRecall('q=alpha&limit=2');
-    const body = (await res.json()) as { results: unknown[] };
+    const body: { results: unknown[] } = await res.json();
     expect(body.results.length).toBe(2);
     expect(totalRecalled()).toBe(2);
   });
@@ -71,7 +71,7 @@ describe('GET /v1/memories counts toward total_recalled', () => {
   it('counts the recency fallback a non-matching query returns', async () => {
     const res = await httpRecall('q=zzzznothingmatches&limit=10');
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { results: unknown[] };
+    const body: { results: unknown[] } = await res.json();
     expect(body.results.length).toBe(3);
     expect(totalRecalled()).toBe(3);
   });

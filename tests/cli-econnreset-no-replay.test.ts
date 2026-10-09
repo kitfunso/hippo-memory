@@ -72,6 +72,7 @@ function runCli(cwd: string, args: string[]): Promise<{ status: number; stdout: 
 function countMemories(hippoRoot: string, content: string): number {
   const db = openHippoDb(hippoRoot);
   try {
+    // SAFETY: an aggregate SELECT returns exactly one row and COUNT(*) is an integer.
     const row = db.prepare('SELECT COUNT(*) AS n FROM memories WHERE content = ?').get(content) as { n: number };
     return row.n;
   } finally {
@@ -81,7 +82,7 @@ function countMemories(hippoRoot: string, content: string): number {
 
 function fetchError(code?: string, message = 'fetch failed'): Error {
   const err = new TypeError(message);
-  if (code !== undefined) (err as Error & { cause: unknown }).cause = { code };
+  if (code !== undefined) err.cause = { code };
   return err;
 }
 

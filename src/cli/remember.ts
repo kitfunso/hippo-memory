@@ -4,8 +4,6 @@ import { envAnthropicApiKey } from '../util/env.js';
 import { evalNow } from '../core/ablation.js';
 import * as fs from 'fs';
 import {
-  createMemory,
-  createSuccessor,
   calculateStrength,
   calculateRewardFactor,
   confidenceFacets,
@@ -14,8 +12,9 @@ import {
   ConfidenceLevel,
   type MemoryEntry,
 } from '../core/memory.js';
+import * as api from '../api/index.js';
+import { ConflictError, NotFoundError } from '../core/api-errors.js';
 import { isInitialized } from '../store/open.js';
-import { writeEntry } from '../store/entry-writes.js';
 import { readEntry, loadAllEntries } from '../store/entry-reads.js';
 import { loadNewestEntries, schemaFitInStore } from '../store/candidates.js';
 import { updateStats } from '../store/index-and-stats.js';
@@ -23,7 +22,7 @@ import { listMemoryConflicts } from '../store/conflicts.js';
 import { RejectedValueError } from '../store/rejection.js';
 import { renderTraceContent, parseSteps } from '../consolidate/trace.js';
 import { embedMemory } from '../store/embeddings/index.js';
-import { loadConfig, type HippoConfig } from '../core/config.js';
+import { loadConfig } from '../core/config.js';
 import { extractPathTags } from '../search/path-context.js';
 import { detectScope } from '../sharing/scope.js';
 import { assertClientScope } from '../store/recall-scope.js';
@@ -34,7 +33,7 @@ import { resolveTenantId } from '../store/tenant.js';
 import { computeSalience } from '../core/salience.js';
 import { validateOwner, isStrictOwnerEnv } from './owner-validation.js';
 import { printError } from './output.js';
-import { emitCliAudit, requireInit, runViaServerIfAvailable } from './shared.js';
+import { requireInit, runViaServerIfAvailable } from './shared.js';
 import { fmt } from './print.js';
 import { type CliFlags, type CommandContext, boolFlag, flagIsTrue, stringFlag } from './flag-values.js';
 import { DAY_MS } from '../util/time.js';
@@ -133,7 +132,6 @@ async function cmdRemember(
   }
 
   const { requested: requestedTags, all: allTags } = rememberTags(flags, process.cwd());
-  const confidence = rememberConfidence(flags);
 
   // Schema fit needs the store, which the routed request has no access to, so it stays here.
   const schemaFit = schemaFitInStore(targetRoot, resolveTenantId({}), text, requestedTags);
@@ -141,26 +139,26 @@ async function cmdRemember(
 
   // Stamp tenant_id from env (HIPPO_TENANT) so recall isolation can filter on this row; unauthenticated CLI gets 'default'.
   const tenantId = resolveTenantId({});
-  const rememberConfig = loadConfig(targetRoot);
 
-  const entry = createMemory(text, {
-    layer: Layer.Episodic,
-    tags: allTags,
-    pinned: boolFlag(flags, 'pin'),
-    source: useGlobal ? 'cli-global' : 'cli',
-    confidence,
-    schema_fit: schemaFit,
+  const gate = salienceGate(text, allTags, targetRoot, tenantId, flags);
+  if (gate.skip) return;
+
+  const entry = writeRemembered(targetRoot, tenantId, {
+    content: text,
     kind: envelope.kind as ('raw' | 'distilled' | 'superseded' | 'archived' | undefined),
-    scope: envelope.scope,
-    owner: envelope.owner,
-    artifact_ref: envelope.artifactRef,
-    tenantId,
-    baseHalfLifeDays: rememberConfig.defaultHalfLifeDays,
+    scope: envelope.scope ?? undefined,
+    owner: envelope.owner ?? undefined,
+    artifactRef: envelope.artifactRef ?? undefined,
+    tags: allTags,
+    local: {
+      layer: Layer.Episodic,
+      pinned: boolFlag(flags, 'pin'),
+      source: useGlobal ? 'cli-global' : 'cli',
+      confidence: rememberConfidence(flags),
+      schemaFit,
+      weaken: gate.weaken,
+    },
   });
-
-  if (!passesSalienceGate(entry, text, targetRoot, rememberConfig, flags)) return;
-
-  writeEntry(targetRoot, entry);
   updateStats(targetRoot, { remembered: 1 });
   printRemembered(entry, useGlobal);
 
@@ -168,36 +166,49 @@ async function cmdRemember(
   await extractRememberFacts(targetRoot, entry, flags);
 }
 
-/** False when the gate skips the write; a start_weak verdict weakens `entry` in place. */
-function passesSalienceGate(
-  entry: MemoryEntry,
+/** The row as the store holds it after the write: the printout, the embedding and the extraction work on that. */
+function writeRemembered(targetRoot: string, tenantId: string, opts: api.RememberOpts): MemoryEntry {
+  const { id } = api.remember({ hippoRoot: targetRoot, tenantId, actor: api.adminActor('cli') }, opts);
+  const entry = readEntry(targetRoot, id, tenantId);
+  if (!entry) throw new Error(`memory ${id} was written but cannot be read back`);
+  return entry;
+}
+
+/** `skip` drops the write; `weaken` is a start_weak verdict, which the write applies to the new row. */
+interface GateVerdict {
+  skip: boolean;
+  weaken?: api.RememberLocal['weaken'];
+}
+
+function salienceGate(
   text: string,
+  tags: string[],
   targetRoot: string,
-  rememberConfig: HippoConfig,
+  tenantId: string,
   flags: CliFlags,
-): boolean {
-  if (!rememberConfig.salience.enabled || boolFlag(flags, 'pin') || boolFlag(flags, 'force')) return true;
+): GateVerdict {
+  const { salience } = loadConfig(targetRoot);
+  if (!salience.enabled || boolFlag(flags, 'pin') || boolFlag(flags, 'force')) return { skip: false };
   // computeSalience compares against the last `recentWindow` rows only; below 1 its slice takes every row, so that case still loads them all.
-  const window = Math.trunc(rememberConfig.salience.recentWindow);
+  const window = Math.trunc(salience.recentWindow);
   const recent = Number.isSafeInteger(window) && window >= 1
-    ? loadNewestEntries(targetRoot, entry.tenantId, window)
-    : loadAllEntries(targetRoot, entry.tenantId);
-  const salienceResult = computeSalience(text, entry.tags, recent, {
-    recentWindow: rememberConfig.salience.recentWindow,
-    overlapThreshold: rememberConfig.salience.overlapThreshold,
-    minContentLength: rememberConfig.salience.minContentLength,
-    maxRepeatErrors: rememberConfig.salience.maxRepeatErrors,
+    ? loadNewestEntries(targetRoot, tenantId, window)
+    : loadAllEntries(targetRoot, tenantId);
+  const salienceResult = computeSalience(text, tags, recent, {
+    recentWindow: salience.recentWindow,
+    overlapThreshold: salience.overlapThreshold,
+    minContentLength: salience.minContentLength,
+    maxRepeatErrors: salience.maxRepeatErrors,
   });
   if (salienceResult.decision === 'skip') {
     console.log(`Skipped (salience: ${salienceResult.reason}, score ${salienceResult.score.toFixed(2)})`);
-    return false;
+    return { skip: true };
   }
   if (salienceResult.decision === 'start_weak') {
-    entry.strength = salienceResult.score;
-    entry.half_life_days = Math.max(1, entry.half_life_days * 0.5);
     console.log(`Weakened (salience: ${salienceResult.reason}, strength ${salienceResult.score.toFixed(2)})`);
+    return { skip: false, weaken: { strength: salienceResult.score, halfLifeFactor: 0.5 } };
   }
-  return true;
+  return { skip: false };
 }
 
 function printRemembered(entry: MemoryEntry, useGlobal: boolean): void {
@@ -244,16 +255,10 @@ function supersedeTags(flags: CliFlags): string[] | undefined {
       : undefined;
 }
 
-function writeSuccessor(hippoRoot: string, newEntry: MemoryEntry): void {
-  try {
-    writeEntry(hippoRoot, newEntry);
-  } catch (err) {
-    if (err instanceof RejectedValueError) {
-      printError(`Error: ${err.message}`);
-      process.exit(1);
-    }
-    throw err;
-  }
+/** The api's conflict text differs by which writer lost; the row itself names its successor either way. */
+function alreadySupersededLine(hippoRoot: string, oldId: string, tenantId: string, conflict: ConflictError): string {
+  const by = readEntry(hippoRoot, oldId, tenantId)?.superseded_by;
+  return by ? `Error: memory ${oldId} is already superseded by ${by}. Supersede that one instead.` : `Error: ${conflict.message}`;
 }
 
 function cmdSupersede(
@@ -264,36 +269,25 @@ function cmdSupersede(
 ): void {
   requireInit(hippoRoot);
 
-  const old = readEntry(hippoRoot, oldId, resolveTenantId({}));
-  if (!old) {
-    printError(`Error: memory ${oldId} not found.`);
+  const tenantId = resolveTenantId({});
+  const overrides = {
+    layer: stringFlag(flags, 'layer') as Layer | undefined,
+    tags: supersedeTags(flags),
+    // Without --pin the successor keeps the old row's pin.
+    pinned: flagIsTrue(flags, 'pin') ? true : undefined,
+  };
+
+  let newId: string;
+  try {
+    ({ newId } = api.supersede({ hippoRoot, tenantId, actor: api.adminActor('cli') }, oldId, newContent, overrides));
+  } catch (err) {
+    if (err instanceof NotFoundError) printError(`Error: memory ${oldId} not found.`);
+    else if (err instanceof RejectedValueError) printError(`Error: ${err.message}`);
+    else if (err instanceof ConflictError) printError(alreadySupersededLine(hippoRoot, oldId, tenantId, err));
+    else throw err;
     process.exit(1);
   }
-  if (old.superseded_by) {
-    printError(`Error: memory ${oldId} is already superseded by ${old.superseded_by}. Supersede that one instead.`);
-    process.exit(1);
-  }
-
-  const layer = stringFlag(flags, 'layer') as Layer | undefined;
-  const tags = supersedeTags(flags);
-  const pinned = flagIsTrue(flags, 'pin') || old.pinned;
-
-  const newEntry = createSuccessor(old, newContent, {
-    tenantId: old.tenantId,
-    baseHalfLifeDays: loadConfig(hippoRoot).defaultHalfLifeDays,
-    layer,
-    tags,
-    pinned,
-  });
-
-  // Write the SUCCESSOR first: a rejection-guard refusal then mutates nothing, and an old-row failure leaves an
-  // orphan successor rather than a dangling pointer. Unlike api.supersede this path is two non-atomic writes.
-  writeSuccessor(hippoRoot, newEntry);
-  old.superseded_by = newEntry.id;
-  writeEntry(hippoRoot, old);
-  emitCliAudit(hippoRoot, 'supersede', oldId, { newId: newEntry.id });
-
-  console.log(`Superseded ${oldId} → ${newEntry.id}`);
+  console.log(`Superseded ${oldId} → ${newId}`);
 }
 
 function parseStepsOrExit(stepsJson: string): ReturnType<typeof parseSteps> {
@@ -345,19 +339,18 @@ function cmdTraceRecord(
     outcome: outcome as 'success' | 'failure' | 'partial',
   });
 
-  const entry = createMemory(content, {
-    layer: Layer.Trace,
+  const { id } = api.remember({ hippoRoot, tenantId: resolveTenantId({}), actor: api.adminActor('cli') }, {
+    content,
     tags,
-    source: String(flags['source'] ?? 'cli'),
-    trace_outcome: outcome as 'success' | 'failure' | 'partial',
-    source_session_id: sessionId,
-    tenantId: resolveTenantId({}),
-    baseHalfLifeDays: loadConfig(hippoRoot).defaultHalfLifeDays,
+    local: {
+      layer: Layer.Trace,
+      source: String(flags['source'] ?? 'cli'),
+      traceOutcome: outcome as 'success' | 'failure' | 'partial',
+      sourceSessionId: sessionId,
+    },
   });
 
-  writeEntry(hippoRoot, entry);
-
-  console.log(`Recorded trace ${entry.id} (outcome=${outcome}, ${steps.length} steps)`);
+  console.log(`Recorded trace ${id} (outcome=${outcome}, ${steps.length} steps)`);
 }
 
 function cmdTrace(

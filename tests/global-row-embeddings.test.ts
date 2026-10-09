@@ -372,7 +372,7 @@ describe('global-row-embeddings: promoteToGlobal producer wiring (subprocess)', 
         // subprocess has fully exited, and that process has no explicit
         // process.exit() call on the success path (cli.ts's main() returns
         // naturally), so Node's event loop keeps it alive until the floating
-        // embedMemory promise settles — same reasoning as cmdImport's batch
+        // embedMemory promise settles — same reasoning as handleImport's batch
         // embed comment (src/cli.ts:6086-6093). The poll is a safety margin,
         // not a requirement to wait out a race.
         await vi.waitFor(() => {

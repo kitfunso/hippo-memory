@@ -16,7 +16,7 @@ import { currentMachine, importForStore, importProjectMemories, importUserMemori
 import { emptyReport, mergeReports } from '../agent-memories/report.js';
 import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
 import { registerWorkspace } from './scheduler.js';
-import { type CliFlags, stringFlag } from './flag-values.js';
+import { type CliFlags, stringFlag, type CommandContext } from './flag-values.js';
 import { printAgentImport } from './print.js';
 import { installCodexMemoryHooks, setupDailySchedule, warnClaudeSettingsUnusable } from './install-steps.js';
 import { learnFromRepo, skipLearnOnSharedStore } from './shared.js';
@@ -172,7 +172,7 @@ function seedFromGitHistory(hippoRoot: string): void {
   }
 }
 
-export function cmdInit(hippoRoot: string, flags: CliFlags): void {
+export function handleInit({ hippoRoot, flags }: CommandContext): void {
   // Handle --scan mode
   if (flags['scan']) {
     const scanDir = stringFlag(flags, 'scan') ?? os.homedir();

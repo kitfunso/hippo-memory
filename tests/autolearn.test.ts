@@ -9,7 +9,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry, loadAllEntries } from '../src/store/entry-reads.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { extractInvalidationTarget, invalidateMatching } from '../src/learn/invalidation.js';
-import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
+import { handleMcpRequest } from '../src/mcp/server.js';
 
 // ---------------------------------------------------------------------------
 // captureError
@@ -374,7 +374,7 @@ describe('write-path gate: MCP hippo_learn tool', () => {
   });
 
   it('drops junk subjects and stores detail-carrying ones via the MCP tool', async () => {
-    const res = (await handleMcpRequest(
+    const res = await handleMcpRequest(
       {
         jsonrpc: '2.0',
         id: 1,
@@ -382,10 +382,11 @@ describe('write-path gate: MCP hippo_learn tool', () => {
         params: { name: 'hippo_learn', arguments: { days: 3650 } },
       },
       { hippoRoot, tenantId: 'default', actor: 'mcp' },
-    )) as McpResponse | null;
+    );
 
-    const text = (res as { result?: { content?: Array<{ text?: string }> } } | null)
-      ?.result?.content?.[0]?.text ?? '';
+    // SAFETY: a tools/call reply wraps tool output as result.content[{type:'text',text}] (src/mcp/request.ts:173).
+    const text = (res?.result as { content?: Array<{ text?: string }> } | undefined)
+      ?.content?.[0]?.text ?? '';
     expect(text).toMatch(/low-information subjects dropped/);
 
     const entries = loadAllEntries(hippoRoot);

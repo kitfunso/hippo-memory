@@ -42,7 +42,7 @@ import { errorFields, errorMessage, log } from '../util/log.js';
 import { envDailyStepTimeoutMs } from '../util/env.js';
 import { writeFileAtomic } from '../util/atomic-write.js';
 import { printError } from './output.js';
-import { type CliFlags, boolFlag } from './flag-values.js';
+import { boolFlag, type CommandContext } from './flag-values.js';
 import { printAgentImport } from './print.js';
 import { installCodexMemoryHooks, setupDailySchedule, warnClaudeSettingsUnusable } from './install-steps.js';
 import { repairQualityOnceAt } from './quality-repair-once.js';
@@ -53,7 +53,7 @@ import { escapeRegex } from '../util/escape.js';
 // Hook install/uninstall
 // ---------------------------------------------------------------------------
 
-export function cmdHook(args: string[]): void {
+export function handleHook({ args }: CommandContext): void {
   const subcommand = args[0];
   const target = args[1];
   if (subcommand === 'list') return hookList();
@@ -390,7 +390,7 @@ function setupDetectedTools(tools: ReturnType<typeof detectInstalledTools>, forc
 // `hippo setup` -- one-shot configuration for every AI coding tool on the box.
 // Detection and install logic live in ./hooks.ts.
 
-export function cmdSetup(flags: CliFlags): void {
+export function handleSetup({ flags }: CommandContext): void {
   const dryRun = boolFlag(flags, 'dry-run');
   const forceAll = boolFlag(flags, 'all');
   const tools = detectInstalledTools();
@@ -507,7 +507,7 @@ function dailyStepFailure<E>(err: E, timeoutMs: number): string {
   return errorMessage(err);
 }
 
-export function cmdDailyRunner(): void {
+export function handleDailyRunner(_ctx: CommandContext): void {
   const globalRoot = getGlobalRoot();
   // No workspace sleep ever opens the global store, yet hooks in folders without a store compact into it.
   if (isInitialized(globalRoot)) {

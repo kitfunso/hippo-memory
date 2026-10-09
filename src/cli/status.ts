@@ -26,13 +26,13 @@ import * as api from '../api/index.js';
 import { resolveTenantId } from '../store/tenant.js';
 import { errorMessage, log } from '../util/log.js';
 import { printError } from './output.js';
-import { type CliFlags, parseCountFlag, type CommandContext, stringFlagOrExit, flagIsTrue } from './flag-values.js';
+import { parseCountFlag, type CommandContext, stringFlagOrExit, flagIsTrue } from './flag-values.js';
 import { requireInit, resolveAuthRoot } from './shared.js';
 import { fmt } from './print.js';
 import { hookStoreRoot } from './hook-runtime.js';
 import { DAY_MS } from '../util/time.js';
 
-export function cmdStatus(hippoRoot: string): void {
+export function handleStatus({ hippoRoot }: CommandContext): void {
   requireInit(hippoRoot);
 
   const entries = loadAllEntries(hippoRoot);
@@ -228,10 +228,7 @@ function cmdInspect(hippoRoot: string, id: string): void {
  * and the hook blocks' tokens later model calls re-read, counted when each session ends.
  * Counts are estimates (characters / 4), the same estimate every budget uses.
  */
-export function cmdTokens(
-  hippoRoot: string,
-  flags: CliFlags,
-): void {
+export function handleTokens({ hippoRoot, flags }: CommandContext): void {
   const root = resolveAuthRoot(hippoRoot, flags);
   const ctx: api.Context = {
     hippoRoot: root,
@@ -274,10 +271,7 @@ export function cmdTokens(
 }
 
 /** `hippo failures [--days <n>] [--json] [--global]`: failed tool calls by outcome, and repeats across sessions. */
-export function cmdFailures(
-  hippoRoot: string,
-  flags: CliFlags,
-): void {
+export function handleFailures({ hippoRoot, flags }: CommandContext): void {
   // The store the capture-error hook writes to; a report never creates one.
   const root = flags['global'] ? getGlobalRoot() : hookStoreRoot(hippoRoot);
   requireInit(root);

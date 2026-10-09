@@ -74,10 +74,12 @@ describe('openHippoDb on an already-current store is write-free', () => {
 
     const db2 = openHippoDb(root);
     try {
+      // SAFETY: the query selects only `name`, a TEXT column of sqlite_master.
       const tables = (db2
         .prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='memories_fts'`)
         .all() as Array<{ name: string }>);
       expect(tables.length).toBe(1);
+      // SAFETY: an aggregate SELECT returns exactly one row and COUNT(*) is an integer.
       const row = db2.prepare(`SELECT COUNT(*) AS c FROM memories_fts WHERE id = ?`).get(m.id) as
         | { c?: number }
         | undefined;

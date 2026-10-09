@@ -26,7 +26,7 @@ import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, t
 import { CARD_TRANSITIONS, type CardStatus } from '../src/core/card.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 import { runInProcess } from './_helpers/run-in-process.js';
-import { cmdCard } from '../src/cli/card.js';
+import { handleCard } from '../src/cli/card.js';
 import { COMMANDS, parseArgs } from '../src/cli.js';
 import * as packageEntry from '../src/index.js';
 
@@ -478,6 +478,12 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
     }
   }
 
+  function cardIdFrom(out: string): string {
+    const id = out.match(/Created card (\S+)/)?.[1];
+    if (!id) throw new Error(`no card id in CLI output: ${out}`);
+    return id;
+  }
+
   function setupCliHome() {
     const home = mkdtempSync(join(tmpdir(), 'hippo-w2a-cli-'));
     const globalDir = join(home, 'global');
@@ -518,7 +524,7 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
     try {
       initStore(join(home, '.hippo'));
       // parseArgs collects --depends-on into an array, so the in-process call passes one.
-      const create = await runInProcess(() => cmdCard(join(home, '.hippo'), ['create'], { title: 'x', 'depends-on': ['nope'] }));
+      const create = await runInProcess(() => handleCard({ hippoRoot: join(home, '.hippo'), args: ['create'], flags: { title: 'x', 'depends-on': ['nope'] } }));
       expect(create.status).toBe(1);
       expect(create.stderr).toContain('unknown parent card id: nope');
     } finally {
@@ -668,12 +674,12 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
     try {
       const parent = runCli(home, env, 'card', 'create', '--title', 'parent');
       expect(parent.status, parent.out).toBe(0);
-      const parentId = parent.out.match(/Created card (\S+)/)?.[1]!;
+      const parentId = cardIdFrom(parent.out);
       expect(parentId).toBeTruthy();
 
       const create = runCli(home, env, 'card', 'create', '--title', 'child', '--repo', 'r', '--contract', 'c', '--budget', '5', '--depends-on', parentId);
       expect(create.status, create.out).toBe(0);
-      const childId = create.out.match(/Created card (\S+)/)?.[1]!;
+      const childId = cardIdFrom(create.out);
       expect(childId).toBeTruthy();
 
       const list = runCli(home, env, 'card', 'list', '--status', 'backlog', '--json');

@@ -62,7 +62,7 @@ describe('openHippoDb pragma order: busy_timeout before journal_mode', () => {
         closeHippoDb(openHippoDb(root));
         opens++;
       } catch (err) {
-        errors.push((err as Error).message);
+        errors.push(err instanceof Error ? err.message : String(err));
       }
     }
 

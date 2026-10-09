@@ -33,7 +33,7 @@ function fill(root: string, count: number, label: string, origin: (i: number) =>
 }
 
 /** Counts every row the loader hands to admission, which is every row the search can rank. */
-function admitCounter(): { obs: DeliveryObserver; seen: Set<string>; calls: () => number } {
+function admitCounter() {
   const seen = new Set<string>();
   let calls = 0;
   const noop = (): void => undefined;

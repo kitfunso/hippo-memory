@@ -6,7 +6,7 @@ import * as policiesModule from '../objects/policies.js';
 import * as skillsModule from '../objects/skills.js';
 import { resolveTenantId } from '../store/tenant.js';
 import { printError } from './output.js';
-import { nonEmptyStringFlag, stringFlag, type CliFlags } from './flag-values.js';
+import { nonEmptyStringFlag, stringFlag, type CliFlags, type CommandContext } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { closeObject, foundOrExit, idArgOrExit, listObjects, printLifecycleTail, type ObjectNames } from './object-verbs.js';
 import { errorMessage } from '../util/log.js';
@@ -87,11 +87,7 @@ function processClose(hippoRoot: string, tenantId: string, args: string[]): void
   closeObject(args, PROCESS, (id) => processesModule.closeProcess(hippoRoot, tenantId, id));
 }
 
-export function cmdProcess(
-  hippoRoot: string,
-  args: string[],
-  flags: CliFlags
-): void {
+export function handleProcess({ hippoRoot, args, flags }: CommandContext): void {
   requireInit(hippoRoot);
   const tenantId = resolveTenantId({});
   const subcommand = args[0] ?? '';
@@ -209,11 +205,7 @@ function policyClose(hippoRoot: string, tenantId: string, args: string[]): void 
   closeObject(args, POLICY, (id) => policiesModule.closePolicy(hippoRoot, tenantId, id));
 }
 
-export function cmdPolicy(
-  hippoRoot: string,
-  args: string[],
-  flags: CliFlags
-): void {
+export function handlePolicy({ hippoRoot, args, flags }: CommandContext): void {
   requireInit(hippoRoot);
   const tenantId = resolveTenantId({});
   const subcommand = args[0] ?? '';
@@ -323,11 +315,7 @@ function skillClose(hippoRoot: string, tenantId: string, args: string[]): void {
   closeObject(args, SKILL, (id) => skillsModule.closeSkill(hippoRoot, tenantId, id));
 }
 
-export function cmdSkill(
-  hippoRoot: string,
-  args: string[],
-  flags: CliFlags
-): void {
+export function handleSkill({ hippoRoot, args, flags }: CommandContext): void {
   requireInit(hippoRoot);
   const tenantId = resolveTenantId({});
   const subcommand = args[0] ?? '';

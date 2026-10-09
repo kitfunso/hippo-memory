@@ -5,7 +5,7 @@ import { openHippoDb, closeHippoDb, getSchemaVersion, type DatabaseSyncLike } fr
 import { raiseMinBinary } from '../src/db/meta.js';
 import { createApiKey, readApiKeyRecord, validateApiKey, verifyApiKeyCached, apiKeyVerifyStats, type ApiKeyRecord } from '../src/store/auth.js';
 import { adminActor, authCreateSelf, authListRows, type Actor, type AuthCreateSelfResult } from '../src/api/index.js';
-import { cmdAuth } from '../src/cli/auth.js';
+import { handleAuth } from '../src/cli/auth.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { sqliteStore, type HippoStore } from '../src/store/index.js';
 import { EXPIRING_KEYS_MIN_BINARY } from '../src/util/version.js';
@@ -200,11 +200,11 @@ describe('key lists', () => {
 
   it('hippo auth list prints each expiry and leaves out expired keys unless --all', async () => {
     const keys = threeKeys();
-    const active = await runInProcess(() => cmdAuth(home, ['list'], {}));
+    const active = await runInProcess(() => handleAuth({ hippoRoot: home, args: ['list'], flags: {} }));
     expect(active.stdout).toContain('created  expires  revoked');
     expect(active.stdout).toContain(keys.liveExpiry);
     expect(active.stdout).not.toContain(keys.expired);
-    expect((await runInProcess(() => cmdAuth(home, ['list'], { all: true }))).stdout).toContain(keys.expired);
+    expect((await runInProcess(() => handleAuth({ hippoRoot: home, args: ['list'], flags: { all: true } }))).stdout).toContain(keys.expired);
   });
 });
 

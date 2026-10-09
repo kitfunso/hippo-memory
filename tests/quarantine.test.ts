@@ -405,7 +405,7 @@ describe('CLI drive via the built binary', () => {
       const result = await ingestEvent(ctx, { event: githubCommentEvent(INJECTION), rawBody: 'x', deliveryId: 'd1' });
 
       const listOut = execFileSync('node', [HIPPO_BIN, 'quarantine', 'list', '--json'], { cwd: cliHome, env }).toString();
-      // SAFETY: cmdQuarantine's --json output is always { quarantine: [...] }.
+      // SAFETY: handleQuarantine's --json output is always { quarantine: [...] }.
       const listed = JSON.parse(listOut) as { quarantine: Array<{ id: string }> };
       expect(listed.quarantine.some((row) => row.id === result.memoryId)).toBe(true);
 

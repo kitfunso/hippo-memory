@@ -42,7 +42,7 @@ const EMBED_DIM = 384;
 
 /** Generate a deterministic unit vector from a seed. Seeded hash -> direction. */
 function syntheticEmbedding(seed: number): number[] {
-  const vec = new Array<number>(EMBED_DIM);
+  const vec = Array.from({ length: EMBED_DIM }, () => 0);
   // Simple deterministic pseudo-random using seed
   let s = seed;
   for (let i = 0; i < EMBED_DIM; i++) {

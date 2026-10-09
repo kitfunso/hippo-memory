@@ -17,6 +17,13 @@ interface Overrides {
   rawLockfile?: string;
 }
 
+interface LockFixture {
+  name: string;
+  lockfileVersion: number;
+  packages: Record<string, { name?: string; version: string }>;
+  version?: string;
+}
+
 /** A minimal repo the gate accepts: every manifest it reads, all at `version`. */
 function makeRepo(version: string, overrides: Overrides = {}): string {
   const root = mkdtempSync(join(tmpdir(), 'hippo-vgate-'));
@@ -29,12 +36,12 @@ function makeRepo(version: string, overrides: Overrides = {}): string {
   if (overrides.rawLockfile !== undefined) {
     writeFileSync(join(root, 'package-lock.json'), overrides.rawLockfile);
   } else if (!overrides.omitLockfile) {
-    const lock: Record<string, unknown> = {
+    const lock: LockFixture = {
       name: 'fixture',
       lockfileVersion: 3,
       packages: { '': { name: 'fixture', version: overrides.lockRootVersion ?? version }, 'node_modules/left-pad': { version: '1.3.0' } },
     };
-    if (overrides.lockVersion !== null) lock['version'] = overrides.lockVersion ?? version;
+    if (overrides.lockVersion !== null) lock.version = overrides.lockVersion ?? version;
     writeFileSync(join(root, 'package-lock.json'), JSON.stringify(lock));
   }
   return root;
@@ -92,7 +99,8 @@ describe('check-manifest-versions.mjs and the lockfile', () => {
   });
 
   it('fails when the lockfile is absent or has no version field', () => {
-    for (const overrides of [{ omitLockfile: true }, { lockVersion: null }] as Overrides[]) {
+    const cases: Overrides[] = [{ omitLockfile: true }, { lockVersion: null }];
+    for (const overrides of cases) {
       const root = makeRepo('2.0.0', overrides);
       try {
         const r = runGate(root);

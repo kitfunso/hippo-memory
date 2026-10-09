@@ -8,7 +8,7 @@ import * as fs from 'fs';
 import { fileURLToPath } from 'node:url';
 import { repairCodexWrapperIfInstalled } from './hooks/codex-wrapper.js';
 import { getHippoRoot } from './store/open.js';
-import { cmdGithub, printGithubBackfillUsage } from './connectors/github/cli-impl.js';
+import { handleGithub, printGithubBackfillUsage } from './connectors/github/cli-impl.js';
 import { printError } from './cli/output.js';
 import { errorFields, errorMessage, isLevelEnabled, log } from './util/log.js';
 import { isStoreBusy, STORE_BUSY_MESSAGE } from './db/busy.js';
@@ -154,10 +154,11 @@ interface CommandSpec extends VerbHandler {
 
 type VerbName = keyof typeof VERB_FLAGS;
 
+// A verb's entry is handle<Verb>(ctx); cmd<Name> is a typed function below an entry, never called from this table.
 /** Every verb main() dispatches, keyed by name; a verb without a VERB_FLAGS entry, or the reverse, fails to compile. */
 export const VERB_HANDLERS = {
   init: {
-    run: async ({ hippoRoot, flags }) => { (await import('./cli/init.js')).cmdInit(hippoRoot, flags); },
+    run: async (c) => { (await import('./cli/init.js')).handleInit(c); },
   },
   remember: {
     run: async (c) => { await (await import('./cli/remember.js')).handleRemember(c); },
@@ -188,20 +189,20 @@ export const VERB_HANDLERS = {
     run: async (c) => { await (await import('./cli/remember.js')).handleTrace(c); },
   },
   refine: {
-    run: async ({ hippoRoot, flags }) => { await (await import('./cli/maintenance.js')).cmdRefine(hippoRoot, flags); },
+    run: async (c) => { await (await import('./cli/maintenance.js')).handleRefine(c); },
   },
   sleep: {
-    run: async ({ hippoRoot, flags }) => { await (await import('./cli/sleep.js')).cmdSleep(hippoRoot, flags); },
+    run: async (c) => { await (await import('./cli/sleep.js')).handleSleep(c); },
     scoped: true,
   },
   'last-sleep': {
-    run: async ({ hippoRoot, flags }) => { (await import('./cli/last-sleep.js')).cmdLastSleep(hippoRoot, flags); },
+    run: async (c) => { (await import('./cli/last-sleep.js')).handleLastSleep(c); },
   },
   'session-end': {
-    run: async ({ hippoRoot, flags }) => { await (await import('./cli/session-hooks.js')).cmdSessionEnd(hippoRoot, flags); },
+    run: async (c) => { await (await import('./cli/session-hooks.js')).handleSessionEnd(c); },
   },
   '__session-end-worker': {
-    run: async ({ hippoRoot, flags }) => { await (await import('./cli/session-hooks.js')).cmdSessionEndWorker(hippoRoot, flags); },
+    run: async (c) => { await (await import('./cli/session-hooks.js')).handleSessionEndWorker(c); },
   },
   'pre-compact': {
     run: async (c) => { await (await import('./cli/session-hooks.js')).handlePreCompact(c); },
@@ -216,30 +217,30 @@ export const VERB_HANDLERS = {
     run: async (c) => { await (await import('./cli/session-hooks.js')).handleCompactResume(c); },
   },
   'codex-run': {
-    run: async ({ hippoRoot, args }) => { (await import('./cli/session-hooks.js')).cmdCodexRun(hippoRoot, args); },
+    run: async (c) => { (await import('./cli/session-hooks.js')).handleCodexRun(c); },
   },
   '__codex-session-end-worker': {
-    run: async ({ hippoRoot, flags }) => { await (await import('./cli/session-hooks.js')).cmdCodexSessionEndWorker(hippoRoot, flags); },
+    run: async (c) => { await (await import('./cli/session-hooks.js')).handleCodexSessionEndWorker(c); },
   },
   dedup: {
-    run: async ({ hippoRoot, flags }) => { (await import('./cli/maintenance.js')).cmdDedup(hippoRoot, flags); },
+    run: async (c) => { (await import('./cli/maintenance.js')).handleDedup(c); },
   },
   dag: {
-    run: async ({ hippoRoot, flags }) => { (await import('./cli/dag.js')).cmdDag(hippoRoot, flags); },
+    run: async (c) => { (await import('./cli/dag.js')).handleDag(c); },
   },
   auth: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/auth.js')).cmdAuth(hippoRoot, args, flags); },
+    run: async (c) => { (await import('./cli/auth.js')).handleAuth(c); },
     scoped: true,
   },
   goal: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/goals.js')).cmdGoal(hippoRoot, args, flags); },
+    run: async (c) => { (await import('./cli/goals.js')).handleGoal(c); },
     scoped: true,
   },
   slack: {
-    run: async ({ hippoRoot, args, flags }) => { await (await import('./cli/slack.js')).cmdSlack(hippoRoot, args, flags); },
+    run: async (c) => { await (await import('./cli/slack.js')).handleSlack(c); },
   },
   github: {
-    run: async ({ hippoRoot, args, flags }) => { await cmdGithub(hippoRoot, args, flags); },
+    run: async (c) => { await handleGithub(c); },
   },
   audit: {
     run: async (c) => { await (await import('./cli/audit.js')).handleAudit(c); },
@@ -252,44 +253,44 @@ export const VERB_HANDLERS = {
     run: async (c) => { await (await import('./cli/status.js')).handleProvenance(c); },
   },
   status: {
-    run: async ({ hippoRoot }) => { (await import('./cli/status.js')).cmdStatus(hippoRoot); },
+    run: async (c) => { (await import('./cli/status.js')).handleStatus(c); },
   },
   outcome: {
-    run: async ({ hippoRoot, flags }) => { (await import('./cli/curate.js')).cmdOutcome(hippoRoot, flags); },
+    run: async (c) => { (await import('./cli/curate.js')).handleOutcome(c); },
     scoped: true,
   },
   conflicts: {
-    run: async ({ hippoRoot, flags }) => { (await import('./cli/curate.js')).cmdConflicts(hippoRoot, flags); },
+    run: async (c) => { (await import('./cli/curate.js')).handleConflicts(c); },
   },
   resolve: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/curate.js')).cmdResolve(hippoRoot, args, flags); },
+    run: async (c) => { (await import('./cli/curate.js')).handleResolve(c); },
   },
   reject: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/curate.js')).cmdReject(hippoRoot, args, flags); },
+    run: async (c) => { (await import('./cli/curate.js')).handleReject(c); },
   },
   rejections: {
-    run: async ({ hippoRoot, flags }) => { (await import('./cli/curate.js')).cmdRejections(hippoRoot, flags); },
+    run: async (c) => { (await import('./cli/curate.js')).handleRejections(c); },
   },
   unreject: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/curate.js')).cmdUnreject(hippoRoot, args, flags); },
+    run: async (c) => { (await import('./cli/curate.js')).handleUnreject(c); },
   },
   dormant: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/curate.js')).cmdDormant(hippoRoot, args, flags); },
+    run: async (c) => { (await import('./cli/curate.js')).handleDormant(c); },
     scoped: true,
   },
   projects: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/projects.js')).cmdProjects(hippoRoot, args, flags); },
+    run: async (c) => { (await import('./cli/projects.js')).handleProjects(c); },
   },
   quarantine: {
-    run: async ({ hippoRoot, args, flags }) => { await (await import('./cli/curate.js')).cmdQuarantine(hippoRoot, args, flags); },
+    run: async (c) => { await (await import('./cli/curate.js')).handleQuarantine(c); },
     scoped: true,
   },
   tokens: {
-    run: async ({ hippoRoot, flags }) => { (await import('./cli/status.js')).cmdTokens(hippoRoot, flags); },
+    run: async (c) => { (await import('./cli/status.js')).handleTokens(c); },
     scoped: true,
   },
   failures: {
-    run: async ({ hippoRoot, flags }) => { (await import('./cli/status.js')).cmdFailures(hippoRoot, flags); },
+    run: async (c) => { (await import('./cli/status.js')).handleFailures(c); },
     scoped: true,
   },
   doctor: {
@@ -299,22 +300,22 @@ export const VERB_HANDLERS = {
     run: async (c) => { await (await import('./cli/status.js')).handleSupportBundle(c); },
   },
   snapshot: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/continuity.js')).cmdSnapshot(hippoRoot, args, flags); },
+    run: async (c) => { (await import('./cli/continuity.js')).handleSnapshot(c); },
   },
   session: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/continuity.js')).cmdSession(hippoRoot, args, flags); },
+    run: async (c) => { (await import('./cli/continuity.js')).handleSession(c); },
   },
   handoff: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/continuity.js')).cmdHandoff(hippoRoot, args, flags); },
+    run: async (c) => { (await import('./cli/continuity.js')).handleHandoff(c); },
   },
   card: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/card.js')).cmdCard(hippoRoot, args, flags); },
+    run: async (c) => { (await import('./cli/card.js')).handleCard(c); },
   },
   predict: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/decisions.js')).cmdPredict(hippoRoot, args, flags); },
+    run: async (c) => { (await import('./cli/decisions.js')).handlePredict(c); },
   },
   current: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/continuity.js')).cmdCurrent(hippoRoot, args, flags); },
+    run: async (c) => { (await import('./cli/continuity.js')).handleCurrent(c); },
   },
   forget: {
     run: async (c) => { await (await import('./cli/curate.js')).handleForget(c); },
@@ -327,22 +328,22 @@ export const VERB_HANDLERS = {
     run: async (c) => { await (await import('./cli/context.js')).handleContext(c); },
   },
   hook: {
-    run: async ({ args }) => { (await import('./cli/setup.js')).cmdHook(args); },
+    run: async (c) => { (await import('./cli/setup.js')).handleHook(c); },
   },
   setup: {
-    run: async ({ flags }) => { (await import('./cli/setup.js')).cmdSetup(flags); },
+    run: async (c) => { (await import('./cli/setup.js')).handleSetup(c); },
   },
   'daily-runner': {
-    run: async () => { (await import('./cli/setup.js')).cmdDailyRunner(); },
+    run: async (c) => { (await import('./cli/setup.js')).handleDailyRunner(c); },
   },
   embed: {
-    run: async ({ hippoRoot, flags }) => { await (await import('./cli/maintenance.js')).cmdEmbed(hippoRoot, flags); },
+    run: async (c) => { await (await import('./cli/maintenance.js')).handleEmbed(c); },
   },
   watch: {
     run: async (c) => { await (await import('./cli/transfer.js')).handleWatch(c); },
   },
   learn: {
-    run: async ({ hippoRoot, flags }) => { (await import('./cli/transfer.js')).cmdLearn(hippoRoot, flags); },
+    run: async (c) => { (await import('./cli/transfer.js')).handleLearn(c); },
     scoped: true,
   },
   promote: {
@@ -350,7 +351,7 @@ export const VERB_HANDLERS = {
     scoped: true,
   },
   sync: {
-    run: async ({ hippoRoot, flags }) => { (await import('./cli/transfer.js')).cmdSync(hippoRoot, flags); },
+    run: async (c) => { (await import('./cli/transfer.js')).handleSync(c); },
   },
   share: {
     run: async (c) => { await (await import('./cli/transfer.js')).handleShare(c); },
@@ -359,7 +360,7 @@ export const VERB_HANDLERS = {
     run: async (c) => { await (await import('./cli/transfer.js')).handlePeers(c); },
   },
   import: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/transfer.js')).cmdImport(hippoRoot, args, flags); },
+    run: async (c) => { (await import('./cli/transfer.js')).handleImport(c); },
   },
   export: {
     run: async (c) => { await (await import('./cli/transfer.js')).handleExport(c); },
@@ -371,7 +372,7 @@ export const VERB_HANDLERS = {
     run: async (c) => { await (await import('./cli/serve.js')).handleDashboard(c); },
   },
   wm: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/continuity.js')).cmdWm(hippoRoot, args, flags); },
+    run: async (c) => { (await import('./cli/continuity.js')).handleWm(c); },
   },
   mcp: {
     run: async () => { await (await import('./cli/serve.js')).handleMcp(); },
@@ -383,30 +384,30 @@ export const VERB_HANDLERS = {
     run: async (c) => { await (await import('./cli/curate.js')).handleInvalidate(c); },
   },
   decide: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/decisions.js')).cmdDecide(hippoRoot, args, flags); },
+    run: async (c) => { (await import('./cli/decisions.js')).handleDecide(c); },
   },
   incident: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/decisions.js')).cmdIncident(hippoRoot, args, flags); },
+    run: async (c) => { (await import('./cli/decisions.js')).handleIncident(c); },
   },
   process: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/playbooks.js')).cmdProcess(hippoRoot, args, flags); },
+    run: async (c) => { (await import('./cli/playbooks.js')).handleProcess(c); },
   },
   policy: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/playbooks.js')).cmdPolicy(hippoRoot, args, flags); },
+    run: async (c) => { (await import('./cli/playbooks.js')).handlePolicy(c); },
   },
   skill: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/playbooks.js')).cmdSkill(hippoRoot, args, flags); },
+    run: async (c) => { (await import('./cli/playbooks.js')).handleSkill(c); },
   },
   brief: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/briefs.js')).cmdProjectBrief(hippoRoot, args, flags); },
+    run: async (c) => { (await import('./cli/briefs.js')).handleProjectBrief(c); },
     aliases: ['project-brief'],
   },
   note: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/briefs.js')).cmdCustomerNote(hippoRoot, args, flags); },
+    run: async (c) => { (await import('./cli/briefs.js')).handleCustomerNote(c); },
     aliases: ['customer-note'],
   },
   graph: {
-    run: async ({ hippoRoot, args, flags }) => { (await import('./cli/briefs.js')).cmdGraph(hippoRoot, args, flags); },
+    run: async (c) => { (await import('./cli/briefs.js')).handleGraph(c); },
   },
 } satisfies Record<VerbName, VerbHandler>;
 

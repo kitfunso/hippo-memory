@@ -5,7 +5,7 @@ import { execFileSync } from 'child_process';
 import { closeHippoDb, openHippoDb } from '../db/index.js';
 import { listProjects, mergeProjects, repairProjects, type ProjectSummary } from '../sharing/project-merge.js';
 import { resolveTenantId } from '../store/tenant.js';
-import { type CliFlags, flagIsTrue } from './flag-values.js';
+import { type CliFlags, flagIsTrue, type CommandContext } from './flag-values.js';
 import { resolveAuthRoot } from './shared.js';
 import { printError } from './output.js';
 import { errorMessage } from '../util/log.js';
@@ -84,7 +84,7 @@ function projectsRepair(db: ProjectsDb, tenantId: string, root: string, flags: C
   console.log(apply ? `Backup: ${r.backup}\nEvery id is in the audit log: hippo audit list --op project_repair` : 'Nothing written. Add --apply to run it.');
 }
 
-export function cmdProjects(hippoRoot: string, args: string[], flags: CliFlags): void {
+export function handleProjects({ hippoRoot, args, flags }: CommandContext): void {
   const root = resolveAuthRoot(hippoRoot, flags);
   const tenantId = resolveTenantId({});
   const sub = args[0] ?? 'list';

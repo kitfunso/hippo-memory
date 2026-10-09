@@ -9,7 +9,7 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { loadEmbeddingIndex } from '../src/store/vector-index.js';
 import { resolveEmbeddingProvider, type EmbeddingProvider } from '../src/store/embeddings/provider.js';
 import { requireLocalPipeline } from '../src/store/embeddings/local.js';
-import { cmdEmbed } from '../src/cli/maintenance.js';
+import { handleEmbed } from '../src/cli/maintenance.js';
 
 /** A local provider that answers every text with `vector`, or fails the whole call as an unloadable model does. */
 function localProvider(opts: { available?: boolean; loadError?: string; vector?: number[] }): EmbeddingProvider {
@@ -65,26 +65,26 @@ describe('the local provider with a model that cannot load', () => {
 
 describe('hippo embed exit code', () => {
   it('is 1 with the reason printed when the model cannot load', async () => {
-    await cmdEmbed(root, {}, localProvider({ loadError: 'model file missing from the cache' }));
+    await handleEmbed({ hippoRoot: root, args: [], flags: {} }, localProvider({ loadError: 'model file missing from the cache' }));
     expect(process.exitCode).toBe(1);
     expect(stderr.join('')).toContain('did not load: model file missing');
     expect(Object.keys(loadEmbeddingIndex(root))).toEqual([]);
   });
 
   it('is 0 when every memory is embedded', async () => {
-    await cmdEmbed(root, {}, localProvider({}));
+    await handleEmbed({ hippoRoot: root, args: [], flags: {} }, localProvider({}));
     expect(process.exitCode).toBeUndefined();
     expect(Object.keys(loadEmbeddingIndex(root))).toHaveLength(1);
   });
 
   it('is 1 when a memory is left unembedded', async () => {
-    await cmdEmbed(root, {}, localProvider({ vector: [] }));
+    await handleEmbed({ hippoRoot: root, args: [], flags: {} }, localProvider({ vector: [] }));
     expect(process.exitCode).toBe(1);
     expect(stderr.join('')).toContain('1 memories are still not embedded');
   });
 
   it('is 1 when no local embedding package is installed', async () => {
-    await cmdEmbed(root, {}, localProvider({ available: false }));
+    await handleEmbed({ hippoRoot: root, args: [], flags: {} }, localProvider({ available: false }));
     expect(process.exitCode).toBe(1);
   });
 });

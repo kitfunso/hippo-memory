@@ -8,7 +8,7 @@ import * as path from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAmbientCandidates } from '../src/store/candidates.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';
 import { isContentWorthStoring } from '../src/core/memory-quality.js';
 import { getContext, type Context } from '../src/api/index.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
@@ -21,7 +21,7 @@ let local: string;
 let globalRoot: string;
 let ctx: Context;
 
-function seed(root: string, content: string, extra: Record<string, unknown> = {}) {
+function seed(root: string, content: string, extra: Partial<MemoryEntry> = {}) {
   const entry = { ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), origin_project: PROJECT, ...extra };
   writeEntry(root, entry);
   return entry;
