@@ -12,6 +12,10 @@ import { BadRequestError } from '../core/api-errors.js';
 import { canTouchScope, isPersonalScope } from './recall-scope.js';
 import { selectMemoryReach } from './tenant-lookup.js';
 
+// The one place MemoryConflictRow's columns are listed; CONFLICT_COLS_MC is the same list under the `mc` alias.
+const CONFLICT_COLS = 'id, memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at';
+const CONFLICT_COLS_MC = CONFLICT_COLS.split(', ').map((c) => `mc.${c}`).join(', ');
+
 function canonicalConflictPair(aId: string, bId: string): { memory_a_id: string; memory_b_id: string } {
   return aId < bId
     ? { memory_a_id: aId, memory_b_id: bId }
@@ -22,12 +26,10 @@ function selectConflictRowsInTenant(db: DatabaseSyncLike, status: string, allSta
   // Tenanted query — JOIN to memories on both conflict members and require
   // each in-tenant, so neither a normal cross-tenant pair nor a stale
   // pre-fix row surfaces (consistent with resolveConflict).
-  // SAFETY: both branches select the same eight mc.* columns (aliased
-  // to MemoryConflictRow's field names) from memory_conflicts.
+  // SAFETY: both branches select CONFLICT_COLS_MC, MemoryConflictRow's columns.
   return allStatuses
     ? db.prepare(`
-        SELECT mc.id, mc.memory_a_id, mc.memory_b_id, mc.reason, mc.score,
-               mc.status, mc.detected_at, mc.updated_at
+        SELECT ${CONFLICT_COLS_MC}
         FROM memory_conflicts mc
         JOIN memories ma ON ma.id = mc.memory_a_id
         JOIN memories mb ON mb.id = mc.memory_b_id
@@ -35,8 +37,7 @@ function selectConflictRowsInTenant(db: DatabaseSyncLike, status: string, allSta
         ORDER BY mc.updated_at DESC, mc.id DESC
       `).all(tenantId, tenantId) as MemoryConflictRow[]
     : db.prepare(`
-        SELECT mc.id, mc.memory_a_id, mc.memory_b_id, mc.reason, mc.score,
-               mc.status, mc.detected_at, mc.updated_at
+        SELECT ${CONFLICT_COLS_MC}
         FROM memory_conflicts mc
         JOIN memories ma ON ma.id = mc.memory_a_id
         JOIN memories mb ON mb.id = mc.memory_b_id
@@ -47,16 +48,15 @@ function selectConflictRowsInTenant(db: DatabaseSyncLike, status: string, allSta
 
 function selectConflictRowsUnscoped(db: DatabaseSyncLike, status: string, allStatuses: boolean): MemoryConflictRow[] {
   // Unscoped query — legacy direct-mode (CLI, tests, consolidate).
-  // SAFETY: both branches select the same eight columns matching
-  // MemoryConflictRow's field set.
+  // SAFETY: both branches select CONFLICT_COLS, MemoryConflictRow's columns.
   return allStatuses
     ? db.prepare(`
-        SELECT id, memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at
+        SELECT ${CONFLICT_COLS}
         FROM memory_conflicts
         ORDER BY updated_at DESC, id DESC
       `).all() as MemoryConflictRow[]
     : db.prepare(`
-        SELECT id, memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at
+        SELECT ${CONFLICT_COLS}
         FROM memory_conflicts
         WHERE status = ?
         ORDER BY updated_at DESC, id DESC
@@ -112,9 +112,9 @@ export interface OpenConflictOf {
 export function loadOpenConflictsOf(hippoRoot: string, tenantId: string, memoryId: string): OpenConflictOf[] {
   const db = openStore(hippoRoot);
   try {
-    // SAFETY: selects the eight mc.* columns of MemoryConflictRow.
+    // SAFETY: selects CONFLICT_COLS_MC, MemoryConflictRow's columns.
     const rows = db.prepare(
-      `SELECT mc.id, mc.memory_a_id, mc.memory_b_id, mc.reason, mc.score, mc.status, mc.detected_at, mc.updated_at
+      `SELECT ${CONFLICT_COLS_MC}
        ${OPEN_IN_TENANT} AND (mc.memory_a_id = ? OR mc.memory_b_id = ?)
        ORDER BY mc.updated_at DESC, mc.id DESC`,
     ).all(tenantId, tenantId, memoryId, memoryId) as MemoryConflictRow[];
@@ -212,10 +212,9 @@ function resolveStaleOpenConflicts(
 ): void {
   const detectedKeys = new Set(canonicalDetected.map((conflict) => `${conflict.memory_a_id}::${conflict.memory_b_id}`));
 
-  // SAFETY: openRows' shape matches the eight columns named in the SELECT
-  // above.
+  // SAFETY: openRows' shape matches the columns named in CONFLICT_COLS.
   const openRows = db.prepare(`
-    SELECT id, memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at
+    SELECT ${CONFLICT_COLS}
     FROM memory_conflicts
     WHERE status = 'open'
   `).all() as MemoryConflictRow[];
@@ -437,19 +436,17 @@ function selectConflictRow(
   conflictId: number,
   tenantId: string | undefined,
 ): MemoryConflictRow | undefined {
-  // SAFETY: both branches select the same eight columns (aliased in the
-  // tenanted branch) matching MemoryConflictRow's field set.
+  // SAFETY: the branches select CONFLICT_COLS_MC and CONFLICT_COLS, MemoryConflictRow's columns.
   return (tenantId !== undefined
     ? db.prepare(`
-        SELECT mc.id, mc.memory_a_id, mc.memory_b_id, mc.reason, mc.score,
-               mc.status, mc.detected_at, mc.updated_at
+        SELECT ${CONFLICT_COLS_MC}
         FROM memory_conflicts mc
         JOIN memories ma ON ma.id = mc.memory_a_id
         JOIN memories mb ON mb.id = mc.memory_b_id
         WHERE mc.id = ? AND ma.tenant_id = ? AND mb.tenant_id = ?
       `).get(conflictId, tenantId, tenantId)
     : db.prepare(`
-        SELECT id, memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at
+        SELECT ${CONFLICT_COLS}
         FROM memory_conflicts WHERE id = ?
       `).get(conflictId)) as MemoryConflictRow | undefined;
 }

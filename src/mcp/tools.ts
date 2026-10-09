@@ -4,6 +4,8 @@ import type { ToolInputSchema } from './tool-args.js';
 import { DEFAULT_RECALL_BUDGET } from '../core/search-types.js';
 import { DEFAULT_ASSEMBLE_BUDGET } from '../api/assemble.js';
 import { MAX_ID_LEN } from '../util/http-util.js';
+import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../store/rows.js';
+import { DEFAULT_CONFIG } from '../core/config.js';
 
 // ── Tool definitions ──
 
@@ -55,7 +57,7 @@ export const TOOLS: readonly McpToolDefinition[] = [
         },
         scorer_window: {
           type: 'number',
-          description: 'How many of the top-ranked memories the fresh-tail and summarize-overflow appendix is worked out against. The main list ranks the whole tenant store, so scorer_window does not narrow it. Default 200. Rejected as RecallContractError code=invalid_scorer_window if 0/negative/non-finite/non-numeric.',
+          description: `How many of the top-ranked memories the fresh-tail and summarize-overflow appendix is worked out against. The main list ranks the whole tenant store, so scorer_window does not narrow it. Default ${DEFAULT_SEARCH_CANDIDATE_LIMIT}. Rejected as RecallContractError code=invalid_scorer_window if 0/negative/non-finite/non-numeric.`,
         },
         session_id: {
           type: 'string',
@@ -154,7 +156,7 @@ export const TOOLS: readonly McpToolDefinition[] = [
   {
     name: 'hippo_outcome',
     description:
-      'Report whether recalled memories were useful. Strengthens good memories (+5 days half-life) and weakens bad ones (-3 days). Call after completing work.',
+      "Report whether recalled memories were useful. Good outcomes slow a memory's decay and bad ones speed it up, in proportion to its record. Call after completing work.",
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -177,7 +179,7 @@ export const TOOLS: readonly McpToolDefinition[] = [
           type: 'number',
           minimum: 0,
           maximum: MAX_BUDGET_TOKENS,
-          description: `Max tokens (default: config.defaultContextBudget, 3000; max ${MAX_BUDGET_TOKENS})`,
+          description: `Max tokens (default: config.defaultContextBudget, ${DEFAULT_CONFIG.defaultContextBudget}; max ${MAX_BUDGET_TOKENS})`,
         },
         scope: {
           type: 'string',
