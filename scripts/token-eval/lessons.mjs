@@ -33,10 +33,10 @@ function checkTaskRole(t, families, index) {
   }
 }
 
-/** The one answer to "is this the same checker": the script's bytes plus its args, so an args-only fix is a fix. */
+/** The one answer to "is this the same checker": the whole invocation (script path as written, its bytes, its args), so an args-only or path-only fix is a fix. */
 export function checkerIdentity(lesson) {
   const bytes = createHash('sha256').update(fs.readFileSync(lesson.checkPath)).digest('hex');
-  return createHash('sha256').update(JSON.stringify([bytes, lesson.check.args ?? []])).digest('hex');
+  return createHash('sha256').update(JSON.stringify([bytes, lesson.check.script, lesson.check.args ?? []])).digest('hex');
 }
 
 function checkLesson(l, baseDir) {

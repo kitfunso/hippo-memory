@@ -272,6 +272,13 @@ describe('reader sample labels and scoring', () => {
     expect(draw(s.out, s.tasks, ['--round', '2', '--n', '6'])).toMatchObject({ code: 0 });
   });
 
+  it('the same bytes at another script path are another checker, since a copy can import a different sibling (27d)', () => {
+    const copy = join(tmp('z0-ident-'), 'toggle.mjs');
+    writeFileSync(copy, readFileSync(join(CHECKS, 'toggle.mjs')));
+    const at = (script: string) => checkerIdentity({ checkPath: script, check: { script, args: [] } });
+    expect(at(copy)).not.toBe(at(join(CHECKS, 'toggle.mjs')));
+  });
+
   it('draws round K only after round K-1 failed and a checker changed since its draw; a scored round is final (27b, 166)', () => {
     const fresh = () => synthOut([...cells('A0', many('pass', 10)), ...cells('A1', many('fail', 10))]);
     const postfix = (out: string, sha: string) => writeRows(out, listGrades(out).map((e) => rowOf(e.grade, 'postfix', {}, sha)), 'postfix');

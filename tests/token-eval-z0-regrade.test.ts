@@ -81,7 +81,7 @@ describe('z0-regrade regrade and grading', () => {
     });
     expect(await regrade(swapped, ['--post-fix', '--cell', keyOf('a1')], { Z0_TOGGLE: 'regrade' })).toMatchObject({ code: 0 });
     const row = rowFor(swapped.out, 'a1', 'postfix');
-    const sha = checkerIdentity({ checkPath: join(CHECKS, 'crash-on-toggle.mjs'), check: { script: 'crash-on-toggle.mjs', args: [] } });
+    const sha = checkerIdentity({ checkPath: join(CHECKS, 'crash-on-toggle.mjs'), check: { script: join(CHECKS, 'crash-on-toggle.mjs'), args: [] } });
     expect(row).toMatchObject({ status: 'done', pass: 'postfix' });
     expect(row.checks[0]).toMatchObject({ regraded: 'error', second: 'error', flip: true, reason: 'checker-error', checkerSha: sha });
   }, 300_000);
