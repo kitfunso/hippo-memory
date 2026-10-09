@@ -39,10 +39,6 @@ export function seenEvent(hippoRoot: string, idempotencyKey: string): { memoryId
     eventSeenAt(db, idempotencyKey) ? { memoryId: eventMemoryAt(db, idempotencyKey) } : null);
 }
 
-export function eventMemory(hippoRoot: string, idempotencyKey: string): string | null {
-  return onHandle(hippoRoot, (db) => eventMemoryAt(db, idempotencyKey));
-}
-
 export function logEvent(hippoRoot: string, entry: GithubEventLogEntry): void {
   onHandle(hippoRoot, (db) => { logEventAt(db, entry); });
 }

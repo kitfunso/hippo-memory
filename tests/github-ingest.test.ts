@@ -1,13 +1,13 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'fs';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import type { Context } from '../src/api.js';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
-import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { ingestEvent, type IngestEvent } from '../src/connectors/github/ingest.js';
+import { ingestEvent, type IngestEvent, type IngestInput, type IngestResult } from '../src/connectors/github/ingest.js';
 import { computeIdempotencyKey } from '../src/connectors/github/signature.js';
 import type {
   GitHubIssueEvent,
@@ -15,6 +15,9 @@ import type {
   GitHubPullRequestEvent,
   GitHubPullRequestReviewCommentEvent,
 } from '../src/connectors/github/types.js';
+
+// SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike.
+const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as { DatabaseSync: { prototype: DatabaseSyncLike } };
 
 // -- Test helpers ----------------------------------------------------------
 
@@ -97,72 +100,28 @@ function makePrReviewCommentEvent(): GitHubPullRequestReviewCommentEvent {
   };
 }
 
-/**
- * Insert a complete memories row. Used by the race tests (5, 8) to simulate
- * a concurrent worker. We mirror upsertEntryRow's column list exactly so
- * NOT NULL constraints and the ON CONFLICT path are satisfied — the row
- * must look like any other memories row.
- */
-function injectMemoryRow(db: DatabaseSyncLike, id: string, content: string, artifactRef: string): void {
-  const entry = createMemory(content, {
-    baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
-    layer: Layer.Episodic,
-    kind: 'raw',
-    scope: 'github:public:acme/demo',
-    owner: 'user:github:other-worker',
-    artifact_ref: artifactRef,
-    tags: ['source:github', 'repo:acme/demo'],
-    tenantId: 'default',
+interface LostRace {
+  readonly loser: IngestResult;
+  readonly winner: IngestResult;
+}
+
+/** Ingests `input` as the loser of a race: at its first lock request a second worker ingests the same event on its own connection and commits. */
+function ingestBehindAnotherWorker(root: string, input: IngestInput): LostRace {
+  const winners: IngestResult[] = [];
+  let winnerRan = false;
+  const { exec } = DatabaseSync.prototype;
+  const spy = vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (this: DatabaseSyncLike, sql: string) {
+    if (sql === 'BEGIN IMMEDIATE' && !winnerRan) {
+      winnerRan = true;
+      winners.push(ingestEvent(ctx(root), { ...input, deliveryId: 'd-other-worker' }));
+    }
+    exec.call(this, sql);
   });
-  db.prepare(
-    `INSERT INTO memories (
-      id, created, last_retrieved, retrieval_count, strength, half_life_days, layer,
-      tags_json, emotional_valence, schema_fit, source, outcome_score,
-      outcome_positive, outcome_negative,
-      conflicts_with_json, pinned, confidence, content,
-      parents_json, starred,
-      trace_outcome, source_session_id,
-      valid_from, superseded_by,
-      extracted_from,
-      dag_level, dag_parent_id,
-      kind, scope, owner, artifact_ref,
-      tenant_id,
-      updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
-  ).run(
-    id,
-    entry.created,
-    entry.last_retrieved,
-    entry.retrieval_count,
-    entry.strength,
-    entry.half_life_days,
-    entry.layer,
-    JSON.stringify(entry.tags),
-    entry.emotional_valence,
-    entry.schema_fit,
-    entry.source,
-    entry.outcome_score,
-    entry.outcome_positive,
-    entry.outcome_negative,
-    JSON.stringify(entry.conflicts_with),
-    entry.pinned ? 1 : 0,
-    entry.confidence,
-    entry.content,
-    JSON.stringify(entry.parents),
-    entry.starred ? 1 : 0,
-    entry.trace_outcome,
-    entry.source_session_id,
-    entry.valid_from,
-    entry.superseded_by,
-    entry.extracted_from,
-    entry.dag_level,
-    entry.dag_parent_id,
-    entry.kind,
-    entry.scope,
-    entry.owner,
-    entry.artifact_ref,
-    entry.tenantId,
-  );
+  try {
+    return { loser: ingestEvent(ctx(root), input), winner: winners[0] };
+  } finally {
+    spy.mockRestore();
+  }
 }
 
 // -- Tests -----------------------------------------------------------------
@@ -325,52 +284,15 @@ describe('ingestEvent', () => {
     expect(refs.has('github://acme/demo/pull/7/review_comment/12345')).toBe(true);
   });
 
-  it('5. race via injection hook: SAVEPOINT collision rolls back, returns skipped_duplicate with other worker memoryId', () => {
+  it('5. race with a second worker: the lost write rolls back, returns skipped_duplicate with other worker memoryId', () => {
     const payload = makeIssueEvent();
     const rawBody = JSON.stringify(payload);
     const event: IngestEvent = { eventName: 'issues', payload };
-    const otherWorkerMemoryId = 'mem_otherworker01';
 
-    const result = ingestEvent(ctx(root), {
-      event,
-      rawBody,
-      deliveryId: 'd-this-worker',
-      __testInjectBeforeLog: (innerDb, key) => {
-        // Single-process simulation of a "worker B already committed" race.
-        //
-        // SQLite + WAL mode allows multiple connections but serializes
-        // writers. While the ingest path holds its write transaction, no
-        // other connection can write — they wait on busy_timeout (5s) and
-        // error. So we cannot simply open a second connection and INSERT.
-        //
-        // Instead we briefly ROLLBACK the write transaction to
-        // return innerDb to autocommit, commit the other-worker rows
-        // (which now persist regardless of subsequent rollbacks), then
-        // RE-OPEN it with BEGIN IMMEDIATE so the calling
-        // writeEntryDbOnly's COMMIT / ROLLBACK statements still target
-        // a valid scope. The DuplicateIdempotencyError thrown by ingest's
-        // INSERT OR IGNORE then rolls back the freshly-opened (empty)
-        // transaction, leaving worker B's committed rows intact, exactly
-        // as a real two-process race would leave them.
-        innerDb.exec('ROLLBACK');
-        try {
-          injectMemoryRow(
-            innerDb,
-            otherWorkerMemoryId,
-            'Other worker content for the same artifact_ref',
-            'github://acme/demo/issue/42',
-          );
-          innerDb
-            .prepare(
-              `INSERT OR IGNORE INTO github_event_log (idempotency_key, delivery_id, event_name, ingested_at, memory_id) VALUES (?, ?, ?, ?, ?)`,
-            )
-            .run(key, 'd-other-worker', 'issues', new Date().toISOString(), otherWorkerMemoryId);
-        } finally {
-          innerDb.exec('BEGIN IMMEDIATE');
-        }
-      },
-    });
+    const { loser: result, winner } = ingestBehindAnotherWorker(root, { event, rawBody, deliveryId: 'd-this-worker' });
+    const otherWorkerMemoryId = winner.memoryId;
 
+    expect(winner.status).toBe('ingested');
     expect(result.status).toBe('skipped_duplicate');
     expect(result.memoryId).toBe(otherWorkerMemoryId);
 
@@ -427,45 +349,18 @@ describe('ingestEvent', () => {
     expect(kNull).toBe(kUndef);
   });
 
-  it('8. race rollback verification: only the OTHER worker memory remains after DuplicateIdempotencyError', () => {
+  it('8. race rollback verification: only the OTHER worker memory remains after the lost write', () => {
     const payload = makeIssueEvent();
     const rawBody = JSON.stringify(payload);
     const event: IngestEvent = { eventName: 'issues', payload };
-    const otherWorkerMemoryId = 'mem_otherworker02';
 
-    const result = ingestEvent(ctx(root), {
-      event,
-      rawBody,
-      deliveryId: 'd-this-worker',
-      __testInjectBeforeLog: (innerDb, key) => {
-        // Same transaction-cycling pattern as test 5. See test 5 for the
-        // full rationale — short version: WAL serializes cross-connection
-        // writers, so to simulate worker B's committed state we briefly
-        // exit + re-enter the write transaction on the same connection.
-        innerDb.exec('ROLLBACK');
-        try {
-          injectMemoryRow(
-            innerDb,
-            otherWorkerMemoryId,
-            'Other worker content for the same artifact_ref',
-            'github://acme/demo/issue/42',
-          );
-          innerDb
-            .prepare(
-              `INSERT OR IGNORE INTO github_event_log (idempotency_key, delivery_id, event_name, ingested_at, memory_id) VALUES (?, ?, ?, ?, ?)`,
-            )
-            .run(key, 'd-other-worker', 'issues', new Date().toISOString(), otherWorkerMemoryId);
-        } finally {
-          innerDb.exec('BEGIN IMMEDIATE');
-        }
-      },
-    });
+    const { loser: result, winner } = ingestBehindAnotherWorker(root, { event, rawBody, deliveryId: 'd-this-worker' });
+    const otherWorkerMemoryId = winner.memoryId;
 
     expect(result.status).toBe('skipped_duplicate');
 
-    // Exactly ONE memory row matching the artifact_ref — this worker's was
-    // rolled back by the SAVEPOINT, only the other worker's pre-injected
-    // row survives.
+    // Exactly ONE memory row matching the artifact_ref: this worker's was
+    // rolled back with its write scope, only the other worker's row survives.
     const db = openHippoDb(root);
     try {
       // SAFETY: the SELECT explicitly lists id, so the row shape matches.

@@ -32,6 +32,7 @@ import { duplicateKey, storedTextKeys } from './same-text.js';
 import { isReusable } from './memory-quality.js';
 import { errorMessage, log } from './log.js';
 import type { DatabaseSyncLike } from './db.js';
+import { appendAuditEvent } from './audit.js';
 
 // The rows are already copied; a failed background embed only delays vectors, so it warns instead of throwing.
 function logEmbedAllFailure<E>(caller: string, err: E): void {
@@ -61,15 +62,28 @@ export function initGlobal(): void {
   }
 }
 
-/**
- * Copy a local memory entry to the global store.
- * Assigns a new ID (prefixed with 'g_') to avoid collisions.
- * Returns the new global entry.
- */
+type PromoteHook = (db: DatabaseSyncLike, globalId: string) => void;
+
+/** The copy's write hook: the `promote` row when asked for, then the caller's own hook, both in the copy's transaction. */
+function promoteHook(sourceId: string, auditAs: { tenantId: string; actor: string } | undefined, afterWrite: PromoteHook | undefined): PromoteHook | undefined {
+  if (!auditAs) return afterWrite;
+  return (db, globalId) => {
+    appendAuditEvent(db, { tenantId: auditAs.tenantId, actor: auditAs.actor, op: 'promote', targetId: globalId, metadata: { sourceId } });
+    afterWrite?.(db, globalId);
+  };
+}
+
+/** Copies a local memory to the global store and returns the copy, which gets a new `g_` id so it cannot collide. */
 export function promoteToGlobal(
   localRoot: string,
   id: string,
-  opts?: { actor?: string; tenantId?: string; afterWrite?: (db: DatabaseSyncLike, globalId: string) => void },
+  opts?: {
+    actor?: string;
+    tenantId?: string;
+    afterWrite?: (db: DatabaseSyncLike, globalId: string) => void;
+    /** Also writes one `promote` audit row for the copy ({sourceId}), in the copy's own transaction. */
+    auditAs?: { tenantId: string; actor: string };
+  },
 ): MemoryEntry {
   const entry = readEntry(localRoot, id, opts?.tenantId);
   if (!entry) throw new NotFoundError(`Memory not found: ${id}`);
@@ -103,7 +117,7 @@ export function promoteToGlobal(
     origin_project: entry.origin_project ?? fallbackOrigin(localRoot),
   };
 
-  writeEntry(globalRoot, globalEntry, { actor: opts?.actor, afterWrite: opts?.afterWrite });
+  writeEntry(globalRoot, globalEntry, { actor: opts?.actor, afterWrite: promoteHook(id, opts?.auditAs, opts?.afterWrite) });
 
   // Fire-and-forget: embedMemory gates on availability and never rejects.
   void embedMemory(globalRoot, globalEntry);

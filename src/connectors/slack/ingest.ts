@@ -1,7 +1,6 @@
 import { remember, type Context, type RememberOpts } from '../../api.js';
-import { markSlackEventSeen, markSlackEventSeenAt, slackEventMemory, slackEventRecord } from '../../store/connectors/slack.js';
+import { markSlackEventSeen, slackEventRecord } from '../../store/connectors/slack.js';
 import { RejectedValueError } from '../../rejection.js';
-import { DuplicateEventError } from './idempotency.js';
 import { messageToRememberOpts } from './transform.js';
 import type { ChannelMeta } from './scope.js';
 import type { SlackMessageEvent } from './types.js';
@@ -21,22 +20,9 @@ export interface IngestResult {
   memoryId: string | null;
 }
 
-/**
- * Ingest a Slack message into hippo as a kind='raw' memory.
- *
- * - Idempotency-checked via slack_event_log (Slack retries within 1 minute).
- * - The memory write and the slack_event_log mark commit atomically through
- *   `api.remember`'s `afterWrite` hook — a crash between the two cannot
- *   produce a duplicate on the next retry.
- * - The afterWrite hook uses an explicit `INSERT OR IGNORE` + changes-check:
- *   if a concurrent worker beat us to slack_event_log between the pre-check
- *   and the SAVEPOINT, we throw `DuplicateEventError` to roll back the memory
- *   write. The pre-check `hasSeenEvent` stays as a fast path for the common
- *   already-seen case, but the afterWrite throw is what makes idempotency
- *   correct under two-worker concurrency.
- * - Empty-body messages return 'skipped' but still mark seen so a replay
- *   returns 'duplicate' rather than re-running the transform.
- */
+/** Ingests a Slack message as a kind='raw' memory, once per event id: Slack redelivers within a minute.
+ *  The pre-check is only the fast path; the store logs the event in the memory's own transaction, which is what holds when two workers race.
+ *  An empty body is logged with no memory, so its replay skips the transform. */
 export function ingestMessage(ctx: Context, input: IngestInput): IngestResult {
   // Idempotency check: if already seen, return the cached memory_id without
   // re-running the transform or hitting api.remember.
@@ -53,14 +39,9 @@ export function ingestMessage(ctx: Context, input: IngestInput): IngestResult {
     return { status: 'skipped', memoryId: null };
   }
 
-  // Atomic write: the afterWrite callback runs inside writeEntry's SAVEPOINT,
-  // so the memory row and the slack_event_log row commit (or roll back)
-  // together. Slack's 1-minute retry window can no longer produce a duplicate
-  // via the crash-between-handles race.
   try {
     return rememberWithEventLog(ctx, input.eventId, opts);
   } catch (e) {
-    if (e instanceof DuplicateEventError) return lostRaceResult(ctx, input.eventId);
     if (e instanceof RejectedValueError) return rejectedValueResult(ctx, input.eventId);
     throw e;
   }
@@ -74,28 +55,12 @@ function rememberWithEventLog(
   // No `|| 'connector:slack'` fallback: the caller always builds ctx with the connector subject, and with
   // an object-shaped Context.actor an OR-fallback would never fire anyway.
   const result = remember(
-    { ...ctx, store: undefined }, // the event log row commits with the memory on hippo.db's own handle, never through a store
-    {
-      ...opts,
-      untrusted: true,
-      afterWrite: (innerDb, memoryId) => {
-        if (!markSlackEventSeenAt(innerDb, eventId, memoryId)) {
-          // Two-worker race: another writer reserved this event_id between
-          // the pre-check and the write. Throw to roll back the SAVEPOINT
-          // in writeEntry — the memory row gets discarded, idempotency
-          // holds, exactly one memory exists for this event_id.
-          throw new DuplicateEventError(eventId);
-        }
-      },
-    },
+    { ...ctx, store: undefined }, // this function answers at once and its event reads go by root, so the write runs on hippo.db too
+    { ...opts, untrusted: true, event: { connector: 'slack', eventId } },
   );
+  // Another worker logged this event between the pre-check and the write: its memory stands and ours was not stored.
+  if (result.duplicate) return { status: 'skipped_duplicate', memoryId: result.duplicate.memoryId };
   return { status: 'ingested', memoryId: result.id };
-}
-
-function lostRaceResult(ctx: Context, eventId: string): IngestResult {
-  // The other worker's memory row is already committed. Return its id
-  // so the caller behaves identically to the fast-path 'duplicate' branch.
-  return { status: 'skipped_duplicate', memoryId: slackEventMemory(ctx.hippoRoot, eventId) };
 }
 
 function rejectedValueResult(ctx: Context, eventId: string): IngestResult {

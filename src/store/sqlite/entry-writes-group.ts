@@ -48,7 +48,7 @@ export function sqliteEntryWrites(hippoRoot: string): Sync<EntryWrites> {
   };
 }
 
-/** A connector's hook writes on the row's handle inside its write scope, so its throw undoes the row. */
+/** A store-side hook writes on the row's handle inside its write scope, so its throw undoes the row. */
 export function writeEntryAt(hippoRoot: string, { entry, actor }: EntryWrite, afterWrite?: WriteEntryOptions['afterWrite']): void {
   const stamped = stampOriginProject(hippoRoot, entry);
   onHandle(hippoRoot, (db) => writeInOwnTenant(db, stamped, actor, afterWrite), openStore);
@@ -69,7 +69,7 @@ export function applyOutcomeAt(hippoRoot: string, outcome: OutcomeWrite, traceId
   return applied.map((entry) => entry.id);
 }
 
-/** Reach is checked inside the archive's write scope. A connector's hook writes on the same handle inside that scope, so its throw undoes the archive. */
+/** Reach is checked inside the archive's write scope. A store-side hook writes on the same handle inside that scope, so its throw undoes the archive. */
 export function archiveRawAt(hippoRoot: string, archive: RawArchive, afterArchive?: ArchiveOpts['afterArchive']): string {
   const archivedAt = onHandle(hippoRoot, (db) => {
     const at = withWriteScope(db, 'archive_raw_in_reach', () => {
@@ -109,7 +109,8 @@ function auditingRefusal<T>(db: DatabaseSyncLike, actor: string, write: () => T)
   }
 }
 
-function writeInOwnTenant(db: DatabaseSyncLike, entry: MemoryEntry, actor: string, afterWrite?: WriteEntryOptions['afterWrite']): void {
+/** writeEntryAt on the caller's handle, so a sibling group can read on it after the scope has unwound. */
+export function writeInOwnTenant(db: DatabaseSyncLike, entry: MemoryEntry, actor: string, afterWrite?: WriteEntryOptions['afterWrite']): void {
   auditingRefusal(db, actor, () => withWriteScope(db, 'write_entry_in_tenant', () => {
     assertIdInTenant(db, entry);
     writeEntryDbOnly(db, entry, { actor, afterWrite });

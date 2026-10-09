@@ -6,7 +6,7 @@
   "sqliteOnlyRoutes": 2,
   "routesOnLoop": 64,
   "twinFunctions": 0,
-  "sqlOutside": 180,
+  "sqlOutside": 179,
   "txLiterals": 28,
   "openersOutsideByFile": {
     "src/agent-memories/sync.ts": 3,
@@ -78,7 +78,6 @@
     "src/policies.ts": 1,
     "src/project-briefs.ts": 2,
     "src/project-merge.ts": 4,
-    "src/quarantine.ts": 1,
     "src/raw-archive.ts": 5,
     "src/recall-trace.ts": 14,
     "src/reject-flow.ts": 2,
@@ -92,9 +91,7 @@
   "sqliteLocalMethods": [
     "applyOutcome",
     "applyOutcomeToLastRecall",
-    "archiveRaw",
-    "finishLastRecall",
-    "writeEntry"
+    "finishLastRecall"
   ],
   "sqliteOnlyRoutesList": [
     "POST /v1/memories/:id/promote",
