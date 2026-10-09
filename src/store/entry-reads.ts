@@ -294,23 +294,6 @@ export function loadFreshRawMemories(
 }
 
 /**
- * Direct DAG children of a parent summary. Tenant scoped. Returns only rows
- * whose `dag_parent_id` matches `parentId`; does NOT walk recursively.
- */
-export function loadChildrenOf(
-  hippoRoot: string,
-  parentId: string,
-  tenantId?: string,
-): MemoryEntry[] {
-  const db = openStore(hippoRoot);
-  try {
-    return selectChildrenByParent(db, [parentId], tenantId).get(parentId) ?? [];
-  } finally {
-    closeHippoDb(db);
-  }
-}
-
-/**
  * Load all entries from SQLite.
  *
  * When `tenantId` is provided, results are scoped to that tenant. Omitting it

@@ -139,7 +139,7 @@ export function deduplicateLesson(
 }
 
 /**
- * Run a command, streaming stdout/stderr to the terminal in real time.
+ * Run a command in a shell, streaming stderr live; never pass text the caller did not write.
  * Returns: { exitCode, stderr }.
  */
 export function runWatched(command: string): Promise<{ exitCode: number; stderr: string }> {

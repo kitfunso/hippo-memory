@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import * as api from '../src/api.js';
-import { createApiKey, grantScope, listScopeGrants } from '../src/store/auth.js';
+import { createApiKey, grantScope, readApiKeyRecord } from '../src/store/auth.js';
 import { closeHippoDb, openHippoDb } from '../src/db.js';
 import { mapApiError } from '../src/http-util.js';
 import { canReadScope } from '../src/recall-scope.js';
@@ -28,7 +28,7 @@ function withDb<T>(fn: (db: ReturnType<typeof openHippoDb>) => T): T {
 }
 
 function grantsOfB(): string[] {
-  return withDb((db) => listScopeGrants(db, keyB.keyId));
+  return withDb((db) => (readApiKeyRecord(db, keyB.keyId)?.scopes ?? []));
 }
 
 function recallAs(key: string, scope: string): Promise<Response> {

@@ -4,7 +4,9 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { serve, __resetSessionRecallHistoryHttp, sqliteStore, type VectorCandidateSpec, type VectorReads } from '../src/server.js';
+import { serve, __resetSessionRecallHistoryHttp, sqliteStore, type HippoStore, type VectorCandidateSpec, type VectorReads } from '../src/server.js';
+import { hybridSearch } from '../src/search/hybrid.js';
+import { resolveVectorArm } from '../src/search/vector.js';
 import { markSharedStore } from '../src/config.js';
 import { __resetSessionRecallHistoryMcp } from '../src/mcp/server.js';
 import { lastRecalledIds } from '../src/mcp/session-state.js';
@@ -14,7 +16,7 @@ import { embeddingIndexIdentity } from '../src/embeddings.js';
 import { resetLogOnce } from '../src/log.js';
 import type { MemoryEntry } from '../src/memory.js';
 import { resetAllPhysicsState } from '../src/db/physics-state.js';
-import { writeEntry } from '../src/store/entry-writes.js';
+import { writeEntry, writeEntryDbOnly } from '../src/store/entry-writes.js';
 import { initStore } from '../src/store/open.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../src/db/vector-store.js';
 import { CLEARED_ENV, FAKE_NOW, freshStore, normalise, rowsOf, seeded, sendRecall, type Templates } from './_helpers/recall-golden-seed.js';
@@ -251,6 +253,43 @@ describe('the in-memory vector reads answer as sqliteStore does', () => {
     expect(await ids(sqlite, TIE, spec)).toEqual(['mem_v_tie_a']);
     expect(await ids(sqlite, NEAR, { includeSuperseded: false, limit: 2 })).toEqual(['mem_o_00', 'mem_o_01']);
   });
+
+  it('2,000 stored vectors rank the same read as Float32 views and as number[] copies', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'hippo-vector-views-'));
+    const root = join(dir, '.hippo');
+    const PLANTED = 'mem_n_1234';
+    try {
+      initStore(root);
+      writeFileSync(join(root, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai', model: MODEL, apiBaseUrl: embeddings.url } }));
+      // Every row has the same three-token text and day, so BM25 and strength tie and the vectors alone order the result.
+      const rows = Array.from({ length: 2000 }, (_, i) => {
+        const id = `mem_n_${String(i).padStart(4, '0')}`;
+        return seedRow(id, `deploy note ${1000 + i}`, 1, id === PLANTED ? NEAR : hashedVector(`topic ${i} cadence ${(i * 7919) % 613}`));
+      });
+      withDb(root, (db) => {
+        db.exec('BEGIN');
+        for (const r of rows) writeEntryDbOnly(db, r.entry);
+        upsertVectors(db, rows.map((r): [string, readonly number[]] => [r.entry.id, r.vector]), IDENTITY);
+        setMeta(db, EMBEDDING_MODEL_META_KEY, IDENTITY);
+        db.exec('COMMIT');
+      });
+      const entries = rows.map((r) => r.entry);
+      const views = sqliteStore(root);
+      const copies: HippoStore = { ...views, vectorViews: undefined };
+      const ranked = async (store: HippoStore): Promise<[string, number, number][]> =>
+        (await hybridSearch(QUERY, entries, { hippoRoot: root, store, budget: 1_000_000, now: new Date(FAKE_NOW) })).map((r) => [r.entry.id, r.score, r.cosine]);
+
+      const viaViews = await ranked(views);
+      expect(viaViews).toEqual(await ranked(copies));
+      expect(viaViews).toHaveLength(2000);
+      expect(viaViews[0]![0]).toBe(PLANTED);
+      expect(viaViews[0]![2]).toBeGreaterThan(0.999);
+      expect((await resolveVectorArm(QUERY, entries, { hippoRoot: root, store: views })).embeddingIndex[PLANTED]).toBeInstanceOf(Float32Array);
+      expect((await resolveVectorArm(QUERY, entries, { hippoRoot: root, store: copies })).embeddingIndex[PLANTED]).toBeInstanceOf(Array);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 60_000);
 
   it('storedVectors, embeddingIndexState and physicsParticles', async () => {
     const some = ['mem_l_8d', 'mem_l_api', 'mem_l_zero', ORPHAN, 'mem_missing'];

@@ -11,7 +11,7 @@ import {
 import { type ContinuityKey, freshActiveSnapshot, SNAPSHOT_AMBIENT_MAX_AGE_MS } from '../store/sessions.js';
 import type { SessionEvent, TaskSnapshot } from '../store/rows.js';
 import type { SessionHandoff } from '../handoff.js';
-import { estimateTokens } from '../token-ledger.js';
+import { estimateTokens } from '../util/token-text.js';
 import { markRetrieved, type MemoryEntry, COMPACTION_MEMORY_TAG } from '../memory.js';
 import { isWorthSurfacing } from '../memory-quality.js';
 import { getGlobalRoot } from '../shared.js';
