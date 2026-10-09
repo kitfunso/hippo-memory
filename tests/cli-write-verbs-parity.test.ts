@@ -15,17 +15,22 @@ const SPAWN_MS = 60_000;
 // Keys that pick a tenant, a scope, a session or a server for the child, so the developer's shell cannot change a row.
 const DROPPED_ENV = ['HIPPO_TENANT', 'HIPPO_SCOPE', 'GSTACK_SKILL', 'OPENCLAW_SKILL', 'HIPPO_SESSION_ID', 'HIPPO_API_KEY', 'HIPPO_REQUIRE_SERVER', 'HIPPO_STRICT_OWNER'];
 const VOLATILE_COLUMNS = ['created', 'last_retrieved', 'valid_from', 'updated_at'];
-const SALIENCE_ON = { salience: { enabled: true } };
+const SALIENCE_ON: StoreConfig = { salience: { enabled: true } };
 // Node's own notice about node:sqlite carries the child's pid and differs by Node version.
 const NODE_WARNING = /^\(node:\d+\) ExperimentalWarning: .*\r?\n\(Use `node --trace-warnings \.\.\.` .*\r?\n/m;
 const STRENGTH_DECIMALS = 6;
+
+/** The part of `config.json` a case sets. */
+interface StoreConfig {
+  salience: { enabled: boolean };
+}
 
 const bases: string[] = [];
 afterAll(() => {
   for (const base of bases) rmSync(base, { recursive: true, force: true });
 });
 
-type Row = Record<string, unknown>;
+type Row = Record<string, string | number | null>;
 
 function query(root: string, sql: string, ...params: number[]): Row[] {
   const db = openHippoDb(root);
@@ -49,7 +54,7 @@ class Store {
   private readonly transcript: string[] = [];
   private auditMark = 0;
 
-  constructor(config?: object) {
+  constructor(config?: StoreConfig) {
     bases.push(this.base);
     mkdirSync(this.cwd, { recursive: true });
     for (const key of DROPPED_ENV) delete this.env[key];
@@ -59,7 +64,7 @@ class Store {
     this.settle();
   }
 
-  private mergeConfig(config: object): void {
+  private mergeConfig(config: StoreConfig): void {
     const file = join(this.root, 'config.json');
     const held: object = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {};
     writeFileSync(file, JSON.stringify({ ...held, ...config }));
