@@ -10,7 +10,8 @@ import { buildGraphModel, renderGraphHtml, renderGraphCanvas, DEFAULT_VIEW_LIMIT
 import { resolveTenantId } from '../store/tenant.js';
 import { errorMessage, log } from '../util/log.js';
 import { printError } from './output.js';
-import { nonEmptyStringFlag, requireInit, type CliFlags, boolFlag, stringFlag } from './shared.js';
+import { nonEmptyStringFlag, type CliFlags, boolFlag, stringFlag } from './flag-values.js';
+import { requireInit } from './shared.js';
 import { closeObject, foundOrExit, idArgOrExit, listObjects, printLifecycleTail, type ObjectNames } from './object-verbs.js';
 
 const BRIEF: ObjectNames = { cmd: 'brief', noun: 'Project brief', idLabel: 'brief' };

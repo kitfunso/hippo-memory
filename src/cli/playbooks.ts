@@ -6,7 +6,8 @@ import * as policiesModule from '../objects/policies.js';
 import * as skillsModule from '../objects/skills.js';
 import { resolveTenantId } from '../store/tenant.js';
 import { printError } from './output.js';
-import { nonEmptyStringFlag, requireInit, stringFlag, type CliFlags } from './shared.js';
+import { nonEmptyStringFlag, stringFlag, type CliFlags } from './flag-values.js';
+import { requireInit } from './shared.js';
 import { closeObject, foundOrExit, idArgOrExit, listObjects, printLifecycleTail, type ObjectNames } from './object-verbs.js';
 import { errorMessage } from '../util/log.js';
 

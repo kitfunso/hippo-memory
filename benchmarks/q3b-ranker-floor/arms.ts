@@ -1,7 +1,7 @@
 // The three arms: one request shape per ranker of `retrieve()`. Each returns the contents it showed, best first.
 
 import { adminActor, retrieve, type Context } from '../../dist/api/index.js';
-import { engineFlags } from '../../dist/cli/shared.js';
+import { engineFlags } from '../../dist/cli/flag-values.js';
 import { loadConfig } from '../../dist/core/config.js';
 import { getReranker } from '../../dist/rerankers/index.js';
 import { detectScope } from '../../dist/sharing/scope.js';

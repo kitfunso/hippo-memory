@@ -5,7 +5,8 @@ import { envPort, envRequireAuth, envTlsCert, envTlsKey } from '../util/env.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { printError } from './output.js';
-import { stringFlagOrExit, requireInit, type CommandContext, stringFlag } from './shared.js';
+import { stringFlagOrExit, type CommandContext, stringFlag } from './flag-values.js';
+import { requireInit } from './shared.js';
 import { errorMessage } from '../util/log.js';
 
 export async function handleDashboard({ hippoRoot, flags }: CommandContext): Promise<void> {

@@ -5,7 +5,7 @@ import type { PolicyType } from '../store/goals.js';
 import * as api from '../api/index.js';
 import { resolveTenantId } from '../store/tenant.js';
 import { printError } from './output.js';
-import { type CliFlags, boolFlag, flagIsTrue, stringFlag } from './shared.js';
+import { type CliFlags, boolFlag, flagIsTrue, stringFlag } from './flag-values.js';
 
 // ---------------------------------------------------------------------------
 // `hippo goal <push|list|complete|suspend|resume>`

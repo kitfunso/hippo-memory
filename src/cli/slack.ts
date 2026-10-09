@@ -14,7 +14,7 @@ import {
 } from '../connectors/slack/workspaces.js';
 import { printError } from './output.js';
 import { printSlackBackfillUsage, printSlackWorkspacesUsage } from './usage.js';
-import { type CliFlags, stringFlag } from './shared.js';
+import { type CliFlags, stringFlag } from './flag-values.js';
 
 // ---------------------------------------------------------------------------
 // Slack subcommands (`hippo slack backfill` / `hippo slack dlq list`)

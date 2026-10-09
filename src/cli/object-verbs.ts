@@ -1,7 +1,7 @@
 // The status, list, id and not-found paths the typed-object verbs (process, policy, skill, brief, note, decide, incident, predict) share.
 
 import { printError } from './output.js';
-import { parseListLimit, parsePositiveId, stringFlag, type CliFlags } from './shared.js';
+import { parseListLimit, parsePositiveId, stringFlag, type CliFlags } from './flag-values.js';
 
 /** The member of `states` named by `status`, or exit 1 with the message that lists every allowed value. */
 export function requireStatus<S extends string>(status: string, states: ReadonlySet<S>): S {

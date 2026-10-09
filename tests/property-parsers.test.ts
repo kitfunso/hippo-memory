@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { parseArgs } from '../src/cli.js';
 import { VERB_FLAGS, flagKind, type VerbFlags } from '../src/cli/flags.js';
-import { parsePositiveId, type CliFlags } from '../src/cli/shared.js';
+import { parsePositiveId, type CliFlags } from '../src/cli/flag-values.js';
 import { HttpError } from '../src/util/http-util.js';
 import type { KeysetPosition } from '../src/util/keyset.js';
 import { pageOf, parseCursor } from '../src/server/cursor.js';

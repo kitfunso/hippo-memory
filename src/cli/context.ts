@@ -19,26 +19,10 @@ import {
   sessionStartEnvelope,
   toRenderItems,
 } from '../api/prompt-hook.js';
-import {
-  type CliFlags,
-  parseLimitFlag,
-  parseCountFlag,
-  parseBudgetFlag,
-  requireInit,
-  type CommandContext,
-  printActiveTaskSnapshot,
-  printSessionEvents,
-  printHandoff,
-  hostSessionId,
-  captureConsole,
-  hookStoreRoot,
-  hookRuntime,
-  payloadCwdRoot,
-  runHookWithStores,
-  inPilotHoldout,
-  startDeliveryRecorder,
-  flagIsTrue,
-} from './shared.js';
+import { type CliFlags, parseLimitFlag, parseCountFlag, parseBudgetFlag, type CommandContext, flagIsTrue } from './flag-values.js';
+import { requireInit } from './shared.js';
+import { printActiveTaskSnapshot, printSessionEvents, printHandoff, captureConsole } from './print.js';
+import { hostSessionId, hookStoreRoot, hookRuntime, payloadCwdRoot, runHookWithStores, inPilotHoldout, startDeliveryRecorder } from './hook-runtime.js';
 
 export async function cmdContext(
   hippoRoot: string,

@@ -50,22 +50,8 @@ import type { DeliveryRecorder } from '../store/delivery-recorder.js';
 import { printError } from './output.js';
 import { cmdLastSleep } from './last-sleep.js';
 import { readCompactResumePayload } from './compact-resume-payload.js';
-import {
-  type CliFlags,
-  type CommandContext,
-  logSessionEndImport,
-  appendSessionEndCloseLog,
-  resetHookInjection,
-  hookStoreRoot,
-  hookRuntime,
-  payloadCwdRoot,
-  runHookWithStores,
-  inPilotHoldout,
-  startDeliveryRecorder,
-  boolFlag,
-  flagIsTrue,
-  stringFlag,
-} from './shared.js';
+import { type CliFlags, type CommandContext, boolFlag, flagIsTrue, stringFlag } from './flag-values.js';
+import { logSessionEndImport, appendSessionEndCloseLog, resetHookInjection, hookStoreRoot, hookRuntime, payloadCwdRoot, runHookWithStores, inPilotHoldout, startDeliveryRecorder } from './hook-runtime.js';
 import type { JsonValue } from '../util/json.js';
 
 /**

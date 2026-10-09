@@ -14,14 +14,9 @@ import { wmPush, wmRead, wmClear, wmFlush } from '../store/working-memory.js';
 import { collectHandoffEvidence } from '../capture/handoff-evidence.js';
 import type { SessionEvent, TaskSnapshot } from '../store/rows.js';
 import { printError } from './output.js';
-import {
-  requireInit,
-  printActiveTaskSnapshot,
-  printSessionEvents,
-  printHandoff,
-  type CliFlags,
-  boolFlag,
-} from './shared.js';
+import { requireInit } from './shared.js';
+import { printActiveTaskSnapshot, printSessionEvents, printHandoff } from './print.js';
+import { type CliFlags, boolFlag } from './flag-values.js';
 
 const ISO_DATETIME_CHARS = 19;
 
