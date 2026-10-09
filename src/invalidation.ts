@@ -2,7 +2,6 @@ import { writeEntryOn } from './store/entry-writes.js';
 import { chunked, loadAllEntries, loadEntriesByIds, selectEntriesByIds } from './store/entry-reads.js';
 import { openStore } from './store/open.js';
 import { openHippoDb, closeHippoDb } from './db.js';
-import { goodOutcomeTimesAt } from './audit.js';
 import { CHURN_STALE_TAG, type MemoryEntry } from './memory.js';
 import {
   GitReadError,
@@ -346,7 +345,14 @@ function resolveTrackedPath(
 function queryConfirmedAt(hippoRoot: string, tenantId: string): Map<string, string> {
   const db = openHippoDb(hippoRoot);
   try {
-    return goodOutcomeTimesAt(db, tenantId);
+    // SAFETY: the SELECT list above is exactly target_id and ts; no other shape reaches this cast.
+    const rows = db.prepare(
+      `SELECT target_id, MAX(ts) AS ts FROM audit_log
+       WHERE tenant_id = ? AND op = 'outcome' AND target_id IS NOT NULL
+         AND json_extract(metadata_json, '$.good') = 1
+       GROUP BY target_id`,
+    ).all(tenantId) as { target_id: string; ts: string }[];
+    return new Map(rows.map((r) => [r.target_id, r.ts]));
   } finally {
     closeHippoDb(db);
   }

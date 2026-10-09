@@ -127,17 +127,6 @@ export function recordTokenUse(db: DatabaseSyncLike, use: TokenUse): void {
   db.prepare(`DELETE FROM token_ledger WHERE ts < ?`).run(cutoff);
 }
 
-/** The `block_hash` of a session's first `pilot` `arm` row, null when the row has none, undefined when there is no row; `tenantId` limits it to one tenant. */
-export function firstArmHashAt(db: DatabaseSyncLike, sessionId: string, tenantId?: string): string | null | undefined {
-  const params = tenantId === undefined ? [sessionId] : [sessionId, tenantId];
-  // SAFETY: the SELECT names exactly this one column.
-  const row = db.prepare(
-    `SELECT block_hash FROM token_ledger WHERE session_id = ?${tenantId === undefined ? '' : ' AND tenant_id = ?'}
-     AND surface = 'pilot' AND event = 'arm' ORDER BY id LIMIT 1`,
-  ).get(...params) as { block_hash: string | null } | undefined;
-  return row === undefined ? undefined : row.block_hash;
-}
-
 /** What a session last sent on a surface, for {@link lastSentState}. */
 export interface LastSent {
   /** {@link blockHash} of the last injected block. */
