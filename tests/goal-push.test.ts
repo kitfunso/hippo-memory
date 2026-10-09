@@ -51,6 +51,7 @@ describe('pushGoal + getActiveGoals', () => {
   function goalRowCount(): number {
     const db = openHippoDb(root);
     try {
+      // SAFETY: the SELECT projects exactly one column, c, as a COUNT(*).
       return (db.prepare('SELECT COUNT(*) AS c FROM goal_stack').get() as { c: number }).c;
     } finally {
       closeHippoDb(db);
