@@ -72,6 +72,33 @@ async function waitFor(check: () => boolean, ms: number): Promise<void> {
   while (!check() && Date.now() < deadline) await new Promise((ok) => setTimeout(ok, 20));
 }
 
+const HEARTBEAT_MS = 50;
+
+/** Fakes only the heartbeat's interval, so a test fires each tick by hand and counts live intervals; fetch and the polls keep real time. */
+function holdHeartbeat(): void {
+  process.env.MCP_SSE_HEARTBEAT_MS = String(HEARTBEAT_MS);
+  vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+}
+
+const tick = (count = 1): void => { vi.advanceTimersByTime(HEARTBEAT_MS * count); };
+
+/** Counts its calls and holds the answer to call number `held` until the test releases it. */
+function heldResolver(held: number) {
+  let calls = 0;
+  let release!: () => void;
+  const answer = new Promise<ResolvedBearer>((ok) => { release = () => ok(GOOD); });
+  const resolver: AuthResolver = (t) => (t !== EXT ? null : ++calls === held ? answer : GOOD);
+  return { resolver, calls: () => calls, release };
+}
+
+/** Settles once the server sees the next request's socket close; arm it before that request is sent. */
+function nextRequestClosed(): Promise<void> {
+  return new Promise((ok) => handle!.server!.once('request', (_req, res: ServerResponse) => res.once('close', () => ok())));
+}
+
+// Nothing between a resolver answer and the handler's next move waits on I/O or a timer, so one macrotask turn sees it done.
+const settle = (): Promise<void> => new Promise((ok) => setImmediate(ok));
+
 type Loose = Partial<Record<keyof ResolvedBearer, string | Array<string | number | null>>>;
 // SAFETY: tests pass deliberately malformed fields to prove the core rejects or downgrades them.
 const tokenResolver = (over: Loose = {}): AuthResolver =>
@@ -105,6 +132,7 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
+  vi.useRealTimers();
   await handle?.stop();
   handle = undefined;
   vi.restoreAllMocks();
@@ -525,59 +553,57 @@ describe('auth resolver stream', () => {
   );
 
   it('skips a heartbeat tick while a check is still in flight', async () => {
-    process.env.MCP_SSE_HEARTBEAT_MS = '50';
-    let calls = 0;
-    await start(async (t) => {
-      if (t !== EXT) return null;
-      calls++;
-      await new Promise((ok) => setTimeout(ok, 400));
-      return GOOD;
-    });
+    const auth = heldResolver(2);
+    await start(auth.resolver);
+    holdHeartbeat();
     const ac = new AbortController();
-    const res = await fetch(`${handle!.url}/mcp/stream`, {
-      headers: { accept: 'text/event-stream', authorization: `Bearer ${EXT}` },
-      signal: ac.signal,
-    });
+    const res = await openStream(EXT, ac.signal);
     expect(res.status).toBe(200);
-    const afterOpen = calls;
-    await new Promise((ok) => setTimeout(ok, 500));
+    const text = collect(res);
+    const pings = (): number => text().split(': ping\n\n').length - 1;
+
+    tick();
+    await waitFor(() => auth.calls() === 2, 3000);
+    expect(auth.calls()).toBe(2);
+    tick(5);
+    await settle();
+    expect(auth.calls()).toBe(2);
+
+    // The answer lands, so the next tick checks again.
+    auth.release();
+    await waitFor(() => pings() === 2, 3000);
+    expect(pings()).toBe(2);
+    tick();
+    await waitFor(() => auth.calls() === 3, 3000);
     ac.abort();
-    expect(calls - afterOpen).toBeLessThanOrEqual(2);
-  }, 10_000);
+    expect(auth.calls()).toBe(3);
+  });
 
   it('starts no heartbeat when the client leaves while the resolver is still answering', async () => {
-    process.env.MCP_SSE_HEARTBEAT_MS = '50';
-    let calls = 0;
-    await start(async (t) => {
-      if (t !== EXT) return null;
-      calls++;
-      await new Promise((ok) => setTimeout(ok, 300));
-      return GOOD;
-    });
+    const auth = heldResolver(1);
+    await start(auth.resolver);
+    holdHeartbeat();
+    const closed = nextRequestClosed();
     const ac = new AbortController();
-    const opened = fetch(`${handle!.url}/mcp/stream`, {
-      headers: { accept: 'text/event-stream', authorization: `Bearer ${EXT}` },
-      signal: ac.signal,
-    }).catch(() => undefined);
-    await new Promise((ok) => setTimeout(ok, 100));
+    const opened = openStream(EXT, ac.signal).catch(() => undefined);
+    await waitFor(() => auth.calls() === 1, 3000);
+    expect(auth.calls()).toBe(1);
+
     ac.abort();
     await opened;
-    await new Promise((ok) => setTimeout(ok, 500));
-    const settled = calls;
-    await new Promise((ok) => setTimeout(ok, 700));
-    expect(settled).toBe(1);
-    expect(calls).toBe(settled);
-  }, 10_000);
+    await closed;
+    auth.release();
+    await settle();
+
+    expect(vi.getTimerCount()).toBe(0);
+    tick(5);
+    await settle();
+    expect(auth.calls()).toBe(1);
+  });
 
   it('writes nothing after close when a heartbeat check was already in flight', async () => {
-    process.env.MCP_SSE_HEARTBEAT_MS = '50';
-    let calls = 0;
-    await start(async (t) => {
-      if (t !== EXT) return null;
-      calls++;
-      if (calls > 1) await new Promise((ok) => setTimeout(ok, 300));
-      return GOOD;
-    });
+    const auth = heldResolver(2);
+    await start(auth.resolver);
     const pings: string[] = [];
     const realWrite = ServerResponse.prototype.write;
     // SAFETY: the spy forwards every argument unchanged; it only records ping writes.
@@ -585,20 +611,24 @@ describe('auth resolver stream', () => {
       if (String(args[0]) === ': ping\n\n') pings.push('ping');
       return realWrite.apply(this, args);
     });
+    holdHeartbeat();
+    const closed = nextRequestClosed();
     const ac = new AbortController();
-    const res = await fetch(`${handle!.url}/mcp/stream`, {
-      headers: { accept: 'text/event-stream', authorization: `Bearer ${EXT}` },
-      signal: ac.signal,
-    });
+    const res = await openStream(EXT, ac.signal);
     expect(res.status).toBe(200);
-    await new Promise((ok) => setTimeout(ok, 120));
-    expect(calls).toBeGreaterThanOrEqual(2);
+
+    tick();
+    await waitFor(() => auth.calls() === 2, 3000);
+    expect(auth.calls()).toBe(2);
     ac.abort();
-    await new Promise((ok) => setTimeout(ok, 80));
-    const atClose = pings.length;
-    await new Promise((ok) => setTimeout(ok, 600));
-    expect(pings.length).toBe(atClose);
-  }, 10_000);
+    await closed;
+    expect(pings).toEqual(['ping']);
+    auth.release();
+    await settle();
+
+    expect(pings).toEqual(['ping']);
+    expect(vi.getTimerCount()).toBe(0);
+  });
 });
 
 describe('package surface', () => {

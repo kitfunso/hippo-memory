@@ -1,6 +1,8 @@
 /** src/env.ts readers: timeouts refuse negatives, HIPPO_REQUIRE_SERVER reads like the other switches, ids and keys come back trimmed. */
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  envAnchoringOff,
+  envAvailabilityOff,
   envClaudeCodeSessionId,
   envHealthProbeMs,
   envHippoSessionId,
@@ -13,6 +15,7 @@ import {
 } from '../src/env.js';
 
 const NAMES = [
+  'HIPPO_ANCHORING', 'HIPPO_AVAILABILITY',
   'MCP_SSE_HEARTBEAT_MS', 'MCP_SSE_MAX_AGE_SEC', 'HIPPO_LLM_RERANKER_TIMEOUT_MS', 'HIPPO_REQUIRE_SERVER',
   'HIPPO_SESSION_ID', 'CLAUDE_CODE_SESSION_ID', 'HIPPO_MODEL_CACHE', 'TYPESAFE_API_KEY', 'HIPPO_HEALTH_PROBE_MS',
 ];
@@ -50,6 +53,22 @@ describe('HIPPO_REQUIRE_SERVER', () => {
     delete process.env.HIPPO_REQUIRE_SERVER;
     expect(envRequireServer()).toBe(false);
   });
+});
+
+describe('HIPPO_ANCHORING and HIPPO_AVAILABILITY', () => {
+  it.each([['HIPPO_ANCHORING', envAnchoringOff], ['HIPPO_AVAILABILITY', envAvailabilityOff]] as const)(
+    '%s switches the hint off only for the exact value off',
+    (name, off) => {
+      delete process.env[name];
+      expect(off()).toBe(false);
+      for (const v of ['', '0', 'false', 'OFF', 'on']) {
+        process.env[name] = v;
+        expect(off(), `${name}=${v}`).toBe(false);
+      }
+      process.env[name] = 'off';
+      expect(off()).toBe(true);
+    },
+  );
 });
 
 describe('trimmed readers', () => {

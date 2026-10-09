@@ -4,14 +4,14 @@ import { confidenceFacets } from '../memory.js';
 import { isInitialized } from '../store/open.js';
 import { loadSearchEntries } from '../store/search-rows.js';
 import { loadIndex } from '../store/index-and-stats.js';
-import { DEFAULT_RECALL_BUDGET, type SearchResult } from '../search/types.js';
+import { DEFAULT_RECALL_BUDGET, type SearchResult } from '../core/search-types.js';
 import { loadConfig } from '../config.js';
 import { dropHeldCopies } from '../same-text.js';
 import { detectScope } from '../scope.js';
 import { getGlobalRoot } from '../shared.js';
 import * as api from '../api.js';
 import { resolveTenantId } from '../tenant.js';
-import { rankRecall } from '../recall-pipeline.js';
+import type { RankRecallResult } from '../recall-pipeline.js';
 import { printedTokens } from '../context-render.js';
 import { printError } from './output.js';
 import {
@@ -39,6 +39,9 @@ function noteScopeHidden(hippoRoot: string, globalRoot: string | undefined, quer
     printError(`[note] ${hidden} candidate${hidden === 1 ? '' : 's'} hidden by recall scope policy (pass an explicit --scope to inspect).`);
   }
 }
+
+/** Where the read-only ranking lands; a `let` the callback assigned would read as never-assigned after the await. */
+interface InspectedSlot { rank?: RankRecallResult }
 
 export async function cmdExplain(
   hippoRoot: string,
@@ -68,14 +71,24 @@ export async function cmdExplain(
     printedTokens(recallEntryText(r, query, false, explainGlobalOn && !explainIndex.entries[r.entry.id]));
   const entryBudget = Math.max(0, budget - printedTokens(recallHeading(budget, budget, query)));
 
-  const rank = await rankRecall(
-    { hippoRoot, globalRoot: explainGlobalOn ? globalRoot : undefined, tenantId },
+  const slot: InspectedSlot = {};
+  await api.retrieve(
+    { hippoRoot, tenantId, actor: api.adminActor('cli') },
     {
-      query, budget: entryBudget, cost, limit, includeSuperseded, asOf,
-      explicitScope, activeScope: explicitScope || detectScope(),
-      search: { ...engine, multihop: false, explain: true },
+      query,
+      cliCore: {
+        rank: {
+          budget: entryBudget, cost, limit, includeSuperseded, asOf,
+          explicitScope, activeScope: explicitScope || detectScope(),
+          search: { ...engine, multihop: false, explain: true },
+        },
+        sources: { globalRoot: explainGlobalOn ? globalRoot : undefined },
+        inspect: (ranking) => { slot.rank = ranking; },
+      },
     },
   );
+  const rank = slot.rank;
+  if (!rank) throw new Error('explain ranked but inspected nothing');
   const hasGlobal = rank.globalEntries.length > 0;
   const modeUsed: 'physics' | 'searchBothHybrid' | 'hybrid' = engine.usePhysics && !hasGlobal
     ? 'physics'

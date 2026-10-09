@@ -2,7 +2,7 @@
 // writes and no direct output. Callers own flag parsing, printing, budget fitting and persistence.
 
 import { evalNow } from './ablation.js';
-import { oneCopyPerMemory } from './api.js';
+import { oneCopyPerMemory } from './api/context-select.js';
 import { compareEntryIdentity } from './compare.js';
 import { closeHippoDb, openHippoDb } from './db.js';
 import { isEmbeddingAvailable } from './local-embedding.js';
@@ -17,7 +17,7 @@ import type { RerankerFn } from './rerankers/types.js';
 import { currentEntries } from './search/as-of.js';
 import { hybridSearch } from './search/hybrid.js';
 import { physicsSearch } from './search/physics-search.js';
-import type { RerankStep, ResultCost, SearchResult } from './search/types.js';
+import type { RerankStep, ResultCost, SearchResult } from './core/search-types.js';
 import { searchBothHybrid } from './shared.js';
 import { loadRecallSearchEntries, recallScopeFilter } from './store/search-rows.js';
 import { textOverlap, tokenize as tokenizeQuery } from './tokenize.js';

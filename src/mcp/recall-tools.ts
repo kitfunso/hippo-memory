@@ -2,7 +2,7 @@
 
 import * as path from 'path';
 import { fitBudget } from '../search/finalize.js';
-import type { SearchResult } from '../search/types.js';
+import type { SearchResult } from '../core/search-types.js';
 import { dropHeldCopies, duplicateKey, storedTextKeys } from '../same-text.js';
 import { retrieve as apiRetrieve, drillDown as apiDrillDown, assemble as apiAssemble, getContext as apiGetContext, buildSuppressionSummary, type Context as ApiContext, type RecallOpts } from '../api.js';
 import { autoDetectContext } from '../context-auto.js';

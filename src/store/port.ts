@@ -280,6 +280,10 @@ export interface HippoStore extends Partial<StoreGroups> {
   close(): Promise<void>;
 }
 
+/** `T` with each method answering its value instead of a Promise of it, groups included: the port as a synchronous store has it. */
+export type Sync<T> = T extends (...args: infer A) => Promise<infer R> ? (...args: A) => R
+  : T extends object ? { [K in keyof T]: Sync<T[K]> } : T;
+
 export interface ContinuityBlock {
   activeSnapshot: TaskSnapshot | null;
   sessionHandoff: SessionHandoff | null;

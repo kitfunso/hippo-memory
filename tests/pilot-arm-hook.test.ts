@@ -165,7 +165,7 @@ describe('the per-prompt hook', () => {
     expect(arms()).toHaveLength(1);
   });
 
-  it('a stored row wins over a later rate change', () => {
+  it('rate 0 turns the pilot off even for a stored holdout session, and rate 10000 silences it again', () => {
     run(HOOK_ARGS, prompt('keep'));
     setRate(0);
     expect(run(HOOK_ARGS, prompt('keep')).stdout).toContain('rollback plan');

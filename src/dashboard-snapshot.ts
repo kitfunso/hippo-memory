@@ -10,8 +10,9 @@ import type { MemoryConflict } from './store/rows.js';
 import { closeHippoDb, getHippoDbPath, openHippoDbReadOnly, type DatabaseSyncLike } from './db.js';
 import { storedVectorIds } from './vector-store.js';
 import type { Band, ChipCounts, Layer, Overview, ProjectKind, ProjectSummary, ScatterGrid, ScatterPoints } from './dashboard-types.js';
+import { DAY_MS } from './util/time.js';
 
-export const DAY_MS = 86_400_000;
+export { DAY_MS };
 export const LAYERS: readonly Layer[] = ['buffer', 'episodic', 'semantic', 'trace'];
 // Wire order of `Band`, and the order the mockup sorts bands in.
 export const BANDS: readonly Band[] = ['pinned', 'strong', 'fading', 'atRisk'];

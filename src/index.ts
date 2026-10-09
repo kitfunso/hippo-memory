@@ -14,7 +14,7 @@ export { hybridSearch } from './search/hybrid.js';
 export { physicsSearch } from './search/physics-search.js';
 export { explainMatch, MatchExplanation } from './search/explain.js';
 export { detectTemporalDirection, temporalBoost, computeTemporalRange } from './search/temporal.js';
-export { SearchResult } from './search/types.js';
+export { SearchResult } from './core/search-types.js';
 export { estimateTokens } from './token-ledger.js';
 export { tokenize, textOverlap } from './tokenize.js';
 export { markRetrieved } from './memory.js';

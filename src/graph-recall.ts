@@ -37,7 +37,7 @@
  */
 import { loadEntriesByIds } from './store/entry-reads.js';
 import type { MemoryEntry } from './memory.js';
-import { DEFAULT_RECALL_BUDGET, type ResultCost, type SearchResult } from './search/types.js';
+import { DEFAULT_RECALL_BUDGET, type ResultCost, type SearchResult } from './core/search-types.js';
 import { estimateTokens } from './token-ledger.js';
 import { compareEntryIdentity } from './compare.js';
 import { loadEntitiesByMemoryId, loadEntitiesByIds, loadNeighborRelations } from './graph/read.js';

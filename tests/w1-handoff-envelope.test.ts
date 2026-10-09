@@ -1,7 +1,7 @@
 // W1 handoff envelope (trajectories/01M2BQTM4AGFVMYY7G2XV5G7WY/plan.md), tests 1-6.
 // Real temp SQLite stores throughout; no mocked DB.
 import { describe, it, expect, beforeEach, afterEach, beforeAll } from 'vitest';
-import { mkdtempSync, rmSync, readFileSync, existsSync, statSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, rmSync, existsSync, statSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync, execSync } from 'node:child_process';
@@ -469,15 +469,6 @@ describe('test 8: scope filtering on the continuity read paths', () => {
     expect(result.activeSnapshot).toBeUndefined();
     expect(result.recentEvents).toHaveLength(1);
     expect(result.recentEvents?.[0].content).toBe('public event');
-  });
-});
-
-describe('test 9: helper swap leaves no local passesScopeFilter clone', () => {
-  it('src/api.ts, the CLI recall path and src/mcp/server.ts declare no local passesScopeFilter const', () => {
-    for (const rel of ['api.ts', 'cli.ts', 'cli/recall.ts', 'mcp/server.ts']) {
-      const content = readFileSync(join(__dirname, '..', 'src', rel), 'utf8');
-      expect(content).not.toMatch(/const passesScopeFilter\b/);
-    }
   });
 });
 

@@ -38,8 +38,7 @@ export async function handleRecallMemories({ req, res, opts, query }: RouteReque
   const ring = sessionRing('http', ctx.tenantId, sessionId);
   if (ring) noteRecall(ring, q, result.results[0]?.id ?? null, result.anchoringHint?.memoryId);
 
-  // Each recall surface counts its own hits; api.recall is no chokepoint,
-  // since the CLI never calls it and MCP shows the user a different band.
+  // HTTP counts the rows it returns here; `retrieve` cannot count for every ranker, since MCP shows a different band and counts none.
   await storeFor(ctx).bumpRecallStats(result.results.length);
 
   // Continuity payloads should never be cached. The caller is asking for

@@ -10,7 +10,7 @@ import { loadAllEntries } from '../src/store/entry-reads.js';
 import { Layer, type MemoryEntry} from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { estimateTokens } from '../src/token-ledger.js';
-import type { SearchResult } from '../src/search/types.js';
+import type { SearchResult } from '../src/core/search-types.js';
 import { insertEntity, insertRelation } from '../src/graph/write.js';
 import { graphExpandRecall } from '../src/graph-recall.js';
 

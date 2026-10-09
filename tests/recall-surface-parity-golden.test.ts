@@ -181,6 +181,37 @@ describe('recall surface parity goldens', () => {
     expect(got).toMatchSnapshot();
   }, 60_000);
 
+  // D7: the audit rows are written first, so a recall the store cannot audit records nothing; only the CLI still answers.
+  it('a recall whose audit row the store refuses leaves no hint row, strengthen, trace or count', async () => {
+    const refused = <T>(call: (s: Store) => Promise<T>) => onFreshStore('local', async (s) => {
+      const before = rowsOf(s.root);
+      const db = openHippoDb(s.root);
+      try {
+        db.exec("CREATE TRIGGER refuse_recall_audit BEFORE INSERT ON audit_log WHEN NEW.op = 'recall' BEGIN SELECT RAISE(ABORT, 'recall audit refused'); END");
+      } finally {
+        closeHippoDb(db);
+      }
+      const out = await call(s);
+      return { out, before, after: rowsOf(s.root), globalAudit: auditOps(s.globalRoot) };
+    });
+    const cli = await refused((s) => viaCli(s, { query: 'deploy' }));
+    const http = await refused(async (s) => (await httpCalls(s, [{ query: 'deploy' }]))[0]!);
+    const mcp = await refused((s) => callTool(s.root, 'hippo_recall', { query: 'deploy' }).then(() => 'answered', (err: Error) => err.message));
+
+    for (const got of [cli, http, mcp]) {
+      expect({ ...got.after, ledger: [] }).toEqual({ ...got.before, ledger: [] });
+      expect(got.globalAudit).toEqual([]);
+    }
+    expect(cli.out.output.status).toBe(0);
+    expect(cli.out.output.stdout).toContain('mem_p_goal');
+    expect(cli.out.output.stderr).toContain('audit write failed');
+    // The ledger books text that was sent: the CLI printed its block, HTTP sent no memory.
+    expect(cli.after.ledger).toHaveLength(cli.before.ledger.length + 1);
+    expect(http.out.output.status).toBe(500);
+    expect(http.after.ledger).toEqual(http.before.ledger);
+    expect(mcp.out).toBe('recall audit refused');
+  }, 60_000);
+
   // D2: candidate windows on a store with 230 matching rows.
   // A store per surface: a recall rewrites the rows it returns, and that write time breaks the next surface's ties.
   it('candidate window per surface', async () => {

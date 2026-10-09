@@ -5,9 +5,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import {
-  PRE_COMPACT_NEXT_STEP_CAP,
   PRE_COMPACT_SUMMARY_CAP,
-  PRE_COMPACT_TASK_CAP,
   WORKING_STATE_CAPS,
   transcriptWorkingState,
   truncateKeepNewest,
@@ -33,8 +31,6 @@ function git(cwd: string, ...args: string[]): void {
 
 describe('WORKING_STATE_CAPS', () => {
   it('is the longest each derived field can be, the summary counting its trim marker', () => {
-    expect(WORKING_STATE_CAPS.task).toBe(PRE_COMPACT_TASK_CAP);
-    expect(WORKING_STATE_CAPS.next_step).toBe(PRE_COMPACT_NEXT_STEP_CAP);
     expect(truncateKeepNewest('x'.repeat(PRE_COMPACT_SUMMARY_CAP * 3), PRE_COMPACT_SUMMARY_CAP)).toHaveLength(WORKING_STATE_CAPS.summary);
   });
 
@@ -58,10 +54,11 @@ describe('collectHandoffEvidence', () => {
     const repo = tmp();
     git(repo, 'init', '-q');
     git(repo, 'commit', '-q', '--allow-empty', '-m', 'init');
-    const clean = collectHandoffEvidence(repo, 'pass');
+    // A wide cap: under the 2 s default a loaded machine turns these reads into nulls.
+    const clean = collectHandoffEvidence(repo, 'pass', { timeoutMs: 20_000 });
     expect(clean).toEqual({ gitRef: expect.stringMatching(/^[0-9a-f]{40}$/), dirtyTree: false, testStatus: 'pass' });
     fs.writeFileSync(path.join(repo, 'new.txt'), 'x');
-    expect(collectHandoffEvidence(repo, 'unknown').dirtyTree).toBe(true);
+    expect(collectHandoffEvidence(repo, 'unknown', { timeoutMs: 20_000 }).dirtyTree).toBe(true);
   });
 
   it('gives null fields outside a repo instead of throwing', () => {
@@ -70,7 +67,7 @@ describe('collectHandoffEvidence', () => {
     expect(collectHandoffEvidence(dir, 'unknown')).toEqual({ gitRef: null, dirtyTree: null, testStatus: 'unknown' });
   });
 
-  it('gives up on a slow git call at timeoutMs instead of the 2 s default', () => {
+  it('caps a slow git call at timeoutMs, not at the 2 s default', () => {
     const repo = tmp();
     git(repo, 'init', '-q');
     git(repo, 'commit', '-q', '--allow-empty', '-m', 'init');
@@ -78,9 +75,8 @@ describe('collectHandoffEvidence', () => {
     const hook = path.join(tmp(), 'slow-fsmonitor.sh');
     fs.writeFileSync(hook, '#!/bin/sh\nsleep 3\n', { mode: 0o755 });
     git(repo, 'config', 'core.fsmonitor', hook.replace(/\\/g, '/'));
-    const started = Date.now();
-    const evidence = collectHandoffEvidence(repo, 'unknown', { timeoutMs: 300 });
-    expect(Date.now() - started).toBeLessThan(1500);
-    expect(evidence).toEqual({ gitRef: expect.stringMatching(/^[0-9a-f]{40}$/), dirtyTree: null, testStatus: 'unknown' });
+    // The hook outlasts the default, so a tree state can only come from the wider cap; no clock is read.
+    expect(collectHandoffEvidence(repo, 'unknown', { timeoutMs: 20_000 }).dirtyTree).toBe(false);
+    expect(collectHandoffEvidence(repo, 'unknown', { timeoutMs: 300 }).dirtyTree).toBeNull();
   });
 });

@@ -1,7 +1,12 @@
 /** Failure log: every failed tool call the capture-error hook sees, stored or not. */
 import { ConflictError } from './api-errors.js';
-import type { CaptureErrorOutcome, RoutineRule } from './capture/failure-reading.js';
 import type { DatabaseSyncLike } from './db.js';
+
+/** Why a failure was not stored, or `stored`. */
+export type CaptureErrorOutcome = 'stored' | 'duplicate' | 'skipped-interrupt' | 'skipped-routine' | 'skipped-invalid';
+
+/** Which routine check skipped a failure; the log keeps it so declines can be told apart from empty searches. */
+export type RoutineRule = 'declined' | 'os-permission' | 'no-match' | 'search-tool' | 'quiet-exit';
 
 /** Rows older than this are pruned on write, which also bounds how far back a repeat can be found. */
 export const FAILURE_LOG_RETENTION_DAYS = 90;

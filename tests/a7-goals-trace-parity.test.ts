@@ -17,7 +17,7 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { computeGoalStackBoost, pushGoal } from '../src/goals.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import type { MemoryEntry } from '../src/memory.js';
-import type { RerankStep } from '../src/search/types.js';
+import type { RerankStep } from '../src/core/search-types.js';
 
 describe('A7 computeGoalStackBoost trace parity (side-channel)', () => {
   let hippoRoot: string;

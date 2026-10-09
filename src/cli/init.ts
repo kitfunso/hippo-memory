@@ -5,6 +5,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import { installJsonHooks } from '../hooks/json-hooks.js';
+import { writeFileAtomic } from '../util/atomic-write.js';
 import { isCodexPresent } from '../hooks/shared.js';
 import { isCodexWrapperInstalled } from '../hooks/codex-wrapper.js';
 import { installOpencodePlugin } from '../hooks/opencode.js';
@@ -16,7 +17,7 @@ import { emptyReport, mergeReports } from '../agent-memories/report.js';
 import { getGlobalRoot, initGlobal } from '../shared.js';
 import { registerWorkspace } from '../scheduler.js';
 import { printAgentImport, installCodexMemoryHooks, setupDailySchedule, learnFromRepo, skipLearnOnSharedStore, warnClaudeSettingsUnusable } from './shared.js';
-import { HOOK_MARKERS, HOOKS, hippoBlock } from './hook-blocks.js';
+import { HOOK_MARKERS, HOOKS, hippoBlock } from '../hooks/hook-blocks.js';
 
 function scanForGitRepos(rootDir: string, maxDepth = 2): string[] {
   const repos: string[] = [];
@@ -233,7 +234,7 @@ function patchInstructionFiles(dir: string, agents: readonly string[]): void {
     }
     const block = `${HOOK_MARKERS.start}\n${hookDef.content}\n${HOOK_MARKERS.end}`;
     const sep = existing.endsWith('\n') ? '\n' : '\n\n';
-    fs.writeFileSync(targetPath, existing + sep + block + '\n', 'utf8');
+    writeFileAtomic(targetPath, existing + sep + block + '\n');
     console.log(`   Auto-installed ${hook} hook in ${hookDef.file}`);
   }
 }
@@ -248,7 +249,7 @@ function refreshShippedBlock(filePath: string, text: string, hook: string): void
     console.log(`   Left the edited hippo block in ${name} as is; \`hippo hook install ${hook}\` replaces it.`);
     return;
   }
-  fs.writeFileSync(filePath, `${text.slice(0, start)}${eol}${HOOKS[owner].content.replace(/\n/g, eol)}${eol}${text.slice(end)}`, 'utf8');
+  writeFileAtomic(filePath, `${text.slice(0, start)}${eol}${HOOKS[owner].content.replace(/\n/g, eol)}${eol}${text.slice(end)}`);
   console.log(`   Refreshed the ${owner} hippo block in ${name}`);
 }
 

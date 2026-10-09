@@ -3,8 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import * as client from '../src/client.js';
-import { cmdRemember } from '../src/cli/remember.js';
+import { cmdRemember, handleRemember } from '../src/cli/remember.js';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
 import { _resetSharedStoreCacheForTests } from '../src/config.js';
@@ -39,18 +38,21 @@ async function directRemember(store: string, text: string): Promise<string> {
   return row?.id ?? '';
 }
 
-/** The body the thin path posts (cli/remember.ts:515-522): no `project`. */
+/** `hippo remember` with a server up: the CLI itself decides to route and builds the body, so the test fails if it stops routing. */
 async function thinRemember(store: string, text: string): Promise<string> {
   handle = await serve({ hippoRoot: store, port: 0 });
-  const { id } = await client.remember(handle.url, undefined, {
-    content: text,
-    kind: undefined,
-    scope: undefined,
-    owner: undefined,
-    artifactRef: undefined,
-    tags: ['path:proj'],
-  });
-  return id;
+  const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+  let printed = '';
+  try {
+    await handleRemember({ hippoRoot: store, args: [text], flags: {} });
+  } finally {
+    printed = log.mock.calls.map((c) => String(c[0])).join(' ');
+    log.mockRestore();
+  }
+  expect(printed).toMatch(/Remembered \[.*\] \(via http/);
+  const row = loadAllEntries(store).find((e) => e.content === text);
+  expect(row).toBeDefined();
+  return row?.id ?? '';
 }
 
 async function bothOrigins(store: string): Promise<ReadonlyArray<string | null | undefined>> {

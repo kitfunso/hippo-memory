@@ -9,7 +9,7 @@ import { BadRequestError, NotFoundError } from './api-errors.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { MemoryEntry, generateId, COMPACTION_MEMORY_TAG } from './memory.js';
-import { AGENT_MEMORY_SOURCE_PREFIX, AGENT_MEMORY_TAGS } from './agent-memories/tools.js';
+import { AGENT_MEMORY_SOURCE_PREFIX, AGENT_MEMORY_TAGS } from './core/agent-memory-tools.js';
 import { initStore } from './store/open.js';
 import { writeEntry } from './store/entry-writes.js';
 import { loadAllEntries, readEntry } from './store/entry-reads.js';
@@ -20,7 +20,7 @@ import { isPersonalScope, passesScopeFilterForRecall, passesCliRecallScopeFilter
 import { search } from './search/bm25-search.js';
 import { hybridSearch } from './search/hybrid.js';
 import { fitBudget } from './search/finalize.js';
-import { DEFAULT_LOCAL_BUMP, DEFAULT_RECALL_BUDGET, type SearchResult, type ResultCost } from './search/types.js';
+import { DEFAULT_LOCAL_BUMP, DEFAULT_RECALL_BUDGET, type SearchResult, type ResultCost } from './core/search-types.js';
 import type { HybridVectorCandidates } from './search/vector.js';
 import { evalNow } from './ablation.js';
 import { fallbackOrigin, classifyOriginProject, resolveGlobalRootDir, resolveProjectIdentity } from './project-identity.js';

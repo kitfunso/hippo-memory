@@ -1,6 +1,6 @@
 // Text the MCP recall and context tools print, and what each printed piece costs the token budget.
 
-import type { SearchResult } from '../search/types.js';
+import type { SearchResult } from '../core/search-types.js';
 import type { SessionEvent, TaskSnapshot } from '../store/rows.js';
 import { confidenceLabel } from '../memory.js';
 import type { ContextCost, ContinuityBlock, RecallResult, RecallResultItem } from '../api.js';

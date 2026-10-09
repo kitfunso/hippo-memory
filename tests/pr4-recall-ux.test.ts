@@ -9,7 +9,7 @@ import { describe, it, expect } from 'vitest';
 import { search } from '../src/search/bm25-search.js';
 import { hybridSearch } from '../src/search/hybrid.js';
 import { explainMatch } from '../src/search/explain.js';
-import type { SearchResult } from '../src/search/types.js';
+import type { SearchResult } from '../src/core/search-types.js';
 import { tokenize } from '../src/tokenize.js';
 import { resolveConfidence, Layer} from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';

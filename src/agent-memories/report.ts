@@ -1,5 +1,5 @@
 // What a sync did, per tool, and the one line a command prints about it (plan design 11).
-import { AGENT_MEMORY_TOOLS, type ToolId } from './tools.js';
+import { AGENT_MEMORY_TOOLS, type ToolId } from '../core/agent-memory-tools.js';
 import type { Scope } from './types.js';
 
 export interface Tally {

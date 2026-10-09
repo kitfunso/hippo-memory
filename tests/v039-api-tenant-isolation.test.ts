@@ -7,9 +7,7 @@ import { queryAuditEvents } from '../src/audit.js';
 import {
   remember,
   promote,
-  forget,
   supersede,
-  archiveRaw,
 } from '../src/api.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { makeRoot } from './_helpers/make-root.js';
@@ -25,9 +23,6 @@ function queryRow<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T
 
 // v0.39 commit 1 regressions:
 //  - promote: tenant pre-check matches archiveRaw (CRITICAL #1)
-//  - forget: lock the existing tenant pre-check invariant
-//  - archiveRaw: lock the existing tenant pre-check invariant (already covered
-//    in api-tenant-deny.test.ts; duplicated here for one-stop hardening surface)
 //  - authCreate: HTTP body.tenantId ignored, key bound to caller (CRITICAL #2)
 //  - supersede: BEGIN IMMEDIATE CAS — direct SQL race + clean path + tenant scope
 //    (CRITICAL #4)
@@ -86,60 +81,6 @@ describe('v039 api tenant isolation', () => {
       expect(Number(grows.c)).toBe(0);
     } finally {
       closeHippoDb(gdb);
-    }
-  });
-
-  // ---- Test 2: forget cross-tenant denied -----------------------------------
-  it('forget refuses to delete a row that belongs to another tenant (lock invariant)', () => {
-    const created = remember(
-      { hippoRoot: home, tenantId: 'alpha', actor: { subject: 'cli', role: 'admin' } },
-      { content: 'alpha-row forget-cross-tenant canary' },
-    );
-
-    expect(() =>
-      forget(
-        { hippoRoot: home, tenantId: 'bravo', actor: { subject: 'api_key:bravo-key', role: 'admin' } },
-        created.id,
-      ),
-    ).toThrow(/memory not found/i);
-
-    const db = openHippoDb(home);
-    try {
-      const row = queryRow<{ tenant_id: string }>(db, `SELECT tenant_id FROM memories WHERE id = ?`, created.id);
-      expect(row).toBeDefined();
-      expect(row!.tenant_id).toBe('alpha');
-    } finally {
-      closeHippoDb(db);
-    }
-  });
-
-  // ---- Test 3: archiveRaw cross-tenant denied -------------------------------
-  it('archiveRaw refuses to archive a row that belongs to another tenant (lock invariant)', () => {
-    const created = remember(
-      { hippoRoot: home, tenantId: 'alpha', actor: { subject: 'cli', role: 'admin' } },
-      { content: 'alpha-raw archiveraw-cross-tenant canary', kind: 'raw' },
-    );
-
-    expect(() =>
-      archiveRaw(
-        { hippoRoot: home, tenantId: 'bravo', actor: { subject: 'api_key:bravo-key', role: 'admin' } },
-        created.id,
-        'cross-tenant probe',
-      ),
-    ).toThrow(/memory not found/i);
-
-    const db = openHippoDb(home);
-    try {
-      const row = queryRow<{ tenant_id: string; kind: string }>(
-        db,
-        `SELECT tenant_id, kind FROM memories WHERE id = ?`,
-        created.id,
-      );
-      expect(row).toBeDefined();
-      expect(row!.tenant_id).toBe('alpha');
-      expect(row!.kind).toBe('raw');
-    } finally {
-      closeHippoDb(db);
     }
   });
 

@@ -1,8 +1,8 @@
 // One store handle per store for each request (HTTP call, MCP tool call, scoped CLI command), opened lazily and closed with it.
 import * as path from 'node:path';
-import { AsyncLocalStorage } from 'node:async_hooks';
 import type { DatabaseSyncLike } from './sqlite.js';
 import { connectHippoDb, getHippoDbPath } from './connect.js';
+import { currentRequestId, requestScopes, type RequestScope } from '../util/request-scope.js';
 
 export interface RequestStoresOptions {
   /** Lock wait of every open in the scope that does not pass its own. */
@@ -30,8 +30,10 @@ function trackLive(scope: RequestStores): void {
 }
 
 /** The handles one request opened, keyed by resolved store path and lock wait. */
-export class RequestStores {
+export class RequestStores implements RequestScope {
   readonly busyWaitMs: number | undefined;
+  // Taken from the scope this one opens inside, so the request's log lines keep their id.
+  readonly requestId: string | undefined = currentRequestId();
   readonly #failFastWhenBusy: boolean;
   readonly #handles = new Map<string, DatabaseSyncLike>();
   #closed = false;
@@ -80,14 +82,12 @@ export class RequestStores {
   }
 }
 
-const scopes = new AsyncLocalStorage<RequestStores>();
-
 /** Runs `fn` in a request scope whose handles close when `fn` settles; inside an open scope `fn` joins it and `opts` is ignored. */
 export async function runWithRequestStores<T>(fn: () => T | Promise<T>, opts?: RequestStoresOptions): Promise<T> {
-  const outer = scopes.getStore();
+  const outer = currentRequestStores();
   if (outer && !outer.closed) return fn();
   const stores = new RequestStores(opts);
-  return scopes.run(stores, async () => {
+  return requestScopes.run(stores, async () => {
     try {
       return await fn();
     } finally {
@@ -96,14 +96,27 @@ export async function runWithRequestStores<T>(fn: () => T | Promise<T>, opts?: R
   });
 }
 
-/** The scope this code runs in, if any. A closed scope still answers: its `get` falls through to a plain open. */
-export function currentRequestStores(): RequestStores | undefined {
-  return scopes.getStore();
+/** runWithRequestStores for a synchronous `fn`, so a batch called from outside any request still opens each store once. */
+export function withRequestStoresSync<T>(fn: () => T): T {
+  const outer = currentRequestStores();
+  if (outer && !outer.closed) return fn();
+  const stores = new RequestStores();
+  try {
+    return requestScopes.run(stores, fn);
+  } finally {
+    stores.close();
+  }
 }
 
-/** Runs `fn` outside every scope, for a connection that must outlive the request that happens to open it. */
+/** The scope this code runs in, if any. A closed scope still answers: its `get` falls through to a plain open. */
+export function currentRequestStores(): RequestStores | undefined {
+  const scope = requestScopes.getStore();
+  return scope instanceof RequestStores ? scope : undefined;
+}
+
+/** Runs `fn` outside every store scope, for a connection that must outlive the request that happens to open it; its log lines keep the request's id. */
 export function outsideRequestStores<T>(fn: () => T): T {
-  return scopes.exit(fn);
+  return requestScopes.run({ requestId: currentRequestId() }, fn);
 }
 
 /** Whether a scope owns `db` and will close it itself. */

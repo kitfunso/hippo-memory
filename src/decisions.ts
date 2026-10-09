@@ -27,12 +27,15 @@
 import { BadRequestError, ConflictError, NotFoundError } from './api-errors.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from './db.js';
 import { writeEntry } from './store/entry-writes.js';
+import { onHandle } from './store/open.js';
 import { assertTenantId } from './tenant.js';
-import { markGraphDirty, removeGraphEntitiesForObject } from './graph/write.js';
+import { markGraphDirty } from './graph/write.js';
 import { createMemory, Layer } from './memory.js';
 import { appendAuditEvent } from './audit.js';
 import { objectHalfLifeDays } from './half-life-migration.js';
-import { keysetAfter, type KeysetPosition } from './keyset.js';
+import type { KeysetPosition } from './keyset.js';
+import type { ObjectDescriptor } from './objects/descriptor.js';
+import { assertObjectStatus, closeObjectOn, dropClosedObjectFromGraph, loadObjectByIdOn, loadObjectsOn } from './objects/lifecycle.js';
 
 // ---------------------------------------------------------------------------
 // Domain types
@@ -119,6 +122,21 @@ const DECISION_COLS = `
   id, memory_id, tenant_id, decision_text, context, status,
   superseded_by, superseded_at, closed_at, created_at
 `;
+
+const DECISION: ObjectDescriptor<Decision, DecisionRow> = {
+  table: 'decisions',
+  cols: DECISION_COLS,
+  label: 'decision',
+  plural: 'decisions',
+  fn: { get: 'loadDecisionById', close: 'closeDecision', list: 'loadDecisions' },
+  states: VALID_DECISION_STATES,
+  closableFrom: ['active'],
+  ops: { close: 'decision_close' },
+  idKey: 'decision_id',
+  graphType: 'decision',
+  listFilters: {},
+  rowTo: rowToDecision,
+};
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -297,9 +315,7 @@ export function saveDecision(
 
 /**
  * Close (retire) an active decision with no successor. Updates the decisions
- * row only; the memory mirror is not mutated. CAS guard mirrors closePrediction
- * (predictions.ts): WHERE status='active'; 0 changes distinguishes not-found
- * from not-active so callers surface the right error.
+ * row only; the memory mirror is not mutated.
  */
 export function closeDecision(
   hippoRoot: string,
@@ -307,68 +323,13 @@ export function closeDecision(
   id: number,
   actor: string = 'cli',
 ): Decision {
-  assertTenantId('closeDecision', tenantId);
+  assertTenantId(DECISION.fn.close, tenantId);
   const now = new Date().toISOString();
-  const db = openHippoDb(hippoRoot);
-  try {
-    db.exec('BEGIN IMMEDIATE');
-    try {
-      const updateResult = db.prepare(`
-        UPDATE decisions
-        SET status = 'closed', closed_at = ?
-        WHERE id = ? AND tenant_id = ? AND status = 'active'
-      `).run(now, id, tenantId);
-
-      if (updateResult.changes === 0) {
-        // SAFETY: row shape matches the single `status` column named in the SELECT above.
-        const existing = db.prepare(
-          `SELECT status FROM decisions WHERE id = ? AND tenant_id = ?`,
-        ).get(id, tenantId) as { status: string } | undefined;
-        if (!existing) {
-          throw new NotFoundError(`closeDecision: decision ${id} not found for tenant ${tenantId}`);
-        }
-        throw new ConflictError(
-          `closeDecision: decision ${id} is not active (status='${existing.status}'); only active decisions can be closed.`,
-        );
-      }
-
-      // SAFETY: row's shape matches the columns named in DECISION_COLS above.
-      const row = db.prepare(`SELECT ${DECISION_COLS} FROM decisions WHERE id = ? AND tenant_id = ?`)
-        .get(id, tenantId) as DecisionRow | undefined;
-      if (!row) throw new NotFoundError(`closeDecision: decision ${id} not found after UPDATE`);
-
-      appendAuditEvent(db, {
-        tenantId,
-        actor,
-        op: 'decision_close',
-        targetId: String(id),
-        metadata: { decision_id: id },
-      });
-
-      db.exec('COMMIT');
-      const closed = rowToDecision(row);
-      // After COMMIT (write lock released), before the finally closes `db`.
-      // Closing removes the object from the graph. Remove its rows DIRECTLY (deterministic),
-      // not only via an enqueued rebuild whose queue item is lost if the mirror is later
-      // forgotten (the queue row cascade-deletes with the memory), which would leave the closed
-      // object stale and could block that forget. Still enqueue when a mirror exists
-      // so a concurrent rebuild re-derives consistently (harmless if it also runs).
-      removeGraphEntitiesForObject(hippoRoot, tenantId, 'decision', closed.id);
-      if (closed.memoryId) {
-        markGraphDirty(hippoRoot, tenantId, closed.memoryId);
-      }
-      return closed;
-    } catch (e) {
-      try {
-        db.exec('ROLLBACK');
-      } catch {
-        // Ignore rollback failures — the throw below is what matters.
-      }
-      throw e;
-    }
-  } finally {
-    closeHippoDb(db);
-  }
+  return onHandle(hippoRoot, (db) => {
+    const closed = closeObjectOn(db, DECISION, tenantId, id, { actor, now });
+    dropClosedObjectFromGraph(hippoRoot, DECISION, tenantId, closed);
+    return closed;
+  });
 }
 
 export function loadDecisionById(
@@ -376,16 +337,8 @@ export function loadDecisionById(
   tenantId: string,
   id: number,
 ): Decision | null {
-  assertTenantId('loadDecisionById', tenantId);
-  const db = openHippoDb(hippoRoot);
-  try {
-    // SAFETY: row's shape matches the columns named in DECISION_COLS above.
-    const row = db.prepare(`SELECT ${DECISION_COLS} FROM decisions WHERE id = ? AND tenant_id = ?`)
-      .get(id, tenantId) as DecisionRow | undefined;
-    return row ? rowToDecision(row) : null;
-  } finally {
-    closeHippoDb(db);
-  }
+  assertTenantId(DECISION.fn.get, tenantId);
+  return onHandle(hippoRoot, (db) => loadObjectByIdOn(db, DECISION, tenantId, id));
 }
 
 export function loadDecisions(
@@ -393,38 +346,9 @@ export function loadDecisions(
   tenantId: string,
   opts: ListDecisionsOpts = {},
 ): Decision[] {
-  assertTenantId('loadDecisions', tenantId);
-  const limit = opts.limit ?? 100;
-  const after = keysetAfter('created_at', 'id', opts.after);
-  const db = openHippoDb(hippoRoot);
-  try {
-    let rows: DecisionRow[];
-    if (opts.status) {
-      if (!VALID_DECISION_STATES.has(opts.status)) {
-        throw new BadRequestError(
-          `loadDecisions: status must be one of ${Array.from(VALID_DECISION_STATES).join('|')}; got ${opts.status}`,
-        );
-      }
-      // SAFETY: rows' shape matches the columns named in DECISION_COLS above.
-      rows = db.prepare(`
-        SELECT ${DECISION_COLS} FROM decisions
-        WHERE tenant_id = ? AND status = ?${after.sql}
-        ORDER BY created_at DESC, id DESC
-        LIMIT ?
-      `).all(tenantId, opts.status, ...after.params, limit) as DecisionRow[];
-    } else {
-      // SAFETY: rows' shape matches the columns named in DECISION_COLS above.
-      rows = db.prepare(`
-        SELECT ${DECISION_COLS} FROM decisions
-        WHERE tenant_id = ?${after.sql}
-        ORDER BY created_at DESC, id DESC
-        LIMIT ?
-      `).all(tenantId, ...after.params, limit) as DecisionRow[];
-    }
-    return rows.map(rowToDecision);
-  } finally {
-    closeHippoDb(db);
-  }
+  assertTenantId(DECISION.fn.list, tenantId);
+  assertObjectStatus(DECISION, opts.status);
+  return onHandle(hippoRoot, (db) => loadObjectsOn(db, DECISION, tenantId, opts));
 }
 
 export function loadActiveDecisions(

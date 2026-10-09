@@ -17,7 +17,7 @@
  * Real HTTP server (serve port:0), per-test isolated local + global stores.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { Context } from '../src/api.js';
 import { remember } from '../src/api.js';
@@ -49,6 +49,7 @@ describe('POST /v1/sleep', () => {
   });
 
   afterEach(async () => {
+    vi.unstubAllEnvs();
     await handle.stop();
     if (origHippoHome === undefined) {
       delete process.env.HIPPO_HOME;
@@ -182,5 +183,44 @@ describe('POST /v1/sleep', () => {
     });
     expect(res.status).toBe(403);
     expect((await jsonAs<{ error: string }>(res)).error).toMatch(/loopback-only/);
+  });
+
+  const postSleep = (): Promise<Response> =>
+    fetch(`${handle.url}/v1/sleep`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+
+  it('answers GET /health while a sleep is still running', async () => {
+    remember({ hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } }, { content: 'a memory for the sleep to write' });
+    // The sleep needs the write lock held here, so it cannot finish until the health answer has released it.
+    const lock = openHippoDb(home);
+    lock.exec('BEGIN IMMEDIATE');
+    const order: string[] = [];
+    // Probed once the server has the sleep request, so the probe cannot be answered ahead of it.
+    const health = new Promise<Response>((resolve, reject) => {
+      handle.server?.once('request', () => fetch(`${handle.url}/health`).then(resolve, reject));
+    });
+    const slept = postSleep().then((res) => { order.push('sleep'); return res; });
+    const healthStatus = (await health).status;
+    order.push('health');
+    lock.exec('ROLLBACK');
+    closeHippoDb(lock);
+    expect([healthStatus, (await slept).status, order]).toEqual([200, 200, ['health', 'sleep']]);
+  });
+
+  it('still answers 503 with Retry-After when another connection holds the write lock', async () => {
+    remember({ hippoRoot: home, tenantId: 'default', actor: { subject: 'localhost:cli', role: 'admin' } }, { content: 'a memory for the sleep to write' });
+    const lock = openHippoDb(home);
+    lock.exec('BEGIN IMMEDIATE');
+    const busy = await postSleep();
+    lock.exec('ROLLBACK');
+    closeHippoDb(lock);
+    expect([busy.status, busy.headers.get('retry-after')]).toEqual([503, '1']);
+  });
+
+  it('stops a sleep at HIPPO_SLEEP_TIMEOUT_MS with 504 and leaves the store usable', async () => {
+    vi.stubEnv('HIPPO_SLEEP_TIMEOUT_MS', '1');
+    const stopped = await postSleep();
+    expect([stopped.status, (await jsonAs<{ error: string }>(stopped)).error]).toEqual([504, expect.stringContaining('did not finish within 1 ms')]);
+    vi.unstubAllEnvs();
+    expect((await postSleep()).status).toBe(200);
   });
 });

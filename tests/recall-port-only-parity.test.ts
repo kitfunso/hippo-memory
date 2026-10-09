@@ -10,7 +10,7 @@ import { _resetAblationCacheForTests } from '../src/ablation.js';
 import type { RecallResult } from '../src/api.js';
 import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import {
-  CLEARED_ENV, FAKE_NOW, freshStore, normalise, RECALL_BRANCHES, RECALL_INPUTS, rowsOf, SESSION, seedPortBranches, seedTemplates, TENANT, type Templates,
+  CLEARED_ENV, FAKE_NOW, freshStore, normalise, RECALL_BRANCHES, RECALL_INPUTS, rowsOf, SESSION, seedPortBranches, sendRecall, seedTemplates, TENANT, type Templates,
 } from './_helpers/recall-golden-seed.js';
 import { portOnlyStore } from './_helpers/port-only-store.js';
 
@@ -65,18 +65,7 @@ function branchReached(via: Surface, b: (typeof RECALL_BRANCHES)[number]): Scena
   };
 }
 
-async function send(url: string, call: Call): Promise<Reply> {
-  if (call.via === 'http') {
-    const params = new URLSearchParams();
-    for (const [k, v] of Object.entries(call.args)) params.set(k === 'query' ? 'q' : k, String(v));
-    const res = await fetch(`${url}/v1/memories?${params.toString()}`);
-    return { status: res.status, body: await res.json() };
-  }
-  const rpc = { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_recall', arguments: call.args } };
-  const headers = { 'content-type': 'application/json', 'x-hippo-project': PROJECT };
-  const res = await fetch(`${url}/mcp`, { method: 'POST', headers, body: JSON.stringify(rpc) });
-  return { status: res.status, body: await res.json() };
-}
+const send = (url: string, call: Call): Promise<Reply> => sendRecall(url, call.via, call.args, PROJECT);
 
 interface Pass { replies: Reply[]; rows: { local: ReturnType<typeof rowsOf>; global: ReturnType<typeof rowsOf> } }
 

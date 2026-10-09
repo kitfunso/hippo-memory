@@ -1,4 +1,5 @@
-// How hippo replaces settings.json when another program holds it, it is read-only, the rename is refused, or the temp file cannot be written.
+// How hippo replaces settings.json when another program holds it, it is read-only, the rename is refused, or the temp file cannot be written;
+// and that the other config files it rewrites go through the same replace.
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import fs from 'node:fs';
@@ -6,7 +7,10 @@ import { syncBuiltinESMExports } from 'node:module';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { escapeRegex } from '../src/escape.js';
+import { installCopilot } from '../src/hooks/copilot.js';
 import { installJsonHooks, resolveJsonHookPaths } from '../src/hooks/json-hooks.js';
+import { installOpencodePlugin } from '../src/hooks/opencode.js';
+import { registerWorkspace, workspaceRegistryPath } from '../src/scheduler.js';
 import { withFakeHome, type FakeHomeHandle } from './_helpers/with-fake-home.js';
 
 const WINDOWS = process.platform === 'win32';
@@ -178,5 +182,62 @@ describe.skipIf(ROOT)('a read-only settings.json', () => {
 
     expect(fs.existsSync(tmp)).toBe(false);
     expect(JSON.parse(fs.readFileSync(file, 'utf8')).hooks.SessionEnd).toHaveLength(1);
+  });
+});
+
+interface Rewrite {
+  readonly file: string;
+  readonly rewrite: () => void;
+}
+
+function seedFile(file: string, text: string): string {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, text, 'utf8');
+  return file;
+}
+
+const OTHER_CONFIG_FILES: ReadonlyArray<readonly [string, (home: string) => Rewrite]> = [
+  ['opencode.json', (home) => ({
+    file: seedFile(path.join(home, '.config', 'opencode', 'opencode.json'), JSON.stringify({
+      theme: 'dark',
+      hooks: { SessionEnd: [{ hooks: [{ type: 'command', command: 'hippo session-end --log-file foo', timeout: 5 }] }] },
+    }, null, 2)),
+    rewrite: () => { installOpencodePlugin(); },
+  })],
+  ['the workspace registry', (home) => {
+    const globalRoot = path.join(home, '.hippo');
+    registerWorkspace(globalRoot, path.join(home, 'repo-a'));
+    return { file: workspaceRegistryPath(globalRoot), rewrite: () => { registerWorkspace(globalRoot, path.join(home, 'repo-b')); } };
+  }],
+  ['copilot-instructions.md', (home) => {
+    // A first install leaves the hooks and MCP files current, so the rerun's only write is the instructions file.
+    fs.mkdirSync(path.join(home, '.copilot'));
+    const file = seedFile(installCopilot().paths.instructions, '# House rules\n\nAlways run the linter before a commit.\n');
+    return { file, rewrite: () => { installCopilot(); } };
+  }],
+];
+
+describe('a write that dies halfway, as on a full disk', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    syncBuiltinESMExports();
+  });
+
+  it.each(OTHER_CONFIG_FILES)('%s keeps its old bytes and gains no temp file', (_name, arrange) => {
+    const { file, rewrite } = arrange(env.home);
+    const before = fs.readFileSync(file, 'utf8');
+    // Stubbed because no real fault stops a write midway on demand: each write lands its first half, then fails.
+    const write = fs.writeFileSync.bind(fs);
+    vi.spyOn(fs, 'writeFileSync').mockImplementation((dest, data, options) => {
+      const text = String(data);
+      write(dest, text.slice(0, Math.ceil(text.length / 2)), options);
+      throw Object.assign(new Error('ENOSPC: no space left on device, write'), { code: 'ENOSPC' });
+    });
+    syncBuiltinESMExports();
+
+    expect(rewrite).toThrow(/ENOSPC/);
+
+    expect(fs.readFileSync(file, 'utf8')).toBe(before);
+    expect(fs.readdirSync(path.dirname(file)).filter((name) => name.includes('.tmp'))).toEqual([]);
   });
 });

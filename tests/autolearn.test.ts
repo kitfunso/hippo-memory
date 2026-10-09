@@ -399,31 +399,6 @@ describe('DF4 write-path gate: MCP hippo_learn tool', () => {
 // deduplicateLesson
 // ---------------------------------------------------------------------------
 
-// ---------------------------------------------------------------------------
-// HOOKS config (verified by reading source)
-// ---------------------------------------------------------------------------
-
-describe('HOOKS config', () => {
-  const cliSource = ['cli.ts', path.join('cli', 'shared.ts'), path.join('cli', 'hook-blocks.ts')].map((f) => fs.readFileSync(path.join(__dirname, '..', 'src', f), 'utf8')).join('\n');
-
-  it('openclaw hook targets AGENTS.md', () => {
-    // The openclaw entry in HOOKS should use AGENTS.md, not a skill file
-    expect(cliSource).toContain("'openclaw': {");
-    expect(cliSource).toContain("file: 'AGENTS.md',");
-    // Ensure it does NOT point to the old skill path
-    expect(cliSource).not.toContain('.openclaw/skills/hippo/SKILL.md');
-  });
-
-  it('openclaw hook content includes key commands', () => {
-    expect(cliSource).toContain('hippo context --auto --budget 1500');
-    expect(cliSource).toContain('hippo learn --git');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// deduplicateLesson
-// ---------------------------------------------------------------------------
-
 describe('git repo detection', () => {
   it('treats an empty recent history window as a real git repo, not a missing repo', () => {
     const repoDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-gitlog-'));

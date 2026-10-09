@@ -10,7 +10,6 @@ import {
   calculateRewardFactor,
   confidenceFacets,
   confidenceLabel,
-  computeSchemaFit,
   Layer,
   ConfidenceLevel,
   type MemoryEntry,
@@ -18,6 +17,7 @@ import {
 import { isInitialized } from '../store/open.js';
 import { writeEntry } from '../store/entry-writes.js';
 import { readEntry, loadAllEntries } from '../store/entry-reads.js';
+import { loadNewestEntries, schemaFitInStore } from '../store/candidates.js';
 import { updateStats } from '../store/index-and-stats.js';
 import { listMemoryConflicts } from '../store/conflicts.js';
 import { RejectedValueError } from '../rejection.js';
@@ -130,8 +130,7 @@ export async function cmdRemember(
   const confidence = rememberConfidence(flags);
 
   // Schema fit needs the store, which the routed request has no access to, so it stays here.
-  const existing = loadAllEntries(targetRoot, resolveTenantId({}));
-  const schemaFit = computeSchemaFit(text, requestedTags, existing);
+  const schemaFit = schemaFitInStore(targetRoot, resolveTenantId({}), text, requestedTags);
   const envelope = parseRememberEnvelope(flags);
 
   // Stamp tenant_id from env (HIPPO_TENANT) so recall isolation can filter on this row; unauthenticated CLI gets 'default'.
@@ -153,7 +152,7 @@ export async function cmdRemember(
     baseHalfLifeDays: rememberConfig.defaultHalfLifeDays,
   });
 
-  if (!passesSalienceGate(entry, text, existing, rememberConfig, flags)) return;
+  if (!passesSalienceGate(entry, text, targetRoot, rememberConfig, flags)) return;
 
   writeEntry(targetRoot, entry);
   updateStats(targetRoot, { remembered: 1 });
@@ -167,12 +166,17 @@ export async function cmdRemember(
 function passesSalienceGate(
   entry: MemoryEntry,
   text: string,
-  existing: MemoryEntry[],
+  targetRoot: string,
   rememberConfig: HippoConfig,
   flags: CliFlags,
 ): boolean {
   if (!rememberConfig.salience.enabled || Boolean(flags['pin']) || Boolean(flags['force'])) return true;
-  const salienceResult = computeSalience(text, entry.tags, existing, {
+  // computeSalience compares against the last `recentWindow` rows only; below 1 its slice takes every row, so that case still loads them all.
+  const window = Math.trunc(rememberConfig.salience.recentWindow);
+  const recent = Number.isSafeInteger(window) && window >= 1
+    ? loadNewestEntries(targetRoot, entry.tenantId, window)
+    : loadAllEntries(targetRoot, entry.tenantId);
+  const salienceResult = computeSalience(text, entry.tags, recent, {
     recentWindow: rememberConfig.salience.recentWindow,
     overlapThreshold: rememberConfig.salience.overlapThreshold,
     minContentLength: rememberConfig.salience.minContentLength,

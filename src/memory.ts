@@ -12,7 +12,7 @@ import {
   isRecallBoostAblated,
   evalNow,
 } from './ablation.js';
-import { AGENT_MEMORY_TOOLS, toolSourcePrefix } from './agent-memories/tools.js';
+import { AGENT_MEMORY_TOOLS, toolSourcePrefix } from './core/agent-memory-tools.js';
 
 export enum Layer {
   Buffer = 'buffer',
@@ -656,62 +656,63 @@ export function computeSchemaFit(
   tags: string[],
   existingEntries: MemoryEntry[]
 ): number {
-  if (existingEntries.length === 0) return 0.5; // no schema yet, neutral
-
-  // Build tag frequency map across all existing entries
-  const tagFreq = new Map<string, number>();
+  const tagCounts = new Map<string, number>();
   for (const entry of existingEntries) {
     for (const tag of entry.tags) {
-      tagFreq.set(tag, (tagFreq.get(tag) ?? 0) + 1);
+      tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
     }
   }
+  return schemaFitFrom(content, tags, { rows: existingEntries.length, tagCounts, contents: existingEntries.map((e) => e.content) });
+}
 
+/** What schema fit reads from a set of memories, so a store can answer without loading its rows. */
+export interface SchemaFitSource {
+  readonly rows: number;
+  /** How many times each tag appears across the set. */
+  readonly tagCounts: ReadonlyMap<string, number>;
+  /** Each memory's text; the walk stops once more matches cannot move the score. */
+  readonly contents: Iterable<string>;
+}
+
+function significantTokens(text: string): Set<string> {
+  return new Set(text.toLowerCase().replace(/[^\w\s]/g, ' ').split(/\s+/).filter((t) => t.length > 3));
+}
+
+/** computeSchemaFit against `source`, for a caller that holds counts and texts but no rows. */
+export function schemaFitFrom(content: string, tags: readonly string[], source: SchemaFitSource): number {
+  const N = source.rows;
+  if (N === 0) return 0.5; // no schema yet, neutral
+  const tagFreq = source.tagCounts;
   if (tags.length === 0 && tagFreq.size === 0) return 0.5;
 
-  // Tag overlap: IDF-weighted Jaccard
-  // Shared rare tags matter more than shared common tags
+  // Tag overlap, weighted so a shared rare tag counts for more than a shared common one.
   let weightedOverlap = 0;
   let totalWeight = 0;
-  const N = existingEntries.length;
-
+  const maxIdf = Math.log(N + 1) + 1;
   for (const tag of tags) {
     const freq = tagFreq.get(tag) ?? 0;
-    // IDF-weighted: rare shared tags score higher
-    const maxIdf = Math.log(N + 1) + 1;
-
-    if (freq > 0) {
-      const idf = Math.log(N / freq) + 1;
-      weightedOverlap += idf;
-    }
+    if (freq > 0) weightedOverlap += Math.log(N / freq) + 1;
     totalWeight += maxIdf;
   }
-
-  // Scale so that matching half the tags at average IDF gives ~0.5
+  // Scaled so that matching half the tags at average weight gives about 0.5.
   const tagScore = totalWeight > 0 ? Math.min(1, (weightedOverlap / totalWeight) * 2) : 0;
 
-  // Content overlap: check how many existing entries share significant tokens
-  const newTokens = new Set(
-    content.toLowerCase().replace(/[^\w\s]/g, ' ').split(/\s+/).filter((t) => t.length > 3)
-  );
-
+  const newTokens = significantTokens(content);
   if (newTokens.size === 0) return Math.min(1, Math.max(0, tagScore));
 
+  // The content score is capped at 1, which this many matching memories reach.
+  const enough = Math.max(5, N * 0.1);
   let contentMatches = 0;
-  for (const entry of existingEntries) {
-    const entryTokens = new Set(
-      entry.content.toLowerCase().replace(/[^\w\s]/g, ' ').split(/\s+/).filter((t) => t.length > 3)
-    );
+  for (const text of source.contents) {
+    const entryTokens = significantTokens(text);
     let shared = 0;
     for (const token of newTokens) {
       if (entryTokens.has(token)) shared++;
     }
-    const overlap = shared / Math.max(newTokens.size, 1);
-    if (overlap > 0.2) contentMatches++;
+    if (shared / newTokens.size > 0.2 && ++contentMatches >= enough) break;
   }
+  const contentScore = Math.min(1, contentMatches / enough);
 
-  const contentScore = Math.min(1, contentMatches / Math.max(5, N * 0.1));
-
-  // Blend: 60% tag overlap, 40% content overlap
   const fit = 0.6 * tagScore + 0.4 * contentScore;
   return Math.min(1, Math.max(0, fit));
 }

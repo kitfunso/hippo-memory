@@ -38,8 +38,11 @@ describe('consolidate auto-promote: session -> trace', () => {
       metadata: { summary: 'fixed broken test' },
     });
 
-    await consolidate(tmpDir, { now: new Date() });
+    const result = await consolidate(tmpDir, { now: new Date() });
 
+    expect(result.promotedTraces).toBe(1);
+    expect(result.details).toContain('  🧬 promoted 1 trace from completed session');
+    expect(result.details.some((l) => l.includes(`from session ${sid} (success)`))).toBe(true);
     const traces = loadAllEntries(tmpDir).filter((e) => e.layer === Layer.Trace);
     expect(traces).toHaveLength(1);
     expect(traces[0].trace_outcome).toBe('success');
@@ -64,6 +67,18 @@ describe('consolidate auto-promote: session -> trace', () => {
 
     const traces = loadAllEntries(tmpDir).filter((e) => e.layer === Layer.Trace);
     expect(traces).toHaveLength(0);
+  });
+
+  it('does NOT promote a session whose completion outcome is not a known one', async () => {
+    initStore(tmpDir);
+    appendSessionEvent(tmpDir, 'default', {
+      session_id: 'sess-bogus', event_type: 'session_complete', content: 'bogus', source: 'agent',
+    });
+
+    const result = await consolidate(tmpDir, { now: new Date() });
+
+    expect(result.promotedTraces).toBe(0);
+    expect(loadAllEntries(tmpDir).filter((e) => e.layer === Layer.Trace)).toHaveLength(0);
   });
 
   it('does NOT create duplicate traces across repeated sleep runs', async () => {

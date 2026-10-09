@@ -347,6 +347,9 @@ describe('project_briefs store (E2 repo-scoped / auto-refreshes first-class obje
     expect(assembled.receiptCount).toBe(50);
     expect(assembled.markdown.length).toBeLessThanOrEqual(MAX_BRIEF_SUMMARY_LEN);
     expect(assembled.markdown).toContain('omitted (summary cap)');
+    const kept = assembled.markdown.split('\n').filter((l) => l.startsWith('- ')).length;
+    expect(assembled.markdown).toContain(`_Auto-assembled from ${kept} of 50 receipt(s)._`);
+    expect(assembled.markdown).toContain(`_... ${50 - kept} more receipt(s) omitted (summary cap)._`);
     // refresh must SUCCEED (not throw) and store a valid brief under the cap
     const b = refreshBrief(home, 'default', 'big');
     expect(b.version).toBe(1);

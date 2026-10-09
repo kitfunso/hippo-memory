@@ -13,7 +13,7 @@ import { evalNow } from '../ablation.js';
 import { hybridSearch } from '../search/hybrid.js';
 import { physicsSearch } from '../search/physics-search.js';
 import type { HybridVectorCandidates } from '../search/vector.js';
-import { DEFAULT_LOCAL_BUMP, type SearchResult } from '../search/types.js';
+import { DEFAULT_LOCAL_BUMP, type SearchResult } from '../core/search-types.js';
 import { compareScoredResults } from '../compare.js';
 import { scopeMatch } from '../scope.js';
 import { type HippoConfig } from '../config.js';

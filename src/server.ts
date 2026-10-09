@@ -9,6 +9,7 @@ import { markSharedStore } from './config.js';
 import { auditWriteFailureCount } from './audit.js';
 import { PACKAGE_VERSION } from './version.js';
 import { errorFields, log } from './log.js';
+import { runWithRequestId } from './util/request-scope.js';
 import { createRateLimiter, type RateLimiter } from './rate-limit.js';
 import {
   type Actor, authCreateSelf, type AuthCreateSelfOpts, type AuthCreateSelfResult, authRevoke, type AuthRevokeReply, type AuthRevokeResult, type Context, RecallContractError,
@@ -23,7 +24,7 @@ import { drainAndClose } from './server/lifecycle.js';
 import { installCrashHandlers } from './util/crash-handlers.js';
 import { handleMcpPost, handleMcpStream } from './server/mcp-http.js';
 import { MCP_PROJECT_SCOPED_HEADER } from './project-identity.js';
-import { logRequestFailure, matchPath, parseRequest, rejectEncodedSlash, replyFor, requestIds, resolveRequestId, sendError } from './server/request.js';
+import { logRequestFailure, matchPath, parseRequest, rejectEncodedSlash, replyFor, resolveRequestId, sendError } from './server/request.js';
 import { handleApproveQuarantine, handleCreateAuthKey, handleListAudit, handleListAuthKeys, handleListQuarantine, handleRejectQuarantine, handleRevokeAuthKey } from './server/routes/admin.js';
 import { handleCloseCustomerNote, handleCreateCustomerNote, handleGetCustomerNote, handleListCustomerNotes, handleSupersedeCustomerNote } from './server/routes/customer-notes.js';
 import { handleCloseDecision, handleCreateDecision, handleGetDecision, handleListDecisions, handleSupersedeDecision } from './server/routes/decisions.js';
@@ -514,7 +515,7 @@ function createStoreHolder(hippoRoot: string, store: HippoStore): StoreHolder {
 
 function replyWithFailure<E>(req: IncomingMessage, res: ServerResponse, err: E, requestId: string): void {
   const mapped = replyFor(err);
-  logRequestFailure(req, err, requestId, mapped.status);
+  logRequestFailure(req, err, mapped.status);
   if (res.headersSent) {
     try { res.end(); } catch { /* socket already gone */ }
     return;
@@ -541,7 +542,7 @@ function replyOrClose<E>(req: IncomingMessage, res: ServerResponse, err: E, requ
     replyWithFailure(req, res, err, requestId);
   } catch (replyErr) {
     // A throw here would be an unhandled rejection, which stops the daemon for every caller.
-    log.error(`serve: failure reply not sent, socket closed: ${replyErr instanceof Error ? replyErr.message : String(replyErr)}`, { requestId });
+    log.error(`serve: failure reply not sent, socket closed: ${replyErr instanceof Error ? replyErr.message : String(replyErr)}`);
     res.destroy();
   }
 }
@@ -644,11 +645,12 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
     inflight.add(res);
     res.once('close', () => inflight.delete(res));
     const requestId = resolveRequestId(req.headers['x-request-id']);
-    requestIds.set(req, requestId);
     res.setHeader('X-Request-Id', requestId);
     const run = (): Promise<void> => handleRequest(req, res, served, startedAt, streamSlots, limiter);
     // A missed port under another store would otherwise create and write a hippo.db that store never reads.
-    (kind === 'sqlite' ? run() : withSqliteBlocked(kind, run)).catch(<E>(err: E) => replyOrClose(req, res, err, requestId));
+    const guarded = (): Promise<void> => (kind === 'sqlite' ? run() : withSqliteBlocked(kind, run));
+    // Inside the scope, so the failure reply's log line carries the id too.
+    runWithRequestId(requestId, () => { guarded().catch(<E>(err: E) => replyOrClose(req, res, err, requestId)); });
   });
 
   setKeepAliveTimeouts(server);

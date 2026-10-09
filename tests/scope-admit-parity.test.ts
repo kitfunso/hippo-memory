@@ -18,12 +18,12 @@ describe('scopeAdmitSql parity on a real store (E10 lane A)', () => {
   let root: string;
   let stored: Array<{ id: string; scope: string | null }>;
 
-  function admittedBySql(col: '' | 'm.', ownScope?: string): string[] {
+  function admittedBySql(col: '' | 'm.', ownScope?: string, and = ''): string[] {
     const { sql, params } = scopeAdmitSql(col, ownScope);
     const db = openStore(root);
     try {
       // SAFETY: the SELECT names only the id column.
-      const rows = db.prepare(`SELECT id FROM memories m WHERE m.tenant_id = ? AND ${sql}`).all('default', ...params) as Array<{ id: string }>;
+      const rows = db.prepare(`SELECT id FROM memories m WHERE m.tenant_id = ? ${and}AND ${sql}`).all('default', ...params) as Array<{ id: string }>;
       return rows.map((r) => r.id).sort();
     } finally {
       closeHippoDb(db);
@@ -54,6 +54,20 @@ describe('scopeAdmitSql parity on a real store (E10 lane A)', () => {
   ] as const)('col %j, ownScope %s', (col, ownScope) => {
     const expected = stored.filter((r) => passesScopeFilterForRecall(r.scope, undefined, ownScope)).map((r) => r.id).sort();
     expect(admittedBySql(col, ownScope)).toEqual(expected);
+  });
+
+  it('binds the owner, so LIKE wildcards in it match nothing extra', () => {
+    const { sql, params } = scopeAdmitSql('', 'personal:private:%');
+    expect(sql).not.toContain('personal:private:%');
+    expect(params[params.length - 1]).toBe('personal:private:%');
+    expect(admittedBySql('', 'personal:private:%')).toEqual(admittedBySql('', undefined));
+  });
+
+  it('keeps the own arm inside its parentheses, so a preceding AND still binds it', () => {
+    const own = stored.find((r) => r.scope === OWN_A)!.id;
+    const found = admittedBySql('m.', OWN_A, `AND m.id != '${own}' `);
+    expect(found).not.toContain(own);
+    expect(found).toEqual(admittedBySql('m.', undefined));
   });
 
   it('admits the owner\'s row only when its own scope is passed', () => {

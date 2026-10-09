@@ -2,12 +2,13 @@
 
 import type { ContinuityBlock } from '../store/port.js';
 import type { MemoryEntry } from '../memory.js';
-import type { RerankStep, SearchResult } from '../search/types.js';
-import type { PlanningFallacyHint, PlanningFallacyWatching } from '../predictions/planning-fallacy.js';
+import type { RerankStep, SearchResult } from '../core/search-types.js';
+import type { PlanningFallacyHint, PlanningFallacyOutput, PlanningFallacyWatching } from '../predictions/planning-fallacy.js';
 import type { AnchoringHint, RecallHistorySnapshot } from '../recall-history.js';
 import type { AvailabilityHint } from '../availability.js';
 import type { AppendAuditOpts } from '../audit.js';
 import type { CallerProject } from '../prompt-hook.js';
+import type { RankRecallOpts, RankRecallResult } from '../recall-pipeline.js';
 
 // ---------------------------------------------------------------------------
 // recall
@@ -161,6 +162,38 @@ export interface RecallOpts {
   leadingAudit?: readonly AppendAuditOpts[]; // rows this recall writes first in its one write, so a failed recall writes none; the HTTP route sets it, others leave it unset
   /** MCP recall only: `retrieve` ranks the whole scoped store and strengthens and traces (pipeline 'mcp') just the ids this returns; `results` stays the window band. */
   showRanked?: (ranking: StoreRanking, result: RecallResult) => ShownRanking;
+  /** Named ranker: `retrieve` ranks with the CLI ranking core. Unset, it ranks the SQL BM25 band, or the wide hybrid list under `showRanked`. */
+  cliCore?: CliCoreRanker;
+}
+
+interface CliCoreRanking {
+  rank: Omit<RankRecallOpts, 'query' | 'sessionId' | 'goalTag'>;
+  /** A second store searched beside `ctx.hippoRoot`. */
+  sources?: { globalRoot?: string };
+  /** Receives each operator note when ranking reaches it. */
+  note?: (line: string) => void;
+}
+
+/** A recall the caller prints. `show` runs once ranking ends, unless it halted; `retrieve` then records the list it returns. */
+export interface CliCoreRecall extends CliCoreRanking {
+  /** The host agent's session: it stamps the token ledger row, and the trace when the recall names no session. */
+  hostSessionId?: string;
+  show: (ranking: RankRecallResult, planning: PlanningFallacyOutput) => ShownCliCore;
+}
+
+/** A read-only look at the ranking (`hippo explain`): no hint is evaluated and nothing is written. */
+export interface CliCoreInspection extends CliCoreRanking {
+  inspect: (ranking: RankRecallResult) => void;
+}
+
+/** The CLI ranking core (`rankRecall`) as a ranker of `retrieve`: host admin only, on hippo.db. Of the other RecallOpts it reads `query`, `sessionId` and `goalTag`. */
+export type CliCoreRanker = CliCoreRecall | CliCoreInspection;
+
+/** `results`: the rows the caller shows, best first; `audit`: its hint rows, written ahead of the 'recall' row; `tokens`: the text it prints, for the ledger. */
+export interface ShownCliCore {
+  results: readonly SearchResult[];
+  audit: readonly AppendAuditOpts[];
+  tokens: number;
 }
 
 /** `ids`: what the caller showed; `audit`: its own rows, written after the recall's and in the same transaction, so all land or none. */
@@ -270,7 +303,7 @@ export interface RecallResult {
    * the calling agent sees its track record at the moment of forecasting
    * (Lovallo-Kahneman 2003 inside-vs-outside view).
    *
-   * Populated by `api.recall` itself via `computePlanningFallacyOutput`.
+   * Populated by `api.recall` itself via `decidePlanningFallacy`.
    * Pipeline-invariant: the value depends only on (queryText, tenantId,
    * predictions table state) — all three are identical regardless of
    * which downstream search pipeline produces the memory list, so MCP

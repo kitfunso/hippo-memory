@@ -15,7 +15,7 @@ import { fitBudget } from './finalize.js';
 import { hybridSearch } from './hybrid.js';
 import { currentEntries } from './as-of.js';
 import { requireVectorReads, vectorCandidatesOutside, type HybridVectorCandidates } from './vector.js';
-import { DEFAULT_RECALL_BUDGET, type ResultCost, type ScoreBreakdown, type SearchResult } from './types.js';
+import { DEFAULT_RECALL_BUDGET, type ResultCost, type ScoreBreakdown, type SearchResult } from '../core/search-types.js';
 
 export interface PhysicsSearchOptions {
   budget?: number;

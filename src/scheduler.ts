@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { log } from './log.js';
+import { writeFileAtomic } from './util/atomic-write.js';
 
 export const DAILY_TASK_NAME = 'hippo-daily-runner';
 
@@ -20,7 +21,7 @@ export interface SchedulerFsDeps {
   existsSync: typeof fs.existsSync;
   readFileSync: typeof fs.readFileSync;
   mkdirSync: typeof fs.mkdirSync;
-  writeFileSync: typeof fs.writeFileSync;
+  writeFile: (file: string, text: string) => void;
   renameSync: typeof fs.renameSync;
 }
 
@@ -28,7 +29,8 @@ let fsDeps: SchedulerFsDeps = {
   existsSync: fs.existsSync,
   readFileSync: fs.readFileSync,
   mkdirSync: fs.mkdirSync,
-  writeFileSync: fs.writeFileSync,
+  // One rename, so a crash mid-save cannot leave a truncated registry that reads as corrupt.
+  writeFile: writeFileAtomic,
   renameSync: fs.renameSync,
 };
 
@@ -92,7 +94,7 @@ function setAsideCorruptRegistry<E>(registryPath: string, err: E): void {
 
 export function saveWorkspaceRegistry(globalRoot: string, registry: WorkspaceRegistry): void {
   fsDeps.mkdirSync(globalRoot, { recursive: true, mode: 0o700 });
-  fsDeps.writeFileSync(
+  fsDeps.writeFile(
     workspaceRegistryPath(globalRoot),
     JSON.stringify(
       {
@@ -102,7 +104,6 @@ export function saveWorkspaceRegistry(globalRoot: string, registry: WorkspaceReg
       null,
       2,
     ) + '\n',
-    'utf8',
   );
 }
 

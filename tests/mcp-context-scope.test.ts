@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
-import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
+import { saveActiveTaskSnapshot, appendSessionEvent } from '../src/store/sessions.js';
+import { saveSessionHandoff } from '../src/store/handoffs.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
 import { makeRoot } from './_helpers/make-root.js';
@@ -40,6 +41,32 @@ describe('mcp hippo_context scope filter', () => {
 
   afterEach(() => {
     rmSync(home, { recursive: true, force: true });
+  });
+
+  it('prints the snapshot, handoff and trail, and drops a superseded row', async () => {
+    const current = createMemory('the deploy runbook lives in docs/deploy.md');
+    const other = createMemory('rollbacks go through the release branch');
+    const old = createMemory('the deploy runbook lives in the wiki');
+    old.superseded_by = current.id;
+    for (const e of [current, other, old]) writeEntry(home, e);
+    saveActiveTaskSnapshot(home, 'default', { task: 'Parity snapshot task', summary: 'snapshot summary', next_step: 'snapshot next step', session_id: 'sess-ctx-text', source: 'test' });
+    appendSessionEvent(home, 'default', { session_id: 'sess-ctx-text', event_type: 'note', content: 'parity trail event', source: 'test' });
+    saveSessionHandoff(home, 'default', { version: 1, sessionId: 'sess-ctx-text', summary: 'parity handoff summary', nextAction: 'parity handoff next action' });
+
+    // Outside git, so the auto query is empty and the text does not follow the host checkout.
+    const cwd = process.cwd();
+    process.chdir(home);
+    try {
+      const text = extractText(await callTool(5, 'hippo_context', { budget: 4000 }, { hippoRoot: home, tenantId: 'default', actor: 'mcp' }));
+      expect(text).toContain('## Active Task Snapshot');
+      expect(text).toContain('## Session Handoff');
+      expect(text).toContain('parity handoff summary');
+      expect(text).toContain('parity trail event');
+      expect(text).toContain('Found 2 memories:');
+      expect(text).not.toContain('lives in the wiki');
+    } finally {
+      process.chdir(cwd);
+    }
   });
 
   it('budget=0 returns no context without marking memories retrieved', async () => {

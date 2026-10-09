@@ -6,6 +6,8 @@ import { parseFrame } from './framing.js';
 import { mcpErrorResponse, isJsonObjectRecord, type McpRequest, type McpResponse } from './protocol.js';
 import { handleMcpRequest } from './request.js';
 import { type JsonValue, isJsonString } from '../json.js';
+import { randomUUID } from 'node:crypto';
+import { runWithRequestId } from '../util/request-scope.js';
 
 // MCP stdio transport spec: messages are newline-delimited JSON-RPC, no embedded newlines.
 // https://modelcontextprotocol.io/specification/.../basic/transports#stdio
@@ -58,7 +60,8 @@ export function startStdioLoop(): void {
       const result = parseFrame(buffer);
       if (result.kind === 'incomplete') break;
       buffer = result.rest;
-      if (result.kind === 'message') dispatch(result.body);
+      // One id per frame, so the error reply and every line logged for the call name the same request.
+      if (result.kind === 'message') runWithRequestId(randomUUID(), () => dispatch(result.body));
     }
   });
 

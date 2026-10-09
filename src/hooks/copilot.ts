@@ -5,8 +5,9 @@ import * as path from 'path';
 import { isDeepStrictEqual } from 'node:util';
 import type { JsonObject } from '../working-memory.js';
 import { type JsonValue, readJsonFile } from '../json.js';
-import { HOOK_MARKERS, hippoBlock } from '../cli/hook-blocks.js';
+import { HOOK_MARKERS, hippoBlock } from './hook-blocks.js';
 import { copilotHomeDir, isJsonObject, vscodeUserDirs } from './shared.js';
+import { writeFileAtomic } from '../util/atomic-write.js';
 import { installJsonHooks, resolveJsonHookPaths, uninstallJsonHooks, writeSettingsFile } from './json-hooks.js';
 
 const MCP_KEY = 'hippo';
@@ -220,15 +221,14 @@ function withCopilotBlock(text: string, found: FoundBlock | null): string {
 export type InstructionsInstallStatus = 'written' | 'present' | 'kept' | 'unclosed';
 
 /** Creates the file when missing; any block but hippo's own Copilot one, and a start marker with no end, leave the file as it is. */
-export function ensureInstructionsBlock(file: string): InstructionsInstallStatus {
+function ensureInstructionsBlock(file: string): InstructionsInstallStatus {
   const old = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
   const found = hippoBlock(old);
   if (found === null && old.includes(HOOK_MARKERS.start)) return 'unclosed';
   if (found !== null && !isCopilotBlock(found.inner)) return 'kept';
   const next = withCopilotBlock(old, found);
   if (next === old) return 'present';
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, next, 'utf8');
+  writeFileAtomic(file, next);
   return 'written';
 }
 
@@ -252,7 +252,7 @@ export function removeInstructionsBlock(file: string): InstructionsRemoveStatus 
   if (!isCopilotBlock(found.inner)) return 'kept';
   const left = withoutCopilotBlock(old, found);
   if (left.trim() === '') fs.rmSync(file);
-  else fs.writeFileSync(file, left, 'utf8');
+  else writeFileAtomic(file, left);
   return 'removed';
 }
 
@@ -266,8 +266,7 @@ export function ensureVscodeInstructions(file: string): VscodeInstructionsInstal
     if (old === VSCODE_INSTRUCTIONS) return 'present';
     if (!isHipposVscodeInstructions(old)) return 'kept';
   }
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, VSCODE_INSTRUCTIONS, 'utf8');
+  writeFileAtomic(file, VSCODE_INSTRUCTIONS);
   return 'written';
 }
 

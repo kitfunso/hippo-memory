@@ -1,82 +1,88 @@
-/**
- * J3.2 — CLI parity guard for the zero-memory-results branch (codex
- * review round 1 catch).
- *
- * Codex flagged: cmdRecall computes cmdPlanningFallacyHint but only
- * rendered it in the populated-results branch. The early
- * `results.length === 0` return silently dropped the hint, breaking
- * parity with HTTP/MCP which surface it regardless of memory matches.
- *
- * A behavioural subprocess test fights hippo's hybrid memory pattern:
- * savePrediction creates a memory mirror tagged with the class_tag, so
- * any query that resolves the class via class_tag overlap will also
- * surface the mirror in BM25 recall (because the tag matches). Forcing
- * the zero-memory case while keeping the class resolvable would
- * require deleting the mirrors AND the recall-index state AND the
- * physics-store mirrors — too brittle to maintain. Codex's underlying
- * scenario ("after the prediction mirror has been forgotten") is real
- * but the test environment can't isolate it cleanly.
- *
- * Instead, this is a STRUCTURAL guard: parse cli.ts and assert the
- * zero-result branch references `cmdPlanningFallacyHint` in both the
- * JSON output object AND the text render block. If a future refactor
- * removes the guards, this fails loudly. The behavioural path is
- * covered end-to-end by api-recall-autodebias.test.ts (the orchestrator
- * returns the right hint object regardless of memory matches) +
- * mcp/http-recall-autodebias.test.ts (the response-side serialisation).
- */
+// `hippo recall` keeps the planning-fallacy hint when no memory matches, as HTTP and MCP do.
+// A prediction outlives its mirror memory, so forgetting the mirrors leaves the class resolvable with nothing to recall.
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { cmdRecall } from '../src/cli/recall.js';
+import { forget, type Context } from '../src/api.js';
+import { savePrediction, closePrediction } from '../src/predictions/store.js';
+import { loadAllEntries } from '../src/store/entry-reads.js';
+import { makeRoot } from './_helpers/make-root.js';
+import { runInProcess } from './_helpers/run-in-process.js';
 
-import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+const QUERY = 'the migration effort will take 3 days';
+const DETECTED = '[detected: "will take 3 days"]';
 
-const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
+interface ZeroRecallJson {
+  results: unknown[];
+  planningFallacyHint?: { classTag: string; nClosed: number; meanRatio: number };
+  planningFallacyWatching?: { reason: string };
+}
 
-describe('cli.ts cmdRecall zero-result branch preserves planningFallacyHint (J3.2 codex round-1 guard)', () => {
-  let cliText: string;
-  let zeroResultBlock: string;
+let root: string;
 
-  it('the parity comment is present (anchor)', () => {
-    cliText = readFileSync(join(repoRoot, 'src/cli/recall.ts'), 'utf8');
-    expect(cliText).toContain('zero-result JSON keeps it for parity');
+/** Three closed migration-effort predictions (actual twice the estimate), then every memory they wrote forgotten. */
+function seedBaserateWithNoMemories(): void {
+  for (const [estimate, actual] of [[2, 4], [3, 6], [4, 8]]) {
+    const p = savePrediction(root, 'default', { classTag: 'migration-effort', claimText: `migration effort estimate ${estimate} days`, estimateValue: estimate });
+    closePrediction(root, 'default', p.id, { closureState: 'closed', actualValue: actual });
+  }
+  const ctx: Context = { hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
+  for (const entry of loadAllEntries(root)) forget(ctx, entry.id);
+  expect(loadAllEntries(root)).toEqual([]);
+}
+
+async function recall(flags: Record<string, boolean> = {}): Promise<string> {
+  const run = await runInProcess(() => cmdRecall(root, QUERY, flags));
+  expect(run.status, run.stderr).toBe(0);
+  return run.stdout;
+}
+
+async function recallJson(): Promise<ZeroRecallJson> {
+  // SAFETY: the zero-result --json exit prints one object carrying these fields; each test asserts the ones it reads.
+  return JSON.parse(await recall({ json: true })) as ZeroRecallJson;
+}
+
+describe('hippo recall with no matching memory keeps the planning-fallacy hint', () => {
+  beforeEach(() => {
+    root = makeRoot('cli-zero-plan');
+    // A global store that does not exist keeps the recall on the local store alone.
+    vi.stubEnv('HIPPO_HOME', join(root, 'no-global'));
+    for (const name of ['HIPPO_TENANT', 'HIPPO_AUTODEBIAS']) vi.stubEnv(name, '');
   });
 
-  it('isolate the zero-result block by line range', () => {
-    // Find the `if (results.length === 0) {` block and slice ~50 lines.
-    // Captures the JSON + text early-return paths the codex fix targets.
-    // Window bumped 3000 -> 3800 (LC1 F1 final-review fix, 2026-08-02): the
-    // zero-result branch now ALSO writes an empty recall trace before the
-    // JSON/text rendering, pushing the rendering code further into the
-    // block. Margin left for future additions to this branch.
-    const startIdx = cliText.indexOf('if (results.length === 0)');
-    expect(startIdx).toBeGreaterThan(0);
-    zeroResultBlock = cliText.slice(startIdx, startIdx + 3800);
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    rmSync(root, { recursive: true, force: true });
   });
 
-  it('zero-result JSON output spreads planningFallacyHint when truthy', () => {
-    // Lock the exact spread pattern that codex's fix added. A future
-    // refactor that drops the spread will trip this test.
-    expect(zeroResultBlock).toMatch(/cmdPlanningFallacyHint\s*\?\s*\{\s*planningFallacyHint:\s*cmdPlanningFallacyHint/);
+  it('--json returns no results and still carries planningFallacyHint', async () => {
+    seedBaserateWithNoMemories();
+    const out = await recallJson();
+
+    expect(out.results).toEqual([]);
+    expect(out.planningFallacyHint).toMatchObject({ classTag: 'migration-effort', nClosed: 3, meanRatio: 2 });
   });
 
-  it('zero-result text render path emits the Planning fallacy hint line', () => {
-    // The text render (continuity OR plain no-memories print) must print the
-    // hint BEFORE the no-memories message; the zero-result branch emits that render.
-    expect(zeroResultBlock).toContain('emit(recallText)');
-    const emptyStart = cliText.indexOf('if (list.length === 0) {');
-    expect(emptyStart).toBeGreaterThan(0);
-    const emptyRender = cliText.slice(emptyStart, emptyStart + 600);
-    expect(emptyRender).toContain('if (showPlan) { console.log(planText);');
-    expect(emptyRender.indexOf('console.log(planText)')).toBeLessThan(emptyRender.indexOf('No memories found for:'));
-    expect(cliText).toContain('Planning fallacy hint');
+  it('text prints the hint line, with the detected phrase quoted, above the no-memories line', async () => {
+    seedBaserateWithNoMemories();
+    const text = await recall();
+
+    const hintAt = text.indexOf('Planning fallacy hint (class: migration-effort)');
+    expect(hintAt).toBeGreaterThanOrEqual(0);
+    expect(text.indexOf('No memories found for:')).toBeGreaterThan(hintAt);
+    expect(text).toContain(DETECTED);
   });
 
-  it('detectedPhrase is sanitised via JSON.stringify on the zero-result text path', () => {
-    // Plan-eng-critic round 2 LOW + codex hardening: regex match text
-    // could contain quotes/parens; JSON.stringify keeps the render
-    // unambiguous regardless of input shape.
-    expect(cliText).toMatch(/JSON\.stringify\(p\.hint\.detectedPhrase\)/);
-    expect(cliText).toMatch(/JSON\.stringify\(p\.watching\.detectedPhrase\)/);
+  it('with no prediction class to match, both outputs carry the watching notice instead', async () => {
+    const out = await recallJson();
+    const text = await recall();
+
+    expect(out.planningFallacyHint).toBeUndefined();
+    expect(out.planningFallacyWatching?.reason).toBe('no_class_match');
+    const watchAt = text.indexOf('Planning fallacy: watching this query (reason: no_class_match)');
+    expect(watchAt).toBeGreaterThanOrEqual(0);
+    expect(text.indexOf('No memories found for:')).toBeGreaterThan(watchAt);
+    expect(text).toContain(DETECTED);
   });
 });

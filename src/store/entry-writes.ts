@@ -3,8 +3,8 @@ import { type DatabaseSyncLike, closeHippoDb, openHippoDb, rethrowIfSqliteBlocke
 import { RejectedValueError } from '../rejection.js';
 import { markSummaryDirtyInTx } from '../summary-dirty.js';
 import { log } from '../log.js';
-import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry } from './rows.js';
 import { auditRejectionRefusal, audit } from './audit-event.js';
+import { selectEntriesByIds } from './entry-reads.js';
 import { stampOriginProject, upsertEntryRow, syncFtsRow, deleteFtsRow } from './entry-row.js';
 import { mirrorBestEffort, writeMarkdownMirror } from './mirrors.js';
 import { openStore } from './open.js';
@@ -138,15 +138,8 @@ function warnStrengthenFailed<E>(error: E): void {
 export function strengthenRetrievedOn(db: DatabaseSyncLike, ids: readonly string[], opts: StrengthenOptions): Set<string> {
   const found = new Set<string>();
   if (ids.length === 0 || opts.recallBoostAblated) return found;
-  const { tenantId } = opts;
-  const tenantClause = tenantId !== undefined ? ' AND tenant_id = ?' : '';
-  const select = db.prepare(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id = ?${tenantClause}`);
-  const live: MemoryEntry[] = [];
-  for (const id of ids) {
-    // SAFETY: the SELECT names exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
-    const row = (tenantId !== undefined ? select.get(id, tenantId) : select.get(id)) as MemoryRow | undefined;
-    if (row) live.push(rowToEntry(row));
-  }
+  const byId = selectEntriesByIds(db, ids, opts.tenantId);
+  const live = [...new Set(ids)].flatMap((id) => byId.get(id) ?? []);
   const update = db.prepare(
     'UPDATE memories SET retrieval_count = ?, last_retrieved = ?, half_life_days = ?, strength = ? WHERE id = ?',
   );

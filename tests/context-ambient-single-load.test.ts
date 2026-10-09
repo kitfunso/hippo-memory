@@ -1,5 +1,4 @@
-/** Episode 01M1VQBCH5CFB8RRKNSRE8RP6M: cli.ts renders getContext.ambientState
- *  instead of re-deriving it. See the first describe block for the single-load pin approach. */
+// `hippo context` renders the ambient state getContext returns, so the printed summary counts the rows the context admitted.
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
@@ -18,22 +17,8 @@ const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const HIPPO_JS = path.join(repoRoot, 'bin', 'hippo.js');
 const FAKE_NOW = '2026-09-06T12:00:00.000Z';
 
-describe('single load: cli.ts renders getContext.ambientState instead of re-deriving it', () => {
-  it('the ambient rendering block contains no loadAllEntries, and computeAmbientState is gone from cli.ts', () => {
-    // Fallback per plan: cli.ts self-invokes main() at import time, so
-    // spying on loadAllEntries in-process would trigger a real CLI dispatch.
-    const cliSrc = fs.readFileSync(path.join(repoRoot, 'src', 'cli.ts'), 'utf8');
-    const contextSrc = fs.readFileSync(path.join(repoRoot, 'src', 'cli', 'context.ts'), 'utf8');
-    const marker = 'if (result.ambientState) {';
-    const idx = contextSrc.indexOf(marker);
-    expect(idx, 'cli/context.ts should render result.ambientState').toBeGreaterThan(-1);
-    const block = contextSrc.slice(idx, idx + 150);
-    expect(block).not.toContain('loadAllEntries');
-    expect(cliSrc).not.toContain('computeAmbientState');
-    expect(contextSrc).not.toContain('computeAmbientState');
-  });
-
-  it('behavioural pin: `hippo context` still renders the ambient summary end to end (real CLI, real store)', () => {
+describe('`hippo context` prints the ambient summary getContext computed', () => {
+  it('counts only the rows the context admitted (real CLI, real store)', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-ambient-cli-'));
     const env = { ...process.env, HIPPO_HOME: dir, HOME: dir, USERPROFILE: dir };
     try {
@@ -46,10 +31,12 @@ describe('single load: cli.ts renders getContext.ambientState instead of re-deri
         cwd: dir, env, encoding: 'utf8',
       });
       expect(remembered.status).toBe(0);
+      // A row the context leaves out: a summary re-derived from every row would count two.
+      writeEntry(path.join(dir, '.hippo'), createMemory('PRIVATE-SCOPE-ROW lives behind a private channel scope', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, scope: 'slack:private:C123' }));
 
       const result = spawnSync(process.execPath, [HIPPO_JS, 'context'], { cwd: dir, env, encoding: 'utf8' });
       expect(result.status).toBe(0);
-      expect(result.stdout).toContain('Memory state:');
+      expect(result.stdout).toMatch(/^Memory state: 1 memories/m);
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
