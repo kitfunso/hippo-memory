@@ -5,6 +5,8 @@
 import { ConfidenceLevel, EmotionalValence } from '../core/memory.js';
 import { fetchWithRetry } from '../util/http-retry.js';
 import { errorMessage, log } from '../util/log.js';
+import { readCappedJson } from '../util/capped-json.js';
+import { type JsonValue, isJsonNumber, isJsonObject, isJsonString } from '../util/json.js';
 
 const ENDPOINT = 'https://api.typesafe.ai/v1/systemone';
 const DEFAULT_MODEL = 'jev-1.13.0';
@@ -31,14 +33,14 @@ export interface JudgeOptions {
   concurrency?: number;
 }
 
-interface JevNoulAnswer { noul?: number }
-interface JevChoiceAnswer { choice?: string; confidence?: number }
-interface JevResponse {
-  answers?: {
-    durable?: JevNoulAnswer;
-    kind?: JevChoiceAnswer;
-    valence?: JevChoiceAnswer;
-  };
+// An honest reply is three short answers, a few hundred bytes; 1 MiB leaves room for a verbose envelope.
+const JUDGE_MAX_REPLY_BYTES = 1024 * 1024;
+
+/** One named answer of a Jev reply `{ answers: { <name>: Answer } }`; an empty object when the reply has none of that shape. */
+function answerNamed(reply: JsonValue, name: string): { [key: string]: JsonValue } {
+  const answers = isJsonObject(reply) ? reply.answers : undefined;
+  const answer = isJsonObject(answers) ? answers[name] : undefined;
+  return isJsonObject(answer) ? answer : {};
 }
 
 const QUESTIONS = {
@@ -73,8 +75,8 @@ const QUESTIONS = {
 const KINDS: readonly JudgedKind[] = ['error', 'decision', 'convention', 'preference', 'trivia'];
 const VALENCES: readonly EmotionalValence[] = ['critical', 'negative', 'positive', 'neutral'];
 
-function oneOf<T extends string>(value: string | undefined, allowed: readonly T[]): T | null {
-  return allowed.find((option) => option === value) ?? null;
+function oneOf<T extends string>(value: JsonValue | undefined, allowed: readonly T[]): T | null {
+  return isJsonString(value) ? allowed.find((option) => option === value) ?? null : null;
 }
 
 /** `verified` is unreachable: that tier means a human or a test confirmed it. */
@@ -117,23 +119,21 @@ export async function judge(content: string, opts: JudgeOptions): Promise<Judgme
   const res = await post(trimmed, opts);
   if (!res) return null;
 
-  let data: JevResponse;
+  let data: JsonValue;
   try {
-    // SAFETY: the documented Jev response is `{ answers: { <name>: Answer } }`
-    // keyed by the question names posted above; every field read below is
-    // optional-chained and range-checked before use, so a lie here returns null.
-    data = await res.json() as JevResponse;
+    data = await readCappedJson(res, JUDGE_MAX_REPLY_BYTES);
   } catch (err) {
     log.debug(`judge: unreadable response: ${errorMessage(err)}`);
     return null;
   }
 
-  const durable = data.answers?.durable?.noul;
-  const kind = oneOf(data.answers?.kind?.choice, KINDS);
-  const valence = oneOf(data.answers?.valence?.choice, VALENCES);
-  if (durable === undefined || durable < 0 || durable > 1 || !kind || !valence) return null;
+  const durable = answerNamed(data, 'durable').noul;
+  const kindAnswer = answerNamed(data, 'kind');
+  const kind = oneOf(kindAnswer.choice, KINDS);
+  const valence = oneOf(answerNamed(data, 'valence').choice, VALENCES);
+  if (!isJsonNumber(durable) || durable < 0 || durable > 1 || !kind || !valence) return null;
 
-  const kindConfidence = data.answers?.kind?.confidence ?? 0;
+  const kindConfidence = isJsonNumber(kindAnswer.confidence) ? kindAnswer.confidence : 0;
   return { durable, kind, valence, confidence: toConfidenceTier(kindConfidence), kindConfidence };
 }
 
