@@ -12,10 +12,9 @@ import { loadStats } from '../store/index-and-stats.js';
 import { listMemoryConflicts } from '../store/conflicts.js';
 import { loadEmbeddingIndex, embeddingModelRequiresReindex } from '../embeddings.js';
 import { resolveEmbeddingProvider } from '../embedding-provider.js';
-import { loadPhysicsState } from '../db/physics-state.js';
+import { loadStoredParticles } from '../store/vector-writes.js';
 import { computeSystemEnergy, vecNorm } from '../physics.js';
 import { loadConfig } from '../config.js';
-import { openHippoDb, closeHippoDb } from '../db.js';
 import { runDoctor, formatDoctor } from '../doctor.js';
 import { buildSupportBundle, TAIL_MAX_LINES } from '../support-bundle.js';
 import { PACKAGE_VERSION } from '../version.js';
@@ -166,21 +165,15 @@ function printEmbeddingStatus(hippoRoot: string, entries: MemoryEntry[]): void {
 // Physics status
 function printPhysicsStatus(hippoRoot: string): void {
   try {
-    const db = openHippoDb(hippoRoot);
-    try {
-      const physicsMap = loadPhysicsState(db);
-      if (physicsMap.size > 0) {
-        const particles = Array.from(physicsMap.values());
-        const physConfig = loadConfig(hippoRoot);
-        const energy = computeSystemEnergy(particles, physConfig.physics.G_memory);
-        let sumVelMag = 0;
-        for (const p of particles) sumVelMag += vecNorm(p.velocity);
-        const avgVelMag = sumVelMag / particles.length;
-        console.log('');
-        console.log(`Physics: ${particles.length} particles, energy: ${fmt(energy.total, 4)} (KE: ${fmt(energy.kinetic, 4)}, PE: ${fmt(energy.potential, 4)}), avg vel: ${fmt(avgVelMag, 4)}`);
-      }
-    } finally {
-      closeHippoDb(db);
+    const particles = loadStoredParticles(hippoRoot);
+    if (particles.length > 0) {
+      const physConfig = loadConfig(hippoRoot);
+      const energy = computeSystemEnergy(particles, physConfig.physics.G_memory);
+      let sumVelMag = 0;
+      for (const p of particles) sumVelMag += vecNorm(p.velocity);
+      const avgVelMag = sumVelMag / particles.length;
+      console.log('');
+      console.log(`Physics: ${particles.length} particles, energy: ${fmt(energy.total, 4)} (KE: ${fmt(energy.kinetic, 4)}, PE: ${fmt(energy.potential, 4)}), avg vel: ${fmt(avgVelMag, 4)}`);
     }
   } catch (err) {
     // The physics table may not exist yet, so status prints without that line.

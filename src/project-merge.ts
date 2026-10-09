@@ -7,7 +7,7 @@ import { containerId, containerPrefix } from './agent-memories/source.js';
 import { AGENT_MEMORY_SOURCE_PREFIX, AGENT_MEMORY_TOOLS, toolSourcePrefix } from './core/agent-memory-tools.js';
 import { appendAuditEvent, queryAuditEvents } from './store/audit.js';
 import { isSharedStore } from './config.js';
-import type { DatabaseSyncLike } from './db.js';
+import { withTrialScope, withWriteScope, type DatabaseSyncLike } from './db.js';
 import { withBackup } from './db/backup.js';
 import { getMeta, setMeta } from './db/meta.js';
 import { insertDormantRow, listDormantSnapshots, replaceDormantEntry } from './store/dormant.js';
@@ -104,15 +104,7 @@ export function listProjects(db: DatabaseSyncLike, tenantId: string): ProjectSum
 }
 
 function inTransaction<T>(db: DatabaseSyncLike, dryRun: boolean, body: () => T): T {
-  db.exec(dryRun ? 'BEGIN' : 'BEGIN IMMEDIATE');
-  try {
-    const out = body();
-    db.exec(dryRun ? 'ROLLBACK' : 'COMMIT');
-    return out;
-  } catch (err) {
-    try { db.exec('ROLLBACK'); } catch { /* already rolled back; keep the original error */ }
-    throw err;
-  }
+  return dryRun ? withTrialScope(db, 'merge_projects', body) : withWriteScope(db, 'merge_projects', body);
 }
 
 /** Refuses user-global and unknown: they are not projects, and folding them would leak or hide every row. */
