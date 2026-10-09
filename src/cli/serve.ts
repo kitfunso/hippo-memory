@@ -13,8 +13,8 @@ export async function handleDashboard({ hippoRoot, flags }: CommandContext): Pro
   requireInit(hippoRoot);
   const port = parseInt(String(flags['port'] ?? '3333'), 10);
   const { serveDashboard } = await import('../dashboard/dashboard.js');
-  serveDashboard(hippoRoot, port);
-  // A busy port or a later throw ends in one log line and exit 1, as it does for serve and mcp.
+  serveDashboard(hippoRoot, port, undefined, { handleSignals: true });
+  // A later throw ends in one log line and exit 1, as it does for serve and mcp; a busy port is reported by the dashboard itself.
   installCrashHandlers('dashboard');
   await new Promise(() => {}); // run until Ctrl+C
 }
