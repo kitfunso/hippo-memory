@@ -188,9 +188,7 @@ describe('global-row-embeddings: awaited batch producers', () => {
   });
 
   it('syncGlobalToLocal-copied rows gain vectors after an awaited embedAll(localRoot)', async (ctx) => {
-    skipWithoutEmbeddings(ctx, isEmbeddingAvailable());
-    // The VM import limit (see embeddingIsFunctional) stays a visible skip even where the backend is required.
-    if (!(await embeddingIsFunctional())) ctx.skip();
+    skipWithoutEmbeddings(ctx, await embeddingIsFunctional());
     const entry = createMemory('awaited batch sync test content unique alpha', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(globalRoot, entry);
 
@@ -209,8 +207,7 @@ describe('global-row-embeddings: awaited batch producers', () => {
   }, 60_000);
 
   it('autoShare-shared rows gain vectors after an awaited embedAll(globalRoot)', async (ctx) => {
-    skipWithoutEmbeddings(ctx, isEmbeddingAvailable());
-    if (!(await embeddingIsFunctional())) ctx.skip();
+    skipWithoutEmbeddings(ctx, await embeddingIsFunctional());
     const entry = createMemory('awaited batch autoshare test content unique beta', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(localRoot, entry);
 
@@ -248,8 +245,7 @@ describe('global-row-embeddings: fire-and-forget integration', () => {
   });
 
   it('promoteToGlobal fire-and-forget embed eventually lands in the global index', async (ctx) => {
-    skipWithoutEmbeddings(ctx, isEmbeddingAvailable());
-    if (!(await embeddingIsFunctional())) ctx.skip();
+    skipWithoutEmbeddings(ctx, await embeddingIsFunctional());
     const entry = createMemory('fire and forget integration promote test content gamma', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(localRoot, entry);
 

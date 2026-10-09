@@ -24,6 +24,7 @@ import { loadAllEntries } from '../src/store/entry-reads.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { embedMemory } from '../src/store/embeddings/index.js';
 import { isEmbeddingAvailable } from '../src/store/embeddings/local.js';
+import { loadEmbeddingIndex } from '../src/store/vector-index.js';
 import { skipWithoutEmbeddings } from './_helpers/embedding-backend.js';
 import { physicsSearch } from '../src/search/physics-search.js';
 import { consolidate } from '../src/consolidate/sleep.js';
@@ -58,6 +59,12 @@ function scoreAssembled(
     if (present && !outranked) answered++;
   }
   return { answered, tokens };
+}
+
+// Fails a run where embedMemory stored nothing, which would otherwise pass on BM25 alone.
+function expectVectorsStored(hippoRoot: string): void {
+  const index = loadEmbeddingIndex(hippoRoot);
+  for (const e of loadAllEntries(hippoRoot)) expect(index[e.id]?.length ?? 0, `vector stored for ${e.id}`).toBeGreaterThan(0);
 }
 
 describe('lifecycle-stress injector', () => {
@@ -158,6 +165,7 @@ describe('lifecycle-stress mechanism (real DB, mirrors the probe)', () => {
     const { memories, labels } = injectStream({ seed: 42, scaleMemories: 40, numFacts: 4, dupesPerFact: 3 });
     for (const m of memories) writeEntry(root, createMemory(m.content, { tags: m.tags, source: 'lse-test' }));
     for (const e of loadAllEntries(root)) await embedMemory(root, e);
+    expectVectorsStored(root);
 
     const cons = await consolidate(root, {});
     // merge must fire on the redundant clusters
@@ -180,6 +188,7 @@ describe('lifecycle-stress mechanism (real DB, mirrors the probe)', () => {
     const { memories, labels } = injectStream({ seed: 11, scaleMemories: 40, numFacts: 4, dupesPerFact: 3 });
     for (const m of memories) writeEntry(root, createMemory(m.content, { tags: m.tags, source: 'lse-test' }));
     for (const e of loadAllEntries(root)) await embedMemory(root, e);
+    expectVectorsStored(root);
     await consolidate(root, {});
     for (const e of loadAllEntries(root)) await embedMemory(root, e);
     const after = loadAllEntries(root);
@@ -203,6 +212,7 @@ describe('lifecycle-stress mechanism (real DB, mirrors the probe)', () => {
     expect(noise.length).toBeGreaterThan(0);
     for (const m of noise) writeEntry(root, createMemory(m.content, { tags: m.tags, source: 'lse-test' }));
     for (const e of loadAllEntries(root)) await embedMemory(root, e);
+    expectVectorsStored(root);
     const entries = loadAllEntries(root);
 
     // no answer token from the (un-injected) fact labels may appear anywhere
