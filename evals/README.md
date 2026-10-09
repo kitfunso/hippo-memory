@@ -98,8 +98,7 @@ de-cluster, so lambda=1.0 (relevance only) ties lambda=0.5 exactly.
    tuning knob for users, not a new default.
 
 Users who want to measure the uplift today: `hippo eval --embedding-weight 0.4`
-(`hippo recall` has no such flag), or set `"embeddings": {"hybridWeight": 0.4}`
-in `.hippo/config.json`.
+(`hippo recall` has no such flag, and no config key sets the weight).
 
 ### LongMemEval results (2026-04-20, full 500 questions)
 

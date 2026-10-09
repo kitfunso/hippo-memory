@@ -13,7 +13,7 @@ import { installJsonHooks, resolveJsonHookPaths, uninstallJsonHooks, writeSettin
 const MCP_KEY = 'hippo';
 
 /** Copilot drops what a per-prompt hook prints, so per-task recall goes through the MCP tool the block names. */
-export const COPILOT_INSTRUCTIONS = `
+const COPILOT_INSTRUCTIONS = `
 ## Project Memory (Hippo)
 
 At the start of each task, call the \`hippo_recall\` tool with a short query that
@@ -51,7 +51,7 @@ before you finish.
 /** VS Code attaches a User `*.instructions.md` file to every chat request its `applyTo` glob matches. */
 const withApplyToAll = (text: string): string => `---\napplyTo: "**"\n---\n${text}\n`;
 
-export const VSCODE_INSTRUCTIONS = withApplyToAll(COPILOT_INSTRUCTIONS);
+const VSCODE_INSTRUCTIONS = withApplyToAll(COPILOT_INSTRUCTIONS);
 
 function isHipposVscodeInstructions(text: string): boolean {
   return SHIPPED_COPILOT_INSTRUCTIONS.some((shipped) => text === withApplyToAll(shipped));
@@ -151,7 +151,7 @@ function readMcpConfig(file: string, host: McpHost): McpConfig | null {
 export type McpMergeStatus = 'added' | 'present' | 'user-owned' | 'unreadable';
 
 /** Adds hippo's server and keeps every other key; a file hippo cannot parse, or a "hippo" key it did not write, stays as it is. */
-export function mergeMcpServer(file: string, host: McpHost = COPILOT_CLI_MCP): McpMergeStatus {
+function mergeMcpServer(file: string, host: McpHost = COPILOT_CLI_MCP): McpMergeStatus {
   const read = readMcpConfig(file, host);
   if (read === null) return 'unreadable';
   const existing = read.servers[MCP_KEY];

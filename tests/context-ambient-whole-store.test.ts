@@ -11,7 +11,7 @@ import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { Layer, _resetLossAversionRatioCacheForTests, type EmotionalValence, type MemoryEntry } from '../src/memory.js';
 import { _resetAblationCacheForTests } from '../src/ablation.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { getContext, adminActor, CONTEXT_CANDIDATE_CAP, type Context } from '../src/api.js';
+import { getContext, adminActor, type Context } from '../src/api.js';
 import { renderAmbientSummary, tallyAmbientEntries, ambientStateFromTallies } from '../src/ambient.js';
 
 let root = '';
@@ -49,7 +49,8 @@ describe('ambient summary over the whole store', () => {
   });
 
   it('a no-query read of a store past the candidate cap reports its true total', async () => {
-    const total = CONTEXT_CANDIDATE_CAP + 25;
+    const CAP = 2000;
+    const total = CAP + 25;
     const db = openHippoDb(store);
     db.exec('BEGIN');
     try {
