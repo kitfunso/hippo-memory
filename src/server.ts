@@ -602,7 +602,7 @@ function installSignalHandlers(stop: () => Promise<void>): void {
  * secrets and 404 when those secrets are unset, and any publicJson GET path. But the loopback
  * no-auth fallback inside buildContextWithAuth still admits unauthenticated
  * requests from a loopback remote address (unless they carry Forwarded,
- * X-Forwarded-For/-Host/-Proto, X-Real-IP, Cf-Connecting-Ip or True-Client-Ip, which mark a same-host proxy and get
+ * X-Forwarded-For/-Host/-Proto, X-Real-IP, Cf-Connecting-Ip, True-Client-Ip or Fly-Client-Ip, which mark a same-host proxy and get
  * a 401 like any keyless remote request), so binding to a non-loopback host
  * is only safe once that fallback is disabled with HIPPO_REQUIRE_AUTH=1,
  * which forces every request (loopback or not) through Bearer-token
