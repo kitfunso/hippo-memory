@@ -6,7 +6,8 @@ import * as path from 'path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { embedAll, loadEmbeddingIndex } from '../src/store/embeddings/index.js';
+import { embedAll } from '../src/store/embeddings/index.js';
+import { loadEmbeddingIndex } from '../src/store/vector-index.js';
 import type { EmbeddingProvider } from '../src/store/embeddings/provider.js';
 
 /** Embeds every text except the ones marked unembeddable, which get the `[]` a local provider returns on a per-item failure. */

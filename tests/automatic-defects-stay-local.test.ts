@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { consolidate } from '../src/consolidate/sleep.js';
 import { Layer } from '../src/core/memory.js';
-import { autoShare, transferScore } from '../src/sharing/shared.js';
+import { autoShare, transferScore } from '../src/sharing/share.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';

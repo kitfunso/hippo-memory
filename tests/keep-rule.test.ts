@@ -18,7 +18,7 @@ import { consolidate } from '../src/consolidate/sleep.js';
 import { deduplicateStore } from '../src/consolidate/dedupe.js';
 import { auditMemory } from '../src/store/audit.js';
 import { closeHippoDb, openHippoDb, withSharedStoreHandles } from '../src/db/index.js';
-import { NO_MERGE_TAGS } from '../src/sharing/shared.js';
+import { NO_MERGE_TAGS } from '../src/sharing/share.js';
 import { forget, listDormant, sleep, supersede, type HippoDbContext } from '../src/api/index.js';
 
 // Each case commits rows to a real store, so its time follows the runner's disk.

@@ -24,7 +24,7 @@ describe('audit log captures every mutation', () => {
       throw new Error(`dist/cli.js not found at ${cli} — run \`npm run build\` first`);
     }
     // HIPPO_HOME is the global root in --global mode (see getGlobalRoot in
-    // src/sharing/shared.ts). Same pattern as tests/recall-why-envelope.test.ts.
+    // src/sharing/global-store.ts). Same pattern as tests/recall-why-envelope.test.ts.
     const home = mkdtempSync(join(tmpdir(), 'hippo-audit-cli-'));
     const env = { ...process.env, HIPPO_HOME: home };
     try {

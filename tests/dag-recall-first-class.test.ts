@@ -22,7 +22,7 @@ import { physicsSearch } from '../src/search/physics-search.js';
 import { isDagSummary } from '../src/search/boosts.js';
 import type { SearchResult } from '../src/core/search-types.js';
 import type { RerankerOptions, RerankResult } from '../src/rerankers/types.js';
-import { searchBothHybrid } from '../src/sharing/shared.js';
+import { searchBothHybrid } from '../src/sharing/search-both.js';
 import { savePhysicsState } from '../src/db/physics-state.js';
 import type { PhysicsParticle } from '../src/core/physics.js';
 

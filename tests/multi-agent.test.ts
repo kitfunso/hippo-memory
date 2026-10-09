@@ -11,10 +11,7 @@ import { createMemory } from './_helpers/default-half-life-memory.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import {
-  transferScore,
-  listPeers,
-} from '../src/sharing/shared.js';
+import { transferScore, listPeers } from '../src/sharing/share.js';
 
 let localDir: string;
 let globalDir: string;

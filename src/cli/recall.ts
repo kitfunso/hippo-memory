@@ -17,7 +17,7 @@ import { estimateTokens } from '../util/token-text.js';
 import { dropHeldCopies } from '../util/same-text.js';
 import { isGlobalStoreRoot } from '../core/project-identity.js';
 import { detectScope } from '../sharing/scope.js';
-import { getGlobalRoot } from '../sharing/shared.js';
+import { getGlobalRoot } from '../sharing/global-store.js';
 import * as api from '../api/index.js';
 import type { PlanningFallacyOutput } from '../predictions/planning-fallacy.js';
 import { detectAnchoring, hashQueryText, biasHintEnabled, snapshotRing } from '../api/recall-history.js';

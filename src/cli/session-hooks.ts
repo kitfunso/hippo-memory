@@ -27,7 +27,7 @@ import { estimateTokens } from '../util/token-text.js';
 import { currentMachine, importSessionFolder } from '../agent-memories/sync.js';
 import { summaryLine } from '../agent-memories/report.js';
 import { resolveProjectIdentity } from '../core/project-identity.js';
-import { getGlobalRoot } from '../sharing/shared.js';
+import { getGlobalRoot } from '../sharing/global-store.js';
 import { cmdCapture, CaptureOptions } from '../capture/command.js';
 import { cmdPreCompact, cmdPostCompact } from '../capture/compact.js';
 import { transcriptWorkingState } from '../capture/working-state.js';

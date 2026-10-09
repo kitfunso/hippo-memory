@@ -5,7 +5,8 @@ import { evalNow } from '../core/ablation.js';
 import { oneCopyPerMemory } from './context-select.js';
 import { compareEntryIdentity, compareScoresDesc } from '../core/compare.js';
 import { isEmbeddingAvailable } from '../store/embeddings/local.js';
-import { activeGoalsWithPolicies, boostByGoals, type GoalRecallLogRow } from '../store/goals.js';
+import { activeGoalsWithPolicies, type GoalRecallLogRow } from '../store/goals.js';
+import { boostByGoals } from '../search/goal-boost.js';
 import { graphExpandRecall } from '../graph/recall.js';
 import { DEFAULT_GRAPH_STREAM_WEIGHT } from '../graph/stream.js';
 import { Layer, type MemoryEntry } from '../core/memory.js';
@@ -18,7 +19,7 @@ import { STRENGTH_RANK_FLOOR, STRENGTH_RANK_SPAN } from '../search/boosts.js';
 import { hybridSearch } from '../search/hybrid.js';
 import { physicsSearch } from '../search/physics-search.js';
 import type { RerankStep, ResultCost, SearchResult } from '../core/search-types.js';
-import { searchBothHybrid } from '../sharing/shared.js';
+import { searchBothHybrid } from '../sharing/search-both.js';
 import { loadRecallSearchEntries, recallScopeFilter } from '../store/search-rows.js';
 import { textOverlap, tokenize as tokenizeQuery } from '../util/tokenize.js';
 

@@ -14,7 +14,7 @@ import type { SessionHandoff } from '../core/handoff.js';
 import { estimateTokens } from '../util/token-text.js';
 import { markRetrieved, type MemoryEntry, COMPACTION_MEMORY_TAG } from '../core/memory.js';
 import { isWorthSurfacing } from '../core/memory-quality.js';
-import { getGlobalRoot } from '../sharing/shared.js';
+import { getGlobalRoot } from '../sharing/global-store.js';
 import type { RecallTraceInput } from '../store/recall-trace.js';
 import { evalNow } from '../core/ablation.js';
 import { dropHeldCopies } from '../util/same-text.js';

@@ -14,7 +14,7 @@ import { loadAllEntries } from '../store/entry-reads.js';
 import { isGitRepo } from '../learn/autolearn.js';
 import { currentMachine, importForStore, importProjectMemories, importUserMemories } from '../agent-memories/sync.js';
 import { emptyReport, mergeReports } from '../agent-memories/report.js';
-import { getGlobalRoot, initGlobal } from '../sharing/shared.js';
+import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
 import { registerWorkspace } from './scheduler.js';
 import { type CliFlags, stringFlag } from './flag-values.js';
 import { printAgentImport } from './print.js';

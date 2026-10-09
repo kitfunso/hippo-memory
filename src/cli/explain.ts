@@ -8,7 +8,7 @@ import { DEFAULT_RECALL_BUDGET, type SearchResult } from '../core/search-types.j
 import { loadConfig } from '../core/config.js';
 import { dropHeldCopies } from '../util/same-text.js';
 import { detectScope } from '../sharing/scope.js';
-import { getGlobalRoot } from '../sharing/shared.js';
+import { getGlobalRoot } from '../sharing/global-store.js';
 import * as api from '../api/index.js';
 import { resolveTenantId } from '../store/tenant.js';
 import type { RankRecallResult } from '../api/recall-pipeline.js';

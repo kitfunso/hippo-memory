@@ -5,7 +5,7 @@ import * as fs from 'fs';
 import type { MemoryEntry } from '../core/memory.js';
 import { loadAllEntries } from '../store/entry-reads.js';
 import { loadConfig } from '../core/config.js';
-import { getGlobalRoot } from '../sharing/shared.js';
+import { getGlobalRoot } from '../sharing/global-store.js';
 import { runEval, bootstrapCorpus, compareSummaries, type EvalCase, type EvalSummary } from '../eval/eval.js';
 import { runFeatureEval, formatResult, resultToBaseline, detectRegressions, type EvalBaseline } from '../eval/eval-suite.js';
 import { PACKAGE_VERSION } from '../util/version.js';

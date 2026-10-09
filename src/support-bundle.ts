@@ -6,7 +6,7 @@ import * as path from 'path';
 import { pathToFileURL } from 'url';
 import { findHippoStoreDir, isGlobalStoreRoot } from './core/project-identity.js';
 import { realpathOrResolve } from './util/real-path.js';
-import { getGlobalRoot } from './sharing/shared.js';
+import { getGlobalRoot } from './sharing/global-store.js';
 import { isInitialized } from './store/open.js';
 import { readStoreInventory } from './store/diagnostics.js';
 import { runDoctor, type DoctorOpts } from './doctor.js';

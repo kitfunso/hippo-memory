@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { INTERNAL_ERROR_MESSAGE, mapApiError } from '../util/http-util.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
 import { currentRequestId } from '../util/request-scope.js';
-import { getGlobalRoot } from '../sharing/shared.js';
+import { getGlobalRoot } from '../sharing/global-store.js';
 import { loadConfig } from '../core/config.js';
 import type { Actor as ApiActor } from '../api/index.js';
 import { findHippoStoreDir, type ResolveProjectIdentityOpts } from '../core/project-identity.js';

@@ -7,7 +7,7 @@ import { calculateStrength, type MemoryEntry } from '../core/memory.js';
 import { auditQueryFields, recordAuditEvent, type AppendAuditOpts } from '../store/audit.js';
 import type { ContextReads, HippoStore } from '../store/index.js';
 import { isWorthSurfacing } from '../core/memory-quality.js';
-import { rankBothStores } from '../sharing/shared.js';
+import { rankBothStores } from '../sharing/search-both.js';
 import { evalNow } from '../core/ablation.js';
 import { hybridSearch } from '../search/hybrid.js';
 import { physicsSearch } from '../search/physics-search.js';

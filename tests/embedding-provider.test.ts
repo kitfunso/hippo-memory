@@ -7,7 +7,8 @@ import {
   resolveEmbeddingIdentity,
   isEmbeddingConfigured,
 } from '../src/store/embeddings/provider.js';
-import { saveEmbeddingIndex, embeddingModelRequiresReindex, saveStoredEmbeddingModel } from '../src/store/embeddings/index.js';
+import { embeddingModelRequiresReindex, saveStoredEmbeddingModel } from '../src/store/embeddings/index.js';
+import { saveEmbeddingIndex } from '../src/store/vector-index.js';
 
 interface EmbeddingsConfig {
   provider?: string;

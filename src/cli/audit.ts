@@ -10,7 +10,7 @@ import { printError } from './output.js';
 import { type CliFlags, type CommandContext, boolFlag, flagIsTrue, stringFlag } from './flag-values.js';
 import { requireInit, resolveAuthRoot } from './shared.js';
 import { repairAutomaticMemories } from './quality-repair.js';
-import { getGlobalRoot } from '../sharing/shared.js';
+import { getGlobalRoot } from '../sharing/global-store.js';
 import { errorMessage } from '../util/log.js';
 
 // ---------------------------------------------------------------------------

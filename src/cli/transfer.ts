@@ -9,20 +9,15 @@ import { readEntry, loadAllEntries } from '../store/entry-reads.js';
 import { schemaFitInStore } from '../store/candidates.js';
 import { updateStats } from '../store/index-and-stats.js';
 import { RejectedValueError } from '../store/rejection.js';
-import { embedAll, embedMemory, loadEmbeddingIndex } from '../store/embeddings/index.js';
+import { embedAll, embedMemory } from '../store/embeddings/index.js';
+import { loadEmbeddingIndex } from '../store/vector-index.js';
 import { loadConfig } from '../core/config.js';
 import { captureError, runWatched } from '../learn/autolearn.js';
 import { currentMachine, importAtSessionEnd, importForStore } from '../agent-memories/sync.js';
 import { detailLines } from '../agent-memories/report.js';
-import {
-  getGlobalRoot,
-  initGlobal,
-  shareMemory,
-  listPeers,
-  autoShare,
-  transferScore,
-  syncGlobalToLocal,
-} from '../sharing/shared.js';
+import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
+import { shareMemory, listPeers, autoShare, transferScore } from '../sharing/share.js';
+import { syncGlobalToLocal } from '../sharing/global-sync.js';
 import {
   importChatGPT,
   importClaude,

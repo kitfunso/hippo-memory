@@ -10,14 +10,14 @@ import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { MemoryEntry } from '../../core/memory.js';
 import { loadAllEntries } from '../entry-reads.js';
-import { openHippoDb, closeHippoDb, getMeta, rethrowIfSqliteBlocked, setMeta, type DatabaseSyncLike } from '../../db/index.js';
+import { rethrowIfSqliteBlocked } from '../../db/index.js';
+import { EMBEDDING_MODEL_META_KEY } from '../../db/vector-store.js';
+import { initializeParticle } from '../../db/physics-state.js';
 import {
-  EMBEDDING_MODEL_META_KEY, deleteOrphanVectors, hasStoredVectors, loadVectors, loadVectorViews, replaceAllVectors, storedVectorIds, upsertVectors,
-} from '../../db/vector-store.js';
-import { initializeParticle, savePhysicsState, loadPhysicsState, resetAllPhysicsState } from '../../db/physics-state.js';
+  indexedModel, pruneStoredVectors, replacesIndex, resetStoredParticles, saveEmbeddingIndex, saveIndexIdentity, saveStoredVectors, seedStoredParticle, storedIndexState,
+} from '../vector-index.js';
 import { loadConfig } from '../../core/config.js';
 import { resolveEmbeddingProvider, type EmbeddingProvider } from './provider.js';
-import { DEFAULT_EMBEDDING_MODEL } from './local.js';
 import { redactSecretsStrict } from '../../util/secret-detect.js';
 import { errorMessage, log } from '../../util/log.js';
 import { StoreNotPortedError } from '../../util/sqlite-blocked.js';
@@ -82,13 +82,7 @@ export function embeddingInputText(entry: { content: string; tags: string[] }): 
 
 function loadStoredEmbeddingModel(hippoRoot: string): string | null {
   try {
-    const db = openHippoDb(hippoRoot);
-    try {
-      const model = getMeta(db, EMBEDDING_MODEL_META_KEY, '').trim();
-      return model || null;
-    } finally {
-      closeHippoDb(db);
-    }
+    return storedIndexState(hippoRoot).storedModel;
   } catch (err) {
     rethrowIfSqliteBlocked(err);
     log.debug(`stored embedding model unreadable: ${errorMessage(err)}`);
@@ -103,34 +97,12 @@ function loadStoredEmbeddingModel(hippoRoot: string): string | null {
  * consistent with the compare side in `embeddingModelRequiresReindex`.
  */
 export function saveStoredEmbeddingModel(hippoRoot: string, model: string): void {
-  const db = openHippoDb(hippoRoot);
-  try {
-    setMeta(db, EMBEDDING_MODEL_META_KEY, embeddingIndexIdentity(model));
-  } finally {
-    closeHippoDb(db);
-  }
-}
-
-/** What a store's vector index was built by: the stored identity, and whether any vector exists. */
-export interface EmbeddingIndexState {
-  readonly storedModel: string | null;
-  readonly hasVectors: boolean;
-}
-
-/** The model the index was built by: the stored identity, else the default model when vectors exist. */
-export function indexedModel(state: EmbeddingIndexState): string | null {
-  return state.storedModel ?? (state.hasVectors ? DEFAULT_EMBEDDING_MODEL : null);
+  saveIndexIdentity(hippoRoot, embeddingIndexIdentity(model));
 }
 
 /** The one rebuild rule every store applies to its indexed model. */
 export function indexNeedsRebuild(indexed: string | null, providerId: string): boolean {
   return indexed !== null && indexed !== embeddingIndexIdentity(providerId);
-}
-
-/** Whether a vector write under the index identity `model` first drops the stored index, which another model built. */
-export function replacesIndex(state: EmbeddingIndexState, model: string): boolean {
-  const indexed = indexedModel(state);
-  return indexed !== null && indexed !== model;
 }
 
 export function resolveIndexedEmbeddingModel(
@@ -139,7 +111,7 @@ export function resolveIndexedEmbeddingModel(
 ): string | null {
   const storedModel = loadStoredEmbeddingModel(hippoRoot);
   if (storedModel) return storedModel;
-  return indexedModel({ storedModel, hasVectors: index ? Object.keys(index).length > 0 : withVectorDb(hippoRoot, hasStoredVectors) });
+  return indexedModel({ storedModel, hasVectors: index ? Object.keys(index).length > 0 : storedIndexState(hippoRoot).hasVectors });
 }
 
 export function embeddingModelRequiresReindex(
@@ -148,18 +120,6 @@ export function embeddingModelRequiresReindex(
   index?: Record<string, number[]>,
 ): boolean {
   return indexNeedsRebuild(resolveIndexedEmbeddingModel(hippoRoot, index), model);
-}
-
-/** hippo.db's index state, the meta row and the EXISTS on one handle. */
-export function embeddingIndexStateAt(hippoRoot: string): EmbeddingIndexState {
-  return withVectorDb(hippoRoot, embeddingIndexStateOn);
-}
-
-export function embeddingIndexStateOn(db: DatabaseSyncLike): EmbeddingIndexState {
-  return {
-    storedModel: getMeta(db, EMBEDDING_MODEL_META_KEY, '').trim() || null,
-    hasVectors: hasStoredVectors(db),
-  };
 }
 
 async function rebuildEmbeddingIndex(
@@ -192,12 +152,7 @@ function resetPhysicsFromIndex(
   index: Record<string, number[]>,
 ): void {
   try {
-    const db = openHippoDb(hippoRoot);
-    try {
-      resetAllPhysicsState(db, entries, index);
-    } finally {
-      closeHippoDb(db);
-    }
+    resetStoredParticles(hippoRoot, entries, index);
   } catch (err) {
     // Best effort: retrieval still falls back without physics state.
     log.warn(`physics reset after reindex failed: ${errorMessage(err)}`);
@@ -235,35 +190,6 @@ export function cosineOf(a: ArrayLike<number>, b: ArrayLike<number>): number {
   if (denom < 1e-10) return 0;
   // Clamp to [-1, 1] to handle floating point drift
   return Math.min(1, Math.max(-1, dot / denom));
-}
-
-function withVectorDb<T>(hippoRoot: string, fn: (db: DatabaseSyncLike) => T): T {
-  const db = openHippoDb(hippoRoot);
-  try {
-    return fn(db);
-  } finally {
-    closeHippoDb(db);
-  }
-}
-
-/** Every stored vector keyed by memory id; `{}` when none. Search reads only the rows it ranks via `loadStoredVectors`. */
-export function loadEmbeddingIndex(hippoRoot: string): Record<string, number[]> {
-  return Object.fromEntries(withVectorDb(hippoRoot, (db) => loadVectors(db)));
-}
-
-/** Stored vectors for `ids` only. */
-export function loadStoredVectors(hippoRoot: string, ids: readonly string[]): Map<string, number[]> {
-  return ids.length === 0 ? new Map() : withVectorDb(hippoRoot, (db) => loadVectors(db, ids));
-}
-
-/** `loadStoredVectors` as Float32 views, for a caller that only scores them. */
-export function loadStoredVectorViews(hippoRoot: string, ids: readonly string[]): Map<string, Float32Array> {
-  return ids.length === 0 ? new Map() : withVectorDb(hippoRoot, (db) => loadVectorViews(db, ids));
-}
-
-/** Replace every stored vector with `index`; `model` defaults to the stored index identity. */
-export function saveEmbeddingIndex(hippoRoot: string, index: Record<string, number[]>, model?: string): void {
-  withVectorDb(hippoRoot, (db) => replaceAllVectors(db, index, model ?? getMeta(db, EMBEDDING_MODEL_META_KEY, '')));
 }
 
 const EMBED_LOCK_FILE = 'embeddings.lock';
@@ -468,7 +394,7 @@ export async function embedMemory(
       const [vector] = await provider.embed([text], 'passage');
       if (!vector || vector.length === 0) return;
 
-      withVectorDb(hippoRoot, (db) => upsertVectors(db, [[entry.id, vector]], embeddingIndexIdentity(identity)));
+      saveStoredVectors(hippoRoot, [[entry.id, vector]], embeddingIndexIdentity(identity));
       saveStoredEmbeddingModel(hippoRoot, identity);
 
       // Initialize physics state for this memory
@@ -497,16 +423,7 @@ async function rebuildIndexForProvider(hippoRoot: string, provider: EmbeddingPro
 
 function initializePhysicsIfMissing(hippoRoot: string, entry: MemoryEntry, vector: number[]): void {
   try {
-    const db = openHippoDb(hippoRoot);
-    try {
-      const existing = loadPhysicsState(db, [entry.id]);
-      if (!existing.has(entry.id)) {
-        const particle = initializeParticle(entry, vector);
-        savePhysicsState(db, [particle]);
-      }
-    } finally {
-      closeHippoDb(db);
-    }
+    seedStoredParticle(hippoRoot, entry, vector);
   } catch (err) {
     // Physics init is best-effort and must not fail the embedding that just landed.
     log.debug(`physics state not initialised for ${entry.id}: ${errorMessage(err)}`);
@@ -570,7 +487,7 @@ async function backfillPending(
       if (vec && vec.length > 0) rows.push([chunk[j].id, vec]);
       else noteSkippedEmbedding(chunk[j].id);
     }
-    count += withVectorDb(hippoRoot, (db) => upsertVectors(db, rows, model));
+    count += saveStoredVectors(hippoRoot, rows, model);
   }
   return { count, backfillError };
 }
@@ -605,10 +522,7 @@ export async function embedAll(
       return Object.keys(rebuiltIndex).length;
     }
 
-    const embedded = withVectorDb(hippoRoot, (db) => {
-      deleteOrphanVectors(db);
-      return storedVectorIds(db);
-    });
+    const embedded = pruneStoredVectors(hippoRoot);
     const pending = entries.filter((e) => !embedded.has(e.id));
     const { count, backfillError } = await backfillPending(hippoRoot, provider, pending, model);
 

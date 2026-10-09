@@ -1,5 +1,5 @@
 import { refreshParticleProperties } from '../db/physics-state.js';
-import { loadStoredParticles, saveStoredParticles } from '../store/vector-writes.js';
+import { loadStoredParticles, saveStoredParticles } from '../store/vector-index.js';
 import { simulate, type ForceContext } from '../core/physics.js';
 import type { SleepRun } from './run.js';
 import { errorMessage } from '../util/log.js';

@@ -820,14 +820,18 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `parseListLimit`: Parse a `?limit=` query param for the E2 list routes. Defaults to 100; requires a positive INTEGER <= 1000. Number.isInteger rejects fractional values like "1.5" that Number.isFinite would pass but SQLite `LIMIT ?` rejects with a datatype mismatch (a 500).
 - `validateIdSegment`: v1.6.4: charset + length validation for `:id` route captures.
 
-### src/sharing/shared.ts
+### src/sharing/global-store.ts
 - `promoteToGlobal`: CD5: same veto as shareMemory; a promoted copy would have no quarantine record to review.
+
+### src/sharing/search-both.ts
 - `searchBoth`: T2 note: PLAIN stable score sort on purpose -- local/global inputs are each deterministically ordered (content tail applied in the underlying search), stability inherits that, and an exact post-bump tie keeps the LOCAL result ahead of the global one (the concat order), preserving the pre-T2 semantics.
 - `HybridSearchOptions.summaryDeboost`: v0.30 / E4 — propagated to underlying hybridSearch calls.
 - `HybridSearchOptions.summaryFreshness`: v0.30 / E4 — propagated.
 - `HybridSearchOptions.recallScope`: v1.25.0 — recall-mode scope filter, consumed by `searchBothHybrid` only.
 - `searchBothHybrid`: v1.25.0 recall mode: push the scope predicate into SQL exactly like api.recall (loadRecallSearchEntries)
 - `rankBothStores`: T2 note: PLAIN stable score sort on purpose -- see searchBoth above; same rationale (deterministic inputs + stability; local-first on ties).
+
+### src/sharing/share.ts
 - `shareMemory`: v39 S4 producer veto: secrets never go to the global store, not even with --force.
 - `shareMemory`: CD5: a quarantined row is unreviewed input, not a lesson; sharing it would spread poison globally.
 - `listPeers`: D4 v1.12.10: `tenantId` is now optional.
@@ -841,6 +845,8 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `autoShare`: v1.25.0: `options.stats` is an opt-in out-param.
 - `autoShare`: AT1: `stats.rejectedSkipped` (optional) is incremented once per candidate refused by the GLOBAL store's rejection tombstone
 - `autoShare`: L9: host-wide read. The global store IS the union across all tenants; per-tenant filtering on the global root would defeat the purpose.
+
+### src/sharing/global-sync.ts
 - `syncGlobalToLocal`: L9: host-wide read. syncGlobalToLocal copies the global union into a tenant-scoped local store
 
 ### src/objects/skills.ts

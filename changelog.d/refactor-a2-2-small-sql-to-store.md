@@ -1,3 +1,0 @@
-### Changed
-
-- **Internal: 14 small SQL statements moved into the store layer.** Session owners, half-life migration, project merge and agent-memory sync call store functions instead of preparing SQL. No behaviour changes.

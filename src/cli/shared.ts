@@ -7,7 +7,7 @@ import { isSharedStore } from '../core/config.js';
 import { isInitialized } from '../store/open.js';
 import { type ChurnStaleResult, detectChurnStale } from '../learn/invalidation.js';
 import { resolveProjectIdentity } from '../core/project-identity.js';
-import { getGlobalRoot, initGlobal } from '../sharing/shared.js';
+import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
 import { type AuditOp, reportAuditWriteFailure } from '../store/audit.js';
 import { sqliteSyncStore } from '../store/sqlite/store.js';
 import * as client from './client.js';

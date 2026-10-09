@@ -76,11 +76,10 @@ export { strengthBucket } from './consolidate/dedupe.js';
 export { isEmbeddingAvailable, getEmbedding } from './store/embeddings/local.js';
 export {
   cosineSimilarity,
-  loadEmbeddingIndex,
-  saveEmbeddingIndex,
   embedMemory,
   embedAll,
 } from './store/embeddings/index.js';
+export { loadEmbeddingIndex, saveEmbeddingIndex } from './store/vector-index.js';
 
 // Feature 2: Auto-learn from errors
 export {
@@ -93,19 +92,10 @@ export {
 } from './learn/autolearn.js';
 
 // Feature 3: Cross-agent shared memory
-export {
-  getGlobalRoot,
-  initGlobal,
-  promoteToGlobal,
-  searchBoth,
-  searchBothHybrid,
-  syncGlobalToLocal,
-  HybridSearchOptions,
-  transferScore,
-  shareMemory,
-  listPeers,
-  autoShare,
-} from './sharing/shared.js';
+export { getGlobalRoot, initGlobal, promoteToGlobal } from './sharing/global-store.js';
+export { searchBoth, searchBothHybrid, HybridSearchOptions } from './sharing/search-both.js';
+export { syncGlobalToLocal } from './sharing/global-sync.js';
+export { transferScore, shareMemory, listPeers, autoShare } from './sharing/share.js';
 
 // Feature 5: Working memory
 export {

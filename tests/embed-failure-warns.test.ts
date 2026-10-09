@@ -6,7 +6,8 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { embedMemory, loadEmbeddingIndex } from '../src/store/embeddings/index.js';
+import { embedMemory } from '../src/store/embeddings/index.js';
+import { loadEmbeddingIndex } from '../src/store/vector-index.js';
 
 const KEY_ENV = 'OPENAI_API_KEY';
 // Built from parts so the repo's secret scan does not flag the test file.

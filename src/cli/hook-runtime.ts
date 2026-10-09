@@ -15,7 +15,7 @@ import { blockHash } from '../util/token-text.js';
 import { importAtSessionEnd, currentMachine } from '../agent-memories/sync.js';
 import { summaryLine } from '../agent-memories/report.js';
 import { isGlobalStoreRoot } from '../core/project-identity.js';
-import { getGlobalRoot } from '../sharing/shared.js';
+import { getGlobalRoot } from '../sharing/global-store.js';
 import { sanitizeLogMessage } from '../capture/compact.js';
 import { resolveTenantId } from '../store/tenant.js';
 import { errorMessage, log } from '../util/log.js';
