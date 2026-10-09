@@ -29,7 +29,8 @@ const { contextCost } = await load('context-render.js');
 const { createDeliveryRecorder } = await load('delivery-recorder.js');
 const { writeDeliveryEventOnHandle } = await load('store/recall-trace.js');
 const { openHippoDb, closeHippoDb } = await load('db.js');
-const { blockHash, recordTokenUse } = await load('token-ledger.js');
+const { blockHash } = await load('util/token-text.js');
+const { recordTokenUse } = await load('token-ledger.js');
 
 // Same seed, vocabulary and prompt as scripts/hook-latency.mjs, so the stores match.
 function mulberry32(seed) {

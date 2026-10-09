@@ -15,7 +15,7 @@ import { saveSessionHandoff, loadLatestHandoff } from '../src/store/handoffs.js'
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/memory.js';
 import { buildProvenanceCoverage } from '../src/cli/provenance-coverage.js';
 import { buildCorrectionLatency } from '../src/cli/correction-latency.js';
-import { estimateTokens } from '../src/token-ledger.js';
+import { estimateTokens } from '../src/util/token-text.js';
 
 let tmpDir: string;
 

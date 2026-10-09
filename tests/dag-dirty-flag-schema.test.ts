@@ -14,10 +14,15 @@ import * as os from 'os';
 import * as path from 'path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { loadDirtySummaries, markSummaryDirty } from '../src/store/summaries.js';
+import { loadAllDirtySummaries, markSummaryDirty } from '../src/store/summaries.js';
 import { openHippoDb } from '../src/db.js';
-import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/memory.js';
 import { queryAuditEvents } from '../src/store/audit.js';
+
+// loadAllDirtySummaries is the production reader; the tenant filter stands in for the per-tenant wrapper.
+function dirtyFor(root: string, tenantId: string): MemoryEntry[] {
+  return loadAllDirtySummaries(root).filter((m) => m.tenantId === tenantId);
+}
 
 describe('v28 schema migration + dirty-flag plumbing', () => {
   let hippoRoot: string;
@@ -77,8 +82,8 @@ describe('v28 schema migration + dirty-flag plumbing', () => {
     db.prepare(`UPDATE memories SET tenant_id = ? WHERE id = ?`).run('tenant2', summaryB.id);
     db.close();
     markSummaryDirty(hippoRoot, summaryA.id, 'default', 'test-actor');
-    expect(loadDirtySummaries(hippoRoot, 'default').map((m) => m.id)).toEqual([summaryA.id]);
-    expect(loadDirtySummaries(hippoRoot, 'tenant2').map((m) => m.id)).toEqual([]);
+    expect(dirtyFor(hippoRoot, 'default').map((m) => m.id)).toEqual([summaryA.id]);
+    expect(dirtyFor(hippoRoot, 'tenant2').map((m) => m.id)).toEqual([]);
   });
 
   it('markSummaryDirty is idempotent (second call writes no audit row + summary_dirty stays 1)', () => {
@@ -103,7 +108,7 @@ describe('v28 schema migration + dirty-flag plumbing', () => {
     const leaf = createMemory('a leaf', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Semantic, dag_level: 1 });
     writeEntry(hippoRoot, leaf);
     markSummaryDirty(hippoRoot, leaf.id, 'default', 'actor');
-    expect(loadDirtySummaries(hippoRoot, 'default')).toEqual([]);
+    expect(dirtyFor(hippoRoot, 'default')).toEqual([]);
     const db = openHippoDb(hippoRoot);
     const auditRows = db.prepare(
       `SELECT * FROM audit_log WHERE op = 'summary_marked_dirty'`,
@@ -114,7 +119,7 @@ describe('v28 schema migration + dirty-flag plumbing', () => {
 
   it('markSummaryDirty no-ops on unknown id (R1 MED-3 test gap)', () => {
     markSummaryDirty(hippoRoot, 'sem_does_not_exist', 'default', 'actor');
-    expect(loadDirtySummaries(hippoRoot, 'default')).toEqual([]);
+    expect(dirtyFor(hippoRoot, 'default')).toEqual([]);
     const db = openHippoDb(hippoRoot);
     const auditRows = db.prepare(
       `SELECT * FROM audit_log WHERE op = 'summary_marked_dirty'`,
@@ -138,8 +143,8 @@ describe('v28 schema migration + dirty-flag plumbing', () => {
     // Attack: mark dirty using the WRONG tenant.
     markSummaryDirty(hippoRoot, summaryB.id, 'default', 'attacker');
     // Verify: tenant2 still sees no dirty rows, no audit row written.
-    expect(loadDirtySummaries(hippoRoot, 'tenant2')).toEqual([]);
-    expect(loadDirtySummaries(hippoRoot, 'default')).toEqual([]);
+    expect(dirtyFor(hippoRoot, 'tenant2')).toEqual([]);
+    expect(dirtyFor(hippoRoot, 'default')).toEqual([]);
     const db2 = openHippoDb(hippoRoot);
     const auditRows = db2.prepare(
       `SELECT * FROM audit_log WHERE op = 'summary_marked_dirty' AND target_id = ?`,

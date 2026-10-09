@@ -21,6 +21,7 @@ import { isLocalCaller, LIMITER_MAX_KEYS } from './auth.js';
 import { enforceRateLimit, warnIfClientIpHeaderUnpinned } from './client-ip.js';
 import { answerAtDeadline, handlerDeadlineCount, isAbandoned, requestDeadlineFor } from './deadline.js';
 import { drainAndClose } from './lifecycle.js';
+import { readyProbeFor } from './ready.js';
 import { installCrashHandlers } from '../util/crash-handlers.js';
 import { handleMcpPost, handleMcpStream } from './mcp-http.js';
 import { MCP_PROJECT_SCOPED_HEADER } from '../project-identity.js';
@@ -159,10 +160,7 @@ async function sendReady(res: ServerResponse, store: HippoStore): Promise<void> 
     sendJson(res, 200, { ok: true, store: 'unchecked' });
     return;
   }
-  try {
-    await runWithRequestStores(() => readiness.ping(), { busyWaitMs: SERVER_DB_WAIT_MS });
-  } catch (err) {
-    log.warn(`GET /ready: the store did not answer: ${errorMessage(err)}`, errorFields(err));
+  if (!(await readyProbeFor(store, readiness)())) {
     sendJson(res, 503, { ok: false, error: 'store_unavailable' });
     return;
   }

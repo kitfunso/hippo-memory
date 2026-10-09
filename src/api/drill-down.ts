@@ -2,7 +2,7 @@
 
 import { requireGroup, storeFor } from '../store-port.js';
 import type { DescendantOrigin, SummaryDescendants } from '../store/port.js';
-import { estimateTokens } from '../token-ledger.js';
+import { estimateTokens } from '../util/token-text.js';
 import type { MemoryEntry } from '../memory.js';
 import { passesScopeFilterForRecall, personalScopeOf } from '../recall-scope.js';
 import { classifyOriginProject } from '../project-identity.js';

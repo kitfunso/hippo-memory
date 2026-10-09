@@ -1,7 +1,7 @@
 // Session context assembly under a token budget.
 
 import { requireGroup, storeFor } from '../store-port.js';
-import { estimateTokens } from '../token-ledger.js';
+import { estimateTokens } from '../util/token-text.js';
 import type { MemoryEntry } from '../memory.js';
 import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../recall-scope.js';
 import { classifyOriginProject, projectNames } from '../project-identity.js';
