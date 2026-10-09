@@ -33,10 +33,40 @@ function checkTaskRole(t, families, index) {
   }
 }
 
-/** The one answer to "is this the same checker": the whole invocation (script path as written, its bytes, its args), so an args-only or path-only fix is a fix. */
+const STATIC_IMPORT = /^[ \t]*(?:import|export)\b[^'"`;]*?(['"])(\.\.?\/[^'"\n]+)\1/gm;
+const CALL_IMPORT = /\b(?:import|require)\s*\(\s*(['"])(\.\.?\/[^'"\n]+)\1/g;
+
+// Fails closed on an import that names no file, so a missing extension cannot hide a helper.
+function checkerFiles(entry) {
+  const entryDir = path.dirname(entry);
+  const seen = new Map();
+  const queue = [{ abs: entry }];
+  while (queue.length) {
+    const { abs, from, spec } = queue.pop();
+    if (seen.has(abs)) continue;
+    let bytes;
+    try {
+      bytes = fs.readFileSync(abs);
+    } catch (e) {
+      if (from && (e.code === 'ENOENT' || e.code === 'EISDIR')) {
+        throw new Error(`checker ${path.basename(from)} imports "${spec}", which is not a file at ${abs}; write the file name with its extension`);
+      }
+      throw e;
+    }
+    seen.set(abs, [abs === entry ? '' : path.relative(entryDir, abs).split(path.sep).join('/'), createHash('sha256').update(bytes).digest('hex')]);
+    const text = bytes.toString('utf8');
+    for (const re of [STATIC_IMPORT, CALL_IMPORT]) {
+      for (const m of text.matchAll(re)) {
+        queue.push({ abs: path.resolve(path.dirname(abs), m[2]), from: abs, spec: m[2] });
+      }
+    }
+  }
+  return [...seen.values()].sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+}
+
+/** The checker's content (entry, its local imports, its args), so a moved results folder reads unchanged and a changed helper reads changed; computed specifiers, packages and run-time reads are outside it. */
 export function checkerIdentity(lesson) {
-  const bytes = createHash('sha256').update(fs.readFileSync(lesson.checkPath)).digest('hex');
-  return createHash('sha256').update(JSON.stringify([bytes, lesson.check.script, lesson.check.args ?? []])).digest('hex');
+  return createHash('sha256').update(JSON.stringify([checkerFiles(lesson.checkPath), lesson.check.args ?? []])).digest('hex');
 }
 
 function checkLesson(l, baseDir) {
@@ -48,6 +78,11 @@ function checkLesson(l, baseDir) {
   if (!baseDir) throw new Error('validateTasks needs the tasks file\'s directory to resolve checker scripts');
   l.checkPath = path.resolve(baseDir, l.check.script);
   if (!fs.existsSync(l.checkPath)) throw new Error(`lesson ${l.id}: check.script ${l.check.script} not found at ${l.checkPath}`);
+  try {
+    checkerFiles(l.checkPath);
+  } catch (e) {
+    throw new Error(`lesson ${l.id}: ${e.message}`);
+  }
 }
 
 function checkFamilyLessons(f, spec, baseDir) {

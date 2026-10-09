@@ -272,11 +272,61 @@ describe('reader sample labels and scoring', () => {
     expect(draw(s.out, s.tasks, ['--round', '2', '--n', '6'])).toMatchObject({ code: 0 });
   });
 
-  it('the same bytes at another script path are another checker, since a copy can import a different sibling (27d)', () => {
-    const copy = join(tmp('z0-ident-'), 'toggle.mjs');
-    writeFileSync(copy, readFileSync(join(CHECKS, 'toggle.mjs')));
-    const at = (script: string) => checkerIdentity({ checkPath: script, check: { script, args: [] } });
-    expect(at(copy)).not.toBe(at(join(CHECKS, 'toggle.mjs')));
+  describe('checker identity is content, not path (27d-27i)', () => {
+    const at = (dir: string, entry = 'check.mjs', args: string[] = []) => checkerIdentity({ checkPath: join(dir, entry), check: { script: entry, args } });
+    const put = (dir: string, files: Record<string, string>) => {
+      for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text);
+      return dir;
+    };
+    const IMPORTS_HELPER = "import { v } from './helper.mjs';\nconsole.log(v);\n";
+
+    it('the same entry bytes with a different sibling helper are another checker (27d)', () => {
+      const a = put(tmp('z0-ident-'), { 'check.mjs': IMPORTS_HELPER, 'helper.mjs': 'export const v = 1;\n' });
+      const b = put(tmp('z0-ident-'), { 'check.mjs': IMPORTS_HELPER, 'helper.mjs': 'export const v = 2;\n' });
+      expect(at(a)).not.toBe(at(b));
+    });
+
+    it('a copied folder, or a renamed entry, is the same checker (27e)', () => {
+      const files = { 'check.mjs': IMPORTS_HELPER, 'helper.mjs': 'export const v = 1;\n' };
+      const a = put(tmp('z0-ident-'), files);
+      const b = put(tmp('z0-ident-'), files);
+      expect(at(a)).toBe(at(b));
+      writeFileSync(join(b, 'renamed.mjs'), IMPORTS_HELPER);
+      expect(at(b, 'renamed.mjs')).toBe(at(a));
+    });
+
+    it('an import cycle ends, and a byte in the far file changes the identity (27f)', () => {
+      const d = put(tmp('z0-ident-'), { 'check.mjs': "import './a.mjs';\n", 'a.mjs': "import './b.mjs';\n", 'b.mjs': "import './a.mjs';\n// one\n" });
+      const before = at(d);
+      writeFileSync(join(d, 'b.mjs'), "import './a.mjs';\n// two\n");
+      expect(at(d)).not.toBe(before);
+    });
+
+    it.each([
+      ['named import', 'check.mjs', "import { v } from './h.mjs';\n", 'h.mjs'],
+      ['bare import', 'check.mjs', "import './h.mjs';\n", 'h.mjs'],
+      ['multi-line import', 'check.mjs', 'import {\n  v,\n} from "./h.mjs";\n', 'h.mjs'],
+      ['export star', 'check.mjs', "export * from './h.mjs';\n", 'h.mjs'],
+      ['dynamic import', 'check.mjs', "const m = await import('./h.mjs');\n", 'h.mjs'],
+      ['require in cjs', 'check.cjs', "const m = require('./h.cjs');\n", 'h.cjs'],
+    ])('follows a %s (27g)', (_name, entry, text, helper) => {
+      const d = put(tmp('z0-ident-'), { [entry]: text, [helper]: '// one\n' });
+      const before = at(d, entry);
+      writeFileSync(join(d, helper), '// two\n');
+      expect(at(d, entry)).not.toBe(before);
+    });
+
+    it('an import that names no file throws and names the specifier (27h)', () => {
+      const d = put(tmp('z0-ident-'), { 'check.cjs': "require('./helper');\n", 'helper.js': '// here\n' });
+      expect(() => at(d, 'check.cjs')).toThrow('./helper');
+    });
+
+    it('a string that only looks like an import is ignored (27i)', () => {
+      const a = put(tmp('z0-ident-'), { 'check.mjs': 'const BAD = "from \'./legacy.mjs\'";\n' });
+      expect(() => at(a)).not.toThrow();
+      const b = put(tmp('z0-ident-'), { 'check.mjs': 'const BAD = "from \'./legacy.mjs\'";\n' });
+      expect(at(a)).toBe(at(b));
+    });
   });
 
   it('draws round K only after round K-1 failed and a checker changed since its draw; a scored round is final (27b, 166)', () => {
