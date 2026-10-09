@@ -1,5 +1,5 @@
 {
-  "count": 178,
+  "count": 174,
   "exports": [
     "src/ablation.ts:_resetAblationCacheForTests",
     "src/agent-memories/claude-code.ts:claudeFolderName",
@@ -84,10 +84,6 @@
     "src/graph-extract.ts:loadGraphSources",
     "src/graph-view.ts:layoutGraph",
     "src/graph/delta.ts:entityKey",
-    "src/graph/read.ts:loadEntityById",
-    "src/graph/read.ts:loadExtractionQueue",
-    "src/graph/write.ts:enqueueExtraction",
-    "src/graph/write.ts:markExtractionProcessed",
     "src/half-life-migration.ts:planHalfLifeMigration",
     "src/half-life-migration.ts:storeHalfLifeBase",
     "src/hooks/copilot.ts:COPILOT_INSTRUCTIONS",
