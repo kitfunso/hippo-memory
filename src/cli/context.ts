@@ -1,6 +1,5 @@
 // The `hippo context` verb, which the per-prompt hook also runs; main() loads it lazily from the command table.
 
-import { MemoryEntry } from '../memory.js';
 import type { DeliveryRecorder } from '../delivery-recorder.js';
 import { isSubagentPayload, recordTokenUse } from '../token-ledger.js';
 import { estimateTokens } from '../util/token-text.js';
@@ -240,7 +239,7 @@ function renderContextMarkdown(view: ContextView): void {
     if (result.recentEvents && result.recentEvents.length > 0) {
       printSessionEvents(result.recentEvents);
     }
-    if (renderItems.length > 0) printContextMarkdown(renderItems, t, framing);
+    if (renderItems.length > 0) for (const line of contextBlockLines(renderItems, t, framing)) console.log(line);
     printCrossProjectSection(crossEntries);
     if (result.ambientState) {
       console.log(`\n${renderAmbientSummary(result.ambientState)}`);
@@ -259,16 +258,6 @@ function renderContextMarkdown(view: ContextView): void {
 
 function printCrossProjectSection(items: api.ContextResultEntry[]): void {
   for (const line of crossProjectLines(items)) console.log(line);
-}
-
-/** @internal Exported for the render snapshot test; not a stable public API. */
-export function printContextMarkdown(
-  items: Array<{ entry: MemoryEntry; score: number; tokens: number; isGlobal: boolean }>,
-  totalTokens: number,
-  framing: string = 'observe',
-  opts: { showStrength?: boolean; heading?: string } = {}
-): void {
-  for (const line of contextBlockLines(items, totalTokens, framing, opts)) console.log(line);
 }
 
 export async function handleContext({ hippoRoot, args, flags }: CommandContext): Promise<void> {

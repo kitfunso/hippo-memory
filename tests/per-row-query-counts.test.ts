@@ -13,7 +13,7 @@ import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '.
 import { readEntry, loadAllEntries, heldIdLookup, loadEntriesByIds } from '../src/store/entry-reads.js';
 import { adminActor, type HippoDbContext } from '../src/api/types.js';
 import { learn, CLI_LEARN } from '../src/api/learn.js';
-import { cmdRemember } from '../src/cli/remember.js';
+import { handleRemember } from '../src/cli/remember.js';
 import { cmdCapture } from '../src/capture/command.js';
 import { outcome } from '../src/api/outcome.js';
 import { quarantineList } from '../src/api/quarantine.js';
@@ -346,7 +346,7 @@ describe('cmdRemember', () => {
   async function remember(root: string, text: string) {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     try {
-      const { statements } = await recordStatementsAsync(() => cmdRemember(root, text, { tag: ['topic:cache'] }));
+      const { statements } = await recordStatementsAsync(() => handleRemember({ hippoRoot: root, args: [text], flags: { tag: ['topic:cache'] } }));
       return { statements, printed: log.mock.calls.map((call) => String(call[0])) };
     } finally {
       log.mockRestore();

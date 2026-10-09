@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { cmdRemember, handleRemember } from '../src/cli/remember.js';
+import { handleRemember } from '../src/cli/remember.js';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
 import { _resetSharedStoreCacheForTests } from '../src/config.js';
@@ -29,7 +29,7 @@ function projectStore(config: Record<string, JsonValue>): string {
 async function directRemember(store: string, text: string): Promise<string> {
   const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
   try {
-    await cmdRemember(store, text, { force: true });
+    await handleRemember({ hippoRoot: store, args: [text], flags: { force: true } });
   } finally {
     log.mockRestore();
   }
