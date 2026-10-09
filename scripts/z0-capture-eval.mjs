@@ -385,21 +385,6 @@ function selftest() {
   console.log('selftest ok');
 }
 
-function collectScored(args, home, outDir) {
-  if (!args.frozen) { console.log('refused: --frozen-corpus is required'); process.exit(1); }
-  const projectsDir = path.resolve(args.projects || path.join(home, '.claude', 'projects'));
-  const { kept, excluded } = collectFresh(projectsDir, outDir, frozenMessages(path.resolve(args.frozen)));
-  const corpus = path.join(outDir, 'corpus');
-  fs.rmSync(corpus, { recursive: true, force: true });
-  const files = kept.map((k) => {
-    const dest = path.join(corpus, k.project, path.basename(k.file));
-    fs.mkdirSync(path.dirname(dest), { recursive: true });
-    fs.copyFileSync(k.file, dest);
-    return dest;
-  });
-  return { files, counts: { mode: 'scored', since: SINCE, kept: kept.length, excluded, minSessions: MIN_SESSIONS } };
-}
-
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.selftest) { selftest(); return; }
@@ -424,7 +409,18 @@ async function main() {
     if (late) { console.log(`refused: ${late} tune sessions start inside the fresh window`); process.exit(1); }
     counts = { mode: 'tune', files: files.length };
   } else {
-    ({ files, counts } = collectScored(args, home, outDir));
+    if (!args.frozen) { console.log('refused: --frozen-corpus is required'); process.exit(1); }
+    const projectsDir = path.resolve(args.projects || path.join(home, '.claude', 'projects'));
+    const { kept, excluded } = collectFresh(projectsDir, outDir, frozenMessages(path.resolve(args.frozen)));
+    const corpus = path.join(outDir, 'corpus');
+    fs.rmSync(corpus, { recursive: true, force: true });
+    files = kept.map((k) => {
+      const dest = path.join(corpus, k.project, path.basename(k.file));
+      fs.mkdirSync(path.dirname(dest), { recursive: true });
+      fs.copyFileSync(k.file, dest);
+      return dest;
+    });
+    counts = { mode: 'scored', since: SINCE, kept: kept.length, excluded, minSessions: MIN_SESSIONS };
   }
   console.log(JSON.stringify({ counts }, null, 2));
   if (!tune && files.length < MIN_SESSIONS) {

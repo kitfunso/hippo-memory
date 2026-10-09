@@ -464,7 +464,10 @@ function selftest() {
   console.log('selftest ok');
 }
 
-function prepareRun(args) {
+async function main() {
+  const args = parseArgs(process.argv.slice(2));
+  if (args.selftest) { selftest(); return; }
+
   const outDir = path.resolve(args.out);
   if (isPathInside(outDir, REPO_ROOT)) {
     console.log('refused: --out is inside the repo');
@@ -489,11 +492,20 @@ function prepareRun(args) {
   fs.mkdirSync(outDir, { recursive: true });
   // A rerun into the same --out must not replay stale copies, and VACUUM INTO refuses an existing file.
   for (const sub of ['corpus', 'stores', 'global', 'judge']) fs.rmSync(path.join(outDir, sub), { recursive: true, force: true });
-  return { outDir, home, projectsDir, marker };
-}
 
-// Exits 2 on a failed replay, after saving what the replay printed.
-function replayAndCount(outDir, home, stores, kept, excluded, latestTs) {
+  const { kept, excluded, cwds, latestTs } = collect(projectsDir, outDir);
+  const stores = collectStores(home, cwds, outDir);
+  fs.writeFileSync(path.join(outDir, 'manifest.json'), JSON.stringify({
+    since: SINCE, collectedAt: new Date().toISOString(),
+    counts: { kept: kept.length, excluded }, stores,
+  }, null, 2));
+
+  if (kept.length === 0) {
+    console.log(JSON.stringify({ counts: { filesKept: 0, filesExcluded: excluded, eligible: 0 } }, null, 2));
+    console.log('window short: need 30 eligible events');
+    process.exit(3);
+  }
+
   const rrRun = runReplay(outDir, home, stores);
   let rr;
   try {
@@ -516,29 +528,6 @@ function replayAndCount(outDir, home, stores, kept, excluded, latestTs) {
     recalledCreatedWithin10MinEligible: rr.all.Z1b.recalledCreatedWithin10MinEligible,
   };
   console.log(JSON.stringify({ counts }, null, 2));
-  return { rr, eligible };
-}
-
-async function main() {
-  const args = parseArgs(process.argv.slice(2));
-  if (args.selftest) { selftest(); return; }
-
-  const { outDir, home, projectsDir, marker } = prepareRun(args);
-
-  const { kept, excluded, cwds, latestTs } = collect(projectsDir, outDir);
-  const stores = collectStores(home, cwds, outDir);
-  fs.writeFileSync(path.join(outDir, 'manifest.json'), JSON.stringify({
-    since: SINCE, collectedAt: new Date().toISOString(),
-    counts: { kept: kept.length, excluded }, stores,
-  }, null, 2));
-
-  if (kept.length === 0) {
-    console.log(JSON.stringify({ counts: { filesKept: 0, filesExcluded: excluded, eligible: 0 } }, null, 2));
-    console.log('window short: need 30 eligible events');
-    process.exit(3);
-  }
-
-  const { rr, eligible } = replayAndCount(outDir, home, stores, kept, excluded, latestTs);
 
   if (eligible < MIN_EVENTS && args.dryRun === null) {
     console.log('window short: need 30 eligible events');
