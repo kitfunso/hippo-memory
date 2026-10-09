@@ -507,6 +507,7 @@ export function computePredictionBaserate(
 
   const db = openHippoDb(hippoRoot);
   try {
+    // Ordered by id because the float sums differ with row order, and another store must reach the same figures.
     // SAFETY: rows' shape matches the two columns named in the SELECT above.
     const rows = db.prepare(`
       SELECT estimate_value, actual_value
@@ -516,6 +517,7 @@ export function computePredictionBaserate(
         AND closure_state = 'closed'
         AND estimate_value IS NOT NULL
         AND actual_value IS NOT NULL
+      ORDER BY id
     `).all(tenantId, classTag) as BaserateRow[];
 
     const baserate = predictionBaserateOf(classTag, rows);

@@ -4,7 +4,7 @@ import { evalNow } from '../ablation.js';
 import { loadStrengthTallies } from '../store/candidates.js';
 import { countOpenConflicts, listTouchableConflicts, resolveConflict } from '../store/conflicts.js';
 import { shareMemory, listPeers } from '../shared.js';
-import { computePredictionBaserate } from '../store/predictions.js';
+import { requireGroup, storeFor } from '../store-port.js';
 import { closeHippoDb, openHippoDb } from '../db.js';
 import { NotFoundError } from '../api-errors.js';
 import { classifyOriginProject } from '../project-identity.js';
@@ -28,12 +28,11 @@ function memoryScope(hippoRoot: string, id: string): string | null {
   }
 }
 
-export function runPredictBaserateTool({ args, ctx, hippoRoot, tenantId }: ToolCall): string {
-  // Text-only reply, matching the other MCP tools; the helper opens its own db
-  // and emits the audit, so call sites cannot drift.
+export async function runPredictBaserateTool({ args, ctx, hippoRoot, tenantId }: ToolCall): Promise<string> {
+  // Text-only reply, matching the other MCP tools; the group's read writes the audit row, so no surface can skip it.
   const classTag = String(args.class_tag || '').trim();
   if (!classTag) return 'No class_tag provided. Usage: pass class_tag matching a class used in past predictions (e.g. "migration-effort").';
-  const baserate = computePredictionBaserate(hippoRoot, tenantId, classTag, ctx?.actor ?? 'mcp');
+  const baserate = await requireGroup(storeFor({ hippoRoot, store: ctx?.store }), 'predictions').predictionBaserate(tenantId, classTag, ctx?.actor ?? 'mcp');
   if (baserate.nClosed === 0) {
     return `No closed predictions in class "${classTag}" yet. Create one via hippo_predict (or 'hippo predict ...' CLI) and close it with hippo_predict_close once the actual outcome is known. Base rates need closed predictions with numeric actual_value to compute.`;
   }

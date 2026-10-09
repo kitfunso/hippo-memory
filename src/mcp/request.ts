@@ -72,9 +72,9 @@ interface ToolEntry {
 
 const TOOL_HANDLERS: ReadonlyMap<string, ToolEntry> = new Map<string, ToolEntry>([
   ['hippo_recall', { handler: runRecallTool, storeReady: 'base' }],
-  ['hippo_assemble', { handler: runAssembleTool }],
-  ['hippo_drill', { handler: runDrillTool }],
-  ['hippo_predict_baserate', { handler: runPredictBaserateTool }],
+  ['hippo_assemble', { handler: runAssembleTool, storeReady: 'dagReads' }],
+  ['hippo_drill', { handler: runDrillTool, storeReady: 'dagReads' }],
+  ['hippo_predict_baserate', { handler: runPredictBaserateTool, storeReady: 'predictions' }],
   ['hippo_remember', { handler: runRememberTool, storeReady: 'entryWrites' }],
   ['hippo_outcome', { handler: runOutcomeTool, storeReady: 'entryWrites' }],
   ['hippo_context', { handler: runContextTool, storeReady: 'contextReads' }],
