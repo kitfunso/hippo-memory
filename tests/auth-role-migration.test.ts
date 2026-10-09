@@ -12,7 +12,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, getCurrentSchemaVersion, getSchemaVersion } from '../src/db.js';
-import { createApiKey, validateApiKey } from '../src/auth.js';
+import { createApiKey, validateApiKey } from '../src/store/auth.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 
 describe('migration v26: api_keys.role', () => {

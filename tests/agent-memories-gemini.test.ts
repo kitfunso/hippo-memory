@@ -9,7 +9,7 @@ import path from 'node:path';
 import { geminiAdapter } from '../src/agent-memories/gemini.js';
 import { textItemKeys } from '../src/agent-memories/keys.js';
 import type { AdapterContext } from '../src/agent-memories/types.js';
-import type { JsonObject } from '../src/working-memory.js';
+import type { JsonObject } from '../src/store/working-memory.js';
 
 let tmp: string;
 

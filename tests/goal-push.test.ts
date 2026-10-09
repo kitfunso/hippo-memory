@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
-import { pushGoal, getActiveGoals } from '../src/goals.js';
+import { pushGoal, getActiveGoals } from '../src/store/goals.js';
 
 describe('pushGoal + getActiveGoals', () => {
   let root: string;

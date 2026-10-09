@@ -8,7 +8,7 @@ import { writeEntry } from '../store/entry-writes.js';
 import { readEntry, loadAllEntries } from '../store/entry-reads.js';
 import { schemaFitInStore } from '../store/candidates.js';
 import { updateStats } from '../store/index-and-stats.js';
-import { RejectedValueError } from '../rejection.js';
+import { RejectedValueError } from '../store/rejection.js';
 import { embedAll, embedMemory, loadEmbeddingIndex } from '../embeddings.js';
 import { loadConfig } from '../config.js';
 import { captureError, runWatched } from '../autolearn.js';

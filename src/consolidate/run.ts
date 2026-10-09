@@ -1,6 +1,6 @@
 import { MemoryEntry, type DecayOptions } from '../memory.js';
 import { openHippoDb, closeHippoDb, ftsRowCounts, isFtsAvailable, repairFtsDrift, type DatabaseSyncLike } from '../db.js';
-import { type DormantMove } from '../dormant.js';
+import { type DormantMove } from '../store/dormant.js';
 import { loadConfig } from '../config.js';
 import { NO_MERGE_TAGS } from '../shared.js';
 
@@ -8,7 +8,7 @@ export interface ConsolidationResult {
   decayed: number;
   removed: number;
   /** Faded memories moved to the dormant store instead of deleted (config
-   *  `dormant.enabled`; src/dormant.ts). Always 0 when that is off. */
+   *  `dormant.enabled`; src/store/dormant.ts). Always 0 when that is off. */
   dormant: number;
   /** Dormant memories deleted for good this sleep because they outlived
    *  `dormant.retentionDays` without a restore. */

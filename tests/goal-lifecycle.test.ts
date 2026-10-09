@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
-import { pushGoal, completeGoal, suspendGoal, resumeGoal, getActiveGoals } from '../src/goals.js';
+import { pushGoal, completeGoal, suspendGoal, resumeGoal, getActiveGoals } from '../src/store/goals.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 
 describe('goal lifecycle', () => {

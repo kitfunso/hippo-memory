@@ -9,7 +9,7 @@ import { readEntry } from '../src/store/entry-reads.js';
 import { deleteEntry } from '../src/store/delete-and-batch.js';
 import { createMemory } from '../src/memory.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { auditWriteFailureCount } from '../src/audit.js';
+import { auditWriteFailureCount } from '../src/store/audit.js';
 
 let root: string;
 

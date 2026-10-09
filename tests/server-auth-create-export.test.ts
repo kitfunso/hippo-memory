@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { authCreate, sqliteStore, StoreBusyError, type HippoDbContext, type HippoStore } from '../src/server.js';
-import { validateApiKey } from '../src/auth.js';
+import { validateApiKey } from '../src/store/auth.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { recordStatements } from './_helpers/count-statements.js';
 

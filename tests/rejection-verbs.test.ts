@@ -14,10 +14,10 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { listMemoryConflicts, replaceDetectedConflicts, resolveConflict } from '../src/store/conflicts.js';
-import { queryAuditEvents } from '../src/audit.js';
+import { queryAuditEvents } from '../src/store/audit.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import * as api from '../src/api.js';
-import { RejectedValueError } from '../src/rejection.js';
+import { RejectedValueError } from '../src/store/rejection.js';
 
 let tmpDir: string;
 

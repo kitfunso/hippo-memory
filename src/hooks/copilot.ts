@@ -3,7 +3,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { isDeepStrictEqual } from 'node:util';
-import type { JsonObject } from '../working-memory.js';
+import type { JsonObject } from '../store/working-memory.js';
 import { type JsonValue, readJsonFile, isJsonObjectLiteral } from '../json.js';
 import { HOOK_MARKERS, hippoBlock } from './hook-blocks.js';
 import { copilotHomeDir, vscodeUserDirs } from './shared.js';

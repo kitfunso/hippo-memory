@@ -3,7 +3,7 @@ import type { Migration } from './types.js';
 export const v44: Migration = {
     version: 44,
     up: (db) => {
-      // Dormant memories (src/dormant.ts): with `dormant.enabled`, the sleep
+      // Dormant memories (src/store/dormant.ts): with `dormant.enabled`, the sleep
       // decay pass moves a faded memory here instead of deleting it. The row
       // leaves `memories` in the same transaction, so recall, context and
       // every sleep pass stop seeing it; entry_json is the full MemoryEntry

@@ -6,7 +6,7 @@ import {
   applyRebuildResult,
   clearSummaryDirtyAfterBuild,
 } from './store/summaries.js';
-import { RejectedValueError } from './rejection.js';
+import { RejectedValueError } from './store/rejection.js';
 import { redactSecretsStrict } from './secret-detect.js';
 import { fetchWithRetry, llmTimeoutMs } from './http-retry.js';
 import { derivationScope, derivationPartitionKey } from './recall-scope.js';

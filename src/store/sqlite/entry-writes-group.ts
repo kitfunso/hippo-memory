@@ -1,15 +1,15 @@
 // hippo.db's half of the EntryWrites store group: the queries remember, outcome, supersede, archive and forget run today.
 import { ConflictError, NotFoundError } from '../../api-errors.js';
-import { appendAuditEvent } from '../../audit.js';
+import { appendAuditEvent } from '../audit.js';
 import { isSqliteBusy, withWriteScope, type DatabaseSyncLike } from '../../db.js';
 import { errorMessage, log } from '../../log.js';
 import { entryAfterOutcome, type MemoryEntry } from '../../memory.js';
-import { archiveRawMemory, type ArchiveOpts } from '../../raw-archive.js';
+import { archiveRawMemory, type ArchiveOpts } from '../raw-archive.js';
 import { ownScopeTouches } from '../../recall-scope.js';
-import { recordTraceOutcome } from '../../recall-trace.js';
-import { RejectedValueError } from '../../rejection.js';
+import { recordTraceOutcome } from '../recall-trace.js';
+import { RejectedValueError } from '../rejection.js';
 import type { EntryTarget, EntryWrite, EntryWrites, OutcomeWrite, RawArchive, SupersedeWrite, Sync } from '../port.js';
-import { markSummaryDirtyInTx } from '../../summary-dirty.js';
+import { markSummaryDirtyInTx } from '../summary-dirty.js';
 import { auditRejectionRefusal } from '../audit-event.js';
 import { deleteEntryCore } from '../delete-and-batch.js';
 import { selectEntriesByIds } from '../entry-reads.js';

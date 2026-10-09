@@ -15,9 +15,9 @@ import {
   serve, authRevoke, ForbiddenError, isReservedActor,
   type ServerHandle, type AuthResolver, type ResolvedBearer, type ServeOpts, type Context,
 } from '../src/server.js';
-import { createApiKey, type CreateApiKeyResult } from '../src/auth.js';
+import { createApiKey, type CreateApiKeyResult } from '../src/store/auth.js';
 import { openHippoDb, closeHippoDb, getHippoDbPath } from '../src/db.js';
-import { listAuditEventsAfter } from '../src/audit.js';
+import { listAuditEventsAfter } from '../src/store/audit.js';
 
 const EXT = 'ext.good';
 const GOOD: ResolvedBearer = { tenantId: 'ext-tenant', subject: 'user-1', role: 'member', scopes: [] };

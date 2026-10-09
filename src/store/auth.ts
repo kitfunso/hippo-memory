@@ -1,10 +1,10 @@
 import { createHash, randomBytes, scrypt, scryptSync, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
-import type { DatabaseSyncLike } from './db.js';
-import { raiseMinBinary } from './db/meta.js';
-import { keysetAfter, type KeysetPosition } from './keyset.js';
-import type { HippoStore } from './store-port.js';
-import { EXPIRING_KEYS_MIN_BINARY } from './version.js';
+import type { DatabaseSyncLike } from '../db.js';
+import { raiseMinBinary } from '../db/meta.js';
+import { keysetAfter, type KeysetPosition } from '../keyset.js';
+import type { HippoStore } from '../store-port.js';
+import { EXPIRING_KEYS_MIN_BINARY } from '../version.js';
 
 /** Every minted API key starts with this, so the server can route a bearer token by shape. */
 export const API_KEY_PREFIX = 'hk_';

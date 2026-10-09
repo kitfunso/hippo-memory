@@ -10,7 +10,7 @@ import { loadAllEntries } from '../store/entry-reads.js';
 import { duplicateKey, storedTextKeys } from '../same-text.js';
 import { getGlobalRoot, initGlobal } from '../shared.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../db.js';
-import { RejectedValueError, checkRejectionGuard } from '../rejection.js';
+import { RejectedValueError, checkRejectionGuard } from '../store/rejection.js';
 import { loadConfig } from '../config.js';
 import { vetSecrets } from '../secret-detect.js';
 import { log } from '../log.js';
