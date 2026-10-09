@@ -4,10 +4,8 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { isInitialized } from '../store/open.js';
 import { readEntry, loadAllEntries } from '../store/entry-reads.js';
-import { schemaFitInStore } from '../store/candidates.js';
-import { updateStats } from '../store/index-and-stats.js';
 import { RejectedValueError } from '../store/rejection.js';
-import { embedAll, embedMemory } from '../store/embeddings/index.js';
+import { embedAll } from '../store/embeddings/index.js';
 import { loadEmbeddingIndex } from '../store/vector-index.js';
 import { captureError, runWatched } from '../learn/autolearn.js';
 import { currentMachine, importAtSessionEnd, importForStore } from '../agent-memories/sync.js';
@@ -61,18 +59,18 @@ async function cmdWatch(command: string, hippoRoot: string, tenantId: string): P
   }
 
   const failure = captureError(exitCode, stderr, command, tenantId);
-  const schemaFit = schemaFitInStore(hippoRoot, tenantId, failure.content, failure.tags);
   // A rejection-guard refusal of a failed command's output must not crash the watcher:
   // skip with the message below and still exit with the wrapped command's real exit code.
   try {
-    const { id } = api.remember(cliApiContext(hippoRoot, tenantId), {
+    api.rememberLocally(cliApiContext(hippoRoot, tenantId), {
       content: failure.content,
       tags: failure.tags,
-      local: { layer: failure.layer, source: failure.source, confidence: failure.confidence, schemaFit },
+      layer: failure.layer,
+      source: failure.source,
+      confidence: failure.confidence,
+      // A failure is stored each time it happens: watch has never put it to the salience gate.
+      force: true,
     });
-    updateStats(hippoRoot, { remembered: 1 });
-    const stored = readEntry(hippoRoot, id, tenantId);
-    if (stored) void embedMemory(hippoRoot, stored);
 
     const preview = stderr.trim().slice(0, STDERR_PREVIEW_CHARS);
     printError(`\nHippo learned from failure: "${preview}"`);
