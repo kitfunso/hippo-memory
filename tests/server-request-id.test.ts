@@ -79,7 +79,7 @@ describe('X-Request-Id', () => {
       const res = await send('/v1/memories/a%2Fb', { 'x-request-id': 'req-err-1' });
       expect(res.status).toBe(400);
       expect(res.requestId).toBe('req-err-1');
-      const logged = stderrSpy.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('requestId=req-err-1'));
+      const logged = stderrSpy.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('requestId=req-err-1') && l.includes(' failed: '));
       expect(logged).toHaveLength(1);
       expect(logged[0]).toMatch(/^\[hippo\] info: GET \/v1\/memories\/a%2Fb failed: .* requestId=req-err-1 status=400\n$/);
     } finally {
@@ -95,6 +95,53 @@ describe('X-Request-Id', () => {
       await send('/v1/context?q=anything', { 'x-request-id': 'req-deep-1' });
       const warned = stderrSpy.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('"pilot"'));
       expect(warned.join('')).toMatch(/^\[hippo\] warn: .* ts=\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z requestId=req-deep-1\n/);
+    } finally {
+      stderrSpy.mockRestore();
+    }
+  });
+});
+
+describe('the access line', () => {
+  const accessLines = (spy: { mock: { calls: unknown[][] } }): string[] =>
+    spy.mock.calls.map((c) => String(c[0])).filter((l) => l.startsWith('[hippo] info: request '));
+
+  it('is one info line per finished request, naming the route pattern and never the path or query the caller sent', async () => {
+    process.env.HIPPO_LOG = 'info';
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      await send('/v1/recall/drill/mem_private_id?q=private-query', { 'x-request-id': 'acc-1' });
+      await send('/v1/predictions/987654321', { 'x-request-id': 'acc-5' });
+      await send('/health', { 'x-request-id': 'acc-2' });
+      await send('/private-path/42?q=private-query', { 'x-request-id': 'acc-3' });
+      await fetch(`${handle.url}/mcp`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-request-id': 'acc-4' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+      }).then((res) => res.text());
+      // The line is written when the response finishes, which the client can see first.
+      await vi.waitFor(() => expect(accessLines(stderrSpy)).toHaveLength(5), { timeout: 5000 });
+      const lines = accessLines(stderrSpy).map((l) => l.replace(/ ts=\S+/, '').replace(/durationMs=\d+/, 'durationMs=N'));
+      expect(lines).toEqual([
+        '[hippo] info: request requestId=acc-1 method=GET route=/v1/recall/drill/:id status=404 durationMs=N\n',
+        '[hippo] info: request requestId=acc-5 method=GET route=/v1/predictions/:id status=404 durationMs=N\n',
+        '[hippo] info: request requestId=acc-2 method=GET route=/health status=200 durationMs=N\n',
+        '[hippo] info: request requestId=acc-3 method=GET route=unmatched status=404 durationMs=N\n',
+        '[hippo] info: request requestId=acc-4 method=POST route=/mcp status=200 durationMs=N tenant=default\n',
+      ]);
+      expect(lines.join('')).not.toMatch(/private|987654321/);
+    } finally {
+      stderrSpy.mockRestore();
+    }
+  });
+
+  it('is not written at the default log level', async () => {
+    delete process.env.HIPPO_LOG;
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      await send('/health');
+      await send('/v1/memories?q=x');
+      await new Promise((ok) => setTimeout(ok, 100));
+      expect(accessLines(stderrSpy)).toEqual([]);
     } finally {
       stderrSpy.mockRestore();
     }

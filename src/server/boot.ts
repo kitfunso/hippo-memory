@@ -21,7 +21,7 @@ import { drainAndClose } from './lifecycle.js';
 import { installCrashHandlers } from '../util/crash-handlers.js';
 import { handleMcpPost, handleMcpStream } from './mcp-http.js';
 import { MCP_PROJECT_SCOPED_HEADER } from '../project-identity.js';
-import { logRequestFailure, openRequest, parseRequest, rejectEncodedSlash, replyFor, sendError } from './request.js';
+import { logRequestFailure, noteAccess, openRequest, parseRequest, rejectEncodedSlash, replyFor, sendError } from './request.js';
 import { createListener, warnIfCleartext } from './tls.js';
 import { assertAddonRoutes, assertPublicJson, assertSqliteStore, dispatchAddonRoute, dispatchPublicJson, dispatchV1Route, isPublicRoute } from './route-table.js';
 import type { RateLimitSpec, ResolvedServeOpts, RouteRequest, ServeOpts, ServerHandle } from './types.js';
@@ -63,7 +63,13 @@ async function handleRequest(
   if (path === '/mcp') res.setHeader(MCP_PROJECT_SCOPED_HEADER, '1');
 
   if (method === 'GET' && path === '/health') {
+    noteAccess(req, { route: path });
     sendHealth(req, res, startedAt);
+    return;
+  }
+  if (method === 'GET' && path === '/ready') {
+    noteAccess(req, { route: path });
+    await sendReady(res, opts.store);
     return;
   }
 
@@ -72,9 +78,10 @@ async function handleRequest(
   const routeRequest: RouteRequest = { req, res, opts, query };
   if (await runWithRequestStores(() => dispatchScopedRoute(routeRequest, method, path), { busyWaitMs: SERVER_DB_WAIT_MS })) return;
 
-  // Outside the request scope: the heartbeat timer outlives the request. Store-ready: the stream only authenticates, through the port.
+  // A scope of its own, which the heartbeat timer keeps after it closes, so the key check and every heartbeat wait the server's lock wait. Store-ready: the stream only authenticates, through the port.
   if (method === 'GET' && path === '/mcp/stream') {
-    await handleMcpStream(req, res, opts, streamSlots);
+    noteAccess(req, { route: path });
+    await runWithRequestStores(() => handleMcpStream(req, res, opts, streamSlots), { busyWaitMs: SERVER_DB_WAIT_MS });
     return;
   }
 
@@ -90,6 +97,7 @@ async function dispatchScopedRoute(r: RouteRequest, method: string, path: string
   const { req, res, opts } = r;
 
   if (method === 'POST' && path === '/v1/connectors/slack/events') {
+    noteAccess(req, { route: path });
     // Bearer auth deliberately skipped: this route is in PUBLIC_ROUTES and authenticates via the Slack HMAC signature.
     if (!isPublicRoute(method, path)) {
       // Defensive: PUBLIC_ROUTES drift would land here. Fail closed.
@@ -101,6 +109,7 @@ async function dispatchScopedRoute(r: RouteRequest, method: string, path: string
   }
 
   if (method === 'POST' && path === '/v1/connectors/github/events') {
+    noteAccess(req, { route: path });
     if (!isPublicRoute(method, path)) {
       throw new HttpError(401, 'auth required');
     }
@@ -111,6 +120,7 @@ async function dispatchScopedRoute(r: RouteRequest, method: string, path: string
 
   // Store-ready: under another store the MCP layer lists and runs only the tools ported to the port.
   if (method === 'POST' && path === '/mcp') {
+    noteAccess(req, { route: path });
     await handleMcpPost(req, res, opts);
     return true;
   }
@@ -133,6 +143,23 @@ function sendHealth(req: IncomingMessage, res: ServerResponse, startedAt: string
   } else {
     sendJson(res, 200, { ok: true });
   }
+}
+
+/** Readiness: one cheap read on the served store under the server's lock wait. /health stays liveness only, so a probe can tell a store that does not answer from a dead process. */
+async function sendReady(res: ServerResponse, store: HippoStore): Promise<void> {
+  const { readiness } = store;
+  if (readiness === undefined) {
+    sendJson(res, 200, { ok: true, store: 'unchecked' });
+    return;
+  }
+  try {
+    await runWithRequestStores(() => readiness.ping(), { busyWaitMs: SERVER_DB_WAIT_MS });
+  } catch (err) {
+    log.warn(`GET /ready: the store did not answer: ${errorMessage(err)}`, errorFields(err));
+    sendJson(res, 503, { ok: false, error: 'store_unavailable' });
+    return;
+  }
+  sendJson(res, 200, { ok: true });
 }
 
 function assertBindable(host: string): void {
@@ -222,7 +249,8 @@ function createStoreHolder(hippoRoot: string, store: HippoStore): StoreHolder {
     if (heldDb || stopHolding || !existsSync(getHippoDbPath(hippoRoot))) return;
     try {
       // The 'finish' listener can fire inside a request scope, which would close this connection with the request.
-      heldDb = outsideRequestStores(() => openHippoDb(hippoRoot));
+      // The server's lock wait: this open runs on the event loop, where SQLite's 5 s default and the 30 s journal-mode retry would stall every request.
+      heldDb = outsideRequestStores(() => openHippoDb(hippoRoot, { busyWaitMs: SERVER_DB_WAIT_MS }));
       checkpointer = startWalCheckpointer(getHippoDbPath(hippoRoot));
     } catch (err) {
       stopHolding = true;

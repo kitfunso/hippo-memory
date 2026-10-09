@@ -1,8 +1,8 @@
 // Last-resort process handlers shared by the long-running entry points (`hippo mcp`, `hippo serve`).
 import { errorFields, errorMessage, log } from '../log.js';
 
-/** Exit once stdout and stderr have drained, so the last reply and the crash log reach their reader; capped at 1 s. */
-function exitAfterFlush(code: number): void {
+/** Exit once stdout and stderr have drained, so the last reply and the last log line reach their reader; capped at 1 s. */
+export function exitAfterFlush(code: number): void {
   process.exitCode = code;
   let pending = 2;
   const done = (): void => { if (--pending === 0) process.exit(code); };

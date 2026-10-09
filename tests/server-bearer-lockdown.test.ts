@@ -204,11 +204,12 @@ describe('server Bearer lockdown', () => {
     ]);
   });
 
-  it('AUTHED_ROUTES covers exactly the derived routes minus public routes minus GET /health', () => {
+  it('AUTHED_ROUTES covers exactly the derived routes minus public routes minus the GET /health and GET /ready probes', () => {
     const derived = routesFromServerSource(dispatchSource);
     const publicRoutes = publicRoutesFromServerSource(serverSource);
     const expected = new Set(derived);
     expected.delete('GET /health');
+    expected.delete('GET /ready');
     for (const r of publicRoutes) expected.delete(r);
 
     const actual = new Set(AUTHED_ROUTES.map((r) => `${r.method} ${r.pattern}`));

@@ -1,6 +1,6 @@
 // The store the token ledger writes to for a caller's root; context, recall and the session hooks share it.
 import { closeHippoDb, isSqliteBusy, noteStoreBusy, openHippoDb } from './db.js';
-import { errorMessage, log } from './log.js';
+import { errorFields, errorMessage, log } from './log.js';
 import { getGlobalRoot } from './shared.js';
 import { isInitialized } from './store/open.js';
 
@@ -15,6 +15,15 @@ export function ledgerRoot(hippoRoot: string, opts?: LedgerRootOpts): string | n
   if (opts?.sharedStore) return null;
   const globalRoot = getGlobalRoot();
   return isInitialized(globalRoot) ? globalRoot : null;
+}
+
+/** A ledger row that did not land. A busy store warns once through noteStoreBusy; any other failure warns once and then logs at debug, since the caller's output is unaffected. */
+export function noteLedgerRowSkipped<E>(error: E): void {
+  if (isSqliteBusy(error)) {
+    noteStoreBusy('token ledger row skipped');
+    return;
+  }
+  log.warnThenDebug('token-ledger-row', `token ledger row skipped: ${errorMessage(error)}`, errorFields(error));
 }
 
 /** Runs `fn` on ledgerRoot's store. Best-effort: undefined on any failure, because a ledger failure must not break context or recall. */
@@ -33,9 +42,7 @@ export function withLedgerDb<T>(hippoRoot: string, fn: (db: ReturnType<typeof op
     db = openHippoDb(root);
     return fn(db);
   } catch (error) {
-    // Best effort, but a busy store is the one failure an operator can act on, so it warns once.
-    if (isSqliteBusy(error)) noteStoreBusy('token ledger row skipped');
-    else log.debug(`token ledger row skipped: ${errorMessage(error)}`);
+    noteLedgerRowSkipped(error);
     return undefined;
   } finally {
     if (db) closeHippoDb(db);

@@ -1,8 +1,9 @@
 // The built-in SQLite adapter behind the store port.
 import { loadAmbientTallies } from '../../ambient-store.js';
 import { listApiKeyRows, readApiKeyRecord } from '../../auth.js';
+import { existsSync } from 'node:fs';
 import { appendAuditEvent, listAuditEventsAfter, queryAuditEvents } from '../../audit.js';
-import { withWriteScope } from '../../db.js';
+import { getHippoDbPath, withWriteScope } from '../../db.js';
 import { embeddingIndexStateAt, loadStoredVectors } from '../../embeddings.js';
 import { activeGoalsWithPolicies, localGoalRecallRows, writeGoalRecallLog } from '../../goals.js';
 import { loadPhysicsState } from '../../db/physics-state.js';
@@ -99,6 +100,13 @@ export function sqliteSyncStore(hippoRoot: string): SqliteSyncStore & Sync<Omit<
         return onHandle(hippoRoot, (db) => queryAuditEvents(db, query));
       },
     },
+    readiness: {
+      ping() {
+        // A probe must not create the store; the first write does, so a root with none yet is ready.
+        if (!existsSync(getHippoDbPath(hippoRoot))) return;
+        onHandle(hippoRoot, (db) => { db.prepare('SELECT 1').get(); });
+      },
+    },
     close() {},
   };
 }
@@ -157,6 +165,7 @@ export function sqliteStore(hippoRoot: string): HippoStore & StoreGroups {
     auditLog: {
       listAuditEvents: async (query) => auditLog.listAuditEvents(query),
     },
+    readiness: { ping: async () => sync.readiness.ping() },
     close: async () => sync.close(),
   };
 }

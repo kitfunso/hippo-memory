@@ -2,7 +2,7 @@ import type { IncomingMessage } from 'node:http';
 import { hasGroup, type StoreGroup } from '../store-port.js';
 import { HttpError, JSON_HEADERS, sendJson, STORE_NOT_PORTED_MESSAGE } from '../http-util.js';
 import { buildContextWithAuth, requireAuth } from './auth.js';
-import { matchPath } from './request.js';
+import { matchPath, noteAccess } from './request.js';
 import { handleApproveQuarantine, handleCreateAuthKey, handleListAudit, handleListAuthKeys, handleListQuarantine, handleRejectQuarantine, handleRevokeAuthKey } from './routes/admin.js';
 import { handleCloseCustomerNote, handleCreateCustomerNote, handleGetCustomerNote, handleListCustomerNotes, handleSupersedeCustomerNote } from './routes/customer-notes.js';
 import { handleCloseDecision, handleCreateDecision, handleGetDecision, handleListDecisions, handleSupersedeDecision } from './routes/decisions.js';
@@ -115,11 +115,19 @@ function routeMatches(route: Route, method: string, path: string): ((r: RouteReq
   return method === route.method && match ? (r) => route.handler(r, match) : null;
 }
 
+/** The route as the access line names it; a regex route reads as its pattern would, so no line carries a caller's id. */
+function routeLabel(route: Route): string {
+  if ('path' in route) return route.path;
+  if ('pattern' in route) return route.pattern;
+  return route.regex.source.replace(/^\^|\$$/g, '').replaceAll('\\/', '/').replaceAll('(\\d+)', ':id');
+}
+
 /** Run the first /v1 route whose method and path match. */
 export async function dispatchV1Route(r: RouteRequest, method: string, path: string): Promise<boolean> {
   for (const route of V1_ROUTES) {
     const run = routeMatches(route, method, path);
     if (run === null) continue;
+    noteAccess(r.req, { route: routeLabel(route) });
     await refuseUnportedRoute(r.req, r.opts, route.storeReady);
     await run(r);
     return true;
@@ -170,17 +178,20 @@ export function assertPublicJson(publicJson: Readonly<Record<string, JsonValue>>
 export async function dispatchAddonRoute({ req, res, opts }: RouteRequest, method: string, path: string): Promise<boolean> {
   const route = method === 'POST' ? opts.routes?.find((r) => r.path === path) : undefined;
   if (!route) return false;
+  noteAccess(req, { route: route.path });
   await refuseUnportedRoute(req, opts, route.storeReady);
   const ctx = await buildContextWithAuth(req, opts);
+  noteAccess(req, { tenant: ctx.tenantId });
   const body = await parseJsonBody(req, ctx);
   sendJson(res, 200, await route.handler({ ctx, body }));
   return true;
 }
 
 /** No auth, body read or store access, so a caller with no key gets it under any store. */
-export function dispatchPublicJson({ res, opts }: RouteRequest, method: string, path: string): boolean {
+export function dispatchPublicJson({ req, res, opts }: RouteRequest, method: string, path: string): boolean {
   const text = method === 'GET' ? opts.publicJsonBodies.get(path) : undefined;
   if (text === undefined) return false;
+  noteAccess(req, { route: path });
   res.writeHead(200, { ...JSON_HEADERS, 'cache-control': 'no-store' });
   res.end(text);
   return true;

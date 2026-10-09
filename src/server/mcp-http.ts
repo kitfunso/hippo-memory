@@ -10,6 +10,7 @@ import { assertCallerProject } from '../project-identity.js';
 import type { CallerProject } from '../prompt-hook.js';
 import { buildContextWithAuth, heartbeatVerdict, readAuthHeader, requireAuth } from './auth.js';
 import { clientLimitKey, subscriberKey } from './client-ip.js';
+import { noteAccess } from './request.js';
 import type { ResolvedServeOpts } from './types.js';
 import { type JsonValue, isJsonString, isJsonObject } from '../json.js';
 
@@ -108,6 +109,7 @@ export async function handleMcpPost(req: IncomingMessage, res: ServerResponse, o
   // pull tenant from HIPPO_TENANT, dropping a valid Bearer for tenant B
   // back to whatever the env says.
   const ctx = await buildContextWithAuth(req, opts);
+  noteAccess(req, { tenant: ctx.tenantId });
   const project = callerProjectFromHeaders(req, ctx.hippoRoot);
   const raw = await readBody(req);
   let mcpReq: JsonValue;

@@ -1,0 +1,9 @@
+### Fixed
+
+- **A token-ledger row that cannot be written is now logged instead of dropped in silence.** The prompt hook and the ledger writer skipped every failed row without a word unless the store was busy. A failure for any other reason now logs one warning with the error class and stack. The hook's output and exit code are unchanged.
+- **`hippo serve` has a readiness probe, `GET /ready`.** It needs no key, like `GET /health`. It runs one cheap read on the served store and answers 200 `{"ok":true}`, or 503 `{"ok":false,"error":"store_unavailable"}` with a warning in the log. A store with no readiness check answers 200 `{"ok":true,"store":"unchecked"}`. `GET /health` is unchanged and still reports only that the process is up.
+- **`hippo serve` no longer stalls at boot behind a locked store.** The connection the server holds open waits 250 ms for a lock, as every request does, instead of up to 30 s on the event loop. The MCP event stream's key check and heartbeat use the same wait.
+- **The MCP stdio server answers a request that has an id and no method.** It replies with JSON-RPC error -32600 and that id, where it used to stay silent and leave the client waiting. A frame with neither is still not answered, and is now logged.
+- **The MCP stdio server finishes calls in flight when its input closes.** It waits up to 5 s, sends their replies, then exits 0. It used to exit at once and lose them. A call still running after 5 s is named in a warning.
+- **`hippo serve` can log one line per request.** With `HIPPO_LOG=info` each finished request logs its method, route pattern, status, duration and request id, plus the tenant where the route knows it. The line never holds the path or query the caller sent. The default log level is unchanged.
+- **`hippo init` and `hippo setup` no longer hang on a scheduler that does not answer.** Each `schtasks` and `crontab` call stops after 30 s and says so.

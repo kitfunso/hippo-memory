@@ -308,6 +308,12 @@ export interface AuditLog {
   listAuditEvents(query: QueryAuditOpts): Promise<AuditEvent[]>;
 }
 
+/** What GET /ready asks of a store. */
+export interface Readiness {
+  /** Resolves once one cheap read has answered; rejects with the store's own error when it cannot. */
+  ping(): Promise<void>;
+}
+
 /** The optional groups: a store sets each one whole or leaves it unset, and a route or MCP tool names the one it needs. */
 export interface StoreGroups {
   /** Unset on a store built before them, where hybrid and physics recall under an embedding provider answer 501. */
@@ -321,6 +327,8 @@ export interface StoreGroups {
   readonly predictions: Predictions;
   readonly dagReads: DagReads;
   readonly auditLog: AuditLog;
+  /** Unset on a store built before it, where GET /ready answers 200 with `store: "unchecked"`. */
+  readonly readiness: Readiness;
 }
 
 export type StoreGroup = 'base' | keyof StoreGroups;

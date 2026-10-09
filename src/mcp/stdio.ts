@@ -1,11 +1,11 @@
 // Stdio transport: newline-delimited JSON-RPC frames in on stdin, replies out on stdout.
 
-import { installCrashHandlers } from '../util/crash-handlers.js';
+import { exitAfterFlush, installCrashHandlers } from '../util/crash-handlers.js';
 import { errorMessage, log } from '../log.js';
 import { parseFrame, type FrameRemainder } from './framing.js';
 import { mcpErrorResponse, type McpRequest, type McpResponse } from './protocol.js';
 import { handleMcpRequest } from './request.js';
-import { type JsonValue, isJsonString, isJsonObject } from '../json.js';
+import { type JsonValue, isJsonNumber, isJsonString, isJsonObject } from '../json.js';
 import { randomUUID } from 'node:crypto';
 import { runWithRequestId } from '../util/request-scope.js';
 
@@ -38,6 +38,40 @@ function isRoutableRequest(v: JsonValue): v is JsonValue & McpRequest {
   return isJsonObject(v) && isJsonString(v.method);
 }
 
+/** A frame that parsed but names no method: with an id it is a request owed an answer; without one it is a notification, which JSON-RPC forbids answering. */
+function answerUnroutable(frame: JsonValue): void {
+  const id = isJsonObject(frame) ? frame.id : undefined;
+  if (isJsonString(id) || isJsonNumber(id)) {
+    send({ jsonrpc: '2.0', id, error: { code: -32600, message: 'Invalid Request: method must be a string' } });
+    return;
+  }
+  log.warn('mcp: dropped a frame with no method and no id; it cannot be routed or answered');
+}
+
+/** How long stdin's end waits for calls still running, so a client that closes right after its last request still gets the reply. */
+const STDIN_END_DRAIN_MS = 5000;
+
+// Calls dispatched and not yet answered, each with the method the drain names if it is still running at the bound.
+const inFlight = new Map<Promise<void>, string>();
+
+function track(method: string, call: Promise<void>): void {
+  inFlight.set(call, method);
+  void call.finally(() => inFlight.delete(call));
+}
+
+async function exitWhenDrained(): Promise<void> {
+  if (inFlight.size > 0) {
+    let bound: NodeJS.Timeout | undefined;
+    const timedOut = new Promise<void>((resolve) => { bound = setTimeout(resolve, STDIN_END_DRAIN_MS); });
+    await Promise.race([Promise.allSettled(inFlight.keys()), timedOut]);
+    clearTimeout(bound);
+  }
+  for (const method of inFlight.values()) {
+    log.warn(`mcp: ${method} was still running ${STDIN_END_DRAIN_MS} ms after stdin closed; exiting without its reply`, { method });
+  }
+  exitAfterFlush(0);
+}
+
 function dispatch(body: string): void {
   let parsed: JsonValue;
   try {
@@ -47,18 +81,20 @@ function dispatch(body: string): void {
     send({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } });
     return;
   }
-  // A frame without a string method cannot be routed; dropping it keeps a stray value from crashing the process.
-  if (!isRoutableRequest(parsed)) return;
-  const req = parsed;
-  if (req.method.startsWith('notifications/')) {
-    handleMcpRequest(req).catch((err) => {
-      log.error(`mcp notification ${req.method} failed: ${errorMessage(err)}`);
-    });
+  if (!isRoutableRequest(parsed)) {
+    answerUnroutable(parsed);
     return;
   }
-  handleMcpRequest(req).then((resp) => { if (resp) send(resp); }).catch((err) => {
+  const req = parsed;
+  if (req.method.startsWith('notifications/')) {
+    track(req.method, handleMcpRequest(req).then(() => {}).catch((err) => {
+      log.error(`mcp notification ${req.method} failed: ${errorMessage(err)}`);
+    }));
+    return;
+  }
+  track(req.method, handleMcpRequest(req).then((resp) => { if (resp) send(resp); }).catch((err) => {
     send(mcpErrorResponse(req.id, err));
-  });
+  }));
 }
 
 /**
@@ -85,7 +121,7 @@ export function startStdioLoop(): void {
     }
   });
 
-  process.stdin.on('end', () => process.exit(0));
+  process.stdin.on('end', () => { void exitWhenDrained(); });
 
   installCrashHandlers('mcp');
 }

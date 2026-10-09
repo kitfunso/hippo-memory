@@ -46,13 +46,48 @@ function watchSlowRequest(req: IncomingMessage, res: ServerResponse, requestId: 
   res.once('close', clear);
 }
 
-/** The request's id, after stamping the headers every reply carries and starting the slow-request watchdog. */
+/** What the route layer learned about a request, for its access line. */
+interface AccessNote {
+  route?: string;
+  tenant?: string;
+}
+
+const accessNotes = new WeakMap<IncomingMessage, AccessNote>();
+
+// A path that matched no route is caller data, so the access line never repeats it.
+const UNMATCHED_ROUTE = 'unmatched';
+
+/** Names the matched route (the table's pattern, never the path sent) or the caller's tenant for the request's access line. */
+export function noteAccess(req: IncomingMessage, note: AccessNote): void {
+  const held = accessNotes.get(req);
+  if (held) Object.assign(held, note);
+}
+
+/** One info line per finished request. A path id and a query string can both hold caller data, so the line carries neither. */
+function logAccessWhenFinished(req: IncomingMessage, res: ServerResponse, requestId: string): void {
+  const note: AccessNote = {};
+  accessNotes.set(req, note);
+  const startedAt = performance.now();
+  res.once('finish', () => {
+    log.info('request', {
+      requestId,
+      method: req.method ?? 'GET',
+      route: note.route ?? UNMATCHED_ROUTE,
+      status: res.statusCode,
+      durationMs: Math.round(performance.now() - startedAt),
+      tenant: note.tenant,
+    });
+  });
+}
+
+/** The request's id, after stamping the headers every reply carries and starting the slow-request watchdog and the access line. */
 export function openRequest(req: IncomingMessage, res: ServerResponse, slowWarnMs?: number): string {
   const requestId = resolveRequestId(req.headers['x-request-id']);
   res.setHeader('X-Request-Id', requestId);
   // Memory text is caller-written, so no browser may guess a reply into HTML or script.
   res.setHeader('X-Content-Type-Options', 'nosniff');
   watchSlowRequest(req, res, requestId, slowWarnMs);
+  logAccessWhenFinished(req, res, requestId);
   return requestId;
 }
 
