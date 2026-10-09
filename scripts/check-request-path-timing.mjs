@@ -33,6 +33,7 @@ const { initStore } = await load('store/open.js');
 const { writeEntryDbOnly } = await load('store/entry-writes.js');
 const { loadAmbientTallies } = await load('store/ambient.js');
 const { openHippoDb, closeHippoDb } = await load('db.js');
+const { createApiKey } = await load('store/auth.js');
 const { getContext, adminActor } = await load('api.js');
 const { handleMcpRequest } = await load('mcp/server.js');
 const { workerSqliteStore } = await load('store/sqlite/worker-store.js');
@@ -127,6 +128,20 @@ const withoutGlobal = (run) => async () => {
 // Answers from a store worker thread, as serve() does by default; the counts below are this thread's, so its ceilings are zero.
 const served = workerSqliteStore(localRoot);
 
+function mintKey(root) {
+  const db = openHippoDb(root);
+  try {
+    return createApiKey(db, { tenantId: 'default', label: 'timing' }).keyId;
+  } finally {
+    closeHippoDb(db);
+  }
+}
+const keyId = mintKey(localRoot);
+// Every authenticated request starts with this read.
+const keyLookup = async () => {
+  if ((await served.findApiKey(keyId)) === null) throw new Error('the served store did not find the key the script minted');
+};
+
 // Each case: label, request, and its ceilings on statements run and rows read.
 const cases = [
   ['getContext, no query', () => getContext(ctx, { currentProject: 'proj' }), [360, 5400]],
@@ -141,6 +156,7 @@ const cases = [
   ['mcp hippo_status', tool('hippo_status'), [17, 11]],
   ['mcp hippo_peers', tool('hippo_peers'), [14, 22]],
   ['served predictions list', () => served.predictions.listPredictions('default', { limit: 20 }), [0, 0]],
+  ['served key lookup', keyLookup, [0, 0]],
 ];
 
 let failed = false;
