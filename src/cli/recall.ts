@@ -21,7 +21,7 @@ import { getGlobalRoot } from '../sharing/global-store.js';
 import * as api from '../api/index.js';
 import type { PlanningFallacyOutput } from '../predictions/planning-fallacy.js';
 import { detectAnchoring, hashQueryText, biasHintEnabled, snapshotRing } from '../api/recall-history.js';
-import { noteRecall, sessionRing, shownRecallRows } from '../api/recall-record.js';
+import { sessionRing, shownRecallRows } from '../api/recall-record.js';
 import { detectAvailabilityBias } from '../api/availability.js';
 import { resolveTenantId } from '../store/tenant.js';
 import { MAX_HOPS, DEFAULT_MAX_NEIGHBORS } from '../graph/recall.js';
@@ -208,11 +208,7 @@ export async function cmdRecall(
   // A late flag is rejected where the ranking halted, after the notes its earlier stages printed.
   o.late.error?.fail();
   if (!slot.presented) throw new Error('recall ranked but presented nothing');
-  const { fit, text } = slot.presented;
-  const { results, hints } = fit;
-  // Fed after the final detect, so the next recall's cooldown reads the top row and hint this one showed.
-  if (fit.anchorRing) noteRecall(fit.anchorRing, query, results[0]?.entry.id ?? null, hints.anchoring?.memoryId);
-  console.log(text);
+  console.log(slot.presented.text);
 }
 
 /** Every flag recall reads, parsed in the order the single-body command checked them. */
@@ -445,8 +441,8 @@ function presentRecall(hippoRoot: string, query: string, o: RecallOptions, ranke
   const audit = shownRecallRows({ tenantId: o.tenantId, actor: 'cli' }, {
     query, ring: fit.anchorRing, topId: results[0]?.entry.id ?? null, anchoring: hints.anchoring, availability: hints.availability,
   });
-  // The token ledger books the text this recall prints, on whichever exit it takes.
-  return { fit, text, shown: { results, audit, tokens: estimateTokens(text) } };
+  // The token ledger books the text this recall prints, on whichever exit it takes; the ring keeps the hint the final detect made.
+  return { text, shown: { results, audit, tokens: estimateTokens(text), anchoredOn: hints.anchoring?.memoryId } };
 }
 
 type PresentedRecall = ReturnType<typeof presentRecall>;

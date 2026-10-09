@@ -9,6 +9,7 @@ import type { AvailabilityHint } from './availability.js';
 import type { AppendAuditOpts } from '../store/audit.js';
 import type { CallerProject } from './prompt-hook.js';
 import type { RankRecallOpts, RankRecallResult } from './recall-pipeline.js';
+import type { RecallRecording } from './recall-finish.js';
 
 // ---------------------------------------------------------------------------
 // recall
@@ -159,7 +160,8 @@ export interface RecallOpts {
   /** Set only by the MCP recall tool, which ranks with its own scorer and drops copies from its own final list: this call
    *  then keeps a memory that a merged row in the same result holds word for word. Other callers leave it unset. */
   keepHeldCopies?: boolean;
-  leadingAudit?: readonly AppendAuditOpts[]; // rows this recall writes first in its one write, so a failed recall writes none; the HTTP route sets it, others leave it unset
+  leadingAudit?: readonly AppendAuditOpts[]; // rows this recall writes first in its one write, so a failed recall writes none; `recordAs` fills it
+  recordAs?: RecallRecording; // the default ranker then records the recall in full (recall-finish.ts) and fills `recallHistory` and `leadingAudit` itself
   /** MCP recall only: `retrieve` ranks the whole scoped store and strengthens and traces (pipeline 'mcp') just the ids this returns; `results` stays the window band. */
   showRanked?: (ranking: StoreRanking, result: RecallResult) => ShownRanking;
   /** Named ranker: `retrieve` ranks with the CLI ranking core. Unset, it ranks the SQL BM25 band, or the wide hybrid list under `showRanked`. */
@@ -194,6 +196,7 @@ export interface ShownCliCore {
   results: readonly SearchResult[];
   audit: readonly AppendAuditOpts[];
   tokens: number;
+  anchoredOn?: string; // the memory its anchoring hint named; the session ring keeps it for the next recall's cooldown
 }
 
 /** `ids`: what the caller showed; `audit`: its own rows, written after the recall's and in the same transaction, so all land or none. */

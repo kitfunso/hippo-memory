@@ -10,8 +10,8 @@ import { saveIndex } from '../store/index-and-stats.js';
 import { sqliteStore, type HippoStore, type RecallWrites } from '../store/index.js';
 import { estimateTokens } from '../util/token-text.js';
 import { callerOf, recallAuditMetadata, recallAuditRow, strengthenOf } from './recall-record.js';
+import { RECALL_RECORDING, recordShownRecall } from './recall-finish.js';
 import type { CliCoreRanker, CliCoreRecall, RecallOpts, RecallResult, ShownCliCore } from './recall-types.js';
-import { recordTokens } from './tokens.js';
 import type { Context } from './types.js';
 
 // entriesByIds reads at most this many ids a call.
@@ -81,10 +81,19 @@ async function recordShown(ctx: Context, store: HippoStore, opts: RecallOpts, co
   if (audited) {
     // The second store logs that it was searched, and strengthens only the rows the first does not hold.
     if (second !== undefined) await finishOrReport(sqliteStore(second), { goalLog: [], audit: [recallRow], strengthen: strengthenOf(ctx, heldElsewhere) });
-    await traceAndMark(ctx, store, opts, core, shown.results);
+    traceAndMark(ctx, opts, core, shown.results);
   }
-  // The ledger books the text the caller prints, and it prints whether or not the record was written.
-  await recordTokens(ctx, 'recall', { items: ids.length, tokens: shown.tokens, sessionId: core.hostSessionId ?? null });
+  // The caller prints whether or not the record was written, so the ring and the ledger still take this list; `written` holds back the count.
+  await recordShownRecall(ctx, store, RECALL_RECORDING.cli, {
+    query: opts.query,
+    sessionId: opts.sessionId,
+    topId: ids[0] ?? null,
+    anchoredOn: shown.anchoredOn,
+    items: ids.length,
+    tokens: shown.tokens,
+    ledgerSessionId: core.hostSessionId ?? null,
+    written: audited,
+  });
 }
 
 // The caller has ranked and is about to print, so a failed audit write is logged and counted, never thrown.
@@ -106,7 +115,7 @@ async function idsNotHeld(store: HippoStore, ids: readonly string[], tenantId: s
   return ids.filter((id) => !held.has(id));
 }
 
-async function traceAndMark(ctx: Context, store: HippoStore, opts: RecallOpts, core: CliCoreRecall, shown: readonly SearchResult[]): Promise<void> {
+function traceAndMark(ctx: Context, opts: RecallOpts, core: CliCoreRecall, shown: readonly SearchResult[]): void {
   // An empty list is traced too, so a coverage gap still reaches the training corpus.
   const traceId = writeRecallTraceAtRoot(ctx.hippoRoot, {
     tenantId: ctx.tenantId,
@@ -119,5 +128,4 @@ async function traceAndMark(ctx: Context, store: HippoStore, opts: RecallOpts, c
   if (shown.length === 0) return;
   // One write for both markers, so `hippo outcome` never pairs these ids with an older trace.
   saveIndex(ctx.hippoRoot, { last_retrieval_ids: shown.map((r) => r.entry.id), last_trace_id: traceId !== null ? String(traceId) : null });
-  await store.bumpRecallStats(shown.length);
 }
