@@ -4,12 +4,9 @@ import * as os from 'os';
 import * as path from 'path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import {
-  promoteToGlobal,
-  shareMemory,
-  autoShare,
-  syncGlobalToLocal,
-} from '../src/sharing/shared.js';
+import { promoteToGlobal } from '../src/sharing/global-store.js';
+import { shareMemory, autoShare } from '../src/sharing/share.js';
+import { syncGlobalToLocal } from '../src/sharing/global-sync.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';

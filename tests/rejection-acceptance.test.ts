@@ -36,7 +36,8 @@ import {
   findRejectedValue,
 } from '../src/store/rejection.js';
 import { cmdCapture } from '../src/capture/command.js';
-import { syncGlobalToLocal, autoShare } from '../src/sharing/shared.js';
+import { syncGlobalToLocal } from '../src/sharing/global-sync.js';
+import { autoShare } from '../src/sharing/share.js';
 import * as api from '../src/api/index.js';
 import { consolidate } from '../src/consolidate/sleep.js';
 import { importEntries } from '../src/importers/core.js';

@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { loadStats, updateStatsUnlessBusy } from '../src/store/index-and-stats.js';
 import { openHippoDb, closeHippoDb, getHippoDbPath, isSqliteBusy, runWithRequestStores, type DatabaseSyncLike } from '../src/db/index.js';
-import { promoteToGlobal } from '../src/sharing/shared.js';
+import { promoteToGlobal } from '../src/sharing/global-store.js';
 import { resetLogOnce } from '../src/util/log.js';
 import { serve } from '../src/server.js';
 import * as client from '../src/cli/client.js';

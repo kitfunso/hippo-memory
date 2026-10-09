@@ -11,7 +11,7 @@ import { loadRecallSearchEntries } from '../src/store/search-rows.js';
 import { createMemory, type CreateMemoryOptions } from '../src/core/memory.js';
 import { saveEmbeddingIndex, saveStoredEmbeddingModel } from '../src/store/embeddings/index.js';
 import { resolveEmbeddingProvider } from '../src/store/embeddings/provider.js';
-import { searchBothHybrid } from '../src/sharing/shared.js';
+import { searchBothHybrid } from '../src/sharing/search-both.js';
 import { hybridSearch } from '../src/search/hybrid.js';
 import { retrieve, getContext } from '../src/api/index.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';

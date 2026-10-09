@@ -447,7 +447,7 @@ describe('HIPPO_FAKE_NOW', () => {
     // itself must honor the fake clock.
     process.env.HIPPO_FAKE_NOW = '2030-01-01T00:00:00.000Z';
     _resetAblationCacheForTests();
-    const { searchBothHybrid } = await import('../src/sharing/shared.js');
+    const { searchBothHybrid } = await import('../src/sharing/search-both.js');
     const m = createMemory('wrapper clock consistency check', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     m.created = '2026-06-11T00:00:00.000Z'; // dated 2026, ancient against the 2030 clock
     m.last_retrieved = '2026-06-11T00:00:00.000Z';

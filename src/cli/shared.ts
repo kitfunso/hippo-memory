@@ -25,7 +25,7 @@ import { importAtSessionEnd, currentMachine } from '../agent-memories/sync.js';
 import { type ImportReport, summaryLine } from '../agent-memories/report.js';
 import { type ChurnStaleResult, detectChurnStale } from '../learn/invalidation.js';
 import { isGlobalStoreRoot, resolveProjectIdentity } from '../core/project-identity.js';
-import { getGlobalRoot, initGlobal } from '../sharing/shared.js';
+import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
 import { DAILY_TASK_NAME, buildDailyRunnerCommand, buildSchtasksCreateArgs, buildWindowsTaskRun, quoteInsideWindowsArg } from './scheduler.js';
 import { sanitizeLogMessage } from '../capture/compact.js';
 import { type AuditOp, reportAuditWriteFailure } from '../store/audit.js';

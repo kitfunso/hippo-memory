@@ -18,7 +18,7 @@ import { STRENGTH_RANK_FLOOR, STRENGTH_RANK_SPAN } from '../search/boosts.js';
 import { hybridSearch } from '../search/hybrid.js';
 import { physicsSearch } from '../search/physics-search.js';
 import type { RerankStep, ResultCost, SearchResult } from '../core/search-types.js';
-import { searchBothHybrid } from '../sharing/shared.js';
+import { searchBothHybrid } from '../sharing/search-both.js';
 import { loadRecallSearchEntries, recallScopeFilter } from '../store/search-rows.js';
 import { textOverlap, tokenize as tokenizeQuery } from '../util/tokenize.js';
 

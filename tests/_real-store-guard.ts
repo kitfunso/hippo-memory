@@ -18,7 +18,7 @@ import { existsSync, readdirSync, realpathSync, rmSync, statSync } from 'node:fs
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 
-// Resolve the global store the way src/sharing/shared.ts getGlobalRoot() does:
+// Resolve the global store the way src/sharing/global-store.ts getGlobalRoot() does:
 // HIPPO_HOME, then XDG_DATA_HOME/hippo, then ~/.hippo.
 function globalStoreRoot(): string {
   const hippoHome = process.env.HIPPO_HOME?.trim();

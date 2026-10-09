@@ -8,7 +8,7 @@ import { writeEntryMirrors } from '../store/entry-writes.js';
 import { EVERY_SCOPE, loadTextsHoldingWords } from '../store/candidates.js';
 import { updateStatsOn } from '../store/index-and-stats.js';
 import { gatedWrite } from '../trust/gated-write.js';
-import { getGlobalRoot, initGlobal } from '../sharing/shared.js';
+import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
 import { embedMemory } from '../store/embeddings/index.js';
 import { maskEmails, redactSecretsStrict } from '../util/secret-detect.js';
 import { RejectedValueError, checkRejectionGuard } from '../store/rejection.js';

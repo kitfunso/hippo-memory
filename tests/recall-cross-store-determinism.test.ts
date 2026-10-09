@@ -28,7 +28,7 @@ import { loadAllEntries } from '../src/store/entry-reads.js';
 import { Layer, type MemoryEntry} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { hybridSearch } from '../src/search/hybrid.js';
-import { searchBothHybrid } from '../src/sharing/shared.js';
+import { searchBothHybrid } from '../src/sharing/search-both.js';
 
 // Fixed clock: pins calculateStrength/recencyBoost so two stores produce
 // byte-identical composite scores for byte-identical content — otherwise

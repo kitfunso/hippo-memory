@@ -11,7 +11,7 @@ import { redactSecretsStrict } from '../util/secret-detect.js';
 import { describeMessageFailure, sendAnthropicMessage } from '../util/anthropic-messages.js';
 import { derivationScope, derivationPartitionKey } from '../store/recall-scope.js';
 import { loadConfig } from '../core/config.js';
-import { neverAutoShareTags } from '../sharing/shared.js';
+import { neverAutoShareTags } from '../sharing/share.js';
 import { errorMessage, log } from '../util/log.js';
 import { certainDefect } from '../core/memory-quality.js';
 

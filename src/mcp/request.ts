@@ -2,7 +2,7 @@
 
 import { errorMessage, log } from '../util/log.js';
 import { STORE_NOT_PORTED_MESSAGE } from '../util/http-util.js';
-import { getGlobalRoot, initGlobal } from '../sharing/shared.js';
+import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
 import { loadConfig } from '../core/config.js';
 import { resolveTenantId } from '../store/tenant.js';
 import { rethrowIfSqliteBlocked, runWithRequestStores } from '../db/index.js';

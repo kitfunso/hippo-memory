@@ -3,7 +3,7 @@
 import * as path from 'path';
 import { errorMessage, log } from '../util/log.js';
 import { repairQualityOnce } from './quality-repair.js';
-import { getGlobalRoot } from '../sharing/shared.js';
+import { getGlobalRoot } from '../sharing/global-store.js';
 import { resolveTenantId } from '../store/tenant.js';
 
 /** Fault-isolated like the project tag repair: a failure warns, leaves the store unmarked and runs again next time. */

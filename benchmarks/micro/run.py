@@ -106,7 +106,7 @@ Action types:
   memories that live in different stores (e.g. promoted globals vs.
   untouched locals), keep each competitor's content under 200 chars and
   make them diverge in their first 200 chars — cross-store dedup keys on
-  `content.slice(0, 200)` (src/sharing/shared.ts:287), so two competitors sharing
+  `content.slice(0, 200)` (src/sharing/search-both.ts:228), so two competitors sharing
   a >=200-char-identical prefix would collapse into one row.
 
 Usage:

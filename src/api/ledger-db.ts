@@ -1,7 +1,7 @@
 // The store the token ledger writes to for a caller's root; context, recall and the session hooks share it.
 import { isSqliteBusy, noteStoreBusy, type openHippoDb } from '../db/index.js';
 import { errorFields, errorMessage, log } from '../util/log.js';
-import { getGlobalRoot } from '../sharing/shared.js';
+import { getGlobalRoot } from '../sharing/global-store.js';
 import { lastSentOnSurface, recordLedgerTurn, type LedgerTurn } from '../store/ledger-turn.js';
 import { isInitialized, onHandle } from '../store/open.js';
 import { sqliteSyncStore } from '../store/sqlite/store.js';

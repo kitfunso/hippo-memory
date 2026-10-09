@@ -6,7 +6,7 @@ import { loadConfig } from '../../dist/core/config.js';
 import { getReranker } from '../../dist/rerankers/index.js';
 import { detectScope } from '../../dist/sharing/scope.js';
 import type { SearchResult } from '../../dist/core/search-types.js';
-import { getGlobalRoot } from '../../dist/sharing/shared.js';
+import { getGlobalRoot } from '../../dist/sharing/global-store.js';
 import { getHippoRoot, isInitialized } from '../../dist/store/open.js';
 import { resolveTenantId } from '../../dist/store/tenant.js';
 import { STAGE_LABEL, stagesNotRun, type Arm, type EvalQuery } from './queries.ts';

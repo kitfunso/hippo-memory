@@ -4,7 +4,7 @@ import { loadConfig } from '../core/config.js';
 import { RejectedValueError } from '../store/rejection.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';
 import { describeMessageFailure, sendAnthropicMessage } from '../util/anthropic-messages.js';
-import { neverAutoShareTags } from '../sharing/shared.js';
+import { neverAutoShareTags } from '../sharing/share.js';
 import { errorMessage, log } from '../util/log.js';
 import { isJsonString, type JsonValue } from '../util/json.js';
 import { certainDefect } from '../core/memory-quality.js';

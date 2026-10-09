@@ -6,7 +6,7 @@ import * as path from 'path';
 import { consolidate } from '../src/consolidate/sleep.js';
 import { Layer} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { NO_MERGE_TAGS } from '../src/sharing/shared.js';
+import { NO_MERGE_TAGS } from '../src/sharing/share.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';

@@ -9,7 +9,7 @@ import { batchWriteAndDelete } from '../src/store/delete-and-batch.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { saveEmbeddingIndex, saveStoredEmbeddingModel } from '../src/store/embeddings/index.js';
 import { resolveEmbeddingProvider } from '../src/store/embeddings/provider.js';
-import { searchBothHybrid } from '../src/sharing/shared.js';
+import { searchBothHybrid } from '../src/sharing/search-both.js';
 import { recordStatementsAsync } from './_helpers/count-statements.js';
 
 const ROWS = 10_000;

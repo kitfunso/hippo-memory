@@ -266,7 +266,7 @@ describe('SearchResult cosine field', () => {
 
 describe('searchBothHybrid', () => {
   it('is exported and callable', async () => {
-    const { searchBothHybrid } = await import('../src/sharing/shared.js');
+    const { searchBothHybrid } = await import('../src/sharing/search-both.js');
     expect(searchBothHybrid).toBeInstanceOf(Function);
   });
 });

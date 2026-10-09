@@ -11,7 +11,7 @@
 
 import type { MemoryEntry } from '../core/memory.js';
 import { hybridSearch } from '../search/hybrid.js';
-import { searchBothHybrid } from '../sharing/shared.js';
+import { searchBothHybrid } from '../sharing/search-both.js';
 import { isInitialized } from '../store/open.js';
 
 // Generous so metrics are not truncated.

@@ -5,7 +5,7 @@ import { ConflictError, NotFoundError } from '../core/api-errors.js';
 import { stampOriginProject } from '../store/entry-row.js';
 import type { ConnectorEvent } from '../store/port.js';
 import { createSuccessor, type MemoryEntry } from '../core/memory.js';
-import { promoteToGlobal } from '../sharing/shared.js';
+import { promoteToGlobal } from '../sharing/global-store.js';
 import { loadConfig } from '../core/config.js';
 import { andThen, notPorted, onStore } from './on-store.js';
 import type { Context, StoreReply } from './types.js';

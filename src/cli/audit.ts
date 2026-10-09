@@ -9,7 +9,7 @@ import { pruneAuditLog, parseOlderThanFlag } from './audit-prune.js';
 import { printError } from './output.js';
 import { type CliFlags, requireInit, type CommandContext, resolveAuthRoot, boolFlag, flagIsTrue, stringFlag } from './shared.js';
 import { repairAutomaticMemories } from './quality-repair.js';
-import { getGlobalRoot } from '../sharing/shared.js';
+import { getGlobalRoot } from '../sharing/global-store.js';
 import { errorMessage } from '../util/log.js';
 
 // ---------------------------------------------------------------------------

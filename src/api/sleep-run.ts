@@ -4,7 +4,7 @@ import { loadAllEntries } from '../store/entry-reads.js';
 import { deleteEntry, memoriesBackingObjects } from '../store/delete-and-batch.js';
 import { reportAuditWriteFailure, auditMemories } from '../store/audit.js';
 import { sqliteSyncStore } from '../store/sqlite/store.js';
-import { autoShare } from '../sharing/shared.js';
+import { autoShare } from '../sharing/share.js';
 import { consolidate } from '../consolidate/sleep.js';
 import { failedUnitOf } from '../store/delete-and-batch.js';
 import { loadConfig } from '../core/config.js';

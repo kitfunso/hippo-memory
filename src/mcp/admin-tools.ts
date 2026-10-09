@@ -3,7 +3,7 @@
 import { evalNow } from '../core/ablation.js';
 import { loadStrengthTallies } from '../store/candidates.js';
 import { countOpenConflicts, listTouchableConflicts, resolveConflict } from '../store/conflicts.js';
-import { shareMemory, listPeers } from '../sharing/shared.js';
+import { shareMemory, listPeers } from '../sharing/share.js';
 import { requireGroup, storeFor } from '../store/index.js';
 import { NotFoundError } from '../core/api-errors.js';
 import { classifyOriginProject } from '../core/project-identity.js';

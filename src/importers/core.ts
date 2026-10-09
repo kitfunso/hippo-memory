@@ -7,7 +7,7 @@ import { createMemory, Layer, MemoryEntry } from '../core/memory.js';
 import { writeEntry } from '../store/entry-writes.js';
 import { loadAllEntries } from '../store/entry-reads.js';
 import { duplicateKey, storedTextKeys } from '../util/same-text.js';
-import { getGlobalRoot, initGlobal } from '../sharing/shared.js';
+import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
 import { withRequestStoresSync } from '../db/request-stores.js';
 import { RejectedValueError } from '../store/rejection.js';
 import { rejectionGuardRefuses } from '../store/rejected-values.js';

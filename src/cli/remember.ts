@@ -27,7 +27,7 @@ import { loadConfig, type HippoConfig } from '../core/config.js';
 import { extractPathTags } from '../search/path-context.js';
 import { detectScope } from '../sharing/scope.js';
 import { assertClientScope } from '../store/recall-scope.js';
-import { getGlobalRoot, initGlobal } from '../sharing/shared.js';
+import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
 import { vetSecrets } from '../util/secret-detect.js';
 import * as client from './client.js';
 import { resolveTenantId } from '../store/tenant.js';

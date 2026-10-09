@@ -14,15 +14,9 @@ import { loadConfig } from '../core/config.js';
 import { captureError, runWatched } from '../learn/autolearn.js';
 import { currentMachine, importAtSessionEnd, importForStore } from '../agent-memories/sync.js';
 import { detailLines } from '../agent-memories/report.js';
-import {
-  getGlobalRoot,
-  initGlobal,
-  shareMemory,
-  listPeers,
-  autoShare,
-  transferScore,
-  syncGlobalToLocal,
-} from '../sharing/shared.js';
+import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
+import { shareMemory, listPeers, autoShare, transferScore } from '../sharing/share.js';
+import { syncGlobalToLocal } from '../sharing/global-sync.js';
 import {
   importChatGPT,
   importClaude,

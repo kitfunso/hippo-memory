@@ -13,7 +13,7 @@ const EXEMPT_DIR = `db${sep}migrations${sep}`;
 // Doc lines that name the rule; exempt by file and exact text, so an edited or added line is read again.
 const DOC_LINES = new Set([
   'api/assemble.ts: * `unknown:legacy` rows.',
-  "sharing/shared.ts: *    `{}`                                  = default-deny (`unknown:legacy`",
+  "sharing/search-both.ts: *    `{}`                                  = default-deny (`unknown:legacy`",
   "store/handoffs.ts: // continuity excludes slack:private:* and 'unknown:legacy'.",
   "store/sessions.ts: // continuity reads applies to slack:private:* and 'unknown:legacy' rows.",
   "store/search-rows.ts: * `unknown:legacy` cannot leak via any consumer that hasn't remembered to re-filter.",

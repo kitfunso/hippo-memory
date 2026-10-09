@@ -8,7 +8,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { findHippoStoreDir } from './core/project-identity.js';
-import { getGlobalRoot } from './sharing/shared.js';
+import { getGlobalRoot } from './sharing/global-store.js';
 import { isInitialized } from './store/open.js';
 import { readStoreHealth, type StoreHealth } from './store/diagnostics.js';
 import { loadConfig } from './core/config.js';
