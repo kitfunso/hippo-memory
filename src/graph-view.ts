@@ -67,6 +67,88 @@ export function graphModelOf({ entities, relations, truncated }: GraphRows): Gra
 const LAYOUT_W = 1000;
 const LAYOUT_H = 700;
 
+type Point = { x: number; y: number };
+
+function seedCircle(nodes: GraphNode[], width: number, height: number): Map<number, Point> {
+  const pos = new Map<number, Point>();
+  const n = nodes.length;
+  const radius = Math.min(width, height) * 0.4;
+  nodes.forEach((node, i) => {
+    const angle = (2 * Math.PI * i) / n;
+    pos.set(node.id, {
+      x: width / 2 + radius * Math.cos(angle),
+      y: height / 2 + radius * Math.sin(angle),
+    });
+  });
+  return pos;
+}
+
+function addRepulsion(nodes: GraphNode[], pos: Map<number, Point>, disp: Point[], k: number): void {
+  const n = nodes.length;
+  for (let i = 0; i < n; i++) {
+    const pi = pos.get(nodes[i].id)!;
+    for (let j = i + 1; j < n; j++) {
+      const pj = pos.get(nodes[j].id)!;
+      const dx = pi.x - pj.x;
+      const dy = pi.y - pj.y;
+      const dist = Math.hypot(dx, dy) || 0.01;
+      const rep = (k * k) / dist;
+      const ux = dx / dist;
+      const uy = dy / dist;
+      disp[i].x += ux * rep;
+      disp[i].y += uy * rep;
+      disp[j].x -= ux * rep;
+      disp[j].y -= uy * rep;
+    }
+  }
+}
+
+function addAttraction(
+  edges: GraphEdge[],
+  idIndex: Map<number, number>,
+  pos: Map<number, Point>,
+  disp: Point[],
+  k: number,
+): void {
+  for (const e of edges) {
+    const i = idIndex.get(e.from);
+    const j = idIndex.get(e.to);
+    if (i === undefined || j === undefined) continue;
+    const pi = pos.get(e.from)!;
+    const pj = pos.get(e.to)!;
+    const dx = pi.x - pj.x;
+    const dy = pi.y - pj.y;
+    const dist = Math.hypot(dx, dy) || 0.01;
+    const att = (dist * dist) / k;
+    const ux = dx / dist;
+    const uy = dy / dist;
+    disp[i].x -= ux * att;
+    disp[i].y -= uy * att;
+    disp[j].x += ux * att;
+    disp[j].y += uy * att;
+  }
+}
+
+function applyDisplacement(
+  nodes: GraphNode[],
+  pos: Map<number, Point>,
+  disp: Point[],
+  temp: number,
+  width: number,
+  height: number,
+): void {
+  nodes.forEach((node, i) => {
+    const p = pos.get(node.id)!;
+    const dl = Math.hypot(disp[i].x, disp[i].y) || 0.01;
+    let nx = p.x + (disp[i].x / dl) * Math.min(dl, temp);
+    let ny = p.y + (disp[i].y / dl) * Math.min(dl, temp);
+    if (!Number.isFinite(nx)) nx = width / 2;
+    if (!Number.isFinite(ny)) ny = height / 2;
+    p.x = Math.max(20, Math.min(width - 20, nx));
+    p.y = Math.max(20, Math.min(height - 20, ny));
+  });
+}
+
 /**
  * Deterministic Fruchterman-Reingold-style force layout. Seeded circular init +
  * fixed iterations, NO `Math.random`, so the same model always yields the same
@@ -80,75 +162,21 @@ export function layoutGraph(
   const width = opts.width ?? LAYOUT_W;
   const height = opts.height ?? LAYOUT_H;
   const iterations = opts.iterations ?? 300;
-  const cx = width / 2;
-  const cy = height / 2;
   const nodes = model.nodes;
   const n = nodes.length;
-  const pos = new Map<number, { x: number; y: number }>();
-  if (n === 0) return pos;
-  if (n === 1) {
-    pos.set(nodes[0].id, { x: cx, y: cy });
-    return pos;
-  }
+  if (n === 0) return new Map();
+  if (n === 1) return new Map([[nodes[0].id, { x: width / 2, y: height / 2 }]]);
 
-  const radius = Math.min(width, height) * 0.4;
-  nodes.forEach((node, i) => {
-    const angle = (2 * Math.PI * i) / n;
-    pos.set(node.id, { x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle) });
-  });
-
+  const pos = seedCircle(nodes, width, height);
   const idIndex = new Map<number, number>(nodes.map((node, i) => [node.id, i]));
   const k = Math.sqrt((width * height) / n); // ideal edge length
 
   for (let iter = 0; iter < iterations; iter++) {
     const disp = nodes.map(() => ({ x: 0, y: 0 }));
-    // Repulsion between all pairs.
-    for (let i = 0; i < n; i++) {
-      const pi = pos.get(nodes[i].id)!;
-      for (let j = i + 1; j < n; j++) {
-        const pj = pos.get(nodes[j].id)!;
-        const dx = pi.x - pj.x;
-        const dy = pi.y - pj.y;
-        const dist = Math.hypot(dx, dy) || 0.01;
-        const rep = (k * k) / dist;
-        const ux = dx / dist;
-        const uy = dy / dist;
-        disp[i].x += ux * rep;
-        disp[i].y += uy * rep;
-        disp[j].x -= ux * rep;
-        disp[j].y -= uy * rep;
-      }
-    }
-    // Attraction along edges.
-    for (const e of model.edges) {
-      const i = idIndex.get(e.from);
-      const j = idIndex.get(e.to);
-      if (i === undefined || j === undefined) continue;
-      const pi = pos.get(e.from)!;
-      const pj = pos.get(e.to)!;
-      const dx = pi.x - pj.x;
-      const dy = pi.y - pj.y;
-      const dist = Math.hypot(dx, dy) || 0.01;
-      const att = (dist * dist) / k;
-      const ux = dx / dist;
-      const uy = dy / dist;
-      disp[i].x -= ux * att;
-      disp[i].y -= uy * att;
-      disp[j].x += ux * att;
-      disp[j].y += uy * att;
-    }
-    // Apply with cooling; clamp.
+    addRepulsion(nodes, pos, disp, k);
+    addAttraction(model.edges, idIndex, pos, disp, k);
     const temp = Math.max(1, (width / 10) * (1 - iter / iterations));
-    nodes.forEach((node, i) => {
-      const p = pos.get(node.id)!;
-      const dl = Math.hypot(disp[i].x, disp[i].y) || 0.01;
-      let nx = p.x + (disp[i].x / dl) * Math.min(dl, temp);
-      let ny = p.y + (disp[i].y / dl) * Math.min(dl, temp);
-      if (!Number.isFinite(nx)) nx = cx;
-      if (!Number.isFinite(ny)) ny = cy;
-      p.x = Math.max(20, Math.min(width - 20, nx));
-      p.y = Math.max(20, Math.min(height - 20, ny));
-    });
+    applyDisplacement(nodes, pos, disp, temp, width, height);
   }
   return pos;
 }
@@ -217,19 +245,10 @@ const STYLE = [
   ".legend b{color:#e2e8f0}",
 ].join("\n");
 
-/**
- * Render the model as a SELF-CONTAINED, dependency-free, offline interactive HTML
- * node-link diagram. Positions are computed server-side (deterministic). User
- * strings are escaped per sink: SVG `<text>`/`<title>` via `escapeHtml`; the model
- * is inlined in a `<script type="application/json">` block with `<`/`>`/`&`
- * unicode-escaped so a `</script>` inside an entity name cannot break out (the
- * client `JSON.parse`s it back and never `innerHTML`s a user string).
- */
-export function renderGraphHtml(model: GraphModel): string {
-  const pos = layoutGraph(model);
-  const color = (t: string): string => NODE_COLORS[t] ?? '#64748b';
+const nodeColor = (t: string): string => NODE_COLORS[t] ?? '#64748b';
 
-  const edgeSvg = model.edges
+function renderEdgeSvg(model: GraphModel, pos: Map<number, Point>): string {
+  return model.edges
     .map((e) => {
       const a = pos.get(e.from);
       const b = pos.get(e.to);
@@ -240,8 +259,10 @@ export function renderGraphHtml(model: GraphModel): string {
       );
     })
     .join('');
+}
 
-  const nodeSvg = model.nodes
+function renderNodeSvg(model: GraphModel, pos: Map<number, Point>): string {
+  return model.nodes
     .map((node) => {
       const p = pos.get(node.id);
       if (!p) return '';
@@ -249,24 +270,44 @@ export function renderGraphHtml(model: GraphModel): string {
       return (
         `<g class="node" data-id="${node.id}" transform="translate(${p.x.toFixed(1)},${p.y.toFixed(1)})">` +
         `<title>${escapeHtml(node.type + ': ' + node.name)}</title>` +
-        `<circle r="7" fill="${color(node.type)}"/>` +
+        `<circle r="7" fill="${nodeColor(node.type)}"/>` +
         `<text x="10" y="4">${escapeHtml(label)}</text>` +
         `</g>`
       );
     })
     .join('');
+}
 
-  // Safe inline JSON for the client: unicode-escape the HTML-significant chars so
-  // the content cannot terminate the <script> block; JSON.parse restores them.
-  const dataJson = JSON.stringify(model)
+// Safe inline JSON for the client: unicode-escape the HTML-significant chars so
+// the content cannot terminate the <script> block; JSON.parse restores them.
+function inlineModelJson(model: GraphModel): string {
+  return JSON.stringify(model)
     .replace(/</g, '\\u003c')
     .replace(/>/g, '\\u003e')
     .replace(/&/g, '\\u0026');
+}
 
+function renderLegend(model: GraphModel): string {
   const types = [...new Set(model.nodes.map((nd) => nd.type))];
-  const legend = types
-    .map((t) => `<span style="color:${color(t)}">●</span> ${escapeHtml(t)}`)
+  return types
+    .map((t) => `<span style="color:${nodeColor(t)}">●</span> ${escapeHtml(t)}`)
     .join('  ');
+}
+
+/**
+ * Render the model as a SELF-CONTAINED, dependency-free, offline interactive HTML
+ * node-link diagram. Positions are computed server-side (deterministic). User
+ * strings are escaped per sink: SVG `<text>`/`<title>` via `escapeHtml`; the model
+ * is inlined in a `<script type="application/json">` block with `<`/`>`/`&`
+ * unicode-escaped so a `</script>` inside an entity name cannot break out (the
+ * client `JSON.parse`s it back and never `innerHTML`s a user string).
+ */
+export function renderGraphHtml(model: GraphModel): string {
+  const pos = layoutGraph(model);
+  const edgeSvg = renderEdgeSvg(model, pos);
+  const nodeSvg = renderNodeSvg(model, pos);
+  const dataJson = inlineModelJson(model);
+  const legend = renderLegend(model);
 
   return [
     '<!doctype html>',

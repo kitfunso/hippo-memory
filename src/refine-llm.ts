@@ -152,46 +152,55 @@ export async function refineStore(
     if (opts.limit !== undefined && processed >= opts.limit) break;
     processed++;
 
-    // Best-effort: walk parents_json (schema v9) to fetch originals. When
-    // parents aren't recorded we still refine using just the merged content.
-    const sources: MemoryEntry[] = [];
-    const parentIds = Array.isArray(entry.parents) ? entry.parents : [];
-    for (const pid of parentIds) {
-      // Parent lookup scoped by opts.tenantId when provided.
-      // Cross-tenant parents return null and are silently skipped — refine
-      // still produces output from the merged content alone (graceful
-      // degradation rather than refuse-to-refine).
-      const p = readEntry(hippoRoot, pid, opts.tenantId);
-      if (p) sources.push(p);
-    }
-
-    const refined = await refineSemanticMemory(entry.content, sources, {
-      apiKey: opts.apiKey,
-      model: opts.model,
-      fetcher: opts.fetcher,
-    });
-
-    if (refined === null) {
-      result.failed++;
-      result.details.push({ id: entry.id, status: 'failed', reason: 'api error or empty response' });
-      continue;
-    }
-
-    if (opts.dryRun) {
-      result.refined++;
-      result.details.push({ id: entry.id, status: 'refined', reason: 'dry-run (no write)' });
-      continue;
-    }
-
-    const updated: MemoryEntry = {
-      ...entry,
-      content: refined,
-      tags: entry.tags.includes(REFINED_TAG) ? entry.tags : [...entry.tags, REFINED_TAG],
-    };
-    writeEntry(hippoRoot, updated);
-    result.refined++;
-    result.details.push({ id: entry.id, status: 'refined' });
+    await refineOneEntry(hippoRoot, entry, opts, result);
   }
 
   return result;
+}
+
+async function refineOneEntry(
+  hippoRoot: string,
+  entry: MemoryEntry,
+  opts: RefineOptions,
+  result: RefineResult,
+): Promise<void> {
+  // Best-effort: walk parents_json (schema v9) to fetch originals. When
+  // parents aren't recorded we still refine using just the merged content.
+  const sources: MemoryEntry[] = [];
+  const parentIds = Array.isArray(entry.parents) ? entry.parents : [];
+  for (const pid of parentIds) {
+    // Parent lookup scoped by opts.tenantId when provided.
+    // Cross-tenant parents return null and are silently skipped — refine
+    // still produces output from the merged content alone (graceful
+    // degradation rather than refuse-to-refine).
+    const p = readEntry(hippoRoot, pid, opts.tenantId);
+    if (p) sources.push(p);
+  }
+
+  const refined = await refineSemanticMemory(entry.content, sources, {
+    apiKey: opts.apiKey,
+    model: opts.model,
+    fetcher: opts.fetcher,
+  });
+
+  if (refined === null) {
+    result.failed++;
+    result.details.push({ id: entry.id, status: 'failed', reason: 'api error or empty response' });
+    return;
+  }
+
+  if (opts.dryRun) {
+    result.refined++;
+    result.details.push({ id: entry.id, status: 'refined', reason: 'dry-run (no write)' });
+    return;
+  }
+
+  const updated: MemoryEntry = {
+    ...entry,
+    content: refined,
+    tags: entry.tags.includes(REFINED_TAG) ? entry.tags : [...entry.tags, REFINED_TAG],
+  };
+  writeEntry(hippoRoot, updated);
+  result.refined++;
+  result.details.push({ id: entry.id, status: 'refined' });
 }

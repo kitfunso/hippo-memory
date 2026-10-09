@@ -209,25 +209,9 @@ function produceHitsForRoot(
   const { reached, originMemByEntityId } = walkRelations(root, tenantId, seedEntities, hops, maxNeighbors);
   if (reached.size === 0) return;
 
-  // Reached entities -> source memory ids -> load DIRECTLY by id (chunked), not lexical.
-  // A mirror-less reached entity (memoryId === null) has no memory to load: drop its null
-  // id BEFORE it reaches loadByIdsChunked / the Set<string> (it cannot be recall-surfaced;
-  // it stays in entities/relations for graph extract / visualization).
   const reachedEntities = loadEntitiesByIds(root, tenantId, [...reached.keys()]);
-  const needLoad = [...new Set(
-    reachedEntities
-      .map((e) => e.memoryId)
-      .filter((id): id is string => id !== null && !seenMemoryIds.has(id)),
-  )];
-  const loadedById = new Map(loadByIdsChunked(root, tenantId, needLoad).map((m) => [m.id, m]));
-
-  // For the bi-temporal as-of rule on a superseded reached row we need its successor's
-  // valid_from. Batch-load the successors referenced by the loaded rows.
-  let successorValidFrom = new Map<string, string>();
-  if (asOfDate) {
-    const succIds = [...new Set([...loadedById.values()].map((m) => m.superseded_by).filter((id): id is string => !!id))];
-    successorValidFrom = new Map(loadByIdsChunked(root, tenantId, succIds).map((m) => [m.id, m.valid_from]));
-  }
+  const loadedById = loadReachedMemories(root, tenantId, reachedEntities, seenMemoryIds);
+  const successorValidFrom = loadSuccessorValidFrom(root, tenantId, loadedById, asOfDate);
 
   for (const ent of reachedEntities) {
     if (ent.memoryId === null) continue;      // mirror-less node: not recall-surfaced
@@ -241,16 +225,51 @@ function produceHitsForRoot(
     const originScore = baseScoreByMemId.get(origin) ?? baseResults[baseResults.length - 1].score;
     seenMemoryIds.add(mem.id);
     seenContent.add(mem.content);
-    const hit: GraphHit = {
-      entry: mem,
-      score: originScore * (1 - HOP_DISCOUNT * via.hops),
-      bm25: 0, cosine: 0,
-      tokens: estimateTokens(mem.content),
-      graphVia: via,
-    };
+    const hit = buildGraphHit(mem, via, originScore);
     if (!hitsByOrigin.has(origin)) hitsByOrigin.set(origin, []);
     hitsByOrigin.get(origin)!.push(hit);
   }
+}
+
+function buildGraphHit(mem: MemoryEntry, via: GraphVia, originScore: number): GraphHit {
+  return {
+    entry: mem,
+    score: originScore * (1 - HOP_DISCOUNT * via.hops),
+    bm25: 0, cosine: 0,
+    tokens: estimateTokens(mem.content),
+    graphVia: via,
+  };
+}
+
+// Reached entities -> source memory ids -> load DIRECTLY by id (chunked), not lexical.
+// A mirror-less reached entity (memoryId === null) has no memory to load: drop its null
+// id BEFORE it reaches loadByIdsChunked / the Set<string> (it cannot be recall-surfaced;
+// it stays in entities/relations for graph extract / visualization).
+function loadReachedMemories(
+  root: string,
+  tenantId: string,
+  reachedEntities: ReturnType<typeof loadEntitiesByIds>,
+  seenMemoryIds: Set<string>,
+): Map<string, MemoryEntry> {
+  const needLoad = [...new Set(
+    reachedEntities
+      .map((e) => e.memoryId)
+      .filter((id): id is string => id !== null && !seenMemoryIds.has(id)),
+  )];
+  return new Map(loadByIdsChunked(root, tenantId, needLoad).map((m) => [m.id, m]));
+}
+
+// For the bi-temporal as-of rule on a superseded reached row we need its successor's
+// valid_from. Batch-load the successors referenced by the loaded rows.
+function loadSuccessorValidFrom(
+  root: string,
+  tenantId: string,
+  loadedById: Map<string, MemoryEntry>,
+  asOfDate: Date | null,
+): Map<string, string> {
+  if (!asOfDate) return new Map<string, string>();
+  const succIds = [...new Set([...loadedById.values()].map((m) => m.superseded_by).filter((id): id is string => !!id))];
+  return new Map(loadByIdsChunked(root, tenantId, succIds).map((m) => [m.id, m.valid_from]));
 }
 
 /**
@@ -270,10 +289,8 @@ export function graphExpandRecall(
   const { hops, hippoRoot, globalRoot, tenantId } = opts;
   if (hops <= 0 || baseResults.length === 0) return baseResults;
   const maxNeighbors = opts.maxNeighbors ?? DEFAULT_MAX_NEIGHBORS;
-  const budget = opts.budget ?? DEFAULT_RECALL_BUDGET;
   const includeSuperseded = opts.includeSuperseded ?? false;
   const asOfDate = opts.asOf ? new Date(opts.asOf) : null;
-  const minResults = opts.minResults ?? 1;
   const recallScope = opts.recallScope ?? {};
 
   const baseScoreByMemId = new Map(baseResults.map((r) => [r.entry.id, r.score]));
@@ -290,6 +307,13 @@ export function graphExpandRecall(
   }
 
   if (hitsByOrigin.size === 0) return baseResults;
+  sortHitsWithinOrigin(hitsByOrigin);
+  const allHits = [...hitsByOrigin.values()].flat();
+  const keep = selectWithinBudget(baseResults, allHits, opts);
+  return mergeKeptHits(baseResults, hitsByOrigin, keep);
+}
+
+function sortHitsWithinOrigin(hitsByOrigin: Map<string, GraphHit[]>): void {
   // Closer hops first within each origin group, then by inherited score.
   // Hops asc and score desc are both true primary keys (unchanged);
   // compareEntryIdentity is only the TAIL for a same-hop, same-score tie.
@@ -301,8 +325,11 @@ export function graphExpandRecall(
       return byScore !== 0 ? byScore : compareEntryIdentity(a.entry, b.entry);
     });
   }
-  const allHits = [...hitsByOrigin.values()].flat();
+}
 
+function selectWithinBudget(baseResults: SearchResult[], allHits: GraphHit[], opts: GraphExpandOpts): Set<SearchResult> {
+  const budget = opts.budget ?? DEFAULT_RECALL_BUDGET;
+  const minResults = opts.minResults ?? 1;
   // Budget SELECTION by score (not by position): a high-value graph hit (it inherits its
   // origin seed's relevance) must be able to win a token slot over a low-score lexical
   // distractor — otherwise a tight --budget keeps the noise and drops the memory --hops
@@ -326,7 +353,14 @@ export function graphExpandRecall(
     usedTokens += tokens;
     keep.add(r);
   }
+  return keep;
+}
 
+function mergeKeptHits(
+  baseResults: SearchResult[],
+  hitsByOrigin: Map<string, GraphHit[]>,
+  keep: Set<SearchResult>,
+): SearchResult[] {
   // DISPLAY order: base order preserved (it may be MMR-diversified); each kept new hit
   // placed directly after the seed it descends from. Hits emit ONLY under a kept seed.
   const merged: SearchResult[] = [];

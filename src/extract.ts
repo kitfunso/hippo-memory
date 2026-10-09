@@ -6,7 +6,7 @@ import { redactSecretsStrict } from './secret-detect.js';
 import { describeMessageFailure, sendAnthropicMessage } from './util/anthropic-messages.js';
 import { neverAutoShareTags } from './shared.js';
 import { errorMessage, log } from './log.js';
-import { isJsonString } from './json.js';
+import { isJsonString, type JsonValue } from './json.js';
 import { certainDefect } from './memory-quality.js';
 
 export interface ExtractedFact {
@@ -62,35 +62,46 @@ export async function extractFacts(
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
 
-    const validValences = new Set<string>(['neutral', 'positive', 'negative', 'critical']);
-    const facts: ExtractedFact[] = [];
-
-    for (const item of parsed) {
-      if (facts.length >= 8) break;
-      if (
-        !item ||
-        !isJsonString(item.content) ||
-        item.content.length < 3
-      )
-        continue;
-
-      const itemTags = item.tags;
-      const tags = Array.isArray(itemTags)
-        ? itemTags.filter((t) => isJsonString(t))
-        : [];
-      // SAFETY: validValences.has(item.valence) above confirms item.valence is one of the four literal strings of EmotionalValence.
-      const valence: EmotionalValence = validValences.has(item.valence)
-        ? (item.valence as EmotionalValence)
-        : 'neutral';
-
-      facts.push({ content: item.content, tags, valence });
-    }
-
-    return facts;
+    return parseExtractedFacts(parsed);
   } catch (err) {
     opts.onError?.(`unparseable response: ${errorMessage(err)}`);
     return [];
   }
+}
+
+// One element of the model's JSON array, before the per-field checks below.
+interface RawExtractedFact {
+  content?: JsonValue;
+  tags?: JsonValue;
+  valence?: string;
+}
+
+function parseExtractedFacts(parsed: (RawExtractedFact | null)[]): ExtractedFact[] {
+  const validValences = new Set<string | undefined>(['neutral', 'positive', 'negative', 'critical']);
+  const facts: ExtractedFact[] = [];
+
+  for (const item of parsed) {
+    if (facts.length >= 8) break;
+    if (
+      !item ||
+      !isJsonString(item.content) ||
+      item.content.length < 3
+    )
+      continue;
+
+    const itemTags = item.tags;
+    const tags = Array.isArray(itemTags)
+      ? itemTags.filter((t) => isJsonString(t))
+      : [];
+    // SAFETY: validValences.has(item.valence) above confirms item.valence is one of the four literal strings of EmotionalValence.
+    const valence: EmotionalValence = validValences.has(item.valence)
+      ? (item.valence as EmotionalValence)
+      : 'neutral';
+
+    facts.push({ content: item.content, tags, valence });
+  }
+
+  return facts;
 }
 
 const INHERITABLE_PREFIXES = ['conv:', 'session:', 'scope:', 'path:'];
@@ -115,20 +126,7 @@ export function storeExtractedFacts(
       log.warn(`storeExtractedFacts: skipped automatic quality defect (${defect})`);
       continue;
     }
-    const tags = ['extracted', ...inheritedTags, ...fact.tags];
-    const entry: MemoryEntry = { ...createMemory(fact.content, {
-      layer: Layer.Semantic,
-      tags,
-      emotional_valence: fact.valence,
-      confidence: 'inferred',
-      source: source.source,
-      extracted_from: source.id,
-      scope: source.scope,
-      // Without it createMemory stamps 'default', and extracted facts leave
-      // the tenant of the episodic memory they were extracted from.
-      tenantId: source.tenantId,
-      baseHalfLifeDays,
-    }), origin_project: source.origin_project };
+    const entry = buildExtractedEntry(fact, source, inheritedTags, baseHalfLifeDays);
 
     // A refusal is per-VALUE: one rejected fact must not
     // drop the rest of this batch. writeEntry has already audited the
@@ -150,4 +148,26 @@ export function storeExtractedFacts(
   }
 
   return entries;
+}
+
+function buildExtractedEntry(
+  fact: ExtractedFact,
+  source: MemoryEntry,
+  inheritedTags: string[],
+  baseHalfLifeDays: number,
+): MemoryEntry {
+  const tags = ['extracted', ...inheritedTags, ...fact.tags];
+  return { ...createMemory(fact.content, {
+    layer: Layer.Semantic,
+    tags,
+    emotional_valence: fact.valence,
+    confidence: 'inferred',
+    source: source.source,
+    extracted_from: source.id,
+    scope: source.scope,
+    // Without it createMemory stamps 'default', and extracted facts leave
+    // the tenant of the episodic memory they were extracted from.
+    tenantId: source.tenantId,
+    baseHalfLifeDays,
+  }), origin_project: source.origin_project };
 }
