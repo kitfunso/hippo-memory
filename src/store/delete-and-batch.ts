@@ -63,7 +63,7 @@ function deleteMemoryRow(db: ReturnType<typeof openHippoDb>, sql: string, id: st
 }
 
 /**
- * db-scoped delete core,so a delete can compose inside a caller's transaction.
+ * db-scoped delete core, so a delete can compose inside a caller's transaction.
  * NO filesystem I/O: the caller's transaction may still roll back, and mirrors are written post-commit.
  *
  * `opts.suppressForgetAudit` (default false): `rejectValue` and `resolveConflict` set it because each
