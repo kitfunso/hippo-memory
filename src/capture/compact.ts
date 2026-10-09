@@ -43,11 +43,13 @@ export function sanitizeLogMessage(message: string): string {
 function appendPreCompactLog(logFile: string, message: string): void {
   try {
     fs.mkdirSync(path.dirname(logFile), { recursive: true });
-    // An append handle keeps two hooks' lines whole; Windows cannot truncate through it, so the cap reopens the path.
-    const fd = fs.openSync(logFile, 'a');
+    // One handle, so the cap acts on the file it measured; two hooks writing in the same instant can overwrite one diagnostic line, which this log accepts.
+    const fd = fs.openSync(logFile, fs.constants.O_RDWR | fs.constants.O_CREAT);
     try {
-      if (fs.fstatSync(fd).size > PRE_COMPACT_LOG_MAX_BYTES) fs.closeSync(fs.openSync(logFile, 'w')); // start fresh: a dumb cap, no rotation
-      fs.writeSync(fd, `[hippo] ${new Date().toISOString()} ${sanitizeLogMessage(message)}\n`);
+      const size = fs.fstatSync(fd).size;
+      const startFresh = size > PRE_COMPACT_LOG_MAX_BYTES; // a dumb cap, no rotation
+      if (startFresh) fs.ftruncateSync(fd, 0);
+      fs.writeSync(fd, `[hippo] ${new Date().toISOString()} ${sanitizeLogMessage(message)}\n`, startFresh ? 0 : size, 'utf8');
     } finally {
       fs.closeSync(fd);
     }
