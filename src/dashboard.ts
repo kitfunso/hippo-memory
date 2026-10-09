@@ -280,17 +280,20 @@ function tokenFreeLocation(req: http.IncomingMessage, url: URL): string | null {
   return `${url.pathname.replace(/^\/+/, '/')}${rest ? `?${rest}` : ''}`;
 }
 
-/** Moves the browser off the URL that carries the token, so the token stays out of history, bookmarks and copied links. */
-function leaveTokenUrl(req: http.IncomingMessage, res: http.ServerResponse, location: string): void {
+/** Moves the browser off the URL that carries the token, so the token stays out of history, bookmarks and copied links; false when the request is answered in place. */
+function leaveTokenUrl(req: http.IncomingMessage, res: http.ServerResponse, url: URL): boolean {
+  const location = tokenFreeLocation(req, url);
+  if (location === null) return false;
   if (req.headers['sec-fetch-site'] !== 'cross-site') {
     res.writeHead(303, { Location: location });
     res.end();
-    return;
+    return true;
   }
   // A browser withholds a SameSite=Strict cookie from a redirect another site started; a refresh from this page is same-site.
   const target = location.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
   res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
   res.end(`<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=${target}"><title>Hippo Dashboard</title></head><body></body></html>`);
+  return true;
 }
 
 /** Serves the dashboard on 127.0.0.1 behind a per-start `token` (tests pass one), since loopback alone lets any local process read every memory; `opts` sets the projection and cache clocks. */
@@ -314,8 +317,7 @@ export function serveDashboard(
     const cookieName = `hippo_dashboard_${req.socket.localPort ?? port}`;
     if (sameToken(url.searchParams.get('token') ?? undefined, token)) {
       res.setHeader('Set-Cookie', `${cookieName}=${token}; HttpOnly; SameSite=Strict; Path=/`);
-      const location = tokenFreeLocation(req, url);
-      if (location !== null) return leaveTokenUrl(req, res, location);
+      if (leaveTokenUrl(req, res, url)) return;
     } else if (!sameToken(cookieValue(req.headers.cookie, cookieName), token)) {
       res.writeHead(401, { 'Content-Type': 'text/plain' });
       res.end('Unauthorized: open the dashboard with the URL `hippo dashboard` printed; it carries the access token.');
