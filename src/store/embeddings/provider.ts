@@ -41,8 +41,14 @@ import { errorMessage, log } from '../../util/log.js';
 import { redactSecretsStrict } from '../../util/secret-detect.js';
 import { fetchWithRetry } from '../../util/http-retry.js';
 import type { JsonValue } from '../../util/json.js';
+import { readCappedJson, readCappedText } from '../../util/capped-json.js';
 
 const ERROR_DETAIL_CHARS = 300;
+// An error body is read for its first lines only; 4x leaves room for multi-byte text.
+const ERROR_BODY_MAX_BYTES = ERROR_DETAIL_CHARS * 4;
+// 16,384 dimensions at 32 bytes a number: four times a 4,096-dimension model.
+const EMBED_REPLY_BYTES_PER_INPUT = 512 * 1024;
+const EMBED_REPLY_BASE_BYTES = 64 * 1024;
 
 export type EmbeddingProviderKind = 'local' | 'openai' | 'voyage' | 'cohere';
 
@@ -261,7 +267,7 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
   private async embedChunk(chunk: string[], key: string, role?: EmbeddingRole): Promise<number[][]> {
     const spec = API_PROVIDER_SPECS[this.kind];
     const resp = await this.postChunk(chunk, key, role);
-    const json = await this.responseJson(resp, key);
+    const json = await this.responseJson(resp, key, chunk.length);
 
     const vectors = spec.extractVectors(json);
     // A 200 response with the wrong number of vectors (or any empty/malformed
@@ -300,11 +306,11 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
   }
 
   /** The body of an OK reply; any other status, or a body that is not JSON, throws with the key cut out. */
-  private async responseJson(resp: Response, key: string): Promise<JsonValue> {
+  private async responseJson(resp: Response, key: string, inputs: number): Promise<JsonValue> {
     if (!resp.ok) {
       let detail = '';
       try {
-        detail = await resp.text();
+        detail = await readCappedText(resp, ERROR_BODY_MAX_BYTES);
       } catch {
         /* ignore body read error */
       }
@@ -314,10 +320,10 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
     }
 
     try {
-      return await resp.json();
+      return await readCappedJson(resp, EMBED_REPLY_BASE_BYTES + inputs * EMBED_REPLY_BYTES_PER_INPUT);
     } catch (err) {
       const msg = errorMessage(err);
-      throw new Error(redact(`${this.kind} embeddings returned invalid JSON: ${msg}`, key), { cause: redactedCause(err, key) });
+      throw new Error(redact(`${this.kind} embeddings returned invalid JSON: ${msg}`, key), { cause: redactedCause(err instanceof Error && err.cause ? err.cause : err, key) });
     }
   }
 }

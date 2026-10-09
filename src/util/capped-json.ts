@@ -21,7 +21,23 @@ export async function readCappedJson(resp: Response, maxBytes: number): Promise<
   raw += decoder.decode();
   try {
     return JSON.parse(raw);
-  } catch {
-    throw new Error('reply is not JSON');
+  } catch (err) {
+    throw new Error('reply is not JSON', { cause: err });
   }
+}
+
+/** Reads at most `maxBytes` of a body as text, then cancels the rest; never throws on size. */
+export async function readCappedText(resp: Response, maxBytes: number): Promise<string> {
+  if (!resp.body) return '';
+  const reader = resp.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let received = 0;
+  while (received < maxBytes) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value.subarray(0, maxBytes - received));
+    received += chunks[chunks.length - 1].byteLength;
+  }
+  await reader.cancel();
+  return new TextDecoder().decode(Buffer.concat(chunks));
 }
