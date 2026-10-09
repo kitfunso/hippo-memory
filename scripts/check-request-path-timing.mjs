@@ -175,6 +175,7 @@ const cases = [
   ['mcp hippo_status', tool('hippo_status'), [13, 7, 1]],
   ['mcp hippo_peers', tool('hippo_peers'), [10, 17, 1]],
   ['served predictions list', () => served.predictions.listPredictions('default', { limit: 20 }), [0, 0, 0]],
+  ['served decisions list', () => served.objects.listObjects('default', 'decision', { limit: 20 }), [0, 0, 0]],
   ['served key lookup', keyLookup, [0, 0, 0]],
   ['http recall, limit 10', httpRecall(inProcessServer.url, 10), [62, 287, 1]],
   // Fifty rows back, so one extra statement per returned row passes the ceiling, which ten rows would not.

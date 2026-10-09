@@ -4,6 +4,7 @@ import { rmSync } from 'node:fs';
 import { setTimeout as delay } from 'node:timers/promises';
 import { inspect } from 'node:util';
 import { detectForwardClaim } from '../src/learn/forward-claim-detector.js';
+import { saveSkill } from '../src/objects/skills.js';
 import type { HippoStore, StoreGroups } from '../src/store/index.js';
 import { sqliteStore } from '../src/store/sqlite/store.js';
 import { packVectors, vectorCopiesOf, vectorViewsOf } from '../src/store/sqlite/vector-pack.js';
@@ -67,6 +68,11 @@ const READS: readonly Read[] = [
   read('auditLog.listAuditEvents', (s) => s.auditLog.listAuditEvents({ tenantId: TENANT, limit: 5 }), "tenantId: 'default'"),
   read('quarantine.listQuarantined', (s) => s.quarantine.listQuarantined(TENANT, { status: 'all' }), 'scripts/wipe.sh before every deploy'),
   read('graphReads.graphRows', (s) => s.graphReads.graphRows(TENANT, { limit: 50 }), 'RetryPolicy'),
+  read('objects.listObjects', (s) => s.objects.listObjects(TENANT, 'decision', { limit: 5 }), 'We adopt RetryPolicy'),
+  read('objects.objectById', (s) => s.objects.objectById(TENANT, 'policy', 1), 'retry up to 3x'),
+  read('objects.policiesInForce', (s) => s.objects.policiesInForce(TENANT, { asOf: '9999-12-31T23:59:59.999Z', limit: 5 }), 'RetryPolicy'),
+  read('objects.activeSkillsByName', (s) => s.objects.activeSkillsByName(TENANT, 5), 'page the owner, then revert'),
+  read('objects.briefReceipts', (s) => s.objects.briefReceipts(TENANT, 'deploy', 5), 'mem_p_plain'),
   read('readiness.ping', (s) => s.readiness.ping(), /^undefined$/),
 ];
 
@@ -132,6 +138,8 @@ describe('a read the op table places on a reader thread', () => {
   // Reads write nothing, so both stores serve one copy for the whole table.
   beforeAll(() => {
     const root = copy();
+    // The shared seed has no skill, and the skill read must find one.
+    saveSkill(root, TENANT, { skillName: 'rollback', instructions: 'page the owner, then revert' });
     onWorkers = workerSqliteStore(root);
     inProcess = sqliteStore(root);
   });

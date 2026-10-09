@@ -87,6 +87,17 @@ export const WORKER_OPS = {
   graphReads: {
     graphRows: 'read',
   },
+  objects: {
+    listObjects: 'read',
+    objectById: 'read',
+    closeObject: 'write',
+    saveObject: 'write',
+    openIncident: 'write',
+    resolveIncident: 'write',
+    policiesInForce: 'read',
+    activeSkillsByName: 'read',
+    briefReceipts: 'read',
+  },
   readiness: {
     ping: 'read',
   },

@@ -59,7 +59,7 @@ function probing(hippoRoot: string, served: Readiness): Readiness {
  *  `executor` defaults to threads of the store's own, with the server's lock wait. */
 export function workerSqliteStore(hippoRoot: string, executor: SqliteExecutor = createSqliteExecutor(hippoRoot)): HippoStore & StoreGroups {
   const inProcess = sqliteStore(hippoRoot);
-  const { keyAudit, keyWrites, vectorWrites, entryWrites, contextReads, predictions, dagReads, auditLog, quarantine, graphReads } = WORKER_OPS;
+  const { keyAudit, keyWrites, vectorWrites, entryWrites, contextReads, predictions, dagReads, auditLog, quarantine, graphReads, objects } = WORKER_OPS;
   const store: HippoStore & StoreGroups = {
     ...inProcess,
     ...onWorkers<WorkerBase>(executor, 'base', WORKER_OPS.base, inProcess),
@@ -74,6 +74,7 @@ export function workerSqliteStore(hippoRoot: string, executor: SqliteExecutor = 
     auditLog: onWorkers(executor, 'auditLog', auditLog, inProcess.auditLog),
     quarantine: onWorkers(executor, 'quarantine', quarantine, inProcess.quarantine),
     graphReads: onWorkers(executor, 'graphReads', graphReads, inProcess.graphReads),
+    objects: onWorkers(executor, 'objects', objects, inProcess.objects),
     readiness: probing(hippoRoot, onWorkers(executor, 'readiness', WORKER_OPS.readiness, inProcess.readiness)),
     close: () => executor.close(),
   };

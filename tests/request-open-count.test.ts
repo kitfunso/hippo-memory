@@ -53,7 +53,7 @@ async function opensDuring(fn: () => Promise<void>): Promise<Record<string, numb
   return counts;
 }
 
-interface CallBody { readonly content?: string; readonly jsonrpc?: '2.0' }
+interface CallBody { readonly content?: string; readonly text?: string; readonly jsonrpc?: '2.0' }
 
 async function call(method: string, path: string, body?: CallBody): Promise<void> {
   const res = await fetch(`${server.url}${path}`, {
@@ -119,6 +119,14 @@ describe('store opens per request', () => {
       call('POST', '/mcp', recallOverMcp),
       call('POST', '/v1/memories', { content: 'the staging database is rebuilt every Sunday night' }),
     ]);
+    expect(await opensDuring(requests)).toEqual({});
+  });
+
+  it("POST /v1/decisions and GET /v1/decisions open no connection on the server thread, a typed object's work running on the store's threads", async () => {
+    const requests = async () => {
+      await call('POST', '/v1/decisions', { text: 'every migration gets a dry run first' });
+      await call('GET', '/v1/decisions');
+    };
     expect(await opensDuring(requests)).toEqual({});
   });
 });
