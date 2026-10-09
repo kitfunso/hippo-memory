@@ -1,4 +1,5 @@
-// The hippo-memory/session-text subpath: what a hook reads from a session (turns, working state, failures, git state, compaction items) and the sharing scrub, with no store, database or server in its imports.
+// The hippo-memory/session-text subpath: what a hook reads from a session (turns, working state, failures,
+// git state, compaction items) and the sharing scrub, with no store, database or server in its imports.
 export { collectSessionTurns, sessionTail, type SessionTurn } from '../capture/transcript.js';
 export { scrubForSharing } from '../capture/share-scrub.js';
 export { transcriptWorkingState, WORKING_STATE_CAPS } from '../capture/working-state.js';

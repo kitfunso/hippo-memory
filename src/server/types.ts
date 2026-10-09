@@ -20,7 +20,8 @@ export interface ServerHandle {
 export interface ResolvedBearer {
   tenantId: string;
   subject: string;
-  /** Not 'admin' means 'member'. Admin is tenant-only, yet can mint member API keys (POST /v1/auth/keys); an add-on revokes them through the exported authRevoke when the IdP deprovisions the minter. */
+  /** Not 'admin' means 'member'. Admin is tenant-only, yet can mint member API keys (POST /v1/auth/keys);
+   * an add-on revokes them through the exported authRevoke when the IdP deprovisions the minter. */
   role: 'admin' | 'member';
   scopes?: readonly string[];
 }
@@ -34,7 +35,8 @@ export interface AddonCall {
   readonly body: Readonly<Record<string, JsonValue>>;
 }
 
-/** A POST /v1 route an add-on mounts through serve(): core authenticates and parses first, then sends the returned value as 200 JSON. Under another store it runs only when that store has its `storeReady` group. */
+/** A POST /v1 route an add-on mounts through serve(): core authenticates and parses first, then sends the
+ * returned value as 200 JSON. Under another store it runs only when that store has its `storeReady` group. */
 export interface AddonRoute {
   readonly path: string;
   readonly handler: (call: AddonCall) => Promise<JsonValue>;
@@ -51,7 +53,8 @@ export interface ServeOpts {
   authResolverTimeoutMs?: number;
   port?: number;
   host?: string;
-  /** Stop and exit on SIGINT/SIGTERM, and drain then exit 1 on an uncaught exception or unhandled rejection. A stop still running 10 s past `shutdownDrainMs` ends the process with a failure exit. Only `hippo serve` owns the process, so only it sets this. */
+  /** Stop and exit on SIGINT/SIGTERM, and drain then exit 1 on an uncaught exception or unhandled rejection. A stop still running
+   * 10 s past `shutdownDrainMs` ends the process with a failure exit. Only `hippo serve` owns the process, so only it sets this. */
   handleSignals?: boolean;
   /** How long stop() lets in-flight requests finish before closing their sockets; defaults to 5000 ms. */
   shutdownDrainMs?: number;
@@ -64,7 +67,8 @@ export interface ServeOpts {
   mintBodyDeadlineMs?: number;
   /** Tests only: shortens the wait for a signed webhook's body, which defaults to 10 s. */
   webhookBodyDeadlineMs?: number;
-  /** PEM certificate and key: serve() then answers HTTPS only. Unset means cleartext HTTP, which needs a TLS-terminating proxy in front on any non-loopback bind. */
+  /** PEM certificate and key: serve() then answers HTTPS only. Unset means cleartext
+   * HTTP, which needs a TLS-terminating proxy in front on any non-loopback bind. */
   tls?: { cert: string | Buffer; key: string | Buffer };
   /** Static JSON served to anyone at GET <path>; built once at boot and never authenticated, so it must hold nothing secret. */
   publicJson?: Readonly<Record<string, JsonValue>>;
@@ -94,7 +98,8 @@ export interface RouteRequest {
 /** A route's store status: a `storeReady` group, a `sqliteOnly` reason, or neither while it waits for a group; never both. */
 type StoreStatus = { storeReady?: StoreGroup; sqliteOnly?: never } | { sqliteOnly: string; storeReady?: never };
 
-/** One /v1 route: an exact path, a matchPath pattern, or a regex, each paired with the handler for one method. Under another store it runs only when that store has its `storeReady` group; a `sqliteOnly` route never does.
+/** One /v1 route: an exact path, a matchPath pattern, or a regex, each paired with the handler for one method.
+ * Under another store it runs only when that store has its `storeReady` group; a `sqliteOnly` route never does.
  *  `loop: 'off'` declares that the route's SQLite work runs on a worker thread, so its handler opens no hippo.db on the server thread. */
 export type Route = { method: string; loop?: 'off' } & StoreStatus & (
   | { path: string; handler: (r: RouteRequest) => Promise<void> }

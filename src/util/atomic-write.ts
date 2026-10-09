@@ -127,7 +127,9 @@ export function writeFileAtomic(file: string, text: string): void {
     replaceViaTemp(target, text, old);
   } catch (err) {
     if (!(err instanceof Error) || !REPLACE_REFUSALS.includes(errnoCode(err))) throw err;
-    log.warn(`${target} could not be replaced by a rename (${errnoCode(err)}), so it is written in place: not atomic, a crash mid-write can leave it truncated`);
+    log.warn(
+      `${target} could not be replaced by a rename (${errnoCode(err)}), so it is written in place: not atomic, a crash mid-write can leave it truncated`
+    );
     writeInPlace(target, text);
   }
 }

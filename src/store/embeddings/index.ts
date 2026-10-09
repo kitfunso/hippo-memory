@@ -14,7 +14,8 @@ import { rethrowIfSqliteBlocked } from '../../db/index.js';
 import { EMBEDDING_MODEL_META_KEY } from '../../db/vector-store.js';
 import { initializeParticle } from '../../db/physics-state.js';
 import {
-  indexedModel, pruneStoredVectors, replacesIndex, resetStoredParticles, saveEmbeddingIndex, saveIndexIdentity, saveStoredVectors, seedStoredParticle, storedIndexState,
+  indexedModel, pruneStoredVectors, replacesIndex, resetStoredParticles, saveEmbeddingIndex, saveIndexIdentity, saveStoredVectors, seedStoredParticle,
+  storedIndexState,
 } from '../vector-index.js';
 import { loadConfig } from '../../core/config.js';
 import { resolveEmbeddingProvider, type EmbeddingProvider } from './provider.js';
@@ -206,7 +207,8 @@ const EMBED_LOCK_FILE = 'embeddings.lock';
 const EMBED_LOCK_WAIT_MS = 10_000;
 const EMBED_LOCK_OWNER = `${process.pid}:${randomUUID()}`;
 
-// In-process mutex plus an O_EXCL "<pid>:<token>" lock file: our token is a lock we leaked; our PID with another token is a live worker thread, unless the lock predates this process (a reused PID).
+// In-process mutex plus an O_EXCL "<pid>:<token>" lock file: our token is a lock we leaked; our PID
+// with another token is a live worker thread, unless the lock predates this process (a reused PID).
 let _embedWriteLock: Promise<void> = Promise.resolve();
 
 function embedLockHolderAlive(lockPath: string): boolean {
@@ -358,7 +360,13 @@ function embedMemoryInStore(store: HippoStore, provider: EmbeddingProvider, entr
     const model = embeddingIndexIdentity(provider.id);
     try {
       const refused = replacesIndex(await reads.embeddingIndexState(), model)
-        || (await writeVectorPage(writes, { model, replaceIndex: false }, [entry], await provider.embed([embeddingInputText(entry)], 'passage'), true)).modelMismatch;
+        || (await writeVectorPage(
+          writes,
+          { model, replaceIndex: false },
+          [entry],
+          await provider.embed([embeddingInputText(entry)], 'passage'),
+          true
+        )).modelMismatch;
       if (refused) warnEmbedFailureOnce('index', OTHER_MODEL_INDEX);
     } catch (err) {
       warnEmbedFailureOnce(provider.kind, errorMessage(err));

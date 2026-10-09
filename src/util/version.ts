@@ -18,7 +18,8 @@
  */
 export const PACKAGE_VERSION = '1.70.0';
 
-/** The floor a store takes on its first expiring key: the first release with schema v53, set by hand in that release; scripts/check-expiring-keys-floor.mjs gates it. */
+/** The floor a store takes on its first expiring key: the first release with schema
+ * v53, set by hand in that release; scripts/check-expiring-keys-floor.mjs gates it. */
 export const EXPIRING_KEYS_MIN_BINARY = '1.64.0';
 
 /** The floor a store takes on its first session bind or owner snapshot: first release with v54; set by hand in that release. */

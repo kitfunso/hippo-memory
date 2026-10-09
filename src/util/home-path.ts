@@ -3,7 +3,8 @@
 // VS Code writes file links URL-encoded, so a separator may be %5C or %2F.
 const WIN_SEP = String.raw`(?:[\\/]|%5[Cc]|%2[Ff])`;
 const WIN_CHAR = String.raw`(?:(?!%5[Cc]|%2[Ff])[^\\/:*?"<>|\s])`;
-// A Windows name never holds a quote, so JSON stops it; one with spaces runs to a separator, quote, closing mark or line end, leaving the mark, as stopping at its first word leaks the surname.
+// A Windows name never holds a quote, so JSON stops it; one with spaces runs to a separator, quote,
+// closing mark or line end, leaving the mark, as stopping at its first word leaks the surname.
 const WIN_USER = String.raw`(?:${WIN_CHAR}+(?: ${WIN_CHAR}+){0,3}(?=${WIN_SEP}|["'\`)\]>,;]|\.(?=\s|$)|(?<!\.)(?:[^\S ]|$))(?<![\`)\],;'])|${WIN_CHAR}+)`;
 
 // Slash-led homes with their case spelled out and no flag, so one pattern can hold all four: Git Bash and WSL mounts, Linux, root and macOS.
@@ -23,7 +24,8 @@ const LINUX_START = String.raw`(?<![\w.~-])${LINUX_HOME}`;
 const ROOT_START = String.raw`(?<![\w.~-])${ROOT_HOME}`;
 const MAC_START = String.raw`(?<![\w.~-])${MAC_HOME}`;
 
-/** One pattern per path shape that carries a user name: Windows, Git Bash and WSL mounts, extended-length, UNC home shares, Linux, macOS and 8.3 short names. */
+/** One pattern per path shape that carries a user name: Windows, Git Bash and WSL
+ * mounts, extended-length, UNC home shares, Linux, macOS and 8.3 short names. */
 export const USER_SEGMENT: readonly RegExp[] = [
   DRIVE_HOME,
   new RegExp(MOUNT_START),

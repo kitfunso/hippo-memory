@@ -18,7 +18,8 @@ import { clock, type WriteBudget } from '../util/write-budget.js';
 export const MEMORY_BACKED_TABLES = ['predictions', 'decisions', 'incidents', 'processes', 'policies', 'skills', 'project_briefs', 'customer_notes'] as const;
 
 /** Deleting a memory that backs an object nulls the object's link, and no restore can repair it, so no automatic pass may. */
-const AUTOMATIC_DELETE_SQL = `${AUTO_DELETABLE_SQL}${MEMORY_BACKED_TABLES.map((t) => ` AND NOT EXISTS (SELECT 1 FROM ${t} WHERE ${t}.memory_id = memories.id)`).join('')}`;
+const AUTOMATIC_DELETE_SQL =
+  `${AUTO_DELETABLE_SQL}${MEMORY_BACKED_TABLES.map((t) => ` AND NOT EXISTS (SELECT 1 FROM ${t} WHERE ${t}.memory_id = memories.id)`).join('')}`;
 
 /** Ids of memories that back a first-class object, for passes that plan deletes before making them. A table missing from an older schema is skipped. */
 export function memoriesBackingObjects(hippoRoot: string): Set<string> {
@@ -207,7 +208,13 @@ function batchWriteAndDeleteOn(
   opts: { snapshot?: LoadedRows; holdMs: number; clock?: () => number },
 ): FlushChunk {
   const now = opts.clock ?? clock;
-  const out: ChunkLog = { written: [], removedIds: [], rejectedSkips: 0, fts: { rows: [], staleIds: [] }, dirty: { parents: new Set(), tenantById: new Map() } };
+  const out: ChunkLog = {
+    written: [],
+    removedIds: [],
+    rejectedSkips: 0,
+    fts: { rows: [], staleIds: [] },
+    dirty: { parents: new Set(), tenantById: new Map() }
+  };
   let next = from;
   // IMMEDIATE: the tombstone probes below read before the first write, and under a deferred BEGIN a
   // concurrent `hippo reject` would make the lock upgrade fail with SQLITE_BUSY and roll back the batch.
@@ -409,7 +416,8 @@ export function deleteEntriesOneByOne(
   }
 }
 
-/** Commits whole components in transactions of about `budget.holdMs` on one store handle, letting other writers in between; returns the ids that left `memories`.
+/** Commits whole components in transactions of about `budget.holdMs` on one store
+ * handle, letting other writers in between; returns the ids that left `memories`.
  *  The snapshot keeps what other writers changed after the caller loaded its rows. */
 export async function commitInChunks(
   hippoRoot: string,

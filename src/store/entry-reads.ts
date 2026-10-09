@@ -471,7 +471,8 @@ export function selectRowsOutsideSourcePrefixAt(
   ).all(...params) as Array<{ id: string; content: string; source: string }>;
 }
 
-/** Content of a tenant's live rows written by `source` and tagged `tag` that no extraction produced, in loadAllEntries' order and in every scope; `exceptSessionId` drops one session's own rows. */
+/** Content of a tenant's live rows written by `source` and tagged `tag` that no extraction produced,
+ * in loadAllEntries' order and in every scope; `exceptSessionId` drops one session's own rows. */
 export function loadLiveContentsBySourceAndTag(hippoRoot: string, tenantId: string, source: string, tag: string, exceptSessionId: string): string[] {
   const db = openStore(hippoRoot);
   try {

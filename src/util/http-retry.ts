@@ -63,7 +63,8 @@ function isIdempotent(method: string | undefined): boolean {
 
 const realSleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** `fetch` with a per-attempt timeout and up to `attempts` tries on 429, 5xx and (see `retryTransport`) transport faults; the last response or error comes back as is. */
+/** `fetch` with a per-attempt timeout and up to `attempts` tries on 429, 5xx and (see
+ * `retryTransport`) transport faults; the last response or error comes back as is. */
 export async function fetchWithRetry(url: string | URL, init: RequestInit, policy: RetryPolicy): Promise<Response> {
   const fetchFn = policy.fetchFn ?? fetch;
   const attempts = Math.max(1, policy.attempts ?? DEFAULT_ATTEMPTS);

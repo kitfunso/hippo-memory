@@ -83,7 +83,12 @@ function codexCheck(home: string): DoctorCheck {
   const parsed = readJson(file);
   // Codex drops every hook in a hooks.json it cannot parse, hippo's included.
   if (fs.existsSync(file) && !isJsonObjectLiteral(parsed)) {
-    return { id: 'codex', status: 'warn', detail: "Codex's hooks.json is not a JSON object, so Codex runs no hook from it", fix: 'repair hooks.json, then run: hippo hook install codex' };
+    return {
+      id: 'codex',
+      status: 'warn',
+      detail: "Codex's hooks.json is not a JSON object, so Codex runs no hook from it",
+      fix: 'repair hooks.json, then run: hippo hook install codex'
+    };
   }
   const text = JSON.stringify(parsed ?? '');
   const codexHooks: Array<[string, string]> = [
@@ -95,7 +100,9 @@ function codexCheck(home: string): DoctorCheck {
   return {
     id: 'codex',
     status: 'warn',
-    detail: missing.length === codexHooks.length ? "Codex found, but hippo's memory hooks are not installed" : `Codex: hippo hooks missing for ${missing.join(', ')}`,
+    detail: missing.length === codexHooks.length
+      ? "Codex found, but hippo's memory hooks are not installed"
+      : `Codex: hippo hooks missing for ${missing.join(', ')}`,
     fix: 'hippo hook install codex   (then trust the hooks once in /hooks)',
   };
 }
@@ -122,7 +129,12 @@ function sleepCheck(lastSleep: StoreHealth['lastSleep'], now: Date): DoctorCheck
   const last = lastSleep.value;
   const when = last !== undefined ? Date.parse(last) : Number.NaN;
   if (Number.isNaN(when)) {
-    return { id: 'sleep', status: 'warn', detail: 'hippo has never slept (consolidated) in this store', fix: 'hippo sleep   (the session-end hook runs it automatically)' };
+    return {
+      id: 'sleep',
+      status: 'warn',
+      detail: 'hippo has never slept (consolidated) in this store',
+      fix: 'hippo sleep   (the session-end hook runs it automatically)'
+    };
   }
   const days = Math.floor((now.getTime() - when) / DAY_MS);
   return days > 7
@@ -178,12 +190,19 @@ function projectsCheck(globalRoot: string): DoctorCheck {
     const found = [
       r.copies.length > 0 ? `${r.copies.length} imported notes copied under the wrong project` : '',
       r.folds.length > 0 ? `old project names that now resolve to another project: ${r.folds.map((f) => `${f.from} -> ${f.into}`).join(', ')}` : '',
-      r.collisions.length > 0 ? `old project names shared by several projects, folded by hand only: ${r.collisions.map((c) => `${c.name} (${c.ids.join(', ')})`).join('; ')}` : '',
+      r.collisions.length > 0
+        ? `old project names shared by several projects, folded by hand only: ${r.collisions.map((c) => `${c.name} (${c.ids.join(', ')})`).join('; ')}`
+        : '',
       r.toProject.length + r.setAside.length > 0 ? `${r.toProject.length + r.setAside.length} merged memories tagged user-global` : '',
     ].filter((s) => s !== '');
     return found.length === 0
       ? { id: 'projects', status: 'pass', detail: 'no duplicate or out-of-date project tags in the global store' }
-      : { id: 'projects', status: 'warn', detail: `global store: ${found.join('; ')}`, fix: 'hippo projects repair --global   (dry run; add --apply to write)' };
+      : {
+        id: 'projects',
+        status: 'warn',
+        detail: `global store: ${found.join('; ')}`,
+        fix: 'hippo projects repair --global   (dry run; add --apply to write)'
+      };
   } catch (err) {
     return { id: 'projects', status: 'info', detail: `project tags not checked (${errorMessage(err)})` };
   } finally {
@@ -205,16 +224,43 @@ interface StoreChoice {
 /** The store the checks run against (project first, then global), and the check that says which. */
 function storeCheck(local: string | null, globalRoot: string, hasGlobal: boolean): StoreChoice {
   if (local !== null && isInitialized(local)) {
-    return { store: local, check: { id: 'store', status: 'pass', detail: `project store at ${local}${hasGlobal ? ` (global store at ${globalRoot} too)` : ''}` } };
+    return {
+      store: local,
+      check: { id: 'store', status: 'pass', detail: `project store at ${local}${hasGlobal ? ` (global store at ${globalRoot} too)` : ''}` }
+    };
   }
   if (local !== null) {
     // The walk stops at the first .hippo it finds, so a bare one (no hippo.db) blocks a parent or global store too.
-    return { store: null, check: { id: 'store', status: 'fail', detail: `${local} has no hippo.db, so hippo commands run here stop at it`, fix: `run hippo init in ${path.dirname(local)}, or remove that .hippo folder` } };
+    return {
+      store: null,
+      check: {
+        id: 'store',
+        status: 'fail',
+        detail: `${local} has no hippo.db, so hippo commands run here stop at it`,
+        fix: `run hippo init in ${path.dirname(local)}, or remove that .hippo folder`
+      }
+    };
   }
   if (hasGlobal) {
-    return { store: globalRoot, check: { id: 'store', status: 'warn', detail: `no project store here; using the global store at ${globalRoot}`, fix: 'hippo init   (in the project root)' } };
+    return {
+      store: globalRoot,
+      check: {
+        id: 'store',
+        status: 'warn',
+        detail: `no project store here; using the global store at ${globalRoot}`,
+        fix: 'hippo init   (in the project root)'
+      }
+    };
   }
-  return { store: null, check: { id: 'store', status: 'fail', detail: 'no hippo store found (project or global)', fix: 'hippo init   (in the project root), or hippo init --global' } };
+  return {
+    store: null,
+    check: {
+      id: 'store',
+      status: 'fail',
+      detail: 'no hippo store found (project or global)',
+      fix: 'hippo init   (in the project root), or hippo init --global'
+    }
+  };
 }
 
 function schemaCheck(have: number, want: number): DoctorCheck {
@@ -317,7 +363,12 @@ function claudeCodeCheck(home: string): DoctorCheck {
   if (missing.length === CLAUDE_CODE_HOOKS.length) {
     return { id: 'claude-code', status: 'warn', detail: 'Claude Code found, but no hippo hooks are installed', fix: 'hippo hook install claude-code' };
   }
-  return { id: 'claude-code', status: 'warn', detail: `Claude Code: hippo hooks missing for ${missing.join(', ')}`, fix: 'hippo hook install claude-code   (adds only what is missing)' };
+  return {
+    id: 'claude-code',
+    status: 'warn',
+    detail: `Claude Code: hippo hooks missing for ${missing.join(', ')}`,
+    fix: 'hippo hook install claude-code   (adds only what is missing)'
+  };
 }
 
 /** Run every check. Never throws for a broken install; broken parts become failed checks. */
@@ -338,7 +389,11 @@ export function runDoctor(opts: DoctorOpts): DoctorReport {
 
   const holdoutRateBp = store === null ? 0 : loadConfig(store).pilot.holdoutRateBp;
   if (holdoutRateBp > 0) {
-    checks.push({ id: 'pilot', status: 'info', detail: `pilot holdout on: about ${holdoutRateBp / 100}% of sessions get no memories pushed by hippo (pilot.holdoutRateBp=${holdoutRateBp})` });
+    checks.push({
+      id: 'pilot',
+      status: 'info',
+      detail: `pilot holdout on: about ${holdoutRateBp / 100}% of sessions get no memories pushed by hippo (pilot.holdoutRateBp=${holdoutRateBp})`
+    });
   }
   if (hasGlobal) checks.push(projectsCheck(globalRoot));
 
@@ -346,7 +401,11 @@ export function runDoctor(opts: DoctorOpts): DoctorReport {
 
   if (isCodexPresent(home)) checks.push(codexCheck(home));
 
-  checks.push({ id: 'embeddings', status: 'info', detail: isEmbeddingAvailable() ? 'local embeddings available (hybrid search)' : 'embeddings not installed; recall uses BM25 (optional: hippo embed --help)' });
+  checks.push({
+    id: 'embeddings',
+    status: 'info',
+    detail: isEmbeddingAvailable() ? 'local embeddings available (hybrid search)' : 'embeddings not installed; recall uses BM25 (optional: hippo embed --help)'
+  });
 
   return { ok: !checks.some((c) => c.status === 'fail'), version: opts.version, store, checks };
 }

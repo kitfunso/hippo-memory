@@ -2,7 +2,18 @@ import { envPort, envRequireAuth, envV1Rps } from '../util/env.js';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { existsSync } from 'node:fs';
 import { detectServer, removePidfileIfOwned, writePidfile } from './server-detect.js';
-import { closeHippoDb, type DatabaseSyncLike, getHippoDbPath, isStoreBusy, openHippoDb, outsideRequestStores, outsideSqliteOffLoop, runWithRequestStores, SERVER_DB_WAIT_MS, withSqliteBlocked } from '../db/index.js';
+import {
+  closeHippoDb,
+  type DatabaseSyncLike,
+  getHippoDbPath,
+  isStoreBusy,
+  openHippoDb,
+  outsideRequestStores,
+  outsideSqliteOffLoop,
+  runWithRequestStores,
+  SERVER_DB_WAIT_MS,
+  withSqliteBlocked
+} from '../db/index.js';
 import { startWalCheckpointer, type WalCheckpointer } from '../db/wal-checkpointer.js';
 import { requireGroup, type HippoStore } from '../store/index.js';
 import { workerSqliteStore } from '../store/sqlite/worker-store.js';
@@ -82,7 +93,8 @@ async function handleRequest(
   const routeRequest: RouteRequest = { req, res, opts, query };
   if (await runWithRequestStores(() => dispatchScopedRoute(routeRequest, method, path), { busyWaitMs: SERVER_DB_WAIT_MS })) return;
 
-  // A scope of its own, which the heartbeat timer keeps after it closes, so the key check and every heartbeat wait the server's lock wait. Store-ready: the stream only authenticates, through the port.
+  // A scope of its own, which the heartbeat timer keeps after it closes, so the key check and every
+  // heartbeat wait the server's lock wait. Store-ready: the stream only authenticates, through the port.
   if (method === 'GET' && path === '/mcp/stream') {
     noteAccess(req, { route: path });
     await runWithRequestStores(() => handleMcpStream(req, res, opts, streamSlots), { busyWaitMs: SERVER_DB_WAIT_MS });
@@ -160,7 +172,8 @@ function sendHealth(req: IncomingMessage, res: ServerResponse, startedAt: string
   }
 }
 
-/** Readiness: one cheap read on the served store under the server's lock wait. /health stays liveness only, so a probe can tell a store that does not answer from a dead process. */
+/** Readiness: one cheap read on the served store under the server's lock wait. /health stays
+ * liveness only, so a probe can tell a store that does not answer from a dead process. */
 async function sendReady(res: ServerResponse, store: HippoStore): Promise<void> {
   const { readiness } = store;
   if (readiness === undefined) {
@@ -445,7 +458,9 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
 
 function frozenAddonRoutes(addonRoutes: ServeOpts['routes']): NonNullable<ServeOpts['routes']> {
   // A frozen copy, so a route the caller adds or renames after boot never skips the check below.
-  const routes = Object.freeze((addonRoutes ?? []).map(({ path, handler, storeReady }) => Object.freeze(storeReady === undefined ? { path, handler } : { path, handler, storeReady })));
+  const routes = Object.freeze((addonRoutes ?? []).map(({ path, handler, storeReady }) => Object.freeze(storeReady === undefined
+    ? { path, handler }
+    : { path, handler, storeReady })));
   assertAddonRoutes(routes);
   return routes;
 }

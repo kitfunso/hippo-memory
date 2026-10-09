@@ -126,7 +126,8 @@ function assertSelfMintOpts({ ttlDays, perSubject }: AuthCreateSelfOpts): void {
   }
 }
 
-/** Mint a member key for the caller an auth resolver vouched for, whatever its role; the binary floor, the cap's revokes, the mint and its audit rows commit or fail together. */
+/** Mint a member key for the caller an auth resolver vouched for, whatever its role; the
+ * binary floor, the cap's revokes, the mint and its audit rows commit or fail together. */
 export function authCreateSelf<C extends Context>(ctx: C, opts: AuthCreateSelfOpts): StoreReply<C, AuthCreateSelfResult> {
   return onStore(ctx, (port) => {
     const keyWrites = port.keyWrites ?? notPorted(port, 'keyWrites');
@@ -146,7 +147,10 @@ function selfKeyMint(ctx: Context, opts: AuthCreateSelfOpts): KeyMintPlan<SelfKe
   // Not destructured: a binding pattern makes TypeScript infer F as KeyFields and lose ownerSubject's string type.
   const made = newKey(ctx, { label, role: 'member', ownerSubject: subject, expiresAt });
   // Same op and actor as an admin mint, so a lookup by audit row finds this key too.
-  return { plaintext: made.plaintext, mint: { key: made.key, actor: subject, metadata: { label, role: 'member', self: true, expiresAt }, perSubject: opts.perSubject } };
+  return {
+    plaintext: made.plaintext,
+    mint: { key: made.key, actor: subject, metadata: { label, role: 'member', self: true, expiresAt }, perSubject: opts.perSubject }
+  };
 }
 
 function selfResult({ key }: SelfKeyMint, plaintext: string): AuthCreateSelfResult {

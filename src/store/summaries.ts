@@ -286,7 +286,12 @@ function auditRefusedRebuild(
   // post-rollback auditRejectionRefusal helper (writeEntry/supersede's
   // tool) is the wrong one here; a direct audit() call is correct and
   // commits with the rest of this savepoint.
-  audit(db, 'reject_refusal', { targetId: summary.id, metadata: { digest: tombstone.digest, reason: tombstone.reason }, actor: patch.actor, tenantId: summary.tenantId });
+  audit(db, 'reject_refusal', {
+    targetId: summary.id,
+    metadata: { digest: tombstone.digest, reason: tombstone.reason },
+    actor: patch.actor,
+    tenantId: summary.tenantId
+  });
   log.warn(
     `applyRebuildResult: refused rebuild content for ${summary.id} — matches a rejected value ` +
       `(digest ${tombstone.digest.slice(0, DIGEST_DISPLAY_CHARS)}...); metadata updated, content unchanged`,

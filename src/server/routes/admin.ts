@@ -57,7 +57,9 @@ export async function handleCreateAuthKey({ req, res, opts }: RouteRequest): Pro
   });
   // The reply cannot change shape, so the server log is where a defaulted admin key gets noticed.
   if (role === undefined && result.role === 'admin') {
-    log.warn(`auth key ${result.keyId} was minted with no role in the body, so it is an admin key, and it never expires; send "role": "member" for a narrower one`);
+    log.warn(
+      `auth key ${result.keyId} was minted with no role in the body, so it is an admin key, and it never expires; send "role": "member" for a narrower one`
+    );
   }
   sendJson(res, 200, result);
   return;

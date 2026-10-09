@@ -41,7 +41,9 @@ function vectorGroups(executor: SqliteExecutor, inProcess: VectorReads): Pick<St
       storedVectors: async (ids) => (ids.length === 0 ? new Map() : vectorCopiesOf(await pack('vectors.storedVectors', ids, vectors.storedVectors))),
     },
     vectorViews: {
-      storedVectorViews: async (ids) => (ids.length === 0 ? new Map() : vectorViewsOf(await pack('vectorViews.storedVectorViews', ids, vectorViews.storedVectorViews))),
+      storedVectorViews: async (ids) => (ids.length === 0
+        ? new Map()
+        : vectorViewsOf(await pack('vectorViews.storedVectorViews', ids, vectorViews.storedVectorViews))),
     },
   };
 }

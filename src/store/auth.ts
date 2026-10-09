@@ -168,7 +168,14 @@ export function readApiKeyRecord(db: DatabaseSyncLike, keyId: string): ApiKeyRec
   // row matches key_id.
   const row = db
     .prepare(`SELECT key_hash, tenant_id, revoked_at, role, expires_at, owner_subject FROM api_keys WHERE key_id = ?`)
-    .get(keyId) as { key_hash: string; tenant_id: string; revoked_at: string | null; role: string; expires_at: string | null; owner_subject: string | null } | undefined;
+    .get(keyId) as {
+      key_hash: string;
+      tenant_id: string;
+      revoked_at: string | null;
+      role: string;
+      expires_at: string | null;
+      owner_subject: string | null;
+    } | undefined;
   if (!row) return null;
   return {
     keyHash: row.key_hash, tenantId: row.tenant_id, revokedAt: row.revoked_at, role: row.role, scopes: listScopeGrants(db, keyId),
@@ -176,7 +183,8 @@ export function readApiKeyRecord(db: DatabaseSyncLike, keyId: string): ApiKeyRec
   };
 }
 
-/** When a key stops working, in epoch ms: Infinity for null, and already past for a missing field (a store that predates expiry) or a stamp that does not parse, so both fail closed. */
+/** When a key stops working, in epoch ms: Infinity for null, and already past for a missing
+ * field (a store that predates expiry) or a stamp that does not parse, so both fail closed. */
 function keyExpiryMs(expiresAt: string | null | undefined): number {
   if (expiresAt === null) return Infinity;
   if (expiresAt === undefined) return -Infinity;
@@ -225,7 +233,8 @@ function secretDigest(plaintext: string): Buffer {
   return createHash('sha256').update(plaintext).digest();
 }
 
-/** LRU of the tokens that matched a stored key hash, so a repeat skips scrypt. Holds a SHA-256 of the token, never the token, and nothing about the key's state. */
+/** LRU of the tokens that matched a stored key hash, so a repeat skips scrypt. Holds
+ * a SHA-256 of the token, never the token, and nothing about the key's state. */
 export class VerifiedKeyCache {
   // Keyed on the stored hash, so a rotated or re-minted key never meets an old entry; Map order makes the first key the least recent.
   private readonly proven = new Map<string, Buffer>();
@@ -289,7 +298,8 @@ async function secretMatches(keyId: string, plaintext: string, keyHash: string, 
   return check;
 }
 
-/** Verify a bearer API key against `store`, null when invalid. The key's row is read on every call, so a revoke, expiry, role or scope change by any process applies on the next one. */
+/** Verify a bearer API key against `store`, null when invalid. The key's row is read on every
+ * call, so a revoke, expiry, role or scope change by any process applies on the next one. */
 export async function verifyApiKeyCached(plaintext: string, store: HippoStore, bound?: DerivationBound): Promise<VerifiedApiKey | null> {
   const keyId = mintedKeyId(plaintext);
   if (keyId === null) return null;

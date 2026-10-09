@@ -112,7 +112,8 @@ export const COPILOT_CLI_MCP: McpHost = { key: 'mcpServers', server: () => ({ ty
 /** VS Code's mcp.json keeps stdio servers under "servers"; it has no "mcpServers" key. */
 export const VSCODE_MCP: McpHost = { key: 'servers', server: () => ({ type: 'stdio', command: hippoCommand(), args: ['mcp'] }) };
 
-/** Only a server hippo wrote counts as hippo's: another command, other args, or any key or value setup does not write (an env you added) makes it the user's. */
+/** Only a server hippo wrote counts as hippo's: another command, other args, or
+ * any key or value setup does not write (an env you added) makes it the user's. */
 function isHipposServer(entry: JsonValue | undefined, host: McpHost): boolean {
   if (!isJsonObjectLiteral(entry) || !('command' in entry) || !('args' in entry)) return false;
   const ours = host.server();

@@ -176,7 +176,8 @@ const TEAM_VISIBLE = scopeAdmitSql('');
 /** Admits every scope, for a reader that sees the whole store, such as the CLI on its own machine. */
 export const EVERY_SCOPE: SqlFragment = Object.freeze({ sql: '1', params: [] });
 
-/** Text, source and origin of tenant rows holding any of `words` that `admit` passes, by default the team-visible ones; a row equal to a text apart from spacing holds its every word.
+/** Text, source and origin of tenant rows holding any of `words` that `admit` passes, by
+ * default the team-visible ones; a row equal to a text apart from spacing holds its every word.
  *  With `project`, only rows carrying one of those names and user-global rows, as loadContextCandidates' filter. No `tenantId` reads every tenant. */
 export function loadTextsHoldingWords(
   hippoRoot: string, tenantId: string | undefined, words: readonly string[], project?: readonly string[], admit: SqlFragment = TEAM_VISIBLE,

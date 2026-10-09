@@ -39,5 +39,6 @@ const sqlText = (s: string): string => `'${s.replace(/'/g, "''")}'`;
 const keepPairSql = (p: KeepPair): string =>
   `(COALESCE(superseded_by, '') = '' AND EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(tags_json) THEN tags_json ELSE '[]' END) WHERE value = ${sqlText(p.tag)}) AND substr(source, 1, ${p.sourcePrefix.length}) = ${sqlText(p.sourcePrefix)})`;
 
-// Pinned and kept rows stay (a superseded row is not kept: its successor carries the tag and source); raw rows leave only through archiveRawMemory. The SQL twin guards the DELETE itself.
+// Pinned and kept rows stay (a superseded row is not kept: its successor carries the tag and
+// source); raw rows leave only through archiveRawMemory. The SQL twin guards the DELETE itself.
 export const AUTO_DELETABLE_SQL = `pinned = 0 AND kind != 'raw'${KEEP_PAIRS.map((p) => ` AND NOT ${keepPairSql(p)}`).join('')}`;

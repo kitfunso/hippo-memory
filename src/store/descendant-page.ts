@@ -97,7 +97,12 @@ function countedLevel(db: DatabaseSyncLike, walk: PagedWalk, parents: readonly s
 }
 
 // Every parent before the one the page ends in is read whole in one statement; that last one is read under a LIMIT.
-function firstRows(db: DatabaseSyncLike, walk: PagedWalk, parents: readonly string[], at: { perParent: ReadonlyMap<string, number>; room: number }): MemoryEntry[] {
+function firstRows(
+  db: DatabaseSyncLike,
+  walk: PagedWalk,
+  parents: readonly string[],
+  at: { perParent: ReadonlyMap<string, number>; room: number }
+): MemoryEntry[] {
   const whole: string[] = [];
   let left = at.room;
   for (const parentId of parents) {

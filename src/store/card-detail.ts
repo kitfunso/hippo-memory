@@ -11,7 +11,8 @@ export interface CardDetail {
   handoff: SessionHandoff | null;
 }
 
-/** Loads the detail behind `hippo card show` and `GET /api/cards/:id` (null when the tenant has no such card); five separate reads, so a write landing between them can show a mixed view, as `card show` always could. */
+/** Loads the detail behind `hippo card show` and `GET /api/cards/:id` (null when the tenant has no such card);
+ * five separate reads, so a write landing between them can show a mixed view, as `card show` always could. */
 export function loadCardDetail(hippoRoot: string, tenantId: string, id: string): CardDetail | null {
   const card = loadCard(hippoRoot, tenantId, id);
   if (!card) return null;

@@ -80,7 +80,8 @@ export function importForStore(hippoRoot: string, opts: SyncOptions): ImportRepo
 export function importProjectMemories(hippoRoot: string, opts: SyncOptions): ImportReport {
   const ctx = context(opts.machine, { projectRoot: path.dirname(hippoRoot) });
   return runPass({
-    scope: 'project', target: hippoRoot, invoking: hippoRoot, list: (a) => a.list(ctx, 'project'), legacy: true, originProject: undefined, legacyOrigins: [], handover: true,
+    scope: 'project', target: hippoRoot, invoking: hippoRoot, list: (a) => a.list(ctx, 'project'), legacy: true, originProject: undefined,
+    legacyOrigins: [], handover: true,
   }, opts);
 }
 
@@ -88,23 +89,27 @@ export function importProjectMemories(hippoRoot: string, opts: SyncOptions): Imp
 export function importUserMemories(invokingRoot: string, opts: SyncOptions): ImportReport {
   const ctx = context(opts.machine, {});
   return runPass({
-    scope: 'user', target: resolveGlobalRootDir(), invoking: invokingRoot, list: (a) => a.list(ctx, 'user'), legacy: false, originProject: '', legacyOrigins: [], handover: false,
+    scope: 'user', target: resolveGlobalRootDir(), invoking: invokingRoot, list: (a) => a.list(ctx, 'user'), legacy: false, originProject: '',
+    legacyOrigins: [], handover: false,
   }, opts);
 }
 
-/** Session end in a folder with no store of its own: the session's project into the global store with its origin, the session folder's notes, then the user pass. */
+/** Session end in a folder with no store of its own: the session's project into the
+ * global store with its origin, the session folder's notes, then the user pass. */
 export function importAtSessionEnd(cwd: string, transcriptPath: string | undefined, opts: SyncOptions): ImportReport {
   const globalRoot = resolveGlobalRootDir();
   const ctx = context(opts.machine, { projectRoot: cwd });
   const report = runPass({
-    scope: 'project', target: globalRoot, invoking: globalRoot, list: (a) => a.list(ctx, 'project'), legacy: false, ...projectOrigins(resolveProjectIdentity(cwd)), handover: false,
+    scope: 'project', target: globalRoot, invoking: globalRoot, list: (a) => a.list(ctx, 'project'), legacy: false,
+    ...projectOrigins(resolveProjectIdentity(cwd)), handover: false,
   }, opts);
   if (transcriptPath !== undefined) mergeReports(report, importSessionFolder(globalRoot, transcriptPath, cwd, opts));
   mergeReports(report, importUserMemories(globalRoot, opts));
   return report;
 }
 
-/** The session folder's notes under the project Claude filed them for, never cwd's: a session begun at home keeps its home notes user-global wherever it ends. No git call, so post-compact can run it. */
+/** The session folder's notes under the project Claude filed them for, never cwd's: a session begun at
+ * home keeps its home notes user-global wherever it ends. No git call, so post-compact can run it. */
 export function importSessionFolder(hippoRoot: string, transcriptPath: string, cwd: string | null, opts: SyncOptions): ImportReport {
   const project = transcriptNotesProject(transcriptPath, cwd, opts.machine);
   if (project === null) return emptyReport();

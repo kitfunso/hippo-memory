@@ -6,7 +6,8 @@ import type { PhysicsParticle } from '../core/physics.js';
 import { float32ToBuffer, initializeParticle, loadPhysicsState, resetAllPhysicsState, savePhysicsState } from '../db/physics-state.js';
 import type { VectorBackfillQuery, VectorRowWrite, VectorWrite, VectorWriteResult } from './port.js';
 import {
-  EMBEDDING_MODEL_META_KEY, deleteOrphanVectors, hasStoredVectors, loadVectors, loadVectorViews, replaceAllVectors, storedVectorDims, storedVectorIds, upsertVectors,
+  EMBEDDING_MODEL_META_KEY, deleteOrphanVectors, hasStoredVectors, loadVectors, loadVectorViews, replaceAllVectors, storedVectorDims, storedVectorIds,
+  upsertVectors,
 } from '../db/vector-store.js';
 import { chunked, selectEntriesByIds } from './entry-reads.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from './rows.js';
@@ -153,7 +154,10 @@ function ownedIds(db: DatabaseSyncLike, ids: readonly string[], tenantId: string
   const owned = new Set<string>();
   for (const chunk of chunked([...new Set(ids)])) {
     // SAFETY: the SELECT names one column, id.
-    const rows = db.prepare(`SELECT id FROM memories WHERE +tenant_id = ? AND id IN (${chunk.map(() => '?').join(', ')})`).all(tenantId, ...chunk) as { id: string }[];
+    const rows = db.prepare(`SELECT id FROM memories WHERE +tenant_id = ? AND id IN (${chunk.map(() => '?').join(', ')})`).all(
+      tenantId,
+      ...chunk
+    ) as { id: string }[];
     for (const row of rows) owned.add(row.id);
   }
   return owned;
