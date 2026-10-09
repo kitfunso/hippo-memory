@@ -2,6 +2,7 @@ import { DEFAULT_TENANT_ID } from '../util/env.js';
 import { Layer, FALLBACK_HALF_LIFE_DAYS, DEFAULT_SCHEMA_FIT, type MemoryEntry, type ConfidenceLevel, type MemoryKind } from '../core/memory.js';
 import { errorMessage, log } from '../util/log.js';
 import { type JsonValue, isJsonObject } from '../util/json.js';
+import { warnDamagedColumn, type StoredJsonSite } from '../util/stored-json.js';
 
 export interface IndexEntry {
   id: string;
@@ -200,18 +201,18 @@ function rowToRetrievalFields(row: MemoryRow): RetrievalFields {
     strength: Number(row.strength ?? 1),
     half_life_days: Number(row.half_life_days ?? FALLBACK_HALF_LIFE_DAYS),
     layer: row.layer as Layer,
-    tags: parseJsonArray(row.tags_json),
+    tags: parseJsonArray(row.tags_json, { table: 'memories', id: row.id, column: 'tags_json' }),
     emotional_valence: row.emotional_valence ?? 'neutral',
     schema_fit: Number(row.schema_fit ?? DEFAULT_SCHEMA_FIT),
     source: row.source ?? 'cli',
     outcome_score: row.outcome_score === null || row.outcome_score === undefined ? null : Number(row.outcome_score),
     outcome_positive: Number(row.outcome_positive ?? 0),
     outcome_negative: Number(row.outcome_negative ?? 0),
-    conflicts_with: parseJsonArray(row.conflicts_with_json),
+    conflicts_with: parseJsonArray(row.conflicts_with_json, { table: 'memories', id: row.id, column: 'conflicts_with_json' }),
     pinned: Boolean(row.pinned),
     confidence: row.confidence ?? 'observed',
     content: row.content,
-    parents: parseJsonArray(row.parents_json),
+    parents: parseJsonArray(row.parents_json, { table: 'memories', id: row.id, column: 'parents_json' }),
     starred: Boolean(row.starred),
     trace_outcome: (row.trace_outcome as MemoryEntry['trace_outcome']) ?? null,
   };
@@ -252,13 +253,15 @@ export function rowToEntry(row: MemoryRow): MemoryEntry {
   return entry;
 }
 
-export function parseJsonArray(raw: string | null | undefined): string[] {
+/** A column that is not JSON reads as empty. With `site` the row is named at warn once; without it no row is known and the line stays at debug. */
+export function parseJsonArray(raw: string | null | undefined, site?: StoredJsonSite): string[] {
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed.map((item) => String(item)) : [];
   } catch (err) {
-    log.debug(`store: corrupt JSON array column read as empty: ${errorMessage(err)}`);
+    if (site) warnDamagedColumn(site, 'not valid JSON');
+    else log.debug(`store: corrupt JSON array column read as empty: ${errorMessage(err)}`);
     return [];
   }
 }
@@ -280,7 +283,7 @@ export function parseLastTraceId(raw: string | null | undefined): string | null 
   return trimmed;
 }
 
-function parseJsonObject(raw: string | null | undefined): Record<string, JsonValue> {
+function parseJsonObject(raw: string | null | undefined, site: StoredJsonSite): Record<string, JsonValue> {
   if (!raw) return {};
   try {
     const parsed: JsonValue = JSON.parse(raw);
@@ -288,8 +291,8 @@ function parseJsonObject(raw: string | null | undefined): Record<string, JsonVal
       return parsed;
     }
     return {};
-  } catch (err) {
-    log.debug(`store: corrupt JSON object column read as empty: ${errorMessage(err)}`);
+  } catch {
+    warnDamagedColumn(site, 'not valid JSON');
     return {};
   }
 }
@@ -331,7 +334,7 @@ export function rowToSessionEvent(row: SessionEventRow): SessionEvent {
     content: row.content,
     source: row.source,
     scope: row.scope ?? null,
-    metadata: parseJsonObject(row.metadata_json),
+    metadata: parseJsonObject(row.metadata_json, { table: 'session_events', id: row.id, column: 'metadata_json' }),
     created_at: row.created_at,
   };
 }
