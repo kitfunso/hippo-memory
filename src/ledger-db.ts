@@ -17,13 +17,31 @@ export function ledgerRoot(hippoRoot: string, opts?: LedgerRootOpts): string | n
   return isInitialized(globalRoot) ? globalRoot : null;
 }
 
-/** A ledger row that did not land. A busy store warns once through noteStoreBusy; any other failure warns once and then logs at debug, since the caller's output is unaffected. */
+// SQLite's result codes for a hippo.db it cannot read: a corrupt image, and a file that is no database.
+const SQLITE_CORRUPT = 11;
+const SQLITE_NOTADB = 26;
+
+/** Why a ledger row did not land: the store is `busy`, it has no ledger to write to (`absent`), or the write failed for a reason nobody planned for (`unexpected`). */
+type LedgerSkip = 'busy' | 'absent' | 'unexpected';
+
+/** The one rule for a skipped ledger row. `absent` is a store with no token_ledger table or a hippo.db SQLite cannot read; the command that owns the store reports that, and a hook must stay quiet about it. */
+function ledgerSkipClass<E>(error: E): LedgerSkip {
+  if (isSqliteBusy(error)) return 'busy';
+  const code = error instanceof Error && 'errcode' in error ? error.errcode : undefined;
+  if (code === SQLITE_CORRUPT || code === SQLITE_NOTADB) return 'absent';
+  return errorMessage(error).includes('no such table: token_ledger') ? 'absent' : 'unexpected';
+}
+
+/** Says why a ledger row did not land, at the level its class earns: busy warns once through noteStoreBusy, absent is debug with no stack, unexpected warns once with the error class and stack. */
 export function noteLedgerRowSkipped<E>(error: E): void {
-  if (isSqliteBusy(error)) {
+  const skip = ledgerSkipClass(error);
+  if (skip === 'busy') {
     noteStoreBusy('token ledger row skipped');
     return;
   }
-  log.warnThenDebug('token-ledger-row', `token ledger row skipped: ${errorMessage(error)}`, errorFields(error));
+  const message = `token ledger row skipped: ${errorMessage(error)}`;
+  if (skip === 'absent') log.debug(message);
+  else log.warnThenDebug('token-ledger-row', message, errorFields(error));
 }
 
 /** Runs `fn` on ledgerRoot's store. Best-effort: undefined on any failure, because a ledger failure must not break context or recall. */

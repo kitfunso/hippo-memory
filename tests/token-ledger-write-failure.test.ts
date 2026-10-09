@@ -8,13 +8,16 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { closeHippoDb, openHippoDb } from '../src/db.js';
 import { adminActor, recordTokens } from '../src/api.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
+import { withLedgerDb } from '../src/ledger-db.js';
 import { promptHookContext } from '../src/prompt-hook.js';
+import { recordTokenUse } from '../src/token-ledger.js';
 import { resetLogOnce } from '../src/log.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 
 let root: string;
 let stderrSpy: MockInstance<typeof process.stderr.write>;
 const savedHome = process.env.HIPPO_HOME;
+const savedLevel = process.env.HIPPO_LOG;
 const PROJECT = { name: 'p', legacyName: 'p' };
 
 function skippedLines(): string[] {
@@ -45,6 +48,8 @@ afterEach(() => {
   stderrSpy.mockRestore();
   if (savedHome === undefined) delete process.env.HIPPO_HOME;
   else process.env.HIPPO_HOME = savedHome;
+  if (savedLevel === undefined) delete process.env.HIPPO_LOG;
+  else process.env.HIPPO_LOG = savedLevel;
   fs.rmSync(root, { recursive: true, force: true });
 });
 
@@ -88,12 +93,39 @@ describe('token ledger write failures', () => {
     }
   });
 
-  it('a ledger read that fails for a reason other than a busy store warns once and the hook still prints its block', async () => {
+  it('a store with no ledger table is an expected skip: nothing at the default level, one debug line with no stack, and the hook prints its block', async () => {
     pinNote(root);
-    const out = await promptHookContext({ hippoRoot: root, tenantId: 'default', actor: adminActor('test') }, { sessionId: 's-dropped', project: PROJECT });
-    expect(out.stdout).toContain('the deploy window opens on Tuesdays');
+    const hook = (sessionId: string) => promptHookContext({ hippoRoot: root, tenantId: 'default', actor: adminActor('test') }, { sessionId, project: PROJECT });
+    expect((await hook('s-dropped-1')).stdout).toContain('the deploy window opens on Tuesdays');
+    expect(skippedLines()).toEqual([]);
+
+    process.env.HIPPO_LOG = 'debug';
+    expect((await hook('s-dropped-2')).stdout).toContain('the deploy window opens on Tuesdays');
     const lines = skippedLines();
-    expect(lines).toHaveLength(1);
-    expect(lines[0]).toMatch(/^\[hippo\] warn: token ledger row skipped: no such table: token_ledger ts=\S+ errorClass=\w+ stack=\S/);
+    expect(lines.length).toBeGreaterThan(0);
+    for (const line of lines) {
+      expect(line).toMatch(/^\[hippo\] debug: token ledger row skipped: no such table: token_ledger ts=\S+\n$/);
+    }
+  });
+
+  it('a hippo.db that is not a database is an expected skip: nothing at the default level, one debug line with no stack', () => {
+    const store = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-ledger-notadb-'));
+    const write = (): void => {
+      withLedgerDb(store, (db) => recordTokenUse(db, { tenantId: 'default', surface: 'hook', event: 'inject', items: 1, tokens: 40 }));
+    };
+    try {
+      initStore(store);
+      fs.writeFileSync(path.join(store, 'hippo.db'), 'not a valid sqlite database file, just garbage bytes 0000000');
+      for (const suffix of ['-wal', '-shm']) fs.rmSync(path.join(store, `hippo.db${suffix}`), { force: true });
+      write();
+      expect(stderrSpy.mock.calls).toEqual([]);
+
+      process.env.HIPPO_LOG = 'debug';
+      write();
+      expect(skippedLines()).toHaveLength(1);
+      expect(skippedLines()[0]).toMatch(/^\[hippo\] debug: token ledger row skipped: file is not a database ts=\S+\n$/);
+    } finally {
+      fs.rmSync(store, { recursive: true, force: true });
+    }
   });
 });
