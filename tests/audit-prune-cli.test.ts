@@ -6,9 +6,9 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { execFileSync } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { hippoOut } from './_helpers/spawn-hippo.js';
 
 const CLI = resolve(__dirname, '..', 'bin', 'hippo.js');
 
@@ -27,11 +27,7 @@ function runCli(cwd: string, args: string[], opts: RunOpts = {}): CliRunResult {
     throw new Error(`bin/hippo.js not found at ${CLI} - run \`npm run build\` first`);
   }
   try {
-    const stdout = execFileSync('node', [CLI, ...args], {
-      cwd,
-      encoding: 'utf8',
-      env: { ...process.env, HIPPO_HOME: join(cwd, '.hippo'), ...(opts.env ?? {}) },
-    });
+    const stdout = hippoOut(args, { cwd, env: { ...process.env, HIPPO_HOME: join(cwd, '.hippo'), ...(opts.env ?? {}) }, exe: 'node' });
     return { stdout, stderr: '' };
   } catch (err) {
     // SAFETY: execFileSync on failure throws an Error augmented with

@@ -8,6 +8,7 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { BOOLEAN_FLAGS, KNOWN_FLAGS, parseArgs, shouldAutoRepairCodexWrapper } from '../src/cli.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
+import { hippoRun } from './_helpers/spawn-hippo.js';
 
 const argv = (...rest: string[]) => ['node', 'hippo', ...rest];
 
@@ -149,7 +150,6 @@ describe('init --no-hooks', () => {
 });
 
 describe('built CLI: --flag=value end-to-end guards', () => {
-  const CLI = resolve(__dirname, '..', 'bin', 'hippo.js');
   let tmpDir: string;
   let env: NodeJS.ProcessEnv;
 
@@ -160,7 +160,7 @@ describe('built CLI: --flag=value end-to-end guards', () => {
   }
 
   function runCli(args: string[]): { stdout: string; stderr: string; status: number } {
-    const res = spawnSync('node', [CLI, ...args], { cwd: tmpDir, env, encoding: 'utf8' });
+    const res = hippoRun(args, { cwd: tmpDir, env, exe: 'node' });
     return { stdout: res.stdout, stderr: res.stderr, status: res.status ?? 1 };
   }
 

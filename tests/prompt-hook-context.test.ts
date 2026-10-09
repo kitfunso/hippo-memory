@@ -16,9 +16,9 @@ import { resolveProjectIdentity } from '../src/project-identity.js';
 import { promptHookContext } from '../src/prompt-hook.js';
 import { HIPPO_PINNED_INJECT_COMMAND } from '../src/hooks/shared.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
+import { hippoRun } from './_helpers/spawn-hippo.js';
 
 const REPO = path.resolve(__dirname, '..');
-const HIPPO_JS = path.join(REPO, 'bin', 'hippo.js');
 // The command Claude Code runs on every prompt, so a change to its flags fails the parity case below.
 const HOOK_ARGS = HIPPO_PINNED_INJECT_COMMAND.split(' ').slice(1);
 
@@ -72,9 +72,7 @@ function ledger(store: string, where: string): LedgerRow[] {
 }
 
 function localHook(projectDir: string, payload: HookPayload): string {
-  const r = spawnSync(process.execPath, [HIPPO_JS, ...HOOK_ARGS], {
-    cwd: projectDir, env: { ...CLI_ENV, HIPPO_HOME: path.join(tmp, 'global') }, input: JSON.stringify(payload), encoding: 'utf8',
-  });
+  const r = hippoRun(HOOK_ARGS, { cwd: projectDir, env: { ...CLI_ENV, HIPPO_HOME: path.join(tmp, 'global') }, input: JSON.stringify(payload) });
   expect(r.status, r.stderr).toBe(0);
   return r.stdout;
 }

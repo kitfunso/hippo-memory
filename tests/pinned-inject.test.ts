@@ -7,6 +7,7 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { Layer} from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
+import { hippoOut } from './_helpers/spawn-hippo.js';
 
 let tmpDir: string;
 let hippoDir: string;
@@ -29,11 +30,7 @@ function runHippo(args: string[]): string {
   // the test (cmdContext merges local + global). The local store lives at
   // `${tmpDir}/.hippo` (resolved via getHippoRoot(cwd)).
   const globalDir = path.join(tmpDir, 'global');
-  return execFileSync(process.execPath, [HIPPO_JS, ...args], {
-    env: { ...process.env, HIPPO_HOME: globalDir },
-    cwd: tmpDir,
-    encoding: 'utf8',
-  });
+  return hippoOut(args, { env: { ...process.env, HIPPO_HOME: globalDir }, cwd: tmpDir });
 }
 
 describe('hippo context --pinned-only', () => {

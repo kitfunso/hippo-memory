@@ -12,22 +12,16 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { pushGoal } from '../src/goals.js';
-
-const HIPPO_BIN = join(process.cwd(), 'bin', 'hippo.js');
+import { hippoOut } from './_helpers/spawn-hippo.js';
 
 function hippo(cwd: string, env: Record<string, string>, ...args: string[]): string {
-  return execFileSync('node', [HIPPO_BIN, ...args], {
-    cwd,
-    env: { ...process.env, ...env },
-    encoding: 'utf-8',
-  });
+  return hippoOut(args, { cwd, env: { ...process.env, ...env }, exe: 'node' });
 }
 
 /** The env passed to the child `hippo` process: a fixed key set, plus an

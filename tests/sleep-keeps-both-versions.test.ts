@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { delimiter, dirname, join, resolve } from 'node:path';
+import { delimiter, dirname, join } from 'node:path';
 import { Layer, type MemoryEntry } from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { initStore } from '../src/store/open.js';
@@ -25,9 +25,9 @@ import { extractFromText } from '../src/capture/extract.js';
 import { computeSalience } from '../src/salience.js';
 import { heldTexts, mergedText } from '../src/same-text.js';
 import { insertDormantRow } from '../src/dormant.js';
+import { hippoOut } from './_helpers/spawn-hippo.js';
 
 const DAY = 86_400_000;
-const HIPPO_BIN = resolve(__dirname, '..', 'bin', 'hippo.js');
 const dirs: string[] = [];
 
 function tmp(): string {
@@ -67,7 +67,7 @@ function hermeticEnv(): NodeJS.ProcessEnv {
 }
 
 function hippo(root: string, ...args: string[]): string {
-  return execFileSync(process.execPath, [HIPPO_BIN, ...args], { cwd: dirname(root), env: hermeticEnv(), encoding: 'utf8' });
+  return hippoOut(args, { cwd: dirname(root), env: hermeticEnv() });
 }
 
 const json = (out: string): { results: { id: string; content: string }[] } => JSON.parse(out.trim().split('\n').pop()!);

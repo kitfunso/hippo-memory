@@ -1,13 +1,14 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { spawnSync, type SpawnSyncReturns } from 'child_process';
+import { type SpawnSyncReturns } from 'child_process';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 import { initStore, getHippoRoot } from '../src/store/open.js';
 import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
+import { hippoRun } from './_helpers/spawn-hippo.js';
 
 // DF1 (docs/plans/2026-08-23-df1-snapshot-lifecycle.md) T2 tests: the two
 // ambient surfaces (MCP recall block, CLI `hippo context`) reroute through
@@ -94,8 +95,6 @@ describe('7. MCP hippo_context surface: backdated snapshot is bounded out (DF1 T
 // real built CLI — same idiom as tests/pre-compact-e2e.test.ts.
 // -----------------------------------------------------------------------
 
-const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
-
 function withScratchEnv() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-df1-explicit-e2e-'));
   const env: NodeJS.ProcessEnv = {
@@ -113,12 +112,7 @@ function runHippo(
   env: NodeJS.ProcessEnv,
   input?: string,
 ): SpawnSyncReturns<string> {
-  return spawnSync(process.execPath, [HIPPO_JS, ...args], {
-    cwd,
-    env,
-    input,
-    encoding: 'utf8',
-  });
+  return hippoRun(args, { cwd, env, input });
 }
 
 function initHippo(cwd: string, env: NodeJS.ProcessEnv): void {

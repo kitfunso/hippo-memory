@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { spawnSync } from 'child_process';
 import { summariseTranscript, resolveLastSessionTranscript } from '../src/capture/transcript.js';
+import { hippoRun } from './_helpers/spawn-hippo.js';
 
 /**
  * Per-test tmpdir so the fake transcript fixtures don't leak between cases.
@@ -318,7 +319,7 @@ describe('session workers never capture a transcript they were not handed', () =
   function runWorker(args: string[]): string {
     const logFile = path.join(tmp.dir, 'worker.log');
     const env = { ...process.env, HIPPO_HOME: tmp.dir, HOME: tmp.dir, USERPROFILE: tmp.dir };
-    const result = spawnSync(process.execPath, [binPath, ...args, '--log-file', logFile], { cwd: tmp.dir, env, encoding: 'utf8' });
+    const result = hippoRun([...args, '--log-file', logFile], { cwd: tmp.dir, env });
     expect(result.status).toBe(0);
     return fs.readFileSync(logFile, 'utf8');
   }

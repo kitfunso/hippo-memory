@@ -1,10 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-
-const HIPPO_BIN = join(process.cwd(), 'bin', 'hippo.js');
+import { hippoOut } from './_helpers/spawn-hippo.js';
 
 interface HippoEnv {
   HIPPO_HOME: string;
@@ -12,11 +10,7 @@ interface HippoEnv {
 }
 
 function hippo(cwd: string, env: HippoEnv, ...args: string[]): string {
-  return execFileSync('node', [HIPPO_BIN, ...args], {
-    cwd,
-    env: { ...process.env, ...env },
-    encoding: 'utf-8',
-  });
+  return hippoOut(args, { cwd, env: { ...process.env, ...env }, exe: 'node' });
 }
 
 describe('recall --layer filter (v0.30.1)', () => {

@@ -18,7 +18,6 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { execFileSync } from 'child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -26,6 +25,7 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { getContext, type Context } from '../src/api.js';
+import { hippoOut } from './_helpers/spawn-hippo.js';
 
 function tmpHome() {
   const home = mkdtempSync(join(tmpdir(), 'hippo-df3-'));
@@ -357,15 +357,9 @@ describe('DF3 — includeRecent quality floor (CLI end-to-end)', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
-
   function runHippo(args: string[]): string {
     const globalDir = path.join(tmpDir, 'global');
-    return execFileSync(process.execPath, [HIPPO_JS, ...args], {
-      env: { ...process.env, HIPPO_HOME: globalDir },
-      cwd: tmpDir,
-      encoding: 'utf8',
-    });
+    return hippoOut(args, { env: { ...process.env, HIPPO_HOME: globalDir }, cwd: tmpDir });
   }
 
   it('test 7 — `hippo context --pinned-only --include-recent 5` excludes junk against a seeded store', () => {

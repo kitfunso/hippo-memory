@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { spawnSync, type SpawnSyncReturns } from 'child_process';
+import { type SpawnSyncReturns } from 'child_process';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getHippoRoot } from '../src/store/open.js';
@@ -11,10 +11,10 @@ import { writeSessionEndHandoff } from '../src/store/handoffs.js';
 import { defaultSleepLogPath } from '../src/hooks/shared.js';
 import { PRE_COMPACT_TASK_CAP, PRE_COMPACT_SUMMARY_CAP, PRE_COMPACT_NEXT_STEP_CAP } from '../src/capture/working-state.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { hippoRun } from './_helpers/spawn-hippo.js';
 
 // Always run against the local built CLI so we're testing our source, not a
 // stale globally-installed version (mirrors tests/pinned-inject.test.ts).
-const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
 const FAKE_JWT = ['eyJ' + 'FAKEHEADER', 'eyJ' + 'FAKEPAYLOAD', 'FAKESIG'].join('.');
 
 /**
@@ -56,12 +56,7 @@ function runHippo(
   env: NodeJS.ProcessEnv,
   input?: string,
 ): SpawnSyncReturns<string> {
-  return spawnSync(process.execPath, [HIPPO_JS, ...args], {
-    cwd,
-    env,
-    input,
-    encoding: 'utf8',
-  });
+  return hippoRun(args, { cwd, env, input });
 }
 
 function initHippo(cwd: string, env: NodeJS.ProcessEnv): void {

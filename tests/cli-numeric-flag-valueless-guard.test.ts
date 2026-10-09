@@ -3,13 +3,11 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
-
-const HIPPO_BIN = join(process.cwd(), 'bin', 'hippo.js');
+import { hippoOut, hippoRun as spawnHippo } from './_helpers/spawn-hippo.js';
 
 type GuardEnv = {
   HIPPO_HOME: string;
@@ -27,22 +25,13 @@ function childEnv(overrides: Record<string, string>): NodeJS.ProcessEnv {
 }
 
 function hippo(cwd: string, env: Record<string, string>, ...args: string[]): string {
-  return execFileSync('node', [HIPPO_BIN, ...args], {
-    cwd,
-    env: childEnv(env),
-    encoding: 'utf-8',
-  });
+  return hippoOut(args, { cwd, env: childEnv(env), exe: 'node' });
 }
 
 function hippoRun(cwd: string, env: Record<string, string>, ...args: string[]) {
   // A reverted guard lets `serve --port` bind and hang forever, and spawnSync blocks
   // the worker's event loop, so vitest's own testTimeout could never fire on it.
-  const res = spawnSync('node', [HIPPO_BIN, ...args], {
-    cwd,
-    env: childEnv(env),
-    encoding: 'utf-8',
-    timeout: 10_000,
-  });
+  const res = spawnHippo(args, { cwd, env: childEnv(env), timeout: 10_000, exe: 'node' });
   return { status: res.status, stdout: res.stdout, stderr: res.stderr };
 }
 

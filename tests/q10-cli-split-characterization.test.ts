@@ -2,11 +2,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { spawnSync } from 'node:child_process';
 import { makeRoot } from './_helpers/make-root.js';
 import { initStore } from '../src/store/open.js';
-
-const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
+import { hippoRun } from './_helpers/spawn-hippo.js';
 
 let root: string;
 let env: NodeJS.ProcessEnv;
@@ -28,7 +26,7 @@ interface RunResult {
 }
 
 function run(...args: string[]): RunResult {
-  const r = spawnSync(process.execPath, [HIPPO_JS, ...args], { cwd: root, env, encoding: 'utf8' });
+  const r = hippoRun(args, { cwd: root, env });
   return { status: r.status, stdout: r.stdout, stderr: r.stderr };
 }
 

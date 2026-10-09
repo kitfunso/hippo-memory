@@ -4,7 +4,6 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { execFileSync } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadIndex } from '../src/store/index-and-stats.js';
@@ -14,8 +13,7 @@ import { estimateTokens } from '../src/token-ledger.js';
 import { assemble, drillDown, type Context } from '../src/api.js';
 import { assembleCost, drillCost } from '../src/context-render.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
-
-const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
+import { hippoOut } from './_helpers/spawn-hippo.js';
 const TAGS = [
   'deployment-pipeline-infrastructure-alpha', 'database-migration-rollback-procedure',
   'observability-alerting-runbook-owner', 'incident-review-follow-up-action-item',
@@ -50,7 +48,7 @@ function hippo(args: string[], input?: string): string {
     ...process.env, HIPPO_HOME: path.join(root, 'global'), HOME: root, USERPROFILE: root,
   };
   for (const k of ['ANTHROPIC_API_KEY', 'HIPPO_SESSION_ID', 'CLAUDE_CODE_SESSION_ID']) delete env[k];
-  return execFileSync(process.execPath, [HIPPO_JS, ...args], { cwd: root, env, input, encoding: 'utf8' });
+  return hippoOut(args, { cwd: root, env, input });
 }
 
 // console.log's newline is the terminal's, not the block's.
