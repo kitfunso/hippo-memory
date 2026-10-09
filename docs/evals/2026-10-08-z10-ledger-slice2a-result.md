@@ -7,7 +7,7 @@
 
 ## What was built
 
-The delivery ledger now writes one boundary row for each accepted call of `hippo pre-compact` and `hippo compact-resume`. No schema change: `event_type` has no CHECK constraint (`src/db/migrations/v50.ts:10`), and `DeliveryEventType` gains `pre-compact` and `compact-resume` (`src/delivery-recorder.ts:9`). `ledger_version` moves from 1 to 2 (`src/delivery-recorder.ts:23`). One duplicate rule covers both boundary types (`src/store/recall-trace.ts:307`, `:320`). The recorder starter is shared (`src/cli/shared.ts:544`). `pre-compact` records through an `onBoundary` callback (`src/capture/compact.ts:129-134`, `src/cli/session-hooks.ts:678-689`). `compact-resume` records in `cmdCompactResume` (`src/cli/session-hooks.ts:97`, `:111`, `:147`). A boundary row carries no prompt hash whatever the payload holds (`src/delivery-recorder.ts:292`). What each hook prints, saves and exits with is unchanged.
+The delivery ledger now writes one boundary row for each accepted call of `hippo pre-compact` and `hippo compact-resume`. No schema change: `event_type` has no CHECK constraint (`src/db/migrations/v50.ts:10`), and `DeliveryEventType` gains `pre-compact` and `compact-resume` (`src/delivery-recorder.ts:10`). `ledger_version` moves from 1 to 2 (`src/delivery-recorder.ts:24`). One duplicate rule covers both boundary types (`src/store/recall-trace.ts:307`, `:320`). The recorder starter is shared (`src/cli/shared.ts:545`). `pre-compact` records through an `onBoundary` callback (`src/capture/compact.ts:129-134`, `src/cli/session-hooks.ts:678-689`). `compact-resume` records in `cmdCompactResume` (`src/cli/session-hooks.ts:97`, `:111`, `:147`). A boundary row carries no prompt hash whatever the payload holds (`src/delivery-recorder.ts:293`). What each hook prints, saves and exits with is unchanged.
 
 ## What ran
 
@@ -24,12 +24,13 @@ npm --prefix C:/Users/skf_s/hippo-wt-z10b run test:delivery-ledger
 - Red first: tests B3 and B7 failed on the old code (B3 found 0 rows; B7 found 3 of 5). W1 and W6 failed for both boundary types before the duplicate rule existed.
 - Mutations, each caught: the duplicate rule limited to `pre-compact` (caught by the `compact-resume` W1 and W6 cases); the boundary callback moved ahead of the early returns in `runPreCompact` (8 tests failed); no try/catch around the callback (only U1 failed); no flush before `process.exit` in `cmdCompactResume` (4 tests failed).
 - Store-open count for `compact-resume`: `{local: 1}` with the delivery ledger on and with it off (`tests/hook-store-open-count.test.ts`).
+- Again at `018ce0ff`, after the merge of master `6bd104a5`, two vitest runs with `--maxWorkers=1`. `tests/delivery-ledger tests/recall-trace tests/elapsed-time-upper-bounds.test.ts`: 11 files, 168 pass; it covers every file `npm run test:delivery-ledger` selects. `tests/compaction-pre-compact.test.ts`, `tests/compaction-callers.test.ts`, `tests/pre-compact-e2e.test.ts`, `tests/compact-resume-text.test.ts`, `tests/hook-store-open-count.test.ts`, `tests/stdin-bounded.test.ts`, `tests/hooks.test.ts`: 7 files, 169 pass, 4 skipped. Not run again at that head: `tests/pilot-arm-hook.test.ts`, `tests/copilot-hooks-cli.test.ts`, `tests/prompt-hook-context.test.ts`.
 
-The full suite was not run here. CI runs the full suite on the pull request. The hand-driven sequence and the medians below were taken at `3fe2473b` and were not run again.
+The full suite was not run here. CI runs the full suite on the pull request. The hand-driven sequence below was run again at `018ce0ff`. The medians were taken at `3fe2473b` and were not run again.
 
 ## Hand-driven sequence
 
-Driver: `C:/hippo-tmp/z10-slice2a/driver.mjs seq`, outside the repo. It builds two scratch projects, one with the delivery ledger on and one off, each with its own `HIPPO_HOME`. It sends the B7 order with session `seq1`: prompt, the same prompt again, `pre-compact`, `compact-resume`, prompt. The prompt hook is `hippo context --pinned-only --include-recent 5 --format additional-context`. A fresh snapshot of the session is saved before `compact-resume`.
+Driver: `C:/hippo-tmp/z10-slice2a/driver.mjs seq`, outside the repo. It builds two scratch projects, one with the delivery ledger on and one off, each with its own `HIPPO_HOME`. It sends the B7 order with session `seq1`: prompt, a second prompt with different text, `pre-compact`, `compact-resume`, prompt. The prompt hook is `hippo context --pinned-only --include-recent 5 --format additional-context`. A fresh snapshot of the session is saved before `compact-resume`.
 
 `delivery_events` of the ledger-on project, in id order:
 
@@ -48,12 +49,14 @@ Stdout, ledger on against off, same inputs:
 | Step | Exit on / off | Stdout bytes on / off | Identical |
 |---|---|---|---|
 | prompt | 0 / 0 | 195 / 195 | yes, raw |
-| prompt again | 0 / 0 | 0 / 0 | yes, raw |
+| second prompt | 0 / 0 | 0 / 0 | yes, raw |
 | `pre-compact` | 0 / 0 | 469 / 469 | yes, raw |
 | `compact-resume` | 0 / 0 | 417 / 417 | yes, after masking ISO timestamps |
 | prompt | 0 / 0 | 453 / 453 | yes, after masking ISO timestamps |
 
 No run printed a delivery ledger stderr line. The raw `compact-resume` bytes differ only in ISO timestamps, which the mask removes, as test B9 does.
+
+The driver first sent the same prompt text twice, and that form depends on timing. Two calls with one prompt hash inside `DELIVERY_DUPLICATE_WINDOW_MS` (2000 ms, `src/store/recall-trace.ts:241`) are one turn under the slice 1 rule (`src/store/recall-trace.ts:330-339`), so the second row gets no turn number and the last prompt gets turn 2. One run at `018ce0ff` gave exactly that. The earlier runs gave the table above, so their two calls were more than 2000 ms apart. The driver now sends a different second prompt, as B7 does, and the run at `018ce0ff` with that driver gave the table above.
 
 ## On/off medians
 
@@ -75,4 +78,5 @@ The box was under heavy load from other work during these runs. The spread insid
 - No in-process timing of the boundary write, as slice 1 did with `scripts/ledger-overhead.mjs`.
 - The `session-end` event, the `recall_trace_id` and `query_hash` fields, tool-failure events and a `--runtime codex` flag are later slices.
 - The Codex runtime label gap stays: a Codex `compact-resume` row reads `claude-code` unless the payload has a turn id.
+- A boundary row has no `project_hash`. Only the context path hands project facts to the recorder (`src/api/context.ts:323`), so in a global store `session_id` is the one link from a boundary row to its project.
 - A missing boundary row is a gap, never evidence that no compaction happened. Remote-caller copies write no row.
