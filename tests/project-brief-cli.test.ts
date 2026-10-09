@@ -81,6 +81,10 @@ describe('hippo brief CLI', () => {
     expect(run(env, ['brief', 'list'])).toContain('repo="demo-repo"');
   });
 
+  it('list rejects an unknown --status and names the allowed values', () => {
+    expect(() => run(env, ['brief', 'list', '--status', 'bogus'])).toThrow(/Invalid --status: "bogus"\. Must be one of: active \| superseded \| closed \| all\./);
+  });
+
   it('rejects a malformed id and does NOT mutate the wrong row (codex P2 regression)', () => {
     run(env, ['brief', 'new', 'still-active', '--summary', 'x']); // becomes #1
     expect(() => run(env, ['brief', 'close', '1abc'])).toThrow();
