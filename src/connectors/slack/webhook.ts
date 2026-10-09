@@ -4,10 +4,9 @@ import { verifySlackSignature } from './signature.js';
 import { isSlackEventEnvelope, isSlackMessageEvent, type SlackEventEnvelope } from './types.js';
 import { ingestMessage } from './ingest.js';
 import { handleMessageDeleted } from './deletion.js';
-import { writeToDlq, type DlqBucket } from './dlq.js';
-import { resolveTenantForTeam } from './tenant-routing.js';
+import { writeToDlqOnRoot, type DlqBucket } from './dlq.js';
+import { resolveTenantForTeamOnRoot } from './tenant-routing.js';
 import { resolveTenantId } from '../../tenant.js';
-import { openHippoDb, closeHippoDb } from '../../db.js';
 import type { Context } from '../../api.js';
 import {
   HttpError,
@@ -87,20 +86,15 @@ function parkInDlq(
   d: SignedSlackRequest,
   park: { tenantId: string | null; teamId: string | null; error: string; bucket: DlqBucket },
 ): void {
-  const db = openHippoDb(d.hippoRoot);
-  try {
-    writeToDlq(db, {
-      tenantId: park.tenantId,
-      teamId: park.teamId,
-      rawPayload: d.rawBody,
-      error: park.error,
-      bucket: park.bucket,
-      signature: d.signature,
-      slackTimestamp: d.slackTimestamp,
-    });
-  } finally {
-    closeHippoDb(db);
-  }
+  writeToDlqOnRoot(d.hippoRoot, {
+    tenantId: park.tenantId,
+    teamId: park.teamId,
+    rawPayload: d.rawBody,
+    error: park.error,
+    bucket: park.bucket,
+    signature: d.signature,
+    slackTimestamp: d.slackTimestamp,
+  });
   sendJson(d.res, 200, { ok: true, status: 'dlq' });
 }
 
@@ -134,12 +128,7 @@ function routeSignedSlackPayload(d: SignedSlackRequest): void {
   // 200 so Slack stops retrying; do NOT call ingest.
   let resolvedTenant: string | null = null;
   if (body !== undefined && isSlackEventEnvelope(body)) {
-    const db = openHippoDb(d.hippoRoot);
-    try {
-      resolvedTenant = resolveTenantForTeam(db, body.team_id);
-    } finally {
-      closeHippoDb(db);
-    }
+    resolvedTenant = resolveTenantForTeamOnRoot(d.hippoRoot, body.team_id);
     if (resolvedTenant === null) {
       parkInDlq(d, {
         tenantId: null, // unroutable - stored as '__unroutable__'
@@ -173,22 +162,17 @@ function routeSignedSlackPayload(d: SignedSlackRequest): void {
 function parkUnparseable(d: SignedSlackRequest, teamIdFromRaw: string | null): void {
   // Attribute the parse failure to the originating workspace via the regex-extracted
   // team_id; a null or unknown team writes tenantId=null, which lands as '__unroutable__'.
-  const db = openHippoDb(d.hippoRoot);
-  try {
-    const parseFailTenant =
-      teamIdFromRaw !== null ? resolveTenantForTeam(db, teamIdFromRaw) : null;
-    writeToDlq(db, {
-      tenantId: parseFailTenant, // null → '__unroutable__' sentinel
-      teamId: teamIdFromRaw,
-      rawPayload: d.rawBody,
-      error: 'invalid JSON',
-      bucket: 'parse_error',
-      signature: d.signature,
-      slackTimestamp: d.slackTimestamp,
-    });
-  } finally {
-    closeHippoDb(db);
-  }
+  const parseFailTenant =
+    teamIdFromRaw !== null ? resolveTenantForTeamOnRoot(d.hippoRoot, teamIdFromRaw) : null;
+  writeToDlqOnRoot(d.hippoRoot, {
+    tenantId: parseFailTenant, // null → '__unroutable__' sentinel
+    teamId: teamIdFromRaw,
+    rawPayload: d.rawBody,
+    error: 'invalid JSON',
+    bucket: 'parse_error',
+    signature: d.signature,
+    slackTimestamp: d.slackTimestamp,
+  });
   sendJson(d.res, 200, { ok: true, status: 'dlq' });
 }
 

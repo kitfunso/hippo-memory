@@ -38,7 +38,6 @@
     "src/connectors/github/cli-impl.ts:cmdGithubBackfill",
     "src/connectors/github/octokit-client.ts:GitHubFetchError",
     "src/connectors/github/octokit-client.ts:parseNextLink",
-    "src/connectors/slack/dlq.ts:markDlqRetried",
     "src/consolidate/merge.ts:mergePartners",
     "src/customer-notes.ts:MAX_NOTE_LEN",
     "src/customer-notes.ts:loadActiveNotesForCustomer",

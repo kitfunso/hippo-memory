@@ -1,29 +1,26 @@
 import type { DatabaseSyncLike } from '../../db.js';
 import { type Context, adminActor } from '../../api.js';
-import { openHippoDb, closeHippoDb } from '../../db.js';
+import {
+  bumpSlackDlqRetryCount,
+  insertSlackDlq,
+  insertSlackDlqAt,
+  listSlackDlqAt,
+  markSlackDlqRetried,
+  slackDlqEntry,
+  type DlqBucket,
+  type DlqItem,
+  type SlackDlqInsert,
+} from '../../store/connectors/slack.js';
 import { ingestMessage } from './ingest.js';
-import { resolveTenantForTeam } from './tenant-routing.js';
+import { resolveTenantForTeamOnRoot } from './tenant-routing.js';
 import { verifySlackSignature } from './signature.js';
 import { isSlackEventEnvelope, isSlackMessageEvent, type SlackEventEnvelope } from './types.js';
 import { handleMessageDeleted } from './deletion.js';
 import { redactPayload, DLQ_REDACTED_NOTE } from '../../secret-detect.js';
 import type { JsonValue } from '../../json.js';
 
-export type DlqBucket = 'parse_error' | 'unroutable' | 'signature_fail';
-
-export interface DlqItem {
-  id: number;
-  tenantId: string;
-  teamId: string | null;
-  rawPayload: string;
-  error: string;
-  receivedAt: string;
-  retriedAt: string | null;
-  bucket: DlqBucket | string;
-  retryCount: number;
-  signature: string | null;
-  slackTimestamp: string | null;
-}
+export type { DlqBucket, DlqItem };
+export { slackDlqEntryAt as getDlqEntry, markSlackDlqRetriedAt as markDlqRetried } from '../../store/connectors/slack.js';
 
 /**
  * writeToDlq is bucket-aware. `bucket` defaults to
@@ -44,92 +41,33 @@ export interface WriteDlqOpts {
   slackTimestamp?: string | null;
 }
 
-export function writeToDlq(db: DatabaseSyncLike, opts: WriteDlqOpts): number {
+/** The row to park: secrets redacted, the unroutable sentinel and the default bucket filled in. */
+function dlqInsert(opts: WriteDlqOpts): SlackDlqInsert {
   const rawPayload = redactPayload(opts.rawPayload);
   // A redacted body can never match its signature, so the row keeps none and replay needs --force.
   const redacted = rawPayload !== opts.rawPayload;
-  const result = db
-    .prepare(
-      `INSERT INTO slack_dlq
-        (tenant_id, team_id, raw_payload, error, received_at, bucket, signature, slack_timestamp)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .run(
-      opts.tenantId ?? '__unroutable__',
-      opts.teamId ?? null,
-      rawPayload,
-      redacted ? `${opts.error}; ${DLQ_REDACTED_NOTE}` : opts.error,
-      new Date().toISOString(),
-      opts.bucket ?? 'parse_error',
-      redacted ? null : opts.signature ?? null,
-      opts.slackTimestamp ?? null,
-    );
-  return Number(result.lastInsertRowid);
-}
-
-/** Raw `slack_dlq` row shape, matching the columns named in the SELECTs below. */
-interface DlqRow {
-  id?: unknown;
-  tenant_id?: unknown;
-  team_id?: unknown;
-  raw_payload?: unknown;
-  error?: unknown;
-  received_at?: unknown;
-  retried_at?: unknown;
-  bucket?: unknown;
-  retry_count?: unknown;
-  signature?: unknown;
-  slack_timestamp?: unknown;
-}
-
-export function listDlq(db: DatabaseSyncLike, opts: { tenantId: string; limit?: number }): DlqItem[] {
-  // SAFETY: row shape matches the columns named in the SELECT below.
-  const rows = db
-    .prepare(
-      `SELECT id, tenant_id, team_id, raw_payload, error, received_at, retried_at,
-              bucket, retry_count, signature, slack_timestamp
-         FROM slack_dlq
-        WHERE tenant_id = ?
-        ORDER BY received_at ASC
-        LIMIT ?`,
-    )
-    .all(opts.tenantId, opts.limit ?? 100) as DlqRow[];
-  return rows.map(rowToItem);
-}
-
-export function getDlqEntry(db: DatabaseSyncLike, id: number): DlqItem | null {
-  // SAFETY: row shape matches the columns named in the SELECT below.
-  const row = db
-    .prepare(
-      `SELECT id, tenant_id, team_id, raw_payload, error, received_at, retried_at,
-              bucket, retry_count, signature, slack_timestamp
-         FROM slack_dlq
-        WHERE id = ?`,
-    )
-    .get(id) as DlqRow | undefined;
-  if (!row) return null;
-  return rowToItem(row);
-}
-
-function rowToItem(r: DlqRow): DlqItem {
   return {
-    id: Number(r.id),
-    tenantId: String(r.tenant_id),
-    teamId: r.team_id == null ? null : String(r.team_id),
-    rawPayload: String(r.raw_payload),
-    error: String(r.error),
-    receivedAt: String(r.received_at),
-    retriedAt: r.retried_at == null ? null : String(r.retried_at),
-    bucket: r.bucket == null ? 'parse_error' : String(r.bucket),
-    retryCount: Number(r.retry_count ?? 0),
-    signature: r.signature == null ? null : String(r.signature),
-    slackTimestamp: r.slack_timestamp == null ? null : String(r.slack_timestamp),
+    tenantId: opts.tenantId ?? '__unroutable__',
+    teamId: opts.teamId ?? null,
+    rawPayload,
+    error: redacted ? `${opts.error}; ${DLQ_REDACTED_NOTE}` : opts.error,
+    bucket: opts.bucket ?? 'parse_error',
+    signature: redacted ? null : opts.signature ?? null,
+    slackTimestamp: opts.slackTimestamp ?? null,
   };
 }
 
-export function markDlqRetried(db: DatabaseSyncLike, id: number): void {
-  db.prepare(`UPDATE slack_dlq SET retried_at = ?, retry_count = retry_count + 1 WHERE id = ?`)
-    .run(new Date().toISOString(), id);
+export function writeToDlq(db: DatabaseSyncLike, opts: WriteDlqOpts): number {
+  return insertSlackDlqAt(db, dlqInsert(opts));
+}
+
+/** writeToDlq on a handle opened for the one insert. */
+export function writeToDlqOnRoot(hippoRoot: string, opts: WriteDlqOpts): number {
+  return insertSlackDlq(hippoRoot, dlqInsert(opts));
+}
+
+export function listDlq(db: DatabaseSyncLike, opts: { tenantId: string; limit?: number }): DlqItem[] {
+  return listSlackDlqAt(db, opts.tenantId, opts.limit ?? 100);
 }
 
 export interface ReplayDlqOpts {
@@ -175,13 +113,7 @@ export function replayDlqEntry(
   id: number,
   opts: ReplayDlqOpts = {},
 ): ReplayDlqResult {
-  const db = openHippoDb(ctx.hippoRoot);
-  let row: DlqItem | null;
-  try {
-    row = getDlqEntry(db, id);
-  } finally {
-    closeHippoDb(db);
-  }
+  const row = slackDlqEntry(ctx.hippoRoot, id);
   if (!row) {
     return { ok: false, status: 'not_found', memoryId: null, retryCount: 0, reason: `dlq id ${id} not found` };
   }
@@ -204,13 +136,7 @@ export function replayDlqEntry(
   }
 
   // Resolve tenant against current state. If still unroutable, bail.
-  const db2 = openHippoDb(ctx.hippoRoot);
-  let tenant: string | null;
-  try {
-    tenant = resolveTenantForTeam(db2, parsed.team_id);
-  } finally {
-    closeHippoDb(db2);
-  }
+  const tenant = resolveTenantForTeamOnRoot(ctx.hippoRoot, parsed.team_id);
   if (!tenant) {
     return failAndBump(ctx.hippoRoot, row, 'unroutable', `team_id ${parsed.team_id} still unroutable`);
   }
@@ -258,7 +184,7 @@ function checkReplaySignature(row: DlqItem, opts: ReplayDlqOpts): ReplayDlqResul
 }
 
 function failAndBump(hippoRoot: string, row: DlqItem, status: string, reason: string): ReplayDlqResult {
-  bumpRetryCount(hippoRoot, row.id);
+  bumpSlackDlqRetryCount(hippoRoot, row.id);
   return { ok: false, status, memoryId: null, retryCount: row.retryCount + 1, reason };
 }
 
@@ -281,7 +207,7 @@ function dispatchReplay(
       deletedTs: inner.deleted_ts,
       eventId: parsed.event_id,
     });
-    markRetried(hippoRoot, id);
+    markSlackDlqRetried(hippoRoot, id);
     return { ok: true, status: r.status, memoryId: r.memoryId, retryCount: row.retryCount + 1 };
   }
 
@@ -296,21 +222,6 @@ function dispatchReplay(
     message: inner,
     eventId: parsed.event_id,
   });
-  markRetried(hippoRoot, id);
+  markSlackDlqRetried(hippoRoot, id);
   return { ok: true, status: result.status, memoryId: result.memoryId, retryCount: row.retryCount + 1 };
-}
-
-function markRetried(hippoRoot: string, id: number): void {
-  const db = openHippoDb(hippoRoot);
-  try { markDlqRetried(db, id); }
-  finally { closeHippoDb(db); }
-}
-
-function bumpRetryCount(hippoRoot: string, id: number): void {
-  const db = openHippoDb(hippoRoot);
-  try {
-    db.prepare(`UPDATE slack_dlq SET retry_count = retry_count + 1 WHERE id = ?`).run(id);
-  } finally {
-    closeHippoDb(db);
-  }
 }
