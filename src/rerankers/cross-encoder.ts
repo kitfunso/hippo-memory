@@ -64,7 +64,7 @@ async function loadTransformersModule(): Promise<Required<TransformersExports> |
       mod.AutoModelForSequenceClassification ?? mod.default?.AutoModelForSequenceClassification;
     return tok && seq ? { AutoTokenizer: tok, AutoModelForSequenceClassification: seq } : null;
   } catch (err) {
-    log.debug(`cross-encoder: transformers import failed: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`cross-encoder: transformers import failed: ${errorMessage(err)}`);
     return null;
   }
 }
@@ -108,7 +108,7 @@ async function buildPipeline(): Promise<CrossEncoderFn | null> {
       return score;
     };
   } catch (err) {
-    log.debug(`cross-encoder: model load failed: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`cross-encoder: model load failed: ${errorMessage(err)}`);
     return null;
   }
 }

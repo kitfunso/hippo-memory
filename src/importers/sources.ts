@@ -1,14 +1,14 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { type ImportResult, type ImportOptions, importEntries, isJsonPlainObject } from './core.js';
-import { parseFrontmatter, collectMarkdownFiles } from './markdown-parse.js';
-import { type JsonValue, isJsonString } from '../json.js';
+import { type ImportResult, type ImportOptions, importEntries } from './core.js';
+import { splitMarkdownFrontmatter, collectMarkdownFiles } from './markdown-parse.js';
+import { type JsonValue, isJsonString, isJsonObject } from '../json.js';
 
 /** Coerce one imported record (string, `{content|text: ...}` object, or
  *  anything else) into the plain-text memory chunk it represents. */
 function extractMemoryText(candidate: JsonValue): string {
   if (isJsonString(candidate)) return candidate;
-  if (isJsonPlainObject(candidate)) {
+  if (isJsonObject(candidate)) {
     return String(candidate['content'] ?? candidate['text'] ?? '');
   }
   return '';
@@ -31,7 +31,7 @@ function parseChatGPTFile(filePath: string): string[] {
       const parsed: JsonValue = JSON.parse(raw);
 
       // {"memories": [...]} - ChatGPT export format
-      if (isJsonPlainObject(parsed) && Array.isArray(parsed.memories)) {
+      if (isJsonObject(parsed) && Array.isArray(parsed.memories)) {
         return parsed.memories.map(extractMemoryText).filter(Boolean);
       }
 
@@ -224,7 +224,7 @@ export function importCursor(sourcePath: string, options: ImportOptions): Import
     : [sourcePath];
   const chunks = files.flatMap((file) => {
     const raw = fs.readFileSync(file, 'utf8');
-    return parseCursorFile(CURSOR_RULE_FILE.test(file) ? parseFrontmatter(raw).body : raw);
+    return parseCursorFile(CURSOR_RULE_FILE.test(file) ? splitMarkdownFrontmatter(raw).body : raw);
   });
   return importEntries(chunks, 'import:cursor', ['imported', 'cursor'], options);
 }

@@ -16,9 +16,8 @@ import { loadSkills, saveSkill } from '../src/skills.js';
 import { loadProjectBriefs, saveProjectBrief } from '../src/project-briefs.js';
 import { loadCustomerNotes, saveCustomerNote } from '../src/customer-notes.js';
 import { loadAllPredictions, savePrediction } from '../src/store/predictions.js';
-import { isJsonObjectRecord } from '../src/http-util.js';
 import { makeRoot } from './_helpers/make-root.js';
-import { type JsonValue, isJsonString } from '../src/json.js';
+import { type JsonValue, isJsonString, isJsonObject } from '../src/json.js';
 
 const ROWS = 7;
 const PAGE = 3;
@@ -107,7 +106,7 @@ async function getPage(route: ListRoute, params: Record<string, string> = {}): P
   if (route.key === null) {
     return { status: res.status, body, items: Array.isArray(body) ? body : [], next: res.headers.get('x-next-cursor') };
   }
-  const record: Record<string, JsonValue> = isJsonObjectRecord(body) ? body : {};
+  const record: Record<string, JsonValue> = isJsonObject(body) ? body : {};
   const list = record[route.key];
   const next = record['next_cursor'];
   return { status: res.status, body, items: Array.isArray(list) ? list : [], next: isJsonString(next) ? next : null };

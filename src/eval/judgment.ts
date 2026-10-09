@@ -5,7 +5,7 @@
 import { envTypesafeApiKey } from '../env.js';
 import { ConfidenceLevel, EmotionalValence } from '../memory.js';
 import { fetchWithRetry } from '../http-retry.js';
-import { log } from '../log.js';
+import { errorMessage, log } from '../log.js';
 
 const ENDPOINT = 'https://api.typesafe.ai/v1/systemone';
 const DEFAULT_MODEL = 'jev-1.13.0';
@@ -108,7 +108,7 @@ async function post(content: string, opts: JudgeOptions): Promise<Response | nul
       }),
     }, { timeoutMs: JUDGE_TIMEOUT_MS, fetchFn: opts.fetcher });
   } catch (err) {
-    log.debug(`judge: request failed: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`judge: request failed: ${errorMessage(err)}`);
     return null;
   }
   return res.ok ? res : null;
@@ -130,7 +130,7 @@ export async function judge(content: string, opts: JudgeOptions): Promise<Judgme
     // optional-chained and range-checked before use, so a lie here returns null.
     data = await res.json() as JevResponse;
   } catch (err) {
-    log.debug(`judge: unreadable response: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`judge: unreadable response: ${errorMessage(err)}`);
     return null;
   }
 

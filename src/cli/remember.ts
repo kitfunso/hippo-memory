@@ -36,6 +36,7 @@ import { validateOwner, isStrictOwnerEnv } from './owner-validation.js';
 import { printError } from './output.js';
 import { emitCliAudit, requireInit, runViaServerIfAvailable, fmt, type CliFlags, type CommandContext, boolFlag, flagIsTrue, stringFlag } from './shared.js';
 import { DAY_MS } from '../util/time.js';
+import { errorMessage } from '../log.js';
 
 // `requested` is what the caller typed; `all` adds path and scope tags from this process's cwd and env.
 interface RememberTags {
@@ -223,7 +224,7 @@ async function extractRememberFacts(targetRoot: string, entry: MemoryEntry, flag
       }
     } catch (err) {
       // Extraction is best-effort: report it, never block remember.
-      printError(`  (extraction failed: ${err instanceof Error ? err.message : String(err)})`);
+      printError(`  (extraction failed: ${errorMessage(err)})`);
     }
   } else if (shouldExtract && !apiKey) {
     printError('  (extraction skipped: ANTHROPIC_API_KEY not set)');

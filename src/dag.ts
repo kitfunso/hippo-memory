@@ -12,7 +12,7 @@ import { fetchWithRetry, llmTimeoutMs } from './http-retry.js';
 import { derivationScope, derivationPartitionKey } from './recall-scope.js';
 import { loadConfig } from './config.js';
 import { neverAutoShareTags } from './shared.js';
-import { log } from './log.js';
+import { errorMessage, log } from './log.js';
 import { certainDefect } from './memory-quality.js';
 
 export interface FactCluster {
@@ -105,7 +105,7 @@ export async function generateDagSummary(
       }),
     }, { timeoutMs: llmTimeoutMs(), fetchFn });
   } catch (err) {
-    opts.onError?.(`request failed: ${err instanceof Error ? err.message : String(err)}`);
+    opts.onError?.(`request failed: ${errorMessage(err)}`);
     return null;
   }
 
@@ -124,7 +124,7 @@ export async function generateDagSummary(
     }
     return text.length >= 20 ? text : null;
   } catch (err) {
-    opts.onError?.(`unparseable response: ${err instanceof Error ? err.message : String(err)}`);
+    opts.onError?.(`unparseable response: ${errorMessage(err)}`);
     return null;
   }
 }
@@ -380,7 +380,7 @@ export async function rebuildDirtySummaries(
       result.failed++;
       log.error(
         `rebuildDirtySummaries: summary ${summary.id} (tenant ${summary.tenantId}) failed: ${
-          err instanceof Error ? err.message : String(err)
+          errorMessage(err)
         }`,
       );
     }

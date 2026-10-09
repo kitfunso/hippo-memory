@@ -4,6 +4,7 @@ import type { MemoryEntry } from './memory.js';
 import { evalNow } from './ablation.js';
 import { scoreOverlap, type PromptRecallGate } from './prompt-recall.js';
 import { blockHash, estimateTokens, hookPayloadSessionId, hookPayloadString, isSubagentPayload } from './token-ledger.js';
+import { errorMessage } from './log.js';
 export type DeliveryRuntime = 'claude-code' | 'codex' | 'copilot' | 'unknown';
 export type DeliveryEventType = 'prompt-submit' | 'pinned-manual';
 export type DeliverySurface = 'hook' | 'context';
@@ -397,7 +398,7 @@ export function createDeliveryRecorder(init: DeliveryRecorderInit): DeliveryReco
       if (fault === 'observe') throw new Error('injected observe fault');
       fn();
     } catch (error) {
-      state.broken = error instanceof Error ? error.message : String(error);
+      state.broken = errorMessage(error);
     }
   };
   const { qualityDropped, offer, reject, dropMissing, gated, selected } = candidateMethods(state, guard);

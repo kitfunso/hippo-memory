@@ -2,7 +2,7 @@ import { type MemoryEntry, markRetrieved } from '../memory.js';
 import { type DatabaseSyncLike, closeHippoDb, openHippoDb, rethrowIfSqliteBlocked, withWriteScope } from '../db.js';
 import { RejectedValueError } from '../rejection.js';
 import { markSummaryDirtyInTx } from '../summary-dirty.js';
-import { log } from '../log.js';
+import { errorMessage, log } from '../log.js';
 import { auditRejectionRefusal, audit } from './audit-event.js';
 import { selectEntriesByIds } from './entry-reads.js';
 import { stampOriginProject, upsertEntryRow, syncFtsRow, deleteFtsRow } from './entry-row.js';
@@ -143,7 +143,7 @@ export function strengthenRetrievedInOwnTx(db: DatabaseSyncLike, ids: readonly s
 }
 
 function warnStrengthenFailed<E>(error: E): void {
-  log.warn(`retrieval stats not saved (${error instanceof Error ? error.message : String(error)})`);
+  log.warn(`retrieval stats not saved (${errorMessage(error)})`);
 }
 
 /** strengthenRetrieved on the caller's handle, inside the caller's transaction. Throws; the caller decides. */

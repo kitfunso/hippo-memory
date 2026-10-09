@@ -1,6 +1,7 @@
 // Read-only file access shared by the adapters: size, binary and failure checks live in one place.
 import fs from 'node:fs';
 import path from 'node:path';
+import { errorMessage } from '../log.js';
 
 export const MAX_ITEM_BYTES = 256 * 1024;
 const MAX_DEPTH = 8;
@@ -21,7 +22,7 @@ export function readTextFile(file: string): TextFile {
     if (buf.includes(0)) return { ok: false, reason: `${file}: not text` };
     return { ok: true, text: buf.toString('utf8'), mtimeMs: stat.mtimeMs };
   } catch (err) {
-    return { ok: false, reason: `${file}: ${err instanceof Error ? err.message : String(err)}` };
+    return { ok: false, reason: `${file}: ${errorMessage(err)}` };
   }
 }
 
@@ -39,7 +40,7 @@ export function listFiles(dir: string, opts: { recursive: boolean }): DirListing
     walk(dir, '', opts.recursive ? MAX_DEPTH : 0, files);
     return { status: 'ok', files: files.sort() };
   } catch (err) {
-    return { status: 'unreadable', reason: `${dir}: ${err instanceof Error ? err.message : String(err)}` };
+    return { status: 'unreadable', reason: `${dir}: ${errorMessage(err)}` };
   }
 }
 

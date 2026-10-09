@@ -35,7 +35,7 @@ import type {
   GitHubRepository,
   GitHubSender,
 } from './types.js';
-import type { JsonValue } from '../../json.js';
+import { type JsonValue, isJsonObject } from '../../json.js';
 
 const API = 'https://api.github.com';
 
@@ -115,23 +115,19 @@ interface PrReviewCommentItem {
   pull_request_url?: string;
 }
 
-function isPlainObject(x: JsonValue | undefined): x is Record<string, JsonValue> {
-  return x !== undefined && x !== null && typeof x === 'object' && !Array.isArray(x);
-}
-
 function isGitHubUser(x: JsonValue | undefined): x is Record<string, JsonValue> & GitHubSender {
-  return isPlainObject(x) && typeof x.login === 'string' && typeof x.id === 'number';
+  return isJsonObject(x) && typeof x.login === 'string' && typeof x.id === 'number';
 }
 
 function isIssuesItem(x: JsonValue): x is JsonValue & IssuesItem {
-  if (!isPlainObject(x)) return false;
+  if (!isJsonObject(x)) return false;
   if (typeof x.number !== 'number') return false;
   if (typeof x.title !== 'string') return false;
   return isGitHubUser(x.user);
 }
 
 function isCommentItem(x: JsonValue): x is JsonValue & (IssueCommentItem | PrReviewCommentItem) {
-  if (!isPlainObject(x)) return false;
+  if (!isJsonObject(x)) return false;
   if (typeof x.id !== 'number') return false;
   return isGitHubUser(x.user);
 }
@@ -185,7 +181,7 @@ async function drainStream(
       // SAFETY: updated_at is GitHub's ISO-timestamp field on every item
       // shape this stream returns; a non-string value would only fail the
       // string comparisons below, matching pre-migration passthrough.
-      const updatedAt = isPlainObject(item)
+      const updatedAt = isJsonObject(item)
         ? ((item.updated_at as string | undefined) ?? null)
         : null;
       if (updatedAt && (!maxUpdatedAt || updatedAt > maxUpdatedAt)) {

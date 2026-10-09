@@ -19,7 +19,7 @@ import { createHash } from 'node:crypto';
 import { openHippoDb, closeHippoDb, rethrowIfSqliteBlocked, type DatabaseSyncLike } from './db.js';
 import type { RerankStep } from './core/search-types.js';
 import { DELIVERY_LEDGER_VERSION, type DeliveryEventInput } from './delivery-recorder.js';
-import { log } from './log.js';
+import { errorMessage, log } from './log.js';
 import { DAY_MS } from './util/time.js';
 
 /** One ranked result to persist alongside its trace row. */
@@ -120,7 +120,7 @@ export function writeRecallTrace(db: DatabaseSyncLike, input: RecallTraceInput):
       throw error;
     }
   } catch (error) {
-    log.error(`recall trace write failed: ${error instanceof Error ? error.message : String(error)}`);
+    log.error(`recall trace write failed: ${errorMessage(error)}`);
     return null;
   }
 }
@@ -153,7 +153,7 @@ export function writeRecallTraceAtRoot(root: string, input: RecallTraceInput): n
     db = openHippoDb(root);
   } catch (error) {
     rethrowIfSqliteBlocked(error);
-    log.error(`recall trace connection failed: ${error instanceof Error ? error.message : String(error)}`);
+    log.error(`recall trace connection failed: ${errorMessage(error)}`);
     return null;
   }
   try {
@@ -229,7 +229,7 @@ export function recordTraceOutcome(db: DatabaseSyncLike, input: RecordTraceOutco
       VALUES (?, ?, ?, ?, ?)
     `).run(input.traceId, new Date().toISOString(), input.tenantId, input.outcome, JSON.stringify(credited));
   } catch (error) {
-    log.error(`recall trace outcome write failed: ${error instanceof Error ? error.message : String(error)}`);
+    log.error(`recall trace outcome write failed: ${errorMessage(error)}`);
   }
 }
 
@@ -374,7 +374,7 @@ export function writeDeliveryEvent(db: DatabaseSyncLike, input: DeliveryEventInp
     }
   } catch (error) {
     // The prompt hook's stderr shows this exact `[hippo] delivery ledger` line, so it stays off the logger's format.
-    console.error(`[hippo] delivery ledger write failed: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(`[hippo] delivery ledger write failed: ${errorMessage(error)}`);
     return null;
   }
 }
@@ -386,7 +386,7 @@ export function writeDeliveryEventAtRoot(root: string, input: DeliveryEventInput
     db = openHippoDb(root);
   } catch (error) {
     // Same hook stderr line as writeDeliveryEvent above.
-    console.error(`[hippo] delivery ledger write failed: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(`[hippo] delivery ledger write failed: ${errorMessage(error)}`);
     return null;
   }
   try {

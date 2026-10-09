@@ -3,7 +3,7 @@ import { openHippoDb, isFtsAvailable, closeHippoDb, type DatabaseSyncLike } from
 import { tokenize } from '../tokenize.js';
 import { isPersonalScope, scopeAdmitSql, type SqlFragment } from '../recall-scope.js';
 import { ftsTermParts, RAREST_TERM_COUNT, rarestFtsQuery } from '../prompt-recall.js';
-import { log } from '../log.js';
+import { errorMessage, log } from '../log.js';
 import { originInSql } from '../project-identity.js';
 import { topVectorMatches } from '../db/vector-store.js';
 import {
@@ -183,7 +183,7 @@ function selectFtsCandidates(db: DatabaseSyncLike, terms: string[], p: SearchPre
       `).all(ftsQuery, ...p.tenantParams, ...p.scopeParams, limit) as MemoryRow[];
   } catch (err) {
     // A query FTS5 cannot parse is expected input; anything else means the index itself is broken.
-    const message = err instanceof Error ? err.message : String(err);
+    const message = errorMessage(err);
     if (!FTS_QUERY_SYNTAX_RE.test(message)) log.once('fts-match-fallback', 'warn', `FTS search failed, using the slower LIKE match: ${message}`);
     return [];
   }

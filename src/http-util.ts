@@ -2,13 +2,8 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { ApiError } from './api-errors.js';
 import { SqliteBlockedError } from './util/sqlite-blocked.js';
 import { envBodyTimeoutMs } from './env.js';
-import type { JsonValue } from './json.js';
 
 // Leaf module shared by server.ts and the connector webhook receivers; it must not import either.
-
-export function isJsonObjectRecord(value: JsonValue | undefined): value is Record<string, JsonValue> {
-  return value !== undefined && value !== null && typeof value === 'object' && !Array.isArray(value);
-}
 
 // node:http header values are `string | string[] | undefined` (never a bare
 // unknown), so this gets its own predicate rather than reusing isJsonString.

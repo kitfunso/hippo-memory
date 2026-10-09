@@ -8,8 +8,8 @@ import { canReadScope } from '../../recall-scope.js';
 import { assertCrossTenantAdmin, buildContextWithAuth, isLoopback } from '../auth.js';
 import { sleepInChild } from '../sleep-offload.js';
 import type { RouteRequest } from '../types.js';
-import { getCallerProject, getString, getStringArray, isJsonBoolean, isSetMember, parseJsonBody, parseListLimit, validateIdSegment } from '../validation.js';
-import { type JsonValue, isJsonString } from '../../json.js';
+import { getCallerProject, getString, getStringArray, isSetMember, parseJsonBody, parseListLimit, validateIdSegment } from '../validation.js';
+import { type JsonValue, isJsonString, isJsonBoolean } from '../../json.js';
 
 const VALID_KINDS: ReadonlySet<MemoryKind> = new Set([
   'raw',

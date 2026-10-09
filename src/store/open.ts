@@ -4,14 +4,16 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { DEFAULT_HALF_LIFE_DAYS, type MemoryEntry, Layer } from '../memory.js';
 import { closeHippoDb, type DatabaseSyncLike, openHippoDb, getMeta, setMeta, withWriteScope } from '../db.js';
-import { type ResolveProjectIdentityOpts, findHippoStoreDir, realpathOrResolve } from '../project-identity.js';
+import { type ResolveProjectIdentityOpts, findHippoStoreDir } from '../project-identity.js';
+import { realpathOrResolve } from '../util/real-path.js';
 import { RejectedValueError } from '../rejection.js';
-import { log } from '../log.js';
-import { type HippoIndex, type LegacyStats, isPlainJsonObject } from './rows.js';
+import { errorMessage, log } from '../log.js';
+import { type HippoIndex, type LegacyStats } from './rows.js';
 import { audit } from './audit-event.js';
 import { deserializeEntry } from './markdown.js';
 import { stampOriginProjectForImport, upsertEntryRow } from './entry-row.js';
 import { ensureMirrorDirectories, syncMirrorFiles, layerDir } from './mirrors.js';
+import { isJsonObject } from '../json.js';
 
 /** Nearest ancestor store like git; the strict join is the fallback so `hippo init` still creates `<cwd>/.hippo`. */
 export function getHippoRoot(cwd: string = process.cwd(), opts?: ResolveProjectIdentityOpts): string {
@@ -138,7 +140,7 @@ function importLegacyIndexAndStats(db: DatabaseSyncLike, hippoRoot: string): voi
   const runs = Array.isArray(legacyStats.consolidation_runs) ? legacyStats.consolidation_runs : [];
   const insertRun = db.prepare(`INSERT INTO consolidation_runs(timestamp, decayed, merged, removed) VALUES (?, ?, ?, ?)`);
   for (const run of runs) {
-    if (!isPlainJsonObject(run)) continue;
+    if (!isJsonObject(run)) continue;
     const row = run;
     insertRun.run(
       String(row.timestamp ?? new Date().toISOString()),
@@ -177,7 +179,7 @@ function loadLegacyIndexFile(hippoRoot: string): HippoIndex {
     // that violates the shape falls through to the catch block's fallback.
     return JSON.parse(fs.readFileSync(indexPath, 'utf8')) as HippoIndex;
   } catch (err) {
-    log.debug(`store: unreadable index.json read as empty: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`store: unreadable index.json read as empty: ${errorMessage(err)}`);
     return { version: 1, entries: {}, last_retrieval_ids: [], last_trace_id: null };
   }
 }
@@ -200,7 +202,7 @@ function loadLegacyStatsFile(hippoRoot: string): LegacyStats {
     // hand-edited or corrupted file even if this optimistic cast is wrong.
     return JSON.parse(fs.readFileSync(statsPath, 'utf8')) as LegacyStats;
   } catch (err) {
-    log.debug(`store: unreadable stats.json read as zero: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`store: unreadable stats.json read as zero: ${errorMessage(err)}`);
     return {
       total_remembered: 0,
       total_recalled: 0,

@@ -12,7 +12,7 @@ import {
   rejectQuarantineRow,
   type QuarantineStatus,
 } from '../quarantine.js';
-import { log } from '../log.js';
+import { errorMessage, log } from '../log.js';
 import type { KeysetPosition } from '../keyset.js';
 import { appendAuditEvent } from '../audit.js';
 import type { Context } from './types.js';
@@ -101,7 +101,7 @@ export function quarantineApprove(ctx: Context, id: string): void {
     const restored = readEntry(ctx.hippoRoot, id, ctx.tenantId);
     if (restored) writeEntryMirrors(ctx.hippoRoot, restored);
   } catch (err) {
-    log.error(`quarantine: mirror rewrite failed for ${id}: ${err instanceof Error ? err.message : String(err)}`);
+    log.error(`quarantine: mirror rewrite failed for ${id}: ${errorMessage(err)}`);
   }
 }
 

@@ -35,7 +35,7 @@ import { BadRequestError } from './api-errors.js';
 import { onHandle } from './store/open.js';
 import { assertTenantId } from './tenant.js';
 import type { KeysetPosition } from './keyset.js';
-import type { JsonValue } from './json.js';
+import { type JsonValue, isJsonString } from './json.js';
 import type { SavableDescriptor } from './objects/descriptor.js';
 import { assertObjectStatus, closeObjectOn, loadObjectByIdOn, loadObjectsOn, saveObject } from './objects/lifecycle.js';
 
@@ -50,10 +50,6 @@ export const VALID_PROCESS_STATES: ReadonlySet<ProcessStatus> = new Set<ProcessS
   'superseded',
   'closed',
 ]);
-
-function isString(v: JsonValue): v is string {
-  return typeof v === 'string';
-}
 
 /** DoS / abuse caps on the steps body (untrusted at the HTTP/SDK boundary). */
 export const MAX_PROCESS_STEPS = 200;
@@ -122,7 +118,7 @@ export function validateProcessSteps(steps: JsonValue): string[] {
   const out: string[] = [];
   for (let i = 0; i < steps.length; i++) {
     const raw = steps[i];
-    if (!isString(raw)) {
+    if (!isJsonString(raw)) {
       throw new BadRequestError(`saveProcess: step ${i + 1} is not a string`);
     }
     const trimmed = raw.trim();
@@ -163,7 +159,7 @@ interface ProcessRow {
 function parseSteps(raw: string): string[] {
   try {
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.every(isString)) {
+    if (Array.isArray(parsed) && parsed.every(isJsonString)) {
       return parsed;
     }
     return [];

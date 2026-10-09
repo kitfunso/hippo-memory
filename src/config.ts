@@ -8,7 +8,7 @@ import { type PhysicsConfig, DEFAULT_PHYSICS_CONFIG, mergePhysicsConfig } from '
 import { DEFAULT_HALF_LIFE_DAYS } from './memory.js';
 import type { PromptRecallMetric } from './prompt-recall.js';
 import { DEFAULT_LOCAL_BUMP, DEFAULT_RECALL_BUDGET } from './core/search-types.js';
-import { log } from './log.js';
+import { errorMessage, log } from './log.js';
 
 export type DecayBasis = 'clock' | 'session' | 'adaptive';
 
@@ -487,7 +487,7 @@ function sharedStoreKey(hippoRoot: string): string {
   try {
     real = fs.realpathSync.native(hippoRoot);
   } catch (err) {
-    log.debug(`sharedStore: realpath fell back to resolve for ${hippoRoot}: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`sharedStore: realpath fell back to resolve for ${hippoRoot}: ${errorMessage(err)}`);
     real = path.resolve(hippoRoot);
   }
   return process.platform === 'win32' ? real.toLowerCase() : real;

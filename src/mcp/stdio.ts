@@ -1,11 +1,11 @@
 // Stdio transport: newline-delimited JSON-RPC frames in on stdin, replies out on stdout.
 
 import { installCrashHandlers } from '../util/crash-handlers.js';
-import { log } from '../log.js';
+import { errorMessage, log } from '../log.js';
 import { parseFrame, type FrameRemainder } from './framing.js';
-import { mcpErrorResponse, isJsonObjectRecord, type McpRequest, type McpResponse } from './protocol.js';
+import { mcpErrorResponse, type McpRequest, type McpResponse } from './protocol.js';
 import { handleMcpRequest } from './request.js';
-import { type JsonValue, isJsonString } from '../json.js';
+import { type JsonValue, isJsonString, isJsonObject } from '../json.js';
 import { randomUUID } from 'node:crypto';
 import { runWithRequestId } from '../util/request-scope.js';
 
@@ -35,7 +35,7 @@ function withoutRefused(chunk: Buffer): Buffer {
 
 // Only method is checked: handleMcpRequest narrows params where it reads them, as the HTTP transport does.
 function isRoutableRequest(v: JsonValue): v is JsonValue & McpRequest {
-  return isJsonObjectRecord(v) && isJsonString(v.method);
+  return isJsonObject(v) && isJsonString(v.method);
 }
 
 function dispatch(body: string): void {
@@ -52,7 +52,7 @@ function dispatch(body: string): void {
   const req = parsed;
   if (req.method.startsWith('notifications/')) {
     handleMcpRequest(req).catch((err) => {
-      log.error(`mcp notification ${req.method} failed: ${err instanceof Error ? err.message : String(err)}`);
+      log.error(`mcp notification ${req.method} failed: ${errorMessage(err)}`);
     });
     return;
   }

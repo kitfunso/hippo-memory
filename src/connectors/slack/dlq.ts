@@ -16,6 +16,7 @@ import { verifySlackSignature } from './signature.js';
 import { isSlackEventEnvelope, isSlackMessageEvent, type SlackEventEnvelope } from './types.js';
 import { handleMessageDeleted } from './deletion.js';
 import type { JsonValue } from '../../json.js';
+import { errorMessage } from '../../log.js';
 
 export type { DlqBucket, DlqItem };
 
@@ -74,7 +75,7 @@ export function replayDlqEntry(
   try {
     parsed = JSON.parse(row.rawPayload);
   } catch (e) {
-    return failAndBump(ctx.hippoRoot, row, 'parse_error', `still unparseable: ${e instanceof Error ? e.message : String(e)}`);
+    return failAndBump(ctx.hippoRoot, row, 'parse_error', `still unparseable: ${errorMessage(e)}`);
   }
   if (!isSlackEventEnvelope(parsed)) {
     return failAndBump(ctx.hippoRoot, row, 'unhandled', 'not an event_callback envelope');

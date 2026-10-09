@@ -9,17 +9,8 @@ import { slackDlq, type DlqBucket } from './dlq.js';
 import { resolveTenantForTeamOnRoot } from './tenant-routing.js';
 import { resolveTenantId } from '../../tenant.js';
 import type { Context } from '../../api.js';
-import {
-  HttpError,
-  JSON_HEADERS,
-  isHeaderString,
-  isJsonObjectRecord,
-  closeIfBodyUnread,
-  readWebhookBody,
-  sendJson,
-  type WebhookRequest,
-} from '../../http-util.js';
-import type { JsonValue } from '../../json.js';
+import { HttpError, JSON_HEADERS, isHeaderString, closeIfBodyUnread, readWebhookBody, sendJson, type WebhookRequest } from '../../http-util.js';
+import { type JsonValue, isJsonObject } from '../../json.js';
 
 /**
  * Slack Events API webhook. Auth is signature-based (HMAC over the raw
@@ -114,7 +105,7 @@ function routeSignedSlackPayload(d: SignedSlackRequest): void {
     parkUnparseable(d, teamIdFromRaw);
     return;
   }
-  if (isJsonObjectRecord(body)) {
+  if (isJsonObject(body)) {
     const bodyRecord = body;
     if (bodyRecord.type === 'url_verification') {
       sendJson(res, 200, {

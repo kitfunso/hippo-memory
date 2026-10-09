@@ -16,6 +16,7 @@ import { writeDeliveryEventAtRoot, writeDeliveryEventOnHandle } from './recall-t
 import {
   blockHash, estimateTokens, hookPayloadString, isSubagentPayload, lastSentState, recordTokenUse, shouldSkipUnchanged, type TokenSurface,
 } from './token-ledger.js';
+import { errorMessage } from './log.js';
 
 /** With `db`, writes on the token ledger's handle (same store); without it, opens its own. A second flush is a no-op. */
 export function flushDeliveryRecorder(rec: DeliveryRecorder | null, db?: ReturnType<typeof openHippoDb>): void {
@@ -24,7 +25,7 @@ export function flushDeliveryRecorder(rec: DeliveryRecorder | null, db?: ReturnT
     rec.flush((input) => (db ? writeDeliveryEventOnHandle(db, input) : writeDeliveryEventAtRoot(rec.root, input)));
   } catch (error) {
     // The hook's one-line stderr contract pins this exact text, so it bypasses the leveled logger.
-    console.error(`[hippo] delivery ledger write failed:${error instanceof Error ? error.message : String(error)}`);
+    console.error(`[hippo] delivery ledger write failed:${errorMessage(error)}`);
   }
 }
 

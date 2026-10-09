@@ -19,6 +19,7 @@ import { loadCardDetail, type CardDetail } from '../card-detail.js';
 import { resolveTenantId } from '../tenant.js';
 import { printError } from './output.js';
 import { type CliFlags, requireInit, stringFlagOrExit } from './shared.js';
+import { errorMessage } from '../log.js';
 
 // Mirrors ARCHIVE_REASON_REQUIRED so the block message can't drift from its usage line.
 const CARD_BLOCK_REASON_REQUIRED = 'hippo card block <id> requires --reason "<why>" (recorded as a comment).';
@@ -154,7 +155,7 @@ function cardCreate(hippoRoot: string, tenantId: string, _args: string[], flags:
   try {
     card = createCard(hippoRoot, tenantId, { title, repo, contract, budget, dependsOn });
   } catch (error) {
-    printError(error instanceof Error ? error.message : String(error));
+    printError(errorMessage(error));
     process.exit(1);
   }
   console.log(`Created card ${card.id} (status: ${card.status})`);
@@ -210,7 +211,7 @@ function cardClaim(hippoRoot: string, tenantId: string, args: string[], flags: C
   try {
     card = claimCard(hippoRoot, tenantId, id, runtime, sessionId);
   } catch (error) {
-    printError(error instanceof Error ? error.message : String(error));
+    printError(errorMessage(error));
     process.exit(1);
   }
   if (!card) {
@@ -231,7 +232,7 @@ function cardHeartbeat(hippoRoot: string, tenantId: string, args: string[], flag
   try {
     card = heartbeatCard(hippoRoot, tenantId, id, runId);
   } catch (error) {
-    printError(error instanceof Error ? error.message : String(error));
+    printError(errorMessage(error));
     process.exit(1);
   }
   if (!card) {
@@ -253,7 +254,7 @@ function cardBlock(hippoRoot: string, tenantId: string, args: string[], flags: C
   try {
     card = blockCard(hippoRoot, tenantId, id, reason, runId);
   } catch (error) {
-    printError(error instanceof Error ? error.message : String(error));
+    printError(errorMessage(error));
     process.exit(1);
   }
   if (!card) {
@@ -275,7 +276,7 @@ function cardReview(hippoRoot: string, tenantId: string, args: string[], flags: 
   try {
     card = reviewCard(hippoRoot, tenantId, id, runId);
   } catch (error) {
-    printError(error instanceof Error ? error.message : String(error));
+    printError(errorMessage(error));
     process.exit(1);
   }
   if (!card) {
@@ -298,7 +299,7 @@ function cardComplete(hippoRoot: string, tenantId: string, args: string[], flags
   try {
     result = completeCard(hippoRoot, tenantId, id, outcomeRaw, runId);
   } catch (error) {
-    printError(error instanceof Error ? error.message : String(error));
+    printError(errorMessage(error));
     process.exit(1);
   }
   if (!result) {

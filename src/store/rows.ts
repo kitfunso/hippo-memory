@@ -1,6 +1,6 @@
 import { Layer, type MemoryEntry, type ConfidenceLevel, type MemoryKind } from '../memory.js';
-import { log } from '../log.js';
-import type { JsonValue } from '../json.js';
+import { errorMessage, log } from '../log.js';
+import { type JsonValue, isJsonObject } from '../json.js';
 
 export interface IndexEntry {
   id: string;
@@ -223,7 +223,7 @@ export function parseJsonArray(raw: string | null | undefined): string[] {
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed.map((item) => String(item)) : [];
   } catch (err) {
-    log.debug(`store: corrupt JSON array column read as empty: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`store: corrupt JSON array column read as empty: ${errorMessage(err)}`);
     return [];
   }
 }
@@ -245,20 +245,16 @@ export function parseLastTraceId(raw: string | null | undefined): string | null 
   return trimmed;
 }
 
-export function isPlainJsonObject(x: JsonValue): x is Record<string, JsonValue> {
-  return x !== null && typeof x === 'object' && !Array.isArray(x);
-}
-
 function parseJsonObject(raw: string | null | undefined): Record<string, JsonValue> {
   if (!raw) return {};
   try {
     const parsed: JsonValue = JSON.parse(raw);
-    if (isPlainJsonObject(parsed)) {
+    if (isJsonObject(parsed)) {
       return parsed;
     }
     return {};
   } catch (err) {
-    log.debug(`store: corrupt JSON object column read as empty: ${err instanceof Error ? err.message : String(err)}`);
+    log.debug(`store: corrupt JSON object column read as empty: ${errorMessage(err)}`);
     return {};
   }
 }

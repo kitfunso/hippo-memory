@@ -129,7 +129,7 @@ function cmdCompactResume(hippoRoot: string, stdinText: string | undefined, stdi
     if (!suppressOutput) restoreCompactSnapshot(hippoRoot, payloadSessionId);
   } catch (err) {
     // Empty stdout on any store error, never a crashed SessionStart; the reason goes to stderr, which the model never sees.
-    log.warn(`hippo compact-resume: skipped: ${err instanceof Error ? err.message : String(err)}`);
+    log.warn(`hippo compact-resume: skipped: ${errorMessage(err)}`);
   }
   process.exit(0);
 }
@@ -156,7 +156,7 @@ function restoreCompactSnapshot(hippoRoot: string, payloadSessionId: string | nu
       }));
     }
   } catch (err) {
-    log.warn(`hippo compact-resume: trail skipped: ${err instanceof Error ? err.message : String(err)}`);
+    log.warn(`hippo compact-resume: trail skipped: ${errorMessage(err)}`);
   }
   // Printed in one write so the ledger books exactly the text the model is handed.
   const text = compactResumeText(snapshot, events);
@@ -258,7 +258,7 @@ async function sessionEndWork(
   const closeLogFile = stringFlag(flags, 'log-file') ?? null;
   const closeSessionId = stringFlag(flags, 'session-id') ?? null;
   const rereadLog = await bookSessionRereads(hippoRoot, transcriptPath, closeSessionId)
-    .catch((err) => [`re-read count failed: ${err instanceof Error ? err.message : String(err)}`]);
+    .catch((err) => [`re-read count failed: ${errorMessage(err)}`]);
   // Sleep starts the log file afresh, so the lines go in after it; on exit too, in case sleep exits the process.
   const flushRereadLog = (): void => { for (const line of rereadLog.splice(0)) appendSessionEndCloseLog(closeLogFile, line); };
   process.once('exit', flushRereadLog);
@@ -442,7 +442,7 @@ async function bookSessionRereads(
   try {
     read = await readApiCalls(transcriptPath);
   } catch (err) {
-    return [`skip re-read count: cannot read the transcript: ${err instanceof Error ? err.message : String(err)}`];
+    return [`skip re-read count: cannot read the transcript: ${errorMessage(err)}`];
   }
   const roots = new Set([hippoRoot, getGlobalRoot()].filter((root) => isInitialized(root)).map((root) => path.resolve(root)));
   const lines: string[] = [];
@@ -456,7 +456,7 @@ async function bookSessionRereads(
         closeHippoDb(db);
       }
     } catch (err) {
-      lines.push(`re-read count failed: ${err instanceof Error ? err.message : String(err)}`);
+      lines.push(`re-read count failed: ${errorMessage(err)}`);
     }
   }
   const skipped = read.malformed > 0 ? `, ${read.malformed} unparsable transcript lines skipped` : '';

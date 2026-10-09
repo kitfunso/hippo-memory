@@ -8,7 +8,7 @@ import { sqliteStore, type HippoStore } from '../store-port.js';
 import { markSharedStore } from '../config.js';
 import { auditWriteFailureCount } from '../audit.js';
 import { PACKAGE_VERSION } from '../version.js';
-import { errorFields, log } from '../log.js';
+import { errorFields, errorMessage, log } from '../log.js';
 import { runWithRequestId } from '../util/request-scope.js';
 import { createRateLimiter, type RateLimiter } from '../rate-limit.js';
 import { RecallContractError } from '../api.js';
@@ -226,7 +226,7 @@ function createStoreHolder(hippoRoot: string, store: HippoStore): StoreHolder {
       checkpointer = startWalCheckpointer(getHippoDbPath(hippoRoot));
     } catch (err) {
       stopHolding = true;
-      log.warn(`serve: could not hold a store connection; requests still work, only slower: ${err instanceof Error ? err.message : String(err)}`);
+      log.warn(`serve: could not hold a store connection; requests still work, only slower: ${errorMessage(err)}`);
     }
   };
   const afterResponse = (): void => {
@@ -272,7 +272,7 @@ function replyOrClose<E>(req: IncomingMessage, res: ServerResponse, err: E, requ
     replyWithFailure(req, res, err, requestId);
   } catch (replyErr) {
     // A throw here would be an unhandled rejection, which stops the daemon for every caller.
-    log.error(`serve: failure reply not sent, socket closed: ${replyErr instanceof Error ? replyErr.message : String(replyErr)}`);
+    log.error(`serve: failure reply not sent, socket closed: ${errorMessage(replyErr)}`);
     res.destroy();
   }
 }
@@ -317,7 +317,7 @@ function installSignalHandlers(stop: () => Promise<void>): void {
       await stop();
       process.exit(0);
     } catch (err) {
-      log.error(`error during stop: ${err instanceof Error ? err.message : String(err)}`, errorFields(err));
+      log.error(`error during stop: ${errorMessage(err)}`, errorFields(err));
       process.exit(1);
     }
   };

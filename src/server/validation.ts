@@ -1,16 +1,8 @@
 // Request-body and path-segment validators shared by the /v1 route handlers.
 import type { IncomingMessage } from 'node:http';
 import type { Context, RememberOpts } from '../api.js';
-import { HttpError, isJsonObjectRecord, MAX_ID_LEN, readBody } from '../http-util.js';
-import { type JsonValue, isJsonString } from '../json.js';
-
-export function isJsonNumber(value: JsonValue | undefined): value is number {
-  return typeof value === 'number';
-}
-
-export function isJsonBoolean(value: JsonValue | undefined): value is boolean {
-  return typeof value === 'boolean';
-}
+import { HttpError, MAX_ID_LEN, readBody } from '../http-util.js';
+import { type JsonValue, isJsonString, isJsonObject } from '../json.js';
 
 // Runtime membership check for a `ReadonlySet<T>` of string-literal union
 // members, used at every `body` field validated against a VALID_* set below.
@@ -46,7 +38,7 @@ export function parseJsonObjectText(raw: string): Record<string, JsonValue> {
   if (raw.length === 0) return {};
   try {
     const parsed: JsonValue = JSON.parse(raw);
-    if (!isJsonObjectRecord(parsed)) {
+    if (!isJsonObject(parsed)) {
       throw new HttpError(400, 'request body must be a JSON object');
     }
     return parsed;
@@ -72,7 +64,7 @@ export function getStringArray(obj: Record<string, JsonValue>, key: string): str
 export function getCallerProject(body: Record<string, JsonValue>): RememberOpts['project'] {
   const v = body.project;
   if (v === undefined || v === null) return undefined;
-  if (!isJsonObjectRecord(v) || !isJsonString(v.name)) {
+  if (!isJsonObject(v) || !isJsonString(v.name)) {
     throw new HttpError(400, 'project must be an object with a "name" string');
   }
   if (v.aliases === undefined) return { name: v.name };

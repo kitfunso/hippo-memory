@@ -5,13 +5,13 @@ import { createHash } from 'node:crypto';
 import type { Context } from '../api.js';
 import { isSharedStore } from '../config.js';
 import { handleMcpRequest, mcpErrorResponse, type McpContext, type McpRequest } from '../mcp/server.js';
-import { HttpError, isJsonObjectRecord, readBody, sendJson } from '../http-util.js';
+import { HttpError, readBody, sendJson } from '../http-util.js';
 import { assertCallerProject } from '../project-identity.js';
 import type { CallerProject } from '../prompt-hook.js';
 import { buildContextWithAuth, heartbeatVerdict, readAuthHeader, requireAuth } from './auth.js';
 import { clientLimitKey, subscriberKey } from './client-ip.js';
 import type { ResolvedServeOpts } from './types.js';
-import { type JsonValue, isJsonString } from '../json.js';
+import { type JsonValue, isJsonString, isJsonObject } from '../json.js';
 
 /**
  * Build a per-client key for MCP state isolation under HTTP-MCP. Used by
@@ -116,7 +116,7 @@ export async function handleMcpPost(req: IncomingMessage, res: ServerResponse, o
   } catch {
     throw new HttpError(400, 'invalid JSON-RPC body');
   }
-  if (!isJsonObjectRecord(mcpReq) || !isJsonString(mcpReq.method)) {
+  if (!isJsonObject(mcpReq) || !isJsonString(mcpReq.method)) {
     throw new HttpError(400, 'JSON-RPC body must include a method string');
   }
   // SAFETY: validated above as a plain JSON object carrying a string method;

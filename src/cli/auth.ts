@@ -6,6 +6,7 @@ import * as api from '../api.js';
 import { resolveTenantId } from '../tenant.js';
 import { printError } from './output.js';
 import { type CliFlags, resolveAuthRoot, boolFlag, stringFlag } from './shared.js';
+import { errorMessage } from '../log.js';
 
 // ---------------------------------------------------------------------------
 // Auth subcommands
@@ -116,7 +117,7 @@ function cmdAuthRevoke(hippoRoot: string, keyId: string, flags: CliFlags): void 
   try {
     revokedAt = api.authRevoke(ctx, keyId).revokedAt;
   } catch (err) {
-    printError(`Error: ${err instanceof Error ? err.message : String(err)}`);
+    printError(`Error: ${errorMessage(err)}`);
     process.exit(1);
   }
   if (flags['json']) {
@@ -133,7 +134,7 @@ function cmdAuthScopeGrant(hippoRoot: string, keyId: string, scope: string, gran
     if (grant) api.authGrant(ctx, keyId, scope);
     else api.authUngrant(ctx, keyId, scope);
   } catch (err) {
-    printError(`Error: ${err instanceof Error ? err.message : String(err)}`);
+    printError(`Error: ${errorMessage(err)}`);
     process.exit(1);
   }
   if (flags['json']) {

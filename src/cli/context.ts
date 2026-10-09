@@ -42,6 +42,7 @@ import {
   inPilotHoldout,
   flagIsTrue,
 } from './shared.js';
+import { errorMessage } from '../log.js';
 
 export async function cmdContext(
   hippoRoot: string,
@@ -77,7 +78,7 @@ function startDeliveryRecorder(
     });
   } catch (error) {
     // The hook's one-line stderr contract pins this exact text, so it bypasses the leveled logger.
-    printError(`[hippo] delivery ledger skipped:${error instanceof Error ? error.message : String(error)}`);
+    printError(`[hippo] delivery ledger skipped:${errorMessage(error)}`);
     return null;
   }
 }

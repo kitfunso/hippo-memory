@@ -4,7 +4,7 @@
   "src/card.ts": 1,
   "src/dedupe.ts": 9,
   "src/importers/core.ts": 11,
-  "src/importers/markdown-parse.ts": 6,
+  "src/importers/markdown-parse.ts": 4,
   "src/importers/markdown.ts": 1,
   "src/importers/vault.ts": 15,
   "src/invalidation.ts": 3,

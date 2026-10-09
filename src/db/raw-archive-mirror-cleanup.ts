@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { DatabaseSyncLike } from '../db.js';
-import { log } from '../log.js';
+import { errorMessage, log } from '../log.js';
 
 const LAYERS = ['episodic', 'buffer', 'semantic'] as const;
 const MAX_WARN_LOGS = 5;
@@ -49,7 +49,7 @@ export function cleanupArchivedMirrors(hippoRoot: string, db: DatabaseSyncLike):
         allOk = false;
         if (warnCount < MAX_WARN_LOGS) {
           log.warn(
-            `cleanupArchivedMirrors: unlink failed for ${filePath} (will retry on next DB open): ${err instanceof Error ? err.message : String(err)}`,
+            `cleanupArchivedMirrors: unlink failed for ${filePath} (will retry on next DB open): ${errorMessage(err)}`,
           );
           warnCount += 1;
         }

@@ -12,6 +12,7 @@ import { resolveTenantId } from '../tenant.js';
 import { refineStore } from '../refine-llm.js';
 import { printError } from './output.js';
 import { type CliFlags, requireInit, resolveAuthRoot, boolFlag } from './shared.js';
+import { errorMessage } from '../log.js';
 
 export async function cmdRefine(
   hippoRoot: string,
@@ -146,7 +147,7 @@ export async function cmdEmbed(
   try {
     count = await embedAll(root, undefined, provider);
   } catch (err) {
-    printError(`Embedding failed: ${err instanceof Error ? err.message : String(err)}`);
+    printError(`Embedding failed: ${errorMessage(err)}`);
     const partial = loadEmbeddingIndex(root);
     printError(
       `Partial progress saved: ${Object.keys(partial).length} embeddings on disk. Re-run \`hippo embed\` to resume.`,
@@ -199,7 +200,7 @@ function readyEmbedProvider(root: string, given?: EmbeddingProvider): EmbeddingP
     try {
       return resolveEmbeddingProvider(root);
     } catch (err) {
-      printError(err instanceof Error ? err.message : String(err));
+      printError(errorMessage(err));
       return null;
     }
   })();

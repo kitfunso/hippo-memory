@@ -4,7 +4,7 @@ import { Layer, type MemoryEntry } from '../memory.js';
 import { dumpFrontmatter } from '../yaml.js';
 import { openHippoDb, getMeta } from '../db.js';
 import { oncePerStore } from '../db/connect.js';
-import { log } from '../log.js';
+import { errorMessage, log } from '../log.js';
 import {
   type TaskSnapshot,
   type SessionEvent,
@@ -225,7 +225,7 @@ export function purgeMirrorBestEffort(
       removeEntryMirrors(hippoRoot, id);
       return true;
     } catch (secondErr) {
-      const msg = secondErr instanceof Error ? secondErr.message : String(secondErr);
+      const msg = errorMessage(secondErr);
       if (isRaw) {
         log.error(
           `${logPrefix}: mirror cleanup failed for ${id} (will retry via reaper on next open): ${msg}`,
@@ -334,7 +334,7 @@ export function mirrorBestEffort(what: string, write: () => void): void {
   try {
     write();
   } catch (err) {
-    log.warn(`${what} not refreshed (${err instanceof Error ? err.message : String(err)}); the database write succeeded`);
+    log.warn(`${what} not refreshed (${errorMessage(err)}); the database write succeeded`);
   }
 }
 

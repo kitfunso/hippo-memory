@@ -1,6 +1,6 @@
 // Transport-agnostic request handling: tool dispatch table, tool execution and the JSON-RPC method switch.
 
-import { log } from '../log.js';
+import { errorMessage, log } from '../log.js';
 import { STORE_NOT_PORTED_MESSAGE } from '../http-util.js';
 import { getGlobalRoot, initGlobal } from '../shared.js';
 import { loadConfig } from '../config.js';
@@ -11,13 +11,13 @@ import { estimateTokens, type TokenSurface } from '../token-ledger.js';
 import { PACKAGE_VERSION } from '../version.js';
 import { validateToolArgs } from './tool-args.js';
 import { RecallRequestError } from '../api/recall-request.js';
-import { findHippoRoot, isJsonObjectRecord, type McpContext, type McpRequest, type McpResponse, type ToolHandler } from './protocol.js';
+import { findHippoRoot, type McpContext, type McpRequest, type McpResponse, type ToolHandler } from './protocol.js';
 import { TOOLS, TOOLS_BY_NAME, ARGS_CHECKED_BY_API } from './tools.js';
 import { runRecallTool, runAssembleTool, runDrillTool, runContextTool } from './recall-tools.js';
 import { runRememberTool, runOutcomeTool, runLearnTool } from './memory-tools.js';
 import { runPredictBaserateTool, runStatusTool, runConflictsTool, runResolveTool, runShareTool, runPeersTool } from './admin-tools.js';
 import { sharedStoreRefusal } from './shared-gate.js';
-import { type JsonValue, isJsonString } from '../json.js';
+import { type JsonValue, isJsonString, isJsonObject } from '../json.js';
 
 /**
  * Zero-install first run (`npx -y hippo-memory mcp` with no store anywhere):
@@ -58,7 +58,7 @@ export async function recordMcpTokens(toolName: string, output: string, ctx?: Mc
     });
   } catch (err) {
     rethrowIfSqliteBlocked(err);
-    log.warnThenDebug('mcp-token-ledger', `token ledger write failed; the tool reply is unaffected: ${err instanceof Error ? err.message : String(err)}`);
+    log.warnThenDebug('mcp-token-ledger', `token ledger write failed; the tool reply is unaffected: ${errorMessage(err)}`);
   }
 }
 
@@ -180,10 +180,10 @@ export async function handleMcpRequest(
       const refusal = sharedStoreRefusal(toolName, ctx);
       if (refusal !== undefined) return { jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: refusal }], isError: true } };
       const argumentsValue = params?.arguments;
-      if (argumentsValue !== undefined && argumentsValue !== null && !isJsonObjectRecord(argumentsValue)) {
+      if (argumentsValue !== undefined && argumentsValue !== null && !isJsonObject(argumentsValue)) {
         return { jsonrpc: '2.0', id, error: { code: -32602, message: `${toolName}: arguments must be an object` } };
       }
-      const toolArgs = isJsonObjectRecord(argumentsValue) ? argumentsValue : {};
+      const toolArgs = isJsonObject(argumentsValue) ? argumentsValue : {};
       const problems = validateToolArgs(tool.inputSchema, toolArgs, ARGS_CHECKED_BY_API.get(toolName));
       if (problems.length > 0) return invalidArgs(id, toolName, problems);
       let output: string;

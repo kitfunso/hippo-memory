@@ -31,12 +31,12 @@ import { RejectedValueError } from './rejection.js';
 import { embedMemory, embedAll } from './embeddings.js';
 import { duplicateKey, storedTextKeys } from './same-text.js';
 import { isReusable } from './memory-quality.js';
-import { log } from './log.js';
+import { errorMessage, log } from './log.js';
 import type { DatabaseSyncLike } from './db.js';
 
 // The rows are already copied; a failed background embed only delays vectors, so it warns instead of throwing.
 function logEmbedAllFailure<E>(caller: string, err: E): void {
-  log.warn(`${caller}: background embed failed (${err instanceof Error ? err.message : String(err)}); run 'hippo embed' to backfill`);
+  log.warn(`${caller}: background embed failed (${errorMessage(err)}); run 'hippo embed' to backfill`);
 }
 
 /**

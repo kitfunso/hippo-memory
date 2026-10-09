@@ -2,10 +2,10 @@
 import { closeDecision, type Decision, type DecisionStatus, loadDecisionById, loadDecisions, saveDecision, VALID_DECISION_STATES } from '../../decisions.js';
 import { HttpError, sendJson } from '../../http-util.js';
 import { NotFoundError } from '../../api-errors.js';
-import type { JsonValue } from '../../json.js';
+import { type JsonValue, isJsonNumber } from '../../json.js';
 import { buildContextWithAuth } from '../auth.js';
 import type { RouteRequest } from '../types.js';
-import { isJsonNumber, parseJsonBody } from '../validation.js';
+import { parseJsonBody } from '../validation.js';
 import { closeRoute, getRoute, listRoute, type ObjectRouteConfig, optionalString, requiredString, type RequiredStringRule } from './object-routes.js';
 
 const decisionRoutes: ObjectRouteConfig<Decision, DecisionStatus> = {

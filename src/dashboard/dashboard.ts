@@ -11,7 +11,7 @@ import { listCards } from '../store-cards.js';
 import { resolveTenantId } from '../tenant.js';
 import { loadCardDetail } from '../card-detail.js';
 import { bodyDeadlineMs, BodyTimeoutError, closeAfterReply, isCrossSite, LOOPBACK_HOST_HEADER } from '../http-util.js';
-import { log } from '../log.js';
+import { errorMessage, log } from '../log.js';
 import { createSnapshotService, isLiveMemory, type SnapshotService } from './dashboard-snapshot.js';
 import {
   buildMemoryDetail, buildMemoryPage, buildOverview, buildProjectDetail, buildSearch,
@@ -346,7 +346,7 @@ export function serveDashboard(
       const clientFault = err instanceof ParamError || err instanceof URIError || err instanceof BodyTimeoutError;
       // A cut-short response is logged even for a client fault; a bare 400 is not.
       if (res.headersSent || !clientFault) {
-        log.error('dashboard request failed', { error: err instanceof Error ? err.message : String(err), path: req.url });
+        log.error('dashboard request failed', { error: errorMessage(err), path: req.url });
       }
       if (res.headersSent) {
         res.end();

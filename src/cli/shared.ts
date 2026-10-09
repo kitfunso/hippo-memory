@@ -113,7 +113,7 @@ export function runChurnStaleForRepo(hippoRoot: string, dryRun: boolean): { root
     try {
       return { root, result: detectChurnStale(root, repoRoot, { tenantId, projectName, legacyName, dryRun }) };
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = errorMessage(err);
       return { root, result: { checked: 0, marked: 0, alreadyMarked: 0, skippedPinned: [], dryRun, preview: [], error: message } };
     }
   });
@@ -417,7 +417,7 @@ export function logSessionEndImport(logFile: string | null, transcriptPath: stri
     if (line !== null) appendSessionEndCloseLog(logFile, line);
     for (const warning of report.warnings) appendSessionEndCloseLog(logFile, `agent memories: ${warning}`);
   } catch (err) {
-    appendSessionEndCloseLog(logFile, `agent memory import failed: ${err instanceof Error ? err.message : String(err)}`);
+    appendSessionEndCloseLog(logFile, `agent memory import failed: ${errorMessage(err)}`);
   }
 }
 

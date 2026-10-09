@@ -6,6 +6,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { printError } from './output.js';
 import { stringFlagOrExit, requireInit, type CommandContext, stringFlag } from './shared.js';
+import { errorMessage } from '../log.js';
 
 export async function handleDashboard({ hippoRoot, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
@@ -41,7 +42,7 @@ function readTlsFiles(flags: CommandContext['flags']): { cert: Buffer; key: Buff
   try {
     return { cert: fs.readFileSync(certPath), key: fs.readFileSync(keyPath) };
   } catch (err) {
-    printError(`hippo serve: cannot read the TLS files: ${err instanceof Error ? err.message : String(err)}`);
+    printError(`hippo serve: cannot read the TLS files: ${errorMessage(err)}`);
     process.exit(1);
   }
 }

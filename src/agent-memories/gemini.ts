@@ -2,7 +2,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { isStringValue } from '../capture-contract.js';
-import { isJsonObject } from '../hooks/shared.js';
 import type { JsonObject } from '../working-memory.js';
 import { readTextFile, splitFrontmatter } from './files.js';
 import { markdownNotes, readFolderStore, type FolderRules } from './folder-store.js';
@@ -10,7 +9,8 @@ import { gitLayout } from './git.js';
 import { textItemKeys } from './keys.js';
 import { splitMarkdownItems } from './markdown.js';
 import type { Adapter, AdapterContext, Container, Listing, Scope } from './types.js';
-import type { JsonValue } from '../json.js';
+import { type JsonValue, isJsonObjectLiteral } from '../json.js';
+import { errorMessage } from '../log.js';
 
 const SECTION = 'gemini added memories';
 
@@ -61,7 +61,7 @@ function projectSlug(ctx: AdapterContext, projectRoot: string, home: string, war
   try {
     projects = parseIndex(read.text);
   } catch (err) {
-    warnings.push(`${index}: ${err instanceof Error ? err.message : String(err)}`);
+    warnings.push(`${index}: ${errorMessage(err)}`);
     return null;
   }
   // The git top level is only asked for when the folder itself has no entry, since it spawns git.
@@ -76,8 +76,8 @@ function projectSlug(ctx: AdapterContext, projectRoot: string, home: string, war
 function parseIndex(text: string): JsonObject {
   // SAFETY: JSON.parse yields JSON; the object checks below decide what is used.
   const data = JSON.parse(text) as JsonValue;
-  const projects = isJsonObject(data) ? data.projects : undefined;
-  if (!isJsonObject(projects)) throw new Error('expected { "projects": { "<absolute path>": "<slug>" } }');
+  const projects = isJsonObjectLiteral(data) ? data.projects : undefined;
+  if (!isJsonObjectLiteral(projects)) throw new Error('expected { "projects": { "<absolute path>": "<slug>" } }');
   return projects;
 }
 

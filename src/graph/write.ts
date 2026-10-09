@@ -14,7 +14,7 @@
 
 import { openHippoDb, closeHippoDb, withWriteScope } from '../db.js';
 import { assertTenantId } from '../tenant.js';
-import { log } from '../log.js';
+import { errorMessage, log } from '../log.js';
 import { clock } from '../write-budget.js';
 import { type GraphTxDb, type SourceKind, type SourceObjectType, type SourceObjectRef, GRAPH_ENTITY_TYPES, GRAPH_RELATION_TYPES, MAX_ENTITY_NAME_LEN, type Entity, type Relation, type GraphQueueItem, type InsertEntityOpts, type InsertRelationOpts, type UpdateEntityOpts } from './types.js';
 import { type EntityRow, type RelationRow, type QueueRow, rowToEntity, rowToRelation, rowToQueueItem, ENTITY_COLS, RELATION_COLS, QUEUE_COLS, type DbLike } from './rows.js';
@@ -427,7 +427,7 @@ export function markGraphDirty(hippoRoot: string, tenantId: string, memoryId: st
     // Logged (warn) so a SYSTEMATIC enqueue failure surfaces to operators, but
     // swallowed so the already-committed object write is never rolled back.
     log.warn(
-      `markGraphDirty: enqueue failed for tenant=${tenantId} memory=${memoryId}: ${err instanceof Error ? err.message : String(err)}`,
+      `markGraphDirty: enqueue failed for tenant=${tenantId} memory=${memoryId}: ${errorMessage(err)}`,
     );
   }
 }
@@ -465,7 +465,7 @@ export function removeGraphEntitiesForObject(
     }
   } catch (err) {
     log.warn(
-      `removeGraphEntitiesForObject: failed for tenant=${tenantId} ${sourceObjectType}#${sourceObjectId}: ${err instanceof Error ? err.message : String(err)}`,
+      `removeGraphEntitiesForObject: failed for tenant=${tenantId} ${sourceObjectType}#${sourceObjectId}: ${errorMessage(err)}`,
     );
   }
 }

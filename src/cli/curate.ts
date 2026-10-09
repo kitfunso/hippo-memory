@@ -25,6 +25,7 @@ import {
   flagIsTrue,
   stringFlag,
 } from './shared.js';
+import { errorMessage } from '../log.js';
 
 export function cmdOutcome(
   hippoRoot: string,
@@ -93,7 +94,7 @@ function cmdForget(
       api.archiveRaw(ctx, id, reason);
       console.log(`Archived ${id}`);
     } catch (err) {
-      printError(`Could not archive ${id}: ${err instanceof Error ? err.message : String(err)}`);
+      printError(`Could not archive ${id}: ${errorMessage(err)}`);
       process.exit(1);
     }
     return;
@@ -103,7 +104,7 @@ function cmdForget(
     api.forget(ctx, id);
     console.log(`Forgot ${id}`);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = errorMessage(err);
     if (/append-only/i.test(msg)) {
       // The delete was refused by the append-only trigger — this is a raw
       // memory, not a missing one. Point the user at the archive path.
@@ -301,7 +302,7 @@ export function cmdReject(
       console.log('  No live rows matched (pre-emptive tombstone).');
     }
   } catch (err) {
-    printError(`Could not reject: ${err instanceof Error ? err.message : String(err)}`);
+    printError(`Could not reject: ${errorMessage(err)}`);
     process.exit(1);
   }
 }
@@ -402,7 +403,7 @@ export function cmdDormant(
       if (err instanceof RejectedValueError) {
         printError(`Cannot restore ${id}: its value was rejected (${err.reason ?? 'no reason given'}). Run \`hippo unreject\` first to allow it.`);
       } else {
-        printError(`Could not ${sub} ${id}: ${err instanceof Error ? err.message : String(err)}`);
+        printError(`Could not ${sub} ${id}: ${errorMessage(err)}`);
       }
       process.exit(1);
     }
@@ -468,7 +469,7 @@ export function cmdQuarantine(
         console.log(`Rejected ${id}: stays quarantined.`);
       }
     } catch (err) {
-      printError(`Could not ${sub} ${id}: ${err instanceof Error ? err.message : String(err)}`);
+      printError(`Could not ${sub} ${id}: ${errorMessage(err)}`);
       process.exit(1);
     }
     return;
@@ -527,7 +528,7 @@ export async function handleForget({ hippoRoot, args, flags }: CommandContext): 
       // A server that died after the health probe is the caller's transport
       // fallback to handle, not an error to report to the user.
       if (client.classifyTransportFailure(err) !== 'none') throw err;
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = errorMessage(err);
       printError(archive ? `Could not archive ${id}: ${msg}` : msg);
       process.exit(1);
     }

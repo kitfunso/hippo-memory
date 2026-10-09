@@ -5,6 +5,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { DAY_MS } from './util/time.js';
+import { errorMessage } from './log.js';
 
 // A `git log --name-status` dump can run to tens of MB; default 1MB pipe would truncate it.
 const GIT_MAX_BUFFER = 64 * 1024 * 1024;
@@ -18,7 +19,7 @@ function runGit(args: string[], repoRoot: string): string {
   try {
     return execFileSync('git', args, { cwd: repoRoot, encoding: 'utf8', maxBuffer: GIT_MAX_BUFFER, timeout: GIT_TIMEOUT_MS, windowsHide: true });
   } catch (err) {
-    throw new GitReadError(`git ${args.join(' ')} failed: ${err instanceof Error ? err.message : String(err)}`);
+    throw new GitReadError(`git ${args.join(' ')} failed: ${errorMessage(err)}`);
   }
 }
 
@@ -30,7 +31,7 @@ function runGitGrepOrEmpty(args: string[], repoRoot: string): string {
     // SAFETY: execFileSync attaches `status` to the thrown Error on a non-zero child exit.
     const status = (err as { status?: number }).status;
     if (status === 1) return '';
-    throw new GitReadError(`git ${args.join(' ')} failed: ${err instanceof Error ? err.message : String(err)}`);
+    throw new GitReadError(`git ${args.join(' ')} failed: ${errorMessage(err)}`);
   }
 }
 

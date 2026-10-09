@@ -21,7 +21,7 @@ import { dropHeldCopies } from '../same-text.js';
 import { BadRequestError } from '../api-errors.js';
 import { isSharedStore, loadConfig } from '../config.js';
 import { rethrowIfSqliteBlocked } from '../db.js';
-import { log } from '../log.js';
+import { errorMessage, log } from '../log.js';
 import { resolveProjectIdentity, classifyOriginProject, isGlobalStoreRoot, projectId, projectNames, type ProjectRef } from '../project-identity.js';
 import { promptTokens } from '../prompt-recall.js';
 import { detectSecret } from '../secret-detect.js';
@@ -473,7 +473,7 @@ async function traceEmptyContext(ctx: Context, opts: ContextOpts, plan: ContextP
     await onStore(ctx, (port) => port.finishRecall({ goalLog: [], audit: [], trace }));
   } catch (error) {
     rethrowIfSqliteBlocked(error);
-    log.error(`recall trace write failed: ${error instanceof Error ? error.message : String(error)}`);
+    log.error(`recall trace write failed: ${errorMessage(error)}`);
   }
 }
 

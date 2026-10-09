@@ -408,7 +408,7 @@ export function handleSupportBundle({ flags }: CommandContext): void {
     if (err instanceof Error && 'code' in err && err.code === 'EEXIST') {
       printError(`${file} already exists; pass --out to choose another file. Nothing was written.`);
     } else {
-      printError(err instanceof Error ? err.message : String(err));
+      printError(errorMessage(err));
     }
     process.exit(1);
   }

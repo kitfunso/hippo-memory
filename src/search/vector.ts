@@ -3,7 +3,7 @@ import { cosineSimilarity, indexedModel, indexNeedsRebuild } from '../embeddings
 import type { VectorCandidateSpec } from '../store/search-rows.js';
 import { resolveEmbeddingProvider } from '../embedding-provider.js';
 import { rethrowIfSqliteBlocked } from '../db.js';
-import { log } from '../log.js';
+import { errorMessage, log } from '../log.js';
 import { requireGroup, sqliteStore, type HippoStore, type VectorReads } from '../store-port.js';
 import { redactSecretsStrict } from '../secret-detect.js';
 import { currentEntries, type CurrentnessOptions } from './as-of.js';
@@ -61,7 +61,7 @@ export async function resolveVectorArm(query: string, entries: MemoryEntry[], op
     await fillVectorArm(arm, query, options.hippoRoot, options);
   } catch (err) {
     rethrowIfSqliteBlocked(err);
-    warnBm25Fallback('error', err instanceof Error ? err.message : String(err));
+    warnBm25Fallback('error', errorMessage(err));
   }
   return arm;
 }

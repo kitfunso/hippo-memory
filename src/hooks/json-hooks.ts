@@ -37,8 +37,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { JsonObject } from '../working-memory.js';
-import { isJsonObject, type JsonHookTarget, HIPPO_SLEEP_MARKER, HIPPO_LAST_SLEEP_MARKER, HIPPO_CAPTURE_MARKER, HIPPO_SESSION_END_MARKER, HIPPO_PINNED_INJECT_MARKER, HIPPO_PINNED_INJECT_COMMAND, HIPPO_PRE_COMPACT_MARKER, HIPPO_COMPACT_RESUME_MARKER, HIPPO_CAPTURE_ERROR_MARKER, HIPPO_POST_COMPACT_MARKER, homeDir, claudeConfigDir, codexHomeDir, copilotHooksFile, defaultPreCompactLogPath } from './shared.js';
-import { type JsonValue, isJsonString, readJsonFile } from '../json.js';
+import { type JsonHookTarget, HIPPO_SLEEP_MARKER, HIPPO_LAST_SLEEP_MARKER, HIPPO_CAPTURE_MARKER, HIPPO_SESSION_END_MARKER, HIPPO_PINNED_INJECT_MARKER, HIPPO_PINNED_INJECT_COMMAND, HIPPO_PRE_COMPACT_MARKER, HIPPO_COMPACT_RESUME_MARKER, HIPPO_CAPTURE_ERROR_MARKER, HIPPO_POST_COMPACT_MARKER, homeDir, claudeConfigDir, codexHomeDir, copilotHooksFile, defaultPreCompactLogPath } from './shared.js';
+import { type JsonValue, isJsonString, readJsonFile, isJsonObjectLiteral } from '../json.js';
 import { escapeRegex } from '../escape.js';
 import { writeFileAtomic } from '../util/atomic-write.js';
 
@@ -108,14 +108,14 @@ function isHippoCommand(command: string, marker: string): boolean {
 const runsHippo = (...markers: string[]) => (command: string): boolean => markers.some((m) => isHippoCommand(command, m));
 
 function handlerCommand(handler: JsonValue | undefined): string | null {
-  return isJsonObject(handler) && isJsonString(handler.command) ? handler.command : null;
+  return isJsonObjectLiteral(handler) && isJsonString(handler.command) ? handler.command : null;
 }
 
 /** `groups` minus the handlers `isOurs` picks; a group goes only once it has no handler left. Null when no handler matched. */
 function withoutHandlers(groups: JsonValue[], isOurs: (command: string) => boolean): JsonValue[] | null {
   let removed = false;
   const kept = groups.flatMap((group): JsonValue[] => {
-    if (!isJsonObject(group) || !Array.isArray(group.hooks)) return [group];
+    if (!isJsonObjectLiteral(group) || !Array.isArray(group.hooks)) return [group];
     const handlers = group.hooks.filter((h) => {
       const command = handlerCommand(h);
       return command === null || !isOurs(command);
@@ -140,7 +140,7 @@ function stripHandlers(hooks: JsonObject, event: string, isOurs: (command: strin
 
 /** Every command string in `groups`; a group or handler of an unexpected shape adds none. */
 function handlerCommands(groups: JsonValue[]): string[] {
-  return groups.flatMap((group) => (isJsonObject(group) && Array.isArray(group.hooks) ? group.hooks.flatMap((h) => handlerCommand(h) ?? []) : []));
+  return groups.flatMap((group) => (isJsonObjectLiteral(group) && Array.isArray(group.hooks) ? group.hooks.flatMap((h) => handlerCommand(h) ?? []) : []));
 }
 
 /** The loose "already installed?" test, on purpose weaker than isHippoCommand: a launcher or env prefix still counts, and a false hit only skips an append. */
@@ -159,11 +159,11 @@ function migratePinnedInjectRecentCommands(hookArray: JsonValue | undefined): bo
   if (!Array.isArray(hookArray)) return false;
   let changed = false;
   for (const entry of hookArray) {
-    if (!isJsonObject(entry)) continue;
+    if (!isJsonObjectLiteral(entry)) continue;
     const innerHooks = entry.hooks;
     if (!Array.isArray(innerHooks)) continue;
     for (const hook of innerHooks) {
-      if (!isJsonObject(hook)) continue;
+      if (!isJsonObjectLiteral(hook)) continue;
       if (!isJsonString(hook.command)) continue;
       const next = addIncludeRecentToPinnedCommand(hook.command);
       if (next !== hook.command) {
@@ -203,14 +203,14 @@ function codexCommandHook(command: string, timeout: number): JsonObject {
 function ensureHooksObject(settings: JsonObject, events: readonly string[]): JsonObject | null {
   if (settings.hooks === undefined) settings.hooks = {};
   const hooks = settings.hooks;
-  if (!isJsonObject(hooks) || events.some((e) => hooks[e] !== undefined && !Array.isArray(hooks[e]))) return null;
+  if (!isJsonObjectLiteral(hooks) || events.some((e) => hooks[e] !== undefined && !Array.isArray(hooks[e]))) return null;
   return hooks;
 }
 
 /** Codex keys trust to each hook's position and hash and re-asks for a changed one, so hippo only appends and never edits an entry. */
 function installCodexHooks(settingsPath: string, settings: JsonValue): InstallResult {
   const result = nothingInstalled('codex', settingsPath);
-  if (!isJsonObject(settings)) return { ...result, invalidJson: true };
+  if (!isJsonObjectLiteral(settings)) return { ...result, invalidJson: true };
   const hooks = ensureHooksObject(settings, ['UserPromptSubmit', 'SessionStart']);
   if (hooks === null) return { ...result, invalidJson: true };
   const append = (event: string, marker: string, group: JsonObject): boolean => {
@@ -255,7 +255,7 @@ function copilotHooksTable(): JsonObject {
 /** The events in hippo's Copilot hooks file, in file order, for setup to name. */
 export function copilotHookEvents(): string[] {
   const hooks = copilotHooksTable().hooks;
-  return isJsonObject(hooks) ? Object.keys(hooks) : [];
+  return isJsonObjectLiteral(hooks) ? Object.keys(hooks) : [];
 }
 
 /** Hippo owns this whole file, so install writes the full table and a second install changes no byte. */
@@ -284,7 +284,7 @@ export function installJsonHooks(target: JsonHookTarget): InstallResult {
     }
   }
   if (target === 'codex') return installCodexHooks(settingsPath, settings);
-  if (!isJsonObject(settings)) return { ...nothingInstalled(target, settingsPath), invalidJson: true };
+  if (!isJsonObjectLiteral(settings)) return { ...nothingInstalled(target, settingsPath), invalidJson: true };
   return installClaudeCodeHooks(settingsPath, settings, logFile);
 }
 
@@ -452,7 +452,7 @@ export function uninstallJsonHooks(target: JsonHookTarget): boolean {
     // Never rewrite a settings file we cannot parse; report nothing uninstalled.
     return false;
   }
-  if (!isJsonObject(settings) || !isJsonObject(settings.hooks)) return false;
+  if (!isJsonObjectLiteral(settings) || !isJsonObjectLiteral(settings.hooks)) return false;
   const hooks = settings.hooks;
   const changed = target === 'codex' ? uninstallCodexHooks(hooks) : uninstallClaudeCodeHooks(hooks);
   if (target === 'claude-code') warnKeptHippoHandlers(settingsPath, hooks);
@@ -468,7 +468,7 @@ export function checkUninstallable(target: JsonHookTarget): Pick<InstallResult, 
   if (!fs.existsSync(settingsPath)) return { settingsPath, invalidJson: false };
   try {
     const settings = readJsonFile(settingsPath);
-    return { settingsPath, invalidJson: !isJsonObject(settings) || (settings.hooks !== undefined && !isJsonObject(settings.hooks)) };
+    return { settingsPath, invalidJson: !isJsonObjectLiteral(settings) || (settings.hooks !== undefined && !isJsonObjectLiteral(settings.hooks)) };
   } catch {
     return { settingsPath, invalidJson: true };
   }

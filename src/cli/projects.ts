@@ -7,6 +7,7 @@ import { listProjects, mergeProjects, repairProjects, type ProjectSummary } from
 import { resolveTenantId } from '../tenant.js';
 import { type CliFlags, resolveAuthRoot, flagIsTrue } from './shared.js';
 import { printError } from './output.js';
+import { errorMessage } from '../log.js';
 
 
 /** Old per-worktree project names of the repo at cwd, mapped to the repo's main checkout name; empty outside git. */
@@ -87,7 +88,7 @@ export function cmdProjects(hippoRoot: string, args: string[], flags: CliFlags):
     printError('Usage: hippo projects [list] [--json] | merge <from> <into> [--apply] | repair [--apply]  [--global]');
     process.exitCode = 1;
   } catch (err) {
-    printError(err instanceof Error ? err.message : String(err));
+    printError(errorMessage(err));
     process.exitCode = 1;
   } finally {
     closeHippoDb(db);

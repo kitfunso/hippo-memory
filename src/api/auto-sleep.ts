@@ -1,6 +1,6 @@
 // When a write starts a background sleep; the MCP remember tool and the session-close hook share it.
 
-import { log } from '../log.js';
+import { errorMessage, log } from '../log.js';
 import { countCreatedSinceLastSleep } from '../store/index-and-stats.js';
 import { consolidate } from '../consolidate/sleep.js';
 import { outsideRequestStores, runWithRequestStores, scopedBusyWait } from '../db.js';
@@ -38,7 +38,7 @@ export function startAutoSleepIfDue(hippoRoot: string, tenantId: string, config:
   const busyWaitMs = scopedBusyWait();
   outsideRequestStores(() => runWithRequestStores(() => consolidate(hippoRoot), { busyWaitMs }))
     .catch((err) => {
-      log.error(`auto-sleep consolidate failed (tenant ${tenantId}): ${err instanceof Error ? err.message : String(err)}`);
+      log.error(`auto-sleep consolidate failed (tenant ${tenantId}): ${errorMessage(err)}`);
     })
     .finally(() => autoSleepInFlight.delete(hippoRoot));
 }
