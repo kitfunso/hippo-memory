@@ -1,0 +1,6 @@
+name: hippo-memory CodeQL config
+paths-ignore:
+  - tests
+  - benchmarks
+  - website
+  - dist

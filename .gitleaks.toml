@@ -1,0 +1,46 @@
+title = "hippo-memory gitleaks config"
+
+[extend]
+useDefault = true
+
+# Each entry names one test file and the one rule that fires on its fake fixture.
+
+[[allowlists]]
+description = "capture-session test: 32-char placeholder token"
+paths = ['''^tests/capture-session-texts\.test\.ts$''']
+targetRules = ["generic-api-key"]
+
+[[allowlists]]
+description = "secret-shapes helper: fake password_policy_id fixture line"
+paths = ['''^tests/_helpers/secret-shapes\.ts$''']
+targetRules = ["generic-api-key"]
+
+[[allowlists]]
+description = "share-scrub test: AWS documentation example key and a synthetic JWT"
+paths = ['''^tests/share-scrub\.test\.ts$''']
+targetRules = ["generic-api-key", "jwt"]
+
+[[allowlists]]
+description = "dormant-memories test: fake api_key value that the scrubber must flag"
+paths = ['''^tests/dormant-memories\.test\.ts$''']
+targetRules = ["generic-api-key"]
+
+[[allowlists]]
+description = "agent-memories-sync test: synthetic JWT in a note body"
+paths = ['''^tests/agent-memories-sync-edges\.test\.ts$''']
+targetRules = ["jwt"]
+
+[[allowlists]]
+description = "pre-compact e2e test: dummy RSA private key header with no key body"
+paths = ['''^tests/pre-compact-e2e\.test\.ts$''']
+targetRules = ["private-key"]
+
+[[allowlists]]
+description = "secret-detect test: made-up provider tokens fed to the detector"
+paths = ['''^tests/secret-detect\.test\.ts$''']
+targetRules = ["generic-api-key", "stripe-access-token"]
+
+[[allowlists]]
+description = "server-hardening test: made-up Slack signing secret"
+paths = ['''^tests/v039-server-hardening\.test\.ts$''']
+targetRules = ["generic-api-key"]
