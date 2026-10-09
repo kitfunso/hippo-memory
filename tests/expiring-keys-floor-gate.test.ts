@@ -16,7 +16,7 @@ function git(cwd: string, ...args: string[]): void {
 
 function writeTree(root: string, version: string, floors: Floors, schema: number): void {
   writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'fixture', version }));
-  writeFileSync(join(root, 'src', 'util/version.ts'), `export const PACKAGE_VERSION = '${version}';\nexport const EXPIRING_KEYS_MIN_BINARY = '${floors.expiring}';\nexport const TASK_OWNER_MIN_BINARY = '${floors.owner}';\n`);
+  writeFileSync(join(root, 'src', 'util', 'version.ts'), `export const PACKAGE_VERSION = '${version}';\nexport const EXPIRING_KEYS_MIN_BINARY = '${floors.expiring}';\nexport const TASK_OWNER_MIN_BINARY = '${floors.owner}';\n`);
   const list = Array.from({ length: schema - 50 }, (_, i) => `v${51 + i}`).join(', ');
   writeFileSync(join(root, 'src', 'db', 'migrations', 'index.ts'), `export const MIGRATIONS = [${list}];\n`);
 }
@@ -26,6 +26,7 @@ function makeRepo(version: string, floors: Floors, tag?: { name: string; schema:
   const root = mkdtempSync(join(tmpdir(), 'hippo-floor-gate-'));
   roots.push(root);
   mkdirSync(join(root, 'src', 'db', 'migrations'), { recursive: true });
+  mkdirSync(join(root, 'src', 'util'));
   git(root, 'init', '-q');
   if (tag) {
     writeTree(root, tag.name, floors, tag.schema);

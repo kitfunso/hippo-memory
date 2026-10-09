@@ -52,7 +52,7 @@
     },
     {
       "id": "trap_6_constants_mismatch",
-      "file": "src/core/config.ts",
+      "file": "src/config.ts",
       "line": 22,
       "description": "RISK_PER_TRADE=0.02 in TypeScript but Python backend has RISK_PER_TRADE=0.015. Causes wrong position sizing on the dashboard.",
       "code_snippet": "export const RISK_PER_TRADE = 0.02;",

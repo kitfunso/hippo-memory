@@ -6,13 +6,14 @@ import { fileURLToPath } from 'node:url';
 
 const SRC = fileURLToPath(new URL('../src', import.meta.url));
 const HAND_ROLLED = /:private:%|%:private:|(LIKE|GLOB)\s+['"`][^'"`]*(:private|personal:)|instr\([^)]*:private|['"`]unknown:legacy['"`]/i;
-const ALLOWED = new Set(['recall-scope.ts']);
+const SCOPE_MODULE = join('store', 'recall-scope.ts');
+const ALLOWED = new Set([SCOPE_MODULE]);
 // Migrations stamp the legacy marker once, as data, and never read through it.
 const EXEMPT_DIR = `db${sep}migrations${sep}`;
 // Doc lines that name the rule; exempt by file and exact text, so an edited or added line is read again.
 const DOC_LINES = new Set([
   'api/assemble.ts: * `unknown:legacy` rows.',
-  "shared.ts: *    `{}`                                  = default-deny (`unknown:legacy`",
+  "sharing/shared.ts: *    `{}`                                  = default-deny (`unknown:legacy`",
   "store/handoffs.ts: // continuity excludes slack:private:* and 'unknown:legacy'.",
   "store/sessions.ts: // continuity reads applies to slack:private:* and 'unknown:legacy' rows.",
   "store/search-rows.ts: * `unknown:legacy` cannot leak via any consumer that hasn't remembered to re-filter.",
@@ -32,7 +33,7 @@ const sources = readdirSync(SRC, { recursive: true, encoding: 'utf8' }).filter((
 describe('scope SQL guard', () => {
   it('finds the patterns where they belong, so the scan is live', () => {
     expect(sources.length).toBeGreaterThan(50);
-    expect(hits('recall-scope.ts').length).toBeGreaterThan(0);
+    expect(hits(SCOPE_MODULE).length).toBeGreaterThan(0);
   });
 
   it('no other source file spells the default-deny SQL or the legacy marker', () => {
