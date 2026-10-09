@@ -2,6 +2,7 @@ import { openHippoDb, closeHippoDb } from '../db.js';
 import { loadPhysicsState, savePhysicsState, refreshParticleProperties } from '../db/physics-state.js';
 import { simulate, type ForceContext } from '../physics.js';
 import type { SleepRun } from './run.js';
+import { errorMessage } from '../log.js';
 
 // -------------------------------------------------------------------------
 // 2. Physics simulation pass
@@ -61,6 +62,6 @@ export function physicsPass(run: SleepRun): void {
       }
     }
   } catch (error) {
-    result.details.push(`  ⚠️ physics simulation skipped: ${error instanceof Error ? error.message : 'unknown error'}`);
+    result.details.push(`  ⚠️ physics simulation skipped: ${errorMessage(error)}`);
   }
 }

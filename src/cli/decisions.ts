@@ -10,6 +10,7 @@ import * as incidentsModule from '../incidents.js';
 import { resolveTenantId } from '../tenant.js';
 import { printError } from './output.js';
 import { parseListLimit, parsePositiveId, requireInit, type CliFlags, flagIsTrue, stringFlag } from './shared.js';
+import { errorMessage } from '../log.js';
 // Lenient on purpose (parseInt reads "1abc" as 1) until the next major version; incidents use the strict parser.
 function parseObjectId(idRaw: string, noun: string): number {
   const id = parseInt(String(idRaw), 10);
@@ -342,7 +343,7 @@ function decideCreate(hippoRoot: string, tenantId: string, decisionText: string,
       if (!oldEntry.tags.includes('superseded')) oldEntry.tags.push('superseded');
       writeEntry(hippoRoot, oldEntry);
     } catch (e) {
-      printError(`  warning: decision recorded and superseded, but failed to weaken the prior memory ${supersedesMemId}: ${(e as Error).message}`);
+      printError(`  warning: decision recorded and superseded, but failed to weaken the prior memory ${supersedesMemId}: ${errorMessage(e)}`);
     }
   }
 
