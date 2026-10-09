@@ -1,5 +1,5 @@
 {
-  "count": 104,
+  "count": 91,
   "exports": [
     "src/agent-memories/claude-code.ts:claudeMemoryFolderNames",
     "src/api/auth.ts:authList",
@@ -82,28 +82,15 @@
     "src/skills.ts:MAX_SKILL_INSTRUCTIONS_LEN",
     "src/skills.ts:loadActiveSkills",
     "src/store/auth.ts:apiKeyVerifyStats",
-    "src/store/auth.ts:listScopeGrants",
-    "src/store/candidates.ts:AMBIENT_DRIFT_SQL",
-    "src/store/candidates.ts:AMBIENT_PINNED_WHERE",
-    "src/store/conflicts.ts:readConflictRefresh",
-    "src/store/conflicts.ts:writeConflictRefresh",
-    "src/store/entry-reads.ts:loadChildrenOf",
     "src/store/failure-log.ts:failuresBySession",
-    "src/store/goals.ts:MAX_ACTIVE_GOAL_DEPTH",
-    "src/store/goals.ts:MAX_FINAL_MULTIPLIER",
-    "src/store/goals.ts:enforceDepthCapWithinTx",
-    "src/store/goals.ts:getActiveGoalsWithDb",
-    "src/store/goals.ts:loadGoalPolicies",
     "src/store/goals.ts:pushGoalWithDb",
     "src/store/graph-queue.ts:enqueueExtraction",
     "src/store/graph-queue.ts:loadExtractionQueue",
     "src/store/graph-queue.ts:markExtractionProcessed",
     "src/store/graph-reads.ts:loadEntityById",
-    "src/store/mirrors.ts:getExistingEntryMirrorPaths",
     "src/store/recall-trace.ts:DELIVERY_LEDGER_RETENTION_DAYS",
     "src/store/recall-trace.ts:readDeliveryEvents",
     "src/store/recall-trace.ts:writeDeliveryEvent",
-    "src/store/search-rows.ts:_forceLikePathForTests",
-    "src/store/summaries.ts:loadDirtySummaries"
+    "src/store/search-rows.ts:_forceLikePathForTests"
   ]
 }
