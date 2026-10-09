@@ -15,7 +15,8 @@ import { createMemory as createDefaultMemory } from './_helpers/default-half-lif
 import { makeRoot } from './_helpers/make-root.js';
 import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
-import { pushGoal, writeGoalRecallLog, type GoalStackBoostOpts } from '../src/store/goals.js';
+import { pushGoal, writeGoalRecallLog } from '../src/store/goals.js';
+import type { GoalStackBoostOpts } from '../src/search/goal-boost.js';
 import { sessionGoalBoost } from './_helpers/session-goal-boost.js';
 import { remember } from '../src/api/index.js';
 import { Layer, type MemoryEntry } from '../src/core/memory.js';
