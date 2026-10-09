@@ -12,7 +12,7 @@ import { describeMessageFailure, sendAnthropicMessage } from '../util/anthropic-
 import { derivationScope, derivationPartitionKey } from '../store/recall-scope.js';
 import { loadConfig } from '../core/config.js';
 import { neverAutoShareTags } from '../sharing/shared.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorFields, errorMessage, log } from '../util/log.js';
 import { certainDefect } from '../core/memory-quality.js';
 
 const SUMMARY_FALLBACK_CHARS = 40;
@@ -372,6 +372,7 @@ export async function rebuildDirtySummaries(
         `rebuildDirtySummaries: summary ${summary.id} (tenant ${summary.tenantId}) failed: ${
           errorMessage(err)
         }`,
+        errorFields(err),
       );
     }
   }

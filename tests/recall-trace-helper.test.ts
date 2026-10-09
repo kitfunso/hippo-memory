@@ -209,6 +209,7 @@ describe('writeRecallTrace', () => {
       }).not.toThrow();
       expect(traceId).toBeNull();
       expect(errSpy).toHaveBeenCalled();
+      expect(errSpy).toHaveBeenCalledWith(expect.stringMatching(/recall trace write failed.* stack=\S*Error.* at /));
       errSpy.mockRestore();
     } finally {
       restore();
@@ -433,6 +434,7 @@ describe('recordTraceOutcome', () => {
         recordTraceOutcome(db, { traceId: 1, tenantId: 'default', outcome: 'positive', memoryIds: ['mem-a'] });
       }).not.toThrow();
       expect(errSpy).toHaveBeenCalled();
+      expect(errSpy).toHaveBeenCalledWith(expect.stringMatching(/recall trace outcome write failed.* stack=\S*Error.* at /));
       errSpy.mockRestore();
     } finally {
       restore();

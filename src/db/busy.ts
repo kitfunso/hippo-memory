@@ -71,11 +71,15 @@ export function withWriteScope<T>(db: DatabaseSyncLike, name: string, fn: () => 
 export function withReadSnapshot<T>(db: DatabaseSyncLike, fn: () => T): T {
   if (db.isTransaction !== false) return fn();
   db.exec('BEGIN');
+  let result: T;
   try {
-    return fn();
-  } finally {
-    db.exec('COMMIT');
+    result = fn();
+  } catch (error) {
+    try { db.exec('COMMIT'); } catch { /* snapshot already gone; keep the original error */ }
+    throw error;
   }
+  db.exec('COMMIT');
+  return result;
 }
 
 /** Runs `fn` and undoes every write it made, throw or not: a dry run that reports what a real run would do. Takes no write lock up front. */

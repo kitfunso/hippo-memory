@@ -1,5 +1,5 @@
 // hippo.db's half of the Quarantine store group: each method is one call on its own handle.
-import { errorMessage, log } from '../../util/log.js';
+import { errorFields, errorMessage, log } from '../../util/log.js';
 import { readEntry } from '../entry-reads.js';
 import { writeEntryMirrors } from '../entry-writes.js';
 import { onHandle } from '../open.js';
@@ -12,7 +12,7 @@ function rewriteMirror(hippoRoot: string, tenantId: string, id: string): void {
     const restored = readEntry(hippoRoot, id, tenantId);
     if (restored) writeEntryMirrors(hippoRoot, restored);
   } catch (err) {
-    log.error(`quarantine: mirror rewrite failed for ${id}: ${errorMessage(err)}`);
+    log.error(`quarantine: mirror rewrite failed for ${id}: ${errorMessage(err)}`, errorFields(err));
   }
 }
 

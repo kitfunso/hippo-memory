@@ -119,6 +119,7 @@ describe('hippo daily-runner', () => {
       const cut = run({ HIPPO_DAILY_STEP_TIMEOUT_MS: '1' });
       expect(cut.stdout).toContain('0 workspaces processed, 2 command failures.');
       expect(cut.stderr).toMatch(/error: daily-runner failed in .*repo during `sleep`: timed out after 1 ms and was stopped .*workspace=.*repo/);
+      expect(cut.stderr).toMatch(/daily-runner failed in .*workspace=.* errorClass=\w+ stack=\S*Error.* at /);
       expect(cut.status).toBe(1);
 
       // Control: the same workspace inside the default deadline is a clean run.

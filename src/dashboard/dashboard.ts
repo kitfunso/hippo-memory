@@ -11,7 +11,7 @@ import { listCards } from '../store/cards.js';
 import { resolveTenantId } from '../store/tenant.js';
 import { loadCardDetail } from '../store/card-detail.js';
 import { bodyDeadlineMs, BodyTimeoutError, closeAfterReply, isCrossSite, LOOPBACK_HOST_HEADER } from '../util/http-util.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorFields, errorMessage, log } from '../util/log.js';
 import { createSnapshotService, isLiveMemory, type SnapshotService } from './dashboard-snapshot.js';
 import {
   buildMemoryDetail, buildMemoryPage, buildOverview, buildProjectDetail, buildSearch,
@@ -322,7 +322,7 @@ function answerDashboardFailure(req: http.IncomingMessage, res: http.ServerRespo
   const clientFault = err instanceof ParamError || err instanceof URIError || err instanceof BodyTimeoutError;
   // A cut-short response is logged even for a client fault; a bare 400 is not.
   if (res.headersSent || !clientFault) {
-    log.error('dashboard request failed', { error: errorMessage(err), path: req.url });
+    log.error('dashboard request failed', { ...errorFields(err), error: errorMessage(err), path: req.url });
   }
   if (res.headersSent) {
     res.end();

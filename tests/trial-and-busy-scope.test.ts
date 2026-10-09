@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { spawn } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { closeHippoDb, openHippoDb, withTrialScope, withWriteScope, type DatabaseSyncLike } from '../src/db/index.js';
+import { closeHippoDb, openHippoDb, withReadSnapshot, withTrialScope, withWriteScope, type DatabaseSyncLike } from '../src/db/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 let root: string;
@@ -102,5 +102,22 @@ describe('withWriteScope busyWaitMs', () => {
     } finally {
       closeHippoDb(db);
     }
+  });
+});
+
+describe('withReadSnapshot', () => {
+  it('shows the caller fn error when the commit also fails', () => {
+    withDb((db) => {
+      const marked = new Error('marked read failure');
+      const attempt = (): void => withReadSnapshot(db, () => { db.exec('ROLLBACK'); throw marked; });
+      expect(attempt).toThrow(marked);
+    });
+  });
+
+  it('shows the commit error when fn returned and the commit fails', () => {
+    withDb((db) => {
+      const attempt = (): number => withReadSnapshot(db, () => { db.exec('ROLLBACK'); return 1; });
+      expect(attempt).toThrow(/no transaction is active/i);
+    });
   });
 });

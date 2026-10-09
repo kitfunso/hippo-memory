@@ -4,7 +4,7 @@ import { Layer, type MemoryEntry } from '../core/memory.js';
 import { dumpFrontmatter } from './yaml.js';
 import { openHippoDb, getMeta } from '../db/index.js';
 import { oncePerStore } from '../db/connect.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorFields, errorMessage, log } from '../util/log.js';
 import {
   type TaskSnapshot,
   type SessionEvent,
@@ -231,6 +231,7 @@ export function purgeMirrorBestEffort(
       if (isRaw) {
         log.error(
           `${logPrefix}: mirror cleanup failed for ${id} (will retry via reaper on next open): ${msg}`,
+          errorFields(secondErr),
         );
       } else {
         const leftover = getExistingEntryMirrorPaths(hippoRoot, id);
@@ -238,6 +239,7 @@ export function purgeMirrorBestEffort(
         log.error(
           `${logPrefix}: mirror cleanup failed for ${id} - no automatic retry exists for this file, ` +
           `delete it manually: ${pathsNote} (${msg})`,
+          errorFields(secondErr),
         );
       }
       return false;

@@ -19,7 +19,7 @@ import { createHash } from 'node:crypto';
 import { openHippoDb, closeHippoDb, rethrowIfSqliteBlocked, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import type { RerankStep } from '../core/search-types.js';
 import { DELIVERY_LEDGER_VERSION, isBoundaryEvent, type DeliveryEventInput } from './delivery-recorder.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorFields, errorMessage, log } from '../util/log.js';
 import { DAY_MS } from '../util/time.js';
 
 /** One ranked result to persist alongside its trace row. */
@@ -115,7 +115,7 @@ export function writeRecallTrace(db: DatabaseSyncLike, input: RecallTraceInput):
       return traceId;
     });
   } catch (error) {
-    log.error(`recall trace write failed: ${errorMessage(error)}`);
+    log.error(`recall trace write failed: ${errorMessage(error)}`, errorFields(error));
     return null;
   }
 }
@@ -148,7 +148,7 @@ export function writeRecallTraceAtRoot(root: string, input: RecallTraceInput): n
     db = openHippoDb(root);
   } catch (error) {
     rethrowIfSqliteBlocked(error);
-    log.error(`recall trace connection failed: ${errorMessage(error)}`);
+    log.error(`recall trace connection failed: ${errorMessage(error)}`, errorFields(error));
     return null;
   }
   try {
@@ -224,7 +224,7 @@ export function recordTraceOutcome(db: DatabaseSyncLike, input: RecordTraceOutco
       VALUES (?, ?, ?, ?, ?)
     `).run(input.traceId, new Date().toISOString(), input.tenantId, input.outcome, JSON.stringify(credited));
   } catch (error) {
-    log.error(`recall trace outcome write failed: ${errorMessage(error)}`);
+    log.error(`recall trace outcome write failed: ${errorMessage(error)}`, errorFields(error));
   }
 }
 

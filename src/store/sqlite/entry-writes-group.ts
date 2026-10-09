@@ -2,7 +2,7 @@
 import { ConflictError, NotFoundError } from '../../core/api-errors.js';
 import { appendAuditEvent } from '../audit.js';
 import { isSqliteBusy, withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
-import { errorMessage, log } from '../../util/log.js';
+import { errorFields, errorMessage, log } from '../../util/log.js';
 import { entryAfterOutcome, type MemoryEntry } from '../../core/memory.js';
 import { archiveRawMemory, type ArchiveOpts } from '../raw-archive.js';
 import { ownScopeTouches } from '../recall-scope.js';
@@ -158,7 +158,7 @@ function cleanArchivedMirrors(db: DatabaseSyncLike, hippoRoot: string, id: strin
   try {
     removeEntryMirrors(hippoRoot, id);
   } catch (mirrorErr) {
-    log.error(`archiveRaw: mirror cleanup failed for ${id} (will retry via reaper on next openHippoDb): ${errorMessage(mirrorErr)}`);
+    log.error(`archiveRaw: mirror cleanup failed for ${id} (will retry via reaper on next openHippoDb): ${errorMessage(mirrorErr)}`, errorFields(mirrorErr));
     return;
   }
   try {

@@ -177,6 +177,7 @@ describe('dashboard entry', () => {
     expect(broken.status).toBe(500);
     expect(broken.body).toBe('{"error":"Internal error"}');
     expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('dashboard request failed'));
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringMatching(/dashboard request failed.* stack=\S*Error.* at /));
 
     const after = await dashboardRequest(port, '/api/overview', `127.0.0.1:${port}`);
     expect(after.status).toBe(200);

@@ -38,7 +38,7 @@ import { currentMachine, importUserMemories } from '../agent-memories/sync.js';
 import { getGlobalRoot } from '../sharing/shared.js';
 import { listRegisteredWorkspaces, runDailyMaintenance } from './scheduler.js';
 import { replayCompactionsAt } from '../capture/compaction-record.js';
-import { errorMessage, log } from '../util/log.js';
+import { errorFields, errorMessage, log } from '../util/log.js';
 import { envDailyStepTimeoutMs } from '../util/env.js';
 import { writeFileAtomic } from '../util/atomic-write.js';
 import { printError } from './output.js';
@@ -540,7 +540,7 @@ export function cmdDailyRunner(): void {
     } catch (err) {
       failed++;
       const action = args.join(' ');
-      log.error(`daily-runner failed in ${cwd} during \`${action}\`: ${dailyStepFailure(err, timeout)}`, { workspace: cwd });
+      log.error(`daily-runner failed in ${cwd} during \`${action}\`: ${dailyStepFailure(err, timeout)}`, { workspace: cwd, ...errorFields(err) });
     }
   });
 

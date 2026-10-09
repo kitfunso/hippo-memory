@@ -142,22 +142,25 @@ function rowToIncident(row: IncidentRow): Incident {
   };
 }
 
-/** A malformed stored steps value reads back as no steps. */
-function parseSteps(raw: string): string[] {
+/** A malformed stored steps value warns and reads back as no steps. */
+function parseSteps(raw: string, id: number): string[] {
+  const site = { table: 'processes', id, column: 'steps' };
   try {
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.every(isJsonString)) {
       return parsed;
     }
+    warnDamagedColumn(site, 'wrong shape');
     return [];
   } catch {
     // Unreadable steps read back as none instead of failing the process read.
+    warnDamagedColumn(site, 'not valid JSON');
     return [];
   }
 }
 
 const rowToProcess = (row: ProcessRow): Process => (
-  { ...head(row), processName: row.process_name, description: row.description, steps: parseSteps(row.steps), ...versionedTail(row) }
+  { ...head(row), processName: row.process_name, description: row.description, steps: parseSteps(row.steps, row.id), ...versionedTail(row) }
 );
 
 const rowToPolicy = (row: PolicyRow): Policy => (
