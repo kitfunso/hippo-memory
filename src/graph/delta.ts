@@ -1,7 +1,7 @@
 // Diffs the derived graph against the stored rows, so a rebuild writes only what changed and an entity keeps the id its relations hang on.
-import type { GraphTxDb, EntityType, RelationType, SourceObjectRef } from './types.js';
+import type { DatabaseSyncLike } from '../db.js';
 import { loadStoredGraph, storedGraphOn } from '../store/graph-reads.js';
-import type { StoredEntity, StoredGraph, StoredRelation } from '../store/graph-rows.js';
+import type { EntityType, RelationType, SourceObjectRef, StoredEntity, StoredGraph, StoredRelation } from '../store/graph-rows.js';
 
 /** What names an object-derived entity across rebuilds; v38 has no UNIQUE on it, so the diff keeps one row per key. */
 export interface NaturalKey {
@@ -132,7 +132,7 @@ function deltaOf(stored: StoredGraph, desired: DesiredGraph): GraphOp[] {
 }
 
 /** Ops that turn the stored graph into `desired`, in apply order; reads only, and keeps the lowest id per natural key. */
-export function graphDelta(db: GraphTxDb, tenantId: string, desired: DesiredGraph): GraphOp[] {
+export function graphDelta(db: DatabaseSyncLike, tenantId: string, desired: DesiredGraph): GraphOp[] {
   return deltaOf(storedGraphOn(db, tenantId, memoryIdsOf(desired)), desired);
 }
 

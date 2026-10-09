@@ -1,5 +1,5 @@
 {
-  "count": 174,
+  "count": 178,
   "exports": [
     "src/ablation.ts:_resetAblationCacheForTests",
     "src/agent-memories/claude-code.ts:claudeFolderName",
@@ -170,6 +170,10 @@
     "src/store/conflicts.ts:readConflictRefresh",
     "src/store/conflicts.ts:writeConflictRefresh",
     "src/store/entry-reads.ts:loadChildrenOf",
+    "src/store/graph-queue.ts:enqueueExtraction",
+    "src/store/graph-queue.ts:loadExtractionQueue",
+    "src/store/graph-queue.ts:markExtractionProcessed",
+    "src/store/graph-reads.ts:loadEntityById",
     "src/store/mirrors.ts:getExistingEntryMirrorPaths",
     "src/store/search-rows.ts:_forceLikePathForTests",
     "src/store/summaries.ts:loadDirtySummaries",

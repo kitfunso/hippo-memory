@@ -19,13 +19,9 @@ import { deleteEntry } from '../src/store/delete-and-batch.js';
 import { saveDecision, closeDecision } from '../src/decisions.js';
 import { savePolicy } from '../src/policies.js';
 import { saveProjectBrief, refreshBrief } from '../src/project-briefs.js';
-import {
-  loadExtractionQueue,
-  loadEntities,
-  loadRelations,
-  loadPendingExtractionTenants,
-} from '../src/graph/read.js';
-import { markGraphDirty, runGraphRebuildTransaction, insertEntity } from '../src/graph/write.js';
+import { runGraphRebuildTransaction, insertEntity } from '../src/store/graph-writes.js';
+import { loadExtractionQueue, loadPendingExtractionTenants, markGraphDirty } from '../src/store/graph-queue.js';
+import { loadEntities, loadRelations } from '../src/store/graph-reads.js';
 import { extractGraph as realExtractGraph, extractGraphChunked, deriveGraph, loadGraphSources } from '../src/graph-extract.js';
 import { graphDelta } from '../src/graph/delta.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';

@@ -3,8 +3,9 @@
  * Docs: docs/plans/2026-06-01-e3-graph-write-lint.md
  *
  * The lint enforces: graph tables (entities/relations/graph_extraction_queue) may only
- * be written through the sanctioned src/graph/write.ts. These tests pin the detection +
- * the false-positive exclusions (sanctioned writer, comment lines, name substrings).
+ * be written through the sanctioned store writers (src/store/graph-writes.ts and
+ * src/store/graph-queue.ts). These tests pin the detection + the false-positive
+ * exclusions (sanctioned writers, comment lines, name substrings).
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
@@ -16,7 +17,7 @@ import { join } from 'node:path';
 import { findGraphWriteViolations } from '../scripts/check-graph-writes.mjs';
 
 describe('check-graph-writes lint', () => {
-  it('the real src/ tree is clean (only src/graph/write.ts writes the graph tables, and it is excluded)', () => {
+  it('the real src/ tree is clean (only the two store writers write the graph tables, and they are excluded)', () => {
     expect(findGraphWriteViolations('src')).toEqual([]);
   });
 
@@ -43,14 +44,22 @@ describe('check-graph-writes lint', () => {
       expect(v.length).toBe(2);
     });
 
-    it('does NOT flag the sanctioned src/graph/write.ts (exact relative path), but DOES flag subgraph.ts AND a subdir graph/write.ts', () => {
-      file('graph/write.ts', `db.prepare('INSERT INTO entities(name) VALUES (?)').run(n);\n`);
+    it('does NOT flag the two sanctioned store writers (exact relative paths), but DOES flag subgraph.ts AND a subdir store/graph-writes.ts', () => {
+      file('store/graph-writes.ts', `db.prepare('INSERT INTO entities(name) VALUES (?)').run(n);\n`);
+      file('store/graph-queue.ts', `db.prepare('UPDATE graph_extraction_queue SET status = ?').run(s);\n`);
       file('subgraph.ts', `db.prepare('INSERT INTO relations(rel_type) VALUES (?)').run(r);\n`);
-      file('connectors/graph/write.ts', `db.prepare('INSERT INTO entities(name) VALUES (?)').run(n);\n`); // a DIFFERENT graph/write.ts, not sanctioned
+      file('connectors/store/graph-writes.ts', `db.prepare('INSERT INTO entities(name) VALUES (?)').run(n);\n`); // a DIFFERENT store/graph-writes.ts, not sanctioned
       const files = findGraphWriteViolations(dir).map((x) => x.file.replace(/\\/g, '/'));
-      expect(files.some((f) => f.endsWith('/graph/write.ts') && !f.includes('connectors'))).toBe(false);
+      expect(files.some((f) => f.endsWith('/store/graph-writes.ts') && !f.includes('connectors'))).toBe(false);
+      expect(files.some((f) => f.endsWith('/store/graph-queue.ts'))).toBe(false);
       expect(files.some((f) => f.endsWith('subgraph.ts'))).toBe(true);
-      expect(files.some((f) => f.endsWith('connectors/graph/write.ts'))).toBe(true); // subdir graph/write.ts IS linted
+      expect(files.some((f) => f.endsWith('connectors/store/graph-writes.ts'))).toBe(true); // subdir store/graph-writes.ts IS linted
+    });
+
+    it('flags a data write placed in src/graph/write.ts, which only applies ops through the store writers', () => {
+      file('graph/write.ts', `db.prepare('DELETE FROM entities WHERE id = ?').run(id);\n`);
+      const v = findGraphWriteViolations(dir);
+      expect(v.map((x) => x.file.replace(/\\/g, '/').endsWith('/graph/write.ts'))).toEqual([true]);
     });
 
     it('catches a MULTI-LINE write (verb and table on separate lines) - codex P2', () => {

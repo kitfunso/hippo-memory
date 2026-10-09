@@ -6,7 +6,8 @@ import { BadRequestError, ConflictError, NotFoundError } from '../api-errors.js'
 import { appendAuditEvent } from '../audit.js';
 import { withWriteScope } from '../db/busy.js';
 import type { DatabaseSyncLike } from '../db.js';
-import { markGraphDirty, removeGraphEntitiesForObject } from '../graph/write.js';
+import { removeGraphEntitiesForObject } from '../store/graph-writes.js';
+import { markGraphDirty } from '../store/graph-queue.js';
 import { objectHalfLifeDays } from '../half-life-migration.js';
 import { keysetAfter } from '../keyset.js';
 import { createMemory, Layer, type MemoryEntry } from '../memory.js';
