@@ -247,7 +247,8 @@ function notBuilt(res: http.ServerResponse): void {
 function serveSpa(res: http.ServerResponse, distUiDir: string, pathname: string): void {
   const safePath = path.normalize(pathname).replace(/^(\.\.[/\\])+/, '');
   const filePath = path.join(distUiDir, safePath);
-  if (!filePath.startsWith(distUiDir)) return forbidden(res);
+  // The separator matters: a bare prefix also admits a sibling folder whose name starts with this one.
+  if (filePath !== distUiDir && !filePath.startsWith(distUiDir + path.sep)) return forbidden(res);
 
   if (fs.existsSync(filePath) && fs.statSync(filePath).isFile() && serveStaticFile(res, filePath)) return;
   // SPA fallback: non-file routes get index.html.
