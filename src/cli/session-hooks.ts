@@ -539,28 +539,38 @@ async function launchCodexSessionEndWorker(
     logFile,
   ];
 
+  if (await detachedWorkerStarted(workerArgs)) return;
+  // Awaited so the sleep write can't be killed by the exit calls below.
   try {
-    const worker = spawn(process.execPath, workerArgs, {
-      detached: true,
-      stdio: 'ignore',
-      windowsHide: true,
+    await cmdCodexSessionEndWorker(hippoRoot, {
+      'codex-home': path.dirname(historyPath),
+      'history-path': historyPath,
+      'start-offset': String(startOffsetBytes),
+      'started-at': String(startedAtMs),
+      'log-file': logFile,
     });
-    worker.unref();
-  } catch (err) {
-    log.debug(`codex run: the session-end worker did not spawn, running inline: ${errorMessage(err)}`);
-    // Awaited so the sleep write can't be killed by the exit calls below.
-    try {
-      await cmdCodexSessionEndWorker(hippoRoot, {
-        'codex-home': path.dirname(historyPath),
-        'history-path': historyPath,
-        'start-offset': String(startOffsetBytes),
-        'started-at': String(startedAtMs),
-        'log-file': logFile,
-      });
-    } catch (inlineErr) {
-      log.debug(`codex run: the inline session-end failed: ${errorMessage(inlineErr)}`);
-    }
+  } catch (inlineErr) {
+    log.debug(`codex run: the inline session-end failed: ${errorMessage(inlineErr)}`);
   }
+}
+
+/** Resolves true once the detached worker is running, false when the spawn fails, whether it throws or reports later. */
+function detachedWorkerStarted(workerArgs: readonly string[]): Promise<boolean> {
+  return new Promise((resolve) => {
+    const failed = (reason: string): void => {
+      log.debug(`codex run: the session-end worker did not spawn, running inline: ${reason}`);
+      resolve(false);
+    };
+    try {
+      const worker = spawn(process.execPath, workerArgs, { detached: true, stdio: 'ignore', windowsHide: true });
+      // An async spawn failure (ENOENT, EAGAIN) arrives as an 'error' event, which a try cannot catch.
+      worker.on('error', (err) => failed(err.message));
+      worker.once('spawn', () => resolve(true));
+      worker.unref();
+    } catch (err) {
+      failed(errorMessage(err));
+    }
+  });
 }
 
 function exitLikeChild(code: number | null, signal: NodeJS.Signals | null): void {
