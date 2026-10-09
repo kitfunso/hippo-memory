@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import type { SearchResult } from '../src/search/types.js';
+import type { SearchResult } from '../src/core/search-types.js';
 import { refineSemanticMemory } from '../src/refine-llm.js';
 import { generateDagSummary } from '../src/dag.js';
 import { extractFacts } from '../src/extract.js';

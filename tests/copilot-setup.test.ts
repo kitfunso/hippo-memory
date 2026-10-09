@@ -7,7 +7,7 @@ import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { copilotHomeDir, detectInstalledTools } from '../src/hooks/shared.js';
 import { COPILOT_INSTRUCTIONS, VSCODE_INSTRUCTIONS, VSCODE_MCP, copilotMcpSnippet, copilotPaths, installCopilot, mergeMcpServer, uninstallCopilot } from '../src/hooks/copilot.js';
-import { HOOKS } from '../src/cli/hook-blocks.js';
+import { HOOKS } from '../src/hooks/hook-blocks.js';
 import { withFakeHome, type FakeHomeHandle } from './_helpers/with-fake-home.js';
 import type { JsonValue } from '../src/json.js';
 

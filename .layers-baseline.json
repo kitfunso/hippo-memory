@@ -1,6 +1,6 @@
 {
-  "runtime": 6,
-  "typeOnly": 4,
+  "runtime": 3,
+  "typeOnly": 1,
   "rootFiles": 136,
   "edges": [
     {
@@ -9,39 +9,9 @@
       "kind": "runtime"
     },
     {
-      "from": "config.ts",
-      "to": "search/types.ts",
-      "kind": "runtime"
-    },
-    {
-      "from": "failure-log.ts",
-      "to": "capture/failure-reading.ts",
-      "kind": "typeOnly"
-    },
-    {
-      "from": "goals.ts",
-      "to": "search/types.ts",
-      "kind": "typeOnly"
-    },
-    {
-      "from": "hooks/copilot.ts",
-      "to": "cli/hook-blocks.ts",
-      "kind": "runtime"
-    },
-    {
       "from": "http-util.ts",
       "to": "db/sqlite-blocked.ts",
       "kind": "runtime"
-    },
-    {
-      "from": "memory.ts",
-      "to": "agent-memories/tools.ts",
-      "kind": "runtime"
-    },
-    {
-      "from": "recall-trace.ts",
-      "to": "search/types.ts",
-      "kind": "typeOnly"
     },
     {
       "from": "store/port.ts",

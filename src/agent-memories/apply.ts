@@ -14,7 +14,7 @@ import { itemHash } from './keys.js';
 import { planContainer, type ContainerPlan, type DormantRow, type LiveRow, type PlannedWrite } from './plan.js';
 import { emptyTally, type Tally } from './report.js';
 import { MIN_ITEM_CHARS, itemSource, splitSource, storedText } from './source.js';
-import type { AgentMemoryTool } from './tools.js';
+import type { AgentMemoryTool } from '../core/agent-memory-tools.js';
 import type { Container, MemoryItem } from './types.js';
 
 export const SYNC_ACTOR = 'agent-memories';

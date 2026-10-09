@@ -2,7 +2,7 @@
 
 import type { ContinuityBlock } from '../store/port.js';
 import type { MemoryEntry } from '../memory.js';
-import type { RerankStep, SearchResult } from '../search/types.js';
+import type { RerankStep, SearchResult } from '../core/search-types.js';
 import type { PlanningFallacyHint, PlanningFallacyOutput, PlanningFallacyWatching } from '../predictions/planning-fallacy.js';
 import type { AnchoringHint, RecallHistorySnapshot } from '../recall-history.js';
 import type { AvailabilityHint } from '../availability.js';

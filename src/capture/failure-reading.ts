@@ -4,12 +4,7 @@ import { scrubForSharing } from '../share-scrub.js';
 import { blockHash } from '../token-ledger.js';
 import { truncateCodePointSafe } from '../transcript-tail.js';
 import type { JsonValue } from '../json.js';
-
-/** Why a failure was not stored, or `stored`. */
-export type CaptureErrorOutcome = 'stored' | 'duplicate' | 'skipped-interrupt' | 'skipped-routine' | 'skipped-invalid';
-
-/** Which routine check skipped a failure; the log keeps it so declines can be told apart from empty searches. */
-export type RoutineRule = 'declined' | 'os-permission' | 'no-match' | 'search-tool' | 'quiet-exit';
+import type { CaptureErrorOutcome, RoutineRule } from '../failure-log.js';
 
 /** What {@link lessonFromFailure} read from a payload; `detail` is the finer failure-log key (untruncated, command head). */
 export type FailureReading =

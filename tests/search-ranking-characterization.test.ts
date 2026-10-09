@@ -14,7 +14,7 @@ import { savePhysicsState } from '../src/physics-state.js';
 import { search } from '../src/search/bm25-search.js';
 import { hybridSearch } from '../src/search/hybrid.js';
 import { physicsSearch } from '../src/search/physics-search.js';
-import type { SearchResult } from '../src/search/types.js';
+import type { SearchResult } from '../src/core/search-types.js';
 import type { RerankerFn } from '../src/rerankers/types.js';
 
 const NOW = new Date('2026-09-01T12:00:00.000Z');

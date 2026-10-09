@@ -1,6 +1,6 @@
 import type { MemoryEntry } from '../memory.js';
 import { isDagSummary } from './boosts.js';
-import type { ScoreBreakdown } from './types.js';
+import type { ScoreBreakdown } from '../core/search-types.js';
 
 /** Whole days since the entry was created, never negative. */
 export function ageInDays(entry: MemoryEntry, now: Date): number {

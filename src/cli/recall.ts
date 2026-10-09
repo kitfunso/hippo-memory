@@ -11,7 +11,7 @@ import type { SessionHandoff } from '../handoff.js';
 import { passesScopeFilterForRecall } from '../recall-scope.js';
 import { fitBudget } from '../search/finalize.js';
 import { explainMatch } from '../search/explain.js';
-import { DEFAULT_RECALL_BUDGET, type SearchResult } from '../search/types.js';
+import { DEFAULT_RECALL_BUDGET, type SearchResult } from '../core/search-types.js';
 import { loadConfig } from '../config.js';
 import { estimateTokens } from '../token-ledger.js';
 import { dropHeldCopies } from '../same-text.js';

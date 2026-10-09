@@ -43,7 +43,7 @@ import { writeFileAtomic } from '../util/atomic-write.js';
 import { printError } from './output.js';
 import { printAgentImport, installCodexMemoryHooks, setupDailySchedule, warnClaudeSettingsUnusable } from './shared.js';
 import { repairQualityOnceAt } from './quality-repair-once.js';
-import { HOOK_MARKERS, HOOKS, hippoBlock, withoutHookBlock } from './hook-blocks.js';
+import { HOOK_MARKERS, HOOKS, hippoBlock, withoutHookBlock } from '../hooks/hook-blocks.js';
 import { escapeRegex } from '../escape.js';
 
 // ---------------------------------------------------------------------------

@@ -12,7 +12,7 @@ import {
   isRecallBoostAblated,
   evalNow,
 } from './ablation.js';
-import { AGENT_MEMORY_TOOLS, toolSourcePrefix } from './agent-memories/tools.js';
+import { AGENT_MEMORY_TOOLS, toolSourcePrefix } from './core/agent-memory-tools.js';
 
 export enum Layer {
   Buffer = 'buffer',

@@ -8,7 +8,7 @@ import { adminActor, type HippoDbContext } from '../../src/api.js';
 import { claudeFolderName } from '../../src/agent-memories/claude-code.js';
 import { emptyTally, totalTally, type ImportReport, type Tally } from '../../src/agent-memories/report.js';
 import type { Machine } from '../../src/agent-memories/sync.js';
-import type { ToolId } from '../../src/agent-memories/tools.js';
+import type { ToolId } from '../../src/core/agent-memory-tools.js';
 import { queryAuditEvents, type AuditOp } from '../../src/audit.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db.js';
 import { listDormantRows, type DormantMemory } from '../../src/dormant.js';

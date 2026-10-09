@@ -12,7 +12,7 @@ import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { estimateTokens } from '../src/token-ledger.js';
-import type { SearchResult } from '../src/search/types.js';
+import type { SearchResult } from '../src/core/search-types.js';
 import { insertEntity, insertRelation } from '../src/graph/write.js';
 import { loadNeighborRelations, loadEntitiesByMemoryId, loadEntitiesByIds } from '../src/graph/read.js';
 import { graphExpandRecall } from '../src/graph-recall.js';

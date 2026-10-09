@@ -6,13 +6,12 @@ import { writeEntry } from './store/entry-writes.js';
 import { loadContentsWithTag } from './store/entry-reads.js';
 import { loadConfig } from './config.js';
 import { closeHippoDb, openHippoDb } from './db.js';
-import { recordFailure, type FailureOutcome } from './failure-log.js';
+import { recordFailure, type CaptureErrorOutcome, type FailureOutcome } from './failure-log.js';
 import {
   failureHash,
   failureSignature,
   lessonFromFailure,
   payloadString,
-  type CaptureErrorOutcome,
   type FailureReading,
 } from './capture/failure-reading.js';
 import type { JsonValue } from './json.js';

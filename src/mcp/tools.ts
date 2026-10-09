@@ -1,7 +1,7 @@
 // Tool definitions and input schemas served by tools/list.
 
 import type { ToolInputSchema } from './tool-args.js';
-import { DEFAULT_RECALL_BUDGET } from '../search/types.js';
+import { DEFAULT_RECALL_BUDGET } from '../core/search-types.js';
 import { DEFAULT_ASSEMBLE_BUDGET } from '../api/assemble.js';
 import { MAX_ID_LEN } from '../http-util.js';
 

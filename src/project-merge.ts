@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { setAsideRow } from './agent-memories/apply.js';
 import { transcriptNotesProject } from './agent-memories/claude-code.js';
 import { containerId, containerPrefix } from './agent-memories/source.js';
-import { AGENT_MEMORY_SOURCE_PREFIX, AGENT_MEMORY_TOOLS, toolSourcePrefix } from './agent-memories/tools.js';
+import { AGENT_MEMORY_SOURCE_PREFIX, AGENT_MEMORY_TOOLS, toolSourcePrefix } from './core/agent-memory-tools.js';
 import { appendAuditEvent, queryAuditEvents } from './audit.js';
 import { isSharedStore } from './config.js';
 import type { DatabaseSyncLike } from './db.js';

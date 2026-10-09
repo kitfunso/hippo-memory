@@ -17,7 +17,7 @@ import { emptyReport, mergeReports } from '../agent-memories/report.js';
 import { getGlobalRoot, initGlobal } from '../shared.js';
 import { registerWorkspace } from '../scheduler.js';
 import { printAgentImport, installCodexMemoryHooks, setupDailySchedule, learnFromRepo, skipLearnOnSharedStore, warnClaudeSettingsUnusable } from './shared.js';
-import { HOOK_MARKERS, HOOKS, hippoBlock } from './hook-blocks.js';
+import { HOOK_MARKERS, HOOKS, hippoBlock } from '../hooks/hook-blocks.js';
 
 function scanForGitRepos(rootDir: string, maxDepth = 2): string[] {
   const repos: string[] = [];

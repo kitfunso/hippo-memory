@@ -1,7 +1,7 @@
 import { envClefEndpoint, envClefEndpointToken, envClefTimeoutMs, envCloudflareAccountId, envCloudflareApiToken } from '../env.js';
 import { buildRelevanceRequest, JEV_DEFAULT_TOP_K, rankByScores } from './jev.js';
 import type { RerankerFn, RerankResult, RerankerOptions, RerankProvenance } from './types.js';
-import type { SearchResult } from '../search/types.js';
+import type { SearchResult } from '../core/search-types.js';
 import { isJsonObjectRecord } from '../http-util.js';
 import { createOutageWarning } from './outage-warning.js';
 import { rerankerPost } from './remote.js';

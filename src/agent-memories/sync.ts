@@ -26,7 +26,7 @@ import { openclawAdapter } from './openclaw.js';
 import { qwenCodeAdapter } from './qwen-code.js';
 import { addTally, emptyReport, mergeReports, toolReport, type ImportReport, type ToolReport } from './report.js';
 import { containerId, containerPrefix, splitSource } from './source.js';
-import { AGENT_MEMORY_SOURCE_PREFIX, AGENT_MEMORY_TOOLS, isToolId, toolSourcePrefix, type AgentMemoryTool, type ToolId } from './tools.js';
+import { AGENT_MEMORY_SOURCE_PREFIX, AGENT_MEMORY_TOOLS, isToolId, toolSourcePrefix, type AgentMemoryTool, type ToolId } from '../core/agent-memory-tools.js';
 import type { Adapter, AdapterContext, Listing, Scope } from './types.js';
 
 export const ADAPTERS: readonly Adapter[] = [claudeCodeAdapter, codexAdapter, geminiAdapter, copilotAdapter, openclawAdapter, qwenCodeAdapter];

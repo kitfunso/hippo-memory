@@ -13,6 +13,7 @@
     "capture": "surface",
     "cli": "surface",
     "connectors": "surface",
+    "core": "base",
     "consolidate": "domain",
     "db": "db",
     "entry": "surface",

@@ -1,7 +1,7 @@
 // Help text for every verb, keyed like the command table in cli.ts; no command logic lives here.
 
 import { TAIL_MAX_LINES } from '../support-bundle.js';
-import { DEFAULT_LOCAL_BUMP, DEFAULT_RECALL_BUDGET } from '../search/types.js';
+import { DEFAULT_LOCAL_BUMP, DEFAULT_RECALL_BUDGET } from '../core/search-types.js';
 import { DEFAULT_ASSEMBLE_BUDGET } from '../api/assemble.js';
 
 export function printAuditPruneUsage(): void {

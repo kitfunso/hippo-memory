@@ -7,7 +7,7 @@ import { describe, it, expect } from 'vitest';
 import { hybridSearch } from '../src/search/hybrid.js';
 import { search } from '../src/search/bm25-search.js';
 import { mmrRerank } from '../src/search/rerank.js';
-import type { SearchResult } from '../src/search/types.js';
+import type { SearchResult } from '../src/core/search-types.js';
 import { createMemory, applyOutcome, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { cosineSimilarity } from '../src/embeddings.js';
 import * as fs from 'fs';

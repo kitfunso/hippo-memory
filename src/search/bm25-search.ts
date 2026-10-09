@@ -10,7 +10,7 @@ import { currentEntries } from './as-of.js';
 import { applyRankBoosts, strengthRecencyMultipliers, NO_SUMMARY_SCORING, type BoostContext } from './boosts.js';
 import { temporalContext } from './temporal.js';
 import { dedupeExtracted, fitBudget, withDagChildren } from './finalize.js';
-import { DEFAULT_RECALL_BUDGET, type ResultCost, type SearchResult } from './types.js';
+import { DEFAULT_RECALL_BUDGET, type ResultCost, type SearchResult } from '../core/search-types.js';
 
 export interface SearchOptions {
   budget?: number;

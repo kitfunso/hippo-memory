@@ -5,7 +5,7 @@ import { engineFlags } from '../../dist/cli/shared.js';
 import { loadConfig } from '../../dist/config.js';
 import { getReranker } from '../../dist/rerankers/index.js';
 import { detectScope } from '../../dist/scope.js';
-import type { SearchResult } from '../../dist/search/types.js';
+import type { SearchResult } from '../../dist/core/search-types.js';
 import { getGlobalRoot } from '../../dist/shared.js';
 import { getHippoRoot, isInitialized } from '../../dist/store/open.js';
 import { resolveTenantId } from '../../dist/tenant.js';

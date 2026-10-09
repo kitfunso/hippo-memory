@@ -12,7 +12,7 @@ import { TaskSnapshot, SessionEvent } from '../store/rows.js';
 import { getHippoRoot, isInitialized } from '../store/open.js';
 import type { HookRuntime } from '../capture-contract.js';
 import type { SessionHandoff } from '../handoff.js';
-import type { SearchResult } from '../search/types.js';
+import type { SearchResult } from '../core/search-types.js';
 import { explainMatch } from '../search/explain.js';
 import { isSharedStore, type HippoConfig } from '../config.js';
 import { openHippoDb, closeHippoDb, isSqliteBusy, noteStoreBusy, runWithRequestStores, HOOK_DB_WAIT_MS } from '../db.js';

@@ -17,7 +17,7 @@ import type { RerankerFn } from './rerankers/types.js';
 import { currentEntries } from './search/as-of.js';
 import { hybridSearch } from './search/hybrid.js';
 import { physicsSearch } from './search/physics-search.js';
-import type { RerankStep, ResultCost, SearchResult } from './search/types.js';
+import type { RerankStep, ResultCost, SearchResult } from './core/search-types.js';
 import { searchBothHybrid } from './shared.js';
 import { loadRecallSearchEntries, recallScopeFilter } from './store/search-rows.js';
 import { textOverlap, tokenize as tokenizeQuery } from './tokenize.js';

@@ -10,7 +10,7 @@ import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
-import type { RerankStep } from '../src/search/types.js';
+import type { RerankStep } from '../src/core/search-types.js';
 import { createMemory as createDefaultMemory } from './_helpers/default-half-life-memory.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { initStore } from '../src/store/open.js';

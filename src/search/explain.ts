@@ -1,6 +1,6 @@
 import { tokenize } from '../tokenize.js';
 import { matchedQueryTerms } from './bm25.js';
-import type { SearchResult } from './types.js';
+import type { SearchResult } from '../core/search-types.js';
 
 export interface MatchExplanation {
   /** Human-readable reason string */

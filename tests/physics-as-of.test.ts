@@ -12,7 +12,7 @@ import { loadConfig } from '../src/config.js';
 import { hybridSearch } from '../src/search/hybrid.js';
 import { physicsSearch } from '../src/search/physics-search.js';
 import { rankRecall, type RankRecallOpts } from '../src/recall-pipeline.js';
-import type { SearchResult } from '../src/search/types.js';
+import type { SearchResult } from '../src/core/search-types.js';
 
 const TENANT = 'default';
 const CUT = '2026-06-01T00:00:00.000Z';

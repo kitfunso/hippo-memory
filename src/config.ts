@@ -7,7 +7,7 @@ import * as path from 'path';
 import { type PhysicsConfig, DEFAULT_PHYSICS_CONFIG, mergePhysicsConfig } from './physics-config.js';
 import { DEFAULT_HALF_LIFE_DAYS } from './memory.js';
 import type { PromptRecallMetric } from './prompt-recall.js';
-import { DEFAULT_LOCAL_BUMP, DEFAULT_RECALL_BUDGET } from './search/types.js';
+import { DEFAULT_LOCAL_BUMP, DEFAULT_RECALL_BUDGET } from './core/search-types.js';
 import { log } from './log.js';
 
 export type DecayBasis = 'clock' | 'session' | 'adaptive';

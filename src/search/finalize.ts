@@ -2,7 +2,7 @@ import type { MemoryEntry } from '../memory.js';
 import { estimateTokens } from '../token-ledger.js';
 import { compareScoredResults } from '../compare.js';
 import { churnStaleFactor } from './boosts.js';
-import type { ResultCost, SearchResult } from './types.js';
+import type { ResultCost, SearchResult } from '../core/search-types.js';
 
 /** When an extracted fact and its source both match, keep only the higher-scoring one (usually the fact). */
 export function dedupeExtracted(scored: SearchResult[]): SearchResult[] {

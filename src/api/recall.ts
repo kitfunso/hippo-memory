@@ -16,7 +16,7 @@ import { hybridSearch } from '../search/hybrid.js';
 import { physicsSearch } from '../search/physics-search.js';
 import { churnStaleFactor } from '../search/boosts.js';
 import type { HybridVectorCandidates } from '../search/vector.js';
-import type { RerankStep } from '../search/types.js';
+import type { RerankStep } from '../core/search-types.js';
 import { compareEntryIdentity } from '../compare.js';
 import { dropHeldCopies, duplicateKey, storedTextKeys } from '../same-text.js';
 import { isSharedStore, loadConfig } from '../config.js';

@@ -17,7 +17,7 @@
 
 import { createHash } from 'node:crypto';
 import { openHippoDb, closeHippoDb, rethrowIfSqliteBlocked, type DatabaseSyncLike } from './db.js';
-import type { RerankStep } from './search/types.js';
+import type { RerankStep } from './core/search-types.js';
 import { DELIVERY_LEDGER_VERSION, type DeliveryEventInput } from './delivery-recorder.js';
 import { log } from './log.js';
 

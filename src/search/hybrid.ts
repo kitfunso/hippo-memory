@@ -14,7 +14,7 @@ import { fuseRanks, type GraphStreamOptions } from './fusion.js';
 import { scoreHybridPool } from './hybrid-score.js';
 import { applyMmrWindow, applyReranker } from './rerank.js';
 import { dedupeExtracted, fitBudget, withDagChildren } from './finalize.js';
-import { DEFAULT_RECALL_BUDGET, type ResultCost, type SearchResult } from './types.js';
+import { DEFAULT_RECALL_BUDGET, type ResultCost, type SearchResult } from '../core/search-types.js';
 import type { HippoStore } from '../store-port.js';
 
 export interface HybridSearchOptions {

@@ -5,7 +5,7 @@ import { reportAuditWriteFailure, type AppendAuditOpts } from '../audit.js';
 import { decidePlanningFallacy, detectPlanningClaim, type PlanningFallacyDecision } from '../predictions/planning-fallacy.js';
 import { rankRecall, type RankRecallResult } from '../recall-pipeline.js';
 import { writeRecallTraceAtRoot } from '../recall-trace.js';
-import type { SearchResult } from '../search/types.js';
+import type { SearchResult } from '../core/search-types.js';
 import { saveIndex } from '../store/index-and-stats.js';
 import { sqliteStore, type HippoStore, type RecallWrites } from '../store-port.js';
 import { estimateTokens } from '../token-ledger.js';
