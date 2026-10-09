@@ -96,15 +96,9 @@ function readBase(db: DatabaseSyncLike): number {
   return Number.isFinite(raw) && raw > 0 ? raw : LEGACY_HALF_LIFE_BASE;
 }
 
-/** The base an object writer gives its memory: the flat 90 days until this store's typed migration has run, which then moves them, and the default after. */
-export function objectHalfLifeDays(hippoRoot: string): number {
-  // SHORTCUT: read outside the write's transaction, so a write racing the typed migration keeps 90; read inside writeEntry if that ever matters.
-  const db = openStore(hippoRoot);
-  try {
-    return getMeta(db, TYPED_HALF_LIFE_META_KEY, '') === '' ? LEGACY_TYPED_HALF_LIFE : loadConfig(hippoRoot).defaultHalfLifeDays;
-  } finally {
-    closeHippoDb(db);
-  }
+/** The base an object writer gives its memory: the flat 90 days until the store's typed migration has run (`onDefault`), which then moves them, and the default after. */
+export function objectHalfLifeDays(hippoRoot: string, onDefault: boolean): number {
+  return onDefault ? loadConfig(hippoRoot).defaultHalfLifeDays : LEGACY_TYPED_HALF_LIFE;
 }
 
 /**

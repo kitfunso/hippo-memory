@@ -8,9 +8,9 @@ import { PRE_COMPACT_TAIL_BYTES, readTranscriptTail, truncateCodePointSafe } fro
 import { humanUserText, summariseTranscript } from './transcript.js';
 import { copilotTurn } from './copilot-transcript.js';
 
-export const PRE_COMPACT_TASK_CAP = 200;
-export const PRE_COMPACT_SUMMARY_CAP = 2000;
-export const PRE_COMPACT_NEXT_STEP_CAP = 500;
+const PRE_COMPACT_TASK_CAP = 200;
+const PRE_COMPACT_SUMMARY_CAP = 2000;
+const PRE_COMPACT_NEXT_STEP_CAP = 500;
 const TRIM_MARKER = '[...earlier turns trimmed]\n';
 
 /** The longest each field of {@link transcriptWorkingState} can be, so a check of a sent working state imports these instead of copying them. */

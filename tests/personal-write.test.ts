@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { remember, type Actor, type HippoDbContext } from '../src/api.js';
 import { BadRequestError } from '../src/api-errors.js';
 import { createApiKey } from '../src/store/auth.js';
-import { cmdRemember } from '../src/cli/remember.js';
+import { handleRemember } from '../src/cli/remember.js';
 import { closeHippoDb, openHippoDb } from '../src/db.js';
 import { mapApiError } from '../src/http-util.js';
 import { importVault } from '../src/importers/vault.js';
@@ -117,9 +117,9 @@ describe('client scopes', () => {
   it('CLI remember --scope refuses a personal scope', async () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     try {
-      await expect(cmdRemember(root, 'cli personal attempt', { force: true, scope: 'personal:private:b' })).rejects.toThrow(BadRequestError);
+      await expect(handleRemember({ hippoRoot: root, args: ['cli personal attempt'], flags: { force: true, scope: 'personal:private:b' } })).rejects.toThrow(BadRequestError);
       expect(loadAllEntries(root)).toHaveLength(0);
-      await cmdRemember(root, 'cli team note', { force: true, scope: 'team' });
+      await handleRemember({ hippoRoot: root, args: ['cli team note'], flags: { force: true, scope: 'team' } });
     } finally {
       log.mockRestore();
     }

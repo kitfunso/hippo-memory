@@ -294,12 +294,8 @@ export default function register(api: any) {
     async execute(_id: string, params: { query: string; budget?: number }) {
       const cfg = getConfig(api);
       const budget = params.budget ?? cfg.budget ?? 1500;
-      const framing = cfg.framing ?? 'observe';
       const hippoCwd = resolveHippoCwdFromContext(api, ctx, cfg.root);
-      const result = runHippo(
-        ['recall', params.query, '--budget', String(budget), '--framing', framing],
-        hippoCwd,
-      );
+      const result = runHippo(['recall', params.query, '--budget', String(budget)], hippoCwd);
       return { content: [{ type: 'text', text: result || 'No relevant memories found.' }] };
     },
   }));

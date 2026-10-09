@@ -5,7 +5,7 @@ import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { queryAuditEvents } from '../src/store/audit.js';
 import { remember as apiRemember } from '../src/api.js';
 import { handleMcpRequest, type McpResponse, type McpContext } from '../src/mcp/server.js';
-import { lastRecalledIds, MAX_RECALL_CLIENTS } from '../src/mcp/session-state.js';
+import { lastRecalledIds } from '../src/mcp/session-state.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 // v0.39 commit 2 regressions:
@@ -260,6 +260,7 @@ describe('mcp tenant + client-key isolation', () => {
       { hippoRoot: home, tenantId: 'alpha', actor: { subject: 'cli', role: 'admin' } },
       { content: 'recall client cap canary', project: { name: 'acme' } },
     );
+    const MAX_RECALL_CLIENTS = 4096;
     lastRecalledIds.clear();
     try {
       for (let i = 0; i < MAX_RECALL_CLIENTS; i++) lastRecalledIds.set(`flood:${i}`, []);
