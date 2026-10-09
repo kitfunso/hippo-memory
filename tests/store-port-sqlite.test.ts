@@ -10,7 +10,7 @@ import { appendAuditEvent, type AppendAuditOpts } from '../src/store/audit.js';
 import { _resetAblationCacheForTests } from '../src/ablation.js';
 import { embeddingIndexIdentity, loadStoredVectors } from '../src/embeddings.js';
 import { detectForwardClaim } from '../src/forward-claim-detector.js';
-import { boostByGoals, getActiveGoalsWithDb, loadGoalPolicies, localGoalRecallRows, pushGoal, writeGoalRecallLog } from '../src/store/goals.js';
+import { activeGoalsWithPolicies, boostByGoals, localGoalRecallRows, pushGoal, writeGoalRecallLog } from '../src/store/goals.js';
 import { __resetSessionRecallHistoryMcp } from '../src/mcp/server.js';
 import { lastRecalledIds } from '../src/mcp/session-state.js';
 import { loadPhysicsState, resetAllPhysicsState } from '../src/db/physics-state.js';
@@ -201,15 +201,7 @@ describe('sqliteStore reads equal the hippo.db functions they wrap and open no m
     async (_name, sessionId, goals, policies) => {
       const opts = { sessionId, tenantId: TENANT };
       const plain = (g: ActiveGoals) => ({ goals: g.goals, policies: [...g.policies] });
-      const { direct, port } = await parity((s) => {
-        const db = openHippoDb(s.root);
-        try {
-          const active = getActiveGoalsWithDb(db, opts);
-          return plain({ goals: active, policies: loadGoalPolicies(db, active) });
-        } finally {
-          closeHippoDb(db);
-        }
-      }, async (store) => plain(await store.activeGoals(opts)));
+      const { direct, port } = await parity((s) => plain(activeGoalsWithPolicies(s.root, opts)), async (store) => plain(await store.activeGoals(opts)));
       expect([direct.value.goals.length, direct.value.policies.length]).toEqual([goals, policies]);
       expect(port.opens).toBe(direct.opens);
     },
@@ -385,12 +377,12 @@ describe('sqliteStore writes leave the rows the hippo.db functions leave, each o
     const globalRow = seeded('deploy notes from the global store about rollbacks', 'mem_p_global', '2026-01-12T00:00:00.000Z', {}, { tags: ['goal-alpha'] });
     const { direct, port } = await parity((s) => {
       const [goalRow] = loadEntriesByIds(s.root, ['mem_p_goal']);
+      const active = activeGoalsWithPolicies(s.root, { sessionId: SESSION, tenantId: TENANT });
       const db = openHippoDb(s.root);
       try {
-        const goals = getActiveGoalsWithDb(db, { sessionId: SESSION, tenantId: TENANT });
         const boost = boostByGoals(
           [{ entry: goalRow!, score: 0.8 }, { entry: globalRow, score: 0.7 }],
-          { goals, policies: loadGoalPolicies(db, goals) },
+          active,
           { sessionId: SESSION, tenantId: TENANT, limit: 10 },
         );
         writeGoalRecallLog(db, localGoalRecallRows(db, boost.log));

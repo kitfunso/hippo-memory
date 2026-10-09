@@ -5,14 +5,26 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
-import { MEMORY_SELECT_COLUMNS } from '../src/store/rows.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { loadAmbientCandidates, AMBIENT_PINNED_WHERE, AMBIENT_DRIFT_SQL } from '../src/store/candidates.js';
+import { loadAmbientCandidates } from '../src/store/candidates.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { recordStatements } from './_helpers/count-statements.js';
 import { LATEST_SCHEMA_VERSION_STR } from './_helpers/schema-version.js';
 
-const PINNED_SQL = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${AMBIENT_PINNED_WHERE}`;
+/** The pinned and drift statements loadAmbientCandidates really prepares, so the plan checks run the production SQL. */
+interface AmbientSql {
+  readonly pinned: string;
+  readonly drift: string;
+}
+
+function ambientSql(root: string): AmbientSql {
+  const { statements } = recordStatements(() => loadAmbientCandidates(root, 'default', 1, () => true));
+  const pinned = statements.find((sql) => sql.includes('pinned = 1'));
+  const drift = statements.find((sql) => sql.includes('length(created)'));
+  if (pinned === undefined || drift === undefined) throw new Error('loadAmbientCandidates did not prepare the pinned and drift statements');
+  return { pinned, drift };
+}
 
 function plan(db: DatabaseSyncLike, sql: string): string {
   // SAFETY: EXPLAIN QUERY PLAN rows carry a TEXT `detail` column.
@@ -38,6 +50,7 @@ function seedStore() {
 describe('ambient pinned query plan', () => {
   it('uses idx_memories_pinned and idx_memories_created_drift', () => {
     const { root, home } = seedStore();
+    const { pinned: PINNED_SQL, drift: AMBIENT_DRIFT_SQL } = ambientSql(root);
     const db = openHippoDb(root);
     try {
       expect(plan(db, PINNED_SQL)).toContain('USING INDEX idx_memories_pinned');
@@ -52,6 +65,7 @@ describe('ambient pinned query plan', () => {
   it('still reports drift and returns pins in created order through the indexes', () => {
     const { root, home } = seedStore();
     try {
+      const { drift: AMBIENT_DRIFT_SQL } = ambientSql(root);
       const db = openHippoDb(root);
       try {
         // SAFETY: one `id` TEXT column.

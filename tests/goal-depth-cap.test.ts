@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
-import { pushGoal, getActiveGoals, MAX_ACTIVE_GOAL_DEPTH } from '../src/store/goals.js';
+import { pushGoal, getActiveGoals } from '../src/store/goals.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 
 describe('goal stack depth cap', () => {
@@ -15,8 +15,11 @@ describe('goal stack depth cap', () => {
   });
   afterEach(() => rmSync(root, { recursive: true, force: true }));
 
-  it('exposes MAX_ACTIVE_GOAL_DEPTH = 3', () => {
-    expect(MAX_ACTIVE_GOAL_DEPTH).toBe(3);
+  it('keeps three goals active and evicts on the fourth push', () => {
+    for (const goalName of ['a', 'b', 'c']) pushGoal(root, { ...ctx, goalName });
+    expect(getActiveGoals(root, ctx)).toHaveLength(3);
+    pushGoal(root, { ...ctx, goalName: 'd' });
+    expect(getActiveGoals(root, ctx).map((g) => g.goalName)).toEqual(['b', 'c', 'd']);
   });
 
   it('auto-suspends the oldest active goal when pushing the 4th', () => {
