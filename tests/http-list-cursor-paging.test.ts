@@ -175,13 +175,7 @@ describe('no paging params: the body a small store got before cursors existed', 
   });
 
   it('/v1/auth/keys returns the same bare array, with no next-page header', async () => {
-    const db = openHippoDb(home);
-    let expected: JsonValue;
-    try {
-      expected = json(listApiKeys(db, { active: true }).filter((k) => k.tenantId === 'default'));
-    } finally {
-      closeHippoDb(db);
-    }
+    const expected = json(listApiKeys(home, { active: true }).filter((k) => k.tenantId === 'default'));
     const page = await getPage(ROUTES[0]!);
     expect(page.status).toBe(200);
     expect(page.body).toEqual(expected);

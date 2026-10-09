@@ -16,7 +16,7 @@ import type { SearchResult } from '../core/search-types.js';
 import { explainMatch } from '../search/explain.js';
 import { isSharedStore, loadConfig, type HippoConfig } from '../config.js';
 import { createDeliveryRecorder, type DeliveryEventType, type DeliveryRecorder } from '../delivery-recorder.js';
-import { openHippoDb, closeHippoDb, isSqliteBusy, noteStoreBusy, runWithRequestStores, HOOK_DB_WAIT_MS } from '../db.js';
+import { isSqliteBusy, noteStoreBusy, runWithRequestStores, HOOK_DB_WAIT_MS } from '../db.js';
 import { ledgerRoot, withLedgerDb } from '../ledger-db.js';
 import { sessionPilotArm } from '../pilot-arm.js';
 import { hookPayloadSessionId, hookPayloadString, isSubagentPayload, recordTokenUse } from '../token-ledger.js';
@@ -28,7 +28,8 @@ import { isGlobalStoreRoot, resolveProjectIdentity } from '../project-identity.j
 import { getGlobalRoot, initGlobal } from '../shared.js';
 import { DAILY_TASK_NAME, buildDailyRunnerCommand, buildSchtasksCreateArgs, buildWindowsTaskRun } from '../scheduler.js';
 import { sanitizeLogMessage } from '../capture/compact.js';
-import { type AuditOp, appendAuditEvent, reportAuditWriteFailure } from '../store/audit.js';
+import { type AuditOp, reportAuditWriteFailure } from '../store/audit.js';
+import { sqliteSyncStore } from '../store/sqlite/store.js';
 import * as client from './client.js';
 import { type ServerInfo, detectServer, removePidfileIfOwned } from '../server-detect.js';
 import { resolveTenantId } from '../tenant.js';
@@ -78,18 +79,13 @@ export function emitCliAudit(
   metadata?: Record<string, unknown>,
 ): void {
   try {
-    const db = openHippoDb(hippoRoot);
-    try {
-      appendAuditEvent(db, {
-        tenantId: resolveTenantId({}),
-        actor: 'cli',
-        op,
-        targetId,
-        metadata,
-      });
-    } finally {
-      closeHippoDb(db);
-    }
+    sqliteSyncStore(hippoRoot).appendAuditEvents([{
+      tenantId: resolveTenantId({}),
+      actor: 'cli',
+      op,
+      targetId,
+      metadata,
+    }]);
   } catch (error) {
     // Best effort: the command already did its work.
     reportAuditWriteFailure(op, String(error), targetId);
