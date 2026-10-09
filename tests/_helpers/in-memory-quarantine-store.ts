@@ -7,7 +7,7 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/memory.js';
 import { recordQuarantine } from '../../src/quarantine.js';
 import { withSqliteAllowed, type HippoStore, type KeysetPosition, type MemoryEntry } from '../../src/server.js';
 import { selectEntriesByIds } from '../../src/store/entry-reads.js';
-import { writeEntryOn } from '../../src/store/entry-writes.js';
+import { writeEntry } from '../../src/store/entry-writes.js';
 import { openStore } from '../../src/store/open.js';
 import type { Quarantine, QuarantineRefusal, QuarantinedMemory } from '../../src/store/port.js';
 import type { QuarantineRow } from '../../src/store/quarantine.js';
@@ -156,7 +156,7 @@ export function seedQuarantineRecords(dir: string): string {
       vi.setSystemTime(new Date(heldAt(r.second)));
       if (r.memoryScope !== undefined) {
         const entry = createMemory(heldContent(r.memoryId), { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId: r.tenantId, scope: r.memoryScope });
-        writeEntryOn(db, dir, { ...entry, id: r.memoryId });
+        writeEntry(dir, { ...entry, id: r.memoryId });
       }
       recordQuarantine(db, { tenantId: r.tenantId, memoryId: r.memoryId, originalScope: r.originalScope, reason: 'test', actor: 'seed' });
     }

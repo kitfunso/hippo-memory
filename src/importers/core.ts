@@ -4,13 +4,13 @@
  */
 
 import { createMemory, Layer, MemoryEntry } from '../memory.js';
-import { writeEntryOn } from '../store/entry-writes.js';
-import { openStore } from '../store/open.js';
+import { writeEntry } from '../store/entry-writes.js';
 import { loadAllEntries } from '../store/entry-reads.js';
 import { duplicateKey, storedTextKeys } from '../same-text.js';
 import { getGlobalRoot, initGlobal } from '../shared.js';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../db.js';
-import { RejectedValueError, checkRejectionGuard } from '../store/rejection.js';
+import { withRequestStoresSync } from '../db/request-stores.js';
+import { RejectedValueError } from '../store/rejection.js';
+import { rejectionGuardRefuses } from '../store/rejected-values.js';
 import { loadConfig } from '../config.js';
 import { vetSecrets } from '../secret-detect.js';
 import { log } from '../log.js';
@@ -96,9 +96,8 @@ export function importEntries(
   let redacted = 0;
   const entries: MemoryEntry[] = [];
 
-  // A dry run probes the rejection guard read-only; a real run writes every chunk on this one handle.
-  const db = options.dryRun ? openHippoDb(targetRoot) : openStore(targetRoot);
-  try {
+  // One scope, so the store opens once however many chunks land: each write, or a dry run's guard probe, shares its handle.
+  return withRequestStoresSync(() => {
     for (const raw of chunks) {
       const { chunk, wasRedacted } = prepareImportChunk(raw, allTags);
 
@@ -110,7 +109,7 @@ export function importEntries(
       }
 
       const entry = createImportEntry(chunk, source, allTags, options, baseHalfLifeDays);
-      if (!writeOrProbeImport(db, targetRoot, entry, options)) {
+      if (!writeOrProbeImport(targetRoot, entry, options)) {
         rejected++;
         continue;
       }
@@ -123,9 +122,7 @@ export function importEntries(
     }
 
     return { total, imported, skipped, rejected, redacted, entries };
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }
 
 /** The store the import writes to, made ready, with the text keys it already holds. */
@@ -192,16 +189,11 @@ function createImportEntry(
 }
 
 /** Writes the entry, or on a dry run only probes the guard; false when a rejected value refuses it. */
-function writeOrProbeImport(
-  db: DatabaseSyncLike,
-  targetRoot: string,
-  entry: MemoryEntry,
-  options: ImportOptions,
-): boolean {
+function writeOrProbeImport(targetRoot: string, entry: MemoryEntry, options: ImportOptions): boolean {
+  if (options.dryRun) return !rejectionGuardRefuses(targetRoot, entry.tenantId ?? 'default', entry.id, entry.content);
   // A rejection refuses one chunk, not the whole import, so siblings still land.
   try {
-    if (options.dryRun) checkRejectionGuard(db, entry.tenantId ?? 'default', entry.id, entry.content);
-    else writeEntryOn(db, targetRoot, entry);
+    writeEntry(targetRoot, entry);
   } catch (err) {
     if (err instanceof RejectedValueError) return false;
     throw err;

@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { makeRoot } from './_helpers/make-root.js';
 import { recordStatements, recordStatementsAsync, countMatching, STORE_OPEN } from './_helpers/count-statements.js';
 import { openStore } from '../src/store/open.js';
-import { writeEntryOn, strengthenRetrieved } from '../src/store/entry-writes.js';
+import { writeEntry, strengthenRetrieved } from '../src/store/entry-writes.js';
 import { MEMORY_SELECT_COLUMNS } from '../src/store/rows.js';
 import { closeHippoDb } from '../src/db.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/memory.js';
@@ -20,6 +20,8 @@ import { quarantineList } from '../src/api/quarantine.js';
 import { drillDown } from '../src/api/drill-down.js';
 import { recordQuarantine, quarantineScopeFor } from '../src/quarantine.js';
 import { importEntries } from '../src/importers/core.js';
+import { importVault } from '../src/importers/vault.js';
+import { withRequestStoresSync } from '../src/db/request-stores.js';
 import { invalidateMatching, detectChurnStale } from '../src/invalidation.js';
 import { replaceDetectedConflicts, resolveConflict, listMemoryConflicts } from '../src/store/conflicts.js';
 import { deduplicateStore } from '../src/dedupe.js';
@@ -53,17 +55,15 @@ function memory(content: string, extra: Partial<MemoryEntry> = {}): MemoryEntry 
   return { ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), ...extra };
 }
 
-/** Seeds on one handle so a 200-row fixture stays fast. */
+/** Seeds in one store scope, which opens the store once, so a 200-row fixture stays fast. */
 function seed(root: string, entries: readonly MemoryEntry[], after?: (db: ReturnType<typeof openStore>, e: MemoryEntry) => void): void {
-  const db = openStore(root);
-  try {
+  withRequestStoresSync(() => {
+    const db = openStore(root);
     for (const e of entries) {
-      writeEntryOn(db, root, e);
+      writeEntry(root, e);
       after?.(db, e);
     }
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }
 
 function rows(n: number, label: string, extra: Partial<MemoryEntry> = {}): MemoryEntry[] {
@@ -174,6 +174,32 @@ describe('importEntries', () => {
       const root = freshRoot('qc-import');
       const chunks = Array.from({ length: n }, (_, i) => `imported chunk ${i} about the zephyrine cache`);
       const { result, statements } = recordStatements(() => importEntries(chunks, 'import:test', ['imported'], { hippoRoot: root, tenantId: 'default' }));
+      expect(result.imported).toBe(n);
+      return countMatching(statements, STORE_OPEN);
+    });
+    expect(opens[1]).toBe(opens[0]);
+  });
+
+  it('probes a dry run on a fixed number of opens too', () => {
+    const opens = SIZES.map((n) => {
+      const root = freshRoot('qc-import-dry');
+      const chunks = Array.from({ length: n }, (_, i) => `previewed chunk ${i} about the zephyrine cache`);
+      const { result, statements } = recordStatements(() => importEntries(chunks, 'import:test', ['imported'], { hippoRoot: root, tenantId: 'default', dryRun: true }));
+      expect(result.imported).toBe(n);
+      return countMatching(statements, STORE_OPEN);
+    });
+    expect(opens[1]).toBe(opens[0]);
+  });
+});
+
+describe('importVault', () => {
+  it('probes a dry run on a fixed number of opens however many notes changed', () => {
+    const opens = SIZES.map((n) => {
+      const root = freshRoot('qc-vault-dry');
+      const vault = path.join(freshRoot('qc-vault-notes'), 'notes');
+      fs.mkdirSync(vault);
+      for (let i = 0; i < n; i++) fs.writeFileSync(path.join(vault, `note-${i}.md`), `vault note ${i} about the zephyrine cache`);
+      const { result, statements } = recordStatements(() => importVault(vault, { hippoRoot: root, tenantId: 'default', name: 'notes', dryRun: true }));
       expect(result.imported).toBe(n);
       return countMatching(statements, STORE_OPEN);
     });
