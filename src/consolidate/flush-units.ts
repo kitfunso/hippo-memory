@@ -1,7 +1,7 @@
 // Splits sleep's queued writes, deletes and dormant moves into components that must each commit whole, so the flush can commit in short transactions.
 import type { MemoryEntry } from '../core/memory.js';
 import type { DormantMove } from '../store/dormant.js';
-import type { FlushComponent } from '../store/delete-and-batch.js';
+import type { FlushComponent, LoadedRows } from '../store/delete-and-batch.js';
 
 /** Components that share no id, ordered by each one's first op across writes, then deletes, then dormant moves. */
 export function groupFlush(
@@ -53,7 +53,7 @@ export function familyUnits(
   writes: readonly MemoryEntry[],
   deletes: readonly string[],
   dormant: readonly DormantMove[],
-  snapshot: ReadonlyMap<string, MemoryEntry>,
+  snapshot: LoadedRows,
 ): string[][] {
   const removing = new Set([...deletes, ...dormant.map((m) => m.entry.id)]);
   const units: string[][] = [];

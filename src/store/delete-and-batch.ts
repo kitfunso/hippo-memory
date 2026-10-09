@@ -116,6 +116,9 @@ function deleteEntryOn(
   return true;
 }
 
+/** Each row as the caller loaded it, by id; a `ReadonlyMap` fits. */
+export type LoadedRows = Pick<ReadonlyMap<string, MemoryEntry>, 'get'>;
+
 // The child fields a level-2/3 summary is built from (loadChildrenOfSummary, generateDagSummary).
 const SUMMARY_INPUTS = ['content', 'created', 'dag_parent_id', 'kind'] as const;
 
@@ -182,7 +185,7 @@ function batchWriteAndDeleteOn(
   hippoRoot: string,
   components: readonly FlushComponent[],
   from: number,
-  opts: { snapshot?: ReadonlyMap<string, MemoryEntry>; holdMs: number; clock?: () => number },
+  opts: { snapshot?: LoadedRows; holdMs: number; clock?: () => number },
 ): FlushChunk {
   const now = opts.clock ?? clock;
   const out: ChunkLog = { written: [], removedIds: [], rejectedSkips: 0, fts: { rows: [], staleIds: [] }, dirty: { parents: new Set(), tenantById: new Map() } };
@@ -232,7 +235,7 @@ function applyComponent(
   db: DatabaseSyncLike,
   hippoRoot: string,
   component: FlushComponent,
-  snapshot: ReadonlyMap<string, MemoryEntry> | undefined,
+  snapshot: LoadedRows | undefined,
   out: ChunkLog,
 ): void {
   // Snapshot every doomed row's dag_parent_id before the deletes: consolidation flushes through here
@@ -314,7 +317,7 @@ function selectAutoDeletableRows(
 function applyBatchWrites(
   db: DatabaseSyncLike,
   stampedWrites: MemoryEntry[],
-  snapshot: ReadonlyMap<string, MemoryEntry> | undefined,
+  snapshot: LoadedRows | undefined,
   out: ChunkLog,
 ): void {
   // Probe tombstones per entry on THIS connection inside the transaction: the producer's check ran earlier
@@ -392,7 +395,7 @@ export function deleteEntriesOneByOne(
 export async function commitInChunks(
   hippoRoot: string,
   components: readonly FlushComponent[],
-  opts: { snapshot: ReadonlyMap<string, MemoryEntry>; budget: WriteBudget; busyWaitMs: number },
+  opts: { snapshot: LoadedRows; budget: WriteBudget; busyWaitMs: number },
 ): Promise<string[]> {
   if (components.length === 0) return [];
   const { snapshot, budget } = opts;

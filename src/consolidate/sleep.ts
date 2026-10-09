@@ -9,8 +9,8 @@
 
 import { evalNow } from '../core/ablation.js';
 import { MemoryEntry, canAutoDelete, type DecayOptions } from '../core/memory.js';
-import { loadAllEntries } from '../store/entry-reads.js';
-import { commitInChunks, memoriesBackingObjects } from '../store/delete-and-batch.js';
+import { loadAllEntriesWithBase } from '../store/entry-reads.js';
+import { commitInChunks, memoriesBackingObjects, type LoadedRows } from '../store/delete-and-batch.js';
 import { appendConsolidationRun, loadSessionDecayContext, incrementSleepCount } from '../store/index-and-stats.js';
 import { replaceDetectedConflicts } from '../store/conflicts.js';
 import { SLEEP_DB_WAIT_MS } from '../db/index.js';
@@ -46,12 +46,11 @@ export async function consolidate(
 
   // Host-wide by design: per-tenant filtering would mean N runs per host and no cross-tenant dedup.
   // The api.sleep audit row tags this with the admin synthetic actor.
-  const all = loadAllEntries(hippoRoot);
+  const { entries: all, base: snapshot } = loadAllEntriesWithBase(hippoRoot);
   if (dryRun) for (const e of all) e.half_life_days = halfLife.halfLives.get(e.id) ?? e.half_life_days;
   const backingObjects = memoriesBackingObjects(hippoRoot);
   // Retirable: auto-deletable (never pinned, raw or kept for good) and not backing a first-class object.
   const retirable = (entry: MemoryEntry): boolean => canAutoDelete(entry) && !backingObjects.has(entry.id);
-  const snapshot = new Map(structuredClone(all).map((e) => [e.id, e]));
 
   const config = loadConfig(hippoRoot);
   const decayOpts = sessionDecayOptions(hippoRoot, config);
@@ -121,7 +120,7 @@ function migrateHalfLives(hippoRoot: string, dryRun: boolean, result: Consolidat
   return halfLife;
 }
 
-async function flushPending(run: SleepRun, snapshot: Map<string, MemoryEntry>, budget: WriteBudget): Promise<void> {
+async function flushPending(run: SleepRun, snapshot: LoadedRows, budget: WriteBudget): Promise<void> {
   const { result, pendingWrites, pendingDeletes, pendingDormant } = run;
   result.removedIds = pendingDeletes;
   if (run.dryRun) return;

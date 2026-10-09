@@ -311,18 +311,46 @@ export function loadAllEntries(hippoRoot: string, tenantId?: string): MemoryEntr
   }
 }
 
-/** Every memory row on an open connection, so a caller can read inside its own transaction. */
-export function selectAllEntries(db: DatabaseSyncLike, tenantId?: string): MemoryEntry[] {
+export interface EntriesWithBase {
+  entries: MemoryEntry[];
+  base: { get(id: string): MemoryEntry | undefined };
+}
+
+/** Every entry plus a by-id lookup of each as loaded, rebuilt from its row on first use, so no deep copy of the store is kept. */
+export function loadAllEntriesWithBase(hippoRoot: string): EntriesWithBase {
+  const db = openStore(hippoRoot);
+  let rows: MemoryRow[];
+  try {
+    rows = selectAllRows(db);
+  } finally {
+    closeHippoDb(db);
+  }
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const built = new Map<string, MemoryEntry>();
+  const get = (id: string): MemoryEntry | undefined => {
+    let entry = built.get(id);
+    const row = byId.get(id);
+    if (!entry && row) built.set(id, (entry = rowToEntry(row)));
+    return entry;
+  };
+  return { entries: rows.map(rowToEntry), base: { get } };
+}
+
+function selectAllRows(db: DatabaseSyncLike, tenantId?: string): MemoryRow[] {
   // SAFETY: both branches select exactly MEMORY_SELECT_COLUMNS, matching
   // MemoryRow's field set.
-  const rows = tenantId !== undefined
+  return tenantId !== undefined
     ? db.prepare(
         `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE tenant_id = ? ORDER BY created ASC, id ASC`,
       ).all(tenantId) as MemoryRow[]
     : db.prepare(
         `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories ORDER BY created ASC, id ASC`,
       ).all() as MemoryRow[];
-  return rows.map(rowToEntry);
+}
+
+/** Every memory row on an open connection, so a caller can read inside its own transaction. */
+export function selectAllEntries(db: DatabaseSyncLike, tenantId?: string): MemoryEntry[] {
+  return selectAllRows(db, tenantId).map(rowToEntry);
 }
 
 /** Live rows whose source starts with `prefix`, on the caller's handle; LIKE folds case, so the prefix is checked again exactly. */
