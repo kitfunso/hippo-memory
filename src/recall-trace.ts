@@ -237,7 +237,7 @@ export function recordTraceOutcome(db: DatabaseSyncLike, input: RecordTraceOutco
 export const DELIVERY_LEDGER_RETENTION_DAYS = 90;
 /** Lock wait for the ledger's own connection: a busy store drops the row rather than slow the hook. */
 export const DELIVERY_LEDGER_WAIT_MS = 50;
-/** Two prompt-identical events without a host turn id this close together are one turn fired twice. */
+/** Two prompt-identical events without a host turn id, or two boundary events of one type, this close are one fire twice. */
 export const DELIVERY_DUPLICATE_WINDOW_MS = 2000;
 
 const DELIVERY_EVENT_COLUMNS = [

@@ -11,15 +11,15 @@ The delivery ledger now writes one boundary row for each accepted call of `hippo
 
 ## What ran
 
-Run at `44a6995f` plus the comment restore `e2a1e2b5`, on node v24.13.0.
+Run at `3fe2473b`, on node v24.13.0.
 
 ```
 npm --prefix C:/Users/skf_s/hippo-wt-z10b run build
 npm --prefix C:/Users/skf_s/hippo-wt-z10b run test:delivery-ledger
 ```
 
-- `npm run test:delivery-ledger`: 7 files, 116 tests, all pass (rerun for this document).
-- Targeted vitest list of 9 files (the delivery-ledger files, `tests/prompt-hook-context.test.ts`, `tests/copilot-hooks-cli.test.ts`, `tests/hook-store-open-count.test.ts`, `tests/stdin-bounded.test.ts`): 226 pass, 0 fail. This count comes from the build run on this branch; it was not rerun for this document.
+- `npm run test:delivery-ledger`: 7 files, 120 tests, all pass.
+- Regression vitest run of 9 files with `--maxWorkers=1`: `tests/compaction-pre-compact.test.ts`, `tests/compaction-callers.test.ts`, `tests/pre-compact-e2e.test.ts`, `tests/compact-resume-text.test.ts`, `tests/pilot-arm-hook.test.ts`, `tests/copilot-hooks-cli.test.ts`, `tests/prompt-hook-context.test.ts`, `tests/hook-store-open-count.test.ts`, `tests/stdin-bounded.test.ts`. Result: 226 pass, 0 fail.
 - Red first: tests B3 and B7 failed on the old code (B3 found 0 rows; B7 found 3 of 5). W1 and W6 failed for both boundary types before the duplicate rule existed.
 - Mutations, each caught: the duplicate rule limited to `pre-compact` (caught by the `compact-resume` W1 and W6 cases); the boundary callback moved ahead of the early returns in `runPreCompact` (8 tests failed); no try/catch around the callback (only U1 failed); no flush before `process.exit` in `cmdCompactResume` (4 tests failed).
 - Store-open count for `compact-resume`: `{local: 1}` with the delivery ledger on and with it off (`tests/hook-store-open-count.test.ts`).

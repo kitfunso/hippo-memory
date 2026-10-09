@@ -1,4 +1,4 @@
-// In-memory observer for one pinned-only context call: what was considered, why each was rejected, what reached stdout.
+// In-memory observer for one hook call (a pinned-only context call or a compaction boundary): what was considered, why each was rejected, what reached stdout.
 // No DB access (the caller hands build()'s output to src/recall-trace.ts); hashes, ids, counts and enums only, never text.
 import type { MemoryEntry } from './memory.js';
 import { evalNow } from './ablation.js';
