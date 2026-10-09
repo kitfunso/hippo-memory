@@ -5,12 +5,14 @@ import { dirname, join } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { agentGit } from '../scripts/token-eval/checks.mjs';
 import { readerDiff } from '../scripts/token-eval/grading.mjs';
+import { runCli as analyze } from '../scripts/token-eval/z0-analyze.mjs';
 import { checkerIdentity } from '../scripts/token-eval/lessons.mjs';
 import { equalShares, fillStrata, kappa, parseLabels, seededOrder, wilson } from '../scripts/token-eval/g5-draw.mjs';
 import { pairDiff } from '../scripts/token-eval/reader-sample.mjs';
 import { listGrades } from '../scripts/token-eval/regrade.mjs';
 import { g5 } from '../scripts/token-eval/z0-gates.mjs';
 import { CHECKS, cleanup, tmp } from './fixtures/z0-harness.js';
+import { GRADING, PRICES, generate, jsonl } from './fixtures/z0-gen.js';
 import { PHRASE, SEQ, bundledOut, cli, gradeDir, readJson, rowOf, runRoot, sealedKey, storedRecord, synthOut, writeRows, type Cell, type Verdict } from './fixtures/z0-g5.js';
 
 const win = process.platform === 'win32';
@@ -380,6 +382,31 @@ describe('stored sample (179)', () => {
     expect(st.ci95[1]).toBeCloseTo(0.9266, 4);
     expect(wilson(25, 30)?.map((x) => Number(x.toFixed(4)))).toEqual([0.6644, 0.9266]);
     expect(kappa({ yesYes: 4, yesNo: 0, noYes: 0, noNo: 0 })).toBeNull();
+  });
+
+  it('wilson stays inside [0, 1] at full and zero agreement, and the analyzer takes the scorer\'s own full-agreement output (28d)', () => {
+    for (const n of [1, 16, 30, 50]) {
+      expect(wilson(n, n)![1]).toBeLessThanOrEqual(1);
+      expect(wilson(n, n)![1]).toBeCloseTo(1, 12);
+      expect(wilson(0, n)![0]).toBeGreaterThanOrEqual(0);
+      expect(wilson(0, n)![0]).toBeCloseTo(0, 12);
+      expect(wilson(n, n)![0]).toBeGreaterThanOrEqual(0);
+    }
+    expect(wilson(16, 16)![1]).toBe(1);
+    const s = storedOut();
+    expect(cli(['stored', '--out', s.out, '--tasks', s.tasks, '--seed', '3', '--n', '16'])).toMatchObject({ code: 0 });
+    const units: { file: string; judged: string }[] = sealedKey(s.out, 'stored.key.json').units;
+    const file = join(tmp('z0-g5-st-'), 'labels.tsv');
+    writeFileSync(file, units.map((u) => `${u.file}\t${u.judged}\n`).join(''));
+    expect(cli(['stored', '--out', s.out, '--labels', file])).toMatchObject({ code: 0, stdout: expect.stringContaining('16 of 16') });
+    const stored = gradingOf(s.out).storedSample;
+    expect(stored.ci95[1]).toBe(1);
+    const g = generate();
+    const dir = tmp('z0-g5-an-');
+    const files = { 'runs.jsonl': jsonl(g.records), 'plan.json': JSON.stringify(g.plan), 'prices.json': JSON.stringify(PRICES), 'grading.json': JSON.stringify({ ...GRADING, storedSample: stored }) };
+    for (const [f, text] of Object.entries(files)) writeFileSync(join(dir, f), text);
+    const r = analyze(['--runs', 'runs.jsonl', '--plan', 'plan.json', '--prices', 'prices.json', '--grading', 'grading.json', '--iterations', '300'], dir);
+    expect(r).toMatchObject({ code: 0, stderr: '' });
   });
 
   it('puts no arm name in any key or string of grading.json (29, R11)', () => {

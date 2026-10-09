@@ -151,7 +151,8 @@ export function wilson(k, n) {
   const d = 1 + (Z95 * Z95) / n;
   const c = (p + (Z95 * Z95) / (2 * n)) / d;
   const h = (Z95 * Math.sqrt((p * (1 - p)) / n + (Z95 * Z95) / (4 * n * n))) / d;
-  return [c - h, c + h];
+  // Rounding can push an endpoint a hair outside [0, 1], where the analyzer's bounds check rejects it.
+  return [Math.max(0, c - h), Math.min(1, c + h)];
 }
 
 /** Cohen's kappa on a 2x2 table (first word the judgement, second the label); null when chance agreement is 1. */
