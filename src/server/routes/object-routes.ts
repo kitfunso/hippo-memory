@@ -46,11 +46,13 @@ export interface RequiredStringRule {
   readonly max: number;
   /** The field name is a plural noun, so the replies read "are required" and "exceed". */
   readonly plural?: boolean;
+  /** The blank check does not trim, so a value of only spaces passes it. */
+  readonly untrimmed?: boolean;
 }
 
 export function requiredString(body: Record<string, JsonValue>, key: string, rule: RequiredStringRule): string {
   const value = body[key];
-  if (!isJsonString(value) || value.trim().length === 0) {
+  if (!isJsonString(value) || (rule.untrimmed ? value : value.trim()).length === 0) {
     throw new HttpError(400, `${key} ${rule.plural ? 'are' : 'is'} required (non-empty string)`);
   }
   if (value.length > rule.max) {
