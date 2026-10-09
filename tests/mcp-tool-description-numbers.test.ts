@@ -1,4 +1,6 @@
 // A tool description that states a default must state the value the code reads, and hippo_outcome states no fixed half-life delta.
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { TOOLS } from '../src/mcp/tools.js';
 import { DEFAULT_CONFIG } from '../src/core/config.js';
@@ -23,5 +25,11 @@ describe('MCP tool description numbers', () => {
     const text = descriptions('hippo_outcome');
     expect(text).not.toContain('+5 days');
     expect(text).not.toContain('-3 days');
+  });
+
+  it('the OpenClaw plugin states no fixed half-life delta either', () => {
+    const src = readFileSync(join(__dirname, '..', 'extensions', 'openclaw-plugin', 'index.ts'), 'utf8');
+    expect(src).not.toContain('+5 days');
+    expect(src).not.toContain('-3 days');
   });
 });

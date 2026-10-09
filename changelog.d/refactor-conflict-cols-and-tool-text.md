@@ -1,6 +1,6 @@
 ### Fixed
 
-- The `hippo_outcome` tool description no longer states half-life changes (+5 days, -3 days) that the model does not make.
+- The `hippo_outcome` tool description, in the MCP server and the OpenClaw plugin, no longer states half-life changes (+5 days, -3 days) that the model does not make.
 
 ### Changed
 
