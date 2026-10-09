@@ -16,6 +16,7 @@ import { printError } from './output.js';
 import { requireInit } from './shared.js';
 import { printActiveTaskSnapshot, printSessionEvents, printHandoff } from './print.js';
 import { type CliFlags, boolFlag, type CommandContext } from './flag-values.js';
+import { CliExit } from './exit.js';
 
 const ISO_DATETIME_CHARS = 19;
 
@@ -27,7 +28,7 @@ function snapshotSave(hippoRoot: string, tenantId: string, flags: CliFlags): voi
 
   if (!task || !summary || !nextStep) {
     printError('Usage: hippo snapshot save --task <task> --summary <summary> --next-step <step> [--source <source>] [--session <session-id>]');
-    process.exit(1);
+    throw new CliExit(1);
   }
 
   const snapshot = saveActiveTaskSnapshot(hippoRoot, tenantId, {
@@ -84,7 +85,7 @@ export function handleSnapshot({ hippoRoot, tenantId, args, flags }: CommandCont
   if (subcommand === 'show') return snapshotShow(hippoRoot, tenantId, flags);
 
   printError('Usage: hippo snapshot <save|show|clear>');
-  process.exit(1);
+  throw new CliExit(1);
 }
 
 
@@ -101,7 +102,7 @@ function sessionLog(hippoRoot: string, tenantId: string, s: SessionArgs, flags: 
 
   if (!s.sessionId || !content) {
     printError('Usage: hippo session log --id <session-id> --content <text> [--type <type>] [--task <task>] [--source <source>]');
-    process.exit(1);
+    throw new CliExit(1);
   }
 
   const event = appendSessionEvent(hippoRoot, tenantId, {
@@ -160,11 +161,11 @@ function sessionComplete(hippoRoot: string, tenantId: string, s: SessionArgs, fl
 
   if (!sessionId) {
     printError('Usage: hippo session complete --session <session-id> --outcome <success|failure|partial> [--summary "..."]');
-    process.exit(1);
+    throw new CliExit(1);
   }
   if (!isHandoffOutcome(outcomeRaw)) {
     printError(`Invalid outcome: "${outcomeRaw}". Must be one of: success, failure, partial.`);
-    process.exit(1);
+    throw new CliExit(1);
   }
   const outcome: HandoffOutcome = outcomeRaw;
 
@@ -204,7 +205,7 @@ export function handleSession({ hippoRoot, tenantId, args, flags }: CommandConte
   if (subcommand === 'resume') return sessionResume(hippoRoot, tenantId, sessionId);
 
   printError('Usage: hippo session <log|show|latest|resume|complete>');
-  process.exit(1);
+  throw new CliExit(1);
 }
 
 function sessionResume(hippoRoot: string, tenantId: string, sessionId: string): void {
@@ -257,13 +258,13 @@ function handoffCreate(hippoRoot: string, tenantId: string, flags: CliFlags): vo
   const summary = String(flags['summary'] ?? '').trim();
   if (!summary) {
     printError('Usage: hippo handoff create --summary "..." [--next "..."] [--session <id>] [--task <id>] [--artifact <path>...] [--constraint <text>...] [--outcome <success|failure|partial>] [--target-runtime <name>] [--card-id <id>] [--tests <pass|fail|unknown>]');
-    process.exit(1);
+    throw new CliExit(1);
   }
 
   const outcomeRaw = flags['outcome'];
   if (outcomeRaw !== undefined && !isHandoffOutcome(outcomeRaw)) {
     printError(`Invalid outcome: "${String(outcomeRaw)}". Must be one of: success, failure, partial.`);
-    process.exit(1);
+    throw new CliExit(1);
   }
 
   const sessionId = String(flags['session'] ?? flags['id'] ?? '').trim() || `fallback-${Date.now()}-${process.pid}`;
@@ -275,7 +276,7 @@ function handoffCreate(hippoRoot: string, tenantId: string, flags: CliFlags): vo
     // parseArgs turns a value-less flag into `true`; refuse rather than store "true".
     if (flags[name] === true) {
       printError(`--${name} needs a value`);
-      process.exit(1);
+      throw new CliExit(1);
     }
   }
   const targetRuntime = String(flags['target-runtime'] ?? '').trim() || undefined;
@@ -345,13 +346,13 @@ function handoffShow(hippoRoot: string, tenantId: string, args: string[], flags:
   const idArg = args[1];
   if (!idArg) {
     printError('Usage: hippo handoff show <id> [--json]');
-    process.exit(1);
+    throw new CliExit(1);
   }
 
   const handoffId = parseInt(idArg, 10);
   if (!Number.isFinite(handoffId) || handoffId <= 0) {
     printError(`Invalid handoff ID: ${idArg}`);
-    process.exit(1);
+    throw new CliExit(1);
   }
 
   const handoff = loadHandoffById(hippoRoot, tenantId, handoffId);
@@ -382,7 +383,7 @@ export function handleHandoff({ hippoRoot, tenantId, args, flags }: CommandConte
   if (subcommand === 'show') return handoffShow(hippoRoot, tenantId, args, flags);
 
   printError('Usage: hippo handoff <create|latest|show>');
-  process.exit(1);
+  throw new CliExit(1);
 }
 
 function printCurrentState(snapshot: TaskSnapshot | null, events: SessionEvent[]): void {
@@ -449,7 +450,7 @@ export function handleCurrent({ hippoRoot, tenantId, args, flags }: CommandConte
   if (subcommand === 'show') return currentShow(hippoRoot, tenantId, flags);
 
   printError('Usage: hippo current <show>');
-  process.exit(1);
+  throw new CliExit(1);
 }
 
 // ---------------------------------------------------------------------------
@@ -482,7 +483,7 @@ export function handleWm({ hippoRoot, args, flags }: CommandContext): void {
   }
 
   printError('Usage: hippo wm <push|read|clear|flush>');
-  process.exit(1);
+  throw new CliExit(1);
 }
 
 function wmPushCmd(hippoRoot: string, flags: CliFlags): void {
@@ -494,7 +495,7 @@ function wmPushCmd(hippoRoot: string, flags: CliFlags): void {
 
   if (!content) {
     printError('Usage: hippo wm push --scope <scope> --content "..." [--importance 0.8] [--session <id>] [--task <id>]');
-    process.exit(1);
+    throw new CliExit(1);
   }
 
   const id = wmPush(hippoRoot, {

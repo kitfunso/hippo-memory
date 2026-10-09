@@ -51,6 +51,7 @@ import { readCompactResumePayload } from './compact-resume-payload.js';
 import { type CliFlags, type CommandContext, boolFlag, flagIsTrue, stringFlag } from './flag-values.js';
 import { logSessionEndImport, appendSessionEndCloseLog, resetHookInjection, hookStoreRoot, hookRuntime, payloadCwdRoot, runHookWithStores, inPilotHoldout, startDeliveryRecorder } from './hook-runtime.js';
 import type { JsonValue } from '../util/json.js';
+import { CliExit } from './exit.js';
 
 /**
  * SessionStart(compact) injector. Prints the active task snapshot + recent
@@ -70,7 +71,7 @@ function cmdCompactResume(hippoRoot: string, tenantId: string, stdinText: string
     // Gate on the non-exiting isInitialized check first: the store reads below call initStore, which would
     // silently create a store in a project that never ran `hippo init`, and this hook fires globally.
     if (!isInitialized(hippoRoot)) {
-      process.exit(0);
+      throw new CliExit(0);
     }
 
     const payloadState = readCompactResumePayload(stdinText, stdinTimedOut);
@@ -87,12 +88,13 @@ function cmdCompactResume(hippoRoot: string, tenantId: string, stdinText: string
 
     if (!suppressOutput) restoreCompactSnapshot(hippoRoot, tenantId, payloadSessionId, rec);
   } catch (err) {
+    if (err instanceof CliExit) throw err;
     // Empty stdout on any store error, never a crashed SessionStart; the reason goes to stderr, which the model never sees.
     log.warn(`hippo compact-resume: skipped: ${errorMessage(err)}`);
   }
   // A no-op when the token ledger's handle already wrote the row; exit would drop it otherwise.
   flushDeliveryRecorder(rec);
-  process.exit(0);
+  throw new CliExit(0);
 }
 
 function restoreCompactSnapshot(hippoRoot: string, tenantId: string, payloadSessionId: string | null, rec: DeliveryRecorder | null): void {
@@ -746,7 +748,7 @@ export async function handleCapture({ hippoRoot, tenantId, flags }: CommandConte
 
   if (!captureSource) {
     printError('Usage: hippo capture --stdin|--file <path>|--last-session [--transcript <path>] [--log-file <path>] [--dry-run] [--global]');
-    process.exit(1);
+    throw new CliExit(1);
   }
 
   // Bounded, and only when last-session has no explicit path: the

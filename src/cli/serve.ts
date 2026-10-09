@@ -8,6 +8,7 @@ import { printError } from './output.js';
 import { stringFlagOrExit, type CommandContext, stringFlag } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { errorMessage } from '../util/log.js';
+import { CliExit } from './exit.js';
 
 export async function handleDashboard({ hippoRoot, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
@@ -38,13 +39,13 @@ function readTlsFiles(flags: CommandContext['flags']): { cert: Buffer; key: Buff
   if (certPath === undefined && keyPath === undefined) return undefined;
   if (certPath === undefined || keyPath === undefined) {
     printError('hippo serve: TLS needs both a certificate and a key: --tls-cert and --tls-key, or HIPPO_TLS_CERT and HIPPO_TLS_KEY.');
-    process.exit(1);
+    throw new CliExit(1);
   }
   try {
     return { cert: fs.readFileSync(certPath), key: fs.readFileSync(keyPath) };
   } catch (err) {
     printError(`hippo serve: cannot read the TLS files: ${errorMessage(err)}`);
-    process.exit(1);
+    throw new CliExit(1);
   }
 }
 
@@ -54,7 +55,7 @@ export async function handleServe({ hippoRoot, flags }: CommandContext): Promise
   const port = Number(portRaw);
   if (!Number.isFinite(port) || port < 0) {
     printError(`Invalid --port: ${String(portRaw)}`);
-    process.exit(1);
+    throw new CliExit(1);
   }
   const host = stringFlag(flags, 'host') ?? '127.0.0.1';
   const tls = readTlsFiles(flags);

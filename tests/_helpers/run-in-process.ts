@@ -2,6 +2,7 @@
 // so a verb test skips the node start-up and module load a child process pays.
 import { format } from 'node:util';
 import { vi } from 'vitest';
+import { CliExit } from '../../src/cli/exit.js';
 
 /** Thrown in place of process.exit so the verb stops where the real process would. */
 export class ExitCalled extends Error {
@@ -16,7 +17,7 @@ export interface InProcessResult {
   readonly status: number;
 }
 
-/** Captures console and stream writes while `fn` runs; the first process.exit(n) ends the run with status n. */
+/** Captures console and stream writes while `fn` runs; the first process.exit(n) or thrown CliExit(n) ends the run with status n. */
 export async function runInProcess(fn: () => void | Promise<void>): Promise<InProcessResult> {
   const out: string[] = [];
   const err: string[] = [];
@@ -35,6 +36,8 @@ export async function runInProcess(fn: () => void | Promise<void>): Promise<InPr
   try {
     await fn();
   } catch (error) {
+    // A verb called without runCli stops by throwing; the entry would exit with that code.
+    if (error instanceof CliExit) exited ??= new ExitCalled(error.code);
     if (!exited) throw error;
   } finally {
     for (const spy of spies) spy.mockRestore();

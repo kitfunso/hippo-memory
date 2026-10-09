@@ -12,6 +12,7 @@ import { printError } from './output.js';
 import { nonEmptyStringFlag, type CliFlags, boolFlag, stringFlag, type CommandContext } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { closeObject, foundOrExit, idArgOrExit, listObjects, printLifecycleTail, type ObjectNames } from './object-verbs.js';
+import { CliExit } from './exit.js';
 
 const BRIEF: ObjectNames = { cmd: 'brief', noun: 'Project brief', idLabel: 'brief' };
 const NOTE: ObjectNames = { cmd: 'note', noun: 'Customer note', idLabel: 'note' };
@@ -44,7 +45,7 @@ function briefRefresh(hippoRoot: string, tenantId: string, args: string[], flags
   const repoRaw = args[1];
   if (!repoRaw) {
     printError('Usage: hippo brief refresh "<repo>" [--dry-run]');
-    process.exit(1);
+    throw new CliExit(1);
   }
   const dryRun = boolFlag(flags, 'dry-run');
   try {
@@ -60,7 +61,7 @@ function briefRefresh(hippoRoot: string, tenantId: string, args: string[], flags
     if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
   } catch (e) {
     printError(errorMessage(e));
-    process.exit(1);
+    throw new CliExit(1);
   }
 }
 
@@ -80,7 +81,7 @@ function briefSupersede(hippoRoot: string, tenantId: string, args: string[], fla
   const summaryRaw = stringFlag(flags, 'summary');
   if (!summaryRaw?.trim()) {
     printError('hippo brief supersede requires --summary "<text>" for the new version.');
-    process.exit(1);
+    throw new CliExit(1);
   }
   const existing = foundOrExit(briefsModule.loadProjectBriefById(hippoRoot, tenantId, id), BRIEF.noun, id);
   try {
@@ -95,7 +96,7 @@ function briefSupersede(hippoRoot: string, tenantId: string, args: string[], fla
     if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
   } catch (e) {
     printError(errorMessage(e));
-    process.exit(1);
+    throw new CliExit(1);
   }
 }
 
@@ -111,7 +112,7 @@ function briefCreate(hippoRoot: string, tenantId: string, args: string[], flags:
   const summaryRaw = stringFlag(flags, 'summary');
   if (!repo || !summaryRaw?.trim()) {
     briefUsage();
-    process.exit(1);
+    throw new CliExit(1);
   }
   try {
     const created = briefsModule.saveProjectBrief(hippoRoot, tenantId, {
@@ -123,7 +124,7 @@ function briefCreate(hippoRoot: string, tenantId: string, args: string[], flags:
     if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
   } catch (e) {
     printError(errorMessage(e));
-    process.exit(1);
+    throw new CliExit(1);
   }
 }
 
@@ -218,7 +219,7 @@ function graphView(hippoRoot: string, tenantId: string, entity: string | undefin
   const format = stringFlag(flags, 'format') ?? 'html';
   if (format !== 'html' && format !== 'canvas') {
     printError("graph view: --format must be 'html' or 'canvas'");
-    process.exit(1);
+    throw new CliExit(1);
   }
   const model = buildGraphModel(hippoRoot, tenantId, { entity, limit: DEFAULT_VIEW_LIMIT });
   const content = format === 'canvas' ? renderGraphCanvas(model) : renderGraphHtml(model);
@@ -243,7 +244,7 @@ export function handleGraph({ hippoRoot, tenantId, args, flags }: CommandContext
       '  hippo graph show [--entity NAME] [--json]   Inspect entities + their edges (text or JSON)\n' +
       '  hippo graph view [--out FILE] [--open] [--format html|canvas] [--entity NAME]   Generate an interactive node-link diagram',
   );
-  process.exit(1);
+  throw new CliExit(1);
 }
 
 function noteList(hippoRoot: string, tenantId: string, flags: CliFlags): void {
@@ -272,7 +273,7 @@ function noteSupersede(hippoRoot: string, tenantId: string, args: string[], flag
   const textRaw = stringFlag(flags, 'text');
   if (!textRaw?.trim()) {
     printError('hippo note supersede requires --text "<note>" for the new version.');
-    process.exit(1);
+    throw new CliExit(1);
   }
   const existing = foundOrExit(customerNotesModule.loadCustomerNoteById(hippoRoot, tenantId, id), NOTE.noun, id);
   try {
@@ -287,7 +288,7 @@ function noteSupersede(hippoRoot: string, tenantId: string, args: string[], flag
     if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
   } catch (e) {
     printError(errorMessage(e));
-    process.exit(1);
+    throw new CliExit(1);
   }
 }
 
@@ -309,7 +310,7 @@ export function handleCustomerNote({ hippoRoot, tenantId, args, flags }: Command
   const textRaw = stringFlag(flags, 'text');
   if (!customer || !textRaw?.trim()) {
     noteUsage();
-    process.exit(1);
+    throw new CliExit(1);
   }
   try {
     const created = customerNotesModule.saveCustomerNote(hippoRoot, tenantId, {
@@ -321,6 +322,6 @@ export function handleCustomerNote({ hippoRoot, tenantId, args, flags }: Command
     if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
   } catch (e) {
     printError(errorMessage(e));
-    process.exit(1);
+    throw new CliExit(1);
   }
 }

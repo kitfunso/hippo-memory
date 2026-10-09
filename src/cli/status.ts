@@ -31,6 +31,7 @@ import { requireInit, resolveAuthRoot } from './shared.js';
 import { fmt } from './print.js';
 import { hookStoreRoot } from './hook-runtime.js';
 import { DAY_MS } from '../util/time.js';
+import { CliExit } from './exit.js';
 
 export function handleStatus({ hippoRoot }: CommandContext): void {
   requireInit(hippoRoot);
@@ -140,7 +141,7 @@ function cmdInspect(hippoRoot: string, tenantId: string, id: string): void {
   const entry = readEntry(hippoRoot, id, tenantId);
   if (!entry) {
     printError(`Memory not found: ${id}`);
-    process.exit(1);
+    throw new CliExit(1);
   }
 
   const now = evalNow();
@@ -309,7 +310,7 @@ export function handleProvenance({ hippoRoot, flags }: CommandContext): void {
     }
   }
   if (flags['strict'] && coverage.coverage < 1) {
-    process.exit(1);
+    throw new CliExit(1);
   }
 }
 
@@ -318,14 +319,14 @@ export function handleDoctor({ flags }: CommandContext): void {
   const pkg = JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'package.json'), 'utf-8')) as { version: string };
   const report = runDoctor({ version: pkg.version });
   console.log(flags['json'] ? JSON.stringify(report, null, 2) : formatDoctor(report));
-  if (!report.ok) process.exit(1);
+  if (!report.ok) throw new CliExit(1);
 }
 
 export function handleSupportBundle({ flags }: CommandContext): void {
   const outFlag = stringFlagOrExit(flags, 'out');
   if (outFlag === '') {
     printError('--out requires a file path.');
-    process.exit(1);
+    throw new CliExit(1);
   }
   const includeLogs = flagIsTrue(flags, 'include-logs');
   const home = envHomeDir() || os.homedir();
@@ -342,7 +343,7 @@ export function handleSupportBundle({ flags }: CommandContext): void {
     } else {
       printError(errorMessage(err));
     }
-    process.exit(1);
+    throw new CliExit(1);
   }
   const kb = Math.round(Buffer.byteLength(json) / 1024);
   console.log(`Wrote ${file} (${kb} KB).`);
@@ -355,7 +356,7 @@ export function handleInspect({ hippoRoot, tenantId, args }: CommandContext): vo
   const id = args[0];
   if (!id) {
     printError('Please provide a memory ID.');
-    process.exit(1);
+    throw new CliExit(1);
   }
   cmdInspect(hippoRoot, tenantId, id);
 }

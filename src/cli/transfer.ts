@@ -33,6 +33,7 @@ import { requireInit, runViaServerIfAvailable, learnFromRepo } from './shared.js
 import { fmt } from './print.js';
 import { type CliFlags, type CommandContext, boolFlag, flagIsTrue, nonEmptyStringFlag } from './flag-values.js';
 import { CONTENT_PREVIEW_CHARS, DATE_PREFIX_CHARS } from '../util/token-text.js';
+import { CliExit } from './exit.js';
 
 const STDERR_PREVIEW_CHARS = 80;
 const MAX_ENTRIES_SHOWN = 10;
@@ -44,7 +45,7 @@ const MAX_ENTRIES_SHOWN = 10;
 async function cmdWatch(command: string, hippoRoot: string, tenantId: string): Promise<void> {
   if (!command) {
     printError('Usage: hippo watch "<command>"');
-    process.exit(1);
+    throw new CliExit(1);
   }
 
   const { exitCode, stderr } = await runWatched(command);
@@ -57,7 +58,7 @@ async function cmdWatch(command: string, hippoRoot: string, tenantId: string): P
   // Only create memory if hippo is initialized
   if (!isInitialized(hippoRoot)) {
     printError('Command failed but .hippo not initialized. Run `hippo init` to enable auto-learn.');
-    process.exit(exitCode);
+    throw new CliExit(exitCode);
   }
 
   const failure = captureError(exitCode, stderr, command, tenantId);
@@ -84,7 +85,7 @@ async function cmdWatch(command: string, hippoRoot: string, tenantId: string): P
     }
   }
 
-  process.exit(exitCode);
+  throw new CliExit(exitCode);
 }
 
 // ---------------------------------------------------------------------------
@@ -96,7 +97,7 @@ export function handleLearn({ hippoRoot, flags }: CommandContext): void {
 
   if (!flags['git']) {
     printError('Usage: hippo learn --git [--days <n>] [--repos <paths>]');
-    process.exit(1);
+    throw new CliExit(1);
   }
 
   const days = parseInt(String(flags['days'] ?? '7'), 10);
@@ -211,12 +212,12 @@ function importFromFile(targetRoot: string, args: string[], flags: CliFlags, opt
 
   if (!filePath || !importer) {
     printError('Usage: hippo import <--chatgpt|--claude|--cursor|--file|--markdown|--vault> <path>, or hippo import --agents [--dry-run]');
-    process.exit(1);
+    throw new CliExit(1);
   }
 
   if (!fs.existsSync(filePath)) {
     printError(`File not found: ${filePath}`);
-    process.exit(1);
+    throw new CliExit(1);
   }
 
   const result = importer(filePath, importOptions);
@@ -299,24 +300,24 @@ function importVaultFolder(
 function checkVaultArgs(folderPath: string, flags: CliFlags, useGlobal: boolean): void {
   if (!fs.existsSync(folderPath) || !fs.statSync(folderPath).isDirectory()) {
     printError(`Vault folder not found (or not a directory): ${folderPath}`);
-    process.exit(1);
+    throw new CliExit(1);
   }
   if (useGlobal) {
     printError('hippo import --vault does not support --global (raw rows are tenant-local).');
-    process.exit(1);
+    throw new CliExit(1);
   }
   if (typeof flags['name'] !== 'string' || !flags['name'].trim()) {
     // --name keys the destructive source-deletion sync; a folder-basename default lets same-basename vaults clobber
     // each other, and a valueless `--name` (boolean true) would silently import under vault:true:*.
     printError('hippo import --vault requires --name <vault> (a non-empty identity key for source-deletion sync).');
-    process.exit(1);
+    throw new CliExit(1);
   }
   if (flags['scope'] !== undefined && (typeof flags['scope'] !== 'string' || !flags['scope'].trim())) {
     // Same valueless-flag trap: a bare `--scope` must not become scope "true".
     // Example uses the source-prefixed private form, since a bare `private` scope
     // is NOT treated as private by recall and importVault rejects it.
     printError('hippo import --vault: --scope requires a value (e.g. --scope vault:private:notes).');
-    process.exit(1);
+    throw new CliExit(1);
   }
 }
 
@@ -348,7 +349,7 @@ function cmdPromote(hippoRoot: string, tenantId: string, id: string): void {
 
   if (!id) {
     printError('Usage: hippo promote <id>');
-    process.exit(1);
+    throw new CliExit(1);
   }
 
   const ctx = cliApiContext(hippoRoot, tenantId);
@@ -358,7 +359,7 @@ function cmdPromote(hippoRoot: string, tenantId: string, id: string): void {
     console.log(`   Global store: ${getGlobalRoot()}`);
   } catch (err) {
     printError(`Failed to promote: ${errorMessage(err)}`);
-    process.exit(1);
+    throw new CliExit(1);
   }
 }
 
@@ -390,7 +391,7 @@ export async function handlePromote({ hippoRoot, tenantId, args }: CommandContex
   const id = args[0];
   if (!id) {
     printError('Please provide a memory ID.');
-    process.exit(1);
+    throw new CliExit(1);
   }
   const promoted = await runViaServerIfAvailable(hippoRoot, async (info, apiKey) => {
     try {
@@ -398,7 +399,7 @@ export async function handlePromote({ hippoRoot, tenantId, args }: CommandContex
       console.log(`Promoted ${id} to global store as ${result.globalId}`);
     } catch (err) {
       printError(`Failed to promote: ${errorMessage(err)}`);
-      process.exit(1);
+      throw new CliExit(1);
     }
   });
   if (promoted) return;
@@ -442,12 +443,12 @@ export function handleShare({ hippoRoot, tenantId, args, flags }: CommandContext
         console.log('Use --force to share anyway.');
       } else {
         printError(`Memory not found: ${shareId}`);
-        process.exit(1);
+        throw new CliExit(1);
       }
     }
   } else {
     printError('Usage: hippo share <memory_id> [--force] or hippo share --auto [--dry-run]');
-    process.exit(1);
+    throw new CliExit(1);
   }
 }
 

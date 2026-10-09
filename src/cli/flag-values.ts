@@ -3,6 +3,7 @@
 import type { RecallSearchOpts } from '../api/recall-pipeline.js';
 import type { HippoConfig } from '../core/config.js';
 import { printError } from './output.js';
+import { CliExit } from './exit.js';
 
 export function parseLimitFlag(value: string | boolean | string[] | undefined): number {
   if (!value) return Infinity;
@@ -21,13 +22,13 @@ export function parseBudgetFlag(value: string | boolean | string[] | undefined, 
   // A value-less flag and a junk value are different typos; the --hops guard already splits them.
   if (typeof value !== 'string') {
     printError('--budget requires an integer value (e.g. --budget 1500).');
-    process.exit(1);
+    throw new CliExit(1);
   }
   // Number(), like the --hops guard: parseInt('12abc') is 12, silently accepting what this message rejects.
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed < 0) {
     printError(`Invalid --budget: "${value}". Must be a non-negative integer.`);
-    process.exit(1);
+    throw new CliExit(1);
   }
   return parsed;
 }
@@ -40,7 +41,7 @@ export function parsePositiveId(idRaw: unknown, label: string): number {
   const id = parseInt(s, 10);
   if (!/^\d+$/.test(s) || id <= 0 || !Number.isSafeInteger(id)) {
     printError(`Invalid ${label} id: "${idRaw}" (expected a positive integer).`);
-    process.exit(1);
+    throw new CliExit(1);
   }
   return id;
 }
@@ -50,7 +51,7 @@ export function parseListLimit(flags: CliFlags): number {
   const limit = limitRaw !== undefined ? parseInt(String(limitRaw), 10) : 100;
   if (!Number.isFinite(limit) || limit <= 0) {
     printError(`Invalid --limit: "${limitRaw}". Must be a positive integer.`);
-    process.exit(1);
+    throw new CliExit(1);
   }
   return limit;
 }
@@ -95,7 +96,7 @@ export function parseAsOfFlag(flags: CliFlags): string | undefined {
   const asOf = stringFlag(flags, 'as-of');
   if (asOf !== undefined && Number.isNaN(new Date(asOf).getTime())) {
     printError(`Error: --as-of value "${asOf}" is not a valid ISO date (e.g. 2026-04-22 or 2026-04-22T12:00:00Z).`);
-    process.exit(1);
+    throw new CliExit(1);
   }
   return asOf;
 }
@@ -118,6 +119,6 @@ export function engineFlags(flags: CliFlags, config: HippoConfig): EngineFlags {
 export function stringFlagOrExit(flags: CliFlags, key: string): string | undefined {
   const v = flags[key];
   if (v === undefined) return undefined;
-  if (v === true || v === false || Array.isArray(v)) { printError(`--${key} requires a value`); process.exit(1); }
+  if (v === true || v === false || Array.isArray(v)) { printError(`--${key} requires a value`); throw new CliExit(1); }
   return v.trim();
 }

@@ -48,6 +48,7 @@ import { installCodexMemoryHooks, setupDailySchedule, warnClaudeSettingsUnusable
 import { repairQualityOnceAt } from './quality-repair-once.js';
 import { HOOK_MARKERS, HOOKS, hippoBlock, withoutHookBlock } from '../hooks/hook-blocks.js';
 import { escapeRegex } from '../util/escape.js';
+import { CliExit } from './exit.js';
 
 // ---------------------------------------------------------------------------
 // Hook install/uninstall
@@ -61,7 +62,7 @@ export function handleHook({ args }: CommandContext): void {
   if (subcommand === 'uninstall') return hookUninstall(target);
 
   printError('Usage: hippo hook <install|uninstall|list> [target]');
-  process.exit(1);
+  throw new CliExit(1);
 }
 
 type HookSpec = (typeof HOOKS)[string];
@@ -87,7 +88,7 @@ function hookInstall(target: string | undefined): void {
   if (!target || !HOOKS[target]) {
     printError(`Unknown hook target: ${target ?? '(none)'}`);
     printError(`   Available: ${[...Object.keys(HOOKS), 'copilot'].join(', ')}`);
-    process.exit(1);
+    throw new CliExit(1);
   }
   const hook = HOOKS[target];
   patchAgentFile(hook, target);
@@ -291,7 +292,7 @@ function hookUninstall(target: string | undefined): void {
   if (target === 'copilot') return printCopilotUninstall(uninstallCopilot());
   if (!target || !HOOKS[target]) {
     printError(`Unknown hook target: ${target ?? '(none)'}`);
-    process.exit(1);
+    throw new CliExit(1);
   }
   unpatchAgentFile(HOOKS[target], target);
 

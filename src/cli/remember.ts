@@ -38,6 +38,7 @@ import { fmt } from './print.js';
 import { type CliFlags, type CommandContext, boolFlag, flagIsTrue, stringFlag } from './flag-values.js';
 import { DAY_MS } from '../util/time.js';
 import { errorMessage } from '../util/log.js';
+import { CliExit } from './exit.js';
 
 const PARENT_PREVIEW_CHARS = 70;
 const DETAIL_CONTENT_CHARS = 160;
@@ -89,7 +90,7 @@ function parseKindFlag(flags: CliFlags): string | undefined {
   if (kindFlag !== undefined && !(userVisibleKinds as readonly string[]).includes(kindFlag)) {
     printError(`Invalid --kind: "${kindFlagRaw}". Must be one of: ${userVisibleKinds.join(', ')}`);
     printError(`(kind='raw' is reserved for ingestion connectors; kind='archived' is internal.)`);
-    process.exit(1);
+    throw new CliExit(1);
   }
   return kindFlag;
 }
@@ -107,7 +108,7 @@ function parseRememberEnvelope(flags: CliFlags): RememberEnvelope {
   const ownerCheck = validateOwner(ownerRaw, { strict: isStrictOwnerEnv() });
   if (!ownerCheck.ok) {
     printError(ownerCheck.message);
-    process.exit(1);
+    throw new CliExit(1);
   }
   if (ownerCheck.message) printError(ownerCheck.message);
   const owner = ownerCheck.value ?? null;
@@ -283,7 +284,7 @@ function cmdSupersede(
     else if (err instanceof RejectedValueError) printError(`Error: ${err.message}`);
     else if (err instanceof ConflictError) printError(alreadySupersededLine(hippoRoot, oldId, tenantId, err));
     else throw err;
-    process.exit(1);
+    throw new CliExit(1);
   }
   console.log(`Superseded ${oldId} → ${newId}`);
 }
@@ -293,7 +294,7 @@ function parseStepsOrExit(stepsJson: string): ReturnType<typeof parseSteps> {
     return parseSteps(stepsJson);
   } catch (err) {
     printError(errorMessage(err));
-    process.exit(1);
+    throw new CliExit(1);
   }
 }
 
@@ -320,11 +321,11 @@ function cmdTraceRecord(
 
   if (!task || !stepsJson || !outcome) {
     printError('Usage: hippo trace record --task <t> --steps <json> --outcome <success|failure|partial> [--session <id>] [--tag <t>]');
-    process.exit(1);
+    throw new CliExit(1);
   }
   if (!validOutcomes.includes(outcome)) {
     printError(`Invalid outcome: "${outcome}". Must be one of: ${validOutcomes.join(', ')}.`);
-    process.exit(1);
+    throw new CliExit(1);
   }
 
   const steps = parseStepsOrExit(stepsJson);
@@ -371,7 +372,7 @@ function cmdTrace(
   }
   if (!entry) {
     printError(`Memory not found: ${id}`);
-    process.exit(1);
+    throw new CliExit(1);
   }
 
   const t: TraceView = {
@@ -505,7 +506,7 @@ export async function handleRemember({ hippoRoot, tenantId, args, flags }: Comma
   }
   if (!text || text.length < 3) {
     printError('Memory content too short (minimum 3 characters).');
-    process.exit(1);
+    throw new CliExit(1);
   }
   // Thin-client routing. When a server is up, simple `remember` calls go
   // over HTTP so the daemon stays single-writer (footgun #2). Rich CLI
@@ -531,7 +532,7 @@ async function rememberViaThinClient(hippoRoot: string, text: string, flags: Cli
   const thinOwnerCheck = validateOwner(thinOwnerRaw, { strict: isStrictOwnerEnv() });
   if (!thinOwnerCheck.ok) {
     printError(thinOwnerCheck.message);
-    process.exit(1);
+    throw new CliExit(1);
   }
   if (thinOwnerCheck.message) printError(thinOwnerCheck.message);
   return runViaServerIfAvailable(hippoRoot, async (info, apiKey) => {
@@ -554,7 +555,7 @@ export function handleSupersede({ hippoRoot, tenantId, args, flags }: CommandCon
   const newContent = args.slice(1).join(' ').trim();
   if (!oldId || !newContent) {
     printError('Usage: hippo supersede <old-id> "<new content>" [--layer L] [--tag T] [--pin]');
-    process.exit(1);
+    throw new CliExit(1);
   }
   cmdSupersede(hippoRoot, tenantId, oldId, newContent, flags);
 }
@@ -567,7 +568,7 @@ export function handleTrace({ hippoRoot, tenantId, args, flags }: CommandContext
   }
   if (!sub) {
     printError('Usage: hippo trace <memory-id> | hippo trace record --task <t> --steps <json> --outcome <o>');
-    process.exit(1);
+    throw new CliExit(1);
   }
   cmdTrace(hippoRoot, tenantId, sub, flags);
 }

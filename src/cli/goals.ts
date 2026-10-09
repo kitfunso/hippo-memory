@@ -6,6 +6,7 @@ import * as api from '../api/index.js';
 import { cliApiContext } from './api-context.js';
 import { printError } from './output.js';
 import { type CliFlags, boolFlag, flagIsTrue, stringFlag, type CommandContext } from './flag-values.js';
+import { CliExit } from './exit.js';
 
 // ---------------------------------------------------------------------------
 // `hippo goal <push|list|complete|suspend|resume>`
@@ -31,7 +32,7 @@ function resolveGoalSession(flags: CliFlags, defaultTenantId: string): { session
   ).trim();
   if (!sessionId) {
     printError('session id required (set HIPPO_SESSION_ID or pass --session-id)');
-    process.exit(1);
+    throw new CliExit(1);
   }
   const tenantId = (
     flags['tenant-id'] !== undefined
@@ -45,12 +46,12 @@ function readGoalPolicy(flags: CliFlags): { policyType: PolicyType } | undefined
   const policyRaw = flags['policy'];
   if (policyRaw === true) {
     printError('--policy requires a value (e.g., --policy error-prioritized)');
-    process.exit(1);
+    throw new CliExit(1);
   }
   if (typeof policyRaw !== 'string') return undefined;
   if (!(GOAL_POLICY_TYPES as readonly string[]).includes(policyRaw)) {
     printError(`Unknown --policy '${policyRaw}'. Expected one of: ${GOAL_POLICY_TYPES.join(' | ')}.`);
-    process.exit(1);
+    throw new CliExit(1);
   }
   return { policyType: policyRaw as PolicyType };
 }
@@ -59,13 +60,13 @@ function readGoalLevel(flags: CliFlags): number | undefined {
   const levelRaw = flags['level'];
   if (levelRaw === true) {
     printError('--level requires a value (e.g., --level 1)');
-    process.exit(1);
+    throw new CliExit(1);
   }
   if (levelRaw === undefined) return undefined;
   const parsed = Number(levelRaw);
   if (!Number.isFinite(parsed) || parsed < 0 || parsed > 2 || !Number.isInteger(parsed)) {
     printError('--level must be an integer in [0, 2]');
-    process.exit(1);
+    throw new CliExit(1);
   }
   return parsed;
 }
@@ -74,7 +75,7 @@ function cmdGoalPush(hippoRoot: string, defaultTenantId: string, args: string[],
   const rawName = args.join(' ').trim();
   if (!rawName) {
     printError('Usage: hippo goal push <name> [--policy <type>] [--success "<condition>"] [--level N] [--parent <goalId>]');
-    process.exit(1);
+    throw new CliExit(1);
   }
   // Sanitize at WRITE time so corrupt names never enter the DB.
   const name = sanitizeGoalName(rawName);
@@ -88,7 +89,7 @@ function cmdGoalPush(hippoRoot: string, defaultTenantId: string, args: string[],
   const successRaw = flags['success'];
   if (successRaw === true) {
     printError('--success requires a value (e.g., --success "<condition>")');
-    process.exit(1);
+    throw new CliExit(1);
   }
   const successCondition = stringFlag(flags, 'success');
 
@@ -97,7 +98,7 @@ function cmdGoalPush(hippoRoot: string, defaultTenantId: string, args: string[],
   const parentRaw = flags['parent'];
   if (parentRaw === true) {
     printError('--parent requires a value (e.g., --parent <goalId>)');
-    process.exit(1);
+    throw new CliExit(1);
   }
   const parentGoalId = stringFlag(flags, 'parent');
 
@@ -149,19 +150,19 @@ function cmdGoalComplete(hippoRoot: string, tenantId: string, args: string[], fl
   const id = args[0];
   if (!id) {
     printError('Usage: hippo goal complete <id> [--outcome <0..1>] [--no-propagate]');
-    process.exit(1);
+    throw new CliExit(1);
   }
   let outcomeScore: number | undefined;
   const outcomeRaw = flags['outcome'];
   if (outcomeRaw === true) {
     printError('--outcome requires a value (e.g., --outcome 0.9)');
-    process.exit(1);
+    throw new CliExit(1);
   }
   if (outcomeRaw !== undefined) {
     const parsed = Number(outcomeRaw);
     if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) {
       printError('--outcome must be a number in [0, 1]');
-      process.exit(1);
+      throw new CliExit(1);
     }
     outcomeScore = parsed;
   }
@@ -174,7 +175,7 @@ function cmdGoalSuspend(hippoRoot: string, tenantId: string, args: string[]): vo
   const id = args[0];
   if (!id) {
     printError('Usage: hippo goal suspend <id>');
-    process.exit(1);
+    throw new CliExit(1);
   }
   api.goalSuspend(cliApiContext(hippoRoot, tenantId), id);
   console.log('ok');
@@ -184,7 +185,7 @@ function cmdGoalResume(hippoRoot: string, tenantId: string, args: string[]): voi
   const id = args[0];
   if (!id) {
     printError('Usage: hippo goal resume <id>');
-    process.exit(1);
+    throw new CliExit(1);
   }
   api.goalResume(cliApiContext(hippoRoot, tenantId), id);
   console.log('ok');
@@ -194,7 +195,7 @@ export function handleGoal({ hippoRoot, tenantId, args, flags }: CommandContext)
   const sub = args[0];
   if (!sub) {
     printError('Usage: hippo goal <push|list|complete|suspend|resume> [args]');
-    process.exit(1);
+    throw new CliExit(1);
   }
   const subArgs = args.slice(1);
   switch (sub) {
@@ -215,6 +216,6 @@ export function handleGoal({ hippoRoot, tenantId, args, flags }: CommandContext)
       return;
     default:
       printError(`Unknown goal subcommand: ${sub}. Expected: push | list | complete | suspend | resume.`);
-      process.exit(1);
+      throw new CliExit(1);
   }
 }

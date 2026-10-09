@@ -14,6 +14,7 @@ import { requireInit } from './shared.js';
 import { fmt } from './print.js';
 import { type CliFlags, type CommandContext, boolFlag } from './flag-values.js';
 import { errorMessage } from '../util/log.js';
+import { CliExit } from './exit.js';
 
 const HIT_TOP_K = 10;
 const MAX_FAILING_SHOWN = 10;
@@ -57,7 +58,7 @@ async function cmdEval(
 
   if (minMrr !== null && summary.meanMrr < minMrr) {
     printError(`MRR ${fmt(summary.meanMrr, 4)} below threshold ${minMrr}`);
-    process.exit(1);
+    throw new CliExit(1);
   }
 
   if (comparePath) printEvalCompare(summary, comparePath, asJson);
@@ -133,7 +134,7 @@ async function runEvalSuite(hippoRoot: string, flags: CliFlags, asJson: boolean,
   if (baseline) {
     const report = detectRegressions(baseline, result);
     if (report.verdict === 'REGRESSION' && minMrr === null) {
-      process.exit(1);
+      throw new CliExit(1);
     }
   }
 }
@@ -142,12 +143,12 @@ async function runEvalSuite(hippoRoot: string, flags: CliFlags, asJson: boolean,
 function readCorpus(corpusPath: string | null): EvalCase[] {
   if (!corpusPath) {
     printError('Usage: hippo eval <corpus.json>  OR  hippo eval --suite [--save-baseline]  OR  hippo eval --bootstrap');
-    process.exit(1);
+    throw new CliExit(1);
   }
 
   if (!fs.existsSync(corpusPath)) {
     printError(`Corpus file not found: ${corpusPath}`);
-    process.exit(1);
+    throw new CliExit(1);
   }
 
   let cases: EvalCase[];
@@ -157,7 +158,7 @@ function readCorpus(corpusPath: string | null): EvalCase[] {
     if (!Array.isArray(cases)) throw new Error('Corpus JSON must be an array or { cases: [...] }');
   } catch (err) {
     printError(`Failed to read corpus: ${errorMessage(err)}`);
-    process.exit(1);
+    throw new CliExit(1);
   }
   return cases;
 }
@@ -204,14 +205,14 @@ function printEvalSummary(summary: EvalSummary, showCases: boolean): void {
 function printEvalCompare(summary: EvalSummary, comparePath: string, asJson: boolean): void {
   if (!fs.existsSync(comparePath)) {
     printError(`Baseline file not found: ${comparePath}`);
-    process.exit(1);
+    throw new CliExit(1);
   }
   let baseline: EvalSummary;
   try {
     baseline = JSON.parse(fs.readFileSync(comparePath, 'utf8'));
   } catch (err) {
     printError(`Failed to parse baseline: ${errorMessage(err)}`);
-    process.exit(1);
+    throw new CliExit(1);
   }
   const cmp = compareSummaries(baseline, summary);
 

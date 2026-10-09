@@ -29,6 +29,7 @@ import {
 } from './types.js';
 import type { JsonValue } from '../../util/json.js';
 import type { CommandContext } from '../../cli/flag-values.js';
+import { CliExit } from '../../cli/exit.js';
 
 type FlagValue = string | boolean | string[];
 type Flags = Record<string, FlagValue>;
@@ -104,14 +105,14 @@ export async function cmdGithubBackfill(
   const repo = flags['repo'];
   if (!isFlagString(repo) || !repo.includes('/')) {
     printGithubBackfillUsage();
-    process.exit(2);
+    throw new CliExit(2);
   }
   const token = envGithubToken();
   if (!token) {
     console.error(
       'GITHUB_TOKEN is not set. Backfill requires a personal access token with repo read scope.',
     );
-    process.exit(2);
+    throw new CliExit(2);
   }
   const maxPerStream = maxPerStreamFlag(flags['max']);
   const sinceFlag = flags['since'];
@@ -142,7 +143,7 @@ export async function cmdGithubBackfill(
     // any JS value is safe (undefined if absent), preserving the existing
     // lenient formatting even when something non-Error was thrown.
     console.error('backfill failed:', (e as Error).message);
-    process.exit(3);
+    throw new CliExit(3);
   }
 }
 
@@ -203,12 +204,12 @@ export async function cmdGithubDlqReplay(
   const idArg = args[0];
   if (!idArg) {
     console.error('Usage: hippo github dlq replay <id> [--force]');
-    process.exit(1);
+    throw new CliExit(1);
   }
   const id = Number(idArg);
   if (!Number.isFinite(id) || !Number.isInteger(id) || id < 1) {
     console.error(`replay: invalid id ${idArg}`);
-    process.exit(1);
+    throw new CliExit(1);
   }
   const force = flags['force'] === true;
   const ctx: Context = {
@@ -229,7 +230,7 @@ export async function cmdGithubDlqReplay(
         result.reason ? ` reason=${result.reason}` : ''
       }`,
     );
-    process.exit(1);
+    throw new CliExit(1);
   }
   console.log(
     `replay ok: status=${result.status} memory_id=${result.memoryId ?? '(none)'} retry_count=${result.retryCount}`,
@@ -251,5 +252,5 @@ export async function handleGithub({ hippoRoot, args, flags }: CommandContext): 
     return;
   }
   console.error('Usage: hippo github <backfill|dlq list|dlq replay <id> [--force]> [...]');
-  process.exit(1);
+  throw new CliExit(1);
 }

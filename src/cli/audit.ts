@@ -12,6 +12,7 @@ import { requireInit, resolveAuthRoot } from './shared.js';
 import { repairAutomaticMemories } from './quality-repair.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import { errorMessage } from '../util/log.js';
+import { CliExit } from './exit.js';
 
 // ---------------------------------------------------------------------------
 // Audit log subcommands (`hippo audit list`)
@@ -31,7 +32,7 @@ function readAuditOp(flags: CliFlags): AuditOp | undefined {
     // Built from the Set so the message cannot drift from the valid ops.
     const expected = Array.from(VALID_AUDIT_OPS).join(' | ');
     printError(`Unknown --op value: ${opFlag}. Expected one of: ${expected}.`);
-    process.exit(1);
+    throw new CliExit(1);
   }
   return opFlag as AuditOp | undefined;
 }
@@ -43,13 +44,13 @@ function readAuditLimit(flags: CliFlags): number {
     const parsed = parseInt(String(limitRaw), 10);
     if (!Number.isFinite(parsed)) {
       printError(`Invalid --limit value: ${String(limitRaw)} (expected a positive integer).`);
-      process.exit(1);
+      throw new CliExit(1);
     }
     limit = parsed;
   }
   if (limit < 1 || limit > 10000) {
     printError(`--limit must be between 1 and 10000 (got ${limit}).`);
-    process.exit(1);
+    throw new CliExit(1);
   }
   return limit;
 }
@@ -63,7 +64,7 @@ async function cmdAuditList(hippoRoot: string, tenantId: string, flags: CliFlags
   const since = stringFlag(flags, 'since');
   if (since !== undefined && !Number.isFinite(new Date(since).getTime())) {
     printError(`Invalid --since: ${since} (expected an ISO timestamp like 2026-04-22 or 2026-04-22T12:00:00Z).`);
-    process.exit(1);
+    throw new CliExit(1);
   }
 
   const limit = readAuditLimit(flags);
@@ -91,14 +92,14 @@ function cmdAuditPrune(hippoRoot: string, ctxTenantId: string, flags: CliFlags):
   const olderThanRaw = stringFlag(flags, 'older-than') ?? '';
   if (!olderThanRaw) {
     printError('Usage: hippo audit prune --older-than <Nd> [--dry-run] [--tenant <t>]');
-    process.exit(1);
+    throw new CliExit(1);
   }
   let olderThanDays: number;
   try {
     olderThanDays = parseOlderThanFlag(olderThanRaw);
   } catch (e) {
     printError(errorMessage(e));
-    process.exit(1);
+    throw new CliExit(1);
   }
   const tenantId = stringFlag(flags, 'tenant')?.trim() || ctxTenantId;
   const dryRun = flagIsTrue(flags, 'dry-run');
@@ -128,7 +129,7 @@ async function cmdAuditLog(hippoRoot: string, tenantId: string, args: string[], 
     return;
   }
   printError(`Unknown audit subcommand: ${sub}. Expected: list | prune.`);
-  process.exit(1);
+  throw new CliExit(1);
 }
 
 function auditRepair(hippoRoot: string, tenantId: string, flags: CliFlags): void {

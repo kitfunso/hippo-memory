@@ -3,32 +3,24 @@ import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { parseArgs } from '../src/cli.js';
 import { VERB_FLAGS, flagKind, type VerbFlags } from '../src/cli/flags.js';
 import { parsePositiveId, type CliFlags } from '../src/cli/flag-values.js';
+import { CliExit } from '../src/cli/exit.js';
 import { HttpError } from '../src/util/http-util.js';
 import type { KeysetPosition } from '../src/util/keyset.js';
 import { pageOf, parseCursor } from '../src/server/cursor.js';
 import { arr, both, forAll, int, just, map, oneOf, pick, str, type Gen } from './_helpers/property.js';
 
-type ExitCode = string | number | null | undefined;
-
-class Exit extends Error {
-  constructor(readonly code: ExitCode) {
-    super(`process.exit(${code})`);
-  }
-}
-
-/** The id the parser returned, or the code it ended the process with: its refusal is an exit, with no error type of its own. */
+/** The id the parser returned, or the exit code its refusal carries. */
 function idOrExit(raw: string) {
   try {
     return { id: parsePositiveId(raw, 'brief') };
   } catch (thrown) {
-    if (thrown instanceof Exit) return { exit: thrown.code };
+    if (thrown instanceof CliExit) return { exit: thrown.code };
     throw thrown;
   }
 }
 
 describe('typed-object id parser properties', () => {
   beforeEach(() => {
-    vi.spyOn(process, 'exit').mockImplementation((code) => { throw new Exit(code); });
     vi.spyOn(console, 'error').mockImplementation(() => {});
   });
   afterEach(() => { vi.restoreAllMocks(); });

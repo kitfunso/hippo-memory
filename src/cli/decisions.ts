@@ -11,6 +11,7 @@ import { nonEmptyStringFlag, parseListLimit, type CliFlags, flagIsTrue, stringFl
 import { requireInit } from './shared.js';
 import { closeObject, foundOrExit, idArgOrExit, listObjects, printLifecycleTail, requireStatus, type ObjectNames } from './object-verbs.js';
 import { errorMessage } from '../util/log.js';
+import { CliExit } from './exit.js';
 
 const BASERATE_DECIMALS = 3;
 const DECISION: ObjectNames = { cmd: 'decide', noun: 'Decision', idLabel: 'decision' };
@@ -22,7 +23,7 @@ function parseObjectId(idRaw: string, noun: string): number {
   const id = parseInt(String(idRaw), 10);
   if (!Number.isFinite(id) || id <= 0) {
     printError(`Invalid ${noun} id: "${idRaw}"`);
-    process.exit(1);
+    throw new CliExit(1);
   }
   return id;
 }
@@ -36,13 +37,13 @@ function predictClose(hippoRoot: string, tenantId: string, args: string[], flags
   const stateRaw = (stringFlag(flags, 'state') ?? '').trim();
   if (!predictionsModule.VALID_CLOSURE_STATES.has(stateRaw as predictionsModule.ClosureState) || stateRaw === 'open') {
     printError(`Invalid --state: "${stateRaw}". Must be one of: closed | closed-unknown.`);
-    process.exit(1);
+    throw new CliExit(1);
   }
   const actualRaw = flags['actual'];
   const actualValue = actualRaw !== undefined ? Number(actualRaw) : undefined;
   if (actualRaw !== undefined && !Number.isFinite(actualValue)) {
     printError(`Invalid --actual: "${actualRaw}". Must be a number.`);
-    process.exit(1);
+    throw new CliExit(1);
   }
   const closureNote = stringFlag(flags, 'note');
 
@@ -70,7 +71,7 @@ function loadPredictionList(hippoRoot: string, tenantId: string, status: string,
   if (!classTag) {
     // status filter without class — scan all classes is more complex; v1 requires --class for non-default status
     printError('--status filter (non-open) requires --class to be set.');
-    process.exit(1);
+    throw new CliExit(1);
   }
   return predictionsModule.loadPredictionsByClass(hippoRoot, tenantId, classTag, {
     closureState,
@@ -120,7 +121,7 @@ function predictBaserate(hippoRoot: string, tenantId: string, flags: CliFlags): 
   const classTag = stringFlag(flags, 'class')?.trim();
   if (!classTag) {
     printError('Usage: hippo predict baserate --class <c>');
-    process.exit(1);
+    throw new CliExit(1);
   }
   const baserate = predictionsModule.computePredictionBaserate(hippoRoot, tenantId, classTag);
   if (baserate.nClosed === 0) {
@@ -156,18 +157,18 @@ function predictCreate(hippoRoot: string, tenantId: string, claimText: string, f
     printError('       hippo predict close <id> --state <closed|closed-unknown> [--actual <v>] [--note "..."]');
     printError('       hippo predict list [--class X] [--status open|closed|closed-unknown|all] [--limit N]');
     printError('       hippo predict show <id>');
-    process.exit(1);
+    throw new CliExit(1);
   }
   const classTag = stringFlag(flags, 'class')?.trim();
   if (!classTag) {
     printError('--class is required for prediction creation.');
-    process.exit(1);
+    throw new CliExit(1);
   }
   const estimateRaw = flags['estimate'];
   const estimateValue = estimateRaw !== undefined ? Number(estimateRaw) : undefined;
   if (estimateRaw !== undefined && !Number.isFinite(estimateValue)) {
     printError(`Invalid --estimate: "${estimateRaw}". Must be a number.`);
-    process.exit(1);
+    throw new CliExit(1);
   }
   const estimateUnit = stringFlag(flags, 'unit');
   const targetDate = stringFlag(flags, 'target');
@@ -230,7 +231,7 @@ function decideCreate(hippoRoot: string, tenantId: string, decisionText: string,
   // than silently creating a non-superseding decision.
   if (flagIsTrue(flags, 'supersedes')) {
     printError('--supersedes requires a memory id, e.g. hippo decide "<text>" --supersedes mem_abc123.');
-    process.exit(1);
+    throw new CliExit(1);
   }
   const supersedesMemId = stringFlag(flags, 'supersedes') ?? null;
 
@@ -245,7 +246,7 @@ function decideCreate(hippoRoot: string, tenantId: string, decisionText: string,
     oldEntry = readEntry(hippoRoot, supersedesMemId, tenantId) ?? null;
     if (!oldEntry) {
       printError(`Memory ${supersedesMemId} not found.`);
-      process.exit(1);
+      throw new CliExit(1);
     }
     supersedesDecisionId =
       decisionsModule.resolveActiveDecisionIdByMemory(hippoRoot, tenantId, supersedesMemId) ?? undefined;
@@ -271,7 +272,7 @@ function exitWithDecideUsage(): never {
   printError('       hippo decide list [--status active|superseded|closed|all] [--limit N]');
   printError('       hippo decide get <id>');
   printError('       hippo decide close <id>');
-  process.exit(1);
+  throw new CliExit(1);
 }
 
 function weakenSupersededMemory(hippoRoot: string, oldEntry: MemoryEntry, supersedesMemId: string | null): void {
@@ -330,7 +331,7 @@ function incidentResolve(hippoRoot: string, tenantId: string, args: string[], fl
   const resolutionRaw = stringFlag(flags, 'resolution');
   if (!resolutionRaw?.trim()) {
     printError('--resolution requires a non-empty value, e.g. hippo incident resolve <id> --resolution "root cause fixed".');
-    process.exit(1);
+    throw new CliExit(1);
   }
   const resolved = incidentsModule.resolveIncident(hippoRoot, tenantId, id, resolutionRaw);
   console.log(`Incident #${resolved.id} resolved.`);
@@ -361,7 +362,7 @@ function incidentCreate(hippoRoot: string, tenantId: string, incidentText: strin
     printError('       hippo incident get <id>');
     printError('       hippo incident resolve <id> --resolution "<text>"');
     printError('       hippo incident close <id>');
-    process.exit(1);
+    throw new CliExit(1);
   }
   const context = nonEmptyStringFlag(flags, 'context');
   // --link is a repeatable flag (collected into an array by parseArgs). A
@@ -374,7 +375,7 @@ function incidentCreate(hippoRoot: string, tenantId: string, incidentText: strin
     linkedMemoryIds = [linkRaw];
   } else if (linkRaw === true) {
     printError('--link requires a memory id, e.g. hippo incident "<text>" --link mem_abc123.');
-    process.exit(1);
+    throw new CliExit(1);
   }
 
   const incidentPathTags = extractPathTags(process.cwd());
