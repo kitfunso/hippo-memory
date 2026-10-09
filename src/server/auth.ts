@@ -1,5 +1,5 @@
 // Bearer and loopback auth for the HTTP server.
-import { envRequireAuth } from '../env.js';
+import { envAllowKeylessLocal, envRequireAuth } from '../env.js';
 import type { IncomingMessage } from 'node:http';
 import { resolveTenantId } from '../tenant.js';
 import { log } from '../log.js';
@@ -30,10 +30,25 @@ const PROXY_HEADERS = [
   'fly-client-ip',
 ] as const;
 
-// A browser on this machine is loopback too, so the no-key fallback also needs a local Host and a same-site caller.
+function proxyHeaderOf(req: IncomingMessage): string | undefined {
+  return PROXY_HEADERS.find((name) => req.headers[name] !== undefined);
+}
+
+/** A page in a browser on this machine: another site's request, or a hostile name resolved to loopback (DNS rebinding). */
+function isForeignPage(req: IncomingMessage): boolean {
+  const host = req.headers.host;
+  return (host !== undefined && !LOOPBACK_HOST_HEADER.test(host)) || isCrossSite(req);
+}
+
+/** True only for a request made on this machine by its own user: a proxy and a browser page are loopback too, so the socket alone proves nothing. */
+export function isLocalCaller(req: IncomingMessage): boolean {
+  return isLoopback(req.socket.remoteAddress) && proxyHeaderOf(req) === undefined && !isForeignPage(req);
+}
+
+// The throwing twin of isLocalCaller, for the no-key fallback: each refusal has its own status, and a proxied one is logged.
 function assertLocalCaller(req: IncomingMessage): void {
   if (!isLoopback(req.socket.remoteAddress)) throw new HttpError(401, 'auth required');
-  const proxyHeader = PROXY_HEADERS.find((name) => req.headers[name] !== undefined);
+  const proxyHeader = proxyHeaderOf(req);
   if (proxyHeader !== undefined) {
     log.warn(
       `proxied loopback request refused: it carries ${proxyHeader}, so the no-key local fallback does not apply. ` +
@@ -41,11 +56,16 @@ function assertLocalCaller(req: IncomingMessage): void {
     );
     throw new HttpError(401, 'auth required');
   }
-  const host = req.headers.host;
-  if ((host !== undefined && !LOOPBACK_HOST_HEADER.test(host)) || isCrossSite(req)) {
+  if (isForeignPage(req)) {
     throw new HttpError(403, 'cross-site or non-local request refused; send an API key');
   }
 }
+
+/** The 401 a keyless request from this machine gets by default; it names both fixes, since an upgrade is where most people meet it. */
+const KEY_REQUIRED_MESSAGE =
+  'auth required: this server takes no request without an API key. Mint one with `hippo auth create` and send it as ' +
+  '"Authorization: Bearer <key>" (the hippo CLI reads HIPPO_API_KEY), or start the server with HIPPO_ALLOW_KEYLESS_LOCAL=1 ' +
+  'to let requests from this machine in without a key.';
 
 /**
  * Read the Authorization header in a case-insensitive way and pull the
@@ -188,16 +208,20 @@ async function resolveBearer(req: IncomingMessage, token: string, opts: AuthOpts
   return id;
 }
 
-/** The auth check without a charge: the bearer's identity, or null for the loopback fallback. */
+/** The auth check without a charge: the bearer's identity, or null for the keyless local fallback. */
 async function checkAuth(req: IncomingMessage, opts: AuthOpts): Promise<BearerIdentity | null> {
   const auth = readAuthHeader(req);
   if (auth.kind === 'malformed') {
     throw new HttpError(401, 'invalid api key');
   }
   if (auth.kind === 'bearer') return resolveBearer(req, auth.token, opts);
-  // No Authorization header: the loopback fallback, unless HIPPO_REQUIRE_AUTH=1 forbids the local-CLI escape hatch.
+  // No Authorization header. HIPPO_REQUIRE_AUTH=1 is checked first, so a deployment that sets both stays closed.
   if (envRequireAuth()) {
     throw new HttpError(401, 'auth required');
+  }
+  if (!envAllowKeylessLocal()) {
+    // Only this machine's own user is told how to switch the key off; a proxied caller or a page learns nothing.
+    throw new HttpError(401, isLocalCaller(req) ? KEY_REQUIRED_MESSAGE : 'auth required');
   }
   assertLocalCaller(req);
   return null;
@@ -246,7 +270,7 @@ function chargeCaller(tenantId: string, actor: Actor, opts: AuthOpts): void {
  * Build a per-request Context from the Authorization header and remote
  * address. Throws HttpError(401) for invalid / missing credentials. Reads
  * the store only for an API-key-shaped Bearer token (or any Bearer token when no
- * auth resolver is registered), so loopback no-auth requests stay cheap.
+ * auth resolver is registered), so keyless local requests stay cheap.
  */
 export async function buildContextWithAuth(req: IncomingMessage, opts: AuthOpts): Promise<Context> {
   const id = await checkAuth(req, opts);
@@ -256,7 +280,7 @@ export async function buildContextWithAuth(req: IncomingMessage, opts: AuthOpts)
     return { hippoRoot: opts.hippoRoot, tenantId: id.tenantId, actor, store: opts.store };
   }
 
-  // Loopback fallback is process-local, treat as admin.
+  // The keyless local fallback (HIPPO_ALLOW_KEYLESS_LOCAL=1) is this machine's own user, so it is host admin.
   return {
     hippoRoot: opts.hippoRoot,
     tenantId: resolveTenantId({}),
@@ -269,7 +293,7 @@ export async function buildContextWithAuth(req: IncomingMessage, opts: AuthOpts)
  * Auth check for routes that do not need a tenant Context (e.g. MCP transport,
  * which builds its own root resolution via findHippoRoot). Throws HttpError
  * 401 the same way buildContextWithAuth does, but skips building the Context
- * envelope. Loopback no-auth still passes.
+ * envelope. A keyless local request passes only under HIPPO_ALLOW_KEYLESS_LOCAL=1.
  */
 export async function requireAuth(req: IncomingMessage, opts: AuthOpts): Promise<void> {
   const id = await checkAuth(req, opts);

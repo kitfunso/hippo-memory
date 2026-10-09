@@ -271,6 +271,8 @@ async function main(): Promise<void> {
   // Port 0 = ephemeral to avoid collisions.
   // The bench measures recall, not the per-IP limiter, which would 429 most queries and drop them from the stats.
   process.env.HIPPO_V1_RPS = '0';
+  // The bench sends no key, so it runs the server in keyless local mode.
+  process.env.HIPPO_ALLOW_KEYLESS_LOCAL = '1';
   const server: ServerHandle = await serve({ hippoRoot: home, port: 0 });
   console.log(`[p99-recall] server listening on ${server.url}`);
 

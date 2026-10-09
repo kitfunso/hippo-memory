@@ -24,6 +24,8 @@ hippo init       # creates a .hippo directory
 hippo serve      # binds 127.0.0.1:3737 by default
 ```
 
+`hippo serve` takes no request without an API key. Mint one and pass it to the client (see Authentication), or, on a machine you trust, start the server with `HIPPO_ALLOW_KEYLESS_LOCAL=1` to let local requests in without a key.
+
 The Python SDK talks to this loopback server. Requires `hippo-memory@>=1.11.4` server (the `/v1/outcome`, `/v1/context`, `/v1/sleep` routes land in v1.11.4).
 
 ## Quickstart
@@ -58,12 +60,14 @@ See `examples/` for 3 runnable scripts: basic remember+recall, context injection
 
 ## Authentication
 
-Default is unauthenticated localhost (tenant `default`). For multi-tenant deployments, mint an API key via the CLI:
+The server refuses a request with no key (401), from this machine too. Mint an API key via the CLI:
 
 ```bash
-hippo auth create-key --label my-key
-# Outputs a plaintext sk_... key (saved ONCE — store it)
+hippo auth create --label my-key
+# Prints the plaintext key ONCE: store it
 ```
+
+A server started with `HIPPO_ALLOW_KEYLESS_LOCAL=1` also serves a client built with no `api_key`, as host admin on tenant `default`.
 
 Then pass it to the client:
 

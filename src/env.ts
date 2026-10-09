@@ -107,6 +107,8 @@ export function envPort(): string | undefined { return raw('HIPPO_PORT'); }
 /** How long a client waits for a running server's /health before writing to the store directly; server-detect.ts holds the default. */
 export function envHealthProbeMs(): number | undefined { return positiveInt('HIPPO_HEALTH_PROBE_MS'); }
 export function envRequireAuth(): boolean { return isOne('HIPPO_REQUIRE_AUTH'); }
+/** `1` lets a request made on this machine in with no key, as host admin; HIPPO_REQUIRE_AUTH=1 wins over it. */
+export function envAllowKeylessLocal(): boolean { return isOne('HIPPO_ALLOW_KEYLESS_LOCAL'); }
 export function envV1Rps(): string | undefined { return raw('HIPPO_V1_RPS'); }
 /** How long a request body may take to arrive; http-util.ts holds the default. */
 export function envBodyTimeoutMs(): number | undefined { return positiveInt('HIPPO_BODY_TIMEOUT_MS'); }

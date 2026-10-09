@@ -742,6 +742,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 
 ### src/server/auth.ts
 - `buildContextWithAuth`: v1.12.0: loopback fallback is process-local, treat as admin.
+- `checkAuth` (src/server/auth.ts): A request with no key is refused 401 on loopback too, unless the server runs with `HIPPO_ALLOW_KEYLESS_LOCAL=1` (`HIPPO_REQUIRE_AUTH=1` wins over it). Before this the fallback was on by default, so any process on the machine, and any other container in the same pod, was host admin with no key. The 401 names both fixes only for a caller that passes `isLocalCaller` (loopback socket, no proxy header, local Host, not cross-site); a proxied caller or a browser page gets the plain `auth required`. No key is handed to first-party callers at boot: the CLI's routed writes send `HIPPO_API_KEY` when it is set and fail with the server's message when it is not, and `hippo serve` prints the rule at start. `GET /health` uses the same `isLocalCaller` test for its version and pid, so a rebound Host or a cross-site page reads liveness only.
 
 ### src/server/boot.ts
 - `handleRequest`: v1.6.4: pre-decode raw-URL slash check.

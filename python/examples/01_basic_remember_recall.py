@@ -1,7 +1,8 @@
 """Example 1: basic remember + recall.
 
 Prereq: `npm install -g hippo-memory@1.11.4` (or local repo build), then
-`hippo serve` in another terminal.
+`HIPPO_ALLOW_KEYLESS_LOCAL=1 hippo serve` in another terminal (the examples
+send no API key; without that switch, pass `api_key=` to `Hippo`).
 
 Run::
     uv run python examples/01_basic_remember_recall.py

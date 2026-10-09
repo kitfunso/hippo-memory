@@ -674,7 +674,10 @@ export const VERB_USAGE = {
     --port <n>             Port to serve on (default: $HIPPO_PORT or 6789)
     --host <host>          Address to bind (default: 127.0.0.1)
     --tls-cert <file>      PEM certificate; serve HTTPS only (or $HIPPO_TLS_CERT)
-    --tls-key <file>       PEM private key for it; give both (or $HIPPO_TLS_KEY)`],
+    --tls-key <file>       PEM private key for it; give both (or $HIPPO_TLS_KEY)
+                           Every request needs an API key (hippo auth create).
+                           $HIPPO_ALLOW_KEYLESS_LOCAL=1 lets requests from this machine
+                           in without one; $HIPPO_REQUIRE_AUTH=1 wins over it.`],
   invalidate: [`
   invalidate "<pattern>"   Actively weaken memories matching an old pattern
                            (content overlap, or a tag EXACTLY equal to the

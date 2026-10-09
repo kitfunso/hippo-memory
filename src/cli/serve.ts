@@ -1,7 +1,7 @@
 // Long-running verbs: `hippo dashboard`, `hippo mcp` and `hippo serve`.
 
 import { installCrashHandlers } from '../util/crash-handlers.js';
-import { envPort, envRequireAuth, envTlsCert, envTlsKey } from '../env.js';
+import { envAllowKeylessLocal, envPort, envRequireAuth, envTlsCert, envTlsKey } from '../env.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { printError } from './output.js';
@@ -47,6 +47,16 @@ function readTlsFiles(flags: CommandContext['flags']): { cert: Buffer; key: Buff
   }
 }
 
+/** Said at every start, so the key rule is a choice an operator sees, and an upgrade that changed it explains itself. */
+function keyRuleLine(): string {
+  if (envRequireAuth()) return 'every request needs an API key (HIPPO_REQUIRE_AUTH=1)';
+  if (envAllowKeylessLocal()) {
+    return 'requests from this machine need no API key and act as host admin (HIPPO_ALLOW_KEYLESS_LOCAL=1); unset it to require a key on every request';
+  }
+  return 'every request needs an API key: mint one with `hippo auth create` and send it as "Authorization: Bearer <key>" ' +
+    '(the hippo CLI reads HIPPO_API_KEY). To let requests from this machine in without a key, start with HIPPO_ALLOW_KEYLESS_LOCAL=1';
+}
+
 export async function handleServe({ hippoRoot, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
   const portRaw = flags['port'] ?? envPort() ?? '6789';
@@ -60,10 +70,7 @@ export async function handleServe({ hippoRoot, flags }: CommandContext): Promise
   const { serve } = await import('../server.js');
   const handle = await serve({ hippoRoot, port, host, handleSignals: true, tls });
   console.log(`hippo serve listening on ${handle.url} (pid ${process.pid})`);
-  // Said at every start: the no-key local fallback is a default an operator should choose, not discover.
-  if (!envRequireAuth()) {
-    console.log('local requests need no API key and act as host admin; set HIPPO_REQUIRE_AUTH=1 to require a key on every request');
-  }
+  console.log(keyRuleLine());
   console.log(`pidfile: ${path.join(hippoRoot, 'server.pid')}`);
   console.log('press Ctrl+C to stop');
   // The SIGINT/SIGTERM handlers stop the server and exit. Hang until then.
