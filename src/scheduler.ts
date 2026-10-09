@@ -135,6 +135,11 @@ export function buildWindowsTaskRun(cmd: string): string {
   return `conhost.exe --headless cmd /c ${cmd}`;
 }
 
+/** `text` for the inside of one double-quoted Windows argument: a backslash run before a quote or the end doubles, so no quote ends the argument early. */
+export function quoteInsideWindowsArg(text: string): string {
+  return text.replace(/(\\*)"/g, '$1$1\\"').replace(/\\+$/, '$&$&');
+}
+
 /** Argv for `schtasks`, passed without a shell: through cmd.exe the `&&` in /tr split the command. */
 export function buildSchtasksCreateArgs(taskName: string, cmd: string): string[] {
   return ['/create', '/tn', taskName, '/tr', buildWindowsTaskRun(cmd), '/sc', 'daily', '/st', '06:15', '/f'];

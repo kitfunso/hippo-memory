@@ -3,13 +3,19 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildDailyRunnerCommand, buildSchtasksCreateArgs, buildWindowsTaskRun } from '../src/scheduler.js';
+import { buildDailyRunnerCommand, buildSchtasksCreateArgs, buildWindowsTaskRun, quoteInsideWindowsArg } from '../src/scheduler.js';
 
 describe('Windows daily task', () => {
   it('runs the runner under a headless console', () => {
     const cmd = buildDailyRunnerCommand('C:/Users/me/.hippo', 'win32');
     expect(buildWindowsTaskRun(cmd)).toBe(`conhost.exe --headless cmd /c ${cmd}`);
     expect(buildSchtasksCreateArgs('t', cmd)).toContain(`conhost.exe --headless cmd /c ${cmd}`);
+  });
+
+  it('keeps a quoted command inside one argument when a backslash sits before a quote or the end', () => {
+    expect(quoteInsideWindowsArg('cd "C:/a b" && hippo')).toBe('cd \\"C:/a b\\" && hippo');
+    expect(quoteInsideWindowsArg('cd "C:\\a\\" && x\\')).toBe('cd \\"C:\\a\\\\\\" && x\\\\');
+    expect(quoteInsideWindowsArg('C:\\a\\b')).toBe('C:\\a\\b');
   });
 
   it.skipIf(process.platform !== 'win32')('creates a task whose quoted && command runs intact', async () => {

@@ -24,7 +24,7 @@ import { type ImportReport, summaryLine } from '../agent-memories/report.js';
 import { type ChurnStaleResult, detectChurnStale } from '../invalidation.js';
 import { resolveProjectIdentity } from '../project-identity.js';
 import { getGlobalRoot, initGlobal } from '../shared.js';
-import { DAILY_TASK_NAME, buildDailyRunnerCommand, buildSchtasksCreateArgs, buildWindowsTaskRun } from '../scheduler.js';
+import { DAILY_TASK_NAME, buildDailyRunnerCommand, buildSchtasksCreateArgs, buildWindowsTaskRun, quoteInsideWindowsArg } from '../scheduler.js';
 import { sanitizeLogMessage } from '../capture/compact.js';
 import { type AuditOp, reportAuditWriteFailure } from '../store/audit.js';
 import { sqliteSyncStore } from '../store/sqlite/store.js';
@@ -319,7 +319,7 @@ function scheduleOnWindows(taskName: string, cmd: string): void {
     if (schedulerTimedOut(err)) warnSchedulerTimedOut('schtasks /create');
     // No admin rights or schtasks unavailable, fall back to printing instructions
     console.log(`   To schedule the machine-level daily runner, run:`);
-    console.log(`   schtasks /create /tn "${taskName}" /tr "${buildWindowsTaskRun(cmd).replace(/"/g, '\\"')}" /sc daily /st 06:15`);
+    console.log(`   schtasks /create /tn "${taskName}" /tr "${quoteInsideWindowsArg(buildWindowsTaskRun(cmd))}" /sc daily /st 06:15`);
   }
 }
 
