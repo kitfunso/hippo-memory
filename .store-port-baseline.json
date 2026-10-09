@@ -1,5 +1,5 @@
 {
-  "openersOutside": 174,
+  "openersOutside": 167,
   "openersInCli": 12,
   "storeBranches": 7,
   "routesWithoutStore": 52,
@@ -54,8 +54,6 @@
     "src/ledger-db.ts": 1,
     "src/mcp/admin-tools.ts": 2,
     "src/policies.ts": 4,
-    "src/predictions/planning-fallacy.ts": 1,
-    "src/predictions/store.ts": 6,
     "src/processes.ts": 3,
     "src/project-briefs.ts": 5,
     "src/recall-pipeline.ts": 1,
