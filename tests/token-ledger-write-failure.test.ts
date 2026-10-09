@@ -8,9 +8,8 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { closeHippoDb, openHippoDb } from '../src/db.js';
 import { adminActor, recordTokens } from '../src/api.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
-import { withLedgerDb } from '../src/ledger-db.js';
+import { bookTokenUse } from '../src/ledger-db.js';
 import { promptHookContext } from '../src/prompt-hook.js';
-import { recordTokenUse } from '../src/token-ledger.js';
 import { resetLogOnce } from '../src/log.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 
@@ -111,7 +110,7 @@ describe('token ledger write failures', () => {
   it('a hippo.db that is not a database is an expected skip: nothing at the default level, one debug line with no stack', () => {
     const store = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-ledger-notadb-'));
     const write = (): void => {
-      withLedgerDb(store, (db) => recordTokenUse(db, { tenantId: 'default', surface: 'hook', event: 'inject', items: 1, tokens: 40 }));
+      bookTokenUse(store, { tenantId: 'default', surface: 'hook', event: 'inject', items: 1, tokens: 40 });
     };
     try {
       initStore(store);
