@@ -33,7 +33,7 @@ import { importMarkdown } from '../importers/markdown.js';
 import { importVault } from '../importers/vault.js';
 import { ImportOptions } from '../importers/core.js';
 import * as api from '../api.js';
-import * as client from '../client.js';
+import * as client from './client.js';
 import { resolveTenantId } from '../tenant.js';
 import { printError } from './output.js';
 import { requireInit, runViaServerIfAvailable, fmt, type CliFlags, type CommandContext, learnFromRepo } from './shared.js';

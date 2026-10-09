@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import * as http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { fetchWithRetry, isRetryableStatus, llmTimeoutMs, parseRetryAfterMs } from '../src/http-retry.js';
-import { classifyTransportFailure } from '../src/client.js';
+import { classifyTransportFailure } from '../src/cli/client.js';
 
 interface Reply {
   status: number;

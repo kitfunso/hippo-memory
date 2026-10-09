@@ -13,8 +13,8 @@ import { loadAllEntries } from './store/entry-reads.js';
 import { openHippoDb, closeHippoDb, getMeta, rethrowIfSqliteBlocked, setMeta, type DatabaseSyncLike } from './db.js';
 import {
   EMBEDDING_MODEL_META_KEY, deleteOrphanVectors, hasStoredVectors, loadVectors, replaceAllVectors, storedVectorIds, upsertVectors,
-} from './vector-store.js';
-import { initializeParticle, savePhysicsState, loadPhysicsState, resetAllPhysicsState } from './physics-state.js';
+} from './db/vector-store.js';
+import { initializeParticle, savePhysicsState, loadPhysicsState, resetAllPhysicsState } from './db/physics-state.js';
 import { loadConfig } from './config.js';
 import { resolveEmbeddingProvider, type EmbeddingProvider } from './embedding-provider.js';
 import { DEFAULT_EMBEDDING_MODEL } from './local-embedding.js';

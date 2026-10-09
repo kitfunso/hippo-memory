@@ -10,10 +10,10 @@ import { _resetSharedStoreCacheForTests, markSharedStore } from '../src/config.j
 import { closeHippoDb, openHippoDb, setMeta, withSqliteBlocked } from '../src/db.js';
 import { StoreNotPortedError } from '../src/util/sqlite-blocked.js';
 import { embeddingIndexIdentity } from '../src/embeddings.js';
-import { resetAllPhysicsState } from '../src/physics-state.js';
+import { resetAllPhysicsState } from '../src/db/physics-state.js';
 import type { HippoStore } from '../src/store-port.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from '../src/store/rows.js';
-import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../src/vector-store.js';
+import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../src/db/vector-store.js';
 import {
   CONTEXT_NOW, contextRowsOf, OWNER, PROJECT, rounded, SESSION, seedContextGlobal, seedContextRows,
 } from './_helpers/context-fixture.js';

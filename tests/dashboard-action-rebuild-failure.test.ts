@@ -2,7 +2,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as entryReads from '../src/store/entry-reads.js';
-import type { MemoryDetail, Overview } from '../src/dashboard-types.js';
+import type { MemoryDetail, Overview } from '../src/dashboard/dashboard-types.js';
 import {
   NOW, get, makeStore, parse, postJson, seed, startDashboard, type RunningDashboard, type TmpStore,
 } from './_helpers/dashboard-fixture.js';

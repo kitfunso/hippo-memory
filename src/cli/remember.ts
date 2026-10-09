@@ -29,10 +29,10 @@ import { detectScope } from '../scope.js';
 import { assertClientScope } from '../recall-scope.js';
 import { getGlobalRoot, initGlobal } from '../shared.js';
 import { vetSecrets } from '../secret-detect.js';
-import * as client from '../client.js';
+import * as client from './client.js';
 import { resolveTenantId } from '../tenant.js';
 import { computeSalience } from '../salience.js';
-import { validateOwner, isStrictOwnerEnv } from '../owner-validation.js';
+import { validateOwner, isStrictOwnerEnv } from './owner-validation.js';
 import { printError } from './output.js';
 import { emitCliAudit, requireInit, runViaServerIfAvailable, fmt, type CliFlags, type CommandContext } from './shared.js';
 

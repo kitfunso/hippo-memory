@@ -10,7 +10,7 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../src/db.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { serveDashboard } from '../src/dashboard.js';
+import { serveDashboard } from '../src/dashboard/dashboard.js';
 import { DASHBOARD_TOKEN } from './_helpers/dashboard-fixture.js';
 import { boundPort } from './_helpers/listen.js';
 

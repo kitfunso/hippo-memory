@@ -114,7 +114,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `Actor`: Actor identity + authorization role for a Context. v1.12.0 A5 v2 sub-1. Before v1.12.0, Context.actor was a bare string. v1.12.0 promotes it to an object carrying both the audit-log subject (formerly the string itself) and a role for /v1/sleep admin gating. Audit helpers continue accepting `string` — callers pass `ctx.actor.subject`.
 - `Actor.scopes`: EI2: restricted scopes a member key may read (auth.ts grantScope). Unused for admin actors.
 
-### src/audit-prune.ts
+### src/cli/audit-prune.ts
 - (module header): Audit log retention pruning (v1.12.9).
 - (module header): Closes TODOS A5 v2 M6: "Audit log unbounded growth. Add a daily `audit prune` cron + `hippo audit prune --older-than 90d` CLI in v2. Mind regulatory retention floors (HIPAA, SOX, GDPR) — the prune should be opt-in per tenant and emit its own audit trail event."
 - `PruneAuditOpts.tenantId`: Tenant scope. Required — prune is always tenant-scoped per the A5 v2 design.
@@ -459,7 +459,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `embedMemory`: L9: host-wide rebuild. The embedding index is keyed by entry.id (which is tenant-scoped) but the index itself is one per hippoRoot.
 - `embedAll`: L9: host-wide by design. embedAll backfills vectors for all tenants' entries into the per-host embedding index.
 
-### src/eval-stats.ts
+### src/eval/eval-stats.ts
 - module header: Statistics and cost accounting for the token-efficiency evals (ROADMAP Part IX, TE3-TE5).
 
 ### src/extract.ts
@@ -617,7 +617,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 ### src/multihop.ts
 - `multihopSearch`: T2 note: PLAIN stable score sort on purpose -- pass1/pass2 inputs are deterministically ordered (search() carries the content tail), stability inherits that, and ties keep pass-1 results ahead of pass-2 follow-ups.
 
-### src/owner-validation.ts
+### src/cli/owner-validation.ts
 - `module header`: --owner format validation (B2 v1.12.6).
 - `module header`: with id ∈ `[A-Za-z0-9_-]+`. Pre-v1.12.6 any string was accepted, leaving the documented contract unenforced.
 - `module header`: to reject + exit. Strict mode will become the default once A5 v2 lands (see `TODOS.md` A3 follow-ups for the migration path).
@@ -896,7 +896,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `loadSearchRows`: `_forceLikePathForTests(true)` forces the LIKE-fallback path here only; nothing in the environment can switch it. Read at the read-call site so writes (`syncFtsRow`, `deleteFtsRow`, `raw-archive.ts::archiveRaw`) keep using `isFtsAvailable` and never skip FTS index sync. Lets tests exercise the LIKE branch without poisoning the on-disk FTS state.
 - `searchPredicates`: v1.12.6 — belt-and-suspenders against `kind='archived'` leaking into recall. `kind='archived'` is a transient sentinel inside `archiveRawMemory`'s SAVEPOINT (src/raw-archive.ts:56): UPDATE kind = 'archived' immediately followed by DELETE, both inside one savepoint that commits or rolls back atomically. SQLite atomicity guarantees no concurrent reader sees the intermediate state. This filter is defensive-only against: (a) future bugs that drop the SAVEPOINT, (b) future bugs that introduce kind='archived' as a persisted state, (c) external direct-SQL writes that bypass archiveRawMemory. tenantOnlyPredicate starts with " WHERE tenant_id = ?" when tenant is set; when unset, we have no WHERE yet, so the archived clause needs both AND and WHERE forms. The "tenant-only" path always has WHERE (from tenant or we synthesize one).
 - `selectLikeCandidates`: tests the newest `LIKE_WINDOW_ROWS` (2,000) admitted rows, never the whole store. The window is read newest first by `created` through `idx_memories_tenant_created` when a tenant is given and by rowid when none is, with tenant, archived, scope and superseded filters inside it so another tenant's rows cannot fill it. A store at or under the window returns exactly what the unbounded statement did. Measured at 10,000 rows, two terms, no match: 8.6 ms and every tenant row tested before, 1.5 ms and 2,000 rows after; an FTS5 hit on a common term costs 14 ms on the same store. A part-word match older than the window is missed; an FTS5 trigram index would cover the whole store and is a schema change.
-- `loadVectorCandidateEntries`: async so the scan in `topVectorMatches` (src/vector-store.ts) can hand the event loop back every 256 rows. One cursor stays open across those pauses: under WAL a reader blocks no writer, and the scan ranks one snapshot. A keyset read per chunk was measured and rejected, because the plan drives from `memories` and each chunk then sorts the whole tenant (10x slower at 250-row chunks). Measured at 10,000 vectors: longest block 35 ms before and 2 ms after at 384 dims, 90 ms and 4 ms at 1,536 dims, total time unchanged. Each row's bytes are copied into one reused Float32Array instead of a view per row.
+- `loadVectorCandidateEntries`: async so the scan in `topVectorMatches` (src/db/vector-store.ts) can hand the event loop back every 256 rows. One cursor stays open across those pauses: under WAL a reader blocks no writer, and the scan ranks one snapshot. A keyset read per chunk was measured and rejected, because the plan drives from `memories` and each chunk then sorts the whole tenant (10x slower at 250-row chunks). Measured at 10,000 vectors: longest block 35 ms before and 2 ms after at 384 dims, 90 ms and 4 ms at 1,536 dims, total time unchanged. Each row's bytes are copied into one reused Float32Array instead of a view per row.
 - `selectFtsCandidates`: F1 (v1.7.0): MEMORY_SEARCH_COLUMNS adds bm25_score as the trailing result column. Every other column is m.<col> AS <col> so rowToEntry sees the same shape it always has.
 - `loadRecallSearchEntries`: Consumers: `api.recall` (v1.7.1+), `cmdRecall`/`cmdExplain` direct CLI paths and `searchBothHybrid` recall mode (v1.25.0).
 - `loadRecallSearchEntries`: `tenantId` widened to optional in v1.25.0 for the searchBothHybrid recall mode (its `tenantId` option is optional); `loadSearchRows` already treats undefined as "no tenant filter" for legacy callers.

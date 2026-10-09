@@ -12,9 +12,9 @@
  *  - Per-feature breakdown so you see exactly what a change helped/hurt
  */
 
-import { createMemory, Layer, type MemoryEntry } from './memory.js';
-import { search } from './search/bm25-search.js';
-import { multihopSearch } from './multihop.js';
+import { createMemory, Layer, type MemoryEntry } from '../memory.js';
+import { search } from '../search/bm25-search.js';
+import { multihopSearch } from '../multihop.js';
 import { mrr, recallAtK, ndcgAtK } from './eval.js';
 
 // ---------------------------------------------------------------------------

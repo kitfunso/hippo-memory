@@ -12,7 +12,7 @@ import type { Server } from 'node:http';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, confidenceFacets, resolveConfidence, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { serveDashboard } from '../src/dashboard.js';
+import { serveDashboard } from '../src/dashboard/dashboard.js';
 import { boundPort } from './_helpers/listen.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
 import { _resetAblationCacheForTests } from '../src/ablation.js';

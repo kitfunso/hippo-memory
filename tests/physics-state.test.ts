@@ -12,7 +12,7 @@ import {
   initializeParticle,
   resetAllPhysicsState,
   refreshParticleProperties,
-} from '../src/physics-state.js';
+} from '../src/db/physics-state.js';
 import type { PhysicsParticle } from '../src/physics.js';
 import type { MemoryEntry } from '../src/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';

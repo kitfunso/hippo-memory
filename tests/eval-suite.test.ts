@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildSyntheticCorpus, runFeatureEval, detectRegressions, resultToBaseline, formatResult } from '../src/eval-suite.js';
+import { buildSyntheticCorpus, runFeatureEval, detectRegressions, resultToBaseline, formatResult } from '../src/eval/eval-suite.js';
 import { cmdEval } from '../src/cli/eval.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 

@@ -56,7 +56,7 @@ const DATA_PATH = path.join(REPO, 'benchmarks', 'longmemeval', 'data', 'longmeme
 fs.mkdirSync(OUT_DIR, { recursive: true });
 
 // ---------------------------------------------------------------------------
-// Metrics (matching src/eval.ts)
+// Metrics (matching src/eval/eval.ts)
 // ---------------------------------------------------------------------------
 
 function mrr(returned, expectedSet) {

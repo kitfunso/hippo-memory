@@ -7,7 +7,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { judgeAll } from '../dist/judgment.js';
+import { judgeAll } from '../dist/eval/judgment.js';
 
 const COST_PER_CALL_USD = 0.0004;
 const NOISE_FLOOR_AUC = 0.07;

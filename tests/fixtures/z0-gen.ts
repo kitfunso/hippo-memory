@@ -1,6 +1,6 @@
 /** Synthetic Z0 records plus the matching plan, with per-arm knobs, for the analyzer tests.
  * Draws are keyed on (arm, sequence, seed, position), so one arm's knob never moves another arm's draws. */
-import { seededRandom } from '../../dist/eval-stats.js';
+import { seededRandom } from '../../dist/eval/eval-stats.js';
 
 type Check = 'pass' | 'fail' | 'na';
 type Kind = 'teach' | 'apply' | 'no-lesson';

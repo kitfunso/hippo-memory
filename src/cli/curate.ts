@@ -9,7 +9,7 @@ import { loadConfig } from '../config.js';
 import { isGitRepo } from '../autolearn.js';
 import { invalidateMatching, InvalidationTarget } from '../invalidation.js';
 import * as api from '../api.js';
-import * as client from '../client.js';
+import * as client from './client.js';
 import { resolveTenantId } from '../tenant.js';
 import { printError } from './output.js';
 import { type CliFlags,

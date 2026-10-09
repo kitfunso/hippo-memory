@@ -1,20 +1,20 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { appendAuditEvent } from './audit.js';
-import { withBackup } from './db/backup.js';
-import { assertSqliteAllowed } from './db/open.js';
-import { DatabaseSync, type DatabaseSyncLike } from './db/sqlite.js';
-import { getMeta, setMeta } from './db/meta.js';
-import { tableColumns } from './db/tables.js';
-import { assertBinaryCompatible } from './db/migrate.js';
-import { insertDormantRow, listDormantSnapshots } from './dormant.js';
-import { calculateStrength, canAutoDelete, type MemoryEntry } from './memory.js';
-import { assessAutomaticMemory, BUNDLE_HEADER, isAutomaticEntry, isCertainReason, type AutomaticMemoryDefect } from './memory-quality.js';
-import { heldTexts } from './same-text.js';
-import { deleteEntryCore, MEMORY_BACKED_TABLES, memoriesBackingObjectsOn } from './store/delete-and-batch.js';
-import { selectAllEntries } from './store/entry-reads.js';
-import { MEMORY_SELECT_COLUMNS, parseJsonArray } from './store/rows.js';
-import { purgeMirrorBestEffort } from './store/mirrors.js';
+import { appendAuditEvent } from '../audit.js';
+import { withBackup } from '../db/backup.js';
+import { assertSqliteAllowed } from '../db/open.js';
+import { DatabaseSync, type DatabaseSyncLike } from '../db/sqlite.js';
+import { getMeta, setMeta } from '../db/meta.js';
+import { tableColumns } from '../db/tables.js';
+import { assertBinaryCompatible } from '../db/migrate.js';
+import { insertDormantRow, listDormantSnapshots } from '../dormant.js';
+import { calculateStrength, canAutoDelete, type MemoryEntry } from '../memory.js';
+import { assessAutomaticMemory, BUNDLE_HEADER, isAutomaticEntry, isCertainReason, type AutomaticMemoryDefect } from '../memory-quality.js';
+import { heldTexts } from '../same-text.js';
+import { deleteEntryCore, MEMORY_BACKED_TABLES, memoriesBackingObjectsOn } from '../store/delete-and-batch.js';
+import { selectAllEntries } from '../store/entry-reads.js';
+import { MEMORY_SELECT_COLUMNS, parseJsonArray } from '../store/rows.js';
+import { purgeMirrorBestEffort } from '../store/mirrors.js';
 
 /** One automatic row with a defect. `set-aside` moves to dormant storage on apply, `review` is listed only, `protected` is kept. */
 export interface QualityRepairIssue {

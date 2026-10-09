@@ -14,8 +14,8 @@
  * native fetch failure so the caller can detect them and self-heal.
  */
 
-import type { RememberOpts, RememberResult } from './api.js';
-import { fetchWithRetry } from './http-retry.js';
+import type { RememberOpts, RememberResult } from '../api.js';
+import { fetchWithRetry } from '../http-retry.js';
 
 /** A write the local server has not answered in this long is stuck; the caller treats it as delivery-unknown. */
 const SERVER_TIMEOUT_MS = 30_000;

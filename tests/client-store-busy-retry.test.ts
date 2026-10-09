@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createServer, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { forget, remember, HttpResponseError } from '../src/client.js';
+import { forget, remember, HttpResponseError } from '../src/cli/client.js';
 
 let server: Server | undefined;
 

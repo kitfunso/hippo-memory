@@ -1,11 +1,11 @@
 // The four dashboard writes, each a thin call into an existing store or api function; the router owns HTTP and the cache.
 
-import * as api from './api.js';
-import { NotFoundError } from './api-errors.js';
-import type { MemoryEntry } from './memory.js';
-import { listTouchableConflicts, resolveConflict } from './store/conflicts.js';
-import { readEntry } from './store/entry-reads.js';
-import { writeEntry } from './store/entry-writes.js';
+import * as api from '../api.js';
+import { NotFoundError } from '../api-errors.js';
+import type { MemoryEntry } from '../memory.js';
+import { listTouchableConflicts, resolveConflict } from '../store/conflicts.js';
+import { readEntry } from '../store/entry-reads.js';
+import { writeEntry } from '../store/entry-writes.js';
 import { ParamError, parseMemoryId, type ActionBody } from './dashboard-params.js';
 import { isLiveMemory } from './dashboard-snapshot.js';
 import type { ForgetResult, ResolveResult } from './dashboard-types.js';

@@ -13,7 +13,7 @@ import { detectForwardClaim } from '../src/forward-claim-detector.js';
 import { boostByGoals, getActiveGoalsWithDb, loadGoalPolicies, localGoalRecallRows, pushGoal, writeGoalRecallLog } from '../src/goals.js';
 import { __resetSessionRecallHistoryMcp } from '../src/mcp/server.js';
 import { lastRecalledIds } from '../src/mcp/session-state.js';
-import { loadPhysicsState, resetAllPhysicsState } from '../src/physics-state.js';
+import { loadPhysicsState, resetAllPhysicsState } from '../src/db/physics-state.js';
 import { resolveClassFromTokens } from '../src/store/planning-fallacy-evidence.js';
 import { computePredictionBaserate } from '../src/store/predictions.js';
 import { writeRecallTraceAtRoot } from '../src/recall-trace.js';
@@ -28,7 +28,7 @@ import { loadLatestHandoff, saveSessionHandoff } from '../src/store/handoffs.js'
 import { updateStats } from '../src/store/index-and-stats.js';
 import { loadRecallSearchEntries, loadVectorCandidateEntries } from '../src/store/search-rows.js';
 import { appendSessionEvent, listSessionEvents, loadActiveTaskSnapshot, saveActiveTaskSnapshot } from '../src/store/sessions.js';
-import { EMBEDDING_MODEL_META_KEY, hasStoredVectors, upsertVectors } from '../src/vector-store.js';
+import { EMBEDDING_MODEL_META_KEY, hasStoredVectors, upsertVectors } from '../src/db/vector-store.js';
 import { countMatching, recordStatementsAsync, STORE_OPEN } from './_helpers/count-statements.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from './_helpers/hashed-embedding-server.js';
 import {

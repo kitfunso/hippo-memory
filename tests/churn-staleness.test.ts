@@ -18,7 +18,7 @@ import { hybridSearch } from '../src/search/hybrid.js';
 import { physicsSearch } from '../src/search/physics-search.js';
 import { CHURN_STALE_RANK_MULTIPLIER } from '../src/search/boosts.js';
 import { openHippoDb } from '../src/db.js';
-import { savePhysicsState } from '../src/physics-state.js';
+import { savePhysicsState } from '../src/db/physics-state.js';
 import type { PhysicsParticle } from '../src/physics.js';
 import { loadConfig } from '../src/config.js';
 import * as api from '../src/api.js';

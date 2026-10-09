@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { cleanupArchivedMirrors } from '../raw-archive-mirror-cleanup.js';
+import { cleanupArchivedMirrors } from './raw-archive-mirror-cleanup.js';
 import { log } from '../log.js';
 import { DatabaseSync, type DatabaseSyncLike } from './sqlite.js';
 import { execWithBusyRetry } from './busy.js';

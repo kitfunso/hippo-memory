@@ -37,7 +37,7 @@
     "src/consolidate/run.ts": 2,
     "src/consolidate/sleep.ts": 3,
     "src/customer-notes.ts": 3,
-    "src/dashboard-snapshot.ts": 1,
+    "src/dashboard/dashboard-snapshot.ts": 1,
     "src/decisions.ts": 4,
     "src/dedupe.ts": 1,
     "src/doctor.ts": 2,

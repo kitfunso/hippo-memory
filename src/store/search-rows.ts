@@ -5,7 +5,7 @@ import { isPersonalScope, scopeAdmitSql, type SqlFragment } from '../recall-scop
 import { ftsTermParts, RAREST_TERM_COUNT, rarestFtsQuery } from '../prompt-recall.js';
 import { log } from '../log.js';
 import { originInSql } from '../project-identity.js';
-import { topVectorMatches } from '../vector-store.js';
+import { topVectorMatches } from '../db/vector-store.js';
 import {
   type MemoryRow,
   MEMORY_SELECT_COLUMNS,

@@ -9,10 +9,10 @@
  * of intuition.
  */
 
-import type { MemoryEntry } from './memory.js';
-import { hybridSearch } from './search/hybrid.js';
-import { searchBothHybrid } from './shared.js';
-import { isInitialized } from './store/open.js';
+import type { MemoryEntry } from '../memory.js';
+import { hybridSearch } from '../search/hybrid.js';
+import { searchBothHybrid } from '../shared.js';
+import { isInitialized } from '../store/open.js';
 
 // ---------------------------------------------------------------------------
 // Types

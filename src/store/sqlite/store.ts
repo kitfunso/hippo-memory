@@ -5,7 +5,7 @@ import { appendAuditEvent, listAuditEventsAfter } from '../../audit.js';
 import { withWriteScope } from '../../db.js';
 import { embeddingIndexStateAt, loadStoredVectors } from '../../embeddings.js';
 import { activeGoalsWithPolicies, localGoalRecallRows, writeGoalRecallLog } from '../../goals.js';
-import { loadPhysicsState } from '../../physics-state.js';
+import { loadPhysicsState } from '../../db/physics-state.js';
 import { planningFallacyEvidenceAt } from '../planning-fallacy-evidence.js';
 import { writeRecallTrace } from '../../recall-trace.js';
 import { recordTokenUse } from '../../token-ledger.js';

@@ -6,7 +6,7 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { assemble, type Context } from '../src/api.js';
-import { seededRandom } from '../src/eval-stats.js';
+import { seededRandom } from '../src/eval/eval-stats.js';
 
 /**
  * F4 — byte compare canonical UTC ISO timestamps instead of localeCompare.

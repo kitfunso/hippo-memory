@@ -5,13 +5,13 @@ import * as path from 'path';
 import * as fs from 'fs';
 import type { AddressInfo } from 'net';
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'crypto';
-import { evalNow } from './ablation.js';
-import { readEntry } from './store/entry-reads.js';
-import { listCards } from './store-cards.js';
-import { resolveTenantId } from './tenant.js';
-import { loadCardDetail } from './card-detail.js';
-import { bodyDeadlineMs, BodyTimeoutError, closeAfterReply, isCrossSite, LOOPBACK_HOST_HEADER } from './http-util.js';
-import { log } from './log.js';
+import { evalNow } from '../ablation.js';
+import { readEntry } from '../store/entry-reads.js';
+import { listCards } from '../store-cards.js';
+import { resolveTenantId } from '../tenant.js';
+import { loadCardDetail } from '../card-detail.js';
+import { bodyDeadlineMs, BodyTimeoutError, closeAfterReply, isCrossSite, LOOPBACK_HOST_HEADER } from '../http-util.js';
+import { log } from '../log.js';
 import { createSnapshotService, isLiveMemory, type SnapshotService } from './dashboard-snapshot.js';
 import {
   buildMemoryDetail, buildMemoryPage, buildOverview, buildProjectDetail, buildSearch,
@@ -22,7 +22,7 @@ import {
 import {
   ParamError, parseActionBody, parseConflictId, parseMemoryId, parseMemoryQuery, parseSearchText, type ActionBody,
 } from './dashboard-params.js';
-import { runWithRequestId } from './util/request-scope.js';
+import { runWithRequestId } from '../util/request-scope.js';
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',

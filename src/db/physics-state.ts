@@ -4,12 +4,12 @@
  * in SQLite using BLOB columns for 384-dim vectors.
  */
 
-import { evalNow } from './ablation.js';
-import type { DatabaseSyncLike } from './db.js';
-import type { MemoryEntry } from './memory.js';
-import type { PhysicsParticle } from './physics.js';
-import { computeMass, computeCharge, computeTemperature, vecZero } from './physics.js';
-import { calculateStrength } from './memory.js';
+import { evalNow } from '../ablation.js';
+import type { DatabaseSyncLike } from '../db.js';
+import type { MemoryEntry } from '../memory.js';
+import type { PhysicsParticle } from '../physics.js';
+import { computeMass, computeCharge, computeTemperature, vecZero } from '../physics.js';
+import { calculateStrength } from '../memory.js';
 
 // ---------------------------------------------------------------------------
 // Float32Array <-> Buffer serialization

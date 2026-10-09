@@ -21,7 +21,7 @@ import {
   completeCard,
   heartbeatCard,
 } from '../src/store-cards.js';
-import { serveDashboard } from '../src/dashboard.js';
+import { serveDashboard } from '../src/dashboard/dashboard.js';
 import { resolveTenantId } from '../src/tenant.js';
 
 const DASHBOARD_TOKEN = 'test-dashboard-token';

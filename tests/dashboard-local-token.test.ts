@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { request, type Server } from 'node:http';
 import { initStore } from '../src/store/open.js';
-import { serveDashboard } from '../src/dashboard.js';
+import { serveDashboard } from '../src/dashboard/dashboard.js';
 import { boundPort } from './_helpers/listen.js';
 
 const TOKEN = 'test-dashboard-token-0123456789';

@@ -5,7 +5,7 @@ import { loadAllEntries } from '../store/entry-reads.js';
 import { deduplicateStore } from '../dedupe.js';
 import { embedAll, loadEmbeddingIndex } from '../embeddings.js';
 import { resolveEmbeddingProvider, type EmbeddingProvider } from '../embedding-provider.js';
-import { resetAllPhysicsState } from '../physics-state.js';
+import { resetAllPhysicsState } from '../db/physics-state.js';
 import { loadConfig } from '../config.js';
 import { openHippoDb, closeHippoDb } from '../db.js';
 import { resolveTenantId } from '../tenant.js';

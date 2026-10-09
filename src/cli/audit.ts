@@ -6,10 +6,10 @@ import { openHippoDb, closeHippoDb } from '../db.js';
 import { auditMemories, AUDIT_OPS, type AuditEvent, type AuditOp } from '../audit.js';
 import * as api from '../api.js';
 import { resolveTenantId } from '../tenant.js';
-import { pruneAuditLog, parseOlderThanFlag } from '../audit-prune.js';
+import { pruneAuditLog, parseOlderThanFlag } from './audit-prune.js';
 import { printError } from './output.js';
 import { type CliFlags, requireInit, type CommandContext, resolveAuthRoot } from './shared.js';
-import { repairAutomaticMemories } from '../quality-repair.js';
+import { repairAutomaticMemories } from './quality-repair.js';
 import { getGlobalRoot } from '../shared.js';
 
 // ---------------------------------------------------------------------------

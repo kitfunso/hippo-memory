@@ -24,8 +24,8 @@
  *     written AFTER the DELETE WHERE ts < cutoff, so ts > cutoff).
  */
 
-import type { DatabaseSyncLike } from './db.js';
-import { appendAuditEvent } from './audit.js';
+import type { DatabaseSyncLike } from '../db.js';
+import { appendAuditEvent } from '../audit.js';
 
 export interface PruneAuditOpts {
   /** Cutoff in days. Rows with `ts < (now - N days)` are deleted. */

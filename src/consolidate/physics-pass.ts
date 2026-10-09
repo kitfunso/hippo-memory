@@ -1,5 +1,5 @@
 import { openHippoDb, closeHippoDb } from '../db.js';
-import { loadPhysicsState, savePhysicsState, refreshParticleProperties } from '../physics-state.js';
+import { loadPhysicsState, savePhysicsState, refreshParticleProperties } from '../db/physics-state.js';
 import { simulate, type ForceContext } from '../physics.js';
 import type { SleepRun } from './run.js';
 

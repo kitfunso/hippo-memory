@@ -2,7 +2,7 @@
 // then reads and writes them in memory with what hippo-memory/server exports, so a conformance test shows that is all another store needs.
 import { listAuditEventsAfter } from '../../src/audit.js';
 import { closeHippoDb, getMeta, openHippoDb } from '../../src/db.js';
-import { loadPhysicsState } from '../../src/physics-state.js';
+import { loadPhysicsState } from '../../src/db/physics-state.js';
 import {
   bufferToFloat32, decodeVector, EMBEDDING_MODEL_META_KEY, encodeVector, float32ToBuffer, rankVectorRows, replacesIndex,
   type AuditEvent, type EmbeddingIndexState, type HippoStore, type MemoryEntry, type PhysicsParticle, type VectorReads, type VectorWrites,

@@ -1,6 +1,6 @@
 import { PACKAGE_VERSION, compareSemver } from '../version.js';
 import { log } from '../log.js';
-import { importLegacyEmbeddingIndex } from '../vector-store.js';
+import { importLegacyEmbeddingIndex } from './vector-store.js';
 import type { DatabaseSyncLike } from './sqlite.js';
 import { execWithBusyRetry } from './busy.js';
 import { tableExists } from './tables.js';

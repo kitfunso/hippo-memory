@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { writeEntry } from '../src/store/entry-writes.js';
 import * as conflicts from '../src/store/conflicts.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import type { MemoryDetail, Overview } from '../src/dashboard-types.js';
+import type { MemoryDetail, Overview } from '../src/dashboard/dashboard-types.js';
 import { get, makeStore, parse, startDashboard, type RunningDashboard, type TmpStore } from './_helpers/dashboard-fixture.js';
 
 let tmp: TmpStore;

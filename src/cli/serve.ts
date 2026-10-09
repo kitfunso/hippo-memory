@@ -10,7 +10,7 @@ import { cardStringFlag, requireInit, type CommandContext } from './shared.js';
 export async function handleDashboard({ hippoRoot, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
   const port = parseInt(String(flags['port'] ?? '3333'), 10);
-  const { serveDashboard } = await import('../dashboard.js');
+  const { serveDashboard } = await import('../dashboard/dashboard.js');
   serveDashboard(hippoRoot, port);
   // A busy port or a later throw ends in one log line and exit 1, as it does for serve and mcp.
   installCrashHandlers('dashboard');

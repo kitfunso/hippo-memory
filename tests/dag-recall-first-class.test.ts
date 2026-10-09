@@ -23,7 +23,7 @@ import { isDagSummary } from '../src/search/boosts.js';
 import type { SearchResult } from '../src/core/search-types.js';
 import type { RerankerOptions, RerankResult } from '../src/rerankers/types.js';
 import { searchBothHybrid } from '../src/shared.js';
-import { savePhysicsState } from '../src/physics-state.js';
+import { savePhysicsState } from '../src/db/physics-state.js';
 import type { PhysicsParticle } from '../src/physics.js';
 
 function makeL2Summary(

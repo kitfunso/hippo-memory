@@ -97,8 +97,8 @@ export type { PhysicsParticle } from './physics.js';
 export { StoreBusyError } from './db.js';
 // An add-on store encodes, decodes and ranks vectors and particles with hippo.db's own code, and drops the index by its rule,
 // so both stores keep the same bytes and return the same ids in the same order.
-export { decodeVector, EMBEDDING_MODEL_META_KEY, encodeVector, rankVectorRows, type VectorMatch, type VectorRow } from './vector-store.js';
-export { bufferToFloat32, float32ToBuffer } from './physics-state.js';
+export { decodeVector, EMBEDDING_MODEL_META_KEY, encodeVector, rankVectorRows, type VectorMatch, type VectorRow } from './db/vector-store.js';
+export { bufferToFloat32, float32ToBuffer } from './db/physics-state.js';
 export { replacesIndex } from './embeddings.js';
 // An add-on's ContextReads applies hippo.db's scope, secret, tally and rarest-term rules with the same code.
 export { passesScopeFilterForRecall, RECALL_DEFAULT_DENY_SCOPES } from './recall-scope.js';

@@ -9,7 +9,7 @@ import { batchWriteAndDelete, deleteEntry } from '../src/store/delete-and-batch.
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
 import { openHippoDb, closeHippoDb, getMeta, setMeta, getSchemaVersion, getCurrentSchemaVersion } from '../src/db.js';
 import { loadEmbeddingIndex, saveEmbeddingIndex } from '../src/embeddings.js';
-import { decodeVector, deleteOrphanVectors, encodeVector, rankVectorRows, topVectorMatches, type VectorMatch, type VectorRow } from '../src/vector-store.js';
+import { decodeVector, deleteOrphanVectors, encodeVector, rankVectorRows, topVectorMatches, type VectorMatch, type VectorRow } from '../src/db/vector-store.js';
 
 let root: string;
 

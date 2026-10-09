@@ -135,7 +135,7 @@ export {
   resultToBaseline,
   detectRegressions,
   buildSyntheticCorpus,
-} from './eval-suite.js';
+} from './eval/eval-suite.js';
 
 // Pineal gland: salience gate
 export {
