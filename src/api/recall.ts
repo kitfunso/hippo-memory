@@ -5,7 +5,7 @@ import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../store/rows.js';
 import { loadEntriesByIds, loadFreshRawMemories } from '../store/entry-reads.js';
 import { loadRecallSearchEntries, recallScopeFilter } from '../store/search-rows.js';
 import type { ContinuityKey } from '../store/sessions.js';
-import { estimateTokens } from '../token-ledger.js';
+import { estimateTokens } from '../util/token-text.js';
 import { formatHandoffEvidenceLine } from '../handoff.js';
 import type { MemoryEntry } from '../memory.js';
 import type { RecallTraceInput } from '../store/recall-trace.js';

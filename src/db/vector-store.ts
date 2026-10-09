@@ -62,22 +62,34 @@ export function deleteOrphanVectors(db: DatabaseSyncLike): number {
   return Number(db.prepare('DELETE FROM memory_vectors WHERE memory_id NOT IN (SELECT id FROM memories)').run().changes ?? 0);
 }
 
-/** Vectors for `ids`, or every stored vector when `ids` is omitted. */
-export function loadVectors(db: DatabaseSyncLike, ids?: readonly string[]): Map<string, number[]> {
-  const out = new Map<string, number[]>();
+// One read behind the copied and the viewed shape, so the two can never return different rows.
+function eachStoredVector(db: DatabaseSyncLike, ids: readonly string[] | undefined, take: (id: string, vector: Float32Array) => void): void {
   const read = (rows: Iterable<unknown>): void => {
     // SAFETY: both SELECTs below name exactly these two columns; node:sqlite returns BLOBs as Uint8Array.
-    for (const row of rows as Iterable<{ memory_id: string; vector: Uint8Array }>) out.set(row.memory_id, Array.from(decodeVector(row.vector)));
+    for (const row of rows as Iterable<{ memory_id: string; vector: Uint8Array }>) take(row.memory_id, decodeVector(row.vector));
   };
   if (ids === undefined) {
     read(db.prepare('SELECT memory_id, vector FROM memory_vectors').iterate());
-    return out;
+    return;
   }
   const unique = [...new Set(ids)];
   for (let i = 0; i < unique.length; i += ID_CHUNK) {
     const chunk = unique.slice(i, i + ID_CHUNK);
     read(db.prepare(`SELECT memory_id, vector FROM memory_vectors WHERE memory_id IN (${chunk.map(() => '?').join(', ')})`).all(...chunk));
   }
+}
+
+/** Vectors for `ids`, or every stored vector when `ids` is omitted. */
+export function loadVectors(db: DatabaseSyncLike, ids?: readonly string[]): Map<string, number[]> {
+  const out = new Map<string, number[]>();
+  eachStoredVector(db, ids, (id, vector) => out.set(id, Array.from(vector)));
+  return out;
+}
+
+/** `loadVectors` for `ids` with no copy: each value views the bytes the store returned for that row. */
+export function loadVectorViews(db: DatabaseSyncLike, ids: readonly string[]): Map<string, Float32Array> {
+  const out = new Map<string, Float32Array>();
+  eachStoredVector(db, ids, (id, vector) => out.set(id, vector));
   return out;
 }
 

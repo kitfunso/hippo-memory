@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { search } from '../src/search/bm25-search.js';
-import { estimateTokens } from '../src/token-ledger.js';
+import { estimateTokens } from '../src/util/token-text.js';
 import { textOverlap } from '../src/tokenize.js';
 import { markRetrieved } from '../src/memory.js';
 import { Layer } from '../src/memory.js';
