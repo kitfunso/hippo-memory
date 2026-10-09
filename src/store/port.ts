@@ -5,6 +5,7 @@ import type { ApiKeyListRow, ApiKeyRecord, ListApiKeysOpts, NewApiKey } from '..
 import type { AppendAuditOpts, AuditEvent, ListAuditAfterOpts, QueryAuditOpts } from '../audit.js';
 import { StoreNotPortedError } from '../util/sqlite-blocked.js';
 import type { EmbeddingIndexState } from '../embeddings.js';
+import type { Entity, Relation } from './graph-rows.js';
 import type { ActiveGoals, GetActiveGoalsOpts, GoalRecallLogRow } from '../goals.js';
 import type { SessionHandoff } from '../handoff.js';
 import type { JsonValue } from '../json.js';
@@ -14,6 +15,7 @@ import type { PhysicsParticle } from '../physics.js';
 import type { PlanningFallacyEvidence } from './planning-fallacy-evidence.js';
 import type { ClosureState, Prediction, PredictionBaserate, SavePredictionOpts } from './predictions.js';
 import type { QuarantineRow, QuarantineStatus } from './quarantine.js';
+import type { ScopeActor } from '../recall-scope.js';
 import type { RecallTraceInput } from '../recall-trace.js';
 import type { AmbientLoadResult, AmbientRecallRequest, ContextCandidateFilter, RecentOrigins } from './candidates.js';
 import type { StrengthenOptions } from './entry-writes.js';
@@ -349,6 +351,32 @@ export interface Quarantine {
   rejectQuarantined(tenantId: string, id: string, actor: string): Promise<QuarantineRejection>;
 }
 
+/** What one graph view reads. `limit` is a positive integer and caps each read on its own. Newest means by createdAt, then id, both descending.
+ *  A row shows when it cites no memory, or its memory is in the tenant under a null scope or one `canReadScope(reader, scope)` admits; with no `reader` every row shows. */
+export interface GraphViewQuery {
+  /** Unset reads the whole graph. Set, the start entities are the first `limit` of exactly this name, lowest id first, less the ones that do not show; none left answers empty and not truncated.
+   *  Per 400 start ids in order, the newest `limit` relations with an end among them join in, each once; in that order each adds its other end to the ids held, which begin as the start ids, until `limit` ids are held. */
+  readonly entity?: string;
+  readonly limit: number;
+  readonly reader?: ScopeActor;
+}
+
+export interface GraphRows {
+  readonly entities: Entity[];
+  /** May name an entity `entities` lacks; the caller drops such a relation. */
+  readonly relations: Relation[];
+  /** Judged before a row is hidden: the start entities, the relations joined in, the relations returned or (whole graph) the entities returned came back `limit` long,
+   *  or the walk held `limit` ids with a relation still to join. */
+  readonly truncated: boolean;
+}
+
+/** The rows behind GET /v1/graph. */
+export interface GraphReads {
+  /** Every read from one snapshot, then the rows that do not show are dropped. Whole graph: the tenant's newest `limit` entities and newest `limit` relations.
+   *  From a name: the tenant's entities of the ids held, id ascending within each 400 of them, and the newest `limit` relations with both ends among those ids. */
+  graphRows(tenantId: string, query: GraphViewQuery): Promise<GraphRows>;
+}
+
 /** The optional groups: a store sets each one whole or leaves it unset, and a route or MCP tool names the one it needs. */
 export interface StoreGroups {
   /** Unset on a store built before them, where hybrid and physics recall under an embedding provider answer 501. */
@@ -363,6 +391,7 @@ export interface StoreGroups {
   readonly dagReads: DagReads;
   readonly auditLog: AuditLog;
   readonly quarantine: Quarantine;
+  readonly graphReads: GraphReads;
   /** Unset on a store built before it, where GET /ready answers 200 with `store: "unchecked"`. */
   readonly readiness: Readiness;
 }

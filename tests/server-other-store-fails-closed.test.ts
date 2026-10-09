@@ -16,6 +16,7 @@ import { requireVectorReads } from '../src/search/vector.js';
 import { loadEntriesByIds } from '../src/store/entry-reads.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from './_helpers/hashed-embedding-server.js';
+import { inMemoryGraphReadsStore, seedGraphRows, type SeededGraph } from './_helpers/in-memory-graph-reads-store.js';
 import { inMemoryPredictionsStore, type InMemoryPredictionsStore } from './_helpers/in-memory-predictions-store.js';
 import { HELD, heldAt, heldContent, inMemoryQuarantineStore, seedQuarantineRecords, type InMemoryQuarantineStore } from './_helpers/in-memory-quarantine-store.js';
 import { portOnlyStoreWithoutVectorReads } from './_helpers/port-only-store.js';
@@ -376,6 +377,74 @@ describe('serve() under a store that has the quarantine group', () => {
     expect(memory.auditRows().slice(-2).map((e) => [e.op, e.actor, e.tenantId, e.targetId])).toEqual([
       ['quarantine_approve', actor, TENANT_A, HELD.a1], ['quarantine_reject', actor, TENANT_A, HELD.a2],
     ]);
+    expect(hippoDbRows()).toEqual(before);
+  });
+});
+
+describe('serve() under a store that has the graphReads group', () => {
+  let fixture: TwoTenantFixture;
+  let graph: SeededGraph;
+  let handle: ServerHandle;
+
+  const hippoDbRows = () => {
+    const db = openHippoDb(fixture.dir);
+    try {
+      // SAFETY: each SELECT names the one column n.
+      const count = (table: string): number => (db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n;
+      return { entities: count('entities'), relations: count('relations'), memories: count('memories'), audit: count('audit_log') };
+    } finally {
+      closeHippoDb(db);
+    }
+  };
+
+  beforeAll(async () => {
+    vi.stubEnv('HIPPO_V1_RPS', '0');
+    fixture = seedTwoTenants();
+    graph = seedGraphRows(fixture.dir);
+    handle = await serve({ hippoRoot: fixture.dir, port: 0, store: inMemoryGraphReadsStore(fixture.dir).store });
+  });
+
+  afterAll(async () => {
+    await handle.stop();
+    vi.unstubAllEnvs();
+    rmSync(fixture.dir, { recursive: true, force: true });
+  });
+
+  it("serves GET /v1/graph from that store, inside the caller's tenant and under the caller's scopes, and writes nothing to hippo.db", async () => {
+    const before = hippoDbRows();
+    const get = async (token: string, path: string): Promise<{ status: number; body: unknown }> => {
+      const res = await fetch(`${handle.url}${path}`, { headers: { authorization: `Bearer ${token}` } });
+      return { status: res.status, body: await res.json() };
+    };
+    const { adminA, memberA, memberB } = fixture.tokens;
+    const { e } = graph;
+    const node = (id: number, type: string, name: string) => ({ id, type, name });
+    const edge = (from: number, to: number) => ({ from, to, relType: 'references' });
+    const hub = node(e.hub, 'project', 'Hub');
+    const spokes = [node(e.spoke1, 'system', 'Spoke'), node(e.spoke2, 'project', 'Spoke')];
+    const shared = node(e.shared, 'project', 'Shared');
+    const amongSpokes = [edge(e.spoke1, e.spoke2), edge(e.hub, e.spoke2), edge(e.hub, e.spoke1)];
+    // An admin reads the held scope and not another person's own: Mine is gone, and with it the relation that ends there.
+    expect(await get(adminA, '/v1/graph')).toEqual({
+      status: 200,
+      body: {
+        nodes: [
+          node(e.anchored, 'policy', 'Anchored'), shared, node(e.lone, 'decision', 'Lone'), node(e.twinOpen, 'person', 'Twin'), node(e.twinHeld, 'person', 'Twin'),
+          node(e.secret, 'customer', 'Secret'), spokes[1], spokes[0], hub,
+        ],
+        edges: [edge(e.shared, e.hub), edge(e.hub, e.secret), ...amongSpokes],
+        truncated: false,
+      },
+    });
+    expect(await get(memberA, '/v1/graph?entity=Hub')).toEqual({
+      status: 200, body: { nodes: [hub, ...spokes, shared], edges: [edge(e.shared, e.hub), ...amongSpokes], truncated: false },
+    });
+    expect(await get(memberA, '/v1/graph?entity=Secret')).toEqual({ status: 200, body: { nodes: [], edges: [], truncated: false } });
+    expect(await get(adminA, '/v1/graph?entity=Hub&limit=2')).toEqual({ status: 200, body: { nodes: [hub, shared], edges: [edge(e.shared, e.hub)], truncated: true } });
+    expect(await get(memberB, '/v1/graph?entity=Shared')).toEqual({
+      status: 200, body: { nodes: [node(e.sharedB, 'project', 'Shared'), node(e.otherB, 'system', 'Other')], edges: [edge(e.sharedB, e.otherB)], truncated: false },
+    });
+    expect(await get(adminA, '/v1/graph?limit=0')).toEqual({ status: 400, body: { error: 'limit must be a positive integer <= 1000' } });
     expect(hippoDbRows()).toEqual(before);
   });
 });

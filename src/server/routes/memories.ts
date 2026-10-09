@@ -1,10 +1,10 @@
 // Memory write routes: create, graph, archive, supersede, promote, forget, outcome, sleep.
 import { archiveRaw, forget, outcome, outcomeForLastRecall, promote, remember, supersede } from '../../api.js';
 import type { MemoryKind } from '../../memory.js';
-import { buildGraphModel } from '../../graph-view.js';
+import { graphModelOf } from '../../graph-view.js';
 import { MAX_ENTITY_NAME_LEN } from '../../graph/types.js';
 import { HttpError, sendJson } from '../../http-util.js';
-import { canReadScope } from '../../recall-scope.js';
+import { requireGroup } from '../../store/port.js';
 import { assertCrossTenantAdmin, buildContextWithAuth, isLoopback } from '../auth.js';
 import { sleepInChild } from '../sleep-offload.js';
 import type { RouteRequest } from '../types.js';
@@ -58,12 +58,9 @@ export async function handleGetGraph({ req, res, opts, query }: RouteRequest): P
   }
   const limit = parseListLimit(query.get('limit'));
   const ctx = await buildContextWithAuth(req, opts);
-  const model = buildGraphModel(ctx.hippoRoot, ctx.tenantId, {
-    entity: entityRaw ?? undefined,
-    limit,
-    canRead: (s) => s === null || canReadScope(ctx.actor, s),
-  });
-  sendJson(res, 200, model);
+  const { role, scopes, owner } = ctx.actor;
+  const rows = await requireGroup(opts.store, 'graphReads').graphRows(ctx.tenantId, { entity: entityRaw ?? undefined, limit, reader: { role, scopes, owner } });
+  sendJson(res, 200, graphModelOf(rows));
   return;
 }
 

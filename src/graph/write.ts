@@ -17,7 +17,8 @@ import { assertTenantId } from '../tenant.js';
 import { errorMessage, log } from '../log.js';
 import { clock } from '../write-budget.js';
 import { type GraphTxDb, type SourceKind, type SourceObjectType, type SourceObjectRef, GRAPH_ENTITY_TYPES, GRAPH_RELATION_TYPES, MAX_ENTITY_NAME_LEN, type Entity, type Relation, type GraphQueueItem, type InsertEntityOpts, type InsertRelationOpts, type UpdateEntityOpts } from './types.js';
-import { type EntityRow, type RelationRow, type QueueRow, rowToEntity, rowToRelation, rowToQueueItem, ENTITY_COLS, RELATION_COLS, QUEUE_COLS, type DbLike } from './rows.js';
+import { type QueueRow, rowToQueueItem, QUEUE_COLS, type DbLike } from './rows.js';
+import { type EntityRow, type RelationRow, rowToEntity, rowToRelation, ENTITY_COLS, RELATION_COLS } from '../store/graph-rows.js';
 import type { DesiredRelation, GraphOp, NaturalKey } from './delta.js';
 
 /** source_object_type -> its object table, for the object-path validation 4-way branch.

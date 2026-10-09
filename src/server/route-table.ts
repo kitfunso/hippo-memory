@@ -42,7 +42,7 @@ export function isPublicRoute(method: string, path: string): boolean {
 /** The /v1 routes in dispatch order; the first entry whose method and path match handles the request. */
 const V1_ROUTES: readonly Route[] = [
   { method: 'POST', path: '/v1/memories', storeReady: 'entryWrites', handler: handleCreateMemory },
-  { method: 'GET', path: '/v1/graph', handler: handleGetGraph },
+  { method: 'GET', path: '/v1/graph', storeReady: 'graphReads', handler: handleGetGraph },
   { method: 'GET', path: '/v1/memories', storeReady: 'base', handler: handleRecallMemories },
   { method: 'GET', pattern: '/v1/sessions/:id/assemble', storeReady: 'dagReads', handler: handleAssembleSession },
   { method: 'GET', pattern: '/v1/recall/drill/:id', storeReady: 'dagReads', handler: handleDrillRecall },
