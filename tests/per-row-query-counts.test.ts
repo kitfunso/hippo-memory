@@ -380,14 +380,16 @@ describe('cmdRemember', () => {
     }
   }
 
-  it('scores schema fit without reading a full row', async () => {
+  it('scores schema fit without reading a stored row, and reads back only the row it wrote', async () => {
     for (const n of SIZES) {
       const root = freshRoot('qc-remember');
       fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { enabled: false } }));
       seed(root, rows(n, 'remember', { tags: ['topic:cache'] }));
       const { statements, printed } = await remember(root, 'a new note about the zephyrine cache');
       expect(printed[0]).toMatch(/^Remembered \[/);
-      expect(countMatching(statements, ROW_READ)).toBe(0);
+      // The write goes through the api, which answers an id, so the printout reads that one row by id.
+      expect(countMatching(statements, ROW_READ)).toBe(1);
+      expect(countMatching(statements, /FROM memories WHERE id = \? AND tenant_id = \?$/)).toBe(1);
     }
   });
 

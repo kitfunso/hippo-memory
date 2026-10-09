@@ -1400,13 +1400,6 @@ exports[`hippo supersede (built CLI, no server) > --layer > audit rows 1`] = `
   {
    "tenant_id": "default",
    "actor": "cli",
-   "op": "remember",
-   "target_id": "id#1",
-   "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":null}"
-  },
-  {
-   "tenant_id": "default",
-   "actor": "cli",
    "op": "supersede",
    "target_id": "id#1",
    "metadata_json": "{\\"newId\\":\\"id#2\\"}"
@@ -1537,13 +1530,6 @@ exports[`hippo supersede (built CLI, no server) > --pin > audit rows 1`] = `
   {
    "tenant_id": "default",
    "actor": "cli",
-   "op": "remember",
-   "target_id": "id#1",
-   "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":null}"
-  },
-  {
-   "tenant_id": "default",
-   "actor": "cli",
    "op": "supersede",
    "target_id": "id#1",
    "metadata_json": "{\\"newId\\":\\"id#2\\"}"
@@ -1669,13 +1655,6 @@ exports[`hippo supersede (built CLI, no server) > --tag > audit rows 1`] = `
    "actor": "cli",
    "op": "remember",
    "target_id": "id#2",
-   "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":null}"
-  },
-  {
-   "tenant_id": "default",
-   "actor": "cli",
-   "op": "remember",
-   "target_id": "id#1",
    "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":null}"
   },
   {
@@ -1833,13 +1812,6 @@ exports[`hippo supersede (built CLI, no server) > a pinned old row > audit rows 
   {
    "tenant_id": "default",
    "actor": "cli",
-   "op": "remember",
-   "target_id": "id#1",
-   "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":null}"
-  },
-  {
-   "tenant_id": "default",
-   "actor": "cli",
    "op": "supersede",
    "target_id": "id#1",
    "metadata_json": "{\\"newId\\":\\"id#2\\"}"
@@ -1971,13 +1943,6 @@ exports[`hippo supersede (built CLI, no server) > an id that is already supersed
   {
    "tenant_id": "default",
    "actor": "cli",
-   "op": "remember",
-   "target_id": "id#1",
-   "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":null}"
-  },
-  {
-   "tenant_id": "default",
-   "actor": "cli",
    "op": "supersede",
    "target_id": "id#1",
    "metadata_json": "{\\"newId\\":\\"id#2\\"}"
@@ -2095,29 +2060,7 @@ Error: memory id#1 is already superseded by id#2. Supersede that one instead.
 
 exports[`hippo supersede (built CLI, no server) > another person's personal row > audit rows 1`] = `
 "{
- "local": [
-  {
-   "tenant_id": "default",
-   "actor": "cli",
-   "op": "remember",
-   "target_id": "id#2",
-   "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":\\"personal:private:a\\"}"
-  },
-  {
-   "tenant_id": "default",
-   "actor": "cli",
-   "op": "remember",
-   "target_id": "id#1",
-   "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":\\"personal:private:a\\"}"
-  },
-  {
-   "tenant_id": "default",
-   "actor": "cli",
-   "op": "supersede",
-   "target_id": "id#1",
-   "metadata_json": "{\\"newId\\":\\"id#2\\"}"
-  }
- ],
+ "local": [],
  "global": []
 }"
 `;
@@ -2140,45 +2083,6 @@ exports[`hippo supersede (built CLI, no server) > another person's personal row 
    "pinned": 0,
    "confidence": "verified",
    "content": "my own note about the billing retry count",
-   "outcome_positive": 0,
-   "outcome_negative": 0,
-   "parents_json": "[]",
-   "starred": 0,
-   "trace_outcome": null,
-   "source_session_id": null,
-   "superseded_by": "id#2",
-   "extracted_from": null,
-   "dag_level": 0,
-   "dag_parent_id": null,
-   "kind": "distilled",
-   "scope": "personal:private:a",
-   "owner": null,
-   "artifact_ref": null,
-   "tenant_id": "default",
-   "descendant_count": 0,
-   "earliest_at": null,
-   "latest_at": null,
-   "summary_dirty": 0,
-   "last_rebuilt_at": null,
-   "rebuild_count": 0,
-   "dag_level_3_built_at": null,
-   "origin_project": ""
-  },
-  {
-   "id": "id#2",
-   "retrieval_count": 0,
-   "strength": 1,
-   "half_life_days": 365,
-   "layer": "episodic",
-   "tags_json": "[]",
-   "emotional_valence": "neutral",
-   "schema_fit": 0.5,
-   "source": "cli",
-   "outcome_score": null,
-   "conflicts_with_json": "[]",
-   "pinned": 0,
-   "confidence": "verified",
-   "content": "a newer note about the billing retry count",
    "outcome_positive": 0,
    "outcome_negative": 0,
    "parents_json": "[]",
@@ -2209,10 +2113,10 @@ exports[`hippo supersede (built CLI, no server) > another person's personal row 
 `;
 
 exports[`hippo supersede (built CLI, no server) > another person's personal row > output 1`] = `
-"$ hippo supersede id#1 a newer note about the billing retry count -> 0
+"$ hippo supersede id#1 a newer note about the billing retry count -> 1
 --- stdout
-Superseded id#1 → id#2
 --- stderr
+Error: memory id#1 not found.
 "
 `;
 
@@ -2231,13 +2135,6 @@ exports[`hippo supersede (built CLI, no server) > every flag at once on a tagged
    "actor": "cli",
    "op": "remember",
    "target_id": "id#2",
-   "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":\\"team:eng\\"}"
-  },
-  {
-   "tenant_id": "default",
-   "actor": "cli",
-   "op": "remember",
-   "target_id": "id#1",
    "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":\\"team:eng\\"}"
   },
   {
@@ -2452,13 +2349,6 @@ exports[`hippo supersede (built CLI, no server) > plain > audit rows 1`] = `
    "actor": "cli",
    "op": "remember",
    "target_id": "id#2",
-   "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":null}"
-  },
-  {
-   "tenant_id": "default",
-   "actor": "cli",
-   "op": "remember",
-   "target_id": "id#1",
    "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":null}"
   },
   {
