@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // CI store-port gate. Every server route should reach the database through the store port, so the leftovers
 // (database openers outside the data layer, store branches in the API, routes not yet store-ready, twin
-// functions) are counted and may fall but never rise above .store-port-baseline.json.
+// functions, SQL prepared outside the data layer, hand-written BEGIN literals) are counted and may fall but never rise above .store-port-baseline.json.
 // Usage: check-store-port.mjs [--list] [--update]. --update lowers the baseline and refuses to raise any number.
 
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -11,7 +11,8 @@ import ts from 'typescript';
 const BASELINE = '.store-port-baseline.json';
 const OPENERS = new Set(['openHippoDb', 'openHippoDbReadOnly', 'openStore', 'onHandle']);
 const TWIN_SUFFIX = /(ThroughStore|OnHippoDb|UnderStore|OnStore)$/;
-const NUMBERS = ['openersOutside', 'openersInCli', 'storeBranches', 'routesWithoutStore', 'twinFunctions'];
+const NUMBERS = ['openersOutside', 'openersInCli', 'storeBranches', 'routesWithoutStore', 'twinFunctions', 'sqlOutside', 'txLiterals'];
+const TX_OWNER = 'src/db/busy.ts';
 
 function tsFiles(dir, out = []) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
@@ -73,6 +74,29 @@ function countStoreBranches(sf) {
   return n;
 }
 
+/** Calls of `<x>.prepare(...)`: SQL written by code that is not the data layer. */
+function countPrepares(sf) {
+  let n = 0;
+  const visit = (node) => {
+    if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === 'prepare') n++;
+    ts.forEachChild(node, visit);
+  };
+  visit(sf);
+  return n;
+}
+
+/** String, no-substitution template and template-head literals that start a transaction by hand. */
+function countTxLiterals(sf) {
+  let n = 0;
+  const visit = (node) => {
+    const literal = ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isTemplateHead(node);
+    if (literal && node.text.trim().startsWith('BEGIN')) n++;
+    ts.forEachChild(node, visit);
+  };
+  visit(sf);
+  return n;
+}
+
 function countTwins(sf) {
   let n = 0;
   const visit = (node) => {
@@ -86,7 +110,10 @@ function countTwins(sf) {
 /** V1_ROUTES entries (one `{ method:` per line) without a storeReady field. */
 function countRoutesWithoutStore(text) {
   const start = text.indexOf('const V1_ROUTES');
-  if (start < 0) return 0;
+  if (start < 0) {
+    console.error('check-store-port: `const V1_ROUTES` not found in src/server.ts; the route count would read 0. Update countRoutesWithoutStore to the new route table.');
+    process.exit(1);
+  }
   const end = text.indexOf('\n];', start);
   const block = text.slice(start, end < 0 ? undefined : end);
   return block.split('\n').filter((l) => /^\s*\{ method:/.test(l) && !l.includes('storeReady')).length;
@@ -98,10 +125,11 @@ function localMethods(sf) {
   return local ? local.members.map((m) => m.name.getText(sf)).sort() : [];
 }
 
-/** All five numbers plus the per-file opener counts for src/, keys sorted, and the SqliteLocal method names. */
+/** All numbers plus the per-file opener and prepare counts for src/, keys sorted, and the SqliteLocal method names. */
 function measure() {
-  const out = { openersOutside: 0, openersInCli: 0, storeBranches: 0, routesWithoutStore: 0, twinFunctions: 0 };
+  const out = { openersOutside: 0, openersInCli: 0, storeBranches: 0, routesWithoutStore: 0, twinFunctions: 0, sqlOutside: 0, txLiterals: 0 };
   const byFile = {};
+  const sqlByFile = {};
   let sqliteLocalMethods = [];
   for (const file of existsSync('src') ? tsFiles('src') : []) {
     const text = readFileSync(file, 'utf8');
@@ -112,21 +140,32 @@ function measure() {
       out.openersOutside += openers;
       if (openers > 0) byFile[file] = openers;
     }
+    if (!isDataLayer(file)) {
+      const prepares = countPrepares(sf);
+      out.sqlOutside += prepares;
+      if (prepares > 0) sqlByFile[file] = prepares;
+    }
+    if (file !== TX_OWNER) out.txLiterals += countTxLiterals(sf);
     if (file.startsWith('src/api/')) out.storeBranches += countStoreBranches(sf);
     out.twinFunctions += countTwins(sf);
     if (file === 'src/server.ts') out.routesWithoutStore = countRoutesWithoutStore(text);
     if (file === 'src/store/sqlite/local.ts') sqliteLocalMethods = localMethods(sf);
   }
-  return { ...out, openersOutsideByFile: byFile, sqliteLocalMethods };
+  return { ...out, openersOutsideByFile: byFile, sqlOutsideByFile: sqlByFile, sqliteLocalMethods };
 }
 
 /** Numbers, files and SqliteLocal methods that went above the baseline, as [label, was, now]. */
 function rises(base, cur) {
   const rose = [];
-  for (const k of NUMBERS) if (cur[k] > (base[k] ?? 0)) rose.push([k, base[k] ?? 0, cur[k]]);
-  const was = base.openersOutsideByFile ?? {};
-  for (const [f, n] of Object.entries(cur.openersOutsideByFile)) if (n > (was[f] ?? 0)) rose.push([f, was[f] ?? 'new', n]);
-  const listed = base.sqliteLocalMethods ?? [];
+  // A key the baseline has never held is a first write, not a rise; once written it ratchets like the rest.
+  const firstWrite = (k) => base !== null && base[k] === undefined;
+  for (const k of NUMBERS) if (!firstWrite(k) && cur[k] > (base?.[k] ?? 0)) rose.push([k, base?.[k] ?? 0, cur[k]]);
+  for (const key of ['openersOutsideByFile', 'sqlOutsideByFile']) {
+    if (firstWrite(key)) continue;
+    const was = base?.[key] ?? {};
+    for (const [f, n] of Object.entries(cur[key])) if (n > (was[f] ?? 0)) rose.push([f, was[f] ?? 'new', n]);
+  }
+  const listed = base?.sqliteLocalMethods ?? [];
   for (const m of cur.sqliteLocalMethods) if (!listed.includes(m)) rose.push([`SqliteLocal.${m}`, 'unlisted', 'declared']);
   return rose;
 }
@@ -138,11 +177,13 @@ const total = NUMBERS.map((k) => `${k} ${current[k]}`).join(', ');
 
 if (args.includes('--list')) {
   for (const k of NUMBERS) console.log(`${current[k]}\t${k}`);
-  for (const [f, n] of Object.entries(current.openersOutsideByFile).sort(([, a], [, b]) => b - a)) console.log(`${n}\t${f}`);
+  for (const key of ['openersOutsideByFile', 'sqlOutsideByFile']) {
+    for (const [f, n] of Object.entries(current[key]).sort(([, a], [, b]) => b - a)) console.log(`${n}\t${f}`);
+  }
   process.exit(0);
 }
 
-const rose = rises(baseline ?? {}, current);
+const rose = rises(baseline, current);
 
 if (args.includes('--update')) {
   if (baseline && rose.length > 0) {
@@ -163,7 +204,7 @@ if (rose.length > 0) {
   process.exit(1);
 }
 const fell = baseline && (NUMBERS.some((k) => current[k] < (baseline[k] ?? 0)) ||
-  Object.entries(baseline.openersOutsideByFile ?? {}).some(([f, n]) => (current.openersOutsideByFile[f] ?? 0) < n) ||
+  ['openersOutsideByFile', 'sqlOutsideByFile'].some((key) => Object.entries(baseline[key] ?? {}).some(([f, n]) => (current[key][f] ?? 0) < n)) ||
   (baseline.sqliteLocalMethods ?? []).length > current.sqliteLocalMethods.length);
 if (fell) console.log('Some counts fell below the baseline; run `node scripts/check-store-port.mjs --update` to lock that in.');
 console.log(`Store-port ratchet OK: ${total}, none above ${BASELINE}.`);

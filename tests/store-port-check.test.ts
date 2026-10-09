@@ -14,7 +14,10 @@ type Counts = {
   storeBranches: number;
   routesWithoutStore: number;
   twinFunctions: number;
+  sqlOutside: number;
+  txLiterals: number;
   openersOutsideByFile: Record<string, number>;
+  sqlOutsideByFile: Record<string, number>;
   sqliteLocalMethods: string[];
 };
 type Run = (...args: string[]) => { status: number | null; stdout: string; stderr: string };
@@ -25,7 +28,10 @@ const zero: Counts = {
   storeBranches: 0,
   routesWithoutStore: 0,
   twinFunctions: 0,
+  sqlOutside: 0,
+  txLiterals: 0,
   openersOutsideByFile: {},
+  sqlOutsideByFile: {},
   sqliteLocalMethods: [],
 };
 
@@ -146,6 +152,48 @@ describe('check-store-port.mjs', () => {
       expect(run().status).toBe(0);
       expect(run('--update').status).toBe(0);
       expect(baseline().sqliteLocalMethods).toEqual(['archiveRaw', 'writeEntry']);
+    });
+  });
+
+  it('fails and names the file when a prepare call appears outside the data layer, and ignores src/store', () => {
+    const call = "export const f = (db: any) => db.prepare('SELECT 1');\n";
+    withFixture({ 'src/a.ts': call, 'src/store/b.ts': call }, { sqlOutside: 0, sqlOutsideByFile: {} }, ({ run }) => {
+      const r = run();
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain('src/a.ts: new -> 1');
+      expect(r.stderr).toContain('sqlOutside: 0 -> 1');
+      expect(r.stderr).not.toContain('src/store/b.ts');
+    });
+  });
+
+  it('counts a BEGIN literal outside src/db/busy.ts and not inside it', () => {
+    const tx = "export const a = 'BEGIN IMMEDIATE';\nexport const b = `BEGIN`;\nexport const c = `BEGIN ${'x'}`;\n";
+    withFixture({ 'src/a.ts': tx, 'src/db/busy.ts': tx }, { txLiterals: 0 }, ({ run }) => {
+      expect(list(run).txLiterals).toBe('3');
+      const r = run();
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain('txLiterals: 0 -> 3');
+    });
+  });
+
+  it('a key the baseline never held is a first write; a key it holds still cannot rise', () => {
+    const call = "export const f = (db: any) => db.prepare('SELECT 1');\n";
+    const absent = { sqlOutside: undefined, sqlOutsideByFile: undefined };
+    withFixture({ 'src/a.ts': call }, absent, ({ run, baseline }) => {
+      expect(run().status).toBe(0);
+      expect(run('--update').status).toBe(0);
+      expect(baseline().sqlOutsideByFile).toEqual({ 'src/a.ts': 1 });
+    });
+    withFixture({ 'src/a.ts': call }, { sqlOutside: 0, sqlOutsideByFile: {} }, ({ run }) => {
+      expect(run('--update').status).toBe(1);
+    });
+  });
+
+  it('exits 1 when src/server.ts has no V1_ROUTES', () => {
+    withFixture({ 'src/server.ts': 'export const ROUTES = [];\n' }, null, ({ run }) => {
+      const r = run('--list');
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain('V1_ROUTES');
     });
   });
 
