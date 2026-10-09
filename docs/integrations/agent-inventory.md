@@ -77,7 +77,7 @@ Fixtures live in `tests/fixtures/capture/<runtime>/<event>/*.json`. Each holds `
 
 ## Next steps (AZ4)
 
-- Move the last payload reader onto the contract: tool failure.
+- Move the tool-failure payload reader onto the contract.
 - Add store-level fixtures for a busy store, a crash and retry, two sessions at once, and a save into the wrong project.
 - Save Claude Code lessons before compaction, not only after it.
 - Record live save-and-resume runs, so modes can reach `verified`.
