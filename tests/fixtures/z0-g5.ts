@@ -53,8 +53,8 @@ export function writeTasks(out: string, positions: number[]) {
 }
 
 /** An out dir holding these cells, each with its reader diffs and a done repro row; run roots exist so realpath forms resolve. */
-export function synthOut(cells: Cell[]) {
-  const out = tmp('z0-g5-out-');
+export function synthOut(cells: Cell[], prefix = 'z0-g5-out-') {
+  const out = tmp(prefix);
   const grades = cells.map((c) => {
     const g = gradeOf(c);
     const dir = gradeDir(out, c.arm, g.seed);

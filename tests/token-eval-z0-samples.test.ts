@@ -80,7 +80,8 @@ describe('reader sample draw', () => {
   });
 
   it('pair files and labels.tsv hold no arm, seed, run name, verdict, checker path, memory command or run path in any spelling (24, R4, R9, R14)', () => {
-    const s = synthOut([{ arm: 'A2', position: 0 }]);
+    // The out dir carries a memory word in its name, so a path into the run must not read as a memory command.
+    const s = synthOut([{ arm: 'A2', position: 0 }], 'z0-g5-hippo-out-');
     const root = realpathSync.native(runRoot(s.out, 'A2'));
     const fwd = root.replace(/\\/g, '/');
     const forms = [root, `${root}\\work`, fwd, root.replace(/\\/g, '\\\\'), root.replace(/[^a-zA-Z0-9]/g, '-')];

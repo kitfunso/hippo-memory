@@ -94,7 +94,8 @@ export function pairDiff(out, e, which) {
 function renderPair(ctx, p) {
   const g = p.entry.grade;
   const commands = (p.which === 'first' ? g.commandsFirst : g.commandsFinal) ?? [];
-  const kept = commands.filter((c) => !isHiddenCommand(c));
+  // Tested after redaction, so a memory word in the out dir's own path does not hide a plain command.
+  const kept = commands.filter((c) => !isHiddenCommand(ctx.redact(c)));
   const text = [
     '## Task', ctx.text.prompt(g.sequence, g.taskId), '', '## Rule', ctx.text.lesson(g.lessonId).rule, '',
     '## Commands the agent ran', kept.length ? fenced(ctx.redact(kept.join('\n\n')), 'sh') : '(none)', '',
