@@ -44,9 +44,9 @@ export function screenVerdicts(records, spec) {
     const mine = records.filter((r) => r.familyId === family.id);
     const count = (arm, verdict) => mine.filter((r) => r.arm === arm && r.lessons[0]?.first === verdict).length;
     const row = { familyId: family.id, a0Breaks: count('A0', 'fail'), a0Of: A0_OF, a4Follows: count('A4', 'pass'), a4Of: A4_OF };
-    const bad = mine.find((r) => r.invalid);
-    // An invalid or missing screen session leaves the family undecided, never kept by default.
-    if (bad) return { ...row, verdict: 'undecided', reason: `${bad.taskId} ${bad.arm} seed${bad.seed}: invalid ${bad.invalid}` };
+    const bad = mine.find((r) => r.invalid || r.void);
+    // An invalid, void or missing screen session leaves the family undecided, never kept by default.
+    if (bad) return { ...row, verdict: 'undecided', reason: `${bad.taskId} ${bad.arm} seed${bad.seed}: ${bad.invalid ? `invalid ${bad.invalid}` : `void ${bad.void}`}` };
     if (mine.length !== A0_OF + A4_OF) return { ...row, verdict: 'undecided', reason: `${mine.length} of ${A0_OF + A4_OF} screen sessions recorded` };
     return { ...row, verdict: row.a0Breaks >= 2 && row.a4Follows === A4_OF ? 'kept' : 'dropped' };
   });

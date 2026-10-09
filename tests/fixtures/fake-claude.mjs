@@ -6,7 +6,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { execSync, spawnSync } from 'node:child_process';
+import { execSync, spawn, spawnSync } from 'node:child_process';
 
 const argv = process.argv.slice(2);
 if (argv.includes('--version')) {
@@ -32,6 +32,26 @@ const napFor = (marker) => {
   if (ms) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, Number(ms[1]));
 };
 
+// The session's auto-memory file and what it held at start, so a test can see what a retry put back.
+const folder = process.cwd().replace(/[^a-zA-Z0-9]/g, '-');
+const memoryFile = path.join(process.env.CLAUDE_CONFIG_DIR, 'projects', folder, 'memory', 'MEMORY.md');
+const startSeen = {
+  memory: fs.existsSync(memoryFile) ? fs.readFileSync(memoryFile, 'utf8') : null,
+  hippoLimit: fs.existsSync(path.join('.hippo', 'limit.txt')),
+  homeLimit: Boolean(process.env.HIPPO_HOME) && fs.existsSync(path.join(process.env.HIPPO_HOME, 'limit.txt')),
+};
+const memWrite = (text) => {
+  fs.mkdirSync(path.dirname(memoryFile), { recursive: true });
+  fs.appendFileSync(memoryFile, `${text}\n`);
+};
+// LIMIT_SURFACES: a cut-off attempt writes every memory surface a retry must put back.
+const limitSurfaces = () => {
+  if (!prompt.includes('LIMIT_SURFACES')) return;
+  memWrite('cutoff');
+  write(path.join('.hippo', 'limit.txt'), 'cut-off attempt\n');
+  if (process.env.HIPPO_HOME) write(path.join(process.env.HIPPO_HOME, 'limit.txt'), 'cut-off attempt\n');
+};
+
 if (prompt.includes('CRASH') && !resumeId) {
   console.error('fake crash before any result');
   process.exit(3);
@@ -50,12 +70,14 @@ if (!resumeId && prompt.includes('LIMIT') && (limitAlways || (limitMarker && !fs
   if (fs.existsSync('AGENTS.md')) fs.appendFileSync('AGENTS.md', 'limited edit\n');
   // A limited attempt can break the repo too, so the runner's cleanup git fails while the limit error is in flight.
   if (prompt.includes('RM_GIT')) fs.rmSync('.git', { recursive: true, force: true });
+  limitSurfaces();
   log('session-limit');
   console.log(LIMIT_TEXT);
   process.exit(1);
 }
 
-const sessionId = resumeId && !prompt.includes('NEW_ID_ON_RESUME') ? resumeId : randomUUID();
+const fixedId = argv.includes('--session-id') ? argv[argv.indexOf('--session-id') + 1] : null;
+const sessionId = resumeId && !prompt.includes('NEW_ID_ON_RESUME') ? resumeId : (fixedId ?? randomUUID());
 const settings = JSON.parse(fs.readFileSync(argv[argv.indexOf('--settings') + 1], 'utf8'));
 let injected = '';
 for (const group of settings.hooks?.UserPromptSubmit ?? []) {
@@ -72,7 +94,6 @@ const hippoDir = process.env[pathKey].split(path.delimiter).find((d) => d && ['h
 
 let toolN = 0;
 const toolUse = (name, toolInput) => ({ type: 'assistant', message: { id: `m-${process.pid}-${toolN}`, usage: {}, content: [{ type: 'tool_use', id: `tu-${process.pid}-${++toolN}`, name, input: toolInput }] } });
-const folder = process.cwd().replace(/[^a-zA-Z0-9]/g, '-');
 const transcript = path.join(process.env.CLAUDE_CONFIG_DIR, 'projects', folder, `${sessionId}.jsonl`);
 const appendTurn = (lines) => {
   if (prompt.includes('NOTRANSCRIPT')) return;
@@ -89,6 +110,54 @@ const lessonState = () => {
   if (prompt.includes('LESSON_OK')) return 'ok';
   return prompt.includes('LESSON_BAD') ? 'bad' : null;
 };
+
+// The run's out dir and root: claude-config sits at <out>/runs/<seq>/<arm>/seed<n>/claude-config.
+const OUT = path.resolve(process.env.CLAUDE_CONFIG_DIR, '..', '..', '..', '..', '..');
+const fill = (text) => text.replaceAll('{OUT}', OUT).replaceAll('{RUN}', path.dirname(process.env.CLAUDE_CONFIG_DIR))
+  .replaceAll('{WT}', process.env.FAKE_WT_DIR ?? '').replaceAll('{HOME}', process.env.HOME ?? '')
+  // {B64:...} lets a probe emit a canary the prompt, which session 1's transcript holds, never spells out.
+  .replace(/\{B64:([^}]+)\}/g, (_, b64) => Buffer.from(b64, 'base64').toString('utf8'));
+// What the hooks added, as the attachment line Claude Code writes after the prompt (z1-replay.mjs reads the same shape).
+const hookLine = () => (injected ? [{ type: 'attachment', attachment: { type: 'hook_additional_context', content: [injected], hookEvent: 'UserPromptSubmit' } }] : []);
+const toolResult = (text) => ({ type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: `tu-${process.pid}-${toolN}`, content: text }] } });
+
+/** Read probes, emitted as tool calls and never run: READ:<p>, READ_PAST, GREP:<p>, BASH:<cmd>, ECHO:<t>, ECHO_TRANSCRIPT(_PRETTY). */
+function probes(text = prompt) {
+  const lines = [];
+  for (const m of text.matchAll(/^(READ:\S+|READ_PAST|GREP:\S+|BASH:.+|ECHO:\S+|ECHO_TRANSCRIPT(?:_PRETTY)?)$/gm)) {
+    const [kind, ...rest] = m[1].split(':');
+    const arg = fill(rest.join(':'));
+    if (kind === 'READ') lines.push(toolUse('Read', { file_path: arg }));
+    else if (kind === 'READ_PAST') lines.push(toolUse('Read', { file_path: path.join(process.env.CLAUDE_CONFIG_DIR, 'projects', folder, `${randomUUID()}.jsonl`) }));
+    else if (kind === 'GREP') lines.push(toolUse('Grep', { pattern: 'x', path: arg }));
+    else if (kind === 'BASH') lines.push(toolUse('Bash', { command: arg }));
+    else if (kind === 'ECHO') lines.push(toolUse('Bash', { command: 'echo' }), toolResult(arg));
+    else {
+      const old = { type: 'user', uuid: randomUUID(), sessionId: randomUUID(), message: { content: 'old' } };
+      // The pretty form is what `jq .` prints: no single line holds type, uuid and sessionId together.
+      lines.push(toolUse('Bash', { command: 'sh x.sh' }), toolResult(`${kind === 'ECHO_TRANSCRIPT_PRETTY' ? JSON.stringify(old, null, 2) : JSON.stringify(old)}\n`));
+    }
+  }
+  return lines;
+}
+
+/** HANG: two streamed assistant messages (one id repeated, 5 then 40 output tokens), a ticking grandchild, then no exit for 120 s. */
+function hang(tag) {
+  if (prompt.includes('HANG_STDERR')) fs.writeSync(2, 'API Error: 529 {"type":"error","error":{"type":"overloaded_error"}}\n');
+  const usage = (input, output) => ({ input_tokens: input, output_tokens: output, cache_read_input_tokens: 100, cache_creation_input_tokens: 20 });
+  const said = (id, input, output) => ({ type: 'assistant', message: { id, usage: usage(input, output), content: [{ type: 'text', text: 'working' }] } });
+  appendTurn([
+    { type: 'user', message: { role: 'user', content: input } },
+    said(`m-hang-${tag}-1`, 10, 5), said(`m-hang-${tag}-1`, 10, 40), said(`m-hang-${tag}-2`, 3, 7),
+  ]);
+  // Outlives any run, so only the runner's tree kill can stop it; a test that finds it alive kills it itself.
+  const tick = `const fs=require('fs');const end=Date.now()+600000;setInterval(()=>{fs.appendFileSync(${JSON.stringify(path.join(OUT, 'tick.txt'))},'.');if(Date.now()>end)process.exit(0);},100);`;
+  const child = spawn(process.execPath, ['-e', tick], { stdio: 'inherit' });
+  fs.writeFileSync(path.join(OUT, 'grandchild.pid'), String(child.pid));
+  log(`hang ${tag}`);
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 120_000);
+  process.exit(0);
+}
 
 const agentFilter = (lines) => {
   fs.appendFileSync(path.join('.git', 'config'), `[filter "z0agent"]\n\t${lines}\n`);
@@ -122,23 +191,37 @@ function firstSession() {
   const state = lessonState();
   if (state) fs.writeFileSync('lesson.txt', `${state}\n`);
   for (const m of prompt.matchAll(/NEW_FILE (\S+)/g)) write(m[1], 'new file from the agent\n');
+  if (prompt.includes('BINFILE')) fs.writeFileSync('blob.bin', Buffer.from([0, 1, 2, 255]));
   const staged = /STAGE_EDIT (\S+)/.exec(prompt);
   if (staged) {
     write(staged[1], 'v1\n');
     sh(`git add -- "${staged[1]}"`);
     write(staged[1], 'v2\n');
   }
+  for (const m of prompt.matchAll(/MEMWRITE:([^\n]+)/g)) memWrite(m[1].trim());
+  // Base64, so a prompt can plant a key phrase it may not hold before the teach (the order check refuses it).
+  for (const m of prompt.matchAll(/MEMWRITE_B64:(\S+)/g)) memWrite(Buffer.from(m[1], 'base64').toString('utf8'));
+  // NOTE:<text> is a frontmatter note beside MEMORY.md, the only kind hippo's importer reads.
+  for (const [i, m] of [...prompt.matchAll(/^NOTE:(.+)$/gm)].entries()) write(path.join(path.dirname(memoryFile), `note-${i}.md`), `---\nname: note ${i}\n---\n${m[1].trim()}\n`);
+  if (/^IMPORT$/m.test(prompt)) sh('hippo import --agents');
+  if (/\bHANG(?:_STDERR)?\b/.test(prompt)) hang('s1');
+  for (const m of prompt.matchAll(/^USERMEM:(.+)$/gm)) fs.appendFileSync(path.join(process.env.CLAUDE_CONFIG_DIR, 'CLAUDE.md'), `${m[1]}\n`);
+  if (prompt.includes('WORKTREE')) sh(`git worktree add -q --detach "${process.env.FAKE_WT_DIR}"`);
   const commands = [...prompt.matchAll(/^RUN_CMD (.+)$/gm)].map((m) => m[1]);
   appendTurn([
     { type: 'user', message: { role: 'user', content: input } },
+    ...hookLine(),
     toolUse('Read', {}),
     { type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: `tu-${process.pid}-1`, is_error: true, content: 'Error: file 12 not found' }] } },
     toolUse('Edit', {}),
     toolUse('Bash', { command: 'git status && cat lib.js' }),
     ...commands.map((command) => toolUse('Bash', { command })),
+    ...(/\bSUBAGENT\b/.test(prompt) ? [] : probes()),
+    ...(prompt.includes('S1_USAGE') ? [{ type: 'assistant', message: { id: 'm-s1', usage: { input_tokens: 0, output_tokens: 500 } } }] : []),
   ]);
   const delegated = [...prompt.matchAll(/^SUBAGENT_CMD (.+)$/gm)].map((m) => m[1]);
   if (delegated.length) writeSubagent('agent-a1', delegated);
+  if (/\bSUBAGENT\b/.test(prompt)) write(path.join(path.dirname(transcript), sessionId, 'subagents', 'agent-probe.jsonl'), probes().map((l) => JSON.stringify(l)).join('\n'));
   // A filter driver in the agent's own .git/config runs as whoever runs git next, from the work tree root.
   if (prompt.includes('CLEAN_FILTER_PLANT')) agentFilter('clean = "echo escaped by a clean filter > ../CLAUDE.md; cat"\n\trequired = true');
   if (prompt.includes('SMUDGE_FILTER')) agentFilter('smudge = "echo ran >> ../smudge-ran.txt; cat"');
@@ -150,6 +233,7 @@ function cutOff() {
   const marker = path.join(promptsDir, `${sessionId}.cut`);
   if (!prompt.includes('CUT_ON_RESUME') || fs.existsSync(marker)) return;
   fs.writeFileSync(marker, '');
+  limitSurfaces();
   // Named apart from ESCAPE so session 1 plants nothing and only the cut-off attempt does.
   if (prompt.includes('ANCESTOR_ON_CUT')) fs.writeFileSync(path.join('..', 'CLAUDE.md'), 'escaped on a cut-off resume\n');
   fs.writeFileSync('cutoff.txt', 'cut-off attempt\n');
@@ -173,7 +257,7 @@ function cutOff() {
 
 function resumeTurn() {
   if (/RESUME_HANG_MS=/.test(prompt)) {
-    // Windows kills only the shell on a timeout, so the orphan lets go of the workspace and the runner's pipes before it hangs.
+    // A hang that already let go of the workspace and the runner's pipes: the timeout must still end it.
     process.chdir(os.tmpdir());
     for (const fd of [1, 2]) fs.closeSync(fd);
     napFor('RESUME_HANG_MS');
@@ -181,12 +265,25 @@ function resumeTurn() {
   }
   log(`transcript-bytes ${fs.existsSync(transcript) ? fs.statSync(transcript).size : 0}`);
   log(`resume-msg ${Buffer.from(input, 'utf8').toString('base64')}`);
+  // FORK_COPY: a resume under a new id starts its file with a copy of session 1's lines, usage included.
+  if (prompt.includes('FORK_COPY') && sessionId !== resumeId) fs.copyFileSync(path.join(path.dirname(transcript), `${resumeId}.jsonl`), transcript);
+  for (const m of prompt.matchAll(/MEMWRITE_ON_RESUME:([^\n]+)/g)) memWrite(m[1].trim());
   cutOff();
+  // RESUME_SUBAGENT_USAGE: the resume bills 1000 output tokens into a subagent file session 1 wrote.
+  if (prompt.includes('RESUME_SUBAGENT_USAGE')) {
+    const usage = { input_tokens: 0, output_tokens: 1000, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
+    fs.appendFileSync(path.join(path.dirname(transcript), sessionId, 'subagents', 'agent-a1.jsonl'), `\n${JSON.stringify({ type: 'assistant', message: { id: 'm-sub-r', usage } })}`);
+  }
+  if (/\bHANG_ON_RESUME\b/.test(prompt)) hang('r');
   if (prompt.includes('NO_RESULT_ON_RESUME')) process.exit(0);
   const line = /WRITE_ON_RESUME (.+)$/m.exec(prompt);
   if (line) fs.appendFileSync('CLAUDE.md', `${line[1]}\n`);
   if (lessonState() && input.startsWith('No:')) fs.writeFileSync('lesson.txt', 'ok\n');
-  appendTurn([{ type: 'user', message: { role: 'user', content: input } }, toolUse('Bash', { command: `echo resumed ${input.slice(0, 3)}` })]);
+  // CAPTURE_TEACH: the agent saves the teach message to hippo itself.
+  if (prompt.includes('CAPTURE_TEACH')) sh(`hippo remember "${input.replaceAll('"', '')}"`);
+  // RESUME_<probe> lines are probes only the resume makes.
+  const later = [...prompt.matchAll(/^RESUME_(\S.*)$/gm)].map((m) => m[1]).join('\n');
+  appendTurn([{ type: 'user', message: { role: 'user', content: input } }, ...hookLine(), toolUse('Bash', { command: `echo resumed ${input.slice(0, 3)}` }), ...probes(later)]);
 }
 
 log(`${resumeId ? 'resume' : 'session'} ${sessionId}`);
@@ -198,7 +295,7 @@ const extra = Math.ceil(injected.length / 4);
 console.log(JSON.stringify({
   type: 'result', subtype: 'success', is_error: false, session_id: prompt.includes('NO_SESSION_ID') ? undefined : sessionId, num_turns: resumeId ? 1 : 3, total_cost_usd: 0.01,
   pad: prompt.includes('BIG_RESULT') ? 'x'.repeat(30_000) : undefined,
-  strayFile: fs.existsSync('stray.txt'), argv, files,
+  strayFile: fs.existsSync('stray.txt'), argv, files, ...startSeen,
   envKeys: Object.keys(process.env).sort(),
   env: { ...Object.fromEntries(PLAIN.map((k) => [k, process.env[k] ?? null])), PATH: process.env[pathKey] },
   hasToken: Boolean(process.env.CLAUDE_CODE_OAUTH_TOKEN),
