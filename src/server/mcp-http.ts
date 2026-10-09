@@ -190,6 +190,10 @@ export async function handleMcpStream(
   //     with reason='max_age_exceeded' when reached.
   //   - MCP_SSE_HEARTBEAT_MS (default 60000) lets tests run with a short
   //     interval without waiting a full minute.
+  keepStreamAlive(req, res, opts);
+}
+
+function keepStreamAlive(req: IncomingMessage, res: ServerResponse, opts: ResolvedServeOpts): void {
   const heartbeatMs =
     envMcpSseHeartbeatMs() ?? 60000;
   const maxAgeMs =
@@ -200,10 +204,7 @@ export async function handleMcpStream(
   const closeWith = (reason: string): void => {
     if (closed) return;
     closed = true;
-    try {
-      res.write(`event: closed\ndata: ${JSON.stringify({ reason })}\n\n`);
-    } catch { /* socket already gone */ }
-    try { res.end(); } catch { /* socket already gone */ }
+    endStreamWithReason(res, reason);
   };
   const ping = setInterval(() => {
     if (closed) {
@@ -240,4 +241,11 @@ export async function handleMcpStream(
     closed = true;
     clearInterval(ping);
   });
+}
+
+function endStreamWithReason(res: ServerResponse, reason: string): void {
+  try {
+    res.write(`event: closed\ndata: ${JSON.stringify({ reason })}\n\n`);
+  } catch { /* socket already gone */ }
+  try { res.end(); } catch { /* socket already gone */ }
 }

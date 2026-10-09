@@ -52,9 +52,6 @@ export function createLlmReranker(): RerankerFn {
   };
 }
 
-/** The instance the reranker registry serves; its outage state lasts the process. */
-export const llmReranker: RerankerFn = createLlmReranker();
-
 /** One chat-completions call; rejects with the reason when the reply holds no usable permutation. */
 async function requestPermutation(url: string, query: string, head: readonly SearchResult[]): Promise<number[]> {
   const key = envLlmRerankerKey();

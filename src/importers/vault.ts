@@ -2,8 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { createHash } from 'node:crypto';
 import { createMemory, MemoryEntry } from '../memory.js';
-import { initStore } from '../store/open.js';
-import { selectVaultRawRows, type VaultRawRow } from '../store/entry-reads.js';
+import { loadVaultRawRows, type VaultRawRow } from '../store/entry-reads.js';
 import { remember, archiveRaw, isPrivateScope, type HippoDbContext } from '../api.js';
 import { assertClientScope } from '../recall-scope.js';
 import { openHippoDb, closeHippoDb } from '../db.js';
@@ -186,32 +185,21 @@ function vaultIdentityOrThrow(options: ImportOptions): VaultIdentity {
 }
 
 function loadVaultRows(hippoRoot: string, tenantId: string, vaultName: string): Map<string, VaultRow[]> {
-  // Load ONCE: every existing raw row for this vault, tenant-scoped. The same
-  // Map serves both per-file idempotency AND the deletion diff (no second
-  // query). LIKE-escape the vault name so a `%`/`_` in it can't over-match.
-  initStore(hippoRoot);
-  // artifactRef -> ALL its live raw rows. >1 only after a concurrent double-insert
-  // (the importer is not re-entrant; see the JSDoc). The buckets matter: a later
-  // changed/deletion pass must archive EVERY matching row, not just the last one
-  // scanned, or older raw vault content lingers live + searchable (codex P2).
+  // One load serves both per-file idempotency and the deletion diff; the vault name is
+  // LIKE-escaped so a `%` or `_` in it cannot over-match.
+  const rows = loadVaultRawRows(hippoRoot, `vault:${escapeLike(vaultName)}:%`, tenantId);
+  // Every live row per artifactRef (more than one only after a concurrent double-insert), because a
+  // later changed or deletion pass must archive them all or older raw vault content stays searchable.
   const existing = new Map<string, VaultRow[]>();
-  const db = openHippoDb(hippoRoot);
-  try {
-    const likeParam = `vault:${escapeLike(vaultName)}:%`;
-    const rows = selectVaultRawRows(db, likeParam, tenantId);
-    // SQLite LIKE is case-insensitive for ASCII, so the query over-fetches
-    // (vault 'A' also matches 'vault:a:%'). Filter to the EXACT-case prefix in
-    // JS so deletion-sync never archives a different-cased vault's rows (codex P2).
-    const exactPrefix = `vault:${vaultName}:`;
-    for (const row of rows) {
-      if (row.artifact_ref && row.artifact_ref.startsWith(exactPrefix)) {
-        const bucket = existing.get(row.artifact_ref);
-        if (bucket) bucket.push(row);
-        else existing.set(row.artifact_ref, [row]);
-      }
+  // LIKE folds ASCII case (vault 'A' also matches 'vault:a:%'), so the exact-case prefix is checked
+  // here; without it deletion-sync would archive a different-cased vault's rows.
+  const exactPrefix = `vault:${vaultName}:`;
+  for (const row of rows) {
+    if (row.artifact_ref && row.artifact_ref.startsWith(exactPrefix)) {
+      const bucket = existing.get(row.artifact_ref);
+      if (bucket) bucket.push(row);
+      else existing.set(row.artifact_ref, [row]);
     }
-  } finally {
-    closeHippoDb(db);
   }
   return existing;
 }

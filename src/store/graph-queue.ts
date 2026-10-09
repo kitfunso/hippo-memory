@@ -2,14 +2,14 @@
 import { openHippoDb, closeHippoDb } from '../db.js';
 import { assertTenantId } from '../tenant.js';
 import { errorMessage, log } from '../log.js';
-import { type GraphQueueStatus, VALID_QUEUE_STATES, type GraphQueueItem, type QueueRow, rowToQueueItem, QUEUE_COLS } from './graph-rows.js';
+import { type GraphQueueItem, type QueueRow, rowToQueueItem, QUEUE_COLS } from './graph-rows.js';
 import { resolveConsolidatedSource } from './graph-writes.js';
 
 /**
  * Enqueue a consolidated memory for later graph extraction. Rejects a raw / missing /
  * cross-tenant memory (the DB trigger is the backstop).
  */
-export function enqueueExtraction(
+function enqueueExtraction(
   hippoRoot: string,
   tenantId: string,
   memoryId: string,
@@ -29,45 +29,6 @@ export function enqueueExtraction(
     // SAFETY: row's shape matches the columns named in QUEUE_COLS above.
     const row = db.prepare(`SELECT ${QUEUE_COLS} FROM graph_extraction_queue WHERE id = ?`).get(id) as QueueRow | undefined;
     if (!row) throw new Error('enqueueExtraction: failed to reload queue item');
-    return rowToQueueItem(row);
-  } finally {
-    closeHippoDb(db);
-  }
-}
-
-/**
- * Mark a queue item terminal (processed | skipped). Only `status`/`processed_at`
- * change, so the consolidated-source guard trigger (which fires on
- * memory_id/kind/tenant_id changes) is not involved. CAS on the current status to a
- * non-terminal 'pending'.
- */
-export function markExtractionProcessed(
-  hippoRoot: string,
-  tenantId: string,
-  id: number,
-  status: 'processed' | 'skipped' = 'processed',
-): GraphQueueItem {
-  assertTenantId('markExtractionProcessed', tenantId);
-  const now = new Date().toISOString();
-  const db = openHippoDb(hippoRoot);
-  try {
-    const updated = db.prepare(`
-      UPDATE graph_extraction_queue
-      SET status = ?, processed_at = ?
-      WHERE id = ? AND tenant_id = ? AND status = 'pending'
-    `).run(status, now, id, tenantId);
-    if (updated.changes === 0) {
-      // SAFETY: existing's shape matches the single `status` column named in
-      // the SELECT above.
-      const existing = db.prepare(`SELECT status FROM graph_extraction_queue WHERE id = ? AND tenant_id = ?`)
-        .get(id, tenantId) as { status: string } | undefined;
-      if (!existing) throw new Error(`markExtractionProcessed: queue item ${id} not found for tenant ${tenantId}`);
-      throw new Error(`markExtractionProcessed: queue item ${id} is not pending (status='${existing.status}')`);
-    }
-    // SAFETY: row's shape matches the columns named in QUEUE_COLS above.
-    const row = db.prepare(`SELECT ${QUEUE_COLS} FROM graph_extraction_queue WHERE id = ? AND tenant_id = ?`)
-      .get(id, tenantId) as QueueRow | undefined;
-    if (!row) throw new Error(`markExtractionProcessed: queue item ${id} not found after UPDATE`);
     return rowToQueueItem(row);
   } finally {
     closeHippoDb(db);
@@ -99,7 +60,7 @@ export function markGraphDirty(hippoRoot: string, tenantId: string, memoryId: st
 /**
  * Mark every pending queue item for a tenant with `id <= maxId` processed, in
  * one UPDATE. Status/processed_at only, so the consolidated-source guard trigger
- * is not involved (same as markExtractionProcessed). Returns the count marked.
+ * is not involved. Returns the count marked.
  * The `<= maxId` watermark excludes items enqueued after the drain snapshot.
  */
 export function markPendingProcessedUpTo(
@@ -117,38 +78,6 @@ export function markPendingProcessedUpTo(
       WHERE tenant_id = ? AND status = 'pending' AND id <= ?
     `).run(now, tenantId, maxId);
     return Number(res.changes ?? 0);
-  } finally {
-    closeHippoDb(db);
-  }
-}
-
-export function loadExtractionQueue(
-  hippoRoot: string,
-  tenantId: string,
-  opts: { status?: GraphQueueStatus; limit?: number } = {},
-): GraphQueueItem[] {
-  assertTenantId('loadExtractionQueue', tenantId);
-  const limit = opts.limit ?? 100;
-  if (opts.status && !VALID_QUEUE_STATES.has(opts.status)) {
-    throw new Error(`loadExtractionQueue: status must be one of ${Array.from(VALID_QUEUE_STATES).join('|')}; got ${opts.status}`);
-  }
-  const db = openHippoDb(hippoRoot);
-  try {
-    const clauses = ['tenant_id = ?'];
-    const params: unknown[] = [tenantId];
-    if (opts.status) {
-      clauses.push('status = ?');
-      params.push(opts.status);
-    }
-    params.push(limit);
-    // SAFETY: rows' shape matches the columns named in QUEUE_COLS above.
-    const rows = db.prepare(`
-      SELECT ${QUEUE_COLS} FROM graph_extraction_queue
-      WHERE ${clauses.join(' AND ')}
-      ORDER BY enqueued_at ASC, id ASC
-      LIMIT ?
-    `).all(...params) as QueueRow[];
-    return rows.map(rowToQueueItem);
   } finally {
     closeHippoDb(db);
   }

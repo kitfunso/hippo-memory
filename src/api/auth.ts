@@ -3,7 +3,7 @@
 import { ForbiddenError, NotFoundError } from '../api-errors.js';
 import {
   mintApiKey,
-  type ApiKeyListItem, type ApiKeyListRow, type ApiKeyRecord, type ListApiKeysOpts, type NewApiKey,
+  type ApiKeyListRow, type ApiKeyRecord, type ListApiKeysOpts, type NewApiKey,
 } from '../store/auth.js';
 import type { KeysetPosition } from '../keyset.js';
 import type { KeyMint, SelfKeyMint } from '../store-port.js';
@@ -151,21 +151,6 @@ function selfKeyMint(ctx: Context, opts: AuthCreateSelfOpts): KeyMintPlan<SelfKe
 
 function selfResult({ key }: SelfKeyMint, plaintext: string): AuthCreateSelfResult {
   return { keyId: key.keyId, plaintext, tenantId: key.tenantId, role: 'member', expiresAt: key.expiresAt };
-}
-
-/**
- * List API keys visible to the calling tenant.
- *
- * Divergence from `cmdAuthList` in src/cli.ts: the CLI today returns ALL keys
- * regardless of tenant (single-tenant deployments). The API surface is tenant-
- * scoped because future multi-tenant deployments will share a hippoRoot, and
- * tenant A must not see tenant B's keys. Read-only, so no audit emit.
- */
-export function authList<C extends Context>(
-  ctx: C,
-  opts: { active: boolean },
-): StoreReply<C, ApiKeyListItem[]> {
-  return onStore(ctx, (port) => andThen(listRows(ctx, port, opts), (rows) => rows.map((r) => r.key)));
 }
 
 type KeyListOpts = { active: boolean; limit?: number; after?: KeysetPosition };

@@ -1,9 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as http from 'node:http';
 import { boundPort } from '../_helpers/listen.js';
-import { createLlmReranker, llmReranker } from '../../src/rerankers/llm.js';
+import { createLlmReranker } from '../../src/rerankers/llm.js';
+import { getReranker } from '../../src/rerankers/index.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import type { SearchResult } from '../../src/core/search-types.js';
+
+// The instance the registry serves, whose outage state lasts the process.
+const llmReranker = getReranker('llm')!;
 
 function asResult(content: string, score: number): SearchResult {
   return { entry: createMemory(content), score, bm25: score, cosine: 0, tokens: 10 };

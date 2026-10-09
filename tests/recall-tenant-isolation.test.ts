@@ -21,8 +21,8 @@ describe('cross-tenant recall isolation', () => {
       execSync(`node "${cli}" remember "alpha-secret-xyz unique-tenant-marker" --global`, { env: envA, cwd: home });
       execSync(`node "${cli}" remember "beta-secret-xyz unique-tenant-marker" --global`, { env: envB, cwd: home });
 
-      const aOut = execSync(`node "${cli}" recall "secret-xyz" --global`, { env: envA, cwd: home }).toString();
-      const bOut = execSync(`node "${cli}" recall "secret-xyz" --global`, { env: envB, cwd: home }).toString();
+      const aOut = execSync(`node "${cli}" recall "secret-xyz"`, { env: envA, cwd: home }).toString();
+      const bOut = execSync(`node "${cli}" recall "secret-xyz"`, { env: envB, cwd: home }).toString();
 
       expect(aOut).toContain('alpha-secret-xyz');
       expect(aOut).not.toContain('beta-secret-xyz');
