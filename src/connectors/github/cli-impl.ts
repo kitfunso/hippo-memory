@@ -17,7 +17,7 @@ import { resolveTenantId } from '../../tenant.js';
 import { backfillRepo } from './backfill.js';
 import { realGitHubFetcher, type GitHubFetcher } from './octokit-client.js';
 import { listDlq } from '../dlq.js';
-import { githubDlq, replayDlqEntry } from './dlq.js';
+import { githubDlq, replayDlqEntry, type IngestHook } from './dlq.js';
 import { ingestEvent, type IngestEvent } from './ingest.js';
 import { handleCommentDeleted } from './deletion.js';
 import { computeDeletionKey } from './signature.js';
@@ -158,6 +158,42 @@ export function cmdGithubDlqList(hippoRoot: string, _flags: Flags): void {
   }
 }
 
+const reingestParkedDelivery: IngestHook = async (innerCtx, args) => {
+  const parsed = JSON.parse(args.rawPayload);
+  const event = parsedToIngestEvent(parsed, args.eventName);
+  if (!event) {
+    return { memoryId: null };
+  }
+  // A replayed comment `.deleted` row must route to the deletion handler, NOT to ingestEvent,
+  // which would write the deleted comment as a NEW raw memory instead of archiving the matching ones.
+  if (
+    (event.eventName === 'issue_comment' || event.eventName === 'pull_request_review_comment') &&
+    event.payload.action === 'deleted'
+  ) {
+    const repo = event.payload.repository?.full_name ?? '';
+    const artifactRef = event.eventName === 'issue_comment'
+      ? `github://${repo}/issue/${event.payload.issue.number}/comment/${event.payload.comment.id}`
+      : `github://${repo}/pull/${event.payload.pull_request.number}/review_comment/${event.payload.comment.id}`;
+    const idempotencyKey = computeDeletionKey(artifactRef, event.payload.comment.updated_at ?? null);
+    const r = handleCommentDeleted(innerCtx, {
+      artifactRef,
+      idempotencyKey,
+      deliveryId: args.deliveryId,
+      eventName: event.eventName,
+    });
+    // archivedCount maps to memoryId only loosely — return null since the
+    // archive operation can affect multiple rows. The replay-result audit
+    // trail is in github_dlq.retry_count + retried_at.
+    return { memoryId: r.archivedCount > 0 ? 'archived' : null };
+  }
+  const r = ingestEvent(innerCtx, {
+    event,
+    rawBody: args.rawPayload,
+    deliveryId: args.deliveryId,
+  });
+  return { memoryId: r.memoryId };
+};
+
 export async function cmdGithubDlqReplay(
   hippoRoot: string,
   args: string[],
@@ -184,41 +220,7 @@ export async function cmdGithubDlqReplay(
     force,
     webhookSecret: envGithubWebhookSecret(),
     previousSecret: envGithubWebhookSecretPrevious(),
-    ingestHook: async (innerCtx, args) => {
-      const parsed = JSON.parse(args.rawPayload);
-      const event = parsedToIngestEvent(parsed, args.eventName);
-      if (!event) {
-        return { memoryId: null };
-      }
-      // A replayed comment `.deleted` row must route to the deletion handler, NOT to ingestEvent,
-      // which would write the deleted comment as a NEW raw memory instead of archiving the matching ones.
-      if (
-        (event.eventName === 'issue_comment' || event.eventName === 'pull_request_review_comment') &&
-        event.payload.action === 'deleted'
-      ) {
-        const repo = event.payload.repository?.full_name ?? '';
-        const artifactRef = event.eventName === 'issue_comment'
-          ? `github://${repo}/issue/${event.payload.issue.number}/comment/${event.payload.comment.id}`
-          : `github://${repo}/pull/${event.payload.pull_request.number}/review_comment/${event.payload.comment.id}`;
-        const idempotencyKey = computeDeletionKey(artifactRef, event.payload.comment.updated_at ?? null);
-        const r = handleCommentDeleted(innerCtx, {
-          artifactRef,
-          idempotencyKey,
-          deliveryId: args.deliveryId,
-          eventName: event.eventName,
-        });
-        // archivedCount maps to memoryId only loosely — return null since the
-        // archive operation can affect multiple rows. The replay-result audit
-        // trail is in github_dlq.retry_count + retried_at.
-        return { memoryId: r.archivedCount > 0 ? 'archived' : null };
-      }
-      const r = ingestEvent(innerCtx, {
-        event,
-        rawBody: args.rawPayload,
-        deliveryId: args.deliveryId,
-      });
-      return { memoryId: r.memoryId };
-    },
+    ingestHook: reingestParkedDelivery,
   });
   if (!result.ok) {
     console.error(
