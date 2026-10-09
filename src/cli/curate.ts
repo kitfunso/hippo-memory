@@ -12,19 +12,9 @@ import * as api from '../api/index.js';
 import * as client from './client.js';
 import { resolveTenantId } from '../store/tenant.js';
 import { printError } from './output.js';
-import {
-  type CliFlags,
-  parseCountFlag,
-  requireInit,
-  runChurnStaleForRepo,
-  runViaServerIfAvailable,
-  fmt,
-  type CommandContext,
-  resolveAuthRoot,
-  boolFlag,
-  flagIsTrue,
-  stringFlag,
-} from './shared.js';
+import { type CliFlags, parseCountFlag, type CommandContext, boolFlag, flagIsTrue, stringFlag } from './flag-values.js';
+import { requireInit, runChurnStaleForRepo, runViaServerIfAvailable, resolveAuthRoot } from './shared.js';
+import { fmt } from './print.js';
 import { errorMessage } from '../util/log.js';
 import { DIGEST_DISPLAY_CHARS, CONTENT_PREVIEW_CHARS, DATE_PREFIX_CHARS } from '../util/token-text.js';
 

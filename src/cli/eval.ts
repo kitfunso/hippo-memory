@@ -10,7 +10,9 @@ import { runEval, bootstrapCorpus, compareSummaries, type EvalCase, type EvalSum
 import { runFeatureEval, formatResult, resultToBaseline, detectRegressions, type EvalBaseline } from '../eval/eval-suite.js';
 import { PACKAGE_VERSION } from '../util/version.js';
 import { printError } from './output.js';
-import { requireInit, fmt, type CliFlags, type CommandContext, boolFlag } from './shared.js';
+import { requireInit } from './shared.js';
+import { fmt } from './print.js';
+import { type CliFlags, type CommandContext, boolFlag } from './flag-values.js';
 import { errorMessage } from '../util/log.js';
 
 const HIT_TOP_K = 10;

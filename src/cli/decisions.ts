@@ -9,7 +9,8 @@ import * as decisionsModule from '../objects/decisions.js';
 import * as incidentsModule from '../objects/incidents.js';
 import { resolveTenantId } from '../store/tenant.js';
 import { printError } from './output.js';
-import { nonEmptyStringFlag, parseListLimit, requireInit, type CliFlags, flagIsTrue, stringFlag } from './shared.js';
+import { nonEmptyStringFlag, parseListLimit, type CliFlags, flagIsTrue, stringFlag } from './flag-values.js';
+import { requireInit } from './shared.js';
 import { closeObject, foundOrExit, idArgOrExit, listObjects, printLifecycleTail, requireStatus, type ObjectNames } from './object-verbs.js';
 import { errorMessage } from '../util/log.js';
 

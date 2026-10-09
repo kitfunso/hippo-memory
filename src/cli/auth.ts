@@ -4,7 +4,8 @@ import { listApiKeys, type ApiKeyListItem } from '../store/auth.js';
 import * as api from '../api/index.js';
 import { resolveTenantId } from '../store/tenant.js';
 import { printError } from './output.js';
-import { type CliFlags, resolveAuthRoot, boolFlag, stringFlag } from './shared.js';
+import { type CliFlags, boolFlag, stringFlag } from './flag-values.js';
+import { resolveAuthRoot } from './shared.js';
 import { errorMessage } from '../util/log.js';
 
 // ---------------------------------------------------------------------------

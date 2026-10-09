@@ -31,7 +31,9 @@ import * as client from './client.js';
 import { resolveTenantId } from '../store/tenant.js';
 import { printError } from './output.js';
 import { errorMessage, log } from '../util/log.js';
-import { requireInit, runViaServerIfAvailable, fmt, type CliFlags, type CommandContext, learnFromRepo, boolFlag, flagIsTrue, nonEmptyStringFlag } from './shared.js';
+import { requireInit, runViaServerIfAvailable, learnFromRepo } from './shared.js';
+import { fmt } from './print.js';
+import { type CliFlags, type CommandContext, boolFlag, flagIsTrue, nonEmptyStringFlag } from './flag-values.js';
 import { CONTENT_PREVIEW_CHARS, DATE_PREFIX_CHARS } from '../util/token-text.js';
 
 const STDERR_PREVIEW_CHARS = 80;

@@ -6,7 +6,9 @@ import * as api from '../api/index.js';
 import { resolveTenantId } from '../store/tenant.js';
 import { assembleCost, assembleHeading, drillCost, settleTokens } from '../api/context-render.js';
 import { printError } from './output.js';
-import { type CliFlags, parseBudgetFlag, requireInit, type CommandContext, captureConsole, flagIsTrue, stringFlag, numberFlag } from './shared.js';
+import { type CliFlags, parseBudgetFlag, type CommandContext, flagIsTrue, stringFlag, numberFlag } from './flag-values.js';
+import { requireInit } from './shared.js';
+import { captureConsole } from './print.js';
 import { CONTENT_PREVIEW_CHARS } from '../util/token-text.js';
 
 const TREE_CHILD_PREVIEW_CHARS = 70;

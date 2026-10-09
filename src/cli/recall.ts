@@ -32,25 +32,10 @@ import { JEV_DEFAULT_TOP_K } from '../rerankers/jev.js';
 import { isClefModel } from '../rerankers/clef.js';
 import { handoffText, printedTokens, sessionTrailText, settleTokens, snapshotText } from '../api/context-render.js';
 import { printError } from './output.js';
-import {
-  parseLimitFlag,
-  parseBudgetFlag,
-  requireInit,
-  recallEntryText,
-  recallHeading,
-  type CliFlags,
-  type CommandContext,
-  parseAsOfFlag,
-  engineFlags,
-  printActiveTaskSnapshot,
-  printSessionEvents,
-  printHandoff,
-  hostSessionId,
-  captureConsole,
-  hookStoreRoot,
-  boolFlag,
-  flagIsTrue,
-} from './shared.js';
+import { parseLimitFlag, parseBudgetFlag, type CliFlags, type CommandContext, parseAsOfFlag, engineFlags, boolFlag, flagIsTrue } from './flag-values.js';
+import { requireInit } from './shared.js';
+import { recallEntryText, recallHeading, printActiveTaskSnapshot, printSessionEvents, printHandoff, captureConsole } from './print.js';
+import { hostSessionId, hookStoreRoot } from './hook-runtime.js';
 
 // JSON.stringify keeps quotes or parens in the matched phrase from blurring the line.
 function planningLine(p: PlanningFallacyOutput): string | null {

@@ -10,7 +10,8 @@ import { loadConfig } from '../core/config.js';
 import { resolveTenantId } from '../store/tenant.js';
 import { refineStore } from './refine-llm.js';
 import { printError } from './output.js';
-import { type CliFlags, requireInit, resolveAuthRoot, boolFlag } from './shared.js';
+import { type CliFlags, boolFlag } from './flag-values.js';
+import { requireInit, resolveAuthRoot } from './shared.js';
 import { errorMessage } from '../util/log.js';
 
 const MAX_FAILED_SHOWN = 5;

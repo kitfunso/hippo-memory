@@ -18,7 +18,8 @@ import { type Card, isCardStatus } from '../core/card.js';
 import { loadCardDetail, type CardDetail } from '../store/card-detail.js';
 import { resolveTenantId } from '../store/tenant.js';
 import { printError } from './output.js';
-import { type CliFlags, requireInit, stringFlagOrExit } from './shared.js';
+import { type CliFlags, stringFlagOrExit } from './flag-values.js';
+import { requireInit } from './shared.js';
 import { errorMessage } from '../util/log.js';
 
 // Mirrors ARCHIVE_REASON_REQUIRED so the block message can't drift from its usage line.

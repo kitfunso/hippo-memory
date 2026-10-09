@@ -14,19 +14,9 @@ import { resolveTenantId } from '../store/tenant.js';
 import type { RankRecallResult } from '../api/recall-pipeline.js';
 import { printedTokens } from '../api/context-render.js';
 import { printError } from './output.js';
-import {
-  parseLimitFlag,
-  parseBudgetFlag,
-  requireInit,
-  fmt,
-  recallEntryText,
-  recallHeading,
-  type CliFlags,
-  type CommandContext,
-  parseAsOfFlag,
-  engineFlags,
-  boolFlag,
-} from './shared.js';
+import { parseLimitFlag, parseBudgetFlag, type CliFlags, type CommandContext, parseAsOfFlag, engineFlags, boolFlag } from './flag-values.js';
+import { requireInit } from './shared.js';
+import { fmt, recallEntryText, recallHeading } from './print.js';
 
 const EXPLAIN_PREVIEW_CHARS = 48;
 

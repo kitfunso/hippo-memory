@@ -19,7 +19,7 @@ import { runInProcess, type InProcessResult } from './_helpers/run-in-process.js
 import {
   CLEARED_ENV, FAKE_NOW, freshStore, normalise, RECALL_INPUTS, rowsOf, seeded, SESSION, seedTemplates, TENANT, type Store, type Templates,
 } from './_helpers/recall-golden-seed.js';
-import type { CliFlags } from '../src/cli/shared.js';
+import type { CliFlags } from '../src/cli/flag-values.js';
 
 type Surface = 'cli' | 'mcp' | 'http';
 const SURFACES: readonly Surface[] = ['cli', 'mcp', 'http'];

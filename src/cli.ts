@@ -44,7 +44,7 @@ import { cmdGithub, printGithubBackfillUsage } from './connectors/github/cli-imp
 import { printError } from './cli/output.js';
 import { errorFields, errorMessage, isLevelEnabled, log } from './util/log.js';
 import { isStoreBusy, STORE_BUSY_MESSAGE } from './db/busy.js';
-import { type CliFlags, type CommandContext, boolFlag, flagIsTrue } from './cli/shared.js';
+import { type CliFlags, type CommandContext, boolFlag, flagIsTrue } from './cli/flag-values.js';
 import { VERB_USAGE, USAGE_HEADER, USAGE_EXAMPLES, printAuditPruneUsage, printSlackBackfillUsage, printSlackWorkspacesUsage } from './cli/usage.js';
 import { type FlagKind, type VerbFlags, VERB_FLAGS, flagKind, isKnownFlag, undeclaredFlags } from './cli/flags.js';
 

@@ -26,17 +26,10 @@ import * as api from '../api/index.js';
 import { resolveTenantId } from '../store/tenant.js';
 import { errorMessage, log } from '../util/log.js';
 import { printError } from './output.js';
-import {
-  type CliFlags,
-  parseCountFlag,
-  requireInit,
-  fmt,
-  type CommandContext,
-  stringFlagOrExit,
-  hookStoreRoot,
-  resolveAuthRoot,
-  flagIsTrue,
-} from './shared.js';
+import { type CliFlags, parseCountFlag, type CommandContext, stringFlagOrExit, flagIsTrue } from './flag-values.js';
+import { requireInit, resolveAuthRoot } from './shared.js';
+import { fmt } from './print.js';
+import { hookStoreRoot } from './hook-runtime.js';
 import { DAY_MS } from '../util/time.js';
 
 export function cmdStatus(hippoRoot: string): void {

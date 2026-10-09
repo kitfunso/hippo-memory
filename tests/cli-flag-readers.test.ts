@@ -1,8 +1,8 @@
-// CLI flags are read through the named readers in src/cli/shared.ts, never with an inline typeof ternary or cast.
+// CLI flags are read through the named readers in src/cli/flag-values.ts, never with an inline typeof ternary or cast.
 import { describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { boolFlag, flagIsTrue, numberFlag, stringFlag, type CliFlags } from '../src/cli/shared.js';
+import { boolFlag, flagIsTrue, numberFlag, stringFlag, type CliFlags } from '../src/cli/flag-values.js';
 
 const cases: ReadonlyArray<[string, CliFlags]> = [
   ['absent', {}],
@@ -40,7 +40,7 @@ describe('inline flag reads', () => {
       return d.name.endsWith('.ts') ? [full] : [];
     });
   const files = [path.resolve('src/cli.ts'), ...sourceFiles(path.resolve('src/cli'))].filter(
-    (f) => path.basename(f) !== 'shared.ts' || !f.includes(`${path.sep}cli${path.sep}`),
+    (f) => path.basename(f) !== 'flag-values.ts' || !f.includes(`${path.sep}cli${path.sep}`),
   );
   const INLINE = /typeof flags\[[^\]]+\]\s*===\s*'string'\s*\?|flags\[[^\]]+\]\s+as string(?!\[)/;
 
