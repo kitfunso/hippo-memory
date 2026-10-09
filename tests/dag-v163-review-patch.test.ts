@@ -40,13 +40,13 @@ describe('v1.6.3 P0-1 — assemble.totalRaw reports unbounded count when truncat
   beforeEach(() => { root = makeRoot('v163-total'); });
   afterEach(() => safeRmSync(root));
 
-  it('rowCap < session size: totalRaw reports the FULL session count', () => {
+  it('rowCap < session size: totalRaw reports the FULL session count', async () => {
     for (let i = 0; i < 12; i++) {
       const e = makeRaw(`session message ${i} content body`, 'sess-big');
       e.created = `2026-01-${String(i + 1).padStart(2, '0')}T00:00:00.000Z`;
       writeEntry(root, e);
     }
-    const r = assemble(ctxFor(root), 'sess-big', { rowCap: 5, budget: 100000 });
+    const r = await assemble(ctxFor(root), 'sess-big', { rowCap: 5, budget: 100000 });
     expect(r.truncated).toBe(true);
     // Pre-v1.6.3: totalRaw=5 (the cap). Post-v1.6.3: totalRaw=12 (the truth).
     expect(r.totalRaw).toBe(12);
@@ -54,18 +54,18 @@ describe('v1.6.3 P0-1 — assemble.totalRaw reports unbounded count when truncat
     expect(r.items.length).toBeLessThanOrEqual(5);
   });
 
-  it('rowCap >= session size: totalRaw uses scoped count (no extra COUNT query)', () => {
+  it('rowCap >= session size: totalRaw uses scoped count (no extra COUNT query)', async () => {
     for (let i = 0; i < 3; i++) {
       const e = makeRaw(`small session ${i}`, 'sess-small');
       e.created = `2026-01-0${i + 1}T00:00:00.000Z`;
       writeEntry(root, e);
     }
-    const r = assemble(ctxFor(root), 'sess-small', { rowCap: 100, budget: 100000 });
+    const r = await assemble(ctxFor(root), 'sess-small', { rowCap: 100, budget: 100000 });
     expect(r.truncated).toBe(false);
     expect(r.totalRaw).toBe(3);
   });
 
-  it('rowCap == session size: truncated=true with matching totalRaw (boundary)', () => {
+  it('rowCap == session size: truncated=true with matching totalRaw (boundary)', async () => {
     // Exactly N rows + cap=N triggers truncated=true (rows.length === rowCap).
     // The unbounded COUNT then runs and reports the same N. Documented in the
     // /review report as a subtle case worth pinning.
@@ -74,13 +74,13 @@ describe('v1.6.3 P0-1 — assemble.totalRaw reports unbounded count when truncat
       e.created = `2026-01-0${i + 1}T00:00:00.000Z`;
       writeEntry(root, e);
     }
-    const r = assemble(ctxFor(root), 'sess-exact', { rowCap: 5, budget: 100000 });
+    const r = await assemble(ctxFor(root), 'sess-exact', { rowCap: 5, budget: 100000 });
     expect(r.truncated).toBe(true);
     expect(r.totalRaw).toBe(5);
     expect(r.items.length).toBe(5);
   });
 
-  it('truncated session with private rows: scope-aware COUNT does NOT leak', () => {
+  it('truncated session with private rows: scope-aware COUNT does NOT leak', async () => {
     // codex P1 / senior P0: pre-fix, an unscoped COUNT(*) let a no-scope
     // caller infer how many private rows existed by comparing totalRaw to
     // items.length. v1.6.3 SQL-encodes the default-deny rule.
@@ -96,12 +96,12 @@ describe('v1.6.3 P0-1 — assemble.totalRaw reports unbounded count when truncat
     }
     // No-scope caller, rowCap forces truncation. totalRaw must equal the
     // PUBLIC count (4), NOT the full session count (10).
-    const r = assemble(ctxFor(root), 'sess-mixed', { rowCap: 3, budget: 100000 });
+    const r = await assemble(ctxFor(root), 'sess-mixed', { rowCap: 3, budget: 100000 });
     expect(r.truncated).toBe(true);
     expect(r.totalRaw).toBe(4);
   });
 
-  it('truncated session with explicit private scope: caller can see their own count', () => {
+  it('truncated session with explicit private scope: caller can see their own count', async () => {
     for (let i = 0; i < 3; i++) {
       const e = makeRaw(`secret detail ${i}`, 'sess-priv', { scope: 'slack:private:CSEC' });
       e.created = `2026-01-0${i + 1}T00:00:00.000Z`;
@@ -110,7 +110,7 @@ describe('v1.6.3 P0-1 — assemble.totalRaw reports unbounded count when truncat
     // Explicit scope match unlocks the count for the authorised caller.
     // rowCap=2 truncates; totalRaw should equal the count of rows matching
     // the explicit scope (3).
-    const r = assemble(ctxFor(root), 'sess-priv', {
+    const r = await assemble(ctxFor(root), 'sess-priv', {
       rowCap: 2,
       budget: 100000,
       scope: 'slack:private:CSEC',

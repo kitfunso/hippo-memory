@@ -258,6 +258,49 @@ export interface Predictions {
   predictionBaserate(tenantId: string, classTag: string, actor: string): Promise<PredictionBaserate>;
 }
 
+/** One session's unsuperseded raw rows inside a tenant; `origins` keeps those projects' rows and rows of no project, unset keeps every origin. */
+export interface SessionRawQuery {
+  readonly tenantId: string;
+  readonly sessionId: string;
+  readonly origins?: readonly string[];
+}
+
+export interface SessionRawWindow extends SessionRawQuery {
+  /** How many of the newest rows to read; zero or less reads them all. */
+  readonly cap: number;
+}
+
+export interface SessionRawCount extends SessionRawQuery {
+  /** Counts rows of exactly this scope; unset or empty counts the rows the default deny admits. */
+  readonly scope?: string;
+  /** The caller's personal scope, which the default deny admits. */
+  readonly ownScope?: string;
+}
+
+export interface DescendantWalk {
+  /** Levels to read under the summary. */
+  readonly depth: number;
+  /** Asked of the summary, then of each child read: a refused row is left out of the answer and nothing under it is read. */
+  readonly admit: (row: MemoryEntry) => boolean;
+}
+
+export interface SummaryDescendants {
+  readonly summary: MemoryEntry;
+  /** The admitted rows of each level, the summary's own children first; a level with none ends the list. */
+  readonly levels: MemoryEntry[][];
+}
+
+/** The reads behind session assembly and summary drill-down. None writes an audit row. */
+export interface DagReads {
+  /** The newest `cap` rows by created then id, returned oldest first (created, then id, ascending) as `loadSessionRawMemories` does; an empty session id reads nothing. */
+  sessionRawEntries(query: SessionRawWindow): Promise<MemoryEntry[]>;
+  /** How many rows the session holds with no cap, under the scope rule `passesScopeFilterForRecall` applies, so the count never tells of a row the caller could not read. */
+  sessionRawCount(query: SessionRawCount): Promise<number>;
+  /** The tenant's row `id` and up to `walk.depth` levels under it, read in one call so no write of this process lands between two levels; null when the tenant holds no such row.
+   *  A level lists the children of the level above it, parent by parent in that level's order and each parent's children by created then id ascending; a row is listed once, at the first level that reaches it. */
+  summaryWithDescendants(tenantId: string, id: string, walk: DescendantWalk): Promise<SummaryDescendants | null>;
+}
+
 /** The optional groups: a store sets each one whole or leaves it unset, and a route or MCP tool names the one it needs. */
 export interface StoreGroups {
   /** Unset on a store built before them, where hybrid and physics recall under an embedding provider answer 501. */
@@ -269,6 +312,7 @@ export interface StoreGroups {
   readonly entryWrites: EntryWrites;
   readonly contextReads: ContextReads;
   readonly predictions: Predictions;
+  readonly dagReads: DagReads;
 }
 
 export type StoreGroup = 'base' | keyof StoreGroups;

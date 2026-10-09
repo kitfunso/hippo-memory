@@ -81,7 +81,7 @@ describe('assemble ISO sort (F4) — integration', () => {
     try { rmSync(root, { recursive: true, force: true }); } catch { /* best-effort */ }
   });
 
-  it('returns items chronologically ordered by createdAt after byte-cmp sort', () => {
+  it('returns items chronologically ordered by createdAt after byte-cmp sort', async () => {
     const sess = 'sess-F4';
     // Insert in shuffled order so any sort failure is caught (insertion
     // order is NOT chronological; fixture timestamps are).
@@ -107,7 +107,7 @@ describe('assemble ISO sort (F4) — integration', () => {
     }
 
     const ctx: Context = { hippoRoot: root, tenantId: 'default', actor: { subject: 'test:f4-int', role: 'admin' } };
-    const result = assemble(ctx, sess, { budget: 10_000 });
+    const result = await assemble(ctx, sess, { budget: 10_000 });
 
     // Strip down to the createdAt strings on returned items, in returned order.
     const got = result.items.map((it) => it.createdAt);

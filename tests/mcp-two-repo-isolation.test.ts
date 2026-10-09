@@ -224,8 +224,8 @@ describe('MCP on a shared store with two repos', () => {
     }
   });
 
-  it('assemble cut short by its row cap counts only the caller\'s repo rows, not beta\'s or the NULL-origin one', () => {
-    const r = assemble(apiCtx(), SESSION, { project: ACME, rowCap: 1, summarizeOlder: false });
+  it('assemble cut short by its row cap counts only the caller\'s repo rows, not beta\'s or the NULL-origin one', async () => {
+    const r = await assemble(apiCtx(), SESSION, { project: ACME, rowCap: 1, summarizeOlder: false });
     expect(r.truncated).toBe(true);
     expect(r.totalRaw).toBe(4);
   });

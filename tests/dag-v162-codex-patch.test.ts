@@ -58,7 +58,7 @@ describe('v1.6.2 codex P2 #1 — loadSessionRawMemories cap preserves NEWEST row
     expect(got.map((e) => e.id)).toEqual([ids[7], ids[8], ids[9]]);
   });
 
-  it('assemble with rowCap on a long session protects fresh-tail correctly', () => {
+  it('assemble with rowCap on a long session protects fresh-tail correctly', async () => {
     const ids: string[] = [];
     for (let i = 0; i < 12; i++) {
       const e = makeRaw(`session msg ${i} content body`, 'sess-y');
@@ -66,7 +66,7 @@ describe('v1.6.2 codex P2 #1 — loadSessionRawMemories cap preserves NEWEST row
       writeEntry(root, e);
       ids.push(e.id);
     }
-    const r = assemble(ctxFor(root), 'sess-y', { rowCap: 5, freshTailCount: 3, budget: 100000 });
+    const r = await assemble(ctxFor(root), 'sess-y', { rowCap: 5, freshTailCount: 3, budget: 100000 });
     expect(r.truncated).toBe(true);
     // Pre-v1.6.2: items would be ids[0..4] (oldest), and freshTailCount=3 would
     // mark ids[2..4] as fresh-tail — actually stale relative to ids[9..11].

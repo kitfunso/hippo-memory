@@ -169,7 +169,7 @@ export async function runRecallTool(call: ToolCall): Promise<string> {
   return rendered.text;
 }
 
-export function runAssembleTool({ args, ctx, hippoRoot, tenantId }: ToolCall): string {
+export async function runAssembleTool({ args, ctx, hippoRoot, tenantId }: ToolCall): Promise<string> {
   const sessionId = String(args.session_id || '');
   if (!sessionId) return 'No session_id provided.';
   const budget = Number(args.budget);
@@ -188,7 +188,7 @@ export function runAssembleTool({ args, ctx, hippoRoot, tenantId }: ToolCall): s
   if (Number.isFinite(budget) && budget > 0) assembleExtra.budget = budget;
   if (Number.isFinite(freshTailCount) && freshTailCount >= 0) assembleExtra.freshTailCount = freshTailCount;
   if (explicitScope !== undefined) assembleExtra.scope = explicitScope;
-  const r = apiAssemble(apiCtx, sessionId, {
+  const r = await apiAssemble(apiCtx, sessionId, {
     summarizeOlder,
     project: ctx?.project,
     ...assembleExtra,
@@ -197,7 +197,7 @@ export function runAssembleTool({ args, ctx, hippoRoot, tenantId }: ToolCall): s
   return assembleText(r);
 }
 
-export function runDrillTool({ args, ctx, hippoRoot, tenantId }: ToolCall): string {
+export async function runDrillTool({ args, ctx, hippoRoot, tenantId }: ToolCall): Promise<string> {
   const summaryId = String(args.summary_id || '');
   if (!summaryId) return 'No summary_id provided.';
   const limit = Number(args.limit);
@@ -214,7 +214,7 @@ export function runDrillTool({ args, ctx, hippoRoot, tenantId }: ToolCall): stri
   if (Number.isFinite(limit) && limit > 0) drillExtra.limit = limit;
   if (Number.isFinite(budget) && budget > 0) drillExtra.budget = budget;
   if (depth !== undefined) drillExtra.depth = depth;
-  const r = apiDrillDown(apiCtx, summaryId, { ...drillExtra, project: ctx?.project, cost: drillCost });
+  const r = await apiDrillDown(apiCtx, summaryId, { ...drillExtra, project: ctx?.project, cost: drillCost });
   if ('failure' in r) {
     // Only not_drillable is caller-actionable. not_found merges cross-tenant, scope-blocked and
     // missing, because telling scope_blocked apart would leak private-row existence.

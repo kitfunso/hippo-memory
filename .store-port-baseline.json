@@ -1,8 +1,8 @@
 {
-  "openersOutside": 139,
+  "openersOutside": 138,
   "openersInCli": 12,
   "storeBranches": 4,
-  "routesWithoutStore": 47,
+  "routesWithoutStore": 45,
   "twinFunctions": 0,
   "sqlOutside": 193,
   "txLiterals": 28,
@@ -12,7 +12,6 @@
     "src/api/audit.ts": 1,
     "src/api/context-select.ts": 2,
     "src/api/dormant.ts": 4,
-    "src/api/drill-down.ts": 1,
     "src/api/forget.ts": 1,
     "src/api/promote.ts": 1,
     "src/api/quarantine.ts": 3,

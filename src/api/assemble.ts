@@ -1,6 +1,6 @@
 // Session context assembly under a token budget.
 
-import { loadEntriesByIds, loadSessionRawMemories, countSessionRawMemories } from '../store/entry-reads.js';
+import { requireGroup, storeFor } from '../store-port.js';
 import { estimateTokens } from '../token-ledger.js';
 import type { MemoryEntry } from '../memory.js';
 import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../recall-scope.js';
@@ -106,11 +106,11 @@ export interface AssembleResult {
  *   - no raws exist for the session
  *   - all rows fail the scope/tenant filter
  */
-export function assemble(
+export async function assemble(
   ctx: Context,
   sessionId: string,
   opts: AssembleOpts = {},
-): AssembleResult {
+): Promise<AssembleResult> {
   assertScopeRequestAllowed(ctx.actor, opts.scope);
   const budget = opts.budget ?? DEFAULT_ASSEMBLE_BUDGET;
   const freshTailCount = opts.freshTailCount ?? 10;
@@ -123,7 +123,8 @@ export function assemble(
   }
 
   const origins = opts.project ? projectNames(opts.project) : undefined;
-  const rows = loadSessionRawMemories(ctx.hippoRoot, sessionId, ctx.tenantId, rowCap, origins);
+  const dag = requireGroup(storeFor(ctx), 'dagReads');
+  const rows = await dag.sessionRawEntries({ tenantId: ctx.tenantId, sessionId, cap: rowCap, origins });
   const truncated = rows.length === rowCap;
   // `scoped.length` under-counts a capped session, so totalRaw falls back to a COUNT below.
   const scoped = rows.filter((r) =>
@@ -133,7 +134,7 @@ export function assemble(
   if (truncated) {
     // The COUNT applies the same default-deny scope rule in SQL, so a no-scope
     // caller cannot infer private rows by comparing totalRaw to items.length.
-    totalRaw = countSessionRawMemories(ctx.hippoRoot, sessionId, ctx.tenantId, opts.scope, own, origins);
+    totalRaw = await dag.sessionRawCount({ tenantId: ctx.tenantId, sessionId, scope: opts.scope, ownScope: own, origins });
   } else {
     totalRaw = scoped.length;
   }
@@ -148,7 +149,7 @@ export function assemble(
 
   // Substitute parent summaries for older rows that share one.
   const { olderItems, summarized } = summarizeOlder && olderRows.length > 0
-    ? substituteSummaries(ctx, olderRows, opts.scope, own, opts.project)
+    ? await substituteSummaries(ctx, olderRows, opts.scope, own, opts.project)
     : { olderItems: olderRows.map(rawItem), summarized: 0 };
 
   const tailItems: AssembledContextItem[] = tailRows.map((r) => ({
@@ -186,13 +187,13 @@ interface SubstitutedOlder {
   summarized: number;
 }
 
-function substituteSummaries(
+async function substituteSummaries(
   ctx: Context,
   olderRows: MemoryEntry[],
   scope: string | undefined,
   own: string | undefined,
   project: CallerProject | undefined,
-): SubstitutedOlder {
+): Promise<SubstitutedOlder> {
   const olderItems: AssembledContextItem[] = [];
   let summarized = 0;
   const olderByParent = new Map<string, MemoryEntry[]>();
@@ -206,7 +207,7 @@ function substituteSummaries(
     (pid) => (olderByParent.get(pid)?.length ?? 0) >= 2,
   );
   const parents = eligibleParentIds.length > 0
-    ? loadEntriesByIds(ctx.hippoRoot, eligibleParentIds, ctx.tenantId)
+    ? (await storeFor(ctx).entriesByIds(eligibleParentIds, ctx.tenantId))
         .filter((p) => (p.dag_level ?? 0) === 2 && !p.superseded_by)
         .filter((p) => passesScopeFilterForRecall(p.scope ?? null, scope, own))
         .filter((p) => !project || classifyOriginProject(p.origin_project, project) !== 'cross-project')

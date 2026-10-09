@@ -327,31 +327,31 @@ describe('v0.30 / E5 — level-3 entity profiles + drillDown depth', () => {
     expect(capturedPrompt).toContain('alice');
   });
 
-  it('test #7: drillDown depth=1 backward compat — returns immediate children', () => {
+  it('test #7: drillDown depth=1 backward compat — returns immediate children', async () => {
     const summary = makeL2Summary('compat test summary content', 'alice');
     writeEntry(hippoRoot, summary);
     writeEntry(hippoRoot, makeL1Fact(summary.id, 'fact one for compat test'));
     writeEntry(hippoRoot, makeL1Fact(summary.id, 'fact two for compat test'));
 
-    const r = drillDown(defaultCtx(hippoRoot), summary.id);
+    const r = await drillDown(defaultCtx(hippoRoot), summary.id);
     assertDrillDownSucceeded(r);
     expect(r.children.length).toBe(2);
     expect(r.totalChildren).toBe(2);
   });
 
-  it('normalizes a fractional API depth before walking the DAG', () => {
+  it('normalizes a fractional API depth before walking the DAG', async () => {
     const l3 = makeL3Profile('fractional depth profile', 'alice');
     writeEntry(hippoRoot, l3);
     const l2 = makeL2Summary('fractional depth topic', 'alice', l3.id);
     writeEntry(hippoRoot, l2);
     writeEntry(hippoRoot, makeL1Fact(l2.id, 'fractional depth leaf'));
 
-    const r = drillDown(defaultCtx(hippoRoot), l3.id, { depth: 1.5 });
+    const r = await drillDown(defaultCtx(hippoRoot), l3.id, { depth: 1.5 });
     assertDrillDownSucceeded(r);
     expect(r.children.map((child) => child.id)).toEqual([l2.id]);
   });
 
-  it('test #8: drillDown depth=2 from L3 returns L2s + L1s with dedup + totalChildren=8', () => {
+  it('test #8: drillDown depth=2 from L3 returns L2s + L1s with dedup + totalChildren=8', async () => {
     const l3 = makeL3Profile('alice profile for depth test', 'alice');
     l3.descendant_count = 2; // stored direct-child count (2 L2 kids)
     writeEntry(hippoRoot, l3);
@@ -364,7 +364,7 @@ describe('v0.30 / E5 — level-3 entity profiles + drillDown depth', () => {
       writeEntry(hippoRoot, makeL1Fact(l2b.id, `B-fact-${i} content here`));
     }
 
-    const r = drillDown(defaultCtx(hippoRoot), l3.id, { depth: 2 });
+    const r = await drillDown(defaultCtx(hippoRoot), l3.id, { depth: 2 });
     assertDrillDownSucceeded(r);
     // 2 L2s + 6 L1s = 8 entries
     expect(r.children.length).toBe(8);
@@ -376,7 +376,7 @@ describe('v0.30 / E5 — level-3 entity profiles + drillDown depth', () => {
     expect(ids.size).toBe(8);
   });
 
-  it('test #9: drillDown depth=3 over-walks safely — BFS exhausts at depth=2 since L1s have no children', () => {
+  it('test #9: drillDown depth=3 over-walks safely — BFS exhausts at depth=2 since L1s have no children', async () => {
     const l3 = makeL3Profile('alice profile depth3 test', 'alice');
     writeEntry(hippoRoot, l3);
     const l2 = makeL2Summary('alice topic for depth3', 'alice', l3.id);
@@ -384,14 +384,14 @@ describe('v0.30 / E5 — level-3 entity profiles + drillDown depth', () => {
     writeEntry(hippoRoot, makeL1Fact(l2.id, 'fact one for depth3 test'));
     writeEntry(hippoRoot, makeL1Fact(l2.id, 'fact two for depth3 test'));
 
-    const r = drillDown(defaultCtx(hippoRoot), l3.id, { depth: 3 });
+    const r = await drillDown(defaultCtx(hippoRoot), l3.id, { depth: 3 });
     assertDrillDownSucceeded(r);
     // 1 L2 + 2 L1s = 3 entries; depth=3 doesn't over-walk into nothing
     expect(r.children.length).toBe(3);
     expect(r.totalChildren).toBe(3);
   });
 
-  it('test #10: drillDown depth=2 global budget truncates mid-walk', () => {
+  it('test #10: drillDown depth=2 global budget truncates mid-walk', async () => {
     const l3 = makeL3Profile('alice profile budget test', 'alice');
     writeEntry(hippoRoot, l3);
     const l2 = makeL2Summary('alice topic for budget test xxxxx', 'alice', l3.id);
@@ -401,13 +401,13 @@ describe('v0.30 / E5 — level-3 entity profiles + drillDown depth', () => {
     }
 
     // Very tight budget — should truncate
-    const r = drillDown(defaultCtx(hippoRoot), l3.id, { depth: 2, budget: 30 });
+    const r = await drillDown(defaultCtx(hippoRoot), l3.id, { depth: 2, budget: 30 });
     assertDrillDownSucceeded(r);
     expect(r.truncated).toBe(true);
     expect(r.children.length).toBeLessThan(6);
   });
 
-  it('test #11: drillDown depth tenant isolation — L1s in different tenant are excluded at level 2', () => {
+  it('test #11: drillDown depth tenant isolation — L1s in different tenant are excluded at level 2', async () => {
     const l3 = makeL3Profile('alice profile tenant test', 'alice');
     writeEntry(hippoRoot, l3);
     const l2a = makeL2Summary('alice topic A in tenant-a', 'alice', l3.id);
@@ -428,7 +428,7 @@ describe('v0.30 / E5 — level-3 entity profiles + drillDown depth', () => {
       db.close();
     }
 
-    const r = drillDown(defaultCtx(hippoRoot, 'default'), l3.id, { depth: 2 });
+    const r = await drillDown(defaultCtx(hippoRoot, 'default'), l3.id, { depth: 2 });
     assertDrillDownSucceeded(r);
     // Should return only L2-A (tenant-a), NOT the L1s in tenant-b
     expect(r.children.length).toBe(1);

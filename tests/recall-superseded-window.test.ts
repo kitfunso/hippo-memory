@@ -86,14 +86,14 @@ describe('a superseded summary never stands in for its children', () => {
     expect(summaryIds()).toEqual([]);
   });
 
-  it('in assemble', () => {
+  it('in assemble', async () => {
     const root = newRoot();
     const summary = summaryWithChildren(root, 'older detail', { kind: 'raw', source_session_id: 'sess-s' });
-    const summaryIds = (): string[] =>
-      assemble(ctxFor(root), 'sess-s', { freshTailCount: 1, budget: 100000 }).items.filter((it) => it.isSummary).map((it) => it.id);
+    const summaryIds = async (): Promise<string[]> =>
+      (await assemble(ctxFor(root), 'sess-s', { freshTailCount: 1, budget: 100000 })).items.filter((it) => it.isSummary).map((it) => it.id);
 
-    expect(summaryIds()).toEqual([summary.id]);
+    expect(await summaryIds()).toEqual([summary.id]);
     supersede(ctxFor(root), summary.id, 'session rollup, revised');
-    expect(summaryIds()).toEqual([]);
+    expect(await summaryIds()).toEqual([]);
   });
 });

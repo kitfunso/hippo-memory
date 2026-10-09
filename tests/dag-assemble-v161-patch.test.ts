@@ -68,23 +68,23 @@ describe('v1.6.1 — assemble.truncated flag', () => {
   beforeEach(() => { root = makeRoot('v161-trunc'); });
   afterEach(() => safeRmSync(root));
 
-  it('truncated=true when rowCap matches the row count', () => {
+  it('truncated=true when rowCap matches the row count', async () => {
     for (let i = 0; i < 6; i++) {
       const e = makeRaw(`body content row ${i}`, 'sess-t');
       e.created = `2026-01-0${i + 1}T00:00:00.000Z`;
       writeEntry(root, e);
     }
-    const r = assemble(ctxFor(root), 'sess-t', { rowCap: 6, budget: 100000 });
+    const r = await assemble(ctxFor(root), 'sess-t', { rowCap: 6, budget: 100000 });
     expect(r.truncated).toBe(true);
   });
 
-  it('truncated=false when rowCap is comfortable', () => {
+  it('truncated=false when rowCap is comfortable', async () => {
     for (let i = 0; i < 3; i++) {
       const e = makeRaw(`body content row ${i}`, 'sess-t2');
       e.created = `2026-01-0${i + 1}T00:00:00.000Z`;
       writeEntry(root, e);
     }
-    const r = assemble(ctxFor(root), 'sess-t2', { rowCap: 100, budget: 100000 });
+    const r = await assemble(ctxFor(root), 'sess-t2', { rowCap: 100, budget: 100000 });
     expect(r.truncated).toBe(false);
   });
 });
@@ -94,26 +94,26 @@ describe('v1.6.1 — totalRaw is post-scope', () => {
   beforeEach(() => { root = makeRoot('v161-total'); });
   afterEach(() => safeRmSync(root));
 
-  it('all-private session: totalRaw=0, items=[], no false positive', () => {
+  it('all-private session: totalRaw=0, items=[], no false positive', async () => {
     for (let i = 0; i < 4; i++) {
       const e = makeRaw(`secret content ${i}`, 'sess-p', { scope: 'slack:private:CSEC' });
       e.created = `2026-01-0${i + 1}T00:00:00.000Z`;
       writeEntry(root, e);
     }
     // No scope passed → default-deny.
-    const r = assemble(ctxFor(root), 'sess-p');
+    const r = await assemble(ctxFor(root), 'sess-p');
     expect(r.totalRaw).toBe(0);
     expect(r.items).toEqual([]);
   });
 
-  it('mixed public + private session: totalRaw counts only public', () => {
+  it('mixed public + private session: totalRaw counts only public', async () => {
     const pub = makeRaw('public content', 'sess-m', { scope: 'slack:public:CGEN' });
     pub.created = '2026-01-01T00:00:00.000Z';
     const priv = makeRaw('private content', 'sess-m', { scope: 'slack:private:CSEC' });
     priv.created = '2026-01-02T00:00:00.000Z';
     writeEntry(root, pub);
     writeEntry(root, priv);
-    const r = assemble(ctxFor(root), 'sess-m');
+    const r = await assemble(ctxFor(root), 'sess-m');
     expect(r.totalRaw).toBe(1);
     expect(r.items.map((it) => it.id)).toEqual([pub.id]);
   });
@@ -124,7 +124,7 @@ describe('v1.6.1 — assemble scope opt parity with recall', () => {
   beforeEach(() => { root = makeRoot('v161-scope'); });
   afterEach(() => safeRmSync(root));
 
-  it('explicit scope match unlocks a private session', () => {
+  it('explicit scope match unlocks a private session', async () => {
     for (let i = 0; i < 3; i++) {
       const e = makeRaw(`secret detail ${i}`, 'sess-priv', {
         scope: 'slack:private:CSEC',
@@ -133,18 +133,18 @@ describe('v1.6.1 — assemble scope opt parity with recall', () => {
       writeEntry(root, e);
     }
     // Without scope: blocked.
-    const blocked = assemble(ctxFor(root), 'sess-priv');
+    const blocked = await assemble(ctxFor(root), 'sess-priv');
     expect(blocked.items).toEqual([]);
     // With matching scope: unlocked.
-    const unlocked = assemble(ctxFor(root), 'sess-priv', { scope: 'slack:private:CSEC' });
+    const unlocked = await assemble(ctxFor(root), 'sess-priv', { scope: 'slack:private:CSEC' });
     expect(unlocked.items.length).toBe(3);
     expect(unlocked.totalRaw).toBe(3);
   });
 
-  it('explicit scope mismatch returns empty', () => {
+  it('explicit scope mismatch returns empty', async () => {
     const e = makeRaw('private content', 'sess-m', { scope: 'slack:private:CSEC' });
     writeEntry(root, e);
-    const r = assemble(ctxFor(root), 'sess-m', { scope: 'slack:private:CDIFFERENT' });
+    const r = await assemble(ctxFor(root), 'sess-m', { scope: 'slack:private:CDIFFERENT' });
     expect(r.items).toEqual([]);
   });
 });

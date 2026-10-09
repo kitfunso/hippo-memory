@@ -106,14 +106,14 @@ describe('quarantineList', () => {
 });
 
 describe('drillDown', () => {
-  it('reads one query per DAG level, not one per parent', () => {
+  it('reads one query per DAG level, not one per parent', async () => {
     for (const n of SIZES) {
       const root = freshRoot('qc-drill');
       const summary = memory('summary of the zephyrine cache work', { dag_level: 2, layer: Layer.Semantic });
       const mids = rows(n, 'mid', { dag_level: 1, dag_parent_id: summary.id });
       const leaves = mids.map((m, i) => memory(`leaf ${i} under the zephyrine cache`, { dag_level: 0, dag_parent_id: m.id }));
       seed(root, [summary, ...mids, ...leaves]);
-      const { result, statements } = recordStatements(() => drillDown(ctxFor(root), summary.id, { depth: 2, limit: 1000 }));
+      const { result, statements } = await recordStatementsAsync(() => drillDown(ctxFor(root), summary.id, { depth: 2, limit: 1000 }));
       expect('failure' in result ? result.failure : result.totalChildren).toBe(2 * n);
       expect(countMatching(statements, STORE_OPEN)).toBe(1);
       expect(countMatching(statements, ROW_READ)).toBe(3);

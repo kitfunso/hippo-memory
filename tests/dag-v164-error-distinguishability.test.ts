@@ -37,22 +37,22 @@ describe('v1.6.4 Task 1 — drillDown discriminated outcome', () => {
   beforeEach(() => { root = makeRoot('v164-task1'); });
   afterEach(() => safeRmSync(root));
 
-  it('failure=not_found for unknown id', () => {
-    const r = drillDown(ctxFor(root), 'mem_no_such_thing');
+  it('failure=not_found for unknown id', async () => {
+    const r = await drillDown(ctxFor(root), 'mem_no_such_thing');
     expect('failure' in r).toBe(true);
     if ('failure' in r) expect(r.failure).toBe('not_found');
   });
 
-  it('failure=not_found for cross-tenant id (NO unscoped probe leak)', () => {
+  it('failure=not_found for cross-tenant id (NO unscoped probe leak)', async () => {
     const s = makeSummary('other tenant', { tenantId: 'other' });
     writeEntry(root, s);
-    const r = drillDown(ctxFor(root, 'default'), s.id);
+    const r = await drillDown(ctxFor(root, 'default'), s.id);
     expect('failure' in r).toBe(true);
     // Intentionally collapsed; distinguishing would leak existence.
     if ('failure' in r) expect(r.failure).toBe('not_found');
   });
 
-  it('failure=not_drillable for a leaf row', () => {
+  it('failure=not_drillable for a leaf row', async () => {
     const leaf = createMemory('plain leaf body content', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Buffer,
@@ -60,23 +60,23 @@ describe('v1.6.4 Task 1 — drillDown discriminated outcome', () => {
       dag_level: 0,
     });
     writeEntry(root, leaf);
-    const r = drillDown(ctxFor(root), leaf.id);
+    const r = await drillDown(ctxFor(root), leaf.id);
     expect('failure' in r).toBe(true);
     if ('failure' in r) expect(r.failure).toBe('not_drillable');
   });
 
-  it('failure=not_found for a private-scoped summary (codex round 3 P1 collapse)', () => {
+  it('failure=not_found for a private-scoped summary (codex round 3 P1 collapse)', async () => {
     // Distinguishable scope_blocked told no-scope callers "row exists but
     // not for you" — same existence leak the HTTP 404 collapse fixed.
     // Now collapsed at the JS API level to match HTTP behaviour.
     const s = makeSummary('secret topic', { scope: 'slack:private:CSEC' });
     writeEntry(root, s);
-    const r = drillDown(ctxFor(root), s.id);
+    const r = await drillDown(ctxFor(root), s.id);
     expect('failure' in r).toBe(true);
     if ('failure' in r) expect(r.failure).toBe('not_found');
   });
 
-  it('failure=not_found for a private-scoped leaf, so not_drillable never confirms a hidden row', () => {
+  it('failure=not_found for a private-scoped leaf, so not_drillable never confirms a hidden row', async () => {
     const leaf = createMemory('secret leaf body content', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Buffer,
@@ -85,7 +85,7 @@ describe('v1.6.4 Task 1 — drillDown discriminated outcome', () => {
       scope: 'slack:private:CSEC',
     });
     writeEntry(root, leaf);
-    expect(drillDown(ctxFor(root), leaf.id)).toEqual({ failure: 'not_found' });
+    expect(await drillDown(ctxFor(root), leaf.id)).toEqual({ failure: 'not_found' });
   });
 });
 

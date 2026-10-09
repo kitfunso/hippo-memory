@@ -12,6 +12,7 @@ import { recordTokenUse } from '../../token-ledger.js';
 import { loadAmbientCandidates, loadContextCandidates } from '../candidates.js';
 import { loadEntriesByIds, loadFreshRawMemories } from '../entry-reads.js';
 import { strengthenRetrievedInOwnTx } from '../entry-writes.js';
+import { sqliteDagReads } from './dag-reads-group.js';
 import { sqliteEntryWrites } from './entry-writes-group.js';
 import { servedPredictions, sqlitePredictions } from './predictions-group.js';
 import { loadLatestHandoff } from '../handoffs.js';
@@ -92,6 +93,7 @@ export function sqliteSyncStore(hippoRoot: string): SqliteSyncStore & Sync<Omit<
     entryWrites: sqliteEntryWrites(hippoRoot),
     contextReads: sqliteContextReads(hippoRoot),
     predictions: sqlitePredictions(hippoRoot),
+    dagReads: sqliteDagReads(hippoRoot),
     close() {},
   };
 }
@@ -99,7 +101,7 @@ export function sqliteSyncStore(hippoRoot: string): SqliteSyncStore & Sync<Omit<
 /** `sqliteSyncStore` as a served store: each method runs at once and answers through a Promise, so a throw rejects as another store's would. */
 export function sqliteStore(hippoRoot: string): HippoStore & StoreGroups {
   const sync = sqliteSyncStore(hippoRoot);
-  const { keyAudit, keyWrites, vectorWrites, entryWrites, contextReads } = sync;
+  const { keyAudit, keyWrites, vectorWrites, entryWrites, contextReads, dagReads } = sync;
   return {
     kind: sync.kind,
     findApiKey: async (keyId) => sync.findApiKey(keyId),
@@ -142,6 +144,11 @@ export function sqliteStore(hippoRoot: string): HippoStore & StoreGroups {
       ambientTallies: async (tenantId, filter) => contextReads.ambientTallies(tenantId, filter),
     },
     predictions: servedPredictions(sync.predictions),
+    dagReads: {
+      sessionRawEntries: async (query) => dagReads.sessionRawEntries(query),
+      sessionRawCount: async (query) => dagReads.sessionRawCount(query),
+      summaryWithDescendants: async (tenantId, id, walk) => dagReads.summaryWithDescendants(tenantId, id, walk),
+    },
     close: async () => sync.close(),
   };
 }
