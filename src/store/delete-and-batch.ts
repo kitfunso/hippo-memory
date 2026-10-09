@@ -1,4 +1,5 @@
-import { AUTO_DELETABLE_SQL, type MemoryEntry } from '../core/memory.js';
+import { type MemoryEntry } from '../core/memory.js';
+import { AUTO_DELETABLE_SQL } from './rule-sql.js';
 import { openHippoDb, closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import { checkRejectionGuard, RejectedValueError } from './rejection.js';
 import { markSummaryDirtyInTx } from './summary-dirty.js';

@@ -1,4 +1,5 @@
-import { type MemoryEntry, schemaFitFrom, strengthSql } from '../core/memory.js';
+import { type MemoryEntry, schemaFitFrom } from '../core/memory.js';
+import { strengthSql } from './rule-sql.js';
 import { closeHippoDb, withReadSnapshot } from '../db/index.js';
 import { scopeAdmitSql, type SqlFragment } from './recall-scope.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';

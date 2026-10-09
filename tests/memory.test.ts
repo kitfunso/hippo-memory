@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { calculateStrength, calculateRewardFactor, applyOutcome, strengthSql, Layer, type MemoryEntry, type TraceOutcome} from '../src/core/memory.js';
+import { calculateStrength, calculateRewardFactor, applyOutcome, Layer, type MemoryEntry, type TraceOutcome} from '../src/core/memory.js';
+import { strengthSql } from '../src/store/rule-sql.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { rmSync } from 'node:fs';

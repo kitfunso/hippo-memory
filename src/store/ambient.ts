@@ -1,5 +1,5 @@
 import { closeHippoDb } from '../db/index.js';
-import { strengthSql } from '../core/memory.js';
+import { strengthSql } from './rule-sql.js';
 import { scopeAdmitSql } from './recall-scope.js';
 import { SECRET_TAGS } from '../util/secret-detect.js';
 import { openStore } from './open.js';

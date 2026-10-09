@@ -54,7 +54,7 @@ _Avoid_: summary memory (the summary lives in the compaction record), snapshot (
 **Keep rule**:
 A tag and a source prefix that together keep a memory out of automatic deletion; today one pair
 per imported agent memory tool. Both must match, because a merge copies a source's tags onto
-a row whose source is `consolidation`. `canAutoDelete` and `AUTO_DELETABLE_SQL` in `src/core/memory.ts`
+a row whose source is `consolidation`. `canAutoDelete` (`src/core/memory.ts`) and `AUTO_DELETABLE_SQL` (`src/store/rule-sql.ts`)
 apply it and change together. `hippo forget` and `hippo supersede` still work on a kept memory.
 _Avoid_: pin (a person sets that), retention policy, allowlist
 
