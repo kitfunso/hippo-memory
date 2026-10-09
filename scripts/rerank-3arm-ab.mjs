@@ -4,13 +4,14 @@
  *  real getReranker(), so the two prior single-harness deltas finally compare.
  *  RERANK_ARM=clef-flash|clef swaps the third arm (CLF4 dev comparison). */
 
-import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { hybridSearch } from '../dist/search/hybrid.js';
 import { buildCorpus } from '../dist/search/bm25.js';
 import { loadAllEntries } from '../dist/store/entry-reads.js';
 import { getReranker } from '../dist/rerankers/index.js';
+import { isEmbeddingAvailable } from '../dist/local-embedding.js';
 
 // Literal, not new Date(): a bare Date() drifted 26min between Lane 12/13 runs
 // and moved a rank. Passing `now` below also short-circuits HIPPO_FAKE_NOW.
@@ -36,6 +37,9 @@ const JEV_CONCURRENCY = Number(process.env.RERANK_CONCURRENCY) > 0 ? Number(proc
 const OUTPUT_PATH = join('results', ARM === 'jev' ? 'rerank-3arm-2026-09-18.json' : `rerank-3arm-${ARM}-${new Date().toISOString().slice(0, 10)}.json`);
 const LANE12_CONTROL = { 'recall@budget': 0.6967, 'R@1': 0.2633, 'R@5': 0.4600, MRR: 0.3608 };
 
+// Without the embedding package hybridSearch quietly builds keyword-only candidates, a different test.
+if (!isEmbeddingAvailable()) { console.error('EMBEDDINGS UNAVAILABLE: install @huggingface/transformers or @xenova/transformers before a rerank run.'); process.exit(1); }
+
 const apiKey = process.env.TYPESAFE_API_KEY?.trim();
 if (ARM === 'jev' && !apiKey) { console.error('TYPESAFE_API_KEY is not set.'); process.exit(1); }
 
@@ -45,7 +49,17 @@ const f = (x) => (Number.isFinite(x) ? x.toFixed(4) : ' n/a ');
 const median = (xs) => { const c = [...xs].sort((a, b) => a - b); const m = Math.floor(c.length / 2); return c.length % 2 ? c[m] : (c[m - 1] + c[m]) / 2; };
 const quantile = (xs, p) => { const c = [...xs].sort((a, b) => a - b); return c[Math.min(c.length - 1, Math.floor(c.length * p))]; };
 
-const hippoRoot = join(homedir(), '.hippo');
+// A frozen copy keeps a run split across days on one corpus; the live store grows between halves.
+const hippoRoot = process.env.RERANK_HIPPO_ROOT?.trim() || join(homedir(), '.hippo');
+// Workers AI's free allocation is per day, so a hosted run caps its calls and resumes from cached answers.
+const rawMax = process.env.RERANK_MAX_CALLS?.trim();
+const MAX_CALLS = rawMax ? Number(rawMax) : Infinity;
+if (!(Number.isInteger(MAX_CALLS) && MAX_CALLS >= 0) && MAX_CALLS !== Infinity) { console.error(`RERANK_MAX_CALLS must be a whole number, not ${rawMax}.`); process.exit(1); }
+// Neurons bill on tokens, and tokens per request are not stable day to day, so a call cap alone can overspend.
+const rawTok = process.env.RERANK_MAX_TOKENS?.trim();
+const MAX_TOKENS = rawTok ? Number(rawTok) : Infinity;
+if (!(Number.isInteger(MAX_TOKENS) && MAX_TOKENS >= 0) && MAX_TOKENS !== Infinity) { console.error(`RERANK_MAX_TOKENS must be a whole number, not ${rawTok}.`); process.exit(1); }
+const CACHE_DIR = process.env.RERANK_CACHE_DIR?.trim() || null;
 const dir = process.env.RERANK_QUERIES_DIR || 'evals/paraphrase';
 const queries = [];
 for (const fn of readdirSync(dir).filter((x) => /^queries\d+\.json$/.test(x)).sort()) {
@@ -99,26 +113,22 @@ async function runPool(items, worker, concurrency) {
 const ceReranker = getReranker('cross-encoder');
 const jevReranker = getReranker(ARM);
 
-// crossEncoderReranker fails OPEN (identity order + a console.warn) rather than
-// throwing, so a silent fallback would look like a real result without this spy.
-let fallbackWarning = null;
-const realWarn = console.warn;
-console.warn = (...a) => { fallbackWarning = a.join(' '); realWarn(...a); };
-const warmup = [{ entry: { id: '__warmup__', content: 'warm up the cross encoder model before timing real queries' }, score: 1, tokens: 10 }];
+// crossEncoderReranker fails OPEN, copying each input score into rerankScore. Its warning goes to
+// stderr through the logger, which a console.warn spy cannot see, so check the scores it returns.
+const warmup = [{ entry: { id: '__warmup__', content: 'warm up the cross encoder model before timing real queries' }, score: 0.123456, tokens: 10 }];
 let modelLoadMs = null;
+let warmOut;
 try {
   const t0 = performance.now();
-  await ceReranker('warm up query', warmup, { topK: 1 });
+  warmOut = await ceReranker('warm up query', warmup, { topK: 1 });
   modelLoadMs = performance.now() - t0;
 } catch (err) {
   console.error('CROSS-ENCODER FAILED TO LOAD: threw during the warmup call.');
   console.error(err?.stack ?? String(err));
   process.exit(1);
 }
-console.warn = realWarn;
-if (fallbackWarning) {
+if (warmOut.every((r, i) => r.rerankScore === warmup[i].score)) {
   console.error('CROSS-ENCODER UNAVAILABLE: reranker fell back to identity ordering, not a real model call.');
-  console.error('Captured warning:', fallbackWarning);
   process.exit(1);
 }
 console.error(`cross-encoder model load ok: ${modelLoadMs.toFixed(1)}ms (warmup excluded from per-query timings)\n`);
@@ -157,7 +167,7 @@ console.error(`phase 1 done: ${rows.length} candidate sets built, cross-encoder 
 // ---------- Phase 2: Jev calls, pooled for wall-clock, one call per query ----------
 // Aggregate-only spy: dist/rerankers/jev.ts is frozen for this run (a second
 // agent is building concurrently), so outcomes are read off fetch, not edited in.
-const jevStats = { calls: 0, ok: 0, failed: 0, partial: 0 };
+const jevStats = { calls: 0, ok: 0, failed: 0, partial: 0, cached: 0, stale: 0, inputTokens: 0 };
 const realFetch = globalThis.fetch;
 globalThis.fetch = async (input, init) => {
   jevStats.calls++;
@@ -170,6 +180,7 @@ globalThis.fetch = async (input, init) => {
       try {
         const body = await res.clone().json();
         const answered = Object.values(body?.result?.answers ?? body?.answers ?? {}).filter((a) => Number.isFinite(a?.noul) && a.noul >= 0 && a.noul <= 1).length;
+        jevStats.inputTokens += Number(body?.result?.usage?.input_tokens ?? body?.usage?.input_tokens) || 0;
         if (answered < expected) jevStats.partial++; else jevStats.ok++;
       } catch { jevStats.partial++; }
     } else {
@@ -183,12 +194,40 @@ globalThis.fetch = async (input, init) => {
 };
 
 console.error(`=== ${ARM} arm: ${rows.length} calls, concurrency ${JEV_CONCURRENCY} ===\n`);
+if (CACHE_DIR) mkdirSync(CACHE_DIR, { recursive: true });
+const cachePath = (row) => join(CACHE_DIR, `${row.id}.json`);
+let started = 0;
 const jevOut = await runPool(rows, async (row) => {
+  if (CACHE_DIR && existsSync(cachePath(row))) {
+    const hit = JSON.parse(readFileSync(cachePath(row), 'utf8'));
+    // An answer scored on another candidate set would splice foreign entries into this head, so it is asked again.
+    const headIds = new Set(row.head.map((r) => r.entry.id));
+    if (hit.head.length === headIds.size && hit.head.every((h) => headIds.has(h.id))) {
+      const byCand = new Map(row.head.map((r) => [r.entry.id, r]));
+      jevStats.cached++;
+      return { jevHead: hit.head.map((h) => ({ ...byCand.get(h.id), ...h.ranks })), ms: hit.ms };
+    }
+    jevStats.stale++;
+  }
+  if (started >= MAX_CALLS || jevStats.inputTokens >= MAX_TOKENS) return null;
+  started++;
   const t0 = Date.now();
   const jevHead = await jevReranker(row.query, row.candidates, { topK: CANDIDATE_TOPK });
-  return { jevHead, ms: Date.now() - t0 };
+  const ms = Date.now() - t0;
+  // Fallbacks are not cached, so a resumed run asks again instead of freezing a failure.
+  if (CACHE_DIR && !jevHead[0]?.rerankProvenance?.fallbackReason) {
+    const head = jevHead.map((r) => ({ id: r.entry.id, ranks: { rerankScore: r.rerankScore, preRerankRank: r.preRerankRank, postRerankRank: r.postRerankRank, rerankProvenance: r.rerankProvenance } }));
+    writeFileSync(cachePath(row), JSON.stringify({ query: row.query, ms, head }));
+  }
+  return { jevHead, ms };
 }, JEV_CONCURRENCY);
 globalThis.fetch = realFetch;
+
+const missing = jevOut.filter((o) => o === null).length;
+if (missing > 0) {
+  console.log(`INCOMPLETE: ${rows.length - missing}/${rows.length} queries scored (${jevStats.cached} cached, ${jevStats.stale} cached answers stale, ${jevStats.calls} new calls, ${jevStats.inputTokens} input tokens). Rerun with the same RERANK_CACHE_DIR to resume; no verdict until every query is scored.`);
+  process.exit(0);
+}
 
 for (let i = 0; i < rows.length; i++) {
   const row = rows[i];
@@ -311,12 +350,15 @@ console.log(`  target-only (cf. Lane 12/13): ${ceTargetStats.distinct} distinct 
 console.log(`${ARM} arm:`.padEnd(19) + `${jevVoid ? 'VOID -- DEGENERATE' : 'non-degenerate'}: ${jevScoreStats.distinct} distinct scores over ${jevScoreStats.count} head entries, min ${f(jevScoreStats.min)}, max ${f(jevScoreStats.max)}`);
 console.log(`  target-only (cf. Lane 12/13): ${jevTargetStats.distinct} distinct over ${jevTargetStats.count}, min ${f(jevTargetStats.min)}, max ${f(jevTargetStats.max)}`);
 console.log(`top-1 changed vs base: cross-encoder ${ceTop1ChangedCount}/${rows.length}, ${ARM} ${jevTop1ChangedCount}/${rows.length}`);
-console.log(`${ARM} HTTP calls: ${jevStats.calls} total, ${jevStats.ok} ok, ${jevStats.failed} failed, ${jevStats.partial} partial (partial = ok response missing a valid noul for >=1 candidate)`);
+console.log(`${ARM} HTTP calls: ${jevStats.calls} total, ${jevStats.ok} ok, ${jevStats.failed} failed, ${jevStats.partial} partial (partial = ok response missing a valid noul for >=1 candidate); ${jevStats.cached} answers from cache, ${jevStats.stale} stale and asked again; ${jevStats.inputTokens} input tokens this run`);
 console.log(`${ARM} per-query fallback (base order kept for that query's head): ${jevFellBackCount}/${rows.length}`);
 for (const [reason, n] of Object.entries(fallbackReasons)) console.log(`  ${n} x ${reason}`);
 
 const actualCost = jevStats.calls * COST_PER_CALL_USD;
 console.log(`\n${ARM} cost: ${jevStats.calls} calls x $${COST_PER_CALL_USD} = $${actualCost.toFixed(4)} (expected $${expectedCost.toFixed(4)})`);
+// Hosted CLEF bills neurons on input tokens, which the per-call dollar line above cannot see.
+const NEURONS_PER_MTOK = { 'clef-flash': 8182, clef: 21818 };
+if (NEURONS_PER_MTOK[ARM] && !process.env.HIPPO_CLEF_ENDPOINT?.trim()) console.log(`${ARM} neurons this run: about ${Math.round(jevStats.inputTokens * NEURONS_PER_MTOK[ARM] / 1e6)} (Workers AI gives 10,000 free a day)`);
 
 console.log('\n======================================================================');
 console.log(`VERDICT: Amendment 3 gate -- "${ARM} ships only if it beats the cross-encoder"`);
