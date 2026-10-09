@@ -96,7 +96,8 @@ function opened(tenantId: string, written: Incident | IncidentOpenRefusal): Inci
   throw new Error('saveIncident: failed to reload saved incident row');
 }
 
-/** Opens an incident with its mirror memory (content "<text>\n\nContext: <context>" when context is given) in one write; a linked memory outside the tenant refuses the whole write. */
+/** Opens an incident with its mirror memory (content "<text>\n\nContext: <context>" when
+ * context is given) in one write; a linked memory outside the tenant refuses the whole write. */
 export function saveIncident(
   hippoRoot: string,
   tenantId: string,

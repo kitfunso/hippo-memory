@@ -17,7 +17,8 @@ export { __resetSessionRecallHistoryHttp } from './server/routes/recall.js';
 export { clientIpForRateLimit } from './server/client-ip.js';
 export { isLoopback, isReservedActor } from './server/auth.js';
 export type { AddonCall, AddonRoute, AuthResolver, RateLimitSpec, ResolvedBearer, ServeOpts, ServerHandle } from './server/types.js';
-// What an add-on route handler needs: HttpError for its 4xx replies, promptHookContext for a caller that renders the prompt hook elsewhere, JsonValue for its body.
+// What an add-on route handler needs: HttpError for its 4xx replies, promptHookContext
+// for a caller that renders the prompt hook elsewhere, JsonValue for its body.
 export { HttpError } from './util/http-util.js';
 export { promptHookContext, type CallerProject } from './api/prompt-hook.js';
 export type { JsonValue } from './util/json.js';

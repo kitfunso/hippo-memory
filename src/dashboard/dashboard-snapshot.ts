@@ -453,7 +453,8 @@ class SnapshotCacheService implements SnapshotService {
   }
 }
 
-/** Holds one read-only connection for its commit signal (`PRAGMA data_version`) and the snapshot cache; `now` dates the strength projections, `cacheClock` ages the cache. */
+/** Holds one read-only connection for its commit signal (`PRAGMA data_version`) and the
+ * snapshot cache; `now` dates the strength projections, `cacheClock` ages the cache. */
 export function createSnapshotService(hippoRoot: string, now: () => number, cacheClock: () => number = Date.now): SnapshotService {
   return new SnapshotCacheService(hippoRoot, now, cacheClock);
 }

@@ -24,10 +24,12 @@ export function ledgerRoot(hippoRoot: string, opts?: LedgerRootOpts): string | n
 const SQLITE_CORRUPT = 11;
 const SQLITE_NOTADB = 26;
 
-/** Why a ledger row did not land: the store is `busy`, it has no ledger to write to (`absent`), or the write failed for a reason nobody planned for (`unexpected`). */
+/** Why a ledger row did not land: the store is `busy`, it has no ledger to write to
+ * (`absent`), or the write failed for a reason nobody planned for (`unexpected`). */
 type LedgerSkip = 'busy' | 'absent' | 'unexpected';
 
-/** The one rule for a skipped ledger row. `absent` is a store with no token_ledger table or a hippo.db SQLite cannot read; the command that owns the store reports that, and a hook must stay quiet about it. */
+/** The one rule for a skipped ledger row. `absent` is a store with no token_ledger table or a hippo.db
+ * SQLite cannot read; the command that owns the store reports that, and a hook must stay quiet about it. */
 function ledgerSkipClass<E>(error: E): LedgerSkip {
   if (isSqliteBusy(error)) return 'busy';
   const code = error instanceof Error && 'errcode' in error ? error.errcode : undefined;
@@ -35,7 +37,8 @@ function ledgerSkipClass<E>(error: E): LedgerSkip {
   return errorMessage(error).includes('no such table: token_ledger') ? 'absent' : 'unexpected';
 }
 
-/** Says why a ledger row did not land, at the level its class earns: busy warns once through noteStoreBusy, absent is debug with no stack, unexpected warns once with the error class and stack. */
+/** Says why a ledger row did not land, at the level its class earns: busy warns once through
+ * noteStoreBusy, absent is debug with no stack, unexpected warns once with the error class and stack. */
 export function noteLedgerRowSkipped<E>(error: E): void {
   const skip = ledgerSkipClass(error);
   if (skip === 'busy') {

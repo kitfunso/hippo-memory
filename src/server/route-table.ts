@@ -234,7 +234,8 @@ export function assertSqliteStore(opts: ResolvedServeOpts): void {
   if (opts.store.kind !== 'sqlite') throw new HttpError(501, STORE_NOT_PORTED_MESSAGE);
 }
 
-/** Under another store, a route that names no group, or one the store lacks, answers 501 without running; the caller is checked first, so a bad key is still a 401. */
+/** Under another store, a route that names no group, or one the store lacks, answers
+ * 501 without running; the caller is checked first, so a bad key is still a 401. */
 async function refuseUnportedRoute(req: IncomingMessage, opts: ResolvedServeOpts, group?: StoreGroup): Promise<void> {
   if (opts.store.kind === 'sqlite' || (group !== undefined && hasGroup(opts.store, group))) return;
   await requireAuth(req, opts);

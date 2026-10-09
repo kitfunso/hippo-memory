@@ -1,5 +1,6 @@
 // The per-prompt hook's block and ledger rows, rendered here for `hippo context` and for promptHookContext (a remote hook route's call).
-// promptHookContext keeps the server-side copy of the CLI's getContext flags (cli/context.ts); the CLI parity case in tests/prompt-hook-context.test.ts is all that ties the two.
+// promptHookContext keeps the server-side copy of the CLI's getContext flags (cli/context.ts);
+// the CLI parity case in tests/prompt-hook-context.test.ts is all that ties the two.
 import { getContext, type Context, type ContextResult, type ContextResultEntry } from './index.js';
 import { BadRequestError } from '../core/api-errors.js';
 import { isSharedStore, loadConfig } from '../core/config.js';
@@ -235,8 +236,10 @@ function assertPromptHookRequest(req: PromptHookRequest): void {
   }
 }
 
-/** The text `hippo context --pinned-only --include-recent 5 --format additional-context` prints for this session, read on `ctx`'s store for the caller's project, leaving out an unchanged static block only when `printedHash` matches it.
- *  `arm` is the raw ledger arm (`hippo` or `holdout`), null at rate 0; a holdout session gets an empty stdout. `staticHash` is the hash to echo back: null with no static block, for a sub-agent or a holdout.
+/** The text `hippo context --pinned-only --include-recent 5 --format additional-context` prints for this session, read
+ * on `ctx`'s store for the caller's project, leaving out an unchanged static block only when `printedHash` matches it.
+ * `arm` is the raw ledger arm (`hippo` or `holdout`), null at rate 0; a holdout session gets an empty
+ * stdout. `staticHash` is the hash to echo back: null with no static block, for a sub-agent or a holdout.
  *  Scope detection (HIPPO_SCOPE and skill env vars) and delivery-ledger events are CLI-only.
  *  Throws BadRequestError past the input caps, and on a shared store for a project assertCallerProject refuses, before any arm is booked. */
 export async function promptHookContext(

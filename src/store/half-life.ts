@@ -76,7 +76,8 @@ function writeMove(db: DatabaseSyncLike, move: HalfLifeMove, old: ReadonlyMap<st
   }
 }
 
-/** Moves the store's half-lives to base `to` as `plan` decides from the rows read here, then records the base. `outcome` is null when no move is due; a dry run plans and writes nothing. */
+/** Moves the store's half-lives to base `to` as `plan` decides from the rows read here, then
+ * records the base. `outcome` is null when no move is due; a dry run plans and writes nothing. */
 export function moveHalfLives<R>(
   hippoRoot: string,
   to: number,

@@ -134,7 +134,8 @@ function closeAt<K extends ObjectKind>(hippoRoot: string, tenantId: string, kind
   return onHandle(hippoRoot, (db) => {
     const closed = closeRow(db, tenantId, kind, id, close);
     if (isObjectRefusal(closed) || !graphType) return closed;
-    // Each graph write takes its own write lock, so both wait for the commit. The rows go at once because the rebuild queue is keyed by a mirror memory that may be gone.
+    // Each graph write takes its own write lock, so both wait for the commit. The rows
+    // go at once because the rebuild queue is keyed by a mirror memory that may be gone.
     removeGraphEntitiesForObject(hippoRoot, tenantId, graphType, closed.id);
     markGraphDirty(hippoRoot, tenantId, closed.memoryId);
     return closed;
@@ -239,7 +240,8 @@ interface MirroredWrite {
   readonly graphTenant?: string;
 }
 
-/** Until the typed migration has run, a mirror goes in on the flat half-life that migration moves; the flag is read under the save's write lock, so the two cannot interleave. */
+/** Until the typed migration has run, a mirror goes in on the flat half-life that migration
+ * moves; the flag is read under the save's write lock, so the two cannot interleave. */
 function onStoreHalfLife(db: DatabaseSyncLike, mirror: MemoryEntry): MemoryEntry {
   if (getMeta(db, TYPED_HALF_LIFE_META_KEY, '') !== '') return mirror;
   const legacy = { ...mirror, half_life_days: deriveHalfLife(LEGACY_TYPED_HALF_LIFE, mirror) };

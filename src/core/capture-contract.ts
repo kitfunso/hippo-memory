@@ -63,7 +63,8 @@ export function isObjectLike<T>(value: T): value is T & object {
 /** The hook runtimes a `--runtime` flag names; absent means Claude Code. */
 export type HookRuntime = 'claude-code' | 'copilot';
 
-/** Reads a Claude Code PreCompact payload, or a Copilot one after stdin.ts mapped it to the same snake_case keys; only an empty stdin counts as a manual run. */
+/** Reads a Claude Code PreCompact payload, or a Copilot one after stdin.ts mapped
+ * it to the same snake_case keys; only an empty stdin counts as a manual run. */
 export function readClaudeCodePreCompact(
   stdinText: string | undefined,
   timedOut: boolean,
@@ -171,7 +172,8 @@ export function readClaudeCodePostCompact(stdinText: string | undefined, timedOu
   };
 }
 
-/** Reads a Claude Code SessionEnd payload, or a Copilot one after stdin.ts mapped it to the same snake_case keys; only an empty stdin counts as a manual run. */
+/** Reads a Claude Code SessionEnd payload, or a Copilot one after stdin.ts mapped
+ * it to the same snake_case keys; only an empty stdin counts as a manual run. */
 export function readSessionEnd(
   stdinText: string | undefined,
   timedOut: boolean,

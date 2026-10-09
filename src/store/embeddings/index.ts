@@ -197,7 +197,8 @@ const EMBED_LOCK_FILE = 'embeddings.lock';
 const EMBED_LOCK_WAIT_MS = 10_000;
 const EMBED_LOCK_OWNER = `${process.pid}:${randomUUID()}`;
 
-// In-process mutex plus an O_EXCL "<pid>:<token>" lock file: our token is a lock we leaked; our PID with another token is a live worker thread, unless the lock predates this process (a reused PID).
+// In-process mutex plus an O_EXCL "<pid>:<token>" lock file: our token is a lock we leaked; our PID
+// with another token is a live worker thread, unless the lock predates this process (a reused PID).
 let _embedWriteLock: Promise<void> = Promise.resolve();
 
 function embedLockHolderAlive(lockPath: string): boolean {

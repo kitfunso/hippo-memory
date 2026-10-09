@@ -126,7 +126,8 @@ function assertSelfMintOpts({ ttlDays, perSubject }: AuthCreateSelfOpts): void {
   }
 }
 
-/** Mint a member key for the caller an auth resolver vouched for, whatever its role; the binary floor, the cap's revokes, the mint and its audit rows commit or fail together. */
+/** Mint a member key for the caller an auth resolver vouched for, whatever its role; the
+ * binary floor, the cap's revokes, the mint and its audit rows commit or fail together. */
 export function authCreateSelf<C extends Context>(ctx: C, opts: AuthCreateSelfOpts): StoreReply<C, AuthCreateSelfResult> {
   return onStore(ctx, (port) => {
     const keyWrites = port.keyWrites ?? notPorted(port, 'keyWrites');

@@ -94,7 +94,8 @@ export function importUserMemories(invokingRoot: string, opts: SyncOptions): Imp
   }, opts);
 }
 
-/** Session end in a folder with no store of its own: the session's project into the global store with its origin, the session folder's notes, then the user pass. */
+/** Session end in a folder with no store of its own: the session's project into the
+ * global store with its origin, the session folder's notes, then the user pass. */
 export function importAtSessionEnd(cwd: string, transcriptPath: string | undefined, opts: SyncOptions): ImportReport {
   const globalRoot = resolveGlobalRootDir();
   const ctx = context(opts.machine, { projectRoot: cwd });
@@ -107,7 +108,8 @@ export function importAtSessionEnd(cwd: string, transcriptPath: string | undefin
   return report;
 }
 
-/** The session folder's notes under the project Claude filed them for, never cwd's: a session begun at home keeps its home notes user-global wherever it ends. No git call, so post-compact can run it. */
+/** The session folder's notes under the project Claude filed them for, never cwd's: a session begun at
+ * home keeps its home notes user-global wherever it ends. No git call, so post-compact can run it. */
 export function importSessionFolder(hippoRoot: string, transcriptPath: string, cwd: string | null, opts: SyncOptions): ImportReport {
   const project = transcriptNotesProject(transcriptPath, cwd, opts.machine);
   if (project === null) return emptyReport();

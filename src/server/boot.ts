@@ -93,7 +93,8 @@ async function handleRequest(
   const routeRequest: RouteRequest = { req, res, opts, query };
   if (await runWithRequestStores(() => dispatchScopedRoute(routeRequest, method, path), { busyWaitMs: SERVER_DB_WAIT_MS })) return;
 
-  // A scope of its own, which the heartbeat timer keeps after it closes, so the key check and every heartbeat wait the server's lock wait. Store-ready: the stream only authenticates, through the port.
+  // A scope of its own, which the heartbeat timer keeps after it closes, so the key check and every
+  // heartbeat wait the server's lock wait. Store-ready: the stream only authenticates, through the port.
   if (method === 'GET' && path === '/mcp/stream') {
     noteAccess(req, { route: path });
     await runWithRequestStores(() => handleMcpStream(req, res, opts, streamSlots), { busyWaitMs: SERVER_DB_WAIT_MS });
@@ -171,7 +172,8 @@ function sendHealth(req: IncomingMessage, res: ServerResponse, startedAt: string
   }
 }
 
-/** Readiness: one cheap read on the served store under the server's lock wait. /health stays liveness only, so a probe can tell a store that does not answer from a dead process. */
+/** Readiness: one cheap read on the served store under the server's lock wait. /health stays
+ * liveness only, so a probe can tell a store that does not answer from a dead process. */
 async function sendReady(res: ServerResponse, store: HippoStore): Promise<void> {
   const { readiness } = store;
   if (readiness === undefined) {

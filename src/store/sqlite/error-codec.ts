@@ -1,4 +1,5 @@
-// A thrown error crosses the worker boundary as plain data and arrives as an instance of its class: the server's mappers test `instanceof`, `errcode` and fields.
+// A thrown error crosses the worker boundary as plain data and arrives as an instance
+// of its class: the server's mappers test `instanceof`, `errcode` and fields.
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../../core/api-errors.js';
 import { RawAppendOnlyError } from '../../core/raw-append-only.js';
 import { IncompatibleBinaryError, StoreBusyError } from '../../db/index.js';

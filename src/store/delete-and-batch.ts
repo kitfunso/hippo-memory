@@ -416,7 +416,8 @@ export function deleteEntriesOneByOne(
   }
 }
 
-/** Commits whole components in transactions of about `budget.holdMs` on one store handle, letting other writers in between; returns the ids that left `memories`.
+/** Commits whole components in transactions of about `budget.holdMs` on one store
+ * handle, letting other writers in between; returns the ids that left `memories`.
  *  The snapshot keeps what other writers changed after the caller loaded its rows. */
 export async function commitInChunks(
   hippoRoot: string,

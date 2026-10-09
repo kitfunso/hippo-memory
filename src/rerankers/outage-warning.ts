@@ -8,7 +8,8 @@ export interface OutageWarning {
   answered(): void;
 }
 
-/** Warns when `name` starts failing, at most every five minutes while it keeps failing, and once when it answers again. `fallback` says what recall does meanwhile. */
+/** Warns when `name` starts failing, at most every five minutes while it keeps failing,
+ * and once when it answers again. `fallback` says what recall does meanwhile. */
 export function createOutageWarning(name: string, fallback: string): OutageWarning {
   let failures = 0;
   let unreported = 0;

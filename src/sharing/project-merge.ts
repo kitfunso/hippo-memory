@@ -168,7 +168,8 @@ function importCopies(db: DatabaseSyncLike, tenantId: string): MemoryEntry[] {
   return live.filter((e) => e.origin_project && e.kind !== 'raw' && !e.pinned && toolTag(e.source) !== null && userGlobal.has(duplicateKey(e.content)));
 }
 
-/** Imports to set aside. The global store also checks each Claude session folder a compaction recorded: its notes under any other project are misfiled, edited or not, and a text copy in the right folder is kept. */
+/** Imports to set aside. The global store also checks each Claude session folder a compaction recorded: its
+ * notes under any other project are misfiled, edited or not, and a text copy in the right folder is kept. */
 function strayImports(db: DatabaseSyncLike, hippoRoot: string, tenantId: string): MemoryEntry[] {
   const copies = importCopies(db, tenantId);
   if (!isGlobalStoreRoot(hippoRoot)) return copies;
@@ -303,7 +304,8 @@ function planUserGlobalRepair(
   return { toProject, setAside, untraced };
 }
 
-/** Sets aside stray imports, folds the names the resolver now maps elsewhere, then re-tags sleep's user-global merges by their parents; a dry run only plans. */
+/** Sets aside stray imports, folds the names the resolver now maps elsewhere, then
+ * re-tags sleep's user-global merges by their parents; a dry run only plans. */
 export function repairProjects(
   db: DatabaseSyncLike, hippoRoot: string, opts: { tenantId: string; dryRun: boolean; globalFolds?: boolean },
 ): RepairResult {

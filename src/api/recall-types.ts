@@ -162,7 +162,8 @@ export interface RecallOpts {
   keepHeldCopies?: boolean;
   leadingAudit?: readonly AppendAuditOpts[]; // rows this recall writes first in its one write, so a failed recall writes none; `recordAs` fills it
   recordAs?: RecallRecording; // the default ranker then records the recall in full (recall-finish.ts) and fills `recallHistory` and `leadingAudit` itself
-  /** MCP recall only: `retrieve` ranks the whole scoped store and strengthens and traces (pipeline 'mcp') just the ids this returns; `results` stays the window band. */
+  /** MCP recall only: `retrieve` ranks the whole scoped store and strengthens and traces
+   * (pipeline 'mcp') just the ids this returns; `results` stays the window band. */
   showRanked?: (ranking: StoreRanking, result: RecallResult) => ShownRanking;
   /** Named ranker: `retrieve` ranks with the CLI ranking core. Unset, it ranks the SQL BM25 band, or the wide hybrid list under `showRanked`. */
   cliCore?: CliCoreRanker;
@@ -188,10 +189,12 @@ export interface CliCoreInspection extends CliCoreRanking {
   inspect: (ranking: RankRecallResult) => void;
 }
 
-/** The CLI ranking core (`rankRecall`) as a ranker of `retrieve`: host admin only, on hippo.db. Of the other RecallOpts it reads `query`, `sessionId` and `goalTag`. */
+/** The CLI ranking core (`rankRecall`) as a ranker of `retrieve`: host admin only, on
+ * hippo.db. Of the other RecallOpts it reads `query`, `sessionId` and `goalTag`. */
 export type CliCoreRanker = CliCoreRecall | CliCoreInspection;
 
-/** `results`: the rows the caller shows, best first; `audit`: its hint rows, written ahead of the 'recall' row; `tokens`: the text it prints, for the ledger. */
+/** `results`: the rows the caller shows, best first; `audit`: its hint rows, written
+ * ahead of the 'recall' row; `tokens`: the text it prints, for the ledger. */
 export interface ShownCliCore {
   results: readonly SearchResult[];
   audit: readonly AppendAuditOpts[];

@@ -35,12 +35,14 @@ export function codexHomeDir(home: string = homeDir(), env: Readonly<Record<stri
   return env.CODEX_HOME || path.join(home, '.codex');
 }
 
-/** Copilot's config folder: $COPILOT_HOME, else ~/.copilot under os.homedir(), as the Copilot apps resolve it (a HOME that differs from the profile must not move it). */
+/** Copilot's config folder: $COPILOT_HOME, else ~/.copilot under os.homedir(), as the
+ * Copilot apps resolve it (a HOME that differs from the profile must not move it). */
 export function copilotHomeDir(home: string = os.homedir(), env: Readonly<Record<string, string | undefined>> = processEnv()): string {
   return env.COPILOT_HOME || path.join(home, '.copilot');
 }
 
-/** Claude Code's config folder, where it reads settings.json: $CLAUDE_CONFIG_DIR when set and non-empty, else ~/.claude under os.homedir(), as Claude Code does (a HOME that differs from the profile must not move it). */
+/** Claude Code's config folder, where it reads settings.json: $CLAUDE_CONFIG_DIR when set and non-empty, else
+ * ~/.claude under os.homedir(), as Claude Code does (a HOME that differs from the profile must not move it). */
 export function claudeConfigDir(home: string = os.homedir(), env: Readonly<Record<string, string | undefined>> = processEnv()): string {
   return env.CLAUDE_CONFIG_DIR || path.join(home, '.claude');
 }

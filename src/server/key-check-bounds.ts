@@ -12,7 +12,8 @@ const KEY_ADDRESS_BURST = 5;
 const KEY_ADDRESS_TRIES_PER_SEC = 5 / 60;
 
 export interface KeyCheckBounds {
-  /** Throws the 429 a refused key check answers, before any derivation: no room left to wait (Retry-After 1), or `address` has spent its tries on `keyId` (Retry-After 12). */
+  /** Throws the 429 a refused key check answers, before any derivation: no room left to
+   * wait (Retry-After 1), or `address` has spent its tries on `keyId` (Retry-After 12). */
   admit(keyId: string, address: string): void;
   /** Runs `derive` now or once a slot frees; `admit` in the same tick keeps the queue within its cap. */
   run<T>(derive: () => Promise<T>): Promise<T>;

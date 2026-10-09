@@ -124,7 +124,8 @@ function objectMemoryIds(objectRows: HalfLifeRows['objectRows']) {
   return { all, retired };
 }
 
-/** Memories that lost a conflict, which resolveConflict halved untagged. A resolved conflict with no audit row (resolved before resolves were audited, or found stale) names no winner, so both sides count. */
+/** Memories that lost a conflict, which resolveConflict halved untagged. A resolved conflict with no audit
+ * row (resolved before resolves were audited, or found stale) names no winner, so both sides count. */
 function conflictLosers(audited: HalfLifeRows['conflictAudits'], resolved: HalfLifeRows['resolvedConflicts']): Set<string> {
   const losers = new Set(audited.map((a) => a.loserId));
   const named = new Set(audited.map((a) => a.conflictId));
