@@ -80,25 +80,13 @@ function sessionTrace(run: SleepRun, consolidationTenant: string, sessionId: str
     return null;
   }
 
-  const completeEvent = events.find((e) => e.event_type === 'session_complete');
-  if (!completeEvent) return null; // defence-in-depth; findPromotableSessions filters already.
-
-  const outcomeRaw = completeEvent.content;
-  if (outcomeRaw !== 'success' && outcomeRaw !== 'failure' && outcomeRaw !== 'partial') {
-    // Malformed terminal event — skip rather than crash the whole sleep.
-    return null;
-  }
-  const outcome: TraceOutcome = outcomeRaw;
+  const ending = sessionEnding(events);
+  if (!ending) return null;
+  const { outcome, summary } = ending;
 
   const steps = events
     .filter((e) => e.event_type !== 'session_complete')
     .map((e) => ({ action: e.content, observation: '' }));
-
-  // SAFETY: session event metadata is a free-form Record<string, unknown>
-  // bag; summary is optional and is only trusted once isJsonString below
-  // confirms it is actually a string.
-  const summaryValue = completeEvent.metadata.summary as JsonValue;
-  const summary = isJsonString(summaryValue) ? summaryValue : '(untitled)';
 
   const trace = createMemory(
     renderTraceContent({ task: summary, steps, outcome }),
@@ -116,6 +104,25 @@ function sessionTrace(run: SleepRun, consolidationTenant: string, sessionId: str
     },
   );
   return { trace, outcome };
+}
+
+/** The outcome and title a session's terminal event carries, or null when it has none or the event is malformed. */
+function sessionEnding(events: ReturnType<typeof listSessionEvents>): { outcome: TraceOutcome; summary: string } | null {
+  const completeEvent = events.find((e) => e.event_type === 'session_complete');
+  if (!completeEvent) return null; // defence-in-depth; findPromotableSessions filters already.
+
+  const outcomeRaw = completeEvent.content;
+  if (outcomeRaw !== 'success' && outcomeRaw !== 'failure' && outcomeRaw !== 'partial') {
+    // Malformed terminal event — skip rather than crash the whole sleep.
+    return null;
+  }
+
+  // SAFETY: session event metadata is a free-form Record<string, unknown>
+  // bag; summary is optional and is only trusted once isJsonString below
+  // confirms it is actually a string.
+  const summaryValue = completeEvent.metadata.summary as JsonValue;
+  const summary = isJsonString(summaryValue) ? summaryValue : '(untitled)';
+  return { outcome: outcomeRaw, summary };
 }
 
 // traceExistsForSession only sees live rows, so a removed rejected trace would regenerate every

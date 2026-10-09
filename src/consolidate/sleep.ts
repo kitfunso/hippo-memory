@@ -53,14 +53,8 @@ export async function consolidate(
   const retirable = (entry: MemoryEntry): boolean => canAutoDelete(entry) && !backingObjects.has(entry.id);
   const snapshot = new Map(structuredClone(all).map((e) => [e.id, e]));
 
-  // Load decay options from config + session context
   const config = loadConfig(hippoRoot);
-  const sessionCtx = loadSessionDecayContext(hippoRoot);
-  const decayOpts: DecayOptions = {
-    decayBasis: config.decayBasis,
-    avgSessionIntervalDays: sessionCtx.avgSessionIntervalDays,
-    sleepCount: sessionCtx.sleepCount,
-  };
+  const decayOpts = sessionDecayOptions(hippoRoot, config);
 
   const consolidateDb = lazyConsolidateDb(hippoRoot, dryRun);
   const run: SleepRun = {
@@ -75,17 +69,37 @@ export async function consolidate(
   };
 
   const decay = decayPass(run);
+  await runPassesAfterDecay(run, consolidateDb.close, options.fetcher);
 
+  const budget = options.budget ?? WRITE_BUDGET;
+  await flushPending(run, snapshot, budget);
+  await expireDormant(run, budget);
+  if (!dryRun) logRun(run, decay);
+  return result;
+}
+
+// Load decay options from config + session context
+function sessionDecayOptions(hippoRoot: string, config: SleepRun['config']): DecayOptions {
+  const sessionCtx = loadSessionDecayContext(hippoRoot);
+  return {
+    decayBasis: config.decayBasis,
+    avgSessionIntervalDays: sessionCtx.avgSessionIntervalDays,
+    sleepCount: sessionCtx.sleepCount,
+  };
+}
+
+/** Every pass between decay and the flush; the tombstone-check handle closes whichever of them throws. */
+async function runPassesAfterDecay(run: SleepRun, closeConsolidateDb: () => void, fetcher: typeof fetch | undefined): Promise<void> {
   let mergesSkippedRejected = 0;
   try {
     promoteSessionTraces(run);
     replayPass(run);
-    await llmPasses(run, options.fetcher);
+    await llmPasses(run, fetcher);
     physicsPass(run);
     retireHeldTexts(run);
     mergesSkippedRejected = mergePass(run);
   } finally {
-    consolidateDb.close();
+    closeConsolidateDb();
   }
 
   if (mergesSkippedRejected > 0) {
@@ -93,12 +107,6 @@ export async function consolidate(
       `consolidate: skipped ${mergesSkippedRejected} merge(s) whose content matches a rejected value`,
     );
   }
-
-  const budget = options.budget ?? WRITE_BUDGET;
-  await flushPending(run, snapshot, budget);
-  await expireDormant(run, budget);
-  if (!dryRun) logRun(run, decay);
-  return result;
 }
 
 // A changed default half-life moves memories still on the old base first,

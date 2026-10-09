@@ -53,19 +53,15 @@ interface MergePartition {
   origin: MemoryEntry['origin_project'];
 }
 
-// -------------------------------------------------------------------------
-// 3. Merge pass  - episodic entries only
-// -------------------------------------------------------------------------
-/** Returns how many clusters were skipped because their merged text matches a rejected value. */
-export function mergePass(run: SleepRun): number {
-  const alreadyMergedIds = new Set(run.survivors.flatMap((e) => e.parents));
-  const mergeCandidates = run.survivors.filter(
+/** The episodic survivors a merge may consume, grouped by the partition their merged row would land in. */
+function partitionMergeCandidates(survivors: readonly MemoryEntry[]): Map<string, MemoryEntry[]> {
+  const alreadyMergedIds = new Set(survivors.flatMap((e) => e.parents));
+  const mergeCandidates = survivors.filter(
     (e) => e.layer === Layer.Episodic && !e.superseded_by && !keptAsWritten(e) && !alreadyMergedIds.has(e.id)
       && !e.pinned // a pin merged with a look-alike would read as one of two values
       && tokenize(e.content).length > 0 // two empty token sets overlap 1, so tokenless text would merge with any other
       && isReusable(e),
   );
-  const used = new Set<string>();
 
   // Partition BEFORE the overlap loop so a cluster can never span tenants and merge cross-tenant content.
   // Map keeps insertion order, so a single-tenant store gets one partition in the original order.
@@ -76,6 +72,16 @@ export function mergePass(run: SleepRun): number {
     if (bucket) bucket.push(entry);
     else mergeCandidatesByTenant.set(key, [entry]);
   }
+  return mergeCandidatesByTenant;
+}
+
+// -------------------------------------------------------------------------
+// 3. Merge pass  - episodic entries only
+// -------------------------------------------------------------------------
+/** Returns how many clusters were skipped because their merged text matches a rejected value. */
+export function mergePass(run: SleepRun): number {
+  const used = new Set<string>();
+  const mergeCandidatesByTenant = partitionMergeCandidates(run.survivors);
 
   // The rejection guard reuses the one consolidateDb handle opened lazily in consolidate(); a dry-run
   // never reaches batchWriteAndDelete's guard bypass, so it has nothing to protect there.
@@ -116,29 +122,10 @@ function mergeCluster(run: SleepRun, partition: MergePartition, cluster: MemoryE
   const { result, dryRun } = run;
   // Create a semantic summary
   const mergedContent = mergeContents(cluster);
-  const allTags = Array.from(new Set(cluster.flatMap((e) => e.tags))).sort();
-  const maxValence = pickStrongestValence(cluster);
 
   // Build the semantic entry FIRST (createMemory is cheap and pure) so the tombstone check below runs
   // under the partition's tenant, the one every cluster member shares and the row will land in.
-  let semantic: MemoryEntry | null = null;
-  if (!dryRun) {
-    semantic = {
-      ...createMemory(mergedContent, {
-        layer: Layer.Semantic,
-        tags: allTags,
-        emotional_valence: maxValence,
-        schema_fit: 0.7,
-        source: 'consolidation',
-        confidence: 'inferred',
-        tenantId: partition.tenantId,
-        scope: partition.scope,
-        baseHalfLifeDays: run.config.defaultHalfLifeDays,
-      }),
-      origin_project: partition.origin,
-      parents: cluster.map((e) => e.id),
-    };
-  }
+  const semantic = dryRun ? null : semanticSummary(mergedContent, cluster, partition, run.config.defaultHalfLifeDays);
 
   if (semantic && mergeRejected(run, semantic, cluster, related, used)) return false;
 
@@ -165,13 +152,37 @@ function mergeCluster(run: SleepRun, partition: MergePartition, cluster: MemoryE
     // references as `survivors`, and the later detectConflicts(survivors)
     // pass in this same run must see the post-demotion half-life, or it
     // can persist conflicts for entries the just-written state excludes.
-    for (const e of cluster) {
-      e.half_life_days = Math.max(1, Math.floor(e.half_life_days * MERGE_SOURCE_HALF_LIFE_FACTOR));
-      e.strength = calculateStrength(e, run.now, run.decayOpts);
-      run.pendingWrites.push(e);
-    }
+    demoteMergedSources(run, cluster);
   }
   return true;
+}
+
+function semanticSummary(mergedContent: string, cluster: MemoryEntry[], partition: MergePartition, baseHalfLifeDays: number): MemoryEntry {
+  const allTags = Array.from(new Set(cluster.flatMap((e) => e.tags))).sort();
+  const maxValence = pickStrongestValence(cluster);
+  return {
+    ...createMemory(mergedContent, {
+      layer: Layer.Semantic,
+      tags: allTags,
+      emotional_valence: maxValence,
+      schema_fit: 0.7,
+      source: 'consolidation',
+      confidence: 'inferred',
+      tenantId: partition.tenantId,
+      scope: partition.scope,
+      baseHalfLifeDays,
+    }),
+    origin_project: partition.origin,
+    parents: cluster.map((e) => e.id),
+  };
+}
+
+function demoteMergedSources(run: SleepRun, cluster: MemoryEntry[]): void {
+  for (const e of cluster) {
+    e.half_life_days = Math.max(1, Math.floor(e.half_life_days * MERGE_SOURCE_HALF_LIFE_FACTOR));
+    e.strength = calculateStrength(e, run.now, run.decayOpts);
+    run.pendingWrites.push(e);
+  }
 }
 
 // mergeContents is DETERMINISTIC CONCATENATION (not an LLM paraphrase)

@@ -115,13 +115,50 @@ export async function assemble(
   const budget = opts.budget ?? DEFAULT_ASSEMBLE_BUDGET;
   const freshTailCount = opts.freshTailCount ?? 10;
   const summarizeOlder = opts.summarizeOlder ?? true;
-  const rowCap = opts.rowCap ?? 5000;
   const own = personalScopeOf(ctx.actor) ?? undefined;
 
   if (!sessionId) {
     return { sessionId, items: [], tokens: 0, totalRaw: 0, summarized: 0, evicted: 0, truncated: false };
   }
 
+  const { scoped, totalRaw, truncated } = await loadScopedRaws(ctx, sessionId, opts, own);
+  if (scoped.length === 0) {
+    return { sessionId, items: [], tokens: 0, totalRaw, summarized: 0, evicted: 0, truncated };
+  }
+
+  // Split newest N into fresh tail; rest is older.
+  const tailStartIdx = Math.max(0, scoped.length - freshTailCount);
+  const olderRows = scoped.slice(0, tailStartIdx);
+  const tailRows = scoped.slice(tailStartIdx);
+
+  // Substitute parent summaries for older rows that share one.
+  const { olderItems, summarized } = summarizeOlder && olderRows.length > 0
+    ? await substituteSummaries(ctx, olderRows, opts.scope, own, opts.project)
+    : { olderItems: olderRows.map(rawItem), summarized: 0 };
+
+  const tailItems = tailRows.map(freshTailItem);
+
+  // Byte compare is chronological for the fixed-form UTC ISO timestamps
+  // (invariant documented in src/memory.ts above MemoryEntry).
+  const cmpIso = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+  olderItems.sort((a, b) => cmpIso(a.createdAt, b.createdAt));
+  tailItems.sort((a, b) => cmpIso(a.createdAt, b.createdAt));
+  const itemCost = opts.cost?.item ?? ((it: AssembledContextItem) => estimateTokens(it.content));
+  const room = budget - (opts.cost?.fixed(Math.max(budget, totalRaw)) ?? 0);
+  const { items, tokens, evicted } = evictToBudget([...olderItems, ...tailItems], itemCost, room);
+
+  return { sessionId, items, tokens, totalRaw, summarized, evicted, truncated };
+}
+
+/** The session's raw rows the caller may see, newest `rowCap` at most, with the uncapped count of them. */
+interface ScopedRaws {
+  scoped: MemoryEntry[];
+  totalRaw: number;
+  truncated: boolean;
+}
+
+async function loadScopedRaws(ctx: Context, sessionId: string, opts: AssembleOpts, own: string | undefined): Promise<ScopedRaws> {
+  const rowCap = opts.rowCap ?? 5000;
   const origins = opts.project ? projectNames(opts.project) : undefined;
   const dag = requireGroup(storeFor(ctx), 'dagReads');
   const rows = await dag.sessionRawEntries({ tenantId: ctx.tenantId, sessionId, cap: rowCap, origins });
@@ -138,38 +175,7 @@ export async function assemble(
   } else {
     totalRaw = scoped.length;
   }
-  if (scoped.length === 0) {
-    return { sessionId, items: [], tokens: 0, totalRaw, summarized: 0, evicted: 0, truncated };
-  }
-
-  // Split newest N into fresh tail; rest is older.
-  const tailStartIdx = Math.max(0, scoped.length - freshTailCount);
-  const olderRows = scoped.slice(0, tailStartIdx);
-  const tailRows = scoped.slice(tailStartIdx);
-
-  // Substitute parent summaries for older rows that share one.
-  const { olderItems, summarized } = summarizeOlder && olderRows.length > 0
-    ? await substituteSummaries(ctx, olderRows, opts.scope, own, opts.project)
-    : { olderItems: olderRows.map(rawItem), summarized: 0 };
-
-  const tailItems: AssembledContextItem[] = tailRows.map((r) => ({
-    id: r.id,
-    content: r.content,
-    createdAt: r.created,
-    isFreshTail: true,
-    strength: r.strength,
-  }));
-
-  // Byte compare is chronological for the fixed-form UTC ISO timestamps
-  // (invariant documented in src/memory.ts above MemoryEntry).
-  const cmpIso = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
-  olderItems.sort((a, b) => cmpIso(a.createdAt, b.createdAt));
-  tailItems.sort((a, b) => cmpIso(a.createdAt, b.createdAt));
-  const itemCost = opts.cost?.item ?? ((it: AssembledContextItem) => estimateTokens(it.content));
-  const room = budget - (opts.cost?.fixed(Math.max(budget, totalRaw)) ?? 0);
-  const { items, tokens, evicted } = evictToBudget([...olderItems, ...tailItems], itemCost, room);
-
-  return { sessionId, items, tokens, totalRaw, summarized, evicted, truncated };
+  return { scoped, totalRaw, truncated };
 }
 
 function rawItem(r: MemoryEntry): AssembledContextItem {
@@ -177,6 +183,16 @@ function rawItem(r: MemoryEntry): AssembledContextItem {
     id: r.id,
     content: r.content,
     createdAt: r.created,
+    strength: r.strength,
+  };
+}
+
+function freshTailItem(r: MemoryEntry): AssembledContextItem {
+  return {
+    id: r.id,
+    content: r.content,
+    createdAt: r.created,
+    isFreshTail: true,
     strength: r.strength,
   };
 }

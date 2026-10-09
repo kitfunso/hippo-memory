@@ -296,11 +296,39 @@ export function buildSyntheticCorpus() {
 // Runner — evaluates each case against the synthetic corpus
 // ---------------------------------------------------------------------------
 
+interface ScoredFeatureCase {
+  case: FeatureTestCase;
+  returnedIds: string[];
+  mrrVal: number;
+  r5: number;
+  ndcg5: number;
+}
+
+/** Each category's mean scores, in the order the corpus first names the category. */
+function featureAverages(cases: readonly FeatureTestCase[], caseResults: readonly ScoredFeatureCase[]): FeatureResult[] {
+  const categories = [...new Set(cases.map(c => c.category))];
+  return categories.map(cat => {
+    const catCases = caseResults.filter(r => r.case.category === cat);
+    const n = catCases.length;
+    const avgMrr = catCases.reduce((s, r) => s + r.mrrVal, 0) / n;
+    const avgR5 = catCases.reduce((s, r) => s + r.r5, 0) / n;
+    const avgNdcg5 = catCases.reduce((s, r) => s + r.ndcg5, 0) / n;
+    return {
+      category: cat,
+      cases: n,
+      mrr: avgMrr,
+      recallAt5: avgR5,
+      ndcgAt5: avgNdcg5,
+      passed: true,
+    };
+  });
+}
+
 export async function runFeatureEval(version: string): Promise<EvalSuiteResult> {
   const start = Date.now();
   const { entries, cases } = buildSyntheticCorpus();
 
-  const caseResults: Array<{ case: FeatureTestCase; returnedIds: string[]; mrrVal: number; r5: number; ndcg5: number }> = [];
+  const caseResults: ScoredFeatureCase[] = [];
 
   for (const c of cases) {
     let results;
@@ -320,22 +348,7 @@ export async function runFeatureEval(version: string): Promise<EvalSuiteResult> 
     });
   }
 
-  const categories = [...new Set(cases.map(c => c.category))];
-  const features: FeatureResult[] = categories.map(cat => {
-    const catCases = caseResults.filter(r => r.case.category === cat);
-    const n = catCases.length;
-    const avgMrr = catCases.reduce((s, r) => s + r.mrrVal, 0) / n;
-    const avgR5 = catCases.reduce((s, r) => s + r.r5, 0) / n;
-    const avgNdcg5 = catCases.reduce((s, r) => s + r.ndcg5, 0) / n;
-    return {
-      category: cat,
-      cases: n,
-      mrr: avgMrr,
-      recallAt5: avgR5,
-      ndcgAt5: avgNdcg5,
-      passed: true,
-    };
-  });
+  const features = featureAverages(cases, caseResults);
 
   const totalCases = caseResults.length;
   const overallMrr = caseResults.reduce((s, r) => s + r.mrrVal, 0) / totalCases;

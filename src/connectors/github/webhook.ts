@@ -220,55 +220,62 @@ function dispatchGitHubEvent(
   deliveryId: string,
   routing: DlqRouting,
 ): boolean {
-  const { res, rawBody, eventName } = d;
-  const ingest = (event: GitHubIngestEvent): true => {
-    const r = ingestGitHubEvent(ctx, { event, rawBody, deliveryId });
-    sendJson(res, 200, { ok: true, status: r.status, memoryId: r.memoryId });
-    return true;
-  };
-  const archiveComment = (event: string, artifactRef: string, updatedAt: string | null): true => {
+  const action = deliveryAction(d.eventName, body);
+  if (action === null) return false;
+
+  if (action.kind === 'manual-review') {
+    // GitHub does fire issues.deleted (admin-initiated). Don't archive - V1
+    // policy is to log and let an operator decide. Archive could lose the
+    // memory if the issue is being moved between accounts.
+    parkAndAck(d, {
+      ...routing,
+      tenantId: ctx.tenantId,
+      error: 'issues.deleted requires manual review',
+      bucket: 'unhandled',
+    });
+  } else if (action.kind === 'archive-comment') {
     // The "deleted:" key namespace keeps this from colliding with the ingest key for the
     // same artifact; a shared key would make hasSeenKey skip the archive.
-    const idempotencyKey = computeGitHubDeletionKey(artifactRef, updatedAt);
+    const idempotencyKey = computeGitHubDeletionKey(action.artifactRef, action.updatedAt);
     const r = handleGitHubCommentDeleted(ctx, {
-      artifactRef,
+      artifactRef: action.artifactRef,
       idempotencyKey,
       deliveryId,
-      eventName: event,
+      eventName: action.eventName,
     });
-    sendJson(res, 200, { ok: true, status: r.status, archivedCount: r.archivedCount });
-    return true;
-  };
+    sendJson(d.res, 200, { ok: true, status: r.status, archivedCount: r.archivedCount });
+  } else {
+    const r = ingestGitHubEvent(ctx, { event: action.event, rawBody: d.rawBody, deliveryId });
+    sendJson(d.res, 200, { ok: true, status: r.status, memoryId: r.memoryId });
+  }
+  return true;
+}
 
-  // Dispatch by event header. Type guards cross-check the body shape against
-  // the header so a payload of one event type cannot satisfy another's guard.
+/** What a signed delivery asks for once its body has matched its event header. */
+type DeliveryAction =
+  | { kind: 'ingest'; event: GitHubIngestEvent }
+  | { kind: 'archive-comment'; eventName: string; artifactRef: string; updatedAt: string | null }
+  | { kind: 'manual-review' };
+
+// Dispatch by event header. Type guards cross-check the body shape against
+// the header so a payload of one event type cannot satisfy another's guard.
+function deliveryAction(eventName: string | null, body: SignedEnvelope): DeliveryAction | null {
   if (eventName === 'issues' && isGitHubIssueEvent(body, 'issues')) {
-    if (body.action === 'deleted') {
-      // GitHub does fire issues.deleted (admin-initiated). Don't archive - V1
-      // policy is to log and let an operator decide. Archive could lose the
-      // memory if the issue is being moved between accounts.
-      parkAndAck(d, {
-        ...routing,
-        tenantId: ctx.tenantId,
-        error: 'issues.deleted requires manual review',
-        bucket: 'unhandled',
-      });
-      return true;
-    }
-    return ingest({ eventName: 'issues', payload: body });
+    if (body.action === 'deleted') return { kind: 'manual-review' };
+    return { kind: 'ingest', event: { eventName: 'issues', payload: body } };
   }
 
   if (eventName === 'issue_comment' && isGitHubIssueCommentEvent(body, 'issue_comment')) {
     if (body.action === 'deleted') {
       const repo = body.repository?.full_name ?? '';
       const artifactRef = `github://${repo}/issue/${body.issue.number}/comment/${body.comment.id}`;
-      return archiveComment(eventName, artifactRef, body.comment.updated_at ?? null);
+      return { kind: 'archive-comment', eventName, artifactRef, updatedAt: body.comment.updated_at ?? null };
     }
-    return ingest({ eventName: 'issue_comment', payload: body });
+    return { kind: 'ingest', event: { eventName: 'issue_comment', payload: body } };
   }
 
   if (eventName === 'pull_request' && isGitHubPullRequestEvent(body, 'pull_request')) {
-    return ingest({ eventName: 'pull_request', payload: body });
+    return { kind: 'ingest', event: { eventName: 'pull_request', payload: body } };
   }
 
   if (
@@ -279,9 +286,9 @@ function dispatchGitHubEvent(
       const repo = body.repository?.full_name ?? '';
       const artifactRef = `github://${repo}/pull/${body.pull_request.number}/review_comment/${body.comment.id}`;
       // Same "deleted:" key namespace as the issue_comment branch above.
-      return archiveComment(eventName, artifactRef, body.comment.updated_at ?? null);
+      return { kind: 'archive-comment', eventName, artifactRef, updatedAt: body.comment.updated_at ?? null };
     }
-    return ingest({ eventName: 'pull_request_review_comment', payload: body });
+    return { kind: 'ingest', event: { eventName: 'pull_request_review_comment', payload: body } };
   }
-  return false;
+  return null;
 }

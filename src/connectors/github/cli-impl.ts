@@ -80,6 +80,17 @@ export function printGithubBackfillUsage(): void {
   console.log('  Requires GITHUB_TOKEN env var with repo read scope.');
 }
 
+/** `--max` as a whole positive count; undefined (no cap) when absent or not one. */
+function maxPerStreamFlag(maxRaw: FlagValue): number | undefined {
+  if (isFlagString(maxRaw) || isFlagValueNumberLike(maxRaw)) {
+    const parsed = Number(maxRaw);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return Math.floor(parsed);
+    }
+  }
+  return undefined;
+}
+
 /**
  * `hippo github backfill`. The fetcher is injectable so tests can drive the
  * code path without hitting the network. Defaults to `realGitHubFetcher`.
@@ -101,14 +112,7 @@ export async function cmdGithubBackfill(
     );
     process.exit(2);
   }
-  const maxRaw = flags['max'];
-  let maxPerStream: number | undefined;
-  if (isFlagString(maxRaw) || isFlagValueNumberLike(maxRaw)) {
-    const parsed = Number(maxRaw);
-    if (Number.isFinite(parsed) && parsed > 0) {
-      maxPerStream = Math.floor(parsed);
-    }
-  }
+  const maxPerStream = maxPerStreamFlag(flags['max']);
   const sinceFlag = flags['since'];
   const sinceIso = isFlagString(sinceFlag) ? sinceFlag : undefined;
   const tenantId = resolveTenantId({});

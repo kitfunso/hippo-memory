@@ -124,7 +124,6 @@ export async function runEval(
   entries: MemoryEntry[],
   options: RunEvalOptions = {},
 ): Promise<EvalSummary> {
-  const budget = options.budget ?? 100_000;   // generous so metrics aren't truncated
   const start = Date.now();
   const results: EvalCaseResult[] = [];
 
@@ -133,23 +132,7 @@ export async function runEval(
   );
 
   for (const c of cases) {
-    const ranked = useBothStores
-      ? await searchBothHybrid(c.query, options.hippoRoot!, options.globalRoot!, {
-          budget,
-          now: options.now,
-          embeddingWeight: options.embeddingWeight,
-          mmr: options.mmr,
-          mmrLambda: options.mmrLambda,
-          localBump: options.localBump,
-        })
-      : await hybridSearch(c.query, entries, {
-          budget,
-          now: options.now,
-          hippoRoot: options.hippoRoot,
-          embeddingWeight: options.embeddingWeight,
-          mmr: options.mmr,
-          mmrLambda: options.mmrLambda,
-        });
+    const ranked = await rankForCase(c.query, entries, options, useBothStores);
     const returnedIds = ranked.map((r) => r.entry.id);
     results.push({
       case: c,
@@ -175,6 +158,28 @@ export async function runEval(
     meanNdcgAt10,
     durationMs: Date.now() - start,
   };
+}
+
+/** One case's ranking: across the local and global stores when `useBothStores`, else over `entries` alone. */
+function rankForCase(query: string, entries: MemoryEntry[], options: RunEvalOptions, useBothStores: boolean) {
+  const budget = options.budget ?? 100_000;   // generous so metrics aren't truncated
+  return useBothStores
+    ? searchBothHybrid(query, options.hippoRoot!, options.globalRoot!, {
+        budget,
+        now: options.now,
+        embeddingWeight: options.embeddingWeight,
+        mmr: options.mmr,
+        mmrLambda: options.mmrLambda,
+        localBump: options.localBump,
+      })
+    : hybridSearch(query, entries, {
+        budget,
+        now: options.now,
+        hippoRoot: options.hippoRoot,
+        embeddingWeight: options.embeddingWeight,
+        mmr: options.mmr,
+        mmrLambda: options.mmrLambda,
+      });
 }
 
 // ---------------------------------------------------------------------------

@@ -55,13 +55,7 @@ export function restoreDormant(ctx: Context, id: string): MemoryEntry {
     let restored: MemoryEntry;
     db.exec('BEGIN IMMEDIATE');
     try {
-      const dormant = readDormantSnapshot(db, ctx.tenantId, id);
-      if (!dormant || !canTouchScope(ctx.actor, dormant.entry.scope ?? null)) {
-        throw new NotFoundError(`dormant memory not found: ${id}`);
-      }
-      if (db.prepare(`SELECT 1 FROM memories WHERE id = ?`).get(id) !== undefined) {
-        throw new ConflictError(`memory ${id} is already active; forget it before restoring its dormant copy`);
-      }
+      const dormant = restorableSnapshot(db, ctx, id);
       const now = new Date();
       // Dormant rows are long-lived, so a snapshot can predate a field added
       // later: createMemory supplies a default for anything it lacks, then
@@ -80,18 +74,7 @@ export function restoreDormant(ctx: Context, id: string): MemoryEntry {
       // A restore is a labelled "forgot it, then needed it" event: the
       // signal a learned lifecycle trains on. Same transaction
       // as the restore, so the label exists exactly when the restore does.
-      appendAuditEvent(db, {
-        tenantId: ctx.tenantId,
-        actor: ctx.actor.subject,
-        op: 'dormant_restore',
-        targetId: id,
-        metadata: {
-          reason: dormant.reason,
-          strengthAtDormancy: dormant.strength,
-          dormantAt: dormant.dormantAt,
-          daysDormant: Math.max(0, (now.getTime() - Date.parse(dormant.dormantAt)) / DAY_MS),
-        },
-      });
+      auditDormantRestore(db, ctx, id, dormant, now);
       db.exec('COMMIT');
     } catch (err) {
       try { db.exec('ROLLBACK'); } catch { /* already rolled back */ }
@@ -105,6 +88,36 @@ export function restoreDormant(ctx: Context, id: string): MemoryEntry {
   } finally {
     closeHippoDb(db);
   }
+}
+
+type StoreDb = ReturnType<typeof openHippoDb>;
+type DormantSnapshot = NonNullable<ReturnType<typeof readDormantSnapshot>>;
+
+/** The caller's dormant copy of `id`; throws when there is none it may touch or a live memory already holds the id. */
+function restorableSnapshot(db: StoreDb, ctx: Context, id: string): DormantSnapshot {
+  const dormant = readDormantSnapshot(db, ctx.tenantId, id);
+  if (!dormant || !canTouchScope(ctx.actor, dormant.entry.scope ?? null)) {
+    throw new NotFoundError(`dormant memory not found: ${id}`);
+  }
+  if (db.prepare(`SELECT 1 FROM memories WHERE id = ?`).get(id) !== undefined) {
+    throw new ConflictError(`memory ${id} is already active; forget it before restoring its dormant copy`);
+  }
+  return dormant;
+}
+
+function auditDormantRestore(db: StoreDb, ctx: Context, id: string, dormant: DormantSnapshot, now: Date): void {
+  appendAuditEvent(db, {
+    tenantId: ctx.tenantId,
+    actor: ctx.actor.subject,
+    op: 'dormant_restore',
+    targetId: id,
+    metadata: {
+      reason: dormant.reason,
+      strengthAtDormancy: dormant.strength,
+      dormantAt: dormant.dormantAt,
+      daysDormant: Math.max(0, (now.getTime() - Date.parse(dormant.dormantAt)) / DAY_MS),
+    },
+  });
 }
 
 /**
