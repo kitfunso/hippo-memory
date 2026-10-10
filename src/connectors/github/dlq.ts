@@ -1,15 +1,15 @@
 import type { Context } from '../../api/index.js';
 import {
-  bumpGitHubDlqRetryCount,
   githubDlqEntry,
+  markGitHubDlqRetried,
   listGitHubDlq,
   type DlqBucket,
   type DlqItem,
   type GitHubDlqInsert,
 } from '../../store/connectors/github.js';
-import { failAndBump, replayFailed, type ConnectorDlq, type ReplayResult } from '../dlq.js';
+import { replayParked, type ConnectorDlq, type ReplayResult, type SignatureRefusal } from '../dlq.js';
 import { verifyGitHubSignature } from './signature.js';
-import { isGitHubWebhookEnvelope } from './types.js';
+import { isGitHubWebhookEnvelope, type GitHubWebhookEnvelope } from './types.js';
 import type { JsonValue } from '../../util/json.js';
 
 export type { DlqBucket, DlqItem };
@@ -20,7 +20,8 @@ type GitHubOwnColumns = Pick<GitHubDlqInsert, 'eventName' | 'deliveryId' | 'inst
 export const githubDlq: ConnectorDlq<GitHubOwnColumns, DlqBucket, DlqItem> = {
   letter: (row) => ({ connector: 'github', ...row }),
   list: listGitHubDlq,
-  bump: bumpGitHubDlqRetryCount,
+  entry: githubDlqEntry,
+  bump: markGitHubDlqRetried,
 };
 
 export interface ReplayDlqOpts {
@@ -50,92 +51,33 @@ export async function replayDlqEntry(
   id: number,
   opts: ReplayDlqOpts & { ingestHook?: IngestHook } = {},
 ): Promise<ReplayResult> {
-  const row = githubDlqEntry(ctx.hippoRoot, id);
-  if (!row) return replayFailed('not_found', 0, `dlq id ${id} not found`);
-
-  // Signature verification (current secret, not the one in effect when DLQed).
-  if (!opts.force && opts.webhookSecret) {
-    const sigFailure = checkReplaySignature(ctx.hippoRoot, row, opts.webhookSecret, opts.previousSecret);
-    if (sigFailure) return sigFailure;
-  }
-
-  const envelopeFailure = checkReplayEnvelope(ctx.hippoRoot, row);
-  if (envelopeFailure) return envelopeFailure;
-
-  // Without an ingest hook this is a dry-run validation. Bump and report.
-  if (!opts.ingestHook) {
-    bumpGitHubDlqRetryCount(ctx.hippoRoot, id);
-    return {
-      ok: true,
-      status: 'replayed',
-      memoryId: null,
-      retryCount: row.retryCount + 1,
-      reason: 'dry-run: no ingest hook supplied',
-    };
-  }
-
-  // Real replay path: the route's IngestHook owns routing, idempotency and the memory write; this module only validates and bumps the retry counter.
-  // No idempotencyKey arg: the hook re-derives it from the parsed event (artifact_ref + updated_at).
-  const eventName = row.eventName ?? '';
-  const deliveryId = row.deliveryId ?? '';
-  const { memoryId } = await opts.ingestHook(ctx, {
-    rawPayload: row.rawPayload,
-    eventName,
-    deliveryId,
-  });
-  bumpGitHubDlqRetryCount(ctx.hippoRoot, id);
-  return {
-    ok: true,
-    status: 'replayed',
-    memoryId,
-    retryCount: row.retryCount + 1,
-  };
+  const { webhookSecret, previousSecret, ingestHook } = opts;
+  return replayParked<DlqItem, JsonValue & GitHubWebhookEnvelope>({
+    dlq: githubDlq,
+    // The secret in effect now, not the one in effect when the row was parked.
+    refuseSignature: (row) => (webhookSecret ? refuseSignature(row, webhookSecret, previousSecret) : null),
+    isEnvelope: isGitHubWebhookEnvelope,
+    notEnvelope: 'not a GitHub webhook envelope',
+    reingest: async (row) => {
+      if (!ingestHook) return { ok: true, status: 'replayed', memoryId: null, reason: 'dry-run: no ingest hook supplied' };
+      // The hook owns routing, idempotency and the memory write, and re-derives the key from the parsed event.
+      const { memoryId } = await ingestHook(ctx, {
+        rawPayload: row.rawPayload,
+        eventName: row.eventName ?? '',
+        deliveryId: row.deliveryId ?? '',
+      });
+      return { ok: true, status: 'replayed', memoryId };
+    },
+  }, ctx.hippoRoot, id, opts.force === true);
 }
 
-/** The failure result when the row cannot pass the signature gate, else null. */
-function checkReplaySignature(
-  hippoRoot: string,
-  row: DlqItem,
-  webhookSecret: string,
-  previousSecret: string | undefined,
-): ReplayResult | null {
+function refuseSignature(row: DlqItem, webhookSecret: string, previousSecret: string | undefined): SignatureRefusal | null {
   if (!row.signature) {
-    return replayFailed(
-      'sig_missing',
-      row.retryCount,
-      'row has no signature (legacy, or redacted before storing); pass --force to replay',
-    );
+    return { status: 'sig_missing', reason: 'row has no signature (legacy, or redacted before storing); pass --force to replay' };
   }
-  const sigOk = verifyGitHubSignature({
-    rawBody: row.rawPayload,
-    signature: row.signature,
-    webhookSecret,
-    previousSecret,
-  });
-  if (!sigOk) {
-    return failAndBump(
-      githubDlq,
-      hippoRoot,
-      row,
-      'sig_fail',
-      'signature did not verify against current GITHUB_WEBHOOK_SECRET; pass --force to replay anyway',
-    );
-  }
-  return null;
-}
-
-/** Parse + envelope guard; the failure result after bumping the count, else null. */
-function checkReplayEnvelope(hippoRoot: string, row: DlqItem): ReplayResult | null {
-  let parsed: JsonValue;
-  try {
-    parsed = JSON.parse(row.rawPayload);
-  } catch (e) {
-    // SAFETY: best-effort error message only; property access on any JS value is safe, even for a non-Error throw.
-    const message = (e as Error).message;
-    return failAndBump(githubDlq, hippoRoot, row, 'parse_error', `still unparseable: ${message}`);
-  }
-  if (!isGitHubWebhookEnvelope(parsed)) {
-    return failAndBump(githubDlq, hippoRoot, row, 'unhandled', 'not a GitHub webhook envelope');
-  }
-  return null;
+  if (verifyGitHubSignature({ rawBody: row.rawPayload, signature: row.signature, webhookSecret, previousSecret })) return null;
+  return {
+    status: 'sig_fail',
+    reason: 'signature did not verify against current GITHUB_WEBHOOK_SECRET; pass --force to replay anyway',
+  };
 }

@@ -5,7 +5,6 @@
   "src/cli/shared.ts": 1,
   "src/cli.ts": 1,
   "src/connectors/github/cli-impl.ts": 1,
-  "src/connectors/github/dlq.ts": 1,
   "src/consolidate/llm-passes.ts": 4,
   "src/consolidate/merge.ts": 1,
   "src/consolidate/sleep.ts": 1,
