@@ -3,7 +3,7 @@ import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { assemble, recall, type Context } from '../src/api/index.js';
+import { assemble, retrieve, type Context } from '../src/api/index.js';
 import { createApiKey } from '../src/store/auth.js';
 import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
@@ -275,8 +275,8 @@ describe('MCP on a shared store with two repos', () => {
     for (const id of [pairs.acme, pairs.slack, pairs.none]) expect(beta.text).not.toContain(`conflict_${id}:`);
   });
 
-  it('overflow substitution never brings in another repo\'s parent summary', () => {
-    const summaries = recall(apiCtx(), { query: 'harbourline', limit: 4, project: ACME }).results.filter((r) => r.isSummary).map((r) => r.id);
+  it('overflow substitution never brings in another repo\'s parent summary', async () => {
+    const summaries = (await retrieve(apiCtx(), { query: 'harbourline', limit: 4, project: ACME })).results.filter((r) => r.isSummary).map((r) => r.id);
     expect(summaries).toContain(ids.acmeSumO);
     expect(summaries).not.toContain(ids.betaSumO);
   });

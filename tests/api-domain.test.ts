@@ -8,7 +8,7 @@ import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { queryAuditEvents } from '../src/store/audit.js';
 import {
   remember,
-  recall,
+  retrieve,
   forget,
   promote,
   supersede,
@@ -46,7 +46,7 @@ describe('api domain — recall/forget/promote/supersede', () => {
     rmSync(globalHome, { recursive: true, force: true });
   });
 
-  it('recall returns BM25 candidates and audits with the supplied actor', () => {
+  it('recall returns BM25 candidates and audits with the supplied actor', async () => {
     remember(
       { hippoRoot: home, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } },
       { content: 'recall-canary alpha-token sentinel' },
@@ -56,7 +56,7 @@ describe('api domain — recall/forget/promote/supersede', () => {
       { content: 'unrelated content for noise' },
     );
 
-    const result = recall(
+    const result = await retrieve(
       { hippoRoot: home, tenantId: 'default', actor: { subject: 'api_key:hk_recall', role: 'admin' } },
       { query: 'alpha-token' },
     );

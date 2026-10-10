@@ -5,7 +5,7 @@ import { join } from 'path';
 import { initStore } from '../src/store/open.js';
 import type { Context } from '../src/api/index.js';
 import { ingestMessage } from '../src/connectors/slack/ingest.js';
-import { recall } from '../src/api/index.js';
+import { retrieve } from '../src/api/index.js';
 
 const ctx = (root: string): Context => ({
   hippoRoot: root,
@@ -35,7 +35,7 @@ describe('slack permission mirroring', () => {
       eventId: 'EvPriv',
     });
 
-    const pubResults = recall(ctx(root), { query: 'secret', scope: 'slack:public:CPUB' });
+    const pubResults = await retrieve(ctx(root), { query: 'secret', scope: 'slack:public:CPUB' });
     expect(pubResults.results.some((r) => r.content.includes('private secret'))).toBe(false);
     expect(pubResults.results.some((r) => r.content.includes('public secret'))).toBe(true);
   });
@@ -56,7 +56,7 @@ describe('slack permission mirroring', () => {
       message: { type: 'message', channel: 'CPRIV', user: 'U1', text: 'private alpha', ts: '2.2' },
       eventId: 'EvPrivA',
     });
-    const r = recall(ctx(root), { query: 'alpha' }); // no scope
+    const r = await retrieve(ctx(root), { query: 'alpha' }); // no scope
     expect(r.results.some((x) => x.content.includes('private alpha'))).toBe(false);
     expect(r.results.some((x) => x.content.includes('public alpha'))).toBe(true);
   });
@@ -69,7 +69,7 @@ describe('slack permission mirroring', () => {
       message: { type: 'message', channel: 'CPUB', user: 'U1', text: 'beta', ts: '1.1' },
       eventId: 'EvPubB',
     });
-    const r = recall(ctx(root), { query: 'beta', scope: 'slack:public:CDOES_NOT_EXIST' });
+    const r = await retrieve(ctx(root), { query: 'beta', scope: 'slack:public:CDOES_NOT_EXIST' });
     expect(r.results).toHaveLength(0);
   });
 
@@ -85,7 +85,7 @@ describe('slack permission mirroring', () => {
       message: { type: 'message', channel: 'CSHARED', user: 'U1', text: 'tenantB secret', ts: '3.3' },
       eventId: 'EvShared',
     });
-    const r = recall(ctxA(root), { query: 'secret', scope: 'slack:private:CSHARED' });
+    const r = await retrieve(ctxA(root), { query: 'secret', scope: 'slack:private:CSHARED' });
     expect(r.results).toHaveLength(0);
   });
 });

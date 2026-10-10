@@ -208,7 +208,8 @@ const CLIENT_JS = [
   "  svg.addEventListener('wheel',function(e){e.preventDefault();var r=svg.getBoundingClientRect();var mx=view.x+(e.clientX-r.left)/r.width*view.w;var " +
     "my=view.y+(e.clientY-r.top)/r.height*view.h;var " +
       "f=e.deltaY<0?0.9:1.1;view.x=mx-(mx-view.x)*f;view.y=my-(my-view.y)*f;view.w*=f;view.h*=f;apply();},{passive:false});",
-  "  var data={};try{data=JSON.parse(document.getElementById('graph-data').textContent);}catch(_){}",
+  "  var data={};try{data=JSON.parse(document.getElementById('graph-data').textContent);}",
+  "  catch(e){console.error('hippo graph: embedded model is not valid JSON',e);}",
   "  var adj={};(data.edges||[]).forEach(function(e){(adj[e.from]=adj[e.from]||[]).push(e.to);(adj[e.to]=adj[e.to]||[]).push(e.from);});",
   "  var active=null;",
   "  document.querySelectorAll('.node').forEach(function(g){g.addEventListener('click',function(ev){ev.stopPropagation();var " +

@@ -11,7 +11,7 @@ import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
 import { initStore } from '../src/store/open.js';
-import { remember, recall, type HippoDbContext } from '../src/api/index.js';
+import { remember, retrieve, type HippoDbContext } from '../src/api/index.js';
 import { pushGoal } from '../src/store/goals.js';
 
 describe('api.recall explain', () => {
@@ -26,12 +26,12 @@ describe('api.recall explain', () => {
     ctx = { hippoRoot, tenantId, actor: { subject: 'test', role: 'admin' } };
   });
 
-  it('explain:true attaches the goal-boost step + rerankPipeline:api', () => {
+  it('explain:true attaches the goal-boost step + rerankPipeline:api', async () => {
     const goalMatch = remember(ctx, { content: 'auth bug fix details', tags: ['fix-auth'] });
     remember(ctx, { content: 'auth UI polish', tags: ['ui'] });
     pushGoal(hippoRoot, { sessionId, tenantId, goalName: 'fix-auth' });
 
-    const result = recall(ctx, { query: 'auth', limit: 10, sessionId, explain: true });
+    const result = await retrieve(ctx, { query: 'auth', limit: 10, sessionId, explain: true });
 
     // Every item carries the api pipeline marker.
     for (const item of result.results) {
@@ -46,12 +46,12 @@ describe('api.recall explain', () => {
     expect(boosted!.rerankTrace![0].scoreAfter).toBe(boosted!.score);
   });
 
-  it('explain:false (default) leaves both fields absent on every band', () => {
+  it('explain:false (default) leaves both fields absent on every band', async () => {
     const goalMatch = remember(ctx, { content: 'auth bug fix details', tags: ['fix-auth'] });
     remember(ctx, { content: 'auth UI polish', tags: ['ui'] });
     pushGoal(hippoRoot, { sessionId, tenantId, goalName: 'fix-auth' });
 
-    const result = recall(ctx, { query: 'auth', limit: 10, sessionId });
+    const result = await retrieve(ctx, { query: 'auth', limit: 10, sessionId });
 
     for (const item of result.results) {
       expect(item.rerankPipeline).toBeUndefined();

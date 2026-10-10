@@ -8,6 +8,7 @@ import { loadConfig } from '../core/config.js';
 import { closeHippoDb, isSqliteBusy, openHippoDb, outsideRequestStores, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import type { MemoryEntry } from '../core/memory.js';
 import { namesFoldedInto } from '../sharing/project-merge.js';
+import { projectTagReads } from '../store/project-tags.js';
 import { isGlobalStoreRoot, projectNames, resolveGlobalRootDir, resolveProjectIdentity, type ProjectIdentity } from '../core/project-identity.js';
 import { duplicateKey, heldTextKeys } from '../util/same-text.js';
 import { removeEntryMirrors } from '../store/mirrors.js';
@@ -16,7 +17,8 @@ import { writeEntryMirrors } from '../store/entry-writes.js';
 import { selectLiveEntriesBySourcePrefix, selectRowsOutsideSourcePrefixAt } from '../store/entry-reads.js';
 import { updateStats } from '../store/index-and-stats.js';
 import { resolveTenantId } from '../store/tenant.js';
-import { setAsideRow, syncContainer, type ContainerOutcome, type ContainerWork, type StoreSession } from './apply.js';
+import { setAsideRow } from '../store/set-aside.js';
+import { syncContainer, type ContainerOutcome, type ContainerWork, type StoreSession } from './apply.js';
 import { claudeCodeAdapter, claudeTranscriptListing, transcriptNotesProject } from './claude-code.js';
 import { codexAdapter } from './codex.js';
 import { copilotAdapter } from './copilot.js';
@@ -270,7 +272,7 @@ function syncStore(pass: Pass, listings: readonly Listing[], store: OpenStore, o
 /** The legacy names plus every name a merge or repair folded into the project; the audit read runs once per pass. */
 function earlierNames(db: DatabaseSyncLike, tenantId: string, id: string, legacyOrigins: readonly string[]): string[] {
   const names = [id, ...legacyOrigins];
-  return [...legacyOrigins, ...namesFoldedInto(db, tenantId, names)].filter((n) => n !== '' && n !== id);
+  return [...legacyOrigins, ...namesFoldedInto(projectTagReads(db, tenantId), names)].filter((n) => n !== '' && n !== id);
 }
 
 interface ContainerWorkOptions {
@@ -374,7 +376,7 @@ function handOver(synced: readonly ContainerWork[], projectRoot: string, opts: S
     // A folder with no git and no marker wrote as '' before its store existed, and as its own name after.
     // Names folded into this project's in the global store were its rows too.
     const names = projectNames(resolveProjectIdentity(projectRoot));
-    const origins = [...new Set([...names, ...namesFoldedInto(db, tenantId, names), ''])];
+    const origins = [...new Set([...names, ...namesFoldedInto(projectTagReads(db, tenantId), names), ''])];
     for (const work of synced) handOverContainer(db, globalRoot, tenantId, work, { origins, platform: opts.machine.platform, report });
   } catch (err) {
     report.warnings.push(`global copies not handed over: ${isSqliteBusy(err) ? 'the global store was busy' : errorMessage(err)}`);

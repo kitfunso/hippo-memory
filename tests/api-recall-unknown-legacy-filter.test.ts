@@ -16,7 +16,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { recall, type Context } from '../src/api/index.js';
+import { retrieve, type Context } from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 function safeRmSync(p: string): void {
@@ -41,7 +41,7 @@ describe('recall: default-deny on unknown:legacy', () => {
   beforeEach(() => { root = makeRoot('unknown-legacy'); });
   afterEach(() => safeRmSync(root));
 
-  it('unscoped recall does NOT surface scope=unknown:legacy rows (also excludes private:*)', () => {
+  it('unscoped recall does NOT surface scope=unknown:legacy rows (also excludes private:*)', async () => {
     writeEntry(root, makeWithScope('public-row alpha', null));
     writeEntry(root, makeWithScope('legacy-row alpha', 'unknown:legacy'));
     // Pin private-scope filter alongside legacy filter so this becomes the
@@ -49,7 +49,7 @@ describe('recall: default-deny on unknown:legacy', () => {
     // JS private-scope exclusion).
     writeEntry(root, makeWithScope('private-row alpha', 'slack:private:Cabc'));
 
-    const r = recall(ctxFor(root), { query: 'alpha' });
+    const r = await retrieve(ctxFor(root), { query: 'alpha' });
     const contents = r.results.map((it) => it.content);
     expect(contents).toContain('public-row alpha');
     expect(contents).not.toContain('legacy-row alpha');
@@ -58,7 +58,7 @@ describe('recall: default-deny on unknown:legacy', () => {
     expect(r.results.length).toBe(1);
   });
 
-  it('explicit scope=unknown:legacy DOES surface the row (operator opt-in for the quarantine bucket)', () => {
+  it('explicit scope=unknown:legacy DOES surface the row (operator opt-in for the quarantine bucket)', async () => {
     // The SQL exact-match branch in loadSearchRows must still admit
     // `m.scope = 'unknown:legacy'` when the caller asks for it. A regression
     // that hardcoded `scope != 'unknown:legacy'` in BOTH SQL branches would
@@ -66,21 +66,21 @@ describe('recall: default-deny on unknown:legacy', () => {
     writeEntry(root, makeWithScope('legacy-row beta', 'unknown:legacy'));
     writeEntry(root, makeWithScope('public-row beta', null));
 
-    const r = recall(ctxFor(root), { query: 'beta', scope: 'unknown:legacy' });
+    const r = await retrieve(ctxFor(root), { query: 'beta', scope: 'unknown:legacy' });
     const contents = r.results.map((it) => it.content);
     expect(contents).toContain('legacy-row beta');
     expect(contents).not.toContain('public-row beta');
     expect(r.results.length).toBe(1);
   });
 
-  it('empty-string scope is treated as unset (default-deny mode)', () => {
+  it('empty-string scope is treated as unset (default-deny mode)', async () => {
     // codex P1[4]: pin the empty-string semantics. `loadRecallSearchEntries`
     // collapses '' → null (default-deny); api.ts treats '' as unset (private
     // filter applies). Both sides must agree or surfaces drift.
     writeEntry(root, makeWithScope('public-row gamma', null));
     writeEntry(root, makeWithScope('legacy-row gamma', 'unknown:legacy'));
 
-    const r = recall(ctxFor(root), { query: 'gamma', scope: '' });
+    const r = await retrieve(ctxFor(root), { query: 'gamma', scope: '' });
     const contents = r.results.map((it) => it.content);
     expect(contents).toContain('public-row gamma');
     expect(contents).not.toContain('legacy-row gamma');

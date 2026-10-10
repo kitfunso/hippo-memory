@@ -5,6 +5,7 @@ import type { Context } from '../api/index.js';
 import { isSharedStore } from '../core/config.js';
 import { handleMcpRequest, mcpErrorResponse, type McpContext, type McpRequest } from '../mcp/server.js';
 import { HttpError, readBody, sendJson } from '../util/http-util.js';
+import { log } from '../util/log.js';
 import { assertCallerProject } from '../core/project-identity.js';
 import type { CallerProject } from '../api/prompt-hook.js';
 import { buildContextWithAuth, heartbeatVerdict, readAuthHeader, requireAuth } from './auth.js';
@@ -189,6 +190,7 @@ function keepStreamAlive(req: IncomingMessage, res: ServerResponse, opts: Resolv
     checking = true;
     void heartbeatVerdict(req, opts).then((verdict) => {
       checking = false;
+      if (!closed && verdict === 'unavailable') log.warn('heartbeat tick skipped: auth check unavailable');
       if (closed || verdict === 'unavailable') return;
       if (verdict === 'revoked') {
         closeWith('auth_revoked');

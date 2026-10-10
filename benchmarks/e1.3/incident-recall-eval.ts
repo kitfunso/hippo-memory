@@ -21,7 +21,7 @@ import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { ingestMessage } from '../../src/connectors/slack/ingest.js';
-import { recall, adminActor, type Context } from '../../src/api/index.js';
+import { retrieve, adminActor, type Context } from '../../src/api/index.js';
 
 interface TranscriptMessage {
   user: string;
@@ -85,7 +85,7 @@ export async function runIncidentRecallEval(opts: {
       });
     }
 
-    const r = recall(ctx, {
+    const r = await retrieve(ctx, {
       query: sc.query,
       limit: 10,
       scope: `slack:public:${sc.channel}`,

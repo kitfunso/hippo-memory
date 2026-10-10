@@ -279,8 +279,8 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
       let detail = '';
       try {
         detail = await readCappedText(resp, ERROR_BODY_MAX_BYTES);
-      } catch {
-        /* ignore body read error */
+      } catch (err) {
+        log.debug(`${this.kind} embeddings error body unreadable: ${errorMessage(err)}`);
       }
       throw new Error(
         redact(`${this.kind} embeddings HTTP ${resp.status}: ${detail.slice(0, ERROR_DETAIL_CHARS)}`, key),

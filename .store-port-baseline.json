@@ -1,6 +1,6 @@
 {
   "openersOutside": 8,
-  "openersInCli": 2,
+  "openersInCli": 0,
   "storeBranches": 4,
   "routesWithoutStore": 0,
   "sqliteOnlyRoutes": 2,
@@ -9,8 +9,8 @@
   "sqlOutside": 0,
   "txLiterals": 0,
   "tenantResolvesInCli": 8,
-  "storeImportsInCli": 55,
-  "handleHoldersOutside": 12,
+  "storeImportsInCli": 53,
+  "handleHoldersOutside": 10,
   "storeFilesWithoutSql": 3,
   "storeFilesWithoutSqlList": [
     "src/store/card-detail.ts",
@@ -30,14 +30,12 @@
     "src/agent-memories/legacy.ts": 1,
     "src/agent-memories/sync.ts": 1,
     "src/api/pilot-arm.ts": 1,
-    "src/cli/sleep.ts": 1,
     "src/doctor.ts": 1,
     "src/graph/delta.ts": 1,
     "src/graph/write.ts": 1,
     "src/index.ts": 1,
     "src/server/boot.ts": 1,
-    "src/sharing/global-store.ts": 1,
-    "src/sharing/project-merge.ts": 1
+    "src/sharing/global-store.ts": 1
   },
   "sqliteLocalMethods": [
     "applyOutcome",

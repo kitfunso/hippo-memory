@@ -94,6 +94,7 @@ function parseSnapshot(row: DormantRow): MemoryEntry | null {
     // the id / tenant / content checks below reject a row edited out of shape.
     const entry = JSON.parse(row.entry_json) as MemoryEntry;
     if (entry.id !== row.id || entry.tenantId !== row.tenant_id || entry.content !== row.content) {
+      warnDamagedColumn({ table: 'dormant_memories', id: row.id, column: 'entry_json' }, 'wrong shape');
       return null;
     }
     return entry;

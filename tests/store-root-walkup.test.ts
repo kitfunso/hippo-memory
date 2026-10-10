@@ -15,7 +15,7 @@ import { saveSessionHandoff } from '../src/store/handoffs.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { queryAuditEvents } from '../src/store/audit.js';
-import { adminActor, recall as apiRecall } from '../src/api/index.js';
+import { adminActor, retrieve } from '../src/api/index.js';
 import { findHippoStoreDir } from '../src/core/project-identity.js';
 import { findHippoRoot } from '../src/mcp/server.js';
 
@@ -122,7 +122,7 @@ describe('getHippoRoot ancestor walk', () => {
 });
 
 describe('CLI end to end', () => {
-  it('uses one initialized global store for projectless recall and context', () => {
+  it('uses one initialized global store for projectless recall and context', async () => {
     const globalStore = mkdirs('global-store');
     const work = mkdirs('home', 'projectless');
     initStore(globalStore);
@@ -213,7 +213,7 @@ describe('CLI end to end', () => {
     const priorHome = process.env.HIPPO_HOME;
     process.env.HIPPO_HOME = globalStore;
     try {
-      const direct = apiRecall(
+      const direct = await retrieve(
         { hippoRoot: globalStore, tenantId: 'default', actor: adminActor('test') },
         { query: 'projectless-orbit', includeContinuity: true },
       );

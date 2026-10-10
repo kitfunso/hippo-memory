@@ -70,11 +70,18 @@ tokens, and whether it was sent or skipped as unchanged. Counts only, never the 
 _Avoid_: usage log, telemetry, cost log
 
 **Delivery ledger**:
-The optional record of the per-prompt hook and the two compaction hooks (`pre-compact` and
-`compact-resume`): one event per call, and for a prompt call one row per candidate memory,
-saying whether it was emitted, reused or rejected and why.
-Ids, hashes, counts and reasons only, never the text. Off by default; kept 90 days.
+The optional record of the per-prompt hook, an agent's `hippo context` call, the two compaction
+hooks (`pre-compact` and `compact-resume`) and `session-end`: one event per call, and for a
+prompt or context call one row per candidate memory, saying whether it was emitted, reused or
+rejected and why. Ids, hashes, counts and reasons only, never the text. Off by default; kept 90 days.
 _Avoid_: delivery log, trace, telemetry
+
+**Delivery class**:
+What happened to one lesson in one session, read from the delivery ledger and the host
+transcript: not written, not retrieved, rejected, delivery unconfirmed, delivered with application
+unknown, applied but wrong, or applied with a supporting outcome. A case the evidence cannot
+decide is `indeterminate`, with a reason. Application comes only from a label, never from delivery.
+_Avoid_: delivery status, outcome (an outcome is one of the label's signals)
 
 **Failure log**:
 Every failed tool call the capture-error hook sees, stored as a memory or not: outcome, session,

@@ -23,6 +23,7 @@ export * from './drill-down.js';
 export * from './outcome.js';
 export * from './forget.js';
 export * from './conflicts.js';
+export * from './projects.js';
 export * from './promote.js';
 export * from './auth.js';
 export * from './audit.js';

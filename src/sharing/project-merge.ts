@@ -1,25 +1,16 @@
 // `hippo projects`: list the project names a store holds, fold one into another, and repair old tags in one reversible pass.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { setAsideRow } from '../agent-memories/apply.js';
 import { transcriptNotesProject } from '../agent-memories/claude-code.js';
 import { containerId, containerPrefix } from '../agent-memories/source.js';
 import { AGENT_MEMORY_SOURCE_PREFIX, AGENT_MEMORY_TOOLS, toolSourcePrefix } from '../core/agent-memory-tools.js';
-import { appendAuditEvent, queryAuditEvents } from '../store/audit.js';
 import { isSharedStore } from '../core/config.js';
-import { withTrialScope, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
-import { withBackup } from '../db/backup.js';
-import { getMeta, setMeta } from '../db/meta.js';
-import { insertDormantRow, listDormantSnapshots, replaceDormantEntry } from '../store/dormant.js';
 import { processEnv } from '../util/env.js';
-import { calculateStrength, type MemoryEntry } from '../core/memory.js';
+import type { MemoryEntry } from '../core/memory.js';
 import { isObjectLike, isStringValue } from '../core/capture-contract.js';
 import { isGlobalStoreRoot, projectNames, resolveProjectIdentity } from '../core/project-identity.js';
 import { duplicateKey } from '../util/same-text.js';
-import { compactionOriginsWithCwd, compactionTranscripts, holdsOrigin, restampCompactionOrigin } from '../store/compactions.js';
-import { removeEntryMirrors } from '../store/mirrors.js';
-import { deleteEntryRowInTx, restampOriginProjectAt, stampOriginProjectsAt, writeEntryMirrors } from '../store/entry-writes.js';
-import { selectAllEntries, selectEntriesByIds, selectLiveEntriesBySourcePrefix } from '../store/entry-reads.js';
+import type { ProjectTagReads, ProjectTagStore, ProjectTagWrites } from '../store/project-tags.js';
 import type { JsonValue } from '../util/json.js';
 
 export interface ProjectSummary {
@@ -69,8 +60,6 @@ export interface RepairResult {
   readonly backup: string | null;
 }
 
-const ACTOR = 'cli';
-
 function isImport(entry: MemoryEntry): boolean {
   return entry.source.startsWith(AGENT_MEMORY_SOURCE_PREFIX);
 }
@@ -81,8 +70,8 @@ function toolTag(source: string): string | null {
 }
 
 /** Live rows per project name, newest write first, with how many of its imported notes are copies held elsewhere. */
-export function listProjects(db: DatabaseSyncLike, tenantId: string): ProjectSummary[] {
-  const live = selectAllEntries(db, tenantId).filter((e) => !e.superseded_by);
+export function listProjects(store: ProjectTagReads): ProjectSummary[] {
+  const live = store.entries().filter((e) => !e.superseded_by);
   const byOrigin = new Map<string | null, MemoryEntry[]>();
   const holders = new Map<string, Set<string | null>>();
   for (const e of live) {
@@ -103,10 +92,6 @@ export function listProjects(db: DatabaseSyncLike, tenantId: string): ProjectSum
   }).sort((a, b) => b.newest.localeCompare(a.newest));
 }
 
-function inTransaction<T>(db: DatabaseSyncLike, dryRun: boolean, body: () => T): T {
-  return dryRun ? withTrialScope(db, 'merge_projects', body) : withWriteScope(db, 'merge_projects', body);
-}
-
 /** Refuses user-global and unknown: they are not projects, and folding them would leak or hide every row. */
 export function validateMergeNames(from: string, into: string): string | null {
   if (from.trim() === '' || into.trim() === '') return 'both project names are required; user-global and unknown rows cannot be merged';
@@ -115,24 +100,19 @@ export function validateMergeNames(from: string, into: string): string | null {
 }
 
 /** Folds project `from` into `into` for one tenant in one transaction; a dry run rolls back and writes nothing, mirrors included. */
-export function mergeProjects(
-  db: DatabaseSyncLike, hippoRoot: string, opts: { tenantId: string; from: string; into: string; dryRun: boolean },
-): MergeResult {
+export function mergeProjects(store: ProjectTagStore, opts: { from: string; into: string; dryRun: boolean }): MergeResult {
   const refusal = validateMergeNames(opts.from, opts.into);
   if (refusal) throw new Error(refusal);
-  const { tenantId, from, into, dryRun } = opts;
-  const fold = (backup: string | null): MergeResult => inTransaction(db, dryRun, () => {
-    const folded = foldInTx(db, tenantId, from, into);
-    appendAuditEvent(db, { tenantId, actor: ACTOR, op: 'project_merge', metadata: { from, into, backup, ...folded } });
-    return { from, into, ...folded, backup };
+  const { from, into, dryRun } = opts;
+  return store.rewrite({ dryRun, backupLabel: 'before-merge' }, (tx, backup) => {
+    const folded = foldInTx(tx, from, into);
+    tx.audit('project_merge', { from, into, backup, ...folded });
+    return { result: { from, into, ...folded, backup }, rewrite: folded.restamped, purge: folded.setAside };
   });
-  const result = dryRun ? fold(null) : withBackup(db, hippoRoot, 'before-merge', fold);
-  if (!dryRun) refreshMirrors(db, hippoRoot, tenantId, result.restamped, result.setAside);
-  return result;
 }
 
-function foldInTx(db: DatabaseSyncLike, tenantId: string, from: string, into: string): Omit<MergeResult, 'from' | 'into' | 'backup'> {
-  const all = selectAllEntries(db, tenantId);
+function foldInTx(tx: ProjectTagWrites, from: string, into: string): Omit<MergeResult, 'from' | 'into' | 'backup'> {
+  const all = tx.entries();
   const rows = all.filter((e) => e.origin_project === from);
   // The sync renames the rest to `into`'s prefix and keeps their ids; only a note `into` already holds would show twice.
   const held = new Set(all.filter((e) => e.origin_project === into && !e.superseded_by && isImport(e)).map(noteKey));
@@ -140,18 +120,18 @@ function foldInTx(db: DatabaseSyncLike, tenantId: string, from: string, into: st
   for (const row of rows) {
     const tag = toolTag(row.source);
     if (!isImport(row) || row.superseded_by || row.kind === 'raw' || tag === null || !held.has(noteKey(row))) continue;
-    if (setAsideRow(db, tag, { ...row, origin_project: into }, 'project-merge').kind === 'dormant') setAside.push(row.id);
+    if (tx.setAside(tag, { ...row, origin_project: into }, 'project-merge').kind === 'dormant') setAside.push(row.id);
   }
   const gone = new Set(setAside);
   const restamped = rows.filter((e) => !gone.has(e.id)).map((e) => e.id);
-  restampOriginProjectAt(db, tenantId, from, into);
+  tx.restampOrigin(from, into);
   const dormantRestamped: string[] = [];
-  for (const snap of listDormantSnapshots(db, tenantId)) {
+  for (const snap of tx.dormant()) {
     if (snap.entry.origin_project !== from || gone.has(snap.entry.id)) continue;
-    replaceDormantEntry(db, tenantId, snap.entry.id, { ...snap.entry, origin_project: into });
+    tx.replaceDormant(snap.entry.id, { ...snap.entry, origin_project: into });
     dormantRestamped.push(snap.entry.id);
   }
-  const compactions = restampCompactionOrigin(db, tenantId, from, into);
+  const compactions = tx.restampCompactions(from, into);
   return { setAside, restamped, dormantRestamped, compactions };
 }
 
@@ -162,20 +142,20 @@ function noteKey(entry: MemoryEntry): string {
 }
 
 /** Live imports under a project name whose exact text a user-global import holds: a session folder's notes stamped with the folder it ended in. */
-function importCopies(db: DatabaseSyncLike, tenantId: string): MemoryEntry[] {
-  const live = selectAllEntries(db, tenantId).filter((e) => !e.superseded_by && isImport(e));
+function importCopies(store: ProjectTagReads): MemoryEntry[] {
+  const live = store.entries().filter((e) => !e.superseded_by && isImport(e));
   const userGlobal = new Set(live.filter((e) => e.origin_project === '').map((e) => duplicateKey(e.content)));
   return live.filter((e) => e.origin_project && e.kind !== 'raw' && !e.pinned && toolTag(e.source) !== null && userGlobal.has(duplicateKey(e.content)));
 }
 
 /** Imports to set aside. The global store also checks each Claude session folder a compaction recorded: its
  * notes under any other project are misfiled, edited or not, and a text copy in the right folder is kept. */
-function strayImports(db: DatabaseSyncLike, hippoRoot: string, tenantId: string): MemoryEntry[] {
-  const copies = importCopies(db, tenantId);
+function strayImports(store: ProjectTagReads, hippoRoot: string): MemoryEntry[] {
+  const copies = importCopies(store);
   if (!isGlobalStoreRoot(hippoRoot)) return copies;
   const machine = { platform: process.platform, env: processEnv() };
   const { platform } = machine;
-  const sessions = compactionTranscripts(db, tenantId);
+  const sessions = store.compactionTranscripts();
   const owners = new Map<string, Map<string, string[]>>();
   for (const { transcript, cwd } of sessions) {
     const project = transcriptNotesProject(transcript, cwd, machine);
@@ -185,9 +165,9 @@ function strayImports(db: DatabaseSyncLike, hippoRoot: string, tenantId: string)
     owners.set(dir, ids.set(project.name, [...new Set([...(ids.get(project.name) ?? []), ...projectNames(project)])]));
   }
   const tool = toolSourcePrefix('claude-code');
-  const live = selectLiveEntriesBySourcePrefix(db, tenantId, tool).filter((e) => e.kind !== 'raw' && !e.pinned);
+  const live = store.liveEntriesBySourcePrefix(tool).filter((e) => e.kind !== 'raw' && !e.pinned);
   const origins = new Set(live.map((e) => e.origin_project ?? ''));
-  const edges = foldEdges(db, tenantId);
+  const edges = foldEdges(store);
   const right = new Set<string>();
   const wrong = new Set<string>();
   for (const [dir, ids] of owners) {
@@ -205,11 +185,11 @@ function strayImports(db: DatabaseSyncLike, hippoRoot: string, tenantId: string)
 }
 
 /** The global store reads each name's recorded session folders, where a compaction's name came from its cwd; a project store folds only its own folder name. */
-function planFolds(db: DatabaseSyncLike, hippoRoot: string, tenantId: string, globalFolds: boolean): Pick<RepairResult, 'folds' | 'collisions'> {
+function planFolds(store: ProjectTagReads, hippoRoot: string, globalFolds: boolean): Pick<RepairResult, 'folds' | 'collisions'> {
   // A name someone merged into by hand stays: undoing their choice would rest on the resolver alone.
-  const chosen = new Set(queryAuditEvents(db, { tenantId, op: 'project_merge', limit: 10000 }).map((e) => e.metadata.into));
-  if (!isGlobalStoreRoot(hippoRoot)) return { folds: ownLegacyFold(db, hippoRoot, tenantId).filter((f) => !chosen.has(f.from)), collisions: [] };
-  const rows = compactionOriginsWithCwd(db, tenantId);
+  const chosen = new Set(store.auditEvents('project_merge').map((e) => e.metadata.into));
+  if (!isGlobalStoreRoot(hippoRoot)) return { folds: ownLegacyFold(store, hippoRoot).filter((f) => !chosen.has(f.from)), collisions: [] };
+  const rows = store.compactionOriginsWithCwd();
   const today = new Map<string, Set<string>>();
   for (const { origin, cwd } of rows) {
     if (fs.existsSync(cwd)) today.set(origin, (today.get(origin) ?? new Set<string>()).add(resolveProjectIdentity(cwd).name));
@@ -228,14 +208,14 @@ function planFolds(db: DatabaseSyncLike, hippoRoot: string, tenantId: string, gl
 }
 
 /** A project store's rows, dormant snapshots and compaction records written before its id existed carry its folder name. */
-function ownLegacyFold(db: DatabaseSyncLike, hippoRoot: string, tenantId: string): ProjectFold[] {
+function ownLegacyFold(store: ProjectTagReads, hippoRoot: string): ProjectFold[] {
   // A shared store's rows carry their callers' names, so one matching its folder's is a member's project, not a legacy tag.
   if (isSharedStore(hippoRoot)) return [];
   const { name, legacyName } = resolveProjectIdentity(path.dirname(path.resolve(hippoRoot)));
   if (legacyName === '' || legacyName === name) return [];
-  const held = holdsOrigin(db, 'memories', tenantId, legacyName)
-    || holdsOrigin(db, 'compactions', tenantId, legacyName)
-    || listDormantSnapshots(db, tenantId).some((s) => s.entry.origin_project === legacyName);
+  const held = store.holdsOrigin('memories', legacyName)
+    || store.holdsOrigin('compactions', legacyName)
+    || store.dormant().some((s) => s.entry.origin_project === legacyName);
   return held ? [{ from: legacyName, into: name }] : [];
 }
 
@@ -245,10 +225,10 @@ function foldOf(value: JsonValue | undefined): ProjectFold[] {
   return isStringValue(from) && isStringValue(into) ? [{ from, into }] : [];
 }
 
-function foldEdges(db: DatabaseSyncLike, tenantId: string): ProjectFold[] {
+function foldEdges(store: Pick<ProjectTagReads, 'auditEvents'>): ProjectFold[] {
   return [
-    ...queryAuditEvents(db, { tenantId, op: 'project_merge', limit: 10000 }).flatMap((e) => foldOf(e.metadata)),
-    ...queryAuditEvents(db, { tenantId, op: 'project_repair', limit: 10000 })
+    ...store.auditEvents('project_merge').flatMap((e) => foldOf(e.metadata)),
+    ...store.auditEvents('project_repair')
       .flatMap((e) => (Array.isArray(e.metadata.folds) ? e.metadata.folds.flatMap(foldOf) : [])),
   ];
 }
@@ -268,26 +248,22 @@ function foldedInto(edges: readonly ProjectFold[], names: readonly string[]): st
 }
 
 /** Names folded, directly or through others, into one of `names`; the sync moves imports still filed under them. */
-export function namesFoldedInto(db: DatabaseSyncLike, tenantId: string, names: readonly string[]): string[] {
-  return foldedInto(foldEdges(db, tenantId), names);
+export function namesFoldedInto(store: Pick<ProjectTagReads, 'auditEvents'>, names: readonly string[]): string[] {
+  return foldedInto(foldEdges(store), names);
 }
 
 /** Reads only, so doctor and a dry run take no write lock; merged rows are planned before any fold, so a few may re-tag differently once folds apply. */
-export function planProjectRepair(db: DatabaseSyncLike, hippoRoot: string, tenantId: string, globalFolds = true): Omit<RepairResult, 'backup'> {
-  const { folds, collisions } = planFolds(db, hippoRoot, tenantId, globalFolds);
-  return { copies: strayImports(db, hippoRoot, tenantId).map((e) => e.id), folds, collisions, ...planUserGlobalRepair(db, tenantId, folds) };
+export function planProjectRepair(store: ProjectTagReads, hippoRoot: string, globalFolds = true): Omit<RepairResult, 'backup'> {
+  const { folds, collisions } = planFolds(store, hippoRoot, globalFolds);
+  return { copies: strayImports(store, hippoRoot).map((e) => e.id), folds, collisions, ...planUserGlobalRepair(store, folds) };
 }
 
 /** Parents read with `folds` already applied, so a plan matches what apply does after folding. */
-function planUserGlobalRepair(
-  db: DatabaseSyncLike,
-  tenantId: string,
-  folds: readonly ProjectFold[]
-): Pick<RepairResult, 'toProject' | 'setAside' | 'untraced'> {
-  const all = selectAllEntries(db, tenantId);
+function planUserGlobalRepair(store: ProjectTagReads, folds: readonly ProjectFold[]): Pick<RepairResult, 'toProject' | 'setAside' | 'untraced'> {
+  const all = store.entries();
   const renamed = new Map(folds.map((f) => [f.from, f.into]));
   const after = (origin: string | null | undefined) => (origin ? renamed.get(origin) ?? origin : origin ?? null);
-  const origins = new Map<string, string | null>(listDormantSnapshots(db, tenantId).map((s) => [s.entry.id, after(s.entry.origin_project)]));
+  const origins = new Map<string, string | null>(store.dormant().map((s) => [s.entry.id, after(s.entry.origin_project)]));
   for (const e of all) origins.set(e.id, after(e.origin_project));
   const toProject: Array<{ id: string; origin: string }> = [];
   const setAside: string[] = [];
@@ -306,38 +282,30 @@ function planUserGlobalRepair(
 
 /** Sets aside stray imports, folds the names the resolver now maps elsewhere, then
  * re-tags sleep's user-global merges by their parents; a dry run only plans. */
-export function repairProjects(
-  db: DatabaseSyncLike, hippoRoot: string, opts: { tenantId: string; dryRun: boolean; globalFolds?: boolean },
-): RepairResult {
-  const { tenantId, dryRun, globalFolds = true } = opts;
-  if (dryRun) return { ...planProjectRepair(db, hippoRoot, tenantId, globalFolds), backup: null };
-  const { result, rewrite, purge } = withBackup(db, hippoRoot, 'before-repair', (backup) => inTransaction(db, false, () => {
+export function repairProjects(store: ProjectTagStore, opts: { dryRun: boolean; globalFolds?: boolean }): RepairResult {
+  const { dryRun, globalFolds = true } = opts;
+  const { hippoRoot } = store;
+  if (dryRun) return { ...planProjectRepair(store, hippoRoot, globalFolds), backup: null };
+  return store.rewrite({ dryRun: false, backupLabel: 'before-repair' }, (tx, backup) => {
     const copies: string[] = [];
-    for (const row of strayImports(db, hippoRoot, tenantId)) {
+    for (const row of strayImports(tx, hippoRoot)) {
       const tag = toolTag(row.source);
-      if (tag !== null && setAsideRow(db, tag, row, 'project-repair').kind === 'dormant') copies.push(row.id);
+      if (tag !== null && tx.setAside(tag, row, 'project-repair').kind === 'dormant') copies.push(row.id);
     }
-    const { folds, collisions } = planFolds(db, hippoRoot, tenantId, globalFolds);
-    const folded = folds.map((f) => foldInTx(db, tenantId, f.from, f.into));
-    const plan = planUserGlobalRepair(db, tenantId, []);
-    stampOriginProjectsAt(db, tenantId, plan.toProject);
+    const { folds, collisions } = planFolds(tx, hippoRoot, globalFolds);
+    const folded = folds.map((f) => foldInTx(tx, f.from, f.into));
+    const plan = planUserGlobalRepair(tx, []);
+    tx.stampOrigins(plan.toProject);
     const now = new Date();
-    for (const row of selectEntriesByIds(db, plan.setAside, tenantId).values()) {
-      insertDormantRow(db, { entry: row, strength: calculateStrength(row, now), reason: 'project-repair', dormantAt: now.toISOString() });
-      deleteEntryRowInTx(db, row, ACTOR);
-    }
-    appendAuditEvent(db, { tenantId, actor: ACTOR, op: 'project_repair', metadata: { backup, copies, folds, folded, ...plan } });
+    for (const row of tx.entriesByIds(plan.setAside).values()) tx.retire(row, 'project-repair', now);
+    tx.audit('project_repair', { backup, copies, folds, folded, ...plan });
     return {
       result: { copies, folds, collisions, ...plan, backup },
       rewrite: [...plan.toProject.map((r) => r.id), ...folded.flatMap((f) => f.restamped)],
       purge: [...copies, ...plan.setAside, ...folded.flatMap((f) => f.setAside)],
     };
-  }));
-  refreshMirrors(db, hippoRoot, tenantId, rewrite, purge);
-  return result;
+  });
 }
-
-const AUTO_REPAIR_META_KEY = 'project_repair_auto';
 
 /** True when a repair would change nothing. */
 function repairIsEmpty(r: Omit<RepairResult, 'backup'>): boolean {
@@ -346,16 +314,10 @@ function repairIsEmpty(r: Omit<RepairResult, 'backup'>): boolean {
 
 /** Sleep runs repair once per store, so an upgrade needs no command. Global-store folds stay
  *  with `hippo projects repair`: their evidence is compaction folders, blind to a same-named repo that never compacted. */
-export function repairOnceOnSleep(db: DatabaseSyncLike, hippoRoot: string, tenantId: string): RepairResult | null {
-  if (getMeta(db, AUTO_REPAIR_META_KEY) === '1') return null;
-  const plan = planProjectRepair(db, hippoRoot, tenantId, false);
-  const result = repairIsEmpty(plan) ? null : repairProjects(db, hippoRoot, { tenantId, dryRun: false, globalFolds: false });
-  setMeta(db, AUTO_REPAIR_META_KEY, '1');
+export function repairOnceOnSleep(store: ProjectTagStore): RepairResult | null {
+  if (store.repairedOnce()) return null;
+  const plan = planProjectRepair(store, store.hippoRoot, false);
+  const result = repairIsEmpty(plan) ? null : repairProjects(store, { dryRun: false, globalFolds: false });
+  store.markRepairedOnce();
   return result;
-}
-
-/** After commit, as the agent memory sync does: a stale mirror would bring the old tag back on the next rebuild. */
-function refreshMirrors(db: DatabaseSyncLike, hippoRoot: string, tenantId: string, rewrite: readonly string[], purge: readonly string[]): void {
-  for (const entry of selectEntriesByIds(db, rewrite, tenantId).values()) writeEntryMirrors(hippoRoot, entry);
-  for (const id of purge) removeEntryMirrors(hippoRoot, id);
 }

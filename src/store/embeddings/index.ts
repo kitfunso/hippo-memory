@@ -19,7 +19,7 @@ import {
 import { loadConfig } from '../../core/config.js';
 import { resolveEmbeddingProvider, type EmbeddingProvider } from '../../embeddings/provider.js';
 import { redactSecretsStrict } from '../../util/secret-detect.js';
-import { errorMessage, log } from '../../util/log.js';
+import { errorCode, errorMessage, log } from '../../util/log.js';
 import { StoreNotPortedError } from '../../util/sqlite-blocked.js';
 import type { HippoStore, VectorReads, VectorRowWrite, VectorWrite, VectorWriteResult, VectorWrites } from '../index.js';
 
@@ -223,12 +223,26 @@ async function withProcessEmbedLock<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
-// A bad key fails every write; one warning tells the user, N would bury the command's own output.
-let _embedFailureWarned = false;
+// A bad key fails every write; one warning per distinct failure tells the user, N would bury the command's own output.
+const EMBED_WARN_KEY_CAP = 64;
+const embedFailureWarned = new Set<string>();
 
-function warnEmbedFailureOnce(source: string, rawMessage: string): void {
-  if (_embedFailureWarned) return;
-  _embedFailureWarned = true;
+function embedFailureKey(source: string, cause: unknown): string {
+  const kind = errorCode(cause) || (cause instanceof Error ? cause.constructor.name : 'NonError');
+  return `${source}:${kind}`;
+}
+
+function warnEmbedFailureOnce(source: string, rawMessage: string, cause?: unknown): void {
+  const key = embedFailureKey(source, cause);
+  if (embedFailureWarned.has(key)) return;
+  // Oldest key out, so a full set still lets a new failure warn.
+  if (embedFailureWarned.size >= EMBED_WARN_KEY_CAP) {
+    for (const oldest of embedFailureWarned) {
+      embedFailureWarned.delete(oldest);
+      break;
+    }
+  }
+  embedFailureWarned.add(key);
   // Strict scrub: this line can land in a hook log file, and an API may echo the key back in its error body.
   const message = redactSecretsStrict(rawMessage).replace(/\s+/g, ' ').replace(/\.+$/, '');
   log.warn(`embedding failed (${source}): ${message}. Memories are stored without embeddings until this is fixed.`);
@@ -303,7 +317,7 @@ function embedMemoryInStore(store: HippoStore, provider: EmbeddingProvider, entr
         )).modelMismatch;
       if (refused) warnEmbedFailureOnce('index', OTHER_MODEL_INDEX);
     } catch (err) {
-      warnEmbedFailureOnce(provider.kind, errorMessage(err));
+      warnEmbedFailureOnce(provider.kind, errorMessage(err), err);
     }
   }).catch((err) => {
     log.warn(`skipped embedding ${entry.id} (${errorMessage(err)})`);
@@ -322,7 +336,7 @@ export async function embedMemory(
     provider = resolveEmbeddingProvider(hippoRoot, { model });
   } catch (err) {
     // Callers fire and forget, so this must resolve: a bad config warns once instead of rejecting.
-    warnEmbedFailureOnce('config', errorMessage(err));
+    warnEmbedFailureOnce('config', errorMessage(err), err);
     return;
   }
   if (!provider.isAvailable()) return;
@@ -350,7 +364,7 @@ export async function embedMemory(
       initializePhysicsIfMissing(hippoRoot, entry, vector);
     } catch (err) {
       // Provider failure (API down / bad key). Best-effort: leave the index as-is, but say so once.
-      warnEmbedFailureOnce(provider.kind, errorMessage(err));
+      warnEmbedFailureOnce(provider.kind, errorMessage(err), err);
     }
   }).catch((err) => {
     log.warn(`skipped embedding ${entry.id} (${errorMessage(err)}); run 'hippo embed' to backfill`);

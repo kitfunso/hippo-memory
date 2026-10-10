@@ -1,6 +1,7 @@
 /** One retry policy for outbound HTTP: a timeout on every attempt, backoff on 429 and 5xx, and on a dropped connection where a replay is safe. */
 
 import { envLlmTimeoutMs } from './env.js';
+import { errorCode, log } from './log.js';
 
 export interface RetryPolicy {
   /** Per-attempt limit; a stalled peer ends as a thrown `TimeoutError`, never a hang. */
@@ -62,6 +63,23 @@ function isIdempotent(method: string | undefined): boolean {
   return verb === 'GET' || verb === 'HEAD';
 }
 
+/** Host plus pathname only: a query string can carry a key. */
+function redactedTarget(url: string | URL): string {
+  try {
+    const u = new URL(url);
+    return `${u.host}${u.pathname}`;
+  } catch {
+    return 'unparseable-url';
+  }
+}
+
+function logRetry(init: RequestInit, url: string | URL, reason: string, attempt: number, attempts: number, delayMs: number): void {
+  // Debug: an attempt that may still succeed is not a warning, and the caller reports the final failure.
+  log.debug('http retry', {
+    method: (init.method ?? 'GET').toUpperCase(), target: redactedTarget(url), reason, attempt: `${attempt}/${attempts}`, delayMs: Math.round(delayMs),
+  });
+}
+
 type Sleep = (ms: number) => Promise<void>;
 
 // `cancel` clears the timer, so a wait the caller left does not keep the process alive.
@@ -111,7 +129,9 @@ export async function fetchWithRetry(url: string | URL, init: RequestInit, polic
     } catch (err) {
       // The caller's own abort is a decision, not a fault, so it ends the call.
       if (!retryTransport || attempt >= attempts || init.signal?.aborted || !isTransientTransportError(err)) throw err;
-      await backoffWait(backoffMs(attempt), policy.sleep, init.signal);
+      const delay = backoffMs(attempt);
+      logRetry(init, url, errorCode(err) || (err instanceof Error ? err.name : 'transport'), attempt, attempts, delay);
+      await backoffWait(delay, policy.sleep, init.signal);
       continue;
     }
     if (!retryOn(res) || attempt >= attempts) return res;
@@ -120,6 +140,8 @@ export async function fetchWithRetry(url: string | URL, init: RequestInit, polic
     if (retryAfter !== null && retryAfter > maxDelayMs) return res;
     // Frees the pooled socket before the next attempt.
     await res.body?.cancel();
-    await backoffWait(retryAfter ?? backoffMs(attempt), policy.sleep, init.signal);
+    const delay = retryAfter ?? backoffMs(attempt);
+    logRetry(init, url, `status ${res.status}`, attempt, attempts, delay);
+    await backoffWait(delay, policy.sleep, init.signal);
   }
 }
