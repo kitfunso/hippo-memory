@@ -2,9 +2,9 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import type { DatabaseSyncLike } from '../db.js';
+import type { DatabaseSyncLike } from './index.js';
 import { withWriteScope } from './busy.js';
-import { log } from '../log.js';
+import { log } from '../util/log.js';
 
 /** Legacy whole-file index; imported once into `memory_vectors`, then kept beside the store as a renamed backup. */
 const LEGACY_EMBEDDINGS_FILE = 'embeddings.json';
@@ -98,6 +98,13 @@ export function storedVectorIds(db: DatabaseSyncLike): Set<string> {
   return new Set((db.prepare('SELECT memory_id FROM memory_vectors').all() as Array<{ memory_id: string }>).map((r) => r.memory_id));
 }
 
+/** Float count of the first stored row, from its blob length; the vector is never read. */
+export function storedVectorDims(db: DatabaseSyncLike): number | undefined {
+  // SAFETY: the SELECT names exactly the one column read.
+  const row = db.prepare('SELECT length(vector) AS bytes FROM memory_vectors LIMIT 1').get() as { bytes: number } | undefined;
+  return row === undefined ? undefined : Math.floor(row.bytes / 4);
+}
+
 export function hasStoredVectors(db: DatabaseSyncLike): boolean {
   return db.prepare('SELECT 1 FROM memory_vectors LIMIT 1').get() !== undefined;
 }
@@ -173,7 +180,8 @@ export async function topVectorMatches(
 ): Promise<VectorMatch[]> {
   const best = bestMatches(query, k);
   if (!best) return [];
-  // SHORTCUT: brute-force cosine over every admitted vector, a chunk per event-loop turn; latency still grows with rows, fine to ~100k, and an ANN index (sqlite-vec, HNSW) is the upgrade.
+  // SHORTCUT: brute-force cosine over every admitted vector, a chunk per event-loop turn; latency
+  // still grows with rows, fine to ~100k, and an ANN index (sqlite-vec, HNSW) is the upgrade.
   // SAFETY: the SELECT names exactly these two columns; node:sqlite returns BLOBs as Uint8Array.
   const rows = db.prepare(`
     SELECT v.memory_id AS id, v.vector AS vector

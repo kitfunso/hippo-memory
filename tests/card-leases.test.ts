@@ -19,8 +19,8 @@ import {
   reclaimExpiredCards,
   loadLatestHandoffForCard,
 } from '../src/store/cards.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { CARD_LEASE_MS } from '../src/card.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { CARD_LEASE_MS } from '../src/core/card.js';
 
 let root: string;
 
@@ -374,20 +374,25 @@ function holdLockThenRun(dbPath: string, sql: string, params: unknown[], holdMs:
     db.exec('BEGIN IMMEDIATE');
     db.prepare(workerData.sql).run(...workerData.params);
     parentPort.postMessage('locked');
-    setTimeout(() => {
+    parentPort.once('message', () => setTimeout(() => {
+      Atomics.store(workerData.holdEnded, 0, 1);
       db.exec('COMMIT');
       db.close();
       parentPort.postMessage('released');
-    }, workerData.holdMs);
+    }, workerData.holdMs));
   `;
-  const worker = new Worker(workerCode, { eval: true, workerData: { dbPath, sql, params, holdMs } });
+  // Set before COMMIT: the commit frees the lock, and the waiting call can return before this thread runs its next line.
+  const holdEnded = new Int32Array(new SharedArrayBuffer(4));
+  const worker = new Worker(workerCode, { eval: true, workerData: { dbPath, sql, params, holdMs, holdEnded } });
   const locked = new Promise<void>((resolve) => {
     worker.once('message', (msg) => { if (msg === 'locked') resolve(); });
   });
   const released = new Promise<void>((resolve) => {
     worker.on('message', (msg) => { if (msg === 'released') { worker.terminate(); resolve(); } });
   });
-  return { locked, released };
+  // The hold is counted from this call, made right before the blocking one, so a stalled test thread cannot let the lock go early.
+  const startHold = (): void => worker.postMessage('hold');
+  return { locked, released, startHold, holdHadEnded: () => Atomics.load(holdEnded, 0) === 1 };
 }
 
 describe('reclaim under a real second connection', () => {
@@ -404,7 +409,7 @@ describe('reclaim under a real second connection', () => {
     }
 
     const dbPath = join(root, 'hippo.db');
-    const { locked, released } = holdLockThenRun(
+    const { locked, released, startHold, holdHadEnded } = holdLockThenRun(
       dbPath,
       `UPDATE cards SET title = ? WHERE id = ?`,
       ['retitled', otherReady.id],
@@ -412,12 +417,13 @@ describe('reclaim under a real second connection', () => {
     );
     await locked;
 
-    const started = Date.now();
+    startHold();
     const reclaimed = reclaimExpiredCards(root, 'default');
-    const elapsedMs = Date.now() - started;
+    const endedByReturn = holdHadEnded();
 
     expect(reclaimed).toEqual([expiredCard.id]);
-    expect(elapsedMs).toBeGreaterThan(300);
+    // A sweep that did not wait returns while the lock is still held, before the hold ends.
+    expect(endedByReturn).toBe(true);
     await released;
   });
 });
@@ -435,7 +441,7 @@ describe('a heartbeat that commits while the sweep waits wins', () => {
 
     const dbPath = join(root, 'hippo.db');
     const futureLease = new Date(Date.now() + CARD_LEASE_MS).toISOString();
-    const { locked, released } = holdLockThenRun(
+    const { locked, released, startHold } = holdLockThenRun(
       dbPath,
       `UPDATE cards SET lease_until = ? WHERE id = ?`,
       [futureLease, card.id],
@@ -443,6 +449,7 @@ describe('a heartbeat that commits while the sweep waits wins', () => {
     );
     await locked;
 
+    startHold();
     const reclaimed = reclaimExpiredCards(root, 'default');
     expect(reclaimed).toEqual([]);
     await released;
@@ -497,6 +504,18 @@ describe('CLI cases: card heartbeat and reclaim through the built CLI', () => {
     return { home, env };
   }
 
+  function cardIdFrom(out: string): string {
+    const id = out.match(/Created card (\S+)/)?.[1];
+    if (!id) throw new Error(`no card id in CLI output: ${out}`);
+    return id;
+  }
+
+  function runIdFrom(out: string): string {
+    const runId = out.match(/run (\d+),/)?.[1];
+    if (!runId) throw new Error(`no run id in CLI output: ${out}`);
+    return runId;
+  }
+
   // HIPPO_HOME isolates only the global store; the local store this drives follows cwd (home/.hippo).
   function backdateLease(home: string, cardId: string) {
     const db = openHippoDb(join(home, '.hippo'));
@@ -511,7 +530,7 @@ describe('CLI cases: card heartbeat and reclaim through the built CLI', () => {
     const { home, env } = setupCliHome();
     try {
       const create = runCli(home, env, 'card', 'create', '--title', 't');
-      const id = create.out.match(/Created card (\S+)/)?.[1]!;
+      const id = cardIdFrom(create.out);
       expect(id).toBeTruthy();
 
       const claim = runCli(home, env, 'card', 'claim', id, '--runtime', 'r1');
@@ -532,9 +551,9 @@ describe('CLI cases: card heartbeat and reclaim through the built CLI', () => {
     const { home, env } = setupCliHome();
     try {
       const create = runCli(home, env, 'card', 'create', '--title', 't');
-      const id = create.out.match(/Created card (\S+)/)?.[1]!;
+      const id = cardIdFrom(create.out);
       const claim = runCli(home, env, 'card', 'claim', id, '--runtime', 'r1');
-      const runId = claim.out.match(/run (\d+),/)?.[1]!;
+      const runId = runIdFrom(claim.out);
       expect(runId).toBeTruthy();
 
       const ok = runCli(home, env, 'card', 'heartbeat', id, '--run', runId);
@@ -570,7 +589,7 @@ describe('CLI cases: card heartbeat and reclaim through the built CLI', () => {
     const { home, env } = setupCliHome();
     try {
       const create = runCli(home, env, 'card', 'create', '--title', 't');
-      const id = create.out.match(/Created card (\S+)/)?.[1]!;
+      const id = cardIdFrom(create.out);
       const claim = runCli(home, env, 'card', 'claim', id, '--runtime', 'r1');
       expect(claim.status, claim.out).toBe(0);
 
@@ -602,7 +621,7 @@ describe('CLI cases: card heartbeat and reclaim through the built CLI', () => {
     const { home, env } = setupCliHome();
     try {
       const create = runCli(home, env, 'card', 'create', '--title', 't');
-      const id = create.out.match(/Created card (\S+)/)?.[1]!;
+      const id = cardIdFrom(create.out);
       runCli(home, env, 'card', 'claim', id, '--runtime', 'r1');
       backdateLease(home, id);
 
@@ -621,9 +640,9 @@ describe('CLI cases: card heartbeat and reclaim through the built CLI', () => {
     const { home, env } = setupCliHome();
     try {
       const blockCase = runCli(home, env, 'card', 'create', '--title', 'block me');
-      const blockId = blockCase.out.match(/Created card (\S+)/)?.[1]!;
+      const blockId = cardIdFrom(blockCase.out);
       const blockClaim = runCli(home, env, 'card', 'claim', blockId, '--runtime', 'r1');
-      const blockRunId = blockClaim.out.match(/run (\d+),/)?.[1]!;
+      const blockRunId = runIdFrom(blockClaim.out);
 
       const blockWrong = runCli(home, env, 'card', 'block', blockId, '--reason', 'why', '--run', '999');
       expect(blockWrong.status).toBe(1);
@@ -632,9 +651,9 @@ describe('CLI cases: card heartbeat and reclaim through the built CLI', () => {
       expect(blockRight.status, blockRight.out).toBe(0);
 
       const reviewCase = runCli(home, env, 'card', 'create', '--title', 'review me');
-      const reviewId = reviewCase.out.match(/Created card (\S+)/)?.[1]!;
+      const reviewId = cardIdFrom(reviewCase.out);
       const reviewClaim = runCli(home, env, 'card', 'claim', reviewId, '--runtime', 'r1');
-      const reviewRunId = reviewClaim.out.match(/run (\d+),/)?.[1]!;
+      const reviewRunId = runIdFrom(reviewClaim.out);
 
       const reviewWrong = runCli(home, env, 'card', 'review', reviewId, '--run', '999');
       expect(reviewWrong.status).toBe(1);
@@ -643,9 +662,9 @@ describe('CLI cases: card heartbeat and reclaim through the built CLI', () => {
       expect(reviewRight.status, reviewRight.out).toBe(0);
 
       const completeCase = runCli(home, env, 'card', 'create', '--title', 'complete me');
-      const completeId = completeCase.out.match(/Created card (\S+)/)?.[1]!;
+      const completeId = cardIdFrom(completeCase.out);
       const completeClaim = runCli(home, env, 'card', 'claim', completeId, '--runtime', 'r1');
-      const completeRunId = completeClaim.out.match(/run (\d+),/)?.[1]!;
+      const completeRunId = runIdFrom(completeClaim.out);
       runCli(home, env, 'card', 'review', completeId);
 
       const completeWrong = runCli(home, env, 'card', 'complete', completeId, '--outcome', 'success', '--run', '999');
@@ -662,9 +681,9 @@ describe('CLI cases: card heartbeat and reclaim through the built CLI', () => {
     const { home, env } = setupCliHome();
     try {
       const create = runCli(home, env, 'card', 'create', '--title', 't');
-      const id = create.out.match(/Created card (\S+)/)?.[1]!;
+      const id = cardIdFrom(create.out);
       const claim = runCli(home, env, 'card', 'claim', id, '--runtime', 'r1');
-      const runId = claim.out.match(/run (\d+),/)?.[1]!;
+      const runId = runIdFrom(claim.out);
 
       const hb = runCli(home, env, 'card', 'heartbeat', id, '--run', runId);
       expect(hb.status, hb.out).toBe(0);
@@ -673,7 +692,7 @@ describe('CLI cases: card heartbeat and reclaim through the built CLI', () => {
       expect(block.status, block.out).toBe(0);
 
       const reclaim = runCli(home, env, 'card', 'claim', id, '--runtime', 'r2');
-      const runId2 = reclaim.out.match(/run (\d+),/)?.[1]!;
+      const runId2 = runIdFrom(reclaim.out);
       const review = runCli(home, env, 'card', 'review', id, '--run', runId2);
       expect(review.status, review.out).toBe(0);
 
@@ -700,7 +719,7 @@ describe('CLI cases: card heartbeat and reclaim through the built CLI', () => {
       expect(proto.out).toContain('unknown card id');
 
       const create = runCli(home, env, 'card', 'create', '--title', 't');
-      const id = create.out.match(/Created card (\S+)/)?.[1]!;
+      const id = cardIdFrom(create.out);
       runCli(home, env, 'card', 'claim', id, '--runtime', 'r1');
 
       const runCtor = runCli(home, env, 'card', 'heartbeat', id, '--run', 'constructor');

@@ -1,4 +1,4 @@
-import { envGithubWebhookSecret, envGithubWebhookSecretPrevious } from '../../env.js';
+import { envGithubWebhookSecret, envGithubWebhookSecretPrevious } from '../../util/env.js';
 import type { ServerResponse } from 'node:http';
 import { verifyGitHubSignature } from './signature.js';
 import {
@@ -15,8 +15,9 @@ import { parkInDlq } from '../dlq.js';
 import { githubDlq, type DlqBucket } from './dlq.js';
 import { resolveTenantForGitHub } from './tenant-routing.js';
 import { computeDeletionKey as computeGitHubDeletionKey } from './signature.js';
-import { resolveTenantId } from '../../tenant.js';
-import type { Context } from '../../api.js';
+import { resolveTenantId } from '../../store/tenant.js';
+import type { Context } from '../../api/index.js';
+import type { HippoStore } from '../../store/index.js';
 import {
   HttpError,
   JSON_HEADERS,
@@ -25,8 +26,8 @@ import {
   readWebhookBody,
   sendJson,
   type WebhookRequest,
-} from '../../http-util.js';
-import type { JsonValue } from '../../json.js';
+} from '../../util/http-util.js';
+import type { JsonValue } from '../../util/json.js';
 
 /**
  * GitHub webhook receiver. Mirrors the Slack route shape but with
@@ -44,7 +45,7 @@ import type { JsonValue } from '../../json.js';
  *
  * Bearer auth is skipped on purpose: server.ts checks isPublicRoute before calling this.
  */
-export async function handleGitHubEventsWebhook(request: WebhookRequest): Promise<void> {
+export async function handleGitHubEventsWebhook(request: WebhookRequest, store?: HippoStore): Promise<void> {
   const { req, res, opts } = request;
   // Secret and signature header before the body, so a caller with neither cannot make the server buffer one.
   const secret = envGithubWebhookSecret();
@@ -80,7 +81,7 @@ export async function handleGitHubEventsWebhook(request: WebhookRequest): Promis
 
   // Signature OK from here on. Everything else is ACK-200; bad envelopes go
   // to the DLQ and a human can replay later.
-  routeSignedDelivery({ hippoRoot: opts.hippoRoot, res, rawBody, eventName, deliveryId, signature: sigStr });
+  await routeSignedDelivery({ hippoRoot: opts.hippoRoot, store, res, rawBody, eventName, deliveryId, signature: sigStr });
 }
 
 const ALLOWED_EVENTS: ReadonlySet<string> = new Set([
@@ -95,6 +96,7 @@ type SignedEnvelope = JsonValue & GitHubWebhookEnvelope;
 /** One signed request and where to answer it; every stage below parks into the DLQ through it. */
 interface SignedDelivery {
   hippoRoot: string;
+  store?: HippoStore;
   res: ServerResponse;
   rawBody: string;
   eventName: string | null;
@@ -107,11 +109,11 @@ interface DlqRouting {
   repoFullName: string | null;
 }
 
-function parkAndAck(
+async function parkAndAck(
   d: SignedDelivery,
   park: DlqRouting & { tenantId: string | null; error: string; bucket: DlqBucket },
-): void {
-  parkInDlq(githubDlq, d.hippoRoot, {
+): Promise<void> {
+  const row = {
     tenantId: park.tenantId,
     rawPayload: d.rawBody,
     error: park.error,
@@ -121,12 +123,13 @@ function parkAndAck(
     signature: d.signature,
     installationId: park.installationId,
     repoFullName: park.repoFullName,
-  });
+  };
+  await parkInDlq(githubDlq, d.hippoRoot, row, d.store);
   sendJson(d.res, 200, { ok: true, status: 'dlq' });
 }
 
-function routeSignedDelivery(d: SignedDelivery): void {
-  const body = parseEnvelopeOrPark(d);
+async function routeSignedDelivery(d: SignedDelivery): Promise<void> {
+  const body = await parseEnvelopeOrPark(d);
   if (body === null || d.deliveryId === null) return;
 
   const routing: DlqRouting = {
@@ -136,9 +139,9 @@ function routeSignedDelivery(d: SignedDelivery): void {
 
   // Tenant resolution. Fail closed on multi-tenant installs with unknown
   // routing - same policy as Slack.
-  const resolvedTenant = resolveTenantForGitHub(d.hippoRoot, routing);
+  const resolvedTenant = await resolveTenantForGitHub(d.hippoRoot, routing, d.store);
   if (resolvedTenant === null) {
-    parkAndAck(d, {
+    await parkAndAck(d, {
       ...routing,
       tenantId: null,
       error: `unroutable: installation_id=${routing.installationId ?? '(none)'} repo=${routing.repoFullName ?? '(none)'}`,
@@ -151,11 +154,12 @@ function routeSignedDelivery(d: SignedDelivery): void {
     hippoRoot: d.hippoRoot,
     tenantId: resolvedTenant,
     actor: { subject: 'connector:github', role: 'admin' },
+    store: d.store,
   };
-  if (dispatchGitHubEvent(d, ctx, body, d.deliveryId, routing)) return;
+  if (await dispatchGitHubEvent(d, ctx, body, d.deliveryId, routing)) return;
 
   // Header allow-listed but body shape didn't satisfy the matching guard.
-  parkAndAck(d, {
+  await parkAndAck(d, {
     ...routing,
     tenantId: resolvedTenant,
     error: `body shape did not match X-GitHub-Event=${d.eventName}`,
@@ -164,7 +168,7 @@ function routeSignedDelivery(d: SignedDelivery): void {
 }
 
 /** Answers ping and parks every unusable body; returns the envelope only when ingest should go on. */
-function parseEnvelopeOrPark(d: SignedDelivery): SignedEnvelope | null {
+async function parseEnvelopeOrPark(d: SignedDelivery): Promise<SignedEnvelope | null> {
   // Cheap regex extraction of installation_id / repo for DLQ rows that fail
   // to JSON.parse - gives operators something to triage.
   const installationFromRaw = (() => {
@@ -175,8 +179,8 @@ function parseEnvelopeOrPark(d: SignedDelivery): SignedEnvelope | null {
     const m = d.rawBody.match(/"full_name"\s*:\s*"([^"]+)"/);
     return m ? m[1] : null;
   })();
-  const parkRaw = (error: string, bucket: DlqBucket): null => {
-    parkAndAck(d, {
+  const parkRaw = async (error: string, bucket: DlqBucket): Promise<null> => {
+    await parkAndAck(d, {
       tenantId: resolveTenantId({}),
       error,
       bucket,
@@ -213,13 +217,13 @@ function parseEnvelopeOrPark(d: SignedDelivery): SignedEnvelope | null {
 }
 
 /** Ingests, archives or parks by event header; false when no guard matched the body. */
-function dispatchGitHubEvent(
+async function dispatchGitHubEvent(
   d: SignedDelivery,
   ctx: Context,
   body: SignedEnvelope,
   deliveryId: string,
   routing: DlqRouting,
-): boolean {
+): Promise<boolean> {
   const action = deliveryAction(d.eventName, body);
   if (action === null) return false;
 
@@ -227,7 +231,7 @@ function dispatchGitHubEvent(
     // GitHub does fire issues.deleted (admin-initiated). Don't archive - V1
     // policy is to log and let an operator decide. Archive could lose the
     // memory if the issue is being moved between accounts.
-    parkAndAck(d, {
+    await parkAndAck(d, {
       ...routing,
       tenantId: ctx.tenantId,
       error: 'issues.deleted requires manual review',
@@ -237,7 +241,7 @@ function dispatchGitHubEvent(
     // The "deleted:" key namespace keeps this from colliding with the ingest key for the
     // same artifact; a shared key would make hasSeenKey skip the archive.
     const idempotencyKey = computeGitHubDeletionKey(action.artifactRef, action.updatedAt);
-    const r = handleGitHubCommentDeleted(ctx, {
+    const r = await handleGitHubCommentDeleted(ctx, {
       artifactRef: action.artifactRef,
       idempotencyKey,
       deliveryId,
@@ -245,7 +249,7 @@ function dispatchGitHubEvent(
     });
     sendJson(d.res, 200, { ok: true, status: r.status, archivedCount: r.archivedCount });
   } else {
-    const r = ingestGitHubEvent(ctx, { event: action.event, rawBody: d.rawBody, deliveryId });
+    const r = await ingestGitHubEvent(ctx, { event: action.event, rawBody: d.rawBody, deliveryId });
     sendJson(d.res, 200, { ok: true, status: r.status, memoryId: r.memoryId });
   }
   return true;

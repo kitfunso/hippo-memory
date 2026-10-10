@@ -39,13 +39,13 @@ const arg = (name, dflt) => {
 const DIST = path.resolve(arg('dist', path.join(REPO, 'dist')));
 // pathToFileURL: Windows' ESM loader rejects a bare "C:/..." specifier.
 const distImport = (name) => import(pathToFileURL(path.join(DIST, name)).href);
-const { createMemory } = await distImport('memory.js');
+const { createMemory } = await distImport('core/memory.js');
 const { initStore } = await distImport('store/open.js');
 const { loadAllEntries } = await distImport('store/entry-reads.js');
 const { batchWriteAndDelete } = await distImport('store/delete-and-batch.js');
 const { hybridSearch } = await distImport('search/hybrid.js');
-const { embedMemory } = await distImport('embeddings.js');
-const { isEmbeddingAvailable } = await distImport('local-embedding.js');
+const { embedMemory } = await distImport('store/embeddings/index.js');
+const { isEmbeddingAvailable } = await distImport('store/embeddings/local.js');
 
 const ARM = arg('arm', 'hippo');
 const PORT = Number(arg('port', '8888'));

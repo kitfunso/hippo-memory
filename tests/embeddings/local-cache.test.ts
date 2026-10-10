@@ -10,7 +10,7 @@ const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '../../');
 // The CI job that has already fetched the weights points this at them; a developer vendors them under benchmarks/.
 const MODEL_CACHE = process.env.HIPPO_MODEL_CACHE || path.join(REPO_ROOT, 'benchmarks/longmemeval/data/model-cache');
-const DIST_EMBEDDINGS = path.join(REPO_ROOT, 'dist/local-embedding.js');
+const DIST_EMBEDDINGS = path.join(REPO_ROOT, 'dist/store/embeddings/local.js');
 const MINILM_DIR = path.join(MODEL_CACHE, 'Xenova/all-MiniLM-L6-v2');
 
 describe('local-cache: HIPPO_MODEL_CACHE', () => {
@@ -20,7 +20,7 @@ describe('local-cache: HIPPO_MODEL_CACHE', () => {
     expect(existsSync(MINILM_DIR)).toBe(true);
 
     // Build a tiny Node.js script that exercises getEmbedding() directly.
-    // We use dist/local-embedding.js (compiled output) so the regular import()
+    // We use dist/store/embeddings/local.js (compiled output) so the regular import()
     // call works outside vitest's VM context.
     const script = `
 import { getEmbedding } from '${url.pathToFileURL(DIST_EMBEDDINGS).href}';

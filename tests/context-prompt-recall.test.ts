@@ -6,11 +6,11 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import type { HippoConfig } from '../src/config.js';
-import { getContext, type Context } from '../src/api.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { _resetAblationCacheForTests } from '../src/ablation.js';
+import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import type { HippoConfig } from '../src/core/config.js';
+import { getContext, type Context } from '../src/api/index.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { hippoOut } from './_helpers/spawn-hippo.js';
 
 const PROJECT = 'proj-a';

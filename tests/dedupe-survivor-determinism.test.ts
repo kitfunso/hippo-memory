@@ -16,19 +16,22 @@
  * file-private.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { remember, type HippoDbContext } from '../src/api.js';
-import { deduplicateStore, strengthBucket } from '../src/dedupe.js';
-import { compareEntryIdentity } from '../src/compare.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { remember, type HippoDbContext } from '../src/api/index.js';
+import { deduplicateStore, strengthBucket } from '../src/consolidate/dedupe.js';
+import { compareEntryIdentity } from '../src/core/compare.js';
 import { consolidate } from '../src/consolidate/sleep.js';
-import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+
+// Two cases build and consolidate a separate store for each of six ingest orders.
+vi.setConfig({ testTimeout: 30_000 });
 
 function tmpHome(prefix: string) {
   const home = mkdtempSync(join(tmpdir(), prefix));

@@ -112,7 +112,7 @@ describe('runSessionWorker', () => {
   });
 });
 
-describe('the turn cursor', () => {
+describe('the progress cursor', () => {
   const turns: SessionTurn[] = [
     { role: 'user', text: 'fix the flaky login test' },
     { role: 'assistant', text: 'The retry budget stays at three.' },

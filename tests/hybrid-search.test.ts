@@ -8,12 +8,12 @@ import { hybridSearch } from '../src/search/hybrid.js';
 import { search } from '../src/search/bm25-search.js';
 import { mmrRerank } from '../src/search/rerank.js';
 import type { SearchResult } from '../src/core/search-types.js';
-import { createMemory, applyOutcome, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { cosineSimilarity } from '../src/embeddings.js';
+import { createMemory, applyOutcome, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { cosineSimilarity } from '../src/store/embeddings/index.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { saveEmbeddingIndex } from '../src/embeddings.js';
+import { saveEmbeddingIndex } from '../src/store/vector-index.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -266,7 +266,7 @@ describe('SearchResult cosine field', () => {
 
 describe('searchBothHybrid', () => {
   it('is exported and callable', async () => {
-    const { searchBothHybrid } = await import('../src/shared.js');
+    const { searchBothHybrid } = await import('../src/sharing/search-both.js');
     expect(searchBothHybrid).toBeInstanceOf(Function);
   });
 });

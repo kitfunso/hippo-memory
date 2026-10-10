@@ -8,9 +8,9 @@ import {
   getCurrentSchemaVersion,
   getSchemaVersion,
   type DatabaseSyncLike,
-} from '../src/db.js';
-import type { HippoDbContext } from '../src/api.js';
-import { remember, archiveRaw, recall } from '../src/api.js';
+} from '../src/db/index.js';
+import type { HippoDbContext } from '../src/api/index.js';
+import { remember, archiveRaw, recall } from '../src/api/index.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 
 interface RedactedArchivePayload {

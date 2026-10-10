@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Layer, type MemoryEntry } from '../src/memory.js';
+import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -12,10 +12,10 @@ import { readEntry, loadAllEntries } from '../src/store/entry-reads.js';
 import { deleteEntry, batchWriteAndDelete } from '../src/store/delete-and-batch.js';
 import { loadAllDirtySummaries } from '../src/store/summaries.js';
 import { consolidate } from '../src/consolidate/sleep.js';
-import { deduplicateStore } from '../src/dedupe.js';
-import { sleep, supersede, type Context } from '../src/api.js';
+import { deduplicateStore } from '../src/consolidate/dedupe.js';
+import { sleep, supersede, type Context } from '../src/api/index.js';
 import { runSleep } from '../src/api/sleep-run.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { queryAuditEvents } from '../src/store/audit.js';
 import { sleepResultLines } from '../src/cli/sleep-render.js';
 
@@ -103,8 +103,8 @@ describe('the sleep audit and dedup respect raw and pinned rows', () => {
 
     deduplicateStore(root);
 
-    expect(readEntry(root, keeper.id)).not.toBeNull();
-    expect(readEntry(root, pinnedCopy.id)).not.toBeNull();
+    expect(readEntry(root, keeper.id)?.content).toBe(CACHE_FACT);
+    expect(readEntry(root, pinnedCopy.id)).toMatchObject({ content: CACHE_FACT, pinned: true });
   });
 
   it('an automatic delete refuses a pinned or raw row; an explicit forget still deletes', () => {

@@ -11,11 +11,11 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import type { Context } from '../src/api.js';
+import type { Context } from '../src/api/index.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { openHippoDb, closeHippoDb, setMeta } from '../src/db.js';
-import { compareSemver } from '../src/version.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { openHippoDb, closeHippoDb, setMeta } from '../src/db/index.js';
+import { compareSemver } from '../src/util/version.js';
 import { handleCommentDeleted } from '../src/connectors/github/deletion.js';
 import { computeIdempotencyKey } from '../src/connectors/github/signature.js';
 import { backfillRepo } from '../src/connectors/github/backfill.js';
@@ -83,7 +83,7 @@ describe('deletion atomicity', () => {
   beforeEach(() => { home = makeRoot('v131-delete-atomic'); });
   afterEach(() => safeRmSync(home));
 
-  it('multi-row deletion: when one archive throws, ALL roll back AND idempotency stays unset for retry', () => {
+  it('multi-row deletion: when one archive throws, ALL roll back AND idempotency stays unset for retry', async () => {
     // Three raw rows with the same artifact_ref (edit history).
     const ref = 'github://acme/secret-repo/issue/42/comment/123';
     const ids = ['mem-edit1', 'mem-edit2', 'mem-edit3'];
@@ -164,7 +164,7 @@ describe('deletion atomicity', () => {
     }
 
     // Success path: archives all 3 rows, marks idempotency.
-    const r = handleCommentDeleted(ctx(home), {
+    const r = await handleCommentDeleted(ctx(home), {
       artifactRef: ref,
       idempotencyKey: 'test-key-multi-archive',
       deliveryId: 'd-1',
@@ -191,7 +191,7 @@ describe('deletion atomicity', () => {
     }
 
     // Retry returns duplicate, no double-archive.
-    const r2 = handleCommentDeleted(ctx(home), {
+    const r2 = await handleCommentDeleted(ctx(home), {
       artifactRef: ref,
       idempotencyKey: 'test-key-multi-archive',
       deliveryId: 'd-2',

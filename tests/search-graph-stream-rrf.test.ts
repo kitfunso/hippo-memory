@@ -16,11 +16,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { Layer, type MemoryEntry } from '../src/memory.js';
+import { Layer, type MemoryEntry } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { insertEntity, insertRelation } from '../src/store/graph-writes.js';
-import { rrfFuse } from '../src/rrf.js';
-import { selectGraphSeeds, graphRankStream } from '../src/graph-stream.js';
+import { rrfFuse } from '../src/search/rrf.js';
+import { selectGraphSeeds, graphRankStream } from '../src/graph/stream.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 function safeRmSync(p: string): void {

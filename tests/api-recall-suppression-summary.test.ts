@@ -12,8 +12,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { recall, buildSuppressionSummary, type Context } from '../src/api.js';
+import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { recall, retrieve, type Context } from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 function safeRmSync(p: string): void {
@@ -48,7 +48,7 @@ describe('RecallResult.suppressionSummary', () => {
     // New field always present from api.recall.
     expect(result.suppressionSummary).toBeDefined();
     // Each field is a non-negative integer counter (RecallSuppressionSummary,
-    // src/api.ts); Number.isInteger is the domain-correct runtime shape check.
+    // src/api/index.ts); Number.isInteger is the domain-correct runtime shape check.
     expect(Number.isInteger(result.suppressionSummary!.totalCandidates)).toBe(true);
     expect(Number.isInteger(result.suppressionSummary!.droppedPreRank)).toBe(true);
     expect(Number.isInteger(result.suppressionSummary!.droppedByBudget)).toBe(true);
@@ -109,39 +109,15 @@ describe('RecallResult.suppressionSummary', () => {
     const result = recall(ctxFor(root), { query: 'iota' });
     expect(result.suppressionSummary!.suppressedByInterference).toBe(0);
   });
-});
 
-describe('buildSuppressionSummary helper', () => {
-  it('passes camelCase input through to camelCase output unchanged', () => {
-    const out = buildSuppressionSummary({
-      totalCandidates: 10,
-      droppedPreRank: 2,
-      droppedByBudget: 3,
-      summarySubstitutionsAdded: 1,
-      freshTailAdded: 4,
-      suppressedByInterference: 0,
-    });
-    expect(out.totalCandidates).toBe(10);
-    expect(out.droppedPreRank).toBe(2);
-    expect(out.droppedByBudget).toBe(3);
-    expect(out.summarySubstitutionsAdded).toBe(1);
-    expect(out.freshTailAdded).toBe(4);
-    expect(out.suppressedByInterference).toBe(0);
-  });
-
-  it('returns a fresh object each call (no shared mutable state)', () => {
-    const counts = {
-      totalCandidates: 1,
-      droppedPreRank: 0,
-      droppedByBudget: 0,
-      summarySubstitutionsAdded: 0,
-      freshTailAdded: 0,
-      suppressedByInterference: 0,
-    };
-    const a = buildSuppressionSummary(counts);
-    const b = buildSuppressionSummary(counts);
-    expect(a).not.toBe(b);
-    a.totalCandidates = 99;
-    expect(b.totalCandidates).toBe(1);
+  it('recall and retrieve return the same ids in the same order and the same summary', async () => {
+    for (let i = 0; i < 8; i++) writeEntry(root, makeRaw(`parity ${i} shared token`));
+    writeEntry(root, { ...makeRaw('parity old shared token'), superseded_by: 'mem_newer' });
+    const opts = { query: 'parity shared', limit: 5 };
+    const sync = recall(ctxFor(root), opts);
+    const async_ = await retrieve(ctxFor(root), opts);
+    expect(async_.results.map((r) => r.id)).toEqual(sync.results.map((r) => r.id));
+    expect(async_.suppressionSummary).toEqual(sync.suppressionSummary);
+    expect(sync.suppressionSummary!.droppedByBudget).toBeGreaterThan(0);
   });
 });

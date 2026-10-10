@@ -2,8 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import type { SearchResult } from '../../src/core/search-types.js';
 import { getReranker } from '../../src/rerankers/index.js';
-import { clefFlashReranker, clefReranker, createClefReranker, parseClefReply } from '../../src/rerankers/clef.js';
-import type { JsonValue } from '../../src/json.js';
+import { createClefReranker, parseClefReply } from '../../src/rerankers/clef.js';
+import type { JsonValue } from '../../src/util/json.js';
 
 const ACCOUNT = '0123456789abcdef0123456789abcdef';
 const FAKE_TOKEN = 'fake-cloudflare-token-for-tests';
@@ -297,9 +297,12 @@ describe('clef rerankers', () => {
     expect(parseClefReply(bare, 1, 'clef-flash', true)).toBe('reply does not name its model');
   });
 
-  it('is registered as clef-flash and clef, with no reranker by default', () => {
-    expect(getReranker('clef-flash')).toBe(clefFlashReranker);
-    expect(getReranker('clef')).toBe(clefReranker);
+  it('is registered as clef-flash and clef, with no reranker by default', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => workersReply([0.1, 0.9, 0.5]));
+    for (const name of ['clef-flash', 'clef'] as const) {
+      const out = await getReranker(name)!('q', inputs());
+      expect(out[0].rerankProvenance?.requestedModel).toBe(name);
+    }
     expect(getReranker(undefined)).toBeNull();
   });
 });

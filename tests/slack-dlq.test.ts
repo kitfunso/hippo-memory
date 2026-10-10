@@ -12,26 +12,26 @@ describe('slack DLQ', () => {
   beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'hippo-slack-dlq-')); initStore(root); });
   afterEach(() => rmSync(root, { recursive: true, force: true }));
 
-  it('captures raw payload + error and lists oldest-first', () => {
-    parkInDlq(slackDlq, root, { tenantId: 'default', rawPayload: '{"a":1}', error: 'parse fail' });
-    parkInDlq(slackDlq, root, { tenantId: 'default', rawPayload: '{"b":2}', error: 'unknown event type' });
+  it('captures raw payload + error and lists oldest-first', async () => {
+    await parkInDlq(slackDlq, root, { tenantId: 'default', rawPayload: '{"a":1}', error: 'parse fail' });
+    await parkInDlq(slackDlq, root, { tenantId: 'default', rawPayload: '{"b":2}', error: 'unknown event type' });
     const items = listDlq(slackDlq, root, { tenantId: 'default' });
     expect(items).toHaveLength(2);
     expect(items[0].error).toBe('parse fail');
     expect(items[0].retriedAt).toBeNull();
   });
 
-  it('markSlackDlqRetried sets retried_at', () => {
-    parkInDlq(slackDlq, root, { tenantId: 'default', rawPayload: '{}', error: 'boom' });
+  it('markSlackDlqRetried sets retried_at', async () => {
+    await parkInDlq(slackDlq, root, { tenantId: 'default', rawPayload: '{}', error: 'boom' });
     const [item] = listDlq(slackDlq, root, { tenantId: 'default' });
     markSlackDlqRetried(root, item.id);
     const [after] = listDlq(slackDlq, root, { tenantId: 'default' });
-    expect(after.retriedAt).not.toBeNull();
+    expect(Number.isNaN(Date.parse(String(after.retriedAt)))).toBe(false);
   });
 
-  it('listDlq scopes by tenantId', () => {
-    parkInDlq(slackDlq, root, { tenantId: 'default', rawPayload: '{}', error: 'a' });
-    parkInDlq(slackDlq, root, { tenantId: 'acme', rawPayload: '{}', error: 'b' });
+  it('listDlq scopes by tenantId', async () => {
+    await parkInDlq(slackDlq, root, { tenantId: 'default', rawPayload: '{}', error: 'a' });
+    await parkInDlq(slackDlq, root, { tenantId: 'acme', rawPayload: '{}', error: 'b' });
     expect(listDlq(slackDlq, root, { tenantId: 'default' })).toHaveLength(1);
     expect(listDlq(slackDlq, root, { tenantId: 'acme' })).toHaveLength(1);
   });

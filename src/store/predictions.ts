@@ -23,15 +23,17 @@
  * per-class base rates from (estimate_value, actual_value) at query time.
  */
 
-import { BadRequestError, NotFoundError } from '../api-errors.js';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../db.js';
+import { BadRequestError, NotFoundError } from '../core/api-errors.js';
+import { openHippoDb, closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import { writeEntryAt } from './sqlite/entry-writes-group.js';
-import { assertTenantId } from '../tenant.js';
-import { createMemory, Layer, type MemoryEntry, type MemoryKind } from '../memory.js';
+import { assertTenantId } from './tenant.js';
+import { createMemory, Layer, type MemoryEntry, type MemoryKind } from '../core/memory.js';
 import { appendAuditEvent } from './audit.js';
-import { loadConfig } from '../config.js';
-import { keysetAfter, type KeysetPosition } from '../keyset.js';
+import { loadConfig } from '../core/config.js';
+import { keysetAfter, type KeysetPosition } from '../util/keyset.js';
 import type { PredictionSave } from './port.js';
+
+const DEFAULT_PREDICTION_PAGE_SIZE = 100;
 
 // ---------------------------------------------------------------------------
 // Domain types
@@ -167,7 +169,8 @@ export function predictionMirror(tenantId: string, claim: SavePredictionOpts, ba
   });
 }
 
-/** The store port's save on hippo.db: the mirror goes in as the port's writeEntry has it, tenant check included, and its predictions row shares that write scope, so neither lands alone. */
+/** The store port's save on hippo.db: the mirror goes in as the port's writeEntry has it, tenant
+ * check included, and its predictions row shares that write scope, so neither lands alone. */
 export function writePrediction(hippoRoot: string, tenantId: string, save: PredictionSave, actor: string): Prediction {
   assertTenantId('savePrediction', tenantId);
   const now = new Date().toISOString();
@@ -279,19 +282,8 @@ export function closePrediction(
   const now = new Date().toISOString();
   const db = openHippoDb(hippoRoot);
   try {
-    db.exec('BEGIN IMMEDIATE');
-    try {
-      const row = closeOpenPredictionRow(db, tenantId, id, opts, { now, actor });
-      db.exec('COMMIT');
-      return rowToPrediction(row);
-    } catch (e) {
-      try {
-        db.exec('ROLLBACK');
-      } catch {
-        // Ignore rollback failures — the throw below is what matters.
-      }
-      throw e;
-    }
+    const row = withWriteScope(db, 'close_prediction', () => closeOpenPredictionRow(db, tenantId, id, opts, { now, actor }));
+    return rowToPrediction(row);
   } finally {
     closeHippoDb(db);
   }
@@ -394,7 +386,7 @@ export function loadPredictionsByClass(
   opts: ListPredictionsOpts = {},
 ): Prediction[] {
   assertTenantId('loadPredictionsByClass', tenantId);
-  const limit = opts.limit ?? 100;
+  const limit = opts.limit ?? DEFAULT_PREDICTION_PAGE_SIZE;
   const after = keysetAfter('created_at', 'id', opts.after);
   const db = openHippoDb(hippoRoot);
   try {
@@ -452,7 +444,7 @@ export function loadAllPredictions(
       WHERE tenant_id = ?${after.sql}
       ORDER BY created_at DESC, id DESC
       LIMIT ?
-    `).all(tenantId, ...after.params, opts.limit ?? 100) as PredictionRow[];
+    `).all(tenantId, ...after.params, opts.limit ?? DEFAULT_PREDICTION_PAGE_SIZE) as PredictionRow[];
     return rows.map(rowToPrediction);
   } finally {
     closeHippoDb(db);
@@ -595,7 +587,7 @@ export function loadOpenPredictions(
   opts: { classTag?: string; limit?: number; after?: KeysetPosition } = {},
 ): Prediction[] {
   assertTenantId('loadOpenPredictions', tenantId);
-  const limit = opts.limit ?? 100;
+  const limit = opts.limit ?? DEFAULT_PREDICTION_PAGE_SIZE;
   const after = keysetAfter('created_at', 'id', opts.after);
   const db = openHippoDb(hippoRoot);
   try {

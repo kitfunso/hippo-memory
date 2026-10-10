@@ -31,9 +31,9 @@ import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { insertEntity, insertRelation } from '../src/store/graph-writes.js';
-import { remember, type Context } from '../src/api.js';
+import { remember, type Context } from '../src/api/index.js';
 
 const CLI = join(process.cwd(), 'dist', 'cli.js');
 
@@ -226,8 +226,8 @@ describe('graph-expanded recall keeps the published accounting honest', () => {
       },
     );
     const d = JSON.parse(raw.slice(raw.indexOf('{')));
-    const s = d.suppressionSummary as SuppressionSummary;
-    const rows = (d.memories ?? d.results ?? []) as Array<{ entry?: { id: string }; id?: string }>;
+    const s: SuppressionSummary = d.suppressionSummary;
+    const rows: Array<{ entry?: { id: string }; id?: string }> = d.memories ?? d.results ?? [];
     const ids = rows.map((r) => (r.entry ?? r).id);
 
     // the edge must actually fire, or this test proves nothing

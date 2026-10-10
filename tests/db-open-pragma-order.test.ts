@@ -6,7 +6,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 
 let root: string;
 let churners: ChildProcess[] = [];
@@ -62,7 +62,7 @@ describe('openHippoDb pragma order: busy_timeout before journal_mode', () => {
         closeHippoDb(openHippoDb(root));
         opens++;
       } catch (err) {
-        errors.push((err as Error).message);
+        errors.push(err instanceof Error ? err.message : String(err));
       }
     }
 

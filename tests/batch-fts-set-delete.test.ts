@@ -9,9 +9,9 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { batchWriteAndDelete } from '../src/store/delete-and-batch.js';
-import { getHippoDbPath, withSharedStoreHandles } from '../src/db.js';
-import type { MemoryEntry } from '../src/memory.js';
-import { resetLogOnce } from '../src/log.js';
+import { getHippoDbPath, withSharedStoreHandles } from '../src/db/index.js';
+import type { MemoryEntry } from '../src/core/memory.js';
+import { resetLogOnce } from '../src/util/log.js';
 import { countMatching, recordStatements } from './_helpers/count-statements.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 
@@ -64,6 +64,7 @@ function breakFtsIndex(): void {
 function dormantRows(id: string): number {
   const db = new DatabaseSync(getHippoDbPath(root));
   try {
+    // SAFETY: an aggregate SELECT returns exactly one row and COUNT(*) is an integer.
     return (db.prepare('SELECT COUNT(*) AS n FROM dormant_memories WHERE id = ?').get(id) as { n: number }).n;
   } finally {
     db.close();

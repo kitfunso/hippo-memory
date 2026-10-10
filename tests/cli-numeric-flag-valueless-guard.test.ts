@@ -6,7 +6,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { hippoOut, hippoRun as spawnHippo } from './_helpers/spawn-hippo.js';
 
 type GuardEnv = {
@@ -74,7 +74,7 @@ describe('global numeric-flag value-less/non-numeric guard - exit-1 cases', () =
     });
   }
 
-  // Pins the GLOBAL semantics: cmdStatus takes no flags at all (mirrors the
+  // Pins the GLOBAL semantics: handleStatus takes no flags at all (mirrors the
   // --scope test's status case), yet the guard still exits 1 pre-dispatch.
   it.each(['0', '2.5'])('recall --reranker-top-k %s exits 1, since a slice would quietly drop candidates', (value) => {
     const res = hippoRun(home, env, 'recall', 'some query', '--reranker', 'clef-flash', '--reranker-top-k', value);
@@ -103,7 +103,7 @@ describe('refine --limit: the paid-API-runaway pin', () => {
     if (home) rmSync(home, { recursive: true, force: true });
   });
 
-  // The guard sits before cmdRefine's own ANTHROPIC_API_KEY check, so a
+  // The guard sits before handleRefine's own ANTHROPIC_API_KEY check, so a
   // value-less --limit must never reach it and must make no API call.
   it('value-less --limit exits 1 before the ANTHROPIC_API_KEY check', () => {
     const res = hippoRun(home, env, 'refine', '--limit');

@@ -1,5 +1,5 @@
-import { type Context } from '../../api.js';
-import { archiveDeletedArtifact } from '../../store/connectors/github.js';
+import { type Context } from '../../api/index.js';
+import { requireGroup, storeFor } from '../../store/index.js';
 
 export interface DeletionInput {
   /** artifact_ref of the comment, e.g.,
@@ -36,15 +36,14 @@ export interface DeletionResult {
  * deletion event from tenant A could archive tenant B's row sharing the same
  * artifact_ref, or accidentally target a distilled row.
  */
-export function handleCommentDeleted(ctx: Context, input: DeletionInput): DeletionResult {
-  const done = archiveDeletedArtifact(ctx.hippoRoot, {
+export async function handleCommentDeleted(ctx: Context, input: DeletionInput): Promise<DeletionResult> {
+  const { artifactRef, idempotencyKey, deliveryId, eventName } = input;
+  const done = await requireGroup(storeFor(ctx), 'connectorEvents').archiveDeletedArtifact({
     tenantId: ctx.tenantId,
-    artifactRef: input.artifactRef,
-    idempotencyKey: input.idempotencyKey,
-    deliveryId: input.deliveryId,
-    eventName: input.eventName,
-    reason: `source_deleted:github:${input.eventName}:${input.deliveryId}`,
-    who: ctx.actor.subject,
+    actor: ctx.actor.subject,
+    artifactRef,
+    reason: `source_deleted:github:${eventName}:${deliveryId}`,
+    event: { connector: 'github', idempotencyKey, deliveryId, eventName },
   });
   if (done.duplicate) return { status: 'duplicate', archivedCount: 0 };
   if (done.archived === 0) return { status: 'archive_skipped_not_found', archivedCount: 0 };

@@ -19,7 +19,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
-import { openHippoDb, closeHippoDb, setMeta } from '../src/db.js';
+import { openHippoDb, closeHippoDb, setMeta } from '../src/db/index.js';
 import {
   embeddingInputText,
   embeddingIndexIdentity,
@@ -27,7 +27,7 @@ import {
   saveStoredEmbeddingModel,
   EMBEDDING_MODEL_META_KEY,
   EMBED_TEXT_FORMAT,
-} from '../src/embeddings.js';
+} from '../src/store/embeddings/index.js';
 
 describe('embeddingInputText', () => {
   it('excludes tags starting with path: but keeps other tags', () => {

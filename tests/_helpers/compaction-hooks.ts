@@ -3,8 +3,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { type SpawnSyncReturns } from 'node:child_process';
 import { expect } from 'vitest';
-import { closeHippoDb, openHippoDb } from '../../src/db.js';
-import { COMPACTION_MEMORY_TAG } from '../../src/memory.js';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
+import { COMPACTION_MEMORY_TAG } from '../../src/core/memory.js';
 import { hippoRun } from './spawn-hippo.js';
 const FIXTURE = path.resolve(__dirname, '..', 'fixtures', 'compaction', 'post-compact-payloads.jsonl');
 

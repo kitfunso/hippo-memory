@@ -1,7 +1,7 @@
 // A store other than hippo.db for the DagReads group: it copies the memory rows out of hippo.db once, then answers each read
 // from memory with the scope rule hippo-memory/server exports, so a conformance test shows another store can match hippo.db's SQL.
 import { listAuditEventsAfter } from '../../src/store/audit.js';
-import { closeHippoDb, openHippoDb } from '../../src/db.js';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { passesScopeFilterForRecall, withSqliteAllowed, type AuditEvent, type HippoStore, type MemoryEntry } from '../../src/server.js';
 import type { DagReads, SessionRawQuery } from '../../src/store/port.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from '../../src/store/rows.js';

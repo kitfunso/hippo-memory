@@ -6,7 +6,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 import { initStore, getHippoRoot } from '../src/store/open.js';
 import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
 
@@ -147,7 +147,7 @@ describe('8. explicit-surface regression: unaffected by the freshness bound (rea
     const result = runHippo(['snapshot', 'show', '--json'], dir, env);
     expect(result.status).toBe(0);
     // SAFETY: `hippo snapshot show --json` prints `{ snapshot }` via
-    // JSON.stringify (cli.ts cmdSnapshot) — the shape asserted here matches
+    // JSON.stringify (cli.ts handleSnapshot) — the shape asserted here matches
     // that print call exactly.
     const parsed = JSON.parse(result.stdout) as { snapshot: { task: string } | null };
     expect(parsed.snapshot).not.toBeNull();

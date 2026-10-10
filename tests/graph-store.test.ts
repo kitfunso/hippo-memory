@@ -11,13 +11,14 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { deleteEntry } from '../src/store/delete-and-batch.js';
-import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { insertEntity, insertRelation } from '../src/store/graph-writes.js';
-import { enqueueExtraction, markExtractionProcessed, loadExtractionQueue } from '../src/store/graph-queue.js';
-import { loadEntityById, loadEntities, loadRelations } from '../src/store/graph-reads.js';
+import { markGraphDirty, markPendingProcessedUpTo } from '../src/store/graph-queue.js';
+import { loadEntitiesByIds, loadEntities, loadRelations } from '../src/store/graph-reads.js';
 import { MAX_ENTITY_NAME_LEN } from '../src/store/graph-rows.js';
 import { makeRoot } from './_helpers/make-root.js';
+import { loadExtractionQueue } from './_helpers/graph-queue.js';
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
@@ -58,7 +59,7 @@ describe('graph store (graph-on-consolidated guard)', () => {
     const rel = insertRelation(home, 'default', { fromEntityId: a.id, toEntityId: b.id, relType: 'owns', memoryId: md });
     expect(rel.relType).toBe('owns');
     expect(rel.sourceKind).toBe('distilled');
-    expect(loadEntityById(home, 'default', a.id)!.name).toBe('Acme');
+    expect(loadEntitiesByIds(home, 'default', [a.id])[0]!.name).toBe('Acme');
   });
 
   it('CRITERION 1: a raw-FK entity is rejected via the helper AND via a direct raw SQL INSERT (trigger ABORTs)', () => {
@@ -162,24 +163,29 @@ describe('graph store (graph-on-consolidated guard)', () => {
     expect(() => insertEntity(home, 'default', { entityType: 'system', name: 'z'.repeat(MAX_ENTITY_NAME_LEN + 1), memoryId: md })).toThrow(/name exceeds/);
   });
 
-  it('enqueueExtraction: distilled enqueues; raw rejected; queue kind-mismatch UPDATE ABORTs; markProcessed', () => {
+  it('markGraphDirty: distilled enqueues; raw is not enqueued; queue kind-mismatch UPDATE ABORTs; markProcessed', () => {
     const md = addMemory(home, 'default', 'distilled');
     const raw = addMemory(home, 'default', 'raw');
-    const q = enqueueExtraction(home, 'default', md);
-    expect(q.status).toBe('pending');
-    expect(q.kind).toBe('distilled');
-    expect(() => enqueueExtraction(home, 'default', raw)).toThrow(/raw|consolidated/i);
+    markGraphDirty(home, 'default', md);
+    const [q] = loadExtractionQueue(home, 'default');
+    expect(q!.status).toBe('pending');
+    expect(q!.kind).toBe('distilled');
+    markGraphDirty(home, 'default', raw);
+    expect(loadExtractionQueue(home, 'default').map((item) => item.memoryId)).toEqual([md]);
     // queue UPDATE that re-points to raw / fakes kind ABORTs
     const db = openHippoDb(home);
     try {
-      expect(() => db.prepare(`UPDATE graph_extraction_queue SET memory_id = ? WHERE id = ?`).run(raw, q.id))
+      expect(() => db.prepare(`UPDATE graph_extraction_queue SET memory_id = ? WHERE id = ?`).run(raw, q!.id))
         .toThrow(/kind must equal the referenced memory kind/);
+      expect(() => db.prepare(`INSERT INTO graph_extraction_queue(tenant_id, memory_id, kind, status, enqueued_at) VALUES ('default', ?, 'distilled', 'pending', ?)`)
+        .run(raw, new Date().toISOString())).toThrow(/kind must equal the referenced memory kind/);
     } finally { closeHippoDb(db); }
     // status-only update (markProcessed) is allowed (guard fires only on memory_id/kind/tenant change)
-    const done = markExtractionProcessed(home, 'default', q.id);
-    expect(done.status).toBe('processed');
-    expect(done.processedAt).not.toBeNull();
-    expect(() => markExtractionProcessed(home, 'default', q.id)).toThrow(/not pending/);
+    expect(markPendingProcessedUpTo(home, 'default', q!.id)).toBe(1);
+    const [done] = loadExtractionQueue(home, 'default', { status: 'processed' });
+    expect(done!.status).toBe('processed');
+    expect(done!.processedAt).not.toBeNull();
+    expect(markPendingProcessedUpTo(home, 'default', q!.id)).toBe(0);
     expect(loadExtractionQueue(home, 'default', { status: 'pending' }).length).toBe(0);
     expect(loadExtractionQueue(home, 'default', { status: 'processed' }).length).toBe(1);
   });
@@ -196,7 +202,7 @@ describe('graph store (graph-on-consolidated guard)', () => {
     const a = insertEntity(home, 'default', { entityType: 'system', name: 'a', memoryId: md });
     const b = insertEntity(home, 'default', { entityType: 'system', name: 'b', memoryId: md });
     insertRelation(home, 'default', { fromEntityId: a.id, toEntityId: b.id, relType: 'depends-on', memoryId: md });
-    enqueueExtraction(home, 'default', md);
+    markGraphDirty(home, 'default', md);
     expect(countRows(home, 'entities')).toBe(2);
     expect(countRows(home, 'relations')).toBe(1);
     expect(countRows(home, 'graph_extraction_queue')).toBe(1);
@@ -204,8 +210,8 @@ describe('graph store (graph-on-consolidated guard)', () => {
     // entities + relations SURVIVE, their memory_id nulled (SET NULL).
     expect(countRows(home, 'entities')).toBe(2);
     expect(countRows(home, 'relations')).toBe(1);
-    expect(loadEntityById(home, 'default', a.id)!.memoryId).toBeNull();
-    expect(loadEntityById(home, 'default', b.id)!.memoryId).toBeNull();
+    expect(loadEntitiesByIds(home, 'default', [a.id])[0]!.memoryId).toBeNull();
+    expect(loadEntitiesByIds(home, 'default', [b.id])[0]!.memoryId).toBeNull();
     // the queue row still cascades away (graph_extraction_queue is untouched by v38).
     expect(countRows(home, 'graph_extraction_queue')).toBe(0);
   });

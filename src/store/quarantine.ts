@@ -1,7 +1,7 @@
 // The memory_quarantine table: the review queue's rows, and the approve and reject writes with their audit rows.
 import { appendAuditEvent } from './audit.js';
-import { withWriteScopeOr, type DatabaseSyncLike } from '../db.js';
-import { keysetAfter, type KeysetPosition } from '../keyset.js';
+import { withWriteScopeOr, type DatabaseSyncLike } from '../db/index.js';
+import { keysetAfter, type KeysetPosition } from '../util/keyset.js';
 import { selectEntriesByIds } from './entry-reads.js';
 import type { QuarantineApproval, QuarantineListQuery, QuarantineRefusal, QuarantineRejection, QuarantinedMemory } from './port.js';
 
@@ -78,6 +78,29 @@ function listQuarantineRows(
         .all(tenantId, status, ...after.params, limit);
   // SAFETY: both branches select SELECT_COLUMNS, matching QuarantineDbRow's field set.
   return (rows as QuarantineDbRow[]).map(fromDbRow);
+}
+
+export interface RecordQuarantineOpts {
+  tenantId: string;
+  memoryId: string;
+  originalScope: string | null;
+  reason: string;
+  actor: string;
+}
+
+/** Insert the quarantine row + its audit event; caller runs this inside the memory's own write transaction. */
+export function recordQuarantine(db: DatabaseSyncLike, opts: RecordQuarantineOpts): void {
+  db.prepare(
+    `INSERT INTO memory_quarantine (tenant_id, memory_id, original_scope, reason, status, quarantined_at)
+     VALUES (?, ?, ?, ?, 'pending', ?)`,
+  ).run(opts.tenantId, opts.memoryId, opts.originalScope, opts.reason, new Date().toISOString());
+  appendAuditEvent(db, {
+    tenantId: opts.tenantId,
+    actor: opts.actor,
+    op: 'quarantine',
+    targetId: opts.memoryId,
+    metadata: { reason: opts.reason, originalScope: opts.originalScope },
+  });
 }
 
 function approveQuarantineRow(db: DatabaseSyncLike, tenantId: string, memoryId: string, decidedBy: string): void {

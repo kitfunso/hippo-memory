@@ -12,7 +12,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { generateProtocol } from '../scripts/e1-lifecycle/generate.mjs';
 import { runArmSeed } from '../scripts/e1-lifecycle/run.mjs';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { _resetAblationCacheForTests } from '../src/ablation.js';
+import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 
 const ABLATION_ENV_VARS = [
   'HIPPO_ABLATE_DECAY',
@@ -153,8 +153,11 @@ describe('E1 driver', () => {
   it('baseline arms produce rankings (bm25-static + recency-window)', async () => {
     const bm25 = await runArmSeed('bm25-static', 4, TINY);
     const rec = await runArmSeed('recency-window', 4, TINY);
-    expect(bm25.epochs[TINY.numSessions - 1].currentR5).not.toBeNull();
-    expect(rec.epochs[TINY.numSessions - 1].currentR5).not.toBeNull();
+    for (const r of [bm25, rec]) {
+      const r5 = r.epochs[TINY.numSessions - 1].currentR5;
+      expect(r5).toBeGreaterThanOrEqual(0);
+      expect(r5).toBeLessThanOrEqual(1);
+    }
   });
 
   it('round-2 arms produce rankings and record their settings in meta', async () => {

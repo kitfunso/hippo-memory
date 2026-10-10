@@ -174,7 +174,7 @@ const readDraw = (ar) => JSON.parse(fs.readFileSync(path.join(ar.work, 'draw.jso
 
 async function loadDeps() {
   const imp = (f) => import(pathToFileURL(path.join(REPO, 'dist', f)).href);
-  const [cap, same, sec] = await Promise.all([imp('capture.js'), imp('same-text.js'), imp('secret-detect.js')]);
+  const [cap, same, sec] = await Promise.all([imp('capture.js'), imp('util/same-text.js'), imp('util/secret-detect.js')]);
   return { summarise: cap.summariseTranscript, extract: cap.extractFromText, dupKey: same.duplicateKey, mask: sec.maskEmails, redact: sec.redactSecretsStrict };
 }
 const captureItems = (d, jsonl) => d.extract(d.mask(d.redact(d.summarise(jsonl)))).map((i) => i.content);

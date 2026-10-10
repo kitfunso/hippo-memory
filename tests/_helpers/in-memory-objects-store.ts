@@ -1,11 +1,10 @@
-// A store other than hippo.db for the Objects group: it copies the typed-object rows out of hippo.db once, then keeps them and
-// the mirrors it is handed in Maps, so a conformance test shows the port's own words are enough to build on.
+// A store other than hippo.db for the Objects group: it keeps the typed-object rows and the mirrors it is handed in Maps and never reads
+// hippo.db's object tables, so a conformance test shows the port's own words are enough to build on.
 import type { AuditOp } from '../../src/store/audit.js';
-import { closeHippoDb, openHippoDb } from '../../src/db.js';
+import { passesScopeFilterForRecall } from '../../src/store/recall-scope.js';
 import type { AppendAuditOpts, AuditEvent, HippoStore, MemoryEntry } from '../../src/server.js';
-import type { ObjectByKind, ObjectFields, ObjectKind, SavableKind } from '../../src/store/object-types.js';
+import type { Incident, ObjectByKind, ObjectFields, ObjectKind, SavableKind } from '../../src/store/object-types.js';
 import type { Objects } from '../../src/store/port.js';
-import { rowSpec, type RowByKind } from '../../src/store/sqlite/object-rows.js';
 import { inMemoryKeyAuditStore } from './in-memory-key-audit-store.js';
 import type { StoreSide } from './store-conformance.js';
 
@@ -106,25 +105,16 @@ function filterValue<K extends ObjectKind>(kind: K): ((row: ObjectByKind[K]) => 
   return FILTER_VALUE[kind];
 }
 
-function copyTable<K extends ObjectKind>(hippoRoot: string, kind: K): Map<number, ObjectByKind[K]> {
-  const spec = rowSpec(kind);
-  const db = openHippoDb(hippoRoot);
-  try {
-    // SAFETY: the SELECT names spec.cols, the columns the kind's row declares.
-    const rows = db.prepare(`SELECT ${spec.cols} FROM ${spec.table}`).all() as RowByKind[K][];
-    return new Map(rows.map((row) => [row.id, spec.rowTo(row)]));
-  } finally {
-    closeHippoDb(db);
-  }
-}
+/** SQLite folds only the ASCII letters, in LOWER and in LIKE alike. */
+const asciiFolded = (text: string): string => text.replace(/[A-Z]/g, (letter) => letter.toLowerCase());
+
+const nextId = (table: ReadonlyMap<number, unknown>): number => Math.max(0, ...table.keys()) + 1;
+const rememberRow = (mirror: MemoryEntry, actor: string): AppendAuditOpts =>
+  ({ tenantId: mirror.tenantId, actor, op: 'remember', targetId: mirror.id, metadata: { kind: mirror.kind ?? 'distilled', scope: mirror.scope ?? null } });
 
 export function inMemoryObjectsStore(hippoRoot: string): InMemoryObjectsStore {
   const base = inMemoryKeyAuditStore(hippoRoot);
-  const tables: Tables = {
-    decision: copyTable(hippoRoot, 'decision'), incident: copyTable(hippoRoot, 'incident'), process: copyTable(hippoRoot, 'process'),
-    policy: copyTable(hippoRoot, 'policy'), skill: copyTable(hippoRoot, 'skill'), project_brief: copyTable(hippoRoot, 'project_brief'),
-    customer_note: copyTable(hippoRoot, 'customer_note'),
-  };
+  const tables: Tables = { decision: new Map(), incident: new Map(), process: new Map(), policy: new Map(), skill: new Map(), project_brief: new Map(), customer_note: new Map() };
   const mirrors = new Map<string, MemoryEntry>();
   const tableOf = <K extends ObjectKind>(kind: K): Map<number, ObjectByKind[K]> => tables[kind];
   const owned = <K extends ObjectKind>(kind: K, tenantId: string, id: number): ObjectByKind[K] | undefined => {
@@ -164,7 +154,7 @@ export function inMemoryObjectsStore(hippoRoot: string): InMemoryObjectsStore {
       const replaced = save.supersedesId === undefined ? undefined : owned(kind, tenantId, save.supersedesId);
       if (save.supersedesId !== undefined && !replaced) return { refused: 'missing' };
       if (replaced && replaced.status !== 'active') return { refused: 'status', status: replaced.status };
-      const id = Math.max(0, ...table.keys()) + 1;
+      const id = nextId(table);
       const version = replaced && rules.versionOf ? rules.versionOf(replaced) + 1 : 1;
       const changeSummary = replaced && rules.versionOf ? save.changeSummary ?? null : null;
       const row = rules.row(save.fields, { id, memoryId: save.mirror.id, tenantId, version, changeSummary, createdAt: save.at });
@@ -176,7 +166,7 @@ export function inMemoryObjectsStore(hippoRoot: string): InMemoryObjectsStore {
       }
       events.push({ tenantId, actor: save.actor, op: createOp(kind), targetId: String(id), metadata: { [ID_KEY[kind]]: id, ...rules.createKeys(save.fields, version) } });
       const { mirror } = save;
-      events.push({ tenantId: mirror.tenantId, actor: save.actor, op: 'remember', targetId: mirror.id, metadata: { kind: mirror.kind ?? 'distilled', scope: mirror.scope ?? null } });
+      events.push(rememberRow(mirror, save.actor));
       // The rows are kept only once every audit row is in, as one transaction would have it.
       await base.store.appendAuditEvents(events);
       if (replaced) table.set(replaced.id, { ...replaced, status: 'superseded', supersededBy: id, supersededAt: save.at });
@@ -184,8 +174,54 @@ export function inMemoryObjectsStore(hippoRoot: string): InMemoryObjectsStore {
       mirrors.set(mirror.id, structuredClone(mirror));
       return structuredClone(row);
     },
-    async mirrorsOnDefaultHalfLife() {
-      return true;
+    async openIncident(tenantId, open) {
+      const { mirror, fields } = open;
+      // The mirror goes in ahead of the link check, so an incident may cite its own mirror.
+      const unlinked = fields.linkedMemoryIds.find((linkId) => (linkId === mirror.id ? mirror : mirrors.get(linkId))?.tenantId !== tenantId);
+      if (unlinked !== undefined) return { refused: 'unlinked', memoryId: unlinked };
+      const id = nextId(tables.incident);
+      const row: Incident = {
+        id, memoryId: mirror.id, tenantId, incidentText: fields.incidentText, context: fields.context ?? null, status: 'open',
+        resolutionText: null, resolvedAt: null, closedAt: null, linkedMemoryIds: [...fields.linkedMemoryIds], createdAt: open.at,
+      };
+      const metadata = { incident_id: id, has_context: Boolean(fields.context), linked_memory_count: fields.linkedMemoryIds.length };
+      await base.store.appendAuditEvents([{ tenantId, actor: open.actor, op: 'incident_open', targetId: String(id), metadata }, rememberRow(mirror, open.actor)]);
+      tables.incident.set(id, row);
+      mirrors.set(mirror.id, structuredClone(mirror));
+      return structuredClone(row);
+    },
+    async resolveIncident(tenantId, id, resolve) {
+      const row = owned('incident', tenantId, id);
+      if (!row) return { refused: 'missing' };
+      if (row.status !== 'open') return { refused: 'status', status: row.status };
+      const resolved: Incident = { ...row, status: 'resolved', resolutionText: resolve.text, resolvedAt: resolve.at };
+      await base.store.appendAuditEvents([{ tenantId, actor: resolve.actor, op: 'incident_resolve', targetId: String(id), metadata: { incident_id: id } }]);
+      tables.incident.set(id, resolved);
+      return structuredClone(resolved);
+    },
+    async policiesInForce(tenantId, query) {
+      const { asOf } = query;
+      const replacedLater = (id: number | null): boolean => {
+        const successor = id === null ? undefined : tables.policy.get(id);
+        return successor !== undefined && byBytes(successor.validFrom, asOf) > 0;
+      };
+      const hits = [...tables.policy.values()].filter((p) =>
+        p.tenantId === tenantId && p.status !== 'closed' && (query.name === undefined || p.policyName === query.name)
+        && byBytes(p.validFrom, asOf) <= 0 && (p.validTo === null || byBytes(asOf, p.validTo) < 0)
+        && (p.status === 'active' || replacedLater(p.supersededBy)));
+      return structuredClone(hits.sort((a, b) => byBytes(b.validFrom, a.validFrom) || b.id - a.id).slice(0, query.limit));
+    },
+    async activeSkillsByName(tenantId, limit) {
+      const hits = [...tables.skill.values()].filter((s) => s.tenantId === tenantId && s.status === 'active');
+      return structuredClone(hits.sort((a, b) => byBytes(a.skillName, b.skillName) || a.id - b.id).slice(0, limit));
+    },
+    async briefReceipts(tenantId, tag, limit) {
+      const quoted = asciiFolded(`"${tag}"`);
+      const hits = [...mirrors.values()].filter((m) =>
+        m.tenantId === tenantId && m.source !== 'project_brief' && passesScopeFilterForRecall(m.scope ?? null, undefined)
+        && asciiFolded(JSON.stringify(m.tags)).includes(quoted));
+      hits.sort((a, b) => byBytes(b.created, a.created) || byBytes(b.id, a.id));
+      return hits.slice(0, limit).map((m) => ({ id: m.id, created: m.created, source: m.source, content: m.content }));
     },
   };
 

@@ -1,5 +1,5 @@
 // One way for a reranker to report that it stopped working, without a line per recall.
-import { log } from '../log.js';
+import { log } from '../util/log.js';
 
 const REPEAT_MS = 5 * 60_000;
 
@@ -8,7 +8,8 @@ export interface OutageWarning {
   answered(): void;
 }
 
-/** Warns when `name` starts failing, at most every five minutes while it keeps failing, and once when it answers again. `fallback` says what recall does meanwhile. */
+/** Warns when `name` starts failing, at most every five minutes while it keeps failing,
+ * and once when it answers again. `fallback` says what recall does meanwhile. */
 export function createOutageWarning(name: string, fallback: string): OutageWarning {
   let failures = 0;
   let unreported = 0;

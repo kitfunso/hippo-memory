@@ -4,7 +4,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { cmdRecall } from '../src/cli/recall.js';
-import { forget, type Context } from '../src/api.js';
+import { forget, type Context } from '../src/api/index.js';
 import { savePrediction, closePrediction } from '../src/store/predictions.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { makeRoot } from './_helpers/make-root.js';
@@ -62,6 +62,13 @@ describe('hippo recall with no matching memory keeps the planning-fallacy hint',
 
     expect(out.results).toEqual([]);
     expect(out.planningFallacyHint).toMatchObject({ classTag: 'migration-effort', nClosed: 3, meanRatio: 2 });
+  });
+
+  it('--json prints the keys in the order scripts have always seen them', async () => {
+    seedBaserateWithNoMemories();
+    const out = await recallJson();
+
+    expect(Object.keys(out)).toEqual(['query', 'results', 'total', 'suppressionSummary', 'planningFallacyHint']);
   });
 
   it('text prints the hint line, with the detected phrase quoted, above the no-memories line', async () => {

@@ -1,11 +1,11 @@
-// Pins every `hippo card` subcommand's stdout, stderr and exit code, in process, so a reshuffle of cmdCard
+// Pins every `hippo card` subcommand's stdout, stderr and exit code, in process, so a reshuffle of handleCard
 // that changes a byte or an exit path fails here. Ids and timestamps are masked; their order is kept.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
-import { cmdCard } from '../src/cli/card.js';
+import { handleCard } from '../src/cli/card.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 
 let root = '';
@@ -42,7 +42,7 @@ describe('hippo card output (in process)', () => {
     const transcript: string[] = [];
     const ids: string[] = [];
     const step = async (label: string, args: string[], flags: Flags = {}): Promise<string> => {
-      const r = await runInProcess(() => cmdCard(store, args, flags));
+      const r = await runInProcess(() => handleCard({ hippoRoot: store, tenantId: 'default', args, flags }));
       transcript.push(`$ card ${label} -> ${r.status}\n--- stdout\n${mask(r.stdout)}--- stderr\n${mask(r.stderr)}`);
       return r.stdout;
     };

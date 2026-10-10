@@ -22,12 +22,12 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { queryAuditEvents } from '../src/store/audit.js';
-import { remember, sleep, getContext, type Context } from '../src/api.js';
+import { remember, sleep, getContext, type Context } from '../src/api/index.js';
 
 // The 'consolidate' audit op's metadata is always the flat scalar phase-counter
-// object built at the appendAuditEvent call site for that op in src/api.ts --
+// object built at the appendAuditEvent call site for that op in src/api/index.ts --
 // never nested objects or arrays.
 type AuditMetadataValue = string | number | boolean | null;
 

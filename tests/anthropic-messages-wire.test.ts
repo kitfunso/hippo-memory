@@ -2,9 +2,9 @@ import http from 'node:http';
 import crypto from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
-import { extractFacts, type ExtractedFact } from '../src/extract.js';
-import { generateDagSummary } from '../src/dag.js';
-import { refineSemanticMemory } from '../src/refine-llm.js';
+import { extractFacts, type ExtractedFact } from '../src/learn/extract.js';
+import { generateDagSummary } from '../src/consolidate/dag.js';
+import { refineSemanticMemory } from '../src/cli/refine-llm.js';
 
 // Real local HTTP server per case; the callers' own `fetcher` option points them at it, so the request bytes are what a real call sends.
 type Mode = 'ok' | 'http400' | 'http500' | 'badjson' | 'empty' | 'hang' | 'refused';
@@ -90,7 +90,7 @@ interface CallerSpec {
 }
 
 const TIMEOUT_MESSAGE = /aborted due to timeout/;
-const NOT_JSON = /Unexpected token/;
+const NOT_JSON = /reply is not JSON/;
 const FACT: ExtractedFact = { content: 'Alice likes tea', tags: ['speaker:Alice'], valence: 'positive' };
 const DAG_TEXT = 'Alice likes tea and drinks it every morning before work.';
 const REFINE_TEXT = 'People prefer tea in the morning.';

@@ -1,8 +1,8 @@
-import { type MemoryEntry, markRetrieved } from '../memory.js';
-import { type DatabaseSyncLike, closeHippoDb, openHippoDb, rethrowIfSqliteBlocked, withWriteScope } from '../db.js';
+import { type MemoryEntry, markRetrieved } from '../core/memory.js';
+import { type DatabaseSyncLike, closeHippoDb, openHippoDb, rethrowIfSqliteBlocked, withWriteScope } from '../db/index.js';
 import { RejectedValueError } from './rejection.js';
 import { markSummaryDirtyInTx } from './summary-dirty.js';
-import { errorMessage, log } from '../log.js';
+import { errorMessage, log } from '../util/log.js';
 import { auditRejectionRefusal, audit } from './audit-event.js';
 import { selectEntriesByIds } from './entry-reads.js';
 import { stampOriginProject, upsertEntryRow, syncFtsRow, deleteFtsRow } from './entry-row.js';
@@ -25,7 +25,8 @@ export function writeEntry(hippoRoot: string, entry: MemoryEntry, opts?: WriteEn
   }
 }
 
-/** writeEntry for each of `entries` in one transaction, so all land or none; each keeps its audit row, and mirrors follow the commit. Returns how many were written. */
+/** writeEntry for each of `entries` in one transaction, so all land or none; each
+ * keeps its audit row, and mirrors follow the commit. Returns how many were written. */
 export function writeEntriesTogether(hippoRoot: string, entries: readonly MemoryEntry[]): number {
   const stamped = entries.map((entry) => stampOriginProject(hippoRoot, entry));
   const db = openStore(hippoRoot);
@@ -44,8 +45,36 @@ export function writeEntriesTogether(hippoRoot: string, entries: readonly Memory
   return stamped.length;
 }
 
+/** writeEntry for each of `entries` on one open store, so the open and its lock wait are
+ * paid once; each row commits alone, and none opens the store when the list is empty. */
+export function writeEntriesSeparately(hippoRoot: string, entries: readonly MemoryEntry[]): void {
+  if (entries.length === 0) return;
+  const db = openStore(hippoRoot);
+  try {
+    for (const entry of entries) writeEntryOn(db, hippoRoot, entry);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/** Adds `tag` to each of a tenant's rows that lacks it, in `ids` order, each read fresh
+ * on one open store and committed alone; an id the tenant does not hold is skipped. */
+export function addTagToEntries(hippoRoot: string, tenantId: string, ids: readonly string[], tag: string): void {
+  const db = openStore(hippoRoot);
+  try {
+    const live = selectEntriesByIds(db, ids, tenantId);
+    for (const id of new Set(ids)) {
+      const entry = live.get(id);
+      if (!entry || entry.tags.includes(tag)) continue;
+      writeEntryOn(db, hippoRoot, { ...entry, tags: [...entry.tags, tag] });
+    }
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
 /** writeEntry on the caller's open store, so a loop of writes opens the store once; each row still commits alone. */
-export function writeEntryOn(db: DatabaseSyncLike, hippoRoot: string, entry: MemoryEntry, opts?: WriteEntryOptions): void {
+function writeEntryOn(db: DatabaseSyncLike, hippoRoot: string, entry: MemoryEntry, opts?: WriteEntryOptions): void {
   try {
     const stamped = stampOriginProject(hippoRoot, entry);
     writeEntryDbOnly(db, stamped, opts);

@@ -1,33 +1,44 @@
-import { envPort, envRequireAuth, envV1Rps } from '../env.js';
+import { envPort, envRequireAuth, envV1Rps } from '../util/env.js';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { existsSync } from 'node:fs';
-import { detectServer, removePidfileIfOwned, writePidfile } from '../server-detect.js';
-import { closeHippoDb, type DatabaseSyncLike, getHippoDbPath, isStoreBusy, openHippoDb, outsideRequestStores, outsideSqliteOffLoop, runWithRequestStores, SERVER_DB_WAIT_MS, withSqliteBlocked } from '../db.js';
+import { detectServer, removePidfileIfOwned, writePidfile } from './server-detect.js';
+import {
+  closeHippoDb,
+  type DatabaseSyncLike,
+  getHippoDbPath,
+  isStoreBusy,
+  openHippoDb,
+  outsideRequestStores,
+  outsideSqliteOffLoop,
+  runWithRequestStores,
+  SERVER_DB_WAIT_MS,
+  withSqliteBlocked
+} from '../db/index.js';
 import { startWalCheckpointer, type WalCheckpointer } from '../db/wal-checkpointer.js';
-import type { HippoStore } from '../store-port.js';
+import { requireGroup, type HippoStore } from '../store/index.js';
 import { workerSqliteStore } from '../store/sqlite/worker-store.js';
-import { markSharedStore } from '../config.js';
+import { markSharedStore } from '../core/config.js';
 import { auditWriteFailureCount } from '../store/audit.js';
-import { PACKAGE_VERSION } from '../version.js';
-import { errorFields, errorMessage, log } from '../log.js';
+import { PACKAGE_VERSION } from '../util/version.js';
+import { errorFields, errorMessage, log } from '../util/log.js';
 import { runWithRequestId } from '../util/request-scope.js';
-import { createRateLimiter, type RateLimiter } from '../rate-limit.js';
-import { RecallContractError } from '../api.js';
+import { createRateLimiter, type RateLimiter } from './rate-limit.js';
+import { RecallContractError } from '../api/index.js';
 import { handleSlackEventsWebhook } from '../connectors/slack/webhook.js';
 import { handleGitHubEventsWebhook } from '../connectors/github/webhook.js';
-import { bodyDeadlineMs, BodyTimeoutError, BodyTooLargeError, closeAfterReply, DeadlineExceededError, HttpError, JSON_HEADERS, sendJson } from '../http-util.js';
+import { BodyTimeoutError, BodyTooLargeError, closeAfterReply, DeadlineExceededError, HttpError, JSON_HEADERS, sendJson } from '../util/http-util.js';
 import { workerCounts } from '../store/sqlite/executor-counts.js';
 import { isLocalCaller, LIMITER_MAX_KEYS } from './auth.js';
 import { enforceRateLimit, warnIfClientIpHeaderUnpinned } from './client-ip.js';
 import { answerAtDeadline, handlerDeadlineCount, isAbandoned, requestDeadlineFor } from './deadline.js';
-import { drainAndClose } from './lifecycle.js';
+import { DEFAULT_SHUTDOWN_DRAIN_MS, drainAndClose, setKeepAliveTimeouts, shutdownBoundMs } from './lifecycle.js';
 import { readyProbeFor } from './ready.js';
-import { installCrashHandlers } from '../util/crash-handlers.js';
+import { installCrashHandlers, installSignalHandlers } from '../util/crash-handlers.js';
 import { handleMcpPost, handleMcpStream } from './mcp-http.js';
-import { MCP_PROJECT_SCOPED_HEADER } from '../project-identity.js';
-import { logRequestFailure, noteAccess, openRequest, parseRequest, rejectEncodedSlash, replyFor, sendError } from './request.js';
+import { MCP_PROJECT_SCOPED_HEADER } from '../core/project-identity.js';
+import { accessRouteOf, logRequestFailure, noteAccess, openRequest, parseRequest, rejectEncodedSlash, replyFor, sendError } from './request.js';
 import { createListener, warnIfCleartext } from './tls.js';
-import { assertAddonRoutes, assertPublicJson, assertSqliteStore, dispatchAddonRoute, dispatchPublicJson, dispatchV1Route, isPublicRoute } from './route-table.js';
+import { assertAddonRoutes, assertPublicJson, dispatchAddonRoute, dispatchPublicJson, dispatchV1Route, isPublicRoute } from './route-table.js';
 import type { AuthResolver, RateLimitSpec, ResolvedServeOpts, RouteRequest, ServeOpts, ServerHandle } from './types.js';
 
 // server.address() returns AddressInfo once a TCP socket is bound; null before
@@ -82,7 +93,8 @@ async function handleRequest(
   const routeRequest: RouteRequest = { req, res, opts, query };
   if (await runWithRequestStores(() => dispatchScopedRoute(routeRequest, method, path), { busyWaitMs: SERVER_DB_WAIT_MS })) return;
 
-  // A scope of its own, which the heartbeat timer keeps after it closes, so the key check and every heartbeat wait the server's lock wait. Store-ready: the stream only authenticates, through the port.
+  // A scope of its own, which the heartbeat timer keeps after it closes, so the key check and every
+  // heartbeat wait the server's lock wait. Store-ready: the stream only authenticates, through the port.
   if (method === 'GET' && path === '/mcp/stream') {
     noteAccess(req, { route: path });
     await runWithRequestStores(() => handleMcpStream(req, res, opts, streamSlots), { busyWaitMs: SERVER_DB_WAIT_MS });
@@ -91,6 +103,13 @@ async function handleRequest(
 
   res.writeHead(404, JSON_HEADERS);
   res.end(JSON.stringify({ error: 'not found' }));
+}
+
+const WEBHOOK_GROUPS = ['entryWrites', 'connectorWrites', 'connectorEvents'] as const;
+
+/** A store missing a group a delivery writes through refuses the webhook up front, so no delivery is acknowledged and then half stored. */
+function requireWebhookGroups(store: HippoStore): void {
+  for (const group of WEBHOOK_GROUPS) requireGroup(store, group);
 }
 
 /** Every route that runs inside a request scope, so it opens each store once: the /v1 table, public JSON, add-on routes, the webhooks and POST /mcp. */
@@ -107,8 +126,8 @@ async function dispatchScopedRoute(r: RouteRequest, method: string, path: string
       // Defensive: PUBLIC_ROUTES drift would land here. Fail closed.
       throw new HttpError(401, 'auth required');
     }
-    assertSqliteStore(opts);
-    await handleSlackEventsWebhook({ req, res, opts });
+    requireWebhookGroups(opts.store);
+    await handleSlackEventsWebhook({ req, res, opts }, opts.store);
     return true;
   }
 
@@ -117,8 +136,8 @@ async function dispatchScopedRoute(r: RouteRequest, method: string, path: string
     if (!isPublicRoute(method, path)) {
       throw new HttpError(401, 'auth required');
     }
-    assertSqliteStore(opts);
-    await handleGitHubEventsWebhook({ req, res, opts });
+    requireWebhookGroups(opts.store);
+    await handleGitHubEventsWebhook({ req, res, opts }, opts.store);
     return true;
   }
 
@@ -153,7 +172,8 @@ function sendHealth(req: IncomingMessage, res: ServerResponse, startedAt: string
   }
 }
 
-/** Readiness: one cheap read on the served store under the server's lock wait. /health stays liveness only, so a probe can tell a store that does not answer from a dead process. */
+/** Readiness: one cheap read on the served store under the server's lock wait. /health stays
+ * liveness only, so a probe can tell a store that does not answer from a dead process. */
 async function sendReady(res: ServerResponse, store: HippoStore): Promise<void> {
   const { readiness } = store;
   if (readiness === undefined) {
@@ -312,9 +332,25 @@ function replyWithFailure<E>(req: IncomingMessage, res: ServerResponse, err: E, 
 
 const HANDLER_LATE = 'the request did not finish by its deadline and was abandoned; a write it started may or may not be saved';
 
-// The caller already has its 504, so a second reply would be written into a finished response.
-function logLateFailure<E>(req: IncomingMessage, err: E): void {
-  log.debug(`${req.method ?? 'GET'} ${(req.url ?? '/').split('?')[0]} ended after its deadline reply: ${errorMessage(err)}`);
+// The caller already has its 504, so this line is the only trace of the failure. The path and the error text can hold caller data, so it carries neither.
+function logLateFailure<E>(req: IncomingMessage, err: E, requestId: string): void {
+  const fields = { requestId, method: req.method ?? 'GET', route: accessRouteOf(req), failureStatus: replyFor(err).status };
+  log.warn('request failed after its deadline reply', { ...fields, errorClass: errorFields(err).errorClass });
+}
+
+// A handler that ends after the 504 finds the response finished, so sending its own reply throws this: its work ran to the end.
+function isDroppedLateReply<E>(err: E): boolean {
+  return err instanceof Error && 'code' in err && err.code === 'ERR_HTTP_HEADERS_SENT';
+}
+
+/** A GET only reads; every other method this server routes can write. */
+const isRead = (method: string): boolean => method === 'GET';
+
+// A read that ends late changed nothing. A write that ends late ran to its end after its caller was told it may not have been saved.
+function logLateFinish(req: IncomingMessage, requestId: string): void {
+  const method = req.method ?? 'GET';
+  if (isRead(method)) return;
+  log.info('request finished after its deadline reply; its own reply was dropped', { requestId, method, route: accessRouteOf(req) });
 }
 
 function replyOrClose<E>(req: IncomingMessage, res: ServerResponse, err: E, requestId: string): void {
@@ -322,7 +358,7 @@ function replyOrClose<E>(req: IncomingMessage, res: ServerResponse, err: E, requ
     replyWithFailure(req, res, err, requestId);
   } catch (replyErr) {
     // A throw here would be an unhandled rejection, which stops the daemon for every caller.
-    log.error(`serve: failure reply not sent, socket closed: ${errorMessage(replyErr)}`);
+    log.error(`serve: failure reply not sent, socket closed: ${errorMessage(replyErr)}`, errorFields(replyErr));
     res.destroy();
   }
 }
@@ -334,24 +370,16 @@ function answerRequest(req: IncomingMessage, res: ServerResponse, handle: () => 
   // Inside the scope, so the failure reply's log line carries the id too.
   runWithRequestId(requestId, () => {
     if (deadline) answerAtDeadline(res, deadline, () => replyOrClose(req, res, new DeadlineExceededError(HANDLER_LATE), requestId));
-    handle().catch(<E>(err: E) => {
-      if (isAbandoned(res)) logLateFailure(req, err);
-      else replyOrClose(req, res, err, requestId);
+    handle().then(() => {
+      if (isAbandoned(res)) logLateFinish(req, requestId);
+    }, <E>(err: E) => {
+      if (!isAbandoned(res)) replyOrClose(req, res, err, requestId);
+      else if (isDroppedLateReply(err)) logLateFinish(req, requestId);
+      else logLateFailure(req, err, requestId);
     });
   }, deadline);
 }
 
-// Node's own default, named so the three socket deadlines read together. It times the request arriving, never the handler, so a 10 minute sleep is not cut.
-const REQUEST_RECEIVE_TIMEOUT_MS = 300_000;
-
-function setKeepAliveTimeouts(server: Server): void {
-  // The default 5s keepAliveTimeout closes idle sockets just as clients reuse them (ECONNRESET).
-  // headersTimeout must stay ABOVE keepAliveTimeout + keepAliveTimeoutBuffer (1s), or it closes idle reused sockets itself.
-  server.keepAliveTimeout = 65_000;
-  server.headersTimeout = 70_000;
-  // Never below what a raised body deadline allows, or Node's bare 408 would come before the route's own.
-  server.requestTimeout = Math.max(REQUEST_RECEIVE_TIMEOUT_MS, server.headersTimeout + bodyDeadlineMs());
-}
 
 function listenOn(server: Server, port: number, host: string): Promise<void> {
   return new Promise<void>((resolve, reject) => {
@@ -371,22 +399,11 @@ function listenOn(server: Server, port: number, host: string): Promise<void> {
   });
 }
 
-function installSignalHandlers(stop: () => Promise<void>): void {
-  let shuttingDown = false;
-  const gracefulShutdown = async (signal: string): Promise<void> => {
-    if (shuttingDown) return;
-    shuttingDown = true;
-    log.warn(`received ${signal}, shutting down`);
-    try {
-      await stop();
-      process.exit(0);
-    } catch (err) {
-      log.error(`error during stop: ${errorMessage(err)}`, errorFields(err));
-      process.exit(1);
-    }
-  };
-  process.once('SIGTERM', () => { void gracefulShutdown('SIGTERM'); });
-  process.once('SIGINT', () => { void gracefulShutdown('SIGINT'); });
+
+function exitOnSignalOrCrash(stop: () => Promise<void>, drainMs: number): void {
+  const shutdown = { run: stop, boundMs: shutdownBoundMs(drainMs) };
+  installSignalHandlers('serve', shutdown);
+  installCrashHandlers('serve', shutdown);
 }
 
 /**
@@ -414,11 +431,9 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   const host = opts.host ?? '127.0.0.1';
   const requestedPort = opts.port ?? Number(envPort() ?? 6789);
 
-  // A frozen copy, so a route the caller adds or renames after boot never skips the check below.
-  const routes = Object.freeze((opts.routes ?? []).map(({ path, handler, storeReady }) => Object.freeze(storeReady === undefined ? { path, handler } : { path, handler, storeReady })));
-  assertAddonRoutes(routes);
+  const routes = frozenAddonRoutes(opts.routes);
   const publicJsonBodies = assertPublicJson(opts.publicJson ?? {});
-  const { perAddress: limiter, callerLimiter, failedAuthLimiter } = bootLimiters(opts.rateLimits);
+  const limiters = bootLimiters(opts.rateLimits);
   assertBindable(host);
   await assertNoLiveServer(opts.hippoRoot);
 
@@ -430,37 +445,17 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   // Open /mcp/stream count per client key, so the cap is per server rather than per process.
   const streamSlots = new Map<string, number>();
 
-  const served: ResolvedServeOpts = {
-    ...opts, routes, publicJsonBodies, store: opts.store ?? workerSqliteStore(opts.hippoRoot), callerLimiter, failedAuthLimiter,
-    authResolver: outsideRouteBlock(opts.authResolver),
-  };
-  const { kind } = served.store;
+  const served = servedOptsFor(opts, routes, publicJsonBodies, limiters);
   // A store other than hippo.db is a team's central server, so its folder's config.json must not decide shared-ness.
-  if (kind !== 'sqlite') markSharedStore(opts.hippoRoot);
+  if (served.store.kind !== 'sqlite') markSharedStore(opts.hippoRoot);
   const holder = createStoreHolder(opts.hippoRoot, served.store);
 
   const inflight = new Set<ServerResponse>();
-  const server: Server = createListener(opts.tls, (req, res) => {
-    res.once('finish', holder.afterResponse);
-    inflight.add(res);
-    res.once('close', () => inflight.delete(res));
-    const run = (): Promise<void> => handleRequest(req, res, served, { startedAt, streamSlots, limiter });
-    // A missed port under another store would otherwise create and write a hippo.db that store never reads.
-    answerRequest(req, res, () => (kind === 'sqlite' ? run() : withSqliteBlocked(kind, run)), opts.slowRequestWarnMs);
-  });
+  const server = acceptingServer(served, holder, inflight, { startedAt, streamSlots, limiter: limiters.perAddress });
 
   setKeepAliveTimeouts(server);
 
-  await listenOn(server, requestedPort, host);
-
-  const address = server.address();
-  if (!isAddressInfo(address)) {
-    throw new Error('server.address() returned unexpected shape');
-  }
-  const addressInfo = address;
-  const actualPort = addressInfo.port;
-  const url = `${opts.tls ? 'https' : 'http'}://${host.includes(':') ? `[${host}]` : host}:${actualPort}`;
-  warnIfCleartext(host, opts.tls, LOOPBACK_HOSTS);
+  const { port: actualPort, url } = await listenAndDescribe(server, requestedPort, host, opts.tls);
 
   writePidfile(opts.hippoRoot, { port: actualPort, url, startedAt });
   holder.hold();
@@ -469,20 +464,68 @@ export async function serve(opts: ServeOpts): Promise<ServerHandle> {
   const stop = async (): Promise<void> => {
     if (stopping) return;
     stopping = true;
-    // Remove the pidfile only if it still names this server. A newer server
-    // may have started on this hippoRoot and rewritten the pidfile; an
-    // unconditional unlink here would orphan it.
-    removePidfileIfOwned(opts.hippoRoot, { pid: process.pid, startedAt });
-    await drainAndClose(server, inflight, opts.shutdownDrainMs ?? 5000);
+    await stopListening(opts, server, inflight, startedAt);
     // The store's worker threads close their connections first, so the held one is still SQLite's last.
     if (!opts.store) await served.store.close();
     await holder.release();
   };
 
-  if (opts.handleSignals) {
-    installSignalHandlers(stop);
-    installCrashHandlers('serve', stop);
-  }
+  if (opts.handleSignals) exitOnSignalOrCrash(stop, opts.shutdownDrainMs ?? DEFAULT_SHUTDOWN_DRAIN_MS);
 
   return { port: actualPort, url, stop, server };
+}
+
+function frozenAddonRoutes(addonRoutes: ServeOpts['routes']): NonNullable<ServeOpts['routes']> {
+  // A frozen copy, so a route the caller adds or renames after boot never skips the check below.
+  const routes = Object.freeze((addonRoutes ?? []).map(({ path, handler, storeReady }) => Object.freeze(storeReady === undefined
+    ? { path, handler }
+    : { path, handler, storeReady })));
+  assertAddonRoutes(routes);
+  return routes;
+}
+
+function servedOptsFor(
+  opts: ServeOpts,
+  routes: NonNullable<ServeOpts['routes']>,
+  publicJsonBodies: ReadonlyMap<string, string>,
+  { callerLimiter, failedAuthLimiter }: BootedLimiters,
+): ResolvedServeOpts {
+  return {
+    ...opts, routes, publicJsonBodies, store: opts.store ?? workerSqliteStore(opts.hippoRoot), callerLimiter, failedAuthLimiter,
+    authResolver: outsideRouteBlock(opts.authResolver),
+  };
+}
+
+function acceptingServer(served: ResolvedServeOpts, holder: StoreHolder, inflight: Set<ServerResponse>, options: HandleRequestOptions): Server {
+  const { kind } = served.store;
+  return createListener(served.tls, (req, res) => {
+    res.once('finish', holder.afterResponse);
+    inflight.add(res);
+    res.once('close', () => inflight.delete(res));
+    const run = (): Promise<void> => handleRequest(req, res, served, options);
+    // A missed port under another store would otherwise create and write a hippo.db that store never reads.
+    answerRequest(req, res, () => (kind === 'sqlite' ? run() : withSqliteBlocked(kind, run)), served.slowRequestWarnMs);
+  });
+}
+
+async function listenAndDescribe(server: Server, port: number, host: string, tls: ServeOpts['tls']): Promise<{ port: number; url: string }> {
+  await listenOn(server, port, host);
+
+  const address = server.address();
+  if (!isAddressInfo(address)) {
+    throw new Error('server.address() returned unexpected shape');
+  }
+  const addressInfo = address;
+  const actualPort = addressInfo.port;
+  const url = `${tls ? 'https' : 'http'}://${host.includes(':') ? `[${host}]` : host}:${actualPort}`;
+  warnIfCleartext(host, tls, LOOPBACK_HOSTS);
+  return { port: actualPort, url };
+}
+
+async function stopListening(opts: ServeOpts, server: Server, inflight: Set<ServerResponse>, startedAt: string): Promise<void> {
+  // Remove the pidfile only if it still names this server. A newer server
+  // may have started on this hippoRoot and rewritten the pidfile; an
+  // unconditional unlink here would orphan it.
+  removePidfileIfOwned(opts.hippoRoot, { pid: process.pid, startedAt });
+  await drainAndClose(server, inflight, opts.shutdownDrainMs ?? DEFAULT_SHUTDOWN_DRAIN_MS);
 }

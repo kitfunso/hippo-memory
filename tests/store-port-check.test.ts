@@ -18,6 +18,7 @@ type Counts = {
   twinFunctions: number;
   sqlOutside: number;
   txLiterals: number;
+  tenantResolvesInCli: number;
   openersOutsideByFile: Record<string, number>;
   sqlOutsideByFile: Record<string, number>;
   sqliteLocalMethods: string[];
@@ -37,6 +38,7 @@ const zero: Counts = {
   twinFunctions: 0,
   sqlOutside: 0,
   txLiterals: 0,
+  tenantResolvesInCli: 0,
   openersOutsideByFile: {},
   sqlOutsideByFile: {},
   sqliteLocalMethods: [],
@@ -84,10 +86,10 @@ describe('check-store-port.mjs', () => {
     });
   });
 
-  it('does not count calls under src/db, src/store, src/cli or src/db.ts in number 1', () => {
+  it('does not count calls under src/db, src/store, src/cli or src/db/index.ts in number 1', () => {
     const call = "export const f = () => openStore('r');\n";
     withFixture(
-      { 'src/db/a.ts': call, 'src/store/b.ts': call, 'src/cli/c.ts': call, 'src/cli.ts': call, 'src/db.ts': call },
+      { 'src/db/a.ts': call, 'src/store/b.ts': call, 'src/cli/c.ts': call, 'src/cli.ts': call, 'src/db/index.ts': call },
       null,
       ({ run }) => {
         expect(list(run)).toMatchObject({ openersOutside: '0', openersInCli: '2' });
@@ -207,6 +209,16 @@ describe('check-store-port.mjs', () => {
     });
   });
 
+  it('counts resolveTenantId calls under src/cli/ only, not the import or other folders', () => {
+    const call = "import { resolveTenantId } from './t.js';\nexport const f = () => resolveTenantId({});\n";
+    withFixture({ 'src/cli/a.ts': call, 'src/cli.ts': call, 'src/api/b.ts': call }, { tenantResolvesInCli: 0 }, ({ run }) => {
+      expect(list(run).tenantResolvesInCli).toBe('1');
+      const r = run();
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain('tenantResolvesInCli: 0 -> 1');
+    });
+  });
+
   it('counts a BEGIN literal outside src/db/busy.ts and not inside it', () => {
     const tx = "export const a = 'BEGIN IMMEDIATE';\nexport const b = `BEGIN`;\nexport const c = `BEGIN ${'x'}`;\n";
     withFixture({ 'src/a.ts': tx, 'src/db/busy.ts': tx }, { txLiterals: 0 }, ({ run }) => {
@@ -284,6 +296,41 @@ describe('check-store-port.mjs', () => {
       expect(r.stderr).toContain('src/api/new.ts: not a carrier file -> uses andThen or onStore');
       expect(r.stderr).not.toContain('src/api/on-store.ts');
       expect(r.stderr).not.toContain('src/api/old.ts');
+    });
+  });
+
+  it('fails and names each surface file that records a recall itself, in a route or a CLI verb', () => {
+    const route = [
+      "import { noteRecall as n } from '../../api/recall-record.js';",
+      'export const f = (s: any, ctx: any) => {',
+      '  s.bumpRecallStats(1);',
+      "  recordTokens(ctx, 'http_recall', {});",
+      '};',
+    ].join('\n');
+    const verb ="export const g = (store: any) => store.recordTokens({ surface: 'recall', items: 1 });\n";
+    withFixture({ 'src/server/routes/recall.ts': route, 'src/cli/recall.ts': verb }, {}, ({ run }) => {
+      for (const args of [[], ['--list'], ['--update']]) {
+        const r = run(...args);
+        expect(r.status, args.join()).toBe(1);
+        expect(r.stderr).toContain('src/server/routes/recall.ts:1 noteRecall');
+        expect(r.stderr).toContain('src/server/routes/recall.ts:3 bumpRecallStats');
+        expect(r.stderr).toContain('src/server/routes/recall.ts:4 recordTokens with a recall label');
+        expect(r.stderr).toContain('src/cli/recall.ts:1 recordTokens with a recall label');
+        expect(r.stderr).toContain('recall-finish.ts');
+      }
+    });
+  });
+
+  it('lets src/api and src/mcp record a recall, and a route book another label or name a recorder in a comment or string', () => {
+    const records = ['export const f = (s: any, ring: any, ctx: any) => {', '  noteRecall(ring);', '  s.bumpRecallStats(1);', "  recordTokens(ctx, 'mcp_recall', {});", '};'].join('\n');
+    const route = [
+      '// noteRecall(ring) and bumpRecallStats(1)',
+      'export const s = "recordTokens(ctx, \'recall\')";',
+      "export const g = (ctx: any) => recordTokens(ctx, 'http_context', { note: 'recalled' });",
+    ].join('\n');
+    withFixture({ 'src/api/recall-finish.ts': records, 'src/mcp/recall-tools.ts': records, 'src/server/routes/recall.ts': route }, {}, ({ run }) => {
+      const r = run();
+      expect(r.status, r.stderr).toBe(0);
     });
   });
 

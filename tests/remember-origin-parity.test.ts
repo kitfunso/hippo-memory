@@ -6,9 +6,9 @@ import * as path from 'node:path';
 import { handleRemember } from '../src/cli/remember.js';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
-import { _resetSharedStoreCacheForTests } from '../src/config.js';
-import type { JsonValue } from '../src/json.js';
-import { clearProjectIdentityCache } from '../src/project-identity.js';
+import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
+import type { JsonValue } from '../src/util/json.js';
+import { clearProjectIdentityCache } from '../src/core/project-identity.js';
 import { serve, type ServerHandle } from '../src/server.js';
 
 let tmp: string;
@@ -29,7 +29,7 @@ function projectStore(config: Record<string, JsonValue>): string {
 async function directRemember(store: string, text: string): Promise<string> {
   const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
   try {
-    await handleRemember({ hippoRoot: store, args: [text], flags: { force: true } });
+    await handleRemember({ hippoRoot: store, tenantId: 'default', args: [text], flags: { force: true } });
   } finally {
     log.mockRestore();
   }
@@ -44,7 +44,7 @@ async function thinRemember(store: string, text: string): Promise<string> {
   const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
   let printed = '';
   try {
-    await handleRemember({ hippoRoot: store, args: [text], flags: {} });
+    await handleRemember({ hippoRoot: store, tenantId: 'default', args: [text], flags: {} });
   } finally {
     printed = log.mock.calls.map((c) => String(c[0])).join(' ');
     log.mockRestore();

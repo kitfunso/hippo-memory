@@ -4,11 +4,11 @@ import { spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { closeHippoDb, openHippoDb } from '../src/db.js';
+import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { initStore } from '../src/store/open.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { readyProbeFor } from '../src/server/ready.js';
-import { sqliteStore } from '../src/store-port.js';
+import { sqliteStore } from '../src/store/index.js';
 
 const dirs: string[] = [];
 afterEach(() => {

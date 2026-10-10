@@ -1,7 +1,7 @@
 /** @jsxImportSource preact */
 import { useEffect, useRef, useState } from 'preact/hooks';
 
-// One memory, three futures, from calculateStrength and markRetrieved in src/memory.ts at their defaults.
+// One memory, three futures, from calculateStrength and markRetrieved in src/core/memory.ts at their defaults.
 // Labels are HTML over a stretched SVG so text keeps its size at every width.
 
 type Ev = { day: number; kind: 'recall' | 'wrong' };

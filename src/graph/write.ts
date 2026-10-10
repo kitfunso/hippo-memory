@@ -1,8 +1,17 @@
 // Applies a rebuild's op list on the caller's transaction. The statements and the consolidated-source guard sit in the store's graph writers.
-import { assertTenantId } from '../tenant.js';
-import { clock } from '../write-budget.js';
-import type { DatabaseSyncLike } from '../db.js';
-import { deleteEntityRow, deleteRelationRow, entityIdBySource, insertEntity, insertRelation, objectInForce, relationPresent, updateEntity } from '../store/graph-writes.js';
+import { assertTenantId } from '../store/tenant.js';
+import { clock } from '../util/write-budget.js';
+import type { DatabaseSyncLike } from '../db/index.js';
+import {
+  deleteEntityRow,
+  deleteRelationRow,
+  entityIdBySource,
+  insertEntity,
+  insertRelation,
+  objectInForce,
+  relationPresent,
+  updateEntity
+} from '../store/graph-writes.js';
 import type { DesiredRelation, GraphOp } from './delta.js';
 
 function insertDesiredRelation(db: DatabaseSyncLike, hippoRoot: string, tenantId: string, rel: DesiredRelation): boolean {
@@ -28,7 +37,8 @@ function applyGraphOp(db: DatabaseSyncLike, hippoRoot: string, tenantId: string,
       return updateEntity(hippoRoot, tenantId, op.id, op.entity, db) !== null;
     case 'insertEntity':
       // A mirrorless object closed since the load is never enqueued again, so a stale insert would stay for good.
-      if (!objectInForce(db, tenantId, op.entity.sourceObject) || entityIdBySource(db, tenantId, op.entity.entityType, op.entity.sourceObject) !== undefined) return false;
+      if (!objectInForce(db, tenantId, op.entity.sourceObject) || entityIdBySource(db, tenantId, op.entity.entityType, op.entity.sourceObject) !== undefined)
+        return false;
       insertEntity(hippoRoot, tenantId, op.entity, db);
       return true;
     case 'insertRelation':

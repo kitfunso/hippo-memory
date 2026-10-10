@@ -1,12 +1,12 @@
 // A store other than hippo.db for the GraphReads group: it copies entities, relations and each memory's scope out of hippo.db once, then
 // walks them in memory from the port's doc comments alone, so a conformance test shows those words are enough to build on.
 import { vi } from 'vitest';
-import { closeHippoDb, openHippoDb } from '../../src/db.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/memory.js';
-import { savePolicy } from '../../src/policies.js';
-import { canReadScope } from '../../src/recall-scope.js';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../../src/core/memory.js';
+import { savePolicy } from '../../src/objects/policies.js';
+import { canReadScope } from '../../src/store/recall-scope.js';
 import { withSqliteAllowed, type HippoStore } from '../../src/server.js';
-import { writeEntryOn } from '../../src/store/entry-writes.js';
+import { writeEntry } from '../../src/store/entry-writes.js';
 import { ENTITY_COLS, RELATION_COLS, rowToEntity, rowToRelation, type Entity, type EntityRow, type EntityType, type Relation, type RelationRow } from '../../src/store/graph-rows.js';
 import { insertEntity, insertRelation } from '../../src/store/graph-writes.js';
 import type { GraphReads, GraphRows, GraphViewQuery } from '../../src/store/port.js';
@@ -127,7 +127,7 @@ type Db = ReturnType<typeof openHippoDb>;
 
 function seeder(db: Db, dir: string) {
   const memory = (tenantId: string, id: string, scope: string | null): string => {
-    writeEntryOn(db, dir, { ...createMemory(`source of ${id}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId, scope }), id });
+    writeEntry(dir, { ...createMemory(`source of ${id}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId, scope }), id });
     return id;
   };
   const entity = (tenantId: string, second: number, name: string, entityType: EntityType, memoryId: string): number => {

@@ -6,8 +6,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AGENT_MEMORY_TOOLS, toolSourcePrefix } from '../src/core/agent-memory-tools.js';
 import {
-  AUTO_DELETABLE_SQL, COMPACTION_MEMORY_TAG, COMPACTION_SOURCE_PREFIX, KEEP_PAIRS, canAutoDelete, type MemoryEntry
-} from '../src/memory.js';
+  COMPACTION_MEMORY_TAG, COMPACTION_SOURCE_PREFIX, KEEP_PAIRS, canAutoDelete, type MemoryEntry
+} from '../src/core/memory.js';
+import { AUTO_DELETABLE_SQL } from '../src/store/rule-sql.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -15,11 +16,14 @@ import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
 import { batchWriteAndDelete, deleteEntry } from '../src/store/delete-and-batch.js';
 import { listMemoryConflicts } from '../src/store/conflicts.js';
 import { consolidate } from '../src/consolidate/sleep.js';
-import { deduplicateStore } from '../src/dedupe.js';
+import { deduplicateStore } from '../src/consolidate/dedupe.js';
 import { auditMemory } from '../src/store/audit.js';
-import { closeHippoDb, openHippoDb } from '../src/db.js';
-import { NO_MERGE_TAGS } from '../src/shared.js';
-import { forget, listDormant, sleep, supersede, type HippoDbContext } from '../src/api.js';
+import { closeHippoDb, openHippoDb, withSharedStoreHandles } from '../src/db/index.js';
+import { NO_MERGE_TAGS } from '../src/sharing/share.js';
+import { forget, listDormant, sleep, supersede, type HippoDbContext } from '../src/api/index.js';
+
+// Each case commits rows to a real store, so its time follows the runner's disk.
+vi.setConfig({ testTimeout: 30_000 });
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
 const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });
@@ -70,17 +74,20 @@ const KEEP_CASES: ReadonlyArray<{ label: string; tags: string[]; source: string;
 
 interface TableRow { id: string; pinned: boolean; kind: 'distilled' | 'raw'; deletable: boolean }
 
-function seedTable(root: string): TableRow[] {
+async function seedTable(root: string): Promise<TableRow[]> {
   const rows: TableRow[] = [];
-  for (const c of KEEP_CASES) {
-    for (const pinned of [false, true]) {
-      for (const kind of ['distilled', 'raw'] as const) {
-        const entry = createMemory7(`table row ${rows.length}: ${c.label}`, { tags: c.tags, source: c.source, pinned, kind, ...RAW_FIELDS });
-        writeEntry(root, entry);
-        rows.push({ id: entry.id, pinned, kind, deletable: !pinned && kind !== 'raw' && !c.kept });
+  // One connection for the table: a close per write checkpoints the WAL, which is slow on Windows.
+  await withSharedStoreHandles(() => {
+    for (const c of KEEP_CASES) {
+      for (const pinned of [false, true]) {
+        for (const kind of ['distilled', 'raw'] as const) {
+          const entry = createMemory7(`table row ${rows.length}: ${c.label}`, { tags: c.tags, source: c.source, pinned, kind, ...RAW_FIELDS });
+          writeEntry(root, entry);
+          rows.push({ id: entry.id, pinned, kind, deletable: !pinned && kind !== 'raw' && !c.kept });
+        }
       }
     }
-  }
+  });
   return rows;
 }
 
@@ -110,18 +117,18 @@ describe('the keep pairs', () => {
 });
 
 describe('canAutoDelete and AUTO_DELETABLE_SQL agree, over pinned x kind x tags x source', () => {
-  it('canAutoDelete gives the table answer for every row', () => {
+  it('canAutoDelete gives the table answer for every row', async () => {
     const root = newRoot();
-    const table = seedTable(root);
+    const table = await seedTable(root);
     const byId = new Map(loadAllEntries(root).map((e) => [e.id, e]));
 
     expect(table).toHaveLength(KEEP_CASES.length * 4);
     for (const row of table) expect(canAutoDelete(byId.get(row.id)!), JSON.stringify(byId.get(row.id))).toBe(row.deletable);
   });
 
-  it('the SQL selects exactly the rows canAutoDelete allows', () => {
+  it('the SQL selects exactly the rows canAutoDelete allows', async () => {
     const root = newRoot();
-    const table = seedTable(root);
+    const table = await seedTable(root);
     const fromFunction = loadAllEntries(root).filter(canAutoDelete).map((e) => e.id).sort();
 
     expect(sqlDeletableIds(root)).toEqual(fromFunction);
@@ -230,7 +237,7 @@ describe('sleep with decay forced', () => {
     await consolidate(root, { now: sixtyDaysOn() });
     await consolidate(root, { now: new Date(Date.now() + 400 * DAY) });
 
-    expect(readEntry(root, kept.id)).not.toBeNull();
+    expect(readEntry(root, kept.id)?.content).toBe(kept.content);
   });
 });
 

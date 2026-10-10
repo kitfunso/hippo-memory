@@ -173,7 +173,7 @@ describe('built CLI: --flag=value end-to-end guards', () => {
     return result;
   }
 
-  function runCli(args: string[]): { stdout: string; stderr: string; status: number } {
+  function runCli(args: string[]) {
     const res = hippoRun(args, { cwd: tmpDir, env, exe: 'node' });
     return { stdout: res.stdout, stderr: res.stderr, status: res.status ?? 1 };
   }

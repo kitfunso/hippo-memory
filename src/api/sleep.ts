@@ -1,6 +1,6 @@
 // The sleep cycle: decay, consolidation, dedupe, graph extraction and the other maintenance passes.
 
-import type { AmbientState } from '../ambient.js';
+import type { AmbientState } from '../core/ambient.js';
 import type { Context } from './types.js';
 import { runSleep } from './sleep-run.js';
 
@@ -12,7 +12,8 @@ import { runSleep } from './sleep-run.js';
 export interface SleepOpts {
   /** Report what a sleep would change without applying it; sharing, the ambient summary and the graph refresh are skipped. */
   dryRun?: boolean;
-  /** Skip copying high-scoring memories to the global store under `HIPPO_HOME`. Default false, so every tenant's memories are eligible; multi-tenant callers pass `true`. */
+  /** Skip copying high-scoring memories to the global store under `HIPPO_HOME`. Default
+   * false, so every tenant's memories are eligible; multi-tenant callers pass `true`. */
   noShare?: boolean;
 }
 

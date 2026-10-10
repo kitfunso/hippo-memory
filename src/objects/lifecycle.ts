@@ -2,13 +2,13 @@
 // Each flow is written twice over the same steps: `...At` answers at once on hippo.db for the CLI, and the other awaits a served store's group for the routes.
 // The tenant, the fields and the list status are checked first, so a bad request fails before a store is asked.
 
-import { BadRequestError, ConflictError, NotFoundError } from '../api-errors.js';
-import { objectHalfLifeDays } from '../half-life-migration.js';
-import { createMemory, Layer, type MemoryEntry } from '../memory.js';
+import { BadRequestError, ConflictError, NotFoundError } from '../core/api-errors.js';
+import { loadConfig } from '../core/config.js';
+import { createMemory, Layer, type MemoryEntry } from '../core/memory.js';
 import type { ObjectByKind, ObjectKind, SavableKind } from '../store/object-types.js';
 import { isObjectRefusal, type ObjectClose, type ObjectListQuery, type ObjectRefusal, type Objects, type ObjectSave } from '../store/port.js';
 import { sqliteObjects } from '../store/sqlite/objects-group.js';
-import { assertTenantId } from '../tenant.js';
+import { assertTenantId } from '../store/tenant.js';
 import type { ObjectDescriptor, ObjectDraft, ObjectListOpts, SavableDescriptor } from './descriptor.js';
 
 /** An empty status or filter lists every row, as an absent one does. */
@@ -25,7 +25,12 @@ export function listObjectsAt<K extends ObjectKind>(hippoRoot: string, d: Object
   return sqliteObjects(hippoRoot).listObjects(tenantId, d.kind, listQuery(d, tenantId, opts));
 }
 
-export async function listObjects<K extends ObjectKind>(objects: Objects, d: ObjectDescriptor<K>, tenantId: string, opts: ObjectListOpts<K>): Promise<ObjectByKind[K][]> {
+export async function listObjects<K extends ObjectKind>(
+  objects: Objects,
+  d: ObjectDescriptor<K>,
+  tenantId: string,
+  opts: ObjectListOpts<K>
+): Promise<ObjectByKind[K][]> {
   return objects.listObjects(tenantId, d.kind, listQuery(d, tenantId, opts));
 }
 
@@ -34,7 +39,12 @@ export function objectByIdAt<K extends ObjectKind>(hippoRoot: string, d: ObjectD
   return sqliteObjects(hippoRoot).objectById(tenantId, d.kind, id);
 }
 
-export async function objectById<K extends ObjectKind>(objects: Objects, d: ObjectDescriptor<K>, tenantId: string, id: number): Promise<ObjectByKind[K] | null> {
+export async function objectById<K extends ObjectKind>(
+  objects: Objects,
+  d: ObjectDescriptor<K>,
+  tenantId: string,
+  id: number
+): Promise<ObjectByKind[K] | null> {
   assertTenantId(d.fn.get, tenantId);
   return objects.objectById(tenantId, d.kind, id);
 }
@@ -60,19 +70,30 @@ export function closeObjectAt<K extends ObjectKind>(hippoRoot: string, d: Object
   return closed(d, tenantId, id, sqliteObjects(hippoRoot).closeObject(tenantId, d.kind, id, close));
 }
 
-export async function closeObject<K extends ObjectKind>(objects: Objects, d: ObjectDescriptor<K>, tenantId: string, id: number, actor: string): Promise<ObjectByKind[K]> {
+export async function closeObject<K extends ObjectKind>(
+  objects: Objects,
+  d: ObjectDescriptor<K>,
+  tenantId: string,
+  id: number,
+  actor: string
+): Promise<ObjectByKind[K]> {
   const close = closing(d, tenantId, actor);
   return closed(d, tenantId, id, await objects.closeObject(tenantId, d.kind, id, close));
 }
 
-/** The memory a typed object writes beside its row, so recall finds the object. `onDefault` is the store's `mirrorsOnDefaultHalfLife`. */
-export function objectMirror(hippoRoot: string, tenantId: string, source: ObjectKind, text: { readonly content: string; readonly tags: readonly string[] }, onDefault: boolean): MemoryEntry {
+/** The memory a typed object writes beside its row, so recall finds the object. */
+export function objectMirror(
+  hippoRoot: string,
+  tenantId: string,
+  source: ObjectKind,
+  text: { readonly content: string; readonly tags: readonly string[] }
+): MemoryEntry {
   return createMemory(text.content, {
     tags: [source, ...text.tags],
     layer: Layer.Semantic,
     confidence: 'verified',
     source,
-    baseHalfLifeDays: objectHalfLifeDays(hippoRoot, onDefault),
+    baseHalfLifeDays: loadConfig(hippoRoot).defaultHalfLifeDays,
     tenantId,
   });
 }
@@ -84,12 +105,17 @@ export interface ObjectSaveSite {
   readonly actor: string;
 }
 
-function objectSave<K extends SavableKind>(site: ObjectSaveSite, kind: K, draft: ObjectDraft<K>, onDefault: boolean): ObjectSave<K> {
-  const mirror = objectMirror(site.hippoRoot, site.tenantId, kind, draft, onDefault);
+function objectSave<K extends SavableKind>(site: ObjectSaveSite, kind: K, draft: ObjectDraft<K>): ObjectSave<K> {
+  const mirror = objectMirror(site.hippoRoot, site.tenantId, kind, draft);
   return { mirror, fields: draft.fields, supersedesId: draft.supersedesId, changeSummary: draft.changeSummary, actor: site.actor, at: draft.at };
 }
 
-function saved<K extends SavableKind, W>(d: SavableDescriptor<K, W>, tenantId: string, replaced: number | undefined, written: ObjectByKind[K] | ObjectRefusal): ObjectByKind[K] {
+function saved<K extends SavableKind, W>(
+  d: SavableDescriptor<K, W>,
+  tenantId: string,
+  replaced: number | undefined,
+  written: ObjectByKind[K] | ObjectRefusal
+): ObjectByKind[K] {
   if (!isObjectRefusal(written)) return written;
   switch (written.refused) {
     case 'missing':
@@ -107,15 +133,16 @@ function saved<K extends SavableKind, W>(d: SavableDescriptor<K, W>, tenantId: s
 export function saveObjectAt<K extends SavableKind, W>(d: SavableDescriptor<K, W>, site: ObjectSaveSite, opts: W): ObjectByKind[K] {
   assertTenantId(d.fn.save, site.tenantId);
   const draft = d.draft(opts);
-  const objects = sqliteObjects(site.hippoRoot);
-  // SHORTCUT: the half-life is read outside the save's transaction, so a save racing the typed migration keeps 90; read it inside the group's save if that ever matters.
-  const save = objectSave(site, d.kind, draft, objects.mirrorsOnDefaultHalfLife());
-  return saved(d, site.tenantId, draft.supersedesId, objects.saveObject(site.tenantId, d.kind, save));
+  return saved(d, site.tenantId, draft.supersedesId, sqliteObjects(site.hippoRoot).saveObject(site.tenantId, d.kind, objectSave(site, d.kind, draft)));
 }
 
-export async function saveObject<K extends SavableKind, W>(objects: Objects, d: SavableDescriptor<K, W>, site: ObjectSaveSite, opts: W): Promise<ObjectByKind[K]> {
+export async function saveObject<K extends SavableKind, W>(
+  objects: Objects,
+  d: SavableDescriptor<K, W>,
+  site: ObjectSaveSite,
+  opts: W
+): Promise<ObjectByKind[K]> {
   assertTenantId(d.fn.save, site.tenantId);
   const draft = d.draft(opts);
-  const save = objectSave(site, d.kind, draft, await objects.mirrorsOnDefaultHalfLife());
-  return saved(d, site.tenantId, draft.supersedesId, await objects.saveObject(site.tenantId, d.kind, save));
+  return saved(d, site.tenantId, draft.supersedesId, await objects.saveObject(site.tenantId, d.kind, objectSave(site, d.kind, draft)));
 }

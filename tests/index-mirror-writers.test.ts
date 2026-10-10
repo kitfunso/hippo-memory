@@ -8,7 +8,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { batchWriteAndDelete, deleteEntry } from '../src/store/delete-and-batch.js';
 import { loadIndex, saveIndex, rebuildIndex } from '../src/store/index-and-stats.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { rejectValue } from '../src/reject-flow.js';
+import { rejectValue } from '../src/trust/reject-flow.js';
 
 let root: string;
 const indexPath = (): string => path.join(root, 'index.json');

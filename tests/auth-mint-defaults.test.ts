@@ -1,11 +1,11 @@
 // A mint that names no role is a member key and one that names no expiry lasts 90 days; admin and no expiry are asked for by name.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { adminActor, authCreate } from '../src/api.js';
-import { cmdAuth } from '../src/cli/auth.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { adminActor, authCreate } from '../src/api/index.js';
+import { handleAuth } from '../src/cli/auth.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { serve, type ServerHandle } from '../src/server.js';
-import { EXPIRING_KEYS_MIN_BINARY } from '../src/version.js';
+import { EXPIRING_KEYS_MIN_BINARY } from '../src/util/version.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
@@ -186,7 +186,7 @@ describe('POST /v1/auth/keys defaults', () => {
 });
 
 describe('hippo auth create defaults', () => {
-  const create = (flags: Record<string, string | boolean>) => runInProcess(() => cmdAuth(home, ['create'], flags));
+  const create = (flags: Record<string, string | boolean>) => runInProcess(() => handleAuth({ hippoRoot: home, tenantId: 'default', args: ['create'], flags }));
 
   it('prints the role and the expiry date, and says on stderr which defaults it took and how to ask for an admin key', async () => {
     const run = await create({});
@@ -254,7 +254,7 @@ describe('the first key of a store', () => {
   it('a store with no key and required auth is administered from the host CLI: it mints the first admin key with no key of its own', async () => {
     const before = await fetch(`${handle.url}/v1/quarantine`);
     expect(before.status).toBe(401);
-    const run = await runInProcess(() => cmdAuth(home, ['create'], { role: 'admin', json: true }));
+    const run = await runInProcess(() => handleAuth({ hippoRoot: home, tenantId: 'default', args: ['create'], flags: { role: 'admin', json: true } }));
     // SAFETY: --json prints one object with these fields.
     const first = JSON.parse(run.stdout) as Minted;
     expect([first.role, daysUntil(first.expiresAt)]).toEqual(['admin', 90]);
@@ -263,7 +263,7 @@ describe('the first key of a store', () => {
   });
 
   it('gets no wider role for being first: with no role named it is a member key', async () => {
-    const run = await runInProcess(() => cmdAuth(home, ['create'], { json: true }));
+    const run = await runInProcess(() => handleAuth({ hippoRoot: home, tenantId: 'default', args: ['create'], flags: { json: true } }));
     // SAFETY: --json prints one object with these fields.
     const first = JSON.parse(run.stdout) as Minted;
     expect(first.role).toBe('member');

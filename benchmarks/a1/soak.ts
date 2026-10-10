@@ -39,7 +39,7 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { initStore } from '../../dist/store/open.js';
-import { remember as apiRemember } from '../../dist/api.js';
+import { remember as apiRemember } from '../../dist/api/index.js';
 import { serve, type ServerHandle } from '../../dist/server.js';
 
 interface CliArgs {

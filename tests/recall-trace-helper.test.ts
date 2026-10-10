@@ -16,11 +16,11 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { writeRecallTrace, writeRecallTraceAtRoot, recordTraceOutcome } from '../src/store/recall-trace.js';
 
 // Row shapes mirror the recall_traces / recall_trace_results /
-// recall_trace_outcomes tables created in src/db.ts (openHippoDb migration).
+// recall_trace_outcomes tables created in src/db/index.ts (openHippoDb migration).
 interface RecallTraceRow {
   id: number;
   ts: string;
@@ -54,7 +54,7 @@ interface RecallTraceOutcomeRow {
 function queryRow<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T {
   // SAFETY: every call site's SQL SELECT list matches T exactly — either the
   // full recall_traces / recall_trace_results / recall_trace_outcomes column
-  // set (see the CREATE TABLE statements in src/db.ts) or an explicit
+  // set (see the CREATE TABLE statements in src/db/index.ts) or an explicit
   // narrower column subset named in the query text — and each query targets
   // a row this test just wrote, so the row is present.
   return db.prepare(sql).get(...params) as T;
@@ -209,6 +209,7 @@ describe('writeRecallTrace', () => {
       }).not.toThrow();
       expect(traceId).toBeNull();
       expect(errSpy).toHaveBeenCalled();
+      expect(errSpy).toHaveBeenCalledWith(expect.stringMatching(/recall trace write failed.* stack=\S*Error.* at /));
       errSpy.mockRestore();
     } finally {
       restore();
@@ -433,6 +434,7 @@ describe('recordTraceOutcome', () => {
         recordTraceOutcome(db, { traceId: 1, tenantId: 'default', outcome: 'positive', memoryIds: ['mem-a'] });
       }).not.toThrow();
       expect(errSpy).toHaveBeenCalled();
+      expect(errSpy).toHaveBeenCalledWith(expect.stringMatching(/recall trace outcome write failed.* stack=\S*Error.* at /));
       errSpy.mockRestore();
     } finally {
       restore();

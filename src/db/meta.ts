@@ -1,4 +1,4 @@
-import { compareSemver } from '../version.js';
+import { compareSemver } from '../util/version.js';
 import type { DatabaseSyncLike } from './sqlite.js';
 import { tableExists } from './tables.js';
 

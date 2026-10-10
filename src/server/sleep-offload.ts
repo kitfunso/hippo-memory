@@ -1,10 +1,10 @@
 // POST /v1/sleep runs its consolidation in a child process, so the server keeps answering and a stuck run can be stopped.
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { sleep, type Actor, type Context, type SleepOpts, type SleepResult } from '../api.js';
-import { StoreBusyError } from '../db.js';
-import { envSleepTimeoutMs } from '../env.js';
-import { HttpError } from '../http-util.js';
+import { sleep, type Actor, type Context, type SleepOpts, type SleepResult } from '../api/index.js';
+import { StoreBusyError } from '../db/index.js';
+import { envSleepTimeoutMs } from '../util/env.js';
+import { HttpError } from '../util/http-util.js';
 
 const DEFAULT_SLEEP_DEADLINE_MS = 600_000;
 
@@ -36,7 +36,10 @@ function runInChild(job: SleepJob): Promise<SleepResult> {
   const deadlineMs = envSleepTimeoutMs() ?? DEFAULT_SLEEP_DEADLINE_MS;
   return new Promise((resolve, reject) => {
     // The child's stderr is the server's log, so Node's SQLite notice would repeat there on every sleep.
-    const child = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', CHILD_ENTRY], { stdio: ['ignore', 'inherit', 'inherit', 'ipc'], windowsHide: true });
+    const child = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', CHILD_ENTRY], {
+      stdio: ['ignore', 'inherit', 'inherit', 'ipc'],
+      windowsHide: true
+    });
     let reply: SleepReply | undefined;
     let timedOut = false;
     // SIGKILL because the child is inside synchronous SQLite work and cannot run a handler; the OS drops its write lock.

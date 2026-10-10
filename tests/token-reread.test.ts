@@ -8,9 +8,9 @@ import { type SpawnSyncReturns } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { appendSessionEvent, saveActiveTaskSnapshot } from '../src/store/sessions.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { runDoctor } from '../src/doctor.js';
-import { Layer } from '../src/memory.js';
+import { Layer } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import {
   carryingCalls,
@@ -24,7 +24,7 @@ import {
   type TokenEvent,
   type TokenSummary,
   type TokenSurface,
-} from '../src/token-ledger.js';
+} from '../src/store/token-ledger.js';
 import { estimateTokens } from '../src/util/token-text.js';
 import { hippoRun } from './_helpers/spawn-hippo.js';
 const SESSION = 'sess-reread';
@@ -181,7 +181,7 @@ describe('recordRereads', () => {
     expect(before).toEqual({ hash: 'h1', skipsSince: 1 });
 
     for (let pass = 0; pass < 2; pass++) {
-      expect(withDb(root, (db) => recordRereads(db, 'default', SESSION, calls))).toBe(430);
+      expect(recordRereads(root, 'default', SESSION, calls)).toBe(430);
     }
     expect(ledgerRows(root, `event = 'reread'`)).toEqual([
       { tenant_id: 'default', session_id: SESSION, surface: 'compact_resume', items: 1, tokens: 50 },
@@ -206,7 +206,7 @@ describe('recordRereads', () => {
       book(db, 'hook', 'inject', minute(3.5), 70);
       book(db, 'hook_recall', 'inject', minute(4.5), 40);
     });
-    expect(withDb(root, (db) => recordRereads(db, 'default', SESSION, calls))).toBe(200);
+    expect(recordRereads(root, 'default', SESSION, calls)).toBe(200);
     expect(ledgerRows(root, `event = 'reread'`)).toEqual([
       { tenant_id: 'default', session_id: SESSION, surface: 'hook', items: 1, tokens: 100 },
       { tenant_id: 'default', session_id: SESSION, surface: 'hook', items: 1, tokens: 100 },
@@ -222,7 +222,7 @@ describe('recordRereads', () => {
       book(db, 'hook', 'inject', minute(0.5), 100);
       for (const surface of others) book(db, surface, 'inject', minute(0.5), 1000);
     });
-    expect(withDb(root, (db) => recordRereads(db, 'default', SESSION, calls))).toBe(100);
+    expect(recordRereads(root, 'default', SESSION, calls)).toBe(100);
     expect(ledgerRows(root, `event = 'reread'`)).toEqual([
       { tenant_id: 'default', session_id: SESSION, surface: 'hook', items: 1, tokens: 100 },
     ]);

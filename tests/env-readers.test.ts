@@ -1,4 +1,4 @@
-/** src/env.ts readers: timeouts refuse negatives, HIPPO_REQUIRE_SERVER reads like the other switches, ids and keys come back trimmed. */
+/** src/util/env.ts readers: timeouts refuse negatives, HIPPO_REQUIRE_SERVER reads like the other switches, ids and keys come back trimmed. */
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   envAnchoringOff,
@@ -10,14 +10,15 @@ import {
   envMcpSseHeartbeatMs,
   envMcpSseMaxAgeSec,
   envModelCache,
+  envQueryEmbedTimeoutMs,
   envRequireServer,
   envTypesafeApiKey,
-} from '../src/env.js';
+} from '../src/util/env.js';
 
 const NAMES = [
   'HIPPO_ANCHORING', 'HIPPO_AVAILABILITY',
   'MCP_SSE_HEARTBEAT_MS', 'MCP_SSE_MAX_AGE_SEC', 'HIPPO_LLM_RERANKER_TIMEOUT_MS', 'HIPPO_REQUIRE_SERVER',
-  'HIPPO_SESSION_ID', 'CLAUDE_CODE_SESSION_ID', 'HIPPO_MODEL_CACHE', 'TYPESAFE_API_KEY', 'HIPPO_HEALTH_PROBE_MS',
+  'HIPPO_SESSION_ID', 'CLAUDE_CODE_SESSION_ID', 'HIPPO_MODEL_CACHE', 'TYPESAFE_API_KEY', 'HIPPO_HEALTH_PROBE_MS', 'HIPPO_QUERY_EMBED_TIMEOUT_MS',
 ];
 const saved = new Map(NAMES.map((n) => [n, process.env[n]]));
 afterEach(() => {
@@ -33,6 +34,7 @@ describe('timeouts', () => {
     ['MCP_SSE_MAX_AGE_SEC', envMcpSseMaxAgeSec],
     ['HIPPO_LLM_RERANKER_TIMEOUT_MS', envLlmRerankerTimeoutMs],
     ['HIPPO_HEALTH_PROBE_MS', envHealthProbeMs],
+    ['HIPPO_QUERY_EMBED_TIMEOUT_MS', envQueryEmbedTimeoutMs],
   ];
   it.each(readers)('%s drops a negative or zero value so the caller default applies', (name, read) => {
     for (const bad of ['-5', '0', 'soon', '']) {

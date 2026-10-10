@@ -6,10 +6,10 @@ import { execFileSync } from 'node:child_process';
 import { makeRoot } from './_helpers/make-root.js';
 import { recordStatements, recordStatementsAsync, countMatching, STORE_OPEN } from './_helpers/count-statements.js';
 import { openStore } from '../src/store/open.js';
-import { writeEntryOn, strengthenRetrieved } from '../src/store/entry-writes.js';
+import { writeEntry, strengthenRetrieved } from '../src/store/entry-writes.js';
 import { MEMORY_SELECT_COLUMNS } from '../src/store/rows.js';
-import { closeHippoDb } from '../src/db.js';
-import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/memory.js';
+import { closeHippoDb } from '../src/db/index.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';
 import { readEntry, loadAllEntries, heldIdLookup, loadEntriesByIds } from '../src/store/entry-reads.js';
 import { adminActor, type HippoDbContext } from '../src/api/types.js';
 import { learn, CLI_LEARN } from '../src/api/learn.js';
@@ -18,16 +18,19 @@ import { cmdCapture } from '../src/capture/command.js';
 import { outcome } from '../src/api/outcome.js';
 import { quarantineList } from '../src/api/quarantine.js';
 import { drillDown } from '../src/api/drill-down.js';
-import { recordQuarantine, quarantineScopeFor } from '../src/quarantine.js';
+import { quarantineScopeFor } from '../src/trust/quarantine.js';
+import { recordQuarantine } from '../src/store/quarantine.js';
 import { importEntries } from '../src/importers/core.js';
-import { invalidateMatching, detectChurnStale } from '../src/invalidation.js';
+import { importVault } from '../src/importers/vault.js';
+import { withRequestStoresSync } from '../src/db/request-stores.js';
+import { invalidateMatching, detectChurnStale } from '../src/learn/invalidation.js';
 import { replaceDetectedConflicts, resolveConflict, listMemoryConflicts } from '../src/store/conflicts.js';
-import { deduplicateStore } from '../src/dedupe.js';
-import { buildDag } from '../src/dag.js';
+import { deduplicateStore } from '../src/consolidate/dedupe.js';
+import { buildDag } from '../src/consolidate/dag.js';
 import { buildMemoryDetail } from '../src/dashboard/dashboard-queries.js';
 import { createSnapshotService } from '../src/dashboard/dashboard-snapshot.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
-import { writeSessionDigest } from '../src/session-digest.js';
+import { writeSessionDigest } from '../src/capture/session-digest.js';
 
 const SIZES = [10, 200] as const;
 const ROW_READ = MEMORY_SELECT_COLUMNS;
@@ -53,17 +56,15 @@ function memory(content: string, extra: Partial<MemoryEntry> = {}): MemoryEntry 
   return { ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), ...extra };
 }
 
-/** Seeds on one handle so a 200-row fixture stays fast. */
+/** Seeds in one store scope, which opens the store once, so a 200-row fixture stays fast. */
 function seed(root: string, entries: readonly MemoryEntry[], after?: (db: ReturnType<typeof openStore>, e: MemoryEntry) => void): void {
-  const db = openStore(root);
-  try {
+  withRequestStoresSync(() => {
+    const db = openStore(root);
     for (const e of entries) {
-      writeEntryOn(db, root, e);
+      writeEntry(root, e);
       after?.(db, e);
     }
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }
 
 function rows(n: number, label: string, extra: Partial<MemoryEntry> = {}): MemoryEntry[] {
@@ -174,6 +175,32 @@ describe('importEntries', () => {
       const root = freshRoot('qc-import');
       const chunks = Array.from({ length: n }, (_, i) => `imported chunk ${i} about the zephyrine cache`);
       const { result, statements } = recordStatements(() => importEntries(chunks, 'import:test', ['imported'], { hippoRoot: root, tenantId: 'default' }));
+      expect(result.imported).toBe(n);
+      return countMatching(statements, STORE_OPEN);
+    });
+    expect(opens[1]).toBe(opens[0]);
+  });
+
+  it('probes a dry run on a fixed number of opens too', () => {
+    const opens = SIZES.map((n) => {
+      const root = freshRoot('qc-import-dry');
+      const chunks = Array.from({ length: n }, (_, i) => `previewed chunk ${i} about the zephyrine cache`);
+      const { result, statements } = recordStatements(() => importEntries(chunks, 'import:test', ['imported'], { hippoRoot: root, tenantId: 'default', dryRun: true }));
+      expect(result.imported).toBe(n);
+      return countMatching(statements, STORE_OPEN);
+    });
+    expect(opens[1]).toBe(opens[0]);
+  });
+});
+
+describe('importVault', () => {
+  it('probes a dry run on a fixed number of opens however many notes changed', () => {
+    const opens = SIZES.map((n) => {
+      const root = freshRoot('qc-vault-dry');
+      const vault = path.join(freshRoot('qc-vault-notes'), 'notes');
+      fs.mkdirSync(vault);
+      for (let i = 0; i < n; i++) fs.writeFileSync(path.join(vault, `note-${i}.md`), `vault note ${i} about the zephyrine cache`);
+      const { result, statements } = recordStatements(() => importVault(vault, { hippoRoot: root, tenantId: 'default', name: 'notes', dryRun: true }));
       expect(result.imported).toBe(n);
       return countMatching(statements, STORE_OPEN);
     });
@@ -346,21 +373,23 @@ describe('cmdRemember', () => {
   async function remember(root: string, text: string) {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     try {
-      const { statements } = await recordStatementsAsync(() => handleRemember({ hippoRoot: root, args: [text], flags: { tag: ['topic:cache'] } }));
+      const { statements } = await recordStatementsAsync(() => handleRemember({ hippoRoot: root, tenantId: 'default', args: [text], flags: { tag: ['topic:cache'] } }));
       return { statements, printed: log.mock.calls.map((call) => String(call[0])) };
     } finally {
       log.mockRestore();
     }
   }
 
-  it('scores schema fit without reading a full row', async () => {
+  it('scores schema fit without reading a stored row, and reads back only the row it wrote', async () => {
     for (const n of SIZES) {
       const root = freshRoot('qc-remember');
       fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { enabled: false } }));
       seed(root, rows(n, 'remember', { tags: ['topic:cache'] }));
       const { statements, printed } = await remember(root, 'a new note about the zephyrine cache');
       expect(printed[0]).toMatch(/^Remembered \[/);
-      expect(countMatching(statements, ROW_READ)).toBe(0);
+      // The write goes through the api, which answers an id, so the printout reads that one row by id.
+      expect(countMatching(statements, ROW_READ)).toBe(1);
+      expect(countMatching(statements, /FROM memories WHERE id = \? AND tenant_id = \?$/)).toBe(1);
     }
   });
 

@@ -18,7 +18,7 @@ _Avoid_: archived memory (the raw archive keeps metadata only), deleted, cold
 **Automatic memory**:
 A memory hippo wrote without a person choosing the words: session capture, git learning,
 a sleep merge, a compaction memory, an extracted fact or a DAG summary, at confidence observed
-or inferred, and a promoted or shared copy of one. Only automatic memories are held to the quality check (`src/memory-quality.ts`);
+or inferred, and a promoted or shared copy of one. Only automatic memories are held to the quality check (`src/core/memory-quality.ts`);
 one with a certain defect is never reused by sleep or shared, and `hippo audit repair` can set
 it aside. A person's memory is never judged on its wording.
 _Avoid_: auto memory (Claude Code's own feature), generated memory, low-quality memory
@@ -54,7 +54,7 @@ _Avoid_: summary memory (the summary lives in the compaction record), snapshot (
 **Keep rule**:
 A tag and a source prefix that together keep a memory out of automatic deletion; today one pair
 per imported agent memory tool. Both must match, because a merge copies a source's tags onto
-a row whose source is `consolidation`. `canAutoDelete` and `AUTO_DELETABLE_SQL` in `src/memory.ts`
+a row whose source is `consolidation`. `canAutoDelete` (`src/core/memory.ts`) and `AUTO_DELETABLE_SQL` (`src/store/rule-sql.ts`)
 apply it and change together. `hippo forget` and `hippo supersede` still work on a kept memory.
 _Avoid_: pin (a person sets that), retention policy, allowlist
 
@@ -70,8 +70,9 @@ tokens, and whether it was sent or skipped as unchanged. Counts only, never the 
 _Avoid_: usage log, telemetry, cost log
 
 **Delivery ledger**:
-The optional per-turn record of the per-prompt hook: one event per call and one row per
-candidate memory, saying whether it was emitted, reused or rejected and why.
+The optional record of the per-prompt hook and the two compaction hooks (`pre-compact` and
+`compact-resume`): one event per call, and for a prompt call one row per candidate memory,
+saying whether it was emitted, reused or rejected and why.
 Ids, hashes, counts and reasons only, never the text. Off by default; kept 90 days.
 _Avoid_: delivery log, trace, telemetry
 
@@ -220,6 +221,22 @@ _Avoid_: kanban, tracker
 **Hook payload**:
 The JSON a host writes to a hook command's stdin at spawn. Optional, and absent only counts as a manual run when the read finished on its own; a read that timed out proves nothing either way.
 _Avoid_: stdin text, hook input, hook data
+
+**Payload reader**:
+The one function that turns the hook payload of one host event into a capture receipt. It only
+reads: no store, no disk. Whether a named file exists is the hook command's check.
+_Avoid_: parser, adapter (an adapter is a host's whole integration), handler
+
+**Capture receipt**:
+What a payload reader returns: `received` with the fields hippo read, `skipped` with the reason
+hippo refuses the payload, or `unavailable` when the read timed out with nothing. It describes the
+payload only; the hook command decides what still runs after a skip.
+_Avoid_: receipt on its own (a raw receipt is a memory), parse result
+
+**Progress cursor**:
+How far capture has read one session's transcript. Capture saves it only after a run that reached
+the end, so a run that failed reads the same turns again.
+_Avoid_: turn cursor, position file, bookmark
 
 **Compaction record**:
 The row in the `compactions` table for one Claude Code compaction: `hippo pre-compact` writes it

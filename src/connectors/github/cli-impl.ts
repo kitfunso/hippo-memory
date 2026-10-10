@@ -2,7 +2,7 @@
  * Implementation of `hippo github` CLI subcommands. Extracted from the main
  * cli.ts so unit tests can import these functions directly without triggering
  * the cli.ts main() side effects. The cli.ts dispatcher re-exports the
- * top-level cmdGithub.
+ * top-level handleGithub.
  *
  * Subcommands mirror the Slack connector shape (cli.ts §Slack subcommands):
  *   - hippo github backfill --repo <owner/name> [--since ISO] [--max <N>]
@@ -10,10 +10,10 @@
  *   - hippo github dlq replay <id> [--force]
  */
 
-import { envGithubToken, envGithubWebhookSecret, envGithubWebhookSecretPrevious } from '../../env.js';
-import { type Context, adminActor } from '../../api.js';
+import { envGithubToken, envGithubWebhookSecret, envGithubWebhookSecretPrevious } from '../../util/env.js';
+import { type Context, adminActor } from '../../api/index.js';
 import { seedCursors } from '../../store/connectors/github.js';
-import { resolveTenantId } from '../../tenant.js';
+import { resolveTenantId } from '../../store/tenant.js';
 import { backfillRepo } from './backfill.js';
 import { realGitHubFetcher, type GitHubFetcher } from './octokit-client.js';
 import { listDlq } from '../dlq.js';
@@ -27,7 +27,9 @@ import {
   isGitHubPullRequestEvent,
   isGitHubPullRequestReviewCommentEvent,
 } from './types.js';
-import type { JsonValue } from '../../json.js';
+import type { JsonValue } from '../../util/json.js';
+import type { CommandContext } from '../../cli/flag-values.js';
+import { CliExit } from '../../cli/exit.js';
 
 type FlagValue = string | boolean | string[];
 type Flags = Record<string, FlagValue>;
@@ -103,14 +105,14 @@ export async function cmdGithubBackfill(
   const repo = flags['repo'];
   if (!isFlagString(repo) || !repo.includes('/')) {
     printGithubBackfillUsage();
-    process.exit(2);
+    throw new CliExit(2);
   }
   const token = envGithubToken();
   if (!token) {
     console.error(
       'GITHUB_TOKEN is not set. Backfill requires a personal access token with repo read scope.',
     );
-    process.exit(2);
+    throw new CliExit(2);
   }
   const maxPerStream = maxPerStreamFlag(flags['max']);
   const sinceFlag = flags['since'];
@@ -141,7 +143,7 @@ export async function cmdGithubBackfill(
     // any JS value is safe (undefined if absent), preserving the existing
     // lenient formatting even when something non-Error was thrown.
     console.error('backfill failed:', (e as Error).message);
-    process.exit(3);
+    throw new CliExit(3);
   }
 }
 
@@ -175,7 +177,7 @@ const reingestParkedDelivery: IngestHook = async (innerCtx, args) => {
       ? `github://${repo}/issue/${event.payload.issue.number}/comment/${event.payload.comment.id}`
       : `github://${repo}/pull/${event.payload.pull_request.number}/review_comment/${event.payload.comment.id}`;
     const idempotencyKey = computeDeletionKey(artifactRef, event.payload.comment.updated_at ?? null);
-    const r = handleCommentDeleted(innerCtx, {
+    const r = await handleCommentDeleted(innerCtx, {
       artifactRef,
       idempotencyKey,
       deliveryId: args.deliveryId,
@@ -186,7 +188,7 @@ const reingestParkedDelivery: IngestHook = async (innerCtx, args) => {
     // trail is in github_dlq.retry_count + retried_at.
     return { memoryId: r.archivedCount > 0 ? 'archived' : null };
   }
-  const r = ingestEvent(innerCtx, {
+  const r = await ingestEvent(innerCtx, {
     event,
     rawBody: args.rawPayload,
     deliveryId: args.deliveryId,
@@ -202,12 +204,12 @@ export async function cmdGithubDlqReplay(
   const idArg = args[0];
   if (!idArg) {
     console.error('Usage: hippo github dlq replay <id> [--force]');
-    process.exit(1);
+    throw new CliExit(1);
   }
   const id = Number(idArg);
   if (!Number.isFinite(id) || !Number.isInteger(id) || id < 1) {
     console.error(`replay: invalid id ${idArg}`);
-    process.exit(1);
+    throw new CliExit(1);
   }
   const force = flags['force'] === true;
   const ctx: Context = {
@@ -228,18 +230,14 @@ export async function cmdGithubDlqReplay(
         result.reason ? ` reason=${result.reason}` : ''
       }`,
     );
-    process.exit(1);
+    throw new CliExit(1);
   }
   console.log(
     `replay ok: status=${result.status} memory_id=${result.memoryId ?? '(none)'} retry_count=${result.retryCount}`,
   );
 }
 
-export async function cmdGithub(
-  hippoRoot: string,
-  args: string[],
-  flags: Flags,
-): Promise<void> {
+export async function handleGithub({ hippoRoot, args, flags }: CommandContext): Promise<void> {
   const sub = args[0];
   if (sub === 'backfill') {
     await cmdGithubBackfill(hippoRoot, flags);
@@ -254,5 +252,5 @@ export async function cmdGithub(
     return;
   }
   console.error('Usage: hippo github <backfill|dlq list|dlq replay <id> [--force]> [...]');
-  process.exit(1);
+  throw new CliExit(1);
 }

@@ -1,19 +1,21 @@
 // Long-running verbs: `hippo dashboard`, `hippo mcp` and `hippo serve`.
 
 import { installCrashHandlers } from '../util/crash-handlers.js';
-import { envAllowKeylessLocal, envPort, envRequireAuth, envTlsCert, envTlsKey } from '../env.js';
+import { envAllowKeylessLocal, envPort, envRequireAuth, envTlsCert, envTlsKey } from '../util/env.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { printError } from './output.js';
-import { stringFlagOrExit, requireInit, type CommandContext, stringFlag } from './shared.js';
-import { errorMessage } from '../log.js';
+import { stringFlagOrExit, type CommandContext, stringFlag } from './flag-values.js';
+import { requireInit } from './shared.js';
+import { errorMessage } from '../util/log.js';
+import { CliExit } from './exit.js';
 
 export async function handleDashboard({ hippoRoot, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
   const port = parseInt(String(flags['port'] ?? '3333'), 10);
   const { serveDashboard } = await import('../dashboard/dashboard.js');
-  serveDashboard(hippoRoot, port);
-  // A busy port or a later throw ends in one log line and exit 1, as it does for serve and mcp.
+  serveDashboard(hippoRoot, port, undefined, { handleSignals: true });
+  // A later throw ends in one log line and exit 1, as it does for serve and mcp; a busy port is reported by the dashboard itself.
   installCrashHandlers('dashboard');
   await new Promise(() => {}); // run until Ctrl+C
 }
@@ -37,13 +39,13 @@ function readTlsFiles(flags: CommandContext['flags']): { cert: Buffer; key: Buff
   if (certPath === undefined && keyPath === undefined) return undefined;
   if (certPath === undefined || keyPath === undefined) {
     printError('hippo serve: TLS needs both a certificate and a key: --tls-cert and --tls-key, or HIPPO_TLS_CERT and HIPPO_TLS_KEY.');
-    process.exit(1);
+    throw new CliExit(1);
   }
   try {
     return { cert: fs.readFileSync(certPath), key: fs.readFileSync(keyPath) };
   } catch (err) {
     printError(`hippo serve: cannot read the TLS files: ${errorMessage(err)}`);
-    process.exit(1);
+    throw new CliExit(1);
   }
 }
 
@@ -63,7 +65,7 @@ export async function handleServe({ hippoRoot, flags }: CommandContext): Promise
   const port = Number(portRaw);
   if (!Number.isFinite(port) || port < 0) {
     printError(`Invalid --port: ${String(portRaw)}`);
-    process.exit(1);
+    throw new CliExit(1);
   }
   const host = stringFlag(flags, 'host') ?? '127.0.0.1';
   const tls = readTlsFiles(flags);

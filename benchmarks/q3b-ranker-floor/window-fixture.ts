@@ -5,12 +5,12 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { adminActor, goalPush, outcome } from '../../dist/api.js';
-import { loadConfig } from '../../dist/config.js';
-import { createMemory } from '../../dist/memory.js';
+import { adminActor, goalPush, outcome } from '../../dist/api/index.js';
+import { loadConfig } from '../../dist/core/config.js';
+import { createMemory } from '../../dist/core/memory.js';
 import { writeEntry } from '../../dist/store/entry-writes.js';
 import { loadRecallSearchEntries } from '../../dist/store/search-rows.js';
-import { resolveTenantId } from '../../dist/tenant.js';
+import { resolveTenantId } from '../../dist/store/tenant.js';
 import { WINDOW_QUERY_COUNT, type EvalQuery } from './queries.ts';
 import { inSandbox, initSandbox } from './sandbox.ts';
 

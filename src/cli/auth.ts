@@ -1,12 +1,13 @@
 // `hippo auth`: create, list, revoke and scope API keys.
 
-import { openHippoDb, closeHippoDb } from '../db.js';
 import { listApiKeys, type ApiKeyListItem } from '../store/auth.js';
-import * as api from '../api.js';
-import { resolveTenantId } from '../tenant.js';
+import * as api from '../api/index.js';
+import { cliApiContext } from './api-context.js';
 import { printError } from './output.js';
-import { type CliFlags, resolveAuthRoot, boolFlag, stringFlag } from './shared.js';
-import { errorMessage } from '../log.js';
+import { type CliFlags, boolFlag, stringFlag, type CommandContext } from './flag-values.js';
+import { resolveAuthRoot } from './shared.js';
+import { errorMessage } from '../util/log.js';
+import { CliExit } from './exit.js';
 
 // ---------------------------------------------------------------------------
 // Auth subcommands
@@ -17,7 +18,7 @@ function roleFlagOrExit(flags: CliFlags): 'admin' | 'member' | undefined {
   const roleFlag = stringFlag(flags, 'role');
   if (roleFlag !== undefined && roleFlag !== 'admin' && roleFlag !== 'member') {
     printError(`Invalid --role value: '${roleFlag}'. Use 'admin' or 'member'.`);
-    process.exit(1);
+    throw new CliExit(1);
   }
   return roleFlag;
 }
@@ -30,7 +31,7 @@ function noteMintDefaults(roleGiven: boolean, expiryGiven: boolean): void {
   if (notes.length > 0) printError(`hippo auth create: ${notes.join('; ')}.`);
 }
 
-function cmdAuthCreate(hippoRoot: string, flags: CliFlags): void {
+function cmdAuthCreate(hippoRoot: string, defaultTenantId: string, flags: CliFlags): void {
   const root = resolveAuthRoot(hippoRoot, flags);
   const tenantFlag = stringFlag(flags, 'tenant');
   const labelFlag = stringFlag(flags, 'label');
@@ -45,18 +46,14 @@ function cmdAuthCreate(hippoRoot: string, flags: CliFlags): void {
   // flows through ctx.tenantId, NOT through opts — authCreate's opts no
   // longer accepts a tenantId field, so the HTTP layer cannot smuggle a
   // body.tenantId across.
-  const ctx: api.HippoDbContext = {
-    hippoRoot: root,
-    tenantId: tenantFlag ?? resolveTenantId({}),
-    actor: api.adminActor('cli'),
-  };
+  const ctx = cliApiContext(root, tenantFlag ?? defaultTenantId);
   let result: api.AuthCreateResult;
   try {
     result = api.authCreate(ctx, { label: labelFlag, role, ttlDays, noExpiry: noExpiry || undefined });
   } catch (err) {
     if (!(err instanceof api.BadRequestError)) throw err;
     printError(`hippo auth create: ${err.message} (--ttl-days, --no-expiry).`);
-    process.exit(1);
+    throw new CliExit(1);
   }
   noteMintDefaults(role !== undefined, ttlFlag !== undefined || noExpiry);
 
@@ -94,13 +91,7 @@ function cmdAuthList(hippoRoot: string, flags: CliFlags): void {
   const includeRevoked = boolFlag(flags, 'all');
   const asJson = boolFlag(flags, 'json');
 
-  const db = openHippoDb(root);
-  let items: ApiKeyListItem[];
-  try {
-    items = listApiKeys(db, { active: !includeRevoked });
-  } finally {
-    closeHippoDb(db);
-  }
+  const items = listApiKeys(root, { active: !includeRevoked });
 
   if (asJson) {
     console.log(JSON.stringify(items));
@@ -119,24 +110,24 @@ function cmdAuthList(hippoRoot: string, flags: CliFlags): void {
 }
 
 // The local CLI owns every tenant, so revoke and grant run in the key's own tenant.
-function keyContext(root: string, keyId: string): api.HippoDbContext {
-  const hostCtx = { hippoRoot: root, tenantId: resolveTenantId({}), actor: api.adminActor('cli') };
+function keyContext(root: string, tenantId: string, keyId: string): api.HippoDbContext {
+  const hostCtx = cliApiContext(root, tenantId);
   const keyTenant = api.authKeyTenant(hostCtx, keyId);
   if (keyTenant === undefined) {
     printError(`Unknown key_id: ${keyId}`);
-    process.exit(1);
+    throw new CliExit(1);
   }
   return { ...hostCtx, tenantId: keyTenant };
 }
 
-function cmdAuthRevoke(hippoRoot: string, keyId: string, flags: CliFlags): void {
-  const ctx = keyContext(resolveAuthRoot(hippoRoot, flags), keyId);
+function cmdAuthRevoke(hippoRoot: string, tenantId: string, keyId: string, flags: CliFlags): void {
+  const ctx = keyContext(resolveAuthRoot(hippoRoot, flags), tenantId, keyId);
   let revokedAt: string;
   try {
     revokedAt = api.authRevoke(ctx, keyId).revokedAt;
   } catch (err) {
     printError(`Error: ${errorMessage(err)}`);
-    process.exit(1);
+    throw new CliExit(1);
   }
   if (flags['json']) {
     console.log(JSON.stringify({ keyId, revokedAt }));
@@ -146,14 +137,14 @@ function cmdAuthRevoke(hippoRoot: string, keyId: string, flags: CliFlags): void 
 }
 
 /** `hippo auth grant|ungrant <key_id> <scope>`, routed through api so the tenant, restricted-scope and audit checks live in one place. */
-function cmdAuthScopeGrant(hippoRoot: string, keyId: string, scope: string, grant: boolean, flags: CliFlags): void {
-  const ctx = keyContext(resolveAuthRoot(hippoRoot, flags), keyId);
+function cmdAuthScopeGrant(hippoRoot: string, tenantId: string, keyId: string, scope: string, grant: boolean, flags: CliFlags): void {
+  const ctx = keyContext(resolveAuthRoot(hippoRoot, flags), tenantId, keyId);
   try {
     if (grant) api.authGrant(ctx, keyId, scope);
     else api.authUngrant(ctx, keyId, scope);
   } catch (err) {
     printError(`Error: ${errorMessage(err)}`);
-    process.exit(1);
+    throw new CliExit(1);
   }
   if (flags['json']) {
     console.log(JSON.stringify({ keyId, scope, granted: grant }));
@@ -162,16 +153,16 @@ function cmdAuthScopeGrant(hippoRoot: string, keyId: string, scope: string, gran
   console.log(grant ? `Granted ${keyId} read access to ${scope}` : `Removed ${keyId}'s grant on ${scope}`);
 }
 
-export function cmdAuth(hippoRoot: string, args: string[], flags: CliFlags): void {
+export function handleAuth({ hippoRoot, tenantId, args, flags }: CommandContext): void {
   const sub = args[0];
   if (!sub) {
     printError('Usage: hippo auth <create|list|revoke|grant|ungrant> [options]');
-    process.exit(1);
+    throw new CliExit(1);
   }
   const subArgs = args.slice(1);
   switch (sub) {
     case 'create':
-      cmdAuthCreate(hippoRoot, flags);
+      cmdAuthCreate(hippoRoot, tenantId, flags);
       return;
     case 'list':
       cmdAuthList(hippoRoot, flags);
@@ -180,9 +171,9 @@ export function cmdAuth(hippoRoot: string, args: string[], flags: CliFlags): voi
       const keyId = subArgs[0];
       if (!keyId) {
         printError('Usage: hippo auth revoke <key_id>');
-        process.exit(1);
+        throw new CliExit(1);
       }
-      cmdAuthRevoke(hippoRoot, keyId, flags);
+      cmdAuthRevoke(hippoRoot, tenantId, keyId, flags);
       return;
     }
     case 'grant':
@@ -190,13 +181,13 @@ export function cmdAuth(hippoRoot: string, args: string[], flags: CliFlags): voi
       const [keyId, scope] = subArgs;
       if (!keyId || !scope) {
         printError(`Usage: hippo auth ${sub} <key_id> <scope>`);
-        process.exit(1);
+        throw new CliExit(1);
       }
-      cmdAuthScopeGrant(hippoRoot, keyId, scope, sub === 'grant', flags);
+      cmdAuthScopeGrant(hippoRoot, tenantId, keyId, scope, sub === 'grant', flags);
       return;
     }
     default:
       printError(`Unknown auth subcommand: ${sub}. Expected: create | list | revoke | grant | ungrant.`);
-      process.exit(1);
+      throw new CliExit(1);
   }
 }

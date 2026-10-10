@@ -4,10 +4,10 @@ import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
-import { closeHippoDb, openHippoDb } from '../src/db.js';
+import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { mcpErrorResponse } from '../src/mcp/server.js';
-import { NotFoundError } from '../src/api-errors.js';
+import { NotFoundError } from '../src/core/api-errors.js';
 
 interface RpcReply {
   id: number;

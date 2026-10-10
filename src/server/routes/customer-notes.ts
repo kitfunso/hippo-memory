@@ -1,6 +1,6 @@
 // /v1/customer-notes routes.
-import { CUSTOMER_NOTE, MAX_CUSTOMER_LEN, type SaveCustomerNoteOpts } from '../../customer-notes.js';
-import { sendJson } from '../../http-util.js';
+import { CUSTOMER_NOTE, MAX_CHANGE_SUMMARY_LEN, MAX_CUSTOMER_LEN, type SaveCustomerNoteOpts } from '../../objects/customer-notes.js';
+import { sendJson } from '../../util/http-util.js';
 import { buildContextWithAuth } from '../auth.js';
 import type { RouteRequest } from '../types.js';
 import { parseJsonBody } from '../validation.js';
@@ -14,7 +14,7 @@ const noteRoutes: VersionedRouteConfig<'customer_note', SaveCustomerNoteOpts> = 
   filterParam: 'customer',
   revise: (body) => {
     const note = requiredString(body, 'note', { max: 8192 });
-    const changeSummary = optionalString(body, 'changeSummary', 4096);
+    const changeSummary = optionalString(body, 'changeSummary', MAX_CHANGE_SUMMARY_LEN);
     return (existing, id) => ({ customer: existing.customer, note, changeSummary, supersedesNoteId: id });
   },
 };
@@ -25,7 +25,7 @@ const noteRoutes: VersionedRouteConfig<'customer_note', SaveCustomerNoteOpts> = 
 // note), GET /v1/customer-notes (list; status + customer filter; shared
 // parseListLimit), GET /v1/customer-notes/:id, POST /v1/customer-notes/:id/supersede,
 // POST /v1/customer-notes/:id/close. DoS caps: customer 256, note 8192,
-// changeSummary 4096. The store validates + throws; the boundary maps validation ->
+// changeSummary MAX_CHANGE_SUMMARY_LEN. The store validates + throws; the boundary maps validation ->
 // 400, not-found -> 404, not-active -> 409. Mirrors /v1/project-briefs.
 export async function handleCreateCustomerNote(rr: RouteRequest): Promise<void> {
   const ctx = await buildContextWithAuth(rr.req, rr.opts);

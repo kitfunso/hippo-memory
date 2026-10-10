@@ -4,7 +4,7 @@
  *
  * The counter was hardcoded to 0 since v1.12.13 (C5) as a placeholder
  * for future B4-depth or J1-anchoring work. v1.13.2 / J1 lights it up:
- * each pipeline's buildSuppressionSummary increments the counter by 1
+ * each pipeline's summary increments the counter by 1
  * when ITS OWN R2 memory_dominance verdict fires.
  *
  * This test focuses on api.recall's counter. CLI + MCP increments are
@@ -16,9 +16,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { recall, type Context } from '../src/api.js';
-import { hashQueryText, type RecallHistorySnapshot, type RecallHistoryEntry } from '../src/recall-history.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { recall, type Context } from '../src/api/index.js';
+import { hashQueryText, type RecallHistorySnapshot, type RecallHistoryEntry } from '../src/api/recall-history.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 function seed(root: string, content: string): string {

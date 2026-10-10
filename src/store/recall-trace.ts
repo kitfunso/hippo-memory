@@ -16,10 +16,10 @@
  */
 
 import { createHash } from 'node:crypto';
-import { openHippoDb, closeHippoDb, rethrowIfSqliteBlocked, type DatabaseSyncLike } from '../db.js';
+import { openHippoDb, closeHippoDb, rethrowIfSqliteBlocked, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import type { RerankStep } from '../core/search-types.js';
-import { DELIVERY_LEDGER_VERSION, type DeliveryEventInput } from '../delivery-recorder.js';
-import { errorMessage, log } from '../log.js';
+import { DELIVERY_LEDGER_VERSION, isBoundaryEvent, type DeliveryEventInput } from './delivery-recorder.js';
+import { errorFields, errorMessage, log } from '../util/log.js';
 import { DAY_MS } from '../util/time.js';
 
 /** One ranked result to persist alongside its trace row. */
@@ -80,8 +80,7 @@ export function writeRecallTrace(db: DatabaseSyncLike, input: RecallTraceInput):
   try {
     const queryHash = createHash('sha256').update(input.query).digest('hex').slice(0, 16);
     const ts = new Date().toISOString();
-    db.exec('BEGIN IMMEDIATE');
-    try {
+    return withWriteScope(db, 'write_recall_trace', () => {
       const insertTrace = db.prepare(`
         INSERT INTO recall_traces (ts, tenant_id, session_id, pipeline, query_hash, query_length, result_count, explain_mode)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -113,14 +112,10 @@ export function writeRecallTrace(db: DatabaseSyncLike, input: RecallTraceInput):
         );
       });
 
-      db.exec('COMMIT');
       return traceId;
-    } catch (error) {
-      try { db.exec('ROLLBACK'); } catch { /* already rolled back; keep the original error */ }
-      throw error;
-    }
+    });
   } catch (error) {
-    log.error(`recall trace write failed: ${errorMessage(error)}`);
+    log.error(`recall trace write failed: ${errorMessage(error)}`, errorFields(error));
     return null;
   }
 }
@@ -153,7 +148,7 @@ export function writeRecallTraceAtRoot(root: string, input: RecallTraceInput): n
     db = openHippoDb(root);
   } catch (error) {
     rethrowIfSqliteBlocked(error);
-    log.error(`recall trace connection failed: ${errorMessage(error)}`);
+    log.error(`recall trace connection failed: ${errorMessage(error)}`, errorFields(error));
     return null;
   }
   try {
@@ -229,7 +224,7 @@ export function recordTraceOutcome(db: DatabaseSyncLike, input: RecordTraceOutco
       VALUES (?, ?, ?, ?, ?)
     `).run(input.traceId, new Date().toISOString(), input.tenantId, input.outcome, JSON.stringify(credited));
   } catch (error) {
-    log.error(`recall trace outcome write failed: ${errorMessage(error)}`);
+    log.error(`recall trace outcome write failed: ${errorMessage(error)}`, errorFields(error));
   }
 }
 
@@ -237,7 +232,7 @@ export function recordTraceOutcome(db: DatabaseSyncLike, input: RecordTraceOutco
 export const DELIVERY_LEDGER_RETENTION_DAYS = 90;
 /** Lock wait for the ledger's own connection: a busy store drops the row rather than slow the hook. */
 export const DELIVERY_LEDGER_WAIT_MS = 50;
-/** Two prompt-identical events without a host turn id this close together are one turn fired twice. */
+/** Two prompt-identical events without a host turn id, or two boundary events of one type, this close are one fire twice. */
 export const DELIVERY_DUPLICATE_WINDOW_MS = 2000;
 
 const DELIVERY_EVENT_COLUMNS = [
@@ -304,7 +299,20 @@ export interface DeliveryEventRow {
   candidates: DeliveryCandidateRow[];
 }
 
+function findDuplicateBoundary(db: DatabaseSyncLike, input: DeliveryEventInput): number | null {
+  // SAFETY: rows carry exactly the `id` and `ts` columns selected.
+  const rows = db.prepare(`
+    SELECT id, ts FROM delivery_events
+    WHERE tenant_id = ? AND session_id = ? AND event_type = ? AND turn_seq IS NOT NULL
+    ORDER BY id
+  `).all(input.tenantId, input.sessionId, input.eventType) as Array<{ id: number; ts: string }>;
+  const at = Date.parse(input.ts);
+  return rows.find((r) => Math.abs(Date.parse(r.ts) - at) <= DELIVERY_DUPLICATE_WINDOW_MS)?.id ?? null;
+}
+
 function findDuplicateTurn(db: DatabaseSyncLike, input: DeliveryEventInput): number | null {
+  // A boundary has no prompt, and two compactions of one session never start within the window, so time alone decides.
+  if (isBoundaryEvent(input.eventType)) return findDuplicateBoundary(db, input);
   if (input.hostTurnId !== null) {
     // SAFETY: a single `id` column, undefined when no row matches.
     const row = db.prepare(`
@@ -338,8 +346,7 @@ function nextTurnSeq(db: DatabaseSyncLike, input: DeliveryEventInput): number {
 /** One event plus its candidates in one write transaction, then prune; fail-soft. The caller must not hold a transaction on `db`. */
 export function writeDeliveryEvent(db: DatabaseSyncLike, input: DeliveryEventInput): number | null {
   try {
-    db.exec('BEGIN IMMEDIATE');
-    try {
+    return withWriteScope(db, 'write_delivery_event', () => {
       // Missing-session and sub-agent events are not turns of a session, so they get no number and no duplicate check.
       const isTurn = input.sessionId !== null && (input.sessionState === 'payload' || input.sessionState === 'env');
       const duplicateOf = isTurn ? findDuplicateTurn(db, input) : null;
@@ -366,15 +373,10 @@ export function writeDeliveryEvent(db: DatabaseSyncLike, input: DeliveryEventInp
       const pruneFrom = Math.min(Date.parse(input.ts), Date.now());
       const cutoff = new Date(pruneFrom - DELIVERY_LEDGER_RETENTION_DAYS * DAY_MS).toISOString();
       db.prepare(`DELETE FROM delivery_events WHERE ts < ?`).run(cutoff);
-      db.exec('COMMIT');
       return eventId;
-    } catch (error) {
-      try { db.exec('ROLLBACK'); } catch { /* SQLite may already have rolled back (SQLITE_FULL, IOERR); keep the original error */ }
-      throw error;
-    }
+    });
   } catch (error) {
-    // The prompt hook's stderr shows this exact `[hippo] delivery ledger` line, so it stays off the logger's format.
-    console.error(`[hippo] delivery ledger write failed: ${errorMessage(error)}`);
+    log.error(`delivery ledger write failed: ${errorMessage(error)}`);
     return null;
   }
 }
@@ -385,8 +387,7 @@ export function writeDeliveryEventAtRoot(root: string, input: DeliveryEventInput
   try {
     db = openHippoDb(root);
   } catch (error) {
-    // Same hook stderr line as writeDeliveryEvent above.
-    console.error(`[hippo] delivery ledger write failed: ${errorMessage(error)}`);
+    log.error(`delivery ledger write failed: ${errorMessage(error)}`);
     return null;
   }
   try {

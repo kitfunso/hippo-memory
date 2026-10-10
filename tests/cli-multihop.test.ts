@@ -43,11 +43,11 @@ describe('hippo recall --multihop', () => {
       env: { ...process.env, HIPPO_HOME: hippoRoot },
     });
 
-    const result = execSync(`${HIPPO} recall "reading"`, {
+    const result = execSync(`${HIPPO} recall "books"`, {
       cwd: hippoRoot,
       env: { ...process.env, HIPPO_HOME: hippoRoot },
       encoding: 'utf-8',
     });
-    expect(result).toBeDefined();
+    expect(result).toContain('Tim reads books');
   });
 });

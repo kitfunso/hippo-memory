@@ -2,12 +2,12 @@
 // in process on a real store, so routing these verbs through the api layer cannot change a byte or a row.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { cmdAuth } from '../src/cli/auth.js';
-import { cmdGoal } from '../src/cli/goals.js';
-import * as api from '../src/api.js';
+import { handleAuth } from '../src/cli/auth.js';
+import { handleGoal } from '../src/cli/goals.js';
+import * as api from '../src/api/index.js';
 import { verifyApiKeyCached } from '../src/store/auth.js';
-import { sqliteStore } from '../src/store-port.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { sqliteStore } from '../src/store/index.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 
@@ -63,7 +63,7 @@ describe('hippo auth revoke, grant and ungrant (in process)', () => {
 
     const transcript: string[] = [];
     const step = async (label: string, args: string[], flags: Flags = {}): Promise<void> => {
-      const r = await runInProcess(() => cmdAuth(root, args, flags));
+      const r = await runInProcess(() => handleAuth({ hippoRoot: root, tenantId: 'default', args, flags }));
       transcript.push(`$ auth ${label} -> ${r.status}\n--- stdout\n${mask(r.stdout)}--- stderr\n${mask(r.stderr)}`);
     };
 
@@ -98,7 +98,7 @@ describe('hippo goal (in process)', () => {
     const mask = masker(/\b(?:g|rp)_[0-9a-f]{16}\b/g, 'id');
     const transcript: string[] = [];
     const step = async (label: string, args: string[], flags: Flags = {}): Promise<string> => {
-      const r = await runInProcess(() => cmdGoal(root, args, flags));
+      const r = await runInProcess(() => handleGoal({ hippoRoot: root, tenantId: 'default', args, flags }));
       transcript.push(`$ goal ${label} -> ${r.status}\n--- stdout\n${mask(r.stdout)}--- stderr\n${mask(r.stderr)}`);
       return r.stdout.trim();
     };

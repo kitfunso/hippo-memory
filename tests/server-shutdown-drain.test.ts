@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { spawn } from 'node:child_process';
 import { serve, type AuthResolver, type ServerHandle } from '../src/server.js';
-import { log } from '../src/log.js';
+import { log } from '../src/util/log.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 const homes: string[] = [];
@@ -88,7 +88,7 @@ describe('serve() graceful stop', () => {
     let stderr = '';
     child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString('utf8'); });
     const code = await new Promise<number | null>((done) => child.once('exit', done));
-    expect(stderr).toMatch(/error during stop: .*errorClass=/);
+    expect(stderr).toMatch(/serve shutdown after SIGTERM failed: .*errorClass=/);
     expect(code).toBe(1);
   }, 15000);
 

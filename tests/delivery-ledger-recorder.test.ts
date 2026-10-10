@@ -5,12 +5,12 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { getContext, type Context, type ContextOpts } from '../src/api.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { _resetAblationCacheForTests } from '../src/ablation.js';
-import type { HippoConfig } from '../src/config.js';
-import { _setDeliveryFaultForTests, createDeliveryRecorder, type DeliveryEventInput, type DeliveryRecorder } from '../src/delivery-recorder.js';
+import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { getContext, type Context, type ContextOpts } from '../src/api/index.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { _resetAblationCacheForTests } from '../src/core/ablation.js';
+import type { HippoConfig } from '../src/core/config.js';
+import { _setDeliveryFaultForTests, createDeliveryRecorder, type DeliveryEventInput, type DeliveryRecorder } from '../src/store/delivery-recorder.js';
 
 const PROJECT = 'proj-a';
 const PROMPT = 'how should the postgres migration rollback plan work';
@@ -138,7 +138,7 @@ describe('the observer never changes getContext', () => {
   it('a throwing observer leaves the result the same and writes nothing at flush', async () => {
     configure({ promptRecall: true });
     seedMixedStore();
-    const err = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const err = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     _setDeliveryFaultForTests('observe');
     const without = await getContext(ctx, baseOpts);
     const rec = recorder();
@@ -146,7 +146,7 @@ describe('the observer never changes getContext', () => {
     const write = vi.fn(() => 1);
     rec.flush(write);
     expect(write).not.toHaveBeenCalled();
-    expect(String(err.mock.calls[0][0])).toMatch(/^\[hippo\] delivery ledger skipped: recorder failed: /);
+    expect(String(err.mock.calls[0][0])).toMatch(/^\[hippo\] warn: delivery ledger skipped: recorder failed: /);
   });
 
   it("lets admit's own throw through and counts a rejected row once however often it is admitted", () => {
@@ -232,5 +232,44 @@ describe('rejection reasons', () => {
     expect([event.consideredCount, event.selectedCount, event.rejectedCount, event.rejectedUnlisted]).toEqual([6, 2, 4, 4]);
     expect(rowsOf(event)).toEqual([]);
     expect(event.filteredCount).toBe(3);
+  });
+});
+
+describe('the event type of a recorder', () => {
+  it('R1 takes eventType over a UserPromptSubmit payload', () => {
+    const rec = createDeliveryRecorder({
+      root: local, storeHash: 'aaaaaaaaaaaaaaaa', writeStore: 'local', tenantId: 'default', eventType: 'pre-compact',
+      stdinText: JSON.stringify({ session_id: 's1', prompt: PROMPT, hook_event_name: 'UserPromptSubmit' }),
+    });
+    expect(eventOf(rec).eventType).toBe('pre-compact');
+  });
+
+  it('R2 without eventType keeps the payload inference', () => {
+    expect(eventOf(recorder()).eventType).toBe('prompt-submit');
+    const manual = createDeliveryRecorder({
+      root: local, storeHash: 'aaaaaaaaaaaaaaaa', writeStore: 'local', tenantId: 'default', stdinText: JSON.stringify({ session_id: 's1' }),
+    });
+    expect(eventOf(manual).eventType).toBe('pinned-manual');
+  });
+});
+
+describe('prompt facts on a boundary row', () => {
+  const withPrompt = (eventType?: 'pre-compact' | 'compact-resume') => createDeliveryRecorder({
+    root: local, storeHash: 'aaaaaaaaaaaaaaaa', writeStore: 'local', tenantId: 'default', eventType,
+    stdinText: JSON.stringify({ session_id: 's1', prompt: 'secret prompt', hook_event_name: 'UserPromptSubmit' }),
+  });
+
+  for (const type of ['pre-compact', 'compact-resume'] as const) {
+    it(`R3 a ${type} row keeps no prompt hash or length although the payload carries a prompt`, () => {
+      const event = eventOf(withPrompt(type));
+      expect([event.eventType, event.promptHash, event.promptLength]).toEqual([type, null, 0]);
+    });
+  }
+
+  it('R4 a prompt-submit row still carries the prompt hash and length', () => {
+    const event = eventOf(withPrompt());
+    expect(event.eventType).toBe('prompt-submit');
+    expect(event.promptHash).not.toBeNull();
+    expect(event.promptLength).toBe(13);
   });
 });

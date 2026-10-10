@@ -1,32 +1,26 @@
 // The `hippo explain` verb; main() loads it lazily from the command table.
 
-import { confidenceFacets } from '../memory.js';
+import { confidenceFacets } from '../core/memory.js';
 import { isInitialized } from '../store/open.js';
 import { loadSearchEntries } from '../store/search-rows.js';
 import { loadIndex } from '../store/index-and-stats.js';
 import { DEFAULT_RECALL_BUDGET, type SearchResult } from '../core/search-types.js';
-import { loadConfig } from '../config.js';
-import { dropHeldCopies } from '../same-text.js';
-import { detectScope } from '../scope.js';
-import { getGlobalRoot } from '../shared.js';
-import * as api from '../api.js';
-import { resolveTenantId } from '../tenant.js';
-import type { RankRecallResult } from '../recall-pipeline.js';
-import { printedTokens } from '../context-render.js';
+import { loadConfig } from '../core/config.js';
+import { dropHeldCopies } from '../util/same-text.js';
+import { detectScope } from '../sharing/scope.js';
+import { getGlobalRoot } from '../sharing/global-store.js';
+import * as api from '../api/index.js';
+import { resolveTenantId } from '../store/tenant.js';
+import { cliApiContext } from './api-context.js';
+import type { RankRecallResult } from '../api/recall-pipeline.js';
+import { printedTokens } from '../api/context-render.js';
 import { printError } from './output.js';
-import {
-  parseLimitFlag,
-  parseBudgetFlag,
-  requireInit,
-  fmt,
-  recallEntryText,
-  recallHeading,
-  type CliFlags,
-  type CommandContext,
-  parseAsOfFlag,
-  engineFlags,
-  boolFlag,
-} from './shared.js';
+import { parseLimitFlag, parseBudgetFlag, type CliFlags, type CommandContext, parseAsOfFlag, engineFlags, boolFlag } from './flag-values.js';
+import { requireInit } from './shared.js';
+import { fmt, recallEntryText, recallHeading } from './print.js';
+import { CliExit } from './exit.js';
+
+const EXPLAIN_PREVIEW_CHARS = 48;
 
 /** The SQL predicate drops denied rows before the window, so an unscoped probe counts what the policy hides. */
 function noteScopeHidden(hippoRoot: string, globalRoot: string | undefined, query: string, tenantId: string, requested: string | undefined): void {
@@ -74,7 +68,7 @@ export async function cmdExplain(
 
   const slot: InspectedSlot = {};
   await api.retrieve(
-    { hippoRoot, tenantId, actor: api.adminActor('cli') },
+    cliApiContext(hippoRoot, tenantId),
     {
       query,
       cliCore: {
@@ -149,7 +143,7 @@ function printExplainTable(results: SearchResult[], query: string, modeUsed: str
   for (let i = 0; i < results.length; i++) {
     const r = results[i];
     const b = r.breakdown;
-    const preview = r.entry.content.replace(/\s+/g, ' ').slice(0, 48);
+    const preview = r.entry.content.replace(/\s+/g, ' ').slice(0, EXPLAIN_PREVIEW_CHARS);
     const ageStr = b ? `${b.ageDays}d` : '?';
     console.log(
       `${String(i + 1).padEnd(5)} ${fmt(r.score, 3).padEnd(7)} ${fmt(r.entry.strength).padEnd(9)} ${ageStr.padEnd(6)} ${r.entry.layer.padEnd(10)} ${r.entry.id.padEnd(17)} ${preview}`,
@@ -197,7 +191,7 @@ export async function handleExplain({ hippoRoot, args, flags }: CommandContext):
   const query = args.join(' ').trim();
   if (!query) {
     printError('Please provide a search query.');
-    process.exit(1);
+    throw new CliExit(1);
   }
   await cmdExplain(hippoRoot, query, flags);
 }

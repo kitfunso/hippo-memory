@@ -15,56 +15,46 @@ import {
   listSessionEvents,
 } from '../store/sessions.js';
 import { writeSessionEndHandoff } from '../store/handoffs.js';
-import { readSessionScan, recordSessionDigest } from '../session-digest.js';
-import { openHippoDb, closeHippoDb } from '../db.js';
-import { captureToolFailure } from '../capture-error.js';
+import { readSessionScan, recordSessionDigest } from '../capture/session-digest.js';
+import { captureToolFailure } from '../capture/capture-error.js';
 import {
-  isSubagentPayload,
   readApiCalls,
   recordRereads,
-  recordTokenUse,
   type TranscriptCalls,
-} from '../token-ledger.js';
+} from '../store/token-ledger.js';
 import { estimateTokens } from '../util/token-text.js';
 import { currentMachine, importSessionFolder } from '../agent-memories/sync.js';
 import { summaryLine } from '../agent-memories/report.js';
-import { resolveProjectIdentity } from '../project-identity.js';
-import { getGlobalRoot } from '../shared.js';
+import { resolveProjectIdentity } from '../core/project-identity.js';
+import { getGlobalRoot } from '../sharing/global-store.js';
 import { cmdCapture, CaptureOptions } from '../capture/command.js';
 import { cmdPreCompact, cmdPostCompact } from '../capture/compact.js';
 import { transcriptWorkingState } from '../capture/working-state.js';
-import { collectHandoffEvidence } from '../handoff-evidence.js';
-import { resolveLastSessionTranscript, type SessionTurn } from '../capture/transcript.js';
+import { collectHandoffEvidence } from '../capture/handoff-evidence.js';
+import { type SessionTurn } from '../capture/transcript.js';
 import { copilotTranscriptFor, SESSION_ID_RE } from '../capture/copilot-transcript.js';
 import { loadTurnPosition, runSessionWorker, saveTurnPosition, turnsAfter, type WorkerMode } from '../capture/session-worker.js';
-import { isStringValue, readVscodeStop } from '../capture-contract.js';
-import { loadConfig } from '../config.js';
+import { isStringValue, readSessionEnd, readVscodeStop, type CaptureInput, type HookRuntime } from '../core/capture-contract.js';
+import { loadConfig } from '../core/config.js';
 import { autoSleepDue } from '../api/auto-sleep.js';
-import { truncateCodePointSafe } from '../transcript-tail.js';
-import { COMPACTION_DB_WAIT_MS } from '../compaction-record.js';
-import { COMPACT_RESUME_EVENT_CONTENT_CAP, COMPACT_RESUME_MAX_AGE_MS, compactResumeText } from '../context-render.js';
-import { normaliseHookPayload, readHookStdin, readStdinBounded, type BoundedStdin } from '../stdin.js';
-import { resolveTenantId } from '../tenant.js';
-import { errorMessage, log } from '../log.js';
-import { withLedgerDb } from '../ledger-db.js';
+import { truncateCodePointSafe } from '../util/transcript-tail.js';
+import { COMPACTION_DB_WAIT_MS } from '../capture/compaction-record.js';
+import { COMPACT_RESUME_EVENT_CONTENT_CAP, COMPACT_RESUME_MAX_AGE_MS, compactResumeText } from '../api/context-render.js';
+import { normaliseHookPayload, readHookStdin, readStdinBounded, type BoundedStdin } from './stdin.js';
+import { errorMessage, log } from '../util/log.js';
+import { bookLedgerTurn } from '../api/ledger-db.js';
+import { flushDeliveryRecorder } from '../api/prompt-hook.js';
+import type { DeliveryRecorder } from '../store/delivery-recorder.js';
 import { printError } from './output.js';
 import { cmdLastSleep } from './last-sleep.js';
+import { readCompactResumePayload } from './compact-resume-payload.js';
+import { type CliFlags, type CommandContext, boolFlag, flagIsTrue, stringFlag } from './flag-values.js';
 import {
-  type CliFlags,
-  type CommandContext,
-  logSessionEndImport,
-  appendSessionEndCloseLog,
-  resetHookInjection,
-  hookStoreRoot,
-  hookRuntime,
-  payloadCwdRoot,
-  runHookWithStores,
-  inPilotHoldout,
-  boolFlag,
-  flagIsTrue,
-  stringFlag,
-} from './shared.js';
-import type { JsonValue } from '../json.js';
+  logSessionEndImport, appendSessionEndCloseLog, reportSessionEndFailure, resetHookInjection, hookStoreRoot, hookRuntime,
+  payloadCwdRoot, runHookWithStores, inPilotHoldout, startDeliveryRecorder,
+} from './hook-runtime.js';
+import type { JsonValue } from '../util/json.js';
+import { CliExit } from './exit.js';
 
 /**
  * SessionStart(compact) injector. Prints the active task snapshot + recent
@@ -78,73 +68,39 @@ import type { JsonValue } from '../json.js';
  * degrades to empty stdout, never a thrown error — a failing SessionStart
  * hook must not pollute session startup.
  */
-function cmdCompactResume(hippoRoot: string, stdinText: string | undefined, stdinTimedOut: boolean): void {
+function cmdCompactResume(hippoRoot: string, tenantId: string, stdinText: string | undefined, stdinTimedOut: boolean): void {
+  let rec: DeliveryRecorder | null = null;
   try {
     // Gate on the non-exiting isInitialized check first: the store reads below call initStore, which would
     // silently create a store in a project that never ran `hippo init`, and this hook fires globally.
     if (!isInitialized(hippoRoot)) {
-      process.exit(0);
+      throw new CliExit(0);
     }
 
     const payloadState = readCompactResumePayload(stdinText, stdinTimedOut);
     let suppressOutput = payloadState.suppressOutput;
     const payloadSessionId = payloadState.payloadSessionId;
 
+    if (payloadState.boundary) rec = startDeliveryRecorder(hippoRoot, stdinText, 'claude-code', 'compact-resume');
+
     // A compaction follows a prompt or SessionStart that booked the arm, so this only reads it.
-    if (!suppressOutput && payloadSessionId !== null && inPilotHoldout(hippoRoot, resolveTenantId({}), payloadSessionId, false)) {
+    if (!suppressOutput && payloadSessionId !== null && inPilotHoldout(hippoRoot, tenantId, payloadSessionId, false)) {
       suppressOutput = true;
+      rec?.disabled();
     }
 
-    if (!suppressOutput) restoreCompactSnapshot(hippoRoot, payloadSessionId);
+    if (!suppressOutput) restoreCompactSnapshot(hippoRoot, tenantId, payloadSessionId, rec);
   } catch (err) {
+    if (err instanceof CliExit) throw err;
     // Empty stdout on any store error, never a crashed SessionStart; the reason goes to stderr, which the model never sees.
     log.warn(`hippo compact-resume: skipped: ${errorMessage(err)}`);
   }
-  process.exit(0);
+  // A no-op when the token ledger's handle already wrote the row; exit would drop it otherwise.
+  flushDeliveryRecorder(rec);
+  throw new CliExit(0);
 }
 
-interface CompactResumePayload { suppressOutput: boolean; payloadSessionId: string | null }
-
-function readCompactResumePayload(stdinText: string | undefined, stdinTimedOut: boolean): CompactResumePayload {
-  // The matcher is an optimization, not a dependency: older Claude Code
-  // that ignores `matcher: 'compact'` would run this on every SessionStart,
-  // so we also gate on payload.source here. A payload that parses but
-  // carries a different source (e.g. 'startup') means the matcher-based
-  // gate failed to apply — stay silent rather than print stale state.
-  const nonEmptyStdin = !!stdinText && stdinText.trim() !== '';
-  // Without a payload session_id the cross-restore guard below can
-  // never fire, so a timed-out empty read must not reach the print path.
-  let suppressOutput = stdinTimedOut && !nonEmptyStdin;
-  let payloadSessionId: string | null = null;
-
-  if (nonEmptyStdin) {
-    let payload: Record<string, unknown> | null = null;
-    try {
-      payload = JSON.parse(stdinText!.trim()) as Record<string, unknown>;
-    } catch {
-      // Malformed JSON is handled as a null payload by the fail-closed check below.
-      payload = null;
-    }
-    if (!payload || typeof payload !== 'object') {
-      // Fail closed on malformed non-empty stdin; only a TTY/no-stdin manual run, which never reaches here, prints.
-      suppressOutput = true;
-    } else {
-      // Fail closed on structurally incomplete payloads too ({}, [], source missing/non-string): real
-      // SessionStart payloads always carry source, so a parsed one must say 'compact' to print.
-      // A sub-agent's payload carries its parent's session id, so the mismatch guard would pass and restore the parent's snapshot into it.
-      if (payload.source !== 'compact' || isSubagentPayload(stdinText)) {
-        suppressOutput = true;
-      }
-      if (typeof payload.session_id === 'string') {
-        payloadSessionId = payload.session_id;
-      }
-    }
-  }
-  return { suppressOutput, payloadSessionId };
-}
-
-function restoreCompactSnapshot(hippoRoot: string, payloadSessionId: string | null): void {
-  const tenantId = resolveTenantId({});
+function restoreCompactSnapshot(hippoRoot: string, tenantId: string, payloadSessionId: string | null, rec: DeliveryRecorder | null): void {
   const snapshot = loadFreshActiveTaskSnapshot(hippoRoot, tenantId, { maxAgeMs: COMPACT_RESUME_MAX_AGE_MS });
   // Concurrent sessions must not cross-restore. Only suppress when BOTH ids are present and differ;
   // either side missing, or a manual invocation with no payload session_id, still prints.
@@ -170,9 +126,13 @@ function restoreCompactSnapshot(hippoRoot: string, payloadSessionId: string | nu
   // Printed in one write so the ledger books exactly the text the model is handed.
   const text = compactResumeText(snapshot, events);
   console.log(text);
-  withLedgerDb(hippoRoot, (db) => recordTokenUse(db, {
-    tenantId, sessionId: payloadSessionId, surface: 'compact_resume', event: 'inject', items: 1, tokens: estimateTokens(text),
-  }));
+  rec?.delivered({ state: 'sent', emittedText: `${text}\n` });
+  bookLedgerTurn(hippoRoot, {
+    uses: [{
+      tenantId, sessionId: payloadSessionId, surface: 'compact_resume', event: 'inject', items: 1, tokens: estimateTokens(text),
+    }],
+    delivery: (write) => flushDeliveryRecorder(rec, write),
+  });
 }
 
 /**
@@ -186,10 +146,7 @@ function restoreCompactSnapshot(hippoRoot: string, payloadSessionId: string | nu
  * immediately. The child writes to the log file and survives TUI teardown;
  * the next SessionStart reads the log via `hippo last-sleep`.
  */
-export async function cmdSessionEnd(
-  hippoRoot: string,
-  flags: CliFlags
-): Promise<void> {
+export async function handleSessionEnd({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   const runtime = hookRuntime(flags);
   const turn = flagIsTrue(flags, 'turn');
   // Copilot's hook command carries no path, since one quoted into it would need escaping for each shell; the log goes where the hook table used to point.
@@ -198,14 +155,17 @@ export async function cmdSessionEnd(
   // Bounded read: extracts transcript_path + session_id for the detached worker's argv.
   const raw = await readStdinBounded();
   // Read before normalising: the Copilot CLI's agentStop shares this hook line, and camelCase keys would pass as VS Code's.
-  if (turn && !isVscodeStopPayload(raw)) return;
+  const stop = turn ? vscodeStopInput(raw) : null;
+  if (turn && !stop) return;
   const stdinText = normaliseHookPayload(raw.text);
   // Before the spawn, since the worker finds its store from the folder it inherits.
   const root = payloadCwdRoot(hippoRoot, stdinText, runtime);
-  const sessionId = payloadSessionIdOrNull(stdinText);
+  const input = stop ?? sessionEndInput(stdinText, raw.timedOut, runtime);
+  const sessionId = input?.sessionId ?? null;
   // Resolved here because only this process saw the payload; the worker captures just the path it is handed.
   // Always a hook, so never scan: an empty stdin here is not a manual run. The Copilot CLI's sessionEnd names no transcript, so its log is found by id.
-  const transcriptPath = resolveLastSessionTranscript(undefined, stdinText, { mayScan: false })
+  const named = input?.transcriptPath ?? null;
+  const transcriptPath = (named !== null && fs.existsSync(named) ? named : null)
     ?? (runtime === 'copilot' && sessionId ? copilotTranscriptFor(sessionId) : null);
 
   try {
@@ -216,23 +176,16 @@ export async function cmdSessionEnd(
     if (logFile) flags['log-file'] = logFile;
     if (transcriptPath) flags['transcript'] = transcriptPath;
     if (sessionId) flags['session-id'] = sessionId;
-    await cmdSessionEndWorker(root, flags);
+    await cmdSessionEndWorker(root, tenantId, flags);
     return;
   }
 }
 
-/** The hook payload's session id, or null for no stdin, non-JSON or a read failure (the snapshot close then no-ops). */
-function payloadSessionIdOrNull(stdinText: string | undefined): string | null {
-  try {
-    if (stdinText && stdinText.trim().startsWith('{')) {
-      const payload = JSON.parse(stdinText) as Record<string, unknown>;
-      if (typeof payload.session_id === 'string') {
-        return payload.session_id;
-      }
-    }
-  } catch {
-    // No stdin, not JSON, or read failure: the snapshot close below will no-op.
-  }
+/** What the session-end payload named; null for one hippo refuses or one that never arrived, and the worker then runs with neither value. */
+function sessionEndInput(stdinText: string | undefined, timedOut: boolean, runtime: HookRuntime): CaptureInput | null {
+  const receipt = readSessionEnd(stdinText, timedOut, runtime);
+  if (receipt.status === 'received') return receipt.input;
+  log.debug(`session-end: ${receipt.reason}`);
   return null;
 }
 
@@ -256,29 +209,35 @@ function spawnSessionEndWorker(workerArgs: readonly string[]): void {
   child.unref();
 }
 
-/** A VS Code Stop payload with a session id that can name the lock file; anything else makes turn mode a silent no-op. */
-function isVscodeStopPayload(raw: BoundedStdin): boolean {
+/** The input of a VS Code Stop payload with a session id that can name the lock file; null makes turn mode a silent no-op. */
+function vscodeStopInput(raw: BoundedStdin): CaptureInput | null {
   const receipt = readVscodeStop(raw.text, raw.timedOut);
-  return receipt.status === 'received' && receipt.input.sessionId !== null && SESSION_ID_RE.test(receipt.input.sessionId);
+  return receipt.status === 'received' && receipt.input.sessionId !== null && SESSION_ID_RE.test(receipt.input.sessionId) ? receipt.input : null;
 }
 
 export async function cmdSessionEndWorker(
   hippoRoot: string,
+  tenantId: string,
   flags: CliFlags
 ): Promise<void> {
   const sessionId = flags['session-id'];
-  await runSessionWorker(isStringValue(sessionId) ? sessionId : null, flagIsTrue(flags, 'turn') ? 'turn' : 'full', (mode) => sessionEndWork(hippoRoot, flags, mode));
+  await runSessionWorker(isStringValue(sessionId) ? sessionId : null, flagIsTrue(flags, 'turn') ? 'turn' : 'full', (mode) => sessionEndWork(hippoRoot, tenantId, flags, mode));
+}
+
+export function handleSessionEndWorker({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
+  return cmdSessionEndWorker(hippoRoot, tenantId, flags);
 }
 
 async function sessionEndWork(
   hippoRoot: string,
+  tenantId: string,
   flags: CliFlags,
   mode: WorkerMode,
 ): Promise<void> {
   const transcriptPath = stringFlag(flags, 'transcript');
   const closeLogFile = stringFlag(flags, 'log-file') ?? null;
   const closeSessionId = stringFlag(flags, 'session-id') ?? null;
-  const rereadLog = await bookSessionRereads(hippoRoot, transcriptPath, closeSessionId)
+  const rereadLog = await bookSessionRereads(hippoRoot, tenantId, transcriptPath, closeSessionId)
     .catch((err) => [`re-read count failed: ${errorMessage(err)}`]);
   // Sleep starts the log file afresh, so the lines go in after it; on exit too, in case sleep exits the process.
   const flushRereadLog = (): void => { for (const line of rereadLog.splice(0)) appendSessionEndCloseLog(closeLogFile, line); };
@@ -290,36 +249,36 @@ async function sessionEndWork(
     flushRereadLog();
     return;
   }
-  if (mode === 'turn' && closeSessionId) await sleepIfDue(hippoRoot, flags, closeLogFile, transcriptPath, closeSessionId);
-  else await sleepProjectStore(hippoRoot, flags, closeLogFile, transcriptPath);
+  if (mode === 'turn' && closeSessionId) await sleepIfDue(hippoRoot, tenantId, flags, closeLogFile, transcriptPath, closeSessionId);
+  else await sleepProjectStore(hippoRoot, tenantId, flags, closeLogFile, transcriptPath);
   flushRereadLog();
   const digestLog = (message: string): void => appendSessionEndCloseLog(closeLogFile, message);
   const scan = transcriptPath ? readSessionScan(transcriptPath, digestLog) : null;
-  const capture = (turns: readonly SessionTurn[] | undefined): boolean => captureEndedSession(hippoRoot, store, flags, transcriptPath, turns);
+  const capture = (turns: readonly SessionTurn[] | undefined): boolean => captureEndedSession(hippoRoot, tenantId, store, flags, transcriptPath, turns);
   if (mode === 'turn') captureNewTurns(transcriptPath, closeSessionId, scan, capture, digestLog);
   else capture(scan?.turns);
   recordSessionDigest(hippoRoot, scan, {
     key: closeSessionId || path.basename(transcriptPath ?? '', '.jsonl'),
-    tenantId: resolveTenantId({}),
+    tenantId,
     log: digestLog,
   });
 
   // Close only this session's snapshot, after sleep+capture: no snapshot producer runs in session-end, and since
   // session-end may never fire (crash, kill -9) the freshness bound in loadFreshActiveTaskSnapshot is the backstop.
   // The handoff is written first, while the snapshot writeSessionEndHandoff reads is still active.
-  if (closeSessionId) writeEndHandoff(store, closeSessionId, transcriptPath, closeLogFile, mode === 'turn');
+  if (closeSessionId) writeEndHandoff(store, tenantId, closeSessionId, transcriptPath, closeLogFile, mode === 'turn');
   if (mode === 'turn') {
     // The chat goes on after a reply, so its snapshot stays for the next compaction to restore.
     appendSessionEndCloseLog(closeLogFile, 'skip snapshot close: turn mode');
     return;
   }
-  closeEndedSessionSnapshot(store, closeSessionId, closeLogFile);
+  closeEndedSessionSnapshot(store, tenantId, closeSessionId, closeLogFile);
 }
 
-function closeEndedSessionSnapshot(store: string, closeSessionId: string | null, closeLogFile: string | null): void {
+function closeEndedSessionSnapshot(store: string, tenantId: string, closeSessionId: string | null, closeLogFile: string | null): void {
   try {
     if (closeSessionId) {
-      const closed = closeTaskSnapshotsForSession(store, resolveTenantId({}), closeSessionId);
+      const closed = closeTaskSnapshotsForSession(store, tenantId, closeSessionId);
       appendSessionEndCloseLog(closeLogFile, `closed ${closed} active snapshot(s) for session ${closeSessionId}`);
     } else {
       appendSessionEndCloseLog(closeLogFile, 'skip: no session_id in SessionEnd payload, active snapshot left untouched');
@@ -331,6 +290,7 @@ function closeEndedSessionSnapshot(store: string, closeSessionId: string | null,
 
 async function sleepProjectStore(
   hippoRoot: string,
+  tenantId: string,
   flags: CliFlags,
   closeLogFile: string | null,
   transcriptPath: string | undefined,
@@ -338,10 +298,10 @@ async function sleepProjectStore(
   // Sleeping the global store from here would learn this folder's git commits into it; it has its own daily sleep.
   if (isInitialized(hippoRoot)) {
     try {
-      await (await import('./sleep.js')).cmdSleep(hippoRoot, flags);
+      await (await import('./sleep.js')).cmdSleep(hippoRoot, tenantId, flags);
     } catch (err) {
-      // cmdSleep writes its failure line only when it has a log file, and capture runs regardless.
-      log.debug(`session-end: sleep failed: ${errorMessage(err)}`);
+      // cmdSleep writes its own failure line only once its log tee is open, and capture runs regardless.
+      reportSessionEndFailure(closeLogFile, 'session-end: sleep', err);
     }
   } else {
     appendSessionEndCloseLog(closeLogFile, 'skip sleep: this folder has no store of its own', { startFresh: true });
@@ -352,21 +312,22 @@ async function sleepProjectStore(
 /** A close after every reply sleeps only at the MCP server's auto-sleep threshold; each line starts the log afresh, as a sleep does. */
 async function sleepIfDue(
   hippoRoot: string,
+  tenantId: string,
   flags: CliFlags,
   closeLogFile: string | null,
   transcriptPath: string | undefined,
   sessionId: string,
 ): Promise<void> {
-  if (!isInitialized(hippoRoot)) return sleepProjectStore(hippoRoot, flags, closeLogFile, transcriptPath);
+  if (!isInitialized(hippoRoot)) return sleepProjectStore(hippoRoot, tenantId, flags, closeLogFile, transcriptPath);
   const prefix = `turn close, session ${sessionId}`;
   try {
-    const { enabled, count, threshold, due } = autoSleepDue(hippoRoot, resolveTenantId({}), loadConfig(hippoRoot).autoSleep);
+    const { enabled, count, threshold, due } = autoSleepDue(hippoRoot, tenantId, loadConfig(hippoRoot).autoSleep);
     if (!due) {
       const why = enabled ? `${count} new memories, threshold ${threshold}` : 'auto-sleep is off';
       appendSessionEndCloseLog(closeLogFile, `${prefix}: skip sleep, ${why}`, { startFresh: true });
       return;
     }
-    await sleepProjectStore(hippoRoot, flags, closeLogFile, transcriptPath);
+    await sleepProjectStore(hippoRoot, tenantId, flags, closeLogFile, transcriptPath);
     appendSessionEndCloseLog(closeLogFile, `${prefix}: ran sleep at ${count} new memories (threshold ${threshold})`);
   } catch (err) {
     appendSessionEndCloseLog(closeLogFile, `${prefix}: sleep check failed: ${errorMessage(err)}`, { startFresh: true });
@@ -396,6 +357,7 @@ function captureNewTurns(
 /** True when capture ran to the end, so a turn close may move its cursor past these turns. */
 function captureEndedSession(
   hippoRoot: string,
+  tenantId: string,
   store: string,
   flags: CliFlags,
   transcriptPath: string | undefined,
@@ -414,27 +376,27 @@ function captureEndedSession(
       logFile,
       dryRun: false,
       global: false,
-      tenantId: resolveTenantId({}),
+      tenantId,
       // In the global store, rows would otherwise read as user-global and show up in every project.
       originProject: store === hippoRoot ? undefined : resolveProjectIdentity(process.cwd()),
       sessionTurns: turns,
     });
     return true;
   } catch (err) {
-    log.debug(`session-end: capture failed: ${errorMessage(err)}`);
+    reportSessionEndFailure(stringFlag(flags, 'log-file') ?? null, 'session-end: capture', err);
     return false;
   }
 }
 
 function writeEndHandoff(
   store: string,
+  tenantId: string,
   closeSessionId: string,
   transcriptPath: string | undefined,
   closeLogFile: string | null,
   inPlace = false,
 ): void {
   try {
-    const tenantId = resolveTenantId({});
     const ownSnapshot = loadActiveTaskSnapshot(store, tenantId)?.session_id === closeSessionId;
     // A never-compacted session has no snapshot; read even when it has one, as another session's PreCompact can take the slot before the write.
     const derived = transcriptPath
@@ -459,6 +421,7 @@ function writeEndHandoff(
 /** Books the ending session's re-reads in each store its ledger rows can land in (project and global); returns the log lines. */
 async function bookSessionRereads(
   hippoRoot: string,
+  tenantId: string,
   transcriptPath: string | undefined,
   sessionId: string | null,
 ): Promise<string[]> {
@@ -474,12 +437,7 @@ async function bookSessionRereads(
   let tokens = 0;
   for (const root of roots) {
     try {
-      const db = openHippoDb(root);
-      try {
-        tokens += recordRereads(db, resolveTenantId({}), sessionId, read.calls);
-      } finally {
-        closeHippoDb(db);
-      }
+      tokens += recordRereads(root, tenantId, sessionId, read.calls);
     } catch (err) {
       lines.push(`re-read count failed: ${errorMessage(err)}`);
     }
@@ -494,6 +452,7 @@ function loadCodexWrapperMetadata(): CodexWrapperMetadata {
   if (!fs.existsSync(metadataPath)) {
     throw new Error('Codex wrapper is not installed. Run `hippo hook install codex` first.');
   }
+  // SAFETY: the file is the one installCodexWrapper wrote; handleCodexRun reads only logFile and realCodexPath from it.
   return JSON.parse(fs.readFileSync(metadataPath, 'utf8')) as CodexWrapperMetadata;
 }
 
@@ -537,10 +496,7 @@ function spawnRealCodex(
   return spawn(realCodexPath, forwardArgs, { cwd, stdio: 'inherit', windowsHide: false });
 }
 
-export function cmdCodexRun(
-  hippoRoot: string,
-  args: string[],
-): void {
+export function handleCodexRun({ hippoRoot, tenantId, args }: CommandContext): void {
   const metadata = loadCodexWrapperMetadata();
   const startedAtMs = Date.now();
   // Codex reads CODEX_HOME at each launch, so resolve it now, not from the install-time metadata.
@@ -560,13 +516,14 @@ export function cmdCodexRun(
   });
 
   child.on('exit', async (code, signal) => {
-    await launchCodexSessionEndWorker(hippoRoot, historyPath, startOffsetBytes, startedAtMs, metadata.logFile);
+    await launchCodexSessionEndWorker(hippoRoot, tenantId, historyPath, startOffsetBytes, startedAtMs, metadata.logFile);
     exitLikeChild(code, signal);
   });
 }
 
 async function launchCodexSessionEndWorker(
   hippoRoot: string,
+  tenantId: string,
   historyPath: string,
   startOffsetBytes: number,
   startedAtMs: number,
@@ -587,28 +544,38 @@ async function launchCodexSessionEndWorker(
     logFile,
   ];
 
+  if (await detachedWorkerStarted(workerArgs)) return;
+  // Awaited so the sleep write can't be killed by the exit calls below.
   try {
-    const worker = spawn(process.execPath, workerArgs, {
-      detached: true,
-      stdio: 'ignore',
-      windowsHide: true,
+    await cmdCodexSessionEndWorker(hippoRoot, tenantId, {
+      'codex-home': path.dirname(historyPath),
+      'history-path': historyPath,
+      'start-offset': String(startOffsetBytes),
+      'started-at': String(startedAtMs),
+      'log-file': logFile,
     });
-    worker.unref();
-  } catch (err) {
-    log.debug(`codex run: the session-end worker did not spawn, running inline: ${errorMessage(err)}`);
-    // Awaited so the sleep write can't be killed by the exit calls below.
-    try {
-      await cmdCodexSessionEndWorker(hippoRoot, {
-        'codex-home': path.dirname(historyPath),
-        'history-path': historyPath,
-        'start-offset': String(startOffsetBytes),
-        'started-at': String(startedAtMs),
-        'log-file': logFile,
-      });
-    } catch (inlineErr) {
-      log.debug(`codex run: the inline session-end failed: ${errorMessage(inlineErr)}`);
-    }
+  } catch (inlineErr) {
+    log.debug(`codex run: the inline session-end failed: ${errorMessage(inlineErr)}`);
   }
+}
+
+/** Resolves true once the detached worker is running, false when the spawn fails, whether it throws or reports later. */
+function detachedWorkerStarted(workerArgs: readonly string[]): Promise<boolean> {
+  return new Promise((resolve) => {
+    const failed = (reason: string): void => {
+      log.debug(`codex run: the session-end worker did not spawn, running inline: ${reason}`);
+      resolve(false);
+    };
+    try {
+      const worker = spawn(process.execPath, workerArgs, { detached: true, stdio: 'ignore', windowsHide: true });
+      // An async spawn failure (ENOENT, EAGAIN) arrives as an 'error' event, which a try cannot catch.
+      worker.on('error', (err) => failed(err.message));
+      worker.once('spawn', () => resolve(true));
+      worker.unref();
+    } catch (err) {
+      failed(errorMessage(err));
+    }
+  });
 }
 
 function exitLikeChild(code: number | null, signal: NodeJS.Signals | null): void {
@@ -626,6 +593,7 @@ function exitLikeChild(code: number | null, signal: NodeJS.Signals | null): void
 
 export async function cmdCodexSessionEndWorker(
   hippoRoot: string,
+  tenantId: string,
   flags: CliFlags,
 ): Promise<void> {
   const logFile = stringFlag(flags, 'log-file');
@@ -636,17 +604,21 @@ export async function cmdCodexSessionEndWorker(
     return;
   }
 
-  await sleepCodexProjectStore(hippoRoot, logFile);
-  captureCodexTranscript(hippoRoot, store, flags, logFile);
+  await sleepCodexProjectStore(hippoRoot, tenantId, logFile);
+  captureCodexTranscript(hippoRoot, tenantId, store, flags, logFile);
 }
 
-async function sleepCodexProjectStore(hippoRoot: string, logFile: string | undefined): Promise<void> {
+export function handleCodexSessionEndWorker({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
+  return cmdCodexSessionEndWorker(hippoRoot, tenantId, flags);
+}
+
+async function sleepCodexProjectStore(hippoRoot: string, tenantId: string, logFile: string | undefined): Promise<void> {
   // Sleeping the global store from here would learn this folder's git commits into it; it has its own daily sleep.
   if (isInitialized(hippoRoot)) {
     try {
-      await (await import('./sleep.js')).cmdSleep(hippoRoot, logFile ? { 'log-file': logFile } : {});
+      await (await import('./sleep.js')).cmdSleep(hippoRoot, tenantId, logFile ? { 'log-file': logFile } : {});
     } catch (err) {
-      log.debug(`codex session-end: sleep failed: ${errorMessage(err)}`);
+      reportSessionEndFailure(logFile ?? null, 'codex session-end: sleep', err);
     }
   } else {
     appendSessionEndCloseLog(logFile ?? null, 'skip sleep: this folder has no store of its own', { startFresh: true });
@@ -654,7 +626,7 @@ async function sleepCodexProjectStore(hippoRoot: string, logFile: string | undef
   }
 }
 
-function captureCodexTranscript(hippoRoot: string, store: string, flags: CliFlags, logFile: string | undefined): void {
+function captureCodexTranscript(hippoRoot: string, tenantId: string, store: string, flags: CliFlags, logFile: string | undefined): void {
   try {
     const codexHome = stringFlag(flags, 'codex-home') ?? resolveCodexWrapperPaths().codexHome;
     const historyPath = stringFlag(flags, 'history-path') ?? path.join(codexHome, 'history.jsonl');
@@ -680,19 +652,19 @@ function captureCodexTranscript(hippoRoot: string, store: string, flags: CliFlag
       logFile,
       dryRun: false,
       global: false,
-      tenantId: resolveTenantId({}),
+      tenantId,
       originProject: store === hippoRoot ? undefined : resolveProjectIdentity(process.cwd()),
       sessionTurns: scan?.turns,
     };
     try {
       cmdCapture(store, captureOpts);
     } catch (err) {
-      log.debug(`codex session-end: capture failed: ${errorMessage(err)}`);
+      reportSessionEndFailure(logFile ?? null, 'codex session-end: capture', err);
     }
     // The Codex wrapper passes no session id, so the rollout file names the session.
-    recordSessionDigest(hippoRoot, scan, { key: path.basename(transcriptPath, '.jsonl'), tenantId: resolveTenantId({}), log: digestLog });
+    recordSessionDigest(hippoRoot, scan, { key: path.basename(transcriptPath, '.jsonl'), tenantId, log: digestLog });
   } catch (err) {
-    log.debug(`codex session-end: transcript scan or digest failed: ${errorMessage(err)}`);
+    reportSessionEndFailure(logFile ?? null, 'codex session-end: transcript scan or digest', err);
   }
 }
 
@@ -702,23 +674,30 @@ export async function handlePreCompact({ hippoRoot, flags }: CommandContext): Pr
   const runtime = hookRuntime(flags);
   const root = payloadCwdRoot(hippoRoot, stdinText, runtime);
   await runHookWithStores(async () => {
+    // Started before any store wait, so two fires of one hook carry timestamps close enough to match as duplicates.
+    const rec = startDeliveryRecorder(hookStoreRoot(root), stdinText, runtime, 'pre-compact');
     resetHookInjection(root, stdinText, null);
     await cmdPreCompact(hookStoreRoot(root), {
       stdinText,
       stdinTimedOut,
       logFile: stringFlag(flags, 'log-file'),
       runtime,
+      onBoundary: (printed) => {
+        rec?.delivered(printed === null ? { state: 'empty' } : { state: 'sent', emittedText: printed });
+        flushDeliveryRecorder(rec);
+      },
     });
   });
 }
 
 export async function handlePostCompact({ hippoRoot, flags }: CommandContext): Promise<void> {
   // PostCompact hook: saves the compaction summary and its memories, then prints one plain line, because Claude Code shows this hook's stdout as-is. Always exits 0.
-  const { text } = await readHookStdin();
+  const { text, timedOut } = await readHookStdin();
   const logFlag = flags['log-file'];
   const store = hookStoreRoot(hippoRoot);
   const line = await runHookWithStores(() => cmdPostCompact(store, {
     stdinText: text,
+    stdinTimedOut: timedOut,
     logFile: logFlag === true || logFlag === false || Array.isArray(logFlag) ? undefined : logFlag,
     // Passed in, since capture.ts importing the sync would close an import cycle.
     afterSave: (transcriptPath, cwd, log) => {
@@ -731,7 +710,7 @@ export async function handlePostCompact({ hippoRoot, flags }: CommandContext): P
   if (line !== null && line !== undefined) console.log(line);
 }
 
-export async function handleCaptureError({ hippoRoot, flags }: CommandContext): Promise<void> {
+export async function handleCaptureError({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   // PostToolUseFailure hook: every path exits 0, and nothing is created
   // when no store exists (the hook fires in every directory).
   const { text } = await readHookStdin();
@@ -741,7 +720,7 @@ export async function handleCaptureError({ hippoRoot, flags }: CommandContext): 
     if (isInitialized(root) && payload) {
       // SAFETY: JSON.parse returns a JSON value by definition.
       const failure = JSON.parse(payload) as JsonValue;
-      await runHookWithStores(() => captureToolFailure(root, resolveTenantId({}), failure));
+      await runHookWithStores(() => captureToolFailure(root, tenantId, failure));
     }
   } catch (err) {
     // A malformed payload or store error must never fail the agent's tool call, so it is reported and dropped.
@@ -749,15 +728,15 @@ export async function handleCaptureError({ hippoRoot, flags }: CommandContext): 
   }
 }
 
-export async function handleCompactResume({ hippoRoot }: CommandContext): Promise<void> {
+export async function handleCompactResume({ hippoRoot, tenantId }: CommandContext): Promise<void> {
   const { text: stdinText, timedOut: stdinTimedOut } = await readHookStdin();
   await runHookWithStores(() => {
     resetHookInjection(hippoRoot, stdinText, 'compact');
-    cmdCompactResume(hookStoreRoot(hippoRoot), stdinText, stdinTimedOut);
+    cmdCompactResume(hookStoreRoot(hippoRoot), tenantId, stdinText, stdinTimedOut);
   });
 }
 
-export async function handleCapture({ hippoRoot, flags }: CommandContext): Promise<void> {
+export async function handleCapture({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   let captureSource: CaptureOptions['source'] | null = null;
   let captureFile: string | undefined;
   let transcriptPath: string | undefined;
@@ -773,7 +752,7 @@ export async function handleCapture({ hippoRoot, flags }: CommandContext): Promi
 
   if (!captureSource) {
     printError('Usage: hippo capture --stdin|--file <path>|--last-session [--transcript <path>] [--log-file <path>] [--dry-run] [--global]');
-    process.exit(1);
+    throw new CliExit(1);
   }
 
   // Bounded, and only when last-session has no explicit path: the
@@ -791,6 +770,6 @@ export async function handleCapture({ hippoRoot, flags }: CommandContext): Promi
     logFile: stringFlag(flags, 'log-file'),
     dryRun: boolFlag(flags, 'dry-run'),
     global: boolFlag(flags, 'global'),
-    tenantId: resolveTenantId({}),
+    tenantId,
   });
 }

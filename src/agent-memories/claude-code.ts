@@ -1,29 +1,32 @@
 // Claude Code's auto memory: frontmatter `.md` notes in a per-project folder, plus the `autoMemoryDirectory` user folder.
 import fs from 'node:fs';
 import path from 'node:path';
-import { resolveProjectIdentity, type ProjectIdentity } from '../project-identity.js';
+import { resolveProjectIdentity, type ProjectIdentity } from '../core/project-identity.js';
 import { realpathOrResolve } from '../util/real-path.js';
-import { isStringValue } from '../capture-contract.js';
+import { isStringValue } from '../core/capture-contract.js';
 import { claudeConfigDir } from '../hooks/shared.js';
 import { expandHome, frontmatterField, itemTime, readTextFile, splitFrontmatter } from './files.js';
 import { markdownNotes, readFolderStore, uniqueFolders, type FolderRules } from './folder-store.js';
 import { gitLayout } from './git.js';
 import type { Adapter, AdapterContext, Container, Listing, Scope } from './types.js';
-import { type JsonValue, isJsonObjectLiteral } from '../json.js';
-import { errorMessage } from '../log.js';
+import { type JsonValue, isJsonObjectLiteral } from '../util/json.js';
+import { errorMessage } from '../util/log.js';
+
+const NAME_SLUG_MAX_CHARS = 200;
 
 // Keeps a pinned name from carrying a separator or `..` out of the projects folder.
 const PROJECT_DIR_NAME = /^[A-Za-z0-9_-]{1,64}$/;
 
 /** Claude Code's auto memory folder names for a project: its checkout, which subfolders share, or the folder itself outside a repository. */
-export function claudeMemoryFolderNames(projectRoot: string, platform: NodeJS.Platform): Set<string> {
+function claudeMemoryFolderNames(projectRoot: string, platform: NodeJS.Platform): Set<string> {
   const roots = [projectRoot, realpathOrResolve(projectRoot)];
   const layout = gitLayout(projectRoot);
   if (layout) roots.push(claudeCheckoutRoot(layout.top, layout.gitDir, layout.common));
   return new Set(roots.map((root) => (platform === 'win32' ? claudeFolderName(root).toLowerCase() : claudeFolderName(root))));
 }
 
-/** Claude Code's rule: a linked worktree shares its main checkout's folder, or the git folder's when that sits outside a checkout (a bare repository, or --separate-git-dir); any other checkout, a submodule included, keeps its own. */
+/** Claude Code's rule: a linked worktree shares its main checkout's folder, or the git folder's when that sits outside
+ * a checkout (a bare repository, or --separate-git-dir); any other checkout, a submodule included, keeps its own. */
 export function claudeCheckoutRoot(top: string, gitDir: string, common: string): string {
   if (gitDir === common) return top;
   if (path.basename(common) === '.git') return path.dirname(common);
@@ -37,7 +40,7 @@ export function claudeFolderName(root: string): string {
   if (name.length <= 200) return name;
   let hash = 0;
   for (let i = 0; i < full.length; i++) hash = ((hash << 5) - hash + full.charCodeAt(i)) | 0;
-  return `${name.slice(0, 200)}-${Math.abs(hash).toString(36)}`;
+  return `${name.slice(0, NAME_SLUG_MAX_CHARS)}-${Math.abs(hash).toString(36)}`;
 }
 
 export const claudeCodeAdapter: Adapter = {
@@ -57,7 +60,8 @@ export function claudeTranscriptListing(ctx: AdapterContext, transcriptPath: str
   return { tool: 'claude-code', home: config, containers: readFolders([folder], 'project', ctx.platform), warnings: [] };
 }
 
-/** The project a session folder's notes belong to: the one Claude named the folder for, the session's start folder, else cwd or a parent; null when none matches. */
+/** The project a session folder's notes belong to: the one Claude named the folder
+ * for, the session's start folder, else cwd or a parent; null when none matches. */
 export function transcriptNotesProject(transcriptPath: string, cwd: string | null, machine: Pick<AdapterContext, 'platform' | 'env'>): ProjectIdentity | null {
   const fold = (name: string) => (machine.platform === 'win32' ? name.toLowerCase() : name);
   const folder = fold(path.basename(path.dirname(transcriptPath)));
@@ -82,8 +86,14 @@ const START_SCAN_BYTES = 64 * 1024;
 
 /** The cwd on the transcript's first line that has one: the folder Claude named the session folder for, which a folder name alone cannot give back. */
 function transcriptStartCwd(transcriptPath: string): string | null {
-  if (!fs.existsSync(transcriptPath)) return null;
-  const fd = fs.openSync(transcriptPath, 'r');
+  let fd: number;
+  try {
+    fd = fs.openSync(transcriptPath, 'r');
+  } catch (err) {
+    // A transcript that is not there names no start folder; any other failure is the caller's to see.
+    if (err instanceof Error && 'code' in err && (err.code === 'ENOENT' || err.code === 'ENOTDIR')) return null;
+    throw err;
+  }
   try {
     const buf = Buffer.alloc(START_SCAN_BYTES);
     const lines = buf.subarray(0, fs.readSync(fd, buf, 0, buf.length, 0)).toString('utf8').split('\n');

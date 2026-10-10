@@ -1,6 +1,6 @@
 import * as os from 'os';
 import * as path from 'path';
-import { deriveOriginProject, originFromSource, isGlobalStoreRoot } from '../../project-identity.js';
+import { deriveOriginProject, originFromSource, isGlobalStoreRoot } from '../../core/project-identity.js';
 import { raiseMinBinary } from '../meta.js';
 import { tableHasColumn } from '../tables.js';
 import type { Migration } from './types.js';

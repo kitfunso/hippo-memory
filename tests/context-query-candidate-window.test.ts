@@ -4,10 +4,10 @@ import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { writeEntryDbOnly } from '../src/store/entry-writes.js';
 import { DEFAULT_SEARCH_CANDIDATE_LIMIT } from '../src/store/rows.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import type { MemoryEntry } from '../src/memory.js';
-import type { DeliveryObserver } from '../src/delivery-recorder.js';
-import { getContext, adminActor, type Context } from '../src/api.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import type { MemoryEntry } from '../src/core/memory.js';
+import type { DeliveryObserver } from '../src/store/delivery-recorder.js';
+import { getContext, adminActor, type Context } from '../src/api/index.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { makeRoot } from './_helpers/make-root.js';
 import { recordStatementsAsync, countMatching } from './_helpers/count-statements.js';
@@ -33,7 +33,7 @@ function fill(root: string, count: number, label: string, origin: (i: number) =>
 }
 
 /** Counts every row the loader hands to admission, which is every row the search can rank. */
-function admitCounter(): { obs: DeliveryObserver; seen: Set<string>; calls: () => number } {
+function admitCounter() {
   const seen = new Set<string>();
   let calls = 0;
   const noop = (): void => undefined;

@@ -1,7 +1,7 @@
 // Every statement the Slack connector runs on hippo.db: backfill cursors, the event log, the dead-letter queue and workspace routing.
 // `xAt(db, ...)` runs on the caller's handle; the same name without `At` opens hippo.db for that one call.
 
-import type { DatabaseSyncLike } from '../../db.js';
+import type { DatabaseSyncLike } from '../../db/index.js';
 import { onHandle } from '../open.js';
 
 // Backfill cursors
@@ -64,10 +64,6 @@ export function markSlackEventSeen(hippoRoot: string, eventId: string, memoryId:
   onHandle(hippoRoot, (db) => markSlackEventSeenAt(db, eventId, memoryId));
 }
 
-export function slackEventMemory(hippoRoot: string, eventId: string): string | null {
-  return onHandle(hippoRoot, (db) => slackEventMemoryAt(db, eventId));
-}
-
 // Deletion lookup
 
 /** The raw memory a Slack message became. The tenant filter keeps one tenant's deletion from reaching another's row with the same ref. */
@@ -77,19 +73,6 @@ export function rawMemoryIdForArtifactAt(db: DatabaseSyncLike, artifactRef: stri
     .prepare(`SELECT id FROM memories WHERE artifact_ref = ? AND tenant_id = ? AND kind = 'raw'`)
     .get(artifactRef, tenantId) as { id?: string } | undefined;
   return row?.id ?? null;
-}
-
-/** A deletion event's standing on one handle: already seen, or the raw memory it targets (null when none). */
-export type SlackDeletionTarget = { seen: true } | { seen: false; memoryId: string | null };
-
-export function slackDeletionTarget(
-  hippoRoot: string,
-  target: { eventId: string; artifactRef: string; tenantId: string },
-): SlackDeletionTarget {
-  return onHandle(hippoRoot, (db): SlackDeletionTarget =>
-    slackEventSeenAt(db, target.eventId)
-      ? { seen: true }
-      : { seen: false, memoryId: rawMemoryIdForArtifactAt(db, target.artifactRef, target.tenantId) });
 }
 
 // Dead-letter queue
@@ -261,7 +244,7 @@ export interface SlackWorkspace {
 }
 
 /** Upserts on team_id: operators move a workspace between tenants without a delete first. */
-export function upsertSlackWorkspaceAt(db: DatabaseSyncLike, teamId: string, tenantId: string): SlackWorkspace {
+function upsertSlackWorkspaceAt(db: DatabaseSyncLike, teamId: string, tenantId: string): SlackWorkspace {
   const addedAt = new Date().toISOString();
   db.prepare(
     `INSERT INTO slack_workspaces (team_id, tenant_id, added_at)
@@ -273,7 +256,7 @@ export function upsertSlackWorkspaceAt(db: DatabaseSyncLike, teamId: string, ten
   return { teamId, tenantId, addedAt };
 }
 
-export function listSlackWorkspacesAt(db: DatabaseSyncLike): SlackWorkspace[] {
+function listSlackWorkspacesAt(db: DatabaseSyncLike): SlackWorkspace[] {
   // SAFETY: the SELECT names team_id, tenant_id and added_at, all NOT NULL text columns of slack_workspaces.
   const rows = db
     .prepare(
@@ -288,9 +271,21 @@ export function listSlackWorkspacesAt(db: DatabaseSyncLike): SlackWorkspace[] {
 }
 
 /** True when a row was deleted, so the caller can report not-found without a second lookup. */
-export function removeSlackWorkspaceAt(db: DatabaseSyncLike, teamId: string): boolean {
+function removeSlackWorkspaceAt(db: DatabaseSyncLike, teamId: string): boolean {
   const result = db
     .prepare(`DELETE FROM slack_workspaces WHERE team_id = ?`)
     .run(teamId);
   return Number(result.changes) > 0;
+}
+
+export function upsertSlackWorkspace(hippoRoot: string, teamId: string, tenantId: string): SlackWorkspace {
+  return onHandle(hippoRoot, (db) => upsertSlackWorkspaceAt(db, teamId, tenantId));
+}
+
+export function listSlackWorkspaces(hippoRoot: string): SlackWorkspace[] {
+  return onHandle(hippoRoot, listSlackWorkspacesAt);
+}
+
+export function removeSlackWorkspace(hippoRoot: string, teamId: string): boolean {
+  return onHandle(hippoRoot, (db) => removeSlackWorkspaceAt(db, teamId));
 }

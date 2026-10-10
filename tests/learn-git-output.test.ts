@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { cmdLearn } from '../src/cli/transfer.js';
+import { handleLearn } from '../src/cli/transfer.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
@@ -64,7 +64,7 @@ function rowsOf(root: string): Record<string, { source: string; confidence: stri
 }
 
 async function learn(root: string, flags: Record<string, string | boolean>, repo = ''): Promise<{ status: number; stdout: string; stderr: string }> {
-  const r = await runInProcess(() => cmdLearn(root, flags));
+  const r = await runInProcess(() => handleLearn({ hippoRoot: root, tenantId: 'default', args: [], flags }));
   const mask = (text: string): string => (repo ? text.replaceAll(basename(repo), '<repo>') : text);
   return { status: r.status, stdout: mask(r.stdout), stderr: mask(r.stderr) };
 }

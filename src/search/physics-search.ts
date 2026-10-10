@@ -1,20 +1,21 @@
-import { calculateStrength, type MemoryEntry } from '../memory.js';
+import { calculateStrength, type MemoryEntry } from '../core/memory.js';
 import { estimateTokens } from '../util/token-text.js';
-import { evalNow, isRecallBoostAblated } from '../ablation.js';
-import { indexedModel, indexNeedsRebuild } from '../embeddings.js';
-import { resolveEmbeddingProvider } from '../embedding-provider.js';
-import { physicsScore as computePhysicsScores, computeMass, type PhysicsParticle } from '../physics.js';
-import { DEFAULT_PHYSICS_CONFIG, type PhysicsConfig } from '../physics-config.js';
-import { rethrowIfSqliteBlocked } from '../db.js';
-import { compareScoredResults } from '../compare.js';
-import { errorMessage, log } from '../log.js';
-import { sqliteStore, type HippoStore, type VectorReads } from '../store-port.js';
+import { evalNow, isRecallBoostAblated } from '../core/ablation.js';
+import { indexNeedsRebuild } from '../store/embeddings/index.js';
+import { indexedModel } from '../store/vector-index.js';
+import { resolveEmbeddingProvider } from '../store/embeddings/provider.js';
+import { physicsScore as computePhysicsScores, computeMass, type PhysicsParticle } from '../core/physics.js';
+import { DEFAULT_PHYSICS_CONFIG, type PhysicsConfig } from '../core/physics-config.js';
+import { rethrowIfSqliteBlocked } from '../db/index.js';
+import { compareScoredResults } from '../core/compare.js';
+import { errorMessage, log } from '../util/log.js';
+import { sqliteStore, type HippoStore, type VectorReads } from '../store/index.js';
 import { churnStaleFactor, summaryMultipliers, summaryScoring, type SummaryScoring } from './boosts.js';
 import { addDagFields, ageInDays } from './breakdown.js';
 import { fitBudget } from './finalize.js';
 import { hybridSearch } from './hybrid.js';
 import { currentEntries } from './as-of.js';
-import { requireVectorReads, vectorCandidatesOutside, type HybridVectorCandidates } from './vector.js';
+import { embedQueryBy, requireVectorReads, startQueryEmbedDeadline, vectorCandidatesOutside, type HybridVectorCandidates } from './vector.js';
 import { DEFAULT_RECALL_BUDGET, type ResultCost, type ScoreBreakdown, type SearchResult } from '../core/search-types.js';
 
 export interface PhysicsSearchOptions {
@@ -65,19 +66,21 @@ export async function physicsSearch(query: string, entries: MemoryEntry[], optio
   const root = options.hippoRoot;
   const store = options.store ?? sqliteStore(root);
 
-  const queryVector = await physicsQueryVector(query, root, store, options.queryEmbedding);
-  if (!queryVector) return hybridSearch(query, entries, options);
+  // Shared with every hybrid ranking below, so a provider that stalls here is not waited on a second time.
+  const queryEmbedDeadline = startQueryEmbedDeadline();
+  const queryVector = await physicsQueryVector(query, root, store, queryEmbedDeadline, options.queryEmbedding);
+  if (!queryVector) return hybridSearch(query, entries, { ...options, queryEmbedDeadline });
   // Checked here too, since a caller's own query vector skips the check inside physicsQueryVector.
   const reads = requireVectorReads(store);
   const pool = currentEntries(await withVectorCandidates(reads, entries, queryVector, options.vectorCandidates), options);
   const physicsMap = await loadCandidateParticles(reads, pool);
-  if (!physicsMap) return hybridSearch(query, pool, options);
+  if (!physicsMap) return hybridSearch(query, pool, { ...options, queryEmbedDeadline });
 
   const pools = splitByParticle(pool, physicsMap, queryVector, now);
   const config = options.physicsConfig ?? DEFAULT_PHYSICS_CONFIG;
   const physicsResults = scorePhysicsPool(pools, queryVector, config, scoring);
   const classicResults = pools.classic.length > 0
-    ? await hybridSearch(query, pools.classic, { ...options, vectorCandidates: undefined, budget: Infinity, explain })
+    ? await hybridSearch(query, pools.classic, { ...options, queryEmbedDeadline, vectorCandidates: undefined, budget: Infinity, explain })
     : [];
   const merged = mergeScorePools(physicsResults, classicResults);
   merged.sort(compareScoredResults);
@@ -85,14 +88,16 @@ export async function physicsSearch(query: string, entries: MemoryEntry[], optio
 }
 
 /** The caller's vector, else the provider's; null sends the caller to hybridSearch. */
-async function physicsQueryVector(query: string, root: string, store: HippoStore, given: number[] | undefined): Promise<number[] | null> {
+async function physicsQueryVector(
+  query: string, root: string, store: HippoStore, deadline: AbortSignal, given: number[] | undefined,
+): Promise<number[] | null> {
   if (given && given.length > 0) return given;
   // Physics scores against particle positions, not the stored vector index, so a pruned index must not block it.
   try {
     const provider = resolveEmbeddingProvider(root);
     if (!provider.isAvailable()) return null;
     if (indexNeedsRebuild(indexedModel(await requireVectorReads(store).embeddingIndexState()), provider.id)) return null;
-    const [vec] = await provider.embed([query], 'query');
+    const vec = await embedQueryBy(deadline, provider, query);
     return vec && vec.length > 0 ? vec : null;
   } catch (err) {
     rethrowIfSqliteBlocked(err);

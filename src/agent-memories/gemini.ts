@@ -1,7 +1,7 @@
 // Gemini CLI: the "Gemini Added Memories" section of GEMINI.md, and the auto-memory folder that projects.json names.
 import fs from 'node:fs';
 import path from 'node:path';
-import { isStringValue } from '../capture-contract.js';
+import { isStringValue } from '../core/capture-contract.js';
 import type { JsonObject } from '../store/working-memory.js';
 import { readTextFile, splitFrontmatter } from './files.js';
 import { markdownNotes, readFolderStore, type FolderRules } from './folder-store.js';
@@ -9,8 +9,8 @@ import { gitLayout } from './git.js';
 import { textItemKeys } from './keys.js';
 import { splitMarkdownItems } from './markdown.js';
 import type { Adapter, AdapterContext, Container, Listing, Scope } from './types.js';
-import { type JsonValue, isJsonObjectLiteral } from '../json.js';
-import { errorMessage } from '../log.js';
+import { type JsonValue, isJsonObjectLiteral } from '../util/json.js';
+import { errorMessage } from '../util/log.js';
 
 const SECTION = 'gemini added memories';
 

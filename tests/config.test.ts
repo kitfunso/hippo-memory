@@ -4,9 +4,9 @@ import * as path from 'path';
 import * as os from 'os';
 import fsDefault from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
-import { loadConfig, isSharedStore, _resetSharedStoreCacheForTests, type HippoConfig } from '../src/config.js';
+import { loadConfig, isSharedStore, _resetSharedStoreCacheForTests, type HippoConfig } from '../src/core/config.js';
 import * as server from '../src/server.js';
-import { log } from '../src/log.js';
+import { log } from '../src/util/log.js';
 
 describe('config.pinnedInject', () => {
   it('defaults to enabled=true budget=1500', () => {

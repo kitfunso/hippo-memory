@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { judge, judgeAll, judgmentApiKey } from '../src/eval/judgment.js';
+import { judge, judgeAll } from '../src/eval/judgment.js';
+import { envTypesafeApiKey } from '../src/util/env.js';
 
 interface JevAnswerFixture { type?: string; noul?: number; choice?: string; confidence?: number }
 interface JevBodyFixture {
@@ -95,6 +96,24 @@ describe('judge', () => {
     }
   });
 
+  it('returns null, never throws, on a body that is not an object or is not JSON', async () => {
+    const reply = (body: string): typeof fetch => async () => new Response(body, { status: 200 });
+    for (const body of ['null', '[]', '"ok"', '{"answers":null}', '{"answers":{"durable":null,"kind":7,"valence":[]}}', '<html>busy</html>']) {
+      expect(await judge('x y z', { apiKey: 'k', fetcher: reply(body) })).toBeNull();
+    }
+  });
+
+  it('returns null when a number arrives as a string, which would pass the range check by coercion', async () => {
+    const body = JSON.stringify({ answers: { durable: { noul: '0.9' }, kind: { choice: 'error' }, valence: { choice: 'neutral' } } });
+    expect(await judge('x y z', { apiKey: 'k', fetcher: async () => new Response(body, { status: 200 }) })).toBeNull();
+  });
+
+  it('returns null for a reply over the 1 MiB cap, even one whose answers are valid', async () => {
+    const padded = JSON.stringify(GOOD).replace(/}$/, `${' '.repeat(1024 * 1024)}}`);
+    expect(JSON.parse(padded)).toEqual(GOOD);
+    expect(await judge('x y z', { apiKey: 'k', fetcher: async () => new Response(padded, { status: 200 }) })).toBeNull();
+  });
+
   it('fails open on transport and HTTP errors', async () => {
     const thrower: typeof fetch = async () => { throw new Error('offline'); };
     expect(await judge('abc', { apiKey: 'k', fetcher: thrower })).toBeNull();
@@ -148,16 +167,16 @@ describe('judgeAll', () => {
   });
 });
 
-describe('judgmentApiKey', () => {
+describe('envTypesafeApiKey', () => {
   it('treats a missing or blank key as opt-out', () => {
     const original = process.env.TYPESAFE_API_KEY;
     try {
       delete process.env.TYPESAFE_API_KEY;
-      expect(judgmentApiKey()).toBeUndefined();
+      expect(envTypesafeApiKey()).toBeUndefined();
       process.env.TYPESAFE_API_KEY = '   ';
-      expect(judgmentApiKey()).toBeUndefined();
+      expect(envTypesafeApiKey()).toBeUndefined();
       process.env.TYPESAFE_API_KEY = ' sk-live ';
-      expect(judgmentApiKey()).toBe('sk-live');
+      expect(envTypesafeApiKey()).toBe('sk-live');
     } finally {
       if (original === undefined) delete process.env.TYPESAFE_API_KEY;
       else process.env.TYPESAFE_API_KEY = original;

@@ -19,7 +19,7 @@ import { ingestMessage } from '../src/connectors/slack/ingest.js';
 import { buildProvenanceCoverage } from '../src/cli/provenance-coverage.js';
 import type { ChannelMeta } from '../src/connectors/slack/scope.js';
 import type { SlackMessageEvent } from '../src/connectors/slack/types.js';
-import type { Context } from '../src/api.js';
+import type { Context } from '../src/api/index.js';
 
 const PUBLIC_CHANNEL: ChannelMeta = { id: 'C01PUB', is_private: false };
 const TEAM_ID = 'T01TEAM';
@@ -52,11 +52,11 @@ describe('Slack connector — provenance coverage parity', () => {
   });
   afterEach(() => safeRmSync(root));
 
-  it('every ingested user message carries owner + artifact_ref (coverage = 1.0)', () => {
+  it('every ingested user message carries owner + artifact_ref (coverage = 1.0)', async () => {
     const ctx = ctxFor(root);
     for (let i = 0; i < 25; i++) {
       const msg = makeMessage(i);
-      ingestMessage(ctx, {
+      await ingestMessage(ctx, {
         teamId: TEAM_ID,
         channel: PUBLIC_CHANNEL,
         message: msg,
@@ -79,7 +79,7 @@ describe('Slack connector — provenance coverage parity', () => {
     }
   });
 
-  it('userless bot message gets bot:<bot_id> owner, never coverage gap', () => {
+  it('userless bot message gets bot:<bot_id> owner, never coverage gap', async () => {
     // Slack edge case: subtype='bot_message' carries text + bot_id but no user.
     // Production must keep ingesting these. Codex round 1 P1: skipping them
     // would silently drop existing bot ingestion (ingest.ts:54-65 treats
@@ -94,7 +94,7 @@ describe('Slack connector — provenance coverage parity', () => {
       ts: '1700000099.000099',
       bot_id: 'B01ABCD',
     };
-    ingestMessage(ctx, {
+    await ingestMessage(ctx, {
       teamId: TEAM_ID,
       channel: PUBLIC_CHANNEL,
       message: userless,
@@ -109,10 +109,10 @@ describe('Slack connector — provenance coverage parity', () => {
     expect(botRow?.tags).toContain('bot:B01ABCD');
   });
 
-  it('threaded reply preserves thread_ts tag and gate stays clean', () => {
+  it('threaded reply preserves thread_ts tag and gate stays clean', async () => {
     const ctx = ctxFor(root);
     const reply = makeMessage(99, { thread_ts: '1700000000.000001' });
-    ingestMessage(ctx, {
+    await ingestMessage(ctx, {
       teamId: TEAM_ID,
       channel: PUBLIC_CHANNEL,
       message: reply,
@@ -125,10 +125,10 @@ describe('Slack connector — provenance coverage parity', () => {
     expect(buildProvenanceCoverage(loadAllEntries(root)).gaps).toHaveLength(0);
   });
 
-  it('message_changed edits do not create coverage gaps', () => {
+  it('message_changed edits do not create coverage gaps', async () => {
     const ctx = ctxFor(root);
     const original = makeMessage(50);
-    ingestMessage(ctx, {
+    await ingestMessage(ctx, {
       teamId: TEAM_ID, channel: PUBLIC_CHANNEL, message: original, eventId: 'EvOrig',
     });
     const edited: SlackMessageEvent = {
@@ -136,7 +136,7 @@ describe('Slack connector — provenance coverage parity', () => {
       subtype: 'message_changed',
       text: `${original.text} (edited)`,
     };
-    ingestMessage(ctx, {
+    await ingestMessage(ctx, {
       teamId: TEAM_ID, channel: PUBLIC_CHANNEL, message: edited, eventId: 'EvEdit',
     });
     expect(buildProvenanceCoverage(loadAllEntries(root)).gaps).toHaveLength(0);

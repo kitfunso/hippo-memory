@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { closeHippoDb, openHippoDb } from '../src/db.js';
+import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { apiKeyVerifyStats, createApiKey, revokeApiKey, type CreateApiKeyOpts } from '../src/store/auth.js';
 import { serve, sqliteStore, StoreBusyError, type AddonRoute, type HippoStore, type ServeOpts } from '../src/server.js';
 import { subscriberKey } from '../src/server/client-ip.js';
@@ -367,6 +367,7 @@ describe('the per-address bucket', () => {
 
   it('keeps HIPPO_V1_RPS when perAddress is unset, and its 429 carries Retry-After', async () => {
     process.env.HIPPO_V1_RPS = '1';
+    freezeClock();
     await start();
     expect(await statuses(() => recall(), 2)).toEqual([200, 200]);
     expect(await recall()).toEqual({ status: 429, retryAfter: '1' });
@@ -374,6 +375,7 @@ describe('the per-address bucket', () => {
 
   it('takes a set perAddress over HIPPO_V1_RPS, looser or stricter', async () => {
     process.env.HIPPO_V1_RPS = '1';
+    freezeClock();
     await start({ perAddress: WIDE });
     expect(await statuses(() => recall(), 5)).toEqual([200, 200, 200, 200, 200]);
     await stop?.();

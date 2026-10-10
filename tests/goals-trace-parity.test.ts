@@ -1,7 +1,7 @@
 /**
  * A7 recall-trace — goals.ts parity.
  *
- * `computeGoalStackBoost` with vs without the optional `opts.trace` accumulator
+ * The session goal boost with vs without the optional `opts.trace` accumulator
  * must produce byte-identical ordered output AND identical scores. The trace
  * is a pure side-channel; passing the Map must not perturb the score-multiply
  * or the re-sort. Real SQLite store, no mocks.
@@ -13,13 +13,14 @@ import os from 'node:os';
 import fs from 'node:fs';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { computeGoalStackBoost, pushGoal } from '../src/store/goals.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import type { MemoryEntry } from '../src/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { pushGoal } from '../src/store/goals.js';
+import { sessionGoalBoost } from './_helpers/session-goal-boost.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import type { MemoryEntry } from '../src/core/memory.js';
 import type { RerankStep } from '../src/core/search-types.js';
 
-describe('computeGoalStackBoost trace parity (side-channel)', () => {
+describe('session goal boost trace parity (side-channel)', () => {
   let hippoRoot: string;
   const tenantId = 'default';
   const sessionId = 'sess-a7-parity';
@@ -49,7 +50,7 @@ describe('computeGoalStackBoost trace parity (side-channel)', () => {
     const db1 = openHippoDb(hippoRoot);
     let without;
     try {
-      without = computeGoalStackBoost(db1, rows.map((r) => ({ ...r })), {
+      without = sessionGoalBoost(hippoRoot, db1, rows.map((r) => ({ ...r })), {
         sessionId,
         tenantId,
         limit: 10,
@@ -63,7 +64,7 @@ describe('computeGoalStackBoost trace parity (side-channel)', () => {
     const db2 = openHippoDb(hippoRoot);
     let withTrace;
     try {
-      withTrace = computeGoalStackBoost(db2, rows.map((r) => ({ ...r })), {
+      withTrace = sessionGoalBoost(hippoRoot, db2, rows.map((r) => ({ ...r })), {
         sessionId,
         tenantId,
         limit: 10,

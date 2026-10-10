@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { pushGoal, completeGoal, suspendGoal, resumeGoal, getActiveGoals } from '../src/store/goals.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 
 describe('goal lifecycle', () => {
   let root: string;
@@ -22,7 +22,7 @@ describe('goal lifecycle', () => {
     const db = openHippoDb(root);
     try {
       // SAFETY: the goal_stack table's status/completed_at/outcome_score columns are
-      // TEXT/TEXT/REAL per the migration in src/db.ts; this query selects exactly
+      // TEXT/TEXT/REAL per the migration in src/db/index.ts; this query selects exactly
       // those three columns for a single row by primary key.
       const row = db.prepare(`SELECT status, completed_at, outcome_score FROM goal_stack WHERE id = ?`).get(g.id) as { status: string; completed_at: string; outcome_score: number };
       expect(row.status).toBe('completed');
@@ -54,7 +54,7 @@ describe('goal lifecycle', () => {
     completeGoal(root, g.id, { outcomeScore: 0.5 });
     const db = openHippoDb(root);
     try {
-      // SAFETY: status is a TEXT column on goal_stack per the migration in src/db.ts;
+      // SAFETY: status is a TEXT column on goal_stack per the migration in src/db/index.ts;
       // this query selects exactly that one column for a single row by primary key.
       const row = db.prepare(`SELECT status FROM goal_stack WHERE id = ?`).get(g.id) as { status: string };
       expect(row.status).toBe('completed');

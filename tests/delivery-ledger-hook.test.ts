@@ -7,12 +7,12 @@ import { spawn, spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { createMemory, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { readDeliveryEvents, type DeliveryEventRow } from '../src/store/recall-trace.js';
-import type { DeliveryFault } from '../src/delivery-recorder.js';
+import type { DeliveryFault } from '../src/store/delivery-recorder.js';
 import { blockHash, estimateTokens } from '../src/util/token-text.js';
-import type { HippoConfig } from '../src/config.js';
+import type { HippoConfig } from '../src/core/config.js';
 
 const HIPPO_JS = path.resolve(__dirname, '..', 'bin', 'hippo.js');
 // The fault switch has no environment or flag route, so a faulted run starts the same CLI through this entry file.
@@ -369,7 +369,7 @@ describe('the ledger never changes the hook', () => {
     const on = run(dir, claude('f7a'), { env: { HIPPO_FAKE_NOW: FAKE_NOW } });
     expect(off.stdout).not.toBe('');
     expect([on.status, on.stdout]).toEqual([off.status, off.stdout]);
-    expect(ledgerLines(on.stderr)).toEqual([expect.stringMatching(/^\[hippo\] delivery ledger write failed: /)]);
+    expect(ledgerLines(on.stderr)).toEqual([expect.stringMatching(/^\[hippo\] error: delivery ledger write failed: /)]);
     expect(eventCount(dir)).toBe(0);
   });
 

@@ -24,7 +24,7 @@
  * downstream; the fail-safe default protects private orgs.
  */
 
-import type { Context } from '../../api.js';
+import type { Context } from '../../api/index.js';
 import { readCursors, writeHwm, type HwmColumn } from '../../store/connectors/github.js';
 import { ingestEvent, type IngestEvent } from './ingest.js';
 import type { GitHubFetcher, GitHubBackfillPage } from './octokit-client.js';
@@ -35,7 +35,7 @@ import type {
   GitHubRepository,
   GitHubSender,
 } from './types.js';
-import { type JsonValue, isJsonObject } from '../../json.js';
+import { type JsonValue, isJsonObject } from '../../util/json.js';
 
 const API = 'https://api.github.com';
 
@@ -181,7 +181,7 @@ async function drainStream(
 
       const evt = toIngestEvent(item);
       if (!evt) continue;
-      const r = ingestEvent(ctx, {
+      const r = await ingestEvent(ctx, {
         event: evt,
         rawBody: JSON.stringify(item),
         deliveryId: `backfill:${ctx.tenantId}:${updatedAt ?? ''}`,

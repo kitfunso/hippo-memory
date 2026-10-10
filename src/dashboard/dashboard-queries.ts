@@ -1,6 +1,6 @@
 // Read models over a snapshot: overview, project, memory page, search, and the fresh single-memory detail.
 
-import { calculateStrength, type MemoryEntry } from '../memory.js';
+import { calculateStrength, type MemoryEntry } from '../core/memory.js';
 import { loadOpenConflictsOf } from '../store/conflicts.js';
 import {
   BANDS, DAY_MS, LAYERS, isLiveMemory, memoryFacts, projectIdentity,

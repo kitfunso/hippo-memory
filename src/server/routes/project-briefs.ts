@@ -1,10 +1,22 @@
 // /v1/project-briefs routes.
-import { assembleBriefFromReceipts, MAX_REPO_LEN, PROJECT_BRIEF, refreshBrief, type SaveProjectBriefOpts } from '../../project-briefs.js';
-import { sendJson } from '../../http-util.js';
+import {
+  briefFromReceipts, MAX_CHANGE_SUMMARY_LEN, MAX_REPO_LEN, PROJECT_BRIEF, refreshedBrief, type SaveProjectBriefOpts,
+} from '../../objects/project-briefs.js';
+import { sendJson } from '../../util/http-util.js';
 import { buildContextWithAuth } from '../auth.js';
 import type { RouteRequest } from '../types.js';
 import { parseJsonBody } from '../validation.js';
-import { closeRoute, getRoute, listRoute, optionalString, requiredString, saveFor, supersedeRoute, type VersionedRouteConfig } from './object-routes.js';
+import {
+  closeRoute,
+  getRoute,
+  listRoute,
+  objectsOf,
+  optionalString,
+  requiredString,
+  saveFor,
+  supersedeRoute,
+  type VersionedRouteConfig
+} from './object-routes.js';
 
 const briefRoutes: VersionedRouteConfig<'project_brief', SaveProjectBriefOpts> = {
   noun: 'project brief',
@@ -14,7 +26,7 @@ const briefRoutes: VersionedRouteConfig<'project_brief', SaveProjectBriefOpts> =
   filterParam: 'repo',
   revise: (body) => {
     const summary = requiredString(body, 'summary', { max: 8192 });
-    const changeSummary = optionalString(body, 'changeSummary', 4096);
+    const changeSummary = optionalString(body, 'changeSummary', MAX_CHANGE_SUMMARY_LEN);
     return (existing, id) => ({ repo: existing.repo, summary, changeSummary, supersedesBriefId: id });
   },
 };
@@ -27,7 +39,7 @@ const briefRoutes: VersionedRouteConfig<'project_brief', SaveProjectBriefOpts> =
 // from the repo's receipts; dryRun returns {markdown} without writing; ordered
 // before /:id), GET /v1/project-briefs/:id, POST /v1/project-briefs/:id/supersede,
 // POST /v1/project-briefs/:id/close. DoS caps: repo 256, summary 8192,
-// changeSummary 4096. The store validates + throws; the boundary maps validation
+// changeSummary MAX_CHANGE_SUMMARY_LEN. The store validates + throws; the boundary maps validation
 // -> 400, not-found -> 404, not-active -> 409. Mirrors /v1/skills.
 export async function handleCreateProjectBrief(rr: RouteRequest): Promise<void> {
   const ctx = await buildContextWithAuth(rr.req, rr.opts);
@@ -45,16 +57,17 @@ export function handleListProjectBriefs(rr: RouteRequest): Promise<void> {
 
 // The refresh op: must precede the /:id routes (literal 'refresh' is non-numeric
 // so the /(\d+)/ routes would not match it, but order it first).
-export async function handleRefreshProjectBrief({ req, res, opts }: RouteRequest): Promise<void> {
+export async function handleRefreshProjectBrief(rr: RouteRequest): Promise<void> {
+  const { req, res, opts } = rr;
   const ctx = await buildContextWithAuth(req, opts);
   const body = await parseJsonBody(req, ctx);
   const repo = requiredString(body, 'repo', { max: MAX_REPO_LEN });
   if (body['dryRun'] === true) {
-    const { markdown, receiptCount } = assembleBriefFromReceipts(opts.hippoRoot, ctx.tenantId, repo);
+    const { markdown, receiptCount } = await briefFromReceipts(objectsOf(rr), ctx.tenantId, repo);
     sendJson(res, 200, { markdown, receiptCount });
     return;
   }
-  const brief = refreshBrief(opts.hippoRoot, ctx.tenantId, repo, ctx.actor.subject);
+  const brief = await refreshedBrief(objectsOf(rr), { hippoRoot: opts.hippoRoot, tenantId: ctx.tenantId, actor: ctx.actor.subject }, repo);
   sendJson(res, 200, { brief });
 }
 

@@ -1,9 +1,9 @@
 // Request plumbing: request ids, error replies, URL parsing and path matching.
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { randomUUID } from 'node:crypto';
-import { isStoreBusy, STORE_BUSY_MESSAGE } from '../db.js';
-import { errorFields, errorMessage, log } from '../log.js';
-import { HttpError, mapApiError, sendJson } from '../http-util.js';
+import { isStoreBusy, STORE_BUSY_MESSAGE } from '../db/index.js';
+import { errorFields, errorMessage, log } from '../util/log.js';
+import { HttpError, mapApiError, sendJson } from '../util/http-util.js';
 
 // The caller's id lands in a response header and in logs, so only a short plain token is echoed back.
 const REQUEST_ID_RE = /^[A-Za-z0-9._:-]{1,128}$/;
@@ -32,7 +32,8 @@ export function replyFor<E>(err: E): { status: number; message: string } {
 // Above the 30 s body deadline and the 5 s resolver deadline, so a request those govern is answered before it is called slow.
 const SLOW_REQUEST_WARN_MS = 60_000;
 
-/** Logs one warn when `res` has sent nothing after `afterMs`. It never ends the request or touches the reply; the timer goes when the reply finishes or the socket closes. */
+/** Logs one warn when `res` has sent nothing after `afterMs`. It never ends the request
+ * or touches the reply; the timer goes when the reply finishes or the socket closes. */
 function watchSlowRequest(req: IncomingMessage, res: ServerResponse, requestId: string, afterMs: number = SLOW_REQUEST_WARN_MS): void {
   const startedAt = Date.now();
   const timer = setTimeout(() => {
@@ -62,6 +63,11 @@ const UNMATCHED_ROUTE = 'unmatched';
 export function noteAccess(req: IncomingMessage, note: AccessNote): void {
   const held = accessNotes.get(req);
   if (held) Object.assign(held, note);
+}
+
+/** The route name the request's access line carries, for a line about the same request logged after its reply. */
+export function accessRouteOf(req: IncomingMessage): string {
+  return accessNotes.get(req)?.route ?? UNMATCHED_ROUTE;
 }
 
 /** One info line per finished request. A path id and a query string can both hold caller data, so the line carries neither. */

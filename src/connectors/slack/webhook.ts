@@ -1,4 +1,4 @@
-import { envSlackSigningSecret, envSlackSigningSecretPrevious } from '../../env.js';
+import { envSlackSigningSecret, envSlackSigningSecretPrevious } from '../../util/env.js';
 import type { ServerResponse } from 'node:http';
 import { verifySlackSignature } from './signature.js';
 import { isSlackEventEnvelope, isSlackMessageEvent, type SlackEventEnvelope } from './types.js';
@@ -6,11 +6,12 @@ import { ingestMessage } from './ingest.js';
 import { handleMessageDeleted } from './deletion.js';
 import { parkInDlq } from '../dlq.js';
 import { slackDlq, type DlqBucket } from './dlq.js';
-import { resolveTenantForTeamOnRoot } from './tenant-routing.js';
-import { resolveTenantId } from '../../tenant.js';
-import type { Context } from '../../api.js';
-import { HttpError, JSON_HEADERS, isHeaderString, closeIfBodyUnread, readWebhookBody, sendJson, type WebhookRequest } from '../../http-util.js';
-import { type JsonValue, isJsonObject } from '../../json.js';
+import { resolveTenantForSlackTeam } from './tenant-routing.js';
+import { resolveTenantId } from '../../store/tenant.js';
+import type { Context } from '../../api/index.js';
+import type { HippoStore } from '../../store/index.js';
+import { HttpError, JSON_HEADERS, isHeaderString, closeIfBodyUnread, readWebhookBody, sendJson, type WebhookRequest } from '../../util/http-util.js';
+import { type JsonValue, isJsonObject } from '../../util/json.js';
 
 /**
  * Slack Events API webhook. Auth is signature-based (HMAC over the raw
@@ -31,7 +32,7 @@ import { type JsonValue, isJsonObject } from '../../json.js';
  *
  * Bearer auth is skipped on purpose: server.ts checks isPublicRoute before calling this.
  */
-export async function handleSlackEventsWebhook(request: WebhookRequest): Promise<void> {
+export async function handleSlackEventsWebhook(request: WebhookRequest, store?: HippoStore): Promise<void> {
   const { req, res, opts } = request;
   // Secret and headers before the body, so a caller with neither cannot make the server buffer one.
   const secret = envSlackSigningSecret();
@@ -62,23 +63,24 @@ export async function handleSlackEventsWebhook(request: WebhookRequest): Promise
   ) {
     throw new HttpError(401, 'invalid Slack signature');
   }
-  routeSignedSlackPayload({ hippoRoot: opts.hippoRoot, res, rawBody, signature: sigStr, slackTimestamp: tsStr });
+  await routeSignedSlackPayload({ hippoRoot: opts.hippoRoot, store, res, rawBody, signature: sigStr, slackTimestamp: tsStr });
 }
 
 /** One signed request and where to answer it; every stage below parks into the DLQ through it. */
 interface SignedSlackRequest {
   hippoRoot: string;
+  store?: HippoStore;
   res: ServerResponse;
   rawBody: string;
   signature: string;
   slackTimestamp: string;
 }
 
-function parkAndAck(
+async function parkAndAck(
   d: SignedSlackRequest,
   park: { tenantId: string | null; teamId: string | null; error: string; bucket: DlqBucket },
-): void {
-  parkInDlq(slackDlq, d.hippoRoot, {
+): Promise<void> {
+  const row = {
     tenantId: park.tenantId,
     teamId: park.teamId,
     rawPayload: d.rawBody,
@@ -86,7 +88,8 @@ function parkAndAck(
     bucket: park.bucket,
     signature: d.signature,
     slackTimestamp: d.slackTimestamp,
-  });
+  };
+  await parkInDlq(slackDlq, d.hippoRoot, row, d.store);
   sendJson(d.res, 200, { ok: true, status: 'dlq' });
 }
 
@@ -111,14 +114,14 @@ function answerUrlVerification(res: ServerResponse, body: JsonValue | undefined)
   return false;
 }
 
-function routeSignedSlackPayload(d: SignedSlackRequest): void {
+async function routeSignedSlackPayload(d: SignedSlackRequest): Promise<void> {
   const { rawBody, res } = d;
   const teamIdFromRaw = teamIdInRawBody(rawBody);
   let body: JsonValue | undefined;
   try {
     body = JSON.parse(rawBody);
   } catch {
-    parkUnparseable(d, teamIdFromRaw);
+    await parkUnparseable(d, teamIdFromRaw);
     return;
   }
   if (answerUrlVerification(res, body)) return;
@@ -128,9 +131,9 @@ function routeSignedSlackPayload(d: SignedSlackRequest): void {
   // 200 so Slack stops retrying; do NOT call ingest.
   let resolvedTenant: string | null = null;
   if (body !== undefined && isSlackEventEnvelope(body)) {
-    resolvedTenant = resolveTenantForTeamOnRoot(d.hippoRoot, body.team_id);
+    resolvedTenant = await resolveTenantForSlackTeam(d.hippoRoot, body.team_id, d.store);
     if (resolvedTenant === null) {
-      parkAndAck(d, {
+      await parkAndAck(d, {
         tenantId: null, // unroutable - stored as '__unroutable__'
         teamId: body.team_id,
         error: `unroutable team_id: ${body.team_id}`,
@@ -146,9 +149,10 @@ function routeSignedSlackPayload(d: SignedSlackRequest): void {
     hippoRoot: d.hippoRoot,
     tenantId: resolvedTenant,
     actor: { subject: 'connector:slack', role: 'admin' },
+    store: d.store,
   };
   if (body === undefined || !isSlackEventEnvelope(body)) {
-    parkAndAck(d, {
+    await parkAndAck(d, {
       tenantId: ctx.tenantId,
       teamId: teamIdFromRaw,
       error: 'not an event_callback envelope',
@@ -156,15 +160,15 @@ function routeSignedSlackPayload(d: SignedSlackRequest): void {
     });
     return;
   }
-  dispatchSlackEvent(d, ctx, body);
+  await dispatchSlackEvent(d, ctx, body);
 }
 
-function parkUnparseable(d: SignedSlackRequest, teamIdFromRaw: string | null): void {
+async function parkUnparseable(d: SignedSlackRequest, teamIdFromRaw: string | null): Promise<void> {
   // Attribute the parse failure to the originating workspace via the regex-extracted
   // team_id; a null or unknown team writes tenantId=null, which lands as '__unroutable__'.
   const parseFailTenant =
-    teamIdFromRaw !== null ? resolveTenantForTeamOnRoot(d.hippoRoot, teamIdFromRaw) : null;
-  parkAndAck(d, {
+    teamIdFromRaw !== null ? await resolveTenantForSlackTeam(d.hippoRoot, teamIdFromRaw, d.store) : null;
+  await parkAndAck(d, {
     tenantId: parseFailTenant, // null → '__unroutable__' sentinel
     teamId: teamIdFromRaw,
     error: 'invalid JSON',
@@ -172,16 +176,16 @@ function parkUnparseable(d: SignedSlackRequest, teamIdFromRaw: string | null): v
   });
 }
 
-function dispatchSlackEvent(
+async function dispatchSlackEvent(
   d: SignedSlackRequest,
   ctx: Context,
   body: JsonValue & SlackEventEnvelope,
-): void {
+): Promise<void> {
   const { res } = d;
   const inner = body.event;
   if (isSlackMessageEvent(inner)) {
     if (inner.subtype === 'message_deleted' && inner.deleted_ts) {
-      const r = handleMessageDeleted(ctx, {
+      const r = await handleMessageDeleted(ctx, {
         teamId: body.team_id,
         channelId: inner.channel,
         deletedTs: inner.deleted_ts,
@@ -190,7 +194,7 @@ function dispatchSlackEvent(
       sendJson(res, 200, { ok: true, status: r.status });
       return;
     }
-    const r = ingestMessage(ctx, {
+    const r = await ingestMessage(ctx, {
       teamId: body.team_id,
       // channel privacy isn't on the inner event; use channel_type as a
       // proxy. 'group'|'im'|'mpim' → private. 'channel' → public. Unknown
@@ -207,7 +211,7 @@ function dispatchSlackEvent(
     sendJson(res, 200, { ok: true, status: r.status, memoryId: r.memoryId });
     return;
   }
-  parkAndAck(d, {
+  await parkAndAck(d, {
     tenantId: ctx.tenantId,
     teamId: body.team_id,
     error: `unhandled event type: ${inner.type ?? 'unknown'}`,

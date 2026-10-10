@@ -1,7 +1,7 @@
 // Copilot hook fixtures, and a scratch home whose COPILOT_HOME sits inside it so no test reads a real ~/.copilot.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { JsonValue } from '../../src/json.js';
+import type { JsonValue } from '../../src/util/json.js';
 import { scratch, type Scratch } from './compaction-hooks.js';
 
 const FIXTURES = path.resolve(__dirname, '..', 'fixtures', 'copilot');

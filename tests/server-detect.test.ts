@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { detectServer, writePidfile, removePidfile, removePidfileIfOwned } from '../src/server-detect.js';
+import { detectServer, writePidfile, removePidfile, removePidfileIfOwned } from '../src/server/server-detect.js';
 import { serve } from '../src/server.js';
 
 // hippoRoot is the directory the pidfile sits directly inside, matching the

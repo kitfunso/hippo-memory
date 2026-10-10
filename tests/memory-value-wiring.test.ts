@@ -12,7 +12,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, it, expect, beforeEach, afterEach, afterAll } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from 'vitest';
 
 import { consolidate } from '../src/consolidate/sleep.js';
 import { initStore } from '../src/store/open.js';
@@ -21,10 +21,10 @@ import { loadAllEntries } from '../src/store/entry-reads.js';
 import { batchWriteAndDelete } from '../src/store/delete-and-batch.js';
 import { loadSessionDecayContext } from '../src/store/index-and-stats.js';
 import { listMemoryConflicts } from '../src/store/conflicts.js';
-import { Layer, calculateStrength, resolveConfidence, type MemoryEntry, type DecayOptions} from '../src/memory.js';
+import { Layer, calculateStrength, resolveConfidence, type MemoryEntry, type DecayOptions} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { loadConfig, type HippoConfig } from '../src/config.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { loadConfig, type HippoConfig } from '../src/core/config.js';
+import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../src/db/index.js';
 import { queryAuditEvents, type AuditEvent } from '../src/store/audit.js';
 import {
   computeMvFeatures,
@@ -33,10 +33,14 @@ import {
   rescueSet,
   validateWeights,
   type MvFeatureVector,
-} from '../src/memory-value.js';
-import { MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256 } from '../src/memory-value-weights.js';
+} from '../src/consolidate/memory-value.js';
+import { MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256 } from '../src/consolidate/memory-value-weights.js';
 
 import { computeFeatures } from '../benchmarks/memory-value/extract.mjs';
+import { mulberry32 } from './_helpers/property.js';
+
+// Each case seeds a real store and runs a full sleep on it, so its time follows the runner's disk.
+vi.setConfig({ testTimeout: 30_000 });
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
 const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });
@@ -345,7 +349,10 @@ describe('(d) flag-off byte-identical', () => {
     }
     expect(built.length).toBeGreaterThanOrEqual(40); // 3 tenants * (10 + 3 + 1) = 42
 
-    for (const e of built) writeEntry(dir, e);
+    // One connection for the seed loop: a close per write checkpoints the WAL, which is slow on Windows.
+    await withSharedStoreHandles(() => {
+      for (const e of built) writeEntry(dir, e);
+    });
 
     // Predicate expectation, computed from the SAME order consolidate()
     // will load (loadAllEntries's `ORDER BY created ASC, id ASC`) -- NOT
@@ -440,6 +447,33 @@ describe('(e) rescue semantics', () => {
       expect(meta.rank!).toBeLessThanOrEqual(3);
       expect(meta.score).toBeTypeOf('number');
     }
+  });
+
+  it('a rescue audit row that fails to write is counted and reported, and the other rows still land', async () => {
+    initStore(dir);
+    enableMemoryValue(dir);
+    const built = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((len) => condemnedEntry('w'.repeat(len), { tenantId: 'ta' }));
+    for (const e of built) writeEntry(dir, e);
+    const refused = built[1]!.id;
+    const db = openHippoDb(dir);
+    try {
+      db.exec(`CREATE TRIGGER refuse_one_rescue_audit BEFORE INSERT ON audit_log WHEN NEW.op = 'mv_rescue' AND NEW.target_id = '${refused}' BEGIN SELECT RAISE(ABORT, 'audit row refused'); END`);
+    } finally {
+      closeHippoDb(db);
+    }
+
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    let result: Awaited<ReturnType<typeof consolidate>>;
+    try {
+      result = await consolidate(dir, { now: NOW });
+      expect(stderr).toHaveBeenCalledWith(expect.stringContaining('audit write failed'));
+    } finally {
+      stderr.mockRestore();
+    }
+
+    expect(result.details).toContain('  ⚠️ memory-value: 1 mv_rescue audit row failed to write (the rescue itself still landed)');
+    expect(new Set(auditRescueRows(dir, 'ta').map((e) => e.targetId))).toEqual(new Set([built[0]!.id, built[2]!.id]));
+    expect(loadAllEntries(dir).map((e) => e.id)).toContain(refused);
   });
 
   it('rescued entries get the standard survivor bookkeeping refresh (stored strength), confidence tier preserved', async () => {
@@ -656,17 +690,6 @@ describe('(g) fail-loud on a malformed weights constant', () => {
 // ---------------------------------------------------------------------------
 describe('(h) scale characterization', () => {
   it('deterministic, deletes-subset, per-tenant isolation at ~2,000 entries / 3 tenants; reports rescue rate', async () => {
-    // mulberry32 — deterministic PRNG so the fixture itself is reproducible.
-    function mulberry32(seed: number): () => number {
-      let s = seed >>> 0;
-      return () => {
-        s = (s + 0x6d2b79f5) >>> 0;
-        let t = s;
-        t = Math.imul(t ^ (t >>> 15), t | 1);
-        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-      };
-    }
     const rand = mulberry32(20260810);
     const wordBank = [
       'alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta', 'eta', 'theta', 'iota', 'kappa',

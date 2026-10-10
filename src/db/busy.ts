@@ -1,7 +1,11 @@
 import type { DatabaseSyncLike } from './sqlite.js';
 
-export function isSqliteBusy(error: unknown): boolean {
-  const code = (error as { errcode?: number } | null)?.errcode;
+function carriesErrcode(cause: unknown): cause is { errcode: unknown } {
+  return typeof cause === 'object' && cause !== null && 'errcode' in cause;
+}
+
+export function isSqliteBusy(cause: unknown): boolean {
+  const code = carriesErrcode(cause) ? cause.errcode : undefined;
   return code === 5 || code === 6 || code === 517;
 }
 
@@ -46,11 +50,17 @@ function undoScope(db: DatabaseSyncLike, top: boolean, name: string): void {
   }
 }
 
+/** Waits for the lock past busy_timeout when given; ignored inside a caller's transaction, which already holds it. */
+export interface WriteScopeOptions {
+  readonly busyWaitMs?: number;
+}
+
 /** Runs `fn` as one write: BEGIN IMMEDIATE on an idle handle, else SAVEPOINT `name` inside the caller's transaction.
  *  A deferred scope that reads first cannot wait out another writer, while BEGIN IMMEDIATE waits the open's busy_timeout. */
-export function withWriteScope<T>(db: DatabaseSyncLike, name: string, fn: () => T): T {
+export function withWriteScope<T>(db: DatabaseSyncLike, name: string, fn: () => T, opts?: WriteScopeOptions): T {
   const top = db.isTransaction === false;
-  db.exec(top ? 'BEGIN IMMEDIATE' : `SAVEPOINT ${name}`);
+  if (top && opts) execWithBusyRetry(db, 'BEGIN IMMEDIATE', opts.busyWaitMs);
+  else db.exec(top ? 'BEGIN IMMEDIATE' : `SAVEPOINT ${name}`);
   try {
     const result = fn();
     db.exec(top ? 'COMMIT' : `RELEASE SAVEPOINT ${name}`);
@@ -65,11 +75,30 @@ export function withWriteScope<T>(db: DatabaseSyncLike, name: string, fn: () => 
 export function withReadSnapshot<T>(db: DatabaseSyncLike, fn: () => T): T {
   if (db.isTransaction !== false) return fn();
   db.exec('BEGIN');
+  let result: T;
   try {
-    return fn();
-  } finally {
-    db.exec('COMMIT');
+    result = fn();
+  } catch (error) {
+    try { db.exec('COMMIT'); } catch { /* snapshot already gone; keep the original error */ }
+    throw error;
   }
+  db.exec('COMMIT');
+  return result;
+}
+
+/** Runs `fn` and undoes every write it made, throw or not: a dry run that reports what a real run would do. Takes no write lock up front. */
+export function withTrialScope<T>(db: DatabaseSyncLike, name: string, fn: () => T): T {
+  const top = db.isTransaction === false;
+  db.exec(top ? 'BEGIN' : `SAVEPOINT ${name}`);
+  let result: T;
+  try {
+    result = fn();
+  } catch (error) {
+    try { undoScope(db, top, name); } catch { /* already rolled back; keep the original error */ }
+    throw error;
+  }
+  undoScope(db, top, name);
+  return result;
 }
 
 /** What `withWriteScopeOr` hands its callback's `rollback(value)`; a class so no stored value can pass for one. */

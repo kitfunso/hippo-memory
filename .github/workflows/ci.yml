@@ -21,6 +21,11 @@ on:
 permissions:
   contents: read
 
+# A new push to a PR cancels the run for the commit it replaced. On master a started run finishes and only the newest waiting run is kept.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   checks:
     runs-on: ubuntu-latest
@@ -54,11 +59,13 @@ jobs:
       - run: node scripts/check-graph-writes.mjs
       - name: No runtime import cycles in src
         run: node scripts/check-import-cycles.mjs
-      # Files over 800 lines and functions over 80 in src/ may shrink but never grow, and no new one may appear.
+      # Files over 800 lines and functions over 50 in src/ (80 in scripts/) may shrink but never grow, and no new one may appear.
       - name: Size ratchet
         run: node scripts/check-size-ratchet.mjs
-      - name: process.env read only through src/env.ts
+      - name: process.env read only through src/util/env.ts
         run: node scripts/check-env-reads.mjs
+      - name: process.exit only in the files check-process-exit lists
+        run: node scripts/check-process-exit.mjs
       - name: Store-port ratchet
         run: node scripts/check-store-port.mjs
       - name: Layer order ratchet
@@ -78,10 +85,9 @@ jobs:
       - name: Request-path timing at 10k memories
         run: node scripts/check-request-path-timing.mjs
       # Small N keeps it near 30 s; the 10k-memory ROADMAP gate (benchmarks/a1/p99-recall.ts defaults) stays a manual run.
-      # Warm-up drops the cold first queries; gating on the fastest of 5 rounds drops runner stalls, which hit 3 of 5 rounds on 2026-10-06.
-      # Healthy runners measure a p99 of 16 to 40 ms here, so 60 ms passes them and a 4x slowdown (64 ms or more) fails.
+      # Written to the job summary and never gated: a runner stall moves p99 with no code change. The step above gates the same request on statements, rows and store opens.
       - name: p99 recall at 1k memories
-        run: node --experimental-strip-types benchmarks/a1/p99-recall.ts --store-size 1000 --warmup 50 --rounds 5 --queries 200 --gate-ms 60
+        run: node --experimental-strip-types benchmarks/a1/p99-recall.ts --store-size 1000 --warmup 50 --rounds 5 --queries 200 --report-only
       - name: Install the packed tarball
         run: npm run smoke:pack
       - name: Provenance gate
@@ -198,7 +204,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: node_modules/@huggingface/transformers/.cache
-          key: hf-models-4.2.0-${{ hashFiles('src/embeddings.ts', 'src/rerankers/cross-encoder.ts') }}
+          key: hf-models-4.2.0-${{ hashFiles('src/store/embeddings/index.ts', 'src/rerankers/cross-encoder.ts') }}
       - run: npm run build
       # The zero-dep `test` job skips these; here the backend is installed.
       - name: Cross-encoder against the real model
@@ -207,6 +213,11 @@ jobs:
           HIPPO_REQUIRE_CROSS_ENCODER: '1'
       - name: Micro-eval
         run: python3 benchmarks/micro/run.py --verbose
+      # The zero-dep `test` job skips these; a missing backend here fails instead.
+      - name: Embedding tests against the real backend
+        run: npx vitest run tests/lifecycle-stress.test.ts tests/global-row-embeddings.test.ts
+        env:
+          HIPPO_REQUIRE_EMBEDDINGS: '1'
       # After the micro-eval, which has fetched the embedding model into this folder by now on a cold cache too.
       - name: Embedding model from a local folder
         run: npx vitest run tests/embeddings/local-cache.test.ts

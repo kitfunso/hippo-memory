@@ -7,14 +7,14 @@ import { join } from 'node:path';
 import { serve, __resetSessionRecallHistoryHttp, sqliteStore, type HippoStore, type VectorCandidateSpec, type VectorReads } from '../src/server.js';
 import { hybridSearch } from '../src/search/hybrid.js';
 import { resolveVectorArm } from '../src/search/vector.js';
-import { markSharedStore } from '../src/config.js';
+import { markSharedStore } from '../src/core/config.js';
 import { __resetSessionRecallHistoryMcp } from '../src/mcp/server.js';
 import { lastRecalledIds } from '../src/mcp/session-state.js';
-import { _resetAblationCacheForTests } from '../src/ablation.js';
-import { closeHippoDb, openHippoDb, setMeta } from '../src/db.js';
-import { embeddingIndexIdentity } from '../src/embeddings.js';
-import { resetLogOnce } from '../src/log.js';
-import type { MemoryEntry } from '../src/memory.js';
+import { _resetAblationCacheForTests } from '../src/core/ablation.js';
+import { closeHippoDb, openHippoDb, setMeta } from '../src/db/index.js';
+import { embeddingIndexIdentity } from '../src/store/embeddings/index.js';
+import { resetLogOnce } from '../src/util/log.js';
+import type { MemoryEntry } from '../src/core/memory.js';
 import { resetAllPhysicsState } from '../src/db/physics-state.js';
 import { writeEntry, writeEntryDbOnly } from '../src/store/entry-writes.js';
 import { initStore } from '../src/store/open.js';
@@ -102,8 +102,11 @@ function shownIds(pass: Pass): string[] {
 let templates: Templates;
 let embeddings: HashedEmbeddings;
 
-/** One recall run on a fresh copy, on hippo.db or on the in-memory store, with every module-level ring, cache and once-key cleared. */
-async function runPass(calls: readonly Call[], physics: boolean, inMemory: boolean, prepare?: (root: string) => void): Promise<Pass> {
+/** hippo.db on store workers, as serve() runs it by default, hippo.db in process, or the in-memory store. */
+type Backing = 'workers' | 'in process' | 'memory';
+
+/** One recall run on a fresh copy, with every module-level ring, cache and once-key cleared. */
+async function runPass(calls: readonly Call[], physics: boolean, backing: Backing, prepare?: (root: string) => void): Promise<Pass> {
   __resetSessionRecallHistoryHttp();
   __resetSessionRecallHistoryMcp();
   _resetAblationCacheForTests();
@@ -117,13 +120,14 @@ async function runPass(calls: readonly Call[], physics: boolean, inMemory: boole
     prepare?.(s.root);
     // serve() marks a port store's root shared, so the hippo.db pass must be shared too to compare like with like.
     markSharedStore(s.root);
-    const memory = inMemory ? inMemoryVectorStore(s.root) : undefined;
+    const memory = backing === 'memory' ? inMemoryVectorStore(s.root) : undefined;
+    const store = memory?.store ?? (backing === 'in process' ? sqliteStore(s.root) : undefined);
     const before = embeddings.requests();
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation((chunk: string | Uint8Array) => {
       lines.push(String(chunk));
       return true;
     });
-    const handle = await serve({ hippoRoot: s.root, port: 0, store: memory?.store });
+    const handle = await serve({ hippoRoot: s.root, port: 0, store });
     const replies: Reply[] = [];
     const mcpIds: string[][] = [];
     try {
@@ -133,7 +137,7 @@ async function runPass(calls: readonly Call[], physics: boolean, inMemory: boole
       }
     } finally {
       await handle.stop();
-      await memory?.store.close();
+      await store?.close();
       stderr.mockRestore();
     }
     const requests = embeddings.requests() - before;
@@ -177,8 +181,11 @@ describe('recall through the vector reads of a store other than hippo.db', () =>
     ['MCP hippo_recall, hybrid', [MCP], false, 'nearestEntries'],
     ['MCP hippo_recall, physics', [MCP], true, 'physicsParticles'],
   ] as const)('%s: same ids in the same order, same rows written, same provider calls', async (_name, calls, physics, read) => {
-    const onHippoDb = await runPass(calls, physics, false);
-    const onMemory = await runPass(calls, physics, true);
+    const onHippoDb = await runPass(calls, physics, 'workers');
+    const onMemory = await runPass(calls, physics, 'memory');
+    const inProcess = await runPass(calls, physics, 'in process');
+    expect([onHippoDb.replies, onHippoDb.mcpIds, onHippoDb.rows, onHippoDb.requests]).toEqual([inProcess.replies, inProcess.mcpIds, inProcess.rows, inProcess.requests]);
+    expect(onHippoDb.log).not.toContain('fell back to BM25');
     expect(onMemory.replies).toEqual(onHippoDb.replies);
     expect(onMemory.mcpIds).toEqual(onHippoDb.mcpIds);
     expect(onMemory.rows).toEqual(onHippoDb.rows);
@@ -207,8 +214,8 @@ describe('when the vector arm cannot run, both stores fall back to BM25 alike', 
     ['a provider that answers 500', undefined, 500, 'physics', 6],
   ] as const)('%s, mode=%s', async (_name, prepare, status, mode, requests) => {
     embeddings.setStatus(status);
-    const onHippoDb = await runPass([http(mode)], true, false, prepare);
-    const onMemory = await runPass([http(mode)], true, true, prepare);
+    const onHippoDb = await runPass([http(mode)], true, 'workers', prepare);
+    const onMemory = await runPass([http(mode)], true, 'memory', prepare);
     expect(onMemory.replies).toEqual(onHippoDb.replies);
     expect(onMemory.rows).toEqual(onHippoDb.rows);
     expect([onHippoDb.requests, onMemory.requests]).toEqual([requests, requests]);
@@ -217,8 +224,8 @@ describe('when the vector arm cannot run, both stores fall back to BM25 alike', 
   }, 60_000);
 
   it('a stale index names the rebuild each store needs', async () => {
-    const onHippoDb = await runPass([http('hybrid')], false, false, staleModel);
-    const onMemory = await runPass([http('hybrid')], false, true, staleModel);
+    const onHippoDb = await runPass([http('hybrid')], false, 'workers', staleModel);
+    const onMemory = await runPass([http('hybrid')], false, 'memory', staleModel);
     expect(onHippoDb.log).toContain("is being rebuilt; run 'hippo embed' ts=");
     expect(onMemory.log).toContain("run 'hippo embed' on the SQLite store, then rebuild the 'in-memory' database from it");
   }, 60_000);

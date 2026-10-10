@@ -18,9 +18,9 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { serve, type ServerHandle } from '../src/server.js';
 import { createApiKey, type CreateApiKeyResult } from '../src/store/auth.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import type { Decision } from '../src/decisions.js';
-import type { JsonValue } from '../src/json.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import type { Decision } from '../src/objects/decisions.js';
+import type { JsonValue } from '../src/util/json.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 type Body = { [key: string]: JsonValue };

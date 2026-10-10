@@ -23,7 +23,8 @@ export function notPorted(port: StorePort, group: keyof StoreGroups): never {
   throw new StoreNotPortedError(port.kind, group);
 }
 
-/** A served store's stand-in for SqliteLocal. The last recall sits in hippo.db's meta table, so only a store that is hippo.db keeps and reads it, on `hippoRoot`. */
+/** A served store's stand-in for SqliteLocal. The last recall sits in hippo.db's
+ * meta table, so only a store that is hippo.db keeps and reads it, on `hippoRoot`. */
 function servedLocal(store: HippoStore, hippoRoot: string): SqliteLocal {
   if (store.kind === 'sqlite') return { ...sqliteLocal(hippoRoot), ...REFUSED_ON_A_STORE };
   return {
@@ -41,6 +42,7 @@ export function onStore<C extends Context, R>(ctx: C, run: (port: StorePort, loc
   const { store } = ctx;
   // No await before `run`: an add-on relies on the first port call starting inside this call.
   const reply = store ? (async () => run(store, servedLocal(store, ctx.hippoRoot)))() : run(sqliteSyncStore(ctx.hippoRoot), sqliteLocal(ctx.hippoRoot));
-  // SAFETY: the store path is an async function's Promise and hippo.db's port calls answer values, so the Promise comes back exactly when ctx has a store, as StoreReply says.
+  // SAFETY: the store path is an async function's Promise and hippo.db's port calls answer
+  // values, so the Promise comes back exactly when ctx has a store, as StoreReply says.
   return reply as StoreReply<C, R>;
 }

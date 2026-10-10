@@ -1,8 +1,8 @@
 // A quiet Copilot search or shell failure reads as routine, as the Claude Code tool of the same kind does (critic test 5, unit half).
 import { describe, it, expect } from 'vitest';
 import { lessonFromFailure } from '../src/capture/failure-reading.js';
-import { normaliseHookPayload } from '../src/stdin.js';
-import type { JsonValue } from '../src/json.js';
+import { normaliseHookPayload } from '../src/cli/stdin.js';
+import type { JsonValue } from '../src/util/json.js';
 import { copilotPayload } from './_helpers/copilot-hooks.js';
 
 const CWD = '/home/user/proj';

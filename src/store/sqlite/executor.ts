@@ -2,15 +2,15 @@
 import { fileURLToPath } from 'node:url';
 import { SHARE_ENV, Worker } from 'node:worker_threads';
 import { addAuditWriteFailures } from '../audit.js';
-import { getHippoDbPath, SERVER_DB_WAIT_MS, StoreBusyError } from '../../db.js';
+import { getHippoDbPath, SERVER_DB_WAIT_MS, StoreBusyError } from '../../db/index.js';
 import { autoCheckpointPages } from '../../db/wal-checkpointer.js';
-import { envStoreQueueMax } from '../../env.js';
-import { DeadlineExceededError } from '../../http-util.js';
-import { errorMessage, log } from '../../log.js';
+import { envStoreQueueMax } from '../../util/env.js';
+import { DeadlineExceededError } from '../../util/http-util.js';
+import { errorMessage, log } from '../../util/log.js';
 import { requestScopes } from '../../util/request-scope.js';
 import { decodeError } from './error-codec.js';
 import { workerCounts } from './executor-counts.js';
-import type { Job, OpMode, Reply, WorkerInit } from './worker-ops.js';
+import { type Job, type OpMode, type Reply, STORE_SETUP_OP, type WorkerInit } from './worker-ops.js';
 
 // Resolved from the package root, so a server run from TypeScript source starts the same built file.
 const WORKER_ENTRY = fileURLToPath(new URL('../../../dist/store/sqlite/worker-entry.js', import.meta.url));
@@ -110,6 +110,8 @@ class WorkerPool implements SqliteExecutor {
   readonly #writeGraceMs: number;
   #nextId = 1;
   #closed = false;
+  // 'done' once the writer has run the store's open-time setup, which a reader's connection could not write.
+  #setup: 'none' | 'running' | 'done' = 'none';
 
   constructor(hippoRoot: string, opts: ExecutorOptions) {
     this.#hippoRoot = hippoRoot;
@@ -141,8 +143,34 @@ class WorkerPool implements SqliteExecutor {
       const pending: Pending = { job: { id: this.#nextId++, op, args, requestId }, settle, fail: reject, deadlineAt, timer: undefined, answered: false };
       this.#watchDeadline(lane, pending);
       lane.queue.push(pending);
+      this.#ensureSetup();
       this.#pump(lane);
     });
+  }
+
+  // Ahead of the call that started it, and with no deadline: the writer's own lock wait bounds it.
+  #ensureSetup(): void {
+    if (this.#setup !== 'none') return;
+    this.#setup = 'running';
+    const pending: Pending = {
+      job: { id: this.#nextId++, op: STORE_SETUP_OP, args: [], requestId: undefined },
+      settle: (reply) => this.#setupEnded(reply.ok ? undefined : decodeError(reply.error)),
+      fail: (err) => this.#setupEnded(err),
+      deadlineAt: undefined,
+      timer: undefined,
+      answered: false,
+    };
+    this.#writer.queue.unshift(pending);
+    this.#pump(this.#writer);
+  }
+
+  // A failed setup fails the reads that waited for it with its own error, as each read's own open would have, and the next call tries it again.
+  #setupEnded(failure: Error | undefined): void {
+    this.#setup = failure === undefined ? 'done' : 'none';
+    for (const lane of this.#readers) {
+      if (failure !== undefined) for (const waiting of lane.queue.splice(0)) finish(waiting, () => waiting.fail(failure));
+      this.#pump(lane);
+    }
   }
 
   // Nothing is queued and nothing ran, so both refusals are the retryable 503 of a busy store.
@@ -233,6 +261,8 @@ class WorkerPool implements SqliteExecutor {
 
   #pump(lane: Lane): void {
     if (lane.running !== undefined) return;
+    // Setup comes first: a reader sent a job before it would open a store whose setup it cannot write.
+    if (lane.mode === 'read' && this.#setup !== 'done') return;
     const next = lane.queue.shift();
     if (next === undefined) return;
     // Started by the first call and never at boot, so a server that only answers /health opens no thread.
@@ -308,7 +338,8 @@ class WorkerPool implements SqliteExecutor {
   }
 }
 
-/** Threads for the hippo.db under `hippoRoot`: one writer and two readers, each started by its first call. */
+/** Threads for the hippo.db under `hippoRoot`: one writer and two readers. The first
+ * call starts the writer for the store's setup; a reader starts at its own first call. */
 export function createSqliteExecutor(hippoRoot: string, opts: ExecutorOptions = {}): SqliteExecutor {
   return new WorkerPool(hippoRoot, opts);
 }

@@ -7,14 +7,18 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, Layer, type CreateMemoryOptions, type MemoryEntry } from '../src/memory.js';
+import { createMemory, Layer, type CreateMemoryOptions, type MemoryEntry } from '../src/core/memory.js';
 import { handleMcpRequest, __resetSessionRecallHistoryMcp, type McpContext, type McpResponse } from '../src/mcp/server.js';
 import { pushGoal } from '../src/store/goals.js';
 import { saveActiveTaskSnapshot, appendSessionEvent } from '../src/store/sessions.js';
-import { saveEmbeddingIndex, saveStoredEmbeddingModel } from '../src/embeddings.js';
-import { resolveEmbeddingProvider } from '../src/embedding-provider.js';
-import { _resetAblationCacheForTests } from '../src/ablation.js';
-import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../src/db.js';
+import { saveStoredEmbeddingModel } from '../src/store/embeddings/index.js';
+import { saveEmbeddingIndex } from '../src/store/vector-index.js';
+import { resolveEmbeddingProvider } from '../src/store/embeddings/provider.js';
+import { _resetAblationCacheForTests } from '../src/core/ablation.js';
+import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../src/db/index.js';
+
+// Every case seeds 26 rows, two of them up to 210 more, in a real store, so its time follows the runner's disk.
+vi.setConfig({ testTimeout: 30_000 });
 
 const NOW = '2026-09-01T12:00:00.000Z';
 const TENANT = 'default';

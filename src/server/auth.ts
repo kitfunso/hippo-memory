@@ -1,15 +1,15 @@
 // Bearer and loopback auth for the HTTP server.
-import { envAllowKeylessLocal, envRequireAuth } from '../env.js';
+import { envAllowKeylessLocal, envRequireAuth } from '../util/env.js';
 import type { IncomingMessage } from 'node:http';
-import { resolveTenantId } from '../tenant.js';
-import { log } from '../log.js';
+import { resolveTenantId } from '../store/tenant.js';
+import { log } from '../util/log.js';
 import { API_KEY_PREFIX, verifyApiKeyCached } from '../store/auth.js';
-import { type Actor, type Context, ownerOrSubject } from '../api.js';
-import { HttpError, isCrossSite, isHeaderString, LOOPBACK_HOST_HEADER, MAX_ID_LEN } from '../http-util.js';
+import { type Actor, type Context, ownerOrSubject } from '../api/index.js';
+import { HttpError, isCrossSite, isHeaderString, LOOPBACK_HOST_HEADER, MAX_ID_LEN } from '../util/http-util.js';
 import { clientLimitKey } from './client-ip.js';
 import { keyCheckBounds } from './key-check-bounds.js';
 import type { AuthResolver, ResolvedBearer, ResolvedServeOpts } from './types.js';
-import { isJsonString } from '../json.js';
+import { isJsonString } from '../util/json.js';
 
 /**
  * Recognise loopback remote addresses. Node reports IPv6-mapped IPv4 as

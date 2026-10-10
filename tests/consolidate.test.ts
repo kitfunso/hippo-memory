@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -7,11 +7,14 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
 import { listMemoryConflicts } from '../src/store/conflicts.js';
-import { createMemory, Layer, calculateStrength, resolveConfidence, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
-import { loadConfig } from '../src/config.js';
+import { createMemory, Layer, calculateStrength, resolveConfidence, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
+import { loadConfig } from '../src/core/config.js';
 import { loadPhysicsState, savePhysicsState, refreshParticleProperties } from '../src/db/physics-state.js';
-import { simulate, type PhysicsParticle } from '../src/physics.js';
+import { simulate, type PhysicsParticle } from '../src/core/physics.js';
+
+// One merge case builds and consolidates five separate stores.
+vi.setConfig({ testTimeout: 30_000 });
 
 /** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
 const createMemory7 = (content: string, options: Partial<Parameters<typeof createMemory>[1]> = {}) => createMemory(content, { baseHalfLifeDays: 7, ...options });
@@ -56,7 +59,8 @@ describe('Decay pass', () => {
 
     const remaining = loadAllEntries(tmpDir);
     const found = remaining.find((e) => e.id === ancient.id);
-    expect(found).toBeDefined();
+    expect(found?.content).toBe('permanent rule');
+    expect(found?.pinned).toBe(true);
   });
 
   it('dry-run does not remove entries', async () => {

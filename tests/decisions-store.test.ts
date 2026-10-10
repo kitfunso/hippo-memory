@@ -25,8 +25,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { deleteEntry } from '../src/store/delete-and-batch.js';
-import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import {
   saveDecision,
   closeDecision,
@@ -35,9 +35,9 @@ import {
   loadActiveDecisions,
   resolveActiveDecisionIdByMemory,
   VALID_DECISION_STATES,
-} from '../src/decisions.js';
-import { ConflictError } from '../src/api-errors.js';
-import { mapApiError } from '../src/http-util.js';
+} from '../src/objects/decisions.js';
+import { ConflictError } from '../src/core/api-errors.js';
+import { mapApiError } from '../src/util/http-util.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 function safeRmSync(p: string): void {

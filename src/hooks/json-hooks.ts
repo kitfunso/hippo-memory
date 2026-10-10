@@ -37,9 +37,26 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { JsonObject } from '../store/working-memory.js';
-import { type JsonHookTarget, HIPPO_SLEEP_MARKER, HIPPO_LAST_SLEEP_MARKER, HIPPO_CAPTURE_MARKER, HIPPO_SESSION_END_MARKER, HIPPO_PINNED_INJECT_MARKER, HIPPO_PINNED_INJECT_COMMAND, HIPPO_PRE_COMPACT_MARKER, HIPPO_COMPACT_RESUME_MARKER, HIPPO_CAPTURE_ERROR_MARKER, HIPPO_POST_COMPACT_MARKER, homeDir, claudeConfigDir, codexHomeDir, copilotHooksFile, defaultPreCompactLogPath } from './shared.js';
-import { type JsonValue, isJsonString, readJsonFile, isJsonObjectLiteral } from '../json.js';
-import { escapeRegex } from '../escape.js';
+import {
+  type JsonHookTarget,
+  HIPPO_SLEEP_MARKER,
+  HIPPO_LAST_SLEEP_MARKER,
+  HIPPO_CAPTURE_MARKER,
+  HIPPO_SESSION_END_MARKER,
+  HIPPO_PINNED_INJECT_MARKER,
+  HIPPO_PINNED_INJECT_COMMAND,
+  HIPPO_PRE_COMPACT_MARKER,
+  HIPPO_COMPACT_RESUME_MARKER,
+  HIPPO_CAPTURE_ERROR_MARKER,
+  HIPPO_POST_COMPACT_MARKER,
+  homeDir,
+  claudeConfigDir,
+  codexHomeDir,
+  copilotHooksFile,
+  defaultPreCompactLogPath
+} from './shared.js';
+import { type JsonValue, isJsonString, readJsonFile, isJsonObjectLiteral } from '../util/json.js';
+import { escapeRegex } from '../util/escape.js';
 import { writeFileAtomic } from '../util/atomic-write.js';
 
 /** A target's hook settings file, the log its SessionEnd hook writes, and the tool's display name. */
@@ -99,7 +116,8 @@ export function resolveJsonHookPaths(target: JsonHookTarget): JsonHookPaths {
 // An unterminated quote runs to the end, as in a shell, which also keeps the scan linear.
 const QUOTED_SPAN = /'[^']*(?:'|$)|"(?:[^"\\]|\\[\s\S]?)*(?:"|$)/g;
 
-/** Hippo's command only at string start or after `(`, past env assignments and an install path, with quoted text ignored: `say hippo sleep`, `echo "a; hippo sleep"` and `./backup.sh && hippo sleep` stay a user's. */
+/** Hippo's command only at string start or after `(`, past env assignments and an install path, with quoted
+ * text ignored: `say hippo sleep`, `echo "a; hippo sleep"` and `./backup.sh && hippo sleep` stay a user's. */
 function isHippoCommand(command: string, marker: string): boolean {
   const unquoted = command.replace(QUOTED_SPAN, '');
   return new RegExp(`(?:^|\\()\\s*(?:[A-Za-z_]\\w*=\\S*\\s+)*(?:[^\\s(]*[/\\\\])?${escapeRegex(marker)}(?![\\w.-])`).test(unquoted);
@@ -199,7 +217,8 @@ function codexCommandHook(command: string, timeout: number): JsonObject {
   return { type: 'command', command, commandWindows: command.replace(/^hippo /, 'hippo.cmd '), timeout };
 }
 
-/** Assigns `settings.hooks = {}` when it is absent, then returns it if it is an object whose `events`, where present, are arrays; null when appending would overwrite anything else. */
+/** Assigns `settings.hooks = {}` when it is absent, then returns it if it is an object whose
+ * `events`, where present, are arrays; null when appending would overwrite anything else. */
 function ensureHooksObject(settings: JsonObject, events: readonly string[]): JsonObject | null {
   if (settings.hooks === undefined) settings.hooks = {};
   const hooks = settings.hooks;
@@ -435,7 +454,8 @@ function uninstallCodexHooks(hooks: JsonObject): boolean {
   return changed;
 }
 
-/** One stderr line naming the handlers uninstall kept that still mention a hippo command (`nice hippo sleep`, `pnpm exec hippo ...`), so the user can remove them by hand. */
+/** One stderr line naming the handlers uninstall kept that still mention a hippo command
+ * (`nice hippo sleep`, `pnpm exec hippo ...`), so the user can remove them by hand. */
 function warnKeptHippoHandlers(settingsPath: string, hooks: JsonObject): void {
   const kept = CLAUDE_HOOK_MARKERS.flatMap(([event, markers]) => {
     const groups = hooks[event];
@@ -472,7 +492,8 @@ export function uninstallJsonHooks(target: JsonHookTarget): boolean {
   return true;
 }
 
-/** Whether uninstall can edit settings.json; `invalidJson` marks a file that exists but is not JSON hippo can edit, which `uninstallJsonHooks` reports only as false. */
+/** Whether uninstall can edit settings.json; `invalidJson` marks a file that exists
+ * but is not JSON hippo can edit, which `uninstallJsonHooks` reports only as false. */
 export function checkUninstallable(target: JsonHookTarget): Pick<InstallResult, 'settingsPath' | 'invalidJson'> {
   const { settings: settingsPath } = resolveJsonHookPaths(target);
   if (!fs.existsSync(settingsPath)) return { settingsPath, invalidJson: false };

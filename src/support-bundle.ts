@@ -1,22 +1,22 @@
-/** `hippo support-bundle`: one redacted JSON snapshot for a support ticket. Read-only (SQLite may leave empty -wal and -shm files); never touches memory content. */
-import { envByName, processEnv } from './env.js';
+/** `hippo support-bundle`: one redacted JSON snapshot for a support ticket. Read-only
+ * (SQLite may leave empty -wal and -shm files); never touches memory content. */
+import { envByName, processEnv } from './util/env.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { pathToFileURL } from 'url';
-import { findHippoStoreDir, isGlobalStoreRoot } from './project-identity.js';
+import { findHippoStoreDir, isGlobalStoreRoot } from './core/project-identity.js';
 import { realpathOrResolve } from './util/real-path.js';
-import { getGlobalRoot } from './shared.js';
+import { getGlobalRoot } from './sharing/global-store.js';
 import { isInitialized } from './store/open.js';
-import { openHippoDbReadOnly, closeHippoDb, getSchemaVersion, getMeta, countTableRows, type DatabaseSyncLike } from './db.js';
-import { listTableNames } from './db/tables.js';
+import { readStoreInventory } from './store/diagnostics.js';
 import { runDoctor, type DoctorOpts } from './doctor.js';
-import { loadConfig } from './config.js';
-import { redactSecretsStrict } from './secret-detect.js';
+import { loadConfig } from './core/config.js';
+import { redactSecretsStrict } from './util/secret-detect.js';
 import type { JsonObject } from './store/working-memory.js';
-import { type JsonValue, isJsonString, isJsonObject } from './json.js';
-import { escapeRegex } from './escape.js';
-import { errorMessage } from './log.js';
+import { type JsonValue, isJsonString, isJsonObject } from './util/json.js';
+import { escapeRegex } from './util/escape.js';
+import { errorMessage } from './util/log.js';
 
 export interface SupportBundleOpts extends DoctorOpts {
   readonly cwd: string;
@@ -31,7 +31,7 @@ const TAIL_MAX_LINE_CHARS = 2000;
 // Greedy on purpose: complete key blocks are redacted first, so any END left is an orphan and what precedes it may be key body.
 const ORPHAN_KEY_END_RE = /^[\s\S]*-----END [A-Z ]*PRIVATE KEY-----/;
 
-// The other env vars hippo reads outside the HIPPO_ prefix (src/embedding-provider.ts, connectors/*).
+// The other env vars hippo reads outside the HIPPO_ prefix (src/store/embeddings/provider.ts, connectors/*).
 const OTHER_ENV_NAMES: readonly string[] = [
   'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'VOYAGE_API_KEY', 'COHERE_API_KEY', 'TYPESAFE_API_KEY',
   'GITHUB_TOKEN', 'GITHUB_WEBHOOK_SECRET', 'GITHUB_WEBHOOK_SECRET_PREVIOUS',
@@ -50,12 +50,6 @@ function buildRuntime(): JsonObject {
     arch: process.arch,
     osRelease: os.release(),
   };
-}
-
-function countTables(db: DatabaseSyncLike): JsonObject {
-  const tables: JsonObject = {};
-  for (const name of listTableNames(db)) tables[name] = countTableRows(db, name);
-  return tables;
 }
 
 function redactConfigValue(value: JsonValue): JsonValue {
@@ -101,18 +95,12 @@ function buildStoreEntry(kind: 'project' | 'global', storeDir: string): JsonObje
   const walPath = `${dbPath}-wal`;
   if (fs.existsSync(walPath)) files['hippo.db-wal'] = fs.statSync(walPath).size;
 
-  let db: DatabaseSyncLike | null = null;
   try {
-    db = openHippoDbReadOnly(storeDir);
-    const schemaVersion = getSchemaVersion(db);
-    const minCompatibleBinary = getMeta(db, 'min_compatible_binary', '') || null;
-    const tables = countTables(db);
+    const { schemaVersion, minCompatibleBinary, tables } = readStoreInventory(storeDir);
     const { configFile, config } = readStoreConfig(storeDir);
     return { kind, path: storeDir, schemaVersion, minCompatibleBinary, files, tables, configFile, config };
   } catch (err) {
     return { kind, path: storeDir, error: errorMessage(err) };
-  } finally {
-    if (db !== null) closeHippoDb(db);
   }
 }
 
@@ -148,12 +136,13 @@ function listLogFileNames(dir: string): string[] {
 }
 
 function tailLogFile(file: string): string[] {
-  const size = fs.statSync(file).size;
-  const readSize = Math.min(size, TAIL_MAX_BYTES);
-  const startedMidFile = size > TAIL_MAX_BYTES;
   const fd = fs.openSync(file, 'r');
   let text: string;
+  let startedMidFile: boolean;
   try {
+    const size = fs.fstatSync(fd).size;
+    const readSize = Math.min(size, TAIL_MAX_BYTES);
+    startedMidFile = size > TAIL_MAX_BYTES;
     const buf = Buffer.alloc(readSize);
     fs.readSync(fd, buf, 0, readSize, size - readSize);
     text = buf.toString('utf8');

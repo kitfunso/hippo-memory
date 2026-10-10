@@ -1,5 +1,5 @@
 // The rows one graph view shows: the newest of the whole graph, or the neighbourhood of one entity name.
-import type { DatabaseSyncLike } from '../db.js';
+import type { DatabaseSyncLike } from '../db/index.js';
 import { IN_LIST_CHUNK, loadEntities, loadEntitiesByIds, loadEntitiesByName, loadNeighborRelations, loadRelations, loadRelationsAmong } from './graph-reads.js';
 import type { GraphRows } from './port.js';
 
@@ -71,7 +71,8 @@ function focusRows({ hippoRoot, db, tenantId }: GraphSource, name: string, limit
   return { entities, relations, truncated };
 }
 
-/** What `GraphReads.graphRows` answers, read on `db`: the caller opens the one snapshot that keeps entity ids and relation ids from two different rebuilds apart. */
+/** What `GraphReads.graphRows` answers, read on `db`: the caller opens the one
+ * snapshot that keeps entity ids and relation ids from two different rebuilds apart. */
 export function graphViewRows(hippoRoot: string, db: DatabaseSyncLike, tenantId: string, spec: GraphViewSpec): GraphRows {
   const source = { hippoRoot, db, tenantId };
   const raw = spec.entity !== undefined ? focusRows(source, spec.entity, spec.limit, spec.canRead) : wholeGraphRows(source, spec.limit);

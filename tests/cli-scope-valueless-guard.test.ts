@@ -24,8 +24,8 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { hippoOut, hippoRun as spawnHippo } from './_helpers/spawn-hippo.js';
 
@@ -134,7 +134,7 @@ describe('global --scope value-less guard: exit-1 cases', () => {
     expect(res.stderr).toContain(USAGE_MSG);
   });
 
-  // Pins the GLOBAL semantics: `status` never reads flags['scope'] (cmdStatus
+  // Pins the GLOBAL semantics: `status` never reads flags['scope'] (handleStatus
   // takes only hippoRoot), yet a value-less --scope still exits 1 because the
   // guard runs before dispatch, uniformly, regardless of whether the target
   // command would have consumed the flag.

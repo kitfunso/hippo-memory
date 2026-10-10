@@ -1,56 +1,45 @@
 // The `hippo recall` verb; main() loads it lazily from the command table.
 
-import { envHippoSessionId } from '../env.js';
-import { confidenceFacets, Layer } from '../memory.js';
+import { envHippoSessionId } from '../util/env.js';
+import { confidenceFacets, Layer } from '../core/memory.js';
 import { TaskSnapshot, SessionEvent } from '../store/rows.js';
 import { isInitialized } from '../store/open.js';
 import { loadIndex } from '../store/index-and-stats.js';
 import { loadActiveTaskSnapshot, listSessionEvents } from '../store/sessions.js';
 import { loadLatestHandoff } from '../store/handoffs.js';
-import type { SessionHandoff } from '../handoff.js';
-import { passesScopeFilterForRecall } from '../recall-scope.js';
+import type { SessionHandoff } from '../core/handoff.js';
+import { passesScopeFilterForRecall } from '../store/recall-scope.js';
 import { fitBudget } from '../search/finalize.js';
 import { explainMatch } from '../search/explain.js';
 import { DEFAULT_RECALL_BUDGET, type SearchResult } from '../core/search-types.js';
-import { loadConfig } from '../config.js';
+import { loadConfig } from '../core/config.js';
 import { estimateTokens } from '../util/token-text.js';
-import { dropHeldCopies } from '../same-text.js';
-import { isGlobalStoreRoot } from '../project-identity.js';
-import { detectScope } from '../scope.js';
-import { getGlobalRoot } from '../shared.js';
-import * as api from '../api.js';
+import { dropHeldCopies } from '../util/same-text.js';
+import { isGlobalStoreRoot } from '../core/project-identity.js';
+import { detectScope } from '../sharing/scope.js';
+import { getGlobalRoot } from '../sharing/global-store.js';
+import * as api from '../api/index.js';
 import type { PlanningFallacyOutput } from '../predictions/planning-fallacy.js';
-import { detectAnchoring, hashQueryText, biasHintEnabled, snapshotRing } from '../recall-history.js';
-import { noteRecall, sessionRing, shownRecallRows } from '../api/recall-record.js';
-import { detectAvailabilityBias } from '../availability.js';
-import { resolveTenantId } from '../tenant.js';
-import { MAX_HOPS, DEFAULT_MAX_NEIGHBORS } from '../graph-recall.js';
+import { detectAnchoring, hashQueryText, biasHintEnabled, snapshotRing } from '../api/recall-history.js';
+import { sessionRing, shownRecallRows } from '../api/recall-record.js';
+import { detectAvailabilityBias } from '../api/availability.js';
+import { resolveTenantId } from '../store/tenant.js';
+import { cliApiContext } from './api-context.js';
+import { MAX_HOPS, DEFAULT_MAX_NEIGHBORS } from '../graph/recall.js';
 import { getReranker } from '../rerankers/index.js';
 import type { RerankerFn } from '../rerankers/types.js';
-import type { RankRecallResult, RankStage, RecallGraphHops, RecallGraphStream, RecallReranker } from '../recall-pipeline.js';
+import type { RankRecallResult, RankStage, RecallGraphHops, RecallGraphStream, RecallReranker } from '../api/recall-pipeline.js';
 import { JEV_DEFAULT_TOP_K } from '../rerankers/jev.js';
 import { isClefModel } from '../rerankers/clef.js';
-import { handoffText, printedTokens, sessionTrailText, settleTokens, snapshotText } from '../context-render.js';
+import { handoffText, printedTokens, sessionTrailText, settleTokens, snapshotText } from '../api/context-render.js';
 import { printError } from './output.js';
 import {
-  parseLimitFlag,
-  parseBudgetFlag,
-  requireInit,
-  recallEntryText,
-  recallHeading,
-  type CliFlags,
-  type CommandContext,
-  parseAsOfFlag,
-  engineFlags,
-  printActiveTaskSnapshot,
-  printSessionEvents,
-  printHandoff,
-  hostSessionId,
-  captureConsole,
-  hookStoreRoot,
-  boolFlag,
-  flagIsTrue,
-} from './shared.js';
+  parseLimitFlag, parseBudgetFlag, type CliFlags, type CommandContext, parseAsOfFlag, engineFlags, boolFlag, flagIsTrue, isBooleanFlag,
+} from './flag-values.js';
+import { requireInit } from './shared.js';
+import { recallEntryText, recallHeading, printActiveTaskSnapshot, printSessionEvents, printHandoff, captureConsole } from './print.js';
+import { hostSessionId, hookStoreRoot } from './hook-runtime.js';
+import { CliExit } from './exit.js';
 
 // JSON.stringify keeps quotes or parens in the matched phrase from blurring the line.
 function planningLine(p: PlanningFallacyOutput): string | null {
@@ -88,7 +77,7 @@ interface RecallLateFlags {
 function failWith(message: string): () => never {
   return () => {
     printError(message);
-    process.exit(1);
+    throw new CliExit(1);
   };
 }
 
@@ -96,7 +85,7 @@ function failWith(message: string): () => never {
 function parseGraphStreamFlags(flags: CliFlags): RecallGraphStream {
   let hops: number | undefined;
   if (flags['graph-hops'] !== undefined) {
-    if (typeof flags['graph-hops'] === 'boolean') failWith(`--graph-hops requires an integer value 1..${MAX_HOPS} (e.g. --graph-hops 2).`)();
+    if (isBooleanFlag(flags['graph-hops'])) failWith(`--graph-hops requires an integer value 1..${MAX_HOPS} (e.g. --graph-hops 2).`)();
     const h = Number(flags['graph-hops']);
     if (!Number.isInteger(h) || h < 1 || h > MAX_HOPS) {
       failWith(`Invalid --graph-hops: "${String(flags['graph-hops'])}". Must be an integer 1..${MAX_HOPS}.`)();
@@ -105,7 +94,7 @@ function parseGraphStreamFlags(flags: CliFlags): RecallGraphStream {
   }
   let seeds: number | undefined;
   if (flags['graph-seeds'] !== undefined) {
-    if (typeof flags['graph-seeds'] === 'boolean') failWith('--graph-seeds requires a positive integer value (e.g. --graph-seeds 10).')();
+    if (isBooleanFlag(flags['graph-seeds'])) failWith('--graph-seeds requires a positive integer value (e.g. --graph-seeds 10).')();
     const s = Number(flags['graph-seeds']);
     if (!Number.isInteger(s) || s < 1) failWith(`Invalid --graph-seeds: "${String(flags['graph-seeds'])}". Must be a positive integer.`)();
     seeds = s;
@@ -116,14 +105,14 @@ function parseGraphStreamFlags(flags: CliFlags): RecallGraphStream {
 function parseHopsFlags(flags: CliFlags): ParsedFlag<RecallGraphHops> {
   if (flags['hops'] === undefined) return {};
   // A value-less `--hops` parses as true, and Number(true) === 1 would silently run a 1-hop expansion.
-  if (typeof flags['hops'] === 'boolean') return { fail: failWith(`--hops requires an integer value 0..${MAX_HOPS} (e.g. --hops 1).`) };
+  if (isBooleanFlag(flags['hops'])) return { fail: failWith(`--hops requires an integer value 0..${MAX_HOPS} (e.g. --hops 1).`) };
   const hops = Number(flags['hops']);
   if (!Number.isInteger(hops) || hops < 0 || hops > MAX_HOPS) {
     return { fail: failWith(`Invalid --hops: "${String(flags['hops'])}". Must be an integer 0..${MAX_HOPS}.`) };
   }
   const raw = flags['max-neighbors'];
   if (raw === undefined) return { value: { hops, maxNeighbors: DEFAULT_MAX_NEIGHBORS } };
-  if (typeof raw === 'boolean') return { fail: failWith(`--max-neighbors requires an integer value 1..200.`) };
+  if (isBooleanFlag(raw)) return { fail: failWith(`--max-neighbors requires an integer value 1..200.`) };
   const maxNeighbors = Number(raw);
   if (!Number.isInteger(maxNeighbors) || maxNeighbors < 1 || maxNeighbors > 200) {
     return { fail: failWith(`Invalid --max-neighbors: "${String(raw)}". Must be an integer 1..200.`) };
@@ -202,7 +191,7 @@ export async function cmdRecall(
   const priced = priceRecallEntries(hippoRoot, query, o);
   const slot: PresentedSlot = {};
   await api.retrieve(
-    { hippoRoot, tenantId: o.tenantId, actor: api.adminActor('cli') },
+    cliApiContext(hippoRoot, o.tenantId),
     {
       query,
       goalTag: o.goalTag,
@@ -223,11 +212,7 @@ export async function cmdRecall(
   // A late flag is rejected where the ranking halted, after the notes its earlier stages printed.
   o.late.error?.fail();
   if (!slot.presented) throw new Error('recall ranked but presented nothing');
-  const { fit, text } = slot.presented;
-  const { results, hints } = fit;
-  // Fed after the final detect, so the next recall's cooldown reads the top row and hint this one showed.
-  if (fit.anchorRing) noteRecall(fit.anchorRing, query, results[0]?.entry.id ?? null, hints.anchoring?.memoryId);
-  console.log(text);
+  console.log(slot.presented.text);
 }
 
 /** Every flag recall reads, parsed in the order the single-body command checked them. */
@@ -346,7 +331,7 @@ function recallHinter(query: string, o: RecallOptions, rank: RankedRecall['rank'
     const availability = availabilityPool
       ? detectAvailabilityBias({ topK: list.map((r) => ({ id: r.entry.id, created: r.entry.created })), pool: availabilityPool })
       : null;
-    const summary = api.buildSuppressionSummary({
+    const summary: api.RecallSuppressionSummary = {
       // The published total includes graph-surfaced rows, so total == preRank + byBudget + returned holds for callers.
       totalCandidates: rank.totalCandidates + rank.graphAdded,
       droppedPreRank: rank.droppedPreRank + held,
@@ -354,7 +339,7 @@ function recallHinter(query: string, o: RecallOptions, rank: RankedRecall['rank'
       summarySubstitutionsAdded: 0,
       freshTailAdded: 0,
       suppressedByInterference: anchoring?.reason === 'memory_dominance' ? 1 : 0, // a query_repeat is a re-ask, not competition
-    });
+    };
     return { anchoring, availability, summary };
   };
   return { anchorRing, hintsFor };
@@ -460,8 +445,8 @@ function presentRecall(hippoRoot: string, query: string, o: RecallOptions, ranke
   const audit = shownRecallRows({ tenantId: o.tenantId, actor: 'cli' }, {
     query, ring: fit.anchorRing, topId: results[0]?.entry.id ?? null, anchoring: hints.anchoring, availability: hints.availability,
   });
-  // The token ledger books the text this recall prints, on whichever exit it takes.
-  return { fit, text, shown: { results, audit, tokens: estimateTokens(text) } };
+  // The token ledger books the text this recall prints, on whichever exit it takes; the ring keeps the hint the final detect made.
+  return { text, shown: { results, audit, tokens: estimateTokens(text), anchoredOn: hints.anchoring?.memoryId } };
 }
 
 type PresentedRecall = ReturnType<typeof presentRecall>;
@@ -488,18 +473,27 @@ function recallOutput(query: string, o: RecallOptions, fit: FittedRecall, isGlob
   });
 }
 
+/** The keys are set in the order the JSON prints them. */
+interface RecallJsonTail {
+  suppressionSummary: FittedRecall['hints']['summary'];
+  planningFallacyHint?: NonNullable<FittedRecall['cmdPlanningFallacyHint']>;
+  planningFallacyWatching?: NonNullable<FittedRecall['cmdPlanningFallacyWatching']>;
+  anchoringHint?: NonNullable<FittedRecall['hints']['anchoring']>;
+  availabilityHint?: NonNullable<FittedRecall['hints']['availability']>;
+  continuity?: RecallContinuity;
+  continuityTokens?: number;
+}
+
 /** The JSON keys after the result list: suppression summary, any bias hints, then continuity when asked for. */
-function recallJsonTail(fit: FittedRecall, includeContinuity: boolean | undefined) {
+function recallJsonTail(fit: FittedRecall, includeContinuity: boolean | undefined): RecallJsonTail {
   const { cmdPlanningFallacyHint, cmdPlanningFallacyWatching, continuityTokens } = fit;
   const { activeSnapshot, sessionHandoff, recentSessionEvents } = fit.continuity;
   const { anchoring: cmdAnchoringHint, availability: cmdAvailabilityHint, summary: cmdSuppressionSummary } = fit.hints;
-  const tail: Record<string, unknown> = {
-    suppressionSummary: cmdSuppressionSummary,
-    ...(cmdPlanningFallacyHint ? { planningFallacyHint: cmdPlanningFallacyHint } : {}),
-    ...(cmdPlanningFallacyWatching ? { planningFallacyWatching: cmdPlanningFallacyWatching } : {}),
-    ...(cmdAnchoringHint ? { anchoringHint: cmdAnchoringHint } : {}),
-    ...(cmdAvailabilityHint ? { availabilityHint: cmdAvailabilityHint } : {}),
-  };
+  const tail: RecallJsonTail = { suppressionSummary: cmdSuppressionSummary };
+  if (cmdPlanningFallacyHint) tail.planningFallacyHint = cmdPlanningFallacyHint;
+  if (cmdPlanningFallacyWatching) tail.planningFallacyWatching = cmdPlanningFallacyWatching;
+  if (cmdAnchoringHint) tail.anchoringHint = cmdAnchoringHint;
+  if (cmdAvailabilityHint) tail.availabilityHint = cmdAvailabilityHint;
   if (includeContinuity) {
     tail.continuity = {
       activeSnapshot,
@@ -511,8 +505,31 @@ function recallJsonTail(fit: FittedRecall, includeContinuity: boolean | undefine
   return tail;
 }
 
-function recallJsonRow(r: SearchResult, query: string, showWhy: boolean, isGlobal: boolean) {
-  const base: Record<string, unknown> = {
+/** One result row; the optional keys are set in the order the JSON prints them. */
+interface RecallJsonRow {
+  id: string;
+  score: number;
+  strength: SearchResult['entry']['strength'];
+  tokens: number;
+  tags: SearchResult['entry']['tags'];
+  content: string;
+  layer: SearchResult['entry']['layer'];
+  trace_outcome?: SearchResult['entry']['trace_outcome'];
+  superseded?: boolean;
+  superseded_by?: SearchResult['entry']['superseded_by'];
+  graphVia?: SearchResult['graphVia'];
+  confidence?: ReturnType<typeof confidenceFacets>['tier'];
+  aged_out?: ReturnType<typeof confidenceFacets>['agedOut'];
+  source?: 'global' | 'local';
+  reason?: ReturnType<typeof explainMatch>['reason'];
+  bm25?: SearchResult['bm25'];
+  cosine?: SearchResult['cosine'];
+  envelope?: ReturnType<typeof explainMatch>['envelope'];
+  rerankTrace?: SearchResult['rerankTrace'];
+}
+
+function recallJsonRow(r: SearchResult, query: string, showWhy: boolean, isGlobal: boolean): RecallJsonRow {
+  const base: RecallJsonRow = {
     id: r.entry.id,
     score: r.score,
     strength: r.entry.strength,
@@ -555,7 +572,7 @@ export async function handleRecall({ hippoRoot, args, flags }: CommandContext): 
   const query = args.join(' ').trim();
   if (!query) {
     printError('Please provide a search query.');
-    process.exit(1);
+    throw new CliExit(1);
   }
   await cmdRecall(hookStoreRoot(hippoRoot), query, flags);
 }

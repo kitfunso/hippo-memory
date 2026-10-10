@@ -14,11 +14,11 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { deleteEntry, batchWriteAndDelete } from '../src/store/delete-and-batch.js';
 import { loadAllDirtySummaries } from '../src/store/summaries.js';
-import { openHippoDb } from '../src/db.js';
-import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/memory.js';
+import { openHippoDb } from '../src/db/index.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';
 import { archiveRawMemory } from '../src/store/raw-archive.js';
-import { invalidateMatching } from '../src/invalidation.js';
-import { supersede, type Context } from '../src/api.js';
+import { invalidateMatching } from '../src/learn/invalidation.js';
+import { supersede, type Context } from '../src/api/index.js';
 
 function defaultCtx(hippoRoot: string): Context {
   return {

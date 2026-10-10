@@ -1,9 +1,29 @@
 // The writer of the entities and relations tables. Every row resolves a consolidated source first, never a raw memory;
 // the schema triggers are the backstop for a write that skips this module.
-import { openHippoDb, closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../db.js';
-import { assertTenantId } from '../tenant.js';
-import { errorMessage, log } from '../log.js';
-import { type EntityType, type RelationType, type SourceKind, type SourceObjectType, type SourceObjectRef, GRAPH_ENTITY_TYPES, GRAPH_RELATION_TYPES, MAX_ENTITY_NAME_LEN, type Entity, type Relation, type InsertEntityOpts, type InsertRelationOpts, type UpdateEntityOpts, type EntityRow, type RelationRow, rowToEntity, rowToRelation, ENTITY_COLS, RELATION_COLS } from './graph-rows.js';
+import { openHippoDb, closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
+import { assertTenantId } from './tenant.js';
+import { errorMessage, log } from '../util/log.js';
+import {
+  type EntityType,
+  type RelationType,
+  type SourceKind,
+  type SourceObjectType,
+  type SourceObjectRef,
+  GRAPH_ENTITY_TYPES,
+  GRAPH_RELATION_TYPES,
+  MAX_ENTITY_NAME_LEN,
+  type Entity,
+  type Relation,
+  type InsertEntityOpts,
+  type InsertRelationOpts,
+  type UpdateEntityOpts,
+  type EntityRow,
+  type RelationRow,
+  rowToEntity,
+  rowToRelation,
+  ENTITY_COLS,
+  RELATION_COLS
+} from './graph-rows.js';
 
 /** source_object_type -> its object table, for the object-path validation 4-way branch.
  *  SQLite cannot parametrize a table name, so the SQL trigger mirrors this explicitly. */
@@ -226,7 +246,17 @@ export function insertRelation(
     const result = db.prepare(`
       INSERT INTO relations(tenant_id, from_entity_id, to_entity_id, rel_type, memory_id, source_kind, source_object_type, source_object_id, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(tenantId, opts.fromEntityId, opts.toEntityId, opts.relType, effectiveMemoryId, sourceKind, sourceObject?.type ?? null, sourceObject?.id ?? null, now);
+    `).run(
+      tenantId,
+      opts.fromEntityId,
+      opts.toEntityId,
+      opts.relType,
+      effectiveMemoryId,
+      sourceKind,
+      sourceObject?.type ?? null,
+      sourceObject?.id ?? null,
+      now
+    );
     const id = Number(result.lastInsertRowid ?? 0);
     // SAFETY: row's shape matches the columns named in RELATION_COLS above.
     const row = db.prepare(`SELECT ${RELATION_COLS} FROM relations WHERE id = ?`).get(id) as RelationRow | undefined;

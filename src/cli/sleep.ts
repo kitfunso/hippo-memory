@@ -2,25 +2,24 @@
 
 import * as path from 'path';
 import * as fs from 'fs';
-import { loadConfig } from '../config.js';
-import { isGitRepo } from '../autolearn.js';
+import { loadConfig } from '../core/config.js';
+import { isGitRepo } from '../learn/autolearn.js';
 import { importForStore, currentMachine } from '../agent-memories/sync.js';
-import { replayCompactionsAt } from '../compaction-record.js';
-import * as api from '../api.js';
-import { resolveTenantId } from '../tenant.js';
+import { replayCompactionsAt } from '../capture/compaction-record.js';
+import * as api from '../api/index.js';
+import { cliApiContext } from './api-context.js';
 import { sleepResultLines } from './sleep-render.js';
-import { errorMessage, log } from '../log.js';
-import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../db.js';
-import { repairOnceOnSleep } from '../project-merge.js';
-import { type CliFlags, requireInit, learnFromRepo, runChurnStaleForRepo, printAgentImport, skipLearnOnSharedStore, boolFlag, stringFlag } from './shared.js';
+import { errorMessage, log } from '../util/log.js';
+import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../db/index.js';
+import { repairOnceOnSleep } from '../sharing/project-merge.js';
+import { type CliFlags, boolFlag, stringFlag, type CommandContext } from './flag-values.js';
+import { requireInit, learnFromRepo, runChurnStaleForRepo, skipLearnOnSharedStore } from './shared.js';
+import { printAgentImport } from './print.js';
 import { repairQualityOnceAt } from './quality-repair-once.js';
 import { printError } from './output.js';
 
 /** Runs `hippo sleep`; with `--log-file` it also tees its output to that file. */
-export async function cmdSleep(
-  hippoRoot: string,
-  flags: CliFlags
-): Promise<void> {
+export async function cmdSleep(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
   // Tee stdout/stderr to a log file when --log-file is set. The SessionEnd
   // hook uses this so the output is captured somewhere the SessionStart hook
   // can re-display it next time the agent UI starts.
@@ -32,18 +31,20 @@ export async function cmdSleep(
       fs.writeFileSync(logFile, `[hippo] ${new Date().toISOString()} consolidating memory...\n`, 'utf8');
       const origStdoutWrite = process.stdout.write.bind(process.stdout);
       const origStderrWrite = process.stderr.write.bind(process.stderr);
-      const tee = (chunk: unknown) => {
+      const tee = (chunk: string | Uint8Array) => {
         try {
-          const buf = typeof chunk === 'string' ? chunk : Buffer.isBuffer(chunk) ? chunk.toString('utf8') : String(chunk);
+          const buf = Buffer.isBuffer(chunk) ? chunk.toString('utf8') : String(chunk);
           fs.appendFileSync(logFile, buf, 'utf8');
         } catch {
           // log failures are non-fatal — still write to the real stream
         }
       };
+      // SAFETY: the wrapper forwards chunk, enc and cb untouched to the original write, so it keeps write's contract.
       process.stdout.write = ((chunk: any, enc?: any, cb?: any): boolean => {
         tee(chunk);
         return origStdoutWrite(chunk, enc, cb);
       }) as typeof process.stdout.write;
+      // SAFETY: the wrapper forwards chunk, enc and cb untouched to the original write, so it keeps write's contract.
       process.stderr.write = ((chunk: any, enc?: any, cb?: any): boolean => {
         tee(chunk);
         return origStderrWrite(chunk, enc, cb);
@@ -58,7 +59,7 @@ export async function cmdSleep(
   }
 
   try {
-    await cmdSleepCore(hippoRoot, flags);
+    await cmdSleepCore(hippoRoot, tenantId, flags);
     if (logFile) console.log('[hippo] sleep complete');
   } catch (err) {
     if (logFile) console.log(`[hippo] sleep failed: ${errorMessage(err)}`);
@@ -68,16 +69,20 @@ export async function cmdSleep(
   }
 }
 
+export function handleSleep({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
+  return cmdSleep(hippoRoot, tenantId, flags);
+}
+
 function renderSleepResult(result: api.SleepResult): void {
   for (const line of sleepResultLines(result)) console.log(line);
 }
 
 /** Fault-isolated: a failed repair warns and runs again next sleep, and never stops the sleep. */
-function repairProjectTagsOnce(hippoRoot: string): void {
+function repairProjectTagsOnce(hippoRoot: string, tenantId: string): void {
   let db: DatabaseSyncLike | undefined;
   try {
     db = openHippoDb(hippoRoot);
-    const r = repairOnceOnSleep(db, hippoRoot, resolveTenantId({}));
+    const r = repairOnceOnSleep(db, hippoRoot, tenantId);
     if (r === null) return;
     const parts = [
       r.copies.length > 0 ? `set aside ${r.copies.length} misfiled note imports` : '',
@@ -94,6 +99,7 @@ function repairProjectTagsOnce(hippoRoot: string): void {
 
 async function cmdSleepCore(
   hippoRoot: string,
+  tenantId: string,
   flags: CliFlags
 ): Promise<void> {
   requireInit(hippoRoot);
@@ -125,16 +131,12 @@ async function cmdSleepCore(
   if (!flags['dry-run']) {
     const finished = replayCompactionsAt(hippoRoot, (message) => log.warn(`compaction replay: ${message}`));
     if (finished > 0) console.log(`Finished saving ${finished} compaction${finished === 1 ? '' : 's'} left over from earlier sessions.`);
-    repairProjectTagsOnce(hippoRoot);
+    repairProjectTagsOnce(hippoRoot, tenantId);
     repairQualityOnceAt(hippoRoot);
   }
 
   // Phase 2-6: Pure-storage pipeline (consolidate + dedup + audit + share + ambient).
-  const ctx: api.Context = {
-    hippoRoot,
-    tenantId: resolveTenantId({}),
-    actor: api.adminActor('cli'),
-  };
+  const ctx = cliApiContext(hippoRoot, tenantId);
   const result = await api.sleep(ctx, {
     dryRun: boolFlag(flags, 'dry-run'),
     noShare: boolFlag(flags, 'no-share'),

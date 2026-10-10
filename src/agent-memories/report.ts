@@ -97,7 +97,8 @@ const plural = (n: number, one: string, many: string): string => `${n} ${n === 1
 
 const TALLY_WORDS = {
   imported: 'new', replaced: 'replaced', restored: 'brought back', setAside: 'set aside', untagged: 'pinned and kept',
-  unchanged: 'unchanged', adopted: 'taken over from the old Claude import', renamed: 'moved to the project id', collapsed: 'duplicates folded', retagged: 'retagged',
+  unchanged: 'unchanged', adopted: 'taken over from the old Claude import', renamed: 'moved to the project id', collapsed: 'duplicates folded',
+  retagged: 'retagged',
   handedOver: 'handed over from the global store', duplicate: 'already stored', secret: 'skipped for a secret', short: 'too short',
   rejected: 'skipped as rejected', unread: 'files skipped', unreadable: 'unreadable folders', busy: 'busy folders',
 } as const satisfies Record<keyof Tally, string>;

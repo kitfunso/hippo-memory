@@ -4,10 +4,11 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { createHash } from 'node:crypto';
 import { homeDir } from '../hooks/shared.js';
-import { errorMessage, log as logger } from '../log.js';
-import { isObjectLike, isStringValue, type ProgressCursor } from '../capture-contract.js';
+import { errorMessage, log as logger } from '../util/log.js';
+import { isObjectLike, isStringValue, type ProgressCursor } from '../core/capture-contract.js';
 import { SESSION_ID_RE } from './copilot-transcript.js';
 import type { SessionTurn } from './transcript.js';
+import { FINGERPRINT_HEX_CHARS } from '../util/token-text.js';
 
 /** A turn close runs after each reply; a full close runs once, when the session ends. */
 export type WorkerMode = 'turn' | 'full';
@@ -137,7 +138,7 @@ export async function runSessionWorker(sessionId: string | null, mode: WorkerMod
 }
 
 function turnKey(turn: SessionTurn): string {
-  return createHash('sha256').update(`${turn.role}\n${turn.text}`).digest('hex').slice(0, 16);
+  return createHash('sha256').update(`${turn.role}\n${turn.text}`).digest('hex').slice(0, FINGERPRINT_HEX_CHARS);
 }
 
 /** The cursor position after `turns`: how many there were and a hash of the last. */

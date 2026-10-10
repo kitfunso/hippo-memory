@@ -1,9 +1,10 @@
-import { type MemoryEntry, schemaFitFrom, strengthSql } from '../memory.js';
-import { closeHippoDb } from '../db.js';
-import { scopeAdmitSql, type SqlFragment } from '../recall-scope.js';
+import { type MemoryEntry, type ConfidenceLevel, FALLBACK_HALF_LIFE_DAYS, Layer, calculateStrength, facetsOf, schemaFitFrom } from '../core/memory.js';
+import { strengthSql } from './rule-sql.js';
+import { closeHippoDb, withReadSnapshot } from '../db/index.js';
+import { scopeAdmitSql, type SqlFragment } from './recall-scope.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
 import { openStore } from './open.js';
-import { originInSql } from '../project-identity.js';
+import { originInSql } from '../core/project-identity.js';
 import { pickRarestFtsQuery, loadRecallSearchEntriesFromDb } from './search-rows.js';
 
 export interface AmbientRecallRequest {
@@ -175,7 +176,8 @@ const TEAM_VISIBLE = scopeAdmitSql('');
 /** Admits every scope, for a reader that sees the whole store, such as the CLI on its own machine. */
 export const EVERY_SCOPE: SqlFragment = Object.freeze({ sql: '1', params: [] });
 
-/** Text, source and origin of tenant rows holding any of `words` that `admit` passes, by default the team-visible ones; a row equal to a text apart from spacing holds its every word.
+/** Text, source and origin of tenant rows holding any of `words` that `admit` passes, by
+ * default the team-visible ones; a row equal to a text apart from spacing holds its every word.
  *  With `project`, only rows carrying one of those names and user-global rows, as loadContextCandidates' filter. No `tenantId` reads every tenant. */
 export function loadTextsHoldingWords(
   hippoRoot: string, tenantId: string | undefined, words: readonly string[], project?: readonly string[], admit: SqlFragment = TEAM_VISIBLE,
@@ -225,8 +227,7 @@ export function schemaFitInStore(hippoRoot: string, tenantId: string, content: s
   const db = openStore(hippoRoot);
   try {
     // One read transaction, so the row count and the texts come from the same snapshot.
-    db.exec('BEGIN');
-    try {
+    return withReadSnapshot(db, () => {
       // SAFETY: rows' shape matches the two columns named in the SELECT.
       const groups = db.prepare(
         'SELECT tags_json, COUNT(*) AS n FROM memories WHERE tenant_id = ? GROUP BY tags_json',
@@ -241,9 +242,7 @@ export function schemaFitInStore(hippoRoot: string, tenantId: string, content: s
       // SAFETY: the SELECT names exactly the one column read.
       const texts = db.prepare('SELECT content FROM memories WHERE tenant_id = ?').iterate(tenantId) as Iterable<{ content: string }>;
       return schemaFitFrom(content, tags, { rows, tagCounts, contents: contentsOf(texts) });
-    } finally {
-      db.exec('COMMIT');
-    }
+    });
   } finally {
     closeHippoDb(db);
   }
@@ -309,6 +308,87 @@ export function loadStrengthTallies(hippoRoot: string, tenantId: string, now: Da
       strengthSum: Number(row.strengthSum),
       atRisk: Number(row.atRisk),
     };
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+/** What `hippo status` prints about the whole store: every tenant and superseded rows too. */
+export interface StatusCounts {
+  total: number;
+  byLayer: Record<Layer, number>;
+  byConfidence: Record<ConfidenceLevel, number>;
+  pinned: number;
+  /** Rows whose strength is under the caller's line; unlike StrengthTallies, pinned rows count. */
+  atRisk: number;
+  agedOut: number;
+  avgStrength: number;
+  /** Open conflicts of every tenant, the rows listMemoryConflicts returns when given no tenant. */
+  openConflicts: number;
+  /** Rows that have a stored vector. */
+  embedded: number;
+}
+
+type StatusColumn = 'layer' | 'confidence' | 'pinned' | 'created' | 'last_retrieved' | 'half_life_days' | 'retrieval_count'
+  | 'emotional_valence' | 'outcome_positive' | 'outcome_negative';
+type StatusRow = Omit<Pick<MemoryRow, StatusColumn>, 'layer'> & { layer: Layer };
+// What calculateStrength and facetsOf read, plus the layer: no text and no JSON column.
+const STATUS_ROW_COLUMNS: readonly StatusColumn[] = [
+  'layer', 'confidence', 'pinned', 'created', 'last_retrieved', 'half_life_days', 'retrieval_count',
+  'emotional_valence', 'outcome_positive', 'outcome_negative',
+];
+
+// Scored in JavaScript, not with strengthSql: SQLite reads fewer date shapes than Date does, so its counts would differ.
+function tallyStatusRows(rows: Iterable<StatusRow>, now: Date, atRiskBelow: number): Omit<StatusCounts, 'openConflicts' | 'embedded'> {
+  const byLayer = { [Layer.Buffer]: 0, [Layer.Episodic]: 0, [Layer.Semantic]: 0, [Layer.Trace]: 0 };
+  const byConfidence = { verified: 0, observed: 0, inferred: 0, stale: 0 };
+  const sums = { total: 0, strength: 0, pinned: 0, atRisk: 0, agedOut: 0 };
+  for (const row of rows) {
+    // rowToEntry's defaults for these columns, so a row scores as its loaded entry would.
+    const entry = {
+      pinned: Boolean(row.pinned),
+      confidence: row.confidence ?? 'observed',
+      created: row.created,
+      last_retrieved: row.last_retrieved,
+      half_life_days: Number(row.half_life_days ?? FALLBACK_HALF_LIFE_DAYS),
+      retrieval_count: Number(row.retrieval_count ?? 0),
+      emotional_valence: row.emotional_valence ?? 'neutral',
+      outcome_positive: Number(row.outcome_positive ?? 0),
+      outcome_negative: Number(row.outcome_negative ?? 0),
+    };
+    const strength = calculateStrength(entry, now);
+    const facets = facetsOf(entry, now);
+    sums.total++;
+    sums.strength += strength;
+    byLayer[row.layer] = (byLayer[row.layer] ?? 0) + 1;
+    byConfidence[facets.tier] = (byConfidence[facets.tier] ?? 0) + 1;
+    if (entry.pinned) sums.pinned++;
+    if (strength < atRiskBelow) sums.atRisk++;
+    if (facets.agedOut) sums.agedOut++;
+  }
+  const { total, pinned, atRisk, agedOut } = sums;
+  return { total, byLayer, byConfidence, pinned, atRisk, agedOut, avgStrength: total > 0 ? sums.strength / total : 0 };
+}
+
+/** The counts `hippo status` prints, from one pass over ten narrow columns: no text is read and no row array is built. */
+export function loadStatusCounts(hippoRoot: string, now: Date, atRiskBelow: number): StatusCounts {
+  const db = openStore(hippoRoot);
+  try {
+    // One read transaction, so the row tallies and the two counts describe the same store.
+    return withReadSnapshot(db, () => {
+      // loadAllEntries' order, so the strengths add up in the order they did and the average rounds the same.
+      // SAFETY: the SELECT names exactly StatusRow's columns, and the store writes `layer` only from the Layer enum.
+      const rows = db.prepare(
+        `SELECT ${STATUS_ROW_COLUMNS.join(', ')} FROM memories ORDER BY created ASC, id ASC`,
+      ).iterate() as Iterable<StatusRow>;
+      const tallies = tallyStatusRows(rows, now, atRiskBelow);
+      // SAFETY: one row whose columns are the two aliases named below.
+      const counts = db.prepare(`SELECT
+        (SELECT COUNT(*) FROM memory_conflicts WHERE status = 'open') AS openConflicts,
+        (SELECT COUNT(*) FROM memory_vectors WHERE memory_id IN (SELECT id FROM memories)) AS embedded`,
+      ).get() as Record<'openConflicts' | 'embedded', number | bigint>;
+      return { ...tallies, openConflicts: Number(counts.openConflicts), embedded: Number(counts.embedded) };
+    });
   } finally {
     closeHippoDb(db);
   }

@@ -1,4 +1,4 @@
-import type { Context } from '../../api.js';
+import type { Context } from '../../api/index.js';
 import { saveSlackCursor, slackCursor } from '../../store/connectors/slack.js';
 import { ingestMessage } from './ingest.js';
 import type { SlackMessageEvent } from './types.js';
@@ -62,7 +62,7 @@ export async function backfillChannel(
     });
     pages++;
     for (const msg of page.messages) {
-      const r = ingestMessage(ctx, {
+      const r = await ingestMessage(ctx, {
         teamId: opts.teamId,
         channel: opts.channel,
         message: msg,

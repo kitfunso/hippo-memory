@@ -10,7 +10,7 @@ import { spawnSync } from 'node:child_process';
 const HIPPO_JS = join(__dirname, '..', 'bin', 'hippo.js');
 
 function withScratchEnv(dir: string) {
-  return { ...process.env, HIPPO_HOME: dir, HOME: dir, USERPROFILE: dir } as NodeJS.ProcessEnv;
+  return { ...process.env, HIPPO_HOME: dir, HOME: dir, USERPROFILE: dir };
 }
 
 let dir: string;
@@ -48,7 +48,7 @@ describe('__session-end-worker awaits cmdSleep before finishing', () => {
     expect(result.status).toBe(0);
     expect(result.stderr).not.toContain('Unhandled');
 
-    const log = require('node:fs').readFileSync(logFile, 'utf8') as string;
+    const log: string = require('node:fs').readFileSync(logFile, 'utf8');
     const sleepFailedAt = log.indexOf('sleep failed:');
     const skipCloseAt = log.indexOf('skip: no session_id');
     expect(sleepFailedAt).toBeGreaterThan(-1);

@@ -1,11 +1,11 @@
-import { closeHippoDb } from '../db.js';
-import { strengthSql } from '../memory.js';
-import { scopeAdmitSql } from '../recall-scope.js';
-import { SECRET_TAGS } from '../secret-detect.js';
+import { closeHippoDb } from '../db/index.js';
+import { strengthSql } from './rule-sql.js';
+import { scopeAdmitSql } from './recall-scope.js';
+import { SECRET_TAGS } from '../util/secret-detect.js';
 import { openStore } from './open.js';
 import { jsonList } from './candidates.js';
-import { originInSql } from '../project-identity.js';
-import { isErrorTagged, type AmbientTallies } from '../ambient.js';
+import { originInSql } from '../core/project-identity.js';
+import { isErrorTagged, type AmbientTallies } from '../core/ambient.js';
 import { DAY_MS } from '../util/time.js';
 
 /** The rows an ambient summary describes: a context read's envelope, origin partition and tag secret veto. */

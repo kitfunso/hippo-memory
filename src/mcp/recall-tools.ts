@@ -3,16 +3,16 @@
 import * as path from 'path';
 import { fitBudget } from '../search/finalize.js';
 import type { SearchResult } from '../core/search-types.js';
-import { dropHeldCopies, duplicateKey, storedTextKeys } from '../same-text.js';
-import { retrieve as apiRetrieve, drillDown as apiDrillDown, assemble as apiAssemble, getContext as apiGetContext, buildSuppressionSummary, type Context as ApiContext, type RecallOpts } from '../api.js';
-import { autoDetectContext } from '../context-auto.js';
-import { resolveProjectIdentity, type ProjectIdentity } from '../project-identity.js';
-import { isSharedStore } from '../config.js';
+import { dropHeldCopies, duplicateKey, storedTextKeys } from '../util/same-text.js';
+import { retrieve as apiRetrieve, drillDown as apiDrillDown, assemble as apiAssemble, getContext as apiGetContext, type Context as ApiContext, type RecallOpts, type RecallSuppressionSummary } from '../api/index.js';
+import { autoDetectContext } from '../api/context-auto.js';
+import { resolveProjectIdentity, type ProjectIdentity } from '../core/project-identity.js';
+import { isSharedStore } from '../core/config.js';
 import type { AppendAuditOpts } from '../store/audit.js';
-import { detectAnchoring, hashQueryText, biasHintEnabled, snapshotRing, type RingBuffer } from '../recall-history.js';
-import { detectAvailabilityBias } from '../availability.js';
+import { detectAnchoring, hashQueryText, biasHintEnabled, snapshotRing, type RingBuffer } from '../api/recall-history.js';
+import { detectAvailabilityBias } from '../api/availability.js';
 import { estimateTokens } from '../util/token-text.js';
-import { assembleCost, assembleText, drillCost, drillText } from '../context-render.js';
+import { assembleCost, assembleText, drillCost, drillText } from '../api/context-render.js';
 import { mcpActor, type ToolCall } from './protocol.js';
 import { lastRecalledIds, resolveClientKey } from './session-state.js';
 import {
@@ -29,7 +29,7 @@ import {
   type RenderedRecall,
   type RenderSlot,
 } from './format.js';
-import { isJsonString } from '../json.js';
+import { isJsonString } from '../util/json.js';
 import { parseContextRequest, parseRecallRequest, toolParams } from '../api/recall-request.js';
 import { noteRecall, sessionRing, shownRecallRows } from '../api/recall-record.js';
 
@@ -83,7 +83,7 @@ function biasHintSections(anchoring: RenderedRecall['anchoring'], availability: 
   return text;
 }
 
-function cutoffSection(s: ReturnType<typeof buildSuppressionSummary>, shown: number): string {
+function cutoffSection(s: RecallSuppressionSummary, shown: number): string {
   const cutoffClauses: string[] = [];
   if (s.droppedByBudget > 0) cutoffClauses.push(`${s.droppedByBudget} dropped to fit limit`);
   if (s.droppedPreRank > 0) cutoffClauses.push(`${s.droppedPreRank} filtered pre-rank`);
@@ -136,14 +136,14 @@ function recallPresenter(budget: number, options: RecallPresenterOptions): NonNu
       const tail = showTail
         ? dropHeldCopies(tailRows.filter((r) => !shownIds.has(r.id) && !shownKeys.has(duplicateKey(r.content))), (r) => r)
         : [];
-      const s = buildSuppressionSummary({
+      const s: RecallSuppressionSummary = {
         totalCandidates: pool.length + droppedByScope,
         droppedPreRank: droppedByScope + cut.length - list.length, // the bucket CLI and API recall put hidden copies in
         droppedByBudget: Math.max(0, pool.length - cut.length), // an upper bound: rows that never matched count too
         summarySubstitutionsAdded: tail.filter((r) => r.isSummary).length,
         freshTailAdded: tail.filter((r) => r.isFreshTail && !r.isSummary).length,
         suppressedByInterference: anchoring?.reason === 'memory_dominance' ? 1 : 0,
-      });
+      };
       // Anchoring is the stronger pull, so it prints first; the Cutoff block sits above the list, where the agent reads it.
       let text = biasHintSections(anchoring, availability);
       if (showPlan) text += planPiece;

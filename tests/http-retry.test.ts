@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as http from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { fetchWithRetry, isRetryableStatus, llmTimeoutMs, parseRetryAfterMs } from '../src/http-retry.js';
+import { fetchWithRetry, isRetryableStatus, llmTimeoutMs, parseRetryAfterMs } from '../src/util/http-retry.js';
 import { classifyTransportFailure } from '../src/cli/client.js';
 
 interface Reply {
@@ -153,6 +153,68 @@ describe('fetchWithRetry against a local server', () => {
     await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
     // The caller gave up, so no second attempt is queued.
     expect(sleeps).toEqual([]);
+  });
+});
+
+describe('the wait between attempts under a caller signal', () => {
+  const neverWakes = (): Promise<void> => new Promise(() => undefined);
+  /** `fetch`, counting the attempts that were started. */
+  function countedFetch() {
+    let calls = 0;
+    const fetchFn: typeof fetch = (input, init) => { calls++; return fetch(input, init); };
+    return { fetchFn, calls: () => calls };
+  }
+
+  it('ends when the signal aborts during the wait a 503 asked for, with the abort reason and no further attempt', async () => {
+    const { url, hits } = await startServer([{ status: 503, headers: { 'retry-after': '2' } }, { status: 200 }]);
+    const controller = new AbortController();
+    const { fetchFn, calls } = countedFetch();
+    const reason = new Error('caller gave up');
+    const pending = fetchWithRetry(url, { signal: controller.signal }, { timeoutMs: 60_000, fetchFn });
+    setTimeout(() => controller.abort(reason), 100);
+    await expect(pending).rejects.toBe(reason);
+    // A wait that sat out its two seconds would have started a second attempt before the abort ended the call.
+    expect([calls(), hits()]).toEqual([1, 1]);
+  });
+
+  it('ends an injected sleep the same way after a dropped connection', async () => {
+    const { url, hits } = await startServer(['reset', { status: 200 }]);
+    const controller = new AbortController();
+    const { fetchFn, calls } = countedFetch();
+    const sleeps: number[] = [];
+    const sleep = (ms: number): Promise<void> => { sleeps.push(ms); return neverWakes(); };
+    const pending = fetchWithRetry(url, { signal: controller.signal }, { timeoutMs: 60_000, fetchFn, sleep, random: () => 0 });
+    setTimeout(() => controller.abort(new Error('caller gave up')), 100);
+    await expect(pending).rejects.toThrow('caller gave up');
+    expect(sleeps).toEqual([125]);
+    expect([calls(), hits()]).toEqual([1, 1]);
+  });
+
+  it('starts no wait when the signal aborted while the reply was read', async () => {
+    const { url } = await startServer([{ status: 503 }, { status: 200 }]);
+    const controller = new AbortController();
+    const sleeps: number[] = [];
+    const fetchFn: typeof fetch = async (input, init) => {
+      const res = await fetch(input, init);
+      controller.abort(new Error('caller gave up'));
+      return res;
+    };
+    const pending = fetchWithRetry(url, { signal: controller.signal }, { timeoutMs: 60_000, fetchFn, sleep: async (ms) => { sleeps.push(ms); } });
+    await expect(pending).rejects.toThrow('caller gave up');
+    expect(sleeps).toEqual([]);
+  });
+
+  it('waits in full and retries when the signal never aborts, and when there is none', async () => {
+    for (const signal of [new AbortController().signal, undefined]) {
+      const { url, hits } = await startServer([{ status: 503 }, { status: 200 }]);
+      const started = performance.now();
+      const res = await fetchWithRetry(url, { signal }, { timeoutMs: 60_000, baseDelayMs: 200, random: () => 1 });
+      expect(res.status).toBe(200);
+      expect(hits()).toBe(2);
+      // A timer may fire a millisecond or two early.
+      expect(performance.now() - started).toBeGreaterThan(180);
+      await new Promise<void>((resolve) => server?.close(() => resolve()));
+    }
   });
 });
 

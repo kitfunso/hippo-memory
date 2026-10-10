@@ -1,8 +1,8 @@
-import { PACKAGE_VERSION, compareSemver } from '../version.js';
-import { errorMessage, log } from '../log.js';
+import { PACKAGE_VERSION, compareSemver } from '../util/version.js';
+import { errorMessage, log } from '../util/log.js';
 import { importLegacyEmbeddingIndex } from './vector-store.js';
 import type { DatabaseSyncLike } from './sqlite.js';
-import { execWithBusyRetry } from './busy.js';
+import { execWithBusyRetry, withWriteScope } from './busy.js';
 import { tableExists } from './tables.js';
 import { ensureMetaTable, getMeta, getSchemaVersion, setMeta, setSchemaVersion } from './meta.js';
 import { MEMORIES_FTS_DDL, REQUIRED_SCHEMA_OBJECTS, ensureContinuityIndexes, ensureContinuityTables } from './continuity.js';
@@ -125,25 +125,17 @@ function applyMigration(
   hippoRoot: string | undefined,
   busyWaitMs: number | undefined,
 ): number {
-  execWithBusyRetry(db, 'BEGIN IMMEDIATE', busyWaitMs);
-  try {
+  return withWriteScope(db, 'apply_migration', () => {
     // A newer binary may have migrated and raised the minimum while we waited for the lock.
     assertBinaryCompatible(db);
     // Re-read under the write lock: another process may have applied this
     // migration while we waited, and re-running one is not idempotent.
     const applied = getSchemaVersion(db);
-    if (applied >= migration.version) {
-      db.exec('COMMIT');
-      return applied;
-    }
+    if (applied >= migration.version) return applied;
     migration.up(db, { hippoRoot });
     setSchemaVersion(db, migration.version);
-    db.exec('COMMIT');
     return migration.version;
-  } catch (error) {
-    try { db.exec('ROLLBACK'); } catch { /* already rolled back; keep the original error */ }
-    throw error;
-  }
+  }, { busyWaitMs });
 }
 
 // The fast path requires user_version as well, and a store stamped only in meta would otherwise never reach it.
@@ -168,6 +160,7 @@ function ensureMetaDefaults(db: DatabaseSyncLike): void {
   // SELECT and zero writes instead of 7 no-op INSERT OR IGNOREs, each of
   // which takes a RESERVED lock even when nothing changes.
   const keys = META_DEFAULTS.map(([key]) => key);
+  // SAFETY: the statement selects only the `key` column of `meta`, which is TEXT NOT NULL, so each row is { key: string }.
   const present = new Set(
     (db
       .prepare(`SELECT key FROM meta WHERE key IN (${keys.map(() => '?').join(',')})`)

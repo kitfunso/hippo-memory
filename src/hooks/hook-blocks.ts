@@ -1,13 +1,24 @@
 // The hippo block each agent's instruction file carries, and how init recognises one it wrote earlier.
 import { createHash } from 'node:crypto';
-import { escapeRegex } from '../escape.js';
+import { escapeRegex } from '../util/escape.js';
 
 export const HOOK_MARKERS = {
   start: '<!-- hippo:start -->',
   end: '<!-- hippo:end -->',
 };
 
-export const HOOKS: Record<string, { file: string; content: string; description: string }> = {
+export interface HookSpec {
+  file: string;
+  content: string;
+  description: string;
+}
+
+// Keyed by agent name; callers look an agent up by a string they were given.
+export interface HookTable {
+  [agent: string]: HookSpec;
+}
+
+export const HOOKS: HookTable = {
   'claude-code': {
     file: 'CLAUDE.md',
     description: 'Claude Code',

@@ -1,13 +1,14 @@
 // `hippo last-sleep`: the previous session's sleep log for the debug log, and one problems line for the user.
 import * as fs from 'fs';
-import { isStringValue } from '../capture-contract.js';
-import { REPLAY_AFTER_MS } from '../compaction-record.js';
-import { SPOOL_PROBLEM, spoolCounts } from '../compaction-spool.js';
+import { isStringValue } from '../core/capture-contract.js';
+import { REPLAY_AFTER_MS } from '../capture/compaction-record.js';
+import { SPOOL_PROBLEM, spoolCounts } from '../capture/compaction-spool.js';
 import { defaultSleepLogPath } from '../hooks/shared.js';
-import { errorMessage, log } from '../log.js';
-import { truncateCodePointSafe } from '../transcript-tail.js';
+import { errorMessage, log } from '../util/log.js';
+import { truncateCodePointSafe } from '../util/transcript-tail.js';
 import { printError } from './output.js';
-import { type CliFlags, hookStoreRoot } from './shared.js';
+import { type CliFlags, type CommandContext } from './flag-values.js';
+import { hookStoreRoot } from './hook-runtime.js';
 
 const SLEEP_FAILED = '[hippo] sleep failed: ';
 const FAILURE_CHARS = 120;
@@ -68,4 +69,8 @@ export function cmdLastSleep(
   if (!flags['keep']) {
     try { fs.unlinkSync(logPath); } catch (err) { log.debug(`last-sleep log not removed, it shows again next session: ${errorMessage(err)}`); }
   }
+}
+
+export function handleLastSleep({ hippoRoot, flags }: CommandContext): void {
+  return cmdLastSleep(hippoRoot, flags);
 }

@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execSync } from 'node:child_process';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db.js';
+import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../src/db/index.js';
 import { queryAuditEvents } from '../src/store/audit.js';
 import { archiveRawMemory } from '../src/store/raw-archive.js';
 
@@ -24,14 +24,14 @@ describe('audit log captures every mutation', () => {
       throw new Error(`dist/cli.js not found at ${cli} — run \`npm run build\` first`);
     }
     // HIPPO_HOME is the global root in --global mode (see getGlobalRoot in
-    // src/shared.ts). Same pattern as tests/recall-why-envelope.test.ts.
+    // src/sharing/global-store.ts). Same pattern as tests/recall-why-envelope.test.ts.
     const home = mkdtempSync(join(tmpdir(), 'hippo-audit-cli-'));
     const env = { ...process.env, HIPPO_HOME: home };
     try {
       execSync(`node "${cli}" init`, { env, cwd: home });
       execSync(`node "${cli}" init --global`, { env, cwd: home });
       execSync(`node "${cli}" remember "audit-canary-99 distinguishing token" --global`, { env, cwd: home });
-      execSync(`node "${cli}" recall "audit-canary-99" --global`, { env, cwd: home });
+      execSync(`node "${cli}" recall "audit-canary-99"`, { env, cwd: home });
 
       const db = openHippoDb(home);
       try {

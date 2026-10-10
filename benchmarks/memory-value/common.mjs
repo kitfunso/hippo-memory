@@ -18,9 +18,8 @@ import { fileURLToPath } from 'node:url';
 // Reuse the repo's existing seeded PRNG rather than hand-rolling a second
 // copy (coding-standards: prefer established code over a fresh
 // implementation when one already exists in-repo).
-export { mulberry32 } from '../../scripts/lifecycle-stress/inject.mjs';
-import { mulberry32 } from '../../scripts/lifecycle-stress/inject.mjs';
-import { _resetAblationCacheForTests } from '../../dist/ablation.js';
+import { mulberry32 } from '../../scripts/lib/prng.mjs';
+import { _resetAblationCacheForTests } from '../../dist/core/ablation.js';
 
 export const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const REPO_ROOT = path.resolve(HERE, '..', '..');
@@ -112,7 +111,7 @@ export function formatLmeDate(date) {
 // ---------------------------------------------------------------------------
 // HIPPO_FAKE_NOW — the one place that sets it, so the ablation-cache-reset
 // contract can never be forgotten at a call site. ablation.ts's readFlags()
-// caches on FIRST read (see src/ablation.ts JSDoc); every write here MUST be
+// caches on FIRST read (see src/core/ablation.ts JSDoc); every write here MUST be
 // paired with _resetAblationCacheForTests() or a stale cached value leaks
 // into every subsequent evalNow() call in this process.
 // ---------------------------------------------------------------------------

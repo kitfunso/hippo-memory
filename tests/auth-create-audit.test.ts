@@ -8,9 +8,9 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { authCreate, authRevoke, adminActor, type HippoDbContext } from '../src/api.js';
+import { authCreate, authRevoke, adminActor, type HippoDbContext } from '../src/api/index.js';
 import { queryAuditEvents } from '../src/store/audit.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 
 function newCtx(tenantId = 'default') {
   const tmpDir = mkdtempSync(join(tmpdir(), 'hippo-auth-create-audit-'));
@@ -27,7 +27,7 @@ function newCtx(tenantId = 'default') {
 }
 
 // auth_create / auth_revoke audit metadata is always the flat {label, role} /
-// {} scalar object built at the appendAuditEvent call sites in src/api.ts for
+// {} scalar object built at the appendAuditEvent call sites in src/api/index.ts for
 // these two ops -- never nested objects or arrays.
 type AuditMetadataValue = string | number | boolean | null;
 

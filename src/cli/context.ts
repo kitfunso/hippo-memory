@@ -1,19 +1,18 @@
 // The `hippo context` verb, which the per-prompt hook also runs; main() loads it lazily from the command table.
 
-import * as path from 'path';
-import { createDeliveryRecorder, type DeliveryRecorder } from '../delivery-recorder.js';
-import { loadConfig } from '../config.js';
-import { isSubagentPayload, recordTokenUse } from '../token-ledger.js';
-import { blockHash, estimateTokens } from '../util/token-text.js';
-import { isGlobalStoreRoot } from '../project-identity.js';
-import { autoDetectContext } from '../context-auto.js';
-import { detectScope } from '../scope.js';
-import { ledgerRoot, withLedgerDb } from '../ledger-db.js';
-import { readHookStdin } from '../stdin.js';
-import * as api from '../api.js';
-import { resolveTenantId } from '../tenant.js';
-import { renderAmbientSummary } from '../ambient.js';
-import { contextBlockLines, contextCost, crossProjectLines, settleTokens } from '../context-render.js';
+import type { DeliveryRecorder } from '../store/delivery-recorder.js';
+import { isSubagentPayload } from '../store/token-ledger.js';
+import { estimateTokens } from '../util/token-text.js';
+import { autoDetectContext } from '../api/context-auto.js';
+import { detectScope } from '../sharing/scope.js';
+import { bookLedgerTurn } from '../api/ledger-db.js';
+import { readHookStdin } from './stdin.js';
+import { isJsonObject, isJsonString, type JsonValue } from '../util/json.js';
+import * as api from '../api/index.js';
+import { resolveTenantId } from '../store/tenant.js';
+import { cliApiContext } from './api-context.js';
+import { renderAmbientSummary } from '../core/ambient.js';
+import { contextBlockLines, contextCost, crossProjectLines, settleTokens } from '../api/context-render.js';
 import {
   additionalContextOutput,
   type ContextView,
@@ -21,28 +20,11 @@ import {
   hasContextData,
   sessionStartEnvelope,
   toRenderItems,
-} from '../prompt-hook.js';
-import { printError } from './output.js';
-import {
-  type CliFlags,
-  parseLimitFlag,
-  parseCountFlag,
-  parseBudgetFlag,
-  requireInit,
-  type CommandContext,
-  printActiveTaskSnapshot,
-  printSessionEvents,
-  printHandoff,
-  hostSessionId,
-  captureConsole,
-  hookStoreRoot,
-  hookRuntime,
-  payloadCwdRoot,
-  runHookWithStores,
-  inPilotHoldout,
-  flagIsTrue,
-} from './shared.js';
-import { errorMessage } from '../log.js';
+} from '../api/prompt-hook.js';
+import { type CliFlags, parseLimitFlag, parseCountFlag, parseBudgetFlag, type CommandContext, flagIsTrue } from './flag-values.js';
+import { requireInit } from './shared.js';
+import { printActiveTaskSnapshot, printSessionEvents, printHandoff, captureConsole } from './print.js';
+import { hostSessionId, hookStoreRoot, hookRuntime, payloadCwdRoot, runHookWithStores, inPilotHoldout, startDeliveryRecorder } from './hook-runtime.js';
 
 export async function cmdContext(
   hippoRoot: string,
@@ -50,37 +32,10 @@ export async function cmdContext(
   flags: CliFlags,
   stdinText?: string
 ): Promise<void> {
-  const rec = startDeliveryRecorder(hippoRoot, flags, stdinText);
+  const rec = flagIsTrue(flags, 'pinned-only') ? startDeliveryRecorder(hippoRoot, stdinText, hookRuntime(flags)) : null;
   // No try/finally: a render throw keeps its own exit code and writes no event.
   await renderContext(hippoRoot, args, flags, stdinText, rec);
   flushDeliveryRecorder(rec);
-}
-
-/** A delivery recorder for a pinned-only call when its ledger store enables one, else null; never throws. */
-function startDeliveryRecorder(
-  hippoRoot: string,
-  flags: CliFlags,
-  stdinText: string | undefined,
-): DeliveryRecorder | null {
-  if (flags['pinned-only'] !== true) return null;
-  try {
-    // The same store withLedgerDb writes the token ledger to, so its config governs both.
-    const root = ledgerRoot(hippoRoot);
-    if (root === null || !loadConfig(root).deliveryLedger.enabled) return null;
-    return createDeliveryRecorder({
-      root,
-      storeHash: blockHash(path.resolve(root)),
-      writeStore: isGlobalStoreRoot(root) ? 'global' : 'local',
-      tenantId: resolveTenantId({}),
-      stdinText,
-      envSessionId: hostSessionId(),
-      runtime: hookRuntime(flags) === 'copilot' ? 'copilot' : undefined,
-    });
-  } catch (error) {
-    // The hook's one-line stderr contract pins this exact text, so it bypasses the leveled logger.
-    printError(`[hippo] delivery ledger skipped:${errorMessage(error)}`);
-    return null;
-  }
 }
 
 interface HookPayload {
@@ -94,10 +49,11 @@ function readHookPayload(stdinText: string | undefined): HookPayload {
   let prompt: string | undefined;
   if (stdinText && stdinText.trim() !== '') {
     try {
-      // SAFETY: both fields are type-checked below before use; `?? {}` covers a JSON null payload.
-      const { session_id: sid, prompt: raw } = (JSON.parse(stdinText.trim()) ?? {}) as { session_id?: unknown; prompt?: unknown };
-      if (typeof sid === 'string' && sid.trim() !== '') sessionId = sid;
-      if (typeof raw === 'string') prompt = raw;
+      const payload: JsonValue = JSON.parse(stdinText.trim());
+      const sid = isJsonObject(payload) ? payload['session_id'] : undefined;
+      const raw = isJsonObject(payload) ? payload['prompt'] : undefined;
+      if (isJsonString(sid) && sid.trim() !== '') sessionId = sid;
+      if (isJsonString(raw)) prompt = raw;
     } catch {
       // Malformed/non-JSON stdin: fall through to the env fallback below.
     }
@@ -138,7 +94,7 @@ async function renderContext(
   // --auto shells out to git, so it stays CLI-side; api.getContext stays host-agnostic and falls back to '*'.
   const query = contextQuery(args, flags);
 
-  const ctx: api.Context = { hippoRoot, tenantId: resolvedTenant, actor: api.adminActor('cli') };
+  const ctx = cliApiContext(hippoRoot, resolvedTenant);
   const format = String(flags['format'] ?? 'markdown');
   const framing = String(flags['framing'] ?? 'observe');
   const opts = buildContextOpts(flags, { query, budget, pinnedOnly, format, framing, session, rec });
@@ -245,12 +201,12 @@ function renderContextJson(view: ContextView, query: string): void {
   });
   console.log(jsonText);
   rec?.delivered({ state: 'sent', emittedText: `${jsonText}\n` });
-  withLedgerDb(view.hippoRoot, (db) => {
-    recordTokenUse(db, {
+  bookLedgerTurn(view.hippoRoot, {
+    uses: [{
       tenantId: view.tenantId, sessionId: view.ledgerSessionId, surface: view.pinnedOnly ? 'hook' : 'context',
       event: 'inject', items: output.length, tokens: estimateTokens(jsonText),
-    });
-    flushDeliveryRecorder(rec, db);
+    }],
+    delivery: (write) => flushDeliveryRecorder(rec, write),
   });
 }
 
@@ -278,12 +234,12 @@ function renderContextMarkdown(view: ContextView): void {
   }));
   if (text.length > 0) console.log(text);
   rec?.delivered(text.length > 0 ? { state: 'sent', emittedText: `${text}\n` } : { state: 'empty' });
-  withLedgerDb(view.hippoRoot, (db) => {
-    recordTokenUse(db, {
+  bookLedgerTurn(view.hippoRoot, {
+    uses: [{
       tenantId: view.tenantId, sessionId: view.ledgerSessionId, surface: view.pinnedOnly ? 'hook' : 'context',
       event: 'inject', items: renderItems.length, tokens: estimateTokens(text),
-    });
-    flushDeliveryRecorder(rec, db);
+    }],
+    delivery: (write) => flushDeliveryRecorder(rec, write),
   });
 }
 

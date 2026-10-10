@@ -3,14 +3,14 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { remember, type Actor, type HippoDbContext } from '../src/api.js';
-import { BadRequestError } from '../src/api-errors.js';
+import { remember, type Actor, type HippoDbContext } from '../src/api/index.js';
+import { BadRequestError } from '../src/core/api-errors.js';
 import { createApiKey } from '../src/store/auth.js';
 import { handleRemember } from '../src/cli/remember.js';
-import { closeHippoDb, openHippoDb } from '../src/db.js';
-import { mapApiError } from '../src/http-util.js';
+import { closeHippoDb, openHippoDb } from '../src/db/index.js';
+import { mapApiError } from '../src/util/http-util.js';
 import { importVault } from '../src/importers/vault.js';
-import type { JsonValue } from '../src/json.js';
+import type { JsonValue } from '../src/util/json.js';
 import { serve, type ServerHandle } from '../src/server.js';
 import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
 import { makeRoot } from './_helpers/make-root.js';
@@ -117,9 +117,9 @@ describe('client scopes', () => {
   it('CLI remember --scope refuses a personal scope', async () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     try {
-      await expect(handleRemember({ hippoRoot: root, args: ['cli personal attempt'], flags: { force: true, scope: 'personal:private:b' } })).rejects.toThrow(BadRequestError);
+      await expect(handleRemember({ hippoRoot: root, tenantId: 'default', args: ['cli personal attempt'], flags: { force: true, scope: 'personal:private:b' } })).rejects.toThrow(BadRequestError);
       expect(loadAllEntries(root)).toHaveLength(0);
-      await handleRemember({ hippoRoot: root, args: ['cli team note'], flags: { force: true, scope: 'team' } });
+      await handleRemember({ hippoRoot: root, tenantId: 'default', args: ['cli team note'], flags: { force: true, scope: 'team' } });
     } finally {
       log.mockRestore();
     }

@@ -35,23 +35,26 @@ import {
 } from '../hooks/copilot.js';
 import { isInitialized } from '../store/open.js';
 import { currentMachine, importUserMemories } from '../agent-memories/sync.js';
-import { getGlobalRoot } from '../shared.js';
-import { listRegisteredWorkspaces, runDailyMaintenance } from '../scheduler.js';
-import { replayCompactionsAt } from '../compaction-record.js';
-import { errorMessage, log } from '../log.js';
-import { envDailyStepTimeoutMs } from '../env.js';
+import { getGlobalRoot } from '../sharing/global-store.js';
+import { listRegisteredWorkspaces, runDailyMaintenance } from './scheduler.js';
+import { replayCompactionsAt } from '../capture/compaction-record.js';
+import { errorFields, errorMessage, log } from '../util/log.js';
+import { envDailyStepTimeoutMs } from '../util/env.js';
 import { writeFileAtomic } from '../util/atomic-write.js';
 import { printError } from './output.js';
-import { type CliFlags, printAgentImport, installCodexMemoryHooks, setupDailySchedule, warnClaudeSettingsUnusable, boolFlag } from './shared.js';
+import { boolFlag, type CommandContext } from './flag-values.js';
+import { printAgentImport } from './print.js';
+import { installCodexMemoryHooks, setupDailySchedule, warnClaudeSettingsUnusable } from './install-steps.js';
 import { repairQualityOnceAt } from './quality-repair-once.js';
 import { HOOK_MARKERS, HOOKS, hippoBlock, withoutHookBlock } from '../hooks/hook-blocks.js';
-import { escapeRegex } from '../escape.js';
+import { escapeRegex } from '../util/escape.js';
+import { CliExit } from './exit.js';
 
 // ---------------------------------------------------------------------------
 // Hook install/uninstall
 // ---------------------------------------------------------------------------
 
-export function cmdHook(args: string[]): void {
+export function handleHook({ args }: CommandContext): void {
   const subcommand = args[0];
   const target = args[1];
   if (subcommand === 'list') return hookList();
@@ -59,7 +62,7 @@ export function cmdHook(args: string[]): void {
   if (subcommand === 'uninstall') return hookUninstall(target);
 
   printError('Usage: hippo hook <install|uninstall|list> [target]');
-  process.exit(1);
+  throw new CliExit(1);
 }
 
 type HookSpec = (typeof HOOKS)[string];
@@ -85,7 +88,7 @@ function hookInstall(target: string | undefined): void {
   if (!target || !HOOKS[target]) {
     printError(`Unknown hook target: ${target ?? '(none)'}`);
     printError(`   Available: ${[...Object.keys(HOOKS), 'copilot'].join(', ')}`);
-    process.exit(1);
+    throw new CliExit(1);
   }
   const hook = HOOKS[target];
   patchAgentFile(hook, target);
@@ -289,7 +292,7 @@ function hookUninstall(target: string | undefined): void {
   if (target === 'copilot') return printCopilotUninstall(uninstallCopilot());
   if (!target || !HOOKS[target]) {
     printError(`Unknown hook target: ${target ?? '(none)'}`);
-    process.exit(1);
+    throw new CliExit(1);
   }
   unpatchAgentFile(HOOKS[target], target);
 
@@ -388,7 +391,7 @@ function setupDetectedTools(tools: ReturnType<typeof detectInstalledTools>, forc
 // `hippo setup` -- one-shot configuration for every AI coding tool on the box.
 // Detection and install logic live in ./hooks.ts.
 
-export function cmdSetup(flags: CliFlags): void {
+export function handleSetup({ flags }: CommandContext): void {
   const dryRun = boolFlag(flags, 'dry-run');
   const forceAll = boolFlag(flags, 'all');
   const tools = detectInstalledTools();
@@ -428,14 +431,16 @@ function setupCopilot(dryRun: boolean): void {
 
 function setupJsonTool(tool: ToolDetection, dryRun: boolean): void {
   if (tool.name === 'copilot') return setupCopilot(dryRun);
+  // SAFETY: detectInstalledTools gives kind 'json-hook' only to claude-code and copilot (hooks/shared.ts), and copilot returned above.
+  const target = tool.name as JsonHookTarget;
   if (dryRun) {
     // Resolve the real settings path so the filename is right for each tool
     // (claude-code -> settings.json, opencode -> opencode.json).
-    const { settings } = resolveJsonHookPaths(tool.name as JsonHookTarget);
+    const { settings } = resolveJsonHookPaths(target);
     console.log(`[dry-run] would install hooks in ${settings}`);
     return;
   }
-  const result = installJsonHooks(tool.name as JsonHookTarget);
+  const result = installJsonHooks(target);
   if (warnClaudeSettingsUnusable(result, `  ${tool.name.padEnd(14)} `)) return;
   const bits: string[] = [];
   if (result.installedSessionEnd) bits.push('SessionEnd (session-end)');
@@ -505,7 +510,7 @@ function dailyStepFailure<E>(err: E, timeoutMs: number): string {
   return errorMessage(err);
 }
 
-export function cmdDailyRunner(): void {
+export function handleDailyRunner(_ctx: CommandContext): void {
   const globalRoot = getGlobalRoot();
   // No workspace sleep ever opens the global store, yet hooks in folders without a store compact into it.
   if (isInitialized(globalRoot)) {
@@ -538,7 +543,7 @@ export function cmdDailyRunner(): void {
     } catch (err) {
       failed++;
       const action = args.join(' ');
-      log.error(`daily-runner failed in ${cwd} during \`${action}\`: ${dailyStepFailure(err, timeout)}`, { workspace: cwd });
+      log.error(`daily-runner failed in ${cwd} during \`${action}\`: ${dailyStepFailure(err, timeout)}`, { workspace: cwd, ...errorFields(err) });
     }
   });
 

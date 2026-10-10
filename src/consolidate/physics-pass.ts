@@ -1,8 +1,10 @@
-import { openHippoDb, closeHippoDb } from '../db.js';
-import { loadPhysicsState, savePhysicsState, refreshParticleProperties } from '../db/physics-state.js';
-import { simulate, type ForceContext } from '../physics.js';
+import { refreshParticleProperties } from '../db/physics-state.js';
+import { loadStoredParticles, saveStoredParticles } from '../store/vector-index.js';
+import { simulate, type ForceContext } from '../core/physics.js';
 import type { SleepRun } from './run.js';
-import { errorMessage } from '../log.js';
+import { errorMessage } from '../util/log.js';
+
+const STATS_DECIMALS = 4;
 
 // -------------------------------------------------------------------------
 // 2. Physics simulation pass
@@ -14,23 +16,15 @@ export function physicsPass(run: SleepRun): void {
     const physicsEnabled = config.physics.enabled === true
       || (config.physics.enabled === 'auto');
 
-    if (physicsEnabled) {
-      const db = openHippoDb(run.hippoRoot);
-      try {
-        simulateStoredParticles(run, db);
-      } finally {
-        closeHippoDb(db);
-      }
-    }
+    if (physicsEnabled) simulateStoredParticles(run);
   } catch (error) {
     result.details.push(`  ⚠️ physics simulation skipped: ${errorMessage(error)}`);
   }
 }
 
-function simulateStoredParticles(run: SleepRun, db: ReturnType<typeof openHippoDb>): void {
+function simulateStoredParticles(run: SleepRun): void {
   const { result, survivors } = run;
-  const physicsMap = loadPhysicsState(db);
-  const particles = Array.from(physicsMap.values());
+  const particles = loadStoredParticles(run.hippoRoot);
   if (particles.length === 0) return;
 
   // Build entry lookup for property refresh
@@ -38,13 +32,13 @@ function simulateStoredParticles(run: SleepRun, db: ReturnType<typeof openHippoD
   refreshParticleProperties(particles, entryMap, run.now);
 
   const stats = simulate(particles, survivorForces(run));
-  savePhysicsState(db, particles);
+  saveStoredParticles(run.hippoRoot, particles);
 
   result.physicsSimulated = stats.particleCount;
   result.details.push(
     `  ⚛️  physics: ${stats.particleCount} particles, ` +
-    `avg vel ${stats.avgVelocityMagnitude.toFixed(4)}, ` +
-    `energy ${stats.energy.total.toFixed(4)}`
+    `avg vel ${stats.avgVelocityMagnitude.toFixed(STATS_DECIMALS)}, ` +
+    `energy ${stats.energy.total.toFixed(STATS_DECIMALS)}`
   );
 }
 

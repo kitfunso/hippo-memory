@@ -5,11 +5,11 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
-import { adminActor, type Context } from '../src/api.js';
-import { _resetSharedStoreCacheForTests } from '../src/config.js';
-import type { JsonValue } from '../src/json.js';
-import { clearProjectIdentityCache } from '../src/project-identity.js';
-import { promptHookContext } from '../src/prompt-hook.js';
+import { adminActor, type Context } from '../src/api/index.js';
+import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
+import type { JsonValue } from '../src/util/json.js';
+import { clearProjectIdentityCache } from '../src/core/project-identity.js';
+import { promptHookContext } from '../src/api/prompt-hook.js';
 import { serve, type ServerHandle } from '../src/server.js';
 
 const ROW = 'the zorblaxian quintessor needs a restart every monday';

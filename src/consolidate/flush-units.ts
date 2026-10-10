@@ -1,7 +1,7 @@
 // Splits sleep's queued writes, deletes and dormant moves into components that must each commit whole, so the flush can commit in short transactions.
-import type { MemoryEntry } from '../memory.js';
+import type { MemoryEntry } from '../core/memory.js';
 import type { DormantMove } from '../store/dormant.js';
-import type { FlushComponent } from '../store/delete-and-batch.js';
+import type { FlushComponent, LoadedRows } from '../store/delete-and-batch.js';
 
 /** Components that share no id, ordered by each one's first op across writes, then deletes, then dormant moves. */
 export function groupFlush(
@@ -48,12 +48,13 @@ function unionFind(units: readonly (readonly string[])[]): (id: string) => strin
 
 /** [child, parent] for each queued op on a child whose DAG parent the run removes: a child's change marks the parent
  *  dirty, and one transaction always applied that mark after the parent was gone, so it audited nothing. */
-// SHORTCUT: a removed parent and all its changed children commit as one component, so one hold can pass holdMs by a family's size; split by child if a family grows large.
+// SHORTCUT: a removed parent and all its changed children commit as one component, so
+// one hold can pass holdMs by a family's size; split by child if a family grows large.
 export function familyUnits(
   writes: readonly MemoryEntry[],
   deletes: readonly string[],
   dormant: readonly DormantMove[],
-  snapshot: ReadonlyMap<string, MemoryEntry>,
+  snapshot: LoadedRows,
 ): string[][] {
   const removing = new Set([...deletes, ...dormant.map((m) => m.entry.id)]);
   const units: string[][] = [];

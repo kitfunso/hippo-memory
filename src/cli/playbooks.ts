@@ -1,14 +1,15 @@
 // First-class object verbs for processes, policies and skills.
 
-import { extractPathTags } from '../path-context.js';
-import * as processesModule from '../processes.js';
-import * as policiesModule from '../policies.js';
-import * as skillsModule from '../skills.js';
-import { resolveTenantId } from '../tenant.js';
+import { extractPathTags } from '../search/path-context.js';
+import * as processesModule from '../objects/processes.js';
+import * as policiesModule from '../objects/policies.js';
+import * as skillsModule from '../objects/skills.js';
 import { printError } from './output.js';
-import { nonEmptyStringFlag, requireInit, stringFlag, type CliFlags } from './shared.js';
+import { isStringFlag, nonEmptyStringFlag, stringFlag, type CliFlags, type CommandContext } from './flag-values.js';
+import { requireInit } from './shared.js';
 import { closeObject, foundOrExit, idArgOrExit, listObjects, printLifecycleTail, type ObjectNames } from './object-verbs.js';
-import { errorMessage } from '../log.js';
+import { errorMessage } from '../util/log.js';
+import { CliExit } from './exit.js';
 
 const PROCESS: ObjectNames = { cmd: 'process', noun: 'Process', idLabel: 'process' };
 const POLICY: ObjectNames = { cmd: 'policy', noun: 'Policy', idLabel: 'policy' };
@@ -18,10 +19,10 @@ const SKILL: ObjectNames = { cmd: 'skill', noun: 'Skill', idLabel: 'skill' };
 // --step yields a string; normalize both to string[]. A value-less --step errors.
 function collectProcessSteps(stepRaw: string | boolean | string[] | undefined): string[] {
   if (Array.isArray(stepRaw)) return stepRaw;
-  if (typeof stepRaw === 'string') return [stepRaw];
+  if (isStringFlag(stepRaw)) return [stepRaw];
   if (stepRaw === true) {
     printError('--step requires a value, e.g. hippo process new "<name>" --step "do X".');
-    process.exit(1);
+    throw new CliExit(1);
   }
   return [];
 }
@@ -61,7 +62,7 @@ function processSupersede(hippoRoot: string, tenantId: string, args: string[], f
   const steps = collectProcessSteps(flags['step']);
   if (steps.length === 0) {
     printError('hippo process supersede requires at least one --step "<text>" for the new version.');
-    process.exit(1);
+    throw new CliExit(1);
   }
   // A supersession is a new version of the SAME process, so the new row reuses the predecessor's name (stable identity
   // across versions). loadProcessById gives an early not-found before the write; saveProcess's in-SAVEPOINT preflight
@@ -86,13 +87,8 @@ function processClose(hippoRoot: string, tenantId: string, args: string[]): void
   closeObject(args, PROCESS, (id) => processesModule.closeProcess(hippoRoot, tenantId, id));
 }
 
-export function cmdProcess(
-  hippoRoot: string,
-  args: string[],
-  flags: CliFlags
-): void {
+export function handleProcess({ hippoRoot, tenantId, args, flags }: CommandContext): void {
   requireInit(hippoRoot);
-  const tenantId = resolveTenantId({});
   const subcommand = args[0] ?? '';
   if (subcommand === 'list') return processList(hippoRoot, tenantId, flags);
   if (subcommand === 'get') return processGet(hippoRoot, tenantId, args);
@@ -112,7 +108,7 @@ function processCreate(hippoRoot: string, tenantId: string, processName: string,
     printError('       hippo process get <id>');
     printError('       hippo process supersede <id> --step "<text>" [--change "<summary>"]');
     printError('       hippo process close <id>');
-    process.exit(1);
+    throw new CliExit(1);
   }
   const steps = collectProcessSteps(flags['step']);
   const description = nonEmptyStringFlag(flags, 'description');
@@ -147,7 +143,7 @@ function policyAsOf(hippoRoot: string, tenantId: string, args: string[], flags: 
   const dateRaw = args[1];
   if (!dateRaw) {
     printError('Usage: hippo policy asof <iso-date> [--name "<policy>"]');
-    process.exit(1);
+    throw new CliExit(1);
   }
   const name = nonEmptyStringFlag(flags, 'name');
   let results;
@@ -155,7 +151,7 @@ function policyAsOf(hippoRoot: string, tenantId: string, args: string[], flags: 
     results = policiesModule.loadPoliciesAsOf(hippoRoot, tenantId, dateRaw, { name });
   } catch (e) {
     printError(errorMessage(e));
-    process.exit(1);
+    throw new CliExit(1);
   }
   if (results.length === 0) {
     console.log(`No active policies in force at ${dateRaw}${name ? ` for "${name}"` : ''}.`);
@@ -183,7 +179,7 @@ function policySupersede(hippoRoot: string, tenantId: string, args: string[], fl
   const textRaw = stringFlag(flags, 'text');
   if (!textRaw?.trim()) {
     printError('hippo policy supersede requires --text "<rule>" for the new version.');
-    process.exit(1);
+    throw new CliExit(1);
   }
   const existing = foundOrExit(policiesModule.loadPolicyById(hippoRoot, tenantId, id), POLICY.noun, id);
   try {
@@ -200,7 +196,7 @@ function policySupersede(hippoRoot: string, tenantId: string, args: string[], fl
     if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
   } catch (e) {
     printError(errorMessage(e));
-    process.exit(1);
+    throw new CliExit(1);
   }
 }
 
@@ -208,13 +204,8 @@ function policyClose(hippoRoot: string, tenantId: string, args: string[]): void 
   closeObject(args, POLICY, (id) => policiesModule.closePolicy(hippoRoot, tenantId, id));
 }
 
-export function cmdPolicy(
-  hippoRoot: string,
-  args: string[],
-  flags: CliFlags
-): void {
+export function handlePolicy({ hippoRoot, tenantId, args, flags }: CommandContext): void {
   requireInit(hippoRoot);
-  const tenantId = resolveTenantId({});
   const subcommand = args[0] ?? '';
   if (subcommand === 'list') return policyList(hippoRoot, tenantId, flags);
   if (subcommand === 'asof') return policyAsOf(hippoRoot, tenantId, args, flags);
@@ -237,7 +228,7 @@ function policyCreate(hippoRoot: string, tenantId: string, args: string[], flags
     printError('       hippo policy asof <iso-date> [--name "<policy>"]');
     printError('       hippo policy supersede <id> --text "<rule>" [--from] [--to] [--change "<summary>"]');
     printError('       hippo policy close <id>');
-    process.exit(1);
+    throw new CliExit(1);
   }
   try {
     const created = policiesModule.savePolicy(hippoRoot, tenantId, {
@@ -252,7 +243,7 @@ function policyCreate(hippoRoot: string, tenantId: string, args: string[], flags
     if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
   } catch (e) {
     printError(errorMessage(e));
-    process.exit(1);
+    throw new CliExit(1);
   }
 }
 
@@ -298,7 +289,7 @@ function skillSupersede(hippoRoot: string, tenantId: string, args: string[], fla
   const instrRaw = stringFlag(flags, 'instructions');
   if (!instrRaw?.trim()) {
     printError('hippo skill supersede requires --instructions "<text>" for the new version.');
-    process.exit(1);
+    throw new CliExit(1);
   }
   const existing = foundOrExit(skillsModule.loadSkillById(hippoRoot, tenantId, id), SKILL.noun, id);
   try {
@@ -314,7 +305,7 @@ function skillSupersede(hippoRoot: string, tenantId: string, args: string[], fla
     if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
   } catch (e) {
     printError(errorMessage(e));
-    process.exit(1);
+    throw new CliExit(1);
   }
 }
 
@@ -322,13 +313,8 @@ function skillClose(hippoRoot: string, tenantId: string, args: string[]): void {
   closeObject(args, SKILL, (id) => skillsModule.closeSkill(hippoRoot, tenantId, id));
 }
 
-export function cmdSkill(
-  hippoRoot: string,
-  args: string[],
-  flags: CliFlags
-): void {
+export function handleSkill({ hippoRoot, tenantId, args, flags }: CommandContext): void {
   requireInit(hippoRoot);
-  const tenantId = resolveTenantId({});
   const subcommand = args[0] ?? '';
   if (subcommand === 'list') return skillList(hippoRoot, tenantId, flags);
   if (subcommand === 'export') return skillExport(hippoRoot, tenantId);
@@ -351,7 +337,7 @@ function skillCreate(hippoRoot: string, tenantId: string, args: string[], flags:
     printError('       hippo skill export   (render active skills as an AGENTS.md/CLAUDE.md block)');
     printError('       hippo skill supersede <id> --instructions "<text>" [--trigger] [--change "<summary>"]');
     printError('       hippo skill close <id>');
-    process.exit(1);
+    throw new CliExit(1);
   }
   try {
     const created = skillsModule.saveSkill(hippoRoot, tenantId, {
@@ -364,6 +350,6 @@ function skillCreate(hippoRoot: string, tenantId: string, args: string[], flags:
     if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
   } catch (e) {
     printError(errorMessage(e));
-    process.exit(1);
+    throw new CliExit(1);
   }
 }

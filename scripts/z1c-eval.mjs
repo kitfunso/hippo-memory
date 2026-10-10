@@ -8,6 +8,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import assert from 'node:assert/strict';
+import { mulberry32 } from './lib/prng.mjs';
 
 const SINCE = '2026-09-26T23:00:00.000Z';
 const CONFIG = { metric: 'jaccard', threshold: 0.08, minShared: 2, maxItems: 3 };
@@ -36,18 +37,6 @@ function parseArgs(argv) {
 }
 
 // shared math (used by main flow and --selftest)
-
-// Same PRNG as z1-replay.mjs: Math.random is banned for reproducibility.
-function mulberry32(seed) {
-  let s = seed >>> 0;
-  return function () {
-    s = (s + 0x6d2b79f5) >>> 0;
-    let t = s;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
 
 function seededShuffle(arr, seed) {
   const rng = mulberry32(seed);

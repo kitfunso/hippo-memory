@@ -4,9 +4,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { initStore } from '../src/store/open.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { auditQueryFields } from '../src/store/audit.js';
-import { getContext, recall, remember, type Context } from '../src/api.js';
+import { getContext, recall, remember, type Context } from '../src/api/index.js';
 import { handleMcpRequest, type McpContext } from '../src/mcp/server.js';
 import { serve, type ServerHandle } from '../src/server.js';
 

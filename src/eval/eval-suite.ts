@@ -12,9 +12,9 @@
  *  - Per-feature breakdown so you see exactly what a change helped/hurt
  */
 
-import { createMemory, Layer, type MemoryEntry } from '../memory.js';
+import { createMemory, Layer, type MemoryEntry } from '../core/memory.js';
 import { search } from '../search/bm25-search.js';
-import { multihopSearch } from '../multihop.js';
+import { multihopSearch } from '../search/multihop.js';
 import { mrr, recallAtK, ndcgAtK } from './eval.js';
 import { DAY_MS } from '../util/time.js';
 
@@ -112,19 +112,39 @@ function mem(id: string, content: string, opts: {
 /** Direct recall: basic keyword matching. */
 function addDirectRecall(entries: MemoryEntry[], cases: FeatureTestCase[]): void {
   entries.push(
-    mem('dr-1', 'The PostgreSQL database migration failed because the users table had a NOT NULL constraint on the email column', { created: dateOffset(1), tags: ['topic:database'] }),
-    mem('dr-2', 'React component rendering performance improved by 40% after memoizing the expensive computation in useMemo', { created: dateOffset(2), tags: ['topic:frontend'] }),
-    mem('dr-3', 'The API rate limiter should use a sliding window algorithm instead of fixed window to prevent burst traffic', { created: dateOffset(3), tags: ['topic:api'] }),
-    mem('dr-4', 'Docker container memory limits need to be set to 512MB for the worker service to prevent OOM kills', { created: dateOffset(4), tags: ['topic:devops'] }),
-    mem('dr-5', 'The JWT token expiration was set to 24 hours but should be reduced to 1 hour for security compliance', { created: dateOffset(5), tags: ['topic:security'] }),
-    mem('dr-6', 'Webpack bundle size grew to 2.3MB because lodash was imported as a whole instead of cherry-picking', { created: dateOffset(6), tags: ['topic:frontend'] }),
-    mem('dr-7', 'The Redis cache TTL for user sessions should match the JWT expiration to prevent stale sessions', { created: dateOffset(7), tags: ['topic:caching'] }),
+    mem('dr-1', 'The PostgreSQL database migration failed because the users table had a NOT NULL constraint on the email column', {
+      created: dateOffset(1), tags: ['topic:database']
+    }),
+    mem('dr-2', 'React component rendering performance improved by 40% after memoizing the expensive computation in useMemo', {
+      created: dateOffset(2), tags: ['topic:frontend']
+    }),
+    mem('dr-3', 'The API rate limiter should use a sliding window algorithm instead of fixed window to prevent burst traffic', {
+      created: dateOffset(3), tags: ['topic:api']
+    }),
+    mem('dr-4', 'Docker container memory limits need to be set to 512MB for the worker service to prevent OOM kills', {
+      created: dateOffset(4), tags: ['topic:devops']
+    }),
+    mem('dr-5', 'The JWT token expiration was set to 24 hours but should be reduced to 1 hour for security compliance', {
+      created: dateOffset(5), tags: ['topic:security']
+    }),
+    mem('dr-6', 'Webpack bundle size grew to 2.3MB because lodash was imported as a whole instead of cherry-picking', {
+      created: dateOffset(6), tags: ['topic:frontend']
+    }),
+    mem('dr-7', 'The Redis cache TTL for user sessions should match the JWT expiration to prevent stale sessions', {
+      created: dateOffset(7), tags: ['topic:caching']
+    }),
     mem('dr-8', 'GraphQL resolver for nested comments has N+1 query problem solved by DataLoader batching', { created: dateOffset(8), tags: ['topic:api'] }),
   );
 
   cases.push(
-    { id: 'dr-q1', category: 'direct-recall', query: 'PostgreSQL migration NOT NULL constraint', expectedIds: ['dr-1'], description: 'exact keyword match on DB migration' },
-    { id: 'dr-q2', category: 'direct-recall', query: 'React useMemo performance memoizing', expectedIds: ['dr-2'], description: 'React performance optimization' },
+    {
+      id: 'dr-q1', category: 'direct-recall', query: 'PostgreSQL migration NOT NULL constraint', expectedIds: ['dr-1'],
+      description: 'exact keyword match on DB migration'
+    },
+    {
+      id: 'dr-q2', category: 'direct-recall', query: 'React useMemo performance memoizing', expectedIds: ['dr-2'],
+      description: 'React performance optimization'
+    },
     { id: 'dr-q3', category: 'direct-recall', query: 'sliding window rate limiter API', expectedIds: ['dr-3'], description: 'API rate limiting approach' },
     { id: 'dr-q4', category: 'direct-recall', query: 'Docker OOM memory limits worker', expectedIds: ['dr-4'], description: 'Docker memory config' },
     { id: 'dr-q5', category: 'direct-recall', query: 'JWT token expiration security', expectedIds: ['dr-5'], description: 'JWT security setting' },
@@ -161,9 +181,18 @@ function addExtractionPreference(entries: MemoryEntry[], cases: FeatureTestCase[
   );
 
   cases.push(
-    { id: 'ep-q1', category: 'extraction-preference', query: 'Kubernetes upgrade staging environment', expectedIds: ['ep-ext-1'], description: 'extracted fact about K8s upgrade should rank above raw utterance' },
-    { id: 'ep-q2', category: 'extraction-preference', query: 'Datadog Grafana alerting migration', expectedIds: ['ep-ext-2'], description: 'extracted fact about monitoring switch' },
-    { id: 'ep-q3', category: 'extraction-preference', query: 'OAuth2 PKCE login page redesign', expectedIds: ['ep-ext-3'], description: 'extracted fact about auth work' },
+    {
+      id: 'ep-q1', category: 'extraction-preference', query: 'Kubernetes upgrade staging environment', expectedIds: ['ep-ext-1'],
+      description: 'extracted fact about K8s upgrade should rank above raw utterance'
+    },
+    {
+      id: 'ep-q2', category: 'extraction-preference', query: 'Datadog Grafana alerting migration', expectedIds: ['ep-ext-2'],
+      description: 'extracted fact about monitoring switch'
+    },
+    {
+      id: 'ep-q3', category: 'extraction-preference', query: 'OAuth2 PKCE login page redesign', expectedIds: ['ep-ext-3'],
+      description: 'extracted fact about auth work'
+    },
   );
 }
 
@@ -193,8 +222,14 @@ function addDagDrilldown(entries: MemoryEntry[], cases: FeatureTestCase[]): void
   }
 
   cases.push(
-    { id: 'dag-q1', category: 'dag-drilldown', query: 'API performance problems latency', expectedIds: ['dag-child-1', 'dag-child-2', 'dag-child-3', 'dag-summary-1'], description: 'summary should drill down to all children' },
-    { id: 'dag-q2', category: 'dag-drilldown', query: 'endpoint response time degradation', expectedIds: ['dag-child-1', 'dag-child-2', 'dag-summary-1'], description: 'query matching summary should surface relevant children' },
+    {
+      id: 'dag-q1', category: 'dag-drilldown', query: 'API performance problems latency',
+      expectedIds: ['dag-child-1', 'dag-child-2', 'dag-child-3', 'dag-summary-1'], description: 'summary should drill down to all children'
+    },
+    {
+      id: 'dag-q2', category: 'dag-drilldown', query: 'endpoint response time degradation',
+      expectedIds: ['dag-child-1', 'dag-child-2', 'dag-summary-1'], description: 'query matching summary should surface relevant children'
+    },
   );
 }
 
@@ -208,10 +243,22 @@ function addTemporal(entries: MemoryEntry[], cases: FeatureTestCase[]): void {
   );
 
   cases.push(
-    { id: 'tmp-q1', category: 'temporal', query: 'what did the team recently decide about the service language', expectedIds: ['tmp-4'], description: 'recent cue should boost newest entry' },
-    { id: 'tmp-q2', category: 'temporal', query: 'what was the first language choice for the service', expectedIds: ['tmp-1'], description: 'oldest cue should boost earliest entry' },
-    { id: 'tmp-q3', category: 'temporal', query: 'latest update on the service rewrite language', expectedIds: ['tmp-4'], description: 'latest should boost most recent' },
-    { id: 'tmp-q4', category: 'temporal', query: 'original architecture decision for the service', expectedIds: ['tmp-1'], description: 'original should boost earliest' },
+    {
+      id: 'tmp-q1', category: 'temporal', query: 'what did the team recently decide about the service language', expectedIds: ['tmp-4'],
+      description: 'recent cue should boost newest entry'
+    },
+    {
+      id: 'tmp-q2', category: 'temporal', query: 'what was the first language choice for the service', expectedIds: ['tmp-1'],
+      description: 'oldest cue should boost earliest entry'
+    },
+    {
+      id: 'tmp-q3', category: 'temporal', query: 'latest update on the service rewrite language', expectedIds: ['tmp-4'],
+      description: 'latest should boost most recent'
+    },
+    {
+      id: 'tmp-q4', category: 'temporal', query: 'original architecture decision for the service', expectedIds: ['tmp-1'],
+      description: 'original should boost earliest'
+    },
   );
 }
 
@@ -249,10 +296,21 @@ function addNoiseResistance(entries: MemoryEntry[], cases: FeatureTestCase[]): v
   );
 
   cases.push(
-    { id: 'nr-q1', category: 'noise-resistance', query: 'database connection pool exhausted max connections', expectedIds: ['nr-1'], description: 'find DB issue despite 30 noise entries' },
-    { id: 'nr-q2', category: 'noise-resistance', query: 'S3 bucket public access security misconfiguration', expectedIds: ['nr-2'], description: 'find S3 issue despite noise' },
-    { id: 'nr-q3', category: 'noise-resistance', query: 'PostgreSQL migration constraint', expectedIds: ['dr-1'], description: 'find earlier DB entry despite noise' },
-    { id: 'nr-q4', category: 'noise-resistance', query: 'JWT token security expiration', expectedIds: ['dr-5'], description: 'find security entry despite noise' },
+    {
+      id: 'nr-q1', category: 'noise-resistance', query: 'database connection pool exhausted max connections', expectedIds: ['nr-1'],
+      description: 'find DB issue despite 30 noise entries'
+    },
+    {
+      id: 'nr-q2', category: 'noise-resistance', query: 'S3 bucket public access security misconfiguration', expectedIds: ['nr-2'],
+      description: 'find S3 issue despite noise'
+    },
+    {
+      id: 'nr-q3', category: 'noise-resistance', query: 'PostgreSQL migration constraint', expectedIds: ['dr-1'],
+      description: 'find earlier DB entry despite noise'
+    },
+    {
+      id: 'nr-q4', category: 'noise-resistance', query: 'JWT token security expiration', expectedIds: ['dr-5'], description: 'find security entry despite noise'
+    },
   );
 }
 
@@ -274,8 +332,14 @@ function addMultiHop(entries: MemoryEntry[], cases: FeatureTestCase[]): void {
   );
 
   cases.push(
-    { id: 'mh-q1', category: 'multi-hop', query: 'Who fixed the Stripe webhook bug and what was the root cause?', expectedIds: ['mh-1', 'mh-2', 'mh-3'], description: 'chain Alice -> Stripe -> Bob -> fix' },
-    { id: 'mh-q2', category: 'multi-hop', query: 'What are all the payment-related issues the team discussed?', expectedIds: ['mh-1', 'mh-2', 'mh-3', 'mh-4'], description: 'find all payment topics across speakers' },
+    {
+      id: 'mh-q1', category: 'multi-hop', query: 'Who fixed the Stripe webhook bug and what was the root cause?',
+      expectedIds: ['mh-1', 'mh-2', 'mh-3'], description: 'chain Alice -> Stripe -> Bob -> fix'
+    },
+    {
+      id: 'mh-q2', category: 'multi-hop', query: 'What are all the payment-related issues the team discussed?',
+      expectedIds: ['mh-1', 'mh-2', 'mh-3', 'mh-4'], description: 'find all payment topics across speakers'
+    },
   );
 }
 

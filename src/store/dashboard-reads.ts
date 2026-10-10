@@ -1,7 +1,11 @@
 // The dashboard snapshot's read of one tenant: live rows with only the columns it shows, and SQL counts of the rows it leaves out.
-import { closeHippoDb } from '../db.js';
+import * as fs from 'fs';
+import { closeHippoDb, getHippoDbPath, openHippoDbReadOnly, type DatabaseSyncLike } from '../db/index.js';
 import { withReadSnapshot } from '../db/busy.js';
-import type { ConfidenceInputs, Layer, MemoryEntry, MemoryKind, StrengthInputs } from '../memory.js';
+import { pragmaDataVersion } from '../db/meta.js';
+import { tableExists } from '../db/tables.js';
+import { storedVectorIds } from '../db/vector-store.js';
+import type { ConfidenceInputs, Layer, MemoryEntry, MemoryKind, StrengthInputs } from '../core/memory.js';
 import { openStore } from './open.js';
 import { QUARANTINE_SCOPE_PREFIX } from './quarantine.js';
 import { type MemoryRow, parseJsonArray } from './rows.js';
@@ -23,7 +27,11 @@ export interface DashboardRows {
 }
 
 const LIVE_COLUMNS = 'id, created, last_retrieved, retrieval_count, half_life_days, layer, tags_json, emotional_valence, outcome_positive, outcome_negative, pinned, confidence, content, superseded_by, kind, scope, origin_project';
-type LiveRow = Pick<MemoryRow, 'id' | 'created' | 'last_retrieved' | 'retrieval_count' | 'half_life_days' | 'layer' | 'tags_json' | 'emotional_valence' | 'outcome_positive' | 'outcome_negative' | 'pinned' | 'confidence' | 'content' | 'superseded_by' | 'kind' | 'scope' | 'origin_project'>;
+type LiveRow = Pick<
+  MemoryRow,
+  'id' | 'created' | 'last_retrieved' | 'retrieval_count' | 'half_life_days' | 'layer' | 'tags_json' | 'emotional_valence' | 'outcome_positive'
+  | 'outcome_negative' | 'pinned' | 'confidence' | 'content' | 'superseded_by' | 'kind' | 'scope' | 'origin_project'
+>;
 
 // SQL twins of isQuarantineScope and of the two halves of isLiveMemory; substr compares bytes, as startsWith does, where LIKE would fold case.
 const QUARANTINED = `(scope IS NOT NULL AND substr(scope, 1, ${QUARANTINE_SCOPE_PREFIX.length}) = '${QUARANTINE_SCOPE_PREFIX}')`;
@@ -41,7 +49,7 @@ function toDashboardRow(row: LiveRow): DashboardRow {
     retrieval_count: Number(row.retrieval_count ?? 0),
     half_life_days: Number(row.half_life_days ?? 7),
     layer: row.layer as Layer,
-    tags: parseJsonArray(row.tags_json),
+    tags: parseJsonArray(row.tags_json, { table: 'memories', id: row.id, column: 'tags_json' }),
     emotional_valence: row.emotional_valence ?? 'neutral',
     outcome_positive: Number(row.outcome_positive ?? 0),
     outcome_negative: Number(row.outcome_negative ?? 0),
@@ -74,5 +82,32 @@ export function loadDashboardRows(hippoRoot: string, tenantId: string): Dashboar
     });
   } finally {
     closeHippoDb(db);
+  }
+}
+
+/** The dashboard's one read-only connection, kept across refreshes for the commit signal; it opens on the first read that finds a database. */
+export class DashboardConnection {
+  private db: DatabaseSyncLike | null = null;
+
+  constructor(private readonly hippoRoot: string) {}
+
+  /** `PRAGMA data_version`, which moves when another connection commits; null while the store has no hippo.db. */
+  dataVersion(): number | null {
+    if (this.db === null) {
+      if (!fs.existsSync(getHippoDbPath(this.hippoRoot))) return null;
+      this.db = openHippoDbReadOnly(this.hippoRoot);
+    }
+    return pragmaDataVersion(this.db);
+  }
+
+  /** Ids with a stored vector: none before the connection opens, null on a store older than the vector table (schema v52). */
+  embeddedIds(): ReadonlySet<string> | null {
+    if (this.db === null) return new Set();
+    return tableExists(this.db, 'memory_vectors') ? storedVectorIds(this.db) : null;
+  }
+
+  close(): void {
+    if (this.db !== null) closeHippoDb(this.db);
+    this.db = null;
   }
 }

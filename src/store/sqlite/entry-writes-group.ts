@@ -1,11 +1,11 @@
 // hippo.db's half of the EntryWrites store group: the queries remember, outcome, supersede, archive and forget run today.
-import { ConflictError, NotFoundError } from '../../api-errors.js';
+import { ConflictError, NotFoundError } from '../../core/api-errors.js';
 import { appendAuditEvent } from '../audit.js';
-import { isSqliteBusy, withWriteScope, type DatabaseSyncLike } from '../../db.js';
-import { errorMessage, log } from '../../log.js';
-import { entryAfterOutcome, type MemoryEntry } from '../../memory.js';
+import { isSqliteBusy, withWriteScope, type DatabaseSyncLike } from '../../db/index.js';
+import { errorFields, errorMessage, log } from '../../util/log.js';
+import { entryAfterOutcome, type MemoryEntry } from '../../core/memory.js';
 import { archiveRawMemory, type ArchiveOpts } from '../raw-archive.js';
-import { ownScopeTouches } from '../../recall-scope.js';
+import { ownScopeTouches } from '../recall-scope.js';
 import { recordTraceOutcome } from '../recall-trace.js';
 import { RejectedValueError } from '../rejection.js';
 import type { EntryTarget, EntryWrite, EntryWrites, OutcomeWrite, RawArchive, SupersedeWrite, Sync } from '../port.js';
@@ -48,7 +48,7 @@ export function sqliteEntryWrites(hippoRoot: string): Sync<EntryWrites> {
   };
 }
 
-/** A connector's hook writes on the row's handle inside its write scope, so its throw undoes the row. */
+/** A store-side hook writes on the row's handle inside its write scope, so its throw undoes the row. */
 export function writeEntryAt(hippoRoot: string, { entry, actor }: EntryWrite, afterWrite?: WriteEntryOptions['afterWrite']): void {
   const stamped = stampOriginProject(hippoRoot, entry);
   onHandle(hippoRoot, (db) => writeInOwnTenant(db, stamped, actor, afterWrite), openStore);
@@ -69,7 +69,7 @@ export function applyOutcomeAt(hippoRoot: string, outcome: OutcomeWrite, traceId
   return applied.map((entry) => entry.id);
 }
 
-/** Reach is checked inside the archive's write scope. A connector's hook writes on the same handle inside that scope, so its throw undoes the archive. */
+/** Reach is checked inside the archive's write scope. A store-side hook writes on the same handle inside that scope, so its throw undoes the archive. */
 export function archiveRawAt(hippoRoot: string, archive: RawArchive, afterArchive?: ArchiveOpts['afterArchive']): string {
   const archivedAt = onHandle(hippoRoot, (db) => {
     const at = withWriteScope(db, 'archive_raw_in_reach', () => {
@@ -109,7 +109,8 @@ export function auditingRefusal<T>(db: DatabaseSyncLike, actor: string, write: (
   }
 }
 
-function writeInOwnTenant(db: DatabaseSyncLike, entry: MemoryEntry, actor: string, afterWrite?: WriteEntryOptions['afterWrite']): void {
+/** writeEntryAt on the caller's handle, so a sibling group can read on it after the scope has unwound. */
+export function writeInOwnTenant(db: DatabaseSyncLike, entry: MemoryEntry, actor: string, afterWrite?: WriteEntryOptions['afterWrite']): void {
   auditingRefusal(db, actor, () => withWriteScope(db, 'write_entry_in_tenant', () => {
     assertIdInTenant(db, entry);
     writeEntryDbOnly(db, entry, { actor, afterWrite });
@@ -137,8 +138,8 @@ function applyOutcomeOn(db: DatabaseSyncLike, outcome: OutcomeWrite): MemoryEntr
 /** Reach, the CAS on the old row, the successor's insert and the supersede row in one BEGIN IMMEDIATE transaction. Two racing supersedes: one CAS wins. */
 function commitSupersede(db: DatabaseSyncLike, write: SupersedeWrite): void {
   const { tenantId, actor, oldId, successor } = write;
-  db.exec('BEGIN IMMEDIATE');
-  try {
+  // The refusal row lands after the scope has rolled back, in a fresh implicit transaction the aborted one cannot undo.
+  auditingRefusal(db, actor, () => withWriteScope(db, 'supersede', () => {
     assertInReach(db, write, oldId);
     // SAFETY: RETURNING names one column, dag_parent_id; no row means another writer got there first.
     const won = db.prepare('UPDATE memories SET superseded_by = ? WHERE id = ? AND tenant_id = ? AND superseded_by IS NULL RETURNING dag_parent_id')
@@ -149,13 +150,7 @@ function commitSupersede(db: DatabaseSyncLike, write: SupersedeWrite): void {
     assertIdInTenant(db, successor);
     writeEntryDbOnly(db, successor, { actor });
     appendAuditEvent(db, { tenantId, actor, op: 'supersede', targetId: oldId, metadata: { newId: successor.id } });
-    db.exec('COMMIT');
-  } catch (err) {
-    try { db.exec('ROLLBACK'); } catch { /* already rolled back */ }
-    // The refusal row lands after ROLLBACK, in a fresh implicit transaction the aborted one cannot undo.
-    if (err instanceof RejectedValueError) auditRejectionRefusal(db, err, actor);
-    throw err;
-  }
+  }));
 }
 
 /** A mirror left on disk would bring the archived row back on the next import; on failure the reaper retries, as mirror_cleaned_at stays NULL. */
@@ -163,7 +158,7 @@ function cleanArchivedMirrors(db: DatabaseSyncLike, hippoRoot: string, id: strin
   try {
     removeEntryMirrors(hippoRoot, id);
   } catch (mirrorErr) {
-    log.error(`archiveRaw: mirror cleanup failed for ${id} (will retry via reaper on next openHippoDb): ${errorMessage(mirrorErr)}`);
+    log.error(`archiveRaw: mirror cleanup failed for ${id} (will retry via reaper on next openHippoDb): ${errorMessage(mirrorErr)}`, errorFields(mirrorErr));
     return;
   }
   try {

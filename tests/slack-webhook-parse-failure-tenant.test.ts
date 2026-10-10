@@ -19,7 +19,7 @@ import { join } from 'node:path';
 import { createHmac } from 'node:crypto';
 import { initStore } from '../src/store/open.js';
 import { serve, type ServerHandle } from '../src/server.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { listDlq } from '../src/connectors/dlq.js';
 import { slackDlq } from '../src/connectors/slack/dlq.js';
 

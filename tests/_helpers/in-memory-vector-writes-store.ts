@@ -1,7 +1,7 @@
 // A store other than hippo.db for the VectorWrites group: it copies memories, vectors, particles and the model meta row out of hippo.db once,
 // then reads and writes them in memory with what hippo-memory/server exports, so a conformance test shows that is all another store needs.
 import { listAuditEventsAfter } from '../../src/store/audit.js';
-import { closeHippoDb, getMeta, openHippoDb } from '../../src/db.js';
+import { closeHippoDb, getMeta, openHippoDb } from '../../src/db/index.js';
 import { loadPhysicsState } from '../../src/db/physics-state.js';
 import {
   bufferToFloat32, decodeVector, EMBEDDING_MODEL_META_KEY, encodeVector, float32ToBuffer, rankVectorRows, replacesIndex,

@@ -1,17 +1,17 @@
-// authCreate, authCreateSelf and authList with a store go through its keyWrites group and never open hippo.db, and
+// authCreate, authCreateSelf and authListRows with a store go through its keyWrites group and never open hippo.db, and
 // POST and GET /v1/auth/keys run under another store only when that store has the group.
 import { afterAll, afterEach, beforeAll, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { cpSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  authCreate, authCreateSelf, authList, authListRows,
+  authCreate, authCreateSelf, authListRows,
   type AuthCreateResult, type AuthCreateSelfResult,
-} from '../src/api.js';
+} from '../src/api/index.js';
 import { verifyApiKeyCached, type ApiKeyListItem, type ApiKeyListRow } from '../src/store/auth.js';
-import { closeHippoDb, openHippoDb } from '../src/db.js';
+import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { StoreNotPortedError } from '../src/util/sqlite-blocked.js';
-import { STORE_NOT_PORTED_MESSAGE } from '../src/http-util.js';
+import { STORE_NOT_PORTED_MESSAGE } from '../src/util/http-util.js';
 import { OTHER_STORE_MARKER, serve, sqliteStore, type Actor, type Context, type HippoDbContext, type HippoStore, type ServerHandle } from '../src/server.js';
 import { inMemoryKeyWritesStore, OWNER, seedOwnedKeys, type OwnedKeys } from './_helpers/in-memory-key-writes-store.js';
 import { portOnlyStoreWithoutVectorReads } from './_helpers/port-only-store.js';
@@ -92,7 +92,7 @@ describe('authCreate and authCreateSelf with ctx.store', () => {
     expect(await verifyApiKeyCached(minted.plaintext, memory.store)).toMatchObject({ keyId: minted.keyId, tenantId: TENANT_A, role: 'member' });
     expect(memory.auditRows().at(-1)).toMatchObject({ tenantId: TENANT_A, actor: 'cli', op: 'auth_create', targetId: minted.keyId, metadata: { label: 'ci', role: 'member' } });
     const secret = minted.plaintext.slice(minted.keyId.length + 1);
-    const stored = JSON.stringify([await memory.store.findApiKey(minted.keyId), await authList(ctx, { active: false }), memory.auditRows()]);
+    const stored = JSON.stringify([await memory.store.findApiKey(minted.keyId), await authListRows(ctx, { active: false }), memory.auditRows()]);
     expect(stored).toContain(minted.keyId);
     expect(stored).not.toContain(secret);
   });
@@ -116,10 +116,9 @@ describe('authCreate and authCreateSelf with ctx.store', () => {
     const storeRoot = copyOf();
     const before = hippoDbState(storeRoot);
     const ctx = { hippoRoot: markedFolder(), tenantId: TENANT_A, actor: admin, store: portOnlyStoreWithoutVectorReads(storeRoot) };
-    const calls: (() => Promise<AuthCreateResult | AuthCreateSelfResult | ApiKeyListItem[] | ApiKeyListRow[]>)[] = [
+    const calls: (() => Promise<AuthCreateResult | AuthCreateSelfResult | ApiKeyListRow[]>)[] = [
       () => authCreate(ctx, { label: 'x' }),
       () => authCreateSelf({ ...ctx, actor: resolverMember }, { ttlDays: 1, perSubject: 1 }),
-      () => authList(ctx, { active: true }),
       () => authListRows(ctx, { active: false, limit: 5 }),
     ];
     for (const call of calls) {
@@ -151,14 +150,12 @@ describe('authCreate and authCreateSelf with ctx.store', () => {
     expectTypeOf(authCreate<Context>).returns.toEqualTypeOf<AuthCreateResult | Promise<AuthCreateResult>>();
     expectTypeOf(authCreateSelf<WithStore>).returns.toEqualTypeOf<Promise<AuthCreateSelfResult>>();
     expectTypeOf(authCreateSelf<NoStore>).returns.toEqualTypeOf<AuthCreateSelfResult>();
-    expectTypeOf(authList<WithStore>).returns.toEqualTypeOf<Promise<ApiKeyListItem[]>>();
-    expectTypeOf(authList<NoStore>).returns.toEqualTypeOf<ApiKeyListItem[]>();
     expectTypeOf(authListRows<WithStore>).returns.toEqualTypeOf<Promise<ApiKeyListRow[]>>();
     expectTypeOf(authListRows<Context>).returns.toEqualTypeOf<ApiKeyListRow[] | Promise<ApiKeyListRow[]>>();
   });
 });
 
-describe('authList with ctx.store', () => {
+describe('authListRows with ctx.store', () => {
   const callers: readonly [string, () => Actor, boolean][] = [
     ['an admin', () => admin, true],
     ['a member signed in through the resolver', () => resolverMember, true],
@@ -172,9 +169,9 @@ describe('authList with ctx.store', () => {
     const memory = inMemoryKeyWritesStore(root);
     const actor = actorOf();
     for (const active of [true, false]) {
-      const onHippoDb = authList({ hippoRoot: root, tenantId: TENANT_A, actor }, { active });
+      const onHippoDb = authListRows({ hippoRoot: root, tenantId: TENANT_A, actor }, { active });
       expect(onHippoDb.length > 0).toBe(listsAny);
-      expect(await authList({ hippoRoot: markedFolder(), tenantId: TENANT_A, actor, store: memory.store }, { active })).toEqual(onHippoDb);
+      expect(await authListRows({ hippoRoot: markedFolder(), tenantId: TENANT_A, actor, store: memory.store }, { active })).toEqual(onHippoDb);
     }
   });
 });

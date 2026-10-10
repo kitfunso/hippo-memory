@@ -1,7 +1,7 @@
 // Z0 failure chain (prereg 179-182) and injected-row sources (93) with the fake Claude Code.
 import { describe, it, expect, afterEach } from 'vitest';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { contextBlockLines } from '../src/context-render.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { contextBlockLines } from '../src/api/context-render.js';
 import { injectedRows } from '../scripts/token-eval/surfaces.mjs';
 import {
   cleanup, isolate, makeRepo, task, teach, apply, plain, lesson, family, spec, run, readRecords, readLedger, find,

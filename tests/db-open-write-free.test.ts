@@ -7,8 +7,8 @@ import { join } from 'node:path';
 import { createRequire } from 'module';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { openHippoDb, closeHippoDb, getMeta } from '../src/db.js';
+import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { openHippoDb, closeHippoDb, getMeta } from '../src/db/index.js';
 import { recordStatements } from './_helpers/count-statements.js';
 
 const require = createRequire(import.meta.url);
@@ -74,10 +74,12 @@ describe('openHippoDb on an already-current store is write-free', () => {
 
     const db2 = openHippoDb(root);
     try {
+      // SAFETY: the query selects only `name`, a TEXT column of sqlite_master.
       const tables = (db2
         .prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='memories_fts'`)
         .all() as Array<{ name: string }>);
       expect(tables.length).toBe(1);
+      // SAFETY: an aggregate SELECT returns exactly one row and COUNT(*) is an integer.
       const row = db2.prepare(`SELECT COUNT(*) AS c FROM memories_fts WHERE id = ?`).get(m.id) as
         | { c?: number }
         | undefined;

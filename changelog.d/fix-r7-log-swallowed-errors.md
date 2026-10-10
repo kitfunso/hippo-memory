@@ -1,3 +1,0 @@
-### Fixed
-
-- **A best-effort step that fails now says so.** The failed-tool capture hook, the pilot arm, the token ledger and 25 other best-effort steps (session-end capture and sleep, the Codex wrapper repair, vault import, physics state, log-file writes) caught their error and dropped it, so a store that had been broken for weeks left no trace. Each still carries on as before, and now writes one line with the error message: a warning where the user loses something (a failure that was not captured, a Codex wrapper that could not be made executable), a debug line (`HIPPO_LOG=debug`) elsewhere.

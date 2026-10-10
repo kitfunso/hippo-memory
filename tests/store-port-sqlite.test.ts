@@ -4,13 +4,15 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { closeHippoDb, getMeta, openHippoDb, setMeta } from '../src/db.js';
-import { recordTokens } from '../src/api.js';
+import { closeHippoDb, getMeta, openHippoDb, setMeta } from '../src/db/index.js';
+import { recordTokens } from '../src/api/index.js';
 import { appendAuditEvent, type AppendAuditOpts } from '../src/store/audit.js';
-import { _resetAblationCacheForTests } from '../src/ablation.js';
-import { embeddingIndexIdentity, loadStoredVectors } from '../src/embeddings.js';
-import { detectForwardClaim } from '../src/forward-claim-detector.js';
-import { activeGoalsWithPolicies, boostByGoals, localGoalRecallRows, pushGoal, writeGoalRecallLog } from '../src/store/goals.js';
+import { _resetAblationCacheForTests } from '../src/core/ablation.js';
+import { embeddingIndexIdentity } from '../src/store/embeddings/index.js';
+import { loadStoredVectors } from '../src/store/vector-index.js';
+import { detectForwardClaim } from '../src/learn/forward-claim-detector.js';
+import { activeGoalsWithPolicies, localGoalRecallRows, pushGoal, writeGoalRecallLog } from '../src/store/goals.js';
+import { boostByGoals } from '../src/search/goal-boost.js';
 import { __resetSessionRecallHistoryMcp } from '../src/mcp/server.js';
 import { lastRecalledIds } from '../src/mcp/session-state.js';
 import { loadPhysicsState, resetAllPhysicsState } from '../src/db/physics-state.js';
@@ -470,7 +472,7 @@ async function recallOver(url: string, call: Recall): Promise<void> {
   expect(await res.json()).not.toHaveProperty('error');
 }
 
-describe('hippo.db opens per recall over serve()', () => {
+describe('hippo.db opens per recall over serve() on the in-process store', () => {
   // Exact, so a second open fails here: the request scope hands every port call the one handle.
   const OPENS: readonly [string, number, Recall, boolean?][] = [
     ['http, no session', 1, { via: 'http', params: { q: 'deploy' } }],
@@ -506,7 +508,7 @@ describe('hippo.db opens per recall over serve()', () => {
         writeFileSync(join(s.root, 'config.json'), JSON.stringify({ embeddings: embeddingsConfig, physics: { enabled: true } }));
       }
       const before = embeddings.requests();
-      const handle = await serve({ hippoRoot: s.root, port: 0 });
+      const handle = await serve({ hippoRoot: s.root, port: 0, store: sqliteStore(s.root) });
       try {
         const { statements } = await recordStatementsAsync(() => recallOver(handle.url, call));
         expect(countMatching(statements, STORE_OPEN)).toBe(opens);

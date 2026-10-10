@@ -1,7 +1,7 @@
 // hippo.db's rows for the typed objects: each kind's table, columns, row mapping and, for a kind the shared save writes, its insert values and audit keys.
 // A status column carries a CHECK constraint, so a row declares it as the kind's status union.
 import type { AuditOp } from '../audit.js';
-import { isJsonString } from '../../json.js';
+import { isJsonString } from '../../util/json.js';
 import { warnDamagedColumn } from '../../util/stored-json.js';
 import type { JsonObject } from '../working-memory.js';
 import type { SourceObjectType } from '../graph-rows.js';
@@ -142,22 +142,25 @@ function rowToIncident(row: IncidentRow): Incident {
   };
 }
 
-/** A malformed stored steps value reads back as no steps. */
-function parseSteps(raw: string): string[] {
+/** A malformed stored steps value warns and reads back as no steps. */
+function parseSteps(raw: string, id: number): string[] {
+  const site = { table: 'processes', id, column: 'steps' };
   try {
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.every(isJsonString)) {
       return parsed;
     }
+    warnDamagedColumn(site, 'wrong shape');
     return [];
   } catch {
     // Unreadable steps read back as none instead of failing the process read.
+    warnDamagedColumn(site, 'not valid JSON');
     return [];
   }
 }
 
 const rowToProcess = (row: ProcessRow): Process => (
-  { ...head(row), processName: row.process_name, description: row.description, steps: parseSteps(row.steps), ...versionedTail(row) }
+  { ...head(row), processName: row.process_name, description: row.description, steps: parseSteps(row.steps, row.id), ...versionedTail(row) }
 );
 
 const rowToPolicy = (row: PolicyRow): Policy => (

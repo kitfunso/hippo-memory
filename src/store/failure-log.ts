@@ -1,6 +1,6 @@
 /** Failure log: every failed tool call the capture-error hook sees, stored or not. */
-import { ConflictError } from '../api-errors.js';
-import type { DatabaseSyncLike } from '../db.js';
+import { ConflictError } from '../core/api-errors.js';
+import type { DatabaseSyncLike } from '../db/index.js';
 import { DAY_MS } from '../util/time.js';
 
 /** Why a failure was not stored, or `stored`. */
@@ -120,6 +120,13 @@ export interface FailureSummary {
   rated: number;
   repeats: number;
   sessions: number;
+}
+
+/** Failed tool calls logged since `sinceIso`, in every tenant; throws when the table is missing. */
+export function countFailuresSince(db: DatabaseSyncLike, sinceIso: string): number {
+  // SAFETY: COUNT aggregate row.
+  const row = db.prepare(`SELECT COUNT(*) AS n FROM failure_log WHERE ts >= ?`).get(sinceIso) as { n: number } | undefined;
+  return Number(row?.n ?? 0);
 }
 
 /** Sum the failure log for one tenant since `sinceIso`. */

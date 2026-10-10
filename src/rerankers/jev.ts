@@ -1,11 +1,15 @@
-import { envJevModel, envJevTimeoutMs, envTypesafeApiKey } from '../env.js';
-import { crossEncoderReranker } from './cross-encoder.js';
+import { envJevModel, envJevTimeoutMs, envTypesafeApiKey } from '../util/env.js';
 import type { RerankerFn, RerankResult, RerankerOptions } from './types.js';
 import type { SearchResult } from '../core/search-types.js';
-import { redactSecretsStrict } from '../secret-detect.js';
+import { redactSecretsStrict } from '../util/secret-detect.js';
 import { createOutageWarning } from './outage-warning.js';
-import { rerankerPost } from './remote.js';
-import { errorMessage } from '../log.js';
+import { rerankerPost, RERANKER_MAX_REPLY_BYTES } from './remote.js';
+import { readCappedJson } from '../util/capped-json.js';
+import { type JsonValue, isJsonNumber, isJsonObject } from '../util/json.js';
+import { compareScoresDesc } from '../core/compare.js';
+import { errorMessage } from '../util/log.js';
+
+const REQUEST_ID_MAX_CHARS = 64;
 
 const ENDPOINT = 'https://api.typesafe.ai/v1/systemone';
 const DEFAULT_TIMEOUT_MS = 5_000;
@@ -16,26 +20,24 @@ const DEFAULT_MODEL = 'jev-1.13.0';
 // The pool size the eval numbers were measured at.
 export const JEV_DEFAULT_TOP_K = 40;
 
-interface JevAnswer {
-  noul?: number;
-}
-
 function truncate(s: string, n: number): string {
   return s.length <= n ? s : `${s.slice(0, n)}...`;
 }
 
 // Number.isFinite rejects a string or null without coercing it, which the
 // declared type cannot promise about a third-party payload.
-function isProbability(v: number | undefined): v is number {
-  return v !== undefined && Number.isFinite(v) && v >= 0 && v <= 1;
+function isProbability(v: JsonValue | undefined): v is number {
+  return isJsonNumber(v) && Number.isFinite(v) && v >= 0 && v <= 1;
 }
 
 // A half-scored list ranks worse than the order it would replace, so one bad
 // answer voids the whole response.
-function parseScores(answers: Record<string, JevAnswer> | undefined, n: number): number[] | null {
+function parseScores(body: JsonValue, n: number): number[] | null {
+  const answers = isJsonObject(body) ? body.answers : undefined;
   const out: number[] = [];
   for (let i = 1; i <= n; i++) {
-    const v = answers?.[`c${i}`]?.noul;
+    const answer = isJsonObject(answers) ? answers[`c${i}`] : undefined;
+    const v = isJsonObject(answer) ? answer.noul : undefined;
     if (!isProbability(v)) return null;
     out.push(v);
   }
@@ -80,12 +82,11 @@ async function requestScores(query: string, head: SearchResult[]): Promise<numbe
   }, envJevTimeoutMs() ?? DEFAULT_TIMEOUT_MS);
   if (!resp.ok) {
     // A third-party header ends up on stderr, so keep printable ASCII only.
-    const requestId = resp.headers.get('x-request-id')?.replace(/[^\x20-\x7e]/g, '').slice(0, 64);
+    const requestId = resp.headers.get('x-request-id')?.replace(/[^\x20-\x7e]/g, '').slice(0, REQUEST_ID_MAX_CHARS);
     await resp.body?.cancel();
     throw new Error(`HTTP ${resp.status}${requestId ? `, request ${requestId}` : ''}`);
   }
-  const body: { answers?: Record<string, JevAnswer> } = await resp.json();
-  const scores = parseScores(body.answers, head.length);
+  const scores = parseScores(await readCappedJson(resp, RERANKER_MAX_REPLY_BYTES), head.length);
   if (!scores) throw new Error('incomplete or out-of-range answers');
   return scores;
 }
@@ -121,11 +122,7 @@ export function rankByScores(head: readonly SearchResult[], scores: readonly num
     postRerankRank: 0,
   }));
   // Stable sort: ties fall back to the prior relevance order.
-  scored.sort((a, b) => b.rerankScore - a.rerankScore);
+  scored.sort((a, b) => compareScoresDesc(a.rerankScore, b.rerankScore));
   scored.forEach((r, i) => (r.postRerankRank = i + 1));
   return scored;
 }
-
-/** Track 4 reranker: hosted TypeSafe Jev, opt-in and paid (TYPESAFE_API_KEY), one batched call per recall.
- *  Any failure warns and delegates to the local cross-encoder. Scores are not bit-stable run to run. */
-export const jevReranker: RerankerFn = createJevReranker(crossEncoderReranker);

@@ -7,10 +7,10 @@ import { join } from 'node:path';
 import {
   archiveRaw, forget, outcome, outcomeForLastRecall, remember, supersede, type Actor, type ArchiveRawResult, type Context, type ForgetResult,
   type HippoDbContext, type OutcomeResult, type RememberResult, type SupersedeResult,
-} from '../src/api.js';
-import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../src/db.js';
+} from '../src/api/index.js';
+import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../src/db/index.js';
 import { SqliteBlockedError, StoreNotPortedError } from '../src/util/sqlite-blocked.js';
-import { STORE_NOT_PORTED_MESSAGE } from '../src/http-util.js';
+import { STORE_NOT_PORTED_MESSAGE } from '../src/util/http-util.js';
 import { handleMcpRequest, type McpContext } from '../src/mcp/server.js';
 import { lastRecalledIds, resolveClientKey } from '../src/mcp/session-state.js';
 import { OTHER_STORE_MARKER, serve, type HippoStore, type ServerHandle } from '../src/server.js';
@@ -100,11 +100,12 @@ describe('the api with ctx.store', () => {
     expect(auditIdsOnHippoDb(storeRoot)).toEqual(before);
   });
 
-  it("refuses the hippo.db-only options and the last-recall outcome under another store", async () => {
+  it("refuses a connector write, the trace link and the last-recall outcome under a store without connectorWrites", async () => {
     const ctx = { hippoRoot: markedFolder(), tenantId: TENANT_A, actor: admin, store: inMemoryEntryWritesStore(copyOf()).store };
-    await expect(remember(ctx, { content: 'connector text', untrusted: true })).rejects.toThrow('written to hippo.db only');
+    const noGroup = new StoreNotPortedError('in-memory', 'connectorWrites');
+    await expect(remember(ctx, { content: 'connector text', untrusted: true })).rejects.toThrow(noGroup);
     await expect(outcome(ctx, ['mem_x'], true, { traceId: 1 })).rejects.toThrow('links its recall trace on hippo.db only');
-    await expect(archiveRaw(ctx, 'mem_x', 'r', { afterArchive: () => undefined })).rejects.toThrow('afterArchive runs on hippo.db only');
+    await expect(archiveRaw(ctx, 'mem_x', 'r', { event: { connector: 'slack', eventId: 'Ev_x' } })).rejects.toThrow(noGroup);
     await expect(outcomeForLastRecall(ctx, true)).rejects.toThrow(SqliteBlockedError);
   });
 

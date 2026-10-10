@@ -4,12 +4,13 @@
  * in SQLite using BLOB columns for 384-dim vectors.
  */
 
-import { evalNow } from '../ablation.js';
-import type { DatabaseSyncLike } from '../db.js';
-import type { MemoryEntry } from '../memory.js';
-import type { PhysicsParticle } from '../physics.js';
-import { computeMass, computeCharge, computeTemperature, vecZero } from '../physics.js';
-import { calculateStrength } from '../memory.js';
+import { evalNow } from '../core/ablation.js';
+import type { DatabaseSyncLike } from './index.js';
+import { withWriteScope } from './busy.js';
+import type { MemoryEntry } from '../core/memory.js';
+import type { PhysicsParticle } from '../core/physics.js';
+import { computeMass, computeCharge, computeTemperature, vecZero } from '../core/physics.js';
+import { calculateStrength } from '../core/memory.js';
 import { DAY_MS } from '../util/time.js';
 
 // ---------------------------------------------------------------------------
@@ -139,8 +140,7 @@ export function savePhysicsState(
       updated_at = datetime('now')
   `);
 
-  db.exec('BEGIN IMMEDIATE');
-  try {
+  withWriteScope(db, 'save_particles', () => {
     for (const p of particles) {
       stmt.run(
         p.memoryId,
@@ -152,11 +152,7 @@ export function savePhysicsState(
         p.lastSimulation,
       );
     }
-    db.exec('COMMIT');
-  } catch (error) {
-    try { db.exec('ROLLBACK'); } catch { /* already rolled back; keep the original error */ }
-    throw error;
-  }
+  });
 }
 
 /**
@@ -182,30 +178,34 @@ export function initializeParticle(
   };
 }
 
-/**
- * Reset all physics states from original embeddings.
- * Drops existing physics data and re-initializes from the embedding index.
- */
+const RESET_BATCH = 64;
+
+/** Drops every particle, then seeds one per entry that has an embedding; `entries` may be read lazily, as each batch is written before the next is read. */
 export function resetAllPhysicsState(
   db: DatabaseSyncLike,
-  entries: MemoryEntry[],
+  entries: Iterable<MemoryEntry>,
   embeddingIndex: Record<string, number[]>,
   now: Date = evalNow(),
 ): number {
   db.exec('DELETE FROM memory_physics');
 
-  const particles: PhysicsParticle[] = [];
-  for (const entry of entries) {
-    const embedding = embeddingIndex[entry.id];
-    if (!embedding || embedding.length === 0) continue;
-    particles.push(initializeParticle(entry, embedding, now));
-  }
-
-  if (particles.length > 0) {
-    savePhysicsState(db, particles);
-  }
-
-  return particles.length;
+  // One transaction for every batch, so a failure part way leaves no particles rather than some.
+  return withWriteScope(db, 'reset_particles', () => {
+    let count = 0;
+    let batch: PhysicsParticle[] = [];
+    const flush = (): void => {
+      savePhysicsState(db, batch);
+      count += batch.length;
+      batch = [];
+    };
+    for (const entry of entries) {
+      const embedding = embeddingIndex[entry.id];
+      if (!embedding || embedding.length === 0) continue;
+      if (batch.push(initializeParticle(entry, embedding, now)) === RESET_BATCH) flush();
+    }
+    flush();
+    return count;
+  });
 }
 
 /**

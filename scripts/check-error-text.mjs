@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Per-file count of hand-spelled caught-error text in src/ may fall, never rise: use errorMessage() from src/log.ts.
+// Per-file count of hand-spelled caught-error text in src/ may fall, never rise: use errorMessage() from src/util/log.ts.
 // Usage: check-error-text.mjs [--update]. --update rewrites the baseline and refuses to raise a number.
 
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -24,7 +24,7 @@ function walk(dir, out = []) {
 const counts = {};
 for (const f of walk('src')) {
   const file = f.replaceAll('\\', '/');
-  if (file === 'src/log.ts') continue;
+  if (file === 'src/util/log.ts') continue;
   const text = readFileSync(f, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:\\])\/\/.*$/gm, '$1');
   const n = PATTERNS.reduce((sum, re) => sum + (text.match(re)?.length ?? 0), 0);
   if (n > 0) counts[file] = n;
@@ -37,7 +37,7 @@ if (process.argv.includes("--update")) {
   writeFileSync(BASELINE, `${JSON.stringify(counts, null, 2)}\n`);
   console.log(`Wrote ${BASELINE}: ${Object.values(counts).reduce((a, b) => a + b, 0)} hits over ${Object.keys(counts).length} files.`);
 } else if (risen.length > 0) {
-  for (const [f, n] of risen) console.error(`${f}: ${n} hand-spelled error text (baseline ${base[f] ?? 0}); call errorMessage() from src/log.ts`);
+  for (const [f, n] of risen) console.error(`${f}: ${n} hand-spelled error text (baseline ${base[f] ?? 0}); call errorMessage() from src/util/log.ts`);
   process.exit(1);
 } else {
   console.log(`Error-text ratchet OK: ${Object.values(counts).reduce((a, b) => a + b, 0)} hits, none above ${BASELINE}.`);

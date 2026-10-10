@@ -13,7 +13,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { fileURLToPath } from 'url';
 
-import { createMemory, type MemoryEntry } from '../src/memory.js';
+import { createMemory, type MemoryEntry } from '../src/core/memory.js';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
@@ -40,8 +40,7 @@ function seedMemory(
   return withLabel;
 }
 
-function buildSeedSet(hippoRoot: string): void {
-  // Production rules
+function seedProductionRules(hippoRoot: string): void {
   seedMemory(hippoRoot, 'never_overwrite',
     `NEVER overwrite existing production files. Create versioned copies (e.g. brent_production_v5.py), keep original intact, let Keith promote.`,
     { tags: ['production', 'rule', 'critical'], emotional_valence: 'critical', pinned: true });
@@ -57,8 +56,9 @@ function buildSeedSet(hippoRoot: string): void {
   seedMemory(hippoRoot, 'powershell_semicolons',
     `PowerShell uses semicolons not && to chain commands. Correct: npm run build; npx wrangler deploy. Wrong: npm run build && npx wrangler deploy.`,
     { tags: ['platform', 'powershell', 'windows', 'error'], emotional_valence: 'negative' });
+}
 
-  // Data pipeline
+function seedDataPipeline(hippoRoot: string): void {
   seedMemory(hippoRoot, 'fred_cache_drop',
     `FRED cache can silently drop series. tips_10y (DFII10) vanished from fred_weekly.parquet, breaking the gold model. Always verify cache contents after refresh failures.`,
     { tags: ['data-pipeline', 'fred', 'error', 'gold-model'], emotional_valence: 'negative' });
@@ -86,8 +86,9 @@ function buildSeedSet(hippoRoot: string): void {
   seedMemory(hippoRoot, 'fred_column_alias',
     `FRED column alias map: tips_10y->compute(ust_10y-breakeven_10y), yield_curve_3m->yield_curve_10y3m, usdbrl_fred->brlusd, henryhub_spot->henry_hub, wti_spot->wti_fred.`,
     { tags: ['data-pipeline', 'fred', 'columns', 'alias'] });
+}
 
-  // Sub-agent gotchas
+function seedSubagentGotchas(hippoRoot: string): void {
   seedMemory(hippoRoot, 'subagent_american_english',
     `Sub-agents use American English. Review before deploying: favorable->favourable, maximize->maximise. Also invalid UI colours: teal, orange, pink not allowed.`,
     { tags: ['sub-agent', 'review', 'spelling', 'ui'] });
@@ -103,8 +104,9 @@ function buildSeedSet(hippoRoot: string): void {
   seedMemory(hippoRoot, 'subagent_novel_data',
     `Suggest novel data sources proactively: NDVI, satellite data, soil moisture, sea surface temps. Don't default to conventional financial/macro sources only.`,
     { tags: ['sub-agent', 'data-sources', 'creativity'] });
+}
 
-  // Quant model lessons
+function seedQuantLessons(hippoRoot: string): void {
   seedMemory(hippoRoot, 'walk_forward_overestimates',
     `Walk-forward OOS Sharpe overestimates by ~50%. CPCV Exp 7: mean WF=1.15 vs CPCV=0.56 (+0.59 avg). Use CPCV-deflated Sharpe for honest reporting.`,
     { tags: ['quant', 'backtest', 'sharpe', 'cpcv', 'walk-forward'] });
@@ -132,7 +134,9 @@ function buildSeedSet(hippoRoot: string): void {
   seedMemory(hippoRoot, 'cpcv_deflation',
     `CPCV deflation needed for honest Sharpe reporting. Walk-forward inflates by ~50%. Use CPCV-deflated Sharpe for risk management and sizing decisions.`,
     { tags: ['quant', 'cpcv', 'sharpe', 'risk'] });
+}
 
+function seedFrontendAndOps(hippoRoot: string): void {
   // Frontend/deploy
   seedMemory(hippoRoot, 'build_before_deploy',
     `Always run npm run build before deploying frontend. Deploy command: npx wrangler pages deploy out --project-name=project-e. Missing build step deploys stale code.`,
@@ -150,6 +154,14 @@ function buildSeedSet(hippoRoot: string): void {
   seedMemory(hippoRoot, 'alternative_data_sources',
     `Alternative data sources for commodity models: NDVI, satellite imagery, soil moisture, sea surface temperatures, shipping AIS. Don't only suggest conventional financial/macro data.`,
     { tags: ['data-sources', 'alternative', 'quant', 'commodities'] });
+}
+
+function buildSeedSet(hippoRoot: string): void {
+  seedProductionRules(hippoRoot);
+  seedDataPipeline(hippoRoot);
+  seedSubagentGotchas(hippoRoot);
+  seedQuantLessons(hippoRoot);
+  seedFrontendAndOps(hippoRoot);
 }
 
 // ---------------------------------------------------------------------------

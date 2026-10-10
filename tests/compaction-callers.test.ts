@@ -6,18 +6,18 @@ import * as path from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { loadContentsWithTag } from '../src/store/entry-reads.js';
-import { closeHippoDb, isStoreBusy, openHippoDb, runWithRequestStores, type DatabaseSyncLike } from '../src/db.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { _resetSharedStoreCacheForTests } from '../src/config.js';
-import { clearProjectIdentityCache } from '../src/project-identity.js';
-import { markSnapshotSaved, PRE_COMPACT_INSTRUCTION, recordSnapshotSaved, recordSummary, saveItems, startCompaction, type ItemContext } from '../src/compaction-record.js';
-import { captureToolFailure, storeLesson } from '../src/capture-error.js';
+import { closeHippoDb, isStoreBusy, openHippoDb, runWithRequestStores, type DatabaseSyncLike } from '../src/db/index.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
+import { clearProjectIdentityCache } from '../src/core/project-identity.js';
+import { markSnapshotSaved, PRE_COMPACT_INSTRUCTION, recordSnapshotSaved, recordSummary, saveItems, startCompaction, type ItemContext } from '../src/capture/compaction-record.js';
+import { captureToolFailure, storeLesson } from '../src/capture/capture-error.js';
 import { failureHash, failureReport } from '../src/capture/failure-reading.js';
 import { WORKING_STATE_CAPS } from '../src/capture/working-state.js';
-import { COMPACTION_ITEM_MAX_CHARS } from '../src/compaction-items.js';
-import { compactResumeText } from '../src/context-render.js';
+import { COMPACTION_ITEM_MAX_CHARS } from '../src/capture/compaction-items.js';
+import { compactResumeText } from '../src/api/context-render.js';
 import { loadActiveTaskSnapshot, saveActiveTaskSnapshot, type ContinuityKey } from '../src/store/sessions.js';
-import { BadRequestError, ConflictError } from '../src/api-errors.js';
+import { BadRequestError, ConflictError } from '../src/core/api-errors.js';
 import type { Context } from '../src/api/types.js';
 import {
   bindSessionOwner,

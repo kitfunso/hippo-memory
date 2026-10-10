@@ -5,13 +5,13 @@ import * as path from 'path';
 import * as fs from 'fs';
 import type { AddressInfo } from 'net';
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'crypto';
-import { evalNow } from '../ablation.js';
+import { evalNow } from '../core/ablation.js';
 import { readEntry } from '../store/entry-reads.js';
 import { listCards } from '../store/cards.js';
-import { resolveTenantId } from '../tenant.js';
-import { loadCardDetail } from '../card-detail.js';
-import { bodyDeadlineMs, BodyTimeoutError, closeAfterReply, isCrossSite, LOOPBACK_HOST_HEADER } from '../http-util.js';
-import { errorMessage, log } from '../log.js';
+import { resolveTenantId } from '../store/tenant.js';
+import { loadCardDetail } from '../store/card-detail.js';
+import { bodyDeadlineMs, BodyTimeoutError, closeAfterReply, isCrossSite, LOOPBACK_HOST_HEADER } from '../util/http-util.js';
+import { errorFields, errorMessage, log } from '../util/log.js';
 import { createSnapshotService, isLiveMemory, type SnapshotService } from './dashboard-snapshot.js';
 import {
   buildMemoryDetail, buildMemoryPage, buildOverview, buildProjectDetail, buildSearch,
@@ -23,6 +23,9 @@ import {
   ParamError, parseActionBody, parseConflictId, parseMemoryId, parseMemoryQuery, parseSearchText, type ActionBody,
 } from './dashboard-params.js';
 import { runWithRequestId } from '../util/request-scope.js';
+import { installSignalHandlers } from '../util/crash-handlers.js';
+import { DEFAULT_SHUTDOWN_DRAIN_MS, drainAndClose, setKeepAliveTimeouts, shutdownBoundMs } from '../server/lifecycle.js';
+import { printError } from '../cli/output.js';
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -322,7 +325,7 @@ function answerDashboardFailure(req: http.IncomingMessage, res: http.ServerRespo
   const clientFault = err instanceof ParamError || err instanceof URIError || err instanceof BodyTimeoutError;
   // A cut-short response is logged even for a client fault; a bare 400 is not.
   if (res.headersSent || !clientFault) {
-    log.error('dashboard request failed', { error: errorMessage(err), path: req.url });
+    log.error('dashboard request failed', { ...errorFields(err), error: errorMessage(err), path: req.url });
   }
   if (res.headersSent) {
     res.end();
@@ -346,12 +349,53 @@ function printDashboardBanner(boundPort: number, token: string, distUiDir: strin
   console.log('Press Ctrl+C to stop.');
 }
 
+/** A port that will not open is the user's to fix, so it gets one plain line and a failure exit code, not an uncaught error's stack. */
+function reportListenFailure(port: number, err: Error): void {
+  const inUse = 'code' in err && err.code === 'EADDRINUSE';
+  printError(inUse
+    ? `hippo dashboard: port ${port} is already in use. Stop the program that holds it, or choose another port with --port <number>.`
+    : `hippo dashboard: could not listen on port ${port}: ${err.message}. Choose another port with --port <number>.`);
+  process.exitCode = 1;
+}
+
+/** Ctrl+C or a stop signal: stop listening, give open requests the API server's drain, and leave within its shutdown bound. */
+function stopOnSignal(server: http.Server): void {
+  const inflight = new Set<http.ServerResponse>();
+  server.on('request', (_req, res) => {
+    inflight.add(res);
+    res.once('close', () => inflight.delete(res));
+  });
+  installSignalHandlers('dashboard', {
+    run: () => drainAndClose(server, inflight, DEFAULT_SHUTDOWN_DRAIN_MS),
+    boundMs: shutdownBoundMs(DEFAULT_SHUTDOWN_DRAIN_MS),
+  });
+}
+
+/** Gives the listener the API server's socket deadlines and one close of the store's connection; with `handleSignals`, a signal stops it too. */
+function superviseListener(server: http.Server, snapshots: SnapshotService, port: number, handleSignals: boolean): void {
+  setKeepAliveTimeouts(server);
+  let storeClosed = false;
+  const closeStore = (): void => {
+    if (storeClosed) return;
+    storeClosed = true;
+    snapshots.close();
+  };
+  server.on('close', closeStore);
+  server.on('error', (err) => {
+    // Once it listens, an 'error' is a failed accept: logged, as the API server does, and the dashboard keeps serving.
+    if (server.listening) return log.error(`dashboard: listener error: ${err.message}`, errorFields(err));
+    reportListenFailure(port, err);
+    // A failed listen emits no 'close', so the store closes here.
+    closeStore();
+  });
+  if (handleSignals) stopOnSignal(server);
+}
 /** Serves the dashboard on 127.0.0.1 behind a per-start `token` (tests pass one), since loopback alone lets any local process read every memory; `opts` sets the projection and cache clocks. */
 export function serveDashboard(
   hippoRoot: string,
   port: number = 3333,
   token: string = randomBytes(32).toString('base64url'),
-  opts?: { now?: () => number; cacheClock?: () => number },
+  opts?: { now?: () => number; cacheClock?: () => number; handleSignals?: boolean },
 ): http.Server {
   const distUiDir = path.resolve(import.meta.dirname, '..', 'dist-ui');
   const hasDistUi = fs.existsSync(path.join(distUiDir, 'index.html'));
@@ -386,7 +430,7 @@ export function serveDashboard(
   };
   // One id per request, so the lines it logs can be told apart from a concurrent request's.
   const server = http.createServer((req, res) => runWithRequestId(randomUUID(), () => onRequest(req, res)));
-  server.on('close', () => snapshots.close());
+  superviseListener(server, snapshots, port, opts?.handleSignals === true);
 
   server.listen(port, '127.0.0.1', () => {
     // SAFETY: listen() was given a TCP port, so address() is AddressInfo, never a pipe name.

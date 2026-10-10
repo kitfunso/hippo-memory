@@ -1,10 +1,10 @@
 // `hippo capture --last-session` for a caller whose transcript was read on another machine: its project names the rows, never the store's folder.
-import { BadRequestError } from '../api-errors.js';
+import { BadRequestError } from '../core/api-errors.js';
 import type { Context } from '../api/types.js';
-import { assertCallerIds, type CallerProject } from '../prompt-hook.js';
-import { assertCallerProject, projectNames } from '../project-identity.js';
-import { longestWord, storedTextKeys } from '../same-text.js';
-import { scrubForSharing } from '../share-scrub.js';
+import { assertCallerIds, type CallerProject } from '../api/prompt-hook.js';
+import { assertCallerProject, projectNames } from '../core/project-identity.js';
+import { longestWord, storedTextKeys } from '../util/same-text.js';
+import { scrubForSharing } from './share-scrub.js';
 import { loadTextsHoldingWords } from '../store/candidates.js';
 import { captureExtractedItems, type CaptureTally } from './command.js';
 import { extractFromTexts } from './extract.js';

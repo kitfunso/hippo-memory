@@ -1,12 +1,13 @@
-import type { MemoryEntry } from '../memory.js';
-import { closeHippoDb, type DatabaseSyncLike, withWriteScope } from '../db.js';
-import { assertTenantId } from '../tenant.js';
+import type { MemoryEntry } from '../core/memory.js';
+import { closeHippoDb, type DatabaseSyncLike, withWriteScope } from '../db/index.js';
+import { assertTenantId } from './tenant.js';
 import { findRejectedValue, rejectionDigest } from './rejection.js';
-import { log } from '../log.js';
+import { log } from '../util/log.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry } from './rows.js';
 import { audit } from './audit-event.js';
 import { syncFtsRow } from './entry-row.js';
 import { openStore } from './open.js';
+import { DIGEST_DISPLAY_CHARS } from '../util/token-text.js';
 
 // ---------------------------------------------------------------------------
 // Dirty-flag helpers for DAG summaries: child writes mark a summary dirty, and the
@@ -285,10 +286,15 @@ function auditRefusedRebuild(
   // post-rollback auditRejectionRefusal helper (writeEntry/supersede's
   // tool) is the wrong one here; a direct audit() call is correct and
   // commits with the rest of this savepoint.
-  audit(db, 'reject_refusal', { targetId: summary.id, metadata: { digest: tombstone.digest, reason: tombstone.reason }, actor: patch.actor, tenantId: summary.tenantId });
+  audit(db, 'reject_refusal', {
+    targetId: summary.id,
+    metadata: { digest: tombstone.digest, reason: tombstone.reason },
+    actor: patch.actor,
+    tenantId: summary.tenantId
+  });
   log.warn(
     `applyRebuildResult: refused rebuild content for ${summary.id} — matches a rejected value ` +
-      `(digest ${tombstone.digest.slice(0, 12)}...); metadata updated, content unchanged`,
+      `(digest ${tombstone.digest.slice(0, DIGEST_DISPLAY_CHARS)}...); metadata updated, content unchanged`,
   );
 }
 

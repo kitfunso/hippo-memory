@@ -31,9 +31,9 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { openHippoDb, closeHippoDb } from '../../dist/db.js';
-import { tokensBySession } from '../../dist/token-ledger.js';
-import { getGlobalRoot } from '../../dist/shared.js';
+import { openHippoDb, closeHippoDb } from '../../dist/db/index.js';
+import { tokensBySession } from '../../dist/store/token-ledger.js';
+import { getGlobalRoot } from '../../dist/sharing/global-store.js';
 import { isInitialized } from '../../dist/store/open.js';
 import { priceUsage, uncachedEquivalentInput } from '../../dist/eval/eval-stats.js';
 

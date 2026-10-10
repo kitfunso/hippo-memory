@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 // Fails when the CLI ranks or records a recall itself: `hippo recall` and `hippo explain` go through retrieve(),
 // which owns the ranking core and every row a recall writes, so the three surfaces cannot drift apart again.
+// Also fails when a CLI file names a memory writer or the store opener: a verb's row change lives behind a function that takes the store root.
 
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { stripComments } from './lib/source-text.mjs';
 
 /** The ranking core and the writers only a recall uses. No CLI file may name one. */
 export const RECALL_ONLY = [
@@ -28,6 +30,8 @@ export const SHARED_WRITERS = [
   'recordTokenUse',
   'recordTokens',
   'withLedgerDb',
+  'bookTokenUse',
+  'bookLedgerTurn',
   'updateStats',
   'updateStatsUnlessBusy',
   'openHippoDb',
@@ -36,10 +40,18 @@ export const SHARED_WRITERS = [
 /** The files that implement the recall verbs, relative to the source root. */
 export const RECALL_VERB_FILES = ['cli/recall.ts', 'cli/explain.ts'];
 
-/** Blanks comments, keeping line numbers, so prose that names a writer is not a call. */
-function stripComments(text) {
-  return text.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' ')).replace(/(^|[^:\\])\/\/.*$/gm, '$1');
-}
+/** The memory writers and the store opener. A CLI verb reaches them through a root-taking function in src/api or the module that owns the rows. */
+export const STORE_WRITERS = ['writeEntry', 'deleteEntry', 'deleteEntryCore', 'batchWriteAndDelete', 'openHippoDb'];
+
+/** The CLI files that may still name some of them, each with its reason. A new entry needs one too. */
+export const STORE_WRITER_EXCEPTIONS = {
+  // Repairs a store without migrating it, so it opens the file itself and deletes on that handle.
+  'cli/quality-repair.ts': STORE_WRITERS,
+  // Both hand their handle to src/sharing/project-merge.ts. An opener there raises check-store-port's openersOutside,
+  // and the merge cannot move into src/store, which may not import src/agent-memories.
+  'cli/projects.ts': ['openHippoDb'],
+  'cli/sleep.ts': ['openHippoDb'],
+};
 
 /**
  * Returns each line of a source text that names one of `names` as an identifier, imports included.
@@ -70,14 +82,25 @@ function listSourceFiles(dir) {
  * @returns {{ file: string, line: number, name: string }[]}
  */
 export function findCliRecallWrites(srcDir) {
+  return findInCli(srcDir, (file) => (RECALL_VERB_FILES.includes(file) ? [...RECALL_ONLY, ...SHARED_WRITERS] : RECALL_ONLY));
+}
+
+/**
+ * Finds every CLI file under srcDir that names a memory writer or the store opener it has no exception for.
+ * @param {string} srcDir
+ * @returns {{ file: string, line: number, name: string }[]}
+ */
+export function findCliStoreWrites(srcDir) {
+  return findInCli(srcDir, (file) => STORE_WRITERS.filter((name) => !(STORE_WRITER_EXCEPTIONS[file] ?? []).includes(name)));
+}
+
+/** Each line of a CLI file under srcDir that names one of the identifiers `bannedIn` answers for that file, sorted. */
+function findInCli(srcDir, bannedIn) {
   const root = resolve(srcDir);
   return listSourceFiles(root)
     .map((p) => [relative(root, p).replace(/\\/g, '/'), p])
     .filter(([file]) => file === 'cli.ts' || file.startsWith('cli/'))
-    .flatMap(([file, p]) => {
-      const banned = RECALL_VERB_FILES.includes(file) ? [...RECALL_ONLY, ...SHARED_WRITERS] : RECALL_ONLY;
-      return namedOnLines(readFileSync(p, 'utf8'), banned).map((hit) => ({ file, ...hit }));
-    })
+    .flatMap(([file, p]) => namedOnLines(readFileSync(p, 'utf8'), bannedIn(file)).map((hit) => ({ file, ...hit })))
     .sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line || a.name.localeCompare(b.name));
 }
 
@@ -89,7 +112,14 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     console.error(`\n${hits.length} recall ranking or recording reference(s) in the CLI under ${srcDir}/:`);
     for (const h of hits) console.error(`  ${srcDir}/${h.file}:${h.line}: ${h.name}`);
     console.error('\nFix: pass the input to retrieve() (src/api/recall.ts) and let it rank and record; the CLI parses flags and prints.\n');
-    process.exit(1);
   }
-  console.log(`The CLI ranks and records recall only through retrieve(). OK.`);
+  const writes = findCliStoreWrites(srcDir);
+  if (writes.length > 0) {
+    console.error(`\n${writes.length} memory writer or store opener reference(s) in the CLI under ${srcDir}/:`);
+    for (const h of writes) console.error(`  ${srcDir}/${h.file}:${h.line}: ${h.name}`);
+    console.error('\nFix: move the row change into a function that takes the store root, in src/api or the module that owns the rows, and call that.\n');
+  }
+  if (hits.length + writes.length > 0) process.exit(1);
+  console.log('The CLI ranks and records recall only through retrieve(). OK.');
+  console.log('The CLI writes memories and opens the store only through functions that take the root. OK.');
 }

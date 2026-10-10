@@ -2,7 +2,10 @@
 
 /** Thrown by a hippo.db open inside a request served from another store: the code path is not ported to the store port yet. */
 export class SqliteBlockedError extends Error {
-  constructor(readonly storeKind: string, message = `hippo.db is not opened while the '${storeKind}' store serves this request; this code path is not ported to the store yet`) {
+  constructor(
+    readonly storeKind: string,
+    message = `hippo.db is not opened while the '${storeKind}' store serves this request; this code path is not ported to the store yet`
+  ) {
     super(message);
     this.name = 'SqliteBlockedError';
   }

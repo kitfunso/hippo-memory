@@ -18,9 +18,9 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { authCreate, adminActor, type HippoDbContext } from '../src/api.js';
+import { authCreate, adminActor, type HippoDbContext } from '../src/api/index.js';
 import { listApiKeys } from '../src/store/auth.js';
-import { openHippoDb, closeHippoDb } from '../src/db.js';
+import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 
 function newCtx(tenantId = 'default') {
   const tmpDir = mkdtempSync(join(tmpdir(), 'hippo-auth-role-cli-'));
@@ -75,7 +75,7 @@ describe('auth CLI role surfacing', () => {
 
       const db = openHippoDb(t.ctx.hippoRoot);
       try {
-        const items = listApiKeys(db, { active: true });
+        const items = listApiKeys(t.ctx.hippoRoot, { active: true });
         expect(items.length).toBe(2);
         const byLabel = Object.fromEntries(items.map(i => [i.label, i.role]));
         expect(byLabel['admin-key']).toBe('admin');
@@ -105,7 +105,7 @@ describe('auth CLI role surfacing', () => {
           VALUES (?, ?, ?, ?, ?, ?)
         `).run('hk_legacy0000000000000000', 'fakehash', 'default', 'legacy', new Date().toISOString(), 'superadmin');
 
-        const items = listApiKeys(db, { active: true });
+        const items = listApiKeys(t.ctx.hippoRoot, { active: true });
         const legacy = items.find(i => i.keyId === 'hk_legacy0000000000000000');
         expect(legacy).toBeDefined();
         expect(legacy!.role).toBe('member'); // fail-safe-to-member

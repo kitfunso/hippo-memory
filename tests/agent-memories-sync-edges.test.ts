@@ -1,12 +1,12 @@
 // Design 6's edge rows from the plan's Added list: supersede, restore, collapse, pin, refuse and the dormant lookups.
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { chmodSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { forget, reject, restoreDormant, supersede } from '../src/api.js';
+import { forget, reject, restoreDormant, supersede } from '../src/api/index.js';
 import { importForStore } from '../src/agent-memories/sync.js';
 import type { ImportReport } from '../src/agent-memories/report.js';
 import { insertDormantRow } from '../src/store/dormant.js';
-import { createMemory, type MemoryEntry } from '../src/memory.js';
+import { createMemory, type MemoryEntry } from '../src/core/memory.js';
 import { removeEntryMirrors } from '../src/store/mirrors.js';
 import { deleteEntryRowInTx, writeEntry } from '../src/store/entry-writes.js';
 import { readEntry } from '../src/store/entry-reads.js';
@@ -15,6 +15,9 @@ import {
   auditCount, auditTotal, closeWorld, codexSummary, ctxFor, dormantRows, expectedContainer, liveRows, liveTexts, note, openWorld, projectNotes,
   sha, toolTally, withDb, type World,
 } from './_helpers/agent-memories-world.js';
+
+// Every sync asks git for each folder's layout in a child process, and a case runs several syncs.
+vi.setConfig({ testTimeout: 30_000 });
 
 const A = 'Run the schema check before this service deploys.';
 const B = 'Run the schema check and the smoke test before each deploy.';

@@ -11,11 +11,11 @@ import { request as httpRequest } from 'node:http';
 import type { Server } from 'node:http';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, confidenceFacets, resolveConfidence, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { createMemory, confidenceFacets, resolveConfidence, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { serveDashboard } from '../src/dashboard/dashboard.js';
 import { boundPort } from './_helpers/listen.js';
 import { handleMcpRequest } from '../src/mcp/server.js';
-import { _resetAblationCacheForTests } from '../src/ablation.js';
+import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 
 const DASHBOARD_TOKEN = 'test-dashboard-token';
 
@@ -32,7 +32,7 @@ function seed(
   content: string,
   over: Partial<MemoryEntry> = {},
 ): MemoryEntry {
-  const e = { ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['facets'] }), ...over } as MemoryEntry;
+  const e = { ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['facets'] }), ...over };
   writeEntry(root, e);
   return e;
 }
@@ -120,7 +120,7 @@ describe('confidence facets', () => {
   });
 
   it('leaves resolveConfidence behaviour unchanged across every shape', () => {
-    const shapes: Array<[Partial<MemoryEntry>, string]> = [
+    const cases: Array<[Partial<MemoryEntry>, string]> = [
       [{ confidence: 'observed', last_retrieved: ago(45) }, 'stale'],
       [{ confidence: 'observed', last_retrieved: ago(1) }, 'observed'],
       [{ confidence: 'inferred', last_retrieved: ago(45) }, 'stale'],
@@ -128,7 +128,7 @@ describe('confidence facets', () => {
       [{ confidence: 'verified', last_retrieved: ago(999) }, 'verified'],
       [{ confidence: 'observed', last_retrieved: ago(999), pinned: true }, 'observed'],
     ];
-    for (const [over, want] of shapes) {
+    for (const [over, want] of cases) {
       const e = seed(hippoRoot, `shape ${want} ${JSON.stringify(over)}`, over);
       expect(resolveConfidence(e, NOW)).toBe(want);
     }
@@ -194,9 +194,9 @@ describe('confidence facets', () => {
       last_retrieved: ago(45),
     });
 
-    const out = JSON.parse(runCli(home, ['recall', 'haddock', '--json', '--why'])) as {
-      results: Array<{ confidence: string; aged_out: boolean }>;
-    };
+    const out: { results: Array<{ confidence: string; aged_out: boolean }> } = JSON.parse(
+      runCli(home, ['recall', 'haddock', '--json', '--why']),
+    );
 
     expect(out.results[0]!.confidence).toBe('observed');
     expect(out.results[0]!.aged_out).toBe(true);
@@ -208,9 +208,9 @@ describe('confidence facets', () => {
       last_retrieved: ago(45),
     });
 
-    const out = JSON.parse(runCli(home, ['explain', 'haddock', '--json'])) as {
-      results: Array<{ confidence: string; aged_out: boolean }>;
-    };
+    const out: { results: Array<{ confidence: string; aged_out: boolean }> } = JSON.parse(
+      runCli(home, ['explain', 'haddock', '--json']),
+    );
 
     expect(out.results[0]!.confidence).toBe('observed');
     expect(out.results[0]!.aged_out).toBe(true);
@@ -222,13 +222,13 @@ describe('confidence facets', () => {
       last_retrieved: ago(45),
     });
 
-    const payload = JSON.parse(
+    const payload: { memories: Array<{ content: string; confidence: string }> } = JSON.parse(
       runCli(home, ['context', 'haddock', '--format', 'json']),
-    ) as { memories: Array<Record<string, unknown>> };
+    );
 
-    const row = payload.memories.find((e) => String(e['content']).includes('haddock'));
+    const row = payload.memories.find((e) => e.content.includes('haddock'));
     expect(row).toBeDefined();
-    expect(row!['confidence']).toBe('observed');
+    expect(row!.confidence).toBe('observed');
     expect(row).not.toHaveProperty('aged_out');
   });
 
@@ -264,10 +264,9 @@ describe('confidence facets', () => {
 
     expect(runCli(home, ['trace', e.id])).toContain('observed, aged');
 
-    const json = JSON.parse(runCli(home, ['trace', e.id, '--json'])) as {
-      confidence: string;
-      aged_out: boolean;
-    };
+    const json: { confidence: string; aged_out: boolean } = JSON.parse(
+      runCli(home, ['trace', e.id, '--json']),
+    );
     expect(json.confidence).toBe('observed');
     expect(json.aged_out).toBe(true);
   });

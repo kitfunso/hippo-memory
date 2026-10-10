@@ -1,9 +1,10 @@
-import { generateId } from '../memory.js';
-import { closeHippoDb, withWriteScope, withWriteScopeOr, type DatabaseSyncLike } from '../db.js';
-import { SessionHandoff, SessionHandoffRow, rowToSessionHandoff, isHandoffOutcome, HandoffOutcome } from '../handoff.js';
-import { Card, CardStatus, CardRun, CardComment, CARD_TRANSITIONS, CARD_LEASE_MS } from '../card.js';
-import { assertTenantId } from '../tenant.js';
+import { generateId } from '../core/memory.js';
+import { closeHippoDb, withWriteScope, withWriteScopeOr, type DatabaseSyncLike } from '../db/index.js';
+import { SessionHandoff, SessionHandoffRow, rowToSessionHandoff, isHandoffOutcome, HandoffOutcome } from '../core/handoff.js';
+import { Card, CardStatus, CardRun, CardComment, CARD_TRANSITIONS, CARD_LEASE_MS } from '../core/card.js';
+import { assertTenantId } from './tenant.js';
 import { openStore } from './open.js';
+import { chunked } from './entry-reads.js';
 import { HANDOFF_COLUMNS } from './handoffs.js';
 
 // ---------------------------------------------------------------------------
@@ -135,6 +136,11 @@ export interface TransitionCardOptions {
 }
 
 export function transitionCard(db: DatabaseSyncLike, tenantId: string, cardId: string, options: TransitionCardOptions): number {
+  return transitionCards(db, tenantId, [cardId], options);
+}
+
+/** transitionCard for every card in `cardIds`, as one statement with one timestamp; returns how many moved. */
+function transitionCards(db: DatabaseSyncLike, tenantId: string, cardIds: readonly string[], options: TransitionCardOptions): number {
   const { from, to, extra } = options;
   for (const status of from) {
     if (!CARD_TRANSITIONS[status].includes(to)) {
@@ -147,14 +153,15 @@ export function transitionCard(db: DatabaseSyncLike, tenantId: string, cardId: s
   const fromPlaceholders = from.map(() => '?').join(', ');
   const sql = `
     UPDATE cards SET status = ?, updated_at = ?, lease_until = ?, heartbeat_at = ?${extra?.setSql ? `, ${extra.setSql}` : ''}
-    WHERE id = ? AND tenant_id = ? AND status IN (${fromPlaceholders})${extra?.whereSql ? ` AND ${extra.whereSql}` : ''}
+    WHERE id IN (${cardIds.map(() => '?').join(', ')}) AND tenant_id = ? AND status IN (${fromPlaceholders})${extra?.whereSql ? ` AND ${extra.whereSql}` : ''}
   `;
-  const params: unknown[] = [to, now, ...lease, ...(extra?.params ?? []), cardId, tenantId, ...from];
+  const params: unknown[] = [to, now, ...lease, ...(extra?.params ?? []), ...cardIds, tenantId, ...from];
   const result = db.prepare(sql).run(...params);
   return Number(result.changes ?? 0);
 }
 
-/** Creates a card; status is ready with no deps or once every dependsOn id is done, else backlog. An unknown dependsOn id throws and commits nothing. A repeated dependsOn id is recorded once. */
+/** Creates a card; status is ready with no deps or once every dependsOn id is done, else backlog.
+ * An unknown dependsOn id throws and commits nothing. A repeated dependsOn id is recorded once. */
 export function createCard(
   hippoRoot: string,
   tenantId: string,
@@ -175,22 +182,7 @@ export function createCard(
     withWriteScope(db, 'create_card', () => {
       // Probe runs inside the transaction (mirrors batchWriteAndDelete): a parent
       // completing between an outside-the-lock read and the INSERT would strand the child.
-      let allParentsDone = true;
-      if (dependsOn.length > 0) {
-        const placeholders = dependsOn.map(() => '?').join(', ');
-        // SAFETY: rows' shape matches the two columns named in the SELECT below.
-        const rows = db.prepare(
-          `SELECT id, status FROM cards WHERE tenant_id = ? AND id IN (${placeholders})`,
-        ).all(tenantId, ...dependsOn) as Array<{ id: string; status: string }>;
-        const found = new Map(rows.map((r) => [r.id, r.status]));
-        // Pre-check before any write: a typo'd --depends-on can never commit a card row.
-        for (const parentId of dependsOn) {
-          if (!found.has(parentId)) {
-            throw new Error(`unknown parent card id: ${parentId}`);
-          }
-        }
-        allParentsDone = dependsOn.every((pid) => found.get(pid) === 'done');
-      }
+      const allParentsDone = everyParentDone(db, tenantId, dependsOn);
 
       id = generateId('card');
       const now = new Date().toISOString();
@@ -200,16 +192,33 @@ export function createCard(
         INSERT INTO cards (id, title, status, repo, contract, budget, created_at, updated_at, tenant_id)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(id, input.title, status, input.repo ?? null, input.contract ?? null, input.budget ?? null, now, now, tenantId);
-      for (const parentId of dependsOn) {
-        db.prepare(`
-          INSERT INTO card_deps (parent, child, tenant_id, created_at) VALUES (?, ?, ?, ?)
-        `).run(parentId, id, tenantId, now);
-      }
+      const insertDep = db.prepare(`
+        INSERT INTO card_deps (parent, child, tenant_id, created_at) VALUES (?, ?, ?, ?)
+      `);
+      for (const parentId of dependsOn) insertDep.run(parentId, id, tenantId, now);
     });
     return loadCardRow(db, tenantId, id)!;
   } finally {
     closeHippoDb(db);
   }
+}
+
+/** Whether every dependsOn card is done, true for none; throws on an id that is no card of the tenant. Call inside the write scope. */
+function everyParentDone(db: DatabaseSyncLike, tenantId: string, dependsOn: readonly string[]): boolean {
+  if (dependsOn.length === 0) return true;
+  const placeholders = dependsOn.map(() => '?').join(', ');
+  // SAFETY: rows' shape matches the two columns named in the SELECT below.
+  const rows = db.prepare(
+    `SELECT id, status FROM cards WHERE tenant_id = ? AND id IN (${placeholders})`,
+  ).all(tenantId, ...dependsOn) as Array<{ id: string; status: string }>;
+  const found = new Map(rows.map((r) => [r.id, r.status]));
+  // Pre-check before any write: a typo'd --depends-on can never commit a card row.
+  for (const parentId of dependsOn) {
+    if (!found.has(parentId)) {
+      throw new Error(`unknown parent card id: ${parentId}`);
+    }
+  }
+  return dependsOn.every((pid) => found.get(pid) === 'done');
 }
 
 /** Returns the card row for id, or null if it does not exist under this tenant. */
@@ -250,9 +259,15 @@ export function loadCardDeps(hippoRoot: string, tenantId: string, id: string) {
   const db = openStore(hippoRoot);
   try {
     // SAFETY: rows' shape matches the single `parent` column named in the SELECT below.
-    const parents = (db.prepare(`SELECT parent FROM card_deps WHERE tenant_id = ? AND child = ?`).all(tenantId, id) as Array<{ parent: string }>).map((r) => r.parent);
+    const parents = (db.prepare(`SELECT parent FROM card_deps WHERE tenant_id = ? AND child = ?`).all(
+      tenantId,
+      id
+    ) as Array<{ parent: string }>).map((r) => r.parent);
     // SAFETY: rows' shape matches the single `child` column named in the SELECT below.
-    const children = (db.prepare(`SELECT child FROM card_deps WHERE tenant_id = ? AND parent = ?`).all(tenantId, id) as Array<{ child: string }>).map((r) => r.child);
+    const children = (db.prepare(`SELECT child FROM card_deps WHERE tenant_id = ? AND parent = ?`).all(
+      tenantId,
+      id
+    ) as Array<{ child: string }>).map((r) => r.child);
     return { parents, children };
   } finally {
     closeHippoDb(db);
@@ -307,7 +322,8 @@ export function loadLatestHandoffForCard(hippoRoot: string, tenantId: string, ca
   }
 }
 
-/** Atomic claim: WHERE status IN (ready, blocked) AND assignee_runtime IS NULL decides the race. Throws on an unknown card id; returns null for a card not ready/blocked or already claimed. Sets a CARD_LEASE_MS lease and returns the new run's id as runId. */
+/** Atomic claim: WHERE status IN (ready, blocked) AND assignee_runtime IS NULL decides the race. Throws on an unknown card id;
+ * returns null for a card not ready/blocked or already claimed. Sets a CARD_LEASE_MS lease and returns the new run's id as runId. */
 export function claimCard(hippoRoot: string, tenantId: string, id: string, runtime: string, sessionId?: string): (Card & { runId: number }) | null {
   assertTenantId('claimCard', tenantId);
   if (runtime.trim() === '') {
@@ -340,7 +356,8 @@ export function claimCard(hippoRoot: string, tenantId: string, id: string, runti
   }
 }
 
-/** Moves a running card's lease to CARD_LEASE_MS from now and records the heartbeat; updated_at is left alone. Throws on an unknown card id or a run id that is not a positive integer; returns null unless the card is running and runId is its live run. */
+/** Moves a running card's lease to CARD_LEASE_MS from now and records the heartbeat; updated_at is left alone. Throws on an
+ * unknown card id or a run id that is not a positive integer; returns null unless the card is running and runId is its live run. */
 export function heartbeatCard(hippoRoot: string, tenantId: string, id: string, runId: number): Card | null {
   assertTenantId('heartbeatCard', tenantId);
   assertRunId(runId);
@@ -365,7 +382,8 @@ export function heartbeatCard(hippoRoot: string, tenantId: string, id: string, r
   }
 }
 
-/** Requires the card be running; closes the live run as blocked and files reason as a comment. Throws on an unknown card id; returns null for a card not running. When runId is given, returns null unless it is the card's live run. */
+/** Requires the card be running; closes the live run as blocked and files reason as a comment. Throws on an unknown
+ * card id; returns null for a card not running. When runId is given, returns null unless it is the card's live run. */
 export function blockCard(hippoRoot: string, tenantId: string, id: string, reason: string, runId?: number): Card | null {
   assertTenantId('blockCard', tenantId);
   if (reason.trim() === '') {
@@ -395,7 +413,8 @@ export function blockCard(hippoRoot: string, tenantId: string, id: string, reaso
   }
 }
 
-/** Requires the card be running; moves it to review, clearing its lease and heartbeat and keeping its live run. When runId is given, returns null unless it is the card's live run. Throws on an unknown card id; returns null for a card not running. */
+/** Requires the card be running; moves it to review, clearing its lease and heartbeat and keeping its live run. When runId is
+ * given, returns null unless it is the card's live run. Throws on an unknown card id; returns null for a card not running. */
 export function reviewCard(hippoRoot: string, tenantId: string, id: string, runId?: number): Card | null {
   assertTenantId('reviewCard', tenantId);
   if (runId !== undefined) assertRunId(runId);
@@ -434,7 +453,6 @@ export function completeCard(
   const db = openStore(hippoRoot);
   try {
     const promoted = withWriteScopeOr(db, 'complete_card', (rollback) => {
-      const promotedChildren: string[] = [];
       const target: CardStatus = outcome === 'success' ? 'done' : 'shelved';
       const allowed = runId === undefined || isLiveRun(db, tenantId, id, runId);
       const changes = allowed ? transitionCard(db, tenantId, id, { from: ['review'], to: target }) : 0;
@@ -449,27 +467,7 @@ export function completeCard(
 
       // Not best-effort (rule 12): promotion runs in this same transaction, so a
       // card can never be `done` with an un-evaluated child.
-      if (target === 'done') {
-        // SAFETY: rows' shape matches the single `child` column named in the SELECT below.
-        const children = (db.prepare(`SELECT child FROM card_deps WHERE tenant_id = ? AND parent = ?`).all(tenantId, id) as Array<{ child: string }>).map((r) => r.child);
-        for (const childId of children) {
-          // SAFETY: row's shape matches the single `status` column named in the SELECT below.
-          const child = db.prepare(`SELECT status FROM cards WHERE tenant_id = ? AND id = ?`).get(tenantId, childId) as { status: string } | undefined;
-          if (!child || child.status !== 'backlog') continue;
-          // SAFETY: rows' shape matches the single `parent` column named in the SELECT below.
-          const parents = (db.prepare(`SELECT parent FROM card_deps WHERE tenant_id = ? AND child = ?`).all(tenantId, childId) as Array<{ parent: string }>).map((r) => r.parent);
-          const placeholders = parents.map(() => '?').join(', ');
-          // SAFETY: row's shape matches the single `c` column named in the SELECT below.
-          const doneCount = (db.prepare(
-            `SELECT COUNT(*) as c FROM cards WHERE tenant_id = ? AND id IN (${placeholders}) AND status = 'done'`,
-          ).get(tenantId, ...parents) as { c: number }).c;
-          if (doneCount === parents.length) {
-            transitionCard(db, tenantId, childId, { from: ['backlog'], to: 'ready' });
-            promotedChildren.push(childId);
-          }
-        }
-      }
-      return promotedChildren;
+      return target === 'done' ? promoteUnblockedChildren(db, tenantId, id) : [];
     });
     return promoted === null ? null : { card: loadCardRow(db, tenantId, id)!, promotedChildren: promoted };
   } finally {
@@ -477,7 +475,24 @@ export function completeCard(
   }
 }
 
-/** Returns to ready every running card of the tenant whose lease has expired or is missing: clears its assignee, closes its live run as 'reclaimed' and leaves its handoffs alone, all in one write transaction. Returns the reclaimed card ids in id order. */
+/** Moves to ready each backlog child of `parentId` whose parents are all done, and returns their ids. Call inside the write scope. */
+function promoteUnblockedChildren(db: DatabaseSyncLike, tenantId: string, parentId: string): string[] {
+  // The child's status and its open parents are result columns, not joins, so the rows keep the order of a plain read of the parent's children.
+  // SAFETY: rows' shape matches the three columns named in the SELECT below.
+  const children = db.prepare(`
+    SELECT d.child AS child,
+      (SELECT c.status FROM cards c WHERE c.tenant_id = ? AND c.id = d.child) AS status,
+      (SELECT COUNT(*) FROM card_deps p WHERE p.tenant_id = ? AND p.child = d.child
+        AND NOT EXISTS (SELECT 1 FROM cards pc WHERE pc.tenant_id = ? AND pc.id = p.parent AND pc.status = 'done')) AS open_parents
+    FROM card_deps d WHERE d.tenant_id = ? AND d.parent = ?
+  `).all(tenantId, tenantId, tenantId, tenantId, parentId) as Array<{ child: string; status: string | null; open_parents: number }>;
+  const unblocked = children.filter((r) => r.status === 'backlog' && r.open_parents === 0).map((r) => r.child);
+  for (const ids of chunked(unblocked)) transitionCards(db, tenantId, ids, { from: ['backlog'], to: 'ready' });
+  return unblocked;
+}
+
+/** Returns to ready every running card of the tenant whose lease has expired or is missing: clears its assignee, closes its live
+ * run as 'reclaimed' and leaves its handoffs alone, all in one write transaction. Returns the reclaimed card ids in id order. */
 export function reclaimExpiredCards(hippoRoot: string, tenantId: string): string[] {
   assertTenantId('reclaimExpiredCards', tenantId);
   const db = openStore(hippoRoot);

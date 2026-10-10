@@ -1,20 +1,22 @@
 // The sleep pipeline behind `sleep`, with its phase dependencies injectable; kept out of the package root.
 
-import { openHippoDb, closeHippoDb } from '../db.js';
 import { loadAllEntries } from '../store/entry-reads.js';
-import { deleteEntry, memoriesBackingObjects } from '../store/delete-and-batch.js';
-import { appendAuditEvent, reportAuditWriteFailure, auditMemories } from '../store/audit.js';
-import { autoShare } from '../shared.js';
+import { memoriesBackingObjects } from '../store/delete-and-batch.js';
+import { reportAuditWriteFailure, auditMemories } from '../store/audit.js';
+import { sqliteSyncStore } from '../store/sqlite/store.js';
+import { autoShare } from '../sharing/share.js';
 import { consolidate } from '../consolidate/sleep.js';
 import { failedUnitOf } from '../store/delete-and-batch.js';
-import { loadConfig } from '../config.js';
-import { deduplicateStore } from '../dedupe.js';
-import { computeAmbientState } from '../ambient.js';
+import { loadConfig } from '../core/config.js';
+import { deduplicateStore } from '../consolidate/dedupe.js';
+import { computeAmbientState } from '../core/ambient.js';
 import { loadPendingExtractionTenants, markPendingProcessedUpTo } from '../store/graph-queue.js';
-import { extractGraphChunked, type ExtractResult } from '../graph-extract.js';
+import { extractGraphChunked, type ExtractResult } from '../graph/extract.js';
+import type { MemoryEntry } from '../core/memory.js';
 import type { Context } from './types.js';
+import { removeAuditErrors } from './audit.js';
 import type { SleepOpts, SleepResult } from './sleep.js';
-import { errorMessage } from '../log.js';
+import { errorMessage } from '../util/log.js';
 
 /** Test-only seam: `runSleep` overrides force a phase to throw into emitSleepAudit's `partial: true` row; production never sets them. */
 export interface SleepPhases {
@@ -23,7 +25,6 @@ export interface SleepPhases {
   auditMemories: typeof auditMemories;
   autoShare: typeof autoShare;
   loadAllEntries: typeof loadAllEntries;
-  deleteEntry: typeof deleteEntry;
   computeAmbientState: typeof computeAmbientState;
   loadConfig: typeof loadConfig;
   loadPendingExtractionTenants: typeof loadPendingExtractionTenants;
@@ -36,7 +37,6 @@ const DEFAULT_SLEEP_PHASES: SleepPhases = {
   auditMemories,
   autoShare,
   loadAllEntries,
-  deleteEntry,
   computeAmbientState,
   loadConfig,
   loadPendingExtractionTenants,
@@ -107,7 +107,8 @@ async function runSleepPhases(
   if (dedupResult.removed > 0) result.deduped = dedupSummary(dedupResult);
 
   // Phase 3: Quality audit (remove junk, report warnings; a dry run skips rows earlier phases would remove).
-  counts.auditDeleted = runQualityAudit(ctx, phases, { dryRun, consolidateResult, dedupResult, result });
+  const audited = runQualityAudit(ctx, phases, { dryRun, consolidateResult, dedupResult, result });
+  counts.auditDeleted = audited.removed;
 
   if (dryRun) return result;
 
@@ -115,7 +116,7 @@ async function runSleepPhases(
   if (!opts.noShare) shareOnSleep(ctx, phases, result);
 
   // Phase 5: Post-sleep ambient state summary.
-  counts.ambient = summarizeAmbient(ctx, phases, result);
+  counts.ambient = summarizeAmbient(ctx, phases, result, audited.remaining);
 
   await drainGraphQueue(ctx, phases, snapshot, result);
   return result;
@@ -173,7 +174,11 @@ function dedupSummary(dedupResult: DedupOutcome): NonNullable<SleepResult['dedup
   };
 }
 
-/** Returns how many audit errors were deleted, or would be under dryRun. */
+interface QualityAuditOutcome {
+  readonly removed: number;
+  readonly remaining: MemoryEntry[];
+}
+
 interface QualityAuditOptions {
   readonly dryRun: boolean;
   readonly consolidateResult: ConsolidateOutcome;
@@ -181,26 +186,25 @@ interface QualityAuditOptions {
   readonly result: SleepResult;
 }
 
-function runQualityAudit(ctx: Context, phases: SleepPhases, options: QualityAuditOptions): number {
+/** `removed` counts audit errors deleted (or that would be under dryRun); `remaining` is what the audit read, less the rows it deleted. */
+function runQualityAudit(ctx: Context, phases: SleepPhases, options: QualityAuditOptions): QualityAuditOutcome {
   const { dryRun, consolidateResult, dedupResult, result } = options;
   const planned = new Set(dryRun ? [...(consolidateResult.removedIds ?? []), ...dedupResult.pairs.map((p) => p.removed)] : []);
   const allEntries = phases.loadAllEntries(ctx.hippoRoot).filter((e) => !planned.has(e.id));
   const auditOut = phases.auditMemories(allEntries, memoriesBackingObjects(ctx.hippoRoot));
-  if (auditOut.issues.length === 0) return 0;
+  if (auditOut.issues.length === 0) return { removed: 0, remaining: allEntries };
   const errors = auditOut.issues.filter((i) => i.severity === 'error');
   const warnings = auditOut.issues.filter((i) => i.severity === 'warning');
-  let removed = 0;
-  for (const issue of errors) {
-    const reason = `sleep-audit: ${issue.reason}`;
-    if (dryRun || phases.deleteEntry(ctx.hippoRoot, issue.memoryId, { actor: ctx.actor.subject, reason, automatic: true })) removed++;
-  }
+  const gone = dryRun ? errors.map((issue) => issue.memoryId) : removeAuditErrors(ctx, 'sleep-audit', errors);
+  const removed = gone.length;
+  const deleted = new Set(gone);
   if (removed > 0 || warnings.length > 0) {
     result.audit = {
       errorsRemoved: removed,
       warningCount: warnings.length,
     };
   }
-  return removed;
+  return { removed, remaining: allEntries.filter((e) => !deleted.has(e.id)) };
 }
 
 function shareOnSleep(ctx: Context, phases: SleepPhases, result: SleepResult): void {
@@ -221,12 +225,10 @@ function shareOnSleep(ctx: Context, phases: SleepPhases, result: SleepResult): v
 }
 
 /** Returns the ambient total the audit row reports: 0 when ambient is off or no current row is left. */
-function summarizeAmbient(ctx: Context, phases: SleepPhases, result: SleepResult): number {
+function summarizeAmbient(ctx: Context, phases: SleepPhases, result: SleepResult, loaded: readonly MemoryEntry[]): number {
   const postSleepConfig = phases.loadConfig(ctx.hippoRoot);
   if (!postSleepConfig.ambient.enabled) return 0;
-  const postSleepEntries = phases.loadAllEntries(ctx.hippoRoot).filter(
-    (e) => !e.superseded_by,
-  );
+  const postSleepEntries = loaded.filter((e) => !e.superseded_by);
   if (postSleepEntries.length === 0) return 0;
   result.ambient = phases.computeAmbientState(postSleepEntries);
   return result.ambient.totalMemories;
@@ -316,32 +318,27 @@ function emitSleepAudit(
   phaseError: Error | null,
 ): void {
   try {
-    const db = openHippoDb(ctx.hippoRoot);
-    try {
-      // Tagged '__host__' because sleep is host-wide; the actor still names the operator who ran it.
-      const sleepAuditMetadata: SleepAuditMetadata = {
-        consolidationCount: counts.consolidation,
-        dedupCount: counts.dedup,
-        auditDeletedCount: counts.auditDeleted,
-        ambientTotal: counts.ambient,
-        dryRun,
-        noShare: opts.noShare ?? false,
-        partial: phaseError !== null,
-        triggeredByTenant: ctx.tenantId, // preserve for audit forensics
-      };
-      if (phaseError) sleepAuditMetadata.errorMessage = phaseError.message;
-      // A flush stopped between chunks names the unit it would have committed next, so a unit that fails every night can be found.
-      const nextUnitIds = failedUnitOf(phaseError);
-      if (nextUnitIds) sleepAuditMetadata.nextUnitIds = nextUnitIds;
-      appendAuditEvent(db, {
-        tenantId: '__host__',
-        actor: ctx.actor.subject,
-        op: 'consolidate',
-        metadata: { ...sleepAuditMetadata },
-      });
-    } finally {
-      closeHippoDb(db);
-    }
+    // Tagged '__host__' because sleep is host-wide; the actor still names the operator who ran it.
+    const sleepAuditMetadata: SleepAuditMetadata = {
+      consolidationCount: counts.consolidation,
+      dedupCount: counts.dedup,
+      auditDeletedCount: counts.auditDeleted,
+      ambientTotal: counts.ambient,
+      dryRun,
+      noShare: opts.noShare ?? false,
+      partial: phaseError !== null,
+      triggeredByTenant: ctx.tenantId, // preserve for audit forensics
+    };
+    if (phaseError) sleepAuditMetadata.errorMessage = phaseError.message;
+    // A flush stopped between chunks names the unit it would have committed next, so a unit that fails every night can be found.
+    const nextUnitIds = failedUnitOf(phaseError);
+    if (nextUnitIds) sleepAuditMetadata.nextUnitIds = nextUnitIds;
+    sqliteSyncStore(ctx.hippoRoot).appendAuditEvents([{
+      tenantId: '__host__',
+      actor: ctx.actor.subject,
+      op: 'consolidate',
+      metadata: { ...sleepAuditMetadata },
+    }]);
   } catch (auditErr) {
     // Logged, never thrown: a second failure must not mask the original phaseError.
     reportAuditWriteFailure('consolidate', String(auditErr));

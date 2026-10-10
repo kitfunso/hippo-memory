@@ -6,16 +6,17 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { batchWriteAndDelete } from '../src/store/delete-and-batch.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
-import { saveEmbeddingIndex, saveStoredEmbeddingModel } from '../src/embeddings.js';
-import { resolveEmbeddingProvider } from '../src/embedding-provider.js';
-import { searchBothHybrid } from '../src/shared.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
+import { saveStoredEmbeddingModel } from '../src/store/embeddings/index.js';
+import { saveEmbeddingIndex } from '../src/store/vector-index.js';
+import { resolveEmbeddingProvider } from '../src/store/embeddings/provider.js';
+import { searchBothHybrid } from '../src/sharing/search-both.js';
 import { recordStatementsAsync } from './_helpers/count-statements.js';
 
 const ROWS = 10_000;
 const FEWER_ROWS = ROWS / 10;
 const DIM = 384;
-// Ten times the rows may cost ten times the time. The smaller recall runs the same code in the same run, so a slow runner and coverage slow both alike.
+// Ten times the rows may read ten times the rows, and no more.
 const MAX_GROWTH = ROWS / FEWER_ROWS;
 // The statements a recall runs and the rows it reads are the same on every runner.
 const MAX_ROWS_READ = 13_000;
@@ -65,22 +66,19 @@ describe('hybrid recall at 10k rows', () => {
       new Response(JSON.stringify({ data: [{ embedding: queryVector }] }), { status: 200 })));
   }, 120_000);
 
-  it('a recall over ten times the rows takes at most ten times as long', async () => {
-    let atRows = Infinity;
-    let atFewer = Infinity;
-    // The fastest of interleaved runs: a stall has to hit every large recall and miss a small one to move the ratio.
-    for (let run = 0; run < 5; run++) {
-      let t0 = performance.now();
-      expect((await recall(home)).length).toBeGreaterThan(0);
-      atRows = Math.min(atRows, performance.now() - t0);
-      t0 = performance.now();
-      expect((await recall(fewer)).length).toBeGreaterThan(0);
-      atFewer = Math.min(atFewer, performance.now() - t0);
-    }
-    const growth = atRows / atFewer;
-    console.log(`hybrid recall: ${atRows.toFixed(0)} ms at ${ROWS} rows, ${atFewer.toFixed(1)} ms at ${FEWER_ROWS}, growth ${growth.toFixed(1)}`);
-    // Work that grows with every row scored, on top of scoring it, grows with the square of the rows and passes the ceiling.
-    expect(growth).toBeLessThan(MAX_GROWTH);
+  it('a recall over ten times the rows runs no more statements and reads at most ten times the rows', async () => {
+    let t0 = performance.now();
+    const atRows = await recordStatementsAsync(() => recall(home));
+    const msAtRows = performance.now() - t0;
+    t0 = performance.now();
+    const atFewer = await recordStatementsAsync(() => recall(fewer));
+    console.log(`hybrid recall: ${msAtRows.toFixed(0)} ms at ${ROWS} rows, ${(performance.now() - t0).toFixed(1)} ms at ${FEWER_ROWS} (printed, not asserted)`);
+    expect(atFewer.result.length).toBeGreaterThan(0);
+    // The smaller recall ran its vector scan too, so the two counts compare like with like.
+    expect(atFewer.rowsRead).toBeGreaterThanOrEqual(FEWER_ROWS);
+    // A query per row scored, or per chunk of rows, grows the statements with the store.
+    expect(atRows.statements.length).toBeLessThanOrEqual(atFewer.statements.length);
+    expect(atRows.rowsRead).toBeLessThanOrEqual(MAX_GROWTH * atFewer.rowsRead);
   }, 120_000);
 
   it('one recall reads each stored vector once and few other rows', async () => {

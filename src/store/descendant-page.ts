@@ -1,6 +1,6 @@
 // A summary's descendants read as a page: every level is counted, and only the rows the caller shows are read whole.
-import type { DatabaseSyncLike } from '../db.js';
-import type { MemoryEntry } from '../memory.js';
+import type { DatabaseSyncLike } from '../db/index.js';
+import type { MemoryEntry } from '../core/memory.js';
 import { chunked, selectEntriesByIds, TENANT_IS } from './entry-reads.js';
 import type { DescendantOrigin, DescendantPage, SummaryDescendants } from './port.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from './rows.js';
@@ -97,7 +97,12 @@ function countedLevel(db: DatabaseSyncLike, walk: PagedWalk, parents: readonly s
 }
 
 // Every parent before the one the page ends in is read whole in one statement; that last one is read under a LIMIT.
-function firstRows(db: DatabaseSyncLike, walk: PagedWalk, parents: readonly string[], at: { perParent: ReadonlyMap<string, number>; room: number }): MemoryEntry[] {
+function firstRows(
+  db: DatabaseSyncLike,
+  walk: PagedWalk,
+  parents: readonly string[],
+  at: { perParent: ReadonlyMap<string, number>; room: number }
+): MemoryEntry[] {
   const whole: string[] = [];
   let left = at.room;
   for (const parentId of parents) {

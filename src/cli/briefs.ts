@@ -2,16 +2,17 @@
 
 import * as fs from 'fs';
 import { spawn } from 'child_process';
-import { extractPathTags } from '../path-context.js';
-import * as briefsModule from '../project-briefs.js';
-import * as customerNotesModule from '../customer-notes.js';
-import { extractGraph } from '../graph-extract.js';
-import { buildGraphModel, renderGraphHtml, renderGraphCanvas, DEFAULT_VIEW_LIMIT } from '../graph-view.js';
-import { resolveTenantId } from '../tenant.js';
-import { errorMessage, log } from '../log.js';
+import { extractPathTags } from '../search/path-context.js';
+import * as briefsModule from '../objects/project-briefs.js';
+import * as customerNotesModule from '../objects/customer-notes.js';
+import { extractGraph } from '../graph/extract.js';
+import { buildGraphModel, renderGraphHtml, renderGraphCanvas, DEFAULT_VIEW_LIMIT } from '../graph/view.js';
+import { errorMessage, log } from '../util/log.js';
 import { printError } from './output.js';
-import { nonEmptyStringFlag, requireInit, type CliFlags, boolFlag, stringFlag } from './shared.js';
+import { nonEmptyStringFlag, type CliFlags, boolFlag, stringFlag, type CommandContext } from './flag-values.js';
+import { requireInit } from './shared.js';
 import { closeObject, foundOrExit, idArgOrExit, listObjects, printLifecycleTail, type ObjectNames } from './object-verbs.js';
+import { CliExit } from './exit.js';
 
 const BRIEF: ObjectNames = { cmd: 'brief', noun: 'Project brief', idLabel: 'brief' };
 const NOTE: ObjectNames = { cmd: 'note', noun: 'Customer note', idLabel: 'note' };
@@ -44,7 +45,7 @@ function briefRefresh(hippoRoot: string, tenantId: string, args: string[], flags
   const repoRaw = args[1];
   if (!repoRaw) {
     printError('Usage: hippo brief refresh "<repo>" [--dry-run]');
-    process.exit(1);
+    throw new CliExit(1);
   }
   const dryRun = boolFlag(flags, 'dry-run');
   try {
@@ -60,7 +61,7 @@ function briefRefresh(hippoRoot: string, tenantId: string, args: string[], flags
     if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
   } catch (e) {
     printError(errorMessage(e));
-    process.exit(1);
+    throw new CliExit(1);
   }
 }
 
@@ -80,7 +81,7 @@ function briefSupersede(hippoRoot: string, tenantId: string, args: string[], fla
   const summaryRaw = stringFlag(flags, 'summary');
   if (!summaryRaw?.trim()) {
     printError('hippo brief supersede requires --summary "<text>" for the new version.');
-    process.exit(1);
+    throw new CliExit(1);
   }
   const existing = foundOrExit(briefsModule.loadProjectBriefById(hippoRoot, tenantId, id), BRIEF.noun, id);
   try {
@@ -95,7 +96,7 @@ function briefSupersede(hippoRoot: string, tenantId: string, args: string[], fla
     if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
   } catch (e) {
     printError(errorMessage(e));
-    process.exit(1);
+    throw new CliExit(1);
   }
 }
 
@@ -111,7 +112,7 @@ function briefCreate(hippoRoot: string, tenantId: string, args: string[], flags:
   const summaryRaw = stringFlag(flags, 'summary');
   if (!repo || !summaryRaw?.trim()) {
     briefUsage();
-    process.exit(1);
+    throw new CliExit(1);
   }
   try {
     const created = briefsModule.saveProjectBrief(hippoRoot, tenantId, {
@@ -123,17 +124,12 @@ function briefCreate(hippoRoot: string, tenantId: string, args: string[], flags:
     if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
   } catch (e) {
     printError(errorMessage(e));
-    process.exit(1);
+    throw new CliExit(1);
   }
 }
 
-export function cmdProjectBrief(
-  hippoRoot: string,
-  args: string[],
-  flags: CliFlags
-): void {
+export function handleProjectBrief({ hippoRoot, tenantId, args, flags }: CommandContext): void {
   requireInit(hippoRoot);
-  const tenantId = resolveTenantId({});
   const subcommand = args[0] ?? '';
   if (subcommand === 'list') return briefList(hippoRoot, tenantId, flags);
   if (subcommand === 'refresh') return briefRefresh(hippoRoot, tenantId, args, flags);
@@ -201,13 +197,13 @@ function graphShow(hippoRoot: string, tenantId: string, entity: string | undefin
 function openInBrowser(out: string): void {
   // Best-effort browser launch; never fail the command if it doesn't work.
   try {
-    const [cmd, cmdArgs] =
+    const [cmd, cmdArgs]: [string, string[]] =
       process.platform === 'win32'
         ? ['cmd', ['/c', 'start', '', out]]
         : process.platform === 'darwin'
           ? ['open', [out]]
           : ['xdg-open', [out]];
-    const child = spawn(cmd, cmdArgs as string[], { detached: true, stdio: 'ignore', windowsHide: true });
+    const child = spawn(cmd, cmdArgs, { detached: true, stdio: 'ignore', windowsHide: true });
     // A missing launcher (e.g. xdg-open absent) emits 'error' asynchronously;
     // an unhandled 'error' event would throw, so swallow it — the file is
     // already written and its path printed above.
@@ -223,7 +219,7 @@ function graphView(hippoRoot: string, tenantId: string, entity: string | undefin
   const format = stringFlag(flags, 'format') ?? 'html';
   if (format !== 'html' && format !== 'canvas') {
     printError("graph view: --format must be 'html' or 'canvas'");
-    process.exit(1);
+    throw new CliExit(1);
   }
   const model = buildGraphModel(hippoRoot, tenantId, { entity, limit: DEFAULT_VIEW_LIMIT });
   const content = format === 'canvas' ? renderGraphCanvas(model) : renderGraphHtml(model);
@@ -234,13 +230,8 @@ function graphView(hippoRoot: string, tenantId: string, entity: string | undefin
   if (flags['open'] && format === 'html') openInBrowser(out);
 }
 
-export function cmdGraph(
-  hippoRoot: string,
-  args: string[],
-  flags: CliFlags
-): void {
+export function handleGraph({ hippoRoot, tenantId, args, flags }: CommandContext): void {
   requireInit(hippoRoot);
-  const tenantId = resolveTenantId({});
   const subcommand = args[0] ?? '';
   if (subcommand === 'extract') return graphExtract(hippoRoot, tenantId);
   const entity = stringFlag(flags, 'entity');
@@ -253,7 +244,7 @@ export function cmdGraph(
       '  hippo graph show [--entity NAME] [--json]   Inspect entities + their edges (text or JSON)\n' +
       '  hippo graph view [--out FILE] [--open] [--format html|canvas] [--entity NAME]   Generate an interactive node-link diagram',
   );
-  process.exit(1);
+  throw new CliExit(1);
 }
 
 function noteList(hippoRoot: string, tenantId: string, flags: CliFlags): void {
@@ -282,7 +273,7 @@ function noteSupersede(hippoRoot: string, tenantId: string, args: string[], flag
   const textRaw = stringFlag(flags, 'text');
   if (!textRaw?.trim()) {
     printError('hippo note supersede requires --text "<note>" for the new version.');
-    process.exit(1);
+    throw new CliExit(1);
   }
   const existing = foundOrExit(customerNotesModule.loadCustomerNoteById(hippoRoot, tenantId, id), NOTE.noun, id);
   try {
@@ -297,7 +288,7 @@ function noteSupersede(hippoRoot: string, tenantId: string, args: string[], flag
     if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
   } catch (e) {
     printError(errorMessage(e));
-    process.exit(1);
+    throw new CliExit(1);
   }
 }
 
@@ -305,13 +296,8 @@ function noteClose(hippoRoot: string, tenantId: string, args: string[]): void {
   closeObject(args, NOTE, (id) => customerNotesModule.closeCustomerNote(hippoRoot, tenantId, id));
 }
 
-export function cmdCustomerNote(
-  hippoRoot: string,
-  args: string[],
-  flags: CliFlags
-): void {
+export function handleCustomerNote({ hippoRoot, tenantId, args, flags }: CommandContext): void {
   requireInit(hippoRoot);
-  const tenantId = resolveTenantId({});
   const subcommand = args[0] ?? '';
   if (subcommand === 'list') return noteList(hippoRoot, tenantId, flags);
   if (subcommand === 'get') return noteGet(hippoRoot, tenantId, args);
@@ -324,7 +310,7 @@ export function cmdCustomerNote(
   const textRaw = stringFlag(flags, 'text');
   if (!customer || !textRaw?.trim()) {
     noteUsage();
-    process.exit(1);
+    throw new CliExit(1);
   }
   try {
     const created = customerNotesModule.saveCustomerNote(hippoRoot, tenantId, {
@@ -336,6 +322,6 @@ export function cmdCustomerNote(
     if (created.memoryId) console.log(`  memory: ${created.memoryId}`);
   } catch (e) {
     printError(errorMessage(e));
-    process.exit(1);
+    throw new CliExit(1);
   }
 }

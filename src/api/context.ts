@@ -10,25 +10,25 @@ import {
 } from '../store/candidates.js';
 import { type ContinuityKey, freshActiveSnapshot, SNAPSHOT_AMBIENT_MAX_AGE_MS } from '../store/sessions.js';
 import type { SessionEvent, TaskSnapshot } from '../store/rows.js';
-import type { SessionHandoff } from '../handoff.js';
+import type { SessionHandoff } from '../core/handoff.js';
 import { estimateTokens } from '../util/token-text.js';
-import { markRetrieved, type MemoryEntry, COMPACTION_MEMORY_TAG } from '../memory.js';
-import { isWorthSurfacing } from '../memory-quality.js';
-import { getGlobalRoot } from '../shared.js';
+import { markRetrieved, type MemoryEntry, COMPACTION_MEMORY_TAG } from '../core/memory.js';
+import { isWorthSurfacing } from '../core/memory-quality.js';
+import { getGlobalRoot } from '../sharing/global-store.js';
 import type { RecallTraceInput } from '../store/recall-trace.js';
-import { evalNow } from '../ablation.js';
-import { dropHeldCopies } from '../same-text.js';
-import { BadRequestError } from '../api-errors.js';
-import { isSharedStore, loadConfig } from '../config.js';
-import { rethrowIfSqliteBlocked } from '../db.js';
-import { errorMessage, log } from '../log.js';
-import { resolveProjectIdentity, classifyOriginProject, isGlobalStoreRoot, projectId, projectNames, type ProjectRef } from '../project-identity.js';
-import { promptTokens } from '../prompt-recall.js';
-import { detectSecret } from '../secret-detect.js';
+import { evalNow } from '../core/ablation.js';
+import { dropHeldCopies } from '../util/same-text.js';
+import { BadRequestError } from '../core/api-errors.js';
+import { isSharedStore, loadConfig } from '../core/config.js';
+import { rethrowIfSqliteBlocked } from '../db/index.js';
+import { errorMessage, log } from '../util/log.js';
+import { resolveProjectIdentity, classifyOriginProject, isGlobalStoreRoot, projectId, projectNames, type ProjectRef } from '../core/project-identity.js';
+import { promptTokens } from '../core/prompt-recall.js';
+import { detectSecret } from '../util/secret-detect.js';
 import { isSessionDigestRow } from '../core/session-digest-row.js';
-import { addAmbientTallies, ambientStateFromTallies, type AmbientState, type AmbientTallies } from '../ambient.js';
-import { requireGroup, sqliteStore, storeFor, type HippoStore } from '../store-port.js';
-import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../recall-scope.js';
+import { addAmbientTallies, ambientStateFromTallies, type AmbientState, type AmbientTallies } from '../core/ambient.js';
+import { requireGroup, sqliteStore, storeFor, type HippoStore } from '../store/index.js';
+import { passesScopeFilterForRecall, assertScopeRequestAllowed, personalScopeOf } from '../store/recall-scope.js';
 import {
   finiteOr,
   selectBySearch,
@@ -85,7 +85,7 @@ export function ambientSecretAdmit(e: MemoryEntry, currentProject: ProjectRef): 
 }
 
 /** Most rows per store a no-query context reads; past it, ranking and ambientState see the strongest by decay. */
-export const CONTEXT_CANDIDATE_CAP = 2000;
+const CONTEXT_CANDIDATE_CAP = 2000;
 
 /** A query reads recall's FTS window from each store; the search's vector arm adds the nearest rows. */
 interface ContextQueryWindow {

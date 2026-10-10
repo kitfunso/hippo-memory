@@ -1,21 +1,21 @@
 // Runs the adapters and routes each container to its store: the project pass, the user pass and their call sites (plan designs 2, 8, 11).
-import { processEnv } from '../env.js';
+import { processEnv } from '../util/env.js';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { errorMessage } from '../log.js';
-import { loadConfig } from '../config.js';
-import { closeHippoDb, isSqliteBusy, openHippoDb, outsideRequestStores, type DatabaseSyncLike } from '../db.js';
-import type { MemoryEntry } from '../memory.js';
-import { namesFoldedInto } from '../project-merge.js';
-import { isGlobalStoreRoot, projectNames, resolveGlobalRootDir, resolveProjectIdentity, type ProjectIdentity } from '../project-identity.js';
-import { duplicateKey, heldTextKeys } from '../same-text.js';
+import { errorMessage } from '../util/log.js';
+import { loadConfig } from '../core/config.js';
+import { closeHippoDb, isSqliteBusy, openHippoDb, outsideRequestStores, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
+import type { MemoryEntry } from '../core/memory.js';
+import { namesFoldedInto } from '../sharing/project-merge.js';
+import { isGlobalStoreRoot, projectNames, resolveGlobalRootDir, resolveProjectIdentity, type ProjectIdentity } from '../core/project-identity.js';
+import { duplicateKey, heldTextKeys } from '../util/same-text.js';
 import { removeEntryMirrors } from '../store/mirrors.js';
 import { initStore, isInitialized } from '../store/open.js';
 import { writeEntryMirrors } from '../store/entry-writes.js';
 import { selectLiveEntriesBySourcePrefix, selectRowsOutsideSourcePrefixAt } from '../store/entry-reads.js';
 import { updateStats } from '../store/index-and-stats.js';
-import { resolveTenantId } from '../tenant.js';
+import { resolveTenantId } from '../store/tenant.js';
 import { setAsideRow, syncContainer, type ContainerOutcome, type ContainerWork, type StoreSession } from './apply.js';
 import { claudeCodeAdapter, claudeTranscriptListing, transcriptNotesProject } from './claude-code.js';
 import { codexAdapter } from './codex.js';
@@ -80,7 +80,8 @@ export function importForStore(hippoRoot: string, opts: SyncOptions): ImportRepo
 export function importProjectMemories(hippoRoot: string, opts: SyncOptions): ImportReport {
   const ctx = context(opts.machine, { projectRoot: path.dirname(hippoRoot) });
   return runPass({
-    scope: 'project', target: hippoRoot, invoking: hippoRoot, list: (a) => a.list(ctx, 'project'), legacy: true, originProject: undefined, legacyOrigins: [], handover: true,
+    scope: 'project', target: hippoRoot, invoking: hippoRoot, list: (a) => a.list(ctx, 'project'), legacy: true, originProject: undefined,
+    legacyOrigins: [], handover: true,
   }, opts);
 }
 
@@ -88,23 +89,27 @@ export function importProjectMemories(hippoRoot: string, opts: SyncOptions): Imp
 export function importUserMemories(invokingRoot: string, opts: SyncOptions): ImportReport {
   const ctx = context(opts.machine, {});
   return runPass({
-    scope: 'user', target: resolveGlobalRootDir(), invoking: invokingRoot, list: (a) => a.list(ctx, 'user'), legacy: false, originProject: '', legacyOrigins: [], handover: false,
+    scope: 'user', target: resolveGlobalRootDir(), invoking: invokingRoot, list: (a) => a.list(ctx, 'user'), legacy: false, originProject: '',
+    legacyOrigins: [], handover: false,
   }, opts);
 }
 
-/** Session end in a folder with no store of its own: the session's project into the global store with its origin, the session folder's notes, then the user pass. */
+/** Session end in a folder with no store of its own: the session's project into the
+ * global store with its origin, the session folder's notes, then the user pass. */
 export function importAtSessionEnd(cwd: string, transcriptPath: string | undefined, opts: SyncOptions): ImportReport {
   const globalRoot = resolveGlobalRootDir();
   const ctx = context(opts.machine, { projectRoot: cwd });
   const report = runPass({
-    scope: 'project', target: globalRoot, invoking: globalRoot, list: (a) => a.list(ctx, 'project'), legacy: false, ...projectOrigins(resolveProjectIdentity(cwd)), handover: false,
+    scope: 'project', target: globalRoot, invoking: globalRoot, list: (a) => a.list(ctx, 'project'), legacy: false,
+    ...projectOrigins(resolveProjectIdentity(cwd)), handover: false,
   }, opts);
   if (transcriptPath !== undefined) mergeReports(report, importSessionFolder(globalRoot, transcriptPath, cwd, opts));
   mergeReports(report, importUserMemories(globalRoot, opts));
   return report;
 }
 
-/** The session folder's notes under the project Claude filed them for, never cwd's: a session begun at home keeps its home notes user-global wherever it ends. No git call, so post-compact can run it. */
+/** The session folder's notes under the project Claude filed them for, never cwd's: a session begun at
+ * home keeps its home notes user-global wherever it ends. No git call, so post-compact can run it. */
 export function importSessionFolder(hippoRoot: string, transcriptPath: string, cwd: string | null, opts: SyncOptions): ImportReport {
   const project = transcriptNotesProject(transcriptPath, cwd, opts.machine);
   if (project === null) return emptyReport();
@@ -390,8 +395,7 @@ function handOverContainer(db: DatabaseSyncLike, root: string, tenantId: string,
   const unread = new Set(work.container.skipped);
   const mirror: MemoryEntry[] = [];
   const purge: string[] = [];
-  db.exec('BEGIN IMMEDIATE');
-  try {
+  withWriteScope(db, 'hand_over_container', () => {
     for (const origin of origins) {
       const prefix = containerPrefix(work.tool.id, containerId(work.container.path, work.container.scope, platform, origin));
       for (const row of selectLiveEntriesBySourcePrefix(db, tenantId, prefix)) {
@@ -401,11 +405,7 @@ function handOverContainer(db: DatabaseSyncLike, root: string, tenantId: string,
         else purge.push(result.id);
       }
     }
-    db.exec('COMMIT');
-  } catch (err) {
-    try { db.exec('ROLLBACK'); } catch { /* already rolled back; keep the original error */ }
-    throw err;
-  }
+  });
   toolReport(report, work.tool.id).tally.handedOver += mirror.length + purge.length;
   afterCommit(root, { mirror, purge }, report);
 }

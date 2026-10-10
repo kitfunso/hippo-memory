@@ -1,11 +1,14 @@
-import { envClefEndpoint, envClefEndpointToken, envClefTimeoutMs, envCloudflareAccountId, envCloudflareApiToken } from '../env.js';
+import { envClefEndpoint, envClefEndpointToken, envClefTimeoutMs, envCloudflareAccountId, envCloudflareApiToken } from '../util/env.js';
 import { buildRelevanceRequest, JEV_DEFAULT_TOP_K, rankByScores } from './jev.js';
 import type { RerankerFn, RerankResult, RerankerOptions, RerankProvenance } from './types.js';
 import type { SearchResult } from '../core/search-types.js';
 import { createOutageWarning } from './outage-warning.js';
-import { rerankerPost } from './remote.js';
-import { type JsonValue, isJsonObject } from '../json.js';
-import { errorMessage } from '../log.js';
+import { rerankerPost, RERANKER_MAX_REPLY_BYTES } from './remote.js';
+import { readCappedJson } from '../util/capped-json.js';
+import { type JsonValue, isJsonObject } from '../util/json.js';
+import { errorMessage } from '../util/log.js';
+
+const RAY_ID_MAX_CHARS = 64;
 
 /** The two pretrained CLEF decision models served by Cloudflare Workers AI. */
 export type ClefModel = 'clef-flash' | 'clef';
@@ -13,8 +16,6 @@ export type ClefModel = 'clef-flash' | 'clef';
 const CLEF_MODELS: readonly ClefModel[] = ['clef-flash', 'clef'];
 const DEFAULT_TIMEOUT_MS = 15_000;
 const MAX_TIMEOUT_MS = 120_000;
-// 64 answers fit in a few KB; 1 MiB leaves room for a verbose envelope.
-const MAX_REPLY_BYTES = 1024 * 1024;
 // Workers AI rejects a request with more than 64 questions, one per candidate here.
 const MAX_CANDIDATES = 64;
 const ACCOUNT_ID = /^[0-9a-f]{32}$/i;
@@ -127,31 +128,6 @@ export function parseClefReply(body: JsonValue, n: number, model: ClefModel, req
   };
 }
 
-// The timeout bounds time, not bytes: a hostile endpoint could stream a huge 2xx body into memory.
-async function readCappedJson(resp: Response): Promise<JsonValue> {
-  if (!resp.body) throw new Error('reply has no body');
-  const reader = resp.body.getReader();
-  const decoder = new TextDecoder();
-  let raw = '';
-  let received = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    received += value.byteLength;
-    if (received > MAX_REPLY_BYTES) {
-      await reader.cancel();
-      throw new Error(`reply over ${MAX_REPLY_BYTES} bytes`);
-    }
-    raw += decoder.decode(value, { stream: true });
-  }
-  raw += decoder.decode();
-  try {
-    return JSON.parse(raw);
-  } catch {
-    throw new Error('reply is not JSON');
-  }
-}
-
 async function requestScores(model: ClefModel, query: string, head: SearchResult[], route: ClefRoute): Promise<ClefScores> {
   const { state, questions } = buildRelevanceRequest(query, head);
   // Strict parse: parseInt would read "15s" as 15 ms, and Node clamps a delay past 2^31-1 to 1 ms.
@@ -162,11 +138,11 @@ async function requestScores(model: ClefModel, query: string, head: SearchResult
   const resp = await rerankerPost(route.url, { headers, body: JSON.stringify({ state, model, questions }) }, timeoutMs);
   if (!resp.ok) {
     // A third-party header ends up on stderr, so keep printable ASCII only.
-    const ray = resp.headers.get('cf-ray')?.replace(/[^\x20-\x7e]/g, '').slice(0, 64);
+    const ray = resp.headers.get('cf-ray')?.replace(/[^\x20-\x7e]/g, '').slice(0, RAY_ID_MAX_CHARS);
     await resp.body?.cancel();
     throw new Error(`HTTP ${resp.status}${ray ? `, ray ${ray}` : ''}`);
   }
-  const body = await readCappedJson(resp);
+  const body = await readCappedJson(resp, RERANKER_MAX_REPLY_BYTES);
   const parsed = parseClefReply(body, head.length, model, route.backend === 'cloudflare');
   if (isRejection(parsed)) throw new Error(parsed);
   return parsed;
@@ -214,9 +190,3 @@ export function createClefReranker(model: ClefModel): RerankerFn {
     return rankByScores(head, got.scores).map((r) => ({ ...r, rerankProvenance: { ...rerankProvenance } }));
   };
 }
-
-/** Opt-in CLEF-flash reranker (Cloudflare Workers AI or HIPPO_CLEF_ENDPOINT); off unless named, so defaults stay native. */
-export const clefFlashReranker: RerankerFn = createClefReranker('clef-flash');
-
-/** Opt-in CLEF reranker, the larger model. Same transport and fallback as clef-flash. */
-export const clefReranker: RerankerFn = createClefReranker('clef');

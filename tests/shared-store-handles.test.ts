@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../src/db.js';
+import { openHippoDb, closeHippoDb, withSharedStoreHandles } from '../src/db/index.js';
 import { initStore } from '../src/store/open.js';
 
 let tmp: string;

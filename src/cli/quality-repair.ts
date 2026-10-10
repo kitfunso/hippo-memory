@@ -2,15 +2,16 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { appendAuditEvent } from '../store/audit.js';
 import { withBackup } from '../db/backup.js';
+import { withTrialScope, withWriteScope } from '../db/busy.js';
 import { assertSqliteAllowed } from '../db/open.js';
 import { DatabaseSync, type DatabaseSyncLike } from '../db/sqlite.js';
 import { getMeta, pragmaUserVersion, setMeta } from '../db/meta.js';
 import { tableColumns } from '../db/tables.js';
 import { assertBinaryCompatible } from '../db/migrate.js';
 import { insertDormantRow, listDormantSnapshots } from '../store/dormant.js';
-import { calculateStrength, canAutoDelete, type MemoryEntry } from '../memory.js';
-import { assessAutomaticMemory, BUNDLE_HEADER, isAutomaticEntry, isCertainReason, type AutomaticMemoryDefect } from '../memory-quality.js';
-import { heldTexts } from '../same-text.js';
+import { calculateStrength, canAutoDelete, type MemoryEntry } from '../core/memory.js';
+import { assessAutomaticMemory, BUNDLE_HEADER, isAutomaticEntry, isCertainReason, type AutomaticMemoryDefect } from '../core/memory-quality.js';
+import { heldTexts } from '../util/same-text.js';
 import { deleteEntryCore, MEMORY_BACKED_TABLES, memoriesBackingObjectsOn } from '../store/delete-and-batch.js';
 import { selectAllEntries, selectPreviewRows } from '../store/entry-reads.js';
 import { ftsRowExists } from '../store/entry-row.js';
@@ -120,7 +121,8 @@ function unsupportedPreview(db: DatabaseSyncLike, tenantId: string) {
   if (!columns.has('id') || !columns.has('content')) return { total: 0, issues: [] };
   const rows = selectPreviewRows(db, columns, tenantId);
   const issues = rows.flatMap((row): QualityRepairIssue[] => {
-    const provenance = { ...row, source: row.source ?? '', confidence: row.confidence ?? 'observed', dag_level: row.dag_level ?? 0, tags: parseJsonArray(row.tags_json) };
+    const tags = parseJsonArray(row.tags_json, { table: 'memories', id: row.id, column: 'tags_json' });
+    const provenance = { ...row, source: row.source ?? '', confidence: row.confidence ?? 'observed', dag_level: row.dag_level ?? 0, tags };
     if (!isAutomaticEntry(provenance)) return [];
     const { reason } = assessAutomaticMemory(row.content);
     return reason === null ? [] : [{ id: row.id, reason, disposition: 'review', protection: 'unsupported schema; no changes permitted' }];
@@ -152,8 +154,7 @@ function setAsideIssue(db: DatabaseSyncLike, entry: MemoryEntry, reason: string,
 }
 
 function applyPlan(db: DatabaseSyncLike, root: string, tenantId: string, backup: string, doneKey?: string): QualityRepairResult {
-  db.exec('BEGIN IMMEDIATE');
-  try {
+  return withWriteScope(db, 'quality_repair_apply', () => {
     const result = initialResult(db, root, tenantId);
     if (!result.supported) throw new Error(`Quality repair capability changed: ${result.blockers.join('; ')}`);
     const entries = new Map(selectAllEntries(db, tenantId).map((entry) => [entry.id, entry]));
@@ -166,18 +167,12 @@ function applyPlan(db: DatabaseSyncLike, root: string, tenantId: string, backup:
       else warnings.push(`Kept ${issue.id}: the store's delete guard protects it.`);
     }
     if (doneKey) setMeta(db, doneKey, '1');
-    db.exec('COMMIT');
     return { ...result, appliedIds, backup, warnings };
-  } catch (error) {
-    try { db.exec('ROLLBACK'); } catch { /* preserve the mutation error */ }
-    throw error;
-  }
+  });
 }
 
 function repairOn(db: DatabaseSyncLike, root: string, opts: { tenantId: string; apply?: boolean; doneKey?: string }): QualityRepairResult {
-  db.exec('BEGIN');
-  const initial = initialResult(db, root, opts.tenantId);
-  db.exec('ROLLBACK');
+  const initial = withTrialScope(db, 'quality_repair_plan', () => initialResult(db, root, opts.tenantId));
   if (!opts.apply || !initial.supported || !initial.issues.some((issue) => issue.disposition === 'set-aside')) return initial;
   db.exec('PRAGMA foreign_keys = ON');
   const result = withBackup(db, root, 'before-quality-repair', (backup) => applyPlan(db, root, opts.tenantId, backup, opts.doneKey));

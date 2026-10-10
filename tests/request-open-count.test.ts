@@ -1,4 +1,4 @@
-// Each HTTP request and MCP tool call opens each store it reads once, however many api helpers it runs.
+// A request opens each store it reads on the server thread once, however many api helpers it runs, and not at all when its store work runs on worker threads.
 // Counts real DatabaseSync connections per database file by patching the prototype, as the hook open-count test does.
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { createRequire } from 'node:module';
@@ -7,10 +7,10 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
-import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/memory.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { serve, type AddonRoute, type ServerHandle } from '../src/server.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
-import { recall, remember } from '../src/api.js';
+import { recall, remember } from '../src/api/index.js';
 
 interface Connection { location(): string | null }
 type ConnectionMethod = (this: Connection, ...args: never[]) => void;
@@ -53,7 +53,7 @@ async function opensDuring(fn: () => Promise<void>): Promise<Record<string, numb
   return counts;
 }
 
-interface CallBody { readonly content?: string; readonly jsonrpc?: '2.0' }
+interface CallBody { readonly content?: string; readonly text?: string; readonly jsonrpc?: '2.0' }
 
 async function call(method: string, path: string, body?: CallBody): Promise<void> {
   const res = await fetch(`${server.url}${path}`, {
@@ -96,30 +96,38 @@ afterAll(async () => {
 });
 
 describe('store opens per request', () => {
-  it('POST /v1/memories opens the store once', async () => {
-    expect(await opensDuring(() => call('POST', '/v1/memories', { content: 'canary rollouts start at five percent of traffic' }))).toEqual({ local: 1 });
+  it("POST /v1/memories opens no connection on the server thread, its write running on the store's writer thread", async () => {
+    expect(await opensDuring(() => call('POST', '/v1/memories', { content: 'canary rollouts start at five percent of traffic' }))).toEqual({});
   });
 
-  it('GET /v1/memories (recall) opens the store once', async () => {
-    expect(await opensDuring(() => call('GET', '/v1/memories?q=rollback%20plan'))).toEqual({ local: 1 });
+  it("GET /v1/memories (recall) opens no connection on the server thread, its reads running on the store's reader threads", async () => {
+    expect(await opensDuring(() => call('GET', '/v1/memories?q=rollback%20plan'))).toEqual({});
   });
 
-  it('MCP hippo_recall over POST /mcp opens the store once', async () => {
-    expect(await opensDuring(() => call('POST', '/mcp', recallOverMcp))).toEqual({ local: 1 });
+  it('MCP hippo_recall over POST /mcp opens no connection on the server thread', async () => {
+    expect(await opensDuring(() => call('POST', '/mcp', recallOverMcp))).toEqual({});
   });
 
   it('an add-on route opens the store once across the api helpers it runs', async () => {
     expect(await opensDuring(() => call('POST', '/v1/test/remember-then-recall', {}))).toEqual({ local: 1 });
   });
 
-  it('concurrent requests each open their own handle', async () => {
+  it('concurrent recalls and a write among them open no connection on the server thread', async () => {
     const requests = async () => void await Promise.all([
       call('GET', '/v1/memories?q=rollback'),
       call('GET', '/v1/memories?q=deploy'),
       call('POST', '/mcp', recallOverMcp),
       call('POST', '/v1/memories', { content: 'the staging database is rebuilt every Sunday night' }),
     ]);
-    expect(await opensDuring(requests)).toEqual({ local: 4 });
+    expect(await opensDuring(requests)).toEqual({});
+  });
+
+  it("POST /v1/decisions and GET /v1/decisions open no connection on the server thread, a typed object's work running on the store's threads", async () => {
+    const requests = async () => {
+      await call('POST', '/v1/decisions', { text: 'every migration gets a dry run first' });
+      await call('GET', '/v1/decisions');
+    };
+    expect(await opensDuring(requests)).toEqual({});
   });
 });
 
