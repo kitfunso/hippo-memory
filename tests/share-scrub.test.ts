@@ -112,7 +112,7 @@ describe('scrubForSharing', () => {
 });
 
 describe('scrubForSharing on hostile input', () => {
-  const SIZE = 32 * 1024;
+  const SIZE = 16 * 1024;
   const fillTo = (unit: string, size: number): string => unit.repeat(Math.ceil(size / unit.length)).slice(0, size);
   // Best of five, so a GC pause or a busy runner cannot lift one size alone.
   const bestMs = (text: string): number => {
@@ -124,8 +124,11 @@ describe('scrubForSharing on hostile input', () => {
     }
     return best;
   };
-  // Linear work reads near 4 when the input grows 4x, quadratic near 16; a ratio of two sizes needs no prose baseline and no clock threshold.
-  const growth = (build: (size: number) => string): number => bestMs(build(4 * SIZE)) / Math.max(bestMs(build(SIZE)), 0.05);
+  // Linear work reads near 16 when the input grows 16x, quadratic near 256, so 64 sits 4x from both; a ratio of two sizes needs no prose baseline and no clock threshold.
+  const growth = (build: (size: number) => string): number => {
+    scrubForSharing(build(SIZE));
+    return bestMs(build(16 * SIZE)) / Math.max(bestMs(build(SIZE)), 0.05);
+  };
   // Each run sits on the hot path of at least one pattern, so a super-linear pattern shows here before it reaches the server.
   const UNITS = [
     'a.', 'a-', 'a@a.a.', '%2', '%3A%5C', 'c%3A%5CUsers%5C', 'c%3A/Users/',
@@ -140,7 +143,7 @@ describe('scrubForSharing on hostile input', () => {
     ...UNITS.map((unit) => [JSON.stringify(unit), (size: number) => fillTo(unit, size)] as const),
     ['a@ then a long a. run', (size: number) => `a@${fillTo('a.', size)}`.slice(0, size)] as const,
     ['long names that end in a keyword', (size: number) => fillTo(`${'a_'.repeat(1024)}password=`, size)] as const,
-  ])('scrubs %s in under 8x the time when the input grows 4x', (_name, build) => {
-    expect(growth(build)).toBeLessThan(8);
+  ])('scrubs %s in under 64x the time when the input grows 16x', (_name, build) => {
+    expect(growth(build)).toBeLessThan(64);
   });
 });
