@@ -26,16 +26,13 @@ export function notPorted(port: StorePort, group: keyof StoreGroups): never {
 /** A served store's stand-in for SqliteLocal. The last recall sits in hippo.db's
  * meta table, so only a store that is hippo.db keeps and reads it, on `hippoRoot`. */
 function servedLocal(store: HippoStore, hippoRoot: string): SqliteLocal {
-  // A worker store sends its writes to the writer thread, so a lone trace goes through the store there too.
-  const traceRecall: SqliteLocal['traceRecall'] = (trace) => store.finishRecall({ goalLog: [], audit: [], trace }).then(() => null);
-  if (store.kind === 'sqlite') return { ...sqliteLocal(hippoRoot), ...REFUSED_ON_A_STORE, traceRecall };
+  if (store.kind === 'sqlite') return { ...sqliteLocal(hippoRoot), ...REFUSED_ON_A_STORE };
   return {
     ...REFUSED_ON_A_STORE,
     applyOutcomeToLastRecall() {
       throw new SqliteBlockedError(store.kind);
     },
     finishLastRecall: (writes) => store.finishRecall(writes).then(() => null),
-    traceRecall,
   };
 }
 

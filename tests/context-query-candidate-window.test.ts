@@ -38,7 +38,7 @@ function admitCounter() {
   let calls = 0;
   const noop = (): void => undefined;
   const obs: DeliveryObserver = {
-    facts: noop, sections: noop, qualityDropped: noop, disabled: noop, offer: noop, reject: noop, dropMissing: noop, gated: noop, selected: noop,
+    facts: noop, sections: noop, qualityDropped: noop, disabled: noop, offer: noop, reject: noop, dropMissing: noop, gated: noop, selected: noop, queried: noop, traced: noop,
     watchAdmit: (admit) => (e: MemoryEntry) => {
       calls++;
       seen.add(e.id);

@@ -119,7 +119,7 @@ export interface DeliveryObserver {
   selected(items: readonly DeliverySelected[]): void;
   /** A searching call's query, `*` for none; kept as its hash, the one the recall trace stores. */
   queried(query: string): void;
-  /** The recall trace this call wrote; null when the write failed or the store answers no id. */
+  /** The recall trace a call that returned rows wrote; null when the write failed or the store answers no id. */
   traced(traceId: number | null): void;
 }
 

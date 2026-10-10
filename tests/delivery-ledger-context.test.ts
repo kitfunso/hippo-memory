@@ -80,13 +80,14 @@ describe('what one hippo context call records', () => {
     expect(new Set(e.candidates.map((c) => c.pool))).toEqual(new Set(['strength']));
   });
 
-  it('C3: a query that returns nothing writes an empty trace, and the empty row links it', () => {
+  it('C3: a query that returns nothing writes an empty trace, which the empty row joins by query hash, not by id', () => {
     const r = run(p, ['zzqxv', 'wplmk']);
     expect([r.status, r.stdout]).toEqual([0, '']);
     const [e] = eventsN(p, 'ctx-1', 1);
     const [trace] = contextTraces(p);
     expect(traceResultIds(p, trace.id)).toEqual([]);
-    expect([e.block_state, e.recall_trace_id, e.query_hash, e.candidates]).toEqual(['empty', trace.id, blockHash('zzqxv wplmk'), []]);
+    expect([e.block_state, e.recall_trace_id, e.query_hash, e.candidates]).toEqual(['empty', null, trace.query_hash, []]);
+    expect(e.query_hash).toBe(blockHash('zzqxv wplmk'));
   });
 
   it('C4: a store with nothing to load writes no trace, so the empty row keeps the query hash and links none', () => {

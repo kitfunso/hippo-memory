@@ -488,7 +488,7 @@ async function traceEmptyContext(ctx: Context, opts: ContextOpts, plan: ContextP
   };
   // The empty reply is already decided, so a lost trace is logged and the call still answers.
   try {
-    plan.obs?.traced(await onStore(ctx, (_port, local) => local.traceRecall(trace)));
+    await onStore(ctx, (port) => port.finishRecall({ goalLog: [], audit: [], trace }));
   } catch (error) {
     rethrowIfSqliteBlocked(error);
     log.error(`recall trace write failed: ${errorMessage(error)}`);
