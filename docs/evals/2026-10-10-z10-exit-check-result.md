@@ -42,7 +42,7 @@ npm --prefix C:/Users/skf_s/hippo-wt-z10x run test:delivery-ledger
 
 ## Mutants
 
-Script: `C:/hippo-tmp/z10x/mutate.mjs`, outside the repo. It edits one source string in a clean worktree at `639be66a`, runs the three exit files, records the failing tests, and restores the file. Every mutant failed at least one case:
+Script: `mutate.mjs`, outside the repo (archived in `hippo-archive/z10-exit-host/scripts/`). It edits one source string in a clean worktree at `639be66a`, runs the three exit files, records the failing tests, and restores the file. Every mutant failed at least one case:
 
 | Mutant | Caught by |
 |---|---|
@@ -62,7 +62,7 @@ M9's first run was invalid, not a survivor. Its edit replaced an `else if` with 
 
 ## Real host
 
-- **Parser on real transcripts.** Three transcripts copied from this machine, outside the repo, with SHA-256 checked at the run:
+- **Parser on real transcripts.** Three transcripts copied from this machine, outside the repo, with SHA-256 checked at the run. They are frozen in `hippo-archive/z10-exit-host/` with the scripts as run, and the prereg's corpus record gives each full hash:
 
 | Copy | SHA-256 | Prompts | Fired | Queued | Task notifications | Other kinds |
 |---|---|---|---|---|---|---|
@@ -70,7 +70,7 @@ M9's first run was invalid, not a survivor. Its edit replaced an `else if` with 
 | real-b | `18ff8b5f…4fdfc1bd` | 21 | 13 | 4 | 1 | 1 image, 2 command, 1 command stdout |
 | real-c | `211a528f…e3186e4b` | 10 | 22 | 16 | 13 | 1 cross-session, 2 agent message, 2 command, 2 command stdout |
 
-  Each count equals the independent count in `C:/hippo-tmp/z10x/tally.mjs`. The reader reads each one against a store whose ledger was never on as `indeterminate` `no-event-row`, with one gap per fired prompt.
+  Each count equals the independent count in `tally.mjs` (archived in `hippo-archive/z10-exit-host/scripts/`). The reader reads each one against a store whose ledger was never on as `indeterminate` `no-event-row`, with one gap per fired prompt.
 - **Live session.** Claude Code on a scratch store with the ledger on, two turns, the second with an unchanged block. Transcript SHA-256 `e909b74d…f1fe7bb9`. The reader returns `application-unknown`: turn 1 `sent`, paired by prompt and confirmed on its attachment; turn 2 `reused`, paired by prompt and confirmed through turn 1. The read at `639be66a` is byte-identical to the first read, taken at `cfeefd0f` before the review fixes.
 
 ## Recall decisions
