@@ -2,7 +2,7 @@
 
 import * as path from 'path';
 import { errorMessage, log } from '../util/log.js';
-import { repairQualityOnce } from './quality-repair.js';
+import { repairQualityOnce } from '../store/quality-repair.js';
 import { getGlobalRoot } from '../sharing/global-store.js';
 import { resolveTenantId } from '../store/tenant.js';
 

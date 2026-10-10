@@ -7,7 +7,7 @@ import { execWithBusyRetry } from './busy.js';
 import { type OpenFacts, runMigrations } from './migrate.js';
 import { autoCheckpointPages } from './wal-checkpointer.js';
 
-const DEFAULT_BUSY_WAIT_MS = 5000;
+export const DEFAULT_BUSY_WAIT_MS = 5000;
 
 export function getHippoDbPath(hippoRoot: string): string {
   return path.join(hippoRoot, 'hippo.db');

@@ -45,8 +45,6 @@ export const STORE_WRITERS = ['writeEntry', 'deleteEntry', 'deleteEntryCore', 'b
 
 /** The CLI files that may still name some of them, each with its reason. A new entry needs one too. */
 export const STORE_WRITER_EXCEPTIONS = {
-  // Repairs a store without migrating it, so it opens the file itself and deletes on that handle.
-  'cli/quality-repair.ts': STORE_WRITERS,
   // Both hand their handle to src/sharing/project-merge.ts. An opener there raises check-store-port's openersOutside,
   // and the merge cannot move into src/store, which may not import src/agent-memories.
   'cli/projects.ts': ['openHippoDb'],

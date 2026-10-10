@@ -5,7 +5,7 @@ import { errorMessage, log } from '../util/log.js';
 import { DatabaseSync, type DatabaseSyncLike } from './sqlite.js';
 import { tableExists } from './tables.js';
 import { assertBinaryCompatible } from './migrate.js';
-import { connectWithFacts, getHippoDbPath, type OpenedDb } from './connect.js';
+import { connectWithFacts, DEFAULT_BUSY_WAIT_MS, getHippoDbPath, type OpenedDb } from './connect.js';
 import { currentRequestStores, isScopedHandle, runWithRequestStores } from './request-stores.js';
 import { OtherStoreFolderError, SqliteBlockedError } from '../util/sqlite-blocked.js';
 
@@ -119,6 +119,21 @@ export function openHippoDbReadOnly(hippoRoot: string): DatabaseSyncLike {
       // Best effort only.
     }
     throw error;
+  }
+}
+
+/** Runs `fn` on an existing hippo.db opened without migrations, for a repair of a store whose schema is behind; closes it after. */
+export function withUnmigratedDb<T>(hippoRoot: string, readOnly: boolean, fn: (db: DatabaseSyncLike) => T): T {
+  // Skips openHippoDb, so it takes the same refusal itself.
+  assertSqliteAllowed(hippoRoot);
+  const file = getHippoDbPath(hippoRoot);
+  if (!existsSync(file)) throw new Error(`No existing Hippo database at ${file}`);
+  const db = new DatabaseSync(file, { readOnly });
+  try {
+    db.exec(`PRAGMA busy_timeout = ${DEFAULT_BUSY_WAIT_MS}`);
+    return fn(db);
+  } finally {
+    db.close();
   }
 }
 

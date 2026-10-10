@@ -1,22 +1,20 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import { appendAuditEvent } from '../store/audit.js';
+import { appendAuditEvent } from './audit.js';
 import { withBackup } from '../db/backup.js';
 import { withTrialScope, withWriteScope } from '../db/busy.js';
-import { assertSqliteAllowed } from '../db/open.js';
-import { DatabaseSync, type DatabaseSyncLike } from '../db/sqlite.js';
+import { withUnmigratedDb } from '../db/open.js';
+import type { DatabaseSyncLike } from '../db/sqlite.js';
 import { getMeta, pragmaUserVersion, setMeta } from '../db/meta.js';
 import { tableColumns } from '../db/tables.js';
 import { assertBinaryCompatible } from '../db/migrate.js';
-import { insertDormantRow, listDormantSnapshots } from '../store/dormant.js';
+import { insertDormantRow, listDormantSnapshots } from './dormant.js';
 import { calculateStrength, canAutoDelete, type MemoryEntry } from '../core/memory.js';
 import { assessAutomaticMemory, BUNDLE_HEADER, isAutomaticEntry, isCertainReason, type AutomaticMemoryDefect } from '../core/memory-quality.js';
 import { heldTexts } from '../util/same-text.js';
-import { deleteEntryCore, MEMORY_BACKED_TABLES, memoriesBackingObjectsOn } from '../store/delete-and-batch.js';
-import { selectAllEntries, selectPreviewRows } from '../store/entry-reads.js';
-import { ftsRowExists } from '../store/entry-row.js';
-import { MEMORY_SELECT_COLUMNS, parseJsonArray } from '../store/rows.js';
-import { purgeMirrorBestEffort } from '../store/mirrors.js';
+import { deleteEntryCore, MEMORY_BACKED_TABLES, memoriesBackingObjectsOn } from './delete-and-batch.js';
+import { selectAllEntries, selectPreviewRows } from './entry-reads.js';
+import { ftsRowExists } from './entry-row.js';
+import { MEMORY_SELECT_COLUMNS, parseJsonArray } from './rows.js';
+import { purgeMirrorBestEffort } from './mirrors.js';
 
 /** One automatic row with a defect. `set-aside` moves to dormant storage on apply, `review` is listed only, `protected` is kept. */
 export interface QualityRepairIssue {
@@ -178,35 +176,22 @@ function repairOn(db: DatabaseSyncLike, root: string, opts: { tenantId: string; 
   const result = withBackup(db, root, 'before-quality-repair', (backup) => applyPlan(db, root, opts.tenantId, backup, opts.doneKey));
   const warnings = [...result.warnings];
   for (const id of result.appliedIds) {
-    if (!purgeMirrorBestEffort(root, id, false, 'quality repair')) warnings.push(`Mirror cleanup failed for ${id}; remove its stale mirror before rebuilding the index.`);
+    if (purgeMirrorBestEffort(root, id, false, 'quality repair')) continue;
+    warnings.push(`Mirror cleanup failed for ${id}; remove its stale mirror before rebuilding the index.`);
   }
   return { ...result, warnings };
 }
 
-function openForRepair<T>(root: string, readOnly: boolean, fn: (db: DatabaseSyncLike) => T): T {
-  // Opens without openHippoDb to skip migrations, so it takes the same refusal itself.
-  assertSqliteAllowed(root);
-  const file = path.join(root, 'hippo.db');
-  if (!fs.existsSync(file)) throw new Error(`No existing Hippo database at ${file}`);
-  const db = new DatabaseSync(file, { readOnly });
-  try {
-    db.exec('PRAGMA busy_timeout = 5000');
-    return fn(db);
-  } finally {
-    db.close();
-  }
-}
-
 /** Preview by default; apply backs the database up, then moves certain defects to dormant storage, without running migrations. */
 export function repairAutomaticMemories(root: string, opts: { tenantId: string; apply?: boolean }): QualityRepairResult {
-  return openForRepair(root, !opts.apply, (db) => repairOn(db, root, opts));
+  return withUnmigratedDb(root, !opts.apply, (db) => repairOn(db, root, opts));
 }
 
 const AUTO_REPAIR_META_KEY = 'quality_repair_auto';
 
 /** Applies the repair once per store, so stores that predate the quality gate are cleaned on upgrade with no command; null once done. */
 export function repairQualityOnce(root: string, tenantId: string): QualityRepairResult | null {
-  return openForRepair(root, false, (db) => {
+  return withUnmigratedDb(root, false, (db) => {
     if (getMeta(db, AUTO_REPAIR_META_KEY) === '1') return null;
     // The apply commits the flag with the moves, so a lock taken between them cannot hide what moved.
     const result = repairOn(db, root, { tenantId, apply: true, doneKey: AUTO_REPAIR_META_KEY });

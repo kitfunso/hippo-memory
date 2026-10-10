@@ -39,7 +39,6 @@ describe('check-cli-recall-writes: memory writers and the store opener', () => {
   });
 
   it('lets an excepted file keep only the names listed for it', () => {
-    file('cli/quality-repair.ts', 'deleteEntryCore(db, id);\n');
     file('cli/projects.ts', 'const db = openHippoDb(root);\nwriteEntry(root, entry);\n');
     file('cli/sleep.ts', 'const db = openHippoDb(root);\n');
     expect(findCliStoreWrites(dir)).toEqual([{ file: 'cli/projects.ts', line: 2, name: 'writeEntry' }]);
