@@ -66,6 +66,8 @@ jobs:
         run: node scripts/check-env-reads.mjs
       - name: process.exit only in the files check-process-exit lists
         run: node scripts/check-process-exit.mjs
+      - name: Every promise call in src awaited or handled
+        run: node scripts/check-floating-promises.mjs
       - name: Store-port ratchet
         run: node scripts/check-store-port.mjs
       - name: Layer order ratchet
