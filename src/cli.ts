@@ -264,7 +264,7 @@ export const VERB_HANDLERS = {
     run: async (c) => { (await import('./cli/curate.js')).handleConflicts(c); },
   },
   resolve: {
-    run: async (c) => { (await import('./cli/curate.js')).handleResolve(c); },
+    run: async (c) => { await (await import('./cli/curate.js')).handleResolve(c); },
   },
   reject: {
     run: async (c) => { (await import('./cli/curate.js')).handleReject(c); },
@@ -385,7 +385,7 @@ export const VERB_HANDLERS = {
     run: async (c) => { await (await import('./cli/curate.js')).handleInvalidate(c); },
   },
   decide: {
-    run: async (c) => { (await import('./cli/decisions.js')).handleDecide(c); },
+    run: async (c) => { await (await import('./cli/decisions.js')).handleDecide(c); },
   },
   incident: {
     run: async (c) => { (await import('./cli/decisions.js')).handleIncident(c); },

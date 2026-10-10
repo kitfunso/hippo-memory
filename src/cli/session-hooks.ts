@@ -6,7 +6,7 @@ import { spawn } from 'child_process';
 import { resolveCodexSessionTranscript } from '../hooks/codex-session.js';
 import { resolveCodexWrapperPaths, type CodexWrapperMetadata } from '../hooks/codex-wrapper.js';
 import { resolveJsonHookPaths } from '../hooks/json-hooks.js';
-import { SessionEvent } from '../store/rows.js';
+import type { SessionEvent } from '../store/rows.js';
 import { isInitialized } from '../store/open.js';
 import {
   loadActiveTaskSnapshot,

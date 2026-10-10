@@ -1,7 +1,7 @@
 // First-class object verbs for predictions, decisions and incidents.
 
 import { MemoryEntry } from '../core/memory.js';
-import { readEntry } from '../store/entry-reads.js';
+import { getMemory } from '../api/memories.js';
 import { extractPathTags } from '../search/path-context.js';
 import * as predictionsModule from '../store/predictions.js';
 import * as decisionsModule from '../objects/decisions.js';
@@ -9,6 +9,7 @@ import * as incidentsModule from '../objects/incidents.js';
 import { printError } from './output.js';
 import { nonEmptyStringFlag, parseListLimit, type CliFlags, flagIsTrue, stringFlag, type CommandContext } from './flag-values.js';
 import { requireInit } from './shared.js';
+import { cliApiContext } from './api-context.js';
 import { closeObject, foundOrExit, idArgOrExit, listObjects, printLifecycleTail, requireStatus, type ObjectNames } from './object-verbs.js';
 import { errorMessage } from '../util/log.js';
 
@@ -213,17 +214,17 @@ function decideClose(hippoRoot: string, tenantId: string, args: string[]): void 
   closeObject(args, DECISION, (id) => decisionsModule.closeDecision(hippoRoot, tenantId, id), parseObjectId);
 }
 
-export function handleDecide({ hippoRoot, tenantId, args, flags }: CommandContext): void {
+export async function handleDecide({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
   const subcommand = args[0] ?? '';
   if (subcommand === 'list') return decideList(hippoRoot, tenantId, flags);
   if (subcommand === 'get') return decideGet(hippoRoot, tenantId, args);
   if (subcommand === 'close') return decideClose(hippoRoot, tenantId, args);
   // Default subcommand: create. args[0] is the decision text.
-  decideCreate(hippoRoot, tenantId, subcommand, flags);
+  await decideCreate(hippoRoot, tenantId, subcommand, flags);
 }
 
-function decideCreate(hippoRoot: string, tenantId: string, decisionText: string, flags: CliFlags): void {
+async function decideCreate(hippoRoot: string, tenantId: string, decisionText: string, flags: CliFlags): Promise<void> {
   if (!decisionText) exitWithDecideUsage();
   const context = nonEmptyStringFlag(flags, 'context');
   // A value-less `--supersedes` asks to supersede but gives no memory id: reject it rather
@@ -242,7 +243,7 @@ function decideCreate(hippoRoot: string, tenantId: string, decisionText: string,
   let supersedesDecisionId: number | undefined;
   let oldEntry: MemoryEntry | null = null;
   if (supersedesMemId) {
-    oldEntry = readEntry(hippoRoot, supersedesMemId, tenantId) ?? null;
+    oldEntry = await getMemory(cliApiContext(hippoRoot, tenantId), supersedesMemId);
     if (!oldEntry) {
       printError(`Memory ${supersedesMemId} not found.`);
       process.exit(1);

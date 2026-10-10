@@ -13,9 +13,9 @@ import {
   type MemoryEntry,
 } from '../core/memory.js';
 import * as api from '../api/index.js';
+import { getMemory } from '../api/memories.js';
 import { ConflictError, NotFoundError } from '../core/api-errors.js';
 import { isInitialized } from '../store/open.js';
-import { readEntry } from '../store/entry-reads.js';
 import { listMemoryConflicts } from '../store/conflicts.js';
 import { RejectedValueError } from '../store/rejection.js';
 import { renderTraceContent, parseSteps } from '../consolidate/trace.js';
@@ -184,18 +184,18 @@ function supersedeTags(flags: CliFlags): string[] | undefined {
 }
 
 /** The api's conflict text differs by which writer lost; the row itself names its successor either way. */
-function alreadySupersededLine(hippoRoot: string, oldId: string, tenantId: string, conflict: ConflictError): string {
-  const by = readEntry(hippoRoot, oldId, tenantId)?.superseded_by;
+async function alreadySupersededLine(hippoRoot: string, oldId: string, tenantId: string, conflict: ConflictError): Promise<string> {
+  const by = (await getMemory(cliApiContext(hippoRoot, tenantId), oldId))?.superseded_by;
   return by ? `Error: memory ${oldId} is already superseded by ${by}. Supersede that one instead.` : `Error: ${conflict.message}`;
 }
 
-function cmdSupersede(
+async function cmdSupersede(
   hippoRoot: string,
   tenantId: string,
   oldId: string,
   newContent: string,
   flags: CliFlags,
-): void {
+): Promise<void> {
   requireInit(hippoRoot);
 
   const overrides = {
@@ -211,7 +211,7 @@ function cmdSupersede(
   } catch (err) {
     if (err instanceof NotFoundError) printError(`Error: memory ${oldId} not found.`);
     else if (err instanceof RejectedValueError) printError(`Error: ${err.message}`);
-    else if (err instanceof ConflictError) printError(alreadySupersededLine(hippoRoot, oldId, tenantId, err));
+    else if (err instanceof ConflictError) printError(await alreadySupersededLine(hippoRoot, oldId, tenantId, err));
     else throw err;
     process.exit(1);
   }
@@ -282,21 +282,21 @@ function cmdTraceRecord(
   console.log(`Recorded trace ${id} (outcome=${outcome}, ${steps.length} steps)`);
 }
 
-function cmdTrace(
+async function cmdTrace(
   hippoRoot: string,
   tenantId: string,
   id: string,
   flags: CliFlags,
-): void {
+): Promise<void> {
   requireInit(hippoRoot);
   const asJson = boolFlag(flags, 'json');
 
   // Look in local store first, then global.
-  let entry = readEntry(hippoRoot, id, tenantId);
+  let entry = await getMemory(cliApiContext(hippoRoot, tenantId), id);
   let sourceLabel: 'local' | 'global' = 'local';
   const globalRoot = getGlobalRoot();
   if (!entry && isInitialized(globalRoot)) {
-    entry = readEntry(globalRoot, id, tenantId);
+    entry = await getMemory(cliApiContext(globalRoot, tenantId), id);
     sourceLabel = 'global';
   }
   if (!entry) {
@@ -307,7 +307,7 @@ function cmdTrace(
   const t: TraceView = {
     entry, id, sourceLabel,
     ...traceStats(entry),
-    ...traceLineage(hippoRoot, globalRoot, entry, id, tenantId),
+    ...(await traceLineage(hippoRoot, globalRoot, entry, id, tenantId)),
   };
   if (asJson) {
     printTraceJson(t);
@@ -316,7 +316,7 @@ function cmdTrace(
   printTraceText(t);
 }
 
-type TraceView = ReturnType<typeof traceStats> & ReturnType<typeof traceLineage> & {
+type TraceView = ReturnType<typeof traceStats> & Awaited<ReturnType<typeof traceLineage>> & {
   entry: MemoryEntry;
   id: string;
   sourceLabel: 'local' | 'global';
@@ -341,13 +341,15 @@ function traceStats(entry: MemoryEntry) {
   return { strength, halfLife, rewardFactor, effHalfLife, ageDays, sinceLast, facets, conf, projectedAt };
 }
 
-function traceLineage(hippoRoot: string, globalRoot: string, entry: MemoryEntry, id: string, tenantId: string) {
+async function traceLineage(hippoRoot: string, globalRoot: string, entry: MemoryEntry, id: string, tenantId: string) {
   // Parents (consolidation lineage) — schema v9 field.
   const parents = Array.isArray(entry.parents) ? entry.parents : [];
-  const parentPreviews = parents.map((pid) => {
-    const p = readEntry(hippoRoot, pid, tenantId) ?? (isInitialized(globalRoot) ? readEntry(globalRoot, pid, tenantId) : null);
-    return { id: pid, content: p ? p.content.replace(/\s+/g, ' ').slice(0, PARENT_PREVIEW_CHARS) : '(not found)' };
-  });
+  const parentPreviews: { id: string; content: string }[] = [];
+  for (const pid of parents) {
+    const p = (await getMemory(cliApiContext(hippoRoot, tenantId), pid))
+      ?? (isInitialized(globalRoot) ? await getMemory(cliApiContext(globalRoot, tenantId), pid) : null);
+    parentPreviews.push({ id: pid, content: p ? p.content.replace(/\s+/g, ' ').slice(0, PARENT_PREVIEW_CHARS) : '(not found)' });
+  }
 
   // Open conflicts involving this memory.
   const allConflicts = [
@@ -479,17 +481,17 @@ async function rememberViaThinClient(hippoRoot: string, text: string, flags: Cli
   });
 }
 
-export function handleSupersede({ hippoRoot, tenantId, args, flags }: CommandContext): void {
+export async function handleSupersede({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   const oldId = args[0];
   const newContent = args.slice(1).join(' ').trim();
   if (!oldId || !newContent) {
     printError('Usage: hippo supersede <old-id> "<new content>" [--layer L] [--tag T] [--pin]');
     process.exit(1);
   }
-  cmdSupersede(hippoRoot, tenantId, oldId, newContent, flags);
+  await cmdSupersede(hippoRoot, tenantId, oldId, newContent, flags);
 }
 
-export function handleTrace({ hippoRoot, tenantId, args, flags }: CommandContext): void {
+export async function handleTrace({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   const sub = args[0] ? String(args[0]) : '';
   if (sub === 'record') {
     cmdTraceRecord(hippoRoot, tenantId, flags);
@@ -499,5 +501,5 @@ export function handleTrace({ hippoRoot, tenantId, args, flags }: CommandContext
     printError('Usage: hippo trace <memory-id> | hippo trace record --task <t> --steps <json> --outcome <o>');
     process.exit(1);
   }
-  cmdTrace(hippoRoot, tenantId, sub, flags);
+  await cmdTrace(hippoRoot, tenantId, sub, flags);
 }

@@ -1,7 +1,6 @@
 // Verbs that weaken, suppress or retire memories: outcome, forget, conflicts, reject, dormant, quarantine, invalidate.
 
 import * as path from 'path';
-import { readEntry } from '../store/entry-reads.js';
 import { listMemoryConflicts, resolveConflict } from '../store/conflicts.js';
 import { rejectValue, unrejectValue, listRejectionsForTenant } from '../trust/reject-flow.js';
 import { RejectedValueError } from '../store/rejection.js';
@@ -10,6 +9,7 @@ import { RawAppendOnlyError } from '../core/raw-append-only.js';
 import { isGitRepo } from '../learn/autolearn.js';
 import { invalidateMatching, InvalidationTarget } from '../learn/invalidation.js';
 import * as api from '../api/index.js';
+import { getMemory } from '../api/memories.js';
 import * as client from './client.js';
 import { cliApiContext } from './api-context.js';
 import { printError } from './output.js';
@@ -121,9 +121,9 @@ function rawForgetRefusal(id: string): string {
 }
 
 // Refuses exactly where the real run would, so "Would forget" is a promise, not a guess.
-function previewForget(hippoRoot: string, tenantId: string, id: string, archive: boolean): void {
+async function previewForget(hippoRoot: string, tenantId: string, id: string, archive: boolean): Promise<void> {
   requireInit(hippoRoot);
-  const entry = readEntry(hippoRoot, id, tenantId);
+  const entry = await getMemory(cliApiContext(hippoRoot, tenantId), id);
   if (!entry) {
     printError(`Memory not found: ${id}`);
     process.exit(1);
@@ -164,7 +164,7 @@ export function handleConflicts({ hippoRoot, flags }: CommandContext): void {
 }
 
 /** Shown when --keep is missing, to help the user decide. */
-function showConflictForResolve(hippoRoot: string, conflictId: number, tenantId: string): void {
+async function showConflictForResolve(hippoRoot: string, conflictId: number, tenantId: string): Promise<void> {
   const conflicts = listMemoryConflicts(hippoRoot, 'open', tenantId);
   const conflict = conflicts.find((c) => c.id === conflictId);
   if (!conflict) {
@@ -177,8 +177,9 @@ function showConflictForResolve(hippoRoot: string, conflictId: number, tenantId:
   console.log(`  Reason: ${conflict.reason}`);
   console.log('');
 
-  const entryA = readEntry(hippoRoot, conflict.memory_a_id, tenantId);
-  const entryB = readEntry(hippoRoot, conflict.memory_b_id, tenantId);
+  const ctx = cliApiContext(hippoRoot, tenantId);
+  const entryA = await getMemory(ctx, conflict.memory_a_id);
+  const entryB = await getMemory(ctx, conflict.memory_b_id);
   if (entryA) {
     console.log(`  [A] ${conflict.memory_a_id}:`);
     console.log(`      ${entryA.content.slice(0, CONFLICT_PREVIEW_CHARS)}${entryA.content.length > CONFLICT_PREVIEW_CHARS ? '...' : ''}`);
@@ -191,7 +192,7 @@ function showConflictForResolve(hippoRoot: string, conflictId: number, tenantId:
   console.log(`Resolve with: hippo resolve ${conflictId} --keep <memory_id> [--forget] [--reject-loser [--reason "<why>"]]`);
 }
 
-export function handleResolve({ hippoRoot, tenantId, args, flags }: CommandContext): void {
+export async function handleResolve({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
 
   const rawId = args[0] ?? '';
@@ -204,7 +205,7 @@ export function handleResolve({ hippoRoot, tenantId, args, flags }: CommandConte
 
   const keepId = String(flags['keep'] ?? '').trim();
   if (!keepId) {
-    showConflictForResolve(hippoRoot, conflictId, tenantId);
+    await showConflictForResolve(hippoRoot, conflictId, tenantId);
     return;
   }
 
@@ -488,7 +489,7 @@ export async function handleForget({ hippoRoot, tenantId, args, flags }: Command
     process.exit(1);
   }
   if (flagIsTrue(flags, 'dry-run')) {
-    previewForget(hippoRoot, tenantId, id, archive);
+    await previewForget(hippoRoot, tenantId, id, archive);
     return;
   }
   const routed = await runViaServerIfAvailable(hippoRoot, async (info, apiKey) => {

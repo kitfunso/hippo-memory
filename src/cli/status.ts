@@ -7,7 +7,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import { fileURLToPath } from 'node:url';
 import { calculateStrength, calculateRewardFactor, resolveConfidence, Layer } from '../core/memory.js';
-import { readEntry, loadAllEntries } from '../store/entry-reads.js';
+import { loadAllEntries } from '../store/entry-reads.js';
 import { loadStats } from '../store/index-and-stats.js';
 import { loadStatusCounts, type StatusCounts } from '../store/candidates.js';
 import { embeddingModelRequiresReindex } from '../store/embeddings/index.js';
@@ -23,6 +23,7 @@ import { getGlobalRoot } from '../sharing/global-store.js';
 import { buildProvenanceCoverage } from './provenance-coverage.js';
 import { buildCorrectionLatency } from './correction-latency.js';
 import * as api from '../api/index.js';
+import { getMemory } from '../api/memories.js';
 import { cliApiContext } from './api-context.js';
 import { errorMessage, log } from '../util/log.js';
 import { printError } from './output.js';
@@ -134,10 +135,10 @@ function printPhysicsStatus(hippoRoot: string): void {
   }
 }
 
-function cmdInspect(hippoRoot: string, tenantId: string, id: string): void {
+async function cmdInspect(hippoRoot: string, tenantId: string, id: string): Promise<void> {
   requireInit(hippoRoot);
 
-  const entry = readEntry(hippoRoot, id, tenantId);
+  const entry = await getMemory(cliApiContext(hippoRoot, tenantId), id);
   if (!entry) {
     printError(`Memory not found: ${id}`);
     process.exit(1);
@@ -351,11 +352,11 @@ export function handleSupportBundle({ flags }: CommandContext): void {
     : 'It holds versions, doctor checks, config with secrets removed, store counts and log file names. It never holds memory text. Read it before you attach it to a ticket.');
 }
 
-export function handleInspect({ hippoRoot, tenantId, args }: CommandContext): void {
+export async function handleInspect({ hippoRoot, tenantId, args }: CommandContext): Promise<void> {
   const id = args[0];
   if (!id) {
     printError('Please provide a memory ID.');
     process.exit(1);
   }
-  cmdInspect(hippoRoot, tenantId, id);
+  await cmdInspect(hippoRoot, tenantId, id);
 }

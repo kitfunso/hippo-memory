@@ -19,6 +19,7 @@ type Counts = {
   sqlOutside: number;
   txLiterals: number;
   tenantResolvesInCli: number;
+  storeImportsInCli: number;
   openersOutsideByFile: Record<string, number>;
   sqlOutsideByFile: Record<string, number>;
   sqliteLocalMethods: string[];
@@ -39,6 +40,7 @@ const zero: Counts = {
   sqlOutside: 0,
   txLiterals: 0,
   tenantResolvesInCli: 0,
+  storeImportsInCli: 0,
   openersOutsideByFile: {},
   sqlOutsideByFile: {},
   sqliteLocalMethods: [],
@@ -216,6 +218,36 @@ describe('check-store-port.mjs', () => {
       const r = run();
       expect(r.status).toBe(1);
       expect(r.stderr).toContain('tenantResolvesInCli: 0 -> 1');
+    });
+  });
+
+  it('counts value imports from src/store and src/db under src/cli/, not type-only lines or other folders', () => {
+    const cli = [
+      "import { readEntry } from '../store/entry-reads.js';",
+      "import { openHippoDb } from '../db/index.js';",
+      "import { loadStats, type Stats } from '../store/stats.js';",
+      "import * as store from '../store/index.js';",
+      "import type { MemoryEntry } from '../store/rows.js';",
+      "import { type TaskSnapshot, type SessionEvent } from '../store/rows.js';",
+      "import { getMemory } from '../api/memories.js';",
+      "import { x } from './store/local.js';",
+    ].join('\n');
+    const nested = "import { readEntry } from '../../store/entry-reads.js';\n";
+    const files = { 'src/cli/a.ts': cli, 'src/cli/deep/b.ts': nested, 'src/cli.ts': "import { y } from './store/index.js';\n", 'src/api/c.ts': cli };
+    withFixture(files, { storeImportsInCli: 4 }, ({ run }) => {
+      expect(list(run).storeImportsInCli).toBe('5');
+      const r = run();
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain('storeImportsInCli: 4 -> 5');
+    });
+  });
+
+  it('a baseline without storeImportsInCli passes and --update writes it', () => {
+    const files = { 'src/cli/a.ts': "import { readEntry } from '../store/entry-reads.js';\n" };
+    withFixture(files, { storeImportsInCli: undefined }, ({ run, baseline }) => {
+      expect(run().status).toBe(0);
+      expect(run('--update').status).toBe(0);
+      expect(baseline().storeImportsInCli).toBe(1);
     });
   });
 
