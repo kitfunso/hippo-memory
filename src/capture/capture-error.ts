@@ -5,7 +5,7 @@ import { createMemory } from '../core/memory.js';
 import { writeEntry } from '../store/entry-writes.js';
 import { loadContentsWithTag } from '../store/entry-reads.js';
 import { loadConfig } from '../core/config.js';
-import { closeHippoDb, openHippoDb } from '../db/index.js';
+import { withHandle } from '../store/open.js';
 import { recordFailure, type CaptureErrorOutcome, type FailureOutcome } from '../store/failure-log.js';
 import {
   failureHash,
@@ -30,8 +30,7 @@ export function captureToolFailure(hippoRoot: string, tenantId: string, payload:
 
 function logFailure(hippoRoot: string, tenantId: string, payload: JsonValue, lesson: FailureReading, outcome: FailureOutcome): void {
   const hash = (s: string | null): string | null => (s === null ? null : failureHash(s));
-  const db = openHippoDb(hippoRoot);
-  try {
+  withHandle(hippoRoot, (db) => {
     recordFailure(db, {
       tenantId,
       sessionId: payloadString(payload, 'session_id'),
@@ -41,9 +40,7 @@ function logFailure(hippoRoot: string, tenantId: string, payload: JsonValue, les
       sigHash: hash(lesson.text),
       detailHash: hash(lesson.detail),
     });
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }
 
 /** Who sent a failure from another machine: the audit actor and the project its lesson and repeat check belong to. */

@@ -67,6 +67,27 @@ export function onHandle<T>(hippoRoot: string, fn: (db: DatabaseSyncLike) => T, 
   }
 }
 
+/** `onHandle` for code outside the data layer: one call on a handle opened with the given lock wait, closed after. */
+export function withHandle<T>(hippoRoot: string, fn: (db: DatabaseSyncLike) => T, opts?: { busyWaitMs?: number }): T {
+  return onHandle(hippoRoot, fn, (root) => openHippoDb(root, opts));
+}
+
+/** A capture's handles: the plain one a dry run probes the rejection guard on, or the set-up one a real write goes through; the other is null. */
+export function withCaptureHandles<T>(
+  hippoRoot: string,
+  dryRun: boolean,
+  fn: (dryRunDb: DatabaseSyncLike | null, writeDb: DatabaseSyncLike | null) => T,
+): T {
+  const dryRunDb = dryRun ? openHippoDb(hippoRoot) : null;
+  const writeDb = dryRun ? null : openStore(hippoRoot);
+  try {
+    return fn(dryRunDb, writeDb);
+  } finally {
+    if (dryRunDb) closeHippoDb(dryRunDb);
+    if (writeDb) closeHippoDb(writeDb);
+  }
+}
+
 /** `meta` key holding the default half-life base a store's memories are on (src/consolidate/half-life-migration.ts). */
 export const HALF_LIFE_BASE_META_KEY = 'default_half_life_base';
 /** `meta` key set once no memory of a decision, incident or other object sits on the old flat 90 days. */

@@ -1,5 +1,5 @@
 {
-  "openersOutside": 16,
+  "openersOutside": 8,
   "openersInCli": 2,
   "storeBranches": 4,
   "routesWithoutStore": 0,
@@ -14,10 +14,6 @@
   "openersOutsideByFile": {
     "src/agent-memories/sync.ts": 3,
     "src/api/ledger-db.ts": 1,
-    "src/capture/caller-session.ts": 1,
-    "src/capture/capture-error.ts": 1,
-    "src/capture/command.ts": 2,
-    "src/capture/compaction-record.ts": 4,
     "src/doctor.ts": 1,
     "src/index.ts": 2,
     "src/server/boot.ts": 1

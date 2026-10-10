@@ -3,7 +3,7 @@ import * as path from 'path';
 import { createMemory, Layer, type MemoryEntry } from '../core/memory.js';
 import { duplicateKey, longestWord, storedTextKeys } from '../util/same-text.js';
 import { stampOriginProject } from '../store/entry-row.js';
-import { isInitialized, openStore } from '../store/open.js';
+import { isInitialized, withCaptureHandles } from '../store/open.js';
 import { writeEntryMirrors } from '../store/entry-writes.js';
 import { EVERY_SCOPE, loadTextsHoldingWords } from '../store/candidates.js';
 import { updateStatsOn } from '../store/index-and-stats.js';
@@ -12,7 +12,7 @@ import { getGlobalRoot, initGlobal } from '../sharing/global-store.js';
 import { embedMemory } from '../store/embeddings/index.js';
 import { maskEmails, redactSecretsStrict } from '../util/secret-detect.js';
 import { RejectedValueError, checkRejectionGuard } from '../store/rejection.js';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../db/index.js';
+import type { DatabaseSyncLike } from '../db/index.js';
 import { loadConfig } from '../core/config.js';
 import { classifyOriginProject, projectId, type ProjectRef } from '../core/project-identity.js';
 import { isStringValue } from '../core/capture-contract.js';
@@ -253,9 +253,7 @@ export function captureExtractedItems(
 
   // Dry run probes the same checkRejectionGuard the real write uses, on a read-only handle,
   // so a tombstoned item previews as rejected rather than captured.
-  const dryRunDb = options.dryRun ? openHippoDb(targetRoot) : null;
-  const writeDb = options.dryRun ? null : openStore(targetRoot);
-  try {
+  withCaptureHandles(targetRoot, options.dryRun, (dryRunDb, writeDb) => {
     for (const item of extracted) {
       if (keys.has(duplicateKey(item.content))) {
         tally.skipped++;
@@ -267,10 +265,7 @@ export function captureExtractedItems(
       const entry = captureEntry(item, options, baseHalfLifeDays);
       tally[captureOne({ targetRoot, options, dryRunDb, writeDb, keys }, item, entry)]++;
     }
-  } finally {
-    if (dryRunDb) closeHippoDb(dryRunDb);
-    if (writeDb) closeHippoDb(writeDb);
-  }
+  });
   return tally;
 }
 
