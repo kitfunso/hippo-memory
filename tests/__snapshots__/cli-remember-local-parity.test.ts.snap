@@ -1,0 +1,2150 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`embedding after a local write (built CLI, local embeddings server) > remember leaves a vector for its row; watch exits before its own lands > audit rows 1`] = `
+"{
+ "local": [
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "remember",
+   "target_id": "id#1",
+   "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":null}"
+  },
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "remember",
+   "target_id": "id#2",
+   "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":null}"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`embedding after a local write (built CLI, local embeddings server) > remember leaves a vector for its row; watch exits before its own lands > memory rows 1`] = `
+"{
+ "local": [
+  {
+   "id": "id#1",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[\\"path:acme\\",\\"path:billing\\",\\"path:ledger\\",\\"path:app\\"]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "the billing service retries a failed charge three times",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  },
+  {
+   "id": "id#2",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[\\"error\\",\\"autolearn\\",\\"node\\"]",
+   "emotional_valence": "negative",
+   "schema_fit": 0,
+   "source": "autolearn",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "observed",
+   "content": "Command 'node fail.js' failed (exit 3): connection refused on port 5432",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`embedding after a local write (built CLI, local embeddings server) > remember leaves a vector for its row; watch exits before its own lands > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "2"
+  }
+ ],
+ "rows": [
+  {
+   "id": "id#1"
+  },
+  {
+   "id": "id#2"
+  }
+ ],
+ "vectors": [
+  "id#1"
+ ]
+}"
+`;
+
+exports[`embedding after a local write (built CLI, local embeddings server) > remember leaves a vector for its row; watch exits before its own lands > output 1`] = `
+"$ hippo remember the billing service retries a failed charge three times -> 0
+--- stdout
+Remembered [id#1]
+   Layer: episodic | Strength: 1.00 | Half-life: 365d | Confidence: verified
+   Tags: path:acme, path:billing, path:ledger, path:app
+--- stderr
+
+$ hippo watch node fail.js -> 3
+--- stdout
+--- stderr
+connection refused on port 5432
+
+Hippo learned from failure: "connection refused on port 5432"
+"
+`;
+
+exports[`hippo remember counts each stored row once (built CLI, no server) > --global > audit rows 1`] = `
+"{
+ "local": [],
+ "global": [
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "remember",
+   "target_id": "id#1",
+   "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":null}"
+  }
+ ]
+}"
+`;
+
+exports[`hippo remember counts each stored row once (built CLI, no server) > --global > memory rows 1`] = `
+"{
+ "local": [],
+ "global": [
+  {
+   "id": "id#1",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[\\"path:acme\\",\\"path:billing\\",\\"path:ledger\\",\\"path:app\\"]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli-global",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "the billing service retries a failed charge three times",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": ""
+  }
+ ]
+}"
+`;
+
+exports[`hippo remember counts each stored row once (built CLI, no server) > --global > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "0"
+  }
+ ],
+ "globalCounter": [
+  {
+   "key": "total_remembered",
+   "value": "1"
+  }
+ ]
+}"
+`;
+
+exports[`hippo remember counts each stored row once (built CLI, no server) > --global > output 1`] = `
+"$ hippo remember the billing service retries a failed charge three times --global -> 0
+--- stdout
+[global] Remembered [id#1]
+   Layer: episodic | Strength: 1.00 | Half-life: 365d | Confidence: verified
+   Tags: path:acme, path:billing, path:ledger, path:app
+--- stderr
+"
+`;
+
+exports[`hippo remember counts each stored row once (built CLI, no server) > --inferred > audit rows 1`] = `
+"{
+ "local": [
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "remember",
+   "target_id": "id#1",
+   "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":null}"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo remember counts each stored row once (built CLI, no server) > --inferred > memory rows 1`] = `
+"{
+ "local": [
+  {
+   "id": "id#1",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[\\"path:acme\\",\\"path:billing\\",\\"path:ledger\\",\\"path:app\\"]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "inferred",
+   "content": "the billing service retries a failed charge three times",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo remember counts each stored row once (built CLI, no server) > --inferred > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "1"
+  }
+ ],
+ "globalCounter": []
+}"
+`;
+
+exports[`hippo remember counts each stored row once (built CLI, no server) > --inferred > output 1`] = `
+"$ hippo remember the billing service retries a failed charge three times --inferred -> 0
+--- stdout
+Remembered [id#1]
+   Layer: episodic | Strength: 1.00 | Half-life: 365d | Confidence: inferred
+   Tags: path:acme, path:billing, path:ledger, path:app
+--- stderr
+"
+`;
+
+exports[`hippo remember counts each stored row once (built CLI, no server) > --kind superseded > audit rows 1`] = `
+"{
+ "local": [
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "remember",
+   "target_id": "id#1",
+   "metadata_json": "{\\"kind\\":\\"superseded\\",\\"scope\\":null}"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo remember counts each stored row once (built CLI, no server) > --kind superseded > memory rows 1`] = `
+"{
+ "local": [
+  {
+   "id": "id#1",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[\\"path:acme\\",\\"path:billing\\",\\"path:ledger\\",\\"path:app\\"]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "the billing service retries a failed charge three times",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "superseded",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo remember counts each stored row once (built CLI, no server) > --kind superseded > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "1"
+  }
+ ],
+ "globalCounter": []
+}"
+`;
+
+exports[`hippo remember counts each stored row once (built CLI, no server) > --kind superseded > output 1`] = `
+"$ hippo remember the billing service retries a failed charge three times --kind superseded -> 0
+--- stdout
+Remembered [id#1]
+   Layer: episodic | Strength: 1.00 | Half-life: 365d | Confidence: verified
+   Tags: path:acme, path:billing, path:ledger, path:app
+--- stderr
+"
+`;
+
+exports[`hippo remember counts each stored row once (built CLI, no server) > --observed > audit rows 1`] = `
+"{
+ "local": [
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "remember",
+   "target_id": "id#1",
+   "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":null}"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo remember counts each stored row once (built CLI, no server) > --observed > memory rows 1`] = `
+"{
+ "local": [
+  {
+   "id": "id#1",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[\\"path:acme\\",\\"path:billing\\",\\"path:ledger\\",\\"path:app\\"]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "observed",
+   "content": "the billing service retries a failed charge three times",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo remember counts each stored row once (built CLI, no server) > --observed > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "1"
+  }
+ ],
+ "globalCounter": []
+}"
+`;
+
+exports[`hippo remember counts each stored row once (built CLI, no server) > --observed > output 1`] = `
+"$ hippo remember the billing service retries a failed charge three times --observed -> 0
+--- stdout
+Remembered [id#1]
+   Layer: episodic | Strength: 1.00 | Half-life: 365d | Confidence: observed
+   Tags: path:acme, path:billing, path:ledger, path:app
+--- stderr
+"
+`;
+
+exports[`hippo remember counts each stored row once (built CLI, no server) > --pin > audit rows 1`] = `
+"{
+ "local": [
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "remember",
+   "target_id": "id#1",
+   "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":null}"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo remember counts each stored row once (built CLI, no server) > --pin > memory rows 1`] = `
+"{
+ "local": [
+  {
+   "id": "id#1",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[\\"path:acme\\",\\"path:billing\\",\\"path:ledger\\",\\"path:app\\"]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 1,
+   "confidence": "verified",
+   "content": "the billing service retries a failed charge three times",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo remember counts each stored row once (built CLI, no server) > --pin > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "1"
+  }
+ ],
+ "globalCounter": []
+}"
+`;
+
+exports[`hippo remember counts each stored row once (built CLI, no server) > --pin > output 1`] = `
+"$ hippo remember the billing service retries a failed charge three times --pin -> 0
+--- stdout
+Remembered [id#1]
+   Layer: episodic | Strength: 1.00 | Half-life: 365d | Confidence: verified
+   Tags: path:acme, path:billing, path:ledger, path:app
+   Pinned (no decay)
+--- stderr
+"
+`;
+
+exports[`hippo remember counts each stored row once (built CLI, no server) > --tag twice plus --error > audit rows 1`] = `
+"{
+ "local": [
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "remember",
+   "target_id": "id#1",
+   "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":null}"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo remember counts each stored row once (built CLI, no server) > --tag twice plus --error > memory rows 1`] = `
+"{
+ "local": [
+  {
+   "id": "id#1",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 730,
+   "layer": "episodic",
+   "tags_json": "[\\"billing\\",\\"retry\\",\\"error\\",\\"path:acme\\",\\"path:billing\\",\\"path:ledger\\",\\"path:app\\"]",
+   "emotional_valence": "negative",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "the billing service retries a failed charge three times",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo remember counts each stored row once (built CLI, no server) > --tag twice plus --error > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "1"
+  }
+ ],
+ "globalCounter": []
+}"
+`;
+
+exports[`hippo remember counts each stored row once (built CLI, no server) > --tag twice plus --error > output 1`] = `
+"$ hippo remember the billing service retries a failed charge three times --tag billing --tag retry --error -> 0
+--- stdout
+Remembered [id#1]
+   Layer: episodic | Strength: 1.00 | Half-life: 730d | Confidence: verified
+   Tags: billing, retry, error, path:acme, path:billing, path:ledger, path:app
+--- stderr
+"
+`;
+
+exports[`hippo remember counts each stored row once (built CLI, no server) > a --kind outside the two allowed stores nothing and counts nothing > audit rows 1`] = `
+"{
+ "local": [],
+ "global": []
+}"
+`;
+
+exports[`hippo remember counts each stored row once (built CLI, no server) > a --kind outside the two allowed stores nothing and counts nothing > memory rows 1`] = `
+"{
+ "local": [],
+ "global": []
+}"
+`;
+
+exports[`hippo remember counts each stored row once (built CLI, no server) > a --kind outside the two allowed stores nothing and counts nothing > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "0"
+  }
+ ]
+}"
+`;
+
+exports[`hippo remember counts each stored row once (built CLI, no server) > a --kind outside the two allowed stores nothing and counts nothing > output 1`] = `
+"$ hippo remember the billing service retries a failed charge three times --kind raw -> 1
+--- stdout
+--- stderr
+Invalid --kind: "raw". Must be one of: distilled, superseded
+(kind='raw' is reserved for ingestion connectors; kind='archived' is internal.)
+
+$ hippo remember the billing service retries a failed charge three times --kind nonsense -> 1
+--- stdout
+--- stderr
+Invalid --kind: "nonsense". Must be one of: distilled, superseded
+(kind='raw' is reserved for ingestion connectors; kind='archived' is internal.)
+"
+`;
+
+exports[`hippo remember counts each stored row once (built CLI, no server) > a rejected value is refused and not counted > audit rows 1`] = `
+"{
+ "local": [
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "reject_refusal",
+   "target_id": "id#1",
+   "metadata_json": "{\\"digest\\":\\"2084ea4db93e2e670891ae91e35ac151eed9c5705534689370fe81f7a77e826c\\",\\"reason\\":\\"wrong\\"}"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo remember counts each stored row once (built CLI, no server) > a rejected value is refused and not counted > memory rows 1`] = `
+"{
+ "local": [],
+ "global": []
+}"
+`;
+
+exports[`hippo remember counts each stored row once (built CLI, no server) > a rejected value is refused and not counted > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "0"
+  }
+ ]
+}"
+`;
+
+exports[`hippo remember counts each stored row once (built CLI, no server) > a rejected value is refused and not counted > output 1`] = `
+"$ hippo remember the billing service retries a failed charge nine times -> 1
+--- stdout
+--- stderr
+Error: Memory value refused: matches a rejected value (digest 2084ea4db93e..., reason: wrong). Run "hippo unreject" to allow it again.
+"
+`;
+
+exports[`hippo remember counts each stored row once (built CLI, no server) > plain > audit rows 1`] = `
+"{
+ "local": [
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "remember",
+   "target_id": "id#1",
+   "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":null}"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo remember counts each stored row once (built CLI, no server) > plain > memory rows 1`] = `
+"{
+ "local": [
+  {
+   "id": "id#1",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[\\"path:acme\\",\\"path:billing\\",\\"path:ledger\\",\\"path:app\\"]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "the billing service retries a failed charge three times",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo remember counts each stored row once (built CLI, no server) > plain > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "1"
+  }
+ ],
+ "globalCounter": []
+}"
+`;
+
+exports[`hippo remember counts each stored row once (built CLI, no server) > plain > output 1`] = `
+"$ hippo remember the billing service retries a failed charge three times -> 0
+--- stdout
+Remembered [id#1]
+   Layer: episodic | Strength: 1.00 | Half-life: 365d | Confidence: verified
+   Tags: path:acme, path:billing, path:ledger, path:app
+--- stderr
+"
+`;
+
+exports[`hippo remember counts each stored row once (built CLI, no server) > two rows count two > audit rows 1`] = `
+"{
+ "local": [
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "remember",
+   "target_id": "id#1",
+   "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":null}"
+  },
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "remember",
+   "target_id": "id#2",
+   "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":null}"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo remember counts each stored row once (built CLI, no server) > two rows count two > memory rows 1`] = `
+"{
+ "local": [
+  {
+   "id": "id#1",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[\\"billing\\",\\"path:acme\\",\\"path:billing\\",\\"path:ledger\\",\\"path:app\\"]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "the billing service retries a failed charge three times",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  },
+  {
+   "id": "id#2",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[\\"billing\\",\\"path:acme\\",\\"path:billing\\",\\"path:ledger\\",\\"path:app\\"]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.6,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "the invoice worker sends a receipt after each charge",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo remember counts each stored row once (built CLI, no server) > two rows count two > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "2"
+  }
+ ]
+}"
+`;
+
+exports[`hippo remember counts each stored row once (built CLI, no server) > two rows count two > output 1`] = `
+"$ hippo remember the billing service retries a failed charge three times --tag billing -> 0
+--- stdout
+Remembered [id#1]
+   Layer: episodic | Strength: 1.00 | Half-life: 365d | Confidence: verified
+   Tags: billing, path:acme, path:billing, path:ledger, path:app
+--- stderr
+
+$ hippo remember the invoice worker sends a receipt after each charge --tag billing -> 0
+--- stdout
+Remembered [id#2]
+   Layer: episodic | Strength: 1.00 | Half-life: 365d | Confidence: verified
+   Tags: billing, path:acme, path:billing, path:ledger, path:app
+--- stderr
+"
+`;
+
+exports[`hippo remember extraction with no key (built CLI, no server) > --extract says the key is missing and the row is still stored > audit rows 1`] = `
+"{
+ "local": [
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "remember",
+   "target_id": "id#1",
+   "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":null}"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo remember extraction with no key (built CLI, no server) > --extract says the key is missing and the row is still stored > memory rows 1`] = `
+"{
+ "local": [
+  {
+   "id": "id#1",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[\\"path:acme\\",\\"path:billing\\",\\"path:ledger\\",\\"path:app\\"]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "the billing service retries a failed charge three times",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo remember extraction with no key (built CLI, no server) > --extract says the key is missing and the row is still stored > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "1"
+  }
+ ]
+}"
+`;
+
+exports[`hippo remember extraction with no key (built CLI, no server) > --extract says the key is missing and the row is still stored > output 1`] = `
+"$ hippo remember the billing service retries a failed charge three times --extract -> 0
+--- stdout
+Remembered [id#1]
+   Layer: episodic | Strength: 1.00 | Half-life: 365d | Confidence: verified
+   Tags: path:acme, path:billing, path:ledger, path:app
+--- stderr
+  (extraction skipped: ANTHROPIC_API_KEY not set)
+"
+`;
+
+exports[`hippo remember extraction with no key (built CLI, no server) > a write the gate skips is not offered for extraction > audit rows 1`] = `
+"{
+ "local": [
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "remember",
+   "target_id": "id#1",
+   "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":null}"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo remember extraction with no key (built CLI, no server) > a write the gate skips is not offered for extraction > memory rows 1`] = `
+"{
+ "local": [
+  {
+   "id": "id#1",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[\\"path:acme\\",\\"path:billing\\",\\"path:ledger\\",\\"path:app\\"]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "the billing service retries a failed charge three times",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo remember extraction with no key (built CLI, no server) > a write the gate skips is not offered for extraction > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "1"
+  }
+ ]
+}"
+`;
+
+exports[`hippo remember extraction with no key (built CLI, no server) > a write the gate skips is not offered for extraction > output 1`] = `
+"$ hippo remember the billing service retries a failed charge three times --extract -> 0
+--- stdout
+Remembered [id#1]
+   Layer: episodic | Strength: 1.00 | Half-life: 365d | Confidence: verified
+   Tags: path:acme, path:billing, path:ledger, path:app
+--- stderr
+  (extraction skipped: ANTHROPIC_API_KEY not set)
+
+$ hippo remember the billing service retries a failed charge three times --extract -> 0
+--- stdout
+Skipped (salience: duplicate (same text as id#1), score 0.10)
+--- stderr
+"
+`;
+
+exports[`hippo remember extraction with no key (built CLI, no server) > extraction enabled in the config says the same without the flag > audit rows 1`] = `
+"{
+ "local": [
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "remember",
+   "target_id": "id#1",
+   "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":null}"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo remember extraction with no key (built CLI, no server) > extraction enabled in the config says the same without the flag > memory rows 1`] = `
+"{
+ "local": [
+  {
+   "id": "id#1",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[\\"path:acme\\",\\"path:billing\\",\\"path:ledger\\",\\"path:app\\"]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "the billing service retries a failed charge three times",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo remember extraction with no key (built CLI, no server) > extraction enabled in the config says the same without the flag > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "1"
+  }
+ ]
+}"
+`;
+
+exports[`hippo remember extraction with no key (built CLI, no server) > extraction enabled in the config says the same without the flag > output 1`] = `
+"$ hippo remember the billing service retries a failed charge three times -> 0
+--- stdout
+Remembered [id#1]
+   Layer: episodic | Strength: 1.00 | Half-life: 365d | Confidence: verified
+   Tags: path:acme, path:billing, path:ledger, path:app
+--- stderr
+  (extraction skipped: ANTHROPIC_API_KEY not set)
+"
+`;
+
+exports[`hippo remember with the salience gate on (built CLI, no server) > skips a repeat of the same text without counting it, and --force and --pin each store it > audit rows 1`] = `
+"{
+ "local": [
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "remember",
+   "target_id": "id#1",
+   "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":null}"
+  },
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "remember",
+   "target_id": "id#2",
+   "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":null}"
+  },
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "remember",
+   "target_id": "id#3",
+   "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":null}"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo remember with the salience gate on (built CLI, no server) > skips a repeat of the same text without counting it, and --force and --pin each store it > memory rows 1`] = `
+"{
+ "local": [
+  {
+   "id": "id#1",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[\\"path:acme\\",\\"path:billing\\",\\"path:ledger\\",\\"path:app\\"]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "the billing service retries a failed charge three times",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  },
+  {
+   "id": "id#2",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 182.5,
+   "layer": "episodic",
+   "tags_json": "[\\"path:acme\\",\\"path:billing\\",\\"path:ledger\\",\\"path:app\\"]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.08000000000000002,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "the billing service retries a failed charge three times",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  },
+  {
+   "id": "id#3",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 182.5,
+   "layer": "episodic",
+   "tags_json": "[\\"path:acme\\",\\"path:billing\\",\\"path:ledger\\",\\"path:app\\"]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.16000000000000003,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 1,
+   "confidence": "verified",
+   "content": "the billing service retries a failed charge three times",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo remember with the salience gate on (built CLI, no server) > skips a repeat of the same text without counting it, and --force and --pin each store it > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "3"
+  }
+ ]
+}"
+`;
+
+exports[`hippo remember with the salience gate on (built CLI, no server) > skips a repeat of the same text without counting it, and --force and --pin each store it > output 1`] = `
+"$ hippo remember the billing service retries a failed charge three times -> 0
+--- stdout
+Remembered [id#1]
+   Layer: episodic | Strength: 1.00 | Half-life: 365d | Confidence: verified
+   Tags: path:acme, path:billing, path:ledger, path:app
+--- stderr
+
+$ hippo remember the billing service retries a failed charge three times -> 0
+--- stdout
+Skipped (salience: duplicate (same text as id#1), score 0.10)
+--- stderr
+
+$ hippo remember the billing service retries a failed charge three times --force -> 0
+--- stdout
+Remembered [id#2]
+   Layer: episodic | Strength: 1.00 | Half-life: 182.5d | Confidence: verified
+   Tags: path:acme, path:billing, path:ledger, path:app
+--- stderr
+
+$ hippo remember the billing service retries a failed charge three times --pin -> 0
+--- stdout
+Remembered [id#3]
+   Layer: episodic | Strength: 1.00 | Half-life: 182.5d | Confidence: verified
+   Tags: path:acme, path:billing, path:ledger, path:app
+   Pinned (no decay)
+--- stderr
+"
+`;
+
+exports[`hippo remember with the salience gate on (built CLI, no server) > skips a text under the minimum length > audit rows 1`] = `
+"{
+ "local": [],
+ "global": []
+}"
+`;
+
+exports[`hippo remember with the salience gate on (built CLI, no server) > skips a text under the minimum length > memory rows 1`] = `
+"{
+ "local": [],
+ "global": []
+}"
+`;
+
+exports[`hippo remember with the salience gate on (built CLI, no server) > skips a text under the minimum length > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "0"
+  }
+ ]
+}"
+`;
+
+exports[`hippo remember with the salience gate on (built CLI, no server) > skips a text under the minimum length > output 1`] = `
+"$ hippo remember abcd -> 0
+--- stdout
+Skipped (salience: content_too_short, score 0.00)
+--- stderr
+"
+`;
+
+exports[`hippo remember with the salience gate on (built CLI, no server) > starts a repeated error weak, with half the half-life, and counts it > audit rows 1`] = `
+"{
+ "local": [
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "remember",
+   "target_id": "id#2",
+   "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":null}"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo remember with the salience gate on (built CLI, no server) > starts a repeated error weak, with half the half-life, and counts it > memory rows 1`] = `
+"{
+ "local": [
+  {
+   "id": "id#1",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 730,
+   "layer": "episodic",
+   "tags_json": "[\\"error\\"]",
+   "emotional_valence": "negative",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "connection timeout on database shard 1",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  },
+  {
+   "id": "id#3",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 730,
+   "layer": "episodic",
+   "tags_json": "[\\"error\\"]",
+   "emotional_valence": "negative",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "connection timeout on database shard 2",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  },
+  {
+   "id": "id#4",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 730,
+   "layer": "episodic",
+   "tags_json": "[\\"error\\"]",
+   "emotional_valence": "negative",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "connection timeout on database shard 3",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  },
+  {
+   "id": "id#5",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 730,
+   "layer": "episodic",
+   "tags_json": "[\\"error\\"]",
+   "emotional_valence": "negative",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "connection timeout on database shard 4",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  },
+  {
+   "id": "id#2",
+   "retrieval_count": 0,
+   "strength": 0.3,
+   "half_life_days": 547.5,
+   "layer": "episodic",
+   "tags_json": "[\\"error\\",\\"path:acme\\",\\"path:billing\\",\\"path:ledger\\",\\"path:app\\"]",
+   "emotional_valence": "negative",
+   "schema_fit": 0.7798691520047061,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "connection timeout on database shard 5",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo remember with the salience gate on (built CLI, no server) > starts a repeated error weak, with half the half-life, and counts it > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "1"
+  }
+ ]
+}"
+`;
+
+exports[`hippo remember with the salience gate on (built CLI, no server) > starts a repeated error weak, with half the half-life, and counts it > output 1`] = `
+"$ hippo remember connection timeout on database shard 5 --error -> 0
+--- stdout
+Weakened (salience: repeat_error (4 recent errors, overlap 100% with id#1), strength 0.30)
+Remembered [id#2]
+   Layer: episodic | Strength: 0.30 | Half-life: 547.5d | Confidence: verified
+   Tags: error, path:acme, path:billing, path:ledger, path:app
+--- stderr
+"
+`;
+
+exports[`hippo remember with the salience gate on (built CLI, no server) > stores a near-duplicate whose value changed, at full strength > audit rows 1`] = `
+"{
+ "local": [
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "remember",
+   "target_id": "id#1",
+   "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":null}"
+  },
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "remember",
+   "target_id": "id#2",
+   "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":null}"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo remember with the salience gate on (built CLI, no server) > stores a near-duplicate whose value changed, at full strength > memory rows 1`] = `
+"{
+ "local": [
+  {
+   "id": "id#1",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[\\"path:acme\\",\\"path:billing\\",\\"path:ledger\\",\\"path:app\\"]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "the billing service retries a failed charge three times",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  },
+  {
+   "id": "id#2",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 182.5,
+   "layer": "episodic",
+   "tags_json": "[\\"path:acme\\",\\"path:billing\\",\\"path:ledger\\",\\"path:app\\"]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.08000000000000002,
+   "source": "cli",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "the billing service retries a failed charge five times",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo remember with the salience gate on (built CLI, no server) > stores a near-duplicate whose value changed, at full strength > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "2"
+  }
+ ]
+}"
+`;
+
+exports[`hippo remember with the salience gate on (built CLI, no server) > stores a near-duplicate whose value changed, at full strength > output 1`] = `
+"$ hippo remember the billing service retries a failed charge three times -> 0
+--- stdout
+Remembered [id#1]
+   Layer: episodic | Strength: 1.00 | Half-life: 365d | Confidence: verified
+   Tags: path:acme, path:billing, path:ledger, path:app
+--- stderr
+
+$ hippo remember the billing service retries a failed charge five times -> 0
+--- stdout
+Remembered [id#2]
+   Layer: episodic | Strength: 1.00 | Half-life: 182.5d | Confidence: verified
+   Tags: path:acme, path:billing, path:ledger, path:app
+--- stderr
+"
+`;
+
+exports[`hippo remember with the salience gate on (built CLI, no server) > the gate of the global store judges a --global write > audit rows 1`] = `
+"{
+ "local": [],
+ "global": [
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "remember",
+   "target_id": "id#1",
+   "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":null}"
+  }
+ ]
+}"
+`;
+
+exports[`hippo remember with the salience gate on (built CLI, no server) > the gate of the global store judges a --global write > memory rows 1`] = `
+"{
+ "local": [],
+ "global": [
+  {
+   "id": "id#1",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 365,
+   "layer": "episodic",
+   "tags_json": "[\\"path:acme\\",\\"path:billing\\",\\"path:ledger\\",\\"path:app\\"]",
+   "emotional_valence": "neutral",
+   "schema_fit": 0.5,
+   "source": "cli-global",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "verified",
+   "content": "the billing service retries a failed charge three times",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": ""
+  }
+ ]
+}"
+`;
+
+exports[`hippo remember with the salience gate on (built CLI, no server) > the gate of the global store judges a --global write > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "0"
+  }
+ ],
+ "globalCounter": [
+  {
+   "key": "total_remembered",
+   "value": "1"
+  }
+ ]
+}"
+`;
+
+exports[`hippo remember with the salience gate on (built CLI, no server) > the gate of the global store judges a --global write > output 1`] = `
+"$ hippo remember the billing service retries a failed charge three times --global -> 0
+--- stdout
+[global] Remembered [id#1]
+   Layer: episodic | Strength: 1.00 | Half-life: 365d | Confidence: verified
+   Tags: path:acme, path:billing, path:ledger, path:app
+--- stderr
+
+$ hippo remember the billing service retries a failed charge three times --global -> 0
+--- stdout
+Skipped (salience: duplicate (same text as id#1), score 0.10)
+--- stderr
+"
+`;
+
+exports[`hippo watch never gates or extracts (built CLI, no server) > stores and counts a repeated failure twice with salience and extraction both on > audit rows 1`] = `
+"{
+ "local": [
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "remember",
+   "target_id": "id#1",
+   "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":null}"
+  },
+  {
+   "tenant_id": "default",
+   "actor": "cli",
+   "op": "remember",
+   "target_id": "id#2",
+   "metadata_json": "{\\"kind\\":\\"distilled\\",\\"scope\\":null}"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo watch never gates or extracts (built CLI, no server) > stores and counts a repeated failure twice with salience and extraction both on > memory rows 1`] = `
+"{
+ "local": [
+  {
+   "id": "id#1",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 730,
+   "layer": "episodic",
+   "tags_json": "[\\"error\\",\\"autolearn\\",\\"node\\"]",
+   "emotional_valence": "negative",
+   "schema_fit": 0.5,
+   "source": "autolearn",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "observed",
+   "content": "Command 'node fail.js' failed (exit 3): connection refused on port 5432",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  },
+  {
+   "id": "id#2",
+   "retrieval_count": 0,
+   "strength": 1,
+   "half_life_days": 730,
+   "layer": "episodic",
+   "tags_json": "[\\"error\\",\\"autolearn\\",\\"node\\"]",
+   "emotional_valence": "negative",
+   "schema_fit": 0.6799999999999999,
+   "source": "autolearn",
+   "outcome_score": null,
+   "conflicts_with_json": "[]",
+   "pinned": 0,
+   "confidence": "observed",
+   "content": "Command 'node fail.js' failed (exit 3): connection refused on port 5432",
+   "outcome_positive": 0,
+   "outcome_negative": 0,
+   "parents_json": "[]",
+   "starred": 0,
+   "trace_outcome": null,
+   "source_session_id": null,
+   "superseded_by": null,
+   "extracted_from": null,
+   "dag_level": 0,
+   "dag_parent_id": null,
+   "kind": "distilled",
+   "scope": null,
+   "owner": null,
+   "artifact_ref": null,
+   "tenant_id": "default",
+   "descendant_count": 0,
+   "earliest_at": null,
+   "latest_at": null,
+   "summary_dirty": 0,
+   "last_rebuilt_at": null,
+   "rebuild_count": 0,
+   "dag_level_3_built_at": null,
+   "origin_project": "app"
+  }
+ ],
+ "global": []
+}"
+`;
+
+exports[`hippo watch never gates or extracts (built CLI, no server) > stores and counts a repeated failure twice with salience and extraction both on > other state 1`] = `
+"{
+ "storeMade": true,
+ "meta": [
+  {
+   "key": "total_forgotten",
+   "value": "0"
+  },
+  {
+   "key": "total_remembered",
+   "value": "2"
+  }
+ ]
+}"
+`;
+
+exports[`hippo watch never gates or extracts (built CLI, no server) > stores and counts a repeated failure twice with salience and extraction both on > output 1`] = `
+"$ hippo watch node fail.js -> 3
+--- stdout
+--- stderr
+connection refused on port 5432
+
+Hippo learned from failure: "connection refused on port 5432"
+
+$ hippo watch node fail.js -> 3
+--- stdout
+--- stderr
+connection refused on port 5432
+
+Hippo learned from failure: "connection refused on port 5432"
+"
+`;

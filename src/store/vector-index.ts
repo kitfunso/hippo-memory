@@ -9,7 +9,7 @@ import {
   EMBEDDING_MODEL_META_KEY, deleteOrphanVectors, hasStoredVectors, loadVectors, loadVectorViews, replaceAllVectors, storedVectorDims, storedVectorIds,
   upsertVectors,
 } from '../db/vector-store.js';
-import { chunked } from './entry-reads.js';
+import { chunked, selectEntriesByIds } from './entry-reads.js';
 import { MEMORY_SELECT_COLUMNS, rowToEntry, type MemoryRow } from './rows.js';
 
 const MAX_BACKFILL_PAGE = 500;
@@ -209,11 +209,23 @@ export function saveStoredParticles(hippoRoot: string, particles: PhysicsParticl
   }
 }
 
-/** Replaces every particle under `hippoRoot` with a fresh one per entry that has an embedding; returns how many. */
-export function resetStoredParticles(hippoRoot: string, entries: MemoryEntry[], embeddingIndex: Record<string, number[]>): number {
+const PARTICLE_PAGE = 64;
+
+function* entriesInPages(db: DatabaseSyncLike, ids: readonly string[]): Generator<MemoryEntry> {
+  for (const page of chunked(ids, PARTICLE_PAGE)) {
+    const rows = selectEntriesByIds(db, page);
+    for (const id of page) {
+      const entry = rows.get(id);
+      if (entry) yield entry;
+    }
+  }
+}
+
+/** Replaces every particle under `hippoRoot` with a fresh one per memory in `ids` that has an embedding; returns how many. Rows are read a page at a time. */
+export function resetStoredParticles(hippoRoot: string, ids: readonly string[], embeddingIndex: Record<string, number[]>): number {
   const db = openHippoDb(hippoRoot);
   try {
-    return resetAllPhysicsState(db, entries, embeddingIndex);
+    return resetAllPhysicsState(db, entriesInPages(db, ids), embeddingIndex);
   } finally {
     closeHippoDb(db);
   }
