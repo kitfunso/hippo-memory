@@ -88,26 +88,48 @@ function unlessGone(read) {
 /** A file's bytes, or null when the file is gone. */
 export const readIfPresent = (file) => unlessGone(() => fs.readFileSync(file));
 
-function* walk(dir) {
-  for (const e of unlessGone(() => fs.readdirSync(dir, { withFileTypes: true })) ?? []) {
+/** An error as a short note: its code, else its message; never file bytes. */
+export const errNote = (err) => err.code ?? err.message;
+
+function* walk(dir, fail) {
+  let entries;
+  try {
+    entries = unlessGone(() => fs.readdirSync(dir, { withFileTypes: true })) ?? [];
+  } catch (err) {
+    fail(dir, `unreadable: ${errNote(err)}`);
+    return;
+  }
+  for (const e of entries) {
     const p = path.join(e.parentPath ?? dir, e.name);
-    if (e.isDirectory()) yield* walk(p);
+    if (e.isDirectory()) yield* walk(p, fail);
     else if (e.isFile()) yield p;
   }
 }
 
-/** Every file under `roots` that holds a known token, deleted; returns their paths relative to `outDir`, never the token. */
+/** Every file under `roots` that holds a known token, deleted; returns their paths relative to `outDir` (a path the sweep could not read or delete carries a note), never the token. */
 export function tokenSweep(vault, roots, outDir) {
   const tokens = knownTokens(vault, null).map((t) => Buffer.from(t, 'utf8'));
   const hits = [];
+  // A per-path error is recorded and the walk goes on, so one locked file never hides a later token (plan R24).
+  const fail = (p, note) => hits.push(`${path.relative(outDir, p).split(path.sep).join('/')} (${note})`);
   for (const root of roots) {
     if (!fs.existsSync(root)) continue;
-    const files = fs.statSync(root).isDirectory() ? [...walk(root)] : [root];
+    const files = fs.statSync(root).isDirectory() ? [...walk(root, fail)] : [root];
     for (const f of files) {
-      const bytes = readIfPresent(f);
+      let bytes;
+      try {
+        bytes = readIfPresent(f);
+      } catch (err) {
+        fail(f, `unreadable: ${errNote(err)}`);
+        continue;
+      }
       if (bytes === null || !tokens.some((t) => bytes.includes(t))) continue;
-      fs.rmSync(f, { force: true });
-      hits.push(path.relative(outDir, f).split(path.sep).join('/'));
+      try {
+        fs.rmSync(f, { force: true });
+        hits.push(path.relative(outDir, f).split(path.sep).join('/'));
+      } catch (err) {
+        fail(f, `holds a token, not deleted: ${errNote(err)}`);
+      }
     }
   }
   return [...new Set(hits)].sort();

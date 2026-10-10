@@ -5,7 +5,7 @@ import { HIPPO_ARMS } from './arms.mjs';
 import { toolInputs, toolResultTexts, hookContexts, commandLog, transcriptWork } from './records.mjs';
 import { runCodexSession, codexEnv } from './codex.mjs';
 import { codexAdapter, parseRollouts, streamEvents } from './codex-rollout.mjs';
-import { authOut, tokenSweep, closeVault, readIfPresent } from './codex-auth.mjs';
+import { authOut, tokenSweep, closeVault, readIfPresent, errNote } from './codex-auth.mjs';
 import { sessionVoid, byPrecedence } from './readcheck.mjs';
 import { holds } from './leaks.mjs';
 import { memoryText } from './lessons.mjs';
@@ -125,17 +125,31 @@ export function sweepCell(ctx, run) {
   const cell = [run.runName, run.arm, `seed${run.seed}`];
   const roots = [run.dirs.root, path.join(ctx.snapDir, ...cell), run.rawDir, path.join(ctx.outDir, 'grading', ...cell), ctx.ledgerFile];
   const hits = tokenSweep(ctx.codexVault, roots, ctx.outDir);
-  if (hits.length) throw new Error(`${run.s.id} ${run.arm} seed${run.seed}: a Codex login token was in ${hits.join(', ')}; those files are deleted and the run stops`);
+  if (hits.length) throw new Error(`${run.s.id} ${run.arm} seed${run.seed}: a Codex login token was in ${hits.join(', ')}; files listed without a note are deleted, and the run stops`);
 }
 
-/** End of a run with Codex: take back every run login copy, sweep the out dir, then remove the vault; returns the hit paths. */
+/** End of a run with Codex: take back every run login copy, sweep the out dir, then remove the vault; returns the hit paths, a path that could not be handled carrying a note. */
 export function finishCodex(ctx) {
   if (!ctx.codexVault) return [];
   try {
     const runs = path.join(ctx.outDir, 'runs');
+    const notes = [];
+    const rel = (p) => path.relative(ctx.outDir, p).split(path.sep).join('/');
+    let homes = [];
+    try {
+      homes = fs.existsSync(runs) ? codexHomes(runs) : [];
+    } catch (err) {
+      notes.push(`runs (unreadable: ${errNote(err)})`);
+    }
     // authOut folds each copy's tokens into the vault before deleting it, so the sweep below still knows them.
-    for (const home of fs.existsSync(runs) ? codexHomes(runs) : []) authOut(ctx.codexVault, home);
-    return tokenSweep(ctx.codexVault, [ctx.outDir], ctx.outDir);
+    for (const home of homes) {
+      try {
+        authOut(ctx.codexVault, home);
+      } catch (err) {
+        notes.push(`${rel(home)} (login copy not taken back: ${errNote(err)})`);
+      }
+    }
+    return [...new Set([...notes, ...tokenSweep(ctx.codexVault, [ctx.outDir], ctx.outDir)])].sort();
   } finally {
     closeVault(ctx.codexVault);
   }

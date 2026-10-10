@@ -1,7 +1,9 @@
 // Z0 set X session driver: codex args and preflight, the rollout parser on fake-codex sessions, the wait, auth and launcher rules.
 import { describe, it, expect, afterEach } from 'vitest';
-import { readFileSync, existsSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { readFileSync, existsSync, writeFileSync, mkdirSync, readdirSync, copyFileSync, chmodSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { spawn } from 'node:child_process';
+import { finishCodex } from '../scripts/token-eval/codex-task.mjs';
 import { createHash } from 'node:crypto';
 import { codexArgs, resolveCodex, runCodexSession } from '../scripts/token-eval/codex.mjs';
 import { codexAdapter, parseRollouts } from '../scripts/token-eval/codex-rollout.mjs';
@@ -18,6 +20,36 @@ afterEach(() => {
   while (opened.length) closeVault(opened.pop()!.codexVault);
 });
 const sha = (f: string) => createHash('sha256').update(readFileSync(f)).digest('hex');
+
+const LOCK_CODE = process.platform === 'win32' ? 'EBUSY' : 'EACCES';
+
+/** Runs `fn` while `file` cannot be read or deleted (a sharing lock held by a child on Windows, mode 0 in a read-only dir on POSIX); null when root makes that impossible. */
+async function withUnreadable<T>(file: string, fn: () => T): Promise<T | null> {
+  if (process.platform === 'win32') {
+    const ready = `${file}.held`;
+    const script = `$h = [IO.File]::Open('${file}', 'Open', 'ReadWrite', 'None'); Set-Content '${ready}' x; Start-Sleep 300`;
+    const child = spawn('powershell', ['-NoProfile', '-Command', script], { stdio: 'ignore' });
+    try {
+      for (let i = 0; i < 300 && !existsSync(ready); i++) await new Promise((r) => setTimeout(r, 50));
+      expect(existsSync(ready)).toBe(true);
+      return fn();
+    } finally {
+      const gone = new Promise((r) => child.once('exit', r));
+      child.kill();
+      await gone;
+    }
+  }
+  if (process.getuid?.() === 0) return null;
+  const dir = dirname(file);
+  chmodSync(file, 0o000);
+  chmodSync(dir, 0o555);
+  try {
+    return fn();
+  } finally {
+    chmodSync(dir, 0o755);
+    chmodSync(file, 0o644);
+  }
+}
 
 /** An isolated operator, ctx and X1 run; `out` is the run's out dir. */
 function setup(name: string, opts: CodexOpts = {}, extra: { sessionTimeoutMs?: number } = {}) {
@@ -170,6 +202,37 @@ describe('the Codex login (test 15)', () => {
     expect(readdirSync(listed.run.dirs.codexHome)).not.toContain('logs_2.sqlite');
     expect(tokenSweep(listed.ctx.codexVault, [listed.run.dirs.root], listed.out)).toEqual([]);
   }, 30_000);
+
+  it('keeps sweeping past a file it cannot read, and names it without any token text', async () => {
+    const { out, op, ctx } = setup('sweepfault');
+    const dir = join(out, 'sweep');
+    mkdirSync(dir, { recursive: true });
+    const bad = join(dir, 'a-locked.json');
+    const good = join(dir, 'b-plain.json');
+    writeFileSync(bad, op.tokens[1]);
+    writeFileSync(good, op.tokens[2]);
+    const hits = await withUnreadable(bad, () => tokenSweep(ctx.codexVault, [dir], out));
+    if (hits === null) return;
+    expect(existsSync(good)).toBe(false);
+    expect(hits).toContain('sweep/b-plain.json');
+    expect(hits).toContain(`sweep/a-locked.json (unreadable: ${LOCK_CODE})`);
+    for (const h of hits) for (const tok of op.tokens) expect(h).not.toContain(tok);
+  });
+
+  it('takes back every other login copy when one home is locked, then still removes the vault', async () => {
+    const { out, op, ctx } = setup('finishfault');
+    const homes = ['a1', 'a2'].map((n) => join(out, 'runs', n, 'X1', '1', 'codex-home'));
+    for (const h of homes) {
+      mkdirSync(h, { recursive: true });
+      copyFileSync(ctx.codexVault.file, join(h, 'auth.json'));
+    }
+    const hits = await withUnreadable(join(homes[0], 'auth.json'), () => finishCodex({ ...ctx, outDir: out }));
+    if (hits === null) return;
+    expect(existsSync(join(homes[1], 'auth.json'))).toBe(false);
+    expect(hits.some((h: string) => h.startsWith('runs/a1/X1/1/codex-home') && h.includes('login copy not taken back'))).toBe(true);
+    expect(existsSync(ctx.codexVault.dir)).toBe(false);
+    for (const h of hits) for (const tok of op.tokens) expect(h).not.toContain(tok);
+  });
 });
 
 describe('the launcher behind hippo\'s wrapper (test 24)', () => {
