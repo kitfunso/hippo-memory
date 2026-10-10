@@ -1,5 +1,6 @@
 // The graph reads a view and a traversal share. Each opens hippo.db itself unless the caller hands it the handle its snapshot runs on.
 import { openHippoDb, closeHippoDb, withReadSnapshot, type DatabaseSyncLike } from '../db/index.js';
+import { onHandle } from './open.js';
 import { assertTenantId } from './tenant.js';
 import {
   type EntityType,
@@ -247,8 +248,7 @@ export function loadEntitiesByMemoryId(
 ): Entity[] {
   assertTenantId('loadEntitiesByMemoryId', tenantId);
   if (memoryIds.length === 0) return [];
-  const db = openHippoDb(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     const out: Entity[] = [];
     for (let i = 0; i < memoryIds.length; i += IN_LIST_CHUNK) {
       const slice = memoryIds.slice(i, i + IN_LIST_CHUNK);
@@ -263,9 +263,7 @@ export function loadEntitiesByMemoryId(
       out.push(...rows.map(rowToEntity));
     }
     return out;
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }
 
 /** The stored rows a rebuild diffs against, read on the caller's handle so the diff and the apply can share one write lock. */
@@ -292,12 +290,9 @@ function memoryKindsOn(db: DatabaseSyncLike, memoryIds: readonly string[]): Read
 
 /** storedGraphOn on its own connection, outside any write lock. */
 export function loadStoredGraph(hippoRoot: string, tenantId: string, memoryIds: readonly string[]): StoredGraph {
-  const db = openHippoDb(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     return storedGraphOn(db, tenantId, memoryIds);
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }
 
 /**
@@ -312,10 +307,7 @@ export function withGraphReadSnapshot<T>(
   hippoRoot: string,
   fn: (txDb: DatabaseSyncLike) => T,
 ): T {
-  const db = openHippoDb(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     return withReadSnapshot(db, () => fn(db));
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }

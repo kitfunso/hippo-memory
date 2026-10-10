@@ -1,6 +1,7 @@
 // Owner lookups by id: the tenant and scope checks in src/api and the CLI's key-tenant lookup share these queries.
 
-import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../db/index.js';
+import { type DatabaseSyncLike } from '../db/index.js';
+import { onHandle } from './open.js';
 
 /** The api_keys fields a tenant, revocation, rank or self-service ownership check reads. */
 export interface ApiKeyOwner {
@@ -28,10 +29,7 @@ export function selectMemoryReach(db: DatabaseSyncLike, id: string): { tenantId:
 
 /** `selectMemoryReach` for the store under `hippoRoot`, with no mirror setup and no full row read. */
 export function memoryReach(hippoRoot: string, id: string): { tenantId: string; scope: string | null } | undefined {
-  const db = openHippoDb(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     return selectMemoryReach(db, id);
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }

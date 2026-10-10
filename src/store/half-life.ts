@@ -1,11 +1,11 @@
 // A half-life move reads, writes, audits and records its base on one handle, so it commits whole or not at all.
-import { closeHippoDb, getMeta, openHippoDb, setMeta, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
+import { getMeta, setMeta, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import type { MemoryEntry } from '../core/memory.js';
 import { appendAuditEvent } from './audit.js';
 import { conflictResolveAuditsAt, resolvedConflictsAt } from './conflicts.js';
 import { objectMemoryRowsAt, selectAllEntries } from './entry-reads.js';
 import { setHalfLivesAt } from './entry-writes.js';
-import { HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY, openStore } from './open.js';
+import { onHandle, HALF_LIFE_BASE_META_KEY, TYPED_HALF_LIFE_META_KEY, openStore } from './open.js';
 
 /** The base every store used before the base was recorded. */
 const LEGACY_HALF_LIFE_BASE = 7;
@@ -36,12 +36,9 @@ function readBase(db: DatabaseSyncLike): number {
 
 /** The base this store's memories are on: 7 days when none was ever recorded. */
 export function recordedHalfLifeBase(hippoRoot: string): number {
-  const db = openHippoDb(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     return readBase(db);
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }
 
 function readRows(db: DatabaseSyncLike, from: number, typedPending: boolean): HalfLifeRows {
@@ -84,8 +81,7 @@ export function moveHalfLives<R>(
   opts: { dryRun: boolean; actor: string },
   plan: (rows: HalfLifeRows) => { moves: readonly HalfLifeMove[]; outcome: R },
 ): { from: number; outcome: R | null } {
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     const run = () => {
       const from = readBase(db);
       const typedPending = getMeta(db, TYPED_HALF_LIFE_META_KEY, '') === '';
@@ -102,7 +98,5 @@ export function moveHalfLives<R>(
     };
     // Plan, write, audit and record the base under one write lock, so a concurrent write or sleep cannot interleave.
     return opts.dryRun ? run() : withWriteScope(db, 'migrate_half_life', run);
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }

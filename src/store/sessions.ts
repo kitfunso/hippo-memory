@@ -127,8 +127,7 @@ export function saveActiveTaskSnapshot(
 export function loadActiveTaskSnapshot(hippoRoot: string, tenantId: string, key?: ContinuityKey): TaskSnapshot | null {
   assertTenantId('loadActiveTaskSnapshot', tenantId);
   const owned = key ? continuityWhere(key) : null;
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     // SAFETY: row's shape matches the ten columns named in the SELECT above.
     const row = db.prepare(`
       SELECT id, task, summary, next_step, status, source, session_id, scope, created_at, updated_at
@@ -146,9 +145,7 @@ export function loadActiveTaskSnapshot(hippoRoot: string, tenantId: string, key?
     const loaded = rowToTaskSnapshot(row);
     if (!key) writeActiveTaskMirror(hippoRoot, tenantId, loaded);
     return loaded;
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /**
@@ -352,8 +349,7 @@ export function listSessionEvents(
   options: { session_id?: string; task?: string; limit?: number } = {}
 ): SessionEvent[] {
   assertTenantId('listSessionEvents', tenantId);
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     const clauses: string[] = ['tenant_id = ?'];
     const params: Array<string | number> = [tenantId];
 
@@ -381,9 +377,7 @@ export function listSessionEvents(
     `).all(...params) as SessionEventRow[];
 
     return rows.map(rowToSessionEvent).reverse();
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /**
@@ -396,8 +390,7 @@ export function findPromotableSessions(
   sinceMs: number,
 ): Array<{ session_id: string }> {
   assertTenantId('findPromotableSessions', tenantId);
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     // SAFETY: rows' shape matches the single `session_id` column selected
     // above.
     const rows = db.prepare(`
@@ -405,9 +398,7 @@ export function findPromotableSessions(
       WHERE event_type = 'session_complete' AND created_at >= ? AND tenant_id = ?
     `).all(new Date(sinceMs).toISOString(), tenantId) as { session_id: string }[];
     return rows;
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /**
@@ -416,17 +407,14 @@ export function findPromotableSessions(
  */
 export function traceExistsForSession(hippoRoot: string, tenantId: string, session_id: string): boolean {
   assertTenantId('traceExistsForSession', tenantId);
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     const row = db.prepare(`
       SELECT 1 FROM memories
       WHERE source_session_id = ? AND layer = 'trace' AND tenant_id = ?
       LIMIT 1
     `).get(session_id, tenantId);
     return !!row;
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /** The owner a session id is bound to, or null. */

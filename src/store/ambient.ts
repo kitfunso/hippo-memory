@@ -1,8 +1,7 @@
-import { closeHippoDb } from '../db/index.js';
 import { strengthSql } from './rule-sql.js';
 import { scopeAdmitSql } from './recall-scope.js';
 import { SECRET_TAGS } from '../util/secret-detect.js';
-import { openStore } from './open.js';
+import { onHandle, openStore } from './open.js';
 import { jsonList } from './candidates.js';
 import { originInSql } from '../core/project-identity.js';
 import { isErrorTagged, type AmbientTallies } from '../core/ambient.js';
@@ -55,8 +54,7 @@ export function loadAmbientTallies(hippoRoot: string, tenantId: string, filter: 
   const { where, params } = contextRowsWhere(tenantId, filter);
   const secret = secretTaggedSql();
   const sevenDaysAgo = new Date(filter.now.getTime() - 7 * DAY_MS).toISOString();
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     // SAFETY: one aggregate row whose columns are the aliases named below. Tag lists come back as one JSON array of
     // arrays and are counted in JS, which maps items through String() as parseJsonArray does.
     const row = db.prepare(`SELECT
@@ -97,7 +95,5 @@ export function loadAmbientTallies(hippoRoot: string, tenantId: string, filter: 
       maxDagLevel: Number(row.maxDagLevel),
       tagCounts,
     };
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }

@@ -6,7 +6,7 @@ import { pragmaDataVersion } from '../db/meta.js';
 import { tableExists } from '../db/tables.js';
 import { storedVectorIds } from '../db/vector-store.js';
 import type { ConfidenceInputs, Layer, MemoryEntry, MemoryKind, StrengthInputs } from '../core/memory.js';
-import { openStore } from './open.js';
+import { onHandle, openStore } from './open.js';
 import { QUARANTINE_SCOPE_PREFIX } from './quarantine.js';
 import { type MemoryRow, parseJsonArray } from './rows.js';
 
@@ -65,8 +65,7 @@ function toDashboardRow(row: LiveRow): DashboardRow {
 
 /** One tenant's live rows and the counts of the rest, read in one transaction so the two agree. */
 export function loadDashboardRows(hippoRoot: string, tenantId: string): DashboardRows {
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     return withReadSnapshot(db, () => {
       // SAFETY: the SELECT names exactly LiveRow's columns.
       const live = db.prepare(`SELECT ${LIVE_COLUMNS} FROM memories WHERE tenant_id = ? AND ${LIVE} ORDER BY created ASC, id ASC`).all(tenantId) as LiveRow[];
@@ -80,9 +79,7 @@ export function loadDashboardRows(hippoRoot: string, tenantId: string): Dashboar
       for (const { why, n } of counts) if (why !== null) excluded[why] = Number(n);
       return { live: live.map(toDashboardRow), excluded };
     });
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /** The dashboard's one read-only connection, kept across refreshes for the commit signal; it opens on the first read that finds a database. */

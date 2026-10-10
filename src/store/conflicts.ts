@@ -1,5 +1,5 @@
 import { DEFAULT_TENANT_ID } from '../util/env.js';
-import { closeHippoDb, openHippoDb, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
+import { closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import type { MemoryEntry } from '../core/memory.js';
 import { rejectionDigest, insertRejectedValue, normalizeValueForRejection } from './rejection.js';
 import { archiveRawMemory } from './raw-archive.js';
@@ -7,7 +7,7 @@ import { type MemoryConflict, type MemoryConflictRow, rowToMemoryConflict } from
 import { audit } from './audit-event.js';
 import { syncChangedMirrors, purgeMirrorBestEffort } from './mirrors.js';
 import { selectEntriesByIds } from './entry-reads.js';
-import { openStore } from './open.js';
+import { onHandle, openStore } from './open.js';
 import { deleteEntryCore } from './delete-and-batch.js';
 import { BadRequestError } from '../core/api-errors.js';
 import { canTouchScope, isPersonalScope } from './recall-scope.js';
@@ -69,8 +69,7 @@ export function listMemoryConflicts(
   status: string = 'open',
   tenantId?: string,
 ): MemoryConflict[] {
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     // v0.28 — '*' is a sentinel meaning "no status filter, return all rows".
     // Pre-v0.28 callers (cli/mcp/dashboard) always passed 'open' or default,
     // so this sentinel is purely additive. The 4 SQL branches below cover
@@ -80,9 +79,7 @@ export function listMemoryConflicts(
       ? selectConflictRowsInTenant(db, status, allStatuses, tenantId)
       : selectConflictRowsUnscoped(db, status, allStatuses);
     return rows.map(rowToMemoryConflict);
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 // listMemoryConflicts' tenanted open set: both members in the tenant.
@@ -93,14 +90,11 @@ const OPEN_IN_TENANT = `FROM memory_conflicts mc
 
 /** How many open conflicts listMemoryConflicts returns for a tenant, without loading one. */
 export function countOpenConflicts(hippoRoot: string, tenantId: string): number {
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     // SAFETY: one row with the single aliased count column.
     const row = db.prepare(`SELECT COUNT(*) AS n ${OPEN_IN_TENANT}`).get(tenantId, tenantId) as { n: number | bigint };
     return Number(row.n);
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /** One open conflict of a memory, with the row on its other side. */
@@ -111,8 +105,7 @@ export interface OpenConflictOf {
 
 /** A tenant's open conflicts naming `memoryId`, in listMemoryConflicts' order, each with its other member read in one batch. */
 export function loadOpenConflictsOf(hippoRoot: string, tenantId: string, memoryId: string): OpenConflictOf[] {
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     // SAFETY: selects CONFLICT_COLS_MC, MemoryConflictRow's columns.
     const rows = db.prepare(
       `SELECT ${CONFLICT_COLS_MC}
@@ -128,20 +121,15 @@ export function loadOpenConflictsOf(hippoRoot: string, tenantId: string, memoryI
       if (other) out.push({ conflict, other });
     }
     return out;
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /** Conflicts whose two rows `actor` may both touch; someone else's personal row hides its whole pair. */
 export function listTouchableConflicts(hippoRoot: string, status: string, tenantId: string, actor: { owner?: string }): MemoryConflict[] {
   const conflicts = listMemoryConflicts(hippoRoot, status, tenantId);
-  const db = openHippoDb(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     return conflicts.filter((c) => [c.memory_a_id, c.memory_b_id].every((id) => canTouchScope(actor, selectMemoryReach(db, id)?.scope ?? null)));
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }
 
 type DetectedConflict = { memory_a_id: string; memory_b_id: string; reason: string; score: number };
@@ -152,13 +140,10 @@ export function replaceDetectedConflicts(
   detected: Array<DetectedConflict>,
   detectedAt: string = new Date().toISOString()
 ): void {
-  const db = openStore(hippoRoot);
-  try {
+  onHandle(hippoRoot, (db) => {
     const changedIds = writeConflictRefresh(db, readConflictRefresh(db), detected, detectedAt);
     syncChangedMirrors(hippoRoot, db, [...selectEntriesByIds(db, changedIds).values()]);
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /** Every memory's tenant, and each stored conflicts_with_json other than '[]', read before the refresh takes the write lock. */

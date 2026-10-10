@@ -24,7 +24,8 @@
  */
 
 import { BadRequestError, NotFoundError } from '../core/api-errors.js';
-import { openHippoDb, closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
+import { withWriteScope, type DatabaseSyncLike } from '../db/index.js';
+import { onHandle } from './open.js';
 import { writeEntryAt } from './sqlite/entry-writes-group.js';
 import { assertTenantId } from './tenant.js';
 import { createMemory, Layer, type MemoryEntry, type MemoryKind } from '../core/memory.js';
@@ -34,6 +35,10 @@ import { keysetAfter, type KeysetPosition } from '../util/keyset.js';
 import type { PredictionSave } from './port.js';
 
 const DEFAULT_PREDICTION_PAGE_SIZE = 100;
+
+const SELECT_COLUMNS = `id, memory_id, tenant_id, class_tag, claim_text,
+  estimate_value, estimate_unit, target_date,
+  actual_value, closure_state, closed_at, closure_note, created_at`;
 
 // ---------------------------------------------------------------------------
 // Domain types
@@ -225,9 +230,7 @@ function insertPredictionRow(
   const predictionId = Number(result.lastInsertRowid ?? 0);
   // SAFETY: row's shape matches the columns named in the SELECT above.
   const row = db.prepare(`
-        SELECT id, memory_id, tenant_id, class_tag, claim_text,
-               estimate_value, estimate_unit, target_date,
-               actual_value, closure_state, closed_at, closure_note, created_at
+        SELECT ${SELECT_COLUMNS}
         FROM predictions WHERE id = ?
       `).get(predictionId) as PredictionRow | undefined;
 
@@ -280,13 +283,10 @@ export function closePrediction(
   }
 
   const now = new Date().toISOString();
-  const db = openHippoDb(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     const row = withWriteScope(db, 'close_prediction', () => closeOpenPredictionRow(db, tenantId, id, opts, { now, actor }));
     return rowToPrediction(row);
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }
 
 /** Closes the row, reloads it and audits the close; the caller owns the transaction. */
@@ -317,9 +317,7 @@ function closeOpenPredictionRow(
 
   // SAFETY: row's shape matches the columns named in the SELECT above.
   const row = db.prepare(`
-        SELECT id, memory_id, tenant_id, class_tag, claim_text,
-               estimate_value, estimate_unit, target_date,
-               actual_value, closure_state, closed_at, closure_note, created_at
+        SELECT ${SELECT_COLUMNS}
         FROM predictions WHERE id = ? AND tenant_id = ?
       `).get(id, tenantId) as PredictionRow | undefined;
 
@@ -364,19 +362,14 @@ export function loadPredictionById(
   id: number,
 ): Prediction | null {
   assertTenantId('loadPredictionById', tenantId);
-  const db = openHippoDb(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     // SAFETY: row's shape matches the columns named in the SELECT above.
     const row = db.prepare(`
-      SELECT id, memory_id, tenant_id, class_tag, claim_text,
-             estimate_value, estimate_unit, target_date,
-             actual_value, closure_state, closed_at, closure_note, created_at
+      SELECT ${SELECT_COLUMNS}
       FROM predictions WHERE id = ? AND tenant_id = ?
     `).get(id, tenantId) as PredictionRow | undefined;
     return row ? rowToPrediction(row) : null;
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }
 
 export function loadPredictionsByClass(
@@ -388,8 +381,7 @@ export function loadPredictionsByClass(
   assertTenantId('loadPredictionsByClass', tenantId);
   const limit = opts.limit ?? DEFAULT_PREDICTION_PAGE_SIZE;
   const after = keysetAfter('created_at', 'id', opts.after);
-  const db = openHippoDb(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     let rows: PredictionRow[];
     if (opts.closureState) {
       if (!VALID_CLOSURE_STATES.has(opts.closureState)) {
@@ -399,9 +391,7 @@ export function loadPredictionsByClass(
       }
       // SAFETY: rows' shape matches the columns named in the SELECT above.
       rows = db.prepare(`
-        SELECT id, memory_id, tenant_id, class_tag, claim_text,
-               estimate_value, estimate_unit, target_date,
-               actual_value, closure_state, closed_at, closure_note, created_at
+        SELECT ${SELECT_COLUMNS}
         FROM predictions
         WHERE tenant_id = ? AND class_tag = ? AND closure_state = ?${after.sql}
         ORDER BY created_at DESC, id DESC
@@ -410,9 +400,7 @@ export function loadPredictionsByClass(
     } else {
       // SAFETY: rows' shape matches the columns named in the SELECT above.
       rows = db.prepare(`
-        SELECT id, memory_id, tenant_id, class_tag, claim_text,
-               estimate_value, estimate_unit, target_date,
-               actual_value, closure_state, closed_at, closure_note, created_at
+        SELECT ${SELECT_COLUMNS}
         FROM predictions
         WHERE tenant_id = ? AND class_tag = ?${after.sql}
         ORDER BY created_at DESC, id DESC
@@ -420,9 +408,7 @@ export function loadPredictionsByClass(
       `).all(tenantId, classTag, ...after.params, limit) as PredictionRow[];
     }
     return rows.map(rowToPrediction);
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }
 
 /** Every prediction in the tenant, open and closed, across all classes: the `status=all` list without a class. */
@@ -433,22 +419,17 @@ export function loadAllPredictions(
 ): Prediction[] {
   assertTenantId('loadAllPredictions', tenantId);
   const after = keysetAfter('created_at', 'id', opts.after);
-  const db = openHippoDb(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     // SAFETY: rows' shape matches the columns named in the SELECT.
     const rows = db.prepare(`
-      SELECT id, memory_id, tenant_id, class_tag, claim_text,
-             estimate_value, estimate_unit, target_date,
-             actual_value, closure_state, closed_at, closure_note, created_at
+      SELECT ${SELECT_COLUMNS}
       FROM predictions
       WHERE tenant_id = ?${after.sql}
       ORDER BY created_at DESC, id DESC
       LIMIT ?
     `).all(tenantId, ...after.params, opts.limit ?? DEFAULT_PREDICTION_PAGE_SIZE) as PredictionRow[];
     return rows.map(rowToPrediction);
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -505,8 +486,7 @@ export function computePredictionBaserate(
   assertTenantId('computePredictionBaserate', tenantId);
   if (!classTag) throw new BadRequestError('computePredictionBaserate: classTag is required');
 
-  const db = openHippoDb(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     // Ordered by id because the float sums differ with row order, and another store must reach the same figures.
     // SAFETY: rows' shape matches the two columns named in the SELECT above.
     const rows = db.prepare(`
@@ -524,9 +504,7 @@ export function computePredictionBaserate(
     // An empty class is audited too, since an agent probing one is a signal; the recall path passes false and audits its own hint.
     if (emitAudit) auditBaserateRead(db, tenantId, actor, classTag, baserate.nClosed);
     return baserate;
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }
 
 function auditBaserateRead(db: DatabaseSyncLike, tenantId: string, actor: string, classTag: string, nClosed: number): void {
@@ -589,15 +567,12 @@ export function loadOpenPredictions(
   assertTenantId('loadOpenPredictions', tenantId);
   const limit = opts.limit ?? DEFAULT_PREDICTION_PAGE_SIZE;
   const after = keysetAfter('created_at', 'id', opts.after);
-  const db = openHippoDb(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     let rows: PredictionRow[];
     if (opts.classTag) {
       // SAFETY: rows' shape matches the columns named in the SELECT above.
       rows = db.prepare(`
-        SELECT id, memory_id, tenant_id, class_tag, claim_text,
-               estimate_value, estimate_unit, target_date,
-               actual_value, closure_state, closed_at, closure_note, created_at
+        SELECT ${SELECT_COLUMNS}
         FROM predictions
         WHERE tenant_id = ? AND class_tag = ? AND closure_state = 'open'${after.sql}
         ORDER BY created_at DESC, id DESC
@@ -606,9 +581,7 @@ export function loadOpenPredictions(
     } else {
       // SAFETY: rows' shape matches the columns named in the SELECT above.
       rows = db.prepare(`
-        SELECT id, memory_id, tenant_id, class_tag, claim_text,
-               estimate_value, estimate_unit, target_date,
-               actual_value, closure_state, closed_at, closure_note, created_at
+        SELECT ${SELECT_COLUMNS}
         FROM predictions
         WHERE tenant_id = ? AND closure_state = 'open'${after.sql}
         ORDER BY created_at DESC, id DESC
@@ -616,7 +589,5 @@ export function loadOpenPredictions(
       `).all(tenantId, ...after.params, limit) as PredictionRow[];
     }
     return rows.map(rowToPrediction);
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }

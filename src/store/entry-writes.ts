@@ -7,7 +7,7 @@ import { auditRejectionRefusal, audit } from './audit-event.js';
 import { selectEntriesByIds } from './entry-reads.js';
 import { stampOriginProject, upsertEntryRow, syncFtsRow, deleteFtsRow } from './entry-row.js';
 import { mirrorBestEffort, writeMarkdownMirror } from './mirrors.js';
-import { openStore } from './open.js';
+import { onHandle, openStore } from './open.js';
 
 export interface WriteEntryOptions {
   actor?: string;
@@ -17,12 +17,9 @@ export interface WriteEntryOptions {
 }
 
 export function writeEntry(hippoRoot: string, entry: MemoryEntry, opts?: WriteEntryOptions): void {
-  const db = openStore(hippoRoot);
-  try {
+  onHandle(hippoRoot, (db) => {
     writeEntryOn(db, hippoRoot, entry, opts);
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /** writeEntry for each of `entries` in one transaction, so all land or none; each
@@ -49,28 +46,22 @@ export function writeEntriesTogether(hippoRoot: string, entries: readonly Memory
  * paid once; each row commits alone, and none opens the store when the list is empty. */
 export function writeEntriesSeparately(hippoRoot: string, entries: readonly MemoryEntry[]): void {
   if (entries.length === 0) return;
-  const db = openStore(hippoRoot);
-  try {
+  onHandle(hippoRoot, (db) => {
     for (const entry of entries) writeEntryOn(db, hippoRoot, entry);
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /** Adds `tag` to each of a tenant's rows that lacks it, in `ids` order, each read fresh
  * on one open store and committed alone; an id the tenant does not hold is skipped. */
 export function addTagToEntries(hippoRoot: string, tenantId: string, ids: readonly string[], tag: string): void {
-  const db = openStore(hippoRoot);
-  try {
+  onHandle(hippoRoot, (db) => {
     const live = selectEntriesByIds(db, ids, tenantId);
     for (const id of new Set(ids)) {
       const entry = live.get(id);
       if (!entry || entry.tags.includes(tag)) continue;
       writeEntryOn(db, hippoRoot, { ...entry, tags: [...entry.tags, tag] });
     }
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /** writeEntry on the caller's open store, so a loop of writes opens the store once; each row still commits alone. */

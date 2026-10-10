@@ -25,7 +25,8 @@
  * must never break recall.
  */
 import { open } from 'node:fs/promises';
-import { closeHippoDb, openHippoDb, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
+import { withWriteScope, type DatabaseSyncLike } from '../db/index.js';
+import { onHandle } from './open.js';
 import type { JsonObject } from './working-memory.js';
 import { type JsonValue, isJsonString, isJsonObjectLiteral } from '../util/json.js';
 import { DAY_MS } from '../util/time.js';
@@ -369,12 +370,9 @@ interface RereadDay {
 
 /** Replace a session's `reread` rows in `hippoRoot`'s store, one per {@link REREAD_SURFACES} surface and UTC day; returns the tokens booked. */
 export function recordRereads(hippoRoot: string, tenantId: string, sessionId: string, calls: readonly ApiCall[]): number {
-  const db = openHippoDb(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     return replaceRereadRows(db, tenantId, sessionId, calls);
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }
 
 /** One transaction, so a refused row leaves the session's earlier re-read rows in place. */

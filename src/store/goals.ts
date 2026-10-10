@@ -1,6 +1,7 @@
 // src/store/goals.ts
 import { randomUUID } from 'node:crypto';
-import { openHippoDb, closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
+import { withWriteScope, type DatabaseSyncLike } from '../db/index.js';
+import { onHandle } from './open.js';
 
 export type GoalStatus = 'active' | 'suspended' | 'completed';
 export type PolicyType = 'schema-fit-biased' | 'error-prioritized' | 'recency-first' | 'hybrid';
@@ -81,12 +82,9 @@ export interface PushGoalOpts {
 }
 
 export function pushGoal(hippoRoot: string, opts: PushGoalOpts): Goal {
-  const db = openHippoDb(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     return pushGoalWithDb(db, opts);
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }
 
 /**
@@ -217,12 +215,9 @@ export interface GetActiveGoalsOpts {
 }
 
 export function getActiveGoals(hippoRoot: string, opts: GetActiveGoalsOpts): Goal[] {
-  const db = openHippoDb(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     return getActiveGoalsWithDb(db, opts);
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }
 
 /** A session's active goals, oldest first, and the retrieval policy of each goal that names one. */
@@ -233,19 +228,15 @@ export interface ActiveGoals {
 
 /** The active goals and their policies on one handle, so a goal and its policy never disagree. */
 export function activeGoalsWithPolicies(hippoRoot: string, opts: GetActiveGoalsOpts): ActiveGoals {
-  const db = openHippoDb(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     const goals = getActiveGoalsWithDb(db, opts);
     return { goals, policies: loadGoalPolicies(db, goals) };
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }
 
 /** Every goal of a (tenant, session), whatever its status, oldest first. */
 export function getSessionGoals(hippoRoot: string, opts: GetActiveGoalsOpts): Goal[] {
-  const db = openHippoDb(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     // SAFETY: rows come from the SELECT below, which projects exactly GoalRow's columns.
     const rows = db.prepare(`
       SELECT id, session_id, tenant_id, goal_name, level, parent_goal_id, status,
@@ -255,9 +246,7 @@ export function getSessionGoals(hippoRoot: string, opts: GetActiveGoalsOpts): Go
       ORDER BY created_at ASC
     `).all(opts.tenantId, opts.sessionId) as GoalRow[];
     return rows.map(rowToGoal);
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }
 
 function getActiveGoalsWithDb(db: DatabaseSyncLike, opts: GetActiveGoalsOpts): Goal[] {
@@ -369,8 +358,7 @@ export interface CompleteGoalOpts {
 }
 
 export function completeGoal(hippoRoot: string, goalId: string, opts: CompleteGoalOpts): void {
-  const db = openHippoDb(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     const completedAt = new Date().toISOString();
     const score = opts.outcomeScore ?? null;
 
@@ -414,23 +402,17 @@ export function completeGoal(hippoRoot: string, goalId: string, opts: CompleteGo
         }
       }
     });
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }
 
 export function suspendGoal(hippoRoot: string, goalId: string): void {
-  const db = openHippoDb(hippoRoot);
-  try {
+  onHandle(hippoRoot, (db) => {
     db.prepare(`UPDATE goal_stack SET status = 'suspended' WHERE id = ? AND status = 'active'`).run(goalId);
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }
 
 export function resumeGoal(hippoRoot: string, goalId: string): void {
-  const db = openHippoDb(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     withWriteScope(db, 'resume_goal', () => {
       // SAFETY: the row comes from the SELECT above, which projects exactly
       // the session_id, tenant_id, and status columns of goal_stack.
@@ -443,7 +425,5 @@ export function resumeGoal(hippoRoot: string, goalId: string): void {
 
       db.prepare(`UPDATE goal_stack SET status = 'active' WHERE id = ?`).run(goalId);
     });
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }

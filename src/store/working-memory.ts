@@ -6,8 +6,8 @@
  * exceeds WM_MAX_ENTRIES per scope.
  */
 
-import { closeHippoDb, withWriteScope } from '../db/index.js';
-import { openStore } from './open.js';
+import { withWriteScope } from '../db/index.js';
+import { onHandle, openStore } from './open.js';
 import type { JsonValue } from '../util/json.js';
 import { warnDamagedColumn } from '../util/stored-json.js';
 import { resolveTenantId } from './tenant.js';
@@ -79,8 +79,7 @@ export function wmPush(hippoRoot: string, opts: {
   metadata?: JsonObject;
   tenantId?: string;
 }): number {
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     const now = new Date().toISOString();
     const importance = opts.importance ?? 0;
     const tenantId = opts.tenantId ?? resolveTenantId({});
@@ -107,9 +106,7 @@ export function wmPush(hippoRoot: string, opts: {
 
       return id;
     });
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 function evictOverCapacity(db: ReturnType<typeof openStore>, scope: string, tenantId: string): void {
@@ -145,8 +142,7 @@ export function wmRead(hippoRoot: string, opts?: {
   limit?: number;
   tenantId?: string;
 }): WorkingMemoryItem[] {
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     const clauses: string[] = ['tenant_id = ?'];
     const params: Array<string | number> = [opts?.tenantId ?? resolveTenantId({})];
 
@@ -174,9 +170,7 @@ export function wmRead(hippoRoot: string, opts?: {
     `).all(...params) as WorkingMemoryRow[];
 
     return rows.map(rowToItem);
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /**
@@ -187,8 +181,7 @@ export function wmClear(hippoRoot: string, opts?: {
   sessionId?: string;
   tenantId?: string;
 }): number {
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     const clauses: string[] = ['tenant_id = ?'];
     const params: Array<string | number> = [opts?.tenantId ?? resolveTenantId({})];
 
@@ -204,9 +197,7 @@ export function wmClear(hippoRoot: string, opts?: {
     const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
     const result = db.prepare(`DELETE FROM working_memory ${where}`).run(...params);
     return Number(result.changes ?? 0);
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /**

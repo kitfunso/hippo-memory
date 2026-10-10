@@ -18,6 +18,7 @@
  * api.listDormant / restoreDormant / forgetDormant / isDormant.
  */
 import { closeHippoDb, openHippoDb, withWriteScope, withWriteScopeOr, type DatabaseSyncLike } from '../db/index.js';
+import { onHandle } from './open.js';
 import type { MemoryEntry } from '../core/memory.js';
 import type { SqlFragment } from './recall-scope.js';
 import type { WriteBudget } from '../util/write-budget.js';
@@ -294,22 +295,16 @@ export async function expireDormantBefore(
 
 /** A tenant's dormant memories whose scope `admit` passes, newest first, read on a handle of its own. */
 export function loadDormantMemories(hippoRoot: string, tenantId: string, opts: ListDormantOpts = {}, admit: SqlFragment = EVERY_SCOPE): DormantMemory[] {
-  const db = openHippoDb(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     return listDormantRows(db, tenantId, opts, admit);
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }
 
 /** Whether a tenant holds a dormant memory with this id whose scope `admit` passes, read on a handle of its own. */
 export function holdsDormantMemory(hippoRoot: string, tenantId: string, id: string, admit: SqlFragment = EVERY_SCOPE): boolean {
-  const db = openHippoDb(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     return hasDormantRow(db, tenantId, id, admit);
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }
 
 /** One restore as the store applies it. The two functions are the caller's policy over plain rows; neither is handed the handle. */
@@ -363,8 +358,7 @@ function restoreInWriteScope(db: DatabaseSyncLike, restore: DormantRestore): Dor
 
 /** Brings one dormant memory back on a single handle: the live row, the dormant delete and the audit row commit together, then its mirrors are written. */
 export function restoreDormantMemory(hippoRoot: string, restore: DormantRestore): DormantRestoreOutcome {
-  const db = openHippoDb(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     let outcome: DormantRestoreOutcome;
     try {
       outcome = restoreInWriteScope(db, restore);
@@ -375,9 +369,7 @@ export function restoreDormantMemory(hippoRoot: string, restore: DormantRestore)
     }
     if (outcome.status === 'restored') writeEntryMirrors(hippoRoot, outcome.entry);
     return outcome;
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }
 
 /** One permanent delete of a dormant memory. */
@@ -393,13 +385,10 @@ export interface DormantForget {
 /** Deletes a tenant's dormant memory for good and writes its `forget` audit row, on a single handle; false when it holds none `admit` passes. */
 export function forgetDormantMemory(hippoRoot: string, forget: DormantForget): boolean {
   const { tenantId, id, actor, admit } = forget;
-  const db = openHippoDb(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     if (!hasDormantRow(db, tenantId, id, admit) || !deleteDormantRow(db, tenantId, id)) return false;
     // Best-effort, like every other forget audit row: the delete stands.
     audit(db, 'forget', { tenantId, actor, targetId: id, metadata: { dormant: true } });
     return true;
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }

@@ -1,7 +1,7 @@
 import type { MemoryEntry } from '../core/memory.js';
 import { closeHippoDb, type DatabaseSyncLike } from '../db/index.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
-import { openStore } from './open.js';
+import { onHandle, openStore } from './open.js';
 import { escapeLike } from '../util/escape.js';
 import { originInSql } from '../core/project-identity.js';
 import { scopeAdmitSql } from './recall-scope.js';
@@ -19,8 +19,7 @@ export const TENANT_IS = '+tenant_id = ?';
  * legacy single-tenant callers and the writeEntry/readEntry round-trip.
  */
 export function readEntry(hippoRoot: string, id: string, tenantId?: string): MemoryEntry | null {
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     // SAFETY: both branches select exactly MEMORY_SELECT_COLUMNS, matching
     // MemoryRow's field set.
     const row = tenantId !== undefined
@@ -31,9 +30,7 @@ export function readEntry(hippoRoot: string, id: string, tenantId?: string): Mem
           `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id = ?`,
         ).get(id) as MemoryRow | undefined;
     return row ? rowToEntry(row) : null;
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /** Ids per `IN (...)` list: far under SQLite's bound-parameter limit, with room for the tenant filter. */
@@ -50,8 +47,7 @@ export function chunked<T>(items: readonly T[], size: number = ID_CHUNK): T[][] 
 export function heldIdLookup(hippoRoot: string, tenantId: string, ids: readonly string[]): (id: string) => boolean {
   const held = new Map<string, boolean>();
   const lookUp = (asked: readonly string[]): void => {
-    const db = openStore(hippoRoot);
-    try {
+    onHandle(hippoRoot, (db) => {
       for (const chunk of chunked([...new Set(asked)])) {
         for (const id of chunk) held.set(id, false);
         // SAFETY: rows' shape matches the single `id` column selected.
@@ -60,9 +56,7 @@ export function heldIdLookup(hippoRoot: string, tenantId: string, ids: readonly 
         ).all(...chunk, tenantId) as Array<{ id: string }>;
         for (const row of rows) held.set(row.id, true);
       }
-    } finally {
-      closeHippoDb(db);
-    }
+    }, openStore);
   };
   if (ids.length > 0) lookUp(ids);
   return (id) => {
@@ -129,8 +123,7 @@ export function loadEntriesByIds(
 ): MemoryEntry[] {
   if (ids.length === 0) return [];
   const capped = ids.slice(0, MAX_IDS_PER_READ);
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     const placeholders = capped.map(() => '?').join(',');
     // Without ORDER BY, rows follow SQLite's IN(...) scan order, which is undefined w.r.t. `ids`.
     // SAFETY: both branches select exactly MEMORY_SELECT_COLUMNS, matching
@@ -143,9 +136,7 @@ export function loadEntriesByIds(
           `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (${placeholders}) ORDER BY created ASC, content ASC, id ASC`,
         ).all(...capped) as MemoryRow[];
     return rows.map(rowToEntry);
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 function originClause(origins: readonly string[] | undefined): string {
@@ -170,8 +161,7 @@ export function loadSessionRawMemories(
   origins?: readonly string[],
 ): MemoryEntry[] {
   if (!sessionId) return [];
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     const params: Array<string | number> = [];
     let sql = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE kind = 'raw' AND source_session_id = ? AND superseded_by IS NULL`;
     params.push(sessionId);
@@ -192,9 +182,7 @@ export function loadSessionRawMemories(
     // SAFETY: sql starts from MEMORY_SELECT_COLUMNS, matching MemoryRow.
     const rows = db.prepare(sql).all(...params) as MemoryRow[];
     return rows.map(rowToEntry);
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /**
@@ -219,8 +207,7 @@ export function countSessionRawMemories(
   origins?: readonly string[],
 ): number {
   if (!sessionId) return 0;
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     const params: Array<string> = [];
     let sql = `SELECT COUNT(*) AS c FROM memories WHERE kind = 'raw' AND source_session_id = ? AND superseded_by IS NULL`;
     params.push(sessionId);
@@ -241,9 +228,7 @@ export function countSessionRawMemories(
     // SAFETY: row's shape matches the single `COUNT(*) AS c` column above.
     const row = db.prepare(sql).get(...params) as { c?: number } | undefined;
     return Number(row?.c ?? 0);
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /**
@@ -269,8 +254,7 @@ export function loadFreshRawMemories(
 ): MemoryEntry[] {
   if (count <= 0) return [];
   const capped = Math.min(count, 200);
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     const params: Array<string | number> = [];
     let sql = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE kind = 'raw' AND superseded_by IS NULL`;
     if (tenantId !== undefined) {
@@ -290,9 +274,7 @@ export function loadFreshRawMemories(
     // SAFETY: sql starts from MEMORY_SELECT_COLUMNS, matching MemoryRow.
     const rows = db.prepare(sql).all(...params) as MemoryRow[];
     return rows.map(rowToEntry);
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /**
@@ -303,23 +285,17 @@ export function loadFreshRawMemories(
  * paths that surface results to a user MUST pass a resolved tenant.
  */
 export function loadAllEntries(hippoRoot: string, tenantId?: string): MemoryEntry[] {
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     return selectAllEntries(db, tenantId);
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /** Every tenant's memory ids in loadAllEntries' order, for a caller that reads the rows a page at a time instead of holding them all. */
 export function loadAllEntryIds(hippoRoot: string): string[] {
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     // SAFETY: the SELECT names exactly the one column read.
     return (db.prepare('SELECT id FROM memories ORDER BY created ASC, id ASC').all() as Array<{ id: string }>).map((row) => row.id);
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 export interface EntriesWithBase {
@@ -376,8 +352,7 @@ export function selectLiveEntriesBySourcePrefix(db: DatabaseSyncLike, tenantId: 
 // Content of every team-visible tenant row tagged `tag`, without reading the rest of the store; `origins` keeps one project's rows and user-global ones.
 // No owner: a personal or connector-private row must never answer `duplicate` for, or stop, a team copy. `instr` prefilters; `includes` re-checks.
 export function loadContentsWithTag(hippoRoot: string, tenantId: string, tag: string, origins?: readonly string[]): string[] {
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     const inProject = origins === undefined ? '' : ` AND (origin_project = '' OR ${originInSql(origins)})`;
     const admit = scopeAdmitSql('');
     /** SAFETY: rows' shape matches the two columns named in the SELECT below. */
@@ -385,9 +360,7 @@ export function loadContentsWithTag(hippoRoot: string, tenantId: string, tag: st
       `SELECT content, tags_json FROM memories WHERE tenant_id = ? AND instr(tags_json, ?) > 0${inProject} AND ${admit.sql}`,
     ).all(tenantId, JSON.stringify(tag), ...(origins ?? []), ...admit.params) as Array<{ content: string; tags_json: string }>;
     return rows.filter((r) => parseJsonArray(r.tags_json).includes(tag)).map((r) => r.content);
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 export interface VaultRawRow {
@@ -399,8 +372,7 @@ export interface VaultRawRow {
 
 /** Live raw rows whose artifact_ref matches a LIKE pattern, for one tenant; the store is set up first when it is new. */
 export function loadVaultRawRows(hippoRoot: string, likeParam: string, tenantId: string): VaultRawRow[] {
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     // SAFETY: query selects exactly the columns of VaultRawRow, in the same
     // names, from the memories table this module owns.
     return db
@@ -409,9 +381,7 @@ export function loadVaultRawRows(hippoRoot: string, likeParam: string, tenantId:
            WHERE artifact_ref LIKE ? ESCAPE '\\' AND tenant_id = ? AND kind = 'raw'`,
       )
       .all(likeParam, tenantId) as VaultRawRow[];
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 export interface PreviewRow {
@@ -474,8 +444,7 @@ export function selectRowsOutsideSourcePrefixAt(
 /** Content of a tenant's live rows written by `source` and tagged `tag` that no extraction produced,
  * in loadAllEntries' order and in every scope; `exceptSessionId` drops one session's own rows. */
 export function loadLiveContentsBySourceAndTag(hippoRoot: string, tenantId: string, source: string, tag: string, exceptSessionId: string): string[] {
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     /** SAFETY: rows' shape matches the two columns named in the SELECT below. */
     const rows = db.prepare(
       `SELECT content, tags_json FROM memories
@@ -485,15 +454,12 @@ export function loadLiveContentsBySourceAndTag(hippoRoot: string, tenantId: stri
        ORDER BY created ASC, id ASC`,
     ).all(tenantId, source, JSON.stringify(tag), exceptSessionId) as Array<{ content: string; tags_json: string }>;
     return rows.filter((r) => parseJsonArray(r.tags_json).includes(tag)).map((r) => r.content);
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /** Every tenant's distilled rows nothing has superseded, in loadAllEntries' order: the rows that can be each other's duplicate. */
 export function loadCurrentDistilledEntries(hippoRoot: string): MemoryEntry[] {
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     // SAFETY: selects exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
     const rows = db.prepare(
       `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories
@@ -501,7 +467,5 @@ export function loadCurrentDistilledEntries(hippoRoot: string): MemoryEntry[] {
        ORDER BY created ASC, id ASC`,
     ).all() as MemoryRow[];
     return rows.map(rowToEntry);
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }

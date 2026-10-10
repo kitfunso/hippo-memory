@@ -1,5 +1,6 @@
 // What `hippo doctor` and `hippo support-bundle` read from a store: one read-only open each, plain data out.
-import { closeHippoDb, countTableRows, ftsRowCounts, getMeta, getSchemaVersion, openHippoDbReadOnly } from '../db/index.js';
+import { countTableRows, ftsRowCounts, getMeta, getSchemaVersion, openHippoDbReadOnly } from '../db/index.js';
+import { onHandle } from './open.js';
 import { listTableNames } from '../db/tables.js';
 import { errorMessage } from '../util/log.js';
 import { compactionCountsAt, tokenTallySince, type CompactionCounts, type TokenTally } from './doctor-reads.js';
@@ -45,8 +46,7 @@ export interface StoreHealth {
 
 /** Everything `hippo doctor` reads from one store; throws when it cannot be opened or its schema version read. */
 export function readStoreHealth(hippoRoot: string, cutoffs: HealthCutoffs): StoreHealth {
-  const db = openHippoDbReadOnly(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     return {
       schemaVersion: getSchemaVersion(db),
       memories: countTableRows(db, 'memories'),
@@ -57,9 +57,7 @@ export function readStoreHealth(hippoRoot: string, cutoffs: HealthCutoffs): Stor
       lastSleep: attempt(() => lastConsolidationAt(db)),
       compactions: attempt(() => compactionCountsAt(db, cutoffs.stuckBefore, cutoffs.transcriptFloor)),
     };
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openHippoDbReadOnly);
 }
 
 export interface StoreInventory {
@@ -72,14 +70,11 @@ export interface StoreInventory {
 
 /** Schema version, oldest allowed binary and row count of every table, for a support bundle; never reads a memory column. */
 export function readStoreInventory(hippoRoot: string): StoreInventory {
-  const db = openHippoDbReadOnly(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     const schemaVersion = getSchemaVersion(db);
     const minCompatibleBinary = getMeta(db, 'min_compatible_binary', '') || null;
     const tables: JsonObject = {};
     for (const name of listTableNames(db)) tables[name] = countTableRows(db, name);
     return { schemaVersion, minCompatibleBinary, tables };
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openHippoDbReadOnly);
 }

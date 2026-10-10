@@ -1,5 +1,6 @@
 // Owns hippo.db's stored vectors, the identity of the model that built them, and the particle rows: every read and write of the three.
-import { closeHippoDb, getMeta, openHippoDb, setMeta, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
+import { getMeta, setMeta, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
+import { onHandle } from './open.js';
 import { DEFAULT_EMBEDDING_MODEL } from './embeddings/local.js';
 import type { MemoryEntry } from '../core/memory.js';
 import type { PhysicsParticle } from '../core/physics.js';
@@ -40,32 +41,23 @@ function embeddingIndexStateOn(db: DatabaseSyncLike): EmbeddingIndexState {
 
 /** hippo.db's index state, the meta row and the EXISTS on one handle. */
 export function storedIndexState(hippoRoot: string): EmbeddingIndexState {
-  const db = openHippoDb(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     return embeddingIndexStateOn(db);
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }
 
 /** Records `identity` as what built the index under `hippoRoot`. */
 export function saveIndexIdentity(hippoRoot: string, identity: string): void {
-  const db = openHippoDb(hippoRoot);
-  try {
+  onHandle(hippoRoot, (db) => {
     setMeta(db, EMBEDDING_MODEL_META_KEY, identity);
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }
 
 /** Every stored vector keyed by memory id; `{}` when none. Search reads only the rows it ranks via `loadStoredVectors`. */
 export function loadEmbeddingIndex(hippoRoot: string): Record<string, number[]> {
-  const db = openHippoDb(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     return Object.fromEntries(loadVectors(db));
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }
 
 export interface StoredVectorSummary {
@@ -75,65 +67,47 @@ export interface StoredVectorSummary {
 
 /** Every stored vector id and the float count of the first row, with no vector decoded. */
 export function storedVectorSummary(hippoRoot: string): StoredVectorSummary {
-  const db = openHippoDb(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     return { ids: storedVectorIds(db), dims: storedVectorDims(db) };
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }
 
 /** Stored vectors for `ids` only. */
 export function loadStoredVectors(hippoRoot: string, ids: readonly string[]): Map<string, number[]> {
   if (ids.length === 0) return new Map();
-  const db = openHippoDb(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     return loadVectors(db, ids);
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }
 
 /** `loadStoredVectors` as Float32 views, for a caller that only scores them. */
 export function loadStoredVectorViews(hippoRoot: string, ids: readonly string[]): Map<string, Float32Array> {
   if (ids.length === 0) return new Map();
-  const db = openHippoDb(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     return loadVectorViews(db, ids);
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }
 
 /** Replace every stored vector with `index`; `model` defaults to the stored index identity. */
 export function saveEmbeddingIndex(hippoRoot: string, index: Record<string, number[]>, model?: string): void {
-  const db = openHippoDb(hippoRoot);
-  try {
+  onHandle(hippoRoot, (db) => {
     replaceAllVectors(db, index, model ?? getMeta(db, EMBEDDING_MODEL_META_KEY, ''));
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }
 
 /** Inserts or replaces `rows` under `model`, each row its own commit so a failure keeps the rows before it; returns how many it wrote. */
 export function saveStoredVectors(hippoRoot: string, rows: Iterable<readonly [string, readonly number[]]>, model: string): number {
-  const db = openHippoDb(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     return upsertVectors(db, rows, model);
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }
 
 /** Drops the vectors of deleted memories under `hippoRoot`, then returns the ids that still have one. */
 export function pruneStoredVectors(hippoRoot: string): Set<string> {
-  const db = openHippoDb(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     deleteOrphanVectors(db);
     return storedVectorIds(db);
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }
 
 export function entriesWithoutVectorAt(db: DatabaseSyncLike, query: VectorBackfillQuery): MemoryEntry[] {
@@ -191,22 +165,16 @@ export function writeVectorsAt(db: DatabaseSyncLike, write: VectorWrite): Vector
 
 /** Every particle stored under `hippoRoot`. */
 export function loadStoredParticles(hippoRoot: string): PhysicsParticle[] {
-  const db = openHippoDb(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     return Array.from(loadPhysicsState(db).values());
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }
 
 /** Writes `particles` over their stored state under `hippoRoot`, as one batch. */
 export function saveStoredParticles(hippoRoot: string, particles: PhysicsParticle[]): void {
-  const db = openHippoDb(hippoRoot);
-  try {
+  onHandle(hippoRoot, (db) => {
     savePhysicsState(db, particles);
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }
 
 const PARTICLE_PAGE = 64;
@@ -223,20 +191,14 @@ function* entriesInPages(db: DatabaseSyncLike, ids: readonly string[]): Generato
 
 /** Replaces every particle under `hippoRoot` with a fresh one per memory in `ids` that has an embedding; returns how many. Rows are read a page at a time. */
 export function resetStoredParticles(hippoRoot: string, ids: readonly string[], embeddingIndex: Record<string, number[]>): number {
-  const db = openHippoDb(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     return resetAllPhysicsState(db, entriesInPages(db, ids), embeddingIndex);
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }
 
 /** Stores a first particle for `entry`, placed at `vector`; a memory that has one keeps it. */
 export function seedStoredParticle(hippoRoot: string, entry: MemoryEntry, vector: number[]): void {
-  const db = openHippoDb(hippoRoot);
-  try {
+  onHandle(hippoRoot, (db) => {
     if (!loadPhysicsState(db, [entry.id]).has(entry.id)) savePhysicsState(db, [initializeParticle(entry, vector)]);
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }

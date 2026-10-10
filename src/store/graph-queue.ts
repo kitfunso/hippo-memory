@@ -1,5 +1,5 @@
 // The graph extraction queue: the consolidated memories that wait for a graph rebuild, and the watermark the sleep drain marks them by.
-import { openHippoDb, closeHippoDb } from '../db/index.js';
+import { onHandle } from './open.js';
 import { assertTenantId } from './tenant.js';
 import { errorMessage, log } from '../util/log.js';
 import { type GraphQueueItem, type QueueRow, rowToQueueItem, QUEUE_COLS } from './graph-rows.js';
@@ -16,8 +16,7 @@ function enqueueExtraction(
 ): GraphQueueItem {
   assertTenantId('enqueueExtraction', tenantId);
   const now = new Date().toISOString();
-  const db = openHippoDb(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     // enqueue is memory-keyed (no source object), so a missing memory still throws (correct -
     // you cannot enqueue a forgotten mirror); memoryId is non-null here by construction.
     const { sourceKind } = resolveConsolidatedSource(db, tenantId, memoryId, null, 'enqueueExtraction');
@@ -30,9 +29,7 @@ function enqueueExtraction(
     const row = db.prepare(`SELECT ${QUEUE_COLS} FROM graph_extraction_queue WHERE id = ?`).get(id) as QueueRow | undefined;
     if (!row) throw new Error('enqueueExtraction: failed to reload queue item');
     return rowToQueueItem(row);
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }
 
 /**
@@ -70,17 +67,14 @@ export function markPendingProcessedUpTo(
 ): number {
   assertTenantId('markPendingProcessedUpTo', tenantId);
   const now = new Date().toISOString();
-  const db = openHippoDb(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     const res = db.prepare(`
       UPDATE graph_extraction_queue
       SET status = 'processed', processed_at = ?
       WHERE tenant_id = ? AND status = 'pending' AND id <= ?
     `).run(now, tenantId, maxId);
     return Number(res.changes ?? 0);
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }
 
 /**
@@ -93,8 +87,7 @@ export function markPendingProcessedUpTo(
 export function loadPendingExtractionTenants(
   hippoRoot: string,
 ): { tenantId: string; maxPendingId: number }[] {
-  const db = openHippoDb(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     // SAFETY: rows' shape matches the two aliased columns (tenant_id, max_id)
     // named in the SELECT above.
     const rows = db.prepare(`
@@ -104,7 +97,5 @@ export function loadPendingExtractionTenants(
       GROUP BY tenant_id
     `).all() as { tenant_id: string; max_id: number }[];
     return rows.map((r) => ({ tenantId: r.tenant_id, maxPendingId: Number(r.max_id) }));
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }

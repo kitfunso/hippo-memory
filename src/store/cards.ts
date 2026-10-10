@@ -1,9 +1,9 @@
 import { generateId } from '../core/memory.js';
-import { closeHippoDb, withWriteScope, withWriteScopeOr, type DatabaseSyncLike } from '../db/index.js';
+import { withWriteScope, withWriteScopeOr, type DatabaseSyncLike } from '../db/index.js';
 import { SessionHandoff, SessionHandoffRow, rowToSessionHandoff, isHandoffOutcome, HandoffOutcome } from '../core/handoff.js';
 import { Card, CardStatus, CardRun, CardComment, CARD_TRANSITIONS, CARD_LEASE_MS } from '../core/card.js';
 import { assertTenantId } from './tenant.js';
-import { openStore } from './open.js';
+import { onHandle, openStore } from './open.js';
 import { chunked } from './entry-reads.js';
 import { HANDOFF_COLUMNS } from './handoffs.js';
 
@@ -174,8 +174,7 @@ export function createCard(
   if (input.budget !== undefined && !(Number.isSafeInteger(input.budget) && input.budget > 0)) {
     throw new Error(`Invalid budget: ${input.budget} (expected a positive integer)`);
   }
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     const dependsOn = [...new Set(input.dependsOn ?? [])];
     let id = '';
 
@@ -198,9 +197,7 @@ export function createCard(
       for (const parentId of dependsOn) insertDep.run(parentId, id, tenantId, now);
     });
     return loadCardRow(db, tenantId, id)!;
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /** Whether every dependsOn card is done, true for none; throws on an id that is no card of the tenant. Call inside the write scope. */
@@ -224,19 +221,15 @@ function everyParentDone(db: DatabaseSyncLike, tenantId: string, dependsOn: read
 /** Returns the card row for id, or null if it does not exist under this tenant. */
 export function loadCard(hippoRoot: string, tenantId: string, id: string): Card | null {
   assertTenantId('loadCard', tenantId);
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     return loadCardRow(db, tenantId, id);
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /** Lists cards for this tenant, optionally filtered to one status, newest-updated first. */
 export function listCards(hippoRoot: string, tenantId: string, opts: { status?: CardStatus } = {}): Card[] {
   assertTenantId('listCards', tenantId);
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     const conditions = ['tenant_id = ?'];
     const params: unknown[] = [tenantId];
     if (opts.status) {
@@ -248,16 +241,13 @@ export function listCards(hippoRoot: string, tenantId: string, opts: { status?: 
       SELECT ${CARD_COLUMNS} FROM cards WHERE ${conditions.join(' AND ')} ORDER BY updated_at DESC, id DESC
     `).all(...params) as CardRow[];
     return rows.map(rowToCard);
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /** Returns this card's parent and child ids from card_deps. */
 export function loadCardDeps(hippoRoot: string, tenantId: string, id: string) {
   assertTenantId('loadCardDeps', tenantId);
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     // SAFETY: rows' shape matches the single `parent` column named in the SELECT below.
     const parents = (db.prepare(`SELECT parent FROM card_deps WHERE tenant_id = ? AND child = ?`).all(
       tenantId,
@@ -269,57 +259,46 @@ export function loadCardDeps(hippoRoot: string, tenantId: string, id: string) {
       id
     ) as Array<{ child: string }>).map((r) => r.child);
     return { parents, children };
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /** Returns this card's run history, most recent first. */
 export function loadCardRuns(hippoRoot: string, tenantId: string, id: string): CardRun[] {
   assertTenantId('loadCardRuns', tenantId);
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     // SAFETY: rows' shape matches CardRunRow.
     const rows = db.prepare(`
       SELECT id, card, runtime, session_id, started, ended, outcome
       FROM card_runs WHERE tenant_id = ? AND card = ? ORDER BY started DESC, id DESC
     `).all(tenantId, id) as CardRunRow[];
     return rows.map(rowToCardRun);
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /** Returns this card's comments, most recent first. */
 export function loadCardComments(hippoRoot: string, tenantId: string, id: string): CardComment[] {
   assertTenantId('loadCardComments', tenantId);
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     // SAFETY: rows' shape matches CardCommentRow.
     const rows = db.prepare(`
       SELECT id, card_id, author, body, created_at
       FROM card_comments WHERE tenant_id = ? AND card_id = ? ORDER BY created_at DESC, id DESC
     `).all(tenantId, id) as CardCommentRow[];
     return rows.map(rowToCardComment);
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /** Read side of the card <-> handoff round trip: the newest handoff filed against this card. */
 export function loadLatestHandoffForCard(hippoRoot: string, tenantId: string, cardId: string): SessionHandoff | null {
   assertTenantId('loadLatestHandoffForCard', tenantId);
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     // SAFETY: row's shape matches HANDOFF_COLUMNS.
     const row = db.prepare(`
       SELECT ${HANDOFF_COLUMNS} FROM session_handoffs
       WHERE tenant_id = ? AND card_id = ? ORDER BY created_at DESC, id DESC LIMIT 1
     `).get(tenantId, cardId) as SessionHandoffRow | undefined;
     return row ? rowToSessionHandoff(row) : null;
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /** Atomic claim: WHERE status IN (ready, blocked) AND assignee_runtime IS NULL decides the race. Throws on an unknown card id;
@@ -329,8 +308,7 @@ export function claimCard(hippoRoot: string, tenantId: string, id: string, runti
   if (runtime.trim() === '') {
     throw new Error('runtime must not be empty');
   }
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     const runId = withWriteScopeOr(db, 'claim_card', (rollback) => {
       const changes = transitionCard(db, tenantId, id, {
         from: ['ready', 'blocked'],
@@ -351,9 +329,7 @@ export function claimCard(hippoRoot: string, tenantId: string, id: string, runti
       return Number(insert.lastInsertRowid ?? 0);
     });
     return runId === null ? null : { ...loadCardRow(db, tenantId, id)!, runId };
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /** Moves a running card's lease to CARD_LEASE_MS from now and records the heartbeat; updated_at is left alone. Throws on an
@@ -361,8 +337,7 @@ export function claimCard(hippoRoot: string, tenantId: string, id: string, runti
 export function heartbeatCard(hippoRoot: string, tenantId: string, id: string, runId: number): Card | null {
   assertTenantId('heartbeatCard', tenantId);
   assertRunId(runId);
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     const beat = withWriteScopeOr(db, 'heartbeat_card', (rollback) => {
       const card = loadCardRow(db, tenantId, id);
       if (!card) {
@@ -377,9 +352,7 @@ export function heartbeatCard(hippoRoot: string, tenantId: string, id: string, r
       return true;
     });
     return beat ? loadCardRow(db, tenantId, id) : null;
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /** Requires the card be running; closes the live run as blocked and files reason as a comment. Throws on an unknown
@@ -390,8 +363,7 @@ export function blockCard(hippoRoot: string, tenantId: string, id: string, reaso
     throw new Error('reason must not be empty');
   }
   if (runId !== undefined) assertRunId(runId);
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     const blocked = withWriteScopeOr(db, 'block_card', (rollback) => {
       const allowed = runId === undefined || isLiveRun(db, tenantId, id, runId);
       const changes = allowed ? transitionCard(db, tenantId, id, { from: ['running'], to: 'blocked', extra: { setSql: 'assignee_runtime = NULL' } }) : 0;
@@ -408,9 +380,7 @@ export function blockCard(hippoRoot: string, tenantId: string, id: string, reaso
       return true;
     });
     return blocked ? loadCardRow(db, tenantId, id) : null;
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /** Requires the card be running; moves it to review, clearing its lease and heartbeat and keeping its live run. When runId is
@@ -418,8 +388,7 @@ export function blockCard(hippoRoot: string, tenantId: string, id: string, reaso
 export function reviewCard(hippoRoot: string, tenantId: string, id: string, runId?: number): Card | null {
   assertTenantId('reviewCard', tenantId);
   if (runId !== undefined) assertRunId(runId);
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     const moved = withWriteScopeOr(db, 'review_card', (rollback) => {
       const allowed = runId === undefined || isLiveRun(db, tenantId, id, runId);
       const changes = allowed ? transitionCard(db, tenantId, id, { from: ['running'], to: 'review' }) : 0;
@@ -432,9 +401,7 @@ export function reviewCard(hippoRoot: string, tenantId: string, id: string, runI
       return true;
     });
     return moved ? loadCardRow(db, tenantId, id) : null;
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /** Requires the card be in review; closes the live run with outcome. Outcome 'success' moves the card to done and, in the same transaction, promotes any child whose parents are now all done; 'failure' or 'partial' moves it to shelved and promotes nothing. Throws on an unknown card id; returns null for a card not in review. When runId is given, returns null unless it is the card's live run. */
@@ -450,8 +417,7 @@ export function completeCard(
     throw new Error(`invalid card outcome: ${String(outcome)}`);
   }
   if (runId !== undefined) assertRunId(runId);
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     const promoted = withWriteScopeOr(db, 'complete_card', (rollback) => {
       const target: CardStatus = outcome === 'success' ? 'done' : 'shelved';
       const allowed = runId === undefined || isLiveRun(db, tenantId, id, runId);
@@ -470,9 +436,7 @@ export function completeCard(
       return target === 'done' ? promoteUnblockedChildren(db, tenantId, id) : [];
     });
     return promoted === null ? null : { card: loadCardRow(db, tenantId, id)!, promotedChildren: promoted };
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /** Moves to ready each backlog child of `parentId` whose parents are all done, and returns their ids. Call inside the write scope. */
@@ -495,8 +459,7 @@ function promoteUnblockedChildren(db: DatabaseSyncLike, tenantId: string, parent
  * run as 'reclaimed' and leaves its handoffs alone, all in one write transaction. Returns the reclaimed card ids in id order. */
 export function reclaimExpiredCards(hippoRoot: string, tenantId: string): string[] {
   assertTenantId('reclaimExpiredCards', tenantId);
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     return withWriteScope(db, 'reclaim_expired_cards', () => {
       // Read lease times under the write lock, so a heartbeat that committed while we waited wins.
       const now = new Date().toISOString();
@@ -512,9 +475,7 @@ export function reclaimExpiredCards(hippoRoot: string, tenantId: string): string
       }
       return ids;
     });
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /** Appends a comment to cardId in any card status; throws if cardId is not a card of this tenant. */
@@ -523,10 +484,7 @@ export function addCardComment(hippoRoot: string, tenantId: string, cardId: stri
   if (body.trim() === '') {
     throw new Error('body must not be empty');
   }
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     return insertCardComment(db, tenantId, cardId, author, body);
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }

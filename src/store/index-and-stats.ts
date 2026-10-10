@@ -1,31 +1,25 @@
-import { type DatabaseSyncLike, closeHippoDb, withWriteScope, setMeta, isSqliteBusy, pruneConsolidationRuns, getMeta } from '../db/index.js';
+import { type DatabaseSyncLike, withWriteScope, setMeta, isSqliteBusy, pruneConsolidationRuns, getMeta } from '../db/index.js';
 import { RejectedValueError } from './rejection.js';
 import { log } from '../util/log.js';
 import type { HippoIndex, LegacyStats } from './rows.js';
 import { audit } from './audit-event.js';
 import { stampOriginProjectForImport, upsertEntryRow } from './entry-row.js';
 import { buildIndexFromDb, readLastRecall, syncMirrorFiles, writeIndexMirror, writeStatsMirror, buildStatsFromDb } from './mirrors.js';
-import { openStore, loadLegacyEntriesFromMarkdown } from './open.js';
+import { onHandle, openStore, loadLegacyEntriesFromMarkdown } from './open.js';
 import { DAY_MS } from '../util/time.js';
 
 /** Load the derived index from SQLite. Read-only: index.json is only ever written by `rebuildIndex`. */
 export function loadIndex(hippoRoot: string): HippoIndex {
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     return buildIndexFromDb(db);
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /** The last recall's ids and its trace alone, for a caller that needs no index entry. */
 export function loadLastRecall(hippoRoot: string): Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'> {
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     return readLastRecall(db);
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /**
@@ -35,23 +29,19 @@ export function loadLastRecall(hippoRoot: string): Pick<HippoIndex, 'last_retrie
  * into the index and rely on both keys moving together. index.json is left to `rebuildIndex`.
  */
 export function saveIndex(hippoRoot: string, index: Pick<HippoIndex, 'last_retrieval_ids' | 'last_trace_id'>): void {
-  const db = openStore(hippoRoot);
-  try {
+  onHandle(hippoRoot, (db) => {
     withWriteScope(db, 'save_index', () => {
       setMeta(db, 'last_retrieval_ids', JSON.stringify(index.last_retrieval_ids ?? []));
       setMeta(db, 'last_trace_id', index.last_trace_id ?? '');
     });
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /**
  * Rebuild mirrors from SQLite, importing any legacy markdown files not already present.
  */
 export function rebuildIndex(hippoRoot: string): HippoIndex {
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     // SAFETY: rows' shape matches the single `id` column selected above.
     const existingIds = new Set(
       (db.prepare(`SELECT id FROM memories`).all() as Array<{ id: string }>).map((row) => row.id)
@@ -91,21 +81,16 @@ export function rebuildIndex(hippoRoot: string): HippoIndex {
     const index = buildIndexFromDb(db);
     writeIndexMirror(hippoRoot, index);
     return index;
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 export function updateStats(
   hippoRoot: string,
   delta: { remembered?: number; recalled?: number; forgotten?: number }
 ): void {
-  const db = openStore(hippoRoot);
-  try {
+  onHandle(hippoRoot, (db) => {
     updateStatsOn(db, hippoRoot, delta);
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /** updateStats on the caller's open store, so a loop of writes opens the store once. */
@@ -141,20 +126,16 @@ export function updateStatsUnlessBusy(hippoRoot: string, delta: Parameters<typeo
 }
 
 export function loadStats(hippoRoot: string): LegacyStats {
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     return buildStatsFromDb(db);
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 export function appendConsolidationRun(
   hippoRoot: string,
   run: { timestamp: string; decayed: number; merged: number; removed: number }
 ): void {
-  const db = openStore(hippoRoot);
-  try {
+  onHandle(hippoRoot, (db) => {
     db.prepare(`INSERT INTO consolidation_runs(timestamp, decayed, merged, removed) VALUES (?, ?, ?, ?)`).run(
       run.timestamp,
       run.decayed,
@@ -163,24 +144,19 @@ export function appendConsolidationRun(
     );
     pruneConsolidationRuns(db, 50);
     writeStatsMirror(hippoRoot, buildStatsFromDb(db));
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /** Rows a tenant created since the last sleep (runs are host-wide), looking back at most 24 hours. */
 export function countCreatedSinceLastSleep(hippoRoot: string, tenantId: string, now: Date = new Date()): number {
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     const dayAgo = new Date(now.getTime() - DAY_MS).toISOString();
     const row = db.prepare(
       `SELECT COUNT(*) AS n FROM memories WHERE tenant_id = ?
          AND created > MAX(?, COALESCE((SELECT MAX(timestamp) FROM consolidation_runs), ''))`,
     ).get<{ n: number }>(tenantId, dayAgo);
     return row.n;
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /**
@@ -205,8 +181,7 @@ export function lastConsolidationAt(db: DatabaseSyncLike): string | undefined {
  * Uses consolidation_runs timestamps to compute session intervals.
  */
 export function loadSessionDecayContext(hippoRoot: string): SessionDecayContext {
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     // Get recent consolidation timestamps (last 20)
     // SAFETY: rows' shape matches the single `timestamp` column above.
     const rows = db.prepare(
@@ -229,20 +204,15 @@ export function loadSessionDecayContext(hippoRoot: string): SessionDecayContext 
     const avgDays = avgMs / DAY_MS;
 
     return { sleepCount, avgSessionIntervalDays: Math.max(0, avgDays) };
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /**
  * Increment the sleep counter. Called after each consolidation run.
  */
 export function incrementSleepCount(hippoRoot: string): void {
-  const db = openStore(hippoRoot);
-  try {
+  onHandle(hippoRoot, (db) => {
     const current = Number(getMeta(db, 'sleep_count', '0')) || 0;
     setMeta(db, 'sleep_count', String(current + 1));
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }

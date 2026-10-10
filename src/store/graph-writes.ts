@@ -1,6 +1,7 @@
 // The writer of the entities and relations tables. Every row resolves a consolidated source first, never a raw memory;
 // the schema triggers are the backstop for a write that skips this module.
 import { openHippoDb, closeHippoDb, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
+import { onHandle } from './open.js';
 import { assertTenantId } from './tenant.js';
 import { errorMessage, log } from '../util/log.js';
 import {
@@ -338,17 +339,14 @@ export function removeGraphEntitiesForObject(
 ): void {
   try {
     assertTenantId('removeGraphEntitiesForObject', tenantId);
-    const db = openHippoDb(hippoRoot);
-    try {
+    onHandle(hippoRoot, (db) => {
       withWriteScope(db, 'remove_graph_entities', () => {
         db.prepare(`DELETE FROM relations WHERE tenant_id = ? AND source_object_type = ? AND source_object_id = ?`)
           .run(tenantId, sourceObjectType, sourceObjectId);
         db.prepare(`DELETE FROM entities WHERE tenant_id = ? AND source_object_type = ? AND source_object_id = ?`)
           .run(tenantId, sourceObjectType, sourceObjectId);
       });
-    } finally {
-      closeHippoDb(db);
-    }
+    });
   } catch (err) {
     log.warn(
       `removeGraphEntitiesForObject: failed for tenant=${tenantId} ${sourceObjectType}#${sourceObjectId}: ${errorMessage(err)}`,

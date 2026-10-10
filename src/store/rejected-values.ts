@@ -11,7 +11,7 @@ import { entryRejectRowAt, selectAllEntries } from './entry-reads.js';
 import { stampOriginProject } from './entry-row.js';
 import { writeEntryDbOnly, writeEntryMirrors } from './entry-writes.js';
 import { purgeMirrorBestEffort } from './mirrors.js';
-import { openStore } from './open.js';
+import { onHandle, openStore } from './open.js';
 import { archiveRawMemory, markMirrorCleaned } from './raw-archive.js';
 import {
   RejectedValueError,
@@ -129,8 +129,7 @@ function purgeRemovedMirrors(db: DatabaseSyncLike, hippoRoot: string, removal: R
  *  text (live or dormant, whole or inside a merged row) and one reject_value audit row. Markdown mirrors follow the commit. */
 export function applyRejection(hippoRoot: string, rejection: Rejection): AppliedRejection {
   const { tenantId, actor, reason, memoryId } = rejection;
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     const content = rejection.textOf(memoryId === undefined ? undefined : entryRejectRowAt(db, memoryId));
     const digest = rejectionDigest(content);
     const rejectedAt = new Date().toISOString();
@@ -159,9 +158,7 @@ export function applyRejection(hippoRoot: string, rejection: Rejection): Applied
 
     const { removedIds, removedRawIds, successors, dormantSuccessorIds } = removal;
     return { digest, content, removedIds, removedRawIds, successorIds: successors.map((s) => s.id), dormantSuccessorIds };
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 export type LiftedRejection =
@@ -172,8 +169,7 @@ export type LiftedRejection =
 /** Deletes the tenant's one rejected value whose digest starts with `digestPrefix` and writes its unreject_value audit row.
  *  No match, or more than one, writes nothing. */
 export function liftRejection(hippoRoot: string, tenantId: string, digestPrefix: string, actor: string): LiftedRejection {
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     const matches = listRejectedValues(db, tenantId).filter((r) => r.digest.startsWith(digestPrefix));
     const target = matches[0];
     if (target === undefined) return { status: 'not_found' };
@@ -182,19 +178,14 @@ export function liftRejection(hippoRoot: string, tenantId: string, digestPrefix:
     deleteRejectedValue(db, tenantId, target.digest);
     audit(db, 'unreject_value', { tenantId, actor, targetId: target.sourceMemoryId ?? undefined, metadata: { digest: target.digest, reason: target.reason } });
     return { status: 'ok', digest: target.digest, reason: target.reason };
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /** The tenant's rejected values, newest first. */
 export function loadRejectedValues(hippoRoot: string, tenantId: string): RejectedValueRow[] {
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     return listRejectedValues(db, tenantId);
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /** Whether the write guard would refuse `content` under `entryId`, as a write of that row would find it. Reads on a plain open

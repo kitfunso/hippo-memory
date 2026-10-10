@@ -11,7 +11,7 @@ import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry } from './rows.js';
 import { audit } from './audit-event.js';
 import { deleteFtsRow, replaceFtsRows, stampOriginProject, upsertMemoryRow } from './entry-row.js';
 import { purgeMirrorBestEffort, mirrorBestEffort, writeMarkdownMirror } from './mirrors.js';
-import { openStore } from './open.js';
+import { onHandle, openStore } from './open.js';
 import { clock, type WriteBudget } from '../util/write-budget.js';
 
 /** Tables whose rows keep a first-class object's backing memory in `memory_id` (ON DELETE SET NULL); tests/dormant-memories.test.ts pins it to the schema. */
@@ -23,12 +23,9 @@ const AUTOMATIC_DELETE_SQL =
 
 /** Ids of memories that back a first-class object, for passes that plan deletes before making them. A table missing from an older schema is skipped. */
 export function memoriesBackingObjects(hippoRoot: string): Set<string> {
-  const db = openHippoDb(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     return memoriesBackingObjectsOn(db);
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }
 
 /** memoriesBackingObjects on the caller's handle. */
@@ -114,12 +111,9 @@ export function deleteEntry(
   id: string,
   opts?: { actor?: string; reason?: string; automatic?: boolean },
 ): boolean {
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     return deleteEntryOn(db, hippoRoot, id, opts);
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /** deleteEntry on the caller's open store, so a loop of deletes opens the store once; each delete still commits alone. */
@@ -167,14 +161,11 @@ export function batchWriteAndDelete(
   const dormant = opts?.dormant ?? [];
   if (toWrite.length === 0 && toDeleteIds.length === 0 && dormant.length === 0) return [];
 
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     // One component, so every op keeps the statement order this call has always had.
     const all: FlushComponent = { writes: toWrite, deletes: toDeleteIds, dormant };
     return batchWriteAndDeleteOn(db, hippoRoot, [all], 0, { snapshot: opts?.snapshot, holdMs: Infinity }).removedIds;
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /** Ops that must commit in one transaction, so a flush split across several never lands part of one. */
@@ -408,12 +399,9 @@ export function deleteEntriesOneByOne(
   opts: { actor?: string; automatic?: boolean },
 ): boolean[] {
   if (targets.length === 0) return [];
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     return targets.map((target) => deleteEntryOn(db, hippoRoot, target.id, { ...opts, reason: target.reason }));
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /** Commits whole components in transactions of about `budget.holdMs` on one store

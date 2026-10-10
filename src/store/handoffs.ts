@@ -1,4 +1,4 @@
-import { closeHippoDb, openHippoDb } from '../db/index.js';
+import { closeHippoDb } from '../db/index.js';
 import {
   type SessionHandoff,
   type SessionHandoffRow,
@@ -10,7 +10,7 @@ import {
 import { scopeAdmitSql } from './recall-scope.js';
 import { assertTenantId } from './tenant.js';
 import type { TaskSnapshot } from './rows.js';
-import { openStore } from './open.js';
+import { onHandle, openStore } from './open.js';
 import { type ContinuityKey, continuityStamp, continuityWhere, loadActiveTaskSnapshot } from './sessions.js';
 
 /** Column list shared by every session_handoffs SELECT; store-cards.ts reuses it for the card handoff lookup. */
@@ -159,8 +159,7 @@ export function loadHandoffById(hippoRoot: string, tenantId: string, id: number)
 /** Stamp the outcome on a session's newest handoff, only if it has none yet. Returns rows changed. */
 export function stampHandoffOutcome(hippoRoot: string, tenantId: string, sessionId: string, outcome: HandoffOutcome): number {
   assertTenantId('stampHandoffOutcome', tenantId);
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     const result = db.prepare(`
       UPDATE session_handoffs SET outcome = ?
       WHERE tenant_id = ? AND session_id = ? AND outcome IS NULL
@@ -171,9 +170,7 @@ export function stampHandoffOutcome(hippoRoot: string, tenantId: string, session
         )
     `).run(outcome, tenantId, sessionId, tenantId, sessionId);
     return Number(result.changes ?? 0);
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /** Rewrites the session's newest handoff when it is still a transcript read, in one statement so a handoff written meanwhile is never overwritten; null when none was rewritten. */
@@ -185,8 +182,7 @@ function replaceTranscriptHandoff(
 ): SessionHandoff | null {
   const { conditions, params } = handoffConditions(tenantId, handoff.sessionId, {}, key);
   const newest = `SELECT id FROM session_handoffs WHERE ${conditions.join(' AND ')} ORDER BY created_at DESC, id DESC LIMIT 1`;
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     const result = db.prepare(`
       UPDATE session_handoffs SET repo_root = ?, task_id = ?, summary = ?, next_action = ?, artifacts_json = ?, scope = ?, created_at = ?,
         constraints_json = ?, evidence_json = ?, outcome = ?, target_runtime = ?, card_id = ?
@@ -210,9 +206,7 @@ function replaceTranscriptHandoff(
     // SAFETY: row's shape matches HANDOFF_COLUMNS.
     const row = db.prepare(`SELECT ${HANDOFF_COLUMNS} FROM session_handoffs WHERE id = (${newest})`).get(...params) as SessionHandoffRow | undefined;
     return row ? rowToSessionHandoff(row) : null;
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 interface HandoffSource {
@@ -302,8 +296,7 @@ export function writeSessionEndHandoff(
 }
 
 function sessionOutcome(hippoRoot: string, tenantId: string, sessionId: string): HandoffOutcome | null {
-  const db = openHippoDb(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     // SAFETY: row's shape matches the single `content` column below.
     const content = (db.prepare(`
       SELECT content FROM session_events
@@ -311,7 +304,5 @@ function sessionOutcome(hippoRoot: string, tenantId: string, sessionId: string):
       ORDER BY created_at DESC, id DESC LIMIT 1
     `).get(tenantId, sessionId) as { content?: string } | undefined)?.content;
     return isHandoffOutcome(content) ? content : null;
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }

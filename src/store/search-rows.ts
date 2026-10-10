@@ -13,7 +13,7 @@ import {
   DEFAULT_SEARCH_CANDIDATE_LIMIT,
   rowToEntry,
 } from './rows.js';
-import { openStore } from './open.js';
+import { onHandle, openStore } from './open.js';
 import { escapeLike } from '../util/escape.js';
 
 /**
@@ -231,12 +231,9 @@ export function loadSearchEntries(
   limit: number = DEFAULT_SEARCH_CANDIDATE_LIMIT,
   tenantId?: string,
 ): MemoryEntry[] {
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     return loadSearchRows(db, query, limit, tenantId).map(rowToEntry);
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /**
@@ -267,12 +264,9 @@ export function loadRecallSearchEntries(
   originProjects?: OriginFilter,
   ownScope?: string,
 ): MemoryEntry[] {
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     return loadRecallSearchEntriesFromDb(db, query, { limit, tenantId, requestedScope, explicitScopeMode, includeSuperseded, originProjects, ownScope });
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 export interface RecallSearchEntriesOptions {

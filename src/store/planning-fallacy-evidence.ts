@@ -1,4 +1,4 @@
-import { closeHippoDb, openHippoDb } from '../db/index.js';
+import { onHandle } from './open.js';
 import { computePredictionBaserate, type PredictionBaserate } from './predictions.js';
 
 export interface ClassResolution {
@@ -46,8 +46,7 @@ export function resolveClassFromTokens(
   queryTokens: readonly string[],
 ): ClassResolution {
   if (queryTokens.length === 0) return { classTag: null, tiebreak: false };
-  const db = openHippoDb(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     // SAFETY: rows' shape matches the single `class_tag` column named in the SELECT above.
     const rows = db.prepare(
       `SELECT DISTINCT class_tag FROM predictions WHERE tenant_id = ?`,
@@ -81,9 +80,7 @@ export function resolveClassFromTokens(
     if (bestScore < 1) return { classTag: null, tiebreak: false };
     if (bestScore === secondBest) return { classTag: null, tiebreak: true };
     return { classTag: bestClass, tiebreak: false };
-  } finally {
-    closeHippoDb(db);
-  }
+  });
 }
 
 /** Resolves a claim's tokens to one class and reads its baserate, writing no audit row. */

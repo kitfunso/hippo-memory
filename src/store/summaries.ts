@@ -1,12 +1,12 @@
 import type { MemoryEntry } from '../core/memory.js';
-import { closeHippoDb, type DatabaseSyncLike, withWriteScope } from '../db/index.js';
+import { type DatabaseSyncLike, withWriteScope } from '../db/index.js';
 import { assertTenantId } from './tenant.js';
 import { findRejectedValue, rejectionDigest } from './rejection.js';
 import { log } from '../util/log.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry } from './rows.js';
 import { audit } from './audit-event.js';
 import { syncFtsRow } from './entry-row.js';
-import { openStore } from './open.js';
+import { onHandle, openStore } from './open.js';
 import { DIGEST_DISPLAY_CHARS } from '../util/token-text.js';
 
 // ---------------------------------------------------------------------------
@@ -33,8 +33,7 @@ export function markSummaryDirty(
   actor: string = 'cli',
 ): void {
   assertTenantId('markSummaryDirty', tenantId);
-  const db = openStore(hippoRoot);
-  try {
+  onHandle(hippoRoot, (db) => {
     // RETURNING dag_level reads the actual level in the same round trip.
     // SAFETY: result's shape matches the single `dag_level` column returned
     // above.
@@ -53,9 +52,7 @@ export function markSummaryDirty(
       // metadata.source tells this dirty-mark apart from the other wiring layers' marks.
       audit(db, 'summary_marked_dirty', { targetId: summaryId, metadata: { dag_level: result.dag_level, source: 'E1' }, actor, tenantId });
     }
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 // ---------------------------------------------------------------------------
@@ -79,8 +76,7 @@ export function markSummaryDirty(
  * tenant-scoped via summary.tenantId.
  */
 export function loadAllL2Summaries(hippoRoot: string): MemoryEntry[] {
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     // SAFETY: this query selects exactly MEMORY_SELECT_COLUMNS, matching
     // MemoryRow's field set.
     const rows = db.prepare(`
@@ -93,9 +89,7 @@ export function loadAllL2Summaries(hippoRoot: string): MemoryEntry[] {
        ORDER BY created ASC, id ASC
     `).all() as MemoryRow[];
     return rows.map(rowToEntry);
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /**
@@ -108,8 +102,7 @@ export function loadAllL2Summaries(hippoRoot: string): MemoryEntry[] {
  * HIPPO_DAG_REBUILD_CAP takes most-recently-changed summaries first.
  */
 export function loadAllDirtySummaries(hippoRoot: string): MemoryEntry[] {
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     // SAFETY: this query selects exactly MEMORY_SELECT_COLUMNS, matching
     // MemoryRow's field set.
     const rows = db.prepare(`
@@ -120,9 +113,7 @@ export function loadAllDirtySummaries(hippoRoot: string): MemoryEntry[] {
        ORDER BY latest_at DESC NULLS LAST, id ASC
     `).all() as MemoryRow[];
     return rows.map(rowToEntry);
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /**
@@ -138,8 +129,7 @@ export function loadChildrenOfSummary(
   tenantId: string,
 ): MemoryEntry[] {
   assertTenantId('loadChildrenOfSummary', tenantId);
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     // SAFETY: this query selects exactly MEMORY_SELECT_COLUMNS, matching
     // MemoryRow's field set.
     const rows = db.prepare(`
@@ -152,9 +142,7 @@ export function loadChildrenOfSummary(
        ORDER BY created ASC
     `).all(summaryId, tenantId) as MemoryRow[];
     return rows.map(rowToEntry);
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /**
@@ -189,12 +177,9 @@ export function applyRebuildResult(
   patch: RebuildPatch,
 ) {
   assertTenantId('applyRebuildResult', summary.tenantId);
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     return withWriteScope(db, 'rebuild_summary', () => applyRebuildInSavepoint(db, summary, patch));
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 // ONE prepared UPDATE per branch. Test #8 inspects the SQL string.
@@ -345,8 +330,7 @@ export function clearSummaryDirtyAfterBuild(
   source: string = 'buildDag-clean',
 ): void {
   assertTenantId('clearSummaryDirtyAfterBuild', tenantId);
-  const db = openStore(hippoRoot);
-  try {
+  onHandle(hippoRoot, (db) => {
     // RETURNING dag_level reads the actual level so audit metadata stays accurate without an extra SELECT.
     // SAFETY: result's shape matches the single `dag_level` column returned
     // below.
@@ -364,7 +348,5 @@ export function clearSummaryDirtyAfterBuild(
       // source tells buildDag-clean (L2) from buildEntityProfiles-clean (L3) and any future build path.
       audit(db, 'summary_marked_clean', { targetId: summaryId, metadata: { dag_level: result.dag_level, source }, actor, tenantId });
     }
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }

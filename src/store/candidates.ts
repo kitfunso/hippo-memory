@@ -1,9 +1,9 @@
 import { type MemoryEntry, type ConfidenceLevel, FALLBACK_HALF_LIFE_DAYS, Layer, calculateStrength, facetsOf, schemaFitFrom } from '../core/memory.js';
 import { strengthSql } from './rule-sql.js';
-import { closeHippoDb, withReadSnapshot } from '../db/index.js';
+import { withReadSnapshot } from '../db/index.js';
 import { scopeAdmitSql, type SqlFragment } from './recall-scope.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry, parseJsonArray } from './rows.js';
-import { openStore } from './open.js';
+import { onHandle, openStore } from './open.js';
 import { originInSql } from '../core/project-identity.js';
 import { pickRarestFtsQuery, loadRecallSearchEntriesFromDb } from './search-rows.js';
 
@@ -83,8 +83,7 @@ export function loadAmbientCandidates(
   // A SQL LIMIT takes an integer; the Array.slice this replaced truncated one,
   // and include_recent is any non-negative finite number at the HTTP edge.
   const needed = Math.trunc(recentNeeded);
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     // SAFETY: every `where` below starts from MEMORY_SELECT_COLUMNS' table.
     const run: RunSql = (where, params) =>
       (db.prepare(
@@ -113,9 +112,7 @@ export function loadAmbientCandidates(
       ? loadRecallSearchEntriesFromDb(db, ftsQuery, { limit: recall.limit, tenantId, includeSuperseded: false, ownScope: recall.ownScope })
       : [];
     return { entries, recall: recallEntries };
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /** The rows a non-pinned context read may admit; each predicate is one getContext's admission applies again in JS. */
@@ -154,8 +151,7 @@ export function loadContextCandidates(hippoRoot: string, tenantId: string, filte
     where.push(`(origin_project = '' OR ${originInSql(filter.project)})`);
     params.push(...filter.project);
   }
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     // SAFETY: the outer SELECT names exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set; the rank sort carries ids only.
     const rows = db.prepare(
       `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE id IN (
@@ -163,9 +159,7 @@ export function loadContextCandidates(hippoRoot: string, tenantId: string, filte
       ) ORDER BY created ASC, id ASC`,
     ).all(...params, filter.now.toISOString(), Math.max(0, Math.trunc(filter.cap))) as MemoryRow[];
     return rows.map(rowToEntry);
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 export type HeldText = Pick<MemoryEntry, 'content' | 'source' | 'origin_project'>;
@@ -187,8 +181,7 @@ export function loadTextsHoldingWords(
   const tenantWhere = tenantId === undefined ? '1' : 'tenant_id = ?';
   const tenantParams = tenantId === undefined ? [] : [tenantId];
   const originWhere = project === undefined ? '' : ` AND (origin_project = '' OR ${originInSql(project)})`;
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     // Chunked so one statement stays far under SQLite's bound-parameter limit.
     for (let i = 0; i < unique.length; i += 200) {
       const chunk = unique.slice(i, i + 200);
@@ -199,23 +192,18 @@ export function loadTextsHoldingWords(
       for (const row of rows) out.push({ content: row.content, source: row.source ?? 'cli', origin_project: row.origin_project });
     }
     return out;
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /** A tenant's `limit` newest rows, oldest first: the tail of loadAllEntries' order, without reading the rows before it. */
 export function loadNewestEntries(hippoRoot: string, tenantId: string, limit: number): MemoryEntry[] {
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     // SAFETY: the SELECT names exactly MEMORY_SELECT_COLUMNS, matching MemoryRow's field set.
     const rows = db.prepare(
       `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE tenant_id = ? ORDER BY created DESC, id DESC LIMIT ?`,
     ).all(tenantId, limit) as MemoryRow[];
     return rows.reverse().map(rowToEntry);
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 function* contentsOf(rows: Iterable<{ content: string }>): Generator<string> {
@@ -224,8 +212,7 @@ function* contentsOf(rows: Iterable<{ content: string }>): Generator<string> {
 
 /** computeSchemaFit against every row of a tenant: tag counts come from one aggregate and texts stream one column, so no row is loaded. */
 export function schemaFitInStore(hippoRoot: string, tenantId: string, content: string, tags: readonly string[]): number {
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     // One read transaction, so the row count and the texts come from the same snapshot.
     return withReadSnapshot(db, () => {
       // SAFETY: rows' shape matches the two columns named in the SELECT.
@@ -243,9 +230,7 @@ export function schemaFitInStore(hippoRoot: string, tenantId: string, content: s
       const texts = db.prepare('SELECT content FROM memories WHERE tenant_id = ?').iterate(tenantId) as Iterable<{ content: string }>;
       return schemaFitFrom(content, tags, { rows, tagCounts, contents: contentsOf(texts) });
     });
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 export interface SourceTally {
@@ -258,17 +243,14 @@ export interface SourceTally {
 
 /** Row count and newest `created` per source, for peer listings that need no row; all tenants when `tenantId` is absent. */
 export function tallySources(hippoRoot: string, tenantId?: string): SourceTally[] {
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     const where = tenantId !== undefined ? 'WHERE tenant_id = ?' : '';
     // SAFETY: rows' shape matches the four aliased columns in the SELECT below.
     return db.prepare(
       `SELECT COALESCE(source, 'cli') AS source, COUNT(*) AS count, MAX(created) AS latest, MIN(created || char(31) || id) AS first
        FROM memories ${where} GROUP BY COALESCE(source, 'cli')`,
     ).all(...(tenantId !== undefined ? [tenantId] : [])) as SourceTally[];
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 // A malformed or non-array JSON list reads as empty, as parseJsonArray does, instead of failing json_each.
@@ -290,8 +272,7 @@ export interface StrengthTallies {
 export function loadStrengthTallies(hippoRoot: string, tenantId: string, now: Date, atRiskBelow: number): StrengthTallies {
   // An unparseable date scores NULL in SQL and 0 in calculateStrength.
   const strength = `COALESCE(${strengthSql(now)}, 0)`;
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     // SAFETY: one aggregate row whose columns are the aliases named below.
     const row = db.prepare(`SELECT
       COUNT(*) AS total,
@@ -308,9 +289,7 @@ export function loadStrengthTallies(hippoRoot: string, tenantId: string, now: Da
       strengthSum: Number(row.strengthSum),
       atRisk: Number(row.atRisk),
     };
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
 
 /** What `hippo status` prints about the whole store: every tenant and superseded rows too. */
@@ -372,8 +351,7 @@ function tallyStatusRows(rows: Iterable<StatusRow>, now: Date, atRiskBelow: numb
 
 /** The counts `hippo status` prints, from one pass over ten narrow columns: no text is read and no row array is built. */
 export function loadStatusCounts(hippoRoot: string, now: Date, atRiskBelow: number): StatusCounts {
-  const db = openStore(hippoRoot);
-  try {
+  return onHandle(hippoRoot, (db) => {
     // One read transaction, so the row tallies and the two counts describe the same store.
     return withReadSnapshot(db, () => {
       // loadAllEntries' order, so the strengths add up in the order they did and the average rounds the same.
@@ -389,7 +367,5 @@ export function loadStatusCounts(hippoRoot: string, now: Date, atRiskBelow: numb
       ).get() as Record<'openConflicts' | 'embedded', number | bigint>;
       return { ...tallies, openConflicts: Number(counts.openConflicts), embedded: Number(counts.embedded) };
     });
-  } finally {
-    closeHippoDb(db);
-  }
+  }, openStore);
 }
