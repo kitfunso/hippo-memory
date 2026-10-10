@@ -8,14 +8,8 @@ import { copilotTurn } from './copilot-transcript.js';
 const RECENT_USER_TURNS = 20;
 const RECENT_ASSISTANT_TURNS = 10;
 
-/**
- * Build a compact text summary from a Claude Code / OpenCode / Copilot JSONL transcript.
- * Keeps plain user messages and the final chunk of assistant text, drops
- * thinking blocks, tool_use, and tool_result noise. Capture reads the same
- * turns through `sessionTail`, one text per turn.
- *
- * Exported for tests.
- */
+/** Build a compact text summary from a Claude Code / OpenCode / Copilot JSONL transcript: plain user messages and the final assistant text chunk,
+ *  without thinking, tool_use and tool_result noise. Exported for tests. */
 
 /** Leading markers of the command lines Claude Code writes with type 'user'. */
 const CLAUDE_CODE_COMMAND_PREFIXES = ['<local-command-', '<command-name>', '<command-message>', '<command-args>'];
@@ -172,16 +166,8 @@ export function summariseSessionTurns(turns: readonly SessionTurn[]): string {
   ].join('\n');
 }
 
-/**
- * Resolve a transcript path for `--last-session`.
- *
- * Priority, where the first source present is the only one tried:
- *   1. Explicit `transcriptPath` option (from `--transcript <path>`)
- *   2. Stdin JSON payload (Claude Code / OpenCode SessionEnd hook shape)
- *   3. Most recent `.jsonl` under `<claude config dir>/projects/<any>/` (`~/.claude` unless CLAUDE_CONFIG_DIR is set), only when the caller passes `mayScan` (only the caller knows it is not a hook) and there is no path and no stdin text, because this scan spans every project on the box
- *
- * Returns null when nothing resolves, a named transcript or payload whose file is missing included. Never throws.
- */
+/** Resolve a transcript path for `--last-session`: `transcriptPath`, then the stdin JSON payload, then the newest `.jsonl` in the Claude config dir.
+ *  The scan runs only with `mayScan` (it spans every project on the box); returns null when nothing resolves, never throws. */
 export function resolveLastSessionTranscript(
   explicit: string | undefined,
   stdinText: string | undefined,

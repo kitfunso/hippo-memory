@@ -15,19 +15,15 @@ import { embedMemory } from '../store/embeddings/index.js';
 import type { DatabaseSyncLike } from '../db/index.js';
 import { appendAuditEvent } from '../store/audit.js';
 
-/**
- * Returns the path to the global Hippo store.
- * Resolution order: $HIPPO_HOME > $XDG_DATA_HOME/hippo > ~/.hippo/
- */
+/** Returns the path to the global Hippo store.
+ *  Resolution order: $HIPPO_HOME > $XDG_DATA_HOME/hippo > ~/.hippo/ */
 export function getGlobalRoot(): string {
-  // Single source of truth lives in project-identity.ts (leaf) so db.ts
-  // migrations can resolve the same path without a shared.ts import cycle.
+  // Single source of truth lives in project-identity.ts (leaf) so db migrations
+  // can resolve the same path without a shared.ts import cycle.
   return resolveGlobalRootDir();
 }
 
-/**
- * Ensure the global store exists.
- */
+/** Ensure the global store exists. */
 export function initGlobal(): void {
   const globalRoot = getGlobalRoot();
   if (!fs.existsSync(globalRoot)) {

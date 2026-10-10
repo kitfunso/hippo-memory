@@ -35,10 +35,8 @@ export interface InvalidationOptions {
   onlyId?: string;
 }
 
-/**
- * Extract what was replaced/removed from a commit message.
- * Returns null if the commit isn't a breaking/migration change.
- */
+/** Extract what was replaced/removed from a commit message.
+ *  Returns null if the commit isn't a breaking/migration change. */
 export function extractInvalidationTarget(message: string): InvalidationTarget | null {
   // Strip conventional commit prefix (e.g., "feat(scope): ")
   const body = message.replace(/^[a-z]+(\([^)]*\))?:\s*/i, '').trim();
@@ -83,30 +81,16 @@ export function extractInvalidationTarget(message: string): InvalidationTarget |
   return null;
 }
 
-/**
- * Find memories that reference the invalidated pattern and weaken them.
- * - Halves half_life_days
- * - Sets confidence to 'stale'
- * - Adds 'invalidated' tag
- * - Skips pinned memories (reported in skippedPinned)
- *
- * Tag matching is EXACT (2026-06-09 incident): the FULL pattern must equal a
- * tag. Token-level matching applies to content only, so a pattern that merely
- * CONTAINS a common tag word ("hippo") can no longer mass-weaken every memory
- * carrying that tag. Both callers (the CLI `invalidate` command and the
- * auto-learn-from-git path) inherit this contract.
- */
+/** Find memories that reference the invalidated pattern and weaken them (halve half_life_days, confidence 'stale', add 'invalidated' tag; pinned are skipped).
+ *  Tag matching is EXACT: the FULL pattern must equal a tag, so a pattern merely containing a common tag word cannot mass-weaken every memory with that tag. */
 export function invalidateMatching(
   hippoRoot: string,
   target: InvalidationTarget,
   tenantId?: string,
   options?: InvalidationOptions,
 ): InvalidationResult {
-  // L9: tenantId opt-in. When provided, only this tenant's memories are
-  // considered for weakening. When undefined, behaves as it did pre-1.12.1
-  // (host-wide invalidation across all tenants in the store).
-  // options.onlyId resolves by FILTERING this tenant-scoped list — never a
-  // direct id lookup — so an id from another tenant is invisible here.
+  // tenantId opt-in: when set, only that tenant's memories are weakened; undefined is host-wide.
+  // options.onlyId filters this tenant-scoped list rather than looking up an id directly, so another tenant's id is invisible here.
   const { result, weakened } = weakenMatches(loadAllEntries(hippoRoot, tenantId), target, options);
   writeEntriesSeparately(hippoRoot, weakened);
   return result;
@@ -564,9 +548,7 @@ export function detectChurnStale(
 
   try {
     const git = loadChurnGitView(repoRoot, opts.legacyName ?? opts.projectName, candidates, anchorOf, needs);
-    // Collected here, written only after every candidate's evidence is
-    // computed: a GitReadError thrown mid-loop must never leave an earlier
-    // candidate tagged while a later one aborts the run untagged.
+    // Collected here and written only after every candidate's evidence is computed, so a GitReadError mid-loop cannot leave an earlier candidate tagged.
     const toTag = recordChurnEvidence(git, candidates, anchorOf, result);
 
     if (!dryRun && toTag.length > 0) tagChurnStale(hippoRoot, opts.tenantId, toTag, confirmedAt);

@@ -24,36 +24,14 @@ export function verifyGitHubSignature(opts: VerifyOpts): boolean {
   return false;
 }
 
-/**
- * Source-aware idempotency key: artifact_ref plus the source-side updated_at.
- * A raw-body key would hash a webhook envelope and a REST backfill item of the
- * SAME source event differently and ingest it twice. Same artifact + same
- * revision = same key, whichever path delivered it; an edit gets a new key,
- * which is correct because each edit IS a new memory revision.
- *
- * Both inputs are upstream-derived from the parsed event, not from the
- * unsigned delivery header — replay attacks still cannot bypass dedupe.
- *
- * Inputs:
- *   - artifactRef: e.g. 'github://acme/repo/issue/42' or
- *     'github://acme/repo/issue/42/comment/123'.
- *   - updatedAt: source-side ISO timestamp (issue.updated_at,
- *     comment.updated_at, pull_request.updated_at). Empty string when the
- *     payload omits it (rare; older REST shapes).
- */
+/** Source-aware idempotency key: artifact_ref plus the source-side updated_at, so a webhook and a REST backfill of the SAME event dedupe.
+ *  An edit gets a new key (a new revision); both inputs come from the parsed event, not the unsigned delivery header, so replays cannot bypass dedupe. */
 export function computeIdempotencyKey(artifactRef: string, updatedAt: string | null | undefined): string {
   return createHash('sha256').update(`${artifactRef}:${updatedAt ?? ''}`).digest('hex');
 }
 
-/**
- * Deletion-specific idempotency key: sha256('deleted:' + artifactRef + ':' +
- * updatedAt). Distinct namespace from computeIdempotencyKey so an ingest's row
- * in github_event_log doesn't make a deletion return 'duplicate' before it
- * gets a chance to archive; retries of the SAME deletion still dedupe.
- *
- * Kept as a separate exported function so the namespace prefix is explicit
- * at every call site (server.ts deletion branches, deletion.ts, DLQ replay).
- */
+/** Deletion idempotency key: sha256('deleted:' + artifactRef + ':' + updatedAt).
+ *  A separate namespace so an ingest's event-log row cannot make a deletion return 'duplicate'; retries of the same deletion still dedupe. */
 export function computeDeletionKey(artifactRef: string, updatedAt: string | null | undefined): string {
   return createHash('sha256').update(`deleted:${artifactRef}:${updatedAt ?? ''}`).digest('hex');
 }

@@ -1,41 +1,6 @@
-/**
- * Policy first-class object.
- *
- * The "bi-temporal-first" object type: a named rule/statement that is in force
- * over an EFFECTIVE-TIME range and evolves via supersession. Two time axes:
- *
- *  - Valid time (effective time): when the policy is in force in the real world,
- *    as first-class columns `valid_from` (required; defaults to creation time)
- *    and `valid_to` (nullable = open-ended). This is the queryable axis: see
- *    `loadPoliciesAsOf` (the active policies in force at a given valid-time).
- *  - Transaction time (system time): when the row was recorded / retired, via
- *    `created_at` + the supersede chain's `superseded_at`. Present, but
- *    time-travel ("what did we BELIEVE was in force at past system time T") is
- *    deferred to a future version.
- *
- * The delta lifecycle reuses the process/decision supersede machinery verbatim
- * (superseded_by self-FK + CAS + INSERT-preflight + server-derived version +
- * change_summary + supersede tenant-match trigger). It DROPS process's `steps`
- * (a policy has `policy_text`) and ADDS `valid_from`/`valid_to`.
- *
- * The `policies` table is the source of truth (survives memory decay); the
- * memory mirror is for recall only. memory_id is NULLABLE with ON DELETE SET
- * NULL so forget/consolidate/archive gracefully orphans the policy row.
- *
- * Lifecycle: active -> superseded (a newer version replaces it) or active ->
- * closed (retired with no successor). Superseding leaves the predecessor's
- * valid-time range intact (it WAS effective then); only the status flips.
- *
- * Date handling: every date input (savePolicy's valid_from/valid_to,
- * loadPoliciesAsOf's asOfDate) is normalized to canonical ISO-8601 datetime
- * (`toISOString`) at the store boundary BEFORE any persist or compare, so the
- * fixed-width values sort lexically and the half-open [valid_from, valid_to)
- * comparison is correct (a date-only asOf vs a datetime valid_from would
- * otherwise make a same-day policy invisible).
- *
- * Dual-write atomicity: `savePolicy` writes the memory + policies row (and, on
- * supersede, the predecessor's UPDATE) in the `objects` store group's one transaction.
- */
+/** Policy object: a rule in force over a valid-time range [valid_from, valid_to), evolving via supersession; `loadPoliciesAsOf` queries it.
+ *  Transaction-time travel (what we believed at past system time T) is deferred. Superseding keeps the predecessor's valid-time range.
+ *  All dates are normalised to ISO-8601 (`toISOString`) at the store boundary so the lexical half-open comparison is sound. */
 
 import { BadRequestError } from '../core/api-errors.js';
 import { assertTenantId } from '../store/tenant.js';
@@ -47,10 +12,6 @@ import type { Objects, PoliciesInForceQuery } from '../store/port.js';
 import { sqliteObjects } from '../store/sqlite/objects-group.js';
 
 export type { Policy, PolicyStatus } from '../store/object-types.js';
-
-// ---------------------------------------------------------------------------
-// Domain types
-// ---------------------------------------------------------------------------
 
 export const VALID_POLICY_STATES: ReadonlySet<PolicyStatus> = new Set<PolicyStatus>([
   'active',
@@ -80,18 +41,8 @@ export interface ListPoliciesOpts {
   after?: KeysetPosition;
 }
 
-// ---------------------------------------------------------------------------
-// Date normalization + validation (the bi-temporal correctness core)
-// ---------------------------------------------------------------------------
-
-/**
- * Parse + canonicalize a date input to ISO-8601 datetime (`toISOString`). Throws
- * on an unparseable value. Whatever `new Date()` accepts is re-emitted in the
- * single fixed-width canonical form, so date-only and datetime inputs collapse to
- * comparable values and lexical ordering is sound. (Overflow inputs like
- * '2026-02-30' roll forward per JS Date semantics rather than throwing; the
- * stored value is still canonical.)
- */
+/** Parse a date input to a fixed-width ISO-8601 datetime so lexical ordering is sound; throws on an unparseable value.
+ *  Overflow inputs like '2026-02-30' roll forward per JS Date semantics. */
 export function normalizePolicyDate(input: string, label: string = 'date'): string {
   const d = new Date(input);
   if (Number.isNaN(d.getTime())) {
@@ -100,10 +51,7 @@ export function normalizePolicyDate(input: string, label: string = 'date'): stri
   return d.toISOString();
 }
 
-/**
- * Normalize valid_from (defaulting to `nowIso` when undefined) + valid_to (null
- * when undefined), then enforce valid_to > valid_from. Returns the canonical pair.
- */
+/** Normalise valid_from (default `nowIso`) and valid_to (default null), then enforce valid_to > valid_from. */
 export function validatePolicyDates(
   validFromRaw: string | undefined,
   validToRaw: string | undefined,
@@ -161,18 +109,8 @@ export const POLICY: SavableDescriptor<'policy', SavePolicyOpts> = {
   },
 };
 
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
-
-/**
- * Create a policy (or a new version that supersedes an existing one). Writes the
- * memory mirror + the policies row in the `objects` store group's one transaction.
- * valid_from defaults to now; valid_to must be > valid_from (validatePolicyDates).
- * When supersedesPolicyId is given, the referenced ACTIVE row is preflighted
- * (status + version) BEFORE the INSERT, then CAS-UPDATEd -> superseded in the same
- * transaction; the new version = predecessor.version + 1 (server-derived).
- */
+/** Create a policy, or a new version superseding an existing one, in the `objects` store group's one transaction.
+ *  valid_from defaults to now; valid_to must be > valid_from (validatePolicyDates). */
 export function savePolicy(
   hippoRoot: string,
   tenantId: string,
@@ -182,11 +120,7 @@ export function savePolicy(
   return saveObjectAt(POLICY, { hippoRoot, tenantId, actor }, opts);
 }
 
-/**
- * Close (retire) an active policy with no successor. CAS guard WHERE
- * status='active'; 0 changes distinguishes not-found from not-active. A
- * superseded row is terminal and cannot be closed.
- */
+/** Close (retire) an active policy with no successor; CAS on status='active', a superseded row is terminal. */
 export function closePolicy(
   hippoRoot: string,
   tenantId: string,
@@ -220,32 +154,8 @@ export function loadActivePolicies(
   return loadPolicies(hippoRoot, tenantId, { status: 'active', limit: opts.limit });
 }
 
-/**
- * The bi-temporal as-of query: the policies in force at `asOfDate` (a valid-time)
- * per current knowledge. Half-open interval [valid_from, valid_to): a row covers
- * T when valid_from <= asOf AND (valid_to IS NULL OR asOf < valid_to). asOfDate is
- * normalized to canonical datetime first so the lexical comparison is sound.
- *
- * A row is returned when it covers T AND it is the live answer for T:
- *  - `active` rows that cover T, OR
- *  - `superseded` rows that cover T BUT whose successor was not yet effective at T
- *    (successor.valid_from > asOf) - i.e. an earlier version that was genuinely in
- *    force then. This is the core valid-time correctness: a Jan-Jun policy
- *    superseded in May is still the answer for `asof March`. Filtering on
- *    status='active' alone would conflate transaction-time with valid-time; the
- *    successor-aware filter mirrors the existing recall-history.ts asOf pattern.
- *
- * `closed` rows are EXCLUDED: closing is a deliberate transaction-time retirement,
- * and resurrecting closed policies for a historical valid-time is full
- * transaction-time-travel (deferred). Returns an ARRAY (overlapping same-name
- * ranges are allowed in v1). Optionally filtered to one policy_name.
- *
- * Date-only `asOfDate` (YYYY-MM-DD, no time component) resolves to the END
- * of that UTC day (23:59:59.999Z), so "as of [day D]" includes a policy that
- * became effective at any instant during D - this is the read-side fix for the
- * common create-then-asof-today workflow, keeping the stored valid_from honest.
- * A full datetime asOf is used as the precise instant.
- */
+/** The policies in force at `asOfDate` (valid-time, half-open [valid_from, valid_to)); superseded rows still answer while the successor is not yet effective.
+ *  `closed` rows are excluded; a date-only asOfDate means the END of that UTC day (23:59:59.999Z), so a policy created today shows up in "as of today". */
 export function loadPoliciesAsOf(
   hippoRoot: string,
   tenantId: string,

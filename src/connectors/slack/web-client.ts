@@ -5,15 +5,8 @@ import { readCappedJson } from '../../util/capped-json.js';
 import { errorMessage } from '../../util/log.js';
 import { type JsonValue, isJsonObject, isJsonString } from '../../util/json.js';
 
-/**
- * Build a SlackHistoryFetcher that pages `conversations.history` over real
- * HTTP. Wraps `fetchWithRetry` so 429 and 5xx handling is automatic. The returned
- * fetcher is the one `backfillChannel` consumes.
- *
- * Slack omits `channel` from messages in the history response, so we stamp
- * the request channel id onto each parsed message — downstream ingest needs
- * it on every event.
- */
+/** Build a SlackHistoryFetcher that pages `conversations.history` over HTTP via `fetchWithRetry` (429 and 5xx handled).
+ *  Slack omits `channel` from history messages, so the request channel id is stamped onto each one for ingest. */
 const SLACK_TIMEOUT_MS = 30_000;
 // A page is at most 200 messages, each up to 40,000 characters at 4 bytes, carried once as text and once as rich-text blocks.
 const SLACK_MAX_REPLY_BYTES = 64 * 1024 * 1024;

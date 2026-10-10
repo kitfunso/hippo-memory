@@ -25,26 +25,14 @@ export const githubDlq: ConnectorDlq<GitHubOwnColumns, DlqBucket, DlqItem> = {
 export interface ReplayDlqOpts {
   /** Current webhook secret. If omitted, signature check is skipped (force-only path). */
   webhookSecret?: string;
-  /**
-   * Previous webhook secret during rotation.
-   * Operators rotating GITHUB_WEBHOOK_SECRET would otherwise be forced into
-   * --force on DLQ rows written under the old secret. Plumbed through to
-   * verifyGitHubSignature.previousSecret.
-   */
+  /** Previous webhook secret during rotation, passed to verifyGitHubSignature.previousSecret so old-secret DLQ rows need no --force. */
   previousSecret?: string;
   /** When true, skip signature verification (used for legacy entries after secret rotation). */
   force?: boolean;
 }
 
-/**
- * Hook the webhook route injects to actually re-ingest a row. Decoupling
- * the dispatch keeps this module free of every event-type handler — the
- * route already knows how to route an envelope, so it passes that capability
- * back in.
- *
- * No `idempotencyKey` field: ingest re-derives the key from the parsed event,
- * so a hook trusting a passed-in key would dedupe against a stale one.
- */
+/** Hook the webhook route injects to re-ingest a row, which keeps this module free of every event-type handler.
+ *  No `idempotencyKey` field: ingest re-derives it from the parsed event, and a passed-in key could be stale. */
 export type IngestHook = (
   ctx: Context,
   args: {
@@ -54,21 +42,8 @@ export type IngestHook = (
   },
 ) => Promise<{ memoryId: string | null }>;
 
-/**
- * Replay a DLQ row through the normal ingest path. Behavior:
- *   1. Fetch row by id. Not found → `not_found`.
- *   2. If !force and webhookSecret provided, verify signature with the
- *      current secret. Fail → bump retry_count, `sig_fail`.
- *      Missing signature on the row → `sig_missing` (no bump; --force required).
- *   3. JSON.parse the raw payload. Fail → bump, `parse_error`.
- *   4. Type-guard the envelope. Fail → bump, `unhandled`.
- *   5. If an `ingestHook` is supplied, call it and return its memoryId.
- *      If not (dry-run path), bump retry_count and return status `replayed`
- *      with memoryId=null. The webhook route wires the real hook.
- *
- * Mirrors Slack's "always use current routing" policy: replays use the
- * deployment state NOW, not at the time of original DLQing.
- */
+/** Replay a DLQ row through the normal ingest path; a failed signature, parse or envelope check bumps retry_count.
+ *  Without an `ingestHook` (dry-run) it bumps retry_count and returns `replayed` with memoryId=null; replays use today's routing, not the original's. */
 export async function replayDlqEntry(
   ctx: Context,
   id: number,
@@ -98,9 +73,7 @@ export async function replayDlqEntry(
     };
   }
 
-  // Real replay path. The route's IngestHook is responsible for routing,
-  // idempotency, and writing the memory. The DLQ module only validates the
-  // surface and bumps the retry counter.
+  // Real replay path: the route's IngestHook owns routing, idempotency and the memory write; this module only validates and bumps the retry counter.
   // No idempotencyKey arg: the hook re-derives it from the parsed event (artifact_ref + updated_at).
   const eventName = row.eventName ?? '';
   const deliveryId = row.deliveryId ?? '';
@@ -157,9 +130,7 @@ function checkReplayEnvelope(hippoRoot: string, id: number, row: DlqItem): Repla
     parsed = JSON.parse(row.rawPayload);
   } catch (e) {
     bumpGitHubDlqRetryCount(hippoRoot, id);
-    // SAFETY: this is a best-effort error message only; property access on
-    // any JS value is safe (undefined if absent), preserving the existing
-    // lenient formatting even when something non-Error was thrown.
+    // SAFETY: best-effort error message only; property access on any JS value is safe, even for a non-Error throw.
     const message = (e as Error).message;
     return replayFailed('parse_error', row.retryCount + 1, `still unparseable: ${message}`);
   }

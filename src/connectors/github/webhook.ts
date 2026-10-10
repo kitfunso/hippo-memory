@@ -29,22 +29,8 @@ import {
 } from '../../util/http-util.js';
 import type { JsonValue } from '../../util/json.js';
 
-/**
- * GitHub webhook receiver. Mirrors the Slack route shape but with
- * GitHub-specific idioms:
- *   1. HMAC SHA-256 over the raw body (X-Hub-Signature-256), no timestamp.
- *   2. Event type discriminated by the X-GitHub-Event header (not body.type).
- *   3. X-GitHub-Delivery is required audit metadata (NOT the dedupe seam - see
- *      computeIdempotencyKey, which folds the signed body into the key so a
- *      replayed body with a fresh delivery UUID still dedupes).
- *   4. Tenant resolved by installation.id → github_installations, then by
- *      repository.full_name → github_repositories (PAT-mode multi-tenant).
- *   5. ALWAYS ACK 200 on signed envelopes (DLQ included). 401 only on bad
- *      signature; 404 only when GITHUB_WEBHOOK_SECRET is unset (don't expose
- *      the route's existence on builds where it's gated off).
- *
- * Bearer auth is skipped on purpose: server.ts checks isPublicRoute before calling this.
- */
+/** GitHub webhook receiver: HMAC SHA-256 over the raw body, event type from the X-GitHub-Event header, tenant by installation.id then repository.full_name.
+ *  ACKs 200 on signed envelopes (DLQ too); 401 only on a bad signature; 404 when GITHUB_WEBHOOK_SECRET is unset. No Bearer: server.ts checks isPublicRoute. */
 export async function handleGitHubEventsWebhook(request: WebhookRequest, store?: HippoStore): Promise<void> {
   const { req, res, opts } = request;
   // Secret and signature header before the body, so a caller with neither cannot make the server buffer one.
@@ -228,9 +214,7 @@ async function dispatchGitHubEvent(
   if (action === null) return false;
 
   if (action.kind === 'manual-review') {
-    // GitHub does fire issues.deleted (admin-initiated). Don't archive - V1
-    // policy is to log and let an operator decide. Archive could lose the
-    // memory if the issue is being moved between accounts.
+    // issues.deleted (admin-initiated) is logged, not archived: archiving could lose the memory if the issue moves between accounts.
     await parkAndAck(d, {
       ...routing,
       tenantId: ctx.tenantId,

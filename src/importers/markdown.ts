@@ -3,14 +3,8 @@ import { type ImportResult, type ImportOptions, importEntries } from './core.js'
 
 const SLUG_MAX_CHARS = 50;
 
-// ---------------------------------------------------------------------------
-// Structured markdown importer (MEMORY.md / AGENTS.md format)
-// ---------------------------------------------------------------------------
-
-/**
- * Slugify a heading for use as a tag.
- * "Data Pipeline & Cache" -> "data-pipeline-cache"
- */
+/** Slugify a heading for use as a tag.
+ *  "Data Pipeline & Cache" -> "data-pipeline-cache" */
 function slugify(heading: string): string {
   return heading
     .toLowerCase()
@@ -21,11 +15,7 @@ function slugify(heading: string): string {
     .slice(0, SLUG_MAX_CHARS);
 }
 
-/**
- * Parse structured markdown into {content, sectionSlug} pairs.
- * Each heading starts a new section. Bullet points / numbered items under
- * the heading become individual memories tagged with the section slug.
- */
+/** Parse structured markdown into {content, sectionSlug} pairs: each heading starts a section whose bullets or numbered items become memories. */
 function parseStructuredMarkdown(raw: string): Array<{ content: string; sectionSlug: string }> {
   const results: Array<{ content: string; sectionSlug: string }> = [];
   const lines = raw.split('\n');

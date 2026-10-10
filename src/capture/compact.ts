@@ -20,21 +20,11 @@ import { resolveLastSessionTranscript } from './transcript.js';
 import { isVscodeTranscript } from './copilot-transcript.js';
 import { mergeWorkingState, transcriptWorkingState, type WorkingState } from './working-state.js';
 
-// ---------------------------------------------------------------------------
-// `hippo pre-compact` — PreCompact hook producer
-// ---------------------------------------------------------------------------
-
 // Diagnostic-only log; a long-lived install must not grow it unbounded.
 const PRE_COMPACT_LOG_MAX_BYTES = 256 * 1024;
 
-/**
- * Log-forgery guard: messages here interpolate payload-controlled values
- * (transcript paths, session ids). Strip C0 control chars — newlines above
- * all — so a crafted value can't inject fake `[hippo] ...` log lines.
- * Exported for every `[hippo]`-prefixed log writer that interpolates
- * payload-controlled values (cli.ts appendSessionEndCloseLog) — one shared
- * guard, not per-file copies.
- */
+/** Log-forgery guard: strip C0 control chars (newlines above all) from payload-controlled values so a crafted value cannot inject fake `[hippo]` log lines.
+ *  Exported as the one shared guard for every `[hippo]`-prefixed log writer that interpolates payload values. */
 export function sanitizeLogMessage(message: string): string {
   // eslint-disable-next-line no-control-regex
   return message.replace(/[\x00-\x1f]/g, '');
@@ -93,9 +83,7 @@ function snapshotJustSaved(hippoRoot: string, sessionId: string | null): boolean
 /** Runs the PreCompact producer: records the compaction, asks the summariser for memories, saves a working-state snapshot. Never extracts memories itself; SessionEnd capture owns that. */
 function runPreCompact(hippoRoot: string, options: PreCompactOptions, logFile: string): void {
   const { stdinText, stdinTimedOut = false, runtime = 'claude-code' } = options;
-  // The PreCompact hook fires in every Claude Code project, including
-  // ones that never ran `hippo init`, so gate before any store-opening call
-  // (saveActiveTaskSnapshot etc. call initStore, which would create one).
+  // PreCompact fires in every Claude Code project, including ones that never ran `hippo init`; gate before any call that would create a store.
   if (!isInitialized(hippoRoot)) {
     appendPreCompactLog(logFile, 'skip: store not initialized');
     return;
@@ -225,13 +213,8 @@ export interface PreCompactOptions {
   onBoundary?: (printed: string | null) => void;
 }
 
-/**
- * PreCompact hook entry point. Exit code 2 on PreCompact BLOCKS compaction,
- * so this verb must exit 0 on every path — malformed stdin, missing
- * transcript, and store errors all degrade to a logged no-op rather than a
- * thrown error. Callers (src/cli.ts) must not wrap this in anything that
- * could turn a caught-and-logged failure back into a non-zero exit.
- */
+/** PreCompact hook entry point. Exit code 2 BLOCKS compaction, so every path (bad stdin, missing transcript, store error) must exit 0 as a logged no-op.
+ *  Callers must not wrap this in anything that turns a caught-and-logged failure into a non-zero exit. */
 export async function cmdPreCompact(hippoRoot: string, options: PreCompactOptions): Promise<void> {
   const logFile = options.logFile ?? defaultPreCompactLogPath();
   try {

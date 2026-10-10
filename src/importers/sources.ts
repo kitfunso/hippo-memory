@@ -14,14 +14,7 @@ function extractMemoryText(candidate: JsonValue): string {
   return '';
 }
 
-/**
- * Parse ChatGPT memory export file.
- * Supports:
- *   - JSON array of strings: ["memory 1", "memory 2"]
- *   - JSON array of objects: [{"content": "...", "created": "..."}]
- *   - ChatGPT export format: {"memories": [{"content": "...", "created_at": "..."}]}
- *   - Plain text: one memory per line
- */
+/** Parse a ChatGPT memory export: a JSON array of strings or `{content, created}` objects, `{"memories": [...]}`, or plain text with one memory per line. */
 function parseChatGPTFile(filePath: string): string[] {
   const raw = fs.readFileSync(filePath, 'utf8').trim();
 
@@ -53,16 +46,10 @@ export function importChatGPT(filePath: string, options: ImportOptions): ImportR
   return importEntries(chunks, 'import:chatgpt', ['imported', 'chatgpt'], options);
 }
 
-// ---------------------------------------------------------------------------
-// Claude importer
-// ---------------------------------------------------------------------------
-
 const HIPPO_START = '<!-- hippo:start -->';
 const HIPPO_END = '<!-- hippo:end -->';
 
-/**
- * Strip the hippo hook block from markdown content.
- */
+/** Strip the hippo hook block from markdown content. */
 function stripHippoBlock(content: string): string {
   const startIdx = content.indexOf(HIPPO_START);
   const endIdx = content.indexOf(HIPPO_END);
@@ -70,9 +57,7 @@ function stripHippoBlock(content: string): string {
   return content.slice(0, startIdx) + content.slice(endIdx + HIPPO_END.length);
 }
 
-/**
- * Split markdown into meaningful chunks (headings + bullet points).
- */
+/** Split markdown into meaningful chunks (headings + bullet points). */
 function splitMarkdown(content: string): string[] {
   const chunks: string[] = [];
   const lines = content.split('\n');
@@ -133,9 +118,7 @@ function appendLine(chunks: string[], open: string, line: string): string {
   return current ? current + ' ' + trimmed : trimmed;
 }
 
-/**
- * Parse CLAUDE.md or Claude memory.json.
- */
+/** Parse CLAUDE.md or Claude memory.json. */
 function parseClaudeFile(filePath: string): string[] {
   const raw = fs.readFileSync(filePath, 'utf8');
 
@@ -161,14 +144,8 @@ export function importClaude(filePath: string, options: ImportOptions): ImportRe
   return importEntries(chunks, 'import:claude', ['imported', 'claude'], options);
 }
 
-// ---------------------------------------------------------------------------
-// Cursor importer
-// ---------------------------------------------------------------------------
-
-/**
- * Split cursor rules file into chunks.
- * Priority: numbered items, then bullet points, then double newlines.
- */
+/** Split cursor rules file into chunks.
+ *  Priority: numbered items, then bullet points, then double newlines. */
 function parseCursorFile(content: string): string[] {
   const chunks: string[] = [];
   const lines = content.split('\n');
@@ -233,15 +210,7 @@ export function importCursor(sourcePath: string, options: ImportOptions): Import
   return importEntries(chunks, 'import:cursor', ['imported', 'cursor'], options);
 }
 
-// ---------------------------------------------------------------------------
-// Generic file importer
-// ---------------------------------------------------------------------------
-
-/**
- * Split a generic file into chunks.
- * Markdown: split on headings and bullet points.
- * Plain text: split on double newlines or one-per-line.
- */
+/** Split a generic file into chunks: markdown on headings and bullets, plain text on double newlines or one per line. */
 function parseGenericFile(filePath: string): string[] {
   const raw = fs.readFileSync(filePath, 'utf8');
   const isMarkdown = filePath.endsWith('.md') || filePath.endsWith('.mdx');

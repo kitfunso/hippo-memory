@@ -20,10 +20,6 @@ import { errorMessage, log } from '../util/log.js';
 import { extractFromTexts, type ExtractedItem } from './extract.js';
 import { type SessionTurn, collectSessionTurns, sessionTail, resolveLastSessionTranscript } from './transcript.js';
 
-// ---------------------------------------------------------------------------
-// Command
-// ---------------------------------------------------------------------------
-
 export interface CaptureOptions {
   source: 'stdin' | 'file' | 'last-session';
   filePath?: string;
@@ -35,21 +31,13 @@ export interface CaptureOptions {
   stdinText?: string;
   stdinTimedOut?: boolean;
   sessionTurns?: readonly SessionTurn[];
-  /**
-   * Tee stdout/stderr to this log file while capture runs. Mirrors the
-   * pattern used by `hippo sleep --log-file` so the SessionEnd hook output
-   * (invisible during TUI teardown) can be surfaced via `hippo last-sleep`
-   * on the next session start. Appends rather than truncates — `hippo sleep`
-   * writes the same file first in the SessionEnd sequence.
-   */
+  /** Tee stdout/stderr to this log file while capture runs, so SessionEnd output (lost in TUI teardown) shows via `hippo last-sleep`.
+   *  Appends, because `hippo sleep` writes the same file first. */
   logFile?: string;
   dryRun: boolean;
   global: boolean;
-  /**
-   * Tenant scope for the dedup read in `cmdCaptureCore`. When provided
-   * AND `global` is false, the dedup check only considers this tenant's
-   * existing memories. Undefined means host-wide dedup. Ignored when `global: true` (global captures are host-wide).
-   */
+  /** Tenant scope for the dedup read in `cmdCaptureCore`: when set and `global` is false, only this tenant's memories count.
+   *  Undefined means host-wide dedup; ignored when `global: true`. */
   tenantId?: string;
   /** The session's project: rows are stamped with its id, and dedup reads its rows under either name. */
   originProject?: ProjectRef;
@@ -59,11 +47,7 @@ export function cmdCapture(
   hippoRoot: string,
   options: CaptureOptions
 ): void {
-  // Tee stdout/stderr to a log file when --log-file is set. Used by the
-  // SessionEnd hook so output (otherwise swallowed by TUI teardown) surfaces
-  // on the next session start via `hippo last-sleep`. Runs second in the
-  // SessionEnd sequence after `hippo sleep`, so we APPEND rather than
-  // truncate — sleep already wrote its own header + body to this file.
+  // Tee to a log file for the SessionEnd hook; APPEND, because `hippo sleep` runs first in that sequence and already wrote its header and body.
   const restoreStdio = options.logFile ? beginLogTee(options.logFile) : null;
   try {
     cmdCaptureCore(hippoRoot, options);
@@ -76,21 +60,14 @@ export function cmdCapture(
   }
 }
 
-/**
- * Append-mode tee: writes a banner line then mirrors every stdout/stderr
- * chunk to `logFile` until the returned restore function is called.
- * Failures to write the log are non-fatal; the real streams still get
- * the data.
- */
+/** Append-mode tee: mirror every stdout/stderr chunk to `logFile` until the returned restore function is called; a log-write failure is non-fatal. */
 function beginLogTee(logFile: string): () => void {
   if (!writeLogBanner(logFile)) return () => {};
 
   const origStdoutWrite = process.stdout.write.bind(process.stdout);
   const origStderrWrite = process.stderr.write.bind(process.stderr);
   const tee = (chunk: string | Uint8Array): void => appendToLog(logFile, chunk);
-  // Node's `write` is overloaded (`(chunk, cb?)` vs `(chunk, encoding, cb?)`);
-  // this wraps whichever of the two shapes was actually called, forwarding
-  // to the same real stream method so runtime behaviour is unchanged.
+  // Node's `write` is overloaded (`(chunk, cb?)` vs `(chunk, encoding, cb?)`); this forwards whichever shape was called to the real method.
   type StreamWriteArgs = [
     chunk: string | Uint8Array,
     encodingOrCb?: BufferEncoding | ((err?: Error) => void),
@@ -99,16 +76,10 @@ function beginLogTee(logFile: string): () => void {
   const wrapWrite = (origWrite: typeof process.stdout.write): typeof process.stdout.write => {
     const wrapped = (...args: StreamWriteArgs): boolean => {
       tee(args[0]);
-      // SAFETY: forwarding the exact arguments Node's real overloaded
-      // `write` received is safe regardless of which overload the call
-      // site used — Node dispatches on the actual argument shapes at
-      // runtime, and `StreamWriteArgs` is the union of both overloads'
-      // parameter lists.
+      // SAFETY: forwarding the exact arguments the real overloaded `write` received is safe; `StreamWriteArgs` is the union of both overloads' parameter lists.
       return (origWrite as (...args: StreamWriteArgs) => boolean)(...args);
     };
-    // SAFETY: `wrapped` matches both real `write` overload shapes it's
-    // assigned to; TS can't verify a single implementation covers an
-    // overloaded type, but this one forwards to the real stream method.
+    // SAFETY: `wrapped` matches both real `write` overload shapes; TS cannot verify one implementation covers an overloaded type.
     return wrapped as typeof process.stdout.write;
   };
   process.stdout.write = wrapWrite(origStdoutWrite);
@@ -189,8 +160,7 @@ function cmdCaptureCore(
   printCaptureTally(options, captureExtractedItems(targetRoot, writeOpts, extracted, keys));
 }
 
-// Dedup only against rows this capture's reader sees: another tenant's rows, or another
-// project's, are hidden from it, so they must not stop its own copy.
+// Dedup only against rows this capture's reader sees: another tenant's or project's rows are hidden, so they must not stop its own copy.
 // Only a row holding an item's longest word can hold that item, so the store returns those rows and no others.
 function storedKeysInView(targetRoot: string, options: CaptureOptions, extracted: readonly ExtractedItem[]): Set<string> {
   const stored = loadTextsHoldingWords(

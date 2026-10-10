@@ -42,9 +42,7 @@ function assertRejectOpts(opts: RejectFlowOpts): void {
     throw new Error('reject accepts either a memory id or --value, not both.');
   }
   if (opts.value !== undefined && normalizeValueForRejection(opts.value).length === 0) {
-    // Direct api callers can pass strings the CLI flag parser would have
-    // refused; an empty-normalized tombstone would refuse nothing meaningful
-    // and pollute the listing.
+    // Direct api callers can pass strings the CLI flag parser would refuse; an empty-normalized tombstone would refuse nothing and pollute the listing.
     throw new Error('reject --value requires non-empty content.');
   }
 }

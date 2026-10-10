@@ -1,13 +1,5 @@
-/**
- * Recall eval harness.
- *
- * Given a corpus of (query, expected_memory_ids) cases, run recall against
- * the store and report ranking-quality metrics: MRR, Recall@K, NDCG@K.
- *
- * The goal is to make recall quality measurable so MMR lambda, embedding
- * weights, and future scoring tweaks can be tuned against evidence instead
- * of intuition.
- */
+/** Recall eval harness: runs recall over (query, expected_memory_ids) cases and reports MRR, Recall@K and NDCG@K.
+ *  It exists so MMR lambda, embedding weights and scoring tweaks are tuned against evidence instead of intuition. */
 
 import type { MemoryEntry } from '../core/memory.js';
 import { hybridSearch } from '../search/hybrid.js';
@@ -17,10 +9,6 @@ import { isInitialized } from '../store/open.js';
 // Generous so metrics are not truncated.
 const DEFAULT_EVAL_BUDGET = 100_000;
 const QUERY_WORDS = 8;
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
 
 export interface EvalCase {
   /** Free-form ID for humans to reference the case. */
@@ -71,10 +59,6 @@ export interface RunEvalOptions {
   now?: Date;
 }
 
-// ---------------------------------------------------------------------------
-// Metrics — pure functions. K is inclusive of position K.
-// ---------------------------------------------------------------------------
-
 /** Mean Reciprocal Rank for a single ranking given expected ids. */
 export function mrr(returned: string[], expected: string[]): number {
   if (expected.length === 0) return 0;
@@ -97,10 +81,8 @@ export function recallAtK(returned: string[], expected: string[], k: number): nu
   return hits / expected.length;
 }
 
-/**
- * Normalized Discounted Cumulative Gain at K with binary relevance.
- * gain_i = 1 if returned[i] ∈ expected else 0. discount = log2(i + 2).
- */
+/** Normalized Discounted Cumulative Gain at K with binary relevance.
+ *  gain_i = 1 if returned[i] ∈ expected else 0. discount = log2(i + 2). */
 export function ndcgAtK(returned: string[], expected: string[], k: number): number {
   if (expected.length === 0) return 0;
   const expectedSet = new Set(expected);
@@ -118,10 +100,6 @@ export function ndcgAtK(returned: string[], expected: string[], k: number): numb
   }
   return idcg === 0 ? 0 : dcg / idcg;
 }
-
-// ---------------------------------------------------------------------------
-// Runner
-// ---------------------------------------------------------------------------
 
 export async function runEval(
   cases: EvalCase[],
@@ -186,10 +164,6 @@ function rankForCase(query: string, entries: MemoryEntry[], options: RunEvalOpti
       });
 }
 
-// ---------------------------------------------------------------------------
-// Compare two eval summaries (baseline vs current)
-// ---------------------------------------------------------------------------
-
 export interface EvalDelta {
   mrr: number;
   recallAt5: number;
@@ -217,11 +191,7 @@ export interface EvalComparison {
   onlyInCurrent: string[];
 }
 
-/**
- * Compute pairwise deltas between a baseline and a current eval summary.
- * Cases are matched by EvalCase.id; any mismatch is surfaced in the onlyIn
- * arrays so the caller knows the corpora diverged.
- */
+/** Compute pairwise deltas between a baseline and a current eval summary, matching cases by EvalCase.id; mismatches land in the onlyIn arrays. */
 export function compareSummaries(baseline: EvalSummary, current: EvalSummary): EvalComparison {
   const aggregate: EvalDelta = {
     mrr: current.meanMrr - baseline.meanMrr,
@@ -266,15 +236,7 @@ export function compareSummaries(baseline: EvalSummary, current: EvalSummary): E
   };
 }
 
-// ---------------------------------------------------------------------------
-// Bootstrap — generate a synthetic corpus from current memories
-// ---------------------------------------------------------------------------
-
-/**
- * For each memory, take its first 8 content words as a trivial query and
- * expect that memory back. Useful as a smoke test: if recall can't find a
- * memory by its own opening words, something is broken.
- */
+/** For each memory, use its first 8 content words as a trivial query and expect that memory back: a smoke test for recall. */
 export function bootstrapCorpus(entries: MemoryEntry[], maxCases = 50): EvalCase[] {
   const cases: EvalCase[] = [];
   for (const e of entries) {

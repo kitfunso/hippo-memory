@@ -128,9 +128,7 @@ export function storeExtractedFacts(
     }
     const entry = buildExtractedEntry(fact, source, inheritedTags, baseHalfLifeDays);
 
-    // A refusal is per-VALUE: one rejected fact must not
-    // drop the rest of this batch. writeEntry has already audited the
-    // refusal (reject_refusal) before rethrowing, so skip-and-count here.
+    // A refusal is per-VALUE: one rejected fact must not drop the rest of the batch; writeEntry already audited it (reject_refusal), so skip and count.
     try {
       writeEntry(hippoRoot, entry);
     } catch (err) {

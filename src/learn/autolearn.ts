@@ -1,7 +1,5 @@
-/**
- * Auto-learn from errors and git history.
- * Agents learn from failures without explicit hippo remember calls.
- */
+/** Auto-learn from errors and git history.
+ *  Agents learn from failures without explicit hippo remember calls. */
 
 import { execSync, execFileSync, spawn } from 'child_process';
 import { MemoryEntry, createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../core/memory.js';
@@ -45,10 +43,8 @@ export function captureError(
   });
 }
 
-/**
- * Parse git log output for actionable lessons.
- * Looks for fix:, revert:, bug:, error:, hotfix: commit messages.
- */
+/** Parse git log output for actionable lessons.
+ *  Looks for fix:, revert:, bug:, error:, hotfix: commit messages. */
 export function extractLessons(gitLog: string, customPatterns?: string[]): string[] {
   const lessons: string[] = [];
   const lines = gitLog.split('\n');
@@ -89,18 +85,8 @@ export function extractLessons(gitLog: string, customPatterns?: string[]): strin
   return [...new Set(lessons)];
 }
 
-/**
- * Split parsed lessons into ones worth storing and low-information ones.
- *
- * `extractLessons` is a published API surface (exported from src/index.ts)
- * and does one job: parse a git log into candidate lesson strings. Adding a
- * quality check inside it would break that contract and silently change
- * what external callers get back. So parsing and admission are separate
- * steps: this function is the write-path gate, called by each caller that
- * actually stores a lesson, not by the parser itself.
- *
- * Order is preserved in both output arrays; both hold lessons with secret shapes redacted.
- */
+/** Split parsed lessons into ones worth storing and low-information ones; kept out of `extractLessons` so that published parser's output cannot change.
+ *  Order is preserved in both arrays, and both hold lessons with secret shapes redacted. */
 export function partitionLessons(lessons: string[]) {
   const kept: string[] = [];
   const dropped: string[] = [];
@@ -114,15 +100,8 @@ export function partitionLessons(lessons: string[]) {
   return { kept, dropped };
 }
 
-/**
- * Check if a substantially similar memory already exists.
- * Returns true if overlap > threshold (default 0.7).
- *
- * `tenantId` is opt-in. Only takes effect when the first argument is a
- * root string (string-overload path). When the first argument is a
- * pre-loaded MemoryEntry[], the caller has already scoped — tenantId is
- * ignored on that path.
- */
+/** Check if a substantially similar memory already exists: true if overlap > threshold (default 0.7).
+ *  `tenantId` applies only on the root-string overload; a pre-loaded MemoryEntry[] is already scoped, so it is ignored there. */
 export function deduplicateLesson(
   hippoRootOrEntries: string | MemoryEntry[],
   lesson: string,
@@ -141,10 +120,8 @@ export function deduplicateLesson(
   return false;
 }
 
-/**
- * Run a command in a shell, streaming stderr live; never pass text the caller did not write.
- * Returns: { exitCode, stderr }.
- */
+/** Run a command in a shell, streaming stderr live; never pass text the caller did not write.
+ *  Returns: { exitCode, stderr }. */
 export function runWatched(command: string): Promise<{ exitCode: number; stderr: string }> {
   return new Promise((resolve) => {
     // Use shell: true so the command string is handled by the shell as-is
@@ -171,9 +148,7 @@ export function runWatched(command: string): Promise<{ exitCode: number; stderr:
   });
 }
 
-/**
- * Check whether a directory is a git work tree.
- */
+/** Check whether a directory is a git work tree. */
 export function isGitRepo(cwd: string): boolean {
   try {
     const raw = execSync('git rev-parse --is-inside-work-tree', {
@@ -190,10 +165,8 @@ export function isGitRepo(cwd: string): boolean {
   }
 }
 
-/**
- * Fetch recent git log lines (subject lines only).
- * days: how many days of history to include.
- */
+/** Fetch recent git log lines (subject lines only).
+ *  days: how many days of history to include. */
 export function fetchGitLog(cwd: string, days: number): string {
   try {
     const raw = execFileSync('git', [

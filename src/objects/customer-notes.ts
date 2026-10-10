@@ -1,23 +1,5 @@
-/**
- * customer_note first-class object.
- *
- * A `customer_note` is a discrete note recorded against an account/customer entity:
- * a `note` body scoped to a `customer`, evolving via the supersede delta lifecycle.
- * Entity-scoping is a free-form `customer` column (the `entities` table is unbuilt,
- * so an FK is deferred). Unlike project_brief's one-summary-per-repo,
- * a customer accrues MANY discrete notes over time, each with its own supersede chain
- * (correct a note -> a new version preserving history; close retires it).
- *
- * Reuses the project_brief/skill supersede machinery verbatim (superseded_by self-FK
- * + CAS + INSERT-preflight + server-derived version + change_summary + supersede
- * tenant-match trigger). It has NO assembler/renderer (the simplest first-class object): the
- * contribution is purely the entity-scoping dimension.
- *
- * The `customer_notes` table is the source of truth (survives memory decay); the
- * memory mirror is for recall. memory_id is NULLABLE with ON DELETE SET NULL.
- *
- * Lifecycle: active -> superseded (a corrected version) or active -> closed (retired).
- */
+/** customer_note object: many discrete notes per free-form `customer` column (no entities FK yet), each with its own supersede chain.
+ *  The `customer_notes` table is the source of truth; the memory mirror (memory_id NULLABLE, ON DELETE SET NULL) is for recall. */
 
 import type { KeysetPosition } from '../util/keyset.js';
 import type { SavableDescriptor } from './descriptor.js';
@@ -26,10 +8,6 @@ import { closeObjectAt, listObjectsAt, objectByIdAt, saveObjectAt } from './life
 import type { CustomerNote, NoteStatus } from '../store/object-types.js';
 
 export type { CustomerNote, NoteStatus } from '../store/object-types.js';
-
-// ---------------------------------------------------------------------------
-// Domain types
-// ---------------------------------------------------------------------------
 
 export const VALID_NOTE_STATES: ReadonlySet<NoteStatus> = new Set<NoteStatus>([
   'active',
@@ -101,21 +79,8 @@ export const CUSTOMER_NOTE: SavableDescriptor<'customer_note', SaveCustomerNoteO
   },
 };
 
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
-
-/**
- * Create a customer_note (or a new version that supersedes an existing one). Writes
- * the memory mirror + the customer_notes row in the `objects` store group's one transaction.
- * When supersedesNoteId is given, the referenced ACTIVE row is preflighted (status +
- * version) BEFORE the INSERT, then CAS-UPDATEd -> superseded in the same transaction;
- * the new version = predecessor.version + 1 (server-derived).
- *
- * The memory mirror carries a `customer:<lc>` tag (in addition to ['customer_note']
- * + caller extraTags) so scope-aware recall treats the note as entity-local. There is
- * no self-recursion path (customer_note has no receipt-query/refresh).
- */
+/** Create a customer_note, or a new version superseding an existing one, in the `objects` store group's one transaction.
+ *  The mirror carries a `customer:<lc>` tag so scope-aware recall treats the note as entity-local. */
 export function saveCustomerNote(
   hippoRoot: string,
   tenantId: string,
@@ -125,10 +90,7 @@ export function saveCustomerNote(
   return saveObjectAt(CUSTOMER_NOTE, { hippoRoot, tenantId, actor }, opts);
 }
 
-/**
- * Close (retire) an active note. CAS guard WHERE status='active'; 0 changes
- * distinguishes not-found from not-active. A superseded row is terminal.
- */
+/** Close (retire) an active note; CAS on status='active', 0 changes means not-found or not-active. */
 export function closeCustomerNote(
   hippoRoot: string,
   tenantId: string,
@@ -154,13 +116,8 @@ export function loadCustomerNotes(
   return listObjectsAt(hippoRoot, CUSTOMER_NOTE, tenantId, { status: opts.status, filter: opts.customer, limit: opts.limit, after: opts.after });
 }
 
-/**
- * All ACTIVE notes for a customer, newest first. Returns a LIST (a customer accrues
- * MANY notes) - this deliberately DIVERGES from project_brief's
- * loadActiveBriefForRepo, which returns a single brief-or-null because a repo has one
- * evolving summary. A future caller cloning the project_brief shape by analogy must
- * not assume a single-return here; the plural name signals the list contract.
- */
+/** All ACTIVE notes for a customer, newest first. Returns a LIST, unlike project_brief's single-or-null
+ *  loadActiveBriefForRepo: a customer accrues many notes. */
 export function loadActiveNotesForCustomer(
   hippoRoot: string,
   tenantId: string,

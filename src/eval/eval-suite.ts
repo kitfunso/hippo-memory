@@ -1,26 +1,11 @@
-/**
- * Self-contained feature evaluation suite for hippo.
- *
- * Creates a synthetic memory corpus with known ground truth, runs searches
- * per feature category, and reports per-feature metrics with regression
- * detection against a saved baseline.
- *
- * Design goals:
- *  - Zero API calls (no LLM judge, no embeddings)
- *  - Deterministic (fixed timestamps, content, IDs)
- *  - Fast (<60s for full suite)
- *  - Per-feature breakdown so you see exactly what a change helped/hurt
- */
+/** Self-contained feature eval suite: a synthetic corpus with known ground truth, per-feature metrics and regression detection against a saved baseline.
+ *  Zero API calls (no LLM judge, no embeddings), deterministic (fixed timestamps, content, IDs) and fast. */
 
 import { createMemory, Layer, type MemoryEntry } from '../core/memory.js';
 import { search } from '../search/bm25-search.js';
 import { multihopSearch } from '../search/multihop.js';
 import { mrr, recallAtK, ndcgAtK } from './eval.js';
 import { DAY_MS } from '../util/time.js';
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
 
 export type FeatureCategory =
   | 'direct-recall'
@@ -80,10 +65,6 @@ export interface RegressionReport {
   }>;
   verdict: 'PASS' | 'REGRESSION';
 }
-
-// ---------------------------------------------------------------------------
-// Synthetic corpus — deterministic, no API calls
-// ---------------------------------------------------------------------------
 
 const BASE_DATE = new Date('2026-01-15T10:00:00Z');
 
@@ -356,10 +337,6 @@ export function buildSyntheticCorpus() {
   return { entries, cases };
 }
 
-// ---------------------------------------------------------------------------
-// Runner — evaluates each case against the synthetic corpus
-// ---------------------------------------------------------------------------
-
 interface ScoredFeatureCase {
   case: FeatureTestCase;
   returnedIds: string[];
@@ -429,10 +406,6 @@ export async function runFeatureEval(version: string): Promise<EvalSuiteResult> 
   };
 }
 
-// ---------------------------------------------------------------------------
-// Regression detection
-// ---------------------------------------------------------------------------
-
 const REGRESSION_THRESHOLD = 0.05;
 
 export function detectRegressions(baseline: EvalBaseline, current: EvalSuiteResult): RegressionReport {
@@ -464,11 +437,7 @@ export function detectRegressions(baseline: EvalBaseline, current: EvalSuiteResu
 }
 
 export function resultToBaseline(result: EvalSuiteResult): EvalBaseline {
-  // SAFETY: every FeatureCategory key is populated by the loop immediately
-  // below (one iteration per entry in result.features), before this object
-  // is read anywhere; result.features is built from every category in
-  // buildSyntheticCorpus's cases (runFeatureEval derives `categories` the
-  // same way), so no FeatureCategory key is left unset.
+  // SAFETY: the loop below sets every FeatureCategory key from result.features, which holds every category in buildSyntheticCorpus's cases.
   const features: EvalBaseline['features'] = {} as EvalBaseline['features'];
   for (const f of result.features) {
     features[f.category] = { mrr: f.mrr, recallAt5: f.recallAt5, ndcgAt5: f.ndcgAt5 };
@@ -480,10 +449,6 @@ export function resultToBaseline(result: EvalSuiteResult): EvalBaseline {
     overall: result.overall,
   };
 }
-
-// ---------------------------------------------------------------------------
-// Formatters
-// ---------------------------------------------------------------------------
 
 function pct(n: number): string {
   return (n * 100).toFixed(1) + '%';

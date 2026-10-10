@@ -2,10 +2,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { realpathOrResolve } from '../util/real-path.js';
 
-/** Minimal inline frontmatter split. Recognises a leading `---\n…\n---\n`
- *  block (no YAML dep). Returns the parsed key→value map plus the body with the
- *  block removed. When no well-formed block is present, `fm` is empty and
- *  `body` is the original content. */
+/** Minimal inline frontmatter split (no YAML dep) on a leading `---\n...\n---\n` block; returns the key-value map plus the body,
+ *  or an empty `fm` and the original content when no well-formed block is present. */
 interface FrontmatterParseResult {
   fm: Record<string, string>;
   body: string;
@@ -24,9 +22,7 @@ export function splitMarkdownFrontmatter(raw: string): FrontmatterParseResult {
     if (!kv) continue;
     let val = kv[2].trim();
     if (val === '') {
-      // YAML block-style list: `key:` followed by indented `- item` lines
-      // (common in Obsidian/Dendron frontmatter). Collect them into a
-      // comma-joined value so frontmatterList parses them (codex P2).
+      // YAML block-style list (`key:` then indented `- item` lines, common in Obsidian/Dendron): collect into a comma-joined value for frontmatterList.
       const items: string[] = [];
       let j = i + 1;
       let item: RegExpMatchArray | null;
@@ -44,9 +40,8 @@ export function splitMarkdownFrontmatter(raw: string): FrontmatterParseResult {
   return { fm, body };
 }
 
-/** Pull a frontmatter field that may be a YAML flow list (`[a, b]`), a
- *  comma-separated scalar (`a, b`), or a single token, into a string[]. Quotes
- *  and surrounding brackets are stripped; empty entries dropped. */
+/** Pull a frontmatter field that may be a YAML flow list (`[a, b]`), a comma-separated scalar, or one token into a string[];
+ *  quotes and brackets are stripped and empty entries dropped. */
 export function frontmatterList(value: string | undefined): string[] {
   if (!value) return [];
   let v = value.trim();
@@ -57,11 +52,8 @@ export function frontmatterList(value: string | undefined): string[] {
     .filter(Boolean);
 }
 
-/** Parse `[[wikilinks]]` from body text. `[[target]]` and `[[target|alias]]`
- *  both yield `target` (alias dropped). Returns de-duplicated, order-preserving
- *  target strings (trimmed). Embeds (`![[…]]`) are intentionally matched too —
- *  the leading `!` is not part of the `[[…]]` capture, so an embed contributes
- *  its target as a candidate, which is the desired no-crash baseline behaviour. */
+/** Parse `[[wikilinks]]` from body text: `[[target]]` and `[[target|alias]]` both yield `target`; de-duplicated, order-preserving.
+ *  Embeds (`![[...]]`) match too, because the leading `!` is outside the capture and a candidate target is harmless. */
 export function parseWikilinks(body: string): string[] {
   const out: string[] = [];
   const seen = new Set<string>();
@@ -78,22 +70,11 @@ export function parseWikilinks(body: string): string[] {
   return out;
 }
 
-/** Recursively collect files whose name matches `match` (`*.md` by default) under `root`,
- *  as paths relative to `root` with forward-slash separators (stable artifactRef keys across OSes).
- *  Symlinks are not followed. Skips dot-directories (the default `.hippo` store,
- *  `.git`, `.obsidian`, `.trash`) AND the canonicalized Hippo store path during
- *  the walk, so re-importing a vault that CONTAINS the store never ingests its own
- *  markdown mirror files (codex R5 P1: `hippo import --vault .` after `hippo
- *  init` in the vault would otherwise self-import its mirror rows and grow on
- *  every run). The root-IS-the-store case is handled one level up in
- *  importVault (a no-op early return), NOT here: returning [] for it would feed
- *  the deletion-sync an empty scan that mass-archives every live row (codex R8). */
+/** Recursively collect files matching `match` (`*.md` default) under `root` as forward-slash relative paths; symlinks are not followed.
+ *  Skips dot-directories and the Hippo store path so a vault containing the store never imports its own mirror files; importVault handles root-IS-the-store. */
 export function collectMarkdownFiles(root: string, hippoRoot: string, match: RegExp = /\.md$/i): string[] {
   const out: string[] = [];
-  // Canonicalize (realpath) so a non-dot HIPPO_HOME store nested in the vault is
-  // skipped even when hippoRoot is an aliased path (junction / Windows case
-  // variant); path.resolve would miss it and self-import the store's mirror
-  // files (codex R9 follow-up: same gap as the importVault guard, sibling site).
+  // Canonicalize (realpath) so a non-dot HIPPO_HOME store nested in the vault is skipped even via a junction or Windows case alias.
   const resolvedHippoRoot = realpathOrResolve(hippoRoot);
   const walk = (dir: string): void => {
     const entries = fs.readdirSync(dir, { withFileTypes: true });

@@ -27,12 +27,8 @@ export interface IngestResult {
   memoryId: string | null;
 }
 
-/**
- * Discriminated union of the four event shapes V1 ingests. The eventName
- * field MUST equal the X-GitHub-Event header value; computeIdempotencyKey
- * folds it into the dedupe key so the same body posted under two different
- * X-GitHub-Event headers produces two distinct keys (test 7).
- */
+/** Discriminated union of the four event shapes V1 ingests; eventName MUST equal the X-GitHub-Event header,
+ *  since computeIdempotencyKey folds it into the dedupe key. */
 export type IngestEvent =
   | { eventName: 'issues'; payload: GitHubIssueEvent }
   | { eventName: 'issue_comment'; payload: GitHubIssueCommentEvent }
@@ -61,12 +57,8 @@ function transformEvent(event: IngestEvent): RememberOpts | null {
   }
 }
 
-/**
- * Extract the source-normalized identifier the idempotency key needs.
- * Backfill and webhook both produce IngestEvent objects describing the same
- * source revision, so deriving the key from these fields collapses both paths
- * onto the same dedupe row. Mirrors the artifactRef strings in transform.ts.
- */
+/** Extract the source-normalized identifier the idempotency key needs, so backfill and webhook deliveries of the same
+ *  source revision collapse onto one dedupe row. Mirrors the artifactRef strings in transform.ts. */
 function eventArtifactRef(event: IngestEvent): string {
   const repo = event.payload.repository?.full_name ?? 'unknown/unknown';
   switch (event.eventName) {
@@ -110,9 +102,7 @@ export async function ingestEvent(ctx: Context, input: IngestInput): Promise<Ing
   const opts = transformEvent(input.event);
 
   if (!opts) {
-    // Empty body: no memory to write, but mark seen so a retry of the same
-    // empty event returns 'duplicate' (not 'skipped' again — that would
-    // re-run the transform on every retry).
+    // Empty body: no memory to write, but mark seen so a retry returns 'duplicate' instead of re-running the transform.
     await events.markEventSeen(event);
     return { status: 'skipped', memoryId: null };
   }
@@ -131,7 +121,7 @@ export async function ingestEvent(ctx: Context, input: IngestInput): Promise<Ing
 }
 
 async function rememberWithEventLog(ctx: Context, event: ConnectorEvent, opts: RememberOpts): Promise<IngestResult> {
-  // No `|| 'connector:github'` fallback (see rememberWithEventLog in slack/ingest.ts for rationale).
+  // No `|| 'connector:github'` fallback: the caller always builds ctx with the connector subject (same as slack/ingest.ts).
   const result = await remember(ctx, { ...opts, untrusted: true, event });
   // Another worker logged this key between the pre-check and the write: its memory stands and ours was not stored.
   if (result.duplicate) return { status: 'skipped_duplicate', memoryId: result.duplicate.memoryId };

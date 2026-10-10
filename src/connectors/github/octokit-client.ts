@@ -1,12 +1,5 @@
-/**
- * Octokit-shaped HTTP fetcher for the GitHub connector backfill.
- *
- * Production uses `realGitHubFetcher` against `https://api.github.com`.
- * Tests inject a fake `GitHubFetcher` so they never hit the network.
- *
- * Any non-200 response that is NOT a recognized rate-limit pause MUST throw
- * `GitHubFetchError`: an empty page would be an empty backfill with no operator signal.
- */
+/** Octokit-shaped HTTP fetcher for the GitHub backfill; tests inject a fake `GitHubFetcher`.
+ *  Any non-200 that is not a recognised rate-limit pause MUST throw `GitHubFetchError`, since an empty page would be a silent empty backfill. */
 
 import { parseRateLimit, type RateLimitInfo } from './ratelimit.js';
 import { fetchWithRetry } from '../../util/http-retry.js';
@@ -37,12 +30,7 @@ export type GitHubFetcher = (args: {
   token: string;
 }) => Promise<GitHubBackfillPage>;
 
-/**
- * Parse the rel="next" URL from an RFC 5988 `Link` header.
- *
- * Header format: `<url1>; rel="next", <url2>; rel="last"`.
- * Returns the URL whose rel parameter is exactly `"next"`, or null.
- */
+/** Parse the rel="next" URL from an RFC 5988 `Link` header, or null. */
 export function parseNextLink(linkHeader: string): string | null {
   if (!linkHeader) return null;
   const re = /<([^>]+)>\s*;\s*rel="next"/;

@@ -1,28 +1,6 @@
-/**
- * Paginated backfill of three GitHub REST streams with per-stream
- * high-water marks (HWMs):
- *   - /repos/{repo}/issues               -> issues_hwm
- *   - /repos/{repo}/issues/comments      -> issue_comments_hwm
- *   - /repos/{repo}/pulls/comments       -> pr_review_comments_hwm
- *
- * Crash safety: each stream's HWM is persisted ONLY after
- * the stream fully drains. If stream 2 throws mid-flight, stream 1's HWM
- * is committed and stream 2's stays NULL (or its prior value). Rerun
- * picks up from stream 1's saved HWM and re-fetches stream 2 from its
- * last committed point.
- *
- * The /issues endpoint returns BOTH issues and PRs (a PR is
- * an issue with a `pull_request` field). We skip PRs here so they don't
- * get ingested under the issues schema. PRs are handled via webhook in
- * V1 (no /pulls backfill stream — review comments cover the discussion
- * surface).
- *
- * Privacy (V1 limitation): the REST list endpoints don't reliably set
- * `repository.private`, and resolving it requires an extra API call per
- * repo. Backfill leaves the field undefined so scopeFromRepository falls
- * through to private. Callers who know the repo is public can re-tag
- * downstream; the fail-safe default protects private orgs.
- */
+/** Paginated backfill of the GitHub issues, issue-comments and PR-review-comments streams, each with its own high-water mark (HWM).
+ *  An HWM is persisted only after its stream fully drains, so a crash in stream 2 leaves stream 1 committed and stream 2 resumes from its prior HWM.
+ *  `repository.private` is left undefined (REST lists omit it), so scopeFromRepository falls through to private. */
 
 import type { Context } from '../../api/index.js';
 import { readCursors, seedCursors, writeHwm, type HwmColumn } from '../../store/connectors/github.js';
@@ -63,12 +41,8 @@ export interface BackfillResult {
   pages: BackfillStreamCounts;
 }
 
-/**
- * Build a synthetic `repository` object from the known repo full name.
- * REST list endpoints often omit the full repository object on each item;
- * we already know the repo since the caller passed it. `private` left
- * undefined so scopeFromRepository falls through to private.
- */
+/** Build a synthetic `repository` from the known repo full name, because REST list items often omit it.
+ *  `private` stays undefined so scopeFromRepository falls through to private. */
 function syntheticRepository(repoFullName: string): GitHubRepository {
   const [owner, name] = repoFullName.split('/');
   return {
@@ -79,11 +53,7 @@ function syntheticRepository(repoFullName: string): GitHubRepository {
   };
 }
 
-/**
- * Parse the trailing issue/PR number from a REST API URL.
- * e.g. https://api.github.com/repos/o/r/issues/42 -> 42
- *      https://api.github.com/repos/o/r/pulls/7   -> 7
- */
+/** Parse the trailing issue/PR number from a REST API URL, e.g. .../issues/42 -> 42. */
 function parseTrailingNumber(url: string | undefined): number | null {
   if (!url) return null;
   const m = url.match(/\/(\d+)(?:\?.*)?$/);
@@ -134,18 +104,8 @@ function isCommentItem(x: JsonValue): x is JsonValue & (IssueCommentItem | PrRev
   return isGitHubUser(x.user);
 }
 
-/**
- * Drain one stream end-to-end. Pauses and retries on rate-limit. Throws on
- * any other fetch error so the caller leaves the HWM unchanged.
- *
- *   - Tracks max(updated_at) across ALL fetched items, including ones
- *     `toIngestEvent` rejects (e.g., PRs returned via `/issues`). Otherwise
- *     a page of pure PRs would never advance the HWM and the next run would
- *     re-fetch the same window forever.
- *   - Returns `drained: boolean` — true only when the stream actually ran
- *     to next=null. Callers MUST NOT advance the HWM when drained=false,
- *     or a capped run would persist a partial HWM and skip the unfetched tail.
- */
+/** Drain one stream end-to-end, pausing on rate-limit and throwing on any other fetch error so the caller leaves the HWM unchanged.
+ *  Callers MUST NOT advance the HWM when drained=false, or a capped run would skip the unfetched tail. */
 interface DrainStreamOptions {
   readonly toIngestEvent: (item: JsonValue) => IngestEvent | null;
   readonly fetcher: GitHubFetcher;
@@ -171,9 +131,7 @@ async function drainStream(
 
     for (const item of page.items) {
       // Track updated_at on EVERY item, before the toIngestEvent filter, so PR-only pages don't loop forever.
-      // SAFETY: updated_at is GitHub's ISO-timestamp field on every item
-      // shape this stream returns; a non-string value would only fail the
-      // string comparisons below, matching pre-migration passthrough.
+      // SAFETY: updated_at is GitHub's ISO-timestamp field on every item shape this stream returns.
       const updatedAt = isJsonObject(item)
         ? ((item.updated_at as string | undefined) ?? null)
         : null;
@@ -232,9 +190,8 @@ function issueItemToEvent(item: JsonValue, repository: GitHubRepository): Ingest
 
 function issueCommentItemToEvent(item: JsonValue, repository: GitHubRepository): IngestEvent | null {
   if (!isCommentItem(item)) return null;
-  // SAFETY: this closure only runs against the /issues/comments stream,
-  // so every item isCommentItem validates here is genuinely an
-  // IssueCommentItem; a missing issue_url is handled defensively below.
+  // SAFETY: this closure only runs against the /issues/comments stream, so every item isCommentItem
+  // validates is an IssueCommentItem; a missing issue_url is handled below.
   const c = item as IssueCommentItem;
   const issueNumber = parseTrailingNumber(c.issue_url);
   if (issueNumber === null) return null;
@@ -254,9 +211,8 @@ function issueCommentItemToEvent(item: JsonValue, repository: GitHubRepository):
 
 function prReviewCommentItemToEvent(item: JsonValue, repository: GitHubRepository): IngestEvent | null {
   if (!isCommentItem(item)) return null;
-  // SAFETY: this closure only runs against the /pulls/comments stream,
-  // so every item isCommentItem validates here is genuinely a
-  // PrReviewCommentItem; a missing pull_request_url is handled below.
+  // SAFETY: this closure only runs against the /pulls/comments stream, so every item isCommentItem
+  // validates is a PrReviewCommentItem; a missing pull_request_url is handled below.
   const c = item as PrReviewCommentItem;
   const prNumber = parseTrailingNumber(c.pull_request_url);
   if (prNumber === null) return null;
@@ -310,7 +266,6 @@ export async function backfillRepo(
     pages: { issues: 0, issueComments: 0, prReviewComments: 0 },
   };
 
-  // ---------- Stream 1: issues (skip PRs) ----------
   const issuesRes = await backfillStream(ctx, opts, sleep, {
     url:
       `${API}/repos/${opts.repoFullName}/issues?state=all&per_page=100` +
@@ -321,7 +276,6 @@ export async function backfillRepo(
   result.ingested.issues = issuesRes.ingested;
   result.pages.issues = issuesRes.pages;
 
-  // ---------- Stream 2: repo-level issue comments ----------
   const commentsRes = await backfillStream(ctx, opts, sleep, {
     url:
       `${API}/repos/${opts.repoFullName}/issues/comments?per_page=100` +
@@ -332,7 +286,6 @@ export async function backfillRepo(
   result.ingested.issueComments = commentsRes.ingested;
   result.pages.issueComments = commentsRes.pages;
 
-  // ---------- Stream 3: repo-level PR review comments ----------
   const prCommentsRes = await backfillStream(ctx, opts, sleep, {
     url:
       `${API}/repos/${opts.repoFullName}/pulls/comments?per_page=100` +

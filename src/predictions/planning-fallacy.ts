@@ -5,19 +5,8 @@ import type { PlanningFallacyEvidence } from '../store/planning-fallacy-evidence
 
 const TARGET_ID_CHARS = 100;
 
-// ---------------------------------------------------------------------------
-// Auto-injection of reference-class baserate on recall
-// ---------------------------------------------------------------------------
-
-/**
- * Surface delivered on `RecallResult.planningFallacyHint` when an
- * agent's recall query carries a forward-prediction phrase AND the closest
- * matching prediction class has closed historical data.
- *
- * The agent sees its track record at the moment of forecasting, anchoring
- * on the outside view (Lovallo-Kahneman 2003) rather than the inside-view
- * inside the planning fallacy.
- */
+/** Surface delivered on `RecallResult.planningFallacyHint` when a recall query carries a forward-prediction phrase and the closest class has closed history,
+ *  so the agent sees its own track record at the moment of forecasting. */
 export interface PlanningFallacyHint {
   classTag: string;
   /** Verbatim PredictionBaserate.summary, e.g.
@@ -25,42 +14,28 @@ export interface PlanningFallacyHint {
   baserateSummary: string;
   /** Discriminator vs hypothetical future manual-override hints. */
   source: 'j3.2-auto';
-  /** The regex match snippet that triggered detection. Lets the agent
-   *  see WHY the hint appeared and self-correct if detection misfires
-   *  (e.g. "I wasn't predicting; ignore"). */
+  /** The regex match snippet that triggered detection, so the agent sees WHY the hint appeared and can self-correct if detection misfired. */
   detectedPhrase: string;
   nClosed: number;
   /** Null only when every closed-row had estimate_value=0 (ratio undefined). */
   meanRatio: number | null;
 }
 
-/**
- * "Watching" variant emitted when the forward-claim regex matched but no
- * PlanningFallacyHint baserate was returned. Silence was the most common
- * real-world failure: a natural-language query carries a
- * forward-claim phrase but its non-stopword tokens don't overlap with
- * any prediction class tag, so hippo emitted nothing despite
- * the regex match. The watching variant surfaces the detection event
- * + a one-line suggestion so the agent can either re-tag the prediction
- * or pass the suggestion through to the user.
- */
+/** "Watching" variant emitted when the forward-claim regex matched but no baserate hint was returned (no prediction class tag overlaps the query's tokens).
+ *  It surfaces the detection plus a one-line suggestion so the agent can re-tag the prediction or pass the suggestion to the user. */
 export interface PlanningFallacyWatching {
   /** The forward-claim phrase the detector matched (verbatim regex match snippet). */
   detectedPhrase: string;
-  /** Why hippo couldn't produce a baserate hint despite the match.
-   *  - 'no_class_match': no class scored >=1 on token overlap.
-   *  - 'tiebreak': >=2 classes tied at the same best score (silent on ambiguity). */
+  /** Why hippo could not produce a baserate hint despite the match: 'no_class_match' (no class scored >=1 on token overlap)
+   *  or 'tiebreak' (>=2 classes tied at the best score; silent on ambiguity). */
   reason: 'no_class_match' | 'tiebreak';
   /** One-line agent-facing suggestion for how the user can give hippo
    *  enough signal to produce a baserate next time. */
   suggestion: string;
 }
 
-/**
- * What `decidePlanningFallacy` hands to recall. Carries EITHER `hint` (baserate
- * available) OR `watching` (regex fired, no baserate), or NEITHER (mode=off,
- * no queryText, no regex match, or nClosed=0 silent path). Never both.
- */
+/** What `decidePlanningFallacy` hands to recall: EITHER `hint` (baserate available) OR `watching` (regex fired, no baserate), or NEITHER (mode=off,
+ *  no queryText, no regex match, or nClosed=0). Never both. */
 export interface PlanningFallacyOutput {
   hint?: PlanningFallacyHint;
   watching?: PlanningFallacyWatching;
@@ -69,10 +44,8 @@ export interface PlanningFallacyOutput {
 export type AutodebiasMode = 'off' | 'regex';
 
 export interface ComputePlanningFallacyHintOpts {
-  /** Override env. When undefined, reads process.env.HIPPO_AUTODEBIAS at
-   *  call time (per-call to allow test-time env toggling without module
-   *  reload). 'off' short-circuits to null BEFORE the regex gate so the
-   *  AUTODEBIAS=off path pays zero work. */
+  /** Override env; undefined reads process.env.HIPPO_AUTODEBIAS per call (so tests can toggle it).
+   *  'off' short-circuits to null before the regex gate. */
   mode?: AutodebiasMode;
 }
 

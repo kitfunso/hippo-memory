@@ -1,25 +1,6 @@
-/**
- * Project_brief first-class object.
- *
- * A `project_brief` is the living, repo-scoped summary of a repository's state: a
- * `summary` body scoped to a `repo`, evolving via the supersede delta lifecycle.
- * "Auto-refreshes from receipts" is scoped to a DETERMINISTIC (no-LLM) assembler:
- * `refreshBrief` gathers the repo's recent receipts (memory rows tagged
- * `path:<repo>`) and assembles them into the brief body. The distinguishing
- * capability is therefore the refresh assembler (analog of skill's export
- * renderer), not an LLM/async pipeline (deferred).
- *
- * Reuses the skill/process supersede machinery verbatim (superseded_by self-FK +
- * CAS + INSERT-preflight + server-derived version + change_summary + supersede
- * tenant-match trigger). It DROPS skill's `skill_name`/`trigger_text` and ADDS
- * `repo` (the repo-scoping dimension) + `summary` (the brief body).
- *
- * The `project_briefs` table is the source of truth (survives memory decay); the
- * memory mirror is for recall. memory_id is NULLABLE with ON DELETE SET NULL.
- *
- * Lifecycle: active -> superseded (a newer version replaces it) or active ->
- * closed (retired).
- */
+/** Project_brief object: the living, repo-scoped `summary` of a repository, evolving via supersession.
+ *  `refreshBrief` assembles recent `path:<repo>` receipts with a deterministic (no-LLM) assembler; an LLM pipeline is deferred.
+ *  The `project_briefs` table is the source of truth; the memory mirror (memory_id NULLABLE, ON DELETE SET NULL) is for recall. */
 
 import { BadRequestError } from '../core/api-errors.js';
 import { assertTenantId } from '../store/tenant.js';
@@ -32,10 +13,6 @@ import type { ObjectListQuery, Objects } from '../store/port.js';
 import { sqliteObjects } from '../store/sqlite/objects-group.js';
 
 export type { BriefStatus, ProjectBrief } from '../store/object-types.js';
-
-// ---------------------------------------------------------------------------
-// Domain types
-// ---------------------------------------------------------------------------
 
 export const VALID_BRIEF_STATES: ReadonlySet<BriefStatus> = new Set<BriefStatus>([
   'active',
@@ -63,9 +40,8 @@ export interface SaveProjectBriefOpts {
   supersedesBriefId?: number;
   /** Extra memory tags merged after ['project_brief']. */
   extraTags?: string[];
-  /** Internal: set by refreshBrief to the receipt count so the audit metadata can
-   *  mark the write as an auto-refresh (vs a manual supersede) WITHOUT a 4th audit
-   *  op. Not part of the public CLI/HTTP surface. */
+  /** Internal: set by refreshBrief to the receipt count so audit metadata marks the write as an auto-refresh
+   *  without a 4th audit op. Not part of the CLI/HTTP surface. */
   refreshReceiptCount?: number;
 }
 
@@ -116,17 +92,7 @@ function buildBriefContent(repo: string, summary: string): string {
   return `${repo}\n\n${summary}`;
 }
 
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
-
-/**
- * Create a project_brief (or a new version that supersedes an existing one). Writes
- * the memory mirror + the project_briefs row in the `objects` store group's one
- * transaction. When supersedesBriefId is given, the referenced ACTIVE row is
- * preflighted (status + version) BEFORE the INSERT, then CAS-UPDATEd -> superseded
- * in the same transaction; the new version = predecessor.version + 1 (server-derived).
- */
+/** Create a project_brief, or a new version superseding an existing one, in the `objects` store group's one transaction. */
 export function saveProjectBrief(
   hippoRoot: string,
   tenantId: string,
@@ -136,9 +102,7 @@ export function saveProjectBrief(
   return saveObjectAt(PROJECT_BRIEF, { hippoRoot, tenantId, actor }, opts);
 }
 
-/**
- * Close (retire) an active brief. A superseded row is terminal.
- */
+/** Close (retire) an active brief; a superseded row is terminal. */
 export function closeProjectBrief(
   hippoRoot: string,
   tenantId: string,
@@ -164,11 +128,7 @@ export function loadProjectBriefs(
   return listObjectsAt(hippoRoot, PROJECT_BRIEF, tenantId, { status: opts.status, filter: opts.repo, limit: opts.limit, after: opts.after });
 }
 
-/**
- * The repo's CURRENT active brief, or null. By convention there is one active brief
- * per (tenant, repo); if an operator created more than one (the DB does not prevent
- * it, consistent with every other first-class object), the MOST-RECENT active row wins.
- */
+/** The repo's current active brief, or null. The DB allows several active rows per (tenant, repo); the most recent wins. */
 function loadActiveBriefForRepo(
   hippoRoot: string,
   tenantId: string,
@@ -183,10 +143,6 @@ function loadActiveBriefForRepo(
 function newestActive(repo: string): ObjectListQuery<'project_brief'> {
   return { status: 'active', filter: repo, limit: 1 };
 }
-
-// ---------------------------------------------------------------------------
-// Refresh assembler (the distinguishing deliverable)
-// ---------------------------------------------------------------------------
 
 /** Single-line headline for a receipt: first non-empty line, newline-stripped,
  *  truncated. Deterministic + safe for the markdown bullet list. */
@@ -203,17 +159,8 @@ function receiptTag(normalizedRepo: string): string {
   return `path:${normalizedRepo.toLowerCase()}`;
 }
 
-// NOTE on ordering: the `id DESC` tiebreak is lexical on a random-ish memory id
-// (e.g. `sem_<hex>`), NOT chronological — within the same `created` timestamp the
-// order is stable-but-arbitrary, not insertion order. `created DESC` is the real
-// recency ordering.
-//
-// Budget-aware assembly: the digest is the
-// brief `summary`, which saveProjectBrief caps at MAX_BRIEF_SUMMARY_LEN. The
-// receipt/headline caps (50 x ~200) could otherwise build an ~11KB body that the
-// store then REJECTS, breaking refresh for inputs within the advertised caps. So
-// include receipt lines newest-first only while they fit under the cap (reserving
-// slack for the header + an omission footer), and note the omitted remainder.
+// `id DESC` is a lexical tiebreak on a random-ish id, so same-`created` order is stable but arbitrary; `created DESC` is the recency order.
+// Receipt lines go newest-first only while they fit MAX_BRIEF_SUMMARY_LEN (reserving slack for header and omission footer), else the store rejects the body.
 function fitReceiptLines(receipts: readonly BriefReceipt[]): string[] {
   const buildReceiptLine = (r: BriefReceipt): string =>
     `- ${(r.created ?? '').slice(0, 10)} [${r.source}] ${receiptHeadline(r.content)}`;
@@ -256,9 +203,7 @@ function renderBriefDigest(normalizedRepo: string, receiptCount: number, receipt
       lines.push(`_... ${omitted} more receipt(s) omitted (summary cap)._`);
     }
   }
-  // Belt-and-suspenders: the budget loop keeps us under the cap, but hard-clamp the
-  // joined string so the store's NOT-NULL/<=cap contract can never be violated even
-  // for a pathological single oversized line.
+  // Belt-and-suspenders: hard-clamp so the store's NOT-NULL/<=cap contract holds even for a single oversized line.
   let markdown = lines.join('\n');
   if (markdown.length > MAX_BRIEF_SUMMARY_LEN) {
     markdown = markdown.slice(0, MAX_BRIEF_SUMMARY_LEN);
@@ -266,19 +211,8 @@ function renderBriefDigest(normalizedRepo: string, receiptCount: number, receipt
   return markdown;
 }
 
-/**
- * Assemble the repo's recent receipts into a deterministic markdown digest, and
- * return it WITH the receipt count (the count feeds refreshBrief's change_summary +
- * audit metadata). NO LLM. Always returns a non-empty, valid summary (a brief
- * `summary` is NOT NULL), including the zero-receipts case.
- *
- * A "receipt" = a tenant memory row carrying the repo's `path:<repo>` tag. The
- * brief's OWN memory mirror (source='project_brief') is excluded so a brief never
- * becomes its own receipt on the next refresh. The match is against the JSON-array
- * serialization (each element is a double-quoted string `"path:hippo"`); the
- * surrounding quotes are load-bearing — they stop `hip` matching `path:hippo`.
- * `repo` is LIKE-escaped + parameterized (operator-supplied; security.md).
- */
+/** Assemble the repo's recent receipts into a deterministic markdown digest and return it with the receipt count; never empty (summary is NOT NULL).
+ *  The brief's own mirror (source='project_brief') is excluded; the quotes in the JSON-array LIKE are load-bearing (`hip` must not match `path:hippo`). */
 export function assembleBriefFromReceipts(
   hippoRoot: string,
   tenantId: string,

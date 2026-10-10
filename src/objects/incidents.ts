@@ -1,30 +1,6 @@
-/**
- * Incident first-class object.
- *
- * An incident is a postmortem capsule: a recorded operational event with a
- * lifecycle and optional linked receipts (the memories that are its evidence).
- * The `incidents` table is the source of truth: an incident stays `open`
- * regardless of memory decay. A memory row still mirrors the incident for
- * recall surfaces but is NOT canonical — memory_id is NULLABLE with ON DELETE
- * SET NULL so forget/consolidate/archive gracefully orphans the incident row.
- *
- * Lifecycle: open -> resolved (a resolution was recorded; the incident stays on
- * record with resolution_text + resolved_at) or open|resolved -> closed
- * (retired with closed_at). This is NOT decision's supersede: there is no
- * superseded_by self-FK, no supersede CAS, and no supersede trigger.
- *
- * Tenant scoping: every helper requires tenantId. BEFORE INSERT/UPDATE triggers
- * enforce incidents.tenant_id == the referenced memory's tenant_id. Mirrors the
- * v30 decisions pattern (src/objects/decisions.ts).
- *
- * Dual-write atomicity: `saveIncident` writes the memory + incidents row in the
- * `objects` store group's one transaction, so a failure in any step rolls all of
- * them back.
- *
- * linked_memory_ids ("linked receipts"): a JSON-encoded array of memory ids on
- * the row, default `[]`. On save, every id must exist in the SAME tenant; a
- * cross-tenant or nonexistent id is rejected (throw) before the insert.
- */
+/** Incident object: a postmortem capsule with lifecycle open -> resolved -> closed (no supersede chain) and optional linked receipts.
+ *  The `incidents` table is the source of truth; the memory mirror (memory_id NULLABLE, ON DELETE SET NULL) is for recall.
+ *  linked_memory_ids must all exist in the SAME tenant or save throws before the insert. */
 
 import { BadRequestError, ConflictError, NotFoundError } from '../core/api-errors.js';
 import { assertTenantId } from '../store/tenant.js';
@@ -36,10 +12,6 @@ import { isObjectRefusal, type IncidentOpen, type IncidentOpenRefusal, type Inci
 import { objectIdByMemory, sqliteObjects } from '../store/sqlite/objects-group.js';
 
 export type { Incident, IncidentStatus } from '../store/object-types.js';
-
-// ---------------------------------------------------------------------------
-// Domain types
-// ---------------------------------------------------------------------------
 
 export const VALID_INCIDENT_STATES: ReadonlySet<IncidentStatus> = new Set<IncidentStatus>([
   'open',
@@ -145,10 +117,7 @@ export async function resolveOpenIncident(objects: Objects, tenantId: string, id
   return resolved(tenantId, id, await objects.resolveIncident(tenantId, id, resolving(tenantId, resolutionText, actor)));
 }
 
-/**
- * Close (retire) an incident from open or resolved (open|resolved -> closed).
- * Updates closed_at only; the memory mirror is not mutated.
- */
+/** Close (retire) an incident from open or resolved; sets closed_at only, the memory mirror is not mutated. */
 export function closeIncident(
   hippoRoot: string,
   tenantId: string,
@@ -182,12 +151,7 @@ export function loadOpenIncidents(
   return loadIncidents(hippoRoot, tenantId, { status: 'open', limit: opts.limit });
 }
 
-/**
- * Resolve a memory id to the table id of the OPEN incident backed by that
- * memory, or null when the memory has no open incident row. Extracted so a
- * memory-id-based lookup is unit-testable at the store layer (mirror of
- * resolveActiveDecisionIdByMemory).
- */
+/** Resolve a memory id to the table id of the OPEN incident backed by it, or null; exported for store-layer tests. */
 export function resolveActiveIncidentIdByMemory(
   hippoRoot: string,
   tenantId: string,

@@ -15,11 +15,8 @@ import { embedAll } from '../store/embeddings/index.js';
 import { log } from '../util/log.js';
 import { logEmbedAllFailure } from './search-both.js';
 
-/**
- * Copy all global memories into the local store.
- * Skips entries that already exist locally, by ID or by text (promote and share copy under a new ID).
- * Returns the count of newly copied entries.
- */
+/** Copy all global memories into the local store, skipping entries that already exist locally by ID or text (promote and share copy under a new ID).
+ *  Returns the count of newly copied entries. */
 export function syncGlobalToLocal(
   localRoot: string,
   globalRoot: string,
@@ -30,19 +27,15 @@ export function syncGlobalToLocal(
   }
   if (!fs.existsSync(globalRoot)) return 0;
 
-  // Host-wide read. syncGlobalToLocal copies the global union into a
-  // tenant-scoped local store; writeEntry on each row carries the tenant if
-  // the local-root context provides one.
+  // Host-wide read: the global union is copied into a tenant-scoped local store, and writeEntry carries the tenant if the local-root context has one.
   const globalEntries = loadAllEntries(globalRoot);
   const textKey = (e: MemoryEntry): string => `${e.tenantId}\n${e.content}`;
   const localEntries = loadAllEntries(localRoot);
   const localIds = new Set(localEntries.map((e) => e.id));
   const localText = new Set(localEntries.map(textKey));
 
-  // Syncing down must not re-import what ambient context
-  // excludes - other-project rows are skipped by default and secret rows
-  // are never copied. origin_project is preserved on the copy (writeEntry
-  // only stamps when the field is missing).
+  // Syncing down must not re-import what ambient context excludes: other-project rows are skipped by default and secret rows never copied.
+  // origin_project is preserved on the copy (writeEntry stamps it only when missing).
   const currentProject = resolveProjectIdentity(path.dirname(path.resolve(localRoot)));
   let count = 0;
   // A locally rejected value must not come back through sync down: caught per item, printed as one line.

@@ -52,10 +52,8 @@ export const NO_MERGE_TAGS: ReadonlySet<string> = new Set([
   ...AGENT_MEMORY_TAGS,
 ]);
 
-/**
- * Estimate how well a memory would transfer to other projects.
- * Returns 0..1 where >0.5 = good candidate for sharing.
- */
+/** Estimate how well a memory would transfer to other projects.
+ *  Returns 0..1 where >0.5 = good candidate for sharing. */
 export function transferScore(entry: MemoryEntry): number {
   let score = 0.5; // neutral default
 
@@ -79,21 +77,15 @@ export function transferScore(entry: MemoryEntry): number {
   return Math.min(1, Math.max(0, score));
 }
 
-/**
- * Share a memory to the global store with attribution.
- * Enriches the source field with project path and timestamp.
- * Returns the new global entry, or null if transfer score is too low.
- */
+/** Share a memory to the global store with attribution (source enriched with project path and timestamp).
+ *  Returns the new entry, or null if the transfer score is too low. */
 export function shareMemory(
   localRoot: string,
   id: string,
   options: { force?: boolean; tenantId?: string; skipEmbed?: boolean } = {}
 ): MemoryEntry | null {
-  // tenantId is OPTIONAL for backward compat — autoShare's internal call at
-  // :370 passes only `{ force: true }` in a single-tenant context. MCP/REST
-  // hosts MUST pass tenantId so a Bearer for tenant A cannot share tenant
-  // B's memory to global. readEntry returns null on cross-tenant lookups
-  // when tenantId is provided.
+  // tenantId is optional for single-tenant callers (autoShare passes only `{ force: true }`); MCP/REST hosts MUST pass it so tenant A cannot share
+  // tenant B's memory to global (readEntry returns null on a cross-tenant lookup).
   const entry = readEntry(localRoot, id, options.tenantId);
   if (!entry) throw new NotFoundError(`Memory not found: ${id}`);
 
@@ -118,10 +110,7 @@ export function shareMemory(
 
   writeEntry(globalRoot, globalEntry);
 
-  // Single-row producer: embed here unless the caller opts out. autoShare
-  // sets skipEmbed so it can batch its whole run through one embedAll() at
-  // the end instead of N serialized full-index rewrites (embedMemory rewrites
-  // the whole index JSON per call).
+  // Embed here unless the caller opts out: autoShare sets skipEmbed to batch one embedAll(), since embedMemory rewrites the whole index per call.
   if (!options.skipEmbed) {
     void embedMemory(globalRoot, globalEntry);
   }
@@ -130,9 +119,7 @@ export function shareMemory(
 }
 
 function assertShareable(entry: MemoryEntry, id: string): void {
-  // Secret producer veto: secrets never go to the global store, not even
-  // with --force. Explicit and loud - a silent null would read as "low
-  // transfer score" and invite retries.
+  // Secret veto: secrets never reach the global store, even with --force; throw loudly, since a silent null reads as "low transfer score" and invites retries.
   const secret = detectSecret(entry);
   if (secret.flagged) {
     throw new BadRequestError(
@@ -152,17 +139,8 @@ function assertShareable(entry: MemoryEntry, id: string): void {
   }
 }
 
-/**
- * List all projects that have contributed memories to the global store.
- * Parses the source field for 'shared:<project>:' or 'promoted:<path>' patterns.
- *
- * `tenantId` is optional. When provided, the global entries
- * are filtered to that tenant before aggregation — matches every other
- * read path's default-safe behaviour. When undefined, host-wide (back-compat
- * for legacy callers like CLI standalone + dashboard internal use). Operators
- * who genuinely want cross-tenant peer discovery can pass undefined or
- * use direct SQL.
- */
+/** List all projects that contributed memories to the global store, parsed from 'shared:<project>:' or 'promoted:<path>' sources.
+ *  `tenantId` filters to one tenant; undefined is host-wide (legacy callers: CLI standalone, dashboard). */
 export function listPeers(
   globalRoot?: string,
   tenantId?: string,
@@ -218,11 +196,8 @@ function isAutoShareCandidate(entry: MemoryEntry, globalContentSet: Set<string>,
   // Skip if already shared (same text apart from spacing)
   if (globalContentSet.has(duplicateKey(entry.content))) return false;
 
-  // Secret producer veto: secret rows never auto-share, regardless of
-  // transfer score. (shareMemory would throw; filtering here keeps the
-  // sleep pipeline fail-safe.) Checked LAST so the stats counter
-  // only counts rows the veto actually withheld — a row failing the score
-  // or dedupe gates was never going to share, secret or not.
+  // Secret veto, checked LAST so the stats counter only counts rows it withheld (a row failing the score or dedupe gate was never going to share).
+  // shareMemory would throw here; filtering keeps the sleep pipeline fail-safe.
   if (detectSecret(entry).flagged) {
     if (stats) stats.secretSkipped++;
     return false;
@@ -231,14 +206,8 @@ function isAutoShareCandidate(entry: MemoryEntry, globalContentSet: Set<string>,
   return true;
 }
 
-// Rejection containment (sync/promote/share copy paths must not let ONE rejected
-// candidate kill the batch): shareMemory -> writeEntry hits the LIVE guard
-// against the GLOBAL store's tombstones. A matching candidate throws
-// RejectedValueError, which (uncaught) would abort this whole loop and,
-// via api.ts's sleep pipeline, the entire autoShare sleep phase. Mirrors
-// syncGlobalToLocal's per-item catch just above in this file. writeEntry's
-// own catch already writes the reject_refusal audit before rethrowing,
-// so do not double-audit here, just count and continue.
+// Rejection containment: shareMemory -> writeEntry can throw RejectedValueError against the GLOBAL store tombstones and abort the autoShare sleep phase.
+// Catch per item like syncGlobalToLocal; writeEntry already audits reject_refusal before rethrowing, so count and continue.
 function shareCandidates(localRoot: string, candidates: readonly MemoryEntry[], stats: AutoShareStats | undefined): MemoryEntry[] {
   const shared: MemoryEntry[] = [];
   let rejectedSkipped = 0;
@@ -266,30 +235,8 @@ function shareCandidates(localRoot: string, candidates: readonly MemoryEntry[], 
   return shared;
 }
 
-/**
- * Auto-share: local memories with high transfer scores, not already global, no NEVER_AUTO_SHARE_TAGS tag.
- * Returns the list of shared entries.
- *
- * `options.tenantId` is opt-in. When provided, the LOCAL-entries read is
- * scoped to that tenant. When undefined, the local read is host-wide (current
- * behaviour). The GLOBAL-entries read is always unioned — the global root IS
- * the cross-tenant aggregate by design. `api.sleep` passes no tenantId
- * because `sleep` is host-wide by intent.
- *
- * `options.stats` is an opt-in out-param. When provided,
- * `stats.secretSkipped` is incremented once per row that passed every OTHER
- * admission gate (transfer score, not-already-global) and was withheld SOLELY
- * by the secret veto — i.e. it counts shares actually prevented, not secret
- * rows merely present. Filled identically under `dryRun`.
- *
- * `stats.rejectedSkipped` (optional) is incremented once per candidate
- * refused by the GLOBAL store's rejection tombstone (RejectedValueError from
- * shareMemory -> writeEntry). Unlike secretSkipped, this can only be
- * detected by attempting the write — `dryRun` returns candidates before the
- * write loop runs, so `rejectedSkipped` stays at its initial value under
- * `dryRun` (candidates that WOULD be refused are not distinguished in the
- * dry-run preview).
- */
+/** Auto-share local memories with high transfer scores, not already global and without a NEVER_AUTO_SHARE_TAGS tag; `options.tenantId` scopes the LOCAL read.
+ *  `options.stats` is an opt-in out-param: `secretSkipped` counts shares the secret veto prevented, `rejectedSkipped` rejection refusals (0 under `dryRun`). */
 export function autoShare(
   localRoot: string,
   options: {

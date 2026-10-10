@@ -1,7 +1,5 @@
-/**
- * Slack Events API envelope shapes used by the ingestion connector.
- * Spec: https://api.slack.com/events-api
- */
+/** Slack Events API envelope shapes used by the ingestion connector.
+ *  Spec: https://api.slack.com/events-api */
 
 import { type JsonValue, isJsonString, isJsonObject, isJsonNumber } from '../../util/json.js';
 
@@ -20,11 +18,7 @@ export interface SlackMessageEvent {
   text?: string;
   ts: string;
   thread_ts?: string;
-  /**
-   * Slack `bot_message` subtype carries `bot_id` instead of `user`. The
-   * provenance gate requires a non-null `owner`, so transform.ts
-   * derives `owner: bot:<bot_id>` when `user` is absent.
-   */
+  /** The `bot_message` subtype carries `bot_id` instead of `user`; transform.ts derives `owner: bot:<bot_id>` from it. */
   bot_id?: string;
   /** Present on subtype='message_deleted'. */
   deleted_ts?: string;

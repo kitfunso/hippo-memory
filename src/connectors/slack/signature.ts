@@ -7,12 +7,7 @@ export interface VerifyOpts {
   timestamp: string;
   signature: string;
   signingSecret: string;
-  /**
-   * Previous signing secret during a rotation. Deploy with
-   * both `SLACK_SIGNING_SECRET` (new) and `SLACK_SIGNING_SECRET_PREVIOUS` (old)
-   * set, verify both work, drop previous after rollover. The verifier tries
-   * `signingSecret` first, then `previousSecret` if that fails.
-   */
+  /** Previous signing secret during rotation (SLACK_SIGNING_SECRET_PREVIOUS); the verifier tries `signingSecret` first, then this. */
   previousSecret?: string;
   /** Current unix seconds. Injectable for tests. */
   now?: number;

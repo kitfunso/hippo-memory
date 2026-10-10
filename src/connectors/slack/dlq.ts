@@ -36,25 +36,8 @@ export interface ReplayDlqOpts {
   skewSeconds?: number;
 }
 
-/**
- * Replay a DLQ row through the normal ingest path. Used by `hippo slack dlq
- * replay <id> [--force]`.
- *
- * Behavior:
- *   1. SELECT the row.
- *   2. If signature + slack_timestamp are present and `signingSecret` is set,
- *      re-verify with the CURRENT secret (not previous). Failure → bail unless
- *      --force. Legacy rows from before v19 may have NULL signature; those
- *      require --force to replay safely.
- *   3. Re-parse the raw_payload and dispatch to ingestMessage / handleMessageDeleted.
- *   4. On success: mark retried_at, increment retry_count.
- *   5. On failure: increment retry_count only, leave the row.
- *
- * The replay always uses the routing the deployment has NOW (current
- * slack_workspaces table + env), not whatever was in effect when the original
- * envelope was DLQed. That is intentional: the DLQ exists to be drained after
- * the operator fixed the routing.
- */
+/** Replay a DLQ row via the normal ingest path (`hippo slack dlq replay <id> [--force]`), re-verifying the signature with the CURRENT secret unless forced.
+ *  Rows with a NULL signature need --force; replays use today's routing, because the DLQ exists to be drained after the operator fixed routing. */
 export async function replayDlqEntry(
   ctx: Pick<Context, 'hippoRoot'>,
   id: number,

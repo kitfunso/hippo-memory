@@ -27,11 +27,8 @@ export interface SearchOptions {
   tenantId?: string;
 }
 
-/**
- * Search across both local and global stores, merging results.
- * Local results are boosted by 1.2x to prefer project-specific context.
- * Returns results sorted by adjusted score, within combined token budget.
- */
+/** Search both local and global stores and merge: local results are boosted 1.2x to prefer project context.
+ *  Returns results sorted by adjusted score within the combined token budget. */
 export function searchBoth(
   query: string,
   localRoot: string,
@@ -116,36 +113,18 @@ export interface HybridSearchOptions extends SearchOptions {
   summaryDeboost?: number;
   /** Propagated. Default true (1.05 boost if rebuilt within 7d). */
   summaryFreshness?: boolean;
-  /** v39 memory scope isolation: optional admission predicate applied to the
-   *  loaded candidate entries of BOTH stores BEFORE ranking, cross-store
-   *  content-dedupe, and budgeting. Without it, an excluded row can shadow
-   *  its admitted duplicate in the dedupe pass, or saturate the budget.
-   *  Default undefined = unchanged behavior (recall paths never set it). */
+  /** Optional admission predicate applied to the loaded candidates of BOTH stores before ranking, cross-store dedupe and budgeting,
+   *  so an excluded row cannot shadow its admitted duplicate or saturate the budget. Undefined (recall paths never set it) means no filter. */
   entryFilter?: (entry: MemoryEntry) => boolean;
-  /** Recall-mode scope filter, consumed by `searchBothHybrid` only.
-   *  ABSENT (undefined) is the only unfiltered mode: both stores load via
-   *  `loadSearchEntries` unchanged (background pipelines / eval callers).
-   *  PRESENT switches the internal loads to `loadRecallSearchEntries` (SQL
-   *  scope predicate) plus the recall-scope JS post-filter:
-   *    `{}`                                  = default-deny (`unknown:legacy`
-   *                                            + `<source>:private:*` excluded)
-   *    `{ requested: 'X' }`                  = exact match on scope X
-   *                                            (api.recall semantics)
-   *    `{ requested: 'X', additive: true }`  = default-admitted set PLUS
-   *                                            scope X (CLI --scope
-   *                                            semantics; see recall-scope.ts
-   *                                            passesCliRecallScopeFilter)
-   *  Object form on purpose — the sibling `scope` option above already gives
-   *  `null` a different meaning (boost-neutral), so a flat `string | null`
-   *  here would overload null with contradictory semantics. Do NOT pass an
-   *  empty object casually from non-recall paths. */
+  /** Recall scope filter for `searchBothHybrid`: absent is the only unfiltered mode; present uses `loadRecallSearchEntries` plus a JS post-filter.
+   *  `{}` = default-deny (legacy and `<source>:private:*` excluded); `{ requested: 'X' }` = exact; `{ requested: 'X', additive: true }` = default plus X.
+   *  An object, not `string | null`, because the sibling `scope` option already gives null a different meaning.
+   *  Do not pass `{}` casually from non-recall paths. */
   recallScope?: { requested?: string; additive?: boolean; ownScope?: string };
 }
 
-/**
- * Hybrid search across both local and global stores, using embeddings when available.
- * Async version of searchBoth that calls hybridSearch instead of search.
- */
+/** Hybrid search across both local and global stores, using embeddings when available.
+ *  Async version of searchBoth that calls hybridSearch instead of search. */
 export async function searchBothHybrid(
   query: string,
   localRoot: string,
@@ -154,17 +133,10 @@ export async function searchBothHybrid(
 ): Promise<SearchResult[]> {
   const { includeSuperseded, asOf, tenantId, entryFilter, recallScope } = options;
 
-  // When an admission filter is active, lift the per-store candidate cap
-  // (default 200): excluded rows matching the query could otherwise fill the
-  // window before any admitted row is even loaded. 5000 is bounded so a common
-  // term on a large store cannot stall an interactive call by ranking every match.
+  // With an admission filter, lift the per-store candidate cap (default 200) to a bounded 5000: excluded rows could otherwise fill the window first.
   const searchWindow = entryFilter ? 5000 : undefined;
-  // Recall mode: push the scope predicate into SQL exactly like
-  // api.recall (loadRecallSearchEntries), so quarantine/private rows never
-  // enter the candidate set, never shadow admitted duplicates in the dedupe
-  // pass, and never consume budget. The JS post-filter below is the
-  // regex-only `<source>:private:*` half plus defense-in-depth on exact
-  // match, mirroring api.ts's recall load.
+  // Recall mode: push the scope predicate into SQL like api.recall, so quarantine/private rows never enter the candidates, shadow duplicates or use budget.
+  // The JS post-filter below is the regex-only `<source>:private:*` half plus defense in depth on exact match.
   const loadEntries = (root: string): MemoryEntry[] => {
     if (!fs.existsSync(root)) return [];
     return recallScope

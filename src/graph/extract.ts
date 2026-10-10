@@ -1,24 +1,5 @@
-/**
- * Deterministic entity extraction.
- *
- * Populates the graph from the already-structured consolidated first-class object tables -
- * NO NLP, no precision gate for entities + supersedes. The graph is a pure derived
- * function of the current object state, so `extractGraph` is an idempotent REBUILD: derive
- * entities + `supersedes` relations from decisions /
- * policies / customer_notes / project_briefs (the four object types whose kind maps to the
- * `entity_type` enum), then write only their difference from the stored rows. All writes go
- * through the src/store/graph-writes.ts consolidated-source guard; this module issues no raw SQL.
- *
- * Pass 3 adds the
- * first CROSS-OBJECT relations: a deterministic NAME-MATCH heuristic that emits a
- * `references` edge when one consolidated object's text contains another entity's name.
- * It is conservative (word-boundary, length-bounded, ambiguity-guarded, per-source
- * capped); its precision is measured + reported, not assumed.
- *
- * Deferred (follow-ups): NLP prose-extraction (semantic depends-on / blocked-by / owns);
- * skill/incident/process entities (not in the entity_type enum - needs a migration); the
- * `hippo sleep` enqueue-hook.
- */
+/** Deterministic entity extraction: the graph is a pure function of the consolidated object tables (decisions, policies, customer_notes, project_briefs).
+ *  Writes go through the src/store/graph-writes.ts consolidated-source guard. Pass 3 adds `references` edges by a conservative name-match heuristic. */
 
 import { applyGraphOps } from './write.js';
 import { runGraphRebuildTransaction } from '../store/graph-writes.js';
@@ -33,15 +14,11 @@ import { loadProjectBriefs } from '../objects/project-briefs.js';
 import { assertTenantId } from '../store/tenant.js';
 import { escapeRegex } from '../util/escape.js';
 
-/** Per-type load cap (the loaders default to 100). A type whose active or superseded
- *  set exceeds this is truncated; `ExtractResult.truncated` records it so the
- *  incompleteness is observable rather than silent. */
+/** Per-type load cap (the loaders default to 100); a type over it is truncated and `ExtractResult.truncated` records that. */
 export const MAX_EXTRACT_PER_TYPE = 10000;
 
-// --- Pass 3 (cross-object references) tunables ------------------------------------
-/** A target entity name must be in [MIN, MAX] chars to be matched: MIN skips short /
- *  generic words; MAX skips prose (a decision's prose name is never a target, only a
- *  source). */
+/** A target entity name must be in [MIN, MAX] chars to be matched: MIN skips short, generic words; MAX skips prose
+ *  (a decision's prose name is never a target, only a source). */
 export const MIN_REF_NAME_LEN = 4;
 export const MAX_REF_NAME_LEN = 80;
 /** Per-source cap so one object cannot explode the graph with references edges. */
@@ -128,11 +105,8 @@ export interface LoadedType {
   hitCap: boolean;
 }
 
-/**
- * Close over one loader's row type so the table below holds uniform functions without erasing it.
- * Loads ACTIVE + SUPERSEDED rows (excluding `closed` = retired) in one call per status, so
- * MAX_EXTRACT_PER_TYPE is a per-status budget; `hitCap` is set when either load is full.
- */
+/** Close over one loader's row type so the table below holds uniform functions. Loads ACTIVE and SUPERSEDED rows (not `closed`),
+ *  one call per status, so MAX_EXTRACT_PER_TYPE is a per-status budget; `hitCap` is set when either load is full. */
 function source<T extends SourceRow>(
   entityType: EntityType,
   load: (root: string, tenant: string, opts: SourceLoadOpts) => T[],

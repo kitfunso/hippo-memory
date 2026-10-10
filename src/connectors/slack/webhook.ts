@@ -13,25 +13,8 @@ import type { HippoStore } from '../../store/index.js';
 import { HttpError, JSON_HEADERS, isHeaderString, closeIfBodyUnread, readWebhookBody, sendJson, type WebhookRequest } from '../../util/http-util.js';
 import { type JsonValue, isJsonObject } from '../../util/json.js';
 
-/**
- * Slack Events API webhook. Auth is signature-based (HMAC over the raw
- * body with SLACK_SIGNING_SECRET); Bearer is NOT required, which is why
- * this route is in PUBLIC_ROUTES. The route is responsible for:
- *   1. Echoing the one-time url_verification challenge.
- *   2. Verifying the HMAC on every other inbound payload.
- *   3. Resolving body.team_id → tenantId via slack_workspaces, falling
- *      back to HIPPO_TENANT then 'default'.
- *   4. Dispatching event_callback envelopes to ingestMessage /
- *      handleMessageDeleted.
- *   5. Parking malformed or unhandled payloads in slack_dlq and STILL
- *      ACKing 200 - Slack retries forever otherwise.
- *
- * When SLACK_SIGNING_SECRET is unset we return 404, not
- * 503, so an external probe cannot distinguish "route gated off by config"
- * from "route does not exist on this build".
- *
- * Bearer auth is skipped on purpose: server.ts checks isPublicRoute before calling this.
- */
+/** Slack Events API webhook: HMAC over the raw body with SLACK_SIGNING_SECRET, no Bearer (hence PUBLIC_ROUTES); malformed payloads go to slack_dlq, ACK 200.
+ *  404 (not 503) when the secret is unset, so a probe cannot tell a gated-off route from a missing one. */
 export async function handleSlackEventsWebhook(request: WebhookRequest, store?: HippoStore): Promise<void> {
   const { req, res, opts } = request;
   // Secret and headers before the body, so a caller with neither cannot make the server buffer one.
@@ -125,10 +108,8 @@ async function routeSignedSlackPayload(d: SignedSlackRequest): Promise<void> {
     return;
   }
   if (answerUrlVerification(res, body)) return;
-  // Resolve tenant, failing closed: when slack_workspaces is non-empty
-  // and the team_id is unknown, resolveTenantForTeam returns null and we
-  // park the envelope in slack_dlq with bucket='unroutable'. Mandatory ACK
-  // 200 so Slack stops retrying; do NOT call ingest.
+  // Fail closed: resolveTenantForSlackTeam returns null for an unknown team_id on a non-empty slack_workspaces; park the envelope in slack_dlq (bucket='unroutable')
+  // and still ACKs 200 so Slack stops retrying; never call ingest.
   let resolvedTenant: string | null = null;
   if (body !== undefined && isSlackEventEnvelope(body)) {
     resolvedTenant = await resolveTenantForSlackTeam(d.hippoRoot, body.team_id, d.store);
@@ -196,9 +177,7 @@ async function dispatchSlackEvent(
     }
     const r = await ingestMessage(ctx, {
       teamId: body.team_id,
-      // channel privacy isn't on the inner event; use channel_type as a
-      // proxy. 'group'|'im'|'mpim' → private. 'channel' → public. Unknown
-      // → private (fail closed).
+      // Channel privacy is not on the inner event, so channel_type is the proxy: 'group'|'im'|'mpim' private, 'channel' public, unknown private.
       channel: {
         id: inner.channel,
         is_private: inner.channel_type !== 'channel',

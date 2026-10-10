@@ -21,9 +21,8 @@ export interface IngestResult {
   memoryId: string | null;
 }
 
-/** Ingests a Slack message as a kind='raw' memory, once per event id: Slack redelivers within a minute.
- *  The pre-check is only the fast path; the store logs the event in the memory's own transaction, which is what holds when two workers race.
- *  An empty body is logged with no memory, so its replay skips the transform. */
+/** Ingests a Slack message as a kind='raw' memory once per event id (Slack redelivers within a minute); the pre-check is only the fast path,
+ *  the store logs the event in the memory's own transaction, which holds when two workers race. An empty body is logged with no memory. */
 export async function ingestMessage(ctx: Context, input: IngestInput): Promise<IngestResult> {
   const events = requireGroup(storeFor(ctx), 'connectorEvents');
   const event: ConnectorEvent = { connector: 'slack', eventId: input.eventId };

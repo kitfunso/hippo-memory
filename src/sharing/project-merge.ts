@@ -345,10 +345,8 @@ function repairIsEmpty(r: Omit<RepairResult, 'backup'>): boolean {
   return r.copies.length + r.folds.length + r.toProject.length + r.setAside.length === 0;
 }
 
-/**
- * Sleep runs repair once per store, so an upgrade needs no command. Global-store folds stay
- * with `hippo projects repair`: their evidence is compaction folders, blind to a same-named repo that never compacted.
- */
+/** Sleep runs repair once per store, so an upgrade needs no command. Global-store folds stay
+ *  with `hippo projects repair`: their evidence is compaction folders, blind to a same-named repo that never compacted. */
 export function repairOnceOnSleep(db: DatabaseSyncLike, hippoRoot: string, tenantId: string): RepairResult | null {
   if (getMeta(db, AUTO_REPAIR_META_KEY) === '1') return null;
   const plan = planProjectRepair(db, hippoRoot, tenantId, false);

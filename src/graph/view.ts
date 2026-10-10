@@ -1,12 +1,5 @@
-/**
- * Graph observability and visualization, READ-ONLY over the entity/relation
- * graph.
- *
- * This module only READS the graph (through the store's graph reads) and renders
- * view-models; it issues no INSERT/UPDATE/DELETE, so `scripts/check-graph-writes.mjs`
- * stays green. Used by the CLI (`hippo graph show` / `hippo graph view`) and the
- * HTTP `GET /v1/graph` route, which all build the same `GraphModel`.
- */
+/** Graph observability and visualization, READ-ONLY over the entity/relation graph (no writes, so `scripts/check-graph-writes.mjs` stays green).
+ *  Shared by `hippo graph show|view` and the HTTP `GET /v1/graph` route, which all build the same `GraphModel`. */
 
 import { withGraphReadSnapshot } from '../store/graph-reads.js';
 import { graphViewRows } from '../store/graph-view-rows.js';
@@ -37,12 +30,8 @@ export interface GraphModel {
 /** Default bound for the CLI viewer / show so an unbounded set is never laid out. */
 export const DEFAULT_VIEW_LIMIT = 500;
 
-/**
- * Build the view-model from the graph (reads only). With `opts.entity`, returns a
- * focus subgraph: every entity whose name === entity, plus their 1-hop neighbours,
- * plus the edges among that union. Dangling edges (an endpoint outside the node
- * set) are always dropped.
- */
+/** Build the view-model (reads only); with `opts.entity`, a focus subgraph of the entities named so plus their 1-hop neighbours.
+ *  Dangling edges (an endpoint outside the node set) are always dropped. */
 export function buildGraphModel(
   hippoRoot: string,
   tenantId: string,
@@ -152,12 +141,8 @@ function applyDisplacement(
   });
 }
 
-/**
- * Deterministic Fruchterman-Reingold-style force layout. Seeded circular init +
- * fixed iterations, NO `Math.random`, so the same model always yields the same
- * positions (testable, stable output). Non-finite coordinates from a degenerate
- * step are clamped to the viewport centre; all positions are clamped in-bounds.
- */
+/** Deterministic Fruchterman-Reingold-style force layout: seeded circular init, fixed iterations, no `Math.random`, so one model gives the same positions.
+ *  Non-finite coordinates are clamped to the viewport centre and all positions to the bounds. */
 export function layoutGraph(
   model: GraphModel,
   opts: { width?: number; height?: number; iterations?: number } = {},
@@ -207,10 +192,8 @@ const NODE_COLORS: NodeColorMap = {
   system: '#64748b',
 };
 
-// Client script: pan (drag bg), zoom (wheel), click-to-highlight a node's edges +
-// neighbours. Reads the inlined model via JSON.parse (never innerHTML), so user
-// strings never reach an HTML sink here. No template literals / `${}` so it nests
-// safely inside this module's own template strings.
+// Client script: pan, zoom, click-to-highlight. It reads the inlined model via JSON.parse (never innerHTML)
+// and uses no template literals or `${}`, so it nests in this module's template strings.
 const CLIENT_JS = [
   "(function(){",
   "  var svg=document.getElementById('g');",
@@ -297,14 +280,8 @@ function renderLegend(model: GraphModel): string {
     .join('  ');
 }
 
-/**
- * Render the model as a SELF-CONTAINED, dependency-free, offline interactive HTML
- * node-link diagram. Positions are computed server-side (deterministic). User
- * strings are escaped per sink: SVG `<text>`/`<title>` via `escapeHtml`; the model
- * is inlined in a `<script type="application/json">` block with `<`/`>`/`&`
- * unicode-escaped so a `</script>` inside an entity name cannot break out (the
- * client `JSON.parse`s it back and never `innerHTML`s a user string).
- */
+/** Render the model as a self-contained, offline interactive HTML node-link diagram with server-side deterministic positions.
+ *  The model is inlined as `<script type="application/json">` with `<`, `>`, `&` unicode-escaped so a `</script>` in an entity name cannot break out. */
 export function renderGraphHtml(model: GraphModel): string {
   const pos = layoutGraph(model);
   const edgeSvg = renderEdgeSvg(model, pos);
@@ -330,12 +307,7 @@ export function renderGraphHtml(model: GraphModel): string {
   ].join('\n');
 }
 
-/**
- * Render the model as a JSON Canvas (jsoncanvas.org) document — `nodes[]` of
- * type `text` positioned by the same deterministic layout, `edges[]` linking
- * them by id. Opens natively in Obsidian. Pure JSON; entity names live in the
- * `text` field (Obsidian renders/sanitizes them).
- */
+/** Render the model as a JSON Canvas (jsoncanvas.org) document: `text` nodes at the same deterministic layout positions, `edges[]` linking them by id. */
 export function renderGraphCanvas(model: GraphModel): string {
   const pos = layoutGraph(model, { width: 2400, height: 1600 });
   const nodes = model.nodes.map((node) => {

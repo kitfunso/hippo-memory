@@ -1,21 +1,9 @@
-/**
- * GitHub webhook event shapes used by the ingestion connector.
- * Spec: https://docs.github.com/en/webhooks/webhook-events-and-payloads
- *
- * V1 cares about four event types: issues, issue_comment, pull_request,
- * pull_request_review_comment. Each guard is gated on the X-GitHub-Event
- * header value so a malicious or misrouted payload cannot satisfy a guard
- * for the wrong event type.
- */
+/** GitHub webhook event shapes for the ingestion connector (https://docs.github.com/en/webhooks/webhook-events-and-payloads).
+ *  Each guard is gated on the X-GitHub-Event header so a misrouted payload cannot satisfy a guard for the wrong event type. */
 
 import { type JsonValue, isJsonString, isJsonNumber } from '../../util/json.js';
 
-/**
- * `private` MUST be optional, not required. The Slack-style
- * fail-safe in scope.ts requires an envelope with `private: undefined` to
- * map to private; a strict boolean type would reject the payload before
- * scope can fail closed.
- */
+/** `private` MUST stay optional: scope.ts maps `private: undefined` to private, and a strict boolean would reject the payload before scope can fail closed. */
 export interface GitHubRepository {
   full_name: string;
   private?: boolean;

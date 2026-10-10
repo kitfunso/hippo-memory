@@ -1,34 +1,6 @@
-/**
- * Process first-class object.
- *
- * A `process` is a "living process map": a named, ordered list of steps that
- * evolves over time. Unlike `incident` (open->resolved->closed, no supersede),
- * `process` REUSES the `decision` supersede path as its delta mechanism: a
- * process evolves by being superseded by a NEW VERSION that records what
- * changed (`change_summary`) and the full new state (`steps`), carrying a
- * server-derived `version` counter. The version chain (walk `superseded_by`)
- * is the changelog. Computed structural step-diffing is a deferred v2 read-side
- * feature; the row stores enough to reconstruct any delta
- * (predecessor.steps + successor.steps + change_summary).
- *
- * The `processes` table is the source of truth: a process stays `active`
- * regardless of memory decay. A memory row mirrors the process for recall but
- * is NOT canonical — memory_id is NULLABLE with ON DELETE SET NULL so
- * forget/consolidate/archive gracefully orphans the process row.
- *
- * Lifecycle: active -> superseded (a newer version replaces it; superseded_by
- * points to the successor) or active -> closed (retired with no successor;
- * only an active head closes).
- *
- * Tenant scoping: every helper requires tenantId. BEFORE INSERT/UPDATE triggers
- * enforce processes.tenant_id == the referenced memory's tenant_id, and a
- * superseded_by same-tenant trigger makes cross-tenant supersession
- * unrepresentable. Mirrors the v30 decisions pattern (src/objects/decisions.ts).
- *
- * Dual-write atomicity: `saveProcess` hands the memory and the process to the
- * `objects` store group, which commits them (and, when superseding, the
- * predecessor's UPDATE) together, so a failure in any step rolls all of them back.
- */
+/** Process object: a named, ordered list of `steps` that evolves by supersession, each version recording `change_summary` and a server-derived `version`.
+ *  The `processes` table is the source of truth; the memory mirror (memory_id NULLABLE, ON DELETE SET NULL) is for recall.
+ *  Structural step-diffing is a deferred read-side feature; the version chain is the changelog. */
 
 import { BadRequestError } from '../core/api-errors.js';
 import type { KeysetPosition } from '../util/keyset.js';
@@ -38,10 +10,6 @@ import { closeObjectAt, listObjectsAt, objectByIdAt, saveObjectAt } from './life
 import type { Process, ProcessStatus } from '../store/object-types.js';
 
 export type { Process, ProcessStatus } from '../store/object-types.js';
-
-// ---------------------------------------------------------------------------
-// Domain types
-// ---------------------------------------------------------------------------
 
 export const VALID_PROCESS_STATES: ReadonlySet<ProcessStatus> = new Set<ProcessStatus>([
   'active',
@@ -72,16 +40,7 @@ export interface ListProcessesOpts {
   after?: KeysetPosition;
 }
 
-// ---------------------------------------------------------------------------
-// steps validation (untrusted input)
-// ---------------------------------------------------------------------------
-
-/**
- * Validate + normalise the steps body. Returns the trimmed step strings
- * (trim-then-store, so ' x ' is stored as 'x'). Throws on a non-array, a
- * non-string / empty element, or a cap breach. Mirrors the incident DoS-cap
- * discipline.
- */
+/** Validate and trim the steps body; throws on a non-array, a non-string or empty element, or a cap breach. */
 export function validateProcessSteps(steps: JsonValue): string[] {
   if (!Array.isArray(steps)) {
     throw new BadRequestError('saveProcess: steps must be an array of strings');
@@ -145,20 +104,8 @@ export const PROCESS: SavableDescriptor<'process', SaveProcessOpts> = {
   },
 };
 
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
-
-/**
- * Create a process (or a new version that supersedes an existing one). Writes
- * the memory mirror + the processes row in the `objects` store group's one
- * transaction. When supersedesProcessId is given, the referenced ACTIVE row is
- * preflighted (status + version) BEFORE the INSERT, then UPDATEd -> superseded in
- * the SAME transaction (CAS: WHERE status='active' AND id != <new id>; throws on
- * changes===0 so a duplicate supersede aborts the whole write). The new row's
- * version = predecessor.version + 1 (server-derived); change_summary carries the
- * delta note. A fresh create has version 1 and change_summary NULL.
- */
+/** Create a process, or a new version superseding an existing one, in the `objects` store group's one transaction.
+ *  The supersede CAS (WHERE status='active' AND id != <new id>) throws on changes===0 so a duplicate supersede aborts the write. */
 export function saveProcess(
   hippoRoot: string,
   tenantId: string,
@@ -168,11 +115,7 @@ export function saveProcess(
   return saveObjectAt(PROCESS, { hippoRoot, tenantId, actor }, opts);
 }
 
-/**
- * Close (retire) an active process with no successor. Updates the processes row
- * only; the memory mirror is not mutated. A superseded row is already
- * terminal in the chain and cannot be closed.
- */
+/** Close (retire) an active process with no successor; a superseded row cannot be closed. */
 export function closeProcess(
   hippoRoot: string,
   tenantId: string,

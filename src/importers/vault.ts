@@ -18,49 +18,23 @@ import { realpathOrResolve } from '../util/real-path.js';
 import { type JsonValue, isJsonString } from '../util/json.js';
 import { escapeLike } from '../util/escape.js';
 
-// ---------------------------------------------------------------------------
-// K1 vault importer (markdown-vault FOLDER → kind='raw' memories)
-//
-// MIRRORS THE CONNECTOR PATTERN (src/connectors/slack|github), NOT the
-// single-file importers above. Each note becomes a single kind='raw' row with
-// provenance in TAGS (`source:vault` + `vault:<name>`), an artifactRef cursor
-// key, and a content-hash tag. Changes APPEND a new raw row after archiveRaw of
-// the old one; deletions archiveRaw the orphaned rows. We NEVER `supersede` a
-// raw row (supersede yields kind='distilled', losing raw-append-only protection
-// and escaping the kind='raw' deletion rescan) — all raw deletions route through
-// `archiveRaw` (the only trigger-legit raw delete).
-// ---------------------------------------------------------------------------
+// K1 vault importer (markdown-vault FOLDER -> kind='raw' memories), following the connector pattern (src/connectors/slack|github).
+// A changed note appends a new raw row after archiveRaw of the old one; NEVER `supersede` a raw row (it yields 'distilled' and escapes the deletion rescan).
 
 type VaultRow = VaultRawRow;
 
-/**
- * Import a markdown vault FOLDER as `kind='raw'` memories.
- *
- * NOT re-entrant: idempotency rests on the in-memory `existing` Map loaded once
- * at the top. Two concurrent importVault runs over the same vault could both see
- * a note as absent and double-insert (the connector pattern relies on a single
- * sequential writer; same caveat applies here).
- */
+/** Import a markdown vault FOLDER as `kind='raw'` memories.
+ *  NOT re-entrant: idempotency rests on the in-memory `existing` Map loaded once, so two concurrent runs over one vault can double-insert. */
 export function importVault(folderPath: string, options: ImportOptions): ImportResult {
   const hippoRoot = options.hippoRoot;
   const identity = vaultIdentityOrThrow(options);
   if (options.global) {
-    // The raw-archive path is tenant-local; global mode would put raw vault rows
-    // in the wrong store. Reject for SDK callers too (the CLI also rejects
-    // --global) rather than silently writing local (codex P2).
+    // The raw-archive path is tenant-local, so global mode would put raw vault rows in the wrong store; reject for SDK callers too, not only the CLI.
     throw new Error('importVault does not support global mode (raw rows are tenant-local).');
   }
 
-  // Self-store no-op guard (codex R8 P1). MUST run BEFORE the existing-rows load
-  // and the deletion-sync pass below. If the vault folder IS the store (or lives
-  // inside it), there are no real vault notes - only the store's own markdown
-  // mirror files. Letting collectMarkdownFiles return [] for this case is NOT
-  // safe: an empty scan is indistinguishable from "every note was deleted", so
-  // deletion-sync would archive every live vault:<name>:* row, and raw-archive
-  // content redaction makes that loss IRREVERSIBLE. The only safe reading of
-  // "import the store into itself" is "do nothing". Canonicalize both paths
-  // (realpath: dereference junctions/symlinks + normalize Windows case) so an
-  // aliased path to the store is still caught (codex R9 P2).
+  // Self-store no-op guard: MUST run before the existing-rows load and the deletion-sync. If the vault IS (or sits inside) the store, an empty scan looks like
+  // "every note deleted" and deletion-sync would irreversibly archive every live row, so do nothing. Canonicalize both paths (realpath) to catch aliased paths.
   const resolvedStore = realpathOrResolve(hippoRoot);
   const resolvedFolder = realpathOrResolve(folderPath);
   if (resolvedFolder === resolvedStore || resolvedFolder.startsWith(resolvedStore + path.sep)) {
@@ -99,10 +73,8 @@ function syncVaultFolder(folderPath: string, options: ImportOptions, { vaultName
   if (dryRun) withRequestStoresSync(importNotes);
   else importNotes();
 
-  // Deletion-sync: any artifactRef present in the Map but NOT seen this run is a
-  // note that vanished from the source folder → archive its raw row. Per-file
-  // archiveRaw (own handle); no outer SAVEPOINT (no cross-file idempotency row
-  // to commit atomically, unlike github's multi-row case).
+  // Deletion-sync: an artifactRef in the Map but not seen this run vanished from the source, so archive its raw row.
+  // Per-file archiveRaw, no outer SAVEPOINT: there is no cross-file idempotency row to commit atomically.
   for (const [artifactRef, rows] of existing) {
     if (seen.has(artifactRef)) continue;
     for (const row of rows) {
@@ -144,12 +116,8 @@ interface VaultIdentity {
 }
 
 function vaultIdentityOrThrow(options: ImportOptions): VaultIdentity {
-  // Vault NAME is the identity key for the destructive deletion-sync below, so it
-  // must be explicit. Defaulting to the folder basename meant two unrelated vaults
-  // sharing a basename (e.g. work/notes and personal/notes) collided on the same
-  // `vault:<name>:*` prefix - importing the second loaded the first's rows and the
-  // deletion-sync archived them (codex R10 P2). Require a deliberate name instead
-  // of inferring a path-unstable one.
+  // The vault NAME keys the destructive deletion-sync, so it must be explicit: defaulting to the folder basename made two vaults
+  // sharing a basename collide on the same `vault:<name>:*` prefix and the sync archived the first one's rows.
   const vaultName = options.name?.trim();
   if (!vaultName) {
     throw new Error(
@@ -157,21 +125,12 @@ function vaultIdentityOrThrow(options: ImportOptions): VaultIdentity {
     );
   }
   if (vaultName.includes(':')) {
-    // ':' is the artifactRef delimiter (vault:<name>:<relpath>); a name
-    // containing it lets a different vault's prefix scan over-match and archive
-    // its rows (codex P2). Reject rather than silently corrupt the keys.
+    // ':' delimits the artifactRef (vault:<name>:<relpath>); a name containing it lets another vault's prefix scan over-match and archive its rows.
     throw new Error(`vault name must not contain ':' (artifactRef delimiter): ${vaultName}`);
   }
   const scope = options.scope ?? null;
-  // Privacy footgun guard (codex R13 P2): hippo's recall filter only default-denies
-  // scopes shaped `<source>:private:*` (see isPrivateScope / PRIVATE_SCOPE_RE in
-  // scope.ts). A bare `private` (or `private:<x>`) first segment is NOT recognized
-  // as private, so notes a user believes are private would still be returned to
-  // no-scope recall callers. Reject the alias and point at the source-prefixed form
-  // rather than silently storing public-visible "private" notes. Use recall's own
-  // isPrivateScope as the single source of truth: reject a scope that names a
-  // `private` segment yet is NOT a valid `<source>:private:*` (catches `private`,
-  // `private:x`, and `vault:private` with a missing trailing segment).
+  // Privacy guard: recall only default-denies scopes shaped `<source>:private:*` (isPrivateScope in src/store/recall-scope.ts), so a bare `private`
+  // alias would be returned to no-scope callers. Reject any scope naming a `private` segment that is not a valid `<source>:private:*`.
   assertClientScope(scope);
   if (scope !== null && scope.split(':').includes('private') && !isPrivateScope(scope)) {
     throw new Error(
@@ -207,29 +166,19 @@ function importVaultNote(run: VaultImportRun, relpath: string): void {
   const artifactRef = `vault:${run.vaultName}:${relpath}`;
   run.seen.add(artifactRef);
 
-  // Content-hash is computed from the RAW file bytes (deterministic; no
-  // Date/random in the content path) so idempotency survives frontmatter
-  // edits identically to body edits.
+  // The content hash covers the RAW file bytes (deterministic, no Date/random) so frontmatter edits are idempotent like body edits.
   const rawFileContent = readVaultNote(run, relpath);
   if (rawFileContent === null) return;
   const hash = createHash('sha256').update(rawFileContent).digest('hex');
   const hashTag = `content-hash:${hash}`;
 
-  // Load every live raw row for this ref (>1 only after a concurrent double-
-  // insert). The idempotency decision happens below, AFTER the full tag set is
-  // built, so it can compare the complete envelope rather than a subset.
+  // Load every live raw row for this ref (>1 only after a concurrent double-insert); decide idempotency below, once the full tag set is built.
   const priors = run.existing.get(artifactRef) ?? [];
 
   const { fm, body } = splitMarkdownFrontmatter(rawFileContent);
 
-  // Empty / frontmatter-only note: nothing storable (createMemory enforces a
-  // min content length). The note's CONTENT was deleted at source, so this is a
-  // content-deletion: archive any prior row(s) - the old body must not stay live
-  // and searchable after the source no longer holds it (codex R12 P2) - then
-  // skip the write. Archiving here is safe precisely because we then skip
-  // remember() entirely: there is no archive-then-throw-on-empty-body hazard
-  // (the original reason this branch did not archive). The note stays in `seen`
-  // so deletion-sync does not double-process it.
+  // Empty or frontmatter-only note: nothing storable, and the content was deleted at source, so archive prior rows (the old body must not stay searchable)
+  // and skip the write. Safe because remember() is skipped, so there is no archive-then-throw hazard; the note stays in `seen` so deletion-sync skips it.
   if (body.trim().length < 3) {
     archivePriors(run, priors, `emptied:${artifactRef}`);
     tally.skipped++;
@@ -246,16 +195,11 @@ function importVaultNote(run: VaultImportRun, relpath: string): void {
 
 function writeChangedNote(run: VaultImportRun, artifactRef: string, priors: VaultRow[], body: string, tags: string[]): void {
   const { ctx, tally } = run;
-  // Changed file → archive EVERY old raw row for this ref (normally one; >1
-  // only after a concurrent double-insert), then append the new one. NEVER
-  // supersede (would yield kind='distilled'). archiveRaw commits + closes its
-  // handle before remember() runs, so there is no double-live row; a crash
-  // between them self-heals (file re-imported as fresh raw next run).
+  // Changed file: archive EVERY old raw row for this ref (>1 only after a concurrent double-insert), then append the new one; NEVER supersede.
+  // archiveRaw commits before remember() runs, so no double-live row; a crash between them self-heals on the next import.
   archivePriors(run, priors, `changed:${artifactRef}`);
 
-  // remember() owns the actual write. We build an `echo` of the SAME content +
-  // tags via createMemory purely for the ImportResult, then reconcile its id to
-  // remember()'s real row id so entries[] reflects the row that landed.
+  // remember() owns the write; the `echo` from createMemory only fills the ImportResult, with its id reconciled to the row that landed.
   const content = vetSecrets(body, tags, true).content;
   const echo = createMemory(content, {
     kind: 'raw',
@@ -294,10 +238,7 @@ function archivePriors(run: VaultImportRun, priors: readonly { id: string }[], r
 }
 
 function vaultNoteTags(run: VaultImportRun, hashTag: string, fm: Record<string, string>, body: string): string[] {
-  // Build the FULL tag envelope this import would write, BEFORE the idempotency
-  // decision. De-duplicate (createMemory stores tags verbatim, so a collision
-  // between, e.g., a frontmatter tag and an extraTag would otherwise produce a
-  // duplicate). Order-preserving.
+  // Build the FULL tag envelope before the idempotency decision, de-duplicated and order-preserving (createMemory stores tags verbatim).
   const frontmatterTags = [
     ...frontmatterList(fm['tags']),
     ...frontmatterList(fm['aliases']).map((a) => `alias:${a}`),
@@ -316,14 +257,8 @@ function vaultNoteTags(run: VaultImportRun, hashTag: string, fm: Record<string, 
 }
 
 function vaultEnvelopeUnchanged(priors: VaultRow[], tags: string[], scope: string | null): boolean {
-  // Unchanged iff EVERY live raw row carries the EXACT same tag set AND scope.
-  // Comparing the COMPLETE set (not the content-hash + a subset of extra tags)
-  // means every envelope change registers: content (via the content-hash tag),
-  // frontmatter, wikilinks, an ADDED extra tag, or a REMOVED one - the earlier
-  // piecemeal checks missed scope (R10 P2) then tag removal (R11 P2). Set
-  // equality is order-independent and both sides are deduped. (`length > 0`
-  // guard: a never-seen file must import, not skip; archiving ALL priors on a
-  // mismatch also clears any concurrent-double-insert duplicates.)
+  // Unchanged iff EVERY live raw row carries the EXACT same tag set AND scope; comparing the complete envelope (not hash plus a subset) catches
+  // scope, added and removed tags. `length > 0` guards a never-seen file; archiving all priors on a mismatch also clears concurrent double-inserts.
   const wantTags = new Set(tags);
   return (
     priors.length > 0 &&
@@ -358,9 +293,7 @@ function storeVaultNote(run: VaultImportRun, echo: MemoryEntry, content: string,
   }
 }
 
-/** Local tolerant JSON-array parse for the loader's `tags_json` column. The
- *  store's own `parseJsonArray` is not exported; this matches its contract
- *  (returns [] on null/garbage). */
+/** Tolerant JSON-array parse for the loader's `tags_json` column (the store's `parseJsonArray` is not exported); returns [] on null or garbage. */
 function parseJsonArrayLoose(value: string | null | undefined): string[] {
   if (!value) return [];
   try {

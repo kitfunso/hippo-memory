@@ -2,9 +2,8 @@ import { type Context } from '../../api/index.js';
 import { requireGroup, storeFor } from '../../store/index.js';
 
 export interface DeletionInput {
-  /** artifact_ref of the comment, e.g.,
-   *  'github://acme/repo/issue/42/comment/123' or
-   *  'github://acme/repo/pull/7/review_comment/456'. */
+  /** artifact_ref of the comment, e.g. 'github://acme/repo/issue/42/comment/123'
+   *  or 'github://acme/repo/pull/7/review_comment/456'. */
   artifactRef: string;
   /** Source idempotency key for this delete event (sha256 of artifact_ref + ':' + updated_at). */
   idempotencyKey: string;
@@ -21,21 +20,8 @@ export interface DeletionResult {
   archivedCount: number;
 }
 
-/**
- * Handle GitHub `issue_comment.deleted` and `pull_request_review_comment.deleted`.
- *
- * Filter by tenant_id + kind='raw'. Multi-row archive:
- * GitHub edits keep the same artifact_ref, so multiple active raw rows can
- * match a single deletion event. Archive ALL of them.
- *
- * The store runs ALL archives + the idempotency mark as one write: a per-row
- * failure rolls back the whole batch, idempotency included, so a retry
- * re-attempts cleanly instead of leaving searchable survivors.
- *
- * Tenant scope and kind='raw' filtering are load-bearing: without them a
- * deletion event from tenant A could archive tenant B's row sharing the same
- * artifact_ref, or accidentally target a distilled row.
- */
+/** Handle `issue_comment.deleted` and `pull_request_review_comment.deleted`: archive ALL active raw rows for the artifact_ref in one write.
+ *  Tenant and kind='raw' filtering are load-bearing: without them a deletion could archive another tenant's row or a distilled row. */
 export async function handleCommentDeleted(ctx: Context, input: DeletionInput): Promise<DeletionResult> {
   const { artifactRef, idempotencyKey, deliveryId, eventName } = input;
   const done = await requireGroup(storeFor(ctx), 'connectorEvents').archiveDeletedArtifact({

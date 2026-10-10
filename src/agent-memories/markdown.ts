@@ -1,6 +1,4 @@
-/**
- * Splits one markdown memory file into items (a top-level bullet or a paragraph), each tagged with its heading. Pure.
- */
+/** Splits one markdown memory file into items (a top-level bullet or a paragraph), each tagged with its heading. Pure. */
 
 export interface MarkdownItem {
   readonly heading: string;      // nearest heading text above the item, '' when none

@@ -1,26 +1,6 @@
-/**
- * Skills as a first-class, versioned object.
- *
- * A `skill` is a reusable, agent-followable capability: an `instructions` body
- * plus an optional `trigger` ("when to apply"), evolving via the supersede delta
- * lifecycle. "Executable" is scoped to an agent-followable INSTRUCTION that, once
- * exported into the agent's in-force rules (AGENTS.md / CLAUDE.md) via
- * `exportSkills`, is executed by the agent reading it. Literal code/command
- * execution is deferred (security; a future sandbox). The distinguishing
- * capability is therefore the EXPORT renderer, not a runtime.
- *
- * Reuses the process/decision supersede machinery verbatim (superseded_by self-FK
- * + CAS + INSERT-preflight + server-derived version + change_summary + supersede
- * tenant-match trigger). It DROPS process's `steps` (a skill's content is a single
- * `instructions` body) and ADDS `trigger` (stored in the `trigger_text` column -
- * `trigger` is a SQLite reserved keyword).
- *
- * The `skills` table is the source of truth (survives memory decay); the memory
- * mirror is for recall. memory_id is NULLABLE with ON DELETE SET NULL.
- *
- * Lifecycle: active -> superseded (a newer version replaces it) or active ->
- * closed (retired). Export renders ACTIVE skills only.
- */
+/** Skill object: an agent-followable `instructions` body plus an optional `trigger`, evolving via supersession.
+ *  `exportSkills` renders ACTIVE skills into AGENTS.md / CLAUDE.md rules; running code from a skill is deferred (security).
+ *  `trigger` is stored in `trigger_text` because it is a SQLite reserved keyword. */
 
 import { BadRequestError } from '../core/api-errors.js';
 import { assertTenantId } from '../store/tenant.js';
@@ -33,10 +13,6 @@ import type { Objects } from '../store/port.js';
 import { sqliteObjects } from '../store/sqlite/objects-group.js';
 
 export type { Skill, SkillStatus } from '../store/object-types.js';
-
-// ---------------------------------------------------------------------------
-// Domain types
-// ---------------------------------------------------------------------------
 
 export const VALID_SKILL_STATES: ReadonlySet<SkillStatus> = new Set<SkillStatus>([
   'active',
@@ -73,10 +49,6 @@ export interface ListSkillsOpts {
   after?: KeysetPosition;
 }
 
-// ---------------------------------------------------------------------------
-// Validation
-// ---------------------------------------------------------------------------
-
 /** The trigger as stored, or null for none. One line, because a newline would forge a heading inside the exported **When:** line. */
 function checkTrigger(trigger: string | undefined): string | null {
   if (trigger === undefined || trigger === null || trigger.trim().length === 0) return null;
@@ -89,9 +61,7 @@ function checkTrigger(trigger: string | undefined): string | null {
   return trigger;
 }
 
-/** Recall-surface content for the memory mirror: name + optional trigger +
- *  instructions. Named (mirrors buildProcessContent) so the recall surface is
- *  deterministic + unit-testable. */
+/** Recall-surface content for the memory mirror: name, optional trigger, instructions. */
 function buildSkillContent(skillName: string, instructions: string, trigger: string | null): string {
   let content = skillName;
   if (trigger) content += `\n\nWhen: ${trigger}`;
@@ -129,17 +99,7 @@ export const SKILL: SavableDescriptor<'skill', SaveSkillOpts> = {
   },
 };
 
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
-
-/**
- * Create a skill (or a new version that supersedes an existing one). Writes the
- * memory mirror + the skills row in the `objects` store group's one transaction. When
- * supersedesSkillId is given, the referenced ACTIVE row is preflighted (status +
- * version) BEFORE the INSERT, then CAS-UPDATEd -> superseded in the same transaction;
- * the new version = predecessor.version + 1 (server-derived).
- */
+/** Create a skill, or a new version superseding an existing one, in the `objects` store group's one transaction. */
 export function saveSkill(
   hippoRoot: string,
   tenantId: string,
@@ -149,9 +109,7 @@ export function saveSkill(
   return saveObjectAt(SKILL, { hippoRoot, tenantId, actor }, opts);
 }
 
-/**
- * Close (retire) an active skill. A superseded row is terminal.
- */
+/** Close (retire) an active skill; a superseded row is terminal. */
 export function closeSkill(
   hippoRoot: string,
   tenantId: string,
@@ -185,15 +143,8 @@ export function loadActiveSkills(
   return loadSkills(hippoRoot, tenantId, { status: 'active', limit: opts.limit });
 }
 
-/**
- * Render the tenant's ACTIVE skills into ONE AGENTS.md / CLAUDE.md-style markdown
- * block (one H2 per skill, ordered by skill_name ASC for determinism), and RETURN
- * the string. Does NOT write any file. Returns '' when there are no active skills.
- *
- * skill_name is single-line (validated on save) so it cannot break the H2 header;
- * instructions are emitted verbatim (operator content). Bounded by MAX_EXPORT_SKILLS
- * active rows; each field is capped on save, so the rendered string is bounded.
- */
+/** Render the tenant's ACTIVE skills into one AGENTS.md / CLAUDE.md-style markdown block (H2 per skill, ordered by skill_name) and return it; writes no file.
+ *  Bounded by MAX_EXPORT_SKILLS rows; instructions are emitted verbatim. */
 export function exportSkills(hippoRoot: string, tenantId: string): string {
   assertTenantId('exportSkills', tenantId);
   return skillsBlock(sqliteObjects(hippoRoot).activeSkillsByName(tenantId, MAX_EXPORT_SKILLS));

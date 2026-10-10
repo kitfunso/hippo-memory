@@ -1,34 +1,12 @@
-/**
- * Graph-retrieval ranked-list stream for RRF fusion.
- *
- * READ-ONLY consumer of the entity/relation graph. Produces a ranked list of
- * `entries[]` indices ordered by graph
- * proximity to the strong lexical seeds, for use as a 3rd fusion input to `rrfFuse`
- * beside BM25 + dense (src/search.ts hybridSearch, scoring:'rrf').
- *
- * DISTINCT from graph-recall.ts: that INJECTS out-of-pool neighbours post-hoc; this
- * RE-RANKS within the already-filtered candidate pool. It only assigns ranks to
- * entries that are (a) graph-reached from a seed AND (b) present in `entries[]`. Seeds
- * themselves are never scored (they already rank via BM25/dense; scoring them would
- * double-count and dilute the orthogonal graph signal).
- *
- * Reuses the BFS traversal shape from graph-recall.ts (loadEntitiesByMemoryId
- * seeds -> loadNeighborRelations BFS both directions, per-hop fanout cap, visited set
- * -> loadEntitiesByIds to resolve reached -> memoryId). Expands across the local AND
- * global stores. Pure reads (SELECTs only via graph.ts helpers), so the
- * check-graph-writes lint permits this module living outside graph.ts.
- *
- * The graph stream's score scale (1/lexRank seed strength x decay^hops) only sets the
- * WITHIN-graph-stream ORDERING; RRF then re-ranks the list by 1/(k + graphRank), so the
- * absolute magnitude is washed out by fusion. Do not tune the scale expecting a
- * fused-score effect — only the induced order matters.
- */
+/** Graph-retrieval ranked-list stream for RRF fusion: READ-ONLY, ranks `entries[]` indices by graph proximity to the strong lexical seeds.
+ *  Unlike graph recall it only re-ranks in-pool, graph-reached, non-seed entries; scoring seeds would double-count BM25/dense.
+ *  The score scale only sets the order inside this stream (RRF re-ranks by 1/(k + graphRank)), so do not tune it for a fused-score effect. */
 import type { MemoryEntry } from '../core/memory.js';
 import { loadEntitiesByMemoryId, loadEntitiesByIds, loadNeighborRelations } from '../store/graph-reads.js';
 import type { Relation } from '../store/graph-rows.js';
 import { MAX_HOPS, DEFAULT_MAX_NEIGHBORS } from './recall.js';
 
-/** Default hops expanded from each seed (MVP; hard cap MAX_HOPS=3 reused from graph-recall). */
+/** Default hops expanded from each seed (MVP; hard cap MAX_HOPS=3 reused from graph recall). */
 export const DEFAULT_GRAPH_HOPS = 2;
 /** Default per-hop multiplicative decay applied to the seed strength. */
 export const DEFAULT_GRAPH_DECAY = 0.5;
@@ -59,11 +37,7 @@ export interface GraphStreamOpts {
   maxNeighbors?: number;
 }
 
-/**
- * Pick the top `seedCount` candidates by best lexical rank (lowest position across the
- * BM25 and dense ranked lists), with strength = 1/(bestRank + 1). Pure; exported for
- * direct unit testing. A candidate present in either ranked list is eligible.
- */
+/** Pick the top `seedCount` candidates by best lexical rank (lowest position across BM25 and dense), strength = 1/(bestRank + 1). Pure. */
 export function selectGraphSeeds(
   bm25Ranked: ReadonlyArray<number>,
   cosineRanked: ReadonlyArray<number>,
@@ -86,11 +60,8 @@ export function selectGraphSeeds(
     .map(([index, best]) => ({ index, strength: 1 / (best + 1) }));
 }
 
-// Pass 1: accumulate the STRONGEST reaching-seed strength per new neighbour across ALL
-// relations at this depth BEFORE committing any to `visited`. Marking a node
-// visited mid-loop would lock it to whichever relation SQLite returned first, so a later
-// edge from a STRONGER lexical seed would be dropped and the neighbour mis-scored. A node
-// already in `visited` was committed at an earlier (shorter) depth and keeps that score.
+// Pass 1: take the STRONGEST reaching-seed strength per new neighbour across ALL relations at this depth before committing any to `visited`;
+// marking mid-loop would lock a node to whichever relation SQLite returned first and drop a stronger seed's later edge.
 function bestStrengthAtDepth(
   rels: ReadonlyArray<Relation>,
   frontierSet: ReadonlySet<number>,
@@ -172,13 +143,8 @@ interface AccumulateForRootOptions {
   readonly tenantId: string;
 }
 
-/**
- * Accumulate per-entryIndex graph-proximity scores from ONE store's graph into
- * `graphScore`. Pure reads. `seeds` are the lexical seeds (index + strength); only the
- * seeds whose entities live in THIS store are expanded. The origin seed strength is
- * carried UNCHANGED along each BFS path; the per-hop decay is applied as decay^depth so
- * a neighbour's score = originSeedStrength x decay^(graph distance).
- */
+/** Accumulate per-entryIndex graph-proximity scores from ONE store's graph into `graphScore`; only seeds whose entities live in THIS store are expanded.
+ *  A neighbour's score = originSeedStrength x decay^(graph distance); the seed strength is carried unchanged along each BFS path. */
 function accumulateForRoot(
   root: string,
   seeds: ReadonlyArray<GraphSeed>,
@@ -197,9 +163,7 @@ function accumulateForRoot(
   const seedEntities = loadEntitiesByMemoryId(root, tenantId, [...strengthByMemId.keys()]);
   if (seedEntities.length === 0) return;
 
-  // entityId -> origin seed strength (carried unchanged along the path). A seed entity is
-  // loaded by memory id, so its memoryId is non-null here; the guard keeps the widened
-  // (string | null) type honest (a null-memory entity is not a lexical seed).
+  // entityId -> origin seed strength. Seeds load by memory id so memoryId is non-null here; the guard keeps the widened (string | null) type honest.
   const originStrength = new Map<number, number>();
   for (const e of seedEntities) {
     if (e.memoryId === null) continue;
@@ -222,14 +186,8 @@ function accumulateForRoot(
   }
 }
 
-/**
- * Produce the graph-retrieval ranked list: `entries[]` indices ordered by graph
- * proximity (desc) to the lexical `seeds`. Only graph-reached, in-pool, non-seed
- * indices appear; the rest are absent (-> rrfFuse absentRank). Pure reads.
- *
- * Returns `[]` when there are no seeds/entries, the graph is empty, no seed maps to an
- * entity, or nothing reached is in-pool — the caller then skips the 3rd fusion list.
- */
+/** Produce the graph-retrieval ranked list: `entries[]` indices by graph proximity (desc) to the lexical `seeds`; absent indices fall to rrfFuse absentRank.
+ *  Returns `[]` when there are no seeds/entries, the graph is empty, or nothing reached is in-pool, so the caller skips the 3rd fusion list. */
 export function graphRankStream(
   entries: ReadonlyArray<MemoryEntry>,
   seeds: ReadonlyArray<GraphSeed>,
@@ -251,11 +209,8 @@ export function graphRankStream(
     accumulateForRoot(root, seeds, entries, { memIdToIndex, graphScore, hops, decay, maxNeighbors, tenantId: opts.tenantId });
   }
 
-  // Seed-exclusion guard: graphScore is keyed by entryIndex
-  // GLOBALLY across roots, but each root's BFS visited-set is per-root, so a memory that
-  // is a seed in one store could be reached as a neighbour in the other store and pick up
-  // a score via max(). Drop every seed index so the "seeds are never scored by the graph
-  // stream" invariant holds across roots, not just within a single store's traversal.
+  // Seed-exclusion guard: graphScore is keyed by entryIndex across roots but each root's visited-set is per-root, so a seed in one store
+  // could score as a neighbour in the other; drop every seed index so "seeds are never graph-scored" holds across roots.
   for (const s of seeds) graphScore.delete(s.index);
 
   if (graphScore.size === 0) return [];

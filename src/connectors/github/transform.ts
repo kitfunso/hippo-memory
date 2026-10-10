@@ -7,22 +7,8 @@ import type {
   GitHubPullRequestReviewCommentEvent,
 } from './types.js';
 
-/**
- * Convert GitHub webhook events into RememberOpts for api.remember(). Each
- * function returns null when the event has no usable body so the webhook
- * caller can mark the delivery seen for idempotency and skip the insert.
- *
- * Contract (mirrors src/connectors/slack/transform.ts):
- * - kind is the literal 'raw' (connector boundary, see src/importers.ts).
- * - artifact_ref formats are stable; deletion paths look up by these strings.
- *   - issue:               github://<owner/repo>/issue/<number>
- *   - issue_comment:       github://<owner/repo>/issue/<number>/comment/<id>
- *   - pull_request:        github://<owner/repo>/pull/<number>
- *   - pr_review_comment:   github://<owner/repo>/pull/<number>/review_comment/<id>
- * - owner is `user:github:<login>`. Required by the provenance gate.
- * - scope is derived from repository.private via scopeFromRepository (default
- *   private when undetermined).
- */
+/** Convert GitHub webhook events into RememberOpts; each returns null when the event has no usable body so the caller marks it seen and skips the insert.
+ *  artifact_ref formats (github://<owner/repo>/issue|pull/<n>[/comment|review_comment/<id>]) are stable because deletion looks rows up by them. */
 
 const UNKNOWN_REPO = 'unknown/unknown';
 

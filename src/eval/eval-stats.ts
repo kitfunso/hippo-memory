@@ -1,16 +1,5 @@
-/**
- * Statistics and cost accounting for the token-efficiency evals.
- *
- * - Cost: price provider usage over four buckets (uncached input, cache
- *   write, cache read, output). Raw token counts overstate savings when most
- *   input is already cache reads, so every dollar claim goes through here.
- * - Uncertainty: paired bootstrap over tasks, cluster bootstrap (tasks that
- *   share a repository are not independent), and a paired ratio bootstrap for
- *   dollars per resolved task.
- *
- * Deterministic: every resampling function takes a seed, so a published
- * result can be reproduced exactly.
- */
+/** Statistics and cost accounting for the token-efficiency evals: cost is priced over four buckets (uncached input, cache write, cache read, output).
+ *  Uncertainty uses paired, cluster (same-repository tasks are not independent) and paired-ratio bootstraps; every resampler takes a seed. */
 
 const DEFAULT_ITERATIONS = 5000;
 const DEFAULT_TWO_LEVEL_ITERATIONS = 10_000;
@@ -28,11 +17,7 @@ export interface Usage {
   outputTokens: number;
 }
 
-/**
- * Prices in dollars per million tokens. Take them from the provider's
- * current price page for the exact model; this module has no built-in
- * prices because they change.
- */
+/** Prices in dollars per million tokens, taken from the provider's current price page for the exact model; this module has no built-in prices. */
 export interface Prices {
   inputPerMTok: number;
   cacheWritePerMTok: number;
@@ -62,12 +47,8 @@ export function priceUsage(usage: Usage, prices: Prices): number {
   ) / 1_000_000;
 }
 
-/**
- * Relative prices of the cache buckets against the base input price, for
- * cost in "uncached-equivalent tokens" when no dollar prices are given.
- * Defaults follow Anthropic's published ratios (5-minute cache write 1.25x,
- * cache read 0.1x); pass the ratios for another provider when needed.
- */
+/** Relative cache-bucket prices against the base input price, for cost in "uncached-equivalent tokens" when no dollar prices are given.
+ *  Defaults follow Anthropic's ratios (5-minute cache write 1.25x, cache read 0.1x); pass another provider's ratios when needed. */
 export interface CacheRatios {
   write: number;
   read: number;
@@ -81,10 +62,8 @@ export function uncachedEquivalentInput(usage: Usage, ratios: CacheRatios = DEFA
   return usage.inputTokens + usage.cacheWriteTokens * ratios.write + usage.cacheReadTokens * ratios.read;
 }
 
-/**
- * Mulberry32: a small seeded PRNG returning floats in [0, 1). Same seed,
- * same stream, on every platform.
- */
+/** Mulberry32: a small seeded PRNG returning floats in [0, 1). Same seed,
+ *  same stream, on every platform. */
 export function seededRandom(seed: number): () => number {
   let a = seed >>> 0;
   return () => {
@@ -132,11 +111,7 @@ function mean(xs: number[]): number {
   return xs.length === 0 ? 0 : xs.reduce((s, x) => s + x, 0) / xs.length;
 }
 
-/**
- * Paired bootstrap for the mean of per-task differences (treatment minus
- * control on the same task). An interval that excludes zero is the bar for
- * calling a difference real.
- */
+/** Paired bootstrap for the mean of per-task differences (treatment minus control, same task); an interval excluding zero is the bar for a real difference. */
 export function pairedBootstrap(diffs: number[], opts: BootstrapOpts = {}): Estimate {
   const iterations = opts.iterations ?? DEFAULT_ITERATIONS;
   const alpha = opts.alpha ?? DEFAULT_ALPHA;
@@ -152,11 +127,7 @@ export function pairedBootstrap(diffs: number[], opts: BootstrapOpts = {}): Esti
   return { estimate: mean(diffs), ...percentileInterval(samples, alpha), iterations };
 }
 
-/**
- * Cluster bootstrap for the mean of per-task differences: resamples whole
- * clusters (for example all tasks from one repository), because tasks in a
- * cluster share causes and are not independent draws.
- */
+/** Cluster bootstrap for the mean of per-task differences: resamples whole clusters (e.g. one repository), because tasks in a cluster are not independent. */
 export function clusteredPairedBootstrap(
   diffsByCluster: ReadonlyMap<string, number[]>,
   opts: BootstrapOpts = {},
@@ -206,13 +177,8 @@ function costPerResolved(outcomes: ArmOutcome[]): number {
   return resolved === 0 ? Number.POSITIVE_INFINITY : cost / resolved;
 }
 
-/**
- * Cost per resolved task in two arms run on the same tasks, with a paired
- * bootstrap over tasks (a task is resampled with both of its arm outcomes).
- * `control[i]` and `treatment[i]` must be the same task. Resamples in which
- * an arm resolves nothing are dropped; `iterations` reports how many were
- * kept.
- */
+/** Cost per resolved task in two arms on the same tasks, with a paired bootstrap (`control[i]` and `treatment[i]` must be the same task).
+ *  Resamples in which an arm resolves nothing are dropped; `iterations` reports how many were kept. */
 export function costPerResolvedDelta(
   control: ArmOutcome[],
   treatment: ArmOutcome[],
@@ -261,20 +227,16 @@ export function costPerResolvedDelta(
   };
 }
 
-/**
- * pass@k: share of tasks with at least one success in their first k runs.
- * NaN when no task has k runs (not measured, which is not the same as 0).
- */
+/** pass@k: share of tasks with at least one success in their first k runs.
+ *  NaN when no task has k runs (not measured, which is not the same as 0). */
 export function passAtK(runsByTask: boolean[][], k: number): number {
   const eligible = runsByTask.filter((r) => r.length >= k);
   if (eligible.length === 0) return Number.NaN;
   return eligible.filter((r) => r.slice(0, k).some(Boolean)).length / eligible.length;
 }
 
-/**
- * pass^k: share of tasks whose first k runs all succeed (consistency).
- * NaN when no task has k runs.
- */
+/** pass^k: share of tasks whose first k runs all succeed (consistency).
+ *  NaN when no task has k runs. */
 export function passHatK(runsByTask: boolean[][], k: number): number {
   const eligible = runsByTask.filter((r) => r.length >= k);
   if (eligible.length === 0) return Number.NaN;
