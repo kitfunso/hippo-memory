@@ -81,7 +81,7 @@ export const realGitHubFetcher: GitHubFetcher = async ({ url, token }) => {
   if (res.status !== 200 && rateLimit.reason === 'none') {
     // The status is the error reported; a body that cannot be read only costs its snippet.
     const body = await readCappedText(res, ERROR_BODY_SNIPPET_CHARS * UTF8_MAX_BYTES_PER_CHAR).catch(() => '');
-    throw new GitHubFetchError(res.status, body.slice(0, ERROR_BODY_SNIPPET_CHARS), url);
+    throw new GitHubFetchError(res.status, body.slice(0, ERROR_BODY_SNIPPET_CHARS), new URL(url).pathname);
   }
 
   const items = res.status === 200 ? await readItems(res, url) : [];

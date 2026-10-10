@@ -86,4 +86,23 @@ describe('embedMemory provider failure', () => {
     expect(warnings()).toHaveLength(1);
     expect(warnings()[0]).toContain("[hippo] warn: embedding failed (config): Unknown embeddings.provider 'opneai'");
   });
+
+  it('warns again for a different failure after the first one', async () => {
+    vi.resetModules();
+    const fresh = await import('../src/store/embeddings/index.js');
+    const config = path.join(root, 'config.json');
+    const entry = createMemory('a memory that meets two different failures', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+    writeEntry(root, entry);
+
+    fs.writeFileSync(config, JSON.stringify({ embeddings: { provider: 'opneai' } }), 'utf8');
+    await fresh.embedMemory(root, entry);
+    fs.writeFileSync(config, JSON.stringify({ embeddings: { provider: 'openai', model: 'm' } }), 'utf8');
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('bad key', { status: 401 })));
+    await fresh.embedMemory(root, entry);
+    await fresh.embedMemory(root, entry);
+
+    expect(warnings()).toHaveLength(2);
+    expect(warnings()[0]).toContain('embedding failed (config)');
+    expect(warnings()[1]).toContain('embedding failed (openai)');
+  });
 });

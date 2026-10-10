@@ -179,8 +179,8 @@ export function resolveEmbeddingModel(hippoRoot: string, explicitModel?: string)
   try {
     const configured = loadConfig(hippoRoot).embeddings.model?.trim();
     if (configured) return configured;
-  } catch {
-    // Fall back to the default model when config cannot be read.
+  } catch (err) {
+    log.warn(`embedding model config unreadable, using the default model: ${errorMessage(err)}`);
   }
 
   return DEFAULT_EMBEDDING_MODEL;
