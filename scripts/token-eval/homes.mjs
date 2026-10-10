@@ -115,6 +115,7 @@ export function shellHippoCheck(arm, dirs, env, shell, name) {
   const last = (r.stdout ?? '').trim().split('\n').pop()?.trim() ?? '';
   const ok = HIPPO_ARMS.has(arm) ? last !== 'Z0_NOT_FOUND' && last !== '' && samePath(path.dirname(last), dirs.bin) : last === 'Z0_NOT_FOUND';
   if (!ok) throw new Error(`${name}: the agent's shell resolves hippo to ${last || `nothing (exit ${r.status}: ${(r.stderr ?? '').trim()})`}, expected ${HIPPO_ARMS.has(arm) ? dirs.bin : 'none'}; a login profile may put a hippo dir back on PATH`);
+  return last;
 }
 
 /** One run's homes check on fresh dirs: what hippo's importer would read, and what `hippo` the agent's shell finds. */
@@ -122,6 +123,8 @@ function checkRunHomes({ outDir, seq, arm, seed }, { baseEnv, passEnv, shell, in
   const dirs = runDirs(outDir, seq, arm, seed);
   const name = `${seq}/${arm}/seed${seed}`;
   freshRunDirs(dirs);
+  // Reaching here proves the three homes existed and were empty.
+  const report = { name, root: dirs.root, imports: [], shell: 'none', after: null };
   try {
     git(['init', '--quiet'], dirs.work);
     const env = armEnv(arm, dirs, baseEnv, { passEnv });
@@ -132,9 +135,14 @@ function checkRunHomes({ outDir, seq, arm, seed }, { baseEnv, passEnv, shell, in
     for (const home of x2 ? [outDir, dirs.home] : [outDir]) {
       const r = sh(`"${process.execPath}" "${HIPPO_JS}" import --agents --dry-run`, dirs.work, { ...childEnv(env), HOME: home, USERPROFILE: home });
       if (r.status !== 0) throw new Error(`${name}: hippo import --agents --dry-run exited ${r.status}: ${r.stderr.slice(-500)}`);
-      checkImportHomes(parseImportDryRun(r.stdout), dirs, name);
+      const entries = parseImportDryRun(r.stdout);
+      checkImportHomes(entries, dirs, name);
+      report.imports.push({ home, entries });
     }
-    shellHippoCheck(arm, dirs, env, shell, name);
+    const found = shellHippoCheck(arm, dirs, env, shell, name);
+    report.shell = found === 'Z0_NOT_FOUND' ? 'none' : found;
+    report.after = homeFiles(dirs);
+    return report;
   } finally {
     fs.rmSync(dirs.root, { recursive: true, force: true });
   }
@@ -149,5 +157,20 @@ export function checkHomes({ outDir, runs, passEnv = [], baseEnv = process.env, 
   if (occupied.length > 0) throw new Error(`${occupied[0]} already holds run data${occupied.length > 1 ? ` (and ${occupied.length - 1} more run dirs)` : ''}; the homes check never deletes it. Pick a new --out, or move that run away first.`);
   fs.mkdirSync(outDir, { recursive: true });
   const shell = gitBash(baseEnv, passEnv);
-  for (const run of runs) checkRunHomes({ outDir, ...run }, { baseEnv, passEnv, shell, install });
+  return runs.map((run) => checkRunHomes({ outDir, ...run }, { baseEnv, passEnv, shell, install }));
+}
+
+/** One block per run for the `--check-homes` output; `outDir` is not needed, each report holds its root. */
+export function formatHomesReport(reports) {
+  return reports.flatMap((r) => {
+    const sees = (entries) => entries.map((e) => `${e.label} at ${e.home}`).join(', ');
+    const multi = r.imports.length > 1;
+    const left = Object.entries(r.after).filter(([, files]) => files.length > 0);
+    return [
+      `  ${r.name}: claude-config, codex-home, hippo-home fresh and empty under ${r.root}`,
+      ...r.imports.map((i) => `    hippo import --agents sees ${sees(i.entries)}${multi ? ` (HOME=${i.home})` : ''}`),
+      `    shell hippo: ${r.shell}`,
+      `    after the check: ${left.length === 0 ? 'empty' : left.map(([k, files]) => `${k.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}: ${files.join(', ')}`).join('; ')}`,
+    ];
+  });
 }
