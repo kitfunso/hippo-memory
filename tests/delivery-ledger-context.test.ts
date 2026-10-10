@@ -194,14 +194,18 @@ describe('the ledger changes nothing a context call prints', () => {
     expect([eventCount(p), eventCount(off)]).toEqual([2, 0]);
   });
 
-  it('I2: a query that matches nothing prints the same empty output and writes the same empty trace', () => {
-    const args = ['zzqxv', 'wplmk'];
-    const on = run(p, args);
-    const plain = run(off, args);
-    expect([on.status, plain.status]).toEqual([0, 0]);
-    expect([on.stdout, plain.stdout]).toEqual(['', '']);
-    const traces = (target: Project) => tableRows(target, `SELECT query_hash, result_count FROM recall_traces WHERE pipeline = 'context'`);
-    expect(traces(off)).toHaveLength(1);
+  it('I2: a query that matches nothing prints the same output in both formats and writes the same empty traces', () => {
+    const miss = ['zzqxv', 'wplmk'];
+    const printed = [miss, [...miss, '--format', 'json']].map((args) => {
+      const on = run(p, args);
+      const plain = run(off, args);
+      expect([on.status, plain.status], on.stderr + plain.stderr).toEqual([0, 0]);
+      expect(on.stdout).toBe(plain.stdout);
+      return on.stdout;
+    });
+    expect(printed[0]).toBe('');
+    const traces = (target: Project) => tableRows(target, `SELECT query_hash, result_count FROM recall_traces WHERE pipeline = 'context' ORDER BY id`);
+    expect(traces(off)).toHaveLength(2);
     expect(traces(p)).toEqual(traces(off));
     expect(retrievalCounts(p)).toEqual(retrievalCounts(off));
   });
