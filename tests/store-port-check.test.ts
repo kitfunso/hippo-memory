@@ -20,8 +20,10 @@ type Counts = {
   txLiterals: number;
   tenantResolvesInCli: number;
   storeImportsInCli: number;
+  handleHoldersOutside: number;
   openersOutsideByFile: Record<string, number>;
   sqlOutsideByFile: Record<string, number>;
+  handleHoldersOutsideByFile: Record<string, number>;
   sqliteLocalMethods: string[];
   sqliteOnlyRoutesList: string[];
   carrierFiles: number;
@@ -41,8 +43,10 @@ const zero: Counts = {
   txLiterals: 0,
   tenantResolvesInCli: 0,
   storeImportsInCli: 0,
+  handleHoldersOutside: 0,
   openersOutsideByFile: {},
   sqlOutsideByFile: {},
+  handleHoldersOutsideByFile: {},
   sqliteLocalMethods: [],
   sqliteOnlyRoutesList: [],
   carrierFiles: 0,
@@ -85,6 +89,33 @@ describe('check-store-port.mjs', () => {
   it('counts a plain call outside the data layer', () => {
     withFixture({ 'src/a.ts': "import { openHippoDb } from './db.js';\nexport const f = () => openHippoDb('r');\n" }, null, ({ run }) => {
       expect(list(run)).toMatchObject({ openersOutside: '1', 'src/a.ts': '1' });
+    });
+  });
+
+  it('counts a file outside the data layer that names the handle type, once, and not comments or the data layer', () => {
+    const holder = "import type { DatabaseSyncLike } from './db/index.js';
+export const f = (db: DatabaseSyncLike, g: DatabaseSyncLike) => db === g;
+";
+    withFixture(
+      { 'src/a.ts': holder, 'src/b.ts': '// DatabaseSync is only named here
+export const b = 1;
+', 'src/store/c.ts': holder, 'src/db/d.ts': holder, 'src/cli/e.ts': holder },
+      null,
+      ({ run, baseline }) => {
+        expect(list(run)).toMatchObject({ handleHoldersOutside: '2', 'src/a.ts': '1', 'src/cli/e.ts': '1' });
+        run('--update');
+        expect(baseline().handleHoldersOutsideByFile).toEqual({ 'src/a.ts': 1, 'src/cli/e.ts': 1 });
+      },
+    );
+  });
+
+  it('fails when a new file starts holding a handle', () => {
+    withFixture({ 'src/a.ts': "import type { DatabaseSync } from 'node:sqlite';
+export type H = DatabaseSync;
+" }, { handleHoldersOutside: 0, handleHoldersOutsideByFile: {} }, ({ run }) => {
+      const r = run();
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain('handleHoldersOutside: 0 -> 1');
     });
   });
 

@@ -15,7 +15,9 @@ const BASELINE = '.store-port-baseline.json';
 const OPENERS = new Set(['openHippoDb', 'openHippoDbReadOnly', 'openStore', 'onHandle']);
 const TWIN_SUFFIX = /(ThroughStore|OnHippoDb|UnderStore|OnStore)$/;
 const NUMBERS = ['openersOutside', 'openersInCli', 'storeBranches', 'routesWithoutStore', 'sqliteOnlyRoutes', 'routesOnLoop', 'twinFunctions',
-  'sqlOutside', 'txLiterals', 'tenantResolvesInCli', 'storeImportsInCli'];
+  'sqlOutside', 'txLiterals', 'tenantResolvesInCli', 'storeImportsInCli', 'handleHoldersOutside'];
+const BY_FILE_KEYS = ['openersOutsideByFile', 'sqlOutsideByFile', 'handleHoldersOutsideByFile'];
+const HANDLE_TYPES = new Set(['DatabaseSyncLike', 'DatabaseSync']);
 // Routes dispatched outside V1_ROUTES. Named here so the count cannot read 0 while they answer on the server thread; a name leaves when its route does.
 const OFF_TABLE_ROUTES = ['POST /mcp', 'GET /mcp/stream', 'POST /v1/connectors/slack/events', 'POST /v1/connectors/github/events', 'GET /health', 'GET /ready', 'POST add-on routes'];
 const TX_OWNER = 'src/db/busy.ts';
@@ -83,6 +85,18 @@ function countStoreBranches(sf) {
   };
   visit(sf);
   return n;
+}
+
+/** 1 when this file's code names the database handle type: holding a raw handle is the same coupling as opening one, whatever the opener is called. */
+function holdsHandle(sf) {
+  let found = false;
+  const visit = (node) => {
+    if (found) return;
+    if (ts.isIdentifier(node) && HANDLE_TYPES.has(node.text)) found = true;
+    else ts.forEachChild(node, visit);
+  };
+  visit(sf);
+  return found ? 1 : 0;
 }
 
 /** Calls of `<x>.prepare(...)`: SQL written by code that is not the data layer. */
@@ -236,6 +250,7 @@ function measure() {
   const out = Object.fromEntries(NUMBERS.map((k) => [k, 0]));
   const byFile = {};
   const sqlByFile = {};
+  const holdersByFile = {};
   let sqliteLocalMethods = [];
   let sqliteOnlyRoutesList = [];
   const carrierFilesList = [];
@@ -249,6 +264,9 @@ function measure() {
       if (openers > 0) byFile[file] = openers;
     }
     if (!isDataLayer(file)) {
+      const holds = holdsHandle(sf);
+      out.handleHoldersOutside += holds;
+      if (holds > 0) holdersByFile[file] = holds;
       const prepares = countPrepares(sf);
       out.sqlOutside += prepares;
       if (prepares > 0) sqlByFile[file] = prepares;
@@ -268,7 +286,7 @@ function measure() {
     }
     if (file === 'src/store/sqlite/local.ts') sqliteLocalMethods = localMethods(sf);
   }
-  return { ...out, openersOutsideByFile: byFile, sqlOutsideByFile: sqlByFile, sqliteLocalMethods, sqliteOnlyRoutesList, carrierFiles: carrierFilesList.length, carrierFilesList };
+  return { ...out, openersOutsideByFile: byFile, sqlOutsideByFile: sqlByFile, handleHoldersOutsideByFile: holdersByFile, sqliteLocalMethods, sqliteOnlyRoutesList, carrierFiles: carrierFilesList.length, carrierFilesList };
 }
 
 /** Numbers, files and SqliteLocal methods that went above the baseline, as [label, was, now]. */
@@ -277,7 +295,7 @@ function rises(base, cur) {
   // A key the baseline has never held is a first write, not a rise; once written it ratchets like the rest.
   const firstWrite = (k) => base !== null && base[k] === undefined;
   for (const k of NUMBERS) if (!firstWrite(k) && cur[k] > (base?.[k] ?? 0)) rose.push([k, base?.[k] ?? 0, cur[k]]);
-  for (const key of ['openersOutsideByFile', 'sqlOutsideByFile']) {
+  for (const key of BY_FILE_KEYS) {
     if (firstWrite(key)) continue;
     const was = base?.[key] ?? {};
     for (const [f, n] of Object.entries(cur[key])) if (n > (was[f] ?? 0)) rose.push([f, was[f] ?? 'new', n]);
@@ -309,7 +327,7 @@ const total = NUMBERS.map((k) => `${k} ${current[k]}`).join(', ');
 if (args.includes('--list')) {
   for (const k of NUMBERS) console.log(`${current[k]}\t${k}`);
   console.log(`${current.carrierFiles}\tcarrierFiles`);
-  for (const key of ['openersOutsideByFile', 'sqlOutsideByFile']) {
+  for (const key of BY_FILE_KEYS) {
     for (const [f, n] of Object.entries(current[key]).sort(([, a], [, b]) => b - a)) console.log(`${n}\t${f}`);
   }
   process.exit(0);
@@ -336,7 +354,7 @@ if (rose.length > 0) {
   process.exit(1);
 }
 const fell = baseline && (NUMBERS.some((k) => current[k] < (baseline[k] ?? 0)) ||
-  ['openersOutsideByFile', 'sqlOutsideByFile'].some((key) => Object.entries(baseline[key] ?? {}).some(([f, n]) => (current[key][f] ?? 0) < n)) ||
+  BY_FILE_KEYS.some((key) => Object.entries(baseline[key] ?? {}).some(([f, n]) => (current[key][f] ?? 0) < n)) ||
   (baseline.sqliteLocalMethods ?? []).length > current.sqliteLocalMethods.length ||
   (baseline.sqliteOnlyRoutesList ?? []).length > current.sqliteOnlyRoutesList.length ||
   current.carrierFiles < (baseline.carrierFiles ?? 0));
