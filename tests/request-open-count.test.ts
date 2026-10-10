@@ -108,8 +108,8 @@ describe('store opens per request', () => {
     expect(await opensDuring(() => call('POST', '/mcp', recallOverMcp))).toEqual({});
   });
 
-  it('an add-on route opens the store once across the api helpers it runs', async () => {
-    expect(await opensDuring(() => call('POST', '/v1/test/remember-then-recall', {}))).toEqual({ local: 1 });
+  it('an add-on route that runs two api helpers opens no connection on the server thread', async () => {
+    expect(await opensDuring(() => call('POST', '/v1/test/remember-then-recall', {}))).toEqual({});
   });
 
   it('concurrent recalls and a write among them open no connection on the server thread', async () => {
