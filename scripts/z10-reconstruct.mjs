@@ -313,9 +313,10 @@ export function reconstruct(opts) {
   if (local === null) throw new Error(`no hippo.db in ${store}`);
   // The hook hashes a project store under its resolved project folder and the global store under its configured path.
   const abs = path.resolve(store);
-  const globalRoot = opts.global === false ? null : path.resolve(opts.global ?? resolveGlobalRootDir());
-  const isGlobal = globalRoot !== null && realpathOrResolve(abs) === realpathOrResolve(globalRoot);
-  const hashed = isGlobal ? globalRoot : path.join(realpathOrResolve(path.dirname(abs)), path.basename(abs));
+  const classRoot = path.resolve(opts.global || resolveGlobalRootDir());
+  const globalRoot = opts.global === false ? null : classRoot;
+  const isGlobal = realpathOrResolve(abs) === realpathOrResolve(classRoot);
+  const hashed = isGlobal ? classRoot : path.join(realpathOrResolve(path.dirname(abs)), path.basename(abs));
   const globalDb = globalRoot !== null && !isGlobal ? openDb(globalRoot) : null;
   const base = {
     store_hash: blockHash(hashed), tenant, session, memory_id: null, memory_store: null, notes: [], label: null,

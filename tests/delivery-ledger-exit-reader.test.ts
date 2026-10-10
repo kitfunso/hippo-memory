@@ -426,8 +426,7 @@ describe('store paths through a link', () => {
   afterEach(() => dispose(p));
 
   /** A junction to `target`, or null when this machine cannot create one. */
-  function link(target: string, name: string): string | null {
-    const l = path.join(p.dir, name);
+  function link(target: string, l: string): string | null {
     try {
       fs.symlinkSync(target, l, 'junction');
     } catch (err) {
@@ -449,7 +448,7 @@ describe('store paths through a link', () => {
 
   it('R26 a project reached through a linked folder', (ctx) => {
     p = project();
-    const L = link(p.proj, 'proj-link');
+    const L = link(p.proj, path.join(p.dir, 'proj-link'));
     if (L === null) return ctx.skip();
     try {
       const r = fire(p, 'r26', PROMPT, { cwd: L });
@@ -476,7 +475,7 @@ describe('store paths through a link', () => {
     initStore(p.globalRoot);
     fs.writeFileSync(path.join(p.globalRoot, 'config.json'), JSON.stringify({ deliveryLedger: { enabled: true }, pinnedInject: { promptRecall: false } }));
     const g = seed(p.globalRoot, 'PINNED: the global release checklist lists every region first', { pinned: true });
-    const G = link(p.globalRoot, 'global-link');
+    const G = link(p.globalRoot, path.join(p.dir, 'global-link'));
     if (G === null) return ctx.skip();
     try {
       const bare = path.join(p.dir, 'bare');
@@ -491,6 +490,31 @@ describe('store paths through a link', () => {
       expect(v.store_hash).toBe(want);
     } finally {
       fs.unlinkSync(G);
+    }
+  });
+
+  it('R28 the command line classifies the global store behind a linked HIPPO_HOME under --no-global, with the link above the store', (ctx) => {
+    p = project();
+    initStore(p.globalRoot);
+    fs.writeFileSync(path.join(p.globalRoot, 'config.json'), JSON.stringify({ deliveryLedger: { enabled: true }, pinnedInject: { promptRecall: false } }));
+    const g = seed(p.globalRoot, 'PINNED: the global release checklist lists every region first', { pinned: true });
+    const L = link(p.dir, `${p.dir}-link`);
+    if (L === null) return ctx.skip();
+    const G = path.join(L, 'global');
+    try {
+      const bare = path.join(p.dir, 'bare');
+      fs.mkdirSync(bare);
+      const r = fire(p, 'r28', PROMPT, { cwd: bare, env: { HIPPO_HOME: G } });
+      const t = writeHostTranscript(p, [{ prompt: PROMPT, stdout: r.stdout }], { name: 'r28' });
+      const out = spawnSync(process.execPath, [SCRIPT, '--store', G, '--session', 'r28', '--memory', g.id, '--transcript', t, '--no-global'], { encoding: 'utf8', env: { ...process.env, HIPPO_HOME: G } });
+      expect(out.status, out.stderr).toBe(0);
+      // SAFETY: the script prints exactly the verdict shape.
+      const v = JSON.parse(out.stdout) as Verdict;
+      expect(v.class).toBe('application-unknown');
+      expect(v.notes.some((n) => n.startsWith('foreign-store'))).toBe(false);
+      expect(v.store_hash).toBe(blockHash(path.resolve(G)));
+    } finally {
+      fs.unlinkSync(L);
     }
   });
 });
