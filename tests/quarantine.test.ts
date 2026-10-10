@@ -128,13 +128,13 @@ describe('recall visibility and the approve/reject lifecycle', () => {
 
   it('default recall does not return it; approve restores the scope and recall then returns it', async () => {
     const ctx = adminCtx(home);
-    expect(api.recall(ctx, { query: 'wipe.sh' }).results.some((r) => r.id === id)).toBe(false);
+    expect((await api.retrieve(ctx, { query: 'wipe.sh' })).results.some((r) => r.id === id)).toBe(false);
 
     await api.quarantineApprove(ctx, id);
     expect(readEntry(home, id, 'default')?.scope).toBe('github:public:acme/demo');
     const audit = await api.auditList(ctx, { op: 'quarantine_approve' });
     expect(audit.some((e) => e.targetId === id)).toBe(true);
-    expect(api.recall(ctx, { query: 'wipe.sh' }).results.some((r) => r.id === id)).toBe(true);
+    expect((await api.retrieve(ctx, { query: 'wipe.sh' })).results.some((r) => r.id === id)).toBe(true);
   });
 
   it('reject keeps it hidden and marks the row rejected', async () => {
@@ -142,7 +142,7 @@ describe('recall visibility and the approve/reject lifecycle', () => {
     await api.quarantineReject(ctx, id);
     expect(readEntry(home, id, 'default')?.scope).toBe('quarantine:private:github:public:acme/demo');
     expect(quarantineRow(home, id)?.status).toBe('rejected');
-    expect(api.recall(ctx, { query: 'wipe.sh' }).results.some((r) => r.id === id)).toBe(false);
+    expect((await api.retrieve(ctx, { query: 'wipe.sh' })).results.some((r) => r.id === id)).toBe(false);
     const audit = await api.auditList(ctx, { op: 'quarantine_reject' });
     expect(audit.some((e) => e.targetId === id)).toBe(true);
   });

@@ -150,7 +150,7 @@ describe('Company Brain continuity scorecard scaffold', () => {
   });
 
   it('recall(includeContinuity=true) hits the same scorecard signals via the public API', async () => {
-    const { recall } = await import('../src/api/index.js');
+    const { retrieve } = await import('../src/api/index.js');
     initStore(tmpDir);
     const sessionId = 'sess-recall-scorecard';
 
@@ -170,14 +170,14 @@ describe('Company Brain continuity scorecard scaffold', () => {
       artifacts: ['docs/plans/2026-05-03-continuity-first-recall.md'],
     });
 
-    const baseline = recall(
+    const baseline = await retrieve(
       { hippoRoot: tmpDir, tenantId: 'default', actor: { subject: 'test', role: 'admin' } },
       { query: 'continuity' },
     );
     expect(baseline.continuity).toBeUndefined();
     expect(baseline.continuityTokens).toBeUndefined();
 
-    const onResult = recall(
+    const onResult = await retrieve(
       { hippoRoot: tmpDir, tenantId: 'default', actor: { subject: 'test', role: 'admin' } },
       { query: 'continuity', includeContinuity: true },
     );

@@ -17,7 +17,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { recall, type Context } from '../src/api/index.js';
+import { retrieve, type Context } from '../src/api/index.js';
 import { hashQueryText, type RecallHistorySnapshot, type RecallHistoryEntry } from '../src/api/recall-history.js';
 import { makeRoot } from './_helpers/make-root.js';
 
@@ -48,32 +48,32 @@ describe('suppressedByInterference counter', () => {
     delete process.env.HIPPO_ANCHORING;
   });
 
-  it('was always 0 pre-v1.13.2 (no anchoring snapshot → stays 0)', () => {
+  it('was always 0 pre-v1.13.2 (no anchoring snapshot → stays 0)', async () => {
     seed(root, 'foo bar baz');
     const ctx: Context = { hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
-    const result = recall(ctx, { query: 'foo bar baz' });
+    const result = await retrieve(ctx, { query: 'foo bar baz' });
     expect(result.suppressionSummary!.suppressedByInterference).toBe(0);
   });
 
-  it('is 0 on R1 query_repeat (only memory_dominance counts as interference)', () => {
+  it('is 0 on R1 query_repeat (only memory_dominance counts as interference)', async () => {
     const id = seed(root, 'foo bar baz');
     const realHash = hashQueryText('foo bar baz');
     const ctx: Context = { hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
     // Snapshot: SAME queryHash as current call returning same top → R1 fires.
-    const result = recall(ctx, { query: 'foo bar baz', recallHistory: [entry(realHash, id)] });
+    const result = await retrieve(ctx, { query: 'foo bar baz', recallHistory: [entry(realHash, id)] });
     // R1 fires (or doesn't, depending on cooldown); either way suppressedByInterference
     // is 0 because only memory_dominance counts as interference.
     expect(result.suppressionSummary!.suppressedByInterference).toBe(0);
   });
 
-  it('is 1 on R2 memory_dominance', () => {
+  it('is 1 on R2 memory_dominance', async () => {
     const id = seed(root, 'foo bar baz');
     const snapshot: RecallHistorySnapshot = [
       entry(111, id),
       entry(222, id),
     ];
     const ctx: Context = { hippoRoot: root, tenantId: 'default', actor: { subject: 'cli', role: 'admin' } };
-    const result = recall(ctx, { query: 'foo bar baz', recallHistory: snapshot });
+    const result = await retrieve(ctx, { query: 'foo bar baz', recallHistory: snapshot });
     expect(result.suppressionSummary!.suppressedByInterference).toBe(1);
   });
 });

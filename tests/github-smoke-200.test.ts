@@ -15,7 +15,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
-import { remember, recall, type Context } from '../src/api/index.js';
+import { remember, retrieve, type Context } from '../src/api/index.js';
 import { ingestEvent, type IngestEvent, type IngestResult } from '../src/connectors/github/ingest.js';
 import { handleCommentDeleted } from '../src/connectors/github/deletion.js';
 import { computeIdempotencyKey } from '../src/connectors/github/signature.js';
@@ -330,7 +330,7 @@ describe('GitHub connector — 200-event smoke test', () => {
     expect(privateDelivery).toBeDefined();
     const privateMarker = privateDelivery!.markerText;
 
-    const noScope = recall(ctx, { query: privateMarker });
+    const noScope = await retrieve(ctx, { query: privateMarker });
     // Default-deny: no private-repo content surfaces to a no-scope caller.
     // Since v1.25.0 the private exclusion runs in SQL BEFORE the candidate
     // window (codex review P2: post-window filtering let private rows starve
@@ -348,7 +348,7 @@ describe('GitHub connector — 200-event smoke test', () => {
       }
     }
 
-    const withScope = recall(ctx, { query: privateMarker, scope: SCOPE_PRIVATE });
+    const withScope = await retrieve(ctx, { query: privateMarker, scope: SCOPE_PRIVATE });
     expect(withScope.results.length).toBeGreaterThan(0);
     expect(withScope.results.some((r) => r.content.includes(privateMarker))).toBe(true);
 
@@ -394,13 +394,13 @@ describe('GitHub connector — 200-event smoke test', () => {
       artifactRef: 'acme://demo/secret/1',
       tags: ['source:acme'],
     });
-    const canaryNoScope = recall(ctx, { query: 'cross-scope-canary-payload-1234' });
+    const canaryNoScope = await retrieve(ctx, { query: 'cross-scope-canary-payload-1234' });
     // v1.25.0: same rationale as section (6) — the SQL pre-window exclusion
     // makes a denied-only match behave like a no-match query (fallback rows
     // possible); assert the intent (the canary payload never surfaces), not
     // the distinguishable-empty shape.
     expect(canaryNoScope.results.some((r) => r.content.includes('cross-scope-canary-payload-1234'))).toBe(false);
-    const canaryScoped = recall(ctx, {
+    const canaryScoped = await retrieve(ctx, {
       query: 'cross-scope-canary-payload-1234',
       scope: 'acme:private:demo',
     });

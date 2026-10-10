@@ -15,7 +15,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
-import { recall, type Context } from '../src/api/index.js';
+import { retrieve, type Context } from '../src/api/index.js';
 import { savePrediction, closePrediction } from '../src/store/predictions.js';
 import { makeRoot } from './_helpers/make-root.js';
 
@@ -74,9 +74,9 @@ describe('api.recall planningFallacyHint', () => {
     delete process.env.HIPPO_AUTODEBIAS;
   });
 
-  it('populates planningFallacyHint when query has forward-claim AND class resolves AND nClosed > 0', () => {
+  it('populates planningFallacyHint when query has forward-claim AND class resolves AND nClosed > 0', async () => {
     seedMigrationEffortBaserate(root);
-    const result = recall(ctxFor(root), { query: 'the migration effort will take 3 days' });
+    const result = await retrieve(ctxFor(root), { query: 'the migration effort will take 3 days' });
     expect(result.planningFallacyHint).toBeDefined();
     expect(result.planningFallacyHint!.classTag).toBe('migration-effort');
     expect(result.planningFallacyHint!.source).toBe('j3.2-auto');
@@ -86,47 +86,47 @@ describe('api.recall planningFallacyHint', () => {
     expect(result.planningFallacyHint!.baserateSummary).toContain('migration-effort');
   });
 
-  it('absent when query has no forward-claim phrase', () => {
+  it('absent when query has no forward-claim phrase', async () => {
     seedMigrationEffortBaserate(root);
-    const result = recall(ctxFor(root), { query: 'tell me about migration auth flow' });
+    const result = await retrieve(ctxFor(root), { query: 'tell me about migration auth flow' });
     expect(result.planningFallacyHint).toBeUndefined();
   });
 
-  it('absent when forward-claim detected but no class scored >= 1 (no_class_match audit fires)', () => {
+  it('absent when forward-claim detected but no class scored >= 1 (no_class_match audit fires)', async () => {
     seedMigrationEffortBaserate(root);
-    const result = recall(ctxFor(root), { query: 'unrelated stuff will take 3 days' });
+    const result = await retrieve(ctxFor(root), { query: 'unrelated stuff will take 3 days' });
     expect(result.planningFallacyHint).toBeUndefined();
     expect(countAuditOps(root, 'recall_autodebias_hint_no_class_match')).toBe(1);
     expect(countAuditOps(root, 'recall_autodebias_hint')).toBe(0);
   });
 
-  it('absent when class has no closed predictions yet (only open ones)', () => {
+  it('absent when class has no closed predictions yet (only open ones)', async () => {
     savePrediction(root, 'default', {
       classTag: 'migration-effort',
       claimText: 'migration prediction open',
       estimateValue: 3,
     });
-    const result = recall(ctxFor(root), { query: 'migration effort will take 5 days' });
+    const result = await retrieve(ctxFor(root), { query: 'migration effort will take 5 days' });
     expect(result.planningFallacyHint).toBeUndefined();
   });
 
-  it('absent under HIPPO_AUTODEBIAS=off even when conditions otherwise met', () => {
+  it('absent under HIPPO_AUTODEBIAS=off even when conditions otherwise met', async () => {
     seedMigrationEffortBaserate(root);
     process.env.HIPPO_AUTODEBIAS = 'off';
-    const result = recall(ctxFor(root), { query: 'migration effort will take 3 days' });
+    const result = await retrieve(ctxFor(root), { query: 'migration effort will take 3 days' });
     expect(result.planningFallacyHint).toBeUndefined();
     // No audit fires either — off short-circuits before the regex gate.
     expect(countAuditOps(root, 'recall_autodebias_hint')).toBe(0);
     expect(countAuditOps(root, 'recall_autodebias_hint_no_class_match')).toBe(0);
   });
 
-  it('absent when query is empty', () => {
+  it('absent when query is empty', async () => {
     seedMigrationEffortBaserate(root);
-    const result = recall(ctxFor(root), { query: '' });
+    const result = await retrieve(ctxFor(root), { query: '' });
     expect(result.planningFallacyHint).toBeUndefined();
   });
 
-  it('silent on tie: 2 classes with equal overlap returns no hint + emits tiebreak audit', () => {
+  it('silent on tie: 2 classes with equal overlap returns no hint + emits tiebreak audit', async () => {
     // Seed two classes that BOTH overlap with "migration" token.
     const pairs: Array<[number, number]> = [[2, 4]];
     for (const [est, act] of pairs) {
@@ -136,38 +136,38 @@ describe('api.recall planningFallacyHint', () => {
       closePrediction(root, 'default', b.id, { closureState: 'closed', actualValue: act });
     }
     // Query "migration will take 3 days" overlaps only on "migration" — tie.
-    const result = recall(ctxFor(root), { query: 'migration will take 3 days' });
+    const result = await retrieve(ctxFor(root), { query: 'migration will take 3 days' });
     expect(result.planningFallacyHint).toBeUndefined();
     expect(countAuditOps(root, 'recall_autodebias_hint_tiebreak')).toBe(1);
     expect(countAuditOps(root, 'recall_autodebias_hint')).toBe(0);
   });
 
-  it('actor attribution: MCP-originated recall writes audit row with actor=mcp (not cli default)', () => {
+  it('actor attribution: MCP-originated recall writes audit row with actor=mcp (not cli default)', async () => {
     seedMigrationEffortBaserate(root);
     const mcpCtx: Context = { hippoRoot: root, tenantId: 'default', actor: { subject: 'mcp', role: 'admin' } };
-    recall(mcpCtx, { query: 'migration effort will take 3 days' });
+    await retrieve(mcpCtx, { query: 'migration effort will take 3 days' });
     expect(lastAuditActor(root, 'recall_autodebias_hint')).toBe('mcp');
   });
 
-  it('actor attribution: HTTP api_key:* subject flows through to audit', () => {
+  it('actor attribution: HTTP api_key:* subject flows through to audit', async () => {
     seedMigrationEffortBaserate(root);
     const httpCtx: Context = { hippoRoot: root, tenantId: 'default', actor: { subject: 'api_key:hk_demo123', role: 'admin' } };
-    recall(httpCtx, { query: 'migration effort will take 3 days' });
+    await retrieve(httpCtx, { query: 'migration effort will take 3 days' });
     expect(lastAuditActor(root, 'recall_autodebias_hint')).toBe('api_key:hk_demo123');
   });
 
-  it('predict_baserate audit channel NOT polluted on auto-hint success (emitAudit=false path)', () => {
+  it('predict_baserate audit channel NOT polluted on auto-hint success (emitAudit=false path)', async () => {
     seedMigrationEffortBaserate(root);
     // Baseline: 0 predict_baserate rows after seeding.
     const baselineBaserate = countAuditOps(root, 'predict_baserate');
-    const result = recall(ctxFor(root), { query: 'migration effort will take 3 days' });
+    const result = await retrieve(ctxFor(root), { query: 'migration effort will take 3 days' });
     expect(result.planningFallacyHint).toBeDefined();
     // J3.2 emits recall_autodebias_hint, NOT predict_baserate.
     expect(countAuditOps(root, 'recall_autodebias_hint')).toBe(1);
     expect(countAuditOps(root, 'predict_baserate')).toBe(baselineBaserate);
   });
 
-  it('class_tag selection is tenant-global, NOT scope-filtered (documented v1 behavior)', () => {
+  it('class_tag selection is tenant-global, NOT scope-filtered (documented v1 behavior)', async () => {
     // Independent-review-critic round 1 MED locked here: PlanningFallacyHint.classTag
     // surfaces across recall scopes. Base-rate reasoning needs the full historical
     // sample; the hint payload itself carries no memory content (only summary string
@@ -179,17 +179,17 @@ describe('api.recall planningFallacyHint', () => {
     // 2. A no-scope recall (the agent didn't specify --scope) should STILL surface
     //    the migration-effort class hint, even though the predictions were created
     //    via tenant-global savePrediction calls without scope segregation.
-    const result = recall(ctxFor(root), { query: 'the migration effort will take 3 days' });
+    const result = await retrieve(ctxFor(root), { query: 'the migration effort will take 3 days' });
     expect(result.planningFallacyHint).toBeDefined();
     expect(result.planningFallacyHint!.classTag).toBe('migration-effort');
     // Sanity: the same data with an explicit scope filter on recall still surfaces
     // the hint (the resolver doesn't consult opts.scope by design).
-    const scopedResult = recall(ctxFor(root), { query: 'the migration effort will take 3 days', scope: 'channel:work' });
+    const scopedResult = await retrieve(ctxFor(root), { query: 'the migration effort will take 3 days', scope: 'channel:work' });
     expect(scopedResult.planningFallacyHint).toBeDefined();
     expect(scopedResult.planningFallacyHint!.classTag).toBe('migration-effort');
   });
 
-  it('cross-tenant scoping: tenant-b query gets no hint from tenant-a predictions', () => {
+  it('cross-tenant scoping: tenant-b query gets no hint from tenant-a predictions', async () => {
     // Seed tenant-a only.
     const ctxA: Context = { hippoRoot: root, tenantId: 'tenant-a', actor: { subject: 'cli', role: 'admin' } };
     const pairs: Array<[number, number]> = [[2, 4], [3, 6]];
@@ -198,11 +198,11 @@ describe('api.recall planningFallacyHint', () => {
       closePrediction(root, 'tenant-a', p.id, { closureState: 'closed', actualValue: act });
     }
     // Tenant-a query gets the hint.
-    const resultA = recall(ctxA, { query: 'migration effort will take 3 days' });
+    const resultA = await retrieve(ctxA, { query: 'migration effort will take 3 days' });
     expect(resultA.planningFallacyHint).toBeDefined();
     // Tenant-b query gets nothing.
     const ctxB: Context = { hippoRoot: root, tenantId: 'tenant-b', actor: { subject: 'cli', role: 'admin' } };
-    const resultB = recall(ctxB, { query: 'migration effort will take 3 days' });
+    const resultB = await retrieve(ctxB, { query: 'migration effort will take 3 days' });
     expect(resultB.planningFallacyHint).toBeUndefined();
   });
 });

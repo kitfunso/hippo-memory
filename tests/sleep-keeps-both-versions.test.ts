@@ -341,7 +341,7 @@ describe('a retired version leaves the merged row', () => {
   const OLD = 'The web app dev server runs on port 3000 locally.';
   const NEW = 'The web app dev server now runs on port 5173 locally.';
   const ctx = (root: string): api.Context => ({ hippoRoot: root, tenantId: 'default', actor: api.adminActor('cli') });
-  const recalled = (root: string): string => api.recall(ctx(root), { query: 'web app dev server port' }).results.map((r) => r.content).join('\n');
+  const recalled = async (root: string): Promise<string> => (await api.retrieve(ctx(root), { query: 'web app dev server port' })).results.map((r) => r.content).join('\n');
   const current = (root: string): string => loadAllEntries(root).filter((e) => !e.superseded_by).map((e) => e.content).join('\n');
 
   async function mergedPair(): Promise<{ root: string; old: MemoryEntry; next: MemoryEntry; row: MemoryEntry }> {
@@ -367,8 +367,8 @@ describe('a retired version leaves the merged row', () => {
     expect(kept.content).toBe(`[Consolidated from 1 related memory, newest first]\n\n- ${NEW}`);
     expect(kept.parents).toEqual([next.id]);
     expect(current(root)).not.toContain(OLD);
-    expect(recalled(root)).toContain(NEW);
-    expect(recalled(root)).not.toContain('port 3000');
+    expect(await recalled(root)).toContain(NEW);
+    expect(await recalled(root)).not.toContain('port 3000');
   });
 
   it('reject takes the value out of a dormant merged row, so restoring it cannot bring the value back', async () => {
@@ -386,7 +386,7 @@ describe('a retired version leaves the merged row', () => {
     const restored = api.restoreDormant(ctx(root), dormant.id);
 
     expect(current(root)).not.toContain(OLD);
-    expect(recalled(root)).not.toContain('port 3000');
+    expect(await recalled(root)).not.toContain('port 3000');
     expect(restored.content).toBe(`[Consolidated from 1 related memory, newest first]\n\n- ${NEW}`);
     expect(restored.parents).toEqual([next.id]);
     expect(out).toContain(`Dormant merged rows that held it keep their other texts in: ${dormant.id}`);
@@ -399,7 +399,7 @@ describe('a retired version leaves the merged row', () => {
     await consolidate(root, { now: new Date(Date.now() + DAY) });
 
     expect(current(root)).not.toContain(OLD);
-    expect(recalled(root)).not.toContain('port 3000');
+    expect(await recalled(root)).not.toContain('port 3000');
     expect(merged(root).map((e) => [e.content, e.parents])).toEqual([[`[Consolidated from 1 related memory, newest first]\n\n- ${NEW}`, [next.id]]]);
   });
 
@@ -441,7 +441,7 @@ describe('recall and context show a merged row, not the sources it holds', () =>
 
   it('api recall with a fresh tail', async () => {
     const { root, row } = await mergedStore();
-    expect(api.recall(ctx(root), { query: QUERY, freshTailCount: 5 }).results.map((r) => r.id)).toEqual([row.id]);
+    expect((await api.retrieve(ctx(root), { query: QUERY, freshTailCount: 5 })).results.map((r) => r.id)).toEqual([row.id]);
   });
 
   it('CLI recall and explain', async () => {

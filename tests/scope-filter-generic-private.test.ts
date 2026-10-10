@@ -24,7 +24,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import type { Context } from '../src/api/index.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { recall } from '../src/api/index.js';
+import { retrieve } from '../src/api/index.js';
 import { handleMcpRequest, type McpResponse } from '../src/mcp/server.js';
 import { makeRoot } from './_helpers/make-root.js';
 
@@ -77,7 +77,7 @@ describe('scope filter — generic *:private:* default-deny', () => {
     writeEntry(home, createMemory('public memory body', { scope: 'slack:public:Cgeneral' }));
     writeEntry(home, createMemory('acme private secret content', { scope: 'acme:private:demo' }));
 
-    const result = recall(ctx(home), { query: 'secret content' });
+    const result = await retrieve(ctx(home), { query: 'secret content' });
     const ids = result.results.map((r) => r.content);
     expect(ids).not.toContain('acme private secret content');
   });
@@ -85,7 +85,7 @@ describe('scope filter — generic *:private:* default-deny', () => {
   it('api.recall denies github:private:owner/repo to a no-scope caller', async () => {
     writeEntry(home, createMemory('github private body', { scope: 'github:private:acme/secret-repo' }));
 
-    const result = recall(ctx(home), { query: 'github private body' });
+    const result = await retrieve(ctx(home), { query: 'github private body' });
     const ids = result.results.map((r) => r.content);
     expect(ids).not.toContain('github private body');
   });
@@ -93,7 +93,7 @@ describe('scope filter — generic *:private:* default-deny', () => {
   it('api.recall denies jira:private:PROJ-1 to a no-scope caller', async () => {
     writeEntry(home, createMemory('jira ticket private text', { scope: 'jira:private:PROJ-1' }));
 
-    const result = recall(ctx(home), { query: 'jira ticket private text' });
+    const result = await retrieve(ctx(home), { query: 'jira ticket private text' });
     const ids = result.results.map((r) => r.content);
     expect(ids).not.toContain('jira ticket private text');
   });
@@ -101,7 +101,7 @@ describe('scope filter — generic *:private:* default-deny', () => {
   it('api.recall returns acme:private:demo when scope matches exactly', async () => {
     writeEntry(home, createMemory('acme private secret content', { scope: 'acme:private:demo' }));
 
-    const result = recall(ctx(home), { query: 'secret content', scope: 'acme:private:demo' });
+    const result = await retrieve(ctx(home), { query: 'secret content', scope: 'acme:private:demo' });
     const contents = result.results.map((r) => r.content);
     expect(contents).toContain('acme private secret content');
   });
@@ -109,7 +109,7 @@ describe('scope filter — generic *:private:* default-deny', () => {
   it('api.recall does NOT leak acme:private:demo to a different explicit scope', async () => {
     writeEntry(home, createMemory('acme private secret content', { scope: 'acme:private:demo' }));
 
-    const result = recall(ctx(home), { query: 'secret content', scope: 'slack:public:Cgeneral' });
+    const result = await retrieve(ctx(home), { query: 'secret content', scope: 'slack:public:Cgeneral' });
     const contents = result.results.map((r) => r.content);
     expect(contents).not.toContain('acme private secret content');
   });
@@ -124,7 +124,7 @@ describe('scope filter — generic *:private:* default-deny', () => {
       scope: 'github:private:acme/secret-repo',
     });
 
-    const result = recall(ctx(home), { query: 'anything', includeContinuity: true });
+    const result = await retrieve(ctx(home), { query: 'anything', includeContinuity: true });
     expect(result.continuity?.activeSnapshot).toBeNull();
   });
 
@@ -138,7 +138,7 @@ describe('scope filter — generic *:private:* default-deny', () => {
       scope: 'acme:private:demo',
     });
 
-    const result = recall(ctx(home), { query: 'anything', includeContinuity: true });
+    const result = await retrieve(ctx(home), { query: 'anything', includeContinuity: true });
     expect(result.continuity?.activeSnapshot).toBeNull();
   });
 
@@ -152,7 +152,7 @@ describe('scope filter — generic *:private:* default-deny', () => {
       scope: 'acme:private:demo',
     });
 
-    const result = recall(ctx(home), { query: 'anything', includeContinuity: true, scope: 'acme:private:demo' });
+    const result = await retrieve(ctx(home), { query: 'anything', includeContinuity: true, scope: 'acme:private:demo' });
     expect(result.continuity?.activeSnapshot?.task).toBe('ACME private task');
   });
 
@@ -161,7 +161,7 @@ describe('scope filter — generic *:private:* default-deny', () => {
     writeEntry(home, createMemory('another public memory', { scope: 'slack:public:Cgeneral' }));
     writeEntry(home, createMemory('untagged memory', { scope: null }));
 
-    const result = recall(ctx(home), { query: 'memory' });
+    const result = await retrieve(ctx(home), { query: 'memory' });
     const contents = result.results.map((r) => r.content);
     expect(contents).toContain('a public memory');
     expect(contents).toContain('another public memory');
@@ -173,7 +173,7 @@ describe('scope filter — generic *:private:* default-deny', () => {
     // the segment is "public" not "private". Guards against a sloppy substring match.
     writeEntry(home, createMemory('not-actually-private memory', { scope: 'acme:public:my-private-channel' }));
 
-    const result = recall(ctx(home), { query: 'private memory' });
+    const result = await retrieve(ctx(home), { query: 'private memory' });
     const contents = result.results.map((r) => r.content);
     expect(contents).toContain('not-actually-private memory');
   });

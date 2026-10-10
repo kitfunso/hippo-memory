@@ -17,7 +17,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, type MemoryEntry, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
-import { recall, type Context } from '../src/api/index.js';
+import { retrieve, type Context } from '../src/api/index.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 function safeRmSync(p: string): void {
@@ -41,19 +41,19 @@ describe('RecallOpts.scorerWindow', () => {
   beforeEach(() => { root = makeRoot('f3'); });
   afterEach(() => safeRmSync(root));
 
-  it('default (scorerWindow undefined): RecallResult.windowSize equals store default 200 — back-compat preserved', () => {
+  it('default (scorerWindow undefined): RecallResult.windowSize equals store default 200, back-compat preserved', async () => {
     writeEntry(root, makeRaw('alpha'));
-    const result = recall(ctxFor(root), { query: 'alpha' });
+    const result = await retrieve(ctxFor(root), { query: 'alpha' });
     expect(result.windowSize).toBe(200);
   });
 
-  it('explicit scorerWindow: RecallResult.windowSize equals the opt-in value', () => {
+  it('explicit scorerWindow: RecallResult.windowSize equals the opt-in value', async () => {
     writeEntry(root, makeRaw('alpha'));
-    const result = recall(ctxFor(root), { query: 'alpha', scorerWindow: 50 });
+    const result = await retrieve(ctxFor(root), { query: 'alpha', scorerWindow: 50 });
     expect(result.windowSize).toBe(50);
   });
 
-  it('scorerWindow can widen the candidate pool above limit (proves widening)', () => {
+  it('scorerWindow can widen the candidate pool above limit (proves widening)', async () => {
     // Codex diff-pass P2 #4: original assertion `total <= 25 && total > 0`
     // would pass even if the implementation accidentally loaded only
     // `limit` candidates. Strengthen: insert 30 raws all matching the
@@ -61,7 +61,7 @@ describe('RecallOpts.scorerWindow', () => {
     // total === 25 (the FTS path under SQLite returns exactly LIMIT
     // matching rows when more than LIMIT exist).
     for (let i = 0; i < 30; i++) writeEntry(root, makeRaw(`zeta ${i}`));
-    const result = recall(ctxFor(root), {
+    const result = await retrieve(ctxFor(root), {
       query: 'zeta',
       limit: 5,
       scorerWindow: 25,
@@ -73,11 +73,11 @@ describe('RecallOpts.scorerWindow', () => {
     expect(result.total).toBe(25);
   });
 
-  it('scorerWindow validation: 0 throws RecallContractError with invalid_scorer_window', () => {
+  it('scorerWindow validation: 0 throws RecallContractError with invalid_scorer_window', async () => {
     writeEntry(root, makeRaw('alpha'));
     let thrown = null;
     try {
-      recall(ctxFor(root), { query: 'alpha', scorerWindow: 0 });
+      await retrieve(ctxFor(root), { query: 'alpha', scorerWindow: 0 });
     } catch (err) {
       thrown = err;
     }
@@ -95,11 +95,11 @@ describe('RecallOpts.scorerWindow', () => {
 
   it.each([-5, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
     'scorerWindow=%s throws RecallContractError with code invalid_scorer_window (testing specialist #1)',
-    (bad) => {
+    async (bad) => {
       writeEntry(root, makeRaw('alpha'));
       let thrown = null;
       try {
-        recall(ctxFor(root), { query: 'alpha', scorerWindow: bad });
+        await retrieve(ctxFor(root), { query: 'alpha', scorerWindow: bad });
       } catch (err) {
         thrown = err;
       }
@@ -121,11 +121,11 @@ describe('RecallOpts.scorerWindow', () => {
     },
   );
 
-  it('limit semantics unchanged: caps base BM25 hits, fresh-tail/summary can expand', () => {
+  it('limit semantics unchanged: caps base BM25 hits, fresh-tail/summary can expand', async () => {
     // Pre-v1.7.0 behaviour: limit caps BM25 base, fresh-tail and summary
     // substitutions extend above. Verify F3 didn't change this.
     for (let i = 0; i < 10; i++) writeEntry(root, makeRaw(`omega ${i}`));
-    const result = recall(ctxFor(root), {
+    const result = await retrieve(ctxFor(root), {
       query: 'omega',
       limit: 3,
       freshTailCount: 5,
@@ -141,13 +141,13 @@ describe('RecallOpts.scorerWindow', () => {
     expect(freshOnes.length).toBeGreaterThan(0);
   });
 
-  it('scorerWindow=1 (smallest legal value) is accepted and honoured (v1.7.1 INFO #2)', () => {
+  it('scorerWindow=1 (smallest legal value) is accepted and honoured (v1.7.1 INFO #2)', async () => {
     // Validator at src/api/index.ts accepts `>= 1` integers. A regression flipping
     // `< 1` to `<= 1` or `< 2` would not be caught by the existing 0-rejection
     // test alone. Pin the lower bound: scorerWindow=1 must NOT throw and the
     // candidate pool must shrink to exactly 1.
     for (let i = 0; i < 5; i++) writeEntry(root, makeRaw(`tau ${i}`));
-    const result = recall(ctxFor(root), {
+    const result = await retrieve(ctxFor(root), {
       query: 'tau',
       limit: 5,
       scorerWindow: 1,
