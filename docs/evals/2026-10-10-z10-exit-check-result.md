@@ -1,8 +1,8 @@
 # Z10 exit check result: delivery reconstruction, invariance and overhead
 
 **Date:** 2026-10-10  
-**Scope:** the engineering part of the Z10 exit, as registered in the [Z10 draft](./2026-09-30-z10-ledger-prereg.md) under "Exit check: engineering scope", with Amendments 1 and 2. No task or efficacy claim.  
-**Verdict:** the engineering part passes at `639be66a`. All 34 class reads and 12 negative controls match their oracles on all eight fields, and each of the 11 reader mutants fails at least one case. The parser's counts match an independent count on three real transcripts, and a live session reads as delivered with application unknown. Recall decisions are unchanged on three surfaces. The ledger's in-process cost meets Amendment 1. The reviews then found eight defects, listed under "Review fixes after the scored run"; with them fixed, the exit tests, the mutants and the live read pass again at `9f04b580`.  
+**Scope:** the engineering part of the Z10 exit, as registered in the [Z10 draft](./2026-09-30-z10-ledger-prereg.md) under "Exit check: engineering scope", with Amendments 1 and 2 for the scored run and Amendment 3 for the review fixes. No task or efficacy claim.  
+**Verdict:** the engineering part passes at `639be66a` (rebased twin `b042bdd1`). All 34 class reads and 12 negative controls match their oracles on all eight fields, and each of the 11 reader mutants fails at least one case. The parser's counts match an independent count on three real transcripts, and a live session reads as delivered with application unknown. Recall decisions are unchanged on three surfaces. The ledger's in-process cost meets Amendment 1. The reviews then found eight defects, listed under "Review fixes after the scored run"; with them fixed, the exit tests, the mutants and the live read pass again at `9f04b580`.  
 **Status:** the delivery ledger stays off by default behind `deliveryLedger.enabled`. Z10's exit stays open until tool-failure rows exist, which need a schema change.
 
 ## What was built
@@ -131,7 +131,7 @@ Again at `9f04b580`, on master `6005960d`:
 - The 11 mutants each fail at least one case, caught by the same tests as in the table above, and N4 now also catches M10.
 - The live read is byte-identical to the archived verdict, SHA-256 `4db9beac…d7765602`.
 - A second codex pass raised one more case, listed under Limits: a project whose `.hippo` is a link to the global store.
-- The scored commit `639be66a` predates two rebases. It is kept on the local branch `archive/z10-exit-scored` of the machine that ran the check. Its rebased twin `b042bdd1` has the same reader, parser, helper and exit-test files.
+- The scored commit `639be66a` predates two rebases and is not in this repository. Its rebased twin `b042bdd1` is, with the same reader, parser, helper and exit-test files. The original is kept on the local branch `archive/z10-exit-scored` of the machine that ran the check.
 
 ## Findings
 
