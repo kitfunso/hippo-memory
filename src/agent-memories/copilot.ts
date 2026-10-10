@@ -6,9 +6,21 @@ import { readFolderStore, type FolderRules } from './folder-store.js';
 import { gitLayout } from './git.js';
 import type { Adapter, AdapterContext, Container } from './types.js';
 import { errorMessage } from '../util/log.js';
-import { vscodeDataFolders } from '../util/agent-homes.js';
 
+const PRODUCTS = ['Code', 'Code - Insiders'] as const;
 const MEMORY_TOOL = ['github.copilot-chat', 'memory-tool', 'memories'] as const;
+
+/** VS Code's user-data resolution: portable install first, then the app-data override, then the platform default. */
+export function vscodeDataFolders(ctx: Pick<AdapterContext, 'env' | 'home' | 'platform'>): string[] {
+  const { env, home, platform } = ctx;
+  if (env.VSCODE_PORTABLE) return [path.join(env.VSCODE_PORTABLE, 'user-data')];
+  let appData: string;
+  if (env.VSCODE_APPDATA) appData = env.VSCODE_APPDATA;
+  else if (platform === 'win32') appData = env.APPDATA || path.join(home, 'AppData', 'Roaming');
+  else if (platform === 'darwin') appData = path.join(home, 'Library', 'Application Support');
+  else appData = env.XDG_CONFIG_HOME || path.join(home, '.config');
+  return PRODUCTS.map((product) => path.join(appData, product));
+}
 
 interface WorkspaceFile {
   readonly folder?: string;

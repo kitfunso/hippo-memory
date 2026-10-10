@@ -1,6 +1,6 @@
 import { MemoryEntry, Layer, calculateStrength, type DecayOptions } from '../core/memory.js';
 import { jaccardMinShared, overlapPartners } from './overlap-index.js';
-import { isQuarantineScope } from '../store/quarantine.js';
+import { isQuarantineScope } from '../trust/quarantine.js';
 import { isPersonalScope } from '../store/recall-scope.js';
 import { DECAY_THRESHOLD } from './decay.js';
 

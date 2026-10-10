@@ -12,10 +12,6 @@ export function quarantineScopeFor(original: string | null): string {
   return `${QUARANTINE_SCOPE_PREFIX}${original ?? 'unscoped'}`;
 }
 
-export function isQuarantineScope(scope: string | null | undefined): boolean {
-  return scope != null && scope.startsWith(QUARANTINE_SCOPE_PREFIX);
-}
-
 export type QuarantineStatus = 'pending' | 'approved' | 'rejected';
 
 export interface QuarantineRow {

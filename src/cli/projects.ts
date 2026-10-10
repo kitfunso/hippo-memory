@@ -2,7 +2,7 @@
 
 import * as path from 'path';
 import { execFileSync } from 'child_process';
-import { withWriteHandle } from '../store/handles.js';
+import { closeHippoDb, openHippoDb } from '../db/index.js';
 import { listProjects, mergeProjects, repairProjects, type ProjectSummary } from '../sharing/project-merge.js';
 import { type CliFlags, flagIsTrue, type CommandContext } from './flag-values.js';
 import { resolveAuthRoot } from './shared.js';
@@ -86,16 +86,17 @@ function projectsRepair(db: ProjectsDb, tenantId: string, root: string, flags: C
 export function handleProjects({ hippoRoot, tenantId, args, flags }: CommandContext): void {
   const root = resolveAuthRoot(hippoRoot, flags);
   const sub = args[0] ?? 'list';
+  const db = openHippoDb(root);
   try {
-    withWriteHandle(root, (db) => {
-      if (sub === 'list') return projectsList(db, tenantId, root, flags);
-      if (sub === 'merge') return projectsMerge(db, tenantId, root, args, flags);
-      if (sub === 'repair') return projectsRepair(db, tenantId, root, flags);
-      printError('Usage: hippo projects [list] [--json] | merge <from> <into> [--apply] | repair [--apply]  [--global]');
-      process.exitCode = 1;
-    });
+    if (sub === 'list') return projectsList(db, tenantId, root, flags);
+    if (sub === 'merge') return projectsMerge(db, tenantId, root, args, flags);
+    if (sub === 'repair') return projectsRepair(db, tenantId, root, flags);
+    printError('Usage: hippo projects [list] [--json] | merge <from> <into> [--apply] | repair [--apply]  [--global]');
+    process.exitCode = 1;
   } catch (err) {
     printError(errorMessage(err));
     process.exitCode = 1;
+  } finally {
+    closeHippoDb(db);
   }
 }

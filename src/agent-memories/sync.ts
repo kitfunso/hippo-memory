@@ -5,8 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { errorMessage } from '../util/log.js';
 import { loadConfig } from '../core/config.js';
-import { closeHippoDb, isSqliteBusy, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
-import { openScratchHandle, openWriteHandle } from '../store/handles.js';
+import { closeHippoDb, isSqliteBusy, openHippoDb, outsideRequestStores, withWriteScope, type DatabaseSyncLike } from '../db/index.js';
 import type { MemoryEntry } from '../core/memory.js';
 import { namesFoldedInto } from '../sharing/project-merge.js';
 import { isGlobalStoreRoot, projectNames, resolveGlobalRootDir, resolveProjectIdentity, type ProjectIdentity } from '../core/project-identity.js';
@@ -211,14 +210,14 @@ function openTarget(target: string, hasItems: boolean, opts: SyncOptions): OpenS
     if (!hasItems) return null;
     initStore(target);
   }
-  const db = openWriteHandle(target, { busyWaitMs: opts.busyWaitMs });
+  const db = openHippoDb(target, { busyWaitMs: opts.busyWaitMs });
   return { db, root: target, global, close: () => closeHippoDb(db) };
 }
 
 function emptyStandIn(global: boolean): OpenStore {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-agent-memories-'));
   // Its folder is deleted at close, so a request scope must not keep the file open past that.
-  const db = openScratchHandle(root);
+  const db = outsideRequestStores(() => openHippoDb(root));
   return {
     db, root, global,
     close: () => {
@@ -370,7 +369,7 @@ function handOver(synced: readonly ContainerWork[], projectRoot: string, opts: S
   if (synced.length === 0 || !isInitialized(globalRoot)) return;
   let db: DatabaseSyncLike | undefined;
   try {
-    db = openWriteHandle(globalRoot, { busyWaitMs: opts.busyWaitMs });
+    db = openHippoDb(globalRoot, { busyWaitMs: opts.busyWaitMs });
     const tenantId = resolveTenantId({});
     // A folder with no git and no marker wrote as '' before its store existed, and as its own name after.
     // Names folded into this project's in the global store were its rows too.

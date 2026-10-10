@@ -4,7 +4,7 @@ import path from 'node:path';
 import { resolveProjectIdentity, type ProjectIdentity } from '../core/project-identity.js';
 import { realpathOrResolve } from '../util/real-path.js';
 import { isStringValue } from '../core/capture-contract.js';
-import { claudeConfigDir } from '../util/agent-homes.js';
+import { claudeConfigDir } from '../hooks/shared.js';
 import { expandHome, frontmatterField, itemTime, readTextFile, splitFrontmatter } from './files.js';
 import { markdownNotes, readFolderStore, uniqueFolders, type FolderRules } from './folder-store.js';
 import { gitLayout } from './git.js';

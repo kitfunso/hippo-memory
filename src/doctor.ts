@@ -6,10 +6,9 @@ import * as path from 'node:path';
 import { findHippoStoreDir } from './core/project-identity.js';
 import { getGlobalRoot } from './sharing/global-store.js';
 import { isInitialized } from './store/open.js';
-import { openReadHandle } from './store/handles.js';
 import { readStoreHealth, type StoreHealth } from './store/diagnostics.js';
 import { loadConfig } from './core/config.js';
-import { closeHippoDb, getCurrentSchemaVersion, IncompatibleBinaryError, type DatabaseSyncLike } from './db/index.js';
+import { openHippoDbReadOnly, closeHippoDb, getCurrentSchemaVersion, IncompatibleBinaryError, type DatabaseSyncLike } from './db/index.js';
 import { REPLAY_AFTER_MS, TRANSCRIPT_FILL_WINDOW_MS } from './capture/compaction-record.js';
 import { SPOOL_DIR, spoolCounts, type SpoolCounts } from './capture/compaction-spool.js';
 import { isEmbeddingAvailable } from './store/embeddings/local.js';
@@ -182,7 +181,7 @@ function compactionsCheck(compactions: StoreHealth['compactions'], store: string
 function projectsCheck(globalRoot: string): DoctorCheck {
   let db: DatabaseSyncLike | null = null;
   try {
-    db = openReadHandle(globalRoot);
+    db = openHippoDbReadOnly(globalRoot);
     const r = planProjectRepair(db, globalRoot, resolveTenantId({}));
     const found = [
       r.copies.length > 0 ? `${r.copies.length} imported notes copied under the wrong project` : '',
