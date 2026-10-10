@@ -1,7 +1,7 @@
 import { generateId } from '../core/memory.js';
 import { withWriteScope, withWriteScopeOr, type DatabaseSyncLike } from '../db/index.js';
 import { SessionHandoff, SessionHandoffRow, rowToSessionHandoff, isHandoffOutcome, HandoffOutcome } from '../core/handoff.js';
-import { Card, CardStatus, CardRun, CardComment, CARD_TRANSITIONS, CARD_LEASE_MS } from '../core/card.js';
+import { Card, CardStatus, CardRun, CardComment, CARD_LEASE_MS, assertCardTransition } from '../core/card.js';
 import { assertTenantId } from './tenant.js';
 import { onHandle, openStore } from './open.js';
 import { chunked } from './entry-reads.js';
@@ -135,18 +135,14 @@ export interface TransitionCardOptions {
   readonly extra?: { setSql?: string; whereSql?: string; params?: unknown[] };
 }
 
-export function transitionCard(db: DatabaseSyncLike, tenantId: string, cardId: string, options: TransitionCardOptions): number {
+function transitionCard(db: DatabaseSyncLike, tenantId: string, cardId: string, options: TransitionCardOptions): number {
   return transitionCards(db, tenantId, [cardId], options);
 }
 
 /** transitionCard for every card in `cardIds`, as one statement with one timestamp; returns how many moved. */
 function transitionCards(db: DatabaseSyncLike, tenantId: string, cardIds: readonly string[], options: TransitionCardOptions): number {
   const { from, to, extra } = options;
-  for (const status of from) {
-    if (!CARD_TRANSITIONS[status].includes(to)) {
-      throw new Error(`illegal card transition: ${status} -> ${to}`);
-    }
-  }
+  assertCardTransition(from, to);
   const now = new Date().toISOString();
   // Lease columns follow status: set on the move to running, cleared on every other move (rule 15).
   const lease = to === 'running' ? [leaseUntilFrom(now), now] : [null, null];

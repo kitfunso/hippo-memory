@@ -6,7 +6,7 @@ import { scopeMatch } from '../sharing/scope.js';
 import { temporalBoost, type TemporalDirection, type TemporalRange } from './temporal.js';
 import { DAY_MS } from '../util/time.js';
 
-export const CHURN_STALE_RANK_MULTIPLIER = 0.5; // SHORTCUT: untuned; measure on real recall before any default.
+const CHURN_STALE_RANK_MULTIPLIER = 0.5; // SHORTCUT: untuned; measure on real recall before any default.
 
 const DECISION_TAG_BOOST = 1.2;
 // A memory tagged for the active scope outranks a neutral one; one tagged for another scope is demoted.
@@ -31,7 +31,7 @@ export function churnStaleFactor(entry: MemoryEntry): number {
   return entry.tags.includes(CHURN_STALE_TAG) ? CHURN_STALE_RANK_MULTIPLIER : 1.0;
 }
 
-export function recencyBoost(entry: MemoryEntry, now: Date): number {
+function recencyBoost(entry: MemoryEntry, now: Date): number {
   if (isRecencyAblated()) return 1; // EVAL-ONLY ablation (see ablation.ts)
   const created = new Date(entry.created);
   const ageDays = (now.getTime() - created.getTime()) / DAY_MS;

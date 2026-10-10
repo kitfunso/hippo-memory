@@ -15,7 +15,6 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { withFakeHome } from './_helpers/with-fake-home.js';
 import {
-  OPENCODE_PLUGIN_SOURCE,
   HIPPO_OPENCODE_PLUGIN_MARKER,
   installOpencodePlugin,
   uninstallOpencodePlugin,
@@ -23,15 +22,31 @@ import {
 } from '../src/hooks/opencode.js';
 import { detectInstalledTools } from '../src/hooks/shared.js';
 
-describe('OPENCODE_PLUGIN_SOURCE', () => {
+/** The plugin text installOpencodePlugin writes into the current (fake) home. */
+function installedSource(): string {
+  installOpencodePlugin();
+  return fs.readFileSync(resolveOpencodePluginPath(), 'utf8');
+}
+
+describe('the installed opencode plugin source', () => {
+  let env: { cleanup: () => void; home: string };
+  let source = '';
+  beforeEach(() => {
+    env = withFakeHome('hippo-opencode-source-');
+    source = installedSource();
+  });
+  afterEach(() => {
+    env.cleanup();
+  });
+
   it('contains the versioned hippo marker', () => {
-    expect(OPENCODE_PLUGIN_SOURCE).toContain(HIPPO_OPENCODE_PLUGIN_MARKER);
+    expect(source).toContain(HIPPO_OPENCODE_PLUGIN_MARKER);
     expect(HIPPO_OPENCODE_PLUGIN_MARKER).toMatch(/^HIPPO_OPENCODE_PLUGIN_V\d+$/);
   });
 
   it('handles session.idle and session.created events', () => {
-    expect(OPENCODE_PLUGIN_SOURCE).toContain('session.idle');
-    expect(OPENCODE_PLUGIN_SOURCE).toContain('session.created');
+    expect(source).toContain('session.idle');
+    expect(source).toContain('session.created');
   });
 
   it('guards against non-Bun runtimes (typeof $ check)', () => {
@@ -39,7 +54,7 @@ describe('OPENCODE_PLUGIN_SOURCE', () => {
     // Node-mode deployment would have $ undefined; fail closed instead of
     // crashing the host session with the idempotence marker locking the
     // broken file in place.
-    expect(OPENCODE_PLUGIN_SOURCE).toMatch(/typeof\s+\$\s*!==\s*['"]function['"]/);
+    expect(source).toMatch(/typeof\s+\$\s*!==\s*['"]function['"]/);
   });
 
   it('uses no type imports (avoids unverified @opencode-ai/plugin dependency)', () => {
@@ -47,8 +62,8 @@ describe('OPENCODE_PLUGIN_SOURCE', () => {
     // build sandbox (npmjs.com returned 403 to WebFetch). opencode infers
     // plugin shape from the returned object so the type annotation was
     // convenience-only — drop it to eliminate the runtime resolution risk.
-    expect(OPENCODE_PLUGIN_SOURCE).not.toContain('import type');
-    expect(OPENCODE_PLUGIN_SOURCE).not.toContain('@opencode-ai/plugin');
+    expect(source).not.toContain('import type');
+    expect(source).not.toContain('@opencode-ai/plugin');
   });
 });
 
@@ -77,12 +92,12 @@ describe('installOpencodePlugin (real-FS)', () => {
   });
 
   it('overwrites when marker matches but content differs (future-proof for V1-revision)', () => {
+    const fresh = installedSource();
     const pluginPath = resolveOpencodePluginPath();
-    fs.mkdirSync(path.dirname(pluginPath), { recursive: true });
     fs.writeFileSync(pluginPath, `// ${HIPPO_OPENCODE_PLUGIN_MARKER}\n// stale content from an earlier 1.11.x\n`);
     const result = installOpencodePlugin();
     expect(result.installed).toBe(true);
-    expect(fs.readFileSync(pluginPath, 'utf8')).toBe(OPENCODE_PLUGIN_SOURCE);
+    expect(fs.readFileSync(pluginPath, 'utf8')).toBe(fresh);
   });
 
   it('migrates: removes only hippo-owned hook entries from opencode.json', () => {

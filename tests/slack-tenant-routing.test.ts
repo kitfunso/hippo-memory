@@ -4,9 +4,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
-import { resolveTenantForTeam } from '../src/connectors/slack/tenant-routing.js';
+import { resolveTenantForSlackTeam } from '../src/connectors/slack/tenant-routing.js';
 
-describe('resolveTenantForTeam', () => {
+describe('resolveTenantForSlackTeam', () => {
   let root: string;
 
   beforeEach(() => {
@@ -18,26 +18,26 @@ describe('resolveTenantForTeam', () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  it('returns the mapped tenant_id when a row exists', () => {
+  it('returns the mapped tenant_id when a row exists', async () => {
     const db = openHippoDb(root);
     try {
       db.prepare(
         `INSERT INTO slack_workspaces (team_id, tenant_id, added_at) VALUES (?, ?, ?)`,
       ).run('TTEAM1', 'tenant-alpha', new Date().toISOString());
-      expect(resolveTenantForTeam(db, 'TTEAM1')).toBe('tenant-alpha');
+      expect(await resolveTenantForSlackTeam(root, 'TTEAM1')).toBe('tenant-alpha');
     } finally {
       closeHippoDb(db);
     }
   });
 
-  it('falls back to env tenant when slack_workspaces is empty (single-workspace install)', () => {
+  it('falls back to env tenant when slack_workspaces is empty (single-workspace install)', async () => {
     const db = openHippoDb(root);
     const prev = process.env.HIPPO_TENANT;
     process.env.HIPPO_TENANT = 'env-tenant';
     try {
       // v0.39 fail-closed contract: empty slack_workspaces means single-
       // workspace install, env fallback is safe.
-      expect(resolveTenantForTeam(db, 'TANY')).toBe('env-tenant');
+      expect(await resolveTenantForSlackTeam(root, 'TANY')).toBe('env-tenant');
     } finally {
       if (prev === undefined) delete process.env.HIPPO_TENANT;
       else process.env.HIPPO_TENANT = prev;
@@ -45,18 +45,18 @@ describe('resolveTenantForTeam', () => {
     }
   });
 
-  it('matches team_id exactly (no prefix bleed) — fails closed on unknown when workspaces non-empty', () => {
+  it('matches team_id exactly (no prefix bleed); fails closed on unknown when workspaces non-empty', async () => {
     const db = openHippoDb(root);
     try {
       db.prepare(
         `INSERT INTO slack_workspaces (team_id, tenant_id, added_at) VALUES (?, ?, ?)`,
       ).run('TTEAM', 'tenant-short', new Date().toISOString());
       // Prefix-extended id must NOT match — fail closed (workspaces non-empty).
-      expect(resolveTenantForTeam(db, 'TTEAMX')).toBeNull();
+      expect(await resolveTenantForSlackTeam(root, 'TTEAMX')).toBeNull();
       // Substring must NOT match — fail closed.
-      expect(resolveTenantForTeam(db, 'TTEA')).toBeNull();
+      expect(await resolveTenantForSlackTeam(root, 'TTEA')).toBeNull();
       // Exact still works.
-      expect(resolveTenantForTeam(db, 'TTEAM')).toBe('tenant-short');
+      expect(await resolveTenantForSlackTeam(root, 'TTEAM')).toBe('tenant-short');
     } finally {
       closeHippoDb(db);
     }

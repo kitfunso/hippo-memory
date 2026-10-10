@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
-import { cmdRecall } from '../src/cli/recall.js';
+import { handleRecall } from '../src/cli/recall.js';
 import { resetSessionRings } from '../src/api/recall-record.js';
 import { handleMcpRequest, _resetSessionRecallHistoryMcpForTests, type McpResponse } from '../src/mcp/server.js';
 import { serve, __resetSessionRecallHistoryHttp, type ServerHandle } from '../src/server.js';
@@ -37,7 +37,7 @@ async function viaCli(s: Store, c: RecallCall): Promise<CliRecalled> {
   const flags: CliFlags = { ...c.cliFlags };
   if (c.session) flags['session-id'] = c.session;
   if (c.budget !== undefined) flags.budget = String(c.budget);
-  const out = await runInProcess(() => cmdRecall(s.root, TENANT, c.query, flags));
+  const out = await runInProcess(() => handleRecall({ hippoRoot: s.root, tenantId: TENANT, args: [c.query], flags }));
   const anchored = /\[anchored_on: ([^\]]+)\]/.exec(out.stdout);
   return { output: out, hint: anchored ? anchored[1]! : null };
 }

@@ -1,13 +1,13 @@
 // A by-id write on another person's personal row answers exactly as a missing id does (D6, F13), the owner still gets through, and no reject sweep reaches another person's row.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
-import { listRejections, reject, remember, supersede, type Actor, type HippoDbContext } from '../src/api/index.js';
+import { reject, remember, supersede, type Actor, type HippoDbContext } from '../src/api/index.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { insertDormantRow, readDormantSnapshot } from '../src/store/dormant.js';
 import { mapApiError } from '../src/util/http-util.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, generateId, type MemoryKind } from '../src/core/memory.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../src/mcp/server.js';
-import { rejectValue } from '../src/trust/reject-flow.js';
+import { listRejectionsForTenant, rejectValue } from '../src/trust/reject-flow.js';
 import { readEntry } from '../src/store/entry-reads.js';
 import { makeRoot } from './_helpers/make-root.js';
 
@@ -100,7 +100,7 @@ describe('reject next to personal rows', () => {
     }
     expect(await masked(id, () => { reject(ctxFor(actorA), { memoryId: id, reason: 'wrong' }); })).toEqual({ status: 400, message: PERSONAL_REFUSAL });
     expect(() => rejectValue({ hippoRoot: root, tenantId: 'default', actor: 'cli', reason: 'wrong', memoryId: id })).toThrow(PERSONAL_REFUSAL);
-    expect(listRejections(ctxFor(actorA))).toHaveLength(0);
+    expect(listRejectionsForTenant(root, 'default')).toHaveLength(0);
     expect(readEntry(root, id, 'default')?.scope).toBe('personal:private:a');
   });
 

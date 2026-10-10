@@ -25,7 +25,7 @@ import {
 import { hybridSearch } from '../src/search/hybrid.js';
 import { outcomeMultiplier } from '../src/search/boosts.js';
 import { markRetrieved } from '../src/core/memory.js';
-import { evalNow, _resetAblationCacheForTests } from '../src/core/ablation.js';
+import { evalNow, isOutcomeSlowAblated, _resetAblationCacheForTests } from '../src/core/ablation.js';
 
 const ABLATION_ENV_VARS = [
   'HIPPO_ABLATE_DECAY',
@@ -329,12 +329,12 @@ describe('HIPPO_ABLATE_OUTCOME', () => {
     // otherwise differ from plain's initial cache purely by fixture timing.
     rewarded.strength = calculateStrength(rewarded, NOW);
     plain.strength = calculateStrength(plain, NOW);
-    expect(replayPriority(rewarded, NOW)).toBe(replayPriority(plain, NOW));
+    expect(replayPriority(rewarded, NOW, isOutcomeSlowAblated())).toBe(replayPriority(plain, NOW, isOutcomeSlowAblated()));
     // Sanity: WITHOUT the flag the rewarded memory is prioritized.
     clearAblationEnv();
     rewarded.strength = calculateStrength(rewarded, NOW);
     plain.strength = calculateStrength(plain, NOW);
-    expect(replayPriority(rewarded, NOW)).toBeGreaterThan(replayPriority(plain, NOW));
+    expect(replayPriority(rewarded, NOW, isOutcomeSlowAblated())).toBeGreaterThan(replayPriority(plain, NOW, isOutcomeSlowAblated()));
   });
 });
 

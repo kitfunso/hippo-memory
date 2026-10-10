@@ -16,8 +16,7 @@ import { boostByGoals } from '../src/search/goal-boost.js';
 import { _resetSessionRecallHistoryMcpForTests } from '../src/mcp/server.js';
 import { lastRecalledIds } from '../src/mcp/session-state.js';
 import { loadPhysicsState, resetAllPhysicsState } from '../src/db/physics-state.js';
-import { resolveClassFromTokens } from '../src/store/planning-fallacy-evidence.js';
-import { computePredictionBaserate } from '../src/store/predictions.js';
+import { planningFallacyEvidenceAt } from '../src/store/planning-fallacy-evidence.js';
 import { writeRecallTraceAtRoot } from '../src/store/recall-trace.js';
 import {
   serve, sqliteStore, __resetSessionRecallHistoryHttp,
@@ -256,11 +255,7 @@ describe('sqliteStore reads equal the hippo.db functions they wrap and open no m
     ['no tokens', [], null],
   ] as const)('planningFallacyEvidence for %s, with no audit row', async (_name, tokens, classTag) => {
     // The planning-fallacy reads of a recall; its audit rows stay with the caller.
-    const { direct, port } = await parity((s) => {
-      const resolution = resolveClassFromTokens(s.root, TENANT, tokens);
-      const baserate = resolution.classTag ? computePredictionBaserate(s.root, TENANT, resolution.classTag, 'recall', false) : null;
-      return { ...resolution, baserate };
-    }, (store) => store.planningFallacyEvidence(TENANT, tokens));
+    const { direct, port } = await parity((s) => planningFallacyEvidenceAt(s.root, TENANT, tokens), (store) => store.planningFallacyEvidence(TENANT, tokens));
     expect(direct.value).toMatchObject({ classTag, tiebreak: false, baserate: classTag ? { nClosed: 1 } : null });
     expect(port.opens).toBe(direct.opens);
   });

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { cmdRecall } from '../src/cli/recall.js';
+import { handleRecall } from '../src/cli/recall.js';
 import { resetSessionRings } from '../src/api/recall-record.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 import { initStore } from '../src/store/open.js';
@@ -30,7 +30,7 @@ afterEach(() => {
 async function runHippo(args: string[]): Promise<{ stdout: string; status: number }> {
   const [, query, ...rest] = args;
   const flags = Object.fromEntries(rest.map((f) => [f.replace(/^--/, ''), true]));
-  return runInProcess(() => cmdRecall(hippoDir, 'default', query, flags));
+  return runInProcess(() => handleRecall({ hippoRoot: hippoDir, tenantId: 'default', args: [query], flags }));
 }
 
 function seedContinuity(): void {

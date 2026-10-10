@@ -10,52 +10,6 @@ import { onHandle, openStore } from './open.js';
 import { DIGEST_DISPLAY_CHARS } from '../util/token-text.js';
 
 // ---------------------------------------------------------------------------
-// Dirty-flag helpers for DAG summaries: child writes mark a summary dirty, and the
-// sleep-cycle rebuild enumerates candidates without scanning every memory row.
-// ---------------------------------------------------------------------------
-
-/**
- * Mark a summary as dirty. Idempotent (re-marking dirty is a no-op + no
- * second audit row). Tenant-scoped to prevent cross-tenant writes via
- * parent-lookup. Called from invalidation.ts / writeEntry /
- * forgetMemory / archiveRawMemory whenever a child is invalidated,
- * superseded, forgotten, or archived.
- *
- * Quietly no-ops if the target row doesn't exist or isn't a level-2/3
- * summary. Emits a 'summary_marked_dirty' audit row on actual
- * state transitions (0 -> 1) via the audit() helper, which try/catches
- * for missing audit_log (the v27 self-heal scenario).
- */
-export function markSummaryDirty(
-  hippoRoot: string,
-  summaryId: string,
-  tenantId: string,
-  actor: string = 'cli',
-): void {
-  assertTenantId('markSummaryDirty', tenantId);
-  onHandle(hippoRoot, (db) => {
-    // RETURNING dag_level reads the actual level in the same round trip.
-    // SAFETY: result's shape matches the single `dag_level` column returned
-    // above.
-    const result = db.prepare(`
-      UPDATE memories
-         SET summary_dirty = 1
-       WHERE id = ?
-         AND tenant_id = ?
-         AND dag_level IN (2, 3)
-         AND summary_dirty = 0
-         AND kind != 'archived'
-      RETURNING dag_level
-    `).get(summaryId, tenantId) as { dag_level: number } | undefined;
-    if (result) {
-      // audit() wraps appendAuditEvent in try/catch (v27 heal scenario).
-      // metadata.source tells this dirty-mark apart from the other wiring layers' marks.
-      audit(db, 'summary_marked_dirty', { targetId: summaryId, metadata: { dag_level: result.dag_level, source: 'E1' }, actor, tenantId });
-    }
-  }, openStore);
-}
-
-// ---------------------------------------------------------------------------
 // Sleep-cycle rebuild surface.
 //
 // loadAllDirtySummaries / loadChildrenOfSummary / applyRebuildResult /

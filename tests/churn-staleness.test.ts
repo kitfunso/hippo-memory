@@ -16,7 +16,7 @@ import { createMemory, CHURN_STALE_TAG, DEFAULT_HALF_LIFE_DAYS } from '../src/co
 import { search } from '../src/search/bm25-search.js';
 import { hybridSearch } from '../src/search/hybrid.js';
 import { physicsSearch } from '../src/search/physics-search.js';
-import { CHURN_STALE_RANK_MULTIPLIER } from '../src/search/boosts.js';
+import { churnStaleFactor } from '../src/search/boosts.js';
 import { openHippoDb } from '../src/db/index.js';
 import { savePhysicsState } from '../src/db/physics-state.js';
 import type { PhysicsParticle } from '../src/core/physics.js';
@@ -463,6 +463,7 @@ describe('api.outcome clears churn-stale on a good outcome', () => {
 // ---------------------------------------------------------------------------
 
 describe('CHURN_STALE_RANK_MULTIPLIER in search scoring', () => {
+  const STALE_FACTOR = churnStaleFactor(createMemory('any', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [CHURN_STALE_TAG] }));
   it('halves the sync search() score for a churn-stale entry vs an otherwise-identical one', () => {
     const plain = createMemory('widget factory configuration details here', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['sometag'] });
     const stale = createMemory('widget factory configuration details here', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: ['sometag', CHURN_STALE_TAG] });
@@ -476,7 +477,7 @@ describe('CHURN_STALE_RANK_MULTIPLIER in search scoring', () => {
   it('applies CHURN_STALE_RANK_MULTIPLIER in the hybrid explain breakdown', async () => {
     const stale = createMemory('gadget assembly line documentation notes', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: [CHURN_STALE_TAG] });
     const [result] = await hybridSearch('gadget assembly line', [stale], { explain: true });
-    expect(result.breakdown!.churnStaleMultiplier).toBe(CHURN_STALE_RANK_MULTIPLIER);
+    expect(result.breakdown!.churnStaleMultiplier).toBe(STALE_FACTOR);
   });
 
   it('ranks a churn-stale entry below an identical untagged one in hybridSearch', async () => {
@@ -508,7 +509,7 @@ describe('CHURN_STALE_RANK_MULTIPLIER in search scoring', () => {
         hippoRoot, queryEmbedding: [1, 0, 0, 0], explain: true,
       });
       expect(results.map((r) => r.entry.id)).toEqual([plain.id, stale.id]);
-      expect(results[1].breakdown!.churnStaleMultiplier).toBe(CHURN_STALE_RANK_MULTIPLIER);
+      expect(results[1].breakdown!.churnStaleMultiplier).toBe(STALE_FACTOR);
     } finally {
       fs.rmSync(hippoRoot, { recursive: true, force: true });
     }
@@ -533,7 +534,7 @@ describe('CHURN_STALE_RANK_MULTIPLIER in search scoring', () => {
       }
       const results = await physicsSearch('flywheel torque', [stale, plain], { hippoRoot, queryEmbedding: [1, 0, 0, 0] });
       const staleScore = results.find((r) => r.entry.id === stale.id)!.score;
-      expect(staleScore).toBeCloseTo(CHURN_STALE_RANK_MULTIPLIER, 5);
+      expect(staleScore).toBeCloseTo(STALE_FACTOR, 5);
       expect(results[0].entry.id).toBe(plain.id);
     } finally {
       fs.rmSync(hippoRoot, { recursive: true, force: true });
@@ -547,7 +548,7 @@ describe('CHURN_STALE_RANK_MULTIPLIER in search scoring', () => {
     for (const results of [search('quasar ledger', [parent, child]), await hybridSearch('quasar ledger', [parent, child])]) {
       const p = results.find((r) => r.entry.id === parent.id)!;
       const c = results.find((r) => r.entry.id === child.id)!;
-      expect(c.score).toBeCloseTo(p.score * 0.9 * CHURN_STALE_RANK_MULTIPLIER, 6);
+      expect(c.score).toBeCloseTo(p.score * 0.9 * STALE_FACTOR, 6);
     }
   });
 

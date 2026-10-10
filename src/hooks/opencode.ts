@@ -44,7 +44,7 @@ const HIPPO_OPENCODE_PLUGIN_MARKER = 'HIPPO_OPENCODE_PLUGIN_V1';
  *    marker match AND content equality, so a plugin-source revision under
  *    the same V1 marker re-writes the file on next install.
  */
-export const OPENCODE_PLUGIN_SOURCE = `// ${HIPPO_OPENCODE_PLUGIN_MARKER}
+const OPENCODE_PLUGIN_SOURCE = `// ${HIPPO_OPENCODE_PLUGIN_MARKER}
 // hippo-memory opencode plugin. DO NOT EDIT — regenerated on every
 // \`hippo hook install opencode\` from src/hooks.ts OPENCODE_PLUGIN_SOURCE
 // in https://github.com/kitfunso/hippo-memory. Local changes will be lost.

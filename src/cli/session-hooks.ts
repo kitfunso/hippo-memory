@@ -223,7 +223,7 @@ function vscodeStopInput(raw: BoundedStdin): CaptureInput | null {
   return receipt.status === 'received' && receipt.input.sessionId !== null && SESSION_ID_RE.test(receipt.input.sessionId) ? receipt.input : null;
 }
 
-export async function cmdSessionEndWorker(
+async function cmdSessionEndWorker(
   hippoRoot: string,
   tenantId: string,
   flags: CliFlags

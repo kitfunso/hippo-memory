@@ -37,14 +37,14 @@ const VALENCE_WEIGHT = {
  * Priority score used to rank survivors for replay. Higher = more likely
  * to be sampled. Pure function of the entry and current time.
  */
-export function replayPriority(entry: MemoryEntry, now: Date): number {
+export function replayPriority(entry: MemoryEntry, now: Date, outcomeAblated: boolean): number {
   const pos = entry.outcome_positive ?? 0;
   const neg = entry.outcome_negative ?? 0;
   // Reward signal: neutral memories get 1, strongly-rewarded memories > 1,
   // negative-dominated memories floor at 0.1 (so they're still eligible, just
   // much less likely to be sampled than neutral peers). Clamp is required
   // because sampleForReplay depends on all weights being positive.
-  const rewardSignal = isOutcomeSlowAblated()
+  const rewardSignal = outcomeAblated
     ? 1.0 // EVAL-ONLY ablation (see ablation.ts): outcome-off also silences replay's reward bias
     : Math.max(0.1, 1 + pos * 0.5 + (pos - neg) * 0.25);
 
@@ -105,10 +105,11 @@ export function sampleForReplay(
   const eligible = survivors.filter((e) => resolveConfidence(e, now) !== 'stale');
   if (eligible.length === 0) return [];
 
+  const outcomeAblated = isOutcomeSlowAblated();
   const pool = eligible.map((entry, idx) => ({
     entry,
     idx,
-    weight: replayPriority(entry, now),
+    weight: replayPriority(entry, now, outcomeAblated),
   }));
 
   const want = Math.min(count, pool.length);

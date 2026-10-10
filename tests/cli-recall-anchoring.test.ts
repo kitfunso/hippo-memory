@@ -1,8 +1,8 @@
-// `hippo recall` anchoring hint, run through cmdRecall in this process: the rings live per process, so a spawned CLI never accumulates history.
+// `hippo recall` anchoring hint, run through handleRecall in this process: the rings live per process, so a spawned CLI never accumulates history.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { cmdRecall } from '../src/cli/recall.js';
+import { handleRecall } from '../src/cli/recall.js';
 import { resolveTenantId } from '../src/store/tenant.js';
 import { peekSessionRing, resetSessionRings } from '../src/api/recall-record.js';
 import { writeEntry } from '../src/store/entry-writes.js';
@@ -27,7 +27,7 @@ function seed(tenantId: string): string {
 
 async function recall(query: string, flags: Flags = { 'session-id': 's1' }): Promise<string> {
   // Dispatch resolves the tenant per call, so a test that switches HIPPO_TENANT midway sees the switch.
-  const run = await runInProcess(() => cmdRecall(root, resolveTenantId({}), query, flags));
+  const run = await runInProcess(() => handleRecall({ hippoRoot: root, tenantId: resolveTenantId({}), args: [query], flags }));
   expect(run.status, run.stderr).toBe(0);
   return run.stdout;
 }

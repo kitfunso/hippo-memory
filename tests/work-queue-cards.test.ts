@@ -19,11 +19,10 @@ import {
   completeCard,
   addCardComment,
   loadCardComments,
-  transitionCard,
   loadLatestHandoffForCard,
 } from '../src/store/cards.js';
 import { openHippoDb, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, type DatabaseSyncLike } from '../src/db/index.js';
-import { CARD_TRANSITIONS, type CardStatus } from '../src/core/card.js';
+import { CARD_TRANSITIONS, assertCardTransition, type CardStatus } from '../src/core/card.js';
 import { LATEST_SCHEMA_VERSION } from './_helpers/schema-version.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 import { handleCard } from '../src/cli/card.js';
@@ -148,24 +147,14 @@ describe('test 4: createCard initial status', () => {
 
 describe('test 5: status-transition matrix', () => {
   it('every (from, to) pair not in CARD_TRANSITIONS[from] throws; every pair in it does not', () => {
-    const db = openHippoDb(root);
-    try {
-      for (const from of ALL_STATUSES) {
-        for (const to of ALL_STATUSES) {
-          const card = createCard(root, 'default', { title: `${from}-${to}` });
-          db.prepare(`UPDATE cards SET status = ? WHERE id = ?`).run(from, card.id);
-          const legal = CARD_TRANSITIONS[from].includes(to);
-          if (legal) {
-            expect(() => transitionCard(db, 'default', card.id, { from: [from], to })).not.toThrow();
-          } else {
-            expect(() => transitionCard(db, 'default', card.id, { from: [from], to })).toThrow(
-              `illegal card transition: ${from} -> ${to}`,
-            );
-          }
+    for (const from of ALL_STATUSES) {
+      for (const to of ALL_STATUSES) {
+        if (CARD_TRANSITIONS[from].includes(to)) {
+          expect(() => assertCardTransition([from], to)).not.toThrow();
+        } else {
+          expect(() => assertCardTransition([from], to)).toThrow(`illegal card transition: ${from} -> ${to}`);
         }
       }
-    } finally {
-      closeHippoDb(db);
     }
   });
 
@@ -179,21 +168,6 @@ describe('test 5: status-transition matrix', () => {
     }
     const claimed = claimCard(root, 'default', card.id, 'codex');
     expect(claimed?.status).toBe('running');
-  });
-
-  it('a wrapper called with an illegal from list throws even when the row status matches that list', () => {
-    const card = createCard(root, 'default', { title: 'Done card' });
-    const db = openHippoDb(root);
-    try {
-      db.prepare(`UPDATE cards SET status = 'done' WHERE id = ?`).run(card.id);
-      // The row's real status ('done') IS in the from list below; the throw must still fire
-      // because CARD_TRANSITIONS.done is empty, proving the check is static, not row-driven.
-      expect(() => transitionCard(db, 'default', card.id, { from: ['done'], to: 'running' })).toThrow(
-        'illegal card transition: done -> running',
-      );
-    } finally {
-      closeHippoDb(db);
-    }
   });
 });
 

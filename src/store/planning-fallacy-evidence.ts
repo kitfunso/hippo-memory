@@ -40,7 +40,7 @@ export interface PlanningFallacyEvidence extends ClassResolution {
  *     test asserting that scope-set predictions surface via no-scope
  *     recalls (so future "fix" attempts that scope-filter trip CI).
  */
-export function resolveClassFromTokens(
+function resolveClassFromTokens(
   hippoRoot: string,
   tenantId: string,
   queryTokens: readonly string[],

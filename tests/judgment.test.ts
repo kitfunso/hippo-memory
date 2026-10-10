@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { judge, judgeAll } from '../src/eval/judgment.js';
+import { judgeAll, type JudgeOptions, type Judgment } from '../src/eval/judgment.js';
 import { envTypesafeApiKey } from '../src/util/env.js';
 
 interface JevAnswerFixture { type?: string; noul?: number; choice?: string; confidence?: number }
@@ -11,6 +11,12 @@ interface JevRequestBody {
   state: string;
   model: string;
   questions: { durable: JevQuestion; kind: JevQuestion; valence: JevQuestion };
+}
+
+/** One candidate through judgeAll, the module's public entry. */
+async function judgeOne(content: string, opts: JudgeOptions): Promise<Judgment | null> {
+  const [result] = await judgeAll([content], opts);
+  return result ?? null;
 }
 
 function jevResponse(body: JevBodyFixture, status = 200): typeof fetch {
@@ -36,7 +42,7 @@ const GOOD = {
 
 describe('judge', () => {
   it('maps a well-formed Jev answer onto hippo fields', async () => {
-    const result = await judge('always use real DB for tests', {
+    const result = await judgeOne('always use real DB for tests', {
       apiKey: 'test-key',
       fetcher: jevResponse(GOOD),
     });
@@ -58,7 +64,7 @@ describe('judge', () => {
       return new Response(JSON.stringify(GOOD), { status: 200 });
     };
 
-    await judge('some lesson', { apiKey: 'sk-abc', fetcher: spy });
+    await judgeOne('some lesson', { apiKey: 'sk-abc', fetcher: spy });
 
     expect(seenUrl).toBe('https://api.typesafe.ai/v1/systemone');
     expect(new Headers(seenInit?.headers).get('authorization')).toBe('Bearer sk-abc');
@@ -69,7 +75,7 @@ describe('judge', () => {
   });
 
   it('drops below the observed tier when Jev is not confident', async () => {
-    const result = await judge('maybe a lesson', {
+    const result = await judgeOne('maybe a lesson', {
       apiKey: 'k',
       fetcher: jevResponse({
         answers: {
@@ -91,7 +97,7 @@ describe('judge', () => {
       {},
     ];
     for (const body of cases) {
-      const result = await judge('x y z', { apiKey: 'k', fetcher: jevResponse(body) });
+      const result = await judgeOne('x y z', { apiKey: 'k', fetcher: jevResponse(body) });
       expect(result).toBeNull();
     }
   });
@@ -99,25 +105,25 @@ describe('judge', () => {
   it('returns null, never throws, on a body that is not an object or is not JSON', async () => {
     const reply = (body: string): typeof fetch => async () => new Response(body, { status: 200 });
     for (const body of ['null', '[]', '"ok"', '{"answers":null}', '{"answers":{"durable":null,"kind":7,"valence":[]}}', '<html>busy</html>']) {
-      expect(await judge('x y z', { apiKey: 'k', fetcher: reply(body) })).toBeNull();
+      expect(await judgeOne('x y z', { apiKey: 'k', fetcher: reply(body) })).toBeNull();
     }
   });
 
   it('returns null when a number arrives as a string, which would pass the range check by coercion', async () => {
     const body = JSON.stringify({ answers: { durable: { noul: '0.9' }, kind: { choice: 'error' }, valence: { choice: 'neutral' } } });
-    expect(await judge('x y z', { apiKey: 'k', fetcher: async () => new Response(body, { status: 200 }) })).toBeNull();
+    expect(await judgeOne('x y z', { apiKey: 'k', fetcher: async () => new Response(body, { status: 200 }) })).toBeNull();
   });
 
   it('returns null for a reply over the 1 MiB cap, even one whose answers are valid', async () => {
     const padded = JSON.stringify(GOOD).replace(/}$/, `${' '.repeat(1024 * 1024)}}`);
     expect(JSON.parse(padded)).toEqual(GOOD);
-    expect(await judge('x y z', { apiKey: 'k', fetcher: async () => new Response(padded, { status: 200 }) })).toBeNull();
+    expect(await judgeOne('x y z', { apiKey: 'k', fetcher: async () => new Response(padded, { status: 200 }) })).toBeNull();
   });
 
   it('fails open on transport and HTTP errors', async () => {
     const thrower: typeof fetch = async () => { throw new Error('offline'); };
-    expect(await judge('abc', { apiKey: 'k', fetcher: thrower })).toBeNull();
-    expect(await judge('abc', { apiKey: 'k', fetcher: jevResponse({}, 401) })).toBeNull();
+    expect(await judgeOne('abc', { apiKey: 'k', fetcher: thrower })).toBeNull();
+    expect(await judgeOne('abc', { apiKey: 'k', fetcher: jevResponse({}, 401) })).toBeNull();
   });
 
   it('retries once on a rate limit, then succeeds', async () => {
@@ -129,7 +135,7 @@ describe('judge', () => {
         : new Response(JSON.stringify(GOOD), { status: 200 });
     };
 
-    const result = await judge('abc', { apiKey: 'k', fetcher: flaky });
+    const result = await judgeOne('abc', { apiKey: 'k', fetcher: flaky });
     expect(calls).toBe(2);
     expect(result?.durable).toBe(0.94);
   });
@@ -137,7 +143,7 @@ describe('judge', () => {
   it('makes no call for content too short to be a memory', async () => {
     let calls = 0;
     const counter: typeof fetch = async () => { calls++; return new Response('{}'); };
-    expect(await judge('  a ', { apiKey: 'k', fetcher: counter })).toBeNull();
+    expect(await judgeOne('  a ', { apiKey: 'k', fetcher: counter })).toBeNull();
     expect(calls).toBe(0);
   });
 });

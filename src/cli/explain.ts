@@ -38,7 +38,7 @@ function noteScopeHidden(hippoRoot: string, globalRoot: string | undefined, quer
 /** Where the read-only ranking lands; a `let` the callback assigned would read as never-assigned after the await. */
 interface InspectedSlot { rank?: RankRecallResult }
 
-export async function cmdExplain(
+async function cmdExplain(
   hippoRoot: string,
   query: string,
   flags: CliFlags

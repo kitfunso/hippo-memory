@@ -1,7 +1,6 @@
 import { envSlackAllowUnknownTeamFallback, envTenant } from '../../util/env.js';
-import type { DatabaseSyncLike } from '../../db/index.js';
 import { requireGroup, storeFor, type HippoStore } from '../../store/index.js';
-import { slackTeamRouteAt, type SlackTeamRoute } from '../../store/connectors/slack.js';
+import type { SlackTeamRoute } from '../../store/connectors/slack.js';
 
 /**
  * Look up the tenant_id for a Slack team_id.
@@ -19,11 +18,6 @@ import { slackTeamRouteAt, type SlackTeamRoute } from '../../store/connectors/sl
  * replay, future MCP) gets the same protection against routing a foreign
  * workspace's events into the deployment tenant.
  */
-export function resolveTenantForTeam(db: DatabaseSyncLike, teamId: string): string | null {
-  return tenantForRoute(slackTeamRouteAt(db, teamId));
-}
-
-/** resolveTenantForTeam through `store`, else hippo.db under `hippoRoot`. */
 export async function resolveTenantForSlackTeam(hippoRoot: string, teamId: string, store?: HippoStore): Promise<string | null> {
   return tenantForRoute(await requireGroup(storeFor({ hippoRoot, store }), 'connectorEvents').slackTeamRoute(teamId));
 }

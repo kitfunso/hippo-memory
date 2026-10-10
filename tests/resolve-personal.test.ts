@@ -1,7 +1,8 @@
 // Conflict resolution never reaches another person's personal row, and a personal value never becomes a tenant-wide tombstone (F1).
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { listRejections, remember, type Actor, type HippoDbContext } from '../src/api/index.js';
+import { remember, type Actor, type HippoDbContext } from '../src/api/index.js';
+import { listRejectionsForTenant } from '../src/trust/reject-flow.js';
 import { resolveOpenConflict } from '../src/dashboard/dashboard-actions.js';
 import { mapApiError } from '../src/util/http-util.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../src/mcp/server.js';
@@ -82,7 +83,7 @@ describe('resolving conflicts next to personal rows', () => {
     expect(readEntry(root, loser, 'default')).toBeNull();
     expect(readEntry(root, teamCopy, 'default')).toBeNull();
     expect(readEntry(root, personalId, 'default')?.scope).toBe('personal:private:a');
-    const tombstones = listRejections(ctxFor(actorB));
+    const tombstones = listRejectionsForTenant(root, 'default');
     expect(tombstones.map((r) => r.sourceMemoryId)).toEqual([loser]);
   });
 
@@ -96,7 +97,7 @@ describe('resolving conflicts next to personal rows', () => {
     }
     expect(refusal?.status).toBe(400);
     expect(refusal?.message).toContain('cannot reject the value of personal memory');
-    expect(listRejections(ctxFor(actorA))).toHaveLength(0);
+    expect(listRejectionsForTenant(root, 'default')).toHaveLength(0);
     expect(readEntry(root, personalId, 'default')).not.toBeNull();
     expect(listMemoryConflicts(root, 'open', 'default').map((c) => c.id)).toEqual([conflictId]);
 

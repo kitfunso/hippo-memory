@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { extractFacts, type ExtractedFact } from '../src/learn/extract.js';
-import { generateDagSummary } from '../src/consolidate/dag.js';
+import { generateDagSummary } from '../src/consolidate/dag-summary.js';
 import { refineSemanticMemory } from '../src/cli/refine-llm.js';
 
 // Real local HTTP server per case; the callers' own `fetcher` option points them at it, so the request bytes are what a real call sends.

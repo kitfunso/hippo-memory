@@ -18,6 +18,7 @@ import { queryAuditEvents } from '../src/store/audit.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import * as api from '../src/api/index.js';
 import { RejectedValueError } from '../src/store/rejection.js';
+import { listRejectionsForTenant } from '../src/trust/reject-flow.js';
 
 let tmpDir: string;
 
@@ -30,7 +31,7 @@ function ctx(tenantId: string = 'default'): api.Context {
   return { hippoRoot: tmpDir, tenantId, actor: { subject: 'cli', role: 'admin' } };
 }
 
-describe('api.reject / api.unreject / api.listRejections', () => {
+describe('api.reject / api.unreject / listRejectionsForTenant', () => {
   it('reject by id removes the row + all same-digest duplicates, one reject_value audit, zero forget audits', () => {
     const a = createMemory('duplicate offending value', { tags: ['x'] });
     const b = createMemory('DUPLICATE OFFENDING VALUE', { tags: ['y'] }); // same normalized digest
@@ -79,7 +80,7 @@ describe('api.reject / api.unreject / api.listRejections', () => {
     writeEntry(tmpDir, a);
     api.reject(ctx(), { memoryId: a.id, reason: 'listed test' });
 
-    const rows = api.listRejections(ctx());
+    const rows = listRejectionsForTenant(tmpDir, 'default');
     expect(rows.length).toBe(1);
     expect(rows[0]!.reason).toBe('listed test');
     expect(rows[0]!.sourceMemoryId).toBe(a.id);
@@ -100,7 +101,7 @@ describe('api.reject / api.unreject / api.listRejections', () => {
 
     const unrejectResult = api.unreject(ctx(), rejectResult.digest);
     expect(unrejectResult.ok).toBe(true);
-    expect(api.listRejections(ctx()).length).toBe(0);
+    expect(listRejectionsForTenant(tmpDir, 'default').length).toBe(0);
 
     expect(() => api.remember(ctx(), { content: 'temporarily rejected' })).not.toThrow();
   });
@@ -130,13 +131,13 @@ describe('api.reject / api.unreject / api.listRejections', () => {
     const a = createMemory('to be rejected for the blank-unreject test', { tags: [] });
     writeEntry(tmpDir, a);
     api.reject(ctx(), { memoryId: a.id, reason: 'setup for blank-unreject test' });
-    expect(api.listRejections(ctx()).length).toBe(1);
+    expect(listRejectionsForTenant(tmpDir, 'default').length).toBe(1);
 
     expect(() => api.unreject(ctx(), '')).toThrow();
     expect(() => api.unreject(ctx(), '   ')).toThrow();
     // The tombstone must survive an accidental blank call, not get wiped by
     // an empty-string startsWith-matches-everything prefix scan.
-    expect(api.listRejections(ctx()).length).toBe(1);
+    expect(listRejectionsForTenant(tmpDir, 'default').length).toBe(1);
   });
 });
 

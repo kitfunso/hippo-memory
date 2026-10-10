@@ -54,6 +54,16 @@ const rows: Row[] = [
     runs: [{ status: 0, output: ['0 exports'] }],
   },
   {
+    name: 'a src comment that names an export is not a use',
+    files: {
+      'src/a.ts': 'export function seam() {}\n',
+      'src/b.ts': '// seam is what the tests call\n/* seam */\nexport const other = 1;\n',
+      'tests/a.test.ts': TEST,
+      '.test-only-exports-baseline.json': baselineOf(),
+    },
+    runs: [{ status: 1, output: ['src/a.ts:seam'] }],
+  },
+  {
     name: 'an export in a package entry file passes',
     files: { 'src/index.ts': 'export const seam = 1;\n', 'tests/a.test.ts': "import { seam } from '../src/index.js';\nseam;\n", '.test-only-exports-baseline.json': baselineOf() },
     runs: [{ status: 0, output: ['0 exports'] }],

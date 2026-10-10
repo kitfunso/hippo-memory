@@ -6,7 +6,7 @@ import { COMMANDS, parseArgs } from '../src/cli.js';
 import { undeclaredFlags, type VerbFlags } from '../src/cli/flags.js';
 import { HOOKS } from '../src/hooks/hook-blocks.js';
 import { installJsonHooks, resolveJsonHookPaths } from '../src/hooks/json-hooks.js';
-import { OPENCODE_PLUGIN_SOURCE } from '../src/hooks/opencode.js';
+import { installOpencodePlugin, resolveOpencodePluginPath } from '../src/hooks/opencode.js';
 import { withFakeHome, type FakeHomeHandle } from './_helpers/with-fake-home.js';
 
 let env: FakeHomeHandle;
@@ -49,7 +49,9 @@ describe('first-party hook command lines', () => {
       lines.push(...hippoCommandsIn(settings));
     }
     lines.push(...hippoCommandsIn(path.resolve(__dirname, '..', 'extensions', 'claude-code-plugin', 'hooks', 'hooks.json')));
-    for (const text of [...Object.values(HOOKS).map((hook) => hook.content), OPENCODE_PLUGIN_SOURCE]) {
+    installOpencodePlugin();
+    const opencodePlugin = fs.readFileSync(resolveOpencodePluginPath(), 'utf8');
+    for (const text of [...Object.values(HOOKS).map((hook) => hook.content), opencodePlugin]) {
       lines.push(...[...text.matchAll(/(?:^|\$`)(hippo [^\n`]+)/gm)].map((m) => m[1]));
     }
 

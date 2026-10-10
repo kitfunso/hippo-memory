@@ -24,7 +24,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { loadRecallSearchEntries } from '../src/store/search-rows.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { withSharedStoreHandles } from '../src/db/index.js';
-import { cmdExplain } from '../src/cli/explain.js';
+import { handleExplain } from '../src/cli/explain.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 import { hippoOut } from './_helpers/spawn-hippo.js';
 
@@ -161,7 +161,7 @@ describe('cli recall scope default-deny', () => {
   it('hippo explain applies the same rule and prints an honest note', async () => {
     vi.stubEnv('HIPPO_HOME', env.HIPPO_HOME);
     vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', env.HIPPO_SKIP_AUTO_INTEGRATIONS);
-    const res = await runInProcess(() => cmdExplain(join(home, '.hippo'), 'deploykey', {}));
+    const res = await runInProcess(() => handleExplain({ hippoRoot: join(home, '.hippo'), tenantId: 'default', args: ['deploykey'], flags: {} }));
     expect(res.status).toBe(0);
     expect(res.stdout).not.toContain(PRIV_SLACK);
     expect(res.stdout).not.toContain(PRIV_GITHUB);

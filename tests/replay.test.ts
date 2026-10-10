@@ -130,7 +130,7 @@ describe('sampleForReplay', () => {
 describe('replayPriority', () => {
   it('returns a positive finite number for a plain entry', () => {
     const e = fakeEntry({ content: 'x' });
-    const p = replayPriority(e, new Date());
+    const p = replayPriority(e, new Date(), false);
     expect(Number.isFinite(p)).toBe(true);
     expect(p).toBeGreaterThan(0);
   });
@@ -139,21 +139,21 @@ describe('replayPriority', () => {
     const now = new Date();
     const neutral = fakeEntry({ content: 'n' });
     const critical = fakeEntry({ content: 'c', emotional_valence: 'critical' });
-    expect(replayPriority(critical, now)).toBeGreaterThan(replayPriority(neutral, now));
+    expect(replayPriority(critical, now, false)).toBeGreaterThan(replayPriority(neutral, now, false));
   });
 
   it('more positive outcomes > fewer', () => {
     const now = new Date();
     const low = fakeEntry({ content: 'l', outcome_positive: 0, outcome_negative: 0 });
     const high = fakeEntry({ content: 'h', outcome_positive: 5, outcome_negative: 0 });
-    expect(replayPriority(high, now)).toBeGreaterThan(replayPriority(low, now));
+    expect(replayPriority(high, now, false)).toBeGreaterThan(replayPriority(low, now, false));
   });
 
   it('under-retrieved > heavily retrieved', () => {
     const now = new Date();
     const fresh = fakeEntry({ content: 'f', retrieval_count: 0 });
     const busy = fakeEntry({ content: 'b', retrieval_count: 50 });
-    expect(replayPriority(fresh, now)).toBeGreaterThan(replayPriority(busy, now));
+    expect(replayPriority(fresh, now, false)).toBeGreaterThan(replayPriority(busy, now, false));
   });
 
   it('stays positive even when negative outcomes dominate', () => {
@@ -162,7 +162,7 @@ describe('replayPriority', () => {
     // weighted-sample-without-replacement picker in sampleForReplay.
     const now = new Date();
     const doomed = fakeEntry({ content: 'doom', outcome_positive: 0, outcome_negative: 100 });
-    expect(replayPriority(doomed, now)).toBeGreaterThan(0);
+    expect(replayPriority(doomed, now, false)).toBeGreaterThan(0);
   });
 
   it('is finite when last_retrieved is malformed', () => {
@@ -170,7 +170,7 @@ describe('replayPriority', () => {
     const bad = fakeEntry({ content: 'bad' });
     // Force an invalid timestamp post-construction to exercise NaN guard.
     const mutated = { ...bad, last_retrieved: 'not-a-date' };
-    const p = replayPriority(mutated, now);
+    const p = replayPriority(mutated, now, false);
     expect(Number.isFinite(p)).toBe(true);
     expect(p).toBeGreaterThan(0);
   });

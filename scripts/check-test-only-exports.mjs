@@ -8,6 +8,7 @@ import { join, relative, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createPurityRule } from './lib/export-purity.mjs';
 import { scriptCallers } from './lib/script-callers.mjs';
+import { stripComments } from './lib/source-text.mjs';
 
 const BASELINE = '.test-only-exports-baseline.json';
 const EXPORT_RE = /^export\s+(?:async\s+)?(?:function\*?|const|let|var|class|enum)\s+([A-Za-z_$][\w$]*)/gm;
@@ -50,7 +51,7 @@ function entryFiles(root, pkg) {
 /** Every `src/file.ts:NAME` exported by src/ that no other src/ file names but a test does, sorted. */
 function namedOnlyByTests(files, tests, entries) {
   const users = new Map();
-  for (const f of files) for (const id of idents(f.text)) users.set(id, (users.get(id) ?? new Set()).add(f.file));
+  for (const f of files) for (const id of idents(stripComments(f.text))) users.set(id, (users.get(id) ?? new Set()).add(f.file));
   const inTests = new Set();
   for (const t of tests) for (const id of idents(t.text)) inTests.add(id);
   const found = [];

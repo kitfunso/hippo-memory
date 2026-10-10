@@ -168,7 +168,7 @@ function parseRecallLateFlags(flags: CliFlags): RecallLateFlags {
 }
 
 /** Runs `hippo recall`: the flags name the ranking core and this verb's presenter, `retrieve` ranks and records, then the block prints. */
-export async function cmdRecall(
+async function cmdRecall(
   hippoRoot: string,
   tenantId: string,
   query: string,

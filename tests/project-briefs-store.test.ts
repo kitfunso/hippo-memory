@@ -33,7 +33,6 @@ import {
   closeProjectBrief,
   loadProjectBriefById,
   loadProjectBriefs,
-  loadActiveBriefForRepo,
   assembleBriefFromReceipts,
   refreshBrief,
   VALID_BRIEF_STATES,
@@ -44,6 +43,10 @@ import { makeRoot } from './_helpers/make-root.js';
 
 function safeRmSync(p: string): void {
   try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
+}
+/** The repo's newest active brief, read the way refreshBrief reads it. */
+function activeBrief(home: string, tenantId: string, repo: string) {
+  return loadProjectBriefs(home, tenantId, { status: 'active', repo, limit: 1 })[0] ?? null;
 }
 function countRows(home: string, table: string): number {
   const db = openHippoDb(home);
@@ -130,7 +133,7 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
     const reV1 = loadProjectBriefById(home, 'default', v1.id)!;
     expect(reV1.status).toBe('superseded');
     expect(reV1.supersededBy).toBe(v2.id);
-    expect(loadActiveBriefForRepo(home, 'default', 'r')!.id).toBe(v3.id);
+    expect(activeBrief(home, 'default', 'r')!.id).toBe(v3.id);
     const db = openHippoDb(home);
     try {
       expect(db.prepare(`SELECT 1 FROM audit_log WHERE op='project_brief_supersede' AND target_id=?`).all(String(v1.id)).length).toBe(1);
@@ -194,8 +197,8 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
     const c = saveProjectBrief(home, 'default', { repo: 'gamma', summary: 'x' });
     saveProjectBrief(home, 'default', { repo: 'beta', summary: 'x2', supersedesBriefId: b.id });
     closeProjectBrief(home, 'default', c.id);
-    expect(loadActiveBriefForRepo(home, 'default', 'alpha')!.id).toBe(a.id);
-    expect(loadActiveBriefForRepo(home, 'default', 'gamma')).toBeNull(); // closed
+    expect(activeBrief(home, 'default', 'alpha')!.id).toBe(a.id);
+    expect(activeBrief(home, 'default', 'gamma')).toBeNull(); // closed
     expect(loadProjectBriefs(home, 'default', { status: 'closed' }).map((x) => x.id)).toEqual([c.id]);
     expect(loadProjectBriefs(home, 'default', { repo: 'beta' }).length).toBe(2); // v1 superseded + v2 active
     expect(loadProjectBriefs(home, 'default', { repo: 'beta', status: 'active' }).length).toBe(1);
@@ -321,7 +324,7 @@ describe('project_briefs store (repo-scoped / auto-refreshes first-class object)
     expect(v2.version).toBe(2);
     expect(v2.changeSummary).toBe('auto-refresh from 2 receipt(s)');
     expect(loadProjectBriefById(home, 'default', v1.id)!.status).toBe('superseded');
-    expect(loadActiveBriefForRepo(home, 'default', 'hippo')!.id).toBe(v2.id);
+    expect(activeBrief(home, 'default', 'hippo')!.id).toBe(v2.id);
     const db2 = openHippoDb(home);
     try {
       // SAFETY: the query selects only metadata_json (TEXT) from audit_log for a

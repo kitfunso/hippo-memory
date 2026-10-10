@@ -27,7 +27,7 @@ import { requireInit } from './shared.js';
 import { printActiveTaskSnapshot, printSessionEvents, printHandoff, captureConsole } from './print.js';
 import { hostSessionId, hookStoreRoot, hookRuntime, payloadCwdRoot, runHookWithStores, inPilotHoldout, startDeliveryRecorder } from './hook-runtime.js';
 
-export async function cmdContext(
+async function cmdContext(
   hippoRoot: string,
   args: string[],
   flags: CliFlags,

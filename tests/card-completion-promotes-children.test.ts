@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Card } from '../src/core/card.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
-import { claimCard, completeCard, createCard, loadCard, loadCardDeps, reviewCard, transitionCard } from '../src/store/cards.js';
+import { claimCard, completeCard, createCard, loadCard, loadCardDeps, reviewCard } from '../src/store/cards.js';
 import { initStore } from '../src/store/open.js';
 import { countMatching, recordStatements } from './_helpers/count-statements.js';
 
@@ -61,9 +61,10 @@ function seedFamily(children: number): Family {
   });
   finish(doneParent);
   const db = openHippoDb(root);
+  const toReady = db.prepare("UPDATE cards SET status = 'ready', updated_at = ? WHERE id = ? AND tenant_id = ? AND status = 'backlog'");
   try {
     ids.forEach((id, i) => {
-      if (i % 5 === 4) transitionCard(db, TENANT, id, { from: ['backlog'], to: 'ready' });
+      if (i % 5 === 4) toReady.run(new Date().toISOString(), id, TENANT);
       if (i % 4 === 3 || i % 5 === 4) otherIds.push(id);
       else promotable.add(id);
     });

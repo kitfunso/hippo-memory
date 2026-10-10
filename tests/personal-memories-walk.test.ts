@@ -8,7 +8,7 @@ import { BadRequestError } from '../src/core/api-errors.js';
 import { createApiKey } from '../src/store/auth.js';
 import { extractFromTexts } from '../src/capture/extract.js';
 import { captureSessionTexts } from '../src/capture/session-texts.js';
-import { cmdRecall } from '../src/cli/recall.js';
+import { handleRecall } from '../src/cli/recall.js';
 import { _resetSharedStoreCacheForTests } from '../src/core/config.js';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { insertEntity } from '../src/store/graph-writes.js';
@@ -22,6 +22,7 @@ import { listMemoryConflicts, replaceDetectedConflicts, resolveConflict } from '
 import { loadAllEntries, readEntry } from '../src/store/entry-reads.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { initStore } from '../src/store/open.js';
+import { listRejectionsForTenant } from '../src/trust/reject-flow.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 
@@ -338,7 +339,7 @@ describe('personal memories walk (plan lane T)', () => {
       for (const who of OTHERS) await sameAsMissing(id, (x) => p.call(keys[who].plaintext, x), p.othersStatus);
       const kept = readEntry(store, id);
       expect([kept?.outcome_positive, kept?.scope, kept?.superseded_by ?? null], `${p.name} row untouched`).toEqual([0, A_SCOPE, null]);
-      expect(api.listRejections(ctxOf('A')), `${p.name} made no rejection`).toHaveLength(0);
+      expect(listRejectionsForTenant(store, 'default'), `${p.name} made no rejection`).toHaveLength(0);
       const mine = await p.call(keys.A.plaintext, id);
       expect(mine.status, `${p.name}: ${mine.text}`).toBe(p.aStatus);
       if (p.name === 'outcome') expect(json<{ applied: number }>(mine).applied).toBe(1);
@@ -477,7 +478,7 @@ describe('personal memories walk (plan lane T)', () => {
     // Fresh rows, because the line 14 sleep may merge the earlier zircon rows into one consolidated row.
     const team = seedRow('the harrowfen pump note for the cli, team row', null, '');
     const mine = seedRow('the harrowfen pump note for the cli, kept by A', A_SCOPE, '');
-    const run = (flags: Record<string, string | boolean>) => runInProcess(() => cmdRecall(store, 'default', 'harrowfen', { json: true, ...flags }));
+    const run = (flags: Record<string, string | boolean>) => runInProcess(() => handleRecall({ hippoRoot: store, tenantId: 'default', args: ['harrowfen'], flags: { json: true, ...flags } }));
     expect((await run({})).stdout).toContain(team.id);
     const scoped = await run({ scope: A_SCOPE });
     expect(scoped.stdout).toContain(team.id);

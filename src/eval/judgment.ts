@@ -112,7 +112,7 @@ async function post(content: string, opts: JudgeOptions): Promise<Response | nul
 
 /** `null` on any failure, so a Jev outage degrades capture to today's
  *  behaviour instead of blocking the write. */
-export async function judge(content: string, opts: JudgeOptions): Promise<Judgment | null> {
+async function judge(content: string, opts: JudgeOptions): Promise<Judgment | null> {
   const trimmed = content.trim();
   if (trimmed.length < 3) return null;
 

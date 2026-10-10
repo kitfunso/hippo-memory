@@ -8,7 +8,8 @@ import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';
-import { cmdContext } from '../src/cli/context.js';
+import { handleContext } from '../src/cli/context.js';
+import { withHookStdin } from './_helpers/hook-stdin.js';
 import { runInProcess } from './_helpers/run-in-process.js';
 
 let root = '';
@@ -54,7 +55,7 @@ describe('hippo context output (in process)', () => {
   it('prints the same bytes and exit codes in every format', async () => {
     const transcript: string[] = [];
     const step = async (label: string, args: string[], flags: Flags, stdin?: string): Promise<void> => {
-      const r = await runInProcess(() => cmdContext(store, args, flags, stdin));
+      const r = await runInProcess(() => withHookStdin(stdin, () => handleContext({ hippoRoot: store, tenantId: 'default', args, flags })));
       transcript.push(`$ context ${label} -> ${r.status}\n--- stdout\n${mask(r.stdout)}\n--- stderr\n${mask(r.stderr)}`);
     };
     const hook = JSON.stringify({ session_id: 'sess-hook', prompt: 'how does the deploy pipeline roll out' });

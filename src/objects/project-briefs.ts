@@ -169,7 +169,7 @@ export function loadProjectBriefs(
  * per (tenant, repo); if an operator created more than one (the DB does not prevent
  * it, consistent with every other first-class object), the MOST-RECENT active row wins.
  */
-export function loadActiveBriefForRepo(
+function loadActiveBriefForRepo(
   hippoRoot: string,
   tenantId: string,
   repo: string,

@@ -11,7 +11,7 @@ import { remember, type HippoDbContext } from '../src/api/index.js';
 import { Layer } from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb, getCurrentSchemaVersion, getSchemaVersion, type DatabaseSyncLike } from '../src/db/index.js';
-import { resolveTenantForTeam } from '../src/connectors/slack/tenant-routing.js';
+import { resolveTenantForSlackTeam } from '../src/connectors/slack/tenant-routing.js';
 import { ingestMessage, type IngestInput, type IngestResult } from '../src/connectors/slack/ingest.js';
 import { messageToRememberOpts } from '../src/connectors/slack/transform.js';
 import { parkInDlq } from '../src/connectors/dlq.js';
@@ -80,11 +80,11 @@ describe('Slack hardening + migration v19', () => {
   });
 
   // 2. Unknown team + empty workspaces → fallback.
-  it('resolveTenantForTeam: empty slack_workspaces → env fallback', () => {
+  it('resolveTenantForSlackTeam: empty slack_workspaces → env fallback', async () => {
     const restore = withEnv('HIPPO_TENANT', 'env-tenant-A');
     const db = openHippoDb(root);
     try {
-      expect(resolveTenantForTeam(db, 'TUNKNOWN')).toBe('env-tenant-A');
+      expect(await resolveTenantForSlackTeam(root, 'TUNKNOWN')).toBe('env-tenant-A');
     } finally {
       closeHippoDb(db);
       restore();
@@ -92,14 +92,14 @@ describe('Slack hardening + migration v19', () => {
   });
 
   // 3. Unknown team + non-empty workspaces → fail closed (null).
-  it('resolveTenantForTeam: non-empty workspaces + unknown team → null (fail closed)', () => {
+  it('resolveTenantForSlackTeam: non-empty workspaces + unknown team → null (fail closed)', async () => {
     const restore = withEnv('SLACK_ALLOW_UNKNOWN_TEAM_FALLBACK', undefined);
     const db = openHippoDb(root);
     try {
       db.prepare(
         `INSERT INTO slack_workspaces (team_id, tenant_id, added_at) VALUES (?, ?, ?)`,
       ).run('TKNOWN', 'tenant-known', new Date().toISOString());
-      expect(resolveTenantForTeam(db, 'TUNKNOWN')).toBeNull();
+      expect(await resolveTenantForSlackTeam(root, 'TUNKNOWN')).toBeNull();
     } finally {
       closeHippoDb(db);
       restore();
@@ -107,7 +107,7 @@ describe('Slack hardening + migration v19', () => {
   });
 
   // 4. Escape hatch SLACK_ALLOW_UNKNOWN_TEAM_FALLBACK=1.
-  it('resolveTenantForTeam: escape hatch returns env tenant when both flag and workspaces non-empty', () => {
+  it('resolveTenantForSlackTeam: escape hatch returns env tenant when both flag and workspaces non-empty', async () => {
     const r1 = withEnv('SLACK_ALLOW_UNKNOWN_TEAM_FALLBACK', '1');
     const r2 = withEnv('HIPPO_TENANT', 'env-fallback');
     const db = openHippoDb(root);
@@ -115,7 +115,7 @@ describe('Slack hardening + migration v19', () => {
       db.prepare(
         `INSERT INTO slack_workspaces (team_id, tenant_id, added_at) VALUES (?, ?, ?)`,
       ).run('TKNOWN', 'tenant-known', new Date().toISOString());
-      expect(resolveTenantForTeam(db, 'TUNKNOWN')).toBe('env-fallback');
+      expect(await resolveTenantForSlackTeam(root, 'TUNKNOWN')).toBe('env-fallback');
     } finally {
       closeHippoDb(db);
       r2();
@@ -330,7 +330,7 @@ describe('Slack hardening + migration v19', () => {
     const ts = String(Math.floor(Date.now() / 1000));
     const sigVal = sign(SECRET, ts, body);
 
-    // Pre-register the workspace so resolveTenantForTeam succeeds on replay.
+    // Pre-register the workspace so resolveTenantForSlackTeam succeeds on replay.
     {
       const db = openHippoDb(root);
       try {

@@ -64,3 +64,12 @@ export const CARD_TRANSITIONS: CardTransitions = {
 // SHORTCUT: one fixed lease for every claim; add a per-claim lease when the W3 dispatcher heartbeats on a timer.
 /** How long a claim or a heartbeat keeps a running card's lease before reclaimExpiredCards may return it to ready. */
 export const CARD_LEASE_MS = 4 * 60 * 60 * 1000;
+
+/** Throws on any move CARD_TRANSITIONS does not allow, before a status write touches the row. */
+export function assertCardTransition(from: readonly CardStatus[], to: CardStatus): void {
+  for (const status of from) {
+    if (!CARD_TRANSITIONS[status].includes(to)) {
+      throw new Error(`illegal card transition: ${status} -> ${to}`);
+    }
+  }
+}

@@ -3,7 +3,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { cmdRecall } from '../src/cli/recall.js';
+import { handleRecall } from '../src/cli/recall.js';
 import { forget, type Context } from '../src/api/index.js';
 import { savePrediction, closePrediction } from '../src/store/predictions.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
@@ -33,7 +33,7 @@ function seedBaserateWithNoMemories(): void {
 }
 
 async function recall(flags: Record<string, boolean> = {}): Promise<string> {
-  const run = await runInProcess(() => cmdRecall(root, 'default', QUERY, flags));
+  const run = await runInProcess(() => handleRecall({ hippoRoot: root, tenantId: 'default', args: [QUERY], flags }));
   expect(run.status, run.stderr).toBe(0);
   return run.stdout;
 }

@@ -9,7 +9,7 @@ import { initStore } from '../src/store/open.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { appendSessionEvent, saveActiveTaskSnapshot } from '../src/store/sessions.js';
 import { saveSessionHandoff } from '../src/store/handoffs.js';
-import { cmdRecall } from '../src/cli/recall.js';
+import { handleRecall } from '../src/cli/recall.js';
 import { resetSessionRings } from '../src/api/recall-record.js';
 import { serve, __resetSessionRecallHistoryHttp, type ServerHandle } from '../src/server.js';
 import type { RecallResult } from '../src/api/index.js';
@@ -48,7 +48,7 @@ async function viaHttp(handle: ServerHandle, c: RecallCall): Promise<Reply> {
 async function viaCli(s: Store, c: RecallCall): Promise<Reply> {
   const flags: CliFlags = { ...c.cli };
   if (c.session) flags['session-id'] = c.session;
-  const out = await runInProcess(() => cmdRecall(s.root, TENANT, c.query, flags));
+  const out = await runInProcess(() => handleRecall({ hippoRoot: s.root, tenantId: TENANT, args: [c.query], flags }));
   return { status: out.status, cacheControl: null, body: out.stdout, stderr: out.stderr, hint: /\[anchored_on: ([^\]]+)\]/.exec(out.stdout)?.[1] ?? null };
 }
 

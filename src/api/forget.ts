@@ -1,8 +1,7 @@
 // Forget a memory, and reject or unreject a value so it cannot be stored again.
 
 import { BadRequestError, NotFoundError } from '../core/api-errors.js';
-import type { RejectedValueRow } from '../store/rejection.js';
-import { rejectValue, unrejectValue, listRejectionsForTenant } from '../trust/reject-flow.js';
+import { rejectValue, unrejectValue } from '../trust/reject-flow.js';
 import { andThen, notPorted, onStore } from './on-store.js';
 import type { Context, StoreReply } from './types.js';
 import { readEntry } from '../store/entry-reads.js';
@@ -104,9 +103,4 @@ export function unreject(ctx: Context, digestOrPrefix: string) {
     );
   }
   return { ok: true, digest: outcome.digest };
-}
-
-/** List every rejected-value tombstone for `ctx.tenantId`, newest first. */
-export function listRejections(ctx: Context): RejectedValueRow[] {
-  return listRejectionsForTenant(ctx.hippoRoot, ctx.tenantId);
 }

@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import type { SearchResult } from '../src/core/search-types.js';
 import { refineSemanticMemory } from '../src/cli/refine-llm.js';
-import { generateDagSummary } from '../src/consolidate/dag.js';
+import { generateDagSummary } from '../src/consolidate/dag-summary.js';
 import { extractFacts } from '../src/learn/extract.js';
 import { getReranker } from '../src/rerankers/index.js';
 import { createJevReranker } from '../src/rerankers/jev.js';

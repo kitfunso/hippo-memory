@@ -90,7 +90,7 @@ describe('POST /v1/connectors/slack/events parse-failure tenant attribution', ()
 
   it('parse failure with unknown team_id (workspace not registered) lands as __unroutable__', async () => {
     // Multi-workspace install with at least one registration → unknown team
-    // means fail-closed (resolveTenantForTeam returns null).
+    // means fail-closed (resolveTenantForSlackTeam returns null).
     const db = openHippoDb(root);
     try {
       db.prepare(
@@ -140,7 +140,7 @@ describe('POST /v1/connectors/slack/events parse-failure tenant attribution', ()
   });
 
   it('single-workspace install (slack_workspaces empty): parse failure still routes via env fallback', async () => {
-    // resolveTenantForTeam's empty-workspaces branch returns HIPPO_TENANT.
+    // resolveTenantForSlackTeam's empty-workspaces branch returns HIPPO_TENANT.
     // This preserves single-workspace install ergonomics (no DLQ landing in
     // __unroutable__ when there's no multi-tenant routing intent).
     process.env.HIPPO_TENANT = 'single-deployment';
@@ -157,7 +157,7 @@ describe('POST /v1/connectors/slack/events parse-failure tenant attribution', ()
       body: badBody,
     });
 
-    // Empty slack_workspaces → resolveTenantForTeam returns HIPPO_TENANT.
+    // Empty slack_workspaces → resolveTenantForSlackTeam returns HIPPO_TENANT.
     expect(rowsByTenant('single-deployment')).toHaveLength(1);
   });
 });
