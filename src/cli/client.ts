@@ -152,8 +152,7 @@ function hasObjectCause(e: Error): e is Error & { cause: { code?: unknown } } {
   return typeof e.cause === 'object' && e.cause !== null;
 }
 
-export function classifyTransportFailure(err: unknown): TransportFailure {
-  if (!(err instanceof Error)) return 'none';
+export function classifyTransportFailure(err: Error): TransportFailure {
   // The server answered, so the transport worked, whatever the message says.
   if (err instanceof HttpResponseError) return 'none';
   const message = err.message.toLowerCase();

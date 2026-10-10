@@ -20,7 +20,8 @@ const MINIMAL_LIB = [
   'declare var Promise: PromiseConstructor;',
 ].join('\n');
 
-describe('check-floating-promises', () => {
+// The checker's cold start is pure CPU, so a loaded runner stretched the first compile past the 5 s unit default even with the small lib.
+describe('check-floating-promises', { timeout: 30_000 }, () => {
   let dir: string;
   beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'floating-promises-')); });
   afterEach(() => { rmSync(dir, { recursive: true, force: true }); });

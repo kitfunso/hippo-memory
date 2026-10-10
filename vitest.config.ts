@@ -40,6 +40,8 @@ for (const k of AGENT_HOME_KEYS) delete process.env[k];
 delete process.env.HIPPO_AGENT_MEMORY_TOOLS;
 const PROVIDER_ENV_KEYS = ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'VOYAGE_API_KEY', 'COHERE_API_KEY', 'TYPESAFE_API_KEY', 'HIPPO_LLM_RERANKER_URL', 'HIPPO_LLM_RERANKER_KEY', 'CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_API_TOKEN', 'HIPPO_CLEF_ENDPOINT', 'HIPPO_CLEF_ENDPOINT_TOKEN'];
 for (const k of PROVIDER_ENV_KEYS) delete process.env[k];
+// Most server tests speak as the keyless local caller; the tests of the key-required default delete this.
+process.env.HIPPO_ALLOW_KEYLESS_LOCAL = '1';
 
 // Each of these builds real git repositories and worktrees per case, too slow for every shard; token-eval.yml runs them.
 export const EVAL_TESTS = ['ab-run', 'make-tasks', 'z0-homes', 'z0-turns', 'z0-codex-run', 'z0-codex-guards', 'z0-codex-faults', 'z0-codex-install'].map((name) => `tests/token-eval-${name}.test.ts`);
@@ -80,6 +82,7 @@ export default defineConfig({
     // the process.env writes at module scope above cover the main process. Both are required.
     env: {
       HIPPO_HOME: isolatedHippoHome, HOME: isolatedUserHome, USERPROFILE: isolatedUserHome, APPDATA: isolatedAppData,
+      HIPPO_ALLOW_KEYLESS_LOCAL: '1',
       ...Object.fromEntries(TMP_KEYS.map((k) => [k, runTmp])),
       ...Object.fromEntries(AGENT_HOME_KEYS.map((k) => [k, ''])),
       ...Object.fromEntries(PROVIDER_ENV_KEYS.map((k) => [k, ''])),

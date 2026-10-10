@@ -22,6 +22,8 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-request-timing-'));
 const localRoot = path.join(tmp, 'proj', '.hippo');
 const globalRoot = path.join(tmp, 'global');
 process.env.HIPPO_HOME = globalRoot;
+// The http rows time the recall p99-recall.ts sends, with no key, so both servers run in keyless local mode.
+process.env.HIPPO_ALLOW_KEYLESS_LOCAL = '1';
 // Outside git, so hippo_context's auto query is empty and the timing measures the store, not git.
 process.chdir(tmp);
 

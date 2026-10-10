@@ -61,7 +61,7 @@ export const VERB_FLAGS = {
   '__codex-session-end-worker': { values: ['codex-home', 'history-path', 'log-file', 'start-offset', 'started-at'] },
   dedup: { switches: ['dry-run'], numbers: ['threshold'] },
   dag: { switches: ['stats'] },
-  auth: { switches: ['all', 'global', 'json'], values: ['label', 'role', 'tenant'] },
+  auth: { switches: ['all', 'global', 'json', 'no-expiry'], values: ['label', 'role', 'tenant'], numbers: ['ttl-days'] },
   goal: {
     switches: ['all', 'no-propagate'],
     values: ['level', 'outcome', 'parent', 'policy', 'session-id', 'success', 'tenant-id'],

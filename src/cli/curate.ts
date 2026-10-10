@@ -13,7 +13,7 @@ import { getMemory } from '../api/memories.js';
 import * as client from './client.js';
 import { cliApiContext } from './api-context.js';
 import { printError } from './output.js';
-import { type CliFlags, parseCountFlag, type CommandContext, boolFlag, flagIsTrue, stringFlag } from './flag-values.js';
+import { type CliFlags, parseCountFlag, type CommandContext, boolFlag, flagIsTrue, nonEmptyStringFlag, stringFlag } from './flag-values.js';
 import { requireInit, runChurnStaleForRepo, runViaServerIfAvailable, resolveAuthRoot } from './shared.js';
 import { fmt } from './print.js';
 import { errorMessage } from '../util/log.js';
@@ -505,7 +505,7 @@ export async function handleForget({ hippoRoot, tenantId, args, flags }: Command
     } catch (err) {
       // A server that died after the health probe is the caller's transport
       // fallback to handle, not an error to report to the user.
-      if (client.classifyTransportFailure(err) !== 'none') throw err;
+      if (err instanceof Error && client.classifyTransportFailure(err) !== 'none') throw err;
       const msg = errorMessage(err);
       printError(archive ? `Could not archive ${id}: ${msg}` : msg);
       throw new CliExit(1);
@@ -566,7 +566,7 @@ export function handleInvalidate({ hippoRoot, tenantId, args, flags }: CommandCo
     printError('Pass a pattern OR --id, not both. Tag matching is EXACT: the full pattern must equal a tag.');
     throw new CliExit(1);
   }
-  const reason = (flags['reason'] || null) as string | null;
+  const reason = nonEmptyStringFlag(flags, 'reason') ?? null;
   const invTarget: InvalidationTarget = {
     from: target ?? `id:${onlyId}`,
     to: reason,

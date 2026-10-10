@@ -74,6 +74,17 @@ def test_sync_auth_create_with_role_member(hippo_server: str):
             assert result.role == "member"
 
 
+def test_sync_auth_create_defaults_to_an_expiring_member_key(hippo_server: str):
+    with HippoSync(base_url=hippo_server) as client:
+        default = client.auth_create(label="sync-default-key")
+        assert default.role == "member"
+        assert default.expires_at is not None
+        week = client.auth_create(label="sync-week-key", ttl_days=7)
+        assert week.expires_at is not None and week.expires_at < default.expires_at
+        forever = client.auth_create(label="sync-forever-key", role="admin", no_expiry=True)
+        assert (forever.role, forever.expires_at) == ("admin", None)
+
+
 def test_sync_auth_list_includes_role_when_server_v1_12_3plus(hippo_server: str):
     """v0.2.0: AuthKey.role populated by server v1.12.3+, None on older."""
     with HippoSync(base_url=hippo_server) as client:

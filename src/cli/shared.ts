@@ -114,7 +114,7 @@ export async function runViaServerIfAvailable(
     await httpFn(info, apiKey);
     return true;
   } catch (err) {
-    const failure = client.classifyTransportFailure(err);
+    const failure = err instanceof Error ? client.classifyTransportFailure(err) : 'none';
     if (failure === 'never-sent') {
       failIfServerRequired('the server pidfile was stale (connection refused)');
       log.warn('stale server pidfile detected, falling back to direct mode');

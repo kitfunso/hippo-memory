@@ -322,6 +322,7 @@ function openBlockBudget(plan: ContextPlan, opts: ContextOpts, budget: number): 
   const blockBudget = pinnedOnly && opts.budget === undefined ? config.pinnedInject.budget : budget;
   obs?.facts({ projectName: projectId(plan.currentProject), budgetTokens: blockBudget, promptRecall: promptRecallPending });
   if (pinnedOnly && !config.pinnedInject.enabled) obs?.disabled();
+  if (!pinnedOnly) obs?.queried(plan.query);
   return cost
     ? Math.max(0, blockBudget - cost.fixed(blockBudget, { cross: plan.includeCrossProject, promptRecall: promptRecallPending, ambient: !pinnedOnly && config.ambient.enabled }))
     : blockBudget;
@@ -447,6 +448,12 @@ interface FinalSelection {
 /** The `limit` cut, then the held-copy drop, then each entry's origin annotation. */
 function finalizeSelection(picked: ContextResultEntry[], plan: ContextPlan): FinalSelection {
   const { obs } = plan;
+  // Ranking reports nothing itself, so its results are offered here and the cuts below can name what they drop.
+  if (!plan.pinnedOnly && obs) {
+    const pool = plan.query === '*' ? 'strength' : 'search';
+    obs.offer(picked.filter((r) => r.isGlobal !== true).map((r) => r.entry), false, pool);
+    obs.offer(picked.filter((r) => r.isGlobal === true).map((r) => r.entry), true, pool);
+  }
   let selected = picked;
   if (plan.limit < selected.length) {
     const cut = selected.slice(0, plan.limit);
@@ -519,7 +526,10 @@ async function recordRetrieval(
   // hippo.db keeps the ids as its last recall, which feeds only outcomeForLastRecall, and it alone reads a second root.
   await onStore(ctx, (port, local) => andThen(
     local.finishLastRecall(writes, plan.hasGlobal ? plan.globalRoot : undefined),
-    () => port.bumpRecallStats(selected.length),
+    (traceId) => {
+      plan.obs?.traced(traceId);
+      return port.bumpRecallStats(selected.length);
+    },
   ));
 
   // Replace selectedItems entries with markRetrieved-updated copies so

@@ -67,13 +67,13 @@ describe('auth_create audit emit', () => {
     }
   });
 
-  it('authCreate with default role logs role=admin in audit metadata', () => {
+  it('authCreate with default role logs role=member in audit metadata', () => {
     const t = newCtx();
     try {
       authCreate(t.ctx, { label: 'no-role-passed' });
       const rows = getAuditRows(t.ctx.hippoRoot, t.ctx.tenantId, 'auth_create');
       expect(rows.length).toBe(1);
-      expect(rows[0].metadata.role).toBe('admin');
+      expect(rows[0].metadata.role).toBe('member');
     } finally {
       t.cleanup();
     }

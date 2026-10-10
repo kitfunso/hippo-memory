@@ -266,6 +266,8 @@ async function main(): Promise<void> {
   seedStore(home, 1000);
   console.log(`[soak] seed done in ${Date.now() - seedStart}ms`);
 
+  // The workload sends no key, so it runs the server in keyless local mode.
+  process.env.HIPPO_ALLOW_KEYLESS_LOCAL = '1';
   const server: ServerHandle = await serve({ hippoRoot: home, port: args.port });
   console.log(`[soak] server listening on ${server.url}`);
 

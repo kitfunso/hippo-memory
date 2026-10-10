@@ -430,19 +430,6 @@ DatabaseSync.prototype.prepare = function (sql, ...rest) {
     }
   }
 
-  it.each([
-    ['the * markdown path', ['context']],
-    ['a query', ['context', 'postgres', 'rollback']],
-  ])('F9: %s prints the same bytes with the flag on and off and records no event', (_label, args) => {
-    fixture();
-    const env = { HIPPO_FAKE_NOW: FAKE_NOW };
-    const off = run(clone(false), null, { args, env });
-    const dir = clone(true);
-    const on = run(dir, null, { args, env });
-    expect([on.status, on.stdout]).toEqual([off.status, off.stdout]);
-    expect(eventCount(dir)).toBe(0);
-  });
-
   it('F10: every ledger text cell is a hash, id, timestamp, session, turn id or enum, never prompt or memory text', () => {
     fixture();
     configure(true, { promptRecall: true });

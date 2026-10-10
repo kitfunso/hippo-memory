@@ -328,17 +328,27 @@ class Hippo:
         *,
         label: str | None = None,
         role: Literal["admin", "member"] | None = None,
+        ttl_days: float | None = None,
+        no_expiry: bool = False,
     ) -> AuthCreated:
         """POST /v1/auth/keys. Mint a new API key; plaintext lands ONCE in response.
 
-        ``role`` (v1.12.3+): 'admin' | 'member'. Defaults to 'admin' server-side.
+        ``role`` (v1.12.3+): 'admin' | 'member'. The server picks 'member' when it is
+        omitted; a server from before that default picks 'admin', so name the role you want.
         Member keys are 403-blocked from admin-gated routes (e.g. ``/v1/sleep``).
+
+        The key expires 90 days after the mint unless ``ttl_days`` names another lifetime
+        (above 0, at most 3650) or ``no_expiry=True`` asks for a key that never expires.
         """
         body: dict[str, Any] = {}
         if label is not None:
             body["label"] = label
         if role is not None:
             body["role"] = role
+        if ttl_days is not None:
+            body["ttlDays"] = ttl_days
+        if no_expiry:
+            body["noExpiry"] = True
         data = await self._request("POST", "/v1/auth/keys", json=body)
         return AuthCreated.model_validate(data)
 

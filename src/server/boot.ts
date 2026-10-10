@@ -28,7 +28,7 @@ import { handleSlackEventsWebhook } from '../connectors/slack/webhook.js';
 import { handleGitHubEventsWebhook } from '../connectors/github/webhook.js';
 import { BodyTimeoutError, BodyTooLargeError, closeAfterReply, DeadlineExceededError, HttpError, JSON_HEADERS, sendJson } from '../util/http-util.js';
 import { workerCounts } from '../store/sqlite/executor-counts.js';
-import { isLoopback, LIMITER_MAX_KEYS } from './auth.js';
+import { isLocalCaller, LIMITER_MAX_KEYS } from './auth.js';
 import { enforceRateLimit, warnIfClientIpHeaderUnpinned } from './client-ip.js';
 import { answerAtDeadline, handlerDeadlineCount, isAbandoned, requestDeadlineFor } from './deadline.js';
 import { DEFAULT_SHUTDOWN_DRAIN_MS, drainAndClose, setKeepAliveTimeouts, shutdownBoundMs } from './lifecycle.js';
@@ -151,11 +151,11 @@ async function dispatchScopedRoute(r: RouteRequest, method: string, path: string
 }
 
 function sendHealth(req: IncomingMessage, res: ServerResponse, startedAt: string): void {
-  // Loopback callers (detectServer's stale-pidfile probe reads version and
-  // pid) get the full body. Non-loopback callers get liveness only: the
-  // version string would fingerprint the build for the public internet and
-  // the pid is noise. Platform health checks only need the 200.
-  if (isLoopback(req.socket.remoteAddress)) {
+  // A caller on this machine (detectServer's stale-pidfile probe reads version and
+  // pid) gets the full body. Anyone else gets liveness only, a proxied caller and a
+  // browser page on a loopback socket included: the version string would fingerprint
+  // the build and the pid is noise. Platform health checks only need the 200.
+  if (isLocalCaller(req)) {
     sendJson(res, 200, {
       ok: true,
       version: VERSION,
@@ -414,14 +414,14 @@ function exitOnSignalOrCrash(stop: () => Promise<void>, drainMs: number): void {
  * requireAuth) has shipped and every route checks it except GET /health
  * (public by design for platform health checks) and the two connector
  * webhooks in PUBLIC_ROUTES, which are HMAC-gated by their own signing
- * secrets and 404 when those secrets are unset, and any publicJson GET path. But the loopback
- * no-auth fallback inside buildContextWithAuth still admits unauthenticated
+ * secrets and 404 when those secrets are unset, and any publicJson GET path. But under
+ * HIPPO_ALLOW_KEYLESS_LOCAL=1 the keyless fallback inside buildContextWithAuth admits unauthenticated
  * requests from a loopback remote address (unless they carry Forwarded,
  * X-Forwarded-For/-Host/-Proto, X-Real-IP, Cf-Connecting-Ip, True-Client-Ip or Fly-Client-Ip, which mark a same-host proxy and get
  * a 401 like any keyless remote request), so binding to a non-loopback host
- * is only safe once that fallback is disabled with HIPPO_REQUIRE_AUTH=1,
- * which forces every request (loopback or not) through Bearer-token
- * validation. Without that env var set, a non-loopback bind would expose the
+ * needs HIPPO_REQUIRE_AUTH=1, which wins over that opt-in and
+ * forces every request (loopback or not) through Bearer-token
+ * validation. Without that env var set, a non-loopback bind could expose the
  * DB to the network with no auth, so we fail fast instead.
  *
  * Use port: 0 in tests to bind to an ephemeral port and read the actual

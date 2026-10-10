@@ -60,7 +60,7 @@ def main() -> int:
     FIXTURES_DIR.mkdir(parents=True, exist_ok=True)
 
     tmp_home = tempfile.mkdtemp(prefix="hippo-fixtures-")
-    env = {**os.environ, "HIPPO_HOME": tmp_home, "HIPPO_TENANT": "default"}
+    env = {**os.environ, "HIPPO_HOME": tmp_home, "HIPPO_TENANT": "default", "HIPPO_ALLOW_KEYLESS_LOCAL": "1"}
 
     print(f"[capture_fixtures] HIPPO_HOME={tmp_home}")
     print(f"[capture_fixtures] spawning serve on port {PORT}")

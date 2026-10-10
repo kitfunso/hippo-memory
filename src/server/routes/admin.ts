@@ -2,12 +2,11 @@
 import { AUDIT_OPS, type AuditOp } from '../../store/audit.js';
 import { auditList, authCreate, authListRows, authRevoke, quarantineApprove, quarantineList, quarantineReject } from '../../api/index.js';
 import { HttpError, readBody, sendJson } from '../../util/http-util.js';
-import { log } from '../../util/log.js';
 import { assertCrossTenantAdmin, buildContextWithAuth } from '../auth.js';
 import { pageOf, parseCursor, setNextCursorHeader } from '../cursor.js';
 import type { RouteRequest } from '../types.js';
 import { isSetMember, parseJsonObjectText, parseListLimit, validateIdSegment } from '../validation.js';
-import { isJsonString } from '../../util/json.js';
+import { isJsonBoolean, isJsonNumber, isJsonString } from '../../util/json.js';
 
 const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>(AUDIT_OPS);
 
@@ -38,7 +37,7 @@ export async function handleCreateAuthKey({ req, res, opts }: RouteRequest): Pro
   }
   // Optional body.role mirrors the --role CLI flag. Validated
   // strictly — anything other than 'admin'|'member' is a 400 (no silent
-  // fallback to admin). authCreate refuses a member caller with a 403.
+  // fallback). authCreate refuses a member caller with a 403.
   const roleRaw = body['role'];
   let role: 'admin' | 'member' | undefined;
   if (roleRaw !== undefined) {
@@ -47,6 +46,15 @@ export async function handleCreateAuthKey({ req, res, opts }: RouteRequest): Pro
     }
     role = roleRaw;
   }
+  // A null is a 400 too: a client that serialises an unset field as null must not get a key that never expires.
+  const ttlDays = body['ttlDays'];
+  if (ttlDays !== undefined && !isJsonNumber(ttlDays)) {
+    throw new HttpError(400, 'ttlDays must be a number');
+  }
+  const noExpiry = body['noExpiry'];
+  if (noExpiry !== undefined && !isJsonBoolean(noExpiry)) {
+    throw new HttpError(400, 'noExpiry must be true or false');
+  }
   // Security: any `tenantId` in the body is IGNORED. The minted key is
   // bound to the caller's authenticated tenant (ctx.tenantId, resolved
   // from the Bearer token). Forwarding body.tenantId here would let
@@ -54,13 +62,9 @@ export async function handleCreateAuthKey({ req, res, opts }: RouteRequest): Pro
   const result = await authCreate(ctx, {
     label: labelRaw,
     role,
+    ttlDays,
+    noExpiry,
   });
-  // The reply cannot change shape, so the server log is where a defaulted admin key gets noticed.
-  if (role === undefined && result.role === 'admin') {
-    log.warn(
-      `auth key ${result.keyId} was minted with no role in the body, so it is an admin key, and it never expires; send "role": "member" for a narrower one`
-    );
-  }
   sendJson(res, 200, result);
   return;
 }

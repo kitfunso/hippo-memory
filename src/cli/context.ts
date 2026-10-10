@@ -32,7 +32,7 @@ export async function cmdContext(
   flags: CliFlags,
   stdinText?: string
 ): Promise<void> {
-  const rec = flagIsTrue(flags, 'pinned-only') ? startDeliveryRecorder(hippoRoot, stdinText, hookRuntime(flags)) : null;
+  const rec = startDeliveryRecorder(hippoRoot, stdinText, hookRuntime(flags), flagIsTrue(flags, 'pinned-only') ? undefined : 'context');
   // No try/finally: a render throw keeps its own exit code and writes no event.
   await renderContext(hippoRoot, args, flags, stdinText, rec);
   flushDeliveryRecorder(rec);

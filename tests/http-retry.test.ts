@@ -54,8 +54,8 @@ describe('fetchWithRetry against a local server', () => {
   it('ends a stalled write with a TimeoutError instead of hanging, and never sends it twice', async () => {
     const { url, hits } = await startServer([null]);
     const deadlines = vi.spyOn(AbortSignal, 'timeout');
-    const err = await fetchWithRetry(url, { method: 'POST', body: '{}' }, { timeoutMs: 200 }).then(() => null, (e: Error) => e);
-    expect(err?.name).toBe('TimeoutError');
+    const err = await fetchWithRetry(url, { method: 'POST', body: '{}' }, { timeoutMs: 200 }).then(() => { throw new Error('the stalled write resolved'); }, (e: Error) => e);
+    expect(err.name).toBe('TimeoutError');
     // The one attempt ran under the caller's limit, so the wait is that limit and no more.
     expect(deadlines.mock.calls).toEqual([[200]]);
     expect(hits()).toBe(1);
@@ -82,7 +82,7 @@ describe('fetchWithRetry against a local server', () => {
 
   it('gives up on a dropped connection after the attempt cap and throws the transport error', async () => {
     const { url, hits } = await startServer(['reset']);
-    const err = await fetchWithRetry(url, { method: 'HEAD' }, { timeoutMs: 2000, ...noSleep }).then(() => null, (e: Error) => e);
+    const err = await fetchWithRetry(url, { method: 'HEAD' }, { timeoutMs: 2000, ...noSleep }).then(() => { throw new Error('the dropped HEAD resolved'); }, (e: Error) => e);
     expect(classifyTransportFailure(err)).toBe('delivery-unknown');
     expect(hits()).toBe(3);
   });

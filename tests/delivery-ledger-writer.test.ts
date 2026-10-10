@@ -105,8 +105,8 @@ describe('writeDeliveryEvent', () => {
     expect(first).not.toBeNull();
     const rows = readDeliveryEvents(db, 'default', 'sess-1');
     expect(rows.map((r) => [r.id, r.turn_seq, r.duplicate_of, r.ledger_version])).toEqual([
-      [first, 1, null, 2],
-      [second, 2, null, 2],
+      [first, 1, null, 3],
+      [second, 2, null, 3],
     ]);
     expect(rows[0].candidates).toEqual([{
       event_id: first, tenant_id: 'default', memory_id: 'mem-1', source_store: 'local', pool: 'pin', stage: 'final',
@@ -155,10 +155,18 @@ describe('writeDeliveryEvent', () => {
     ]);
   });
 
-  const boundary = (eventType: 'pre-compact' | 'compact-resume', overrides: Partial<DeliveryEventInput> = {}): DeliveryEventInput =>
+  it('W8 numbers two context rows 500 ms apart, since a context row has no prompt or host turn to match', () => {
+    const context = (overrides: Partial<DeliveryEventInput> = {}): DeliveryEventInput =>
+      event({ eventType: 'context', surface: 'context', sessionState: 'env', promptHash: null, promptLength: 0, ...overrides });
+    writeDeliveryEvent(db, context());
+    writeDeliveryEvent(db, context({ ts: at(500) }));
+    expect(readDeliveryEvents(db, 'default', 'sess-1').map((r) => [r.turn_seq, r.duplicate_of])).toEqual([[1, null], [2, null]]);
+  });
+
+  const boundary = (eventType: 'pre-compact' | 'compact-resume' | 'session-end', overrides: Partial<DeliveryEventInput> = {}): DeliveryEventInput =>
     event({ eventType, promptHash: null, promptLength: 0, ...overrides });
 
-  describe.each(['pre-compact', 'compact-resume'] as const)('%s boundary duplicates', (type) => {
+  describe.each(['pre-compact', 'compact-resume', 'session-end'] as const)('%s boundary duplicates', (type) => {
     it('W1 flags a second prompt-less event 500 ms later as a duplicate of the first', () => {
       const first = writeDeliveryEvent(db, boundary(type));
       const second = writeDeliveryEvent(db, boundary(type, { ts: at(500) }));
