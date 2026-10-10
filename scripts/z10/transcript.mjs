@@ -47,7 +47,7 @@ export function parseTranscript(text) {
     } else if (line.type === 'attachment' && line.attachment?.type === 'queued_command') {
       const body = promptBody(line.attachment.prompt);
       const mode = line.attachment.commandMode;
-      const kind = mode === undefined || mode === 'prompt' || mode === 'task-notification' ?kindOf(body?.text ?? '') : `queued-${mode}`;
+      const kind = mode === undefined || mode === 'prompt' || mode === 'task-notification' ? kindOf(body?.text ?? '') : `queued-${mode}`;
       if (body) candidates.push({ index: candidates.length, pos, kind, image: body.image, text: body.text, attachments: [], fired: false, queued: true });
     } else if (line.type === 'attachment' && line.attachment?.type === 'hook_additional_context' && line.attachment.hookEvent === 'UserPromptSubmit') {
       const owner = candidates[candidates.length - 1];
