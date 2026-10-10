@@ -160,7 +160,7 @@ export function seedQuarantineRecords(dir: string): string {
       }
       recordQuarantine(db, { tenantId: r.tenantId, memoryId: r.memoryId, originalScope: r.originalScope, reason: 'test', actor: 'seed' });
     }
-    return createApiKey(db, { tenantId: TENANT_B, label: 'globex-admin', role: 'admin' }).plaintext;
+    return createApiKey(db, { tenantId: TENANT_B, label: 'globex-admin', role: 'admin', expiresAt: '2999-01-01T00:00:00.000Z' }).plaintext;
   } finally {
     vi.useRealTimers();
     closeHippoDb(db);

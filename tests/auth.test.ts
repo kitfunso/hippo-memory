@@ -31,7 +31,7 @@ describe('auth', () => {
     const home = mkdtempSync(join(tmpdir(), 'hippo-auth-'));
     const db = openHippoDb(home);
     try {
-      const { plaintext } = createApiKey(db, { tenantId: 'default', label: 'test' });
+      const { plaintext } = createApiKey(db, { tenantId: 'default', label: 'test', role: 'admin' });
       const ctx = validateApiKey(db, plaintext);
       expect(ctx).toEqual({ valid: true, tenantId: 'default', keyId: expect.stringMatching(/^hk_/), role: 'admin', scopes: [] });
     } finally {

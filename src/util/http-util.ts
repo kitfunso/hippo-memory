@@ -148,7 +148,16 @@ export function isCrossSite(req: IncomingMessage): boolean {
   const site = req.headers['sec-fetch-site'];
   if (site !== undefined && site !== 'same-origin' && site !== 'none') return true;
   const origin = req.headers.origin;
-  return origin !== undefined && origin !== `http://${req.headers.host}`;
+  return origin !== undefined && originHost(origin) !== req.headers.host;
+}
+
+// Scheme is ignored so an https page behind a TLS-terminating proxy still matches its own Host.
+function originHost(origin: string): string | null {
+  try {
+    return new URL(origin).host;
+  } catch {
+    return null;
+  }
 }
 
 /** Per-request values a connector webhook receiver reads; ServeOpts and the /v1 RouteRequest both satisfy it. */

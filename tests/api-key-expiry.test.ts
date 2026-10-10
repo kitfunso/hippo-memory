@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb, getSchemaVersion, type DatabaseSyncLike } from '../src/db/index.js';
 import { raiseMinBinary } from '../src/db/meta.js';
-import { createApiKey, readApiKeyRecord, validateApiKey, verifyApiKeyCached, apiKeyVerifyStats, type ApiKeyRecord } from '../src/store/auth.js';
+import { createApiKey, insertApiKey, mintApiKey, readApiKeyRecord, validateApiKey, verifyApiKeyCached, apiKeyVerifyStats, type ApiKeyRecord } from '../src/store/auth.js';
 import { adminActor, authCreateSelf, authListRows, type Actor, type AuthCreateSelfResult } from '../src/api/index.js';
 import { handleAuth } from '../src/cli/auth.js';
 import { serve, type ServerHandle } from '../src/server.js';
@@ -98,7 +98,10 @@ describe('schema v53', () => {
 
 describe('the binary floor for expiring keys', () => {
   it('a store with no expiring key keeps its old floor, even after a key that never expires', () => {
-    withDb((db) => createApiKey(db, { tenantId: 'default', label: 'admin', role: 'admin' }));
+    withDb((db) => {
+      const { keyId, keyHash } = mintApiKey();
+      insertApiKey(db, { keyId, keyHash, tenantId: 'default', label: 'admin', role: 'admin', createdAt: new Date().toISOString(), ownerSubject: null, expiresAt: null });
+    });
     expect(floor()).toBe('1.24.0');
   });
 
@@ -180,7 +183,11 @@ describe('key lists', () => {
   function threeKeys(): ListedKeys {
     const liveExpiry = new Date(Date.now() + 60_000).toISOString();
     const live = mint(liveExpiry).keyId;
-    const plain = withDb((db) => createApiKey(db, { tenantId: 'default', label: 'plain', role: 'admin' })).keyId;
+    const plain = withDb((db) => {
+      const { keyId, keyHash } = mintApiKey();
+      insertApiKey(db, { keyId, keyHash, tenantId: 'default', label: 'plain', role: 'admin', createdAt: new Date().toISOString(), ownerSubject: null, expiresAt: null });
+      return keyId;
+    });
     // Minted last, so it sits first in a newest-first page.
     const expired = mint(new Date(Date.now() - 1000).toISOString()).keyId;
     return { expired, live, liveExpiry, plain };

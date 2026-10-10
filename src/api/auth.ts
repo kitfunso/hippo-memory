@@ -2,7 +2,7 @@
 
 import { BadRequestError, ForbiddenError, NotFoundError } from '../core/api-errors.js';
 import {
-  mintApiKey,
+  DEFAULT_KEY_TTL_DAYS, mintApiKey,
   type ApiKeyListRow, type ApiKeyRecord, type ListApiKeysOpts, type NewApiKey,
 } from '../store/auth.js';
 import type { KeysetPosition } from '../util/keyset.js';
@@ -70,8 +70,7 @@ function newKey<F extends KeyFields>(ctx: Context, fields: F): MintedKeyRow<F> {
   return { plaintext, key: { ...fields, keyId, keyHash, tenantId: ctx.tenantId, createdAt: new Date().toISOString() } };
 }
 
-/** Days a key lives when its mint names no expiry, so a key nobody remembers stops working by itself. */
-export const DEFAULT_KEY_TTL_DAYS = 90;
+export { DEFAULT_KEY_TTL_DAYS };
 
 // The ceiling keeps toISOString in range.
 export const MAX_TTL_DAYS = 3650;
