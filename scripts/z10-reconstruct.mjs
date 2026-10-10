@@ -216,7 +216,7 @@ function forgotten(db, tenant, id, firstTs) {
   if (!hasTable(db, 'audit_log')) return null;
   const row = db.prepare("SELECT ts FROM audit_log WHERE op = 'forget' AND target_id = ? AND tenant_id = ? ORDER BY id LIMIT 1").get(id, tenant);
   if (row === undefined) return null;
-  return firstTs !== null && row.ts > firstTs ? 'forgotten' : 'forgotten-before';
+  return firstTs === null || row.ts > firstTs ? 'forgotten' : 'forgotten-before';
 }
 
 function build(local, opts, base) {

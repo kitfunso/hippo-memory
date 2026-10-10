@@ -177,6 +177,13 @@ describe('fold edge cases', () => {
     expect([v.class, v.reason]).toEqual(['indeterminate', 'forgotten']);
   });
 
+  it('R10b a memory forgotten in a session with no rows is indeterminate forgotten, not not-written', () => {
+    const m = present();
+    expect(deleteEntry(dir, m.id)).toBe(true);
+    const v = read('r10b', m.id);
+    expect([v.class, v.reason, v.turn]).toEqual(['indeterminate', 'forgotten', null]);
+  });
+
   it('R11 label validation: bad fields, other sessions and duplicates', () => {
     const m = present();
     const block = 'the block that was sent';
@@ -184,12 +191,27 @@ describe('fold edge cases', () => {
     const t = transcript([{ prompt: 'a prompt', attach: block }]);
     const ok = { session_id: 'r11', memory_id: m.id, application: 'observed', signal: 'revert', evidence: 'git revert abc' };
     const run = (labels: Json[]) => read('r11', m.id, { transcript: t, labels });
+    for (const signal of ['failed-check', 'explicit-correction', 'revert', 'repeated-error']) {
+      expect(run([{ ...ok, signal }])).toMatchObject({ class: 'applied-but-wrong', label: { signal } });
+    }
     expect(run([{ ...ok, signal: 'guess' }])).toMatchObject({ class: 'application-unknown', notes: ['label-error:signal'], label: null });
     expect(run([{ ...ok, evidence: '  ' }]).notes).toEqual(['label-error:evidence']);
     expect(run([{ ...ok, session_id: 'other' }, { ...ok, memory_id: 'other' }])).toMatchObject({ class: 'application-unknown', notes: [] });
     expect(run([ok, { ...ok, signal: 'failed-check' }])).toMatchObject({ class: 'application-unknown', notes: ['label-error:duplicate'], label: null });
     expect(run([{ ...ok, application: 'unknown', signal: 'unknown', evidence: '' }]).class).toBe('application-unknown');
     expect(run([ok]).class).toBe('applied-but-wrong');
+  });
+});
+
+describe('pairing', () => {
+  it('R15 a sent turn whose prompt hash and attachment match no transcript prompt is delivery-unconfirmed no-paired-prompt', () => {
+    const m = present();
+    const block = 'the block that was sent';
+    const id = write(event('r15', { promptHash: blockHash('the payload prompt'), emittedHash: blockHash(block), candidates: [row(m.id)] }));
+    const t = transcript([{ prompt: 'a typed line one', fired: false }, { prompt: 'a typed line two', fired: false }]);
+    const v = read('r15', m.id, { transcript: t });
+    expect([v.class, v.reason, v.turn, v.turns[0].paired_by, v.notes.some((n: string) => n.startsWith('gap:'))])
+      .toEqual(['delivery-unconfirmed', 'no-paired-prompt', { event_id: id, turn_seq: 1 }, null, false]);
   });
 });
 
