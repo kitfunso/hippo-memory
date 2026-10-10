@@ -8,8 +8,8 @@
   "twinFunctions": 0,
   "sqlOutside": 0,
   "txLiterals": 0,
-  "tenantResolvesInCli": 9,
-  "storeImportsInCli": 82,
+  "tenantResolvesInCli": 8,
+  "storeImportsInCli": 64,
   "openersOutsideByFile": {
     "src/agent-memories/sync.ts": 3,
     "src/api/ledger-db.ts": 1,

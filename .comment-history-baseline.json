@@ -1,14 +1,12 @@
 {
-  "src/api/drill-down.ts": 8,
-  "src/api/quarantine.ts": 1,
-  "src/consolidate/dedupe.ts": 9,
+  "src/api/drill-down.ts": 2,
+  "src/consolidate/dedupe.ts": 2,
   "src/core/card.ts": 1,
-  "src/importers/core.ts": 11,
-  "src/importers/markdown-parse.ts": 4,
+  "src/importers/core.ts": 3,
   "src/importers/markdown.ts": 1,
-  "src/importers/vault.ts": 9,
-  "src/learn/invalidation.ts": 3,
-  "src/objects/skills.ts": 3,
-  "src/store/conflicts.ts": 18,
+  "src/importers/vault.ts": 1,
+  "src/learn/invalidation.ts": 1,
+  "src/objects/skills.ts": 2,
+  "src/store/conflicts.ts": 1,
   "src/trust/quarantine.ts": 1
 }

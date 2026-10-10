@@ -93,7 +93,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `restoreDormant`: A restore is a labelled "forgot it, then needed it" event: the signal a learned lifecycle (ROADMAP LC3) trains on.
 
 ### src/api/forget.ts
-- `reject / unreject / listRejections` (section banner): AT1: reject / unreject / listRejections docs/plans/2026-08-15-at1-rejected-value-tombstone.md §4
+- `reject / unreject` (section banner): AT1: reject and unreject, docs/plans/2026-08-15-at1-rejected-value-tombstone.md §4
 
 ### src/api/outcome.ts
 - `outcome`: `opts.traceId` (LC1, docs/plans/2026-08-02-lc1-recall-trace-persistence.md): OPTIONAL additive opt so a programmatic caller can link this outcome to the recall_traces row it judges.
@@ -971,10 +971,9 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 ### src/store/summaries.ts
 - `summaries.ts` (dirty-flag banner): v0.30 / E1 of DAG live-coupling — dirty-flag helpers for the existing DAG layer's level-2 summaries. Used by E2 (child-write propagation in invalidation.ts / writeEntry / forgetMemory / archiveRawMemory) to mark a summary dirty when one of its children changes, and by E3's sleep-cycle rebuildDirtySummaries phase to enumerate candidates without scanning every memory row.
 - `loadDirtySummaries`: Sorted by latest_at DESC (NULLS LAST) so E3's rebuild cap (HIPPO_DAG_REBUILD_CAP, default 20) takes the most-recently-changed summaries first.
-- `markSummaryDirty`: Called by E2 from invalidation.ts / writeEntry / forgetMemory / archiveRawMemory whenever a child is invalidated, superseded, forgotten, or archived.
-- `markSummaryDirty`: Quietly no-ops if the target row doesn't exist or isn't a level-2 summary (E5 will widen the dag_level guard to IN (2, 3) when level-3 build path lands).
-- `markSummaryDirty`: v0.30 / E5: widened dag_level=2 -> IN (2, 3). RETURNING dag_level reads actual level in same round trip.
-- `markSummaryDirty`: metadata.source=E1 leaves a breadcrumb so E2-E5 debugging can distinguish dirty-marks across the arc's wiring layers.
+- `markSummaryDirtyInTx` (now in src/store/summary-dirty.ts): called from invalidation, writeEntry, forgetMemory and archiveRawMemory whenever a child is invalidated, superseded, forgotten or archived; it runs in the caller's transaction.
+- `markSummaryDirtyInTx`: quietly no-ops if the target row does not exist or is not a level-2 or level-3 summary.
+- `markSummaryDirtyInTx`: RETURNING dag_level reads the actual level in the same round trip; the audit row carries `source: E2`.
 - `summaries.ts` (rebuild banner): v0.30 / E3 of DAG live-coupling — sleep-cycle rebuild surface.
 - `loadAllL2Summaries`: v0.30 / E5 — host-wide loader for L2 topic summaries without an L3 parent. Mirrors loadAllDirtySummaries pattern (E3).
 - `loadAllDirtySummaries`: v0.30 / E3 — host-wide variant of loadDirtySummaries.
