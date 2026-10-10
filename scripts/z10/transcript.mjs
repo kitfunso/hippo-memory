@@ -1,4 +1,4 @@
-// The Claude Code transcript contract the Z10 reader joins on: which lines are prompts, which hooks fired under them, and which turn row owns which prompt.
+// The Claude Code transcript contract the delivery reader joins on: which lines are prompts, which hooks fired under them, and which turn row owns which prompt.
 
 const FIRING = ['task-notification', 'cross-session-message', 'agent-message'];
 const QUIET = ['command-name', 'local-command-stdout', 'local-command-caveat', 'bash-input', 'bash-stdout', 'bash-stderr'];

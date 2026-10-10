@@ -1,4 +1,4 @@
-// Z10 exit fixtures: the built hook writes the ledger rows, and scripts/z10-reconstruct.mjs must name the class each construction implies.
+// Exit fixtures: the built hook writes the ledger rows, and scripts/z10-reconstruct.mjs must name the class each construction implies.
 import { describe, it, expect, afterEach } from 'vitest';
 import { initStore } from '../src/store/open.js';
 import {
@@ -55,7 +55,7 @@ describe('capture: a lesson the store never held at the turn', () => {
     make();
     fire(p, 'x1', P1);
     expect(events('x1')).toHaveLength(1);
-    const v = verdictOf({ store: p.hippoRoot, session: 'x1', key: 'a sentence nobody wrote', global: false });
+    const v = verdictOf({ store: p.hippoRoot, session: 'x1', key: 'a sentence nobody wrote', global: p.globalRoot });
     ok(v, 'x1', null, { class: 'not-written', reason: 'no-row', turn: null, stage: null });
   });
 

@@ -1,4 +1,4 @@
-// Z10 exit negative controls: constructions where a join must NOT confirm, so a reader that over-joins fails here.
+// Exit negative controls: constructions where a join must NOT confirm, so a reader that over-joins fails here.
 import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -83,6 +83,7 @@ describe('negative controls', () => {
     expect(rows('SELECT COUNT(*) AS c FROM delivery_events')[0].c).toBe(0);
     const v = read('n4', pinId(), { transcript: doc('n4', [turnOf(P1, r.stdout)]) });
     ok(v, 'n4', pinId(), { class: 'indeterminate', reason: 'no-event-row', turn: null, stage: null });
+    expect([v.notes.filter((n) => n.startsWith('gap:')), v.turns.filter((t) => t.event_id === null).length]).toEqual([['gap:0'], 1]);
   });
 
   it('N5 a label with an inferred application is ignored and reported', () => {

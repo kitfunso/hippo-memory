@@ -32,11 +32,24 @@ function findMemories(stores, tenant, opts) {
   const found = [];
   for (const { db, name } of stores) {
     const rows = opts.memory !== undefined
-      ? db.prepare('SELECT id, created FROM memories WHERE tenant_id = ? AND id = ?').all(tenant, opts.memory)
-      : db.prepare('SELECT id, created FROM memories WHERE tenant_id = ? AND instr(content, ?) > 0').all(tenant, opts.key);
-    for (const r of rows) found.push({ id: r.id, created: r.created, store: name });
+      ? db.prepare('SELECT id, created, source FROM memories WHERE tenant_id = ? AND id = ?').all(tenant, opts.memory)
+      : db.prepare('SELECT id, created, source FROM memories WHERE tenant_id = ? AND instr(content, ?) > 0').all(tenant, opts.key);
+    for (const r of rows) found.push({ id: r.id, created: r.created, source: r.source, store: name, db });
   }
   return found;
+}
+
+// Copies keep the source's creation time, so their audit row dates them.
+function presenceIn(m, tenant) {
+  if (!/^(shared|promoted):/.test(m.source ?? '')) return m.created;
+  if (!hasTable(m.db, 'audit_log')) return null;
+  return m.db.prepare("SELECT MIN(ts) AS ts FROM audit_log WHERE op = 'remember' AND target_id = ? AND tenant_id = ?").get(m.id, tenant).ts ?? null;
+}
+
+// The earliest time any store holds the lesson; null when every holder is a copy with no remember row.
+function presentSince(found, tenant) {
+  const times = found.filter((m) => m.id === found[0].id).map((m) => presenceIn(m, tenant)).filter((t) => t !== null);
+  return times.length === 0 ? null : times.reduce((a, b) => (b < a ? b : a));
 }
 
 function loadSession(db, tenant, session, storeHash, notes) {
@@ -135,24 +148,37 @@ function reusedDelivery(env, gi) {
 }
 
 function absentReason(env, ts) {
-  if (env.memory) return env.memory.created <= ts ? null : 'written-after';
+  if (env.memory) {
+    if (env.memory.since === null) return 'presence-unknown';
+    return env.memory.since <= ts ? null : 'written-after';
+  }
   return env.hasCandidates ? null : 'no-row';
 }
+
+// What a turn with no candidate row reads as when the lesson was in the store.
+function ifPresent(g) {
+  const { row } = g;
+  if (g.surface) return ranged('not-retrieved', 'rejected', 'context-surface');
+  if (row.rejected_unlisted === 0) return proven('not-retrieved', 'not-loaded');
+  return ranged('not-retrieved', 'rejected', row.rejected_count - row.rejected_unlisted < ROW_CAP ? 'undecided' : 'unlisted');
+}
+
+const unknownPresence = (v) => ranged('not-written', v.stage_reached ?? v.range[1], 'presence-unknown');
 
 function judge(env, g, gi) {
   const { row, cand } = g;
   if (row.block_state === 'disabled') {
-    return absentReason(env, row.ts) === 'written-after' ? proven('not-written', 'written-after') : proven('rejected', 'block-disabled');
+    const gone = absentReason(env, row.ts);
+    if (gone === 'presence-unknown') return unknownPresence(proven('rejected', 'block-disabled'));
+    return gone === 'written-after' ? proven('not-written', 'written-after') : proven('rejected', 'block-disabled');
   }
   if (cand?.outcome === 'rejected') return proven('rejected', cand.reason);
   if (cand && g.surface) return unconfirmed('surface-unjoined');
   if (cand?.outcome === 'emitted') return emittedDelivery(g, env);
   if (cand?.outcome === 'reused') return reusedDelivery(env, gi);
   const absent = absentReason(env, row.ts);
-  if (absent) return proven('not-written', absent);
-  if (g.surface) return ranged('not-retrieved', 'rejected', 'context-surface');
-  if (row.rejected_unlisted === 0) return proven('not-retrieved', 'not-loaded');
-  return ranged('not-retrieved', 'rejected', row.rejected_count - row.rejected_unlisted < ROW_CAP ? 'undecided' : 'unlisted');
+  if (absent === 'presence-unknown') return unknownPresence(ifPresent(g));
+  return absent ? proven('not-written', absent) : ifPresent(g);
 }
 
 function turnOf(env, g, gi) {
@@ -257,7 +283,7 @@ function build(local, opts, base) {
     base.label = pickLabel(opts.labels, session, found.map((m) => m.id), base.notes);
     return { class: 'indeterminate', reason: 'key-ambiguous' };
   }
-  env.memory = found[0] ?? null;
+  env.memory = found.length === 0 ? null : { ...found[0], since: presentSince(found, tenant) };
   base.memory_id = env.memory?.id ?? opts.memory ?? null;
   base.label = pickLabel(opts.labels, session, base.memory_id === null ? [] : [base.memory_id], base.notes);
   base.memory_store = env.memory?.store ?? null;
@@ -272,7 +298,10 @@ function build(local, opts, base) {
   env.hasCandidates = targetCands.size > 0;
   if (env.memory === null && !env.hasCandidates) {
     const why = base.memory_id === null ? null : forgotten(stores, tenant, base.memory_id, rows[0]?.ts ?? null);
-    return why === 'forgotten' ? { class: 'indeterminate', reason: why } : { class: 'not-written', reason: why ?? 'no-row' };
+    if (why === 'forgotten') return { class: 'indeterminate', reason: why };
+    // A read told to skip the global store cannot show a lesson that lives only there was never written.
+    if (why === null && opts.global === false && !opts.isGlobal) return { class: 'indeterminate', reason: 'global-unread' };
+    return { class: 'not-written', reason: why ?? 'no-row' };
   }
   return foldSession(env, { rows, targetCands, opts, base });
 }
@@ -322,7 +351,7 @@ export function reconstruct(opts) {
     store_hash: blockHash(hashed), tenant, session, memory_id: null, memory_store: null, notes: [], label: null,
   };
   try {
-    const part = build(local, { ...opts, globalDb }, base);
+    const part = build(local, { ...opts, globalDb, isGlobal }, base);
     const acted = noteLabelMisfit(base.label, part, base.notes);
     return {
       class: part.class, reason: part.reason, store_hash: base.store_hash, tenant_id: tenant, session_id: session,

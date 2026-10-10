@@ -1,4 +1,4 @@
-// The Z10 reader on rows the real ledger writer built, plus the transcript parser and the CLI arguments.
+// The delivery reader on rows the real ledger writer built, plus the transcript parser and the CLI arguments.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -14,7 +14,9 @@ import { blockHash } from '../src/util/token-text.js';
 import { realpathOrResolve } from '../src/util/real-path.js';
 import type { JsonValue } from '../src/util/json.js';
 import { seed, verdictOf, writeHostTranscript, type ReadOpts, type Verdict } from './_helpers/host-transcript.js';
-import { dispose, project, type Project } from './_helpers/delivery-boundary.js';
+import { dispose, hippo, project, type Project } from './_helpers/delivery-boundary.js';
+import { upsertEntryRow } from '../src/store/entry-row.js';
+import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { fire } from './_helpers/host-transcript.js';
 import { parseTranscript } from '../scripts/z10/transcript.mjs';
 
@@ -218,6 +220,28 @@ describe('fold edge cases', () => {
     expect([before.class, before.reason, before.turns[0].event_id]).toEqual(['rejected', 'block-disabled', id]);
   });
 
+  it('R30 a shared copy with no remember row has no presence time, so a turn with no candidate row is indeterminate presence-unknown', () => {
+    const copy = { ...createMemory('a lesson copied in without an audit row', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), created: CREATED, source: 'shared:elsewhere:2026-10-05T00:00:00.000Z' };
+    const db = openHippoDb(dir);
+    try {
+      upsertEntryRow(db, copy);
+    } finally {
+      closeHippoDb(db);
+    }
+    write(event('r30', { candidates: [], selectedCount: 0, emittedCount: 0 }));
+    const v = read('r30', copy.id);
+    expect([v.class, v.reason, v.turns[0].range]).toEqual(['indeterminate', 'presence-unknown', ['not-written', 'not-retrieved']]);
+  });
+
+  it('R31 a lesson in no store and no candidate row is indeterminate global-unread when the global store was skipped, and not-written when it was read', () => {
+    write(event('r31', { candidates: [], selectedCount: 0, emittedCount: 0 }));
+    expect(read('r31', 'mem_nowhere', { global: false })).toMatchObject({ class: 'indeterminate', reason: 'global-unread' });
+    const g = path.join(dir, 'g31');
+    fs.mkdirSync(g);
+    initStore(g);
+    expect(read('r31', 'mem_nowhere', { global: g })).toMatchObject({ class: 'not-written', reason: 'no-row' });
+  });
+
   it('R25 a reuse after a group whose sent row was a duplicate is confirmed through that group', () => {
     const m = present();
     const block = 'the block the duplicate row sent';
@@ -236,7 +260,7 @@ describe('fold edge cases', () => {
 
   it('R20 a valid label on a not-written or key-ambiguous read is noted, not applied', () => {
     const label = { session_id: 'r20', memory_id: 'mem_never', application: 'observed', signal: 'resolved-check', evidence: 'a passing run' };
-    const never = read('r20', 'mem_never', { labels: [label] });
+    const never = read('r20', 'mem_never', { labels: [label], global: path.join(dir, 'no-global') });
     expect([never.class, never.reason, never.notes, never.label]).toEqual(['not-written', 'no-row', ['label-conflict'], null]);
     const first = seed(dir, 'the shared phrase appears in the first lesson', { created: CREATED });
     seed(dir, 'the shared phrase appears in the second lesson', { created: CREATED });
@@ -289,6 +313,29 @@ describe('fold edge cases', () => {
     expect(run([ok, { ...ok, signal: 'failed-check' }])).toMatchObject({ class: 'application-unknown', notes: ['label-error:duplicate'], label: null });
     expect(run([{ ...ok, application: 'unknown', signal: 'unknown', evidence: '' }]).class).toBe('application-unknown');
     expect(run([ok]).class).toBe('applied-but-wrong');
+  });
+});
+
+describe('a lesson copied to the global store', () => {
+  let p: Project;
+  afterEach(() => dispose(p));
+
+  it('R29 a lesson shared after the turn keeps its old created time, and the copy still reads not-written written-after', () => {
+    p = project();
+    const note = 'office note: the coffee machine schedule changes for team lunch on friday';
+    const target = seed(p.hippoRoot, `${note} oldest`, { created: '2026-05-01T00:00:00.000Z' });
+    for (let i = 0; i < 6; i++) seed(p.hippoRoot, `${note} ${i}`, { created: `2026-06-0${i + 1}T00:00:00.000Z` });
+    fire(p, 'r29', 'first question about deploys');
+    const shared = hippo(p, ['share', target.id, '--force']);
+    expect(shared.status, shared.stderr).toBe(0);
+    const copyId = /Shared \[(\S+)\] to global store\./.exec(shared.stdout)?.[1] ?? '';
+    expect(copyId).not.toBe('');
+    const db = new DatabaseSync(path.join(p.globalRoot, 'hippo.db'), { readOnly: true });
+    const raw = db.prepare('SELECT created, source FROM memories WHERE id = ?').get(copyId);
+    db.close();
+    expect([raw?.created, String(raw?.source).startsWith('shared:')]).toEqual([target.created, true]);
+    const v = verdictOf({ store: p.hippoRoot, session: 'r29', memory: copyId, global: p.globalRoot });
+    expect([v.class, v.reason, v.memory_store, v.turns.map((t) => t.cand_reason)]).toEqual(['not-written', 'written-after', 'global', [null]]);
   });
 });
 

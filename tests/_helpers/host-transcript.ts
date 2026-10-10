@@ -1,10 +1,12 @@
-// A Claude Code style transcript built from the hook's real stdout, plus the fixture drivers the Z10 exit tests share.
+// A Claude Code style transcript built from the hook's real stdout, plus the fixture drivers the exit tests share.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { SpawnSyncReturns } from 'node:child_process';
 import { expect } from 'vitest';
 import type { JsonValue } from '../../src/util/json.js';
 import { writeEntry } from '../../src/store/entry-writes.js';
+import { closeHippoDb, openHippoDbReadOnly } from '../../src/db/index.js';
+import { readDeliveryEvents } from '../../src/store/recall-trace.js';
 import { blockHash } from '../../src/util/token-text.js';
 import { realpathOrResolve } from '../../src/util/real-path.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../../src/core/memory.js';
@@ -65,11 +67,21 @@ export interface Oracle {
 
 /** The eight registered fields in one comparison, so no case can score fewer. */
 export function expectVerdict(v: Verdict, want: Oracle & { store: string; session: string; memory: string | null; tenant?: string }): void {
+  const tenant = want.tenant ?? 'default';
+  const db = openHippoDbReadOnly(want.store);
+  let hooked: string | undefined;
+  try {
+    hooked = readDeliveryEvents(db, tenant, want.session).at(-1)?.store_hash;
+  } finally {
+    closeHippoDb(db);
+  }
+  // A session with no row has no hook hash to read, so the project-store rule stands in.
+  const storeHash = hooked ?? blockHash(path.join(realpathOrResolve(path.dirname(path.resolve(want.store))), path.basename(want.store)));
   expect({
     class: v.class, reason: v.reason, store_hash: v.store_hash, tenant_id: v.tenant_id,
     session_id: v.session_id, turn: v.turn, stage: v.stage, memory_id: v.memory_id,
   }).toEqual({
-    class: want.class, reason: want.reason, store_hash: blockHash(path.join(realpathOrResolve(path.dirname(path.resolve(want.store))), path.basename(want.store))), tenant_id: want.tenant ?? 'default',
+    class: want.class, reason: want.reason, store_hash: storeHash, tenant_id: tenant,
     session_id: want.session, turn: want.turn, stage: want.stage, memory_id: want.memory,
   });
 }
