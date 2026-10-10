@@ -272,7 +272,7 @@ export function buildIndexFromDb(db: ReturnType<typeof openHippoDb>): HippoIndex
       file: path.join(layer, `${row.id}.md`),
       layer,
       strength: Number(row.strength ?? 0),
-      tags: parseJsonArray(row.tags_json),
+      tags: parseJsonArray(row.tags_json, { table: 'memories', id: row.id, column: 'tags_json' }),
       created: row.created,
       last_retrieved: row.last_retrieved,
       pinned: Boolean(row.pinned),
@@ -292,7 +292,7 @@ export function readLastRecall(db: ReturnType<typeof openHippoDb>): Pick<HippoIn
   ).all() as Array<{ key: string; value: string }>;
   const lockstep = new Map(lockstepRows.map((r) => [r.key, r.value]));
   return {
-    last_retrieval_ids: parseJsonArray(lockstep.get('last_retrieval_ids') ?? '[]'),
+    last_retrieval_ids: parseJsonArray(lockstep.get('last_retrieval_ids') ?? '[]', { table: 'meta', id: 'last_retrieval_ids', column: 'value' }),
     last_trace_id: parseLastTraceId(lockstep.get('last_trace_id') ?? ''),
   };
 }

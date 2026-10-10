@@ -48,6 +48,7 @@ import { installCodexMemoryHooks, setupDailySchedule, warnClaudeSettingsUnusable
 import { repairQualityOnceAt } from './quality-repair-once.js';
 import { HOOK_MARKERS, HOOKS, hippoBlock, withoutHookBlock } from '../hooks/hook-blocks.js';
 import { escapeRegex } from '../util/escape.js';
+import { CliExit } from './exit.js';
 
 // ---------------------------------------------------------------------------
 // Hook install/uninstall
@@ -61,7 +62,7 @@ export function handleHook({ args }: CommandContext): void {
   if (subcommand === 'uninstall') return hookUninstall(target);
 
   printError('Usage: hippo hook <install|uninstall|list> [target]');
-  process.exit(1);
+  throw new CliExit(1);
 }
 
 type HookSpec = (typeof HOOKS)[string];
@@ -87,7 +88,7 @@ function hookInstall(target: string | undefined): void {
   if (!target || !HOOKS[target]) {
     printError(`Unknown hook target: ${target ?? '(none)'}`);
     printError(`   Available: ${[...Object.keys(HOOKS), 'copilot'].join(', ')}`);
-    process.exit(1);
+    throw new CliExit(1);
   }
   const hook = HOOKS[target];
   patchAgentFile(hook, target);
@@ -291,7 +292,7 @@ function hookUninstall(target: string | undefined): void {
   if (target === 'copilot') return printCopilotUninstall(uninstallCopilot());
   if (!target || !HOOKS[target]) {
     printError(`Unknown hook target: ${target ?? '(none)'}`);
-    process.exit(1);
+    throw new CliExit(1);
   }
   unpatchAgentFile(HOOKS[target], target);
 
@@ -430,14 +431,16 @@ function setupCopilot(dryRun: boolean): void {
 
 function setupJsonTool(tool: ToolDetection, dryRun: boolean): void {
   if (tool.name === 'copilot') return setupCopilot(dryRun);
+  // SAFETY: detectInstalledTools gives kind 'json-hook' only to claude-code and copilot (hooks/shared.ts), and copilot returned above.
+  const target = tool.name as JsonHookTarget;
   if (dryRun) {
     // Resolve the real settings path so the filename is right for each tool
     // (claude-code -> settings.json, opencode -> opencode.json).
-    const { settings } = resolveJsonHookPaths(tool.name as JsonHookTarget);
+    const { settings } = resolveJsonHookPaths(target);
     console.log(`[dry-run] would install hooks in ${settings}`);
     return;
   }
-  const result = installJsonHooks(tool.name as JsonHookTarget);
+  const result = installJsonHooks(target);
   if (warnClaudeSettingsUnusable(result, `  ${tool.name.padEnd(14)} `)) return;
   const bits: string[] = [];
   if (result.installedSessionEnd) bits.push('SessionEnd (session-end)');

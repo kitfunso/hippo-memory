@@ -34,12 +34,6 @@ export function prefixFor(model: string, role?: EmbeddingRole): string {
   return '';
 }
 
-// Use Function constructor to bypass TypeScript static module resolution
-// for optional peer dependencies that may not be installed.
-// SAFETY: `import(s)` always resolves to a module namespace object (or rejects);
-// Promise<object> names that honestly without claiming a specific module shape.
-const _dynImport = new Function('s', 'return import(s)') as (s: string) => Promise<object>;
-
 /** Check (synchronously) if @xenova/transformers or @huggingface/transformers is installed. */
 export function isEmbeddingAvailable(): boolean {
   if (_embeddingAvailable !== null) return _embeddingAvailable;
@@ -132,8 +126,7 @@ async function importPipelineFactory(pkg: string, model: string): Promise<any> {
     // SAFETY: the resolved module's shape is untyped by design (optional peer
     // dependency); pipelineFn/mod.env are read defensively below and any
     // failure to find a usable pipeline falls through to `return null`.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const mod = await _dynImport(pkg) as any;
+    const mod = await import(/* @vite-ignore */ pkg);
     if (envModelCache()) {
       if (mod.env) {
         mod.env.cacheDir = envModelCache();

@@ -9,6 +9,7 @@ import { type CliFlags, parseBudgetFlag, type CommandContext, flagIsTrue, string
 import { requireInit } from './shared.js';
 import { captureConsole } from './print.js';
 import { CONTENT_PREVIEW_CHARS } from '../util/token-text.js';
+import { CliExit } from './exit.js';
 
 const TREE_CHILD_PREVIEW_CHARS = 70;
 const TREE_LEAF_PREVIEW_CHARS = 60;
@@ -106,13 +107,13 @@ async function cmdAssemble(hippoRoot: string, tenantId: string, sessionId: strin
     tenantId,
     actor: api.adminActor('cli:assemble'),
   };
-  const r = await api.assemble(ctx, sessionId, {
-    ...(Number.isFinite(budget) && budget! > 0 ? { budget } : {}),
-    ...(Number.isFinite(freshTailCount) && freshTailCount! >= 0 ? { freshTailCount } : {}),
-    summarizeOlder,
-    ...(scope !== undefined ? { scope } : {}),
-    cost: assembleCost(sessionId),
-  });
+  const opts: api.AssembleOpts = {};
+  if (Number.isFinite(budget) && budget! > 0) opts.budget = budget;
+  if (Number.isFinite(freshTailCount) && freshTailCount! >= 0) opts.freshTailCount = freshTailCount;
+  opts.summarizeOlder = summarizeOlder;
+  if (scope !== undefined) opts.scope = scope;
+  opts.cost = assembleCost(sessionId);
+  const r = await api.assemble(ctx, sessionId, opts);
   if (flags['json']) {
     console.log(JSON.stringify(r, null, 2));
     return;
@@ -138,7 +139,7 @@ async function cmdDrillDown(hippoRoot: string, tenantId: string, summaryId: stri
   if (rawDepth !== undefined) {
     if (!Number.isInteger(rawDepth) || rawDepth < 1 || rawDepth > 10) {
       printError(`--depth must be an integer between 1 and 10 (got ${flags['depth']})`);
-      process.exit(2);
+      throw new CliExit(2);
     }
     depth = rawDepth;
   }
@@ -147,12 +148,12 @@ async function cmdDrillDown(hippoRoot: string, tenantId: string, summaryId: stri
     tenantId,
     actor: api.adminActor('cli:drill'),
   };
-  const r = await api.drillDown(ctx, summaryId, {
-    ...(Number.isFinite(limit) && limit! > 0 ? { limit } : {}),
-    ...(Number.isFinite(budget) && budget! > 0 ? { budget } : {}),
-    ...(depth !== undefined ? { depth } : {}),
-    cost: drillCost,
-  });
+  const opts: api.DrillDownOpts = {};
+  if (Number.isFinite(limit) && limit! > 0) opts.limit = limit;
+  if (Number.isFinite(budget) && budget! > 0) opts.budget = budget;
+  if (depth !== undefined) opts.depth = depth;
+  opts.cost = drillCost;
+  const r = await api.drillDown(ctx, summaryId, opts);
   if ('failure' in r) {
     // Only `not_drillable` is caller-actionable. `not_found` collapses cross-tenant, scope-blocked
     // and missing on purpose: telling scope_blocked apart would leak that the row exists.
@@ -161,7 +162,7 @@ async function cmdDrillDown(hippoRoot: string, tenantId: string, summaryId: stri
     } else {
       printError(`No drillable summary at id=${summaryId}.`);
     }
-    process.exit(1);
+    throw new CliExit(1);
   }
   if (flags['json']) {
     console.log(JSON.stringify(r, null, 2));
@@ -179,7 +180,7 @@ export async function handleDrill({ hippoRoot, tenantId, args, flags }: CommandC
   const summaryId = args[0];
   if (!summaryId) {
     printError('Usage: hippo drill <summary-id> [--limit N] [--budget N]');
-    process.exit(1);
+    throw new CliExit(1);
   }
   await cmdDrillDown(hippoRoot, tenantId, summaryId, flags);
 }
@@ -188,7 +189,7 @@ export async function handleAssemble({ hippoRoot, tenantId, args, flags }: Comma
   const sessionId = stringFlag(flags, 'session') ?? args[0];
   if (!sessionId) {
     printError('Usage: hippo assemble --session <id> [--budget N] [--fresh-tail N] [--no-summarize-older] [--json]');
-    process.exit(1);
+    throw new CliExit(1);
   }
   await cmdAssemble(hippoRoot, tenantId, sessionId, flags);
 }

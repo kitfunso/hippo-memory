@@ -18,6 +18,7 @@ import { requireInit, runChurnStaleForRepo, runViaServerIfAvailable, resolveAuth
 import { fmt } from './print.js';
 import { errorMessage } from '../util/log.js';
 import { DIGEST_DISPLAY_CHARS, CONTENT_PREVIEW_CHARS, DATE_PREFIX_CHARS } from '../util/token-text.js';
+import { CliExit } from './exit.js';
 
 const CONFLICT_PREVIEW_CHARS = 120;
 const REJECTED_DIGEST_LIST_CHARS = 16;
@@ -32,7 +33,7 @@ export function handleOutcome({ hippoRoot, tenantId, flags }: CommandContext): v
 
   if (!good && !bad) {
     printError('Specify --good or --bad');
-    process.exit(1);
+    throw new CliExit(1);
   }
 
   // Through api.outcome so every CLI outcome writes one audit_log row per id, as the MCP path does.
@@ -81,21 +82,21 @@ function cmdForget(
     console.log(`Forgot ${id}`);
   } catch (err) {
     reportForgetFailure(ctx, id, err);
-    process.exit(1);
+    throw new CliExit(1);
   }
 }
 
 function archiveForgottenRaw(ctx: api.HippoDbContext, id: string, reason: string | null): void {
   if (!reason) {
     printError(ARCHIVE_REASON_REQUIRED);
-    process.exit(1);
+    throw new CliExit(1);
   }
   try {
     api.archiveRaw(ctx, id, reason);
     console.log(`Archived ${id}`);
   } catch (err) {
     printError(`Could not archive ${id}: ${errorMessage(err)}`);
-    process.exit(1);
+    throw new CliExit(1);
   }
 }
 
@@ -126,15 +127,15 @@ function previewForget(hippoRoot: string, tenantId: string, id: string, archive:
   const entry = readEntry(hippoRoot, id, tenantId);
   if (!entry) {
     printError(`Memory not found: ${id}`);
-    process.exit(1);
+    throw new CliExit(1);
   }
   if (!archive && entry.kind === 'raw') {
     printError(rawForgetRefusal(id));
-    process.exit(1);
+    throw new CliExit(1);
   }
   if (archive && entry.kind !== 'raw') {
     printError(`Could not archive ${id}: memory ${id} is not raw (kind=${entry.kind})`);
-    process.exit(1);
+    throw new CliExit(1);
   }
   const snippet = entry.content.length > CONTENT_PREVIEW_CHARS ? `${entry.content.slice(0, CONTENT_PREVIEW_CHARS)}...` : entry.content;
   console.log(`Would ${archive ? 'archive' : 'forget'} ${id} (dry run, nothing changed): "${snippet}"`);
@@ -169,7 +170,7 @@ function showConflictForResolve(hippoRoot: string, conflictId: number, tenantId:
   const conflict = conflicts.find((c) => c.id === conflictId);
   if (!conflict) {
     printError(`Conflict ${conflictId} not found or already resolved.`);
-    process.exit(1);
+    throw new CliExit(1);
   }
 
   console.log(`Conflict ${conflictId}:`);
@@ -199,7 +200,7 @@ export function handleResolve({ hippoRoot, tenantId, args, flags }: CommandConte
   const conflictId = parseInt(rawId.replace(/^conflict_/, ''), 10);
   if (isNaN(conflictId)) {
     printError('Usage: hippo resolve <conflict_id> --keep <memory_id> [--forget]');
-    process.exit(1);
+    throw new CliExit(1);
   }
 
   const keepId = String(flags['keep'] ?? '').trim();
@@ -220,7 +221,7 @@ export function handleResolve({ hippoRoot, tenantId, args, flags }: CommandConte
 
   if (!result) {
     printError(`Could not resolve conflict ${conflictId}. Check the ID and --keep value.`);
-    process.exit(1);
+    throw new CliExit(1);
   }
 
   const action = rejectLoser
@@ -244,7 +245,7 @@ export function handleReject({ hippoRoot, tenantId, args, flags }: CommandContex
   const reason = (stringFlag(flags, 'reason') ?? '').trim();
   if (!reason) {
     printError('hippo reject requires --reason "<why>" (the tombstone stores no content; reason is its only identity).');
-    process.exit(1);
+    throw new CliExit(1);
   }
 
   const valueFlag = stringFlag(flags, 'value');
@@ -253,12 +254,12 @@ export function handleReject({ hippoRoot, tenantId, args, flags }: CommandContex
   if (!memoryId && valueFlag === undefined) {
     printError('Usage: hippo reject <memory-id> --reason "<why>"');
     printError('   or: hippo reject --value "<text>" --reason "<why>"');
-    process.exit(1);
+    throw new CliExit(1);
   }
   if (memoryId && valueFlag !== undefined) {
     // Ambiguous ask: silently preferring one form would ignore the other without feedback.
     printError('hippo reject takes EITHER a memory id OR --value, not both.');
-    process.exit(1);
+    throw new CliExit(1);
   }
 
   try {
@@ -273,7 +274,7 @@ export function handleReject({ hippoRoot, tenantId, args, flags }: CommandContex
     printRejected(result, reason);
   } catch (err) {
     printError(`Could not reject: ${errorMessage(err)}`);
-    process.exit(1);
+    throw new CliExit(1);
   }
 }
 
@@ -326,20 +327,20 @@ export function handleUnreject({ hippoRoot, tenantId, args, flags }: CommandCont
   const digestOrPrefix = (args[0] ?? '').trim();
   if (!digestOrPrefix) {
     printError('Usage: hippo unreject <digest-or-prefix>');
-    process.exit(1);
+    throw new CliExit(1);
   }
 
   const outcome = unrejectValue(root, tenantId, digestOrPrefix, 'cli');
   if (outcome.status === 'not_found') {
     printError(`No rejected value matches "${digestOrPrefix}". Run \`hippo rejections\` to list tombstones.`);
-    process.exit(1);
+    throw new CliExit(1);
   }
   if (outcome.status === 'ambiguous') {
     printError(`"${digestOrPrefix}" matches ${outcome.candidates.length} tombstones. Use a longer prefix:`);
     for (const c of outcome.candidates) {
       printError(`  ${c.digest.slice(0, REJECTED_DIGEST_LIST_CHARS)}...  ${c.reason ?? 'none given'}`);
     }
-    process.exit(1);
+    throw new CliExit(1);
   }
 
   console.log(`Unrejected [${outcome.digest.slice(0, DIGEST_DISPLAY_CHARS)}...] (was: ${outcome.reason ?? 'none given'})`);
@@ -378,7 +379,7 @@ export function handleDormant({ hippoRoot, tenantId, args, flags }: CommandConte
 function changeDormant(ctx: api.Context, sub: 'restore' | 'forget', id: string): void {
   if (!id) {
     printError(`Usage: hippo dormant ${sub} <id>`);
-    process.exit(1);
+    throw new CliExit(1);
   }
   try {
     if (sub === 'restore') {
@@ -394,7 +395,7 @@ function changeDormant(ctx: api.Context, sub: 'restore' | 'forget', id: string):
     } else {
       printError(`Could not ${sub} ${id}: ${errorMessage(err)}`);
     }
-    process.exit(1);
+    throw new CliExit(1);
   }
 }
 
@@ -446,7 +447,7 @@ export async function handleQuarantine({ hippoRoot, tenantId, args, flags }: Com
 async function decideQuarantined(ctx: api.Context, sub: 'approve' | 'reject', id: string): Promise<void> {
   if (!id) {
     printError(`Usage: hippo quarantine ${sub} <id>`);
-    process.exit(1);
+    throw new CliExit(1);
   }
   try {
     if (sub === 'approve') {
@@ -458,7 +459,7 @@ async function decideQuarantined(ctx: api.Context, sub: 'approve' | 'reject', id
     }
   } catch (err) {
     printError(`Could not ${sub} ${id}: ${errorMessage(err)}`);
-    process.exit(1);
+    throw new CliExit(1);
   }
 }
 
@@ -477,7 +478,7 @@ export async function handleForget({ hippoRoot, tenantId, args, flags }: Command
   const id = args[0];
   if (!id) {
     printError('Please provide a memory ID.');
-    process.exit(1);
+    throw new CliExit(1);
   }
   // Archive has its own HTTP route (POST /v1/memories/:id/archive); route
   // both branches the same way the direct path does.
@@ -485,7 +486,7 @@ export async function handleForget({ hippoRoot, tenantId, args, flags }: Command
   const reason = stringFlag(flags, 'reason') ?? null;
   if (archive && !reason) {
     printError(ARCHIVE_REASON_REQUIRED);
-    process.exit(1);
+    throw new CliExit(1);
   }
   if (flagIsTrue(flags, 'dry-run')) {
     previewForget(hippoRoot, tenantId, id, archive);
@@ -506,7 +507,7 @@ export async function handleForget({ hippoRoot, tenantId, args, flags }: Command
       if (client.classifyTransportFailure(err) !== 'none') throw err;
       const msg = errorMessage(err);
       printError(archive ? `Could not archive ${id}: ${msg}` : msg);
-      process.exit(1);
+      throw new CliExit(1);
     }
   });
   if (routed) return;
@@ -517,11 +518,11 @@ function invalidateChurn(hippoRoot: string, args: string[], flags: CommandContex
   if (args[0] || flags['id'] !== undefined) {
     printError('Usage: hippo invalidate --churn [--dry-run]');
     printError('--churn takes no pattern or --id.');
-    process.exit(1);
+    throw new CliExit(1);
   }
   if (!isGitRepo(process.cwd())) {
     printError('hippo invalidate --churn must run inside a git repository.');
-    process.exit(1);
+    throw new CliExit(1);
   }
   const churnDryRun = flagIsTrue(flags, 'dry-run');
   let churnFailed = false;
@@ -543,7 +544,7 @@ function invalidateChurn(hippoRoot: string, args: string[], flags: CommandContex
       console.log(`Skipped ${result.skippedPinned.length} pinned: ${result.skippedPinned.join(', ')}`);
     }
   }
-  if (churnFailed) process.exit(1);
+  if (churnFailed) throw new CliExit(1);
 }
 
 export function handleInvalidate({ hippoRoot, tenantId, args, flags }: CommandContext): void {
@@ -554,7 +555,7 @@ export function handleInvalidate({ hippoRoot, tenantId, args, flags }: CommandCo
     // Value-less --id must never silently fall through to pattern mode
     // (pattern mode writes broadly; an ignored --id reverses user intent).
     printError('--id requires a memory id');
-    process.exit(1);
+    throw new CliExit(1);
   }
   const onlyId = stringFlag(flags, 'id');
   const dryRun = flagIsTrue(flags, 'dry-run');
@@ -562,7 +563,7 @@ export function handleInvalidate({ hippoRoot, tenantId, args, flags }: CommandCo
     printError('Usage: hippo invalidate "<old pattern>" [--dry-run] [--reason "<why>"]');
     printError('       hippo invalidate --id <memory-id> [--dry-run] [--reason "<why>"]');
     printError('Pass a pattern OR --id, not both. Tag matching is EXACT: the full pattern must equal a tag.');
-    process.exit(1);
+    throw new CliExit(1);
   }
   const reason = (flags['reason'] || null) as string | null;
   const invTarget: InvalidationTarget = {

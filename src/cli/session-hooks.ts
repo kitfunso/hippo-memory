@@ -49,8 +49,12 @@ import { printError } from './output.js';
 import { cmdLastSleep } from './last-sleep.js';
 import { readCompactResumePayload } from './compact-resume-payload.js';
 import { type CliFlags, type CommandContext, boolFlag, flagIsTrue, stringFlag } from './flag-values.js';
-import { logSessionEndImport, appendSessionEndCloseLog, resetHookInjection, hookStoreRoot, hookRuntime, payloadCwdRoot, runHookWithStores, inPilotHoldout, startDeliveryRecorder } from './hook-runtime.js';
+import {
+  logSessionEndImport, appendSessionEndCloseLog, reportSessionEndFailure, resetHookInjection, hookStoreRoot, hookRuntime,
+  payloadCwdRoot, runHookWithStores, inPilotHoldout, startDeliveryRecorder,
+} from './hook-runtime.js';
 import type { JsonValue } from '../util/json.js';
+import { CliExit } from './exit.js';
 
 /**
  * SessionStart(compact) injector. Prints the active task snapshot + recent
@@ -70,7 +74,7 @@ function cmdCompactResume(hippoRoot: string, tenantId: string, stdinText: string
     // Gate on the non-exiting isInitialized check first: the store reads below call initStore, which would
     // silently create a store in a project that never ran `hippo init`, and this hook fires globally.
     if (!isInitialized(hippoRoot)) {
-      process.exit(0);
+      throw new CliExit(0);
     }
 
     const payloadState = readCompactResumePayload(stdinText, stdinTimedOut);
@@ -87,12 +91,13 @@ function cmdCompactResume(hippoRoot: string, tenantId: string, stdinText: string
 
     if (!suppressOutput) restoreCompactSnapshot(hippoRoot, tenantId, payloadSessionId, rec);
   } catch (err) {
+    if (err instanceof CliExit) throw err;
     // Empty stdout on any store error, never a crashed SessionStart; the reason goes to stderr, which the model never sees.
     log.warn(`hippo compact-resume: skipped: ${errorMessage(err)}`);
   }
   // A no-op when the token ledger's handle already wrote the row; exit would drop it otherwise.
   flushDeliveryRecorder(rec);
-  process.exit(0);
+  throw new CliExit(0);
 }
 
 function restoreCompactSnapshot(hippoRoot: string, tenantId: string, payloadSessionId: string | null, rec: DeliveryRecorder | null): void {
@@ -295,8 +300,8 @@ async function sleepProjectStore(
     try {
       await (await import('./sleep.js')).cmdSleep(hippoRoot, tenantId, flags);
     } catch (err) {
-      // cmdSleep writes its failure line only when it has a log file, and capture runs regardless.
-      log.debug(`session-end: sleep failed: ${errorMessage(err)}`);
+      // cmdSleep writes its own failure line only once its log tee is open, and capture runs regardless.
+      reportSessionEndFailure(closeLogFile, 'session-end: sleep', err);
     }
   } else {
     appendSessionEndCloseLog(closeLogFile, 'skip sleep: this folder has no store of its own', { startFresh: true });
@@ -378,7 +383,7 @@ function captureEndedSession(
     });
     return true;
   } catch (err) {
-    log.debug(`session-end: capture failed: ${errorMessage(err)}`);
+    reportSessionEndFailure(stringFlag(flags, 'log-file') ?? null, 'session-end: capture', err);
     return false;
   }
 }
@@ -447,6 +452,7 @@ function loadCodexWrapperMetadata(): CodexWrapperMetadata {
   if (!fs.existsSync(metadataPath)) {
     throw new Error('Codex wrapper is not installed. Run `hippo hook install codex` first.');
   }
+  // SAFETY: the file is the one installCodexWrapper wrote; handleCodexRun reads only logFile and realCodexPath from it.
   return JSON.parse(fs.readFileSync(metadataPath, 'utf8')) as CodexWrapperMetadata;
 }
 
@@ -612,7 +618,7 @@ async function sleepCodexProjectStore(hippoRoot: string, tenantId: string, logFi
     try {
       await (await import('./sleep.js')).cmdSleep(hippoRoot, tenantId, logFile ? { 'log-file': logFile } : {});
     } catch (err) {
-      log.debug(`codex session-end: sleep failed: ${errorMessage(err)}`);
+      reportSessionEndFailure(logFile ?? null, 'codex session-end: sleep', err);
     }
   } else {
     appendSessionEndCloseLog(logFile ?? null, 'skip sleep: this folder has no store of its own', { startFresh: true });
@@ -653,12 +659,12 @@ function captureCodexTranscript(hippoRoot: string, tenantId: string, store: stri
     try {
       cmdCapture(store, captureOpts);
     } catch (err) {
-      log.debug(`codex session-end: capture failed: ${errorMessage(err)}`);
+      reportSessionEndFailure(logFile ?? null, 'codex session-end: capture', err);
     }
     // The Codex wrapper passes no session id, so the rollout file names the session.
     recordSessionDigest(hippoRoot, scan, { key: path.basename(transcriptPath, '.jsonl'), tenantId, log: digestLog });
   } catch (err) {
-    log.debug(`codex session-end: transcript scan or digest failed: ${errorMessage(err)}`);
+    reportSessionEndFailure(logFile ?? null, 'codex session-end: transcript scan or digest', err);
   }
 }
 
@@ -746,7 +752,7 @@ export async function handleCapture({ hippoRoot, tenantId, flags }: CommandConte
 
   if (!captureSource) {
     printError('Usage: hippo capture --stdin|--file <path>|--last-session [--transcript <path>] [--log-file <path>] [--dry-run] [--global]');
-    process.exit(1);
+    throw new CliExit(1);
   }
 
   // Bounded, and only when last-session has no explicit path: the

@@ -1,6 +1,7 @@
 // The payload gate for `hippo compact-resume`.
 
 import { isSubagentPayload } from '../store/token-ledger.js';
+import { isJsonObject, isJsonString, type JsonValue } from '../util/json.js';
 
 export interface CompactResumePayload { suppressOutput: boolean; payloadSessionId: string | null; boundary: boolean }
 
@@ -15,14 +16,14 @@ export function readCompactResumePayload(stdinText: string | undefined, stdinTim
   let boundary = !nonEmptyStdin && !stdinTimedOut;
 
   if (nonEmptyStdin) {
-    let payload: Record<string, unknown> | null = null;
+    let payload: JsonValue = null;
     try {
-      payload = JSON.parse(stdinText!.trim()) as Record<string, unknown>;
+      payload = JSON.parse(stdinText!.trim());
     } catch {
       // Malformed JSON is handled as a null payload by the fail-closed check below.
       payload = null;
     }
-    if (!payload || typeof payload !== 'object') {
+    if (!isJsonObject(payload)) {
       // Fail closed on malformed non-empty stdin; only a TTY/no-stdin manual run, which never reaches here, prints.
       suppressOutput = true;
     } else {
@@ -32,7 +33,7 @@ export function readCompactResumePayload(stdinText: string | undefined, stdinTim
       if (payload.source !== 'compact' || isSubagentPayload(stdinText)) {
         suppressOutput = true;
       }
-      if (typeof payload.session_id === 'string') {
+      if (isJsonString(payload.session_id)) {
         payloadSessionId = payload.session_id;
       }
     }

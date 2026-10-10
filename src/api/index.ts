@@ -15,6 +15,7 @@ export { classifyOriginProject } from '../core/project-identity.js';
 
 export * from './types.js';
 export * from './remember.js';
+export * from './remember-local.js';
 export * from './recall-types.js';
 export * from './recall.js';
 export * from './assemble.js';

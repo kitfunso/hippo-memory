@@ -2,13 +2,14 @@
 
 import { printError } from './output.js';
 import { parseListLimit, parsePositiveId, stringFlag, type CliFlags } from './flag-values.js';
+import { CliExit } from './exit.js';
 
 /** The member of `states` named by `status`, or exit 1 with the message that lists every allowed value. */
 export function requireStatus<S extends string>(status: string, states: ReadonlySet<S>): S {
   const found = [...states].find((s) => s === status);
   if (found === undefined) {
     printError(`Invalid --status: "${status}". Must be one of: ${[...states, 'all'].join(' | ')}.`);
-    process.exit(1);
+    throw new CliExit(1);
   }
   return found;
 }
@@ -48,7 +49,7 @@ export function idArgOrExit(
   const idRaw = args[1];
   if (!idRaw) {
     printError(usage);
-    process.exit(1);
+    throw new CliExit(1);
   }
   return parseId(idRaw, label);
 }
@@ -56,7 +57,7 @@ export function idArgOrExit(
 export function foundOrExit<O>(found: O | null | undefined, noun: string, id: number): O {
   if (!found) {
     printError(`${noun} ${id} not found.`);
-    process.exit(1);
+    throw new CliExit(1);
   }
   return found;
 }

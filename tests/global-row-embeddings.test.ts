@@ -13,6 +13,7 @@ import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { embedAll } from '../src/store/embeddings/index.js';
 import { loadEmbeddingIndex } from '../src/store/vector-index.js';
 import { isEmbeddingAvailable } from '../src/store/embeddings/local.js';
+import { skipWithoutEmbeddings } from './_helpers/embedding-backend.js';
 import { resolveEmbeddingProvider } from '../src/store/embeddings/provider.js';
 
 // docs/plans/2026-07-18-global-row-embeddings.md: rows written to the global
@@ -43,19 +44,8 @@ function cleanUp(...dirs: string[]): void {
 
 let _embeddingFunctional: boolean | null = null;
 
-/**
- * isEmbeddingAvailable() only confirms the local provider package resolves;
- * it does not confirm the pipeline can actually load in-process. Under
- * vitest's VM-based test execution, embeddings.ts's `_dynImport` (a
- * `new Function('s', 'return import(s)')` trick used to keep the peer dep
- * optional) throws ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING because it escapes
- * Vite's SSR module graph. That is a harness limitation, not a producer-
- * wiring bug: the identical call embeds successfully in a plain `node`
- * script outside vitest, and the CLI test below (which spawns a real `node`
- * subprocess) is unaffected. Probe once with a real embed call and cache the
- * result, so in-process tests that need a genuine vector skip cleanly here
- * instead of failing on an empty/undefined one.
- */
+// isEmbeddingAvailable() only proves the package resolves; one real embed call (cached) proves the pipeline loads
+// before a test depends on a vector.
 async function embeddingIsFunctional(): Promise<boolean> {
   if (_embeddingFunctional !== null) return _embeddingFunctional;
   if (!isEmbeddingAvailable()) {
@@ -68,20 +58,6 @@ async function embeddingIsFunctional(): Promise<boolean> {
     const provider = resolveEmbeddingProvider(probeRoot);
     const [vector] = await provider.embed(['embedding functional probe'], 'passage');
     _embeddingFunctional = Array.isArray(vector) && vector.length > 0;
-  } catch (err) {
-    // Only the documented VM limitation (see the comment above) is a known
-    // "unavailable in this harness" condition. Anything else is a genuine
-    // embed-pipeline regression and must fail loud, not masquerade as a skip.
-    // SAFETY: `err` is unknown per catch-clause typing; every field read
-    // below is optional-chained, so the narrowing is safe no matter what
-    // shape the actual thrown value turns out to have.
-    const code = (err as NodeJS.ErrnoException | undefined)?.code;
-    const message = err instanceof Error ? err.message : String(err);
-    const isKnownVmLimitation =
-      code === 'ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING' ||
-      message.includes('ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING');
-    if (!isKnownVmLimitation) throw err;
-    _embeddingFunctional = false;
   } finally {
     fs.rmSync(probeRoot, { recursive: true, force: true });
   }
@@ -186,11 +162,8 @@ describe('global-row-embeddings: awaited batch producers', () => {
     cleanUp(localRoot, globalRoot);
   });
 
-  it('syncGlobalToLocal-copied rows gain vectors after an awaited embedAll(localRoot)', async () => {
-    if (!(await embeddingIsFunctional())) {
-      console.warn('SKIP: embeddings unavailable in this environment');
-      return;
-    }
+  it('syncGlobalToLocal-copied rows gain vectors after an awaited embedAll(localRoot)', async (ctx) => {
+    skipWithoutEmbeddings(ctx, await embeddingIsFunctional());
     const entry = createMemory('awaited batch sync test content unique alpha', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(globalRoot, entry);
 
@@ -208,11 +181,8 @@ describe('global-row-embeddings: awaited batch producers', () => {
     expect(index[entry.id].length).toBeGreaterThan(0);
   }, 60_000);
 
-  it('autoShare-shared rows gain vectors after an awaited embedAll(globalRoot)', async () => {
-    if (!(await embeddingIsFunctional())) {
-      console.warn('SKIP: embeddings unavailable in this environment');
-      return;
-    }
+  it('autoShare-shared rows gain vectors after an awaited embedAll(globalRoot)', async (ctx) => {
+    skipWithoutEmbeddings(ctx, await embeddingIsFunctional());
     const entry = createMemory('awaited batch autoshare test content unique beta', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(localRoot, entry);
 
@@ -249,11 +219,8 @@ describe('global-row-embeddings: fire-and-forget integration', () => {
     cleanUp(localRoot, globalRoot);
   });
 
-  it('promoteToGlobal fire-and-forget embed eventually lands in the global index', async () => {
-    if (!(await embeddingIsFunctional())) {
-      console.warn('SKIP: embeddings unavailable in this environment');
-      return;
-    }
+  it('promoteToGlobal fire-and-forget embed eventually lands in the global index', async (ctx) => {
+    skipWithoutEmbeddings(ctx, await embeddingIsFunctional());
     const entry = createMemory('fire and forget integration promote test content gamma', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(localRoot, entry);
 
@@ -320,8 +287,7 @@ describe('global-row-embeddings: hippo embed --global CLI', () => {
 
 describe('global-row-embeddings: promoteToGlobal producer wiring (subprocess)', () => {
   // Real-process counterpart of the in-process "fire-and-forget integration"
-  // test above, which skips under vitest's VM (embeddingIsFunctional() ->
-  // ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING). Spawns real `node` subprocesses
+  // test above; it covers the built CLI path. Spawns real `node` subprocesses
   // (same pattern as the "hippo embed --global CLI" test above) so the actual
   // promoteToGlobal -> embedMemory fire is exercised end-to-end: init, remember,
   // embed (warms the local vector + model cache), promote, then poll the
