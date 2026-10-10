@@ -6,7 +6,7 @@ import { archiveRawMemory } from './raw-archive.js';
 import { type MemoryConflict, type MemoryConflictRow, rowToMemoryConflict } from './rows.js';
 import { audit } from './audit-event.js';
 import { syncChangedMirrors, purgeMirrorBestEffort } from './mirrors.js';
-import { selectEntriesByIds } from './entry-reads.js';
+import { chunked, selectEntriesByIds } from './entry-reads.js';
 import { onHandle, openStore } from './open.js';
 import { deleteEntryCore } from './delete-and-batch.js';
 import { BadRequestError } from '../core/api-errors.js';
@@ -136,31 +136,40 @@ export function replaceDetectedConflicts(
   detectedAt: string = new Date().toISOString()
 ): void {
   onHandle(hippoRoot, (db) => {
-    const changedIds = writeConflictRefresh(db, readConflictRefresh(db), detected, detectedAt);
+    const changedIds = writeConflictRefresh(db, readConflictRefresh(db, detected), detected, detectedAt);
     syncChangedMirrors(hippoRoot, db, [...selectEntriesByIds(db, changedIds).values()]);
   }, openStore);
 }
 
-/** Every memory's tenant, and each stored conflicts_with_json other than '[]', read before the refresh takes the write lock. */
+/** The tenant of every memory the refresh can compare, and each stored conflicts_with_json other than '[]', read before the refresh takes the write lock. */
 export interface ConflictRefreshReads {
   sameTenant: SameTenant;
   storedRefs: ReadonlyMap<string, string | null>;
 }
 
-/** The refresh's read of the whole memories table, kept out of the write lock because it grows with the store. */
-function readConflictRefresh(db: DatabaseSyncLike): ConflictRefreshReads {
+/** The refresh's reads, kept out of the write lock; only rows holding refs, in an open conflict or in `detected` are loaded, not the whole table. */
+function readConflictRefresh(db: DatabaseSyncLike, detected: readonly DetectedConflict[]): ConflictRefreshReads {
   // Tenant guard (E2): a conflict is meaningful only within one tenant, so cross-tenant pairs are
   // skipped on insert and on rebuild, and a stale cross-tenant row can neither persist nor leak a foreign id.
   const tenantById = new Map<string, string>();
   const storedRefs = new Map<string, string | null>();
   // SAFETY: rows' shape matches the three columns named in the SELECT.
-  for (const r of db.prepare(`SELECT id, tenant_id, conflicts_with_json FROM memories`).all() as Array<{
-    id: string;
-    tenant_id: string;
-    conflicts_with_json: string | null;
-  }>) {
+  const rows = db.prepare(`
+    SELECT id, tenant_id, conflicts_with_json FROM memories
+    WHERE conflicts_with_json != '[]'
+      OR id IN (SELECT memory_a_id FROM memory_conflicts WHERE status = 'open')
+      OR id IN (SELECT memory_b_id FROM memory_conflicts WHERE status = 'open')
+  `).all() as Array<{ id: string; tenant_id: string; conflicts_with_json: string | null }>;
+  for (const r of rows) {
     tenantById.set(r.id, r.tenant_id);
     if (r.conflicts_with_json !== '[]') storedRefs.set(r.id, r.conflicts_with_json);
+  }
+  const given = [...new Set(detected.flatMap((c) => [c.memory_a_id, c.memory_b_id]))].filter((id) => !tenantById.has(id));
+  for (const ids of chunked(given)) {
+    const marks = ids.map(() => '?').join(',');
+    // SAFETY: rows' shape matches the two columns named in the SELECT.
+    const found = db.prepare(`SELECT id, tenant_id FROM memories WHERE id IN (${marks})`).all(...ids) as Array<{ id: string; tenant_id: string }>;
+    for (const r of found) tenantById.set(r.id, r.tenant_id);
   }
   const sameTenant = (a: string, b: string): boolean => {
     const ta = tenantById.get(a);

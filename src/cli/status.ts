@@ -7,13 +7,13 @@ import * as fs from 'fs';
 import * as os from 'os';
 import { fileURLToPath } from 'node:url';
 import { calculateStrength, calculateRewardFactor, resolveConfidence, Layer } from '../core/memory.js';
-import { loadAllEntries } from '../store/entry-reads.js';
+import { loadCorrectionEntries, loadRawEntries } from '../store/report-reads.js';
 import { loadStats } from '../store/index-and-stats.js';
 import { loadStatusCounts, type StatusCounts } from '../store/candidates.js';
 import { embeddingModelRequiresReindex } from '../store/embeddings/index.js';
 import { resolveEmbeddingProvider } from '../store/embeddings/provider.js';
 import { loadStoredParticles, storedVectorSummary } from '../store/vector-index.js';
-import { computeSystemEnergy, vecNorm } from '../core/physics.js';
+import { computeSystemEnergy, vecNorm, type PhysicsParticle } from '../core/physics.js';
 import { loadConfig } from '../core/config.js';
 import { runDoctor, formatDoctor } from '../doctor.js';
 import { buildSupportBundle, TAIL_MAX_LINES } from '../support-bundle.js';
@@ -118,23 +118,30 @@ function printEmbeddingStatus(hippoRoot: string, counts: Pick<StatusCounts, 'tot
   }
 }
 
+// The all-pairs energy sum is quadratic, so a large particle set skips it.
+const PHYSICS_ENERGY_STATUS_MAX = 2000;
+
 // Physics status
 function printPhysicsStatus(hippoRoot: string): void {
   try {
     const particles = loadStoredParticles(hippoRoot);
     if (particles.length > 0) {
-      const physConfig = loadConfig(hippoRoot);
-      const energy = computeSystemEnergy(particles, physConfig.physics.G_memory);
       let sumVelMag = 0;
       for (const p of particles) sumVelMag += vecNorm(p.velocity);
       const avgVelMag = sumVelMag / particles.length;
       console.log('');
-      console.log(`Physics: ${particles.length} particles, energy: ${fmt(energy.total, 4)} (KE: ${fmt(energy.kinetic, 4)}, PE: ${fmt(energy.potential, 4)}), avg vel: ${fmt(avgVelMag, 4)}`);
+      console.log(`Physics: ${particles.length} particles, ${physicsEnergyText(particles, loadConfig(hippoRoot).physics.G_memory)}, avg vel: ${fmt(avgVelMag, 4)}`);
     }
   } catch (err) {
     // The physics table may not exist yet, so status prints without that line.
     log.debug(`physics status skipped: ${errorMessage(err)}`);
   }
+}
+
+export function physicsEnergyText(particles: PhysicsParticle[], gMemory: number): string {
+  if (particles.length > PHYSICS_ENERGY_STATUS_MAX) return `energy: skipped (${particles.length} particles)`;
+  const energy = computeSystemEnergy(particles, gMemory);
+  return `energy: ${fmt(energy.total, 4)} (KE: ${fmt(energy.kinetic, 4)}, PE: ${fmt(energy.potential, 4)})`;
 }
 
 async function cmdInspect(hippoRoot: string, tenantId: string, id: string): Promise<void> {
@@ -265,8 +272,7 @@ export function handleFailures({ hippoRoot, tenantId, flags }: CommandContext): 
 
 export function handleCorrectionLatency({ hippoRoot, flags }: CommandContext): void {
   requireInit(hippoRoot);
-  const entries = loadAllEntries(hippoRoot);
-  const report = buildCorrectionLatency(entries);
+  const report = buildCorrectionLatency(loadCorrectionEntries(hippoRoot));
   if (flags['json']) {
     console.log(JSON.stringify(report, null, 2));
   } else if (report.count === 0) {
@@ -290,8 +296,7 @@ export function handleCorrectionLatency({ hippoRoot, flags }: CommandContext): v
 
 export function handleProvenance({ hippoRoot, flags }: CommandContext): void {
   requireInit(hippoRoot);
-  const entries = loadAllEntries(hippoRoot);
-  const coverage = buildProvenanceCoverage(entries);
+  const coverage = buildProvenanceCoverage(loadRawEntries(hippoRoot));
   if (flags['json']) {
     console.log(JSON.stringify(coverage, null, 2));
   } else if (coverage.rawTotal === 0) {
