@@ -1,0 +1,4 @@
+### Fixed
+
+- **A rule you state in a session is pinned when it is captured.** Before, capture stored it like any other line, and the prompt hook brought it back only when a later prompt shared at least two of its words. A correction such as "never edit CHANGELOG.md by hand" was missing from a later task about rounding in `src/money.js`, so the agent made the same mistake again. Rules from the agent's own replies, and from `--file` or piped captures, stay unpinned, because those sources do not show that a person said them.
+- **Context that Codex adds to a session no longer counts as something the user typed.** Codex stores the AGENTS.md text, the environment block and app state as user messages. Capture and the session digest now skip them, so a rule from AGENTS.md is not saved as one the user stated.
