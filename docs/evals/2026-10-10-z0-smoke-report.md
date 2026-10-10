@@ -16,9 +16,11 @@
 ```bash
 node benchmarks/token-eval/smoke/make-toy.mjs C:/z0-runs/toy1
 node scripts/token-eval/ab-run.mjs --tasks C:/z0-runs/toy1/tasks.json --out C:/z0-runs/smoke-homes \
-  --model claude-sonnet-5-5 --codex-model gpt-6.1-sol --arms A0,A1,A2,A4,A5,X1,X2 --seeds 1 --check-homes
+  --model claude-sonnet-5-5 --codex-model gpt-5.6-sol --arms A0,A1,A2,A4,A5,X1,X2 --seeds 1 --check-homes
 # Homes check passed for 7 runs.
 ```
+
+The Codex model is passed explicitly. The operator's `~/.codex/config.toml` names `gpt-6.1-sol`, and the server rejects it for a ChatGPT login with a 400 ("not supported when using Codex with a ChatGPT account", seen 2026-10-10).
 
 ## The six points
 
