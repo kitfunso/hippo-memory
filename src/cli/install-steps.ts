@@ -4,6 +4,7 @@ import * as path from 'path';
 import { execFileSync, execSync } from 'child_process';
 import { installJsonHooks, type InstallResult } from '../hooks/json-hooks.js';
 import { CODEX_TRUST_LINE } from '../hooks/shared.js';
+import { envSkipSchedule } from '../util/env.js';
 import { DAILY_TASK_NAME, buildDailyRunnerCommand, hasUnsafeRunnerPathChars, buildSchtasksCreateArgs, buildWindowsTaskRun, quoteInsideWindowsArg } from './scheduler.js';
 
 /** Adds hippo's two Codex hooks and says what changed; each install ends on the trust reminder, since Codex skips an untrusted hook. */
@@ -45,6 +46,11 @@ function warnSchedulerTimedOut(command: string): void {
 }
 
 export function setupDailySchedule(globalRoot: string): void {
+  // Checked here, not per caller, so init, init --scan and setup all honour it.
+  if (envSkipSchedule()) {
+    console.log('   HIPPO_SKIP_SCHEDULE=1, so the machine-level daily runner was not scheduled.');
+    return;
+  }
   const runnerDir = path.resolve(globalRoot);
   if (hasUnsafeRunnerPathChars(runnerDir, process.platform)) {
     console.log(`   Skipping schedule: runner path contains unsafe characters.`);
