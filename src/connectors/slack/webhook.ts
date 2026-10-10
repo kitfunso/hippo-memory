@@ -108,7 +108,7 @@ async function routeSignedSlackPayload(d: SignedSlackRequest): Promise<void> {
     return;
   }
   if (answerUrlVerification(res, body)) return;
-  // Fail closed: resolveTenantForSlackTeam returns null for an unknown team_id on a non-empty slack_workspaces; park the envelope in slack_dlq (bucket='unroutable')
+  // Fail closed: resolveTenantForSlackTeam returns null for an unknown team on a non-empty slack_workspaces; park it in slack_dlq (bucket='unroutable')
   // and still ACKs 200 so Slack stops retrying; never call ingest.
   let resolvedTenant: string | null = null;
   if (body !== undefined && isSlackEventEnvelope(body)) {
