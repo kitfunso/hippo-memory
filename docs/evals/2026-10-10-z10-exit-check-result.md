@@ -38,6 +38,7 @@ npm --prefix C:/Users/skf_s/hippo-wt-z10x run test:delivery-ledger
   X5 reads an unlisted and a listed row, which the registration counts as two reads. X13 reads both interleaved sessions, and X17 reads both the recall memory and the pin, which the registration counts as one read each. The 28 reader tests on writer-built rows also pass.
 - The CI check scripts, each exit 0: agent inventory, CLI recall writes, comment history, env reads, error text, expiring keys floor, floating promises, graph writes, import cycles, layers, lint ratchet, manifest versions, open core, openclaw dist, process exit, request-path timing, roadmap, size ratchet, store port, test-only exports. `npm run typecheck:tests` is clean.
 - The full suite, `npm test`: 797 files, 9740 pass, 24 skipped, 4 fail. The four failures are in three Z0 token-eval files, under the machine load above. Run again alone, `token-eval-z0-leaks` and `token-eval-z0-surfaces` pass, and both `token-eval-z0-timeout` tests fail again: each hits its 120 s limit, and then Windows refuses to delete the hung session's directory (EPERM). This branch changes no file under `src/` and nothing those tests import. The Token eval workflow passes on master in CI.
+- Again after a rebase on master `a361bc4e`, which cut `src` comments, fixed the test-only export check and locked ratchet baselines: the build, `test:delivery-ledger` (213 pass), and the lint, size, comment, roadmap and test-only-export checks, each exit 0. The mutants, host checks and timings were not run again there.
 
 ## Mutants
 
