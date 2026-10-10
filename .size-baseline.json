@@ -8,9 +8,7 @@
     "scripts/z1-replay.mjs:main": 163,
     "scripts/z1-replay.mjs:processFile": 346,
     "scripts/z1-replay.mjs:processFile > fireHookPrompt": 93,
-    "scripts/z1c-eval.mjs:main": 116,
-    "src/capture/compaction-record.ts:replayCompactions": 53,
-    "src/capture/compaction-record.ts:saveCompaction": 57
+    "scripts/z1c-eval.mjs:main": 116
   },
   "longLines": {
     "src/api/context.ts": 2,
@@ -20,7 +18,7 @@
     "src/capture/codex-patch.ts": 1,
     "src/capture/compact.ts": 3,
     "src/capture/compaction-items-caller.ts": 1,
-    "src/capture/compaction-record.ts": 11,
+    "src/capture/compaction-record.ts": 9,
     "src/capture/compaction-spool.ts": 4,
     "src/capture/copilot-transcript.ts": 1,
     "src/capture/failure-caller.ts": 2,
