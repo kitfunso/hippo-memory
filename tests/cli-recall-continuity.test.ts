@@ -30,7 +30,7 @@ afterEach(() => {
 async function runHippo(args: string[]): Promise<{ stdout: string; status: number }> {
   const [, query, ...rest] = args;
   const flags = Object.fromEntries(rest.map((f) => [f.replace(/^--/, ''), true]));
-  return runInProcess(() => cmdRecall(hippoDir, query, flags));
+  return runInProcess(() => cmdRecall(hippoDir, 'default', query, flags));
 }
 
 function seedContinuity(): void {

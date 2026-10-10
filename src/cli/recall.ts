@@ -1,36 +1,22 @@
 // The `hippo recall` verb; main() loads it lazily from the command table.
 
 import { envHippoSessionId } from '../util/env.js';
-import { confidenceFacets, Layer } from '../core/memory.js';
-import type { TaskSnapshot, SessionEvent } from '../store/rows.js';
-import { isInitialized } from '../store/open.js';
-import { loadIndex } from '../store/index-and-stats.js';
-import { loadActiveTaskSnapshot, listSessionEvents } from '../store/sessions.js';
-import { loadLatestHandoff } from '../store/handoffs.js';
-import type { SessionHandoff } from '../core/handoff.js';
-import { passesScopeFilterForRecall } from '../store/recall-scope.js';
-import { fitBudget } from '../search/finalize.js';
-import { explainMatch } from '../search/explain.js';
+import { Layer } from '../core/memory.js';
 import { DEFAULT_RECALL_BUDGET, type SearchResult } from '../core/search-types.js';
 import { loadConfig } from '../core/config.js';
 import { estimateTokens } from '../util/token-text.js';
 import { dropHeldCopies } from '../util/same-text.js';
-import { isGlobalStoreRoot } from '../core/project-identity.js';
-import { detectScope } from '../sharing/scope.js';
-import { getGlobalRoot } from '../sharing/global-store.js';
 import * as api from '../api/index.js';
 import type { PlanningFallacyOutput } from '../predictions/planning-fallacy.js';
 import { detectAnchoring, hashQueryText, biasHintEnabled, snapshotRing } from '../api/recall-history.js';
 import { sessionRing, shownRecallRows } from '../api/recall-record.js';
 import { detectAvailabilityBias } from '../api/availability.js';
-import { resolveTenantId } from '../store/tenant.js';
+import {
+  cliRecallOrigin, cliRecallReranker, cliRecallSetting, DEFAULT_MAX_NEIGHBORS, fitRecallRows, loadCliRecallContinuity, MAX_HOPS, recallJsonRow,
+  type CliRecallRerankerPick,
+} from '../api/recall-cli.js';
 import { cliApiContext } from './api-context.js';
-import { MAX_HOPS, DEFAULT_MAX_NEIGHBORS } from '../graph/recall.js';
-import { getReranker } from '../rerankers/index.js';
-import type { RerankerFn } from '../rerankers/types.js';
 import type { RankRecallResult, RankStage, RecallGraphHops, RecallGraphStream, RecallReranker } from '../api/recall-pipeline.js';
-import { JEV_DEFAULT_TOP_K } from '../rerankers/jev.js';
-import { isClefModel } from '../rerankers/clef.js';
 import { handoffText, printedTokens, sessionTrailText, settleTokens, snapshotText } from '../api/context-render.js';
 import { printError } from './output.js';
 import {
@@ -122,16 +108,17 @@ function parseHopsFlags(flags: CliFlags): ParsedFlag<RecallGraphHops> {
 
 function parseRerankerFlag(flags: CliFlags): ParsedFlag<RecallReranker> {
   const name = flags['reranker'] !== undefined ? String(flags['reranker']).trim() : '';
-  let fn: RerankerFn | null;
+  let picked: CliRecallRerankerPick | null;
   try {
-    fn = getReranker(name);
+    picked = cliRecallReranker(name);
   } catch (err) {
     // An unknown name throws to the top-level handler, as it did when the lookup sat mid-pipeline.
     return { fail: () => { throw err; } };
   }
-  if (!fn) return {};
+  if (!picked) return {};
+  const { fn } = picked;
   const raw = flags['reranker-top-k'];
-  const topK = raw !== undefined ? Number(raw) : name === 'jev' || isClefModel(name) ? JEV_DEFAULT_TOP_K : 50;
+  const topK = raw !== undefined ? Number(raw) : picked.defaultTopK;
   // slice(0, -1) would quietly drop the last candidate rather than fail.
   if (!Number.isInteger(topK) || topK < 1) {
     return { fail: failWith(`Invalid --reranker-top-k: "${String(raw)}". Must be a positive integer.`) };
@@ -183,15 +170,18 @@ function parseRecallLateFlags(flags: CliFlags): RecallLateFlags {
 /** Runs `hippo recall`: the flags name the ranking core and this verb's presenter, `retrieve` ranks and records, then the block prints. */
 export async function cmdRecall(
   hippoRoot: string,
+  tenantId: string,
   query: string,
   flags: CliFlags
 ): Promise<void> {
   requireInit(hippoRoot);
-  const o = parseRecallOptions(hippoRoot, flags);
-  const priced = priceRecallEntries(hippoRoot, query, o);
+  const ctx = cliApiContext(hippoRoot, tenantId);
+  const o = parseRecallOptions(ctx, flags);
+  const priced = priceRecallEntries(ctx, query, o);
+  const { globalRoot } = o.setting;
   const slot: PresentedSlot = {};
   await api.retrieve(
-    cliApiContext(hippoRoot, o.tenantId),
+    ctx,
     {
       query,
       goalTag: o.goalTag,
@@ -199,11 +189,11 @@ export async function cmdRecall(
       cliCore: {
         rank: rankOptions(query, flags, o, priced),
         // The global store is a second source for this surface alone, and never when it is the store being searched.
-        sources: { globalRoot: o.globalRoot !== hippoRoot && priced.globalOn ? o.globalRoot : undefined },
+        sources: { globalRoot: globalRoot !== hippoRoot && priced.globalOn ? globalRoot : undefined },
         note: (line) => printError(line),
         hostSessionId: hostSessionId(),
         show: (rank, planning) => {
-          slot.presented = presentRecall(hippoRoot, query, o, { rank, ...priced }, planning);
+          slot.presented = presentRecall(ctx, query, o, { rank, ...priced }, planning);
           return slot.presented.shown;
         },
       },
@@ -216,24 +206,20 @@ export async function cmdRecall(
 }
 
 /** Every flag recall reads, parsed in the order the single-body command checked them. */
-function parseRecallOptions(hippoRoot: string, flags: CliFlags) {
+function parseRecallOptions(ctx: api.HippoDbContext, flags: CliFlags) {
   const budget = parseBudgetFlag(flags['budget'], DEFAULT_RECALL_BUDGET);
   const limit = parseLimitFlag(flags['limit']);
   const asJson = boolFlag(flags, 'json');
   const showWhy = boolFlag(flags, 'why');
   const includeSuperseded = boolFlag(flags, 'include-superseded');
   const asOf = parseAsOfFlag(flags);
-  const globalRoot = getGlobalRoot();
-  const primaryIsGlobal = isGlobalStoreRoot(hippoRoot);
-  // Cross-tenant rows must never surface, so the tenant is resolved once and threaded through every load.
-  const tenantId = resolveTenantId({});
   // The explicit --scope is the filter input; the detected scope only boosts, so auto-detection never filters.
   const explicitScope = flags['scope'] !== undefined ? String(flags['scope']).trim() : null;
-  const config = loadConfig(hippoRoot);
+  const setting = cliRecallSetting(ctx, explicitScope);
+  const config = loadConfig(ctx.hippoRoot);
   const minResults = flags['min-results'] !== undefined
     ? parseInt(String(flags['min-results']), 10)
     : undefined;
-  const activeScope = explicitScope || detectScope();
   const graphStream = flagIsTrue(flags, 'graph-stream') ? parseGraphStreamFlags(flags) : undefined;
   const late = parseRecallLateFlags(flags);
   const goalTag = flags['goal'] !== undefined ? String(flags['goal']).trim() : '';
@@ -243,8 +229,8 @@ function parseRecallOptions(hippoRoot: string, flags: CliFlags) {
       : envHippoSessionId() ?? ''
   ).trim();
   return {
-    budget, limit, asJson, showWhy, includeSuperseded, asOf, globalRoot, primaryIsGlobal, tenantId,
-    explicitScope, config, minResults, activeScope, graphStream, late, goalTag, sessionId,
+    budget, limit, asJson, showWhy, includeSuperseded, asOf, setting, tenantId: ctx.tenantId,
+    explicitScope, config, minResults, graphStream, late, goalTag, sessionId,
     includeContinuity: boolFlag(flags, 'continuity'),
   };
 }
@@ -252,13 +238,12 @@ function parseRecallOptions(hippoRoot: string, flags: CliFlags) {
 type RecallOptions = ReturnType<typeof parseRecallOptions>;
 
 /** Each entry priced as the line it prints, with the source marker `--why` shows. */
-function priceRecallEntries(hippoRoot: string, query: string, o: RecallOptions) {
-  const localIndex = loadIndex(hippoRoot);
-  const globalOn = isInitialized(o.globalRoot);
-  const isGlobal = (r: SearchResult): boolean => o.primaryIsGlobal || (globalOn && !localIndex.entries[r.entry.id]);
+function priceRecallEntries(ctx: api.HippoDbContext, query: string, o: RecallOptions) {
+  const origin = cliRecallOrigin(ctx, o.setting);
+  const isGlobal = (r: SearchResult): boolean => origin.isGlobal(r.entry.id);
   const entryText = (r: SearchResult): string => recallEntryText(r, query, o.showWhy, isGlobal(r));
   const printCost = (r: SearchResult): number => printedTokens(entryText(r));
-  return { globalOn, isGlobal, entryText, printCost };
+  return { globalOn: origin.globalOn, isGlobal, entryText, printCost };
 }
 
 type PricedEntries = ReturnType<typeof priceRecallEntries>;
@@ -269,7 +254,7 @@ function rankOptions(query: string, flags: CliFlags, o: RecallOptions, priced: P
   const entryBudget = Math.max(0, o.budget - printedTokens(recallHeading(o.budget, o.budget, query)));
   return {
     budget: entryBudget, cost: priced.printCost, limit: o.limit, why: o.showWhy, includeSuperseded: o.includeSuperseded, asOf: o.asOf,
-    explicitScope: o.explicitScope, activeScope: o.activeScope,
+    explicitScope: o.explicitScope, activeScope: o.setting.activeScope,
     search: { ...engineFlags(flags, o.config), multihop: flagIsTrue(flags, 'multihop') || o.config.multihop.enabled, graphStream: o.graphStream, minResults: o.minResults, explain: false },
     graphHops: o.late.graphHops,
     evcAdaptive: boolFlag(flags, 'evc-adaptive'),
@@ -286,35 +271,6 @@ function rankOptions(query: string, flags: CliFlags, o: RecallOptions, priced: P
 
 interface RankedRecall extends PricedEntries {
   readonly rank: RankRecallResult;
-}
-
-interface RecallContinuity {
-  readonly activeSnapshot: TaskSnapshot | null;
-  readonly sessionHandoff: SessionHandoff | null;
-  readonly recentSessionEvents: SessionEvent[];
-}
-
-/** Loaded before the zero-result branch, so a no-match query with live continuity still returns a resume packet. */
-function loadRecallContinuity(hippoRoot: string, o: RecallOptions): RecallContinuity {
-  if (!o.includeContinuity || o.primaryIsGlobal) return { activeSnapshot: null, sessionHandoff: null, recentSessionEvents: [] };
-  const rawSnapshot = loadActiveTaskSnapshot(hippoRoot, o.tenantId);
-  const sessionId = rawSnapshot?.session_id ?? undefined;
-  const rawHandoff = sessionId
-    ? loadLatestHandoff(hippoRoot, o.tenantId, sessionId)
-    : null;
-  const rawEvents = sessionId
-    ? listSessionEvents(hippoRoot, o.tenantId, { session_id: sessionId, limit: 5 })
-    : [];
-  // The same shared scope rule as api.recall; the active scope merges --scope and detectScope().
-  const effectiveScope = o.activeScope || undefined;
-  const rowScope = (
-    r: { scope?: string | null } | null | undefined,
-  ): string | null => r?.scope ?? null;
-  return {
-    activeSnapshot: rawSnapshot && passesScopeFilterForRecall(rowScope(rawSnapshot), effectiveScope) ? rawSnapshot : null,
-    sessionHandoff: rawHandoff && passesScopeFilterForRecall(rowScope(rawHandoff), effectiveScope) ? rawHandoff : null,
-    recentSessionEvents: rawEvents.filter((e) => passesScopeFilterForRecall(rowScope(e), effectiveScope)),
-  };
 }
 
 /** Each pipeline computes its hints over the list it returns, so they follow the list as it shrinks. */
@@ -353,7 +309,7 @@ interface RecallRenderView {
   readonly showPlan: boolean;
   readonly planText: string | null;
   readonly hasContinuity: boolean;
-  readonly continuity: RecallContinuity;
+  readonly continuity: api.ContinuityBlock;
   readonly entryText: (r: SearchResult) => string;
 }
 
@@ -393,7 +349,7 @@ function renderRecallBlock(list: SearchResult[], h: RecallHints, v: RecallRender
 }
 
 /** Pays the continuity sections and the plan hint first, then fits the memories into what is left. */
-function fitRecallBlock(query: string, o: RecallOptions, ranked: RankedRecall, loaded: RecallContinuity, planning: PlanningFallacyOutput) {
+function fitRecallBlock(query: string, o: RecallOptions, ranked: RankedRecall, loaded: api.ContinuityBlock, planning: PlanningFallacyOutput) {
   const { budget } = o;
   let { activeSnapshot, sessionHandoff, recentSessionEvents } = loaded;
   // Sections print ahead of the memories, so they are paid first, after the header; one that does not fit is dropped.
@@ -404,7 +360,7 @@ function fitRecallBlock(query: string, o: RecallOptions, ranked: RankedRecall, l
   if (sessionHandoff && !pays(printedTokens(handoffText(sessionHandoff)))) sessionHandoff = null;
   if (recentSessionEvents.length > 0 && !pays(printedTokens(sessionTrailText(recentSessionEvents)))) recentSessionEvents = [];
   const continuityTokens = sectionBudget - left;
-  const continuity: RecallContinuity = { activeSnapshot, sessionHandoff, recentSessionEvents };
+  const continuity: api.ContinuityBlock = { activeSnapshot, sessionHandoff, recentSessionEvents };
   const hasContinuity = activeSnapshot !== null || sessionHandoff !== null || recentSessionEvents.length > 0;
 
   // The baserate hint depends on the query alone, so `retrieve` evaluates it and this only prices the line.
@@ -415,7 +371,7 @@ function fitRecallBlock(query: string, o: RecallOptions, ranked: RankedRecall, l
 
   // The first --min-results are kept whatever they cost (the documented exception); the rest skip and continue.
   const floor = o.minResults ?? 1;
-  const fitted = fitBudget(ranked.rank.results, left, floor, ranked.printCost);
+  const fitted = fitRecallRows(ranked.rank.results, left, floor, ranked.printCost);
   // Copies go after every cut, so a merged row the budget drops never hides its sources.
   const shown = (n: number): SearchResult[] => dropHeldCopies(fitted.slice(0, n), (r) => r.entry);
   let kept = fitted.length;
@@ -438,8 +394,9 @@ function fitRecallBlock(query: string, o: RecallOptions, ranked: RankedRecall, l
 type FittedRecall = ReturnType<typeof fitRecallBlock>;
 
 /** The presenter `retrieve` calls once ranking ends: fits and renders the block, and names the rows and hint rows to record. */
-function presentRecall(hippoRoot: string, query: string, o: RecallOptions, ranked: RankedRecall, planning: PlanningFallacyOutput) {
-  const fit = fitRecallBlock(query, o, ranked, loadRecallContinuity(hippoRoot, o), planning);
+function presentRecall(ctx: api.HippoDbContext, query: string, o: RecallOptions, ranked: RankedRecall, planning: PlanningFallacyOutput) {
+  // Loaded before the zero-result branch, so a no-match query with live continuity still returns a resume packet.
+  const fit = fitRecallBlock(query, o, ranked, loadCliRecallContinuity(ctx, o.setting, o.includeContinuity), planning);
   const { results, hints } = fit;
   const text = recallOutput(query, o, fit, ranked.isGlobal);
   const audit = shownRecallRows({ tenantId: o.tenantId, actor: 'cli' }, {
@@ -480,7 +437,7 @@ interface RecallJsonTail {
   planningFallacyWatching?: NonNullable<FittedRecall['cmdPlanningFallacyWatching']>;
   anchoringHint?: NonNullable<FittedRecall['hints']['anchoring']>;
   availabilityHint?: NonNullable<FittedRecall['hints']['availability']>;
-  continuity?: RecallContinuity;
+  continuity?: api.ContinuityBlock;
   continuityTokens?: number;
 }
 
@@ -505,74 +462,11 @@ function recallJsonTail(fit: FittedRecall, includeContinuity: boolean | undefine
   return tail;
 }
 
-/** One result row; the optional keys are set in the order the JSON prints them. */
-interface RecallJsonRow {
-  id: string;
-  score: number;
-  strength: SearchResult['entry']['strength'];
-  tokens: number;
-  tags: SearchResult['entry']['tags'];
-  content: string;
-  layer: SearchResult['entry']['layer'];
-  trace_outcome?: SearchResult['entry']['trace_outcome'];
-  superseded?: boolean;
-  superseded_by?: SearchResult['entry']['superseded_by'];
-  graphVia?: SearchResult['graphVia'];
-  confidence?: ReturnType<typeof confidenceFacets>['tier'];
-  aged_out?: ReturnType<typeof confidenceFacets>['agedOut'];
-  source?: 'global' | 'local';
-  reason?: ReturnType<typeof explainMatch>['reason'];
-  bm25?: SearchResult['bm25'];
-  cosine?: SearchResult['cosine'];
-  envelope?: ReturnType<typeof explainMatch>['envelope'];
-  rerankTrace?: SearchResult['rerankTrace'];
-}
-
-function recallJsonRow(r: SearchResult, query: string, showWhy: boolean, isGlobal: boolean): RecallJsonRow {
-  const base: RecallJsonRow = {
-    id: r.entry.id,
-    score: r.score,
-    strength: r.entry.strength,
-    tokens: r.tokens,
-    tags: r.entry.tags,
-    content: r.entry.content,
-    layer: r.entry.layer,
-  };
-  if (r.entry.layer === Layer.Trace) {
-    base.trace_outcome = r.entry.trace_outcome;
-  }
-  if (r.entry.superseded_by) {
-    base.superseded = true;
-    base.superseded_by = r.entry.superseded_by;
-  }
-  if (r.graphVia) {
-    base.graphVia = r.graphVia;
-  }
-  if (showWhy) {
-    const explanation = explainMatch(query, r);
-    const facets = confidenceFacets(r.entry);
-    base.confidence = facets.tier;
-    base.aged_out = facets.agedOut;
-    base.source = isGlobal ? 'global' : 'local';
-    base.reason = explanation.reason;
-    base.bm25 = r.bm25;
-    base.cosine = r.cosine;
-    if (explanation.envelope) {
-      base.envelope = explanation.envelope;
-    }
-    // The ordered lifecycle re-ranking steps, so a caller can see why a row moved.
-    if (r.rerankTrace && r.rerankTrace.length > 0) {
-      base.rerankTrace = r.rerankTrace;
-    }
-  }
-  return base;
-}
-
-export async function handleRecall({ hippoRoot, args, flags }: CommandContext): Promise<void> {
+export async function handleRecall({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
   const query = args.join(' ').trim();
   if (!query) {
     printError('Please provide a search query.');
     throw new CliExit(1);
   }
-  await cmdRecall(hookStoreRoot(hippoRoot), query, flags);
+  await cmdRecall(hookStoreRoot(hippoRoot), tenantId, query, flags);
 }

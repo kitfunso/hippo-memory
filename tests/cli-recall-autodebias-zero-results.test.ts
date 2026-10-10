@@ -33,7 +33,7 @@ function seedBaserateWithNoMemories(): void {
 }
 
 async function recall(flags: Record<string, boolean> = {}): Promise<string> {
-  const run = await runInProcess(() => cmdRecall(root, QUERY, flags));
+  const run = await runInProcess(() => cmdRecall(root, 'default', QUERY, flags));
   expect(run.status, run.stderr).toBe(0);
   return run.stdout;
 }

@@ -37,7 +37,7 @@ async function viaCli(s: Store, c: RecallCall): Promise<CliRecalled> {
   const flags: CliFlags = { ...c.cliFlags };
   if (c.session) flags['session-id'] = c.session;
   if (c.budget !== undefined) flags.budget = String(c.budget);
-  const out = await runInProcess(() => cmdRecall(s.root, c.query, flags));
+  const out = await runInProcess(() => cmdRecall(s.root, TENANT, c.query, flags));
   const anchored = /\[anchored_on: ([^\]]+)\]/.exec(out.stdout);
   return { output: out, hint: anchored ? anchored[1]! : null };
 }
