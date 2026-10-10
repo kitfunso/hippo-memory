@@ -172,7 +172,7 @@ describe('fold edge cases', () => {
     db.exec('CREATE TABLE memories (id TEXT)');
     db.close();
     const v = verdictOf({ store: bare, session: 's', memory: 'mem_x' });
-    expect([v.class, v.reason]).toEqual(['indeterminate', 'no-ledger-table']);
+    expect([v.class, v.reason, v.memory_id]).toEqual(['indeterminate', 'no-ledger-table', 'mem_x']);
   });
 
   it('R9 a key two memories hold is indeterminate key-ambiguous', () => {
@@ -203,6 +203,33 @@ describe('fold edge cases', () => {
     write(event('r19', { candidates: [], selectedCount: 0, emittedCount: 0 }));
     const v = read('r19', 'mem_gone');
     expect([v.class, v.reason]).toEqual(['indeterminate', 'forgotten']);
+  });
+
+  it('R24 a disabled turn before the lesson was written is not-written, and after it is rejected', () => {
+    const ts = new Date('2026-10-02T00:00:00.000Z');
+    const id = write(event('r24', { ts: ts.toISOString(), blockState: 'disabled', consideredCount: 0, selectedCount: 0, emittedCount: 0 }));
+    const later = seed(dir, 'a lesson written a minute after the disabled turn', { created: new Date(ts.getTime() + 60_000).toISOString() });
+    const earlier = seed(dir, 'a lesson written a minute before the disabled turn', { created: new Date(ts.getTime() - 60_000).toISOString() });
+    const after = read('r24', later.id);
+    expect([after.class, after.reason, after.turns[0].event_id]).toEqual(['not-written', 'written-after', id]);
+    const before = read('r24', earlier.id);
+    expect([before.class, before.reason, before.turns[0].event_id]).toEqual(['rejected', 'block-disabled', id]);
+  });
+
+  it('R25 a reuse after a group whose sent row was a duplicate is confirmed through that group', () => {
+    const m = present();
+    const block = 'the block the duplicate row sent';
+    const promptHash = blockHash('prompt a');
+    const t = Date.parse('2026-10-02T00:00:00.000Z');
+    const a = write(event('r25', { ts: new Date(t).toISOString(), promptHash, blockState: 'reused', candidates: [row(m.id, { outcome: 'reused' })] }));
+    const a2 = write(event('r25', { ts: new Date(t + 500).toISOString(), promptHash, emittedHash: blockHash(block), candidates: [row(m.id)] }));
+    const c = write(event('r25', { ts: new Date(t + 5_000).toISOString(), promptHash: blockHash('prompt c'), blockState: 'reused', candidates: [row(m.id, { outcome: 'reused' })] }));
+    const check = new DatabaseSync(path.join(dir, 'hippo.db'), { readOnly: true });
+    const rows = check.prepare('SELECT id, turn_seq, duplicate_of FROM delivery_events ORDER BY id').all();
+    check.close();
+    expect(rows.map((r) => [r.id, r.turn_seq !== null, r.duplicate_of])).toEqual([[a, true, null], [a2, false, a], [c, true, null]]);
+    const v = read('r25', m.id, { transcript: transcript([{ prompt: 'prompt a', attach: block }, { prompt: 'prompt c' }]) });
+    expect([v.class, v.turns[1].event_id, v.turns[1].delivery, v.turns[1].via_event_id]).toEqual(['application-unknown', c, 'confirmed', a]);
   });
 
   it('R20 a valid label on a not-written or key-ambiguous read is noted, not applied', () => {

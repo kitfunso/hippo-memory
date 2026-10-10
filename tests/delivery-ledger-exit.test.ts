@@ -459,4 +459,3 @@ describe('boundary evidence', () => {
     expect([v.notes.includes(`session-end:${end[0].id}`), v.turns.map((x) => x.event_type)]).toEqual([true, ['prompt-submit']]);
   });
 });
-

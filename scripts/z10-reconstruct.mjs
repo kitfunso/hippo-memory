@@ -126,7 +126,7 @@ function reusedDelivery(env, gi) {
   let j = -1;
   for (let i = gi - 1; i >= 0 && j < 0; i--) {
     const c = env.prompts[i];
-    if (c.row.block_state === 'sent' && c.emitters.length > 0 && k.row.static_hash !== null && c.row.static_hash === k.row.static_hash) j = i;
+    if (k.row.static_hash !== null && c.emitters.some((e) => e.block_state === 'sent' && e.static_hash === k.row.static_hash)) j = i;
   }
   if (j < 0) return unconfirmed('no-original');
   if (compactedBetween(env, j, gi)) return unconfirmed('compacted-since-send');
@@ -140,7 +140,9 @@ function absentReason(env, ts) {
 
 function judge(env, g, gi) {
   const { row, cand } = g;
-  if (row.block_state === 'disabled') return proven('rejected', 'block-disabled');
+  if (row.block_state === 'disabled') {
+    return absentReason(env, row.ts) === 'written-after' ? proven('not-written', 'written-after') : proven('rejected', 'block-disabled');
+  }
   if (cand?.outcome === 'rejected') return proven('rejected', cand.reason);
   if (cand && g.surface) return unconfirmed('surface-unjoined');
   if (cand?.outcome === 'emitted') return emittedDelivery(g, env);
@@ -245,6 +247,7 @@ function build(local, opts, base) {
   if (opts.globalDb) stores.push({ db: opts.globalDb, name: 'global' });
   const env = { stores };
   if (!hasTable(local, 'delivery_events')) {
+    base.memory_id = opts.memory ?? null;
     base.label = pickLabel(opts.labels, session, opts.memory === undefined ? [] : [opts.memory], base.notes);
     return { class: 'indeterminate', reason: 'no-ledger-table' };
   }
