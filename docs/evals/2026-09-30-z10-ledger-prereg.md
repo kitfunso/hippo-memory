@@ -174,6 +174,12 @@ This section settles the engineering part of the Z10 exit. It covers three check
   - A twelfth control checks that a queued prompt's attachment is never given to the prompt before it. Turn 1 is sent with its attachment missing, a `pre-compact` resets the block, and turn 2, a queued prompt, sends the same block with its attachment present. Turn 1 must stay unconfirmed.
   - An eleventh mutant ignores queued prompts.
   - Not verified: whether the hook's payload prompt equals the queued text. A turn that printed still pairs by its attachment hash.
+- **Amendment 2, after the overhead run and before the scored fixture run: code review.** The execute-stage review found a path to a false confirmation, and four smaller gaps. None of them changes the overhead, which measures `src/` only. Changes:
+  - A turn is confirmed only by the hash of a row whose own candidate emitted the lesson. Before, any duplicate row's hash counted. So a `reused-recall-sent` row, which prints only its recall block, could confirm a pin that its `sent` duplicate emitted. A writer-built reader test now checks this negative.
+  - The transcript is joined on the session. A line that names another session is dropped and counted in a note.
+  - A skill slash command, a line that starts with `<command-message>`, fires hooks and is read as a prompt. Only built-in slash commands (`<command-name>`) and shell lines fire none. This corrects the slash-command example under "Delivery confirmation".
+  - A memory that is gone with no forget row, but whose id appears in any candidate or trace row, is `indeterminate` `forgotten`, never not-written. Several delete paths write no forget row.
+  - A label on any class other than application-unknown is noted, including the early returns.
 
 ## Controls and failure cases
 
