@@ -1,6 +1,6 @@
 /** Single source of truth for the package version, written by scripts/sync-version.mjs; never edit by hand. Read by the db rollback guard, /health, MCP.
  * A constant, not a runtime package.json read: the published bundle may lack package.json on a path ESM can resolve. */
-export const PACKAGE_VERSION = '1.70.0';
+export const PACKAGE_VERSION = '1.71.0';
 
 /** The floor a store takes on its first expiring key: the first release with schema
  * v53, set by hand in that release; scripts/check-expiring-keys-floor.mjs gates it. */
