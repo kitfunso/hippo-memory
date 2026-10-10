@@ -172,7 +172,7 @@ export const VERB_USAGE = {
                            the goal tag get a 1.5x score boost and results are
                            re-sorted. Default off. RESEARCH.md §PFC.dlPFC.
     --session-id <id>      Session identifier for dlPFC goal-stack boost.
-                           Defaults to \$HIPPO_SESSION_ID. When set and the
+                           Defaults to $HIPPO_SESSION_ID. When set and the
                            (tenant, session) has active goals (see
                            'hippo goal push'), recall auto-boosts memories
                            whose tags match an active goal name. Boost stacks

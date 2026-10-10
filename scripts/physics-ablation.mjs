@@ -94,14 +94,13 @@ function pairedBootstrapCI(diffs, iters = 5000, alpha = 0.05) {
   const n = diffs.length;
   if (n === 0) return { meanDiff: 0, low: 0, high: 0 };
   const mean = diffs.reduce((a, b) => a + b, 0) / n;
-  const boots = new Array(iters);
-  for (let b = 0; b < iters; b++) {
+  const boots = Array.from({ length: iters }, () => {
     let s = 0;
     for (let i = 0; i < n; i++) {
       s += diffs[Math.floor(Math.random() * n)];
     }
-    boots[b] = s / n;
-  }
+    return s / n;
+  });
   boots.sort((a, b) => a - b);
   const lo = boots[Math.floor((alpha / 2) * iters)];
   const hi = boots[Math.floor((1 - alpha / 2) * iters)];

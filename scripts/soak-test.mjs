@@ -68,14 +68,12 @@ class Mulberry32 {
 const rng = new Mulberry32(SEED);
 
 function randomUnitVec(dim) {
-  const v = new Array(dim);
-  for (let i = 0; i < dim; i++) v[i] = rng.gauss();
+  const v = Array.from({ length: dim }, () => rng.gauss());
   return vecNormalize(v);
 }
 
 function randomNearbyVec(base, scatter, dim) {
-  const v = new Array(dim);
-  for (let i = 0; i < dim; i++) v[i] = base[i] + scatter * rng.gauss();
+  const v = Array.from({ length: dim }, (_, i) => base[i] + scatter * rng.gauss());
   return vecNormalize(v);
 }
 
@@ -85,7 +83,7 @@ function makeParticle(id, position, opts = {}) {
   return {
     memoryId: id,
     position,
-    velocity: new Array(position.length).fill(0),
+    velocity: Array.from({ length: position.length }, () => 0),
     mass: opts.mass ?? 1.0,
     charge: opts.charge ?? 0.0, // +1 = positive valence, -1 = negative, 0 = neutral
     temperature: opts.temperature ?? 1.0,
