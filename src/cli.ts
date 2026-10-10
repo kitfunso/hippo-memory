@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { repairCodexWrapperIfInstalled } from './hooks/codex-wrapper.js';
 import { getHippoRoot } from './store/open.js';
 import { resolveTenantId } from './store/tenant.js';
-import { handleGithub, printGithubBackfillUsage } from './connectors/github/cli-impl.js';
+import { handleGitHub, printGitHubBackfillUsage } from './cli/github.js';
 import { printError } from './cli/output.js';
 import { errorFields, errorMessage, isLevelEnabled, log } from './util/log.js';
 import { isStoreBusy, STORE_BUSY_MESSAGE } from './db/busy.js';
@@ -242,7 +242,7 @@ export const VERB_HANDLERS = {
     run: async (c) => { await (await import('./cli/slack.js')).handleSlack(c); },
   },
   github: {
-    run: async (c) => { await handleGithub(c); },
+    run: async (c) => { await handleGitHub(c); },
   },
   audit: {
     run: async (c) => { await (await import('./cli/audit.js')).handleAudit(c); },
@@ -471,7 +471,7 @@ const SUBCOMMAND_USAGE: ReadonlyMap<string, () => void> = new Map([
   ['audit prune', printAuditPruneUsage],
   ['slack backfill', printSlackBackfillUsage],
   ['slack workspaces', printSlackWorkspacesUsage],
-  ['github backfill', printGithubBackfillUsage],
+  ['github backfill', printGitHubBackfillUsage],
 ]);
 
 function printHelp(command: string, args: string[]): void {

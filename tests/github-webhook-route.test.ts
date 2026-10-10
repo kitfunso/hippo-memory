@@ -57,7 +57,7 @@ interface IssueBodyOpts {
   repoFullName?: string;
 }
 
-interface GithubIssueEventPayload {
+interface GitHubIssueEventPayload {
   action: string;
   issue: { number: number; title: string; body: string; user: { login: string; id: number } };
   repository: { full_name: string; private: boolean; owner: { login: string }; name: string };
@@ -66,7 +66,7 @@ interface GithubIssueEventPayload {
 }
 
 function issueBody(opts: IssueBodyOpts = {}): string {
-  const obj: GithubIssueEventPayload = {
+  const obj: GitHubIssueEventPayload = {
     action: opts.action ?? 'opened',
     issue: {
       number: opts.number ?? 42,

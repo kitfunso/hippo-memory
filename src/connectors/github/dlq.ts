@@ -1,11 +1,11 @@
 import type { Context } from '../../api/index.js';
 import {
-  bumpDlqRetry,
-  dlqEntry,
-  listDlqRows,
+  bumpGitHubDlqRetryCount,
+  githubDlqEntry,
+  listGitHubDlq,
   type DlqBucket,
   type DlqItem,
-  type GithubDlqWrite,
+  type GitHubDlqInsert,
 } from '../../store/connectors/github.js';
 import { replayFailed, type ConnectorDlq, type ReplayResult } from '../dlq.js';
 import { verifyGitHubSignature } from './signature.js';
@@ -14,12 +14,12 @@ import type { JsonValue } from '../../util/json.js';
 
 export type { DlqBucket, DlqItem };
 
-type GithubOwnColumns = Pick<GithubDlqWrite, 'eventName' | 'deliveryId' | 'installationId' | 'repoFullName'>;
+type GitHubOwnColumns = Pick<GitHubDlqInsert, 'eventName' | 'deliveryId' | 'installationId' | 'repoFullName'>;
 
 /** GitHub's dead-letter table; the event, delivery, installation and repo columns let an operator triage a row without re-reading the payload. */
-export const githubDlq: ConnectorDlq<GithubOwnColumns, DlqBucket, DlqItem> = {
+export const githubDlq: ConnectorDlq<GitHubOwnColumns, DlqBucket, DlqItem> = {
   letter: (row) => ({ connector: 'github', ...row }),
-  list: listDlqRows,
+  list: listGitHubDlq,
 };
 
 export interface ReplayDlqOpts {
@@ -74,7 +74,7 @@ export async function replayDlqEntry(
   id: number,
   opts: ReplayDlqOpts & { ingestHook?: IngestHook } = {},
 ): Promise<ReplayResult> {
-  const row = dlqEntry(ctx.hippoRoot, id);
+  const row = githubDlqEntry(ctx.hippoRoot, id);
   if (!row) return replayFailed('not_found', 0, `dlq id ${id} not found`);
 
   // Signature verification (current secret, not the one in effect when DLQed).
@@ -88,7 +88,7 @@ export async function replayDlqEntry(
 
   // Without an ingest hook this is a dry-run validation. Bump and report.
   if (!opts.ingestHook) {
-    bumpDlqRetry(ctx.hippoRoot, id);
+    bumpGitHubDlqRetryCount(ctx.hippoRoot, id);
     return {
       ok: true,
       status: 'replayed',
@@ -109,7 +109,7 @@ export async function replayDlqEntry(
     eventName,
     deliveryId,
   });
-  bumpDlqRetry(ctx.hippoRoot, id);
+  bumpGitHubDlqRetryCount(ctx.hippoRoot, id);
   return {
     ok: true,
     status: 'replayed',
@@ -140,7 +140,7 @@ function checkReplaySignature(
     previousSecret,
   });
   if (!sigOk) {
-    bumpDlqRetry(hippoRoot, id);
+    bumpGitHubDlqRetryCount(hippoRoot, id);
     return replayFailed(
       'sig_fail',
       row.retryCount + 1,
@@ -156,7 +156,7 @@ function checkReplayEnvelope(hippoRoot: string, id: number, row: DlqItem): Repla
   try {
     parsed = JSON.parse(row.rawPayload);
   } catch (e) {
-    bumpDlqRetry(hippoRoot, id);
+    bumpGitHubDlqRetryCount(hippoRoot, id);
     // SAFETY: this is a best-effort error message only; property access on
     // any JS value is safe (undefined if absent), preserving the existing
     // lenient formatting even when something non-Error was thrown.
@@ -164,7 +164,7 @@ function checkReplayEnvelope(hippoRoot: string, id: number, row: DlqItem): Repla
     return replayFailed('parse_error', row.retryCount + 1, `still unparseable: ${message}`);
   }
   if (!isGitHubWebhookEnvelope(parsed)) {
-    bumpDlqRetry(hippoRoot, id);
+    bumpGitHubDlqRetryCount(hippoRoot, id);
     return replayFailed('unhandled', row.retryCount + 1, 'not a GitHub webhook envelope');
   }
   return null;

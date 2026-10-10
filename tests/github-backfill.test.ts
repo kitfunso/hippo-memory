@@ -102,7 +102,7 @@ function makeFakeFetcher(plan: FakePlan, capture?: CallCapture): GitHubFetcher {
   };
 }
 
-type GithubIssueItem = {
+type GitHubIssueItem = {
   number: number;
   title: string;
   body: string;
@@ -111,7 +111,7 @@ type GithubIssueItem = {
   pull_request?: { url: string };
 }
 
-type GithubIssueCommentItem = {
+type GitHubIssueCommentItem = {
   id: number;
   body: string;
   user: { login: string; id: number };
@@ -119,7 +119,7 @@ type GithubIssueCommentItem = {
   issue_url: string;
 }
 
-type GithubPrReviewCommentItem = {
+type GitHubPrReviewCommentItem = {
   id: number;
   body: string;
   user: { login: string; id: number };
@@ -128,8 +128,8 @@ type GithubPrReviewCommentItem = {
 }
 
 /** Build a stream-1 (issues) item. */
-function issueItem(number: number, updatedAt: string, isPr = false): GithubIssueItem {
-  const item: GithubIssueItem = {
+function issueItem(number: number, updatedAt: string, isPr = false): GitHubIssueItem {
+  const item: GitHubIssueItem = {
     number,
     title: `issue ${number}`,
     body: `body for ${number}`,
@@ -140,7 +140,7 @@ function issueItem(number: number, updatedAt: string, isPr = false): GithubIssue
   return item;
 }
 
-function issueCommentItem(id: number, issueNumber: number, updatedAt: string): GithubIssueCommentItem {
+function issueCommentItem(id: number, issueNumber: number, updatedAt: string): GitHubIssueCommentItem {
   return {
     id,
     body: `comment ${id}`,
@@ -150,7 +150,7 @@ function issueCommentItem(id: number, issueNumber: number, updatedAt: string): G
   };
 }
 
-function prReviewCommentItem(id: number, prNumber: number, updatedAt: string): GithubPrReviewCommentItem {
+function prReviewCommentItem(id: number, prNumber: number, updatedAt: string): GitHubPrReviewCommentItem {
   return {
     id,
     body: `review comment ${id}`,

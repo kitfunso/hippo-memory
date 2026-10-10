@@ -19,7 +19,7 @@ import type { QuarantineRow, QuarantineStatus } from './quarantine.js';
 import type { ScopeActor } from './recall-scope.js';
 import type { RecallTraceInput } from './recall-trace.js';
 import type { AmbientLoadResult, AmbientRecallRequest, ContextCandidateFilter, RecentOrigins } from './candidates.js';
-import type { GithubDlqWrite, GithubRouting } from './connectors/github.js';
+import type { GitHubDlqInsert, GitHubRouting } from './connectors/github.js';
 import type { SlackDlqInsert, SlackTeamRoute } from './connectors/slack.js';
 import type { StrengthenOptions } from './entry-writes.js';
 import type { SessionEvent, TaskSnapshot } from './rows.js';
@@ -611,7 +611,7 @@ export interface ArtifactArchive {
 }
 
 /** One payload a webhook could not use, already redacted, for the dead-letter queue of its connector. */
-export type ConnectorDeadLetter = ({ readonly connector: 'slack' } & SlackDlqInsert) | ({ readonly connector: 'github' } & GithubDlqWrite);
+export type ConnectorDeadLetter = ({ readonly connector: 'slack' } & SlackDlqInsert) | ({ readonly connector: 'github' } & GitHubDlqInsert);
 
 /** What a connector delivery reads and writes beside connectorWrites: the event log,
  * tenant routing, the dead-letter queue and the archive of a deleted artifact. */
@@ -631,7 +631,7 @@ export interface ConnectorEvents {
   /** The tenant a Slack team is registered to, or how many workspaces are registered when it is not. */
   slackTeamRoute(teamId: string): Promise<SlackTeamRoute>;
   /** The tenant of the installation, or of the repository when no installation is named, with the size of both routing tables. */
-  githubRouting(query: { readonly installationId?: string | null; readonly repoFullName?: string | null }): Promise<GithubRouting>;
+  githubRouting(query: { readonly installationId?: string | null; readonly repoFullName?: string | null }): Promise<GitHubRouting>;
   /** Appends the row and answers its id. */
   parkDeadLetter(letter: ConnectorDeadLetter): Promise<number>;
 }

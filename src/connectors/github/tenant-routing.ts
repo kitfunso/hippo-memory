@@ -1,4 +1,4 @@
-import { envGithubAllowUnknownInstallationFallback, envTenant } from '../../util/env.js';
+import { envGitHubAllowUnknownInstallationFallback, envTenant } from '../../util/env.js';
 import { requireGroup, storeFor, type HippoStore } from '../../store/index.js';
 
 export interface ResolveArgs {
@@ -38,7 +38,7 @@ export async function resolveTenantForGitHub(
   store?: HippoStore,
 ): Promise<string | null> {
   const envFallback = (): string => envTenant();
-  const escapeHatch = envGithubAllowUnknownInstallationFallback();
+  const escapeHatch = envGitHubAllowUnknownInstallationFallback();
 
   const routing = await requireGroup(storeFor({ hippoRoot, store }), 'connectorEvents').githubRouting(args);
   if (routing.tenant) return routing.tenant;

@@ -5,7 +5,7 @@ import { join } from 'path';
 import { initStore } from '../src/store/open.js';
 import { parkInDlq, listDlq } from '../src/connectors/dlq.js';
 import { githubDlq, replayDlqEntry, type DlqBucket } from '../src/connectors/github/dlq.js';
-import { dlqEntry } from '../src/store/connectors/github.js';
+import { githubDlqEntry } from '../src/store/connectors/github.js';
 import type { Context } from '../src/api/index.js';
 
 describe('github DLQ', () => {
@@ -33,7 +33,7 @@ describe('github DLQ', () => {
       repoFullName: 'octo/repo',
     });
     expect(id).toBe(1);
-    const item = dlqEntry(root, id);
+    const item = githubDlqEntry(root, id);
     expect(item).not.toBeNull();
     expect(item!.tenantId).toBe('default');
     expect(item!.rawPayload).toBe('{"action":"opened"}');
@@ -56,7 +56,7 @@ describe('github DLQ', () => {
       error: 'no tenant',
       bucket: 'unroutable',
     });
-    const item = dlqEntry(root, id);
+    const item = githubDlqEntry(root, id);
     expect(item!.tenantId).toBe('__unroutable__');
     expect(item!.bucket).toBe('unroutable');
     const listed = listDlq(githubDlq, root, { tenantId: '__unroutable__' });
@@ -115,10 +115,10 @@ describe('github DLQ', () => {
       rawPayload: '{}',
       error: 'boom',
     });
-    const found = dlqEntry(root, id);
+    const found = githubDlqEntry(root, id);
     expect(found).not.toBeNull();
     expect(found!.id).toBe(id);
-    expect(dlqEntry(root, 9999)).toBeNull();
+    expect(githubDlqEntry(root, 9999)).toBeNull();
   });
 
   it('replayDlqEntry returns not_found for unknown ids', async () => {
@@ -142,7 +142,7 @@ describe('github DLQ', () => {
     expect(result.status).toBe('parse_error');
     expect(result.retryCount).toBe(1);
 
-    const after = dlqEntry(root, id);
+    const after = githubDlqEntry(root, id);
     expect(after!.retryCount).toBe(1);
     expect(after!.retriedAt).not.toBeNull();
   });

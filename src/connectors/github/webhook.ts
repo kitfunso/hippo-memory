@@ -1,4 +1,4 @@
-import { envGithubWebhookSecret, envGithubWebhookSecretPrevious } from '../../util/env.js';
+import { envGitHubWebhookSecret, envGitHubWebhookSecretPrevious } from '../../util/env.js';
 import type { ServerResponse } from 'node:http';
 import { verifyGitHubSignature } from './signature.js';
 import {
@@ -48,14 +48,14 @@ import type { JsonValue } from '../../util/json.js';
 export async function handleGitHubEventsWebhook(request: WebhookRequest, store?: HippoStore): Promise<void> {
   const { req, res, opts } = request;
   // Secret and signature header before the body, so a caller with neither cannot make the server buffer one.
-  const secret = envGithubWebhookSecret();
+  const secret = envGitHubWebhookSecret();
   if (!secret) {
     closeIfBodyUnread(request);
     res.writeHead(404, JSON_HEADERS);
     res.end(JSON.stringify({ error: 'not found' }));
     return;
   }
-  const previousSecret = envGithubWebhookSecretPrevious();
+  const previousSecret = envGitHubWebhookSecretPrevious();
   const sigHdr = req.headers['x-hub-signature-256'];
   const eventHdr = req.headers['x-github-event'];
   const deliveryHdr = req.headers['x-github-delivery'];

@@ -158,7 +158,7 @@ export function envSlackTeamId(): string | undefined { return raw('SLACK_TEAM_ID
 export function envSlackSigningSecret(): string | undefined { return raw('SLACK_SIGNING_SECRET'); }
 export function envSlackSigningSecretPrevious(): string | undefined { return raw('SLACK_SIGNING_SECRET_PREVIOUS'); }
 export function envSlackAllowUnknownTeamFallback(): boolean { return isOne('SLACK_ALLOW_UNKNOWN_TEAM_FALLBACK'); }
-export function envGithubToken(): string | undefined { return raw('GITHUB_TOKEN'); }
-export function envGithubWebhookSecret(): string | undefined { return raw('GITHUB_WEBHOOK_SECRET'); }
-export function envGithubWebhookSecretPrevious(): string | undefined { return raw('GITHUB_WEBHOOK_SECRET_PREVIOUS'); }
-export function envGithubAllowUnknownInstallationFallback(): boolean { return isOne('GITHUB_ALLOW_UNKNOWN_INSTALLATION_FALLBACK'); }
+export function envGitHubToken(): string | undefined { return raw('GITHUB_TOKEN'); }
+export function envGitHubWebhookSecret(): string | undefined { return raw('GITHUB_WEBHOOK_SECRET'); }
+export function envGitHubWebhookSecretPrevious(): string | undefined { return raw('GITHUB_WEBHOOK_SECRET_PREVIOUS'); }
+export function envGitHubAllowUnknownInstallationFallback(): boolean { return isOne('GITHUB_ALLOW_UNKNOWN_INSTALLATION_FALLBACK'); }

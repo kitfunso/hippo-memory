@@ -3,8 +3,8 @@
  *
  * Strategy: subprocess via execFileSync (mirrors tests/slack-cli.test.ts) for
  * end-to-end argv/exit-code behaviour. Test 3 (backfill happy path) imports
- * the implementation directly from cli-impl.ts to inject a fake GitHubFetcher
- * without hitting the network. cli-impl.ts is intentionally kept side-effect
+ * the implementation directly from src/cli/github.ts to inject a fake GitHubFetcher
+ * without hitting the network. src/cli/github.ts is intentionally kept side-effect
  * free so it can be imported in-process.
  */
 
@@ -18,7 +18,7 @@ import { initStore } from '../src/store/open.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
 import { parkInDlq, listDlq } from '../src/connectors/dlq.js';
 import { githubDlq } from '../src/connectors/github/dlq.js';
-import { cmdGithubBackfill } from '../src/connectors/github/cli-impl.js';
+import { cmdGitHubBackfill } from '../src/cli/github.js';
 import type {
   GitHubFetcher,
   GitHubBackfillPage,
@@ -147,7 +147,7 @@ describe('hippo github CLI', () => {
     const origLog = console.log;
     console.log = (...a: unknown[]) => logs.push(a.map(String).join(' '));
     try {
-      await cmdGithubBackfill(
+      await cmdGitHubBackfill(
         hippoRoot,
         { repo: 'acme/widgets' },
         fetcher,
@@ -157,7 +157,7 @@ describe('hippo github CLI', () => {
       if (prevToken === undefined) delete process.env.GITHUB_TOKEN;
       else process.env.GITHUB_TOKEN = prevToken;
     }
-    // SAFETY: cmdGithubBackfill's only console.log call in this path prints
+    // SAFETY: cmdGitHubBackfill's only console.log call in this path prints
     // its own JSON summary object with `ingested`/`pages` counters (verified
     // by the assertions below); logs is captured exclusively around that call.
     const json = JSON.parse(logs.join('\n')) as {
@@ -332,7 +332,7 @@ describe('hippo github CLI', () => {
     const printed = vi.spyOn(console, 'log').mockImplementation(() => {});
     vi.stubEnv('GITHUB_TOKEN', 'fake-token');
     try {
-      await cmdGithubBackfill(hippoRoot, { repo, max }, fetcher);
+      await cmdGitHubBackfill(hippoRoot, { repo, max }, fetcher);
       return JSON.parse(String(printed.mock.calls[0][0])).ingested.issues;
     } finally {
       vi.unstubAllEnvs();

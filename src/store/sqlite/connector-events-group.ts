@@ -1,5 +1,5 @@
 // hippo.db's half of the ConnectorEvents store group: each call on a handle of its own.
-import { archiveDeletedArtifact, eventSeenAt, githubRouting, insertDlq, logEvent, seenEvent } from '../connectors/github.js';
+import { archiveDeletedArtifact, eventSeenAt, githubRouting, insertGitHubDlq, logEvent, seenEvent } from '../connectors/github.js';
 import { insertSlackDlq, markSlackEventSeen, rawMemoryIdForArtifactAt, slackEventRecord, slackEventSeenAt, slackTeamRoute } from '../connectors/slack.js';
 import { onHandle } from '../open.js';
 import type { ArtifactArchive, ConnectorEvent, ConnectorEventRecord, ConnectorEvents, DeletionLookup, DeletionTarget, Sync } from '../port.js';
@@ -36,7 +36,7 @@ export function sqliteConnectorEvents(hippoRoot: string): Sync<ConnectorEvents> 
     archiveDeletedArtifact: (archive) => archiveArtifact(hippoRoot, archive),
     slackTeamRoute: (teamId) => slackTeamRoute(hippoRoot, teamId),
     githubRouting: (query) => githubRouting(hippoRoot, query),
-    parkDeadLetter: (letter) => (letter.connector === 'slack' ? insertSlackDlq(hippoRoot, letter) : insertDlq(hippoRoot, letter)),
+    parkDeadLetter: (letter) => (letter.connector === 'slack' ? insertSlackDlq(hippoRoot, letter) : insertGitHubDlq(hippoRoot, letter)),
   };
 }
 

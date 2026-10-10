@@ -8,7 +8,7 @@ import { closeHippoDb, openHippoDb, withSqliteBlocked } from '../src/db/index.js
 import type { MemoryEntry } from '../src/core/memory.js';
 import type { AuditEvent } from '../src/server.js';
 import { requireGroup } from '../src/store/index.js';
-import { logEvent, type GithubRouting } from '../src/store/connectors/github.js';
+import { logEvent, type GitHubRouting } from '../src/store/connectors/github.js';
 import { markSlackEventSeen, upsertSlackWorkspace, type SlackTeamRoute } from '../src/store/connectors/slack.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import type { ConnectorDeadLetter, ConnectorEvent, ConnectorEventRecord, ConnectorWriteOutcome, DeletionTarget } from '../src/store/port.js';
@@ -28,7 +28,7 @@ const REASON = 'source_deleted:github:issue_comment:d-1';
 
 type Row = Pick<MemoryEntry, 'id' | 'tenantId' | 'kind'>;
 type Archived = { readonly duplicate: boolean; readonly archived: number };
-type Value = ConnectorEventRecord | DeletionTarget | Archived | SlackTeamRoute | GithubRouting | ConnectorWriteOutcome | Row[] | number | void;
+type Value = ConnectorEventRecord | DeletionTarget | Archived | SlackTeamRoute | GitHubRouting | ConnectorWriteOutcome | Row[] | number | void;
 type Call = GroupCall<'connectorEvents', Value>;
 
 interface Side {

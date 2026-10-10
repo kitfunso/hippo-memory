@@ -149,7 +149,7 @@ describe('both webhooks under a store that is not hippo.db', () => {
     const res = await fetch(`${url}/v1/connectors/slack/events`, { method: 'POST', headers, body });
     return { status: res.status, body: await res.json(), sent: { body, ts, signature: headers['x-slack-signature'] } };
   };
-  const postGithub = async (url: string, deliveryId: string, payload: JsonValue, secret = secrets.github) => {
+  const postGitHub = async (url: string, deliveryId: string, payload: JsonValue, secret = secrets.github) => {
     const body = JSON.stringify(payload);
     const signature = `sha256=${createHmac('sha256', secret).update(body).digest('hex')}`;
     const headers = { 'content-type': 'application/json', 'x-hub-signature-256': signature, 'x-github-event': 'issue_comment', 'x-github-delivery': deliveryId };
@@ -188,10 +188,10 @@ describe('both webhooks under a store that is not hippo.db', () => {
     const stray = await postSlack(served.url, slackEvent('T_OTHER', 'Ev_stray', posted('1700.000003')));
     expect(stray).toMatchObject({ status: 200, body: { ok: true, status: 'dlq' } });
     expect(await postSlack(served.url, slackEvent('T_ACME', 'Ev_deleted', removed('1700.000001')))).toMatchObject({ status: 200, body: { ok: true, status: 'archived' } });
-    const noted = await postGithub(served.url, 'd-1', commentEvent('created'));
+    const noted = await postGitHub(served.url, 'd-1', commentEvent('created'));
     expect(noted).toEqual({ status: 200, body: { ok: true, status: 'ingested', memoryId: expect.any(String) } });
     const commentId: string = noted.body.memoryId;
-    expect(await postGithub(served.url, 'd-2', commentEvent('deleted'))).toEqual({ status: 200, body: { ok: true, status: 'archived', archivedCount: 1 } });
+    expect(await postGitHub(served.url, 'd-2', commentEvent('deleted'))).toEqual({ status: 200, body: { ok: true, status: 'archived', archivedCount: 1 } });
 
     expect(slackRows(memory)).toEqual([['Ev_deleted', memoryId], ['Ev_message', memoryId]]);
     expect(githubRows(memory)).toEqual([['d-1', 'issue_comment', commentId], ['d-2', 'issue_comment', commentId]]);
@@ -210,7 +210,7 @@ describe('both webhooks under a store that is not hippo.db', () => {
     const before = rows();
     const other = randomBytes(24).toString('hex');
     expect(await postSlack(served.url, slackEvent('T_ACME', 'Ev_forged', posted('1700.000009')), other)).toMatchObject({ status: 401, body: { error: 'invalid Slack signature' } });
-    expect(await postGithub(served.url, 'd-forged', commentEvent('created'), other)).toEqual({ status: 401, body: { error: 'invalid GitHub signature' } });
+    expect(await postGitHub(served.url, 'd-forged', commentEvent('created'), other)).toEqual({ status: 401, body: { error: 'invalid GitHub signature' } });
     expect(rows()).toEqual(before);
   });
 
@@ -220,9 +220,9 @@ describe('both webhooks under a store that is not hippo.db', () => {
     const noEvents = await serveOn({ ...memory.store, connectorEvents: undefined });
     const noWrites = await serveOn({ ...memory.store, connectorWrites: undefined });
     expect(await postSlack(noEvents.url, slackEvent('T_ACME', 'Ev_refused', posted('1700.000010')))).toMatchObject(refused);
-    expect(await postGithub(noEvents.url, 'd-refused', commentEvent('created'))).toEqual(refused);
+    expect(await postGitHub(noEvents.url, 'd-refused', commentEvent('created'))).toEqual(refused);
     expect(await postSlack(noWrites.url, slackEvent('T_ACME', 'Ev_unknown', removed('1700.999999')))).toMatchObject(refused);
-    expect(await postGithub(noWrites.url, 'd-unknown', { ...commentEvent('deleted'), issue: { number: 77 } })).toEqual(refused);
+    expect(await postGitHub(noWrites.url, 'd-unknown', { ...commentEvent('deleted'), issue: { number: 77 } })).toEqual(refused);
     expect(rows()).toEqual(before);
   });
 });
