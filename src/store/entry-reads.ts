@@ -311,6 +311,17 @@ export function loadAllEntries(hippoRoot: string, tenantId?: string): MemoryEntr
   }
 }
 
+/** Every tenant's memory ids in loadAllEntries' order, for a caller that reads the rows a page at a time instead of holding them all. */
+export function loadAllEntryIds(hippoRoot: string): string[] {
+  const db = openStore(hippoRoot);
+  try {
+    // SAFETY: the SELECT names exactly the one column read.
+    return (db.prepare('SELECT id FROM memories ORDER BY created ASC, id ASC').all() as Array<{ id: string }>).map((row) => row.id);
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
 export interface EntriesWithBase {
   entries: MemoryEntry[];
   base: { get(id: string): MemoryEntry | undefined };

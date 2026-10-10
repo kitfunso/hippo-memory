@@ -8,7 +8,7 @@ export interface StoredJsonSite {
   column: string;
 }
 
-/** Warns the first time this row's column is found damaged, then logs at debug, so a row read on every recall cannot flood stderr. */
+/** Warns the first time this row's column is found damaged (the logger caps how many), then at debug, so a row read on every recall cannot flood stderr. */
 export function warnDamagedColumn(site: StoredJsonSite, problem: 'not valid JSON' | 'wrong shape'): void {
   const { table, id, column } = site;
   log.warnThenDebug(`damaged-column:${table}:${id}:${column}`, `store: ${table}.${column} is ${problem}; read as empty`, { table, id, column });

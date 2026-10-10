@@ -138,6 +138,8 @@ export function envLlmTimeoutMs(): number | undefined { return positiveInt('HIPP
 export function envTypesafeApiKey(): string | undefined { return trimmed('TYPESAFE_API_KEY'); }
 export function envJevTimeoutMs(): number | undefined { return positiveInt('HIPPO_JEV_TIMEOUT_MS'); }
 export function envJevModel(): string | undefined { return raw('HIPPO_JEV_MODEL'); }
+/** How long a recall waits for an API provider to embed its query before ranking on BM25 alone; search/vector.ts holds the default. */
+export function envQueryEmbedTimeoutMs(): number | undefined { return positiveInt('HIPPO_QUERY_EMBED_TIMEOUT_MS'); }
 export function envLlmRerankerUrl(): string | undefined { return raw('HIPPO_LLM_RERANKER_URL'); }
 export function envLlmRerankerKey(): string | undefined { return raw('HIPPO_LLM_RERANKER_KEY'); }
 export function envLlmRerankerModel(): string | undefined { return raw('HIPPO_LLM_RERANKER_MODEL'); }

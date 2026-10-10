@@ -1,7 +1,7 @@
 // Store upkeep verbs: `hippo refine`, `hippo dedup` and `hippo embed`.
 
 import { envAnthropicApiKey } from '../util/env.js';
-import { loadAllEntries } from '../store/entry-reads.js';
+import { loadAllEntries, loadAllEntryIds } from '../store/entry-reads.js';
 import { deduplicateStore } from '../consolidate/dedupe.js';
 import { embedAll } from '../store/embeddings/index.js';
 import { resolveEmbeddingProvider, type EmbeddingProvider } from '../store/embeddings/provider.js';
@@ -12,6 +12,7 @@ import { printError } from './output.js';
 import { boolFlag, type CommandContext } from './flag-values.js';
 import { requireInit, resolveAuthRoot } from './shared.js';
 import { errorMessage } from '../util/log.js';
+import { CliExit } from './exit.js';
 
 const MAX_FAILED_SHOWN = 5;
 const MAX_PAIRS_SHOWN = 15;
@@ -23,7 +24,7 @@ export async function handleRefine({ hippoRoot, tenantId, flags }: CommandContex
   const apiKey = envAnthropicApiKey();
   if (!apiKey) {
     printError('hippo refine needs ANTHROPIC_API_KEY in the environment.');
-    process.exit(1);
+    throw new CliExit(1);
   }
 
   const dryRun = boolFlag(flags, 'dry-run');
@@ -172,9 +173,8 @@ export async function handleEmbed(
 }
 
 function resetPhysics(root: string): void {
-  const entries = loadAllEntries(root);
   const embIndex = loadEmbeddingIndex(root);
-  const count = resetStoredParticles(root, entries, embIndex);
+  const count = resetStoredParticles(root, loadAllEntryIds(root), embIndex);
   console.log(`Reset physics state: ${count} particles re-initialized from embeddings.`);
 }
 

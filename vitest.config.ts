@@ -86,8 +86,7 @@ export default defineConfig({
     },
     globalSetup: ['tests/_build-freshness.ts', 'tests/_real-store-guard.ts'],
     server: { deps: { external: [/tests[\\/]_coverage-provider\.ts$/] } },
-    // 55 of 384 files spawn git/hippo/nested-vitest children, so one fork per
-    // core oversubscribes a big box. Detail: CHANGELOG 1.38.3.
+    // About a fifth of the files spawn git/hippo/nested-vitest children, so one fork per core oversubscribes a big box (CHANGELOG 1.38.3).
     maxWorkers: 6,
     coverage: {
       provider: 'custom',

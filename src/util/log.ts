@@ -55,20 +55,34 @@ function write(level: LogLevel, message: string, fields?: LogFields): void {
   process.stderr.write(`${format(level, message, stamped)}\n`);
 }
 
+// Some keys follow the data (one per damaged row and column), so the set of them stops growing here.
+const ONCE_KEY_CAP = 1_000;
 const onceKeys = new Set<string>();
+let onceCapReported = false;
 
-/** Write `message` at `level` the first time `key` is seen in this process; later calls are dropped. */
+/** 'new' records the key and 'seen' is a repeat. 'uncounted' is an unseen key once the set is full: it is not recorded, and the first one says so at warn. */
+function sightOnceKey(key: string): 'new' | 'seen' | 'uncounted' {
+  if (onceKeys.has(key)) return 'seen';
+  if (onceKeys.size < ONCE_KEY_CAP) {
+    onceKeys.add(key);
+    return 'new';
+  }
+  if (!onceCapReported) {
+    onceCapReported = true;
+    write('warn', `log: ${ONCE_KEY_CAP} once-only warnings were written; further new ones in this process log at debug`);
+  }
+  return 'uncounted';
+}
+
+/** Write `message` at `level` the first time `key` is seen in this process; later calls are dropped. Past the key cap an unseen key logs at debug. */
 function once(key: string, level: LogLevel, message: string, fields?: LogFields): void {
-  if (onceKeys.has(key)) return;
-  onceKeys.add(key);
-  write(level, message, fields);
+  const sighting = sightOnceKey(key);
+  if (sighting !== 'seen') write(sighting === 'new' ? level : 'debug', message, fields);
 }
 
 /** Warn the first time `key` is seen in this process, then log at debug, so a repeating failure stays findable without flooding stderr. */
 function warnThenDebug(key: string, message: string, fields?: LogFields): void {
-  const level = onceKeys.has(key) ? 'debug' : 'warn';
-  onceKeys.add(key);
-  write(level, message, fields);
+  write(sightOnceKey(key) === 'new' ? 'warn' : 'debug', message, fields);
 }
 
 /** The class name and stack of a thrown value, as log fields; a non-Error throw has no stack. */
@@ -94,4 +108,5 @@ export function errorMessage(cause: unknown): string {
 /** Test hook: forget which once-keys have fired. */
 export function resetLogOnce(): void {
   onceKeys.clear();
+  onceCapReported = false;
 }

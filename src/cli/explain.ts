@@ -18,6 +18,7 @@ import { printError } from './output.js';
 import { parseLimitFlag, parseBudgetFlag, type CliFlags, type CommandContext, parseAsOfFlag, engineFlags, boolFlag } from './flag-values.js';
 import { requireInit } from './shared.js';
 import { fmt, recallEntryText, recallHeading } from './print.js';
+import { CliExit } from './exit.js';
 
 const EXPLAIN_PREVIEW_CHARS = 48;
 
@@ -190,7 +191,7 @@ export async function handleExplain({ hippoRoot, args, flags }: CommandContext):
   const query = args.join(' ').trim();
   if (!query) {
     printError('Please provide a search query.');
-    process.exit(1);
+    throw new CliExit(1);
   }
   await cmdExplain(hippoRoot, query, flags);
 }

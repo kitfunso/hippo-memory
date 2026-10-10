@@ -15,6 +15,7 @@ export interface RetryPolicy {
   /** Also retry a dropped connection or a timed-out attempt. On for GET and HEAD; any other method turns it on only when a replay cannot commit twice. */
   retryTransport?: boolean;
   fetchFn?: typeof fetch;
+  /** Replaces the timer between attempts. A caller `signal` that aborts still ends the wait at once. */
   sleep?: (ms: number) => Promise<void>;
   random?: () => number;
 }
@@ -61,7 +62,29 @@ function isIdempotent(method: string | undefined): boolean {
   return verb === 'GET' || verb === 'HEAD';
 }
 
-const realSleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+type Sleep = (ms: number) => Promise<void>;
+
+// `cancel` clears the timer, so a wait the caller left does not keep the process alive.
+const timerSleep = (ms: number, cancel?: AbortSignal): Promise<void> => new Promise((resolve) => {
+  const timer = setTimeout(resolve, ms);
+  cancel?.addEventListener('abort', () => clearTimeout(timer), { once: true });
+});
+
+/** The wait between attempts. With a caller signal it ends the moment that signal aborts and rejects with its reason, so no further attempt starts. */
+async function backoffWait(ms: number, sleep: Sleep | undefined, signal: AbortSignal | null | undefined): Promise<void> {
+  if (!signal) return (sleep ?? timerSleep)(ms);
+  signal.throwIfAborted();
+  const left = new AbortController();
+  const aborted = new Promise<never>((_resolve, reject) => {
+    signal.addEventListener('abort', () => reject(signal.reason), { once: true, signal: left.signal });
+  });
+  try {
+    // An injected sleep cannot be cancelled, so it is raced and left to run out.
+    await Promise.race([sleep ? sleep(ms) : timerSleep(ms, left.signal), aborted]);
+  } finally {
+    left.abort();
+  }
+}
 
 /** `fetch` with a per-attempt timeout and up to `attempts` tries on 429, 5xx and (see
  * `retryTransport`) transport faults; the last response or error comes back as is. */
@@ -70,7 +93,6 @@ export async function fetchWithRetry(url: string | URL, init: RequestInit, polic
   const attempts = Math.max(1, policy.attempts ?? DEFAULT_ATTEMPTS);
   const baseDelayMs = policy.baseDelayMs ?? DEFAULT_BASE_DELAY_MS;
   const maxDelayMs = policy.maxDelayMs ?? DEFAULT_MAX_DELAY_MS;
-  const sleep = policy.sleep ?? realSleep;
   const random = policy.random ?? Math.random;
   const retryOn = policy.retryOn ?? ((res: Response) => isRetryableStatus(res.status));
   const retryTransport = policy.retryTransport ?? isIdempotent(init.method);
@@ -89,7 +111,7 @@ export async function fetchWithRetry(url: string | URL, init: RequestInit, polic
     } catch (err) {
       // The caller's own abort is a decision, not a fault, so it ends the call.
       if (!retryTransport || attempt >= attempts || init.signal?.aborted || !isTransientTransportError(err)) throw err;
-      await sleep(backoffMs(attempt));
+      await backoffWait(backoffMs(attempt), policy.sleep, init.signal);
       continue;
     }
     if (!retryOn(res) || attempt >= attempts) return res;
@@ -98,6 +120,6 @@ export async function fetchWithRetry(url: string | URL, init: RequestInit, polic
     if (retryAfter !== null && retryAfter > maxDelayMs) return res;
     // Frees the pooled socket before the next attempt.
     await res.body?.cancel();
-    await sleep(retryAfter ?? backoffMs(attempt));
+    await backoffWait(retryAfter ?? backoffMs(attempt), policy.sleep, init.signal);
   }
 }

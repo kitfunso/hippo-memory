@@ -7,6 +7,7 @@ import { printError } from './output.js';
 import { type CliFlags, boolFlag, stringFlag, type CommandContext } from './flag-values.js';
 import { resolveAuthRoot } from './shared.js';
 import { errorMessage } from '../util/log.js';
+import { CliExit } from './exit.js';
 
 // ---------------------------------------------------------------------------
 // Auth subcommands
@@ -24,7 +25,7 @@ function cmdAuthCreate(hippoRoot: string, defaultTenantId: string, flags: CliFla
   if (roleFlag !== undefined) {
     if (roleFlag !== 'admin' && roleFlag !== 'member') {
       printError(`Invalid --role value: '${roleFlag}'. Use 'admin' or 'member'.`);
-      process.exit(1);
+      throw new CliExit(1);
     }
     role = roleFlag;
   } else {
@@ -96,7 +97,7 @@ function keyContext(root: string, tenantId: string, keyId: string): api.HippoDbC
   const keyTenant = api.authKeyTenant(hostCtx, keyId);
   if (keyTenant === undefined) {
     printError(`Unknown key_id: ${keyId}`);
-    process.exit(1);
+    throw new CliExit(1);
   }
   return { ...hostCtx, tenantId: keyTenant };
 }
@@ -108,7 +109,7 @@ function cmdAuthRevoke(hippoRoot: string, tenantId: string, keyId: string, flags
     revokedAt = api.authRevoke(ctx, keyId).revokedAt;
   } catch (err) {
     printError(`Error: ${errorMessage(err)}`);
-    process.exit(1);
+    throw new CliExit(1);
   }
   if (flags['json']) {
     console.log(JSON.stringify({ keyId, revokedAt }));
@@ -125,7 +126,7 @@ function cmdAuthScopeGrant(hippoRoot: string, tenantId: string, keyId: string, s
     else api.authUngrant(ctx, keyId, scope);
   } catch (err) {
     printError(`Error: ${errorMessage(err)}`);
-    process.exit(1);
+    throw new CliExit(1);
   }
   if (flags['json']) {
     console.log(JSON.stringify({ keyId, scope, granted: grant }));
@@ -138,7 +139,7 @@ export function handleAuth({ hippoRoot, tenantId, args, flags }: CommandContext)
   const sub = args[0];
   if (!sub) {
     printError('Usage: hippo auth <create|list|revoke|grant|ungrant> [options]');
-    process.exit(1);
+    throw new CliExit(1);
   }
   const subArgs = args.slice(1);
   switch (sub) {
@@ -152,7 +153,7 @@ export function handleAuth({ hippoRoot, tenantId, args, flags }: CommandContext)
       const keyId = subArgs[0];
       if (!keyId) {
         printError('Usage: hippo auth revoke <key_id>');
-        process.exit(1);
+        throw new CliExit(1);
       }
       cmdAuthRevoke(hippoRoot, tenantId, keyId, flags);
       return;
@@ -162,13 +163,13 @@ export function handleAuth({ hippoRoot, tenantId, args, flags }: CommandContext)
       const [keyId, scope] = subArgs;
       if (!keyId || !scope) {
         printError(`Usage: hippo auth ${sub} <key_id> <scope>`);
-        process.exit(1);
+        throw new CliExit(1);
       }
       cmdAuthScopeGrant(hippoRoot, tenantId, keyId, scope, sub === 'grant', flags);
       return;
     }
     default:
       printError(`Unknown auth subcommand: ${sub}. Expected: create | list | revoke | grant | ungrant.`);
-      process.exit(1);
+      throw new CliExit(1);
   }
 }

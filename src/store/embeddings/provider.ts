@@ -62,6 +62,13 @@ const DEFAULT_API_BATCH_SIZE = 64;
 /** Per-request timeout for API embedding calls. A provider/proxy that accepts
  *  the connection but never responds must not hang embed/recall indefinitely. */
 const REQUEST_TIMEOUT_MS = 30_000;
+// Under a caller's deadline a longer Retry-After hands the reply back at once; the remote rerankers use the same cap.
+const DEADLINE_RETRY_WAIT_CAP_MS = 2_000;
+
+export interface EmbedCallOptions {
+  /** Ends the whole call when it aborts, every batch and retry included. The local provider runs in process and ignores it. */
+  signal?: AbortSignal;
+}
 
 export interface EmbeddingProvider {
   readonly kind: EmbeddingProviderKind;
@@ -82,7 +89,7 @@ export interface EmbeddingProvider {
    * single item could not be embedded. MAY throw on a hard transport/auth
    * failure (so a reindex aborts before saving a partial index).
    */
-  embed(texts: string[], role?: EmbeddingRole): Promise<number[][]>;
+  embed(texts: string[], role?: EmbeddingRole, call?: EmbedCallOptions): Promise<number[][]>;
 }
 
 // ---------------------------------------------------------------------------
@@ -244,7 +251,7 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
     return this.enabled && !!envByName(this.keyEnv)?.trim();
   }
 
-  async embed(texts: string[], role?: EmbeddingRole): Promise<number[][]> {
+  async embed(texts: string[], role?: EmbeddingRole, call: EmbedCallOptions = {}): Promise<number[][]> {
     if (texts.length === 0) return [];
     const key = envByName(this.keyEnv)?.trim();
     if (!key) {
@@ -258,15 +265,15 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
     const out: number[][] = [];
     for (let i = 0; i < texts.length; i += this.batchSize) {
       const chunk = texts.slice(i, i + this.batchSize);
-      const vecs = await this.embedChunk(chunk, key, role);
+      const vecs = await this.embedChunk(chunk, key, role, call.signal);
       for (const v of vecs) out.push(v.length > 0 ? l2normalize(v) : v);
     }
     return out;
   }
 
-  private async embedChunk(chunk: string[], key: string, role?: EmbeddingRole): Promise<number[][]> {
+  private async embedChunk(chunk: string[], key: string, role?: EmbeddingRole, signal?: AbortSignal): Promise<number[][]> {
     const spec = API_PROVIDER_SPECS[this.kind];
-    const resp = await this.postChunk(chunk, key, role);
+    const resp = await this.postChunk(chunk, key, role, signal);
     const json = await this.responseJson(resp, key, chunk.length);
 
     const vectors = spec.extractVectors(json);
@@ -287,7 +294,7 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
     return vectors;
   }
 
-  private async postChunk(chunk: string[], key: string, role?: EmbeddingRole): Promise<Response> {
+  private async postChunk(chunk: string[], key: string, role?: EmbeddingRole, signal?: AbortSignal): Promise<Response> {
     const spec = API_PROVIDER_SPECS[this.kind];
     const url = `${this.baseUrl.replace(/\/$/, '')}/${spec.path}`;
     try {
@@ -298,7 +305,13 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
           authorization: `Bearer ${key}`,
         },
         body: JSON.stringify(spec.buildBody(this.model, chunk.map(redactSecretsStrict), role)),
-      }, { timeoutMs: REQUEST_TIMEOUT_MS });
+        signal,
+      }, {
+        timeoutMs: REQUEST_TIMEOUT_MS,
+        // Embedding the same text twice changes nothing on the far side, so a dropped connection or a stalled attempt is replayed.
+        retryTransport: true,
+        maxDelayMs: signal ? DEADLINE_RETRY_WAIT_CAP_MS : undefined,
+      });
     } catch (err) {
       const msg = errorMessage(err);
       throw new Error(redact(`embedding request to ${this.kind} failed: ${msg}`, key), { cause: redactedCause(err, key) });

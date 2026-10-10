@@ -16,12 +16,17 @@
 
 import type { RememberOpts, RememberResult } from '../api/index.js';
 import { fetchWithRetry } from '../util/http-retry.js';
+import { readCappedJson } from '../util/capped-json.js';
+import { isJsonObject, isJsonString } from '../util/json.js';
 
 /** A write the local server has not answered in this long is stuck; the caller treats it as delivery-unknown. */
 const SERVER_TIMEOUT_MS = 30_000;
 
 /** Five tries at the server's 1 s Retry-After keeps the roughly 5 s wait the CLI had before the server answered busy with 503. */
 const STORE_BUSY_ATTEMPTS = 5;
+
+/** Every routed write answers with a few short fields; the pidfile's port may now be another process, so cap what it sends. */
+const MAX_REPLY_BYTES = 1024 * 1024;
 
 /** The server sets Retry-After on a 503 only for a held write lock (server.ts replyFor); the auth-provider 503 has none. */
 function isStoreBusy(res: Response): boolean {
@@ -38,10 +43,6 @@ function buildHeaders(apiKey: string | undefined, withBody: boolean) {
   if (withBody) headers['content-type'] = 'application/json';
   if (apiKey) headers['authorization'] = `Bearer ${apiKey}`;
   return headers;
-}
-
-function isNonEmptyString(value: string | undefined): value is string {
-  return typeof value === 'string' && value.length > 0;
 }
 
 /** An error the server answered with, not one the transport raised. The
@@ -63,14 +64,20 @@ export class HttpResponseError extends Error {
 async function throwForStatus(res: Response): Promise<never> {
   let message = `${res.status} ${res.statusText}`;
   try {
-    const body: { error?: string } = await res.json();
-    if (body && isNonEmptyString(body.error)) {
+    const body = await readCappedJson(res, MAX_REPLY_BYTES);
+    if (isJsonObject(body) && isJsonString(body.error) && body.error.length > 0) {
       message = body.error;
     }
   } catch {
-    // body wasn't JSON; fall back to status line.
+    // body wasn't JSON or ran past the cap; fall back to status line.
   }
   throw new HttpResponseError(message, res.status);
+}
+
+/** A 2xx reply's body, read under the cap. */
+async function readReply<T>(res: Response): Promise<T> {
+  // SAFETY: the reply comes from hippo's own server, whose route returns this api result as JSON.
+  return (await readCappedJson(res, MAX_REPLY_BYTES)) as T;
 }
 
 export async function remember(
@@ -84,8 +91,7 @@ export async function remember(
     body: JSON.stringify(opts),
   });
   if (!res.ok) await throwForStatus(res);
-  const result: RememberResult = await res.json();
-  return result;
+  return readReply<RememberResult>(res);
 }
 
 export async function forget(
@@ -98,8 +104,7 @@ export async function forget(
     headers: buildHeaders(apiKey, false),
   });
   if (!res.ok) await throwForStatus(res);
-  const result: { ok: true; id: string } = await res.json();
-  return result;
+  return readReply<{ ok: true; id: string }>(res);
 }
 
 export async function promote(
@@ -112,8 +117,7 @@ export async function promote(
     headers: buildHeaders(apiKey, false),
   });
   if (!res.ok) await throwForStatus(res);
-  const result: { ok: true; sourceId: string; globalId: string } = await res.json();
-  return result;
+  return readReply<{ ok: true; sourceId: string; globalId: string }>(res);
 }
 
 export async function archiveRaw(
@@ -128,8 +132,7 @@ export async function archiveRaw(
     body: JSON.stringify({ reason }),
   });
   if (!res.ok) await throwForStatus(res);
-  const result: { ok: true; archivedAt: string } = await res.json();
-  return result;
+  return readReply<{ ok: true; archivedAt: string }>(res);
 }
 
 /**

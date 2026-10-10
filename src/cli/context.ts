@@ -7,6 +7,7 @@ import { autoDetectContext } from '../api/context-auto.js';
 import { detectScope } from '../sharing/scope.js';
 import { bookLedgerTurn } from '../api/ledger-db.js';
 import { readHookStdin } from './stdin.js';
+import { isJsonObject, isJsonString, type JsonValue } from '../util/json.js';
 import * as api from '../api/index.js';
 import { resolveTenantId } from '../store/tenant.js';
 import { cliApiContext } from './api-context.js';
@@ -48,10 +49,11 @@ function readHookPayload(stdinText: string | undefined): HookPayload {
   let prompt: string | undefined;
   if (stdinText && stdinText.trim() !== '') {
     try {
-      // SAFETY: both fields are type-checked below before use; `?? {}` covers a JSON null payload.
-      const { session_id: sid, prompt: raw } = (JSON.parse(stdinText.trim()) ?? {}) as { session_id?: unknown; prompt?: unknown };
-      if (typeof sid === 'string' && sid.trim() !== '') sessionId = sid;
-      if (typeof raw === 'string') prompt = raw;
+      const payload: JsonValue = JSON.parse(stdinText.trim());
+      const sid = isJsonObject(payload) ? payload['session_id'] : undefined;
+      const raw = isJsonObject(payload) ? payload['prompt'] : undefined;
+      if (isJsonString(sid) && sid.trim() !== '') sessionId = sid;
+      if (isJsonString(raw)) prompt = raw;
     } catch {
       // Malformed/non-JSON stdin: fall through to the env fallback below.
     }

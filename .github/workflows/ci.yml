@@ -64,6 +64,8 @@ jobs:
         run: node scripts/check-size-ratchet.mjs
       - name: process.env read only through src/util/env.ts
         run: node scripts/check-env-reads.mjs
+      - name: process.exit only in the files check-process-exit lists
+        run: node scripts/check-process-exit.mjs
       - name: Store-port ratchet
         run: node scripts/check-store-port.mjs
       - name: Layer order ratchet
@@ -211,6 +213,11 @@ jobs:
           HIPPO_REQUIRE_CROSS_ENCODER: '1'
       - name: Micro-eval
         run: python3 benchmarks/micro/run.py --verbose
+      # The zero-dep `test` job skips these; a missing backend here fails instead.
+      - name: Embedding tests against the real backend
+        run: npx vitest run tests/lifecycle-stress.test.ts tests/global-row-embeddings.test.ts
+        env:
+          HIPPO_REQUIRE_EMBEDDINGS: '1'
       # After the micro-eval, which has fetched the embedding model into this folder by now on a cold cache too.
       - name: Embedding model from a local folder
         run: npx vitest run tests/embeddings/local-cache.test.ts

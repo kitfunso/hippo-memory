@@ -36,7 +36,7 @@ import { readyProbeFor } from './ready.js';
 import { installCrashHandlers, installSignalHandlers } from '../util/crash-handlers.js';
 import { handleMcpPost, handleMcpStream } from './mcp-http.js';
 import { MCP_PROJECT_SCOPED_HEADER } from '../core/project-identity.js';
-import { logRequestFailure, noteAccess, openRequest, parseRequest, rejectEncodedSlash, replyFor, sendError } from './request.js';
+import { accessRouteOf, logRequestFailure, noteAccess, openRequest, parseRequest, rejectEncodedSlash, replyFor, sendError } from './request.js';
 import { createListener, warnIfCleartext } from './tls.js';
 import { assertAddonRoutes, assertPublicJson, dispatchAddonRoute, dispatchPublicJson, dispatchV1Route, isPublicRoute } from './route-table.js';
 import type { AuthResolver, RateLimitSpec, ResolvedServeOpts, RouteRequest, ServeOpts, ServerHandle } from './types.js';
@@ -332,9 +332,25 @@ function replyWithFailure<E>(req: IncomingMessage, res: ServerResponse, err: E, 
 
 const HANDLER_LATE = 'the request did not finish by its deadline and was abandoned; a write it started may or may not be saved';
 
-// The caller already has its 504, so a second reply would be written into a finished response.
-function logLateFailure<E>(req: IncomingMessage, err: E): void {
-  log.debug(`${req.method ?? 'GET'} ${(req.url ?? '/').split('?')[0]} ended after its deadline reply: ${errorMessage(err)}`);
+// The caller already has its 504, so this line is the only trace of the failure. The path and the error text can hold caller data, so it carries neither.
+function logLateFailure<E>(req: IncomingMessage, err: E, requestId: string): void {
+  const fields = { requestId, method: req.method ?? 'GET', route: accessRouteOf(req), failureStatus: replyFor(err).status };
+  log.warn('request failed after its deadline reply', { ...fields, errorClass: errorFields(err).errorClass });
+}
+
+// A handler that ends after the 504 finds the response finished, so sending its own reply throws this: its work ran to the end.
+function isDroppedLateReply<E>(err: E): boolean {
+  return err instanceof Error && 'code' in err && err.code === 'ERR_HTTP_HEADERS_SENT';
+}
+
+/** A GET only reads; every other method this server routes can write. */
+const isRead = (method: string): boolean => method === 'GET';
+
+// A read that ends late changed nothing. A write that ends late ran to its end after its caller was told it may not have been saved.
+function logLateFinish(req: IncomingMessage, requestId: string): void {
+  const method = req.method ?? 'GET';
+  if (isRead(method)) return;
+  log.info('request finished after its deadline reply; its own reply was dropped', { requestId, method, route: accessRouteOf(req) });
 }
 
 function replyOrClose<E>(req: IncomingMessage, res: ServerResponse, err: E, requestId: string): void {
@@ -354,9 +370,12 @@ function answerRequest(req: IncomingMessage, res: ServerResponse, handle: () => 
   // Inside the scope, so the failure reply's log line carries the id too.
   runWithRequestId(requestId, () => {
     if (deadline) answerAtDeadline(res, deadline, () => replyOrClose(req, res, new DeadlineExceededError(HANDLER_LATE), requestId));
-    handle().catch(<E>(err: E) => {
-      if (isAbandoned(res)) logLateFailure(req, err);
-      else replyOrClose(req, res, err, requestId);
+    handle().then(() => {
+      if (isAbandoned(res)) logLateFinish(req, requestId);
+    }, <E>(err: E) => {
+      if (!isAbandoned(res)) replyOrClose(req, res, err, requestId);
+      else if (isDroppedLateReply(err)) logLateFinish(req, requestId);
+      else logLateFailure(req, err, requestId);
     });
   }, deadline);
 }

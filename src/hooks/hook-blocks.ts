@@ -7,7 +7,18 @@ export const HOOK_MARKERS = {
   end: '<!-- hippo:end -->',
 };
 
-export const HOOKS: Record<string, { file: string; content: string; description: string }> = {
+export interface HookSpec {
+  file: string;
+  content: string;
+  description: string;
+}
+
+// Keyed by agent name; callers look an agent up by a string they were given.
+export interface HookTable {
+  [agent: string]: HookSpec;
+}
+
+export const HOOKS: HookTable = {
   'claude-code': {
     file: 'CLAUDE.md',
     description: 'Claude Code',

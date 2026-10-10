@@ -29,8 +29,10 @@ import { printError } from './output.js';
 import { parseCountFlag, type CommandContext, stringFlagOrExit, flagIsTrue } from './flag-values.js';
 import { requireInit, resolveAuthRoot } from './shared.js';
 import { fmt } from './print.js';
+import { isJsonObject } from '../util/json.js';
 import { hookStoreRoot } from './hook-runtime.js';
 import { DAY_MS } from '../util/time.js';
+import { CliExit } from './exit.js';
 
 export function handleStatus({ hippoRoot }: CommandContext): void {
   requireInit(hippoRoot);
@@ -58,14 +60,14 @@ export function handleStatus({ hippoRoot }: CommandContext): void {
   console.log(`  Stale:           ${byConfidence['stale'] ?? 0}`);
   console.log(`  Aged out:        ${agedOut}  (of the above; excludes pinned, verified)`);
   console.log('');
-  console.log(`Total remembered:  ${(stats as Record<string,number>)['total_remembered'] ?? 0}`);
-  console.log(`Total recalled:    ${(stats as Record<string,number>)['total_recalled'] ?? 0}`);
-  console.log(`Total forgotten:   ${(stats as Record<string,number>)['total_forgotten'] ?? 0}`);
+  console.log(`Total remembered:  ${stats.total_remembered ?? 0}`);
+  console.log(`Total recalled:    ${stats.total_recalled ?? 0}`);
+  console.log(`Total forgotten:   ${stats.total_forgotten ?? 0}`);
 
-  const runs = (stats as Record<string, unknown[]>)['consolidation_runs'] ?? [];
+  const runs = stats.consolidation_runs ?? [];
   if (Array.isArray(runs) && runs.length > 0) {
-    const last = runs[runs.length - 1] as Record<string, unknown>;
-    console.log(`Last sleep:        ${last['timestamp']}`);
+    const last = runs[runs.length - 1];
+    console.log(`Last sleep:        ${isJsonObject(last) ? last['timestamp'] : undefined}`);
   } else {
     console.log(`Last sleep:        never`);
   }
@@ -140,7 +142,7 @@ function cmdInspect(hippoRoot: string, tenantId: string, id: string): void {
   const entry = readEntry(hippoRoot, id, tenantId);
   if (!entry) {
     printError(`Memory not found: ${id}`);
-    process.exit(1);
+    throw new CliExit(1);
   }
 
   const now = evalNow();
@@ -309,7 +311,7 @@ export function handleProvenance({ hippoRoot, flags }: CommandContext): void {
     }
   }
   if (flags['strict'] && coverage.coverage < 1) {
-    process.exit(1);
+    throw new CliExit(1);
   }
 }
 
@@ -318,14 +320,14 @@ export function handleDoctor({ flags }: CommandContext): void {
   const pkg = JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'package.json'), 'utf-8')) as { version: string };
   const report = runDoctor({ version: pkg.version });
   console.log(flags['json'] ? JSON.stringify(report, null, 2) : formatDoctor(report));
-  if (!report.ok) process.exit(1);
+  if (!report.ok) throw new CliExit(1);
 }
 
 export function handleSupportBundle({ flags }: CommandContext): void {
   const outFlag = stringFlagOrExit(flags, 'out');
   if (outFlag === '') {
     printError('--out requires a file path.');
-    process.exit(1);
+    throw new CliExit(1);
   }
   const includeLogs = flagIsTrue(flags, 'include-logs');
   const home = envHomeDir() || os.homedir();
@@ -342,7 +344,7 @@ export function handleSupportBundle({ flags }: CommandContext): void {
     } else {
       printError(errorMessage(err));
     }
-    process.exit(1);
+    throw new CliExit(1);
   }
   const kb = Math.round(Buffer.byteLength(json) / 1024);
   console.log(`Wrote ${file} (${kb} KB).`);
@@ -355,7 +357,7 @@ export function handleInspect({ hippoRoot, tenantId, args }: CommandContext): vo
   const id = args[0];
   if (!id) {
     printError('Please provide a memory ID.');
-    process.exit(1);
+    throw new CliExit(1);
   }
   cmdInspect(hippoRoot, tenantId, id);
 }
