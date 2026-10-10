@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { listRollouts } from '../scripts/token-eval/codex-rollout.mjs';
 import { cleanup, makeRepo, readLedger, find, runRoot } from './fixtures/z0-harness.js';
-import { xRun, xTrio, xIsolate, xRecords, fakeSeen, filesHolding, vaultsHolding } from './fixtures/z0-codex-harness.js';
+import { xRun, xTrio, xIsolate, xRecords, xLimit, fakeSeen, filesHolding, vaultsHolding } from './fixtures/z0-codex-harness.js';
 import type { Operator } from './fixtures/z0-codex-harness.js';
 
 afterEach(cleanup);
@@ -36,7 +36,7 @@ describe('limit retry in a Codex apply (test 16)', () => {
     const seen = fakeSeen(codexLog);
     expect(seen[1].authSha).not.toBeNull();
     expect(seen[1].authSha).toBe(seen[0].authSha);
-  }, 240_000);
+  }, xLimit());
 });
 
 describe('limit text on stdout in X2 (test 16)', () => {
@@ -45,7 +45,7 @@ describe('limit text on stdout in X2 (test 16)', () => {
     await xRun(xTrio(makeRepo(), { 'a-xa': 'NOISE' }), ['X2'], out, op, { limitWaitMs: 0 });
     const a = find(records(out), 'X2', 'a-xa');
     expect([a.invalid, a.limitRetries, a.usage?.firstSession.inputTokens]).toEqual([null, 0, 500]);
-  }, 240_000);
+  }, xLimit());
 });
 
 describe('timeout in a Codex apply (test 21)', () => {
@@ -55,20 +55,21 @@ describe('timeout in a Codex apply (test 21)', () => {
     const a = find(records(out), 'X1', 'a-xa');
     expect([a.invalid, a.timedOut]).toEqual([null, true]);
     expect(a.usage?.firstSession).toEqual({ inputTokens: 500, cacheWriteTokens: 0, cacheReadTokens: 200, outputTokens: 40 });
-  }, 240_000);
+  }, xLimit());
 });
 
 describe('memory wait and memories switch through the runner (tests 13, 14)', () => {
   it('records the wait, leaves it out of wallMs, and records memories off', async () => {
     const { out, op, codexLog } = xIsolate('wait');
-    await xRun(xTrio(makeRepo(), { 'a-xa': 'MEMWRITE:300' }), ['X1'], out, op, { codexMemoryWait: 'poll:5000:30000', codexMemories: 'off' });
+    // Writes for 20 s keep one cell's wait long, so wallMs < wait shows the wait is left out without racing that cell's git checks under load.
+    await xRun(xTrio(makeRepo(), { 'a-xa': 'MEMWRITE:500x40' }), ['X1'], out, op, { codexMemoryWait: 'poll:3000:60000', codexMemories: 'off' });
     const a = find(records(out), 'X1', 'a-xa');
-    expect(a.codexMemoryWait?.ms).toBeGreaterThanOrEqual(5000);
+    expect(a.codexMemoryWait?.ms).toBeGreaterThanOrEqual(8000);
     expect(a.codexMemoryWait?.timedOut).toBe(false);
     expect(a.wallMs).toBeLessThan(a.codexMemoryWait?.ms ?? 0);
     expect(a.codexMemories).toBe(false);
     expect(fakeSeen(codexLog)[0].config).toContain('memories = false');
-  }, 240_000);
+  }, xLimit());
 });
 
 describe('the login never outlives the run (test 15)', () => {
@@ -78,7 +79,7 @@ describe('the login never outlives the run (test 15)', () => {
     await expect(xRun(xTrio(makeRepo(), { 'a-xa': 'PRINT_AUTH' }), ['X1'], out, op)).rejects.toThrow(/login token/);
     expect(records(out)).toHaveLength(3);
     noTokenLeft(out, op, before);
-  }, 240_000);
+  }, xLimit());
 
   it('deletes Codex own token files, and the final sweep finds a token left outside every cell root', async () => {
     const { out, op } = xIsolate('final');
@@ -87,7 +88,7 @@ describe('the login never outlives the run (test 15)', () => {
     await expect(run).rejects.toThrow(/leak-out\.txt/);
     expect(records(out)).toHaveLength(9);
     noTokenLeft(out, op, before);
-  }, 240_000);
+  }, xLimit());
 });
 
 describe('setup faults stop the run with no record (tests 26, 27)', () => {
@@ -96,12 +97,12 @@ describe('setup faults stop the run with no record (tests 26, 27)', () => {
     await expect(xRun(xTrio(makeRepo(), { 'a-xa': 'AUTH_FAIL' }), ['X1'], out, op)).rejects.toThrow(/login failed/);
     expect(records(out).map((r) => r.taskId)).toEqual(['t-xa', 't-xb', 't-xc']);
     expect(vaultsHolding(op.tokens)).toEqual([]);
-  }, 240_000);
+  }, xLimit());
 
   it('stops when a Codex session called an MCP or app tool', async () => {
     const { out, op } = xIsolate('mcp');
     await expect(xRun(xTrio(makeRepo(), { 'a-xa': 'MCP_TOOL' }), ['X1'], out, op)).rejects.toThrow(/MCP or app tools/);
     expect(records(out).some((r) => r.taskId === 'a-xa')).toBe(false);
     expect(vaultsHolding(op.tokens)).toEqual([]);
-  }, 240_000);
+  }, xLimit());
 });

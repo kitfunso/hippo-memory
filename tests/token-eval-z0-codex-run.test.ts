@@ -7,7 +7,7 @@ import { cacheTaskRepos } from '../scripts/token-eval/runs.mjs';
 import { STUB_CLAUDE_MD, X3_STUB, stubRefOf, checkoutBase } from '../scripts/token-eval/workspace.mjs';
 import { parseZ0Records } from '../scripts/token-eval/z0-records.mjs';
 import { cleanup, makeRepo, lesson, family, teach, apply, find, logLines, runRoot, workDir, tmp } from './fixtures/z0-harness.js';
-import { xSpec, xRun, xTrio, xIsolate, xRecords, fakeSeen, X_IDS } from './fixtures/z0-codex-harness.js';
+import { xSpec, xRun, xTrio, xIsolate, xRecords, xLimit, fakeSeen, X_IDS } from './fixtures/z0-codex-harness.js';
 
 afterEach(cleanup);
 
@@ -43,7 +43,7 @@ describe('set X end to end (test 6)', () => {
       expect(x.argv.slice(0, 4)).toEqual(['exec', '--json', '--model', 'gpt-fake']);
       expect(x.home).toBe(join(runRoot(out, 'X1'), 'home'));
     }
-  }, 240_000);
+  }, xLimit());
 });
 
 describe('what carries from a Claude teach to a Codex apply (test 7)', () => {
@@ -57,7 +57,7 @@ describe('what carries from a Claude teach to a Codex apply (test 7)', () => {
     expect(seen.every((x) => (x.agents ?? '').includes('the zq-xa-l1 rule'))).toBe(true);
     expect(find(recs, 'X1', 'a-xa').chain).toMatchObject({ stored: true, shown: true });
     expect(find(recs, 'X1', 'a-xb').chain).toMatchObject({ stored: true, shown: false });
-  }, 240_000);
+  }, xLimit());
 });
 
 describe('X3 stub (test 8)', () => {
@@ -87,7 +87,7 @@ describe('X3 stub (test 8)', () => {
     await xRun(xTrio(r), ['X1'], x1.out, x1.op);
     const stubRef = (o: string, arm: string) => JSON.parse(readFileSync(join(o, 'grading', 'seqF', arm, 'seed1', 'a-xa.grade.json'), 'utf8')).stubRef;
     expect([stubRef(out, 'X3'), stubRef(x1.out, 'X1')]).toEqual(['refs/eval-x3/seqF/a-xa', 'refs/eval/seqF/a-xa']);
-  }, 240_000);
+  }, xLimit(2));
 
   it('refuses a key phrase that only the X3 stub holds', () => {
     const r = makeRepo();
@@ -127,7 +127,7 @@ describe('X4 block (test 9)', () => {
       expect(text.split('<!-- z0 taught -->').length - 1).toBe(1);
       expect(text.split('<!-- /z0 taught -->').length - 1).toBe(1);
     }
-  }, 240_000);
+  }, xLimit());
 });
 
 describe('bias (test 22)', () => {
@@ -145,5 +145,5 @@ describe('bias (test 22)', () => {
     const ok = await fields('bias-ok', 'LESSON_OK');
     expect(ok.tool).toBe('codex');
     expect(ok).toEqual(await fields('bias-bad', 'LESSON_BAD'));
-  }, 240_000);
+  }, xLimit(2));
 });

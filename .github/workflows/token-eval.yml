@@ -34,11 +34,18 @@ concurrency:
 
 jobs:
   token-eval:
-    name: token-eval (${{ matrix.os }})
+    name: token-eval (${{ matrix.os }}, ${{ matrix.part.name }})
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
+        # One Codex file per runner: each runs set X end to end many times, and together they overran one 30-minute job.
+        part:
+          - { name: harness, args: --project harness }
+          - { name: codex 1/4, args: --project codex --shard=1/4 }
+          - { name: codex 2/4, args: --project codex --shard=2/4 }
+          - { name: codex 3/4, args: --project codex --shard=3/4 }
+          - { name: codex 4/4, args: --project codex --shard=4/4 }
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     steps:
@@ -61,4 +68,4 @@ jobs:
       - name: Vitest
         # Bash on Windows too, so the `--` reaches npm; four workers there, as in ci.yml's suite job.
         shell: bash
-        run: npm run test:eval -- ${{ runner.os == 'Windows' && '--maxWorkers=4' || '' }}
+        run: npm run test:eval -- ${{ matrix.part.args }} ${{ runner.os == 'Windows' && '--maxWorkers=4' || '' }}

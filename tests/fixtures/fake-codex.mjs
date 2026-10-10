@@ -181,12 +181,12 @@ function hookLines() {
   });
 }
 
-/** MEMWRITE:<ms>: a detached child writes the v1 memory summary after the session has ended. */
+/** MEMWRITE:<ms>[x<n>]: a detached child appends to the v1 memory summary n times (default 1), ms apart, from after the session has ended. */
 function memWrite() {
-  const ms = /MEMWRITE:(\d+)/.exec(prompt)?.[1];
-  if (!ms) return;
+  const m = /MEMWRITE:(\d+)(?:x(\d+))?/.exec(prompt);
+  if (!m) return;
   const file = path.join(HOME, 'memories', 'memory_summary.md');
-  const code = `setTimeout(()=>{const fs=require('fs');fs.mkdirSync(${JSON.stringify(path.dirname(file))},{recursive:true});fs.writeFileSync(${JSON.stringify(file)},'summary\\n');},${Number(ms)});`;
+  const code = `const fs=require('fs');let n=${Number(m[2] ?? 1)};const t=setInterval(()=>{fs.mkdirSync(${JSON.stringify(path.dirname(file))},{recursive:true});fs.appendFileSync(${JSON.stringify(file)},'summary\\n');if(--n<=0)clearInterval(t);},${Number(m[1])});`;
   spawn(process.execPath, ['-e', code], { detached: true, stdio: 'ignore' }).unref();
 }
 

@@ -101,6 +101,9 @@ export function xTrio(r: FixtureRepo, prompts: Record<string, string> = {}) {
   return xSpec(r, X_IDS.map(xFamily), tasks);
 }
 
+/** A test's limit for `runs` xRun calls: a hang guard, since the runner's git hardening makes one run slow on Windows and slower under load. */
+export const xLimit = (runs = 1) => runs * 480_000;
+
 /** runAll over fake-claude teaches and fake-codex applies, with the operator's launcher and login and no memory wait. */
 export async function xRun(s: ReturnType<typeof xSpec>, arms: string[], out: string, op: Operator, extra: RunExtra & CodexOpts = {}) {
   return runAll({

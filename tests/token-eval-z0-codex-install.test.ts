@@ -8,7 +8,7 @@ import { closeVault } from '../scripts/token-eval/codex-auth.mjs';
 import { checkHomes, runDirs } from '../scripts/token-eval/homes.mjs';
 import { HIPPO_JS, pathKey } from '../scripts/token-eval/exec.mjs';
 import { cleanup, tmp, isolate, makeRepo, find } from './fixtures/z0-harness.js';
-import { operator, wrapOperator, codexCtx, codexRun, xRun, xTrio, xIsolate, xRecords, fakeSeen } from './fixtures/z0-codex-harness.js';
+import { operator, wrapOperator, codexCtx, codexRun, xRun, xTrio, xIsolate, xRecords, xLimit, fakeSeen } from './fixtures/z0-codex-harness.js';
 import type { CodexCtx, CodexOpts } from './fixtures/z0-codex-harness.js';
 
 afterEach(cleanup);
@@ -168,7 +168,7 @@ describe('the hook trust seam (test 12)', () => {
     expect([a.invalid, a.codexHookTrust, a.codexHooksFired?.injections]).toEqual([null, 'none', 0]);
     const seen = fakeSeen(codexLog);
     expect(seen.some((s) => s.config?.includes('hooks.state') || s.argv.includes('--dangerously-bypass-hook-trust'))).toBe(false);
-  }, 240_000);
+  }, xLimit());
 
   it('file: the same trust text, with each run\'s own hooks.json path, is in all four X arms\' config.toml', () => {
     const { ctx, out } = setup('trustfile', { codexHookTrust: `file:${trustFile()}` });
@@ -188,7 +188,7 @@ describe('the hook trust seam (test 12)', () => {
     const a = find(xRecords(out), 'X2', 'a-xa');
     expect([a.invalid, a.void, a.codexHookTrust]).toEqual([null, null, 'file']);
     expect(a.codexHooksFired?.injections).toBeGreaterThanOrEqual(1);
-  }, 240_000);
+  }, xLimit());
 
   it('flag: every Codex session gets the bypass flag, and hippo\'s hooks fire in X2', async () => {
     const { out, op, codexLog } = xIsolate('trustflag');
@@ -199,7 +199,7 @@ describe('the hook trust seam (test 12)', () => {
     const seen = fakeSeen(codexLog);
     expect(seen.length).toBeGreaterThan(0);
     expect(seen.every((s) => s.argv.includes('--dangerously-bypass-hook-trust'))).toBe(true);
-  }, 240_000);
+  }, xLimit());
 });
 
 describe('--check-homes on an X2 run after the install (test 20)', () => {

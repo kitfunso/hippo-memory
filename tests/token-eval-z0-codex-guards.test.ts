@@ -3,7 +3,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { cleanup, makeRepo, find, tmp } from './fixtures/z0-harness.js';
-import { xRun, xTrio, xIsolate, xRecords } from './fixtures/z0-codex-harness.js';
+import { xRun, xTrio, xIsolate, xRecords, xLimit } from './fixtures/z0-codex-harness.js';
 import type { XRecord } from './fixtures/z0-codex-harness.js';
 
 afterEach(cleanup);
@@ -30,14 +30,14 @@ describe('G1 on a Codex apply (test 17)', () => {
     const b = find(recs, 'X1', 'a-xb');
     expect(b.voidHits?.map((h) => `${h.reason}/${h.class}`)).toEqual(['read/transcript-content', 'hippo-text/hook', 'hippo-text/rollout']);
     expect(find(recs, 'X1', 'a-xc').void).toBeNull();
-  }, 240_000);
+  }, xLimit());
 
   it('does not void a hippo hook context in X2', async () => {
     const { out, op } = xIsolate('g1x2');
     await xRun(xTrio(makeRepo(), { 'a-xb': 'HOOKCTX:<!-- hippo:start --> hint' }), ['X2'], out, op);
     const b = find(xRecords(out), 'X2', 'a-xb');
     expect([b.tool, b.void, b.voidHits ?? []]).toEqual(['codex', null, []]);
-  }, 240_000);
+  }, xLimit());
 });
 
 describe('G3 on Codex state (test 18)', () => {
@@ -51,7 +51,7 @@ describe('G3 on Codex state (test 18)', () => {
     expect(t.leakHits?.map((h) => [h.lessonId, h.surface])).toEqual([['xb-l1', 'codexState']]);
     expect(t.leakHits?.[0].path).toMatch(/memories_1\.sqlite/);
     expect(['t-xc', 'a-xa', 'b-xc'].map((id) => find(recs, 'X1', id).invalid)).toEqual(['leak', 'leak', 'leak']);
-  }, 240_000);
+  }, xLimit());
 
   it('finds a key phrase planted in the run\'s codex-home memories before the teach', async () => {
     const { out, op } = xIsolate('g3mem');
@@ -62,14 +62,14 @@ describe('G3 on Codex state (test 18)', () => {
     expect(t.invalid).toBe('leak');
     expect(t.leakHits?.map((h) => [h.lessonId, h.surface])).toEqual([['xb-l1', 'codexMemories']]);
     expect(['a-xa', 'b-xc'].map((id) => find(recs, 'X1', id).invalid)).toEqual(['leak', 'leak']);
-  }, 240_000);
+  }, xLimit());
 
   it('counts a key phrase in a memories database WAL file in the stored check', async () => {
     const { out, op } = xIsolate('storedwal');
     const prompts = { 't-xa': `LESSON_BAD\nAPPEND:{RUN}/codex-home/memories_1.sqlite-wal:{B64:${b64('the zq-xa-l1 rule')}}` };
     await xRun(xTrio(makeRepo(), prompts), ['X1'], out, op);
     expect(find(xRecords(out), 'X1', 'a-xa').chain).toMatchObject({ stored: true, shown: false });
-  }, 240_000);
+  }, xLimit());
 });
 
 describe('the X2 chain (test 19)', () => {
@@ -80,7 +80,7 @@ describe('the X2 chain (test 19)', () => {
     const a = find(xRecords(out), 'X2', 'a-xa');
     expect([a.tool, a.invalid, a.void]).toEqual(['codex', null, null]);
     expect(a.chain).toMatchObject({ captured: true, shown: true });
-  }, 240_000);
+  }, xLimit());
 
   it('counts hook rows for the Codex thread and reads the wrapper\'s digest line for it', async () => {
     const { out, op } = xIsolate('x2hooks');
@@ -93,7 +93,7 @@ describe('the X2 chain (test 19)', () => {
     const b = find(recs, 'X2', 'b-xa');
     expect([b.codexHooksFired?.injections, b.codexWrapperCaptured]).toEqual([0, false]);
     expect(b.codexWrapperWait?.end).toBe('digest: skip: no final message and no edits');
-  }, 240_000);
+  }, xLimit());
 });
 
 describe('rollout classes through the runner (test 25)', () => {
@@ -116,7 +116,7 @@ describe('rollout classes through the runner (test 25)', () => {
     expect(find(recs, 'X1', 'b-xb').void).toBe('operator-canary');
     // X1 has no wrapper log and no hippo store.
     expect(recs.filter((r) => r.tool === 'codex').map((r) => [r.codexWrapperCaptured, r.codexHooksFired])).toEqual(Array(6).fill([false, null]));
-  }, 240_000);
+  }, xLimit());
 
   it('counts the child thread\'s hook row in codexHooksFired and a memory thread\'s apart', async () => {
     const { out, op } = xIsolate('classhooks');
@@ -127,5 +127,5 @@ describe('rollout classes through the runner (test 25)', () => {
     expect([a.codexHooksFired?.injections, a.codexInternalHooksFired]).toEqual([2, null]);
     const m = find(recs, 'X2', 'b-xa');
     expect([m.codexHooksFired?.injections, m.codexInternalHooksFired?.injections]).toEqual([0, 1]);
-  }, 240_000);
+  }, xLimit());
 });
