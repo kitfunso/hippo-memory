@@ -71,6 +71,7 @@ describe('memory wait and memories switch through the runner (tests 13, 14)', ()
     const starts = readFileSync(join(out, 'runs.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).map((rec) => [rec.taskId, Date.parse(rec.startedAt)] as const);
     const aStart = starts.find(([id]) => id === 'a-xa')![1];
     const stepMs = Math.min(...starts.map(([, t]) => t).filter((t) => t > aStart)) - aStart;
+    expect(Number.isFinite(stepMs)).toBe(true);
     const wallMs = a.wallMs ?? -1;
     expect(Number.isInteger(wallMs) && wallMs >= 0).toBe(true);
     expect(wallMs + waitMs).toBeLessThanOrEqual(stepMs);
