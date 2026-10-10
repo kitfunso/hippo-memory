@@ -51,7 +51,6 @@ function loadSession(db, tenant, session, storeHash, notes) {
 function splitRows(rows, targetCands, notes) {
   const mains = [];
   const dups = new Map();
-  const kept = new Set(rows.map((r) => r.id));
   const compactIds = [];
   for (const r of rows) {
     if (r.session_state === 'subagent') {
@@ -62,13 +61,17 @@ function splitRows(rows, targetCands, notes) {
       compactIds.push(r.id);
       notes.push(`${r.event_type}:${r.id}`);
     } else if (r.duplicate_of !== null) {
-      if (!kept.has(r.duplicate_of)) notes.push(`orphan-duplicate:${r.id}`);
       dups.set(r.duplicate_of, [...(dups.get(r.duplicate_of) ?? []), r]);
     } else if (r.turn_seq !== null || r.event_type !== 'prompt-submit') {
       mains.push(r);
     } else {
       notes.push(`unnumbered:${r.id}`);
     }
+  }
+  // Only a main row owns a group, so a duplicate of any other row is dropped and noted.
+  const mainIds = new Set(mains.map((r) => r.id));
+  for (const [original, list] of dups) {
+    if (!mainIds.has(original)) for (const r of list) notes.push(`orphan-duplicate:${r.id}`);
   }
   return { mains, dups, compactIds };
 }
@@ -278,6 +281,7 @@ function foldSession(env, { rows, targetCands, opts, base }) {
   env.done = new Map();
   env.parsed = opts.transcript === undefined ? null : parseTranscript(fs.readFileSync(opts.transcript, 'utf8'), base.session);
   if (env.parsed?.foreign > 0) base.notes.push(`transcript-foreign-lines:${env.parsed.foreign}`);
+  if (env.parsed?.skipped.length > 0) base.notes.push(`transcript-skipped-lines:${env.parsed.skipped.length}`);
   env.pairs = new Map();
   let gaps = [];
   if (env.parsed) {

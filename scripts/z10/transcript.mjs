@@ -40,6 +40,10 @@ export function parseTranscript(text, session) {
       skipped.push(pos);
       return;
     }
+    if (!(line instanceof Object) || Array.isArray(line)) {
+      skipped.push(pos);
+      return;
+    }
     if (session !== undefined && isText(line?.sessionId) && line.sessionId !== session) {
       foreign++;
     } else if (line.type === 'system' && line.subtype === 'compact_boundary') {

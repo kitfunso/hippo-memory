@@ -12,7 +12,7 @@ import { writeDeliveryEventOnHandle } from '../src/store/recall-trace.js';
 import type { DeliveryCandidateInput, DeliveryEventInput, DeliveryRejectReason, DeliveryStage } from '../src/store/delivery-recorder.js';
 import { blockHash } from '../src/util/token-text.js';
 import type { JsonValue } from '../src/util/json.js';
-import { seed, verdictOf, writeHostTranscript, type ReadOpts } from './_helpers/host-transcript.js';
+import { seed, verdictOf, writeHostTranscript, type ReadOpts, type Verdict } from './_helpers/host-transcript.js';
 import type { Project } from './_helpers/delivery-boundary.js';
 import { parseTranscript } from '../scripts/z10/transcript.mjs';
 
@@ -229,6 +229,21 @@ describe('fold edge cases', () => {
     expect(v.notes).toEqual([`foreign-store:${a}`, `orphan-duplicate:${b}`]);
   });
 
+  it('R23 a duplicate of a row that is not a main row is noted (the writer cannot produce the pair, so one UPDATE unnumbers the original)', () => {
+    const m = present();
+    const promptHash = blockHash('one prompt fired twice');
+    const t = Date.parse('2026-10-02T00:00:00.000Z');
+    const a = write(event('r23', { ts: new Date(t).toISOString(), promptHash, candidates: [row(m.id)] }));
+    const b = write(event('r23', { ts: new Date(t + 500).toISOString(), promptHash, candidates: [row(m.id)] }));
+    const db = new DatabaseSync(path.join(dir, 'hippo.db'));
+    const raw = () => db.prepare('SELECT id, turn_seq, duplicate_of, session_state FROM delivery_events ORDER BY id').all().map((r) => [r.id, r.turn_seq, r.duplicate_of, r.session_state]);
+    expect(raw()).toEqual([[a, 1, null, 'payload'], [b, null, a, 'payload']]);
+    db.prepare('UPDATE delivery_events SET turn_seq = NULL WHERE id = ?').run(a);
+    expect(raw()).toEqual([[a, null, null, 'payload'], [b, null, a, 'payload']]);
+    db.close();
+    expect(read('r23', m.id).notes).toEqual([`unnumbered:${a}`, `orphan-duplicate:${b}`]);
+  });
+
   it('R11 label validation: bad fields, other sessions and duplicates', () => {
     const m = present();
     const block = 'the block that was sent';
@@ -270,6 +285,29 @@ ${hook}
     expect(foreign.turns[0].delivery).toBe('unconfirmed');
     const own = read('r18', m.id, { transcript: file('own', 'r18') });
     expect([own.class, own.notes, own.turns[0].delivery]).toEqual(['application-unknown', [], 'confirmed']);
+  });
+
+  it('R22 torn and non-object transcript lines are skipped and noted, and a torn attachment reads unconfirmed', () => {
+    const m = present();
+    const block = 'the block that was sent';
+    write(event('r22', { promptHash: blockHash('a prompt'), emittedHash: blockHash(block), candidates: [row(m.id)] }));
+    const user = JSON.stringify({ type: 'user', message: { role: 'user', content: 'a prompt' } });
+    const hook = JSON.stringify({ type: 'attachment', attachment: { type: 'hook_additional_context', content: [block], hookName: 'UserPromptSubmit', hookEvent: 'UserPromptSubmit' } });
+    const file = (name: string, ...lines: string[]): string => {
+      const f = path.join(dir, `${name}.jsonl`);
+      fs.writeFileSync(f, `${lines.join('\n')}\n`);
+      return f;
+    };
+    const fields = (v: Verdict) => [v.class, v.turn, v.turns[0].delivery];
+    const clean = read('r22', m.id, { transcript: file('clean', user, hook) });
+    expect(clean.class).toBe('application-unknown');
+    expect(clean.notes.some((n: string) => n.startsWith('transcript-skipped-lines'))).toBe(false);
+    const noisy = read('r22', m.id, { transcript: file('noisy', '{"type":"user",', user, 'null', hook) });
+    expect(fields(noisy)).toEqual(fields(clean));
+    expect(noisy.notes).toContain('transcript-skipped-lines:2');
+    const torn = read('r22', m.id, { transcript: file('torn', user, hook.slice(0, hook.length / 2)) });
+    expect(torn.class).toBe('delivery-unconfirmed');
+    expect(torn.notes).toContain('transcript-skipped-lines:1');
   });
 
   it('R15 a sent turn whose prompt hash and attachment match no transcript prompt is delivery-unconfirmed no-paired-prompt', () => {
