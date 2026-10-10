@@ -9,6 +9,7 @@ import { codexArgs, resolveCodex, runCodexSession } from '../scripts/token-eval/
 import { codexAdapter, parseRollouts } from '../scripts/token-eval/codex-rollout.mjs';
 import { tokenSweep, closeVault } from '../scripts/token-eval/codex-auth.mjs';
 import { codexPreflight, chooseArms } from '../scripts/token-eval/ab-run.mjs';
+import { foldPath } from '../scripts/token-eval/readcheck.mjs';
 import { cleanup, tmp, isolate, makeRepo } from './fixtures/z0-harness.js';
 import { operator, wrapOperator, codexCtx, codexRun, xTask, fakeSeen, filesHolding, xTrio } from './fixtures/z0-codex-harness.js';
 import type { CodexCtx, CodexOpts } from './fixtures/z0-codex-harness.js';
@@ -108,7 +109,8 @@ describe('the rollout parser (test 5)', () => {
       const commands = codexAdapter.commandLog(s.rollouts.agent);
       expect(commands.map((c: string) => c.replace(/".*[\\/]/, '"'))).toEqual(['cat "lib.js"', 'cat "x.txt"']);
       const tools = codexAdapter.toolInputs(s.rollouts.agent);
-      expect(tools.every((x: { input: { cwd: string } }) => x.input.cwd === run.dirs.work), form).toBe(true);
+      // Folded as G1 compares it: the fake reports process.cwd(), which macOS resolves past the /var link.
+      expect(tools.every((x: { input: { cwd: string } }) => foldPath(x.input.cwd) === foldPath(run.dirs.work)), form).toBe(true);
       expect(codexAdapter.toolResultTexts(s.rollouts.agent).map((o: { text: string }) => o.text)[1]).toMatch(/No such file/);
     }
   });
