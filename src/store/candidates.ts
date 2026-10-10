@@ -209,24 +209,31 @@ function* contentsOf(rows: Iterable<{ content: string }>): Generator<string> {
   for (const row of rows) yield row.content;
 }
 
-/** computeSchemaFit against every row of a tenant: tag counts come from one aggregate and texts stream one column, so no row is loaded. */
+/** How many of a tenant's newest rows schemaFitInStore reads; older rows no longer move the fit. */
+const SCHEMA_FIT_WINDOW_ROWS = 2000;
+
+/** computeSchemaFit against a tenant's newest SCHEMA_FIT_WINDOW_ROWS rows: tag counts come from one aggregate
+ * and texts stream one column, so no row is loaded. */
 export function schemaFitInStore(hippoRoot: string, tenantId: string, content: string, tags: readonly string[]): number {
+  const newest = 'SELECT tags_json, content FROM memories WHERE tenant_id = ? ORDER BY created DESC, id DESC LIMIT ?';
   return onHandle(hippoRoot, (db) => {
     // One read transaction, so the row count and the texts come from the same snapshot.
     return withReadSnapshot(db, () => {
       // SAFETY: rows' shape matches the two columns named in the SELECT.
       const groups = db.prepare(
-        'SELECT tags_json, COUNT(*) AS n FROM memories WHERE tenant_id = ? GROUP BY tags_json',
-      ).all(tenantId) as Array<{ tags_json: string | null; n: number }>;
+        `SELECT tags_json, COUNT(*) AS n FROM (${newest}) GROUP BY tags_json`,
+      ).all(tenantId, SCHEMA_FIT_WINDOW_ROWS) as Array<{ tags_json: string | null; n: number }>;
       let rows = 0;
       const tagCounts = new Map<string, number>();
       for (const group of groups) {
         rows += group.n;
         for (const tag of parseJsonArray(group.tags_json)) tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + group.n);
       }
-      // SHORTCUT: the text walk visits rows until a tenth of the tenant matches; a stored token count per tenant is the upgrade.
+      // SHORTCUT: only the newest SCHEMA_FIT_WINDOW_ROWS rows count, so older tags drop out;
+      // a stored per-tenant tag and token tally is the upgrade.
       // SAFETY: the SELECT names exactly the one column read.
-      const texts = db.prepare('SELECT content FROM memories WHERE tenant_id = ?').iterate(tenantId) as Iterable<{ content: string }>;
+      const texts = db.prepare(`SELECT content FROM (${newest})`)
+        .iterate(tenantId, SCHEMA_FIT_WINDOW_ROWS) as Iterable<{ content: string }>;
       return schemaFitFrom(content, tags, { rows, tagCounts, contents: contentsOf(texts) });
     });
   }, openStore);

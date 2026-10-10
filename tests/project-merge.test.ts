@@ -130,6 +130,27 @@ describe('hippo projects repair', () => {
     expect(mirror(two.id)).toBeNull();
   });
 
+  it('repairs exactly the two re-tagged and two set-aside rows and leaves the other rows of the store as they were', () => {
+    const b1 = row('proj-b parent one', 'proj-b');
+    const b2 = row('proj-b parent two', 'proj-b');
+    const c1 = row('proj-c parent', 'proj-c');
+    const bystanders = Array.from({ length: 5 }, (_, i) => row(`bystander ${i}`, `proj-x${i}`));
+    const merged = (parents: string[]) => row(`merged from ${parents.join(' ')}`, '', { source: 'consolidation', parents });
+    const tagged = [merged([b1.id]), merged([b2.id])];
+    const aside = [merged([b1.id, c1.id]), merged([b2.id, c1.id])];
+    open();
+
+    const r = repairProjects(db, home, { tenantId: T, dryRun: false });
+    const rows = byId();
+    expect(r.toProject.map((p) => p.id).sort()).toEqual(tagged.map((e) => e.id).sort());
+    expect(r.setAside.slice().sort()).toEqual(aside.map((e) => e.id).sort());
+    for (const e of tagged) expect(rows.get(e.id)!.origin_project).toBe('proj-b');
+    for (const e of aside) expect(rows.has(e.id)).toBe(false);
+    for (const e of [b1, b2, c1, ...bystanders]) expect(rows.get(e.id)!.origin_project).toBe(e.origin_project);
+    expect(mirror(tagged[0].id)).toContain('origin_project: proj-b');
+    expect(mirror(aside[0].id)).toBeNull();
+  });
+
   it('sets aside a project-tagged import whose text, spacing aside, a user-global import holds, and nothing else', () => {
     note('the home folder note every session can see', '');
     const copy = note('the home folder note every session can see', 'repo-wt-a');

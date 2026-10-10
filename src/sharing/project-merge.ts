@@ -19,7 +19,7 @@ import { duplicateKey } from '../util/same-text.js';
 import { compactionOriginsWithCwd, compactionTranscripts, holdsOrigin, restampCompactionOrigin } from '../store/compactions.js';
 import { removeEntryMirrors } from '../store/mirrors.js';
 import { deleteEntryRowInTx, restampOriginProjectAt, stampOriginProjectsAt, writeEntryMirrors } from '../store/entry-writes.js';
-import { selectAllEntries, selectLiveEntriesBySourcePrefix } from '../store/entry-reads.js';
+import { selectAllEntries, selectEntriesByIds, selectLiveEntriesBySourcePrefix } from '../store/entry-reads.js';
 import type { JsonValue } from '../util/json.js';
 
 export interface ProjectSummary {
@@ -321,9 +321,8 @@ export function repairProjects(
     const folded = folds.map((f) => foldInTx(db, tenantId, f.from, f.into));
     const plan = planUserGlobalRepair(db, tenantId, []);
     stampOriginProjectsAt(db, tenantId, plan.toProject);
-    const aside = new Set(plan.setAside);
     const now = new Date();
-    for (const row of selectAllEntries(db, tenantId).filter((e) => aside.has(e.id))) {
+    for (const row of selectEntriesByIds(db, plan.setAside, tenantId).values()) {
       insertDormantRow(db, { entry: row, strength: calculateStrength(row, now), reason: 'project-repair', dormantAt: now.toISOString() });
       deleteEntryRowInTx(db, row, ACTOR);
     }
@@ -357,7 +356,6 @@ export function repairOnceOnSleep(db: DatabaseSyncLike, hippoRoot: string, tenan
 
 /** After commit, as the agent memory sync does: a stale mirror would bring the old tag back on the next rebuild. */
 function refreshMirrors(db: DatabaseSyncLike, hippoRoot: string, tenantId: string, rewrite: readonly string[], purge: readonly string[]): void {
-  const ids = new Set(rewrite);
-  for (const entry of selectAllEntries(db, tenantId)) if (ids.has(entry.id)) writeEntryMirrors(hippoRoot, entry);
+  for (const entry of selectEntriesByIds(db, rewrite, tenantId).values()) writeEntryMirrors(hippoRoot, entry);
   for (const id of purge) removeEntryMirrors(hippoRoot, id);
 }

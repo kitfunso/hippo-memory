@@ -4,7 +4,7 @@
 import { MemoryEntry, Layer } from '../core/memory.js';
 import { REFINED_TAG, storeRefinement } from '../api/index.js';
 import { cliApiContext } from './api-context.js';
-import { loadAllEntries, readEntry } from '../store/entry-reads.js';
+import { chunked, loadAllEntries, loadEntriesByIds } from '../store/entry-reads.js';
 import { redactSecretsStrict } from '../util/secret-detect.js';
 import { sendAnthropicMessage, type AnthropicMessageFailure } from '../util/anthropic-messages.js';
 import { log } from '../util/log.js';
@@ -143,14 +143,13 @@ async function refineOneEntry(
 ): Promise<void> {
   // Best-effort: walk parents_json (schema v9) to fetch originals. When
   // parents aren't recorded we still refine using just the merged content.
-  const sources: MemoryEntry[] = [];
   const parentIds = Array.isArray(entry.parents) ? entry.parents : [];
-  for (const pid of parentIds) {
-    // Parent lookup is tenant-scoped; cross-tenant parents return null and are skipped,
-    // so refine still works from the merged content alone.
-    const p = readEntry(hippoRoot, pid, opts.tenantId);
-    if (p) sources.push(p);
-  }
+  // Parent lookup is tenant-scoped; cross-tenant parents are absent and skipped,
+  // so refine still works from the merged content alone.
+  const found = new Map(
+    chunked(parentIds).flatMap((chunk) => loadEntriesByIds(hippoRoot, chunk, opts.tenantId)).map((p) => [p.id, p]),
+  );
+  const sources = parentIds.flatMap((pid) => found.get(pid) ?? []);
 
   const refined = await refineSemanticMemory(entry.content, sources, {
     apiKey: opts.apiKey,

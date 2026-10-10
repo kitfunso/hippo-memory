@@ -5,9 +5,9 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import { computeSchemaFit, deriveHalfLife, DEFAULT_HALF_LIFE_DAYS, type MemoryEntry } from '../src/core/memory.js';
-import { schemaFitInStore } from '../src/store/candidates.js';
+import { loadNewestEntries, schemaFitInStore } from '../src/store/candidates.js';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { writeEntry } from '../src/store/entry-writes.js';
+import { writeEntriesTogether, writeEntry } from '../src/store/entry-writes.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { makeRoot } from './_helpers/make-root.js';
 
@@ -132,6 +132,30 @@ describe('schemaFitInStore', () => {
     // No tags and a capped content score: 0.6 * 0 + 0.4 * 1.
     expect(schemaFitInStore(root, 'default', 'zephyrine refresh', [])).toBe(0.4);
     expect(schemaFitInStore(root, 'nobody', 'zephyrine refresh', ['data-pipeline'])).toBe(0.5);
+  });
+
+  it('scores against only the newest window of rows, not the whole tenant', () => {
+    const root = makeRoot('schema-fit-window');
+    roots.push(root);
+    // Mirrors SCHEMA_FIT_WINDOW_ROWS in src/store/candidates.ts; a drift fails the fit comparison below.
+    const windowRows = 2000;
+    const oldest = Array.from({ length: 50 }, (_, i) => ({
+      ...createMemory(`ancient ledger entry ${i}`, { tags: ['oldonly'] }),
+      created: new Date(Date.UTC(2020, 0, 1, 0, 0, i)).toISOString(),
+    }));
+    const newest = Array.from({ length: windowRows }, (_, i) => ({
+      ...createMemory(`recent pipeline note ${i}`, { tags: ['recent', i % 2 ? 'even' : 'odd'] }),
+      created: new Date(Date.UTC(2025, 0, 1, 0, 0, i)).toISOString(),
+    }));
+    writeEntriesTogether(root, [...oldest, ...newest]);
+    const window = loadNewestEntries(root, 'default', windowRows);
+    expect(window).toHaveLength(windowRows);
+    expect(window.some((entry) => entry.tags.includes('oldonly'))).toBe(false);
+
+    const tags = ['oldonly', 'recent'];
+    const fit = schemaFitInStore(root, 'default', 'ancient ledger entry', tags);
+    expect(fit).toBe(computeSchemaFit('ancient ledger entry', tags, window));
+    expect(fit).not.toBe(computeSchemaFit('ancient ledger entry', tags, loadAllEntries(root, 'default')));
   });
 });
 
