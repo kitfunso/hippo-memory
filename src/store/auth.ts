@@ -4,6 +4,7 @@ import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../db/index.js
 import { raiseMinBinary } from '../db/meta.js';
 import { keysetAfter, type KeysetPosition } from '../util/keyset.js';
 import type { HippoStore } from './index.js';
+import { DAY_MS } from '../util/time.js';
 import { EXPIRING_KEYS_MIN_BINARY } from '../util/version.js';
 
 /** Every minted API key starts with this, so the server can route a bearer token by shape. */
@@ -72,13 +73,16 @@ const scryptOffLoop: (password: string, salt: Buffer, keylen: number) => Promise
 export interface CreateApiKeyOpts {
   tenantId: string;
   label?: string;
-  /** 'admin' | 'member'. Defaults to 'admin' (backward-compat for callers that don't specify). */
+  /** 'admin' | 'member'. Defaults to 'member', like the API layer. */
   role?: 'admin' | 'member';
   /** The auth-resolver subject a self-service key belongs to; unset for keys an admin or the CLI mints. */
   ownerSubject?: string;
-  /** ISO time the key stops working; unset means it never expires. */
+  /** ISO time the key stops working; unset means DEFAULT_KEY_TTL_DAYS from now. */
   expiresAt?: string;
 }
+
+/** Days a key lives when its mint names no expiry, so a key nobody remembers stops working by itself. */
+export const DEFAULT_KEY_TTL_DAYS = 90;
 
 export interface CreateApiKeyResult {
   keyId: string;
@@ -122,8 +126,8 @@ export function insertApiKey(db: DatabaseSyncLike, key: NewApiKey): void {
 export function createApiKey(db: DatabaseSyncLike, opts: CreateApiKeyOpts): CreateApiKeyResult {
   const { keyId, plaintext, keyHash } = mintApiKey();
   insertApiKey(db, {
-    keyId, keyHash, tenantId: opts.tenantId, label: opts.label ?? null, role: opts.role ?? 'admin', createdAt: new Date().toISOString(),
-    ownerSubject: opts.ownerSubject ?? null, expiresAt: opts.expiresAt ?? null,
+    keyId, keyHash, tenantId: opts.tenantId, label: opts.label ?? null, role: opts.role ?? 'member', createdAt: new Date().toISOString(),
+    ownerSubject: opts.ownerSubject ?? null, expiresAt: opts.expiresAt ?? new Date(Date.now() + DEFAULT_KEY_TTL_DAYS * DAY_MS).toISOString(),
   });
   return { keyId, plaintext };
 }

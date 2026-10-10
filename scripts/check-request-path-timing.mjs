@@ -141,7 +141,7 @@ const served = workerSqliteStore(localRoot);
 function mintKey(root) {
   const db = openHippoDb(root);
   try {
-    return createApiKey(db, { tenantId: 'default', label: 'timing' }).keyId;
+    return createApiKey(db, { tenantId: 'default', label: 'timing', role: 'admin' }).keyId;
   } finally {
     closeHippoDb(db);
   }
