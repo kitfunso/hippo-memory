@@ -2,9 +2,10 @@
 import { HttpError, sendJson } from '../../util/http-util.js';
 import { type JsonValue, isJsonString } from '../../util/json.js';
 import type { ObjectDescriptor, ObjectListOpts, SavableDescriptor } from '../../objects/descriptor.js';
-import { closeObject, listObjects, objectById, saveObject } from '../../objects/lifecycle.js';
+import { objectsOf, saveFor } from '../../api/objects.js';
+import { closeObject, listObjects, objectById } from '../../objects/lifecycle.js';
 import type { ObjectByKind, ObjectKind, SavableKind } from '../../store/object-types.js';
-import { requireGroup, type Objects } from '../../store/port.js';
+import type { Objects } from '../../store/port.js';
 import { buildContextWithAuth } from '../auth.js';
 import { byCreatedAt, pageOf, parseCursor } from '../cursor.js';
 import type { RouteRequest } from '../types.js';
@@ -56,22 +57,6 @@ export function optionalString(body: Record<string, JsonValue>, key: string, max
   return value;
 }
 
-/** The request store's object group; the dispatcher has already answered 501 for a store without it. */
-export function objectsOf({ opts }: RouteRequest): Objects {
-  return requireGroup(opts.store, 'objects');
-}
-
-/** Saves through the request's store as the authenticated caller. */
-export function saveFor<K extends SavableKind, W>(
-  rr: RouteRequest,
-  d: SavableDescriptor<K, W>,
-  tenantId: string,
-  actor: string,
-  write: W
-): Promise<ObjectByKind[K]> {
-  return saveObject(objectsOf(rr), d, { hippoRoot: rr.opts.hippoRoot, tenantId, actor }, write);
-}
-
 async function found<K extends ObjectKind>(cfg: ObjectRouteConfig<K>, objects: Objects, tenantId: string, id: number): Promise<ObjectByKind[K]> {
   const row = await objectById(objects, cfg.object, tenantId, id);
   if (!row) throw new HttpError(404, `${cfg.noun} ${id} not found`);
@@ -94,27 +79,27 @@ export async function listRoute<K extends ObjectKind>(cfg: ObjectRouteConfig<K>,
     }
     listOpts.status = status;
   }
-  const page = pageOf(await listObjects(objectsOf(rr), cfg.object, ctx.tenantId, listOpts), limit, byCreatedAt);
+  const page = pageOf(await listObjects(objectsOf(ctx), cfg.object, ctx.tenantId, listOpts), limit, byCreatedAt);
   sendJson(res, 200, { [cfg.listField]: page.items, next_cursor: page.nextCursor });
 }
 
 export async function getRoute<K extends ObjectKind>(cfg: ObjectRouteConfig<K>, rr: RouteRequest, match: RegExpMatchArray): Promise<void> {
   const id = parseInt(match[1], 10);
   const ctx = await buildContextWithAuth(rr.req, rr.opts);
-  sendJson(rr.res, 200, { [cfg.field]: await found(cfg, objectsOf(rr), ctx.tenantId, id) });
+  sendJson(rr.res, 200, { [cfg.field]: await found(cfg, objectsOf(ctx), ctx.tenantId, id) });
 }
 
 export async function closeRoute<K extends ObjectKind>(cfg: ObjectRouteConfig<K>, rr: RouteRequest, match: RegExpMatchArray): Promise<void> {
   const id = parseInt(match[1], 10);
   const ctx = await buildContextWithAuth(rr.req, rr.opts);
-  sendJson(rr.res, 200, { [cfg.field]: await closeObject(objectsOf(rr), cfg.object, ctx.tenantId, id, ctx.actor.subject) });
+  sendJson(rr.res, 200, { [cfg.field]: await closeObject(objectsOf(ctx), cfg.object, ctx.tenantId, id, ctx.actor.subject) });
 }
 
 export async function supersedeRoute<K extends SavableKind, W>(cfg: VersionedRouteConfig<K, W>, rr: RouteRequest, match: RegExpMatchArray): Promise<void> {
   const id = parseInt(match[1], 10);
   const ctx = await buildContextWithAuth(rr.req, rr.opts);
   const successor = cfg.revise(await parseJsonBody(rr.req, ctx));
-  const existing = await found(cfg, objectsOf(rr), ctx.tenantId, id);
-  const saved = await saveFor(rr, cfg.object, ctx.tenantId, ctx.actor.subject, successor(existing, id));
+  const existing = await found(cfg, objectsOf(ctx), ctx.tenantId, id);
+  const saved = await saveFor(ctx, cfg.object, successor(existing, id));
   sendJson(rr.res, 200, { [cfg.field]: saved });
 }

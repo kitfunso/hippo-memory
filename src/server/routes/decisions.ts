@@ -6,7 +6,8 @@ import { type JsonValue, isJsonNumber } from '../../util/json.js';
 import { buildContextWithAuth } from '../auth.js';
 import type { RouteRequest } from '../types.js';
 import { MAX_SHORT_FIELD_LEN, parseJsonBody } from '../validation.js';
-import { closeRoute, getRoute, listRoute, type ObjectRouteConfig, optionalString, requiredString, type RequiredStringRule, saveFor } from './object-routes.js';
+import { saveFor } from '../../api/objects.js';
+import { closeRoute, getRoute, listRoute, type ObjectRouteConfig, optionalString, requiredString, type RequiredStringRule } from './object-routes.js';
 
 const decisionRoutes: ObjectRouteConfig<'decision'> = { noun: 'decision', field: 'decision', listField: 'decisions', object: DECISION };
 
@@ -41,7 +42,7 @@ export async function handleCreateDecision(rr: RouteRequest): Promise<void> {
     supersedesDecisionId: supersededId(body),
   };
   try {
-    const decision = await saveFor(rr, DECISION, ctx.tenantId, ctx.actor.subject, write);
+    const decision = await saveFor(ctx, DECISION, write);
     sendJson(res, 201, { decision });
   } catch (e) {
     // A missing referenced row is a conflict with the create, not a missing target.
@@ -59,7 +60,7 @@ export async function handleSupersedeDecision(rr: RouteRequest, match: RegExpMat
   const oldId = parseInt(match[1], 10);
   const ctx = await buildContextWithAuth(rr.req, rr.opts);
   const body = await parseJsonBody(rr.req, ctx);
-  const decision = await saveFor(rr, DECISION, ctx.tenantId, ctx.actor.subject, {
+  const decision = await saveFor(ctx, DECISION, {
     decisionText: requiredString(body, 'text', TEXT),
     context: optionalString(body, 'context', MAX_SHORT_FIELD_LEN),
     supersedesDecisionId: oldId,

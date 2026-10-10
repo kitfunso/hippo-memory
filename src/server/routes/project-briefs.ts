@@ -6,16 +6,15 @@ import { sendJson } from '../../util/http-util.js';
 import { buildContextWithAuth } from '../auth.js';
 import type { RouteRequest } from '../types.js';
 import { parseJsonBody } from '../validation.js';
+import { objectsOf, saveFor } from '../../api/objects.js';
 import {
   closeRoute,
   getRoute,
   listRoute,
-  objectsOf,
   optionalString,
   requiredString,
-  saveFor,
   supersedeRoute,
-  type VersionedRouteConfig
+  type VersionedRouteConfig,
 } from './object-routes.js';
 
 const briefRoutes: VersionedRouteConfig<'project_brief', SaveProjectBriefOpts> = {
@@ -44,7 +43,7 @@ const briefRoutes: VersionedRouteConfig<'project_brief', SaveProjectBriefOpts> =
 export async function handleCreateProjectBrief(rr: RouteRequest): Promise<void> {
   const ctx = await buildContextWithAuth(rr.req, rr.opts);
   const body = await parseJsonBody(rr.req, ctx);
-  const brief = await saveFor(rr, PROJECT_BRIEF, ctx.tenantId, ctx.actor.subject, {
+  const brief = await saveFor(ctx, PROJECT_BRIEF, {
     repo: requiredString(body, 'repo', { max: MAX_REPO_LEN }),
     summary: requiredString(body, 'summary', { max: 8192 }),
   });
@@ -63,11 +62,11 @@ export async function handleRefreshProjectBrief(rr: RouteRequest): Promise<void>
   const body = await parseJsonBody(req, ctx);
   const repo = requiredString(body, 'repo', { max: MAX_REPO_LEN });
   if (body['dryRun'] === true) {
-    const { markdown, receiptCount } = await briefFromReceipts(objectsOf(rr), ctx.tenantId, repo);
+    const { markdown, receiptCount } = await briefFromReceipts(objectsOf(ctx), ctx.tenantId, repo);
     sendJson(res, 200, { markdown, receiptCount });
     return;
   }
-  const brief = await refreshedBrief(objectsOf(rr), { hippoRoot: opts.hippoRoot, tenantId: ctx.tenantId, actor: ctx.actor.subject }, repo);
+  const brief = await refreshedBrief(objectsOf(ctx), { hippoRoot: opts.hippoRoot, tenantId: ctx.tenantId, actor: ctx.actor.subject }, repo);
   sendJson(res, 200, { brief });
 }
 

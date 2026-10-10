@@ -4,7 +4,8 @@ import { sendJson } from '../../util/http-util.js';
 import { buildContextWithAuth } from '../auth.js';
 import type { RouteRequest } from '../types.js';
 import { parseJsonBody } from '../validation.js';
-import { closeRoute, getRoute, listRoute, optionalString, requiredString, saveFor, supersedeRoute, type VersionedRouteConfig } from './object-routes.js';
+import { saveFor } from '../../api/objects.js';
+import { closeRoute, getRoute, listRoute, optionalString, requiredString, supersedeRoute, type VersionedRouteConfig } from './object-routes.js';
 
 const noteRoutes: VersionedRouteConfig<'customer_note', SaveCustomerNoteOpts> = {
   noun: 'customer note',
@@ -30,7 +31,7 @@ const noteRoutes: VersionedRouteConfig<'customer_note', SaveCustomerNoteOpts> = 
 export async function handleCreateCustomerNote(rr: RouteRequest): Promise<void> {
   const ctx = await buildContextWithAuth(rr.req, rr.opts);
   const body = await parseJsonBody(rr.req, ctx);
-  const customerNote = await saveFor(rr, CUSTOMER_NOTE, ctx.tenantId, ctx.actor.subject, {
+  const customerNote = await saveFor(ctx, CUSTOMER_NOTE, {
     customer: requiredString(body, 'customer', { max: MAX_CUSTOMER_LEN }),
     note: requiredString(body, 'note', { max: 8192 }),
   });

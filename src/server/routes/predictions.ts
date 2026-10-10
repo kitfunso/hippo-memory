@@ -1,7 +1,8 @@
 // /v1/predictions routes.
+import { closePrediction, listPredictions, predictionBaserate, predictionById, savePrediction } from '../../api/predictions.js';
 import { loadConfig } from '../../core/config.js';
 import { predictionMirror, VALID_CLOSURE_STATES } from '../../store/predictions.js';
-import { requireGroup, type PredictionFilter } from '../../store/port.js';
+import type { PredictionFilter } from '../../store/port.js';
 import { HttpError, MAX_ID_LEN, sendJson } from '../../util/http-util.js';
 import { buildContextWithAuth } from '../auth.js';
 import { byCreatedAt, pageOf, parseCursor } from '../cursor.js';
@@ -56,7 +57,7 @@ export async function handleCreatePrediction({ req, res, opts }: RouteRequest): 
   }
   const claimed = { classTag, claimText: claim, estimateValue, estimateUnit, targetDate: targetDateValue };
   const mirror = predictionMirror(ctx.tenantId, claimed, loadConfig(opts.hippoRoot).defaultHalfLifeDays);
-  const prediction = await requireGroup(opts.store, 'predictions').savePrediction(ctx.tenantId, { ...claimed, mirror }, ctx.actor.subject);
+  const prediction = await savePrediction(ctx, { ...claimed, mirror });
   sendJson(res, 201, { prediction });
 }
 
@@ -79,7 +80,7 @@ export async function handleListPredictions({ req, res, opts, query }: RouteRequ
   const limit = parseListLimit(query.get('limit'));
   const after = parseCursor(query.get('cursor'), 'string', 'integer');
   const ctx = await buildContextWithAuth(req, opts);
-  const predictions = await requireGroup(opts.store, 'predictions').listPredictions(ctx.tenantId, { ...listFilter(classTag, status), limit: limit + 1, after });
+  const predictions = await listPredictions(ctx, { ...listFilter(classTag, status), limit: limit + 1, after });
   const page = pageOf(predictions, limit, byCreatedAt);
   sendJson(res, 200, { predictions: page.items, next_cursor: page.nextCursor });
 }
@@ -97,14 +98,14 @@ export async function handlePredictionStats({ req, res, opts, query }: RouteRequ
     throw new HttpError(400, `class exceeds ${MAX_ID_LEN}-character cap`);
   }
   const ctx = await buildContextWithAuth(req, opts);
-  const baserate = await requireGroup(opts.store, 'predictions').predictionBaserate(ctx.tenantId, classTag, ctx.actor.subject);
+  const baserate = await predictionBaserate(ctx, classTag);
   sendJson(res, 200, { baserate });
 }
 
 export async function handleGetPrediction({ req, res, opts }: RouteRequest, predictionByIdMatch: RegExpMatchArray): Promise<void> {
   const id = parseInt(predictionByIdMatch[1], 10);
   const ctx = await buildContextWithAuth(req, opts);
-  const prediction = await requireGroup(opts.store, 'predictions').predictionById(ctx.tenantId, id);
+  const prediction = await predictionById(ctx, id);
   if (!prediction) {
     throw new HttpError(404, `prediction ${id} not found`);
   }
@@ -139,6 +140,6 @@ export async function handleClosePrediction({ req, res, opts }: RouteRequest, pr
     closureNote = note;
   }
   const close = { closureState: state, actualValue, closureNote };
-  const prediction = await requireGroup(opts.store, 'predictions').closePrediction(ctx.tenantId, id, close, ctx.actor.subject);
+  const prediction = await closePrediction(ctx, id, close);
   sendJson(res, 200, { prediction });
 }

@@ -4,17 +4,16 @@ import { sendJson } from '../../util/http-util.js';
 import { buildContextWithAuth } from '../auth.js';
 import type { RouteRequest } from '../types.js';
 import { MAX_SHORT_FIELD_LEN, parseJsonBody } from '../validation.js';
+import { objectsOf, saveFor } from '../../api/objects.js';
 import {
   closeRoute,
   getRoute,
   listRoute,
-  objectsOf,
   optionalString,
   type RequiredStringRule,
   requiredString,
-  saveFor,
   supersedeRoute,
-  type VersionedRouteConfig
+  type VersionedRouteConfig,
 } from './object-routes.js';
 
 const INSTRUCTIONS: RequiredStringRule = { max: 8192, plural: true };
@@ -47,7 +46,7 @@ const skillRoutes: VersionedRouteConfig<'skill', SaveSkillOpts> = {
 export async function handleCreateSkill(rr: RouteRequest): Promise<void> {
   const ctx = await buildContextWithAuth(rr.req, rr.opts);
   const body = await parseJsonBody(rr.req, ctx);
-  const skill = await saveFor(rr, SKILL, ctx.tenantId, ctx.actor.subject, {
+  const skill = await saveFor(ctx, SKILL, {
     skillName: requiredString(body, 'skillName', { max: MAX_SKILL_NAME_LEN }),
     instructions: requiredString(body, 'instructions', INSTRUCTIONS),
     trigger: optionalString(body, 'trigger', 1024),
@@ -64,7 +63,7 @@ export function handleListSkills(rr: RouteRequest): Promise<void> {
 export async function handleExportSkills(rr: RouteRequest): Promise<void> {
   const { req, res, opts } = rr;
   const ctx = await buildContextWithAuth(req, opts);
-  const markdown = await skillsMarkdown(objectsOf(rr), ctx.tenantId);
+  const markdown = await skillsMarkdown(objectsOf(ctx), ctx.tenantId);
   sendJson(res, 200, { markdown });
 }
 

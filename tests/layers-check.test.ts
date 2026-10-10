@@ -10,6 +10,9 @@ const MAP = {
   folders: { sub: 'high' },
   rootFiles: { 'a.ts': 'low', 'b.ts': 'high' },
 };
+const ROUTE_CALLS = ["import { requireGroup } from '../../x.js';", "export const r = (s) => requireGroup(s, 'g');", ''].join('\n');
+const ROUTE_CLEAN = ['// not requireGroup', "import { graphRows } from '../../api/graph.js';", 'export const r = graphRows;', ''].join('\n');
+const ROUTE_MAP = { order: ['low', 'high'], folders: { sub: 'high', server: 'high' }, rootFiles: { 'a.ts': 'low', 'b.ts': 'high' } };
 const NO_EDGES = { runtime: 0, typeOnly: 0, rootFiles: 2, edges: [] };
 
 type Row = {
@@ -53,6 +56,27 @@ const rows: Row[] = [
     baseline: { runtime: 1, typeOnly: 0, rootFiles: 2, edges: [{ from: 'a.ts', to: 'sub/x.ts', kind: 'runtime' }] },
     status: 1,
     output: ['a.ts:1 -> sub/y.ts'],
+  },
+  {
+    name: 'a route that calls requireGroup fails with file:line',
+    files: { 'src/a.ts': '', 'src/b.ts': '', 'src/server/routes/r.ts': ROUTE_CALLS },
+    map: ROUTE_MAP,
+    status: 1,
+    output: ['server/routes/r.ts:1', 'server/routes/r.ts:2'],
+  },
+  {
+    name: 'a route that imports storeFor fails',
+    files: { 'src/a.ts': '', 'src/b.ts': '', 'src/server/routes/r.ts': "import { storeFor } from '../../x.js';\n" },
+    map: ROUTE_MAP,
+    status: 1,
+    output: ['server/routes/r.ts:1'],
+  },
+  {
+    name: 'a route that goes through an api function passes, and a comment naming requireGroup is ignored',
+    files: { 'src/a.ts': '', 'src/b.ts': '', 'src/server/routes/r.ts': ROUTE_CLEAN },
+    map: ROUTE_MAP,
+    status: 0,
+    output: ['Layer ratchet OK'],
   },
 ];
 

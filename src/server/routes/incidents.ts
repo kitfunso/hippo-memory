@@ -6,7 +6,8 @@ import { buildContextWithAuth } from '../auth.js';
 import type { RouteRequest } from '../types.js';
 import { MAX_SHORT_FIELD_LEN, parseJsonBody } from '../validation.js';
 import { type JsonValue, isJsonString } from '../../util/json.js';
-import { closeRoute, getRoute, listRoute, type ObjectRouteConfig, objectsOf, optionalString, requiredString } from './object-routes.js';
+import { objectsOf } from '../../api/objects.js';
+import { closeRoute, getRoute, listRoute, type ObjectRouteConfig, optionalString, requiredString } from './object-routes.js';
 
 const MAX_LINKED_MEMORY_IDS = 256;
 
@@ -50,7 +51,7 @@ export async function handleCreateIncident(rr: RouteRequest): Promise<void> {
     linkedMemoryIds: linkedMemoryIds(body),
   };
   try {
-    const incident = await openIncident(objectsOf(rr), opts.hippoRoot, ctx.tenantId, write, ctx.actor.subject);
+    const incident = await openIncident(objectsOf(ctx), opts.hippoRoot, ctx.tenantId, write, ctx.actor.subject);
     sendJson(res, 201, { incident });
   } catch (e) {
     // A missing referenced row is a conflict with the create, not a missing target.
@@ -68,7 +69,7 @@ export async function handleResolveIncident(rr: RouteRequest, match: RegExpMatch
   const id = parseInt(match[1], 10);
   const ctx = await buildContextWithAuth(req, opts);
   const resolutionText = requiredString(await parseJsonBody(req, ctx), 'resolutionText', { max: MAX_SHORT_FIELD_LEN });
-  const incident = await resolveOpenIncident(objectsOf(rr), ctx.tenantId, id, resolutionText, ctx.actor.subject);
+  const incident = await resolveOpenIncident(objectsOf(ctx), ctx.tenantId, id, resolutionText, ctx.actor.subject);
   sendJson(res, 200, { incident });
 }
 

@@ -5,7 +5,8 @@ import { buildContextWithAuth } from '../auth.js';
 import type { RouteRequest } from '../types.js';
 import { MAX_SHORT_FIELD_LEN, parseJsonBody } from '../validation.js';
 import { type JsonValue, isJsonString } from '../../util/json.js';
-import { closeRoute, getRoute, listRoute, optionalString, requiredString, saveFor, supersedeRoute, type VersionedRouteConfig } from './object-routes.js';
+import { saveFor } from '../../api/objects.js';
+import { closeRoute, getRoute, listRoute, optionalString, requiredString, supersedeRoute, type VersionedRouteConfig } from './object-routes.js';
 
 // HTTP-boundary validation for a process `steps` body (untrusted). Returns the
 // step strings (saveProcess re-validates + trims, this is the fail-fast 400
@@ -63,7 +64,7 @@ const processRoutes: VersionedRouteConfig<'process', SaveProcessOpts> = {
 export async function handleCreateProcess(rr: RouteRequest): Promise<void> {
   const ctx = await buildContextWithAuth(rr.req, rr.opts);
   const body = await parseJsonBody(rr.req, ctx);
-  const process = await saveFor(rr, PROCESS, ctx.tenantId, ctx.actor.subject, {
+  const process = await saveFor(ctx, PROCESS, {
     processName: requiredString(body, 'processName', { max: MAX_SHORT_FIELD_LEN }),
     steps: validateProcessStepsBody(body['steps']),
     description: optionalString(body, 'description', MAX_SHORT_FIELD_LEN),

@@ -4,16 +4,15 @@ import { HttpError, sendJson } from '../../util/http-util.js';
 import { buildContextWithAuth } from '../auth.js';
 import type { RouteRequest } from '../types.js';
 import { MAX_SHORT_FIELD_LEN, parseJsonBody } from '../validation.js';
+import { objectsOf, saveFor } from '../../api/objects.js';
 import {
   closeRoute,
   getRoute,
   listRoute,
-  objectsOf,
   optionalString,
   requiredString,
-  saveFor,
   supersedeRoute,
-  type VersionedRouteConfig
+  type VersionedRouteConfig,
 } from './object-routes.js';
 
 // The date fields get a type and length check only: the store parses the date, and the cap bounds a junk string before it reaches the Date parser.
@@ -39,7 +38,7 @@ const policyRoutes: VersionedRouteConfig<'policy', SavePolicyOpts> = {
 export async function handleCreatePolicy(rr: RouteRequest): Promise<void> {
   const ctx = await buildContextWithAuth(rr.req, rr.opts);
   const body = await parseJsonBody(rr.req, ctx);
-  const policy = await saveFor(rr, POLICY, ctx.tenantId, ctx.actor.subject, {
+  const policy = await saveFor(ctx, POLICY, {
     policyName: requiredString(body, 'policyName', { max: MAX_SHORT_FIELD_LEN }),
     policyText: requiredString(body, 'policyText', { max: MAX_SHORT_FIELD_LEN }),
     validFrom: optionalString(body, 'validFrom', MAX_DATE_LEN),
@@ -62,7 +61,7 @@ export async function handlePoliciesAsOf(rr: RouteRequest): Promise<void> {
   }
   const name = query.get('name') ?? undefined;
   const ctx = await buildContextWithAuth(req, opts);
-  const policies = await policiesAsOf(objectsOf(rr), ctx.tenantId, date, { name });
+  const policies = await policiesAsOf(objectsOf(ctx), ctx.tenantId, date, { name });
   sendJson(res, 200, { policies });
 }
 

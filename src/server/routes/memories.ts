@@ -1,10 +1,10 @@
 // Memory write routes: create, graph, archive, supersede, promote, forget, outcome, sleep.
+import { graphRows } from '../../api/graph.js';
 import { archiveRaw, forget, outcome, outcomeForLastRecall, promote, remember, supersede } from '../../api/index.js';
 import type { MemoryKind } from '../../core/memory.js';
 import { graphModelOf } from '../../graph/view.js';
 import { MAX_ENTITY_NAME_LEN } from '../../store/graph-rows.js';
 import { HttpError, sendJson } from '../../util/http-util.js';
-import { requireGroup } from '../../store/port.js';
 import { assertCrossTenantAdmin, buildContextWithAuth, isLoopback } from '../auth.js';
 import { sleepInChild } from '../sleep-offload.js';
 import type { RouteRequest } from '../types.js';
@@ -58,8 +58,7 @@ export async function handleGetGraph({ req, res, opts, query }: RouteRequest): P
   }
   const limit = parseListLimit(query.get('limit'));
   const ctx = await buildContextWithAuth(req, opts);
-  const { role, scopes, owner } = ctx.actor;
-  const rows = await requireGroup(opts.store, 'graphReads').graphRows(ctx.tenantId, { entity: entityRaw ?? undefined, limit, reader: { role, scopes, owner } });
+  const rows = await graphRows(ctx, { entity: entityRaw ?? undefined, limit });
   sendJson(res, 200, graphModelOf(rows));
   return;
 }

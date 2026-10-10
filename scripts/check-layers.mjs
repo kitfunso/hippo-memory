@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // CI layer gate. A src/ file imports only from its own layer or a lower one (order and the folder and root-file
 // map are in layers.json). Existing upward imports sit in .layers-baseline.json and may go but never grow.
+// A file under src/server/routes/ that names requireGroup or storeFor also fails: routes reach the store through src/api.
 // Usage: check-layers.mjs [--list] [--update]. --update rewrites the baseline; it refuses to add an edge or raise a number.
 
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -98,6 +99,24 @@ function findUpwardEdges(map, srcDir) {
   return [...edges.entries()].sort(([a], [b]) => byText(a, b)).map(([, e]) => e);
 }
 
+const ROUTES_DIR = 'server/routes';
+const ROUTE_STORE_RE = /\b(requireGroup|storeFor)\b/;
+
+/** Lines under src/server/routes/ that name requireGroup or storeFor: a route reaches the store through src/api, never the port. */
+function findRouteStoreReaches(srcDir) {
+  const root = resolve(srcDir);
+  const dir = join(root, ROUTES_DIR);
+  if (!existsSync(dir)) return [];
+  const out = [];
+  for (const file of tsFiles(dir)) {
+    const lines = stripComments(readFileSync(file, 'utf8')).split('\n');
+    lines.forEach((text, i) => {
+      if (ROUTE_STORE_RE.test(text)) out.push(`${relative(root, file).replaceAll('\\', '/')}:${i + 1}`);
+    });
+  }
+  return out;
+}
+
 const edgeKey = (e) => `${e.from}\t${e.to}\t${e.kind}`;
 const describe = (e) => `${e.from}:${e.line} -> ${e.to} (${e.layerFrom} -> ${e.layerTo}, ${e.kind === 'typeOnly' ? 'type' : 'runtime'})`;
 
@@ -112,6 +131,13 @@ if (problems.length > 0) {
   console.error(`${MAP} does not match src/:`);
   for (const p of problems) console.error(`  ${p}`);
   console.error(`Add the folder or file to ${MAP} under the layer it belongs to, or remove the stale entry.`);
+  process.exit(1);
+}
+
+const routeReaches = findRouteStoreReaches('src');
+if (routeReaches.length > 0 && !args.includes('--update') && !args.includes('--list')) {
+  console.error('A route handler names requireGroup or storeFor; call a src/api function that takes the Context instead:');
+  for (const r of routeReaches) console.error(`  ${r}`);
   process.exit(1);
 }
 
