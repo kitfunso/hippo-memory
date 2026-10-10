@@ -4,7 +4,7 @@ import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { log } from '../src/util/log.js';
-import { __resetSessionRecallHistoryMcp } from '../src/mcp/server.js';
+import { _resetSessionRecallHistoryMcpForTests } from '../src/mcp/server.js';
 import { lastRecalledIds } from '../src/mcp/session-state.js';
 import { __resetSessionRecallHistoryHttp, serve, type ServerHandle } from '../src/server.js';
 import type { HippoStore, StoreGroups } from '../src/store/index.js';
@@ -97,7 +97,7 @@ function copy(): string {
 /** Recall keeps per-session rings and caches in the server's process, which both passes share. */
 function resetRecallState(): void {
   __resetSessionRecallHistoryHttp();
-  __resetSessionRecallHistoryMcp();
+  _resetSessionRecallHistoryMcpForTests();
   _resetAblationCacheForTests();
   lastRecalledIds.clear();
 }

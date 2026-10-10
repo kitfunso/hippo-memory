@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { __setDigestExistsProbe, buildSessionDigest, realFsPath, repoRelative, type DigestEdit } from '../src/capture/session-digest.js';
+import { _setDigestExistsProbeForTests, buildSessionDigest, realFsPath, repoRelative, type DigestEdit } from '../src/capture/session-digest.js';
 
 const HOST = /fileserver|example\.com|[\\/]opt[\\/]/i;
 const probes: string[] = [];
@@ -17,14 +17,14 @@ beforeEach(() => {
   repo = String(realFsPath(path.join(tmp, 'repo')));
   probes.length = 0;
   // A host-named probe answers false, so a broken guard fails the test without dialing out.
-  __setDigestExistsProbe((p) => {
+  _setDigestExistsProbeForTests((p) => {
     probes.push(p);
     return HOST.test(p) ? false : fs.existsSync(p);
   });
 });
 
 afterEach(() => {
-  __setDigestExistsProbe(null);
+  _setDigestExistsProbeForTests(null);
   fs.rmSync(tmp, { recursive: true, force: true });
 });
 

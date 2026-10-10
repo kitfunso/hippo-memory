@@ -13,6 +13,9 @@ const BASELINE = '.test-only-exports-baseline.json';
 const EXPORT_RE = /^export\s+(?:async\s+)?(?:function\*?|const|let|var|class|enum)\s+([A-Za-z_$][\w$]*)/gm;
 const IDENT_RE = /[A-Za-z_$][\w$]*/g;
 const DIST_RE = /dist\/[\w./-]+\.js/g;
+const SEAM_RE = /^_[a-z][A-Za-z0-9]*ForTests$/;
+// Published through src/server.ts and renamed at 2.0.
+const SEAM_EXEMPT = new Set(['__resetSessionRecallHistoryHttp']);
 const CALLER_DIRS = ['scripts', 'benchmarks'];
 const BUILD_DIRS = new Set(['node_modules', 'dist', '.git']);
 
@@ -80,6 +83,21 @@ export function judgeExports(root = '.') {
   });
 }
 
+/** `file:line name` for every src/ export that breaks the `_<verb><Thing>ForTests` scheme. */
+export function seamNameViolations(root = '.') {
+  const bad = [];
+  for (const p of walk(join(root, 'src'), isSource)) {
+    const file = relative(root, p).replaceAll(sep, '/');
+    readFileSync(p, 'utf8').split(/\r?\n/).forEach((line, i) => {
+      const name = new RegExp(EXPORT_RE.source).exec(line)?.[1];
+      if (!name || SEAM_EXEMPT.has(name)) return;
+      const seam = name.startsWith('_') || name.endsWith('ForTests');
+      if (seam && !SEAM_RE.test(name)) bad.push(`${file}:${i + 1} ${name}`);
+    });
+  }
+  return bad;
+}
+
 function update(baseline, current, added) {
   if (baseline && added.length > 0) {
     console.error('Refusing to update: the baseline may only shrink.');
@@ -125,6 +143,12 @@ function main(args) {
   if (args.includes('--list')) {
     for (const e of current) console.log(e.replace(/:([^:]+)$/, ': $1'));
     return 0;
+  }
+  const bad = seamNameViolations('.');
+  if (bad.length > 0) {
+    console.error('Test seams must be named _<verb><Thing>ForTests:');
+    for (const b of bad) console.error(`  ${b}`);
+    return 1;
   }
   return check(current, wasSet, added);
 }

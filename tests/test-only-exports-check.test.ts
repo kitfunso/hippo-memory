@@ -12,6 +12,31 @@ const baselineOf = (...exports: string[]) => JSON.stringify({ count: exports.len
 type Run = { args?: string[]; status: number; output: string[] };
 type Row = { name: string; files: Record<string, string>; runs: Run[]; count?: number };
 
+// A second src user keeps the ratchet quiet so each row isolates the naming rule.
+function seamRow(name: string, seam: string, status: number, output: string[]): Row {
+  return {
+    name,
+    files: {
+      'src/a.ts': `export function ${seam}() {}
+`,
+      'src/b.ts': `import { ${seam} } from './a.js';
+${seam}();
+`,
+      '.test-only-exports-baseline.json': baselineOf(),
+    },
+    runs: [{ status, output }],
+  };
+}
+
+function seamRows(): Row[] {
+  return [
+    seamRow('a _verbThingForTests seam name passes', '_setThingForTests', 0, ['ratchet OK']),
+    seamRow('a __setX seam name fails with file:line name', '__setThing', 1, ['src/a.ts:1 __setThing']),
+    seamRow('a ForTests name without the underscore fails', 'setThingForTests', 1, ['src/a.ts:1 setThingForTests']),
+    seamRow('the published __resetSessionRecallHistoryHttp is exempt', '__resetSessionRecallHistoryHttp', 0, ['ratchet OK']),
+  ];
+}
+
 const rows: Row[] = [
   {
     name: 'a new test-only export fails and is named',
@@ -48,6 +73,7 @@ const rows: Row[] = [
     runs: [{ args: ['--update'], status: 1, output: ['Refusing to update', 'src/a.ts:seam'] }],
     count: 0,
   },
+  ...seamRows(),
 ];
 
 describe('check-test-only-exports.mjs', () => {

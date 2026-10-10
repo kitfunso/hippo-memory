@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { initStore } from '../src/store/open.js';
 import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, Layer, type CreateMemoryOptions, type MemoryEntry } from '../src/core/memory.js';
-import { handleMcpRequest, __resetSessionRecallHistoryMcp, type McpContext, type McpResponse } from '../src/mcp/server.js';
+import { handleMcpRequest, _resetSessionRecallHistoryMcpForTests, type McpContext, type McpResponse } from '../src/mcp/server.js';
 import { pushGoal } from '../src/store/goals.js';
 import { saveActiveTaskSnapshot, appendSessionEvent } from '../src/store/sessions.js';
 import { saveStoredEmbeddingModel } from '../src/store/embeddings/index.js';
@@ -148,7 +148,7 @@ describe('MCP hippo_recall ranking', () => {
   beforeEach(() => {
     process.env.HIPPO_FAKE_NOW = NOW;
     _resetAblationCacheForTests();
-    __resetSessionRecallHistoryMcp();
+    _resetSessionRecallHistoryMcpForTests();
   });
 
   afterEach(() => {

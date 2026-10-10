@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { rmSync } from 'node:fs';
 import { serve, __resetSessionRecallHistoryHttp, sqliteStore, type HippoStore } from '../src/server.js';
 import { markSharedStore } from '../src/core/config.js';
-import { __resetSessionRecallHistoryMcp } from '../src/mcp/server.js';
+import { _resetSessionRecallHistoryMcpForTests } from '../src/mcp/server.js';
 import { lastRecalledIds } from '../src/mcp/session-state.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import type { RecallResult } from '../src/api/index.js';
@@ -74,7 +74,7 @@ let templates: Templates;
 /** One scenario on a fresh store copy, with every module-level ring and cache cleared first. */
 async function runPass(scenario: Scenario, makeStore?: (root: string) => HippoStore): Promise<Pass> {
   __resetSessionRecallHistoryHttp();
-  __resetSessionRecallHistoryMcp();
+  _resetSessionRecallHistoryMcpForTests();
   _resetAblationCacheForTests();
   lastRecalledIds.clear();
   const s = freshStore(templates, scenario.kind);

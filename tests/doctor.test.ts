@@ -14,7 +14,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { createMemory, DEFAULT_HALF_LIFE_DAYS } from '../src/core/memory.js';
 import { runDoctor, formatDoctor } from '../src/doctor.js';
 import { startCompaction } from '../src/capture/compaction-record.js';
-import { __setSpoolFs } from '../src/capture/compaction-spool.js';
+import { _setSpoolFsForTests } from '../src/capture/compaction-spool.js';
 import { repairProjects } from '../src/sharing/project-merge.js';
 import { openHippoDb, openHippoDbReadOnly, closeHippoDb, getSchemaVersion, getCurrentSchemaVersion, setMeta } from '../src/db/index.js';
 
@@ -184,7 +184,7 @@ describe('hippo doctor', () => {
     it('a spool that cannot be listed still shows the database counts', () => {
       const { cwd, spoolAt } = setup('doctor-spool-unread-');
       spoolAt(`${stamp(ago(30))}-ddddddd1.unreadable.bad`, ago(2));
-      __setSpoolFs({
+      _setSpoolFsForTests({
         ...fs,
         readdirSync: (dir) => {
           if (dir.endsWith('compactions-spool')) throw Object.assign(new Error('EPERM: simulated'), { code: 'EPERM' });
@@ -194,7 +194,7 @@ describe('hippo doctor', () => {
       try {
         expect(compactions(cwd)).toMatchObject({ status: 'warn', detail: '0 compactions recorded, none stuck in the store; spool not read: EPERM: simulated' });
       } finally {
-        __setSpoolFs(null);
+        _setSpoolFsForTests(null);
       }
     });
   });

@@ -295,7 +295,7 @@ export function readSessionScan(transcriptPath: string, log: (message: string) =
 let existsProbe: (p: string) => boolean = fs.existsSync;
 
 /** Test-only seam, the scheduler's pattern: lets a test prove a network path never reaches the probe. Null restores it. */
-export function __setDigestExistsProbe(probe: ((p: string) => boolean) | null): void {
+export function _setDigestExistsProbeForTests(probe: ((p: string) => boolean) | null): void {
   existsProbe = probe ?? fs.existsSync;
 }
 

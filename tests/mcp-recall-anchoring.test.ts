@@ -6,7 +6,7 @@
  * - Renders `## Anchoring hint` block in text response when hint fires
  * - Bumps mcpSuppressionSummary.suppressedByInterference on R2
  * - Emits `recall_anchor_skipped_no_session` when sessionId absent
- * - Module-level Map is reset via __resetSessionRecallHistoryMcp helper
+ * - Module-level Map is reset via _resetSessionRecallHistoryMcpForTests helper
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
@@ -15,7 +15,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { Layer} from '../src/core/memory.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
-import { handleMcpRequest, __resetSessionRecallHistoryMcp, type McpContext, type McpResponse } from '../src/mcp/server.js';
+import { handleMcpRequest, _resetSessionRecallHistoryMcpForTests, type McpContext, type McpResponse } from '../src/mcp/server.js';
 import { makeRoot } from './_helpers/make-root.js';
 
 type RecallToolArgs = {
@@ -65,7 +65,7 @@ describe('mcp hippo_recall anchoringHint', () => {
     originalHome = process.env.HIPPO_HOME;
     process.env.HIPPO_HOME = home;
     delete process.env.HIPPO_ANCHORING;
-    __resetSessionRecallHistoryMcp();
+    _resetSessionRecallHistoryMcpForTests();
     // Seed a memory that matches the test query so MCP physics/hybrid
     // returns a non-null top-1.
     for (let i = 0; i < 3; i++) {
@@ -83,7 +83,7 @@ describe('mcp hippo_recall anchoringHint', () => {
     if (originalHome === undefined) delete process.env.HIPPO_HOME;
     else process.env.HIPPO_HOME = originalHome;
     delete process.env.HIPPO_ANCHORING;
-    __resetSessionRecallHistoryMcp();
+    _resetSessionRecallHistoryMcpForTests();
   });
 
   it('R2 fires after >=3 recalls with same query on same session (memory_dominance + suppressedByInterference bumped)', async () => {

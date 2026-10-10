@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb } from '../src/db/index.js';
 import { serve, __resetSessionRecallHistoryHttp } from '../src/server.js';
-import { __resetSessionRecallHistoryMcp } from '../src/mcp/server.js';
+import { _resetSessionRecallHistoryMcpForTests } from '../src/mcp/server.js';
 import { lastRecalledIds } from '../src/mcp/session-state.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import type { RecallResult } from '../src/api/index.js';
@@ -70,7 +70,7 @@ describe('recall branch replies and rows match the code before the store port', 
     vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
     vi.stubEnv('HIPPO_V1_RPS', '0');
     __resetSessionRecallHistoryHttp();
-    __resetSessionRecallHistoryMcp();
+    _resetSessionRecallHistoryMcpForTests();
     _resetAblationCacheForTests();
     lastRecalledIds.clear();
   });

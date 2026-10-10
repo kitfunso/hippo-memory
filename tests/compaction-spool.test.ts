@@ -3,7 +3,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PostCompactPayload } from '../src/capture/compaction-record.js';
-import { __setSpoolFs, importSpool, spool, spoolCounts, type SpoolFs, type SpoolImporter } from '../src/capture/compaction-spool.js';
+import { _setSpoolFsForTests, importSpool, spool, spoolCounts, type SpoolFs, type SpoolImporter } from '../src/capture/compaction-spool.js';
 
 let root: string;
 let logs: string[];
@@ -13,7 +13,7 @@ beforeEach(() => {
   logs = [];
 });
 afterEach(() => {
-  __setSpoolFs(null);
+  _setSpoolFsForTests(null);
   vi.restoreAllMocks();
   fs.rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
@@ -26,7 +26,7 @@ const spoolDir = (): string => path.join(root, 'compactions-spool');
 const lockFile = (): string => path.join(spoolDir(), 'replay.lock');
 const stamp = (ms: number): string => String(ms).padStart(13, '0');
 const realFs: SpoolFs = fs;
-const withFs = (over: Partial<SpoolFs>): void => __setSpoolFs({ ...realFs, ...over });
+const withFs = (over: Partial<SpoolFs>): void => _setSpoolFsForTests({ ...realFs, ...over });
 const fsError = (code: string): Error => Object.assign(new Error(`${code}: simulated`), { code });
 const leftToAnother = (): string[] => logs.filter((l) => l.startsWith('spool left to another replayer'));
 const payload = (sessionId: string): PostCompactPayload => ({ sessionId, trigger: 'auto', cwd: null, transcriptPath: null, compactSummary: null });
@@ -243,7 +243,7 @@ describe('one replayer at a time', () => {
     expect(seen).toEqual(['s1']);
     expect(logs).toEqual(['spool lock could not be read, stopping']);
     expect(fs.readdirSync(spoolDir())).toEqual([`${B}.a0.json`]);
-    __setSpoolFs(null);
+    _setSpoolFsForTests(null);
     expect(replay(collector().importer)).toBe(1);
   });
 });
@@ -446,7 +446,7 @@ describe('temp files a spool left', () => {
       },
     });
     expect(() => spool(root, 'default', payload('s1'), { summary: 'kept', items: [] }, new Date())).not.toThrow();
-    __setSpoolFs(null);
+    _setSpoolFsForTests(null);
     const [name] = fs.readdirSync(spoolDir());
     expect(name).toMatch(/^\d{13}-[0-9a-f]{8}\.a0\.json\.tmp$/);
     age(path.join(spoolDir(), name));

@@ -47,7 +47,7 @@ export interface SpoolFs {
 let fsx: SpoolFs = fs;
 
 /** Test-only seam, so a test can make one fs call fail; null restores the real fs. */
-export function __setSpoolFs(next: SpoolFs | null): void {
+export function _setSpoolFsForTests(next: SpoolFs | null): void {
   fsx = next ?? fs;
 }
 

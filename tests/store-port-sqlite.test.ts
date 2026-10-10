@@ -13,7 +13,7 @@ import { loadStoredVectors } from '../src/store/vector-index.js';
 import { detectForwardClaim } from '../src/learn/forward-claim-detector.js';
 import { activeGoalsWithPolicies, localGoalRecallRows, pushGoal, writeGoalRecallLog } from '../src/store/goals.js';
 import { boostByGoals } from '../src/search/goal-boost.js';
-import { __resetSessionRecallHistoryMcp } from '../src/mcp/server.js';
+import { _resetSessionRecallHistoryMcpForTests } from '../src/mcp/server.js';
 import { lastRecalledIds } from '../src/mcp/session-state.js';
 import { loadPhysicsState, resetAllPhysicsState } from '../src/db/physics-state.js';
 import { resolveClassFromTokens } from '../src/store/planning-fallacy-evidence.js';
@@ -495,7 +495,7 @@ describe('hippo.db opens per recall over serve() on the in-process store', () =>
 
   beforeEach(() => {
     __resetSessionRecallHistoryHttp();
-    __resetSessionRecallHistoryMcp();
+    _resetSessionRecallHistoryMcpForTests();
     lastRecalledIds.clear();
   });
 
@@ -525,7 +525,7 @@ describe('hippo.db opens per recall over serve() on the in-process store', () =>
 describe('a recall whose store read fails mid-way', () => {
   beforeEach(() => {
     __resetSessionRecallHistoryHttp();
-    __resetSessionRecallHistoryMcp();
+    _resetSessionRecallHistoryMcpForTests();
     lastRecalledIds.clear();
   });
 

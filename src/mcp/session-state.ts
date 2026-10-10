@@ -4,7 +4,7 @@ import { DEFAULT_TENANT_ID } from '../util/env.js';
 import { resetSessionRings } from '../api/recall-record.js';
 
 /** Test-only: reset the MCP recall rings. Call from beforeEach. */
-export function __resetSessionRecallHistoryMcp(): void {
+export function _resetSessionRecallHistoryMcpForTests(): void {
   resetSessionRings('mcp');
 }
 

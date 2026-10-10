@@ -8,7 +8,7 @@
  * Usage: hippo mcp (or npx hippo-memory mcp)
  */
 
-export { __resetSessionRecallHistoryMcp } from './session-state.js';
+export { _resetSessionRecallHistoryMcpForTests } from './session-state.js';
 export { findHippoRoot, mcpErrorResponse, type McpRequest, type McpResponse, type McpContext } from './protocol.js';
 export { handleMcpRequest } from './request.js';
 export { startStdioLoop } from './stdio.js';

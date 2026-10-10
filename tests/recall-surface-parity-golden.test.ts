@@ -10,7 +10,7 @@ import { writeEntry } from '../src/store/entry-writes.js';
 import { openHippoDb, closeHippoDb } from '../src/db/index.js';
 import { cmdRecall } from '../src/cli/recall.js';
 import { resetSessionRings } from '../src/api/recall-record.js';
-import { handleMcpRequest, __resetSessionRecallHistoryMcp, type McpResponse } from '../src/mcp/server.js';
+import { handleMcpRequest, _resetSessionRecallHistoryMcpForTests, type McpResponse } from '../src/mcp/server.js';
 import { serve, __resetSessionRecallHistoryHttp, type ServerHandle } from '../src/server.js';
 import { retrieve, RecallContractError, type RecallResult } from '../src/api/index.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
@@ -134,7 +134,7 @@ describe('recall surface parity goldens', () => {
     vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
     _resetAblationCacheForTests();
     resetSessionRings('cli');
-    __resetSessionRecallHistoryMcp();
+    _resetSessionRecallHistoryMcpForTests();
     __resetSessionRecallHistoryHttp();
   });
 

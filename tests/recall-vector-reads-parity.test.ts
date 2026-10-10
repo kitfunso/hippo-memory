@@ -8,7 +8,7 @@ import { serve, __resetSessionRecallHistoryHttp, sqliteStore, type HippoStore, t
 import { hybridSearch } from '../src/search/hybrid.js';
 import { resolveVectorArm } from '../src/search/vector.js';
 import { markSharedStore } from '../src/core/config.js';
-import { __resetSessionRecallHistoryMcp } from '../src/mcp/server.js';
+import { _resetSessionRecallHistoryMcpForTests } from '../src/mcp/server.js';
 import { lastRecalledIds } from '../src/mcp/session-state.js';
 import { _resetAblationCacheForTests } from '../src/core/ablation.js';
 import { closeHippoDb, openHippoDb, setMeta } from '../src/db/index.js';
@@ -108,7 +108,7 @@ type Backing = 'workers' | 'in process' | 'memory';
 /** One recall run on a fresh copy, with every module-level ring, cache and once-key cleared. */
 async function runPass(calls: readonly Call[], physics: boolean, backing: Backing, prepare?: (root: string) => void): Promise<Pass> {
   __resetSessionRecallHistoryHttp();
-  __resetSessionRecallHistoryMcp();
+  _resetSessionRecallHistoryMcpForTests();
   _resetAblationCacheForTests();
   lastRecalledIds.clear();
   resetLogOnce();
