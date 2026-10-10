@@ -1,12 +1,12 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import { loadAllEntries } from '../src/store/entry-reads.js';
-import { writeEntriesSeparately } from '../src/store/entry-writes.js';
+import { writeEntriesTogether } from '../src/store/entry-writes.js';
 import { onHandle, openStore } from '../src/store/open.js';
 import { createMemory } from './_helpers/default-half-life-memory.js';
 import { makeRoot } from './_helpers/make-root.js';
 
-describe('writeEntriesSeparately', () => {
+describe('writeEntriesTogether', () => {
   const roots: string[] = [];
   afterEach(() => {
     for (const dir of roots.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
@@ -16,8 +16,12 @@ describe('writeEntriesSeparately', () => {
     const root = makeRoot('entry-writes-batch');
     roots.push(root);
     const entries = ['alpha', 'beta', 'gamma'].map((text) => createMemory(text));
-    writeEntriesSeparately(root, entries);
+    writeEntriesTogether(root, entries);
     expect(loadAllEntries(root, 'default').map((e) => e.content).sort()).toEqual(['alpha', 'beta', 'gamma']);
+  });
+
+  it('opens no store for an empty list', () => {
+    expect(writeEntriesTogether('Z:/no/such/hippo-root', [])).toBe(0);
   });
 
   it('commits the rows in one transaction, so a failing last row leaves none', () => {
@@ -28,7 +32,7 @@ describe('writeEntriesSeparately', () => {
         BEGIN SELECT RAISE(ABORT, 'poisoned row'); END`);
     }, openStore);
     const entries = ['alpha', 'beta', 'poison'].map((text) => createMemory(text));
-    expect(() => writeEntriesSeparately(root, entries)).toThrow(/poisoned row/);
+    expect(() => writeEntriesTogether(root, entries)).toThrow(/poisoned row/);
     expect(loadAllEntries(root, 'default')).toHaveLength(0);
   });
 });
