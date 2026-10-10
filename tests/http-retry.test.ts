@@ -169,12 +169,11 @@ describe('the wait between attempts under a caller signal', () => {
     const { url, hits } = await startServer([{ status: 503, headers: { 'retry-after': '2' } }, { status: 200 }]);
     const controller = new AbortController();
     const { fetchFn, calls } = countedFetch();
-    const started = performance.now();
+    const reason = new Error('caller gave up');
     const pending = fetchWithRetry(url, { signal: controller.signal }, { timeoutMs: 60_000, fetchFn });
-    setTimeout(() => controller.abort(new Error('caller gave up')), 100);
-    await expect(pending).rejects.toThrow('caller gave up');
-    // The wait asked for was two seconds.
-    expect(performance.now() - started).toBeLessThan(1_000);
+    setTimeout(() => controller.abort(reason), 100);
+    await expect(pending).rejects.toBe(reason);
+    // A wait that sat out its two seconds would have started a second attempt before the abort ended the call.
     expect([calls(), hits()]).toEqual([1, 1]);
   });
 

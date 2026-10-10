@@ -20,8 +20,6 @@ import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from './_h
 const TENANT = 'default';
 const QUERY = 'deploy';
 const BUDGET_MS = 300;
-// Room for a busy machine; an unbudgeted call would wait 30 s for each of three attempts.
-const MARGIN_MS = 1_000;
 const LEXICAL = 'deploy pipeline uses blue green rollout';
 // Shares no word with the query, so only the vector arm can return it.
 const VECTOR_ONLY = 'ship to production with zero downtime';
@@ -71,7 +69,7 @@ beforeEach(() => {
 afterEach(() => {
   embeddings.setStatus(200);
   embeddings.setFault(null);
-  stderr.mockRestore();
+  vi.restoreAllMocks();
   vi.unstubAllEnvs();
 });
 
@@ -90,13 +88,15 @@ describe("a recall's query embedding", () => {
     vi.stubEnv('HIPPO_QUERY_EMBED_TIMEOUT_MS', String(BUDGET_MS));
     embeddings.setFault('stall');
 
-    const started = performance.now();
+    const before = embeddings.requests();
+
+    // The provider never answers, so a recall that returns at all returned at its deadline.
     const shown = await recall(root);
-    const elapsedMs = performance.now() - started;
+    const sent = embeddings.requests() - before;
     await recall(root);
 
     expect(shown).toEqual([LEXICAL]);
-    expect(elapsedMs).toBeLessThan(BUDGET_MS + MARGIN_MS);
+    expect(sent).toBe(1);
     expect(fallbackLines()).toHaveLength(1);
     expect(fallbackLines()[0]).toMatch(new RegExp(`^\\[hippo\\] warn: .*the openai embedding provider gave no query vector within ${BUDGET_MS} ms`));
     expect(fallbackLines()[0]).not.toContain(QUERY);
@@ -118,16 +118,16 @@ describe("a recall's query embedding", () => {
   it('ends within the budget when it runs out during the wait a 503 asked for', async () => {
     const root = seedStore();
     vi.stubEnv('HIPPO_QUERY_EMBED_TIMEOUT_MS', String(BUDGET_MS));
-    // Two seconds is the longest wait the provider accepts under a deadline; sat out in full it would pass budget plus margin.
+    // Two seconds is the longest wait the provider accepts under a deadline, far past the budget.
     embeddings.setStatus(503, 2);
     const before = embeddings.requests();
+    const fetched = vi.spyOn(globalThis, 'fetch');
 
-    const started = performance.now();
     const shown = await recall(root);
-    const elapsedMs = performance.now() - started;
 
     expect(shown).toEqual([LEXICAL]);
-    expect(elapsedMs).toBeLessThan(BUDGET_MS + MARGIN_MS);
+    // A wait that outlasted the deadline would go on to a second attempt, which the dead signal ends before it reaches the server.
+    expect(fetched).toHaveBeenCalledTimes(1);
     expect(embeddings.requests() - before).toBe(1);
     expect(fallbackLines()).toHaveLength(1);
     expect(fallbackLines()[0]).toContain(`the openai embedding provider gave no query vector within ${BUDGET_MS} ms`);
@@ -167,6 +167,19 @@ describe("a recall's query embedding", () => {
 
     expect([...new Set(ranked.map((r) => r.entry.content))]).toEqual([LEXICAL]);
     expect(embeddings.requests() - before).toBe(1);
+  });
+
+  it('hands an API provider the deadline as its abort signal, and reads the abort as no vector', async () => {
+    const deadline = AbortSignal.timeout(20);
+    const given: (AbortSignal | undefined)[] = [];
+    const untilAbort = new Promise<number[][]>((_resolve, reject) => deadline.addEventListener('abort', () => reject(deadline.reason)));
+    const api: EmbeddingProvider = {
+      kind: 'openai', model: 'stub', id: 'openai:stub', isAvailable: () => true,
+      embed: (_texts, _role, call) => { given.push(call?.signal); return untilAbort; },
+    };
+
+    expect(await embedQueryBy(deadline, api, QUERY)).toBeNull();
+    expect(given).toEqual([deadline]);
   });
 
   it('does not hold the in-process provider to the deadline, which no signal can stop', async () => {

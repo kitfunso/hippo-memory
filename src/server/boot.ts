@@ -343,10 +343,13 @@ function isDroppedLateReply<E>(err: E): boolean {
   return err instanceof Error && 'code' in err && err.code === 'ERR_HTTP_HEADERS_SENT';
 }
 
+/** A GET only reads; every other method this server routes can write. */
+const isRead = (method: string): boolean => method === 'GET';
+
 // A read that ends late changed nothing. A write that ends late ran to its end after its caller was told it may not have been saved.
 function logLateFinish(req: IncomingMessage, requestId: string): void {
   const method = req.method ?? 'GET';
-  if (method === 'GET') return;
+  if (isRead(method)) return;
   log.info('request finished after its deadline reply; its own reply was dropped', { requestId, method, route: accessRouteOf(req) });
 }
 
