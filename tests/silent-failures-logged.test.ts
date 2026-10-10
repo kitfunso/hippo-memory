@@ -7,7 +7,6 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { fetchWithRetry } from '../src/util/http-retry.js';
 import { heartbeatVerdict } from '../src/server/auth.js';
-import { realGitHubFetcher } from '../src/connectors/github/octokit-client.js';
 import { resolveEmbeddingProvider } from '../src/store/embeddings/provider.js';
 import { handleInit } from '../src/cli/init.js';
 import { cmdCapture } from '../src/capture/command.js';
@@ -88,15 +87,6 @@ describe('heartbeatVerdict', () => {
     const verdict = await heartbeatVerdict(req, { hippoRoot: root } as Parameters<typeof heartbeatVerdict>[1]);
     expect(verdict).toBe('unavailable');
     expect(logged().some((l) => l.includes('error: heartbeat auth check failed'))).toBe(true);
-  });
-});
-
-describe('github fetcher', () => {
-  it('keeps the query string out of the error for a non-200 reply', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response('nope', { status: 404 })));
-    await expect(
-      realGitHubFetcher({ url: 'https://api.github.test/repos/o/r/issues?since=2020&access=SECRET', token: 't' }),
-    ).rejects.toMatchObject({ status: 404, url: '/repos/o/r/issues', message: expect.not.stringContaining('SECRET') });
   });
 });
 

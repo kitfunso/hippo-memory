@@ -1,5 +1,332 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`hippo exit codes and output of failing invocations (built CLI) > 'assemble without a session' 1`] = `
+"$ hippo assemble -> 1
+--- stdout
+--- stderr
+Usage: hippo assemble --session <id> [--budget N] [--fresh-tail N] [--no-summarize-older] [--json]
+"
+`;
+
+exports[`hippo exit codes and output of failing invocations (built CLI) > 'audit list with an unknown op' 1`] = `
+"$ hippo audit list --op bogus -> 1
+--- stdout
+--- stderr
+Unknown --op value: bogus. Expected one of: remember | recall | promote | supersede | forget | archive_raw | auth_revoke | auth_create | outcome | consolidate | audit_prune | summary_marked_dirty | summary_marked_clean | summary_rebuilt | predict_create | predict_close | predict_baserate | recall_autodebias_hint | recall_autodebias_hint_no_class_match | recall_autodebias_hint_tiebreak | recall_anchor_detected_query_repeat | recall_anchor_detected_memory_dominance | recall_anchor_skipped_no_session | recall_availability_detected | decision_create | decision_supersede | decision_close | incident_open | incident_resolve | incident_close | process_create | process_supersede | process_close | policy_create | policy_supersede | policy_close | skill_create | skill_supersede | skill_close | project_brief_create | project_brief_supersede | project_brief_close | customer_note_create | customer_note_supersede | customer_note_close | mv_rescue | reject_value | reject_refusal | unreject_value | conflict_resolve | half_life_migrate | dormant_restore | auth_grant | auth_ungrant | quarantine | quarantine_approve | quarantine_reject | agent_memory_restore | agent_memory_set_aside | project_merge | project_repair | quality_repair.
+"
+`;
+
+exports[`hippo exit codes and output of failing invocations (built CLI) > 'auth revoke of an unknown key' 1`] = `
+"$ hippo auth revoke hk_nosuchkey -> 1
+--- stdout
+--- stderr
+Unknown key_id: hk_nosuchkey
+"
+`;
+
+exports[`hippo exit codes and output of failing invocations (built CLI) > 'brief refresh without a repo' 1`] = `
+"$ hippo brief refresh -> 1
+--- stdout
+--- stderr
+Usage: hippo brief refresh "<repo>" [--dry-run]
+"
+`;
+
+exports[`hippo exit codes and output of failing invocations (built CLI) > 'capture without a source' 1`] = `
+"$ hippo capture -> 1
+--- stdout
+--- stderr
+Usage: hippo capture --stdin|--file <path>|--last-session [--transcript <path>] [--log-file <path>] [--dry-run] [--global]
+"
+`;
+
+exports[`hippo exit codes and output of failing invocations (built CLI) > 'card show of a missing card' 1`] = `
+"$ hippo card show 999 -> 1
+--- stdout
+--- stderr
+No card found with id 999.
+"
+`;
+
+exports[`hippo exit codes and output of failing invocations (built CLI) > 'compact-resume with an empty store' 1`] = `
+"$ hippo compact-resume -> 0
+--- stdout
+--- stderr
+"
+`;
+
+exports[`hippo exit codes and output of failing invocations (built CLI) > 'compact-resume with no store' 1`] = `
+"$ hippo compact-resume -> 0
+--- stdout
+--- stderr
+"
+`;
+
+exports[`hippo exit codes and output of failing invocations (built CLI) > 'context with a negative budget' 1`] = `
+"$ hippo context --budget -5 -> 1
+--- stdout
+--- stderr
+Invalid --budget: "-5". Must be a non-negative integer.
+"
+`;
+
+exports[`hippo exit codes and output of failing invocations (built CLI) > 'decide get of a missing decision' 1`] = `
+"$ hippo decide get 999 -> 1
+--- stdout
+--- stderr
+Decision 999 not found.
+"
+`;
+
+exports[`hippo exit codes and output of failing invocations (built CLI) > 'drill past the depth range' 1`] = `
+"$ hippo drill 1 --depth 99 -> 2
+--- stdout
+--- stderr
+--depth must be an integer between 1 and 10 (got 99)
+"
+`;
+
+exports[`hippo exit codes and output of failing invocations (built CLI) > 'dry-run on a verb without one' 1`] = `
+"$ hippo remember three short words --dry-run -> 2
+--- stdout
+--- stderr
+hippo remember has no --dry-run, so it would run for real. Nothing was changed.
+"
+`;
+
+exports[`hippo exit codes and output of failing invocations (built CLI) > 'eval with a missing corpus' 1`] = `
+"$ hippo eval no-such-corpus.json -> 1
+--- stdout
+--- stderr
+Corpus file not found: no-such-corpus.json
+"
+`;
+
+exports[`hippo exit codes and output of failing invocations (built CLI) > 'explain without a query' 1`] = `
+"$ hippo explain -> 1
+--- stdout
+--- stderr
+Please provide a search query.
+"
+`;
+
+exports[`hippo exit codes and output of failing invocations (built CLI) > 'forget without an id' 1`] = `
+"$ hippo forget -> 1
+--- stdout
+--- stderr
+Please provide a memory ID.
+"
+`;
+
+exports[`hippo exit codes and output of failing invocations (built CLI) > 'github backfill refused by the server' 1`] = `
+"$ hippo github backfill --repo acme/widgets -> 3
+--- stdout
+--- stderr
+backfill failed: GitHub 401 on /repos/acme/widgets/issues: {"message":"Bad credentials"}
+"
+`;
+
+exports[`hippo exit codes and output of failing invocations (built CLI) > 'github backfill without a repo' 1`] = `
+"$ hippo github backfill -> 2
+--- stdout
+hippo github backfill --repo <owner/name> [--since ISO] [--max <N>]
+  --repo   GitHub repository in owner/name format (required, e.g. acme/widgets)
+  --since  Initial high-water-mark for first run (optional, ISO 8601)
+  --max    Cap items per stream (optional, integer)
+  Requires GITHUB_TOKEN env var with repo read scope.
+--- stderr
+"
+`;
+
+exports[`hippo exit codes and output of failing invocations (built CLI) > 'github backfill without a token' 1`] = `
+"$ hippo github backfill --repo acme/widgets -> 2
+--- stdout
+--- stderr
+GITHUB_TOKEN is not set. Backfill requires a personal access token with repo read scope.
+"
+`;
+
+exports[`hippo exit codes and output of failing invocations (built CLI) > 'github without a subcommand' 1`] = `
+"$ hippo github -> 1
+--- stdout
+--- stderr
+Usage: hippo github <backfill|dlq list|dlq replay <id> [--force]> [...]
+"
+`;
+
+exports[`hippo exit codes and output of failing invocations (built CLI) > 'goal without a subcommand' 1`] = `
+"$ hippo goal -> 1
+--- stdout
+--- stderr
+Usage: hippo goal <push|list|complete|suspend|resume> [args]
+"
+`;
+
+exports[`hippo exit codes and output of failing invocations (built CLI) > 'hook install of an unknown target' 1`] = `
+"$ hippo hook install bogus -> 1
+--- stdout
+--- stderr
+Unknown hook target: bogus
+   Available: claude-code, codex, cursor, openclaw, opencode, pi, copilot
+"
+`;
+
+exports[`hippo exit codes and output of failing invocations (built CLI) > 'inspect without an id' 1`] = `
+"$ hippo inspect -> 1
+--- stdout
+--- stderr
+Please provide a memory ID.
+"
+`;
+
+exports[`hippo exit codes and output of failing invocations (built CLI) > 'list with a zero limit' 1`] = `
+"$ hippo process list --limit 0 -> 1
+--- stdout
+--- stderr
+Invalid --limit: "0". Must be a positive integer.
+"
+`;
+
+exports[`hippo exit codes and output of failing invocations (built CLI) > 'list with an unknown status' 1`] = `
+"$ hippo process list --status bogus -> 1
+--- stdout
+--- stderr
+Invalid --status: "bogus". Must be one of: active | superseded | closed | all.
+"
+`;
+
+exports[`hippo exit codes and output of failing invocations (built CLI) > 'policy asof without a date' 1`] = `
+"$ hippo policy asof -> 1
+--- stdout
+--- stderr
+Usage: hippo policy asof <iso-date> [--name "<policy>"]
+"
+`;
+
+exports[`hippo exit codes and output of failing invocations (built CLI) > 'predict baserate without a class' 1`] = `
+"$ hippo predict baserate -> 1
+--- stdout
+--- stderr
+Usage: hippo predict baserate --class <c>
+"
+`;
+
+exports[`hippo exit codes and output of failing invocations (built CLI) > 'recall with an unknown outcome' 1`] = `
+"$ hippo recall deploy keys --outcome bogus -> 1
+--- stdout
+--- stderr
+Invalid --outcome: "bogus". Must be one of: success, failure, partial.
+"
+`;
+
+exports[`hippo exit codes and output of failing invocations (built CLI) > 'recall without a query' 1`] = `
+"$ hippo recall -> 1
+--- stdout
+--- stderr
+Please provide a search query.
+"
+`;
+
+exports[`hippo exit codes and output of failing invocations (built CLI) > 'refine without a key' 1`] = `
+"$ hippo refine -> 1
+--- stdout
+--- stderr
+hippo refine needs ANTHROPIC_API_KEY in the environment.
+"
+`;
+
+exports[`hippo exit codes and output of failing invocations (built CLI) > 'remember too short' 1`] = `
+"$ hippo remember ab -> 1
+--- stdout
+--- stderr
+Memory content too short (minimum 3 characters).
+"
+`;
+
+exports[`hippo exit codes and output of failing invocations (built CLI) > 'serve with one TLS file' 1`] = `
+"$ hippo serve --tls-cert cert.pem -> 1
+--- stdout
+--- stderr
+hippo serve: TLS needs both a certificate and a key: --tls-cert and --tls-key, or HIPPO_TLS_CERT and HIPPO_TLS_KEY.
+"
+`;
+
+exports[`hippo exit codes and output of failing invocations (built CLI) > 'slack backfill without a channel' 1`] = `
+"$ hippo slack backfill -> 1
+--- stdout
+hippo slack backfill --channel <id> [--since ISO]
+  --channel  Slack channel id (required, e.g. C0123ABC)
+  --since    backfill from ISO timestamp (default: cursor)
+--- stderr
+"
+`;
+
+exports[`hippo exit codes and output of failing invocations (built CLI) > 'slack backfill without a token' 1`] = `
+"$ hippo slack backfill --channel C123 -> 2
+--- stdout
+--- stderr
+SLACK_BOT_TOKEN is not set. Backfill requires a Slack bot token with channels:history scope.
+"
+`;
+
+exports[`hippo exit codes and output of failing invocations (built CLI) > 'snapshot save without a task' 1`] = `
+"$ hippo snapshot save -> 1
+--- stdout
+--- stderr
+Usage: hippo snapshot save --task <task> --summary <summary> --next-step <step> [--source <source>] [--session <session-id>]
+"
+`;
+
+exports[`hippo exit codes and output of failing invocations (built CLI) > 'unknown flag on a destructive verb' 1`] = `
+"$ hippo forget mem_x --bogus -> 2
+--- stdout
+--- stderr
+Unknown flag --bogus for hippo forget. Nothing was changed.
+"
+`;
+
+exports[`hippo exit codes and output of failing invocations (built CLI) > 'unknown verb' 1`] = `
+"$ hippo nosuchverb -> 1
+--- stdout
+<the text of hippo help>
+--- stderr
+Unknown command: nosuchverb
+"
+`;
+
+exports[`hippo exit codes and output of failing invocations (built CLI) > 'version' 1`] = `
+"$ hippo --version -> 0
+--- stdout
+<version>
+--- stderr
+"
+`;
+
+exports[`hippo exit codes and output of failing invocations (built CLI) > 'watch of a failing command with no st…' 1`] = `
+"$ hippo watch node -e "process.exit(3)" -> 3
+--- stdout
+--- stderr
+Command failed but .hippo not initialized. Run \`hippo init\` to enable auto-learn.
+"
+`;
+
+exports[`hippo exit codes and output of failing invocations (built CLI) > 'watch of a failing command' 1`] = `
+"$ hippo watch node -e "process.exit(3)" -> 3
+--- stdout
+--- stderr
+
+Hippo learned from failure: ""
+"
+`;
+
+exports[`hippo exit codes and output of failing invocations (built CLI) > 'watch without a command' 1`] = `
+"$ hippo watch -> 1
+--- stdout
+--- stderr
+Usage: hippo watch "<command>"
+"
+`;
+
 exports[`hippo exit codes and output of failing invocations (built CLI) > assemble without a session 1`] = `
 "$ hippo assemble -> 1
 --- stdout
