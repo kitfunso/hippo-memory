@@ -3,6 +3,7 @@
 import { TAIL_MAX_LINES } from '../support-bundle.js';
 import { DEFAULT_LOCAL_BUMP, DEFAULT_RECALL_BUDGET } from '../core/search-types.js';
 import { DEFAULT_ASSEMBLE_BUDGET } from '../api/assemble.js';
+import { DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from '../server/defaults.js';
 
 export function printAuditPruneUsage(): void {
   console.log('hippo audit prune --older-than <Nd> [--dry-run] [--tenant <t>]');
@@ -671,8 +672,8 @@ export const VERB_USAGE = {
   mcp                      Start MCP server (stdio transport)`],
   serve: [`
   serve                    Start the HTTP API server for this store (Ctrl+C stops it)
-    --port <n>             Port to serve on (default: $HIPPO_PORT or 6789)
-    --host <host>          Address to bind (default: 127.0.0.1)
+    --port <n>             Port to serve on (default: $HIPPO_PORT or ${DEFAULT_SERVER_PORT})
+    --host <host>          Address to bind (default: ${DEFAULT_SERVER_HOST})
     --tls-cert <file>      PEM certificate; serve HTTPS only (or $HIPPO_TLS_CERT)
     --tls-key <file>       PEM private key for it; give both (or $HIPPO_TLS_KEY)
                            Every request needs an API key (hippo auth create).

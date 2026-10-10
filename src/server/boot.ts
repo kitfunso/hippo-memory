@@ -33,6 +33,7 @@ import { enforceRateLimit, warnIfClientIpHeaderUnpinned } from './client-ip.js';
 import { answerAtDeadline, handlerDeadlineCount, isAbandoned, requestDeadlineFor } from './deadline.js';
 import { DEFAULT_SHUTDOWN_DRAIN_MS, drainAndClose, setKeepAliveTimeouts, shutdownBoundMs } from './lifecycle.js';
 import { readyProbeFor } from './ready.js';
+import { DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from './defaults.js';
 import { installCrashHandlers, installSignalHandlers } from '../util/crash-handlers.js';
 import { handleMcpPost, handleMcpStream } from './mcp-http.js';
 import { MCP_PROJECT_SCOPED_HEADER } from '../core/project-identity.js';
@@ -428,8 +429,8 @@ function exitOnSignalOrCrash(stop: () => Promise<void>, drainMs: number): void {
  * port back via server.address() after listen.
  */
 export async function serve(opts: ServeOpts): Promise<ServerHandle> {
-  const host = opts.host ?? '127.0.0.1';
-  const requestedPort = opts.port ?? Number(envPort() ?? 6789);
+  const host = opts.host ?? DEFAULT_SERVER_HOST;
+  const requestedPort = opts.port ?? Number(envPort() ?? DEFAULT_SERVER_PORT);
 
   const routes = frozenAddonRoutes(opts.routes);
   const publicJsonBodies = assertPublicJson(opts.publicJson ?? {});

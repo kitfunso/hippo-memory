@@ -9,6 +9,7 @@ import { stringFlagOrExit, type CommandContext, stringFlag } from './flag-values
 import { requireInit } from './shared.js';
 import { errorMessage } from '../util/log.js';
 import { CliExit } from './exit.js';
+import { DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from '../server/defaults.js';
 
 export async function handleDashboard({ hippoRoot, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
@@ -61,13 +62,13 @@ function keyRuleLine(): string {
 
 export async function handleServe({ hippoRoot, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
-  const portRaw = flags['port'] ?? envPort() ?? '6789';
+  const portRaw = flags['port'] ?? envPort() ?? DEFAULT_SERVER_PORT;
   const port = Number(portRaw);
   if (!Number.isFinite(port) || port < 0) {
     printError(`Invalid --port: ${String(portRaw)}`);
     throw new CliExit(1);
   }
-  const host = stringFlag(flags, 'host') ?? '127.0.0.1';
+  const host = stringFlag(flags, 'host') ?? DEFAULT_SERVER_HOST;
   const tls = readTlsFiles(flags);
   const { serve } = await import('../server.js');
   const handle = await serve({ hippoRoot, port, host, handleSignals: true, tls });
