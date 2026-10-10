@@ -180,6 +180,7 @@ This section settles the engineering part of the Z10 exit. It covers three check
   - A skill slash command, a line that starts with `<command-message>`, fires hooks and is read as a prompt. Only built-in slash commands (`<command-name>`) and shell lines fire none. This corrects the slash-command example under "Delivery confirmation".
   - A memory that is gone with no forget row, but whose id appears in any candidate or trace row, is `indeterminate` `forgotten`, never not-written. Several delete paths write no forget row.
   - A label on any class other than application-unknown is noted, including the early returns.
+  - A second review round passed. From it, the reader notes transcript lines it cannot read, and a duplicate of a row that never became a turn. A line that parses to anything but an object no longer stops the read. The parser keeps `promptSource: 'system'` lines: 430 of the 547 such lines in 18 distinct transcripts on this machine were followed by a hook attachment. Those transcripts hold no sidechain lines, so none are skipped.
 
 ## Controls and failure cases
 
